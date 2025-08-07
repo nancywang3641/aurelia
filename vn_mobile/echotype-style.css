@@ -1,0 +1,250 @@
+/* Echo模態窗口樣式 */
+.echo-dialog-container {
+            width: 85%;
+            max-width: 420px;
+            height: 80vh;
+            max-height: 730px;
+            background-color: white;
+            border-radius: 15px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.echo-dialog-header {
+            background-color: #1DA1F2;
+            color: white;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            height: 60px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.echo-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.echo-title {
+    font-size: 20px;
+    font-weight: bold;
+    color: white;
+    margin: 0;
+}
+
+.close-echo-dialog {
+    background: none;
+    border: none;
+    color: #1DA1F2;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s, opacity 0.2s;
+    padding: 5px;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-echo-dialog:hover {
+    transform: scale(1.1);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.echo-dialog-content {
+            flex-grow: 1;
+            border: none;
+            width: 100%;
+            height: calc(100% - 60px); /* 只減去header的高度 */
+            overflow: hidden;
+            position: relative;
+}
+
+.echo-iframe {
+    width: 100%;
+    height: 100%;
+
+    border: none;
+    background-color: white;
+}
+
+.echo-dialog-footer {
+    padding: 12px 20px;
+    background-color: #f1f3f4;
+    border-top: 1px solid #e1e8ed;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 50px;
+}
+
+.echo-close-button {
+    background-color: #1DA1F2;
+    color: white;
+    border: none;
+    border-radius: 25px;
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+    box-shadow: 0 2px 4px rgba(29, 161, 242, 0.2);
+}
+
+.echo-close-button:hover {
+    background-color: #1991DB;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(29, 161, 242, 0.3);
+}
+
+.echo-close-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(29, 161, 242, 0.2);
+}
+
+/* Echo模態窗口動畫 */
+.vn-modal#echoModal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.vn-modal#echoModal.active .echo-dialog-container {
+    animation: slideInFromTop 0.4s ease-out;
+}
+
+@keyframes slideInFromTop {
+    0% {
+        transform: translateY(-50px) scale(0.9);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+/* 響應式設計 */
+@media (max-width: 600px) {
+    .echo-dialog-container {
+        width: 95%;
+        max-width: none;
+        height: 85vh;
+        margin: 0 auto;
+    }
+    
+    .echo-dialog-header {
+        padding: 12px 15px;
+    }
+    
+    .echo-title {
+        font-size: 18px;
+    }
+    
+    .close-echo-dialog {
+        font-size: 22px;
+        width: 32px;
+        height: 32px;
+    }
+    
+    .echo-dialog-footer {
+        padding: 10px 15px;
+    }
+}
+
+
+/* Echo載入狀態 */
+.echo-loading {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+    color: #657786;
+}
+
+.echo-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e1e8ed;
+    border-top-color: #1DA1F2;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Echo iframe容器樣式增強 */
+.echo-iframe-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: white;
+}
+
+.echo-iframe-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.echo-iframe-container.loading::before {
+    opacity: 1;
+}
+
+
+/* 確保Echo模態窗口在其他元素之上 */
+.vn-modal#echoModal {
+    z-index: 1050;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+/* Echo模態窗口標題樣式改進 */
+.echo-dialog-header .echo-info {
+    flex: 1;
+}
+
+.echo-dialog-header .echo-title {
+    background: linear-gradient(45deg, #ffffff, #e3f2fd);
+    background-clip: text;
+    -webkit-background-clip: text;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.5px;
+}
+
+/* Echo 時間線內容底部間距 - 防止最後的 post 被底部按鈕遮住 */
+#timeline-posts {
+    padding-bottom: 80px; /* 為底部按鈕和額外空間留出空間 */
+}
+
+/* Echo 其他標籤頁也需要底部間距 */
+#trending-list {
+    padding-bottom: 80px;
+}
+
+#profile-cards {
+    padding-bottom: 80px;
+}

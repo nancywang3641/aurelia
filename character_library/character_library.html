@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人設庫 - JCY版</title>
+    <link rel="stylesheet" href="character_library_styles.css">
+</head>
+<body>
+    <!-- 頂部導航 -->
+    <div class="char-lib-header">
+        <button class="back-btn" id="backBtn">←</button>
+        <h1 class="title">編輯人設</h1>
+        <div class="header-actions">
+            <button class="refresh-btn" id="refreshBtn" title="刷新列表" onclick="forceRefreshCharacterList()">🔄</button>
+            <button class="add-btn" id="addCharBtn">+</button>
+        </div>
+    </div>
+    
+    <!-- 使用提示 -->
+    <div class="usage-tips" id="usageTips">
+        <div class="tips-content">
+            <span class="tips-icon">💡</span>
+            <span class="tips-text desktop-tips">懸停在角色卡片上可顯示 ✏️編輯 和 🗑️刪除 按鈕</span>
+            <span class="tips-text mobile-tips" style="display: none;">角色卡片右上角有 ✏️編輯 和 🗑️刪除 按鈕</span>
+            <button class="tips-close" onclick="closeUsageTips()">✕</button>
+        </div>
+    </div>
+
+    <!-- 主要內容區域 -->
+    <div class="char-lib-main">
+        <!-- 角色列表 -->
+        <div class="character-list" id="characterList">
+            <!-- 角色項目將動態添加到這裡 -->
+        </div>
+
+        <!-- 空狀態 -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <div class="empty-icon">👤</div>
+            <div class="empty-text">還沒有創建任何角色</div>
+            <div class="empty-subtitle">點擊右上角的 + 號開始創建您的第一個角色</div>
+        </div>
+    </div>
+
+    <!-- 角色編輯模態窗口 -->
+    <div class="modal-overlay" id="characterModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 id="modalTitle">新增角色</h2>
+                <button class="close-btn" id="closeModalBtn">&times;</button>
+            </div>
+            
+            <div class="modal-content">
+                <form id="characterForm">
+                    <!-- 基本信息 -->
+                    <div class="form-section">
+                        <h3>基本信息</h3>
+                        
+                        <div class="form-group">
+                            <label for="charName">名字</label>
+                            <input type="text" id="charName" placeholder="char名字" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="charPersonality">人設</label>
+                            <textarea id="charPersonality" placeholder="char人設" rows="4" required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="charSuffix">拍攝後綴</label>
+                            <input type="text" id="charSuffix" placeholder="例如：的後背">
+                        </div>
+                    </div>
+
+                    <!-- 頭像 -->
+                    <div class="form-section">
+                        <h3>頭像</h3>
+                        <div class="avatar-upload">
+                            <div class="avatar-preview" id="avatarPreview">
+                                <div class="avatar-placeholder">
+                                    <span>👤</span>
+                                    <div class="upload-text">角色頭像</div>
+                                </div>
+                            </div>
+                            <div class="avatar-input-group">
+                                <input type="file" id="avatarInput" accept="image/*" class="file-input">
+                                <button type="button" class="upload-btn" onclick="document.getElementById('avatarInput').click()">選擇圖片</button>
+                            </div>
+                            <div class="form-help">支持 JPG、PNG、GIF 格式，文件大小不超過 20MB</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn cancel-btn" id="cancelBtn">取消</button>
+                <button type="button" class="btn save-btn" id="saveBtn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="character_library.js"></script>
+</body>
+</html> 
