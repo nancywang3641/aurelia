@@ -1,0 +1,471 @@
+        /* Livestream Dialog Styles */
+        .livestream-dialog-container {
+            position: relative;
+            width: 95%;
+            max-width: 1200px;
+            height: 85vh;
+            max-height: 850px;
+            margin: 0 auto;
+            background-color: #1a1a1a;
+            border-radius: 12px;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .livestream-dialog-header {
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            background-color: #121212;
+            border-bottom: 1px solid #333;
+        }
+
+        .livestream-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .livestream-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .livestream-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        .livestream-status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #f44336;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        .livestream-stats {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            color: #ccc;
+            font-size: 14px;
+        }
+
+        .livestream-viewers, .livestream-gifts {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .close-livestream-dialog {
+            background: none;
+            border: none;
+            color: #ccc;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close-livestream-dialog:hover {
+            color: #fff;
+        }
+
+        .livestream-dialog-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .livestream-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            filter: blur(1px) brightness(0.7);
+            z-index: 0;
+            transition: all 0.5s ease-in-out;
+        }
+        
+        .livestream-background.with-image {
+            filter: brightness(0.8) contrast(1.1);
+            box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.4);
+        }
+        
+        .livestream-background.loading {
+            background: linear-gradient(45deg, #1a1a2e, #16213e, #0f3460);
+            background-size: 400% 400%;
+            animation: gradientShift 2s ease-in-out infinite;
+        }
+        
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .livestream-main {
+            flex: 3;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 20px;
+        }
+
+        .livestream-character {
+            flex: 1;
+            display: flex;
+            bottom: 0;
+            margin: 0;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .streamer-image {
+            max-height: 70%;
+            max-width: 80%;
+            object-fit: contain;
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.7));
+        }
+
+        .streamer-name {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-top: 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .livestream-dialog-box {
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .livestream-dialog-text {
+            color: #fff;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .livestream-chat {
+            flex: 1;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: rgba(0, 0, 0, 0.85);
+            border-left: 1px solid #333;
+        }
+
+        .livestream-chat-header {
+            padding: 10px 15px;
+            background-color: #121212;
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            border-bottom: 1px solid #333;
+        }
+
+        .livestream-chat-messages {
+            flex: 3;
+            color: #fff;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 200px; /* 确保有最小高度 */
+            background-color: rgba(0, 0, 0, 0.3); /* 添加背景色以便调试 */
+        }
+
+        .chat-message {
+            background-color: rgba(60, 60, 60, 0.3);
+            border-radius: 5px;
+            padding: 8px 10px;
+            font-size: 14px;
+            color: #fff;
+            word-break: break-word;
+            margin-bottom: 5px; /* 确保消息之间有间距 */
+            border: 1px solid rgba(255, 255, 255, 0.1); /* 添加边框以便调试 */
+        }
+
+        .chat-username {
+            font-weight: bold;
+            color: #ffcc00;
+            margin-right: 5px;
+        }
+
+        .livestream-gift-ranking {
+            flex: 1;
+            padding: 10px;
+            border-top: 1px solid #333;
+            overflow-y: auto;
+        }
+
+        .gift-ranking-header {
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .gift-rank-item {
+            display: flex;
+            align-items: center;
+            padding: 5px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            background-color: rgba(60, 60, 60, 0.3);
+        }
+
+        .rank-number {
+            width: 30px;
+            text-align: center;
+            font-weight: bold;
+            margin-right: 10px;
+            color: #fff;
+        }
+
+        .rank-1 {
+            color: gold;
+        }
+
+        .rank-2 {
+            color: silver;
+        }
+
+        .rank-3 {
+            color: #cd7f32; /* bronze */
+        }
+
+        .rank-username {
+            flex: 1;
+            color: #ffcc00;
+            font-weight: bold;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .rank-gift-value {
+            color: #ff5252;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .empty-ranking {
+            text-align: center;
+            color: #999;
+            padding: 10px;
+        }
+
+        .livestream-dialog-footer {
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0 20px;
+            background-color: #121212;
+            border-top: 1px solid #333;
+        }
+
+        .livestream-end-button {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .livestream-end-button:hover {
+            background-color: #d32f2f;
+        }
+
+        /* 自定义滚动条样式 */
+        .livestream-dialog-box::-webkit-scrollbar,
+        .livestream-chat-messages::-webkit-scrollbar,
+        .livestream-gift-ranking::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .livestream-dialog-box::-webkit-scrollbar-track,
+        .livestream-chat-messages::-webkit-scrollbar-track,
+        .livestream-gift-ranking::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .livestream-dialog-box::-webkit-scrollbar-thumb,
+        .livestream-chat-messages::-webkit-scrollbar-thumb,
+        .livestream-gift-ranking::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .livestream-dialog-box::-webkit-scrollbar-thumb:hover,
+        .livestream-chat-messages::-webkit-scrollbar-thumb:hover,
+        .livestream-gift-ranking::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #ff5252, #ff7676);
+        }
+
+        .livestream-dialog-box::-webkit-scrollbar-thumb:active,
+        .livestream-chat-messages::-webkit-scrollbar-thumb:active,
+        .livestream-gift-ranking::-webkit-scrollbar-thumb:active {
+            background: linear-gradient(135deg, #e53935, #ff5252);
+        }
+
+        /* Firefox 滚动条样式 */
+        .livestream-dialog-box,
+        .livestream-chat-messages,
+        .livestream-gift-ranking {
+            scrollbar-width: thin;
+            scrollbar-color: #ff6b6b rgba(255, 255, 255, 0.1);
+        }
+
+        /* 滚动条动画效果 */
+        @keyframes scrollbarGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(255, 107, 107, 0.3); }
+            50% { box-shadow: 0 0 15px rgba(255, 107, 107, 0.6); }
+        }
+
+        .livestream-dialog-box::-webkit-scrollbar-thumb,
+        .livestream-chat-messages::-webkit-scrollbar-thumb,
+        .livestream-gift-ranking::-webkit-scrollbar-thumb {
+            animation: scrollbarGlow 2s ease-in-out infinite;
+        }
+
+        /* 滚动条角落样式 */
+        .livestream-dialog-box::-webkit-scrollbar-corner,
+        .livestream-chat-messages::-webkit-scrollbar-corner,
+        .livestream-gift-ranking::-webkit-scrollbar-corner {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        /* 移动端优化 */
+        @media (max-width: 768px) {
+            .livestream-dialog-box::-webkit-scrollbar,
+            .livestream-chat-messages::-webkit-scrollbar,
+            .livestream-gift-ranking::-webkit-scrollbar {
+                width: 6px;
+            }
+        }
+
+        /* 直播间整体美化效果 */
+        .livestream-dialog-container {
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                0 0 0 1px rgba(255, 255, 255, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        /* 聊天消息美化 */
+        .chat-message {
+            background: linear-gradient(135deg, rgba(60, 60, 60, 0.4), rgba(40, 40, 40, 0.4));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+        }
+
+        .chat-message:hover {
+            background: linear-gradient(135deg, rgba(80, 80, 80, 0.5), rgba(60, 60, 60, 0.5));
+            transform: translateX(2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 礼物排行榜美化 */
+        .gift-rank-item {
+            background: linear-gradient(135deg, rgba(60, 60, 60, 0.4), rgba(40, 40, 40, 0.4));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+        }
+
+        .gift-rank-item:hover {
+            background: linear-gradient(135deg, rgba(80, 80, 80, 0.5), rgba(60, 60, 60, 0.5));
+            transform: translateX(2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 主播对话框美化 */
+        .livestream-dialog-box {
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.6));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 4px 16px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        /* 按钮美化 */
+        .livestream-end-button {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .livestream-end-button:hover {
+            background: linear-gradient(135deg, #d32f2f, #b71c1c);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+        }
+
+        /* 状态点动画优化 */
+        @keyframes pulse {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+            }
+            50% { 
+                opacity: 0.8;
+                transform: scale(1.1);
+                box-shadow: 0 0 0 6px rgba(244, 67, 54, 0);
+            }
+        }
+
+        /* 文字渐变效果 */
+        .livestream-name {
+            background: linear-gradient(135deg, #fff, #ffcc00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .chat-username {
+            background: linear-gradient(135deg, #ffcc00, #ffeb3b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
