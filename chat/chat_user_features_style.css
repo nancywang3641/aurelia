@@ -1,0 +1,2840 @@
+/* =======================================================================
+   用户功能模态窗口和标签样式
+   ======================================================================= */
+
+/* 模态窗口基础样式 */
+.function-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.function-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.function-modal.hidden {
+    display: none;
+}
+
+.function-modal-content {
+    background-color: var(--content-bg) !important;
+    color: var(--panel-text-color) !important;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 8px 32px rgba(0, 0, 0, 0.4);
+    width: 90%;
+    max-width: 420px;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    transform: scale(0.95) translateY(20px);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.function-modal.show .function-modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.function-modal-body {
+    background: var(--content-bg) !important;
+    color: var(--panel-text-color) !important;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    max-height: 50vh;
+    padding: 24px;
+    border-radius: 0 0 24px 24px;
+}
+
+.function-modal-header {
+    background: var(--header-bg) !important;
+    color: var(--panel-text-color) !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px 24px 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px 24px 0 0;
+    position: relative;
+}
+
+.function-modal-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20px;
+    right: 20px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+.function-modal-header h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--panel-text-color) !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.function-modal-close {
+    font-size: 24px;
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.2s ease;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.function-modal-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.function-modal-header, .function-modal-header h3, .function-modal-close {
+    color: var(--panel-text-color) !important;
+}
+
+.function-modal-body label,
+.function-modal-body .function-modal-hint,
+.function-modal-body .preset-btn,
+.function-modal-body .sticker-name {
+    color: var(--content-text-color, #222) !important;
+}
+
+/* 恢復功能窗口輸入框、下拉、時間/日期控件為白底黑字 */
+.function-modal-body input,
+.function-modal-body textarea,
+.time-input-section input[type="time"],
+.time-input-section input[type="date"],
+select {
+    background: #fff !important;
+    color: #222 !important;
+    border: 2px solid rgba(0, 0, 0, 0.1) !important;
+    border-radius: 12px;
+    font-size: 15px;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+    padding: 12px 16px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+select option {
+    background: #fff !important;
+    color: #222 !important;
+}
+
+.function-modal-body input:focus,
+.function-modal-body textarea:focus {
+    outline: none;
+    border-color: var(--bubble-color, #d32f2f);
+    box-shadow: 0 0 0 4px rgba(211, 47, 47, 0.1), 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.function-modal-body textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    font-size: 14px;
+    font-family: inherit;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 80px;
+    max-height: 200px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+    background: #ffffff;
+    color: #333333;
+}
+
+/* 提示信息 */
+.function-modal-hint {
+    background: linear-gradient(135deg, rgba(211, 47, 47, 0.05), rgba(211, 47, 47, 0.02));
+    border-left: 4px solid var(--bubble-color, #d32f2f);
+    padding: 16px 18px;
+    border-radius: 12px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* 预设按钮样式 */
+.red-envelope-presets {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.preset-btn {
+    margin-top: 8px;
+    padding: 14px 16px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.preset-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: left 0.5s ease;
+}
+
+.preset-btn:hover {
+    border-color: var(--bubble-color, #d32f2f);
+    background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(211, 47, 47, 0.15);
+}
+
+.preset-btn:hover::before {
+    left: 100%;
+}
+
+.preset-btn:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 4px 15px rgba(211, 47, 47, 0.2);
+}
+
+/* 表情包网格 */
+.sticker-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.sticker-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px 12px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.sticker-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: left 0.5s ease;
+}
+
+.sticker-item:hover {
+    border-color: var(--bubble-color, #d32f2f);
+    background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(211, 47, 47, 0.15);
+}
+
+.sticker-item:hover::before {
+    left: 100%;
+}
+
+.sticker-preview {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+.sticker-name {
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+}
+
+.custom-sticker {
+    border-top: 1px solid #e0e0e0;
+    padding-top: 15px;
+}
+
+/* 模态窗口底部 */
+.function-modal-footer {
+    background: var(--content-bg) !important;
+    color: var(--panel-text-color) !important;
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+    padding: 20px 24px 24px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0 0 24px 24px;
+    position: relative;
+}
+
+.function-modal-footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20px;
+    right: 20px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+/* 功能窗口按鈕主題色 */
+.function-btn-confirm {
+    background: var(--confirm-button-bg, #007bff) !important;
+    color: var(--confirm-button-text, #ffffff) !important;
+    border: none;
+    border-radius: 16px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.function-btn-confirm::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.function-btn-confirm:hover {
+    filter: brightness(1.1) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 123, 255, 0.4);
+}
+
+.function-btn-confirm:hover::before {
+    left: 100%;
+}
+
+.function-btn-confirm:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.5);
+}
+
+.function-btn-cancel {
+    background: var(--cancel-button-bg, #6c757d) !important;
+    color: var(--cancel-button-text, #ffffff) !important;
+    border: none;
+    border-radius: 16px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.function-btn-cancel:hover {
+    filter: brightness(1.1) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(108, 117, 125, 0.4);
+}
+
+.function-btn-cancel:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 4px 15px rgba(108, 117, 125, 0.5);
+}
+
+/* =======================================================================
+   附件标签样式
+   ======================================================================= */
+
+.attachment-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: transparent;      /* 透明背景 */
+    border: none;                 /* 无边框 */
+    border-bottom: none;
+}
+
+.attachment-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(145deg, #2c3e50 0%, #34495e 100%);
+    color: var(--panel-text-color, #fff) ;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    animation: tagSlideIn 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+}
+
+.attachment-tag:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* 🆕 標籤圖標樣式 */
+.attachment-tag-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    border-radius: 50%;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+    background: #ffffff;
+    padding: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* 🆕 標籤文字樣式 */
+.attachment-tag-text {
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+/* 🆕 標籤emoji圖標樣式 */
+.attachment-tag-emoji {
+    font-size: 18px;
+    background: #ffffff;
+    border-radius: 50%;
+    padding: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+}
+
+@keyframes tagSlideIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(-10px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.tag-remove {
+    margin-left: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.tag-remove:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+
+
+/* 当有标签时，输入框样式调整 */
+.attachment-tags + #userInput {
+    border-radius: 0 0 18px 18px;
+    border-top: none;
+}
+
+/* =======================================================================
+   响应式设计
+   ======================================================================= */
+
+@media (max-width: 480px) {
+    .function-modal-content {
+        width: 95%;
+        margin: 10px;
+    }
+    
+    .function-modal-header,
+    .function-modal-body,
+    .function-modal-footer {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    
+    .location-presets,
+    .red-envelope-presets {
+        grid-template-columns: 1fr;
+    }
+    
+    .sticker-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+    
+    .function-modal-footer {
+        flex-direction: column;
+    }
+    
+    .function-btn-cancel,
+    .function-btn-confirm {
+        width: 100%;
+    }
+}
+
+/* =======================================================================
+   特殊功能样式
+   ======================================================================= */
+
+/* 红包模态窗口特殊样式 */
+#redEnvelopeModal .function-modal-header {
+    background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+    color: white;
+    border-radius: 16px 16px 0 0;
+}
+
+#redEnvelopeModal .function-modal-header h3 {
+    color: white;
+}
+
+#redEnvelopeModal .function-modal-close {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#redEnvelopeModal .function-modal-close:hover {
+    color: white;
+}
+
+/* 转账模态窗口特殊样式 */
+#transferModal .function-modal-header {
+    background: linear-gradient(135deg, #4CAF50, #66BB6A);
+    color: white;
+    border-radius: 16px 16px 0 0;
+}
+
+#transferModal .function-modal-header h3 {
+    color: white;
+}
+
+#transferModal .function-modal-close {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#transferModal .function-modal-close:hover {
+    color: white;
+}
+
+/* 语音相关特殊样式 */
+#voiceInputModal .function-modal-body {
+    position: relative;
+}
+
+#voiceInputModal .function-modal-body::before {
+    content: '🎙️';
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 24px;
+    opacity: 0.3;
+}
+
+/* 加载动画 */
+.function-modal-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.function-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--primary-green);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ================================== */
+/* 新增：轉帳、通話、位置卡片樣式       */
+/* ================================== */
+
+/* --- 轉帳卡片樣式 --- */
+.transfer-container {
+    background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+    border: 1px solid #388e3c;
+    border-radius: 16px;
+    padding: 16px;
+    margin-top: 8px;
+    min-width: 280px;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+    animation: transferSlideIn 0.5s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.transfer-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.transfer-header-icon {
+    display: flex;
+    align-items: center;
+}
+
+.transfer-header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.transfer-content {
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.transfer-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+}
+
+.transfer-container .transfer-amount {
+    font-size: 24px;
+    font-weight: bold;
+    color: #000000 !important;
+    text-shadow: none;
+    line-height: 1.2;
+}
+
+.transfer-container .transfer-note {
+    font-size: 14px;
+    color: #000000 !important;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.transfer-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.transfer-status-icon {
+    font-size: 14px;
+    color: #28a745;
+    font-weight: bold;
+}
+
+.transfer-status-text {
+    font-size: 12px;
+    color: #28a745;
+    font-weight: 500;
+}
+
+/* 等待處理狀態 */
+.transfer-status.pending .transfer-status-icon {
+    color: #ff9800;
+}
+
+.transfer-status.pending .transfer-status-text {
+    color: #ff9800;
+}
+
+/* 已接受狀態 */
+.transfer-status.accepted .transfer-status-icon {
+    color: #28a745;
+}
+
+.transfer-status.accepted .transfer-status-text {
+    color: #28a745;
+}
+
+/* 已拒絕狀態 */
+.transfer-status.rejected .transfer-status-icon {
+    color: #dc3545;
+}
+
+.transfer-status.rejected .transfer-status-text {
+    color: #dc3545;
+}
+
+/* 過期狀態 */
+.transfer-status.expired .transfer-status-icon,
+.gift-status.expired .gift-status-icon {
+    color: #6c757d;
+}
+
+.transfer-status.expired .transfer-status-text,
+.gift-status.expired .gift-status-text {
+    color: #6c757d;
+}
+
+/* 禮物狀態樣式 */
+.gift-status.pending .gift-status-icon {
+    color: #ff9800;
+}
+
+.gift-status.accepted .gift-status-icon {
+    color: #28a745;
+}
+
+.gift-status.rejected .gift-status-icon {
+    color: #dc3545;
+}
+
+/* 倒計時樣式 */
+.transfer-timer,
+.gift-timer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.timer-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+}
+
+.timer-display {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+.timer-minutes,
+.timer-seconds {
+    font-size: 12px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: 'Courier New', monospace;
+    min-width: 16px;
+    text-align: center;
+}
+
+.timer-separator {
+    font-size: 12px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: 'Courier New', monospace;
+}
+
+/* 倒計時警告狀態 */
+.transfer-timer.warning .timer-display {
+    background: rgba(255, 152, 0, 0.3);
+    animation: pulse 1s infinite;
+}
+
+.transfer-timer.danger .timer-display {
+    background: rgba(220, 53, 69, 0.3);
+    animation: pulse 0.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.transfer-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #4caf50, #66bb6a, #81c784);
+}
+
+@keyframes transferSlideIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.9) translateY(-10px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.message.sent .transfer-container {
+    background: linear-gradient(135deg, #388e3c 0%, #4caf50 100%);
+    border-color: #2e7d32;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+}
+
+.transfer-icon-wrapper {
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.transfer-icon-wrapper img {
+    width: 24px;
+    height: 24px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.transfer-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+    align-items: center;
+}
+
+.transfer-amount {
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    line-height: 1.2;
+}
+
+.transfer-note {
+    font-size: 14px;
+    color: #ffffff;
+    font-weight: 500;
+    opacity: 0.95;
+}
+
+/* 發送方的轉賬卡片樣式 */
+.message.sent .transfer-header-title {
+    color: #ffffff;
+}
+
+.message.sent .transfer-content {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.message.sent .transfer-status {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+/* 響應式設計 - 轉賬卡片 */
+@media (max-width: 480px) {
+    .transfer-container {
+        min-width: 240px;
+        padding: 12px;
+    }
+    
+    .transfer-icon-wrapper {
+        width: 40px;
+        height: 40px;
+        margin-right: 12px;
+    }
+    
+    .transfer-icon-wrapper img {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .transfer-amount {
+        font-size: 20px;
+    }
+    
+    .transfer-note {
+        font-size: 13px;
+    }
+}
+
+
+/* --- 視訊通話記錄卡片樣式 --- */
+.call-record-container {
+    background-color: #e3f2fd; /* 淺藍色背景 */
+    border: 1px solid #bbdefb;
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    min-width: 180px;
+}
+.message.sent .call-record-container {
+    background-color: #90caf9;
+    border-color: #64b5f6;
+}
+.call-record-icon {
+    font-size: 22px;
+    margin-right: 12px;
+    color: #1976d2;
+}
+.message.sent .call-record-icon {
+    color: #1565c0;
+}
+.call-record-details {
+    flex-grow: 1;
+}
+.call-record-note {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+}
+.call-record-duration {
+    font-size: 13px;
+    color: #555;
+    margin-top: 2px;
+}
+
+
+/* --- 位置卡片樣式 --- */
+.location-card-container {
+    background: #fff3e0; /* 淺橘色背景 */
+    border: 1px solid #ffe0b2;
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-width: 180px;
+}
+.message.sent .location-card-container {
+    background: #ffcc80;
+    border-color: #ffb74d;
+}
+.location-card-details {
+    flex-grow: 1;
+}
+.location-card-name {
+    font-size: 16px;
+    font-weight: bold;
+    color: #e65100;
+}
+.location-card-address {
+    font-size: 12px;
+    color: #666;
+}
+.location-card-icon {
+    font-size: 24px;
+    margin-left: 12px;
+}
+.location-card-icon a {
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* 通话记录样式扩展 */
+.call-record-container.incoming-call {
+    background-color: #e8f5e9; 
+    border-left: 4px solid #4CAF50;
+    animation: incoming-call-pulse 2s infinite;
+}
+
+.call-record-container.outgoing-call {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196F3;
+}
+
+.call-record-container.call-answered {
+    background-color: #f3e5f5;
+    border-left: 4px solid #9C27B0;
+}
+
+.call-record-container.call-ended {
+    background-color: #ffebee;
+    border-left: 4px solid #f44336;
+}
+
+@keyframes incoming-call-pulse {
+    0%, 100% { 
+        box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
+    }
+    50% { 
+        box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+    }
+}
+
+/* ================================== */
+/* 通话邀请和响应样式                   */
+/* ================================== */
+
+/* 通话邀请卡片 */
+.call-invitation-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    padding: 16px;
+    color: white;
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+    animation: call-invitation-pulse 2s infinite;
+    max-width: 280px;
+}
+
+@keyframes call-invitation-pulse {
+    0%, 100% { 
+        transform: scale(1); 
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+    }
+    50% { 
+        transform: scale(1.02); 
+        box-shadow: 0 6px 30px rgba(102, 126, 234, 0.5);
+    }
+}
+
+.call-invitation-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.call-invitation-icon {
+    font-size: 24px;
+    margin-right: 12px;
+    animation: call-icon-ring 1.5s infinite;
+}
+
+@keyframes call-icon-ring {
+    0%, 50%, 100% { transform: rotate(0deg); }
+    10%, 30% { transform: rotate(-10deg); }
+    20%, 40% { transform: rotate(10deg); }
+}
+
+.call-invitation-info {
+    flex: 1;
+}
+
+.call-invitation-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.call-invitation-note {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.call-invitation-status {
+    font-size: 13px;
+    opacity: 0.8;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.call-invitation-actions {
+    display: flex;
+    justify-content: center;
+}
+
+/* 🆕 新增：通话状态显示样式 */
+.call-invitation-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-weight: 500;
+    animation: status-fade-in 0.3s ease;
+}
+
+@keyframes status-fade-in {
+    0% {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.call-invitation-status.accepted {
+    background: rgba(76, 175, 80, 0.2);
+    border: 1px solid rgba(76, 175, 80, 0.5);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.call-invitation-status.declined {
+    background: rgba(244, 67, 54, 0.2);
+    border: 1px solid rgba(244, 67, 54, 0.5);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.call-status-icon {
+    font-size: 16px;
+    margin-right: 8px;
+}
+
+.call-status-text {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.call-invitation-pending {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    animation: pending-blink 2s infinite;
+}
+
+@keyframes pending-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.6; }
+}
+
+/* 通话响应卡片 */
+.call-response-container {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-weight: 500;
+    animation: response-slide-in 0.5s ease;
+}
+
+@keyframes response-slide-in {
+    0% {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.call-response-container.accepted {
+    background: linear-gradient(135deg, #4CAF50, #66BB6A);
+    color: white;
+}
+
+.call-response-container.declined {
+    background: linear-gradient(135deg, #f44336, #ef5350);
+    color: white;
+}
+
+.call-response-container.ended {
+    background: linear-gradient(135deg, #9E9E9E, #757575);
+    color: white;
+}
+
+.call-response-icon {
+    font-size: 20px;
+    margin-right: 12px;
+}
+
+.call-response-text {
+    font-size: 15px;
+}
+
+/* 通话邀请在发送方的样式调整 */
+.message.sent .call-invitation-container {
+    background: linear-gradient(135deg, var(--primary-green), var(--dark-green));
+}
+
+.message.sent .call-response-container.accepted {
+    background: linear-gradient(135deg, #66BB6A, #4CAF50);
+}
+
+.message.sent .call-response-container.declined {
+    background: linear-gradient(135deg, #ef5350, #f44336);
+}
+
+.message.sent .call-response-container.ended {
+    background: linear-gradient(135deg, #757575, #9E9E9E);
+}
+
+/* 🆕 发送方的通话状态样式 */
+.message.sent .call-invitation-status.accepted {
+    background: rgba(76, 175, 80, 0.3);
+    border: 1px solid rgba(76, 175, 80, 0.6);
+}
+
+.message.sent .call-invitation-status.declined {
+    background: rgba(244, 67, 54, 0.3);
+    border: 1px solid rgba(244, 67, 54, 0.6);
+}
+
+.message.sent .call-invitation-status.ended {
+    background: rgba(158, 158, 158, 0.3);
+    border: 1px solid rgba(158, 158, 158, 0.6);
+    color: #757575;
+}
+
+.call-invitation-status.ended {
+    background: rgba(158, 158, 158, 0.3);
+    border: 1px solid rgba(158, 158, 158, 0.6);
+    color: #757575;
+}
+
+/* 响应式调整 */
+@media (max-width: 480px) {
+    .call-invitation-container {
+        max-width: 260px;
+        padding: 14px;
+    }
+    
+    .call-invitation-icon {
+        font-size: 22px;
+    }
+    
+    .call-invitation-title {
+        font-size: 15px;
+    }
+    
+    .call-invitation-note {
+        font-size: 13px;
+    }
+}
+
+/* ============================================================================
+   时间调节模态窗口样式 - 添加到 chat_user_features_style.css
+   ============================================================================ */
+
+/* 时间调节模态窗口特殊样式 */
+#timeAdjustmentModal .function-modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 16px 16px 0 0;
+}
+
+#timeAdjustmentModal .function-modal-header h3 {
+    color: white;
+}
+
+#timeAdjustmentModal .function-modal-close {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#timeAdjustmentModal .function-modal-close:hover {
+    color: white;
+}
+
+/* 时间模式选择器 */
+.time-mode-selector {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    border-left: 4px solid #667eea;
+    border: 1px solid #e9ecef;
+}
+
+.time-mode-selector label {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333333;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.time-mode-selector label:hover {
+    color: #667eea;
+}
+
+.time-mode-selector label:last-child {
+    margin-bottom: 0;
+}
+
+.time-mode-selector input[type="radio"] {
+    margin-right: 10px;
+    width: 16px;
+    height: 16px;
+    accent-color: #667eea;
+}
+
+/* 时间输入区域 */
+.time-input-section {
+    margin-bottom: 20px;
+}
+
+.time-input-section label {
+    display: block;
+    margin-bottom: 8px;
+    margin-top: 15px;
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+}
+
+.time-input-section label:first-child {
+    margin-top: 0;
+}
+
+.time-input-section input[type="time"]:focus,
+.time-input-section input[type="date"]:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    
+}
+
+
+
+/* 时间调节提示信息样式 */
+#timeAdjustmentModal .function-modal-hint {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border-left: 4px solid #667eea;
+    margin-bottom: 15px;
+}
+
+/* 时间调节确认按钮特殊样式 - 使用主题变量 */
+#timeAdjustmentModal .function-btn-confirm {
+    background: var(--confirm-button-bg, #007bff) !important;
+    color: var(--confirm-button-text, #ffffff) !important;
+    border: none;
+    position: relative;
+    overflow: hidden;
+}
+
+#timeAdjustmentModal .function-btn-confirm::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+#timeAdjustmentModal .function-btn-confirm:hover::before {
+    left: 100%;
+}
+
+#timeAdjustmentModal .function-btn-confirm:hover {
+    filter: brightness(1.1) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.3);
+}
+
+/* 响应式设计 */
+@media (max-width: 480px) {
+    .preset-time-row {
+        grid-template-columns: 1fr;
+    }
+    
+
+    
+    .time-mode-selector {
+        padding: 12px;
+    }
+    
+    .time-input-section input[type="time"],
+    .time-input-section input[type="date"] {
+        font-size: 14px;
+        padding: 10px 12px;
+    }
+}
+
+/* 特殊动画效果 */
+@keyframes timeAdjustmentPulse {
+    0%, 100% { 
+        box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4);
+    }
+    50% { 
+        box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+    }
+}
+
+/* 🆕 現代化按鈕動畫效果 */
+@keyframes buttonGlow {
+    0%, 100% {
+        box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(211, 47, 47, 0.5);
+    }
+}
+
+@keyframes buttonShine {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* 🆕 按鈕焦點效果 */
+.function-btn-confirm:focus,
+.function-btn-cancel:focus,
+.preset-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.3);
+}
+
+/* 🆕 按鈕載入動畫 */
+.function-btn-confirm.loading,
+.function-btn-cancel.loading {
+    position: relative;
+    color: transparent;
+}
+
+.function-btn-confirm.loading::after,
+.function-btn-cancel.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid transparent;
+    border-top: 2px solid #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#timeAdjustmentModal.show .function-modal-content {
+    animation: timeAdjustmentPulse 2s infinite;
+}
+
+/* 时间输入框的自定义样式 */
+.time-input-section input[type="time"]::-webkit-calendar-picker-indicator,
+.time-input-section input[type="date"]::-webkit-calendar-picker-indicator {
+    background-color: #667eea;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 2px;
+}
+
+.time-input-section input[type="time"]::-webkit-calendar-picker-indicator:hover,
+.time-input-section input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    background-color: #5a6fd8;
+}
+
+
+/* =======================================================================
+   劇情指示消息样式
+   ======================================================================= */
+
+.story-directive-message {
+    margin: 20px auto !important;
+}
+
+.story-directive-content {
+    background: linear-gradient(135deg, #6B73FF 0%, #9D50BB 100%);
+    color: white;
+    border-radius: 16px;
+    padding: 16px 20px;
+    box-shadow: 0 4px 15px rgba(107, 115, 255, 0.3);
+    text-align: center;
+    min-width: 200px;
+    max-width: 350px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.story-directive-type {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.story-directive-text {
+    font-size: 16px;
+    line-height: 1.4;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 劇情指示类型颜色变化 */
+.story-directive-content:has(.story-directive-type:contains("角色行動")) {
+    background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%);
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+}
+
+.story-directive-content:has(.story-directive-type:contains("場景變化")) {
+    background: linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%);
+    box-shadow: 0 4px 15px rgba(78, 205, 196, 0.3);
+}
+
+.story-directive-content:has(.story-directive-type:contains("時間推進")) {
+    background: linear-gradient(135deg, #45B7D1 0%, #3498DB 100%);
+    box-shadow: 0 4px 15px rgba(69, 183, 209, 0.3);
+}
+
+/* 响应式设计 */
+@media (max-width: 480px) {
+    .story-directive-content {
+        padding: 12px 16px;
+        min-width: 150px;
+        max-width: 280px;
+    }
+    
+    .story-directive-type {
+        font-size: 12px;
+    }
+    
+    .story-directive-text {
+        font-size: 14px;
+    }
+}
+
+
+/* 功能窗口每一行输入区块隔间样式 */
+.function-modal-body label,
+.function-modal-body .function-modal-row,
+.function-modal-body .input-row {
+    display: block;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    padding: 10px 12px 8px 12px;
+    margin-bottom: 14px;
+    margin-top: 0;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* 让label和input分开一行 */
+.function-modal-body label {
+    margin-bottom: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    background: none;
+    border: none;
+    padding: 0 0 4px 0;
+}
+
+/* 統一功能卡片陰影（加強版 Material 風格） */
+.transfer-container,
+.call-record-container,
+.location-card-container,
+.call-invitation-container,
+.call-response-container,
+.story-directive-content {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.18);
+}
+
+/* =======================================================================
+   通話卡片字體顏色修復 - 添加到 chat_user_features_style.css
+   ======================================================================= */
+
+/* 修復通話邀請狀態的字體顏色 */
+.call-invitation-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-weight: 500;
+    animation: status-fade-in 0.3s ease;
+    color: white !important; /* 強制白色字體 */
+}
+
+.call-invitation-status.accepted {
+    background: rgba(76, 175, 80, 0.8) !important; /* 提高背景不透明度 */
+    border: 1px solid rgba(76, 175, 80, 0.9);
+    color: white !important; /* 白色字體 */
+}
+
+.call-invitation-status.declined {
+    background: rgba(244, 67, 54, 0.8) !important; /* 提高背景不透明度 */
+    border: 1px solid rgba(244, 67, 54, 0.9);
+    color: white !important; /* 白色字體 */
+}
+
+.call-invitation-status.ended {
+    background: rgba(158, 158, 158, 0.8) !important; /* 提高背景不透明度 */
+    border: 1px solid rgba(158, 158, 158, 0.9);
+    color: white !important; /* 白色字體 */
+}
+
+/* 修復通話響應容器的字體顏色 */
+.call-response-container {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-weight: 500;
+    animation: response-slide-in 0.5s ease;
+    color: white !important; /* 強制白色字體 */
+}
+
+.call-response-container.accepted {
+    background: linear-gradient(135deg, #4CAF50, #66BB6A) !important;
+    color: white !important; /* 白色字體 */
+    border: 1px solid #4CAF50;
+}
+
+.call-response-container.declined {
+    background: linear-gradient(135deg, #f44336, #ef5350) !important;
+    color: white !important; /* 白色字體 */
+    border: 1px solid #f44336;
+}
+
+.call-response-container.ended {
+    background: linear-gradient(135deg, #9E9E9E, #757575) !important;
+    color: white !important; /* 白色字體 */
+    border: 1px solid #9E9E9E;
+}
+
+/* 修復通話邀請容器內的文字顏色 */
+.call-invitation-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+    animation: call-invitation-pulse 2s infinite;
+    max-width: 280px;
+}
+
+/* 修復通話邀請內部元素的顏色 */
+.call-invitation-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: white !important; /* 白色字體 */
+}
+
+.call-invitation-note {
+    font-size: 14px;
+    opacity: 0.9;
+    color: white !important; /* 白色字體 */
+}
+
+.call-invitation-icon {
+    font-size: 24px;
+    margin-right: 12px;
+    color: white !important; /* 白色圖標 */
+    animation: call-icon-ring 1.5s infinite;
+}
+
+/* 修復通話邀請按鈕樣式 */
+.call-invitation-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.call-action-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: white !important; /* 白色字體 */
+    min-width: 80px;
+}
+
+.call-accept-btn {
+    background: linear-gradient(135deg, #4CAF50, #66BB6A) !important;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+    color: white !important; /* 白色字體 */
+}
+
+.call-accept-btn:hover {
+    background: linear-gradient(135deg, #45a049, #5cb85c) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.call-decline-btn {
+    background: linear-gradient(135deg, #f44336, #ef5350) !important;
+    box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+    color: white !important; /* 白色字體 */
+}
+
+.call-decline-btn:hover {
+    background: linear-gradient(135deg, #d32f2f, #b71c1c) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+}
+
+/* 修復發送方的通話狀態樣式 */
+.message.sent .call-invitation-status.accepted {
+    background: rgba(76, 175, 80, 0.9) !important;
+    border: 1px solid rgba(76, 175, 80, 1);
+    color: white !important;
+}
+
+.message.sent .call-invitation-status.declined {
+    background: rgba(244, 67, 54, 0.9) !important;
+    border: 1px solid rgba(244, 67, 54, 1);
+    color: white !important;
+}
+
+.message.sent .call-invitation-status.ended {
+    background: rgba(158, 158, 158, 0.9) !important;
+    border: 1px solid rgba(158, 158, 158, 1);
+    color: white !important;
+}
+
+.message.sent .call-response-container.accepted {
+    background: linear-gradient(135deg, #66BB6A, #4CAF50) !important;
+    color: white !important;
+}
+
+.message.sent .call-response-container.declined {
+    background: linear-gradient(135deg, #ef5350, #f44336) !important;
+    color: white !important;
+}
+
+.message.sent .call-response-container.ended {
+    background: linear-gradient(135deg, #757575, #9E9E9E) !important;
+    color: white !important;
+}
+
+/* 確保通話狀態文字和圖標都是白色 */
+.call-status-icon {
+    font-size: 16px;
+    margin-right: 8px;
+    color: white !important;
+}
+
+.call-status-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: white !important;
+}
+
+.call-response-icon {
+    font-size: 20px;
+    color: white !important;
+}
+
+.call-response-text {
+    font-size: 15px;
+    color: white !important;
+}
+
+/* 確保在不同主題下的兼容性 */
+[data-theme="dark"] .call-invitation-status,
+[data-theme="dark"] .call-response-container,
+.dark-theme .call-invitation-status,
+.dark-theme .call-response-container {
+    color: white !important;
+}
+
+[data-theme="dark"] .call-invitation-title,
+[data-theme="dark"] .call-invitation-note,
+[data-theme="dark"] .call-status-text,
+[data-theme="dark"] .call-response-text,
+.dark-theme .call-invitation-title,
+.dark-theme .call-invitation-note,
+.dark-theme .call-status-text,
+.dark-theme .call-response-text {
+    color: white !important;
+}
+
+/* 響應式設計 */
+@media (max-width: 480px) {
+    .call-invitation-container {
+        max-width: 260px;
+        padding: 14px;
+    }
+    
+    .call-action-btn {
+        padding: 8px 12px;
+        font-size: 13px;
+        min-width: 70px;
+    }
+    
+    .call-invitation-title {
+        font-size: 15px;
+    }
+    
+    .call-invitation-note {
+        font-size: 13px;
+    }
+}
+
+/* =======================================================================
+   群組成員管理器樣式
+   ======================================================================= */
+
+/* 成員輸入容器 */
+.member-input-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.member-input-container input {
+    flex: 1;
+    background: #fff !important;
+    color: #222 !important;
+    border: 2px solid rgba(0, 0, 0, 0.1) !important;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.add-member-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--bubble-color, #d32f2f) 0%, var(--bubble-color-dark, #b71c1c) 100%);
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(211, 47, 47, 0.3);
+}
+
+.add-member-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.4);
+}
+
+.add-member-btn:active {
+    transform: scale(0.95);
+}
+
+/* 成員列表顯示 */
+.member-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    min-height: 20px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 🆕 成員列表滾動條樣式 */
+.member-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.member-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.member-list::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.member-list::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Firefox 滾動條 */
+.member-list {
+    scrollbar-width: thin;
+    scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.member-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.member-tag:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.member-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.member-remove {
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    color: #666;
+    margin-left: 4px;
+    transition: color 0.2s ease;
+}
+
+.member-remove:hover {
+    color: #d32f2f;
+}
+
+/* 🆕 成員頭像網格顯示 */
+.member-avatar-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 10px;
+    min-height: 60px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 2px dashed rgba(0, 0, 0, 0.1);
+}
+
+.member-avatar-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    flex: 1;
+}
+
+.member-avatar-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.member-avatar-item:hover {
+    transform: translateY(-2px);
+}
+
+.member-avatar-item img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s ease;
+}
+
+.member-avatar-item:hover img {
+    border-color: var(--bubble-color, #d32f2f);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.member-avatar-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: #333;
+    text-align: center;
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.member-avatar-remove {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 20px;
+    height: 20px;
+    background: #d32f2f;
+    color: white;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.member-avatar-item:hover .member-avatar-remove {
+    opacity: 1;
+}
+
+.add-member-avatar-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border: 2px dashed #1976d2;
+    border-radius: 50%;
+    color: #1976d2;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    gap: 2px;
+}
+
+.add-member-avatar-btn:hover {
+    background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
+    transform: scale(1.05);
+}
+
+.add-icon {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.add-text {
+    font-size: 8px;
+    font-weight: 500;
+}
+
+/* 🆕 群組創建者頭像樣式 */
+.admin-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-avatar-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.admin-avatar-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    min-width: 40px;
+}
+
+.admin-avatar-upload {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-avatar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    background: #f8f9fa;
+    color: #666;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.admin-avatar-btn:hover {
+    border-color: var(--bubble-color, #d32f2f);
+    background: #fff;
+    color: var(--bubble-color, #d32f2f);
+}
+
+.admin-avatar-preview {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.admin-avatar-text {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* 簡化的成員添加窗口 */
+.member-add-content {
+    max-width: 400px;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.add-member-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(211, 47, 47, 0.05), rgba(211, 47, 47, 0.02));
+    border-radius: 16px;
+    border: 1px solid rgba(211, 47, 47, 0.1);
+}
+
+.add-member-section h4 {
+    margin: 0 0 15px 0;
+    color: var(--bubble-color, #d32f2f);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.member-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-row label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-row input {
+    background: #fff !important;
+    color: #222 !important;
+    border: 2px solid rgba(0, 0, 0, 0.1) !important;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 15px;
+    transition: all 0.2s ease;
+}
+
+.form-row input:focus {
+    outline: none;
+    border-color: var(--bubble-color, #d32f2f) !important;
+    box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1);
+}
+
+/* 頭像上傳 */
+.avatar-upload-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.avatar-upload-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 2px dashed rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    background: #f8f9fa;
+    color: #666;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.avatar-upload-btn:hover {
+    border-color: var(--bubble-color, #d32f2f);
+    background: #fff;
+    color: var(--bubble-color, #d32f2f);
+}
+
+.add-member-submit-btn {
+    background: linear-gradient(135deg, var(--bubble-color, #d32f2f) 0%, var(--bubble-color-dark, #b71c1c) 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(211, 47, 47, 0.3);
+}
+
+.add-member-submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.4);
+}
+
+.add-member-submit-btn:active {
+    transform: translateY(0);
+}
+
+/* 成員列表區域 */
+.member-list-section {
+    margin-bottom: 20px;
+}
+
+.member-list-section h4 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.member-manager-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 🆕 增強滾動條樣式 */
+.member-manager-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.member-manager-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.member-manager-list::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.member-manager-list::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Firefox 滾動條 */
+.member-manager-list {
+    scrollbar-width: thin;
+    scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+.member-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.member-item-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.member-item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.member-item-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+.member-item-display {
+    font-size: 12px;
+    color: #666;
+}
+
+.member-item-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.member-item-btn {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.member-item-edit {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.member-item-edit:hover {
+    background: #bbdefb;
+}
+
+.member-item-delete {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+.member-item-delete:hover {
+    background: #ffcdd2;
+}
+
+/* 確認按鈕 */
+.confirm-members-btn {
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.confirm-members-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.cancel-btn {
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.cancel-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+}
+
+/* 響應式設計 */
+@media (max-width: 480px) {
+    .member-manager-content {
+        max-width: 95%;
+        margin: 10px;
+    }
+    
+    .member-form {
+        gap: 12px;
+    }
+    
+    .member-item {
+        padding: 10px;
+    }
+    
+    .member-item-avatar {
+        width: 35px;
+        height: 35px;
+    }
+    
+    .member-item-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .member-item-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+}
+
+/* 🆕 取消按鈕樣式 */
+.cancel-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 10px;
+    transition: background-color 0.2s ease;
+}
+
+.cancel-btn:hover {
+    background: #5a6268;
+}
+
+/* 🆕 群組頭像上傳樣式 */
+.group-avatar-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.group-avatar-upload {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.group-avatar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    background: #f8f9fa;
+    color: #666;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.group-avatar-btn:hover {
+    border-color: var(--bubble-color, #d32f2f);
+    background: #fff;
+    color: var(--bubble-color, #d32f2f);
+}
+
+.group-avatar-preview {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.group-avatar-text {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* 🆕 私聊頭像上傳樣式 */
+.user-input-container,
+.character-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.user-avatar-section,
+.character-avatar-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-avatar-label,
+.character-avatar-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    min-width: 60px;
+}
+
+.user-avatar-upload,
+.character-avatar-upload {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-avatar-btn,
+.character-avatar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    background: #f8f9fa;
+    color: #666;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-avatar-btn:hover,
+.character-avatar-btn:hover {
+    border-color: var(--bubble-color, #d32f2f);
+    background: #fff;
+    color: var(--bubble-color, #d32f2f);
+}
+
+.user-avatar-preview,
+.character-avatar-preview {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.user-avatar-text,
+.character-avatar-text {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* 響應式設計 - 私聊頭像 */
+@media (max-width: 480px) {
+    .user-avatar-section,
+    .character-avatar-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .user-avatar-label,
+    .character-avatar-label {
+        min-width: auto;
+    }
+    
+    .user-avatar-btn,
+    .character-avatar-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+    
+    .user-avatar-preview,
+    .character-avatar-preview {
+        width: 25px;
+        height: 25px;
+    }
+}
+
+/* =======================================================================
+   禮物卡片樣式
+   ======================================================================= */
+
+.gift-container {
+    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+    border: 1px solid #ff8a8e;
+    border-radius: 16px;
+    padding: 16px;
+    margin-top: 8px;
+    min-width: 280px;
+    box-shadow: 0 4px 15px rgba(255, 154, 158, 0.3);
+    animation: giftSlideIn 0.5s ease;
+}
+
+@keyframes giftSlideIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.9) translateY(-10px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.gift-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.gift-icon {
+    display: flex;
+    align-items: center;
+}
+
+.gift-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.gift-content {
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.gift-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+}
+
+.gift-sender {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.gift-name {
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+}
+
+.gift-description {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+}
+
+.gift-value {
+    font-size: 18px;
+    font-weight: bold;
+    color: #dc3545;
+    margin-top: 4px;
+}
+
+.gift-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.gift-status-icon {
+    font-size: 14px;
+    color: #28a745;
+    font-weight: bold;
+}
+
+.gift-status-text {
+    font-size: 12px;
+    color: #28a745;
+    font-weight: 500;
+}
+
+/* 發送方的禮物卡片樣式 */
+.message.sent .gift-container {
+    background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+    border-color: #ff5a8c;
+}
+
+.message.sent .gift-title {
+    color: #c41e3a;
+}
+
+.message.sent .gift-content {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.message.sent .gift-status {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+/* 響應式設計 - 禮物卡片 */
+@media (max-width: 480px) {
+    .gift-container {
+        min-width: 240px;
+        padding: 12px;
+    }
+    
+    .gift-title {
+        font-size: 13px;
+    }
+    
+    .gift-name {
+        font-size: 15px;
+    }
+    
+    .gift-value {
+        font-size: 16px;
+    }
+}
+
+/* 背景上傳樣式 */
+.background-upload-section {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 15px;
+}
+
+.background-upload-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    border: 2px dashed #999;
+    border-radius: 12px;
+    background: #f8f9fa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 120px;
+    min-height: 120px;
+}
+
+.background-upload-btn:hover {
+    border-color: #667eea;
+    background: #f0f2ff;
+}
+
+.background-image-preview {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    object-fit: cover;
+    margin-bottom: 8px;
+    border: 1px solid #ddd;
+}
+
+.background-upload-text {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
+}
+
+.uploaded-images-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.uploaded-image-item {
+    position: relative;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.uploaded-image-item:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.uploaded-image-item img {
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.uploaded-image-item .delete-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(255, 0, 0, 0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.uploaded-image-item .delete-btn:hover {
+    background: rgba(255, 0, 0, 1);
+}

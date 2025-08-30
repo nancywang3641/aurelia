@@ -1,0 +1,30 @@
+:root {
+  --main-color: #000000;
+  --header-bg: var(--main-color);
+  --bubble-color: #d32f2f;
+  --bubble-color-light: #e57373;
+  --bubble-color-dark: #b71c1c;
+  --user-bubble-color: #23272e;
+  --user-bubble-light: #444851;
+  --user-bubble-dark: #181a1f;
+  --card-color: #d32f2f;
+  --card-hover: #b71c1c;
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "思源黑體", "苹方", "微軟雅黑", sans-serif;
+}
+
+/* 主題色覆蓋原生下拉與時間日期控件 */
+select,
+input[type="time"],
+input[type="date"] {
+  background: var(--header-bg, #222) !important;
+  color: var(--panel-text-color, #fff) !important;
+  border: 1px solid var(--bubble-color-dark, #b71c1c) !important;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+select option {
+  background: var(--header-bg, #222) !important;
+  color: var(--panel-text-color, #fff) !important;
+} 
