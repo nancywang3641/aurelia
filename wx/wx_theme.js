@@ -1,12 +1,12 @@
 // ----------------------------------------------------------------
 // [檔案 1] wx_theme.js
 // 模塊：外觀樣式 (View/Style)
-// Update: 新增 Font Awesome CSS 庫注入。
+// Update: V71.10 移除外部 CDN，使用酒館原生圖標庫以防止衝突。
 // ----------------------------------------------------------------
 
 (function() {
     window.WX_THEME = {
-        version: 'v71.9-fa',
+        version: 'v71.10-native',
 
         css: `
             @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
@@ -95,7 +95,7 @@
             
             .wx-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 10px; padding: 25px 20px; }
             .wx-grid-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
-            /* 更新：調整圖標容器樣式，適配 FontAwesome */
+            /* 調整圖標容器樣式 (相容 FontAwesome) */
             .wx-grid-icon { width: 55px; height: 55px; background: #fff; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1px solid #e0e0e0; color: #444; }
             .wx-grid-label { font-size: 11px; color: #666; }
             .wx-grid-item:active .wx-grid-icon { background: #e0e0e0; }
@@ -109,25 +109,17 @@
         `,
 
         inject: function(doc) {
-            // 1. 注入 Font Awesome CDN
-            const FA_ID = 'wx-font-awesome';
-            if (!doc.getElementById(FA_ID)) {
-                const link = doc.createElement('link');
-                link.id = FA_ID;
-                link.rel = 'stylesheet';
-                link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
-                doc.head.appendChild(link);
-                console.log('[WeChat Theme] Font Awesome Injected');
-            }
-
-            // 2. 注入自定義 CSS
+            // V71.10: 移除 Font Awesome CDN 注入
+            // 酒館 (SillyTavern) 內建已有 FA，重複注入會導致全局樣式污染。
+            
+            // 僅注入我們自己的 CSS
             const STYLE_ID = 'wx-style-modular';
             if (!doc.getElementById(STYLE_ID)) {
                 const style = doc.createElement('style');
                 style.id = STYLE_ID;
                 style.innerHTML = this.css;
                 doc.head.appendChild(style);
-                console.log('[WeChat Theme] CSS Injected');
+                console.log('[WeChat Theme] CSS Injected (Using Native Icons)');
             }
         }
     };
