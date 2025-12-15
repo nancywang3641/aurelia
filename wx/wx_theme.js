@@ -1,50 +1,23 @@
 // ----------------------------------------------------------------
 // [檔案 1] wx_theme.js
 // 模塊：外觀樣式 (View/Style)
-// Update: V71.10 移除外部 CDN，使用酒館原生圖標庫以防止衝突。
+// Update: V71.11 - 強制移除殘留的 Font Awesome 衝突連結
 // ----------------------------------------------------------------
 
 (function() {
     window.WX_THEME = {
-        version: 'v71.10-native',
+        version: 'v71.11-cleanup',
 
         css: `
             @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
-            
             @keyframes popIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
-            .wx-source-details {
-                border: 1px dashed #ccc;
-                background: #f9f9f9;
-                border-radius: 4px;
-                margin: 5px 0;
-                padding: 2px 8px;
-                font-size: 12px;
-                color: #666;
-                width: fit-content;
-                max-width: 100%;
-                animation: popIn 0.3s ease-out;
-            }
+            .wx-source-details { border: 1px dashed #ccc; background: #f9f9f9; border-radius: 4px; margin: 5px 0; padding: 2px 8px; font-size: 12px; color: #666; width: fit-content; max-width: 100%; animation: popIn 0.3s ease-out; }
             .wx-source-details summary { cursor: pointer; outline: none; font-weight: bold; user-select: none; color: #888; }
             .wx-source-details summary:hover { color: #333; }
             .wx-code-content { display: block; white-space: pre-wrap; font-family: monospace; font-size: 11px; color: #2c662d; margin-top: 5px; padding: 5px; background: #fff; border: 1px solid #eee; overflow-x: auto; }
 
-            .wx-shell { 
-                font-family: 'Noto Sans SC', sans-serif; 
-                width: 100%; max-width: 450px; height: 650px; 
-                margin: 15px 0; 
-                background: #f2f2f2; 
-                border-radius: 12px; 
-                overflow: hidden; 
-                border: 1px solid #dcdcdc; 
-                position: relative; 
-                display: flex; flex-direction: column; 
-                text-align: left; 
-                box-shadow: 0 5px 20px rgba(0,0,0,0.15); 
-                z-index: 10; 
-                clear: both; 
-                display: block; 
-            }
+            .wx-shell { font-family: 'Noto Sans SC', sans-serif; width: 100%; max-width: 450px; height: 650px; margin: 15px 0; background: #f2f2f2; border-radius: 12px; overflow: hidden; border: 1px solid #dcdcdc; position: relative; display: flex; flex-direction: column; text-align: left; box-shadow: 0 5px 20px rgba(0,0,0,0.15); z-index: 10; clear: both; display: block; }
             
             .wx-header { background: #ededed; height: 45px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #dcdcdc; z-index: 10; display: flex; }
             .wx-header-title { font-weight: 600; font-size: 16px; color: #000; }
@@ -55,14 +28,7 @@
             .wx-page-container { flex: 1; position: relative; overflow: hidden; width: 100%; display: flex; flex-direction: column; height: calc(100% - 45px); }
             .wx-page-list { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow-y: auto; background: #fff; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1; }
             
-            .wx-page-room { 
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-                overflow-y: auto; background: #f2f2f2; 
-                transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.3s ease; 
-                display: flex; flex-direction: column; 
-                padding-bottom: 70px; 
-                z-index: 2; 
-            }
+            .wx-page-room { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow-y: auto; background: #f2f2f2; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.3s ease; display: flex; flex-direction: column; padding-bottom: 70px; z-index: 2; }
             .wx-page-room.active { transform: translateX(0); }
             
             .wx-chat-item { display: flex; padding: 12px 16px; border-bottom: 1px solid #f2f2f2; cursor: pointer; background: #fff; min-height: 70px; box-sizing: border-box; }
@@ -95,7 +61,6 @@
             
             .wx-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 10px; padding: 25px 20px; }
             .wx-grid-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
-            /* 調整圖標容器樣式 (相容 FontAwesome) */
             .wx-grid-icon { width: 55px; height: 55px; background: #fff; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1px solid #e0e0e0; color: #444; }
             .wx-grid-label { font-size: 11px; color: #666; }
             .wx-grid-item:active .wx-grid-icon { background: #e0e0e0; }
@@ -109,17 +74,21 @@
         `,
 
         inject: function(doc) {
-            // V71.10: 移除 Font Awesome CDN 注入
-            // 酒館 (SillyTavern) 內建已有 FA，重複注入會導致全局樣式污染。
-            
-            // 僅注入我們自己的 CSS
+            // 🔴 消毒動作：強制檢查並刪除舊版殘留的 Font Awesome
+            const oldFA = doc.getElementById('wx-font-awesome');
+            if (oldFA) {
+                console.log('[WeChat Theme] 發現舊版 Font Awesome 殘留，正在移除...');
+                oldFA.remove();
+            }
+
+            // 注入自定義 CSS
             const STYLE_ID = 'wx-style-modular';
             if (!doc.getElementById(STYLE_ID)) {
                 const style = doc.createElement('style');
                 style.id = STYLE_ID;
                 style.innerHTML = this.css;
                 doc.head.appendChild(style);
-                console.log('[WeChat Theme] CSS Injected (Using Native Icons)');
+                console.log('[WeChat Theme] CSS Injected');
             }
         }
     };
