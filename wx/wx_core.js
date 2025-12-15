@@ -1,37 +1,25 @@
 // ----------------------------------------------------------------
 // [檔案 3] wx_core.js
 // 模塊：核心邏輯 (Controller/Core)
-// 職責：整合 Theme 與 View，執行掃描、解析、隊列管理與 DOM 操作。
+// Update: 修復點擊列表卡頓/需雙擊的問題 (移除 ActiveChat 的 Hash 依賴)。
 // ----------------------------------------------------------------
 
 (async function () {
-    console.log('[WeChat] Core V71.8 (Modular) Loaded');
+    console.log('[WeChat] Core V71.9 (Lag Fix) Loaded');
 
     const ctx = (window.parent && window.parent.document) ? window.parent : window;
     const doc = ctx.document;
 
-    // 1. 依賴檢查與樣式注入
-    if (window.WX_THEME) {
-        window.WX_THEME.inject(doc);
-    } else {
-        console.error('錯誤：未檢測到 wx_theme.js，請確保先加載樣式模塊。');
-    }
+    // 1. 依賴檢查
+    if (window.WX_THEME) { window.WX_THEME.inject(doc); }
+    if (!window.WX_VIEW) { console.error('錯誤：未檢測到 wx_view.js'); return; }
 
-    if (!window.WX_VIEW) {
-        console.error('錯誤：未檢測到 wx_view.js，請確保先加載視圖模塊。');
-        return;
-    }
-
-    // ----------------------------------------------------------------
     // 2. 狀態管理
-    // ----------------------------------------------------------------
     let GLOBAL_CHATS = {}; 
     let GLOBAL_ACTIVE_CHAT = null;
     let RENDER_QUEUE = []; 
 
-    // ----------------------------------------------------------------
-    // 3. 核心解析器 (Parser)
-    // ----------------------------------------------------------------
+    // 3. 解析器
     function parseChunk(cleanText, existingChats) {
         const lines = cleanText.split('\n');
         let currentChat = "未分類";
@@ -40,7 +28,6 @@
             line = line.trim();
             if (!line) return;
 
-            // [Chat: XXX]
             const chatMatch = line.match(/^\[\s*Chat\s*[:：]\s*(.*?)\s*\]/i);
             if (chatMatch) {
                 currentChat = chatMatch[1].replace(']', '').trim();
@@ -52,7 +39,6 @@
 
             if (!existingChats[currentChat]) existingChats[currentChat] = { messages: [], lastTime: '', unread: true, pushedCount: 0, renderedCount: 0 };
 
-            // [Time]
             if (line.match(/^\[\s*Time\s*\]/i)) {
                 let timeStr = line.replace(/^\[\s*Time\s*\]/i, '').trim();
                 if(timeStr) {
@@ -62,7 +48,6 @@
                 return;
             }
 
-            // [Name] & Content
             const nameMatch = line.match(/^\[(.*?)(?:[:：])?\]/); 
             if (nameMatch) {
                 const tag = nameMatch[1];
@@ -79,7 +64,6 @@
     }
 
     function addMsg(chats, chatName, isMe, content) {
-        // 過濾未完成標籤
         if (content.match(/^\[\s*(图片|圖片|Img|语音|語音|Voice|红包|RedPacket)/i) && !content.includes(']')) return;
 
         const splitRegex = /(\[[:：]?\s*(?:图片|圖片|Img|语音|語音|Voice|红包|RedPacket|表情包|Sticker).*?\])/gi;
@@ -99,9 +83,7 @@
         });
     }
 
-    // ----------------------------------------------------------------
-    // 4. 隊列消費者 (Consumer) - 負責彈出動畫
-    // ----------------------------------------------------------------
+    // 4. 隊列消費者
     setInterval(() => {
         if (RENDER_QUEUE.length > 0) {
             const nextItem = RENDER_QUEUE.shift(); 
@@ -112,7 +94,6 @@
                 const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_CHAT];
                 if (currentChat && nextItem.index >= currentChat.renderedCount) {
                     const d = doc.createElement('div');
-                    // 調用 View 模塊生成 HTML
                     d.innerHTML = window.WX_VIEW.renderBubble(nextItem.msg, nextItem.chatName, true); 
                     roomContainer.appendChild(d.firstChild);
                     if (roomPage) roomPage.scrollTop = roomPage.scrollHeight;
@@ -122,35 +103,26 @@
         }
     }, 800);
 
-    // ----------------------------------------------------------------
-    // 5. 掃描與更新循環 (Main Loop)
-    // ----------------------------------------------------------------
+    // 5. 更新 UI
     function updateShellUI(shell) {
         const listContainer = shell.querySelector('.wx-page-list > div');
         const roomContainer = shell.querySelector('#wxRoomContent');
         
-        // 更新列表 (調用 View)
         if (listContainer) {
             listContainer.innerHTML = window.WX_VIEW.getListHTML(GLOBAL_CHATS, GLOBAL_ACTIVE_CHAT);
         }
 
-        // 推送隊列 (Producer)
         for (let chatName in GLOBAL_CHATS) {
             const chat = GLOBAL_CHATS[chatName];
             const targetCount = chat.messages.length;
             
             if (targetCount > chat.pushedCount) {
                 for (let i = chat.pushedCount; i < targetCount; i++) {
-                    RENDER_QUEUE.push({
-                        msg: chat.messages[i],
-                        chatName: chatName,
-                        index: i 
-                    });
+                    RENDER_QUEUE.push({ msg: chat.messages[i], chatName: chatName, index: i });
                 }
                 chat.pushedCount = targetCount; 
             } 
             
-            // 即時更新最後一條內容 (防閃爍)
             if (chatName === GLOBAL_ACTIVE_CHAT && roomContainer) {
                 const lastIdx = targetCount - 1;
                 if (lastIdx >= 0 && lastIdx < chat.renderedCount) {
@@ -160,12 +132,9 @@
                        const contentDiv = lastBubble.querySelector('.wx-bubble-content');
                        if (contentDiv) {
                            const tempDiv = doc.createElement('div');
-                           // 調用 View
                            tempDiv.innerHTML = window.WX_VIEW.renderBubble(lastMsg, chatName, false);
                            const newContent = tempDiv.querySelector('.wx-bubble-content').innerHTML;
-                           if (contentDiv.innerHTML !== newContent) {
-                               contentDiv.innerHTML = newContent;
-                           }
+                           if (contentDiv.innerHTML !== newContent) contentDiv.innerHTML = newContent;
                        }
                    }
                 }
@@ -173,6 +142,7 @@
         }
     }
 
+    // 6. 掃描循環 (Main Loop)
     function scanAndRender() {
         const blocks = Array.from(doc.querySelectorAll('.mes_text'));
         if (blocks.length === 0) return;
@@ -195,7 +165,6 @@
         const newChats = {};
         let combinedContent = "";
 
-        // DOM 操作與摺疊邏輯 (Stability Lock)
         for (let i = masterIndex; i < blocks.length; i++) {
             const block = blocks[i];
             const currentHTML = block.innerHTML;
@@ -225,7 +194,6 @@
                     combinedContent += clean + "\n";
                 });
 
-                // 摺疊操作
                 if (i >= masterIndex && isStable && !currentHTML.includes('wx-source-details')) {
                      block.innerHTML = block.innerHTML.replace(
                         /(\[wx_os\][\s\S]*?(?:\[\/wx_os\]|$))/gi, 
@@ -236,10 +204,8 @@
         }
 
         combinedContent = combinedContent.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<br\s*\/?>/gi, '\n');
-        
         parseChunk(combinedContent, newChats);
 
-        // 狀態繼承 (Persistence)
         for (let name in newChats) {
             if (GLOBAL_CHATS[name]) {
                 if (GLOBAL_CHATS[name].hasPlayed) newChats[name].hasPlayed = true;
@@ -250,24 +216,25 @@
         }
         GLOBAL_CHATS = newChats;
 
-        const currentHash = Object.keys(GLOBAL_CHATS).length + (GLOBAL_ACTIVE_CHAT || 'list') + combinedContent.length;
+        // 🔴 關鍵修改：計算 Hash 時移除 GLOBAL_ACTIVE_CHAT，避免點擊時發生重繪衝突
+        const currentHash = Object.keys(GLOBAL_CHATS).length + combinedContent.length;
+        
         const shell = masterBlock.querySelector('.wx-shell');
+        const storedHash = masterBlock.getAttribute('data-wx-hash');
         
         if (!shell) {
             const shellContainer = doc.createElement('div');
-            // 調用 View 生成初始殼
             shellContainer.innerHTML = window.WX_VIEW.renderShell(GLOBAL_ACTIVE_CHAT, GLOBAL_CHATS);
             masterBlock.appendChild(shellContainer.firstElementChild);
             masterBlock.setAttribute('data-wx-hash', String(currentHash));
-        } else {
+        } else if (storedHash !== String(currentHash)) {
+            // 只有內容真正變動時，才更新 UI
             updateShellUI(shell);
             masterBlock.setAttribute('data-wx-hash', String(currentHash));
         }
     }
 
-    // ----------------------------------------------------------------
-    // 6. 全局 API 接口 (交互功能)
-    // ----------------------------------------------------------------
+    // 7. 交互接口
     window.top.wxTriggerChat = async function(name) {
         GLOBAL_ACTIVE_CHAT = name;
         const shell = doc.querySelector('.wx-shell');
@@ -283,7 +250,7 @@
              RENDER_QUEUE = [];
         }
 
-        updateShellUI(shell);
+        updateShellUI(shell); // 手動觸發一次 UI 更新 (負責切換 CSS class)
 
         const room = shell.querySelector('.wx-page-room');
         const list = shell.querySelector('.wx-page-list');
@@ -314,23 +281,19 @@
         const box = el.querySelector('.wx-trans-box');
         if(box.style.display==='block') { box.style.display='none'; }
         else { 
-            box.style.display='block'; 
-            box.innerText = '';
+            box.style.display='block'; box.innerText = '';
             const t = decodeURIComponent(txt);
             let i=0; 
-            const timer = setInterval(()=>{
-                box.innerText += t.charAt(i); i++;
-                if(i>=t.length) clearInterval(timer);
-            }, 30);
+            const timer = setInterval(()=>{ box.innerText += t.charAt(i); i++; if(i>=t.length) clearInterval(timer); }, 30);
         }
     };
 
     window.top.wxBigImg = function(src) { window.open(src, '_blank'); };
     window.top.wxCheckInput = function(el) {
         const btn = el.parentElement.querySelector('.wx-send-btn');
-        const plus = el.parentElement.querySelector('.wx-icon-btn:nth-child(4)'); 
-        if (el.value.trim()) { btn.classList.add('show'); plus.style.display = 'none'; } 
-        else { btn.classList.remove('show'); plus.style.display = 'block'; }
+        const plus = el.parentElement.querySelector('.wx-icon-btn:nth-child(4)'); // 這裡可能是第3或4個，視圖結構而定
+        if (el.value.trim()) { btn.classList.add('show'); if(plus) plus.style.display = 'none'; } 
+        else { btn.classList.remove('show'); if(plus) plus.style.display = 'block'; }
     };
     window.top.wxTogglePanel = function() {
         const panel = doc.querySelector('.wx-action-panel');
