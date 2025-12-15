@@ -1,20 +1,19 @@
 // ----------------------------------------------------------------
 // [檔案 1] wx_theme.js
-// 模塊：外觀樣式 (View/Style)
-// Update: V71.11 - 強制移除殘留的 Font Awesome 衝突連結
+// 模塊：外觀樣式 (View/Style) - V72.0 (Modal Edition)
 // ----------------------------------------------------------------
 
 (function() {
     window.WX_THEME = {
-        version: 'v71.11-cleanup',
+        version: 'v72.0-modal',
 
         css: `
             @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
-            @keyframes popIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-            .wx-source-details { border: 1px dashed #ccc; background: #f9f9f9; border-radius: 4px; margin: 5px 0; padding: 2px 8px; font-size: 12px; color: #666; width: fit-content; max-width: 100%; animation: popIn 0.3s ease-out; }
+            .wx-source-details { border: 1px dashed #ccc; background: #f9f9f9; border-radius: 4px; margin: 5px 0; padding: 2px 8px; font-size: 12px; color: #666; width: fit-content; max-width: 100%; }
             .wx-source-details summary { cursor: pointer; outline: none; font-weight: bold; user-select: none; color: #888; }
-            .wx-source-details summary:hover { color: #333; }
             .wx-code-content { display: block; white-space: pre-wrap; font-family: monospace; font-size: 11px; color: #2c662d; margin-top: 5px; padding: 5px; background: #fff; border: 1px solid #eee; overflow-x: auto; }
 
             .wx-shell { font-family: 'Noto Sans SC', sans-serif; width: 100%; max-width: 450px; height: 650px; margin: 15px 0; background: #f2f2f2; border-radius: 12px; overflow: hidden; border: 1px solid #dcdcdc; position: relative; display: flex; flex-direction: column; text-align: left; box-shadow: 0 5px 20px rgba(0,0,0,0.15); z-index: 10; clear: both; display: block; }
@@ -71,17 +70,39 @@
             .wx-time-stamp { text-align: center; font-size: 12px; color: #cecece; margin: 10px 0; width: 100%; clear:both; }
             .wx-voice-wrapper { display: flex; flex-direction: column; gap: 5px; cursor: pointer; }
             .wx-trans-box { font-size: 13px; padding: 8px; border-top: 1px solid rgba(0,0,0,0.1); display: none; background:rgba(0,0,0,0.05); }
+
+            /* --- V72 新增：彈出輸入框樣式 --- */
+            .wx-modal-overlay {
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.6); z-index: 100;
+                display: none; align-items: center; justify-content: center;
+                backdrop-filter: blur(2px); animation: fadeIn 0.2s;
+            }
+            .wx-modal-overlay.show { display: flex; }
+            .wx-modal-box {
+                background: #fff; width: 75%; border-radius: 12px; padding: 20px 15px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+                animation: popIn 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+                display: flex; flex-direction: column; gap: 10px;
+            }
+            .wx-modal-title { font-size: 16px; font-weight: 600; text-align: center; margin-bottom: 5px; color: #333; }
+            .wx-modal-input {
+                width: 100%; padding: 10px; border: 1px solid #ddd; background: #f9f9f9;
+                border-radius: 6px; box-sizing: border-box; font-size: 14px; outline: none;
+                transition: border 0.2s, background 0.2s; color:#000;
+            }
+            .wx-modal-input:focus { border-color: #07c160; background: #fff; }
+            .wx-modal-footer { display: flex; gap: 10px; margin-top: 10px; }
+            .wx-btn { flex: 1; padding: 10px 0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; text-align: center; }
+            .wx-btn-cancel { background: #f2f2f2; color: #333; }
+            .wx-btn-confirm { background: #07c160; color: #fff; }
+            .wx-btn-confirm:active { background: #06ad56; }
         `,
 
         inject: function(doc) {
-            // 🔴 消毒動作：強制檢查並刪除舊版殘留的 Font Awesome
             const oldFA = doc.getElementById('wx-font-awesome');
-            if (oldFA) {
-                console.log('[WeChat Theme] 發現舊版 Font Awesome 殘留，正在移除...');
-                oldFA.remove();
-            }
+            if (oldFA) oldFA.remove();
 
-            // 注入自定義 CSS
             const STYLE_ID = 'wx-style-modular';
             if (!doc.getElementById(STYLE_ID)) {
                 const style = doc.createElement('style');

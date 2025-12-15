@@ -1,11 +1,10 @@
 // ----------------------------------------------------------------
 // [檔案 3] wx_core.js
 // 模塊：核心邏輯 (Controller/Core)
-// Update: 修復點擊列表卡頓/需雙擊的問題 (移除 ActiveChat 的 Hash 依賴)。
 // ----------------------------------------------------------------
 
 (async function () {
-    console.log('[WeChat] Core V71.9 (Lag Fix) Loaded');
+    console.log('[WeChat] Core V72.0 (Interactive) Loaded');
 
     const ctx = (window.parent && window.parent.document) ? window.parent : window;
     const doc = ctx.document;
@@ -18,8 +17,9 @@
     let GLOBAL_CHATS = {}; 
     let GLOBAL_ACTIVE_CHAT = null;
     let RENDER_QUEUE = []; 
+    let PENDING_ACTION_TYPE = null; // 暫存當前正在進行的動作類型
 
-    // 3. 解析器
+    // 3. 核心解析器
     function parseChunk(cleanText, existingChats) {
         const lines = cleanText.split('\n');
         let currentChat = "未分類";
@@ -52,7 +52,7 @@
             if (nameMatch) {
                 const tag = nameMatch[1];
                 let isMe = false;
-                if (!tag.match(/^(语音|Voice|图片|Img|红包|RedPacket|表情包|Sticker)$/i)) {
+                if (!tag.match(/^(语音|Voice|图片|Img|红包|RedPacket|表情包|Sticker|转账|Transfer|位置|Location)$/i)) {
                     isMe = !!tag.match(/^(You|Me|我|Self)$/i);
                     let content = line.replace(/^\[.*?\]/, '').trim();
                     if (content) addMsg(existingChats, currentChat, isMe, content);
@@ -64,9 +64,9 @@
     }
 
     function addMsg(chats, chatName, isMe, content) {
-        if (content.match(/^\[\s*(图片|圖片|Img|语音|語音|Voice|红包|RedPacket)/i) && !content.includes(']')) return;
+        if (content.match(/^\[\s*(图片|Img|语音|Voice|红包|RedPacket)/i) && !content.includes(']')) return;
 
-        const splitRegex = /(\[[:：]?\s*(?:图片|圖片|Img|语音|語音|Voice|红包|RedPacket|表情包|Sticker).*?\])/gi;
+        const splitRegex = /(\[[:：]?\s*(?:图片|Img|语音|Voice|红包|RedPacket|表情包|Sticker|转账|Transfer|位置|Location).*?\])/gi;
         const parts = content.split(splitRegex);
 
         parts.forEach(part => {
@@ -74,9 +74,11 @@
             if(!trimmed) return;
 
             let preview = trimmed;
-            if (trimmed.match(/\[\s*(图片|圖片|Img)/i)) preview = '[圖片]';
-            else if (trimmed.match(/\[\s*(语音|語音|Voice)/i)) preview = '[語音]';
+            if (trimmed.match(/\[\s*(图片|Img)/i)) preview = '[圖片]';
+            else if (trimmed.match(/\[\s*(语音|Voice)/i)) preview = '[語音]';
             else if (trimmed.match(/\[\s*(红包|RedPacket)/i)) preview = '[紅包]';
+            else if (trimmed.match(/\[\s*(转账|Transfer)/i)) preview = '[轉帳]';
+            else if (trimmed.match(/\[\s*(位置|Location)/i)) preview = '[位置]';
             
             chats[chatName].lastPreview = preview;
             chats[chatName].messages.push({ type: 'msg', isMe: isMe, content: trimmed });
@@ -103,7 +105,7 @@
         }
     }, 800);
 
-    // 5. 更新 UI
+    // 5. 掃描循環
     function updateShellUI(shell) {
         const listContainer = shell.querySelector('.wx-page-list > div');
         const roomContainer = shell.querySelector('#wxRoomContent');
@@ -118,7 +120,11 @@
             
             if (targetCount > chat.pushedCount) {
                 for (let i = chat.pushedCount; i < targetCount; i++) {
-                    RENDER_QUEUE.push({ msg: chat.messages[i], chatName: chatName, index: i });
+                    RENDER_QUEUE.push({
+                        msg: chat.messages[i],
+                        chatName: chatName,
+                        index: i 
+                    });
                 }
                 chat.pushedCount = targetCount; 
             } 
@@ -134,7 +140,9 @@
                            const tempDiv = doc.createElement('div');
                            tempDiv.innerHTML = window.WX_VIEW.renderBubble(lastMsg, chatName, false);
                            const newContent = tempDiv.querySelector('.wx-bubble-content').innerHTML;
-                           if (contentDiv.innerHTML !== newContent) contentDiv.innerHTML = newContent;
+                           if (contentDiv.innerHTML !== newContent) {
+                               contentDiv.innerHTML = newContent;
+                           }
                        }
                    }
                 }
@@ -142,7 +150,6 @@
         }
     }
 
-    // 6. 掃描循環 (Main Loop)
     function scanAndRender() {
         const blocks = Array.from(doc.querySelectorAll('.mes_text'));
         if (blocks.length === 0) return;
@@ -182,8 +189,7 @@
                 block.setAttribute('data-wx-stable', String(stableCount));
             }
 
-            const isFinished = currentText.includes('[/wx_os]');
-            const isStable = isFinished && (stableCount > 2);
+            const isStable = currentText.includes('[/wx_os]') && (stableCount > 2);
 
             const regex = /\[wx_os\]([\s\S]*?)(?:\[\/wx_os\]|$)/gi;
             const matches = currentText.match(regex);
@@ -204,6 +210,7 @@
         }
 
         combinedContent = combinedContent.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<br\s*\/?>/gi, '\n');
+        
         parseChunk(combinedContent, newChats);
 
         for (let name in newChats) {
@@ -216,25 +223,21 @@
         }
         GLOBAL_CHATS = newChats;
 
-        // 🔴 關鍵修改：計算 Hash 時移除 GLOBAL_ACTIVE_CHAT，避免點擊時發生重繪衝突
-        const currentHash = Object.keys(GLOBAL_CHATS).length + combinedContent.length;
-        
+        const currentHash = Object.keys(GLOBAL_CHATS).length + (GLOBAL_ACTIVE_CHAT || 'list') + combinedContent.length;
         const shell = masterBlock.querySelector('.wx-shell');
-        const storedHash = masterBlock.getAttribute('data-wx-hash');
         
         if (!shell) {
             const shellContainer = doc.createElement('div');
             shellContainer.innerHTML = window.WX_VIEW.renderShell(GLOBAL_ACTIVE_CHAT, GLOBAL_CHATS);
             masterBlock.appendChild(shellContainer.firstElementChild);
             masterBlock.setAttribute('data-wx-hash', String(currentHash));
-        } else if (storedHash !== String(currentHash)) {
-            // 只有內容真正變動時，才更新 UI
+        } else {
             updateShellUI(shell);
             masterBlock.setAttribute('data-wx-hash', String(currentHash));
         }
     }
 
-    // 7. 交互接口
+    // 6. 全局交互 API (Action & Modal Logic)
     window.top.wxTriggerChat = async function(name) {
         GLOBAL_ACTIVE_CHAT = name;
         const shell = doc.querySelector('.wx-shell');
@@ -249,31 +252,26 @@
              GLOBAL_CHATS[name].renderedCount = msgs.length;
              RENDER_QUEUE = [];
         }
-
-        updateShellUI(shell); // 手動觸發一次 UI 更新 (負責切換 CSS class)
-
+        updateShellUI(shell);
         const room = shell.querySelector('.wx-page-room');
         const list = shell.querySelector('.wx-page-list');
         const footer = shell.querySelector('.wx-footer-wrapper');
         const back = shell.querySelector('.wx-back-btn');
         const title = shell.querySelector('.wx-header-title');
-        const panel = shell.querySelector('.wx-action-panel');
-        if (panel) panel.classList.remove('open');
-        room.style.paddingBottom = '70px'; 
-
+        
         if (name === null) {
-            room.classList.remove('active');
-            list.style.transform = 'translateX(0)';
-            footer.style.display = 'none';
-            back.classList.remove('show');
-            title.innerText = '微信';
+            if(room) room.classList.remove('active');
+            if(list) list.style.transform = 'translateX(0)';
+            if(footer) footer.style.display = 'none';
+            if(back) back.classList.remove('show');
+            if(title) title.innerText = '微信';
         } else {
-            room.classList.add('active');
-            list.style.transform = 'translateX(-30%)';
-            footer.style.display = 'flex';
-            back.classList.add('show');
-            title.innerText = name;
-            if(room) room.scrollTop = room.scrollHeight;
+            if(room) room.classList.add('active');
+            if(list) list.style.transform = 'translateX(-30%)';
+            if(footer) footer.style.display = 'flex';
+            if(back) back.classList.add('show');
+            if(title) title.innerText = name;
+            setTimeout(() => { if(room) room.scrollTop = room.scrollHeight; }, 100);
         }
     };
 
@@ -281,44 +279,93 @@
         const box = el.querySelector('.wx-trans-box');
         if(box.style.display==='block') { box.style.display='none'; }
         else { 
-            box.style.display='block'; box.innerText = '';
+            box.style.display='block'; 
+            box.innerText = '';
             const t = decodeURIComponent(txt);
             let i=0; 
-            const timer = setInterval(()=>{ box.innerText += t.charAt(i); i++; if(i>=t.length) clearInterval(timer); }, 30);
+            const timer = setInterval(()=>{
+                box.innerText += t.charAt(i); i++;
+                if(i>=t.length) clearInterval(timer);
+            }, 30);
         }
     };
 
     window.top.wxBigImg = function(src) { window.open(src, '_blank'); };
     window.top.wxCheckInput = function(el) {
         const btn = el.parentElement.querySelector('.wx-send-btn');
-        const plus = el.parentElement.querySelector('.wx-icon-btn:nth-child(4)'); // 這裡可能是第3或4個，視圖結構而定
-        if (el.value.trim()) { btn.classList.add('show'); if(plus) plus.style.display = 'none'; } 
-        else { btn.classList.remove('show'); if(plus) plus.style.display = 'block'; }
+        const plus = el.parentElement.querySelector('.wx-icon-btn:nth-child(4)'); 
+        if (el.value.trim()) { btn.classList.add('show'); plus.style.display = 'none'; } 
+        else { btn.classList.remove('show'); plus.style.display = 'block'; }
     };
     window.top.wxTogglePanel = function() {
         const panel = doc.querySelector('.wx-action-panel');
         const room = doc.querySelector('.wx-page-room');
         if (panel) {
             panel.classList.toggle('open');
-            if(panel.classList.contains('open')) { room.style.paddingBottom = '290px'; } else { room.style.paddingBottom = '70px'; }
+            if(panel.classList.contains('open') && room) { room.style.paddingBottom = '290px'; } 
+            else if (room) { room.style.paddingBottom = '70px'; }
             if(room) setTimeout(()=> room.scrollTop = room.scrollHeight, 300);
         }
     };
 
+    // --- 新增：動作處理邏輯 ---
     window.top.wxAction = function(type) {
-        let content = "";
+        PENDING_ACTION_TYPE = type;
+        const modal = doc.querySelector('#wxActionModal');
+        const title = doc.querySelector('#wxModalTitle');
+        const input = doc.querySelector('#wxModalInput');
+        if (!modal || !input) return;
+
+        input.value = '';
+        let hint = "請輸入...";
         switch(type) {
-            case 'photo': content = "[圖片: 照片]"; break;
-            case 'camera': content = "[圖片: 拍攝照片]"; break;
-            case 'video': content = "[語音: 發起視訊通話]"; break;
-            case 'voice': content = "[語音: 發起語音通話]"; break;
-            case 'location': content = "[位置: 我的位置]"; break;
-            case 'redpacket': content = "[紅包: 恭喜發財]"; break;
-            case 'transfer': content = "[轉帳: 100元]"; break;
-            case 'gift': content = "[圖片: 禮物]"; break;
+            case 'photo': hint = "請輸入圖片描述或網址"; break;
+            case 'camera': hint = "請輸入拍攝內容描述"; break;
+            case 'video': hint = "請輸入視訊通話備註"; break;
+            case 'voice': hint = "請輸入語音通話備註"; break;
+            case 'location': hint = "請輸入位置名稱"; break;
+            case 'redpacket': hint = "請輸入紅包祝福語"; break;
+            case 'transfer': hint = "請輸入轉帳金額"; break;
+            case 'gift': hint = "請輸入禮物名稱"; break;
         }
-        if(content) window.top.wxSend(null, content);
+        title.innerText = hint;
+        input.placeholder = hint;
+        
+        modal.classList.add('show');
+        input.focus();
+        
+        // 綁定 Enter 鍵
+        input.onkeydown = (e) => { if(e.key === 'Enter') window.top.wxConfirmModal(); };
+        
+        // 收起面板
         window.top.wxTogglePanel();
+    };
+
+    window.top.wxCloseModal = function() {
+        const modal = doc.querySelector('#wxActionModal');
+        if(modal) modal.classList.remove('show');
+        PENDING_ACTION_TYPE = null;
+    };
+
+    window.top.wxConfirmModal = function() {
+        const input = doc.querySelector('#wxModalInput');
+        const val = input.value.trim();
+        if (!val) { window.top.wxCloseModal(); return; }
+
+        let content = "";
+        switch(PENDING_ACTION_TYPE) {
+            case 'photo': content = `[圖片: ${val}]`; break;
+            case 'camera': content = `[圖片: 拍攝 ${val}]`; break;
+            case 'video': content = `[語音: 發起視訊通話 - ${val}]`; break;
+            case 'voice': content = `[語音: 發起語音通話 - ${val}]`; break;
+            case 'location': content = `[位置: ${val}]`; break;
+            case 'redpacket': content = `[紅包: ${val}]`; break;
+            case 'transfer': content = `[轉帳: ${val}]`; break;
+            case 'gift': content = `[圖片: 禮物 ${val}]`; break;
+        }
+
+        if(content) window.top.wxSend(null, content);
+        window.top.wxCloseModal();
     };
 
     window.top.wxInput = function(e, el) { if(e.key==='Enter') window.top.wxSend(el); };
@@ -336,6 +383,8 @@
         const name = GLOBAL_ACTIVE_CHAT;
         if (!name) return;
         if (!GLOBAL_CHATS[name]) { GLOBAL_CHATS[name] = { messages: [], lastTime: '', unread: false, hasPlayed: true, pushedCount:0, renderedCount:0 }; }
+        
+        // 立即顯示我方消息
         GLOBAL_CHATS[name].messages.push({type:'msg', isMe:true, content:text});
         
         const roomContent = doc.querySelector('#wxRoomContent');
@@ -349,6 +398,7 @@
         }
         if(inputEl) { inputEl.value=''; window.top.wxCheckInput(inputEl); }
 
+        // 發送給 AI
         if(window.TavernHelper) {
             await window.TavernHelper.createChatMessages([{role:'user', message:`\n[wx_os]\n[Chat: ${name}]\n[You] ${text}\n[/wx_os]`}]);
             await new Promise(r => setTimeout(r, 600));
