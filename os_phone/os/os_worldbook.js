@@ -1,9 +1,9 @@
 // ----------------------------------------------------------------
-// [檔案] os_worldbook.js (V1.5 - UI 高度修復與刪除外移版)
+// [檔案] os_worldbook.js (V1.6 - 防呆與強制字串修復版)
 // 路徑：os_phone/os/os_worldbook.js
 // 職責：奧瑞亞獨立世界書系統
 //   - 功能：支援關鍵字觸發、視覺化 Tag 編輯、自訂 Order 排序
-//   - 修復：適配 Bottom Nav 高度防遮擋、刪除按鈕移至列表外層
+//   - 修復：適配 Bottom Nav 高度防遮擋、刪除按鈕移至列表外層、修復 keys.split 報錯
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -277,7 +277,8 @@
         const allTags = new Set();
         _entries.forEach(e => {
             if (e.keys) {
-                e.keys.split(',').forEach(k => {
+                // 🔥 修復：強制轉成字串，防止舊資料格式報錯
+                String(e.keys).split(',').forEach(k => {
                     const tk = k.trim();
                     if (tk) allTags.add(tk);
                 });
@@ -327,7 +328,8 @@
             filtered = filtered.filter(e => 
                 e.title.toLowerCase().includes(q) || 
                 e.content.toLowerCase().includes(q) ||
-                (e.keys && e.keys.toLowerCase().includes(q))
+                // 🔥 修復：強制轉成字串防呆
+                (e.keys && String(e.keys).toLowerCase().includes(q))
             );
         }
 
@@ -346,7 +348,8 @@
         list.innerHTML = filtered.map(e => {
             let keysHtml = '<span class="wb-entry-keys" style="color:#6a8a6a">📌 常駐</span>';
             if (e.keys) {
-                keysHtml = e.keys.split(',').map(k => `<span style="display:inline-block;background:rgba(212,175,55,.1);color:#d4af37;padding:1px 6px;border-radius:6px;margin-right:3px;">#${escHtml(k.trim())}</span>`).join('');
+                // 🔥 修復：強制轉成字串，防止舊資料格式報錯
+                keysHtml = String(e.keys).split(',').map(k => `<span style="display:inline-block;background:rgba(212,175,55,.1);color:#d4af37;padding:1px 6px;border-radius:6px;margin-right:3px;">#${escHtml(k.trim())}</span>`).join('');
             }
             const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${e.order}</span>` : '';
 
@@ -434,7 +437,8 @@
         populateCatSelect(root);
         root.querySelector('#wb-f-cat').value = entry.category || '其他';
 
-        _currentTags = entry.keys ? entry.keys.split(',').map(k => k.trim()).filter(k => k) : [];
+        // 🔥 修復：強制轉成字串，防止舊資料格式報錯
+        _currentTags = entry.keys ? String(entry.keys).split(',').map(k => k.trim()).filter(k => k) : [];
         root.querySelector('#wb-f-keys-input').value = '';
         renderTagEditor(root);
 
@@ -620,7 +624,8 @@
             const enabled = entries.filter(e => e.enabled !== false);
             
             let triggered = enabled.filter(e => {
-                const kStr = (e.keys || '').trim();
+                // 🔥 修復：強制轉成字串，防止舊資料格式報錯
+                const kStr = (e.keys ? String(e.keys) : '').trim();
                 if (!kStr) return true; 
                 
                 const keywords = kStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k);
@@ -641,7 +646,8 @@
             const enabled = entries.filter(e => e.enabled !== false);
             
             let triggered = enabled.filter(e => {
-                const kStr = (e.keys || '').trim();
+                // 🔥 修復：強制轉成字串，防止舊資料格式報錯
+                const kStr = (e.keys ? String(e.keys) : '').trim();
                 if (!kStr) return true;
                 
                 const keywords = kStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k);
@@ -663,5 +669,5 @@
         }
     };
 
-    console.log('[PhoneOS] ✅ 獨立世界書系統 (OS_WORLDBOOK V1.5 - UI 修復與刪除外移) 已載入');
+    console.log('[PhoneOS] ✅ 獨立世界書系統 (OS_WORLDBOOK V1.6 - 防呆修復版) 已載入');
 })();
