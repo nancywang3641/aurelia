@@ -1,10 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] os_prompts.js (V4.0 - Modular COT + Persona Manager)
+// [檔案] os_prompts.js (V4.2 - Modular COT + ST Preset Import)
 // 職責：管理 AI 提示詞。硬編碼系統Prompt不開放編輯；
 //       行為條目 (COT) 與 Iris/Cheshire 人設可由用戶自訂。
+//       支援 JSON 格式的預設包匯出、匯入，並支援酒館(ST)預設包智能提取。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入提示詞管理器 (Prompt Manager V4.0)...');
+    console.log('[PhoneOS] 載入提示詞管理器 (Prompt Manager V4.2)...');
     const win = window.parent || window;
 
     // ================================================================
@@ -728,6 +729,9 @@ B. 發布新帖子:
         .pm-header { display:flex; align-items:center; padding:0 12px; height:48px; background:#1a1a2e; border-bottom:1px solid #2a2a3a; flex-shrink:0; }
         .pm-back-btn { font-size:22px; cursor:pointer; color:#d4af37; margin-right:10px; line-height:1; user-select:none; }
         .pm-title { font-weight:700; font-size:15px; flex:1; }
+        .pm-header-actions { display: flex; align-items: center; }
+        .pm-header-action { font-size: 16px; cursor: pointer; color: #a09080; padding: 4px; margin-left: 8px; border-radius: 4px; transition: .2s; }
+        .pm-header-action:hover { color: #d4af37; background: rgba(212,175,55,.1); }
 
         /* Tabs */
         .pm-tabs  { display:flex; border-bottom:1px solid #2a2a3a; flex-shrink:0; background:#1a1a2e; }
@@ -1042,52 +1046,6 @@ B. 發布新帖子:
         modal.classList.add('open');
     }
 
-    // ── 條目庫 Modal（Layer 2 浮窗）──
-    function openEntryLibraryModal(bodyEl) {
-        const wrap = bodyEl.closest('.pm-wrap') || bodyEl.parentElement;
-        let modal = wrap.querySelector('.pm-bmodal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.className = 'pm-bmodal';
-            wrap.appendChild(modal);
-        }
-
-        const rebuildList = () => {
-            const stagingList = modal.querySelector('.pm-staging-list');
-            if (!stagingList) return;
-            renderStaging(stagingList, rebuildList);
-        };
-
-        modal.innerHTML = `
-            <div class="pm-bmodal-hd">
-                <button class="pm-bmodal-back">‹</button>
-                <span class="pm-bmodal-title">📝 條目庫</span>
-                <button class="pm-add-btn pm-elib-add">＋ 新增條目</button>
-            </div>
-            <div class="pm-bmodal-body">
-                <div class="pm-staging-list"></div>
-            </div>`;
-
-        modal.querySelector('.pm-bmodal-back').onclick = () => modal.classList.remove('open');
-
-        modal.querySelector('.pm-elib-add').onclick = () => {
-            const list = loadEntries();
-            list.push({ id: genId(), name: '新條目', content: '', enabled: true, order: list.length });
-            saveEntries(list);
-            rebuildList();
-            setTimeout(() => {
-                const cards = modal.querySelectorAll('.pm-staging-entry');
-                if (cards.length) {
-                    cards[cards.length - 1].querySelector('.pm-staging-body')?.classList.add('open');
-                    cards[cards.length - 1].querySelector('.pm-entry-name-input')?.focus();
-                }
-            }, 30);
-        };
-
-        rebuildList();
-        modal.classList.add('open');
-    }
-
     function renderUnified(body) {
         body.innerHTML = '';
 
@@ -1310,28 +1268,6 @@ B. 發布新帖子:
         };
     }
 
-    function renderOrder(body) {
-        const po = win.VN_PromptOrder;
-        if (!po) {
-            body.innerHTML = '<div class="pm-empty">⚠️ VN 劇情模塊未載入<br><small>請先開啟 VN 遊戲面板</small></div>';
-            return;
-        }
-        body.innerHTML = `
-            <p class="pm-order-hint">
-                ✎ = 自定義文字提示詞　📌 = 系統佔位（動態注入）<br>
-                拖曳條目調整 AI 讀取順序（僅影響 VN 劇情模式）。
-            </p>
-            <div class="pm-order-list" id="pm-order-list"></div>
-            <button class="pm-order-reset" id="pm-order-reset">↺ 重置為預設順序</button>
-        `;
-        const listEl = body.querySelector('#pm-order-list');
-        po.render(listEl);
-        body.querySelector('#pm-order-reset').onclick = () => {
-            po.reset();
-            po.render(listEl);
-        };
-    }
-
     // ── Tab 2：條目庫 ──
     function renderLibrary(body) {
         body.innerHTML = '';
@@ -1358,12 +1294,178 @@ B. 發布新帖子:
         renderStaging(list, () => renderLibrary(body));
     }
 
+    // ── 匯出匯入邏輯 ──
+    function exportPrompts() {
+        const data = {
+            version: 1,
+            type: "os_prompts",
+            entries: loadEntries(),
+            bundles: loadBundles(),
+            order: loadUnifiedOrder(),
+            iris: loadIris(),
+            cheshire: loadCheshire(),
+            globalCot: loadUniversalCot()
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `os_prompts_backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // 🔥 [新增] 智能萃取 SillyTavern Preset 面板
+    function openSTPresetModal(stBlocks, wrapperBody, refreshCallback) {
+        const wrap = wrapperBody.closest('.pm-wrap') || wrapperBody.parentElement;
+        let modal = wrap.querySelector('.pm-bmodal-st');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.className = 'pm-bmodal pm-bmodal-st';
+            wrap.appendChild(modal);
+        }
+
+        let html = `
+            <div class="pm-bmodal-hd">
+                <button class="pm-bmodal-back" id="st-modal-close">‹</button>
+                <span class="pm-bmodal-title">📥 發現酒館(ST)預設包</span>
+                <button class="pm-bundle-save" id="st-modal-import">匯入選中</button>
+            </div>
+            <div class="pm-bmodal-body">
+                <div style="font-size:12px; color:#aaa; margin-bottom:12px; line-height:1.4;">
+                    系統掃描到這是一個 ST Preset。<br>請勾選你想提取並轉換為「本地條目」的提示詞區塊：
+                </div>
+        `;
+
+        stBlocks.forEach((b, idx) => {
+            html += `
+                <div class="pm-staging-entry" style="margin-bottom:8px; border-color:#d4af3730;">
+                    <div class="pm-staging-head">
+                        <input type="checkbox" class="st-block-cb" data-idx="${idx}" checked style="width:16px; height:16px; accent-color:#d4af37;">
+                        <span class="pm-staging-name" style="color:#d4af37;">${b.title}</span>
+                        <button class="pm-icon-btn" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">👁️ 預覽</button>
+                    </div>
+                    <div class="pm-staging-body" style="padding:0 10px 10px; display:none;">
+                        <textarea class="pm-entry-ta" readonly style="height:100px; color:#999; border-color:#333;">${b.content.replace(/</g, '&lt;')}</textarea>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div>`;
+        modal.innerHTML = html;
+
+        modal.querySelector('#st-modal-close').onclick = () => modal.classList.remove('open');
+        modal.querySelector('#st-modal-import').onclick = () => {
+            const checkedBoxes = modal.querySelectorAll('.st-block-cb:checked');
+            if (checkedBoxes.length === 0) {
+                alert('請至少勾選一項！');
+                return;
+            }
+            const entries = loadEntries();
+            checkedBoxes.forEach(cb => {
+                const block = stBlocks[cb.dataset.idx];
+                entries.push({
+                    id: genId(),
+                    name: `[ST] ${block.title}`,
+                    content: block.content,
+                    enabled: true
+                });
+            });
+            saveEntries(entries);
+            alert(`✅ 成功匯入 ${checkedBoxes.length} 個條目！請在「條目庫」中查看。`);
+            modal.classList.remove('open');
+            refreshCallback();
+        };
+
+        modal.classList.add('open');
+    }
+
+    function importPrompts(file, wrapperBody, refreshCallback) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                
+                // 1. 判斷是否為 PhoneOS 原生備份檔
+                if (data.type === "os_prompts") {
+                    if (confirm('是否要【合併】匯入的資料？\n\n點「確定」合併（不會刪除原有資料）\n點「取消」則完全覆蓋現有資料！')) {
+                        const curEntries = loadEntries();
+                        const curBundles = loadBundles();
+                        const curOrder = loadUnifiedOrder();
+                        const newEntries = data.entries || [];
+                        const newBundles = data.bundles || [];
+
+                        const entryMap = Object.fromEntries(curEntries.map(e => [e.id, e]));
+                        newEntries.forEach(e => entryMap[e.id] = e);
+                        saveEntries(Object.values(entryMap));
+
+                        const bundleMap = Object.fromEntries(curBundles.map(b => [b.id, b]));
+                        newBundles.forEach(b => bundleMap[b.id] = b);
+                        saveBundles(Object.values(bundleMap));
+
+                        const addedOrder = (data.order || []).filter(id => !curOrder.includes(id));
+                        saveUnifiedOrder([...curOrder, ...addedOrder]);
+
+                        if (data.iris) saveIris(data.iris);
+                        if (data.cheshire) saveCheshire(data.cheshire);
+                        if (data.globalCot) saveUniversalCot(data.globalCot);
+                    } else {
+                        if(data.entries) saveEntries(data.entries);
+                        if(data.bundles) saveBundles(data.bundles);
+                        if(data.order) saveUnifiedOrder(data.order);
+                        if(data.iris !== undefined) saveIris(data.iris);
+                        if(data.cheshire !== undefined) saveCheshire(data.cheshire);
+                        if(data.globalCot !== undefined) saveUniversalCot(data.globalCot);
+                    }
+                    alert('✅ 提示詞匯入成功！');
+                    refreshCallback();
+                    return;
+                }
+                
+                // 2. 判斷是否為 SillyTavern Preset
+                if (data.system_prompt !== undefined || Array.isArray(data.prompt_build_array)) {
+                    let stBlocks = [];
+                    if (data.system_prompt && data.system_prompt.trim()) {
+                        stBlocks.push({ title: 'Main Prompt', content: data.system_prompt });
+                    }
+                    if (data.post_history_instructions && data.post_history_instructions.trim()) {
+                        stBlocks.push({ title: 'Post History', content: data.post_history_instructions });
+                    }
+                    if (Array.isArray(data.prompt_build_array)) {
+                        data.prompt_build_array.forEach(item => {
+                            if (item.text && item.text.trim()) {
+                                stBlocks.push({ title: item.name || 'Unnamed Block', content: item.text });
+                            }
+                        });
+                    }
+                    if (stBlocks.length > 0) {
+                        openSTPresetModal(stBlocks, wrapperBody, refreshCallback);
+                    } else {
+                        alert('⚠️ 在這個 ST 預設包中沒有找到可提取的提示詞內容。');
+                    }
+                    return;
+                }
+
+                throw new Error("無法識別的 JSON 格式！既不是 os_prompts 備份，也不是 ST Preset。");
+                
+            } catch(err) {
+                alert('❌ 匯入失敗：' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    }
+
     function launchApp(container) {
         container.innerHTML = `
             <div class="pm-wrap">
                 <div class="pm-header">
                     <span class="pm-back-btn" id="pm-nav-home">‹</span>
                     <span class="pm-title">📝 提示詞管理</span>
+                    <div class="pm-header-actions">
+                        <span class="pm-header-action" id="pm-export" title="匯出提示詞包">📤</span>
+                        <span class="pm-header-action" id="pm-import" title="匯入提示詞/ST預設包">📥</span>
+                        <input type="file" id="pm-import-file" accept=".json" style="display:none">
+                    </div>
                 </div>
                 <div class="pm-tabs">
                     <div class="pm-tab active" data-tab="unified">📦 預設包</div>
@@ -1377,6 +1479,7 @@ B. 發布新帖子:
         const body = container.querySelector('#pm-body');
         renderUnified(body);
 
+        // Tab 切換邏輯
         container.querySelectorAll('.pm-tab').forEach(tab => {
             tab.onclick = function() {
                 container.querySelectorAll('.pm-tab').forEach(t => t.classList.remove('active'));
@@ -1387,6 +1490,26 @@ B. 發布新帖子:
             };
         });
 
+        // 匯出 / 匯入事件綁定
+        container.querySelector('#pm-export').onclick = exportPrompts;
+        const importBtn = container.querySelector('#pm-import');
+        const importFile = container.querySelector('#pm-import-file');
+        
+        importBtn.onclick = () => importFile.click();
+        importFile.onchange = (e) => {
+            if (e.target.files.length > 0) {
+                importPrompts(e.target.files[0], body, () => {
+                    // 重新渲染當前分頁
+                    const activeTab = container.querySelector('.pm-tab.active').dataset.tab;
+                    if (activeTab === 'unified') renderUnified(body);
+                    else if (activeTab === 'library') renderLibrary(body);
+                    else renderPersonas(body);
+                });
+            }
+            e.target.value = ''; // 清空選擇，允許重複選擇同一個檔案
+        };
+
+        // 返回按鈕
         container.querySelector('#pm-nav-home').onclick = function() {
             const w = window.parent || window;
             if (w.PhoneSystem) w.PhoneSystem.goHome();
@@ -1394,5 +1517,5 @@ B. 發布新帖子:
     }
 
     win.OS_PROMPTS.launchApp = launchApp;
-    console.log('[PhoneOS] Prompt Manager V4.0 就緒。');
+    console.log('[PhoneOS] Prompt Manager V4.2 就緒。');
 })();
