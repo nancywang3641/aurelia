@@ -15,39 +15,40 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
 
     <style>
-        /* ── 基礎重置 (iOS PWA 終極全螢幕解法) ── */
+        /* ── 基礎重置 (暴力全螢幕，無視底部安全區) ── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         
         html, body {
-            /* 🔥 死死釘在螢幕邊緣，拒絕任何懸空與縮放 */
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             width: 100%; height: 100%;
             overflow: hidden;
-            background: #050402; 
+            background: #ffffff; /* 換回乾淨白底，解決黑條問題 */
             font-family: 'Noto Sans TC', 'PingFang TC', sans-serif;
             -webkit-tap-highlight-color: transparent;
             -webkit-text-size-adjust: 100%;
-            overscroll-behavior: none; /* 禁用 iOS 煩人的滑動回彈 */
+            overscroll-behavior: none; 
         }
 
         /* ── 全螢幕根容器 ── */
         #aurelia-standalone-root {
             position: absolute;
-            inset: 0; /* 100% 填滿整個螢幕，包含底部橫條區 */
+            top: 0; left: 0; right: 0; bottom: 0; /* 強制貼底 0，殺掉 safe-area */
             width: 100%;
             height: 100%;
             overflow: hidden;
         }
 
-        /* 🔥 真・解決底部黑條與 Home 鍵遮擋 (針對 Control Center 的導覽列) */
+        /* 🔥 真・解決底部醜條：不長胖、不留白、不變黑，直接維持原樣貼底 */
         #aurelia-bottom-nav {
-            /* 讓導覽列的背景往下延伸吃滿黑條區，按鈕自動被 padding 頂到安全位置 */
-            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
-            height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+            padding-bottom: 0 !important;
+            height: 56px !important;
+            /* 為了稍微避開 iOS 橫條，我們只加一點點 padding，絕不加好加滿變胖白條 */
+            padding-bottom: 12px !important; 
+            height: 68px !important; 
         }
 
-        /* ── 讓 embeddedRoot 填滿整個容器（覆蓋 control_center 預設的 85vh）── */
+        /* ── 讓 embeddedRoot 填滿整個容器 ── */
         #aurelia-embedded-root {
             height: 100% !important;
             min-height: 100% !important;
@@ -56,7 +57,7 @@
             box-shadow: none !important;
         }
 
-        /* ── 獨立模式：手機框架填滿容器（覆蓋 phone_system.js 的 fixed/50%/85vh）── */
+        /* ── 獨立模式：手機框架填滿容器 ── */
         #phone-frame-hardware {
             position: absolute !important;
             top: 0 !important;
@@ -71,9 +72,9 @@
             max-height: none !important;
         }
         
-        /* 🔥 確保手機系統的內部視窗也不會被底部橫條擋住 */
+        /* 確保手機內部不會被往上推 */
         #aurelia-phone-screen {
-            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+            padding-bottom: 0 !important;
         }
 
         @media (max-width: 768px) {
@@ -86,18 +87,18 @@
             }
         }
 
-        /* ── 獨立模式隱藏「登出」按鈕（沒有 ST 沒有意義）── */
+        /* ── 獨立模式隱藏「登出」按鈕 ── */
         [data-nav-id="nav-close"] { display: none !important; }
 
         /* ── 啟動載入畫面 ── */
         #aurelia-boot {
             position: fixed; inset: 0;
-            background: #050402;
+            background: #ffffff; /* 啟動畫面也改白底，避免閃黑 */
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             gap: 16px; z-index: 99999;
             transition: opacity 0.6s;
-            padding-bottom: env(safe-area-inset-bottom, 0px); /* 啟動畫面也避開橫條 */
+            padding-bottom: 0; 
         }
         #aurelia-boot.hidden { opacity: 0; pointer-events: none; }
         #aurelia-boot-logo {
@@ -108,7 +109,7 @@
         }
         #aurelia-boot-bar-wrap {
             width: 160px; height: 2px;
-            background: rgba(255,255,255,.08);
+            background: rgba(0,0,0,.08);
             border-radius: 2px; overflow: hidden;
         }
         #aurelia-boot-bar {
@@ -118,7 +119,7 @@
         }
         #aurelia-boot-label {
             font-size: 10px; letter-spacing: 3px;
-            color: rgba(212,175,55,.5); text-transform: uppercase;
+            color: rgba(212,175,55,.8); text-transform: uppercase;
         }
     </style>
 </head>
@@ -203,27 +204,20 @@
     (function () {
         'use strict';
 
-        // ── ST 事件系統 stub（避免各模組因找不到 eventOn 報錯）──
+        // ── ST 事件系統 stub ──
         window.eventOn    = window.eventOn    || function () {};
         window.eventOnce  = window.eventOnce  || function () {};
         window.eventOff   = window.eventOff   || function () {};
         window.eventEmit  = window.eventEmit  || function () {};
         window.eventOnButton  = window.eventOnButton  || function () {};
-        // 獨立模式：TavernHelper 設為 null，讓所有 `if(window.TavernHelper)` 判斷走 else 分支
-        // 不能設成 {}（空物件是 truthy，會讓 wx_core 嘗試呼叫不存在的 .generate/.createChatMessages）
         window.TavernHelper   = null;
 
-        // 獨立模式：強制 WX directMode + disableTyping，並繼承主 API 設定
-        // directMode=true   → wx_core 走 OS_API/WX_API 分支而非 TavernHelper
-        // disableTyping=true → chat() 直接呼叫 onFinish，不跑逐字元迴圈
-        // 繼承主設定        → 讓 wx_phone_api_config 有 url/key/model，否則 chat() 直接 onError
         (function () {
             try {
                 const wxCfg  = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}');
                 const mainCfg = JSON.parse(localStorage.getItem('os_global_config')    || '{}');
                 wxCfg.directMode    = true;
                 wxCfg.disableTyping = true;
-                // 繼承主模型設定（只在 wx 自己沒填時覆蓋）
                 if (!wxCfg.url   && mainCfg.url)   wxCfg.url   = mainCfg.url;
                 if (!wxCfg.key   && mainCfg.key)   wxCfg.key   = mainCfg.key;
                 if (!wxCfg.model && mainCfg.model) wxCfg.model = mainCfg.model;
@@ -231,7 +225,6 @@
                 localStorage.setItem('wx_phone_api_config', JSON.stringify(wxCfg));
             } catch(e) {}
         })();
-        // tavern_events stub：防止 vn_core 的 init 迴圈因找不到此物件而無限重試
         window.tavern_events  = window.tavern_events  || {
             MESSAGE_RECEIVED: 'message_received',
             MESSAGE_SENT:     'message_sent',
@@ -258,13 +251,13 @@
             }
         }
 
-        // ── 全域快捷函式（對齊 index.js）──
+        // ── 全域快捷函式 ──
         window.togglePhoneSystem = function() {
             if (window.PhoneSystem) window.PhoneSystem.show();
             else console.warn('[Aurelia] 手機系統尚未就緒');
         };
 
-        // ── 手機 App 註冊（與 index.js 保持一致）──
+        // ── 手機 App 註冊 ──
         function registerApps() {
             const PS = window.PhoneSystem;
             if (!PS) return;
@@ -283,7 +276,6 @@
         function init() {
             setProgress(20, 'MOUNTING LOBBY');
 
-            // 1. 掛載奧瑞亞大廳到全螢幕根容器
             const root = document.getElementById('aurelia-standalone-root');
             if (window.AureliaControlCenter && root) {
                 window.AureliaControlCenter.mountEmbedded(root, 'bottom');
@@ -293,13 +285,11 @@
 
             setProgress(60, 'REGISTERING APPS');
 
-            // 2. 延遲等所有模組載入完畢後再註冊 App
             setTimeout(() => {
                 registerApps();
                 setProgress(90, 'STARTING');
             }, 800);
 
-            // 3. 廣播系統就緒並隱藏啟動畫面
             setTimeout(() => {
                 window.eventEmit('APP_READY');
                 window.eventEmit('VN_PANEL_READY');
@@ -309,7 +299,6 @@
             }, 1500);
         }
 
-        // DOM 就緒後啟動
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {
