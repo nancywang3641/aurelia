@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <!-- iOS PWA 設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="奧瑞亞" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="https://files.catbox.moe/l5hl69.png" />
+    <link rel="icon" type="image/png" href="https://files.catbox.moe/l5hl69.png" />
+    <title>奧瑞亞 | Aurelia</title>
+
+    <!-- Font Awesome（底部導覽列圖示） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+
+    <style>
+        /* ── 基礎重置 ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background: #050402;
+            font-family: 'Noto Sans TC', 'PingFang TC', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        /* ── 全螢幕根容器 ── */
+        #aurelia-standalone-root {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* ── 讓 embeddedRoot 填滿整個容器（覆蓋 control_center 預設的 85vh）── */
+        #aurelia-embedded-root {
+            height: 100% !important;
+            min-height: 100% !important;
+            margin-bottom: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+
+        /* ── 獨立模式：手機框架填滿容器（覆蓋 phone_system.js 的 fixed/50%/85vh）
+             使用 ID 選擇器，優先級天生高於 .phone-frame class，不影響 ST ── */
+        #phone-frame-hardware {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            transform: none !important;
+            border-radius: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            max-height: none !important;
+        }
+        @media (max-width: 768px) {
+            #phone-frame-hardware {
+                height: 100% !important;
+                top: 0 !important;
+                transform: none !important;
+                border-bottom-left-radius: 0 !important;
+                border-bottom-right-radius: 0 !important;
+            }
+        }
+
+        /* ── 獨立模式隱藏「登出」按鈕（沒有 ST 沒有意義）── */
+        [data-nav-id="nav-close"] { display: none !important; }
+
+        /* ── 啟動載入畫面 ── */
+        #aurelia-boot {
+            position: fixed; inset: 0;
+            background: #050402;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 16px; z-index: 99999;
+            transition: opacity 0.6s;
+        }
+        #aurelia-boot.hidden { opacity: 0; pointer-events: none; }
+        #aurelia-boot-logo {
+            width: 64px; height: 64px;
+            border-radius: 50%;
+            border: 2px solid rgba(212,175,55,.4);
+            box-shadow: 0 0 24px rgba(212,175,55,.2);
+        }
+        #aurelia-boot-bar-wrap {
+            width: 160px; height: 2px;
+            background: rgba(255,255,255,.08);
+            border-radius: 2px; overflow: hidden;
+        }
+        #aurelia-boot-bar {
+            height: 100%; width: 0%;
+            background: #d4af37; border-radius: 2px;
+            transition: width .3s linear;
+        }
+        #aurelia-boot-label {
+            font-size: 10px; letter-spacing: 3px;
+            color: rgba(212,175,55,.5); text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 啟動載入畫面 -->
+    <div id="aurelia-boot">
+        <img id="aurelia-boot-logo" src="https://files.catbox.moe/l5hl69.png" alt="Aurelia" />
+        <div id="aurelia-boot-bar-wrap"><div id="aurelia-boot-bar"></div></div>
+        <div id="aurelia-boot-label">INITIALIZING</div>
+    </div>
+
+    <!-- 奧瑞亞大廳全螢幕掛載點 -->
+    <div id="aurelia-standalone-root"></div>
+
+    <!-- BGM 播放器（void_terminal.js 需要此元素存在） -->
+    <audio id="lobby-bgm-player" loop preload="none"></audio>
+
+    <!-- ═══════════════════════════════════════════════════
+         STEP 1：核心框架（不依賴 ST）
+         跳過：tavern_bridge / html_extractor /
+               story_extractor / aurelia_regex_bridge / vn_dom_bridge
+         ⚠️ ui_utilities.js 保留：其 AureliaVoidStyles 提供大廳全部 CSS；
+            IconManager / MessageCollapser 在獨立模式下找不到 ST DOM，靜默失敗。
+    ═══════════════════════════════════════════════════ -->
+    <script src="core/panel_manager.js"></script>
+    <script src="core/ui_utilities.js"></script>
+    <script src="core/void_terminal.js"></script>
+    <script src="core/control_center.js"></script>
+
+    <!-- ═══════════════════════════════════════════════════
+         STEP 2：OS 基礎層
+    ═══════════════════════════════════════════════════ -->
+    <script src="os_phone/os/os_settings.js"></script>
+    <script src="os_phone/os/os_db.js"></script>
+    <!-- os_sync.js → SKIP（同步到 ST 世界書，獨立版不需要） -->
+    <script src="os_phone/os/os_persona.js"></script>
+    <script src="os_phone/os/os_prompts.js"></script>
+    <script src="os_phone/os/os_lorebook.js"></script>
+    <script src="os_phone/os/os_contacts.js"></script>
+    <script src="os_phone/os/os_tavern_bridge.js"></script>
+    <script src="os_phone/os/os_bridge.js"></script>
+    <script src="os_phone/os/os_think.js"></script>
+    <script src="os_phone/os/os_api_engine.js"></script>
+    <script src="os_phone/os/os_debug_panel.js"></script><!-- [DEBUG] 移除此行可停用 -->
+    <script src="os_phone/os/phone_system.js"></script>
+    <script src="os_phone/os/os_monitor.js"></script>
+
+    <!-- ═══════════════════════════════════════════════════
+         STEP 3：擴充 OS 功能層
+    ═══════════════════════════════════════════════════ -->
+    <script src="os_phone/os/os_economy.js"></script>
+    <script src="os_phone/os/os_minimax.js"></script>
+    <script src="os_phone/os/translation_manager.js"></script>
+    <script src="os_phone/os/os_image_manager.js"></script>
+    <script src="os_phone/os/os_achievement.js"></script>
+    <script src="os_phone/os/os_404_store.js"></script>
+    <script src="os_phone/os/os_tarot.js"></script>
+    <script src="os_phone/os/os_backup.js"></script>
+    <script src="os_phone/os/os_worldbook.js"></script>
+
+    <!-- ═══════════════════════════════════════════════════
+         STEP 4：VN 視覺小說
+    ═══════════════════════════════════════════════════ -->
+    <script src="os_phone/vn_story/vn_styles.js"></script>
+    <script src="os_phone/vn_story/vn_core.js"></script>
+    <script src="os_phone/vn_story/vn_phone.js"></script>
+
+    <!-- ═══════════════════════════════════════════════════
+         STEP 5：RPG 狀態系統
+    ═══════════════════════════════════════════════════ -->
+    <script src="os_phone/rpg/status_core.js"></script>
+    <script src="os_phone/rpg/summary_core.js"></script>
+    <script src="os_phone/rpg/status_panel.js"></script>
+    <script src="os_phone/rpg/avatar_manager.js"></script>
+
+    <!-- ═══════════════════════════════════════════════════
+         STEP 6：App 層
+    ═══════════════════════════════════════════════════ -->
+    <script src="os_phone/host_club/host_core.js"></script>
+
+    <script src="os_phone/pet/pet_inventory.js"></script>
+    <script src="os_phone/pet/pet_status.js"></script>
+    <script src="os_phone/pet/pet_shop.js"></script>
+    <script src="os_phone/pet/pet_home.js"></script>
+
+    <script src="os_phone/child/child_core.js"></script>
+    <!-- child_prompts.js → SKIP（AI 提示詞，Standalone API 整合後再啟用） -->
+
+    <script src="os_phone/wx/wx_user_profile.js"></script>
+    <script src="os_phone/wx/wx_theme.js"></script>
+    <script src="os_phone/wx/wx_contacts.js"></script>
+    <script src="os_phone/wx/wx_chat_settings.js"></script>
+    <script src="os_phone/wx/wx_bubble_settings.js"></script>
+    <script src="os_phone/wx/wx_message_manager.js"></script>
+    <script src="os_phone/wx/wx_view.js"></script>
+    <script src="os_phone/wx/wx_core.js"></script>
+    <script src="os_phone/wx/wx_tavern_api_bridge.js"></script>
+
+    <script src="os_phone/wb/wb_user_profile.js"></script>
+    <script src="os_phone/wb/wb_account.js"></script>
+    <script src="os_phone/wb/wb_theme.js"></script>
+    <script src="os_phone/wb/wb_view.js"></script>
+    <script src="os_phone/wb/wb_core.js"></script>
+
+    <script src="os_phone/inv/inv_core.js"></script>
+    <script src="os_phone/qb/qb_core.js"></script>
+    <script src="os_phone/qb/os_404_chaos.js"></script>
+
+    <!-- ═══════════════════════════════════════════════════
+         STEP 7：初始化
+    ═══════════════════════════════════════════════════ -->
+    <script>
+    (function () {
+        'use strict';
+
+        // ── ST 事件系統 stub（避免各模組因找不到 eventOn 報錯）──
+        window.eventOn    = window.eventOn    || function () {};
+        window.eventOnce  = window.eventOnce  || function () {};
+        window.eventOff   = window.eventOff   || function () {};
+        window.eventEmit  = window.eventEmit  || function () {};
+        window.eventOnButton  = window.eventOnButton  || function () {};
+        // 獨立模式：TavernHelper 設為 null，讓所有 `if(window.TavernHelper)` 判斷走 else 分支
+        // 不能設成 {}（空物件是 truthy，會讓 wx_core 嘗試呼叫不存在的 .generate/.createChatMessages）
+        window.TavernHelper   = null;
+
+        // 獨立模式：強制 WX directMode + disableTyping，並繼承主 API 設定
+        // directMode=true   → wx_core 走 OS_API/WX_API 分支而非 TavernHelper
+        // disableTyping=true → chat() 直接呼叫 onFinish，不跑逐字元迴圈
+        // 繼承主設定        → 讓 wx_phone_api_config 有 url/key/model，否則 chat() 直接 onError
+        (function () {
+            try {
+                const wxCfg  = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}');
+                const mainCfg = JSON.parse(localStorage.getItem('os_global_config')    || '{}');
+                wxCfg.directMode    = true;
+                wxCfg.disableTyping = true;
+                // 繼承主模型設定（只在 wx 自己沒填時覆蓋）
+                if (!wxCfg.url   && mainCfg.url)   wxCfg.url   = mainCfg.url;
+                if (!wxCfg.key   && mainCfg.key)   wxCfg.key   = mainCfg.key;
+                if (!wxCfg.model && mainCfg.model) wxCfg.model = mainCfg.model;
+                if (!wxCfg.maxTokens && mainCfg.maxTokens) wxCfg.maxTokens = mainCfg.maxTokens;
+                localStorage.setItem('wx_phone_api_config', JSON.stringify(wxCfg));
+            } catch(e) {}
+        })();
+        // tavern_events stub：防止 vn_core 的 init 迴圈因找不到此物件而無限重試
+        window.tavern_events  = window.tavern_events  || {
+            MESSAGE_RECEIVED: 'message_received',
+            MESSAGE_SENT:     'message_sent',
+            CHAT_CHANGED:     'chat_changed',
+            CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
+        };
+        window.PANEL_COMMUNICATION = { ready: true, processors: {}, modulesLoaded: {} };
+
+        // ── 載入進度條 ──
+        const bootBar   = document.getElementById('aurelia-boot-bar');
+        const bootLabel = document.getElementById('aurelia-boot-label');
+        let _progress = 0;
+        function setProgress(pct, label) {
+            _progress = pct;
+            if (bootBar)   bootBar.style.width = pct + '%';
+            if (bootLabel && label) bootLabel.textContent = label;
+        }
+
+        function hideBoot() {
+            const boot = document.getElementById('aurelia-boot');
+            if (boot) {
+                boot.classList.add('hidden');
+                setTimeout(() => boot.remove(), 700);
+            }
+        }
+
+        // ── 全域快捷函式（對齊 index.js）──
+        window.togglePhoneSystem = function() {
+            if (window.PhoneSystem) window.PhoneSystem.show();
+            else console.warn('[Aurelia] 手機系統尚未就緒');
+        };
+
+        // ── 手機 App 註冊（與 index.js 保持一致）──
+        function registerApps() {
+            const PS = window.PhoneSystem;
+            if (!PS) return;
+            if (window.RPG_PANEL)    PS.install('RPG 狀態',  '🛡️', '#5d4037', window.RPG_PANEL.launch);
+            if (window.HOST_CLUB)    PS.install('不夜城',    '🍸', '#7c3aed', window.HOST_CLUB.launch);
+            if (window.OS_ECONOMY)   PS.install('電子錢包',  '💳', '#2c3e50', c => window.OS_ECONOMY.launch(c));
+            if (window.PET_SHOP)     PS.install('寵物店',    '🐾', '#112250', window.PET_SHOP.launch);
+            if (window.PET_HOME)     PS.install('我的寵物',  '🏠', '#3C507D', window.PET_HOME.launch);
+            if (window.OS_TAROT)     PS.install('賽博塔羅',  '🔮', '#9b59b6', window.OS_TAROT.launch);
+            if (window.VN_STORY)     PS.install('故事模式',  '📖', '#ff69b4', window.VN_STORY.launch);
+            if (window.OS_WORLDBOOK) PS.install('世界書',    '📗', '#1a3a5c', c => window.OS_WORLDBOOK.launch(c));
+            if (window.OS_SETTINGS)  PS.install('設置',      '⚙️', '#4c4c4c', window.OS_SETTINGS.launchApp);
+        }
+
+        // ── 主初始化流程 ──
+        function init() {
+            setProgress(20, 'MOUNTING LOBBY');
+
+            // 1. 掛載奧瑞亞大廳到全螢幕根容器
+            const root = document.getElementById('aurelia-standalone-root');
+            if (window.AureliaControlCenter && root) {
+                window.AureliaControlCenter.mountEmbedded(root, 'bottom');
+            } else {
+                console.error('[Aurelia] AureliaControlCenter 未載入，請檢查 core/ 路徑');
+            }
+
+            setProgress(60, 'REGISTERING APPS');
+
+            // 2. 延遲等所有模組載入完畢後再註冊 App
+            setTimeout(() => {
+                registerApps();
+                setProgress(90, 'STARTING');
+            }, 800);
+
+            // 3. 廣播系統就緒並隱藏啟動畫面
+            setTimeout(() => {
+                window.eventEmit('APP_READY');
+                window.eventEmit('VN_PANEL_READY');
+                window.eventEmit('CHAT_CHANGED');
+                setProgress(100, 'READY');
+                setTimeout(hideBoot, 300);
+            }, 1500);
+        }
+
+        // DOM 就緒後啟動
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+    })();
+    </script>
+</body>
+</html>
