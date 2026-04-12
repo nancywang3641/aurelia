@@ -15,32 +15,36 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
 
     <style>
-        /* ── 基礎重置 ── */
+        /* ── 基礎重置 (iOS PWA 終極全螢幕解法) ── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         
         html, body {
-            width: 100%; 
-            /* 🔥 修正 1：使用 100dvh 與 fill-available 強制填滿 iOS 螢幕，消除底部黑條 */
-            height: 100dvh;
-            min-height: -webkit-fill-available;
+            /* 🔥 死死釘在螢幕邊緣，拒絕任何懸空與縮放 */
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%;
             overflow: hidden;
-            background: #050402;
+            background: #050402; 
             font-family: 'Noto Sans TC', 'PingFang TC', sans-serif;
             -webkit-tap-highlight-color: transparent;
             -webkit-text-size-adjust: 100%;
+            overscroll-behavior: none; /* 禁用 iOS 煩人的滑動回彈 */
         }
 
         /* ── 全螢幕根容器 ── */
         #aurelia-standalone-root {
-            position: fixed;
-            inset: 0;
+            position: absolute;
+            inset: 0; /* 100% 填滿整個螢幕，包含底部橫條區 */
             width: 100%;
-            /* 🔥 修正 2：對齊 100dvh */
-            height: 100dvh;
+            height: 100%;
             overflow: hidden;
-            /* 🔥 修正 3：讓容器吃滿螢幕底部，但把內部 UI 往上推，避免按鈕被 Home 橫條擋住 */
-            padding-bottom: env(safe-area-inset-bottom, 0px);
-            box-sizing: border-box;
+        }
+
+        /* 🔥 真・解決底部黑條與 Home 鍵遮擋 (針對 Control Center 的導覽列) */
+        #aurelia-bottom-nav {
+            /* 讓導覽列的背景往下延伸吃滿黑條區，按鈕自動被 padding 頂到安全位置 */
+            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+            height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
         }
 
         /* ── 讓 embeddedRoot 填滿整個容器（覆蓋 control_center 預設的 85vh）── */
@@ -52,8 +56,7 @@
             box-shadow: none !important;
         }
 
-        /* ── 獨立模式：手機框架填滿容器（覆蓋 phone_system.js 的 fixed/50%/85vh）
-             使用 ID 選擇器，優先級天生高於 .phone-frame class，不影響 ST ── */
+        /* ── 獨立模式：手機框架填滿容器（覆蓋 phone_system.js 的 fixed/50%/85vh）── */
         #phone-frame-hardware {
             position: absolute !important;
             top: 0 !important;
@@ -67,6 +70,12 @@
             margin: 0 !important;
             max-height: none !important;
         }
+        
+        /* 🔥 確保手機系統的內部視窗也不會被底部橫條擋住 */
+        #aurelia-phone-screen {
+            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+        }
+
         @media (max-width: 768px) {
             #phone-frame-hardware {
                 height: 100% !important;
@@ -88,8 +97,7 @@
             align-items: center; justify-content: center;
             gap: 16px; z-index: 99999;
             transition: opacity 0.6s;
-            /* 啟動畫面也確保安全區域墊底 */
-            padding-bottom: env(safe-area-inset-bottom, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px); /* 啟動畫面也避開橫條 */
         }
         #aurelia-boot.hidden { opacity: 0; pointer-events: none; }
         #aurelia-boot-logo {
