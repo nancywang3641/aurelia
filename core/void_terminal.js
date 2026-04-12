@@ -17,27 +17,13 @@
 
     // ===== 佈局管理器 (解決 iOS 動態島遮擋) =====
     function applyLayoutMode() {
-        try {
-            const mode = localStorage.getItem('aurelia_layout_mode') || 'auto';
-            if (mode === 'pad-ios') {
-                document.body.classList.add('layout-pad-ios');
-            } else {
-                document.body.classList.remove('layout-pad-ios');
-            }
-        } catch (e) {
-            console.warn('[Aurelia] 佈局讀取失敗', e);
+        const mode = localStorage.getItem('aurelia_layout_mode') || 'auto';
+        document.body.classList.remove('layout-pad-ios');
+        if (mode === 'pad-ios') {
+            document.body.classList.add('layout-pad-ios');
         }
     }
     applyLayoutMode(); // 初始化執行
-
-    // 🔥 強力鎖定機制：確保 PWA 在剛載入、切換多工回來、重新聚焦時，絕對不會弄丟動態島的補償設定
-    document.addEventListener('DOMContentLoaded', applyLayoutMode);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) applyLayoutMode(); });
-    window.addEventListener('focus', applyLayoutMode);
-    window.addEventListener('pageshow', applyLayoutMode);
-    // 防禦性定時器，防止 iOS 啟動動畫延遲重置樣式
-    setTimeout(applyLayoutMode, 500);
-    setTimeout(applyLayoutMode, 1500);
 
     // ===== 狀態管理 =====
     let IRIS_STATE = {
@@ -291,7 +277,6 @@
             // 使用者回來了
             if (!_hiddenByTab) return;
             _hiddenByTab = false;
-            applyLayoutMode(); // 🔥 強制重新鎖定佈局設定，防止被 iOS 切換多工洗掉
             // 面板沒開就不恢復 BGM
             if (!_isPanelOpen || _isActivitySuspended) return;
             const bgmUrl = is404Room ? URLS.BGM_404 : URLS.BGM_LOBBY;
@@ -459,7 +444,7 @@
             @keyframes vssIn { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:none} }
             @keyframes vssScan { 0%{top:-2px} 100%{top:100%} }
 
-            /* iOS 安全區域自動適應 (保留頂部適應) */
+            /* iOS 安全區域自動適應 */
             .void-top-bar { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
             .void-app-tray { top: calc(56px + env(safe-area-inset-top, 0px)); }
             .void-bubble-layer { top: calc(56px + env(safe-area-inset-top, 0px)); }
@@ -2354,6 +2339,6 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
         }
     };
 
-    console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (支援全局登入API自動跳轉與鎖定佈局)');
+    console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (支援全局登入API自動跳轉)');
 
 })(window.VoidTerminal = window.VoidTerminal || {});
