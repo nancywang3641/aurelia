@@ -1,20 +1,26 @@
 // ----------------------------------------------------------------
-// [檔案] os_settings.js (V5.6 - Strict Clone & Add Secondary & iOS Layout)
+// [檔案] os_settings.js (V5.6.1 - Strict Clone & Add Secondary & iOS Layout Fix)
 // 職責：管理 PhoneOS 全域設定
 // 修改：
 // 1. 基於 V4.3 原檔，不動任何原有邏輯與樣式。
 // 2. 新增 [⚡ 副模型] 分頁，完全複製主模型的 UI 結構與操作邏輯。
 // 3. 副模型配置獨立儲存於 'os_secondary_llm_config'。
 // 4. 將備份分頁擴充為「⚙️ 系統/備份」，加入「iOS 介面佈局」設定，儲存即時生效。
+// 5. [HOTFIX] 修復設定面板自身的 Header 在 iOS 動態島/瀏海下被遮擋的問題。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入系統設置模塊 (V5.6 Dual LLM & iOS Layout)...');
+    console.log('[PhoneOS] 載入系統設置模塊 (V5.6.1 Dual LLM & iOS Layout)...');
 
-    // 定義系統級樣式 (完全沿用原檔)
+    // 定義系統級樣式 (完全沿用原檔，加上 iOS Safe Area)
     const appStyle = `
         /* 基礎容器 */
         .set-container { width: 100%; height: 100%; background: #121212; color: #fff; display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; }
         .set-header { padding: 15px 20px; background: #1e1e1e; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+        
+        /* 🔥 iOS 安全區域自動適應與手動強制下移 */
+        .set-header { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
+        body.layout-pad-ios .set-header { padding-top: 55px !important; }
+
         .set-title { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
         .set-back-btn { font-size: 24px; color: #a855f7; cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s; }
         .set-back-btn:hover { background: rgba(168, 85, 247, 0.1); }
@@ -66,6 +72,9 @@
     const targetDoc = (window.parent && window.parent.document) ? window.parent.document : document;
     if (!targetDoc.getElementById('os-settings-css')) {
         const s = targetDoc.createElement('style'); s.id = 'os-settings-css'; s.innerHTML = appStyle; targetDoc.head.appendChild(s);
+    } else {
+        // 如果已存在，強制更新 CSS (確保加入 iOS 佈局)
+        targetDoc.getElementById('os-settings-css').innerHTML = appStyle;
     }
 
     const LLM_STORAGE_KEY = 'os_global_config';
@@ -1210,6 +1219,16 @@
                         d.body.classList.remove('layout-pad-ios');
                     }
                 });
+                
+                // 強制更新自身的 header 樣式 (以防萬一 classList 沒生效)
+                const header = container.querySelector('.set-header');
+                if (header) {
+                    if (layoutMode === 'pad-ios') {
+                        header.style.setProperty('padding-top', '55px', 'important');
+                    } else {
+                        header.style.removeProperty('padding-top');
+                    }
+                }
 
                 // 2. 收集其他設定
                 const llmData = {
