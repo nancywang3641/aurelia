@@ -1,8 +1,8 @@
 /**
  * ========================
  * Aurelia UI Utilities (Lite)
- * UI 工具箱 - 負責圖標定位、訊息折疊與動態島佈局避讓
- * 版本：3.1.0-layout-fix
+ * UI 工具箱 - 負責圖標定位與訊息折疊
+ * 版本：3.0.0-lite
  * ========================
  */
 (function() {
@@ -311,146 +311,7 @@
     };
 
     // ========================
-    // 3. 佈局形態管理器 (Layout Manager - 解決動態島遮擋)
-    // ========================
-    const LayoutManager = {
-        modes: ['default', 'notch', 'compact'],
-        currentMode: 'default',
-
-        init() {
-            this.injectStyles();
-            this.createFloatingButton();
-            this.loadState();
-        },
-
-        injectStyles() {
-            if (document.getElementById('aurelia-layout-styles')) return;
-            const style = document.createElement('style');
-            style.id = 'aurelia-layout-styles';
-            style.innerHTML = `
-                /* 形態切換器 UI - 放置於安全區域 */
-                #aurelia-layout-btn {
-                    position: fixed; top: 15px; left: 15px; z-index: 100000;
-                    width: 32px; height: 32px; background: rgba(0,0,0,0.4);
-                    color: #fff; border-radius: 50%; display: flex; align-items: center;
-                    justify-content: center; cursor: pointer; backdrop-filter: blur(5px);
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.2); transition: 0.3s;
-                    font-size: 14px;
-                }
-                #aurelia-layout-btn:hover { background: rgba(0,0,0,0.7); transform: scale(1.1); }
-                
-                #aurelia-layout-panel {
-                    position: fixed; top: 55px; left: 15px; z-index: 100000;
-                    background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
-                    border: 1px solid #cbd5e0; border-radius: 8px; padding: 10px;
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.15); display: none;
-                    flex-direction: column; gap: 8px; width: 140px;
-                }
-                .layout-option-btn {
-                    padding: 8px 10px; background: transparent; border: 1px solid #e2e8f0;
-                    border-radius: 6px; font-size: 12px; color: #4a5568; cursor: pointer;
-                    text-align: left; transition: 0.2s; font-weight: bold;
-                }
-                .layout-option-btn.active {
-                    background: #ebf8ff; border-color: #63b3ed; color: #2b6cb0;
-                }
-                .layout-option-btn:hover:not(.active) { background: #f7fafc; }
-
-                /* === 瀏海/動態島模式 (Notch Mode) === 
-                   針對 void_terminal 渲染出來的各個面板，強迫加上頂部 padding 避開動態島 
-                */
-                body.layout-notch .void-top-bar { padding-top: 45px !important; }
-                body.layout-notch .void-app-tray { top: 85px !important; }
-                body.layout-notch .void-bubble-layer { top: 85px !important; }
-                body.layout-notch .hist-header,
-                body.layout-notch .ach-header,
-                body.layout-notch .store-header { padding-top: 45px !important; }
-                body.layout-notch .void-session-topbar { padding-top: 45px !important; }
-                body.layout-notch .void-login-container { padding-top: 50px !important; }
-                /* 404 崩潰模式同理 */
-                body.layout-notch .void-tab.mode-404 .void-top-bar { padding-top: 45px !important; }
-
-                /* === 緊湊模式 (Compact Mode) === 
-                   專門給小螢幕手機，擠壓 UI 以換取更多空間 
-                */
-                body.layout-compact .void-top-bar { padding: 5px 15px !important; }
-                body.layout-compact .void-app-tray { top: 40px !important; padding: 4px 8px !important; }
-                body.layout-compact .void-char-area { bottom: 70px !important; height: 70% !important; }
-                body.layout-compact .void-dialogue-wrap { bottom: 70px !important; }
-                body.layout-compact .void-chat-bar { padding: 4px 8px !important; }
-            `;
-            document.head.appendChild(style);
-        },
-
-        createFloatingButton() {
-            if (document.getElementById('aurelia-layout-btn')) return;
-
-            const btn = document.createElement('div');
-            btn.id = 'aurelia-layout-btn';
-            btn.title = '切換佈局形態 (避開動態島)';
-            btn.innerHTML = '📱';
-            
-            const panel = document.createElement('div');
-            panel.id = 'aurelia-layout-panel';
-            
-            const options = [
-                { id: 'default', name: '📱 預設形態' },
-                { id: 'notch', name: '🏝️ 動態島避讓' },
-                { id: 'compact', name: '🗜️ 緊湊形態' }
-            ];
-
-            options.forEach(opt => {
-                const obtn = document.createElement('button');
-                obtn.className = 'layout-option-btn';
-                obtn.dataset.mode = opt.id;
-                obtn.innerText = opt.name;
-                obtn.onclick = () => {
-                    this.setMode(opt.id);
-                    panel.style.display = 'none';
-                };
-                panel.appendChild(obtn);
-            });
-
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
-            };
-
-            document.body.appendChild(btn);
-            document.body.appendChild(panel);
-
-            // 點擊空白處關閉
-            document.addEventListener('click', (e) => {
-                if (!panel.contains(e.target) && e.target !== btn) {
-                    panel.style.display = 'none';
-                }
-            });
-        },
-
-        setMode(mode) {
-            this.currentMode = mode;
-            // 移除舊的佈局 class，加上新的
-            document.body.classList.remove('layout-default', 'layout-notch', 'layout-compact');
-            document.body.classList.add('layout-' + mode);
-            
-            // 更新 UI 狀態
-            document.querySelectorAll('.layout-option-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.mode === mode);
-            });
-
-            // 儲存至本地端，確保重新整理依然有效
-            localStorage.setItem('aurelia_layout_mode', mode);
-            console.log('[LayoutManager] 佈局已切換為:', mode);
-        },
-
-        loadState() {
-            const savedMode = localStorage.getItem('aurelia_layout_mode') || 'default';
-            this.setMode(savedMode);
-        }
-    };
-
-    // ========================
-    // 4. 純白大廳 / 404 號房 全域樣式
+    // 3. 純白大廳 / 404 號房 全域樣式
     //    其他模組可呼叫 window.AureliaVoidStyles.inject(bgUrl) 確保樣式已注入
     // ========================
     const VoidStyles = {
@@ -676,14 +537,13 @@
     };
 
     // ========================
-    // 5. 導出與啟動
+    // 4. 導出與啟動
     // ========================
     window.AureliaUIUtils = {
         init: () => {
             IconManager.init();
             MessageCollapser.init();
-            LayoutManager.init(); // 🔥 啟動佈局管理器
-            console.log('✅ UI 工具箱 (Lite) 已啟動 (包含動態島避讓支援)');
+            console.log('✅ UI 工具箱 (Lite) 已啟動');
         },
         reinitializeCollapse: () => MessageCollapser.init()
     };

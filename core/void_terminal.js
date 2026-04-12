@@ -1,7 +1,7 @@
 /**
  * ========================
- * Void Terminal (v4.9 - Auto Login Fix & Narrative Engine)
- * 純白大廳與敘事引擎核心 (包含居中登入介面與全局姓名紀錄)
+ * Void Terminal (v4.10 - iOS Notch & Standalone Layout Fix)
+ * 純白大廳與敘事引擎核心 (包含居中登入介面、全局姓名紀錄與 iOS 佈局適配)
  * ========================
  * 職責：
  * 1. 渲染純白大廳 UI (Bubbles, 聊天框, 立繪) 與 登入介面。
@@ -9,10 +9,21 @@
  * 3. 處理 ERR_404 崩潰彩蛋與場景切換。
  * 4. 解析 [LaunchApp|xxx] 標籤，與 Control Center 連動打開外部面板。
  * 5. 導出全局登入資訊 (getUserName / setUserName)，供其他面板 (App) 讀取。
+ * 6. (NEW) 管理 iOS 動態島/瀏海的安全區域與強制下移佈局。
  */
 
 (function(VoidTerminal) {
     'use strict';
+
+    // ===== 佈局管理器 (解決 iOS 動態島遮擋) =====
+    function applyLayoutMode() {
+        const mode = localStorage.getItem('aurelia_layout_mode') || 'auto';
+        document.body.classList.remove('layout-pad-ios');
+        if (mode === 'pad-ios') {
+            document.body.classList.add('layout-pad-ios');
+        }
+    }
+    applyLayoutMode(); // 初始化執行
 
     // ===== 狀態管理 =====
     let IRIS_STATE = {
@@ -277,6 +288,7 @@
     // ===== 生命週期鉤子 =====
     VoidTerminal.onShow = async function() {
         _isPanelOpen = true;
+        applyLayoutMode(); // 確保重新開啟時佈局正確
         if (_isActivitySuspended) return;
         const bgmUrl = is404Room ? URLS.BGM_404 : URLS.BGM_LOBBY;
         playLobbyBgm(bgmUrl);
@@ -432,6 +444,24 @@
             @keyframes vssIn { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:none} }
             @keyframes vssScan { 0%{top:-2px} 100%{top:100%} }
 
+            /* iOS 安全區域自動適應 */
+            .void-top-bar { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
+            .void-app-tray { top: calc(56px + env(safe-area-inset-top, 0px)); }
+            .void-bubble-layer { top: calc(56px + env(safe-area-inset-top, 0px)); }
+            .void-panel-overlay { top: calc(90px + env(safe-area-inset-top, 0px)); }
+            #achievement-panel-overlay { top: calc(10% + env(safe-area-inset-top, 0px)); }
+            #store-panel-overlay { top: calc(8% + env(safe-area-inset-top, 0px)); }
+            .void-login-overlay { padding-top: env(safe-area-inset-top, 0px); }
+
+            /* 手動強制下移模式 (給動態島或安全區域失效時使用) */
+            body.layout-pad-ios .void-top-bar { padding-top: 55px !important; }
+            body.layout-pad-ios .void-app-tray { top: 96px !important; }
+            body.layout-pad-ios .void-bubble-layer { top: 96px !important; }
+            body.layout-pad-ios .void-panel-overlay { top: 130px !important; }
+            body.layout-pad-ios #achievement-panel-overlay { top: 15% !important; }
+            body.layout-pad-ios #store-panel-overlay { top: 12% !important; }
+            body.layout-pad-ios .void-login-overlay { padding-top: 40px !important; }
+
             /* ── 登入介面外框 ── */
             .void-login-overlay {
                 position:absolute;inset:0;z-index:200;overflow:hidden;
@@ -483,7 +513,7 @@
             }
             .void-login-alt-btn:hover { background:#edf2f7;color:#4a5568;border-color:#e2e8f0; }
 
-            /* ── 人設選擇器 ── */
+            /* ── 人設/佈局 選擇器 ── */
             .void-login-name-row { display:flex;gap:6px;align-items:stretch; }
             .void-login-name-row input { flex:1;min-width:0; }
             .void-persona-pick-btn {
@@ -495,7 +525,7 @@
             .void-persona-dropdown {
                 display:none;margin-top:5px;background:#fff;border:1px solid #cbd5e0;
                 border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.1);
-                max-height:170px;overflow-y:auto;
+                max-height:220px;overflow-y:auto;
             }
             .void-persona-dropdown::-webkit-scrollbar { width:4px; }
             .void-persona-dropdown::-webkit-scrollbar-thumb { background:#cbd5e0;border-radius:4px; }
@@ -624,9 +654,9 @@
                         <label>體驗者代號 (USER NAME)</label>
                         <div class="void-login-name-row">
                             <input type="text" id="void-login-name" value="${savedName}" placeholder="例如: 約翰" autocomplete="off">
-                            <button class="void-persona-pick-btn" id="void-persona-pick-btn" title="從酒館人設列表選擇">▾</button>
+                            <button class="void-persona-pick-btn" id="void-layout-btn" title="介面佈局與人設設定">⚙️</button>
                         </div>
-                        <div id="void-persona-dropdown" class="void-persona-dropdown"></div>
+                        <div id="void-layout-dropdown" class="void-persona-dropdown"></div>
                     </div>
                     <button class="void-login-btn" id="void-login-submit">▶ 啟動連結</button>
                     <button class="void-login-alt-btn" id="void-login-sessions">📂 管理歷史存檔</button>
@@ -672,9 +702,9 @@
             renderSessionManager(ov.querySelector('#void-session-manager'), currentId, tab);
         };
 
-        // ── 人設選擇器 ──
-        const pickBtn  = ov.querySelector('#void-persona-pick-btn');
-        const dropdown = ov.querySelector('#void-persona-dropdown');
+        // ── 人設選擇器 / 佈局設定器 ──
+        const layoutBtn  = ov.querySelector('#void-layout-btn');
+        const dropdown = ov.querySelector('#void-layout-dropdown');
 
         // 同 os_tavern_bridge.js 邏輯：API 取全列表 → DOM fallback
         async function _fetchPersonaList() {
@@ -713,34 +743,61 @@
         async function _renderDropdown() {
             dropdown.innerHTML = '<div class="void-persona-empty">⏳ 讀取中...</div>';
             dropdown.style.display = 'block';
-            const list = await _fetchPersonaList();
-            dropdown.innerHTML = '';
-            if (!list.length) {
-                dropdown.innerHTML = '<div class="void-persona-empty">⚠ 未找到酒館人設</div>';
+
+            const isStandalone = !(window.parent || window).SillyTavern;
+            let html = '';
+
+            // 佈局設定區塊 (iOS 解決方案)
+            const currentMode = localStorage.getItem('aurelia_layout_mode') || 'auto';
+            html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #a0aec0; background: #f8f9fa;">🖥️ 介面佈局 (解決頂部遮擋)</div>`;
+            html += `<div class="void-persona-item ${currentMode === 'auto' ? 'is-selected' : ''}" data-layout="auto"><span>📱 自動適配 (Auto/預設)</span></div>`;
+            html += `<div class="void-persona-item ${currentMode === 'pad-ios' ? 'is-selected' : ''}" data-layout="pad-ios"><span>🍎 強制下移 (iOS 動態島/瀏海)</span></div>`;
+
+            // 角色切換區塊 (僅酒館模式顯示)
+            if (!isStandalone) {
+                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #a0aec0; background: #f8f9fa; margin-top: 5px;">👤 酒館人設 (Persona)</div>`;
+                const list = await _fetchPersonaList();
+                if (!list.length) {
+                    html += '<div class="void-persona-empty">⚠ 未找到酒館人設</div>';
+                } else {
+                    list.forEach(p => {
+                        html += `<div class="void-persona-item persona-pick ${p.isSelected ? 'is-selected' : ''}" data-name="${p.name}">
+                            <span>${p.name}</span>${p.isSelected ? '<span class="vpick-badge">使用中</span>' : ''}
+                        </div>`;
+                    });
+                }
             } else {
-                list.forEach(p => {
-                    const item = document.createElement('div');
-                    item.className = 'void-persona-item' + (p.isSelected ? ' is-selected' : '');
-                    item.innerHTML = `<span>${p.name}</span>${p.isSelected ? '<span class="vpick-badge">使用中</span>' : ''}`;
-                    item.onclick = (e) => {
-                        e.stopPropagation();
-                        inputEl.value = p.name;
+                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #a0aec0; background: #f8f9fa; margin-top: 5px;">👤 獨立模式</div>`;
+                html += `<div class="void-persona-empty" style="padding:8px 14px;">獨立 API 模式下，請直接在上方輸入您的代號。</div>`;
+            }
+
+            dropdown.innerHTML = html;
+
+            // 綁定點擊事件
+            dropdown.querySelectorAll('.void-persona-item').forEach(item => {
+                item.onclick = (e) => {
+                    e.stopPropagation();
+                    if (item.dataset.layout) {
+                        localStorage.setItem('aurelia_layout_mode', item.dataset.layout);
+                        applyLayoutMode();
+                        _renderDropdown(); // 重新渲染以更新打勾狀態
+                    } else if (item.dataset.name) {
+                        inputEl.value = item.dataset.name;
                         dropdown.style.display = 'none';
                         inputEl.focus();
-                    };
-                    dropdown.appendChild(item);
-                });
-            }
+                    }
+                };
+            });
         }
 
-        pickBtn.onclick = (e) => {
+        layoutBtn.onclick = (e) => {
             e.stopPropagation();
             if (dropdown.style.display === 'block') { dropdown.style.display = 'none'; return; }
             _renderDropdown();
         };
 
         document.addEventListener('click', function _closeDropdown(e) {
-            if (!dropdown.contains(e.target) && e.target !== pickBtn) {
+            if (!dropdown.contains(e.target) && e.target !== layoutBtn) {
                 dropdown.style.display = 'none';
             }
         }, { capture: true });
@@ -970,7 +1027,7 @@
                 /* === 🔥 成就面板 (Achievement Panel) 全新懸浮設計 === */
                 @keyframes achPanelIn { from{opacity:0;transform:translate(-50%, 20px) scale(0.95)} to{opacity:1;transform:translate(-50%, 0) scale(1)} }
                 #achievement-panel-overlay {
-                    position:absolute; top: 10%; left: 50%; transform: translateX(-50%);
+                    position:absolute; left: 50%; transform: translateX(-50%);
                     width: 90%; max-width: 480px; height: 75%; z-index: 50;
                     background: rgba(10, 10, 18, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
                     border: 1px solid rgba(255, 215, 0, 0.3); border-radius: 12px;
@@ -1013,7 +1070,7 @@
                 /* === 🔥 404 商店面板 (Store Panel) 全新駭客終端設計 === */
                 @keyframes storePanelIn { from{opacity:0;transform:translate(-50%, -20px) scale(0.95)} to{opacity:1;transform:translate(-50%, 0) scale(1)} }
                 #store-panel-overlay {
-                    position:absolute; top: 8%; left: 50%; transform: translateX(-50%);
+                    position:absolute; left: 50%; transform: translateX(-50%);
                     width: 94%; max-width: 520px; height: 62%; z-index: 51; /* 高度縮減，完美避開底部的對話框！ */
                     background: #050a05;
                     display:none; flex-direction:column;
@@ -1119,7 +1176,7 @@
                             <div class="void-sys-dropdown-item" data-app="提示詞"><i class="fa-solid fa-sliders"></i><span>提示詞</span></div>
                             <div class="void-sys-dropdown-item" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></div>
                             <div style="height:1px; background:rgba(0,0,0,0.05); margin:4px 0;"></div>
-                            <div class="void-sys-dropdown-item" data-action="logout" style="color:#e53e3e;"><i class="fa-solid fa-power-off"></i><span>切換帳號</span></div>
+                            <div class="void-sys-dropdown-item" data-action="logout" style="color:#e53e3e;"><i class="fa-solid fa-power-off"></i><span>切換帳號 / 佈局</span></div>
                         </div>
                     </div>
                     <div class="mobile-apps-menu" id="mobile-apps-menu">
