@@ -1,13 +1,14 @@
 // ----------------------------------------------------------------
-// [檔案] os_settings.js (V5.5 - Strict Clone & Add Secondary)
+// [檔案] os_settings.js (V5.6 - Strict Clone & Add Secondary & iOS Layout)
 // 職責：管理 PhoneOS 全域設定
 // 修改：
 // 1. 基於 V4.3 原檔，不動任何原有邏輯與樣式。
 // 2. 新增 [⚡ 副模型] 分頁，完全複製主模型的 UI 結構與操作邏輯。
 // 3. 副模型配置獨立儲存於 'os_secondary_llm_config'。
+// 4. 將備份分頁擴充為「⚙️ 系統/備份」，加入「iOS 介面佈局」設定，儲存即時生效。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入系統設置模塊 (V5.5 Dual LLM)...');
+    console.log('[PhoneOS] 載入系統設置模塊 (V5.6 Dual LLM & iOS Layout)...');
 
     // 定義系統級樣式 (完全沿用原檔)
     const appStyle = `
@@ -19,8 +20,9 @@
         .set-back-btn:hover { background: rgba(168, 85, 247, 0.1); }
         
         /* Tab 導航 */
-        .set-tabs { display: flex; background: #1e1e1e; padding: 0 10px; border-bottom: 1px solid #333; flex-shrink: 0; }
-        .set-tab { flex: 1; text-align: center; padding: 12px 0; font-size: 13px; color: #888; cursor: pointer; position: relative; transition: 0.3s; font-weight: 500; }
+        .set-tabs { display: flex; background: #1e1e1e; padding: 0 10px; border-bottom: 1px solid #333; flex-shrink: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+        .set-tabs::-webkit-scrollbar { display: none; }
+        .set-tab { flex: 1; min-width: 70px; text-align: center; padding: 12px 0; font-size: 13px; color: #888; cursor: pointer; position: relative; transition: 0.3s; font-weight: 500; }
         .set-tab.active { color: #a855f7; font-weight: bold; }
         .set-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #a855f7; border-radius: 3px 3px 0 0; }
         
@@ -283,7 +285,7 @@
                     <div class="set-tab" data-tab="sec-llm" style="color:#a855f7;">⚡ 副模型</div>
                     <div class="set-tab" data-tab="img">🎨 圖片設置</div>
                     <div class="set-tab" data-tab="voice">🎵 語音</div>
-                    <div class="set-tab" data-tab="backup">☁️ 備份</div>
+                    <div class="set-tab" data-tab="sys">⚙️ 系統/備份</div>
                 </div>
 
                 <div class="set-content">
@@ -569,7 +571,6 @@
                                     </div>
                                 </div>
                                 </div>
-                                <!-- NAI 提示詞預設管理 -->
                                 <div style="margin-top:15px; border:1px solid #3d2d5c; border-radius:8px; padding:12px; background:#110d1a;">
                                     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
                                         <div class="set-label" style="margin:0;">📋 提示詞預設</div>
@@ -671,10 +672,8 @@
                         </div>
                     </div>
 
-                    <!-- 🎵 語音設置 (Minimax TTS) -->
                     <div id="view-voice" class="tab-view hidden">
 
-                        <!-- GPT-SoVITS 快速開關 -->
                         <div style="background:rgba(99,179,237,0.06); padding:10px; border-radius:8px; margin-bottom:12px; border:1px solid rgba(99,179,237,0.2);">
                             <div class="set-label" style="margin-bottom:6px;">
                                 <span>🎙️ GPT-SoVITS TTS（VN 面板）</span>
@@ -687,7 +686,6 @@
                             🎵 <b>Minimax TTS</b>：配置後，VN 面板 [Char|...] 對話自動合成語音。請至 Minimax 平台取得 API Key。
                         </div>
 
-                        <!-- 總開關 -->
                         <div class="set-group">
                             <div class="set-label">
                                 <span>🔊 語音合成（總開關）</span>
@@ -696,7 +694,6 @@
                             <div class="set-desc">也可以在 VN 面板右上角 <b>🎵</b> 按鈕隨時切換，不需要進設置、不需要刪 Key。關閉後立即停止播放。</div>
                         </div>
 
-                        <!-- API 設定 -->
                         <div class="set-group">
                             <div class="set-label">服務區域</div>
                             <select class="set-select" id="mm-provider">
@@ -729,7 +726,6 @@
                             </select>
                         </div>
 
-                        <!-- 全域語速 & 語言增強 -->
                         <div class="set-group">
                             <div class="set-slider-container">
                                 <div class="set-label"><span>預設語速</span><span class="set-slider-val" id="mm-speed-val">${(minimaxConfig.defaultSpeed ?? 1.0).toFixed(1)}</span></div>
@@ -748,7 +744,6 @@
                             </div>
                         </div>
 
-                        <!-- 音色設定檔 -->
                         <div class="set-group">
                             <div class="set-label">🎭 音色設定檔 <span style="font-size:11px; color:#888; font-weight:normal;">（VN / wx 面板通用）</span></div>
                             <div class="set-desc">每個角色可設定「顯示名稱」、「Minimax 音色ID」與多個「別名」。VN 面板輸出的角色名會自動比對所有別名（大小寫不敏感），找到後播放對應音色。</div>
@@ -759,7 +754,6 @@
                             </div>
                         </div>
 
-                        <!-- 音色庫模態框 -->
                         <div id="mm-voice-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); align-items:center; justify-content:center;">
                             <div style="background:#1a1225; border:1px solid #6b37a0; border-radius:12px; padding:16px; width:92%; max-width:480px; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -771,7 +765,6 @@
                             </div>
                         </div>
 
-                        <!-- 測試 -->
                         <div class="set-group">
                             <div class="set-label">🔌 測試語音</div>
                             <div style="display:flex; gap:8px; margin-bottom:10px;">
@@ -784,15 +777,22 @@
                         </div>
                     </div>
 
-                    <!-- ☁️ 備份分頁 -->
-                    <div id="view-backup" class="tab-view hidden">
+                    <div id="view-sys" class="tab-view hidden">
+
+                        <div class="set-group">
+                            <div class="set-label">🖥️ 介面佈局 (解決頂部遮擋)</div>
+                            <div class="set-desc">在 iOS 加到主畫面 (PWA) 時，若遇到動態島或瀏海遮擋頂部 UI，可開啟「強制下移」。</div>
+                            <select class="set-select" id="os-layout-mode">
+                                <option value="auto" ${localStorage.getItem('aurelia_layout_mode') !== 'pad-ios' ? 'selected' : ''}>📱 自動適配 (Auto/預設)</option>
+                                <option value="pad-ios" ${localStorage.getItem('aurelia_layout_mode') === 'pad-ios' ? 'selected' : ''}>🍎 強制下移 (iOS 動態島/瀏海)</option>
+                            </select>
+                        </div>
 
                         <div style="background:rgba(99,179,237,0.08); padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid rgba(99,179,237,0.2); font-size:12px; color:#90cdf4;">
                             ☁️ 備份會將世界書、寵物、成就、App 設定等<b>輕量資料</b>同步至 GitHub Gist。
                             大型資料（寵物日誌、未來 VN 存檔等）請使用「本地全量匯出」。
                         </div>
 
-                        <!-- GitHub Gist 設定 -->
                         <div class="set-group">
                             <div class="set-label">🔑 GitHub Gist 設定</div>
                             <div class="set-desc">申請 <b>gist</b> 權限的 Personal Access Token（Settings → Developer settings → Fine-grained tokens）。首次備份後 Gist ID 自動保存。</div>
@@ -805,7 +805,6 @@
                             </div>
                         </div>
 
-                        <!-- 儲存空間 -->
                         <div class="set-group">
                             <div class="set-label">
                                 📊 本地儲存空間
@@ -814,7 +813,6 @@
                             <div id="bk-storage-info" style="font-size:12px; color:#888;">點擊「掃描」查看各資料佔用量</div>
                         </div>
 
-                        <!-- 本地匯出入 -->
                         <div class="set-group">
                             <div class="set-label">💾 本地全量備份</div>
                             <div class="set-desc">匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。</div>
@@ -1060,151 +1058,160 @@
         };
 
         // Fetch Logic (Primary)
-btnFetch.onclick = async () => {
-    btnFetch.style.animation = "spin 1s linear infinite";
-    status.innerText = "⏳ 正在獲取模型列表...";
-    
-    try {
-        // 情況 A: 使用系統 API (跟隨酒館) -> 用偷看模式
-        if (elSystemApi.checked) {
-            const win = window.parent;
-            // 優先讀取酒館當前選擇
-            let foundModel = win.oai_settings?.openai_model || win.settings?.makersuite_model;
+        btnFetch.onclick = async () => {
+            btnFetch.style.animation = "spin 1s linear infinite";
+            status.innerText = "⏳ 正在獲取模型列表...";
             
-            // 嘗試從 DOM 抓取 (如果變數抓不到)
-            if (!foundModel) {
-                const domSelect = win.document.querySelector('#model_openai_select');
-                if (domSelect) foundModel = domSelect.value;
-            }
+            try {
+                // 情況 A: 使用系統 API (跟隨酒館) -> 用偷看模式
+                if (elSystemApi.checked) {
+                    const win = window.parent;
+                    // 優先讀取酒館當前選擇
+                    let foundModel = win.oai_settings?.openai_model || win.settings?.makersuite_model;
+                    
+                    // 嘗試從 DOM 抓取 (如果變數抓不到)
+                    if (!foundModel) {
+                        const domSelect = win.document.querySelector('#model_openai_select');
+                        if (domSelect) foundModel = domSelect.value;
+                    }
 
-            if (foundModel) {
-                elModel.innerHTML = `<option value="${foundModel}" selected>${foundModel}</option>`;
-                status.innerText = `✅ 已同步 (系統): ${foundModel}`;
-                status.style.color = "#07c160";
-            } else {
-                throw new Error("無法讀取酒館模型");
-            }
-        } 
-        // 情況 B: 手動 API 模式 (這就是你要找回的功能！)
-        else {
-            const url = elUrl.value.trim();
-            const key = elKey.value.trim();
-            if (!url) throw new Error("請輸入 API 地址");
+                    if (foundModel) {
+                        elModel.innerHTML = `<option value="${foundModel}" selected>${foundModel}</option>`;
+                        status.innerText = `✅ 已同步 (系統): ${foundModel}`;
+                        status.style.color = "#07c160";
+                    } else {
+                        throw new Error("無法讀取酒館模型");
+                    }
+                } 
+                // 情況 B: 手動 API 模式
+                else {
+                    const url = elUrl.value.trim();
+                    const key = elKey.value.trim();
+                    if (!url) throw new Error("請輸入 API 地址");
 
-            // 構建標準 OpenAI 格式的 models 端點
-            let fetchUrl = url.replace(/\/chat\/completions$/, '').replace(/\/$/, '') + '/v1/models';
-            
-            // 發送請求
-            const res = await fetch(fetchUrl, { 
-                method: 'GET', 
-                headers: { 'Authorization': `Bearer ${key}` } 
-            });
-            
-            if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
-            
-            const data = await res.json();
-            let models = data.data || data.models || [];
-            
-            // 清空並填入列表
-            if (models.length > 0) {
-                elModel.innerHTML = '';
-                models.forEach(m => { 
-                    const id = m.id || m; // 相容不同格式
-                    elModel.innerHTML += `<option value="${id}">${id}</option>`; 
-                });
-                status.innerText = `✅ 成功獲取 ${models.length} 個模型`;
-                status.style.color = "#07c160";
-            } else {
-                throw new Error("API 返回了空列表");
+                    // 構建標準 OpenAI 格式的 models 端點
+                    let fetchUrl = url.replace(/\/chat\/completions$/, '').replace(/\/$/, '') + '/v1/models';
+                    
+                    // 發送請求
+                    const res = await fetch(fetchUrl, { 
+                        method: 'GET', 
+                        headers: { 'Authorization': `Bearer ${key}` } 
+                    });
+                    
+                    if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
+                    
+                    const data = await res.json();
+                    let models = data.data || data.models || [];
+                    
+                    // 清空並填入列表
+                    if (models.length > 0) {
+                        elModel.innerHTML = '';
+                        models.forEach(m => { 
+                            const id = m.id || m; // 相容不同格式
+                            elModel.innerHTML += `<option value="${id}">${id}</option>`; 
+                        });
+                        status.innerText = `✅ 成功獲取 ${models.length} 個模型`;
+                        status.style.color = "#07c160";
+                    } else {
+                        throw new Error("API 返回了空列表");
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+                status.innerText = `❌ 同步失敗: ${e.message}`;
+                status.style.color = "#ff453a";
+            } finally {
+                btnFetch.style.animation = "none";
             }
-        }
-    } catch (e) {
-        console.error(e);
-        status.innerText = `❌ 同步失敗: ${e.message}`;
-        status.style.color = "#ff453a";
-    } finally {
-        btnFetch.style.animation = "none";
-    }
-};
+        };
 
         // --- 這是 secFetch (副模型) 的專用邏輯 ---
-secFetch.onclick = async () => {
-    // 1. 讓按鈕轉起來
-    secFetch.style.animation = "spin 1s linear infinite";
-    status.innerText = "⏳ 正在獲取副模型列表...";
-    
-    try {
-        // --- 分支 A: 系統託管模式 (Spy Mode) ---
-        // 注意：這裡變量是 secSystemApi
-        if (secSystemApi.checked) {
-            const win = window.parent;
-            // 嘗試讀取酒館當前的模型 (通常副模型若選系統託管，就是直接跟隨主系統)
-            let foundModel = win.oai_settings?.openai_model || win.settings?.makersuite_model;
+        secFetch.onclick = async () => {
+            // 1. 讓按鈕轉起來
+            secFetch.style.animation = "spin 1s linear infinite";
+            status.innerText = "⏳ 正在獲取副模型列表...";
             
-            // 暴力讀取 DOM
-            if (!foundModel) {
-                const domSelect = win.document.querySelector('#model_openai_select');
-                if (domSelect) foundModel = domSelect.value;
-            }
+            try {
+                // --- 分支 A: 系統託管模式 (Spy Mode) ---
+                if (secSystemApi.checked) {
+                    const win = window.parent;
+                    // 嘗試讀取酒館當前的模型 (通常副模型若選系統託管，就是直接跟隨主系統)
+                    let foundModel = win.oai_settings?.openai_model || win.settings?.makersuite_model;
+                    
+                    // 暴力讀取 DOM
+                    if (!foundModel) {
+                        const domSelect = win.document.querySelector('#model_openai_select');
+                        if (domSelect) foundModel = domSelect.value;
+                    }
 
-            if (foundModel) {
-                // 注意：這裡是寫入 secModel
-                secModel.innerHTML = `<option value="${foundModel}" selected>${foundModel}</option>`;
-                status.innerText = `✅ 副模型已同步 (系統): ${foundModel}`;
-                status.style.color = "#07c160";
-            } else {
-                throw new Error("無法讀取酒館模型");
-            }
-        } 
-        
-        // --- 分支 B: 手動 API 模式 (你要修復的重點) ---
-        else {
-            // 🔥 關鍵修正：這裡全部要改成 sec 開頭的變數！
-            const url = secUrl.value.trim();  // 原本是 elUrl
-            const key = secKey.value.trim();  // 原本是 elKey
-            
-            if (!url) throw new Error("請輸入副模型 API 地址");
+                    if (foundModel) {
+                        secModel.innerHTML = `<option value="${foundModel}" selected>${foundModel}</option>`;
+                        status.innerText = `✅ 副模型已同步 (系統): ${foundModel}`;
+                        status.style.color = "#07c160";
+                    } else {
+                        throw new Error("無法讀取酒館模型");
+                    }
+                } 
+                
+                // --- 分支 B: 手動 API 模式 ---
+                else {
+                    const url = secUrl.value.trim();  
+                    const key = secKey.value.trim();  
+                    
+                    if (!url) throw new Error("請輸入副模型 API 地址");
 
-            // 處理 URL
-            let fetchUrl = url.replace(/\/chat\/completions$/, '').replace(/\/$/, '') + '/v1/models';
-            
-            // 發送請求
-            const res = await fetch(fetchUrl, { 
-                method: 'GET', 
-                headers: { 'Authorization': `Bearer ${key}` } 
-            });
-            
-            if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
-            
-            const data = await res.json();
-            let models = data.data || data.models || [];
-            
-            // 🔥 關鍵修正：寫入 secModel 下拉單
-            if (models.length > 0) {
-                secModel.innerHTML = ''; 
-                models.forEach(m => { 
-                    const id = m.id || m;
-                    secModel.innerHTML += `<option value="${id}">${id}</option>`; 
-                });
-                status.innerText = `✅ 副模型列表更新成功 (${models.length})`;
-                status.style.color = "#07c160";
-            } else {
-                throw new Error("API 返回空列表");
-            }
-        }
+                    // 處理 URL
+                    let fetchUrl = url.replace(/\/chat\/completions$/, '').replace(/\/$/, '') + '/v1/models';
+                    
+                    // 發送請求
+                    const res = await fetch(fetchUrl, { 
+                        method: 'GET', 
+                        headers: { 'Authorization': `Bearer ${key}` } 
+                    });
+                    
+                    if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
+                    
+                    const data = await res.json();
+                    let models = data.data || data.models || [];
+                    
+                    if (models.length > 0) {
+                        secModel.innerHTML = ''; 
+                        models.forEach(m => { 
+                            const id = m.id || m;
+                            secModel.innerHTML += `<option value="${id}">${id}</option>`; 
+                        });
+                        status.innerText = `✅ 副模型列表更新成功 (${models.length})`;
+                        status.style.color = "#07c160";
+                    } else {
+                        throw new Error("API 返回空列表");
+                    }
+                }
 
-    } catch (e) {
-        console.error(e);
-        status.innerText = `❌ 副模型同步失敗: ${e.message}`;
-        status.style.color = "#ff453a";
-    } finally {
-        // 停止旋轉
-        secFetch.style.animation = "none";
-    }
-};
+            } catch (e) {
+                console.error(e);
+                status.innerText = `❌ 副模型同步失敗: ${e.message}`;
+                status.style.color = "#ff453a";
+            } finally {
+                secFetch.style.animation = "none";
+            }
+        };
 
         btnSave.onclick = () => {
             try {
+                // 🔥 1. 保存介面佈局設定 (iOS PWA)
+                const layoutMode = container.querySelector('#os-layout-mode')?.value || 'auto';
+                localStorage.setItem('aurelia_layout_mode', layoutMode);
+                const targetDocs = [document];
+                if (window.parent && window.parent.document) targetDocs.push(window.parent.document);
+                targetDocs.forEach(d => {
+                    if (layoutMode === 'pad-ios') {
+                        d.body.classList.add('layout-pad-ios');
+                    } else {
+                        d.body.classList.remove('layout-pad-ios');
+                    }
+                });
+
+                // 2. 收集其他設定
                 const llmData = {
                     useSystemApi: elSystemApi.checked,
                     stProfileId: elStProfile.value,
@@ -1224,7 +1231,6 @@ secFetch.onclick = async () => {
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
-                // 🔥 新增：收集副模型數據
                 const secLlmData = {
                     useSystemApi: secSystemApi.checked,
                     stProfileId: secStProfile.value,
@@ -1276,7 +1282,6 @@ secFetch.onclick = async () => {
                     }
                 };
 
-                // 🔥 收集 Minimax 語音資料（含開關、語速、語言增強、音色設定檔）
                 const mmGroupId   = container.querySelector('#mm-group-id');
                 const mmApiKey    = container.querySelector('#mm-api-key');
                 const mmProvider  = container.querySelector('#mm-provider');
@@ -1284,7 +1289,6 @@ secFetch.onclick = async () => {
                 const mmEnabled   = container.querySelector('#mm-enabled');
                 const mmSpeed     = container.querySelector('#mm-speed');
                 const mmLangBoost = container.querySelector('#mm-lang-boost');
-                // 收集音色設定檔（從各 profile card 讀取）
                 const voiceProfiles = [];
                 container.querySelectorAll('.mm-profile-card').forEach(card => {
                     const label   = card.querySelector('.mm-p-label')?.value.trim();
@@ -1307,7 +1311,7 @@ secFetch.onclick = async () => {
                     voiceProfiles
                 } : null;
 
-                saveConfig(llmData, secLlmData, imgData, minimaxData); // 🔥 傳入 secLlmData + minimaxData
+                saveConfig(llmData, secLlmData, imgData, minimaxData); 
                 btnSave.innerText = "已保存 ✓"; 
                 status.innerText = "✅ 設置已生效"; status.style.color = "#07c160";
                 setTimeout(() => { btnSave.innerText = "保存所有設定"; }, 2000);
@@ -1332,8 +1336,6 @@ secFetch.onclick = async () => {
                     if (!context) throw new Error('無法取得 ST Context');
 
                     if (cfg.stProfileId) {
-                        // 關鍵：後端靠 readSecret() 讀取當前激活的 key，不從 body 讀
-                        // 必須先切換 profile（這會執行 /secret-id 輪換 server-side key），再打請求
                         const profilesSelect = doc.getElementById('connection_profiles');
                         if (!profilesSelect) throw new Error('找不到 ST 連線設定選單 (#connection_profiles)');
 
@@ -1360,7 +1362,6 @@ secFetch.onclick = async () => {
                                 50
                             );
                         } finally {
-                            // 測試後還原原本的 profile
                             if (needSwitch) {
                                 profilesSelect.value = originalProfileId || '';
                                 profilesSelect.dispatchEvent(new Event('change'));
