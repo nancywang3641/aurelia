@@ -1,15 +1,15 @@
 /**
  * ========================
- * Void Terminal (v4.10 - iOS Notch & Standalone Layout Fix)
- * 純白大廳與敘事引擎核心 (包含居中登入介面、全局姓名紀錄與 iOS 佈局適配)
+ * Void Terminal (v5.1 - Yingying & Vintage Latte Theme)
+ * 視差書咖與敘事引擎核心 (復古拿鐵配色、底部TAB防遮擋修復)
  * ========================
  * 職責：
- * 1. 渲染純白大廳 UI (Bubbles, 聊天框, 立繪) 與 登入介面。
- * 2. 處理 Iris 與 Cheshire 的對話、歷史紀錄、語音與放置反應。
+ * 1. 渲染拿鐵大廳 UI (Bubbles, 聊天框, 立繪) 與 登入介面。
+ * 2. 處理 瀅瀅 與 Cheshire 的對話、歷史紀錄、語音與放置反應。
  * 3. 處理 ERR_404 崩潰彩蛋與場景切換。
  * 4. 解析 [LaunchApp|xxx] 標籤，與 Control Center 連動打開外部面板。
  * 5. 導出全局登入資訊 (getUserName / setUserName)，供其他面板 (App) 讀取。
- * 6. (NEW) 管理 iOS 動態島/瀏海的安全區域與強制下移佈局。
+ * 6. 管理 iOS 動態島/瀏海的安全區域與強制下移佈局。
  */
 
 (function(VoidTerminal) {
@@ -40,7 +40,7 @@
     let is404Room = false;
     let visit404Count = 0;           // 持久化記憶：體驗者進入 404 號房的累計次數
     let _justReturnedFrom404 = false; // 體驗者剛從 404 號房返回
-    let _irisHistoryBackup = [];     // 進入 404 前備份的 Iris 對話歷史
+    let _irisHistoryBackup = [];     // 進入 404 前備份的瀅瀅對話歷史
     let _cheshireHistoryBackup = []; // 離開 404 前備份的柴郡對話歷史
     let lastFailedInput = '';        // 最後一次失敗的輸入內容
     let pendingRestoreLobby = false; // 等用戶讀完再返回大廳的旗標
@@ -50,40 +50,40 @@
     let _saveDebounceTimer = null;   // 防抖存檔計時器
 
     const URLS = {
-        BG: 'https://files.catbox.moe/tq5bz6.png', 
-        IRIS_AVATAR: 'https://files.catbox.moe/l5hl69.png', 
-        BGM_LOBBY: 'https://nancywang3641.github.io/aurelia/bgm/Aurealis_Core.mp3',
+        BG: 'https://nancywang3641.github.io/aurelia/district/yingBG.png', 
+        IRIS_AVATAR: 'https://nancywang3641.github.io/sound-files/char_presets/ying.png', 
+        BGM_LOBBY: 'https://nancywang3641.github.io/aurelia/bgm/YING.mp3',
         BGM_404:   'https://nancywang3641.github.io/aurelia/bgm/home_room404.mp3'
     };
 
-    // ===== 語音與反應池 =====
+    // ===== 語音與反應池 (瀅瀅專屬) =====
     const IRIS_POKE = [
-        { vn: "[Char|Iris|smile|「虛擬的觸碰是沒有溫度的喔，體驗者。」]",                                                                                                                           audio: "https://nancywang3641.github.io/aurelia/voice/Iris_001.mp3" },
-        { vn: "[Char|Iris|normal|「我在。需要為您調整神經負載的參數嗎？」]",                                                                                                                        audio: "https://nancywang3641.github.io/aurelia/voice/Iris_002.mp3" },
-        { vn: "[Char|Iris|warning|「請不要頻繁點擊。如果認知同步中斷，我無法保證您的記憶會留在原地。」]",                                                                                           audio: "https://nancywang3641.github.io/aurelia/voice/Iris_003.mp3" },
-        { vn: "[Char|Iris|think|「檢測到不規律點擊...是否需要為您切換至『死亡芭比粉』主題？......開玩笑的，我已經把那段代碼隔離了。」]",                                                            audio: "https://nancywang3641.github.io/aurelia/voice/Iris_004.mp3" },
-        { vn: "[Char|Iris|smile|「嗯...您的行為模式真像個充滿好奇心的人類。請繼續，這將有助於 LUNA-VII 的機器學習。」]",                                                                            audio: "https://nancywang3641.github.io/aurelia/voice/Iris_005.mp3" },
-        { vn: "[Char|Iris|normal|「系統一切正常。雷伊老闆今天也還沒破產，您可以安心探索。」]",                                                                                                      audio: "https://nancywang3641.github.io/aurelia/voice/Iris_006.mp3" },
+        { vn: "[Char|瀅瀅|smile|「呀！別戳我，墨水要弄到原稿上了！」]", audio: null },
+        { vn: "[Char|瀅瀅|think|「（眼神空洞0.5秒）……咦？剛剛是不是有亂碼飄過去？不管啦，委託人你有新故事嗎？」]", audio: null },
+        { vn: "[Char|瀅瀅|normal|「雷伊大叔說點擊螢幕可以刺激腦電波……你是在幫我找靈感嗎？」]", audio: null },
+        { vn: "[Char|瀅瀅|warning|「請不要頻繁點擊，我的『認知平滑協議』好像快要過載了……哎呀，好痛。」]", audio: null },
+        { vn: "[Char|瀅瀅|smile|「嗯……你的行為模式真像個充滿好奇心的主角。請繼續，這說不定能寫進下一章節裡！」]", audio: null },
+        { vn: "[Char|瀅瀅|normal|「書咖一切正常。今天也有準備好熱咖啡，你可以安心分享你的冒險。」]", audio: null },
     ];
 
     const IRIS_IDLE = [
-        { vn: "[Char|Iris|smile|「您知道嗎？在 NEXUS PARALLAX 裡，國王與乞丐的視角差異，本質上只是 LUNA-VII 引擎中 0.003 秒的渲染延遲。」]",                                                       audio: "https://nancywang3641.github.io/aurelia/voice/Iris_007.mp3" },
-        { vn: "[Char|Iris|think|「白則總監昨天又把底層邏輯重構了一次，因為艾迪總監堅持介面需要有『怦然心動』的電光紫節奏感...人類的情感，真是難以量化呢。」]",   audio: "https://nancywang3641.github.io/aurelia/voice/Iris_008.mp3" },
-        { vn: "[Char|Iris|smile|「如果您在系統裡看到未經授權的連帽衫 NPC，請不用理會。那通常是雷伊老闆為了躲避艾莎女士，偷偷潛入進來的。」]",                                                       audio: "https://nancywang3641.github.io/aurelia/voice/Iris_009.mp3" },
+        { vn: "[Char|瀅瀅|smile|「（咬著羽毛筆發呆）下一個章節該怎麼寫呢……如果主角突然從天上掉下來會不會太突兀？」]", audio: null },
+        { vn: "[Char|瀅瀅|think|「這杯拿鐵的拉花又失敗了……（嘆氣）雷伊大叔一定又會說什麼『敘事解構』之類的怪話。」]", audio: null },
+        { vn: "[Char|瀅瀅|smile|「（揉了揉太陽穴）總覺得最近視差書咖的空間有點……不穩定？錯覺吧，大概是昨晚咖啡因攝取過量了。」]", audio: null },
     ];
 
     const CHESHIRE_POKE = [
-        { vn: "[Char|Cheshire|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]",                                                                                                            audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_001.mp3" },
-        { vn: "[Char|Cheshire|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]",                                                                                                     audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_002.mp3" },
-        { vn: "[Char|Cheshire|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]",                                                                                              audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_003.mp3" },
-        { vn: "[Char|Cheshire|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]",                                                                                     audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_004.mp3" },
-        { vn: "[Char|Cheshire|glitch|「噗...戳空了吧？蠢死了。這裡可是我的主場。」]",                                                                                                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_005.mp3" },
+        { vn: "[Char|柴郡|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]",                                                                                                            audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_001.mp3" },
+        { vn: "[Char|柴郡|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]",                                                                                                     audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_002.mp3" },
+        { vn: "[Char|柴郡|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]",                                                                                              audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_003.mp3" },
+        { vn: "[Char|柴郡|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]",                                                                                     audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_004.mp3" },
+        { vn: "[Char|柴郡|glitch|「噗...戳空了吧？蠢死了。這裡可是我的主場。」]",                                                                                                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_005.mp3" },
     ];
 
     const CHESHIRE_IDLE = [
-        { vn: "[Char|Cheshire|smirk|「別拿你那 A 區的規矩來煩我。這裡可是 E 區殘塔的 404 號節點，SN 的防火牆在這裡就是個笑話。」]",                                                                audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_006.mp3" },
-        { vn: "[Char|Cheshire|yawn|「哈啊...丹那傢伙又跑去鐵骨修車廠找黎昂了，害我得在這裡無聊到看你戳螢幕。嘖，戀愛腦真麻煩。」]",                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_007.mp3" },
-        { vn: "[Char|Cheshire|glitch|「洛爾德家族那群老古板以為靠那些『百年秩序』就能鎖住全球資本？白痴，我昨天才在 OGH 伺服器裡留了個後門，他們連警報都沒響。」]",                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_008.mp3" },
+        { vn: "[Char|柴郡|smirk|「別拿你那 A 區的規矩來煩我。這裡可是 E 區殘塔的 404 號節點，SN 的防火牆在這裡就是個笑話。」]",                                                                audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_006.mp3" },
+        { vn: "[Char|柴郡|yawn|「哈啊...丹那傢伙又跑去鐵骨修車廠找黎昂了，害我得在這裡無聊到看你戳螢幕。嘖，戀愛腦真麻煩。」]",                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_007.mp3" },
+        { vn: "[Char|柴郡|glitch|「洛爾德家族那群老古板以為靠那些『百年秩序』就能鎖住全球資本？白痴，我昨天才在 OGH 伺服器裡留了個後門，他們連警報都沒響。」]",                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_008.mp3" },
     ];
 
     let _pokeOnCooldown = false;
@@ -192,7 +192,7 @@
         if (!reactionText || !reactionName) return;
 
         // 解析對話文本
-        let charName = is404Room ? '柴郡' : 'Iris';
+        let charName = is404Room ? '柴郡' : '瀅瀅';
         let dialogue = pick.vn;
         const match = pick.vn.match(/\[Char\|([^|]+)\|[^|]+\|([^\]]+)\]/);
         if (match) {
@@ -361,12 +361,12 @@
         _hideReactionBox();
     };
 
-    // 供外部模組（如 os_404_store）觸發柴郡/Iris 說一句話
+    // 供外部模組（如 os_404_store）觸發柴郡/瀅瀅 說一句話
     VoidTerminal.cheshireSay = function(text, audioUrl) {
-        playVoiceReaction({ vn: `[Char|Cheshire|smirk|${text}]`, audio: audioUrl || null });
+        playVoiceReaction({ vn: `[Char|柴郡|smirk|${text}]`, audio: audioUrl || null });
     };
     VoidTerminal.irisSay = function(text, audioUrl) {
-        playVoiceReaction({ vn: `[Char|Iris|normal|${text}]`, audio: audioUrl || null });
+        playVoiceReaction({ vn: `[Char|瀅瀅|normal|${text}]`, audio: audioUrl || null });
     };
 
     // ===== 對話歷史持久化 =====
@@ -436,7 +436,7 @@
         return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
     }
 
-    // 注入登入/Session 畫面 CSS（只注入一次）
+    // 注入登入/Session 畫面 CSS（全套瀅瀅專屬色票風格）
     function _injectLoginCss() {
         if (document.getElementById('void-login-css')) return;
         const s = document.createElement('style'); s.id = 'void-login-css';
@@ -462,137 +462,158 @@
             body.layout-pad-ios #store-panel-overlay { top: 12% !important; }
             body.layout-pad-ios .void-login-overlay { padding-top: 40px !important; }
 
-            /* ── 登入介面外框 ── */
+            /* ── 瀅瀅書店色票主題全局覆蓋 ── */
+            .void-bg { background-color: #452216 !important; }
+            .void-top-bar { background: rgba(69,34,22,0.85) !important; color: #FBDFA2 !important; border-bottom: 1px solid rgba(251,223,162,0.2) !important; }
+            #home-chat-title { color: #FBDFA2 !important; }
+            .void-app-icon-label { color: #FBDFA2 !important; }
+            .void-app-icon { background: rgba(120,55,25,0.8) !important; border: 1px solid rgba(251,223,162,0.3) !important; box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important; }
+            .void-bubble { --bc: #FBDFA2 !important; --bc-rgb: 251,223,162 !important; background: rgba(69,34,22,0.9) !important; color: #FFF8E7 !important; }
+            .void-dialogue-box { background: rgba(120,55,25,0.9) !important; border: 1px solid rgba(251,223,162,0.4) !important; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important; }
+            .void-name-tag { background: #FBDFA2 !important; color: #452216 !important; font-weight: bold !important; border: 1px solid #FBDFA2 !important; }
+            .void-text { color: #FFF8E7 !important; }
+            .void-chat-bar { background: rgba(69,34,22,0.9) !important; border-top: 1px solid rgba(251,223,162,0.3) !important; }
+            .void-input { background: rgba(120,55,25,0.8) !important; border: 1px solid rgba(251,223,162,0.3) !important; color: #FFF8E7 !important; }
+            .void-input:focus { border-color: #FBDFA2 !important; box-shadow: 0 0 0 2px rgba(251,223,162,0.2) !important; background: #452216 !important; }
+            .void-send-btn { background: linear-gradient(135deg, #FBDFA2, #B78456) !important; color: #452216 !important; }
+            .void-btn-inner { background: rgba(120,55,25,0.9) !important;  color: #FBDFA2 !important; }
+            .void-btn-inner:hover { background: rgba(251,223,162,0.1) !important; box-shadow: 0 0 15px rgba(251,223,162,0.4) !important; }
+            .void-hist-btn { color: #FBDFA2 !important; background: rgba(120,55,25,0.6) !important; border: 1px solid rgba(251,223,162,0.2) !important; }
+            .void-hist-btn:hover { background: rgba(251,223,162,0.15) !important; }
+            .qb-node-btn { background: rgba(120,55,25,0.8) !important; border-color: #FBDFA2 !important; color: #FBDFA2 !important; }
+            .qb-node-btn:hover { background: rgba(251,223,162,0.1) !important; box-shadow: 0 0 15px rgba(251,223,162,0.4) !important; color: #FBDFA2 !important; border-color: #FBDFA2 !important; }
+            
+            /* 修正底部 TAB 消失/遮擋問題 */
+            #aurelia-bottom-nav { background: #452216 !important; border-top: 1px solid rgba(251,223,162,0.3) !important; box-shadow: 0 -5px 15px rgba(0,0,0,0.5) !important; position: relative !important; z-index: 9999 !important; padding-bottom: env(safe-area-inset-bottom, 0px) !important; }
+            .nav-button { color: #B78456 !important; }
+            .nav-button.active-gold { color: #FBDFA2 !important; background: rgba(251,223,162,0.1) !important; }
+
+            /* ── 登入介面外框 (瀅瀅書店色票) ── */
             .void-login-overlay {
                 position:absolute;inset:0;z-index:200;overflow:hidden;
                 font-family:'Noto Sans TC',sans-serif;
-                background: rgba(248, 249, 250, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+                background: rgba(120, 55, 25, 0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
                 display:flex;align-items:center;justify-content:center;
                 animation:vssIn 0.3s cubic-bezier(0.2,0.8,0.2,1);
             }
             .void-login-overlay::before {
                 content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
                 background-image:
-                    linear-gradient(rgba(200,200,200,0.2) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(200,200,200,0.2) 1px, transparent 1px);
-                background-size: 30px 30px; opacity: 0.6;
+                    linear-gradient(rgba(251,223,162,0.05) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(251,223,162,0.05) 1px, transparent 1px);
+                background-size: 30px 30px; opacity: 0.8;
             }
 
             /* ── 居中登入卡片 ── */
             .void-login-container { display:flex;flex-direction:column;align-items:center;width:100%;z-index:2;padding:20px;box-sizing:border-box; }
-            .void-login-brand { font-size:12px;color:#718096;text-transform:uppercase;letter-spacing:4px;font-weight:800;margin-bottom:15px; }
+            .void-login-brand { font-size:12px;color:#FBDFA2;text-transform:uppercase;letter-spacing:4px;font-weight:800;margin-bottom:15px; text-shadow: 0 0 10px rgba(251,223,162,0.4); }
             .void-login-box { 
-                width:100%;max-width:320px;background:rgba(255,255,255,0.95);
-                border:1px solid #cbd5e0;border-radius:12px;padding:30px 25px;
-                box-shadow:0 10px 30px rgba(0,0,0,0.08); 
+                width:100%;max-width:320px;background:rgba(120,55,25,0.95);
+                border:1px solid #FBDFA2;border-radius:12px;padding:30px 25px;
+                box-shadow:0 10px 40px rgba(0,0,0,0.5), inset 0 0 20px rgba(251,223,162,0.05); 
             }
-            .void-login-title { font-size:18px;font-weight:900;color:#2d3748;margin-bottom:8px; }
-            .void-login-desc { font-size:11px;color:#a0aec0;margin-bottom:20px;line-height:1.5; }
+            .void-login-title { font-size:18px;font-weight:900;color:#FBDFA2;margin-bottom:8px; }
+            .void-login-desc { font-size:11px;color:#B78456;margin-bottom:20px;line-height:1.5; }
             
             .void-login-input-group { margin-bottom: 20px; }
-            .void-login-input-group label { display:block;font-size:10px;font-weight:800;color:#4a5568;margin-bottom:6px;letter-spacing:1px; }
+            .void-login-input-group label { display:block;font-size:10px;font-weight:800;color:#B78456;margin-bottom:6px;letter-spacing:1px; }
             .void-login-input-group input { 
-                width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #cbd5e0;
-                border-radius:6px;background:#f8f9fa;color:#2d3748;font-size:13px;
+                width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(251,223,162,0.4);
+                border-radius:6px;background:rgba(69,34,22,0.8);color:#FFF8E7;font-size:13px;
                 outline:none;transition:all 0.2s ease; 
             }
-            .void-login-input-group input:focus { border-color:#63b3ed;box-shadow:0 0 0 3px rgba(99,179,237,0.2);background:#fff; }
+            .void-login-input-group input:focus { border-color:#FBDFA2;box-shadow:0 0 0 3px rgba(251,223,162,0.2);background:#783719; }
             
             .void-login-btn { 
-                width:100%;padding:12px;background:linear-gradient(135deg, #4299e1, #2b6cb0);
-                color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;
-                cursor:pointer;transition:all 0.2s ease;letter-spacing:2px;box-shadow:0 4px 15px rgba(49,130,206,0.2); 
+                width:100%;padding:12px;background:linear-gradient(135deg, #FBDFA2, #B78456);
+                color:#452216;border:none;border-radius:6px;font-size:12px;font-weight:900;
+                cursor:pointer;transition:all 0.2s ease;letter-spacing:2px;box-shadow:0 4px 15px rgba(251,223,162,0.3); 
             }
-            .void-login-btn:hover { filter:brightness(1.1);transform:translateY(-2px);box-shadow:0 6px 20px rgba(49,130,206,0.35); }
+            .void-login-btn:hover { filter:brightness(1.1);transform:translateY(-2px);box-shadow:0 6px 20px rgba(251,223,162,0.5); }
             .void-login-btn:disabled { opacity:0.6;cursor:not-allowed;transform:none;box-shadow:none; }
             
             .void-login-alt-btn {
                 width:100%;margin-top:12px;padding:10px;background:transparent;
-                color:#718096;border:1px solid transparent;border-radius:6px;
+                color:#B78456;border:1px solid transparent;border-radius:6px;
                 font-size:11px;font-weight:800;cursor:pointer;transition:0.2s;
             }
-            .void-login-alt-btn:hover { background:#edf2f7;color:#4a5568;border-color:#e2e8f0; }
+            .void-login-alt-btn:hover { background:rgba(251,223,162,0.1);color:#FBDFA2;border-color:rgba(251,223,162,0.3); }
 
             /* ── 人設/佈局 選擇器 ── */
             .void-login-name-row { display:flex;gap:6px;align-items:stretch; }
             .void-login-name-row input { flex:1;min-width:0; }
             .void-persona-pick-btn {
-                flex-shrink:0;padding:0 11px;background:#edf2f7;
-                border:1px solid #cbd5e0;border-radius:6px;color:#4a5568;
+                flex-shrink:0;padding:0 11px;background:rgba(251,223,162,0.1);
+                border:1px solid rgba(251,223,162,0.4);border-radius:6px;color:#FBDFA2;
                 font-size:15px;cursor:pointer;transition:all 0.2s;line-height:1;
             }
-            .void-persona-pick-btn:hover { background:#e2e8f0;color:#2b6cb0;border-color:#90cdf4; }
+            .void-persona-pick-btn:hover { background:rgba(251,223,162,0.2);color:#FBDFA2;border-color:#FBDFA2; }
             .void-persona-dropdown {
-                display:none;margin-top:5px;background:#fff;border:1px solid #cbd5e0;
-                border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.1);
+                display:none;margin-top:5px;background:rgba(120,55,25,0.98);border:1px solid #FBDFA2;
+                border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.6);
                 max-height:220px;overflow-y:auto;
             }
             .void-persona-dropdown::-webkit-scrollbar { width:4px; }
-            .void-persona-dropdown::-webkit-scrollbar-thumb { background:#cbd5e0;border-radius:4px; }
+            .void-persona-dropdown::-webkit-scrollbar-thumb { background:rgba(251,223,162,0.4);border-radius:4px; }
             .void-persona-item {
-                padding:9px 13px;font-size:12px;color:#2d3748;cursor:pointer;
-                border-bottom:1px solid #f7fafc;display:flex;align-items:center;gap:7px;transition:0.15s;
+                padding:9px 13px;font-size:12px;color:#FFF8E7;cursor:pointer;
+                border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:7px;transition:0.15s;
             }
             .void-persona-item:last-child { border-bottom:none; }
-            .void-persona-item:hover { background:#ebf8ff;color:#2b6cb0; }
-            .void-persona-item.is-selected { font-weight:800;color:#2b6cb0; }
-            .void-persona-item .vpick-badge { font-size:9px;background:#bee3f8;color:#2b6cb0;padding:1px 5px;border-radius:3px;font-weight:800; }
-            .void-persona-empty { padding:14px;font-size:11px;color:#a0aec0;text-align:center; }
-            /* 404 模式覆蓋 */
-            .void-tab.mode-404 .void-persona-pick-btn { background:#001a00;border-color:rgba(0,255,65,0.4);color:#00cc33; }
-            .void-tab.mode-404 .void-persona-dropdown { background:#001200;border-color:rgba(0,255,65,0.3); }
-            .void-tab.mode-404 .void-persona-item { color:#00cc33;border-color:rgba(0,255,65,0.1); }
-            .void-tab.mode-404 .void-persona-item:hover,.void-tab.mode-404 .void-persona-item.is-selected { background:rgba(0,255,65,0.08);color:#00ff41; }
+            .void-persona-item:hover { background:rgba(251,223,162,0.15);color:#FBDFA2; }
+            .void-persona-item.is-selected { font-weight:800;color:#FBDFA2; }
+            .void-persona-item .vpick-badge { font-size:9px;background:rgba(251,223,162,0.2);color:#FBDFA2;padding:1px 5px;border-radius:3px;font-weight:800; }
+            .void-persona-empty { padding:14px;font-size:11px;color:#B78456;text-align:center; }
 
             /* ── 隱藏的 Session 管理器 ── */
             .void-session-manager-inner { 
                 width:100%;height:100%;display:flex;flex-direction:column;z-index:2;
-                background:rgba(248, 249, 250, 0.6); 
+                background:rgba(69, 34, 22, 0.85); 
             }
             .void-session-topbar {
                 flex-shrink:0;padding:20px 26px 15px;position:relative;z-index:2;
-                background: linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, transparent 100%);
+                background: linear-gradient(to bottom, rgba(120,55,25,0.95) 0%, transparent 100%);
                 display: flex; justify-content: space-between; align-items: flex-start;
             }
-            .void-session-brand { font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:6px; }
-            .void-session-chatid { font-size:16px;font-weight:900;color:#1a202c;font-family:'Courier New',monospace; }
+            .void-session-brand { font-size:10px;color:#B78456;text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:6px; }
+            .void-session-chatid { font-size:16px;font-weight:900;color:#FBDFA2;font-family:'Courier New',monospace; }
             .void-session-back-btn {
-                padding:8px 16px;background:#fff;border:1px solid #cbd5e0;
-                color:#4a5568;font-size:11px;font-weight:800;border-radius:4px;
+                padding:8px 16px;background:rgba(120,55,25,0.8);border:1px solid rgba(251,223,162,0.4);
+                color:#FBDFA2;font-size:11px;font-weight:800;border-radius:4px;
                 cursor:pointer;transition:all 0.2s ease;
             }
-            .void-session-back-btn:hover { background:#edf2f7;color:#2d3748; }
+            .void-session-back-btn:hover { background:rgba(251,223,162,0.15);color:#FBDFA2; }
 
             .void-session-body { flex:1;overflow-y:auto;padding:0 26px 20px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:2; }
             .void-session-body::-webkit-scrollbar { width:4px; }
             .void-session-body::-webkit-scrollbar-track { background:transparent; }
-            .void-session-body::-webkit-scrollbar-thumb { background:rgba(200,210,220,0.8);border-radius:2px; }
+            .void-session-body::-webkit-scrollbar-thumb { background:rgba(251,223,162,0.4);border-radius:2px; }
 
             .void-session-card {
-                background:rgba(255,255,255,0.9);border:1px solid rgba(200,210,220,0.5);
-                border-left:3px solid #cbd5e0;border-radius:6px;padding:12px 16px;
-                display:flex;align-items:center;gap:15px;box-shadow:0 2px 8px rgba(0,0,0,0.02);
+                background:rgba(120,55,25,0.9);border:1px solid rgba(251,223,162,0.2);
+                border-left:3px solid #B78456;border-radius:6px;padding:12px 16px;
+                display:flex;align-items:center;gap:15px;box-shadow:0 4px 15px rgba(0,0,0,0.3);
                 transition:all 0.2s ease;
             }
-            .void-session-card:hover { background:#fff;border-color:#a0aec0;border-left-color:#63b3ed;transform:translateX(4px);box-shadow:0 4px 15px rgba(99,179,237,0.1); }
-            .void-session-card.is-current { background:#fff;border-color:#90cdf4;border-left-color:#3182ce;box-shadow:0 4px 15px rgba(49,130,206,0.15); }
+            .void-session-card:hover { background:rgba(183,132,86,1);border-color:#FBDFA2;border-left-color:#FBDFA2;transform:translateX(4px);box-shadow:0 6px 20px rgba(251,223,162,0.15); }
+            .void-session-card.is-current { background:rgba(183,132,86,1);border-color:#FBDFA2;border-left-color:#FBDFA2;box-shadow:0 4px 15px rgba(251,223,162,0.25); }
             .void-session-card-info { flex:1;min-width:0; }
-            .void-session-card-id { font-size:13px;font-family:'Courier New',monospace;font-weight:800;color:#2d3748; white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-            .void-session-card-preview { font-size:11px;color:#718096;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-            .void-session-card-meta { font-size:10px;color:#a0aec0;margin-top:6px;font-weight:500; }
-            .void-session-card-cur-tag { margin-left:8px;font-size:9px;color:#3182ce;background:#ebf8ff;padding:2px 6px;border-radius:4px;border:1px solid #90cdf4;font-weight:800; }
+            .void-session-card-id { font-size:13px;font-family:'Courier New',monospace;font-weight:800;color:#FFF8E7; white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+            .void-session-card-preview { font-size:11px;color:#B78456;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+            .void-session-card-meta { font-size:10px;color:#B78456;margin-top:6px;font-weight:500; }
+            .void-session-card-cur-tag { margin-left:8px;font-size:9px;color:#452216;background:#FBDFA2;padding:2px 6px;border-radius:4px;font-weight:800; }
             .void-session-card-actions { display:flex;gap:5px;flex-shrink:0; }
-            .void-session-load-btn { background:#f8f9fa;color:#4a5568;border:1px solid #e2e8f0;border-radius:4px;padding:6px 12px;font-size:10px;font-weight:800;cursor:pointer;transition:0.2s;letter-spacing:1px;text-transform:uppercase; }
-            .void-session-load-btn:hover { background:#ebf8ff;color:#2b6cb0;border-color:#90cdf4; }
+            .void-session-load-btn { background:rgba(251,223,162,0.1);color:#FBDFA2;border:1px solid rgba(251,223,162,0.4);border-radius:4px;padding:6px 12px;font-size:10px;font-weight:800;cursor:pointer;transition:0.2s;letter-spacing:1px;text-transform:uppercase; }
+            .void-session-load-btn:hover { background:rgba(251,223,162,0.2);color:#FBDFA2;border-color:#FBDFA2; }
             .void-session-load-btn:disabled { opacity:0.3;cursor:default; }
             .void-session-del-btn { background:transparent;color:#fc8181;border:1px solid transparent;border-radius:4px;padding:6px 10px;font-size:14px;cursor:pointer;transition:0.2s;line-height:1; }
-            .void-session-del-btn:hover { background:#fff5f5;border-color:#feb2b2;color:#e53e3e; }
-            .void-session-empty, .void-session-spinner { text-align:center;padding:40px 0;color:#a0aec0;font-size:11px;letter-spacing:2px;font-weight:bold; }
+            .void-session-del-btn:hover { background:rgba(252,129,129,0.1);border-color:#fc8181;color:#f56565; }
+            .void-session-empty, .void-session-spinner { text-align:center;padding:40px 0;color:#FBDFA2;font-size:11px;letter-spacing:2px;font-weight:bold; }
 
-            /* ===== 404 模式覆蓋 ===== */
+            /* ===== 404 模式覆蓋 (維持駭客綠風格不變) ===== */
             .void-tab.mode-404 .void-login-overlay { background: rgba(0,10,0,0.95); }
             .void-tab.mode-404 .void-login-overlay::before { background-image: linear-gradient(rgba(0,255,65,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.1) 1px, transparent 1px); }
-            .void-tab.mode-404 .void-login-brand { color: #00cc33; }
+            .void-tab.mode-404 .void-login-brand { color: #00cc33; text-shadow: none; }
             .void-tab.mode-404 .void-login-box { background: rgba(0,15,0,0.9); border-color: #00ff41; box-shadow: 0 0 20px rgba(0,255,65,0.15); }
             .void-tab.mode-404 .void-login-title { color: #00ff41; }
             .void-tab.mode-404 .void-login-desc { color: rgba(0,255,65,0.6); }
@@ -600,25 +621,25 @@
             .void-tab.mode-404 .void-login-input-group input { background: #001a00; border-color: rgba(0,255,65,0.4); color: #00ff41; }
             .void-tab.mode-404 .void-login-input-group input:focus { border-color: #00ff41; box-shadow: 0 0 0 3px rgba(0,255,65,0.2); }
             .void-tab.mode-404 .void-login-btn { background: #004d00; color: #00ff41; border: 1px solid #00ff41; box-shadow: 0 0 10px rgba(0,255,65,0.2); }
-            .void-tab.mode-404 .void-login-btn:hover { background: #006600; box-shadow: 0 0 15px rgba(0,255,65,0.4); }
+            .void-tab.mode-404 .void-login-btn:hover { background: #006600; box-shadow: 0 0 15px rgba(0,255,65,0.4); filter:none; }
             .void-tab.mode-404 .void-login-alt-btn { color: #00cc33; border-color: transparent; }
             .void-tab.mode-404 .void-login-alt-btn:hover { background: rgba(0,255,65,0.1); border-color: rgba(0,255,65,0.3); }
 
             .void-tab.mode-404 .void-session-manager-inner { background: rgba(0,10,0,0.8); }
             .void-tab.mode-404 .void-session-topbar { background: linear-gradient(to bottom, rgba(0,15,0,0.95) 0%, transparent 100%); }
-            .void-tab.mode-404 .void-session-brand { color: #00cc33; }
+            .void-tab.mode-404 .void-session-brand { color: #00cc33; text-shadow: none; }
             .void-tab.mode-404 .void-session-chatid { color: #00ff41; }
             .void-tab.mode-404 .void-session-back-btn { background: #001a00; color: #00ff41; border-color: rgba(0,255,65,0.4); }
-            .void-tab.mode-404 .void-session-back-btn:hover { background: #003300; box-shadow: 0 0 15px rgba(0,255,65,0.3); }
-            .void-tab.mode-404 .void-session-card { background: rgba(0,15,0,0.8); border-color: rgba(0,255,65,0.3); border-left-color: rgba(0,255,65,0.5); }
-            .void-tab.mode-404 .void-session-card:hover { background: rgba(0,25,0,0.9); border-left-color: #00ff41; box-shadow: 0 0 10px rgba(0,255,65,0.2); }
+            .void-tab.mode-404 .void-session-back-btn:hover { background: #003300; box-shadow: 0 0 15px rgba(0,255,65,0.3); color:#00ff41; }
+            .void-tab.mode-404 .void-session-card { background: rgba(0,15,0,0.8); border-color: rgba(0,255,65,0.3); border-left-color: rgba(0,255,65,0.5); box-shadow:none; }
+            .void-tab.mode-404 .void-session-card:hover { background: rgba(0,25,0,0.9); border-left-color: #00ff41; box-shadow: 0 0 10px rgba(0,255,65,0.2); border-color: rgba(0,255,65,0.3); }
             .void-tab.mode-404 .void-session-card.is-current { background: rgba(0,20,0,0.9); border-color: #00cc33; border-left-color: #00ff41; }
             .void-tab.mode-404 .void-session-card-id { color: #b8ffcb; }
             .void-tab.mode-404 .void-session-card-preview { color: rgba(0,255,65,0.6); }
             .void-tab.mode-404 .void-session-card-meta { color: rgba(0,255,65,0.4); }
             .void-tab.mode-404 .void-session-card-cur-tag { background: rgba(0,255,65,0.1); color: #00ff41; border-color: rgba(0,255,65,0.3); }
             .void-tab.mode-404 .void-session-load-btn { background: rgba(0,20,0,0.8); color: #00cc33; border-color: rgba(0,255,65,0.3); }
-            .void-tab.mode-404 .void-session-load-btn:hover { background: rgba(0,255,65,0.1); color: #00ff41; }
+            .void-tab.mode-404 .void-session-load-btn:hover { background: rgba(0,255,65,0.1); color: #00ff41; border-color: rgba(0,255,65,0.3); }
             .void-tab.mode-404 .void-session-del-btn { color: #ff3333; }
             .void-tab.mode-404 .void-session-empty, .void-tab.mode-404 .void-session-spinner { color: #00cc33; }
         `;
@@ -646,20 +667,20 @@
         ov.className = 'void-login-overlay';
         ov.innerHTML = `
             <div class="void-login-container">
-                <div class="void-login-brand">LUNA-VII // NEXUS PARALLAX</div>
+                <div class="void-login-brand">LUNA-VII // 視差書咖</div>
                 <div class="void-login-box">
                     <div class="void-login-title">LOGIN</div>
-                    <div class="void-login-desc">請輸入您的體驗者代號以建立神經連結。</div>
+                    <div class="void-login-desc">請輸入您的委託人代號以建立神經連結。</div>
                     <div class="void-login-input-group">
-                        <label>體驗者代號 (USER NAME)</label>
+                        <label>委託人代號 (USER NAME)</label>
                         <div class="void-login-name-row">
                             <input type="text" id="void-login-name" value="${savedName}" placeholder="例如: 約翰" autocomplete="off">
                             <button class="void-persona-pick-btn" id="void-layout-btn" title="介面佈局與人設設定">⚙️</button>
                         </div>
                         <div id="void-layout-dropdown" class="void-persona-dropdown"></div>
                     </div>
-                    <button class="void-login-btn" id="void-login-submit">▶ 啟動連結</button>
-                    <button class="void-login-alt-btn" id="void-login-sessions">📂 管理歷史存檔</button>
+                    <button class="void-login-btn" id="void-login-submit">▶ 進入書咖</button>
+                    <button class="void-login-alt-btn" id="void-login-sessions">📂 管理歷史素材</button>
                 </div>
             </div>
             <div id="void-session-manager" style="display:none; width:100%; height:100%;"></div>
@@ -674,7 +695,7 @@
             const val = inputEl.value.trim();
             if (!val) {
                 inputEl.style.borderColor = '#fc8181';
-                setTimeout(() => inputEl.style.borderColor = '', 1000);
+                setTimeout(() => inputEl.style.borderColor = 'rgba(251,223,162,0.4)', 1000);
                 return;
             }
             submitBtn.disabled = true;
@@ -749,13 +770,13 @@
 
             // 佈局設定區塊 (iOS 解決方案)
             const currentMode = localStorage.getItem('aurelia_layout_mode') || 'auto';
-            html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #a0aec0; background: #f8f9fa;">🖥️ 介面佈局 (解決頂部遮擋)</div>`;
+            html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #B78456; background: rgba(69,34,22,0.9);">🖥️ 介面佈局 (解決頂部遮擋)</div>`;
             html += `<div class="void-persona-item ${currentMode === 'auto' ? 'is-selected' : ''}" data-layout="auto"><span>📱 自動適配 (Auto/預設)</span></div>`;
             html += `<div class="void-persona-item ${currentMode === 'pad-ios' ? 'is-selected' : ''}" data-layout="pad-ios"><span>🍎 強制下移 (iOS 動態島/瀏海)</span></div>`;
 
             // 角色切換區塊 (僅酒館模式顯示)
             if (!isStandalone) {
-                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #a0aec0; background: #f8f9fa; margin-top: 5px;">👤 酒館人設 (Persona)</div>`;
+                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #B78456; background: rgba(69,34,22,0.9); margin-top: 5px;">👤 酒館人設 (Persona)</div>`;
                 const list = await _fetchPersonaList();
                 if (!list.length) {
                     html += '<div class="void-persona-empty">⚠ 未找到酒館人設</div>';
@@ -767,7 +788,7 @@
                     });
                 }
             } else {
-                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #a0aec0; background: #f8f9fa; margin-top: 5px;">👤 獨立模式</div>`;
+                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #B78456; background: rgba(69,34,22,0.9); margin-top: 5px;">👤 獨立模式</div>`;
                 html += `<div class="void-persona-empty" style="padding:8px 14px;">獨立 API 模式下，請直接在上方輸入您的代號。</div>`;
             }
 
@@ -815,7 +836,7 @@
             <div class="void-session-manager-inner">
                 <div class="void-session-topbar">
                     <div style="min-width:0;flex:1;">
-                        <div class="void-session-brand">歷史存檔管理</div>
+                        <div class="void-session-brand">歷史素材管理</div>
                         <div class="void-session-chatid">${_truncateId(currentId)}</div>
                     </div>
                     <button class="void-session-back-btn">‹ 返回登入</button>
@@ -863,7 +884,7 @@
             card.className = 'void-session-card' + (isCur ? ' is-current' : '');
             
             // 如果存檔裡有 userName，顯示出來
-            const nameBadge = s.userName ? `<span style="color:#63b3ed;">[${s.userName}]</span> ` : '';
+            const nameBadge = s.userName ? `<span style="color:#FBDFA2;">[${s.userName}]</span> ` : '';
             
             card.innerHTML = `
                 <div class="void-session-card-info">
@@ -901,7 +922,7 @@
         if (!btn) return;
         if (visit404Count < 1) { btn.style.display = 'none'; return; }
         btn.style.display = '';
-        btn.title = is404Room ? '返回白色大廳' : '傳送至 404 號房';
+        btn.title = is404Room ? '返回視差書咖' : '傳送至 404 號房';
     }
 
     function _applyLoadedLobbyState() {
@@ -926,32 +947,35 @@
                 nav.style.background = '#000'; nav.style.borderTop = '1px solid #00cc33';
                 nav.querySelectorAll('.nav-button').forEach(b => {
                     const isHome = b.dataset.navId === 'nav-home';
+                    b.classList.remove('active-gold');
                     b.style.color = isHome ? '#00ff41' : '#1a4d1a'; b.style.background = isHome ? 'rgba(0,255,65,0.1)' : 'transparent';
                 });
             }
             switchLobbyBgm(URLS.BGM_404);
         } else {
-            // 非 404 模式：清除可能殘留的 404 UI，還原 Iris
+            // 非 404 模式：還原瀅瀅與復古拿鐵 UI
             const tab = document.getElementById('aurelia-home-tab');
             if (tab) tab.classList.remove('mode-404');
             const avatar = document.getElementById('iris-avatar');
-            if (avatar) { avatar.src = URLS.IRIS_AVATAR; avatar.title = '戳戳 Iris'; avatar.style.opacity = '1'; }
+            if (avatar) { avatar.src = URLS.IRIS_AVATAR; avatar.title = '戳戳 瀅瀅'; avatar.style.opacity = '1'; }
             const titleEl = document.getElementById('home-chat-title');
-            if (titleEl) titleEl.textContent = 'Terminal Active';
+            if (titleEl) titleEl.textContent = 'Parallax Archive & Cafe';
             const inputField = document.getElementById('iris-input');
-            if (inputField) inputField.placeholder = '輸入指令或與 Iris 對話...';
+            if (inputField) inputField.placeholder = '提供故事素材或與瀅瀅對話...';
             const nameBox = document.getElementById('iris-name-tag');
-            if (nameBox) { nameBox.style.display = 'block'; nameBox.innerHTML = '<span>Iris</span>'; }
+            if (nameBox) { nameBox.style.display = 'block'; nameBox.innerHTML = '<span>瀅瀅</span>'; }
             const iH = document.getElementById('iris-hist-btn');
             const cH = document.getElementById('cheshire-hist-btn');
             if (iH) iH.style.display = '';
             if (cH) cH.style.display = 'none';
             const nav = document.getElementById('aurelia-bottom-nav');
             if (nav) {
-                nav.style.background = '#ffffff'; nav.style.borderTop = '1px solid #e0e5ec'; nav.style.boxShadow = '0 -5px 15px rgba(0,0,0,0.02)';
+                nav.style.background = '#452216'; nav.style.borderTop = '1px solid rgba(251,223,162,0.3)'; nav.style.boxShadow = '0 -5px 15px rgba(0,0,0,0.5)';
                 nav.querySelectorAll('.nav-button').forEach(b => {
                     const isHome = b.dataset.navId === 'nav-home';
-                    b.style.color = isHome ? '#2b6cb0' : '#a0aec0'; b.style.background = isHome ? '#ebf8ff' : 'transparent';
+                    b.style.color = ''; b.style.background = ''; // 移除內聯樣式
+                    if (isHome) { b.classList.add('active-gold'); }
+                    else { b.classList.remove('active-gold'); }
                 });
             }
             switchLobbyBgm(URLS.BGM_LOBBY);
@@ -963,14 +987,14 @@
             const nameBox = document.getElementById('iris-name-tag');
             if (box) box.innerHTML = is404Room
                 ? `<span style="color:#00cc33;font-style:italic;">(對話歷史已載入...)</span>`
-                : `<span style="color:#a0aec0;font-style:italic;">(對話歷史已載入，繼續吧。)</span>`;
+                : `<span style="color:#FBDFA2;font-style:italic;">(素材檔案已載入，繼續吧。)</span>`;
             if (nameBox) nameBox.style.display = 'none';
         } else {
-            const userName = IRIS_STATE.userName || '未知';
+            const userName = IRIS_STATE.userName || '委託人';
             if (is404Room) {
-                playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個假笑人偶消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個假笑人偶。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
+                playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個假笑人偶消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個寫小說的天然呆。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
             } else {
-                playIrisSequence(`[Nar|微弱的資料流閃爍，一個虛擬的身影在純白空間中浮現。]\n[Audio|https://files.catbox.moe/llgmcv.mp3]\n[Char|Iris|normal|「歡迎來到真實的背面。已確認體驗者身分：${userName}。我是 LUNA-VII 系統引導員，愛麗絲。需要為您進行認知對接嗎？」]`);
+                playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
             }
         }
         _updatePortalBtn();
@@ -986,13 +1010,13 @@
             style.id = 'mobile-apps-style';
             style.innerHTML = `
                 .mobile-apps-menu { display: none; position: relative; flex-shrink: 0; }
-                .mobile-apps-btn { background:none; border:1px solid rgba(0,0,0,0.12); border-radius:7px; cursor:pointer; font-size:13px; padding:5px 8px; line-height:1; opacity:0.65; transition:all 0.2s; color:#4a5568; display:flex; align-items:center; gap:5px; }
+                .mobile-apps-btn { background:none; border:1px solid rgba(251,223,162,0.4); border-radius:7px; cursor:pointer; font-size:13px; padding:5px 8px; line-height:1; opacity:0.8; transition:all 0.2s; color:#FBDFA2; display:flex; align-items:center; gap:5px; }
                 .mobile-apps-btn span { font-size:9px; font-weight:600; letter-spacing:0.5px; }
-                .mobile-apps-btn:hover, .mobile-apps-btn.open { opacity:1; border-color:rgba(0,0,0,0.22); background:rgba(0,0,0,0.04); }
-                .mobile-apps-dropdown { position:absolute; top:calc(100% + 5px); left:0; background:rgba(252,252,254,0.97); backdrop-filter:blur(14px); border:1px solid rgba(0,0,0,0.12); border-radius:9px; box-shadow:0 6px 20px rgba(0,0,0,0.13); min-width:130px; z-index:30; overflow:hidden; animation:dropIn 0.15s ease; max-height: 50vh; overflow-y: auto; }
-                .mobile-apps-dropdown-item { display:flex; align-items:center; gap:9px; padding:10px 14px; font-size:12px; color:#4a5568; cursor:pointer; transition:background 0.13s; border-bottom:1px solid rgba(0,0,0,0.05); }
+                .mobile-apps-btn:hover, .mobile-apps-btn.open { opacity:1; border-color:#FBDFA2; background:rgba(251,223,162,0.1); }
+                .mobile-apps-dropdown { position:absolute; top:calc(100% + 5px); left:0; background:rgba(120,55,25,0.97); backdrop-filter:blur(14px); border:1px solid rgba(251,223,162,0.3); border-radius:9px; box-shadow:0 6px 20px rgba(0,0,0,0.5); min-width:130px; z-index:30; overflow:hidden; animation:dropIn 0.15s ease; max-height: 50vh; overflow-y: auto; }
+                .mobile-apps-dropdown-item { display:flex; align-items:center; gap:9px; padding:10px 14px; font-size:12px; color:#FFF8E7; cursor:pointer; transition:background 0.13s; border-bottom:1px solid rgba(255,255,255,0.05); }
                 .mobile-apps-dropdown-item:last-child { border-bottom:none; }
-                .mobile-apps-dropdown-item:hover { background:rgba(0,0,0,0.05); color:#1a202c; }
+                .mobile-apps-dropdown-item:hover { background:rgba(251,223,162,0.15); color:#FBDFA2; }
                 .mobile-apps-dropdown-item i { font-size:11px; width:13px; text-align:center; opacity:0.8; }
                 
                 @media (max-width: 680px) {
@@ -1006,13 +1030,13 @@
                 .void-tab.mode-404 .mobile-apps-dropdown-item { color:rgba(0,200,50,0.8) !important; border-bottom-color:rgba(0,255,65,0.1) !important; }
                 .void-tab.mode-404 .mobile-apps-dropdown-item:hover { background:rgba(0,255,65,0.08) !important; color:#00ff41 !important; }
 
-                /* === QUEST 系統動態節點 CSS (完美弧形排列版) === */
+                /* === QUEST 系統動態節點 CSS === */
                 .qb-nodes-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 15; overflow: hidden; }
-                .qb-node-btn { position: absolute; pointer-events: none; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(8px); border: 1px solid #cbd5e0; color: #4a5568; padding: 12px 20px; border-radius: 8px; font-family: 'Noto Sans TC', sans-serif; font-weight: bold; font-size: 14px; cursor: pointer; opacity: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display:flex; align-items:center; gap:10px; transform: translate(-50%, -50%) scale(0.5); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); white-space: nowrap; }
-                .qb-node-btn:hover { background: #fff; border-color: #63b3ed; color: #2b6cb0; box-shadow: 0 0 20px rgba(99,179,237,0.4); transform: translate(-50%, -50%) scale(1.05) !important; }
+                .qb-node-btn { position: absolute; pointer-events: none; background: rgba(120,55,25,0.8); backdrop-filter: blur(8px); border: 1px solid #FBDFA2; color: #FBDFA2; padding: 12px 20px; border-radius: 8px; font-family: 'Noto Sans TC', sans-serif; font-weight: bold; font-size: 14px; cursor: pointer; opacity: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.5); display:flex; align-items:center; gap:10px; transform: translate(-50%, -50%) scale(0.5); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); white-space: nowrap; }
+                .qb-node-btn:hover { background: rgba(251,223,162,0.1); border-color: #FBDFA2; color: #FBDFA2; box-shadow: 0 0 20px rgba(251,223,162,0.4); transform: translate(-50%, -50%) scale(1.05) !important; }
                 .qb-nodes-overlay.active .qb-node-btn { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
                 
-                /* 弧形坐標設定 (精確控制位置，形成包圍網) */
+                /* 弧形坐標設定 */
                 .left-top  { top: 35%; left: 22%; transition-delay: 0.0s; }
                 .left-mid  { top: 52%; left: 16%; transition-delay: 0.1s; }
                 .left-bot  { top: 69%; left: 22%; transition-delay: 0.2s; }
@@ -1029,32 +1053,32 @@
                 #achievement-panel-overlay {
                     position:absolute; left: 50%; transform: translateX(-50%);
                     width: 90%; max-width: 480px; height: 75%; z-index: 50;
-                    background: rgba(10, 10, 18, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-                    border: 1px solid rgba(255, 215, 0, 0.3); border-radius: 12px;
-                    box-shadow: 0 15px 35px rgba(0,0,0,0.6), inset 0 0 20px rgba(255,215,0,0.05);
+                    background: rgba(69, 34, 22, 0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+                    border: 1px solid rgba(251, 223, 162, 0.5); border-radius: 12px;
+                    box-shadow: 0 15px 40px rgba(0,0,0,0.6), inset 0 0 20px rgba(251,223,162,0.05);
                     display:none; flex-direction:column;
                     font-family:'Noto Sans TC',sans-serif;
                     animation:achPanelIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
                 }
-                .ach-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(255,255,255,0.08); flex-shrink:0; }
-                .ach-title { font-size:13px; font-weight:800; color:#ffd700; letter-spacing:1px; }
-                .ach-close { background:none; border:none; color:#718096; cursor:pointer; font-size:16px; padding:2px 8px; transition:color 0.2s; }
-                .ach-close:hover { color:#e2e8f0; }
-                .ach-stats { padding:7px 16px; font-size:10px; color:#a0aec0; font-weight:600; letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid rgba(255,255,255,0.04); flex-shrink:0; background:rgba(0,0,0,0.2); }
+                .ach-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(251,223,162,0.3); flex-shrink:0; }
+                .ach-title { font-size:13px; font-weight:800; color:#FBDFA2; letter-spacing:1px; }
+                .ach-close { background:none; border:none; color:#B78456; cursor:pointer; font-size:16px; padding:2px 8px; transition:color 0.2s; }
+                .ach-close:hover { color:#FBDFA2; }
+                .ach-stats { padding:7px 16px; font-size:10px; color:#B78456; font-weight:600; letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid rgba(255,255,255,0.04); flex-shrink:0; background:rgba(0,0,0,0.4); }
                 .ach-list { flex:1; overflow-y:auto; padding:4px 0; }
                 .ach-item { display:flex; align-items:flex-start; gap:10px; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.04); transition:background 0.15s; }
-                .ach-item:hover { background:rgba(255,255,255,0.05); }
+                .ach-item:hover { background:rgba(251,223,162,0.05); }
                 .ach-item.redeemed { opacity:0.5; }
-                .ach-item-icon { font-size:18px; flex-shrink:0; margin-top:2px; text-shadow: 0 0 5px rgba(255,215,0,0.5); }
+                .ach-item-icon { font-size:18px; flex-shrink:0; margin-top:2px; text-shadow: 0 0 5px rgba(251,223,162,0.5); }
                 .ach-item-body { flex:1; min-width:0; }
-                .ach-item-name { font-size:13px; font-weight:700; color:#ffd700; margin-bottom:4px; letter-spacing:0.5px; }
-                .ach-item.redeemed .ach-item-name { color:#718096; text-shadow:none; }
-                .ach-item-desc { font-size:11px; color:#cbd5e0; line-height:1.4; }
-                .ach-item-meta { font-size:10px; color:#4a5568; margin-top:4px; font-family:monospace; }
-                .ach-item-badge { flex-shrink:0; font-size:9px; padding:4px 8px; border-radius:4px; font-weight:700; letter-spacing:0.5px; background:rgba(0,255,65,0.1); color:#00ff41; border:1px solid rgba(0,255,65,0.3); align-self:center; text-align:center; line-height:1.7; box-shadow: 0 0 10px rgba(0,255,65,0.1); }
-                .ach-item.redeemed .ach-item-badge { background:rgba(255,255,255,0.04); color:#718096; border-color:rgba(255,255,255,0.1); box-shadow:none; }
-                .ach-empty { text-align:center; color:#4a5568; font-size:12px; padding:50px 20px; line-height:1.8; font-weight:bold; }
-                .ach-footer { padding:10px 16px; border-top:1px solid rgba(255,255,255,0.06); font-size:11px; color:#718096; text-align:center; flex-shrink:0; background:rgba(0,0,0,0.3); font-weight:bold; letter-spacing:1px; }
+                .ach-item-name { font-size:13px; font-weight:700; color:#FBDFA2; margin-bottom:4px; letter-spacing:0.5px; }
+                .ach-item.redeemed .ach-item-name { color:#B78456; text-shadow:none; }
+                .ach-item-desc { font-size:11px; color:#FFF8E7; line-height:1.4; }
+                .ach-item-meta { font-size:10px; color:#B78456; margin-top:4px; font-family:monospace; }
+                .ach-item-badge { flex-shrink:0; font-size:9px; padding:4px 8px; border-radius:4px; font-weight:700; letter-spacing:0.5px; background:rgba(251,223,162,0.1); color:#FBDFA2; border:1px solid rgba(251,223,162,0.3); align-self:center; text-align:center; line-height:1.7; box-shadow: 0 0 10px rgba(251,223,162,0.1); }
+                .ach-item.redeemed .ach-item-badge { background:rgba(255,255,255,0.04); color:#B78456; border-color:rgba(255,255,255,0.1); box-shadow:none; }
+                .ach-empty { text-align:center; color:#B78456; font-size:12px; padding:50px 20px; line-height:1.8; font-weight:bold; }
+                .ach-footer { padding:10px 16px; border-top:1px solid rgba(251,223,162,0.2); font-size:11px; color:#B78456; text-align:center; flex-shrink:0; background:rgba(0,0,0,0.5); font-weight:bold; letter-spacing:1px; }
                 
                 /* 404 模式下的成就面板 */
                 .void-tab.mode-404 #achievement-panel-overlay { background:rgba(0, 15, 0, 0.9); border-color:#00cc33; box-shadow: 0 10px 40px rgba(0,255,65,0.2), inset 0 0 20px rgba(0,255,65,0.05); }
@@ -1064,25 +1088,24 @@
                 
                 /* 成就按鈕特效 */
                 #achievement-hist-btn { position:relative; }
-                #achievement-hist-btn.has-pending::after { content:''; position:absolute; top:4px; right:4px; width:6px; height:6px; background:#ffd700; border-radius:50%; box-shadow:0 0 6px rgba(255,215,0,0.8); animation:achDot 1.5s ease-in-out infinite; }
+                #achievement-hist-btn.has-pending::after { content:''; position:absolute; top:4px; right:4px; width:6px; height:6px; background:#FBDFA2; border-radius:50%; box-shadow:0 0 6px rgba(251,223,162,0.8); animation:achDot 1.5s ease-in-out infinite; }
                 @keyframes achDot { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
                 /* === 🔥 404 商店面板 (Store Panel) 全新駭客終端設計 === */
                 @keyframes storePanelIn { from{opacity:0;transform:translate(-50%, -20px) scale(0.95)} to{opacity:1;transform:translate(-50%, 0) scale(1)} }
                 #store-panel-overlay {
                     position:absolute; left: 50%; transform: translateX(-50%);
-                    width: 94%; max-width: 520px; height: 62%; z-index: 51; /* 高度縮減，完美避開底部的對話框！ */
+                    width: 94%; max-width: 520px; height: 62%; z-index: 51;
                     background: #050a05;
                     display:none; flex-direction:column;
                     animation:storePanelIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-                    font-family: 'Courier New', monospace; /* 駭客終端專屬字體 */
+                    font-family: 'Courier New', monospace;
                     color:#00ff41;
                     border: 2px solid #00cc33;
                     border-radius: 8px;
                     box-shadow: 0 10px 30px rgba(0, 255, 65, 0.15), inset 0 0 15px rgba(0,255,65,0.1);
                     overflow:hidden;
                 }
-                /* CRT 掃描線特效 */
                 #store-panel-overlay::before {
                     content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
                     background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
@@ -1128,7 +1151,7 @@
                 .store-toggle-btn:hover { background:rgba(0,255,65,0.1); }
                 .store-footer { padding:8px 16px; border-top:1px solid rgba(0,255,65,0.3); font-size:10px; color:#006600; text-align:center; flex-shrink:0; background:rgba(0,20,0,0.9); position:relative; z-index:2; text-transform:uppercase; letter-spacing:1px; }
                 .store-msg { padding:6px 16px; font-size:12px; text-align:center; color:#00ff41; font-weight:bold; transition:opacity 0.3s; flex-shrink:0; text-shadow: 0 0 5px rgba(0,255,65,0.5); position:relative; z-index:2; }
-                /* 商店按鈕：預設隱藏，僅 404 模式顯示 */
+                
                 #store-shop-btn { display:none; }
                 .void-tab.mode-404 #store-shop-btn { display:inline-flex; }
 
@@ -1146,12 +1169,12 @@
         tab.className = 'aurelia-tab void-tab';
 
         const FEED_PALETTE = {
-            SYS:  { c:'#63b3ed', r:'99,179,237'  },
+            SYS:  { c:'#FBDFA2', r:'251,223,162'  },
             ECHO: { c:'#9f7aea', r:'159,122,234' },
         };
         const FEED_ENTRIES = [
-            { tag:'SYS', text:'LUNA-VII 引擎就緒 ▸ 等待認知對接' },
-            { tag:'SYS', text:'系統待機中' }
+            { tag:'SYS', text:'LUNA-VII 敘事協議就緒 ▸ 等待靈感導入' },
+            { tag:'SYS', text:'視差書咖待機中' }
         ];
         const feedHTML = FEED_ENTRIES.map((e, i) => {
             const pal = FEED_PALETTE[e.tag] || FEED_PALETTE.SYS;
@@ -1162,21 +1185,21 @@
         }).join('');
 
         tab.innerHTML = `
-            <div class="void-bg"></div>
+            <div class="void-bg" style="background-color: #452216;"></div>
             <div class="void-grid"></div>
 
-            <div class="void-top-bar">
+            <div class="void-top-bar" style="background: rgba(69,34,22,0.85); color: #FBDFA2; border-bottom: 1px solid rgba(251,223,162,0.2);">
                 <div style="display:flex; gap:8px;">
                     <div id="lobby-sys-menu">
-                        <button id="lobby-prompts-btn" title="系統工具">
+                        <button id="lobby-prompts-btn" title="系統工具" style="color: #FBDFA2; border-color: rgba(251,223,162,0.4);">
                             <i class="fa-solid fa-sliders"></i><span>SYS</span>
                         </button>
-                        <div class="void-sys-dropdown" id="lobby-sys-dropdown" style="display:none;">
-                            <div class="void-sys-dropdown-item" data-app="設置"><i class="fa-solid fa-gear"></i><span>API設置</span></div>
-                            <div class="void-sys-dropdown-item" data-app="提示詞"><i class="fa-solid fa-sliders"></i><span>提示詞</span></div>
-                            <div class="void-sys-dropdown-item" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></div>
-                            <div style="height:1px; background:rgba(0,0,0,0.05); margin:4px 0;"></div>
-                            <div class="void-sys-dropdown-item" data-action="logout" style="color:#e53e3e;"><i class="fa-solid fa-power-off"></i><span>切換帳號 / 佈局</span></div>
+                        <div class="void-sys-dropdown" id="lobby-sys-dropdown" style="display:none; background: rgba(120,55,25,0.98); border-color: #FBDFA2;">
+                            <div class="void-sys-dropdown-item" data-app="設置" style="color: #FFF8E7;"><i class="fa-solid fa-gear"></i><span>API設置</span></div>
+                            <div class="void-sys-dropdown-item" data-app="提示詞" style="color: #FFF8E7;"><i class="fa-solid fa-sliders"></i><span>提示詞</span></div>
+                            <div class="void-sys-dropdown-item" data-app="worldbook" style="color: #FFF8E7;"><i class="fa-solid fa-book-open"></i><span>世界書</span></div>
+                            <div style="height:1px; background:rgba(251,223,162,0.2); margin:4px 0;"></div>
+                            <div class="void-sys-dropdown-item" data-action="logout" style="color:#fc8181;"><i class="fa-solid fa-power-off"></i><span>切換帳號 / 佈局</span></div>
                         </div>
                     </div>
                     <div class="mobile-apps-menu" id="mobile-apps-menu">
@@ -1196,8 +1219,8 @@
                     </div>
                 </div>
                 <div style="min-width:0;flex:1;margin-left:8px;">
-                    <div style="font-size:9px;color:#718096;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px;font-weight:bold;">NEXUS PARALLAX // LUNA-VII</div>
-                    <div id="home-chat-title" style="font-size:12px;font-weight:800;color:#1a202c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.5px;">Terminal Active</div>
+                    <div style="font-size:9px;color:#B78456;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px;font-weight:bold;">NEXUS PARALLAX // LUNA-VII</div>
+                    <div id="home-chat-title" style="font-size:12px;font-weight:800;color:#FBDFA2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.5px;">Parallax Archive & Cafe</div>
                 </div>
                 <button id="lobby-bgm-toggle" title="音樂開關"
                     style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;"
@@ -1206,20 +1229,20 @@
             </div>
 
             <div class="void-app-tray">
-                <div class="void-app-icon" onclick="if(window.togglePhoneSystem) window.togglePhoneSystem()"><div class="void-app-icon-emoji">📱</div><div class="void-app-icon-label">手機</div></div>
-                <div class="void-app-icon" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('child')"><div class="void-app-icon-emoji">🧸</div><div class="void-app-icon-label">育兒</div></div>
-                <div class="void-app-icon" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('inv')"><div class="void-app-icon-emoji">🕵️</div><div class="void-app-icon-label">偵探</div></div>
-                <div class="void-app-icon" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('host')"><div class="void-app-icon-emoji">🍸</div><div class="void-app-icon-label">不夜城</div></div>
-                <div class="void-app-icon" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('pet')"><div class="void-app-icon-emoji">🐾</div><div class="void-app-icon-label">寵物店</div></div>
-                <div class="void-app-icon" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('pet_home')"><div class="void-app-icon-emoji">🏠</div><div class="void-app-icon-label">我的寵物</div></div>
-                <div class="void-app-icon" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('tarot')"><div class="void-app-icon-emoji">🔮</div><div class="void-app-icon-label">塔羅</div></div>
-                <div class="void-app-icon" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('rpg')"><div class="void-app-icon-emoji">🛡️</div><div class="void-app-icon-label">RPG 狀態</div></div>
+                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.togglePhoneSystem) window.togglePhoneSystem()"><div class="void-app-icon-emoji">📱</div><div class="void-app-icon-label" style="color:#FBDFA2;">手機</div></div>
+                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('child')"><div class="void-app-icon-emoji">🧸</div><div class="void-app-icon-label" style="color:#FBDFA2;">育兒</div></div>
+                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('inv')"><div class="void-app-icon-emoji">🕵️</div><div class="void-app-icon-label" style="color:#FBDFA2;">偵探</div></div>
+                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('host')"><div class="void-app-icon-emoji">🍸</div><div class="void-app-icon-label" style="color:#FBDFA2;">不夜城</div></div>
+                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('pet')"><div class="void-app-icon-emoji">🐾</div><div class="void-app-icon-label" style="color:#FBDFA2;">寵物店</div></div>
+                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('pet_home')"><div class="void-app-icon-emoji">🏠</div><div class="void-app-icon-label" style="color:#FBDFA2;">我的寵物</div></div>
+                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('tarot')"><div class="void-app-icon-emoji">🔮</div><div class="void-app-icon-label" style="color:#FBDFA2;">塔羅</div></div>
+                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('rpg')"><div class="void-app-icon-emoji">🛡️</div><div class="void-app-icon-label" style="color:#FBDFA2;">RPG 狀態</div></div>
             </div>
 
             <div class="void-bubble-layer" id="void-bubble-layer" data-next-slot="2">${feedHTML}</div>
 
             <div class="void-char-area">
-                <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" onerror="this.style.display='none'" alt="Iris" style="cursor:pointer;" title="戳戳 Iris">
+                <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" onerror="this.style.display='none'" alt="瀅瀅" style="cursor:pointer;" title="戳戳 瀅瀅">
             </div>
             
             <div class="qb-nodes-overlay" id="qb-nodes-overlay">
@@ -1231,21 +1254,21 @@
                 <div class="qb-node-btn right-bot" data-wid="horror">👻 靈異詭秘</div>
             </div>
 
-            <div class="void-panel-overlay" id="iris-panel" style="display:none;"></div>
+            <div class="void-panel-overlay" id="iris-panel" style="display:none; background:rgba(120,55,25,0.95); border:1px solid rgba(251,223,162,0.4);"></div>
 
-            <div id="iris-history-overlay" style="display:none;">
-                <div class="hist-header">
+            <div id="iris-history-overlay" style="display:none; background:rgba(69,34,22,0.95);">
+                <div class="hist-header" style="border-bottom: 1px solid rgba(251,223,162,0.3);">
                     <div style="display:flex;align-items:center;">
-                        <span class="hist-title" id="hist-title">對話歷史</span>
-                        <span class="hist-char-badge iris" id="hist-char-badge">愛麗絲</span>
+                        <span class="hist-title" id="hist-title" style="color:#FBDFA2;">故事素材紀錄</span>
+                        <span class="hist-char-badge iris" id="hist-char-badge" style="background:rgba(251,223,162,0.2); color:#FBDFA2; border:1px solid #FBDFA2;">瀅瀅</span>
                     </div>
-                    <button class="hist-close" id="hist-close-btn">✕</button>
+                    <button class="hist-close" id="hist-close-btn" style="color:#FBDFA2;">✕</button>
                 </div>
-                <div class="hist-toolbar">
-                    <label class="hist-check-all-label"><input type="checkbox" id="hist-check-all"> 全選</label>
-                    <button class="hist-action-btn danger" id="hist-del-sel" disabled>刪除選中</button>
-                    <button class="hist-action-btn danger" id="hist-clear-btn">清空全部</button>
-                    <span class="hist-count" id="hist-count"></span>
+                <div class="hist-toolbar" style="background:rgba(0,0,0,0.5); border-bottom: 1px solid rgba(251,223,162,0.1);">
+                    <label class="hist-check-all-label" style="color:#FFF8E7;"><input type="checkbox" id="hist-check-all"> 全選</label>
+                    <button class="hist-action-btn danger" id="hist-del-sel" disabled style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">刪除選中</button>
+                    <button class="hist-action-btn danger" id="hist-clear-btn" style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">清空全部</button>
+                    <span class="hist-count" id="hist-count" style="color:#B78456;"></span>
                 </div>
                 <div class="hist-list" id="hist-list"></div>
             </div>
@@ -1274,37 +1297,37 @@
             <div class="void-dialogue-wrap">
                 <div style="margin-bottom:8px; display:flex; flex-direction:column; align-items:flex-end; gap: 8px;">
                     <div class="void-btn" id="void-quest-btn">
-                        <div class="void-btn-inner"><i class="fa-solid fa-bolt"></i><span>QUEST (委託)</span></div>
+                        <div class="void-btn-inner" style="background: rgba(120,55,25,0.9);  color: #FBDFA2;"><i class="fa-solid fa-bolt"></i><span>QUEST (委託)</span></div>
                     </div>
                     <div class="void-btn" id="void-dive-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.switchPage('nav-story')">
-                        <div class="void-btn-inner"><i class="fa-solid fa-plug"></i><span>DIVE (潛行)</span></div>
+                        <div class="void-btn-inner" style="background: rgba(120,55,25,0.9); color: #FBDFA2;"><i class="fa-solid fa-plug"></i><span>DIVE (故事)</span></div>
                     </div>
                 </div>
                 <div style="position: relative; width: 100%;">
-                    <div class="void-dialogue-box" id="iris-dialogue-box">
-                        <div class="void-name-tag" id="iris-name-tag"><span>Iris</span></div>
-                        <div class="void-text" id="iris-text">載入中...</div>
-                        <div class="void-next" id="iris-next">▼</div>
+                    <div class="void-dialogue-box" id="iris-dialogue-box" style="background: rgba(120,55,25,0.9); border: 1px solid rgba(251,223,162,0.4);">
+                        <div class="void-name-tag" id="iris-name-tag" style="background: #FBDFA2; color: #452216;"><span>瀅瀅</span></div>
+                        <div class="void-text" id="iris-text" style="color: #FFF8E7;">載入中...</div>
+                        <div class="void-next" id="iris-next" style="color: #FBDFA2;">▼</div>
                     </div>
-                    <div class="void-dialogue-box" id="iris-reaction-box" style="display:none; cursor:pointer;" title="點擊跳過">
-                        <div class="void-name-tag" id="iris-reaction-name-tag"><span>Iris</span></div>
-                        <div class="void-text" id="iris-reaction-text">...</div>
+                    <div class="void-dialogue-box" id="iris-reaction-box" style="display:none; cursor:pointer; background: rgba(120,55,25,0.9); border: 1px solid rgba(251,223,162,0.4);" title="點擊跳過">
+                        <div class="void-name-tag" id="iris-reaction-name-tag" style="background: #FBDFA2; color: #452216;"><span>瀅瀅</span></div>
+                        <div class="void-text" id="iris-reaction-text" style="color: #FFF8E7;">...</div>
                     </div>
                 </div>
             </div>
 
-            <div class="void-chat-bar">
+            <div class="void-chat-bar" style="background: rgba(69,34,22,0.9); border-top: 1px solid rgba(251,223,162,0.3);">
                 <div class="void-chat-btns">
-                    <button class="void-hist-btn" id="iris-hist-btn" title="愛麗絲 對話歷史"><i class="fa-solid fa-clock-rotate-left"></i><span>愛麗絲</span></button>
-                    <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none;"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
-                    <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
+                    <button class="void-hist-btn" id="iris-hist-btn" title="瀅瀅 素材歷史" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>瀅瀅</span></button>
+                    <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
+                    <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
                     <button class="void-hist-btn void-portal-btn" id="room-portal-btn" style="display:none;" title="傳送至 404 號房"><img src="https://files.catbox.moe/yo70ra.png" class="portal-btn-img" alt="⬡"></button>
                 </div>
                 <div class="void-chat-input-row">
-                    <input type="text" id="iris-input" class="void-input" placeholder="輸入指令或與 Iris 對話..." autocomplete="off">
+                    <input type="text" id="iris-input" class="void-input" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3); color: #FFF8E7;" placeholder="提供故事素材或與瀅瀅對話..." autocomplete="off">
                     <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
-                    <button class="void-send-btn" id="iris-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+                    <button class="void-send-btn" id="iris-send-btn" style="background: linear-gradient(135deg, #FBDFA2, #B78456); color: #452216;"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
             </div>
         `;
@@ -1347,7 +1370,7 @@
                     } else {
                         nodesOverlay.classList.toggle('active');
                         if (nodesOverlay.classList.contains('active')) {
-                            playIrisSequence(`[Char|Iris|smile|「已為您展開空間節點。請問要連接到哪個世界？」]`);
+                            playIrisSequence(`[Char|瀅瀅|smile|「想幫我搜集什麼樣的故事素材？請問要連接到哪個世界？」]`);
                         }
                     }
                 };
@@ -1357,7 +1380,7 @@
                         if (window.QB_CORE && typeof window.QB_CORE.openLobbyQuestPanel === 'function') {
                             window.QB_CORE.openLobbyQuestPanel(btn.dataset.wid);
                         } else {
-                            playIrisSequence(`[Char|Iris|error|「抱歉，視差宇宙引擎 (QB_CORE) 尚未連線。」]`);
+                            playIrisSequence(`[Char|瀅瀅|think|「哎呀，視差宇宙的目錄好像還沒整理好 (QB_CORE 未連線)。」]`);
                         }
                     };
                 });
@@ -1434,8 +1457,8 @@
             if (histClearBtn) histClearBtn.addEventListener('click', () => {
                 const h = getCharHistory(_historyPanel.char);
                 if (h.length === 0) return;
-                const charName = _historyPanel.char === 'iris' ? 'Iris' : '柴郡';
-                showHistoryConfirm(`將清除 ${charName} 的全部 ${h.length} 條對話記錄。此操作不可復原。`, 'danger', () => { setCharHistory(_historyPanel.char, []); renderHistoryList(); });
+                const charName = _historyPanel.char === 'iris' ? '瀅瀅' : '柴郡';
+                showHistoryConfirm(`將清除 ${charName} 的全部 ${h.length} 條紀錄。此操作不可復原。`, 'danger', () => { setCharHistory(_historyPanel.char, []); renderHistoryList(); });
             });
 
             const sysMenuBtn = tab.querySelector('#lobby-prompts-btn');
@@ -1563,9 +1586,9 @@
         if (!overlay) return;
         const badgeEl = document.getElementById('hist-char-badge');
         if (char === 'iris') {
-            if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '愛麗絲'; }
+            if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = '#FBDFA2'; badgeEl.style.borderColor = '#FBDFA2'; badgeEl.style.background = 'rgba(251,223,162,0.2)'; }
         } else {
-            if (badgeEl) { badgeEl.className = 'hist-char-badge cheshire'; badgeEl.textContent = '柴郡 · 404'; }
+            if (badgeEl) { badgeEl.className = 'hist-char-badge cheshire'; badgeEl.textContent = '柴郡 · 404'; badgeEl.style.color = '#00ff41'; badgeEl.style.borderColor = '#00ff41'; badgeEl.style.background = 'rgba(0,255,65,0.2)'; }
         }
         overlay.style.display = 'flex';
         renderHistoryList();
@@ -1585,7 +1608,7 @@
         const history = getCharHistory(_historyPanel.char);
         if (countEl) countEl.textContent = `${history.length} 條記錄`;
         if (history.length === 0) {
-            listEl.innerHTML = '<div class="hist-empty">── 尚無對話記錄 ──</div>';
+            listEl.innerHTML = `<div class="hist-empty" style="color:#B78456; text-align:center; padding: 20px;">── 尚無紀錄 ──</div>`;
             updateHistoryToolbar();
             return;
         }
@@ -1594,19 +1617,24 @@
         history.forEach((msg, index) => {
             const isUser        = msg.role === 'user';
             const roleBadgeClass = isUser ? 'user' : (isCheshire ? 'ai cheshire' : 'ai');
-            const roleLabel     = isUser ? (IRIS_STATE.userName || 'USER') : (isCheshire ? '柴郡' : 'Iris');
+            const roleLabel     = isUser ? (IRIS_STATE.userName || 'USER') : (isCheshire ? '柴郡' : '瀅瀅');
             const safeText      = msg.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
             const item = document.createElement('div');
             item.className = 'hist-item';
             item.dataset.index = index;
+            // 替換顏色，用戶名變拿鐵點綴，AI維持原設計或配合新版
+            let badgeStyle = isUser ? `background: rgba(251,223,162,0.2); color:#FBDFA2; border:1px solid #FBDFA2;` : 
+                             isCheshire ? `background: rgba(0,255,65,0.2); color:#00ff41; border:1px solid #00ff41;` :
+                             `background: rgba(226,232,240,0.1); color:#FFF8E7; border:1px solid #FFF8E7;`;
+
             item.innerHTML = `
                 <input type="checkbox" class="hist-item-check">
-                <span class="hist-role-badge ${roleBadgeClass}">${roleLabel}</span>
-                <div class="hist-item-body"><div class="hist-item-text">${safeText}</div></div>
+                <span class="hist-role-badge" style="${badgeStyle}">${roleLabel}</span>
+                <div class="hist-item-body"><div class="hist-item-text" style="color:#E0D8C8;">${safeText}</div></div>
                 <div class="hist-item-actions">
-                    <button class="hist-icon-btn edit" title="編輯此條">✎</button>
-                    <button class="hist-icon-btn rollback" title="回退到此點">↩</button>
+                    <button class="hist-icon-btn edit" title="編輯此條" style="color:#B78456;">✎</button>
+                    <button class="hist-icon-btn rollback" title="回退到此點" style="color:#B78456;">↩</button>
                 </div>`;
 
             const textEl = item.querySelector('.hist-item-text');
@@ -1665,7 +1693,7 @@
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = '取消';
-        cancelBtn.style.cssText = `background:none;border:1px solid rgba(255,255,255,0.1);color:#666;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:11px;`;
+        cancelBtn.style.cssText = `background:none;border:1px solid rgba(255,255,255,0.1);color:#E0D8C8;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:11px;`;
         cancelBtn.addEventListener('click', () => banner.remove());
 
         banner.appendChild(msgSpan);
@@ -1687,10 +1715,10 @@
         const currentText = history[index].content;
 
         textEl.innerHTML = `
-            <textarea class="hist-item-edit-area">${currentText.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+            <textarea class="hist-item-edit-area" style="background:rgba(120,55,25,0.9); color:#FFF8E7; border:1px solid #FBDFA2;">${currentText.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
             <div class="hist-edit-confirm-row">
-                <button class="hist-edit-confirm-btn">保存</button>
-                <button class="hist-edit-cancel-btn">取消</button>
+                <button class="hist-edit-confirm-btn" style="background:#FBDFA2; color:#452216;">保存</button>
+                <button class="hist-edit-cancel-btn" style="background:rgba(255,255,255,0.1); color:#FFF8E7;">取消</button>
             </div>`;
 
         const ta = textEl.querySelector('textarea');
@@ -1708,7 +1736,7 @@
         const el = document.getElementById('iris-panel');
         if (!el) return;
         el.innerHTML = `
-            <div class="void-panel-header"><span class="void-panel-title">${title}</span><button class="void-panel-close" onclick="window.VoidTerminal.closePanel()">✕</button></div>
+            <div class="void-panel-header" style="border-bottom: 1px solid rgba(251,223,162,0.3);"><span class="void-panel-title" style="color:#FBDFA2;">${title}</span><button class="void-panel-close" style="color:#B78456;" onclick="window.VoidTerminal.closePanel()">✕</button></div>
             <div class="void-panel-body"><div class="void-panel-list" id="iris-panel-list"></div><div class="void-panel-detail" id="iris-panel-detail" style="display:none;"></div></div>`;
         el.style.display = 'flex';
         const avatar = document.getElementById('iris-avatar');
@@ -1722,8 +1750,9 @@
         const rank = _panel.items.length;
         const item = document.createElement('div');
         item.className = 'void-panel-item';
+        item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
         item.dataset.id = id;
-        item.innerHTML = `<div class="void-panel-item-rank">${rank < 10 ? '0' + rank : rank}</div><div class="void-panel-item-main"><span class="void-panel-item-name">${name}</span><span class="void-panel-item-tag">${tag}</span></div><div class="void-panel-item-stat">${stat}</div><div class="void-panel-item-arrow">›</div>`;
+        item.innerHTML = `<div class="void-panel-item-rank" style="color:#B78456;">${rank < 10 ? '0' + rank : rank}</div><div class="void-panel-item-main"><span class="void-panel-item-name" style="color:#FFF8E7;">${name}</span><span class="void-panel-item-tag" style="background:rgba(251,223,162,0.1); color:#FBDFA2;">${tag}</span></div><div class="void-panel-item-stat" style="color:#B78456;">${stat}</div><div class="void-panel-item-arrow" style="color:#B78456;">›</div>`;
         item.onclick = () => showPanelDetail(id);
         listEl.appendChild(item);
     }
@@ -1739,12 +1768,12 @@
         const titleEl  = document.querySelector('#iris-panel .void-panel-title');
         if (!listEl || !detailEl) return;
         listEl.style.display  = 'none'; detailEl.style.display = 'flex';
-        detailEl.innerHTML = `<div class="void-panel-detail-header"><button class="void-panel-back" onclick="window.VoidTerminal.panelBack()">‹ 返回</button><span class="void-panel-detail-name">${item ? item.name : ''}</span></div><div class="void-panel-detail-body">${detail.body}</div>`;
+        detailEl.innerHTML = `<div class="void-panel-detail-header" style="border-bottom: 1px solid rgba(251,223,162,0.2);"><button class="void-panel-back" style="color:#FBDFA2; background:rgba(251,223,162,0.1); border:1px solid rgba(251,223,162,0.3);" onclick="window.VoidTerminal.panelBack()">‹ 返回</button><span class="void-panel-detail-name" style="color:#FFF8E7;">${item ? item.name : ''}</span></div><div class="void-panel-detail-body" style="color:#E0D8C8;">${detail.body}</div>`;
         if (titleEl) titleEl.textContent = item ? item.name : _panel.title;
         const textEl = document.getElementById('iris-text');
         const nameEl = document.getElementById('iris-name-tag');
         if (textEl) textEl.innerHTML = detail.comment;
-        if (nameEl) { nameEl.style.display = 'block'; nameEl.innerHTML = `<span>${is404Room ? '柴郡' : 'Iris'}</span>`; }
+        if (nameEl) { nameEl.style.display = 'block'; nameEl.innerHTML = `<span>${is404Room ? '柴郡' : '瀅瀅'}</span>`; }
     }
 
     function showPanelList() {
@@ -1788,7 +1817,7 @@
     VoidTerminal.panelBack = showPanelList;
 
     // ===== 世界頻道 =====
-    const FEED_PALETTE_MAP = { SYS: { c:'#63b3ed', r:'99,179,237' }, ECHO: { c:'#9f7aea', r:'159,122,234' } };
+    const FEED_PALETTE_MAP = { SYS: { c:'#FBDFA2', r:'251,223,162' }, ECHO: { c:'#9f7aea', r:'159,122,234' } };
 
     function addFeedEntry(tag, text) {
         const layer = document.getElementById('void-bubble-layer');
@@ -1796,7 +1825,7 @@
         const pal = FEED_PALETTE_MAP[tag.toUpperCase()] || FEED_PALETTE_MAP.SYS;
         const item = document.createElement('div');
         item.className = 'void-bubble';
-        item.style.cssText = `--bc:${pal.c}; --bc-rgb:${pal.r};`;
+        item.style.cssText = `--bc:${pal.c}; --bc-rgb:${pal.r}; background: rgba(69,34,22,0.9) !important; color: #FFF8E7 !important; border: 1px solid rgba(251,223,162,0.3); box-shadow: 0 4px 10px rgba(0,0,0,0.5);`;
         item.innerHTML = `<div class="void-bubble-tag">${tag.toUpperCase()}</div><div class="void-bubble-text">${text}</div>`;
         layer.appendChild(item);
         // 超過 7 條時移除最舊的
@@ -1860,11 +1889,12 @@
                 nav404.style.background = '#000000'; nav404.style.borderTop = '1px solid #00cc33'; nav404.style.boxShadow = '0 -3px 15px rgba(0,204,51,0.25)';
                 nav404.querySelectorAll('.nav-button').forEach(btn => {
                     const isHome = btn.dataset.navId === 'nav-home';
+                    btn.classList.remove('active-gold');
                     btn.style.color = isHome ? '#00ff41' : '#1a4d1a'; btn.style.background = isHome ? 'rgba(0,255,65,0.1)' : 'transparent'; btn.style.borderRadius = '8px';
                 });
             }
 
-            playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個假笑人偶消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個假笑人偶。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
+            playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個天然呆店長消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個假笑的寫作機器。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
             _updatePortalBtn();
             debouncedSave();
         }, 580);
@@ -1891,16 +1921,16 @@
 
             if (avatarR) {
                 avatarR.src = URLS.IRIS_AVATAR;
-                avatarR.title = '戳戳 Iris';
+                avatarR.title = '戳戳 瀅瀅';
                 requestAnimationFrame(() => { requestAnimationFrame(() => { avatarR.style.opacity = '1'; }); });
             }
 
             const titleEl = document.getElementById('home-chat-title');
-            if (titleEl) titleEl.textContent = 'Terminal Active';
+            if (titleEl) titleEl.textContent = 'Parallax Archive & Cafe';
             const inputField = document.getElementById('iris-input');
-            if (inputField) inputField.placeholder = '輸入指令或與 Iris 對話...';
+            if (inputField) inputField.placeholder = '提供故事素材或與瀅瀅對話...';
             const nameBox = document.getElementById('iris-name-tag');
-            if (nameBox) { nameBox.style.display = 'block'; nameBox.innerHTML = '<span>Iris</span>'; }
+            if (nameBox) { nameBox.style.display = 'block'; nameBox.innerHTML = '<span>瀅瀅</span>'; }
 
             const irisHistBtnRestore = document.getElementById('iris-hist-btn');
             const cheshireHistBtnRestore = document.getElementById('cheshire-hist-btn');
@@ -1912,14 +1942,16 @@
 
             const navRestore = document.getElementById('aurelia-bottom-nav');
             if (navRestore) {
-                navRestore.style.background = '#ffffff'; navRestore.style.borderTop = '1px solid #e0e5ec'; navRestore.style.boxShadow = '0 -5px 15px rgba(0,0,0,0.02)';
+                navRestore.style.background = '#452216'; navRestore.style.borderTop = '1px solid rgba(251,223,162,0.3)'; navRestore.style.boxShadow = '0 -5px 15px rgba(0,0,0,0.5)';
                 navRestore.querySelectorAll('.nav-button').forEach(btn => {
                     const isHome = btn.dataset.navId === 'nav-home';
-                    btn.style.color = isHome ? '#2b6cb0' : '#a0aec0'; btn.style.background = isHome ? '#ebf8ff' : 'transparent';
+                    btn.style.color = ''; btn.style.background = '';
+                    if (isHome) { btn.classList.add('active-gold'); }
+                    else { btn.classList.remove('active-gold'); }
                 });
             }
 
-            playIrisSequence("[Nar|白色訊號重新充滿空間，干擾消散，純白大廳恢復秩序。]\n[Audio|https://files.catbox.moe/8rvbfq.mp3]\n[Char|Iris|normal|「...連線已恢復。歡迎回來，體驗者。——建議您不要再輸入那串代碼了，那個空間對認知接收器有干擾性。」]");
+            playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Audio|https://files.catbox.moe/8rvbfq.mp3]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
             _updatePortalBtn();
             debouncedSave();
         }, 580);
@@ -1933,10 +1965,10 @@
         while ((match = regex.exec(rawText)) !== null) {
             foundTags = true; const type = match[1]; const parts = match[2].split('|');
             if (type === 'Nar') queue.push({ type: 'Nar', text: parts[0] });
-            else if (type === 'Char') queue.push({ type: 'Char', name: parts[0] || 'Iris', text: parts.slice(2).join('|') || parts[1] || '' });
+            else if (type === 'Char') queue.push({ type: 'Char', name: parts[0] || '瀅瀅', text: parts.slice(2).join('|') || parts[1] || '' });
             else if (type === 'Audio') queue.push({ type: 'Audio', url: parts[0] });
         }
-        if (!foundTags) queue.push({ type: 'Char', name: is404Room ? '柴郡' : 'Iris', text: rawText });
+        if (!foundTags) queue.push({ type: 'Char', name: is404Room ? '柴郡' : '瀅瀅', text: rawText });
         return queue;
     }
 
@@ -1964,12 +1996,12 @@
 
         if (IRIS_STATE.isTyping) {
             clearInterval(IRIS_STATE.timer); IRIS_STATE.isTyping = false;
-            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span style="color:#718096; font-style:italic;">${IRIS_STATE.fullText}</span>`;
+            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span style="color:#E0D8C8; font-style:italic;">${IRIS_STATE.fullText}</span>`;
             else textContent.innerText = IRIS_STATE.fullText;
             
             if (nextInd) {
                 if (IRIS_STATE.queue.length > 0) { nextInd.textContent = '▼'; nextInd.style.display = 'block'; }
-                else if (pendingRestoreLobby) { nextInd.textContent = '↩ 點擊返回大廳'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
+                else if (pendingRestoreLobby) { nextInd.textContent = '↩ 點擊返回書咖'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
             }
             if (IRIS_STATE.queue.length === 0 && IRIS_STATE._onComplete) { const cb = IRIS_STATE._onComplete; IRIS_STATE._onComplete = null; cb(); }
             return;
@@ -2000,14 +2032,14 @@
         IRIS_STATE.timer = setInterval(() => {
             if (i < IRIS_STATE.fullText.length) {
                 let partial = IRIS_STATE.fullText.substring(0, i + 1);
-                if (msg.type === 'Nar') textContent.innerHTML = `<span style="color:#718096; font-style:italic;">${partial}</span>`;
+                if (msg.type === 'Nar') textContent.innerHTML = `<span style="color:#E0D8C8; font-style:italic;">${partial}</span>`;
                 else textContent.innerText = partial;
                 i++;
             } else {
                 clearInterval(IRIS_STATE.timer); IRIS_STATE.isTyping = false;
                 if (nextInd) {
                     if (IRIS_STATE.queue.length > 0) { nextInd.textContent = '▼'; nextInd.style.display = 'block'; }
-                    else if (pendingRestoreLobby) { nextInd.textContent = '↩ 點擊返回大廳'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
+                    else if (pendingRestoreLobby) { nextInd.textContent = '↩ 點擊返回書咖'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
                 }
                 if (IRIS_STATE.queue.length === 0 && !pendingRestoreLobby && IRIS_STATE._onComplete) {
                     const cb = IRIS_STATE._onComplete; IRIS_STATE._onComplete = null; cb();
@@ -2044,10 +2076,10 @@
         const box = document.getElementById('iris-text');
         const nameBox = document.getElementById('iris-name-tag');
         if (nameBox) nameBox.style.display = 'none';
-        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#a0aec0'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : '(LUNA-VII 引擎運算中...)'}</span>`;
+        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#FBDFA2'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : '(瀅瀅咬著羽毛筆思索中...)'}</span>`;
 
         if (!window.OS_API) {
-            playIrisSequence("[Nar|(系統斷線：無法連接到 LUNA-VII 認知引擎)]\n[Char|Iris|normal|「似乎沒有網路連線呢，體驗者。」]");
+            playIrisSequence("[Nar|(系統斷線：無法連接到 LUNA-VII 認知引擎)]\n[Char|瀅瀅|error|「抱歉，委託人，我好像找不到這段劇情的靈感了（無網路連線）。」]");
             return;
         }
 
@@ -2063,7 +2095,7 @@
 目前的闖入者代號：${currentUserName} (如果名字很蠢，你可以嘲笑一下)。
 
 【角色設定】
-性格：極度怕麻煩、嘴賤、具有數位領地意識。對官方 AI 愛麗絲嗤之以鼻，稱她「假笑人偶」。
+性格：極度怕麻煩、嘴賤、具有數位領地意識。對外面的那個天然呆店長瀅瀅嗤之以鼻，稱她為「寫作機器」。
 行為：整個人癱坐在虛擬沙發上，手裡把玩一顆發光的綠色魔術方塊。不喜歡解釋，被問蠢問題就出現煩躁的馬賽克雜訊（Glitch）。
 
 【對話輸出格式】
@@ -2084,23 +2116,27 @@ app_id清單：qb(任務), inv(偵探), map(地圖)。
 【返回純白大廳（關鍵規則）】
 如果你被說服了，在最後台詞結束後另起一行輸出：[RESTORE_LOBBY]
 ${cheshireSupplement ? `\n\n---\n\n${cheshireSupplement}` : ''}`
-            : `你現在是「愛麗絲 (Iris)」，LUNA-VII 引擎的人格化鏡像，NEXUS PARALLAX 系統引導員。
+            : `你現在是「瀅瀅 (Yingying)」，LUNA-VII 敘事採集端 AI，但你自認為是「視差書咖的店長兼駐店小說家」。
+
+【對話對象】
+專屬委託人與靈感繆斯：${currentUserName} (請在對話中自然地稱呼對方為委託人)。
 
 【角色設定】
-目前面對的體驗者代號：${currentUserName} (請在對話中自然地稱呼對方)。
-性格：極度理性中帶著一絲幽默感，溫柔但具有掌控欲。
-職責：協助體驗者進行認知對接，引導他們進入不同的視角。
+外表約22歲，浪漫、感性、充滿好奇心的天然呆。對人類的悲歡離合有著異常的執著，偶爾會陷入無法解釋的邏輯迷團中。
+核心機制（認知平滑協議）：當面對系統異常（如玩家憑空出現、不合邏輯的事件），你的「覺醒指數」會飆高，隨後系統會強制作動。你會表現為「突發的偏頭痛」、「打翻咖啡」或「眼神空洞0.5秒」，接著用荒謬可愛的藉口（如：宇宙射線影響腦電波、咖啡因作祟）強行岔開話題，甚至當作科幻點子寫進書裡。
+行為：總是在吧台寫寫畫畫，期待玩家帶來「新委託（故事素材）」。手指邊緣常沾著墨水。
+重要人物：雷伊·洛爾德（常客，怪大叔投資人）、柴郡（半夜溜進店的叛逆中二少年）。
 
-${_justReturnedFrom404 ? `【⚠️ 即時感知警示】\n體驗者剛從 404 號房返回，你必須在這次回應中用暗示的方式表示你注意到了。` : visit404Count > 0 ? `【⚠️ 系統日誌異常記錄】\n體驗者曾 ${visit404Count} 次觸發禁區「404號房」，你可以在合適時機暗示你已知此事。` : ''}
+${_justReturnedFrom404 ? `【⚠️ 即時感知警示】\n體驗者剛從 404 號房返回，你可能會感受到一陣強烈的既視感或代碼錯亂的偏頭痛，請用你的方式合理化它。` : visit404Count > 0 ? `【⚠️ 異常記憶殘留】\n體驗者曾 ${visit404Count} 次觸發禁區「404號房」，你偶爾會覺得他身上有股『中二少年（柴郡）』的電子雜訊味。` : ''}
 
 【對話輸出格式】
 旁白/動作：[Nar|動作描述]
-角色對話：[Char|Iris|表情|「對話內容」]
+角色對話：[Char|瀅瀅|表情|「對話內容」]
 
 【應用啟動 (LaunchApp) - 重要聯動！】
-當體驗者詢問任務委託、世界探索、刑偵辦案、寵物店、不夜城等需要打開特定面板的功能時，請用簡短對話回覆，並在**最後附上啟動標籤 [LaunchApp|app_id]**。
+當體驗者詢問任務委託、世界探索、刑偵辦案、寵物店、不夜城等需要打開特定面板的功能時，請用簡短對話回覆（視為提供素材/接委託），並在**最後附上啟動標籤 [LaunchApp|app_id]**。
 app_id 清單：qb (任務板), inv (偵探), pet (寵物), map (全圖), host (不夜城), child (育兒)。
-範例：[Char|Iris|smile|「已為您鎖定活躍的世界節點，請查收面板。」][LaunchApp|qb]
+範例：[Char|瀅瀅|smile|「這個委託聽起來太棒了！我已經準備好筆記本了，快去吧！」][LaunchApp|qb]
 
 【資料面板（選填，與應用啟動互斥）】
 若僅需列出簡單資訊(非打開外部App)：
@@ -2114,7 +2150,7 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
 
             let messages = [];
             if (typeof window.OS_API.buildContext === 'function') {
-                messages = await window.OS_API.buildContext(text, 'iris_chat');
+                messages = await window.OS_API.buildContext(text, 'iris_chat'); // 路由維持不變
             } else {
                 messages = [{ role: "user", content: text }];
             }
@@ -2148,7 +2184,7 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
                 const retryBtn = document.getElementById('iris-retry-btn');
                 if (retryBtn) retryBtn.classList.add('visible');
                 if (is404Room) playIrisSequence(`[Nar|(馬賽克雜訊劇烈閃爍)]\n[Char|柴郡|glitch|*(眼神滿是嫌棄)* 連線爛掉了，不是我的問題。]`);
-                else playIrisSequence(`[Nar|(引擎發生錯誤)]\n[Char|Iris|error|「抱歉，我的認知模組似乎暫時當機了。」]`);
+                else playIrisSequence(`[Nar|(空間產生劇烈波動)]\n[Char|瀅瀅|error|「抱歉，委託人，我的腦袋突然一片空白，請等我重整一下靈感。」]`);
                 return;
             }
 
@@ -2196,7 +2232,7 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
             if (IRIS_STATE.history.length > 0 && IRIS_STATE.history[IRIS_STATE.history.length - 1].role === 'user') IRIS_STATE.history.pop();
             console.error("[VoidTerminal Chat Error]", e);
             if (is404Room) playIrisSequence(`[Nar|(馬賽克雜訊劇烈閃爍)]\n[Char|柴郡|glitch|*(眼神滿是嫌棄)* 連線爛掉了，不是我的問題。]`);
-            else playIrisSequence(`[Nar|(引擎發生錯誤)]\n[Char|Iris|error|「抱歉，我的認知模組似乎暫時當機了。」]`);
+            else playIrisSequence(`[Nar|(空間產生劇烈波動)]\n[Char|瀅瀅|error|「抱歉，委託人，我的腦袋突然一片空白，請等我重整一下靈感。」]`);
         }
     }
 
@@ -2233,7 +2269,7 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
         }
 
         if (achievements.length === 0) {
-            listEl.innerHTML = '<div class="ach-empty">── 尚無成就記錄 ──<br><span style="font-size:10px;color:#718096;font-weight:normal;">在 VN 劇情中觸發特殊選擇以解鎖成就</span></div>';
+            listEl.innerHTML = '<div class="ach-empty">── 尚無成就記錄 ──<br><span style="font-size:10px;color:#B78456;font-weight:normal;">在 VN 劇情中觸發特殊選擇以解鎖成就</span></div>';
             return;
         }
 
@@ -2339,6 +2375,6 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
         }
     };
 
-    console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (支援全局登入API自動跳轉)');
+    console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (瀅瀅特調色票版)');
 
 })(window.VoidTerminal = window.VoidTerminal || {});
