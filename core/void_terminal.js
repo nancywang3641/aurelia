@@ -711,13 +711,20 @@
         });
     }
 
-    // 更新傳送門按鈕的可見性與提示文字
+    // 更新頂部 404↔大廳 切換按鈕外觀（首次解鎖後才顯示）
     function _updatePortalBtn() {
         const btn = document.getElementById('room-portal-btn');
         if (!btn) return;
         if (visit404Count < 1) { btn.style.display = 'none'; return; }
         btn.style.display = '';
-        btn.title = is404Room ? '返回視差書咖' : '傳送至 404 號房';
+        const label = btn.querySelector('.void-mode-toggle-label');
+        if (is404Room) {
+            if (label) label.textContent = '⬡ 視差書咖';
+            btn.title = '返回視差書咖';
+        } else {
+            if (label) label.textContent = '⬡ 404';
+            btn.title = '傳送至 404 號房';
+        }
     }
 
     function _applyLoadedLobbyState() {
@@ -823,38 +830,11 @@
             <div class="void-grid"></div>
 
             <div class="void-top-bar" style="background: rgba(69,34,22,0.85); color: #FBDFA2; border-bottom: 1px solid rgba(251,223,162,0.2);">
-                <div style="display:flex; gap:8px;">
-                    <div id="lobby-sys-menu">
-                        <button id="lobby-prompts-btn" title="系統工具" style="color: #FBDFA2; border-color: rgba(251,223,162,0.4);">
-                            <i class="fa-solid fa-sliders"></i><span>SYS</span>
-                        </button>
-                        <div class="void-sys-dropdown" id="lobby-sys-dropdown" style="display:none; background: rgba(120,55,25,0.98); border-color: #FBDFA2;">
-                            <div class="void-sys-dropdown-item" data-app="設置" style="color: #FFF8E7;"><i class="fa-solid fa-gear"></i><span>API設置</span></div>
-                            <div class="void-sys-dropdown-item" data-app="提示詞" style="color: #FFF8E7;"><i class="fa-solid fa-sliders"></i><span>提示詞</span></div>
-                            <div class="void-sys-dropdown-item" data-app="worldbook" style="color: #FFF8E7;"><i class="fa-solid fa-book-open"></i><span>世界書</span></div>
-                            <div class="void-sys-dropdown-item" data-app="avs" style="color: #FFF8E7;"><i class="fa-solid fa-dice"></i><span>變數工坊</span></div>
-                            <div style="height:1px; background:rgba(251,223,162,0.2); margin:4px 0;"></div>
-                            <div class="void-sys-dropdown-item" data-action="logout" style="color:#fc8181;"><i class="fa-solid fa-power-off"></i><span>切換帳號 / 佈局</span></div>
-                        </div>
-                    </div>
-                    <div class="mobile-apps-menu" id="mobile-apps-menu">
-                        <button class="mobile-apps-btn" id="mobile-apps-btn" title="應用程式">
-                            <i class="fa-solid fa-layer-group"></i><span>APPS</span>
-                        </button>
-                        <div class="mobile-apps-dropdown" id="mobile-apps-dropdown" style="display:none;">
-                            <div class="mobile-apps-dropdown-item" data-app="phone"><i class="fa-solid fa-mobile-screen"></i><span>手機</span></div>
-                            <div class="mobile-apps-dropdown-item" data-app="child"><i class="fa-solid fa-baby"></i><span>育兒</span></div>
-                            <div class="mobile-apps-dropdown-item" data-app="inv"><i class="fa-solid fa-magnifying-glass"></i><span>偵探</span></div>
-                            <div class="mobile-apps-dropdown-item" data-app="host"><i class="fa-solid fa-martini-glass-citrus"></i><span>不夜城</span></div>
-                            <div class="mobile-apps-dropdown-item" data-app="pet"><i class="fa-solid fa-paw"></i><span>寵物店</span></div>
-                            <div class="mobile-apps-dropdown-item" data-app="pet_home"><i class="fa-solid fa-house"></i><span>我的寵物</span></div>
-                            <div class="mobile-apps-dropdown-item" data-app="tarot"><i class="fa-solid fa-star-of-david"></i><span>塔羅</span></div>
-                            <div class="mobile-apps-dropdown-item" data-app="rpg"><i class="fa-solid fa-shield-halved"></i><span>RPG 狀態</span></div>
-                        </div>
-                    </div>
-                </div>
+                <button class="void-mode-toggle-btn" id="room-portal-btn" title="傳送至 404 號房" style="display:none;">
+                    <span class="void-mode-toggle-label">⬡ 404</span>
+                </button>
                 <div style="min-width:0;flex:1;margin-left:8px;">
-                    <div style="font-size:9px;color:#B78456;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px;font-weight:bold;">NEXUS PARALLAX // LUNA-VII</div>
+                    <div class="void-top-sub-label" style="font-size:9px;color:#B78456;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px;font-weight:bold;">NEXUS PARALLAX // LUNA-VII</div>
                     <div id="home-chat-title" style="font-size:12px;font-weight:800;color:#FBDFA2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.5px;">Parallax Archive & Cafe</div>
                 </div>
                 <button id="lobby-bgm-toggle" title="音樂開關"
@@ -863,16 +843,6 @@
                 <audio id="lobby-bgm-player" loop style="display:none;"></audio>
             </div>
 
-            <div class="void-app-tray">
-                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.togglePhoneSystem) window.togglePhoneSystem()"><div class="void-app-icon-emoji">📱</div><div class="void-app-icon-label" style="color:#FBDFA2;">手機</div></div>
-                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('child')"><div class="void-app-icon-emoji">🧸</div><div class="void-app-icon-label" style="color:#FBDFA2;">育兒</div></div>
-                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('inv')"><div class="void-app-icon-emoji">🕵️</div><div class="void-app-icon-label" style="color:#FBDFA2;">偵探</div></div>
-                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('host')"><div class="void-app-icon-emoji">🍸</div><div class="void-app-icon-label" style="color:#FBDFA2;">不夜城</div></div>
-                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('pet')"><div class="void-app-icon-emoji">🐾</div><div class="void-app-icon-label" style="color:#FBDFA2;">寵物店</div></div>
-                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('pet_home')"><div class="void-app-icon-emoji">🏠</div><div class="void-app-icon-label" style="color:#FBDFA2;">我的寵物</div></div>
-                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('tarot')"><div class="void-app-icon-emoji">🔮</div><div class="void-app-icon-label" style="color:#FBDFA2;">塔羅</div></div>
-                <div class="void-app-icon" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3);" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp('rpg')"><div class="void-app-icon-emoji">🛡️</div><div class="void-app-icon-label" style="color:#FBDFA2;">RPG 狀態</div></div>
-            </div>
 
             <div class="void-bubble-layer" id="void-bubble-layer" data-next-slot="2">${feedHTML}</div>
 
@@ -957,7 +927,16 @@
                     <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
                     <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
-                    <button class="void-hist-btn void-portal-btn" id="room-portal-btn" style="display:none;" title="傳送至 404 號房"><img src="https://files.catbox.moe/yo70ra.png" class="portal-btn-img" alt="⬡"></button>
+                    <button class="void-hist-btn" data-app-launch="child" title="育兒"><span class="vhb-em">🧸</span><span>育兒</span></button>
+                    <button class="void-hist-btn" data-app-launch="inv" title="偵探"><span class="vhb-em">🕵️</span><span>偵探</span></button>
+                    <button class="void-hist-btn" data-app-launch="host" title="不夜城"><span class="vhb-em">🍸</span><span>不夜城</span></button>
+                    <button class="void-hist-btn" data-app-launch="pet" title="寵物店"><span class="vhb-em">🐾</span><span>寵物</span></button>
+                    <button class="void-hist-btn" data-app-launch="pet_home" title="我的寵物"><span class="vhb-em">🏠</span><span>我的寵物</span></button>
+                    <button class="void-hist-btn" data-app-launch="tarot" title="塔羅"><span class="vhb-em">🔮</span><span>塔羅</span></button>
+                    <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
+                    <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
+                    <button class="void-hist-btn" data-os-launch="微博" title="微博"><span class="vhb-em">👁️</span><span>微博</span></button>
+                    <button class="void-hist-btn" data-os-launch="電子錢包" title="電子錢包"><span class="vhb-em">💳</span><span>錢包</span></button>
                 </div>
                 <div class="void-chat-input-row">
                     <input type="text" id="iris-input" class="void-input" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3); color: #FFF8E7;" placeholder="提供故事素材或與瀅瀅對話..." autocomplete="off">
@@ -1052,10 +1031,24 @@
             const storeShopBtn = tab.querySelector('#store-shop-btn');
             if (storeShopBtn) storeShopBtn.addEventListener('click', openStorePanel);
 
+            // 404 ↔ 視差書咖 切換 (頂部左側按鈕)
             const portalBtn = tab.querySelector('#room-portal-btn');
             if (portalBtn) portalBtn.addEventListener('click', () => {
                 if (is404Room) restoreLobby();
                 else enter404Room();
+            });
+
+            // App 啟動按鈕 (launchGameApp)
+            tab.querySelectorAll('[data-app-launch]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp(btn.dataset.appLaunch);
+                });
+            });
+            // App 啟動按鈕 (showOsApp → wx/wb/錢包)
+            tab.querySelectorAll('[data-os-launch]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (window.AureliaControlCenter) window.AureliaControlCenter.showOsApp(btn.dataset.osLaunch);
+                });
             });
 
             const storeCloseBtn = tab.querySelector('#store-close-btn');
@@ -1096,75 +1089,6 @@
                 showHistoryConfirm(`將清除 ${charName} 的全部 ${h.length} 條紀錄。此操作不可復原。`, 'danger', () => { setCharHistory(_historyPanel.char, []); renderHistoryList(); });
             });
 
-            const sysMenuBtn = tab.querySelector('#lobby-prompts-btn');
-            const sysDropdown = tab.querySelector('#lobby-sys-dropdown');
-            if (sysMenuBtn && sysDropdown) {
-                sysMenuBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const isOpen = sysDropdown.style.display !== 'none';
-                    sysDropdown.style.display = isOpen ? 'none' : 'block';
-                    sysMenuBtn.classList.toggle('open', !isOpen);
-                    // 關閉另一個下拉單
-                    if (appsDropdown) { appsDropdown.style.display = 'none'; }
-                    if (appsMenuBtn) { appsMenuBtn.classList.remove('open'); }
-                });
-                sysDropdown.querySelectorAll('.void-sys-dropdown-item').forEach(item => {
-                    item.addEventListener('click', () => {
-                        const appName = item.dataset.app;
-                        const action  = item.dataset.action;
-                        
-                        if (action === 'logout') {
-                            // 登出：清空名字並重新顯示登入框
-                            IRIS_STATE.userName = '';
-                            showLoginScreen(tab);
-                        } else if (appName && window.AureliaControlCenter) {
-                            window.AureliaControlCenter.showOsApp(appName);
-                        }
-                        
-                        sysDropdown.style.display = 'none';
-                        sysMenuBtn.classList.remove('open');
-                    });
-                });
-                document.addEventListener('click', (e) => {
-                    if (!tab.querySelector('#lobby-sys-menu')?.contains(e.target)) {
-                        sysDropdown.style.display = 'none';
-                        sysMenuBtn.classList.remove('open');
-                    }
-                });
-            }
-
-            // APPS 響應式下拉選單綁定
-            const appsMenuBtn = tab.querySelector('#mobile-apps-btn');
-            const appsDropdown = tab.querySelector('#mobile-apps-dropdown');
-            if (appsMenuBtn && appsDropdown) {
-                appsMenuBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const isOpen = appsDropdown.style.display !== 'none';
-                    appsDropdown.style.display = isOpen ? 'none' : 'block';
-                    appsMenuBtn.classList.toggle('open', !isOpen);
-                    // 關閉另一個下拉單
-                    if (sysDropdown) { sysDropdown.style.display = 'none'; }
-                    if (sysMenuBtn) { sysMenuBtn.classList.remove('open'); }
-                });
-                appsDropdown.querySelectorAll('.mobile-apps-dropdown-item').forEach(item => {
-                    item.addEventListener('click', () => {
-                        const appName = item.dataset.app;
-                        if (appName === 'phone') {
-                            if (window.togglePhoneSystem) window.togglePhoneSystem();
-                        } else {
-                            if (window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp(appName);
-                        }
-                        appsDropdown.style.display = 'none';
-                        appsMenuBtn.classList.remove('open');
-                    });
-                });
-                document.addEventListener('click', (e) => {
-                    if (!tab.querySelector('#mobile-apps-menu')?.contains(e.target)) {
-                        appsDropdown.style.display = 'none';
-                        appsMenuBtn.classList.remove('open');
-                    }
-                });
-            }
 
             // 🔥 啟動時檢查資料庫，實現真正的自動登入與跳過登入畫面
             const currentId = getChatId();
@@ -1975,6 +1899,12 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
     // ===== 導出全局介面 =====
     // 暴露到外層，讓其他面板 (如 QB_CORE, IDOL_CORE) 能夠調用
     VoidTerminal.playSequence = playIrisSequence;
+
+    VoidTerminal.logout = function() {
+        IRIS_STATE.userName = '';
+        const t = document.getElementById('aurelia-home-tab');
+        if (t) showLoginScreen(t);
+    };
 
     // 🔥 全局登入紀錄 API
     VoidTerminal.getUserName = function() { 

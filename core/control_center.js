@@ -65,12 +65,12 @@
         // 🌟 修復底部黑邊：加上 padding-bottom: env(safe-area-inset-bottom) 與 box-sizing 以適配 iPhone 底部小白條安全區域
         nav.style.cssText = `height: 55px; background: #ffffff; border-top: 1px solid #e0e5ec; display: flex; justify-content: center; align-items: center; gap: 15px; box-shadow: 0 -5px 15px rgba(0,0,0,0.02); flex-shrink: 0; z-index: 200; position: relative; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box;`;
 
-        // 🔥 改名為「我」
         const items = [
-            { id: 'nav-home',  icon: 'fa-solid fa-cube',                  active: true,  title: '大廳' },
-            { id: 'nav-story', icon: 'fa-solid fa-plug',                  active: false, title: 'DIVE' },
-            { id: 'nav-user',  icon: 'fa-solid fa-user',                  active: false, title: '我' },
-            { id: 'nav-close', icon: 'fa-solid fa-power-off', isClose: true,             title: '登出' }
+            { id: 'nav-home',  icon: 'fa-solid fa-cube',     active: true,  title: '大廳' },
+            { id: 'nav-story', icon: 'fa-solid fa-plug',     active: false, title: 'DIVE' },
+            { id: 'nav-user',  icon: 'fa-solid fa-user',     active: false, title: '我' },
+            { id: 'nav-write', icon: 'fa-solid fa-pen-nib',  active: false, title: '寫作' },
+            { id: 'nav-close', icon: 'fa-solid fa-power-off', isClose: true, title: '登出' }
         ];
 
         items.forEach(item => {
@@ -141,6 +141,9 @@
                 }
             }
         }
+        else if (pageId === 'nav-write') {
+            if (window.VoidTerminal && window.VoidTerminal.suspendIdle) window.VoidTerminal.suspendIdle();
+        }
 
         if (pageId !== 'nav-story') {
             const extractorContainer = container.querySelector('#aurelia-extractor-container-vn');
@@ -192,9 +195,41 @@
         userTab.className = 'aurelia-tab';
         userTab.style.cssText = `width:100%; height:100%; display:none; background:#f8f9fa; position: relative; flex-direction:column; overflow:hidden;`;
 
+        // ── 寫作設置 TAB ──
+        const writeTab = parentDoc.createElement('div');
+        writeTab.id = 'aurelia-write-tab';
+        writeTab.className = 'aurelia-tab write-tab';
+        writeTab.style.cssText = `width:100%; height:100%; display:none; position:relative; flex-direction:column; overflow:hidden;`;
+        writeTab.innerHTML = `
+            <div class="write-tab-content">
+                <div class="write-tab-title-block">
+                    <div class="write-tab-title">寫作設置</div>
+                    <div class="write-tab-subtitle">WRITING · SYSTEM</div>
+                </div>
+                <div class="write-tab-btns">
+                    <button class="write-tab-btn" data-app="設置"><i class="fa-solid fa-gear"></i><span>API 設置</span></button>
+                    <button class="write-tab-btn" data-app="提示詞"><i class="fa-solid fa-sliders"></i><span>提示詞管理</span></button>
+                    <button class="write-tab-btn" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></button>
+                    <button class="write-tab-btn" data-app="avs"><i class="fa-solid fa-dice"></i><span>變數工坊</span></button>
+                </div>
+                <button class="write-tab-logout-btn" id="write-logout-btn">
+                    <i class="fa-solid fa-power-off"></i><span>切換帳號 / 佈局</span>
+                </button>
+            </div>`;
+        writeTab.querySelectorAll('.write-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (window.AureliaControlCenter) window.AureliaControlCenter.showOsApp(btn.dataset.app);
+            });
+        });
+        const wLogoutBtn = writeTab.querySelector('#write-logout-btn');
+        if (wLogoutBtn) wLogoutBtn.addEventListener('click', () => {
+            if (window.VoidTerminal && window.VoidTerminal.logout) window.VoidTerminal.logout();
+        });
+
         container.appendChild(homeTab);
         container.appendChild(storyTab);
         container.appendChild(userTab);
+        container.appendChild(writeTab);
         return container;
     }
 
@@ -381,6 +416,9 @@
             if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
         };
 
+        // 讓 PhoneSystem.goHome() 直接呼叫也能關閉 panel
+        if (window.PhoneSystem) window.PhoneSystem.goHome = doClose;
+
         div.addEventListener('click', (e) => {
             const btn = e.target.closest('[onclick]');
             if (!btn) return;
@@ -406,7 +444,6 @@
             div.style.cssText = 'width: 100%; height: 100%; overflow: auto; background: #1e1e1e;';
             container.appendChild(div);
 
-            // 🔥 這裡註冊了新的 AVS 變數工坊
             const map = {
                 '設置': window.OS_SETTINGS,
                 '世界書': window.OS_WORLDBOOK || window.OS_LOREBOOK,
@@ -419,8 +456,18 @@
                 '刑案調查': window.INV_CORE,
                 '視差引擎': window.OS_QUEST_BOARD,
                 'avs': window.OS_AVS,
-                '變數工坊': window.OS_AVS
+                '變數工坊': window.OS_AVS,
+                // wx/wb/錢包 (phone_system shim 已將它們存入 __PHONE_APPS)
+                '微信':    { launch: (c) => window.__PHONE_APPS?.['微信']?.(c) },
+                '微博':    { launch: (c) => window.__PHONE_APPS?.['微博']?.(c) },
+                '電子錢包':{ launch: (c) => window.__PHONE_APPS?.['電子錢包']?.(c) },
             };
+
+            const _panelClose = () => {
+                if (panel) panel.style.transform = 'translateX(100%)';
+                if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
+            };
+            if (window.PhoneSystem) window.PhoneSystem.goHome = _panelClose;
 
             const originalLaunchApp = map[appName]?.launchApp || map[appName]?.launch;
             if (originalLaunchApp) {
