@@ -739,13 +739,10 @@
             if (cH) cH.style.display = '';
             const nav = document.getElementById('aurelia-bottom-nav');
             if (nav) {
-                nav.style.background = '#000'; nav.style.borderTop = '1px solid #00cc33';
-                nav.querySelectorAll('.nav-button').forEach(b => {
-                    const isHome = b.dataset.navId === 'nav-home';
-                    b.classList.remove('active-gold');
-                    b.style.color = isHome ? '#00ff41' : '#1a4d1a'; b.style.background = isHome ? 'rgba(0,255,65,0.1)' : 'transparent';
-                });
+                nav.classList.add('mode-404');
+                nav.querySelectorAll('.nav-button').forEach(b => b.classList.remove('active-gold'));
             }
+            document.getElementById('aurelia-phone-screen')?.classList.add('mode-404');
             switchLobbyBgm(URLS.BGM_404);
         } else {
             // 非 404 模式：還原瀅瀅與復古拿鐵 UI
@@ -765,14 +762,14 @@
             if (cH) cH.style.display = 'none';
             const nav = document.getElementById('aurelia-bottom-nav');
             if (nav) {
-                nav.style.background = '#452216'; nav.style.borderTop = '1px solid rgba(251,223,162,0.3)'; nav.style.boxShadow = '0 -5px 15px rgba(0,0,0,0.5)';
+                nav.classList.remove('mode-404');
                 nav.querySelectorAll('.nav-button').forEach(b => {
                     const isHome = b.dataset.navId === 'nav-home';
-                    b.style.color = ''; b.style.background = ''; // 移除內聯樣式
                     if (isHome) { b.classList.add('active-gold'); }
                     else { b.classList.remove('active-gold'); }
                 });
             }
+            document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
             switchLobbyBgm(URLS.BGM_LOBBY);
         }
         // 有對話歷史：顯示「繼續」提示；沒有：播放初始歡迎動畫
@@ -1524,13 +1521,10 @@
 
             const nav404 = document.getElementById('aurelia-bottom-nav');
             if (nav404) {
-                nav404.style.background = '#000000'; nav404.style.borderTop = '1px solid #00cc33'; nav404.style.boxShadow = '0 -3px 15px rgba(0,204,51,0.25)';
-                nav404.querySelectorAll('.nav-button').forEach(btn => {
-                    const isHome = btn.dataset.navId === 'nav-home';
-                    btn.classList.remove('active-gold');
-                    btn.style.color = isHome ? '#00ff41' : '#1a4d1a'; btn.style.background = isHome ? 'rgba(0,255,65,0.1)' : 'transparent'; btn.style.borderRadius = '8px';
-                });
+                nav404.classList.add('mode-404');
+                nav404.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active-gold'));
             }
+            document.getElementById('aurelia-phone-screen')?.classList.add('mode-404');
 
             playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個天然呆店長消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個假笑的寫作機器。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
             _updatePortalBtn();
@@ -1580,14 +1574,14 @@
 
             const navRestore = document.getElementById('aurelia-bottom-nav');
             if (navRestore) {
-                navRestore.style.background = '#452216'; navRestore.style.borderTop = '1px solid rgba(251,223,162,0.3)'; navRestore.style.boxShadow = '0 -5px 15px rgba(0,0,0,0.5)';
+                navRestore.classList.remove('mode-404');
                 navRestore.querySelectorAll('.nav-button').forEach(btn => {
                     const isHome = btn.dataset.navId === 'nav-home';
-                    btn.style.color = ''; btn.style.background = '';
                     if (isHome) { btn.classList.add('active-gold'); }
                     else { btn.classList.remove('active-gold'); }
                 });
             }
+            document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
 
             playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Audio|https://files.catbox.moe/8rvbfq.mp3]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
             _updatePortalBtn();
