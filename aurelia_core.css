@@ -8,8 +8,9 @@
 
 html, body {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    width: 100%; height: 100%;
+    top: 0; left: 0; right: 0; 
+    /* 移除 bottom:0，改用 100dvh 強行突破蘋果安全區限制 */
+    width: 100%; height: 100dvh;
     overflow: hidden;
     background: #1a0d0a; /* 替換為深色避免白光閃爍 */
     font-family: 'Noto Sans TC', 'PingFang TC', sans-serif;
@@ -20,14 +21,15 @@ html, body {
 
 #aurelia-standalone-root {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    width: 100%; height: 100%;
+    top: 0; left: 0; right: 0; 
+    /* 移除 bottom:0，繼承 100dvh */
+    width: 100%; height: 100dvh;
     overflow: hidden;
 }
 
 #aurelia-embedded-root {
-    height: 100% !important;
-    min-height: 100% !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
     margin-bottom: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -38,7 +40,7 @@ html, body {
     top: 0 !important;
     left: 0 !important;
     width: 100% !important;
-    height: 100% !important;
+    height: 100dvh !important;
     transform: none !important;
     border-radius: 0 !important;
     border: none !important;
@@ -47,11 +49,11 @@ html, body {
     max-height: none !important;
 }
 
-#aurelia-phone-screen { padding-bottom: 0 !important; }
+#aurelia-phone-screen { padding-bottom: 0 !important; height: 100%; }
 
 @media (max-width: 768px) {
     #phone-frame-hardware {
-        height: 100% !important;
+        height: 100dvh !important;
         top: 0 !important;
         transform: none !important;
         border-bottom-left-radius: 0 !important;
@@ -617,6 +619,7 @@ body.layout-pad-ios .void-login-overlay { padding-top: 40px !important; }
     border-top: 1px solid rgba(251,223,162,0.3) !important;
     box-shadow: 0 -5px 15px rgba(0,0,0,0.5) !important;
     z-index: 9999 !important;
+    padding-bottom: 0 !important; /* 絕對不使用墊高，強行貼齊底部物理像素 */
 }
 #aurelia-bottom-nav .nav-button {
     color: #B78456 !important;
@@ -665,11 +668,11 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
    新增面板：在末尾追加對應的 .xxx-* 區塊即可
    =========================================================
    模組對照：
-   ps-*   → os_persona.js   (人設 TAB)
-   pm-*   → os_prompts.js   (提示詞管理)
-   wb-*   → os_worldbook.js (世界書)
-   set-*  → os_settings.js  (系統設置 API)
-   avs-*  → os_avs.js       (變數工坊)
+   ps-* → os_persona.js   (人設 TAB)
+   pm-* → os_prompts.js   (提示詞管理)
+   wb-* → os_worldbook.js (世界書)
+   set-* → os_settings.js  (系統設置 API)
+   avs-* → os_avs.js       (變數工坊)
    ========================================================= */
 
 /* ──────────────────────────────────────────────────────────
