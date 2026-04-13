@@ -13,115 +13,7 @@
     <title>奧瑞亞 | Aurelia</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
-
-    <style>
-        /* ── 基礎重置 (暴力全螢幕，無視底部安全區) ── */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        
-        html, body {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            width: 100%; height: 100%;
-            overflow: hidden;
-            background: #ffffff; /* 換回乾淨白底，解決黑條問題 */
-            font-family: 'Noto Sans TC', 'PingFang TC', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-            -webkit-text-size-adjust: 100%;
-            overscroll-behavior: none; 
-        }
-
-        /* ── 全螢幕根容器 ── */
-        #aurelia-standalone-root {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0; /* 強制貼底 0，殺掉 safe-area */
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        /* 🔥 真・解決底部醜條：不長胖、不留白、不變黑，直接維持原樣貼底 */
-        #aurelia-bottom-nav {
-            padding-bottom: 0 !important;
-            height: 56px !important;
-            /* 為了稍微避開 iOS 橫條，我們只加一點點 padding，絕不加好加滿變胖白條 */
-            padding-bottom: 12px !important; 
-            height: 68px !important; 
-        }
-
-        /* ── 讓 embeddedRoot 填滿整個容器 ── */
-        #aurelia-embedded-root {
-            height: 100% !important;
-            min-height: 100% !important;
-            margin-bottom: 0 !important;
-            border-radius: 0 !important;
-            box-shadow: none !important;
-        }
-
-        /* ── 獨立模式：手機框架填滿容器 ── */
-        #phone-frame-hardware {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            transform: none !important;
-            border-radius: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            margin: 0 !important;
-            max-height: none !important;
-        }
-        
-        /* 確保手機內部不會被往上推 */
-        #aurelia-phone-screen {
-            padding-bottom: 0 !important;
-        }
-
-        @media (max-width: 768px) {
-            #phone-frame-hardware {
-                height: 100% !important;
-                top: 0 !important;
-                transform: none !important;
-                border-bottom-left-radius: 0 !important;
-                border-bottom-right-radius: 0 !important;
-            }
-        }
-
-        /* ── 獨立模式隱藏「登出」按鈕 ── */
-        [data-nav-id="nav-close"] { display: none !important; }
-
-        /* ── 啟動載入畫面 ── */
-        #aurelia-boot {
-            position: fixed; inset: 0;
-            background: #ffffff; /* 啟動畫面也改白底，避免閃黑 */
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            gap: 16px; z-index: 99999;
-            transition: opacity 0.6s;
-            padding-bottom: 0; 
-        }
-        #aurelia-boot.hidden { opacity: 0; pointer-events: none; }
-        #aurelia-boot-logo {
-            width: 64px; height: 64px;
-            border-radius: 50%;
-            border: 2px solid rgba(212,175,55,.4);
-            box-shadow: 0 0 24px rgba(212,175,55,.2);
-        }
-        #aurelia-boot-bar-wrap {
-            width: 160px; height: 2px;
-            background: rgba(0,0,0,.08);
-            border-radius: 2px; overflow: hidden;
-        }
-        #aurelia-boot-bar {
-            height: 100%; width: 0%;
-            background: #d4af37; border-radius: 2px;
-            transition: width .3s linear;
-        }
-        #aurelia-boot-label {
-            font-size: 10px; letter-spacing: 3px;
-            color: rgba(212,175,55,.8); text-transform: uppercase;
-        }
-    </style>
+    <link rel="stylesheet" href="aurelia_core.css" />
 </head>
 <body>
 
@@ -162,6 +54,7 @@
     <script src="os_phone/os/os_tarot.js"></script>
     <script src="os_phone/os/os_backup.js"></script>
     <script src="os_phone/os/os_worldbook.js"></script>
+    <script src="os_phone/os/os_avs.js"></script>
 
     <script src="os_phone/vn_story/vn_styles.js"></script>
     <script src="os_phone/vn_story/vn_core.js"></script>
@@ -269,6 +162,7 @@
             if (window.OS_TAROT)     PS.install('賽博塔羅',  '🔮', '#9b59b6', window.OS_TAROT.launch);
             if (window.VN_STORY)     PS.install('故事模式',  '📖', '#ff69b4', window.VN_STORY.launch);
             if (window.OS_WORLDBOOK) PS.install('世界書',    '📗', '#1a3a5c', c => window.OS_WORLDBOOK.launch(c));
+            if (window.OS_AVS)       PS.install('變數工坊',  '🎲', '#e67e22', c => window.OS_AVS.launch(c));
             if (window.OS_SETTINGS)  PS.install('設置',      '⚙️', '#4c4c4c', window.OS_SETTINGS.launchApp);
         }
 
