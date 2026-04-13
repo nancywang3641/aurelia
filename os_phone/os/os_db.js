@@ -1,20 +1,20 @@
 // ----------------------------------------------------------------
-// [檔案] os_db.js (V9.1 - DB Version Bump)
+// [檔案] os_db.js (V16.0 - Restored & AVS Variable System Added)
 // 路徑：os_phone/os/os_db.js
 // 職責：管理 IndexedDB 資料庫。
 // 修正：
-// 1. [升級] 版本號強制跳至 11，確保能正確觸發升級事件，建立 lobby_history 倉庫！
-// 2. [新增] 'pet_logs' 倉庫，用於儲存寵物互動的隨機事件與歷史。
-// 3. [功能] 新增 savePetLog 與 getRelatedPetLogs 接口。
-// 4. [修正] 支援依據 chatId 動態存取刑偵調查資料 (Investigation Data)
+// 1. [還原] 完整保留所有 V9.1 的舊邏輯（包含 WB 微博、寵物、偵探、寶寶等所有 API）。
+// 2. [升級] 版本號強制跳至 16，確保能正確觸發升級事件來建立新倉庫！
+// 3. [新增] 'var_packs' 倉庫，用於儲存玩家自建的變數包表單 (AVS系統)。
+// 4. [新增] 'ui_templates' 倉庫，用於儲存煉丹爐 AI 生成的 HTML/CSS 美化模板。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入系統資料庫 (System Storage V9.1 Memory)...');
+    console.log('[PhoneOS] 載入系統資料庫 (System Storage V16.0 Memory)...');
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    // 🔥 關鍵修正：將版本號升級為 12，強制瀏覽器觸發 onupgradeneeded 來建立新倉庫
-    const DB_VERSION = 15;
+    // 🔥 關鍵修正：將版本號升級為 16，強制瀏覽器觸發 onupgradeneeded 來建立新倉庫
+    const DB_VERSION = 16;
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -28,6 +28,10 @@
     const STORE_NAME_CHILD_CHAT = 'child_chat_history'; // 寶寶一對一聊天記錄
     const STORE_NAME_WORLDBOOK  = 'world_book_entries'; // 獨立世界書條目
     const STORE_NAME_VN_CHAPTERS = 'vn_chapters';       // VN 劇情章節存檔
+    
+    // --- 新增 AVS 與 UI 模板倉庫 ---
+    const STORE_NAME_VAR_PACKS = 'var_packs';           // 動態變數表單配置
+    const STORE_NAME_UI_TEMPLATES = 'ui_templates';     // AI 生成的 UI 美化模板
 
     let dbInstance = null;
 
@@ -47,7 +51,7 @@
                     const stores = [
                         STORE_NAME_IMAGES,
                         STORE_NAME_CHATS,
-                        STORE_NAME_WB,
+                        STORE_NAME_WB,          // 微博資料庫 (完整保留)
                         STORE_NAME_INV,
                         STORE_NAME_MAP,
                         STORE_NAME_PETS,
@@ -55,8 +59,10 @@
                         STORE_NAME_LOBBY,       // 大廳對話歷史
                         STORE_NAME_ACH,         // 成就系統
                         STORE_NAME_CHILD_CHAT,  // 寶寶聊天記錄
-                        STORE_NAME_WORLDBOOK,    // 獨立世界書條目
-                        STORE_NAME_VN_CHAPTERS   // VN 劇情章節存檔
+                        STORE_NAME_WORLDBOOK,   // 獨立世界書條目
+                        STORE_NAME_VN_CHAPTERS, // VN 劇情章節存檔
+                        STORE_NAME_VAR_PACKS,   // [新增] AVS變數包
+                        STORE_NAME_UI_TEMPLATES // [新增] UI模板
                     ];
 
                     stores.forEach(name => {
@@ -240,6 +246,8 @@
         getApiChat: async function(id) { const db=await this.init(); return new Promise((r,j)=>{const tx=db.transaction(STORE_NAME_CHATS,'readonly');const req=tx.objectStore(STORE_NAME_CHATS).get(id);req.onsuccess=()=>r(req.result?req.result.data:null);req.onerror=e=>j(e)})},
         getAllApiChats: async function() { const db=await this.init(); return new Promise((r,j)=>{const tx=db.transaction(STORE_NAME_CHATS,'readonly');const req=tx.objectStore(STORE_NAME_CHATS).getAll();req.onsuccess=()=>{const c={};if(req.result)req.result.forEach(i=>{c[i.chatId]=i.data});r(c)};req.onerror=e=>j(e)})},
         deleteApiChat: async function(id) { const db=await this.init(); return new Promise((r,j)=>{const tx=db.transaction(STORE_NAME_CHATS,'readwrite');tx.objectStore(STORE_NAME_CHATS).delete(id);tx.oncomplete=()=>r(true);tx.onerror=e=>j(e)})},
+        
+        // 🔥 這裡就是 WB (微博) 完整保留的程式碼！
         saveWbPost: async function(p) { const db=await this.init(); return new Promise((r,j)=>{const tx=db.transaction(STORE_NAME_WB,'readwrite');if(!p.timestamp)p.timestamp=Date.now();tx.objectStore(STORE_NAME_WB).put(p);tx.oncomplete=()=>r(p.id);tx.onerror=e=>j(e)})},
         getAllWbPosts: async function() { const db=await this.init(); return new Promise((r,j)=>{const tx=db.transaction(STORE_NAME_WB,'readonly');const req=tx.objectStore(STORE_NAME_WB).getAll();req.onsuccess=()=>{let p=req.result||[];p.sort((a,b)=>b.timestamp-a.timestamp);r(p)};req.onerror=e=>j(e)})},
         deleteWbPost: async function(id) { const db=await this.init(); return new Promise((r,j)=>{const tx=db.transaction(STORE_NAME_WB,'readwrite');tx.objectStore(STORE_NAME_WB).delete(id);tx.oncomplete=()=>r(true);tx.onerror=e=>j(e)})},
@@ -493,6 +501,80 @@
                             .forEach(ch => store.delete(ch.id));
                         tx.oncomplete = () => r(true);
                     };
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        }
+    });
+
+    // =========================================================
+    // 🔥 以下為本次新增：變數工坊 (AVS) 相關接口
+    // =========================================================
+    Object.assign(win.OS_DB, {
+        saveVarPack: async function(pack) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readwrite');
+                    tx.objectStore(STORE_NAME_VAR_PACKS).put(pack);
+                    tx.oncomplete = () => r(pack.id);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllVarPacks: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readonly');
+                    const req = tx.objectStore(STORE_NAME_VAR_PACKS).getAll();
+                    req.onsuccess = () => r(req.result || []);
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteVarPack: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readwrite');
+                    tx.objectStore(STORE_NAME_VAR_PACKS).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        // UI Templates
+        saveUITemplate: async function(templateData) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!templateData.createdAt) templateData.createdAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_UI_TEMPLATES, 'readwrite');
+                    tx.objectStore(STORE_NAME_UI_TEMPLATES).put(templateData);
+                    tx.oncomplete = () => r(templateData.id);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllUITemplates: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_UI_TEMPLATES, 'readonly');
+                    const req = tx.objectStore(STORE_NAME_UI_TEMPLATES).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteUITemplate: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_UI_TEMPLATES, 'readwrite');
+                    tx.objectStore(STORE_NAME_UI_TEMPLATES).delete(id);
+                    tx.oncomplete = () => r(true);
                     tx.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });

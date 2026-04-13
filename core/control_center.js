@@ -1,6 +1,6 @@
 ﻿/**
  * ========================
- * Aurelia Control Center (v4.8.1 - UI Text Fix)
+ * Aurelia Control Center (v4.8.1 - UI Text Fix & AVS Integration)
  * 控制中心 - 外殼與路由核心
  * ========================
  */
@@ -394,6 +394,7 @@
             div.style.cssText = 'width: 100%; height: 100%; overflow: auto; background: #1e1e1e;';
             container.appendChild(div);
 
+            // 🔥 這裡註冊了新的 AVS 變數工坊
             const map = {
                 '設置': window.OS_SETTINGS,
                 '世界書': window.OS_WORLDBOOK || window.OS_LOREBOOK,
@@ -405,17 +406,20 @@
                 'RPG 狀態': window.RPG_PANEL,
                 '刑案調查': window.INV_CORE,
                 '視差引擎': window.OS_QUEST_BOARD,
+                'avs': window.OS_AVS,
+                '變數工坊': window.OS_AVS
             };
 
             const originalLaunchApp = map[appName]?.launchApp || map[appName]?.launch;
             if (originalLaunchApp) {
                 originalLaunchApp(div);
                 setTimeout(() => {
-                    const selectors = ['#nav-home', '#pm-nav-home', '.set-back-btn', '.lb-back-btn', '.qb-back-btn', '.mon-back-btn', '.pm-back-btn', '.rpg-back-btn', '.am-btn-icon', '[onclick*=\"goHome\"]'];
+                    // 🔥 這裡加入了 #avs-nav-home 來攔截返回按鈕
+                    const selectors = ['#nav-home', '#pm-nav-home', '.set-back-btn', '.lb-back-btn', '.qb-back-btn', '.mon-back-btn', '.pm-back-btn', '.rpg-back-btn', '.am-btn-icon', '#avs-nav-home', '[onclick*=\"goHome\"]'];
                     selectors.forEach(selector => {
                         div.querySelectorAll(selector).forEach(btn => {
                             const onclickAttr = btn.getAttribute('onclick');
-                            const shouldHijack = selector === '[onclick*=\"goHome\"]' || selector === '#nav-home' || selector.includes('back-btn') || (onclickAttr && onclickAttr.includes('goHome'));
+                            const shouldHijack = selector === '[onclick*=\"goHome\"]' || selector === '#nav-home' || selector.includes('back-btn') || selector === '#avs-nav-home' || (onclickAttr && onclickAttr.includes('goHome'));
                             if (shouldHijack) {
                                 btn.removeAttribute('onclick');
                                 btn.onclick = (e) => { 
@@ -436,6 +440,6 @@
     };
 
     setTimeout(() => { if (!phoneModal) phoneModal = createPhoneModal(); }, 0);
-    console.log('✅ 控制中心模組 (v4.8.1 - 修正標籤名稱) 已加載');
+    console.log('✅ 控制中心模組 (v4.8.1 - 修正標籤名稱與 AVS 支援) 已加載');
 
 })(window.AureliaControlCenter = window.AureliaControlCenter || {});

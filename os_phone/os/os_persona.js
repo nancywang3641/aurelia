@@ -1,11 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] os_persona.js (V5.7 - 終極穩定版：V5.0 核心通訊 + 新版 UI)
+// [檔案] os_persona.js (V5.8 - 終極穩定版：V5.0 核心通訊 + 拿鐵咖啡 UI)
 // 路徑：os_phone/os/os_persona.js
 // 職責：統一的人設切換與管理 (OS 層級)
-// 說明：完美還原 V5.0 的 REQUEST_SWITCH_USER_PERSONA 通訊協議，確保 ST 模式切換絕對有效。
+// 說明：完美還原 V5.0 的 REQUEST_SWITCH_USER_PERSONA 通訊協議，確保 ST 模式切換絕對有效，並整合拿鐵主題。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入人設管理器 V5.7 (V5.0 核心還原版)...');
+    console.log('[PhoneOS] 載入人設管理器 V5.8 (拿鐵咖啡色票版)...');
     const win = window.parent || window;
     const doc = win.document;
 
@@ -46,58 +46,62 @@
         win._os_persona_listening = true;
     }
 
-    // ── 新版明亮 UI 樣式 ──
+    // ── 新版拿鐵咖啡 UI 樣式 ──
     function injectStyles() {
         const sid = 'os-persona-styles';
         if (doc.getElementById(sid)) return;
         const s = doc.createElement('style');
         s.id = sid;
         s.textContent = `
-        .ps-app { display:flex; flex-direction:column; height:100%; width:100%; background:#f8f9fa; color:#333; font-family:sans-serif; overflow:hidden; }
-        .ps-header { display:flex; align-items:center; justify-content:center; height:50px; background:#fff; border-bottom:1px solid #e2e8f0; flex-shrink:0; box-shadow:0 1px 2px rgba(0,0,0,0.02); }
-        .ps-title { font-size:16px; font-weight:700; color:#1a202c; letter-spacing:0.5px; }
+        .ps-app { display:flex; flex-direction:column; height:100%; width:100%; background:#452216; color:#FFF8E7; font-family:'Noto Sans TC',sans-serif; overflow:hidden; position:relative; }
+        .ps-app::before { content:''; position:absolute; inset:0; pointer-events:none; z-index:0; background-image:linear-gradient(rgba(251,223,162,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(251,223,162,0.05) 1px, transparent 1px); background-size: 30px 30px; opacity: 0.8; }
         
-        .ps-body { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+        .ps-header { display:flex; align-items:center; justify-content:center; height:56px; background:rgba(69,34,22,0.85); border-bottom:1px solid rgba(251,223,162,0.2); flex-shrink:0; box-shadow:0 2px 10px rgba(0,0,0,0.3); position:relative; z-index:2; }
+        .ps-title { font-size:15px; font-weight:800; color:#FBDFA2; letter-spacing:1px; text-transform:uppercase; }
         
-        .ps-card { display:flex; align-items:center; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; gap:14px; transition:.2s; position:relative; box-shadow:0 2px 4px rgba(0,0,0,0.02); cursor:pointer; }
-        .ps-card:hover { border-color:#cbd5e0; transform:translateY(-1px); }
-        .ps-card.active { border-color:#2b6cb0; background:#ebf8ff; box-shadow:0 4px 10px rgba(43,108,176,0.1); }
+        .ps-body { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; position:relative; z-index:2; }
+        .ps-body::-webkit-scrollbar { width:4px; }
+        .ps-body::-webkit-scrollbar-thumb { background:rgba(251,223,162,0.4); border-radius:4px; }
         
-        .ps-avatar { width:52px; height:52px; border-radius:50%; background:#edf2f7; object-fit:cover; flex-shrink:0; border:2px solid #fff; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition:0.2s; }
-        .ps-card.active .ps-avatar { border-color:#2b6cb0; }
+        .ps-card { display:flex; align-items:center; background:rgba(120,55,25,0.9); border:1px solid rgba(251,223,162,0.2); border-left:3px solid #B78456; border-radius:8px; padding:14px; gap:14px; transition:all 0.2s ease; position:relative; box-shadow:0 4px 15px rgba(0,0,0,0.3); cursor:pointer; }
+        .ps-card:hover { background:rgba(183,132,86,1); border-color:#FBDFA2; border-left-color:#FBDFA2; transform:translateX(4px); box-shadow:0 6px 20px rgba(251,223,162,0.15); }
+        .ps-card.active { background:rgba(183,132,86,1); border-color:#FBDFA2; border-left-color:#FBDFA2; box-shadow:0 4px 15px rgba(251,223,162,0.25); }
+        
+        .ps-avatar { width:52px; height:52px; border-radius:50%; background:rgba(69,34,22,0.8); object-fit:cover; flex-shrink:0; border:2px solid rgba(251,223,162,0.5); box-shadow:0 2px 8px rgba(0,0,0,0.4); transition:0.2s; }
+        .ps-card.active .ps-avatar { border-color:#FBDFA2; box-shadow:0 0 10px rgba(251,223,162,0.5); }
         
         .ps-info { flex:1; min-width:0; padding-right:10px; }
-        .ps-name { font-size:15px; font-weight:700; color:#2d3748; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; }
-        .ps-desc { font-size:12px; color:#718096; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .ps-name { font-size:15px; font-weight:800; color:#FFF8E7; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; }
+        .ps-desc { font-size:11px; color:#B78456; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
         
         .ps-actions { display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
-        .ps-btn-edit, .ps-btn-del { background:none; border:none; font-size:14px; cursor:pointer; padding:8px; border-radius:8px; transition:.2s; display:flex; align-items:center; justify-content:center; }
-        .ps-btn-edit { color:#718096; background:#f7fafc; border:1px solid #e2e8f0; }
-        .ps-btn-edit:hover { color:#2b6cb0; background:#ebf8ff; border-color:#bee3f8; }
-        .ps-btn-del { color:#e53e3e; background:#fff5f5; border:1px solid #fed7d7; }
-        .ps-btn-del:hover { color:#c53030; background:#fed7d7; }
+        .ps-btn-edit, .ps-btn-del { background:none; border:none; font-size:13px; cursor:pointer; padding:8px; border-radius:6px; transition:.2s; display:flex; align-items:center; justify-content:center; }
+        .ps-btn-edit { color:#FBDFA2; background:rgba(251,223,162,0.1); border:1px solid rgba(251,223,162,0.3); }
+        .ps-btn-edit:hover { background:rgba(251,223,162,0.2); border-color:#FBDFA2; box-shadow:0 0 8px rgba(251,223,162,0.3); }
+        .ps-btn-del { color:#fc8181; background:rgba(252,129,129,0.1); border:1px solid rgba(252,129,129,0.3); }
+        .ps-btn-del:hover { background:rgba(252,129,129,0.2); border-color:#fc8181; box-shadow:0 0 8px rgba(252,129,129,0.3); }
 
-        .ps-add-btn { width:100%; padding:14px; background:#fff; border:2px dashed #cbd5e0; border-radius:12px; color:#4a5568; font-size:14px; font-weight:600; cursor:pointer; transition:.2s; display:flex; align-items:center; justify-content:center; gap:8px; margin-top:8px; }
-        .ps-add-btn:hover { background:#f8f9fa; border-color:#a0aec0; color:#2d3748; }
+        .ps-add-btn { width:100%; padding:14px; background:linear-gradient(135deg, #FBDFA2, #B78456); border:none; border-radius:8px; color:#452216; font-size:13px; font-weight:900; cursor:pointer; transition:.2s; display:flex; align-items:center; justify-content:center; gap:8px; margin-top:8px; letter-spacing:1px; box-shadow:0 4px 15px rgba(251,223,162,0.2); }
+        .ps-add-btn:hover { filter:brightness(1.1); transform:translateY(-2px); box-shadow:0 6px 20px rgba(251,223,162,0.4); }
 
-        .ps-modal-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.4); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; opacity:0; pointer-events:none; transition:opacity 0.2s; backdrop-filter:blur(2px); }
+        .ps-modal-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.6); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; opacity:0; pointer-events:none; transition:opacity 0.2s; backdrop-filter:blur(4px); }
         .ps-modal-overlay.show { opacity:1; pointer-events:auto; }
-        .ps-modal { width:100%; max-width:340px; background:#fff; border-radius:16px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.15); transform:translateY(15px); transition:transform 0.2s; }
+        .ps-modal { width:100%; max-width:340px; background:rgba(120,55,25,0.95); border:1px solid #FBDFA2; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 15px 50px rgba(0,0,0,0.6); transform:translateY(15px); transition:transform 0.2s; }
         .ps-modal-overlay.show .ps-modal { transform:translateY(0); }
         
-        .ps-modal-header { padding:16px; background:#fff; border-bottom:1px solid #e2e8f0; font-size:16px; font-weight:700; color:#1a202c; text-align:center; }
+        .ps-modal-header { padding:16px; background:rgba(69,34,22,0.9); border-bottom:1px solid rgba(251,223,162,0.3); font-size:15px; font-weight:800; color:#FBDFA2; text-align:center; letter-spacing:1px; }
         .ps-modal-body { padding:20px 16px; display:flex; flex-direction:column; gap:14px; }
-        .ps-field label { display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:6px; }
-        .ps-field input, .ps-field textarea { width:100%; background:#f8f9fa; border:1px solid #e2e8f0; border-radius:8px; color:#2d3748; font-size:14px; padding:12px; box-sizing:border-box; outline:none; transition:border-color 0.2s, box-shadow 0.2s; font-family:inherit; }
-        .ps-field input:focus, .ps-field textarea:focus { border-color:#2b6cb0; background:#fff; box-shadow:0 0 0 3px rgba(43,108,176,0.1); }
+        .ps-field label { display:block; font-size:11px; font-weight:800; color:#B78456; margin-bottom:6px; letter-spacing:0.5px; }
+        .ps-field input, .ps-field textarea { width:100%; background:rgba(69,34,22,0.8); border:1px solid rgba(251,223,162,0.4); border-radius:6px; color:#FFF8E7; font-size:13px; padding:12px; box-sizing:border-box; outline:none; transition:border-color 0.2s, box-shadow 0.2s; font-family:inherit; }
+        .ps-field input:focus, .ps-field textarea:focus { border-color:#FBDFA2; box-shadow:0 0 0 3px rgba(251,223,162,0.2); background:rgba(120,55,25,0.9); }
         .ps-field textarea { resize:vertical; min-height:90px; line-height:1.5; }
         
-        .ps-modal-footer { display:flex; border-top:1px solid #e2e8f0; background:#f8f9fa; }
-        .ps-modal-btn { flex:1; padding:14px; background:none; border:none; font-size:14px; font-weight:600; cursor:pointer; transition:0.2s; }
-        .ps-modal-cancel { color:#718096; border-right:1px solid #e2e8f0; }
-        .ps-modal-cancel:hover { background:#edf2f7; color:#4a5568; }
-        .ps-modal-save { color:#2b6cb0; }
-        .ps-modal-save:hover { background:#ebf8ff; }
+        .ps-modal-footer { display:flex; border-top:1px solid rgba(251,223,162,0.3); background:rgba(69,34,22,0.6); }
+        .ps-modal-btn { flex:1; padding:14px; background:none; border:none; font-size:13px; font-weight:800; cursor:pointer; transition:0.2s; letter-spacing:1px; }
+        .ps-modal-cancel { color:#B78456; border-right:1px solid rgba(251,223,162,0.2); }
+        .ps-modal-cancel:hover { background:rgba(251,223,162,0.1); color:#FBDFA2; }
+        .ps-modal-save { color:#FBDFA2; }
+        .ps-modal-save:hover { background:rgba(251,223,162,0.15); text-shadow:0 0 8px rgba(251,223,162,0.5); }
         `;
         doc.head.appendChild(s);
     }
@@ -161,10 +165,10 @@
         container.innerHTML = `
             <div class="ps-app" id="ps-app-root">
                 <div class="ps-header">
-                    <div class="ps-title">👤 關於我</div>
+                    <div class="ps-title"><i class="fa-solid fa-address-card"></i> PERSONA / 關於我</div>
                 </div>
                 <div class="ps-body" id="ps-list-container">
-                    <div style="text-align:center; padding:40px; color:#a0aec0;">載入中...</div>
+                    <div style="text-align:center; padding:40px; color:#B78456;">載入中...</div>
                 </div>
                 
                 <div class="ps-modal-overlay" id="ps-modal">
@@ -230,23 +234,23 @@
         }
 
         if (listToRender.length === 0) {
-            listContainer.innerHTML = `<div style="text-align:center; padding:40px; color:#a0aec0;">無法讀取酒館人設列表。</div>`;
+            listContainer.innerHTML = `<div style="text-align:center; padding:40px; color:#B78456;">無法讀取酒館人設列表。</div>`;
             return;
         }
 
         listContainer.innerHTML = `
-            <div style="margin-bottom: 12px; font-size: 12px; color: #718096; text-align: center; background: #edf2f7; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <i class="fa-solid fa-link" style="color:#2b6cb0;"></i> <b>已與 ST 酒館人設同步</b><br>
+            <div style="margin-bottom: 12px; font-size: 11px; color: #B78456; text-align: center; background: rgba(69,34,22,0.8); padding: 10px; border-radius: 8px; border: 1px solid rgba(251,223,162,0.2);">
+                <i class="fa-solid fa-link" style="color:#FBDFA2;"></i> <b>已與 ST 酒館人設同步</b><br>
                 <span style="font-size:10px; opacity:0.8;">(若需新增或編輯，請使用右側原生面板)</span>
             </div>
         ` + listToRender.map(p => `
             <div class="ps-card ${p.active ? 'active' : ''}" data-id="${p.id}" data-name="${p.name}">
                 ${p.avatar ? `<img class="ps-avatar" src="${p.avatar}" onerror="this.src='https://files.catbox.moe/l5hl69.png'" />` : 
-                `<div class="ps-avatar" style="display:flex;align-items:center;justify-content:center;font-size:24px;color:#a0aec0;background:#edf2f7;"><i class="fa-solid fa-user"></i></div>`}
+                `<div class="ps-avatar" style="display:flex;align-items:center;justify-content:center;font-size:24px;color:#FBDFA2;"><i class="fa-solid fa-user"></i></div>`}
                 <div class="ps-info">
                     <div class="ps-name">
                         ${esc(p.name)} 
-                        ${p.active ? '<i class="fa-solid fa-circle-check" style="color:#2b6cb0; margin-left:6px; font-size:14px;" title="當前使用中"></i>' : ''}
+                        ${p.active ? '<i class="fa-solid fa-circle-check" style="color:#FBDFA2; margin-left:6px; font-size:14px; text-shadow:0 0 5px rgba(251,223,162,0.5);" title="當前使用中"></i>' : ''}
                     </div>
                     <div class="ps-desc">${esc(p.desc) || '<i style="opacity:0.6">ST 原生設定檔</i>'}</div>
                 </div>
@@ -268,7 +272,7 @@
                 el.classList.add('active');
                 const nameEl = el.querySelector('.ps-name');
                 if (nameEl && !nameEl.querySelector('.fa-circle-check')) {
-                    nameEl.innerHTML += ' <i class="fa-solid fa-circle-check" style="color:#2b6cb0; margin-left:6px; font-size:14px;" title="當前使用中"></i>';
+                    nameEl.innerHTML += ' <i class="fa-solid fa-circle-check" style="color:#FBDFA2; margin-left:6px; font-size:14px; text-shadow:0 0 5px rgba(251,223,162,0.5);" title="當前使用中"></i>';
                 }
             });
         });
@@ -292,7 +296,7 @@
                 <div class="ps-info">
                     <div class="ps-name">
                         ${esc(p.name)} 
-                        ${p.id === curId ? '<i class="fa-solid fa-circle-check" style="color:#2b6cb0; margin-left:6px; font-size:14px;" title="當前使用中"></i>' : ''}
+                        ${p.id === curId ? '<i class="fa-solid fa-circle-check" style="color:#FBDFA2; margin-left:6px; font-size:14px; text-shadow:0 0 5px rgba(251,223,162,0.5);" title="當前使用中"></i>' : ''}
                     </div>
                     <div class="ps-desc">${esc(p.desc) || '<i style="opacity:0.6">點擊編輯新增設定...</i>'}</div>
                 </div>

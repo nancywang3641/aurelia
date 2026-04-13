@@ -1,10 +1,10 @@
 // ----------------------------------------------------------------
-// [檔案] os_api_engine.js (V3.14 - Precision Keyword Scanner)
+// [檔案] os_api_engine.js (V3.15 - Precision Scanner & AVS Ready)
 // 路徑：os_phone/os/os_api_engine.js
-// 職責：組裝 Prompt 並負責與 AI 通訊。支援精準關鍵字掃描。
+// 職責：組裝 Prompt 並負責與 AI 通訊。支援精準關鍵字掃描與動態變數(AVS)攔截。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入 API 引擎 (V3.14 - Precision Scanner)...');
+    console.log('[PhoneOS] 載入 API 引擎 (V3.15 - AVS Ready)...');
     const win = window.parent || window;
 
     // --- 1. 核心清洗函數 ---
@@ -13,10 +13,13 @@
         let cleaned = text;
 
         const thinkBlocks = [];
-        cleaned.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, (_, inner) => {
+        // 🔥 修正：正確執行 replace 賦值，真正剝除 <think>
+        cleaned = cleaned.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, (_, inner) => {
             const trimmed = inner.trim();
             if (trimmed) thinkBlocks.push(trimmed);
+            return ''; // 從最終顯示文本中剔除
         });
+        
         if (thinkBlocks.length > 0 && win.OS_THINK) {
             win.OS_THINK.push(thinkBlocks.join('\n\n──────\n\n'), text);
         }
@@ -27,9 +30,30 @@
                 const preamble = cleaned.substring(0, wxStart).trim();
                 if (preamble.length > 10 && win.OS_THINK) {
                     win.OS_THINK.push('[前置推理]\n' + preamble, text);
+                    cleaned = cleaned.substring(wxStart);
                 }
             }
         }
+
+        // 🔥 AVS 系統：攔截 <vars> 動態變數
+        cleaned = cleaned.replace(/<vars>([\s\S]*?)<\/vars>/gi, (_, inner) => {
+            try {
+                const varsData = JSON.parse(inner.trim());
+                // 合併到 localStorage 的當前狀態
+                let currentState = JSON.parse(localStorage.getItem('avs_current_state') || '{}');
+                Object.assign(currentState, varsData);
+                localStorage.setItem('avs_current_state', JSON.stringify(currentState));
+                console.log('[AVS] 動態變數已攔截並更新:', currentState);
+                
+                // 廣播事件，讓未來的「美化面板」能夠監聽並更新 UI
+                if (win.dispatchEvent) {
+                    win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: currentState }));
+                }
+            } catch(e) {
+                console.warn('[AVS] 變數 JSON 解析失敗:', e, inner);
+            }
+            return ''; // 成功或失敗都將其從純文字中剝除，不污染畫面
+        });
 
         cleaned = cleaned.replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, "$1");
         cleaned = cleaned.trim();
@@ -40,7 +64,8 @@
     function stripVnTags(text) {
         if (!text || typeof text !== 'string') return '';
         let s = text;
-        s = s.replace(/<session_settlement>[\s\S]*?<\/session_settlement>/gi, '');
+        // 🔥 AVS 擴充：將 status 與 vars 一併從歷史記錄中隱藏，不浪費 Token
+        s = s.replace(/<(session_settlement|status|vars)>[\s\S]*?<\/\1>/gi, '');
         s = s.replace(/<\/?(content|summary)>/gi, '');
         s = s.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '');
         s = s.replace(/\[Char\|([^|]+)\|[^|]*\|([^|\]]+)(?:\|[^\]]+)?\]/g,
@@ -601,6 +626,14 @@
                 } catch (e) { console.error("Chat history load error", e); }
             }
 
+            // 🔥 AVS 系統注入：讓 AI 知道目前的變數狀態
+            try {
+                const avsState = JSON.parse(localStorage.getItem('avs_current_state') || '{}');
+                if (Object.keys(avsState).length > 0) {
+                    apiMessages.push({ role: "system", content: `[SYSTEM: Current Dynamic Variables (AVS)]\n${JSON.stringify(avsState)}` });
+                }
+            } catch(e) {}
+
             if (userMessage) {
                 let finalUserMsg = userMessage;
                 if (promptKey.includes('wb_')) {
@@ -656,7 +689,6 @@
             sysPrompt = sysPrompt.replace(/{{char}}/g, charName).replace(/{{user}}/g, userName);
 
             // ── 2. 構建「精準掃描文本 (scanText)」供世界書觸發 ──
-            // 🔥 修復：嚴格限制只掃描「用戶輸入 + 純淨歷史正文 + 開場白」，絕不混入系統提示詞或思考鏈！
             let scanText = userMessage || '';
 
             // 附加近期歷史 或 正在輸入的開場白 UI 內容
@@ -666,9 +698,7 @@
                     if (chat?.messages?.length) {
                         scanText += " " + chat.messages.slice(-5).map(m => {
                             let text = m.raw || m.content || "";
-                            // 嚴格過濾：清除 <think> 標籤與內容
                             text = text.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
-                            // 嚴格萃取：只拿 <content> 內的正文
                             const match = text.match(/<content>([\s\S]*?)<\/content>/i);
                             if (match) text = match[1];
                             return text;
@@ -684,15 +714,12 @@
                     scanText += " " + storyChapters.slice(-3).map(ch => {
                         let req = ch.request || "";
                         let text = ch.content || "";
-                        // 嚴格過濾：清除 <think> 標籤與內容
                         text = text.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
-                        // 嚴格萃取：只拿 <content> 內的正文
                         const match = text.match(/<content>([\s\S]*?)<\/content>/i);
                         if (match) text = match[1];
                         return req + " " + text;
                     }).join(" ");
                     
-                    // 把正在 UI 上輸入的「開場白標題」與「劇情指引」抓進來掃描！
                     const doc = win.document;
                     if (doc) {
                         const genTitle = doc.getElementById('vn-gen-title')?.value || '';
@@ -713,6 +740,15 @@
             // ── 4. 組合 API 訊息 ──
             if (cotPrompt) apiMessages.push({ role: 'system', content: `### \n${cotPrompt}` });
             apiMessages.push({ role: 'system', content: `### Roleplay Instruction\n${sysPrompt}` });
+
+            // 🔥 AVS 動態變數狀態準備 (通用)
+            let avsPrompt = '';
+            try {
+                const avsState = JSON.parse(localStorage.getItem('avs_current_state') || '{}');
+                if (Object.keys(avsState).length > 0) {
+                    avsPrompt = `[SYSTEM: Current Dynamic Variables (AVS)]\n${JSON.stringify(avsState)}`;
+                }
+            } catch(e) {}
 
             if (promptKey === 'vn_story') {
                 const _promptOrder = (() => {
@@ -786,6 +822,9 @@
                     _vnMsgs.forEach(m => _vn.push(m));
                 }
 
+                // 🔥 注入 AVS 變數
+                if (avsPrompt) _vn.push({ role: 'system', content: avsPrompt });
+
                 if (userMessage) {
                     const _cotReminder = `\n\n[SYS]\n叮! 委託者發來新的消息，請查收後，提交COT草稿及正文本`;
                     _vn.push({ role: 'user', content: userMessage + _cotReminder });
@@ -800,6 +839,9 @@
             if (charPersona)  contextBlock += `[Character Persona (Private Chat)]:\n${charPersona}\n\n`;
             if (lore)         contextBlock += `[World Info]:\n${lore}\n\n`;
             if (contextBlock) apiMessages.push({ role: 'system', content: contextBlock });
+
+            // 🔥 注入 AVS 變數 (非 VN 模式)
+            if (avsPrompt) apiMessages.push({ role: 'system', content: avsPrompt });
 
             if (promptKey === 'wx_chat_system' && win.WX_DB?.getApiChat && win.wxApp?.GLOBAL_ACTIVE_ID) {
                 try {
@@ -847,5 +889,5 @@
     };
 
     win.WX_API = win.OS_API;
-    console.log('[PhoneOS] API 引擎 (V3.14 - Precision Keyword Scanner) 就緒');
+    console.log('[PhoneOS] API 引擎 (V3.15 - AVS Ready) 就緒');
 })();
