@@ -62,7 +62,8 @@
     function createBottomNav(parentDoc) {
         const nav = parentDoc.createElement('div');
         nav.id = CONFIG.BOTTOM_NAV_ID; 
-        nav.style.cssText = `height: 55px; background: #ffffff; border-top: 1px solid #e0e5ec; display: flex; justify-content: center; align-items: center; gap: 15px; box-shadow: 0 -5px 15px rgba(0,0,0,0.02); flex-shrink: 0; z-index: 200; position: relative;`;
+        // 🌟 修復底部黑邊：加上 padding-bottom: env(safe-area-inset-bottom) 與 box-sizing 以適配 iPhone 底部小白條安全區域
+        nav.style.cssText = `height: 55px; background: #ffffff; border-top: 1px solid #e0e5ec; display: flex; justify-content: center; align-items: center; gap: 15px; box-shadow: 0 -5px 15px rgba(0,0,0,0.02); flex-shrink: 0; z-index: 200; position: relative; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box;`;
 
         // 🔥 改名為「我」
         const items = [
@@ -241,16 +242,27 @@
         isEmbedded = true;
         
         const isMobile = isMobileDevice();
+        // 🌟 判斷當前是否處於獨立全螢幕模式 (index.html)
+        const isStandalone = containerEl && containerEl.id === 'aurelia-standalone-root';
 
         if (!embeddedRoot) {
             embeddedRoot = document.createElement('div');
             embeddedRoot.id = 'aurelia-embedded-root';
-            embeddedRoot.style.cssText = `
-                position: relative; width: 100%; height: ${isMobile ? '85vh' : '82vh'}; 
-                min-height: ${isMobile ? '400px' : '600px'}; flex-shrink: 0; 
-                z-index: 100; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-                border-radius: 8px; overflow: hidden; order: ${placement === 'top' ? '-1' : '9999'};
-            `;
+            
+            // 🌟 如果是獨立全螢幕模式，取消酒館內嵌用的 85vh 與外邊距，強制 100dvh
+            if (isStandalone) {
+                embeddedRoot.style.cssText = `
+                    position: relative; width: 100%; height: 100dvh; 
+                    flex-shrink: 0; z-index: 100; overflow: hidden;
+                `;
+            } else {
+                embeddedRoot.style.cssText = `
+                    position: relative; width: 100%; height: ${isMobile ? '85vh' : '82vh'}; 
+                    min-height: ${isMobile ? '400px' : '600px'}; flex-shrink: 0; 
+                    z-index: 100; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+                    border-radius: 8px; overflow: hidden; order: ${placement === 'top' ? '-1' : '9999'};
+                `;
+            }
         }
 
         phoneFrame.style.cssText = `
