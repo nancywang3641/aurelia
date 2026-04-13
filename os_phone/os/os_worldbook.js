@@ -1,9 +1,10 @@
 // ----------------------------------------------------------------
-// [檔案] os_worldbook.js (V1.6 - 防呆與強制字串修復版)
+// [檔案] os_worldbook.js (V1.6 - 防呆與強制字串修復版 + Latte Theme)
 // 路徑：os_phone/os/os_worldbook.js
 // 職責：奧瑞亞獨立世界書系統
 //   - 功能：支援關鍵字觸發、視覺化 Tag 編輯、自訂 Order 排序
 //   - 修復：適配 Bottom Nav 高度防遮擋、刪除按鈕移至列表外層、修復 keys.split 報錯
+//   - 樣式：全面套用 Vintage Latte 復古拿鐵主題
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -19,93 +20,97 @@
         const s = document.createElement('style');
         s.id = 'os-wb-styles';
         s.textContent = `
-        .wb-app { display:flex; flex-direction:column; height:100%; background:#0d0d14; color:#e8e0d5; font-size:13px; overflow:hidden; position:relative; }
-        .wb-header { display:grid; grid-template-columns:44px 1fr 64px; align-items:center; height:44px; background:#13131e; border-bottom:1px solid #2a2a3a; flex-shrink:0; }
-        .wb-header-title { font-size:15px; font-weight:600; letter-spacing:.5px; white-space:nowrap; text-align:center; overflow:hidden; text-overflow:ellipsis; color:#e8e0d5; }
-        .wb-header-btn { display:flex; align-items:center; justify-content:center; height:44px; background:none; border:none; color:#a09080; cursor:pointer; font-size:18px; border-radius:6px; transition:color .2s,background .2s; padding:0 6px; }
-        .wb-header-btn:hover { color:#d4af37; background:rgba(212,175,55,.12); }
-        .wb-search-bar { padding:6px 12px 8px; background:#13131e; border-bottom:1px solid #2a2a3a; flex-shrink:0; }
-        .wb-cat-bar { display:flex; gap:4px; padding:8px 10px; background:#13131e; overflow-x:auto; flex-shrink:0; scrollbar-width:none; border-bottom:1px solid #1e1e2e; }
+        .wb-app { display:flex; flex-direction:column; height:100%; background:#1a0d0a; color:#FFF8E7; font-size:13px; overflow:hidden; position:relative; }
+        .wb-header { display:grid; grid-template-columns:44px 1fr 64px; align-items:center; height:44px; background:rgba(69,34,22,0.9); border-bottom:1px solid rgba(251,223,162,0.3); flex-shrink:0; }
+        .wb-header-title { font-size:15px; font-weight:600; letter-spacing:.5px; white-space:nowrap; text-align:center; overflow:hidden; text-overflow:ellipsis; color:#FBDFA2; }
+        .wb-header-btn { display:flex; align-items:center; justify-content:center; height:44px; background:none; border:none; color:#B78456; cursor:pointer; font-size:18px; border-radius:6px; transition:color .2s,background .2s; padding:0 6px; }
+        .wb-header-btn:hover { color:#FBDFA2; background:rgba(251,223,162,.15); }
+        .wb-search-bar { padding:6px 12px 8px; background:rgba(69,34,22,0.9); border-bottom:1px solid rgba(251,223,162,0.3); flex-shrink:0; }
+        .wb-cat-bar { display:flex; gap:4px; padding:8px 10px; background:rgba(69,34,22,0.9); overflow-x:auto; flex-shrink:0; scrollbar-width:none; border-bottom:1px solid rgba(251,223,162,0.2); }
         .wb-cat-bar::-webkit-scrollbar { display:none; }
-        .wb-cat-tab { flex-shrink:0; padding:4px 12px; border-radius:20px; border:1px solid #2a2a3a; background:none; color:#888; font-size:11px; cursor:pointer; transition:.2s; }
-        .wb-cat-tab.active { background:#d4af37; border-color:#d4af37; color:#13131e; font-weight:700; }
+        .wb-cat-tab { flex-shrink:0; padding:4px 12px; border-radius:20px; border:1px solid rgba(251,223,162,0.3); background:none; color:#B78456; font-size:11px; cursor:pointer; transition:.2s; }
+        .wb-cat-tab.active { background:#FBDFA2; border-color:#FBDFA2; color:#452216; font-weight:700; }
         
         /* 🔥 修復列表高度：底部留出 75px 空間，避免被導覽列遮擋 */
         .wb-list { flex:1; overflow-y:auto; padding:8px 10px 75px 10px; display:flex; flex-direction:column; gap:6px; }
-        .wb-list::-webkit-scrollbar { width:3px; } .wb-list::-webkit-scrollbar-thumb { background:#2a2a3a; border-radius:2px; }
+        .wb-list::-webkit-scrollbar { width:3px; } .wb-list::-webkit-scrollbar-thumb { background:rgba(251,223,162,0.3); border-radius:2px; }
         
-        .wb-entry { display:flex; align-items:center; background:#1a1a28; border:1px solid #2a2a3a; border-radius:10px; padding:10px 12px; gap:10px; transition:border-color .2s; }
-        .wb-entry:hover { border-color:#3a3a5a; }
+        .wb-entry { display:flex; align-items:center; background:rgba(120,55,25,0.6); border:1px solid rgba(251,223,162,0.2); border-radius:10px; padding:10px 12px; gap:10px; transition:border-color .2s; }
+        .wb-entry:hover { border-color:#FBDFA2; }
         .wb-entry.disabled { opacity:.45; }
         .wb-entry-info { flex:1; min-width:0; }
-        .wb-entry-title { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#e8e0d5; display:flex; align-items:center; gap:6px; }
-        .wb-entry-order { background:#2a2a3a; color:#d4af37; padding:1px 5px; border-radius:4px; font-size:10px; font-weight:700; }
-        .wb-entry-meta { font-size:10px; color:#555; margin-top:4px; }
-        .wb-entry-cat { display:inline-block; padding:1px 7px; border-radius:10px; background:#1e1e35; border:1px solid #3a3a5a; font-size:9px; color:#8080c0; margin-right:4px; }
+        .wb-entry-title { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#FFF8E7; display:flex; align-items:center; gap:6px; }
+        .wb-entry-order { background:rgba(69,34,22,0.8); color:#FBDFA2; padding:1px 5px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid rgba(251,223,162,0.2); }
+        .wb-entry-meta { font-size:10px; color:#E0D8C8; margin-top:4px; }
+        .wb-entry-cat { display:inline-block; padding:1px 7px; border-radius:10px; background:rgba(69,34,22,0.8); border:1px solid rgba(251,223,162,0.3); font-size:9px; color:#FBDFA2; margin-right:4px; }
         
         /* 🔥 編輯與刪除按鈕樣式 */
         .wb-entry-edit, .wb-entry-del { background:none; border:none; cursor:pointer; font-size:14px; padding:5px; border-radius:6px; transition:.2s; flex-shrink:0; }
-        .wb-entry-edit { color:#666; }
-        .wb-entry-edit:hover { color:#d4af37; background:rgba(212,175,55,.1); }
-        .wb-entry-del { color:#c85a5a; margin-left:2px; }
-        .wb-entry-del:hover { color:#ff8080; background:rgba(200,50,50,.15); }
+        .wb-entry-edit { color:#B78456; }
+        .wb-entry-edit:hover { color:#FBDFA2; background:rgba(251,223,162,.15); }
+        .wb-entry-del { color:#fc8181; margin-left:2px; }
+        .wb-entry-del:hover { color:#ff9999; background:rgba(252,129,129,.15); }
         
         .wb-toggle { position:relative; width:34px; height:18px; flex-shrink:0; }
         .wb-toggle input { opacity:0; width:0; height:0; position:absolute; }
-        .wb-toggle-slider { position:absolute; inset:0; background:#2a2a3a; border-radius:18px; cursor:pointer; transition:.25s; }
-        .wb-toggle input:checked + .wb-toggle-slider { background:#d4af37; }
-        .wb-toggle-slider:before { content:''; position:absolute; width:12px; height:12px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.25s; }
+        .wb-toggle-slider { position:absolute; inset:0; background:rgba(251,223,162,0.3); border-radius:18px; cursor:pointer; transition:.25s; }
+        .wb-toggle input:checked + .wb-toggle-slider { background:#FBDFA2; }
+        .wb-toggle-slider:before { content:''; position:absolute; width:12px; height:12px; left:3px; top:3px; background:#452216; border-radius:50%; transition:.25s; }
         .wb-toggle input:checked + .wb-toggle-slider:before { transform:translateX(16px); }
-        .wb-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#3a3a5a; gap:8px; }
+        .wb-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#B78456; gap:8px; }
         .wb-empty-icon { font-size:40px; opacity:.4; }
         
         /* 🔥 修復懸浮按鈕：位置往上提，避開導覽列 */
-        .wb-fab { position:absolute; bottom:70px; right:16px; width:44px; height:44px; border-radius:50%; background:#d4af37; border:none; color:#13131e; font-size:22px; cursor:pointer; box-shadow:0 4px 16px rgba(212,175,55,.35); display:flex; align-items:center; justify-content:center; transition:.2s; z-index:10; }
-        .wb-fab:hover { background:#e6c84b; transform:scale(1.05); }
+        .wb-fab { position:absolute; bottom:70px; right:16px; width:44px; height:44px; border-radius:50%; background:#FBDFA2; border:none; color:#452216; font-size:22px; cursor:pointer; box-shadow:0 4px 16px rgba(251,223,162,.35); display:flex; align-items:center; justify-content:center; transition:.2s; z-index:10; }
+        .wb-fab:hover { background:#fce8b2; transform:scale(1.05); }
 
         /* 🔥 修復編輯遮罩：底部增加 55px Padding，確保按鈕不被遮擋 */
-        .wb-overlay { position:absolute; inset:0; background:rgba(0,0,0,.85); z-index:50; display:flex; flex-direction:column; padding-bottom: 55px; box-sizing: border-box; }
+        .wb-overlay { position:absolute; inset:0; background:rgba(20,10,5,.95); backdrop-filter:blur(3px); z-index:50; display:flex; flex-direction:column; padding-bottom: 55px; box-sizing: border-box; }
         .wb-overlay.hidden { display:none; }
-        .wb-form { flex:1; background:#13131e; display:flex; flex-direction:column; overflow:hidden; border-top-left-radius:8px; border-top-right-radius:8px; }
-        .wb-form-header { display:flex; align-items:center; padding:12px 14px; border-bottom:1px solid #2a2a3a; gap:8px; }
-        .wb-form-title-text { flex:1; font-size:14px; font-weight:600; }
-        .wb-form-save { background:#d4af37; border:none; color:#13131e; font-size:12px; font-weight:700; padding:5px 14px; border-radius:20px; cursor:pointer; }
-        .wb-form-save:hover { background:#e6c84b; }
-        .wb-form-cancel { background:none; border:1px solid #3a3a5a; color:#888; font-size:12px; padding:5px 12px; border-radius:20px; cursor:pointer; }
+        .wb-form { flex:1; background:rgba(69,34,22,0.95); display:flex; flex-direction:column; overflow:hidden; border-top-left-radius:8px; border-top-right-radius:8px; border-top:1px solid rgba(251,223,162,0.3); }
+        .wb-form-header { display:flex; align-items:center; padding:12px 14px; border-bottom:1px solid rgba(251,223,162,0.3); gap:8px; }
+        .wb-form-title-text { flex:1; font-size:14px; font-weight:600; color:#FBDFA2; }
+        .wb-form-save { background:#FBDFA2; border:none; color:#452216; font-size:12px; font-weight:700; padding:5px 14px; border-radius:20px; cursor:pointer; }
+        .wb-form-save:hover { background:#fce8b2; }
+        .wb-form-cancel { background:none; border:1px solid rgba(251,223,162,0.3); color:#B78456; font-size:12px; padding:5px 12px; border-radius:20px; cursor:pointer; }
+        .wb-form-cancel:hover { color:#FBDFA2; background:rgba(251,223,162,0.1); }
         .wb-form-body { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:12px; }
-        .wb-field label { display:block; font-size:11px; color:#888; margin-bottom:5px; letter-spacing:.3px; }
-        .wb-field input, .wb-field select, .wb-field textarea { width:100%; background:#0d0d14; border:1px solid #2a2a3a; border-radius:8px; color:#e8e0d5; font-size:13px; padding:8px 10px; box-sizing:border-box; outline:none; transition:border-color .2s; font-family:inherit; }
-        .wb-field input:focus, .wb-field select:focus, .wb-field textarea:focus { border-color:#d4af37; }
+        .wb-field label { display:block; font-size:11px; color:#B78456; margin-bottom:5px; letter-spacing:.3px; }
+        .wb-field input, .wb-field select, .wb-field textarea { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); border-radius:8px; color:#FFF8E7; font-size:13px; padding:8px 10px; box-sizing:border-box; outline:none; transition:border-color .2s; font-family:inherit; }
+        .wb-field input:focus, .wb-field select:focus, .wb-field textarea:focus { border-color:#FBDFA2; }
         .wb-field textarea { resize:vertical; min-height:180px; line-height:1.6; }
-        .wb-field select option { background:#1a1a28; }
-        .wb-field-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1e1e2e; }
-        .wb-field-row label { font-size:12px; color:#aaa; margin:0; }
+        .wb-field select option { background:rgba(69,34,22,0.95); }
+        .wb-field-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(251,223,162,0.2); }
+        .wb-field-row label { font-size:12px; color:#E0D8C8; margin:0; }
 
         /* 標籤系統專用 UI */
-        .wb-tag-box { display:flex; flex-wrap:wrap; gap:6px; padding:6px 10px; background:#0d0d14; border:1px solid #2a2a3a; border-radius:8px; align-items:center; transition:.2s; min-height:34px; box-sizing:border-box; cursor:text; }
-        .wb-tag-box:focus-within { border-color:#d4af37; }
-        .wb-tag-item { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#1e1e35; border:1px solid #3a3a5a; border-radius:12px; font-size:11px; color:#e8e0d5; font-weight:500; }
-        .wb-tag-remove { background:none; border:none; color:#e06060; font-size:12px; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; }
-        .wb-tag-remove:hover { color:#ff8080; }
-        .wb-tag-input { flex:1; min-width:80px; background:transparent !important; border:none !important; color:#e8e0d5; font-size:12px; outline:none !important; font-family:inherit; padding:0 !important; }
+        .wb-tag-box { display:flex; flex-wrap:wrap; gap:6px; padding:6px 10px; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); border-radius:8px; align-items:center; transition:.2s; min-height:34px; box-sizing:border-box; cursor:text; }
+        .wb-tag-box:focus-within { border-color:#FBDFA2; }
+        .wb-tag-item { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:rgba(120,55,25,0.6); border:1px solid rgba(251,223,162,0.3); border-radius:12px; font-size:11px; color:#FBDFA2; font-weight:500; }
+        .wb-tag-remove { background:none; border:none; color:#fc8181; font-size:12px; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; }
+        .wb-tag-remove:hover { color:#ff9999; }
+        .wb-tag-input { flex:1; min-width:80px; background:transparent !important; border:none !important; color:#FFF8E7; font-size:12px; outline:none !important; font-family:inherit; padding:0 !important; }
         .wb-tag-sug-area { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
-        .wb-tag-sug { background:#1a1a28; border:1px dashed #3a3a5a; color:#888; padding:3px 10px; border-radius:12px; font-size:10px; cursor:pointer; transition:.2s; }
-        .wb-tag-sug:hover { border-color:#d4af37; color:#d4af37; background:rgba(212,175,55,.05); }
+        .wb-tag-sug { background:rgba(120,55,25,0.4); border:1px dashed rgba(251,223,162,0.4); color:#B78456; padding:3px 10px; border-radius:12px; font-size:10px; cursor:pointer; transition:.2s; }
+        .wb-tag-sug:hover { border-color:#FBDFA2; color:#FBDFA2; background:rgba(251,223,162,.15); }
 
         /* 設定頁 */
         .wb-settings { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:14px; }
-        .wb-section { background:#1a1a28; border:1px solid #2a2a3a; border-radius:10px; padding:12px 14px; }
-        .wb-section-title { font-size:11px; color:#d4af37; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; font-weight:600; }
-        .wb-input { width:100%; background:#0d0d14; border:1px solid #2a2a3a; border-radius:8px; color:#e8e0d5; font-size:12px; padding:7px 10px; box-sizing:border-box; outline:none; margin-bottom:7px; font-family:inherit; }
+        .wb-section { background:rgba(69,34,22,0.6); border:1px solid rgba(251,223,162,0.3); border-radius:10px; padding:12px 14px; }
+        .wb-section-title { font-size:11px; color:#FBDFA2; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; font-weight:600; }
+        .wb-input { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); border-radius:8px; color:#FFF8E7; font-size:12px; padding:7px 10px; box-sizing:border-box; outline:none; margin-bottom:7px; font-family:inherit; }
+        .wb-input:focus { border-color:#FBDFA2; }
         .wb-btn { width:100%; padding:9px; border-radius:8px; border:none; font-size:13px; cursor:pointer; font-weight:600; margin-top:4px; transition:.2s; }
-        .wb-btn-primary { background:#d4af37; color:#13131e; }
-        .wb-btn-primary:hover { background:#e6c84b; }
-        .wb-btn-secondary { background:#2a2a3a; color:#ccc; }
-        .wb-btn-danger { background:rgba(200,50,50,.2); color:#e06060; border:1px solid rgba(200,50,50,.3); }
-        .wb-hint { font-size:10px; color:#555; margin-top:4px; line-height:1.5; }
+        .wb-btn-primary { background:#FBDFA2; color:#452216; }
+        .wb-btn-primary:hover { background:#fce8b2; }
+        .wb-btn-secondary { background:rgba(120,55,25,0.6); color:#FBDFA2; border:1px solid rgba(251,223,162,0.3); }
+        .wb-btn-secondary:hover { background:rgba(120,55,25,0.8); }
+        .wb-btn-danger { background:rgba(252,129,129,.15); color:#fc8181; border:1px solid rgba(252,129,129,.3); }
+        .wb-btn-danger:hover { background:rgba(252,129,129,.25); }
+        .wb-hint { font-size:10px; color:#B78456; margin-top:4px; line-height:1.5; }
 
-        .wb-search { width:100%; background:#0d0d14; border:1px solid #2a2a3a; border-radius:20px; color:#e8e0d5; font-size:12px; padding:6px 14px; outline:none; box-sizing:border-box; display:block; }
-        .wb-search:focus { border-color:#d4af37; }
+        .wb-search { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); border-radius:20px; color:#FFF8E7; font-size:12px; padding:6px 14px; outline:none; box-sizing:border-box; display:block; }
+        .wb-search:focus { border-color:#FBDFA2; }
         `;
         document.head.appendChild(s);
     }
@@ -150,14 +155,14 @@
     function buildHTML() {
         return `
         <div class="wb-app" id="wb-root">
-          <div style="display:flex!important;flex-direction:row!important;align-items:center!important;width:100%!important;height:44px!important;background:#13131e;border-bottom:1px solid #2a2a3a;flex-shrink:0;box-sizing:border-box;">
+          <div style="display:flex!important;flex-direction:row!important;align-items:center!important;width:100%!important;height:44px!important;background:rgba(69,34,22,0.9);border-bottom:1px solid rgba(251,223,162,0.3);flex-shrink:0;box-sizing:border-box;">
             <button onclick="goHome()" title="返回大廳"
-              style="flex:0 0 64px!important;width:64px!important;height:44px!important;background:none;border:none;color:#d4af37;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;border-radius:6px;letter-spacing:.5px;">←返回</button>
-            <span style="flex:1!important;text-align:center!important;font-size:15px;font-weight:600;color:#e8e0d5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.5px;">世界書</span>
+              style="flex:0 0 64px!important;width:64px!important;height:44px!important;background:none;border:none;color:#FBDFA2;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;border-radius:6px;letter-spacing:.5px;">←返回</button>
+            <span style="flex:1!important;text-align:center!important;font-size:15px;font-weight:600;color:#FBDFA2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.5px;">世界書</span>
             <button id="wb-settings-btn" title="條目管理"
-              style="flex:0 0 44px!important;width:44px!important;height:44px!important;background:none;border:none;color:#a09080;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;border-radius:6px;">🗂️</button>
+              style="flex:0 0 44px!important;width:44px!important;height:44px!important;background:none;border:none;color:#B78456;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;border-radius:6px;">🗂️</button>
           </div>
-          <div style="padding:6px 12px 8px;background:#13131e;border-bottom:1px solid #2a2a3a;flex-shrink:0;">
+          <div style="padding:6px 12px 8px;background:rgba(69,34,22,0.9);border-bottom:1px solid rgba(251,223,162,0.3);flex-shrink:0;">
             <input class="wb-search" id="wb-search" placeholder="搜尋條目或關鍵字..." />
           </div>
 
@@ -196,7 +201,7 @@
                   <div class="wb-tag-box" id="wb-tag-box" onclick="document.getElementById('wb-f-keys-input').focus()">
                     <input type="text" class="wb-tag-input" id="wb-f-keys-input" placeholder="新增標籤..." autocomplete="off" />
                   </div>
-                  <div class="wb-hint" style="margin-top:6px; color:#777;">📚 點擊快速加入：</div>
+                  <div class="wb-hint" style="margin-top:6px; color:#B78456;">📚 點擊快速加入：</div>
                   <div class="wb-tag-sug-area" id="wb-tag-suggestions"></div>
                 </div>
                 <div class="wb-field-row">
@@ -236,7 +241,7 @@
                   </div>
                 </div>
                 <div class="wb-section">
-                  <div class="wb-section-title" style="color:#e06060">⚠️ 危險操作</div>
+                  <div class="wb-section-title" style="color:#fc8181">⚠️ 危險操作</div>
                   <button class="wb-btn wb-btn-danger" id="wb-clear-all-btn">🗑 清空全部條目</button>
                 </div>
               </div>
@@ -288,7 +293,7 @@
         const suggestions = Array.from(allTags).filter(t => !_currentTags.includes(t));
         
         if (suggestions.length === 0) {
-            sugArea.innerHTML = '<span style="color:#555; font-size:10px;">(無其他可用標籤)</span>';
+            sugArea.innerHTML = '<span style="color:#B78456; font-size:10px;">(無其他可用標籤)</span>';
         } else {
             sugArea.innerHTML = suggestions.map(t =>
                 `<button class="wb-tag-sug" data-tag="${escHtml(t)}">+ ${escHtml(t)}</button>`
@@ -346,10 +351,10 @@
         }
 
         list.innerHTML = filtered.map(e => {
-            let keysHtml = '<span class="wb-entry-keys" style="color:#6a8a6a">📌 常駐</span>';
+            let keysHtml = '<span class="wb-entry-keys" style="color:#6b8e23">📌 常駐</span>';
             if (e.keys) {
                 // 🔥 修復：強制轉成字串，防止舊資料格式報錯
-                keysHtml = String(e.keys).split(',').map(k => `<span style="display:inline-block;background:rgba(212,175,55,.1);color:#d4af37;padding:1px 6px;border-radius:6px;margin-right:3px;">#${escHtml(k.trim())}</span>`).join('');
+                keysHtml = String(e.keys).split(',').map(k => `<span style="display:inline-block;background:rgba(251,223,162,.15);color:#FBDFA2;padding:1px 6px;border-radius:6px;margin-right:3px;border:1px solid rgba(251,223,162,0.2);">#${escHtml(k.trim())}</span>`).join('');
             }
             const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${e.order}</span>` : '';
 
@@ -486,9 +491,9 @@
         const cats = getCats();
         const el = root.querySelector('#wb-cats-list');
         el.innerHTML = cats.map(c =>
-            `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;background:#1e1e35;border:1px solid #3a3a5a;font-size:11px;color:#a0a0d0">
+            `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;background:rgba(120,55,25,0.6);border:1px solid rgba(251,223,162,0.3);font-size:11px;color:#FBDFA2">
                 ${escHtml(c)}
-                ${DEFAULT_CATS.includes(c) ? '' : `<button data-cat="${escHtml(c)}" style="background:none;border:none;color:#e06060;cursor:pointer;font-size:12px;padding:0 0 0 2px">×</button>`}
+                ${DEFAULT_CATS.includes(c) ? '' : `<button data-cat="${escHtml(c)}" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:12px;padding:0 0 0 2px">×</button>`}
             </span>`
         ).join('');
         el.querySelectorAll('[data-cat]').forEach(btn => {
@@ -669,5 +674,5 @@
         }
     };
 
-    console.log('[PhoneOS] ✅ 獨立世界書系統 (OS_WORLDBOOK V1.6 - 防呆修復版) 已載入');
+    console.log('[PhoneOS] ✅ 獨立世界書系統 (OS_WORLDBOOK V1.6 - 防呆修復版 + Latte Theme) 已載入');
 })();
