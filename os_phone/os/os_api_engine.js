@@ -1,11 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] os_api_engine.js (V3.17 - AVS 引擎已移至 os_avs_engine.js)
+// [檔案] os_api_engine.js (V3.18 - 加入全局 {{user}} 巨集替換，無 char 版)
 // 路徑：os_phone/os/os_api_engine.js
 // 職責：組裝 Prompt 並負責與 AI 通訊。
 //       AVS 底層引擎由 os_avs_engine.js 提供，本檔僅呼叫 win._AVS_ENGINE。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入 API 引擎 (V3.17)...');
+    console.log('[PhoneOS] 載入 API 引擎 (V3.18)...');
     const win = window.parent || window; // 🔥 絕對保留：雙通向架構的核心
 
     // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
@@ -478,7 +478,8 @@
                 sysPrompt = `You are ${charName}. Chat with ${userName}.`;
             }
 
-            if (sysPrompt) sysPrompt = sysPrompt.replace(/{{char}}/g, charName).replace(/{{user}}/g, userName);
+            // 🔥 移除 {{char}} 替換，僅替換 {{user}}
+            if (sysPrompt) sysPrompt = sysPrompt.replace(/{{user}}/g, userName);
 
             const apiMessages = [];
 
@@ -662,7 +663,7 @@
             const apiMessages = [];
 
             // ── 1. 提取全域人設與提示詞 ──
-            let userName = 'User', charName = 'AI', userDesc = '';
+            let userName = 'User', userDesc = '';
             try {
                 const persona = win.OS_PERSONA?.getCurrent?.() || {};
                 if (persona.name) userName = persona.name;
@@ -679,13 +680,13 @@
             if (promptKey === 'wx_chat_system' && win.wxApp?.GLOBAL_ACTIVE_ID) {
                 try {
                     const chatObj = win.wxApp.GLOBAL_CHATS?.[win.wxApp.GLOBAL_ACTIVE_ID];
-                    if (chatObj?.name) charName = chatObj.name;
                     if (chatObj?.personaCustom) charPersona = chatObj.personaCustom;
                     if (!charPersona && chatObj?.persona) charPersona = chatObj.persona;
                 } catch(e) {}
             }
 
-            sysPrompt = sysPrompt.replace(/{{char}}/g, charName).replace(/{{user}}/g, userName);
+            // 🔥 移除 {{char}} 替換，僅替換 {{user}}
+            sysPrompt = sysPrompt.replace(/{{user}}/g, userName);
 
             // ── 2. 構建「精準掃描文本 (scanText)」供世界書觸發 ──
             let scanText = userMessage || '';
@@ -956,5 +957,5 @@
         }
     };
 
-    console.log('[PhoneOS] API 引擎 (V3.16 - AVS Ready & File Safe + API Engine) 就緒');
+    console.log('[PhoneOS] API 引擎 (V3.18 - 加入全局 {{user}} 巨集替換，無 char 版) 就緒');
 })();
