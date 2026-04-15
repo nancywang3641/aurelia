@@ -116,7 +116,7 @@ html, body {
 .void-sys-dropdown-item i { font-size:11px; width:13px; text-align:center; opacity:0.8; }
 
 .void-char-area { position:absolute; bottom:80px; left:50%; transform:translateX(-50%); z-index:5; width:100%; max-width:640px; height:78%; display:flex; justify-content:center; align-items:flex-end; }
-.void-char-img { max-width:150%; max-height:100%; width:auto; height:auto; object-fit:contain; filter:drop-shadow(0 12px 28px rgba(0,0,0,0.3)); transition:transform 0.3s ease, opacity 0.35s ease; }
+.void-char-img { max-width:120%; max-height:100%; width:auto; height:auto; object-fit:contain; filter:drop-shadow(0 12px 28px rgba(0,0,0,0.3)); transition:transform 0.3s ease, opacity 0.35s ease; }
 
 .void-dialogue-wrap { position:absolute; bottom:90px; left:0; right:0; z-index:10; padding:10px 15px; }
 .void-dialogue-box { background:rgba(120,55,25,0.9); backdrop-filter:blur(25px); -webkit-backdrop-filter:blur(25px); border:1px solid rgba(251,223,162,0.4); border-radius:4px; padding:15px 20px; box-shadow:0 10px 40px rgba(0,0,0,0.4); position:relative; cursor:pointer; min-height:60px; }
@@ -145,7 +145,37 @@ html, body {
 .void-hist-btn { flex-shrink:0; background:rgba(120,55,25,0.6); border:1px solid rgba(251,223,162,0.2); border-radius:7px; padding:3px 6px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; color:#FBDFA2; transition:all 0.2s; line-height:1; }
 .void-hist-btn i { font-size:10px; }
 .void-hist-btn span { font-size:8px; white-space:nowrap; }
+.void-hist-btn .vhb-em { font-size:13px; line-height:1; }
 .void-hist-btn:hover { background:rgba(251,223,162,0.15); color:#FBDFA2; border-color:#FBDFA2; }
+
+/* ── 404 切換按鈕 (頂部左側) ── */
+.void-mode-toggle-btn { background:rgba(120,55,25,0.5); border:1px solid rgba(251,223,162,0.4); color:#FBDFA2; cursor:pointer; padding:5px 10px; border-radius:5px; font-size:11px; font-weight:700; white-space:nowrap; transition:all 0.2s; display:flex; align-items:center; gap:4px; letter-spacing:0.5px; }
+.void-mode-toggle-btn:hover { background:rgba(251,223,162,0.15); border-color:#FBDFA2; }
+
+/* ── 寫作設置 TAB 與 各應用主面板 (復古格柵背景) ── */
+.write-tab, .set-container, .pm-wrap, .wb-app, .avs-container, .ps-app {
+    background-color: #1a0d0a !important;
+    background-image: linear-gradient(rgba(251,223,162,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(251,223,162,0.04) 1px, transparent 1px) !important;
+    background-size: 30px 30px !important;
+}
+
+/* ── 子面板 TAB 切換按鈕懸停效果 (拿鐵主題) ── */
+.set-tab, .pm-tab, .avs-tab, .wb-cat-tab { transition: all 0.2s ease; }
+.set-tab:hover, .pm-tab:hover, .avs-tab:hover { background: rgba(251,223,162,0.1) !important; color: #FBDFA2 !important; }
+.wb-cat-tab:hover { background: rgba(251,223,162,0.1) !important; border-color: #FBDFA2 !important; color: #FBDFA2 !important; }
+
+.write-tab-content { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:20px; gap:20px; }
+.write-tab-title-block { text-align:center; margin-bottom:8px; }
+.write-tab-title { font-size:20px; font-weight:900; color:#FBDFA2; letter-spacing:3px; text-transform:uppercase; }
+.write-tab-subtitle { font-size:9px; color:#B78456; letter-spacing:4px; text-transform:uppercase; margin-top:4px; font-weight:600; }
+.write-tab-btns { display:flex; flex-direction:column; gap:10px; width:100%; max-width:260px; }
+.write-tab-btn { width:100%; padding:14px 20px; display:flex; align-items:center; gap:14px; background:rgba(120,55,25,0.7); border:1px solid rgba(251,223,162,0.35); color:#FBDFA2; cursor:pointer; border-radius:3px; font-size:14px; font-weight:700; letter-spacing:1px; transition:all 0.2s; backdrop-filter:blur(5px); transform:skewX(-8deg); }
+.write-tab-btn > * { transform:skewX(8deg); }
+.write-tab-btn i { font-size:16px; flex-shrink:0; }
+.write-tab-btn span { flex:1; text-align:left; }
+.write-tab-btn:hover { background:rgba(251,223,162,0.15); border-color:#FBDFA2; transform:skewX(-8deg) translateY(-2px); box-shadow:0 5px 15px rgba(251,223,162,0.2); }
+.write-tab-logout-btn { margin-top:8px; padding:10px 20px; display:flex; align-items:center; gap:10px; background:transparent; border:1px solid rgba(252,129,129,0.3); color:rgba(252,129,129,0.7); cursor:pointer; border-radius:3px; font-size:12px; font-weight:600; letter-spacing:1px; transition:all 0.2s; }
+.write-tab-logout-btn:hover { border-color:#fc8181; color:#fc8181; background:rgba(252,129,129,0.08); }
 
 .void-bubble-layer { position:absolute; right:8px; top:56px; bottom:100px; width:162px; z-index:8; pointer-events:none; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; align-items:flex-end; gap:5px; background:transparent; }
 .void-bubble { position:relative; width:100%; max-width:162px; background:rgba(69,34,22,0.9); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(251,223,162,0.3); border-radius:16px; padding:8px 11px; box-shadow:0 6px 24px rgba(0,0,0,0.4),0 2px 6px rgba(0,0,0,0.2); opacity:0; animation:bubblePop 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards; flex-shrink:0; box-sizing:border-box; color:#FFF8E7; }
@@ -248,23 +278,41 @@ html, body {
 @keyframes vssIn { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:none} }
 @keyframes vssScan { 0%{top:-2px} 100%{top:100%} }
 
-/* iOS 安全區域自動適應 */
+/* ── iOS 安全區域自動適應 (env 自動模式，只要 viewport-fit=cover 就生效) ── */
+
+/* 大廳 top bar */
 .void-top-bar { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
-.void-app-tray { top: calc(56px + env(safe-area-inset-top, 0px)); }
 .void-bubble-layer { top: calc(56px + env(safe-area-inset-top, 0px)); }
 .void-panel-overlay { top: calc(90px + env(safe-area-inset-top, 0px)); }
 #achievement-panel-overlay { top: calc(10% + env(safe-area-inset-top, 0px)); }
 #store-panel-overlay { top: calc(8% + env(safe-area-inset-top, 0px)); }
 .void-login-overlay { padding-top: env(safe-area-inset-top, 0px); }
 
-/* 手動強制下移模式 */
-body.layout-pad-ios .void-top-bar { padding-top: 55px !important; }
-body.layout-pad-ios .void-app-tray { top: 96px !important; }
-body.layout-pad-ios .void-bubble-layer { top: 96px !important; }
+/* 各子面板 header — 避免被動態島/瀬海遮住返回鍵 */
+.set-header  { padding-top: calc(15px + env(safe-area-inset-top, 0px)) !important; }
+.wb-header   { padding-top: calc(12px + env(safe-area-inset-top, 0px)) !important; height: calc(44px + env(safe-area-inset-top, 0px)) !important; }
+.pm-header   { padding-top: calc(12px + env(safe-area-inset-top, 0px)) !important; height: calc(48px + env(safe-area-inset-top, 0px)) !important; }
+.avs-header  { padding-top: calc(15px + env(safe-area-inset-top, 0px)) !important; }
+.ps-header   { height: calc(56px + env(safe-area-inset-top, 0px)) !important; padding-top: env(safe-area-inset-top, 0px) !important; }
+.write-tab-content { padding-top: calc(20px + env(safe-area-inset-top, 0px)) !important; }
+
+/* 底部安全區域 — 消除 iPhone 底部黑條 */
+#aurelia-bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px) !important; box-sizing: content-box !important; }
+
+/* ── 手動強制下移模式 (iOS 動態島手動選擇時) ── */
+body.layout-pad-ios .void-top-bar    { padding-top: 62px !important; }
+body.layout-pad-ios .void-bubble-layer { top: 102px !important; }
 body.layout-pad-ios .void-panel-overlay { top: 130px !important; }
 body.layout-pad-ios #achievement-panel-overlay { top: 15% !important; }
 body.layout-pad-ios #store-panel-overlay { top: 12% !important; }
-body.layout-pad-ios .void-login-overlay { padding-top: 40px !important; }
+body.layout-pad-ios .void-login-overlay { padding-top: 44px !important; }
+body.layout-pad-ios .set-header  { padding-top: 62px !important; }
+body.layout-pad-ios .wb-header   { padding-top: 50px !important; height: 94px !important; }
+body.layout-pad-ios .pm-header   { padding-top: 50px !important; height: 92px !important; }
+body.layout-pad-ios .avs-header  { padding-top: 62px !important; }
+body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !important; }
+body.layout-pad-ios .write-tab-content { padding-top: 64px !important; }
+body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
 
 /* 登入介面外框 */
 .void-login-overlay {
@@ -545,15 +593,45 @@ body.layout-pad-ios .void-login-overlay { padding-top: 40px !important; }
 .void-tab.mode-404 .void-sys-dropdown { background:rgba(0,10,0,0.97) !important; border-color:rgba(0,255,65,0.25) !important; box-shadow:0 6px 20px rgba(0,255,65,0.08) !important; }
 .void-tab.mode-404 .void-sys-dropdown-item { color:rgba(0,200,50,0.8) !important; border-bottom-color:rgba(0,255,65,0.1) !important; }
 .void-tab.mode-404 .void-sys-dropdown-item:hover { background:rgba(0,255,65,0.08) !important; color:#00ff41 !important; }
-.void-tab.mode-404 .void-hist-btn { border-color:rgba(0,255,65,0.18); color:rgba(0,204,51,0.6); }
-.void-tab.mode-404 .void-hist-btn:hover { background:rgba(0,255,65,0.08); color:#00cc33; }
-.void-tab.mode-404 #iris-history-overlay { background:rgba(0,6,0,0.97); }
-.void-tab.mode-404 .hist-title { color:#a8ffca; }
+/* 成就/黑市/瀅瀅 歷史按鈕 — 修正 background 未被覆蓋 */
+.void-tab.mode-404 .void-hist-btn { background:rgba(0,15,0,0.6) !important; border-color:rgba(0,255,65,0.18) !important; color:rgba(0,204,51,0.6) !important; }
+.void-tab.mode-404 .void-hist-btn:hover { background:rgba(0,255,65,0.08) !important; color:#00cc33 !important; }
+/* QUEST/DIVE void-btn-inner 有 inline style，需 !important 蓋掉 */
+.void-tab.mode-404 .void-btn-inner { background: transparent !important; color: #00ff41 !important; }
+/* 大廳 header NEXUS PARALLAX 副標題 (void-top-sub-label) */
+.void-tab.mode-404 .void-top-sub-label { color: rgba(0,255,65,0.45) !important; }
+/* 故事素材紀錄窗 iris-history-overlay */
+.void-tab.mode-404 #iris-history-overlay { background:rgba(0,6,0,0.97) !important; }
+.void-tab.mode-404 .hist-header { background: rgba(0,12,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.25) !important; }
+.void-tab.mode-404 .hist-title { color:#a8ffca !important; }
+.void-tab.mode-404 .hist-close { color: #00cc33 !important; }
+.void-tab.mode-404 .hist-close:hover { color: #00ff41 !important; }
+.void-tab.mode-404 .hist-check-all-label { color: #b8ffcb !important; }
+.void-tab.mode-404 .hist-action-btn { background: rgba(0,15,0,0.7) !important; border-color: rgba(0,255,65,0.25) !important; color: #00cc33 !important; }
+.void-tab.mode-404 .hist-action-btn:hover:not(:disabled) { background: rgba(0,255,65,0.1) !important; color: #00ff41 !important; }
+.void-tab.mode-404 .hist-list::-webkit-scrollbar-thumb { background: rgba(0,255,65,0.25) !important; }
+.void-tab.mode-404 .hist-item:hover { background: rgba(0,255,65,0.05) !important; }
+.void-tab.mode-404 .hist-item.selected { background: rgba(0,255,65,0.08) !important; border-color: rgba(0,255,65,0.2) !important; }
 .void-tab.mode-404 .hist-item-check { accent-color:#00cc33; }
 .void-tab.mode-404 .hist-check-all-label input { accent-color:#00cc33; }
-.void-tab.mode-404 .hist-role-badge.user { background:rgba(0,255,65,0.08); color:rgba(0,200,50,0.9); }
+.void-tab.mode-404 .hist-role-badge.user { background:rgba(0,255,65,0.08) !important; color:rgba(0,200,50,0.9) !important; border-color: rgba(0,255,65,0.3) !important; }
+.void-tab.mode-404 .hist-item-text { color: rgba(0,255,65,0.7) !important; }
+.void-tab.mode-404 .hist-item-text:hover { color: #b8ffcb !important; }
+.void-tab.mode-404 .hist-item-edit-area { background: rgba(0,10,0,0.85) !important; border-color: rgba(0,255,65,0.4) !important; color: #b8ffcb !important; }
 .void-tab.mode-404 .hist-icon-btn.edit:hover { color:#00cc33; }
 .void-tab.mode-404 .hist-edit-confirm-btn { background:rgba(0,255,65,0.1); border-color:rgba(0,255,65,0.3); color:#00cc33; }
+/* 成就窗口 ach-* 補全 */
+.void-tab.mode-404 .ach-header { background: rgba(0,12,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.25) !important; }
+.void-tab.mode-404 .ach-close { color: #00cc33 !important; }
+.void-tab.mode-404 .ach-close:hover { color: #00ff41 !important; }
+.void-tab.mode-404 .ach-stats { color: rgba(0,255,65,0.5) !important; border-bottom-color: rgba(0,255,65,0.06) !important; background: rgba(0,5,0,0.5) !important; }
+.void-tab.mode-404 .ach-empty { color: rgba(0,255,65,0.4) !important; }
+.void-tab.mode-404 .ach-item:hover { background: rgba(0,255,65,0.04) !important; }
+.void-tab.mode-404 .ach-item-desc { color: rgba(0,255,65,0.65) !important; }
+.void-tab.mode-404 .ach-item-meta { color: rgba(0,255,65,0.4) !important; }
+.void-tab.mode-404 .ach-item-badge { background: rgba(0,20,0,0.7) !important; color: #00cc33 !important; border-color: rgba(0,255,65,0.3) !important; box-shadow: none !important; }
+.void-tab.mode-404 .ach-item.redeemed .ach-item-badge { background: rgba(0,5,0,0.5) !important; color: #1a4d1a !important; border-color: rgba(0,255,65,0.1) !important; }
+.void-tab.mode-404 .ach-footer { color: rgba(0,255,65,0.4) !important; border-top-color: rgba(0,255,65,0.15) !important; background: rgba(0,5,0,0.5) !important; }
 .void-tab.mode-404 .void-panel-overlay { background:rgba(0,10,0,0.88) !important; border-color:rgba(0,255,65,0.35) !important; box-shadow:0 8px 32px rgba(0,255,65,0.08) !important; }
 .void-tab.mode-404 .void-panel-header { background:rgba(0,15,0,0.6) !important; border-bottom-color:rgba(0,255,65,0.2) !important; }
 .void-tab.mode-404 .void-panel-title { color:#00ff41 !important; }
@@ -572,10 +650,24 @@ body.layout-pad-ios .void-login-overlay { padding-top: 40px !important; }
 .void-tab.mode-404 .mobile-apps-dropdown-item:hover { background:rgba(0,255,65,0.08) !important; color:#00ff41 !important; }
 .void-tab.mode-404 .qb-node-btn { background: rgba(0, 15, 0, 0.8); border-color: rgba(0, 204, 51, 0.6); color: #00cc33; }
 .void-tab.mode-404 .qb-node-btn:hover { background: rgba(0, 255, 65, 0.1); border-color: #00ff41; color: #00ff41; box-shadow: 0 0 20px rgba(0,255,65,0.3); }
-.void-tab.mode-404 #achievement-panel-overlay { background:rgba(0, 15, 0, 0.9); border-color:#00cc33; box-shadow: 0 10px 40px rgba(0,255,65,0.2), inset 0 0 20px rgba(0,255,65,0.05); }
-.void-tab.mode-404 .ach-title { color:#00ff41; text-shadow: 0 0 8px rgba(0,255,65,0.5); }
-.void-tab.mode-404 .ach-item-name { color:#00ff41; }
-.void-tab.mode-404 .ach-item.redeemed .ach-item-name { color:#1a4d1a; }
+.void-tab.mode-404 #achievement-panel-overlay { background:rgba(0, 15, 0, 0.9) !important; border-color:#00cc33 !important; box-shadow: 0 10px 40px rgba(0,255,65,0.2), inset 0 0 20px rgba(0,255,65,0.05) !important; }
+.void-tab.mode-404 .ach-title { color:#00ff41 !important; text-shadow: 0 0 8px rgba(0,255,65,0.5) !important; }
+.void-tab.mode-404 .ach-item-name { color:#00ff41 !important; }
+.void-tab.mode-404 .ach-item.redeemed .ach-item-name { color:#1a4d1a !important; }
+/* 404 切換按鈕 mode-404 */
+.void-tab.mode-404 .void-mode-toggle-btn { background:rgba(0,20,0,0.6) !important; border-color:rgba(0,255,65,0.35) !important; color:#00ff41 !important; }
+.void-tab.mode-404 .void-mode-toggle-btn:hover { background:rgba(0,255,65,0.1) !important; border-color:#00ff41 !important; }
+
+/* persona dropdown */
+.void-tab.mode-404 .void-persona-dropdown { background: rgba(0,10,0,0.97) !important; border-color: rgba(0,255,65,0.25) !important; }
+.void-tab.mode-404 .void-persona-dropdown::-webkit-scrollbar-thumb { background: rgba(0,255,65,0.3) !important; }
+.void-tab.mode-404 .void-persona-item { color: rgba(0,200,50,0.8) !important; border-bottom-color: rgba(0,255,65,0.1) !important; }
+.void-tab.mode-404 .void-persona-item:hover { background: rgba(0,255,65,0.08) !important; color: #00ff41 !important; }
+.void-tab.mode-404 .void-persona-item.is-selected { color: #00ff41 !important; }
+.void-tab.mode-404 .void-persona-item .vpick-badge { background: rgba(0,255,65,0.15) !important; color: #00ff41 !important; }
+.void-tab.mode-404 .void-persona-empty { color: rgba(0,255,65,0.4) !important; }
+/* persona dropdown section headers have inline style="background:rgba(69,34,22,0.9)" */
+.void-tab.mode-404 .void-persona-dropdown [style*="rgba(69,34,22"] { background: rgba(0,15,0,0.9) !important; color: rgba(0,255,65,0.45) !important; }
 .void-tab.mode-404 .void-login-overlay { background: rgba(0,10,0,0.95); }
 .void-tab.mode-404 .void-login-overlay::before { background-image: linear-gradient(rgba(0,255,65,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.1) 1px, transparent 1px); }
 .void-tab.mode-404 .void-login-brand { color: #00cc33; text-shadow: none; }
@@ -619,7 +711,8 @@ body.layout-pad-ios .void-login-overlay { padding-top: 40px !important; }
     border-top: 1px solid rgba(251,223,162,0.3) !important;
     box-shadow: 0 -5px 15px rgba(0,0,0,0.5) !important;
     z-index: 9999 !important;
-    padding-bottom: 0 !important; /* 絕對不使用墊高，強行貼齊底部物理像素 */
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    box-sizing: content-box !important;
 }
 #aurelia-bottom-nav .nav-button {
     color: #B78456 !important;
@@ -678,9 +771,8 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
 /* ──────────────────────────────────────────────────────────
    ps-* ｜ os_persona.js ｜ 人設 TAB
    ────────────────────────────────────────────────────────── */
-#aurelia-phone-screen.mode-404 #aurelia-user-tab { background: #000800 !important; }
-#aurelia-phone-screen.mode-404 .ps-app { background: #000800 !important; }
-#aurelia-phone-screen.mode-404 .ps-app::before { background-image: linear-gradient(rgba(0,255,65,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.06) 1px, transparent 1px) !important; }
+#aurelia-phone-screen.mode-404 #aurelia-user-tab { background-color: #000800 !important; }
+#aurelia-phone-screen.mode-404 .ps-app { background-color: #000800 !important; background-image: linear-gradient(rgba(0,255,65,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.08) 1px, transparent 1px) !important; background-size: 30px 30px !important; }
 #aurelia-phone-screen.mode-404 .ps-header { background: rgba(0,15,0,0.9) !important; border-bottom-color: rgba(0,255,65,0.25) !important; }
 #aurelia-phone-screen.mode-404 .ps-title { color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .ps-body { background: #000800 !important; color: #b8ffcb !important; }
@@ -705,15 +797,16 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
 /* ──────────────────────────────────────────────────────────
    pm-* ｜ os_prompts.js ｜ 提示詞管理
    ────────────────────────────────────────────────────────── */
-#aurelia-phone-screen.mode-404 .pm-wrap { background: #000800 !important; color: #b8ffcb !important; }
+#aurelia-phone-screen.mode-404 .pm-wrap { background-color: #000800 !important; background-image: linear-gradient(rgba(0,255,65,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.08) 1px, transparent 1px) !important; background-size: 30px 30px !important; color: #b8ffcb !important; }
 #aurelia-phone-screen.mode-404 .pm-header { background: rgba(0,15,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.3) !important; }
 #aurelia-phone-screen.mode-404 .pm-back-btn { color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .pm-title { color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .pm-header-action { color: #00cc33 !important; }
 #aurelia-phone-screen.mode-404 .pm-header-action:hover { color: #00ff41 !important; background: rgba(0,255,65,0.1) !important; }
 #aurelia-phone-screen.mode-404 .pm-tabs { background: rgba(0,15,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.3) !important; }
-#aurelia-phone-screen.mode-404 .pm-tab { color: #1a4d1a !important; border-bottom-color: transparent !important; }
-#aurelia-phone-screen.mode-404 .pm-tab.active { color: #00ff41 !important; border-bottom-color: #00ff41 !important; }
+#aurelia-phone-screen.mode-404 .pm-tab { color: #1a4d1a !important; border-bottom-color: transparent !important; transition: all 0.2s; }
+#aurelia-phone-screen.mode-404 .pm-tab:hover { background: rgba(0,255,65,0.1) !important; color: #00ff41 !important; }
+#aurelia-phone-screen.mode-404 .pm-tab.active { color: #00ff41 !important; border-bottom-color: #00ff41 !important; background: rgba(0,255,65,0.15) !important; }
 #aurelia-phone-screen.mode-404 .pm-body { background: #000800 !important; }
 #aurelia-phone-screen.mode-404 .pm-uni-item { background: rgba(0,15,0,0.7) !important; border-color: rgba(0,255,65,0.25) !important; }
 #aurelia-phone-screen.mode-404 .pm-uni-item:hover { border-color: #00ff41 !important; }
@@ -749,7 +842,7 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
 /* ──────────────────────────────────────────────────────────
    wb-* ｜ os_worldbook.js ｜ 世界書
    ────────────────────────────────────────────────────────── */
-#aurelia-phone-screen.mode-404 .wb-app { background: #000800 !important; color: #b8ffcb !important; }
+#aurelia-phone-screen.mode-404 .wb-app { background-color: #000800 !important; background-image: linear-gradient(rgba(0,255,65,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.08) 1px, transparent 1px) !important; background-size: 30px 30px !important; color: #b8ffcb !important; }
 #aurelia-phone-screen.mode-404 .wb-header { background: rgba(0,15,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.3) !important; }
 #aurelia-phone-screen.mode-404 .wb-header-title { color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .wb-header-btn { color: #00cc33 !important; background: none !important; border: none !important; }
@@ -758,7 +851,8 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
 #aurelia-phone-screen.mode-404 .wb-search { background: rgba(0,15,0,0.85) !important; border-color: rgba(0,255,65,0.3) !important; color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .wb-search::placeholder { color: rgba(0,255,65,0.3) !important; }
 #aurelia-phone-screen.mode-404 .wb-cat-bar { background: rgba(0,12,0,0.9) !important; border-bottom-color: rgba(0,255,65,0.15) !important; }
-#aurelia-phone-screen.mode-404 .wb-cat-tab { border-color: rgba(0,255,65,0.3) !important; color: #1a4d1a !important; background: none !important; }
+#aurelia-phone-screen.mode-404 .wb-cat-tab { border-color: rgba(0,255,65,0.3) !important; color: #1a4d1a !important; background: none !important; transition: all 0.2s; }
+#aurelia-phone-screen.mode-404 .wb-cat-tab:hover { background: rgba(0,255,65,0.1) !important; color: #00ff41 !important; border-color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .wb-cat-tab.active { background: #004d00 !important; border-color: #00ff41 !important; color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .wb-list { background: #000800 !important; }
 #aurelia-phone-screen.mode-404 .wb-list::-webkit-scrollbar-thumb { background: rgba(0,255,65,0.25) !important; }
@@ -807,18 +901,29 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
 #aurelia-phone-screen.mode-404 .wb-tag-sug:hover { border-color: #00ff41 !important; color: #00ff41 !important; background: rgba(0,255,65,0.1) !important; }
 #aurelia-phone-screen.mode-404 .wb-settings { background: #000800 !important; }
 #aurelia-phone-screen.mode-404 .wb-section { background: rgba(0,15,0,0.6) !important; border-color: rgba(0,255,65,0.3) !important; }
+/* wb-btn — 條目管理小窗按鈕 */
+#aurelia-phone-screen.mode-404 .wb-btn-primary { background: #004d00 !important; color: #00ff41 !important; }
+#aurelia-phone-screen.mode-404 .wb-btn-primary:hover { background: #006600 !important; }
+#aurelia-phone-screen.mode-404 .wb-btn-secondary { background: rgba(0,15,0,0.7) !important; color: #00cc33 !important; border-color: rgba(0,255,65,0.3) !important; }
+#aurelia-phone-screen.mode-404 .wb-btn-secondary:hover { background: rgba(0,255,65,0.08) !important; }
+/* wb-btn fallback if worldbook panel opens inside void-tab scope */
+.void-tab.mode-404 .wb-btn-primary { background: #004d00 !important; color: #00ff41 !important; }
+.void-tab.mode-404 .wb-btn-primary:hover { background: #006600 !important; }
+.void-tab.mode-404 .wb-btn-secondary { background: rgba(0,15,0,0.7) !important; color: #00cc33 !important; border-color: rgba(0,255,65,0.3) !important; }
+.void-tab.mode-404 .wb-btn-secondary:hover { background: rgba(0,255,65,0.08) !important; }
 
 /* ──────────────────────────────────────────────────────────
    set-* ｜ os_settings.js ｜ 系統設置 / API 設定
    ────────────────────────────────────────────────────────── */
-#aurelia-phone-screen.mode-404 .set-container { background: #000800 !important; color: #b8ffcb !important; }
+#aurelia-phone-screen.mode-404 .set-container { background-color: #000800 !important; background-image: linear-gradient(rgba(0,255,65,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.08) 1px, transparent 1px) !important; background-size: 30px 30px !important; color: #b8ffcb !important; }
 #aurelia-phone-screen.mode-404 .set-header { background: rgba(0,15,0,0.9) !important; border-bottom-color: rgba(0,255,65,0.3) !important; color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .set-title { color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .set-back-btn { color: #00cc33 !important; }
 #aurelia-phone-screen.mode-404 .set-back-btn:hover { background: rgba(0,255,65,0.1) !important; color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .set-tabs { background: rgba(0,12,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.3) !important; }
-#aurelia-phone-screen.mode-404 .set-tab { color: #1a4d1a !important; }
-#aurelia-phone-screen.mode-404 .set-tab.active { color: #00ff41 !important; }
+#aurelia-phone-screen.mode-404 .set-tab { color: #1a4d1a !important; transition: all 0.2s; }
+#aurelia-phone-screen.mode-404 .set-tab:hover { background: rgba(0,255,65,0.1) !important; color: #00ff41 !important; }
+#aurelia-phone-screen.mode-404 .set-tab.active { color: #00ff41 !important; background: rgba(0,255,65,0.15) !important; }
 #aurelia-phone-screen.mode-404 .set-tab.active::after { background: #00ff41 !important; box-shadow: 0 -2px 8px rgba(0,255,65,0.4) !important; }
 #aurelia-phone-screen.mode-404 .set-content { background: #000800 !important; }
 #aurelia-phone-screen.mode-404 .set-content::-webkit-scrollbar-thumb { background: rgba(0,255,65,0.3) !important; }
@@ -849,7 +954,7 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
 /* ──────────────────────────────────────────────────────────
    avs-* ｜ os_avs.js ｜ 變數工坊
    ────────────────────────────────────────────────────────── */
-#aurelia-phone-screen.mode-404 .avs-container { background: #000800 !important; color: #b8ffcb !important; }
+#aurelia-phone-screen.mode-404 .avs-container { background-color: #000800 !important; background-image: linear-gradient(rgba(0,255,65,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.08) 1px, transparent 1px) !important; background-size: 30px 30px !important; color: #b8ffcb !important; }
 #aurelia-phone-screen.mode-404 .avs-header { background: rgba(0,15,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.3) !important; }
 #aurelia-phone-screen.mode-404 .avs-title { color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .avs-back-btn { color: #00cc33 !important; }
@@ -859,8 +964,9 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
 #aurelia-phone-screen.mode-404 .avs-sys-item:last-child { border-bottom: none !important; }
 #aurelia-phone-screen.mode-404 .avs-sys-item:hover { background: rgba(0,255,65,0.08) !important; color: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .avs-tabs { background: rgba(0,12,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.3) !important; }
-#aurelia-phone-screen.mode-404 .avs-tab { color: #1a4d1a !important; }
-#aurelia-phone-screen.mode-404 .avs-tab.active { color: #00ff41 !important; }
+#aurelia-phone-screen.mode-404 .avs-tab { color: #1a4d1a !important; transition: all 0.2s; }
+#aurelia-phone-screen.mode-404 .avs-tab:hover { background: rgba(0,255,65,0.1) !important; color: #00ff41 !important; }
+#aurelia-phone-screen.mode-404 .avs-tab.active { color: #00ff41 !important; background: rgba(0,255,65,0.15) !important; }
 #aurelia-phone-screen.mode-404 .avs-tab.active::after { background: #00ff41 !important; }
 #aurelia-phone-screen.mode-404 .avs-content { background: #000800 !important; }
 #aurelia-phone-screen.mode-404 .avs-card { background: rgba(0,15,0,0.8) !important; border-color: rgba(0,255,65,0.2) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important; }
