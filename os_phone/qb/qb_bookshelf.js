@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// [檔案] qb_bookshelf.js (v1.5 - 內頁升級：滑動卡片 + 擴充館藏 UI 美化)
+// [檔案] qb_bookshelf.js (v1.6 - 動態人設防汙染預覽版)
 // 職責：書架視窗模組 — 書脊渲染、書封面展開、撰寫新書、刪除確認彈窗
 // 從 void_terminal.js 抽出，完全無狀態，依賴全域物件：
 //   window.AURELIA_WORLDS / AURELIA_CUSTOM_WORLDS
@@ -470,6 +470,9 @@
             ? w.greetings : null;
         const isCard    = !!greetings;
 
+        // 🔥 動態獲取面板中最新切換的人設名字 (UI 防汙染蒙版核心)
+        const currentUserName = window.OS_PERSONA?.getName ? window.OS_PERSONA.getName() : 'User';
+
         panel.innerHTML = `
             <div style="position:absolute;inset:0;background:url('${w.cover}') center/cover;"></div>
             <div style="position:absolute;inset:0;background:linear-gradient(180deg,
@@ -596,7 +599,9 @@
                                         </span>
                                         <input type="radio" name="qb-greeting" value="${i}" ${i === 0 ? 'checked' : ''} style="display:none;">
                                     </div>
-                                    <div style="font-size:14px;color:rgba(255,248,231,0.88);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">${_escHtml(g)}</div>
+                                    <div style="font-size:14px;color:rgba(255,248,231,0.88);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">
+                                        ${_escHtml(g).replace(/\{\{\s*user\s*\}\}/gi, currentUserName).replace(/\{\{\s*char\s*\}\}/gi, w.title)}
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
@@ -936,5 +941,5 @@
     // ── 公開 API ─────────────────────────────────────────────────
     window.QbBookshelf = { render, openCover, openCreate };
 
-    console.log('✅ QbBookshelf 模組就緒');
+    console.log('✅ QbBookshelf 模組就緒 (v1.6 - 動態人設防汙染預覽版)');
 })();
