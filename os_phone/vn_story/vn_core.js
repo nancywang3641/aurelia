@@ -440,6 +440,10 @@
             // 關閉選項 overlay（載入新/舊章節時清除殘留）
             const choiceOv = document.getElementById('vn-choice-overlay');
             if (choiceOv) choiceOv.classList.remove('active');
+            
+            // 🔥 新增：確保全螢幕 Loading 被關閉
+            const choiceLoadOv = document.getElementById('vn-choice-loading-overlay');
+            if (choiceLoadOv) choiceLoadOv.classList.remove('active');
 
             for (const url of Object.values(this._bgMemCache)) {
                 if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
@@ -454,8 +458,6 @@
             }
             this._itemMemCache = {};
             // ⚠️ avatars / _avatarMemCache 跨章節保留，不歸零
-            // 原因：AI 上下文長了必然重複輸出同角色 profile，用程式碼去重比靠 prompt 規則可靠
-            // 完整清除只在 stopGame() / 頁面重新整理時執行
             this._pendingAvatars = {};
             this._decodedImgs = {};
             this.currentName = '';
@@ -487,7 +489,7 @@
                 if(el) el.style.display = 'none';
             });
 
-            // 清除場景插圖 overlay（防止跨章節殘留）
+            // 清除場景插圖 overlay
             const sceneCgOverlay = document.getElementById('scene-cg-overlay');
             if (sceneCgOverlay) sceneCgOverlay.classList.remove('active');
             const sceneCgImg = document.getElementById('scene-cg-img');
@@ -496,7 +498,6 @@
             const bg = document.getElementById('game-bg');
             if (bg) {
                 if (this._lastBgCacheId) {
-                    // 有上一章背景：cacheId 存活，從 IDB 重新取 URL（blob 已被 resetState 撤銷）
                     bg.style.backgroundImage = 'none';
                     const _cid = this._lastBgCacheId;
                     (async () => {
@@ -874,7 +875,11 @@
             const config = (win.OS_SETTINGS?.getConfig?.()) || {};
             if (!win.OS_API || (!config.url && !config.useSystemApi)) return;
 
-            // 顯示生成中 loader
+            // 🔥 新增：顯示全螢幕 Loading 畫面
+            const loadingOverlay = document.getElementById('vn-choice-loading-overlay');
+            if (loadingOverlay) loadingOverlay.classList.add('active');
+
+            // 原本的微型 loader 依然保留，作為底部進度提示
             this._showStartLoader(0);
             const loaderBar = document.getElementById('vn-start-loader-bar');
             if (loaderBar) { loaderBar.style.transition = 'none'; loaderBar.style.width = '0%'; void loaderBar.offsetWidth; }
@@ -901,7 +906,12 @@
                             const _storyTitle = window.VN_Core._currentStoryTitle || '';
                             await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${choice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: choice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
                         } catch(e) {}
+                        
                         window.VN_Core._lastRawText = fullText;
+
+                        // 🔥 新增：成功拿到 AI 回應後，隱藏全螢幕 Loading
+                        if (loadingOverlay) loadingOverlay.classList.remove('active');
+
                         window.VN_Core.loadScript(fullText, null);
                         this._showStartLoader(6000, () => window.VN_Core.next());
                         resolve();
@@ -909,6 +919,8 @@
                 });
             } catch(err) {
                 console.error('[VN_Choice] 生成失敗:', err);
+                // 🔥 新增：發生錯誤時也必須解除 Loading
+                if (loadingOverlay) loadingOverlay.classList.remove('active');
                 const loaderEl = document.getElementById('vn-start-loader');
                 if (loaderEl) loaderEl.style.display = 'none';
             }
