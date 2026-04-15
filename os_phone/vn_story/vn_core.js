@@ -3969,7 +3969,10 @@
                 #aurelia-extractor-phone-overlay::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.74) 0%,rgba(0,0,0,.88) 55%,rgba(0,0,0,.94) 100%);z-index:0;pointer-events:none}
                 #aurelia-extractor-phone-overlay.show{transform:translateY(0)}
                 #ue-root-wrapper{position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column;color:#e8dfc8;font-family:'Noto Serif TC',serif;box-sizing:border-box}
-                #ue-toolbar{display:flex;justify-content:space-between;align-items:center;padding:0 16px;background:rgba(5,4,2,.55);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.22);flex-shrink:0;height:52px}
+                
+                /* 🔥 修改：加入 env(safe-area-inset-top) 修正 iOS 瀏海遮擋 */
+                #ue-toolbar{display:flex;justify-content:space-between;align-items:center;padding:env(safe-area-inset-top, 0px) 16px 0;background:rgba(5,4,2,.55);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.22);flex-shrink:0;height:calc(52px + env(safe-area-inset-top, 0px));box-sizing:border-box;}
+                
                 .ue-title{font-weight:700;font-size:13px;color:#d4af37;letter-spacing:4px;text-transform:uppercase}
                 .ue-icon-btn{border:none;background:transparent;cursor:pointer;font-size:17px;color:rgba(212,175,55,.5);transition:all .18s;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center}
                 .ue-icon-btn:hover{color:#d4af37;background:rgba(212,175,55,.1)}
