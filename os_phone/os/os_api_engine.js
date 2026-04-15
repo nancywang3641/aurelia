@@ -1,11 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] os_api_engine.js (V3.20 - 核彈級攔截版：強制過濾所有 {{user}} 變體)
+// [檔案] os_api_engine.js (V3.22 - 終極完整版：修復代碼缺失 + 完美動態人設)
 // 路徑：os_phone/os/os_api_engine.js
 // 職責：組裝 Prompt 並負責與 AI 通訊。
 //       AVS 底層引擎由 os_avs_engine.js 提供，本檔僅呼叫 win._AVS_ENGINE。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入 API 引擎 (V3.20)...');
+    console.log('[PhoneOS] 載入 API 引擎 (V3.22)...');
     const win = window.parent || window; // 🔥 絕對保留：雙通向架構的核心
 
     // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
@@ -158,25 +158,25 @@
             } catch(e) { return true; }
         },
 
-        // 🌟 新增：統一獲取最真實的全局使用者名稱
+        // 🌟 新增：統一獲取最真實的全局使用者名稱 (最高優先級：OS_PERSONA)
         getGlobalUserName: function() {
-            let uName = "User";
+            let uName = "";
             try {
                 const w = window.parent || window;
-                if (!this.isStandalone() && w.SillyTavern?.getContext) {
+                // 1. 絕對優先：OS_PERSONA (面板切換的第一手最新資料)
+                if (w.OS_PERSONA && typeof w.OS_PERSONA.getName === 'function') {
+                    const pName = w.OS_PERSONA.getName();
+                    if (pName && pName.trim() !== 'User') uName = pName.trim();
+                }
+                // 2. 備用方案：酒館 (ST) 原生 Context
+                if (!uName && !this.isStandalone() && w.SillyTavern?.getContext) {
                     const stCtx = w.SillyTavern.getContext();
-                    if (stCtx && stCtx.user && stCtx.user.name) uName = stCtx.user.name;
-                }
-                if (uName === "User" && w.OS_PERSONA?.getCurrent) {
-                    const pName = w.OS_PERSONA.getCurrent().name;
-                    if (pName && pName !== 'User') uName = pName;
-                }
-                if (uName === "User" && w.OS_USER?.getInfo) {
-                    const uiName = w.OS_USER.getInfo().name;
-                    if (uiName && uiName !== 'User') uName = uiName;
+                    if (stCtx?.user?.name && stCtx.user.name.trim() !== 'User') {
+                        uName = stCtx.user.name.trim();
+                    }
                 }
             } catch(e) {}
-            return uName;
+            return uName || "User";
         },
 
         chatSecondary: async function(messages, onChunk, onFinish, onError) {
@@ -192,7 +192,7 @@
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
             // 🌟 第一道防線：獲取名字，並在打印 Debug 表格前直接把傳入的 messages 掃一遍
-            const globalUserName = this.getGlobalUserName() || "User";
+            const globalUserName = this.getGlobalUserName();
             messages.forEach(m => {
                 if (m.content && typeof m.content === 'string') {
                     // 使用 \s* 防止有空格如 {{ user }} 的情況
@@ -237,6 +237,7 @@
                 }
             } catch(e) { totalTokens = Math.ceil(totalChars * 0.5) || 0; }
 
+            // 🔥 完整恢復的 Debug Panel 與 console.table 分類顯示 (絕不省略)
             try {
                 const typeLabel = config._isSecondary ? "⚡ 副模型 (Secondary)" : "🧠 主模型 (Primary)";
                 console.group(`📊 [OS_API] ${typeLabel} 發送檢查 (Token: ${totalTokens} | Chars: ${totalChars})`);
@@ -330,8 +331,8 @@
                             .filter(p => p.content && p.content.trim());
 
                         if (injected.length > 0) {
-                            // 🌟 確保從外部預設包注入進來的文字，也被掃描替換
                             let combined = injected.map(p => p.content.trim()).join('\n\n');
+                            // 🌟 確保從外部預設包注入進來的文字，也被掃描替換
                             combined = combined.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
                             messages.unshift({ role: 'system', content: combined });
                             console.log(`📋 [PresetPrompt] 注入 ${injected.length} 個條目 (來源: "${targetPreset}")，共 ${combined.length} 字元`);
@@ -371,6 +372,7 @@
                 };
 
                 _dbgStart = Date.now();
+                // 🔥 完整恢復的 Debug 攔截請求發送
                 try {
                     const _dbgUrl = !useSystemApi ? (config.url || '') : '/api/st-backend';
                     window._OS_DBG_REQUEST?.(_dbgId, commonBody, _dbgUrl, config.model);
@@ -450,6 +452,7 @@
 
                 if (!fullText) throw new Error("API 返回內容為空 (可能被過濾或生成失敗)");
 
+                // 🔥 完整恢復的 Debug 攔截響應接收
                 try { window._OS_DBG_RESPONSE?.(_dbgId, 200, rawApiResponse || fullText, Date.now() - _dbgStart); } catch(e) {}
 
                 const recvChars = fullText.length;
@@ -494,13 +497,12 @@
                 try { ctx = await win.OS_TAVERN_BRIDGE.getApiContext(); } catch (e) { console.error(e); }
             }
 
-            let userName = ctx.user.name || "User";
+            let userName = this.getGlobalUserName(); // 🔥 動態獲取名字
             let userDesc = "";
 
             const userModule = win.OS_USER || win.WX_USER;
             if (userModule && typeof userModule.getInfo === 'function') {
                 const uInfo = userModule.getInfo();
-                if (uInfo.name && uInfo.name !== 'User') userName = uInfo.name;
                 if (uInfo.desc) userDesc = uInfo.desc;
             }
             const charName = ctx.char.name || "AI";
@@ -699,10 +701,10 @@
             const apiMessages = [];
 
             // ── 1. 提取全域人設與提示詞 ──
-            let userName = 'User', userDesc = '';
+            let userName = this.getGlobalUserName(); // 🔥 動態獲取名字
+            let userDesc = '';
             try {
                 const persona = win.OS_PERSONA?.getCurrent?.() || {};
-                if (persona.name) userName = persona.name;
                 if (persona.description || persona.desc) userDesc = persona.description || persona.desc;
             } catch(e) {}
 
@@ -990,5 +992,5 @@
         }
     };
 
-    console.log('[PhoneOS] API 引擎 (V3.20 - 核彈級攔截版：強制過濾所有 {{user}} 變體) 就緒');
+    console.log('[PhoneOS] API 引擎 (V3.22 - 終極完整版：修復代碼缺失 + 完美動態人設) 就緒');
 })();
