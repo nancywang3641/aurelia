@@ -581,26 +581,58 @@
                     <div style="font-size:14px;font-weight:bold;color:#FBDFA2;letter-spacing:1px;">
                         📖 選擇開場白：${w.title}
                     </div>
-                    <button id="qb-inner-close" style="
-                        background:none;border:none;color:rgba(251,223,162,0.6);
-                        font-size:24px;cursor:pointer;line-height:1;padding:0 5px;"
-                        onmouseover="this.style.color='#FBDFA2'" onmouseout="this.style.color='rgba(251,223,162,0.6)'">×</button>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button id="qb-greet-replace-btn" title="文字取代" style="
+                            background:rgba(251,223,162,0.12);border:1px solid rgba(251,223,162,0.3);
+                            color:rgba(251,223,162,0.75);font-size:13px;cursor:pointer;
+                            border-radius:6px;padding:4px 10px;letter-spacing:0.5px;white-space:nowrap;"
+                            onmouseover="this.style.background='rgba(251,223,162,0.22)'" onmouseout="this.style.background='rgba(251,223,162,0.12)'">🔄 取代</button>
+                        <button id="qb-inner-close" style="
+                            background:none;border:none;color:rgba(251,223,162,0.6);
+                            font-size:24px;cursor:pointer;line-height:1;padding:0 5px;"
+                            onmouseover="this.style.color='#FBDFA2'" onmouseout="this.style.color='rgba(251,223,162,0.6)'">×</button>
+                    </div>
+                </div>
+
+                <!-- 文字取代浮層 -->
+                <div id="qb-greet-replace-panel" style="display:none;padding:14px 20px;background:rgba(30,18,8,0.97);border-bottom:1px solid rgba(251,223,162,0.2);flex-shrink:0;flex-direction:column;gap:10px;">
+                    <div style="font-size:12px;color:rgba(251,223,162,0.5);letter-spacing:1px;margin-bottom:2px;">全部開場白批量取代</div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input id="qb-greet-find" placeholder="搜尋文字…" style="flex:1;background:rgba(0,0,0,0.5);border:1px solid rgba(251,223,162,0.25);border-radius:6px;color:#FFF8E7;padding:8px 10px;font-size:13px;outline:none;">
+                        <span style="color:rgba(251,223,162,0.4);font-size:16px;">→</span>
+                        <input id="qb-greet-repl" placeholder="替換為…" style="flex:1;background:rgba(0,0,0,0.5);border:1px solid rgba(251,223,162,0.25);border-radius:6px;color:#FFF8E7;padding:8px 10px;font-size:13px;outline:none;">
+                        <button id="qb-greet-replace-do" style="background:linear-gradient(135deg,rgba(251,223,162,0.25),rgba(200,160,48,0.3));border:1px solid rgba(251,223,162,0.4);color:#FBDFA2;border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;white-space:nowrap;font-weight:bold;">取代全部</button>
+                    </div>
+                    <div id="qb-greet-replace-msg" style="font-size:12px;color:rgba(150,220,130,0.8);min-height:16px;"></div>
+                    <!-- 已儲存規則列表 -->
+                    <div id="qb-greet-saved-rules" style="display:none;border-top:1px solid rgba(251,223,162,0.1);padding-top:10px;display:flex;flex-direction:column;gap:6px;">
+                        <div style="font-size:11px;color:rgba(251,223,162,0.3);letter-spacing:1px;margin-bottom:2px;">📌 已儲存規則（點擊套用）</div>
+                        <div id="qb-greet-rules-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                    </div>
                 </div>
                 
                 <div id="qb-greeting-slider" style="flex:1; overflow:hidden; position:relative; width:100%; display:flex; flex-direction:column;">
                     <div id="qb-greeting-track" style="display:flex; width:100%; height:100%; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);">
                         
                         ${greetings.map((g, i) => `
-                            <div class="qb-greet-slide" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 20px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
+                            <div class="qb-greet-slide" data-greet-idx="${i}" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 20px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
                                 <div style="border:1px solid rgba(251,223,162,0.25); background:rgba(0,0,0,0.5); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column;">
                                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid rgba(251,223,162,0.15);padding-bottom:12px;">
                                         <span style="font-size:14px;color:#FBDFA2;letter-spacing:2px;font-weight:bold;">
                                             開場白 ${i + 1}
                                         </span>
-                                        <input type="radio" name="qb-greeting" value="${i}" ${i === 0 ? 'checked' : ''} style="display:none;">
+                                        <div style="display:flex;align-items:center;gap:6px;">
+                                            <button class="qb-greet-edit-btn" data-idx="${i}" title="編輯此開場白" style="background:rgba(251,223,162,0.1);border:1px solid rgba(251,223,162,0.25);color:rgba(251,223,162,0.6);font-size:13px;cursor:pointer;border-radius:5px;padding:3px 8px;line-height:1.4;">✏️ 編輯</button>
+                                            <input type="radio" name="qb-greeting" value="${i}" ${i === 0 ? 'checked' : ''} style="display:none;">
+                                        </div>
                                     </div>
-                                    <div style="font-size:14px;color:rgba(255,248,231,0.88);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">
+                                    <div class="qb-greet-text" data-idx="${i}" style="font-size:14px;color:rgba(255,248,231,0.88);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">
                                         ${_escHtml(g).replace(/\{\{\s*user\s*\}\}/gi, currentUserName).replace(/\{\{\s*char\s*\}\}/gi, w.title)}
+                                    </div>
+                                    <textarea class="qb-greet-editor" data-idx="${i}" style="display:none;flex:1;min-height:200px;background:rgba(0,0,0,0.6);border:1px solid rgba(251,223,162,0.35);border-radius:6px;color:#FFF8E7;font-size:13px;line-height:1.8;padding:12px;resize:vertical;font-family:inherit;outline:none;"></textarea>
+                                    <div class="qb-greet-save-row" data-idx="${i}" style="display:none;justify-content:flex-end;gap:8px;margin-top:10px;">
+                                        <button class="qb-greet-cancel-btn" data-idx="${i}" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:rgba(255,248,231,0.6);border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;">取消</button>
+                                        <button class="qb-greet-save-btn" data-idx="${i}" style="background:linear-gradient(135deg,rgba(251,223,162,0.25),rgba(200,160,48,0.3));border:1px solid rgba(251,223,162,0.4);color:#FBDFA2;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:bold;">儲存</button>
                                     </div>
                                 </div>
                             </div>
@@ -627,6 +659,18 @@
                     <div id="qb-greet-dots" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:80%;">
                         ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:#FBDFA2;opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
                         <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:#4a9eff;opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
+                    </div>
+
+                    <div style="width:100%;max-width:340px;position:relative;">
+                        <div style="font-size:11px;color:rgba(251,223,162,0.4);letter-spacing:1px;margin-bottom:6px;text-align:left;">💬 你的第一句回應（可選）</div>
+                        <textarea id="qb-user-reply" rows="2" placeholder="輸入你對開場白的回應，例如：「沒事，你繼續說。」" style="
+                            width:100%;box-sizing:border-box;
+                            background:rgba(0,0,0,0.45);border:1px solid rgba(251,223,162,0.2);
+                            border-radius:8px;color:#FFF8E7;font-size:13px;line-height:1.6;
+                            padding:10px 12px;resize:none;font-family:inherit;outline:none;
+                            transition:border-color 0.2s;scrollbar-width:none;"
+                            onfocus="this.style.borderColor='rgba(251,223,162,0.45)'"
+                            onblur="this.style.borderColor='rgba(251,223,162,0.2)'"></textarea>
                     </div>
 
                     <button class="qb-dive-world-btn" data-wid="${w.id}" style="
@@ -758,6 +802,15 @@
         })();
         // ──────────────────────────────────────────────────────────
 
+        // ── 開場白儲存輔助 ────────────────────────────────────────────
+        function _saveGreetings() {
+            const idx = (window.AURELIA_CUSTOM_WORLDS || []).findIndex(x => x.id === w.id);
+            if (idx !== -1) {
+                window.AURELIA_CUSTOM_WORLDS[idx].greetings = w.greetings;
+                try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
+            }
+        }
+
         // ── 視圖切換與滑動卡片邏輯 (角色卡專屬) ───────────────────────
         if (isCard) {
             const coverView = panel.querySelector('#qb-cover-view');
@@ -839,6 +892,188 @@
                     updateSlider();
                 }
             }, { passive: true });
+
+            // ── ✏️ 逐張編輯開場白 ─────────────────────────────────────
+            function _enterEditMode(idx) {
+                const slide = innerView.querySelector(`.qb-greet-slide[data-greet-idx="${idx}"]`);
+                if (!slide) return;
+                const textDiv  = slide.querySelector('.qb-greet-text');
+                const editor   = slide.querySelector('.qb-greet-editor');
+                const saveRow  = slide.querySelector('.qb-greet-save-row');
+                const editBtn  = slide.querySelector('.qb-greet-edit-btn');
+                if (!textDiv || !editor) return;
+                // 填入原始文字（未轉義、未替換），供用戶編輯
+                editor.value = w.greetings[idx] || '';
+                textDiv.style.display   = 'none';
+                editor.style.display    = 'block';
+                if (saveRow) saveRow.style.display = 'flex';
+                if (editBtn) editBtn.style.display  = 'none';
+            }
+
+            function _exitEditMode(idx, save) {
+                const slide = innerView.querySelector(`.qb-greet-slide[data-greet-idx="${idx}"]`);
+                if (!slide) return;
+                const textDiv  = slide.querySelector('.qb-greet-text');
+                const editor   = slide.querySelector('.qb-greet-editor');
+                const saveRow  = slide.querySelector('.qb-greet-save-row');
+                const editBtn  = slide.querySelector('.qb-greet-edit-btn');
+                if (save) {
+                    const newText = editor.value;
+                    w.greetings[idx] = newText;
+                    _saveGreetings();
+                    // 重新渲染文字（帶顯示替換）
+                    textDiv.innerHTML = _escHtml(newText)
+                        .replace(/\{\{\s*user\s*\}\}/gi, currentUserName)
+                        .replace(/\{\{\s*char\s*\}\}/gi, w.title);
+                }
+                textDiv.style.display   = '';
+                editor.style.display    = 'none';
+                if (saveRow) saveRow.style.display = 'none';
+                if (editBtn) editBtn.style.display  = '';
+            }
+
+            // 綁定所有「✏️ 編輯」按鈕
+            innerView.querySelectorAll('.qb-greet-edit-btn').forEach(btn => {
+                btn.onclick = () => _enterEditMode(parseInt(btn.dataset.idx));
+            });
+            // 綁定所有「儲存」按鈕
+            innerView.querySelectorAll('.qb-greet-save-btn').forEach(btn => {
+                btn.onclick = () => _exitEditMode(parseInt(btn.dataset.idx), true);
+            });
+            // 綁定所有「取消」按鈕
+            innerView.querySelectorAll('.qb-greet-cancel-btn').forEach(btn => {
+                btn.onclick = () => _exitEditMode(parseInt(btn.dataset.idx), false);
+            });
+
+            // ── 🔄 批量文字取代 + 規則儲存 ───────────────────────────
+            const _RULES_KEY  = 'aurelia_greet_replace_rules';
+            const replaceBtn  = innerView.querySelector('#qb-greet-replace-btn');
+            const replacePanel= innerView.querySelector('#qb-greet-replace-panel');
+            const findInput   = innerView.querySelector('#qb-greet-find');
+            const replInput   = innerView.querySelector('#qb-greet-repl');
+            const doReplBtn   = innerView.querySelector('#qb-greet-replace-do');
+            const replMsg     = innerView.querySelector('#qb-greet-replace-msg');
+            const savedRulesWrap = innerView.querySelector('#qb-greet-saved-rules');
+            const rulesList   = innerView.querySelector('#qb-greet-rules-list');
+
+            // 讀取 / 儲存規則到 localStorage
+            function _loadRules() {
+                try { return JSON.parse(localStorage.getItem(_RULES_KEY) || '[]'); } catch(e) { return []; }
+            }
+            function _persistRules(rules) {
+                try { localStorage.setItem(_RULES_KEY, JSON.stringify(rules)); } catch(e) {}
+            }
+            function _addRule(find, repl) {
+                const rules = _loadRules();
+                // 去重：相同 find 直接更新 repl
+                const existing = rules.findIndex(r => r.find === find);
+                if (existing !== -1) { rules[existing].repl = repl; }
+                else { rules.unshift({ find, repl }); }
+                if (rules.length > 30) rules.length = 30;  // 最多 30 條
+                _persistRules(rules);
+            }
+            function _deleteRule(find) {
+                _persistRules(_loadRules().filter(r => r.find !== find));
+            }
+
+            // 渲染規則 chips
+            function _renderRules() {
+                if (!rulesList) return;
+                const rules = _loadRules();
+                if (!rules.length) {
+                    if (savedRulesWrap) savedRulesWrap.style.display = 'none';
+                    return;
+                }
+                if (savedRulesWrap) savedRulesWrap.style.display = 'flex';
+                rulesList.innerHTML = '';
+                rules.forEach(r => {
+                    const chip = document.createElement('div');
+                    chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:rgba(251,223,162,0.08);border:1px solid rgba(251,223,162,0.2);border-radius:20px;padding:4px 10px 4px 12px;cursor:pointer;transition:background 0.15s;max-width:100%;';
+                    chip.title = `點擊填入：「${r.find}」→「${r.repl}」`;
+
+                    const label = document.createElement('span');
+                    label.style.cssText = 'font-size:12px;color:rgba(255,248,231,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;';
+                    label.textContent = `${r.find} → ${r.repl || '（刪除）'}`;
+
+                    const del = document.createElement('button');
+                    del.textContent = '×';
+                    del.style.cssText = 'background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;font-size:14px;line-height:1;padding:0;flex-shrink:0;';
+                    del.title = '刪除此規則';
+                    del.onclick = e => {
+                        e.stopPropagation();
+                        _deleteRule(r.find);
+                        _renderRules();
+                    };
+
+                    chip.appendChild(label);
+                    chip.appendChild(del);
+                    chip.addEventListener('mouseenter', () => chip.style.background = 'rgba(251,223,162,0.16)');
+                    chip.addEventListener('mouseleave', () => chip.style.background = 'rgba(251,223,162,0.08)');
+                    // 點擊 chip → 填入輸入框並立即執行
+                    chip.onclick = () => {
+                        if (findInput) findInput.value = r.find;
+                        if (replInput) replInput.value = r.repl;
+                        doReplBtn?.click();
+                    };
+                    rulesList.appendChild(chip);
+                });
+            }
+
+            // 執行取代的核心函式
+            function _doReplace(find, repl) {
+                if (!find) {
+                    if (replMsg) { replMsg.textContent = '請輸入搜尋文字'; replMsg.style.color = 'rgba(255,160,100,0.8)'; }
+                    return;
+                }
+                let count = 0;
+                w.greetings = w.greetings.map(g => {
+                    const updated = g.split(find).join(repl);
+                    if (updated !== g) count++;
+                    return updated;
+                });
+                if (count > 0) {
+                    _saveGreetings();
+                    // 更新所有顯示中的文字
+                    innerView.querySelectorAll('.qb-greet-text').forEach(el => {
+                        const i = parseInt(el.dataset.idx);
+                        el.innerHTML = _escHtml(w.greetings[i])
+                            .replace(/\{\{\s*user\s*\}\}/gi, currentUserName)
+                            .replace(/\{\{\s*char\s*\}\}/gi, w.title);
+                    });
+                    // 若有正在編輯的框也同步
+                    innerView.querySelectorAll('.qb-greet-editor').forEach(el => {
+                        const i = parseInt(el.dataset.idx);
+                        if (el.style.display !== 'none') el.value = w.greetings[i];
+                    });
+                    // 儲存這條規則
+                    _addRule(find, repl);
+                    _renderRules();
+                    if (replMsg) { replMsg.textContent = `✅ 已取代 ${count} 個開場白，規則已儲存`; replMsg.style.color = 'rgba(150,220,130,0.9)'; }
+                } else {
+                    if (replMsg) { replMsg.textContent = '未找到匹配文字'; replMsg.style.color = 'rgba(255,160,100,0.8)'; }
+                }
+                setTimeout(() => { if (replMsg) replMsg.textContent = ''; }, 3000);
+            }
+
+            if (replaceBtn && replacePanel) {
+                replaceBtn.onclick = () => {
+                    const open = replacePanel.style.display === 'flex';
+                    replacePanel.style.display = open ? 'none' : 'flex';
+                    if (!open) {
+                        _renderRules();
+                        if (findInput) findInput.focus();
+                    }
+                };
+            }
+
+            if (doReplBtn) {
+                doReplBtn.onclick = () => _doReplace(findInput?.value || '', replInput?.value ?? '');
+            }
+
+            // Enter 鍵快捷觸發
+            [findInput, replInput].forEach(inp => {
+                if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') doReplBtn?.click(); });
+            });
         }
 
         // 返回書架按鈕
@@ -872,6 +1107,7 @@
                     const sel = panel.querySelector('input[name="qb-greeting"]:checked');
                     const idx = sel ? parseInt(sel.value) : 0;
                     const chosenGreeting = (idx >= 0 && greetings && greetings[idx]) ? greetings[idx] : '';
+                    const userReply = (panel.querySelector('#qb-user-reply')?.value || '').trim();
 
                     localStorage.setItem('vn_current_world_id', w.id);
                     localStorage.removeItem('vn_pending_first_mes');
@@ -882,7 +1118,7 @@
                     shelves.forEach(s => s.style.display = 'flex');
 
                     if (isStandalone) {
-                        window._pendingCardDive = { worldId: w.id, greeting: chosenGreeting, title: w.title };
+                        window._pendingCardDive = { worldId: w.id, greeting: chosenGreeting, title: w.title, userReply };
                         if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
                         setTimeout(() => window.VN_Core?.openGeneratePanel?.(), 400);
                     } else {

@@ -144,8 +144,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* === VN 生成面板 === */
         #vn-gen-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.88); backdrop-filter: blur(12px); z-index: 110; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         #vn-gen-overlay.active { opacity: 1; pointer-events: auto; }
-        #vn-gen-window { width: calc(100% - 30px); max-width: 420px; background: linear-gradient(135deg, #0d0d0d 0%, #050505 100%); border: 1px solid rgba(212,175,55,0.3); border-radius: 2px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.95), 0 0 0 1px rgba(255,255,255,0.04) inset; display: flex; flex-direction: column; transform: scale(0.97) translateY(12px); opacity: 0; transition: transform 0.35s cubic-bezier(0.2,0.8,0.2,1), opacity 0.35s; margin-top: env(safe-area-inset-top, 0px); }
-        body.layout-pad-ios #vn-gen-window { margin-top: 35px; }
+        #vn-gen-window { width: calc(100% - 30px); max-width: 420px; background: linear-gradient(135deg, #0d0d0d 0%, #050505 100%); border: 1px solid rgba(212,175,55,0.3); border-radius: 2px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.95), 0 0 0 1px rgba(255,255,255,0.04) inset; display: flex; flex-direction: column; transform: scale(0.97) translateY(12px); opacity: 0; transition: transform 0.35s cubic-bezier(0.2,0.8,0.2,1), opacity 0.35s; }
         #vn-gen-overlay.active #vn-gen-window { transform: scale(1) translateY(0); opacity: 1; }
         #vn-gen-titlebar { background: rgba(10,10,10,0.9); border-bottom: 1px solid rgba(212,175,55,0.25); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         #vn-gen-titlebar .gen-title { color: var(--gold); font-family: var(--font-classic); font-size: 1.1rem; letter-spacing: 3px; }
@@ -214,8 +213,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         #chapter-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 100; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
         #chapter-overlay.active { opacity: 1; pointer-events: auto; }
-        #chapter-window { width: calc(100% - 30px); max-width: 410px; max-height: calc(100% - 40px); background: linear-gradient(135deg, #111 0%, #050505 100%); border: 1px solid var(--glass-border); border-radius: 2px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.05) inset; display: flex; flex-direction: column; transform: scale(0.98) translateY(10px); opacity: 0; transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s; margin-top: env(safe-area-inset-top, 0px); }
-        body.layout-pad-ios #chapter-window { margin-top: 35px; }
+        #chapter-window { width: calc(100% - 30px); max-width: 410px; max-height: calc(100% - 40px); background: linear-gradient(135deg, #111 0%, #050505 100%); border: 1px solid var(--glass-border); border-radius: 2px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.05) inset; display: flex; flex-direction: column; transform: scale(0.98) translateY(10px); opacity: 0; transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s; }
         #chapter-overlay.active #chapter-window { transform: scale(1) translateY(0); opacity: 1; }
         #chapter-titlebar { background: rgba(10,10,10,0.8); border-bottom: 1px solid var(--gold-dark); padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         #chapter-titlebar .ch-title { color: var(--gold); font-family: var(--font-classic); font-size: 1.2rem; letter-spacing: 4px; }
@@ -415,7 +413,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .portrait-jumpscare { animation: anim-portrait-jumpscare 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
         
         #top-badge {
-            position: absolute; top: calc(18px + env(safe-area-inset-top, 0px)); left: 18px; z-index: 10;
+            position: absolute; top: 18px; left: 18px; z-index: 10;
             border: none; box-shadow: none; border-radius: 0;
             /* 水平漸隱黑遮罩條 — 左右邊緣透明消散，無硬邊框 */
             background: linear-gradient(to right,
@@ -434,8 +432,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                  1px -1px 0 rgba(0,0,0,0.9),
                 -1px  1px 0 rgba(0,0,0,0.9);
         }
-        body.layout-pad-ios #top-badge,
-        .layout-pad-ios #top-badge { top: 55px !important; }
         #top-badge::before {
             content: '';
             display: inline-block; vertical-align: middle;
@@ -889,8 +885,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         #game-settings-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 60; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
         #game-settings-overlay.active { opacity: 1; pointer-events: auto; }
-        #game-settings-window { width: calc(100% - 30px); max-width: 410px; max-height: calc(100% - 40px); background: linear-gradient(135deg, #111 0%, #050505 100%); border: 1px solid var(--glass-border); border-radius: 2px; box-shadow: 0 20px 60px rgba(0,0,0,0.9); display: flex; flex-direction: column; transform: scale(0.98) translateY(10px); opacity: 0; transition: transform 0.4s, opacity 0.4s; overflow: hidden; margin-top: env(safe-area-inset-top, 0px); }
-        body.layout-pad-ios #game-settings-window { margin-top: 35px; }
+        #game-settings-window { width: calc(100% - 30px); max-width: 410px; max-height: calc(100% - 40px); background: linear-gradient(135deg, #111 0%, #050505 100%); border: 1px solid var(--glass-border); border-radius: 2px; box-shadow: 0 20px 60px rgba(0,0,0,0.9); display: flex; flex-direction: column; transform: scale(0.98) translateY(10px); opacity: 0; transition: transform 0.4s, opacity 0.4s; overflow: hidden; }
         #game-settings-overlay.active #game-settings-window { transform: scale(1) translateY(0); opacity: 1; }
         #gs-titlebar { background: rgba(10,10,10,0.8); border-bottom: 1px solid var(--gold-dark); padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; }
         #gs-titlebar .gs-title { color: var(--gold); font-family: var(--font-classic); font-size: 1.2rem; letter-spacing: 4px; }
@@ -1158,16 +1153,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             
 
             /* 背景標籤 */
-            #top-badge { 
-                top: calc(10px + env(safe-area-inset-top, 0px)) !important;
-                left: 8px;
-                font-size: 0.82rem; 
-                letter-spacing: 1.5px; 
-            }
-            body.layout-pad-ios #top-badge,
-            .layout-pad-ios #top-badge { 
-                top: 52px !important; 
-            }
+            #top-badge { font-size: 0.82rem; letter-spacing: 1.5px; }
 
             /* 對話框全面縮小 */
             #text-panel-wrapper { width: 95%; bottom: 15px; }
@@ -1258,24 +1244,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #phone-call.call-active #call-avatar { width: 56px; height: 56px; }
             #phone-call.call-active #call-name { font-size: 1.1rem; }
         }
-
-        /* ⏳ 資料中心選項 Loading 遮罩 */
-        #vn-choice-loading-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(5,5,8,0.92); backdrop-filter: blur(10px);
-            z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center;
-            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-        }
-        #vn-choice-loading-overlay.active { opacity: 1; pointer-events: auto; }
-        .vn-cl-spinner {
-            width: 40px; height: 40px; border: 3px solid rgba(212,175,55,0.2);
-            border-top-color: var(--gold); border-radius: 50%;
-            animation: spin 0.8s linear infinite; margin-bottom: 16px;
-        }
-        .vn-cl-text {
-            color: var(--gold); font-family: var(--font-classic); font-size: 1rem;
-            letter-spacing: 4px; text-shadow: 0 0 10px rgba(212,175,55,0.4);
-        }
     `;
 
     // === 注入樣式 ===
@@ -1320,15 +1288,18 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 </div>
 
             <div id="page-settings" class="page hidden">
-                <div class="menu-wrapper" style="justify-content: flex-start; padding-top: calc(50px + env(safe-area-inset-top, 0px)); height: auto; min-height: 100%;">
+                <div class="menu-wrapper" style="justify-content: flex-start; padding-top: 50px; height: auto; min-height: 100%;">
 
+                    <!-- Tab 容器 -->
                     <div class="cfg-tab-wrap">
+                    <!-- Tab 切換列 -->
                     <div class="cfg-tab-bar">
                         <button class="cfg-tab-btn active" onclick="window.VN_PLAYER.switchCfgTab('cfg-tab-basic', this)">⚙️ 基本</button>
                         <button class="cfg-tab-btn" onclick="window.VN_PLAYER.switchCfgTab('cfg-tab-prompt', this)">🎨 Prompt</button>
                         <button class="cfg-tab-btn" onclick="window.VN_PLAYER.switchCfgTab('cfg-tab-avatar', this)">🎭 頭像</button>
                     </div>
 
+                    <!-- Tab 1: 基本路徑 -->
                     <div id="cfg-tab-basic" class="cfg-tab-panel active">
                         <div class="setting-row">
                             <label>🏠 主頁背景圖</label>
@@ -1364,6 +1335,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                         </div>
                     </div>
 
+                    <!-- Tab 2: Prompt -->
                     <div id="cfg-tab-prompt" class="cfg-tab-panel">
                         <div class="setting-row">
                             <label>🧑‍🎨 VN頭像追加詞 <span style="font-weight:normal; color:#888; font-size:0.8em;">（選填，插入在 OS通用底詞 與 角色描述詞 之間）</span></label>
@@ -1392,6 +1364,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                         </div>
                     </div>
 
+                    <!-- Tab 3: 頭像快取 -->
                     <div id="cfg-tab-avatar" class="cfg-tab-panel">
                         <div class="setting-row" id="avatar-mgr-wrap">
                             <label>🎭 角色立繪快取 (防重複生圖)</label>
@@ -1400,7 +1373,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                         <p style="color:#888; font-size:0.85rem; line-height: 1.5; margin-bottom: 20px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。</p>
                     </div>
 
-                    </div><button class="btn" onclick="window.VN_PLAYER.saveConfig()" style="margin-top:10px;">保存並返回</button>
+                    </div><!-- /.cfg-tab-wrap -->
+
+                    <button class="btn" onclick="window.VN_PLAYER.saveConfig()" style="margin-top:10px;">保存並返回</button>
                 </div>
             </div>
 
@@ -1506,12 +1481,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                     </div>
                     <div id="vn-log-content"></div>
                 </div>
-                
-                <div id="vn-choice-loading-overlay">
-                    <div class="vn-cl-spinner"></div>
-                    <div class="vn-cl-text">AI 命運編織中...</div>
-                </div>
 
+                <!-- 💭 思考鏈小窗 -->
                 <div id="vn-think-popup">
                     <div id="vn-think-popup-header">
                         <span id="vn-think-popup-title">💭 本章思考鏈</span>
@@ -1520,6 +1491,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                     <div id="vn-think-popup-body"></div>
                 </div>
 
+                <!-- 📖 劇情閱讀器（迷你酒館）-->
                 <div id="vn-reader-overlay">
                     <div id="vn-reader-header">
                         <div id="vn-reader-title">📖 劇情閱讀器</div>
@@ -1597,6 +1569,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                             </div>
                             <div id="chat-body"></div>
 
+                            <!-- 表情包面板 -->
+                            <!-- 表情包面板：tabs + grid only，管理移至系統設置 -->
                             <div id="sticker-panel" onclick="event.stopPropagation()">
                                 <div id="sticker-tabs-row">
                                     <div id="sticker-tabs"></div>
@@ -1665,6 +1639,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
                 <audio id="bgm-player" loop></audio>
 
+                <!-- 第三方插件 HTML block 展示層 -->
                 <div id="html-block-overlay" style="display:none;"></div>
 
                 <div id="game-settings-overlay">
@@ -1716,6 +1691,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                         <button class="gen-close" onclick="window.VN_PLAYER.closeGeneratePanel()">✕</button>
                     </div>
                     <div id="vn-gen-columns">
+                        <!-- 左欄：自由生成（儲存記錄完全隔離） -->
                         <div id="vn-gen-body">
                             <div class="vn-gen-col-hd">✍️ 自由生成</div>
                             <label>開場白標題 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，填了才會儲存/覆蓋)</span></label>
@@ -1731,6 +1707,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                                 <div id="vn-gen-presets"></div>
                             </div>
                         </div>
+                        <!-- 右欄：書架角色卡（標示書名，完全獨立） -->
                         <div id="vn-gen-card-col">
                             <div class="vn-gen-col-hd">📚 書架角色卡</div>
                             <div id="vn-gen-card-list"></div>

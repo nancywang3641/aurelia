@@ -440,10 +440,6 @@
             // 關閉選項 overlay（載入新/舊章節時清除殘留）
             const choiceOv = document.getElementById('vn-choice-overlay');
             if (choiceOv) choiceOv.classList.remove('active');
-            
-            // 🔥 新增：確保全螢幕 Loading 被關閉
-            const choiceLoadOv = document.getElementById('vn-choice-loading-overlay');
-            if (choiceLoadOv) choiceLoadOv.classList.remove('active');
 
             for (const url of Object.values(this._bgMemCache)) {
                 if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
@@ -458,6 +454,8 @@
             }
             this._itemMemCache = {};
             // ⚠️ avatars / _avatarMemCache 跨章節保留，不歸零
+            // 原因：AI 上下文長了必然重複輸出同角色 profile，用程式碼去重比靠 prompt 規則可靠
+            // 完整清除只在 stopGame() / 頁面重新整理時執行
             this._pendingAvatars = {};
             this._decodedImgs = {};
             this.currentName = '';
@@ -489,7 +487,7 @@
                 if(el) el.style.display = 'none';
             });
 
-            // 清除場景插圖 overlay
+            // 清除場景插圖 overlay（防止跨章節殘留）
             const sceneCgOverlay = document.getElementById('scene-cg-overlay');
             if (sceneCgOverlay) sceneCgOverlay.classList.remove('active');
             const sceneCgImg = document.getElementById('scene-cg-img');
@@ -498,6 +496,7 @@
             const bg = document.getElementById('game-bg');
             if (bg) {
                 if (this._lastBgCacheId) {
+                    // 有上一章背景：cacheId 存活，從 IDB 重新取 URL（blob 已被 resetState 撤銷）
                     bg.style.backgroundImage = 'none';
                     const _cid = this._lastBgCacheId;
                     (async () => {
@@ -635,6 +634,12 @@
             const contentMatch = txt.match(/<content>([\s\S]*?)<\/content>/i);
             let storyText = contentMatch ? contentMatch[1] : txt;
 
+            // 解析 <branches> 區塊（位於 <content> 外，作為一次性選擇，不進入 AI 上下文）
+            const branchesMatch = txt.match(/<branches>([\s\S]*?)<\/branches>/i);
+            const _branchLines = branchesMatch
+                ? branchesMatch[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('[Choice|'))
+                : [];
+
             // 🧹 從 storyText 移除 <profile> 區塊（含 <details> 包裝）
             // 角色表不應出現在 VN 對話流中；資料會另存至 OS_WORLDBOOK
             storyText = storyText.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, match =>
@@ -708,6 +713,11 @@
             }
 
             // ⚠️ _extractAndSaveProfiles 已停用：自動把 VN 劇情角色寫入 OS_WORLDBOOK 會汙染世界書資料
+
+            // 將 <branches> 選項附加到 script 末尾（由現有 [Choice|] 機制驅動顯示）
+            if (_branchLines.length) {
+                this.script.push(..._branchLines);
+            }
 
             this._prewarmBgs();
             this._prewarmScenes();
@@ -875,11 +885,7 @@
             const config = (win.OS_SETTINGS?.getConfig?.()) || {};
             if (!win.OS_API || (!config.url && !config.useSystemApi)) return;
 
-            // 🔥 新增：顯示全螢幕 Loading 畫面
-            const loadingOverlay = document.getElementById('vn-choice-loading-overlay');
-            if (loadingOverlay) loadingOverlay.classList.add('active');
-
-            // 原本的微型 loader 依然保留，作為底部進度提示
+            // 顯示生成中 loader
             this._showStartLoader(0);
             const loaderBar = document.getElementById('vn-start-loader-bar');
             if (loaderBar) { loaderBar.style.transition = 'none'; loaderBar.style.width = '0%'; void loaderBar.offsetWidth; }
@@ -906,12 +912,7 @@
                             const _storyTitle = window.VN_Core._currentStoryTitle || '';
                             await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${choice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: choice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
                         } catch(e) {}
-                        
                         window.VN_Core._lastRawText = fullText;
-
-                        // 🔥 新增：成功拿到 AI 回應後，隱藏全螢幕 Loading
-                        if (loadingOverlay) loadingOverlay.classList.remove('active');
-
                         window.VN_Core.loadScript(fullText, null);
                         this._showStartLoader(6000, () => window.VN_Core.next());
                         resolve();
@@ -919,8 +920,6 @@
                 });
             } catch(err) {
                 console.error('[VN_Choice] 生成失敗:', err);
-                // 🔥 新增：發生錯誤時也必須解除 Loading
-                if (loadingOverlay) loadingOverlay.classList.remove('active');
                 const loaderEl = document.getElementById('vn-start-loader');
                 if (loaderEl) loaderEl.style.display = 'none';
             }
@@ -3226,8 +3225,9 @@
             _saveCardSession(p.worldId, p.title, p.greeting);
             // 預設 diveBtn（diveSelectedCard 依賴此 dataset）
             if (diveBtn) {
-                diveBtn.dataset.wid      = p.worldId;
-                diveBtn.dataset.greeting = p.greeting || '';
+                diveBtn.dataset.wid       = p.worldId;
+                diveBtn.dataset.greeting  = p.greeting  || '';
+                diveBtn.dataset.userReply = p.userReply || '';
             }
             _renderCardCol();                        // 重繪列表（此時 pending 已 null）
             setTimeout(() => diveSelectedCard(), 150);
@@ -3281,9 +3281,10 @@
 
     // 角色卡 DIVE：存紀錄 → 靜默建 prompt → AI 生成 VN 格式
     function diveSelectedCard() {
-        const diveBtn = document.getElementById('vn-gen-card-dive');
-        const wid      = diveBtn?.dataset.wid;
-        const greeting = diveBtn?.dataset.greeting || '';
+        const diveBtn  = document.getElementById('vn-gen-card-dive');
+        const wid       = diveBtn?.dataset.wid;
+        const greeting  = diveBtn?.dataset.greeting  || '';
+        const userReply = diveBtn?.dataset.userReply || '';
         if (!wid) return;
         const w = (window.AURELIA_CUSTOM_WORLDS || []).find(x => x.id === wid);
         if (!w) return;
@@ -3310,9 +3311,19 @@
         // 靜默填入 vn-gen-request（右欄操作，不動左欄使用者資料）
         const genInput = document.getElementById('vn-gen-request');
         const genTitle = document.getElementById('vn-gen-title');
-        if (genInput) genInput.value = greeting
-            ? `請以下列開場白情境為基礎，生成 VN 視覺小說格式的開場章節：\n\n${greeting}`
-            : `請以角色「${w.title}」的世界觀生成 VN 視覺小說格式的開場章節。`;
+        if (genInput) {
+            if (greeting && userReply) {
+                genInput.value =
+                    `請以下列對話情境為基礎，生成 VN 視覺小說格式的開場章節。\n\n` +
+                    `【角色開場白】\n${greeting}\n\n` +
+                    `【用戶的第一句回應】\n${userReply}\n\n` +
+                    `請從此對話後繼續發展劇情，讓角色自然地回應用戶的話語。`;
+            } else if (greeting) {
+                genInput.value = `請以下列開場白情境為基礎，生成 VN 視覺小說格式的開場章節：\n\n${greeting}`;
+            } else {
+                genInput.value = `請以角色「${w.title}」的世界觀生成 VN 視覺小說格式的開場章節。`;
+            }
+        }
         if (genTitle) genTitle.value = w.title;
 
         // ── 顯示全板生成中 Loading（蓋住整個 generate window）────
@@ -3336,10 +3347,18 @@
                                -webkit-box-orient:vertical;overflow:hidden;">
                        「${_esc(greeting.slice(0, 90))}${greeting.length > 90 ? '…' : ''}」
                    </div>` : '';
+            const replyPreview = userReply
+                ? `<div style="font-size:11px;color:rgba(150,200,255,0.4);max-width:260px;
+                               line-height:1.6;margin-top:-4px;
+                               display:-webkit-box;-webkit-line-clamp:2;
+                               -webkit-box-orient:vertical;overflow:hidden;">
+                       你：「${_esc(userReply.slice(0, 60))}${userReply.length > 60 ? '…' : ''}」
+                   </div>` : '';
             loadDiv.innerHTML = `
                 <div style="font-size:44px;filter:drop-shadow(0 2px 14px rgba(212,175,55,0.45));">${_esc(w.icon)}</div>
                 <div style="font-size:17px;font-weight:900;color:#FBDFA2;letter-spacing:3px;">${_esc(w.title)}</div>
                 ${greetPreview}
+                ${replyPreview}
                 <div id="vn-card-dive-status" style="display:flex;align-items:center;gap:8px;
                      font-size:12px;color:rgba(212,175,55,0.75);margin-top:6px;">
                     <span class="gen-spinner"></span>AI 正在編織故事，請稍候…
@@ -3669,42 +3688,74 @@
             const options = this._pendingChoices || [];
             const cb = this._choiceCallback;
             const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
             const btns = options.map((opt, i) =>
-                `<button id="ue-choice-btn-${i}" style="display:block;width:100%;text-align:left;background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.22);color:#c8b87a;padding:12px 16px;margin-bottom:10px;border-radius:4px;font-size:0.88rem;cursor:pointer;line-height:1.5;transition:all 0.2s;" onmouseover="this.style.background='rgba(212,175,55,0.14)'" onmouseout="this.style.background='rgba(212,175,55,0.06)'">${esc(opt.replace(/「|」/g,''))}</button>`
+                `<button id="ue-choice-btn-${i}" style="display:block;width:100%;text-align:left;
+                    background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.22);
+                    color:#c8b87a;padding:11px 15px;margin-bottom:8px;border-radius:4px;
+                    font-size:0.87rem;cursor:pointer;line-height:1.5;transition:all 0.2s;"
+                    onmouseover="this.style.background='rgba(212,175,55,0.13)'"
+                    onmouseout="this.style.background='rgba(212,175,55,0.06)'"
+                >${esc(opt.replace(/「|」/g,''))}</button>`
             ).join('');
-            const customSection = `
-                <button id="ue-choice-custom-toggle" style="display:block;width:100%;text-align:left;background:transparent;border:1px dashed rgba(255,255,255,0.12);color:#666;padding:10px 16px;border-radius:4px;font-size:0.82rem;cursor:pointer;">✏️ 自行輸入...</button>
-                <div id="ue-choice-custom-wrap" style="display:none;margin-top:8px;display:none;">
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <input id="ue-choice-custom-input" type="text" placeholder="輸入你的行動..." maxlength="200" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(212,175,55,0.3);border-radius:3px;color:#ddd;padding:8px 10px;font-size:0.82rem;outline:none;">
-                        <button id="ue-choice-custom-ok" style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.4);color:#d4af37;padding:8px 14px;border-radius:3px;cursor:pointer;font-size:0.8rem;">確定</button>
-                    </div>
-                </div>`;
-            // 選定後關閉 archive + 觸發 callback
+
+            // 選項點擊 → 貼入輸入框；發送按鈕 → 觸發 callback + loading
             setTimeout(() => {
+                const inp = document.getElementById('ue-choice-input');
+                const sendBtn = document.getElementById('ue-choice-send');
+
                 options.forEach((opt, i) => {
                     const b = document.getElementById(`ue-choice-btn-${i}`);
-                    if (b) b.onclick = () => { this._pendingChoices = null; this.hide(); cb && cb(opt); };
-                });
-                const toggleBtn = document.getElementById('ue-choice-custom-toggle');
-                const customWrap = document.getElementById('ue-choice-custom-wrap');
-                const customInput = document.getElementById('ue-choice-custom-input');
-                const customOk = document.getElementById('ue-choice-custom-ok');
-                if (toggleBtn && customWrap) {
-                    toggleBtn.onclick = () => {
-                        const shown = customWrap.style.display !== 'none';
-                        customWrap.style.display = shown ? 'none' : 'block';
-                        if (!shown && customInput) customInput.focus();
+                    if (!b) return;
+                    b.onclick = () => {
+                        if (inp) { inp.value = opt; inp.focus(); }
+                        // 高亮選中
+                        options.forEach((_, j) => {
+                            const bj = document.getElementById(`ue-choice-btn-${j}`);
+                            if (bj) { bj.style.borderColor = 'rgba(212,175,55,0.22)'; bj.style.background = 'rgba(212,175,55,0.06)'; }
+                        });
+                        b.style.borderColor = 'rgba(212,175,55,0.7)';
+                        b.style.background  = 'rgba(212,175,55,0.16)';
                     };
-                }
-                const doCustom = () => {
-                    const val = customInput?.value?.trim();
-                    if (val) { this._pendingChoices = null; this.hide(); cb && cb(val); }
+                });
+
+                const doSend = () => {
+                    const val = inp?.value?.trim();
+                    if (!val) return;
+                    this._pendingChoices = null;
+                    // 先顯示 loading，再關閉 archive，再觸發 AI
+                    window.VN_Core?._showStartLoader?.(0);
+                    this.hide();
+                    cb && cb(val);
                 };
-                if (customOk) customOk.onclick = doCustom;
-                if (customInput) customInput.onkeydown = e => { if (e.key === 'Enter') doCustom(); };
+
+                if (sendBtn) sendBtn.onclick = doSend;
+                if (inp) inp.onkeydown = e => { if (e.key === 'Enter') doSend(); };
             }, 50);
-            return `<div style="padding:8px 0">${btns}${customSection}</div>`;
+
+            return `
+                <div style="display:flex;flex-direction:column;justify-content:center;
+                            height:100%;padding:20px 12px;box-sizing:border-box;gap:0;">
+                    <div>${btns}</div>
+                    <div style="display:flex;gap:8px;align-items:center;
+                                margin-top:14px;padding-top:12px;
+                                border-top:1px solid rgba(212,175,55,0.12);">
+                        <input id="ue-choice-input" type="text"
+                            placeholder="點選項填入，或直接輸入..." maxlength="300"
+                            style="flex:1;background:rgba(0,0,0,0.35);
+                                   border:1px solid rgba(212,175,55,0.3);border-radius:4px;
+                                   color:#e0d4a8;padding:10px 12px;font-size:0.84rem;
+                                   outline:none;font-family:inherit;">
+                        <button id="ue-choice-send"
+                            style="background:rgba(212,175,55,0.18);
+                                   border:1px solid rgba(212,175,55,0.5);
+                                   color:#d4af37;padding:10px 20px;border-radius:4px;
+                                   cursor:pointer;font-size:0.84rem;white-space:nowrap;
+                                   transition:background 0.2s;font-family:inherit;"
+                            onmouseover="this.style.background='rgba(212,175,55,0.32)'"
+                            onmouseout="this.style.background='rgba(212,175,55,0.18)'">發送 ▶</button>
+                    </div>
+                </div>`;
         },
 
         async _profilesHtml() {
@@ -3969,10 +4020,7 @@
                 #aurelia-extractor-phone-overlay::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.74) 0%,rgba(0,0,0,.88) 55%,rgba(0,0,0,.94) 100%);z-index:0;pointer-events:none}
                 #aurelia-extractor-phone-overlay.show{transform:translateY(0)}
                 #ue-root-wrapper{position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column;color:#e8dfc8;font-family:'Noto Serif TC',serif;box-sizing:border-box}
-                
-                /* 🔥 修改：加入 env(safe-area-inset-top) 修正 iOS 瀏海遮擋 */
-                #ue-toolbar{display:flex;justify-content:space-between;align-items:center;padding:env(safe-area-inset-top, 0px) 16px 0;background:rgba(5,4,2,.55);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.22);flex-shrink:0;height:calc(52px + env(safe-area-inset-top, 0px));box-sizing:border-box;}
-                
+                #ue-toolbar{display:flex;justify-content:space-between;align-items:center;padding:0 16px;background:rgba(5,4,2,.55);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.22);flex-shrink:0;height:52px}
                 .ue-title{font-weight:700;font-size:13px;color:#d4af37;letter-spacing:4px;text-transform:uppercase}
                 .ue-icon-btn{border:none;background:transparent;cursor:pointer;font-size:17px;color:rgba(212,175,55,.5);transition:all .18s;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center}
                 .ue-icon-btn:hover{color:#d4af37;background:rgba(212,175,55,.1)}
