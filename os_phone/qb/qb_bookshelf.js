@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// [檔案] qb_bookshelf.js (v1.1)
+// [檔案] qb_bookshelf.js (v1.2 - 移動端自適應與手勢翻頁升級)
 // 職責：書架視窗模組 — 書脊渲染、書封面展開、撰寫新書、刪除確認彈窗
 // 從 void_terminal.js 抽出，完全無狀態，依賴全域物件：
 //   window.AURELIA_WORLDS / AURELIA_CUSTOM_WORLDS
@@ -228,7 +228,7 @@
         return addSpine;
     }
 
-    // ── 渲染書架（三層分頁）────────────────────────────────────
+    // ── 渲染書架（移動端動態寬高適配＋手勢滑動）────────────────────────
     function render() {
         const shelves = _getShelves();
         if (!shelves.length) return;
@@ -236,18 +236,24 @@
         const allWorlds = Object.values(window.AURELIA_WORLDS || {})
             .concat(window.AURELIA_CUSTOM_WORLDS || []);
 
-        // 計算每層可放幾本（依寬度）
-        const shelfW   = shelves[0].getBoundingClientRect().width || 300;
+        // 動態獲取第一層書架的真實寬度。
+        // 如果因面板剛打開等原因抓不到(<=0)，則退回使用螢幕寬度預估 (扣除兩側邊距約 40px)
+        let shelfW = shelves[0].clientWidth;
+        if (shelfW <= 0) {
+            shelfW = window.innerWidth > 0 ? (window.innerWidth - 40) : 300;
+        }
+
+        // 計算每層可放幾本（保底最少1本，完美適配移動端）
         const bookW    = 48, gap = 3, padH = 28;
         const perShelf = Math.max(1, Math.floor((shelfW - padH + gap) / (bookW + gap)));
         const perPage  = perShelf * shelves.length;
 
-        // 計算書本高度（依層高，上限 145px）
-        const shelfH = shelves[0].getBoundingClientRect().height || 185;
+        // 計算書本高度（依層高，避免在移動端變形）
+        const shelfH = shelves[0].clientHeight || 185;
         const bookH  = Math.min(145, Math.max(60, shelfH - 40));
 
-        // 換頁邊界
-        const totalPages = Math.max(1, Math.ceil((allWorlds.length + 1) / perPage)); // +1 for add btn
+        // 換頁邊界計算
+        const totalPages = Math.max(1, Math.ceil((allWorlds.length + 1) / perPage)); // +1 是留給新增按鈕
         _currentPage = Math.max(0, Math.min(_currentPage, totalPages - 1));
         const startIdx = _currentPage * perPage;
         const pageWorlds = allWorlds.slice(startIdx, startIdx + perPage);
@@ -255,13 +261,37 @@
         // 清空三層書架
         shelves.forEach(s => _clearShelf(s));
 
-        // 將書本分配到各層
+        // 將書本依序塞入各層
         shelves.forEach((shelfEl, i) => {
             const slice = pageWorlds.slice(i * perShelf, (i + 1) * perShelf);
             slice.forEach(w => shelfEl.appendChild(_makeSpine(w, bookH)));
+
+            // 綁定移動端 Swipe 滑動手勢翻頁
+            if (!shelfEl._swipeWired) {
+                let touchStartX = 0;
+                shelfEl.addEventListener('touchstart', (e) => {
+                    touchStartX = e.changedTouches[0].screenX;
+                }, { passive: true });
+                
+                shelfEl.addEventListener('touchend', (e) => {
+                    let touchEndX = e.changedTouches[0].screenX;
+                    // 向左滑 -> 下一頁
+                    if (touchStartX - touchEndX > 50) {
+                        const nextBtn = document.getElementById('qb-page-next');
+                        if (nextBtn && !nextBtn.disabled) { _currentPage++; render(); }
+                    } 
+                    // 向右滑 -> 上一頁
+                    else if (touchEndX - touchStartX > 50) {
+                        const prevBtn = document.getElementById('qb-page-prev');
+                        if (prevBtn && !prevBtn.disabled) { _currentPage--; render(); }
+                    }
+                }, { passive: true });
+                
+                shelfEl._swipeWired = true;
+            }
         });
 
-        // ＋ 按鈕：最後一頁，緊跟最後一本書所在的那一層
+        // ＋ 新增按鈕：只在最後一頁出現，並緊跟最後一本書所在的那一層
         if (_currentPage === totalPages - 1) {
             const addShelfIdx = Math.min(
                 Math.floor(pageWorlds.length / perShelf),
@@ -271,23 +301,26 @@
             window.OS_CARD_IMPORT?.injectImportSpine?.(shelves[addShelfIdx]);
         }
 
-        // 翻頁導航
+        // 翻頁導航箭頭狀態更新
         const nav      = document.getElementById('qb-shelf-nav');
         const label    = document.getElementById('qb-page-label');
         const prevBtn  = document.getElementById('qb-page-prev');
         const nextBtn  = document.getElementById('qb-page-next');
+        
         if (nav) {
             if (totalPages > 1) {
                 nav.style.display = 'flex';
-                if (label)   label.textContent     = `${_currentPage + 1} / ${totalPages}`;
+                if (label)   label.textContent      = `${_currentPage + 1} / ${totalPages}`;
                 if (prevBtn) prevBtn.disabled       = _currentPage === 0;
                 if (nextBtn) nextBtn.disabled       = _currentPage === totalPages - 1;
-                if (!nav._wired) {
-                    nav._wired = true;
+                
+                if (!nav._clickWired) {
+                    nav._clickWired = true;
                     if (prevBtn) prevBtn.onclick = () => { if (_currentPage > 0) { _currentPage--; render(); } };
                     if (nextBtn) nextBtn.onclick = () => { if (_currentPage < totalPages - 1) { _currentPage++; render(); } };
                 }
             } else {
+                // 只有一頁時自動隱藏底部導航
                 nav.style.display = 'none';
             }
         }
@@ -424,7 +457,7 @@
             panel.style.display = 'none';
             panel.innerHTML = '';
             shelves.forEach(s => s.style.display = 'flex');
-            render();
+            render(); // 返回時重新計算以防視窗改變
         };
         setTimeout(() => input.focus(), 50);
     }
@@ -652,7 +685,7 @@
             panel.style.display = 'none';
             panel.innerHTML = '';
             shelves.forEach(s => s.style.display = 'flex');
-            render();
+            render(); // 返回時重新渲染確保排版正確
         };
 
         const removeBtn = panel.querySelector('.qb-remove-world-btn');
@@ -714,6 +747,19 @@
             }
         };
     }
+
+    // ── 監聽視窗大小改變 (移動端橫直屏旋轉或縮放適配) ─────────────────────
+    let _resizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(() => {
+            const shelves = _getShelves();
+            // 如果書架存在且第一層寬度大於 0（代表面板可見），則觸發重新計算排版
+            if (shelves.length > 0 && shelves[0].clientWidth > 0) {
+                render();
+            }
+        }, 150); // 加入 150ms 延遲，避免手機旋轉時瘋狂觸發耗效能
+    });
 
     // ── 公開 API ─────────────────────────────────────────────────
     window.QbBookshelf = { render, openCover, openCreate };
