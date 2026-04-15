@@ -440,10 +440,6 @@
             // 關閉選項 overlay（載入新/舊章節時清除殘留）
             const choiceOv = document.getElementById('vn-choice-overlay');
             if (choiceOv) choiceOv.classList.remove('active');
-            
-            // 🔥 新增：確保全螢幕 Loading 被關閉
-            const choiceLoadOv = document.getElementById('vn-choice-loading-overlay');
-            if (choiceLoadOv) choiceLoadOv.classList.remove('active');
 
             for (const url of Object.values(this._bgMemCache)) {
                 if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
@@ -458,6 +454,8 @@
             }
             this._itemMemCache = {};
             // ⚠️ avatars / _avatarMemCache 跨章節保留，不歸零
+            // 原因：AI 上下文長了必然重複輸出同角色 profile，用程式碼去重比靠 prompt 規則可靠
+            // 完整清除只在 stopGame() / 頁面重新整理時執行
             this._pendingAvatars = {};
             this._decodedImgs = {};
             this.currentName = '';
@@ -489,7 +487,7 @@
                 if(el) el.style.display = 'none';
             });
 
-            // 清除場景插圖 overlay
+            // 清除場景插圖 overlay（防止跨章節殘留）
             const sceneCgOverlay = document.getElementById('scene-cg-overlay');
             if (sceneCgOverlay) sceneCgOverlay.classList.remove('active');
             const sceneCgImg = document.getElementById('scene-cg-img');
@@ -498,6 +496,7 @@
             const bg = document.getElementById('game-bg');
             if (bg) {
                 if (this._lastBgCacheId) {
+                    // 有上一章背景：cacheId 存活，從 IDB 重新取 URL（blob 已被 resetState 撤銷）
                     bg.style.backgroundImage = 'none';
                     const _cid = this._lastBgCacheId;
                     (async () => {
@@ -875,11 +874,7 @@
             const config = (win.OS_SETTINGS?.getConfig?.()) || {};
             if (!win.OS_API || (!config.url && !config.useSystemApi)) return;
 
-            // 🔥 新增：顯示全螢幕 Loading 畫面
-            const loadingOverlay = document.getElementById('vn-choice-loading-overlay');
-            if (loadingOverlay) loadingOverlay.classList.add('active');
-
-            // 原本的微型 loader 依然保留，作為底部進度提示
+            // 顯示生成中 loader
             this._showStartLoader(0);
             const loaderBar = document.getElementById('vn-start-loader-bar');
             if (loaderBar) { loaderBar.style.transition = 'none'; loaderBar.style.width = '0%'; void loaderBar.offsetWidth; }
@@ -906,12 +901,7 @@
                             const _storyTitle = window.VN_Core._currentStoryTitle || '';
                             await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${choice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: choice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
                         } catch(e) {}
-                        
                         window.VN_Core._lastRawText = fullText;
-
-                        // 🔥 新增：成功拿到 AI 回應後，隱藏全螢幕 Loading
-                        if (loadingOverlay) loadingOverlay.classList.remove('active');
-
                         window.VN_Core.loadScript(fullText, null);
                         this._showStartLoader(6000, () => window.VN_Core.next());
                         resolve();
@@ -919,8 +909,6 @@
                 });
             } catch(err) {
                 console.error('[VN_Choice] 生成失敗:', err);
-                // 🔥 新增：發生錯誤時也必須解除 Loading
-                if (loadingOverlay) loadingOverlay.classList.remove('active');
                 const loaderEl = document.getElementById('vn-start-loader');
                 if (loaderEl) loaderEl.style.display = 'none';
             }
@@ -3969,10 +3957,7 @@
                 #aurelia-extractor-phone-overlay::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.74) 0%,rgba(0,0,0,.88) 55%,rgba(0,0,0,.94) 100%);z-index:0;pointer-events:none}
                 #aurelia-extractor-phone-overlay.show{transform:translateY(0)}
                 #ue-root-wrapper{position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column;color:#e8dfc8;font-family:'Noto Serif TC',serif;box-sizing:border-box}
-                
-                /* 🔥 修改：加入 env(safe-area-inset-top) 修正 iOS 瀏海遮擋 */
-                #ue-toolbar{display:flex;justify-content:space-between;align-items:center;padding:env(safe-area-inset-top, 0px) 16px 0;background:rgba(5,4,2,.55);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.22);flex-shrink:0;height:calc(52px + env(safe-area-inset-top, 0px));box-sizing:border-box;}
-                
+                #ue-toolbar{display:flex;justify-content:space-between;align-items:center;padding:0 16px;background:rgba(5,4,2,.55);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.22);flex-shrink:0;height:52px}
                 .ue-title{font-weight:700;font-size:13px;color:#d4af37;letter-spacing:4px;text-transform:uppercase}
                 .ue-icon-btn{border:none;background:transparent;cursor:pointer;font-size:17px;color:rgba(212,175,55,.5);transition:all .18s;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center}
                 .ue-icon-btn:hover{color:#d4af37;background:rgba(212,175,55,.1)}
