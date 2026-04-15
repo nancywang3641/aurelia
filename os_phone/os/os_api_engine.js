@@ -1,11 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] os_api_engine.js (V3.18 - 加入全局 {{user}} 巨集替換，無 char 版)
+// [檔案] os_api_engine.js (V3.19 - 終極攔截版：全局 {{user}} 發送前統一替換)
 // 路徑：os_phone/os/os_api_engine.js
 // 職責：組裝 Prompt 並負責與 AI 通訊。
 //       AVS 底層引擎由 os_avs_engine.js 提供，本檔僅呼叫 win._AVS_ENGINE。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入 API 引擎 (V3.18)...');
+    console.log('[PhoneOS] 載入 API 引擎 (V3.19)...');
     const win = window.parent || window; // 🔥 絕對保留：雙通向架構的核心
 
     // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
@@ -310,8 +310,22 @@
                 } catch(e) { console.warn('📋 [PresetPrompt] 注入失敗：', e); }
             }
 
+            // 🔥 終極攔截：聽從你的神級建議，直接在發送前的最後一刻獲取當前玩家名稱！
+            let globalUserName = "User";
+            try {
+                if (win.OS_PERSONA?.getCurrent) globalUserName = win.OS_PERSONA.getCurrent().name || "User";
+                else if (win.OS_USER?.getInfo)  globalUserName = win.OS_USER.getInfo().name || "User";
+            } catch(e) {}
+
             const cleanMessages = messages
-                .map(m => { const { _source, _isProto, _chatId, ...rest } = m; return rest; })
+                .map(m => { 
+                    const { _source, _isProto, _chatId, ...rest } = m; 
+                    // 🌟 這裡就是最後把關處！所有提示詞、世界書、預設包都在這裡被強制轉換 {{user}}
+                    if (rest.content && typeof rest.content === 'string') {
+                        rest.content = rest.content.replace(/\{\{user\}\}/gi, globalUserName);
+                    }
+                    return rest; 
+                })
                 .filter(m => m.content && m.content.trim().length > 0);
 
             let _dbgId    = Date.now() + Math.random();
@@ -477,9 +491,6 @@
             if (!sysPrompt && promptKey === 'wx_chat_system') {
                 sysPrompt = `You are ${charName}. Chat with ${userName}.`;
             }
-
-            // 🔥 移除 {{char}} 替換，僅替換 {{user}}
-            if (sysPrompt) sysPrompt = sysPrompt.replace(/{{user}}/g, userName);
 
             const apiMessages = [];
 
@@ -684,9 +695,6 @@
                     if (!charPersona && chatObj?.persona) charPersona = chatObj.persona;
                 } catch(e) {}
             }
-
-            // 🔥 移除 {{char}} 替換，僅替換 {{user}}
-            sysPrompt = sysPrompt.replace(/{{user}}/g, userName);
 
             // ── 2. 構建「精準掃描文本 (scanText)」供世界書觸發 ──
             let scanText = userMessage || '';
@@ -957,5 +965,5 @@
         }
     };
 
-    console.log('[PhoneOS] API 引擎 (V3.18 - 加入全局 {{user}} 巨集替換，無 char 版) 就緒');
+    console.log('[PhoneOS] API 引擎 (V3.19 - 終極攔截版：全局 {{user}} 發送前統一替換) 就緒');
 })();
