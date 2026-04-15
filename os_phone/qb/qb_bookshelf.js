@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// [檔案] qb_bookshelf.js (v1.2 - 移動端自適應與手勢翻頁升級)
+// [檔案] qb_bookshelf.js (v1.5 - 內頁升級：滑動卡片 + 擴充館藏 UI 美化)
 // 職責：書架視窗模組 — 書脊渲染、書封面展開、撰寫新書、刪除確認彈窗
 // 從 void_terminal.js 抽出，完全無狀態，依賴全域物件：
 //   window.AURELIA_WORLDS / AURELIA_CUSTOM_WORLDS
@@ -237,7 +237,6 @@
             .concat(window.AURELIA_CUSTOM_WORLDS || []);
 
         // 動態獲取第一層書架的真實寬度。
-        // 如果因面板剛打開等原因抓不到(<=0)，則退回使用螢幕寬度預估 (扣除兩側邊距約 40px)
         let shelfW = shelves[0].clientWidth;
         if (shelfW <= 0) {
             shelfW = window.innerWidth > 0 ? (window.innerWidth - 40) : 300;
@@ -253,7 +252,7 @@
         const bookH  = Math.min(145, Math.max(60, shelfH - 40));
 
         // 換頁邊界計算
-        const totalPages = Math.max(1, Math.ceil((allWorlds.length + 1) / perPage)); // +1 是留給新增按鈕
+        const totalPages = Math.max(1, Math.ceil((allWorlds.length + 1) / perPage));
         _currentPage = Math.max(0, Math.min(_currentPage, totalPages - 1));
         const startIdx = _currentPage * perPage;
         const pageWorlds = allWorlds.slice(startIdx, startIdx + perPage);
@@ -275,13 +274,10 @@
                 
                 shelfEl.addEventListener('touchend', (e) => {
                     let touchEndX = e.changedTouches[0].screenX;
-                    // 向左滑 -> 下一頁
                     if (touchStartX - touchEndX > 50) {
                         const nextBtn = document.getElementById('qb-page-next');
                         if (nextBtn && !nextBtn.disabled) { _currentPage++; render(); }
-                    } 
-                    // 向右滑 -> 上一頁
-                    else if (touchEndX - touchStartX > 50) {
+                    } else if (touchEndX - touchStartX > 50) {
                         const prevBtn = document.getElementById('qb-page-prev');
                         if (prevBtn && !prevBtn.disabled) { _currentPage--; render(); }
                     }
@@ -291,7 +287,7 @@
             }
         });
 
-        // ＋ 新增按鈕：只在最後一頁出現，並緊跟最後一本書所在的那一層
+        // ＋ 新增按鈕
         if (_currentPage === totalPages - 1) {
             const addShelfIdx = Math.min(
                 Math.floor(pageWorlds.length / perShelf),
@@ -320,7 +316,6 @@
                     if (nextBtn) nextBtn.onclick = () => { if (_currentPage < totalPages - 1) { _currentPage++; render(); } };
                 }
             } else {
-                // 只有一頁時自動隱藏底部導航
                 nav.style.display = 'none';
             }
         }
@@ -337,7 +332,7 @@
             <div style="position:absolute;inset:0;background:linear-gradient(160deg,#2a1a0e 0%,#1a0e06 100%);"></div>
             <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(180deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,transparent 1px,transparent 20px);pointer-events:none;"></div>
 
-            <button id="qb-create-back" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);border:1px solid rgba(251,223,162,0.25);color:#FBDFA2;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;letter-spacing:1px;z-index:2;">← 書架</button>
+            <button id="qb-create-back" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);border:1px solid rgba(251,223,162,0.25);color:#FBDFA2;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
 
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 28px 28px;z-index:2;gap:0;overflow-y:auto;">
                 <div style="font-size:30px;margin-bottom:14px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">✒️</div>
@@ -384,7 +379,6 @@
         const wbList   = panel.querySelector('#qb-wb-list');
         const wbHint   = panel.querySelector('#qb-wb-hint');
 
-        // ── 世界書折疊區：點擊後載入條目 ──────────────────────────
         let wbLoaded = false;
         wbToggle.onclick = async () => {
             const isOpen = wbList.style.display !== 'none';
@@ -418,7 +412,6 @@
             }
         };
 
-        // ── 取得勾選的世界書內容 ─────────────────────────────────
         const getCheckedLore = () => {
             const checked = wbList.querySelectorAll('input[type=checkbox]:checked');
             if (!checked.length) return '';
@@ -457,12 +450,12 @@
             panel.style.display = 'none';
             panel.innerHTML = '';
             shelves.forEach(s => s.style.display = 'flex');
-            render(); // 返回時重新計算以防視窗改變
+            render();
         };
         setTimeout(() => input.focus(), 50);
     }
 
-    // ── 書封面展開面板 ───────────────────────────────────────────
+    // ── 書封面與內頁展開面板 (雙層結構 + 滑動卡片) ────────────────────────
     function openCover(w) {
         const panel = document.getElementById('qb-book-cover-panel');
         const shelves = _getShelves();
@@ -476,56 +469,6 @@
         const greetings = (w.cardImport && Array.isArray(w.greetings) && w.greetings.length)
             ? w.greetings : null;
         const isCard    = !!greetings;
-        const btnLabel  = isCard ? '與TA相遇' : '踏入故事';
-
-        // 開場白選項 HTML（僅角色卡）
-        const greetingHtml = isCard ? `
-            <div style="width:100%;margin-bottom:12px;text-align:left;">
-                <div style="font-size:10px;color:rgba(251,223,162,0.4);letter-spacing:2px;margin-bottom:8px;">
-                    選 擇 開 場 方 式
-                </div>
-                <div id="qb-greeting-list" style="
-                    max-height:300px;overflow-y:auto;
-                    display:flex;flex-direction:column;gap:6px;
-                    scrollbar-width:thin;scrollbar-color:rgba(212,175,55,0.3) transparent;">
-                    ${greetings.map((g, i) => `
-                        <label style="
-                            display:block;padding:12px 14px;border-radius:6px;cursor:pointer;
-                            border:1px solid rgba(251,223,162,${i === 0 ? '0.35' : '0.1'});
-                            background:rgba(0,0,0,${i === 0 ? '0.55' : '0.38'});
-                            transition:all 0.15s;" class="greeting-opt">
-                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
-                                <input type="radio" name="qb-greeting" value="${i}"
-                                    ${i === 0 ? 'checked' : ''}
-                                    style="accent-color:#d4af37;flex-shrink:0;">
-                                <span style="font-size:10px;color:rgba(251,223,162,0.5);letter-spacing:1px;">
-                                    開場白 ${i + 1}
-                                </span>
-                            </div>
-                            <div style="font-size:12.5px;color:rgba(255,248,231,0.82);line-height:1.75;
-                                        display:-webkit-box;-webkit-line-clamp:4;
-                                        -webkit-box-orient:vertical;overflow:hidden;">
-                                ${_escHtml(g)}
-                            </div>
-                        </label>`).join('')}
-                    <label style="
-                        display:flex;align-items:center;gap:10px;padding:11px 14px;
-                        border-radius:6px;cursor:pointer;
-                        border:1px solid rgba(100,160,255,0.18);
-                        background:rgba(20,45,100,0.35);
-                        transition:all 0.15s;" class="greeting-opt">
-                        <input type="radio" name="qb-greeting" value="-1"
-                            style="accent-color:#4a9eff;flex-shrink:0;">
-                        <span style="font-size:12px;color:rgba(150,200,255,0.75);">🎲 讓 AI 自由發揮</span>
-                    </label>
-                </div>
-            </div>` : `
-            <div style="font-size:13px;color:rgba(255,242,210,0.88);line-height:2;font-style:italic;
-                        text-shadow:0 1px 6px rgba(0,0,0,1);margin-bottom:18px;">${w.desc}</div>
-            <div style="color:rgba(229,62,62,0.85);font-size:11px;letter-spacing:2px;margin-bottom:24px;
-                        text-shadow:0 0 6px rgba(0,0,0,0.8);">
-                危&ensp;險&ensp;度 &nbsp;${dangerFill}<span style="opacity:0.3;">${dangerEmpty}</span>
-            </div>`;
 
         panel.innerHTML = `
             <div style="position:absolute;inset:0;background:url('${w.cover}') center/cover;"></div>
@@ -538,49 +481,83 @@
                 background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);
                 border:1px solid rgba(251,223,162,0.3);color:#FBDFA2;
                 padding:6px 14px;border-radius:20px;cursor:pointer;
-                font-size:12px;letter-spacing:1px;z-index:2;">← 書架</button>
+                font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
 
-            <div style="position:absolute;bottom:0;left:0;right:0;
-                        padding:${isCard ? '12px' : '20px'} 20px ${isCard ? '20px' : '32px'};
-                        text-align:center;z-index:2;overflow-y:auto;
-                        max-height:${isCard ? '92%' : '85%'};
-                        scrollbar-width:thin;scrollbar-color:rgba(212,175,55,0.2) transparent;">
-                <div style="font-size:${isCard ? '24px' : '40px'};margin-bottom:4px;
-                            filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">${w.icon}</div>
-                <div style="font-size:${isCard ? '18px' : '24px'};font-weight:900;color:#FBDFA2;
+            <div id="qb-cover-view" style="
+                position:absolute;bottom:0;left:0;right:0;
+                padding:20px 20px 32px;text-align:center;z-index:2;
+                display:flex;flex-direction:column;align-items:center;">
+                
+                <div style="font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">${w.icon}</div>
+                <div style="font-size:24px;font-weight:900;color:#FBDFA2;
                             letter-spacing:3px;text-shadow:0 2px 16px rgba(0,0,0,0.9);
-                            margin-bottom:${isCard ? '10px' : '14px'};
-                            font-family:'Noto Sans TC',sans-serif;line-height:1.3;">${w.title}</div>
-                ${greetingHtml}
+                            margin-bottom:14px;font-family:'Noto Sans TC',sans-serif;line-height:1.3;">${w.title}</div>
+                
+                ${!isCard ? `
+                <div style="font-size:13px;color:rgba(255,242,210,0.88);line-height:2;font-style:italic;
+                            text-shadow:0 1px 6px rgba(0,0,0,1);margin-bottom:18px;">${w.desc}</div>
+                <div style="color:rgba(229,62,62,0.85);font-size:11px;letter-spacing:2px;margin-bottom:16px;
+                            text-shadow:0 0 6px rgba(0,0,0,0.8);">
+                    危&ensp;險&ensp;度 &nbsp;${dangerFill}<span style="opacity:0.3;">${dangerEmpty}</span>
+                </div>
+                ` : `
+                <div style="font-size:12px;color:rgba(251,223,162,0.6);margin-bottom:16px;letter-spacing:1px;">
+                    收錄 ${greetings.length} 條開場白記憶
+                </div>
+                `}
 
                 <div id="qb-wb-pack-slot" style="
-                    width:100%;margin-bottom:12px;
-                    display:flex;align-items:center;flex-wrap:wrap;gap:6px;
-                    padding:7px 10px;border-radius:6px;
-                    background:rgba(0,0,0,0.38);border:1px solid rgba(251,223,162,0.12);">
-                    <span style="font-size:10px;color:rgba(251,223,162,0.4);white-space:nowrap;letter-spacing:1px;">
-                        📚 書包
-                    </span>
-                    <div id="qb-wb-pack-tags" style="display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0;"></div>
-                    <select id="qb-wb-pack-add" style="
-                        background:rgba(0,0,0,0.5);border:1px solid rgba(251,223,162,0.2);
-                        border-radius:4px;color:rgba(251,223,162,0.6);font-size:11px;
-                        padding:3px 6px;outline:none;font-family:inherit;max-width:120px;">
-                        <option value="">＋ 新增…</option>
+                    width: 100%; margin-bottom: 24px;
+                    display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                    <div style="display:flex; align-items:center; gap:8px; width:75%;">
+                        <div style="flex:1; height:1px; background:linear-gradient(90deg, transparent, rgba(251,223,162,0.25));"></div>
+                        <span style="font-size:10px; color:rgba(251,223,162,0.5); letter-spacing:3px; text-shadow:0 1px 2px #000; font-weight:bold;">擴充館藏</span>
+                        <div style="flex:1; height:1px; background:linear-gradient(270deg, transparent, rgba(251,223,162,0.25));"></div>
+                    </div>
+                    <div style="display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:6px; width:100%;">
+                        <div id="qb-wb-pack-tags" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;"></div>
+                        <select id="qb-wb-pack-add" style="
+                            background:rgba(0,0,0,0.4); border:1px dashed rgba(251,223,162,0.3);
+                            border-radius:12px; color:rgba(251,223,162,0.5); font-size:10px;
+                            padding:3px 8px; outline:none; font-family:inherit; cursor:pointer; text-align:center;
+                            transition:all 0.2s;">
+                            <option value="">＋ 掛載</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="qb-var-pack-row" style="
+                    width:78%; display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+                    <span style="font-size:10px; color:rgba(251,223,162,0.45); letter-spacing:2px; white-space:nowrap; flex-shrink:0;">⚙ 變數包</span>
+                    <select id="qb-var-pack-sel" style="
+                        flex:1; background:rgba(0,0,0,0.45); border:1px solid rgba(251,223,162,0.2);
+                        border-radius:12px; color:rgba(251,223,162,0.75); font-size:10px;
+                        padding:4px 10px; outline:none; font-family:inherit; cursor:pointer;
+                        transition:border-color 0.2s;">
+                        <option value="">— 未連結 —</option>
                     </select>
                 </div>
 
-                <div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;
-                            margin-top:4px;">
-                    <button class="qb-dive-world-btn" data-wid="${w.id}" style="
+                <div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;">
+                    ${isCard ? `
+                    <button id="qb-open-inner-btn" style="
                         background:linear-gradient(135deg,#FBDFA2,#c8a030);color:#1a0a04;
-                        font-weight:900;font-size:${isCard ? '14px' : '15px'};
-                        padding:${isCard ? '12px 36px' : '14px 44px'};border:none;
+                        font-weight:900;font-size:15px;padding:14px 44px;border:none;
                         border-radius:3px;cursor:pointer;letter-spacing:3px;
                         box-shadow:0 4px 24px rgba(251,223,162,0.35);transition:opacity 0.2s;"
                         onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-                        ${btnLabel}
+                        📖 翻閱開場白
                     </button>
+                    ` : `
+                    <button class="qb-dive-world-btn" data-wid="${w.id}" style="
+                        background:linear-gradient(135deg,#FBDFA2,#c8a030);color:#1a0a04;
+                        font-weight:900;font-size:15px;padding:14px 44px;border:none;
+                        border-radius:3px;cursor:pointer;letter-spacing:3px;
+                        box-shadow:0 4px 24px rgba(251,223,162,0.35);transition:opacity 0.2s;"
+                        onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                        踏入故事
+                    </button>
+                    `}
                     ${w.custom ? `<button class="qb-remove-world-btn" data-wid="${w.id}" style="
                         background:rgba(180,30,30,0.6);border:1px solid rgba(255,80,80,0.4);
                         color:rgba(255,180,180,0.9);font-size:12px;padding:10px 18px;
@@ -588,13 +565,84 @@
                         onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">下架</button>` : ''}
                 </div>
             </div>
+
+            ${isCard ? `
+            <div id="qb-inner-view" style="
+                display:none;position:absolute;inset:0;z-index:10;
+                background:rgba(20,12,8,0.98);
+                flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
+                
+                <div style="padding:16px 20px;border-bottom:1px solid rgba(251,223,162,0.15);
+                            display:flex;align-items:center;justify-content:space-between;
+                            background:rgba(0,0,0,0.3);flex-shrink:0;">
+                    <div style="font-size:14px;font-weight:bold;color:#FBDFA2;letter-spacing:1px;">
+                        📖 選擇開場白：${w.title}
+                    </div>
+                    <button id="qb-inner-close" style="
+                        background:none;border:none;color:rgba(251,223,162,0.6);
+                        font-size:24px;cursor:pointer;line-height:1;padding:0 5px;"
+                        onmouseover="this.style.color='#FBDFA2'" onmouseout="this.style.color='rgba(251,223,162,0.6)'">×</button>
+                </div>
+                
+                <div id="qb-greeting-slider" style="flex:1; overflow:hidden; position:relative; width:100%; display:flex; flex-direction:column;">
+                    <div id="qb-greeting-track" style="display:flex; width:100%; height:100%; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);">
+                        
+                        ${greetings.map((g, i) => `
+                            <div class="qb-greet-slide" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 20px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
+                                <div style="border:1px solid rgba(251,223,162,0.25); background:rgba(0,0,0,0.5); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column;">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid rgba(251,223,162,0.15);padding-bottom:12px;">
+                                        <span style="font-size:14px;color:#FBDFA2;letter-spacing:2px;font-weight:bold;">
+                                            開場白 ${i + 1}
+                                        </span>
+                                        <input type="radio" name="qb-greeting" value="${i}" ${i === 0 ? 'checked' : ''} style="display:none;">
+                                    </div>
+                                    <div style="font-size:14px;color:rgba(255,248,231,0.88);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">${_escHtml(g)}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                        
+                        <div class="qb-greet-slide" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 20px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
+                            <div style="border:1px solid rgba(100,160,255,0.3); background:rgba(20,45,100,0.4); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                                <input type="radio" name="qb-greeting" value="-1" style="display:none;">
+                                <div style="font-size:48px; margin-bottom:20px; filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));">🎲</div>
+                                <span style="font-size:18px;color:rgba(150,200,255,0.9);font-weight:bold;letter-spacing:3px;">讓 AI 自由發揮</span>
+                                <div style="font-size:13px;color:rgba(150,200,255,0.6);margin-top:12px;text-align:center;line-height:1.6;">無預設開場故事<br>直接踏入這個世界的未知領域</div>
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                    <button id="qb-greet-prev-btn" style="position:absolute;left:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid rgba(251,223,162,0.3);color:#FBDFA2;width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">◀</button>
+                    <button id="qb-greet-next-btn" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid rgba(251,223,162,0.3);color:#FBDFA2;width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">▶</button>
+                </div>
+
+                <div style="padding:14px 20px 24px;border-top:1px solid rgba(251,223,162,0.15);
+                            background:rgba(0,0,0,0.4);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:16px;">
+                    
+                    <div id="qb-greet-dots" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:80%;">
+                        ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:#FBDFA2;opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
+                        <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:#4a9eff;opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
+                    </div>
+
+                    <button class="qb-dive-world-btn" data-wid="${w.id}" style="
+                        width:100%;max-width:340px;
+                        background:linear-gradient(135deg,#FBDFA2,#c8a030);color:#1a0a04;
+                        font-weight:900;font-size:16px;padding:15px;border:none;
+                        border-radius:6px;cursor:pointer;letter-spacing:4px;
+                        box-shadow:0 4px 24px rgba(251,223,162,0.25);transition:opacity 0.2s;"
+                        onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                        與TA相遇 🚀
+                    </button>
+                </div>
+            </div>
+            ` : ''}
         `;
 
         panel.style.display = 'block';
         shelves.forEach(s => s.style.display = 'none');
         if (nav) nav.style.display = 'none';
 
-        // ── 📚 世界書包插槽 初始化 ───────────────────────────────
+        // ── 📚 擴充館藏插槽 初始化 ───────────────────────────────
         if (!Array.isArray(w.wbPacks)) {
             w.wbPacks = w.cardImport ? [w.title] : [];
         }
@@ -613,12 +661,13 @@
             tagsEl.innerHTML = '';
             (w.wbPacks || []).forEach(pack => {
                 const chip = document.createElement('div');
+                // 美化：輕量化的半透明小標籤
                 chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;
-                    background:rgba(212,175,55,0.18);border:1px solid rgba(212,175,55,0.35);
-                    border-radius:12px;padding:3px 10px 3px 10px;font-size:11px;
-                    color:rgba(251,223,162,0.85);`;
+                    background:rgba(251,223,162,0.1);border:1px solid rgba(251,223,162,0.25);
+                    border-radius:12px;padding:3px 10px;font-size:10px;
+                    color:rgba(251,223,162,0.8);backdrop-filter:blur(2px);`;
                 chip.innerHTML = `<span>${_escHtml(pack)}</span>
-                    <span style="cursor:pointer;opacity:0.6;font-size:13px;line-height:1;margin-left:2px;"
+                    <span style="cursor:pointer;opacity:0.6;font-size:12px;line-height:1;margin-left:2px;"
                           class="wb-chip-remove" data-pack="${_escHtml(pack)}">×</span>`;
                 chip.querySelector('.wb-chip-remove').onclick = () => {
                     w.wbPacks = w.wbPacks.filter(p => p !== pack);
@@ -629,15 +678,15 @@
                 tagsEl.appendChild(chip);
             });
             if (!w.wbPacks.length) {
-                tagsEl.innerHTML = `<span style="font-size:10px;color:rgba(255,255,255,0.25);font-style:italic;">
-                    （未載入任何書包，不啟用世界書）</span>`;
+                tagsEl.innerHTML = `<span style="font-size:10px;color:rgba(255,255,255,0.2);font-style:italic;">
+                    （尚無掛載館藏）</span>`;
             }
         }
 
         function _populatePackSelect() {
             const sel = panel.querySelector('#qb-wb-pack-add');
             if (!sel) return;
-            sel.innerHTML = '<option value="">＋ 新增書包…</option>';
+            sel.innerHTML = '<option value="">＋ 掛載</option>';
             const allPacks  = window.OS_WORLDBOOK?.getAvailablePacks?.() || [];
             const available = allPacks.filter(p => !(w.wbPacks || []).includes(p));
             available.forEach(p => {
@@ -650,7 +699,7 @@
                 const opt = document.createElement('option');
                 opt.value = '';
                 opt.disabled = true;
-                opt.textContent = '（無其他書包可新增）';
+                opt.textContent = '（無其他可掛載）';
                 sel.appendChild(opt);
             }
         }
@@ -672,22 +721,130 @@
         _populatePackSelect();
         const _packSel = panel.querySelector('#qb-wb-pack-add');
         if (_packSel) _packSel.onchange = _packSelectChange;
+
+        // ── 🔧 變數包插槽 初始化 ──────────────────────────────────
+        (async () => {
+            const varSel = panel.querySelector('#qb-var-pack-sel');
+            if (!varSel || !window.OS_DB?.getAllVarPacks) return;
+            try {
+                const packs = await window.OS_DB.getAllVarPacks();
+                packs.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name || p.id;
+                    if (p.id === w.autoPackId) opt.selected = true;
+                    varSel.appendChild(opt);
+                });
+            } catch(e) { console.warn('[QB] 變數包列表載入失敗', e); }
+            varSel.onchange = () => {
+                w.autoPackId = varSel.value || undefined;
+                // 寫回 AURELIA_CUSTOM_WORLDS + localStorage
+                const idx = (window.AURELIA_CUSTOM_WORLDS || []).findIndex(x => x.id === w.id);
+                if (idx !== -1) {
+                    if (w.autoPackId) window.AURELIA_CUSTOM_WORLDS[idx].autoPackId = w.autoPackId;
+                    else delete window.AURELIA_CUSTOM_WORLDS[idx].autoPackId;
+                    try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
+                }
+                // 高亮邊框反饋
+                varSel.style.borderColor = w.autoPackId ? 'rgba(251,223,162,0.6)' : 'rgba(251,223,162,0.2)';
+            };
+            // 初始高亮
+            if (w.autoPackId) varSel.style.borderColor = 'rgba(251,223,162,0.6)';
+        })();
         // ──────────────────────────────────────────────────────────
 
-        // 選項 hover 效果
-        panel.querySelectorAll('.greeting-opt').forEach(lbl => {
-            lbl.onmouseenter = () => lbl.style.background = 'rgba(255,255,255,0.08)';
-            lbl.onmouseleave = () => lbl.style.background =
-                lbl.querySelector('input')?.checked ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)';
-        });
+        // ── 視圖切換與滑動卡片邏輯 (角色卡專屬) ───────────────────────
+        if (isCard) {
+            const coverView = panel.querySelector('#qb-cover-view');
+            const innerView = panel.querySelector('#qb-inner-view');
+            const coverBack = panel.querySelector('#qb-cover-back');
+            
+            // 開啟內頁
+            panel.querySelector('#qb-open-inner-btn').onclick = () => {
+                coverView.style.display = 'none';
+                coverBack.style.display = 'none';
+                innerView.style.display = 'flex';
+                updateSlider(); // 初始化顯示第一張
+            };
+            
+            // 關閉內頁
+            panel.querySelector('#qb-inner-close').onclick = () => {
+                innerView.style.display = 'none';
+                coverView.style.display = 'flex';
+                coverBack.style.display = 'block';
+            };
 
+            // 滑動核心邏輯
+            const track = panel.querySelector('#qb-greeting-track');
+            const slides = panel.querySelectorAll('.qb-greet-slide');
+            const dots = panel.querySelectorAll('.qb-greet-dot');
+            const prevBtn = panel.querySelector('#qb-greet-prev-btn');
+            const nextBtn = panel.querySelector('#qb-greet-next-btn');
+            const totalSlides = slides.length;
+            let currentSlide = 0;
+
+            function updateSlider() {
+                // 平滑推動軌道
+                track.style.transform = `translateX(-${currentSlide * 100}%)`;
+
+                // 更新內部隱藏的 radio (為了最後點擊「與TA相遇」能讀取正確值)
+                slides.forEach((s, i) => {
+                    const radio = s.querySelector('input[type="radio"]');
+                    if (radio) radio.checked = (i === currentSlide);
+                });
+
+                // 更新底部小圓點
+                dots.forEach((d, i) => {
+                    d.style.opacity = (i === currentSlide) ? '1' : '0.3';
+                    d.style.transform = (i === currentSlide) ? 'scale(1.3)' : 'scale(1)';
+                });
+
+                // 控制左右按鈕的顯示 (非觸控裝置輔助)
+                if (prevBtn) prevBtn.style.display = (currentSlide === 0) ? 'none' : 'flex';
+                if (nextBtn) nextBtn.style.display = (currentSlide === totalSlides - 1) ? 'none' : 'flex';
+            }
+
+            // 綁定點擊按鈕切換
+            if (prevBtn) prevBtn.onclick = () => { if (currentSlide > 0) { currentSlide--; updateSlider(); } };
+            if (nextBtn) nextBtn.onclick = () => { if (currentSlide < totalSlides - 1) { currentSlide++; updateSlider(); } };
+            dots.forEach((d, i) => d.onclick = () => { currentSlide = i; updateSlider(); });
+
+            // 綁定移動端手勢滑動 (Swipe)
+            const sliderContainer = panel.querySelector('#qb-greeting-slider');
+            let startX = 0;
+            let isSwiping = false;
+
+            sliderContainer.addEventListener('touchstart', (e) => {
+                startX = e.changedTouches[0].screenX;
+                isSwiping = true;
+            }, { passive: true });
+
+            sliderContainer.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+                isSwiping = false;
+                let endX = e.changedTouches[0].screenX;
+                let diff = startX - endX;
+
+                // 滑動超過 50px 判定為翻頁
+                if (diff > 50 && currentSlide < totalSlides - 1) {
+                    currentSlide++;
+                    updateSlider();
+                } else if (diff < -50 && currentSlide > 0) {
+                    currentSlide--;
+                    updateSlider();
+                }
+            }, { passive: true });
+        }
+
+        // 返回書架按鈕
         panel.querySelector('#qb-cover-back').onclick = () => {
             panel.style.display = 'none';
             panel.innerHTML = '';
             shelves.forEach(s => s.style.display = 'flex');
-            render(); // 返回時重新渲染確保排版正確
+            render();
         };
 
+        // 下架按鈕
         const removeBtn = panel.querySelector('.qb-remove-world-btn');
         if (removeBtn) {
             removeBtn.onclick = () => {
@@ -700,52 +857,68 @@
             };
         }
 
-        panel.querySelector('.qb-dive-world-btn').onclick = () => {
-            const isStandalone = window.OS_API?.isStandalone?.() ?? false;
+        // 踏入故事 / 與TA相遇 按鈕
+        panel.querySelectorAll('.qb-dive-world-btn').forEach(btn => {
+            btn.onclick = () => {
+                const isStandalone = window.OS_API?.isStandalone?.() ?? false;
 
-            // ── 角色卡路徑（cardImport）─────────────────────────
-            if (w.cardImport) {
-                const sel = panel.querySelector('input[name="qb-greeting"]:checked');
-                const idx = sel ? parseInt(sel.value) : 0;
-                const chosenGreeting = (idx >= 0 && greetings && greetings[idx]) ? greetings[idx] : '';
+                // ── 角色卡路徑（cardImport）─────────────────────────
+                if (w.cardImport) {
+                    const sel = panel.querySelector('input[name="qb-greeting"]:checked');
+                    const idx = sel ? parseInt(sel.value) : 0;
+                    const chosenGreeting = (idx >= 0 && greetings && greetings[idx]) ? greetings[idx] : '';
 
-                localStorage.setItem('vn_current_world_id', w.id);
-                localStorage.removeItem('vn_pending_first_mes');
+                    localStorage.setItem('vn_current_world_id', w.id);
+                    localStorage.removeItem('vn_pending_first_mes');
+                    try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
+
+                    document.getElementById('qb-bookshelf-overlay').style.display = 'none';
+                    panel.style.display = 'none';
+                    shelves.forEach(s => s.style.display = 'flex');
+
+                    if (isStandalone) {
+                        window._pendingCardDive = { worldId: w.id, greeting: chosenGreeting, title: w.title };
+                        if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                        setTimeout(() => window.VN_Core?.openGeneratePanel?.(), 400);
+                    } else {
+                        if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                        if (window.StoryExtractor?.show) window.StoryExtractor.show();
+                    }
+                    return;
+                }
+
+                // ── 一般世界路徑（QB 任務板）───────────────────────
                 try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
+
+                // 初始化變數包（若有綁定）
+                if (w.autoPackId && window.OS_DB && window._AVS_ENGINE) {
+                    window.OS_DB.getAllVarPacks?.().then(packs => {
+                        const pack = (packs || []).find(p => p.id === w.autoPackId);
+                        if (pack) {
+                            window._AVS_ENGINE.initFromPack(pack);
+                            window.OS_AVS?.activateTemplateForPack?.(w.autoPackId);
+                            console.log(`[QB] 已初始化變數包：${pack.name}`);
+                        }
+                    }).catch(e => console.warn('[QB] 變數包初始化失敗:', e));
+                }
 
                 document.getElementById('qb-bookshelf-overlay').style.display = 'none';
                 panel.style.display = 'none';
-                shelves.forEach(s => s.style.display = 'flex'); // 為下次打開預先恢復
+                shelves.forEach(s => s.style.display = 'flex');
 
                 if (isStandalone) {
-                    window._pendingCardDive = { worldId: w.id, greeting: chosenGreeting, title: w.title };
-                    if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
-                    setTimeout(() => window.VN_Core?.openGeneratePanel?.(), 400);
+                    if (window.QB_CORE?.openBook) {
+                        window.QB_CORE.openBook(w.id);
+                    } else {
+                        window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|think|「哎呀，這本書好像還沒準備好 (QB_CORE 模組未連線)。」]`);
+                    }
                 } else {
                     if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
                     if (window.StoryExtractor?.show) window.StoryExtractor.show();
+                    else window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|think|「哎呀，故事提取器還沒準備好 (StoryExtractor 未連線)。」]`);
                 }
-                return;
-            }
-
-            // ── 一般世界路徑（QB 任務板）───────────────────────
-            try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
-            document.getElementById('qb-bookshelf-overlay').style.display = 'none';
-            panel.style.display = 'none';
-            shelves.forEach(s => s.style.display = 'flex'); // 為下次打開預先恢復
-
-            if (isStandalone) {
-                if (window.QB_CORE?.openBook) {
-                    window.QB_CORE.openBook(w.id);
-                } else {
-                    window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|think|「哎呀，這本書好像還沒準備好 (QB_CORE 模組未連線)。」]`);
-                }
-            } else {
-                if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
-                if (window.StoryExtractor?.show) window.StoryExtractor.show();
-                else window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|think|「哎呀，故事提取器還沒準備好 (StoryExtractor 未連線)。」]`);
-            }
-        };
+            };
+        });
     }
 
     // ── 監聽視窗大小改變 (移動端橫直屏旋轉或縮放適配) ─────────────────────
@@ -754,11 +927,10 @@
         clearTimeout(_resizeTimer);
         _resizeTimer = setTimeout(() => {
             const shelves = _getShelves();
-            // 如果書架存在且第一層寬度大於 0（代表面板可見），則觸發重新計算排版
             if (shelves.length > 0 && shelves[0].clientWidth > 0) {
                 render();
             }
-        }, 150); // 加入 150ms 延遲，避免手機旋轉時瘋狂觸發耗效能
+        }, 150);
     });
 
     // ── 公開 API ─────────────────────────────────────────────────

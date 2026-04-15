@@ -230,6 +230,34 @@
         background:none; color:#888; font-size:12px; border-radius:6px; cursor:pointer;
         margin-bottom:12px; }
     .avsr-add-btn:hover { color:#d4af37; border-color:#d4af37; }
+
+    /* ── 模式 tab ── */
+    .avsm-status { display:flex; align-items:center; gap:8px; padding:10px 14px;
+        background:rgba(0,0,0,0.3); border-radius:8px; margin-bottom:10px;
+        border:1px solid rgba(212,175,55,0.2); }
+    .avsm-status-label { font-size:11px; color:#888; letter-spacing:1px; }
+    .avsm-status-value { font-size:14px; font-weight:700; color:#d4af37; }
+    .avsm-status-raw { margin-left:auto; font-family:monospace; font-size:10px; color:#555; }
+    .avsm-hint { font-size:11px; color:#666; margin-bottom:12px; line-height:1.7; }
+    .avsm-hint code { color:#a08040; font-size:10px; background:rgba(0,0,0,0.3);
+        padding:1px 5px; border-radius:3px; }
+    .avsm-list { display:flex; flex-direction:column; gap:8px; }
+    .avsm-card { background:rgba(212,175,55,0.06); border:1px solid rgba(212,175,55,0.2);
+        border-radius:8px; padding:12px 14px; display:flex; align-items:flex-start; gap:10px; }
+    .avsm-card.active-mode { border-color:rgba(212,175,55,0.65);
+        background:rgba(212,175,55,0.12); box-shadow:0 0 10px rgba(212,175,55,0.1); }
+    .avsm-card.disabled { opacity:0.45; }
+    .avsm-icon { font-size:24px; flex-shrink:0; line-height:1; padding-top:2px; }
+    .avsm-info { flex:1; min-width:0; }
+    .avsm-name { font-size:13px; font-weight:600; color:#d4af37; margin-bottom:3px;
+        display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
+    .avsm-cond { font-size:11px; color:#888; font-family:monospace; margin-bottom:3px; }
+    .avsm-preview { font-size:11px; color:#555; white-space:nowrap;
+        overflow:hidden; text-overflow:ellipsis; }
+    .avsm-tag-on { font-size:9px; color:#4caf50; background:rgba(76,175,80,0.15);
+        border:1px solid rgba(76,175,80,0.3); padding:1px 6px; border-radius:3px; }
+    .avsm-tag-off { font-size:9px; color:#666; background:rgba(100,100,100,0.1);
+        border:1px solid rgba(100,100,100,0.2); padding:1px 6px; border-radius:3px; }
     `;
 
     function renderTab(container) {
@@ -261,7 +289,8 @@
     }
 
     function _renderListInner(el) {
-        const rules = _loadRules();
+        // 模式規則（folder === '__mode__'）由 🎭 模式 tab 管理，此處隱藏
+        const rules = _loadRules().filter(r => r.folder !== '__mode__');
         console.log('[AVSR] _renderList 規則數:', rules.length, 'localStorage 原始長度:', (localStorage.getItem('avs_condition_rules') || '').length);
 
         // ── 建立世界 ID → 標題 對照表 ─────────────────────────
@@ -553,9 +582,218 @@
     }
 
     // ================================================================
-    // 五、掛載
+    // 五、🎭 模式 Tab
     // ================================================================
 
-    win.OS_AVS_RULES = { getActiveContext, generateRulesForWorld, renderTab };
+    function renderModesTab(container) {
+        const el = container.querySelector('#avs-view-modes');
+        if (!el) return;
+        // 確保樣式已注入（條件規則 tab 可能尚未被訪問）
+        if (!document.getElementById('avsr-styles')) {
+            const s = document.createElement('style');
+            s.id = 'avsr-styles';
+            s.textContent = CSS;
+            document.head.appendChild(s);
+        }
+        el.style.position = 'relative';
+        el.style.overflow = 'hidden';
+        _renderModesList(el);
+    }
+
+    function _renderModesList(el) {
+        const allRules = _loadRules();
+        const modes    = allRules.filter(r => r.folder === '__mode__');
+
+        // 當前 AVS 狀態，找出正在生效的模式
+        const state      = win._AVS_ENGINE?.read?.() || {};
+        const activeMode = modes.find(m => {
+            const actual = _getVal(state, m.path || 'mode');
+            return actual !== undefined && String(actual) === String(m.value);
+        });
+        const modeVarVal = _getVal(state, 'mode');
+        const statusRaw  = modeVarVal !== undefined ? String(modeVarVal) : '（未設定）';
+        const statusName = activeMode
+            ? `${activeMode.icon || '🎭'} ${activeMode.name}`
+            : statusRaw;
+
+        const cardsHtml = modes.length === 0
+            ? `<div class="avsr-empty">尚無自訂模式<br>
+                <span style="font-size:11px;color:#444;">新增後，AI 寫 &lt;vars&gt;mode = "值"&lt;/vars&gt; 即可自動切換</span>
+               </div>`
+            : modes.map(m => {
+                const isOn     = m.enabled !== false;
+                const isActive = activeMode?.id === m.id;
+                const preview  = (m.content || '').slice(0, 55) + ((m.content||'').length > 55 ? '…' : '');
+                return `<div class="avsm-card${isActive ? ' active-mode' : ''}${isOn ? '' : ' disabled'}" data-id="${m.id}">
+                    <div class="avsm-icon">${_esc(m.icon || '🎭')}</div>
+                    <div class="avsm-info">
+                        <div class="avsm-name">
+                            ${_esc(m.name || '未命名模式')}
+                            ${isActive ? '<span class="avsm-tag-on">● 生效中</span>' : ''}
+                            ${!isOn    ? '<span class="avsm-tag-off">已停用</span>'  : ''}
+                        </div>
+                        <div class="avsm-cond">${_esc(m.path || 'mode')} = "${_esc(String(m.value))}"</div>
+                        <div class="avsm-preview">${_esc(preview)}</div>
+                    </div>
+                    <div class="avsr-actions">
+                        <span class="avsr-toggle" data-mtoggle="${m.id}" style="cursor:pointer;font-size:18px;">${isOn ? '●' : '○'}</span>
+                        <button class="avsr-btn-sm" data-medit="${m.id}">編輯</button>
+                        <button class="avsr-btn-sm danger" data-mdel="${m.id}">✕</button>
+                    </div>
+                </div>`;
+            }).join('');
+
+        el.innerHTML = `
+            <div class="avsm-status">
+                <span class="avsm-status-label">當前模式</span>
+                <span class="avsm-status-value">${_esc(statusName)}</span>
+                <span class="avsm-status-raw">mode = "${_esc(statusRaw)}"</span>
+            </div>
+            <div class="avsm-hint">
+                AI 回應時在 &lt;vars&gt; 中寫入對應觸發值即可切換，例：<code>&lt;vars&gt;mode = "combat"&lt;/vars&gt;</code>
+            </div>
+            <button class="avsr-add-btn" id="avsm-add">＋ 新增模式</button>
+            <div class="avsm-list">${cardsHtml}</div>
+            <div class="avsr-editor hidden" id="avsm-editor"></div>
+        `;
+
+        // 啟用 / 停用
+        el.querySelectorAll('[data-mtoggle]').forEach(btn => {
+            btn.onclick = () => {
+                const rules = _loadRules();
+                const idx   = rules.findIndex(r => r.id === btn.dataset.mtoggle);
+                if (idx !== -1) {
+                    rules[idx].enabled = rules[idx].enabled === false;
+                    _saveRules(rules);
+                    _renderModesList(el);
+                }
+            };
+        });
+
+        // 刪除
+        el.querySelectorAll('[data-mdel]').forEach(btn => {
+            btn.onclick = () => {
+                if (!confirm('確認刪除此模式？')) return;
+                _saveRules(_loadRules().filter(r => r.id !== btn.dataset.mdel));
+                _renderModesList(el);
+            };
+        });
+
+        // 編輯
+        el.querySelectorAll('[data-medit]').forEach(btn => {
+            btn.onclick = () => {
+                const rule = _loadRules().find(r => r.id === btn.dataset.medit);
+                if (rule) _openModeEditor(el, rule);
+            };
+        });
+
+        // 新增
+        el.querySelector('#avsm-add').onclick = () => _openModeEditor(el, null);
+    }
+
+    function _openModeEditor(el, existing) {
+        const editorEl = el.querySelector('#avsm-editor');
+        if (!editorEl) return;
+        const isNew = !existing;
+
+        editorEl.innerHTML = `
+            <div class="avsr-editor-header">
+                <button class="avsr-btn-cancel" id="avsm-back">←</button>
+                <span class="avsr-editor-title">${isNew ? '新增模式' : '編輯模式'}</span>
+            </div>
+            <div class="avsr-editor-body">
+                <div style="display:flex;gap:10px;">
+                    <div class="avsr-field" style="width:68px;flex-shrink:0;">
+                        <label>圖示</label>
+                        <input id="avsm-f-icon" value="${_esc(existing?.icon || '')}" placeholder="🎭"
+                            style="text-align:center;font-size:20px;padding:6px 4px;">
+                    </div>
+                    <div class="avsr-field" style="flex:1;">
+                        <label>模式名稱</label>
+                        <input id="avsm-f-name" value="${_esc(existing?.name || '')}" placeholder="戰鬥模式">
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <div class="avsr-field" style="flex:1;">
+                        <label>變數路徑（預設 mode）</label>
+                        <input id="avsm-f-path" value="${_esc(existing?.path || 'mode')}" placeholder="mode">
+                    </div>
+                    <div class="avsr-field" style="flex:1;">
+                        <label>觸發值</label>
+                        <input id="avsm-f-value" value="${_esc(existing?.value || '')}" placeholder="combat">
+                    </div>
+                </div>
+                <div class="avsr-field">
+                    <label>注入文字（條件成立時插入給 AI 的行為指令）</label>
+                    <textarea id="avsm-f-content" style="min-height:110px;"
+                        placeholder="例：使用短句，動作節奏優先，回覆不超過3段，避免大段心理描寫。">${_esc(existing?.content || '')}</textarea>
+                </div>
+                <div class="avsm-hint" id="avsm-live-hint" style="margin-top:0;"></div>
+            </div>
+            <div class="avsr-editor-footer">
+                <button class="avsr-btn-cancel" id="avsm-cancel">取消</button>
+                <button class="avsr-btn-save"   id="avsm-save">儲存</button>
+            </div>
+        `;
+        editorEl.classList.remove('hidden');
+
+        const pathInput  = editorEl.querySelector('#avsm-f-path');
+        const valInput   = editorEl.querySelector('#avsm-f-value');
+        const hintEl     = editorEl.querySelector('#avsm-live-hint');
+
+        const updateHint = () => {
+            const p = pathInput.value.trim() || 'mode';
+            const v = valInput.value.trim()  || '...';
+            hintEl.innerHTML = `AI 寫 <code>&lt;vars&gt;${_esc(p)} = "${_esc(v)}"&lt;/vars&gt;</code> 即可啟動此模式`;
+        };
+        updateHint();
+        pathInput.oninput = updateHint;
+        valInput.oninput  = updateHint;
+
+        const close = () => { editorEl.classList.add('hidden'); editorEl.innerHTML = ''; };
+        editorEl.querySelector('#avsm-back').onclick   = close;
+        editorEl.querySelector('#avsm-cancel').onclick = close;
+
+        editorEl.querySelector('#avsm-save').onclick = () => {
+            const name    = editorEl.querySelector('#avsm-f-name').value.trim();
+            const icon    = editorEl.querySelector('#avsm-f-icon').value.trim();
+            const path    = pathInput.value.trim() || 'mode';
+            const value   = valInput.value.trim();
+            const content = editorEl.querySelector('#avsm-f-content').value.trim();
+
+            if (!value || !content) {
+                alert('觸發值和注入文字不能為空');
+                return;
+            }
+
+            const rules = _loadRules();
+            if (isNew) {
+                rules.push({
+                    id:       _newId(),
+                    name:     name || `${value} 模式`,
+                    icon,
+                    enabled:  true,
+                    path,
+                    op:       '=',
+                    value,
+                    content,
+                    priority: 10,       // 模式優先，早於一般規則
+                    folder:   '__mode__',
+                });
+            } else {
+                const idx = rules.findIndex(r => r.id === existing.id);
+                if (idx !== -1) Object.assign(rules[idx], { name, icon, path, value, content });
+            }
+            _saveRules(rules);
+            close();
+            _renderModesList(el);
+        };
+    }
+
+    // ================================================================
+    // 六、掛載
+    // ================================================================
+
+    win.OS_AVS_RULES = { getActiveContext, generateRulesForWorld, renderTab, renderModesTab };
     console.log('[AVS Rules] ✅ 條件注入引擎就緒');
 })();

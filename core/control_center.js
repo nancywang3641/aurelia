@@ -213,7 +213,8 @@
         userTab.style.cssText = `width:100%; height:100%; display:none; background:#f8f9fa; position: relative; flex-direction:column; overflow:hidden;`;
 
         // 🔥 動態判斷：只有獨立模式才渲染提示詞、世界書、變數工坊
-        const isStandalone = window.OS_API && window.OS_API.isStandalone();
+        // 用 DOM 元素 ID 判斷最可靠（不依賴 OS_API 是否已就緒，不受行動端 window.parent 干擾）
+        const isStandalone = !!document.getElementById('aurelia-standalone-root');
 
         // ── 寫作設置 TAB ──
         const writeTab = parentDoc.createElement('div');

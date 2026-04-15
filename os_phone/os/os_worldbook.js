@@ -115,6 +115,26 @@
         .wb-btn-danger { background:rgba(252,129,129,.15); color:#fc8181; border:1px solid rgba(252,129,129,.3); }
         .wb-btn-danger:hover { background:rgba(252,129,129,.25); }
         .wb-hint { font-size:10px; color:#B78456; margin-top:4px; line-height:1.5; }
+
+        /* ── 匯出選擇器 ── */
+        .wb-export-modal { position:absolute; inset:0; background:rgba(10,5,2,0.88); backdrop-filter:blur(4px); z-index:80; display:flex; align-items:flex-end; justify-content:center; }
+        .wb-export-modal.hidden { display:none; }
+        .wb-export-sheet { width:100%; background:rgba(50,22,10,0.98); border-top:1px solid rgba(251,223,162,0.35); border-radius:16px 16px 0 0; padding:18px 16px 28px; display:flex; flex-direction:column; gap:12px; max-height:70%; overflow:hidden; }
+        .wb-export-title { font-size:14px; font-weight:700; color:#FBDFA2; letter-spacing:1px; text-align:center; }
+        .wb-export-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:2px; }
+        .wb-export-list::-webkit-scrollbar { width:3px; } .wb-export-list::-webkit-scrollbar-thumb { background:rgba(251,223,162,0.3); border-radius:2px; }
+        .wb-export-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:rgba(120,55,25,0.4); border:1px solid rgba(251,223,162,0.15); border-radius:8px; cursor:pointer; transition:.2s; }
+        .wb-export-row:hover, .wb-export-row.checked { border-color:rgba(251,223,162,0.5); background:rgba(120,55,25,0.7); }
+        .wb-export-row input[type=checkbox] { accent-color:#FBDFA2; width:15px; height:15px; flex-shrink:0; cursor:pointer; }
+        .wb-export-row-name { flex:1; font-size:13px; color:#FFF8E7; }
+        .wb-export-row-count { font-size:11px; color:#B78456; }
+        .wb-export-actions { display:flex; gap:8px; flex-shrink:0; }
+        .wb-export-sel-all { font-size:11px; color:#B78456; cursor:pointer; padding:4px 10px; border:1px solid rgba(251,223,162,0.2); border-radius:12px; background:none; transition:.2s; }
+        .wb-export-sel-all:hover { color:#FBDFA2; border-color:rgba(251,223,162,0.4); }
+        .wb-export-confirm { flex:1; padding:10px; background:#FBDFA2; color:#452216; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:.2s; }
+        .wb-export-confirm:hover { background:#fce8b2; }
+        .wb-export-cancel { padding:10px 16px; background:none; color:#B78456; border:1px solid rgba(251,223,162,0.25); border-radius:8px; font-size:13px; cursor:pointer; }
+        .wb-export-cancel:hover { color:#FBDFA2; }
         `;
         document.head.appendChild(s);
     }
@@ -249,9 +269,9 @@
               </div>
               <div class="wb-settings">
                 <div class="wb-section">
-                  <div class="wb-section-title">📂 匯入 / 匯出 (當前書包)</div>
+                  <div class="wb-section-title">📂 匯入 / 匯出</div>
                   <button class="wb-btn wb-btn-secondary" id="wb-import-st-btn">📥 匯入世界書 JSON</button>
-                  <button class="wb-btn wb-btn-secondary" id="wb-export-btn">📤 匯出當前書包為 JSON</button>
+                  <button class="wb-btn wb-btn-secondary" id="wb-export-btn">📤 匯出書包…</button>
                   <input type="file" id="wb-file-input" accept=".json" style="display:none" />
                 </div>
                 <div class="wb-section">
@@ -575,23 +595,74 @@
         });
     }
 
-    function exportJSON() {
-        const entriesToExport = _entries.filter(e => e.book === _activeBook);
-        if (entriesToExport.length === 0) {
-            alert('當前書包是空的，無法匯出。');
-            return;
-        }
-        const data = JSON.stringify({ 
-            version: 2, 
-            name: _activeBook, // ST 格式：保存書名
-            exportedAt: new Date().toISOString(), 
-            entries: entriesToExport 
-        }, null, 2);
-        const blob = new Blob([data], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `worldbook-${_activeBook}.json`;
-        a.click();
+    function exportJSON(root) {
+        const books = getBooks();
+        // 統計每包的條目數
+        const bookCounts = {};
+        books.forEach(b => { bookCounts[b] = _entries.filter(e => e.book === b).length; });
+
+        // 建立選擇器 modal
+        const modal = document.createElement('div');
+        modal.className = 'wb-export-modal';
+        modal.innerHTML = `
+            <div class="wb-export-sheet">
+                <div class="wb-export-title">📤 選擇要匯出的書包</div>
+                <div class="wb-export-list">
+                    ${books.map(b => `
+                    <label class="wb-export-row${b === _activeBook ? ' checked' : ''}">
+                        <input type="checkbox" value="${escHtml(b)}"${b === _activeBook ? ' checked' : ''}>
+                        <span class="wb-export-row-name">📚 ${escHtml(b)}</span>
+                        <span class="wb-export-row-count">${bookCounts[b]} 條</span>
+                    </label>`).join('')}
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                    <button class="wb-export-sel-all" id="wb-ex-selall">全選</button>
+                    <button class="wb-export-sel-all" id="wb-ex-selnone">取消全選</button>
+                </div>
+                <div class="wb-export-actions">
+                    <button class="wb-export-cancel" id="wb-ex-cancel">取消</button>
+                    <button class="wb-export-confirm" id="wb-ex-confirm">匯出</button>
+                </div>
+            </div>`;
+
+        (root || document.body).appendChild(modal);
+
+        // checkbox 聯動列樣式
+        modal.querySelectorAll('.wb-export-row').forEach(row => {
+            const cb = row.querySelector('input[type=checkbox]');
+            cb.addEventListener('change', () => row.classList.toggle('checked', cb.checked));
+        });
+
+        modal.querySelector('#wb-ex-selall').onclick = () =>
+            modal.querySelectorAll('.wb-export-row input').forEach(cb => { cb.checked = true; cb.closest('.wb-export-row').classList.add('checked'); });
+        modal.querySelector('#wb-ex-selnone').onclick = () =>
+            modal.querySelectorAll('.wb-export-row input').forEach(cb => { cb.checked = false; cb.closest('.wb-export-row').classList.remove('checked'); });
+        modal.querySelector('#wb-ex-cancel').onclick = () => modal.remove();
+
+        modal.querySelector('#wb-ex-confirm').onclick = () => {
+            const selected = [...modal.querySelectorAll('.wb-export-row input:checked')].map(cb => cb.value);
+            if (!selected.length) { alert('請至少選擇一個書包'); return; }
+
+            const entriesToExport = _entries.filter(e => selected.includes(e.book));
+            if (!entriesToExport.length) { alert('選中的書包沒有任何條目'); return; }
+
+            const isSingle = selected.length === 1;
+            const data = JSON.stringify({
+                version: 2,
+                name: isSingle ? selected[0] : `合併匯出(${selected.length}包)`,
+                exportedAt: new Date().toISOString(),
+                books: selected,
+                entries: entriesToExport
+            }, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = isSingle
+                ? `worldbook-${selected[0]}.json`
+                : `worldbook-export-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            modal.remove();
+        };
     }
 
     async function importJSON(file, root) {
@@ -742,7 +813,7 @@
             e.target.value = '';
         });
 
-        root.querySelector('#wb-export-btn').addEventListener('click', exportJSON);
+        root.querySelector('#wb-export-btn').addEventListener('click', () => exportJSON(root));
 
         root.querySelector('#wb-add-cat-btn').addEventListener('click', () => {
             const val = root.querySelector('#wb-new-cat-input').value.trim();

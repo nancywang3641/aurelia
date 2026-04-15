@@ -1,0 +1,22 @@
+{
+    "name": "奧瑞亞 Aurelia",
+    "short_name": "奧瑞亞",
+    "description": "手機 OS 模擬器 · AI 寫作輔助",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#0a0603",
+    "theme_color": "#1a0e06",
+    "icons": [
+        {
+            "src": "https://files.catbox.moe/l5hl69.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "https://files.catbox.moe/l5hl69.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

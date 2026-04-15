@@ -10,6 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="apple-touch-icon" href="https://files.catbox.moe/l5hl69.png" />
     <link rel="icon" type="image/png" href="https://files.catbox.moe/l5hl69.png" />
+    <link rel="manifest" href="pwa.json" />
     <title>奧瑞亞 | Aurelia</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
@@ -195,6 +196,15 @@
                 setProgress(100, 'READY');
                 setTimeout(hideBoot, 300);
             }, 1500);
+        }
+
+        // ── Service Worker 註冊（iOS PWA 背景恢復快取）──
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js', { scope: './' })
+                    .then(reg => console.log('[SW] 已註冊', reg.scope))
+                    .catch(e => console.warn('[SW] 註冊失敗', e));
+            });
         }
 
         if (document.readyState === 'loading') {

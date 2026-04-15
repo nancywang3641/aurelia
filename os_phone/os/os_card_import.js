@@ -397,13 +397,10 @@
         panelEl.querySelector('#ci-go-back').onclick = () => {
             panelEl.style.display = 'none';
             panelEl.innerHTML = '';
-            if (railEl) {
-                railEl.style.display = 'flex';
-                // 通知書架重新渲染（讓新書脊出現）
-                win.dispatchEvent(new CustomEvent('CARD_IMPORT_COMPLETE', {
-                    detail: { worldId: null }
-                }));
-            }
+            // 通知書架重新渲染（CARD_IMPORT_COMPLETE listener 會還原 shelves + render）
+            win.dispatchEvent(new CustomEvent('CARD_IMPORT_COMPLETE', {
+                detail: { worldId: null }
+            }));
         };
     }
 
@@ -413,7 +410,12 @@
     function openImportPanel(railEl) {
         const panel = document.getElementById('qb-book-cover-panel');
         if (!panel) return;
-        if (railEl) railEl.style.display = 'none';
+        // 隱藏所有書架層 + 翻頁 nav（與 openCover/openCreate 行為一致）
+        const _allShelves = ['qb-shelf-1','qb-shelf-2','qb-shelf-3']
+            .map(id => document.getElementById(id)).filter(Boolean);
+        const _nav = document.getElementById('qb-shelf-nav');
+        _allShelves.forEach(s => s.style.display = 'none');
+        if (_nav) _nav.style.display = 'none';
 
         panel.innerHTML = `
             <div style="position:absolute;inset:0;
@@ -428,7 +430,7 @@
                 background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);
                 border:1px solid rgba(251,223,162,0.25);color:#FBDFA2;
                 padding:6px 14px;border-radius:20px;cursor:pointer;
-                font-size:12px;letter-spacing:1px;z-index:2;">← 書架</button>
+                font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
 
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;
                         align-items:center;justify-content:center;
@@ -504,7 +506,8 @@
         panel.querySelector('#ci-back').onclick = () => {
             panel.style.display = 'none';
             panel.innerHTML = '';
-            if (railEl) railEl.style.display = 'flex';
+            _allShelves.forEach(s => s.style.display = 'flex');
+            window.QbBookshelf?.render?.();
         };
 
         // 拖放 + 點擊選擇

@@ -3283,6 +3283,18 @@
         localStorage.setItem('vn_current_world_id', w.id);
         localStorage.removeItem('vn_pending_first_mes');
 
+        // 初始化角色卡綁定的變數包，並自動啟用展廳面板
+        if (w.autoPackId && win.OS_DB && win._AVS_ENGINE) {
+            win.OS_DB.getAllVarPacks?.().then(packs => {
+                const pack = (packs || []).find(p => p.id === w.autoPackId);
+                if (pack) {
+                    win._AVS_ENGINE.initFromPack(pack);
+                    win.OS_AVS?.activateTemplateForPack?.(w.autoPackId);
+                    console.log(`[VN] 已初始化角色卡變數包：${pack.name}`);
+                }
+            }).catch(e => console.warn('[VN] 角色卡變數包初始化失敗:', e));
+        }
+
         // 靜默填入 vn-gen-request（右欄操作，不動左欄使用者資料）
         const genInput = document.getElementById('vn-gen-request');
         const genTitle = document.getElementById('vn-gen-title');

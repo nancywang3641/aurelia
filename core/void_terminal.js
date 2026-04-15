@@ -911,7 +911,7 @@ const IRIS_IDLE = [
                     </div>
 
                     <!-- 書封面展開面板 -->
-                    <div id="qb-book-cover-panel" style="display:none; position:absolute; inset:0; overflow:hidden;"></div>
+                    <div id="qb-book-cover-panel" style="display:none; position:absolute; inset:0; overflow:hidden; z-index:20;"></div>
 
                 </div>
 
@@ -1065,9 +1065,16 @@ const IRIS_IDLE = [
 
             if (closeBookshelfBtn) {
                 closeBookshelfBtn.onclick = () => {
-                    bookshelfOverlay.style.display = 'none';
+                    // 先還原書架狀態，再關閉 overlay
                     const coverPanel = bookshelfOverlay.querySelector('#qb-book-cover-panel');
                     if (coverPanel) { coverPanel.style.display = 'none'; coverPanel.innerHTML = ''; }
+                    ['qb-shelf-1','qb-shelf-2','qb-shelf-3'].forEach(id => {
+                        const s = bookshelfOverlay.querySelector(`#${id}`);
+                        if (s) s.style.display = 'flex';
+                    });
+                    const nav = bookshelfOverlay.querySelector('#qb-shelf-nav');
+                    if (nav) nav.style.display = 'none'; // render() 下次開啟時會判斷
+                    bookshelfOverlay.style.display = 'none';
                 };
             }
 
@@ -1075,7 +1082,17 @@ const IRIS_IDLE = [
 
             // 📥 角色卡匯入完成後自動刷新書架
             window.addEventListener('CARD_IMPORT_COMPLETE', function _onCardImport() {
-                if (spineRail) window.QbBookshelf?.render(spineRail);
+                // 還原書架層（匯入面板會隱藏它們），再重繪
+                const bsOverlay = document.getElementById('qb-bookshelf-overlay');
+                if (bsOverlay) {
+                    const coverPanel = bsOverlay.querySelector('#qb-book-cover-panel');
+                    if (coverPanel) { coverPanel.style.display = 'none'; coverPanel.innerHTML = ''; }
+                    ['qb-shelf-1','qb-shelf-2','qb-shelf-3'].forEach(id => {
+                        const s = bsOverlay.querySelector(`#${id}`);
+                        if (s) s.style.display = 'flex';
+                    });
+                }
+                window.QbBookshelf?.render();
             });
 
             const bgmBtn = tab.querySelector('#lobby-bgm-toggle');

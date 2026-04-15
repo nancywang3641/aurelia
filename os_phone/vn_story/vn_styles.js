@@ -264,9 +264,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         /* --- 返回主頁與設定按鈕 (乾淨無括號, 黑金風格) --- */
         #btn-home, #btn-settings, #btn-reader { position: absolute; z-index: 15; background: rgba(10,10,12,0.6); backdrop-filter: blur(5px); border: 1px solid rgba(212,175,55,0.3); color: var(--gold-dark); padding: 8px 16px; cursor: pointer; font-size: 0.85rem; transition: all 0.3s; font-family: var(--font-classic); letter-spacing: 1px; border-radius: 2px; text-transform: uppercase; }
-        #btn-home { top: 20px; right: 20px; }
-        #btn-settings { top: 20px; right: 100px; }
-        #btn-reader { top: 20px; right: 178px; padding: 8px 12px; }
+        #btn-home { top: calc(20px + env(safe-area-inset-top, 0px)); right: 20px; }
+        #btn-settings { top: calc(20px + env(safe-area-inset-top, 0px)); right: 100px; }
+        #btn-reader { top: calc(20px + env(safe-area-inset-top, 0px)); right: 178px; padding: 8px 12px; }
+        body.layout-pad-ios #btn-home,
+        body.layout-pad-ios #btn-settings,
+        body.layout-pad-ios #btn-reader { top: 55px; }
         #btn-home:hover, #btn-settings:hover, #btn-reader:hover { border-color: var(--gold); color: var(--gold); background: rgba(0,0,0,0.8); box-shadow: 0 0 10px rgba(212,175,55,0.2); }
 
         /* 📖 閱讀器泡泡 — 思考摺疊塊（ST 風格） */
@@ -1142,8 +1145,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             .ch-name { font-size: 0.88rem; }
 
             /* 遊戲頂部按鈕 */
-            #btn-home { top: 10px; right: 8px; padding: 6px 12px; font-size: 0.78rem; }
-            #btn-settings { top: 10px; right: 80px; padding: 6px 12px; font-size: 0.78rem; }
+            #btn-home { top: calc(10px + env(safe-area-inset-top, 0px)); right: 8px; padding: 6px 12px; font-size: 0.78rem; }
+            #btn-settings { top: calc(10px + env(safe-area-inset-top, 0px)); right: 80px; padding: 6px 12px; font-size: 0.78rem; }
+            body.layout-pad-ios #btn-home,
+            body.layout-pad-ios #btn-settings,
+            body.layout-pad-ios #btn-reader { top: 52px; }
             
 
             /* 背景標籤 */

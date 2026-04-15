@@ -118,10 +118,12 @@
                     <div class="avs-tab" data-tab="furnace">🔥 煉丹爐</div>
                     <div class="avs-tab" data-tab="gallery">🖼️ 展廳</div>
                     <div class="avs-tab" data-tab="rules">⚡ 條件規則</div>
+                    <div class="avs-tab" data-tab="modes">🎭 模式</div>
                 </div>
                 <div class="avs-content">
                     <div id="avs-view-state" class="avs-view active"></div>
                     <div id="avs-view-rules" class="avs-view"></div>
+                    <div id="avs-view-modes" class="avs-view"></div>
                     <div id="avs-view-packs" class="avs-view">
                         <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack">＋ 創建新變數包</div>
                         <div id="avs-pack-list" style="display:flex; flex-direction:column; gap:10px;"></div>
@@ -184,6 +186,7 @@
                 }
                 if (tab.dataset.tab === 'state') renderStateView(container);
                 if (tab.dataset.tab === 'rules') win.OS_AVS_RULES?.renderTab?.(container);
+                if (tab.dataset.tab === 'modes') win.OS_AVS_RULES?.renderModesTab?.(container);
             };
         });
 
@@ -580,8 +583,35 @@
         console.log('[AVS] 已更新全域活動模板快取。');
     }
 
+    /**
+     * 依 packId 自動啟用對應的 UI 模板（供角色卡進入故事時呼叫）
+     * 若該包已有 isActive 的模板則不重複操作。
+     */
+    async function activateTemplateForPack(packId) {
+        if (!packId || !win.OS_DB) return;
+        try {
+            const allTpls = await win.OS_DB.getAllUITemplates?.() || [];
+            const packTpls = allTpls.filter(t => t.packId === packId);
+            if (!packTpls.length) return;                           // 此包無模板
+            if (packTpls.some(t => t.isActive)) return;            // 已有啟用的，不覆蓋
+
+            // 取最新的模板（createdAt 最大）啟用
+            packTpls.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            packTpls[0].isActive = true;
+            await win.OS_DB.saveUITemplate(packTpls[0]);
+
+            // 更新 localStorage 快取
+            const updated = await win.OS_DB.getAllUITemplates?.() || [];
+            localStorage.setItem('avs_active_ui_templates', JSON.stringify(updated.filter(t => t.isActive)));
+            console.log(`[AVS] 自動啟用展廳面板：packId=${packId}`);
+        } catch(e) {
+            console.warn('[AVS] activateTemplateForPack 失敗:', e);
+        }
+    }
+
     win.OS_AVS = {
         launch: launchApp,
+        activateTemplateForPack,
         /** 還原上一個 AVS 快照（可在 reroll/重試 時外部呼叫） */
         restoreSnapshot: () => win._AVS_ENGINE?.restore?.() ?? null,
         /** 取當前故事的 AVS 狀態 */
