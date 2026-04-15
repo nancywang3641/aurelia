@@ -150,6 +150,24 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-gen-titlebar .gen-title { color: var(--gold); font-family: var(--font-classic); font-size: 1.1rem; letter-spacing: 3px; }
         #vn-gen-titlebar .gen-close { width: 30px; height: 30px; background: transparent; border: 1px solid transparent; color: rgba(212,175,55,0.5); font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s; border-radius: 2px; }
         #vn-gen-titlebar .gen-close:hover { color: var(--gold); border-color: var(--gold); }
+        /* === VN 生成面板 雙欄 === */
+        #vn-gen-window { max-width: 640px; }
+        #vn-gen-columns { display: flex; min-height: 0; flex: 1; }
+        #vn-gen-body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; border-right: 1px solid rgba(212,175,55,0.12); min-width: 0; }
+        #vn-gen-card-col { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; padding: 12px 10px 10px; gap: 6px; }
+        .vn-gen-col-hd { color: rgba(212,175,55,0.55); font-size: 0.72rem; letter-spacing: 2px; font-family: var(--font-classic); padding-bottom: 6px; border-bottom: 1px solid rgba(212,175,55,0.12); flex-shrink: 0; }
+        /* 角色卡欄 */
+        #vn-gen-card-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; min-height: 0; }
+        .vn-gen-card-item { display: flex; align-items: center; gap: 4px; padding: 7px 9px; background: rgba(255,255,255,0.03); border: 1px solid rgba(212,175,55,0.12); border-radius: 3px; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+        .vn-gen-card-item:hover { background: rgba(212,175,55,0.07); border-color: rgba(212,175,55,0.35); }
+        .vn-gen-card-item.selected { background: rgba(212,175,55,0.1); border-color: var(--gold); }
+        .vn-gen-card-info { flex: 1; min-width: 0; }
+        .vn-gen-card-source { color: rgba(212,175,55,0.6); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; }
+        .vn-gen-card-desc { color: rgba(255,255,255,0.45); font-size: 0.72rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #vn-gen-card-empty { color: rgba(255,255,255,0.2); font-size: 0.75rem; text-align: center; padding: 20px 4px; line-height: 1.6; }
+        #vn-gen-card-dive { flex-shrink: 0; padding: 9px 6px; background: transparent; border: 1px solid rgba(212,175,55,0.3); color: var(--gold); font-size: 0.78rem; letter-spacing: 2px; font-family: var(--font-classic); cursor: pointer; border-radius: 2px; transition: all 0.2s; display: none; margin-top: 4px; }
+        #vn-gen-card-dive:hover { background: rgba(212,175,55,0.1); border-color: var(--gold); }
+        #vn-gen-card-dive.visible { display: block; }
         #vn-gen-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
         #vn-gen-body label { color: var(--gold-light); font-size: 0.8rem; letter-spacing: 1.5px; font-family: var(--font-classic); }
         #vn-gen-request { width: 100%; min-height: 90px; max-height: 180px; padding: 10px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(212,175,55,0.2); border-radius: 2px; color: var(--text-light); font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; line-height: 1.6; outline: none; transition: border-color 0.3s; }
@@ -1666,18 +1684,28 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                         <span class="gen-title">✨ AI 生成劇情</span>
                         <button class="gen-close" onclick="window.VN_PLAYER.closeGeneratePanel()">✕</button>
                     </div>
-                    <div id="vn-gen-body">
-                        <label>開場白標題 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，填了才會儲存/覆蓋)</span></label>
-                        <input id="vn-gen-title" type="text" placeholder="例：雨天咖啡廳初見" autocomplete="off" />
-                        <label>劇情指引 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，留空則 AI 自由發揮)</span></label>
-                        <textarea id="vn-gen-request" placeholder="例：繼續上次在咖啡廳的相遇，加入一段雨天的邂逅...&#10;&#10;或留空讓 AI 自由創作"></textarea>
-                        <button id="vn-gen-submit" onclick="window.VN_PLAYER.generateStory()">🚀 開始生成</button>
-                        <div id="vn-gen-presets-wrap">
-                            <div class="vn-gen-presets-hd">
-                                <span>📂 已儲存的開場白</span>
-                                <span id="vn-gen-presets-count"></span>
+                    <div id="vn-gen-columns">
+                        <!-- 左欄：自由生成（儲存記錄完全隔離） -->
+                        <div id="vn-gen-body">
+                            <div class="vn-gen-col-hd">✍️ 自由生成</div>
+                            <label>開場白標題 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，填了才會儲存/覆蓋)</span></label>
+                            <input id="vn-gen-title" type="text" placeholder="例：雨天咖啡廳初見" autocomplete="off" />
+                            <label>劇情指引 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，留空則 AI 自由發揮)</span></label>
+                            <textarea id="vn-gen-request" placeholder="例：繼續上次在咖啡廳的相遇，加入一段雨天的邂逅...&#10;&#10;或留空讓 AI 自由創作"></textarea>
+                            <button id="vn-gen-submit" onclick="window.VN_PLAYER.generateStory()">🚀 開始生成</button>
+                            <div id="vn-gen-presets-wrap">
+                                <div class="vn-gen-presets-hd">
+                                    <span>📂 已儲存的開場白</span>
+                                    <span id="vn-gen-presets-count"></span>
+                                </div>
+                                <div id="vn-gen-presets"></div>
                             </div>
-                            <div id="vn-gen-presets"></div>
+                        </div>
+                        <!-- 右欄：書架角色卡（標示書名，完全獨立） -->
+                        <div id="vn-gen-card-col">
+                            <div class="vn-gen-col-hd">📚 書架角色卡</div>
+                            <div id="vn-gen-card-list"></div>
+                            <button id="vn-gen-card-dive" onclick="window.VN_PLAYER.diveSelectedCard()">🎭 與TA相遇</button>
                         </div>
                     </div>
                     <div id="vn-gen-status"></div>

@@ -840,8 +840,29 @@
 
         // === 獨立模式：選擇按鈕 ===
         _showStandaloneChoices: function(line) {
-            // [Choice|選項A|選項B|選項C]
-            const options = line.slice(8, -1).split('|').map(s => s.trim()).filter(Boolean);
+            // 支援兩種格式：
+            //   舊格式（向下相容）：[Choice|選項A|選項B|選項C]  ← 一行多選用 | 分隔
+            //   新格式（推薦）：    [Choice|選項A]              ← 每條獨立一行，可寫完整句子
+            //                     [Choice|選項B]
+            //                     [Choice|選項C]
+            const content = line.slice(8, -1);  // 去掉 [Choice| 和 ]
+            let options = [];
+
+            if (content.includes('|')) {
+                // 舊格式：內容有 | → 直接 split
+                options = content.split('|').map(s => s.trim()).filter(Boolean);
+            } else {
+                // 新格式：收集從當前行開始的所有連續 [Choice|...] 行
+                if (content.trim()) options.push(content.trim());
+                let nxt = this.index + 1;
+                while (nxt < this.script.length && this.script[nxt].startsWith('[Choice|')) {
+                    const opt = this.script[nxt].slice(8, -1).trim();
+                    if (opt) options.push(opt);
+                    nxt++;
+                }
+                this.index = nxt - 1;  // index 跳到最後一個 Choice 行
+            }
+
             if (!options.length) { this.next(); return; }
             // 把選擇存入 Archive，然後打開資訊中心
             VN_StandaloneArchive._pendingChoices = options;
@@ -860,6 +881,7 @@
 
             try {
                 if (win.OS_THINK) win.OS_THINK.setContext({ panel: 'VN 選項選擇', userInput: choice });
+                const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
                 const messages = await win.OS_API.buildContext(choice, 'vn_story');
                 await new Promise((resolve, reject) => {
                     win.OS_API.chat(messages, config, null, async (fullText) => {
@@ -877,7 +899,7 @@
                             const _thinking = win.OS_THINK?.getLatest()?.content?.trim() || '';
                             const _storyId    = window.VN_Core._currentStoryId    || '';
                             const _storyTitle = window.VN_Core._currentStoryTitle || '';
-                            await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${choice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: choice, thinking: _thinking, createdAt: Date.now() });
+                            await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${choice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: choice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
                         } catch(e) {}
                         window.VN_Core._lastRawText = fullText;
                         window.VN_Core.loadScript(fullText, null);
@@ -1955,11 +1977,19 @@
             document.getElementById('dialogue-text').innerHTML = '';
             document.getElementById('speaker-name').style.display = 'none';
 
-            // 檢查最後一行是否為選擇，若是則直接處理（不能靠 next() 因為 index 到底會進 end-overlay）
-            const lastLine = this.script[this.script.length - 1];
-            if (lastLine && lastLine.startsWith('[Choice|') && (win.OS_API?.isStandalone?.() ?? false)) {
-                this.index = this.script.length - 1;
-                this._showStandaloneChoices(lastLine);
+            // 檢查末尾是否為選擇（支援新格式：連續多行 [Choice|...]）
+            // 找到最後一段連續 Choice 行的起始位置
+            let _firstChoiceIdx = this.script.length - 1;
+            while (_firstChoiceIdx > 0 && this.script[_firstChoiceIdx].startsWith('[Choice|')) {
+                _firstChoiceIdx--;
+            }
+            // 修正：如果退到非 Choice 行，往前一步
+            if (!this.script[_firstChoiceIdx]?.startsWith('[Choice|')) _firstChoiceIdx++;
+
+            const _firstChoiceLine = this.script[_firstChoiceIdx];
+            if (_firstChoiceLine?.startsWith('[Choice|') && (win.OS_API?.isStandalone?.() ?? false)) {
+                this.index = _firstChoiceIdx;
+                this._showStandaloneChoices(_firstChoiceLine);
             } else {
                 this.index = this.script.length - 1;
             }
@@ -3140,10 +3170,194 @@
         document.getElementById('vn-gen-submit').disabled = false;
         overlay.classList.add('active');
         _renderGenPresets();
+        _renderCardCol();   // 每次開啟都刷新右欄角色卡
         setTimeout(() => {
             const ta = document.getElementById('vn-gen-request');
             if (ta) ta.focus();
         }, 350);
+    }
+
+    // ── 角色卡紀錄 helpers ──────────────────────────────────────
+    const _CARD_SESSIONS_KEY = 'vn_card_sessions';
+    function _loadCardSessions() {
+        try { return JSON.parse(localStorage.getItem(_CARD_SESSIONS_KEY) || '[]'); } catch(e) { return []; }
+    }
+    function _saveCardSession(worldId, worldTitle, greeting) {
+        const sessions = _loadCardSessions();
+        sessions.unshift({ id: `cs_${Date.now()}`, worldId, worldTitle, greeting, ts: Date.now() });
+        // 同角色同開場白去重（只保留最新一筆）
+        const seen = new Set();
+        const deduped = sessions.filter(s => {
+            const key = s.worldId + '|' + (s.greeting || '').slice(0, 30);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+        localStorage.setItem(_CARD_SESSIONS_KEY, JSON.stringify(deduped.slice(0, 50)));
+    }
+    function _deleteCardSession(id) {
+        const sessions = _loadCardSessions().filter(s => s.id !== id);
+        localStorage.setItem(_CARD_SESSIONS_KEY, JSON.stringify(sessions));
+    }
+
+    // 渲染右欄：書架角色卡紀錄（格式：角色名 - 開場白描述）
+    function _renderCardCol() {
+        const list    = document.getElementById('vn-gen-card-list');
+        const diveBtn = document.getElementById('vn-gen-card-dive');
+        if (!list) return;
+
+        // ── 必須在任何 early-return 之前處理 pending ──────────────
+        // 否則 sessions 為空時 return 提前，_pendingCardDive 永遠不觸發
+        if (window._pendingCardDive) {
+            const p = window._pendingCardDive;
+            window._pendingCardDive = null;          // 先清除，防止遞迴循環
+            _saveCardSession(p.worldId, p.title, p.greeting);
+            // 預設 diveBtn（diveSelectedCard 依賴此 dataset）
+            if (diveBtn) {
+                diveBtn.dataset.wid      = p.worldId;
+                diveBtn.dataset.greeting = p.greeting || '';
+            }
+            _renderCardCol();                        // 重繪列表（此時 pending 已 null）
+            setTimeout(() => diveSelectedCard(), 150);
+            return;
+        }
+        // ────────────────────────────────────────────────────────
+
+        const sessions = _loadCardSessions();
+        list.innerHTML = '';
+        if (diveBtn) diveBtn.classList.remove('visible');
+
+        if (!sessions.length) {
+            list.innerHTML = '<div id="vn-gen-card-empty">尚無書架角色卡紀錄<br><span style="font-size:0.68rem;opacity:0.5;">從書架點「與TA相遇」即會產生紀錄</span></div>';
+            return;
+        }
+
+        sessions.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'vn-gen-card-item';
+            const greetLabel = s.greeting
+                ? s.greeting.slice(0, 40) + (s.greeting.length > 40 ? '…' : '')
+                : '（AI 自由發揮）';
+            item.innerHTML = `
+                <div class="vn-gen-card-info" style="flex:1;min-width:0;">
+                    <div class="vn-gen-card-source">${s.worldTitle}</div>
+                    <div class="vn-gen-card-desc">${greetLabel}</div>
+                </div>
+                <button class="vn-card-del-btn" data-sid="${s.id}"
+                    style="flex-shrink:0;background:none;border:none;color:rgba(255,255,255,0.25);
+                           font-size:0.75rem;cursor:pointer;padding:0 2px;line-height:1;"
+                    title="刪除此紀錄">✕</button>
+            `;
+            item.querySelector('.vn-card-del-btn').onclick = e => {
+                e.stopPropagation();
+                _deleteCardSession(s.id);
+                _renderCardCol();
+            };
+            const _selectItem = () => {
+                list.querySelectorAll('.vn-gen-card-item').forEach(el => el.classList.remove('selected'));
+                item.classList.add('selected');
+                if (diveBtn) {
+                    diveBtn.dataset.wid      = s.worldId;
+                    diveBtn.dataset.greeting = s.greeting || '';
+                    diveBtn.classList.add('visible');
+                }
+            };
+            item.onclick = _selectItem;
+            list.appendChild(item);
+        });
+    }
+
+    // 角色卡 DIVE：存紀錄 → 靜默建 prompt → AI 生成 VN 格式
+    function diveSelectedCard() {
+        const diveBtn = document.getElementById('vn-gen-card-dive');
+        const wid      = diveBtn?.dataset.wid;
+        const greeting = diveBtn?.dataset.greeting || '';
+        if (!wid) return;
+        const w = (window.AURELIA_CUSTOM_WORLDS || []).find(x => x.id === wid);
+        if (!w) return;
+
+        // 存紀錄到右欄
+        _saveCardSession(w.id, w.title, greeting);
+
+        // 世界 ID → buildContext 取世界書 + 條件規則
+        localStorage.setItem('vn_current_world_id', w.id);
+        localStorage.removeItem('vn_pending_first_mes');
+
+        // 靜默填入 vn-gen-request（右欄操作，不動左欄使用者資料）
+        const genInput = document.getElementById('vn-gen-request');
+        const genTitle = document.getElementById('vn-gen-title');
+        if (genInput) genInput.value = greeting
+            ? `請以下列開場白情境為基礎，生成 VN 視覺小說格式的開場章節：\n\n${greeting}`
+            : `請以角色「${w.title}」的世界觀生成 VN 視覺小說格式的開場章節。`;
+        if (genTitle) genTitle.value = w.title;
+
+        // ── 顯示全板生成中 Loading（蓋住整個 generate window）────
+        const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const genWindow = document.getElementById('vn-gen-window');
+        const LOAD_ID   = 'vn-card-dive-loading';
+        let   loadDiv   = document.getElementById(LOAD_ID);
+        if (!loadDiv && genWindow) {
+            loadDiv = document.createElement('div');
+            loadDiv.id = LOAD_ID;
+            loadDiv.style.cssText = [
+                'position:absolute;inset:0;z-index:20;border-radius:inherit;',
+                'background:rgba(8,6,4,0.97);',
+                'display:flex;flex-direction:column;align-items:center;justify-content:center;',
+                'gap:14px;text-align:center;padding:36px;'
+            ].join('');
+            const greetPreview = greeting
+                ? `<div style="font-size:11.5px;color:rgba(255,248,231,0.3);max-width:260px;
+                               line-height:1.75;font-style:italic;margin-top:4px;
+                               display:-webkit-box;-webkit-line-clamp:3;
+                               -webkit-box-orient:vertical;overflow:hidden;">
+                       「${_esc(greeting.slice(0, 90))}${greeting.length > 90 ? '…' : ''}」
+                   </div>` : '';
+            loadDiv.innerHTML = `
+                <div style="font-size:44px;filter:drop-shadow(0 2px 14px rgba(212,175,55,0.45));">${_esc(w.icon)}</div>
+                <div style="font-size:17px;font-weight:900;color:#FBDFA2;letter-spacing:3px;">${_esc(w.title)}</div>
+                ${greetPreview}
+                <div id="vn-card-dive-status" style="display:flex;align-items:center;gap:8px;
+                     font-size:12px;color:rgba(212,175,55,0.75);margin-top:6px;">
+                    <span class="gen-spinner"></span>AI 正在編織故事，請稍候…
+                </div>
+            `;
+            genWindow.style.position = 'relative';
+            genWindow.appendChild(loadDiv);
+        }
+
+        // 監聽生成失敗（submitBtn 重新啟用 = 出錯）
+        const submitBtn = document.getElementById('vn-gen-submit');
+        if (submitBtn) {
+            const _obs = new MutationObserver(() => {
+                if (!submitBtn.disabled) {
+                    _obs.disconnect();
+                    const ld = document.getElementById(LOAD_ID);
+                    if (!ld) return;  // 成功 → panel 已關閉，不需處理
+                    // 出錯：更新狀態文字 + 顯示重試按鈕
+                    const ds = document.getElementById('vn-card-dive-status');
+                    if (ds) {
+                        const errMsg = document.getElementById('vn-gen-status')?.textContent || '生成失敗，請重試';
+                        ds.innerHTML = `<span style="color:rgba(255,90,90,0.9);">❌ ${_esc(errMsg.replace(/^❌\s*/,''))}</span>`;
+                    }
+                    if (!ld.querySelector('#vn-card-dive-retry')) {
+                        const retryBtn = document.createElement('button');
+                        retryBtn.id = 'vn-card-dive-retry';
+                        retryBtn.textContent = '關閉';
+                        retryBtn.style.cssText = [
+                            'margin-top:8px;padding:9px 28px;border-radius:4px;cursor:pointer;',
+                            'border:1px solid rgba(212,175,55,0.35);',
+                            'background:rgba(212,175,55,0.12);color:#FBDFA2;font-size:12px;'
+                        ].join('');
+                        retryBtn.onclick = () => ld.remove();
+                        ld.appendChild(retryBtn);
+                    }
+                }
+            });
+            _obs.observe(submitBtn, { attributes: true, attributeFilter: ['disabled'] });
+        }
+        // ────────────────────────────────────────────────────────
+
+        generateStory();
     }
 
     function closeGeneratePanel() {
@@ -3162,6 +3376,51 @@
             statusEl.className = 'err';
             return;
         }
+
+        // ── 角色卡開場白直通：跳過 API，直接用 first_mes ──────
+        const _pendingFirstMes = localStorage.getItem('vn_pending_first_mes');
+        if (_pendingFirstMes) {
+            localStorage.removeItem('vn_pending_first_mes');
+            submitBtn.disabled = true;
+            statusEl.innerHTML = '<span class="gen-spinner"></span>載入角色開場白…';
+            statusEl.className = '';
+            try {
+                const fullText = _pendingFirstMes.includes('<content>')
+                    ? _pendingFirstMes
+                    : `<content>\n${_pendingFirstMes}\n</content>`;
+                const now        = Date.now();
+                const storyTitle = window.VN_Core._extractStoryTitle(fullText)
+                    || presetTitle
+                    || localStorage.getItem('vn_current_story_title')
+                    || '角色開場';
+                const storyId    = `${storyTitle}_${now}`;
+                window.VN_Core._setStoryId(storyId, storyTitle);
+                const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
+                await win.OS_DB.saveVnChapter({
+                    title:    '第一章：相遇',
+                    storyId,
+                    storyTitle,
+                    content:  fullText,
+                    request:  request || '角色卡開場白',
+                    thinking: '',
+                    createdAt: now,
+                    avsStateBefore,
+                });
+                closeGeneratePanel();
+                window.VN_Core._lastRawText = fullText;
+                window.VN_Core.loadScript(fullText, null);
+                switchPage('page-game');
+                window.VN_Core._showStartLoader(4000, () => window.VN_Core.next());
+                console.log('[VN_Gen] ✅ 角色卡開場白直通成功');
+            } catch(e) {
+                console.error('[VN_Gen] 開場白載入失敗:', e);
+                statusEl.textContent = `❌ 載入失敗：${e.message}`;
+                statusEl.className = 'err';
+                submitBtn.disabled = false;
+            }
+            return;
+        }
+        // ─────────────────────────────────────────────────────────
 
         // 取 API 設定
         const config = (win.OS_SETTINGS?.getConfig?.()) || {};
@@ -3189,6 +3448,7 @@
 
             window.VN_Core._setStoryId('__new_story__', '');
 
+            const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
             const messages = await win.OS_API.buildContext(userMsg, 'vn_story');
 
             // 呼叫 API
@@ -3227,7 +3487,8 @@
                                 content: fullText,
                                 request: request || '',
                                 thinking: _thinking,
-                                createdAt: now
+                                createdAt: now,
+                                avsStateBefore
                             });
                             console.log('[VN_Gen] ✅ 章節已存檔：', title, '| 故事：', storyId);
                         } catch(e) {
@@ -3316,6 +3577,11 @@
         },
 
         hide() {
+            if (this._avsListener) {
+                win.removeEventListener('AVS_VARS_UPDATED', this._avsListener);
+                this._avsListener = null;
+            }
+            this._rerollHandler = null;
             const overlay = document.getElementById('aurelia-extractor-phone-overlay');
             if (overlay) { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 360); }
         },
@@ -3331,7 +3597,30 @@
                 this._addTab(tabBar, contentArea, 'choices', '🎯 做出選擇', this._choicesHtml(), true);
             }
             this._addTab(tabBar, contentArea, 'profiles', '📜 本章角色', await this._profilesHtml(), !hasChoices);
+            this._addTab(tabBar, contentArea, 'avs',      '📊 狀態',      await this._avsHtml(),       false);
             this._addTab(tabBar, contentArea, 'wallet',   '💰 錢包',      this._walletHtml(),          false);
+
+            // AVS_VARS_UPDATED 事件 → 自動刷新狀態 tab
+            const _avsRefresh = async () => {
+                const pane = overlay.querySelector('#tab-pane-avs');
+                if (pane) pane.innerHTML = await this._avsHtml();
+            };
+            win.removeEventListener('AVS_VARS_UPDATED', this._avsListener);
+            this._avsListener = _avsRefresh;
+            win.addEventListener('AVS_VARS_UPDATED', this._avsListener);
+
+            // 回朔按鈕（事件委派，動態插入後仍可觸發）
+            if (this._rerollHandler) overlay.removeEventListener('click', this._rerollHandler);
+            this._rerollHandler = async (e) => {
+                if (e.target && e.target.id === 'avs-reroll-btn' && !e.target.disabled) {
+                    e.target.disabled = true;
+                    e.target.textContent = '回朔中...';
+                    await this._avsReroll();
+                    const pane = overlay.querySelector('#tab-pane-avs');
+                    if (pane) pane.innerHTML = await this._avsHtml();
+                }
+            };
+            overlay.addEventListener('click', this._rerollHandler);
         },
 
         _addTab(tabBar, contentArea, id, name, html, active) {
@@ -3446,6 +3735,154 @@
             } catch(e) { return `<div style="padding:20px;color:#e74c3c">讀取失敗: ${e.message}</div>`; }
         },
 
+        async _avsHtml() {
+            const storyId = window.VN_Core?._currentStoryId || '';
+            const stateKey = storyId ? `avs_state_${storyId}` : 'avs_current_state';
+            let state = {};
+            try { state = JSON.parse(localStorage.getItem(stateKey) || '{}'); } catch(e) {}
+            const entries = Object.entries(state);
+
+            // 讀取此故事所有章節（按時間升序）
+            let storyChs = [];
+            try {
+                const allChs = await win.OS_DB?.getAllVnChapters?.() || [];
+                storyChs = allChs.filter(c => c.storyId === storyId).sort((a, b) => (a.createdAt||0) - (b.createdAt||0));
+            } catch(e) {}
+
+            const lastChapter = storyChs.length ? storyChs[storyChs.length - 1] : null;
+            const hasReroll = lastChapter && lastChapter.avsStateBefore !== undefined;
+            const rerollBtn = `<button id="avs-reroll-btn" style="
+                width:100%;padding:8px 0;margin-bottom:12px;border-radius:6px;
+                background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);
+                color:${hasReroll ? '#d4af37' : '#555'};font-size:12px;cursor:${hasReroll ? 'pointer' : 'not-allowed'};
+                letter-spacing:1px;
+            " ${hasReroll ? '' : 'disabled'}>↩ 回朔上一章節${hasReroll ? '' : '（無紀錄）'}</button>`;
+
+            // 當前狀態面板（煉丹爐模板 or 原始變數）
+            let activeTpls = [];
+            try { activeTpls = JSON.parse(localStorage.getItem('avs_active_ui_templates') || '[]'); } catch(e) {}
+
+            let panelHtml = '';
+            if (activeTpls.length > 0) {
+                let rendered = '';
+                for (const tpl of activeTpls) {
+                    let html = tpl.htmlContent || '';
+                    let css  = tpl.cssContent  || '';
+                    Object.entries(state).forEach(([k, v]) => {
+                        const re = new RegExp(`\\{\\{${k}\\}\\}`, 'g');
+                        html = html.replace(re, String(v));
+                    });
+                    html = html.replace(/\{\{[\w.]+\}\}/g, '—');
+                    rendered += `<style>${css}</style>${html}`;
+                }
+                panelHtml = `<div class="native-render-wrapper">${rendered}</div>`;
+            } else if (entries.length === 0) {
+                panelHtml = `<div style="padding:24px 0;text-align:center;color:#666;font-size:12px;">
+                    目前沒有追蹤中的變數<br>
+                    <span style="font-size:11px;color:#444;">AI 輸出 &lt;vars&gt; 後會自動出現<br>可在 變數工坊 AVS 用煉丹爐生成美化面板</span>
+                </div>`;
+            } else {
+                const rows = entries.map(([k, v]) => {
+                    const display = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(212,175,55,0.1);">
+                        <span style="color:rgba(200,178,130,0.6);font-size:11px;font-family:monospace;">${k}</span>
+                        <span style="color:#d4af37;font-size:13px;font-weight:bold;font-family:monospace;">${display}</span>
+                    </div>`;
+                }).join('');
+                panelHtml = `<div>
+                    <div style="font-size:10px;color:#555;letter-spacing:2px;margin-bottom:12px;">RAW STATE</div>
+                    ${rows}
+                </div>`;
+            }
+
+            // 變數歷史：計算每章 diff
+            let historyHtml = '';
+            if (storyChs.length > 0) {
+                const chDiffs = storyChs.map((ch, i) => {
+                    const before = ch.avsStateBefore || {};
+                    // after = 下一章的 before，最後一章用當前 state
+                    const after = (i < storyChs.length - 1)
+                        ? (storyChs[i + 1].avsStateBefore || {})
+                        : state;
+                    // 收集所有 key
+                    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+                    const changes = [];
+                    keys.forEach(k => {
+                        const bv = before[k];
+                        const av = after[k];
+                        if (JSON.stringify(bv) !== JSON.stringify(av)) {
+                            changes.push({ k, bv, av });
+                        }
+                    });
+                    return { ch, changes };
+                }).filter(d => d.changes.length > 0).reverse(); // 最新在上
+
+                if (chDiffs.length > 0) {
+                    const diffRows = chDiffs.map(({ ch, changes }) => {
+                        const changeLines = changes.map(({ k, bv, av }) => {
+                            const bStr = bv === undefined ? '—' : (typeof bv === 'object' ? JSON.stringify(bv) : String(bv));
+                            const aStr = av === undefined ? '—' : (typeof av === 'object' ? JSON.stringify(av) : String(av));
+                            const numB = parseFloat(bv), numA = parseFloat(av);
+                            let delta = '';
+                            if (!isNaN(numB) && !isNaN(numA)) {
+                                const d = numA - numB;
+                                delta = `<span style="color:${d >= 0 ? '#2ecc71' : '#e74c3c'};font-size:10px;margin-left:4px;">${d >= 0 ? '+' : ''}${d}</span>`;
+                            }
+                            return `<div style="display:flex;gap:6px;align-items:center;padding:3px 0;">
+                                <span style="color:#888;font-size:10px;font-family:monospace;min-width:60px;">${k}</span>
+                                <span style="color:#666;font-size:10px;font-family:monospace;">${bStr}</span>
+                                <span style="color:#555;font-size:10px;">→</span>
+                                <span style="color:#d4af37;font-size:10px;font-family:monospace;">${aStr}</span>
+                                ${delta}
+                            </div>`;
+                        }).join('');
+                        const chTitle = ch.title || '未命名章節';
+                        return `<div style="padding:10px 0;border-bottom:1px solid rgba(212,175,55,0.08);">
+                            <div style="font-size:11px;color:#888;margin-bottom:6px;">📖 ${chTitle}</div>
+                            ${changeLines}
+                        </div>`;
+                    }).join('');
+
+                    historyHtml = `<details style="margin-top:16px;">
+                        <summary style="cursor:pointer;font-size:11px;color:#888;letter-spacing:2px;list-style:none;display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid rgba(212,175,55,0.15);">
+                            <span>▼</span><span>變數歷史 (${chDiffs.length} 章有變化)</span>
+                        </summary>
+                        <div style="padding-top:4px;">${diffRows}</div>
+                    </details>`;
+                }
+            }
+
+            return `<div id="avs-tab-root" data-story="${storyId}" data-last-ch="${lastChapter?.id || ''}">
+                ${rerollBtn}
+                ${panelHtml}
+                ${historyHtml}
+            </div>`;
+        },
+
+        async _avsReroll() {
+            const storyId = window.VN_Core?._currentStoryId || '';
+            if (!storyId) return;
+            try {
+                const allChs = await win.OS_DB?.getAllVnChapters?.() || [];
+                const storyChs = allChs.filter(c => c.storyId === storyId).sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
+                if (!storyChs.length) return;
+                const lastCh = storyChs[0];
+                if (!lastCh.avsStateBefore) return;
+
+                // 刪除最後一章
+                await win.OS_DB?.deleteVnChapter?.(lastCh.id);
+
+                // 還原 AVS 狀態到章節開始前
+                const stateKey = `avs_state_${storyId}`;
+                localStorage.setItem(stateKey, JSON.stringify(lastCh.avsStateBefore));
+                if (win.dispatchEvent) win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: lastCh.avsStateBefore }));
+
+                console.log('[AVS] ↩ 回朔成功，刪除章節:', lastCh.title || lastCh.id);
+            } catch(e) {
+                console.error('[AVS] 回朔失敗:', e);
+            }
+        },
+
         _walletHtml() {
             const eco = win.OS_ECONOMY;
             if (!eco) return '<div style="padding:30px;text-align:center;color:#999">OS_ECONOMY 未載入</div>';
@@ -3535,7 +3972,7 @@
         switchPage, saveConfig, switchCfgTab, stopGame, openChapterPanel, closeChapterPanel,
         openGameSettings, closeGameSettings, openChatBgPanel, closeChatBgPanel, handleChatBgFile,
         applyChatBgUrl, clearChatBg,
-        openGeneratePanel, closeGeneratePanel, generateStory,
+        openGeneratePanel, closeGeneratePanel, generateStory, diveSelectedCard,
         resetPromptOrder() { VN_PromptOrder.reset(); },
 
         // 💭 本章思考鏈小窗
@@ -3789,6 +4226,20 @@
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
         }
+
+        // QB Dive：靜默填入 prompt，直接觸發生成（獨立路徑，不開首頁生成 overlay）
+        if (window._pendingQBPayload && (win.OS_API?.isStandalone?.() ?? false)) {
+            const _qbPayload = window._pendingQBPayload;
+            window._pendingQBPayload = null;
+            setTimeout(() => {
+                const genInput = document.getElementById('vn-gen-request');
+                const genTitle = document.getElementById('vn-gen-title');
+                if (genInput) genInput.value = _qbPayload.startPrompt;
+                if (genTitle) genTitle.value = _qbPayload.title || '';
+                generateStory();
+                console.log('[VN] QB Dive 觸發生成:', _qbPayload.title);
+            }, 300);
+        }
     }
 
     function install() {
@@ -3799,7 +4250,18 @@
     }
     install();
 
-    // === 7. 自動偵測新劇本 ===
+    // === 7. QB 劇本包接收（來自 qb_core diveQuest） ===
+    window._pendingQBPayload = window._pendingQBPayload || null;
+    win.addEventListener('VN_STORY_STARTED', function(e) {
+        const isStandalone = win.OS_API?.isStandalone?.() ?? false;
+        if (!isStandalone) return; // 只在獨立模式有效，確保不污染酒館模式
+        const payload = e.detail;
+        if (!payload || !payload.startPrompt) return;
+        window._pendingQBPayload = payload;
+        console.log('[VN] 收到 VN_STORY_STARTED，暫存 QB 劇本包:', payload.title);
+    });
+
+    // === 8. 自動偵測新劇本 ===
     window._pendingAutoScript = window._pendingAutoScript || null;
 
     (function _setupAutoDetect() {

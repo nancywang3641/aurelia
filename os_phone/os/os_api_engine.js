@@ -1,11 +1,16 @@
 // ----------------------------------------------------------------
-// [檔案] os_api_engine.js (V3.15 - Precision Scanner & AVS Ready)
+// [檔案] os_api_engine.js (V3.17 - AVS 引擎已移至 os_avs_engine.js)
 // 路徑：os_phone/os/os_api_engine.js
-// 職責：組裝 Prompt 並負責與 AI 通訊。支援精準關鍵字掃描與動態變數(AVS)攔截。
+// 職責：組裝 Prompt 並負責與 AI 通訊。
+//       AVS 底層引擎由 os_avs_engine.js 提供，本檔僅呼叫 win._AVS_ENGINE。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入 API 引擎 (V3.15 - AVS Ready)...');
-    const win = window.parent || window;
+    console.log('[PhoneOS] 載入 API 引擎 (V3.17)...');
+    const win = window.parent || window; // 🔥 絕對保留：雙通向架構的核心
+
+    // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
+    const _avsRead  = () => win._AVS_ENGINE?.read?.()       ?? {};
+    const _avsApply = (t) => win._AVS_ENGINE?.apply?.(t);
 
     // --- 1. 核心清洗函數 ---
     function cleanRawOutput(text) {
@@ -35,25 +40,19 @@
             }
         }
 
-        // 🔥 AVS 系統：攔截 <vars> 動態變數
+        // 🔥 AVS 系統：攔截 <vars> 動態變數（支援 =, +=, -=, *=, /= 運算子）
         cleaned = cleaned.replace(/<vars>([\s\S]*?)<\/vars>/gi, (_, inner) => {
             try {
-                const varsData = JSON.parse(inner.trim());
-                // 合併到 localStorage 的當前狀態
-                let currentState = JSON.parse(localStorage.getItem('avs_current_state') || '{}');
-                Object.assign(currentState, varsData);
-                localStorage.setItem('avs_current_state', JSON.stringify(currentState));
-                console.log('[AVS] 動態變數已攔截並更新:', currentState);
-                
-                // 廣播事件，讓未來的「美化面板」能夠監聽並更新 UI
-                if (win.dispatchEvent) {
-                    win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: currentState }));
-                }
+                _avsApply(inner.trim());
             } catch(e) {
-                console.warn('[AVS] 變數 JSON 解析失敗:', e, inner);
+                console.warn('[AVS] <vars> 解析失敗:', e, inner);
             }
-            return ''; // 成功或失敗都將其從純文字中剝除，不污染畫面
+            return '';
         });
+
+        // 🔥 終極修復：過濾 AI 幻覺產生的危險 HTML 標籤，防止 file:/// 模式下 iframe 渲染崩潰
+        cleaned = cleaned.replace(/<(iframe|script|meta|link|object|embed)[^>]*>[\s\S]*?<\/\1>/gi, '');
+        cleaned = cleaned.replace(/<(iframe|script|meta|link|object|embed)[^>]*\/?>/gi, '');
 
         cleaned = cleaned.replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, "$1");
         cleaned = cleaned.trim();
@@ -626,9 +625,9 @@
                 } catch (e) { console.error("Chat history load error", e); }
             }
 
-            // 🔥 AVS 系統注入：讓 AI 知道目前的變數狀態
+            // 🔥 AVS 系統注入：讓 AI 知道目前的變數狀態（按 storyId 分艙）
             try {
-                const avsState = JSON.parse(localStorage.getItem('avs_current_state') || '{}');
+                const avsState = _avsRead();
                 if (Object.keys(avsState).length > 0) {
                     apiMessages.push({ role: "system", content: `[SYSTEM: Current Dynamic Variables (AVS)]\n${JSON.stringify(avsState)}` });
                 }
@@ -732,19 +731,30 @@
             // ── 3. 獲取世界書 (OS_WORLDBOOK) ──
             let lore = '';
             try {
-                if (win.OS_WORLDBOOK?.getEnabledContext) {
+                // 優先使用書封面選定的書包組合；若無則用當前啟用的書
+                const _rawPacks = localStorage.getItem('vn_active_wb_packs');
+                const _activePacks = _rawPacks ? JSON.parse(_rawPacks) : null;
+                if (_activePacks && _activePacks.length && win.OS_WORLDBOOK?.getContextByPacks) {
+                    lore = await win.OS_WORLDBOOK.getContextByPacks(_activePacks, scanText);
+                } else if (win.OS_WORLDBOOK?.getEnabledContext) {
                     lore = await win.OS_WORLDBOOK.getEnabledContext(scanText);
                 }
             } catch(e) { console.warn('[OS_API standalone] 世界書載入失敗:', e); }
+
+            // ── 3b. AVS 條件規則注入 ──
+            try {
+                const _avsRulesCtx = win.OS_AVS_RULES?.getActiveContext?.(_avsRead());
+                if (_avsRulesCtx) lore = lore ? lore + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;
+            } catch(e) { console.warn('[OS_API standalone] AVS 條件規則載入失敗:', e); }
 
             // ── 4. 組合 API 訊息 ──
             if (cotPrompt) apiMessages.push({ role: 'system', content: `### \n${cotPrompt}` });
             apiMessages.push({ role: 'system', content: `### Roleplay Instruction\n${sysPrompt}` });
 
-            // 🔥 AVS 動態變數狀態準備 (通用)
+            // 🔥 AVS 動態變數狀態準備（按 storyId 分艙）
             let avsPrompt = '';
             try {
-                const avsState = JSON.parse(localStorage.getItem('avs_current_state') || '{}');
+                const avsState = _avsRead();
                 if (Object.keys(avsState).length > 0) {
                     avsPrompt = `[SYSTEM: Current Dynamic Variables (AVS)]\n${JSON.stringify(avsState)}`;
                 }
@@ -826,7 +836,7 @@
                 if (avsPrompt) _vn.push({ role: 'system', content: avsPrompt });
 
                 if (userMessage) {
-                    const _cotReminder = `\n\n[SYS]\n叮! 委託者發來新的消息，請查收後，提交COT草稿及正文本`;
+                    const _cotReminder = `\n\n[SYS]\n叮! 委託者發來新的消息，請查收後，提交<thinking> tag，草稿及正文本`;
                     _vn.push({ role: 'user', content: userMessage + _cotReminder });
                 }
 
@@ -878,7 +888,7 @@
 
             if (userMessage) {
                 let finalUserMsg = userMessage;
-                const cotReminder = `\n\n[SYS]\n叮! 委託者發來新的消息，請查收後，提交COT草稿及正文本`;
+                const cotReminder = `\n\n[SYS]\n叮! 委託者發來新的消息，請查收後，提交<thinking> tag，草稿及正文本`;
                 finalUserMsg += cotReminder;
                 apiMessages.push({ role: 'user', content: finalUserMsg });
             }
@@ -889,5 +899,62 @@
     };
 
     win.WX_API = win.OS_API;
-    console.log('[PhoneOS] API 引擎 (V3.15 - AVS Ready) 就緒');
+
+    // --- 4. OS_API_ENGINE 獨立應用暴露介面 ---
+    win.OS_API_ENGINE = {
+        generateText: async function(promptKey, userMessage) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    let config = {};
+                    if (win.OS_SETTINGS && typeof win.OS_SETTINGS.getConfig === 'function') {
+                        config = win.OS_SETTINGS.getConfig();
+                    } else {
+                        const rawCfg = localStorage.getItem('os_global_config');
+                        if (rawCfg) config = JSON.parse(rawCfg);
+                    }
+
+                    const messages = await win.OS_API.buildContext(userMessage, promptKey);
+
+                    win.OS_API.chat(
+                        messages,
+                        config,
+                        (chunk) => { /* 忽略串流輸出，直接等待結果 */ },
+                        (finalText) => { resolve(finalText); },
+                        (err) => { reject(err); },
+                        { disableTyping: true } // 告知不使用打字機效果，加速回傳
+                    );
+                } catch (e) {
+                    console.error("[OS_API_ENGINE] generateText 執行失敗:", e);
+                    resolve(""); // 避免崩潰，回傳空字串
+                }
+            });
+        },
+
+        startStandaloneStory: async function(sessionPayload) {
+            console.log("[OS_API_ENGINE] 啟動獨立劇情:", sessionPayload);
+
+            // 1. 設定當前 VN Story ID 及標題
+            localStorage.setItem('vn_current_story_id', sessionPayload.entityId);
+            localStorage.setItem('vn_current_story_title', sessionPayload.title);
+
+            // 2. 將開場白存入 DB (初始化劇情)
+            if (win.OS_DB && typeof win.OS_DB.saveVnChapter === 'function') {
+                await win.OS_DB.saveVnChapter({
+                    storyId: sessionPayload.entityId,
+                    request: "【系統：載入視差宇宙節點】", // 假裝這是使用者輸入的要求
+                    content: sessionPayload.startPrompt // 將完整組裝的開場提示設定給 AI 作為上下文
+                });
+            } else {
+                console.warn("[OS_API_ENGINE] 找不到 OS_DB.saveVnChapter，無法儲存開場紀錄");
+            }
+
+            // 3. 廣播事件讓 VN 面板監聽並刷新
+            if (win.dispatchEvent) {
+                const event = new CustomEvent('VN_STORY_STARTED', { detail: sessionPayload });
+                win.dispatchEvent(event);
+            }
+        }
+    };
+
+    console.log('[PhoneOS] API 引擎 (V3.16 - AVS Ready & File Safe + API Engine) 就緒');
 })();

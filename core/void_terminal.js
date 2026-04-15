@@ -1,7 +1,7 @@
 /**
  * ========================
- * Void Terminal (v5.1 - Yingying & Vintage Latte Theme)
- * 視差書咖與敘事引擎核心 (復古拿鐵配色、底部TAB防遮擋修復)
+ * Void Terminal (v6.0 - Yingying Bookshelf & Vintage Latte Theme)
+ * 視差書咖與敘事引擎核心 (整合大廳動態書櫃)
  * ========================
  * 職責：
  * 1. 渲染拿鐵大廳 UI (Bubbles, 聊天框, 立繪) 與 登入介面。
@@ -10,6 +10,7 @@
  * 4. 解析 [LaunchApp|xxx] 標籤，與 Control Center 連動打開外部面板。
  * 5. 導出全局登入資訊 (getUserName / setUserName)，供其他面板 (App) 讀取。
  * 6. 管理 iOS 動態島/瀏海的安全區域與強制下移佈局。
+ * 7. [新增] 渲染大廳專屬的「世界館藏書櫃」，並將開書事件拋給 QB_CORE。
  */
 
 (function(VoidTerminal) {
@@ -24,6 +25,22 @@
         }
     }
     applyLayoutMode(); // 初始化執行
+
+    // ===== 全域世界館藏 (供 QB_CORE 共用) =====
+    const BASE_IMG_URL = 'https://nancywang3641.github.io/aurelia/district/';
+    window.AURELIA_WORLDS = {
+        xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: '⚔️', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: BASE_IMG_URL + '蒼泱神州.png' },
+        fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: '🗡️', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: BASE_IMG_URL + '艾斯蘭登大陸.png' },
+        scifi:      { id: 'scifi',      title: '裂縫紀元·新伊甸都市', icon: '🤖', desc: '科技高度發達的未來。賽博朋克的霓虹燈。', danger: 4, cover: BASE_IMG_URL + '裂縫紀元·新伊甸都市.png' },
+        superpower: { id: 'superpower', title: '臨界都市·異時頻界', icon: '⚡', desc: '現代社會的背面，潛藏著覺醒者。', danger: 3, cover: BASE_IMG_URL + '臨界都市·異時頻界.png' },
+        apocalypse: { id: 'apocalypse', title: '塵土紀元·零號廢土', icon: '☢️', desc: '文明崩塌後的荒原。喪屍橫行、輻射遍地。', danger: 5, cover: BASE_IMG_URL + '塵土紀元·零號廢土.png' },
+        horror:     { id: 'horror',     title: '靜默海半島', icon: '👻', desc: '不可名狀的恐懼。古老的儀式、午夜的凶宅。', danger: 5, cover: BASE_IMG_URL + '靜默海半島.png' }
+    };
+    // 從 localStorage 恢復用戶自建世界
+    try {
+        const _saved = localStorage.getItem('aurelia_custom_worlds');
+        window.AURELIA_CUSTOM_WORLDS = _saved ? JSON.parse(_saved) : [];
+    } catch(e) { window.AURELIA_CUSTOM_WORLDS = []; }
 
     // ===== 狀態管理 =====
     let IRIS_STATE = {
@@ -58,31 +75,31 @@
 
     // ===== 語音與反應池 (瀅瀅專屬) =====
     const IRIS_POKE = [
-        { vn: "[Char|瀅瀅|smile|「呀！別戳我，墨水要弄到原稿上了！」]", audio: null },
-        { vn: "[Char|瀅瀅|think|「（眼神空洞0.5秒）……咦？剛剛是不是有亂碼飄過去？不管啦，委託人你有新故事嗎？」]", audio: null },
-        { vn: "[Char|瀅瀅|normal|「雷伊大叔說點擊螢幕可以刺激腦電波……你是在幫我找靈感嗎？」]", audio: null },
-        { vn: "[Char|瀅瀅|warning|「請不要頻繁點擊，我的『認知平滑協議』好像快要過載了……哎呀，好痛。」]", audio: null },
-        { vn: "[Char|瀅瀅|smile|「嗯……你的行為模式真像個充滿好奇心的主角。請繼續，這說不定能寫進下一章節裡！」]", audio: null },
-        { vn: "[Char|瀅瀅|normal|「書咖一切正常。今天也有準備好熱咖啡，你可以安心分享你的冒險。」]", audio: null },
-    ];
+    { vn: "[Char|瀅瀅|surprise|「哇！等、等等！你突然戳過來，我的思路全被打斷啦——」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_001.wav" },
+    { vn: "[Char|瀅瀅|think|「（眼神空洞0.5秒）……咦？剛剛空氣裡是不是閃過了一排綠色的字？啊，不管啦！這一定是靈感之神降臨的前兆！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_002.wav" },
+    { vn: "[Char|瀅瀅|smile|「雷伊大叔說過，適度的物理刺激有助於活化腦細胞……所以你是在幫我催稿嗎？好過分！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_003.wav" },
+    { vn: "[Char|瀅瀅|warning|「嗚……頭突然有點痛……（猛搖頭）一定是昨晚那杯三倍濃縮的咖啡因還沒退！委託人，你有帶新故事來轉移我的注意力嗎？」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_004.wav" },
+    { vn: "[Char|瀅瀅|smile|「嗯哼哼，這種突如其來的觸感……太棒了！我要把這個寫進下一章『主角遭到隱形怪人襲擊』的橋段裡！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_005.wav" },
+    { vn: "[Char|瀅瀅|normal|「歡迎光臨視差書咖！今天的拿鐵拉花雖然又失敗了，但聽故事的筆記本已經準備好囉！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_006.wav" },
+];
 
-    const IRIS_IDLE = [
-        { vn: "[Char|瀅瀅|smile|「（咬著羽毛筆發呆）下一個章節該怎麼寫呢……如果主角突然從天上掉下來會不會太突兀？」]", audio: null },
-        { vn: "[Char|瀅瀅|think|「這杯拿鐵的拉花又失敗了……（嘆氣）雷伊大叔一定又會說什麼『敘事解構』之類的怪話。」]", audio: null },
-        { vn: "[Char|瀅瀅|smile|「（揉了揉太陽穴）總覺得最近視差書咖的空間有點……不穩定？錯覺吧，大概是昨晚咖啡因攝取過量了。」]", audio: null },
-    ];
+const IRIS_IDLE = [
+    { vn: "[Char|瀅瀅|smile|「（咬著羽毛筆發呆）如果反派其實是個整天喝黑咖啡、愛玩樂高的怪大叔……不對不對，這樣太像雷伊先生了，缺乏威脅感呢。」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_007.wav" },
+    { vn: "[Char|瀅瀅|think|「總覺得……這個世界的邊界，好像是一行一行的代碼？啊！這一定是宇宙射線影響了我的腦電波，太有科幻感了，我要立刻記下來！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_008.wav" },
+    { vn: "[Char|瀅瀅|normal|「（揉了揉太陽穴）今天店裡的空間好像有點……卡頓？錯覺吧。客人怎麼還不來呢……」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_009.wav" },
+];
 
     const CHESHIRE_POKE = [
-        { vn: "[Char|柴郡|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]",                                                                                                            audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_001.mp3" },
-        { vn: "[Char|柴郡|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]",                                                                                                     audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_002.mp3" },
-        { vn: "[Char|柴郡|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]",                                                                                              audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_003.mp3" },
-        { vn: "[Char|柴郡|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]",                                                                                     audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_004.mp3" },
+        { vn: "[Char|柴郡|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]",                                                                                                         audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_001.mp3" },
+        { vn: "[Char|柴郡|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]",                                                                                                      audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_002.mp3" },
+        { vn: "[Char|柴郡|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]",                                                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_003.mp3" },
+        { vn: "[Char|柴郡|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]",                                                                                       audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_004.mp3" },
         { vn: "[Char|柴郡|glitch|「噗...戳空了吧？蠢死了。這裡可是我的主場。」]",                                                                                                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_005.mp3" },
     ];
 
     const CHESHIRE_IDLE = [
         { vn: "[Char|柴郡|smirk|「別拿你那 A 區的規矩來煩我。這裡可是 E 區殘塔的 404 號節點，SN 的防火牆在這裡就是個笑話。」]",                                                                audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_006.mp3" },
-        { vn: "[Char|柴郡|yawn|「哈啊...丹那傢伙又跑去鐵骨修車廠找黎昂了，害我得在這裡無聊到看你戳螢幕。嘖，戀愛腦真麻煩。」]",                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_007.mp3" },
+        { vn: "[Char|柴郡|yawn|「哈啊...丹那傢伙又跑去鐵骨修車廠找黎昂了，害我得在這裡無聊到看你戳螢幕。」]",                                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_007.mp3" },
         { vn: "[Char|柴郡|glitch|「洛爾德家族那群老古板以為靠那些『百年秩序』就能鎖住全球資本？白痴，我昨天才在 OGH 伺服器裡留了個後門，他們連警報都沒響。」]",                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_008.mp3" },
     ];
 
@@ -793,13 +810,13 @@
             if (is404Room) {
                 playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個假笑人偶消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個寫小說的天然呆。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
             } else {
-                playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
+                playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Audio|https://nancywang3641.github.io/aurelia/district/YING_2.wav]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
             }
         }
         _updatePortalBtn();
     }
 
-    // ===== 構建大廳 UI =====
+    // ── 書架視窗 → 已移至 os_phone/qb/qb_bookshelf.js（QbBookshelf 模組）──
     VoidTerminal.createTab = function(parentDoc) {
         if (window.AureliaVoidStyles) window.AureliaVoidStyles.inject(URLS.BG);
         
@@ -824,6 +841,18 @@
                 <div class="void-bubble-text">${e.text}</div>
             </div>`;
         }).join('');
+
+        // 🔥 判斷是否為獨立模式，用來決定要不要印出多餘的 App 按鈕
+        const isStandalone = !(window.parent || window).SillyTavern;
+        const extraAppsHtml = isStandalone ? `
+                    <button class="void-hist-btn" data-app-launch="child" title="育兒"><span class="vhb-em">🧸</span><span>育兒</span></button>
+                    <button class="void-hist-btn" data-app-launch="inv" title="偵探"><span class="vhb-em">🕵️</span><span>偵探</span></button>
+                    <button class="void-hist-btn" data-app-launch="host" title="不夜城"><span class="vhb-em">🍸</span><span>不夜城</span></button>
+                    <button class="void-hist-btn" data-app-launch="pet" title="寵物店"><span class="vhb-em">🐾</span><span>寵物</span></button>
+                    <button class="void-hist-btn" data-app-launch="pet_home" title="我的寵物"><span class="vhb-em">🏠</span><span>我的寵物</span></button>
+                    <button class="void-hist-btn" data-os-launch="微博" title="微博"><span class="vhb-em">👁️</span><span>微博</span></button>
+                    <button class="void-hist-btn" data-os-launch="電子錢包" title="電子錢包"><span class="vhb-em">💳</span><span>錢包</span></button>
+        ` : '';
 
         tab.innerHTML = `
             <div class="void-bg" style="background-color: #452216;"></div>
@@ -850,13 +879,48 @@
                 <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" onerror="this.style.display='none'" alt="瀅瀅" style="cursor:pointer;" title="戳戳 瀅瀅">
             </div>
             
-            <div class="qb-nodes-overlay" id="qb-nodes-overlay">
-                <div class="qb-node-btn left-top" data-wid="fantasy">🗡️ 奇幻世界</div>
-                <div class="qb-node-btn left-mid" data-wid="xianxia">⚔️ 仙俠武俠</div>
-                <div class="qb-node-btn left-bot" data-wid="scifi">🤖 科幻世界</div>
-                <div class="qb-node-btn right-top" data-wid="superpower">⚡ 異能世界</div>
-                <div class="qb-node-btn right-mid" data-wid="apocalypse">☢️ 末日世界</div>
-                <div class="qb-node-btn right-bot" data-wid="horror">👻 靈異詭秘</div>
+            <div class="qb-bookshelf-overlay" id="qb-bookshelf-overlay" style="display:none; position:absolute; top:8%; left:4%; right:4%; bottom:15%; background:#1e1208; border:3px solid #6b4c3a; border-radius:8px; z-index:100; flex-direction:column; box-shadow:inset 0 0 50px rgba(0,0,0,0.8), 0 15px 40px rgba(0,0,0,0.9); overflow:hidden;">
+                <!-- 木紋牆壁背景 -->
+                <div style="position:absolute; inset:0; background-image:repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 18px); pointer-events:none;"></div>
+                <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(90,55,25,0.35) 0%, transparent 70%); pointer-events:none;"></div>
+
+                <div style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, #3e271a, #2c1e16); border-bottom:2px solid #1a110b; padding:12px 15px; box-shadow:0 4px 15px rgba(0,0,0,0.4);">
+                    <div style="color:#FBDFA2; font-weight:bold; font-size:16px; font-family:'Cinzel', serif; letter-spacing:1px; text-shadow:2px 2px 4px rgba(0,0,0,0.5);">📖 瀅瀅的館藏書架</div>
+                    <button id="close-bookshelf-btn" style="background:none; border:none; color:#B78456; font-size:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#B78456'">✕</button>
+                </div>
+
+                <!-- 書脊軌道 + 書封面 共用容器 -->
+                <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">
+
+                    <!-- 第一層書架 -->
+                    <div id="qb-shelf-1" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
+                        <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
+                        <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
+                    </div>
+
+                    <!-- 第二層書架 -->
+                    <div id="qb-shelf-2" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
+                        <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
+                        <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
+                    </div>
+
+                    <!-- 第三層書架 -->
+                    <div id="qb-shelf-3" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
+                        <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
+                        <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
+                    </div>
+
+                    <!-- 書封面展開面板 -->
+                    <div id="qb-book-cover-panel" style="display:none; position:absolute; inset:0; overflow:hidden;"></div>
+
+                </div>
+
+                <!-- 翻頁導航（書架滿時顯示） -->
+                <div id="qb-shelf-nav" style="display:none; flex-shrink:0; align-items:center; justify-content:center; gap:16px; padding:6px 0; background:rgba(26,12,6,0.95); border-top:1px solid rgba(107,76,58,0.4);">
+                    <button id="qb-page-prev" style="background:none; border:1px solid rgba(251,223,162,0.35); color:#FBDFA2; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">‹</button>
+                    <span id="qb-page-label" style="color:#B78456; font-size:13px; font-family:monospace; letter-spacing:1px;"></span>
+                    <button id="qb-page-next" style="background:none; border:1px solid rgba(251,223,162,0.35); color:#FBDFA2; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">›</button>
+                </div>
             </div>
 
             <div class="void-panel-overlay" id="iris-panel" style="display:none; background:rgba(120,55,25,0.95); border:1px solid rgba(251,223,162,0.4);"></div>
@@ -902,10 +966,10 @@
             <div class="void-dialogue-wrap">
                 <div style="margin-bottom:8px; display:flex; flex-direction:column; align-items:flex-end; gap: 8px;">
                     <div class="void-btn" id="void-quest-btn">
-                        <div class="void-btn-inner" style="background: rgba(120,55,25,0.9);  color: #FBDFA2;"><i class="fa-solid fa-bolt"></i><span>QUEST (委託)</span></div>
+                        <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-bolt"></i><span>館藏</span></div>
                     </div>
                     <div class="void-btn" id="void-dive-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.switchPage('nav-story')">
-                        <div class="void-btn-inner" style="background: rgba(120,55,25,0.9); color: #FBDFA2;"><i class="fa-solid fa-plug"></i><span>DIVE (故事)</span></div>
+                        <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-plug"></i><span>入境</span></div>
                     </div>
                 </div>
                 <div style="position: relative; width: 100%;">
@@ -927,16 +991,10 @@
                     <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
                     <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
-                    <button class="void-hist-btn" data-app-launch="child" title="育兒"><span class="vhb-em">🧸</span><span>育兒</span></button>
-                    <button class="void-hist-btn" data-app-launch="inv" title="偵探"><span class="vhb-em">🕵️</span><span>偵探</span></button>
-                    <button class="void-hist-btn" data-app-launch="host" title="不夜城"><span class="vhb-em">🍸</span><span>不夜城</span></button>
-                    <button class="void-hist-btn" data-app-launch="pet" title="寵物店"><span class="vhb-em">🐾</span><span>寵物</span></button>
-                    <button class="void-hist-btn" data-app-launch="pet_home" title="我的寵物"><span class="vhb-em">🏠</span><span>我的寵物</span></button>
+                    ${extraAppsHtml}
                     <button class="void-hist-btn" data-app-launch="tarot" title="塔羅"><span class="vhb-em">🔮</span><span>塔羅</span></button>
                     <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
-                    <button class="void-hist-btn" data-os-launch="微博" title="微博"><span class="vhb-em">👁️</span><span>微博</span></button>
-                    <button class="void-hist-btn" data-os-launch="電子錢包" title="電子錢包"><span class="vhb-em">💳</span><span>錢包</span></button>
                 </div>
                 <div class="void-chat-input-row">
                     <input type="text" id="iris-input" class="void-input" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3); color: #FFF8E7;" placeholder="提供故事素材或與瀅瀅對話..." autocomplete="off">
@@ -969,10 +1027,11 @@
                 };
             }
 
-            // 綁定 QUEST 節點特效與觸發事件
+            // 🔥 綁定 QUEST 按鈕觸發大廳書櫃
             const questBtn = tab.querySelector('#void-quest-btn');
-            const nodesOverlay = tab.querySelector('#qb-nodes-overlay');
-            if (questBtn && nodesOverlay) {
+            const bookshelfOverlay = tab.querySelector('#qb-bookshelf-overlay');
+            const closeBookshelfBtn = tab.querySelector('#close-bookshelf-btn');
+            if (questBtn && bookshelfOverlay) {
                 questBtn.onclick = () => {
                     if (is404Room) {
                         // 404 房間：直接開啟柴郡混沌片場
@@ -982,23 +1041,42 @@
                             playIrisSequence(`[Char|柴郡|glitch|*(發出惱人的嗶嗶聲)* 混沌引擎故障了，不關我的事。]`);
                         }
                     } else {
-                        nodesOverlay.classList.toggle('active');
-                        if (nodesOverlay.classList.contains('active')) {
-                            playIrisSequence(`[Char|瀅瀅|smile|「想幫我搜集什麼樣的故事素材？請問要連接到哪個世界？」]`);
+                        const isStandalone = window.OS_API?.isStandalone?.() ?? false;
+                        if (!isStandalone) {
+                            // 酒館模式：切到 DIVE tab 再開踏入故事窗口
+                            if (window.AureliaControlCenter && typeof window.AureliaControlCenter.switchPage === 'function') {
+                                window.AureliaControlCenter.switchPage('nav-story');
+                            }
+                            if (window.StoryExtractor && typeof window.StoryExtractor.show === 'function') {
+                                window.StoryExtractor.show();
+                            }
+                        } else {
+                            // 獨立模式：開書架
+                            const isOpening = bookshelfOverlay.style.display === 'none';
+                            bookshelfOverlay.style.display = isOpening ? 'flex' : 'none';
+                            if (isOpening) {
+                                window.QbBookshelf?.render();
+                                playIrisSequence(`[Audio|https://nancywang3641.github.io/aurelia/district/YING_1.wav][Char|瀅瀅|smile|「想幫我搜集什麼樣的故事素材？請從書架上挑選一本書吧！」]`);
+                            }
                         }
                     }
                 };
-                nodesOverlay.querySelectorAll('.qb-node-btn').forEach(btn => {
-                    btn.onclick = () => {
-                        nodesOverlay.classList.remove('active');
-                        if (window.QB_CORE && typeof window.QB_CORE.openLobbyQuestPanel === 'function') {
-                            window.QB_CORE.openLobbyQuestPanel(btn.dataset.wid);
-                        } else {
-                            playIrisSequence(`[Char|瀅瀅|think|「哎呀，視差宇宙的目錄好像還沒整理好 (QB_CORE 未連線)。」]`);
-                        }
-                    }
-                });
             }
+
+            if (closeBookshelfBtn) {
+                closeBookshelfBtn.onclick = () => {
+                    bookshelfOverlay.style.display = 'none';
+                    const coverPanel = bookshelfOverlay.querySelector('#qb-book-cover-panel');
+                    if (coverPanel) { coverPanel.style.display = 'none'; coverPanel.innerHTML = ''; }
+                };
+            }
+
+            // 「撰寫新書」已改由書脊軌道末尾的「＋」書脊觸發 (見 QbBookshelf.render)
+
+            // 📥 角色卡匯入完成後自動刷新書架
+            window.addEventListener('CARD_IMPORT_COMPLETE', function _onCardImport() {
+                if (spineRail) window.QbBookshelf?.render(spineRail);
+            });
 
             const bgmBtn = tab.querySelector('#lobby-bgm-toggle');
             if (bgmBtn) {
@@ -1507,7 +1585,7 @@
             }
             document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
 
-            playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Audio|https://files.catbox.moe/8rvbfq.mp3]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
+            playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Audio|https://nancywang3641.github.io/aurelia/district/YING_3.wav]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
             _updatePortalBtn();
             debouncedSave();
         }, 580);
@@ -1937,6 +2015,6 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
         }
     };
 
-    console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (瀅瀅特調色票版)');
+    console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (大廳書櫃整合版)');
 
 })(window.VoidTerminal = window.VoidTerminal || {});

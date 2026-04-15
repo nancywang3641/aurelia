@@ -76,6 +76,13 @@
         items.forEach(item => {
             const btn = parentDoc.createElement('div');
             btn.className = 'nav-button';
+            
+            // 🌟 修復初始高亮：為預設啟用的大廳加上 active 與 active-gold
+            if (item.active) {
+                btn.classList.add('active');
+                btn.classList.add('active-gold');
+            }
+
             btn.dataset.navId = item.id;
             btn.style.cssText = `padding: 8px 16px; cursor: pointer; border-radius: 12px; color: ${item.active ? '#2b6cb0' : '#a0aec0'}; display: flex; align-items: center; gap: 6px; font-family: sans-serif; transition: 0.2s; ${item.active ? 'background:#ebf8ff;' : ''}`;
             btn.innerHTML = `<i class="${item.icon}" style="font-size: 16px;"></i><span style="font-size:12px; font-weight:bold;">${item.title}</span>`;
@@ -97,6 +104,16 @@
         container.querySelectorAll('.nav-button').forEach(btn => {
             if (btn.dataset.navId === 'nav-close') return;
             const active = btn.dataset.navId === pageId;
+            
+            // 🌟 修復 TAB 狀態卡死：同步切換 active / active-gold 類名，突破 CSS 的 !important 限制
+            if (active) {
+                btn.classList.add('active');
+                btn.classList.add('active-gold');
+            } else {
+                btn.classList.remove('active');
+                btn.classList.remove('active-gold');
+            }
+
             if (btn.style.background !== 'transparent' && btn.style.background.includes('rgba(0, 255, 65')) {
                 // 404 mode ignore
             } else {
@@ -195,6 +212,9 @@
         userTab.className = 'aurelia-tab';
         userTab.style.cssText = `width:100%; height:100%; display:none; background:#f8f9fa; position: relative; flex-direction:column; overflow:hidden;`;
 
+        // 🔥 動態判斷：只有獨立模式才渲染提示詞、世界書、變數工坊
+        const isStandalone = window.OS_API && window.OS_API.isStandalone();
+
         // ── 寫作設置 TAB ──
         const writeTab = parentDoc.createElement('div');
         writeTab.id = 'aurelia-write-tab';
@@ -208,9 +228,11 @@
                 </div>
                 <div class="write-tab-btns">
                     <button class="write-tab-btn" data-app="設置"><i class="fa-solid fa-gear"></i><span>API 設置</span></button>
+                    ${isStandalone ? `
                     <button class="write-tab-btn" data-app="提示詞"><i class="fa-solid fa-sliders"></i><span>提示詞管理</span></button>
                     <button class="write-tab-btn" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></button>
                     <button class="write-tab-btn" data-app="avs"><i class="fa-solid fa-dice"></i><span>變數工坊</span></button>
+                    ` : ''}
                 </div>
                 <button class="write-tab-logout-btn" id="write-logout-btn">
                     <i class="fa-solid fa-power-off"></i><span>切換帳號 / 佈局</span>
