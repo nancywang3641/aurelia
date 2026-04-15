@@ -1,11 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] os_api_engine.js (V3.19 - 終極攔截版：全局 {{user}} 發送前統一替換)
+// [檔案] os_api_engine.js (V3.20 - 核彈級攔截版：強制過濾所有 {{user}} 變體)
 // 路徑：os_phone/os/os_api_engine.js
 // 職責：組裝 Prompt 並負責與 AI 通訊。
 //       AVS 底層引擎由 os_avs_engine.js 提供，本檔僅呼叫 win._AVS_ENGINE。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入 API 引擎 (V3.19)...');
+    console.log('[PhoneOS] 載入 API 引擎 (V3.20)...');
     const win = window.parent || window; // 🔥 絕對保留：雙通向架構的核心
 
     // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
@@ -158,6 +158,27 @@
             } catch(e) { return true; }
         },
 
+        // 🌟 新增：統一獲取最真實的全局使用者名稱
+        getGlobalUserName: function() {
+            let uName = "User";
+            try {
+                const w = window.parent || window;
+                if (!this.isStandalone() && w.SillyTavern?.getContext) {
+                    const stCtx = w.SillyTavern.getContext();
+                    if (stCtx && stCtx.user && stCtx.user.name) uName = stCtx.user.name;
+                }
+                if (uName === "User" && w.OS_PERSONA?.getCurrent) {
+                    const pName = w.OS_PERSONA.getCurrent().name;
+                    if (pName && pName !== 'User') uName = pName;
+                }
+                if (uName === "User" && w.OS_USER?.getInfo) {
+                    const uiName = w.OS_USER.getInfo().name;
+                    if (uiName && uiName !== 'User') uName = uiName;
+                }
+            } catch(e) {}
+            return uName;
+        },
+
         chatSecondary: async function(messages, onChunk, onFinish, onError) {
             let secConfig = {};
             if (win.OS_SETTINGS && typeof win.OS_SETTINGS.getSecondaryConfig === 'function') {
@@ -170,6 +191,15 @@
         },
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
+            // 🌟 第一道防線：獲取名字，並在打印 Debug 表格前直接把傳入的 messages 掃一遍
+            const globalUserName = this.getGlobalUserName() || "User";
+            messages.forEach(m => {
+                if (m.content && typeof m.content === 'string') {
+                    // 使用 \s* 防止有空格如 {{ user }} 的情況
+                    m.content = m.content.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
+                }
+            });
+
             if (this.isStandalone() && config.useSystemApi) {
                 config = { ...config, useSystemApi: false };
                 if (!config.url || !config.key) {
@@ -300,7 +330,9 @@
                             .filter(p => p.content && p.content.trim());
 
                         if (injected.length > 0) {
-                            const combined = injected.map(p => p.content.trim()).join('\n\n');
+                            // 🌟 確保從外部預設包注入進來的文字，也被掃描替換
+                            let combined = injected.map(p => p.content.trim()).join('\n\n');
+                            combined = combined.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
                             messages.unshift({ role: 'system', content: combined });
                             console.log(`📋 [PresetPrompt] 注入 ${injected.length} 個條目 (來源: "${targetPreset}")，共 ${combined.length} 字元`);
                         }
@@ -310,23 +342,16 @@
                 } catch(e) { console.warn('📋 [PresetPrompt] 注入失敗：', e); }
             }
 
-            // 🔥 終極攔截：聽從你的神級建議，直接在發送前的最後一刻獲取當前玩家名稱！
-            let globalUserName = "User";
-            try {
-                if (win.OS_PERSONA?.getCurrent) globalUserName = win.OS_PERSONA.getCurrent().name || "User";
-                else if (win.OS_USER?.getInfo)  globalUserName = win.OS_USER.getInfo().name || "User";
-            } catch(e) {}
-
-            const cleanMessages = messages
-                .map(m => { 
-                    const { _source, _isProto, _chatId, ...rest } = m; 
-                    // 🌟 這裡就是最後把關處！所有提示詞、世界書、預設包都在這裡被強制轉換 {{user}}
-                    if (rest.content && typeof rest.content === 'string') {
-                        rest.content = rest.content.replace(/\{\{user\}\}/gi, globalUserName);
-                    }
-                    return rest; 
-                })
+            let cleanMessages = messages
+                .map(m => { const { _source, _isProto, _chatId, ...rest } = m; return rest; })
                 .filter(m => m.content && m.content.trim().length > 0);
+
+            // 🌟 終極核彈防線：把過濾完要準備發送的陣列整個 Stringify，無死角 Replace，然後 Parse 回去！
+            try {
+                let stringifiedPayload = JSON.stringify(cleanMessages);
+                stringifiedPayload = stringifiedPayload.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
+                cleanMessages = JSON.parse(stringifiedPayload);
+            } catch(e) { console.warn("核彈替換失效", e); }
 
             let _dbgId    = Date.now() + Math.random();
             let _dbgStart = Date.now();
@@ -965,5 +990,5 @@
         }
     };
 
-    console.log('[PhoneOS] API 引擎 (V3.19 - 終極攔截版：全局 {{user}} 發送前統一替換) 就緒');
+    console.log('[PhoneOS] API 引擎 (V3.20 - 核彈級攔截版：強制過濾所有 {{user}} 變體) 就緒');
 })();
