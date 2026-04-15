@@ -307,11 +307,12 @@
             embeddedRoot = document.createElement('div');
             embeddedRoot.id = 'aurelia-embedded-root';
             
-            // 🌟 如果是獨立全螢幕模式，取消酒館內嵌用的 85vh 與外邊距，強制 100dvh
+            // 獨立全螢幕模式：height: 100% 繼承父元素（standalone-root 用 bottom:0 錨定）
+            // 不用 100dvh，避免 iOS PWA 四捨五入差值造成底部黑條
             if (isStandalone) {
                 embeddedRoot.style.cssText = `
-                    position: relative; width: 100%; height: 100dvh; 
-                    flex-shrink: 0; z-index: 100; overflow: hidden;
+                    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                    width: 100%; z-index: 100; overflow: hidden;
                 `;
             } else {
                 embeddedRoot.style.cssText = `
@@ -324,8 +325,8 @@
         }
 
         phoneFrame.style.cssText = `
-            width: 100%; height: 100%; border: none; border-radius: 0;
-            padding: 0; position: absolute; top: 0; left: 0;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            border: none; border-radius: 0; padding: 0;
             box-shadow: none; display: block; background: #fff;
         `;
         embeddedRoot.appendChild(phoneFrame);
