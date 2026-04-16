@@ -8,11 +8,16 @@
 
 html, body {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0; /* ✅ 四邊鎖定 */
+    top: 0; left: 0; right: 0; 
+    /* ❌ 拿掉 bottom: 0 */
+    height: 100vh;
+    height: 100dvh; /* ✅ 用 100dvh 強制穿透安全區域 */
     width: 100%;
-    height: 100% !important; 
     overflow: hidden;
-    background: #452216; /* 確保底色一致 */
+    background: #452216; /* ✅ 關鍵：讓最底層背景色與導覽列相同，完美隱藏縫隙 */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
 }
 
 /* 為了讓 404 模式也能完美無縫，順手加上這行： */
@@ -27,6 +32,12 @@ body.mode-404 { background: #000000; }
     overflow: hidden;
 }
 
+#aurelia-standalone-root {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%;
+    overflow: hidden;
+}
 
 #aurelia-embedded-root {
     height: 100% !important;
@@ -50,25 +61,7 @@ body.mode-404 { background: #000000; }
     max-height: none !important;
 }
 
-/* 確保主容器撐滿，並預留底部導覽列高度 */
-#aurelia-tab-container {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    /* 預留空間 = 導覽列高度 + 安全區域 */
-    padding-bottom: calc(55px + env(safe-area-inset-bottom, 0px));
-}
-
-
-/* 確保手機螢幕容器確實填滿 */
-#aurelia-phone-screen {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    display: flex;
-    flex-direction: column;
-}
+#aurelia-phone-screen { padding-bottom: 0 !important; height: 100%; }
 
 @media (max-width: 768px) {
     #phone-frame-hardware {
@@ -315,8 +308,30 @@ body.mode-404 { background: #000000; }
 .ps-header   { height: calc(56px + env(safe-area-inset-top, 0px)) !important; padding-top: env(safe-area-inset-top, 0px) !important; }
 .write-tab-content { padding-top: calc(20px + env(safe-area-inset-top, 0px)) !important; }
 
-/* 底部安全區域 — 消除 iPhone 底部黑條 */
-#aurelia-bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px) !important; box-sizing: content-box !important; }
+#aurelia-bottom-nav {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    /* 這裡固定內容高度為 50px，比原本的 55px 更精簡 */
+    height: 50px !important; 
+    /* 讓咖啡色背景延伸到 iOS 小白條區域 */
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important; 
+    box-sizing: content-box !important;
+    background: #452216 !important;
+    display: flex !important;
+    justify-content: center !important;
+    /* 核心修正：圖示靠上對齊，不要居中 */
+    align-items: flex-start !important; 
+    padding-top: 8px !important; 
+    border-top: 1px solid rgba(251,223,162,0.3) !important;
+    z-index: 9999 !important;
+}
+
+/* 為了防止內容被固定住的導覽列遮住，主容器需要留白 */
+#aurelia-tab-container {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+}
 
 /* ── 手動強制下移模式 (iOS 動態島手動選擇時) ── */
 body.layout-pad-ios .void-top-bar    { padding-top: 62px !important; }
