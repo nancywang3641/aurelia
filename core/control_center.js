@@ -63,7 +63,8 @@
         const nav = parentDoc.createElement('div');
         nav.id = CONFIG.BOTTOM_NAV_ID; 
         // 🌟 修復底部黑邊：加上 padding-bottom: env(safe-area-inset-bottom) 與 box-sizing 以適配 iPhone 底部小白條安全區域
-        nav.style.cssText = `height: 55px; background: #ffffff; border-top: 1px solid #e0e5ec; display: flex; justify-content: center; align-items: center; gap: 15px; box-shadow: 0 -5px 15px rgba(0,0,0,0.02); flex-shrink: 0; z-index: 200; position: relative; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box;`;
+        // 大約在 46 行附近
+nav.style.cssText = `display: flex; justify-content: center; z-index: 200;`;
 
         const items = [
             { id: 'nav-home',  icon: 'fa-solid fa-cube',     active: true,  title: '大廳' },
