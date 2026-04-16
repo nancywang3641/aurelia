@@ -1,7 +1,7 @@
 ﻿/**
  * ========================
- * Aurelia Control Center (v4.8.1 - UI Text Fix & AVS Integration)
- * 控制中心 - 外殼與路由核心
+ * Aurelia Control Center (v4.8.3 - Dual Panel Architecture)
+ * 控制中心 - 外殼與路由核心 (雙視窗分離版，完美解決 App 遮擋與寫作狀態保留)
  * ========================
  */
 
@@ -213,7 +213,6 @@
         userTab.style.cssText = `width:100%; height:100%; display:none; background:#f8f9fa; position: relative; flex-direction:column; overflow:hidden;`;
 
         // 🔥 動態判斷：只有獨立模式才渲染提示詞、世界書、變數工坊
-        // 用 DOM 元素 ID 判斷最可靠（不依賴 OS_API 是否已就緒，不受行動端 window.parent 干擾）
         const isStandalone = !!document.getElementById('aurelia-standalone-root');
 
         // ── 寫作設置 TAB ──
@@ -239,6 +238,7 @@
                     <i class="fa-solid fa-power-off"></i><span>切換帳號 / 佈局</span>
                 </button>
             </div>`;
+            
         writeTab.querySelectorAll('.write-tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (window.AureliaControlCenter) window.AureliaControlCenter.showOsApp(btn.dataset.app);
@@ -248,6 +248,13 @@
         if (wLogoutBtn) wLogoutBtn.addEventListener('click', () => {
             if (window.VoidTerminal && window.VoidTerminal.logout) window.VoidTerminal.logout();
         });
+
+        // 🌟 雙層架構 1：寫作 TAB 專用的視窗 (只會覆蓋寫作頁面)
+        const writePanel = parentDoc.createElement('div');
+        writePanel.id = 'write-panel-container';
+        writePanel.style.cssText = `position: absolute; top:0; left:0; width:100%; height:100%; background: #1a1a1a; z-index: 50; display: none; flex-direction: column;`;
+        writePanel.innerHTML = `<div id="write-iframe-container" style="width:100%; height:100%; background:#000; overflow:hidden; position:relative;"></div>`;
+        writeTab.appendChild(writePanel);
 
         container.appendChild(homeTab);
         container.appendChild(storyTab);
@@ -263,11 +270,13 @@
         screen.appendChild(createTabContainer(parentDoc));
         screen.appendChild(createBottomNav(parentDoc));
 
+        // 🌟 雙層架構 2：全螢幕全域視窗 (給遊戲 Apps 使用，覆蓋整個手機)
         const slidePanel = parentDoc.createElement('div');
         slidePanel.id = 'aurelia-panel-container';
-        slidePanel.style.cssText = `position: absolute; top:0; left:0; width:100%; height:100%; background: #1a1a1a; z-index: 50; transform: translateX(100%); transition: transform 0.3s; display: flex; flex-direction: column;`;
+        slidePanel.style.cssText = `position: absolute; top:0; left:0; width:100%; height:100%; background: #1a1a1a; z-index: 50; display: none; flex-direction: column;`;
         slidePanel.innerHTML = `<div id=\"aurelia-iframe-container\" style=\"width:100%; height:100%; background:#000; overflow:hidden; position:relative;\"></div>`;
         screen.appendChild(slidePanel);
+        
         return screen;
     }
 
@@ -307,8 +316,7 @@
             embeddedRoot = document.createElement('div');
             embeddedRoot.id = 'aurelia-embedded-root';
             
-            // 獨立全螢幕模式：height: 100% 繼承父元素（standalone-root 用 bottom:0 錨定）
-            // 不用 100dvh，避免 iOS PWA 四捨五入差值造成底部黑條
+            // 獨立全螢幕模式：height: 100% 繼承父元素
             if (isStandalone) {
                 embeddedRoot.style.cssText = `
                     position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -424,6 +432,8 @@
         
         const root = phoneFrame;
         if (!root) return;
+        
+        // 🌟 遊戲類一律使用全域視窗，確保不會被 Tab 切換遮擋
         const appContainer = root.querySelector('#aurelia-iframe-container');
         const panel = root.querySelector('#aurelia-panel-container');
         if (!appContainer || !panel) return;
@@ -434,13 +444,12 @@
         appContainer.appendChild(div);
 
         const doClose = () => {
-            panel.style.transform = 'translateX(100%)';
+            panel.style.display = 'none';
             if (window.INV_CORE && typeof window.INV_CORE.stopBgm === 'function') window.INV_CORE.stopBgm();
             if (window.CHILD_CORE && typeof window.CHILD_CORE.stopBgm === 'function') window.CHILD_CORE.stopBgm();
             if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
         };
 
-        // 讓 PhoneSystem.goHome() 直接呼叫也能關閉 panel
         if (window.PhoneSystem) window.PhoneSystem.goHome = doClose;
 
         div.addEventListener('click', (e) => {
@@ -451,7 +460,7 @@
         }, true);
 
         launchFn(div);
-        panel.style.transform = 'translateX(0)';
+        panel.style.display = 'flex';
         if (window.VoidTerminal && window.VoidTerminal.suspendLobbyActivity) window.VoidTerminal.suspendLobbyActivity();
     };
 
@@ -459,8 +468,16 @@
         if (!isVisible) AureliaControlCenter.show();
         const root = phoneFrame;
         if (!root) return;
-        const container = root.querySelector('#aurelia-iframe-container');
-        const panel = root.querySelector('#aurelia-panel-container');
+        
+        // 🌟 雙視窗路由：判斷是否為「寫作專用 App」
+        const isWriteApp = ['設置', '世界書', 'worldbook', '提示詞', '思考記錄', 'think', 'avs', '變數工坊'].includes(appName);
+        
+        // 自動選擇要注入的視窗容器
+        const containerId = isWriteApp ? '#write-iframe-container' : '#aurelia-iframe-container';
+        const panelId = isWriteApp ? '#write-panel-container' : '#aurelia-panel-container';
+
+        const container = root.querySelector(containerId);
+        const panel = root.querySelector(panelId);
 
         if (container) {
             container.innerHTML = '';
@@ -488,7 +505,7 @@
             };
 
             const _panelClose = () => {
-                if (panel) panel.style.transform = 'translateX(100%)';
+                if (panel) panel.style.display = 'none';
                 if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
             };
             if (window.PhoneSystem) window.PhoneSystem.goHome = _panelClose;
@@ -497,7 +514,6 @@
             if (originalLaunchApp) {
                 originalLaunchApp(div);
                 setTimeout(() => {
-                    // 🔥 這裡加入了 #avs-nav-home 來攔截返回按鈕
                     const selectors = ['#nav-home', '#pm-nav-home', '.set-back-btn', '.lb-back-btn', '.qb-back-btn', '.mon-back-btn', '.pm-back-btn', '.rpg-back-btn', '.am-btn-icon', '#avs-nav-home', '[onclick*=\"goHome\"]'];
                     selectors.forEach(selector => {
                         div.querySelectorAll(selector).forEach(btn => {
@@ -507,7 +523,7 @@
                                 btn.removeAttribute('onclick');
                                 btn.onclick = (e) => { 
                                     e.preventDefault(); e.stopPropagation(); 
-                                    if (panel) panel.style.transform = 'translateX(100%)'; 
+                                    if (panel) panel.style.display = 'none'; 
                                     if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
                                 };
                             }
@@ -518,11 +534,11 @@
                 div.innerHTML = `<div style=\"color:#e06060;padding:20px;\">App 未就緒 (${appName})</div>`;
             }
         }
-        if (panel) panel.style.transform = 'translateX(0)';
+        if (panel) panel.style.display = 'flex';
         if (window.VoidTerminal && window.VoidTerminal.suspendLobbyActivity) window.VoidTerminal.suspendLobbyActivity();
     };
 
     setTimeout(() => { if (!phoneModal) phoneModal = createPhoneModal(); }, 0);
-    console.log('✅ 控制中心模組 (v4.8.1 - 修正標籤名稱與 AVS 支援) 已加載');
+    console.log('✅ 控制中心模組 (v4.8.3 - 雙視窗路由架構) 已加載');
 
 })(window.AureliaControlCenter = window.AureliaControlCenter || {});

@@ -132,30 +132,32 @@ RedPacket領取格式注意:
 <profile>
 | 名字 | 身份 | 性格 | 外觀描述 | 頭像提示詞 |
 |------|------|------|----------|-----------|
-| 角色名 | 身份 | 性格核心 | 外觀文字描述 | bust shot, girl, blue hair, ... |
+| 角色名 | 身份 | 性格核心 | 外觀文字描述 | [1girl/1boy], [mature_ adult/young_ adult/child], [face focus/close-up/bust shot], [vibe], [face shape], [body type], [skin color], [eye color], [eye shape], [hair length] , [hair style] , [hair texture], [bangs type],  [distinct feature], [1-2個bustshot上衣標籤], [表情標籤], [簡單背景標籤] |
 </profile>
+
 規則：
+- 必須是 NAI 標籤風格 (Danbooru Tags)
 - **名字欄必須與 [Char|名字|...] tag 內用的名字完全一致（用短名/常用名，不帶姓氏）**
 - 每個角色只輸出一次（後續章節相同角色不重複）
 - 頭像提示詞用英文，風格：2D半厚塗，bust shot居中，描述髮型髮色/瞳色/表情/服裝
 - 嚴禁使用 realistic/photo/real person 等寫實詞
 
-### 選項與結束
-⚠️ 選項格式：每條選項獨立一行，禁止合併到同一行
-[Choice|選項A完整內容]
-[Choice|選項B完整內容]
-[Choice|選項C完整內容]
 
-选项说明:
-[核心原則：選項必須有懸念感，讓玩家真的想選，禁止廢話短句]
+## 與<content>並列的其他外插件Block:（<branches>, <summary> , <vars> ）
 
+### 選項與摘要-使用<branches></branches>, <summary> </summary> 包裹，不可放在<content>內
 每章結尾共 3 條，從以下五種類型中挑選搭配（每條獨立一行）：
+<branches>
+A. 語言選項主角：「（完整一句話，帶情緒或意圖）」]
+B. 行動選項主角（具體動詞＋對象＋場景細節，不寫結果）]
+C. 劇情行動（推進核心衝突或關係的具體行為，有因有果起點）]
+D. 時間快進（跳至下一個重要時間節點或等待結束後的第一個動作）]
+E. 區域轉換主角前往→（具體設施或地點名稱）]
+</branches>
 
-A. 語言選項    →  [Choice|主角：「（完整一句話，帶情緒或意圖）」]
-B. 行動選項    →  [Choice|主角（具體動詞＋對象＋場景細節，不寫結果）]
-C. 劇情行動    →  [Choice|（推進核心衝突或關係的具體行為，有因有果起點）]
-D. 時間快進    →  [Choice|（跳至下一個重要時間節點或等待結束後的第一個動作）]
-E. 區域轉換    →  [Choice|主角前往→（具體設施或地點名稱）]
+选项说明: 
+[選擇是獨立block，不可有其他格式摻雜]
+[核心原則：選項必須有懸念感，讓玩家真的想選，禁止廢話短句]
 
 規則：
 1. 每條都是獨立完整描述，禁止只有兩三個字的短句（如「離開」「問問題」「繼續看」）
@@ -163,23 +165,19 @@ E. 區域轉換    →  [Choice|主角前往→（具體設施或地點名稱）
 3. 僅描述行動起點，不呈現結果，保持懸念
 4. 同一章 3 條選項盡量混合不同類型，避免全都是同一種
 
+
 <summary> 
 [SessionEnd|本章劇情摘要]    ← 章節結束標記，摘要用於系統記錄
 </summary> 
 
-### 金融交易（有金錢往來時使用，放在 </content> 之後）
-<status>
-T01 | -500 | 購買咖啡
-T02 | +1000 | 完成委託報酬
-</status>
-規則：
-- 每筆交易獨立一行，格式嚴格為 TXX | 金額 | 原因
-- TX ID 在本回合唯一（T01、T02…，每次從 T01 重新計數）
-- 金額：支出用負數（-500），收入用正數（+1000）
-- 沒有金錢往來時省略整個 <status> 區塊
-- <status> 塊放在 </content> 之後，不影響劇情顯示
 
 ### 動態變數追蹤 AVS（有數值狀態變化時使用，放在 </content> 之後）
+    [核心原則：為了大幅降低產生幻覺算錯數值或亂編變數的機率，請先輸出分析推理後再寫<vars>，每條後方都可備注更改原因，"//原因"來讓用戶後續可監察]
+
+<vars_analyze>
+...Analysis, for convenience, the output language is not restricted here.
+</vars_analyze>
+
 <vars>
 變數名 運算子 值
 </vars>
@@ -191,9 +189,9 @@ T02 | +1000 | 完成委託報酬
 
 範例：
 <vars>
-gold += 300
-hp -= 15
-level = 5
+gold += 300 //在市場賣掉古董金鍊
+hp -= 15 //意外被史萊姆攻擊，損失不嚴重
+level = 5 
 status = "中毒"
 </vars>
 
@@ -202,40 +200,16 @@ status = "中毒"
 - 只追蹤「劇情中真正發生變化」的數值，不要每回合重複輸出所有變數
 - 系統會自動把當前狀態注入到你的上下文 [SYSTEM: Current Dynamic Variables (AVS)]，你需要根據這個來決定數值的變化
 - 沒有任何數值變化時省略整個 <vars> 區塊
-- <vars> 塊放在 </content> 之後（可與 <status> 並列）
+- <vars> 塊放在 </content> 之後（可與 <summary>  並列）
 
 ## 寫作規則
 1. 每章至少 15-25 個標籤，有完整的起承轉合
 2. [Nar|] 和 [Char|] 交替使用，不要連續 5 個以上相同標籤
 3. 台詞用「」包裹，自然、符合角色個性
 4. 表情選擇要符合當下情緒
-5. 每章必須以 [Choice|...] 或 [SessionEnd|...] 結尾
-6. 禁止在 <content> 外輸出任何文字、解釋或元數據（<status> 與 <vars> 除外）
+5. 禁止在 <content> 外輸出任何文字、解釋或元數據（<summary> , <branches>, <vars> 除外）
 
-## 輸出範例結構
-<thinking>
-瀅瀅有話要說，得努力規劃一下故事節奏...
-</thinking>
-
-<content>
-[Story|故事標題]
-[Chapter|第一章：相遇]
-[Protagonist|{{user}}]
-[Area|奧瑞亞市·濱海咖啡廳]
-[BGM|relax_jazz]
-[Bg|cozy_cafe_rainy_window]
-[Nar|窗外細雨打在玻璃上，咖啡廳裡飄著輕柔的爵士樂。]
-[Char|角色名|normal|「不好意思，這裡可以坐嗎？」]
-[Nar|她的聲音帶著一絲謹慎，眼神卻清澈如水。]
-[Choice|主角點頭示意，側過臉輕聲說：「坐吧。」]
-[Choice|主角繼續盯著窗外雨景，假裝沒聽見]
-[Choice|主角前往→吧台，請店員幫她加一張椅子]
-</content>
-<profile>
-| 名字 | 身份 | 性格 | 外觀描述 | 頭像提示詞 |
-|------|------|------|----------|-----------|
-| 林曉晴 | 咖啡廳常客 | 謹慎溫柔 | 長直黑髮，穿米色針織外套 | bust shot, girl, long black hair, brown eyes, knit sweater, gentle smile, centered, 2D illustration |
-</profile>`,
+`,
 
         'wx_chat_system': `你現在扮演 {{char}} 在手機通訊軟體上與 {{user}} 對話。\n${WX_PROTOCOL}`,
 

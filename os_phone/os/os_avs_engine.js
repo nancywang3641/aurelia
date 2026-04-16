@@ -1,12 +1,12 @@
 // ----------------------------------------------------------------
-// [檔案] os_avs_engine.js (V1.0 - AVS 核心引擎，獨立模組)
+// [檔案] os_avs_engine.js (V1.3 - AVS 核心引擎，支援行內註解版)
 // 路徑：os_phone/os/os_avs_engine.js
 // 職責：AVS 變數系統底層引擎。負責狀態讀寫、快照、<vars> 解析。
-//       與 os_api_engine.js、os_avs.js、vn_core.js 完全解耦。
-//       升級：支援點記法巢狀路徑、push 陣列指令、中文變數名。
+//       升級：防呆正則表達式、強制儲存錯誤攔截、新增「新故事自動初始化」監聽。
+//       V1.3 新增：支援行內註解 (//) 過濾，完美支援 vars_analyze 提示詞。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[AVS Engine] 載入 AVS 核心引擎 V1.0...');
+    console.log('[AVS Engine] 載入 AVS 核心引擎 V1.3...');
     const win = window.parent || window;
 
     // ================================================================
@@ -27,9 +27,14 @@
     }
 
     function _avsWrite(state) {
-        localStorage.setItem(_avsKey(), JSON.stringify(state));
+        try {
+            // 🔥 預防 localStorage 容量滿導致的崩潰
+            localStorage.setItem(_avsKey(), JSON.stringify(state));
+        } catch(e) {
+            console.error('[AVS] 寫入 Storage 失敗 (可能系統空間不足):', e);
+        }
         if (win.dispatchEvent) win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: state }));
-        console.log('[AVS] 狀態已更新 →', JSON.stringify(state));
+        console.log('🎲 [AVS] 變數已更新 →', JSON.stringify(state));
     }
 
     // ================================================================
@@ -42,25 +47,18 @@
         try { stack = JSON.parse(localStorage.getItem(skey) || '[]'); } catch(e) {}
         stack.push({ ts: Date.now(), state: JSON.parse(JSON.stringify(state)) });
         if (stack.length > 10) stack = stack.slice(-10);
-        localStorage.setItem(skey, JSON.stringify(stack));
+        
+        try {
+            localStorage.setItem(skey, JSON.stringify(stack));
+        } catch(e) {
+            console.warn('[AVS] 快照儲存失敗，略過備份 (Quota Exceeded)');
+        }
     }
 
     // ================================================================
-    // 四、<vars> 解析器（升級版：點記法 + push + 中文支援）
+    // 四、<vars> 解析器（終極防呆升級版 + 註解過濾）
     // ================================================================
 
-    /**
-     * 解析並套用 <vars> 內容。
-     *
-     * 支援格式：
-     *   hp -= 10
-     *   gold += 500
-     *   User.动态日志 push "今天發生了大事"
-     *   NPC.王曉明.好感度 += 5
-     *   世界.当前时间 = "第4天 早晨"
-     *
-     * 兼容舊版 JSON 格式：{ "gold": 500 }
-     */
     function _avsApplyVars(inner) {
         let state = _avsRead();
         _avsSnapshot(state);
@@ -75,61 +73,82 @@
             } catch(e) {}
         }
 
-        const lines = inner.split(/[\n;]+/).map(l => l.trim()).filter(Boolean);
+        // 🔥 V1.3 核心升級：在切行之後，強制把每一行裡的 "//" 後面的文字全部砍掉
+        const lines = inner.split(/[\n;]+/)
+            .map(l => l.split('//')[0].trim()) 
+            .filter(Boolean);
+            
+        let updatedCount = 0;
+
         for (const line of lines) {
-            // 支援中文、點記法路徑；支援 push / += / -= / *= / /= / =
-            const m = line.match(/^([^\s\+\-\*\/=]+)\s*(push|\+=|-=|\*=|\/=|=)\s*(.+)$/);
-            if (!m) continue;
-            const [, path, op, rawVal] = m;
+            try {
+                // 終極容錯正則：支援變數名中含有空白（例如 "User HP"），防止 AI 亂排版
+                const m = line.match(/^([^+=*\/;:-]+?)\s*(push|\+=|-=|\*=|\/=|=)\s*(.+)$/i);
+                if (!m) {
+                    console.warn('[AVS Engine] 無法解析此行變數，略過:', line);
+                    continue;
+                }
+                const path = m[1].trim();
+                const op = m[2].trim();
+                const rawVal = m[3].trim();
 
-            // 解析值型別
-            let parsed;
-            const trimmed = rawVal.trim();
-            if (trimmed === 'true')       parsed = true;
-            else if (trimmed === 'false') parsed = false;
-            else if (/^".*"$/.test(trimmed) || /^'.*'$/.test(trimmed)) parsed = trimmed.slice(1, -1);
-            else { const n = parseFloat(trimmed); parsed = isNaN(n) ? trimmed : n; }
+                // 解析值型別
+                let parsed;
+                const trimmed = rawVal;
+                if (trimmed === 'true')       parsed = true;
+                else if (trimmed === 'false') parsed = false;
+                else if (/^".*"$/.test(trimmed) || /^'.*'$/.test(trimmed)) parsed = trimmed.slice(1, -1);
+                else { const n = parseFloat(trimmed); parsed = isNaN(n) ? trimmed : n; }
 
-            // 點記法：走巢狀路徑，不存在則自動建立
-            const keys = path.split('.');
-            let cur = state;
-            for (let i = 0; i < keys.length - 1; i++) {
-                const k = keys[i];
-                if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
-                cur = cur[k];
-            }
-            const lastKey = keys[keys.length - 1];
-            const existing = cur[lastKey];
-            const curNum = typeof existing === 'number' ? existing : (parseFloat(existing) || 0);
-            const parsedNum = typeof parsed === 'number' ? parsed : 0;
+                // 點記法：走巢狀路徑，不存在則自動建立
+                const keys = path.split('.');
+                let cur = state;
+                for (let i = 0; i < keys.length - 1; i++) {
+                    const k = keys[i];
+                    if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
+                    cur = cur[k];
+                }
+                const lastKey = keys[keys.length - 1];
+                const existing = cur[lastKey];
+                const curNum = typeof existing === 'number' ? existing : (parseFloat(existing) || 0);
+                const parsedNum = typeof parsed === 'number' ? parsed : 0;
 
-            switch (op) {
-                case '=':
-                    cur[lastKey] = parsed;
-                    break;
-                case 'push':
-                    if (!Array.isArray(cur[lastKey])) {
-                        cur[lastKey] = cur[lastKey] !== undefined ? [cur[lastKey]] : [];
-                    }
-                    cur[lastKey].push(parsed);
-                    if (cur[lastKey].length > 30) cur[lastKey].shift(); // 最多保留 30 筆
-                    break;
-                case '+=':
-                    if (Array.isArray(cur[lastKey])) {
+                switch (op) {
+                    case '=':
+                        cur[lastKey] = parsed;
+                        break;
+                    case 'push':
+                        if (!Array.isArray(cur[lastKey])) {
+                            cur[lastKey] = cur[lastKey] !== undefined ? [cur[lastKey]] : [];
+                        }
                         cur[lastKey].push(parsed);
-                        if (cur[lastKey].length > 30) cur[lastKey].shift();
-                    } else {
-                        cur[lastKey] = typeof parsed === 'string'
-                            ? (existing || '') + parsed
-                            : curNum + parsedNum;
-                    }
-                    break;
-                case '-=': cur[lastKey] = curNum - parsedNum; break;
-                case '*=': cur[lastKey] = curNum * parsedNum; break;
-                case '/=': cur[lastKey] = parsedNum !== 0 ? curNum / parsedNum : curNum; break;
+                        if (cur[lastKey].length > 30) cur[lastKey].shift(); // 最多保留 30 筆
+                        break;
+                    case '+=':
+                        if (Array.isArray(cur[lastKey])) {
+                            cur[lastKey].push(parsed);
+                            if (cur[lastKey].length > 30) cur[lastKey].shift();
+                        } else {
+                            cur[lastKey] = typeof parsed === 'string'
+                                ? (existing || '') + parsed
+                                : curNum + parsedNum;
+                        }
+                        break;
+                    case '-=': cur[lastKey] = curNum - parsedNum; break;
+                    case '*=': cur[lastKey] = curNum * parsedNum; break;
+                    case '/=': cur[lastKey] = parsedNum !== 0 ? curNum / parsedNum : curNum; break;
+                }
+                updatedCount++;
+            } catch(lineError) {
+                console.error(`[AVS Engine] 單行解析崩潰 (${line}):`, lineError);
             }
         }
-        _avsWrite(state);
+        
+        if (updatedCount > 0) {
+            _avsWrite(state);
+        } else {
+            console.warn('[AVS Engine] 未發現有效的變數更新');
+        }
     }
 
     // ================================================================
@@ -159,7 +178,7 @@
             try { stack = JSON.parse(localStorage.getItem(skey) || '[]'); } catch(e) {}
             if (!stack.length) return null;
             const prev = stack.pop();
-            localStorage.setItem(skey, JSON.stringify(stack));
+            try { localStorage.setItem(skey, JSON.stringify(stack)); } catch(e){}
             _avsWrite(prev.state);
             return prev.state;
         },
@@ -178,5 +197,41 @@
         }
     };
 
-    console.log('[AVS Engine] ✅ _AVS_ENGINE 就緒（點記法 + push 已啟用）');
+    // ================================================================
+    // 六、自動化生命週期監聽 (修復：新劇情未初始化變數的 Bug)
+    // ================================================================
+    if (win.addEventListener) {
+        win.addEventListener('VN_STORY_STARTED', async (e) => {
+            console.log('[AVS Engine] 偵測到新故事啟動，準備執行自動初始化...');
+            try {
+                const payload = e.detail || {};
+                let targetPackId = payload.packId;
+                
+                // 如果 payload 沒有直接提供 packId，我們就去查當前啟用的「展廳模板」綁定了哪個包
+                if (!targetPackId && win.OS_DB && typeof win.OS_DB.getAllUITemplates === 'function') {
+                    const tpls = await win.OS_DB.getAllUITemplates();
+                    const activeTpl = tpls.find(t => t.isActive);
+                    if (activeTpl) targetPackId = activeTpl.packId;
+                }
+
+                // 找到對應的包後，調用 initFromPack 塞入初始值
+                if (targetPackId && win.OS_DB && typeof win.OS_DB.getAllVarPacks === 'function') {
+                    const packs = await win.OS_DB.getAllVarPacks();
+                    const pack = packs.find(p => p.id === targetPackId);
+                    if (pack) {
+                        win._AVS_ENGINE.initFromPack(pack);
+                        console.log(`[AVS Engine] ✅ 已在新劇情自動載入變數預設值: ${pack.name}`);
+                    } else {
+                        console.warn(`[AVS Engine] 找不到 ID 為 ${targetPackId} 的變數包`);
+                    }
+                } else {
+                    console.log('[AVS Engine] ⚠️ 無明確綁定的變數包，跳過自動初始化。');
+                }
+            } catch (err) {
+                console.error('[AVS Engine] 自動初始化發生錯誤:', err);
+            }
+        });
+    }
+
+    console.log('[AVS Engine] ✅ _AVS_ENGINE 就緒（支援行內註解與自動初始化）');
 })();

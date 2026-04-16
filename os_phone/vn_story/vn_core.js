@@ -637,7 +637,16 @@
             // 解析 <branches> 區塊（位於 <content> 外，作為一次性選擇，不進入 AI 上下文）
             const branchesMatch = txt.match(/<branches>([\s\S]*?)<\/branches>/i);
             const _branchLines = branchesMatch
-                ? branchesMatch[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('[Choice|'))
+                ? branchesMatch[1].split('\n')
+                    .map(l => l.trim())
+                    .filter(Boolean) // 過濾掉空行
+                    .map(l => {
+                        // 向下相容：如果 AI 還是輸出了舊格式，就直接保留
+                        if (l.startsWith('[Choice|')) return l;
+                        // 智能轉換：將 "A. 探險" 或 "1. 探險" 或 "- 探險" 自動轉成系統讀得懂的 [Choice|探險]
+                        const cleanLine = l.replace(/^([A-Za-z]\.|[0-9]+\.|-)\s*/, '');
+                        return `[Choice|${cleanLine}]`;
+                    })
                 : [];
 
             // 🧹 從 storyText 移除 <profile> 區塊（含 <details> 包裝）
@@ -885,10 +894,29 @@
             const config = (win.OS_SETTINGS?.getConfig?.()) || {};
             if (!win.OS_API || (!config.url && !config.useSystemApi)) return;
 
-            // 顯示生成中 loader
-            this._showStartLoader(0);
-            const loaderBar = document.getElementById('vn-start-loader-bar');
-            if (loaderBar) { loaderBar.style.transition = 'none'; loaderBar.style.width = '0%'; void loaderBar.offsetWidth; }
+            // 1. 延遲一點點接管 Loading 畫面，覆蓋掉面板原本瞬間隱藏的 bug
+            setTimeout(() => {
+                const gamePage = document.getElementById('page-game');
+                if (gamePage && !document.getElementById('vn-start-loader')) {
+                    this._showStartLoader(0); 
+                }
+                const loaderEl = document.getElementById('vn-start-loader');
+                const loaderBar = document.getElementById('vn-start-loader-bar');
+                
+                if (loaderEl && loaderBar) {
+                    loaderEl.style.display = 'flex';
+                    loaderBar.style.transition = 'none';
+                    loaderBar.style.width = '0%';
+                    void loaderBar.offsetWidth; // 強制重繪
+                    
+                    // 製造假進度：用 30 秒慢慢跑到 90%，讓畫面有在讀取的感覺
+                    loaderBar.style.transition = 'width 30s cubic-bezier(0.1, 0.5, 0.5, 1)';
+                    loaderBar.style.width = '90%';
+                }
+            }, 50);
+
+            // 同時在背景對話框顯示提示文字，避免畫面像當機一樣
+            this.renderVN('', `*你選擇了：「${choice}」*\n\n...命運的軌跡正在重新編織，請稍候...`);
 
             try {
                 if (win.OS_THINK) win.OS_THINK.setContext({ panel: 'VN 選項選擇', userInput: choice });
@@ -912,9 +940,22 @@
                             const _storyTitle = window.VN_Core._currentStoryTitle || '';
                             await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${choice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: choice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
                         } catch(e) {}
+                        
                         window.VN_Core._lastRawText = fullText;
                         window.VN_Core.loadScript(fullText, null);
-                        this._showStartLoader(6000, () => window.VN_Core.next());
+                        
+                        // 2. 生成完畢，進度條衝到 100% 後關閉
+                        const loaderEl = document.getElementById('vn-start-loader');
+                        const loaderBar = document.getElementById('vn-start-loader-bar');
+                        if (loaderBar) {
+                            loaderBar.style.transition = 'width 0.4s ease-out';
+                            loaderBar.style.width = '100%';
+                        }
+                        setTimeout(() => {
+                            if (loaderEl) loaderEl.style.display = 'none';
+                            window.VN_Core.next(); // 進入下一段劇情
+                        }, 500);
+                        
                         resolve();
                     }, (err) => reject(err), { disableTyping: true });
                 });
@@ -922,6 +963,7 @@
                 console.error('[VN_Choice] 生成失敗:', err);
                 const loaderEl = document.getElementById('vn-start-loader');
                 if (loaderEl) loaderEl.style.display = 'none';
+                this.renderVN('', `*API 生成失敗，請檢查連線或設定。*\n\n錯誤訊息: ${err.message}`);
             }
         },
 
@@ -2664,7 +2706,9 @@
                     const isActive = group.storyId && group.storyId === currentStoryId;
                     const groupId  = 'chgrp_' + Math.random().toString(36).slice(2, 8);
                     const maxTime  = Math.max(...group.chapters.map(c => c.createdAt || 0));
-                    const dateStr  = maxTime ? new Date(maxTime).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }) : '';
+                    
+                    // 1. 資料夾顯示完整的 日期 + 時間 (例如：04/16 下午01:30)
+                    const dateStr  = maxTime ? new Date(maxTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
 
                     // ── 資料夾標題列 ──
                     const header = document.createElement('div');
@@ -2708,15 +2752,17 @@
                         body.remove();
                     };
 
+                    // 2. 章節強制按時間「升序」（舊到新：第一章在最上面）
+                    group.chapters.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
                     // ── 各章節 ──
                     group.chapters.forEach(ch => {
-                        const date = new Date(ch.createdAt).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
                         const item = document.createElement('div');
                         item.className = 'ch-item';
-                        item.style.cssText = 'position:relative;';
+                        // 移除單獨時間，並增加右側 padding 避免標題太長壓到刪除鈕
+                        item.style.cssText = 'position:relative; padding-right: 50px;';
                         item.innerHTML = `
                             <span class="ch-name">${ch.title}</span>
-                            <span class="ch-num" style="font-size:0.72rem;color:#888;">${date}</span>
                             <button style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(200,50,50,.15);border:1px solid rgba(200,50,50,.3);color:#e06060;border-radius:4px;padding:2px 8px;font-size:0.75rem;cursor:pointer;" data-id="${ch.id}">刪</button>
                         `;
                         // 點擊載入
@@ -3279,7 +3325,7 @@
         });
     }
 
-    // 角色卡 DIVE：存紀錄 → 靜默建 prompt → AI 生成 VN 格式
+    // 角色卡 DIVE：存紀錄 → 直接傳遞參數給生成器 (拔除 localStorage 貼布)
     function diveSelectedCard() {
         const diveBtn  = document.getElementById('vn-gen-card-dive');
         const wid       = diveBtn?.dataset.wid;
@@ -3296,19 +3342,17 @@
         localStorage.setItem('vn_current_world_id', w.id);
         localStorage.removeItem('vn_pending_first_mes');
 
-        // 初始化角色卡綁定的變數包，並自動啟用展廳面板
-        if (w.autoPackId && win.OS_DB && win._AVS_ENGINE) {
-            win.OS_DB.getAllVarPacks?.().then(packs => {
-                const pack = (packs || []).find(p => p.id === w.autoPackId);
-                if (pack) {
-                    win._AVS_ENGINE.initFromPack(pack);
-                    win.OS_AVS?.activateTemplateForPack?.(w.autoPackId);
-                    console.log(`[VN] 已初始化角色卡變數包：${pack.name}`);
-                }
-            }).catch(e => console.warn('[VN] 角色卡變數包初始化失敗:', e));
+        // 🌟 【重構】把變數包 ID 打包成選項參數
+        const diveOptions = {
+            targetPackId: w.autoPackId || null
+        };
+
+        // 激活展廳面板可以先做，這只影響 UI 顯示
+        if (w.autoPackId && win.OS_AVS?.activateTemplateForPack) {
+            win.OS_AVS.activateTemplateForPack(w.autoPackId);
         }
 
-        // 靜默填入 vn-gen-request（右欄操作，不動左欄使用者資料）
+        // 靜默填入 vn-gen-request
         const genInput = document.getElementById('vn-gen-request');
         const genTitle = document.getElementById('vn-gen-title');
         if (genInput) {
@@ -3326,7 +3370,7 @@
         }
         if (genTitle) genTitle.value = w.title;
 
-        // ── 顯示全板生成中 Loading（蓋住整個 generate window）────
+        // ── 顯示全板生成中 Loading ────
         const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         const genWindow = document.getElementById('vn-gen-window');
         const LOAD_ID   = 'vn-card-dive-loading';
@@ -3368,15 +3412,13 @@
             genWindow.appendChild(loadDiv);
         }
 
-        // 監聽生成失敗（submitBtn 重新啟用 = 出錯）
         const submitBtn = document.getElementById('vn-gen-submit');
         if (submitBtn) {
             const _obs = new MutationObserver(() => {
                 if (!submitBtn.disabled) {
                     _obs.disconnect();
                     const ld = document.getElementById(LOAD_ID);
-                    if (!ld) return;  // 成功 → panel 已關閉，不需處理
-                    // 出錯：更新狀態文字 + 顯示重試按鈕
+                    if (!ld) return;  
                     const ds = document.getElementById('vn-card-dive-status');
                     if (ds) {
                         const errMsg = document.getElementById('vn-gen-status')?.textContent || '生成失敗，請重試';
@@ -3398,9 +3440,9 @@
             });
             _obs.observe(submitBtn, { attributes: true, attributeFilter: ['disabled'] });
         }
-        // ────────────────────────────────────────────────────────
 
-        generateStory();
+        // 🌟 把選項傳遞給生成器
+        generateStory(diveOptions);
     }
 
     function closeGeneratePanel() {
@@ -3408,11 +3450,15 @@
         if (overlay) overlay.classList.remove('active');
     }
 
-    async function generateStory() {
+    // 🌟 【重構】加上 options = {} 參數與 async 關鍵字
+    async function generateStory(options = {}) {
         const submitBtn = document.getElementById('vn-gen-submit');
         const statusEl  = document.getElementById('vn-gen-status');
         const request   = (document.getElementById('vn-gen-request')?.value || '').trim();
         const presetTitle = (document.getElementById('vn-gen-title')?.value || '').trim();
+        
+        // 🌟 接收傳遞過來的變數包 ID
+        const targetPackId = options.targetPackId || null;
 
         if (!win.OS_API) {
             statusEl.textContent = '❌ OS_API 未載入，請重整頁面';
@@ -3438,6 +3484,14 @@
                     || '角色開場';
                 const storyId    = `${storyTitle}_${now}`;
                 window.VN_Core._setStoryId(storyId, storyTitle);
+                
+                // 🌟 【重構】直接使用手上的 targetPackId
+                if (win.dispatchEvent) {
+                    win.dispatchEvent(new CustomEvent('VN_STORY_STARTED', { 
+                        detail: { entityId: storyId, title: storyTitle, packId: targetPackId } 
+                    }));
+                }
+
                 const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
                 await win.OS_DB.saveVnChapter({
                     title:    '第一章：相遇',
@@ -3454,7 +3508,7 @@
                 window.VN_Core.loadScript(fullText, null);
                 switchPage('page-game');
                 window.VN_Core._showStartLoader(4000, () => window.VN_Core.next());
-                console.log('[VN_Gen] ✅ 角色卡開場白直通成功');
+                console.log('[VN_Gen] ✅ 角色卡開場白直通成功，變數已透過參數直接初始化');
             } catch(e) {
                 console.error('[VN_Gen] 開場白載入失敗:', e);
                 statusEl.textContent = `❌ 載入失敗：${e.message}`;
@@ -3463,9 +3517,7 @@
             }
             return;
         }
-        // ─────────────────────────────────────────────────────────
 
-        // 取 API 設定
         const config = (win.OS_SETTINGS?.getConfig?.()) || {};
         if (!config.url && !config.useSystemApi) {
             statusEl.innerHTML = '❌ 尚未設定 API。請先到 <b>設置 → 🧠 主模型</b> 填入 API URL 與 Key。';
@@ -3473,37 +3525,28 @@
             return;
         }
 
-        // 顯示生成中狀態
         submitBtn.disabled = true;
         statusEl.innerHTML = '<span class="gen-spinner"></span>AI 生成中，請稍候...';
         statusEl.className = '';
 
-        // 新開場白 = 全新時間軸，先暫時清空 storyId
-        // 讓 buildContext 不會把舊劇情章節注入進來
-        // ⚠️ 必須在 try 外宣告，catch 才能存取
         let _prevStoryId    = window.VN_Core._currentStoryId;
         let _prevStoryTitle = window.VN_Core._currentStoryTitle;
 
         try {
-            // 組裝 Context（使用 vn_story prompt）
             const userMsg = request || '請根據現有世界觀與角色設定，自由創作一段沉浸式互動劇情。';
             if (win.OS_THINK) win.OS_THINK.setContext({ panel: 'VN 劇情生成', userInput: userMsg });
 
             window.VN_Core._setStoryId('__new_story__', '');
 
-            const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
             const messages = await win.OS_API.buildContext(userMsg, 'vn_story');
 
-            // 呼叫 API
             await new Promise((resolve, reject) => {
                 win.OS_API.chat(
                     messages,
                     config,
-                    null, // onChunk（不需要流式顯示）
+                    null, 
                     async (fullText) => {
-                        // 成功：載入劇本並啟動
                         if (!fullText || !fullText.includes('<content>')) {
-                            console.warn('[VN_Gen] 未偵測到 <content> 標籤，嘗試直接載入...');
                             if (fullText && fullText.length > 50) {
                                 fullText = `<content>\n${fullText}\n</content>`;
                             } else {
@@ -3512,17 +3555,27 @@
                             }
                         }
 
-                        // 🗂️ 自動存檔到 OS_DB
                         try {
                             const titleMatch = fullText.match(/\[Chapter\|(?:\d+\|)?([^\]|]+)\]/i)
                                             || fullText.match(/\[Story\|([^\]]+)\]/i);
                             const title = titleMatch ? titleMatch[1].trim() : `章節 ${new Date().toLocaleString('zh-TW')}`;
                             const _thinking = win.OS_THINK?.getLatest()?.content?.trim() || '';
-                            // generateStory = 新開場白 → 建立新 storyId（時間軸獨立）
+                            
                             const now = Date.now();
                             const storyTitle = window.VN_Core._extractStoryTitle(fullText) || presetTitle || '未命名故事';
                             const storyId    = `${storyTitle}_${now}`;
+                            
                             window.VN_Core._setStoryId(storyId, storyTitle);
+
+                            // 🌟 【重構】AI 生成完畢，直接使用手上的 targetPackId 初始化
+                            if (win.dispatchEvent) {
+                                win.dispatchEvent(new CustomEvent('VN_STORY_STARTED', { 
+                                    detail: { entityId: storyId, title: storyTitle, packId: targetPackId } 
+                                }));
+                            }
+
+                            const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
+
                             await win.OS_DB.saveVnChapter({
                                 title,
                                 storyId,
@@ -3533,13 +3586,10 @@
                                 createdAt: now,
                                 avsStateBefore
                             });
-                            console.log('[VN_Gen] ✅ 章節已存檔：', title, '| 故事：', storyId);
                         } catch(e) {
                             console.warn('[VN_Gen] 存檔失敗（不影響播放）:', e);
                         }
 
-                        // 💰 解析 <status> 交易指令 → OS_ECONOMY
-                        // 格式：T01 | -500 | 購買物品
                         if (win.OS_ECONOMY && typeof win.OS_ECONOMY.processAiTransaction === 'function') {
                             const statusMatch = fullText.match(/<status>([\s\S]*?)<\/status>/i);
                             if (statusMatch) {
@@ -3553,7 +3603,6 @@
                             }
                         }
 
-                        // 💾 有填標題就儲存/覆蓋開場白預設
                         if (presetTitle) _saveGenPreset(presetTitle, request);
 
                         closeGeneratePanel();
@@ -3561,11 +3610,10 @@
                         window.VN_Core.loadScript(fullText, null);
                         switchPage('page-game');
                         window.VN_Core._showStartLoader(6000, () => window.VN_Core.next());
-                        console.log('[VN_Gen] ✅ 劇本生成成功，已套用');
                         resolve();
                     },
                     (err) => reject(err),
-                    { disableTyping: true } // 跳過逐字動畫，直接給 onFinish
+                    { disableTyping: true }
                 );
             });
 
@@ -3574,7 +3622,6 @@
             statusEl.textContent = `❌ 生成失敗：${err.message || '未知錯誤'}`;
             statusEl.className = 'err';
             submitBtn.disabled = false;
-            // 生成失敗：還原到原本的 storyId，避免上下文斷掉
             window.VN_Core._setStoryId(_prevStoryId, _prevStoryTitle);
         }
     }

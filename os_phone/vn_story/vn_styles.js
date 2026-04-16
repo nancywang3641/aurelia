@@ -314,15 +314,15 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-reader-divider { text-align: center; font-size: 0.65rem; color: #222; letter-spacing: 2px; padding: 4px 0; }
         .vn-reader-loading { text-align: center; color: #333; font-size: 0.82rem; padding: 40px; }
 
-        /* 💭 思考鏈小窗 */
-        #vn-think-popup { position: absolute; bottom: 90px; right: 10px; width: min(340px, 90vw); max-height: 260px; background: rgba(8,8,20,0.96); border: 1px solid rgba(100,100,200,0.25); border-radius: 8px; display: flex; flex-direction: column; z-index: 30; opacity: 0; pointer-events: none; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; }
+        /* 💭 思考鏈小窗 (黑金高貴風) */
+        #vn-think-popup { position: absolute; bottom: 90px; right: 10px; width: min(380px, 90vw); max-height: 300px; background: linear-gradient(135deg, rgba(13,13,13,0.96) 0%, rgba(5,5,5,0.98) 100%); border: 1px solid rgba(212,175,55,0.3); border-radius: 4px; display: flex; flex-direction: column; z-index: 30; opacity: 0; pointer-events: none; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 15px rgba(212,175,55,0.05); }
         #vn-think-popup.active { opacity: 1; pointer-events: auto; transform: translateY(0); }
-        #vn-think-popup-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid rgba(100,100,200,0.12); flex-shrink: 0; }
-        #vn-think-popup-title { font-size: 0.72rem; color: #5a5a90; letter-spacing: 1px; }
-        #vn-think-popup-close { font-size: 14px; color: #444; cursor: pointer; line-height: 1; }
-        #vn-think-popup-close:hover { color: #888; }
-        #vn-think-popup-body { overflow-y: auto; padding: 10px 12px; font-size: 0.72rem; color: #5a5a8a; line-height: 1.75; white-space: pre-wrap; word-break: break-word; scrollbar-width: thin; scrollbar-color: #1e1e3a transparent; }
-        .think-empty-msg { color: #333; text-align: center; padding: 20px 0; }
+        #vn-think-popup-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px dashed rgba(212,175,55,0.2); flex-shrink: 0; background: rgba(0,0,0,0.4); }
+        #vn-think-popup-title { font-size: 0.85rem; color: var(--gold); letter-spacing: 2px; font-family: var(--font-classic); font-weight: bold; }
+        #vn-think-popup-close { font-size: 16px; color: rgba(212,175,55,0.5); cursor: pointer; line-height: 1; transition: 0.2s; }
+        #vn-think-popup-close:hover { color: var(--gold); transform: scale(1.1); }
+        #vn-think-popup-body { overflow-y: auto; padding: 15px; font-size: 0.85rem; color: #e8dfc8; line-height: 1.8; white-space: pre-wrap; word-break: break-word; scrollbar-width: thin; scrollbar-color: rgba(212,175,55,0.3) transparent; font-family: var(--font-sans); }
+        .think-empty-msg { color: #666; text-align: center; padding: 20px 0; font-family: var(--font-sans); }
 
         /* 📖 閱讀器 — 故事分頁 Tab */
         #vn-reader-tabs { flex-shrink: 0; display: flex; gap: 2px; padding: 8px 14px 0; overflow-x: auto; border-bottom: 1px solid rgba(255,255,255,0.05); scrollbar-width: none; }
@@ -1244,6 +1244,130 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #phone-call.call-active #call-avatar { width: 56px; height: 56px; }
             #phone-call.call-active #call-name { font-size: 1.1rem; }
         }
+
+
+        /* =========================================
+           🔧 修正：AI 生成劇情面板 (手機端上下堆疊)
+           ========================================= */
+        @media (max-width: 768px) {
+            /* 1. 將雙欄 (flex-row) 改為上下堆疊 (flex-col) */
+            #vn-gen-columns { 
+                flex-direction: column; 
+            }
+            
+            /* 2. 左欄：移除原本的右邊線，改成下邊線分隔上下區塊 */
+            #vn-gen-body { 
+                border-right: none; 
+                border-bottom: 1px solid rgba(212,175,55,0.12); 
+                padding: 16px 14px;
+            }
+            
+            /* 3. 右欄 (角色卡)：解除原本 220px 的寬度限制，改為滿版，並給個最大高度 */
+            #vn-gen-card-col { 
+                width: 100%; 
+                box-sizing: border-box;
+                padding: 14px;
+                max-height: 280px; /* 限制高度，這樣角色多的時候會在區塊內滾動，不會撐爆畫面 */
+            }
+            
+            /* 4. 整個 Modal 視窗：確保不要超過手機螢幕高度 */
+            #vn-gen-window { 
+                max-height: 90vh; 
+                overflow-y: auto; 
+            }
+        }
+
+        /* =========================================
+           ✨ 新增：AI 生成劇情面板 (摺疊功能樣式與手機堆疊)
+           ========================================= */
+        /* 讓 details 容器重置為區塊，避免 flex 衝突 */
+        #vn-gen-body, #vn-gen-card-col {
+            display: block !important;
+            min-height: min-content; 
+        }
+        
+        /* 隱藏原生三角形 */
+        details.vn-collapse-group summary::-webkit-details-marker {
+            display: none;
+        }
+        
+        /* 美化點擊標題列 */
+        details.vn-collapse-group summary {
+            list-style: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            outline: none;
+            /* 繼承原本標題的樣式設定 */
+            color: rgba(212,175,55,0.7);
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            font-family: var(--font-classic);
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(212,175,55,0.12);
+            transition: color 0.2s;
+        }
+        details.vn-collapse-group summary:hover {
+            color: var(--gold);
+        }
+        
+        /* 拿掉原本手動寫在 div 的底線，交給 summary 統一管理 */
+        div.vn-gen-col-hd {
+            border-bottom: none !important;
+            padding-bottom: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        
+        /* 右側箭頭旋轉動畫 */
+        .collapse-icon {
+            font-size: 0.6rem;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: rgba(212,175,55,0.4);
+        }
+        details.vn-collapse-group[open] .collapse-icon {
+            transform: rotate(180deg);
+            color: var(--gold);
+        }
+        
+        /* 把原本外層的 Flex 佈局移到內層內容區 */
+        details#vn-gen-body .collapse-content {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding-top: 14px;
+        }
+        details#vn-gen-card-col .collapse-content {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-top: 10px;
+            /* 讓角色清單可以滾動 */
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        /* 手機版 (RWD) 覆蓋：上下堆疊 */
+        @media (max-width: 768px) {
+            #vn-gen-columns { flex-direction: column; }
+            #vn-gen-body { border-right: none; border-bottom: 1px solid rgba(212,175,55,0.12); padding-bottom: 14px; }
+            #vn-gen-card-col { width: 100%; box-sizing: border-box; }
+            
+            /* 讓外層視窗統一處理滾動即可，避免雙重滾動條 */
+            #vn-gen-window { max-height: 85vh; overflow-y: auto; }
+            
+            /* 🌟 修正點：解除內部高度限制，讓內容自然往下推 */
+            details#vn-gen-body .collapse-content { 
+                max-height: none; 
+                overflow-y: visible; 
+            }
+            
+            /* 🌟 修正點：確保按鈕與列表不會被 Flexbox 擠壓變形 */
+            #vn-gen-submit, #vn-gen-presets-wrap {
+                flex-shrink: 0;
+            }
+        }
     `;
 
     // === 注入樣式 ===
@@ -1458,10 +1582,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
 
                             </div>
-                            <button class="vn-panel-btn" id="vn-btn-log" onclick="window.VN_Core.showLog(); event.stopPropagation();">Log</button>
-                            <button class="vn-panel-btn" id="vn-btn-think" onclick="window.VN_PLAYER.showThinkPopup(); event.stopPropagation();" title="本章思考鏈">💭</button>
-                            <button class="vn-panel-btn" id="vn-btn-skip" onclick="window.VN_Core.toggleSkip(); event.stopPropagation();">Skip</button>
-                            <button class="vn-panel-btn" id="vn-btn-ctx" onclick="window.VN_Core.toggleCtx(); event.stopPropagation();">Ctx</button>
+                            <button class="vn-panel-btn" id="vn-btn-log" onclick="window.VN_Core.showLog(); event.stopPropagation();">LOG</button>
+                            <button class="vn-panel-btn" id="vn-btn-think" onclick="window.VN_PLAYER.showThinkPopup(); event.stopPropagation();" title="本章思考鏈">COT</button>
+                            <button class="vn-panel-btn" id="vn-btn-skip" onclick="window.VN_Core.toggleSkip(); event.stopPropagation();">SKIP</button>
+                            <button class="vn-panel-btn" id="vn-btn-ctx" onclick="window.VN_Core.toggleCtx(); event.stopPropagation();">CTX</button>
                             <button class="vn-panel-btn" id="vn-btn-regen" style="display:none;color:#f6ad55;" onclick="window.VN_Core.regenCurrentTTS(); event.stopPropagation();" title="清除快取並重新生成當前語音">↺ TTS</button>
                         </div>
 
@@ -1485,7 +1609,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                 <!-- 💭 思考鏈小窗 -->
                 <div id="vn-think-popup">
                     <div id="vn-think-popup-header">
-                        <span id="vn-think-popup-title">💭 本章思考鏈</span>
+                        <span id="vn-think-popup-title">本章思考鏈</span>
                         <span id="vn-think-popup-close" onclick="window.VN_PLAYER.hideThinkPopup()">✕</span>
                     </div>
                     <div id="vn-think-popup-body"></div>
@@ -1691,28 +1815,37 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                         <button class="gen-close" onclick="window.VN_PLAYER.closeGeneratePanel()">✕</button>
                     </div>
                     <div id="vn-gen-columns">
-                        <!-- 左欄：自由生成（儲存記錄完全隔離） -->
-                        <div id="vn-gen-body">
-                            <div class="vn-gen-col-hd">✍️ 自由生成</div>
-                            <label>開場白標題 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，填了才會儲存/覆蓋)</span></label>
-                            <input id="vn-gen-title" type="text" placeholder="例：雨天咖啡廳初見" autocomplete="off" />
-                            <label>劇情指引 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，留空則 AI 自由發揮)</span></label>
-                            <textarea id="vn-gen-request" placeholder="例：繼續上次在咖啡廳的相遇，加入一段雨天的邂逅...&#10;&#10;或留空讓 AI 自由創作"></textarea>
-                            <button id="vn-gen-submit" onclick="window.VN_PLAYER.generateStory()">🚀 開始生成</button>
-                            <div id="vn-gen-presets-wrap">
-                                <div class="vn-gen-presets-hd">
-                                    <span>📂 已儲存的開場白</span>
-                                    <span id="vn-gen-presets-count"></span>
+                        <details id="vn-gen-body" class="vn-collapse-group" open>
+                            <summary class="vn-gen-col-hd">
+                                <span>✍️ 自由生成</span>
+                                <span class="collapse-icon">▼</span>
+                            </summary>
+                            <div class="collapse-content">
+                                <label>開場白標題 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，填了才會儲存/覆蓋)</span></label>
+                                <input id="vn-gen-title" type="text" placeholder="例：雨天咖啡廳初見" autocomplete="off" />
+                                <label>劇情指引 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，留空則 AI 自由發揮)</span></label>
+                                <textarea id="vn-gen-request" placeholder="例：繼續上次在咖啡廳的相遇，加入一段雨天的邂逅...&#10;&#10;或留空讓 AI 自由創作"></textarea>
+                                <button id="vn-gen-submit" onclick="window.VN_PLAYER.generateStory()">🚀 開始生成</button>
+                                <div id="vn-gen-presets-wrap">
+                                    <div class="vn-gen-presets-hd">
+                                        <span>📂 已儲存的開場白</span>
+                                        <span id="vn-gen-presets-count"></span>
+                                    </div>
+                                    <div id="vn-gen-presets"></div>
                                 </div>
-                                <div id="vn-gen-presets"></div>
                             </div>
-                        </div>
-                        <!-- 右欄：書架角色卡（標示書名，完全獨立） -->
-                        <div id="vn-gen-card-col">
-                            <div class="vn-gen-col-hd">📚 書架角色卡</div>
-                            <div id="vn-gen-card-list"></div>
-                            <button id="vn-gen-card-dive" onclick="window.VN_PLAYER.diveSelectedCard()">🎭 與TA相遇</button>
-                        </div>
+                        </details>
+
+                        <details id="vn-gen-card-col" class="vn-collapse-group" open>
+                            <summary class="vn-gen-col-hd">
+                                <span>📚 書架角色卡</span>
+                                <span class="collapse-icon">▼</span>
+                            </summary>
+                            <div class="collapse-content">
+                                <div id="vn-gen-card-list"></div>
+                                <button id="vn-gen-card-dive" onclick="window.VN_PLAYER.diveSelectedCard()">🎭 與TA相遇</button>
+                            </div>
+                        </details>
                     </div>
                     <div id="vn-gen-status"></div>
                 </div>

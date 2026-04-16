@@ -1,11 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] os_api_engine.js (V3.22 - 終極完整版：修復代碼缺失 + 完美動態人設)
+// [檔案] os_api_engine.js (V3.24 - 終極完整版：支援 <vars_analyze> 思考鏈)
 // 路徑：os_phone/os/os_api_engine.js
 // 職責：組裝 Prompt 並負責與 AI 通訊。
 //       AVS 底層引擎由 os_avs_engine.js 提供，本檔僅呼叫 win._AVS_ENGINE。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入 API 引擎 (V3.22)...');
+    console.log('[PhoneOS] 載入 API 引擎 (V3.24)...');
     const win = window.parent || window; // 🔥 絕對保留：雙通向架構的核心
 
     // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
@@ -18,10 +18,10 @@
         let cleaned = text;
 
         const thinkBlocks = [];
-        // 🔥 修正：正確執行 replace 賦值，真正剝除 <think>
-        cleaned = cleaned.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, (_, inner) => {
+        // 🔥 V3.24 升級：同時攔截 <think> 與 <vars_analyze>，並送入思考面板
+        cleaned = cleaned.replace(/<(think(?:ing)?|vars_analyze)>([\s\S]*?)<\/\1>/gi, (_, tag, inner) => {
             const trimmed = inner.trim();
-            if (trimmed) thinkBlocks.push(trimmed);
+            if (trimmed) thinkBlocks.push(`[${tag.toUpperCase()}]\n${trimmed}`);
             return ''; // 從最終顯示文本中剔除
         });
         
@@ -40,12 +40,13 @@
             }
         }
 
-        // 🔥 AVS 系統：攔截 <vars> 動態變數（支援 =, +=, -=, *=, /= 運算子）
-        cleaned = cleaned.replace(/<vars>([\s\S]*?)<\/vars>/gi, (_, inner) => {
+        // 🔥 AVS 系統：攔截 <vars> 動態變數（升級：更寬鬆的標籤匹配，防呆機制）
+        cleaned = cleaned.replace(/<vars\b[^>]*>([\s\S]*?)<\/vars>/gi, (_, inner) => {
+            console.log('🌟 [OS_API] 成功攔截 <vars> 區塊，轉交 AVS 引擎處理');
             try {
                 _avsApply(inner.trim());
             } catch(e) {
-                console.warn('[AVS] <vars> 解析失敗:', e, inner);
+                console.warn('[OS_API] <vars> 交接失敗:', e, inner);
             }
             return '';
         });
@@ -63,8 +64,8 @@
     function stripVnTags(text) {
         if (!text || typeof text !== 'string') return '';
         let s = text;
-        // 🔥 AVS 擴充：將 status 與 vars 一併從歷史記錄中隱藏，不浪費 Token
-        s = s.replace(/<(session_settlement|status|vars)>[\s\S]*?<\/\1>/gi, '');
+        // 🔥 AVS 擴充：將 status、vars、vars_analyze 一併從歷史記錄中隱藏，不浪費 Token
+        s = s.replace(/<(session_settlement|status|vars|vars_analyze)>[\s\S]*?<\/\1>/gi, '');
         s = s.replace(/<\/?(content|summary)>/gi, '');
         s = s.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '');
         s = s.replace(/\[Char\|([^|]+)\|[^|]*\|([^|\]]+)(?:\|[^\]]+)?\]/g,
@@ -158,17 +159,14 @@
             } catch(e) { return true; }
         },
 
-        // 🌟 新增：統一獲取最真實的全局使用者名稱 (最高優先級：OS_PERSONA)
         getGlobalUserName: function() {
             let uName = "";
             try {
                 const w = window.parent || window;
-                // 1. 絕對優先：OS_PERSONA (面板切換的第一手最新資料)
                 if (w.OS_PERSONA && typeof w.OS_PERSONA.getName === 'function') {
                     const pName = w.OS_PERSONA.getName();
                     if (pName && pName.trim() !== 'User') uName = pName.trim();
                 }
-                // 2. 備用方案：酒館 (ST) 原生 Context
                 if (!uName && !this.isStandalone() && w.SillyTavern?.getContext) {
                     const stCtx = w.SillyTavern.getContext();
                     if (stCtx?.user?.name && stCtx.user.name.trim() !== 'User') {
@@ -191,11 +189,9 @@
         },
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
-            // 🌟 第一道防線：獲取名字，並在打印 Debug 表格前直接把傳入的 messages 掃一遍
             const globalUserName = this.getGlobalUserName();
             messages.forEach(m => {
                 if (m.content && typeof m.content === 'string') {
-                    // 使用 \s* 防止有空格如 {{ user }} 的情況
                     m.content = m.content.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
                 }
             });
@@ -237,7 +233,6 @@
                 }
             } catch(e) { totalTokens = Math.ceil(totalChars * 0.5) || 0; }
 
-            // 🔥 完整恢復的 Debug Panel 與 console.table 分類顯示 (絕不省略)
             try {
                 const typeLabel = config._isSecondary ? "⚡ 副模型 (Secondary)" : "🧠 主模型 (Primary)";
                 console.group(`📊 [OS_API] ${typeLabel} 發送檢查 (Token: ${totalTokens} | Chars: ${totalChars})`);
@@ -332,7 +327,6 @@
 
                         if (injected.length > 0) {
                             let combined = injected.map(p => p.content.trim()).join('\n\n');
-                            // 🌟 確保從外部預設包注入進來的文字，也被掃描替換
                             combined = combined.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
                             messages.unshift({ role: 'system', content: combined });
                             console.log(`📋 [PresetPrompt] 注入 ${injected.length} 個條目 (來源: "${targetPreset}")，共 ${combined.length} 字元`);
@@ -347,7 +341,6 @@
                 .map(m => { const { _source, _isProto, _chatId, ...rest } = m; return rest; })
                 .filter(m => m.content && m.content.trim().length > 0);
 
-            // 🌟 終極核彈防線：把過濾完要準備發送的陣列整個 Stringify，無死角 Replace，然後 Parse 回去！
             try {
                 let stringifiedPayload = JSON.stringify(cleanMessages);
                 stringifiedPayload = stringifiedPayload.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
@@ -372,7 +365,6 @@
                 };
 
                 _dbgStart = Date.now();
-                // 🔥 完整恢復的 Debug 攔截請求發送
                 try {
                     const _dbgUrl = !useSystemApi ? (config.url || '') : '/api/st-backend';
                     window._OS_DBG_REQUEST?.(_dbgId, commonBody, _dbgUrl, config.model);
@@ -452,7 +444,6 @@
 
                 if (!fullText) throw new Error("API 返回內容為空 (可能被過濾或生成失敗)");
 
-                // 🔥 完整恢復的 Debug 攔截響應接收
                 try { window._OS_DBG_RESPONSE?.(_dbgId, 200, rawApiResponse || fullText, Date.now() - _dbgStart); } catch(e) {}
 
                 const recvChars = fullText.length;
@@ -497,7 +488,7 @@
                 try { ctx = await win.OS_TAVERN_BRIDGE.getApiContext(); } catch (e) { console.error(e); }
             }
 
-            let userName = this.getGlobalUserName(); // 🔥 動態獲取名字
+            let userName = this.getGlobalUserName(); 
             let userDesc = "";
 
             const userModule = win.OS_USER || win.WX_USER;
@@ -664,7 +655,6 @@
                 } catch (e) { console.error("Chat history load error", e); }
             }
 
-            // 🔥 AVS 系統注入：讓 AI 知道目前的變數狀態（按 storyId 分艙）
             try {
                 const avsState = _avsRead();
                 if (Object.keys(avsState).length > 0) {
@@ -700,8 +690,7 @@
         _buildStandaloneContext: async function(userMessage, promptKey) {
             const apiMessages = [];
 
-            // ── 1. 提取全域人設與提示詞 ──
-            let userName = this.getGlobalUserName(); // 🔥 動態獲取名字
+            let userName = this.getGlobalUserName();
             let userDesc = '';
             try {
                 const persona = win.OS_PERSONA?.getCurrent?.() || {};
@@ -723,17 +712,16 @@
                 } catch(e) {}
             }
 
-            // ── 2. 構建「精準掃描文本 (scanText)」供世界書觸發 ──
             let scanText = userMessage || '';
 
-            // 附加近期歷史 或 正在輸入的開場白 UI 內容
             if (promptKey === 'wx_chat_system' && win.wxApp?.GLOBAL_ACTIVE_ID && win.WX_DB?.getApiChat) {
                 try {
                     const chat = await win.WX_DB.getApiChat(win.wxApp.GLOBAL_ACTIVE_ID);
                     if (chat?.messages?.length) {
                         scanText += " " + chat.messages.slice(-5).map(m => {
                             let text = m.raw || m.content || "";
-                            text = text.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                            // 🔥 V3.24: 一併剔除 vars_analyze 以避免影響掃描
+                            text = text.replace(/<(think(?:ing)?|vars_analyze)>[\s\S]*?<\/\1>/gi, '');
                             const match = text.match(/<content>([\s\S]*?)<\/content>/i);
                             if (match) text = match[1];
                             return text;
@@ -749,7 +737,8 @@
                     scanText += " " + storyChapters.slice(-3).map(ch => {
                         let req = ch.request || "";
                         let text = ch.content || "";
-                        text = text.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                        // 🔥 V3.24: 一併剔除 vars_analyze 以避免影響掃描
+                        text = text.replace(/<(think(?:ing)?|vars_analyze)>[\s\S]*?<\/\1>/gi, '');
                         const match = text.match(/<content>([\s\S]*?)<\/content>/i);
                         if (match) text = match[1];
                         return req + " " + text;
@@ -764,10 +753,8 @@
                 } catch(e) {}
             }
 
-            // ── 3. 獲取世界書 (OS_WORLDBOOK) ──
             let lore = '';
             try {
-                // 優先使用書封面選定的書包組合；若無則用當前啟用的書
                 const _rawPacks = localStorage.getItem('vn_active_wb_packs');
                 const _activePacks = _rawPacks ? JSON.parse(_rawPacks) : null;
                 if (_activePacks && _activePacks.length && win.OS_WORLDBOOK?.getContextByPacks) {
@@ -777,17 +764,14 @@
                 }
             } catch(e) { console.warn('[OS_API standalone] 世界書載入失敗:', e); }
 
-            // ── 3b. AVS 條件規則注入 ──
             try {
                 const _avsRulesCtx = win.OS_AVS_RULES?.getActiveContext?.(_avsRead());
                 if (_avsRulesCtx) lore = lore ? lore + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;
             } catch(e) { console.warn('[OS_API standalone] AVS 條件規則載入失敗:', e); }
 
-            // ── 4. 組合 API 訊息 ──
             if (cotPrompt) apiMessages.push({ role: 'system', content: `### \n${cotPrompt}` });
             apiMessages.push({ role: 'system', content: `### Roleplay Instruction\n${sysPrompt}` });
 
-            // 🔥 AVS 動態變數狀態準備（按 storyId 分艙）
             let avsPrompt = '';
             try {
                 const avsState = _avsRead();
@@ -851,7 +835,7 @@
                             _injectedSys.add(_item.id);
                             if      (_item.id === 'cot'          && cotPrompt) _vn.push({ role: 'system', content: `### \n${cotPrompt}` });
                             else if (_item.id === 'panel_prompt')              { const fmt = win.OS_PROMPTS?.getFormat?.('vn_story') || ''; if (fmt) _vn.push({ role: 'system', content: fmt }); }
-                            else if (_item.id === 'worldbook'   && lore)      _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
+                            else if (_item.id === 'worldbook'   && lore)       _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
                             else if (_item.id === 'persona'     && (userDesc || userName !== 'User'))  _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
                             else if (_item.id === 'vn_history') _vnMsgs.forEach(m => _vn.push(m));
                         } else if (_item.type === 'entry') {
@@ -868,7 +852,6 @@
                     _vnMsgs.forEach(m => _vn.push(m));
                 }
 
-                // 🔥 注入 AVS 變數
                 if (avsPrompt) _vn.push({ role: 'system', content: avsPrompt });
 
                 if (userMessage) {
@@ -886,7 +869,6 @@
             if (lore)         contextBlock += `[World Info]:\n${lore}\n\n`;
             if (contextBlock) apiMessages.push({ role: 'system', content: contextBlock });
 
-            // 🔥 注入 AVS 變數 (非 VN 模式)
             if (avsPrompt) apiMessages.push({ role: 'system', content: avsPrompt });
 
             if (promptKey === 'wx_chat_system' && win.WX_DB?.getApiChat && win.wxApp?.GLOBAL_ACTIVE_ID) {
@@ -961,7 +943,7 @@
                     );
                 } catch (e) {
                     console.error("[OS_API_ENGINE] generateText 執行失敗:", e);
-                    resolve(""); // 避免崩潰，回傳空字串
+                    resolve(""); 
                 }
             });
         },
@@ -969,22 +951,19 @@
         startStandaloneStory: async function(sessionPayload) {
             console.log("[OS_API_ENGINE] 啟動獨立劇情:", sessionPayload);
 
-            // 1. 設定當前 VN Story ID 及標題
             localStorage.setItem('vn_current_story_id', sessionPayload.entityId);
             localStorage.setItem('vn_current_story_title', sessionPayload.title);
 
-            // 2. 將開場白存入 DB (初始化劇情)
             if (win.OS_DB && typeof win.OS_DB.saveVnChapter === 'function') {
                 await win.OS_DB.saveVnChapter({
                     storyId: sessionPayload.entityId,
-                    request: "【系統：載入視差宇宙節點】", // 假裝這是使用者輸入的要求
-                    content: sessionPayload.startPrompt // 將完整組裝的開場提示設定給 AI 作為上下文
+                    request: "【系統：載入視差宇宙節點】", 
+                    content: sessionPayload.startPrompt 
                 });
             } else {
                 console.warn("[OS_API_ENGINE] 找不到 OS_DB.saveVnChapter，無法儲存開場紀錄");
             }
 
-            // 3. 廣播事件讓 VN 面板監聽並刷新
             if (win.dispatchEvent) {
                 const event = new CustomEvent('VN_STORY_STARTED', { detail: sessionPayload });
                 win.dispatchEvent(event);
@@ -992,5 +971,5 @@
         }
     };
 
-    console.log('[PhoneOS] API 引擎 (V3.22 - 終極完整版：修復代碼缺失 + 完美動態人設) 就緒');
+    console.log('[PhoneOS] API 引擎 (V3.24 - 終極完整版：支援 <vars_analyze> 思考鏈) 就緒');
 })();
