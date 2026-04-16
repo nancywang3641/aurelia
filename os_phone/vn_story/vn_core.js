@@ -2735,22 +2735,28 @@
                     };
 
                     // 刪除整個故事
-                    header.querySelector('.ch-story-del').onclick = async (e) => {
-                        e.stopPropagation();
-                        const sid = group.storyId;
-                        if (!confirm(`確定刪除「${group.storyTitle}」的所有章節？\n（開場白預設不受影響）`)) return;
-                        if (sid) {
-                            await win.OS_DB.deleteVnChaptersByStoryId(sid);
-                            if (sid === window.VN_Core._currentStoryId) {
-                                window.VN_Core._setStoryId('', '');
-                            }
-                        } else {
-                            // 舊版無 storyId 資料，逐條刪除
-                            for (const ch of group.chapters) await win.OS_DB.deleteVnChapter(ch.id);
-                        }
-                        header.remove();
-                        body.remove();
-                    };
+header.querySelector('.ch-story-del').onclick = async (e) => {
+    e.stopPropagation();
+    const sid = group.storyId;
+    if (!confirm(`確定刪除「${group.storyTitle}」的所有章節？\n（開場白預設不受影響）`)) return;
+    if (sid) {
+        // 1. 刪除資料庫裡的章節
+        await win.OS_DB.deleteVnChaptersByStoryId(sid);
+        
+        // ✨ 2. 新增這兩行：同步清除遺留在 localStorage 的 AVS 變數與回朔快照
+        localStorage.removeItem(`avs_state_${sid}`);
+        localStorage.removeItem(`avs_snap_${sid}`);
+
+        if (sid === window.VN_Core._currentStoryId) {
+            window.VN_Core._setStoryId('', '');
+        }
+    } else {
+        // 舊版無 storyId 資料，逐條刪除
+        for (const ch of group.chapters) await win.OS_DB.deleteVnChapter(ch.id);
+    }
+    header.remove();
+    body.remove();
+};
 
                     // 2. 章節強制按時間「升序」（舊到新：第一章在最上面）
                     group.chapters.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
