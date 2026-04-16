@@ -63,8 +63,23 @@
         const nav = parentDoc.createElement('div');
         nav.id = CONFIG.BOTTOM_NAV_ID; 
         // 🌟 修復底部黑邊：加上 padding-bottom: env(safe-area-inset-bottom) 與 box-sizing 以適配 iPhone 底部小白條安全區域
-        nav.style.cssText = `height: 55px; background: #ffffff; border-top: 1px solid #e0e5ec; display: flex; justify-content: center; align-items: center; gap: 15px; box-shadow: 0 -5px 15px rgba(0,0,0,0.02); flex-shrink: 0; z-index: 200; position: relative; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box;`;
-
+        // 找到 nav.style.cssText 的定義，將其替換為：
+nav.style.cssText = `
+    position: absolute; 
+    bottom: 0; left: 0; right: 0;
+    /* 高度為基礎 55px 加上 iOS 安全區域 */
+    height: calc(55px + env(safe-area-inset-bottom, 0px)); 
+    background: #452216; 
+    border-top: 1px solid rgba(251,223,162,0.3);
+    display: flex; 
+    justify-content: center; 
+    /* 讓內容靠頂部排列，底部留給安全區域 */
+    align-items: flex-start; 
+    padding-top: 8px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+    z-index: 9999;
+`;
         const items = [
             { id: 'nav-home',  icon: 'fa-solid fa-cube',     active: true,  title: '大廳' },
             { id: 'nav-story', icon: 'fa-solid fa-plug',     active: false, title: 'DIVE' },
@@ -333,7 +348,8 @@
         }
 
         phoneFrame.style.cssText = `
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            position: absolute; top: 0; left: 0; right: 0;
+            height: 100%; /* 👈 讓它繼承外層的 100dvh */
             border: none; border-radius: 0; padding: 0;
             box-shadow: none; display: block; background: #fff;
         `;
