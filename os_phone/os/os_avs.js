@@ -437,6 +437,7 @@
         let snapCount = 0;
         try { snapCount = JSON.parse(localStorage.getItem(`avs_snap_${stateKey}`) || '[]').length; } catch(e) {}
 
+        // 👇 1. 在 UI 加入清理按鈕
         el.innerHTML = `
             <div class="avs-card" style="margin-bottom:12px;">
                 <div style="font-size:12px;color:rgba(251,223,162,0.45);margin-bottom:6px;">當前故事</div>
@@ -448,7 +449,11 @@
                 <div class="avs-btn avs-btn-outline" id="avs-btn-rollback" style="flex:1;padding:8px;font-size:12px;${snapCount === 0 ? 'opacity:0.4;pointer-events:none;' : ''}">
                     ↩ 還原上一步 (${snapCount})
                 </div>
-                <div class="avs-btn avs-btn-danger" id="avs-btn-clear-state" style="padding:8px;font-size:12px;">清空狀態</div>
+                <div class="avs-btn avs-btn-danger" id="avs-btn-clear-state" style="padding:8px;font-size:12px;">清空當前狀態</div>
+            </div>
+
+            <div class="avs-btn avs-btn-outline" id="avs-btn-gc" style="width:100%;margin-bottom:16px;padding:8px;font-size:12px;color:rgba(150,200,255,0.8);border-color:rgba(150,200,255,0.3);">
+                🧹 掃描並清理孤兒變數檔案
             </div>
 
             <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
@@ -475,12 +480,62 @@
             };
         }
 
-        // 清空狀態
+        // 清空當前狀態
         el.querySelector('#avs-btn-clear-state').onclick = () => {
             if (!confirm('確定清空當前故事的所有變數狀態？')) return;
             localStorage.removeItem(stateKey);
             localStorage.removeItem(`avs_snap_${stateKey}`);
             renderStateView(container);
+        };
+
+        // 👇 2. 新增垃圾回收邏輯 (Garbage Collection)
+        el.querySelector('#avs-btn-gc').onclick = async () => {
+            if (!confirm('將比對現存劇本，自動刪除已被刪除故事的殘留變數/快照。\n確定執行嗎？')) return;
+            
+            const btn = el.querySelector('#avs-btn-gc');
+            btn.textContent = '掃描中...';
+            btn.style.pointerEvents = 'none';
+
+            try {
+                // a. 取得資料庫中「真正還活著」的 storyId
+                const allChapters = await win.OS_DB.getAllVnChapters();
+                const activeIds = new Set(allChapters.map(ch => ch.storyId).filter(Boolean));
+                
+                // 保險起見，把當前 localStorage 紀錄的 current_story_id 也加入存活名單
+                const currentId = localStorage.getItem('vn_current_story_id');
+                if (currentId) activeIds.add(currentId);
+
+                // b. 掃描整個 localStorage
+                const keysToDelete = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    // 鎖定 AVS 的狀態與快照
+                    if (k && (k.startsWith('avs_state_') || k.startsWith('avs_snap_avs_state_'))) {
+                        // 剝離前綴，提取出真正的 storyId
+                        const extractedId = k.replace('avs_snap_avs_state_', '').replace('avs_state_', '');
+                        
+                        // 如果這個 ID 不是公用默認值，且不在「存活名單」內，就是孤兒
+                        if (extractedId !== 'avs_current_state' && extractedId !== '' && !activeIds.has(extractedId)) {
+                            keysToDelete.push(k);
+                        }
+                    }
+                }
+
+                // c. 執行刪除
+                keysToDelete.forEach(k => localStorage.removeItem(k));
+
+                // d. 顯示結果
+                setTimeout(() => {
+                    alert(`✅ 清理完成！\n共回收了 ${keysToDelete.length} 筆孤兒變數垃圾。`);
+                    renderStateView(container);
+                }, 300);
+
+            } catch (e) {
+                console.error('[AVS GC]', e);
+                alert('清理失敗: ' + e.message);
+                btn.textContent = '🧹 掃描並清理孤兒變數檔案';
+                btn.style.pointerEvents = 'auto';
+            }
         };
 
         // 從 Pack 初始化
