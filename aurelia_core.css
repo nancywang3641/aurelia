@@ -8,24 +8,30 @@
 
 html, body {
     position: fixed;
-    /* 用 inset: 0 (四邊都是 0) 錨定到真實螢幕邊界，避免 100dvh 在 iOS PWA
-       standalone 模式下四捨五入差 1-2px 而露出底部黑條 */
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0; left: 0; right: 0; 
+    /* ❌ 拿掉 bottom: 0 */
+    height: 100vh;
+    height: 100dvh; /* ✅ 用 100dvh 強制穿透安全區域 */
     width: 100%;
     overflow: hidden;
-    background: #1a0d0a;
-    font-family: 'Noto Sans TC', 'PingFang TC', sans-serif;
+    background: #452216; /* ✅ 關鍵：讓最底層背景色與導覽列相同，完美隱藏縫隙 */
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     overscroll-behavior: none;
 }
 
+/* 為了讓 404 模式也能完美無縫，順手加上這行： */
+body.mode-404 { background: #000000; }
+
 #aurelia-standalone-root {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0; left: 0; right: 0;
+    /* ❌ 拿掉 bottom: 0 */
+    height: 100%; /* ✅ 繼承 100dvh */
     width: 100%;
     overflow: hidden;
 }
+
 
 #aurelia-embedded-root {
     height: 100% !important;
