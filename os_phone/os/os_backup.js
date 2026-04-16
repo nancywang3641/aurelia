@@ -1,18 +1,17 @@
 // ----------------------------------------------------------------
-// [檔案] os_backup.js (V1.0)
+// [檔案] os_backup.js (V2.0 - 終極全量備份版：支援 AVS 與 VN V16)
 // 路徑：os_phone/os/os_backup.js
 // 職責：統一資料備份引擎
-//   - 備份目標：IndexedDB 重要倉庫 + localStorage 設定
-//   - 雲端：GitHub Gist（輕量必要資料）
-//   - 本地：JSON 檔案匯出入（包含大型資料）
-//   - VN 故事文本量大，預設僅本地匯出，不走 Gist
+//   - 備份目標：IndexedDB 所有重要倉庫 + localStorage 設定
+//   - 雲端：GitHub Gist（僅限世界書/寵物等輕量必要資料）
+//   - 本地：JSON 檔案匯出入（100% 包含 AVS、VN章節、聊天紀錄等大型資料）
 // ----------------------------------------------------------------
 (function () {
     'use strict';
     const win = window.parent || window;
     const LSKEY = 'os_backup_settings';
 
-    // localStorage 中需要備份的 key 列表（不含敏感 token）
+    // 🔥 V2.0 升級：加入所有 AVS 與系統核心的 LocalStorage Keys
     const LS_BACKUP_KEYS = [
         'os_global_config',           // 主模型設定
         'os_secondary_llm_config',    // 副模型設定
@@ -22,6 +21,12 @@
         'vn_cfg_v4',                  // VN 面板設定
         'os_persona_data',            // 人設資料
         'os_economy_data',            // 錢包餘額/交易
+        'avs_current_state',          // [AVS] 當前全局動態變數 JSON 狀態
+        'avs_active_ui_templates',    // [AVS] 當前啟用的美化面板快取
+        'vn_current_story_id',        // [VN] 當前故事 ID
+        'vn_current_story_title',     // [VN] 當前故事顯示名
+        'vn_prompt_order',            // [VN] 提示詞順序
+        'wx_phone_api_config'         // 微信設定
     ];
 
     // ── 設定讀寫 ─────────────────────────────────────────────────────
@@ -30,107 +35,18 @@
     }
     function saveSettings(s) { localStorage.setItem(LSKEY, JSON.stringify(s)); }
 
-    // ── 資料收集 ─────────────────────────────────────────────────────
-    async function collectDB(opts) {
-        const db = win.OS_DB;
-        const out = {};
-        try {
-            if (opts.worldbook !== false && db?.getAllWorldbookEntries)
-                out.worldbook = await db.getAllWorldbookEntries();
-
-            if (opts.pets !== false && db?.getAllPets)
-                out.pets = await db.getAllPets();
-
-            if (opts.achievements !== false && db?.getAllAchievements)
-                out.achievements = await db.getAllAchievements().catch(() => []);
-
-            if (opts.petLogs && db) {
-                // pet_logs 可能很大，只在全量備份時收集
-                out.petLogs = await _getStore('pet_logs').catch(() => []);
-            }
-        } catch(e) { console.warn('[OS_BACKUP] DB 收集部分失敗:', e); }
-        return out;
-    }
-
-    function collectLocalStorage() {
-        const out = {};
-        LS_BACKUP_KEYS.forEach(k => {
-            const v = localStorage.getItem(k);
-            if (v !== null) out[k] = v; // 保留原始字串，還原時直接 setItem
-        });
-        return out;
-    }
-
-    // 通用 IndexedDB getAll（用於 pet_logs 等沒有封裝方法的倉庫）
+    // ── 通用 IndexedDB 方法 ──────────────────────────────────────────
     function _getStore(storeName) {
         return new Promise(async (resolve, reject) => {
             try {
+                if (!win.OS_DB) return resolve([]);
                 const db = await win.OS_DB.init();
                 const tx = db.transaction(storeName, 'readonly');
                 const req = tx.objectStore(storeName).getAll();
                 req.onsuccess = () => resolve(req.result || []);
                 req.onerror = e => reject(e.target.error);
-            } catch(e) { reject(e); }
+            } catch(e) { resolve([]); } // 若該倉庫不存在則回傳空陣列
         });
-    }
-
-    // ── 全量資料打包（本地匯出用） ────────────────────────────────────
-    async function collectAll(opts = {}) {
-        const dbData = await collectDB({ ...opts, petLogs: opts.petLogs !== false });
-        return {
-            version: 2,
-            exportedAt: new Date().toISOString(),
-            type: 'full',
-            db: dbData,
-            localStorage: collectLocalStorage()
-        };
-    }
-
-    // ── Gist 備份資料打包（只含輕量必要資料） ─────────────────────────
-    async function collectEssential() {
-        const dbData = await collectDB({ worldbook: true, pets: true, achievements: true, petLogs: false });
-        return {
-            version: 2,
-            exportedAt: new Date().toISOString(),
-            type: 'essential',
-            db: dbData,
-            localStorage: collectLocalStorage()
-        };
-    }
-
-    // ── 還原資料 ──────────────────────────────────────────────────────
-    async function applyData(data, opts = {}) {
-        const db = win.OS_DB;
-        let restored = { worldbook: 0, pets: 0, achievements: 0, localStorage: 0 };
-
-        // IndexedDB
-        if (data.db) {
-            const d = data.db;
-            if (d.worldbook?.length && db?.saveWorldbookEntry) {
-                for (const e of d.worldbook) await db.saveWorldbookEntry(e);
-                restored.worldbook = d.worldbook.length;
-            }
-            if (d.pets?.length && db?.savePet) {
-                for (const e of d.pets) await db.savePet(e);
-                restored.pets = d.pets.length;
-            }
-            if (d.achievements?.length && db) {
-                for (const e of d.achievements) {
-                    await _putStore('achievements', e).catch(() => {});
-                }
-                restored.achievements = d.achievements.length;
-            }
-        }
-
-        // localStorage
-        if (data.localStorage && opts.restoreSettings !== false) {
-            Object.entries(data.localStorage).forEach(([k, v]) => {
-                localStorage.setItem(k, v);
-                restored.localStorage++;
-            });
-        }
-
-        return restored;
     }
 
     function _putStore(storeName, entry) {
@@ -145,6 +61,130 @@
         });
     }
 
+    // ── 資料收集 ─────────────────────────────────────────────────────
+    async function collectDB(opts) {
+        const out = {};
+        try {
+            // 🌟 1. 輕量資料 (Gist 與本地都會備份)
+            if (opts.worldbook !== false) out.worldbook = await _getStore('world_book_entries');
+            if (opts.pets !== false) out.pets = await _getStore('pets');
+            if (opts.achievements !== false) out.achievements = await _getStore('achievements');
+
+            // 🌟 2. 全量資料 (僅限本地 JSON 打包)
+            if (opts.fullExport) {
+                out.petLogs = await _getStore('pet_logs');
+                
+                // 🔥 新增：AVS 變數工坊資料
+                out.varPacks = await _getStore('var_packs');
+                out.uiTemplates = await _getStore('ui_templates');
+                
+                // 🔥 新增：VN 視覺小說長線劇本
+                out.vnChapters = await _getStore('vn_chapters');
+                
+                // 🔥 新增：各類聊天與歷史紀錄
+                out.apiChats = await _getStore('api_chats');
+                out.childChatHistory = await _getStore('child_chat_history');
+                out.wbPosts = await _getStore('wb_posts');
+                out.lobbyHistory = await _getStore('lobby_history');
+            }
+        } catch(e) { console.warn('[OS_BACKUP] DB 收集部分失敗:', e); }
+        return out;
+    }
+
+    function collectLocalStorage() {
+        const out = {};
+        LS_BACKUP_KEYS.forEach(k => {
+            const v = localStorage.getItem(k);
+            if (v !== null) out[k] = v; 
+        });
+        return out;
+    }
+
+    // ── 全量資料打包（本地匯出用） ────────────────────────────────────
+    async function collectAll(opts = {}) {
+        // 強制開啟全量收集模式
+        const dbData = await collectDB({ ...opts, fullExport: true });
+        return {
+            version: 3, // 升級為 V3 備份格式
+            exportedAt: new Date().toISOString(),
+            type: 'full',
+            db: dbData,
+            localStorage: collectLocalStorage()
+        };
+    }
+
+    // ── Gist 備份資料打包（只含輕量必要資料） ─────────────────────────
+    async function collectEssential() {
+        const dbData = await collectDB({ worldbook: true, pets: true, achievements: true, fullExport: false });
+        return {
+            version: 3,
+            exportedAt: new Date().toISOString(),
+            type: 'essential',
+            db: dbData,
+            localStorage: collectLocalStorage()
+        };
+    }
+
+    // ── 還原資料 ──────────────────────────────────────────────────────
+    async function applyData(data, opts = {}) {
+        let restored = { worldbook: 0, pets: 0, achievements: 0, localStorage: 0, avs: 0, vn: 0, chats: 0 };
+
+        // IndexedDB 恢復
+        if (data.db) {
+            const d = data.db;
+            
+            // 恢復基礎資料
+            if (d.worldbook?.length) {
+                for (const e of d.worldbook) await _putStore('world_book_entries', e).catch(()=>{});
+                restored.worldbook = d.worldbook.length;
+            }
+            if (d.pets?.length) {
+                for (const e of d.pets) await _putStore('pets', e).catch(()=>{});
+                restored.pets = d.pets.length;
+            }
+            if (d.achievements?.length) {
+                for (const e of d.achievements) await _putStore('achievements', e).catch(()=>{});
+                restored.achievements = d.achievements.length;
+            }
+
+            // 恢復 AVS 資料
+            if (d.varPacks?.length) {
+                for (const e of d.varPacks) await _putStore('var_packs', e).catch(()=>{});
+                restored.avs += d.varPacks.length;
+            }
+            if (d.uiTemplates?.length) {
+                for (const e of d.uiTemplates) await _putStore('ui_templates', e).catch(()=>{});
+                restored.avs += d.uiTemplates.length;
+            }
+
+            // 恢復 VN 資料
+            if (d.vnChapters?.length) {
+                for (const e of d.vnChapters) await _putStore('vn_chapters', e).catch(()=>{});
+                restored.vn += d.vnChapters.length;
+            }
+
+            // 恢復其他歷史紀錄
+            if (d.petLogs?.length) for (const e of d.petLogs) await _putStore('pet_logs', e).catch(()=>{});
+            if (d.apiChats?.length) {
+                for (const e of d.apiChats) await _putStore('api_chats', e).catch(()=>{});
+                restored.chats += d.apiChats.length;
+            }
+            if (d.childChatHistory?.length) for (const e of d.childChatHistory) await _putStore('child_chat_history', e).catch(()=>{});
+            if (d.wbPosts?.length) for (const e of d.wbPosts) await _putStore('wb_posts', e).catch(()=>{});
+            if (d.lobbyHistory?.length) for (const e of d.lobbyHistory) await _putStore('lobby_history', e).catch(()=>{});
+        }
+
+        // LocalStorage 恢復
+        if (data.localStorage && opts.restoreSettings !== false) {
+            Object.entries(data.localStorage).forEach(([k, v]) => {
+                localStorage.setItem(k, v);
+                restored.localStorage++;
+            });
+        }
+
+        return restored;
+    }
+
     // ── GitHub Gist API ───────────────────────────────────────────────
     async function gistBackup() {
         const s = getSettings();
@@ -153,14 +193,14 @@
         const data = await collectEssential();
         const content = JSON.stringify(data, null, 2);
 
-        // 檢查大小（Gist 單檔上限約 10MB，超過提醒用戶改用本地匯出）
+        // 檢查大小（Gist 單檔上限約 10MB）
         const sizeKB = Math.round(new Blob([content]).size / 1024);
-        if (sizeKB > 8192) throw new Error(`資料量過大（${sizeKB}KB），請改用「本地匯出」備份大型資料`);
+        if (sizeKB > 8192) throw new Error(`資料量過大（${sizeKB}KB），請改用「本地匯出」備份`);
 
         const body = { files: { 'aurelia-backup.json': { content } } };
         let url = 'https://api.github.com/gists', method = 'POST';
         if (s.gistId) { url += '/' + s.gistId; method = 'PATCH'; }
-        else { body.description = '奧瑞亞系統統一備份 V2'; body.public = false; }
+        else { body.description = '奧瑞亞系統統一備份 V3'; body.public = false; }
 
         const res = await fetch(url, {
             method,
@@ -192,12 +232,8 @@
     }
 
     // ── 本地匯出入 ────────────────────────────────────────────────────
-    async function exportLocal(includeVN = false) {
-        const data = await collectAll({ petLogs: true });
-        if (includeVN) {
-            // 預留：VN 故事存檔（未來接入後在這裡補充）
-            // data.db.vnSessions = await _getStore('vn_sessions').catch(() => []);
-        }
+    async function exportLocal() {
+        const data = await collectAll();
         const content = JSON.stringify(data, null, 2);
         const sizeKB = Math.round(new Blob([content]).size / 1024);
         const blob = new Blob([content], { type: 'application/json' });
@@ -215,10 +251,14 @@
         return applyData(data, opts);
     }
 
-    // ── 儲存空間估算 ──────────────────────────────────────────────────
+    // ── 儲存空間估算 (包含所有 V16 倉庫) ────────────────────────────────
     async function estimateSize() {
         const results = {};
-        const stores = ['world_book_entries', 'pets', 'pet_logs', 'achievements', 'child_chat_history'];
+        // 將 AVS 和 VN 加入掃描清單
+        const stores = [
+            'world_book_entries', 'pets', 'pet_logs', 'achievements', 
+            'child_chat_history', 'var_packs', 'ui_templates', 'vn_chapters', 'api_chats'
+        ];
         for (const s of stores) {
             try {
                 const items = await _getStore(s);
@@ -243,5 +283,5 @@
         collectAll,
     };
 
-    console.log('[PhoneOS] ✅ 統一備份引擎 (OS_BACKUP V1.0) 已載入');
+    console.log('[PhoneOS] ✅ 統一備份引擎 (OS_BACKUP V2.0 - 支援 AVS 與 VN) 已載入');
 })();

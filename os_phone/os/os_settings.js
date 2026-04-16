@@ -1,12 +1,13 @@
 // ----------------------------------------------------------------
-// [檔案] os_settings.js (V5.6.3 - Aurelia Style & Sync Primary URL)
+// [檔案] os_settings.js (V6.0.0 - Aurelia Style, Sync Primary URL & Factory Reset)
 // 職責：管理 PhoneOS 全域設定
 // 修改：
 // 1. 全面套用 Aurelia 核心 CSS (拿鐵色/流金/磨砂玻璃)，統一系統視覺。
 // 2. 副模型新增「同步主模型 API 端點」拉桿，自動繼承 URL/Key。
+// 3. 🔥 新增：核彈級「一鍵格式化」雙重確認清空數據功能。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入系統設置模塊 (V5.6.3 Aurelia Style & Sync)...');
+    console.log('[PhoneOS] 載入系統設置模塊 (V6.0.0 Aurelia Style & Sync & Reset)...');
 
     // 定義系統級樣式 (全面替換為 Aurelia 咖啡流金風格)
     const appStyle = `
@@ -59,6 +60,14 @@
         .btn-save:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(251,223,162,0.4); }
         .btn-test { padding: 12px; border-radius: 4px; text-align: center; font-weight: 800; cursor: pointer; margin-top: 10px; background: rgba(251,223,162,0.1); color: #FBDFA2; border: 1px solid rgba(251,223,162,0.4); transition: all 0.2s; }
         .btn-test:hover { background: rgba(251,223,162,0.2); border-color: #FBDFA2; }
+        
+        /* 🔥 新增：危險區域與格式化按鈕 */
+        .danger-zone { margin-top: 30px; border: 1px solid rgba(252, 129, 129, 0.3); background: rgba(252, 129, 129, 0.05); padding: 15px; border-radius: 12px; }
+        .danger-zone h3 { color: #fc8181; font-size: 15px; margin-bottom: 8px; font-weight: bold; }
+        .danger-zone p { font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 12px; line-height: 1.4; }
+        .btn-danger { padding: 12px; border-radius: 4px; text-align: center; font-weight: 800; cursor: pointer; background: rgba(252, 129, 129, 0.2); color: #fc8181; border: 1px solid rgba(252, 129, 129, 0.5); transition: all 0.2s; }
+        .btn-danger:hover { background: rgba(252, 129, 129, 0.3); box-shadow: 0 0 10px rgba(252, 129, 129, 0.3); }
+
         .toggle-switch { position: relative; width: 42px; height: 22px; flex-shrink: 0; }
         .toggle-switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(69, 34, 22, 0.6); border: 1px solid rgba(251,223,162,0.3); transition: .3s; border-radius: 22px; }
@@ -833,6 +842,12 @@
                             <input type="file" id="bk-file-input" accept=".json" style="display:none;" />
                         </div>
 
+                        <div class="danger-zone">
+                            <h3><i class="fa-solid fa-triangle-exclamation"></i> 危險區域：一鍵格式化</h3>
+                            <p>此操作將徹底刪除所有本地資料庫（包含角色、對話、長線劇情、變數工坊、寵物與系統設定）。操作後將自動重整網頁。請務必先進行備份！</p>
+                            <div class="btn-danger" id="bk-format-btn">💥 格式化並清空所有數據</div>
+                        </div>
+
                         <div id="bk-status" style="font-size:12px; color:#B78456; text-align:center; padding:10px 0; min-height:20px;"></div>
                     </div>
 
@@ -1309,7 +1324,7 @@
                 const minimaxData = mmGroupId ? {
                     enabled:              mmEnabled  ? mmEnabled.checked        : false,
                     groupId:              mmGroupId.value.trim(),
-                    apiKey:               mmApiKey   ? mmApiKey.value.trim()     : '',
+                    apiKey:               mmApiKey   ? mmApiKey.value.trim()      : '',
                     provider:             mmProvider ? mmProvider.value          : 'cn',
                     speechModel:          mmModel    ? mmModel.value             : 'speech-01-turbo',
                     defaultSpeed:         mmSpeed    ? parseFloat(mmSpeed.value) : 1.0,
@@ -1931,6 +1946,42 @@
             } catch(e) { setStatus('❌ 匯入失敗：' + e.message, '#fc8181'); }
             e.target.value = '';
         });
+
+        // 🔥 新增：一鍵格式化邏輯
+        const btnFormat = container.querySelector('#bk-format-btn');
+        if (btnFormat) {
+            btnFormat.addEventListener('click', async () => {
+                const firstConfirm = confirm('⚠️ 警告：即將清空所有系統數據！這將徹底刪除你的所有劇情、對話、變數和設定！\n\n確定要繼續嗎？');
+                if (!firstConfirm) return;
+                
+                const secondConfirm = confirm('🛑 最終防線：資料刪除後無法恢復（宛如物理超渡）。\n請確保你已經匯出了備份檔。\n\n真的要徹底格式化嗎？');
+                if (!secondConfirm) return;
+
+                setBtnLoading(btnFormat, '格式化中...');
+                setStatus('💥 正在執行全系統格式化，請勿關閉網頁...', '#fc8181');
+                
+                try {
+                    // 清除 LocalStorage
+                    localStorage.clear();
+                    
+                    // 呼叫 OS_DB 的核彈接口
+                    const win = window.parent || window;
+                    if (win.OS_DB && typeof win.OS_DB.factoryReset === 'function') {
+                        await win.OS_DB.factoryReset();
+                    } else {
+                        console.warn('[PhoneOS] 找不到 OS_DB.factoryReset，僅執行 localStorage 清理');
+                    }
+                    
+                    setStatus('✅ 格式化完成！系統即將重生...', '#b8ffcb');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } catch (e) {
+                    setStatus('❌ 格式化失敗：' + e.message, '#fc8181');
+                    setBtnDone(btnFormat, '💥 格式化並清空所有數據');
+                }
+            });
+        }
     }
 
     window.OS_SETTINGS.launchApp = launchApp;

@@ -774,5 +774,34 @@
         }
     });
 
+    // =========================================================
+    // 🔥 系統級接口：一鍵格式化 (Factory Reset)
+    // =========================================================
+    Object.assign(win.OS_DB, {
+        factoryReset: async function() {
+            return new Promise((resolve, reject) => {
+                try {
+                    if (dbInstance) {
+                        dbInstance.close();
+                        dbInstance = null;
+                    }
+                    const req = indexedDB.deleteDatabase(DB_NAME);
+                    req.onsuccess = () => {
+                        console.log('[OS_DB] 💥 資料庫已徹底格式化刪除 (Factory Reset)');
+                        resolve(true);
+                    };
+                    req.onerror = (e) => {
+                        console.error('[OS_DB] 格式化失敗:', e.target.error);
+                        reject(e.target.error);
+                    };
+                    req.onblocked = () => {
+                        console.warn('[OS_DB] 格式化被阻塞，請確保沒有其他分頁正在使用資料庫');
+                        resolve(false);
+                    };
+                } catch(e) { reject(e); }
+            });
+        }
+    });
+
     win.WX_DB = win.OS_DB;
 })();
