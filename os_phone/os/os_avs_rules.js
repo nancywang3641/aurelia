@@ -201,8 +201,23 @@
         background:rgba(127,179,211,0.12); border:1px solid rgba(127,179,211,0.25);
         padding:1px 6px; border-radius:3px; font-weight:400; }
 
-    /* 編輯面板 */
-    .avsr-editor { position:absolute; inset:0; background:rgba(10,8,6,0.97);
+
+    /* 編輯面板 (修正壓扁問題，改為全域浮動視窗) */
+    .avsr-editor { 
+        position: fixed; 
+        top: calc(115px + env(safe-area-inset-top, 0px)); 
+        bottom: calc(90px + env(safe-area-inset-bottom, 0px)); /* 👈 拉高距離避開底部導覽列 */
+        left: 15px; 
+        right: 15px; 
+        background: rgba(26, 13, 10, 0.98); 
+        border: 1px solid rgba(251, 223, 162, 0.4);
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        z-index: 9999; 
+        display: flex; 
+        flex-direction: column; 
+        overflow: hidden; 
+    }
         z-index:100; display:flex; flex-direction:column; overflow:hidden; }
     .avsr-editor.hidden { display:none; }
     .avsr-editor-header { display:flex; align-items:center; padding:12px 14px;
@@ -493,38 +508,38 @@
             <div class="avsr-editor-body">
                 <div class="avsr-field">
                     <label>規則名稱（備忘用）</label>
-                    <input id="avsr-f-name" placeholder="例：王小明 親密行為" value="${_esc(rule.name || '')}">
+                    <input class="avs-input" id="avsr-f-name" placeholder="例：王小明 親密行為" value="${_esc(rule.name || '')}">
                 </div>
                 <div class="avsr-field">
                     <label>觸發條件</label>
                     <div class="avsr-cond-row">
-                        <input id="avsr-f-path" list="${datalistId}"
+                        <input class="avs-input" id="avsr-f-path" list="${datalistId}"
                             placeholder="點選或手動輸入變數路徑"
                             value="${_esc(rule.path || '')}"
                             autocomplete="off">
-                        <select id="avsr-f-op">
+                        <select class="avs-select" id="avsr-f-op" style="padding:10px;">
                             ${['>=','<=','>','<','=','!='].map(o => `<option${o===rule.op?' selected':''}>${o}</option>`).join('')}
                         </select>
-                        <input id="avsr-f-val" placeholder="值" value="${_esc(String(rule.value ?? ''))}">
+                        <input class="avs-input" id="avsr-f-val" placeholder="值" value="${_esc(String(rule.value ?? ''))}">
                     </div>
                     ${hintHtml}
                 </div>
                 <div class="avsr-field">
                     <label>注入文字（條件成立時送給 AI）</label>
-                    <textarea id="avsr-f-content" placeholder="例：王小明此時對你非常親密，會主動拉近距離，說話語氣溫柔...">${_esc(rule.content || '')}</textarea>
+                    <textarea class="avs-textarea" id="avsr-f-content" placeholder="例：王小明此時對你非常親密，會主動拉近距離，說話語氣溫柔...">${_esc(rule.content || '')}</textarea>
                 </div>
                 <div class="avsr-field">
                     <label>分組名稱（選填，同名的規則會視覺上靠在一起）</label>
-                    <input id="avsr-f-folder" placeholder="例：好感度系列、危機狀態、戰鬥規則…" value="${_esc(rule.folder || '')}">
+                    <input class="avs-input" id="avsr-f-folder" placeholder="例：好感度系列、危機狀態、戰鬥規則…" value="${_esc(rule.folder || '')}">
                 </div>
                 <div class="avsr-field">
                     <label>優先度（數字越小越優先，預設 50）</label>
-                    <input id="avsr-f-priority" type="number" value="${rule.priority ?? 50}">
+                    <input class="avs-input" id="avsr-f-priority" type="number" value="${rule.priority ?? 50}">
                 </div>
             </div>
-            <div class="avsr-editor-footer">
-                <button class="avsr-btn-cancel" id="avsr-cancel">取消</button>
-                <button class="avsr-btn-save" id="avsr-save">儲存</button>
+            <div class="avsr-editor-footer" style="gap: 10px;">
+                <button class="avs-btn avs-btn-outline" id="avsr-cancel" style="flex:1;">取消</button>
+                <button class="avs-btn avs-btn-primary" id="avsr-save" style="flex:1;">儲存</button>
             </div>
         `;
 
@@ -698,41 +713,41 @@
 
         editorEl.innerHTML = `
             <div class="avsr-editor-header">
-                <button class="avsr-btn-cancel" id="avsm-back">←</button>
-                <span class="avsr-editor-title">${isNew ? '新增模式' : '編輯模式'}</span>
+                <button class="avs-btn avs-btn-outline" id="avsm-back" style="padding: 4px 12px; font-size: 16px;">←</button>
+                <span class="avsr-editor-title" style="margin-left: 8px;">${isNew ? '新增模式' : '編輯模式'}</span>
             </div>
             <div class="avsr-editor-body">
                 <div style="display:flex;gap:10px;">
                     <div class="avsr-field" style="width:68px;flex-shrink:0;">
                         <label>圖示</label>
-                        <input id="avsm-f-icon" value="${_esc(existing?.icon || '')}" placeholder="🎭"
+                        <input class="avs-input" id="avsm-f-icon" value="${_esc(existing?.icon || '')}" placeholder="🎭"
                             style="text-align:center;font-size:20px;padding:6px 4px;">
                     </div>
                     <div class="avsr-field" style="flex:1;">
                         <label>模式名稱</label>
-                        <input id="avsm-f-name" value="${_esc(existing?.name || '')}" placeholder="戰鬥模式">
+                        <input class="avs-input" id="avsm-f-name" value="${_esc(existing?.name || '')}" placeholder="戰鬥模式">
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;">
                     <div class="avsr-field" style="flex:1;">
                         <label>變數路徑（預設 mode）</label>
-                        <input id="avsm-f-path" value="${_esc(existing?.path || 'mode')}" placeholder="mode">
+                        <input class="avs-input" id="avsm-f-path" value="${_esc(existing?.path || 'mode')}" placeholder="mode">
                     </div>
                     <div class="avsr-field" style="flex:1;">
                         <label>觸發值</label>
-                        <input id="avsm-f-value" value="${_esc(existing?.value || '')}" placeholder="combat">
+                        <input class="avs-input" id="avsm-f-value" value="${_esc(existing?.value || '')}" placeholder="combat">
                     </div>
                 </div>
                 <div class="avsr-field">
                     <label>注入文字（條件成立時插入給 AI 的行為指令）</label>
-                    <textarea id="avsm-f-content" style="min-height:110px;"
+                    <textarea class="avs-textarea" id="avsm-f-content" style="min-height:110px;"
                         placeholder="例：使用短句，動作節奏優先，回覆不超過3段，避免大段心理描寫。">${_esc(existing?.content || '')}</textarea>
                 </div>
                 <div class="avsm-hint" id="avsm-live-hint" style="margin-top:0;"></div>
             </div>
-            <div class="avsr-editor-footer">
-                <button class="avsr-btn-cancel" id="avsm-cancel">取消</button>
-                <button class="avsr-btn-save"   id="avsm-save">儲存</button>
+            <div class="avsr-editor-footer" style="gap: 10px;">
+                <button class="avs-btn avs-btn-outline" id="avsm-cancel" style="flex:1;">取消</button>
+                <button class="avs-btn avs-btn-primary" id="avsm-save" style="flex:1;">儲存</button>
             </div>
         `;
         editorEl.classList.remove('hidden');
