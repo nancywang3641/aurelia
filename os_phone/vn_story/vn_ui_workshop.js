@@ -8,7 +8,7 @@
 
     const workshopStyle = `
         .vn-ws-container { width: 100%; height: 100%; background: #1a0d0a; color: #FFF8E7; display: flex; flex-direction: column; font-family: 'Noto Sans TC', sans-serif; position: relative; z-index: 9999; }
-        .vn-ws-header { padding: 15px 20px; background: rgba(69,34,22,0.9); border-bottom: 1px solid rgba(251,223,162,0.3); display: flex; justify-content: space-between; align-items: center; }
+        .vn-ws-header { padding: calc(15px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 15px; background: rgba(69,34,22,0.9); border-bottom: 1px solid rgba(251,223,162,0.3); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
         .vn-ws-title { font-size: 18px; font-weight: bold; color: #FBDFA2; display: flex; align-items: center; gap: 10px; }
         .vn-ws-close { background: none; border: none; color: #FBDFA2; font-size: 20px; cursor: pointer; }
         .vn-ws-idea-btn { background: rgba(251,223,162,0.2); border: 1px solid #FBDFA2; color: #FBDFA2; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; transition: 0.2s; }

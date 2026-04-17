@@ -285,7 +285,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 📖 劇情閱讀器 */
         #vn-reader-overlay { position: absolute; inset: 0; background: rgba(6,6,10,0.98); z-index: 70; display: none; flex-direction: column; }
         #vn-reader-overlay.active { display: flex; }
-        #vn-reader-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid rgba(212,175,55,0.2); flex-shrink: 0; }
+        #vn-reader-header { display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 14px; border-bottom: 1px solid rgba(212,175,55,0.2); flex-shrink: 0; box-sizing: border-box; }
         #vn-reader-title { color: var(--gold); font-family: var(--font-classic); font-size: 1rem; letter-spacing: 2px; }
         #vn-reader-close { color: #666; font-size: 1.6rem; cursor: pointer; transition: color 0.2s; }
         #vn-reader-close:hover { color: var(--gold); }
@@ -853,7 +853,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-bgm-toast.notfound #vn-bgm-name { color: rgba(255,180,180,0.85); text-decoration: line-through; }
 
         /* --- Log 面板 --- */
-        #vn-log-overlay { background: rgba(10,10,12,0.95); z-index: 60; display: flex; flex-direction: column; padding: 40px 0; box-sizing: border-box; }
+        #vn-log-overlay { background: rgba(10,10,12,0.95); z-index: 60; display: flex; flex-direction: column; padding: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 20px) 0 20px; box-sizing: border-box; }
         #vn-log-header { display: flex; justify-content: space-between; align-items: center; padding: 0 50px 20px; border-bottom: 1px solid rgba(212,175,55,0.25); margin-bottom: 20px; width:100%; box-sizing:border-box;}
         #vn-log-title { color: var(--gold); font-size: 1.2rem; font-family: var(--font-sans); font-weight: bold; letter-spacing: 2px; }
         .vn-log-close { color: #888; font-size: 1.8rem; cursor: pointer; transition: 0.2s; }
@@ -885,7 +885,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             animation: pulseOp 2s infinite;
         }
 
-        #game-settings-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 60; display: flex; justify-content: center; align-items: center; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
+        #game-settings-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 60; display: flex; justify-content: center; align-items: center; padding-top: var(--safe-top, env(safe-area-inset-top, 0px)); padding-bottom: var(--safe-bottom, env(safe-area-inset-bottom, 0px)); box-sizing: border-box; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
         #game-settings-overlay.active { opacity: 1; pointer-events: auto; }
         #game-settings-window { width: calc(100% - 30px); max-width: 410px; max-height: calc(100% - 40px); background: linear-gradient(135deg, #111 0%, #050505 100%); border: 1px solid var(--glass-border); border-radius: 2px; box-shadow: 0 20px 60px rgba(0,0,0,0.9); display: flex; flex-direction: column; transform: scale(0.98) translateY(10px); opacity: 0; transition: transform 0.4s, opacity 0.4s; overflow: hidden; }
         #game-settings-overlay.active #game-settings-window { transform: scale(1) translateY(0); opacity: 1; }

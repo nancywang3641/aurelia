@@ -368,16 +368,16 @@
         // ── 獨立模式：JS 強制把底部導覽列釘死到真實視口底部 ──
         // 這是 CSS position:fixed 的保險層，確保即使 CSS 快取還是舊版也能正確定位
         if (isStandalone) {
-            requestAnimationFrame(function _fixNav() {
+            function applyNavFix() {
                 const nav = document.getElementById('aurelia-bottom-nav');
                 const tabCont = document.getElementById('aurelia-tab-container');
-                if (!nav) { requestAnimationFrame(_fixNav); return; }
+                if (!nav) return false;
 
                 // 讀取真實 safe-area（iOS home indicator 區域）
-                // 用 CSS 變數取得 env() 值，JS 無法直接讀取 env()
+                // 建立臨時 DOM 元素量測 env(safe-area-inset-bottom) 的實際像素值
                 const safeAreaBottom = (() => {
                     const el = document.createElement('div');
-                    el.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);width:0;pointer-events:none;';
+                    el.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);width:0;pointer-events:none;visibility:hidden;';
                     document.body.appendChild(el);
                     const h = el.offsetHeight || 0;
                     document.body.removeChild(el);
@@ -386,18 +386,19 @@
 
                 const NAV_H = 55; // nav 可見內容高度 px
 
-                // 強制 nav 貼底
-                nav.style.setProperty('position', 'fixed',   'important');
-                nav.style.setProperty('bottom',   '0px',     'important');
-                nav.style.setProperty('left',     '0px',     'important');
-                nav.style.setProperty('right',    '0px',     'important');
-                nav.style.setProperty('width',    '100%',    'important');
-                nav.style.setProperty('height',   NAV_H + 'px', 'important');
-                nav.style.setProperty('padding-bottom', safeAreaBottom + 'px', 'important');
-                nav.style.setProperty('box-sizing', 'content-box', 'important');
-                nav.style.setProperty('align-items', 'center', 'important');
+                // 強制 nav 貼底（inline !important 覆蓋所有 CSS）
+                nav.style.setProperty('position',       'fixed',             'important');
+                nav.style.setProperty('bottom',         '0px',               'important');
+                nav.style.setProperty('left',           '0px',               'important');
+                nav.style.setProperty('right',          '0px',               'important');
+                nav.style.setProperty('width',          '100%',              'important');
+                nav.style.setProperty('height',         NAV_H + 'px',        'important');
+                nav.style.setProperty('padding-bottom', safeAreaBottom + 'px','important');
+                nav.style.setProperty('box-sizing',     'content-box',       'important');
+                nav.style.setProperty('align-items',    'center',            'important');
+                nav.style.setProperty('z-index',        '9999',              'important');
 
-                // tab 容器：填滿 nav 上方空間
+                // tab 容器：position:absolute 填滿 nav 上方空間
                 if (tabCont) {
                     const totalNavH = NAV_H + safeAreaBottom;
                     tabCont.style.setProperty('position', 'absolute', 'important');
@@ -408,6 +409,20 @@
                     tabCont.style.setProperty('flex',   'none',            'important');
                     tabCont.style.setProperty('height', 'auto',            'important');
                 }
+                return true;
+            }
+
+            // 初始修正：nav 可能尚未掛載，持續重試直到成功
+            requestAnimationFrame(function _fixNav() {
+                if (!applyNavFix()) requestAnimationFrame(_fixNav);
+            });
+
+            // 螢幕旋轉時 safe-area-inset 會改變，重新套用修正
+            window.addEventListener('orientationchange', function() {
+                setTimeout(applyNavFix, 300); // 等待旋轉動畫完成再量測
+            });
+            window.addEventListener('resize', function() {
+                applyNavFix();
             });
         }
 

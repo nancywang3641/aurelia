@@ -12,7 +12,7 @@
         .studio-left { flex: 1; display: flex; flex-direction: column; border-right: 1px solid rgba(251,223,162,0.3); background: rgba(0,0,0,0.2); min-width: 300px; }
         .studio-right { flex: 1.2; display: flex; flex-direction: column; background: #110805; min-width: 300px; position: relative; }
         
-        .studio-header { padding: 15px 20px; background: rgba(69,34,22,0.9); border-bottom: 1px solid rgba(251,223,162,0.3); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .studio-header { padding: calc(15px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 15px; background: rgba(69,34,22,0.9); border-bottom: 1px solid rgba(251,223,162,0.3); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; box-sizing: border-box; }
         .studio-title { font-size: 16px; font-weight: bold; color: #FBDFA2; display: flex; align-items: center; gap: 10px; }
         .studio-channel-badge { font-size: 11px; background: rgba(46,204,113,0.15); border: 1px solid #2ecc71; color: #2ecc71; padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: normal; }
         .studio-mode-select { background: rgba(0,0,0,0.5); border: 1px solid #FBDFA2; color: #FBDFA2; padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer; }

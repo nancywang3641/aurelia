@@ -6,6 +6,27 @@
    ========================================================= */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* =========================================================
+   ★ iOS 安全區域通用變數
+   ─────────────────────────────────────────────────────────
+   用法：任何新窗口的頂部標題列或定位元素，改用
+       padding-top: calc(原始padding + var(--safe-top))
+       top: calc(原始top + var(--safe-top))
+   完全不需要每次都打 env(safe-area-inset-top, 0px)
+   ========================================================= */
+:root {
+    --safe-top:    env(safe-area-inset-top,    0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left:   env(safe-area-inset-left,   0px);
+    --safe-right:  env(safe-area-inset-right,  0px);
+}
+
+/* ── 通用輔助 class（直接加在新窗口標題列上即可）──
+   .aurelia-safe-header   → 標題列型，保留原有 padding，只在頂部額外加安全間距
+   .aurelia-safe-overlay  → 整個覆蓋層型，適合 position:absolute inset:0 的面板根容器 */
+.aurelia-safe-header  { padding-top: calc(var(--safe-top) + var(--aurelia-pad, 14px)) !important; box-sizing: border-box !important; }
+.aurelia-safe-overlay { padding-top: var(--safe-top) !important; box-sizing: border-box !important; }
+
 html, body {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;  /* 四邊錨定，不依賴 dvh 計算 */
