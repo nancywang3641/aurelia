@@ -121,9 +121,9 @@
                         console.log(`[DelWorld] 已刪世界書條目 ${targets.length} 筆（分類：${cardName}）`);
                     } catch(e) { console.warn('[DelWorld] 世界書刪除失敗', e); }
                 }
-                // 4. 刪條件規則（worldId）
+                // 4. 刪條件規則（worldId） - 修復鍵值錯誤
                 try {
-                    const rulesKey = 'avs_rules';
+                    const rulesKey = 'avs_condition_rules'; // ✅ 已修正為正確的 AVS 規則鍵值
                     const allRules = JSON.parse(localStorage.getItem(rulesKey) || '[]');
                     const filtered = allRules.filter(r => r.worldId !== w.id);
                     localStorage.setItem(rulesKey, JSON.stringify(filtered));
@@ -594,7 +594,6 @@
                     </div>
                 </div>
 
-                <!-- 文字取代浮層 -->
                 <div id="qb-greet-replace-panel" style="display:none;padding:14px 20px;background:rgba(30,18,8,0.97);border-bottom:1px solid rgba(251,223,162,0.2);flex-shrink:0;flex-direction:column;gap:10px;">
                     <div style="font-size:12px;color:rgba(251,223,162,0.5);letter-spacing:1px;margin-bottom:2px;">全部開場白批量取代</div>
                     <div style="display:flex;gap:8px;align-items:center;">
@@ -604,7 +603,6 @@
                         <button id="qb-greet-replace-do" style="background:linear-gradient(135deg,rgba(251,223,162,0.25),rgba(200,160,48,0.3));border:1px solid rgba(251,223,162,0.4);color:#FBDFA2;border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;white-space:nowrap;font-weight:bold;">取代全部</button>
                     </div>
                     <div id="qb-greet-replace-msg" style="font-size:12px;color:rgba(150,220,130,0.8);min-height:16px;"></div>
-                    <!-- 已儲存規則列表 -->
                     <div id="qb-greet-saved-rules" style="display:none;border-top:1px solid rgba(251,223,162,0.1);padding-top:10px;display:flex;flex-direction:column;gap:6px;">
                         <div style="font-size:11px;color:rgba(251,223,162,0.3);letter-spacing:1px;margin-bottom:2px;">📌 已儲存規則（點擊套用）</div>
                         <div id="qb-greet-rules-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>

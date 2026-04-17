@@ -668,6 +668,14 @@
                     'p','div','span','br','hr','b','i','em','strong','a','img',
                     'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
                     'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
+
+                // 🌟 神奇魔法：動態抓取煉丹爐已啟用的區塊標籤
+                if (window.VN_DynamicParser && window.VN_DynamicParser.activeTemplates) {
+                    window.VN_DynamicParser.activeTemplates.forEach(tpl => {
+                        if (tpl.isBlock && tpl.tagId) _skipSys.push(tpl.tagId.toLowerCase());
+                    });
+                }
+
                 let _inBlock = false, _bCloseTag = '';
                 this.script = this.script.filter(l => {
                     if (!_inBlock) {
@@ -894,29 +902,9 @@
             const config = (win.OS_SETTINGS?.getConfig?.()) || {};
             if (!win.OS_API || (!config.url && !config.useSystemApi)) return;
 
-            // 1. 延遲一點點接管 Loading 畫面，覆蓋掉面板原本瞬間隱藏的 bug
-            setTimeout(() => {
-                const gamePage = document.getElementById('page-game');
-                if (gamePage && !document.getElementById('vn-start-loader')) {
-                    this._showStartLoader(0); 
-                }
-                const loaderEl = document.getElementById('vn-start-loader');
-                const loaderBar = document.getElementById('vn-start-loader-bar');
-                
-                if (loaderEl && loaderBar) {
-                    loaderEl.style.display = 'flex';
-                    loaderBar.style.transition = 'none';
-                    loaderBar.style.width = '0%';
-                    void loaderBar.offsetWidth; // 強制重繪
-                    
-                    // 製造假進度：用 30 秒慢慢跑到 90%，讓畫面有在讀取的感覺
-                    loaderBar.style.transition = 'width 30s cubic-bezier(0.1, 0.5, 0.5, 1)';
-                    loaderBar.style.width = '90%';
-                }
-            }, 50);
-
-            // 同時在背景對話框顯示提示文字，避免畫面像當機一樣
-            this.renderVN('', `*你選擇了：「${choice}」*\n\n...命運的軌跡正在重新編織，請稍候...`);
+            // loader 已由 doSend 在 Archive 關閉前就顯示好，這裡只確保 label 正確
+            const _chkLbl = document.getElementById('vn-start-loader-label');
+            if (_chkLbl) _chkLbl.textContent = 'AI 生成中...';
 
             try {
                 if (win.OS_THINK) win.OS_THINK.setContext({ panel: 'VN 選項選擇', userInput: choice });
@@ -1498,8 +1486,6 @@
                 document.getElementById('dialogue-text').innerHTML = "";
                 document.getElementById('speaker-name').style.display = 'none';
                 this.isSkip = false; this.updateControlUI();
-
-                // 隱藏對話框 + 清除立繪，顯示資料中心按鈕
                 const panelWrapper = document.getElementById('text-panel-wrapper');
                 if (panelWrapper) panelWrapper.style.display = 'none';
                 const gc = document.getElementById('game-char'); if (gc) gc.style.display = 'none';
@@ -1512,12 +1498,8 @@
                         endBtn.onclick = () => {
                             if (win.OS_API?.isStandalone?.() ?? false) {
                                 VN_StandaloneArchive.show();
-                            } else if (win.AureliaHtmlExtractor && typeof win.AureliaHtmlExtractor.show === 'function') {
+                            } else if (win.AureliaHtmlExtractor) {
                                 win.AureliaHtmlExtractor.show();
-                            } else if (win.toggleHtmlExtractor) {
-                                win.toggleHtmlExtractor();
-                            } else {
-                                console.warn("[VN_Core] 找不到 AureliaHtmlExtractor (狀態提取模組)");
                             }
                         };
                     }
@@ -1533,285 +1515,99 @@
             if (line.startsWith('<call')) { if(win.VN_Phone) win.VN_Phone.initCall(this, line); return; }
             if (line.startsWith('</call>')) { if(win.VN_Phone) win.VN_Phone.exitCall(this); return; }
 
-            // === 偵測其他作者的自訂區塊標籤 ===
-            // 支援兩種格式：
-            //   格式A：<XXX> ... </XXX>   （XML 風格，無屬性）
-            //   格式B：[XXX] ... [/XXX]   （方括號風格，無 | 分隔符，有 | 的是 VN 系統標籤）
+            // --- 自訂區塊過濾 ---
             {
-                const _sysXml = ['content','call','chat','status','summary','avatar',
-                    'p','div','span','br','hr','b','i','em','strong','a','img',
-                    'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
-                    'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
+                const _sysXml = ['content','call','chat','status','summary','avatar','p','div','span','br','hr'];
+                
+                // 🌟 神奇魔法：動態抓取煉丹爐已啟用的區塊標籤
+                if (window.VN_DynamicParser && window.VN_DynamicParser.activeTemplates) {
+                    window.VN_DynamicParser.activeTemplates.forEach(tpl => {
+                        if (tpl.isBlock && tpl.tagId) _sysXml.push(tpl.tagId.toLowerCase());
+                    });
+                }
 
-                // 格式A：<XXX>
-                const _fOpenA = line.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
+                const _fOpenA = line.match(/^<([A-Za-z\u4e00-\u9fff][\w-]*)>$/);
                 if (_fOpenA && !_sysXml.includes(_fOpenA[1].toLowerCase())) {
                     let _ei = this.index + 1;
                     const _ct = `</${_fOpenA[1]}>`;
                     while (_ei < this.script.length && this.script[_ei] !== _ct) _ei++;
-                    this.index = _ei;
-                    this._showDomBlock();
-                    return;
+                    this.index = _ei; this._showDomBlock(); return;
                 }
-                const _fCloseA = line.match(/^<\/([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
-                if (_fCloseA && !_sysXml.includes(_fCloseA[1].toLowerCase())) { this.next(); return; }
-
-                // 格式B：[XXX]（無 | 代表是區塊標籤，非 VN 系統單行標籤）
-                const _fOpenB = line.match(/^\[([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)\]$/);
-                if (_fOpenB) {
-                    let _ei = this.index + 1;
-                    const _ct = `[/${_fOpenB[1]}]`;
-                    while (_ei < this.script.length && this.script[_ei] !== _ct) _ei++;
-                    this.index = _ei;
-                    this._showDomBlock();
-                    return;
-                }
-                // 格式B 閉合：[/XXX]
-                if (/^\[\/[A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*\]$/.test(line)) { this.next(); return; }
             }
 
             if (this.mode === 'chat') { if(win.VN_Phone) win.VN_Phone.handleChatLine(line, this); return; }
             if (this.mode === 'call') { if(win.VN_Phone) win.VN_Phone.handleCallLine(line, this); return; }
 
-            // === VN 模式 ===
+            // === VN 模式核心渲染 ===
             this.toggleUI('vn');
 
+            // 🔥 【重點插入：動態積木攔截】 🔥
+            // 如果偵測到自訂標籤，解析器會接手並暫停劇情，這裡直接 return
+            if (window.VN_DynamicParser && window.VN_DynamicParser.processLine(line, this)) {
+                return; 
+            }
+
+            // 以下是原本的硬編碼格式處理
             if (line.startsWith('[BGM|')) {
-                const rawName = line.split('|')[1].replace(']', '').trim();
-                // 防禦性剝除副檔名（AI 偶爾還是會帶 .mp3/.ogg 等）
-                const name = rawName.replace(/\.[^.]+$/, '');
+                const name = line.split('|')[1].replace(']', '').trim().replace(/\.[^.]+$/, '');
                 const audio = document.getElementById('bgm-player');
-                if (name === 'stop') {
-                    if (audio) audio.pause();
-                } else if (VN_Config.data.bgm && audio) {
+                if (name === 'stop') { audio && audio.pause(); } 
+                else if (VN_Config.data.bgm && audio) {
                     audio.src = VN_Config.data.bgm + name + '.mp3';
-                    // 顯示 BGM Toast：canplay = 綠，error = 紅
-                    const onOk  = () => { this._showBgmToast(name, true);  cleanup(); };
-                    const onErr = () => { this._showBgmToast(name, false); cleanup(); };
-                    const cleanup = () => { audio.removeEventListener('canplay', onOk); audio.removeEventListener('error', onErr); };
-                    audio.addEventListener('canplay', onOk,  { once: true });
-                    audio.addEventListener('error',   onErr, { once: true });
                     audio.play().catch(() => {});
-                } else {
-                    // BGM 路徑未設定 → 直接顯示紅色 toast
-                    this._showBgmToast(name, false);
                 }
                 this.next(); return;
             }
 
-            // 🎬 場景CG（含人物的插圖，獨立容器，點擊關閉）
             if (line.startsWith('[Scene|')) {
-                if (localStorage.getItem('vn_scene_enabled') === '0') { this.next(); return; }
                 const parts = line.slice(7, -1).split('|');
-                const cacheId = parts[0];
-                const prompt  = parts[1];
                 const overlay = document.getElementById('scene-cg-overlay');
-                const cgImg   = document.getElementById('scene-cg-img');
+                const cgImg = document.getElementById('scene-cg-img');
                 if (overlay && cgImg) {
-                    overlay.classList.add('active');
-                    this.hideVNPanel();
-                    const memUrl = this._sceneMemCache[cacheId];
-                    if (memUrl) {
-                        cgImg.src = memUrl;
-                    } else if (cacheId && prompt) {
-                        cgImg.src = '';
-                        (async () => {
-                            const url = await this._safeFetchScene(cacheId, prompt);
-                            if (url && cgImg) cgImg.src = url;
-                        })();
-                    }
+                    overlay.classList.add('active'); this.hideVNPanel();
+                    cgImg.src = '';
+                    this._safeFetchScene(parts[0], parts[1]).then(url => { if(url) cgImg.src = url; });
                 }
-                return; // 等待用戶點擊 scene-cg-overlay 後再 next()
+                return;
             }
 
             if (line.startsWith('[Bg|')) {
-                document.getElementById('game-char').style.display = 'none';
-                document.getElementById('char-portrait').style.display = 'none';
-                const parts = line.slice(4, -1).split('|');
-                // 兼容格式：
-                //   [Bg|scene_desc]              → parts[0]=場景描述（badge + AI prompt）
-                //   [Bg|bg_key|scene_label|prompt] → parts[1]=badge, parts[2]=AI prompt
-                const sceneLabel = parts.length >= 2 ? parts[1] : parts[0];
-                const aiPrompt   = parts[2] || (parts.length === 1 ? parts[0] : null);
-                const cacheId    = sceneLabel || ('bg_' + Date.now());
-
-                if (sceneLabel) {
-                    const sceneName = sceneLabel.replace(/_/g, ' ');
-                    const rankPanel = document.getElementById('stream-rank-panel');
-                    const usePanel = rankPanel && !rankPanel.classList.contains('hidden');
-                    if (usePanel) {
-                        document.getElementById('stream-scene-label').innerText = sceneName;
-                        document.getElementById('stream-scene-row').classList.remove('hidden');
-                        document.getElementById('top-badge').style.display = 'none';
-                    } else {
-                        const badge = document.getElementById('top-badge');
-                        badge.innerText = sceneName; badge.style.display = 'block';
-                    }
-                }
-                if (aiPrompt) {
-                    this._lastBgCacheId = cacheId;
-                    const memUrl = this._bgMemCache[cacheId];
-                    if (memUrl) {
-                        document.getElementById('game-bg').style.backgroundImage = `url('${memUrl}')`;
-                    } else {
-                        (async () => {
-                            const url = await this._safeFetchBg(cacheId, aiPrompt);
-                            if (url) document.getElementById('game-bg').style.backgroundImage = `url('${url}')`;
-                        })();
-                    }
-                }
-                this.next(); return;
-            }
-
-            // 📺 直播資訊 Header
-            if (line.startsWith('[Stream|')) {
-                const p = line.slice(8, -1).split('|').map(s => s.trim());
-                const hdr = document.getElementById('stream-header');
-                if (hdr) {
-                    document.getElementById('stream-title-text').innerText  = p[0] || '';
-                    document.getElementById('stream-host-text').innerText   = p[1] || '';
-                    document.getElementById('stream-viewers').innerText     = p[2] || '';
-                    document.getElementById('stream-followers').innerText   = p[3] || '';
-                    document.getElementById('stream-rank').innerText        = p[4] || '';
-                    hdr.classList.remove('hidden');
-                }
-                this.next(); return;
-            }
-
-            // 🎖 粉絲榜
-            if (line.startsWith('[StreamRank|')) {
-                const p = line.slice(12, -1).split('|').map(s => s.trim());
-                // p: 名1,頭銜1,值1, 名2,頭銜2,值2, 名3,頭銜3,值3
-                for (let i = 0; i < 3; i++) {
-                    const n = i * 3;
-                    document.getElementById(`sr-name-${i+1}`).innerText  = p[n]   || '';
-                    document.getElementById(`sr-title-${i+1}`).innerText = p[n+1] || '';
-                    document.getElementById(`sr-score-${i+1}`).innerText = p[n+2] || '';
-                }
-                document.getElementById('stream-rank-panel').classList.remove('hidden');
-                // 若 top-badge 已有內容，立即吸收進場景列並隱藏
+                const p = line.slice(4, -1).split('|');
+                const label = p.length >= 2 ? p[1] : p[0];
                 const badge = document.getElementById('top-badge');
-                if (badge && badge.style.display !== 'none' && badge.innerText) {
-                    document.getElementById('stream-scene-label').innerText = badge.innerText;
-                    document.getElementById('stream-scene-row').classList.remove('hidden');
-                    badge.style.display = 'none';
+                if (badge) { badge.innerText = label.replace(/_/g, ' '); badge.style.display = 'block'; }
+                if (p[2] || p[0]) {
+                    this._safeFetchBg(label, p[2] || p[0]).then(url => {
+                        if(url) document.getElementById('game-bg').style.backgroundImage = `url('${url}')`;
+                    });
                 }
                 this.next(); return;
             }
 
-            // 💬 彈幕 (左→右飛行)
-            if (line.startsWith('[Danmu|')) {
-                const parts = line.slice(7, -1).split('|');
-                const danmuName = parts[0] || '';
-                const danmuText = parts[1] || '';
-                this.launchDanmu(danmuName, danmuText);
-                this.next(); return;
-            }
-
-            // 🏆 成就解鎖
             if (line.startsWith('[Achievement|')) {
-                const parts = line.slice(13, -1).split('|');
-                const name = parts[0] || '';
-                const desc = parts[1] || '';
-                this.addLog("成就解鎖", `${name}${desc ? ' — ' + desc : ''}`);
-                document.getElementById('achievement-name').innerText = name;
-                document.getElementById('achievement-desc').innerText = desc;
+                const p = line.slice(13, -1).split('|');
+                document.getElementById('achievement-name').innerText = p[0] || '';
+                document.getElementById('achievement-desc').innerText = p[1] || '';
                 document.getElementById('achievement-overlay').classList.add('active');
-                // 通知全局成就系統（如已掛載）
-                if (win.OS_ACHIEVEMENT?.unlock) win.OS_ACHIEVEMENT.unlock(name, desc);
-                // 3.5 秒後自動消失並繼續
-                clearTimeout(this._achTimer);
-                this._achTimer = setTimeout(() => { this.dismissAchievement(); }, 3500);
-                return; // 不暫停 VN，繼續跑後面的行
-            }
-
-            // 📋 委託面板
-            if (line.startsWith('[Quest|')) {
-                const parts = line.slice(7, -1).split('|');
-                const qtitle  = parts[0] || '';
-                const qnpc    = parts[1] || '';
-                const qdesc   = parts[2] || '';
-                const qreward = parts[3] || '';
-                document.getElementById('quest-title').innerText         = qtitle;
-                document.getElementById('quest-requester-name').innerText = qnpc;
-                document.getElementById('quest-desc').innerText          = qdesc;
-                document.getElementById('quest-reward').innerText        = qreward;
-                document.getElementById('quest-overlay').classList.add('active');
-                this.hideVNPanel();
-                this.addLog("委託", `【${qtitle}】${qnpc ? ' — ' + qnpc : ''}${qreward ? ' 獎勵：' + qreward : ''}`);
-                return;
+                setTimeout(() => this.dismissAchievement(), 3500);
+                this.next(); return;
             }
 
             if (line.startsWith('[Sys|')) {
-                const parts = line.slice(5, -1).split('|');
-                const bodyText = parts.length >= 2 ? parts.slice(1).join('|') : parts[0];
-                // AI 常用 Sys 播報成就，靜默跳過避免與 [Achievement] 雙重彈窗
-                if (bodyText.includes('成就解鎖') || bodyText.includes('成就：') || bodyText.includes('Achievement')) {
-                    this.next(); return;
-                }
-                const titleEl = document.getElementById('sys-title');
-                const textEl = document.getElementById('sys-text');
-                if (parts.length >= 2) { titleEl.innerText = parts[0]; titleEl.style.display = 'block'; }
-                else { titleEl.style.display = 'none'; }
+                const p = line.slice(5, -1).split('|');
+                const text = p.length >= 2 ? p.slice(1).join('|') : p[0];
                 document.getElementById('sys-overlay').classList.add('active');
                 this.hideVNPanel();
-                this.typewriter(textEl, this.parseMarkdown(bodyText));
-                this.addLog("系統", bodyText);
+                this.typewriter(document.getElementById('sys-text'), this.parseMarkdown(text));
                 return;
             }
 
-            if (line.startsWith('[Trans|')) {
-                const _tParts = line.split('|');
-                // [Trans|文字] 或 [Trans|type|文字]
-                const text = (_tParts[2]?.replace(']', '') || _tParts[1]?.replace(']', '') || '').trim();
-                document.getElementById('trans-text').innerText = text;
-                document.getElementById('trans-overlay').classList.add('active');
-                this.hideVNPanel(); setTimeout(() => this.checkAutoNext(), 2000); return;
-            }
-
-            if (line.startsWith('[Item|')) {
-                const parts = line.slice(6, -1).split('|');
-                const itemName = parts[0];
-                document.getElementById('item-title').innerText = itemName;
-                document.getElementById('item-desc').innerText = parts[1] || '';
-                document.getElementById('item-overlay').classList.add('active');
-                this.hideVNPanel();
-                document.getElementById('item-img').src = ''; 
-                const memUrl = this._itemMemCache[itemName];
-                if (memUrl) {
-                    document.getElementById('item-img').src = memUrl;
-                } else {
-                    (async () => {
-                        const cached = await VN_Cache.get('item_cache', itemName);
-                        if (cached && cached.url && !cached.url.startsWith('blob:')) {
-                            const objUrl = await this._toObjectUrl(cached.url);
-                            this._itemMemCache[itemName] = objUrl || cached.url;
-                        } else {
-                            const raw = await VN_Image.getItem(itemName);
-                            if (raw) {
-                                try {
-                                    const fetchRes = await fetch(raw);
-                                    const blob = await fetchRes.blob();
-                                    const objUrl = URL.createObjectURL(blob);
-                                    const dataUrl = await new Promise(r => {
-                                        const reader = new FileReader();
-                                        reader.onload = () => r(reader.result);
-                                        reader.onerror = () => r('');
-                                        reader.readAsDataURL(blob);
-                                    });
-                                    this._itemMemCache[itemName] = objUrl;
-                                    if (dataUrl) await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: dataUrl });
-                                } catch(e) {
-                                    this._itemMemCache[itemName] = raw;
-                                    await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: raw });
-                                }
-                            }
-                        }
-                        if (this._itemMemCache[itemName]) document.getElementById('item-img').src = this._itemMemCache[itemName];
-                    })();
-                }
-                this.addLog("獲得物品", `${itemName} - ${parts[1]||''}`);
-                return;
+            if (line.startsWith('[Quest|')) {
+                const p = line.slice(7, -1).split('|');
+                document.getElementById('quest-title').innerText = p[0] || '';
+                document.getElementById('quest-desc').innerText = p[2] || '';
+                document.getElementById('quest-overlay').classList.add('active');
+                this.hideVNPanel(); return;
             }
 
             if (line.startsWith('[Char|')) {
@@ -1819,106 +1615,26 @@
                 const ex = this._extractTextAndSFX(p.slice(2));
                 this.updateSprite(p[0], p[1]);
                 this.renderVN(p[0], ex.text);
-                this.addLog(p[0], ex.text);
                 this.playSFX(ex.sfx);
-                // 記錄當前 Char 狀態（給重新生成按鈕用）
-                this._currentChar = { charName: p[0], text: ex.text, emotion: this._mapExprToEmotion(p[1]), expression: p[1] };
+                this._currentChar = { charName: p[0], text: ex.text, expression: p[1] };
                 this.updateControlUI();
-                // 🎙️ GPT-SoVITS TTS：expression 直接映射 emotion，不需要額外標籤
-                this._vnSoVITSPlay(p[0], ex.text, this._mapExprToEmotion(p[1]));
-                // 🔥 Minimax TTS：播放當前句
-                (function(charName, text, expression) {
-                    const _mm = (window.parent || window).OS_MINIMAX;
-                    if (_mm) _mm.playForChar(charName, text, { expression });
-                })(p[0], ex.text, p[1]);
-                // 🔮 預取下一句 TTS（背景偷跑，不阻塞）
-                (function prefetchNext(script, curIdx) {
-                    const _mm = (window.parent || window).OS_MINIMAX;
-                    if (!_mm?.prefetchForChar) return;
-                    for (let i = curIdx + 1; i < script.length; i++) {
-                        const nl = script[i];
-                        if (nl.startsWith('[Char|')) {
-                            const np = nl.slice(6, -1).split('|');
-                            const nex = VN_Core._extractTextAndSFX(np.slice(2));
-                            if (nex.text) _mm.prefetchForChar(np[0], nex.text, { expression: np[1] });
-                            break;
-                        }
-                        // 遇到選擇/結束節點就停止預取
-                        if (nl.startsWith('[Choice|') || nl.startsWith('[End]') || nl.startsWith('</')) break;
-                    }
-                })(this.script, this.index);
                 return;
             }
-            if (line.startsWith('[Inner|')) {
-                const p = line.slice(7, -1).split('|');
-                const ex = this._extractTextAndSFX(p.slice(1));
-                // strip any ** wrapping AI may or may not have added
-                const _innerClean = ex.text.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
-                this.updateSprite(p[0], 'Think');
-                this.renderVN(p[0], _innerClean, 'inner');
-                this.addLog(p[0], _innerClean);
-                this.playSFX(ex.sfx);
-                return;
-            }
+
             if (line.startsWith('[Nar|')) {
-                document.getElementById('game-char').style.display = 'none';
-                document.getElementById('char-portrait').style.display = 'none';
-                const p = line.slice(5, -1).split('|');
-                const ex = this._extractTextAndSFX(p);
-                this._currentChar = null; this.updateControlUI();
+                const ex = this._extractTextAndSFX(line.slice(5, -1).split('|'));
                 this.renderVN('', ex.text);
-                this.addLog("旁白", ex.text);
                 this.playSFX(ex.sfx);
                 return;
             }
 
-            // 🎮 選擇按鈕（獨立模式原生 UI；ST 模式由正則+DOM bridge 處理，這裡靜默跳過）
             if (line.startsWith('[Choice|')) {
-                if (win.OS_API?.isStandalone?.() ?? false) {
-                    this._showStandaloneChoices(line);
-                } else {
-                    this.next();
-                }
+                if (win.OS_API?.isStandalone?.() ?? false) this._showStandaloneChoices(line);
+                else this.next();
                 return;
             }
 
-            // 📖 章節結束標記（跨面板通訊：ST 模式由 inv_core 等面板掃描聊天記錄；獨立模式改為主動派發事件）
-            if (line.startsWith('[SessionEnd|')) {
-                if (win.OS_API?.isStandalone?.() ?? false) {
-                    // 派發 os_vn_session_end 事件，供 inv_core 等面板在獨立模式下接收結算
-                    try {
-                        const tagSummary = line.slice(12, -1);
-                        const fullText = this._lastRawText || '';
-                        win.dispatchEvent(new CustomEvent('os_vn_session_end', {
-                            detail: { summary: tagSummary, fullText }
-                        }));
-                        console.log('[VN_Core] 已派發 os_vn_session_end 事件');
-                    } catch(e) {}
-                }
-                this.next();
-                return;
-            }
-
-            // Fallback: *text* → Inner monologue, plain text → Nar
-            const _trimmed = line.trim();
-            if (/^\*{1,2}[^*].+\*{1,2}$/.test(_trimmed)) {
-                // *text* or **text** — AI wrote novel-style asterisk, treat as Inner thought
-                const _innerText = _trimmed.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
-                this.updateSprite(this._lastChar || '', 'Think');
-                this.renderVN(this._lastChar || '', _innerText, 'inner');
-                this.addLog(this._lastChar || '内心', _innerText);
-                return;
-            }
-            // also catch text that AI wrote with only a trailing ] (forgot [Nar| prefix)
-            const _stripped = _trimmed.replace(/^\[?/, '').replace(/\]$/, '').trim();
-            if (_stripped.length > 2 && !_trimmed.startsWith('[') && !_trimmed.startsWith('<') && !_trimmed.startsWith('//') && !_trimmed.startsWith('---')) {
-                // plain text — treat as narration
-                document.getElementById('game-char').style.display = 'none';
-                document.getElementById('char-portrait').style.display = 'none';
-                this.renderVN('', _stripped);
-                this.addLog('旁白', _stripped);
-                return;
-            }
+            // Fallback
             this.next();
         },
 
@@ -3776,10 +3492,37 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                     const val = inp?.value?.trim();
                     if (!val) return;
                     this._pendingChoices = null;
-                    // 先顯示 loading，再關閉 archive，再觸發 AI
-                    window.VN_Core?._showStartLoader?.(0);
-                    this.hide();
-                    cb && cb(val);
+
+                    const vc = window.VN_Core;
+                    if (vc) {
+                        const gamePage = document.getElementById('page-game');
+                        // 若 loader DOM 不存在，呼叫一次建立它
+                        // （_showStartLoader(0) 會排 setTimeout(0) 隱藏，
+                        //   但我們後面用 rAF 在它之後再 re-show）
+                        if (!document.getElementById('vn-start-loader') && gamePage) {
+                            vc._showStartLoader(0);
+                        }
+                        // requestAnimationFrame 在瀏覽器的事件迴圈中
+                        // 排在 setTimeout(0) 之後才執行 → 可安全覆蓋那個 hide
+                        requestAnimationFrame(() => {
+                            const loaderEl  = document.getElementById('vn-start-loader');
+                            const loaderBar = document.getElementById('vn-start-loader-bar');
+                            const loaderLbl = document.getElementById('vn-start-loader-label');
+                            if (!loaderEl) return;
+                            loaderEl.style.display = 'flex';
+                            if (loaderBar) {
+                                loaderBar.style.transition = 'none';
+                                loaderBar.style.width = '0%';
+                                void loaderBar.offsetWidth;           // 強制 reflow
+                                loaderBar.style.transition = 'width 30s cubic-bezier(0.1,0.5,0.5,1)';
+                                loaderBar.style.width = '90%';
+                            }
+                            if (loaderLbl) loaderLbl.textContent = 'AI 生成中...';
+                        });
+                    }
+
+                    this.hide();    // Archive 滑走（0.4s 動畫）
+                    cb && cb(val);  // 觸發 AI 生成
                 };
 
                 if (sendBtn) sendBtn.onclick = doSend;
@@ -4073,7 +3816,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 #aurelia-extractor-phone-overlay::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.74) 0%,rgba(0,0,0,.88) 55%,rgba(0,0,0,.94) 100%);z-index:0;pointer-events:none}
                 #aurelia-extractor-phone-overlay.show{transform:translateY(0)}
                 #ue-root-wrapper{position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column;color:#e8dfc8;font-family:'Noto Serif TC',serif;box-sizing:border-box}
-                #ue-toolbar{display:flex;justify-content:space-between;align-items:center;padding:0 16px;background:rgba(5,4,2,.55);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.22);flex-shrink:0;height:52px}
+                #ue-toolbar{display:flex;justify-content:space-between;align-items:center;padding:calc(env(safe-area-inset-top,0px)) 16px 0;background:rgba(5,4,2,.55);backdrop-filter:blur(14px);border-bottom:1px solid rgba(212,175,55,.22);flex-shrink:0;min-height:52px;height:calc(52px + env(safe-area-inset-top,0px))}
                 .ue-title{font-weight:700;font-size:13px;color:#d4af37;letter-spacing:4px;text-transform:uppercase}
                 .ue-icon-btn{border:none;background:transparent;cursor:pointer;font-size:17px;color:rgba(212,175,55,.5);transition:all .18s;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center}
                 .ue-icon-btn:hover{color:#d4af37;background:rgba(212,175,55,.1)}

@@ -8,34 +8,22 @@
 
 html, body {
     position: fixed;
-    top: 0; left: 0; right: 0; 
-    /* ❌ 拿掉 bottom: 0 */
-    height: 100vh;
-    height: 100dvh; /* ✅ 用 100dvh 強制穿透安全區域 */
+    top: 0; left: 0; right: 0; bottom: 0;  /* 四邊錨定，不依賴 dvh 計算 */
     width: 100%;
     overflow: hidden;
-    background: #452216; /* ✅ 關鍵：讓最底層背景色與導覽列相同，完美隱藏縫隙 */
+    /* 同導覽列顏色：萬一有任何縫隙也不會露出異色 */
+    background: #452216;
+    font-family: 'Noto Sans TC', 'PingFang TC', sans-serif;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     overscroll-behavior: none;
 }
 
-/* 為了讓 404 模式也能完美無縫，順手加上這行： */
 body.mode-404 { background: #000000; }
 
 #aurelia-standalone-root {
     position: absolute;
-    top: 0; left: 0; right: 0;
-    /* ❌ 拿掉 bottom: 0 */
-    height: 100%; /* ✅ 繼承 100dvh */
-    width: 100%;
-    overflow: hidden;
-}
-
-#aurelia-standalone-root {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    width: 100%;
+    inset: 0;          /* top/right/bottom/left 全部為 0 */
     overflow: hidden;
 }
 
@@ -308,7 +296,38 @@ body.mode-404 { background: #000000; }
 .ps-header   { height: calc(56px + env(safe-area-inset-top, 0px)) !important; padding-top: env(safe-area-inset-top, 0px) !important; }
 .write-tab-content { padding-top: calc(20px + env(safe-area-inset-top, 0px)) !important; }
 
-/* 底部安全區域 — 消除 iPhone 底部黑條 */
+/* ── 底部導覽列：獨立模式用 position:fixed 錨到真實視口底部 ──
+   position:fixed 不依賴任何高度鏈計算，直接貼螢幕底邊，
+   100dvh / height:100% 的誤差完全無影響。
+   padding-bottom 讓按鈕顯示在 home indicator 上方。 */
+#aurelia-standalone-root #aurelia-bottom-nav {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    box-sizing: content-box !important;
+}
+
+/* tab 容器改用 absolute，把底部讓給固定導覽列的高度 */
+#aurelia-standalone-root #aurelia-tab-container {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    /* 55px = nav 可見高度；safe-area = home indicator 區 */
+    bottom: calc(55px + env(safe-area-inset-bottom, 0px)) !important;
+    flex: none !important;
+    height: auto !important;
+}
+
+/* phone-screen 需要 position:relative 讓 tab-container 的 absolute 定位有效 */
+#aurelia-standalone-root #aurelia-phone-screen {
+    position: relative !important;
+}
+
+/* SillyTavern 內嵌模式保持原本 flex 佈局（不在 standalone-root 裡） */
 #aurelia-bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px) !important; box-sizing: content-box !important; }
 
 /* ── 手動強制下移模式 (iOS 動態島手動選擇時) ── */
@@ -325,6 +344,9 @@ body.layout-pad-ios .avs-header  { padding-top: 62px !important; }
 body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !important; }
 body.layout-pad-ios .write-tab-content { padding-top: 64px !important; }
 body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
+body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
+    bottom: calc(55px + 20px) !important;
+}
 
 /* 登入介面外框 */
 .void-login-overlay {
@@ -723,8 +745,12 @@ body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
     border-top: 1px solid rgba(251,223,162,0.3) !important;
     box-shadow: 0 -5px 15px rgba(0,0,0,0.5) !important;
     z-index: 9999 !important;
+    /* 不在 standalone-root 裡（即 ST 內嵌模式）時的 safe-area 設定 */
     padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     box-sizing: content-box !important;
+    /* 確保不被任何 overflow:hidden 截斷 */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
 }
 #aurelia-bottom-nav .nav-button {
     color: #B78456 !important;

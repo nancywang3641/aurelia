@@ -413,7 +413,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .portrait-jumpscare { animation: anim-portrait-jumpscare 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
         
         #top-badge {
-            position: absolute; top: 18px; left: 18px; z-index: 10;
+            position: absolute;
+            top: calc(18px + env(safe-area-inset-top, 0px));
+            left: 18px; z-index: 10;
             border: none; box-shadow: none; border-radius: 0;
             /* 水平漸隱黑遮罩條 — 左右邊緣透明消散，無硬邊框 */
             background: linear-gradient(to right,
@@ -883,7 +885,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             animation: pulseOp 2s infinite;
         }
 
-        #game-settings-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 60; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
+        #game-settings-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 60; display: flex; justify-content: center; align-items: center; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
         #game-settings-overlay.active { opacity: 1; pointer-events: auto; }
         #game-settings-window { width: calc(100% - 30px); max-width: 410px; max-height: calc(100% - 40px); background: linear-gradient(135deg, #111 0%, #050505 100%); border: 1px solid var(--glass-border); border-radius: 2px; box-shadow: 0 20px 60px rgba(0,0,0,0.9); display: flex; flex-direction: column; transform: scale(0.98) translateY(10px); opacity: 0; transition: transform 0.4s, opacity 0.4s; overflow: hidden; }
         #game-settings-overlay.active #game-settings-window { transform: scale(1) translateY(0); opacity: 1; }

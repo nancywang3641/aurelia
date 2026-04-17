@@ -880,7 +880,6 @@ const IRIS_IDLE = [
             </div>
             
             <div class="qb-bookshelf-overlay" id="qb-bookshelf-overlay" style="display:none; position:absolute; top:8%; left:4%; right:4%; bottom:15%; background:#1e1208; border:3px solid #6b4c3a; border-radius:8px; z-index:100; flex-direction:column; box-shadow:inset 0 0 50px rgba(0,0,0,0.8), 0 15px 40px rgba(0,0,0,0.9); overflow:hidden;">
-                <!-- 木紋牆壁背景 -->
                 <div style="position:absolute; inset:0; background-image:repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 18px); pointer-events:none;"></div>
                 <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(90,55,25,0.35) 0%, transparent 70%); pointer-events:none;"></div>
 
@@ -889,33 +888,27 @@ const IRIS_IDLE = [
                     <button id="close-bookshelf-btn" style="background:none; border:none; color:#B78456; font-size:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#B78456'">✕</button>
                 </div>
 
-                <!-- 書脊軌道 + 書封面 共用容器 -->
                 <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">
 
-                    <!-- 第一層書架 -->
                     <div id="qb-shelf-1" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
                         <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
                         <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
                     </div>
 
-                    <!-- 第二層書架 -->
                     <div id="qb-shelf-2" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
                         <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
                         <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
                     </div>
 
-                    <!-- 第三層書架 -->
                     <div id="qb-shelf-3" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
                         <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
                         <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
                     </div>
 
-                    <!-- 書封面展開面板 -->
                     <div id="qb-book-cover-panel" style="display:none; position:absolute; inset:0; overflow:hidden; z-index:20;"></div>
 
                 </div>
 
-                <!-- 翻頁導航（書架滿時顯示） -->
                 <div id="qb-shelf-nav" style="display:none; flex-shrink:0; align-items:center; justify-content:center; gap:16px; padding:6px 0; background:rgba(26,12,6,0.95); border-top:1px solid rgba(107,76,58,0.4);">
                     <button id="qb-page-prev" style="background:none; border:1px solid rgba(251,223,162,0.35); color:#FBDFA2; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">‹</button>
                     <span id="qb-page-label" style="color:#B78456; font-size:13px; font-family:monospace; letter-spacing:1px;"></span>
@@ -992,6 +985,7 @@ const IRIS_IDLE = [
                     <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
                     ${extraAppsHtml}
+                    <button class="void-hist-btn" id="vn-workshop-btn" title="VN 標籤煉丹爐"><span class="vhb-em">🪄</span><span>VN煉丹</span></button>
                     <button class="void-hist-btn" data-app-launch="tarot" title="塔羅"><span class="vhb-em">🔮</span><span>塔羅</span></button>
                     <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
@@ -1148,6 +1142,15 @@ const IRIS_IDLE = [
 
             const storeCloseBtn = tab.querySelector('#store-close-btn');
             if (storeCloseBtn) storeCloseBtn.addEventListener('click', closeStorePanel);
+
+            // 🔥 VN 標籤煉丹爐 啟動按鈕
+            const workshopBtn = tab.querySelector('#vn-workshop-btn');
+            if (workshopBtn) {
+                workshopBtn.addEventListener('click', () => {
+                    if (window.VN_UI_Workshop) window.VN_UI_Workshop.launch();
+                    else alert('標籤煉丹爐模組尚未載入，請確認 index.html 底部有正確引入 vn_ui_workshop.js！');
+                });
+            }
 
             const histCloseBtn = tab.querySelector('#hist-close-btn');
             const histCheckAll = tab.querySelector('#hist-check-all');

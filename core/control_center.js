@@ -212,7 +212,7 @@
         userTab.className = 'aurelia-tab';
         userTab.style.cssText = `width:100%; height:100%; display:none; background:#f8f9fa; position: relative; flex-direction:column; overflow:hidden;`;
 
-        // 🔥 動態判斷：只有獨立模式才渲染提示詞、世界書、變數工坊
+        // 🔥 動態判斷：只有獨立模式才渲染提示詞、世界書、變數工坊與創作室
         const isStandalone = !!document.getElementById('aurelia-standalone-root');
 
         // ── 寫作設置 TAB ──
@@ -232,6 +232,7 @@
                     <button class="write-tab-btn" data-app="提示詞"><i class="fa-solid fa-sliders"></i><span>提示詞管理</span></button>
                     <button class="write-tab-btn" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></button>
                     <button class="write-tab-btn" data-app="avs"><i class="fa-solid fa-dice"></i><span>變數工坊</span></button>
+                    <button class="write-tab-btn" id="btn-launch-studio"><i class="fa-solid fa-palette"></i><span>靈感創作室</span></button>
                     ` : ''}
                 </div>
                 <button class="write-tab-logout-btn" id="write-logout-btn">
@@ -239,11 +240,18 @@
                 </button>
             </div>`;
             
+        // 🔥 修改這裡：攔截創作室的點擊事件，避免調用 showOsApp
         writeTab.querySelectorAll('.write-tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (window.AureliaControlCenter) window.AureliaControlCenter.showOsApp(btn.dataset.app);
+                if (btn.id === 'btn-launch-studio') {
+                    if (window.OS_STUDIO) window.OS_STUDIO.launch();
+                    else alert('靈感創作室模組尚未載入，請確認 index.html 底部有引入 os_studio.js！');
+                } else if (btn.dataset.app) {
+                    if (window.AureliaControlCenter) window.AureliaControlCenter.showOsApp(btn.dataset.app);
+                }
             });
         });
+
         const wLogoutBtn = writeTab.querySelector('#write-logout-btn');
         if (wLogoutBtn) wLogoutBtn.addEventListener('click', () => {
             if (window.VoidTerminal && window.VoidTerminal.logout) window.VoidTerminal.logout();
@@ -333,8 +341,7 @@
         }
 
         phoneFrame.style.cssText = `
-            position: absolute; top: 0; left: 0; right: 0;
-            height: 100%; /* 👈 讓它繼承外層的 100dvh */
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             border: none; border-radius: 0; padding: 0;
             box-shadow: none; display: block; background: #fff;
         `;
