@@ -365,6 +365,52 @@
         });
         embedObserver.observe(containerEl, { childList: true });
 
+        // ── 獨立模式：JS 強制把底部導覽列釘死到真實視口底部 ──
+        // 這是 CSS position:fixed 的保險層，確保即使 CSS 快取還是舊版也能正確定位
+        if (isStandalone) {
+            requestAnimationFrame(function _fixNav() {
+                const nav = document.getElementById('aurelia-bottom-nav');
+                const tabCont = document.getElementById('aurelia-tab-container');
+                if (!nav) { requestAnimationFrame(_fixNav); return; }
+
+                // 讀取真實 safe-area（iOS home indicator 區域）
+                // 用 CSS 變數取得 env() 值，JS 無法直接讀取 env()
+                const safeAreaBottom = (() => {
+                    const el = document.createElement('div');
+                    el.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);width:0;pointer-events:none;';
+                    document.body.appendChild(el);
+                    const h = el.offsetHeight || 0;
+                    document.body.removeChild(el);
+                    return h;
+                })();
+
+                const NAV_H = 55; // nav 可見內容高度 px
+
+                // 強制 nav 貼底
+                nav.style.setProperty('position', 'fixed',   'important');
+                nav.style.setProperty('bottom',   '0px',     'important');
+                nav.style.setProperty('left',     '0px',     'important');
+                nav.style.setProperty('right',    '0px',     'important');
+                nav.style.setProperty('width',    '100%',    'important');
+                nav.style.setProperty('height',   NAV_H + 'px', 'important');
+                nav.style.setProperty('padding-bottom', safeAreaBottom + 'px', 'important');
+                nav.style.setProperty('box-sizing', 'content-box', 'important');
+                nav.style.setProperty('align-items', 'center', 'important');
+
+                // tab 容器：填滿 nav 上方空間
+                if (tabCont) {
+                    const totalNavH = NAV_H + safeAreaBottom;
+                    tabCont.style.setProperty('position', 'absolute', 'important');
+                    tabCont.style.setProperty('top',    '0px',             'important');
+                    tabCont.style.setProperty('left',   '0px',             'important');
+                    tabCont.style.setProperty('right',  '0px',             'important');
+                    tabCont.style.setProperty('bottom', totalNavH + 'px',  'important');
+                    tabCont.style.setProperty('flex',   'none',            'important');
+                    tabCont.style.setProperty('height', 'auto',            'important');
+                }
+            });
+        }
+
         isVisible = true;
         if (window.VoidTerminal && window.VoidTerminal.onShow) window.VoidTerminal.onShow();
     };

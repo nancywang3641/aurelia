@@ -207,9 +207,21 @@
 
         // ── Service Worker 註冊（iOS PWA 背景恢復快取）──
         if ('serviceWorker' in navigator) {
+            // 當新 SW 取得控制權時，強制重新整理頁面以確保加載最新的 JS/CSS
+            // （舊 SW 可能已用 Cache-First 提供了舊檔案，換 SW 後必須 reload）
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('[SW] 偵測到新版本接管，自動重新整理…');
+                window.location.reload();
+            });
+
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js', { scope: './' })
-                    .then(reg => console.log('[SW] 已註冊', reg.scope))
+                    .then(reg => {
+                        console.log('[SW] 已註冊', reg.scope);
+                        // 強制立刻檢查 sw.js 是否有新版本（不等 24 小時）
+                        // 這讓 iOS 在每次開啟 App 時都能偵測到新部署
+                        reg.update().catch(() => {});
+                    })
                     .catch(e => console.warn('[SW] 註冊失敗', e));
             });
         }
