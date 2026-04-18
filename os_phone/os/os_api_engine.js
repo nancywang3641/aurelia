@@ -432,13 +432,59 @@
                 } else {
                     let targetUrl = config.url.replace(/\/$/, '');
                     if (!targetUrl.includes('/chat/completions')) targetUrl += (targetUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
-                    
+
+                    // ── 真實 SSE 串流路徑 ──────────────────────────────────────
+                    // 只有呼叫方明確傳入 options.useRealStream:true 才啟用
+                    // 其他所有面板繼續走非串流路線，完全不受影響
+                    if (options.useRealStream) {
+                        const streamBody = { ...commonBody, stream: true };
+                        const streamResp = await fetch(targetUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+                            body: JSON.stringify(streamBody)
+                        });
+                        if (!streamResp.ok) throw new Error(`SSE 請求失敗 HTTP ${streamResp.status}`);
+                        if (!streamResp.body) throw new Error('此瀏覽器不支援 ReadableStream，請改用 Chrome/Safari');
+
+                        const reader = streamResp.body.getReader();
+                        const decoder = new TextDecoder();
+                        let buf = '', acc = '';
+
+                        outer: while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            buf += decoder.decode(value, { stream: true });
+                            const lines = buf.split('\n');
+                            buf = lines.pop() ?? '';   // 保留不完整的末尾行
+                            for (const line of lines) {
+                                const trimmed = line.trim();
+                                if (!trimmed.startsWith('data: ')) continue;
+                                const payload = trimmed.slice(6);
+                                if (payload === '[DONE]') break outer;
+                                try {
+                                    const delta = JSON.parse(payload)?.choices?.[0]?.delta?.content || '';
+                                    if (delta) { acc += delta; if (onChunk) onChunk(acc); }
+                                } catch(e) { /* 忽略格式有誤的行 */ }
+                            }
+                        }
+
+                        fullText = cleanRawOutput(acc);
+                        win.OS_API._lastCtx = {
+                            sendTokens: totalTokens, sendChars: totalChars,
+                            recvChars: acc.length, recvTokens: Math.ceil(acc.length * 0.5),
+                            msgCount: cleanMessages.length, updatedAt: Date.now()
+                        };
+                        if (onFinish) onFinish(fullText);
+                        return;   // ← 提前返回，跳過下方的非串流邏輯
+                    }
+                    // ── 一般非串流路徑（原邏輯，其他面板走這裡）─────────────
+
                     const response = await fetch(targetUrl, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
                         body: JSON.stringify(commonBody)
                     });
                     const data = await response.json();
-                    rawApiResponse = data; 
+                    rawApiResponse = data;
                     fullText = normalizeResponse(data);
                 }
 

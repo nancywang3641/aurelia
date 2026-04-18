@@ -25,15 +25,18 @@
         },
         
         processLine: function(line, vnCore) {
-            if (!line || this.activeTemplates.length === 0) return false;
-            const safeLine = line.trim();
-            
+            if (this.activeTemplates.length === 0) return false;
+            const safeLine = (line || '').trim();
+
             // 狀態 1：正在收集區塊內容中
+            // ⚠️ 必須在空行判斷之前處理！區塊內的空行（如 StellarFeed 的分節空行）
+            // 若不攔截就 return false，VN 引擎會自行推進 next()，
+            // 與 parser 的 setTimeout(next,20) 產生雙重推進，導致後面的行被跳過。
             if (this._inBlockId) {
                 // 防呆：去除空白比較，避免結尾多了空格導致無法閉合
                 const cleanLine = safeLine.toLowerCase().replace(/\s+/g, '');
                 const targetClose = `</${this._inBlockId.toLowerCase()}>`;
-                
+
                 if (cleanLine === targetClose) {
                     // 區塊結束，啟動沙盒執行
                     const targetTag = this._inBlockId;
@@ -42,12 +45,16 @@
                     this._blockLines = [];
                     this._renderBlock(targetTag, lines, vnCore);
                 } else {
-                    this._blockLines.push(safeLine); // 繼續收集
+                    // 空行不加入資料（不影響 JS 解析），但仍攔截避免 VN 引擎介入
+                    if (safeLine) this._blockLines.push(safeLine);
                     // 🔥 關鍵修復：使用 setTimeout (20ms) 讓出執行緒，避開 VN 引擎的防連點鎖 (isProcessing)
-                    setTimeout(() => { vnCore.next(); }, 20); 
+                    setTimeout(() => { vnCore.next(); }, 20);
                 }
-                return true; // 攔截，暫停 VN 原生處理
+                return true; // 無論空行或否，一律攔截
             }
+
+            // 非區塊模式下，空行直接放行給 VN 引擎
+            if (!safeLine) return false;
 
             // 狀態 2：偵測是否為區塊開頭 (例如 <weibo>)
             const blockStartMatch = safeLine.match(/^<([a-zA-Z0-9_-]+)>\s*$/i);

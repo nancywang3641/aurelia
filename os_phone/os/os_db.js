@@ -1,14 +1,14 @@
 // ----------------------------------------------------------------
-// [檔案] os_db.js (V19.2 - 修正 Canvas 專案分類對接 Bookshelf)
+// [檔案] os_db.js (V20 - 建立獨立 Studio 草稿庫)
 // 路徑：os_phone/os/os_db.js
 // 職責：管理 IndexedDB 資料庫。支援酒館與獨立版雙通向。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入系統資料庫 (System Storage V19.2)...');
+    console.log('[PhoneOS] 載入系統資料庫 (System Storage V20)...');
     const win = window.parent || window; 
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 19; 
+    const DB_VERSION = 20; // 🔥 升級至 V20
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -26,6 +26,7 @@
     const STORE_NAME_VAR_PACKS = 'var_packs';           
     const STORE_NAME_UI_TEMPLATES = 'ui_templates';     
     const STORE_NAME_STUDIO = 'studio_chats';
+    const STORE_NAME_STUDIO_DRAFTS = 'studio_drafts'; // 🔥 新增：純淨草稿庫
 
     let dbInstance = null;
 
@@ -46,7 +47,8 @@
                         STORE_NAME_PET_LOGS, STORE_NAME_LOBBY, STORE_NAME_ACH,
                         STORE_NAME_CHILD_CHAT, STORE_NAME_WORLDBOOK,
                         STORE_NAME_VN_CHAPTERS, STORE_NAME_VAR_PACKS,
-                        STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO
+                        STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO,
+                        STORE_NAME_STUDIO_DRAFTS // 🔥 註冊草稿庫
                     ];
 
                     stores.forEach(name => {
@@ -69,6 +71,7 @@
             });
         },
 
+        // --- 🎨 靈感創作室 (Studio) 對話快取 ---
         saveStudioChat: async function(modeId, messages) {
             const db = await this.init();
             return new Promise((resolve, reject) => {
@@ -102,6 +105,7 @@
             });
         },
 
+        // --- 寵物、圖片、聊天歷史 (維持原樣) ---
         savePet: async function(petData) {
             const db = await this.init();
             return new Promise((resolve, reject) => {
@@ -145,7 +149,6 @@
                 } catch(e) { reject(e); }
             });
         },
-
         savePetLog: async function(logData) {
             const db = await this.init();
             return new Promise((resolve, reject) => {
@@ -185,7 +188,6 @@
                 } catch(e) { reject(e); }
             });
         },
-
         saveImage: async function(id, f) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
@@ -240,7 +242,6 @@
                 } catch(e) { j(e); }
             });
         },
-
         saveApiChat: async function(id, d) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
@@ -283,7 +284,6 @@
                 } catch(e) { j(e); }
             });
         },
-        
         saveWbPost: async function(p) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
@@ -324,7 +324,6 @@
                 } catch(e) { j(e); }
             });
         },
-        
         saveInvestigationState: async function(chatId, d) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
@@ -354,7 +353,6 @@
                 } catch(e) { j(e); }
             });
         },
-        
         saveMapFacilityData: async function(z, f, d) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
@@ -384,7 +382,6 @@
                 } catch(e) { j(e); }
             });
         },
-
         saveLobbyHistory: async function(chatId, data) {
             const db = await this.init();
             return new Promise((r, j) => {
@@ -499,7 +496,7 @@
         }
     });
 
-    // --- 📖 世界書條目接口 (修正 Category 對接 Bookshelf) ---
+    // --- 📖 正式世界書條目接口 ---
     Object.assign(win.OS_DB, {
         saveWorldbookEntry: async function(entry) {
             const db = await this.init();
@@ -522,7 +519,6 @@
                 } catch(e) { j(e); }
             });
         },
-        // 🔥 修正：透過 Category (專案分類) 快速獲取檔案樹所需資料
         getWorldbookEntriesByCategory: async function(categoryName) {
             const db = await this.init();
             return new Promise((r, j) => {
@@ -557,6 +553,58 @@
         }
     });
 
+    // =========================================================
+    // 🔥 新增：純淨草稿庫接口 (與世界書徹底隔離)
+    // =========================================================
+    Object.assign(win.OS_DB, {
+        saveStudioDraft: async function(entry) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!entry.id) entry.id = 'draft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+                    entry.updatedAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
+                    tx.objectStore(STORE_NAME_STUDIO_DRAFTS).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllStudioDrafts: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readonly').objectStore(STORE_NAME_STUDIO_DRAFTS).getAll();
+                    req.onsuccess = () => r(req.result || []);
+                } catch(e) { j(e); }
+            });
+        },
+        getStudioDraftsByCategory: async function(categoryName) {
+            const drafts = await this.getAllStudioDrafts();
+            return drafts.filter(e => e.category === categoryName);
+        },
+        deleteStudioDraft: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
+                    tx.objectStore(STORE_NAME_STUDIO_DRAFTS).delete(id);
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
+        },
+        clearStudioDrafts: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
+                    tx.objectStore(STORE_NAME_STUDIO_DRAFTS).clear();
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
+        }
+    });
+
+    // --- VN 與其他系統 (維持原樣) ---
     Object.assign(win.OS_DB, {
         saveVnChapter: async function(chapter) {
             const db = await this.init();
@@ -636,7 +684,6 @@
                 } catch(e) { j(e); }
             });
         },
-
         saveUITemplate: async function(templateData) {
             const db = await this.init();
             return new Promise((r, j) => {
@@ -667,7 +714,6 @@
                 } catch(e) { j(e); }
             });
         },
-
         saveVNTagTemplate: async function(tagData) {
             if (!tagData.id) {
                 tagData.id = 'vn_tag_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);

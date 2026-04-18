@@ -233,6 +233,7 @@
                     <button class="write-tab-btn" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></button>
                     <button class="write-tab-btn" data-app="avs"><i class="fa-solid fa-dice"></i><span>變數工坊</span></button>
                     <button class="write-tab-btn" id="btn-launch-studio"><i class="fa-solid fa-palette"></i><span>靈感創作室</span></button>
+                    <button class="write-tab-btn" id="btn-launch-workshop"><i class="fa-solid fa-wand-magic-sparkles"></i><span>VN煉丹</span></button>
                     ` : ''}
                 </div>
                 <button class="write-tab-logout-btn" id="write-logout-btn">
@@ -240,12 +241,16 @@
                 </button>
             </div>`;
             
-        // 🔥 修改這裡：攔截創作室的點擊事件，避免調用 showOsApp
+        // 🔥 修改這裡：攔截創作室/煉丹爐的點擊事件，避免調用 showOsApp
         writeTab.querySelectorAll('.write-tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (btn.id === 'btn-launch-studio') {
                     if (window.OS_STUDIO) window.OS_STUDIO.launch();
                     else alert('靈感創作室模組尚未載入，請確認 index.html 底部有引入 os_studio.js！');
+                } else if (btn.id === 'btn-launch-workshop') {
+                    // VN煉丹爐：掛在 write-tab 容器內，切 TAB 自動跟著消失
+                    if (window.VN_UI_Workshop) window.VN_UI_Workshop.launchInTab(writeTab);
+                    else alert('VN標籤煉丹爐模組尚未載入，請確認 index.html 底部有引入 vn_ui_workshop.js！');
                 } else if (btn.dataset.app) {
                     if (window.AureliaControlCenter) window.AureliaControlCenter.showOsApp(btn.dataset.app);
                 }

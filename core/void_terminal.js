@@ -985,7 +985,6 @@ const IRIS_IDLE = [
                     <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
                     ${extraAppsHtml}
-                    <button class="void-hist-btn" id="vn-workshop-btn" title="VN 標籤煉丹爐"><span class="vhb-em">🪄</span><span>VN煉丹</span></button>
                     <button class="void-hist-btn" data-app-launch="tarot" title="塔羅"><span class="vhb-em">🔮</span><span>塔羅</span></button>
                     <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
@@ -1142,15 +1141,6 @@ const IRIS_IDLE = [
 
             const storeCloseBtn = tab.querySelector('#store-close-btn');
             if (storeCloseBtn) storeCloseBtn.addEventListener('click', closeStorePanel);
-
-            // 🔥 VN 標籤煉丹爐 啟動按鈕
-            const workshopBtn = tab.querySelector('#vn-workshop-btn');
-            if (workshopBtn) {
-                workshopBtn.addEventListener('click', () => {
-                    if (window.VN_UI_Workshop) window.VN_UI_Workshop.launch();
-                    else alert('標籤煉丹爐模組尚未載入，請確認 index.html 底部有正確引入 vn_ui_workshop.js！');
-                });
-            }
 
             const histCloseBtn = tab.querySelector('#hist-close-btn');
             const histCheckAll = tab.querySelector('#hist-check-all');

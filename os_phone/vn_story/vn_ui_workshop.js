@@ -113,8 +113,10 @@
     let generatedData = null;
     let basePrompt = ""; 
 
-    function launchWorkshop() {
-        const root = document.getElementById('aurelia-phone-screen') || document.body;
+    function launchWorkshop(root) {
+        // root 由呼叫方傳入（寫作 TAB 容器），不傳則降級到 phone-screen
+        if (!root) root = document.getElementById('aurelia-phone-screen') || document.body;
+
         let existing = document.getElementById('vn_workshop_app');
         if (existing) existing.remove();
 
@@ -127,11 +129,18 @@
 
         const appDiv = document.createElement('div');
         appDiv.id = 'vn_workshop_app';
-        appDiv.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; z-index:9000;';
+        // z-index:9999 確保覆蓋在寫作 TAB 的 write-panel-container (z:50) 之上
+        appDiv.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; z-index:9999;';
         appDiv.innerHTML = workshopHTML;
         root.appendChild(appDiv);
 
         bindEvents();
+    }
+
+    // launchInTab：由 control_center.js 的寫作 TAB 呼叫，
+    // 把面板掛在 TAB 容器內，切換 TAB 時自動隨之消失
+    function launchInTab(tabContainer) {
+        launchWorkshop(tabContainer);
     }
 
     function bindEvents() {
@@ -244,20 +253,24 @@
 ### 輸出指令規範：
 1. **tagId**: 適合點子的英文標籤名 (如 hospital_list)。
 2. **format**: 
-   - ⚠️ **絕對不要輸出具體的資料內容** (例如不要寫出特定的道具名或人名，不僅生成劇本時浪費Token，劇本AI還會產生「過度擬合（Overfitting）」)。
-   - 請使用 **{變數名稱}** 作為佔位符 (例如：[Item|{name}|{rarity}] )。
+   - <my_tag>
+   ...
+   [Item|姓名|狀態]
+   ...
+   </my_tag> 包裹
    - 若為列表，請輸出一行標準格式後，下方加上 "... (根據劇情生成 N 行)"。
 3. **desc**: 詳細的風格與互動描述。
 
 ### 格式要求：
 - 必須將 JSON 物件包裹在 <json> 與 </json> 標籤內。
 - JSON 內部換行請寫成 "\\n"。
+- <my_tag>...</my_tag>必須有，但不可多組TAG，這裏只適配一組TAG BLCOK，不可跳過只寫內容，腳本會直接報錯。
 
-範例格式思維 (僅供參考邏輯)：
-<my_tag>
-[Slot|{title}|{value}]
-... (根據劇情生成 3 行)
-</my_tag>
+範例格式思維 (僅供參考邏輯)，腳本沒有錯容，寫錯就報錯：
+<hit_list>
+[Item|目標姓名|狀態]
+... (根據劇情生成 N 行)
+</hit_list>
 
 請開始轉換：`;
 
@@ -473,6 +486,7 @@ ${desc}
 3. \x60onComplete\x60 (Function): 呼叫此函數會關閉面板並繼續遊戲。
 
 你的任務必須做到：
+0. 主外框必須有卡片容器(用戶的展廳需要外容器高度，否則會塌陷)，否則會滿屏，這不是這面板要的效果。
 1. 分析 \x60lines\x60 陣列中的字串，提取出所需資料。
 2. 實現「步進（Step）」或「滾動」互動。
 3. 當所有互動結束時（例如點擊完最後一筆），必須呼叫 \x60onComplete()\x60。
@@ -600,5 +614,8 @@ ${desc}
         }
     }
 
-    win.VN_UI_Workshop = { launch: launchWorkshop };
+    win.VN_UI_Workshop = {
+        launch: launchWorkshop,       // 舊接口保留（不傳 root 則掛在 phone-screen）
+        launchInTab: launchInTab,     // 新接口：由寫作 TAB 呼叫，面板跟著 TAB 走
+    };
 })();

@@ -222,12 +222,15 @@
             await prevQueue; // 等前一個完成
             console.log('[ImageManager] NAI 輪到我了，開始生成...');
 
-            // 尺寸：預設 1024x1024，但接受 options 傳入（插圖需要 832x512 橫幅）
-            const isChar = (type === 'char');
+            // 尺寸：預設 1024x1024，但接受 options 傳入
+            // scene / char 都是人物插圖類型；item / pet 是物品類型
+            const isChar = (type === 'char' || type === 'scene');
             const width  = options.width  || 1024;
             const height = options.height || 1024;
 
             // 底詞：NAI Danbooru tag 格式（設定可自訂）
+            // scene / char 已由呼叫方（getScene/getAvatar）預先 join avatarBasePrompt，
+            // 這裡再前置 NAI 品質底詞（masterpiece, best quality…）
             let finalPrompt = prompt;
             if (isChar && cfg.charBasePrompt) {
                 finalPrompt = cfg.charBasePrompt + ', ' + prompt;
@@ -235,10 +238,12 @@
                 finalPrompt = cfg.itemBasePrompt + ', ' + prompt;
             }
 
-            // 負向提示詞：從設定讀取
-            const negativePrompt = isChar
-                ? (cfg.charNegPrompt || 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry')
-                : (cfg.itemNegPrompt || 'person, human, body, face, hands, worst quality, low quality, blurry, watermark, text');
+            // 負向提示詞：優先使用呼叫方傳入的 options.negativePrompt（使用者自訂），
+            // 否則按類型使用預設值
+            const negativePrompt = options.negativePrompt ||
+                (isChar
+                    ? (cfg.charNegPrompt || 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry')
+                    : (cfg.itemNegPrompt || 'person, human, body, face, hands, worst quality, low quality, blurry, watermark, text'));
 
             const model   = cfg.model    || 'nai-diffusion-3';
             const isV4    = model.includes('nai-diffusion-4');

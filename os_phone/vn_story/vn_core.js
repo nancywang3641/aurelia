@@ -161,8 +161,11 @@
         },
         getScene: async function(prompt) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
-                const negPrompt = VN_Config.data.sceneNegPrompt || VN_Config.data.avatarNegPrompt || undefined;
-                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: 832, height: 1216, negativePrompt: negPrompt });
+                // ★ 直接把 prompt 丟給 generate，type='scene'
+                //   OS_IMAGE_MANAGER._genNovelAI 會自動套用 os_settings.js 中的
+                //   charBasePrompt / charNegPrompt（避免用空的 VN_Config.data 設定）
+                // NAI 免費無限小圖：直式插圖 512×768（不耗 Anlas）
+                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: 512, height: 768 });
             } return "";
         }
     };
@@ -436,6 +439,12 @@
             this._lorebookLoaded = false;
             this._domBlockCursor = 0;     // 第幾個自訂 DOM block（每次 loadScript 歸零）
             this._currentMessageId = null; // 當前訊息 ID，供從 .mes_text 抓 DOM
+            // 重置動態 Parser 狀態 + 清除殘留 overlay（防止舊面板的 onComplete 汙染新章節）
+            if (window.VN_DynamicParser) {
+                window.VN_DynamicParser._inBlockId = null;
+                window.VN_DynamicParser._blockLines = [];
+            }
+            document.querySelectorAll('.vn-dyn-overlay').forEach(el => el.remove());
 
             // 關閉選項 overlay（載入新/舊章節時清除殘留）
             const choiceOv = document.getElementById('vn-choice-overlay');
@@ -676,16 +685,33 @@
                     });
                 }
 
+                // _inDynBlock：追蹤「動態 Parser 區塊」（煉丹爐標籤，如 <StellarFeed>）
+                // 這類區塊的內容必須完整保留，讓 vn_dynamic_parser 的 processLine 自行收集；
+                // 不能讓格式B過濾器（[Timeline]、[Hot] 等節區標記）誤判為 DOM Block 並刪除後續內容。
                 let _inBlock = false, _bCloseTag = '';
+                let _inDynBlock = false, _dynCloseTag = '';
                 this.script = this.script.filter(l => {
+                    // ── 優先：動態 Parser 區塊保護層 ──────────────────────────
+                    if (_inDynBlock) {
+                        if (l === _dynCloseTag) { _inDynBlock = false; _dynCloseTag = ''; }
+                        return true; // 區塊內所有行（含節區標記與結束標籤）一律保留
+                    }
+
                     if (!_inBlock) {
                         // 格式A 開頭 <XXX>
                         const _oA = l.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
-                        if (_oA && !_skipSys.includes(_oA[1].toLowerCase())) {
-                            _inBlock = true; _bCloseTag = `</${_oA[1]}>`;
-                            return true; // 保留開頭標籤行
+                        if (_oA) {
+                            if (_skipSys.includes(_oA[1].toLowerCase())) {
+                                // 這是已知的動態 Parser 區塊 → 切換到保護模式，完整保留
+                                _inDynBlock = true; _dynCloseTag = `</${_oA[1]}>`;
+                                return true;
+                            } else {
+                                // 未知 XML 區塊 → 走原本的 DOM Block 過濾
+                                _inBlock = true; _bCloseTag = `</${_oA[1]}>`;
+                                return true; // 保留開頭標籤行
+                            }
                         }
-                        // 格式B 開頭 [XXX]
+                        // 格式B 開頭 [XXX]（僅在非動態區塊時觸發）
                         const _oB = l.match(/^\[([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)\]$/);
                         if (_oB) {
                             _inBlock = true; _bCloseTag = `[/${_oB[1]}]`;
@@ -1498,8 +1524,12 @@
                         endBtn.onclick = () => {
                             if (win.OS_API?.isStandalone?.() ?? false) {
                                 VN_StandaloneArchive.show();
-                            } else if (win.AureliaHtmlExtractor) {
+                            } else if (win.AureliaHtmlExtractor && typeof win.AureliaHtmlExtractor.show === 'function') {
                                 win.AureliaHtmlExtractor.show();
+                            } else if (win.toggleHtmlExtractor) {
+                                win.toggleHtmlExtractor();
+                            } else {
+                                console.warn('[VN_Core] 找不到 AureliaHtmlExtractor (狀態提取模組)');
                             }
                         };
                     }
@@ -1515,24 +1545,54 @@
             if (line.startsWith('<call')) { if(win.VN_Phone) win.VN_Phone.initCall(this, line); return; }
             if (line.startsWith('</call>')) { if(win.VN_Phone) win.VN_Phone.exitCall(this); return; }
 
+            // 🔥 【動態積木攔截 - 最優先，必須在 DOM block 過濾之前】
+            // processLine 在收集區塊時（_inBlockId 已設定），必須優先攔截 [Timeline]、[Hot] 等行，
+            // 否則這些行會被下方的 _fOpenB 誤判為 DOM Block 並呼叫 _showDomBlock()。
+            if (window.VN_DynamicParser && window.VN_DynamicParser.processLine(line, this)) {
+                return;
+            }
+
             // --- 自訂區塊過濾 ---
+            //   格式A：<XXX> ... </XXX>   （XML 風格，無屬性）
+            //   格式B：[XXX] ... [/XXX]   （方括號風格，無 | 分隔符，有 | 的是 VN 系統標籤）
             {
-                const _sysXml = ['content','call','chat','status','summary','avatar','p','div','span','br','hr'];
-                
-                // 🌟 神奇魔法：動態抓取煉丹爐已啟用的區塊標籤
+                const _sysXml = ['content','call','chat','status','summary','avatar',
+                    'p','div','span','br','hr','b','i','em','strong','a','img',
+                    'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
+                    'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
+
+                // 動態抓取煉丹爐已啟用的區塊標籤（這類標籤由 VN_DynamicParser 處理，不走 _showDomBlock）
                 if (window.VN_DynamicParser && window.VN_DynamicParser.activeTemplates) {
                     window.VN_DynamicParser.activeTemplates.forEach(tpl => {
                         if (tpl.isBlock && tpl.tagId) _sysXml.push(tpl.tagId.toLowerCase());
                     });
                 }
 
-                const _fOpenA = line.match(/^<([A-Za-z\u4e00-\u9fff][\w-]*)>$/);
+                // 格式A：<XXX>
+                const _fOpenA = line.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
                 if (_fOpenA && !_sysXml.includes(_fOpenA[1].toLowerCase())) {
                     let _ei = this.index + 1;
                     const _ct = `</${_fOpenA[1]}>`;
                     while (_ei < this.script.length && this.script[_ei] !== _ct) _ei++;
-                    this.index = _ei; this._showDomBlock(); return;
+                    this.index = _ei;
+                    this._showDomBlock();
+                    return;
                 }
+                const _fCloseA = line.match(/^<\/([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
+                if (_fCloseA && !_sysXml.includes(_fCloseA[1].toLowerCase())) { this.next(); return; }
+
+                // 格式B：[XXX]（無 | 代表是區塊標籤，非 VN 系統單行標籤）
+                const _fOpenB = line.match(/^\[([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)\]$/);
+                if (_fOpenB) {
+                    let _ei = this.index + 1;
+                    const _ct = `[/${_fOpenB[1]}]`;
+                    while (_ei < this.script.length && this.script[_ei] !== _ct) _ei++;
+                    this.index = _ei;
+                    this._showDomBlock();
+                    return;
+                }
+                // 格式B 閉合：[/XXX]
+                if (/^\[\/[A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*\]$/.test(line)) { this.next(); return; }
             }
 
             if (this.mode === 'chat') { if(win.VN_Phone) win.VN_Phone.handleChatLine(line, this); return; }
@@ -1541,73 +1601,237 @@
             // === VN 模式核心渲染 ===
             this.toggleUI('vn');
 
-            // 🔥 【重點插入：動態積木攔截】 🔥
-            // 如果偵測到自訂標籤，解析器會接手並暫停劇情，這裡直接 return
-            if (window.VN_DynamicParser && window.VN_DynamicParser.processLine(line, this)) {
-                return; 
-            }
-
             // 以下是原本的硬編碼格式處理
             if (line.startsWith('[BGM|')) {
-                const name = line.split('|')[1].replace(']', '').trim().replace(/\.[^.]+$/, '');
+                const rawName = line.split('|')[1].replace(']', '').trim();
+                const name = rawName.replace(/\.[^.]+$/, '');
                 const audio = document.getElementById('bgm-player');
-                if (name === 'stop') { audio && audio.pause(); } 
-                else if (VN_Config.data.bgm && audio) {
+                if (name === 'stop') {
+                    if (audio) audio.pause();
+                } else if (VN_Config.data.bgm && audio) {
                     audio.src = VN_Config.data.bgm + name + '.mp3';
+                    // 顯示 BGM Toast：canplay = 綠，error = 紅
+                    const onOk  = () => { this._showBgmToast(name, true);  cleanup(); };
+                    const onErr = () => { this._showBgmToast(name, false); cleanup(); };
+                    const cleanup = () => { audio.removeEventListener('canplay', onOk); audio.removeEventListener('error', onErr); };
+                    audio.addEventListener('canplay', onOk,  { once: true });
+                    audio.addEventListener('error',   onErr, { once: true });
                     audio.play().catch(() => {});
+                } else {
+                    // BGM 路徑未設定 → 直接顯示紅色 toast
+                    this._showBgmToast(name, false);
                 }
                 this.next(); return;
             }
 
+            // 🎬 場景CG（含人物的插圖，獨立容器，點擊關閉）
             if (line.startsWith('[Scene|')) {
+                if (localStorage.getItem('vn_scene_enabled') === '0') { this.next(); return; }
                 const parts = line.slice(7, -1).split('|');
+                const cacheId = parts[0];
+                const prompt  = parts[1];
                 const overlay = document.getElementById('scene-cg-overlay');
-                const cgImg = document.getElementById('scene-cg-img');
+                const cgImg   = document.getElementById('scene-cg-img');
                 if (overlay && cgImg) {
-                    overlay.classList.add('active'); this.hideVNPanel();
-                    cgImg.src = '';
-                    this._safeFetchScene(parts[0], parts[1]).then(url => { if(url) cgImg.src = url; });
+                    overlay.classList.add('active');
+                    this.hideVNPanel();
+                    const memUrl = this._sceneMemCache[cacheId];
+                    if (memUrl) {
+                        cgImg.src = memUrl;
+                    } else if (cacheId && prompt) {
+                        cgImg.src = '';
+                        (async () => {
+                            const url = await this._safeFetchScene(cacheId, prompt);
+                            if (url && cgImg) cgImg.src = url;
+                        })();
+                    }
                 }
-                return;
+                return; // 等待用戶點擊 scene-cg-overlay 後再 next()
             }
 
             if (line.startsWith('[Bg|')) {
-                const p = line.slice(4, -1).split('|');
-                const label = p.length >= 2 ? p[1] : p[0];
-                const badge = document.getElementById('top-badge');
-                if (badge) { badge.innerText = label.replace(/_/g, ' '); badge.style.display = 'block'; }
-                if (p[2] || p[0]) {
-                    this._safeFetchBg(label, p[2] || p[0]).then(url => {
-                        if(url) document.getElementById('game-bg').style.backgroundImage = `url('${url}')`;
-                    });
+                document.getElementById('game-char').style.display = 'none';
+                document.getElementById('char-portrait').style.display = 'none';
+                const parts = line.slice(4, -1).split('|');
+                // 兼容格式：
+                //   [Bg|scene_desc]              → parts[0]=場景描述（badge + AI prompt）
+                //   [Bg|bg_key|scene_label|prompt] → parts[1]=badge, parts[2]=AI prompt
+                const sceneLabel = parts.length >= 2 ? parts[1] : parts[0];
+                const aiPrompt   = parts[2] || (parts.length === 1 ? parts[0] : null);
+                const cacheId    = sceneLabel || ('bg_' + Date.now());
+
+                if (sceneLabel) {
+                    const sceneName = sceneLabel.replace(/_/g, ' ');
+                    const rankPanel = document.getElementById('stream-rank-panel');
+                    const usePanel  = rankPanel && !rankPanel.classList.contains('hidden');
+                    if (usePanel) {
+                        // 直播面板顯示中 → 更新場景列，隱藏 top-badge
+                        document.getElementById('stream-scene-label').innerText = sceneName;
+                        document.getElementById('stream-scene-row').classList.remove('hidden');
+                        document.getElementById('top-badge').style.display = 'none';
+                    } else {
+                        const badge = document.getElementById('top-badge');
+                        if (badge) { badge.innerText = sceneName; badge.style.display = 'block'; }
+                    }
+                }
+                if (aiPrompt) {
+                    this._lastBgCacheId = cacheId;
+                    const memUrl = this._bgMemCache[cacheId];
+                    if (memUrl) {
+                        document.getElementById('game-bg').style.backgroundImage = `url('${memUrl}')`;
+                    } else {
+                        (async () => {
+                            const url = await this._safeFetchBg(cacheId, aiPrompt);
+                            if (url) document.getElementById('game-bg').style.backgroundImage = `url('${url}')`;
+                        })();
+                    }
                 }
                 this.next(); return;
             }
 
-            if (line.startsWith('[Achievement|')) {
-                const p = line.slice(13, -1).split('|');
-                document.getElementById('achievement-name').innerText = p[0] || '';
-                document.getElementById('achievement-desc').innerText = p[1] || '';
-                document.getElementById('achievement-overlay').classList.add('active');
-                setTimeout(() => this.dismissAchievement(), 3500);
+            // 📺 直播資訊 Header
+            if (line.startsWith('[Stream|')) {
+                const p = line.slice(8, -1).split('|').map(s => s.trim());
+                const hdr = document.getElementById('stream-header');
+                if (hdr) {
+                    document.getElementById('stream-title-text').innerText  = p[0] || '';
+                    document.getElementById('stream-host-text').innerText   = p[1] || '';
+                    document.getElementById('stream-viewers').innerText     = p[2] || '';
+                    document.getElementById('stream-followers').innerText   = p[3] || '';
+                    document.getElementById('stream-rank').innerText        = p[4] || '';
+                    hdr.classList.remove('hidden');
+                }
                 this.next(); return;
             }
 
-            if (line.startsWith('[Sys|')) {
-                const p = line.slice(5, -1).split('|');
-                const text = p.length >= 2 ? p.slice(1).join('|') : p[0];
-                document.getElementById('sys-overlay').classList.add('active');
-                this.hideVNPanel();
-                this.typewriter(document.getElementById('sys-text'), this.parseMarkdown(text));
+            // 🎖 粉絲榜
+            if (line.startsWith('[StreamRank|')) {
+                const p = line.slice(12, -1).split('|').map(s => s.trim());
+                for (let i = 0; i < 3; i++) {
+                    const n = i * 3;
+                    document.getElementById(`sr-name-${i+1}`).innerText  = p[n]   || '';
+                    document.getElementById(`sr-title-${i+1}`).innerText = p[n+1] || '';
+                    document.getElementById(`sr-score-${i+1}`).innerText = p[n+2] || '';
+                }
+                document.getElementById('stream-rank-panel').classList.remove('hidden');
+                const badge = document.getElementById('top-badge');
+                if (badge && badge.style.display !== 'none' && badge.innerText) {
+                    document.getElementById('stream-scene-label').innerText = badge.innerText;
+                    document.getElementById('stream-scene-row').classList.remove('hidden');
+                    badge.style.display = 'none';
+                }
+                this.next(); return;
+            }
+
+            // 💬 彈幕 (左→右飛行)
+            if (line.startsWith('[Danmu|')) {
+                const parts = line.slice(7, -1).split('|');
+                const danmuName = parts[0] || '';
+                const danmuText = parts[1] || '';
+                this.launchDanmu(danmuName, danmuText);
+                this.next(); return;
+            }
+
+            // 🏆 成就解鎖
+            if (line.startsWith('[Achievement|')) {
+                const parts = line.slice(13, -1).split('|');
+                const name = parts[0] || '';
+                const desc = parts[1] || '';
+                this.addLog("成就解鎖", `${name}${desc ? ' — ' + desc : ''}`);
+                document.getElementById('achievement-name').innerText = name;
+                document.getElementById('achievement-desc').innerText = desc;
+                document.getElementById('achievement-overlay').classList.add('active');
+                if (win.OS_ACHIEVEMENT?.unlock) win.OS_ACHIEVEMENT.unlock(name, desc);
+                clearTimeout(this._achTimer);
+                this._achTimer = setTimeout(() => { this.dismissAchievement(); }, 3500);
                 return;
             }
 
+            // 📋 委託面板
             if (line.startsWith('[Quest|')) {
-                const p = line.slice(7, -1).split('|');
-                document.getElementById('quest-title').innerText = p[0] || '';
-                document.getElementById('quest-desc').innerText = p[2] || '';
+                const parts = line.slice(7, -1).split('|');
+                const qtitle  = parts[0] || '';
+                const qnpc    = parts[1] || '';
+                const qdesc   = parts[2] || '';
+                const qreward = parts[3] || '';
+                document.getElementById('quest-title').innerText          = qtitle;
+                document.getElementById('quest-requester-name').innerText = qnpc;
+                document.getElementById('quest-desc').innerText           = qdesc;
+                document.getElementById('quest-reward').innerText         = qreward;
                 document.getElementById('quest-overlay').classList.add('active');
-                this.hideVNPanel(); return;
+                this.hideVNPanel();
+                this.addLog("委託", `【${qtitle}】${qnpc ? ' — ' + qnpc : ''}${qreward ? ' 獎勵：' + qreward : ''}`);
+                return;
+            }
+
+            if (line.startsWith('[Sys|')) {
+                const parts = line.slice(5, -1).split('|');
+                const bodyText = parts.length >= 2 ? parts.slice(1).join('|') : parts[0];
+                if (bodyText.includes('成就解鎖') || bodyText.includes('成就：') || bodyText.includes('Achievement')) {
+                    this.next(); return;
+                }
+                const titleEl = document.getElementById('sys-title');
+                const textEl  = document.getElementById('sys-text');
+                if (parts.length >= 2) { titleEl.innerText = parts[0]; titleEl.style.display = 'block'; }
+                else { titleEl.style.display = 'none'; }
+                document.getElementById('sys-overlay').classList.add('active');
+                this.hideVNPanel();
+                this.typewriter(textEl, this.parseMarkdown(bodyText));
+                this.addLog("系統", bodyText);
+                return;
+            }
+
+            if (line.startsWith('[Trans|')) {
+                const _tParts = line.split('|');
+                const text = (_tParts[2]?.replace(']', '') || _tParts[1]?.replace(']', '') || '').trim();
+                document.getElementById('trans-text').innerText = text;
+                document.getElementById('trans-overlay').classList.add('active');
+                this.hideVNPanel(); setTimeout(() => this.checkAutoNext(), 2000); return;
+            }
+
+            if (line.startsWith('[Item|')) {
+                const parts = line.slice(6, -1).split('|');
+                const itemName = parts[0];
+                document.getElementById('item-title').innerText = itemName;
+                document.getElementById('item-desc').innerText  = parts[1] || '';
+                document.getElementById('item-overlay').classList.add('active');
+                this.hideVNPanel();
+                document.getElementById('item-img').src = '';
+                const memUrl = this._itemMemCache[itemName];
+                if (memUrl) {
+                    document.getElementById('item-img').src = memUrl;
+                } else {
+                    (async () => {
+                        const cached = await VN_Cache.get('item_cache', itemName);
+                        if (cached && cached.url && !cached.url.startsWith('blob:')) {
+                            const objUrl = await this._toObjectUrl(cached.url);
+                            this._itemMemCache[itemName] = objUrl || cached.url;
+                        } else {
+                            const raw = await VN_Image.getItem(itemName);
+                            if (raw) {
+                                try {
+                                    const fetchRes = await fetch(raw);
+                                    const blob = await fetchRes.blob();
+                                    const objUrl = URL.createObjectURL(blob);
+                                    const dataUrl = await new Promise(r => {
+                                        const reader = new FileReader();
+                                        reader.onload = () => r(reader.result);
+                                        reader.onerror = () => r('');
+                                        reader.readAsDataURL(blob);
+                                    });
+                                    this._itemMemCache[itemName] = objUrl;
+                                    if (dataUrl) await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: dataUrl });
+                                } catch(e) {
+                                    this._itemMemCache[itemName] = raw;
+                                    await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: raw });
+                                }
+                            }
+                        }
+                        if (this._itemMemCache[itemName]) document.getElementById('item-img').src = this._itemMemCache[itemName];
+                    })();
+                }
+                this.addLog("獲得物品", `${itemName} - ${parts[1]||''}`);
+                return;
             }
 
             if (line.startsWith('[Char|')) {
@@ -1615,26 +1839,97 @@
                 const ex = this._extractTextAndSFX(p.slice(2));
                 this.updateSprite(p[0], p[1]);
                 this.renderVN(p[0], ex.text);
+                this.addLog(p[0], ex.text);
                 this.playSFX(ex.sfx);
-                this._currentChar = { charName: p[0], text: ex.text, expression: p[1] };
+                this._lastChar = p[0];
+                this._currentChar = { charName: p[0], text: ex.text, emotion: this._mapExprToEmotion(p[1]), expression: p[1] };
                 this.updateControlUI();
+                this._vnSoVITSPlay(p[0], ex.text, this._mapExprToEmotion(p[1]));
+                (function(charName, text, expression) {
+                    const _mm = (window.parent || window).OS_MINIMAX;
+                    if (_mm) _mm.playForChar(charName, text, { expression });
+                })(p[0], ex.text, p[1]);
+                (function prefetchNext(script, curIdx) {
+                    const _mm = (window.parent || window).OS_MINIMAX;
+                    if (!_mm?.prefetchForChar) return;
+                    for (let i = curIdx + 1; i < script.length; i++) {
+                        const nl = script[i];
+                        if (nl.startsWith('[Char|')) {
+                            const np = nl.slice(6, -1).split('|');
+                            const nex = VN_Core._extractTextAndSFX(np.slice(2));
+                            if (nex.text) _mm.prefetchForChar(np[0], nex.text, { expression: np[1] });
+                            break;
+                        }
+                        if (nl.startsWith('[Choice|') || nl.startsWith('[End]') || nl.startsWith('</')) break;
+                    }
+                })(this.script, this.index);
                 return;
             }
-
+            if (line.startsWith('[Inner|')) {
+                const p = line.slice(7, -1).split('|');
+                const ex = this._extractTextAndSFX(p.slice(1));
+                const _innerClean = ex.text.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
+                this.updateSprite(p[0], 'Think');
+                this.renderVN(p[0], _innerClean, 'inner');
+                this.addLog(p[0], _innerClean);
+                this.playSFX(ex.sfx);
+                return;
+            }
             if (line.startsWith('[Nar|')) {
-                const ex = this._extractTextAndSFX(line.slice(5, -1).split('|'));
+                document.getElementById('game-char').style.display = 'none';
+                document.getElementById('char-portrait').style.display = 'none';
+                const p = line.slice(5, -1).split('|');
+                const ex = this._extractTextAndSFX(p);
+                this._currentChar = null; this.updateControlUI();
                 this.renderVN('', ex.text);
+                this.addLog("旁白", ex.text);
                 this.playSFX(ex.sfx);
                 return;
             }
 
+            // 🎮 選擇按鈕（獨立模式原生 UI；ST 模式由正則+DOM bridge 處理，這裡靜默跳過）
             if (line.startsWith('[Choice|')) {
-                if (win.OS_API?.isStandalone?.() ?? false) this._showStandaloneChoices(line);
-                else this.next();
+                if (win.OS_API?.isStandalone?.() ?? false) {
+                    this._showStandaloneChoices(line);
+                } else {
+                    this.next();
+                }
                 return;
             }
 
-            // Fallback
+            // 📖 章節結束標記（跨面板通訊：ST 模式由 inv_core 等面板掃描聊天記錄；獨立模式改為主動派發事件）
+            if (line.startsWith('[SessionEnd|')) {
+                if (win.OS_API?.isStandalone?.() ?? false) {
+                    try {
+                        const tagSummary = line.slice(12, -1);
+                        const fullText = this._lastRawText || '';
+                        win.dispatchEvent(new CustomEvent('os_vn_session_end', {
+                            detail: { summary: tagSummary, fullText }
+                        }));
+                        console.log('[VN_Core] 已派發 os_vn_session_end 事件');
+                    } catch(e) {}
+                }
+                this.next();
+                return;
+            }
+
+            // Fallback: *text* → Inner monologue, plain text → Nar
+            const _trimmed = line.trim();
+            if (/^\*{1,2}[^*].+\*{1,2}$/.test(_trimmed)) {
+                const _innerText = _trimmed.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
+                this.updateSprite(this._lastChar || '', 'Think');
+                this.renderVN(this._lastChar || '', _innerText, 'inner');
+                this.addLog(this._lastChar || '内心', _innerText);
+                return;
+            }
+            const _stripped = _trimmed.replace(/^\[?/, '').replace(/\]$/, '').trim();
+            if (_stripped.length > 2 && !_trimmed.startsWith('[') && !_trimmed.startsWith('<') && !_trimmed.startsWith('//') && !_trimmed.startsWith('---')) {
+                document.getElementById('game-char').style.display = 'none';
+                document.getElementById('char-portrait').style.display = 'none';
+                this.renderVN('', _stripped);
+                this.addLog('旁白', _stripped);
+                return;
+            }
             this.next();
         },
 
@@ -3824,10 +4119,11 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 #ue-tab-bar::-webkit-scrollbar{display:none}
                 .ue-tab-item{padding:11px 14px;font-size:10px;color:rgba(200,178,130,.45);cursor:pointer;border-bottom:2px solid transparent;transition:all .18s;white-space:nowrap;font-weight:600;letter-spacing:2px}
                 .ue-tab-item.active{color:#d4af37;border-bottom-color:#d4af37}
-                #ue-content-area{flex:1;overflow-y:auto;overflow-x:hidden;background:transparent;padding:16px}
+                #ue-content-area{flex:1;overflow-y:auto;overflow-x:hidden;background:transparent;padding:0;display:flex;flex-direction:column;}
                 #ue-content-area::-webkit-scrollbar{width:3px}
                 #ue-content-area::-webkit-scrollbar-thumb{background:rgba(212,175,55,.28);border-radius:2px}
-                .ue-tab-pane{display:none}.ue-tab-pane.active{display:block}
+                .ue-tab-pane{display:none;}
+                .ue-tab-pane.active{display:flex;flex-direction:column;flex:1;padding:16px;box-sizing:border-box;}
                 .native-render-wrapper{color:#e8dfc8;display:flow-root;width:100%}
                 .ue-md-table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
                 .ue-md-table th{background:rgba(212,175,55,.12);color:#d4af37;padding:7px 10px;text-align:left;border-bottom:1px solid rgba(212,175,55,.3);font-size:11px}
