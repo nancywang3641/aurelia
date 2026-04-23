@@ -228,12 +228,12 @@
                 </div>
                 <div class="write-tab-btns">
                     <button class="write-tab-btn" data-app="設置"><i class="fa-solid fa-gear"></i><span>API 設置</span></button>
+                    <button class="write-tab-btn" id="btn-launch-workshop"><i class="fa-solid fa-wand-magic-sparkles"></i><span>VN煉丹</span></button>
                     ${isStandalone ? `
                     <button class="write-tab-btn" data-app="提示詞"><i class="fa-solid fa-sliders"></i><span>提示詞管理</span></button>
                     <button class="write-tab-btn" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></button>
                     <button class="write-tab-btn" data-app="avs"><i class="fa-solid fa-dice"></i><span>變數工坊</span></button>
                     <button class="write-tab-btn" id="btn-launch-studio"><i class="fa-solid fa-palette"></i><span>靈感創作室</span></button>
-                    <button class="write-tab-btn" id="btn-launch-workshop"><i class="fa-solid fa-wand-magic-sparkles"></i><span>VN煉丹</span></button>
                     ` : ''}
                 </div>
                 <button class="write-tab-logout-btn" id="write-logout-btn">
@@ -489,10 +489,7 @@
 
     AureliaControlCenter.launchGameApp = function(key) {
         const GAME_APP_MAP = {
-            child:      () => window.CHILD_CORE?.launch,
-            inv:        () => window.INV_CORE?.launchApp,
             qb:         () => window.OS_QUEST_BOARD?.launchApp,
-            host:       () => window.HOST_CLUB?.launch,
             pet:        () => window.PET_SHOP?.launch,
             pet_home:   () => window.PET_HOME?.launch,
             tarot:      () => window.OS_TAROT?.launch,
@@ -519,8 +516,6 @@
 
         const doClose = () => {
             panel.style.display = 'none';
-            if (window.INV_CORE && typeof window.INV_CORE.stopBgm === 'function') window.INV_CORE.stopBgm();
-            if (window.CHILD_CORE && typeof window.CHILD_CORE.stopBgm === 'function') window.CHILD_CORE.stopBgm();
             if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
         };
 
@@ -542,10 +537,13 @@
         if (!isVisible) AureliaControlCenter.show();
         const root = phoneFrame;
         if (!root) return;
-        
+
         // 🌟 雙視窗路由：判斷是否為「寫作專用 App」
         const isWriteApp = ['設置', '世界書', 'worldbook', '提示詞', '思考記錄', 'think', 'avs', '變數工坊'].includes(appName);
-        
+
+        // 🌟 寫作類 App 必須先切換到寫作 TAB，否則 write-panel-container 在其他 tab 下是 display:none
+        if (isWriteApp) switchPage('nav-write');
+
         // 自動選擇要注入的視窗容器
         const containerId = isWriteApp ? '#write-iframe-container' : '#aurelia-iframe-container';
         const panelId = isWriteApp ? '#write-panel-container' : '#aurelia-panel-container';
@@ -568,7 +566,6 @@
                 'think': window.OS_THINK,
                 '系統診斷': window.OS_MONITOR,
                 'RPG 狀態': window.RPG_PANEL,
-                '刑案調查': window.INV_CORE,
                 '視差引擎': window.OS_QUEST_BOARD,
                 'avs': window.OS_AVS,
                 '變數工坊': window.OS_AVS,

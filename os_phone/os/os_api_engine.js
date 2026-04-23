@@ -177,6 +177,135 @@
             return uName || "User";
         },
 
+        /**
+         * 場景插圖分析：把劇情文本送給副模型，讓它在適當位置插入 [Scene|id|prompt] 標籤
+         * @param {string} storyText   - 已提取的 <content> 劇情文本
+         * @param {function} onFinish  - callback(enhancedText) 回傳插入了 [Scene|] 的增強版文本
+         * @param {function} [onError] - callback(err) 錯誤處理
+         */
+        analyzeSceneInserts: function(storyText, onFinish, onError) {
+            const imgCfg   = (win.OS_SETTINGS?.getImageConfig?.()) || {};
+            const sceneCfg = imgCfg.sceneGen || {};
+
+            if (!sceneCfg.enabled) { onFinish(storyText); return; }
+
+            const specPrompt = (sceneCfg.specPrompt || '').trim();
+            if (!specPrompt) { onFinish(storyText); return; }
+
+            // ── 依 promptStyle 決定 prompt 格式指令 ──────────────────────
+            const _rawStyle  = sceneCfg.promptStyle || 'auto';
+            const _globalSvc = (win.OS_IMAGE_MANAGER?.config?.service) || 'pollinations';
+            const _useNatural = _rawStyle === 'natural' || (_rawStyle === 'auto' && _globalSvc !== 'novelai');
+
+            const _taskInstruction = _useNatural ? [
+                'Analyze the story and output a JSON array of scene-insertion points.',
+                'Each object has two fields:',
+                '  "after"  — a SHORT phrase (5-20 chars) copied VERBATIM from the story,',
+                '             identifying the line AFTER which the scene should appear.',
+                '  "prompt" — vivid natural-language English description of the scene (no tag syntax, no commas as separators).',
+                '',
+                'OUTPUT: raw JSON array only — no markdown fences, no explanation, nothing else.',
+                '',
+                'EXAMPLE:',
+                '[',
+                '  {"after": "她推開了門", "prompt": "a girl standing in a doorway bathed in golden sunset light, cinematic mood"},',
+                '  {"after": "握住她的手腕", "prompt": "close-up of two hands clasped together, soft dramatic lighting"}',
+                ']',
+                '',
+                'ANCHOR RULES:',
+                '• Copy "after" exactly as it appears in the story — do NOT paraphrase.',
+                '• Pick a phrase near the END of the target line so it pinpoints that location.',
+                '• If no suitable visual moment exists, output: []',
+                '',
+                'Scene description style rules (apply when writing the "prompt" field):',
+                '──────────────────────────────────────────────────────────────────'
+            ].join('\n') : [
+                'Analyze the story and output a JSON array of scene-insertion points.',
+                'Each object has two fields:',
+                '  "after"  — a SHORT phrase (5-20 chars) copied VERBATIM from the story,',
+                '             identifying the line AFTER which the scene should appear.',
+                '  "prompt" — Danbooru image prompt tags for that scene (see format rules below).',
+                '',
+                'OUTPUT: raw JSON array only — no markdown fences, no explanation, nothing else.',
+                '',
+                'EXAMPLE:',
+                '[',
+                '  {"after": "她推開了門", "prompt": "1girl, doorway, sunset, medium_shot"},',
+                '  {"after": "握住她的手腕", "prompt": "2girls, hand_holding, close-up"}',
+                ']',
+                '',
+                'ANCHOR RULES:',
+                '• Copy "after" exactly as it appears in the story — do NOT paraphrase.',
+                '• Pick a phrase near the END of the target line so it pinpoints that location.',
+                '• If no suitable visual moment exists, output: []',
+                '',
+                'Scene prompt format rules (apply when writing the "prompt" field):',
+                '──────────────────────────────────────────────────────────────────'
+            ].join('\n');
+
+            const sysPrompt = _taskInstruction + '\n' + specPrompt;
+
+            const messages = [
+                { role: 'system', content: sysPrompt },
+                { role: 'user',   content: storyText }
+            ];
+
+            let secConfig = {};
+            if (win.OS_SETTINGS?.getSecondaryConfig) secConfig = win.OS_SETTINGS.getSecondaryConfig();
+            else if (win.OS_SETTINGS?.getConfig)     secConfig = win.OS_SETTINGS.getConfig();
+            secConfig._isSecondary = true;
+
+            this.chat(
+                messages,
+                secConfig,
+                null,
+                (aiResponse) => {
+                    try {
+                        // 提取 JSON 陣列（防止 AI 多包了 markdown code fence）
+                        const jsonMatch = (aiResponse || '').match(/\[[\s\S]*\]/);
+                        if (!jsonMatch) { onFinish(storyText); return; }
+
+                        const insertions = JSON.parse(jsonMatch[0]);
+                        if (!Array.isArray(insertions) || insertions.length === 0) {
+                            onFinish(storyText); return;
+                        }
+
+                        // 原文按行分割，依序找錨點並插入 <scene> block
+                        const lines = storyText.split('\n');
+                        let offset = 0; // 每次插入後需偏移行索引
+
+                        for (const ins of insertions) {
+                            if (!ins.after || !ins.prompt) continue;
+
+                            // 找包含錨點的行（從前往後，取第一個）
+                            let targetIdx = -1;
+                            for (let i = 0; i < lines.length; i++) {
+                                if (lines[i].includes(ins.after)) { targetIdx = i; break; }
+                            }
+                            if (targetIdx < 0) {
+                                console.warn('[VN SceneGen] 找不到錨點，跳過:', ins.after);
+                                continue;
+                            }
+
+                            // 在錨點行後插入 <scene>...<\/scene>
+                            lines.splice(targetIdx + 1 + offset, 0, '<scene>', ins.prompt, '</scene>');
+                            offset += 3;
+                        }
+
+                        onFinish(lines.join('\n'));
+                    } catch(e) {
+                        console.warn('[VN SceneGen] JSON 解析失敗，使用原文:', e);
+                        onFinish(storyText);
+                    }
+                },
+                (err) => {
+                    console.warn('[VN SceneGen] 副模型分析失敗，跳過插圖:', err);
+                    if (onError) onError(err);
+                    else onFinish(storyText);
+                }
+            );
+        },
+
         chatSecondary: async function(messages, onChunk, onFinish, onError) {
             let secConfig = {};
             if (win.OS_SETTINGS && typeof win.OS_SETTINGS.getSecondaryConfig === 'function') {
@@ -423,7 +552,8 @@
                         if (activeModel) requestBody.model = activeModel;
                         const response = await fetch('/api/backends/chat-completions/generate', {
                             method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
-                            body: JSON.stringify(requestBody)
+                            body: JSON.stringify(requestBody),
+                            signal: options.signal || undefined
                         });
                         const data = await response.json();
                         rawApiResponse = data; 
@@ -441,7 +571,8 @@
                         const streamResp = await fetch(targetUrl, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
-                            body: JSON.stringify(streamBody)
+                            body: JSON.stringify(streamBody),
+                            signal: options.signal || undefined
                         });
                         if (!streamResp.ok) throw new Error(`SSE 請求失敗 HTTP ${streamResp.status}`);
                         if (!streamResp.body) throw new Error('此瀏覽器不支援 ReadableStream，請改用 Chrome/Safari');
@@ -481,7 +612,8 @@
 
                     const response = await fetch(targetUrl, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
-                        body: JSON.stringify(commonBody)
+                        body: JSON.stringify(commonBody),
+                        signal: options.signal || undefined
                     });
                     const data = await response.json();
                     rawApiResponse = data;
@@ -547,9 +679,11 @@
             let sysPrompt = "";
             let cotPrompt = "";
 
+            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];
+
             if (win.OS_PROMPTS) {
                 if (promptKey) sysPrompt = win.OS_PROMPTS.get(promptKey);
-                cotPrompt = win.OS_PROMPTS.get('universal_cot');
+                if (!NO_COT_ROUTES.includes(promptKey)) cotPrompt = win.OS_PROMPTS.get('universal_cot');
             }
 
             if (!sysPrompt && promptKey === 'wx_chat_system') {
@@ -734,6 +868,8 @@
 
         // --- 5. 獨立模式 Context Builder (精準掃描引擎) ---
         _buildStandaloneContext: async function(userMessage, promptKey) {
+            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];
+
             const apiMessages = [];
 
             let userName = this.getGlobalUserName();
@@ -746,7 +882,7 @@
             let sysPrompt = '', cotPrompt = '';
             if (win.OS_PROMPTS) {
                 sysPrompt  = win.OS_PROMPTS.get(promptKey) || '';
-                cotPrompt  = win.OS_PROMPTS.get('universal_cot') || '';
+                if (!NO_COT_ROUTES.includes(promptKey)) cotPrompt = win.OS_PROMPTS.get('universal_cot') || '';
             }
 
             let charPersona = '';
@@ -853,10 +989,7 @@
                             const _isRecent = _ctxN === 0 || idx >= arr.length - _ctxN;
                             if (!_isRecent) {
                                 const _sm = _c.match(/<summary>([\s\S]*?)<\/summary>/i);
-                                if (_sm) {
-                                    const _pl = _sm[1].split('\n').find(l => /^\s*plot\s*:/i.test(l));
-                                    _c = _pl ? _pl.trim() : '';
-                                } else { _c = ''; }
+                                _c = _sm ? _sm[1].trim() : '';
                             } else {
                                 const _m = _c.match(/<content>([\s\S]*?)<\/content>/i);
                                 if (_m) _c = _m[1].trim();
@@ -880,7 +1013,7 @@
                             if (_injectedSys.has(_item.id)) continue;
                             _injectedSys.add(_item.id);
                             if      (_item.id === 'cot'          && cotPrompt) _vn.push({ role: 'system', content: `### \n${cotPrompt}` });
-                            else if (_item.id === 'panel_prompt')              { const fmt = win.OS_PROMPTS?.getFormat?.('vn_story') || ''; if (fmt) _vn.push({ role: 'system', content: fmt }); }
+                            else if (_item.id === 'panel_prompt')              { const fmt = win.OS_PROMPTS?.getSystemPrompt?.('vn_story') || win.OS_PROMPTS?.getFormat?.('vn_story') || ''; if (fmt) _vn.push({ role: 'system', content: fmt }); }
                             else if (_item.id === 'worldbook'   && lore)       _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
                             else if (_item.id === 'persona'     && (userDesc || userName !== 'User'))  _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
                             else if (_item.id === 'vn_history') _vnMsgs.forEach(m => _vn.push(m));

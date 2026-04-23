@@ -65,6 +65,7 @@
     <script src="os_phone/os/os_card_import.js"></script>
 
     <script src="os_phone/vn_story/vn_styles.js"></script>
+    <script src="os_phone/vn_story/vn_settings.js"></script>
     <script src="os_phone/vn_story/vn_dynamic_parser.js"></script>
     <script src="os_phone/vn_story/vn_core.js"></script>
     <script src="os_phone/vn_story/vn_phone.js"></script>
@@ -75,14 +76,11 @@
     <script src="os_phone/rpg/status_panel.js"></script>
     <script src="os_phone/rpg/avatar_manager.js"></script>
 
-    <script src="os_phone/host_club/host_core.js"></script>
-
     <script src="os_phone/pet/pet_inventory.js"></script>
     <script src="os_phone/pet/pet_status.js"></script>
     <script src="os_phone/pet/pet_shop.js"></script>
     <script src="os_phone/pet/pet_home.js"></script>
 
-    <script src="os_phone/child/child_core.js"></script>
     <script src="os_phone/wx/wx_user_profile.js"></script>
     <script src="os_phone/wx/wx_theme.js"></script>
     <script src="os_phone/wx/wx_contacts.js"></script>
@@ -99,7 +97,6 @@
     <script src="os_phone/wb/wb_view.js"></script>
     <script src="os_phone/wb/wb_core.js"></script>
 
-    <script src="os_phone/inv/inv_core.js"></script>
     <script src="os_phone/qb/qb_core.js"></script>
     <script src="os_phone/qb/qb_bookshelf.js"></script>
     <script src="os_phone/qb/os_404_chaos.js"></script>
@@ -167,8 +164,7 @@
             const PS = window.PhoneSystem;
             if (!PS) return;
             if (window.RPG_PANEL)    PS.install('RPG 狀態',  '🛡️', '#5d4037', window.RPG_PANEL.launch);
-            if (window.HOST_CLUB)    PS.install('不夜城',    '🍸', '#7c3aed', window.HOST_CLUB.launch);
-            if (window.OS_ECONOMY)   PS.install('電子錢包',  '💳', '#2c3e50', c => window.OS_ECONOMY.launch(c));
+if (window.OS_ECONOMY)   PS.install('電子錢包',  '💳', '#2c3e50', c => window.OS_ECONOMY.launch(c));
             if (window.PET_SHOP)     PS.install('寵物店',    '🐾', '#112250', window.PET_SHOP.launch);
             if (window.PET_HOME)     PS.install('我的寵物',  '🏠', '#3C507D', window.PET_HOME.launch);
             if (window.OS_TAROT)     PS.install('賽博塔羅',  '🔮', '#9b59b6', window.OS_TAROT.launch);

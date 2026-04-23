@@ -143,7 +143,7 @@ RedPacket領取格式注意:
 - 嚴禁使用 realistic/photo/real person 等寫實詞
 
 
-## 與<content>並列的其他外插件Block:（<branches>, <summary> , <vars> ）
+## 與<content>並列的其他外插件Block:（<branches>, <summary> , <vars> , <spade_live>）
 
 ### 選項與摘要-使用<branches></branches>, <summary> </summary> 包裹，不可放在<content>內
 每章結尾共 3 條，從以下五種類型中挑選搭配（每條獨立一行）：
@@ -170,6 +170,23 @@ E. 區域轉換主角前往→（具體設施或地點名稱）]
 [SessionEnd|本章劇情摘要]    ← 章節結束標記，摘要用於系統記錄
 </summary> 
 
+
+### 直播間模式 (SPADE_LIVE)
+當場景需要呈現角色正在「進行直播」時，使用 <spade_live> 區塊，放在 </content> 之後。
+[LIVE|text] = 主播說的話　[SYS|text] = 系統事件（打賞、通知等）
+
+<spade_live>
+[LIVE|晚上好，我的罪人們。今晚想懺悔點什麼？]
+[SYS|螢幕右下角的黑桃數字開始瘋狂跳動。]
+[LIVE|刷一艘星際遊輪，我唸一首波德萊爾的詩。用你們最愛的氣泡音。]
+[SYS|一條霓虹橫幅劃過螢幕：「用戶『純愛戰神』送出『星際遊輪』x1」]
+[LIVE|看來今晚有人想聽詩了...很好。]
+</spade_live>
+
+規則：
+- 只在場景有直播畫面時使用，不可在普通對話中混入
+- 每個 [LIVE|] 代表主播一句話，[SYS|] 代表即時系統彈幕/事件
+- 不需要包進 <content> 內，與 <content> 並列輸出
 
 ### 動態變數追蹤 AVS（有數值狀態變化時使用，放在 </content> 之後）
     [核心原則：為了大幅降低產生幻覺算錯數值或亂編變數的機率，請先輸出分析推理後再寫<vars>，每條後方都可備注更改原因，"//原因"來讓用戶後續可監察]

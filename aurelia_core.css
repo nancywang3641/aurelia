@@ -150,6 +150,21 @@ body.mode-404 { background: #000000; }
 .void-chat-bar { position:absolute; bottom:0; left:0; right:0; z-index:15; height:auto; background:rgba(69,34,22,0.9); backdrop-filter:blur(10px); border-top:1px solid rgba(251,223,162,0.3); display:flex; flex-direction:column; padding:6px 12px; gap:5px; }
 .void-chat-btns { display:flex; gap:6px; align-items:center; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
 .void-chat-btns::-webkit-scrollbar { display:none; }
+/* ── 大廳畫布面板（在 void-chat-bar 內部，隨 chat-bar 一起定位，不需要自己處理 z-index）── */
+.lobby-canvas-area { display:flex; flex-direction:column; width:100%; max-width:390px; max-height:78vh; background:rgba(20,8,2,0.98); border:1px solid rgba(251,223,162,0.25); border-radius:14px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,0.7); }
+.lca-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(60,28,14,0.98); border-bottom:1px solid rgba(251,223,162,0.15); flex-shrink:0; }
+.lca-title  { font-size:12px; color:#FBDFA2; font-weight:700; letter-spacing:0.5px; }
+.lca-close  { background:none; border:none; color:#B78456; font-size:15px; cursor:pointer; padding:2px 8px; border-radius:4px; transition:0.2s; line-height:1; }
+.lca-close:hover { color:#fc8181; }
+.lca-content { flex:1; overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; scrollbar-color:rgba(251,223,162,0.3) transparent; }
+@keyframes lcaSlideIn { from { opacity:0; transform:scale(0.96) translateY(12px); } to { opacity:1; transform:scale(1) translateY(0); } }
+@keyframes lcaSlideOut { from { opacity:1; transform:scale(1) translateY(0); } to { opacity:0; transform:scale(0.96) translateY(12px); } }
+/* 404 模式 */
+.void-tab.mode-404 .lobby-canvas-area { background:rgba(0,6,0,0.98); border-color:rgba(0,255,65,0.18); }
+.void-tab.mode-404 .lca-header { background:rgba(0,12,0,0.95); border-color:rgba(0,255,65,0.12); }
+.void-tab.mode-404 .lca-title  { color:#00ff41; }
+.void-tab.mode-404 .lca-close  { color:#00cc33; }
+
 .void-chat-input-row { display:flex; gap:8px; align-items:center; }
 .void-input { flex:1; background:rgba(120,55,25,0.8); border:1px solid rgba(251,223,162,0.3); color:#FFF8E7; padding:10px 16px; border-radius:2px; font-size:13px; outline:none; transition:0.2s; transform:skewX(-5deg); }
 .void-input:focus { background:#452216; border-color:#FBDFA2; box-shadow:0 0 0 2px rgba(251,223,162,0.2); }

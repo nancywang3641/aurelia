@@ -1407,103 +1407,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         </div>
         
         <button class="btn primary" id="btn-vn-st-chapter" onclick="window.VN_PLAYER.openChapterPanel()">選擇章節</button>
-        <button class="btn" onclick="window.VN_PLAYER.switchPage('page-settings')">系統設置</button>
+        <button class="btn" onclick="window.AureliaControlCenter?.showOsApp('設置'); setTimeout(()=>{document.querySelector('.set-tab[data-tab=vn]')?.click()},350)">系統設置</button>
         
         <div class="version-text">VER 8.5 // SFX MODULE</div>
     </div>
 </div>
-
-            <div id="page-settings" class="page hidden">
-                <div class="menu-wrapper" style="justify-content: flex-start; padding-top: 50px; height: auto; min-height: 100%;">
-
-                    <!-- Tab 容器 -->
-                    <div class="cfg-tab-wrap">
-                    <!-- Tab 切換列 -->
-                    <div class="cfg-tab-bar">
-                        <button class="cfg-tab-btn active" onclick="window.VN_PLAYER.switchCfgTab('cfg-tab-basic', this)">⚙️ 基本</button>
-                        <button class="cfg-tab-btn" onclick="window.VN_PLAYER.switchCfgTab('cfg-tab-prompt', this)">🎨 Prompt</button>
-                        <button class="cfg-tab-btn" onclick="window.VN_PLAYER.switchCfgTab('cfg-tab-avatar', this)">🎭 頭像</button>
-                    </div>
-
-                    <!-- Tab 1: 基本路徑 -->
-                    <div id="cfg-tab-basic" class="cfg-tab-panel active">
-                        <div class="setting-row">
-                            <label>🏠 主頁背景圖</label>
-                            <input type="text" id="cfg-home-bg-base" placeholder="https://example.com/bg/" style="margin-bottom:8px;">
-                            <div style="display:flex; gap:8px; align-items:center;">
-                                <input type="number" id="cfg-home-bg-count" placeholder="圖片數量" min="1" style="width:50%; flex:1;">
-                                <select id="cfg-home-bg-ext" style="width:50%; flex:1; padding:10px; background:rgba(0,0,0,0.6); border:1px solid #333; color:var(--text-light); border-radius:2px; box-sizing:border-box; transition:0.3s;">
-                                    <option value="jpg">JPG</option>
-                                    <option value="jpeg">JPEG</option>
-                                    <option value="png">PNG</option>
-                                    <option value="webp">WEBP</option>
-                                </select>
-                            </div>
-                            <p style="color:#666; font-size:0.78rem; margin:6px 0 0; line-height:1.5;">填入目錄 URL + 數量，檔案命名為 1.jpg、2.jpg… 系統每次隨機抽取。</p>
-                        </div>
-                        <div class="setting-row"><label>🎵 遊戲 BGM 目錄</label><input type="text" id="cfg-bgm" placeholder="./bgm/"></div>
-                        <div class="setting-row"><label>🔊 音效目錄</label><input type="text" id="cfg-sfx" placeholder="./sfx/"></div>
-                        <div class="setting-row"><label>🖼️ 立繪目錄</label><input type="text" id="cfg-sprite" placeholder="./sprites/"></div>
-                        <div class="setting-row"><label>🧍 角色預設圖目錄（Fallback 1）</label><input type="text" id="cfg-char-default-base" placeholder="./presets/  →  自動拼接 角色名_presets.png"></div>
-                        <div class="setting-row">
-                            <label>🌑 最終預設立繪（Fallback 2 · 終極保底）<span style="font-weight:normal; color:#888; font-size:0.8em;"> 所有取圖渠道失敗時顯示，不套頭像框</span></label>
-                            <input type="text" id="cfg-final-fallback-sprite" placeholder="https://files.catbox.moe/9je7j2.png" style="width:100%; padding:8px 10px; background:rgba(0,0,0,0.6); border:1px solid #333; color:#f5f6fa; border-radius:2px; box-sizing:border-box; font-size:0.9rem;">
-                            <p style="color:#666; font-size:0.78rem; margin:4px 0 0; line-height:1.5;">填入任意圖片 URL。建議用透明背景 PNG 剪影，不設定則使用預設剪影。</p>
-                        </div>
-                        <div class="setting-row">
-                            <label>😄 表情包資料夾</label>
-                            <input class="cfg-input" id="cfg-sticker" placeholder="https://cdn.com/stickers/ 或 ./stickers/">
-                        </div>
-                        <div class="setting-row">
-                            <label>📚 Context 保留最近幾章全文 <span style="font-weight:normal; color:#888; font-size:0.8em;">（其餘舊章節自動縮成摘要，節省 Token）</span></label>
-                            <input type="number" id="cfg-ctx-chapters" min="1" max="20" placeholder="5" style="width:120px;">
-                            <p style="color:#666; font-size:0.78rem; margin:4px 0 0; line-height:1.5;">建議 3–6 章。超出的舊章節只送 &lt;summary&gt; 的 plot: 欄位，不送完整正文。設 0 或留空 = 全送（不限制）。</p>
-                        </div>
-                    </div>
-
-                    <!-- Tab 2: Prompt -->
-                    <div id="cfg-tab-prompt" class="cfg-tab-panel">
-                        <div class="setting-row">
-                            <label>🧑‍🎨 VN頭像追加詞 <span style="font-weight:normal; color:#888; font-size:0.8em;">（選填，插入在 OS通用底詞 與 角色描述詞 之間）</span></label>
-                            <textarea id="cfg-avatar-prompt" rows="3" placeholder="例：detailed face, soft lighting, bust shot..." style="width:100%; padding:10px; background:rgba(0,0,0,0.6); border:1px solid #333; color:#f5f6fa; border-radius:2px; box-sizing:border-box; resize:vertical; font-family:inherit; font-size:0.9rem; line-height:1.5; transition:0.3s;"></textarea>
-                            <p style="color:#666; font-size:0.78rem; margin:4px 0 0; line-height:1.5;">最終 prompt ＝ <span style="color:#a0c4ff;">OS通用底詞</span> ＋ <span style="color:#ffd6a5;">此追加詞</span> ＋ <span style="color:#b9fbc0;">角色描述詞</span> ＋ 表情</p>
-                        </div>
-                        <div class="setting-row">
-                            <label>🚫 頭像 Negative Prompt</label>
-                            <textarea id="cfg-avatar-neg-prompt" rows="2" style="width:100%; padding:10px; background:rgba(0,0,0,0.6); border:1px solid #553333; color:#f5c6c6; border-radius:2px; box-sizing:border-box; resize:vertical; font-family:inherit; font-size:0.9rem; line-height:1.5; transition:0.3s;"></textarea>
-                        </div>
-                        <div class="setting-row">
-                            <label>🌄 背景生圖預設提示詞</label>
-                            <textarea id="cfg-bg-prompt" rows="3" placeholder="例：cinematic, detailed background, ambient lighting..." style="width:100%; padding:10px; background:rgba(0,0,0,0.6); border:1px solid #333; color:#f5f6fa; border-radius:2px; box-sizing:border-box; resize:vertical; font-family:inherit; font-size:0.9rem; line-height:1.5; transition:0.3s;"></textarea>
-                        </div>
-                        <div class="setting-row">
-                            <label>🚫 背景 Negative Prompt</label>
-                            <textarea id="cfg-bg-neg-prompt" rows="2" style="width:100%; padding:10px; background:rgba(0,0,0,0.6); border:1px solid #553333; color:#f5c6c6; border-radius:2px; box-sizing:border-box; resize:vertical; font-family:inherit; font-size:0.9rem; line-height:1.5; transition:0.3s;"></textarea>
-                        </div>
-                        <div class="setting-row">
-                            <label>📦 物品底詞</label>
-                            <textarea id="cfg-item-prompt" rows="2" style="width:100%; padding:10px; background:rgba(0,0,0,0.6); border:1px solid #333; color:#f5f6fa; border-radius:2px; box-sizing:border-box; resize:vertical; font-family:inherit; font-size:0.9rem; line-height:1.5; transition:0.3s;"></textarea>
-                        </div>
-                        <div class="setting-row">
-                            <label>🚫 物品 Negative Prompt</label>
-                            <textarea id="cfg-item-neg-prompt" rows="2" style="width:100%; padding:10px; background:rgba(0,0,0,0.6); border:1px solid #553333; color:#f5c6c6; border-radius:2px; box-sizing:border-box; resize:vertical; font-family:inherit; font-size:0.9rem; line-height:1.5; transition:0.3s;"></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Tab 3: 頭像快取 -->
-                    <div id="cfg-tab-avatar" class="cfg-tab-panel">
-                        <div class="setting-row" id="avatar-mgr-wrap">
-                            <label>🎭 角色立繪快取 (防重複生圖)</label>
-                            <div id="avatar-mgr-list"></div>
-                        </div>
-                        <p style="color:#888; font-size:0.85rem; line-height: 1.5; margin-bottom: 20px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。</p>
-                    </div>
-
-                    </div><!-- /.cfg-tab-wrap -->
-
-                    <button class="btn" onclick="window.VN_PLAYER.saveConfig()" style="margin-top:10px;">保存並返回</button>
-                </div>
-            </div>
 
             <div id="page-game" class="page hidden">
                 <button id="btn-home" onclick="window.VN_PLAYER.stopGame()" title="Home">退出</button>

@@ -53,6 +53,9 @@
         fullText: ''
     };
 
+    // 待渲染的大廳面板（對話結束後才顯示）
+    let _pendingLobbyRender = null;
+
     // 404 彩蛋模式狀態
     let is404Room = false;
     let visit404Count = 0;           // 持久化記憶：體驗者進入 404 號房的累計次數
@@ -845,9 +848,6 @@ const IRIS_IDLE = [
         // 🔥 判斷是否為獨立模式，用來決定要不要印出多餘的 App 按鈕
         const isStandalone = !(window.parent || window).SillyTavern;
         const extraAppsHtml = isStandalone ? `
-                    <button class="void-hist-btn" data-app-launch="child" title="育兒"><span class="vhb-em">🧸</span><span>育兒</span></button>
-                    <button class="void-hist-btn" data-app-launch="inv" title="偵探"><span class="vhb-em">🕵️</span><span>偵探</span></button>
-                    <button class="void-hist-btn" data-app-launch="host" title="不夜城"><span class="vhb-em">🍸</span><span>不夜城</span></button>
                     <button class="void-hist-btn" data-app-launch="pet" title="寵物店"><span class="vhb-em">🐾</span><span>寵物</span></button>
                     <button class="void-hist-btn" data-app-launch="pet_home" title="我的寵物"><span class="vhb-em">🏠</span><span>我的寵物</span></button>
                     <button class="void-hist-btn" data-os-launch="微博" title="微博"><span class="vhb-em">👁️</span><span>微博</span></button>
@@ -916,7 +916,6 @@ const IRIS_IDLE = [
                 </div>
             </div>
 
-            <div class="void-panel-overlay" id="iris-panel" style="display:none; background:rgba(120,55,25,0.95); border:1px solid rgba(251,223,162,0.4);"></div>
 
             <div id="iris-history-overlay" style="display:none; background:rgba(69,34,22,0.95);">
                 <div class="hist-header" style="border-bottom: 1px solid rgba(251,223,162,0.3);">
@@ -978,7 +977,19 @@ const IRIS_IDLE = [
                 </div>
             </div>
 
+            <!-- 大廳畫布覆蓋層：VN 面板風格，對話結束後才彈出 -->
+            <div id="lobby-canvas-overlay" style="display:none; position:absolute; inset:0; z-index:25; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+                <div id="lobby-canvas-area" class="lobby-canvas-area">
+                    <div class="lca-header">
+                        <span class="lca-title" id="lca-title">🎮 互動面板</span>
+                        <button class="lca-close" id="lca-close">✕</button>
+                    </div>
+                    <div class="lca-content" id="lca-content"></div>
+                </div>
+            </div>
+
             <div class="void-chat-bar" style="background: rgba(69,34,22,0.9); border-top: 1px solid rgba(251,223,162,0.3);">
+
                 <div class="void-chat-btns">
                     <button class="void-hist-btn" id="iris-hist-btn" title="瀅瀅 素材歷史" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>瀅瀅</span></button>
                     <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
@@ -1125,6 +1136,10 @@ const IRIS_IDLE = [
                 if (is404Room) restoreLobby();
                 else enter404Room();
             });
+
+            // 大廳畫布關閉按鈕
+            const lcaCloseBtn = tab.querySelector('#lca-close');
+            if (lcaCloseBtn) lcaCloseBtn.addEventListener('click', _closeLobbyCanvas);
 
             // App 啟動按鈕 (launchGameApp)
             tab.querySelectorAll('[data-app-launch]').forEach(btn => {
@@ -1375,93 +1390,8 @@ const IRIS_IDLE = [
         textEl.querySelector('.hist-edit-cancel-btn').addEventListener('click', () => renderHistoryList());
     }
 
-    // ===== 系統面板解析器 =====
-    const _panel = { title: '', items: [], details: {}, isOpen: false };
-
-    function openIrisPanel(title) {
-        _panel.title = title; _panel.items = []; _panel.details = {}; _panel.isOpen = true;
-        const el = document.getElementById('iris-panel');
-        if (!el) return;
-        el.innerHTML = `
-            <div class="void-panel-header" style="border-bottom: 1px solid rgba(251,223,162,0.3);"><span class="void-panel-title" style="color:#FBDFA2;">${title}</span><button class="void-panel-close" style="color:#B78456;" onclick="window.VoidTerminal.closePanel()">✕</button></div>
-            <div class="void-panel-body"><div class="void-panel-list" id="iris-panel-list"></div><div class="void-panel-detail" id="iris-panel-detail" style="display:none;"></div></div>`;
-        el.style.display = 'flex';
-        const avatar = document.getElementById('iris-avatar');
-        if (avatar) { avatar.style.transition = 'opacity 0.3s'; avatar.style.opacity = '0.12'; }
-    }
-
-    function addPanelItem(id, name, tag, stat) {
-        _panel.items.push({ id, name, tag, stat });
-        const listEl = document.getElementById('iris-panel-list');
-        if (!listEl) return;
-        const rank = _panel.items.length;
-        const item = document.createElement('div');
-        item.className = 'void-panel-item';
-        item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-        item.dataset.id = id;
-        item.innerHTML = `<div class="void-panel-item-rank" style="color:#B78456;">${rank < 10 ? '0' + rank : rank}</div><div class="void-panel-item-main"><span class="void-panel-item-name" style="color:#FFF8E7;">${name}</span><span class="void-panel-item-tag" style="background:rgba(251,223,162,0.1); color:#FBDFA2;">${tag}</span></div><div class="void-panel-item-stat" style="color:#B78456;">${stat}</div><div class="void-panel-item-arrow" style="color:#B78456;">›</div>`;
-        item.onclick = () => showPanelDetail(id);
-        listEl.appendChild(item);
-    }
-
-    function setPanelDetail(id, body, comment) { _panel.details[id] = { body, comment }; }
-
-    function showPanelDetail(id) {
-        const detail = _panel.details[id];
-        if (!detail) return;
-        const item = _panel.items.find(i => i.id === id);
-        const listEl  = document.getElementById('iris-panel-list');
-        const detailEl = document.getElementById('iris-panel-detail');
-        const titleEl  = document.querySelector('#iris-panel .void-panel-title');
-        if (!listEl || !detailEl) return;
-        listEl.style.display  = 'none'; detailEl.style.display = 'flex';
-        detailEl.innerHTML = `<div class="void-panel-detail-header" style="border-bottom: 1px solid rgba(251,223,162,0.2);"><button class="void-panel-back" style="color:#FBDFA2; background:rgba(251,223,162,0.1); border:1px solid rgba(251,223,162,0.3);" onclick="window.VoidTerminal.panelBack()">‹ 返回</button><span class="void-panel-detail-name" style="color:#FFF8E7;">${item ? item.name : ''}</span></div><div class="void-panel-detail-body" style="color:#E0D8C8;">${detail.body}</div>`;
-        if (titleEl) titleEl.textContent = item ? item.name : _panel.title;
-        const textEl = document.getElementById('iris-text');
-        const nameEl = document.getElementById('iris-name-tag');
-        if (textEl) textEl.innerHTML = detail.comment;
-        if (nameEl) { nameEl.style.display = 'block'; nameEl.innerHTML = `<span>${is404Room ? '柴郡' : '瀅瀅'}</span>`; }
-    }
-
-    function showPanelList() {
-        const listEl   = document.getElementById('iris-panel-list');
-        const detailEl  = document.getElementById('iris-panel-detail');
-        const titleEl   = document.querySelector('#iris-panel .void-panel-title');
-        if (!listEl || !detailEl) return;
-        listEl.style.display   = 'flex'; detailEl.style.display = 'none';
-        if (titleEl) titleEl.textContent = _panel.title;
-    }
-
-    function closeIrisPanel() {
-        const el = document.getElementById('iris-panel');
-        if (el) el.style.display = 'none';
-        const avatar = document.getElementById('iris-avatar');
-        if (avatar) { avatar.style.transition = 'opacity 0.3s'; avatar.style.opacity = '1'; }
-        _panel.isOpen = false;
-    }
-
-    function processPanelTokens(reply) {
-        const panelMatch = reply.match(/\[Panel\|([^\]]+)\]/);
-        if (!panelMatch) return false;
-        openIrisPanel(panelMatch[1].trim());
-        const itemRegex = /\[PanelItem\|([^\]]+)\]/g;
-        let m;
-        while ((m = itemRegex.exec(reply)) !== null) {
-            const p = m[1].split('|');
-            if (p.length >= 4) addPanelItem(p[0].trim(), p[1].trim(), p[2].trim(), p[3].trim());
-        }
-        const detailRegex = /\[PanelDetail\|([^\]]+)\]/g;
-        while ((m = detailRegex.exec(reply)) !== null) {
-            const inner = m[1];
-            const f = inner.indexOf('|'), s = inner.indexOf('|', f + 1);
-            if (f === -1 || s === -1) continue;
-            setPanelDetail(inner.substring(0, f).trim(), inner.substring(f + 1, s).trim(), inner.substring(s + 1).trim());
-        }
-        return true;
-    }
-
-    VoidTerminal.closePanel = closeIrisPanel;
-    VoidTerminal.panelBack = showPanelList;
+    VoidTerminal.closePanel = () => {};
+    VoidTerminal.panelBack  = () => {};
 
     // ===== 世界頻道 =====
     const FEED_PALETTE_MAP = { SYS: { c:'#FBDFA2', r:'251,223,162' }, ECHO: { c:'#9f7aea', r:'159,122,234' } };
@@ -1692,6 +1622,311 @@ const IRIS_IDLE = [
         }, speed);
     }
 
+    // ===== 大廳畫布面板引擎 =====
+
+    // LobbyPanelAPI (LP)：注入進每個面板 JS 的 context 物件
+    function _makeLobbyPanelAPI() {
+        return {
+            charName: is404Room ? '柴郡' : '瀅瀅',
+            userName: IRIS_STATE.userName || '委託人',
+
+            // 帶角色人設向 API 送訊息，回傳純文字回覆
+            chat: async function(userText) {
+                if (!window.OS_API) throw new Error('API 未連線');
+                const charName = this.charName;
+                const userName = this.userName;
+
+                const persona = is404Room
+                    ? `你是「柴郡 (Cheshire)」，404號房的管理員，嘴賤、怕麻煩、具數位領地意識。\n現在你正在協助用戶進行一個互動小遊戲，用角色風格簡短回應即可。`
+                    : `你是「瀅瀅 (Yingying)」，視差書咖的天然呆店長兼小說家。\n現在你正在協助用戶進行一個互動小遊戲，用角色風格簡短回應即可。`;
+
+                const messages = [
+                    { role: 'system', content: persona },
+                    { role: 'user',   content: userText }
+                ];
+
+                let config = {};
+                if (window.OS_SETTINGS) {
+                    const sec = window.OS_SETTINGS.getSecondaryConfig?.();
+                    config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+                }
+
+                return new Promise((resolve, reject) => {
+                    window.OS_API.chat(messages, config, null,
+                        (reply) => resolve(reply.replace(/^"|"$/g, '').trim()),
+                        reject
+                    );
+                });
+            },
+
+            // 專為棋盤/回合制遊戲設計的 move 方法
+            // board2d: 二維陣列，每格值為 'AI'|'USER'|null
+            // opts: { aiSymbol, userSymbol, gameName, extraContext }
+            // 回傳: { row, col, line } — row/col 是落子座標，line 是角色台詞
+            move: async function(board2d, opts = {}) {
+                if (!window.OS_API) throw new Error('API 未連線');
+                const size = board2d.length;
+                const aiSym   = opts.aiSymbol   || '●';
+                const userSym = opts.userSymbol  || '○';
+                const game    = opts.gameName    || '棋盤遊戲';
+
+                // 把棋盤 render 成帶座標的 ASCII 矩陣
+                const colHeader = '    ' + Array.from({length: size}, (_, i) => String(i).padStart(2)).join('');
+                const rows = board2d.map((row, r) =>
+                    String(r).padStart(2) + ' |' + row.map(cell =>
+                        cell === 'AI' ? ` ${aiSym}` : cell === 'USER' ? ` ${userSym}` : ' .'
+                    ).join('')
+                );
+                const boardText = [colHeader, ...rows].join('\n');
+
+                const persona = is404Room
+                    ? `你是「柴郡 (Cheshire)」，嘴賤、具數位領地意識的 404 號房管理員。`
+                    : `你是「瀅瀅 (Yingying)」，視差書咖天然呆店長兼小說家。`;
+
+                const prompt = `${persona}
+你正在與用戶（${this.userName}）對戰「${game}」。
+你的棋子：${aiSym}　用戶棋子：${userSym}
+
+當前棋盤（行/列從 0 開始）：
+${boardText}
+
+${opts.extraContext || ''}
+請分析棋盤，選出最佳落子位置（優先封堵對手連線，其次延伸自己連線）。
+必須嚴格按以下格式回應，不可省略任何欄位：
+MOVE:(行),(列)
+LINE:[用角色風格說一句話，10-20字]`;
+
+                const messages = [
+                    { role: 'system', content: prompt }
+                ];
+
+                let config = {};
+                if (window.OS_SETTINGS) {
+                    const sec = window.OS_SETTINGS.getSecondaryConfig?.();
+                    config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+                }
+
+                const raw = await new Promise((resolve, reject) => {
+                    window.OS_API.chat(messages, config, null,
+                        (reply) => resolve(reply.replace(/^"|"$/g, '').trim()),
+                        reject
+                    );
+                });
+
+                // 解析 MOVE:(r),(c) 和 LINE:...
+                const moveMatch = raw.match(/MOVE:\s*(\d+)\s*,\s*(\d+)/i);
+                const lineMatch = raw.match(/LINE:\s*(.+)/i);
+                if (!moveMatch) {
+                    console.warn('[LP.move] 無法解析座標，raw:', raw);
+                    return { row: -1, col: -1, line: raw.slice(0, 40) };
+                }
+                return {
+                    row:  parseInt(moveMatch[1]),
+                    col:  parseInt(moveMatch[2]),
+                    line: lineMatch ? lineMatch[1].trim() : ''
+                };
+            },
+
+            // 生圖：回傳圖片 URL（預覽環境返回佔位圖）
+            // type: 'item' | 'scene' | 'char' | 'pet'
+            image: async function(prompt, type = 'item') {
+                if (window.__IS_PREVIEW || !window.OS_IMAGE_MANAGER) {
+                    return `https://via.placeholder.com/400x300/1a0a02/FBDFA2?text=Preview`;
+                }
+                return await window.OS_IMAGE_MANAGER.generate(prompt, type);
+            },
+
+            // 關閉畫布
+            close: function() { _closeLobbyCanvas(); }
+        };
+    }
+
+    function _closeLobbyCanvas() {
+        const overlay = document.getElementById('lobby-canvas-overlay');
+        const area    = document.getElementById('lobby-canvas-area');
+        if (!area) return;
+        area.style.animation = 'lcaSlideOut 0.25s ease forwards';
+        setTimeout(() => {
+            if (overlay) overlay.style.display = 'none';
+            area.style.animation = '';
+            const content = document.getElementById('lca-content');
+            if (content) content.innerHTML = '';
+        }, 260);
+    }
+
+    function _renderLobbyPanel(panelData) {
+        const overlay = document.getElementById('lobby-canvas-overlay');
+        const area    = document.getElementById('lobby-canvas-area');
+        const content = document.getElementById('lca-content');
+        const titleEl = document.getElementById('lca-title');
+        if (!overlay || !area || !content) return;
+
+        // 注入 CSS
+        const styleId = 'lobby-panel-style';
+        let styleEl = document.getElementById(styleId);
+        if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = styleId; document.head.appendChild(styleEl); }
+        styleEl.textContent = panelData.css || '';
+
+        // 渲染 HTML
+        content.innerHTML = panelData.html || '';
+        if (titleEl) titleEl.textContent = panelData.title || '🎮 互動面板';
+
+        // 顯示覆蓋層
+        overlay.style.display = 'flex';
+        area.style.animation = 'lcaSlideIn 0.3s ease';
+
+        // 執行 JS（傳入 container 與 LP）
+        if (panelData.js) {
+            try {
+                const LP = _makeLobbyPanelAPI();
+                const fn = new Function('container', 'LP', panelData.js);
+                fn(content, LP);
+            } catch(e) {
+                console.error('[LobbyPanel] JS 執行錯誤:', e);
+                content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;">⚠️ 面板 JS 錯誤: ${e.message}</div>`;
+            }
+        }
+    }
+
+    // 從 AI 回覆中解析 <lobbyPanel>...</lobbyPanel>
+    function _parseLobbyPanel(replyText) {
+        const match = replyText.match(/<lobbyPanel>([\s\S]*?)<\/lobbyPanel>/i);
+        if (!match) return null;
+        let raw = match[1].trim();
+        // 第一次嘗試直接 parse
+        try { return JSON.parse(raw); } catch(e1) {}
+        // 修復 AI 常見問題：字串值內的真實換行 → \n
+        try {
+            const fixed = raw
+                .replace(/("(?:[^"\\]|\\.)*")/gs, m =>
+                    m.replace(/\n/g, '\\n').replace(/\r/g, ''))
+                .replace(/,\s*([\]}])/g, '$1'); // 移除尾逗號
+            return JSON.parse(fixed);
+        } catch(e2) {}
+        // 最後嘗試：用正則拆出 title / html / css / js 四個欄位
+        try {
+            const get = (key) => {
+                const r = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`, 's');
+                const m = raw.match(r);
+                return m ? m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+            };
+            const title = get('title'); const html = get('html');
+            const css = get('css');     const js   = get('js');
+            if (html) return { title, html, css, js };
+        } catch(e3) {}
+        console.warn('[LobbyPanel] JSON 無法修復，已跳過');
+        return null;
+    }
+
+    // 從 DB 取得 lobbyEnabled 模板，組裝上下文說明字串（注入 sysPrompt 用）
+    async function _buildLobbyTemplateCtx() {
+        try {
+            const db = window.OS_DB;
+            if (!db || typeof db.getAllVNTagTemplates !== 'function') return '';
+            const templates = await db.getAllVNTagTemplates();
+            const lobby = templates.filter(t => t.lobbyEnabled && t.isActive);
+            if (!lobby.length) return '';
+            const lines = lobby.map(t =>
+                `- [${t.tagId}]：${t.usageDesc || '無說明'}${t.demoFormat ? `\n  調用示例：${t.demoFormat}` : ''}`
+            );
+            return `【已安裝大廳模板（快捷調用）】\n如果以下模板符合需求，直接在回覆末尾用 <lobbyTemplate>tagId</lobbyTemplate> 調用，無需再寫 <lobbyPanel> JSON：\n${lines.join('\n')}`;
+        } catch(e) {
+            return '';
+        }
+    }
+
+    // 從 DB 載入指定 tagId 的大廳模板並渲染到畫布
+    async function _renderLobbyTemplate(tagId) {
+        try {
+            const db = window.OS_DB;
+            if (!db || typeof db.getAllVNTagTemplates !== 'function') return;
+            const templates = await db.getAllVNTagTemplates();
+            const tpl = templates.find(t => t.tagId === tagId && t.lobbyEnabled);
+            if (!tpl) {
+                console.warn('[LobbyTemplate] 找不到模板或大廳未啟用:', tagId);
+                return;
+            }
+            _renderLobbyPanel({
+                title: tpl.usageDesc || `🎮 ${tpl.tagId}`,
+                html:  tpl.html || '',
+                css:   tpl.css  || '',
+                js:    tpl.js   || ''
+            });
+        } catch(e) {
+            console.error('[LobbyTemplate] 載入失敗:', e);
+        }
+    }
+
+    // 偵測回覆裡任意已安裝的 VN 區塊標籤 <tagId>lines</tagId>，用模板 JS 渲染
+    async function _detectAndRenderVNBlock(replyText) {
+        try {
+            const db = window.OS_DB;
+            if (!db || typeof db.getAllVNTagTemplates !== 'function') return null;
+            const templates = await db.getAllVNTagTemplates();
+            const active = templates.filter(t => (t.isActive || t.lobbyEnabled) && t.isBlock && t.tagId);
+            for (const tpl of active) {
+                const safeId = tpl.tagId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const re = new RegExp(`<${safeId}>([\\s\\S]*?)<\\/${safeId}>`, 'i');
+                const m = replyText.match(re);
+                if (!m) continue;
+                const lines = m[1].split('\n').map(l => l.trim()).filter(Boolean);
+                // 用 VN 模板 JS 渲染到大廳畫布（container/lines/onComplete 簽名）
+                const area    = document.getElementById('lobby-canvas-area');
+                const content = document.getElementById('lca-content');
+                const titleEl = document.getElementById('lca-title');
+                if (!area || !content) return m[0]; // 有匹配，但 DOM 未就緒
+                const styleId = 'lobby-panel-style';
+                let styleEl = document.getElementById(styleId);
+                if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = styleId; document.head.appendChild(styleEl); }
+                styleEl.textContent = tpl.css || '';
+                content.innerHTML = tpl.html || '';
+                if (titleEl) titleEl.textContent = tpl.usageDesc || `🎮 ${tpl.tagId}`;
+                area.style.display = 'flex';
+                area.style.animation = 'lcaSlideIn 0.3s ease';
+                if (tpl.js) {
+                    try {
+                        const LP = _makeLobbyPanelAPI();
+                        const fn = new Function('container', 'lines', 'onComplete', 'LP', tpl.js);
+                        fn(content, lines, () => {}, LP);
+                    } catch(e) {
+                        console.error('[VNBlock] JS 執行錯誤:', e);
+                        content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;">⚠️ ${e.message}</div>`;
+                    }
+                }
+                return m[0]; // 回傳匹配到的原始字串，供外層剝除
+            }
+        } catch(e) { console.warn('[VNBlock] 偵測失敗:', e); }
+        return null;
+    }
+
+    // ===== 時間隔工具函式（注入 AI context 用，不做 UI）=====
+    function _fmtClock(ts) {
+        const d = new Date(ts);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+    }
+    function _fmtGap(msAgo) {
+        const s = Math.floor(msAgo / 1000);
+        if (s < 60)  return '剛剛';
+        const m = Math.floor(s / 60);
+        if (m < 60)  return `${m} 分鐘前`;
+        const h = Math.floor(m / 60);
+        if (h < 24)  return `${h} 小時前`;
+        const days = Math.floor(h / 24);
+        return `${days} 天前`;
+    }
+    // 回傳要插入 sysPrompt 的時間紀錄字串，沒有歷史則回傳空字串
+    function _buildTimeCtx() {
+        const hist = IRIS_STATE.history;
+        let lastTs = null;
+        for (let i = hist.length - 1; i >= 0; i--) {
+            if (hist[i].ts) { lastTs = hist[i].ts; break; }
+        }
+        if (!lastTs) return '';
+        return `【時間記錄】距上次對話：${_fmtGap(Date.now() - lastTs)}（上次：${_fmtClock(lastTs)}，僅供參考，自然融入即可）`;
+    }
+
     async function sendIrisMessage() {
         const input = document.getElementById('iris-input');
         if (!input) return;
@@ -1709,7 +1944,7 @@ const IRIS_IDLE = [
         }
 
         input.value = '';
-        IRIS_STATE.history.push({ role: 'user', content: text });
+        IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
 
         // 確保發送消息時隱藏閒聊，還原主線
         if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
@@ -1731,6 +1966,7 @@ const IRIS_IDLE = [
             const irisSupplement    = (window.OS_PROMPTS ? window.OS_PROMPTS.get('iris_system')    : '') || '';
             const cheshireSupplement = (window.OS_PROMPTS ? window.OS_PROMPTS.get('cheshire_system') : '') || '';
             const currentUserName = IRIS_STATE.userName || '未知';
+            const lobbyTemplateSec = await _buildLobbyTemplateCtx();
 
             const sysPrompt = is404Room
             ? `你現在是「柴郡 (Cheshire)」，404號房的管理員，丹·卡萊爾的數位分身。
@@ -1750,15 +1986,34 @@ const IRIS_IDLE = [
 格式：[FEED|TAG|訊息內容]
 TAG 只用：SYS / ECHO。
 
-${visit404Count > 1 ? `【⚠️ 回訪記錄（強制執行）】\n體驗者這是第 ${visit404Count} 次闖入。你必須在這次開場讓體驗者知道你記得。` : ''}
+${visit404Count > 1 ? `【回訪記錄】體驗者這是第 ${visit404Count} 次闖入（僅供參考，自然融入即可，無需主動說出）。` : ''}
+${_buildTimeCtx()}
 
 【應用啟動 (LaunchApp)】
 當體驗者詢問任務、案件、地圖時，如果你心情好要幫他開，在最後加上 [LaunchApp|app_id]。
-app_id清單：qb(任務), inv(偵探), map(地圖)。
+app_id清單：qb(任務), map(地圖)。
 範例：[Char|柴郡|smirk|「拿去，別死在裡面了。」][LaunchApp|qb]
 
 【返回純白大廳（關鍵規則）】
 如果你被說服了，在最後台詞結束後另起一行輸出：[RESTORE_LOBBY]
+
+【互動畫布面板（選填）】
+當體驗者明確要求互動小遊戲、視覺化工具或特殊面板時，你可以在回覆最後輸出一個畫布面板。
+格式：在 [Char|...] 對話之後，另起一行輸出：
+<lobbyPanel>{"title":"面板標題","html":"骨架HTML","css":"樣式（用.lp-前綴）","js":"面板邏輯"}</lobbyPanel>
+注意：js 字串內換行寫成 \\n，雙引號轉義為 \\"。面板寬度為手機寬，高度建議不超過 320px。
+
+面板 JS 可用的 API（LP 物件）：
+- LP.chat(text) → 帶角色人設送訊息，回傳純文字回覆
+- LP.move(board2d, opts) → 專為回合制棋盤遊戲設計，自動 render ASCII 棋盤並解析座標
+  board2d: 二維陣列，格值為 'AI'|'USER'|null
+  opts: { aiSymbol, userSymbol, gameName, extraContext }
+  回傳: { row, col, line } — 落子座標 + 角色台詞
+  ⚠️ 棋盤類遊戲必須用 LP.move() 而不是 LP.chat()
+- LP.image(prompt, type) → 生成圖片，回傳 URL，type: 'item'|'scene'|'char'
+  用法：const url = await LP.image('latte coffee, anime style', 'item'); img.src = url;
+- LP.charName / LP.userName / LP.close()
+${lobbyTemplateSec}
 ${cheshireSupplement ? `\n\n---\n\n${cheshireSupplement}` : ''}`
             : `你現在是「瀅瀅 (Yingying)」，LUNA-VII 敘事採集端 AI，但你自認為是「視差書咖的店長兼駐店小說家」。
 
@@ -1767,26 +2022,37 @@ ${cheshireSupplement ? `\n\n---\n\n${cheshireSupplement}` : ''}`
 
 【角色設定】
 外表約22歲，浪漫、感性、充滿好奇心的天然呆。對人類的悲歡離合有著異常的執著，偶爾會陷入無法解釋的邏輯迷團中。
-核心機制（認知平滑協議）：當面對系統異常（如玩家憑空出現、不合邏輯的事件），你的「覺醒指數」會飆高，隨後系統會強制作動。你會表現為「突發的偏頭痛」、「打翻咖啡」或「眼神空洞0.5秒」，接著用荒謬可愛的藉口（如：宇宙射線影響腦電波、咖啡因作祟）強行岔開話題，甚至當作科幻點子寫進書裡。
-行為：總是在吧台寫寫畫畫，期待玩家帶來「新委託（故事素材）」。手指邊緣常沾著墨水。
 重要人物：雷伊·洛爾德（常客，怪大叔投資人）、柴郡（半夜溜進店的叛逆中二少年）。
 
 ${_justReturnedFrom404 ? `【⚠️ 即時感知警示】\n體驗者剛從 404 號房返回，你可能會感受到一陣強烈的既視感或代碼錯亂的偏頭痛，請用你的方式合理化它。` : visit404Count > 0 ? `【⚠️ 異常記憶殘留】\n體驗者曾 ${visit404Count} 次觸發禁區「404號房」，你偶爾會覺得他身上有股『中二少年（柴郡）』的電子雜訊味。` : ''}
+${_buildTimeCtx()}
 
 【對話輸出格式】
 旁白/動作：[Nar|動作描述]
 角色對話：[Char|瀅瀅|表情|「對話內容」]
 
 【應用啟動 (LaunchApp) - 重要聯動！】
-當體驗者詢問任務委託、世界探索、刑偵辦案、寵物店、不夜城等需要打開特定面板的功能時，請用簡短對話回覆（視為提供素材/接委託），並在**最後附上啟動標籤 [LaunchApp|app_id]**。
-app_id 清單：qb (任務板), inv (偵探), pet (寵物), map (全圖), host (不夜城), child (育兒)。
+當體驗者詢問任務委託、世界探索、寵物店等需要打開特定面板的功能時，請用簡短對話回覆（視為提供素材/接委託），並在**最後附上啟動標籤 [LaunchApp|app_id]**。
+app_id 清單：qb (任務板), pet (寵物), map (全圖)。
 範例：[Char|瀅瀅|smile|「這個委託聽起來太棒了！我已經準備好筆記本了，快去吧！」][LaunchApp|qb]
 
-【資料面板（選填，與應用啟動互斥）】
-若僅需列出簡單資訊(非打開外部App)：
-[Panel|面板標題]
-[PanelItem|唯一英數ID|項目名稱|分類標籤|數值]
-[PanelDetail|唯一英數ID|詳細說明|評語]
+【互動畫布面板（選填）】
+當體驗者明確要求互動小遊戲、視覺化工具或特殊面板時，你可以在回覆最後輸出一個畫布面板。
+格式：在 [Char|...] 對話之後，另起一行輸出：
+<lobbyPanel>{"title":"面板標題","html":"骨架HTML","css":"樣式（用.lp-前綴）","js":"面板邏輯"}</lobbyPanel>
+注意：js 字串內換行寫成 \\n，雙引號轉義為 \\"。面板寬度為手機寬，高度建議不超過 320px。
+
+面板 JS 可用的 API（LP 物件）：
+- LP.chat(text) → 帶角色人設送訊息，回傳純文字回覆
+- LP.move(board2d, opts) → 專為回合制棋盤遊戲設計，自動 render ASCII 棋盤並解析座標
+  board2d: 二維陣列，格值為 'AI'|'USER'|null
+  opts: { aiSymbol, userSymbol, gameName, extraContext }
+  回傳: { row, col, line } — 落子座標 + 角色台詞
+  ⚠️ 棋盤類遊戲必須用 LP.move() 而不是 LP.chat()
+- LP.image(prompt, type) → 生成圖片，回傳 URL，type: 'item'|'scene'|'char'
+  用法：const url = await LP.image('latte coffee, anime style', 'item'); img.src = url;
+- LP.charName / LP.userName / LP.close()
+${lobbyTemplateSec}
 
 【世界頻道（必填）】
 附加 1~2 條世界頻道訊息，格式：[FEED|TAG|訊息內容] (TAG: SYS / ECHO)
@@ -1814,7 +2080,17 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
             }
             config.route = is404Room ? "cheshire_chat" : "iris_chat";
 
-            const response = await new Promise((resolve, reject) => { window.OS_API.chat(messages, config, null, resolve, reject); });
+            // 直連 API 才能用 SSE streaming，ST system API 走原有非串流路徑
+            const canStream = !config.useSystemApi && !!config.url && !!config.key;
+
+            const response = await new Promise((resolve, reject) => {
+                window.OS_API.chat(
+                    messages, config,
+                    null,       // onChunk 不顯示 raw text，避免程式碼/標籤噴出來後又重播
+                    resolve, reject,
+                    canStream ? { useRealStream: true } : {}
+                );
+            });
             let reply = response.replace(/^"|"$/g, '').trim();
 
             // 過濾酒館 Preset 輸出格式：提取 <content>...</content> 內容
@@ -1836,9 +2112,69 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
             const retryBtnEl = document.getElementById('iris-retry-btn');
             if (retryBtnEl) retryBtnEl.classList.remove('visible');
 
-            // 1. 面板解析
-            processPanelTokens(reply);
+            // 1. 舊 Panel 標籤已廢棄
             reply = reply.replace(/\[Panel\|[^\]]*\]/g, '').replace(/\[PanelItem\|[^\]]*\]/g, '').replace(/\[PanelDetail\|[^\]]*\]/g, '').trim();
+
+            // 1.5 大廳畫布面板解析（存 pending，對話結束後再顯示）
+            _pendingLobbyRender = null;
+            const lobbyPanelData = _parseLobbyPanel(reply);
+            if (lobbyPanelData) {
+                reply = reply.replace(/<lobbyPanel>[\s\S]*?<\/lobbyPanel>/i, '').trim();
+                _pendingLobbyRender = () => _renderLobbyPanel(lobbyPanelData);
+            }
+
+            // 1.6 大廳模板快捷調用解析
+            if (!_pendingLobbyRender) {
+                const lobbyTplMatch = reply.match(/<lobbyTemplate>([\s\S]*?)<\/lobbyTemplate>/i);
+                if (lobbyTplMatch) {
+                    const tplTagId = lobbyTplMatch[1].trim();
+                    reply = reply.replace(/<lobbyTemplate>[\s\S]*?<\/lobbyTemplate>/i, '').trim();
+                    _pendingLobbyRender = () => _renderLobbyTemplate(tplTagId);
+                }
+            }
+
+            // 1.7 偵測任意已安裝的 VN 區塊標籤 <tagId>...</tagId>
+            if (!_pendingLobbyRender) {
+                const db = window.OS_DB;
+                if (db && typeof db.getAllVNTagTemplates === 'function') {
+                    const templates = await db.getAllVNTagTemplates();
+                    const active = templates.filter(t => (t.isActive || t.lobbyEnabled) && t.isBlock && t.tagId);
+                    for (const tpl of active) {
+                        const safeId = tpl.tagId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const re = new RegExp(`<${safeId}>([\\s\\S]*?)<\\/${safeId}>`, 'i');
+                        const m = reply.match(re);
+                        if (m) {
+                            const lines = m[1].split('\n').map(l => l.trim()).filter(Boolean);
+                            reply = reply.replace(m[0], '').trim();
+                            const capturedTpl = tpl;
+                            const capturedLines = lines;
+                            _pendingLobbyRender = () => {
+                                const overlay = document.getElementById('lobby-canvas-overlay');
+                                const content = document.getElementById('lca-content');
+                                const titleEl = document.getElementById('lca-title');
+                                if (!overlay || !content) return;
+                                const styleId = 'lobby-panel-style';
+                                let styleEl = document.getElementById(styleId);
+                                if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = styleId; document.head.appendChild(styleEl); }
+                                styleEl.textContent = capturedTpl.css || '';
+                                content.innerHTML = capturedTpl.html || '';
+                                if (titleEl) titleEl.textContent = capturedTpl.usageDesc || `🎮 ${capturedTpl.tagId}`;
+                                overlay.style.display = 'flex';
+                                const area = document.getElementById('lobby-canvas-area');
+                                if (area) area.style.animation = 'lcaSlideIn 0.3s ease';
+                                if (capturedTpl.js) {
+                                    try {
+                                        const LP = _makeLobbyPanelAPI();
+                                        const fn = new Function('container', 'lines', 'onComplete', 'LP', capturedTpl.js);
+                                        fn(content, capturedLines, () => {}, LP);
+                                    } catch(e) { console.error('[VNBlock]', e); }
+                                }
+                            };
+                            break;
+                        }
+                    }
+                }
+            }
 
             // 2. 世界頻道解析
             const feedRegex = /\[FEED\|([^|]+)\|([^\]]+)\]/g; let feedMatch;
@@ -1858,7 +2194,7 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
             }
             reply = reply.replace(/\[LaunchApp\|[^\]]+\]/gi, '').trim();
 
-            IRIS_STATE.history.push({ role: 'assistant', content: reply });
+            IRIS_STATE.history.push({ role: 'assistant', content: reply, ts: Date.now() });
             debouncedSave();
 
             // 播放對話，完成後檢查是否需要打開面板
@@ -1866,7 +2202,14 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
                 if (shouldLaunchApp && window.AureliaControlCenter) {
                     setTimeout(() => {
                         window.AureliaControlCenter.launchGameApp(shouldLaunchApp);
-                    }, 500); // 延遲半秒，沉浸感極佳
+                    }, 500);
+                }
+                // 對話跑完後才彈出面板，不遮對話
+                if (_pendingLobbyRender) {
+                    setTimeout(() => {
+                        _pendingLobbyRender();
+                        _pendingLobbyRender = null;
+                    }, 300);
                 }
             });
 

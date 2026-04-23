@@ -582,6 +582,12 @@
             const drafts = await this.getAllStudioDrafts();
             return drafts.filter(e => e.category === categoryName);
         },
+        deleteStudioDraftsByCategory: async function(categoryName) {
+            const drafts = await this.getAllStudioDrafts();
+            const targets = drafts.filter(e => e.category === categoryName);
+            for (const entry of targets) await this.deleteStudioDraft(entry.id);
+            return targets.length;
+        },
         deleteStudioDraft: async function(id) {
             const db = await this.init();
             return new Promise((r, j) => {

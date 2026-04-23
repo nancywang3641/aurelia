@@ -163,6 +163,45 @@
                 itemBasePrompt: '',
                 itemNegPrompt: '',
                 naiPresets: []
+            },
+            sceneGen: {
+                enabled: false,
+                promptStyle: 'auto',
+
+                sceneBasePrompt: '',
+                sceneNegPrompt: 'worst quality, low quality, blurry, watermark, text, signature',
+                specPrompt: `WHEN TO INSERT A SCENE
+- Location changes or a new environment is established
+- Significant emotional shift or dramatic turning point
+- New character introduced with notable appearance
+- Action, combat, or NSFW scene begins
+
+PROMPT RULES (Danbooru-style tags, comma-separated, single line)
+
+TAG ORDER:
+1. Subject count: 1girl / 2boys / 1boy 1girl / etc.
+   For 2+ characters: add one prose lock sentence describing spatial positions.
+   e.g.: 2girls, a silver-haired girl on the left faces a dark-haired girl on the right,
+2. Per character — use AND to separate multiple characters:
+   [(adult:1.5), position, skin_tone, physique, eye_color, hair_desc, clothing, pose, expression]
+3. Interaction / relationship tags (written outside character blocks)
+4. Environment + lighting + camera: location, time_of_day, shot_type, angle
+
+MULTI-CHARACTER RULES
+- AND blocks for up to 2 focal characters only.
+- 3+ characters: pick 2 focal, demote the rest to background_characters, depth_of_field.
+- Give each focal character equal tag detail — do not simplify one to save space.
+- Close contact or NSFW: remove left_side / right_side spatial tags.
+- Always write (adult:1.5) as the very first tag inside each character block.
+
+SHOT TYPES
+Calm / dialogue : bust_shot or medium_shot, from_side or from_front
+Action          : dynamic_angle, motion_blur, dutch_angle
+Intimate / NSFW : close-up, from_above or from_side — no spatial position tags
+
+EXAMPLE "prompt" value:
+"2girls, a pale-skinned girl on the left reaches toward a tanned girl on the right, [(adult:1.5), left_side, pale_skin, gentle_vibe, long_silver_hair, soft_bangs, white_dress, reaching_out, worried_expression] AND [(adult:1.5), right_side, tanned_skin, calm_vibe, short_dark_hair, no_bangs, casual_jacket, stepping_back, neutral_expression], tense_atmosphere, dramatic_moment, rainy_street, night, from_side, medium_shot, shallow_depth_of_field"`,
+                specTemplates: []
             }
         };
         if (saved) {
@@ -180,6 +219,14 @@
                         ...config.pollinations,
                         ...pol,
                         models: config.pollinations.models
+                    },
+                    novelai: {
+                        ...config.novelai,
+                        ...(savedConfig.novelai || {})
+                    },
+                    sceneGen: {
+                        ...config.sceneGen,
+                        ...(savedConfig.sceneGen || {})
                     }
                 };
             } catch(e) {}
@@ -298,6 +345,7 @@
                     <div class="set-tab" data-tab="sec-llm">⚡ 副模型</div>
                     <div class="set-tab" data-tab="img">🎨 圖片設置</div>
                     <div class="set-tab" data-tab="voice">🎵 語音</div>
+                    <div class="set-tab" data-tab="vn">🎮 VN</div>
                     <div class="set-tab" data-tab="sys">⚙️ 系統/備份</div>
                 </div>
 
@@ -682,6 +730,84 @@
                         </div>
                         </div>
 
+                        <!-- ── 場景插圖（獨立版）── -->
+                        <div class="set-group" style="border-top:1px solid rgba(251,223,162,0.25); padding-top:15px; margin-top:5px;">
+                            <div class="set-label" style="font-size:13px; display:flex; align-items:center; justify-content:space-between;">
+                                <span>🖼️ 場景插圖（獨立版）</span>
+                                <label class="toggle-switch"><input type="checkbox" id="img-scene-enabled" ${imgConfig.sceneGen?.enabled ? 'checked' : ''}><span class="slider"></span></label>
+                            </div>
+                            <div class="set-desc" style="margin-top:6px;">開啟後，VN 播放前會呼叫 AI 分析劇情並自動插入場景插圖。僅獨立版有效；ST 模式請使用 SD 插件。</div>
+
+                            <div id="img-scene-body" style="${imgConfig.sceneGen?.enabled ? '' : 'opacity:0.5; pointer-events:none;'} margin-top:14px;">
+
+                                <!-- ── Prompt 風格 ── -->
+                                <div style="margin-bottom:12px;">
+                                    <div class="set-label" style="font-size:11px;">🎛️ Prompt 風格</div>
+                                    <select class="set-select" id="img-scene-prompt-style" style="font-size:12px;"
+                                        onchange="(function(v){
+                                            const isNai  = v==='tags'    || (v==='auto' && window.OS_IMAGE_MANAGER?.config?.service==='novelai');
+                                            const isPoll = v==='natural' || (v==='auto' && window.OS_IMAGE_MANAGER?.config?.service!=='novelai');
+                                            document.getElementById('img-scene-base-row').style.display='';
+                                            document.getElementById('img-scene-neg-row').style.display = isNai ? '' : 'none';
+                                            document.getElementById('img-scene-base-label').textContent = isPoll
+                                                ? '🎨 畫風描述（自然語言，加在 AI prompt 前）'
+                                                : '🎨 場景底詞（Danbooru tag，加在 AI prompt 前）';
+                                            document.getElementById('img-scene-base-hint').textContent = isPoll
+                                                ? '← 自然語言描述畫風，例如：cinematic lighting, anime style, detailed'
+                                                : '← 在此放畫風底詞。可點下方「套用預設包」從現有 NAI 預設包快速填入。';
+                                            document.getElementById('img-scene-preset-row').style.display = isNai ? '' : 'none';
+                                        })(this.value)">
+                                        <option value="auto" ${(imgConfig.sceneGen?.promptStyle||'auto')==='auto' ? 'selected':''}>🔀 自動（跟主服務）</option>
+                                        <option value="tags" ${imgConfig.sceneGen?.promptStyle==='tags' ? 'selected':''}>🏷️ 標籤（NAI / Danbooru）</option>
+                                        <option value="natural" ${imgConfig.sceneGen?.promptStyle==='natural' ? 'selected':''}>💬 自然語言（Pollinations）</option>
+                                    </select>
+                                </div>
+
+                                <div id="img-scene-base-row" style="margin-bottom:12px;">
+                                    <div class="set-label" id="img-scene-base-label" style="font-size:11px;">${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? '🎨 畫風描述（自然語言，加在 AI prompt 前）' : '🎨 場景底詞（Danbooru tag，加在 AI prompt 前）';})()}</div>
+                                    <textarea class="set-textarea" id="img-scene-base-prompt" style="min-height:60px;">${imgConfig.sceneGen?.sceneBasePrompt || ''}</textarea>
+                                    <div id="img-scene-base-hint" style="font-size:11px; color:#B78456; margin-top:3px;">${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? '← 自然語言描述畫風，例如：cinematic lighting, anime style, detailed' : '← 在此放畫風底詞。可點下方「套用預設包」從現有 NAI 預設包快速填入。';})()}</div>
+                                    <div id="img-scene-preset-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? 'none' : 'flex';})()}; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
+                                        <select id="img-scene-preset-ref" class="set-select" style="flex:1; min-width:0; font-size:11px;">
+                                            <option value="">-- 從 NAI 預設包複製底詞 --</option>
+                                            ${(imgConfig.novelai.naiPresets || []).map((p, i) => `<option value="${i}">${p.name}</option>`).join('')}
+                                        </select>
+                                        <span style="font-size:11px; color:#FBDFA2; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid #FBDFA2; border-radius:4px; background:rgba(251,223,162,0.1);" onclick="window._sceneSpec.applyPreset()">套用</span>
+                                    </div>
+                                </div>
+
+                                <div id="img-scene-neg-row" style="margin-bottom:12px; display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? 'none' : '';})()};">
+                                    <div class="set-label" style="font-size:11px;">🚫 場景負詞</div>
+                                    <textarea class="set-textarea" id="img-scene-neg-prompt" style="min-height:50px;">${imgConfig.sceneGen?.sceneNegPrompt || ''}</textarea>
+                                </div>
+
+                                <!-- 規範提示詞 -->
+                                <div style="border:1px solid rgba(251,223,162,0.3); border-radius:4px; padding:12px; background:rgba(69,34,22,0.5); margin-top:4px;">
+                                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                                        <div class="set-label" style="margin:0; font-size:12px;">📋 規範提示詞 <span style="color:#B78456; font-weight:normal; font-size:10px;">（注入給 AI，告訴它輸出格式）</span></div>
+                                    </div>
+                                    <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px;">
+                                        <select id="img-scene-spec-sel" class="set-select" style="flex:1; min-width:0; font-size:11px;">
+                                            <option value="">-- 選擇模板 --</option>
+                                            ${(imgConfig.sceneGen?.specTemplates || []).map((t, i) => `<option value="${i}">${t.name}</option>`).join('')}
+                                        </select>
+                                        <span style="font-size:11px; color:#FBDFA2; cursor:pointer; white-space:nowrap; padding:5px 8px; border:1px solid #FBDFA2; border-radius:4px; background:rgba(251,223,162,0.1);" onclick="window._sceneSpec.apply()">套用</span>
+                                        <span style="font-size:11px; color:#FBDFA2; cursor:pointer; white-space:nowrap; padding:5px 8px; border:1px solid #FBDFA2; border-radius:4px; background:rgba(251,223,162,0.1);" onclick="window._sceneSpec.save()">另存</span>
+                                        <span style="font-size:11px; color:#fc8181; cursor:pointer; white-space:nowrap; padding:5px 8px; border:1px solid #fc8181; border-radius:4px; background:rgba(252,129,129,0.1);" onclick="window._sceneSpec.del()">刪除</span>
+                                    </div>
+                                    <div id="img-scene-spec-name-row" style="display:none; margin-bottom:8px;">
+                                        <div style="display:flex; gap:8px;">
+                                            <input id="img-scene-spec-name-input" class="set-input" placeholder="模板名稱（如：NAI V4.5 標準）" style="flex:1; font-size:11px;">
+                                            <span style="font-size:11px; color:#FBDFA2; cursor:pointer; padding:5px 8px; border:1px solid #FBDFA2; border-radius:4px; white-space:nowrap; background:rgba(251,223,162,0.1);" onclick="window._sceneSpec.confirmSave()">確認</span>
+                                            <span style="font-size:11px; color:#B78456; cursor:pointer; padding:5px 8px; border:1px solid #B78456; border-radius:4px;" onclick="window._sceneSpec.cancelSave()">取消</span>
+                                        </div>
+                                    </div>
+                                    <textarea class="set-textarea" id="img-scene-spec-prompt" style="min-height:160px; font-size:11px;">${(imgConfig.sceneGen?.specPrompt || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                                    <div style="font-size:10px; color:#B78456; margin-top:4px;">↑ 用 {MAX_PER_CHAPTER} 代入最大插圖數，系統自動替換。</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="set-group">
                             <div class="set-label">測試生成</div>
                             <input class="set-input" id="img-test-prompt" type="text" placeholder="輸入描述..." value="a handsome man holding a rose">
@@ -798,6 +924,11 @@
                         </div>
                     </div>
 
+                    <!-- ── VN 系統設置（由 vn_settings.js 提供） ── -->
+                    <div id="view-vn" class="tab-view hidden">
+                        ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getHTML() : '<div class="set-desc" style="padding:20px; text-align:center;">⚠️ vn_settings.js 尚未載入</div>'}
+                    </div>
+
                     <div id="view-sys" class="tab-view hidden">
 
                         <div class="set-group">
@@ -860,7 +991,7 @@
         const backBtn = container.querySelector('#nav-home');
         backBtn.onclick = () => { const win = window.parent || window; if (win.PhoneSystem) win.PhoneSystem.goHome(); };
 
-        const tabs = container.querySelectorAll('.set-tab');
+        const tabs = container.querySelectorAll('.set-tab[data-tab]');
         const views = container.querySelectorAll('.tab-view');
         tabs.forEach(tab => {
             tab.onclick = () => {
@@ -1300,6 +1431,14 @@
                         itemBasePrompt: (container.querySelector('#img-nai-item-base')?.value || '').trim(),
                         itemNegPrompt:  (container.querySelector('#img-nai-item-neg')?.value  || '').trim(),
                         naiPresets: naiPresets,
+                    },
+                    sceneGen: {
+                        enabled:          container.querySelector('#img-scene-enabled')?.checked ?? false,
+                        promptStyle:      container.querySelector('#img-scene-prompt-style')?.value || 'auto',
+                        sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
+                        sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
+                        specPrompt:      (container.querySelector('#img-scene-spec-prompt')?.value  || '').trim(),
+                        specTemplates:    sceneSpecTemplates,
                     }
                 };
 
@@ -1332,9 +1471,11 @@
                     voiceProfiles
                 } : null;
 
-                saveConfig(llmData, secLlmData, imgData, minimaxData); 
-                btnSave.innerText = "已保存 ✓"; 
-                status.innerText = "✅ 設置已生效"; 
+                saveConfig(llmData, secLlmData, imgData, minimaxData);
+                // VN 設置由外部模組統一存入 vn_cfg_v4
+                if (window.VN_SETTINGS_PANEL) window.VN_SETTINGS_PANEL.save(container);
+                btnSave.innerText = "已保存 ✓";
+                status.innerText = "✅ 設置已生效";
                 setTimeout(() => { btnSave.innerText = "保存所有設定"; }, 2000);
             } catch (e) {
                 console.error("保存失敗:", e);
@@ -1534,6 +1675,93 @@
                 if (!confirm(`刪除預設「${name}」？`)) return;
                 naiPresets.splice(idx, 1);
                 refreshNaiPresetDropdown();
+            }
+        };
+
+        // ── 場景插圖：規範提示詞模板 handlers ──────────────────────
+        let sceneSpecTemplates = [...(imgConfig.sceneGen?.specTemplates || [])];
+
+        function refreshSceneSpecDropdown() {
+            const sel = container.querySelector('#img-scene-spec-sel');
+            if (!sel) return;
+            const cur = sel.value;
+            sel.innerHTML = '<option value="">-- 選擇模板 --</option>' +
+                sceneSpecTemplates.map((t, i) => `<option value="${i}">${t.name}</option>`).join('');
+            if (cur !== '' && sceneSpecTemplates[parseInt(cur)]) sel.value = cur;
+        }
+
+        // 同步 NAI 預設包下拉（預設包存入後需刷新參考下拉）
+        function refreshScenePresetRef() {
+            const sel = container.querySelector('#img-scene-preset-ref');
+            if (!sel) return;
+            const cur = sel.value;
+            sel.innerHTML = '<option value="">-- 從 NAI 預設包複製底詞 --</option>' +
+                naiPresets.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+            if (cur !== '' && naiPresets[parseInt(cur)]) sel.value = cur;
+        }
+
+        // 場景插圖啟用開關 → 控制操作區透明度
+        const elSceneEnabled = container.querySelector('#img-scene-enabled');
+        const elSceneBody    = container.querySelector('#img-scene-body');
+        if (elSceneEnabled && elSceneBody) {
+            elSceneEnabled.addEventListener('change', () => {
+                elSceneBody.style.opacity       = elSceneEnabled.checked ? '1'    : '0.5';
+                elSceneBody.style.pointerEvents = elSceneEnabled.checked ? 'auto' : 'none';
+            });
+        }
+
+        window._sceneSpec = {
+            apply() {
+                const sel = container.querySelector('#img-scene-spec-sel');
+                if (!sel || sel.value === '') { alert('請先選擇模板'); return; }
+                const t = sceneSpecTemplates[parseInt(sel.value)];
+                if (!t) return;
+                const ta = container.querySelector('#img-scene-spec-prompt');
+                if (ta) ta.value = t.prompt || '';
+            },
+            save() {
+                const row = container.querySelector('#img-scene-spec-name-row');
+                if (row) row.style.display = 'block';
+                container.querySelector('#img-scene-spec-name-input')?.focus();
+            },
+            confirmSave() {
+                const nameInput = container.querySelector('#img-scene-spec-name-input');
+                const name = nameInput?.value.trim();
+                if (!name) { alert('請輸入模板名稱'); return; }
+                const ta = container.querySelector('#img-scene-spec-prompt');
+                sceneSpecTemplates.push({ name, prompt: ta?.value.trim() || '' });
+                refreshSceneSpecDropdown();
+                const sel = container.querySelector('#img-scene-spec-sel');
+                if (sel) sel.value = String(sceneSpecTemplates.length - 1);
+                const row = container.querySelector('#img-scene-spec-name-row');
+                if (row) row.style.display = 'none';
+                if (nameInput) nameInput.value = '';
+            },
+            cancelSave() {
+                const row = container.querySelector('#img-scene-spec-name-row');
+                if (row) row.style.display = 'none';
+                const nameInput = container.querySelector('#img-scene-spec-name-input');
+                if (nameInput) nameInput.value = '';
+            },
+            del() {
+                const sel = container.querySelector('#img-scene-spec-sel');
+                if (!sel || sel.value === '') { alert('請先選擇要刪除的模板'); return; }
+                const idx = parseInt(sel.value);
+                const name = sceneSpecTemplates[idx]?.name || '';
+                if (!confirm(`刪除模板「${name}」？`)) return;
+                sceneSpecTemplates.splice(idx, 1);
+                refreshSceneSpecDropdown();
+            },
+            // 從 NAI 預設包複製底詞到場景底詞框
+            applyPreset() {
+                const sel = container.querySelector('#img-scene-preset-ref');
+                if (!sel || sel.value === '') { alert('請先選擇 NAI 預設包'); return; }
+                const p = naiPresets[parseInt(sel.value)];
+                if (!p) return;
+                const base = container.querySelector('#img-scene-base-prompt');
+                const neg  = container.querySelector('#img-scene-neg-prompt');
+                if (base) base.value = p.charBasePrompt || '';
+                if (neg)  neg.value  = p.charNegPrompt  || '';
             }
         };
 
