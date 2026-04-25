@@ -1112,11 +1112,27 @@ const IRIS_IDLE = [
 
             const rotateBtn = tab.querySelector('#lobby-rotate-btn');
             if (rotateBtn) {
-                rotateBtn.onclick = () => {
-                    const root = document.getElementById('aurelia-standalone-root');
-                    if (!root) return;
-                    const isLandscape = root.classList.toggle('aurelia-landscape');
-                    rotateBtn.style.transform = isLandscape ? 'rotate(90deg)' : '';
+                rotateBtn.onclick = async () => {
+                    const inLandscape = rotateBtn.dataset.landscape === '1';
+                    try {
+                        if (!inLandscape) {
+                            if (document.documentElement.requestFullscreen) {
+                                await document.documentElement.requestFullscreen().catch(() => {});
+                            }
+                            if (screen.orientation?.lock) {
+                                await screen.orientation.lock('landscape');
+                            }
+                            rotateBtn.dataset.landscape = '1';
+                            rotateBtn.title = '切回直版';
+                        } else {
+                            if (screen.orientation?.unlock) screen.orientation.unlock();
+                            if (document.exitFullscreen) await document.exitFullscreen().catch(() => {});
+                            rotateBtn.dataset.landscape = '0';
+                            rotateBtn.title = '切換橫版';
+                        }
+                    } catch(e) {
+                        console.warn('[Rotate]', e);
+                    }
                 };
             }
 

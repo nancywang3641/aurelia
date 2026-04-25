@@ -1132,18 +1132,4 @@ body.mode-404 #aurelia-bottom-nav .nav-button.active-gold {
 /* border with coffee/amber colors */
 #aurelia-phone-screen.mode-404 .set-content [style*="border:1px solid rgba(251,223,162"],
 
-/* =========================================================
-   橫版模式（獨立版專用）
-   點 🔄 按鈕後，#aurelia-standalone-root 加上 .aurelia-landscape
-   ========================================================= */
-#aurelia-standalone-root.aurelia-landscape {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    width: 100dvh !important;
-    height: 100dvw !important;
-    transform: translate(-50%, -50%) rotate(90deg) !important;
-    transform-origin: center center !important;
-    overflow: hidden !important;
-}
 #aurelia-phone-screen.mode-404 .set-content [style*="border: 1px solid rgba(251,223,162"] { border-color: rgba(0,255,65,0.25) !important; }
