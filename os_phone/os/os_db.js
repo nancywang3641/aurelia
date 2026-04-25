@@ -1,14 +1,14 @@
 // ----------------------------------------------------------------
-// [檔案] os_db.js (V20 - 建立獨立 Studio 草稿庫)
+// [檔案] os_db.js (V21 - 加入向量記憶庫 vn_memories)
 // 路徑：os_phone/os/os_db.js
 // 職責：管理 IndexedDB 資料庫。支援酒館與獨立版雙通向。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入系統資料庫 (System Storage V20)...');
-    const win = window.parent || window; 
+    console.log('[PhoneOS] 載入系統資料庫 (System Storage V21)...');
+    const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 20; // 🔥 升級至 V20
+    const DB_VERSION = 21; // 🔥 升級至 V21：向量記憶庫
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -26,7 +26,8 @@
     const STORE_NAME_VAR_PACKS = 'var_packs';           
     const STORE_NAME_UI_TEMPLATES = 'ui_templates';     
     const STORE_NAME_STUDIO = 'studio_chats';
-    const STORE_NAME_STUDIO_DRAFTS = 'studio_drafts'; // 🔥 新增：純淨草稿庫
+    const STORE_NAME_STUDIO_DRAFTS = 'studio_drafts';
+    const STORE_NAME_VN_MEMORIES  = 'vn_memories';   // 🔥 V21：向量記憶庫
 
     let dbInstance = null;
 
@@ -48,7 +49,8 @@
                         STORE_NAME_CHILD_CHAT, STORE_NAME_WORLDBOOK,
                         STORE_NAME_VN_CHAPTERS, STORE_NAME_VAR_PACKS,
                         STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO,
-                        STORE_NAME_STUDIO_DRAFTS // 🔥 註冊草稿庫
+                        STORE_NAME_STUDIO_DRAFTS,
+                        STORE_NAME_VN_MEMORIES   // 🔥 V21：向量記憶庫
                     ];
 
                     stores.forEach(name => {
@@ -621,7 +623,12 @@
                     if (!chapter.createdAt) chapter.createdAt = Date.now();
                     const tx = db.transaction(STORE_NAME_VN_CHAPTERS, 'readwrite');
                     tx.objectStore(STORE_NAME_VN_CHAPTERS).put(chapter);
-                    tx.oncomplete = () => r(chapter.id);
+                    tx.oncomplete = () => {
+                        win.dispatchEvent(new CustomEvent('VN_CHAPTER_SAVED', { detail: {
+                            id: chapter.id, storyId: chapter.storyId, content: chapter.content
+                        }}));
+                        r(chapter.id);
+                    };
                 } catch(e) { j(e); }
             });
         },
@@ -653,6 +660,46 @@
                     const req = store.getAll();
                     req.onsuccess = () => {
                         (req.result || []).filter(ch => ch.storyId === storyId).forEach(ch => store.delete(ch.id));
+                        tx.oncomplete = () => r(true);
+                    };
+                } catch(e) { j(e); }
+            });
+        },
+
+        // ── vn_memories：向量記憶條目 CRUD ──────────────────────────
+        saveVnMemory: async function(entry) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!entry.id) entry.id = 'vmem_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                    if (!entry.createdAt) entry.createdAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_MEMORIES).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllVnMemories: async function(storyId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_VN_MEMORIES, 'readonly').objectStore(STORE_NAME_VN_MEMORIES).getAll();
+                    req.onsuccess = () => {
+                        const all = req.result || [];
+                        r(storyId ? all.filter(m => m.storyId === storyId) : all);
+                    };
+                } catch(e) { j(e); }
+            });
+        },
+        deleteVnMemoriesByStoryId: async function(storyId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME_VN_MEMORIES);
+                    const req = store.getAll();
+                    req.onsuccess = () => {
+                        (req.result || []).filter(m => m.storyId === storyId).forEach(m => store.delete(m.id));
                         tx.oncomplete = () => r(true);
                     };
                 } catch(e) { j(e); }

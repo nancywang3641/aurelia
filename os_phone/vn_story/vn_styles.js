@@ -1385,34 +1385,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
     const vnHTML = `
     <div class="vn-root">
         <div class="vn-container">
-            <div id="page-home" class="page">
-    <div class="home-bg-fx">
-        <div class="glow-orb gold"></div>
-        <div class="glow-orb cyan"></div>
-    </div>
-    
-    <div class="home-frame">
-        <div class="corner tl"></div><div class="corner tr"></div>
-        <div class="corner bl"></div><div class="corner br"></div>
-    </div>
-
-    <div class="menu-wrapper">
-        <div class="title-group">
-            <h1>Stellar Nexus</h1>
-            <div class="subtitle">
-                <span class="line"></span>
-                <span class="text">Interactive Visual Novel</span>
-                <span class="line"></span>
-            </div>
-        </div>
-        
-        <button class="btn primary" id="btn-vn-st-chapter" onclick="window.VN_PLAYER.openChapterPanel()">選擇章節</button>
-        <button class="btn" onclick="window.AureliaControlCenter?.showOsApp('設置'); setTimeout(()=>{document.querySelector('.set-tab[data-tab=vn]')?.click()},350)">系統設置</button>
-        
-        <div class="version-text">VER 8.5 // SFX MODULE</div>
-    </div>
-</div>
-
             <div id="page-game" class="page hidden">
                 <button id="btn-home" onclick="window.VN_PLAYER.stopGame()" title="Home">退出</button>
                 <button id="btn-settings" onclick="window.VN_PLAYER.openGameSettings()" title="Config">設定</button>

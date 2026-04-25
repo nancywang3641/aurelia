@@ -645,11 +645,19 @@
         hide() {
             console.log('[StoryExtractor] 🔍 hide() 被調用');
 
+            const _maybeHideVnPanel = () => {
+                const pageGame = document.getElementById('page-game');
+                if (pageGame && pageGame.classList.contains('hidden')) {
+                    if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
+                }
+            };
+
             const vnExtractorContainer = document.getElementById('story-extractor-container-vn');
             if (vnExtractorContainer) {
                 vnExtractorContainer.classList.remove('show');
                 vnExtractorContainer.style.removeProperty('display');
                 this.isVisible = false;
+                _maybeHideVnPanel();
                 return;
             }
 
@@ -661,6 +669,7 @@
                         parentContainer.classList.remove('show');
                         parentContainer.style.removeProperty('display');
                         this.isVisible = false;
+                        _maybeHideVnPanel();
                         return;
                     }
                 }

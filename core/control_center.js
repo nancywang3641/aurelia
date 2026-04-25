@@ -67,7 +67,6 @@
 
         const items = [
             { id: 'nav-home',  icon: 'fa-solid fa-cube',     active: true,  title: '大廳' },
-            { id: 'nav-story', icon: 'fa-solid fa-plug',     active: false, title: 'DIVE' },
             { id: 'nav-user',  icon: 'fa-solid fa-user',     active: false, title: '我' },
             { id: 'nav-write', icon: 'fa-solid fa-pen-nib',  active: false, title: '寫作' },
             { id: 'nav-close', icon: 'fa-solid fa-power-off', isClose: true, title: '登出' }
@@ -126,24 +125,7 @@
         const target = container.querySelector('#' + pageId.replace('nav-', 'aurelia-') + '-tab');
         if (target) target.style.display = 'flex';
 
-        if (pageId === 'nav-story') {
-            if (window.VoidTerminal && window.VoidTerminal.suspendIdle) window.VoidTerminal.suspendIdle();
-            const vnContainer = container.querySelector('#aurelia-vn-app-container');
-            if (vnContainer && !vnContainer.dataset.vnInited) {
-                if (window.VN_PLAYER && window.VN_PLAYER.launchApp) {
-                    window.VN_PLAYER.launchApp(vnContainer);
-                    vnContainer.dataset.vnInited = 'true';
-                } else {
-                    setTimeout(() => {
-                        if (window.VN_PLAYER && window.VN_PLAYER.launchApp && !vnContainer.dataset.vnInited) {
-                            window.VN_PLAYER.launchApp(vnContainer);
-                            vnContainer.dataset.vnInited = 'true';
-                        }
-                    }, 2000);
-                }
-            }
-        } 
-        else if (pageId === 'nav-home') {
+        if (pageId === 'nav-home') {
             if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
         }
         else if (pageId === 'nav-user') {
@@ -162,14 +144,75 @@
             if (window.VoidTerminal && window.VoidTerminal.suspendIdle) window.VoidTerminal.suspendIdle();
         }
 
-        if (pageId !== 'nav-story') {
-            const extractorContainer = container.querySelector('#aurelia-extractor-container-vn');
-            if (extractorContainer) { extractorContainer.style.display = 'none'; extractorContainer.classList.remove('show'); }
-            const storyExtractorContainer = container.querySelector('#story-extractor-container-vn');
-            if (storyExtractorContainer) { storyExtractorContainer.style.display = 'none'; storyExtractorContainer.classList.remove('show'); }
-            if (window.AureliaHtmlExtractor?.hide) window.AureliaHtmlExtractor.hide();
-            if (window.StoryExtractor?.hide) window.StoryExtractor.hide();
+    }
+
+    function showVnPanel(action) {
+        const root = isEmbedded ? embeddedRoot : phoneModal;
+        if (!root && !isEmbedded) return;
+        const container = isEmbedded ? phoneFrame : root;
+
+        const vnPanel = container.querySelector('#aurelia-vn-panel');
+        const vnContainer = container.querySelector('#aurelia-vn-app-container');
+        if (!vnPanel || !vnContainer) return;
+
+        if (window.VoidTerminal && window.VoidTerminal.suspendIdle) window.VoidTerminal.suspendIdle();
+
+        function _runAction(delay) {
+            if (!action) return;
+            setTimeout(() => {
+                if (action === 'story' && window.StoryExtractor) window.StoryExtractor.show();
+                else if (action === 'generate' && window.VN_PLAYER) window.VN_PLAYER.openGeneratePanel();
+                else if (action === 'chapter' && window.VN_PLAYER) window.VN_PLAYER.openChapterPanel();
+            }, delay);
         }
+
+        vnPanel.style.display = 'flex';
+
+        if (!vnContainer.dataset.vnInited) {
+            const hasPendingScript = !!window._pendingAutoScript;
+            if (window.VN_PLAYER && window.VN_PLAYER.launchApp) {
+                window.VN_PLAYER.launchApp(vnContainer);
+                vnContainer.dataset.vnInited = 'true';
+                if (!hasPendingScript) _runAction(150);
+            } else {
+                setTimeout(() => {
+                    if (window.VN_PLAYER && window.VN_PLAYER.launchApp) {
+                        const stillPending = !!window._pendingAutoScript;
+                        window.VN_PLAYER.launchApp(vnContainer);
+                        vnContainer.dataset.vnInited = 'true';
+                        if (!stillPending) _runAction(150);
+                    }
+                }, 2000);
+            }
+        } else {
+            _runAction(50);
+        }
+    }
+
+    function hideVnPanel() {
+        const vnPanel = document.getElementById('aurelia-vn-panel');
+        if (vnPanel) vnPanel.style.display = 'none';
+
+        const extractorContainer = document.getElementById('aurelia-extractor-container-vn');
+        if (extractorContainer) { extractorContainer.style.display = 'none'; extractorContainer.classList.remove('show'); }
+        const storyExtractorContainer = document.getElementById('story-extractor-container-vn');
+        if (storyExtractorContainer) { storyExtractorContainer.style.display = 'none'; storyExtractorContainer.classList.remove('show'); }
+        if (window.AureliaHtmlExtractor?.hide) window.AureliaHtmlExtractor.hide();
+        if (window.StoryExtractor?.hide) window.StoryExtractor.hide();
+
+        // 強制讓所有 tab 隱藏，只顯示 home tab，並同步底部 nav 高亮
+        document.querySelectorAll('.aurelia-tab').forEach(t => { t.style.display = 'none'; });
+        const homeTab = document.getElementById('aurelia-home-tab');
+        if (homeTab) homeTab.style.display = 'flex';
+        document.querySelectorAll('.nav-button').forEach(btn => {
+            const isHome = btn.dataset.navId === 'nav-home';
+            btn.classList.toggle('active', isHome);
+            btn.classList.toggle('active-gold', isHome);
+            btn.style.color = isHome ? '#2b6cb0' : '#a0aec0';
+            btn.style.background = isHome ? '#ebf8ff' : 'transparent';
+        });
+
+        if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
     }
 
     function createTabContainer(parentDoc) {
@@ -186,26 +229,6 @@
             homeTab.className = 'aurelia-tab void-tab';
             homeTab.innerHTML = '<div style=\"color:red; padding:20px;\">[錯誤] Void Terminal 模組未載入。</div>';
         }
-
-        const storyTab = parentDoc.createElement('div');
-        storyTab.id = 'aurelia-story-tab';
-        storyTab.className = 'aurelia-tab';
-        storyTab.style.cssText = `width:100%; height:100%; display:none; background:#000; position: relative; flex-direction:column;`;
-
-        const vnAppContainer = parentDoc.createElement('div');
-        vnAppContainer.id = 'aurelia-vn-app-container';
-        vnAppContainer.style.cssText = 'width:100%; height:100%; overflow:hidden; position:relative;';
-        storyTab.appendChild(vnAppContainer);
-
-        const extractorContainer = parentDoc.createElement('div');
-        extractorContainer.id = 'aurelia-extractor-container-vn';
-        extractorContainer.style.cssText = `position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; z-index: 1000; overflow: hidden; display: none; flex-direction: column;`;
-        storyTab.appendChild(extractorContainer);
-
-        const storyExtractorContainer = parentDoc.createElement('div');
-        storyExtractorContainer.id = 'story-extractor-container-vn';
-        storyExtractorContainer.style.cssText = `position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; border: 2px solid #d4af37; z-index: 1001; overflow: hidden; display: none; flex-direction: column;`;
-        storyTab.appendChild(storyExtractorContainer);
 
         const userTab = parentDoc.createElement('div');
         userTab.id = 'aurelia-user-tab';
@@ -270,7 +293,6 @@
         writeTab.appendChild(writePanel);
 
         container.appendChild(homeTab);
-        container.appendChild(storyTab);
         container.appendChild(userTab);
         container.appendChild(writeTab);
         return container;
@@ -289,7 +311,29 @@
         slidePanel.style.cssText = `position: absolute; top:0; left:0; width:100%; height:100%; background: #1a1a1a; z-index: 50; display: none; flex-direction: column;`;
         slidePanel.innerHTML = `<div id=\"aurelia-iframe-container\" style=\"width:100%; height:100%; background:#000; overflow:hidden; position:relative;\"></div>`;
         screen.appendChild(slidePanel);
-        
+
+        // 🌟 VN 專用全螢幕 overlay（從大廳直接彈出，z-index 51 覆蓋其他 overlay）
+        const vnPanel = parentDoc.createElement('div');
+        vnPanel.id = 'aurelia-vn-panel';
+        vnPanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom:55px; background:#000; z-index: 51; display: none; flex-direction: column;`;
+
+        const vnAppContainer = parentDoc.createElement('div');
+        vnAppContainer.id = 'aurelia-vn-app-container';
+        vnAppContainer.style.cssText = 'width:100%; height:100%; overflow:hidden; position:relative;';
+        vnPanel.appendChild(vnAppContainer);
+
+        const extractorContainer = parentDoc.createElement('div');
+        extractorContainer.id = 'aurelia-extractor-container-vn';
+        extractorContainer.style.cssText = `position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; z-index: 1000; overflow: hidden; display: none; flex-direction: column;`;
+        vnPanel.appendChild(extractorContainer);
+
+        const storyExtractorContainer = parentDoc.createElement('div');
+        storyExtractorContainer.id = 'story-extractor-container-vn';
+        storyExtractorContainer.style.cssText = `position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; border: 2px solid #d4af37; z-index: 1001; overflow: hidden; display: none; flex-direction: column;`;
+        vnPanel.appendChild(storyExtractorContainer);
+
+        screen.appendChild(vnPanel);
+
         return screen;
     }
 
@@ -479,6 +523,8 @@
     AureliaControlCenter.isVisible = () => isVisible;
     AureliaControlCenter.isEmbeddedMounted = () => isEmbedded;
     AureliaControlCenter.switchPage = switchPage;
+    AureliaControlCenter.showVnPanel = showVnPanel;
+    AureliaControlCenter.hideVnPanel = hideVnPanel;
 
     AureliaControlCenter.setChatTitle = function(title) {
         const el = document.getElementById('aurelia-current-chat-title');

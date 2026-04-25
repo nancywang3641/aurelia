@@ -721,6 +721,20 @@
                 }
             }
 
+            // 3. 新式：從 <summary> 的 char_new: 行讀取頭像 prompt（取代 <profile> 表格）
+            const smReg = /<summary>([\s\S]*?)<\/summary>/g; let sm;
+            while ((sm = smReg.exec(txtString)) !== null) {
+                for (const line of sm[1].split('\n')) {
+                    const cnMatch = line.match(/char_new\s*[:：]\s*([^|]+)\|(.+)/);
+                    if (!cnMatch) continue;
+                    const cnName = cnMatch[1].trim();
+                    if (!cnName || this.avatars[cnName]) continue; // 已有則跳過（首次登場原則）
+                    const kvStr = cnMatch[2];
+                    const avatarKv = kvStr.match(/頭像\s*=\s*([^|]+)/);
+                    if (avatarKv) this.avatars[cnName] = avatarKv[1].trim();
+                }
+            }
+
             // ⚠️ _extractAndSaveProfiles 已停用：自動把 VN 劇情角色寫入 OS_WORLDBOOK 會汙染世界書資料
 
             // 將 <branches> 選項附加到 script 末尾（由現有 [Choice|] 機制驅動顯示）
@@ -2844,9 +2858,9 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                         // 點擊載入
                         item.onclick = (e) => {
                             if (e.target.dataset.id) return;
-                            closeChapterPanel();
                             window.VN_Core._setStoryId(ch.storyId || '', ch.storyTitle || '');
                             switchPage('page-game');
+                            closeChapterPanel();
                             // 走 _loadWithSceneAnalysis：若場景插圖已啟用，先送副模型分析再播放
                             window.VN_Core._showStartLoader(4000, () => window.VN_Core._loadWithSceneAnalysis(ch.content, null));
                         };
@@ -2915,9 +2929,9 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 item.className = 'ch-item tavern-parse';
                 item.innerHTML = `<span class="ch-name">${ch.title}</span><span class="ch-num">CH.${String(ch.index).padStart(2, '0')}</span><span class="ch-msgid">#${ch.message_id}</span>`;
                 item.onclick = () => {
-                    closeChapterPanel();
                     window.VN_Core.loadScript(ch.content, ch.message_id);
                     switchPage('page-game');
+                    closeChapterPanel();
                     window.VN_Core.next();
                 };
                 list.appendChild(item);
@@ -2929,7 +2943,13 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         }
     }
 
-    function closeChapterPanel() { document.getElementById('chapter-overlay').classList.remove('active'); }
+    function closeChapterPanel() {
+        document.getElementById('chapter-overlay').classList.remove('active');
+        const pageGame = document.getElementById('page-game');
+        if (pageGame && pageGame.classList.contains('hidden')) {
+            if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
+        }
+    }
 
     // === 4. 全域 UI 輔助函數 ===
     // === 主頁背景輪播 ===
@@ -3005,13 +3025,11 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
     }
 
     function switchPage(id) {
-        if (id !== 'page-home') _stopHomeBgTimer();
+        _stopHomeBgTimer();
         document.querySelectorAll('.page').forEach(e => e.classList.add('hidden'));
-        document.getElementById(id).classList.remove('hidden');
-        if (id === 'page-home') {
-            applyRandomHomeBg();
-        }
-        if (id !== 'page-game') { const bgm = document.getElementById('bgm-player'); bgm.pause(); bgm.currentTime = 0; }
+        const target = document.getElementById(id);
+        if (target) target.classList.remove('hidden');
+        if (id !== 'page-game') { const bgm = document.getElementById('bgm-player'); if (bgm) { bgm.pause(); bgm.currentTime = 0; } }
     }
 
     function stopGame() {
@@ -3022,7 +3040,11 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         window.VN_Core._avatarMemCache = {};
         window.VN_Core.avatars = {};
         window.VN_Core.resetState();
-        switchPage('page-home');
+        const bgm = document.getElementById('bgm-player');
+        if (bgm) { bgm.pause(); bgm.currentTime = 0; }
+        const pageGame = document.getElementById('page-game');
+        if (pageGame) pageGame.classList.add('hidden');
+        if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
     }
 
     // === 4.5 VN_Sticker 表情包模組 ===
@@ -3505,6 +3527,10 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
     function closeGeneratePanel() {
         const overlay = document.getElementById('vn-gen-overlay');
         if (overlay) overlay.classList.remove('active');
+        const pageGame = document.getElementById('page-game');
+        if (pageGame && pageGame.classList.contains('hidden')) {
+            if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
+        }
     }
 
     // 🌟 【重構】加上 options = {} 參數與 async 關鍵字
@@ -3560,9 +3586,9 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                     createdAt: now,
                     avsStateBefore,
                 });
-                closeGeneratePanel();
                 window.VN_Core._lastRawText = fullText;
                 switchPage('page-game');
+                closeGeneratePanel();
                 window.VN_Core._showStartLoader(4000, () => window.VN_Core._loadWithSceneAnalysis(fullText, null));
                 console.log('[VN_Gen] ✅ 角色卡開場白直通成功，變數已透過參數直接初始化');
             } catch(e) {
@@ -3661,9 +3687,9 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
 
                         if (presetTitle) _saveGenPreset(presetTitle, request);
 
-                        closeGeneratePanel();
                         window.VN_Core._lastRawText = fullText;
                         switchPage('page-game');
+                        closeGeneratePanel();
                         window.VN_Core._showStartLoader(6000, () => window.VN_Core._loadWithSceneAnalysis(fullText, null));
                         resolve();
                     },
@@ -3888,21 +3914,21 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         },
 
         async _profilesHtml() {
-            // 掃描所有章節的 ch.content，解析 <profile> 表格，累積全局角色資料
+            // 掃描所有章節，解析 <profile> 表格（舊式）與 <summary> char_new:（新式）
             if (!win.OS_DB?.getAllVnChapters) return '<div style="padding:30px;text-align:center;color:#999">OS_DB 未載入</div>';
             try {
                 const allChapters = await win.OS_DB.getAllVnChapters();
                 const currentStoryId = window.VN_Core?._currentStoryId || '';
-                // 只看當前故事的章節
                 const chapters = currentStoryId
                     ? allChapters.filter(ch => ch.storyId === currentStoryId)
                     : allChapters.filter(ch => !ch.storyId);
-                // 從舊到新解析，後出現同名角色不覆蓋（AI 只在首次登場輸出 profile）
-                const allChars = {}; // name → { cells, headers }
+                // 從舊到新，後出現同名角色不覆蓋（首次登場原則）
+                const allChars = {}; // name → { headers, cells }
+                const _stdHeaders = ['名字', '身份', '性格', '外觀描述', '頭像提示詞'];
                 chapters.slice().reverse().forEach(ch => {
                     const content = ch.content || '';
-                    const profReg = /<profile>([\s\S]*?)<\/profile>/gi;
-                    let pm;
+                    // ── 舊式 <profile> 表格 ──
+                    const profReg = /<profile>([\s\S]*?)<\/profile>/gi; let pm;
                     while ((pm = profReg.exec(content)) !== null) {
                         const rows = pm[1].split('\n').filter(l => l.trim().startsWith('|'));
                         let headers = null;
@@ -3915,11 +3941,27 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                             if (name && !allChars[name]) allChars[name] = { headers, cells };
                         }
                     }
+                    // ── 新式 <summary> char_new: ──
+                    const smReg = /<summary>([\s\S]*?)<\/summary>/gi; let sm;
+                    while ((sm = smReg.exec(content)) !== null) {
+                        for (const line of sm[1].split('\n')) {
+                            const cnMatch = line.match(/char_new\s*[:：]\s*([^|]+)\|(.+)/);
+                            if (!cnMatch) continue;
+                            const name = cnMatch[1].trim();
+                            if (!name || allChars[name]) continue;
+                            const kvStr = cnMatch[2];
+                            const get = key => (kvStr.match(new RegExp(`${key}\\s*=\\s*([^|]+)`)) || [])[1]?.trim() || '—';
+                            allChars[name] = {
+                                headers: _stdHeaders,
+                                cells: [name, get('身份'), get('性格'), get('外觀'), get('頭像')]
+                            };
+                        }
+                    }
                 });
                 const keys = Object.keys(allChars);
                 if (!keys.length) return `<div style="padding:30px;text-align:center;color:#999">
                     <div style="font-size:36px;margin-bottom:8px">📭</div>
-                    尚無角色資料。生成劇情後，AI 輸出的 &lt;profile&gt; 表格會累積於此。</div>`;
+                    尚無角色資料。生成劇情後，AI 在摘要中的 char_new: 資料會累積於此。</div>`;
                 return keys.map(name => {
                     const { headers, cells } = allChars[name];
                     const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -4368,52 +4410,10 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
 
         container.innerHTML = window.VN_STYLES.vnHTML;
 
-        // 🔀 獨立模式 vs 酒館模式偵測
-        const isStandalone = win.OS_API?.isStandalone?.() ?? false;
-
-        const menuWrapper = container.querySelector('#page-home .menu-wrapper');
-        if (menuWrapper) {
-            const btnStory = document.createElement('button');
-            btnStory.className = 'btn';
-            btnStory.id = 'btn-open-story-extractor';
-            btnStory.style.borderColor = '#00d2d3';
-            btnStory.style.color = '#00d2d3';
-
-            if (isStandalone) {
-                // 獨立模式：「踏入故事」→ 觸發 AI 生成開場白
-                btnStory.textContent = '✨ 踏入故事';
-                btnStory.onclick = () => openGeneratePanel();
-                // 「選擇章節」改為讀取本地存檔，保留顯示
-                const chapterBtn = container.querySelector('#btn-vn-st-chapter');
-                if (chapterBtn) chapterBtn.textContent = '📦 選擇章節';
-                console.log('[VN] 獨立模式：踏入故事 → AI 生成，選擇章節 → 本地存檔');
-            } else {
-                // 酒館模式：維持原有邏輯
-                btnStory.textContent = '踏入故事';
-                btnStory.onclick = () => {
-                    if (win.StoryExtractor) {
-                        win.StoryExtractor.show();
-                    } else if (win.toggleHtmlExtractor) {
-                        win.toggleHtmlExtractor();
-                    } else {
-                        alert('開場白提取模組尚未就緒，請檢查 story_extractor.js 是否加載。');
-                    }
-                };
-            }
-
-            const dbBtn = menuWrapper.querySelector('button');
-            if (dbBtn) {
-                menuWrapper.insertBefore(btnStory, dbBtn);
-            } else {
-                menuWrapper.appendChild(btnStory);
-            }
-        }
-
         VN_Config.load();
         VN_Settings.load();
         loadSavedChatBg();
         VN_Sticker.init();
-        applyRandomHomeBg();
         
         // 啟動時初始化主頁背景音樂按鈕與播放狀態
         if (window.VN_Core.updateHomeBgmState) {
@@ -4428,7 +4428,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 const _pMsgId  = typeof _pending === 'object' ? _pending.messageId : null;
                 window.VN_Core.loadScript(_pScript, _pMsgId);
                 switchPage('page-game');
-                window.VN_Core._showStartLoader(10000, () => window.VN_Core.next());
+                window.VN_Core.next();
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
         }
@@ -4501,28 +4501,13 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
 
                     if (!text.includes('<content>')) { _processedIds.delete(messageId); return; }
 
-                    if (document.getElementById('page-game')) {
+                    const _vnPanel = document.getElementById('aurelia-vn-panel');
+                    const _vnVisible = _vnPanel && _vnPanel.style.display !== 'none';
+                    if (_vnVisible && document.getElementById('page-game')) {
                         switchPage('page-game');
-                        // ★ 先跑 loading bar（10秒），等外部插件（圖像注入等）完工後，
-                        //   在 callback 裡重新從 TavernHelper 讀取最新內容再注入
-                        //   獨立模式沒有這類插件，但流程相同，不影響
-                        window.VN_Core._showStartLoader(10000, () => {
-                            try {
-                                const updatedMsgs = window.TavernHelper.getChatMessages(messageId);
-                                const updatedText = (updatedMsgs && updatedMsgs.length > 0)
-                                    ? (updatedMsgs[0].message || updatedMsgs[0].mes || updatedMsgs[0].content || '')
-                                    : '';
-                                // 用更新後的內容（含插件插入的 tag），fallback 到原始
-                                const finalText = (updatedText.includes('<content>')) ? updatedText : text;
-                                window.VN_Core.loadScript(finalText, messageId);
-                                window.VN_Core.next();
-                                console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
-                            } catch(e) {
-                                // fallback：用原始文字
-                                window.VN_Core.loadScript(text, messageId);
-                                window.VN_Core.next();
-                            }
-                        });
+                        window.VN_Core.loadScript(text, messageId);
+                        window.VN_Core.next();
+                        console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
                     } else {
                         window._pendingAutoScript = { text: text, messageId: messageId };
                         console.log('[PhoneOS] 自動偵測：劇本已暫存，待開啟 VN app 後套用');

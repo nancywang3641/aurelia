@@ -1001,6 +1001,32 @@
                     } catch(e) { console.warn('[OS_API vn_story] VN 歷史載入失敗:', e); }
                 }
 
+                // ── char_new / char_exit 角色記憶掃描（掃描所有章節 summary，按時間線取最新）──
+                let _charStateMap  = {}; // name → { detail, time }（char_exit：現況）
+                let _charAppearMap = {}; // name → { 身份, 性格, 外觀 }（char_new：外觀，只取首次）
+                let _latestStoryTime = '';
+                for (const _ch of _stCh) {
+                    const _sm = (_ch.content || '').match(/<summary>([\s\S]*?)<\/summary>/i);
+                    if (!_sm) continue;
+                    const _smText = _sm[1];
+                    // 故事時間（取最新）
+                    const _tMatch = _smText.match(/故事時間\s*[:：]\s*(.+)/);
+                    if (_tMatch) _latestStoryTime = _tMatch[1].trim();
+                    // char_new（首次登場外觀，已有則跳過）
+                    for (const _nm of _smText.matchAll(/char_new\s*[:：]\s*([^|\r\n]+)\|(.+)/g)) {
+                        const _cName = _nm[1].trim();
+                        if (!_cName || _charAppearMap[_cName]) continue;
+                        const _kvStr = _nm[2];
+                        const _get = k => (_kvStr.match(new RegExp(`${k}\\s*=\\s*([^|]+)`)) || [])[1]?.trim() || '';
+                        _charAppearMap[_cName] = { 身份: _get('身份'), 性格: _get('性格'), 外觀: _get('外觀') };
+                    }
+                    // char_exit（最新現況，後者覆蓋前者）
+                    for (const _em of _smText.matchAll(/char_exit\s*[:：]\s*([^|\r\n]+)\|(.+)/g)) {
+                        const _cName = _em[1].trim();
+                        if (_cName) _charStateMap[_cName] = { detail: _em[2].trim(), time: _latestStoryTime };
+                    }
+                }
+
                 const _vn = [];
                 const _entryMap = Object.fromEntries((win.OS_PROMPTS?.getEntries?.() || []).map(e => [e.id, e]));
                 const _vnBundles = (win.OS_PROMPTS?.getBundles?.() || [])
@@ -1029,6 +1055,56 @@
                     if (lore)       _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
                     if (userDesc || userName !== 'User') _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
                     _vnMsgs.forEach(m => _vn.push(m));
+                }
+
+                // ── 角色記錄 / 向量召回 ──
+                const _vecEnabled = win.OS_VECTOR_ENGINE?.isEnabled?.() === true;
+                if (_vecEnabled && userMessage) {
+                    // 向量模式：跳過全量 [角色記錄]，改用語意召回
+                    try {
+                        const _memories = await win.OS_VECTOR_ENGINE.search(userMessage, _sid);
+                        if (_memories.length > 0) {
+                            let _recallBlock = `[記憶召回]\n`;
+                            if (_latestStoryTime) _recallBlock += `當前故事時間：${_latestStoryTime}\n\n`;
+                            for (const _m of _memories) {
+                                _recallBlock += `[${_m.type || 'event'}] ${_m.text}`;
+                                if (_m.tags?.length) _recallBlock += `（${_m.tags.join('、')}）`;
+                                _recallBlock += '\n';
+                            }
+                            _vn.push({ role: 'system', content: _recallBlock.trim() });
+                            console.log(`[OS_API vn_story] 向量召回：${_memories.length} 條記憶`);
+                        }
+                    } catch(_ve) {
+                        console.warn('[OS_API vn_story] 向量召回失敗，降級為全量注入:', _ve);
+                        // fallthrough to full injection below
+                    }
+                } else {
+                    // 全量注入模式
+                    const _allCharNames = new Set([...Object.keys(_charAppearMap), ...Object.keys(_charStateMap)]);
+                    if (_allCharNames.size > 0) {
+                        let _csBlock = `[角色記錄]\n`;
+                        if (_latestStoryTime) _csBlock += `當前故事時間：${_latestStoryTime}\n\n`;
+                        for (const _n of _allCharNames) {
+                            const _ap = _charAppearMap[_n];
+                            const _st = _charStateMap[_n];
+                            _csBlock += `${_n}\n`;
+                            if (_ap) {
+                                if (_ap.身份) _csBlock += `  身份：${_ap.身份}\n`;
+                                if (_ap.性格) _csBlock += `  性格：${_ap.性格}\n`;
+                                if (_ap.外觀) _csBlock += `  外觀：${_ap.外觀}\n`;
+                            }
+                            if (_st) _csBlock += `  現況：${_st.detail}${_st.time ? `（記錄於：${_st.time}）` : ''}\n`;
+                            _csBlock += '\n';
+                        }
+                        const _knownNames = Object.keys(_charAppearMap);
+                        if (_knownNames.length > 0) {
+                            _csBlock += `[摘要輸出規則]\n`;
+                            _csBlock += `char_new: 以下角色外觀已登記，外觀無實質變化時請勿重複輸出（節省 token）：${_knownNames.join('、')}\n`;
+                            _csBlock += `char_exit: 不受上述限制，角色狀態/位置只要有變化就必須輸出更新`;
+                        }
+                        _vn.push({ role: 'system', content: _csBlock.trim() });
+                        console.log(`[OS_API vn_story] 角色記錄注入：${_allCharNames.size} 人，故事時間：${_latestStoryTime}`);
+                    }
                 }
 
                 if (avsPrompt) _vn.push({ role: 'system', content: avsPrompt });

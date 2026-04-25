@@ -220,7 +220,7 @@ const IRIS_IDLE = [
             dialogue = match[2];
         }
 
-        reactionName.innerHTML = `<span>${charName}</span>`;
+        const _rns = reactionName.querySelector('span'); if (_rns) _rns.textContent = charName;
         reactionName.style.display = 'block';
         reactionText.innerHTML = '';
 
@@ -759,7 +759,7 @@ const IRIS_IDLE = [
             const inputField = document.getElementById('iris-input');
             if (inputField) inputField.placeholder = '...你最好有話說。';
             const nameBox = document.getElementById('iris-name-tag');
-            if (nameBox) { nameBox.style.display = 'block'; nameBox.innerHTML = '<span>CHESHIRE / 柴郡</span>'; }
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='CHESHIRE / 柴郡'; }
             const iH = document.getElementById('iris-hist-btn');
             const cH = document.getElementById('cheshire-hist-btn');
             if (iH) iH.style.display = 'none';
@@ -782,7 +782,7 @@ const IRIS_IDLE = [
             const inputField = document.getElementById('iris-input');
             if (inputField) inputField.placeholder = '提供故事素材或與瀅瀅對話...';
             const nameBox = document.getElementById('iris-name-tag');
-            if (nameBox) { nameBox.style.display = 'block'; nameBox.innerHTML = '<span>瀅瀅</span>'; }
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='瀅瀅'; }
             const iH = document.getElementById('iris-hist-btn');
             const cH = document.getElementById('cheshire-hist-btn');
             if (iH) iH.style.display = '';
@@ -806,7 +806,7 @@ const IRIS_IDLE = [
             const nameBox = document.getElementById('iris-name-tag');
             if (box) box.innerHTML = is404Room
                 ? `<span style="color:#00cc33;font-style:italic;">(對話歷史已載入...)</span>`
-                : `<span style="color:#FBDFA2;font-style:italic;">(素材檔案已載入，繼續吧。)</span>`;
+                : `<span style="color:#5c3a28;font-style:italic;">(素材檔案已載入，繼續吧。)</span>`;
             if (nameBox) nameBox.style.display = 'none';
         } else {
             const userName = IRIS_STATE.userName || '委託人';
@@ -869,6 +869,9 @@ const IRIS_IDLE = [
                 <button id="lobby-bgm-toggle" title="音樂開關"
                     style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;"
                     onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">🔊</button>
+                ${isStandalone ? `<button id="lobby-rotate-btn" title="切換橫/直版"
+                    style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;"
+                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">🔄</button>` : ''}
                 <audio id="lobby-bgm-player" loop style="display:none;"></audio>
             </div>
 
@@ -960,19 +963,24 @@ const IRIS_IDLE = [
                     <div class="void-btn" id="void-quest-btn">
                         <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-bolt"></i><span>館藏</span></div>
                     </div>
-                    <div class="void-btn" id="void-dive-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.switchPage('nav-story')">
-                        <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-plug"></i><span>入境</span></div>
+                    <div class="void-btn" id="void-story-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel(window.OS_API?.isStandalone?.() ? 'generate' : 'story');">
+                        <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-play"></i><span>踏入故事</span></div>
+                    </div>
+                    <div class="void-btn" id="void-chapter-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel('chapter');">
+                        <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-book-open"></i><span>選擇章節</span></div>
                     </div>
                 </div>
                 <div style="position: relative; width: 100%;">
-                    <div class="void-dialogue-box" id="iris-dialogue-box" style="background: rgba(120,55,25,0.9); border: 1px solid rgba(251,223,162,0.4);">
-                        <div class="void-name-tag" id="iris-name-tag" style="background: #FBDFA2; color: #452216;"><span>瀅瀅</span></div>
-                        <div class="void-text" id="iris-text" style="color: #FFF8E7;">載入中...</div>
-                        <div class="void-next" id="iris-next" style="color: #FBDFA2;">▼</div>
+                    <div class="void-dialogue-box" id="iris-dialogue-box">
+                        <img class="void-dlg-bg" src="https://files.catbox.moe/5edth7.png" alt="">
+                        <div class="void-name-tag" id="iris-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
+                        <div class="void-text" id="iris-text">載入中...</div>
+                        <div class="void-next" id="iris-next">▼</div>
                     </div>
-                    <div class="void-dialogue-box" id="iris-reaction-box" style="display:none; cursor:pointer; background: rgba(120,55,25,0.9); border: 1px solid rgba(251,223,162,0.4);" title="點擊跳過">
-                        <div class="void-name-tag" id="iris-reaction-name-tag" style="background: #FBDFA2; color: #452216;"><span>瀅瀅</span></div>
-                        <div class="void-text" id="iris-reaction-text" style="color: #FFF8E7;">...</div>
+                    <div class="void-dialogue-box" id="iris-reaction-box" style="display:none; cursor:pointer;" title="點擊跳過">
+                        <img class="void-dlg-bg" src="https://files.catbox.moe/5edth7.png" alt="">
+                        <div class="void-name-tag" id="iris-reaction-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
+                        <div class="void-text" id="iris-reaction-text">...</div>
                     </div>
                 </div>
             </div>
@@ -980,7 +988,7 @@ const IRIS_IDLE = [
             <!-- 大廳畫布覆蓋層：VN 面板風格，對話結束後才彈出 -->
             <div id="lobby-canvas-overlay" style="display:none; position:absolute; inset:0; z-index:25; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
                 <div id="lobby-canvas-area" class="lobby-canvas-area">
-                    <div class="lca-header">
+                    <div class="lca-header" style="display:none;">
                         <span class="lca-title" id="lca-title">🎮 互動面板</span>
                         <button class="lca-close" id="lca-close">✕</button>
                     </div>
@@ -1047,12 +1055,9 @@ const IRIS_IDLE = [
                     } else {
                         const isStandalone = window.OS_API?.isStandalone?.() ?? false;
                         if (!isStandalone) {
-                            // 酒館模式：切到 DIVE tab 再開踏入故事窗口
-                            if (window.AureliaControlCenter && typeof window.AureliaControlCenter.switchPage === 'function') {
-                                window.AureliaControlCenter.switchPage('nav-story');
-                            }
-                            if (window.StoryExtractor && typeof window.StoryExtractor.show === 'function') {
-                                window.StoryExtractor.show();
+                            // 酒館模式：直接開 VN panel 並觸發故事提取
+                            if (window.AureliaControlCenter && typeof window.AureliaControlCenter.showVnPanel === 'function') {
+                                window.AureliaControlCenter.showVnPanel('story');
                             }
                         } else {
                             // 獨立模式：開書架
@@ -1103,6 +1108,16 @@ const IRIS_IDLE = [
             if (bgmBtn) {
                 bgmBtn.textContent = bgmEnabled ? '🔊' : '🔇';
                 bgmBtn.onclick = toggleLobbyBgm;
+            }
+
+            const rotateBtn = tab.querySelector('#lobby-rotate-btn');
+            if (rotateBtn) {
+                rotateBtn.onclick = () => {
+                    const root = document.getElementById('aurelia-standalone-root');
+                    if (!root) return;
+                    const isLandscape = root.classList.toggle('aurelia-landscape');
+                    rotateBtn.style.transform = isLandscape ? 'rotate(90deg)' : '';
+                };
             }
 
             const retryBtn = tab.querySelector('#iris-retry-btn');
@@ -1412,12 +1427,7 @@ const IRIS_IDLE = [
     }
 
     function scheduleBubbleFade(el) {
-        const popDelay = parseFloat(el.style.animationDelay || '0') * 1000;
-        setTimeout(() => {
-            if (!el.parentNode) return;
-            el.style.animation = 'bubbleFadeOut 0.5s ease forwards';
-            setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
-        }, popDelay + 600 + 5000);
+        // 泡泡不自動消失，由 addFeedEntry 超限時移除最舊一條
     }
 
     // ===== 404 彩蛋系統 =====
@@ -1451,7 +1461,7 @@ const IRIS_IDLE = [
             const inputField = document.getElementById('iris-input');
             if (inputField) inputField.placeholder = '...你最好有話說。';
             const nameBox = document.getElementById('iris-name-tag');
-            if (nameBox) { nameBox.style.display = 'block'; nameBox.innerHTML = '<span>CHESHIRE / 柴郡</span>'; }
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='CHESHIRE / 柴郡'; }
 
             const irisHistBtn404 = document.getElementById('iris-hist-btn');
             const cheshireHistBtn404 = document.getElementById('cheshire-hist-btn');
@@ -1504,7 +1514,7 @@ const IRIS_IDLE = [
             const inputField = document.getElementById('iris-input');
             if (inputField) inputField.placeholder = '提供故事素材或與瀅瀅對話...';
             const nameBox = document.getElementById('iris-name-tag');
-            if (nameBox) { nameBox.style.display = 'block'; nameBox.innerHTML = '<span>瀅瀅</span>'; }
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='瀅瀅'; }
 
             const irisHistBtnRestore = document.getElementById('iris-hist-btn');
             const cheshireHistBtnRestore = document.getElementById('cheshire-hist-btn');
@@ -1570,7 +1580,7 @@ const IRIS_IDLE = [
 
         if (IRIS_STATE.isTyping) {
             clearInterval(IRIS_STATE.timer); IRIS_STATE.isTyping = false;
-            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span style="color:#E0D8C8; font-style:italic;">${IRIS_STATE.fullText}</span>`;
+            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${IRIS_STATE.fullText}</span>`;
             else textContent.innerText = IRIS_STATE.fullText;
             
             if (nextInd) {
@@ -1598,7 +1608,7 @@ const IRIS_IDLE = [
         }
 
         if (msg.type === 'Nar') { nameBox.style.display = 'none'; IRIS_STATE.fullText = msg.text; }
-        else { nameBox.style.display = 'block'; nameBox.innerHTML = `<span>${msg.name}</span>`; IRIS_STATE.fullText = msg.text; }
+        else { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent=msg.name; IRIS_STATE.fullText = msg.text; }
 
         IRIS_STATE.isTyping = true; textContent.innerHTML = '';
         let i = 0; const speed = 25;
@@ -1606,7 +1616,7 @@ const IRIS_IDLE = [
         IRIS_STATE.timer = setInterval(() => {
             if (i < IRIS_STATE.fullText.length) {
                 let partial = IRIS_STATE.fullText.substring(0, i + 1);
-                if (msg.type === 'Nar') textContent.innerHTML = `<span style="color:#E0D8C8; font-style:italic;">${partial}</span>`;
+                if (msg.type === 'Nar') textContent.innerHTML = `<span style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${partial}</span>`;
                 else textContent.innerText = partial;
                 i++;
             } else {
@@ -1751,7 +1761,22 @@ LINE:[用角色風格說一句話，10-20字]`;
             area.style.animation = '';
             const content = document.getElementById('lca-content');
             if (content) content.innerHTML = '';
+            window.__LP = null;
         }, 260);
+    }
+    // 暴露給 os_studio / lobbyPanel JS 裡的 onclick 使用
+    window._closeLobbyCanvas = _closeLobbyCanvas;
+
+    // 把 content 內所有 onclick 屬性重新綁定到含 LP 的作用域，解決閉包隔離問題
+    function _rewireOnclicks(container, LP) {
+        container.querySelectorAll('[onclick]').forEach(el => {
+            const code = el.getAttribute('onclick');
+            el.removeAttribute('onclick');
+            el.addEventListener('click', (e) => {
+                try { new Function('container', 'LP', 'event', code)(container, LP, e); }
+                catch(err) { console.warn('[LobbyPanel] onclick 執行失敗:', err); }
+            });
+        });
     }
 
     function _renderLobbyPanel(panelData) {
@@ -1775,10 +1800,11 @@ LINE:[用角色風格說一句話，10-20字]`;
         overlay.style.display = 'flex';
         area.style.animation = 'lcaSlideIn 0.3s ease';
 
-        // 執行 JS（傳入 container 與 LP）
+        // 執行 JS（傳入 container 與 LP；同時暴露 window.__LP 供 onclick 使用）
+        const LP = _makeLobbyPanelAPI();
+        window.__LP = LP;
         if (panelData.js) {
             try {
-                const LP = _makeLobbyPanelAPI();
                 const fn = new Function('container', 'LP', panelData.js);
                 fn(content, LP);
             } catch(e) {
@@ -1786,6 +1812,8 @@ LINE:[用角色風格說一句話，10-20字]`;
                 content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;">⚠️ 面板 JS 錯誤: ${e.message}</div>`;
             }
         }
+        // 重綁所有 onclick，讓閉包函數在有 LP 的作用域內執行
+        _rewireOnclicks(content, LP);
     }
 
     // 從 AI 回覆中解析 <lobbyPanel>...</lobbyPanel>
@@ -1883,16 +1911,18 @@ LINE:[用角色風格說一句話，10-20字]`;
                 if (titleEl) titleEl.textContent = tpl.usageDesc || `🎮 ${tpl.tagId}`;
                 area.style.display = 'flex';
                 area.style.animation = 'lcaSlideIn 0.3s ease';
+                const LP2 = _makeLobbyPanelAPI();
+                window.__LP = LP2;
                 if (tpl.js) {
                     try {
-                        const LP = _makeLobbyPanelAPI();
                         const fn = new Function('container', 'lines', 'onComplete', 'LP', tpl.js);
-                        fn(content, lines, () => {}, LP);
+                        fn(content, lines, _closeLobbyCanvas, LP2);
                     } catch(e) {
                         console.error('[VNBlock] JS 執行錯誤:', e);
                         content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;">⚠️ ${e.message}</div>`;
                     }
                 }
+                _rewireOnclicks(content, LP2);
                 return m[0]; // 回傳匹配到的原始字串，供外層剝除
             }
         } catch(e) { console.warn('[VNBlock] 偵測失敗:', e); }
@@ -1955,7 +1985,7 @@ LINE:[用角色風格說一句話，10-20字]`;
         const box = document.getElementById('iris-text');
         const nameBox = document.getElementById('iris-name-tag');
         if (nameBox) nameBox.style.display = 'none';
-        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#FBDFA2'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : '(瀅瀅咬著羽毛筆思索中...)'}</span>`;
+        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#5c3a28'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : '(瀅瀅咬著羽毛筆思索中...)'}</span>`;
 
         if (!window.OS_API) {
             playIrisSequence("[Nar|(系統斷線：無法連接到 LUNA-VII 認知引擎)]\n[Char|瀅瀅|error|「抱歉，委託人，我好像找不到這段劇情的靈感了（無網路連線）。」]");
@@ -2163,11 +2193,13 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
                                 const area = document.getElementById('lobby-canvas-area');
                                 if (area) area.style.animation = 'lcaSlideIn 0.3s ease';
                                 if (capturedTpl.js) {
+                                    const LP3 = _makeLobbyPanelAPI();
+                                    window.__LP = LP3;
                                     try {
-                                        const LP = _makeLobbyPanelAPI();
                                         const fn = new Function('container', 'lines', 'onComplete', 'LP', capturedTpl.js);
-                                        fn(content, capturedLines, () => {}, LP);
+                                        fn(content, capturedLines, _closeLobbyCanvas, LP3);
                                     } catch(e) { console.error('[VNBlock]', e); }
+                                    _rewireOnclicks(content, LP3);
                                 }
                             };
                             break;
