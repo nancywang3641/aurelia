@@ -77,7 +77,7 @@
         .wb-overlay { position:absolute; inset:0; background:rgba(20,10,5,.95); backdrop-filter:blur(3px); z-index:50; display:flex; flex-direction:column; padding-bottom: 55px; box-sizing: border-box; }
         .wb-overlay.hidden { display:none; }
         .wb-form { flex:1; background:rgba(69,34,22,0.95); display:flex; flex-direction:column; overflow:hidden; border-top-left-radius:8px; border-top-right-radius:8px; border-top:1px solid rgba(251,223,162,0.3); }
-        .wb-form-header { display:flex; align-items:center; padding:12px 14px; border-bottom:1px solid rgba(251,223,162,0.3); gap:8px; }
+        .wb-form-header { display:flex; align-items:center; padding:12px 14px; padding-top:calc(12px + env(safe-area-inset-top, 0px)); border-bottom:1px solid rgba(251,223,162,0.3); gap:8px; }
         .wb-form-title-text { flex:1; font-size:14px; font-weight:600; color:#FBDFA2; }
         .wb-form-save { background:#FBDFA2; border:none; color:#452216; font-size:12px; font-weight:700; padding:5px 14px; border-radius:20px; cursor:pointer; }
         .wb-form-save:hover { background:#fce8b2; }
@@ -514,12 +514,7 @@
         root.querySelector('#wb-f-keys-input').value = '';
         renderTagEditor(root);
 
-        const editOverlay = root.querySelector('#wb-edit-overlay');
-        editOverlay.classList.remove('hidden');
-        if (!editOverlay.dataset.swipeInited) {
-            wbAddSwipeToDismiss(editOverlay, editOverlay.querySelector('.wb-form-header'));
-            editOverlay.dataset.swipeInited = '1';
-        }
+        root.querySelector('#wb-edit-overlay').classList.remove('hidden');
     }
 
     function openEditForm(root, id) {
@@ -539,12 +534,7 @@
         root.querySelector('#wb-f-keys-input').value = '';
         renderTagEditor(root);
 
-        const editOverlay2 = root.querySelector('#wb-edit-overlay');
-        editOverlay2.classList.remove('hidden');
-        if (!editOverlay2.dataset.swipeInited) {
-            wbAddSwipeToDismiss(editOverlay2, editOverlay2.querySelector('.wb-form-header'));
-            editOverlay2.dataset.swipeInited = '1';
-        }
+        root.querySelector('#wb-edit-overlay').classList.remove('hidden');
     }
 
     async function saveForm(root) {
@@ -580,42 +570,10 @@
         await reload(root);
     }
 
-    // iOS touch 下滑關閉 overlay（閾值 80px）
-    function wbAddSwipeToDismiss(overlay, headerEl) {
-        let startY = 0, curDY = 0, dragging = false;
-        const inner = overlay.querySelector('.wb-form') || overlay;
-        headerEl.addEventListener('touchstart', e => {
-            if (e.touches.length !== 1) return;
-            startY = e.touches[0].clientY;
-            curDY = 0; dragging = true;
-            inner.style.transition = 'none';
-        }, { passive: true });
-        headerEl.addEventListener('touchmove', e => {
-            if (!dragging || e.touches.length !== 1) return;
-            curDY = e.touches[0].clientY - startY;
-            if (curDY > 0) inner.style.transform = `translateY(${curDY}px)`;
-        }, { passive: true });
-        headerEl.addEventListener('touchend', () => {
-            if (!dragging) return;
-            dragging = false;
-            inner.style.transition = '';
-            if (curDY > 80) {
-                overlay.classList.add('hidden');
-            }
-            inner.style.transform = '';
-        });
-    }
-
     // ── 設定與操作 ────────────────────────────────────────────────────
     function openSettings(root) {
         renderCatsList(root);
-        const overlay = root.querySelector('#wb-cfg-overlay');
-        overlay.classList.remove('hidden');
-        // 掛上 swipe-to-dismiss（只掛一次）
-        if (!overlay.dataset.swipeInited) {
-            wbAddSwipeToDismiss(overlay, overlay.querySelector('.wb-form-header'));
-            overlay.dataset.swipeInited = '1';
-        }
+        root.querySelector('#wb-cfg-overlay').classList.remove('hidden');
     }
 
     function renderCatsList(root) {

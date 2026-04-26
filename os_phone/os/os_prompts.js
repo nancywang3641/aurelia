@@ -841,7 +841,7 @@ B. 發布新帖子:
         /* ── Bundle Edit Modal (slide-in, Layer 2) ── */
         .pm-bmodal { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(20,10,5,0.95); backdrop-filter: blur(5px); z-index:60; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .22s cubic-bezier(.4,0,.2,1); }
         .pm-bmodal.open { transform:translateX(0); }
-        .pm-bmodal-hd { display:flex; align-items:center; padding:0 12px; height:48px; gap:8px; border-bottom:1px solid rgba(251,223,162,0.3); flex-shrink:0; background:rgba(69,34,22,0.9); }
+        .pm-bmodal-hd { display:flex; align-items:center; padding:0 12px; padding-top:env(safe-area-inset-top, 0px); height:calc(48px + env(safe-area-inset-top, 0px)); gap:8px; border-bottom:1px solid rgba(251,223,162,0.3); flex-shrink:0; background:rgba(69,34,22,0.9); }
         .pm-bmodal-back { font-size:22px; color:#B78456; cursor:pointer; padding:0 6px 2px; background:none; border:none; line-height:1; flex-shrink:0; }
         .pm-bmodal-back:hover { color:#FBDFA2; }
         .pm-bmodal-title { flex:1; font-size:14px; font-weight:600; color:#FBDFA2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1072,40 +1072,6 @@ B. 發布新帖子:
     }
 
     // ── Bundle Edit Modal（Layer 2 浮窗）──
-    // iOS touch 下滑/右滑關閉 modal（threshold 80px）
-    function addSwipeToDismiss(modal, headerEl) {
-        let startX = 0, startY = 0, curDX = 0, curDY = 0, dragging = false;
-        headerEl.addEventListener('touchstart', e => {
-            if (e.touches.length !== 1) return;
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-            curDX = curDY = 0; dragging = true;
-            modal.style.transition = 'none';
-        }, { passive: true });
-        headerEl.addEventListener('touchmove', e => {
-            if (!dragging || e.touches.length !== 1) return;
-            curDX = e.touches[0].clientX - startX;
-            curDY = e.touches[0].clientY - startY;
-            // 只往右或往下拖才跟手
-            if (curDX > 0 || curDY > 0) {
-                const tx = Math.max(0, curDX);
-                const ty = Math.max(0, curDY);
-                modal.style.transform = `translateX(${tx}px) translateY(${ty}px)`;
-            }
-        }, { passive: true });
-        headerEl.addEventListener('touchend', () => {
-            if (!dragging) return;
-            dragging = false;
-            modal.style.transition = '';
-            if (curDX > 80 || curDY > 80) {
-                modal.classList.remove('open');
-                modal.style.transform = '';
-            } else {
-                modal.style.transform = '';
-            }
-        });
-    }
-
     function openBundleModal(bundleId, bodyEl) {
         const wrap = bodyEl.closest('.pm-wrap') || bodyEl.parentElement;
         let modal = wrap.querySelector('.pm-bmodal');
@@ -1141,7 +1107,6 @@ B. 發布新帖子:
             </div>`;
 
         modal.querySelector('.pm-bmodal-back').onclick = () => modal.classList.remove('open');
-        addSwipeToDismiss(modal, modal.querySelector('.pm-bmodal-hd'));
 
         modal.querySelector('.pm-bmodal-sv').onclick = () => {
             const bl = loadBundles(); const bi = bl.findIndex(b => b.id === bundleId);
@@ -1473,7 +1438,6 @@ B. 發布新帖子:
         modal.innerHTML = html;
 
         modal.querySelector('#st-modal-close').onclick = () => modal.classList.remove('open');
-        addSwipeToDismiss(modal, modal.querySelector('.pm-bmodal-hd'));
         modal.querySelector('#st-modal-import').onclick = () => {
             const checkedBoxes = modal.querySelectorAll('.st-block-cb:checked');
             if (checkedBoxes.length === 0) {
