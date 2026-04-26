@@ -330,7 +330,7 @@
         // 🌟 VN 專用全螢幕 overlay（從大廳直接彈出，z-index 51 覆蓋其他 overlay）
         const vnPanel = parentDoc.createElement('div');
         vnPanel.id = 'aurelia-vn-panel';
-        vnPanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom:55px; background:#000; z-index: 51; display: none; flex-direction: column;`;
+        vnPanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom:calc(55px + env(safe-area-inset-bottom, 0px)); background:#000; z-index: 51; display: none; flex-direction: column;`;
 
         const vnAppContainer = parentDoc.createElement('div');
         vnAppContainer.id = 'aurelia-vn-app-container';

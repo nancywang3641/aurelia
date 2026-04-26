@@ -4518,8 +4518,9 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             document.getElementById('vn-think-popup')?.classList.remove('active');
         },
 
-        // 📖 劇情閱讀器
+        // 📖 劇情閱讀器（轉發給獨立模組 VN_READER）
         async showReaderPanel() {
+            if (win.VN_READER) { win.VN_READER.show(); return; }
             const overlay = document.getElementById('vn-reader-overlay');
             if (!overlay) return;
             overlay.classList.add('active');
@@ -4674,11 +4675,13 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             _renderStoryChapters(_rActiveGroup.chapters);
         },
         hideReaderPanel() {
+            if (win.VN_READER) { win.VN_READER.hide(); return; }
             document.getElementById('vn-reader-overlay')?.classList.remove('active');
         },
 
         // 📝 大總結 編輯器（在閱讀器內開啟）
         async showSummaryEditor() {
+            if (win.VN_READER) { win.VN_READER.showSummaryEditor(); return; }
             const body = document.getElementById('vn-reader-body');
             const tabs = document.getElementById('vn-reader-tabs');
             if (!body) return;
@@ -4735,6 +4738,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         },
 
         hideSummaryEditor() {
+            if (win.VN_READER) { win.VN_READER.hideSummaryEditor(); return; }
             const body = document.getElementById('vn-reader-body');
             const tabs = document.getElementById('vn-reader-tabs');
             if (!body) return;
@@ -4746,6 +4750,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         },
 
         async saveSummaryEdit() {
+            if (win.VN_READER) { win.VN_READER.saveSummaryEdit(); return; }
             const body = document.getElementById('vn-reader-body');
             const textarea = document.getElementById('vn-summary-edit-area');
             if (!textarea || !body?._summaryEntry) return;
