@@ -972,6 +972,7 @@
                 })();
 
                 const _vnMsgs = [];
+                let _stCh = [];
                 if (win.OS_DB?.getAllVnChapters) {
                     try {
                         const _ctxN = (() => {
@@ -980,7 +981,7 @@
                         })();
                         const _allCh  = await win.OS_DB.getAllVnChapters();
                         const _sid    = localStorage.getItem('vn_current_story_id') || '';
-                        let _stCh     = _sid
+                        _stCh     = _sid
                             ? _allCh.filter(ch => ch.storyId === _sid)
                             : _allCh.filter(ch => !ch.storyId);
 
