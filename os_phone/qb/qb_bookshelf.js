@@ -16,6 +16,37 @@
 (function() {
     'use strict';
 
+    // ── 自由書籍常數 & 歷史助手 ──────────────────────────────────
+    const FREE_SCRIPT_WID        = '__free_script__';
+    const FREE_SCRIPT_HISTORY_KEY = 'vn_free_history';
+
+    const _FREE_WORLD = {
+        id: FREE_SCRIPT_WID,
+        isFreeScript: true,
+        title: '自由劇情',
+        icon: '✍️',
+        cover: '',
+        desc: '不限角色，自由輸入劇情指令',
+        wbPacks: [],
+        custom: false
+    };
+
+    function _getFreeHistory() {
+        try { return JSON.parse(localStorage.getItem(FREE_SCRIPT_HISTORY_KEY) || '[]'); } catch(e) { return []; }
+    }
+    function _addFreeHistory(title, request) {
+        const list = _getFreeHistory();
+        // 同指令去重（只保留最新）
+        const key = (request || '').slice(0, 40);
+        const deduped = list.filter(h => (h.request || '').slice(0, 40) !== key);
+        deduped.unshift({ id: 'fh_' + Date.now(), title, request, ts: Date.now() });
+        try { localStorage.setItem(FREE_SCRIPT_HISTORY_KEY, JSON.stringify(deduped.slice(0, 30))); } catch(e) {}
+    }
+    function _deleteFreeHistory(id) {
+        const list = _getFreeHistory().filter(h => h.id !== id);
+        try { localStorage.setItem(FREE_SCRIPT_HISTORY_KEY, JSON.stringify(list)); } catch(e) {}
+    }
+
     // ── HTML 轉義 ─────────────────────────────────────────────────
     function _escHtml(str) {
         return String(str)
@@ -159,11 +190,14 @@
         const spine = document.createElement('div');
         spine.className = 'qb-spine';
         spine.dataset.wid = w.id;
+        const bgStyle = w.isFreeScript
+            ? 'background:linear-gradient(160deg,#1a1a2e,#16213e,#0f3460);'
+            : `background:url('${w.cover}') center/cover;`;
         spine.style.cssText = `
             flex-shrink:0; width:48px; height:${bookH}px; position:relative; z-index:1;
-            background:url('${w.cover}') center/cover;
+            ${bgStyle}
             border-radius:2px 1px 1px 2px;
-            border-left:5px solid rgba(255,255,255,0.25);
+            border-left:5px solid ${w.isFreeScript ? 'rgba(100,180,255,0.35)' : 'rgba(255,255,255,0.25)'};
             border-right:2px solid rgba(0,0,0,0.6);
             box-shadow:inset 4px 0 10px rgba(0,0,0,0.5), 4px 4px 12px rgba(0,0,0,0.7);
             cursor:pointer;
@@ -171,12 +205,12 @@
             transform-origin:bottom center;
         `;
         spine.innerHTML = `
-            <div style="position:absolute;inset:0;background:rgba(0,0,0,0.52);border-radius:inherit;"></div>
+            <div style="position:absolute;inset:0;background:rgba(0,0,0,${w.isFreeScript ? '0.3' : '0.52'});border-radius:inherit;"></div>
             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:8px 0;">
-                <span style="writing-mode:vertical-rl;text-orientation:mixed;color:#FBDFA2;font-size:11px;font-weight:700;letter-spacing:3px;text-shadow:0 1px 4px #000;max-height:78%;overflow:hidden;line-height:1.3;">${w.title}</span>
+                <span style="writing-mode:vertical-rl;text-orientation:mixed;color:${w.isFreeScript ? 'rgba(150,200,255,0.95)' : '#FBDFA2'};font-size:11px;font-weight:700;letter-spacing:3px;text-shadow:0 1px 4px #000;max-height:78%;overflow:hidden;line-height:1.3;">${w.title}</span>
             </div>
             <div style="position:absolute;top:6px;left:0;right:0;text-align:center;font-size:14px;line-height:1;">${w.icon}</div>
-            <div style="position:absolute;bottom:4px;left:0;right:0;text-align:center;color:rgba(229,62,62,0.9);font-size:8px;font-weight:bold;text-shadow:0 0 4px #000;">▲${w.danger}</div>
+            ${!w.isFreeScript ? `<div style="position:absolute;bottom:4px;left:0;right:0;text-align:center;color:rgba(229,62,62,0.9);font-size:8px;font-weight:bold;text-shadow:0 0 4px #000;">▲${w.danger}</div>` : ''}
             ${w.custom ? `<button class="qb-spine-del" title="下架" style="position:absolute;top:4px;right:3px;background:rgba(180,30,30,0.75);border:none;color:#fff;font-size:9px;width:16px;height:16px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;z-index:5;">✕</button>` : ''}
         `;
         spine.onmouseenter = () => {
@@ -233,7 +267,8 @@
         const shelves = _getShelves();
         if (!shelves.length) return;
 
-        const allWorlds = Object.values(window.AURELIA_WORLDS || {})
+        const allWorlds = [_FREE_WORLD]
+            .concat(Object.values(window.AURELIA_WORLDS || {}))
             .concat(window.AURELIA_CUSTOM_WORLDS || []);
 
         // 動態獲取第一層書架的真實寬度。
@@ -455,12 +490,223 @@
         setTimeout(() => input.focus(), 50);
     }
 
+    // ── 自由書籍封面（獨立渲染路徑）──────────────────────────────
+    function _openFreeScriptCover() {
+        const panel   = document.getElementById('qb-book-cover-panel');
+        const shelves = _getShelves();
+        const nav     = document.getElementById('qb-shelf-nav');
+        if (!panel) return;
+
+        panel.innerHTML = `
+            <div style="position:absolute;inset:0;background:linear-gradient(160deg,#0d0d1a,#111827,#0f1f40);"></div>
+            <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 40%,rgba(60,120,255,0.12),transparent 65%);"></div>
+
+            <button id="qb-cover-back" style="
+                position:absolute;top:12px;left:12px;
+                background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);
+                border:1px solid rgba(100,180,255,0.3);color:rgba(150,200,255,0.9);
+                padding:6px 14px;border-radius:20px;cursor:pointer;
+                font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
+
+            <div id="qb-cover-view" style="
+                position:absolute;bottom:0;left:0;right:0;
+                padding:20px 20px 32px;text-align:center;z-index:2;
+                display:flex;flex-direction:column;align-items:center;">
+
+                <div style="font-size:48px;margin-bottom:8px;filter:drop-shadow(0 2px 12px rgba(100,180,255,0.5));">✍️</div>
+                <div style="font-size:24px;font-weight:900;color:rgba(150,210,255,0.95);
+                            letter-spacing:3px;text-shadow:0 2px 16px rgba(0,0,0,0.9);
+                            margin-bottom:6px;font-family:'Noto Sans TC',sans-serif;">自由劇情</div>
+                <div style="font-size:12px;color:rgba(150,200,255,0.5);margin-bottom:24px;letter-spacing:1px;">
+                    不限角色，自由輸入劇情指令
+                </div>
+
+                <button id="qb-free-open-inner-btn" style="
+                    background:linear-gradient(135deg,rgba(100,180,255,0.25),rgba(60,120,220,0.35));
+                    color:rgba(180,220,255,0.95);
+                    font-weight:900;font-size:15px;padding:14px 44px;
+                    border:1px solid rgba(100,180,255,0.45);
+                    border-radius:3px;cursor:pointer;letter-spacing:3px;
+                    box-shadow:0 4px 24px rgba(60,120,255,0.2);transition:opacity 0.2s;"
+                    onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                    📖 翻閱開場白
+                </button>
+            </div>
+
+            <div id="qb-free-inner-view" style="
+                display:none;position:absolute;inset:0;z-index:10;
+                background:rgba(10,12,22,0.98);
+                flex-direction:column;">
+
+                <div style="padding:14px 18px;border-bottom:1px solid rgba(100,180,255,0.15);
+                            display:flex;align-items:center;justify-content:space-between;
+                            background:rgba(0,0,0,0.3);flex-shrink:0;">
+                    <div style="font-size:13px;font-weight:bold;color:rgba(150,210,255,0.9);letter-spacing:1px;">
+                        ✍️ 自由劇情 · 指令輸入
+                    </div>
+                    <button id="qb-free-inner-close" style="
+                        background:none;border:none;color:rgba(150,200,255,0.5);
+                        font-size:24px;cursor:pointer;line-height:1;padding:0 5px;"
+                        onmouseover="this.style.color='rgba(150,200,255,0.9)'" onmouseout="this.style.color='rgba(150,200,255,0.5)'">×</button>
+                </div>
+
+                <div style="padding:14px 18px;border-bottom:1px solid rgba(100,180,255,0.1);flex-shrink:0;">
+                    <div style="font-size:11px;color:rgba(150,200,255,0.4);letter-spacing:1px;margin-bottom:5px;">故事標題（可留空）</div>
+                    <input id="qb-free-title-input" placeholder="例：廢土女傭兵" style="
+                        width:100%;box-sizing:border-box;
+                        background:rgba(0,0,0,0.45);border:1px solid rgba(100,180,255,0.2);
+                        border-radius:6px;color:#e0f0ff;font-size:13px;
+                        padding:8px 10px;outline:none;font-family:inherit;
+                        transition:border-color 0.2s;"
+                        onfocus="this.style.borderColor='rgba(100,180,255,0.5)'"
+                        onblur="this.style.borderColor='rgba(100,180,255,0.2)'">
+                    <div style="font-size:11px;color:rgba(150,200,255,0.4);letter-spacing:1px;margin:10px 0 5px;">劇情指令</div>
+                    <textarea id="qb-free-request-input" rows="4" placeholder="直接描述你想要的開場情境、角色設定、世界觀…" style="
+                        width:100%;box-sizing:border-box;
+                        background:rgba(0,0,0,0.45);border:1px solid rgba(100,180,255,0.2);
+                        border-radius:6px;color:#e0f0ff;font-size:13px;line-height:1.6;
+                        padding:10px 12px;resize:none;font-family:inherit;outline:none;
+                        transition:border-color 0.2s;scrollbar-width:none;"
+                        onfocus="this.style.borderColor='rgba(100,180,255,0.5)'"
+                        onblur="this.style.borderColor='rgba(100,180,255,0.2)'"></textarea>
+                </div>
+
+                <div style="flex:1;overflow-y:auto;padding:10px 18px;scrollbar-width:thin;scrollbar-color:#334 transparent;">
+                    <div style="font-size:10px;color:rgba(150,200,255,0.3);letter-spacing:2px;margin-bottom:8px;text-transform:uppercase;">過往開場</div>
+                    <div id="qb-free-history-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+                </div>
+
+                <div style="padding:12px 18px;border-top:1px solid rgba(100,180,255,0.15);flex-shrink:0;">
+                    <button id="qb-free-dive-btn" style="
+                        width:100%;
+                        background:linear-gradient(135deg,rgba(100,180,255,0.2),rgba(60,120,220,0.3));
+                        color:rgba(180,220,255,0.95);
+                        font-weight:900;font-size:15px;padding:14px;
+                        border:1px solid rgba(100,180,255,0.4);
+                        border-radius:4px;cursor:pointer;letter-spacing:3px;
+                        box-shadow:0 4px 20px rgba(60,120,255,0.15);transition:opacity 0.2s;"
+                        onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                        踏入故事
+                    </button>
+                </div>
+            </div>
+        `;
+
+        panel.style.display = 'block';
+        shelves.forEach(s => s.style.display = 'none');
+        if (nav) nav.style.display = 'none';
+
+        const coverView  = panel.querySelector('#qb-cover-view');
+        const innerView  = panel.querySelector('#qb-free-inner-view');
+        const titleInput = panel.querySelector('#qb-free-title-input');
+        const reqInput   = panel.querySelector('#qb-free-request-input');
+
+        // ── 開啟/關閉內頁 ───────────────────────────────────────
+        panel.querySelector('#qb-free-open-inner-btn').onclick = () => {
+            coverView.style.display = 'none';
+            panel.querySelector('#qb-cover-back').style.display = 'none';
+            innerView.style.display = 'flex';
+            _renderFreeHistory();
+            setTimeout(() => reqInput?.focus(), 150);
+        };
+        panel.querySelector('#qb-free-inner-close').onclick = () => {
+            innerView.style.display = 'none';
+            coverView.style.display = 'flex';
+            panel.querySelector('#qb-cover-back').style.display = 'block';
+        };
+        panel.querySelector('#qb-cover-back').onclick = () => {
+            panel.style.display = 'none';
+            shelves.forEach(s => s.style.display = 'flex');
+            if (nav) nav.style.display = '';
+        };
+
+        // ── 歷史列表渲染 ──────────────────────────────────────────
+        function _renderFreeHistory() {
+            const listEl = panel.querySelector('#qb-free-history-list');
+            if (!listEl) return;
+            const hist = _getFreeHistory();
+            if (!hist.length) {
+                listEl.innerHTML = `<div style="font-size:12px;color:rgba(255,255,255,0.2);text-align:center;padding:12px;">尚無歷史紀錄</div>`;
+                return;
+            }
+            listEl.innerHTML = hist.map(h => `
+                <div class="qb-free-hist-item" data-id="${h.id}" style="
+                    background:rgba(100,180,255,0.05);border:1px solid rgba(100,180,255,0.15);
+                    border-radius:6px;padding:10px 12px;cursor:pointer;
+                    transition:background 0.15s,border-color 0.15s;position:relative;"
+                    onmouseover="this.style.background='rgba(100,180,255,0.1)';this.style.borderColor='rgba(100,180,255,0.3)'"
+                    onmouseout="this.style.background='rgba(100,180,255,0.05)';this.style.borderColor='rgba(100,180,255,0.15)'">
+                    ${h.title ? `<div style="font-size:11px;color:rgba(150,210,255,0.7);font-weight:bold;margin-bottom:4px;letter-spacing:1px;">${_escHtml(h.title)}</div>` : ''}
+                    <div style="font-size:12px;color:rgba(220,235,255,0.75);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${_escHtml(h.request || '')}</div>
+                    <div style="font-size:10px;color:rgba(150,200,255,0.25);margin-top:4px;">${new Date(h.ts).toLocaleDateString('zh-TW')}</div>
+                    <button class="qb-free-hist-del" data-id="${h.id}" style="
+                        position:absolute;top:6px;right:6px;
+                        background:rgba(180,30,30,0.5);border:none;color:rgba(255,180,180,0.7);
+                        font-size:10px;width:18px;height:18px;border-radius:50%;
+                        cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;"
+                        onclick="event.stopPropagation();">✕</button>
+                </div>
+            `).join('');
+
+            listEl.querySelectorAll('.qb-free-hist-item').forEach(item => {
+                item.onclick = () => {
+                    const id = item.dataset.id;
+                    const h  = _getFreeHistory().find(x => x.id === id);
+                    if (!h) return;
+                    if (titleInput) titleInput.value = h.title || '';
+                    if (reqInput)   reqInput.value   = h.request || '';
+                    reqInput?.focus();
+                };
+            });
+            listEl.querySelectorAll('.qb-free-hist-del').forEach(btn => {
+                btn.onclick = () => {
+                    _deleteFreeHistory(btn.dataset.id);
+                    _renderFreeHistory();
+                };
+            });
+        }
+
+        // ── 踏入故事 ──────────────────────────────────────────────
+        panel.querySelector('#qb-free-dive-btn').onclick = () => {
+            const title   = (titleInput?.value || '').trim();
+            const request = (reqInput?.value || '').trim();
+            if (!request) {
+                reqInput.style.borderColor = 'rgba(255,100,100,0.6)';
+                setTimeout(() => { reqInput.style.borderColor = 'rgba(100,180,255,0.2)'; }, 1500);
+                reqInput?.focus();
+                return;
+            }
+
+            _addFreeHistory(title, request);
+
+            // 清除舊世界書狀態
+            localStorage.removeItem('vn_active_wb_packs');
+            localStorage.removeItem('vn_current_world_id');
+
+            // 設置 pending，讓 VN 頁接收後自動生成
+            window._pendingFreeScriptDive = { title, request };
+
+            // 收起書架
+            const overlay = document.getElementById('qb-bookshelf-overlay');
+            if (overlay) overlay.style.display = 'none';
+            panel.style.display = 'none';
+            shelves.forEach(s => s.style.display = 'flex');
+            if (nav) nav.style.display = '';
+
+            // 切換到 VN 頁
+            if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+        };
+    }
+
     // ── 書封面與內頁展開面板 (雙層結構 + 滑動卡片) ────────────────────────
     function openCover(w) {
         const panel = document.getElementById('qb-book-cover-panel');
         const shelves = _getShelves();
         const nav = document.getElementById('qb-shelf-nav');
         if (!panel) return;
+
+        // 自由書籍走獨立路徑
+        if (w.isFreeScript) { _openFreeScriptCover(); return; }
 
         const dangerFill  = '▮'.repeat(w.danger || 0);
         const dangerEmpty = '▯'.repeat(Math.max(0, 5 - (w.danger || 0)));

@@ -980,9 +980,26 @@
                         })();
                         const _allCh  = await win.OS_DB.getAllVnChapters();
                         const _sid    = localStorage.getItem('vn_current_story_id') || '';
-                        const _stCh   = _sid
+                        let _stCh     = _sid
                             ? _allCh.filter(ch => ch.storyId === _sid)
                             : _allCh.filter(ch => !ch.storyId);
+
+                        // 查詢大總結，過濾已覆蓋章節
+                        let _grandSummaryBlock = '';
+                        if (win.OS_DB?.getGrandSummaries) {
+                            const _summaries = await win.OS_DB.getGrandSummaries(_sid);
+                            if (_summaries.length > 0) {
+                                // 取最新一筆（count 最大）
+                                const _latest = _summaries.reduce((a, b) => (a.count >= b.count ? a : b));
+                                const _coveredIds = new Set(_latest.coveredChapterIds || []);
+                                if (_coveredIds.size > 0) {
+                                    _stCh = _stCh.filter(ch => !_coveredIds.has(ch.id));
+                                }
+                                _grandSummaryBlock = `【大總結（第${_latest.count}次）】\n${_latest.content}`;
+                                console.log(`[OS_API vn_story] 大總結注入：第${_latest.count}次，已過濾 ${_coveredIds.size} 章`);
+                            }
+                        }
+
                         _stCh.reverse().forEach((ch, idx, arr) => {
                             let _c = ch.content || '';
                             if (!_c) return;
@@ -998,6 +1015,11 @@
                             if (ch.request) _vnMsgs.push({ role: 'user', content: ch.request });
                             if (_c) _vnMsgs.push({ role: 'assistant', content: _c });
                         });
+
+                        // 大總結插在歷史最前面
+                        if (_grandSummaryBlock) {
+                            _vnMsgs.unshift({ role: 'system', content: _grandSummaryBlock });
+                        }
                     } catch(e) { console.warn('[OS_API vn_story] VN 歷史載入失敗:', e); }
                 }
 

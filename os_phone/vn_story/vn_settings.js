@@ -85,6 +85,7 @@
         <div class="set-tab active" data-vntab="path"   onclick="window.VN_SETTINGS_PANEL._switchTab(this,'path')">🗂️ 路徑</div>
         <div class="set-tab"        data-vntab="prompt" onclick="window.VN_SETTINGS_PANEL._switchTab(this,'prompt')">🖼️ Prompt</div>
         <div class="set-tab"        data-vntab="avatar" onclick="window.VN_SETTINGS_PANEL._switchTab(this,'avatar')">🎭 頭像</div>
+        <div class="set-tab"        data-vntab="bg"     onclick="window.VN_SETTINGS_PANEL._switchTab(this,'bg')">🌄 背景</div>
         <div class="set-tab"        data-vntab="tts"    onclick="window.VN_SETTINGS_PANEL._switchTab(this,'tts')">🎙 語音</div>
     </div>
 
@@ -190,6 +191,15 @@
         <div class="set-desc" style="margin-top:4px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。</div>
     </div><!-- /vn-subtab-avatar -->
 
+    <!-- Tab：背景快取 -->
+    <div id="vn-subtab-bg" class="vn-subtab-view" style="display:none;">
+        <div class="set-group">
+            <div class="set-label">🌄 場景背景快取 <span style="font-weight:normal; color:#B78456; font-size:11px;">防重複生圖</span></div>
+            <div id="vncfg-bg-mgr-list" style="margin-top:8px;"></div>
+        </div>
+        <div class="set-desc" style="margin-top:4px;">* 包含 bg_cache（場景背景）。</div>
+    </div><!-- /vn-subtab-bg -->
+
 </div>`;
         },
 
@@ -212,6 +222,15 @@
                     window.VN_PLAYER.loadAvatarManager('vncfg-avatar-mgr-list');
                 } else {
                     const list = document.getElementById('vncfg-avatar-mgr-list');
+                    if (list) list.innerHTML = '<div style="color:#B78456; font-size:12px; padding:10px 0;">⚠️ VN 尚未啟動，請先開啟 VN 面板再查看快取。</div>';
+                }
+            }
+            // 背景 tab：切換時從 IDB 載入 bg_cache 列表
+            if (tabId === 'bg') {
+                if (window.VN_PLAYER?.loadBgManager) {
+                    window.VN_PLAYER.loadBgManager('vncfg-bg-mgr-list');
+                } else {
+                    const list = document.getElementById('vncfg-bg-mgr-list');
                     if (list) list.innerHTML = '<div style="color:#B78456; font-size:12px; padding:10px 0;">⚠️ VN 尚未啟動，請先開啟 VN 面板再查看快取。</div>';
                 }
             }

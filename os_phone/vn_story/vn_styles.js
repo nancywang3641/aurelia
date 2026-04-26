@@ -649,9 +649,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* =========================================
            系統提示框 / 轉場 / Log
            ========================================= */
-        #sys-overlay, #trans-overlay, #item-overlay, #vn-log-overlay, #quest-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: 0.35s ease; backdrop-filter: blur(5px); }
+        #sys-overlay, #trans-overlay, #item-overlay, #vn-log-overlay, #vn-summary-overlay, #quest-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: 0.35s ease; backdrop-filter: blur(5px); }
         #sys-overlay { background: rgba(0,0,0,0.7); }
-        #sys-overlay.active, #trans-overlay.active, #item-overlay.active, #vn-log-overlay.active { opacity: 1; pointer-events: auto; }
+        #sys-overlay.active, #trans-overlay.active, #item-overlay.active, #vn-log-overlay.active, #vn-summary-overlay.active { opacity: 1; pointer-events: auto; }
         
         /* ⚙ 系統提示框 (黑金外框結構，但採用科技青色 Cyan) */
         #sys-box {
@@ -866,6 +866,18 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-log-item:hover { border-left-color: var(--gold); background: rgba(212,175,55,0.04); }
         .vn-log-name { color: var(--gold); font-size: 0.95rem; font-weight: bold; margin-bottom: 8px; }
         .vn-log-text { color: #ddd; font-size: 1.05rem; line-height: 1.6; font-family: var(--font-sans); }
+
+        /* --- 大總結 overlay --- */
+        #vn-summary-overlay { background: rgba(10,10,12,0.97); z-index: 60; display: flex; flex-direction: column; padding: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 20px) 0 20px; box-sizing: border-box; }
+        #vn-summary-header { display: flex; justify-content: space-between; align-items: center; padding: 0 50px 20px; border-bottom: 1px solid rgba(212,175,55,0.25); margin-bottom: 20px; width:100%; box-sizing:border-box; }
+        #vn-summary-title { color: var(--gold); font-size: 1.2rem; font-family: var(--font-sans); font-weight: bold; letter-spacing: 2px; }
+        #vn-summary-content { flex: 1; overflow-y: auto; padding: 0 50px 20px; width:100%; box-sizing:border-box; color: #ddd; font-size: 0.9rem; line-height: 1.75; font-family: var(--font-sans); white-space: pre-wrap; }
+        #vn-summary-content::-webkit-scrollbar { width: 6px; }
+        #vn-summary-content::-webkit-scrollbar-track { background: transparent; }
+        #vn-summary-content::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        #vn-summary-content table { border-collapse: collapse; width: 100%; font-size: 0.82rem; margin: 8px 0; }
+        #vn-summary-content th, #vn-summary-content td { border: 1px solid rgba(212,175,55,0.2); padding: 6px 8px; text-align: left; vertical-align: top; }
+        #vn-summary-content th { color: var(--gold); background: rgba(212,175,55,0.06); }
 
         /* =========================================
            ⚙ 遊戲內設定面板 (黑金古典風)
@@ -1461,7 +1473,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                                 </div>
                                 <div class="ctx-time" id="ctx-time">尚未偵測到數據</div>
 
-
+                                <div id="ctx-summary-wrap" style="display:none; margin-top:9px; border-top:1px solid rgba(246,173,85,0.2); padding-top:9px;">
+                                    <div style="font-size:10px; color:#888; margin-bottom:6px; letter-spacing:0.5px;">Token 已達警戒，建議執行大總結</div>
+                                    <button id="ctx-summary-btn" onclick="window.VN_Summary.generate(); event.stopPropagation();" style="width:100%; padding:7px 4px; background:rgba(246,173,85,0.08); border:1px solid rgba(246,173,85,0.35); border-radius:4px; color:#f6ad55; font-size:11px; cursor:pointer; font-family:inherit; letter-spacing:1px; transition:0.2s;">📝 大總結</button>
+                                </div>
 
                             </div>
                             <button class="vn-panel-btn" id="vn-btn-log" onclick="window.VN_Core.showLog(); event.stopPropagation();">LOG</button>
@@ -1488,6 +1503,15 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                     <div id="vn-log-content"></div>
                 </div>
 
+                <!-- 📝 大總結 overlay -->
+                <div id="vn-summary-overlay">
+                    <div id="vn-summary-header">
+                        <div id="vn-summary-title">📝 大總結</div>
+                        <div class="vn-log-close" onclick="window.VN_Summary.hideResult()">✕</div>
+                    </div>
+                    <div id="vn-summary-content"></div>
+                </div>
+
                 <!-- 💭 思考鏈小窗 -->
                 <div id="vn-think-popup">
                     <div id="vn-think-popup-header">
@@ -1501,7 +1525,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                 <div id="vn-reader-overlay">
                     <div id="vn-reader-header">
                         <div id="vn-reader-title">📖 劇情閱讀器</div>
-                        <div id="vn-reader-close" onclick="window.VN_PLAYER.hideReaderPanel()">✕</div>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div id="vn-reader-summary-btn" onclick="window.VN_PLAYER.showSummaryEditor()" title="查看/編輯大總結" style="color:#888;font-size:0.78rem;cursor:pointer;padding:3px 8px;border:1px solid rgba(212,175,55,0.2);border-radius:4px;transition:all 0.2s;" onmouseover="this.style.color='#d4af37';this.style.borderColor='rgba(212,175,55,0.5)'" onmouseout="this.style.color='#888';this.style.borderColor='rgba(212,175,55,0.2)'">📝 大總結</div>
+                            <div id="vn-reader-close" onclick="window.VN_PLAYER.hideReaderPanel()">✕</div>
+                        </div>
                     </div>
                     <div id="vn-reader-tabs" style="display:none"></div>
                     <div id="vn-reader-body"></div>

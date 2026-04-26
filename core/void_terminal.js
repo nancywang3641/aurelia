@@ -869,9 +869,6 @@ const IRIS_IDLE = [
                 <button id="lobby-bgm-toggle" title="音樂開關"
                     style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;"
                     onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">🔊</button>
-                ${isStandalone ? `<button id="lobby-rotate-btn" title="切換橫/直版"
-                    style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;"
-                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">🔄</button>` : ''}
                 <audio id="lobby-bgm-player" loop style="display:none;"></audio>
             </div>
 
@@ -942,7 +939,10 @@ const IRIS_IDLE = [
                     <span class="ach-title">🏆 資料庫成就清單</span>
                     <button class="ach-close" id="ach-close-btn">✕</button>
                 </div>
-                <div class="ach-stats" id="ach-stats">0 個成就 · 0 個待兌換</div>
+                <div class="ach-stats" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span id="ach-stats">0 個成就 · 0 個待兌換</span>
+                    <button id="ach-clear-btn" style="display:none;padding:3px 9px;background:rgba(180,60,60,0.15);border:1px solid rgba(200,80,80,0.35);color:#e07070;border-radius:5px;cursor:pointer;font-size:11px;letter-spacing:1px;white-space:nowrap;">🗑 清空</button>
+                </div>
                 <div class="ach-list" id="ach-list"></div>
                 <div class="ach-footer">📡 提示：收集異常成就可前往 404 號房進行黑市交易</div>
             </div>
@@ -1072,6 +1072,12 @@ const IRIS_IDLE = [
                 };
             }
 
+            // ST 版：隱藏「踏入故事」按鈕（與「館藏」功能重複）
+            const storyBtn = tab.querySelector('#void-story-btn');
+            if (storyBtn && !(window.OS_API?.isStandalone?.() ?? false)) {
+                storyBtn.style.display = 'none';
+            }
+
             if (closeBookshelfBtn) {
                 closeBookshelfBtn.onclick = () => {
                     // 先還原書架狀態，再關閉 overlay
@@ -1110,31 +1116,6 @@ const IRIS_IDLE = [
                 bgmBtn.onclick = toggleLobbyBgm;
             }
 
-            const rotateBtn = tab.querySelector('#lobby-rotate-btn');
-            if (rotateBtn) {
-                rotateBtn.onclick = async () => {
-                    const inLandscape = rotateBtn.dataset.landscape === '1';
-                    try {
-                        if (!inLandscape) {
-                            if (document.documentElement.requestFullscreen) {
-                                await document.documentElement.requestFullscreen().catch(() => {});
-                            }
-                            if (screen.orientation?.lock) {
-                                await screen.orientation.lock('landscape');
-                            }
-                            rotateBtn.dataset.landscape = '1';
-                            rotateBtn.title = '切回直版';
-                        } else {
-                            if (screen.orientation?.unlock) screen.orientation.unlock();
-                            if (document.exitFullscreen) await document.exitFullscreen().catch(() => {});
-                            rotateBtn.dataset.landscape = '0';
-                            rotateBtn.title = '切換橫版';
-                        }
-                    } catch(e) {
-                        console.warn('[Rotate]', e);
-                    }
-                };
-            }
 
             const retryBtn = tab.querySelector('#iris-retry-btn');
             if (retryBtn) {
@@ -2296,6 +2277,19 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
         const redeemed = achievements.filter(a =>  a.redeemed);
 
         if (statsEl) statsEl.textContent = `${achievements.length} 個成就 · ${pending.length} 個待兌換`;
+
+        // 清空按鈕：有成就才顯示，並只綁一次事件
+        const clearBtn = document.getElementById('ach-clear-btn');
+        if (clearBtn) clearBtn.style.display = achievements.length > 0 ? '' : 'none';
+        if (clearBtn && !clearBtn._bound) {
+            clearBtn._bound = true;
+            clearBtn.onclick = async () => {
+                if (!confirm(`確定要清空全部 ${achievements.length} 筆成就？此動作無法復原。`)) return;
+                if (window.OS_DB && window.OS_DB.clearAchievements) await window.OS_DB.clearAchievements();
+                if (window.OS_ACHIEVEMENT && window.OS_ACHIEVEMENT.load) await window.OS_ACHIEVEMENT.load();
+                renderAchievementList();
+            };
+        }
 
         // 更新按鈕 "待兌換" 小圓點
         if (achBtn) {

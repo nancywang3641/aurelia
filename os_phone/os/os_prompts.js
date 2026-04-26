@@ -1072,6 +1072,40 @@ B. 發布新帖子:
     }
 
     // ── Bundle Edit Modal（Layer 2 浮窗）──
+    // iOS touch 下滑/右滑關閉 modal（threshold 80px）
+    function addSwipeToDismiss(modal, headerEl) {
+        let startX = 0, startY = 0, curDX = 0, curDY = 0, dragging = false;
+        headerEl.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1) return;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            curDX = curDY = 0; dragging = true;
+            modal.style.transition = 'none';
+        }, { passive: true });
+        headerEl.addEventListener('touchmove', e => {
+            if (!dragging || e.touches.length !== 1) return;
+            curDX = e.touches[0].clientX - startX;
+            curDY = e.touches[0].clientY - startY;
+            // 只往右或往下拖才跟手
+            if (curDX > 0 || curDY > 0) {
+                const tx = Math.max(0, curDX);
+                const ty = Math.max(0, curDY);
+                modal.style.transform = `translateX(${tx}px) translateY(${ty}px)`;
+            }
+        }, { passive: true });
+        headerEl.addEventListener('touchend', () => {
+            if (!dragging) return;
+            dragging = false;
+            modal.style.transition = '';
+            if (curDX > 80 || curDY > 80) {
+                modal.classList.remove('open');
+                modal.style.transform = '';
+            } else {
+                modal.style.transform = '';
+            }
+        });
+    }
+
     function openBundleModal(bundleId, bodyEl) {
         const wrap = bodyEl.closest('.pm-wrap') || bodyEl.parentElement;
         let modal = wrap.querySelector('.pm-bmodal');
@@ -1107,6 +1141,7 @@ B. 發布新帖子:
             </div>`;
 
         modal.querySelector('.pm-bmodal-back').onclick = () => modal.classList.remove('open');
+        addSwipeToDismiss(modal, modal.querySelector('.pm-bmodal-hd'));
 
         modal.querySelector('.pm-bmodal-sv').onclick = () => {
             const bl = loadBundles(); const bi = bl.findIndex(b => b.id === bundleId);
@@ -1438,6 +1473,7 @@ B. 發布新帖子:
         modal.innerHTML = html;
 
         modal.querySelector('#st-modal-close').onclick = () => modal.classList.remove('open');
+        addSwipeToDismiss(modal, modal.querySelector('.pm-bmodal-hd'));
         modal.querySelector('#st-modal-import').onclick = () => {
             const checkedBoxes = modal.querySelectorAll('.st-block-cb:checked');
             if (checkedBoxes.length === 0) {

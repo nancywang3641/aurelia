@@ -23,7 +23,9 @@
     let isEmbedded = false;
     let embeddedRoot = null;
     let syncInterval = null;
-    let embedObserver = null; 
+    let embedObserver = null;
+    let syncTargetSelector = '#sheld';
+    let _vnWasOpenBeforeTabSwitch = false;
 
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -32,7 +34,7 @@
 
     function syncModalToChat() {
         if (!phoneFrame || !isVisible || isEmbedded) return;
-        const chatEl = document.querySelector('#chat');
+        const chatEl = document.querySelector(syncTargetSelector) || document.querySelector('#sheld') || document.querySelector('#chat');
         if (!chatEl) return;
         const rect = chatEl.getBoundingClientRect();
         phoneFrame.style.position = 'fixed';
@@ -50,8 +52,8 @@
         if (window.ResizeObserver) {
             const ro = new ResizeObserver(() => { if (!isEmbedded) syncModalToChat(); });
             ro.observe(document.body);
-            const chatEl = document.querySelector('#chat');
-            if (chatEl) ro.observe(chatEl);
+            const syncEl = document.querySelector(syncTargetSelector) || document.querySelector('#sheld') || document.querySelector('#chat');
+            if (syncEl) ro.observe(syncEl);
         }
     }
 
@@ -69,7 +71,7 @@
             { id: 'nav-home',  icon: 'fa-solid fa-cube',     active: true,  title: '大廳' },
             { id: 'nav-user',  icon: 'fa-solid fa-user',     active: false, title: '我' },
             { id: 'nav-write', icon: 'fa-solid fa-pen-nib',  active: false, title: '寫作' },
-            { id: 'nav-close', icon: 'fa-solid fa-power-off', isClose: true, title: '登出' }
+            { id: 'nav-close', icon: 'fa-solid fa-power-off', isClose: true, title: '關閉' }
         ];
 
         items.forEach(item => {
@@ -86,9 +88,11 @@
             btn.style.cssText = `padding: 8px 16px; cursor: pointer; border-radius: 12px; color: ${item.active ? '#2b6cb0' : '#a0aec0'}; display: flex; align-items: center; gap: 6px; font-family: sans-serif; transition: 0.2s; ${item.active ? 'background:#ebf8ff;' : ''}`;
             btn.innerHTML = `<i class="${item.icon}" style="font-size: 16px;"></i><span style="font-size:12px; font-weight:bold;">${item.title}</span>`;
             
-            btn.onclick = () => { 
-                if (item.isClose) AureliaControlCenter.hide(); 
-                else switchPage(item.id); 
+            btn.onclick = () => {
+                if (item.isClose) {
+                    if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) window.AureliaHtmlExtractor.hide();
+                    AureliaControlCenter.hide();
+                } else switchPage(item.id);
             };
             nav.appendChild(btn);
         });
@@ -99,6 +103,18 @@
         const root = isEmbedded ? embeddedRoot : phoneModal;
         if (!root && !isEmbedded) return;
         const container = isEmbedded ? phoneFrame : root;
+
+        // 切離大廳時暫時隱藏 VN panel；回到大廳時自動恢復
+        const vnPanel = container.querySelector('#aurelia-vn-panel');
+        if (vnPanel) {
+            if (pageId !== 'nav-home' && vnPanel.style.display !== 'none') {
+                _vnWasOpenBeforeTabSwitch = true;
+                vnPanel.style.display = 'none';
+            } else if (pageId === 'nav-home' && _vnWasOpenBeforeTabSwitch) {
+                _vnWasOpenBeforeTabSwitch = false;
+                vnPanel.style.display = 'flex';
+            }
+        }
 
         container.querySelectorAll('.nav-button').forEach(btn => {
             if (btn.dataset.navId === 'nav-close') return;
@@ -198,7 +214,6 @@
         const storyExtractorContainer = document.getElementById('story-extractor-container-vn');
         if (storyExtractorContainer) { storyExtractorContainer.style.display = 'none'; storyExtractorContainer.classList.remove('show'); }
         if (window.AureliaHtmlExtractor?.hide) window.AureliaHtmlExtractor.hide();
-        if (window.StoryExtractor?.hide) window.StoryExtractor.hide();
 
         // 強制讓所有 tab 隱藏，只顯示 home tab，並同步底部 nav 高亮
         document.querySelectorAll('.aurelia-tab').forEach(t => { t.style.display = 'none'; });
@@ -379,10 +394,21 @@
                     position: absolute; top: 0; left: 0; right: 0; bottom: 0;
                     width: 100%; z-index: 100; overflow: hidden;
                 `;
+            } else if (isMobile) {
+                // 🌟 改用 absolute 放棄 fixed，徹底避開 iOS/Android 鍵盤推擠機制
+                const panelHeight = Math.round(window.innerHeight * 0.85);
+                embeddedRoot.style.cssText = `
+                    position: absolute; left: 0; right: 0;
+                    width: 100%; height: ${panelHeight}px; max-height: 100%;
+                    transform: none;
+                    z-index: 999; overflow: hidden; background: #fff;
+                    box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
+                    border-radius: 20px 20px 0 0;
+                `;
             } else {
                 embeddedRoot.style.cssText = `
-                    position: relative; width: 100%; height: ${isMobile ? '85vh' : '82vh'}; 
-                    min-height: ${isMobile ? '400px' : '600px'}; flex-shrink: 0; 
+                    position: relative; width: 100%; height: 82vh;
+                    min-height: 600px; flex-shrink: 0;
                     z-index: 100; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);
                     border-radius: 8px; overflow: hidden; order: ${placement === 'top' ? '-1' : '9999'};
                 `;
@@ -396,23 +422,48 @@
         `;
         embeddedRoot.appendChild(phoneFrame);
         
-        if (placement === 'top') {
-            containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
-        } else {
-            containerEl.appendChild(embeddedRoot);
-        }
+        if (isMobile && !isStandalone) {
+            // 行動端掛到 body，脫離 #chat 捲動容器
+            document.body.appendChild(embeddedRoot);
+            if (embedObserver) embedObserver.disconnect();
+            embedObserver = null;
 
-        if (embedObserver) embedObserver.disconnect();
-        embedObserver = new MutationObserver(() => {
-            if (!isEmbedded || !embeddedRoot || !embeddedRoot.parentNode) return;
-            if (placement === 'bottom' && containerEl.lastElementChild !== embeddedRoot) {
-                containerEl.appendChild(embeddedRoot);
-                containerEl.scrollTop = containerEl.scrollHeight;
-            } else if (placement === 'top' && containerEl.firstElementChild !== embeddedRoot) {
-                containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+            // 鍵盤彈出時，面板若比可視區高會撐出滾動條（黑底露出）
+            // 用 visualViewport.resize 即時縮減高度，收鍵盤後還原
+            if (window.visualViewport) {
+                const _origPanelH = Math.round(window.innerHeight * 0.85);
+                window.visualViewport.addEventListener('resize', function() {
+                    if (!embeddedRoot) return;
+                    const vvH = window.visualViewport.height;
+                    embeddedRoot.style.height = Math.min(_origPanelH, Math.round(vvH * 0.95)) + 'px';
+                    
+                    // 🌟 核心修復：強制把被瀏覽器推上去的視口拉回頂部
+                    if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+                        setTimeout(() => {
+                            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                            document.body.scrollTop = 0;
+                        }, 50); // 稍微延遲以覆蓋瀏覽器的預設滾動
+                    }
+                });
             }
-        });
-        embedObserver.observe(containerEl, { childList: true });
+        } else {
+            if (placement === 'top') {
+                containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+            } else {
+                containerEl.appendChild(embeddedRoot);
+            }
+            if (embedObserver) embedObserver.disconnect();
+            embedObserver = new MutationObserver(() => {
+                if (!isEmbedded || !embeddedRoot || !embeddedRoot.parentNode) return;
+                if (placement === 'bottom' && containerEl.lastElementChild !== embeddedRoot) {
+                    containerEl.appendChild(embeddedRoot);
+                    containerEl.scrollTop = containerEl.scrollHeight;
+                } else if (placement === 'top' && containerEl.firstElementChild !== embeddedRoot) {
+                    containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+                }
+            });
+            embedObserver.observe(containerEl, { childList: true });
+        }
 
         // ── 獨立模式：JS 強制把底部導覽列釘死到真實視口底部 ──
         // 這是 CSS position:fixed 的保險層，確保即使 CSS 快取還是舊版也能正確定位
@@ -482,6 +533,7 @@
     AureliaControlCenter.unmountEmbedded = function() {
         if (!isEmbedded || !embeddedRoot) return;
         if (embedObserver) { embedObserver.disconnect(); embedObserver = null; }
+
         if (phoneModal) {
             phoneModal.appendChild(phoneFrame);
             phoneFrame.style.position = 'fixed';
@@ -517,6 +569,10 @@
         }
         isVisible = false;
         if (window.VoidTerminal && window.VoidTerminal.onHide) window.VoidTerminal.onHide();
+    };
+
+    AureliaControlCenter.setSyncTarget = function(selector) {
+        if (selector) syncTargetSelector = selector;
     };
 
     AureliaControlCenter.toggle = () => isVisible ? AureliaControlCenter.hide() : AureliaControlCenter.show();

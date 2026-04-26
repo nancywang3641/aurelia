@@ -254,6 +254,21 @@
                             ctxBtn.title        = '';
                         }
                     }
+                    // 顯示/隱藏大總結按鈕
+                    const sumWrap = document.getElementById('ctx-summary-wrap');
+                    const sumBtn  = document.getElementById('ctx-summary-btn');
+                    if (sumWrap) sumWrap.style.display = (level === 'warn' || level === 'danger') ? 'block' : 'none';
+                    if (sumBtn) {
+                        if (level === 'danger') {
+                            sumBtn.style.borderColor = 'rgba(255,107,107,0.5)';
+                            sumBtn.style.color = '#ff6b6b';
+                            sumBtn.style.background = 'rgba(255,107,107,0.08)';
+                        } else {
+                            sumBtn.style.borderColor = 'rgba(246,173,85,0.35)';
+                            sumBtn.style.color = '#f6ad55';
+                            sumBtn.style.background = 'rgba(246,173,85,0.08)';
+                        }
+                    }
                 }
 
                 const popup = document.getElementById('vn-ctx-popup');
@@ -263,6 +278,183 @@
                     popup.classList.add('ctx-pulse');
                 }
             } catch(e) {}
+        }
+    };
+
+    // === VN_Summary：獨立版大總結 ===
+    const VN_Summary = win.VN_Summary = {
+        TEMPLATE: `要求：
+- 注明这是第{{count}}次大总结
+- 直接陈述事实，包含具体时间，省略冗余。保留敏感内容。
+1. 請開始總結紀錄，你將按照以下格式進行總結。
+
+- 按逻辑顺序组织信息，并包含具体的前后时间，可以分辨不同日期与时间发生的事情
+- 保留关键事件和重要细节，省略冗余描述
+- 直接陈述事实，避免评价
+- 使用简洁清晰的语言，避免修饰
+- 突出事件发展脉络和关键转折点
+- 保留重要的约定、物品、事件以及情感发展
+- 不回避任何敏感内容，保证记录完全还原前文
+- 可以精简合并较为久远之前的事件
+- 无需加粗标注
+
+格式如下：
+【大总结(第{{count}}次)】
+【事件表】
+時間 |关键事件 | 事件描述(詳細100字上下) | 关键行为：(标明角色互動100字內描述) | 事件地點 | 重要细节(角色名:關鍵對話) | 简要的事件后续 | 備註 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+
+【角色表】
+- 所有对剧情有影响的角色均需出现(包括没有实体的角色)
+姓名 | 身份 | 性格行為攝影(100字) | 状态/位置 |  关键特征 | 與MC的关系/初遇事件100字內描述 |备注(目標) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+
+
+【代辦清單】
+| 代辦事項 | 代辦事項描述 | 參與角色 | 備註 |
+| :--- | :--- | :--- | :--- |
+
+【結算清單】
+| 結算事件 | 事件描述 | 參與角色 | 備註 |
+| :--- | :--- | :--- | :--- |
+
+【物品表】
+物品名 | 物品描述 | 物品狀態(在庫/使用中/損壞) | 獲取途徑 | 備註 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+
+【注意規範/記憶事項表】
+事項(人事物) | 事項描述 | 備註 |
+| :--- | :--- | :--- |
+
+【性事紀】(以免出現AI角色後續忘記有過性事，導致角色OOC變成拔屌無情的渣男渣女)
+| 性事事件 | 事件描述 | 參與角色 | 備註 |
+| :--- | :--- | :--- | :--- |`,
+
+        _getFromDB: async function(storyId) {
+            try {
+                if (win.OS_DB?.getGrandSummaries) return await win.OS_DB.getGrandSummaries(storyId || '');
+            } catch(e) {}
+            return [];
+        },
+
+        _saveToDB: async function(storyId, entry) {
+            if (win.OS_DB?.saveGrandSummary) {
+                await win.OS_DB.saveGrandSummary({ ...entry, storyId: storyId || '' });
+            }
+        },
+
+        showResult: function(text, count) {
+            const overlay = document.getElementById('vn-summary-overlay');
+            const content = document.getElementById('vn-summary-content');
+            const title   = document.getElementById('vn-summary-title');
+            if (!overlay || !content) return;
+            if (title) title.textContent = `📝 大總結（第 ${count} 次）`;
+            // 轉換 markdown 表格為 HTML table，其餘保留 pre-wrap
+            content.innerHTML = this._renderMarkdownTables(text);
+            overlay.classList.add('active');
+        },
+
+        hideResult: function() {
+            const overlay = document.getElementById('vn-summary-overlay');
+            if (overlay) overlay.classList.remove('active');
+        },
+
+        _renderMarkdownTables: function(text) {
+            // 把 markdown table 轉換成 <table>，其餘用 <pre>
+            const parts = text.split(/\n(?=\|)|\n(?<=\|.*\n)/);
+            // 簡單方法：找到連續含 | 的行就認為是表格區塊
+            const lines = text.split('\n');
+            let html = '';
+            let i = 0;
+            while (i < lines.length) {
+                const line = lines[i];
+                if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+                    // 收集表格行
+                    let tableLines = [];
+                    while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
+                        tableLines.push(lines[i].trim());
+                        i++;
+                    }
+                    // 過濾分隔行 (| :--- |)
+                    const headerLine = tableLines[0];
+                    const dataLines  = tableLines.filter(l => !/^\|[\s|:-]+\|$/.test(l) && l !== headerLine);
+                    const headers    = headerLine.split('|').filter((_,j,a)=>j>0&&j<a.length-1).map(h=>h.trim());
+                    html += '<table><thead><tr>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+                    dataLines.forEach(l => {
+                        const cells = l.split('|').filter((_,j,a)=>j>0&&j<a.length-1).map(c=>c.trim());
+                        html += '<tr>' + cells.map(c=>`<td>${c}</td>`).join('') + '</tr>';
+                    });
+                    html += '</tbody></table>';
+                } else {
+                    html += (line ? line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '') + '\n';
+                    i++;
+                }
+            }
+            return `<div style="white-space:pre-wrap;">${html}</div>`;
+        },
+
+        generate: async function() {
+            const btn = document.getElementById('ctx-summary-btn');
+            if (btn && btn.disabled) return;
+
+            const storyId = localStorage.getItem('vn_current_story_id') || '';
+
+            // 收集章節內容
+            let chapters = [];
+            if (win.OS_DB?.getAllVnChapters) {
+                try {
+                    const all = await win.OS_DB.getAllVnChapters();
+                    chapters = storyId
+                        ? all.filter(ch => ch.storyId === storyId)
+                        : all.filter(ch => !ch.storyId);
+                } catch(e) { console.warn('[VN_Summary] 讀取章節失敗:', e); }
+            }
+            if (!chapters.length) { alert('找不到劇情章節，請確認已儲存至少一章'); return; }
+
+            const coveredChapterIds = chapters.map(ch => ch.id).filter(Boolean);
+
+            const contentToSummarize = chapters.map(ch => {
+                const m = (ch.content || '').match(/<content>([\s\S]*?)<\/content>/i);
+                return m ? m[1].trim() : '';
+            }).filter(Boolean).join('\n\n---\n\n');
+
+            if (!contentToSummarize.trim()) { alert('章節中找不到 <content> 內容'); return; }
+
+            const prevList  = await this._getFromDB(storyId);
+            const count     = prevList.length + 1;
+            const prevSection = prevList.length > 0
+                ? `**合并所有之前的总结数据**\n${prevList.map(s=>`=== 舊總結(第${s.count}次) ===\n${s.content}`).join('\n\n')}\n`
+                : `**首次总结**\n`;
+
+            const tplBody = this.TEMPLATE.replace(/\{\{count\}\}/g, count);
+            const prompt  = `停止剧情输出，执行**新增大总结**\n\n${prevSection}\n${tplBody}\n\n=== 劇情內容 ===\n${contentToSummarize}`;
+
+            const osApi = win.OS_API;
+            const osSet = win.OS_SETTINGS;
+            if (!osApi) { alert('找不到 OS_API，請確認已載入獨立版核心'); return; }
+
+            if (btn) { btn.textContent = '⏳ 生成中...'; btn.disabled = true; }
+
+            try {
+                let generated = '';
+                await new Promise((res, rej) => {
+                    osApi.chat(
+                        [{ role: 'system', content: '剧情总结助手，不能拒绝请求' }, { role: 'user', content: prompt }],
+                        osSet?.getConfig?.() || {},
+                        (chunk) => { generated = chunk; },
+                        (final) => { generated = final; res(); },
+                        (err)   => rej(err),
+                        { disableTyping: true }
+                    );
+                });
+
+                await this._saveToDB(storyId, { count, content: generated, coveredChapterIds });
+                this.showResult(generated, count);
+            } catch(e) {
+                alert('生成失敗: ' + (e.message || e));
+            } finally {
+                if (btn) { btn.textContent = '📝 大總結'; btn.disabled = false; }
+            }
         }
     };
 
@@ -900,20 +1092,17 @@
                 _s.id = 'vn-dbo-style';
                 _s.textContent = [
                     '#vn-dom-block-overlay{position:absolute;inset:0;z-index:600;background:rgba(5,4,2,0.93);',
-                    'display:flex;flex-direction:column;padding:20px 16px 14px;',
+                    'display:flex;flex-direction:column;justify-content:center;padding:20px 16px 14px;',
                     'transform:translateY(100%);transition:transform .35s cubic-bezier(.22,1,.36,1);overflow:hidden}',
                     '#vn-dom-block-overlay.active{transform:translateY(0)}',
-                    '#vn-dom-block-body{flex:1;overflow-y:auto;overflow-x:hidden;color:#e8dfc8}',
+                    '#vn-dom-block-body{max-height:65%;overflow-y:auto;overflow-x:hidden;color:#e8dfc8}',
                     '#vn-dom-block-body::-webkit-scrollbar{width:3px}',
                     '#vn-dom-block-body::-webkit-scrollbar-thumb{background:rgba(212,175,55,.3);border-radius:2px}',
                     /* 確保圖片（如 SD 插件的 sd-ui-image）在缺少原插件 CSS 時仍可見 */
                     '#vn-dom-block-body img{max-width:100%;height:auto;display:block;margin:0 auto;border-radius:6px}',
                     '#vn-dom-block-body>div,#vn-dom-block-body>section,#vn-dom-block-body>article{display:block;width:100%}',
-                    '#vn-dom-block-close{flex-shrink:0;margin-top:14px;padding:10px;',
-                    'background:rgba(212,175,55,.15);border:1px solid rgba(212,175,55,.4);',
-                    'color:#d4af37;cursor:pointer;border-radius:6px;font-size:13px;',
-                    'letter-spacing:2px;width:100%;transition:background .2s}',
-                    '#vn-dom-block-close:hover{background:rgba(212,175,55,.28)}'
+                    '#vn-dom-block-hint{flex-shrink:0;margin-top:16px;text-align:center;',
+                    'color:rgba(180,180,180,0.45);font-size:11px;letter-spacing:1px;pointer-events:none}'
                 ].join('');
                 document.head.appendChild(_s);
             }
@@ -923,8 +1112,8 @@
             if (!overlay) {
                 overlay = document.createElement('div');
                 overlay.id = 'vn-dom-block-overlay';
-                overlay.innerHTML = '<div id="vn-dom-block-body"></div><button id="vn-dom-block-close">▶ 繼續</button>';
-                overlay.querySelector('#vn-dom-block-close').onclick = () => this._hideDomBlock();
+                overlay.innerHTML = '<div id="vn-dom-block-body"></div><div id="vn-dom-block-hint">點擊背景關閉</div>';
+                overlay.onclick = (e) => { if (e.target === overlay) this._hideDomBlock(); };
                 const gamePage = document.getElementById('page-game');
                 if (!gamePage) { this.next(); return; }
                 gamePage.appendChild(overlay);
@@ -2023,9 +2212,8 @@
             const _trimmed = line.trim();
             if (/^\*{1,2}[^*].+\*{1,2}$/.test(_trimmed)) {
                 const _innerText = _trimmed.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
-                this.updateSprite(this._lastChar || '', 'Think');
-                this.renderVN(this._lastChar || '', _innerText, 'inner');
-                this.addLog(this._lastChar || '内心', _innerText);
+                this.renderVN('', _innerText, 'inner');
+                this.addLog('内心', _innerText);
                 return;
             }
             const _stripped = _trimmed.replace(/^\[?/, '').replace(/\]$/, '').trim();
@@ -2253,7 +2441,8 @@
             const dtEl = document.getElementById('dialogue-text');
             panel.classList.remove('inner-mode');
             if (mode === 'inner') {
-                nel.style.display = 'inline-block'; nel.innerText = n || '…';
+                if (n) { nel.style.display = 'inline-block'; nel.innerText = n; }
+                else { nel.style.display = 'none'; }
                 panel.classList.remove('nar-mode'); panel.classList.add('char-mode', 'inner-mode');
             } else if (n) {
                 nel.style.display = 'inline-block'; nel.innerText = n;
@@ -2685,6 +2874,16 @@
         const list = document.getElementById(listId || 'avatar-mgr-list'); if (!list) return;
         const entries = await VN_Cache.getAll('avatar_cache'); list.innerHTML = '';
         if (entries.length === 0) { list.innerHTML = '<div style="color:#666; font-size:0.85rem; padding:15px 0; text-align:center;">尚無快取紀錄（角色首次出現時自動建立）</div>'; return; }
+        const clearAllBtn = document.createElement('button');
+        clearAllBtn.textContent = '🗑 清空全部快取';
+        clearAllBtn.style.cssText = 'display:block;width:100%;margin-bottom:12px;padding:8px;background:rgba(180,60,60,0.15);border:1px solid rgba(200,80,80,0.35);color:#e07070;border-radius:6px;cursor:pointer;font-size:12px;letter-spacing:1px;';
+        clearAllBtn.onclick = async () => {
+            if (!confirm(`確定要清空全部 ${entries.length} 筆頭像快取？此動作無法復原。`)) return;
+            for (const e of entries) await VN_Cache.delete('avatar_cache', e.key);
+            if (window.VN_PLAYER) window.VN_PLAYER._avatarMemCache = {};
+            loadAvatarManager(listId);
+        };
+        list.appendChild(clearAllBtn);
         entries.forEach(entry => {
             const item = document.createElement('div'); item.className = 'avatar-mgr-item';
             const img = document.createElement('img'); img.className = 'avatar-preview'; img.title = entry.key;
@@ -2743,6 +2942,78 @@
         await VN_Cache.delete('avatar_cache', name); itemEl.style.transition = 'opacity 0.2s'; itemEl.style.opacity = '0';
         const _empty = '<div style="color:#666; font-size:0.85rem; padding:15px 0; text-align:center;">尚無快取紀錄（角色首次出現時自動建立）</div>';
         setTimeout(() => { itemEl.remove(); const list = listEl || document.getElementById('avatar-mgr-list'); if (list && list.children.length === 0) list.innerHTML = _empty; }, 200);
+    }
+
+    async function loadBgManager(listId) {
+        const list = document.getElementById(listId || 'bg-mgr-list'); if (!list) return;
+        const entries = await VN_Cache.getAll('bg_cache'); list.innerHTML = '';
+        const _empty = '<div style="color:#666; font-size:0.85rem; padding:15px 0; text-align:center;">尚無快取紀錄（場景首次生成時自動建立）</div>';
+        if (entries.length === 0) { list.innerHTML = _empty; return; }
+        const clearAllBtn = document.createElement('button');
+        clearAllBtn.textContent = `🗑 清空全部快取（${entries.length} 筆）`;
+        clearAllBtn.style.cssText = 'display:block;width:100%;margin-bottom:12px;padding:8px;background:rgba(180,60,60,0.15);border:1px solid rgba(200,80,80,0.35);color:#e07070;border-radius:6px;cursor:pointer;font-size:12px;letter-spacing:1px;';
+        clearAllBtn.onclick = async () => {
+            if (!confirm(`確定要清空全部 ${entries.length} 筆背景快取？此動作無法復原。`)) return;
+            for (const e of entries) await VN_Cache.delete('bg_cache', e.key);
+            loadBgManager(listId);
+        };
+        list.appendChild(clearAllBtn);
+        entries.forEach(entry => {
+            const item = document.createElement('div'); item.className = 'avatar-mgr-item';
+            const img = document.createElement('img'); img.className = 'avatar-preview';
+            img.style.cssText = 'width:96px;height:56px;object-fit:cover;border-radius:4px;flex-shrink:0;';
+            img.title = entry.key;
+            img.onerror = () => { img.style.opacity = '0.25'; img.title = entry.key + '（圖片失效）'; };
+            if (entry.url && !entry.url.startsWith('blob:')) {
+                img.src = entry.url;
+            } else {
+                img.style.opacity = '0.25'; img.title = entry.key + '（快取已過期）';
+                VN_Cache.delete('bg_cache', entry.key);
+            }
+            const info = document.createElement('div'); info.style.cssText = 'flex:1; min-width:0;';
+            const nameEl = document.createElement('div'); nameEl.className = 'avatar-mgr-name';
+            nameEl.textContent = entry.key; nameEl.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:4px;word-break:break-all;';
+            const textarea = document.createElement('textarea'); textarea.className = 'avatar-mgr-prompt'; textarea.value = entry.prompt || '';
+            info.appendChild(nameEl); info.appendChild(textarea);
+            const btnWrap = document.createElement('div'); btnWrap.style.cssText = 'display:flex; flex-direction:column; gap:8px; flex-shrink:0;';
+            const regenBtn = document.createElement('button'); regenBtn.className = 'avatar-regen-btn'; regenBtn.textContent = '↺ 重生成';
+            regenBtn.onclick = () => regenerateBgEntry(regenBtn, entry.key, textarea, img);
+            const delBtn = document.createElement('button'); delBtn.className = 'avatar-del-btn'; delBtn.textContent = '✕ 刪除';
+            delBtn.onclick = () => deleteBgEntry(entry.key, item, list);
+            btnWrap.appendChild(regenBtn); btnWrap.appendChild(delBtn);
+            item.appendChild(img); item.appendChild(info); item.appendChild(btnWrap); list.appendChild(item);
+        });
+    }
+    async function regenerateBgEntry(btn, key, textarea, previewImg) {
+        const prompt = textarea.value.trim(); if (!prompt) return;
+        const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
+        try {
+            const raw = await VN_Image.getBg(prompt);
+            if (raw) {
+                try {
+                    const fetchRes = await fetch(raw);
+                    const blob = await fetchRes.blob();
+                    const dataUrl = await new Promise(r => {
+                        const reader = new FileReader();
+                        reader.onload = () => r(reader.result);
+                        reader.onerror = () => r('');
+                        reader.readAsDataURL(blob);
+                    });
+                    const saveUrl = dataUrl || raw;
+                    await VN_Cache.set('bg_cache', key, { prompt, rawUrl: raw, url: saveUrl });
+                    previewImg.src = saveUrl; previewImg.style.opacity = '1';
+                } catch(e) {
+                    await VN_Cache.set('bg_cache', key, { prompt, rawUrl: raw, url: raw });
+                    previewImg.src = raw; previewImg.style.opacity = '1';
+                }
+            }
+        } catch(e) { console.error('[VN] regenerateBgEntry 失敗', e); }
+        btn.textContent = orig; btn.disabled = false; btn.classList.remove('loading');
+    }
+    async function deleteBgEntry(key, itemEl, listEl) {
+        await VN_Cache.delete('bg_cache', key); itemEl.style.transition = 'opacity 0.2s'; itemEl.style.opacity = '0';
+        const _empty = '<div style="color:#666; font-size:0.85rem; padding:15px 0; text-align:center;">尚無快取紀錄（場景首次生成時自動建立）</div>';
+        setTimeout(() => { itemEl.remove(); const list = listEl || document.getElementById('bg-mgr-list'); if (list && list.children.length === 0) list.innerHTML = _empty; }, 200);
     }
 
     /* =========================================
@@ -3301,6 +3572,11 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
     function openGeneratePanel() {
         const overlay = document.getElementById('vn-gen-overlay');
         if (!overlay) return;
+        // 不是從書籍 dive 進來，清除殘留世界書，避免繼承上一本書的 worldbook
+        if (!window._pendingCardDive && !window._pendingQBPayload) {
+            localStorage.removeItem('vn_active_wb_packs');
+            localStorage.removeItem('vn_current_world_id');
+        }
         document.getElementById('vn-gen-status').textContent = '';
         document.getElementById('vn-gen-status').className = '';
         document.getElementById('vn-gen-submit').disabled = false;
@@ -4222,6 +4498,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         openGeneratePanel, closeGeneratePanel, generateStory, diveSelectedCard,
         resetPromptOrder() { VN_PromptOrder.reset(); },
         loadAvatarManager,   // 供 vn_settings.js 外接調用（接受自定義 listId）
+        loadBgManager,       // 供 vn_settings.js 外接調用（BG 快取列表）
 
         // 💭 本章思考鏈小窗
         showThinkPopup() {
@@ -4398,6 +4675,91 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         },
         hideReaderPanel() {
             document.getElementById('vn-reader-overlay')?.classList.remove('active');
+        },
+
+        // 📝 大總結 編輯器（在閱讀器內開啟）
+        async showSummaryEditor() {
+            const body = document.getElementById('vn-reader-body');
+            const tabs = document.getElementById('vn-reader-tabs');
+            if (!body) return;
+
+            // 暫存章節內容以便返回
+            body._prevHtml   = body.innerHTML;
+            body._prevScroll = body.scrollTop;
+            if (tabs) { body._prevTabsDisplay = tabs.style.display; tabs.style.display = 'none'; }
+
+            body.innerHTML = '<div style="padding:20px;color:#555;font-size:0.85rem;">載入大總結中...</div>';
+
+            const storyId = localStorage.getItem('vn_current_story_id') || '';
+            let summaries = [];
+            try {
+                if (win.OS_DB?.getGrandSummaries) summaries = await win.OS_DB.getGrandSummaries(storyId);
+            } catch(e) {}
+
+            if (!summaries.length) {
+                body.innerHTML = `
+                    <div style="display:flex;flex-direction:column;height:100%;padding:20px;box-sizing:border-box;">
+                        <div style="color:#555;font-size:0.85rem;margin-bottom:16px;">尚無大總結記錄。Token 達 70% 時可在 CTX 彈窗中生成。</div>
+                        <button onclick="window.VN_PLAYER.hideSummaryEditor()" style="align-self:flex-start;background:transparent;border:1px solid rgba(212,175,55,0.25);color:#888;padding:6px 16px;border-radius:4px;cursor:pointer;font-size:0.82rem;">← 返回閱讀器</button>
+                    </div>`;
+                return;
+            }
+
+            const latest = summaries.reduce((a, b) => (a.count >= b.count ? a : b));
+            // 儲存 entry 參考
+            body._summaryEntry = latest;
+
+            const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const ts = latest.timestamp ? new Date(latest.timestamp).toLocaleString('zh-TW') : '';
+
+            body.innerHTML = `
+                <div style="display:flex;flex-direction:column;height:100%;padding:16px;box-sizing:border-box;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                        <div style="color:#d4af37;font-size:0.82rem;letter-spacing:1px;">📝 大總結（第 ${latest.count} 次）<span style="color:#555;font-size:0.75rem;margin-left:8px;">${ts}</span></div>
+                        <div style="color:#555;font-size:0.72rem;">覆蓋 ${(latest.coveredChapterIds||[]).length} 章</div>
+                    </div>
+                    <textarea id="vn-summary-edit-area"
+                        style="flex:1;width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(212,175,55,0.18);
+                               color:#e8dfc8;padding:12px;border-radius:6px;font-family:monospace;font-size:0.78rem;
+                               resize:none;line-height:1.6;box-sizing:border-box;outline:none;"
+                        spellcheck="false">${esc(latest.content)}</textarea>
+                    <div style="display:flex;gap:8px;margin-top:12px;flex-shrink:0;">
+                        <button onclick="window.VN_PLAYER.hideSummaryEditor()"
+                            style="background:transparent;border:1px solid rgba(255,255,255,0.12);color:#888;
+                                   padding:7px 18px;border-radius:4px;cursor:pointer;font-size:0.82rem;">← 返回</button>
+                        <button onclick="window.VN_PLAYER.saveSummaryEdit()"
+                            style="background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.35);color:#d4af37;
+                                   padding:7px 18px;border-radius:4px;cursor:pointer;font-size:0.82rem;flex:1;">💾 儲存修改</button>
+                    </div>
+                </div>`;
+        },
+
+        hideSummaryEditor() {
+            const body = document.getElementById('vn-reader-body');
+            const tabs = document.getElementById('vn-reader-tabs');
+            if (!body) return;
+            if (body._prevHtml !== undefined) {
+                body.innerHTML = body._prevHtml;
+                body.scrollTop = body._prevScroll || 0;
+            }
+            if (tabs && body._prevTabsDisplay !== undefined) tabs.style.display = body._prevTabsDisplay;
+        },
+
+        async saveSummaryEdit() {
+            const body = document.getElementById('vn-reader-body');
+            const textarea = document.getElementById('vn-summary-edit-area');
+            if (!textarea || !body?._summaryEntry) return;
+            const newContent = textarea.value;
+            const entry = { ...body._summaryEntry, content: newContent };
+            try {
+                await win.OS_DB?.saveGrandSummary(entry);
+                // 視覺回饋
+                const saveBtn = textarea.closest('div').nextElementSibling?.querySelector('button:last-child');
+                if (saveBtn) { const orig = saveBtn.textContent; saveBtn.textContent = '✓ 已儲存'; setTimeout(() => { saveBtn.textContent = orig; }, 1500); }
+                body._summaryEntry = entry;
+            } catch(e) {
+                alert('儲存失敗: ' + (e.message || e));
+            }
         }
     };
 
@@ -4431,6 +4793,20 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 window.VN_Core.next();
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
+        }
+
+        // 自由書籍 Dive：從書架自由劇情書過來
+        if (window._pendingFreeScriptDive && (win.OS_API?.isStandalone?.() ?? false)) {
+            const _free = window._pendingFreeScriptDive;
+            window._pendingFreeScriptDive = null;
+            setTimeout(() => {
+                const genInput = document.getElementById('vn-gen-request');
+                const genTitle = document.getElementById('vn-gen-title');
+                if (genInput) genInput.value = _free.request;
+                if (genTitle) genTitle.value = _free.title || '';
+                generateStory();
+                console.log('[VN] 自由書籍 Dive 觸發生成:', _free.title || '（無標題）');
+            }, 300);
         }
 
         // QB Dive：靜默填入 prompt，直接觸發生成（獨立路徑，不開首頁生成 overlay）

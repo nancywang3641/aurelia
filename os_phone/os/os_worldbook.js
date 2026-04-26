@@ -514,7 +514,12 @@
         root.querySelector('#wb-f-keys-input').value = '';
         renderTagEditor(root);
 
-        root.querySelector('#wb-edit-overlay').classList.remove('hidden');
+        const editOverlay = root.querySelector('#wb-edit-overlay');
+        editOverlay.classList.remove('hidden');
+        if (!editOverlay.dataset.swipeInited) {
+            wbAddSwipeToDismiss(editOverlay, editOverlay.querySelector('.wb-form-header'));
+            editOverlay.dataset.swipeInited = '1';
+        }
     }
 
     function openEditForm(root, id) {
@@ -534,7 +539,12 @@
         root.querySelector('#wb-f-keys-input').value = '';
         renderTagEditor(root);
 
-        root.querySelector('#wb-edit-overlay').classList.remove('hidden');
+        const editOverlay2 = root.querySelector('#wb-edit-overlay');
+        editOverlay2.classList.remove('hidden');
+        if (!editOverlay2.dataset.swipeInited) {
+            wbAddSwipeToDismiss(editOverlay2, editOverlay2.querySelector('.wb-form-header'));
+            editOverlay2.dataset.swipeInited = '1';
+        }
     }
 
     async function saveForm(root) {
@@ -570,10 +580,42 @@
         await reload(root);
     }
 
+    // iOS touch 下滑關閉 overlay（閾值 80px）
+    function wbAddSwipeToDismiss(overlay, headerEl) {
+        let startY = 0, curDY = 0, dragging = false;
+        const inner = overlay.querySelector('.wb-form') || overlay;
+        headerEl.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1) return;
+            startY = e.touches[0].clientY;
+            curDY = 0; dragging = true;
+            inner.style.transition = 'none';
+        }, { passive: true });
+        headerEl.addEventListener('touchmove', e => {
+            if (!dragging || e.touches.length !== 1) return;
+            curDY = e.touches[0].clientY - startY;
+            if (curDY > 0) inner.style.transform = `translateY(${curDY}px)`;
+        }, { passive: true });
+        headerEl.addEventListener('touchend', () => {
+            if (!dragging) return;
+            dragging = false;
+            inner.style.transition = '';
+            if (curDY > 80) {
+                overlay.classList.add('hidden');
+            }
+            inner.style.transform = '';
+        });
+    }
+
     // ── 設定與操作 ────────────────────────────────────────────────────
     function openSettings(root) {
         renderCatsList(root);
-        root.querySelector('#wb-cfg-overlay').classList.remove('hidden');
+        const overlay = root.querySelector('#wb-cfg-overlay');
+        overlay.classList.remove('hidden');
+        // 掛上 swipe-to-dismiss（只掛一次）
+        if (!overlay.dataset.swipeInited) {
+            wbAddSwipeToDismiss(overlay, overlay.querySelector('.wb-form-header'));
+            overlay.dataset.swipeInited = '1';
+        }
     }
 
     function renderCatsList(root) {

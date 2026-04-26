@@ -8,7 +8,7 @@
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 21; // 🔥 升級至 V21：向量記憶庫
+    const DB_VERSION = 22; // 🔥 升級至 V22：大總結儲存
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -28,6 +28,7 @@
     const STORE_NAME_STUDIO = 'studio_chats';
     const STORE_NAME_STUDIO_DRAFTS = 'studio_drafts';
     const STORE_NAME_VN_MEMORIES  = 'vn_memories';   // 🔥 V21：向量記憶庫
+    const STORE_NAME_VN_SUMMARIES = 'vn_grand_summaries'; // V22：大總結儲存
 
     let dbInstance = null;
 
@@ -50,7 +51,8 @@
                         STORE_NAME_VN_CHAPTERS, STORE_NAME_VAR_PACKS,
                         STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO,
                         STORE_NAME_STUDIO_DRAFTS,
-                        STORE_NAME_VN_MEMORIES   // 🔥 V21：向量記憶庫
+                        STORE_NAME_VN_MEMORIES,  // 🔥 V21：向量記憶庫
+                        STORE_NAME_VN_SUMMARIES  // 🔥 V22：大總結儲存
                     ];
 
                     stores.forEach(name => {
@@ -662,6 +664,43 @@
                         (req.result || []).filter(ch => ch.storyId === storyId).forEach(ch => store.delete(ch.id));
                         tx.oncomplete = () => r(true);
                     };
+                } catch(e) { j(e); }
+            });
+        },
+
+        // ── vn_grand_summaries：大總結 CRUD ─────────────────────────
+        saveGrandSummary: async function(entry) {
+            // entry: { id, storyId, count, content, timestamp }
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!entry.id) entry.id = 'gs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+                    if (!entry.timestamp) entry.timestamp = Date.now();
+                    const tx = db.transaction(STORE_NAME_VN_SUMMARIES, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_SUMMARIES).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                } catch(e) { j(e); }
+            });
+        },
+        getGrandSummaries: async function(storyId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_VN_SUMMARIES, 'readonly').objectStore(STORE_NAME_VN_SUMMARIES).getAll();
+                    req.onsuccess = () => {
+                        const all = (req.result || []).filter(s => (s.storyId || '') === (storyId || ''));
+                        r(all.sort((a, b) => (a.count || 0) - (b.count || 0)));
+                    };
+                } catch(e) { j(e); }
+            });
+        },
+        deleteGrandSummary: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VN_SUMMARIES, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_SUMMARIES).delete(id);
+                    tx.oncomplete = () => r(true);
                 } catch(e) { j(e); }
             });
         },
