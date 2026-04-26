@@ -562,7 +562,7 @@
                 : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
 
             const style = `
-                .wx-me-header { background: ${headerBg}; padding: 30px 25px 30px 20px; display: flex; align-items: center; margin-bottom: 10px; }
+                .wx-me-header { background: ${headerBg}; padding: 30px 25px 30px 20px; padding-top: calc(30px + env(safe-area-inset-top, 0px)); display: flex; align-items: center; margin-bottom: 10px; }
                 .wx-me-avatar { width: 64px; height: 64px; border-radius: 6px; background-size: cover; margin-right: 15px; border: 1px solid ${borderColor}; }
                 .wx-me-info { flex: 1; display: flex; flex-direction: column; gap: 5px; }
                 .wx-me-name { font-size: 20px; font-weight: 600; color: ${nameColor}; }

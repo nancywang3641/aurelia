@@ -15,7 +15,7 @@
             .wx-source-details summary { cursor: pointer; outline: none; font-weight: bold; user-select: none; color: #888; }
             .wx-code-content { display: block; white-space: pre-wrap; font-family: monospace; font-size: 11px; color: #2c662d; margin-top: 5px; padding: 5px; background: #fff; border: 1px solid #eee; overflow-x: auto; }
 
-            .wx-header { background: #ededed; height: 45px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #dcdcdc; z-index: 20; }
+            .wx-header { background: #ededed; height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid #dcdcdc; z-index: 20; }
             .wx-header-title { font-weight: 600; font-size: 16px; color: #000; }
             .wx-back-btn { cursor: pointer; display: flex; align-items: center; font-size: 15px; color: #000; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 0.2s;}
             .wx-back-btn.show { opacity: 1; pointer-events: auto; }
