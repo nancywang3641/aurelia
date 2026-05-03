@@ -1,0 +1,338 @@
+<div id="multi_panel_settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>多功能面板系統設置</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        
+        <div class="inline-drawer-content">
+            <label class="flex-container" title="啟用多功能面板系統">
+                <input type="checkbox" id="mp_enabled">
+                <span>啟用多功能面板系統</span>
+                <span class="fa-solid fa-circle-question note-link-span"></span>
+            </label>
+            
+            <label class="flex-container" title="為聊天消息添加折叠功能">
+                <input type="checkbox" id="mp_message_collapse">
+                <span>啟用消息折叠功能</span>
+                <span class="fa-solid fa-circle-question note-link-span" title="為每條消息添加折叠/展開按鈕"></span>
+            </label>
+            
+            <hr>
+            
+            <div class="flex-container">
+                <label for="mp_mount_mode">插入模式：</label>
+                <select id="mp_mount_mode">
+                    <option value="modal">浮窗模式</option>
+                    <option value="embedded">內嵌模式</option>
+                </select>
+            </div>
+            
+            <div class="flex-container">
+                <label for="mp_mount_selector">插入位置容器：</label>
+                <select id="mp_mount_selector">
+                    <option value="#sheld">#sheld（整個對話框，推薦）</option>
+                    <option value="#chat">#chat（僅訊息區）</option>
+                </select>
+            </div>
+
+            <div class="flex-container">
+                <label for="mp_mount_placement">插入順序：</label>
+                <select id="mp_mount_placement">
+                    <option value="bottom">底部（append）</option>
+                    <option value="top">頂部（prepend）</option>
+                </select>
+            </div>
+            
+            <hr>
+            
+            <div class="flex-container">
+                <div class="status-indicator" id="mp_status">
+                    <span class="status-text">狀態：未初始化</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 設置頁面腳本
+(function() {
+    'use strict';
+    
+    console.log('多功能面板系統設置頁面載入');
+    
+    // 獲取擴展設置（包含 localStorage 回退）
+    function getExtensionSettings() {
+        if (typeof window.extension_settings === 'undefined') {
+            window.extension_settings = {};
+        }
+        let settings = window.extension_settings['多功能面板系統'];
+        if (!settings) {
+            try {
+                const saved = localStorage.getItem('extension_settings');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && parsed['多功能面板系統']) {
+                        settings = parsed['多功能面板系統'];
+                        window.extension_settings['多功能面板系統'] = settings;
+                    }
+                }
+            } catch (e) {
+                console.warn('⚠️ 從 localStorage 載入擴展設置失敗:', e);
+            }
+        }
+        return settings || {};
+    }
+    // 暴露到全局以避免作用域問題
+    window.getExtensionSettings = getExtensionSettings;
+
+    // 保存擴展設置
+    function saveExtensionSettings(settings) {
+        if (typeof window.extension_settings === 'undefined') {
+            window.extension_settings = {};
+        }
+        if (!window.extension_settings['多功能面板系統']) {
+            window.extension_settings['多功能面板系統'] = {};
+        }
+        Object.assign(window.extension_settings['多功能面板系統'], settings);
+        
+        // 嘗試多種保存方式
+        if (typeof saveSettingsDebounced === 'function') {
+            saveSettingsDebounced();
+        } else if (typeof saveSettings === 'function') {
+            saveSettings();
+        } else {
+            // 後備：直接保存到 localStorage
+            try {
+                localStorage.setItem('extension_settings', JSON.stringify(window.extension_settings));
+            } catch (error) {
+                console.warn('⚠️ localStorage 保存失敗:', error);
+            }
+        }
+    }
+    // 暴露到全局以避免作用域問題
+    window.saveExtensionSettings = saveExtensionSettings;
+
+    // 簡單深合併（僅處理對象與基本值）
+    function deepMerge(target, source) {
+        const result = Array.isArray(target) ? [...target] : { ...target };
+        if (!source) return result;
+        for (const key of Object.keys(source)) {
+            const sv = source[key];
+            const tv = result[key];
+            if (sv && typeof sv === 'object' && !Array.isArray(sv)) {
+                result[key] = deepMerge(tv && typeof tv === 'object' ? tv : {}, sv);
+            } else {
+                result[key] = sv;
+            }
+        }
+        return result;
+    }
+
+    // 初始化設置頁面
+    function initializeSettings() {
+        const settings = getExtensionSettings();
+        
+        // 設置默認值
+        const defaults = {
+            enabled: true,
+            messageCollapse: true,
+            mount: {
+                mode: 'modal',
+                selector: '#sheld',
+                placement: 'bottom'
+            }
+        };
+        
+        const finalSettings = deepMerge(defaults, settings);
+        // 同步回全局內存，避免 UI 顯示與實際使用不一致
+        if (typeof window.extension_settings === 'undefined') {
+            window.extension_settings = {};
+        }
+        window.extension_settings['多功能面板系統'] = finalSettings;
+        
+        // 應用設置到 UI
+        document.getElementById('mp_enabled').checked = !!finalSettings.enabled;
+        document.getElementById('mp_message_collapse').checked = finalSettings.messageCollapse !== false;
+        document.getElementById('mp_mount_mode').value = finalSettings.mount?.mode || 'modal';
+        document.getElementById('mp_mount_selector').value = finalSettings.mount?.selector || '#sheld';
+        document.getElementById('mp_mount_placement').value = finalSettings.mount?.placement || 'bottom';
+        
+        // 更新狀態
+        updateStatus();
+    }
+    
+    // 更新狀態顯示
+    function updateStatus() {
+        const statusElement = document.getElementById('mp_status');
+        const statusText = statusElement.querySelector('.status-text');
+        
+        if (window.MultiPanelExtensionAPI) {
+            const status = window.MultiPanelExtensionAPI.getStatus();
+            statusText.textContent = `狀態：已載入 (v${status.version})`;
+            statusElement.className = 'status-indicator success';
+        } else {
+            statusText.textContent = '狀態：未載入';
+            statusElement.className = 'status-indicator error';
+        }
+    }
+    
+    // 事件監聽器
+    document.getElementById('mp_enabled').addEventListener('change', function() {
+        window.saveExtensionSettings({ enabled: this.checked });
+        console.log('多功能面板系統啟用狀態:', this.checked);
+        
+        // 🔥 立即應用主開關設置
+        if (this.checked) {
+            // 啟用擴展功能
+            console.log('✅ 啟用多功能面板系統...');
+            
+            // 顯示圖標
+            const icon = document.getElementById('aurelia-floating-icon');
+            if (icon) {
+                icon.style.display = 'block';
+            }
+            
+            // 啟用處理器
+            if (window.PANEL_COMMUNICATION) {
+                window.PANEL_COMMUNICATION.ready = true;
+            }
+            
+            toastr.success('多功能面板系統已啟用');
+        } else {
+            // 禁用擴展功能
+            console.log('⏸️ 禁用多功能面板系統...');
+            
+            // 隱藏圖標
+            const icon = document.getElementById('aurelia-floating-icon');
+            if (icon) {
+                icon.style.display = 'none';
+            }
+            
+            // 停止處理器
+            if (window.PANEL_COMMUNICATION) {
+                window.PANEL_COMMUNICATION.ready = false;
+            }
+            
+            toastr.success('多功能面板系統已禁用');
+        }
+    });
+    
+    // 插入模式設置事件監聽器
+    document.getElementById('mp_mount_mode').addEventListener('change', function() {
+        const settings = getExtensionSettings();
+        if (!settings.mount) settings.mount = {};
+        settings.mount.mode = this.value;
+        window.saveExtensionSettings(settings);
+        console.log('插入模式設置:', this.value);
+    });
+    
+    document.getElementById('mp_mount_selector').addEventListener('change', function() {
+        const settings = getExtensionSettings();
+        if (!settings.mount) settings.mount = {};
+        settings.mount.selector = this.value;
+        window.saveExtensionSettings(settings);
+        console.log('插入位置容器設置:', this.value);
+    });
+
+    document.getElementById('mp_mount_placement').addEventListener('change', function() {
+        const settings = getExtensionSettings();
+        if (!settings.mount) settings.mount = {};
+        settings.mount.placement = this.value;
+        window.saveExtensionSettings(settings);
+        console.log('插入順序設置:', this.value);
+    });
+    
+    // 消息折叠功能開關事件監聽器
+    document.getElementById('mp_message_collapse').addEventListener('change', function() {
+        const settings = getExtensionSettings();
+        settings.messageCollapse = this.checked;
+        window.saveExtensionSettings(settings);
+        console.log('消息折叠功能:', this.checked ? '啟用' : '禁用');
+        
+        // 通知主腳本重新初始化折叠功能
+        if (window.AureliaUIUtils && window.AureliaUIUtils.reinitializeCollapse) {
+            if (this.checked) {
+                // 啟用折叠功能
+                window.AureliaUIUtils.reinitializeCollapse();
+                toastr.success('消息折叠功能已啟用');
+            } else {
+                // 禁用折叠功能：移除所有折叠按鈕
+                const buttons = document.querySelectorAll('.mes-collapse-btn'); // 🔥 更新了 Class 選擇器
+                buttons.forEach(btn => btn.remove());
+                // 恢復所有被折叠的內容
+                const chatContainer = document.querySelector('#chat');
+                if (chatContainer) {
+                    const messages = chatContainer.querySelectorAll('.mes');
+                    messages.forEach(msg => {
+                        const mesid = msg.getAttribute('mesid');
+                        if (mesid) {
+                            localStorage.removeItem(`mes-collapse-${mesid}`);
+                        }
+                        // 恢復所有隱藏的元素
+                        const block = msg.querySelector('.mes_block');
+                        const avatar = msg.querySelector('.mesAvatarWrapper');
+                        
+                        // 內容區恢復
+                        if (block) {
+                            Array.from(block.children).forEach(child => {
+                                if (!child.classList.contains('ch_name') && !child.classList.contains('mes_edit_buttons')) {
+                                    child.style.display = '';
+                                }
+                            });
+                        }
+                        // 頭像區恢復
+                        if (avatar) avatar.style.display = '';
+                    });
+                }
+                toastr.success('消息折叠功能已禁用');
+            }
+        } else {
+            // 如果函數還未載入，提示需要刷新頁面
+            toastr.info('設置已保存，請刷新頁面以應用更改');
+        }
+    });
+    
+    // 定期更新狀態
+    setInterval(updateStatus, 5000);
+    
+    // 初始化
+    initializeSettings();
+    
+})();
+</script>
+
+<style>
+#multi_panel_settings .status-indicator {
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 5px 0;
+}
+
+#multi_panel_settings .status-indicator.success {
+    background-color: rgba(76, 175, 80, 0.2);
+    border: 1px solid rgba(76, 175, 80, 0.5);
+    color: #4caf50;
+}
+
+#multi_panel_settings .status-indicator.error {
+    background-color: rgba(244, 67, 54, 0.2);
+    border: 1px solid rgba(244, 67, 54, 0.5);
+    color: #f44336;
+}
+
+#multi_panel_settings .status-text {
+    font-weight: bold;
+}
+
+#multi_panel_settings select {
+    min-width: 120px;
+    margin-right: 10px;
+}
+
+#multi_panel_settings .menu_button {
+    margin: 5px 0;
+    padding: 8px 16px;
+}
+</style>

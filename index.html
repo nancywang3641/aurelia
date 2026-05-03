@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="奧瑞亞" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="https://files.catbox.moe/l5hl69.png" />
+    <link rel="icon" type="image/png" href="https://files.catbox.moe/l5hl69.png" />
+    <link rel="manifest" href="pwa.json" />
+    <title>奧瑞亞 | Aurelia</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="aurelia_core.css" />
+</head>
+<body>
+
+    
+
+    <div id="aurelia-boot">
+        <img id="aurelia-boot-logo" src="https://files.catbox.moe/l5hl69.png" alt="Aurelia" />
+        <div id="aurelia-boot-bar-wrap"><div id="aurelia-boot-bar"></div></div>
+        <div id="aurelia-boot-label">INITIALIZING</div>
+    </div>
+
+    <div id="aurelia-standalone-root"></div>
+
+    <audio id="lobby-bgm-player" loop preload="none"></audio>
+
+    <script src="core/panel_manager.js"></script>
+    <script src="core/ui_utilities.js"></script>
+    <script src="core/void_terminal.js"></script>
+    <script src="core/control_center.js"></script>
+
+    <script src="os_phone/os/os_settings.js"></script>
+    <script src="os_phone/os/os_db.js"></script>
+    <script src="os_phone/os/os_studio.js"></script>
+    <script src="os_phone/os/os_persona.js"></script>
+    <script src="os_phone/os/os_prompts.js"></script>
+    <script src="os_phone/os/os_lorebook.js"></script>
+    <script src="os_phone/os/os_contacts.js"></script>
+    <script src="os_phone/os/os_tavern_bridge.js"></script>
+    <script src="os_phone/os/os_bridge.js"></script>
+    <script src="os_phone/os/os_think.js"></script>
+    <script src="os_phone/os/os_avs_engine.js"></script>
+    <script src="os_phone/os/os_avs_rules.js"></script>
+    <script src="os_phone/os/os_vector_engine.js"></script>
+    <script src="os_phone/os/os_api_engine.js"></script>
+    <script src="os_phone/os/os_debug_panel.js"></script>
+    <script src="os_phone/os/phone_system.js"></script>
+    <script src="os_phone/os/os_monitor.js"></script>
+
+    <script src="os_phone/os/os_minimax.js"></script>
+    <script src="os_phone/os/translation_manager.js"></script>
+    <script src="os_phone/os/os_image_manager.js"></script>
+    <script src="os_phone/os/os_achievement.js"></script>
+    <script src="os_phone/os/os_404_store.js"></script>
+    <script src="os_phone/os/os_tarot.js"></script>
+    <script src="os_phone/os/os_backup.js"></script>
+    <script src="os_phone/os/os_worldbook.js"></script>
+    <script src="os_phone/os/os_avs.js"></script>
+    <script src="os_phone/os/os_card_import.js"></script>
+
+    <script src="os_phone/vn_story/vn_styles.js"></script>
+    <script src="os_phone/vn_story/vn_settings.js"></script>
+    <script src="os_phone/vn_story/vn_dynamic_parser.js"></script>
+    <script src="os_phone/vn_story/vn_core.js"></script>
+    <script src="os_phone/vn_story/vn_reader.js"></script>
+    <script src="os_phone/vn_story/vn_phone.js"></script>
+    <script src="os_phone/vn_story/vn_ui_workshop.js"></script>
+
+    <script src="os_phone/rpg/status_core.js"></script>
+    <script src="os_phone/rpg/summary_core.js"></script>
+    <script src="os_phone/rpg/status_panel.js"></script>
+    <script src="os_phone/rpg/avatar_manager.js"></script>
+
+    <script src="os_phone/wx/wx_user_profile.js"></script>
+    <script src="os_phone/wx/wx_theme.js"></script>
+    <script src="os_phone/wx/wx_contacts.js"></script>
+    <script src="os_phone/wx/wx_chat_settings.js"></script>
+    <script src="os_phone/wx/wx_bubble_settings.js"></script>
+    <script src="os_phone/wx/wx_message_manager.js"></script>
+    <script src="os_phone/wx/wx_view.js"></script>
+    <script src="os_phone/wx/wx_core.js"></script>
+    <script src="os_phone/wx/wx_tavern_api_bridge.js"></script>
+
+    <script src="os_phone/wb/wb_user_profile.js"></script>
+    <script src="os_phone/wb/wb_account.js"></script>
+    <script src="os_phone/wb/wb_theme.js"></script>
+    <script src="os_phone/wb/wb_view.js"></script>
+    <script src="os_phone/wb/wb_core.js"></script>
+
+    <script src="os_phone/qb/qb_core.js"></script>
+    <script src="os_phone/qb/qb_bookshelf.js"></script>
+    <script src="os_phone/qb/os_404_chaos.js"></script>
+
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ── ST 事件系統 stub ──
+        window.eventOn    = window.eventOn    || function () {};
+        window.eventOnce  = window.eventOnce  || function () {};
+        window.eventOff   = window.eventOff   || function () {};
+        window.eventEmit  = window.eventEmit  || function () {};
+        window.eventOnButton  = window.eventOnButton  || function () {};
+        window.TavernHelper   = null;
+
+        (function () {
+            try {
+                const wxCfg  = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}');
+                const mainCfg = JSON.parse(localStorage.getItem('os_global_config')    || '{}');
+                wxCfg.directMode    = true;
+                wxCfg.disableTyping = true;
+                if (!wxCfg.url   && mainCfg.url)   wxCfg.url   = mainCfg.url;
+                if (!wxCfg.key   && mainCfg.key)   wxCfg.key   = mainCfg.key;
+                if (!wxCfg.model && mainCfg.model) wxCfg.model = mainCfg.model;
+                if (!wxCfg.maxTokens && mainCfg.maxTokens) wxCfg.maxTokens = mainCfg.maxTokens;
+                localStorage.setItem('wx_phone_api_config', JSON.stringify(wxCfg));
+            } catch(e) {}
+        })();
+        window.tavern_events  = window.tavern_events  || {
+            MESSAGE_RECEIVED: 'message_received',
+            MESSAGE_SENT:     'message_sent',
+            CHAT_CHANGED:     'chat_changed',
+            CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
+        };
+        window.PANEL_COMMUNICATION = { ready: true, processors: {}, modulesLoaded: {} };
+
+        // ── 載入進度條 ──
+        const bootBar   = document.getElementById('aurelia-boot-bar');
+        const bootLabel = document.getElementById('aurelia-boot-label');
+        let _progress = 0;
+        function setProgress(pct, label) {
+            _progress = pct;
+            if (bootBar)   bootBar.style.width = pct + '%';
+            if (bootLabel && label) bootLabel.textContent = label;
+        }
+
+        function hideBoot() {
+            const boot = document.getElementById('aurelia-boot');
+            if (boot) {
+                boot.classList.add('hidden');
+                setTimeout(() => boot.remove(), 700);
+            }
+        }
+
+        // ── 全域快捷函式 ──
+        window.togglePhoneSystem = function() {
+            if (window.PhoneSystem) window.PhoneSystem.show();
+            else console.warn('[Aurelia] 手機系統尚未就緒');
+        };
+
+        // ── 手機 App 註冊 ──
+        function registerApps() {
+            const PS = window.PhoneSystem;
+            if (!PS) return;
+            if (window.RPG_PANEL)    PS.install('RPG 狀態',  '🛡️', '#5d4037', window.RPG_PANEL.launch);
+            if (window.OS_TAROT)     PS.install('賽博塔羅',  '🔮', '#9b59b6', window.OS_TAROT.launch);
+            if (window.VN_STORY)     PS.install('故事模式',  '📖', '#ff69b4', window.VN_STORY.launch);
+            if (window.OS_WORLDBOOK) PS.install('世界書',    '📗', '#1a3a5c', c => window.OS_WORLDBOOK.launch(c));
+            if (window.OS_AVS)       PS.install('變數工坊',  '🎲', '#e67e22', c => window.OS_AVS.launch(c));
+            if (window.OS_SETTINGS)  PS.install('設置',      '⚙️', '#4c4c4c', window.OS_SETTINGS.launchApp);
+        }
+
+        // ── 主初始化流程 ──
+        function init() {
+            setProgress(20, 'MOUNTING LOBBY');
+
+            const root = document.getElementById('aurelia-standalone-root');
+            if (window.AureliaControlCenter && root) {
+                window.AureliaControlCenter.mountEmbedded(root, 'bottom');
+            } else {
+                console.error('[Aurelia] AureliaControlCenter 未載入，請檢查 core/ 路徑');
+            }
+
+            setProgress(60, 'REGISTERING APPS');
+
+            setTimeout(() => {
+                registerApps();
+                setProgress(90, 'STARTING');
+            }, 800);
+
+            setTimeout(() => {
+                window.eventEmit('APP_READY');
+                window.eventEmit('VN_PANEL_READY');
+                window.eventEmit('CHAT_CHANGED');
+                setProgress(100, 'READY');
+                setTimeout(hideBoot, 300);
+            }, 1500);
+        }
+
+        // ── Service Worker 註冊（iOS PWA 背景恢復快取）──
+        if ('serviceWorker' in navigator) {
+            // 當新 SW 取得控制權時，強制重新整理頁面以確保加載最新的 JS/CSS
+            // （舊 SW 可能已用 Cache-First 提供了舊檔案，換 SW 後必須 reload）
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('[SW] 偵測到新版本接管，自動重新整理…');
+                window.location.reload();
+            });
+
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js', { scope: './' })
+                    .then(reg => {
+                        console.log('[SW] 已註冊', reg.scope);
+                        // 強制立刻檢查 sw.js 是否有新版本（不等 24 小時）
+                        // 這讓 iOS 在每次開啟 App 時都能偵測到新部署
+                        reg.update().catch(() => {});
+                    })
+                    .catch(e => console.warn('[SW] 註冊失敗', e));
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+    })();
+    </script>
+</body>
+</html>
