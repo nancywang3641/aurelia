@@ -1,0 +1,44 @@
+# === 大型本地資源（絕對不傳）===
+/models/
+/models/**
+/wav/
+/wav/**
+*.wav
+*.mp3
+*.ckpt
+*.pth
+*.bin
+*.safetensors
+
+# === TTS 本地工具 ===
+tts_models.json
+scan_models.bat
+scan_models.py
+
+# === 酒館參考檔（不屬於擴展本身）===
+@types.txt
+slash_command.txt
+
+# === 封存舊文件（保留本地備查，不上 GitHub）===
+_archive/
+
+# === Claude Code 工作資料 ===
+.claude/
+
+# === 系統 / 編輯器 ===
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+*.tmp
+.vscode/
+.idea/
+
+# === Node（如果之後加）===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === 個人筆記（如果還有要新增）===
+*.local.md

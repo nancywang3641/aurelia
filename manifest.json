@@ -1,0 +1,13 @@
+{
+	"display_name": "多功能面板系統",
+	"loading_order": 1,
+	"requires": [],
+	"optional": [],
+	"js": "index.js",
+	"css": "",
+	"author": "none",
+	"version": "2.0.0",
+	"homePage": ".",
+	"auto_update": true,
+	"description": "整合 VN、Chat、Echo、Forum、Map、Inventory、Shop、Task、IdCard、Livestream 等面板的完整系統"
+}
