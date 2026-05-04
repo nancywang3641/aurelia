@@ -353,8 +353,8 @@ EXAMPLE "prompt" value:
                     <div class="set-tab" data-tab="img">🎨 圖片設置</div>
                     <div class="set-tab" data-tab="voice">🎵 語音</div>
                     <div class="set-tab" data-tab="vn">🎮 VN</div>
-                    <div class="set-tab" data-tab="vec">🔮 記憶向量</div>
-                    <div class="set-tab" data-tab="sys">⚙️ 系統/備份</div>
+                    <div class="set-tab" data-tab="vec"${!isStandalone ? ' style="display:none"' : ''}>🔮 記憶向量</div>
+                    <div class="set-tab" data-tab="sys"${!isStandalone ? ' style="display:none"' : ''}>⚙️ 系統/備份</div>
                 </div>
 
                 <div class="set-content">
