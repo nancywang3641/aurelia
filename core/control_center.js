@@ -450,15 +450,13 @@
                 _vvAnchorHandler = () => {
                     if (!embeddedRoot) return;
                     const vv = window.visualViewport;
-                    // 偵測鍵盤是否彈出：vv.height 顯著小於 innerHeight 表示有鍵盤
                     const isKeyboardOpen = vv.height < window.innerHeight * 0.9;
-                    if (isKeyboardOpen) {
-                        // 鍵盤彈出：撐滿可見區，不留黑底
-                        embeddedRoot.style.height = vv.height + 'px';
-                    } else {
-                        // 鍵盤收起：回到 85% 設計值
-                        embeddedRoot.style.height = Math.round(window.innerHeight * 0.85) + 'px';
-                    }
+                    // 高度：鍵盤彈出時撐滿 vv.height，收起時 85%
+                    const panelH = isKeyboardOpen ? vv.height : Math.round(window.innerHeight * 0.85);
+                    embeddedRoot.style.height = panelH + 'px';
+                    // 用 translateY 把浮窗底部錨定到 visualViewport 底部（鍵盤正上方）
+                    const offset = (vv.offsetTop + vv.height) - window.innerHeight;
+                    embeddedRoot.style.transform = `translateY(${offset}px)`;
                 };
                 _vvAnchorHandler();
                 window.visualViewport.addEventListener('resize', _vvAnchorHandler);
