@@ -62,126 +62,153 @@
             style.textContent = `
                 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400;500;700&family=Cinzel:wght@400;700&display=swap');
 
-                /* === 淺色主題（默認） === */
+                /* === 亮版（默認）：視差書咖風，對齊主大廳 === */
                 #se-root-wrapper {
                     width: 100%; height: 100%; display: flex; flex-direction: column;
-                    background: #fcfcfc; position: relative;
-                    overflow: hidden; box-sizing: border-box; font-family: 'Roboto', sans-serif;
-                    color: #333;
+                    background: #452216; position: relative;
+                    overflow: hidden; box-sizing: border-box;
+                    font-family: 'Noto Sans TC', sans-serif;
+                    color: #FBDFA2;
+                    background-image:
+                        linear-gradient(rgba(251,223,162,0.05) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(251,223,162,0.05) 1px, transparent 1px);
+                    background-size: 30px 30px;
                 }
 
                 #se-toolbar {
                     display: flex; justify-content: space-between; align-items: center;
-                    padding: 0 15px; background: #fff; border-bottom: 1px solid #eee;
+                    padding: 0 15px;
+                    background: rgba(69,34,22,0.85);
+                    border-bottom: 1px solid rgba(251,223,162,0.2);
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
                     flex-shrink: 0; height: 50px;
                 }
-                .se-title { font-weight: 700; font-size: 16px; color: #444; letter-spacing: 2px; font-family: 'Playfair Display', serif; }
+                .se-title { font-weight: 700; font-size: 16px; color: #FBDFA2; letter-spacing: 2px; font-family: 'Noto Sans TC', sans-serif; }
                 .se-controls { display: flex; gap: 8px; }
                 .se-icon-btn {
                     border: none; background: transparent; cursor: pointer;
-                    font-size: 18px; color: #999; transition: all 0.2s;
+                    font-size: 18px; color: #B78456; transition: all 0.2s;
                     width: 32px; height: 32px; border-radius: 50%;
                 }
-                .se-icon-btn:hover { color: #333; background: #f0f0f0; }
+                .se-icon-btn:hover { color: #FBDFA2; background: rgba(251,223,162,0.1); }
 
                 #se-tab-bar {
-                    display: flex; gap: 15px; padding: 0 15px; background: #fff;
-                    border-bottom: 1px solid #eee; overflow-x: auto; flex-shrink: 0;
+                    display: flex; gap: 15px; padding: 0 15px;
+                    background: rgba(69,34,22,0.6);
+                    border-bottom: 1px solid rgba(251,223,162,0.2);
+                    overflow-x: auto; flex-shrink: 0;
                 }
                 #se-tab-bar::-webkit-scrollbar { display: none; }
 
                 .se-tab-item {
-                    padding: 12px 0; font-size: 13px; color: #888; cursor: pointer;
+                    padding: 12px 0; font-size: 13px; color: #B78456; cursor: pointer;
                     border-bottom: 2px solid transparent; transition: all 0.2s;
                     white-space: nowrap; font-weight: 500; text-transform: uppercase;
                 }
-                .se-tab-item.active { color: #222; border-bottom-color: #222; font-weight: 700; }
+                .se-tab-item.active { color: #FBDFA2; border-bottom-color: #FBDFA2; font-weight: 700; }
 
-                #se-content-area { flex: 1; position: relative; width: 100%; overflow-y: auto; overflow-x: hidden; background: #fcfcfc; min-height: 150px; }
+                #se-content-area { flex: 1; position: relative; width: 100%; overflow-y: auto; overflow-x: hidden; background: transparent; min-height: 150px; }
 
                 .se-tab-pane { width: 100%; min-height: 100%; padding: 15px; box-sizing: border-box; display: none; }
                 .se-tab-pane.active { display: block; }
 
-                /* 強制內容樣式修正 */
-                #se-root-wrapper .native-render-wrapper { color: #1a1a1a; display: flow-root; width: 100%; margin-bottom: 15px; }
-                #se-root-wrapper .native-render-wrapper p, #se-root-wrapper .native-render-wrapper li, #se-root-wrapper .native-render-wrapper td { color: #1a1a1a; }
+                /* 內容卡片樣式 */
+                #se-root-wrapper .native-render-wrapper {
+                    color: #FBDFA2; display: flow-root; width: 100%; margin-bottom: 15px;
+                    background: rgba(69,34,22,0.55);
+                    border: 1px solid rgba(251,223,162,0.18);
+                    border-left: 2px solid rgba(251,223,162,0.45);
+                    padding: 15px; border-radius: 4px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                }
+                #se-root-wrapper .native-render-wrapper p, #se-root-wrapper .native-render-wrapper li, #se-root-wrapper .native-render-wrapper td { color: #FBDFA2; }
+                #se-root-wrapper .native-render-wrapper h1, #se-root-wrapper .native-render-wrapper h2, #se-root-wrapper .native-render-wrapper h3 {
+                    color: #FBDFA2; border-bottom: 1px solid rgba(251,223,162,0.3);
+                }
                 #se-root-wrapper .native-render-wrapper svg text, #se-root-wrapper .native-render-wrapper .nodeLabel, #se-root-wrapper .native-render-wrapper .edgeLabel {
-                    color: #eee !important; fill: #eee !important;
+                    color: #FBDFA2 !important; fill: #FBDFA2 !important;
                 }
 
-                /* === 黑金主題 === */
+                /* === 暗版：404 終端風（綠霓虹，對齊大廳 mode-404） === */
                 #se-root-wrapper.theme-darkgold {
-                    background: #0a0a0a;
-                    color: #e6e6e6;
-                    font-family: 'Cinzel', 'Microsoft YaHei', sans-serif;
+                    background: #000800;
+                    color: #b8ffcb;
+                    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                    background-image:
+                        linear-gradient(rgba(0,255,65,0.08) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0,255,65,0.08) 1px, transparent 1px);
+                    background-size: 30px 30px;
                 }
 
                 #se-root-wrapper.theme-darkgold #se-toolbar {
-                    background: #111111;
-                    border-bottom: 1px solid #333;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                    background: rgba(0,15,0,0.9);
+                    border-bottom: 1px solid rgba(0,255,65,0.25);
+                    box-shadow: 0 2px 8px rgba(0,255,65,0.05);
                 }
 
                 #se-root-wrapper.theme-darkgold .se-title {
-                    color: #d4af37;
-                    font-family: 'Cinzel', serif;
-                    text-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+                    color: #00ff41;
+                    font-family: 'Consolas', monospace;
+                    font-weight: 700;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 8px rgba(0,255,65,0.4);
                 }
 
                 #se-root-wrapper.theme-darkgold .se-icon-btn {
-                    color: #888;
+                    color: #00cc33;
                 }
 
                 #se-root-wrapper.theme-darkgold .se-icon-btn:hover {
-                    color: #d4af37;
-                    background: rgba(212, 175, 55, 0.1);
+                    color: #00ff41;
+                    background: rgba(0,255,65,0.1);
                 }
 
                 #se-root-wrapper.theme-darkgold #se-tab-bar {
-                    background: #0a0a0a;
-                    border-bottom: 1px solid #333;
+                    background: rgba(0,15,0,0.7);
+                    border-bottom: 1px solid rgba(0,255,65,0.25);
                 }
 
                 #se-root-wrapper.theme-darkgold .se-tab-item {
-                    color: #666;
+                    color: #00cc33;
                 }
 
                 #se-root-wrapper.theme-darkgold .se-tab-item.active {
-                    color: #d4af37;
-                    border-bottom-color: #d4af37;
-                    text-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+                    color: #00ff41;
+                    border-bottom-color: #00ff41;
+                    text-shadow: 0 0 6px rgba(0,255,65,0.5);
                 }
 
                 #se-root-wrapper.theme-darkgold #se-content-area {
-                    background: #0a0a0a;
+                    background: transparent;
                 }
 
                 #se-root-wrapper.theme-darkgold .se-tab-pane {
-                    background: #0a0a0a;
-                    color: #e6e6e6;
+                    background: transparent;
+                    color: #b8ffcb;
                 }
 
                 #se-root-wrapper.theme-darkgold .native-render-wrapper {
-                    color: #e6e6e6;
-                    background: #111111;
-                    border: 1px solid #333;
-                    border-left: 2px solid #7a6020;
+                    color: #b8ffcb;
+                    background: rgba(0,15,0,0.7);
+                    border: 1px solid rgba(0,255,65,0.2);
+                    border-left: 2px solid rgba(0,255,65,0.5);
                     padding: 15px;
                     margin-bottom: 15px;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                    box-shadow: 0 2px 8px rgba(0,255,65,0.05);
+                    border-radius: 4px;
                 }
 
                 #se-root-wrapper.theme-darkgold .native-render-wrapper p,
                 #se-root-wrapper.theme-darkgold .native-render-wrapper li,
                 #se-root-wrapper.theme-darkgold .native-render-wrapper td {
-                    color: #e6e6e6;
+                    color: #b8ffcb;
                 }
 
                 #se-root-wrapper.theme-darkgold .native-render-wrapper h1,
                 #se-root-wrapper.theme-darkgold .native-render-wrapper h2,
                 #se-root-wrapper.theme-darkgold .native-render-wrapper h3 {
-                    color: #d4af37;
-                    border-bottom: 1px solid #7a6020;
+                    color: #00ff41;
+                    border-bottom: 1px solid rgba(0,255,65,0.3);
                 }
 
                 /* === VN TAB 模式樣式（小窗口） === */
