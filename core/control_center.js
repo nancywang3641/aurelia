@@ -29,6 +29,7 @@
     let _vvAnchorHandler = null;
     let _savedBodyStyle = null;
     let _savedScrollY = 0;
+    let _rafTracking = false;
 
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -399,8 +400,7 @@
                 `;
             } else if (isMobile) {
                 embeddedRoot.style.cssText = `
-                    position: fixed; left: 0; right: 0; bottom: 0;
-                    width: 100%; height: 85dvh; max-height: 100dvh;
+                    position: fixed; left: 0; right: 0; width: 100%;
                     z-index: 999; overflow: hidden; background: #fff;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
                     border-radius: 20px 20px 0 0;
@@ -423,40 +423,13 @@
         embeddedRoot.appendChild(phoneFrame);
         
         if (isMobile && !isStandalone) {
-            // 強制掛到 <html> 根元素，繞過 body 和 #sheld 可能帶的 transform
-            // （iOS 上 position:fixed 會被任何帶 transform/filter/will-change 的祖先困住）
-            document.documentElement.appendChild(embeddedRoot);
+            // 行動端掛到 body，脫離 #chat 捲動容器
+            document.body.appendChild(embeddedRoot);
             if (embedObserver) embedObserver.disconnect();
             embedObserver = null;
 
-            // 診斷輔助：把祖先鏈的 transform/filter/willChange 狀態存到 window 全局供 debug
-            window.__aurelia_debug_ancestors = (() => {
-                const result = [];
-                let el = embeddedRoot.parentNode;
-                while (el && el !== document) {
-                    const cs = getComputedStyle(el);
-                    if (cs.transform !== 'none' || cs.filter !== 'none' || cs.willChange !== 'auto') {
-                        result.push({ tag: el.tagName, id: el.id, transform: cs.transform, filter: cs.filter, willChange: cs.willChange });
-                    }
-                    el = el.parentNode;
-                }
-                return result;
-            })();
-
-            // iOS body scroll lock：防止 input 獲焦時 body 被自動滾走帶飛 fixed 浮窗
-            _savedScrollY = window.scrollY || window.pageYOffset || 0;
-            _savedBodyStyle = {
-                position: document.body.style.position,
-                top: document.body.style.top,
-                width: document.body.style.width,
-                overflow: document.body.style.overflow,
-            };
-            document.body.style.position = 'fixed';
-            document.body.style.top = `-${_savedScrollY}px`;
-            document.body.style.width = '100%';
-            document.body.style.overflow = 'hidden';
-
-            // 高度跟隨 visualViewport，確保鍵盤彈出時面板自動壓縮不溢出
+            // 浮窗跟隨 #form_sheld 位置：酒館已經處理好 iOS 鍵盤的 viewport 適配，
+            // 我們直接吸附 form_sheld 頂部，它走哪浮窗貼哪
             if (window.visualViewport) {
                 if (_vvAnchorHandler) {
                     window.visualViewport.removeEventListener('resize', _vvAnchorHandler);
@@ -464,19 +437,29 @@
                 }
                 _vvAnchorHandler = () => {
                     if (!embeddedRoot) return;
-                    const vv = window.visualViewport;
-                    const isKeyboardOpen = vv.height < window.innerHeight * 0.9;
-                    // 高度：鍵盤彈出時撐滿 vv.height，收起時 85%
-                    const panelH = isKeyboardOpen ? vv.height : Math.round(window.innerHeight * 0.85);
-                    embeddedRoot.style.height = panelH + 'px';
-                    // 用 translateY 把浮窗底部錨定到 visualViewport 底部（鍵盤正上方）
-                    const offset = (vv.offsetTop + vv.height) - window.innerHeight;
-                    embeddedRoot.style.transform = `translateY(${offset}px)`;
+                    const formSheld = document.getElementById('form_sheld');
+                    if (!formSheld) return;
+                    const rect = formSheld.getBoundingClientRect();
+                    // 浮窗底部緊貼 form_sheld 頂部，頂部留 15% 給酒館頭部
+                    const panelTop = Math.round(window.innerHeight * 0.15);
+                    const panelBottom = window.innerHeight - rect.top; // 距離視口底部多遠
+                    embeddedRoot.style.top = panelTop + 'px';
+                    embeddedRoot.style.bottom = panelBottom + 'px';
+                    embeddedRoot.style.height = 'auto';
                 };
                 _vvAnchorHandler();
                 window.visualViewport.addEventListener('resize', _vvAnchorHandler);
                 window.visualViewport.addEventListener('scroll', _vvAnchorHandler);
             }
+
+            // RAF loop：每幀跟蹤 form_sheld 位置（酒館內部邏輯也可能改變它，光靠事件不夠）
+            _rafTracking = true;
+            const _rafLoop = () => {
+                if (!_rafTracking || !embeddedRoot) return;
+                if (_vvAnchorHandler) _vvAnchorHandler();
+                requestAnimationFrame(_rafLoop);
+            };
+            requestAnimationFrame(_rafLoop);
         } else {
             if (placement === 'top') {
                 containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
@@ -568,15 +551,7 @@
             window.visualViewport.removeEventListener('scroll', _vvAnchorHandler);
             _vvAnchorHandler = null;
         }
-        if (_savedBodyStyle !== null) {
-            document.body.style.position = _savedBodyStyle.position;
-            document.body.style.top = _savedBodyStyle.top;
-            document.body.style.width = _savedBodyStyle.width;
-            document.body.style.overflow = _savedBodyStyle.overflow;
-            window.scrollTo(0, _savedScrollY);
-            _savedBodyStyle = null;
-            _savedScrollY = 0;
-        }
+        _rafTracking = false;
         if (embedObserver) { embedObserver.disconnect(); embedObserver = null; }
 
         if (phoneModal) {
