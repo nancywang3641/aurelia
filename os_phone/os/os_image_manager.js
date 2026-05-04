@@ -403,6 +403,9 @@
                 } catch (e) {}
             }
 
+            // 🔥 把翻譯後的 prompt 寫回 options，讓 caller（vn_core 等）拿來存 cache
+            options.translatedPrompt = translatedPrompt;
+
             // 🗑️ 已拔除硬塞的 defaultPrompt style，直接使用翻譯後的原意
             const optimizedPrompt = translatedPrompt;
 

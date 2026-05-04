@@ -104,10 +104,13 @@
 
     const VN_Image = {
         _join: function(...parts) { return parts.filter(Boolean).join(', '); },
-        getBg: async function(prompt) {
+        getBg: async function(prompt, outMeta) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
                 const full = this._join(VN_Config.data.bgBasePrompt, prompt);
-                return await win.OS_IMAGE_MANAGER.generateBackgroundAsync(full, { width: 1024, height: 768, negativePrompt: VN_Config.data.bgNegPrompt || undefined });
+                const opts = { width: 1024, height: 768, negativePrompt: VN_Config.data.bgNegPrompt || undefined };
+                const url = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(full, opts);
+                if (outMeta) outMeta.translatedPrompt = opts.translatedPrompt;
+                return url;
             } return "";
         },
         getAvatar: async function(prompt, exp) {
@@ -1272,8 +1275,10 @@
                     return this._bgMemCache[cacheId];
                 }
             }
-            const raw = await VN_Image.getBg(prompt);
+            const meta = {};
+            const raw = await VN_Image.getBg(prompt, meta);
             if (!raw) return '';
+            const savedPrompt = meta.translatedPrompt || prompt;
             _sessionBgRawUrls[cacheId] = raw;
             try {
                 const fetchRes = await fetch(raw);
@@ -1287,14 +1292,14 @@
                 });
                 this._bgMemCache[cacheId] = objUrl;
                 this._preloadImg(cacheId, objUrl);
-                if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt, rawUrl: raw, url: dataUrl });
+                if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url: dataUrl });
                 return objUrl;
             } catch(e) {
                 const url = await this._toDataUrl(raw);
                 if (url) {
                     this._bgMemCache[cacheId] = url;
                     this._preloadImg(cacheId, url);
-                    await VN_Cache.set('bg_cache', cacheId, { prompt, rawUrl: raw, url });
+                    await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url });
                 }
                 return this._bgMemCache[cacheId] || '';
             }
@@ -1342,8 +1347,10 @@
                         await VN_Cache.delete('bg_cache', cacheId);
                     }
                     if (!win.OS_IMAGE_MANAGER) continue;
-                    const raw = await VN_Image.getBg(prompt);
+                    const meta = {};
+                    const raw = await VN_Image.getBg(prompt, meta);
                     if (raw) {
+                        const savedPrompt = meta.translatedPrompt || prompt;
                         _sessionBgRawUrls[cacheId] = raw;
                         try {
                             const fetchRes = await fetch(raw);
@@ -1357,13 +1364,13 @@
                             });
                             this._bgMemCache[cacheId] = objUrl;
                             this._preloadImg(cacheId, objUrl);
-                            if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt, rawUrl: raw, url: dataUrl });
+                            if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url: dataUrl });
                         } catch(e) {
                             const url = await this._toDataUrl(raw);
                             if (url) {
                                 this._bgMemCache[cacheId] = url;
                                 this._preloadImg(cacheId, url);
-                                await VN_Cache.set('bg_cache', cacheId, { prompt, rawUrl: raw, url });
+                                await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url });
                             }
                         }
                     }
@@ -2988,8 +2995,10 @@
         const prompt = textarea.value.trim(); if (!prompt) return;
         const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
         try {
-            const raw = await VN_Image.getBg(prompt);
+            const meta = {};
+            const raw = await VN_Image.getBg(prompt, meta);
             if (raw) {
+                const savedPrompt = meta.translatedPrompt || prompt;
                 try {
                     const fetchRes = await fetch(raw);
                     const blob = await fetchRes.blob();
@@ -3000,11 +3009,13 @@
                         reader.readAsDataURL(blob);
                     });
                     const saveUrl = dataUrl || raw;
-                    await VN_Cache.set('bg_cache', key, { prompt, rawUrl: raw, url: saveUrl });
+                    await VN_Cache.set('bg_cache', key, { prompt: savedPrompt, rawUrl: raw, url: saveUrl });
                     previewImg.src = saveUrl; previewImg.style.opacity = '1';
+                    if (textarea && savedPrompt !== prompt) textarea.value = savedPrompt;
                 } catch(e) {
-                    await VN_Cache.set('bg_cache', key, { prompt, rawUrl: raw, url: raw });
+                    await VN_Cache.set('bg_cache', key, { prompt: savedPrompt, rawUrl: raw, url: raw });
                     previewImg.src = raw; previewImg.style.opacity = '1';
+                    if (textarea && savedPrompt !== prompt) textarea.value = savedPrompt;
                 }
             }
         } catch(e) { console.error('[VN] regenerateBgEntry 失敗', e); }
