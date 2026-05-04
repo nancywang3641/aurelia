@@ -27,7 +27,7 @@
     applyLayoutMode(); // 初始化執行
 
     // ===== 全域世界館藏 (供 QB_CORE 共用) =====
-    const BASE_IMG_URL = 'https://nancywang3641.github.io/sound-files/district/';
+    const BASE_IMG_URL = 'https://nancywang3641.github.io/sound-files/home-page/';
     window.AURELIA_WORLDS = {
         xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: '⚔️', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: BASE_IMG_URL + '蒼泱神州.png' },
         fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: '🗡️', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: BASE_IMG_URL + '艾斯蘭登大陸.png' },
@@ -69,41 +69,74 @@
     let _currentChatId = null;       // 當前載入的 chatId (對話存檔鍵)
     let _saveDebounceTimer = null;   // 防抖存檔計時器
 
+    // 大廳 BG 依本地時段切換：day(6-18) / evening(18-21) / night(21-6)
+    function _getCafeBgPeriod() {
+        const h = new Date().getHours();
+        if (h >= 6 && h < 18) return 'day';
+        if (h >= 18 && h < 21) return 'evening';
+        return 'night';
+    }
     const URLS = {
-        BG: 'https://nancywang3641.github.io/sound-files/district/yingBG.png', 
-        IRIS_AVATAR: 'https://nancywang3641.github.io/sound-files/char_presets/ying.png', 
-        BGM_LOBBY: 'https://nancywang3641.github.io/sound-files/bgm/YING.mp3',
-        BGM_404:   'https://nancywang3641.github.io/sound-files/bgm/home_room404.mp3'
+        get BG() {
+            return `https://nancywang3641.github.io/sound-files/home-page/YingyingCafe_${_getCafeBgPeriod()}.png`;
+        },
+        IRIS_AVATAR: 'https://nancywang3641.github.io/sound-files/char_presets/ying.png',
+        BGM_LOBBY: 'https://nancywang3641.github.io/aurelia/bgm/YING.mp3',
+        BGM_404:   'https://nancywang3641.github.io/aurelia/bgm/home_room404.mp3'
     };
+
+    // 算「現在 → 下一個時段邊界（06:00 / 18:00 / 21:00）」的毫秒數
+    function _msToNextCafePeriod() {
+        const now = new Date();
+        const next = new Date(now);
+        next.setMinutes(0, 0, 0);
+        const h = now.getHours();
+        if (h < 6)       next.setHours(6);
+        else if (h < 18) next.setHours(18);
+        else if (h < 21) next.setHours(21);
+        else { next.setDate(next.getDate() + 1); next.setHours(6); }
+        return next.getTime() - now.getTime() + 1000; // +1s buffer 確保跨過邊界
+    }
+
+    // 在每個時段邊界自動重套大廳 BG（一天只觸發 3 次）
+    let _cafeBgTimer = null;
+    function _scheduleCafeBgUpdate() {
+        if (_cafeBgTimer) clearTimeout(_cafeBgTimer);
+        _cafeBgTimer = setTimeout(() => {
+            if (window.AureliaVoidStyles) window.AureliaVoidStyles.inject(URLS.BG);
+            _scheduleCafeBgUpdate();
+        }, _msToNextCafePeriod());
+    }
+    _scheduleCafeBgUpdate();
 
     // ===== 語音與反應池 (瀅瀅專屬) =====
     const IRIS_POKE = [
-    { vn: "[Char|瀅瀅|surprise|「哇！等、等等！你突然戳過來，我的思路全被打斷啦——」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_001.wav" },
-    { vn: "[Char|瀅瀅|think|「（眼神空洞0.5秒）……咦？剛剛空氣裡是不是閃過了一排綠色的字？啊，不管啦！這一定是靈感之神降臨的前兆！」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_002.wav" },
-    { vn: "[Char|瀅瀅|smile|「雷伊大叔說過，適度的物理刺激有助於活化腦細胞……所以你是在幫我催稿嗎？好過分！」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_003.wav" },
-    { vn: "[Char|瀅瀅|warning|「嗚……頭突然有點痛……（猛搖頭）一定是昨晚那杯三倍濃縮的咖啡因還沒退！委託人，你有帶新故事來轉移我的注意力嗎？」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_004.wav" },
-    { vn: "[Char|瀅瀅|smile|「嗯哼哼，這種突如其來的觸感……太棒了！我要把這個寫進下一章『主角遭到隱形怪人襲擊』的橋段裡！」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_005.wav" },
-    { vn: "[Char|瀅瀅|normal|「歡迎光臨視差書咖！今天的拿鐵拉花雖然又失敗了，但聽故事的筆記本已經準備好囉！」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_006.wav" },
+    { vn: "[Char|瀅瀅|surprise|「哇！等、等等！你突然戳過來，我的思路全被打斷啦——」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_001.wav" },
+    { vn: "[Char|瀅瀅|think|「（眼神空洞0.5秒）……咦？剛剛空氣裡是不是閃過了一排綠色的字？啊，不管啦！這一定是靈感之神降臨的前兆！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_002.wav" },
+    { vn: "[Char|瀅瀅|smile|「雷伊大叔說過，適度的物理刺激有助於活化腦細胞……所以你是在幫我催稿嗎？好過分！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_003.wav" },
+    { vn: "[Char|瀅瀅|warning|「嗚……頭突然有點痛……（猛搖頭）一定是昨晚那杯三倍濃縮的咖啡因還沒退！委託人，你有帶新故事來轉移我的注意力嗎？」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_004.wav" },
+    { vn: "[Char|瀅瀅|smile|「嗯哼哼，這種突如其來的觸感……太棒了！我要把這個寫進下一章『主角遭到隱形怪人襲擊』的橋段裡！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_005.wav" },
+    { vn: "[Char|瀅瀅|normal|「歡迎光臨視差書咖！今天的拿鐵拉花雖然又失敗了，但聽故事的筆記本已經準備好囉！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_006.wav" },
 ];
 
 const IRIS_IDLE = [
-    { vn: "[Char|瀅瀅|smile|「（咬著羽毛筆發呆）如果反派其實是個整天喝黑咖啡、愛玩樂高的怪大叔……不對不對，這樣太像雷伊先生了，缺乏威脅感呢。」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_007.wav" },
-    { vn: "[Char|瀅瀅|think|「總覺得……這個世界的邊界，好像是一行一行的代碼？啊！這一定是宇宙射線影響了我的腦電波，太有科幻感了，我要立刻記下來！」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_008.wav" },
-    { vn: "[Char|瀅瀅|normal|「（揉了揉太陽穴）今天店裡的空間好像有點……卡頓？錯覺吧。客人怎麼還不來呢……」]", audio: "https://nancywang3641.github.io/sound-files/voice/YING_009.wav" },
+    { vn: "[Char|瀅瀅|smile|「（咬著羽毛筆發呆）如果反派其實是個整天喝黑咖啡、愛玩樂高的怪大叔……不對不對，這樣太像雷伊先生了，缺乏威脅感呢。」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_007.wav" },
+    { vn: "[Char|瀅瀅|think|「總覺得……這個世界的邊界，好像是一行一行的代碼？啊！這一定是宇宙射線影響了我的腦電波，太有科幻感了，我要立刻記下來！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_008.wav" },
+    { vn: "[Char|瀅瀅|normal|「（揉了揉太陽穴）今天店裡的空間好像有點……卡頓？錯覺吧。客人怎麼還不來呢……」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_009.wav" },
 ];
 
     const CHESHIRE_POKE = [
-        { vn: "[Char|柴郡|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]",                                                                                                         audio: "https://nancywang3641.github.io/sound-files/voice/Cheshire_001.mp3" },
-        { vn: "[Char|柴郡|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]",                                                                                                      audio: "https://nancywang3641.github.io/sound-files/voice/Cheshire_002.mp3" },
-        { vn: "[Char|柴郡|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]",                                                                                                 audio: "https://nancywang3641.github.io/sound-files/voice/Cheshire_003.mp3" },
-        { vn: "[Char|柴郡|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]",                                                                                       audio: "https://nancywang3641.github.io/sound-files/voice/Cheshire_004.mp3" },
-        { vn: "[Char|柴郡|glitch|「噗...戳空了吧？蠢死了。這裡可是我的主場。」]",                                                                                                               audio: "https://nancywang3641.github.io/sound-files/voice/Cheshire_005.mp3" },
+        { vn: "[Char|柴郡|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]",                                                                                                         audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_001.mp3" },
+        { vn: "[Char|柴郡|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]",                                                                                                      audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_002.mp3" },
+        { vn: "[Char|柴郡|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]",                                                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_003.mp3" },
+        { vn: "[Char|柴郡|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]",                                                                                       audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_004.mp3" },
+        { vn: "[Char|柴郡|glitch|「噗...戳空了吧？蠢死了。這裡可是我的主場。」]",                                                                                                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_005.mp3" },
     ];
 
     const CHESHIRE_IDLE = [
-        { vn: "[Char|柴郡|smirk|「別拿你那 A 區的規矩來煩我。這裡可是 E 區殘塔的 404 號節點，SN 的防火牆在這裡就是個笑話。」]",                                                                audio: "https://nancywang3641.github.io/sound-files/voice/Cheshire_006.mp3" },
-        { vn: "[Char|柴郡|yawn|「哈啊...丹那傢伙又跑去鐵骨修車廠找黎昂了，害我得在這裡無聊到看你戳螢幕。」]",                                                                                 audio: "https://nancywang3641.github.io/sound-files/voice/Cheshire_007.mp3" },
-        { vn: "[Char|柴郡|glitch|「洛爾德家族那群老古板以為靠那些『百年秩序』就能鎖住全球資本？白痴，我昨天才在 OGH 伺服器裡留了個後門，他們連警報都沒響。」]",                               audio: "https://nancywang3641.github.io/sound-files/voice/Cheshire_008.mp3" },
+        { vn: "[Char|柴郡|smirk|「別拿你那 A 區的規矩來煩我。這裡可是 E 區殘塔的 404 號節點，SN 的防火牆在這裡就是個笑話。」]",                                                                audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_006.mp3" },
+        { vn: "[Char|柴郡|yawn|「哈啊...丹那傢伙又跑去鐵骨修車廠找黎昂了，害我得在這裡無聊到看你戳螢幕。」]",                                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_007.mp3" },
+        { vn: "[Char|柴郡|glitch|「洛爾德家族那群老古板以為靠那些『百年秩序』就能鎖住全球資本？白痴，我昨天才在 OGH 伺服器裡留了個後門，他們連警報都沒響。」]",                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_008.mp3" },
     ];
 
     let _pokeOnCooldown = false;
@@ -813,7 +846,7 @@ const IRIS_IDLE = [
             if (is404Room) {
                 playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個假笑人偶消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個寫小說的天然呆。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
             } else {
-                playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Audio|https://nancywang3641.github.io/sound-files/district/YING_2.wav]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
+                playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Audio|https://nancywang3641.github.io/sound-files/home-page/YING_2.wav]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
             }
         }
         _updatePortalBtn();
@@ -1066,7 +1099,7 @@ const IRIS_IDLE = [
                             bookshelfOverlay.style.display = isOpening ? 'flex' : 'none';
                             if (isOpening) {
                                 window.QbBookshelf?.render();
-                                playIrisSequence(`[Audio|https://nancywang3641.github.io/sound-files/district/YING_1.wav][Char|瀅瀅|smile|「想幫我搜集什麼樣的故事素材？請從書架上挑選一本書吧！」]`);
+                                playIrisSequence(`[Audio|https://nancywang3641.github.io/sound-files/home-page/YING_1.wav][Char|瀅瀅|smile|「想幫我搜集什麼樣的故事素材？請從書架上挑選一本書吧！」]`);
                             }
                         }
                     }
@@ -1443,7 +1476,7 @@ const IRIS_IDLE = [
         const tab = document.getElementById('aurelia-home-tab');
         if (!tab) return;
 
-        new Audio('https://nancywang3641.github.io/sound-files/sound_effect/glitch1.mp3').play().catch(() => {});
+        new Audio('https://nancywang3641.github.io/aurelia/sound_effect/glitch1.mp3').play().catch(() => {});
         tab.classList.add('glitch-crash');
 
         // 在 glitch 動畫一開始就淡出立繪，580ms 後場景切換時立繪已完全消失
@@ -1496,7 +1529,7 @@ const IRIS_IDLE = [
         const tab = document.getElementById('aurelia-home-tab');
         if (!tab) return;
 
-        new Audio('https://nancywang3641.github.io/sound-files/sound_effect/glitch1.mp3').play().catch(() => {});
+        new Audio('https://nancywang3641.github.io/aurelia/sound_effect/glitch1.mp3').play().catch(() => {});
         tab.classList.add('glitch-crash');
 
         // 在 glitch 動畫一開始就淡出立繪，580ms 後場景切換時立繪已完全消失
@@ -1539,7 +1572,7 @@ const IRIS_IDLE = [
             }
             document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
 
-            playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Audio|https://nancywang3641.github.io/sound-files/district/YING_3.wav]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
+            playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Audio|https://nancywang3641.github.io/sound-files/home-page/YING_3.wav]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
             _updatePortalBtn();
             debouncedSave();
         }, 580);
