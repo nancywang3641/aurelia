@@ -26,6 +26,7 @@
     let embedObserver = null;
     let syncTargetSelector = '#sheld';
     let _vnWasOpenBeforeTabSwitch = false;
+    let _vvAnchorHandler = null;
 
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -424,6 +425,25 @@
             document.body.appendChild(embeddedRoot);
             if (embedObserver) embedObserver.disconnect();
             embedObserver = null;
+
+            // iOS Chrome 鍵盤推 layout viewport 修復：用 visualViewport 錨定浮窗到可見區
+            if (window.visualViewport) {
+                if (_vvAnchorHandler) {
+                    window.visualViewport.removeEventListener('resize', _vvAnchorHandler);
+                    window.visualViewport.removeEventListener('scroll', _vvAnchorHandler);
+                }
+                _vvAnchorHandler = () => {
+                    if (!embeddedRoot) return;
+                    const vv = window.visualViewport;
+                    // 用 transform 抵消頁面被推走的距離，把面板拉回真實可見區
+                    embeddedRoot.style.transform = `translateY(${-vv.offsetTop}px)`;
+                    // 高度跟隨 visualViewport，確保鍵盤彈出時面板自動壓縮不溢出
+                    embeddedRoot.style.height = Math.min(window.innerHeight * 0.85, vv.height * 0.95) + 'px';
+                };
+                _vvAnchorHandler();
+                window.visualViewport.addEventListener('resize', _vvAnchorHandler);
+                window.visualViewport.addEventListener('scroll', _vvAnchorHandler);
+            }
         } else {
             if (placement === 'top') {
                 containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
@@ -510,6 +530,11 @@
 
     AureliaControlCenter.unmountEmbedded = function() {
         if (!isEmbedded || !embeddedRoot) return;
+        if (_vvAnchorHandler && window.visualViewport) {
+            window.visualViewport.removeEventListener('resize', _vvAnchorHandler);
+            window.visualViewport.removeEventListener('scroll', _vvAnchorHandler);
+            _vvAnchorHandler = null;
+        }
         if (embedObserver) { embedObserver.disconnect(); embedObserver = null; }
 
         if (phoneModal) {
