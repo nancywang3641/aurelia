@@ -470,17 +470,33 @@ function renderChars(cfg) {
         .map(([id, m]) => `<option value="${esc(id)}">${esc(m.name || id)}</option>`)
         .join('');
 
-    const rows = Object.entries(cfg.charMappings).map(([char, mid]) => `
-<div class="vtts-char-row" id="vtts-cr-${esc(char)}">
-  <span class="vtts-char-name">${esc(char)}</span>
-  <select class="vtts-input" id="vtts-cs-${esc(char)}" onchange="VN_TTS_Panel.updateCharMapping('${escJs(char)}',this.value)">
-    <option value="">（未綁定）</option>
-    ${Object.entries(cfg.models).map(([id,m]) =>
-        `<option value="${esc(id)}" ${mid===id?'selected':''}>${esc(m.name||id)}</option>`
-    ).join('')}
-  </select>
-  <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteCharMapping('${escJs(char)}')">✕</button>
-</div>`).join('');
+    const rows = Object.entries(cfg.charMappings).map(([char, mid]) => {
+        const aliases = (cfg.charAliases && Array.isArray(cfg.charAliases[char])) ? cfg.charAliases[char] : [];
+        const chipStyle = 'display:inline-flex;align-items:center;gap:5px;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.35);color:#d4af37;padding:3px 9px;border-radius:11px;font-size:11px;line-height:1.2;';
+        const chipXStyle = 'cursor:pointer;color:#888;font-size:11px;line-height:1;padding:0 1px;';
+        const chips = aliases.map(a =>
+            `<span style="${chipStyle}">${esc(a)}<span style="${chipXStyle}" onclick="VN_TTS_Panel.removeAlias('${escJs(char)}','${escJs(a)}')" title="移除別名">✕</span></span>`
+        ).join('');
+
+        return `
+<div class="vtts-char-row" id="vtts-cr-${esc(char)}" style="display:flex;flex-direction:column;align-items:stretch;gap:8px;">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span class="vtts-char-name" style="flex:0 0 auto;">${esc(char)}</span>
+    <select class="vtts-input" id="vtts-cs-${esc(char)}" onchange="VN_TTS_Panel.updateCharMapping('${escJs(char)}',this.value)" style="flex:1;">
+      <option value="">（未綁定）</option>
+      ${Object.entries(cfg.models).map(([id,m]) =>
+          `<option value="${esc(id)}" ${mid===id?'selected':''}>${esc(m.name||id)}</option>`
+      ).join('')}
+    </select>
+    <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteCharMapping('${escJs(char)}')">✕</button>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-left:8px;">
+    <span style="font-size:11px;color:#888;letter-spacing:1px;">別名</span>
+    ${chips || '<span style="font-size:11px;color:#555;">（無，AI 流口水時會對不上）</span>'}
+    <input id="vtts-alias-input-${esc(char)}" type="text" placeholder="+ 新增別名（按 Enter）" style="flex:1;min-width:140px;background:rgba(0,0,0,0.3);border:1px dashed rgba(212,175,55,0.3);color:#FBDFA2;padding:4px 8px;border-radius:3px;font-size:11px;outline:none;" onkeypress="if(event.key==='Enter'){event.preventDefault();VN_TTS_Panel.addAlias('${escJs(char)}',this.value);this.value='';}">
+  </div>
+</div>`;
+    }).join('');
 
     return `
 <div class="vtts-card">
@@ -1078,6 +1094,44 @@ const VN_TTS_Panel = {
         const tts = this._tts();
         if (!tts) return;
         delete tts.config.charMappings[charName];
+        if (tts.config.charAliases) delete tts.config.charAliases[charName];
+        tts.save();
+        this._renderBody('chars');
+    },
+
+    // 新增別名（AI 用全名/小名都能對到同一個模型）
+    addAlias(charName, alias) {
+        const tts = this._tts();
+        if (!tts) return;
+        const a = String(alias || '').trim();
+        if (!a) return;
+        if (!tts.config.charAliases || typeof tts.config.charAliases !== 'object') tts.config.charAliases = {};
+        if (!Array.isArray(tts.config.charAliases[charName])) tts.config.charAliases[charName] = [];
+        const list = tts.config.charAliases[charName];
+        const lc = a.toLowerCase();
+        if (String(charName).toLowerCase() === lc) { this._toast('✗ 別名不能跟主名相同'); return; }
+        if (list.some(x => String(x).toLowerCase() === lc)) { this._toast('✗ 此別名已存在'); return; }
+        // 跨角色衝突檢查（同一別名指向兩個主名會混亂）
+        for (const [other, otherList] of Object.entries(tts.config.charAliases)) {
+            if (other === charName) continue;
+            if (Array.isArray(otherList) && otherList.some(x => String(x).toLowerCase() === lc)) {
+                this._toast(`✗ 別名「${a}」已被「${other}」使用`);
+                return;
+            }
+        }
+        list.push(a);
+        tts.save();
+        this._renderBody('chars');
+    },
+
+    removeAlias(charName, alias) {
+        const tts = this._tts();
+        if (!tts || !tts.config.charAliases) return;
+        const list = tts.config.charAliases[charName];
+        if (!Array.isArray(list)) return;
+        const lc = String(alias).toLowerCase();
+        tts.config.charAliases[charName] = list.filter(a => String(a).toLowerCase() !== lc);
+        if (!tts.config.charAliases[charName].length) delete tts.config.charAliases[charName];
         tts.save();
         this._renderBody('chars');
     },
