@@ -395,12 +395,9 @@
                     width: 100%; z-index: 100; overflow: hidden;
                 `;
             } else if (isMobile) {
-                // 🌟 改用 absolute 放棄 fixed，徹底避開 iOS/Android 鍵盤推擠機制
-                const panelHeight = Math.round(window.innerHeight * 0.85);
                 embeddedRoot.style.cssText = `
-                    position: absolute; left: 0; right: 0;
-                    width: 100%; height: ${panelHeight}px; max-height: 100%;
-                    transform: none;
+                    position: fixed; left: 0; right: 0; bottom: 0;
+                    width: 100%; height: 85dvh; max-height: 100dvh;
                     z-index: 999; overflow: hidden; background: #fff;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
                     border-radius: 20px 20px 0 0;
@@ -427,25 +424,6 @@
             document.body.appendChild(embeddedRoot);
             if (embedObserver) embedObserver.disconnect();
             embedObserver = null;
-
-            // 鍵盤彈出時，面板若比可視區高會撐出滾動條（黑底露出）
-            // 用 visualViewport.resize 即時縮減高度，收鍵盤後還原
-            if (window.visualViewport) {
-                const _origPanelH = Math.round(window.innerHeight * 0.85);
-                window.visualViewport.addEventListener('resize', function() {
-                    if (!embeddedRoot) return;
-                    const vvH = window.visualViewport.height;
-                    embeddedRoot.style.height = Math.min(_origPanelH, Math.round(vvH * 0.95)) + 'px';
-                    
-                    // 🌟 核心修復：強制把被瀏覽器推上去的視口拉回頂部
-                    if (document.activeElement && document.activeElement.tagName === 'INPUT') {
-                        setTimeout(() => {
-                            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-                            document.body.scrollTop = 0;
-                        }, 50); // 稍微延遲以覆蓋瀏覽器的預設滾動
-                    }
-                });
-            }
         } else {
             if (placement === 'top') {
                 containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
