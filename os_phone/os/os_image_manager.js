@@ -33,8 +33,6 @@
                 },
                 charBasePrompt: 'anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines',
                 charNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text',
-                petBasePrompt: 'cute, 2D art, sticker style, simple background, white background, high quality',
-                petNegPrompt: 'bad anatomy, blurry, low quality, worst quality, human, person, watermark, text',
                 itemBasePrompt: 'item only, product shot, no background, white background, clean illustration, high quality',
                 itemNegPrompt: 'person, human, character, body, face, hands, people, crowd, anatomy, bad anatomy, blurry, low quality, worst quality, watermark, text'
             },
@@ -99,8 +97,8 @@
                 }
             }
 
-            // 🔥 步驟 2: 路由判斷（char/item/pet/scene 有 NAI token 走 NAI；背景底板走 generateBackgroundAsync）
-            const isNaiType = (type === 'char' || type === 'item' || type === 'pet' || type === 'scene');
+            // 🔥 步驟 2: 路由判斷（char/item/scene 有 NAI token 走 NAI；背景底板走 generateBackgroundAsync）
+            const isNaiType = (type === 'char' || type === 'item' || type === 'scene');
             if (isNaiType && this.config.service === 'novelai' && this.config.novelai.token) {
                 // NAI 使用 Danbooru tag 格式，底詞/負詞在 _genNovelAI 內部處理
                 console.log(`[ImageManager] Final Prompt [${type}→NAI]: ${englishPrompt}`);
@@ -108,19 +106,15 @@
             }
 
             // 🔥 步驟 3: Pollinations 底詞（只在走 Pollinations 時套用）
-            if (type === 'pet') {
-                const petBase = this.config.pollinations.petBasePrompt;
-                if (petBase) englishPrompt = petBase + ', ' + englishPrompt;
-            } else if (type === 'char') {
+            if (type === 'char') {
                 const charBase = this.config.pollinations.charBasePrompt;
                 if (charBase) englishPrompt = charBase + ', ' + englishPrompt;
             }
             console.log(`[ImageManager] Final Prompt [${type}→Pol]: ${englishPrompt}`);
 
             // 🔥 步驟 4: Pollinations 負詞
-            if (!options.negativePrompt) {
-                if (type === 'pet') options = { ...options, negativePrompt: this.config.pollinations.petNegPrompt || undefined };
-                else if (type === 'char') options = { ...options, negativePrompt: this.config.pollinations.charNegPrompt || undefined };
+            if (!options.negativePrompt && type === 'char') {
+                options = { ...options, negativePrompt: this.config.pollinations.charNegPrompt || undefined };
             }
 
             return this._genPollinations(englishPrompt, type, options);
@@ -129,11 +123,6 @@
         // --- Pollinations 生成邏輯 ---
         _genPollinations: function(basePrompt, type, options = {}) {
             let optimizedPrompt = basePrompt;
-
-            // 🔥 僅保留寵物去背的特殊邏輯，其他類型(包含 char)全部原汁原味輸出
-            if (type === 'pet') {
-                optimizedPrompt = `full body shot of ${basePrompt}, simple white background, no shadow`;
-            } 
 
             const seed = options.seed || Math.floor(Math.random() * 100000);
             const width = options.width || 512;
@@ -356,8 +345,6 @@
                 let fallbackPrompt = prompt;
                 if (type === 'char' && this.config.pollinations.charBasePrompt) {
                     fallbackPrompt = this.config.pollinations.charBasePrompt + ', ' + prompt;
-                } else if (type === 'pet' && this.config.pollinations.petBasePrompt) {
-                    fallbackPrompt = this.config.pollinations.petBasePrompt + ', ' + prompt;
                 }
                 return this._genPollinations(fallbackPrompt, type);
             }
