@@ -60,7 +60,8 @@ const PHONE_FILES = [
     'vn_story/vn_tts_panel.js',
     'vn_story/vn_core.js',
     'vn_story/vn_phone.js',
-  'vn_story/vn_ui_workshop.js',
+    'vn_story/vn_reader.js',
+    'vn_story/vn_ui_workshop.js',
 
     // === 🛡️ RPG 狀態系統 ===
     'rpg/status_core.js',
