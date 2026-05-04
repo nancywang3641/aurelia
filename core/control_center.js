@@ -406,11 +406,15 @@
                     overflow: hidden;
                 `;
             } else {
+                // desktop：跟 mobile 一樣 absolute 占滿 #sheld，z-index 蓋過 form_sheld
                 embeddedRoot.style.cssText = `
-                    position: relative; width: 100%; height: 82vh;
-                    min-height: 600px; flex-shrink: 0;
-                    z-index: 100; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-                    border-radius: 8px; overflow: hidden; order: ${placement === 'top' ? '-1' : '9999'};
+                    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                    width: 100%;
+                    z-index: 999;
+                    background: #fff;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+                    border-radius: 8px;
+                    overflow: hidden;
                 `;
             }
         }
@@ -422,8 +426,8 @@
         `;
         embeddedRoot.appendChild(phoneFrame);
 
-        // mobile 用 absolute 必須有定位錨點：containerEl 若是 static 就強制改 relative
-        if (isMobile && !isStandalone && containerEl && getComputedStyle(containerEl).position === 'static') {
+        // 用 absolute 必須有定位錨點：containerEl 若是 static 就強制改 relative
+        if (!isStandalone && containerEl && getComputedStyle(containerEl).position === 'static') {
             containerEl.style.position = 'relative';
             containerEl.dataset.aureliaPosForced = '1';
         }
