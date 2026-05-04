@@ -14,6 +14,7 @@ window.PANEL_COMMUNICATION = {
 
 // 🔥 2. 模組加載順序
 const MODULE_LOAD_ORDER = [
+    { name: 'bgm_collector', path: './scripts/extensions/third-party/my-tavern-extension/bgm-global-collector.js', key: 'bgmCollector' },
     { name: 'loader_core', path: './scripts/extensions/third-party/my-tavern-extension/core/loader_core.js', key: 'core' },
     { name: 'ui_utilities', path: './scripts/extensions/third-party/my-tavern-extension/core/ui_utilities.js', key: 'utilities' },
     { name: 'tavern_bridge', path: './scripts/extensions/third-party/my-tavern-extension/core/tavern_bridge.js', key: 'bridge' },

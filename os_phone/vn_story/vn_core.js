@@ -102,6 +102,72 @@
     };
     window.VN_PromptOrder = VN_PromptOrder;
 
+    // ─── BGM 模糊匹配 index ───────────────────────────────────────
+    // AI 流口水寫錯 BGM 名時，從本地 bgm 目錄找最接近的檔名。找不到夠像的就靜音（避免氛圍違和）
+    const VN_BgmIndex = {
+        _list: null,
+        _loadPromise: null,
+
+        async load() {
+            if (this._list) return this._list;
+            if (this._loadPromise) return this._loadPromise;
+            this._loadPromise = (async () => {
+                const baseUrl = (win.VN_Config?.data?.bgm) || '';
+                // 解析 GitHub Pages URL：https://owner.github.io/repo/path/ → owner/repo/path
+                const m = baseUrl.match(/^https:\/\/([^.]+)\.github\.io\/([^/]+)\/(.+?)\/?$/);
+                if (!m) {
+                    console.warn('[VN] BGM 目錄非 GitHub Pages URL，跳過 fuzzy match index');
+                    this._list = [];
+                    return [];
+                }
+                const [, owner, repo, path] = m;
+                try {
+                    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+                    const res = await fetch(apiUrl);
+                    if (!res.ok) throw new Error('GitHub API ' + res.status);
+                    const arr = await res.json();
+                    this._list = arr
+                        .filter(f => f.type === 'file' && /\.(mp3|m4a|ogg|wav|flac)$/i.test(f.name))
+                        .map(f => f.name.replace(/\.[^.]+$/, ''));
+                    console.log(`[VN] BGM index 載入 ${this._list.length} 個檔案`);
+                    return this._list;
+                } catch (e) {
+                    console.warn('[VN] BGM index 載入失敗:', e);
+                    this._list = [];
+                    return [];
+                }
+            })();
+            return this._loadPromise;
+        },
+
+        findMatch(needName) {
+            if (!this._list || !this._list.length) return null;
+            const need = String(needName).toLowerCase().trim();
+            if (!need) return null;
+            let best = null, bestScore = 0;
+            for (const cand of this._list) {
+                const c = String(cand).toLowerCase();
+                if (c === need) return cand;
+                let score = 0;
+                // 子字串包含優先（最常見：「咖啡時光」vs「咖啡時光午後」）
+                if (c.includes(need) || need.includes(c)) {
+                    const lenRatio = Math.min(need.length, c.length) / Math.max(need.length, c.length);
+                    score = 0.5 + lenRatio * 0.4;  // 0.5~0.9 看相對長度
+                } else {
+                    // Jaccard 字符集合相似度
+                    const sa = new Set(need); const sb = new Set(c);
+                    const inter = [...sa].filter(x => sb.has(x)).length;
+                    const union = new Set([...need, ...c]).size;
+                    score = union ? inter / union : 0;
+                }
+                if (score > bestScore) { best = cand; bestScore = score; }
+            }
+            // 門檻 0.5 — 不夠像就回 null（讓系統選擇靜音而非配錯氛圍）
+            return bestScore >= 0.5 ? { name: best, score: bestScore } : null;
+        }
+    };
+    win.VN_BgmIndex = VN_BgmIndex;
+
     const VN_Image = {
         _join: function(...parts) { return parts.filter(Boolean).join(', '); },
         getBg: async function(prompt, outMeta) {
@@ -1983,13 +2049,31 @@
                 if (name === 'stop') {
                     if (audio) audio.pause();
                 } else if (VN_Config.data.bgm && audio) {
-                    audio.src = VN_Config.data.bgm + name + '.mp3';
-                    const onOk  = () => { this._showBgmToast(name, true);  cleanup(); };
-                    const onErr = () => { this._showBgmToast(name, false); cleanup(); };
-                    const cleanup = () => { audio.removeEventListener('canplay', onOk); audio.removeEventListener('error', onErr); };
-                    audio.addEventListener('canplay', onOk,  { once: true });
-                    audio.addEventListener('error',   onErr, { once: true });
-                    audio.play().catch(() => {});
+                    const _self = this;
+                    const tryPlay = (filename, fuzzyHint) => {
+                        audio.src = VN_Config.data.bgm + filename + '.mp3';
+                        const onOk  = () => { _self._showBgmToast(fuzzyHint ? `${filename} ←≈ ${name}` : filename, true); cleanup(); };
+                        const onErr = async () => {
+                            cleanup();
+                            // exact 失敗 → 嘗試 fuzzy match
+                            if (!fuzzyHint && win.VN_BgmIndex) {
+                                await win.VN_BgmIndex.load();
+                                const match = win.VN_BgmIndex.findMatch(name);
+                                if (match) {
+                                    console.log(`[VN] BGM fuzzy match: "${name}" → "${match.name}" (score ${match.score.toFixed(2)})`);
+                                    tryPlay(match.name, true);
+                                    return;
+                                }
+                            }
+                            // 找不到夠像的 → 靜音（避免配錯氛圍）
+                            _self._showBgmToast(name, false);
+                        };
+                        const cleanup = () => { audio.removeEventListener('canplay', onOk); audio.removeEventListener('error', onErr); };
+                        audio.addEventListener('canplay', onOk, { once: true });
+                        audio.addEventListener('error',   onErr, { once: true });
+                        audio.play().catch(() => {});
+                    };
+                    tryPlay(name, false);
                 } else {
                     this._showBgmToast(name, false);
                 }
