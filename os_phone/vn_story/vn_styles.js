@@ -273,13 +273,13 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #btn-home:hover, #btn-settings:hover, #btn-reader:hover { border-color: var(--gold); color: var(--gold); background: rgba(0,0,0,0.8); box-shadow: 0 0 10px rgba(212,175,55,0.2); }
 
         /* 📖 閱讀器泡泡 — 思考摺疊塊（ST 風格） */
-        .vn-reader-think-wrap { max-width: 88%; margin-bottom: 6px; }
-        .vn-reader-think-hd { display: flex; align-items: center; gap: 6px; padding: 5px 12px; background: rgba(80,80,160,0.08); border: 1px solid rgba(100,100,200,0.18); border-radius: 6px; cursor: pointer; font-size: 0.74rem; color: #5a5a90; transition: background 0.2s; user-select: none; }
-        .vn-reader-think-hd:hover { background: rgba(80,80,160,0.15); }
+        .vn-reader-think-wrap { width: 100%; margin-bottom: 6px; }
+        .vn-reader-think-hd { display: flex; align-items: center; gap: 6px; padding: 5px 12px; background: rgba(80,80,160,0.12); border: 1px solid rgba(100,100,200,0.28); border-radius: 6px; cursor: pointer; font-size: 0.78rem; color: #b8b8e8; transition: background 0.2s; user-select: none; }
+        .vn-reader-think-hd:hover { background: rgba(80,80,160,0.22); }
         .rth-arrow { font-size: 0.55rem; transition: transform 0.22s; display: inline-block; }
         .vn-reader-think-wrap.open .rth-arrow { transform: rotate(90deg); }
         .vn-reader-think-wrap.open .vn-reader-think-hd { border-radius: 6px 6px 0 0; }
-        .vn-reader-think-body { display: none; padding: 10px 14px; background: rgba(10,10,30,0.7); border: 1px solid rgba(100,100,200,0.12); border-top: none; border-radius: 0 0 6px 6px; font-size: 0.72rem; color: #5a5a8a; line-height: 1.75; white-space: pre-wrap; word-break: break-word; max-height: 280px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1e1e3a transparent; }
+        .vn-reader-think-body { display: none; padding: 10px 14px; background: rgba(20,20,40,0.85); border: 1px solid rgba(100,100,200,0.22); border-top: none; border-radius: 0 0 6px 6px; font-size: 0.78rem; color: #c8c8e8; line-height: 1.75; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2a2a4a transparent; }
         .vn-reader-think-wrap.open .vn-reader-think-body { display: block; }
 
         /* 📖 劇情閱讀器 */
@@ -294,24 +294,24 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-reader-body::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
 
         /* 對話泡泡 */
-        .vn-reader-msg { display: flex; flex-direction: column; gap: 4px; }
+        .vn-reader-msg { display: flex; flex-direction: column; gap: 4px; width: 100%; }
         .vn-reader-msg.user { align-items: flex-end; }
-        .vn-reader-msg.ai   { align-items: flex-start; }
-        .vn-reader-label { font-size: 0.7rem; color: #444; letter-spacing: 1px; padding: 0 6px; }
-        .vn-reader-bubble { max-width: 88%; padding: 10px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.8; word-break: break-word; }
+        .vn-reader-msg.ai   { align-items: stretch; }
+        .vn-reader-label { font-size: 0.7rem; color: #666; letter-spacing: 1px; padding: 0 6px; }
+        .vn-reader-bubble { padding: 12px 16px; border-radius: 12px; font-size: 0.88rem; line-height: 1.85; word-break: break-word; box-sizing: border-box; }
         .vn-reader-bubble p { margin: 0 0 0.6em; }
         .vn-reader-bubble p:last-child { margin-bottom: 0; }
-        .vn-reader-msg.user .vn-reader-bubble { background: rgba(60,100,180,0.25); border: 1px solid rgba(80,120,220,0.3); color: #a0b8f0; border-radius: 12px 12px 2px 12px; }
-        .vn-reader-msg.ai   .vn-reader-bubble { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); color: #c8c0b0; border-radius: 12px 12px 12px 2px; }
+        .vn-reader-msg.user .vn-reader-bubble { max-width: 80%; background: rgba(60,100,180,0.25); border: 1px solid rgba(80,120,220,0.3); color: #b8c8f0; border-radius: 12px 12px 2px 12px; }
+        .vn-reader-msg.ai   .vn-reader-bubble { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #d8d0c0; border-radius: 12px; }
+        /* 原始 tag bubble — 視覺取代小說 bubble，金色字 monospace */
+        .vn-reader-bubble.raw-view { display: none; font-family: 'Consolas','Monaco',monospace; font-size: 0.8rem; color: #d4b87a; background: rgba(30,22,8,0.7); border: 1px solid rgba(212,175,55,0.28); white-space: pre-wrap; line-height: 1.7; }
+        .vn-reader-bubble.raw-view.active { display: block; }
+        .vn-reader-bubble.novel-view.hidden { display: none; }
         .vn-reader-actions { display: flex; gap: 6px; margin-top: 4px; padding: 0 4px; }
-        .vn-reader-act-btn { font-size: 0.7rem; color: #333; border: 1px solid #222; background: transparent; padding: 2px 8px; border-radius: 3px; cursor: pointer; transition: all 0.2s; }
-        .vn-reader-act-btn:hover { color: #888; border-color: #444; }
-        .vn-reader-act-btn.active { color: var(--gold); border-color: rgba(212,175,55,0.4); }
-        .vn-reader-extra { display: none; margin-top: 6px; padding: 10px 14px; max-width: 88%; background: rgba(0,0,0,0.4); border-left: 2px solid #222; border-radius: 0 6px 6px 0; font-size: 0.75rem; color: #555; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
-        .vn-reader-extra.active { display: block; }
-        .vn-reader-extra.think { border-left-color: rgba(100,100,200,0.4); color: #5a5a8a; }
-        .vn-reader-extra.raw   { border-left-color: rgba(212,175,55,0.2); color: #5a5030; }
-        .vn-reader-divider { text-align: center; font-size: 0.65rem; color: #222; letter-spacing: 2px; padding: 4px 0; }
+        .vn-reader-act-btn { font-size: 0.72rem; color: #777; border: 1px solid #444; background: transparent; padding: 3px 10px; border-radius: 3px; cursor: pointer; transition: all 0.2s; }
+        .vn-reader-act-btn:hover { color: #ccc; border-color: #777; }
+        .vn-reader-act-btn.active { color: var(--gold); border-color: rgba(212,175,55,0.55); background: rgba(212,175,55,0.06); }
+        .vn-reader-divider { text-align: center; font-size: 0.7rem; color: #555; letter-spacing: 2px; padding: 6px 0; }
         .vn-reader-loading { text-align: center; color: #333; font-size: 0.82rem; padding: 40px; }
 
         /* 💭 思考鏈小窗 (黑金高貴風) */

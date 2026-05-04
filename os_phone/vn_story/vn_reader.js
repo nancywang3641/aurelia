@@ -89,6 +89,82 @@
 
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+    // ── 模式偵測：有 TavernHelper 且非 standalone 視為酒館模式 ────
+    function _isTavernMode() {
+        if (win.OS_API?.isStandalone?.()) return false;
+        return !!win.TavernHelper;
+    }
+
+    // ── 從酒館 TavernHelper 拉訊息，組成統一 chapter 格式 ─────────
+    function _fetchTavernChapters() {
+        const helper = win.TavernHelper;
+        if (!helper) return [];
+
+        const lastId = helper.getLastMessageId?.();
+        if (lastId == null || lastId < 0) return [];
+
+        let allMsgs = [];
+        try {
+            allMsgs = helper.getChatMessages(`0-${lastId}`) || [];
+        } catch (e) {
+            console.error('[VN_READER] getChatMessages 失敗:', e);
+            return [];
+        }
+
+        const chapters = [];
+        let chapterIndex = 0;
+        let pendingUserText = '';
+
+        allMsgs.forEach(m => {
+            // user 訊息：暫存，等下個 assistant 訊息配對成章節的 request
+            if (m.role === 'user' || m.is_user === true) {
+                pendingUserText = m.message || m.mes || '';
+                return;
+            }
+
+            const text = m.message || m.mes || '';
+            // 過濾沒 <content> 標籤的（純對話/系統訊息）
+            if (!text.includes('<content>')) {
+                pendingUserText = '';
+                return;
+            }
+
+            chapterIndex++;
+            let chTitle = `對話紀錄 ${chapterIndex}`;
+            const chMatch = text.match(/\[Chapter\|(?:\d+\|)?([^\]|]+)\]/i);
+            const storyMatch = text.match(/\[Story\|([^\]]+)\]/i);
+            if (chMatch) chTitle = chMatch[1].trim();
+            else if (storyMatch) chTitle = storyMatch[1].trim();
+
+            // thinking 抽取（兼容 <think> 跟 <thinking>）
+            let thinking = '';
+            const thMatch = text.match(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/i);
+            if (thMatch) thinking = thMatch[1].trim();
+
+            // createdAt
+            let createdAt = Date.now();
+            if (m.send_date) {
+                const t = typeof m.send_date === 'number' ? m.send_date : Date.parse(m.send_date);
+                if (!isNaN(t)) createdAt = t;
+            }
+
+            chapters.push({
+                id: `tv_${m.message_id ?? chapterIndex}`,
+                storyId: '__tavern__',
+                storyTitle: '當前對話',
+                title: chTitle,
+                request: pendingUserText,
+                content: text,
+                thinking: thinking,
+                createdAt: createdAt
+            });
+
+            pendingUserText = '';
+        });
+
+        return chapters;
+    }
+
     // ── 渲染章節列表 ──────────────────────────────────────────────
     function _renderChapters(chapters, body) {
         const sorted = [...chapters].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
@@ -125,11 +201,11 @@
             html += `<div class="vn-reader-msg ai">
                 <div class="vn-reader-label">🤖 AI</div>
                 ${thinkBlock}
-                <div class="vn-reader-bubble" id="vrb-novel-${id}">${novelText || '<span style="color:#333">（無內容）</span>'}</div>
+                <div class="vn-reader-bubble novel-view" id="vrb-novel-${id}">${novelText || '<span style="color:#555">（無內容）</span>'}</div>
+                <div class="vn-reader-bubble raw-view" id="vrb-raw-${id}">${rawText}</div>
                 <div class="vn-reader-actions">
-                    <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('raw','${id}',this)">📄 原始 tag</button>
+                    <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('${id}',this)">📄 看原始 tag</button>
                 </div>
-                <div class="vn-reader-extra raw" id="vrb-raw-${id}">${rawText}</div>
             </div>`;
         });
         body.innerHTML = html;
@@ -148,6 +224,21 @@
 
             body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;">載入中...</div>';
 
+            // 🔥 酒館模式：從 TavernHelper 拿當前 chat 訊息
+            if (_isTavernMode()) {
+                const chapters = _fetchTavernChapters();
+                if (!chapters.length) {
+                    body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;line-height:1.6;">當前聊天無含 &lt;content&gt; 標籤的章節<br><span style="font-size:0.78rem;color:#444;">(需要 AI 用 VN 格式回覆才會被識別)</span></div>';
+                    tabsEl.style.display = 'none';
+                    return;
+                }
+                tabsEl.style.display = 'none';
+                _activeStoryId = '__tavern__';
+                _renderChapters(chapters, body);
+                return;
+            }
+
+            // PWA 模式：從 OS_DB 拿章節
             let allChapters = [];
             try { allChapters = await (win.OS_DB?.getAllVnChapters?.() || []); } catch(e) {}
 
@@ -294,13 +385,16 @@
         _thinkToggle(id) {
             document.getElementById(`vrth-${id}`)?.classList.toggle('open');
         },
-        _toggle(type, id, btn) {
-            const el = document.getElementById(`vrb-${type}-${id}`);
-            if (!el) return;
-            const isOpen = el.classList.contains('active');
-            btn.closest('.vn-reader-actions')?.querySelectorAll('.vn-reader-act-btn').forEach(b => b.classList.remove('active'));
-            el.classList.toggle('active', !isOpen);
-            if (!isOpen) btn.classList.add('active');
+        // 切換小說 ↔ 原始 tag（互斥顯示，不展開在底部）
+        _toggle(id, btn) {
+            const novel = document.getElementById(`vrb-novel-${id}`);
+            const raw   = document.getElementById(`vrb-raw-${id}`);
+            if (!novel || !raw) return;
+            const showRaw = !raw.classList.contains('active');
+            raw.classList.toggle('active', showRaw);
+            novel.classList.toggle('hidden', showRaw);
+            btn.classList.toggle('active', showRaw);
+            btn.textContent = showRaw ? '📖 看小說' : '📄 看原始 tag';
         }
     };
 
