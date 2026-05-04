@@ -82,7 +82,7 @@
         },
         IRIS_AVATAR: 'https://nancywang3641.github.io/sound-files/char_presets/ying.png',
         BGM_LOBBY: 'https://nancywang3641.github.io/sound-files/home-page/home_yingcafe.mp3',
-        BGM_404:   'https://nancywang3641.github.io/aurelia/bgm/home_room404.mp3'
+        BGM_404:   'https://nancywang3641.github.io/sound-files/home-page/home_room404.mp3'
     };
 
     // 算「現在 → 下一個時段邊界（06:00 / 18:00 / 21:00）」的毫秒數
