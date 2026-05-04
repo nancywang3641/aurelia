@@ -144,8 +144,6 @@
                 },
                 charBasePrompt: 'anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines',
                 charNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text',
-                petBasePrompt: 'cute, 2D art, sticker style, simple background, white background, high quality',
-                petNegPrompt: 'bad anatomy, blurry, low quality, worst quality, human, person, watermark, text'
             },
             novelai: {
                 token: '',
@@ -768,14 +766,14 @@ EXAMPLE "prompt" value:
                                     </div>
                                 </div>
                                 <div style="margin-top:15px;">
-                                    <div class="set-label">📦 物品/寵物底詞</div>
+                                    <div class="set-label">📦 物品底詞</div>
                                     <textarea class="set-textarea" id="img-nai-item-base">${imgConfig.novelai.itemBasePrompt || ''}</textarea>
                                     <div style="text-align:right; margin-top:4px;">
                                         <span style="font-size:11px; color:#FBDFA2; cursor:pointer;" onclick="document.getElementById('img-nai-item-base').value='masterpiece, best quality, white background, simple background, no background, product image, detailed'">[重置]</span>
                                     </div>
                                 </div>
                                 <div style="margin-top:15px;">
-                                    <div class="set-label">🚫 物品/寵物負詞</div>
+                                    <div class="set-label">🚫 物品負詞</div>
                                     <textarea class="set-textarea" id="img-nai-item-neg">${imgConfig.novelai.itemNegPrompt || ''}</textarea>
                                     <div style="text-align:right; margin-top:4px;">
                                         <span style="font-size:11px; color:#FBDFA2; cursor:pointer;" onclick="document.getElementById('img-nai-item-neg').value='person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text'">[重置]</span>
@@ -802,22 +800,6 @@ EXAMPLE "prompt" value:
                             </div>
                         </div>
 
-                        <div class="set-group">
-                            <div class="set-label">🐾 寵物圖片底詞 <span style="font-size:10px; color:#B78456; font-weight:normal;">（寵物商店 / 合成）</span></div>
-                            <textarea class="set-textarea" id="img-pet-prompt">${imgConfig.pollinations.petBasePrompt}</textarea>
-                            <div style="font-size:11px; color:#B78456; margin-top:6px; line-height:1.5;">↑ 寵物專用，不影響人物頭像。角色底詞與寵物底詞完全分離。</div>
-                            <div style="text-align:right; margin-top:5px;">
-                                <span style="font-size:11px; color:#FBDFA2; cursor:pointer;" onclick="document.getElementById('img-pet-prompt').value='cute, 2D art, sticker style, simple background, white background, high quality'">[重置為預設]</span>
-                            </div>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">🚫 寵物負詞</div>
-                            <textarea class="set-textarea" id="img-pet-neg-prompt">${imgConfig.pollinations.petNegPrompt}</textarea>
-                            <div style="text-align:right; margin-top:5px;">
-                                <span style="font-size:11px; color:#FBDFA2; cursor:pointer;" onclick="document.getElementById('img-pet-neg-prompt').value='bad anatomy, blurry, low quality, worst quality, human, person, watermark, text'">[重置為預設]</span>
-                            </div>
-                        </div>
                         </div>
 
                         <!-- ── 場景插圖（獨立版）── -->
@@ -1269,8 +1251,6 @@ EXAMPLE "prompt" value:
         const elNaiModel = container.querySelector('#img-nai-model');
         const elStylePrompt = container.querySelector('#img-style-prompt');
         const elCharNegPrompt = container.querySelector('#img-char-neg-prompt');
-        const elPetPrompt = container.querySelector('#img-pet-prompt');
-        const elPetNegPrompt = container.querySelector('#img-pet-neg-prompt');
         const elImgTestPrompt = container.querySelector('#img-test-prompt');
         const btnImgTest = container.querySelector('#img-test-btn');
         const imgTestPreview = container.querySelector('#img-test-preview');
@@ -1628,8 +1608,6 @@ EXAMPLE "prompt" value:
                         models: imgConfig.pollinations.models || {},
                         charBasePrompt: elStylePrompt.value.trim(),
                         charNegPrompt: elCharNegPrompt.value.trim(),
-                        petBasePrompt: elPetPrompt.value.trim(),
-                        petNegPrompt: elPetNegPrompt.value.trim(),
                         itemBasePrompt: imgConfig.pollinations.itemBasePrompt,
                         itemNegPrompt: imgConfig.pollinations.itemNegPrompt
                     },
@@ -2264,8 +2242,6 @@ EXAMPLE "prompt" value:
                 imageManager.config.pollinations.model = elPolModel.value;
                 imageManager.config.pollinations.charBasePrompt = elStylePrompt.value.trim();
                 imageManager.config.pollinations.charNegPrompt = elCharNegPrompt.value.trim();
-                imageManager.config.pollinations.petBasePrompt = elPetPrompt.value.trim();
-                imageManager.config.pollinations.petNegPrompt = elPetNegPrompt.value.trim();
 
                 const getNum = (selector, def) => parseFloat(container.querySelector(selector)?.value ?? def);
                 const getInt = (selector, def) => parseInt(container.querySelector(selector)?.value ?? def);
