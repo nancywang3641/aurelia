@@ -400,10 +400,13 @@
                 `;
             } else if (isMobile) {
                 embeddedRoot.style.cssText = `
-                    position: fixed; left: 0; right: 0; width: 100%;
-                    z-index: 999; overflow: hidden; background: #fff;
+                    position: absolute; left: 0; right: 0; bottom: 0;
+                    width: 100%; height: 75vh;
+                    z-index: 30;
+                    background: #fff;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
                     border-radius: 20px 20px 0 0;
+                    overflow: hidden;
                 `;
             } else {
                 embeddedRoot.style.cssText = `
@@ -423,43 +426,16 @@
         embeddedRoot.appendChild(phoneFrame);
         
         if (isMobile && !isStandalone) {
-            // 行動端掛到 body，脫離 #chat 捲動容器
-            document.body.appendChild(embeddedRoot);
+            // 把浮窗插入成 form_sheld 的前一個兄弟，借用酒館原生 layout 處理鍵盤
+            const formSheld = document.getElementById('form_sheld');
+            if (formSheld && formSheld.parentNode) {
+                formSheld.parentNode.insertBefore(embeddedRoot, formSheld);
+            } else {
+                // fallback：找不到 form_sheld 就退回 body
+                document.body.appendChild(embeddedRoot);
+            }
             if (embedObserver) embedObserver.disconnect();
             embedObserver = null;
-
-            // 浮窗跟隨 #form_sheld 位置：酒館已經處理好 iOS 鍵盤的 viewport 適配，
-            // 我們直接吸附 form_sheld 頂部，它走哪浮窗貼哪
-            if (window.visualViewport) {
-                if (_vvAnchorHandler) {
-                    window.visualViewport.removeEventListener('resize', _vvAnchorHandler);
-                    window.visualViewport.removeEventListener('scroll', _vvAnchorHandler);
-                }
-                _vvAnchorHandler = () => {
-                    if (!embeddedRoot) return;
-                    const formSheld = document.getElementById('form_sheld');
-                    if (!formSheld) return;
-                    const rect = formSheld.getBoundingClientRect();
-                    // 浮窗底部緊貼 form_sheld 頂部，頂部留 15% 給酒館頭部
-                    const panelTop = Math.round(window.innerHeight * 0.15);
-                    const panelBottom = window.innerHeight - rect.top; // 距離視口底部多遠
-                    embeddedRoot.style.top = panelTop + 'px';
-                    embeddedRoot.style.bottom = panelBottom + 'px';
-                    embeddedRoot.style.height = 'auto';
-                };
-                _vvAnchorHandler();
-                window.visualViewport.addEventListener('resize', _vvAnchorHandler);
-                window.visualViewport.addEventListener('scroll', _vvAnchorHandler);
-            }
-
-            // RAF loop：每幀跟蹤 form_sheld 位置（酒館內部邏輯也可能改變它，光靠事件不夠）
-            _rafTracking = true;
-            const _rafLoop = () => {
-                if (!_rafTracking || !embeddedRoot) return;
-                if (_vvAnchorHandler) _vvAnchorHandler();
-                requestAnimationFrame(_rafLoop);
-            };
-            requestAnimationFrame(_rafLoop);
         } else {
             if (placement === 'top') {
                 containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
@@ -546,12 +522,6 @@
 
     AureliaControlCenter.unmountEmbedded = function() {
         if (!isEmbedded || !embeddedRoot) return;
-        if (_vvAnchorHandler && window.visualViewport) {
-            window.visualViewport.removeEventListener('resize', _vvAnchorHandler);
-            window.visualViewport.removeEventListener('scroll', _vvAnchorHandler);
-            _vvAnchorHandler = null;
-        }
-        _rafTracking = false;
         if (embedObserver) { embedObserver.disconnect(); embedObserver = null; }
 
         if (phoneModal) {
