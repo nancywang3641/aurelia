@@ -199,13 +199,15 @@
                 </div>` : '';
 
             html += `<div class="vn-reader-msg ai">
-                <div class="vn-reader-label">🤖 AI</div>
+                <div class="vn-reader-msg-hd">
+                    <div class="vn-reader-label">🤖 AI</div>
+                    <div class="vn-reader-actions">
+                        <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('${id}',this)">📄 看原始 tag</button>
+                    </div>
+                </div>
                 ${thinkBlock}
                 <div class="vn-reader-bubble novel-view" id="vrb-novel-${id}">${novelText || '<span style="color:#555">（無內容）</span>'}</div>
                 <div class="vn-reader-bubble raw-view" id="vrb-raw-${id}">${rawText}</div>
-                <div class="vn-reader-actions">
-                    <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('${id}',this)">📄 看原始 tag</button>
-                </div>
             </div>`;
         });
         body.innerHTML = html;
