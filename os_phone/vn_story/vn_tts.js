@@ -28,6 +28,9 @@ const VN_TTS = {
         // 角色對應: charName → modelId
         charMappings: {},
 
+        // 角色別名: 主名 → [別名1, 別名2, ...]（不分大小寫匹配，AI 用全名/小名都能對到同一個模型）
+        charAliases: {},
+
         // NPC 分類: [{ id, name, tags:[], modelIds:[] }]
         npcCategories: []
     },
@@ -88,8 +91,20 @@ const VN_TTS = {
 
     // ── 角色 → 模型解析 ─────────────────────────────────────────────────
     _resolveModel(charName, typeHint) {
+        // 0. 別名 → 主名 normalize（不分大小寫；AI 流口水用全名/小名都能對到）
+        let lookupName = charName;
+        if (charName && !this.config.charMappings[charName] && this.config.charAliases) {
+            const lc = String(charName).toLowerCase();
+            for (const [main, aliases] of Object.entries(this.config.charAliases)) {
+                if (Array.isArray(aliases) && aliases.some(a => String(a).toLowerCase() === lc)) {
+                    lookupName = main;
+                    break;
+                }
+            }
+        }
+
         // 1. 直接對應 (最優先：你手動綁死的角色)
-        const mid = this.config.charMappings[charName];
+        const mid = this.config.charMappings[lookupName];
         if (mid && this.config.models[mid]) {
             return { id: mid, ...this.config.models[mid] };
         }
