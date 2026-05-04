@@ -306,6 +306,79 @@ EXAMPLE "prompt" value:
         const secLlmConfig = loadSecLlmConfig();
         const imgConfig = loadImageConfig();
         const minimaxConfig = loadMinimaxConfig();
+        const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
+
+        // 畫廊子 tab 切換 helper（含 avatar/bg 列表 lazy load）
+        if (!window._switchOsGalTab) {
+            window._switchOsGalTab = function(el, tabId) {
+                el.parentElement.querySelectorAll('[data-galtab]').forEach(t => {
+                    t.classList.remove('active');
+                    t.style.color = '#B78456';
+                    t.style.borderBottomColor = 'transparent';
+                    t.style.fontWeight = '400';
+                });
+                el.classList.add('active');
+                el.style.color = '#FBDFA2';
+                el.style.borderBottomColor = '#FBDFA2';
+                el.style.fontWeight = '700';
+                document.querySelectorAll('.img-subtab-view').forEach(v => v.style.display = 'none');
+                const target = document.getElementById('view-img-' + tabId);
+                if (target) target.style.display = 'block';
+                if (tabId === 'avatar' && window.VN_PLAYER?.loadAvatarManager) {
+                    window.VN_PLAYER.loadAvatarManager('vncfg-avatar-mgr-list');
+                } else if (tabId === 'bg' && window.VN_PLAYER?.loadBgManager) {
+                    window.VN_PLAYER.loadBgManager('vncfg-bg-mgr-list');
+                }
+            };
+        }
+
+        // 偵測 TTS 當前 mode（minimax / sovits / off）
+        let vttsEnabled = false;
+        try { vttsEnabled = !!(JSON.parse(localStorage.getItem('vn_tts_v1') || '{}').enabled); } catch (e) {}
+        const currentTtsMode = minimaxConfig.enabled ? 'minimax' : (vttsEnabled ? 'sovits' : 'off');
+
+        // 語音 mode 三選一互斥切換
+        if (!window._switchTtsMode) {
+            window._switchTtsMode = function(el, mode) {
+                el.parentElement.querySelectorAll('[data-ttsmode]').forEach(b => {
+                    b.classList.remove('active');
+                    b.style.background = 'transparent';
+                    b.style.color = '#888';
+                    b.style.fontWeight = '400';
+                    b.style.boxShadow = 'none';
+                });
+                el.classList.add('active');
+                el.style.background = 'rgba(251,223,162,0.18)';
+                el.style.color = '#FBDFA2';
+                el.style.fontWeight = '700';
+                el.style.boxShadow = '0 0 0 1px rgba(251,223,162,0.45) inset';
+                document.querySelectorAll('.voice-area').forEach(v => v.style.display = 'none');
+                const target = document.getElementById('voice-area-' + mode);
+                if (target) target.style.display = 'block';
+                // SoVITS lazy init：第一次切到 sovits 才注入 vn_tts_panel
+                if (mode === 'sovits' && window.VN_TTS_Panel?.initInline) {
+                    window.VN_TTS_Panel.initInline('vn-tts-inline-root');
+                }
+                // 同步 checkbox（mode 互斥：被選的 checked、其他 unchecked）
+                const mm = document.getElementById('mm-enabled');
+                const vtts = document.getElementById('vtts-enabled');
+                if (mm)   mm.checked = (mode === 'minimax');
+                if (vtts) vtts.checked = (mode === 'sovits');
+                // 🔥 Immediate apply：立即寫 localStorage（不依賴主保存按鈕）
+                try {
+                    const mmCfg = JSON.parse(localStorage.getItem('os_minimax_config') || '{}');
+                    mmCfg.enabled = (mode === 'minimax');
+                    localStorage.setItem('os_minimax_config', JSON.stringify(mmCfg));
+                } catch (e) {}
+                try {
+                    const ttsCfg = JSON.parse(localStorage.getItem('vn_tts_v1') || '{}');
+                    ttsCfg.enabled = (mode === 'sovits');
+                    localStorage.setItem('vn_tts_v1', JSON.stringify(ttsCfg));
+                } catch (e) {}
+                // 同步 in-memory config（避免背景音不及生效）
+                if (window.VN_TTS?.config) window.VN_TTS.config.enabled = (mode === 'sovits');
+            };
+        }
 
         const isStandalone = !!(window.OS_API && typeof window.OS_API.isStandalone === 'function' && window.OS_API.isStandalone());
         if (isStandalone) {
@@ -350,7 +423,7 @@ EXAMPLE "prompt" value:
                 <div class="set-tabs">
                     <div class="set-tab active" data-tab="llm">🧠 主模型</div>
                     <div class="set-tab" data-tab="sec-llm">⚡ 副模型</div>
-                    <div class="set-tab" data-tab="img">🎨 圖片設置</div>
+                    <div class="set-tab" data-tab="img">🎨 畫廊</div>
                     <div class="set-tab" data-tab="voice">🎵 語音</div>
                     <div class="set-tab" data-tab="vn">🎮 VN</div>
                     <div class="set-tab" data-tab="vec"${!isStandalone ? ' style="display:none"' : ''}>🔮 記憶向量</div>
@@ -544,6 +617,13 @@ EXAMPLE "prompt" value:
                     </div>
 
                     <div id="view-img" class="tab-view hidden">
+                        <div style="display:flex;gap:8px;padding:0 0 12px;border-bottom:1px solid rgba(251,223,162,0.15);margin-bottom:12px;flex-wrap:wrap;">
+                            <div class="gal-subtab active" data-galtab="api"    style="cursor:pointer;padding:6px 12px;font-size:13px;color:#FBDFA2;border-bottom:2px solid #FBDFA2;font-weight:700;" onclick="_switchOsGalTab(this,'api')">🔑 圖片設置</div>
+                            <div class="gal-subtab" data-galtab="prompt" style="cursor:pointer;padding:6px 12px;font-size:13px;color:#B78456;border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'prompt')">🖼️ Prompt</div>
+                            <div class="gal-subtab" data-galtab="avatar" style="cursor:pointer;padding:6px 12px;font-size:13px;color:#B78456;border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'avatar')">🎭 頭像</div>
+                            <div class="gal-subtab" data-galtab="bg"     style="cursor:pointer;padding:6px 12px;font-size:13px;color:#B78456;border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'bg')">🌄 背景</div>
+                        </div>
+                        <div id="view-img-api" class="img-subtab-view">
                         <div class="set-group">
                             <div class="set-label">生成服務</div>
                             <select class="set-select" id="img-service">
@@ -825,29 +905,68 @@ EXAMPLE "prompt" value:
                                 <div id="img-test-url" style="font-size:11px; color:#B78456; margin-top:8px; word-break:break-all;"></div>
                             </div>
                         </div>
+                        </div><!-- /view-img-api -->
+                        <div id="view-img-prompt" class="img-subtab-view" style="display:none;">
+                            <div class="set-group">
+                                <div class="set-label">🧑‍🎨 頭像追加詞</div>
+                                <div class="set-desc">插在 OS 通用底詞 與 角色描述詞 之間。</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:70px;">${vnD.avatarBasePrompt || ''}</textarea>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label">🚫 頭像 Negative Prompt</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:50px;">${vnD.avatarNegPrompt || ''}</textarea>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label">🌄 背景生圖底詞</div>
+                                <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:70px;">${vnD.bgBasePrompt || ''}</textarea>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label">🚫 背景 Negative Prompt</div>
+                                <textarea class="set-textarea" id="vncfg-bg-neg" style="min-height:50px;">${vnD.bgNegPrompt || ''}</textarea>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label">📦 物品底詞</div>
+                                <textarea class="set-textarea" id="vncfg-item-prompt" style="min-height:50px;">${vnD.itemBasePrompt || ''}</textarea>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label">🚫 物品 Negative Prompt</div>
+                                <textarea class="set-textarea" id="vncfg-item-neg" style="min-height:50px;">${vnD.itemNegPrompt || ''}</textarea>
+                            </div>
+                        </div>
+                        <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
+                            <div class="set-group">
+                                <div class="set-label">🎭 角色立繪快取 <span style="font-weight:normal; color:#B78456; font-size:11px;">防重複生圖</span></div>
+                                <div id="vncfg-avatar-mgr-list" style="margin-top:8px;"></div>
+                            </div>
+                            <div class="set-desc" style="margin-top:4px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。</div>
+                        </div>
+                        <div id="view-img-bg" class="img-subtab-view" style="display:none;">
+                            <div class="set-group">
+                                <div class="set-label">🌄 場景背景快取 <span style="font-weight:normal; color:#B78456; font-size:11px;">防重複生圖</span></div>
+                                <div id="vncfg-bg-mgr-list" style="margin-top:8px;"></div>
+                            </div>
+                            <div class="set-desc" style="margin-top:4px;">* 包含 bg_cache（場景背景）。</div>
+                        </div>
                     </div>
 
                     <div id="view-voice" class="tab-view hidden">
 
-                        <div style="background:rgba(251,223,162,0.1); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(251,223,162,0.2);">
-                            <div class="set-label" style="margin-bottom:6px;">
-                                <span>🎙️ GPT-SoVITS TTS（VN 面板）</span>
-                                <label class="toggle-switch"><input type="checkbox" id="sovits-vn-enabled" ${localStorage.getItem('vn_sovits_enabled') !== '0' ? 'checked' : ''}><span class="slider"></span></label>
-                            </div>
-                            <div class="set-desc">開啟後 VN 面板 [Char|...] 對話自動呼叫 GPT-SoVITS 插件合成語音。需先在 GPT-SoVITS 插件面板為角色綁定模型。</div>
+                        <!-- 三選一 mode 切換 -->
+                        <div style="display:flex;gap:6px;margin-bottom:16px;padding:4px;background:rgba(0,0,0,0.25);border-radius:6px;">
+                            <div data-ttsmode="minimax" onclick="_switchTtsMode(this,'minimax')" style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='minimax' ? 'background:rgba(251,223,162,0.18);color:#FBDFA2;font-weight:700;box-shadow:0 0 0 1px rgba(251,223,162,0.45) inset;' : 'color:#888;'}">🎵 MINIMAX</div>
+                            <div data-ttsmode="sovits"  onclick="_switchTtsMode(this,'sovits')"  style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='sovits' ? 'background:rgba(251,223,162,0.18);color:#FBDFA2;font-weight:700;box-shadow:0 0 0 1px rgba(251,223,162,0.45) inset;' : 'color:#888;'}">🎙 SoVITS TTS</div>
+                            <div data-ttsmode="off"     onclick="_switchTtsMode(this,'off')"     style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='off' ? 'background:rgba(251,223,162,0.18);color:#FBDFA2;font-weight:700;box-shadow:0 0 0 1px rgba(251,223,162,0.45) inset;' : 'color:#888;'}">🔇 全關閉</div>
                         </div>
+
+                        <!-- MINIMAX 設定區 -->
+                        <div id="voice-area-minimax" class="voice-area" style="display:${currentTtsMode==='minimax' ? 'block' : 'none'};">
 
                         <div style="background:rgba(251,223,162,0.1); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(251,223,162,0.2); font-size:12px; color:#FBDFA2;">
                             🎵 <b>Minimax TTS</b>：配置後，VN 面板 [Char|...] 對話自動合成語音。請至 Minimax 平台取得 API Key。
                         </div>
 
-                        <div class="set-group">
-                            <div class="set-label">
-                                <span>🔊 語音合成（總開關）</span>
-                                <label class="toggle-switch"><input type="checkbox" id="mm-enabled" ${minimaxConfig.enabled ? 'checked' : ''}><span class="slider"></span></label>
-                            </div>
-                            <div class="set-desc">也可以在 VN 面板右上角 <b>🎵</b> 按鈕隨時切換，不需要進設置、不需要刪 Key。關閉後立即停止播放。</div>
-                        </div>
+                        <!-- mm-enabled 已被三選一頂端按鈕取代，隱藏但保留以維持 save / 切換邏輯 -->
+                        <input type="checkbox" id="mm-enabled" style="display:none;" ${minimaxConfig.enabled ? 'checked' : ''}>
 
                         <div class="set-group">
                             <div class="set-label">服務區域</div>
@@ -929,6 +1048,21 @@ EXAMPLE "prompt" value:
                             <div class="btn-test" id="mm-test-btn">🎵 播放測試語音</div>
                             <div class="btn-test" id="mm-stop-btn" style="margin-top:8px; display:none;">⏹ 停止播放</div>
                             <div id="mm-test-result" style="display:none; margin-top:10px; background:rgba(69,34,22,0.8); border-radius:4px; padding:12px; font-size:12px; color:#FFF8E7; font-family:monospace; word-break:break-all;"></div>
+                        </div>
+
+                        </div><!-- /voice-area-minimax -->
+
+                        <!-- SoVITS 設定區（vn_tts_panel inline 注入點） -->
+                        <div id="voice-area-sovits" class="voice-area" style="display:${currentTtsMode==='sovits' ? 'block' : 'none'};">
+                            <div id="vn-tts-inline-root"></div>
+                        </div>
+
+                        <!-- 全關閉 -->
+                        <div id="voice-area-off" class="voice-area" style="display:${currentTtsMode==='off' ? 'block' : 'none'};">
+                            <div style="background:rgba(251,223,162,0.05);padding:24px;border-radius:6px;text-align:center;color:#B78456;font-size:13px;line-height:1.9;border:1px solid rgba(251,223,162,0.1);">
+                                🔇 已關閉所有語音合成<br>
+                                <span style="font-size:11px;color:#888;">VN 面板對話將不會自動朗讀<br>點上方按鈕切換語音引擎</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1674,11 +1808,10 @@ EXAMPLE "prompt" value:
             secTestBtn.style.opacity = '1'; secTestBtn.textContent = '🔌 發送測試訊息';
         };
 
-        const sovitsToggle = container.querySelector('#sovits-vn-enabled');
-        if (sovitsToggle) {
-            sovitsToggle.onchange = () => {
-                localStorage.setItem('vn_sovits_enabled', sovitsToggle.checked ? '1' : '0');
-            };
+
+        // 若預設 mode 是 sovits，render 後立刻注入 vn_tts_panel inline
+        if (currentTtsMode === 'sovits' && window.VN_TTS_Panel?.initInline) {
+            setTimeout(() => window.VN_TTS_Panel.initInline('vn-tts-inline-root'), 100);
         }
 
         const mmSpeedSlider = container.querySelector('#mm-speed');
