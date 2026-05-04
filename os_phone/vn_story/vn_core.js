@@ -1294,29 +1294,42 @@
             const key = cfg.pixabayKey;
             if (!key) { console.warn('[VN] 未設 Pixabay key，跳過 fallback'); return ''; }
 
+            // 純翻譯 helper：用 translate(zh→en) 而非 translateForImageGeneration（後者會加 photorealistic 等修飾詞污染搜尋）
+            const pureTranslate = async (text) => {
+                if (!text || !/[一-龥]/.test(text)) return text;
+                if (win.TranslationManager?.translate) {
+                    try { return await win.TranslationManager.translate(text, 'zh', 'en'); } catch (e) {}
+                }
+                return text;
+            };
+
             // 1. 優先用 cacheId 的地點部分（去掉時間前綴）
             let searchSrc = '';
             if (cacheId) {
                 const idx = String(cacheId).indexOf('_');
                 const place = idx >= 0 ? String(cacheId).slice(idx + 1) : String(cacheId);
                 searchSrc = place.replace(/_/g, ' ').trim();
-                // 中文 → 翻譯成英文
-                if (/[一-龥]/.test(searchSrc) && win.TranslationManager?.translateForImageGeneration) {
-                    try {
-                        searchSrc = await win.TranslationManager.translateForImageGeneration(searchSrc, 'background');
-                    } catch (e) { console.warn('[VN] cacheId 翻譯失敗，fallback 到 prompt:', e); }
-                }
+                searchSrc = await pureTranslate(searchSrc);
             }
-            // 2. fallback：用 prompt（已翻譯版本）
-            if (!searchSrc || !/[a-zA-Z]/.test(searchSrc)) searchSrc = prompt;
+            // 2. fallback：用原 prompt（不是 translatedPrompt 那個含修飾詞的版本）
+            if (!searchSrc || !/[a-zA-Z]/.test(searchSrc)) {
+                searchSrc = await pureTranslate(String(prompt || '').slice(0, 60));
+            }
 
+            // Pixabay 不吃 AI 修飾詞，過濾掉常見污染詞
+            const STOPWORDS = new Set([
+                'photorealistic','realistic','photo','photography','cinematic','dramatic',
+                'high','quality','best','detailed','intricate','masterpiece',
+                '4k','8k','hd','uhd','ultra','sharp','focus','rendering','render',
+                'illustration','painting','artwork','digital','art'
+            ]);
             const keywords = String(searchSrc || '')
                 .replace(/[^a-zA-Z0-9 ]/g, ' ')
                 .split(/\s+/)
-                .filter(w => w.length > 2)
+                .filter(w => w.length > 2 && !STOPWORDS.has(w.toLowerCase()))
                 .slice(0, 3)
                 .join('+');
-            if (!keywords) { console.warn('[VN] Pixabay fallback: 沒英文關鍵字'); return ''; }
+            if (!keywords) { console.warn('[VN] Pixabay fallback: 沒英文關鍵字（過濾修飾詞後）'); return ''; }
             try {
                 const url = `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(keywords)}&image_type=photo&orientation=horizontal&per_page=20&safesearch=true`;
                 const res = await fetch(url);
@@ -1365,10 +1378,10 @@
                 }
             }
 
-            // Fallback：Pixabay（cacheId 用來取地點關鍵詞，避開時間前綴污染搜尋）
+            // Fallback：Pixabay（用原 prompt，內部走純翻譯避開 AI 修飾詞）
             let isFallback = false;
             if (!raw) {
-                raw = await this._pixabayFallback(meta.translatedPrompt || prompt, cacheId);
+                raw = await this._pixabayFallback(prompt, cacheId);
                 isFallback = !!raw;
             }
             if (!raw) return '';
