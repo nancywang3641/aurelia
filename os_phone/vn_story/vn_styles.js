@@ -41,7 +41,12 @@
         .hidden { display: none !important; }
 
         /* --- 選單與設置 (黑金高貴風) --- */
-        /* --- 主頁背景與裝飾 --- */
+        /* 🆘 退路圖庫 fallback（Pollinations 卡住時用 Pixabay 圖，套玻璃磨砂中度遮罩） */
+#game-bg.bg-fallback {
+    filter: blur(4px) saturate(0.85) brightness(0.7);
+}
+
+/* --- 主頁背景與裝飾 --- */
 #page-home {
     background-color: #050505;
     background-size: cover;
