@@ -667,18 +667,19 @@
             if (bg) {
                 if (this._lastBgCacheId) {
                     // 有上一章背景：cacheId 存活，從 IDB 重新取 URL（blob 已被 resetState 撤銷）
-                    bg.style.backgroundImage = 'none';
+                    this._setBgImage(bg, '');
                     const _cid = this._lastBgCacheId;
                     (async () => {
                         const cached = await VN_Cache.get('bg_cache', _cid);
                         if (cached && cached.url && bg) {
                             const objUrl = await this._toObjectUrl(cached.url).catch(() => null);
-                            const finalUrl = objUrl || cached.url;
-                            bg.style.backgroundImage = `url('${finalUrl}')`;
+                            let finalUrl = objUrl || cached.url;
+                            if (cached.fallback && !String(finalUrl).includes('#fallback')) finalUrl += '#fallback';
+                            this._setBgImage(bg, finalUrl);
                         }
                     })();
                 } else {
-                    bg.style.backgroundImage = 'none';
+                    this._setBgImage(bg, '');
                 }
             }
 
@@ -1261,6 +1262,75 @@
             } catch(e) { return ''; }
         },
 
+        // 測試用：console 跑 VN_Core.testFallback('描述', '黎明_候機大廳') 直接套一張 fallback 圖
+        testFallback: async function(prompt, cacheId) {
+            prompt = prompt || 'cafe interior daylight';
+            console.log(`[VN] testFallback prompt: "${prompt}", cacheId: "${cacheId || '(無)'}"`);
+            const url = await this._pixabayFallback(prompt, cacheId || '');
+            if (!url) { console.error('[VN] testFallback: 拿不到圖（檢查 Pixabay key 設好沒、瀏覽器 console 有沒有 CORS 錯誤）'); return null; }
+            console.log('[VN] testFallback URL:', url);
+            const bg = document.getElementById('game-bg');
+            if (bg) this._setBgImage(bg, url + '#fallback');
+            else console.warn('[VN] #game-bg 不存在，先進 VN 場景再測');
+            return url;
+        },
+
+        // 統一 BG 套用：URL 含 #fallback 時加 .bg-fallback class（套玻璃磨砂 CSS）
+        _setBgImage: function(el, url) {
+            if (!el) return;
+            if (url) {
+                el.style.backgroundImage = `url('${url}')`;
+                el.classList.toggle('bg-fallback', String(url).includes('#fallback'));
+            } else {
+                el.style.backgroundImage = 'none';
+                el.classList.remove('bg-fallback');
+            }
+        },
+
+        // Pixabay 退路圖庫：Pollinations 卡住或失敗時觸發
+        // cacheId 格式「時間_地點」（例如 黎明_候機大廳）→ 取地點部分翻譯為英文當搜尋詞
+        _pixabayFallback: async function(prompt, cacheId) {
+            const cfg = (win.OS_SETTINGS?.getImageConfig?.()) || {};
+            const key = cfg.pixabayKey;
+            if (!key) { console.warn('[VN] 未設 Pixabay key，跳過 fallback'); return ''; }
+
+            // 1. 優先用 cacheId 的地點部分（去掉時間前綴）
+            let searchSrc = '';
+            if (cacheId) {
+                const idx = String(cacheId).indexOf('_');
+                const place = idx >= 0 ? String(cacheId).slice(idx + 1) : String(cacheId);
+                searchSrc = place.replace(/_/g, ' ').trim();
+                // 中文 → 翻譯成英文
+                if (/[一-龥]/.test(searchSrc) && win.TranslationManager?.translateForImageGeneration) {
+                    try {
+                        searchSrc = await win.TranslationManager.translateForImageGeneration(searchSrc, 'background');
+                    } catch (e) { console.warn('[VN] cacheId 翻譯失敗，fallback 到 prompt:', e); }
+                }
+            }
+            // 2. fallback：用 prompt（已翻譯版本）
+            if (!searchSrc || !/[a-zA-Z]/.test(searchSrc)) searchSrc = prompt;
+
+            const keywords = String(searchSrc || '')
+                .replace(/[^a-zA-Z0-9 ]/g, ' ')
+                .split(/\s+/)
+                .filter(w => w.length > 2)
+                .slice(0, 3)
+                .join('+');
+            if (!keywords) { console.warn('[VN] Pixabay fallback: 沒英文關鍵字'); return ''; }
+            try {
+                const url = `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(keywords)}&image_type=photo&orientation=horizontal&per_page=20&safesearch=true`;
+                const res = await fetch(url);
+                const json = await res.json();
+                if (!json.hits || !json.hits.length) { console.warn('[VN] Pixabay 無匹配:', keywords); return ''; }
+                const pick = json.hits[Math.floor(Math.random() * json.hits.length)];
+                console.log(`[VN] Pixabay fallback hit: "${keywords}" → ${pick.tags || ''}`);
+                return pick.largeImageURL || pick.webformatURL || '';
+            } catch (e) {
+                console.error('[VN] Pixabay fallback 失敗:', e);
+                return '';
+            }
+        },
+
         _safeFetchBg: async function(cacheId, prompt) {
             if (this._bgMemCache[cacheId]) return this._bgMemCache[cacheId];
             const cached = await VN_Cache.get('bg_cache', cacheId);
@@ -1268,15 +1338,41 @@
                 if (cached.url.startsWith('blob:')) {
                     await VN_Cache.delete('bg_cache', cacheId);
                 } else {
+                    let displayUrl = cached.url;
+                    if (cached.fallback) displayUrl = displayUrl.includes('#') ? displayUrl : displayUrl + '#fallback';
                     const objUrl = await this._toObjectUrl(cached.url);
-                    this._bgMemCache[cacheId] = objUrl || cached.url;
+                    this._bgMemCache[cacheId] = (objUrl || cached.url) + (cached.fallback ? '#fallback' : '');
                     this._preloadImg(cacheId, this._bgMemCache[cacheId]);
                     return this._bgMemCache[cacheId];
                 }
             }
             const meta = {};
-            const raw = await VN_Image.getBg(prompt, meta);
+            // 強制 fallback 測試模式
+            let forceFallback = false;
+            try { forceFallback = JSON.parse(localStorage.getItem('os_image_config') || '{}').fallbackForce === true; } catch(e) {}
+
+            // Pollinations 生圖 + 12 秒 timeout
+            let raw = '';
+            if (!forceFallback) {
+                try {
+                    raw = await Promise.race([
+                        VN_Image.getBg(prompt, meta),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Pollinations timeout 12s')), 12000))
+                    ]);
+                } catch (e) {
+                    console.warn('[VN] Pollinations 失敗，啟用 Pixabay fallback:', e.message);
+                    raw = '';
+                }
+            }
+
+            // Fallback：Pixabay（cacheId 用來取地點關鍵詞，避開時間前綴污染搜尋）
+            let isFallback = false;
+            if (!raw) {
+                raw = await this._pixabayFallback(meta.translatedPrompt || prompt, cacheId);
+                isFallback = !!raw;
+            }
             if (!raw) return '';
+
             const savedPrompt = meta.translatedPrompt || prompt;
             try {
                 const fetchRes = await fetch(raw);
@@ -1288,16 +1384,18 @@
                     reader.onerror = () => r('');
                     reader.readAsDataURL(blob);
                 });
-                this._bgMemCache[cacheId] = objUrl;
-                this._preloadImg(cacheId, objUrl);
-                if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url: dataUrl });
-                return objUrl;
+                const tagged = isFallback ? objUrl + '#fallback' : objUrl;
+                this._bgMemCache[cacheId] = tagged;
+                this._preloadImg(cacheId, tagged);
+                if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url: dataUrl, fallback: isFallback });
+                return tagged;
             } catch(e) {
                 const url = await this._toDataUrl(raw);
                 if (url) {
-                    this._bgMemCache[cacheId] = url;
-                    this._preloadImg(cacheId, url);
-                    await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url });
+                    const tagged = isFallback ? url + '#fallback' : url;
+                    this._bgMemCache[cacheId] = tagged;
+                    this._preloadImg(cacheId, tagged);
+                    await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url, fallback: isFallback });
                 }
                 return this._bgMemCache[cacheId] || '';
             }
@@ -1326,50 +1424,10 @@
                 tasks.push({ cacheId, prompt });
             }
             if (!tasks.length) return;
-            console.log(`[VN] 預熱背景：共 ${tasks.length} 張，依序生成中...`);
+            console.log(`[VN] 預熱背景：共 ${tasks.length} 張，依序生成中（含 fallback）...`);
             (async () => {
                 for (const { cacheId, prompt } of tasks) {
-                    if (this._bgMemCache[cacheId]) {
-                        this._preloadImg(cacheId, this._bgMemCache[cacheId]);
-                        continue;
-                    }
-                    const cached = await VN_Cache.get('bg_cache', cacheId);
-                    if (cached && cached.url && !cached.url.startsWith('blob:')) {
-                        const objUrl = await this._toObjectUrl(cached.url);
-                        this._bgMemCache[cacheId] = objUrl || cached.url;
-                        this._preloadImg(cacheId, this._bgMemCache[cacheId]);
-                        continue;
-                    }
-                    if (cached && cached.url && cached.url.startsWith('blob:')) {
-                        await VN_Cache.delete('bg_cache', cacheId);
-                    }
-                    if (!win.OS_IMAGE_MANAGER) continue;
-                    const meta = {};
-                    const raw = await VN_Image.getBg(prompt, meta);
-                    if (raw) {
-                        const savedPrompt = meta.translatedPrompt || prompt;
-                        try {
-                            const fetchRes = await fetch(raw);
-                            const blob = await fetchRes.blob();
-                            const objUrl = URL.createObjectURL(blob);
-                            const dataUrl = await new Promise(r => {
-                                const reader = new FileReader();
-                                reader.onload = () => r(reader.result);
-                                reader.onerror = () => r('');
-                                reader.readAsDataURL(blob);
-                            });
-                            this._bgMemCache[cacheId] = objUrl;
-                            this._preloadImg(cacheId, objUrl);
-                            if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url: dataUrl });
-                        } catch(e) {
-                            const url = await this._toDataUrl(raw);
-                            if (url) {
-                                this._bgMemCache[cacheId] = url;
-                                this._preloadImg(cacheId, url);
-                                await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url });
-                            }
-                        }
-                    }
+                    await this._safeFetchBg(cacheId, prompt);
                 }
                 console.log('[VN] 所有背景預熱完成');
             })();
@@ -1954,12 +2012,13 @@
                 if (aiPrompt) {
                     this._lastBgCacheId = cacheId;
                     const memUrl = this._bgMemCache[cacheId];
+                    const _gameBg = document.getElementById('game-bg');
                     if (memUrl) {
-                        document.getElementById('game-bg').style.backgroundImage = `url('${memUrl}')`;
+                        this._setBgImage(_gameBg, memUrl);
                     } else {
                         (async () => {
                             const url = await this._safeFetchBg(cacheId, aiPrompt);
-                            if (url) document.getElementById('game-bg').style.backgroundImage = `url('${url}')`;
+                            if (url) this._setBgImage(_gameBg, url);
                         })();
                     }
                 }

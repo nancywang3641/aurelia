@@ -227,7 +227,9 @@ EXAMPLE "prompt" value:
                     sceneGen: {
                         ...config.sceneGen,
                         ...(savedConfig.sceneGen || {})
-                    }
+                    },
+                    pixabayKey:    savedConfig.pixabayKey || '',
+                    fallbackForce: savedConfig.fallbackForce === true
                 };
             } catch(e) {}
         }
@@ -905,6 +907,17 @@ EXAMPLE "prompt" value:
                                 <div id="img-test-url" style="font-size:11px; color:#B78456; margin-top:8px; word-break:break-all;"></div>
                             </div>
                         </div>
+
+                        <div class="set-group" style="border-top:1px dashed rgba(251,223,162,0.2); padding-top:14px; margin-top:14px;">
+                            <div class="set-label">🆘 退路圖庫（Pixabay）</div>
+                            <div class="set-desc" style="margin-bottom:8px;">Pollinations 卡住或 12 秒 timeout 時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:#FBDFA2;">pixabay.com/api/docs</a></div>
+                            <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${imgConfig.pixabayKey || ''}">
+                            <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+                                <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
+                                <span style="font-size:12px; color:#FBDFA2;">🧪 強制走退路圖庫（測試用，不去 Pollinations）</span>
+                            </div>
+                        </div>
+
                         </div><!-- /view-img-api -->
                         <div id="view-img-prompt" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
@@ -1644,7 +1657,9 @@ EXAMPLE "prompt" value:
                         sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
                         specPrompt:      (container.querySelector('#img-scene-spec-prompt')?.value  || '').trim(),
                         specTemplates:    sceneSpecTemplates,
-                    }
+                    },
+                    pixabayKey:    (container.querySelector('#img-pixabay-key')?.value || '').trim(),
+                    fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false
                 };
 
                 const mmGroupId   = container.querySelector('#mm-group-id');
