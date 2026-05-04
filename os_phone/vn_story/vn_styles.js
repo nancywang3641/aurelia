@@ -307,7 +307,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-reader-bubble.raw-view { display: none; font-family: 'Consolas','Monaco',monospace; font-size: 0.8rem; color: #d4b87a; background: rgba(30,22,8,0.7); border: 1px solid rgba(212,175,55,0.28); white-space: pre-wrap; line-height: 1.7; }
         .vn-reader-bubble.raw-view.active { display: block; }
         .vn-reader-bubble.novel-view.hidden { display: none; }
-        .vn-reader-actions { display: flex; gap: 6px; margin-top: 4px; padding: 0 4px; }
+        .vn-reader-msg-hd { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 4px; box-sizing: border-box; }
+        .vn-reader-actions { display: flex; gap: 6px; }
         .vn-reader-act-btn { font-size: 0.72rem; color: #777; border: 1px solid #444; background: transparent; padding: 3px 10px; border-radius: 3px; cursor: pointer; transition: all 0.2s; }
         .vn-reader-act-btn:hover { color: #ccc; border-color: #777; }
         .vn-reader-act-btn.active { color: var(--gold); border-color: rgba(212,175,55,0.55); background: rgba(212,175,55,0.06); }
