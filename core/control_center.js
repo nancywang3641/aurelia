@@ -27,6 +27,8 @@
     let syncTargetSelector = '#sheld';
     let _vnWasOpenBeforeTabSwitch = false;
     let _vvAnchorHandler = null;
+    let _savedBodyStyle = null;
+    let _savedScrollY = 0;
 
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -426,7 +428,20 @@
             if (embedObserver) embedObserver.disconnect();
             embedObserver = null;
 
-            // iOS Chrome 鍵盤推 layout viewport 修復：用 visualViewport 錨定浮窗到可見區
+            // iOS body scroll lock：防止 input 獲焦時 body 被自動滾走帶飛 fixed 浮窗
+            _savedScrollY = window.scrollY || window.pageYOffset || 0;
+            _savedBodyStyle = {
+                position: document.body.style.position,
+                top: document.body.style.top,
+                width: document.body.style.width,
+                overflow: document.body.style.overflow,
+            };
+            document.body.style.position = 'fixed';
+            document.body.style.top = `-${_savedScrollY}px`;
+            document.body.style.width = '100%';
+            document.body.style.overflow = 'hidden';
+
+            // 高度跟隨 visualViewport，確保鍵盤彈出時面板自動壓縮不溢出
             if (window.visualViewport) {
                 if (_vvAnchorHandler) {
                     window.visualViewport.removeEventListener('resize', _vvAnchorHandler);
@@ -435,9 +450,6 @@
                 _vvAnchorHandler = () => {
                     if (!embeddedRoot) return;
                     const vv = window.visualViewport;
-                    // 用 transform 抵消頁面被推走的距離，把面板拉回真實可見區
-                    embeddedRoot.style.transform = `translateY(${-vv.offsetTop}px)`;
-                    // 高度跟隨 visualViewport，確保鍵盤彈出時面板自動壓縮不溢出
                     embeddedRoot.style.height = Math.min(window.innerHeight * 0.85, vv.height * 0.95) + 'px';
                 };
                 _vvAnchorHandler();
@@ -534,6 +546,15 @@
             window.visualViewport.removeEventListener('resize', _vvAnchorHandler);
             window.visualViewport.removeEventListener('scroll', _vvAnchorHandler);
             _vvAnchorHandler = null;
+        }
+        if (_savedBodyStyle !== null) {
+            document.body.style.position = _savedBodyStyle.position;
+            document.body.style.top = _savedBodyStyle.top;
+            document.body.style.width = _savedBodyStyle.width;
+            document.body.style.overflow = _savedBodyStyle.overflow;
+            window.scrollTo(0, _savedScrollY);
+            _savedBodyStyle = null;
+            _savedScrollY = 0;
         }
         if (embedObserver) { embedObserver.disconnect(); embedObserver = null; }
 
