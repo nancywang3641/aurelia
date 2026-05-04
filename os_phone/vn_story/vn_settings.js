@@ -22,9 +22,6 @@
         bgNegPrompt:         'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render',
         itemBasePrompt:      'item only, product shot, no background, white background, clean illustration, high quality',
         itemNegPrompt:       'person, human, character, body, face, hands, people, crowd, bad anatomy, blurry, low quality, worst quality, watermark, text',
-        homeBgBase:          '',
-        homeBgCount:         '0',
-        homeBgExt:           'jpg',
         ctxChapters:         5
     };
 
@@ -56,9 +53,6 @@
                 bgNegPrompt:         g('bg-neg'),
                 itemBasePrompt:      g('item-prompt'),
                 itemNegPrompt:       g('item-neg'),
-                homeBgBase:          g('home-bg-base'),
-                homeBgCount:         g('home-bg-count') || '0',
-                homeBgExt:           container.querySelector('#vncfg-home-bg-ext')?.value || 'jpg',
                 ctxChapters:         gi('ctx-chapters', 5)
             };
 
@@ -73,9 +67,15 @@
         // ── 輸出 HTML 字串（供 os_settings launchApp 嵌入） ──────
         getHTML(d) {
             d = d || this.load();
-            const extOpt = (v) => ['jpg','jpeg','png','webp']
-                .map(e => `<option value="${e}"${d.homeBgExt === e ? ' selected' : ''}>${e.toUpperCase()}</option>`)
-                .join('');
+
+            // 「Context 保留最近幾章全文」僅獨立(PWA)版本有意義；酒館版由酒館自己管 prompt 注入，隱藏這個設定
+            const isStandalone = !!(window.OS_API?.isStandalone?.());
+            const ctxChaptersBlock = isStandalone ? `
+        <div class="set-group">
+            <div class="set-label">📚 Context 保留最近幾章全文 <span style="font-weight:normal; color:#B78456; font-size:11px;">其餘舊章節自動縮成摘要</span></div>
+            <input class="set-input" type="number" id="vncfg-ctx-chapters" min="1" max="20" placeholder="5" value="${d.ctxChapters ?? 5}" style="width:120px;">
+            <div class="set-desc">建議 3–6 章。設 0 或留空 = 全送（不限制）。</div>
+        </div>` : '';
 
             return /* html */`
 <div style="padding-bottom:4px;">
@@ -92,15 +92,6 @@
     <!-- Tab：路徑 -->
     <div id="vn-subtab-path" class="vn-subtab-view">
 
-        <div class="set-group">
-            <div class="set-label">🏠 主頁背景圖</div>
-            <input class="set-input" id="vncfg-home-bg-base" placeholder="https://example.com/bg/" value="${d.homeBgBase}">
-            <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
-                <input class="set-input" type="number" id="vncfg-home-bg-count" placeholder="圖片數量" min="1" value="${d.homeBgCount}" style="flex:1;">
-                <select class="set-select" id="vncfg-home-bg-ext" style="flex:1;">${extOpt()}</select>
-            </div>
-            <div class="set-desc">URL 目錄 + 數量，檔名命名為 1.jpg / 2.jpg…，系統每次隨機抽取。</div>
-        </div>
 
         <div class="set-group">
             <div class="set-label">🎵 遊戲 BGM 目錄</div>
@@ -133,11 +124,7 @@
             <div class="set-desc">建議用透明背景 PNG 剪影。</div>
         </div>
 
-        <div class="set-group">
-            <div class="set-label">📚 Context 保留最近幾章全文 <span style="font-weight:normal; color:#B78456; font-size:11px;">其餘舊章節自動縮成摘要</span></div>
-            <input class="set-input" type="number" id="vncfg-ctx-chapters" min="1" max="20" placeholder="5" value="${d.ctxChapters ?? 5}" style="width:120px;">
-            <div class="set-desc">建議 3–6 章。設 0 或留空 = 全送（不限制）。</div>
-        </div>
+        ${ctxChaptersBlock}
 
     </div><!-- /vn-subtab-path -->
 

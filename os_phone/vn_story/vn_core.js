@@ -76,7 +76,7 @@
 
     // === 2. 系統配置 & 生圖引擎 ===
     const VN_Config = {
-        data: { bgm: '', sfx: '', spriteBase: '', stickerBase: '', charDefaultBase: '', finalFallbackSprite: 'https://files.catbox.moe/9je7j2.png', avatarBasePrompt: '', avatarNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text', bgBasePrompt: '', bgNegPrompt: 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render', itemBasePrompt: 'item only, product shot, no background, white background, clean illustration, high quality', itemNegPrompt: 'person, human, character, body, face, hands, people, crowd, bad anatomy, blurry, low quality, worst quality, watermark, text', homeBgBase: '', homeBgCount: '0', homeBgExt: 'jpg', ctxChapters: 5 },
+        data: { bgm: '', sfx: '', spriteBase: '', stickerBase: '', charDefaultBase: '', finalFallbackSprite: 'https://files.catbox.moe/9je7j2.png', avatarBasePrompt: '', avatarNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text', bgBasePrompt: '', bgNegPrompt: 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render', itemBasePrompt: 'item only, product shot, no background, white background, clean illustration, high quality', itemNegPrompt: 'person, human, character, body, face, hands, people, crowd, bad anatomy, blurry, low quality, worst quality, watermark, text', ctxChapters: 5 },
         // UI 設置由 vn_settings.js 管理，此處只負責從 localStorage 載入供運行期使用
         load: function() {
             const s = localStorage.getItem('vn_cfg_v4');
@@ -1268,7 +1268,6 @@
                 if (cached.url.startsWith('blob:')) {
                     await VN_Cache.delete('bg_cache', cacheId);
                 } else {
-                    if (cached.rawUrl) _sessionBgRawUrls[cacheId] = cached.rawUrl;
                     const objUrl = await this._toObjectUrl(cached.url);
                     this._bgMemCache[cacheId] = objUrl || cached.url;
                     this._preloadImg(cacheId, this._bgMemCache[cacheId]);
@@ -1279,7 +1278,6 @@
             const raw = await VN_Image.getBg(prompt, meta);
             if (!raw) return '';
             const savedPrompt = meta.translatedPrompt || prompt;
-            _sessionBgRawUrls[cacheId] = raw;
             try {
                 const fetchRes = await fetch(raw);
                 const blob = await fetchRes.blob();
@@ -1337,7 +1335,6 @@
                     }
                     const cached = await VN_Cache.get('bg_cache', cacheId);
                     if (cached && cached.url && !cached.url.startsWith('blob:')) {
-                        if (cached.rawUrl) _sessionBgRawUrls[cacheId] = cached.rawUrl;
                         const objUrl = await this._toObjectUrl(cached.url);
                         this._bgMemCache[cacheId] = objUrl || cached.url;
                         this._preloadImg(cacheId, this._bgMemCache[cacheId]);
@@ -1351,7 +1348,6 @@
                     const raw = await VN_Image.getBg(prompt, meta);
                     if (raw) {
                         const savedPrompt = meta.translatedPrompt || prompt;
-                        _sessionBgRawUrls[cacheId] = raw;
                         try {
                             const fetchRes = await fetch(raw);
                             const blob = await fetchRes.blob();
@@ -3234,80 +3230,8 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
     }
 
     // === 4. 全域 UI 輔助函數 ===
-    // === 主頁背景輪播 ===
-    let _homeBgTimer    = null;
-    let _homeBgPool     = [];
-    let _homeBgIdx      = 0;
-    // 遊戲中出現過的背景原始 URL（不隨 resetState 清除，跨回合持久）
-    const _sessionBgRawUrls = {};
-
-    function _setHomeBg(url) {
-        const pg = document.getElementById('page-home');
-        if (pg) pg.style.backgroundImage = url ? `url('${url}')` : 'none';
-    }
-
-    function _stopHomeBgTimer() {
-        if (_homeBgTimer) { clearInterval(_homeBgTimer); _homeBgTimer = null; }
-    }
-
-    async function applyRandomHomeBg() {
-        _stopHomeBgTimer();
-        const base  = VN_Config.data.homeBgBase;
-        const count = parseInt(VN_Config.data.homeBgCount) || 0;
-        const ext   = VN_Config.data.homeBgExt || 'jpg';
-
-        if (base && count > 0) {
-            let currentIdx = Math.floor(Math.random() * count) + 1;
-            const getNextUrl = () => {
-                const url = base.endsWith('/') ? `${base}${currentIdx}.${ext}` : `${base}/${currentIdx}.${ext}`;
-                currentIdx++;
-                if (currentIdx > count) currentIdx = 1;
-                return url;
-            };
-            
-            _setHomeBg(getNextUrl());
-            
-            if (count > 1) {
-                _homeBgTimer = setInterval(() => {
-                    _setHomeBg(getNextUrl());
-                }, 10000); 
-            }
-            return;
-        }
-
-        const sessionUrls = Object.values(_sessionBgRawUrls).filter(Boolean);
-        if (sessionUrls.length > 0) {
-            _homeBgPool = [...sessionUrls];
-            _homeBgPool.sort(() => Math.random() - 0.5);
-            _homeBgIdx = 0;
-            _setHomeBg(_homeBgPool[0]);
-            if (_homeBgPool.length > 1) {
-                _homeBgTimer = setInterval(() => {
-                    _homeBgIdx = (_homeBgIdx + 1) % _homeBgPool.length;
-                    _setHomeBg(_homeBgPool[_homeBgIdx]);
-                }, 10000);
-            }
-            return;
-        }
-
-        const entries = await VN_Cache.getAll('bg_cache');
-        _homeBgPool = entries.map(e => e.rawUrl || e.url).filter(Boolean);
-        if (_homeBgPool.length === 0) { _setHomeBg(null); return; }
-
-        _homeBgPool.sort(() => Math.random() - 0.5);
-        _homeBgIdx = 0;
-        _setHomeBg(_homeBgPool[0]);
-
-        if (_homeBgPool.length > 1) {
-            _homeBgTimer = setInterval(() => {
-                _homeBgIdx = (_homeBgIdx + 1) % _homeBgPool.length;
-                _setHomeBg(_homeBgPool[_homeBgIdx]);
-            }, 10000);
-        }
-    }
 
     function switchPage(id) {
-        _stopHomeBgTimer();
         document.querySelectorAll('.page').forEach(e => e.classList.add('hidden'));
         const target = document.getElementById(id);
         if (target) target.classList.remove('hidden');
