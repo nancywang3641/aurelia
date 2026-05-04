@@ -1278,7 +1278,9 @@
             return url;
         },
 
-        // 統一 BG 套用：URL 含 #fallback 時加 .bg-fallback class（套玻璃磨砂 CSS）
+        // 統一 BG 套用：URL hash 標記 fallback 等級
+        // #fallback        → 中度磨砂（Pixabay，圖經審核可看清場景）
+        // #fallback-strong → 重度磨砂（LoremFlickr，圖未審核糊到只剩色塊氛圍）
         _setBgImage: function(el, url) {
             if (!el) return;
             if (url) {
@@ -1396,11 +1398,11 @@
             let isFallback = false;
             if (!raw) {
                 raw = await this._pixabayFallback(prompt, cacheId);
-                if (raw) isFallback = true;
+                if (raw) { isFallback = true; console.log('[VN] fallback source: Pixabay'); }
             }
             if (!raw) {
                 raw = await this._loremFlickrFallback(prompt, cacheId);
-                if (raw) isFallback = true;
+                if (raw) { isFallback = true; console.log('[VN] fallback source: LoremFlickr'); }
             }
             if (!raw) return '';
 
