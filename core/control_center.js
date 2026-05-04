@@ -26,10 +26,6 @@
     let embedObserver = null;
     let syncTargetSelector = '#sheld';
     let _vnWasOpenBeforeTabSwitch = false;
-    let _vvAnchorHandler = null;
-    let _savedBodyStyle = null;
-    let _savedScrollY = 0;
-    let _rafTracking = false;
 
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -399,14 +395,16 @@
                     width: 100%; z-index: 100; overflow: hidden;
                 `;
             } else if (isMobile) {
+                // mobile 走嵌入模式（跟 desktop 同路徑），提高 z-index 防被 form_sheld 遮擋
                 embeddedRoot.style.cssText = `
-                    position: absolute; left: 0; right: 0; bottom: 0;
-                    width: 100%; height: 75vh;
-                    z-index: 30;
-                    background: #fff;
+                    position: relative; width: 100%; height: 70vh;
+                    min-height: 400px; flex-shrink: 0;
+                    z-index: 999;
+                    margin-bottom: 15px;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
-                    border-radius: 20px 20px 0 0;
+                    border-radius: 12px;
                     overflow: hidden;
+                    order: ${placement === 'top' ? '-1' : '9999'};
                 `;
             } else {
                 embeddedRoot.style.cssText = `
@@ -425,35 +423,22 @@
         `;
         embeddedRoot.appendChild(phoneFrame);
         
-        if (isMobile && !isStandalone) {
-            // 把浮窗插入成 form_sheld 的前一個兄弟，借用酒館原生 layout 處理鍵盤
-            const formSheld = document.getElementById('form_sheld');
-            if (formSheld && formSheld.parentNode) {
-                formSheld.parentNode.insertBefore(embeddedRoot, formSheld);
-            } else {
-                // fallback：找不到 form_sheld 就退回 body
-                document.body.appendChild(embeddedRoot);
-            }
-            if (embedObserver) embedObserver.disconnect();
-            embedObserver = null;
+        if (placement === 'top') {
+            containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
         } else {
-            if (placement === 'top') {
-                containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
-            } else {
-                containerEl.appendChild(embeddedRoot);
-            }
-            if (embedObserver) embedObserver.disconnect();
-            embedObserver = new MutationObserver(() => {
-                if (!isEmbedded || !embeddedRoot || !embeddedRoot.parentNode) return;
-                if (placement === 'bottom' && containerEl.lastElementChild !== embeddedRoot) {
-                    containerEl.appendChild(embeddedRoot);
-                    containerEl.scrollTop = containerEl.scrollHeight;
-                } else if (placement === 'top' && containerEl.firstElementChild !== embeddedRoot) {
-                    containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
-                }
-            });
-            embedObserver.observe(containerEl, { childList: true });
+            containerEl.appendChild(embeddedRoot);
         }
+        if (embedObserver) embedObserver.disconnect();
+        embedObserver = new MutationObserver(() => {
+            if (!isEmbedded || !embeddedRoot || !embeddedRoot.parentNode) return;
+            if (placement === 'bottom' && containerEl.lastElementChild !== embeddedRoot) {
+                containerEl.appendChild(embeddedRoot);
+                containerEl.scrollTop = containerEl.scrollHeight;
+            } else if (placement === 'top' && containerEl.firstElementChild !== embeddedRoot) {
+                containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+            }
+        });
+        embedObserver.observe(containerEl, { childList: true });
 
         // ── 獨立模式：JS 強制把底部導覽列釘死到真實視口底部 ──
         // 這是 CSS position:fixed 的保險層，確保即使 CSS 快取還是舊版也能正確定位
