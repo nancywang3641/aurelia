@@ -41,12 +41,30 @@
                          style="color:#666;font-size:1.6rem;cursor:pointer;line-height:1;">✕</div>
                 </div>
             </div>
+            <div id="vn-reader-sa-toolbar" style="display:none;">
+                <div class="tb-row">
+                    <span class="tb-label">🙈 隱藏對話</span>
+                    <input type="number" class="tb-floor" id="vrs-hide-start" placeholder="起始" min="0">
+                    <span class="tb-sep">~</span>
+                    <input type="number" class="tb-floor" id="vrs-hide-end" placeholder="結束" min="0">
+                    <button class="tb-btn" onclick="window.VN_READER._slashHide(this)">隱藏</button>
+                    <button class="tb-btn gold" onclick="window.VN_READER._slashUnhide(this)">取消</button>
+                    <button class="tb-btn danger" onclick="window.VN_READER._slashShowAll(this)">全顯示</button>
+                    <button class="tb-btn" onclick="window.VN_READER._refreshStatus(this)" title="重新整理">🔄</button>
+                </div>
+                <div id="vrs-status">
+                    <span class="lab">最後樓層</span><span class="val" id="vrs-last-id">—</span>
+                    <span class="sep">｜</span>
+                    <span class="lab">已隱藏</span><span class="val" id="vrs-hidden-list">—</span>
+                </div>
+            </div>
             <div id="vn-reader-sa-tabs"
                  style="display:none;flex-shrink:0;gap:2px;padding:8px 14px 0;
                         overflow-x:auto;border-bottom:1px solid rgba(255,255,255,0.05);
                         scrollbar-width:none;"></div>
             <div id="vn-reader-sa-body"
-                 style="flex:1;overflow-y:auto;padding:16px 14px;
+                 style="flex:1;overflow-y:auto;
+                        padding:16px 14px calc(100px + env(safe-area-inset-bottom, 0px));
                         display:flex;flex-direction:column;gap:16px;
                         scrollbar-width:thin;scrollbar-color:#222 transparent;"></div>`;
 
@@ -226,8 +244,12 @@
 
             body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;">載入中...</div>';
 
+            const toolbar = overlay.querySelector('#vn-reader-sa-toolbar');
+
             // 🔥 酒館模式：從 TavernHelper 拿當前 chat 訊息
             if (_isTavernMode()) {
+                if (toolbar) toolbar.style.display = 'flex';
+                this._updateHideStatus();
                 const chapters = _fetchTavernChapters();
                 if (!chapters.length) {
                     body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;line-height:1.6;">當前聊天無含 &lt;content&gt; 標籤的章節<br><span style="font-size:0.78rem;color:#444;">(需要 AI 用 VN 格式回覆才會被識別)</span></div>';
@@ -239,6 +261,9 @@
                 _renderChapters(chapters, body);
                 return;
             }
+
+            // PWA 模式：toolbar 不適用（沒酒館對話框可隱藏）
+            if (toolbar) toolbar.style.display = 'none';
 
             // PWA 模式：從 OS_DB 拿章節
             let allChapters = [];
@@ -397,6 +422,144 @@
             novel.classList.toggle('hidden', showRaw);
             btn.classList.toggle('active', showRaw);
             btn.textContent = showRaw ? '📖 看小說' : '📄 看原始 tag';
+        },
+
+        // ── 隱藏對話框工具（透過酒館助手 triggerSlash 背景注入指令）────
+        async _callSlashCommand(cmd) {
+            const trigger = win.TavernHelper?.triggerSlash || win.triggerSlash;
+            if (typeof trigger === 'function') {
+                try {
+                    await trigger(cmd);
+                    return;
+                } catch (e) {
+                    console.error('[VN_READER] triggerSlash 失敗:', e);
+                }
+            }
+            // fallback：酒館助手沒載入時用 textarea hack
+            const ta  = document.querySelector('#send_textarea');
+            const btn = document.querySelector('#send_but');
+            if (!ta || !btn) {
+                console.error('[VN_READER] 既無 TavernHelper 也找不到酒館輸入框');
+                return;
+            }
+            ta.value = cmd;
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+            btn.click();
+        },
+        _readHideRange() {
+            const s = parseInt(document.getElementById('vrs-hide-start')?.value);
+            const e = parseInt(document.getElementById('vrs-hide-end')?.value);
+            if (isNaN(s) || isNaN(e) || s < 0 || e < 0) {
+                alert('請輸入有效樓層號（>= 0）');
+                return null;
+            }
+            return s > e ? `${e}-${s}` : `${s}-${e}`;
+        },
+        // 按鈕視覺反饋包裝：⏳ → ✓ / ✗，1.2 秒後恢復
+        async _withBtnFeedback(btn, action, successText = '✓') {
+            if (!btn) return action();
+            const orig = btn.textContent;
+            const wasDisabled = btn.disabled;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+            btn.classList.add('busy');
+            try {
+                const r = await action();
+                btn.textContent = successText;
+                btn.classList.remove('busy');
+                btn.classList.add('ok');
+                setTimeout(() => {
+                    btn.textContent = orig;
+                    btn.disabled = wasDisabled;
+                    btn.classList.remove('ok');
+                }, 1200);
+                return r;
+            } catch (e) {
+                btn.textContent = '✗';
+                btn.classList.remove('busy');
+                btn.classList.add('err');
+                console.error('[VN_READER] 操作失敗:', e);
+                setTimeout(() => {
+                    btn.textContent = orig;
+                    btn.disabled = wasDisabled;
+                    btn.classList.remove('err');
+                }, 1500);
+            }
+        },
+        async _slashHide(btn) {
+            const range = this._readHideRange();
+            if (!range) return;
+            await this._withBtnFeedback(btn, async () => {
+                await this._callSlashCommand(`/hide ${range}`);
+                this._updateHideStatus();
+            });
+        },
+        async _slashUnhide(btn) {
+            const range = this._readHideRange();
+            if (!range) return;
+            await this._withBtnFeedback(btn, async () => {
+                await this._callSlashCommand(`/unhide ${range}`);
+                this._updateHideStatus();
+            });
+        },
+        async _slashShowAll(btn) {
+            await this._withBtnFeedback(btn, async () => {
+                await this._callSlashCommand('/unhide 0-{{lastMessageId}}');
+                this._updateHideStatus();
+            });
+        },
+        _refreshStatus(btn) {
+            this._updateHideStatus();
+            if (btn) {
+                btn.classList.add('ok');
+                setTimeout(() => btn.classList.remove('ok'), 600);
+            }
+        },
+
+        // ── 把連續 ID 合併成 range 字串：[1,2,3,5,8,9] → "1-3, 5, 8-9" ──
+        _formatRanges(ids) {
+            if (!ids || !ids.length) return '無';
+            const sorted = [...ids].sort((a, b) => a - b);
+            const out = [];
+            let start = sorted[0], prev = sorted[0];
+            for (let i = 1; i < sorted.length; i++) {
+                if (sorted[i] === prev + 1) {
+                    prev = sorted[i];
+                } else {
+                    out.push(start === prev ? `${start}` : `${start}-${prev}`);
+                    start = prev = sorted[i];
+                }
+            }
+            out.push(start === prev ? `${start}` : `${start}-${prev}`);
+            return out.join(', ');
+        },
+
+        // ── 更新 status 列：最後 #ID + 已隱藏範圍 ─────────────────
+        _updateHideStatus() {
+            const lastEl   = document.getElementById('vrs-last-id');
+            const hiddenEl = document.getElementById('vrs-hidden-list');
+            if (!lastEl || !hiddenEl) return;
+
+            try {
+                const helper = win.TavernHelper;
+                const ctx    = win.SillyTavern?.getContext?.();
+                const chat   = ctx?.chat || [];
+
+                // 最後 #ID
+                let lastId = -1;
+                if (helper?.getLastMessageId) lastId = helper.getLastMessageId();
+                else if (chat.length) lastId = chat.length - 1;
+                lastEl.textContent = lastId >= 0 ? `#${lastId}` : '—';
+
+                // 已隱藏 ID 列表（從 chat array 找 is_system: true）
+                const hiddenIds = [];
+                chat.forEach((m, idx) => {
+                    if (m && m.is_system === true) hiddenIds.push(idx);
+                });
+                hiddenEl.textContent = this._formatRanges(hiddenIds);
+            } catch (e) {
+                console.error('[VN_READER] _updateHideStatus 失敗:', e);
+            }
         }
     };
 

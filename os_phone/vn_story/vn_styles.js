@@ -315,6 +315,33 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-reader-divider { text-align: center; font-size: 0.7rem; color: #555; letter-spacing: 2px; padding: 6px 0; }
         .vn-reader-loading { text-align: center; color: #333; font-size: 0.82rem; padding: 40px; }
 
+        /* 🙈 全域：隱藏被酒館 /hide 標記的訊息（這是 Janus Nexus 的 CSS 技巧） */
+        .mes[is_system="true"] { display: none !important; }
+        .mes[is_system="true"] + .mes { margin-top: 0; }
+
+        /* 🙈 閱讀器 header 的 hide 工具列 */
+        #vn-reader-sa-toolbar { display: flex; flex-direction: column; gap: 6px; padding: 8px 14px; border-bottom: 1px solid rgba(212,175,55,0.12); background: rgba(15,15,20,0.6); flex-shrink: 0; }
+        #vn-reader-sa-toolbar .tb-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        #vn-reader-sa-toolbar .tb-label { color: #888; font-size: 0.74rem; letter-spacing: 1px; margin-right: 4px; }
+        #vn-reader-sa-toolbar input.tb-floor { width: 60px; background: rgba(0,0,0,0.4); border: 1px solid rgba(212,175,55,0.18); color: #d4af37; padding: 3px 6px; border-radius: 3px; font-size: 0.78rem; text-align: center; outline: none; }
+        #vn-reader-sa-toolbar input.tb-floor:focus { border-color: rgba(212,175,55,0.5); }
+        #vn-reader-sa-toolbar .tb-sep { color: #555; font-size: 0.78rem; }
+        #vn-reader-sa-toolbar .tb-btn { font-size: 0.74rem; padding: 4px 10px; border-radius: 3px; cursor: pointer; border: 1px solid #444; background: transparent; color: #aaa; transition: all 0.15s; }
+        #vn-reader-sa-toolbar .tb-btn:hover { color: #fff; border-color: #888; }
+        #vn-reader-sa-toolbar .tb-btn.danger:hover { color: #ff6b6b; border-color: #ff6b6b; }
+        #vn-reader-sa-toolbar .tb-btn.gold:hover { color: var(--gold); border-color: rgba(212,175,55,0.55); background: rgba(212,175,55,0.06); }
+        /* 按鈕反饋狀態 */
+        #vn-reader-sa-toolbar .tb-btn.busy { color: #d4af37; border-color: rgba(212,175,55,0.4); background: rgba(212,175,55,0.04); cursor: wait; animation: vrs-pulse 0.8s ease-in-out infinite; }
+        #vn-reader-sa-toolbar .tb-btn.ok { color: #4ade80; border-color: rgba(74,222,128,0.55); background: rgba(74,222,128,0.08); }
+        #vn-reader-sa-toolbar .tb-btn.err { color: #ff6b6b; border-color: rgba(255,107,107,0.55); background: rgba(255,107,107,0.08); }
+        #vn-reader-sa-toolbar .tb-btn:disabled { cursor: not-allowed; opacity: 0.85; }
+        @keyframes vrs-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+        /* status 列 */
+        #vrs-status { font-size: 0.72rem; color: #777; font-family: 'Consolas','Monaco',monospace; padding: 2px 0 0; line-height: 1.4; }
+        #vrs-status .lab { color: #555; margin-right: 4px; }
+        #vrs-status .val { color: #d4af37; margin-right: 8px; }
+        #vrs-status .sep { color: #444; margin-right: 6px; }
+
         /* 💭 思考鏈小窗 (黑金高貴風) */
         #vn-think-popup { position: absolute; bottom: 90px; right: 10px; width: min(380px, 90vw); max-height: 300px; background: linear-gradient(135deg, rgba(13,13,13,0.96) 0%, rgba(5,5,5,0.98) 100%); border: 1px solid rgba(212,175,55,0.3); border-radius: 4px; display: flex; flex-direction: column; z-index: 30; opacity: 0; pointer-events: none; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 15px rgba(212,175,55,0.05); }
         #vn-think-popup.active { opacity: 1; pointer-events: auto; transform: translateY(0); }

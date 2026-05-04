@@ -26,6 +26,7 @@
     let embedObserver = null;
     let syncTargetSelector = '#sheld';
     let _vnWasOpenBeforeTabSwitch = false;
+    let _readerWasOpenBeforeTabSwitch = false;
 
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -113,6 +114,18 @@
             } else if (pageId === 'nav-home' && _vnWasOpenBeforeTabSwitch) {
                 _vnWasOpenBeforeTabSwitch = false;
                 vnPanel.style.display = 'flex';
+            }
+        }
+
+        // 同樣：切離大廳時暫時隱藏 VN_READER；回到大廳時自動恢復
+        const vnReader = document.getElementById('vn-reader-sa') || container.querySelector('#vn-reader-sa');
+        if (vnReader) {
+            if (pageId !== 'nav-home' && vnReader.style.display !== 'none') {
+                _readerWasOpenBeforeTabSwitch = true;
+                vnReader.style.display = 'none';
+            } else if (pageId === 'nav-home' && _readerWasOpenBeforeTabSwitch) {
+                _readerWasOpenBeforeTabSwitch = false;
+                vnReader.style.display = 'flex';
             }
         }
 
