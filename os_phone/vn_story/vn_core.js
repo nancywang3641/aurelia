@@ -1263,12 +1263,15 @@
         },
 
         // 測試用：console 跑 VN_Core.testFallback('描述', '黎明_候機大廳') 直接套一張 fallback 圖
+        // 走完整 chain：Pixabay → LoremFlickr，回報哪個接住
         testFallback: async function(prompt, cacheId) {
             prompt = prompt || 'cafe interior daylight';
             console.log(`[VN] testFallback prompt: "${prompt}", cacheId: "${cacheId || '(無)'}"`);
-            const url = await this._pixabayFallback(prompt, cacheId || '');
-            if (!url) { console.error('[VN] testFallback: 拿不到圖（檢查 Pixabay key 設好沒、瀏覽器 console 有沒有 CORS 錯誤）'); return null; }
-            console.log('[VN] testFallback URL:', url);
+            let url = await this._pixabayFallback(prompt, cacheId || '');
+            let source = 'Pixabay';
+            if (!url) { url = await this._loremFlickrFallback(prompt, cacheId || ''); source = 'LoremFlickr'; }
+            if (!url) { console.error('[VN] testFallback: 兩個 fallback 都失敗'); return null; }
+            console.log(`[VN] ✓ ${source} 接住:`, url);
             const bg = document.getElementById('game-bg');
             if (bg) this._setBgImage(bg, url + '#fallback');
             else console.warn('[VN] #game-bg 不存在，先進 VN 場景再測');
@@ -1287,14 +1290,8 @@
             }
         },
 
-        // Pixabay 退路圖庫：Pollinations 卡住或失敗時觸發
-        // cacheId 格式「時間_地點」（例如 黎明_候機大廳）→ 取地點部分翻譯為英文當搜尋詞
-        _pixabayFallback: async function(prompt, cacheId) {
-            const cfg = (win.OS_SETTINGS?.getImageConfig?.()) || {};
-            const key = cfg.pixabayKey;
-            if (!key) { console.warn('[VN] 未設 Pixabay key，跳過 fallback'); return ''; }
-
-            // 純翻譯 helper：用 translate(zh→en) 而非 translateForImageGeneration（後者會加 photorealistic 等修飾詞污染搜尋）
+        // 提取 fallback 用的英文關鍵字（cacheId 地點 → 翻譯 → 過濾 AI 修飾詞）
+        _buildFallbackKeywords: async function(prompt, cacheId) {
             const pureTranslate = async (text) => {
                 if (!text || !/[一-龥]/.test(text)) return text;
                 if (win.TranslationManager?.translate) {
@@ -1303,7 +1300,6 @@
                 return text;
             };
 
-            // 1. 優先用 cacheId 的地點部分（去掉時間前綴）
             let searchSrc = '';
             if (cacheId) {
                 const idx = String(cacheId).indexOf('_');
@@ -1311,25 +1307,32 @@
                 searchSrc = place.replace(/_/g, ' ').trim();
                 searchSrc = await pureTranslate(searchSrc);
             }
-            // 2. fallback：用原 prompt（不是 translatedPrompt 那個含修飾詞的版本）
             if (!searchSrc || !/[a-zA-Z]/.test(searchSrc)) {
                 searchSrc = await pureTranslate(String(prompt || '').slice(0, 60));
             }
 
-            // Pixabay 不吃 AI 修飾詞，過濾掉常見污染詞
             const STOPWORDS = new Set([
                 'photorealistic','realistic','photo','photography','cinematic','dramatic',
                 'high','quality','best','detailed','intricate','masterpiece',
                 '4k','8k','hd','uhd','ultra','sharp','focus','rendering','render',
                 'illustration','painting','artwork','digital','art'
             ]);
-            const keywords = String(searchSrc || '')
+            return String(searchSrc || '')
                 .replace(/[^a-zA-Z0-9 ]/g, ' ')
                 .split(/\s+/)
                 .filter(w => w.length > 2 && !STOPWORDS.has(w.toLowerCase()))
-                .slice(0, 3)
-                .join('+');
-            if (!keywords) { console.warn('[VN] Pixabay fallback: 沒英文關鍵字（過濾修飾詞後）'); return ''; }
+                .slice(0, 3);
+        },
+
+        // Pixabay 退路圖庫（高品質，需要 API key）
+        _pixabayFallback: async function(prompt, cacheId) {
+            const cfg = (win.OS_SETTINGS?.getImageConfig?.()) || {};
+            const key = cfg.pixabayKey;
+            if (!key) return '';
+
+            const kwArr = await this._buildFallbackKeywords(prompt, cacheId);
+            if (!kwArr.length) { console.warn('[VN] Pixabay: 沒英文關鍵字'); return ''; }
+            const keywords = kwArr.join('+');
             try {
                 const url = `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(keywords)}&image_type=photo&orientation=horizontal&per_page=20&safesearch=true`;
                 const res = await fetch(url);
@@ -1342,6 +1345,17 @@
                 console.error('[VN] Pixabay fallback 失敗:', e);
                 return '';
             }
+        },
+
+        // LoremFlickr 退路圖庫（免註冊，URL 直接帶關鍵字，最後一搏）
+        _loremFlickrFallback: async function(prompt, cacheId) {
+            const kwArr = await this._buildFallbackKeywords(prompt, cacheId);
+            if (!kwArr.length) { console.warn('[VN] LoremFlickr: 沒英文關鍵字'); return ''; }
+            // LoremFlickr 用逗號分隔多個關鍵字
+            const tags = kwArr.join(',');
+            const url = `https://loremflickr.com/1280/720/${encodeURIComponent(tags)}`;
+            console.log(`[VN] LoremFlickr fallback: "${tags}" → ${url}`);
+            return url;
         },
 
         _safeFetchBg: async function(cacheId, prompt) {
@@ -1378,11 +1392,15 @@
                 }
             }
 
-            // Fallback：Pixabay（用原 prompt，內部走純翻譯避開 AI 修飾詞）
+            // Fallback chain：Pixabay (有 key) → LoremFlickr (永遠 work)
             let isFallback = false;
             if (!raw) {
                 raw = await this._pixabayFallback(prompt, cacheId);
-                isFallback = !!raw;
+                if (raw) isFallback = true;
+            }
+            if (!raw) {
+                raw = await this._loremFlickrFallback(prompt, cacheId);
+                if (raw) isFallback = true;
             }
             if (!raw) return '';
 
