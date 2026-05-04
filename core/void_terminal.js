@@ -81,7 +81,7 @@
             return `https://nancywang3641.github.io/sound-files/home-page/YingyingCafe_${_getCafeBgPeriod()}.png`;
         },
         IRIS_AVATAR: 'https://nancywang3641.github.io/sound-files/char_presets/ying.png',
-        BGM_LOBBY: 'https://nancywang3641.github.io/aurelia/bgm/YING.mp3',
+        BGM_LOBBY: 'https://nancywang3641.github.io/sound-files/home-page/home_yingcafe.mp3',
         BGM_404:   'https://nancywang3641.github.io/aurelia/bgm/home_room404.mp3'
     };
 
