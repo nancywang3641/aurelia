@@ -158,7 +158,25 @@
         document.getElementById('mp_mount_mode').value = finalSettings.mount?.mode || 'modal';
         document.getElementById('mp_mount_selector').value = finalSettings.mount?.selector || '#sheld';
         document.getElementById('mp_mount_placement').value = finalSettings.mount?.placement || 'bottom';
-        
+
+        // mobile 強制嵌入模式並隱藏模式選單（mobile 不支援浮窗模式）
+        (function hideMobileFloatingOption() {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                || window.innerWidth < 768;
+            if (!isMobile) return;
+
+            const modeSelect = document.getElementById('mp_mount_mode');
+            if (!modeSelect) return;
+
+            // 強制設為嵌入模式並儲存
+            modeSelect.value = 'embedded';
+            modeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // 隱藏整個下拉單的容器（連同 label 一起隱藏）
+            const wrapper = modeSelect.closest('.flex-container');
+            if (wrapper) wrapper.style.display = 'none';
+        })();
+
         // 更新狀態
         updateStatus();
     }
