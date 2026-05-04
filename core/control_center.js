@@ -395,16 +395,15 @@
                     width: 100%; z-index: 100; overflow: hidden;
                 `;
             } else if (isMobile) {
-                // mobile 走嵌入模式（跟 desktop 同路徑），提高 z-index 防被 form_sheld 遮擋
+                // 用 absolute 占滿 #sheld 整個區域，z-index 蓋過 form_sheld (z-index:30)
                 embeddedRoot.style.cssText = `
-                    position: relative; width: 100%; height: 70vh;
-                    min-height: 400px; flex-shrink: 0;
+                    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                    width: 100%;
                     z-index: 999;
-                    margin-bottom: 15px;
+                    background: #fff;
                     box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
                     border-radius: 12px;
                     overflow: hidden;
-                    order: ${placement === 'top' ? '-1' : '9999'};
                 `;
             } else {
                 embeddedRoot.style.cssText = `
@@ -422,7 +421,13 @@
             box-shadow: none; display: block; background: #fff;
         `;
         embeddedRoot.appendChild(phoneFrame);
-        
+
+        // mobile 用 absolute 必須有定位錨點：containerEl 若是 static 就強制改 relative
+        if (isMobile && !isStandalone && containerEl && getComputedStyle(containerEl).position === 'static') {
+            containerEl.style.position = 'relative';
+            containerEl.dataset.aureliaPosForced = '1';
+        }
+
         if (placement === 'top') {
             containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
         } else {
@@ -507,6 +512,13 @@
 
     AureliaControlCenter.unmountEmbedded = function() {
         if (!isEmbedded || !embeddedRoot) return;
+
+        // 還原 mount 時被強制改成 relative 的 containerEl
+        document.querySelectorAll('[data-aurelia-pos-forced]').forEach(el => {
+            el.style.position = '';
+            delete el.dataset.aureliaPosForced;
+        });
+
         if (embedObserver) { embedObserver.disconnect(); embedObserver = null; }
 
         if (phoneModal) {
