@@ -423,10 +423,25 @@
         embeddedRoot.appendChild(phoneFrame);
         
         if (isMobile && !isStandalone) {
-            // 行動端掛到 body，脫離 #chat 捲動容器
-            document.body.appendChild(embeddedRoot);
+            // 強制掛到 <html> 根元素，繞過 body 和 #sheld 可能帶的 transform
+            // （iOS 上 position:fixed 會被任何帶 transform/filter/will-change 的祖先困住）
+            document.documentElement.appendChild(embeddedRoot);
             if (embedObserver) embedObserver.disconnect();
             embedObserver = null;
+
+            // 診斷輔助：把祖先鏈的 transform/filter/willChange 狀態存到 window 全局供 debug
+            window.__aurelia_debug_ancestors = (() => {
+                const result = [];
+                let el = embeddedRoot.parentNode;
+                while (el && el !== document) {
+                    const cs = getComputedStyle(el);
+                    if (cs.transform !== 'none' || cs.filter !== 'none' || cs.willChange !== 'auto') {
+                        result.push({ tag: el.tagName, id: el.id, transform: cs.transform, filter: cs.filter, willChange: cs.willChange });
+                    }
+                    el = el.parentNode;
+                }
+                return result;
+            })();
 
             // iOS body scroll lock：防止 input 獲焦時 body 被自動滾走帶飛 fixed 浮窗
             _savedScrollY = window.scrollY || window.pageYOffset || 0;
