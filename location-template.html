@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>設施互動界面</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="location.css">
+    <script src="theme-manager.js"></script>
+    <style>
+        /* 角色動畫相關樣式 */
+        .walking-character {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            z-index: 5;
+            transition: left 0.016s linear; /* 使移動更平滑 */
+            will-change: transform, left; /* 優化性能 */
+        }
+        
+        .walking-character:hover {
+            transform: scale(1.1);
+        }
+        
+        .character-chibi {
+            width: 40px;
+            height: 60px;
+            border-radius: 20px 20px 10px 10px;
+            position: relative;
+        }
+        
+        /* 角色臉部特徵 */
+        .character-chibi::before {
+            content: "";
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background-color: #fff;
+            border-radius: 50%;
+            top: 15px;
+            left: 10px;
+            box-shadow: 15px 0 0 #fff;
+        }
+        
+        .character-chibi::after {
+            content: "";
+            position: absolute;
+            width: 8px;
+            height: 4px;
+            background-color: #fff;
+            border-radius: 10px;
+            top: 30px;
+            left: 15px;
+        }
+        
+        .character-name {
+            margin-top: 5px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        
+        /* 行走動畫 */
+        .walking-left .character-chibi,
+        .walking-right .character-chibi {
+            animation: bounce 0.8s infinite alternate;
+        }
+        
+        .walking-left {
+            transform: scaleX(-1);
+        }
+        
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-2px); }
+        }
+        
+        /* 坐下效果 */
+        .sitting .character-chibi {
+            transform: scaleY(0.85) translateY(10%);
+            transition: transform 0.3s ease;
+        }
+        
+        /* 顯示狀態消息 */
+        .character-status {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 100;
+            animation: fadeInOut 2s forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .response-container {
+    position: relative;
+    height: 40%;
+    background-color: #fff;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.response-content {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    padding: 12px;
+    background-color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    text-align: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.response-content.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.chat-icon {
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    display: flex;
+    gap: 5px;
+    z-index: 5;
+}
+
+.chat-bubble {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.chat-bubble:hover {
+    transform: scale(1.1);
+    background-color: #e0e0e0;
+}
+
+
+
+/* 頁面容器樣式 */
+.pages-container {
+    flex: 1;
+    display: flex;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.page {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 0 10px 10px;
+    gap: 10px;
+    overflow-y: auto;
+    position: relative;
+}
+
+.main-page {
+    padding-bottom: 20px;
+}
+
+.main-page .function-section-box, 
+.main-page .facility-section-box,
+.main-page .custom-section-box {
+    background-color: #fff;
+    border-radius: 15px;
+    padding: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    flex: 1;
+    min-width: 100px; /* 確保在小屏幕上有合理的寬度 */
+    max-width: 33%; /* 限制最大寬度 */
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    height: 120px; /* 統一高度 */
+    transition: all 0.3s ease; /* 添加基本轉換效果 */
+}
+
+.custom-grid, .function-grid, .icon-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-gap: 4px;
+    padding: 5px;
+    flex: 1;
+}
+
+.section-title {
+    font-size: 14px;
+    text-align: center;
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px solid #f0f0f0;
+    color: #666;
+}
+
+/* 第二頁應用樣式 */
+.page-title {
+    text-align: center;
+    font-size: 22px;
+    color: white;
+    margin: 15px 0;
+    font-weight: normal;
+}
+
+.apps-container {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 15px;
+    padding: 0 10px;
+    margin-top: 15px;
+}
+
+.app-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.app-icon-bg {
+    width: 70px;
+    height: 70px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.app-icon-large {
+    font-size: 32px;
+}
+
+.app-name {
+    font-size: 14px;
+    color: white;
+    text-align: center;
+}
+
+/* 頁面指示器 */
+.page-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 5px 0;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+}
+
+.indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.indicator-dot.active {
+    width: 20px;
+    height: 8px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+/* 歷史對話記錄模態視窗 */
+.chat-history-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 350px;
+    height: 70vh;
+    max-height: 600px;
+    background-color: white;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+}
+
+.chat-history-content {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 10px;
+}
+
+.history-message {
+    display: flex;
+    flex-direction: column;
+    max-width: 80%;
+    gap: 5px;
+}
+
+.history-message.user {
+    align-self: flex-end;
+}
+
+.history-message.character {
+    align-self: flex-start;
+}
+
+.message-avatar {
+    align-self: flex-start;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+}
+
+.message-bubble {
+    padding: 10px 15px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.history-message.user .message-bubble {
+    background-color: #dcf8c6;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.history-message.character .message-bubble {
+    background-color: #f0f0f0;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
+.message-time {
+    font-size: 12px;
+    color: #999;
+    margin-top: 3px;
+}
+
+.history-message.user .message-time {
+    align-self: flex-end;
+}
+
+.history-message.character .message-time {
+    align-self: flex-start;
+}
+
+/* 修復角色動作描述樣式 */
+.response-action {
+    padding: 12px;
+    height: 60%;
+    background-color: #fff;
+    border-radius: 20px;
+    text-align: center;
+    font-size: 14px;
+    color: #555;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 8px;
+    font-style: italic;
+}
+
+.overlay {
+    position: fixed;
+    z-index: 999;
+    display: none;
+}
+
+/* 模態框覆蓋層，用於設施編輯等彈窗 */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    display: none;
+}
+
+/* 對話氣泡樣式 */
+.response-section {
+    margin: 15px 0;
+    padding: 0 15px;
+}
+
+.response-bubble {
+    background-color: #f5f5f5;
+    border-radius: 20px;
+    padding: 15px;
+    position: relative;
+    max-width: 100%;
+}
+
+.response-bubble::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    border-width: 0 10px 10px 10px;
+    border-style: solid;
+    border-color: transparent transparent #f5f5f5 transparent;
+}
+
+.response-bubble p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.facility-section-box .app-icon, 
+.function-section-box .function-icon,
+.custom-section-box .function-icon {
+    width: 30px;
+    height: 30px;
+    background-color: #FFE552;
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 14px;
+    font-weight: bold;
+    margin: 0 auto;
+    color: #000;
+}
+
+.facility-section-box .icon-grid {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    font-size: 32px;  /* 放大圖標 */
+    padding: 10px;
+}
+
+.custom-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 10px;
+}
+
+.system-icon {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.system-icon:hover {
+    transform: scale(1.1);
+    background-color: rgba(255, 255, 255, 1);
+}
+
+.facility-section-box,
+.function-section-box,
+.custom-section-box {
+    background: white;
+    border-radius: 15px;
+    padding: 5px;
+    margin: 5px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 85px;
+}
+
+.facility-section-box:hover,
+.custom-section-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.section-title {
+    font-size: 14px;
+    color: #333;
+    margin-top: 5px;
+    text-align: center;
+}
+
+.main-page .sections-container {
+    position: relative;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.main-page .function-section-box, 
+.main-page .facility-section-box,
+.main-page .custom-section-box {
+    background-color: #fff;
+    border-radius: 15px;
+    padding: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    flex: 1;
+    min-width: 100px; /* 確保在小屏幕上有合理的寬度 */
+    max-width: 33%; /* 限制最大寬度 */
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    height: 130px; /* 統一高度 */
+    transition: all 0.3s ease; /* 添加基本轉換效果 */
+}
+
+/* 將場景設施的標題樣式恢復，跟功能區域的標題對齊 */
+.facility-section-box {
+    display: flex;
+    flex-direction: column !important; /* 恢復正常方向 */
+}
+
+/* 添加設施圖標內顯示兩個字的特殊樣式 */
+.main-page .facility-icon.preview-only {
+    font-size: 14px ;
+    padding: 2px ;
+    word-break: keep-all ;
+    white-space: nowrap ;
+}
+
+.facility-section-box:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+/* 添加功能區塊 hover 效果 */
+.function-section-box:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+/* 添加自定義區塊 hover 效果 */
+.custom-section-box:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+/* 資料夾展開視圖 */
+.facility-folder-expanded {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    max-width: 300px;
+    max-height: 70vh;
+    background-color: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    z-index: 10000; /* 增加 z-index 確保在遮罩層上方 */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 資料夾標題 */
+.folder-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: linear-gradient(135deg, #6e45e2 0%, #88d3ce 100%);
+    color: white;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+}
+
+.folder-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.close-folder-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.close-folder-btn:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+}
+
+/* 展開的設施圖標網格 */
+.expanded-facility-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 15px;
+    overflow-y: auto;
+    max-height: calc(70vh - 50px);
+}
+
+/* 展開的設施圖標 */
+.expanded-facility-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #f5f5f5;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.expanded-facility-icon:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+    background-color: #f0f0f0;
+}
+
+.expanded-facility-icon .icon {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 16px;
+    color: white;
+    text-align: center;
+    line-height: 1.1;
+    word-break: keep-all;
+    white-space: nowrap;
+    padding: 2px;
+}
+
+.expanded-facility-icon .name {
+    font-size: 12px;
+    text-align: center;
+    color: #333;
+    font-weight: 500;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 沒有設施的提示 */
+.no-facilities-message {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 15px;
+    color: #666;
+    font-style: italic;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    margin: 5px 0;
+    font-size: 12px;
+}
+
+/* 資料夾圖標指示器 */
+.folder-indicator {
+    display: none; /* 隱藏+號 */
+}
+
+.facility-icon.preview-only:hover {
+    transform: none ;
+    background-color: #e0e0e0;
+    box-shadow: none ;
+}
+
+/* 添加一個小提示，指示用戶需要點擊資料夾而非直接點擊圖標 */
+.facility-section-box:after {
+    content: "";
+    display: none; /* 隱藏提示文本 */
+}
+
+.facility-section-box:hover:after {
+    opacity: 0;
+}
+
+/* 工具提示樣式 */
+.tooltip {
+    display: none;
+}
+
+/* 更多指示器樣式 */
+.more-indicator {
+    background-color: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #555;
+}
+
+/* 應用圖標樣式 */
+.app-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+    width: 80px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.app-icon:hover {
+    transform: translateY(-2px);
+}
+
+.app-icon-inner {
+    font-size: 24px;
+}
+
+.app-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* 調整应用展開視圖中圖標樣式 */
+.expanded-facility-icon .icon.app-icon {
+    background-color: #f9f9f9;
+    border-radius: 15px;
+    color: #333;
+    font-size: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+}
+
+.expanded-facility-icon .icon.app-icon .app-icon-inner {
+    margin: 0;
+}
+
+.custom-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 10px;
+}
+
+/* 預覽圖標樣式 */
+.preview-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: default;
+    user-select: none;
+}
+
+/* 資料夾視窗樣式 */
+.folder-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    max-width: 400px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+}
+
+.window-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.window-title {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.window-close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+}
+
+.window-content {
+    padding: 20px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.app-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 20px;
+    justify-items: center;
+}
+
+.icon-emoji {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    margin-bottom: 5px;
+    transition: transform 0.2s;
+}
+
+.icon-name {
+    font-size: 14px;
+    color: #333;
+}
+
+.app-icon:hover .icon-emoji {
+    transform: scale(1.1);
+}
+
+/* 資料夾點擊效果 */
+.section-box {
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.section-box:active {
+    transform: scale(0.95);
+}
+
+/* 全局链接樣式 */
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+/* 返回按鈕樣式 */
+.back-btn {
+    text-decoration: none;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    margin-right: 15px;
+    transition: transform 0.2s ease;
+}
+
+.back-btn:hover {
+    transform: scale(1.1);
+}
+
+/* 設施展開視圖樣式 */
+#expandedFacilityGrid {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+    max-height: calc(100vh - 100px);
+}
+
+.facility-layer-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    padding: 10px 0;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.facilities-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 15px;
+    padding: 10px 0;
+}
+
+.expanded-facility-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+}
+
+.expanded-facility-icon:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.expanded-facility-icon .icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.expanded-facility-icon .name {
+    font-size: 14px;
+    color: #333;
+    text-align: center;
+    word-break: break-all;
+}
+
+.facility-icon-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: white;
+}
+
+/* 动画模块管理器样式 */
+.module-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.module-btn {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.module-btn:hover {
+    background-color: var(--primary-color-dark);
+}
+
+.module-list {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.module-category {
+    margin-bottom: 15px;
+}
+
+.category-header {
+    font-weight: bold;
+    padding: 8px;
+    background-color: var(--secondary-bg);
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.module-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+    padding: 10px;
+}
+
+.module-item {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.module-item:hover {
+    border-color: var(--primary-color);
+    background-color: var(--hover-bg);
+}
+
+.module-item.selected {
+    border-color: var(--primary-color);
+    background-color: var(--active-bg);
+}
+
+.module-item-name {
+    font-weight: bold;
+}
+
+.module-item-info {
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.module-settings {
+    background-color: var(--secondary-bg);
+    border-radius: 6px;
+    padding: 15px;
+}
+    </style>
+</head>
+<body>
+    <div class="phone-container">
+        <div class="screen">
+            <div class="dynamic-island"></div>
+            
+            <!-- 設施互動界面內容 -->
+            <div class="location-app-content">
+                <!-- 頂部應用欄 -->
+                <div class="app-header">
+                    <a href="#" class="back-btn" id="backBtn">←</a>
+                    <h1 id="locationName">設施名稱</h1>
+                    <div class="header-icon" id="locationIcon">🏢</div>
+                </div>
+                
+                <!-- 麵包屑導航 -->
+                <div class="breadcrumb-nav">
+                    <span class="breadcrumb-item"><a href="app-map.html">Aurealis Core</a></span>
+                    <span class="breadcrumb-separator">></span>
+                    <span class="breadcrumb-item"><a href="#" id="districtLink">所在區域</a></span>
+                    <span class="breadcrumb-separator">></span>
+                    <span class="breadcrumb-item current" id="breadcrumbLocation">設施名稱</span>
+                </div>
+                
+                <!-- 場景視窗 (背景+角色) -->
+                <div class="scene-window" id="sceneWindow">
+                    <!-- 場景背景 -->
+                    <div class="scene-background" id="sceneBackground"></div>
+                    
+                    <!-- 場景信息 -->
+                    <div class="scene-info">
+                        <div class="scene-time" id="sceneTime">15:30</div>
+                        <div class="scene-weather" id="sceneWeather">☀️ 晴天</div>
+                    </div>
+                    
+                    <!-- NPC角色容器 -->
+                    <div class="npc-container" id="npcContainer">
+                        <!-- 示例NPC - 將由JS動態生成 -->
+                    </div>
+                    
+                    <!-- NPC對話框 (初始隱藏) -->
+                    <div class="npc-dialogue-container" id="npcDialogueContainer">
+                        <div class="npc-portrait" id="npcPortrait"></div>
+                        <div class="dialogue-content">
+                            <div class="dialogue-name" id="dialogueName">角色名稱</div>
+                            <div class="dialogue-text" id="dialogueText">角色對話內容將顯示在這裡...</div>
+                        </div>
+                        <button class="dialogue-close-btn" id="closeDialogueBtn">×</button>
+                    </div>
+                </div>
+                
+                <!-- 主角回應區 -->
+                <div class="response-buttons">
+                    <div class="scene-mode-container">
+                        <div class="character-name-tag">
+                            <span class="character-name" id="speakingCharacterName">現實</span>
+                        </div>
+                        <div class="scene-mode-content" id="characterResponse">
+                            第三人稱描述的場景內容
+                        </div>
+                        
+                        <div class="chat-icon">
+                            <div class="chat-bubble" id="historyButton">💬</div>
+                        </div>
+                    </div>
+                    
+                    <details class="status-bar-details">
+                        <summary class="status-bar-summary">[狀態欄]</summary>
+                        <div class="status-bar-content">
+                            <div class="status-bar-info">這裡顯示角色的狀態信息，您以導演視角可查看這些信息</div>
+                            <div class="status-bar-grid">
+                                <div class="status-bar-label">當前心情:</div>
+                                <div class="status-bar-value" id="status-mood">[😐/😤/😂等]</div>
+                                
+                                <div class="status-bar-label">回應:</div>
+                                <div class="status-bar-value" id="status-response">[角色即將說出的話]</div>
+                                
+                                <div class="status-bar-label">動作描述:</div>
+                                <div class="status-bar-value" id="status-action">[角色當下進行的明顯動作]</div>
+                                
+                                <div class="status-bar-label">思考狀態:</div>
+                                <div class="status-bar-value" id="status-thinking">[角色的內心判斷、計畫或私密情緒]</div>
+                                
+                                <div class="status-bar-label">主軸:</div>
+                                <div class="status-bar-value" id="status-main">[角色此時此刻的行動或情感目標]</div>
+                                
+                                <div class="status-bar-label">窗口:</div>
+                                <div class="status-bar-value" id="status-window">[由哪一角色或旁白生成下一段]</div>
+                                
+                                <div class="status-bar-label">轉場:</div>
+                                <div class="status-bar-value" id="status-transition">[場景變化，如: 客廳→走廊，無變動則NA]</div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+                
+                <div class="sections-container">
+                    <div class="section-row">
+                        <div class="facility-section-box" id="backgroundInfoFolder">
+                            <div class="icon-grid">
+                                <div class="preview-icon">🏞️</div>
+                            </div>
+                            <div class="section-title">背景資訊</div>
+                        </div>
+                        
+                        <div class="function-section-box" id="appFolder">
+                            <div class="function-grid">
+                                <div class="preview-icon">🎒</div>
+                                <div class="preview-icon">😊</div>
+                                <div class="preview-icon">💰</div>
+                                <div class="preview-icon">🐾</div>
+                            </div>
+                            <div class="section-title">應用</div>
+                        </div>
+                        
+                        <div class="custom-section-box" id="systemFolder">
+                            <div class="function-grid">
+                                <div class="preview-icon">🎨</div>
+                                <div class="preview-icon">📋</div>
+                            </div>
+                            <div class="section-title">系統</div>
+                        </div>
+                    </div>
+                </div>
+                
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 單一覆蓋層，用於所有模態視窗 -->
+<div class="overlay" id="overlay" style="display: none;"></div>
+
+<!-- 歷史對話記錄模態視窗 -->
+<div class="chat-history-modal" id="chatHistoryModal">
+    <div class="modal-header">
+        <div class="modal-title">歷史對話記錄</div>
+        <button class="close-btn" id="closeHistoryModal">×</button>
+    </div>
+    <div class="chat-history-content">
+        <div class="history-message user">
+            <div class="message-avatar">👤</div>
+            <div class="message-bubble">你好，最近過得如何？</div>
+            <div class="message-time"></div>
+        </div>
+        <div class="history-message character">
+            <div class="message-avatar">👩</div>
+            <div class="message-bubble">很好呀！今天天氣不錯，我剛散完步回來。</div>
+            <div class="message-time"></div>
+        </div>
+        <div class="history-message user">
+            <div class="message-avatar">👤</div>
+            <div class="message-bubble">那太好了，你喜歡去哪裡散步？</div>
+            <div class="message-time"></div>
+        </div>
+        <!-- 更多對話記錄... -->
+    </div>
+</div>
+
+
+
+<!-- 模態框覆蓋層，用於設施編輯等彈窗 -->
+<div id="modalOverlay" class="modal-overlay" style="display: none;"></div>
+
+<!-- 場景設施模態視窗 -->
+
+
+<!-- 背景資訊資料夾展開視圖 -->
+<div id="backgroundInfoFolderExpanded" class="folder-expanded" style="display: none;">
+    <div class="folder-header">
+        <h2>背景資訊</h2>
+        <button id="closeBackgroundInfoBtn" class="close-btn">×</button>
+    </div>
+    <div class="background-info-content">
+        <div class="info-block">
+            <h3>當前背景資訊</h3>
+            <div class="info-grid">
+                <div class="info-row">
+                    <div class="info-label">當前時間:</div>
+                    <div class="info-value" id="bg-time">00:00</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">當前月份:</div>
+                    <div class="info-value" id="bg-month">6月</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">當前區域:</div>
+                    <div class="info-value" id="bg-area">A區</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">當前設施:</div>
+                    <div class="info-value" id="bg-facility">未指定</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">天氣狀態:</div>
+                    <div class="info-value" id="bg-weather">晴朗</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">時間模式:</div>
+                    <div class="info-value" id="bg-time-mode">白天</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新增場景設施資料夾展開視圖 -->
+<div id="facilityFolderExpanded" class="folder-expanded" style="display: none;">
+    <div class="folder-header">
+        <h2>場景設施</h2>
+        <button id="closeFolderBtn" class="close-btn">×</button>
+    </div>
+    <div id="expandedFacilityGrid" class="expanded-grid"></div>
+</div>
+
+<!-- 新增應用資料夾展開視圖 -->
+<div id="appFolderExpanded" class="facility-folder-expanded" style="display: none;">
+    <div class="folder-header">
+        <h3>應用程式</h3>
+        <button class="close-folder-btn" id="closeAppFolderBtn">×</button>
+    </div>
+    <div id="expandedAppGrid" class="expanded-facility-grid">
+        <!-- 應用程式列表 -->
+        <a href="app/app-backpack.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">🎒</div>
+            </div>
+            <div class="name">背包</div>
+        </a>
+        
+        <a href="app/app-status.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">😊</div>
+            </div>
+            <div class="name">心情</div>
+        </a>
+        
+        <a href="app/app-wallet.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">💰</div>
+            </div>
+            <div class="name">錢包</div>
+        </a>
+        
+        <a href="app/app-pet.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">🐾</div>
+            </div>
+            <div class="name">家寵</div>
+        </a>
+        
+        <a href="app/app-schedule.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">📅</div>
+            </div>
+            <div class="name">生活日程</div>
+        </a>
+        
+        <a href="app/app-memory.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">📱</div>
+            </div>
+            <div class="name">記憶庫</div>
+        </a>
+        
+        <a href="app/app-notes.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">📝</div>
+            </div>
+            <div class="name">筆記</div>
+        </a>
+        
+        <a href="app/app-chatroom.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">💬</div>
+            </div>
+            <div class="name">聊天室</div>
+        </a>
+        
+        <a href="app/app-echo.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">⚛️</div>
+            </div>
+            <div class="name">Echo</div>
+        </a>
+        
+        <a href="app/app-shopping.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">🛒</div>
+            </div>
+            <div class="name">網購</div>
+        </a>
+        
+        <a href="app/app-bill.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">📋</div>
+            </div>
+            <div class="name">帳單</div>
+        </a>
+        
+        <a href="app/app-map.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#E53935"/>
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13V2z" fill="#C62828"/>
+                        <circle cx="12" cy="9" r="2.5" fill="white"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="name">地圖</div>
+        </a>
+    </div>
+</div>
+
+<!-- 新增系統資料夾展開視圖 -->
+<div id="systemFolderExpanded" class="facility-folder-expanded" style="display: none;">
+    <div class="folder-header">
+        <h3>系統功能</h3>
+        <button class="close-folder-btn" id="closeSystemFolderBtn">×</button>
+    </div>
+    <div id="expandedSystemGrid" class="expanded-facility-grid">
+        <!-- 系統功能列表 - 添加AI內容管理 -->
+        <a href="app/app-settings.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">🎨</div>
+            </div>
+            <div class="name">主題</div>
+        </a>
+        
+        <a href="ai-content-management.html" class="expanded-facility-icon">
+            <div class="icon app-icon">
+                <div class="app-icon-inner">📋</div>
+            </div>
+            <div class="name">AI內容管理</div>
+        </a>
+    </div>
+
+                
+                <!-- 角色動作區 -->
+                <div class="player-action-container">
+                    <div class="player-action" id="playerAction">
+                        [你好奇地觀察著這個場所，注意到各種有趣的細節和特色...]
+                    </div>
+                </div>
+                
+                <!-- 底部控制欄 -->
+                <div class="bottom-controls">
+                    <button class="control-btn" id="inventoryBtn">
+                        <span class="control-icon">🎒</span>
+                        <span class="control-text">背包</span>
+                    </button>
+                    <button class="control-btn" id="activityBtn">
+                        <span class="control-icon">🎮</span>
+                        <span class="control-text">活動</span>
+                    </button>
+                    <button class="control-btn" id="infoBtn">
+                        <span class="control-icon">ℹ️</span>
+                        <span class="control-text">信息</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 活動選單 (初始隱藏) -->
+            <div class="activity-menu" id="activityMenu">
+                <div class="menu-header">
+                    <h3>可進行的活動</h3>
+                    <button class="close-menu-btn" id="closeActivityMenu">×</button>
+                </div>
+                <div class="menu-items" id="activityItems">
+                    <!-- 將由JavaScript動態生成活動項目 -->
+                </div>
+            </div>
+            
+            <!-- 設施信息面板 (初始隱藏) -->
+            <div class="location-info-panel" id="locationInfoPanel">
+                <div class="panel-header">
+                    <h3>設施信息</h3>
+                    <button class="close-panel-btn" id="closeInfoPanel">×</button>
+                </div>
+                <div class="panel-content">
+                    <div class="info-section">
+                        <h4 id="infoName">設施名稱</h4>
+                        <p class="info-description" id="infoDescription">這裡將顯示設施的描述內容...</p>
+                    </div>
+                    <div class="info-section">
+                        <h4>基本信息</h4>
+                        <div class="info-item">
+                            <span class="info-label">開放時間:</span>
+                            <span class="info-value" id="infoHours">全天開放</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">人氣時段:</span>
+                            <span class="info-value" id="infoPeakTime">下午14:00 - 17:00</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">特色服務:</span>
+                            <span class="info-value" id="infoFeatured">尚無資料</span>
+                        </div>
+                    </div>
+                    <div class="info-section">
+                        <h4>常見角色</h4>
+                        <div id="infoVisitors">
+                            <!-- 將由JavaScript動態生成訪客項目 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="location.js"></script>
+</body>
+</html>
