@@ -70,6 +70,14 @@ const PHONE_FILES = [
     'rpg/status_panel.js',
     'rpg/avatar_manager.js',
 
+    // === 🗺️ MAP 地圖系統 ===
+    'map/map_data.js',
+    'map/world_runtime.js',
+    'map/world_generator.js',
+    'map/schedule_engine.js',
+    'map/vn_bridge.js',
+    'map/map_core.js',
+
     // === 🔵 微信 (WeChat) ===
     'wx/wx_user_profile.js', 'wx/wx_theme.js',
     'wx/wx_contacts.js', 'wx/wx_chat_settings.js', 'wx/wx_bubble_settings.js',
@@ -123,7 +131,7 @@ function getExtensionSettings() {
         } catch (e) {}
     }
     if (!settings) {
-        settings = { enabled: true, mount: { mode: 'embedded', selector: '#sheld', placement: 'bottom' } };
+        settings = { enabled: true, mount: { mode: 'embedded', selector: '#chat', placement: 'bottom' } };
     }
     return settings;
 }
@@ -184,6 +192,11 @@ async function initializeExtension() {
                 // 註冊賽博塔羅系統
                 if (window.OS_TAROT) {
                     window.PhoneSystem.install('賽博塔羅', '🔮', '#9b59b6', window.OS_TAROT.launch);
+                }
+
+                // 註冊地圖系統
+                if (window.OS_MAP) {
+                    window.PhoneSystem.install('地圖', '🗺️', '#2f9544', window.OS_MAP.launchApp);
                 }
 
                 // 註冊 VN 視覺小說
@@ -292,12 +305,11 @@ function overrideToggleLogic() {
 
     const smartToggle = () => {
         const settings = getExtensionSettings();
-        const mount = settings.mount || { mode: 'embedded', selector: '#sheld', placement: 'bottom' };
+        const mount = settings.mount || { mode: 'embedded', selector: '#chat', placement: 'bottom' };
 
         if (mount.mode === 'embedded') {
-            const target = document.querySelector(mount.selector) ||
-                           document.querySelector('#sheld') ||
-                           document.querySelector('#chat') ||
+            const target = document.querySelector(mount.selector) || 
+                           document.querySelector('#chat') || 
                            document.querySelector('.chat-body');
             
             if (target) {
@@ -312,9 +324,9 @@ function overrideToggleLogic() {
                 }
             }
             
-            console.log('[Aurelia] 尚未找到容器，啟動監聽器...');
+            console.log('[Aurelia] 尚未找到 #chat，啟動監聽器...');
             const obs = new MutationObserver(() => {
-                const t = document.querySelector(mount.selector) || document.querySelector('#sheld') || document.querySelector('#chat');
+                const t = document.querySelector(mount.selector) || document.querySelector('#chat');
                 if (t && window.AureliaControlCenter) {
                     const useFixed = mount.placement === 'bottom';
                     window.AureliaControlCenter.mountEmbedded(t, mount.placement, useFixed);
@@ -327,9 +339,6 @@ function overrideToggleLogic() {
         } else {
             if (window.AureliaControlCenter && window.AureliaControlCenter.isEmbeddedMounted && window.AureliaControlCenter.isEmbeddedMounted()) {
                 window.AureliaControlCenter.unmountEmbedded();
-            }
-            if (window.AureliaControlCenter && window.AureliaControlCenter.setSyncTarget) {
-                window.AureliaControlCenter.setSyncTarget(mount.selector || '#sheld');
             }
             if (originalToggle) originalToggle.call(window.AureliaControlCenter);
         }
