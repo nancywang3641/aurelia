@@ -221,14 +221,15 @@
         const safeTagId = data.tagId.replace(/[^a-zA-Z0-9_-]/g, '');
         let htmlContent = (data.html || '').replace(/\{\{(\d+)\}\}/g, '$$$$$1'); 
         
-        let fullHtml = `<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<style>\n${data.css || ''}\n</style>\n</head>\n<body>\n`;
+        // 拔掉 <!DOCTYPE html> 與 <head>，直接用 <body> 與 <style> 輕裝上陣
+        let fullHtml = `<body>\n<style>\n${data.css || ''}\n</style>\n`;
         fullHtml += `<div class="vn-dynamic-panel-${safeTagId}" id="${safeTagId}-container">\n${htmlContent}\n</div>\n`;
         
         if (data.js) {
             let safeJs = data.js.replace(/\x60\x60\x60(?:javascript|js|html|css)?/gi, '').replace(/\x60\x60\x60/g, '').trim();
             fullHtml += `\n<script>\n(async function(){\n  try {\n    const ctx = window.parent || window;\n    const imgManager = ctx.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;\n    const container = document.getElementById('${safeTagId}-container');\n    const rawText = \`$1\`;\n    const lines = rawText.split('\\n').map(l=>l.trim()).filter(Boolean);\n    window.__IS_PREVIEW = false;\n    ${safeJs}\n  } catch(e) {\n    console.error('${safeTagId} 腳本執行錯誤:', e);\n  }\n})();\n</script>\n`;
         }
-        fullHtml += `</body>\n</html>`;
+        fullHtml += `</body>`;
         return "```\n" + fullHtml + "\n```";
     }
 
