@@ -333,10 +333,10 @@
         screen.appendChild(createTabContainer(parentDoc));
         screen.appendChild(createBottomNav(parentDoc));
 
-        // 🌟 雙層架構 2：全螢幕全域視窗 (給遊戲 Apps 使用，覆蓋整個手機)
+        // 🌟 雙層架構 2：全螢幕全域視窗 (給遊戲 Apps 使用，避開底部導覽列)
         const slidePanel = parentDoc.createElement('div');
         slidePanel.id = 'aurelia-panel-container';
-        slidePanel.style.cssText = `position: absolute; top:0; left:0; width:100%; height:100%; background: #1a1a1a; z-index: 50; display: none; flex-direction: column;`;
+        slidePanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom:calc(55px + env(safe-area-inset-bottom, 0px)); background: #1a1a1a; z-index: 50; display: none; flex-direction: column;`;
         slidePanel.innerHTML = `<div id=\"aurelia-iframe-container\" style=\"width:100%; height:100%; background:#000; overflow:hidden; position:relative;\"></div>`;
         screen.appendChild(slidePanel);
 
@@ -599,6 +599,7 @@
             pet:        () => window.PET_SHOP?.launch,
             pet_home:   () => window.PET_HOME?.launch,
             tarot:      () => window.OS_TAROT?.launch,
+            map:        () => window.OS_MAP?.launchApp,
             rpg:        () => window.RPG_PANEL?.launch,
             worldbook:  () => window.OS_WORLDBOOK?.launch,
         };
@@ -675,6 +676,8 @@
                 '視差引擎': window.OS_QUEST_BOARD,
                 'avs': window.OS_AVS,
                 '變數工坊': window.OS_AVS,
+                '地圖': window.OS_MAP,
+                'map': window.OS_MAP,
                 // wx/wb/錢包 (phone_system shim 已將它們存入 __PHONE_APPS)
                 '微信':    { launch: (c) => window.__PHONE_APPS?.['微信']?.(c) },
                 '微博':    { launch: (c) => window.__PHONE_APPS?.['微博']?.(c) },

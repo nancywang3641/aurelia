@@ -376,12 +376,63 @@
                 } catch(e) { j(e); }
             });
         },
-        clearAllMapData: async function() { 
-            const db = await this.init(); 
+        clearAllMapData: async function() {
+            const db = await this.init();
             return new Promise((r, j) => {
                 try {
                     const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
                     tx.objectStore(STORE_NAME_MAP).clear();
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
+        },
+        // === 🌍 動態世界資料 (複用 map_data store, 用 __world__ 前綴 key) ===
+        saveWorldData: async function(worldId, data) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
+                    tx.objectStore(STORE_NAME_MAP).put({
+                        id: `__world__${worldId}`,
+                        worldId,
+                        ...data,
+                        timestamp: Date.now()
+                    });
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
+        },
+        getWorldData: async function(worldId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_MAP, 'readonly')
+                        .objectStore(STORE_NAME_MAP).get(`__world__${worldId}`);
+                    req.onsuccess = () => r(req.result || null);
+                    req.onerror = () => j(req.error);
+                } catch(e) { j(e); }
+            });
+        },
+        listWorlds: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_MAP, 'readonly')
+                        .objectStore(STORE_NAME_MAP).getAll();
+                    req.onsuccess = () => {
+                        const all = req.result || [];
+                        r(all.filter(x => x.id && x.id.startsWith('__world__')));
+                    };
+                    req.onerror = () => j(req.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteWorldData: async function(worldId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
+                    tx.objectStore(STORE_NAME_MAP).delete(`__world__${worldId}`);
                     tx.oncomplete = () => r(true);
                 } catch(e) { j(e); }
             });
