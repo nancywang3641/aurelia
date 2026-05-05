@@ -43,8 +43,16 @@ yarn-error.log*
 # === 個人筆記（如果還有要新增）===
 *.local.md
 
-# === README 不上 GitHub（個人玩具不公開介紹）===
+# === 個人參考/說明文檔不上傳（中文檔名無法用 glob 簡化，逐個列）===
 README.md
+【視差世界观架构】.md
+動態世界地圖.md
+location-template.html
+
+# 保險規則：擋未來的個人筆記/模板（中文 glob 不可靠，盡量擋一部分）
+*template*.html
+*參考*.md
+*參考*.html
 
 # === 本地工具腳本（含 SSH 細節，不傳 GitHub）===
 *.bat
