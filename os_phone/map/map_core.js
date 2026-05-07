@@ -72,7 +72,10 @@
         /* 詳情頁覆蓋層 */
         .am-detail-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 100; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 0.4s; background-size: cover; background-position: center; }
         .am-detail-overlay.active { opacity: 1; pointer-events: auto; }
-        .am-detail-header { padding: 15px; display: flex; justify-content: space-between; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); }
+        .am-detail-header { padding: 15px; display: flex; align-items: center; gap: 12px; background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent); }
+        .am-detail-title-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.2; }
+        .am-detail-zone { font-size: 10px; color: #888; letter-spacing: 2px; text-transform: uppercase; font-family: 'Cinzel', serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .am-detail-facility { font-size: 16px; color: #D4AF37; font-weight: bold; letter-spacing: 1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .am-center-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px; overflow-y: auto; gap: 15px; }
 
@@ -119,11 +122,22 @@
         .am-landmark { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; z-index: 3; pointer-events: auto; opacity: 0.92; user-select: none; cursor: pointer; }
         .am-landmark-emoji { font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)); }
         .am-landmark-label { background: rgba(0,0,0,0.7); color: #ddd; padding: 2px 6px; border-radius: 8px; font-size: 9px; white-space: nowrap; border: 1px solid rgba(212,175,55,0.35); letter-spacing: 0.5px; }
-        .am-landmark-popup { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: rgba(15,15,15,0.96); color: #f0f0f0; padding: 8px 12px; border-radius: 10px; font-size: 11px; max-width: 200px; min-width: 110px; white-space: normal; word-break: break-word; text-align: center; line-height: 1.55; border: 1px solid rgba(212,175,55,0.55); box-shadow: 0 6px 14px rgba(0,0,0,0.7); z-index: 25; pointer-events: none; }
+        .am-landmark-popup { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: rgba(15,15,15,0.96); color: #f0f0f0; padding: 8px 12px; border-radius: 10px; font-size: 11px; max-width: 180px; min-width: 110px; white-space: normal; word-break: break-word; text-align: center; line-height: 1.55; border: 1px solid rgba(212,175,55,0.55); box-shadow: 0 6px 14px rgba(0,0,0,0.7); z-index: 25; pointer-events: none; }
         .am-landmark-popup::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px; border: 6px solid transparent; border-top-color: rgba(15,15,15,0.96); }
         .am-landmark.am-landmark-open { z-index: 24; }
         .am-landmark.am-landmark-open .am-landmark-popup { display: block; animation: am-landmark-fade 0.18s ease; }
         @keyframes am-landmark-fade { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+        /* 邊緣自動翻向：y 太上 → popup 改下方；x 太左/右 → popup 對齊邊緣 */
+        .am-landmark.popup-below .am-landmark-popup { bottom: auto; top: calc(100% + 6px); }
+        .am-landmark.popup-below .am-landmark-popup::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: rgba(15,15,15,0.96); }
+        .am-landmark.popup-left .am-landmark-popup { left: -10px; transform: none; }
+        .am-landmark.popup-left .am-landmark-popup::after { left: 18px; margin-left: 0; }
+        .am-landmark.popup-right .am-landmark-popup { left: auto; right: -10px; transform: none; }
+        .am-landmark.popup-right .am-landmark-popup::after { left: auto; right: 18px; margin-left: 0; }
+        .am-landmark.popup-left.am-landmark-open .am-landmark-popup,
+        .am-landmark.popup-right.am-landmark-open .am-landmark-popup { animation: am-landmark-fade-side 0.18s ease; }
+        @keyframes am-landmark-fade-side { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         .am-landmark:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.08); transition: transform 0.15s ease; }
         .am-scene-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 6; background: rgba(0,0,0,0.4); color: #D4AF37; font-family: 'Cinzel', serif; letter-spacing: 2px; font-size: 12px; pointer-events: none; }
         .am-scene-loading::before { content: '◐'; display: inline-block; margin-right: 8px; animation: am-spin 1s linear infinite; }
@@ -650,6 +664,10 @@ ${facilityText}
                 <div id="am-detail-view" class="am-detail-overlay">
                     <div class="am-detail-header">
                         <div class="am-btn-icon" onclick="window.AUREALIS_MAP.closeDetail()">‹</div>
+                        <div class="am-detail-title-wrap">
+                            <div class="am-detail-zone" id="am-detail-zone-text"></div>
+                            <div class="am-detail-facility" id="am-detail-facility-text"></div>
+                        </div>
                     </div>
                     <div class="am-center-stage">
                         <div id="am-mission-area" class="am-mission-card"></div>
@@ -693,21 +711,21 @@ ${facilityText}
         if (win.WORLD_RUNTIME && win.WORLD_RUNTIME.needsInit && win.WORLD_RUNTIME.needsInit()) {
             title.innerText = "NEW WORLD";
             selector.innerHTML = `
-                <div style="text-align:center; max-width:480px; padding:20px;">
-                    <div style="font-family:'Cinzel'; font-size:22px; color:#D4AF37; letter-spacing:3px; margin-bottom:10px;">UNCHARTED</div>
-                    <div style="color:#aaa; font-size:13px; line-height:1.6; margin-bottom:25px;">
-                        此聊天室尚未生成世界地圖。<br>
-                        你可以讓 AI 根據當前世界書動態生成，或直接使用奧瑞亞作為預設世界。
+                <div style="display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px; max-width:340px;">
+                    <div style="font-size:24px; color:#D4AF37; letter-spacing:8px; margin-top:8px; font-weight:bold;">未知大陸</div>
+                    <div style="width:40px; height:1px; background:linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent); margin-bottom:4px;"></div>
+                    <div style="color:#aaa; font-size:12px; line-height:1.8; text-align:center; margin-bottom:18px; letter-spacing:0.5px;">
+                        此聊天室尚未生成世界地圖<br>
+                        讓 AI 根據當前世界書動態生成<br>
+                        或直接使用奧瑞亞作為預設世界
                     </div>
-                    <button class="am-zone-entrance" style="width:auto; height:auto; padding:14px 22px; flex-direction:row; gap:10px; margin-bottom:12px; cursor:pointer;"
+                    <button class="am-zone-entrance" style="width:280px; height:auto; padding:14px 20px; justify-content:center; cursor:pointer; background:rgba(40,30,5,0.45); border-color:rgba(212,175,55,0.5);"
                             onclick="window.AUREALIS_MAP.initCurrentWorld()">
-                        <span style="font-size:22px;">✨</span>
-                        <span style="font-size:13px; color:#D4AF37; letter-spacing:1px; font-family:'Cinzel';">INITIALIZE WORLD</span>
+                        <span style="font-size:14px; color:#D4AF37; letter-spacing:3px; font-weight:bold;">生成世界地圖</span>
                     </button>
-                    <button class="am-zone-entrance" style="width:auto; height:auto; padding:10px 18px; flex-direction:row; gap:10px; cursor:pointer; opacity:0.7;"
+                    <button class="am-zone-entrance" style="width:280px; height:auto; padding:11px 20px; justify-content:center; cursor:pointer; opacity:0.7; background:rgba(15,15,15,0.5); border-color:rgba(120,120,120,0.25);"
                             onclick="window.AUREALIS_MAP.useAurealisFallback()">
-                        <span style="font-size:18px;">🏛️</span>
-                        <span style="font-size:11px; color:#aaa; letter-spacing:1px; font-family:'Cinzel';">USE AUREALIS</span>
+                        <span style="font-size:12px; color:#aaa; letter-spacing:3px;">使用奧瑞亞預設</span>
                     </button>
                 </div>
             `;
@@ -1458,7 +1476,13 @@ ${facilityText}
         STATE.activeFacility = facility;
         STATE.activeFacilityKey = facKey; // 保存 Key 以便查詢事件
 
-        // 切換設施先把 stage 整個清乾淨：背景圖 + 內容（避免上一個設施的 landmark / 小人殘留到新設施）
+        // 標題列填上「區域名 / 設施名」
+        const zoneText = document.getElementById('am-detail-zone-text');
+        const facText = document.getElementById('am-detail-facility-text');
+        if (zoneText) zoneText.textContent = zoneData.name || STATE.currentZoneId || '';
+        if (facText) facText.textContent = `${facility.icon || '📍'} ${facility.name || ''}`;
+
+        // 切換設施先把 stage 整個清乾淨:背景圖 + 內容(避免上一個設施的 landmark / 小人殘留到新設施)
         const charGridReset = document.getElementById('am-char-grid');
         if (charGridReset) {
             charGridReset.style.backgroundImage = '';
@@ -1605,8 +1629,14 @@ ${facilityText}
                     const popupHtml = lm.description
                         ? `<div class="am-landmark-popup">${escHtml(lm.description)}</div>`
                         : '';
+                    // 靠邊自動翻向：避免 popup 被 stage 的 overflow:hidden 切掉
+                    // popup 估算 ~100px 高 ≈ stage 40-50%，所以 y<50 都該翻下方
+                    const sideClasses = ['am-landmark'];
+                    if (lm.y < 50) sideClasses.push('popup-below');     // 上半 → popup 改下方
+                    if (lm.x < 28) sideClasses.push('popup-left');      // 太靠左 → popup 對齊左邊
+                    else if (lm.x > 72) sideClasses.push('popup-right'); // 太靠右 → popup 對齊右邊
                     return `
-                    <div class="am-landmark" style="left:${lm.x}%; top:${lm.y}%;" title="${escAttr(lm.label)}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
+                    <div class="${sideClasses.join(' ')}" style="left:${lm.x}%; top:${lm.y}%;" title="${escAttr(lm.label)}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
                         ${popupHtml}
                         <div class="am-landmark-emoji">${lm.emoji || '📍'}</div>
                         <div class="am-landmark-label">${escHtml(lm.label) || ''}</div>
@@ -1646,7 +1676,14 @@ ${facilityText}
             }).join('');
 
             charGrid.innerHTML = landmarkHtml + charsHtml;
-            document.getElementById('am-scan-btn').innerHTML = '<span>↻</span> 重新掃描';
+            // 按鈕文字：真的有掃描結果（路人 / intro / 發現）才改「重新掃描」
+            // 只有常駐排程角色 / sceneMap 不算掃過（探索此地是去抽路人，跟 landmark 無關）
+            const reallyScanned = (STATE.introSegments && STATE.introSegments.length > 0)
+                || (STATE.discoveries && STATE.discoveries.length > 0)
+                || STATE.generatedChars.some(c => !c.isResident && !c.isLive);
+            document.getElementById('am-scan-btn').innerHTML = reallyScanned
+                ? '<span>↻</span> 重新掃描'
+                : '<span>🔍</span> 探索此地';
 
             // 啟動走路 + 冒泡動畫
             _startCharacterAnimations(charGrid);
