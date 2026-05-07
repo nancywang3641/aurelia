@@ -198,8 +198,8 @@ ${facilityText}
         {"category": "Home", "prob": 100, "location_id": "Home", "action": "...", "dialogue": "..."}
       ],
       "上午": [
-        {"category": "Work", "prob": 70, "location_id": "Z1_F1", "action": "...", "dialogue": "..."},
-        {"category": "Outing", "prob": 30, "location_id": "Z2_F3", "action": "...", "dialogue": "..."}
+        {"category": "Work", "prob": 70, "location_id": "<從上方清單選一個 sceneId>", "action": "...", "dialogue": "..."},
+        {"category": "Outing", "prob": 30, "location_id": "<另一個 sceneId>", "action": "...", "dialogue": "..."}
       ]
     }
   }
