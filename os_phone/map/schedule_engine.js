@@ -131,24 +131,6 @@
         }
     }
 
-    // 用當前角色卡名做 fallback（profile 為空時用）
-    async function getFallbackChars() {
-        try {
-            if (win.SillyTavern && win.SillyTavern.getContext) {
-                const ctx = win.SillyTavern.getContext();
-                const cName = ctx && ctx.name2;
-                if (cName) {
-                    return [{
-                        name: cName,
-                        identity: '主要角色',
-                        persona: ''
-                    }];
-                }
-            }
-        } catch (e) {}
-        return [];
-    }
-
     // 構建設施清單字串（餵給 AI）
     function buildFacilityListText(worldData) {
         if (!worldData || !worldData.zones) return '';
@@ -164,16 +146,33 @@
         return lines.join('\n');
     }
 
-    // 構建 Stage 2 prompt
+    // 構建 Stage 2 prompt（雙模式）
+    // 模式 A：profile 有角色 → 列清單，AI 照名單生
+    // 模式 B：profile 為空 → 命令 AI 從 [World Info] 自行提取角色（系統卡 / 開頭尚未跑 VN）
     function buildSchedulePrompt(chars, worldData) {
-        const charList = chars.map(c => `- ${c.name}（${c.identity || '?'}）：${c.persona || '?'}`).join('\n');
         const facilityText = buildFacilityListText(worldData);
+        const mainName = getMainUserName();
+        const useProfile = Array.isArray(chars) && chars.length > 0;
 
-        return `[系統指令：動態角色排程生成]
-你是「${worldData.name}」這個世界的敘事 AI。請為以下角色各自生成一份 24 小時排程表。
+        let header;
+        if (useProfile) {
+            const charList = chars.map(c => `- ${c.name}（${c.identity || '?'}）：${c.persona || '?'}`).join('\n');
+            header = `你是此世界的敘事 AI。請為以下角色各自生成一份 24 小時排程表。
 
 【角色清單】
-${charList}
+${charList}`;
+        } else {
+            header = `你是此世界的敘事 AI。請從上文 [World Info] 中提取此世界的重要角色，為每個角色生成一份 24 小時排程表。
+
+【角色提取規則】
+- 從 [World Info] 中挑出 NPC、配角、具名角色（不論作者把資料放在哪個條目、用什麼命名方式都要能辨識）
+- 主角 "${mainName || '(玩家本人)'}" 絕對不得列入排程
+- 角色總數最多 5 個，挑最有戲份、最有存在感的；少於 5 個也可以
+- 角色名請用世界書中明確出現的人名，不要自創新角色`;
+        }
+
+        return `[系統指令：動態角色排程生成]
+${header}
 
 【可選地點 location_id 清單】
 ${facilityText}
@@ -236,18 +235,14 @@ ${facilityText}
         const chatId = win.WORLD_RUNTIME.detectWorldId();
         if (progressCb) progressCb('load', '讀取角色檔案...');
 
-        let chars = await loadProfileChars(chatId);
-        let usedFallback = false;
-        if (chars.length === 0) {
-            chars = await getFallbackChars();
-            usedFallback = true;
-            if (chars.length === 0) {
-                if (progressCb) progressCb('error', '找不到任何角色（請先跑劇情累積 profile）');
-                return false;
-            }
-        }
+        const chars = await loadProfileChars(chatId);
+        const usedFallback = chars.length === 0;
 
-        if (progressCb) progressCb('ai', `為 ${chars.length} 個角色生成排程...`);
+        if (progressCb) {
+            progressCb('ai', usedFallback
+                ? '從世界書提取角色生成排程...'
+                : `為 ${chars.length} 個角色生成排程...`);
+        }
 
         const prompt = buildSchedulePrompt(chars, world);
         let messages;
@@ -280,12 +275,13 @@ ${facilityText}
                     return;
                 }
 
+                const finalCharCount = Object.keys(json.schedules).length;
                 console.log('[Schedule] ✅ AI JSON 解析成功:', Object.keys(json.schedules));
 
                 // 寫入 WORLD_RUNTIME + OS_DB
                 const ok = await win.WORLD_RUNTIME.setSchedules(json.schedules, {
                     fallback: usedFallback,
-                    charCount: chars.length
+                    charCount: finalCharCount
                 });
                 if (progressCb) progressCb(ok ? 'done' : 'error', ok ? '排程已生成' : '存檔失敗');
                 resolve(ok);
@@ -299,10 +295,27 @@ ${facilityText}
         });
     }
 
+    // 時段內快取：同角色同時段同天，骰一次就鎖定
+    // 用 WeakMap 以 sched 物件當 key —— setSchedules 換新物件後，舊 cache 自動失效
+    let branchCache = new WeakMap(); // WeakMap<schedObj, Map<"charName|period|YYYY-MM-DD", branch>>
+
+    function _dayKey(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    // 手動清快取（重新生成排程 / debug 用）
+    function clearActivityCache() {
+        branchCache = new WeakMap();
+        console.log('[Schedule] 🧹 排程快取已清空');
+    }
+
     // 骰子函數：給定角色，回傳當下時段命中的分支
     // 優先順序：liveStates（VN 即時抽取）> schedule（平常作息範本）
     function getCurrentActivity(charName, time) {
-        // 1. 先查 liveStates（VN > schedule）
+        // 1. 先查 liveStates（VN > schedule）—— live 是即時的，不快取
         if (win.WORLD_RUNTIME && typeof win.WORLD_RUNTIME.getLiveState === 'function') {
             const live = win.WORLD_RUNTIME.getLiveState(charName, time);
             if (live) {
@@ -324,19 +337,41 @@ ${facilityText}
         const sched = world.schedules[charName];
         if (!sched) return null;
 
-        const period = getTimePeriod(time || new Date());
+        const now = time || new Date();
+        const period = getTimePeriod(now);
         const branches = sched[period];
         if (!Array.isArray(branches) || branches.length === 0) return null;
 
-        const total = branches.reduce((s, b) => s + (Number(b.prob) || 0), 0);
-        if (total <= 0) return branches[0];
-        let r = Math.random() * total;
-        for (const b of branches) {
-            r -= (Number(b.prob) || 0);
-            if (r <= 0) return b;
+        // 查時段快取（同 sched 物件 + 同 charName + 同 period + 同日期）
+        const cacheKey = `${charName}|${period}|${_dayKey(now)}`;
+        let inner = branchCache.get(sched);
+        if (inner && inner.has(cacheKey)) {
+            return inner.get(cacheKey);
         }
-        return branches[branches.length - 1];
+
+        // miss → 骰
+        const total = branches.reduce((s, b) => s + (Number(b.prob) || 0), 0);
+        let chosen;
+        if (total <= 0) {
+            chosen = branches[0];
+        } else {
+            let r = Math.random() * total;
+            chosen = branches[branches.length - 1];
+            for (const b of branches) {
+                r -= (Number(b.prob) || 0);
+                if (r <= 0) { chosen = b; break; }
+            }
+        }
+
+        // 寫入快取
+        if (!inner) {
+            inner = new Map();
+            branchCache.set(sched, inner);
+        }
+        inner.set(cacheKey, chosen);
+        return chosen;
     }
+
 
     // 取在指定設施內的所有角色（當下時段）
     // 同時涵蓋 schedule 角色與 liveStates 角色（即使後者沒有 schedule）
@@ -376,10 +411,10 @@ ${facilityText}
         getTimePeriod,
         getMainUserName,
         loadProfileChars,
-        getFallbackChars,
         generateSchedules,
         getCurrentActivity,
         getCharsAtFacility,
+        clearActivityCache,
         extractJSON
     };
 })();

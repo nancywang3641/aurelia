@@ -468,6 +468,12 @@
             console.error('[WorldRuntime] setSchedules: 當前無世界資料');
             return false;
         }
+        // 排程換新 → 清掉時段內快取，避免角色卡在舊分支
+        try {
+            if (win.SCHEDULE_ENGINE && typeof win.SCHEDULE_ENGINE.clearActivityCache === 'function') {
+                win.SCHEDULE_ENGINE.clearActivityCache();
+            }
+        } catch (e) {}
         if (currentWorld.isDefault) {
             // 奧瑞亞不存 DB（它是固定世界），但 schedules 可活在記憶體
             currentWorld.schedules = schedules;
