@@ -631,10 +631,13 @@
             }
         };
         win.eventOn('chat_id_changed', onChatChange);
-        setTimeout(() => {
-            // 啟動時把 realChatId 對齊
-            realChatId = detectWorldId();
-            onChatChange();
+        setTimeout(async () => {
+            // 啟動時強制切到當前 chatId 對應的世界（不依賴 onChatChange 的 != 比對，
+            // 否則初始化階段會被「早就相等」騙過 → 永遠停在啟動預設的奧瑞亞）
+            const initialChatId = detectWorldId();
+            realChatId = initialChatId;
+            isPreview = false;
+            await switchTo(initialChatId);
         }, 1500);
     }
     setTimeout(attachChatListener, 1000);

@@ -14,7 +14,7 @@
 
     // 預設底板風格詞綴 — 固定 2D 俯視插畫風，避免 pollinations 隨機出寫實 / 人物入鏡
     // 與 AI 給的 backdropPrompt 拼接：DEFAULT_BASEPLATE + ", " + AI prompt
-    const DEFAULT_BASEPLATE = "2D illustration, RPG, 8 bit, floor plan, straight down angle, panoramic pixel art scene, Top-down view, Highly detailed environment, serene atmosphere, masterpiece, highres, 8k resolution, best quality, game world map, no characters, environment-focused";
+    const DEFAULT_BASEPLATE = "rpg, 8 bit, masterpiece, highres, Highly detailed environment, (true top-down:1.5), NO walls, game world map, floor plan, straight down angle, panoramic pixel art scene, Top-down view,  serene atmosphere,  best quality,  no characters, environment-focused";
 
     function isBackdropAuto() {
         try { return localStorage.getItem(BACKDROP_AUTO_KEY) === '1'; } catch (e) { return false; }
