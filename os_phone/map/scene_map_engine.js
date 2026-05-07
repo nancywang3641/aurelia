@@ -40,7 +40,10 @@
 說明：描述小地圖底背景（如：village interior, library hall, garden corner...），其他外觀物件只能布局九宮格大概描述（上下左右中）。
 
 **(2) 地標物件（地圖上的物體，人物 ≠ 地標物件，不可輸出人物）**
-格式：\`[地標物件|物件英文關鍵詞|中文描述（emoji 開頭）|x:0-100,y:0-100]\`
+格式：\`[地標物件|emoji+中文短名|長描述|x:0-100,y:0-100]\`
+- 第 1 欄：emoji + 中文短名（emoji 開頭，短名 4-6 字純名詞，例：🪧任務佈告板）→ 永遠顯示在地標下方
+- 第 2 欄：長描述（一句話描寫此處氛圍 / 細節，10-25 字）→ 玩家點擊地標才彈出
+- 第 3 欄：x/y 座標（0-100）
 
 ### 2. 坐標系統說明
 (0,0) 左上角  -------  (100,0) 右上角
@@ -55,18 +58,18 @@
 - **布局合理**：物件不要全部重疊，根據描述合理分布在 0-100 平面上
 - **小人活動區留白**：小人會在 y=60~92 範圍走動，重要可看的物件可以放在 y<60 上半部；y=60-92 範圍盡量分散別塞太密（避免擋小人路）
 - **每個地標的中文描述開頭請帶一個 emoji**（如 🪧🏰🌸🍷🛏️📚🪑🍽️），讓玩家一眼識別
-- **⚠ 中文描述限 4-6 字，純名詞短語**：
-  ✅ 好的範例：🪑圓桌 / 🪧任務板 / 🔥壁爐 / 🍻吧檯 / 🌸花圃 / 🛏️睡墊 / 📚書架
-  ❌ 禁止敘述句：「散落著雜誌的簡約木茶几」、「燃燒著火焰的古老壁爐」、「重要的任務佈告板」、「擺滿戰利品的展示櫃」
-  emoji 後直接接物件名，不要修飾形容詞、不要場景描寫
+- **⚠ 兩欄分工嚴格**：
+  - 短名（第 1 欄）：emoji + 4-6 字純名詞，例：🪑圓桌 / 🪧任務板 / 🔥壁爐 / 🛏️睡墊。禁止敘述句、修飾語
+  - 長描述（第 2 欄）：10-25 字氛圍描寫，可有形容詞、場景細節、人群動態，例：「布告板附近擠滿了冒險者人群」、「爐火劈啪作響，幾隻獵犬伏在前方」
+  - 短名是「標題」，長描述是「點擊浮窗內文」，別把長描述塞進短名
 
 ### ✅ 輸出範例
 <scene-map>
 [地標底板|cozy fantasy tavern interior, wooden tables left, bar counter back, fireplace right]
-[地標物件|fireplace|🔥壁爐|x:80,y:35]
-[地標物件|bar counter|🍻吧檯|x:50,y:25]
-[地標物件|round table|🪑圓桌|x:25,y:75]
-[地標物件|announcement board|🪧任務佈告板|x:15,y:30]
+[地標物件|🔥壁爐|爐火劈啪作響，幾隻獵犬伏在前方烤火|x:80,y:35]
+[地標物件|🍻吧檯|老闆正擦拭著黃銅酒杯，目光犀利地掃視來客|x:50,y:25]
+[地標物件|🪑圓桌|散落著啤酒漬的木桌，三張舊木凳子圍著|x:25,y:75]
+[地標物件|🪧任務佈告板|布告板附近擠滿了冒險者人群|x:15,y:30]
 </scene-map>
 
 只輸出 <scene-map>...</scene-map> 包裹的內容，不要其他文字、不要 markdown 包裹。`;
@@ -110,18 +113,32 @@
                 continue;
             }
             if (/物件/.test(tag)) {
-                const keyword = fields[0] || '';
-                const labelRaw = fields[1] || keyword;
-                const coords = fields[2] || '';
+                // 偵測格式：第 1 欄開頭是 emoji → 新格式 (emoji+短名 | 長描述 | 座標)
+                //                       否則 → 舊格式 (英文keyword | emoji+短名 | 座標)
+                const EMOJI_HEAD = /^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F2FF}\u{2300}-\u{23FF}]/u;
+                const isNewFormat = EMOJI_HEAD.test(fields[0] || '');
+
+                let labelRaw, description, coords;
+                if (isNewFormat) {
+                    labelRaw = fields[0] || '';
+                    description = fields[1] || '';
+                    coords = fields[2] || '';
+                } else {
+                    // 舊存檔相容：第 1 欄是英文 keyword、第 2 欄是 emoji+短名
+                    labelRaw = fields[1] || fields[0] || '';
+                    description = '';
+                    coords = fields[2] || '';
+                }
+
                 const xMatch = coords.match(/x\s*[:：]\s*(\d+(?:\.\d+)?)/i);
                 const yMatch = coords.match(/y\s*[:：]\s*(\d+(?:\.\d+)?)/i);
                 if (!xMatch || !yMatch) continue;
 
                 const { emoji, text } = _splitEmoji(labelRaw);
                 landmarks.push({
-                    keyword: keyword,
-                    label: text || keyword,
+                    label: text || labelRaw,
                     emoji: emoji,
+                    description: description,
                     x: Math.max(0, Math.min(100, parseFloat(xMatch[1]))),
                     y: Math.max(0, Math.min(100, parseFloat(yMatch[1])))
                 });
