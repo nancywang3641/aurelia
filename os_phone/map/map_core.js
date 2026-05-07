@@ -115,12 +115,15 @@
         .am-scene-stage { position: relative; width: 100%; max-width: 640px; aspect-ratio: 2 / 1; overflow: hidden; border-radius: 12px; margin: 20px auto 0; border: 1px solid rgba(212, 175, 55, 0.3); background: rgba(0,0,0,0.3); background-size: cover; background-position: center; transition: background-image 0.6s ease-in-out; }
         .walking-character { position: absolute; display: flex; flex-direction: column; align-items: center; cursor: pointer; z-index: 5; transition: left 0.05s linear, top 0.05s linear; top: 75%; transform: translate(-50%, -50%); will-change: transform, left, top; }
 
-        /* --- 場景地標：預設只顯示 emoji，點擊 toggle 出名稱 --- */
+        /* --- 場景地標：emoji+短名永遠顯示；點擊（移動端友善）彈出長描述 popup --- */
         .am-landmark { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; z-index: 3; pointer-events: auto; opacity: 0.92; user-select: none; cursor: pointer; }
         .am-landmark-emoji { font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)); }
-        .am-landmark-label { display: none; background: rgba(0,0,0,0.78); color: #ddd; padding: 2px 6px; border-radius: 8px; font-size: 9px; max-width: 100px; white-space: normal; word-break: break-all; text-align: center; border: 1px solid rgba(212,175,55,0.35); letter-spacing: 0.5px; }
-        .am-landmark.am-landmark-open .am-landmark-label { display: block; animation: am-landmark-fade 0.18s ease; }
-        @keyframes am-landmark-fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .am-landmark-label { background: rgba(0,0,0,0.7); color: #ddd; padding: 2px 6px; border-radius: 8px; font-size: 9px; white-space: nowrap; border: 1px solid rgba(212,175,55,0.35); letter-spacing: 0.5px; }
+        .am-landmark-popup { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: rgba(15,15,15,0.96); color: #f0f0f0; padding: 8px 12px; border-radius: 10px; font-size: 11px; max-width: 200px; min-width: 110px; white-space: normal; word-break: break-word; text-align: center; line-height: 1.55; border: 1px solid rgba(212,175,55,0.55); box-shadow: 0 6px 14px rgba(0,0,0,0.7); z-index: 25; pointer-events: none; }
+        .am-landmark-popup::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px; border: 6px solid transparent; border-top-color: rgba(15,15,15,0.96); }
+        .am-landmark.am-landmark-open { z-index: 24; }
+        .am-landmark.am-landmark-open .am-landmark-popup { display: block; animation: am-landmark-fade 0.18s ease; }
+        @keyframes am-landmark-fade { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         .am-landmark:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.08); transition: transform 0.15s ease; }
         .am-scene-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 6; background: rgba(0,0,0,0.4); color: #D4AF37; font-family: 'Cinzel', serif; letter-spacing: 2px; font-size: 12px; pointer-events: none; }
         .am-scene-loading::before { content: '◐'; display: inline-block; margin-right: 8px; animation: am-spin 1s linear infinite; }
@@ -1594,14 +1597,22 @@ ${facilityText}
             }
 
             // 場景地標層（純靜態裝飾，避撞由 _startCharacterAnimations 處理）
-            // 預設只顯示 emoji，點擊 toggle 出 label（避免 AI 寫長敘述句爆版）
+            // emoji + 短名常駐顯示，點擊（適配移動端）才彈出長描述 popup
+            const escAttr = (s) => String(s || '').replace(/"/g, '&quot;');
+            const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const landmarkHtml = (sceneMap && Array.isArray(sceneMap.landmarks) && sceneMap.landmarks.length > 0)
-                ? sceneMap.landmarks.map(lm => `
-                    <div class="am-landmark" style="left:${lm.x}%; top:${lm.y}%;" title="${lm.keyword || lm.label}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
+                ? sceneMap.landmarks.map(lm => {
+                    const popupHtml = lm.description
+                        ? `<div class="am-landmark-popup">${escHtml(lm.description)}</div>`
+                        : '';
+                    return `
+                    <div class="am-landmark" style="left:${lm.x}%; top:${lm.y}%;" title="${escAttr(lm.label)}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
+                        ${popupHtml}
                         <div class="am-landmark-emoji">${lm.emoji || '📍'}</div>
-                        <div class="am-landmark-label">${lm.label || lm.keyword || ''}</div>
+                        <div class="am-landmark-label">${escHtml(lm.label) || ''}</div>
                     </div>
-                `).join('')
+                    `;
+                }).join('')
                 : '';
 
             const charsHtml = STATE.generatedChars.map((char, idx) => {
