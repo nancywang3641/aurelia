@@ -66,6 +66,7 @@
                     currentWorld = {
                         id: worldId,
                         name: saved.name || 'Unknown World',
+                        worldMap: saved.worldMap || null,
                         zones: saved.zones,
                         schedules: saved.schedules || null,
                         scheduleMeta: saved.scheduleMeta || null,
@@ -105,6 +106,7 @@
         currentWorld = {
             id: worldId,
             name: worldData.name || 'Unknown',
+            worldMap: worldData.worldMap || null,
             zones: worldData.zones,
             schedules: null,
             scheduleMeta: null,
@@ -117,6 +119,7 @@
             try {
                 await win.OS_DB.saveWorldData(worldId, {
                     name: currentWorld.name,
+                    worldMap: currentWorld.worldMap,
                     zones: currentWorld.zones,
                     schedules: null,
                     scheduleMeta: null,
@@ -446,6 +449,7 @@
         try {
             await win.OS_DB.saveWorldData(currentWorldId, {
                 name: currentWorld.name,
+                worldMap: currentWorld.worldMap || null,
                 zones: currentWorld.zones,
                 schedules: currentWorld.schedules,
                 scheduleMeta: currentWorld.scheduleMeta,
@@ -488,6 +492,7 @@
             try {
                 await win.OS_DB.saveWorldData(currentWorldId, {
                     name: currentWorld.name,
+                    worldMap: currentWorld.worldMap || null,
                     zones: currentWorld.zones,
                     schedules: currentWorld.schedules,
                     scheduleMeta: currentWorld.scheduleMeta,
@@ -496,6 +501,45 @@
                 console.log('[WorldRuntime] 📋 排程已存進 OS_DB');
             } catch (e) {
                 console.error('[WorldRuntime] 存排程失敗:', e);
+                return false;
+            }
+        }
+        if (onWorldChanged) onWorldChanged(currentWorld);
+        return true;
+    }
+
+    // 為某個 facility 設定 sceneMap（場景地標資料）並持久化
+    async function saveFacilitySceneMap(zoneId, facKey, sceneMap) {
+        if (!currentWorld || !currentWorld.zones) {
+            console.error('[WorldRuntime] saveFacilitySceneMap: 當前無世界資料');
+            return false;
+        }
+        const zone = currentWorld.zones[zoneId];
+        if (!zone || !zone.facilities || !zone.facilities[facKey]) {
+            console.error('[WorldRuntime] saveFacilitySceneMap: 找不到 facility', zoneId, facKey);
+            return false;
+        }
+        zone.facilities[facKey].sceneMap = sceneMap;
+
+        if (currentWorld.isDefault) {
+            // 奧瑞亞純記憶體
+            console.log('[WorldRuntime] 🗺️ 奧瑞亞 sceneMap 已存記憶體（不持久化）');
+            if (onWorldChanged) onWorldChanged(currentWorld);
+            return true;
+        }
+        if (win.OS_DB && typeof win.OS_DB.saveWorldData === 'function') {
+            try {
+                await win.OS_DB.saveWorldData(currentWorldId, {
+                    name: currentWorld.name,
+                    worldMap: currentWorld.worldMap || null,
+                    zones: currentWorld.zones,
+                    schedules: currentWorld.schedules,
+                    scheduleMeta: currentWorld.scheduleMeta,
+                    liveStates: currentWorld.liveStates || {}
+                });
+                console.log(`[WorldRuntime] 🗺️ sceneMap 已存（${zoneId}/${facKey}）`);
+            } catch (e) {
+                console.error('[WorldRuntime] 存 sceneMap 失敗:', e);
                 return false;
             }
         }
@@ -538,6 +582,7 @@
         switchTo,
         setWorld,
         setSchedules,
+        saveFacilitySceneMap,
         getSchedules: () => currentWorld ? currentWorld.schedules : null,
         hasSchedules: () => !!(currentWorld && currentWorld.schedules && Object.keys(currentWorld.schedules).length > 0),
         // 即時狀態 API

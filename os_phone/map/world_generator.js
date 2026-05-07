@@ -9,29 +9,74 @@
     console.log('[PhoneOS] 載入動態世界生成器 (V1.0)...');
     const win = window.parent || window;
 
+    // 世界大地圖底板風格詞綴（俯視全景，無人物，整個 world 一張）
+    const DEFAULT_WORLDMAP_BASEPLATE = "fantasy world map illustration, painted overhead view, top-down aerial perspective, regions clearly separated by terrain, decorative borders, parchment style, soft lighting, masterpiece, highres, no characters, environment-focused";
+
     const STAGE1_PROMPT = `[系統指令：動態世界地圖生成]
-你是「視差世界觀」的地圖建構 AI。請根據當前【世界書】與【角色卡】設定，生成此世界的區域與設施清單。
+你是世界觀地圖建構 AI。請根據當前【世界書】與【角色卡】設定，生成此世界的區域與設施清單。
+
+【世界規模判斷 — 自行依世界書內容決定，不可機械式平均】
+- 小場景（村莊 / 校園 / 單一機構 / 異空間 / 偏鄉小鎮）：2-3 個區域，每區 3-4 個設施
+- 中型場景（城鎮 / 都會 / 王國首都 / 學院）：3-5 個區域，每區 4-6 個設施
+- 史詩級（多國 / 大陸 / 帝國 / 多元宇宙）：4-6 個區域，每區 5-7 個設施
+※ 區域數 / 設施數要貼合世界書描寫，不要每次都湊 3 區 3 設施
 
 【嚴格規則】
-- 設施名稱必須符合該世界觀的認知框架（中世紀世界禁用「捷運站」「網咖」等現代詞；末日廢土禁用「皇家城堡」等中世紀詞）
+- 設施名稱必須符合該世界觀的認知框架（中世紀世界禁用「捷運站」「網咖」；末日廢土禁用「皇家城堡」；魔法學院禁用「便利商店」）
 - 層級結構：世界 → 區域 (zone) → 設施 (facility)
-- 數量限制：2~3 個區域，每個區域包含 3~5 個設施
-- 每個設施需給一個 emoji icon、短名 (shortName)、英文背景圖 prompt (background_prompt)
+- 各區域之間應有功能 / 氛圍差異（鬧區 vs 隱秘 vs 邊陲），避免同質化
+- 每個區域 (zone) 需給一個能代表該區的 emoji icon
+- 每個區域需給 mapX / mapY（0-100 整數座標，標出該區在「世界大地圖」上的位置；依世界書地理描述合理擺放——港口靠近邊緣、商業中心放中央、山區放角落、不同 zone 不可重疊）
+- 每個設施需給一個 emoji icon、短名 (shortName, 4 字內)、英文背景圖 prompt (background_prompt)
+- 整個世界另需一張「大地圖底板」，吐 world_map_prompt 欄位（英文關鍵詞，描述全景俯視構圖：例如 fantasy kingdom map, central palace, harbor in northeast, mountain range west, river running south）
+
+【⚠ JSON key 命名規則 — 違反必須重寫】
+- zone 與 facility 的 JSON key 必須是「語意化的英文 snake_case」
+- ✅ 好的 key：harbor_docks / noble_quarter / cathedral / wasteland_outpost / oracle_archive / dragon_roost / market_alley / forge / cybernet_cafe / monastery_garden
+- ❌ 禁止的 key：Z1 / Z2 / Z3 / F1 / F2 / zone1 / zone_a / area_a / facility_x（任何制式編號或字母代號）
+- key 用英文（程式辨識用），name 用中文（玩家看的）
+- 同一張地圖內，每個 key 必須具有可辨識的語意，從 key 就能猜出是什麼地方
 
 【輸出格式：嚴格 JSON，不要任何其他文字、不要 markdown 包裹】
+範例（中型城市，3 區、設施數量不固定）：
 {
-  "world_name": "世界名稱（中文）",
+  "world_name": "霧光帝都・艾爾迪亞",
+  "world_map_prompt": "fantasy imperial capital map, central palace district on a hill, harbor docks at the northeast coast, shadow alleys at the southwest fringe, river running through, twilight",
   "zones": {
-    "Z1": {
-      "name": "區域名稱",
-      "background_prompt": "english keywords for image generation, e.g. medieval town square, sunset, fantasy",
+    "noble_quarter": {
+      "name": "貴族街",
+      "icon": "👑",
+      "mapX": 50, "mapY": 45,
+      "background_prompt": "majestic baroque mansions, gas lamps, marble pavement, twilight",
       "facilities": {
-        "F1": {
-          "name": "設施全名",
-          "shortName": "短名(4字內)",
-          "icon": "🏰",
-          "background_prompt": "english keywords"
-        }
+        "marble_palace": { "name": "白瑩王宮", "shortName": "王宮", "icon": "🏰", "background_prompt": "white marble palace, throne hall, gilded pillars" },
+        "opera_house":   { "name": "金紗歌劇院", "shortName": "歌劇院", "icon": "🎭", "background_prompt": "ornate opera hall, red velvet, chandeliers" },
+        "rose_garden":   { "name": "玫瑰庭園", "shortName": "庭園", "icon": "🌹", "background_prompt": "manicured rose garden, stone fountains, dusk light" },
+        "knight_barracks": { "name": "騎士團駐地", "shortName": "騎士團", "icon": "⚔️", "background_prompt": "stone barracks, armored knights, training yard" },
+        "high_cathedral":  { "name": "至高大教堂", "shortName": "教堂", "icon": "⛪", "background_prompt": "gothic cathedral, stained glass, candle light" }
+      }
+    },
+    "harbor_docks": {
+      "name": "風暴港埠",
+      "icon": "⚓",
+      "mapX": 78, "mapY": 22,
+      "background_prompt": "stormy harbor, wooden ships, lighthouse, fog",
+      "facilities": {
+        "salty_tavern":   { "name": "鹹風酒館", "shortName": "酒館", "icon": "🍻", "background_prompt": "rough sailor tavern, oil lamps, wooden barrels" },
+        "fish_market":    { "name": "晨霧魚市", "shortName": "魚市", "icon": "🐟", "background_prompt": "busy fish market, wet stone, morning fog" },
+        "smuggler_pier":  { "name": "走私者碼頭", "shortName": "暗碼頭", "icon": "🪝", "background_prompt": "dark wooden pier, hooded figures, lantern" }
+      }
+    },
+    "shadow_alleys": {
+      "name": "影巷區",
+      "icon": "🗡️",
+      "mapX": 22, "mapY": 70,
+      "background_prompt": "narrow shadowy alleys, gas lamps, cobblestone, fog",
+      "facilities": {
+        "thieves_den":    { "name": "影爪賊巢", "shortName": "賊巢", "icon": "🗝️", "background_prompt": "underground thieves hideout, candles, daggers" },
+        "black_apothecary": { "name": "黑漆藥房", "shortName": "藥房", "icon": "⚗️", "background_prompt": "dim apothecary, glass vials, herbs hanging" },
+        "card_house":     { "name": "命運牌館", "shortName": "牌館", "icon": "🃏", "background_prompt": "smoky gambling hall, oil lamps, gold coins" },
+        "underground_arena": { "name": "深淵鬥技場", "shortName": "鬥技場", "icon": "🩸", "background_prompt": "underground fighting pit, torchlight, blood stains" }
       }
     }
   }
@@ -110,16 +155,32 @@
                 };
             });
 
+            // mapX / mapY：clamp 到 0-100，缺值給 null 讓 renderHome 退化成卡片排版
+            const mapX = (typeof z.mapX === 'number') ? Math.max(0, Math.min(100, z.mapX)) : null;
+            const mapY = (typeof z.mapY === 'number') ? Math.max(0, Math.min(100, z.mapY)) : null;
+
             zones[zKey] = {
                 name: z.name || zKey,
+                icon: z.icon || '',
+                mapX,
+                mapY,
                 background: genFacilityImage(z.background_prompt || z.name) || genLoremFlickrUrl(z.background_prompt || z.name),
                 bgPrompt: z.background_prompt || '',
                 facilities
             };
         });
 
+        // 世界大地圖底板（風格詞綴前置 + AI 給的 prompt 後置）
+        const worldMap = { backdropPrompt: '', backdropUrl: '' };
+        if (rawJson.world_map_prompt && typeof rawJson.world_map_prompt === 'string') {
+            worldMap.backdropPrompt = rawJson.world_map_prompt;
+            const fullWorldPrompt = `${DEFAULT_WORLDMAP_BASEPLATE}, ${rawJson.world_map_prompt}`;
+            worldMap.backdropUrl = genFacilityImage(fullWorldPrompt) || genLoremFlickrUrl(rawJson.world_map_prompt);
+        }
+
         return {
             name: rawJson.world_name || 'Generated World',
+            worldMap,
             zones
         };
     }

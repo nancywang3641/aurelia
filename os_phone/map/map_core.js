@@ -39,9 +39,19 @@
         .am-home-layer { z-index: 5; position: absolute; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.5s; }
         .am-home-layer.active { opacity: 1; pointer-events: auto; }
         .am-zone-selector { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; width: 100%; max-width: 800px; padding: 20px; animation: floatUp 0.8s ease-out; }
+
+        /* === 大世界地圖 marker 模式（zone 浮在 worldMap 底圖上）=== */
+        .am-zone-selector.am-marker-mode { display: block; position: absolute; inset: 0; max-width: none; padding: 0; animation: floatUp 0.6s ease-out; pointer-events: none; background-size: cover; background-position: center; background-repeat: no-repeat; }
+        .am-zone-marker { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; pointer-events: auto; transition: transform 0.2s; }
+        .am-zone-marker:hover { transform: translate(-50%, -50%) scale(1.15); z-index: 10; }
+        .am-zone-marker-emoji { font-size: 38px; line-height: 1; filter: drop-shadow(0 0 10px rgba(0,0,0,0.85)); animation: am-marker-pulse 2.6s ease-in-out infinite; }
+        @keyframes am-marker-pulse { 0%, 100% { filter: drop-shadow(0 0 10px rgba(0,0,0,0.85)); } 50% { filter: drop-shadow(0 0 18px rgba(212,175,55,0.7)); } }
+        .am-zone-marker-label { background: rgba(0,0,0,0.78); color: #D4AF37; padding: 4px 12px; border-radius: 14px; font-size: 11px; white-space: nowrap; border: 1px solid rgba(212,175,55,0.55); letter-spacing: 1.5px; font-family: 'Cinzel', serif; box-shadow: 0 4px 10px rgba(0,0,0,0.6); }
+        .am-zone-marker .am-zone-dot { top: 0; right: 8px; left: auto; }
         .am-zone-entrance { width: 100px; height: 120px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; backdrop-filter: blur(5px); position: relative; overflow: visible; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .am-zone-entrance:hover { transform: translateY(-10px) scale(1.05); background: rgba(20,20,20,0.8); border-color: #D4AF37; box-shadow: 0 0 25px rgba(212, 175, 55, 0.4); }
         .am-zone-letter { font-family: 'Cinzel'; font-size: 42px; font-weight: bold; margin-bottom: 5px; background: linear-gradient(45deg, #D4AF37, #FFF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .am-zone-emoji { font-size: 44px; line-height: 1; margin-bottom: 6px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6)); }
         .am-zone-label { font-size: 9px; color: #bbb; text-transform: uppercase; letter-spacing: 2px; text-align: center; font-weight: bold; }
         
         /* 設施網格層 */
@@ -102,9 +112,20 @@
         .am-btn-main { background: #D4AF37; border: none; color: #000; }
 
         /* --- 動態小人與頭像樣式 --- */
-        .am-scene-stage { position: relative; width: 100%; height: 250px; overflow: hidden; border-radius: 12px; margin-top: 20px; border: 1px solid rgba(212, 175, 55, 0.3); background: rgba(0,0,0,0.3); }
-        .walking-character { position: absolute; display: flex; flex-direction: column; align-items: center; cursor: pointer; z-index: 5; transition: left 0.05s linear, bottom 0.05s linear; bottom: 20px; will-change: transform, left, bottom; }
-        .walking-character:hover { transform: scale(1.1); z-index: 10; }
+        .am-scene-stage { position: relative; width: 100%; max-width: 640px; aspect-ratio: 2 / 1; overflow: hidden; border-radius: 12px; margin: 20px auto 0; border: 1px solid rgba(212, 175, 55, 0.3); background: rgba(0,0,0,0.3); background-size: cover; background-position: center; transition: background-image 0.6s ease-in-out; }
+        .walking-character { position: absolute; display: flex; flex-direction: column; align-items: center; cursor: pointer; z-index: 5; transition: left 0.05s linear, top 0.05s linear; top: 75%; transform: translate(-50%, -50%); will-change: transform, left, top; }
+
+        /* --- 場景地標：預設只顯示 emoji，點擊 toggle 出名稱 --- */
+        .am-landmark { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; z-index: 3; pointer-events: auto; opacity: 0.92; user-select: none; cursor: pointer; }
+        .am-landmark-emoji { font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)); }
+        .am-landmark-label { display: none; background: rgba(0,0,0,0.78); color: #ddd; padding: 2px 6px; border-radius: 8px; font-size: 9px; max-width: 100px; white-space: normal; word-break: break-all; text-align: center; border: 1px solid rgba(212,175,55,0.35); letter-spacing: 0.5px; }
+        .am-landmark.am-landmark-open .am-landmark-label { display: block; animation: am-landmark-fade 0.18s ease; }
+        @keyframes am-landmark-fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .am-landmark:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.08); transition: transform 0.15s ease; }
+        .am-scene-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 6; background: rgba(0,0,0,0.4); color: #D4AF37; font-family: 'Cinzel', serif; letter-spacing: 2px; font-size: 12px; pointer-events: none; }
+        .am-scene-loading::before { content: '◐'; display: inline-block; margin-right: 8px; animation: am-spin 1s linear infinite; }
+        @keyframes am-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .walking-character:hover { transform: translate(-50%, -50%) scale(1.1); z-index: 10; }
         
         /* 新增：圓形大頭像 */
         .character-avatar { width: 45px; height: 45px; border-radius: 50%; background-size: cover; background-position: center; border: 2px solid #D4AF37; margin-bottom: -15px; z-index: 10; background-color: #000; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
@@ -124,9 +145,9 @@
         .walking-character .character-chibi, .walking-character .character-avatar { animation: bounce 0.8s infinite alternate; }
         @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-4px); } }
 
-        /* 朝向翻轉：往左移時整個小人鏡像；名字 + 泡泡反向抵消，避免文字翻過去看不懂 */
-        .walking-character.walking-left { transform: scaleX(-1); }
-        .walking-character.walking-left:hover { transform: scaleX(-1) scale(1.1); }
+        /* 朝向翻轉：往左移時整個小人鏡像（保留 translate 校正中心錨點）；名字 + 泡泡反向抵消，避免文字翻過去看不懂 */
+        .walking-character.walking-left { transform: translate(-50%, -50%) scaleX(-1); }
+        .walking-character.walking-left:hover { transform: translate(-50%, -50%) scaleX(-1) scale(1.1); }
         .walking-character.walking-left .character-name { transform: scaleX(-1); }
         .walking-character.walking-left .character-dialogue-bubble { transform: translateX(-50%) scaleX(-1); }
         
@@ -191,19 +212,48 @@
         const characters = charGrid.querySelectorAll('.walking-character');
         if (!characters.length) return;
 
+        // 拿當前 facility 的 landmarks 做避撞（同 0-100 % 座標系）
+        const landmarks = (STATE.activeFacility
+            && STATE.activeFacility.sceneMap
+            && Array.isArray(STATE.activeFacility.sceneMap.landmarks))
+            ? STATE.activeFacility.sceneMap.landmarks : [];
+        const COLLISION_R = 8; // 半徑 8% 視為擋路
+
+        function isBlocked(x, y) {
+            for (let i = 0; i < landmarks.length; i++) {
+                const lm = landmarks[i];
+                const dx = x - lm.x;
+                const dy = y - lm.y;
+                if (dx * dx + dy * dy < COLLISION_R * COLLISION_R) return true;
+            }
+            return false;
+        }
+        // 小人活動範圍：x 14-86 / y 62-85（下半部走道；考慮元素本身寬高，避免中心錨點貼邊時元素超出容器）
+        function pickValidTarget() {
+            for (let i = 0; i < 6; i++) {
+                const x = 14 + Math.random() * 72;
+                const y = 62 + Math.random() * 23;
+                if (!isBlocked(x, y)) return { x, y };
+            }
+            // 6 次都撞 → 認了，至少有個目標
+            return { x: 14 + Math.random() * 72, y: 62 + Math.random() * 23 };
+        }
+
         // 每隻角色一份運動狀態：當前位置、目標位置、停站結束時間、速度
         const states = [];
         characters.forEach((charEl) => {
             const startX = parseFloat(charEl.style.left) || 50;
+            const startY = parseFloat(charEl.style.top) || 75;
+            const initT = pickValidTarget();
             states.push({
                 el: charEl,
-                x: startX,                                // % 水平位置
-                y: 20,                                    // px 垂直位置（從底部算起，CSS 預設 bottom:20px）
-                targetX: startX,
-                targetY: 20,
+                x: startX,                                  // % 水平位置
+                y: startY,                                  // % 垂直位置（top）
+                targetX: initT.x,
+                targetY: initT.y,
                 standUntil: Date.now() + 500 + Math.random() * 1500, // 開場先站一下
-                speedX: 0.15 + Math.random() * 0.15,      // % per frame（橫向慢一點）
-                speedY: 0.4 + Math.random() * 0.4,        // px per frame（縱向）
+                speedX: 0.15 + Math.random() * 0.15,        // % per frame
+                speedY: 0.15 + Math.random() * 0.15,        // % per frame
             });
         });
 
@@ -219,10 +269,11 @@
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
                 if (dist < 0.5) {
-                    // 抵達 → 站 1-3 秒後選新目標（包含縱向 0-60px）
+                    // 抵達 → 站 1-3 秒後選新目標（避開所有 landmark）
                     s.standUntil = now + 1000 + Math.random() * 2000;
-                    s.targetX = 10 + Math.random() * 70;
-                    s.targetY = Math.random() * 60;
+                    const newT = pickValidTarget();
+                    s.targetX = newT.x;
+                    s.targetY = newT.y;
                     return;
                 }
 
@@ -238,7 +289,7 @@
                 }
 
                 s.el.style.left = s.x + '%';
-                s.el.style.bottom = s.y + 'px';
+                s.el.style.top = s.y + '%';
             });
 
             STATE.rafId = requestAnimationFrame(tick);
@@ -622,8 +673,13 @@ ${facilityText}
         const innerLayer = document.getElementById('am-inner-layer');
         const title = document.getElementById('am-main-title');
 
+        // 全頁底色維持奧瑞亞固定圖（就算 marker 模式也保留作氛圍底色）
         bg.style.backgroundImage = `url('${getHomeBackground()}')`;
         bg.classList.remove('blur');
+
+        // 預先準備 worldMap URL（marker 模式時貼到 selector 上，跟 marker 座標 100% 對齊）
+        const _world = WORLD() ? WORLD().getCurrentWorld() : null;
+        const worldMapUrl = (_world && _world.worldMap && _world.worldMap.backdropUrl) ? _world.worldMap.backdropUrl : null;
 
         homeLayer.classList.add('active');
         innerLayer.classList.remove('active');
@@ -669,6 +725,48 @@ ${facilityText}
             return 0;
         });
 
+        // marker 模式：所有非動態區都有 mapX/mapY 才啟用（動態區允許沒座標，後面用右下角 fallback）
+        const realZoneIds = sortedIds.filter(id => id !== dynamicId);
+        const useMarkerMode = realZoneIds.length > 0 && realZoneIds.every(id => {
+            const z = WORLD().getZone(id);
+            return z && typeof z.mapX === 'number' && typeof z.mapY === 'number';
+        });
+
+        if (useMarkerMode) {
+            selector.classList.add('am-marker-mode');
+            // 把 worldMap 直接貼到 selector 上：marker 用 % 浮在這層，座標 100% 對齊
+            if (worldMapUrl) {
+                selector.style.backgroundImage = `url('${worldMapUrl}')`;
+            } else {
+                selector.style.backgroundImage = '';
+            }
+            selector.innerHTML = sortedIds.map(id => {
+                const zone = WORLD().getZone(id);
+                const isDynamic = (id === dynamicId) || (zone && zone.isDynamic);
+                const hasEvent = Object.values(STATE.activeEvents).some(ev => ev.zoneId === id);
+                const dotHtml = hasEvent ? `<div class="am-zone-dot"></div>` : '';
+                const safeId = String(id).replace(/'/g, "\\'");
+
+                // 沒座標的動態區放右下角，避免疊在主要 zone 上
+                const mx = (zone && typeof zone.mapX === 'number') ? zone.mapX : (isDynamic ? 92 : 50);
+                const my = (zone && typeof zone.mapY === 'number') ? zone.mapY : (isDynamic ? 88 : 50);
+                const icon = (zone && zone.icon) ? zone.icon : (isDynamic ? '🌀' : '🌐');
+                const labelText = (zone && zone.name) ? zone.name : 'ZONE';
+
+                return `
+                <div class="am-zone-marker" style="left:${mx}%; top:${my}%;" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">
+                    ${dotHtml}
+                    <div class="am-zone-marker-emoji">${icon}</div>
+                    <div class="am-zone-marker-label">${labelText}</div>
+                </div>
+                `;
+            }).join('');
+            return;
+        }
+
+        // === fallback：卡片 grid 模式（奧瑞亞 / 舊存檔沒 mapX/mapY 用這個）===
+        selector.classList.remove('am-marker-mode');
+        selector.style.backgroundImage = '';
         selector.innerHTML = sortedIds.map(id => {
             const hasEvent = Object.values(STATE.activeEvents).some(ev => ev.zoneId === id);
             const dotHtml = hasEvent ? `<div class="am-zone-dot"></div>` : '';
@@ -685,14 +783,25 @@ ${facilityText}
                 </div>`;
             }
 
-            const zoneLabel = labels[id] || (zone && zone.name ? zone.name : 'ZONE');
+            // 奧瑞亞 5 區用單字母（A-E 是設計感）；其他用 zone.icon；都沒有就 fallback emoji
+            const aurealisLetters = { A: true, B: true, C: true, D: true, E: true };
+            const isAurealisLetter = aurealisLetters[id] === true && id.length === 1;
+            const zoneIcon = (zone && zone.icon) ? zone.icon : '';
+            const zoneName = (zone && zone.name) ? zone.name : 'ZONE';
+            const labelText = labels[id] || zoneName;
             const safeId = String(id).replace(/'/g, "\\'");
+
+            const topDisplay = zoneIcon
+                ? `<div class="am-zone-emoji">${zoneIcon}</div>`
+                : isAurealisLetter
+                    ? `<div class="am-zone-letter">${id}</div>`
+                    : `<div class="am-zone-emoji">🌐</div>`;
 
             return `
             <div class="am-zone-entrance" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">
                 ${dotHtml}
-                <div class="am-zone-letter">${id}</div>
-                <div class="am-zone-label">${zoneLabel}</div>
+                ${topDisplay}
+                <div class="am-zone-label">${labelText}</div>
             </div>
         `}).join('');
     }
@@ -856,6 +965,20 @@ ${facilityText}
                         </label>
                     </div>
 
+                    <!-- 場景地標：底板補圖開關 -->
+                    <div style="color:#aaa; font-size:11px; margin:12px 0 6px; letter-spacing:1px; font-family:'Cinzel';">SCENE MAP</div>
+                    <div style="background:rgba(20,20,20,0.4); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
+                        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                            <input type="checkbox" id="scenemap-backdrop-auto"
+                                ${(win.SCENE_MAP_ENGINE && win.SCENE_MAP_ENGINE.isBackdropAuto && win.SCENE_MAP_ENGINE.isBackdropAuto()) ? 'checked' : ''}
+                                style="width:18px; height:18px; accent-color:#D4AF37;">
+                            <div style="flex:1;">
+                                <div style="color:#D4AF37; font-weight:bold; font-size:13px;">自動補底板圖（Pollinations）</div>
+                                <div style="color:#888; font-size:10px; margin-top:2px;">進設施生地標時順便出張底板背景；關閉省流量，地標 emoji 仍會顯示</div>
+                            </div>
+                        </label>
+                    </div>
+
                     <!-- 工具區 -->
                     <div style="color:#aaa; font-size:11px; margin:12px 0 6px; letter-spacing:1px; font-family:'Cinzel';">TOOLS</div>
                     <div style="display:flex; gap:6px;">
@@ -895,6 +1018,12 @@ ${facilityText}
             timeoutMs: Math.max(5000, timeoutSec * 1000),
             silentFallback
         });
+
+        // 順便存 SceneMap 開關
+        const scenemapBackdrop = document.getElementById('scenemap-backdrop-auto');
+        if (scenemapBackdrop && win.SCENE_MAP_ENGINE && typeof win.SCENE_MAP_ENGINE.setBackdropAuto === 'function') {
+            win.SCENE_MAP_ENGINE.setBackdropAuto(scenemapBackdrop.checked);
+        }
 
         if (win.toastr) win.toastr.success(`設置已儲存（${enabled ? '已啟用' : '已停用'}）`, 'Map');
         closeModal();
@@ -1326,6 +1455,15 @@ ${facilityText}
         STATE.activeFacility = facility;
         STATE.activeFacilityKey = facKey; // 保存 Key 以便查詢事件
 
+        // 切換設施先把 stage 整個清乾淨：背景圖 + 內容（避免上一個設施的 landmark / 小人殘留到新設施）
+        const charGridReset = document.getElementById('am-char-grid');
+        if (charGridReset) {
+            charGridReset.style.backgroundImage = '';
+            charGridReset.innerHTML = '';
+        }
+        // 上一輪的走路 / 冒泡定時器也要立刻收乾淨
+        _clearAnimationTimers();
+
         // 讀取舊有數據（臨時掃描的路人）
         STATE.generatedChars = [];
         STATE.introSegments = [];
@@ -1383,8 +1521,35 @@ ${facilityText}
             missionCard.classList.remove('active');
         }
 
-        renderScanResults();
         detailView.classList.add('active');
+
+        // 第一次進設施沒 sceneMap → 直接顯 loading，跳過 renderScanResults，避免小人先曝光
+        // 等 AI 完成才一次性 render（landmark + 小人一起出現）
+        if (!facility.sceneMap && win.SCENE_MAP_ENGINE && typeof win.SCENE_MAP_ENGINE.generateForFacility === 'function') {
+            const charGrid = document.getElementById('am-char-grid');
+            const resultsDiv = document.getElementById('am-scan-results');
+            resultsDiv.classList.add('active'); // 強制展開讓用戶看 loading
+            const loadingEl = document.createElement('div');
+            loadingEl.className = 'am-scene-loading';
+            loadingEl.textContent = '正在勘景...';
+            charGrid.appendChild(loadingEl);
+
+            try {
+                await win.SCENE_MAP_ENGINE.generateForFacility(STATE.currentZoneId, facKey);
+            } catch (e) {
+                console.error('[Map] sceneMap 生成失敗:', e);
+            }
+            // 用戶可能在 AI 期間切走了，避免覆蓋當下視圖
+            if (STATE.activeFacilityKey !== facKey) {
+                if (loadingEl.parentNode) loadingEl.remove();
+                return;
+            }
+            // AI 完成才 render（loading 會被 innerHTML 覆寫掉）
+            renderScanResults();
+        } else {
+            // 已有 sceneMap → 直接 render
+            renderScanResults();
+        }
     }
 
     function renderScanResults() {
@@ -1392,7 +1557,9 @@ ${facilityText}
         const charGrid = document.getElementById('am-char-grid');
         const introBox = document.getElementById('am-intro-container');
 
-        if (STATE.generatedChars.length > 0 || STATE.introSegments.length > 0 || (STATE.discoveries && STATE.discoveries.length > 0)) {
+        // 有 sceneMap 也算「有內容」，這樣進設施一回來就能看到地標
+        const hasSceneMap = !!(STATE.activeFacility && STATE.activeFacility.sceneMap);
+        if (STATE.generatedChars.length > 0 || STATE.introSegments.length > 0 || (STATE.discoveries && STATE.discoveries.length > 0) || hasSceneMap) {
             resultsDiv.classList.add('active');
             
             let introHtml = STATE.introSegments.map(text => `<div style="background:rgba(0,0,0,0.5); padding:10px; margin-bottom:10px; border-radius:4px;">${text}</div>`).join('');
@@ -1418,8 +1585,29 @@ ${facilityText}
             _clearAnimationTimers();
 
             // 替換為動態大頭娃娃渲染
-            charGrid.innerHTML = STATE.generatedChars.map((char, idx) => {
-                const randomLeft = Math.floor(Math.random() * 70) + 10;
+            // sceneMap 底板圖（用戶開了 pollinations 補圖才有）
+            const sceneMap = STATE.activeFacility && STATE.activeFacility.sceneMap;
+            if (sceneMap && sceneMap.backdropUrl) {
+                charGrid.style.backgroundImage = `url('${sceneMap.backdropUrl}')`;
+            } else {
+                charGrid.style.backgroundImage = '';
+            }
+
+            // 場景地標層（純靜態裝飾，避撞由 _startCharacterAnimations 處理）
+            // 預設只顯示 emoji，點擊 toggle 出 label（避免 AI 寫長敘述句爆版）
+            const landmarkHtml = (sceneMap && Array.isArray(sceneMap.landmarks) && sceneMap.landmarks.length > 0)
+                ? sceneMap.landmarks.map(lm => `
+                    <div class="am-landmark" style="left:${lm.x}%; top:${lm.y}%;" title="${lm.keyword || lm.label}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
+                        <div class="am-landmark-emoji">${lm.emoji || '📍'}</div>
+                        <div class="am-landmark-label">${lm.label || lm.keyword || ''}</div>
+                    </div>
+                `).join('')
+                : '';
+
+            const charsHtml = STATE.generatedChars.map((char, idx) => {
+                // 中心錨點座標：x 14-86 / y 62-85（跟 pickValidTarget 同範圍，避免初始位置貼邊）
+                const randomLeft = Math.floor(Math.random() * 72) + 14;
+                const randomTop = Math.floor(Math.random() * 23) + 62;
                 const colors = ['#D4AF37', '#ff453a', '#6e45e2', '#88d3ce', '#ffffff'];
                 const residentColor = '#FFD700'; // 常駐用金色
                 const liveColor = '#ff8c42';     // VN 即時用橘紅
@@ -1437,7 +1625,7 @@ ${facilityText}
                         : '';
 
                 return `
-                <div class="walking-character" style="left: ${randomLeft}%;" onclick="window.AUREALIS_MAP.openCharacterDetail(${idx})">
+                <div class="walking-character" style="left: ${randomLeft}%; top: ${randomTop}%;" onclick="window.AUREALIS_MAP.openCharacterDetail(${idx})">
                     <div class="character-dialogue-bubble">${shortDialogue}</div>
                     <div class="character-avatar" style="background-image: url('${avatarUrl}'); ${borderStyle}"></div>
                     <div class="character-chibi" style="background-color: ${charColor};"></div>
@@ -1445,6 +1633,8 @@ ${facilityText}
                 </div>
                 `;
             }).join('');
+
+            charGrid.innerHTML = landmarkHtml + charsHtml;
             document.getElementById('am-scan-btn').innerHTML = '<span>↻</span> 重新掃描';
 
             // 啟動走路 + 冒泡動畫
