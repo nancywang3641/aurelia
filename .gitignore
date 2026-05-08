@@ -57,3 +57,6 @@ location-template.html
 # === 本地工具腳本（含 SSH 細節，不傳 GitHub）===
 *.bat
 sync_*
+
+# === Clawd 桌寵立繪素材（Anthropic 版權，僅本機使用，朋友 fallback DiceBear）===
+core/assets/claude/

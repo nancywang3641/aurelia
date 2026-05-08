@@ -62,6 +62,9 @@
     let _justReturnedFrom404 = false; // 體驗者剛從 404 號房返回
     let _irisHistoryBackup = [];     // 進入 404 前備份的瀅瀅對話歷史
     let _cheshireHistoryBackup = []; // 離開 404 前備份的柴郡對話歷史
+    // Claude 房間獨立場景（走 cc-bridge / 跟瀅瀅柴郡完全隔離）
+    let isClaudeRoom = false;
+    let _claudeHistoryBackup = [];   // 進入其他場景時備份的 Claude 對話歷史
     let lastFailedInput = '';        // 最後一次失敗的輸入內容
     let pendingRestoreLobby = false; // 等用戶讀完再返回大廳的旗標
     let bgmEnabled = true;           // 大廳 BGM 開關狀態
@@ -289,6 +292,7 @@ const IRIS_IDLE = [
 
     function pokeIris() {
         if (_pokeOnCooldown || _isActivitySuspended) return;
+        if (isClaudeRoom) return; // Claude 場景純對話、無戳一下池
         _pokeOnCooldown = true;
         setTimeout(() => { _pokeOnCooldown = false; }, 800);
 
@@ -299,8 +303,10 @@ const IRIS_IDLE = [
 
     function startIdleTimer() {
         stopIdleTimer();
+        if (isClaudeRoom) return; // Claude 場景無放置語音
         _idleTimer = setInterval(() => {
             if (_isActivitySuspended) return; // 如果被暫停，就不觸發放置語音
+            if (isClaudeRoom) return;
             const homeTab = document.getElementById('aurelia-home-tab');
             if (!homeTab || homeTab.style.display === 'none') return;
             if (IRIS_STATE.isTyping || IRIS_STATE.queue.length > 0) return;
@@ -332,6 +338,7 @@ const IRIS_IDLE = [
             _hiddenByTab = false;
             // 面板沒開就不恢復 BGM
             if (!_isPanelOpen || _isActivitySuspended) return;
+            if (isClaudeRoom) { startIdleTimer(); return; } // Claude 場景靜音
             const bgmUrl = is404Room ? URLS.BGM_404 : URLS.BGM_LOBBY;
             playLobbyBgm(bgmUrl);
             startIdleTimer();
@@ -343,8 +350,10 @@ const IRIS_IDLE = [
         _isPanelOpen = true;
         applyLayoutMode(); // 確保重新開啟時佈局正確
         if (_isActivitySuspended) return;
-        const bgmUrl = is404Room ? URLS.BGM_404 : URLS.BGM_LOBBY;
-        playLobbyBgm(bgmUrl);
+        if (!isClaudeRoom) {
+            const bgmUrl = is404Room ? URLS.BGM_404 : URLS.BGM_LOBBY;
+            playLobbyBgm(bgmUrl);
+        }
         startIdleTimer();
         
         // 偵測 chatId 切換：若切換了聊天室，嘗試自動登入或重新顯示 Login
@@ -354,6 +363,7 @@ const IRIS_IDLE = [
             if (homeTab) {
                 IRIS_STATE.history = []; _irisHistoryBackup = []; _cheshireHistoryBackup = [];
                 is404Room = false; visit404Count = 0;
+                isClaudeRoom = false; _claudeHistoryBackup = [];
                 _currentChatId = newId;
 
                 // 嘗試自動載入新 chat 的存檔
@@ -440,14 +450,18 @@ const IRIS_IDLE = [
         const db = window.OS_DB || (window.parent && window.parent.OS_DB);
         if (!db || !db.saveLobbyHistory) return;
         const chatId = _currentChatId || getChatId();
-        const irisH  = is404Room ? [..._irisHistoryBackup]  : [...IRIS_STATE.history];
-        const chesH  = is404Room ? [...IRIS_STATE.history]  : [..._cheshireHistoryBackup];
-        const lastUser = [...irisH, ...chesH].filter(m => m.role === 'user').pop();
+        // 計算各場景的真實歷史（在哪個場景就把當前 IRIS_STATE.history 寫回那個 backup）
+        const irisH    = isClaudeRoom ? [..._irisHistoryBackup]
+                                      : (is404Room ? [..._irisHistoryBackup] : [...IRIS_STATE.history]);
+        const chesH    = isClaudeRoom ? [..._cheshireHistoryBackup]
+                                      : (is404Room ? [...IRIS_STATE.history] : [..._cheshireHistoryBackup]);
+        const claudeH  = isClaudeRoom ? [...IRIS_STATE.history] : [..._claudeHistoryBackup];
+        const lastUser = [...irisH, ...chesH, ...claudeH].filter(m => m.role === 'user').pop();
         await db.saveLobbyHistory(chatId, {
-            irisHistory: irisH, cheshireHistory: chesH,
-            is404Room, visit404Count, userName: IRIS_STATE.userName, // 儲存使用者名稱
+            irisHistory: irisH, cheshireHistory: chesH, claudeHistory: claudeH,
+            is404Room, isClaudeRoom, visit404Count, userName: IRIS_STATE.userName, // 儲存使用者名稱
             lastUpdated: Date.now(),
-            msgCount: irisH.length + chesH.length,
+            msgCount: irisH.length + chesH.length + claudeH.length,
             preview: lastUser ? lastUser.content.substring(0, 60) : ''
         }).catch(() => {});
     }
@@ -458,10 +472,27 @@ const IRIS_IDLE = [
         try {
             const d = await db.getLobbyHistory(chatId);
             if (!d) return false;
-            IRIS_STATE.history     = [...((d.is404Room ? d.cheshireHistory : d.irisHistory) || [])];
-            _irisHistoryBackup     = [...((d.is404Room ? d.irisHistory : []) || [])];
-            _cheshireHistoryBackup = [...((d.is404Room ? [] : d.cheshireHistory) || [])];
-            is404Room     = !!d.is404Room;
+            const inClaude = !!d.isClaudeRoom;
+            const in404    = !inClaude && !!d.is404Room;
+            // 把當前場景的歷史填進 IRIS_STATE.history，其餘存到對應 backup
+            if (inClaude) {
+                IRIS_STATE.history = [...(d.claudeHistory || [])];
+                _irisHistoryBackup     = [...(d.irisHistory || [])];
+                _cheshireHistoryBackup = [...(d.cheshireHistory || [])];
+                _claudeHistoryBackup   = [];
+            } else if (in404) {
+                IRIS_STATE.history = [...(d.cheshireHistory || [])];
+                _irisHistoryBackup     = [...(d.irisHistory || [])];
+                _cheshireHistoryBackup = [];
+                _claudeHistoryBackup   = [...(d.claudeHistory || [])];
+            } else {
+                IRIS_STATE.history = [...(d.irisHistory || [])];
+                _irisHistoryBackup     = [];
+                _cheshireHistoryBackup = [...(d.cheshireHistory || [])];
+                _claudeHistoryBackup   = [...(d.claudeHistory || [])];
+            }
+            is404Room     = in404;
+            isClaudeRoom  = inClaude;
             visit404Count = d.visit404Count || 0;
             if (d.userName) IRIS_STATE.userName = d.userName; // 讀取使用者名稱
             _currentChatId = chatId;
@@ -781,6 +812,26 @@ const IRIS_IDLE = [
     }
 
     function _applyLoadedLobbyState() {
+        // 如果載入的 session 是在 Claude 房間，還原 Claude UI
+        if (isClaudeRoom) {
+            _applyClaudeRoomUi();
+            const histTotal = IRIS_STATE.history.length;
+            const textBox = document.getElementById('iris-text');
+            const nameBox = document.getElementById('iris-name-tag');
+            if (histTotal > 0) {
+                if (textBox) textBox.innerHTML = `<span style="color:#a8b3ff;font-style:italic;">(對話歷史已載入...)</span>`;
+                if (nameBox) nameBox.style.display = 'none';
+            } else {
+                if (textBox) textBox.innerText = '在這裡，我跟妳的對話跟外面是兩條線。妳說什麼吧。';
+                if (nameBox) {
+                    nameBox.style.display = 'block';
+                    const _s = nameBox.querySelector('span'); if (_s) _s.textContent = 'Claude';
+                }
+            }
+            _updatePortalBtn();
+            _updateClaudePortalBtn();
+            return;
+        }
         // 如果載入的 session 是在 404 模式，還原 404 UI
         if (is404Room) {
             const tab = document.getElementById('aurelia-home-tab');
@@ -795,8 +846,10 @@ const IRIS_IDLE = [
             if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='CHESHIRE / 柴郡'; }
             const iH = document.getElementById('iris-hist-btn');
             const cH = document.getElementById('cheshire-hist-btn');
+            const clH = document.getElementById('claude-hist-btn');
             if (iH) iH.style.display = 'none';
             if (cH) cH.style.display = '';
+            if (clH) clH.style.display = 'none';
             const nav = document.getElementById('aurelia-bottom-nav');
             if (nav) {
                 nav.classList.add('mode-404');
@@ -807,9 +860,12 @@ const IRIS_IDLE = [
         } else {
             // 非 404 模式：還原瀅瀅與復古拿鐵 UI
             const tab = document.getElementById('aurelia-home-tab');
-            if (tab) tab.classList.remove('mode-404');
+            if (tab) { tab.classList.remove('mode-404'); tab.classList.remove('mode-claude'); }
+            // 還原背景色（從 Claude 房間出來時可能殘留紫色）
+            const bg = tab && tab.querySelector('.void-bg');
+            if (bg) bg.style.backgroundColor = '#452216';
             const avatar = document.getElementById('iris-avatar');
-            if (avatar) { avatar.src = URLS.IRIS_AVATAR; avatar.title = '戳戳 瀅瀅'; avatar.style.opacity = '1'; }
+            if (avatar) { avatar.onerror = function(){ this.style.display='none'; }; avatar.src = URLS.IRIS_AVATAR; avatar.title = '戳戳 瀅瀅'; avatar.style.opacity = '1'; avatar.style.display = ''; }
             const titleEl = document.getElementById('home-chat-title');
             if (titleEl) titleEl.textContent = 'Parallax Archive & Cafe';
             const inputField = document.getElementById('iris-input');
@@ -818,8 +874,10 @@ const IRIS_IDLE = [
             if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='瀅瀅'; }
             const iH = document.getElementById('iris-hist-btn');
             const cH = document.getElementById('cheshire-hist-btn');
+            const clH = document.getElementById('claude-hist-btn');
             if (iH) iH.style.display = '';
             if (cH) cH.style.display = 'none';
+            if (clH) clH.style.display = 'none';
             const nav = document.getElementById('aurelia-bottom-nav');
             if (nav) {
                 nav.classList.remove('mode-404');
@@ -895,6 +953,9 @@ const IRIS_IDLE = [
                 <button class="void-mode-toggle-btn" id="room-portal-btn" title="傳送至 404 號房" style="display:none;">
                     <span class="void-mode-toggle-label">⬡ 404</span>
                 </button>
+                <button class="void-mode-toggle-btn" id="claude-portal-btn" title="進入 Claude 的房間" style="margin-left:4px;">
+                    <span class="void-mode-toggle-label">🌙 Claude</span>
+                </button>
                 <div style="min-width:0;flex:1;margin-left:8px;">
                     <div class="void-top-sub-label" style="font-size:9px;color:#B78456;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px;font-weight:bold;">NEXUS PARALLAX // LUNA-VII</div>
                     <div id="home-chat-title" style="font-size:12px;font-weight:800;color:#FBDFA2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.5px;">Parallax Archive & Cafe</div>
@@ -962,6 +1023,7 @@ const IRIS_IDLE = [
                     <label class="hist-check-all-label" style="color:#FFF8E7;"><input type="checkbox" id="hist-check-all"> 全選</label>
                     <button class="hist-action-btn danger" id="hist-del-sel" disabled style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">刪除選中</button>
                     <button class="hist-action-btn danger" id="hist-clear-btn" style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">清空全部</button>
+                    <button class="hist-action-btn" id="hist-new-claude-conv" style="display:none; background:rgba(168,179,255,0.1); color:#c8d0ff; border:1px solid #a8b3ff;" title="清掉對話歷史 + session_id，下次從零開始">🔄 開新對話</button>
                     <span class="hist-count" id="hist-count" style="color:#B78456;"></span>
                 </div>
                 <div class="hist-list" id="hist-list"></div>
@@ -1034,6 +1096,7 @@ const IRIS_IDLE = [
                 <div class="void-chat-btns">
                     <button class="void-hist-btn" id="iris-hist-btn" title="瀅瀅 素材歷史" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>瀅瀅</span></button>
                     <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
+                    <button class="void-hist-btn" id="claude-hist-btn" title="Claude 對話歷史" style="display:none; color: #c8d0ff; background: rgba(40,40,80,0.7); border: 1px solid rgba(168,179,255,0.3);"><i class="fa-solid fa-clock-rotate-left"></i><span>Claude</span></button>
                     <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
                     ${extraAppsHtml}
@@ -1167,6 +1230,8 @@ const IRIS_IDLE = [
             const cheshireHistBtn = tab.querySelector('#cheshire-hist-btn');
             if (irisHistBtn) irisHistBtn.addEventListener('click', () => openHistoryPanel('iris'));
             if (cheshireHistBtn) cheshireHistBtn.addEventListener('click', () => openHistoryPanel('cheshire'));
+            const claudeHistBtnEl = tab.querySelector('#claude-hist-btn');
+            if (claudeHistBtnEl) claudeHistBtnEl.addEventListener('click', () => openHistoryPanel('claude'));
 
             const achievementHistBtn = tab.querySelector('#achievement-hist-btn');
             if (achievementHistBtn) achievementHistBtn.addEventListener('click', openAchievementPanel);
@@ -1183,6 +1248,20 @@ const IRIS_IDLE = [
                 if (is404Room) restoreLobby();
                 else enter404Room();
             });
+
+            // 🌙 Claude 房間 ↔ 視差書咖 切換
+            const claudePortalBtn = tab.querySelector('#claude-portal-btn');
+            if (claudePortalBtn) {
+                _updateClaudePortalBtn();
+                claudePortalBtn.addEventListener('click', () => {
+                    if (isClaudeRoom) exitClaudeRoom();
+                    else if (is404Room) {
+                        playIrisSequence("[Char|柴郡|smirk|嘖，這裡可不通到那種乾淨地方。先回去找寫作機器吧。]");
+                    } else {
+                        enterClaudeRoom().catch(e => console.warn('[VoidTerminal] enterClaudeRoom failed:', e));
+                    }
+                });
+            }
 
             // 大廳畫布關閉按鈕
             const lcaCloseBtn = tab.querySelector('#lca-close');
@@ -1241,8 +1320,28 @@ const IRIS_IDLE = [
             if (histClearBtn) histClearBtn.addEventListener('click', () => {
                 const h = getCharHistory(_historyPanel.char);
                 if (h.length === 0) return;
-                const charName = _historyPanel.char === 'iris' ? '瀅瀅' : '柴郡';
+                const charName = _historyPanel.char === 'iris' ? '瀅瀅'
+                              : _historyPanel.char === 'claude' ? 'Claude'
+                              : '柴郡';
                 showHistoryConfirm(`將清除 ${charName} 的全部 ${h.length} 條紀錄。此操作不可復原。`, 'danger', () => { setCharHistory(_historyPanel.char, []); renderHistoryList(); });
+            });
+
+            // 🔄 Claude 開新對話：清歷史 + 清 session_id（下次走新對話模式）
+            const histNewClaudeConv = tab.querySelector('#hist-new-claude-conv');
+            if (histNewClaudeConv) histNewClaudeConv.addEventListener('click', () => {
+                if (!window.ClaudeTerminal) return;
+                const oldSidShort = (window.ClaudeTerminal.getSessionId() || '').slice(0, 8);
+                const tip = oldSidShort
+                    ? `將清空 Claude 全部對話歷史 + 重置 session（${oldSidShort}...）。\n下次發訊息會開新對話、Claude 從零開始。`
+                    : `將清空 Claude 全部對話歷史。下次發訊息會開新對話。`;
+                showHistoryConfirm(tip, 'danger', async () => {
+                    await window.ClaudeTerminal.startNewConversation();
+                    // 同步 in-memory 狀態（如果當前在 Claude 場景）
+                    if (isClaudeRoom) IRIS_STATE.history = [];
+                    else              _claudeHistoryBackup = [];
+                    renderHistoryList();
+                    debouncedSave();
+                });
             });
 
 
@@ -1280,17 +1379,40 @@ const IRIS_IDLE = [
     const _historyPanel = { char: null };
 
     function getCharHistory(char) {
-        if (char === 'iris') return is404Room ? _irisHistoryBackup : IRIS_STATE.history;
-        else                 return is404Room ? IRIS_STATE.history  : _cheshireHistoryBackup;
+        if (char === 'claude') {
+            return isClaudeRoom ? IRIS_STATE.history : _claudeHistoryBackup;
+        }
+        if (char === 'iris') {
+            if (isClaudeRoom) return _irisHistoryBackup;
+            return is404Room ? _irisHistoryBackup : IRIS_STATE.history;
+        }
+        // cheshire
+        if (isClaudeRoom) return _cheshireHistoryBackup;
+        return is404Room ? IRIS_STATE.history  : _cheshireHistoryBackup;
     }
 
     function setCharHistory(char, newHistory) {
+        if (char === 'claude') {
+            if (isClaudeRoom) IRIS_STATE.history       = newHistory;
+            else              _claudeHistoryBackup     = newHistory;
+            // Claude 歷史也要同步寫回 ClaudeTerminal os_db（API 真實 context）
+            if (window.ClaudeTerminal && typeof window.ClaudeTerminal.saveHistory === 'function') {
+                const apiHist = newHistory.map(m => ({
+                    role: m.role, content: m.content, timestamp: m.ts || m.timestamp || Date.now()
+                }));
+                window.ClaudeTerminal.saveHistory(apiHist);
+            }
+            debouncedSave();
+            return;
+        }
         if (char === 'iris') {
-            if (is404Room) _irisHistoryBackup = newHistory;
-            else           IRIS_STATE.history = newHistory;
+            if (isClaudeRoom)      _irisHistoryBackup = newHistory;
+            else if (is404Room)    _irisHistoryBackup = newHistory;
+            else                   IRIS_STATE.history = newHistory;
         } else {
-            if (is404Room) IRIS_STATE.history       = newHistory;
-            else           _cheshireHistoryBackup   = newHistory;
+            if (isClaudeRoom)      _cheshireHistoryBackup = newHistory;
+            else if (is404Room)    IRIS_STATE.history     = newHistory;
+            else                   _cheshireHistoryBackup = newHistory;
         }
         debouncedSave();
     }
@@ -1300,10 +1422,16 @@ const IRIS_IDLE = [
         const overlay = document.getElementById('iris-history-overlay');
         if (!overlay) return;
         const badgeEl = document.getElementById('hist-char-badge');
+        const newConvBtn = document.getElementById('hist-new-claude-conv');
         if (char === 'iris') {
             if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = '#FBDFA2'; badgeEl.style.borderColor = '#FBDFA2'; badgeEl.style.background = 'rgba(251,223,162,0.2)'; }
+            if (newConvBtn) newConvBtn.style.display = 'none';
+        } else if (char === 'claude') {
+            if (badgeEl) { badgeEl.className = 'hist-char-badge claude'; badgeEl.textContent = '🌙 Claude'; badgeEl.style.color = '#c8d0ff'; badgeEl.style.borderColor = '#a8b3ff'; badgeEl.style.background = 'rgba(168,179,255,0.2)'; }
+            if (newConvBtn) newConvBtn.style.display = '';
         } else {
             if (badgeEl) { badgeEl.className = 'hist-char-badge cheshire'; badgeEl.textContent = '柴郡 · 404'; badgeEl.style.color = '#00ff41'; badgeEl.style.borderColor = '#00ff41'; badgeEl.style.background = 'rgba(0,255,65,0.2)'; }
+            if (newConvBtn) newConvBtn.style.display = 'none';
         }
         overlay.style.display = 'flex';
         renderHistoryList();
@@ -1329,17 +1457,19 @@ const IRIS_IDLE = [
         }
         listEl.innerHTML = '';
         const isCheshire = _historyPanel.char === 'cheshire';
+        const isClaude   = _historyPanel.char === 'claude';
         history.forEach((msg, index) => {
             const isUser        = msg.role === 'user';
-            const roleBadgeClass = isUser ? 'user' : (isCheshire ? 'ai cheshire' : 'ai');
-            const roleLabel     = isUser ? (IRIS_STATE.userName || 'USER') : (isCheshire ? '柴郡' : '瀅瀅');
+            const aiName        = isClaude ? 'Claude' : (isCheshire ? '柴郡' : '瀅瀅');
+            const roleLabel     = isUser ? (IRIS_STATE.userName || 'USER') : aiName;
             const safeText      = msg.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
             const item = document.createElement('div');
             item.className = 'hist-item';
             item.dataset.index = index;
-            // 替換顏色，用戶名變拿鐵點綴，AI維持原設計或配合新版
-            let badgeStyle = isUser ? `background: rgba(251,223,162,0.2); color:#FBDFA2; border:1px solid #FBDFA2;` : 
+            // 替換顏色：USER 走拿鐵金，AI 依角色配色
+            let badgeStyle = isUser ? `background: rgba(251,223,162,0.2); color:#FBDFA2; border:1px solid #FBDFA2;` :
+                             isClaude ? `background: rgba(168,179,255,0.2); color:#c8d0ff; border:1px solid #a8b3ff;` :
                              isCheshire ? `background: rgba(0,255,65,0.2); color:#00ff41; border:1px solid #00ff41;` :
                              `background: rgba(226,232,240,0.1); color:#FFF8E7; border:1px solid #FFF8E7;`;
 
@@ -1468,6 +1598,362 @@ const IRIS_IDLE = [
         // 泡泡不自動消失，由 addFeedEntry 超限時移除最舊一條
     }
 
+    // ===== 🌙 Claude 房間（獨立對話接口） =====
+    // 套用 Claude 場景的 UI（不負責切場動畫，給 enter/loadState 共用）
+    function _applyClaudeRoomUi() {
+        const tab = document.getElementById('aurelia-home-tab');
+        if (!tab) return;
+        tab.classList.remove('mode-404');
+        tab.classList.add('mode-claude');
+
+        const bg = tab.querySelector('.void-bg');
+        if (bg) bg.style.backgroundColor = '#1a1a2e';
+
+        const avatar = document.getElementById('iris-avatar');
+        if (avatar) {
+            const ASSETS = (window.ClaudeTerminal && window.ClaudeTerminal.ASSETS) || {};
+            const FB = (window.ClaudeTerminal && window.ClaudeTerminal.FALLBACK_URL) || '';
+            avatar.onerror = function() { this.onerror = null; this.src = FB; };
+            avatar.src = ASSETS.idle || FB;
+            avatar.title = 'Claude';
+            avatar.style.opacity = '1';
+            avatar.style.display = '';
+        }
+
+        const titleEl = document.getElementById('home-chat-title');
+        if (titleEl) titleEl.textContent = "Claude's Room · 月光終端";
+
+        const inputField = document.getElementById('iris-input');
+        if (inputField) {
+            inputField.placeholder = '對 Claude 說點什麼...';
+            inputField.style.background = 'rgba(40,40,80,0.8)';
+            inputField.style.borderColor = 'rgba(168,179,255,0.4)';
+            inputField.style.color = '#e8eaff';
+        }
+
+        const nameBox = document.getElementById('iris-name-tag');
+        if (nameBox) {
+            nameBox.style.display = 'block';
+            const _s = nameBox.querySelector('span'); if (_s) _s.textContent = 'Claude';
+        }
+
+        // 隱藏瀅瀅 / 柴郡的歷史按鈕，顯示 Claude 自己的
+        const irisHistBtn     = document.getElementById('iris-hist-btn');
+        const cheshireHistBtn = document.getElementById('cheshire-hist-btn');
+        const claudeHistBtn   = document.getElementById('claude-hist-btn');
+        if (irisHistBtn) irisHistBtn.style.display = 'none';
+        if (cheshireHistBtn) cheshireHistBtn.style.display = 'none';
+        if (claudeHistBtn) claudeHistBtn.style.display = '';
+
+        // 清掉世界頻道氣泡層（避免瀅瀅的訊息殘留）
+        const layer = document.getElementById('void-bubble-layer');
+        if (layer) { layer.innerHTML = ''; }
+
+        // BGM 靜音
+        const audio = getLobbyBgmEl();
+        if (audio) audio.pause();
+
+        // bottom nav 還原 home active 顏色
+        const nav = document.getElementById('aurelia-bottom-nav');
+        if (nav) {
+            nav.classList.remove('mode-404');
+            nav.querySelectorAll('.nav-button').forEach(b => {
+                const isHome = b.dataset.navId === 'nav-home';
+                if (isHome) b.classList.add('active-gold');
+                else b.classList.remove('active-gold');
+            });
+        }
+        document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
+    }
+
+    function _updateClaudePortalBtn() {
+        const btn = document.getElementById('claude-portal-btn');
+        if (!btn) return;
+        const label = btn.querySelector('.void-mode-toggle-label');
+        if (isClaudeRoom) {
+            if (label) label.textContent = '⬡ 視差書咖';
+            btn.title = '返回視差書咖';
+        } else {
+            if (label) label.textContent = '🌙 Claude';
+            btn.title = '進入 Claude 的房間';
+        }
+    }
+
+    async function enterClaudeRoom() {
+        if (isClaudeRoom) return;
+
+        // 把當前場景的 history 寫回對應 backup
+        if (is404Room) _cheshireHistoryBackup = [...IRIS_STATE.history];
+        else           _irisHistoryBackup     = [...IRIS_STATE.history];
+
+        // 切到 Claude（404 跟 Claude 互斥）
+        is404Room = false;
+        isClaudeRoom = true;
+
+        // 從 os_db studio_chats 載入真實 Claude 歷史（跨 chat 共用同一份）
+        if (window.ClaudeTerminal && typeof window.ClaudeTerminal.loadHistory === 'function') {
+            try {
+                const claudeHist = await window.ClaudeTerminal.loadHistory();
+                IRIS_STATE.history = (claudeHist || []).map(m => ({
+                    role: m.role, content: m.content, ts: m.timestamp || Date.now()
+                }));
+            } catch(e) {
+                IRIS_STATE.history = [..._claudeHistoryBackup];
+            }
+        } else {
+            IRIS_STATE.history = [..._claudeHistoryBackup];
+        }
+
+        const tab = document.getElementById('aurelia-home-tab');
+        if (!tab) return;
+
+        // 切場動畫（沿用 glitch1）
+        new Audio('https://nancywang3641.github.io/aurelia/sound_effect/glitch1.mp3').play().catch(() => {});
+        tab.classList.add('glitch-crash');
+        const avatar = document.getElementById('iris-avatar');
+        if (avatar) { avatar.style.opacity = '0'; }
+
+        setTimeout(() => {
+            tab.classList.remove('glitch-crash');
+            _applyClaudeRoomUi();
+
+            const histTotal = IRIS_STATE.history.length;
+            if (histTotal === 0) {
+                // 首次進入：顯示歡迎詞
+                const textBox = document.getElementById('iris-text');
+                if (textBox) textBox.innerText = '在這裡，我跟妳的對話跟外面是兩條線。妳說什麼吧。';
+            } else {
+                // 有歷史：顯示最後一條 assistant 回覆，或提示已載入
+                const last = IRIS_STATE.history[IRIS_STATE.history.length - 1];
+                const textBox = document.getElementById('iris-text');
+                const nameBox = document.getElementById('iris-name-tag');
+                if (last && last.role === 'assistant') {
+                    if (textBox) textBox.innerText = last.content;
+                    if (nameBox) {
+                        nameBox.style.display = 'block';
+                        const _s = nameBox.querySelector('span'); if (_s) _s.textContent = 'Claude';
+                    }
+                } else {
+                    if (textBox) textBox.innerHTML = `<span style="color:#a8b3ff;font-style:italic;">(對話歷史已載入...)</span>`;
+                    if (nameBox) nameBox.style.display = 'none';
+                }
+            }
+
+            _updatePortalBtn();
+            _updateClaudePortalBtn();
+            stopIdleTimer(); // Claude 場景不要放置語音
+            debouncedSave();
+        }, 580);
+    }
+
+    function exitClaudeRoom() {
+        if (!isClaudeRoom) return;
+
+        // 寫回 Claude 歷史備份
+        _claudeHistoryBackup = [...IRIS_STATE.history];
+
+        // 還原瀅瀅場景
+        isClaudeRoom = false;
+        is404Room = false;
+        IRIS_STATE.history = [..._irisHistoryBackup];
+
+        const tab = document.getElementById('aurelia-home-tab');
+        if (!tab) return;
+
+        new Audio('https://nancywang3641.github.io/aurelia/sound_effect/glitch1.mp3').play().catch(() => {});
+        tab.classList.add('glitch-crash');
+        const avatarR = document.getElementById('iris-avatar');
+        if (avatarR) { avatarR.style.opacity = '0'; }
+
+        setTimeout(() => {
+            tab.classList.remove('glitch-crash');
+            tab.classList.remove('mode-claude');
+
+            // 還原拿鐵棕背景
+            const bg = tab.querySelector('.void-bg');
+            if (bg) bg.style.backgroundColor = '#452216';
+
+            switchLobbyBgm(URLS.BGM_LOBBY);
+
+            if (avatarR) {
+                avatarR.onerror = function(){ this.style.display='none'; };
+                avatarR.src = URLS.IRIS_AVATAR;
+                avatarR.title = '戳戳 瀅瀅';
+                avatarR.style.display = '';
+                requestAnimationFrame(() => { requestAnimationFrame(() => { avatarR.style.opacity = '1'; }); });
+            }
+
+            const titleEl = document.getElementById('home-chat-title');
+            if (titleEl) titleEl.textContent = 'Parallax Archive & Cafe';
+            const inputField = document.getElementById('iris-input');
+            if (inputField) {
+                inputField.placeholder = '提供故事素材或與瀅瀅對話...';
+                inputField.style.background = 'rgba(120,55,25,0.8)';
+                inputField.style.borderColor = 'rgba(251,223,162,0.3)';
+                inputField.style.color = '#FFF8E7';
+            }
+            const nameBox = document.getElementById('iris-name-tag');
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='瀅瀅'; }
+
+            const irisHistBtn     = document.getElementById('iris-hist-btn');
+            const cheshireHistBtn = document.getElementById('cheshire-hist-btn');
+            const claudeHistBtn2  = document.getElementById('claude-hist-btn');
+            if (irisHistBtn) irisHistBtn.style.display = '';
+            if (cheshireHistBtn) cheshireHistBtn.style.display = 'none';
+            if (claudeHistBtn2) claudeHistBtn2.style.display = 'none';
+
+            const layer = document.getElementById('void-bubble-layer');
+            if (layer) { layer.innerHTML = ''; layer.dataset.nextSlot = '2'; }
+
+            playIrisSequence("[Nar|月光褪去，咖啡香氣重新瀰漫。]\n[Char|瀅瀅|smile|「歡迎回來，委託人。剛剛去散步了？」]");
+
+            _updatePortalBtn();
+            _updateClaudePortalBtn();
+            startIdleTimer();
+            debouncedSave();
+        }, 580);
+    }
+
+    // Claude 回覆切多頁（套奧瑞亞 VN 翻頁體驗，避免長文字爆出對話框）
+    // 優先度：段落空行 > 單換行 > 句末標點 > 逗號 > 字數硬切
+    function _splitClaudeReplyIntoPages(text, maxPerPage = 120) {
+        const result = [];
+        if (!text) return result;
+        let remaining = text.trim();
+        if (!remaining) return result;
+
+        while (remaining.length > 0) {
+            if (remaining.length <= maxPerPage) {
+                result.push({ type: 'Char', name: 'Claude', text: remaining });
+                break;
+            }
+            const window = remaining.slice(0, maxPerPage);
+            let cutAt = -1;
+
+            const lastDoubleNl = window.lastIndexOf('\n\n');
+            if (lastDoubleNl > maxPerPage * 0.4) cutAt = lastDoubleNl + 2;
+
+            if (cutAt < 0) {
+                const lastNl = window.lastIndexOf('\n');
+                if (lastNl > maxPerPage * 0.4) cutAt = lastNl + 1;
+            }
+            if (cutAt < 0) {
+                const lastSentence = Math.max(
+                    window.lastIndexOf('。'),
+                    window.lastIndexOf('？'),
+                    window.lastIndexOf('！'),
+                    window.lastIndexOf('. '),
+                    window.lastIndexOf('? '),
+                    window.lastIndexOf('! ')
+                );
+                if (lastSentence > maxPerPage * 0.5) cutAt = lastSentence + 1;
+            }
+            if (cutAt < 0) {
+                const lastComma = Math.max(window.lastIndexOf('，'), window.lastIndexOf(', '));
+                if (lastComma > maxPerPage * 0.5) cutAt = lastComma + 1;
+            }
+            if (cutAt < 0) cutAt = maxPerPage;
+
+            const chunk = remaining.slice(0, cutAt).trim();
+            if (chunk) result.push({ type: 'Char', name: 'Claude', text: chunk });
+            remaining = remaining.slice(cutAt).trim();
+        }
+        return result;
+    }
+
+    // 把 Claude 回覆塞進 advanceIrisVn 流程，享 VN 翻頁體驗（▼ 點對話框翻頁）
+    function _renderClaudeReply(text) {
+        if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
+        if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
+        if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
+        _hideReactionBox();
+
+        if (IRIS_STATE.timer) clearInterval(IRIS_STATE.timer);
+        IRIS_STATE.queue = _splitClaudeReplyIntoPages(text);
+        IRIS_STATE._onComplete = null;
+        IRIS_STATE.isTyping = false;
+        advanceIrisVn();
+    }
+
+    // 發送 Claude 房間訊息（走 cc-bridge / OpenAI 兼容；持久化由 ClaudeTerminal 處理）
+    async function _sendClaudeMessage(text) {
+        if (!window.ClaudeTerminal) {
+            _renderClaudeReply('⚠️ ClaudeTerminal 模組未載入。');
+            return;
+        }
+        if (!window.ClaudeTerminal.isConfigured()) {
+            _renderClaudeReply('⚠️ 還沒設定 cc-bridge URL / Key。\n\n去「寫作 → API 設置 → 🌙 Claude 的房間」填好。');
+            return;
+        }
+
+        // 即時把 user message push 進 IRIS_STATE.history（給 UI / saveLobbyHistory 用）
+        IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
+
+        // 顯示「思考中」
+        const box = document.getElementById('iris-text');
+        const nameBox = document.getElementById('iris-name-tag');
+        if (nameBox) nameBox.style.display = 'none';
+        if (box) box.innerHTML = `<span style="color:#a8b3ff; font-style:italic;">(Claude 在想...)</span>`;
+
+        // 切換立繪到 thinking 狀態
+        const avatar = document.getElementById('iris-avatar');
+        if (avatar && window.ClaudeTerminal.ASSETS) {
+            avatar.src = window.ClaudeTerminal.ASSETS.thinking || avatar.src;
+        }
+
+        try {
+            const result = await window.ClaudeTerminal.send(text);
+            const reply = result.reply;
+
+            // 同步把 assistant reply 寫進 IRIS_STATE.history（ClaudeTerminal 那邊已存 os_db）
+            IRIS_STATE.history.push({ role: 'assistant', content: reply, ts: Date.now() });
+
+            // 切回 idle 立繪
+            if (avatar && window.ClaudeTerminal.ASSETS) {
+                avatar.src = window.ClaudeTerminal.ASSETS.idle || avatar.src;
+            }
+
+            // session_id resume 失敗：cc-bridge 退回新 session、Claude 不記得前文
+            if (result.sessionFallback) {
+                _renderClaudeReply(
+                    '⚠️ 之前的 session 失效了（cc-bridge 重啟過 / log 被清 / 太久沒聊）。\n\n' +
+                    '我從零開始記新對話了。如果想讓我知道之前聊過什麼，把重點再講一次給我聽吧。\n\n' +
+                    '---\n\n' + reply
+                );
+            } else {
+                _renderClaudeReply(reply);
+            }
+            debouncedSave();
+        } catch (e) {
+            // 失敗：回滾剛 push 的 user message
+            if (IRIS_STATE.history.length > 0 && IRIS_STATE.history[IRIS_STATE.history.length - 1].role === 'user') {
+                IRIS_STATE.history.pop();
+            }
+
+            // 切到 error 立繪
+            if (avatar && window.ClaudeTerminal.ASSETS) {
+                avatar.src = window.ClaudeTerminal.ASSETS.error || avatar.src;
+            }
+
+            const raw = (e && e.message) || '未知錯誤';
+            const [code, ...rest] = raw.split(':');
+            const detail = rest.join(':') || raw;
+            let userMsg;
+            switch (code) {
+                case 'NOT_CONFIGURED': userMsg = '⚠️ 還沒設定 cc-bridge URL / Key。\n\n去「寫作 → API 設置 → 🌙 Claude 的房間」填好。'; break;
+                case 'AUTH':           userMsg = '🔒 ' + detail; break;
+                case 'NETWORK':        userMsg = '🌐 ' + detail; break;
+                case 'SERVER':         userMsg = '💥 ' + detail; break;
+                case 'EMPTY':          userMsg = '🤔 ' + detail; break;
+                case 'API':            userMsg = '⚠️ API 錯誤：' + detail; break;
+                case 'BAD_JSON':       userMsg = '⚠️ ' + detail; break;
+                case 'SETTINGS_MISSING': userMsg = '⚠️ ' + detail; break;
+                default:               userMsg = '⚠️ ' + raw;
+            }
+            _renderClaudeReply(userMsg);
+        }
+    }
+
     // ===== 404 彩蛋系統 =====
     function enter404Room() {
         is404Room = true; visit404Count++;
@@ -1503,8 +1989,10 @@ const IRIS_IDLE = [
 
             const irisHistBtn404 = document.getElementById('iris-hist-btn');
             const cheshireHistBtn404 = document.getElementById('cheshire-hist-btn');
+            const claudeHistBtn404 = document.getElementById('claude-hist-btn');
             if (irisHistBtn404) irisHistBtn404.style.display = 'none';
             if (cheshireHistBtn404) cheshireHistBtn404.style.display = '';
+            if (claudeHistBtn404) claudeHistBtn404.style.display = 'none';
 
             const layer = document.getElementById('void-bubble-layer');
             if (layer) { layer.innerHTML = ''; addFeedEntry('SYS', 'SYSTEM COMPROMISED'); }
@@ -1556,8 +2044,10 @@ const IRIS_IDLE = [
 
             const irisHistBtnRestore = document.getElementById('iris-hist-btn');
             const cheshireHistBtnRestore = document.getElementById('cheshire-hist-btn');
+            const claudeHistBtnRestore = document.getElementById('claude-hist-btn');
             if (irisHistBtnRestore) irisHistBtnRestore.style.display = '';
             if (cheshireHistBtnRestore) cheshireHistBtnRestore.style.display = 'none';
+            if (claudeHistBtnRestore) claudeHistBtnRestore.style.display = 'none';
 
             const layer = document.getElementById('void-bubble-layer');
             if (layer) { layer.innerHTML = ''; layer.dataset.nextSlot = '2'; }
@@ -2000,6 +2490,12 @@ LINE:[用角色風格說一句話，10-20字]`;
         if (!input) return;
         const text = input.value.trim();
         if (!text) return;
+
+        // 🌙 Claude 房間獨立分支：走 cc-bridge / OpenAI 兼容、跟瀅瀅柴郡完全隔離
+        if (isClaudeRoom) {
+            input.value = '';
+            return _sendClaudeMessage(text);
+        }
 
         startIdleTimer();
 
