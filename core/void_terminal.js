@@ -954,7 +954,7 @@ const IRIS_IDLE = [
                     <span class="void-mode-toggle-label">⬡ 404</span>
                 </button>
                 <button class="void-mode-toggle-btn" id="claude-portal-btn" title="進入 Claude 的房間" style="margin-left:4px;">
-                    <span class="void-mode-toggle-label">🌙 Claude</span>
+                    <span class="void-mode-toggle-label">🦀 Claude</span>
                 </button>
                 <div style="min-width:0;flex:1;margin-left:8px;">
                     <div class="void-top-sub-label" style="font-size:9px;color:#B78456;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px;font-weight:bold;">NEXUS PARALLAX // LUNA-VII</div>
@@ -1023,7 +1023,7 @@ const IRIS_IDLE = [
                     <label class="hist-check-all-label" style="color:#FFF8E7;"><input type="checkbox" id="hist-check-all"> 全選</label>
                     <button class="hist-action-btn danger" id="hist-del-sel" disabled style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">刪除選中</button>
                     <button class="hist-action-btn danger" id="hist-clear-btn" style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">清空全部</button>
-                    <button class="hist-action-btn" id="hist-new-claude-conv" style="display:none; background:rgba(168,179,255,0.1); color:#c8d0ff; border:1px solid #a8b3ff;" title="清掉對話歷史 + session_id，下次從零開始">🔄 開新對話</button>
+                    <button class="hist-action-btn" id="hist-new-claude-conv" style="display:none; background:rgba(217,81,34,0.15); color:#D95122; border:1px solid #EAB05C;" title="清掉對話歷史 + session_id，下次從零開始">🔄 開新對話</button>
                     <span class="hist-count" id="hist-count" style="color:#B78456;"></span>
                 </div>
                 <div class="hist-list" id="hist-list"></div>
@@ -1080,6 +1080,14 @@ const IRIS_IDLE = [
                 </div>
             </div>
 
+            <!-- 🦀 Claude 月夜咖啡聊天室面板（mode-claude 才顯示，由 CSS 控制） -->
+            <div class="claude-chat-panel" id="claude-chat-panel">
+                <div class="claude-portrait-area">
+                    <img id="claude-portrait-img" class="claude-portrait-img" alt="Clawd">
+                </div>
+                <div class="claude-chat-stream" id="claude-chat-stream"></div>
+            </div>
+
             <!-- 大廳畫布覆蓋層：VN 面板風格，對話結束後才彈出 -->
             <div id="lobby-canvas-overlay" style="display:none; position:absolute; inset:0; z-index:25; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
                 <div id="lobby-canvas-area" class="lobby-canvas-area">
@@ -1096,7 +1104,7 @@ const IRIS_IDLE = [
                 <div class="void-chat-btns">
                     <button class="void-hist-btn" id="iris-hist-btn" title="瀅瀅 素材歷史" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>瀅瀅</span></button>
                     <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
-                    <button class="void-hist-btn" id="claude-hist-btn" title="Claude 對話歷史" style="display:none; color: #c8d0ff; background: rgba(40,40,80,0.7); border: 1px solid rgba(168,179,255,0.3);"><i class="fa-solid fa-clock-rotate-left"></i><span>Claude</span></button>
+                    <button class="void-hist-btn" id="claude-hist-btn" title="Claude 對話歷史" style="display:none; color: #FFF5E1; background: rgba(217,81,34,0.7); border: 1px solid rgba(234,176,92,0.4);"><i class="fa-solid fa-clock-rotate-left"></i><span>Claude</span></button>
                     <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
                     ${extraAppsHtml}
@@ -1249,7 +1257,7 @@ const IRIS_IDLE = [
                 else enter404Room();
             });
 
-            // 🌙 Claude 房間 ↔ 視差書咖 切換
+            // 🦀 Claude 房間 ↔ 視差書咖 切換
             const claudePortalBtn = tab.querySelector('#claude-portal-btn');
             if (claudePortalBtn) {
                 _updateClaudePortalBtn();
@@ -1337,8 +1345,16 @@ const IRIS_IDLE = [
                 showHistoryConfirm(tip, 'danger', async () => {
                     await window.ClaudeTerminal.startNewConversation();
                     // 同步 in-memory 狀態（如果當前在 Claude 場景）
-                    if (isClaudeRoom) IRIS_STATE.history = [];
-                    else              _claudeHistoryBackup = [];
+                    if (isClaudeRoom) {
+                        IRIS_STATE.history = [];
+                        // 同步清掉聊天室畫面 + 顯示新的歡迎詞
+                        const stream = document.getElementById('claude-chat-stream');
+                        if (stream) stream.innerHTML = '';
+                        _renderClaudeBubble('assistant', '對話歸零了。重新開始說吧。');
+                        _setClaudePortraitState('living');
+                    } else {
+                        _claudeHistoryBackup = [];
+                    }
                     renderHistoryList();
                     debouncedSave();
                 });
@@ -1427,7 +1443,7 @@ const IRIS_IDLE = [
             if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = '#FBDFA2'; badgeEl.style.borderColor = '#FBDFA2'; badgeEl.style.background = 'rgba(251,223,162,0.2)'; }
             if (newConvBtn) newConvBtn.style.display = 'none';
         } else if (char === 'claude') {
-            if (badgeEl) { badgeEl.className = 'hist-char-badge claude'; badgeEl.textContent = '🌙 Claude'; badgeEl.style.color = '#c8d0ff'; badgeEl.style.borderColor = '#a8b3ff'; badgeEl.style.background = 'rgba(168,179,255,0.2)'; }
+            if (badgeEl) { badgeEl.className = 'hist-char-badge claude'; badgeEl.textContent = '☕ Claude'; badgeEl.style.color = '#D95122'; badgeEl.style.borderColor = '#D95122'; badgeEl.style.background = 'rgba(217,81,34,0.18)'; }
             if (newConvBtn) newConvBtn.style.display = '';
         } else {
             if (badgeEl) { badgeEl.className = 'hist-char-badge cheshire'; badgeEl.textContent = '柴郡 · 404'; badgeEl.style.color = '#00ff41'; badgeEl.style.borderColor = '#00ff41'; badgeEl.style.background = 'rgba(0,255,65,0.2)'; }
@@ -1469,7 +1485,7 @@ const IRIS_IDLE = [
             item.dataset.index = index;
             // 替換顏色：USER 走拿鐵金，AI 依角色配色
             let badgeStyle = isUser ? `background: rgba(251,223,162,0.2); color:#FBDFA2; border:1px solid #FBDFA2;` :
-                             isClaude ? `background: rgba(168,179,255,0.2); color:#c8d0ff; border:1px solid #a8b3ff;` :
+                             isClaude ? `background: rgba(217,81,34,0.18); color:#D95122; border:1px solid #D95122;` :
                              isCheshire ? `background: rgba(0,255,65,0.2); color:#00ff41; border:1px solid #00ff41;` :
                              `background: rgba(226,232,240,0.1); color:#FFF8E7; border:1px solid #FFF8E7;`;
 
@@ -1598,7 +1614,7 @@ const IRIS_IDLE = [
         // 泡泡不自動消失，由 addFeedEntry 超限時移除最舊一條
     }
 
-    // ===== 🌙 Claude 房間（獨立對話接口） =====
+    // ===== 🦀 Claude 房間（獨立對話接口） =====
     // 套用 Claude 場景的 UI（不負責切場動畫，給 enter/loadState 共用）
     function _applyClaudeRoomUi() {
         const tab = document.getElementById('aurelia-home-tab');
@@ -1609,27 +1625,22 @@ const IRIS_IDLE = [
         const bg = tab.querySelector('.void-bg');
         if (bg) bg.style.backgroundColor = '#1a1a2e';
 
+        // 舊的 VN 立繪在 mode-claude 被 CSS 藏起來；新的聊天室立繪在 .claude-portrait-img
+        // 但 iris-avatar 還是要保留設定（以防 mode 切回去時殘留）
         const avatar = document.getElementById('iris-avatar');
         if (avatar) {
-            const ASSETS = (window.ClaudeTerminal && window.ClaudeTerminal.ASSETS) || {};
-            const FB = (window.ClaudeTerminal && window.ClaudeTerminal.FALLBACK_URL) || '';
-            avatar.onerror = function() { this.onerror = null; this.src = FB; };
-            avatar.src = ASSETS.idle || FB;
-            avatar.title = 'Claude';
             avatar.style.opacity = '1';
             avatar.style.display = '';
         }
+        // 新聊天室立繪設成 living（會動的）
+        _setClaudePortraitState('living');
 
         const titleEl = document.getElementById('home-chat-title');
         if (titleEl) titleEl.textContent = "Claude's Room · 月光終端";
 
+        // 輸入框配色由 CSS .void-tab.mode-claude .void-input 接管，這裡只改 placeholder
         const inputField = document.getElementById('iris-input');
-        if (inputField) {
-            inputField.placeholder = '對 Claude 說點什麼...';
-            inputField.style.background = 'rgba(40,40,80,0.8)';
-            inputField.style.borderColor = 'rgba(168,179,255,0.4)';
-            inputField.style.color = '#e8eaff';
-        }
+        if (inputField) inputField.placeholder = '對 Claude 說點什麼...';
 
         const nameBox = document.getElementById('iris-name-tag');
         if (nameBox) {
@@ -1674,7 +1685,7 @@ const IRIS_IDLE = [
             if (label) label.textContent = '⬡ 視差書咖';
             btn.title = '返回視差書咖';
         } else {
-            if (label) label.textContent = '🌙 Claude';
+            if (label) label.textContent = '🦀 Claude';
             btn.title = '進入 Claude 的房間';
         }
     }
@@ -1717,26 +1728,10 @@ const IRIS_IDLE = [
             tab.classList.remove('glitch-crash');
             _applyClaudeRoomUi();
 
-            const histTotal = IRIS_STATE.history.length;
-            if (histTotal === 0) {
-                // 首次進入：顯示歡迎詞
-                const textBox = document.getElementById('iris-text');
-                if (textBox) textBox.innerText = '在這裡，我跟妳的對話跟外面是兩條線。妳說什麼吧。';
-            } else {
-                // 有歷史：顯示最後一條 assistant 回覆，或提示已載入
-                const last = IRIS_STATE.history[IRIS_STATE.history.length - 1];
-                const textBox = document.getElementById('iris-text');
-                const nameBox = document.getElementById('iris-name-tag');
-                if (last && last.role === 'assistant') {
-                    if (textBox) textBox.innerText = last.content;
-                    if (nameBox) {
-                        nameBox.style.display = 'block';
-                        const _s = nameBox.querySelector('span'); if (_s) _s.textContent = 'Claude';
-                    }
-                } else {
-                    if (textBox) textBox.innerHTML = `<span style="color:#a8b3ff;font-style:italic;">(對話歷史已載入...)</span>`;
-                    if (nameBox) nameBox.style.display = 'none';
-                }
+            // 把歷史 render 成氣泡列表；無歷史就丟一條歡迎詞
+            _hydrateClaudeStream();
+            if (IRIS_STATE.history.length === 0) {
+                _renderClaudeBubble('assistant', '在這裡，我跟妳的對話跟外面是兩條線。妳說什麼吧。');
             }
 
             _updatePortalBtn();
@@ -1816,63 +1811,73 @@ const IRIS_IDLE = [
 
     // Claude 回覆切多頁（套奧瑞亞 VN 翻頁體驗，避免長文字爆出對話框）
     // 優先度：段落空行 > 單換行 > 句末標點 > 逗號 > 字數硬切
-    function _splitClaudeReplyIntoPages(text, maxPerPage = 120) {
-        const result = [];
-        if (!text) return result;
-        let remaining = text.trim();
-        if (!remaining) return result;
+    // ===== Claude 聊天室渲染（取代 VN 翻頁） =====
 
-        while (remaining.length > 0) {
-            if (remaining.length <= maxPerPage) {
-                result.push({ type: 'Char', name: 'Claude', text: remaining });
-                break;
-            }
-            const window = remaining.slice(0, maxPerPage);
-            let cutAt = -1;
-
-            const lastDoubleNl = window.lastIndexOf('\n\n');
-            if (lastDoubleNl > maxPerPage * 0.4) cutAt = lastDoubleNl + 2;
-
-            if (cutAt < 0) {
-                const lastNl = window.lastIndexOf('\n');
-                if (lastNl > maxPerPage * 0.4) cutAt = lastNl + 1;
-            }
-            if (cutAt < 0) {
-                const lastSentence = Math.max(
-                    window.lastIndexOf('。'),
-                    window.lastIndexOf('？'),
-                    window.lastIndexOf('！'),
-                    window.lastIndexOf('. '),
-                    window.lastIndexOf('? '),
-                    window.lastIndexOf('! ')
-                );
-                if (lastSentence > maxPerPage * 0.5) cutAt = lastSentence + 1;
-            }
-            if (cutAt < 0) {
-                const lastComma = Math.max(window.lastIndexOf('，'), window.lastIndexOf(', '));
-                if (lastComma > maxPerPage * 0.5) cutAt = lastComma + 1;
-            }
-            if (cutAt < 0) cutAt = maxPerPage;
-
-            const chunk = remaining.slice(0, cutAt).trim();
-            if (chunk) result.push({ type: 'Char', name: 'Claude', text: chunk });
-            remaining = remaining.slice(cutAt).trim();
-        }
-        return result;
+    // 切換上半立繪狀態（idle / living / thinking / happy / error）
+    function _setClaudePortraitState(state) {
+        const img = document.getElementById('claude-portrait-img');
+        if (!img) return;
+        const ASSETS = (window.ClaudeTerminal && window.ClaudeTerminal.ASSETS) || {};
+        const FB = (window.ClaudeTerminal && window.ClaudeTerminal.FALLBACK_URL) || '';
+        img.onerror = function(){ this.onerror = null; this.src = FB; };
+        img.src = ASSETS[state] || ASSETS.living || ASSETS.idle || FB;
     }
 
-    // 把 Claude 回覆塞進 advanceIrisVn 流程，享 VN 翻頁體驗（▼ 點對話框翻頁）
-    function _renderClaudeReply(text) {
-        if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
-        if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
-        if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
-        _hideReactionBox();
+    function _scrollClaudeChatToBottom() {
+        const stream = document.getElementById('claude-chat-stream');
+        if (stream) stream.scrollTop = stream.scrollHeight;
+    }
 
-        if (IRIS_STATE.timer) clearInterval(IRIS_STATE.timer);
-        IRIS_STATE.queue = _splitClaudeReplyIntoPages(text);
-        IRIS_STATE._onComplete = null;
-        IRIS_STATE.isTyping = false;
-        advanceIrisVn();
+    /** 加一條氣泡到 chat-stream。
+     *  role: 'user' | 'assistant'
+     *  opts.thinking: 字串 → 在氣泡上方塞折疊 thinking 區塊（之後 cc-bridge 真的吐 thinking 再用）
+     */
+    function _renderClaudeBubble(role, content, opts = {}) {
+        const stream = document.getElementById('claude-chat-stream');
+        if (!stream) return;
+        const isUser = role === 'user';
+        const wrap = document.createElement('div');
+        wrap.className = 'claude-bubble-wrap ' + (isUser ? 'from-user' : 'from-claude');
+
+        if (!isUser && opts.thinking) {
+            const t = document.createElement('div');
+            t.className = 'claude-thinking';
+            const header = document.createElement('div');
+            header.className = 'claude-thinking-header';
+            header.innerHTML = '<span class="claude-thinking-toggle">▶</span><span>💭 thinking...</span>';
+            const body = document.createElement('div');
+            body.className = 'claude-thinking-content';
+            body.textContent = opts.thinking;
+            t.appendChild(header); t.appendChild(body);
+            t.addEventListener('click', () => t.classList.toggle('open'));
+            wrap.appendChild(t);
+        }
+
+        const bubble = document.createElement('div');
+        bubble.className = 'claude-bubble ' + (isUser ? 'from-user' : 'from-claude');
+        bubble.textContent = content;
+        wrap.appendChild(bubble);
+
+        stream.appendChild(wrap);
+        _scrollClaudeChatToBottom();
+    }
+
+    /** 進入 Claude 房間時用：把 IRIS_STATE.history 全部 render 成氣泡 */
+    function _hydrateClaudeStream() {
+        const stream = document.getElementById('claude-chat-stream');
+        if (!stream) return;
+        stream.innerHTML = '';
+        (IRIS_STATE.history || []).forEach(m => {
+            _renderClaudeBubble(m.role === 'user' ? 'user' : 'assistant', m.content);
+        });
+        _scrollClaudeChatToBottom();
+    }
+
+    // 把 Claude 回覆 append 成一條氣泡 + 立繪 happy → living
+    function _renderClaudeReply(text) {
+        _renderClaudeBubble('assistant', text);
+        _setClaudePortraitState('happy');
+        setTimeout(() => _setClaudePortraitState('living'), 600);
     }
 
     // 發送 Claude 房間訊息（走 cc-bridge / OpenAI 兼容；持久化由 ClaudeTerminal 處理）
@@ -1882,36 +1887,23 @@ const IRIS_IDLE = [
             return;
         }
         if (!window.ClaudeTerminal.isConfigured()) {
-            _renderClaudeReply('⚠️ 還沒設定 cc-bridge URL / Key。\n\n去「寫作 → API 設置 → 🌙 Claude 的房間」填好。');
+            _renderClaudeReply('⚠️ 還沒設定 cc-bridge URL / Key。\n\n去「寫作 → API 設置 → 🦀 Claude 的房間」填好。');
             return;
         }
 
-        // 即時把 user message push 進 IRIS_STATE.history（給 UI / saveLobbyHistory 用）
+        // 即時把 user message push 進 history + 立刻 render 成右側橘氣泡
         IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
+        _renderClaudeBubble('user', text);
 
-        // 顯示「思考中」
-        const box = document.getElementById('iris-text');
-        const nameBox = document.getElementById('iris-name-tag');
-        if (nameBox) nameBox.style.display = 'none';
-        if (box) box.innerHTML = `<span style="color:#a8b3ff; font-style:italic;">(Claude 在想...)</span>`;
-
-        // 切換立繪到 thinking 狀態
-        const avatar = document.getElementById('iris-avatar');
-        if (avatar && window.ClaudeTerminal.ASSETS) {
-            avatar.src = window.ClaudeTerminal.ASSETS.thinking || avatar.src;
-        }
+        // 立繪切 thinking
+        _setClaudePortraitState('thinking');
 
         try {
             const result = await window.ClaudeTerminal.send(text);
             const reply = result.reply;
 
-            // 同步把 assistant reply 寫進 IRIS_STATE.history（ClaudeTerminal 那邊已存 os_db）
+            // assistant reply 寫進 history（ClaudeTerminal 那邊已存 os_db）
             IRIS_STATE.history.push({ role: 'assistant', content: reply, ts: Date.now() });
-
-            // 切回 idle 立繪
-            if (avatar && window.ClaudeTerminal.ASSETS) {
-                avatar.src = window.ClaudeTerminal.ASSETS.idle || avatar.src;
-            }
 
             // session_id resume 失敗：cc-bridge 退回新 session、Claude 不記得前文
             if (result.sessionFallback) {
@@ -1930,17 +1922,14 @@ const IRIS_IDLE = [
                 IRIS_STATE.history.pop();
             }
 
-            // 切到 error 立繪
-            if (avatar && window.ClaudeTerminal.ASSETS) {
-                avatar.src = window.ClaudeTerminal.ASSETS.error || avatar.src;
-            }
+            _setClaudePortraitState('error');
 
             const raw = (e && e.message) || '未知錯誤';
             const [code, ...rest] = raw.split(':');
             const detail = rest.join(':') || raw;
             let userMsg;
             switch (code) {
-                case 'NOT_CONFIGURED': userMsg = '⚠️ 還沒設定 cc-bridge URL / Key。\n\n去「寫作 → API 設置 → 🌙 Claude 的房間」填好。'; break;
+                case 'NOT_CONFIGURED': userMsg = '⚠️ 還沒設定 cc-bridge URL / Key。\n\n去「寫作 → API 設置 → 🦀 Claude 的房間」填好。'; break;
                 case 'AUTH':           userMsg = '🔒 ' + detail; break;
                 case 'NETWORK':        userMsg = '🌐 ' + detail; break;
                 case 'SERVER':         userMsg = '💥 ' + detail; break;
@@ -1950,7 +1939,8 @@ const IRIS_IDLE = [
                 case 'SETTINGS_MISSING': userMsg = '⚠️ ' + detail; break;
                 default:               userMsg = '⚠️ ' + raw;
             }
-            _renderClaudeReply(userMsg);
+            _renderClaudeBubble('assistant', userMsg);
+            setTimeout(() => _setClaudePortraitState('living'), 1500);
         }
     }
 
@@ -2491,7 +2481,7 @@ LINE:[用角色風格說一句話，10-20字]`;
         const text = input.value.trim();
         if (!text) return;
 
-        // 🌙 Claude 房間獨立分支：走 cc-bridge / OpenAI 兼容、跟瀅瀅柴郡完全隔離
+        // 🦀 Claude 房間獨立分支：走 cc-bridge / OpenAI 兼容、跟瀅瀅柴郡完全隔離
         if (isClaudeRoom) {
             input.value = '';
             return _sendClaudeMessage(text);

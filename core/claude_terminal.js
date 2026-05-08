@@ -131,7 +131,7 @@
     ClaudeTerminal.send = async function(userText) {
         const cfg = ClaudeTerminal.getConfig();
         if (!cfg) throw new Error('SETTINGS_MISSING:OS_SETTINGS 未載入');
-        if (!cfg.url || !cfg.key) throw new Error('NOT_CONFIGURED:還沒填 URL 跟 Key，去設定 → 🌙 Claude 的房間');
+        if (!cfg.url || !cfg.key) throw new Error('NOT_CONFIGURED:還沒填 URL 跟 Key，去設定 → 🦀 Claude 的房間');
 
         // 讀歷史 → 加新 user → 立即存（讓 UI 即時顯示在 hist 視窗）
         const history = await ClaudeTerminal.loadHistory();
@@ -185,7 +185,7 @@
             await ClaudeTerminal.saveHistory(history);
             const errMsg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
             if (resp.status === 401 || resp.status === 403) {
-                throw new Error('AUTH:Key 不對。去設定 → 🌙 Claude 的房間 重填。');
+                throw new Error('AUTH:Key 不對。去設定 → 🦀 Claude 的房間 重填。');
             }
             if (resp.status >= 500) {
                 throw new Error('SERVER:Claude 跑出錯。看 cc-bridge log。原始：' + errMsg);

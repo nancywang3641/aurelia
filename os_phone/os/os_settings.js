@@ -446,7 +446,7 @@ EXAMPLE "prompt" value:
                 <div class="set-tabs">
                     <div class="set-tab active" data-tab="llm">🧠 主模型</div>
                     <div class="set-tab" data-tab="sec-llm">⚡ 副模型</div>
-                    <div class="set-tab" data-tab="claude-room">🌙 Claude 的房間</div>
+                    <div class="set-tab" data-tab="claude-room">🦀 Claude 的房間</div>
                     <div class="set-tab" data-tab="img">🎨 畫廊</div>
                     <div class="set-tab" data-tab="voice">🎵 語音</div>
                     <div class="set-tab" data-tab="vn">🎮 VN</div>
@@ -642,7 +642,7 @@ EXAMPLE "prompt" value:
 
                     <div id="view-claude-room" class="tab-view hidden">
                         <div style="background:rgba(180,150,200,0.12); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(251,223,162,0.3); font-size:12px; color:#FBDFA2; line-height:1.6;">
-                            🌙 <b>Claude 的房間</b>是獨立的 Claude 對話接口，跟主／副模型完全隔離 — 不會被其他 prompt 污染。<br>
+                            🦀 <b>Claude 的房間</b>是獨立的 Claude 對話接口，跟主／副模型完全隔離 — 不會被其他 prompt 污染。<br>
                             走 cc-bridge → 本機 Claude Code → Anthropic（用 Max 訂閱）。
                         </div>
 
