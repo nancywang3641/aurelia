@@ -1,7 +1,6 @@
 /**
  * Story Extractor (開場白提取器)
- * 自動把開場白中的每個 HTML 區塊變成獨立 TAB
- * TAB 名稱自動從內容中提取（title、h1-h6、header 等）
+ * 把開場白整段渲染在單一區域（純文字 + HTML 區塊依原本順序堆疊）
  */
 
 (function() {
@@ -15,9 +14,10 @@
     };
 
     const StoryExtractor = {
-        activeTab: '',
         currentTheme: THEMES.light,
         isVisible: false,
+        originalFormParent: null,    // 記住 #form_sheld 原本的家（hide 時還原）
+        originalFormSibling: null,
 
         init() {
             this.loadTheme();
@@ -92,27 +92,14 @@
                 }
                 .se-icon-btn:hover { color: #FBDFA2; background: rgba(251,223,162,0.1); }
 
-                #se-tab-bar {
-                    display: flex; gap: 15px; padding: 0 15px;
-                    background: rgba(69,34,22,0.6);
-                    border-bottom: 1px solid rgba(251,223,162,0.2);
-                    overflow-x: auto; flex-shrink: 0;
+                #se-content-area {
+                    flex: 1; position: relative; width: 100%;
+                    overflow-y: auto; overflow-x: hidden;
+                    background: transparent; min-height: 150px;
+                    padding: 15px; box-sizing: border-box;
                 }
-                #se-tab-bar::-webkit-scrollbar { display: none; }
 
-                .se-tab-item {
-                    padding: 12px 0; font-size: 13px; color: #B78456; cursor: pointer;
-                    border-bottom: 2px solid transparent; transition: all 0.2s;
-                    white-space: nowrap; font-weight: 500; text-transform: uppercase;
-                }
-                .se-tab-item.active { color: #FBDFA2; border-bottom-color: #FBDFA2; font-weight: 700; }
-
-                #se-content-area { flex: 1; position: relative; width: 100%; overflow-y: auto; overflow-x: hidden; background: transparent; min-height: 150px; }
-
-                .se-tab-pane { width: 100%; min-height: 100%; padding: 15px; box-sizing: border-box; display: none; }
-                .se-tab-pane.active { display: block; }
-
-                /* 內容卡片樣式 */
+                /* 純文字容器：套用書咖卡片裝飾 */
                 #se-root-wrapper .native-render-wrapper {
                     color: #FBDFA2; display: flow-root; width: 100%; margin-bottom: 15px;
                     background: rgba(69,34,22,0.55);
@@ -120,6 +107,26 @@
                     border-left: 2px solid rgba(251,223,162,0.45);
                     padding: 15px; border-radius: 4px;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                    font-size: calc(var(--mainFontSize, 16px) + 2px);
+                    line-height: 1.7;
+                }
+
+                /* HTML 區塊容器：透明、只給間距，讓角色卡自帶樣式發光 */
+                #se-root-wrapper .story-html-block {
+                    width: 100%; margin-bottom: 15px;
+                    display: flow-root;
+                }
+
+                /* 強制繼承：擋掉外部對 p/li/td 等的直接規則覆蓋（書咖預設或 ST 全域樣式） */
+                #se-root-wrapper .native-render-wrapper * {
+                    font-family: inherit !important;
+                    color: inherit !important;
+                }
+
+                /* 吃掉瀏覽器對 <q> 標籤自動加的引號（避免跟原文裡的引號重複變成 ""…""） */
+                #se-root-wrapper .native-render-wrapper q::before,
+                #se-root-wrapper .native-render-wrapper q::after {
+                    content: none !important;
                 }
                 #se-root-wrapper .native-render-wrapper p, #se-root-wrapper .native-render-wrapper li, #se-root-wrapper .native-render-wrapper td { color: #FBDFA2; }
                 #se-root-wrapper .native-render-wrapper h1, #se-root-wrapper .native-render-wrapper h2, #se-root-wrapper .native-render-wrapper h3 {
@@ -163,26 +170,7 @@
                     background: rgba(0,255,65,0.1);
                 }
 
-                #se-root-wrapper.theme-darkgold #se-tab-bar {
-                    background: rgba(0,15,0,0.7);
-                    border-bottom: 1px solid rgba(0,255,65,0.25);
-                }
-
-                #se-root-wrapper.theme-darkgold .se-tab-item {
-                    color: #00cc33;
-                }
-
-                #se-root-wrapper.theme-darkgold .se-tab-item.active {
-                    color: #00ff41;
-                    border-bottom-color: #00ff41;
-                    text-shadow: 0 0 6px rgba(0,255,65,0.5);
-                }
-
                 #se-root-wrapper.theme-darkgold #se-content-area {
-                    background: transparent;
-                }
-
-                #se-root-wrapper.theme-darkgold .se-tab-pane {
                     background: transparent;
                     color: #b8ffcb;
                 }
@@ -232,16 +220,6 @@
                     font-size: 14px !important;
                 }
 
-                #se-root-wrapper.vn-tab-mode #se-tab-bar {
-                    padding: 0 10px !important;
-                    height: 35px;
-                }
-
-                #se-root-wrapper.vn-tab-mode .se-tab-item {
-                    padding: 8px 0 !important;
-                    font-size: 11px !important;
-                }
-
                 #se-root-wrapper.vn-tab-mode #se-content-area {
                     padding: 8px !important;
                     font-size: 11px !important;
@@ -260,6 +238,28 @@
 
                 #story-extractor-container-vn.show {
                     display: flex !important;
+                }
+
+                /* === 輸入區底座（劫持 #form_sheld 進來用） === */
+                #se-root-wrapper #se-input-area {
+                    flex-shrink: 0; width: 100%;
+                    background: rgba(69, 34, 22, 0.85);
+                    border-top: 1px solid rgba(251, 223, 162, 0.25);
+                    z-index: 10; min-height: 50px;
+                    box-sizing: border-box;
+                }
+                #se-root-wrapper #se-input-area #form_sheld {
+                    position: relative !important;
+                    bottom: auto !important; left: auto !important; right: auto !important;
+                    width: 100% !important; max-width: 100% !important;
+                    background: transparent !important;
+                    box-shadow: none !important;
+                    padding: 10px !important; margin: 0 !important;
+                }
+                /* 暗版：404 終端風的輸入區 */
+                #se-root-wrapper.theme-darkgold #se-input-area {
+                    background: rgba(0, 15, 0, 0.85);
+                    border-top: 1px solid rgba(0, 255, 65, 0.25);
                 }
             `;
             document.head.appendChild(style);
@@ -342,8 +342,8 @@
                         <button class="se-icon-btn" title="刷新" id="se-btn-refresh">↻</button>
                     </div>
                 </div>
-                <div id="se-tab-bar" style="${isVnTabMode ? 'padding: 0 10px;' : ''}"></div>
                 <div id="se-content-area" style="${isVnTabMode ? 'padding: 8px; font-size: 12px;' : ''}"></div>
+                <div id="se-input-area"></div>
             `;
 
             iframeContainer.appendChild(rootWrapper);
@@ -392,22 +392,29 @@
 
             this.applyTheme();
             this.isVisible = true;
+
+            // DOM 劫持：把酒館主聊天的輸入框搬進來（mount 在 #chat 時不搬，跟 html_extractor 行為一致）
+            try {
+                const _mountSelector = window.extension_settings?.['多功能面板系統']?.mount?.selector || '#sheld';
+                const formSheld = document.getElementById('form_sheld');
+                if (formSheld && _mountSelector !== '#chat') {
+                    this.originalFormParent = formSheld.parentNode;
+                    this.originalFormSibling = formSheld.nextSibling;
+                    rootWrapper.querySelector('#se-input-area').appendChild(formSheld);
+                    console.log('[StoryExtractor] 已劫持 #form_sheld');
+                }
+            } catch (e) { console.warn('[StoryExtractor] 劫持 #form_sheld 失敗', e); }
+
             console.log('[StoryExtractor] ✅ 窗口已顯示');
 
             this.scanAndRender();
         },
 
-        // 🔥 自動把每個頂層 HTML 區塊變成獨立 TAB，自動提取標題
-        // 純文字開場白 → 直接顯示為一個 TAB（不拆分）
-        // 文字 + HTML 混合 → 文字一個 TAB，每個 HTML 區塊各一個 TAB
+        // 把開場白整段渲染進單一區域：純文字 + HTML 區塊依原本順序堆疊
         scanAndRender() {
             const contentArea = document.getElementById('se-content-area');
-            const tabBar = document.getElementById('se-tab-bar');
-
             contentArea.innerHTML = '';
-            tabBar.innerHTML = '';
 
-            // 🔥 獲取 mesid="0" 的第一條消息
             const firstMes = document.querySelector('#chat .mes[mesid="0"] .mes_text');
 
             if (!firstMes) {
@@ -418,229 +425,208 @@
                 return;
             }
 
-            // 🔥 解析內容
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = firstMes.innerHTML;
 
-            // 🔥 定義「有意義的 HTML 容器」（值得獨立成 TAB 的元素）
             const BLOCK_TAGS = ['DIV', 'TABLE', 'FORM', 'DETAILS', 'SECTION', 'ARTICLE', 'ASIDE', 'NAV', 'FIELDSET', 'FIGURE', 'IFRAME', 'CANVAS', 'SVG'];
 
-            const tabs = [];
-            let textContent = []; // 累積非區塊內容
+            let textBuffer = [];
+            const flushText = () => {
+                if (textBuffer.length === 0) return;
+                const html = textBuffer.join('');
+                if (html.replace(/<[^>]*>/g, '').trim()) {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'native-render-wrapper';
+                    wrapper.innerHTML = html;
+                    contentArea.appendChild(wrapper);
+                }
+                textBuffer = [];
+            };
 
-            // 🔥 遍歷所有子節點，區分文字和 HTML 區塊
-            Array.from(tempDiv.childNodes).forEach((node, index) => {
+            Array.from(tempDiv.childNodes).forEach(node => {
                 if (node.nodeType === Node.TEXT_NODE) {
-                    // 純文字節點
-                    const text = node.textContent.trim();
-                    if (text) {
-                        textContent.push(node.textContent);
-                    }
+                    if (node.textContent.trim()) textBuffer.push(node.textContent);
                 } else if (node.nodeType === Node.ELEMENT_NODE) {
                     const tagName = node.tagName.toUpperCase();
+                    if (['SCRIPT', 'STYLE'].includes(tagName)) return;
 
-                    // 跳過 script、style
-                    if (['SCRIPT', 'STYLE'].includes(tagName)) {
-                        return;
-                    }
-
-                    // 🔥 如果是容器元素，獨立成 TAB
                     if (BLOCK_TAGS.includes(tagName)) {
-                        // 先把之前累積的文字內容存起來（稍後處理）
-                        tabs.push({
-                            id: `html-${index}`,
-                            name: this.extractTabName(node, tabs.length),
-                            html: `<div class="native-render-wrapper">${node.outerHTML}</div>`,
-                            isHtml: true
-                        });
+                        flushText();
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'story-html-block';
+                        wrapper.innerHTML = node.outerHTML;
+                        wrapper.querySelectorAll('details:not([open])').forEach(el => el.setAttribute('open', 'true'));
+                        contentArea.appendChild(wrapper);
                     } else {
-                        // 非容器元素（P、SPAN、BR、HR 等），累積到文字內容
-                        textContent.push(node.outerHTML);
+                        textBuffer.push(node.outerHTML);
                     }
                 }
             });
+            flushText();
 
-            // 🔥 如果有文字內容，創建一個「文字」TAB（放在最前面）
-            if (textContent.length > 0) {
-                const textHtml = textContent.join('');
-                // 只有在文字內容有實際內容時才創建
-                if (textHtml.replace(/<[^>]*>/g, '').trim()) {
-                    tabs.unshift({
-                        id: 'text-content',
-                        name: '📝 開場白',
-                        html: `<div class="native-render-wrapper">${textHtml}</div>`,
-                        isHtml: false
-                    });
-                }
-            }
-
-            // 🔥 如果沒有任何 TAB，顯示空提示
-            if (tabs.length === 0) {
+            if (contentArea.children.length === 0) {
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
                     <div style="font-size:40px; margin-bottom:10px;">📭</div>
                     開場白內容為空
                 </div>`;
-                tabBar.style.display = 'none';
                 return;
             }
 
-            // 🔥 如果只有一個 TAB，隱藏分頁欄
-            if (tabs.length === 1) {
-                tabBar.style.display = 'none';
-            } else {
-                tabBar.style.display = 'flex';
-            }
-
-            // 🔥 創建所有 TAB
-            tabs.forEach(tab => {
-                this.createTab(tab.id, tab.name, tab.html);
+            this.fixIframes(contentArea);
+            this.mimicAuthorStyle(contentArea);
+            // iframe 載入慢（含內部 JS 觸發的 1.5s 過渡）→ 載完立刻補一次 + 1.6s 後再補一次最終態
+            contentArea.querySelectorAll('iframe').forEach(iframe => {
+                iframe.addEventListener('load', () => {
+                    console.log('[StoryExtractor] iframe 載入完成，補偷學樣式');
+                    this.mimicAuthorStyle(contentArea);
+                    setTimeout(() => {
+                        console.log('[StoryExtractor] iframe 載入後 1.6s，最終補正');
+                        this.mimicAuthorStyle(contentArea);
+                    }, 1600);
+                }, { once: true });
             });
-
-            // 激活第一個 TAB
-            this.activeTab = tabs[0].id;
-            this.switchTab(this.activeTab);
-
-            console.log(`[StoryExtractor] ✅ 開場白已分為 ${tabs.length} 個 TAB`);
+            console.log(`[StoryExtractor] ✅ 開場白渲染完成，共 ${contentArea.children.length} 個區塊`);
         },
 
-        // 🔥 自動從元素中提取標題作為 TAB 名稱
-        extractTabName(element, index) {
-            // 1. 嘗試找 title 屬性
-            if (element.getAttribute('title')) {
-                return this.truncateName(element.getAttribute('title'));
+        // 文字 wrapper 偷學作者 HTML 面板的視覺：背景、遮罩、文字色、邊框、圓角、陰影、字體
+        // bg 捐贈者：第一個有底色或 bg-image 的可見元素
+        // overlay 捐贈者：全屏絕對定位 + 半透明底色（疊在 bg 上的「夜色」遮罩）
+        // 文字色捐贈者：第一個有直接文字內容的可見元素
+        mimicAuthorStyle(contentArea) {
+            const blocks = contentArea.querySelectorAll('.story-html-block');
+            if (!blocks.length) return;
+
+            let bgDonor = null;
+            let overlayDonor = null;
+            let textDonor = null;
+            for (const block of blocks) {
+                if (!bgDonor) bgDonor = this.findStyledDonor(block);
+                if (!overlayDonor) overlayDonor = this.findOverlayDonor(block);
+                if (!textDonor) textDonor = this.findTextDonor(block);
+                if (bgDonor && overlayDonor && textDonor) break;
             }
 
-            // 2. 嘗試找 data-title 屬性
-            if (element.getAttribute('data-title')) {
-                return this.truncateName(element.getAttribute('data-title'));
+            if (!bgDonor) {
+                console.log('[StoryExtractor] 找不到 bg 捐贈者，保留書咖預設');
+                return;
             }
 
-            // 3. 嘗試找 h1-h6 標題
-            const heading = element.querySelector('h1, h2, h3, h4, h5, h6');
-            if (heading && heading.textContent.trim()) {
-                return this.truncateName(heading.textContent.trim());
-            }
+            const bgCs = getComputedStyle(bgDonor);
+            const overlayColor = overlayDonor ? getComputedStyle(overlayDonor).backgroundColor : null;
+            const textColor = textDonor ? getComputedStyle(textDonor).color : bgCs.color;
+            const fontFamily = textDonor ? getComputedStyle(textDonor).fontFamily : bgCs.fontFamily;
 
-            // 4. 嘗試找 .title, .header, .heading 類
-            const titleEl = element.querySelector('.title, .header, .heading, [class*="title"], [class*="header"]');
-            if (titleEl && titleEl.textContent.trim()) {
-                return this.truncateName(titleEl.textContent.trim());
-            }
+            console.log('[StoryExtractor] bg：', bgDonor.tagName, bgDonor.className || '(無)',
+                '| overlay：', overlayColor || '(無)',
+                '| 文字色：', textColor,
+                '| 字體：', fontFamily,
+                '| bgImage:', bgCs.backgroundImage.substring(0, 60));
 
-            // 5. 嘗試找 legend（for fieldset）
-            const legend = element.querySelector('legend');
-            if (legend && legend.textContent.trim()) {
-                return this.truncateName(legend.textContent.trim());
-            }
+            // 多重背景合成：overlay（整面色塊）疊在 image 上
+            const composedBgImage = (overlayColor && bgCs.backgroundImage !== 'none')
+                ? `linear-gradient(${overlayColor}, ${overlayColor}), ${bgCs.backgroundImage}`
+                : bgCs.backgroundImage;
 
-            // 6. 嘗試找 caption（for table）
-            const caption = element.querySelector('caption');
-            if (caption && caption.textContent.trim()) {
-                return this.truncateName(caption.textContent.trim());
-            }
+            contentArea.querySelectorAll('.native-render-wrapper').forEach(w => {
+                w.style.backgroundColor = bgCs.backgroundColor;
+                w.style.backgroundImage = composedBgImage;
+                w.style.backgroundSize = bgCs.backgroundSize;
+                w.style.backgroundPosition = bgCs.backgroundPosition;
+                w.style.backgroundRepeat = bgCs.backgroundRepeat;
+                w.style.color = textColor;
+                w.style.borderTop = `${bgCs.borderTopWidth} ${bgCs.borderTopStyle} ${bgCs.borderTopColor}`;
+                w.style.borderRight = `${bgCs.borderRightWidth} ${bgCs.borderRightStyle} ${bgCs.borderRightColor}`;
+                w.style.borderBottom = `${bgCs.borderBottomWidth} ${bgCs.borderBottomStyle} ${bgCs.borderBottomColor}`;
+                w.style.borderLeft = `${bgCs.borderLeftWidth} ${bgCs.borderLeftStyle} ${bgCs.borderLeftColor}`;
+                w.style.borderRadius = bgCs.borderRadius;
+                w.style.boxShadow = bgCs.boxShadow;
+                w.style.fontFamily = fontFamily;
+                w.style.padding = '15px';
+            });
+        },
 
-            // 7. 嘗試用元素的 id 或 class 作為名稱
-            if (element.id) {
-                return this.formatClassName(element.id);
+        // 共用：判斷元素是否隱藏（含 opacity:0，避免採到夜模式被淡出的 day-bg 之類）
+        _isHidden(el) {
+            try {
+                const cs = getComputedStyle(el);
+                return cs.display === 'none' ||
+                    cs.visibility === 'hidden' ||
+                    parseFloat(cs.opacity || '1') < 0.05;
+            } catch (e) { return false; }
+        },
+
+        // 共用：BFS wrapper 子樹，遇到 iframe 踩進 contentDocument，跳過隱藏元素
+        // matchFn(el) 返回 true 即返回該元素
+        _bfsFindFirst(wrapper, matchFn, maxDepth = 5) {
+            if (!wrapper) return null;
+            const queue = [];
+            for (const child of wrapper.children) {
+                queue.push({ el: child, depth: 0 });
             }
-            if (element.className && typeof element.className === 'string') {
-                const firstClass = element.className.split(' ')[0];
-                if (firstClass) {
-                    return this.formatClassName(firstClass);
+            while (queue.length) {
+                const { el, depth } = queue.shift();
+                if (!el || !el.tagName || this._isHidden(el)) continue;
+                if (matchFn(el)) return el;
+                if (depth >= maxDepth) continue;
+
+                if (el.tagName === 'IFRAME') {
+                    try {
+                        const iframeDoc = el.contentDocument;
+                        if (iframeDoc && iframeDoc.body) {
+                            for (const child of iframeDoc.body.children) {
+                                queue.push({ el: child, depth: depth + 1 });
+                            }
+                        }
+                    } catch (e) { /* cross-origin */ }
+                } else if (el.children) {
+                    for (const child of el.children) {
+                        queue.push({ el: child, depth: depth + 1 });
+                    }
                 }
             }
-
-            // 8. 使用標籤名 + 索引作為備用名稱
-            const tagIcons = {
-                'DIV': '📦',
-                'TABLE': '📊',
-                'FORM': '📝',
-                'UL': '📋',
-                'OL': '📋',
-                'DETAILS': '📂',
-                'SECTION': '📑',
-                'ARTICLE': '📰',
-                'NAV': '🧭',
-                'ASIDE': '📌',
-                'IFRAME': '🖼️',
-                'CANVAS': '🎨',
-                'SVG': '🎨'
-            };
-            const icon = tagIcons[element.tagName] || '📄';
-            return `${icon} 區塊 ${index + 1}`;
+            return null;
         },
 
-        // 🔥 截斷過長的名稱
-        truncateName(name) {
-            const maxLength = 15;
-            if (name.length > maxLength) {
-                return name.substring(0, maxLength) + '...';
-            }
-            return name;
-        },
-
-        // 🔥 格式化 class/id 名稱（把 kebab-case 或 snake_case 轉成可讀形式）
-        formatClassName(name) {
-            return name
-                .replace(/[-_]/g, ' ')
-                .replace(/([a-z])([A-Z])/g, '$1 $2')
-                .split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                .join(' ')
-                .substring(0, 15);
-        },
-
-        // 🔥 執行動態插入的腳本
-        executeScripts(container) {
-            const scripts = container.querySelectorAll('script');
-            scripts.forEach(oldScript => {
-                const newScript = document.createElement('script');
-                // 複製所有屬性
-                Array.from(oldScript.attributes).forEach(attr => {
-                    newScript.setAttribute(attr.name, attr.value);
-                });
-                // 複製腳本內容
-                newScript.textContent = oldScript.textContent;
-                // 替換舊腳本
-                oldScript.parentNode.replaceChild(newScript, oldScript);
+        // 找第一個有底色或 bg-image 的可見元素
+        findStyledDonor(wrapper) {
+            return this._bfsFindFirst(wrapper, (el) => {
+                try {
+                    const cs = getComputedStyle(el);
+                    const hasBgColor = cs.backgroundColor &&
+                        cs.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
+                        cs.backgroundColor !== 'transparent';
+                    const hasBgImage = cs.backgroundImage && cs.backgroundImage !== 'none';
+                    return hasBgColor || hasBgImage;
+                } catch (e) { return false; }
             });
         },
 
-        createTab(id, name, contentHtml) {
-            const tabBar = document.getElementById('se-tab-bar');
-            const contentArea = document.getElementById('se-content-area');
-
-            const btn = document.createElement('div');
-            btn.className = 'se-tab-item';
-            btn.id = `se-tab-btn-${id}`;
-            btn.textContent = name;
-            btn.onclick = () => this.switchTab(id);
-            tabBar.appendChild(btn);
-
-            const pane = document.createElement('div');
-            pane.className = 'se-tab-pane';
-            pane.id = `se-tab-pane-${id}`;
-            pane.innerHTML = contentHtml;
-
-            pane.querySelectorAll('details:not([open])').forEach(el => {
-                el.setAttribute('open', 'true');
-            });
-
-            contentArea.appendChild(pane);
+        // 找第一個有直接文字內容的可見元素（用它的 color 當文字色）
+        findTextDonor(wrapper) {
+            return this._bfsFindFirst(wrapper, (el) => {
+                for (const child of el.childNodes) {
+                    if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) {
+                        return true;
+                    }
+                }
+                return false;
+            }, 7);
         },
 
-        switchTab(id) {
-            this.activeTab = id;
-            document.querySelectorAll('.se-tab-item').forEach(b => b.classList.remove('active'));
-            const btn = document.getElementById(`se-tab-btn-${id}`);
-            if(btn) btn.classList.add('active');
-
-            document.querySelectorAll('.se-tab-pane').forEach(p => p.classList.remove('active'));
-            const pane = document.getElementById(`se-tab-pane-${id}`);
-            if(pane) {
-                pane.classList.add('active');
-                this.fixIframes(pane);
-            }
+        // 找遮罩層：position:absolute/fixed + 全屏 (top/bottom/left/right 至少對角=0) + 有半透明底色
+        findOverlayDonor(wrapper) {
+            return this._bfsFindFirst(wrapper, (el) => {
+                try {
+                    const cs = getComputedStyle(el);
+                    if (cs.position !== 'absolute' && cs.position !== 'fixed') return false;
+                    const bg = cs.backgroundColor;
+                    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') return false;
+                    // 全屏判定：對角邊都 0
+                    const fullV = cs.top === '0px' && cs.bottom === '0px';
+                    const fullH = cs.left === '0px' && cs.right === '0px';
+                    return fullV && fullH;
+                } catch (e) { return false; }
+            }, 6);
         },
 
         fixIframes(container) {
@@ -671,6 +657,17 @@
 
         hide() {
             console.log('[StoryExtractor] 🔍 hide() 被調用');
+
+            // 還原 #form_sheld 回原本的家（最先做，避免後續 DOM 操作把它連帶清掉）
+            try {
+                const formSheld = document.getElementById('form_sheld');
+                if (formSheld && this.originalFormParent) {
+                    this.originalFormParent.insertBefore(formSheld, this.originalFormSibling);
+                    this.originalFormParent = null;
+                    this.originalFormSibling = null;
+                    console.log('[StoryExtractor] 已還原 #form_sheld');
+                }
+            } catch (e) { console.warn('[StoryExtractor] 還原 #form_sheld 失敗', e); }
 
             const _maybeHideVnPanel = () => {
                 const pageGame = document.getElementById('page-game');
