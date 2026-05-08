@@ -720,30 +720,191 @@ body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
 .void-tab.mode-404::after { content:''; position:absolute; inset:0; pointer-events:none; z-index:100; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,0.025) 2px,rgba(0,255,65,0.025) 4px); }
 
 /* =========================================================
-   5b. 🌙 Claude 的房間 (月光終端模式)
-   立繪用 Clawd 像素小螃蟹（viewBox 15×16），需垂直置中 + 限制尺寸 + 像素銳化
+   5b. ☕ Claude 的房間 — Cafe 暖統一聊天室 (mode-claude 獨佔)
+   配色：Beeswax (#EAB05C) / Grenadine (#D95122) / Cafe Latte (#896645) / 奶油 (#f5e9d8)
+   呼應 Claude 官方橘 logo；所有顏色用變數，改 :root 即可全套換掉
    ========================================================= */
-.void-tab.mode-claude .void-char-area {
-    align-items: center !important;       /* 垂直置中（不再靠對話框底） */
-    bottom: 90px !important;
-    height: calc(100% - 200px) !important; /* 避開頂部 bar 與底部對話框 */
-    padding-bottom: 80px !important;       /* 把 flex center 重心往上推 40px */
+.void-tab.mode-claude {
+    /* 主色（暖統一） */
+    --cl-cream:           #f5e9d8;     /* 奶油紙底 */
+    --cl-cream-light:     #fff5e1;     /* 更亮一點的奶油 */
+    --cl-beeswax:         #EAB05C;     /* 焦糖黃，主 accent */
+    --cl-beeswax-soft:    #FBDFA2;     /* 柔焦糖（過渡用） */
+    --cl-grenadine:       #D95122;     /* 深橘（user 氣泡 / 送出按鈕） */
+    --cl-cafe-latte:      #896645;     /* 棕邊 / 副文字 */
+    --cl-text-deep:       #3d2010;     /* 主文字 */
+    --cl-paper-grain:     rgba(137,102,69,0.05);
+    --cl-warm-shadow:     rgba(137,102,69,0.18);
+    --cl-warm-glow:       rgba(234,176,92,0.55);
+
+    /* 立繪區（暖漸層 fallback，可被 --cl-portrait-bg-image 整個蓋掉） */
+    --cl-portrait-bg-1:   var(--cl-beeswax-soft);
+    --cl-portrait-bg-2:   var(--cl-beeswax);
+    --cl-portrait-bg-3:   var(--cl-grenadine);
 }
-.void-tab.mode-claude .void-char-img {
-    max-width: 320px !important;
-    max-height: 320px !important;
-    image-rendering: pixelated;            /* SVG 雖向量但有像素元素，銳化更討喜 */
-    filter: drop-shadow(0 8px 24px rgba(168,179,255,0.45)) !important;  /* 月色光暈 */
-    animation: clawd-float 3s ease-in-out infinite;
-}
-@keyframes clawd-float {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-8px); }
-}
-/* Claude 場景：清掉世界頻道氣泡層的舊內容（避免瀅瀅訊息殘留） */
+
+/* mode-claude 啟動時：藏掉 VN 對話、立繪、世界頻道泡泡（聊天室自己接管） */
+.void-tab.mode-claude .void-char-area,
+.void-tab.mode-claude .void-dialogue-wrap,
 .void-tab.mode-claude .void-bubble-layer { display: none !important; }
-/* Claude 場景：name tag 月色 */
-.void-tab.mode-claude .void-name-tag > span { color: #c8d0ff !important; }
+
+/* 聊天室面板（其他 mode 不顯示） */
+.claude-chat-panel { display: none; }
+.void-tab.mode-claude .claude-chat-panel {
+    display: flex !important;
+    flex-direction: column;
+    position: absolute;
+    top: 50px;            /* 留標題列 */
+    bottom: 90px;         /* 留底部 chat-bar */
+    left: 0; right: 0;
+    z-index: 5;
+    overflow: hidden;
+}
+
+/* 上半立繪區（暖漸層，可被 --cl-portrait-bg-image 整個換掉） */
+.claude-portrait-area {
+    flex: 0 0 35%;
+    position: relative;
+    background: var(--cl-portrait-bg-image,
+        linear-gradient(135deg,
+            var(--cl-portrait-bg-1, #FBDFA2) 0%,
+            var(--cl-portrait-bg-2, #EAB05C) 55%,
+            var(--cl-portrait-bg-3, #D95122) 100%));
+    background-size: cover;
+    background-position: center;
+    overflow: hidden;
+    border-bottom: 1px solid var(--cl-beeswax, #EAB05C);
+}
+.claude-portrait-area::before {
+    content: ''; position: absolute; inset: -20%;
+    background: radial-gradient(circle at center, var(--cl-warm-glow, rgba(234,176,92,0.55)) 0%, transparent 60%);
+    pointer-events: none;
+}
+.claude-portrait-img {
+    position: absolute; inset: 0; margin: auto;
+    width: auto; height: 75%; max-height: 240px;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 8px 24px rgba(217,81,34,0.35));
+    animation: claude-portrait-float 3s ease-in-out infinite;
+    z-index: 2;
+}
+@keyframes claude-portrait-float {
+    0%,100% { transform: translateY(0); }
+    50%     { transform: translateY(-6px); }
+}
+
+/* 下半訊息區（同樣奶油紙底，跟立繪區暖色連通） */
+.claude-chat-stream {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    padding: 16px 12px;
+    display: flex; flex-direction: column; gap: 12px;
+    background:
+        repeating-linear-gradient(45deg,
+            var(--cl-paper-grain, rgba(137,102,69,0.05)) 0px,
+            var(--cl-paper-grain, rgba(137,102,69,0.05)) 1px,
+            transparent 1px, transparent 4px),
+        var(--cl-cream, #f5e9d8);
+    box-shadow: inset 0 2px 12px var(--cl-warm-shadow, rgba(137,102,69,0.18));
+}
+.claude-chat-stream::-webkit-scrollbar { width: 6px; }
+.claude-chat-stream::-webkit-scrollbar-thumb { background: rgba(137,102,69,0.4); border-radius: 3px; }
+
+/* 氣泡 wrap（thinking + bubble 一組） */
+.claude-bubble-wrap { display: flex; flex-direction: column; gap: 6px; max-width: 85%; }
+.claude-bubble-wrap.from-user   { align-self: flex-end;   align-items: flex-end; }
+.claude-bubble-wrap.from-claude { align-self: flex-start; align-items: flex-start; }
+
+/* 氣泡共用 */
+.claude-bubble {
+    padding: 10px 14px; border-radius: 16px;
+    line-height: 1.55; font-size: 14px;
+    word-break: break-word; white-space: pre-wrap;
+    animation: claude-bubble-in 0.25s ease-out;
+}
+@keyframes claude-bubble-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 使用者氣泡（Grenadine 深橘） */
+.claude-bubble.from-user {
+    background: var(--cl-grenadine, #D95122);
+    color: #ffffff;
+    border-top-right-radius: 4px;
+    box-shadow: 0 4px 12px rgba(217,81,34,0.3);
+}
+
+/* Claude 氣泡（純白 + Beeswax 邊 + 暖光高光，serif） */
+.claude-bubble.from-claude {
+    background: #ffffff;
+    color: var(--cl-text-deep, #3d2010);
+    border: 1px solid var(--cl-beeswax, #EAB05C);
+    border-top-left-radius: 4px;
+    box-shadow:
+        0 0 0 2px rgba(234,176,92,0.18),
+        0 4px 12px var(--cl-warm-shadow, rgba(137,102,69,0.18));
+    font-family: 'Playfair Display', Georgia, 'Songti TC', serif;
+}
+
+/* thinking 折疊塊（暖灰版） */
+.claude-thinking {
+    align-self: flex-start; max-width: 100%;
+    background: rgba(137,102,69,0.10);
+    color: var(--cl-cafe-latte, #896645);
+    border: 1px solid rgba(234,176,92,0.4);
+    border-radius: 8px; padding: 6px 10px;
+    font-size: 12px; cursor: pointer; user-select: none;
+}
+.claude-thinking-header { display: flex; align-items: center; gap: 6px; opacity: 0.92; }
+.claude-thinking-toggle { font-size: 9px; transition: transform 0.2s; display: inline-block; }
+.claude-thinking.open .claude-thinking-toggle { transform: rotate(90deg); }
+.claude-thinking-content {
+    display: none; margin-top: 6px; padding-top: 6px;
+    border-top: 1px solid rgba(234,176,92,0.3);
+    font-style: italic; line-height: 1.5; white-space: pre-wrap;
+}
+.claude-thinking.open .claude-thinking-content { display: block; }
+
+/* mode-claude 蓋過 inline 書咖色：底部 chat-bar / 輸入框 / 送出按鈕 / 重試按鈕（全暖統一） */
+.void-tab.mode-claude .void-chat-bar {
+    background: var(--cl-cream-light, #fff5e1) !important;
+    border-top: 1px solid rgba(234,176,92,0.5) !important;
+    box-shadow: 0 -2px 8px rgba(137,102,69,0.08) !important;
+}
+.void-tab.mode-claude .void-input {
+    background: #ffffff !important;
+    color: var(--cl-text-deep, #3d2010) !important;
+    border-color: var(--cl-beeswax, #EAB05C) !important;
+    caret-color: var(--cl-grenadine, #D95122);
+}
+.void-tab.mode-claude .void-input::placeholder {
+    color: rgba(137,102,69,0.55) !important;
+}
+.void-tab.mode-claude .void-send-btn {
+    background: linear-gradient(135deg, var(--cl-beeswax, #EAB05C), var(--cl-grenadine, #D95122)) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(217,81,34,0.5) !important;
+}
+.void-tab.mode-claude .void-send-btn:hover {
+    box-shadow: 0 0 12px rgba(217,81,34,0.4) !important;
+}
+.void-tab.mode-claude .void-retry-btn {
+    background: rgba(234,176,92,0.25) !important;
+    color: var(--cl-cafe-latte, #896645) !important;
+    border: 1px solid rgba(234,176,92,0.5) !important;
+}
+.void-tab.mode-claude .void-retry-btn:hover {
+    background: rgba(234,176,92,0.4) !important;
+    box-shadow: 0 0 8px rgba(234,176,92,0.4) !important;
+}
+
+/* 手機 / 窄螢幕 */
+@media (max-width: 600px) {
+    .claude-portrait-area { flex: 0 0 32%; }
+    .claude-portrait-img { max-height: 180px; height: 80%; }
+    .claude-bubble { font-size: 13px; }
+    .claude-chat-stream { padding: 12px 10px; }
+}
 
 /* =========================================================
    6. 底部導航列與全域控制 (Bottom Nav)
