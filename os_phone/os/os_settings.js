@@ -91,6 +91,7 @@
     const SEC_LLM_STORAGE_KEY = 'os_secondary_llm_config';
     const IMG_STORAGE_KEY = 'os_image_config';
     const MINIMAX_STORAGE_KEY = 'os_minimax_config';
+    const CLAUDE_ROOM_STORAGE_KEY = 'os_claude_room_config';
     
     // --- 讀取 LLM 設置 ---
     function loadLlmConfig() {
@@ -258,6 +259,25 @@ EXAMPLE "prompt" value:
         return config;
     }
 
+    // --- 讀取Claude 的房間設置（獨立 Claude 接口，跟主/副模型完全隔離；不對接酒館 profile / preset） ---
+    function loadClaudeRoomConfig() {
+        let saved = localStorage.getItem(CLAUDE_ROOM_STORAGE_KEY);
+        let config = {
+            url: '',
+            key: '',
+            model: 'claude-opus-4-7',
+            maxTokens: 4096,
+            temperature: 1.0,
+            top_p: 1.0
+        };
+        if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
+        return config;
+    }
+
+    function saveClaudeRoomConfig(data) {
+        localStorage.setItem(CLAUDE_ROOM_STORAGE_KEY, JSON.stringify(data));
+    }
+
     function saveConfig(llmData, secLlmData, imgData, minimaxData) {
         localStorage.setItem(LLM_STORAGE_KEY, JSON.stringify(llmData));
         localStorage.setItem(SEC_LLM_STORAGE_KEY, JSON.stringify(secLlmData));
@@ -296,6 +316,8 @@ EXAMPLE "prompt" value:
         getSecondaryConfig: loadSecLlmConfig,
         getImageConfig: loadImageConfig,
         getMinimaxConfig: loadMinimaxConfig,
+        getClaudeRoomConfig: loadClaudeRoomConfig,
+        saveClaudeRoomConfig: saveClaudeRoomConfig,
         saveConfig: saveConfig
     };
 
@@ -306,6 +328,7 @@ EXAMPLE "prompt" value:
         const secLlmConfig = loadSecLlmConfig();
         const imgConfig = loadImageConfig();
         const minimaxConfig = loadMinimaxConfig();
+        const claudeRoomConfig = loadClaudeRoomConfig();
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
 
         // 畫廊子 tab 切換 helper（含 avatar/bg 列表 lazy load）
@@ -423,6 +446,7 @@ EXAMPLE "prompt" value:
                 <div class="set-tabs">
                     <div class="set-tab active" data-tab="llm">🧠 主模型</div>
                     <div class="set-tab" data-tab="sec-llm">⚡ 副模型</div>
+                    <div class="set-tab" data-tab="claude-room">🌙 Claude 的房間</div>
                     <div class="set-tab" data-tab="img">🎨 畫廊</div>
                     <div class="set-tab" data-tab="voice">🎵 語音</div>
                     <div class="set-tab" data-tab="vn">🎮 VN</div>
@@ -613,6 +637,51 @@ EXAMPLE "prompt" value:
                             <div class="set-label">🔌 測試 API 連線</div>
                             <div class="btn-test" id="sec-test-btn">發送測試訊息</div>
                             <div id="sec-test-result" style="display:none; margin-top:10px; background:rgba(69,34,22,0.8); border-radius:4px; padding:12px; font-size:12px; color:#E0D8C8; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
+                        </div>
+                    </div>
+
+                    <div id="view-claude-room" class="tab-view hidden">
+                        <div style="background:rgba(180,150,200,0.12); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(251,223,162,0.3); font-size:12px; color:#FBDFA2; line-height:1.6;">
+                            🌙 <b>Claude 的房間</b>是獨立的 Claude 對話接口，跟主／副模型完全隔離 — 不會被其他 prompt 污染。<br>
+                            走 cc-bridge → 本機 Claude Code → Anthropic（用 Max 訂閱）。
+                        </div>
+
+                        <div class="set-group">
+                            <div class="set-label">🔌 API 端點 URL</div>
+                            <input class="set-input" id="claude-room-url" placeholder="https://你的-cc-bridge（自動補 /v1/chat/completions）" value="${claudeRoomConfig.url}">
+                            <div class="set-desc">填啥都行：base URL（程式自動補 /v1/chat/completions）、/v1 結尾、或完整 URL 都可。擴展作者本人填自己 cc-bridge URL；朋友 clone 來的請架自己的 cc-bridge 填自己的 URL。</div>
+                        </div>
+
+                        <div class="set-group">
+                            <div class="set-label">🔑 API Key（Bearer Token）</div>
+                            <input class="set-input" id="claude-room-key" type="password" placeholder="cc_bridge_token" value="${claudeRoomConfig.key}">
+                            <div class="set-desc">cc-bridge 的 Bearer token（config.json 裡的 cc_bridge_token）。⚠️ 不要分享 — 朋友拿到 = 燒妳訂閱。朋友想用「Claude 的房間」應自架 cc-bridge 填自己的 token。</div>
+                        </div>
+
+                        <div class="set-group">
+                            <div class="set-label">模型 ID</div>
+                            <input class="set-input" id="claude-room-model" placeholder="claude-opus-4-7" value="${claudeRoomConfig.model}">
+                            <div class="set-desc">純標識用。實際模型由本機 CC 決定（Max 訂閱對應的模型）。</div>
+                        </div>
+
+                        <div class="set-group">
+                            <div class="set-slider-container">
+                                <div class="set-label"><span>Max Tokens</span></div>
+                                <input type="number" min="100" max="200000" step="100" value="${claudeRoomConfig.maxTokens}" class="set-input" id="claude-room-max-tokens" style="margin-top:6px;">
+                            </div>
+                            <div class="set-slider-container" style="margin-top:10px;">
+                                <div class="set-label"><span>Temperature</span><span class="set-slider-val" id="claude-room-val-temp">${claudeRoomConfig.temperature}</span></div>
+                                <input type="range" min="0" max="2" step="0.05" value="${claudeRoomConfig.temperature}" class="set-slider" id="claude-room-temperature">
+                            </div>
+                            <div class="set-slider-container" style="margin-top:10px;">
+                                <div class="set-label"><span>Top P</span><span class="set-slider-val" id="claude-room-val-topp">${claudeRoomConfig.top_p}</span></div>
+                                <input type="range" min="0" max="1" step="0.01" value="${claudeRoomConfig.top_p}" class="set-slider" id="claude-room-top-p">
+                            </div>
+                        </div>
+
+                        <div class="set-group">
+                            <div class="btn-test" id="claude-room-test-btn">🔍 測試連線</div>
+                            <div id="claude-room-test-result" style="display:none; margin-top:10px; background:rgba(69,34,22,0.8); border-radius:4px; padding:12px; font-size:12px; color:#E0D8C8; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
                     </div>
 
@@ -1536,6 +1605,70 @@ EXAMPLE "prompt" value:
             }
         };
 
+        // === Claude 的房間（獨立 Claude 接口）binding：slider 同步 + 測試連線 ===
+        const elClaudeRoomTemp = container.querySelector('#claude-room-temperature');
+        const elClaudeRoomTopP = container.querySelector('#claude-room-top-p');
+        const elClaudeRoomValTemp = container.querySelector('#claude-room-val-temp');
+        const elClaudeRoomValTopP = container.querySelector('#claude-room-val-topp');
+        if (elClaudeRoomTemp && elClaudeRoomValTemp) {
+            elClaudeRoomTemp.oninput = () => { elClaudeRoomValTemp.textContent = elClaudeRoomTemp.value; };
+        }
+        if (elClaudeRoomTopP && elClaudeRoomValTopP) {
+            elClaudeRoomTopP.oninput = () => { elClaudeRoomValTopP.textContent = elClaudeRoomTopP.value; };
+        }
+
+        const claudeRoomTestBtn = container.querySelector('#claude-room-test-btn');
+        const claudeRoomTestResult = container.querySelector('#claude-room-test-result');
+        // URL 兼容處理：用戶可填 base URL / /v1 / 完整 URL，自動補成 /v1/chat/completions
+        function _normalizeChatUrl(raw) {
+            let u = (raw || '').trim().replace(/\/+$/, '');
+            if (!u) return '';
+            if (u.endsWith('/chat/completions')) return u;
+            if (u.endsWith('/v1')) return u + '/chat/completions';
+            return u + '/v1/chat/completions';
+        }
+
+        if (claudeRoomTestBtn && claudeRoomTestResult) {
+            claudeRoomTestBtn.onclick = async () => {
+                const url = _normalizeChatUrl(container.querySelector('#claude-room-url').value);
+                const key = container.querySelector('#claude-room-key').value.trim();
+                const model = container.querySelector('#claude-room-model').value.trim() || 'claude-opus-4-7';
+                if (!url || !key) {
+                    claudeRoomTestResult.style.display = 'block';
+                    claudeRoomTestResult.textContent = '❌ 請先填 URL 跟 Key';
+                    return;
+                }
+                claudeRoomTestBtn.textContent = '⏳ 測試中（CC 啟動需 10-30 秒）…';
+                claudeRoomTestResult.style.display = 'block';
+                claudeRoomTestResult.textContent = `⏳ 打 ${url}\n等 CC 回應…`;
+                try {
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${key}`
+                        },
+                        body: JSON.stringify({
+                            model,
+                            messages: [{ role: 'user', content: '用一句繁中說「Claude 的房間連線測試成功」' }],
+                            stream: false,
+                            max_tokens: 100
+                        })
+                    });
+                    const data = await resp.json();
+                    if (resp.ok && data.choices && data.choices[0]) {
+                        claudeRoomTestResult.textContent = `✅ 連線成功\n\n回覆：${data.choices[0].message.content}`;
+                    } else {
+                        claudeRoomTestResult.textContent = `❌ ${(data.error && data.error.message) || '未知錯誤'}\nstatus: ${resp.status}`;
+                    }
+                } catch (e) {
+                    claudeRoomTestResult.textContent = `❌ 網路錯誤：${e.message}`;
+                } finally {
+                    claudeRoomTestBtn.textContent = '🔍 測試連線';
+                }
+            };
+        }
+
         btnSave.onclick = () => {
             try {
                 const layoutMode = container.querySelector('#os-layout-mode')?.value || 'auto';
@@ -1670,6 +1803,20 @@ EXAMPLE "prompt" value:
                 } : null;
 
                 saveConfig(llmData, secLlmData, imgData, minimaxData);
+
+                // Claude 的房間設定（獨立儲存，跟主/副模型完全隔離）
+                const elClaudeRoomUrl = container.querySelector('#claude-room-url');
+                if (elClaudeRoomUrl) {
+                    const claudeRoomData = {
+                        url: elClaudeRoomUrl.value.trim(),
+                        key: container.querySelector('#claude-room-key').value.trim(),
+                        model: container.querySelector('#claude-room-model').value.trim() || 'claude-opus-4-7',
+                        maxTokens: parseInt(container.querySelector('#claude-room-max-tokens').value) || 4096,
+                        temperature: parseFloat(container.querySelector('#claude-room-temperature').value) || 1.0,
+                        top_p: parseFloat(container.querySelector('#claude-room-top-p').value) || 1.0
+                    };
+                    saveClaudeRoomConfig(claudeRoomData);
+                }
 
                 // 向量記憶設定
                 if (vecEnabled) {

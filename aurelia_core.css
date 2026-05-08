@@ -785,6 +785,32 @@ body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
 .void-tab.mode-404::after { content:''; position:absolute; inset:0; pointer-events:none; z-index:100; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,0.025) 2px,rgba(0,255,65,0.025) 4px); }
 
 /* =========================================================
+   5b. 🌙 Claude 的房間 (月光終端模式)
+   立繪用 Clawd 像素小螃蟹（viewBox 15×16），需垂直置中 + 限制尺寸 + 像素銳化
+   ========================================================= */
+.void-tab.mode-claude .void-char-area {
+    align-items: center !important;       /* 垂直置中（不再靠對話框底） */
+    bottom: 90px !important;
+    height: calc(100% - 200px) !important; /* 避開頂部 bar 與底部對話框 */
+    padding-bottom: 80px !important;       /* 把 flex center 重心往上推 40px */
+}
+.void-tab.mode-claude .void-char-img {
+    max-width: 320px !important;
+    max-height: 320px !important;
+    image-rendering: pixelated;            /* SVG 雖向量但有像素元素，銳化更討喜 */
+    filter: drop-shadow(0 8px 24px rgba(168,179,255,0.45)) !important;  /* 月色光暈 */
+    animation: clawd-float 3s ease-in-out infinite;
+}
+@keyframes clawd-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+}
+/* Claude 場景：清掉世界頻道氣泡層的舊內容（避免瀅瀅訊息殘留） */
+.void-tab.mode-claude .void-bubble-layer { display: none !important; }
+/* Claude 場景：name tag 月色 */
+.void-tab.mode-claude .void-name-tag > span { color: #c8d0ff !important; }
+
+/* =========================================================
    6. 底部導航列與全域控制 (Bottom Nav)
    ========================================================= */
 #aurelia-bottom-nav {
