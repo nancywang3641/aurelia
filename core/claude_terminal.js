@@ -113,6 +113,43 @@
         await ClaudeTerminal.clearHistory();
     };
 
+    // ============== 檔案上傳 ==============
+
+    /** 把 File 物件清單上傳到 cc-bridge /v1/upload。
+     *  回傳 { upload_id, files: [{path, filename, mime, size}, ...] }
+     *  path 是 cc-bridge 機器上的本機路徑，後續發訊息把這個 path 塞進 attachments。
+     */
+    ClaudeTerminal.uploadFiles = async function(fileList) {
+        const cfg = ClaudeTerminal.getConfig();
+        if (!cfg) throw new Error('SETTINGS_MISSING:OS_SETTINGS 未載入');
+        if (!cfg.url || !cfg.key) throw new Error('NOT_CONFIGURED:還沒填 URL 跟 Key，去設定 → 🦀 Claude 的房間');
+
+        const uploadUrl = cfg.url.replace(/\/v1\/chat\/completions$/, '/v1/upload');
+        const fd = new FormData();
+        Array.from(fileList).forEach((f, i) => fd.append(`file_${i}`, f, f.name));
+
+        let resp, data;
+        try {
+            resp = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + cfg.key },
+                body: fd,
+            });
+        } catch (e) {
+            throw new Error('NETWORK:上傳失敗，cc-bridge 沒在跑？原始：' + (e.message || e));
+        }
+        try {
+            data = await resp.json();
+        } catch (e) {
+            throw new Error('BAD_JSON:上傳回應非 JSON');
+        }
+        if (!resp.ok) {
+            const msg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
+            throw new Error('UPLOAD:' + msg);
+        }
+        return data;
+    };
+
     // ============== 訊息發送 ==============
 
     /**
@@ -125,10 +162,11 @@
      *      → 第一次或 startNewConversation 後走此路
      *
      * @param {string} userText
+     * @param {Array<{path,filename,mime}>} [attachments] 上傳完的附件清單（已是 cc-bridge 本機路徑）
      * @returns {Promise<{reply: string, sessionFallback: boolean}>}
      *   sessionFallback=true 表 cc-bridge resume 失敗、退回新 session（Claude 失憶警告）
      */
-    ClaudeTerminal.send = async function(userText) {
+    ClaudeTerminal.send = async function(userText, attachments) {
         const cfg = ClaudeTerminal.getConfig();
         if (!cfg) throw new Error('SETTINGS_MISSING:OS_SETTINGS 未載入');
         if (!cfg.url || !cfg.key) throw new Error('NOT_CONFIGURED:還沒填 URL 跟 Key，去設定 → 🦀 Claude 的房間');
@@ -157,6 +195,7 @@
         if (incomingSid) body.session_id = incomingSid;
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
+        if (attachments && attachments.length) body.attachments = attachments;
 
         let resp, data;
         try {
