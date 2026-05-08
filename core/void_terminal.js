@@ -65,6 +65,7 @@
     // Claude 房間獨立場景（走 cc-bridge / 跟瀅瀅柴郡完全隔離）
     let isClaudeRoom = false;
     let _claudeHistoryBackup = [];   // 進入其他場景時備份的 Claude 對話歷史
+    let _pendingClaudeAttachments = []; // 當前訊息要附的檔（每筆 {path, filename, mime, size}），送出後清空
     let lastFailedInput = '';        // 最後一次失敗的輸入內容
     let pendingRestoreLobby = false; // 等用戶讀完再返回大廳的旗標
     let bgmEnabled = true;           // 大廳 BGM 開關狀態
@@ -1114,8 +1115,12 @@ const IRIS_IDLE = [
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
                     <button class="void-hist-btn" data-os-launch="map" title="地圖"><span class="vhb-em">🗺️</span><span>地圖</span></button>
                 </div>
+                <!-- Claude 房間：附件 chip 預覽列（mode-claude 才顯示，由 CSS 控制） -->
+                <div class="claude-attach-chips" id="claude-attach-chips"></div>
+                <input type="file" id="claude-file-input" multiple style="display:none;" accept="image/*,application/pdf,.txt,.md,.json,.csv,.js,.ts,.py,.html,.css,.yml,.yaml,.toml,.log">
                 <div class="void-chat-input-row">
                     <input type="text" id="iris-input" class="void-input" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3); color: #FFF8E7;" placeholder="提供故事素材或與瀅瀅對話..." autocomplete="off">
+                    <button class="void-attach-btn" id="claude-attach-btn" title="附加檔案" style="display:none;">📎</button>
                     <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
                     <button class="void-send-btn" id="iris-send-btn" style="background: linear-gradient(135deg, #FBDFA2, #B78456); color: #452216;"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
@@ -1133,6 +1138,20 @@ const IRIS_IDLE = [
             if (sendBtn) sendBtn.onclick = sendIrisMessage;
             if (inputField) inputField.onkeypress = (e) => { if (e.key === 'Enter') sendIrisMessage(); };
             if (avatar) avatar.onclick = pokeIris;
+
+            // Claude 房間：📎 附件按鈕（只在 mode-claude 顯示，由 CSS 控制 display）
+            const attachBtn = tab.querySelector('#claude-attach-btn');
+            const fileInput = tab.querySelector('#claude-file-input');
+            if (attachBtn && fileInput) {
+                attachBtn.onclick = () => fileInput.click();
+                fileInput.onchange = async (e) => {
+                    const files = e.target.files;
+                    if (files && files.length) {
+                        await _handleClaudeFilePick(files);
+                    }
+                    fileInput.value = '';  // 重置 input 才能再次選同一個檔
+                };
+            }
 
             // 點擊反應對話框直接跳過 (恢復主線)
             const reactionBox = tab.querySelector('#iris-reaction-box');
@@ -1832,6 +1851,21 @@ const IRIS_IDLE = [
      *  role: 'user' | 'assistant'
      *  opts.thinking: 字串 → 在氣泡上方塞折疊 thinking 區塊（之後 cc-bridge 真的吐 thinking 再用）
      */
+    /** 從 mime / filename 推一個合適 emoji icon 給附件 chip 用 */
+    function _attachIcon(mime, filename) {
+        const ext = ((filename || '').split('.').pop() || '').toLowerCase();
+        if (['png','jpg','jpeg','gif','webp','bmp','svg'].includes(ext)) return '🖼️';
+        if (ext === 'pdf') return '📄';
+        if (['md','txt','log','csv','yaml','yml','toml'].includes(ext)) return '📝';
+        if (['js','ts','tsx','jsx','py','html','css','json','sh','bat','rb','go','rs','c','cpp','java'].includes(ext)) return '⚡';
+        if (typeof mime === 'string') {
+            if (mime.startsWith('image/')) return '🖼️';
+            if (mime === 'application/pdf') return '📄';
+            if (mime.startsWith('text/')) return '📝';
+        }
+        return '📎';
+    }
+
     function _renderClaudeBubble(role, content, opts = {}) {
         const stream = document.getElementById('claude-chat-stream');
         if (!stream) return;
@@ -1856,21 +1890,106 @@ const IRIS_IDLE = [
         const bubble = document.createElement('div');
         bubble.className = 'claude-bubble ' + (isUser ? 'from-user' : 'from-claude');
         bubble.textContent = content;
+
+        // 附件 chip（顯示這條訊息附了哪些檔）
+        if (Array.isArray(opts.attachments) && opts.attachments.length) {
+            const attachBox = document.createElement('div');
+            attachBox.className = 'claude-bubble-attachments';
+            opts.attachments.forEach(a => {
+                const item = document.createElement('span');
+                item.className = 'claude-bubble-attach-item';
+                item.textContent = `${_attachIcon(a.mime, a.filename)} ${a.filename || 'file'}`;
+                attachBox.appendChild(item);
+            });
+            bubble.appendChild(attachBox);
+        }
+
         wrap.appendChild(bubble);
 
         stream.appendChild(wrap);
         _scrollClaudeChatToBottom();
     }
 
-    /** 進入 Claude 房間時用：把 IRIS_STATE.history 全部 render 成氣泡 */
+    /** 進入 Claude 房間時用：把 IRIS_STATE.history 全部 render 成氣泡（含附件） */
     function _hydrateClaudeStream() {
         const stream = document.getElementById('claude-chat-stream');
         if (!stream) return;
         stream.innerHTML = '';
         (IRIS_STATE.history || []).forEach(m => {
-            _renderClaudeBubble(m.role === 'user' ? 'user' : 'assistant', m.content);
+            _renderClaudeBubble(
+                m.role === 'user' ? 'user' : 'assistant',
+                m.content,
+                { attachments: m.attachments || [] }
+            );
         });
         _scrollClaudeChatToBottom();
+    }
+
+    // ===== 附件 chip 預覽列（輸入框上方）=====
+    function _renderClaudeAttachChips() {
+        const row = document.getElementById('claude-attach-chips');
+        if (!row) return;
+        row.innerHTML = '';
+        _pendingClaudeAttachments.forEach((a, idx) => {
+            const chip = document.createElement('div');
+            chip.className = 'claude-attach-chip';
+            chip.title = a.path || a.filename;
+            const icon = document.createElement('span');
+            icon.textContent = _attachIcon(a.mime, a.filename);
+            const name = document.createElement('span');
+            name.className = 'claude-attach-chip-name';
+            name.textContent = a.filename || 'file';
+            const x = document.createElement('span');
+            x.className = 'claude-attach-chip-x';
+            x.textContent = '×';
+            x.title = '移除';
+            x.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _pendingClaudeAttachments.splice(idx, 1);
+                _renderClaudeAttachChips();
+            });
+            chip.appendChild(icon); chip.appendChild(name); chip.appendChild(x);
+            row.appendChild(chip);
+        });
+    }
+
+    /** 觸發隱藏的 file input、上傳到 cc-bridge、push 進 _pendingClaudeAttachments */
+    async function _handleClaudeFilePick(fileList) {
+        if (!fileList || !fileList.length) return;
+        if (!window.ClaudeTerminal || typeof window.ClaudeTerminal.uploadFiles !== 'function') {
+            _renderClaudeBubble('assistant', '⚠️ ClaudeTerminal 未載入，無法上傳。');
+            return;
+        }
+        // 顯示「上傳中」chip
+        const placeholderIdx = _pendingClaudeAttachments.length;
+        Array.from(fileList).forEach(f => {
+            _pendingClaudeAttachments.push({
+                _uploading: true,
+                filename: f.name,
+                mime: f.type || '',
+                size: f.size,
+            });
+        });
+        _renderClaudeAttachChips();
+
+        try {
+            const result = await window.ClaudeTerminal.uploadFiles(fileList);
+            // 用 server 回傳的真實路徑替換 placeholder
+            (result.files || []).forEach((meta, i) => {
+                _pendingClaudeAttachments[placeholderIdx + i] = {
+                    path: meta.path,
+                    filename: meta.filename,
+                    mime: meta.mime,
+                    size: meta.size,
+                };
+            });
+        } catch (e) {
+            // 上傳失敗：拔掉 placeholder
+            _pendingClaudeAttachments.splice(placeholderIdx, fileList.length);
+            const raw = (e && e.message) || '未知錯誤';
+            _renderClaudeBubble('assistant', '⚠️ 上傳失敗：' + raw);
+        }
+        _renderClaudeAttachChips();
     }
 
     // 把 Claude 回覆 append 成一條氣泡 + 立繪 happy → living
@@ -1891,15 +2010,25 @@ const IRIS_IDLE = [
             return;
         }
 
-        // 即時把 user message push 進 history + 立刻 render 成右側橘氣泡
-        IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
-        _renderClaudeBubble('user', text);
+        // 快照當前附件（only paths from server，不送 _uploading placeholder），送出後清空
+        const attachmentsSnapshot = _pendingClaudeAttachments
+            .filter(a => a && a.path)
+            .map(a => ({ path: a.path, filename: a.filename, mime: a.mime, size: a.size }));
+        _pendingClaudeAttachments = [];
+        _renderClaudeAttachChips();
+
+        // 即時把 user message（含附件）push 進 history + 立刻 render 成右側橘氣泡
+        IRIS_STATE.history.push({
+            role: 'user', content: text, ts: Date.now(),
+            attachments: attachmentsSnapshot.length ? attachmentsSnapshot : undefined,
+        });
+        _renderClaudeBubble('user', text, { attachments: attachmentsSnapshot });
 
         // 立繪切 thinking
         _setClaudePortraitState('thinking');
 
         try {
-            const result = await window.ClaudeTerminal.send(text);
+            const result = await window.ClaudeTerminal.send(text, attachmentsSnapshot);
             const reply = result.reply;
 
             // assistant reply 寫進 history（ClaudeTerminal 那邊已存 os_db）
