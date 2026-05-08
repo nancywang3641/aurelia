@@ -10,7 +10,13 @@
     const win = window.parent || window;
 
     // 世界大地圖底板風格詞綴（俯視全景，無人物，整個 world 一張）
-    const DEFAULT_WORLDMAP_BASEPLATE = "fantasy world map illustration, painted overhead view, top-down aerial perspective, regions clearly separated by terrain, decorative borders, parchment style, soft lighting, masterpiece, highres, no characters, environment-focused";
+    // 兩份 baseplate，根據 AI 判定的 world_genre 選用
+    // - fictional：完全虛構（修仙 / 奇幻 / 異世界 / 末日 / 賽博）→ 強制虛構 + 禁真實地理
+    // - historical：真實歷史背景（明清 / 江戶 / 維多利亞 / 二戰）→ 寫實地理風，允許真實地名
+    const WORLDMAP_BASEPLATE_FICTIONAL = "imaginary fictional fantasy realm map, original invented continent, hand-drawn fantasy cartography, painted overhead view, top-down aerial perspective, regions separated by terrain, decorative borders, parchment style, soft lighting, masterpiece, highres, no characters, environment-focused, NO real-world geography, NO earth continents, NO china map, NO asia mainland shape, NO real country borders, NOT a political map";
+    const WORLDMAP_BASEPLATE_HISTORICAL = "historical world map, period-accurate cartography, antique map illustration, painted overhead view, top-down aerial perspective, parchment style, sepia tones, hand-lettered place names, decorative compass rose, soft lighting, masterpiece, highres, no characters, environment-focused";
+    // 舊名稱保留（avoid breaking external refs，現在指向 fictional）
+    const DEFAULT_WORLDMAP_BASEPLATE = WORLDMAP_BASEPLATE_FICTIONAL;
 
     const STAGE1_PROMPT = `[系統指令：動態世界地圖生成]
 你是世界觀地圖建構 AI。請根據當前【世界書】與【角色卡】設定，生成此世界的區域與設施清單。
@@ -28,7 +34,15 @@
 - 每個區域 (zone) 需給一個能代表該區的 emoji icon
 - 每個區域需給 mapX / mapY（0-100 整數座標，標出該區在「世界大地圖」上的位置；依世界書地理描述合理擺放——港口靠近邊緣、商業中心放中央、山區放角落、不同 zone 不可重疊）
 - 每個設施需給一個 emoji icon、短名 (shortName, 4 字內)、英文背景圖 prompt (background_prompt)
-- 整個世界另需一張「大地圖底板」，吐 world_map_prompt 欄位（英文關鍵詞，描述全景俯視構圖：例如 fantasy kingdom map, central palace, harbor in northeast, mountain range west, river running south）
+- 整個世界另需一張「大地圖底板」，吐 world_map_prompt 欄位（英文關鍵詞，描述全景俯視構圖）
+
+【⚠ 世界類型判定（world_genre 欄位）— 影響大地圖視覺風格】
+請先讀世界書與角色卡，判定本世界類型，輸出在頂層的 world_genre 欄位：
+- "fictional"：完全虛構世界（修仙 / 仙俠 / 奇幻 / 異世界 / 末日廢土 / 賽博 / 魔法學院 / 末世喪屍 / 異星）
+  → 大地圖會用「虛構幻想」風格，world_map_prompt **嚴禁** 用任何真實地名（不可寫 china / japan / asia / europe / 北京 / 長安 / 九州 / 東海 / 崑崙 / 蓬萊 / 桃花源 等真實或典故地名），用純粹地形構圖英文詞（mountain / harbor / floating islands / mystical valley 等）
+- "historical"：真實歷史背景（明清 / 民國 / 江戶 / 維多利亞時期 / 二戰 / 古羅馬 / 紀實年代劇）
+  → 大地圖會用「歷史寫實」風格，world_map_prompt **可以** 自由使用真實地名與該時期地理（例如 ming dynasty china map, edo japan, victorian london, ancient rome）
+- 不確定 / 邊界模糊（例如架空朝代但融合真實朝代元素）→ 預設用 "fictional" 保險
 
 【⚠ JSON key 命名規則 — 違反必須重寫】
 - zone 與 facility 的 JSON key 必須是「語意化的英文 snake_case」
@@ -38,9 +52,10 @@
 - 同一張地圖內，每個 key 必須具有可辨識的語意，從 key 就能猜出是什麼地方
 
 【輸出格式：嚴格 JSON，不要任何其他文字、不要 markdown 包裹】
-範例（中型城市，3 區、設施數量不固定）：
+範例（中型城市，3 區、設施數量不固定，虛構奇幻 / fictional）：
 {
   "world_name": "霧光帝都・艾爾迪亞",
+  "world_genre": "fictional",
   "world_map_prompt": "fantasy imperial capital map, central palace district on a hill, harbor docks at the northeast coast, shadow alleys at the southwest fringe, river running through, twilight",
   "zones": {
     "noble_quarter": {
@@ -170,16 +185,23 @@
             };
         });
 
+        // 世界類型：fictional（虛構奇幻）或 historical（真實歷史背景），預設 fictional
+        const genre = (rawJson.world_genre === 'historical') ? 'historical' : 'fictional';
+        const baseplate = (genre === 'historical')
+            ? WORLDMAP_BASEPLATE_HISTORICAL
+            : WORLDMAP_BASEPLATE_FICTIONAL;
+
         // 世界大地圖底板（風格詞綴前置 + AI 給的 prompt 後置）
-        const worldMap = { backdropPrompt: '', backdropUrl: '' };
+        const worldMap = { backdropPrompt: '', backdropUrl: '', genre };
         if (rawJson.world_map_prompt && typeof rawJson.world_map_prompt === 'string') {
             worldMap.backdropPrompt = rawJson.world_map_prompt;
-            const fullWorldPrompt = `${DEFAULT_WORLDMAP_BASEPLATE}, ${rawJson.world_map_prompt}`;
+            const fullWorldPrompt = `${baseplate}, ${rawJson.world_map_prompt}`;
             worldMap.backdropUrl = genFacilityImage(fullWorldPrompt) || genLoremFlickrUrl(rawJson.world_map_prompt);
         }
 
         return {
             name: rawJson.world_name || 'Generated World',
+            genre,
             worldMap,
             zones
         };
