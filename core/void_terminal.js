@@ -1870,18 +1870,12 @@ const IRIS_IDLE = [
         { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5'     },
     ];
     const CLAUDE_EFFORTS = [
-        { id: '',       label: '預設（看 cc-bridge）' },
-        { id: 'off',    label: 'Off (不思考)' },
-        { id: 'low',    label: 'Low' },
-        { id: 'medium', label: 'Medium' },
-        { id: 'high',   label: 'High' },
-        { id: 'xhigh',  label: 'xHigh' },
-        { id: 'max',    label: 'Max' },
-    ];
-    const CLAUDE_BACKENDS = [
-        { id: '',    label: '預設（server 決定）' },
-        { id: 'cli', label: '訂閱（含 agent 工具）' },
-        { id: 'api', label: 'API（純聊天 + thinking 可見）' },
+        { id: 'off',    label: 'Off · 不思考' },
+        { id: 'low',    label: 'Low · 簡單問題跳過' },
+        { id: 'medium', label: 'Medium · 自動判斷（建議）' },
+        { id: 'high',   label: 'High · 多數題都思考' },
+        { id: 'xhigh',  label: 'xHigh · 深度思考' },
+        { id: 'max',    label: 'Max · 不留餘地' },
     ];
 
     function _getClaudeRoomCfg() {
@@ -1967,15 +1961,10 @@ const IRIS_IDLE = [
             label: (p.name || p.id) + (p.url ? '' : ' (未設定)'),
         }));
 
-        // backend 在 Anthropic 直連模式下沒意義（直連永遠走原生格式、不能切 cli/api）
-        const activeP = presets.find(p => p.id === curPresetId) || presets[0];
-        const isDirectAnthropic = activeP && _isAnthropicDirect(activeP.url);
-
         popup.innerHTML = `
-            ${sectionHtml('連線預設',  presetList,        curPresetId, 'preset')}
-            ${sectionHtml('Model',     CLAUDE_MODELS,     curModel,    'model')}
-            ${isDirectAnthropic ? '' : sectionHtml('Backend', CLAUDE_BACKENDS, curBackend, 'backend')}
-            ${sectionHtml('Thinking Effort', CLAUDE_EFFORTS, curEffort, 'effort')}
+            ${sectionHtml('連線預設',     presetList,        curPresetId, 'preset')}
+            ${sectionHtml('Model',        CLAUDE_MODELS,     curModel,    'model')}
+            ${sectionHtml('Thinking 思考', CLAUDE_EFFORTS,    curEffort || 'medium', 'effort')}
         `;
         popup.style.display = 'block';
 
@@ -1986,10 +1975,6 @@ const IRIS_IDLE = [
         });
         popup.querySelectorAll('[data-model]').forEach(el => el.onclick = () => {
             const c = _getClaudeRoomCfg(); c.inlineModel = el.dataset.model; _saveClaudeRoomCfg(c);
-            _updateClaudePickerLabel(); _openClaudePickerPopup();
-        });
-        popup.querySelectorAll('[data-backend]').forEach(el => el.onclick = () => {
-            const c = _getClaudeRoomCfg(); c.inlineBackend = el.dataset.backend; _saveClaudeRoomCfg(c);
             _updateClaudePickerLabel(); _openClaudePickerPopup();
         });
         popup.querySelectorAll('[data-effort]').forEach(el => el.onclick = () => {
