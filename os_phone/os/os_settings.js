@@ -260,48 +260,77 @@ EXAMPLE "prompt" value:
     }
 
     // --- 讀取Claude 的房間設置（獨立 Claude 接口，跟主/副模型完全隔離；不對接酒館 profile / preset） ---
+    // 新版資料結構：跟其他 AI 提供者一樣只有 URL + 密鑰，多預設可隨時切換
+    // - 朋友只填一個 Anthropic 預設就能用、不需要 server / cc-bridge
+    // - Rae 可加多組（例如本機 cc-bridge / VPS cc-bridge / Anthropic 直連）
     function loadClaudeRoomConfig() {
         let saved = localStorage.getItem(CLAUDE_ROOM_STORAGE_KEY);
+        const defaultPresets = [
+            { id: 'anthropic', name: 'Anthropic 直連', url: 'https://api.anthropic.com/v1/messages', key: '' },
+        ];
         let config = {
-            // 舊欄位（向下相容、新版面板會慢慢淘汰）
-            url: '',
-            key: '',
+            presets: defaultPresets,
+            activePresetId: 'anthropic',
+            // 預設值（聊天時 inline picker 不選的話用這些）
             model: 'claude-opus-4-7',
             maxTokens: 4096,
             temperature: 1.0,
             top_p: 1.0,
-            // 新：多 endpoint 預設（兩個固定 slot：PC + VPS）
-            endpoints: {
-                pc:  { name: '🏠 本機 PC',  url: 'https://dancc.raekeyu.com/v1/chat/completions', token: '', apiKey: '' },
-                vps: { name: '☁️ VPS Cloud', url: 'https://cc.raekeyu.com/v1/chat/completions',   token: '', apiKey: '' },
-            },
-            activeEndpoint: 'pc',  // 'pc' | 'vps'
-            // 新：inline picker 的覆寫值（空字串 = 用 cc-bridge config 的預設）
+            // inline picker 覆寫值（空字串 = 用該 endpoint server 的預設）
             inlineModel:   '',
-            inlineEffort:  '',  // '' / 'off' / 'low' / 'medium' / 'high' / 'xhigh' / 'max'
-            inlineBackend: '',  // '' / 'cli' / 'api'
+            inlineEffort:  '',
+            inlineBackend: '',
         };
         if (saved) {
             try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {}
-            // 老資料 → 新 endpoints 自動 migrate（只在 endpoints.pc.token 還空 + 老 key 有值時）
-            if (config.endpoints && !config.endpoints.pc.token && config.key) {
-                config.endpoints.pc.token = config.key;
-                config.endpoints.vps.token = config.key;  // 兩台共用同一個 cc_bridge_token
+
+            // 從舊版 endpoints 結構 migrate 到 presets array（一次性、之後不再執行）
+            if (saved.includes('"endpoints"') && (!config.presets || config.presets.length === 1)) {
+                try {
+                    const old = JSON.parse(saved);
+                    const migrated = [];
+                    if (old.endpoints) {
+                        for (const [slotId, ep] of Object.entries(old.endpoints)) {
+                            const key = ep.token || ep.apiKey || '';
+                            if (ep.url || key) {
+                                migrated.push({ id: slotId, name: ep.name || slotId, url: ep.url || '', key });
+                            }
+                        }
+                    }
+                    if (migrated.length) {
+                        config.presets = migrated;
+                        config.activePresetId = old.activeEndpoint || migrated[0].id;
+                    }
+                } catch(e) {}
             }
-            if (config.endpoints && !config.endpoints.pc.url.includes('chat/completions') && config.url) {
-                // 不覆蓋預設 URL，但若用戶有自訂 URL，搬到 PC slot
-                if (config.url) config.endpoints.pc.url = config.url;
+
+            // 從更早的舊版（單一 url/key）migrate
+            if (saved.includes('"url"') && (!config.presets || config.presets.every(p => !p.url && !p.key))) {
+                try {
+                    const old = JSON.parse(saved);
+                    if (old.url || old.key) {
+                        config.presets = [
+                            { id: 'legacy', name: '預設', url: old.url || '', key: old.key || '' },
+                            ...defaultPresets,
+                        ];
+                        config.activePresetId = 'legacy';
+                    }
+                } catch(e) {}
+            }
+
+            if (!config.presets || !config.presets.length) config.presets = defaultPresets;
+            if (!config.presets.find(p => p.id === config.activePresetId)) {
+                config.activePresetId = config.presets[0].id;
             }
         }
         return config;
     }
 
-    // 取得當前 active endpoint 的展開資料（含 url/token/apiKey/name）
-    function getActiveEndpoint(config) {
+    // 取得當前 active preset 的展開資料
+    function getActivePreset(config) {
         config = config || loadClaudeRoomConfig();
-        const id = config.activeEndpoint || 'pc';
-        const ep = (config.endpoints || {})[id] || { name: id, url: '', token: '', apiKey: '' };
-        return { id, ...ep };
+        const presets = config.presets || [];
+        return presets.find(p => p.id === config.activePresetId) || presets[0] || { id: '', name: '', url: '', key: '' };
     }
 
     function saveClaudeRoomConfig(data) {
@@ -348,7 +377,12 @@ EXAMPLE "prompt" value:
         getMinimaxConfig: loadMinimaxConfig,
         getClaudeRoomConfig: loadClaudeRoomConfig,
         saveClaudeRoomConfig: saveClaudeRoomConfig,
-        getActiveClaudeEndpoint: getActiveEndpoint,
+        getActiveClaudePreset: getActivePreset,
+        // 向下相容的舊 API（其他地方還在用），轉接到新 getActivePreset
+        getActiveClaudeEndpoint: function() {
+            const p = getActivePreset();
+            return { id: p.id, name: p.name, url: p.url, token: p.key, apiKey: '' };
+        },
         saveConfig: saveConfig
     };
 
@@ -673,50 +707,17 @@ EXAMPLE "prompt" value:
 
                     <div id="view-claude-room" class="tab-view hidden">
                         <div style="background:rgba(180,150,200,0.12); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(251,223,162,0.3); font-size:12px; color:#FBDFA2; line-height:1.6;">
-                            🦀 <b>Claude 的房間</b>支援多 endpoint：本機 PC（CLI Max 免費）+ VPS（API 計費，PC 關時 fallback）。<br>
-                            <b>Model / Effort 在聊天室裡按那個橫條切換</b>，不用回這裡。
+                            🦀 <b>Claude 的房間</b>：跟其他 AI 一樣填 URL + 密鑰即可。<br>
+                            最常見填法：<br>
+                            • <b>Anthropic 官方</b>（最簡單）：URL 留預設、密鑰填 sk-ant-...<br>
+                            • <b>自架 cc-bridge</b>：URL 改成你的 cc-bridge 端點、密鑰填 Bearer token<br>
+                            模型 / 推理深度可在聊天室那條橫條快速切，不用回這裡。
                         </div>
 
-                        <!-- Endpoint 預設（兩個 slot：PC + VPS）-->
                         <div class="set-group">
-                            <div class="set-label">📍 Endpoint 預設（用哪台 cc-bridge）</div>
-
-                            <!-- 🏠 本機 PC slot -->
-                            <div style="background:rgba(69,34,22,0.4); border:1px solid rgba(251,223,162,0.2); border-radius:6px; padding:10px; margin-bottom:8px;">
-                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#FBDFA2;">
-                                    <input type="radio" name="claude-active-ep" value="pc" id="claude-ep-radio-pc" ${(claudeRoomConfig.activeEndpoint || 'pc') === 'pc' ? 'checked' : ''}>
-                                    🏠 本機 PC（CLI Max 免費）
-                                </label>
-                                <div style="margin-top:8px;">
-                                    <input class="set-input" id="claude-ep-pc-url" placeholder="https://dancc.raekeyu.com/v1/chat/completions" value="${claudeRoomConfig.endpoints?.pc?.url || ''}">
-                                    <div class="set-desc" style="margin-top:4px;">URL（PC 的 cc-bridge tunnel）</div>
-                                </div>
-                                <div style="margin-top:6px;">
-                                    <input class="set-input" id="claude-ep-pc-token" type="password" placeholder="cc_bridge_token" value="${claudeRoomConfig.endpoints?.pc?.token || ''}">
-                                    <div class="set-desc" style="margin-top:4px;">Bearer Token（cc_bridge_token，PC 跟 VPS 通常用同一個）</div>
-                                </div>
-                                <div style="margin-top:6px;">
-                                    <input class="set-input" id="claude-ep-pc-apikey" type="password" placeholder="留空 = 用 cc-bridge 自己 config.json 的 API key" value="${claudeRoomConfig.endpoints?.pc?.apiKey || ''}">
-                                    <div class="set-desc" style="margin-top:4px;">Anthropic API Key（選填，只在 backend=API 時用；空 = 用 server 自己的）</div>
-                                </div>
-                            </div>
-
-                            <!-- ☁️ VPS slot -->
-                            <div style="background:rgba(69,34,22,0.4); border:1px solid rgba(251,223,162,0.2); border-radius:6px; padding:10px;">
-                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#FBDFA2;">
-                                    <input type="radio" name="claude-active-ep" value="vps" id="claude-ep-radio-vps" ${claudeRoomConfig.activeEndpoint === 'vps' ? 'checked' : ''}>
-                                    ☁️ VPS Cloud（API，PC 關也能用）
-                                </label>
-                                <div style="margin-top:8px;">
-                                    <input class="set-input" id="claude-ep-vps-url" placeholder="https://cc.raekeyu.com/v1/chat/completions" value="${claudeRoomConfig.endpoints?.vps?.url || ''}">
-                                </div>
-                                <div style="margin-top:6px;">
-                                    <input class="set-input" id="claude-ep-vps-token" type="password" placeholder="cc_bridge_token" value="${claudeRoomConfig.endpoints?.vps?.token || ''}">
-                                </div>
-                                <div style="margin-top:6px;">
-                                    <input class="set-input" id="claude-ep-vps-apikey" type="password" placeholder="留空 = 用 VPS cc-bridge 自己的 API key" value="${claudeRoomConfig.endpoints?.vps?.apiKey || ''}">
-                                </div>
-                            </div>
+                            <div class="set-label">📍 連線預設（可建多組、隨時切換）</div>
+                            <div id="claude-presets-list"></div>
+                            <button class="btn-test" id="claude-preset-add-btn" style="margin-top:8px;">➕ 新增預設</button>
                         </div>
 
                         <div class="set-group">
@@ -736,13 +737,13 @@ EXAMPLE "prompt" value:
                         </div>
 
                         <div class="set-group">
-                            <div class="btn-test" id="claude-room-test-btn">🔍 測試當前 endpoint 連線</div>
+                            <div class="btn-test" id="claude-room-test-btn">🔍 測試當前預設的連線</div>
                             <div id="claude-room-test-result" style="display:none; margin-top:10px; background:rgba(69,34,22,0.8); border-radius:4px; padding:12px; font-size:12px; color:#E0D8C8; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
 
-                        <!-- 隱藏的舊欄位，給 saveConfig 兼容用 -->
-                        <input type="hidden" id="claude-room-url" value="${claudeRoomConfig.url || ''}">
-                        <input type="hidden" id="claude-room-key" value="${claudeRoomConfig.key || ''}">
+                        <!-- 隱藏：保存當前 presets 序列化（runtime 用，不顯示）-->
+                        <input type="hidden" id="claude-presets-json" value='${JSON.stringify(claudeRoomConfig.presets || [])}'>
+                        <input type="hidden" id="claude-active-preset-id" value="${claudeRoomConfig.activePresetId || ''}">
                         <input type="hidden" id="claude-room-model" value="${claudeRoomConfig.model || ''}">
                     </div>
 
@@ -1684,51 +1685,164 @@ EXAMPLE "prompt" value:
         function _normalizeChatUrl(raw) {
             let u = (raw || '').trim().replace(/\/+$/, '');
             if (!u) return '';
+            // Anthropic 直連格式：保留 /v1/messages 不變
+            if (/api\.anthropic\.com/i.test(u) || u.endsWith('/v1/messages')) {
+                if (u.endsWith('/v1/messages')) return u;
+                if (u.endsWith('/v1')) return u + '/messages';
+                if (/api\.anthropic\.com$/i.test(u)) return u + '/v1/messages';
+                return u;
+            }
+            // OpenAI / cc-bridge 兼容：補 /v1/chat/completions
             if (u.endsWith('/chat/completions')) return u;
             if (u.endsWith('/v1')) return u + '/chat/completions';
             return u + '/v1/chat/completions';
         }
 
+        // 判斷 URL 是不是 Anthropic 直連
+        function _isAnthropicDirectUrl(u) {
+            if (!u) return false;
+            return /api\.anthropic\.com/i.test(u) || u.endsWith('/v1/messages');
+        }
+
+        // ===== Claude Presets：渲染清單 + CRUD =====
+        const presetsListEl = container.querySelector('#claude-presets-list');
+        const presetsHiddenEl = container.querySelector('#claude-presets-json');
+        const activePresetIdEl = container.querySelector('#claude-active-preset-id');
+        let _presets = [];
+        let _activeId = '';
+        try { _presets = JSON.parse(presetsHiddenEl?.value || '[]') || []; } catch(e) {}
+        _activeId = activePresetIdEl?.value || (_presets[0]?.id || '');
+
+        function _persistPresets() {
+            if (presetsHiddenEl) presetsHiddenEl.value = JSON.stringify(_presets);
+            if (activePresetIdEl) activePresetIdEl.value = _activeId;
+        }
+
+        function _renderPresets() {
+            if (!presetsListEl) return;
+            presetsListEl.innerHTML = '';
+            _presets.forEach((p, idx) => {
+                const card = document.createElement('div');
+                card.style.cssText = 'background:rgba(69,34,22,0.4); border:1px solid rgba(251,223,162,0.2); border-radius:6px; padding:10px; margin-bottom:8px;';
+                card.innerHTML = `
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#FBDFA2;">
+                        <input type="radio" name="claude-active-preset" value="${p.id}" ${p.id === _activeId ? 'checked' : ''}>
+                        <input class="set-input" data-field="name" placeholder="預設名稱" value="${(p.name || '').replace(/"/g,'&quot;')}" style="flex:1; min-width:0;">
+                        <button class="claude-preset-del" title="刪除預設" style="background:rgba(217,81,34,0.2); color:#D95122; border:1px solid rgba(217,81,34,0.4); border-radius:4px; padding:2px 8px; cursor:pointer;">✕</button>
+                    </label>
+                    <div style="margin-top:8px;">
+                        <input class="set-input" data-field="url" placeholder="https://api.anthropic.com/v1/messages 或 cc-bridge URL" value="${(p.url || '').replace(/"/g,'&quot;')}">
+                    </div>
+                    <div style="margin-top:6px;">
+                        <input class="set-input" data-field="key" type="password" placeholder="API Key（sk-ant-... 或 cc_bridge_token）" value="${(p.key || '').replace(/"/g,'&quot;')}">
+                    </div>
+                `;
+                // radio
+                card.querySelector('input[type="radio"]').onchange = (e) => {
+                    if (e.target.checked) { _activeId = p.id; _persistPresets(); }
+                };
+                // 三個欄位 input 監聽（即時更新 _presets）
+                card.querySelectorAll('input[data-field]').forEach(inp => {
+                    inp.oninput = () => {
+                        _presets[idx][inp.dataset.field] = inp.value;
+                        _persistPresets();
+                    };
+                });
+                // 刪除
+                card.querySelector('.claude-preset-del').onclick = () => {
+                    if (_presets.length <= 1) { alert('至少要留一組預設'); return; }
+                    if (!confirm(`刪除預設「${p.name || p.id}」？`)) return;
+                    _presets.splice(idx, 1);
+                    if (_activeId === p.id) _activeId = _presets[0].id;
+                    _persistPresets();
+                    _renderPresets();
+                };
+                presetsListEl.appendChild(card);
+            });
+        }
+
+        _renderPresets();
+
+        const presetAddBtn = container.querySelector('#claude-preset-add-btn');
+        if (presetAddBtn) {
+            presetAddBtn.onclick = () => {
+                const id = 'p' + Date.now().toString(36);
+                _presets.push({ id, name: '新預設', url: 'https://api.anthropic.com/v1/messages', key: '' });
+                _activeId = id;
+                _persistPresets();
+                _renderPresets();
+            };
+        }
+
         if (claudeRoomTestBtn && claudeRoomTestResult) {
             claudeRoomTestBtn.onclick = async () => {
-                // 改成用「當前 active endpoint」的 URL/token 測（不用老的 url/key 欄位了）
-                const activeRadio = container.querySelector('input[name="claude-active-ep"]:checked');
-                const activeId = activeRadio?.value || 'pc';
-                const url = _normalizeChatUrl(container.querySelector(`#claude-ep-${activeId}-url`)?.value || '');
-                const key = (container.querySelector(`#claude-ep-${activeId}-token`)?.value || '').trim();
+                const active = _presets.find(p => p.id === _activeId) || _presets[0];
+                if (!active) {
+                    claudeRoomTestResult.style.display = 'block';
+                    claudeRoomTestResult.textContent = '❌ 沒有任何預設，請先新增';
+                    return;
+                }
+                const url = _normalizeChatUrl(active.url);
+                const key = (active.key || '').trim();
                 const model = container.querySelector('#claude-room-model').value.trim() || 'claude-opus-4-7';
                 if (!url || !key) {
                     claudeRoomTestResult.style.display = 'block';
-                    claudeRoomTestResult.textContent = `❌ ${activeId === 'pc' ? '🏠 PC' : '☁️ VPS'} endpoint 沒填完整 URL+Token`;
+                    claudeRoomTestResult.textContent = `❌ 「${active.name || active.id}」沒填完整 URL+密鑰`;
                     return;
                 }
-                claudeRoomTestBtn.textContent = '⏳ 測試中（CC 啟動需 10-30 秒）…';
+                const isAnthropic = _isAnthropicDirectUrl(url);
+                claudeRoomTestBtn.textContent = '⏳ 測試中（首次可能 10-30 秒）…';
                 claudeRoomTestResult.style.display = 'block';
-                claudeRoomTestResult.textContent = `⏳ 打 ${url}\n等 CC 回應…`;
+                claudeRoomTestResult.textContent = `⏳ 打 ${url}\n（${isAnthropic ? 'Anthropic 直連' : 'cc-bridge / OpenAI 兼容'}）…`;
                 try {
-                    const resp = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${key}`
-                        },
-                        body: JSON.stringify({
-                            model,
-                            messages: [{ role: 'user', content: '用一句繁中說「Claude 的房間連線測試成功」' }],
-                            stream: false,
-                            max_tokens: 100
-                        })
-                    });
-                    const data = await resp.json();
-                    if (resp.ok && data.choices && data.choices[0]) {
-                        claudeRoomTestResult.textContent = `✅ 連線成功\n\n回覆：${data.choices[0].message.content}`;
+                    let resp, data;
+                    if (isAnthropic) {
+                        resp = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-api-key': key,
+                                'anthropic-version': '2023-06-01',
+                                'anthropic-dangerous-direct-browser-access': 'true',
+                            },
+                            body: JSON.stringify({
+                                model,
+                                max_tokens: 100,
+                                messages: [{ role: 'user', content: '用一句繁中說「Claude 的房間連線測試成功」' }],
+                            }),
+                        });
+                        data = await resp.json();
+                        if (resp.ok && data.content) {
+                            const txt = (data.content.find(b => b.type === 'text') || {}).text || '';
+                            claudeRoomTestResult.textContent = `✅ 連線成功\n\n回覆：${txt}`;
+                        } else {
+                            claudeRoomTestResult.textContent = `❌ ${(data.error && data.error.message) || '未知錯誤'}\nstatus: ${resp.status}`;
+                        }
                     } else {
-                        claudeRoomTestResult.textContent = `❌ ${(data.error && data.error.message) || '未知錯誤'}\nstatus: ${resp.status}`;
+                        resp = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${key}`,
+                            },
+                            body: JSON.stringify({
+                                model,
+                                messages: [{ role: 'user', content: '用一句繁中說「Claude 的房間連線測試成功」' }],
+                                stream: false,
+                                max_tokens: 100,
+                            }),
+                        });
+                        data = await resp.json();
+                        if (resp.ok && data.choices && data.choices[0]) {
+                            claudeRoomTestResult.textContent = `✅ 連線成功\n\n回覆：${data.choices[0].message.content}`;
+                        } else {
+                            claudeRoomTestResult.textContent = `❌ ${(data.error && data.error.message) || '未知錯誤'}\nstatus: ${resp.status}`;
+                        }
                     }
                 } catch (e) {
                     claudeRoomTestResult.textContent = `❌ 網路錯誤：${e.message}`;
                 } finally {
-                    claudeRoomTestBtn.textContent = '🔍 測試連線';
+                    claudeRoomTestBtn.textContent = '🔍 測試當前預設的連線';
                 }
             };
         }
@@ -1869,39 +1983,26 @@ EXAMPLE "prompt" value:
                 saveConfig(llmData, secLlmData, imgData, minimaxData);
 
                 // Claude 的房間設定（獨立儲存，跟主/副模型完全隔離）
-                const elClaudeRoomUrl = container.querySelector('#claude-room-url');
-                if (elClaudeRoomUrl) {
-                    // 收集兩個 endpoint slot
-                    const _normUrl = (u) => _normalizeChatUrl(u || '') || u || '';
-                    const epPcUrl    = _normUrl((container.querySelector('#claude-ep-pc-url')?.value || '').trim());
-                    const epPcToken  = (container.querySelector('#claude-ep-pc-token')?.value || '').trim();
-                    const epPcKey    = (container.querySelector('#claude-ep-pc-apikey')?.value || '').trim();
-                    const epVpsUrl   = _normUrl((container.querySelector('#claude-ep-vps-url')?.value || '').trim());
-                    const epVpsToken = (container.querySelector('#claude-ep-vps-token')?.value || '').trim();
-                    const epVpsKey   = (container.querySelector('#claude-ep-vps-apikey')?.value || '').trim();
+                const elClaudeRoomModel = container.querySelector('#claude-room-model');
+                if (elClaudeRoomModel) {
+                    // 從 hidden field 讀回現場編輯的 presets / activeId
+                    let presets = [];
+                    try { presets = JSON.parse(container.querySelector('#claude-presets-json')?.value || '[]') || []; } catch(e) {}
+                    // URL 跑一次 normalize（保證後端格式統一）
+                    presets = presets.map(p => ({ ...p, url: _normalizeChatUrl(p.url || '') || (p.url || '') }));
+                    const activePresetId = container.querySelector('#claude-active-preset-id')?.value
+                        || (presets[0]?.id || '');
 
-                    // active endpoint radio
-                    const activeRadio = container.querySelector('input[name="claude-active-ep"]:checked');
-                    const activeEpId = activeRadio?.value || 'pc';
-
-                    // 讀回 inline picker 既有設定（不被儲存覆蓋掉）
+                    // 讀回 inline picker 既有覆寫值（不被儲存覆蓋掉）
                     const existing = loadClaudeRoomConfig();
 
                     const claudeRoomData = {
-                        // 老 fields 沿用（向下相容）
-                        url: elClaudeRoomUrl.value.trim() || epPcUrl,
-                        key: (container.querySelector('#claude-room-key')?.value || '').trim() || epPcToken,
-                        model: container.querySelector('#claude-room-model').value.trim() || 'claude-opus-4-7',
+                        presets,
+                        activePresetId,
+                        model: elClaudeRoomModel.value.trim() || 'claude-opus-4-7',
                         maxTokens: parseInt(container.querySelector('#claude-room-max-tokens').value) || 4096,
                         temperature: parseFloat(container.querySelector('#claude-room-temperature').value) || 1.0,
                         top_p: parseFloat(container.querySelector('#claude-room-top-p').value) || 1.0,
-                        // 新：endpoint slots + active
-                        endpoints: {
-                            pc:  { name: '🏠 本機 PC',  url: epPcUrl,  token: epPcToken,  apiKey: epPcKey  },
-                            vps: { name: '☁️ VPS Cloud', url: epVpsUrl, token: epVpsToken, apiKey: epVpsKey },
-                        },
-                        activeEndpoint: activeEpId,
-                        // 新：inline picker 的覆寫（保留既有值）
                         inlineModel:   existing.inlineModel   || '',
                         inlineEffort:  existing.inlineEffort  || '',
                         inlineBackend: existing.inlineBackend || '',

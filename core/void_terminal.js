@@ -1903,8 +1903,20 @@ const IRIS_IDLE = [
         return '🧠 ' + eff;
     }
     function _shortEndpointLabel(cfg) {
-        const id = cfg?.activeEndpoint || 'pc';
-        return id === 'vps' ? '☁️ VPS' : '🏠 PC';
+        const presets = cfg?.presets || [];
+        const active = presets.find(p => p.id === cfg.activePresetId) || presets[0];
+        if (!active) return '⚠️ 沒設定';
+        // 偵測 URL 類型自動配 emoji
+        const url = active.url || '';
+        let emoji = '🌐';
+        if (/api\.anthropic\.com/i.test(url)) emoji = '🌐';
+        else if (/dancc\.|localhost|127\.0\.0\.1/i.test(url)) emoji = '🏠';
+        else if (/cc\.|vps/i.test(url)) emoji = '☁️';
+        return `${emoji} ${active.name || active.id}`;
+    }
+
+    function _isAnthropicDirect(url) {
+        return /api\.anthropic\.com/i.test(url || '') || (url || '').endsWith('/v1/messages');
     }
 
     /** 聊天室上方那條橫條的文字更新 */
@@ -1914,9 +1926,17 @@ const IRIS_IDLE = [
         const m = document.getElementById('claude-pick-model');
         const e = document.getElementById('claude-pick-effort');
         const ep = document.getElementById('claude-pick-endpoint');
+        const bk = document.getElementById('claude-pick-backend');
         if (m)  m.textContent  = _shortModelLabel(cfg.inlineModel || cfg.model);
         if (e)  e.textContent  = _shortEffortLabel(cfg.inlineEffort);
         if (ep) ep.textContent = _shortEndpointLabel(cfg);
+        // backend 在 Anthropic 直連模式下沒意義，藏起來
+        if (bk) {
+            const presets = cfg?.presets || [];
+            const active = presets.find(p => p.id === cfg.activePresetId) || presets[0];
+            const direct = active && _isAnthropicDirect(active.url);
+            bk.style.display = direct ? 'none' : '';
+        }
     }
 
     /** popup 內容生成 + 展開 */
@@ -1928,7 +1948,7 @@ const IRIS_IDLE = [
         const curModel   = cfg.inlineModel   || cfg.model || 'claude-opus-4-7';
         const curEffort  = cfg.inlineEffort  || '';
         const curBackend = cfg.inlineBackend || '';
-        const curEp      = cfg.activeEndpoint || 'pc';
+        const curPresetId = cfg.activePresetId || '';
 
         const sectionHtml = (title, list, curId, dataKey) => `
             <div class="claude-picker-section-title">${title}</div>
@@ -1940,23 +1960,28 @@ const IRIS_IDLE = [
             `).join('')}
         `;
 
-        // endpoint section: build from cfg.endpoints
-        const epList = ['pc', 'vps'].map(id => {
-            const ep = cfg.endpoints?.[id];
-            return { id, label: (ep?.name || id) + ((ep?.url) ? '' : ' (未設定)') };
-        });
+        // 連線預設 section（從 cfg.presets）
+        const presets = cfg.presets || [];
+        const presetList = presets.map(p => ({
+            id: p.id,
+            label: (p.name || p.id) + (p.url ? '' : ' (未設定)'),
+        }));
+
+        // backend 在 Anthropic 直連模式下沒意義（直連永遠走原生格式、不能切 cli/api）
+        const activeP = presets.find(p => p.id === curPresetId) || presets[0];
+        const isDirectAnthropic = activeP && _isAnthropicDirect(activeP.url);
 
         popup.innerHTML = `
-            ${sectionHtml('Endpoint',  epList,           curEp,      'ep')}
-            ${sectionHtml('Model',     CLAUDE_MODELS,    curModel,   'model')}
-            ${sectionHtml('Backend',   CLAUDE_BACKENDS,  curBackend, 'backend')}
+            ${sectionHtml('連線預設',  presetList,        curPresetId, 'preset')}
+            ${sectionHtml('Model',     CLAUDE_MODELS,     curModel,    'model')}
+            ${isDirectAnthropic ? '' : sectionHtml('Backend', CLAUDE_BACKENDS, curBackend, 'backend')}
             ${sectionHtml('Thinking Effort', CLAUDE_EFFORTS, curEffort, 'effort')}
         `;
         popup.style.display = 'block';
 
         // 綁項目點擊
-        popup.querySelectorAll('[data-ep]').forEach(el => el.onclick = () => {
-            const c = _getClaudeRoomCfg(); c.activeEndpoint = el.dataset.ep; _saveClaudeRoomCfg(c);
+        popup.querySelectorAll('[data-preset]').forEach(el => el.onclick = () => {
+            const c = _getClaudeRoomCfg(); c.activePresetId = el.dataset.preset; _saveClaudeRoomCfg(c);
             _updateClaudePickerLabel(); _openClaudePickerPopup();
         });
         popup.querySelectorAll('[data-model]').forEach(el => el.onclick = () => {
