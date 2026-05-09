@@ -35,9 +35,22 @@
 
     // ============== 設定 ==============
 
+    function _isAnthropicDirectUrl(u) {
+        if (!u) return false;
+        return /api\.anthropic\.com/i.test(u) || u.endsWith('/v1/messages');
+    }
+
     function _normalizeChatUrl(raw) {
         let u = (raw || '').trim().replace(/\/+$/, '');
         if (!u) return '';
+        // Anthropic 直連格式：保留 /v1/messages
+        if (_isAnthropicDirectUrl(u)) {
+            if (u.endsWith('/v1/messages')) return u;
+            if (u.endsWith('/v1')) return u + '/messages';
+            if (/api\.anthropic\.com$/i.test(u)) return u + '/v1/messages';
+            return u;
+        }
+        // OpenAI / cc-bridge：補 /v1/chat/completions
         if (u.endsWith('/chat/completions')) return u;
         if (u.endsWith('/v1')) return u + '/chat/completions';
         return u + '/v1/chat/completions';
@@ -48,21 +61,25 @@
             return null;
         }
         const c = window.OS_SETTINGS.getClaudeRoomConfig();
-        // 優先用 active endpoint（新版多 slot），fallback 到老 c.url/c.key（向下相容）
-        const ep = (typeof window.OS_SETTINGS.getActiveClaudeEndpoint === 'function')
-            ? window.OS_SETTINGS.getActiveClaudeEndpoint(c) : null;
-        const url   = ep && ep.url   ? _normalizeChatUrl(ep.url)   : _normalizeChatUrl(c.url);
-        const key   = ep && ep.token ? ep.token.trim()              : (c.key || '').trim();
-        const apiKey = ep && ep.apiKey ? ep.apiKey.trim() : '';
+        // 新版：從 presets 找 active；舊版（endpoint slot 或單一 url/key）走 getActiveClaudeEndpoint
+        let activePreset = null;
+        if (typeof window.OS_SETTINGS.getActiveClaudePreset === 'function') {
+            activePreset = window.OS_SETTINGS.getActiveClaudePreset(c);
+        } else if (typeof window.OS_SETTINGS.getActiveClaudeEndpoint === 'function') {
+            const ep = window.OS_SETTINGS.getActiveClaudeEndpoint();
+            if (ep) activePreset = { id: ep.id, name: ep.name, url: ep.url, key: ep.token };
+        }
+        const url = activePreset && activePreset.url ? _normalizeChatUrl(activePreset.url) : _normalizeChatUrl(c.url || '');
+        const key = activePreset && activePreset.key ? activePreset.key.trim() : (c.key || '').trim();
         return {
-            url, key, apiKey,
-            endpointId:   ep ? ep.id : 'pc',
-            endpointName: ep ? ep.name : '',
+            url, key,
+            isAnthropicDirect: _isAnthropicDirectUrl(url),
+            presetId:   activePreset ? activePreset.id   : '',
+            presetName: activePreset ? activePreset.name : '',
             model: (c.inlineModel || c.model || 'claude-opus-4-7').trim(),
             maxTokens: Number(c.maxTokens) || 4096,
             temperature: Number(c.temperature),
             top_p: Number(c.top_p),
-            // inline picker 覆寫（送進 body 給 cc-bridge）
             inlineEffort:  (c.inlineEffort  || '').trim(),
             inlineBackend: (c.inlineBackend || '').trim(),
         };
@@ -179,15 +196,132 @@
     ClaudeTerminal.send = async function(userText, attachments) {
         const cfg = ClaudeTerminal.getConfig();
         if (!cfg) throw new Error('SETTINGS_MISSING:OS_SETTINGS 未載入');
-        if (!cfg.url || !cfg.key) throw new Error('NOT_CONFIGURED:還沒填 URL 跟 Key，去設定 → 🦀 Claude 的房間');
+        if (!cfg.url || !cfg.key) throw new Error('NOT_CONFIGURED:還沒填 URL 跟 密鑰，去設定 → 🦀 Claude 的房間');
 
-        // 讀歷史 → 加新 user → 立即存（讓 UI 即時顯示在 hist 視窗）
+        // 依 URL 自動分流：Anthropic 直連 vs cc-bridge / OpenAI 兼容
+        if (cfg.isAnthropicDirect) {
+            return _sendAnthropicDirect(userText, attachments, cfg);
+        }
+        return _sendCcBridge(userText, attachments, cfg);
+    };
+
+    // ===== Anthropic 直連（朋友最常用、不需任何 server）=====
+    async function _sendAnthropicDirect(userText, attachments, cfg) {
         const history = await ClaudeTerminal.loadHistory();
         const newUserMsg = { role: 'user', content: userText, timestamp: Date.now() };
         const updatedHistory = [...history, newUserMsg];
         await ClaudeTerminal.saveHistory(updatedHistory);
 
-        // 決定送多少 messages：有 session_id 就只送新 user（resume 走 cache）；沒就送全歷史
+        // 攻略：把附件圖片讀成 base64 image_block（瀏覽器原生 file 物件處理）
+        // 注意：附件物件目前只在 cc-bridge 路徑生產（path 是 server 上的）
+        // 直連模式暫不支援 path-based 附件，只走純文字（後續可加 FileReader 直接讀）
+        const lastUserBlocks = [{ type: 'text', text: userText }];
+
+        const messages = history.slice(-HISTORY_LIMIT).map(m => ({
+            role: m.role, content: m.content,
+        })).concat([{ role: 'user', content: lastUserBlocks }]);
+
+        const body = {
+            model: cfg.model,
+            max_tokens: cfg.maxTokens,
+            messages,
+        };
+        // thinking effort（非 off / 空字串才啟用）
+        const eff = (cfg.inlineEffort || '').toLowerCase();
+        if (eff && eff !== 'off') {
+            body.thinking = { type: 'adaptive', display: 'summarized' };
+            body.output_config = { effort: eff };
+        }
+
+        let resp, data;
+        try {
+            resp = await fetch(cfg.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': cfg.key,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true',
+                },
+                body: JSON.stringify(body),
+            });
+        } catch (e) {
+            await ClaudeTerminal.saveHistory(history);
+            throw new Error('NETWORK:無法連線到 Anthropic API。原始：' + (e.message || e));
+        }
+
+        try { data = await resp.json(); }
+        catch (e) {
+            await ClaudeTerminal.saveHistory(history);
+            throw new Error('BAD_JSON:Anthropic 回應無法解析 JSON');
+        }
+
+        if (!resp.ok) {
+            await ClaudeTerminal.saveHistory(history);
+            const errMsg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
+            if (resp.status === 401) throw new Error('AUTH:Anthropic API Key 無效。重填。');
+            if (resp.status === 429) throw new Error('API:請求過快或額度用完：' + errMsg);
+            throw new Error('API:' + errMsg);
+        }
+
+        // 拆 content blocks（可能有 thinking + text）
+        let replyText = '';
+        let thinkingText = '';
+        for (const block of (data.content || [])) {
+            if (block.type === 'text') replyText += block.text || '';
+            else if (block.type === 'thinking') thinkingText += block.thinking || '';
+            else if (block.type === 'redacted_thinking') thinkingText += '(thinking 已加密)';
+        }
+
+        if (!replyText) {
+            await ClaudeTerminal.saveHistory(history);
+            throw new Error('EMPTY:Anthropic 沒回半個字。');
+        }
+
+        const thinking = thinkingText.trim() || null;
+
+        // 算 cost（Opus 4.x 預設定價、其他可加擴展）
+        const usageRaw = data.usage || {};
+        const usageMeta = {
+            input_tokens:  usageRaw.input_tokens || 0,
+            output_tokens: usageRaw.output_tokens || 0,
+            cache_creation_input_tokens: usageRaw.cache_creation_input_tokens || 0,
+            cache_read_input_tokens:     usageRaw.cache_read_input_tokens || 0,
+            total_cost_usd: _estimateCost(cfg.model, usageRaw),
+            model: cfg.model,
+        };
+
+        const assistantMsg = { role: 'assistant', content: replyText, timestamp: Date.now() };
+        if (thinking) assistantMsg.thinking = thinking;
+        assistantMsg.usage = usageMeta;
+        await ClaudeTerminal.saveHistory([...updatedHistory, assistantMsg]);
+
+        return { reply: replyText, thinking, usage: usageMeta, sessionFallback: false };
+    }
+
+    // 簡單 cost 估算（USD per M tokens）— 給直連 Anthropic 模式
+    function _estimateCost(model, usage) {
+        const PRICE = {
+            'claude-opus-4-7':            { in: 15, out: 75, cw: 18.75, cr: 1.5 },
+            'claude-opus-4-6':            { in: 15, out: 75, cw: 18.75, cr: 1.5 },
+            'claude-opus-4-5-20251101':   { in: 15, out: 75, cw: 18.75, cr: 1.5 },
+            'claude-sonnet-4-6':          { in: 3,  out: 15, cw: 3.75,  cr: 0.3 },
+            'claude-sonnet-4-5-20250929': { in: 3,  out: 15, cw: 3.75,  cr: 0.3 },
+            'claude-haiku-4-5-20251001':  { in: 1,  out: 5,  cw: 1.25,  cr: 0.1 },
+        };
+        let p = PRICE[model];
+        if (!p && model && model.includes('-202')) p = PRICE[model.split('-202')[0].replace(/-$/, '')];
+        if (!p) return 0;
+        return Math.round(((usage.input_tokens||0)*p.in + (usage.output_tokens||0)*p.out + (usage.cache_creation_input_tokens||0)*p.cw + (usage.cache_read_input_tokens||0)*p.cr) / 1000) / 1000;
+    }
+
+    // ===== cc-bridge / OpenAI 兼容路徑（Rae 自架 server 用）=====
+    async function _sendCcBridge(userText, attachments, cfg) {
+        const history = await ClaudeTerminal.loadHistory();
+        const newUserMsg = { role: 'user', content: userText, timestamp: Date.now() };
+        const updatedHistory = [...history, newUserMsg];
+        await ClaudeTerminal.saveHistory(updatedHistory);
+
         const incomingSid = ClaudeTerminal.getSessionId();
         const apiMessages = incomingSid
             ? [{ role: 'user', content: userText }]
@@ -200,16 +334,14 @@
             model: cfg.model,
             messages: apiMessages,
             stream: false,
-            max_tokens: cfg.maxTokens
+            max_tokens: cfg.maxTokens,
         };
         if (incomingSid) body.session_id = incomingSid;
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
         if (attachments && attachments.length) body.attachments = attachments;
-        // 自定 overrides 給 cc-bridge：inline picker 選的 backend/effort、面板填的 api key
         if (cfg.inlineBackend) body.cc_backend = cfg.inlineBackend;
         if (cfg.inlineEffort)  body.cc_api_effort = cfg.inlineEffort;
-        if (cfg.apiKey)        body.anthropic_api_key = cfg.apiKey;
 
         let resp, data;
         try {
@@ -217,19 +349,17 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + cfg.key
+                    'Authorization': 'Bearer ' + cfg.key,
                 },
-                body: JSON.stringify(body)
+                body: JSON.stringify(body),
             });
         } catch (e) {
-            // 訊息存進歷史但 API 失敗——回滾這條 user
             await ClaudeTerminal.saveHistory(history);
-            throw new Error('NETWORK:本機 cc-bridge 沒在跑？或網路斷線。原始：' + (e.message || e));
+            throw new Error('NETWORK:cc-bridge 沒在跑？或網路斷線。原始：' + (e.message || e));
         }
 
-        try {
-            data = await resp.json();
-        } catch (e) {
+        try { data = await resp.json(); }
+        catch (e) {
             await ClaudeTerminal.saveHistory(history);
             throw new Error('BAD_JSON:cc-bridge 回應無法解析 JSON');
         }
@@ -237,47 +367,31 @@
         if (!resp.ok) {
             await ClaudeTerminal.saveHistory(history);
             const errMsg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
-            if (resp.status === 401 || resp.status === 403) {
-                throw new Error('AUTH:Key 不對。去設定 → 🦀 Claude 的房間 重填。');
-            }
-            if (resp.status >= 500) {
-                throw new Error('SERVER:Claude 跑出錯。看 cc-bridge log。原始：' + errMsg);
-            }
+            if (resp.status === 401 || resp.status === 403) throw new Error('AUTH:密鑰不對。');
+            if (resp.status >= 500) throw new Error('SERVER:server 跑出錯：' + errMsg);
             throw new Error('API:' + errMsg);
         }
 
         const reply = data && data.choices && data.choices[0] && data.choices[0].message
-            ? (data.choices[0].message.content || '').trim()
-            : '';
-
+            ? (data.choices[0].message.content || '').trim() : '';
         if (!reply) {
             await ClaudeTerminal.saveHistory(history);
             throw new Error('EMPTY:Claude 沒回半個字。');
         }
 
-        // 更新 session_id（CLI 每次都吐 new session_id，resume 成功也會吐同一個）
         const newSid = data.session_id || null;
         if (newSid) ClaudeTerminal.setSessionId(newSid);
-
-        // Fallback 偵測：送了 sid 但 cc-bridge 回了不同的 → 表示 resume 失敗、開了新 session
-        // → Claude 看不到之前歷史、這次回覆會失憶。caller 應該顯示警告
         const sessionFallback = !!(incomingSid && newSid && incomingSid !== newSid);
-
-        // thinking content（API 模式才有；CLI 模式為 null/undefined）
         const thinking = (typeof data.thinking === 'string' && data.thinking.trim()) ? data.thinking : null;
-
-        // usage_meta（含 token 數 + total_cost_usd + model）
         const usageMeta = data.usage_meta || null;
 
-        // 寫回 assistant（含 thinking + usage 一起存，hist 視窗 / 重整後可看回放）
         const assistantMsg = { role: 'assistant', content: reply, timestamp: Date.now() };
         if (thinking) assistantMsg.thinking = thinking;
         if (usageMeta) assistantMsg.usage = usageMeta;
-        const finalHistory = [...updatedHistory, assistantMsg];
-        await ClaudeTerminal.saveHistory(finalHistory);
+        await ClaudeTerminal.saveHistory([...updatedHistory, assistantMsg]);
 
         return { reply, thinking, usage: usageMeta, sessionFallback };
-    };
+    }
 
     /** 對話總數（給 UI badge / 標題用） */
     ClaudeTerminal.getMessageCount = async function() {
