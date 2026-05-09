@@ -820,7 +820,7 @@ body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
     flex-direction: column;
     position: absolute;
     top: 50px;            /* 留標題列 */
-    bottom: 90px;         /* 留底部 chat-bar */
+    bottom: 135px;        /* 留底部 chat-bar（含 picker bar，比其他 mode 多 ~45px） */
     left: 0; right: 0;
     z-index: 5;
     overflow: hidden;
