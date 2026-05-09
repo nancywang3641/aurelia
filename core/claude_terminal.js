@@ -215,7 +215,9 @@
         // 攻略：把附件圖片讀成 base64 image_block（瀏覽器原生 file 物件處理）
         // 注意：附件物件目前只在 cc-bridge 路徑生產（path 是 server 上的）
         // 直連模式暫不支援 path-based 附件，只走純文字（後續可加 FileReader 直接讀）
-        const lastUserBlocks = [{ type: 'text', text: userText }];
+        // 重點：cache_control: ephemeral 標在最後一條 user msg → 把所有 prior history 全 cache 住
+        // 下次發訊息時前面歷史命中 cache、token 算 cache_read 費率（比 input 便宜 ~10x）
+        const lastUserBlocks = [{ type: 'text', text: userText, cache_control: { type: 'ephemeral' } }];
 
         const messages = history.slice(-HISTORY_LIMIT).map(m => ({
             role: m.role, content: m.content,
