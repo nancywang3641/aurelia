@@ -1970,7 +1970,10 @@ const IRIS_IDLE = [
 
         // 綁項目點擊
         popup.querySelectorAll('[data-preset]').forEach(el => el.onclick = () => {
-            const c = _getClaudeRoomCfg(); c.activePresetId = el.dataset.preset; _saveClaudeRoomCfg(c);
+            const c = _getClaudeRoomCfg();
+            c.activePresetId = el.dataset.preset;
+            _saveClaudeRoomCfg(c);
+            // sid 已經 per-preset 存了，切過去自動取對應 sid（不用清也不會混）
             _updateClaudePickerLabel(); _openClaudePickerPopup();
         });
         popup.querySelectorAll('[data-model]').forEach(el => el.onclick = () => {

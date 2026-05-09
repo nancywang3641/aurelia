@@ -16,7 +16,7 @@
 
     const HISTORY_MODE_ID = 'claude_room_main';
     const HISTORY_LIMIT = 100; // 最近 100 條（約 50 輪），新對話模式才用；resume 模式只送新訊息
-    const SESSION_ID_KEY = 'claude_room_session_id'; // localStorage key
+    const SESSION_ID_KEY = 'claude_room_session_id'; // localStorage key（明天會被 multi-conv 系統取代）
     const SVG_BASE = 'scripts/extensions/third-party/my-tavern-extension/core/assets/claude/';
     const FALLBACK_URL = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=clawd&size=256';
 
@@ -81,7 +81,7 @@
             temperature: Number(c.temperature),
             top_p: Number(c.top_p),
             inlineEffort:  (c.inlineEffort  || '').trim(),
-            inlineBackend: (c.inlineBackend || '').trim(),
+            // inlineBackend 已棄用（picker 砍 BACKEND section 了），保留讀但不送 body
         };
     };
 
@@ -342,8 +342,7 @@
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
         if (attachments && attachments.length) body.attachments = attachments;
-        if (cfg.inlineBackend) body.cc_backend = cfg.inlineBackend;
-        if (cfg.inlineEffort)  body.cc_api_effort = cfg.inlineEffort;
+        if (cfg.inlineEffort) body.cc_api_effort = cfg.inlineEffort;
 
         let resp, data;
         try {
