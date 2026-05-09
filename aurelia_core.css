@@ -1057,12 +1057,106 @@ body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
     color: #fff;
 }
 
+/* ===== Claude inline picker bar + popup ===== */
+.claude-picker-bar { display: none; }
+.void-tab.mode-claude .claude-picker-bar {
+    display: block !important;
+    padding: 4px 10px;
+    background: rgba(234,176,92,0.10);
+    border-bottom: 1px solid rgba(234,176,92,0.25);
+    flex-shrink: 0;
+}
+.claude-picker-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: transparent;
+    border: 1px solid rgba(234,176,92,0.4);
+    color: var(--cl-cafe-latte, #896645);
+    border-radius: 14px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.18s;
+    white-space: nowrap;
+}
+.claude-picker-btn:hover {
+    background: rgba(234,176,92,0.18);
+    border-color: var(--cl-beeswax, #EAB05C);
+    color: var(--cl-text-deep, #3d2010);
+}
+.claude-pick-sep { color: rgba(137,102,69,0.5); margin: 0 2px; }
+.claude-pick-arrow { font-size: 9px; margin-left: 4px; opacity: 0.65; }
+
+/* popup（從 input 區上方彈出） */
+.claude-picker-popup {
+    position: absolute;
+    bottom: 96px;  /* 蓋在 input row 上方 */
+    left: 12px;
+    width: 240px;
+    max-height: 60vh;
+    overflow-y: auto;
+    background: #ffffff;
+    border: 1px solid var(--cl-beeswax, #EAB05C);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(137,102,69,0.25);
+    z-index: 200;
+    padding: 6px 0;
+    font-size: 13px;
+}
+.claude-picker-section-title {
+    font-size: 10px;
+    color: var(--cl-cafe-latte, #896645);
+    text-transform: uppercase;
+    padding: 8px 12px 4px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+.claude-picker-section-title:not(:first-child) {
+    border-top: 1px solid rgba(234,176,92,0.25);
+    margin-top: 4px;
+}
+.claude-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    color: var(--cl-text-deep, #3d2010);
+    transition: background 0.15s;
+}
+.claude-picker-item:hover {
+    background: rgba(234,176,92,0.18);
+}
+.claude-picker-item.active {
+    color: var(--cl-grenadine, #D95122);
+    font-weight: 600;
+}
+.claude-picker-check {
+    width: 14px;
+    text-align: center;
+    color: var(--cl-grenadine, #D95122);
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+/* Token / cost footer（每條 Claude 氣泡下方的小字） */
+.claude-bubble-usage {
+    align-self: flex-start;
+    font-size: 10px;
+    color: rgba(137,102,69,0.65);
+    padding: 0 4px;
+    cursor: help;
+    user-select: none;
+    margin-top: -2px;
+}
+
 /* 手機 / 窄螢幕 */
 @media (max-width: 600px) {
     .claude-portrait-area { flex: 0 0 32%; }
     .claude-portrait-img { max-height: 180px; height: 80%; }
     .claude-bubble { font-size: 13px; }
     .claude-chat-stream { padding: 12px 10px; }
+    .claude-picker-popup { width: calc(100% - 24px); left: 12px; right: 12px; }
 }
 
 /* =========================================================

@@ -48,13 +48,23 @@
             return null;
         }
         const c = window.OS_SETTINGS.getClaudeRoomConfig();
+        // 優先用 active endpoint（新版多 slot），fallback 到老 c.url/c.key（向下相容）
+        const ep = (typeof window.OS_SETTINGS.getActiveClaudeEndpoint === 'function')
+            ? window.OS_SETTINGS.getActiveClaudeEndpoint(c) : null;
+        const url   = ep && ep.url   ? _normalizeChatUrl(ep.url)   : _normalizeChatUrl(c.url);
+        const key   = ep && ep.token ? ep.token.trim()              : (c.key || '').trim();
+        const apiKey = ep && ep.apiKey ? ep.apiKey.trim() : '';
         return {
-            url: _normalizeChatUrl(c.url),
-            key: (c.key || '').trim(),
-            model: (c.model || 'claude-opus-4-7').trim(),
+            url, key, apiKey,
+            endpointId:   ep ? ep.id : 'pc',
+            endpointName: ep ? ep.name : '',
+            model: (c.inlineModel || c.model || 'claude-opus-4-7').trim(),
             maxTokens: Number(c.maxTokens) || 4096,
             temperature: Number(c.temperature),
-            top_p: Number(c.top_p)
+            top_p: Number(c.top_p),
+            // inline picker 覆寫（送進 body 給 cc-bridge）
+            inlineEffort:  (c.inlineEffort  || '').trim(),
+            inlineBackend: (c.inlineBackend || '').trim(),
         };
     };
 
@@ -196,6 +206,10 @@
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
         if (attachments && attachments.length) body.attachments = attachments;
+        // 自定 overrides 給 cc-bridge：inline picker 選的 backend/effort、面板填的 api key
+        if (cfg.inlineBackend) body.cc_backend = cfg.inlineBackend;
+        if (cfg.inlineEffort)  body.cc_api_effort = cfg.inlineEffort;
+        if (cfg.apiKey)        body.anthropic_api_key = cfg.apiKey;
 
         let resp, data;
         try {
@@ -252,13 +266,17 @@
         // thinking content（API 模式才有；CLI 模式為 null/undefined）
         const thinking = (typeof data.thinking === 'string' && data.thinking.trim()) ? data.thinking : null;
 
-        // 寫回 assistant（含 thinking 一起存，hist 視窗 / 重整後可看回放）
+        // usage_meta（含 token 數 + total_cost_usd + model）
+        const usageMeta = data.usage_meta || null;
+
+        // 寫回 assistant（含 thinking + usage 一起存，hist 視窗 / 重整後可看回放）
         const assistantMsg = { role: 'assistant', content: reply, timestamp: Date.now() };
         if (thinking) assistantMsg.thinking = thinking;
+        if (usageMeta) assistantMsg.usage = usageMeta;
         const finalHistory = [...updatedHistory, assistantMsg];
         await ClaudeTerminal.saveHistory(finalHistory);
 
-        return { reply, thinking, sessionFallback };
+        return { reply, thinking, usage: usageMeta, sessionFallback };
     };
 
     /** 對話總數（給 UI badge / 標題用） */
