@@ -249,11 +249,16 @@
         // → Claude 看不到之前歷史、這次回覆會失憶。caller 應該顯示警告
         const sessionFallback = !!(incomingSid && newSid && incomingSid !== newSid);
 
-        // 寫回 assistant
-        const finalHistory = [...updatedHistory, { role: 'assistant', content: reply, timestamp: Date.now() }];
+        // thinking content（API 模式才有；CLI 模式為 null/undefined）
+        const thinking = (typeof data.thinking === 'string' && data.thinking.trim()) ? data.thinking : null;
+
+        // 寫回 assistant（含 thinking 一起存，hist 視窗 / 重整後可看回放）
+        const assistantMsg = { role: 'assistant', content: reply, timestamp: Date.now() };
+        if (thinking) assistantMsg.thinking = thinking;
+        const finalHistory = [...updatedHistory, assistantMsg];
         await ClaudeTerminal.saveHistory(finalHistory);
 
-        return { reply, sessionFallback };
+        return { reply, thinking, sessionFallback };
     };
 
     /** 對話總數（給 UI badge / 標題用） */

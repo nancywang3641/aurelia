@@ -1910,7 +1910,7 @@ const IRIS_IDLE = [
         _scrollClaudeChatToBottom();
     }
 
-    /** 進入 Claude 房間時用：把 IRIS_STATE.history 全部 render 成氣泡（含附件） */
+    /** 進入 Claude 房間時用：把 IRIS_STATE.history 全部 render 成氣泡（含附件 + thinking） */
     function _hydrateClaudeStream() {
         const stream = document.getElementById('claude-chat-stream');
         if (!stream) return;
@@ -1919,7 +1919,10 @@ const IRIS_IDLE = [
             _renderClaudeBubble(
                 m.role === 'user' ? 'user' : 'assistant',
                 m.content,
-                { attachments: m.attachments || [] }
+                {
+                    attachments: m.attachments || [],
+                    thinking: m.thinking || null,
+                }
             );
         });
         _scrollClaudeChatToBottom();
@@ -2030,19 +2033,27 @@ const IRIS_IDLE = [
         try {
             const result = await window.ClaudeTerminal.send(text, attachmentsSnapshot);
             const reply = result.reply;
+            const thinking = result.thinking || null;
 
             // assistant reply 寫進 history（ClaudeTerminal 那邊已存 os_db）
-            IRIS_STATE.history.push({ role: 'assistant', content: reply, ts: Date.now() });
+            const assistantRecord = { role: 'assistant', content: reply, ts: Date.now() };
+            if (thinking) assistantRecord.thinking = thinking;
+            IRIS_STATE.history.push(assistantRecord);
 
             // session_id resume 失敗：cc-bridge 退回新 session、Claude 不記得前文
             if (result.sessionFallback) {
-                _renderClaudeReply(
+                _renderClaudeBubble('assistant',
                     '⚠️ 之前的 session 失效了（cc-bridge 重啟過 / log 被清 / 太久沒聊）。\n\n' +
                     '我從零開始記新對話了。如果想讓我知道之前聊過什麼，把重點再講一次給我聽吧。\n\n' +
-                    '---\n\n' + reply
+                    '---\n\n' + reply,
+                    { thinking }
                 );
+                _setClaudePortraitState('happy');
+                setTimeout(() => _setClaudePortraitState('living'), 600);
             } else {
-                _renderClaudeReply(reply);
+                _renderClaudeBubble('assistant', reply, { thinking });
+                _setClaudePortraitState('happy');
+                setTimeout(() => _setClaudePortraitState('living'), 600);
             }
             debouncedSave();
         } catch (e) {
