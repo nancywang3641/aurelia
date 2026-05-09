@@ -1879,9 +1879,9 @@ const IRIS_IDLE = [
         { id: 'max',    label: 'Max' },
     ];
     const CLAUDE_BACKENDS = [
-        { id: '',    label: '預設（cc-bridge config）' },
-        { id: 'cli', label: 'CLI (Claude Code agent)' },
-        { id: 'api', label: 'API (純聊天 + thinking)' },
+        { id: '',    label: '預設（server 決定）' },
+        { id: 'cli', label: '訂閱（含 agent 工具）' },
+        { id: 'api', label: 'API（純聊天 + thinking 可見）' },
     ];
 
     function _getClaudeRoomCfg() {
