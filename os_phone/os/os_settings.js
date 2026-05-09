@@ -263,15 +263,45 @@ EXAMPLE "prompt" value:
     function loadClaudeRoomConfig() {
         let saved = localStorage.getItem(CLAUDE_ROOM_STORAGE_KEY);
         let config = {
+            // 舊欄位（向下相容、新版面板會慢慢淘汰）
             url: '',
             key: '',
             model: 'claude-opus-4-7',
             maxTokens: 4096,
             temperature: 1.0,
-            top_p: 1.0
+            top_p: 1.0,
+            // 新：多 endpoint 預設（兩個固定 slot：PC + VPS）
+            endpoints: {
+                pc:  { name: '🏠 本機 PC',  url: 'https://dancc.raekeyu.com/v1/chat/completions', token: '', apiKey: '' },
+                vps: { name: '☁️ VPS Cloud', url: 'https://cc.raekeyu.com/v1/chat/completions',   token: '', apiKey: '' },
+            },
+            activeEndpoint: 'pc',  // 'pc' | 'vps'
+            // 新：inline picker 的覆寫值（空字串 = 用 cc-bridge config 的預設）
+            inlineModel:   '',
+            inlineEffort:  '',  // '' / 'off' / 'low' / 'medium' / 'high' / 'xhigh' / 'max'
+            inlineBackend: '',  // '' / 'cli' / 'api'
         };
-        if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
+        if (saved) {
+            try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {}
+            // 老資料 → 新 endpoints 自動 migrate（只在 endpoints.pc.token 還空 + 老 key 有值時）
+            if (config.endpoints && !config.endpoints.pc.token && config.key) {
+                config.endpoints.pc.token = config.key;
+                config.endpoints.vps.token = config.key;  // 兩台共用同一個 cc_bridge_token
+            }
+            if (config.endpoints && !config.endpoints.pc.url.includes('chat/completions') && config.url) {
+                // 不覆蓋預設 URL，但若用戶有自訂 URL，搬到 PC slot
+                if (config.url) config.endpoints.pc.url = config.url;
+            }
+        }
         return config;
+    }
+
+    // 取得當前 active endpoint 的展開資料（含 url/token/apiKey/name）
+    function getActiveEndpoint(config) {
+        config = config || loadClaudeRoomConfig();
+        const id = config.activeEndpoint || 'pc';
+        const ep = (config.endpoints || {})[id] || { name: id, url: '', token: '', apiKey: '' };
+        return { id, ...ep };
     }
 
     function saveClaudeRoomConfig(data) {
@@ -318,6 +348,7 @@ EXAMPLE "prompt" value:
         getMinimaxConfig: loadMinimaxConfig,
         getClaudeRoomConfig: loadClaudeRoomConfig,
         saveClaudeRoomConfig: saveClaudeRoomConfig,
+        getActiveClaudeEndpoint: getActiveEndpoint,
         saveConfig: saveConfig
     };
 
@@ -642,29 +673,54 @@ EXAMPLE "prompt" value:
 
                     <div id="view-claude-room" class="tab-view hidden">
                         <div style="background:rgba(180,150,200,0.12); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(251,223,162,0.3); font-size:12px; color:#FBDFA2; line-height:1.6;">
-                            🦀 <b>Claude 的房間</b>是獨立的 Claude 對話接口，跟主／副模型完全隔離 — 不會被其他 prompt 污染。<br>
-                            走 cc-bridge → 本機 Claude Code → Anthropic（用 Max 訂閱）。
+                            🦀 <b>Claude 的房間</b>支援多 endpoint：本機 PC（CLI Max 免費）+ VPS（API 計費，PC 關時 fallback）。<br>
+                            <b>Model / Effort 在聊天室裡按那個橫條切換</b>，不用回這裡。
+                        </div>
+
+                        <!-- Endpoint 預設（兩個 slot：PC + VPS）-->
+                        <div class="set-group">
+                            <div class="set-label">📍 Endpoint 預設（用哪台 cc-bridge）</div>
+
+                            <!-- 🏠 本機 PC slot -->
+                            <div style="background:rgba(69,34,22,0.4); border:1px solid rgba(251,223,162,0.2); border-radius:6px; padding:10px; margin-bottom:8px;">
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#FBDFA2;">
+                                    <input type="radio" name="claude-active-ep" value="pc" id="claude-ep-radio-pc" ${(claudeRoomConfig.activeEndpoint || 'pc') === 'pc' ? 'checked' : ''}>
+                                    🏠 本機 PC（CLI Max 免費）
+                                </label>
+                                <div style="margin-top:8px;">
+                                    <input class="set-input" id="claude-ep-pc-url" placeholder="https://dancc.raekeyu.com/v1/chat/completions" value="${claudeRoomConfig.endpoints?.pc?.url || ''}">
+                                    <div class="set-desc" style="margin-top:4px;">URL（PC 的 cc-bridge tunnel）</div>
+                                </div>
+                                <div style="margin-top:6px;">
+                                    <input class="set-input" id="claude-ep-pc-token" type="password" placeholder="cc_bridge_token" value="${claudeRoomConfig.endpoints?.pc?.token || ''}">
+                                    <div class="set-desc" style="margin-top:4px;">Bearer Token（cc_bridge_token，PC 跟 VPS 通常用同一個）</div>
+                                </div>
+                                <div style="margin-top:6px;">
+                                    <input class="set-input" id="claude-ep-pc-apikey" type="password" placeholder="留空 = 用 cc-bridge 自己 config.json 的 API key" value="${claudeRoomConfig.endpoints?.pc?.apiKey || ''}">
+                                    <div class="set-desc" style="margin-top:4px;">Anthropic API Key（選填，只在 backend=API 時用；空 = 用 server 自己的）</div>
+                                </div>
+                            </div>
+
+                            <!-- ☁️ VPS slot -->
+                            <div style="background:rgba(69,34,22,0.4); border:1px solid rgba(251,223,162,0.2); border-radius:6px; padding:10px;">
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#FBDFA2;">
+                                    <input type="radio" name="claude-active-ep" value="vps" id="claude-ep-radio-vps" ${claudeRoomConfig.activeEndpoint === 'vps' ? 'checked' : ''}>
+                                    ☁️ VPS Cloud（API，PC 關也能用）
+                                </label>
+                                <div style="margin-top:8px;">
+                                    <input class="set-input" id="claude-ep-vps-url" placeholder="https://cc.raekeyu.com/v1/chat/completions" value="${claudeRoomConfig.endpoints?.vps?.url || ''}">
+                                </div>
+                                <div style="margin-top:6px;">
+                                    <input class="set-input" id="claude-ep-vps-token" type="password" placeholder="cc_bridge_token" value="${claudeRoomConfig.endpoints?.vps?.token || ''}">
+                                </div>
+                                <div style="margin-top:6px;">
+                                    <input class="set-input" id="claude-ep-vps-apikey" type="password" placeholder="留空 = 用 VPS cc-bridge 自己的 API key" value="${claudeRoomConfig.endpoints?.vps?.apiKey || ''}">
+                                </div>
+                            </div>
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">🔌 API 端點 URL</div>
-                            <input class="set-input" id="claude-room-url" placeholder="https://你的-cc-bridge（自動補 /v1/chat/completions）" value="${claudeRoomConfig.url}">
-                            <div class="set-desc">填啥都行：base URL（程式自動補 /v1/chat/completions）、/v1 結尾、或完整 URL 都可。擴展作者本人填自己 cc-bridge URL；朋友 clone 來的請架自己的 cc-bridge 填自己的 URL。</div>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">🔑 API Key（Bearer Token）</div>
-                            <input class="set-input" id="claude-room-key" type="password" placeholder="cc_bridge_token" value="${claudeRoomConfig.key}">
-                            <div class="set-desc">cc-bridge 的 Bearer token（config.json 裡的 cc_bridge_token）。⚠️ 不要分享 — 朋友拿到 = 燒妳訂閱。朋友想用「Claude 的房間」應自架 cc-bridge 填自己的 token。</div>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">模型 ID</div>
-                            <input class="set-input" id="claude-room-model" placeholder="claude-opus-4-7" value="${claudeRoomConfig.model}">
-                            <div class="set-desc">純標識用。實際模型由本機 CC 決定（Max 訂閱對應的模型）。</div>
-                        </div>
-
-                        <div class="set-group">
+                            <div class="set-label">⚙️ 預設值（聊天時 inline picker 不選的話用這些）</div>
                             <div class="set-slider-container">
                                 <div class="set-label"><span>Max Tokens</span></div>
                                 <input type="number" min="100" max="200000" step="100" value="${claudeRoomConfig.maxTokens}" class="set-input" id="claude-room-max-tokens" style="margin-top:6px;">
@@ -680,9 +736,14 @@ EXAMPLE "prompt" value:
                         </div>
 
                         <div class="set-group">
-                            <div class="btn-test" id="claude-room-test-btn">🔍 測試連線</div>
+                            <div class="btn-test" id="claude-room-test-btn">🔍 測試當前 endpoint 連線</div>
                             <div id="claude-room-test-result" style="display:none; margin-top:10px; background:rgba(69,34,22,0.8); border-radius:4px; padding:12px; font-size:12px; color:#E0D8C8; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
+
+                        <!-- 隱藏的舊欄位，給 saveConfig 兼容用 -->
+                        <input type="hidden" id="claude-room-url" value="${claudeRoomConfig.url || ''}">
+                        <input type="hidden" id="claude-room-key" value="${claudeRoomConfig.key || ''}">
+                        <input type="hidden" id="claude-room-model" value="${claudeRoomConfig.model || ''}">
                     </div>
 
                     <div id="view-img" class="tab-view hidden">
@@ -1630,12 +1691,15 @@ EXAMPLE "prompt" value:
 
         if (claudeRoomTestBtn && claudeRoomTestResult) {
             claudeRoomTestBtn.onclick = async () => {
-                const url = _normalizeChatUrl(container.querySelector('#claude-room-url').value);
-                const key = container.querySelector('#claude-room-key').value.trim();
+                // 改成用「當前 active endpoint」的 URL/token 測（不用老的 url/key 欄位了）
+                const activeRadio = container.querySelector('input[name="claude-active-ep"]:checked');
+                const activeId = activeRadio?.value || 'pc';
+                const url = _normalizeChatUrl(container.querySelector(`#claude-ep-${activeId}-url`)?.value || '');
+                const key = (container.querySelector(`#claude-ep-${activeId}-token`)?.value || '').trim();
                 const model = container.querySelector('#claude-room-model').value.trim() || 'claude-opus-4-7';
                 if (!url || !key) {
                     claudeRoomTestResult.style.display = 'block';
-                    claudeRoomTestResult.textContent = '❌ 請先填 URL 跟 Key';
+                    claudeRoomTestResult.textContent = `❌ ${activeId === 'pc' ? '🏠 PC' : '☁️ VPS'} endpoint 沒填完整 URL+Token`;
                     return;
                 }
                 claudeRoomTestBtn.textContent = '⏳ 測試中（CC 啟動需 10-30 秒）…';
@@ -1807,13 +1871,40 @@ EXAMPLE "prompt" value:
                 // Claude 的房間設定（獨立儲存，跟主/副模型完全隔離）
                 const elClaudeRoomUrl = container.querySelector('#claude-room-url');
                 if (elClaudeRoomUrl) {
+                    // 收集兩個 endpoint slot
+                    const _normUrl = (u) => _normalizeChatUrl(u || '') || u || '';
+                    const epPcUrl    = _normUrl((container.querySelector('#claude-ep-pc-url')?.value || '').trim());
+                    const epPcToken  = (container.querySelector('#claude-ep-pc-token')?.value || '').trim();
+                    const epPcKey    = (container.querySelector('#claude-ep-pc-apikey')?.value || '').trim();
+                    const epVpsUrl   = _normUrl((container.querySelector('#claude-ep-vps-url')?.value || '').trim());
+                    const epVpsToken = (container.querySelector('#claude-ep-vps-token')?.value || '').trim();
+                    const epVpsKey   = (container.querySelector('#claude-ep-vps-apikey')?.value || '').trim();
+
+                    // active endpoint radio
+                    const activeRadio = container.querySelector('input[name="claude-active-ep"]:checked');
+                    const activeEpId = activeRadio?.value || 'pc';
+
+                    // 讀回 inline picker 既有設定（不被儲存覆蓋掉）
+                    const existing = loadClaudeRoomConfig();
+
                     const claudeRoomData = {
-                        url: elClaudeRoomUrl.value.trim(),
-                        key: container.querySelector('#claude-room-key').value.trim(),
+                        // 老 fields 沿用（向下相容）
+                        url: elClaudeRoomUrl.value.trim() || epPcUrl,
+                        key: (container.querySelector('#claude-room-key')?.value || '').trim() || epPcToken,
                         model: container.querySelector('#claude-room-model').value.trim() || 'claude-opus-4-7',
                         maxTokens: parseInt(container.querySelector('#claude-room-max-tokens').value) || 4096,
                         temperature: parseFloat(container.querySelector('#claude-room-temperature').value) || 1.0,
-                        top_p: parseFloat(container.querySelector('#claude-room-top-p').value) || 1.0
+                        top_p: parseFloat(container.querySelector('#claude-room-top-p').value) || 1.0,
+                        // 新：endpoint slots + active
+                        endpoints: {
+                            pc:  { name: '🏠 本機 PC',  url: epPcUrl,  token: epPcToken,  apiKey: epPcKey  },
+                            vps: { name: '☁️ VPS Cloud', url: epVpsUrl, token: epVpsToken, apiKey: epVpsKey },
+                        },
+                        activeEndpoint: activeEpId,
+                        // 新：inline picker 的覆寫（保留既有值）
+                        inlineModel:   existing.inlineModel   || '',
+                        inlineEffort:  existing.inlineEffort  || '',
+                        inlineBackend: existing.inlineBackend || '',
                     };
                     saveClaudeRoomConfig(claudeRoomData);
                 }

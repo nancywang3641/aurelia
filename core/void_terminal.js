@@ -1115,6 +1115,20 @@ const IRIS_IDLE = [
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
                     <button class="void-hist-btn" data-os-launch="map" title="地圖"><span class="vhb-em">🗺️</span><span>地圖</span></button>
                 </div>
+                <!-- Claude 房間：inline picker bar（mode-claude 才顯示）-->
+                <div class="claude-picker-bar" id="claude-picker-bar">
+                    <button class="claude-picker-btn" id="claude-picker-btn" type="button">
+                        <span id="claude-pick-model">Opus 4.7</span>
+                        <span class="claude-pick-sep">·</span>
+                        <span id="claude-pick-effort">🧠 medium</span>
+                        <span class="claude-pick-sep">·</span>
+                        <span id="claude-pick-endpoint">☁️ VPS</span>
+                        <span class="claude-pick-arrow">▼</span>
+                    </button>
+                </div>
+                <!-- Claude inline picker popup（預設藏） -->
+                <div class="claude-picker-popup" id="claude-picker-popup" style="display:none;"></div>
+
                 <!-- Claude 房間：附件 chip 預覽列（mode-claude 才顯示，由 CSS 控制） -->
                 <div class="claude-attach-chips" id="claude-attach-chips"></div>
                 <input type="file" id="claude-file-input" multiple style="display:none;" accept="image/*,application/pdf,.txt,.md,.json,.csv,.js,.ts,.py,.html,.css,.yml,.yaml,.toml,.log">
@@ -1150,6 +1164,20 @@ const IRIS_IDLE = [
                         await _handleClaudeFilePick(files);
                     }
                     fileInput.value = '';  // 重置 input 才能再次選同一個檔
+                };
+            }
+
+            // Claude inline picker bar 點開 popup
+            const pickerBtn = tab.querySelector('#claude-picker-btn');
+            if (pickerBtn) {
+                pickerBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const popup = document.getElementById('claude-picker-popup');
+                    if (popup && popup.style.display !== 'none') {
+                        _closeClaudePickerPopup();
+                    } else {
+                        _openClaudePickerPopup();
+                    }
                 };
             }
 
@@ -1654,6 +1682,9 @@ const IRIS_IDLE = [
         // 新聊天室立繪設成 living（會動的）
         _setClaudePortraitState('living');
 
+        // 更新 inline picker bar 文字
+        _updateClaudePickerLabel();
+
         const titleEl = document.getElementById('home-chat-title');
         if (titleEl) titleEl.textContent = "Claude's Room · 月光終端";
 
@@ -1830,6 +1861,132 @@ const IRIS_IDLE = [
 
     // Claude 回覆切多頁（套奧瑞亞 VN 翻頁體驗，避免長文字爆出對話框）
     // 優先度：段落空行 > 單換行 > 句末標點 > 逗號 > 字數硬切
+    // ===== Claude inline picker（聊天室上方橫條：model / effort / endpoint） =====
+
+    const CLAUDE_MODELS = [
+        { id: 'claude-opus-4-7',           label: 'Opus 4.7 ⭐'   },
+        { id: 'claude-opus-4-6',           label: 'Opus 4.6'      },
+        { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6'    },
+        { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5'     },
+    ];
+    const CLAUDE_EFFORTS = [
+        { id: '',       label: '預設（看 cc-bridge）' },
+        { id: 'off',    label: 'Off (不思考)' },
+        { id: 'low',    label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high',   label: 'High' },
+        { id: 'xhigh',  label: 'xHigh' },
+        { id: 'max',    label: 'Max' },
+    ];
+    const CLAUDE_BACKENDS = [
+        { id: '',    label: '預設（cc-bridge config）' },
+        { id: 'cli', label: 'CLI (Claude Code agent)' },
+        { id: 'api', label: 'API (純聊天 + thinking)' },
+    ];
+
+    function _getClaudeRoomCfg() {
+        return (window.OS_SETTINGS && window.OS_SETTINGS.getClaudeRoomConfig)
+            ? window.OS_SETTINGS.getClaudeRoomConfig() : null;
+    }
+    function _saveClaudeRoomCfg(cfg) {
+        if (window.OS_SETTINGS && window.OS_SETTINGS.saveClaudeRoomConfig) {
+            window.OS_SETTINGS.saveClaudeRoomConfig(cfg);
+        }
+    }
+    function _shortModelLabel(modelId) {
+        const m = CLAUDE_MODELS.find(x => x.id === modelId);
+        return m ? m.label.replace(' ⭐', '') : (modelId || 'Opus 4.7');
+    }
+    function _shortEffortLabel(eff) {
+        if (!eff) return '🧠 預設';
+        if (eff === 'off') return '🧠 off';
+        return '🧠 ' + eff;
+    }
+    function _shortEndpointLabel(cfg) {
+        const id = cfg?.activeEndpoint || 'pc';
+        return id === 'vps' ? '☁️ VPS' : '🏠 PC';
+    }
+
+    /** 聊天室上方那條橫條的文字更新 */
+    function _updateClaudePickerLabel() {
+        const cfg = _getClaudeRoomCfg();
+        if (!cfg) return;
+        const m = document.getElementById('claude-pick-model');
+        const e = document.getElementById('claude-pick-effort');
+        const ep = document.getElementById('claude-pick-endpoint');
+        if (m)  m.textContent  = _shortModelLabel(cfg.inlineModel || cfg.model);
+        if (e)  e.textContent  = _shortEffortLabel(cfg.inlineEffort);
+        if (ep) ep.textContent = _shortEndpointLabel(cfg);
+    }
+
+    /** popup 內容生成 + 展開 */
+    function _openClaudePickerPopup() {
+        const cfg = _getClaudeRoomCfg();
+        if (!cfg) return;
+        const popup = document.getElementById('claude-picker-popup');
+        if (!popup) return;
+        const curModel   = cfg.inlineModel   || cfg.model || 'claude-opus-4-7';
+        const curEffort  = cfg.inlineEffort  || '';
+        const curBackend = cfg.inlineBackend || '';
+        const curEp      = cfg.activeEndpoint || 'pc';
+
+        const sectionHtml = (title, list, curId, dataKey) => `
+            <div class="claude-picker-section-title">${title}</div>
+            ${list.map(it => `
+                <div class="claude-picker-item${curId === it.id ? ' active' : ''}" data-${dataKey}="${it.id}">
+                    <span class="claude-picker-check">${curId === it.id ? '✓' : ''}</span>
+                    <span>${it.label}</span>
+                </div>
+            `).join('')}
+        `;
+
+        // endpoint section: build from cfg.endpoints
+        const epList = ['pc', 'vps'].map(id => {
+            const ep = cfg.endpoints?.[id];
+            return { id, label: (ep?.name || id) + ((ep?.url) ? '' : ' (未設定)') };
+        });
+
+        popup.innerHTML = `
+            ${sectionHtml('Endpoint',  epList,           curEp,      'ep')}
+            ${sectionHtml('Model',     CLAUDE_MODELS,    curModel,   'model')}
+            ${sectionHtml('Backend',   CLAUDE_BACKENDS,  curBackend, 'backend')}
+            ${sectionHtml('Thinking Effort', CLAUDE_EFFORTS, curEffort, 'effort')}
+        `;
+        popup.style.display = 'block';
+
+        // 綁項目點擊
+        popup.querySelectorAll('[data-ep]').forEach(el => el.onclick = () => {
+            const c = _getClaudeRoomCfg(); c.activeEndpoint = el.dataset.ep; _saveClaudeRoomCfg(c);
+            _updateClaudePickerLabel(); _openClaudePickerPopup();
+        });
+        popup.querySelectorAll('[data-model]').forEach(el => el.onclick = () => {
+            const c = _getClaudeRoomCfg(); c.inlineModel = el.dataset.model; _saveClaudeRoomCfg(c);
+            _updateClaudePickerLabel(); _openClaudePickerPopup();
+        });
+        popup.querySelectorAll('[data-backend]').forEach(el => el.onclick = () => {
+            const c = _getClaudeRoomCfg(); c.inlineBackend = el.dataset.backend; _saveClaudeRoomCfg(c);
+            _updateClaudePickerLabel(); _openClaudePickerPopup();
+        });
+        popup.querySelectorAll('[data-effort]').forEach(el => el.onclick = () => {
+            const c = _getClaudeRoomCfg(); c.inlineEffort = el.dataset.effort; _saveClaudeRoomCfg(c);
+            _updateClaudePickerLabel(); _openClaudePickerPopup();
+        });
+    }
+
+    function _closeClaudePickerPopup() {
+        const p = document.getElementById('claude-picker-popup');
+        if (p) p.style.display = 'none';
+    }
+
+    // 點 popup 外面關閉
+    document.addEventListener('click', (e) => {
+        const popup = document.getElementById('claude-picker-popup');
+        if (!popup || popup.style.display === 'none') return;
+        const btn = document.getElementById('claude-picker-btn');
+        if (popup.contains(e.target) || (btn && btn.contains(e.target))) return;
+        _closeClaudePickerPopup();
+    });
+
     // ===== Claude 聊天室渲染（取代 VN 翻頁） =====
 
     // 切換上半立繪狀態（idle / living / thinking / happy / error）
@@ -1906,11 +2063,25 @@ const IRIS_IDLE = [
 
         wrap.appendChild(bubble);
 
+        // 用量 footer：只在 Claude 氣泡 + 有 usage 時顯示
+        if (!isUser && opts.usage && (opts.usage.input_tokens || opts.usage.output_tokens)) {
+            const u = opts.usage;
+            const cost = (typeof u.total_cost_usd === 'number' && u.total_cost_usd > 0)
+                ? `$${u.total_cost_usd.toFixed(4)}` : '$0.0000';
+            const cacheNote = (u.cache_read_input_tokens > 0)
+                ? ` · cache ${u.cache_read_input_tokens}r` : '';
+            const footer = document.createElement('div');
+            footer.className = 'claude-bubble-usage';
+            footer.title = `model: ${u.model || '?'}\ninput: ${u.input_tokens || 0}\noutput: ${u.output_tokens || 0}\ncache write: ${u.cache_creation_input_tokens || 0}\ncache read: ${u.cache_read_input_tokens || 0}\ncost: ${cost}`;
+            footer.textContent = `💰 ${cost} · ${u.input_tokens || 0}↑ ${u.output_tokens || 0}↓${cacheNote}`;
+            wrap.appendChild(footer);
+        }
+
         stream.appendChild(wrap);
         _scrollClaudeChatToBottom();
     }
 
-    /** 進入 Claude 房間時用：把 IRIS_STATE.history 全部 render 成氣泡（含附件 + thinking） */
+    /** 進入 Claude 房間時用：把 IRIS_STATE.history 全部 render 成氣泡（含附件 + thinking + usage） */
     function _hydrateClaudeStream() {
         const stream = document.getElementById('claude-chat-stream');
         if (!stream) return;
@@ -1922,6 +2093,7 @@ const IRIS_IDLE = [
                 {
                     attachments: m.attachments || [],
                     thinking: m.thinking || null,
+                    usage: m.usage || null,
                 }
             );
         });
@@ -2034,10 +2206,12 @@ const IRIS_IDLE = [
             const result = await window.ClaudeTerminal.send(text, attachmentsSnapshot);
             const reply = result.reply;
             const thinking = result.thinking || null;
+            const usage = result.usage || null;
 
-            // assistant reply 寫進 history（ClaudeTerminal 那邊已存 os_db）
+            // assistant reply 寫進 history（含 thinking + usage 一起存）
             const assistantRecord = { role: 'assistant', content: reply, ts: Date.now() };
             if (thinking) assistantRecord.thinking = thinking;
+            if (usage) assistantRecord.usage = usage;
             IRIS_STATE.history.push(assistantRecord);
 
             // session_id resume 失敗：cc-bridge 退回新 session、Claude 不記得前文
@@ -2046,12 +2220,12 @@ const IRIS_IDLE = [
                     '⚠️ 之前的 session 失效了（cc-bridge 重啟過 / log 被清 / 太久沒聊）。\n\n' +
                     '我從零開始記新對話了。如果想讓我知道之前聊過什麼，把重點再講一次給我聽吧。\n\n' +
                     '---\n\n' + reply,
-                    { thinking }
+                    { thinking, usage }
                 );
                 _setClaudePortraitState('happy');
                 setTimeout(() => _setClaudePortraitState('living'), 600);
             } else {
-                _renderClaudeBubble('assistant', reply, { thinking });
+                _renderClaudeBubble('assistant', reply, { thinking, usage });
                 _setClaudePortraitState('happy');
                 setTimeout(() => _setClaudePortraitState('living'), 600);
             }
