@@ -930,6 +930,45 @@ body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
 }
 .claude-thinking.open .claude-thinking-content { display: block; }
 
+/* tool summary 摺疊塊（仿 Claude.ai 桌面端「Edited 2 files, ran a command」） */
+.claude-tool-summary {
+    align-self: flex-start; max-width: 100%;
+    background: rgba(234,176,92,0.10);
+    color: var(--cl-cafe-latte, #896645);
+    border: 1px solid rgba(234,176,92,0.4);
+    border-radius: 8px; padding: 6px 10px;
+    font-size: 12px; cursor: pointer; user-select: none;
+}
+.claude-tool-summary-header { display: flex; align-items: center; gap: 6px; opacity: 0.92; }
+.claude-tool-summary-toggle { font-size: 9px; transition: transform 0.2s; display: inline-block; }
+.claude-tool-summary.open .claude-tool-summary-toggle { transform: rotate(90deg); }
+.claude-tool-summary-body {
+    display: none; margin-top: 6px; padding-top: 6px;
+    border-top: 1px solid rgba(234,176,92,0.3);
+    line-height: 1.55;
+}
+.claude-tool-summary.open .claude-tool-summary-body { display: block; }
+.claude-tool-summary-item {
+    padding: 2px 0;
+    display: flex; align-items: baseline; gap: 6px;
+    overflow: hidden;
+}
+.claude-tool-summary-name {
+    font-weight: 600;
+    color: var(--cl-grenadine, #D95122);
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+.claude-tool-summary-detail {
+    color: var(--cl-cafe-latte, #896645);
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* mode-claude 蓋過 inline 書咖色：底部 chat-bar / 輸入框 / 送出按鈕 / 重試按鈕（全暖統一） */
 .void-tab.mode-claude .void-chat-bar {
     background: var(--cl-cream-light, #fff5e1) !important;

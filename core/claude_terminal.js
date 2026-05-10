@@ -398,13 +398,15 @@
         const sessionFallback = !!(incomingSid && newSid && incomingSid !== newSid);
         const thinking = (typeof data.thinking === 'string' && data.thinking.trim()) ? data.thinking : null;
         const usageMeta = data.usage_meta || null;
+        const toolsUsed = Array.isArray(data.tools_used) ? data.tools_used : [];
 
         const assistantMsg = { role: 'assistant', content: reply, timestamp: Date.now() };
         if (thinking) assistantMsg.thinking = thinking;
         if (usageMeta) assistantMsg.usage = usageMeta;
+        if (toolsUsed.length) assistantMsg.tools_used = toolsUsed;
         await ClaudeTerminal.saveHistory([...updatedHistory, assistantMsg]);
 
-        return { reply, thinking, usage: usageMeta, sessionFallback };
+        return { reply, thinking, usage: usageMeta, sessionFallback, toolsUsed };
     }
 
     /** 對話總數（給 UI badge / 標題用） */

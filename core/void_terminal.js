@@ -2051,6 +2051,49 @@ const IRIS_IDLE = [
         return '📎';
     }
 
+    /** 把 tools_used list 摘成「改了 X 個檔、跑了 Y 個命令...」一行字 */
+    function _summarizeToolsUsed(toolsUsed) {
+        if (!Array.isArray(toolsUsed) || !toolsUsed.length) return '';
+        const counts = {};
+        for (const t of toolsUsed) {
+            const name = (t && t.name) || 'unknown';
+            counts[name] = (counts[name] || 0) + 1;
+        }
+        const cnt = k => counts[k] || 0;
+        const e = cnt('Edit') + cnt('Write') + cnt('MultiEdit') + cnt('NotebookEdit');
+        const b = cnt('Bash');
+        const r = cnt('Read');
+        const s = cnt('Grep') + cnt('Glob');
+        const w = cnt('WebFetch') + cnt('WebSearch');
+        const known = e + b + r + s + w;
+        const other = toolsUsed.length - known;
+        const parts = [];
+        if (e) parts.push(`改了 ${e} 個檔`);
+        if (b) parts.push(`跑了 ${b} 個命令`);
+        if (r) parts.push(`讀了 ${r} 個檔`);
+        if (s) parts.push(`搜了 ${s} 次`);
+        if (w) parts.push(`抓了 ${w} 個網頁`);
+        if (other) parts.push(`其他 ${other} 個工具`);
+        return parts.length ? parts.join('、') : `用了 ${toolsUsed.length} 個工具`;
+    }
+
+    /** 拿 tool 的主要輸入欄位作為 detail（檔名 / 命令前 80 字 / pattern 前 60 字 等） */
+    function _toolDetailLine(tool) {
+        const inp = (tool && tool.input) || {};
+        const name = tool && tool.name;
+        if (!name) return '';
+        if (name === 'Edit' || name === 'Write' || name === 'MultiEdit' || name === 'NotebookEdit' || name === 'Read') {
+            const p = (inp.file_path || inp.notebook_path || '');
+            return p ? p.replace(/^.*[\\/]/, '') : '';  // basename only
+        }
+        if (name === 'Bash')      return (inp.command || '').slice(0, 80);
+        if (name === 'Grep')      return (inp.pattern || '').slice(0, 60) + (inp.path ? ` in ${inp.path.replace(/^.*[\\/]/, '')}` : '');
+        if (name === 'Glob')      return (inp.pattern || '').slice(0, 60);
+        if (name === 'WebFetch')  return (inp.url || '').slice(0, 80);
+        if (name === 'WebSearch') return (inp.query || '').slice(0, 60);
+        return '';
+    }
+
     let _claudeMdConverter = null;
     function _claudeMarkdownToSafeHtml(text) {
         if (!window.showdown || !window.DOMPurify) return null;
@@ -2117,6 +2160,42 @@ const IRIS_IDLE = [
             wrap.appendChild(t);
         }
 
+        // tool summary 摺疊塊（仿 Claude.ai 桌面端「Edited 2 files, ran a command」）
+        if (!isUser && Array.isArray(opts.toolsUsed) && opts.toolsUsed.length) {
+            const ts = document.createElement('div');
+            ts.className = 'claude-tool-summary';
+
+            const tsHeader = document.createElement('div');
+            tsHeader.className = 'claude-tool-summary-header';
+            const summary = _summarizeToolsUsed(opts.toolsUsed);
+            tsHeader.innerHTML = `<span class="claude-tool-summary-toggle">▶</span><span>🔧 ${summary}</span>`;
+
+            const tsBody = document.createElement('div');
+            tsBody.className = 'claude-tool-summary-body';
+            opts.toolsUsed.forEach(tool => {
+                const item = document.createElement('div');
+                item.className = 'claude-tool-summary-item';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'claude-tool-summary-name';
+                nameSpan.textContent = (tool && tool.name) || 'unknown';
+                item.appendChild(nameSpan);
+                const detail = _toolDetailLine(tool);
+                if (detail) {
+                    const detailSpan = document.createElement('span');
+                    detailSpan.className = 'claude-tool-summary-detail';
+                    detailSpan.textContent = detail;
+                    item.appendChild(document.createTextNode(' '));
+                    item.appendChild(detailSpan);
+                }
+                tsBody.appendChild(item);
+            });
+
+            ts.appendChild(tsHeader);
+            ts.appendChild(tsBody);
+            ts.addEventListener('click', () => ts.classList.toggle('open'));
+            wrap.appendChild(ts);
+        }
+
         const bubble = document.createElement('div');
         bubble.className = 'claude-bubble ' + (isUser ? 'from-user' : 'from-claude');
         if (isUser) {
@@ -2179,6 +2258,7 @@ const IRIS_IDLE = [
                     attachments: m.attachments || [],
                     thinking: m.thinking || null,
                     usage: m.usage || null,
+                    toolsUsed: (Array.isArray(m.tools_used) && m.tools_used.length) ? m.tools_used : null,
                 }
             );
         });
@@ -2292,11 +2372,13 @@ const IRIS_IDLE = [
             const reply = result.reply;
             const thinking = result.thinking || null;
             const usage = result.usage || null;
+            const toolsUsed = (Array.isArray(result.toolsUsed) && result.toolsUsed.length) ? result.toolsUsed : null;
 
-            // assistant reply 寫進 history（含 thinking + usage 一起存）
+            // assistant reply 寫進 history（含 thinking / usage / tools_used 一起存）
             const assistantRecord = { role: 'assistant', content: reply, ts: Date.now() };
             if (thinking) assistantRecord.thinking = thinking;
             if (usage) assistantRecord.usage = usage;
+            if (toolsUsed) assistantRecord.tools_used = toolsUsed;
             IRIS_STATE.history.push(assistantRecord);
 
             // session_id resume 失敗：cc-bridge 退回新 session、Claude 不記得前文
@@ -2305,12 +2387,12 @@ const IRIS_IDLE = [
                     '⚠️ 之前的 session 失效了（cc-bridge 重啟過 / log 被清 / 太久沒聊）。\n\n' +
                     '我從零開始記新對話了。如果想讓我知道之前聊過什麼，把重點再講一次給我聽吧。\n\n' +
                     '---\n\n' + reply,
-                    { thinking, usage }
+                    { thinking, usage, toolsUsed }
                 );
                 _setClaudePortraitState('happy');
                 setTimeout(() => _setClaudePortraitState('living'), 600);
             } else {
-                _renderClaudeBubble('assistant', reply, { thinking, usage });
+                _renderClaudeBubble('assistant', reply, { thinking, usage, toolsUsed });
                 _setClaudePortraitState('happy');
                 setTimeout(() => _setClaudePortraitState('living'), 600);
             }
