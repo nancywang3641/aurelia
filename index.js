@@ -67,8 +67,9 @@ const PHONE_FILES = [
     'vn_story/vn_ui_workshop.js',
 
     // === 🛡️ RPG 狀態系統 ===
-    'rpg/state_schema.js',     // Stage 1：副模型生 schema
-    'rpg/state_runtime.js',    // Stage 2：副模型抽 + patch + injectPrompts
+    'rpg/state_schema.js',         // Stage 1：主模型生 schema
+    'rpg/state_runtime.js',        // Stage 2：副模型抽 + patch + injectPrompts
+    'rpg/blacklist_injector.js',   // 每輪 inject 黑名單條目（避免世界書 keys 觸發漏掉）
     'rpg/summary_core.js',
     'rpg/status_panel.js',
     'rpg/avatar_manager.js',

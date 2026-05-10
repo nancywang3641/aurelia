@@ -1,9 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] state_schema.js (V1 - Stage 1：副模型生 schema)
+// [檔案] state_schema.js (V2 - Stage 1：主模型生 schema)
 // 路徑：os_phone/rpg/state_schema.js
 // 職責：
 // 1. 讀世界書 + 主角設定 + 開頭幾條 chat → 拼成 Stage 1 prompt
-// 2. 跑副模型 chatSecondary 吐 JSON schema（這個世界要追蹤哪些狀態欄位）
+// 2. 跑主模型 OS_API.chat 吐 JSON schema（這個世界要追蹤哪些狀態欄位）
+//    主模型用於 schema 是因為這是一次性「設計師工作」，要對世界觀深度理解，
+//    用主模型品質較高。Stage 2 高頻 patches 抽取仍用副模型（state_runtime.js）。
 // 3. 寫進 OS_DB.saveStateData（key = chatId）
 // 4. emit 'AURELIA_STATE_SCHEMA_GENERATED' 事件給 panel 重新渲染
 //
@@ -163,10 +165,12 @@ ${materials.headMessages || '（無）'}
 - 重視這個世界**特有**的元素（例：末日題材就要倒計時；推理題材就要線索清單；戀愛題材就要好感分數）`;
     }
 
-    // --- 副模型呼叫 ---
-    function callSecondary(prompt) {
+    // --- 主模型呼叫（schema 是一次性設計工作，用主模型品質較好）---
+    function callPrimary(prompt) {
         return new Promise((resolve, reject) => {
-            if (!win.OS_API?.chatSecondary) return reject(new Error('OS_API.chatSecondary 不可用'));
+            if (!win.OS_API?.chat) return reject(new Error('OS_API.chat 不可用'));
+            const config = win.OS_SETTINGS?.getConfig?.();
+            if (!config) return reject(new Error('讀不到主模型 config（OS_SETTINGS）'));
             const messages = [
                 { role: 'system', content: 'You are a strict JSON schema designer. Output only valid JSON, no markdown, no comments.' },
                 { role: 'user', content: prompt }
@@ -174,9 +178,9 @@ ${materials.headMessages || '（無）'}
             let done = false;
             const timer = setTimeout(() => {
                 if (done) return; done = true;
-                reject(new Error('副模型超時'));
+                reject(new Error('主模型超時'));
             }, CONFIG.timeoutMs);
-            win.OS_API.chatSecondary(messages, null, (text) => {
+            win.OS_API.chat(messages, config, null, (text) => {
                 if (done) return; done = true;
                 clearTimeout(timer);
                 resolve(text);
@@ -192,7 +196,7 @@ ${materials.headMessages || '（無）'}
         let lastErr;
         for (let i = 0; i < CONFIG.retryCount; i++) {
             try {
-                const raw = await callSecondary(prompt);
+                const raw = await callPrimary(prompt);
                 const json = extractJSON(raw);
                 if (json && json.fields && typeof json.fields === 'object' && Object.keys(json.fields).length >= CONFIG.minFields) {
                     return json;
@@ -204,7 +208,7 @@ ${materials.headMessages || '（無）'}
                 console.warn('[State Schema] 第', i+1, '次失敗:', e?.message || e);
             }
         }
-        throw lastErr || new Error('副模型重試耗盡');
+        throw lastErr || new Error('主模型重試耗盡');
     }
 
     // --- 對外 API ---
@@ -212,7 +216,7 @@ ${materials.headMessages || '（無）'}
         const chatId = getChatId();
         if (!chatId) { showToast('⚠️ 沒有 chatId，無法生成 schema', 'warning'); return null; }
 
-        showToast('🧬 副模型正在分析世界 → 生成狀態 schema...', 'info');
+        showToast('🧬 主模型正在分析世界 → 生成狀態 schema...', 'info');
         try {
             const [worldbook, userPersona, charCard, headMessages] = await Promise.all([
                 gatherWorldbookText(),
