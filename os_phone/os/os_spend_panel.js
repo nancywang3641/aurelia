@@ -112,8 +112,23 @@
                     font-family: 'Playfair Display', Georgia, 'Songti TC', 'Microsoft JhengHei', serif;
                     overflow: auto; box-sizing: border-box; }
                 .sp-header { font-size: 18px; font-weight: 700; margin-bottom: 16px;
-                    display: flex; align-items: center; gap: 8px; color: #3d2010; }
+                    display: flex; align-items: center; gap: 8px; color: #3d2010;
+                    position: relative; }
                 .sp-header-sub { font-size: 11px; color: #896645; font-weight: 400; margin-left: 8px; }
+                .sp-close-btn {
+                    position: absolute; right: 0; top: -4px;
+                    background: transparent; border: 1px solid #EAB05C;
+                    color: #896645;
+                    width: 28px; height: 28px; border-radius: 50%;
+                    cursor: pointer; font-size: 14px;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: all 0.2s; padding: 0;
+                }
+                .sp-close-btn:hover {
+                    background: rgba(217,81,34,0.15);
+                    color: #D95122;
+                    border-color: #D95122;
+                }
                 .sp-card { background: rgba(255,255,255,0.85); border: 1px solid #EAB05C;
                     border-radius: 12px; padding: 14px 18px; margin-bottom: 12px;
                     box-shadow: 0 2px 8px rgba(137,102,69,0.1); }
@@ -151,7 +166,7 @@
                 .sp-clear-btn:hover { background: rgba(217,81,34,0.25); }
             </style>
             <div class="sp-container">
-                <div class="sp-header">💰 額度面板<span class="sp-header-sub">累計 ${s.count} 次對話的本地統計</span></div>
+                <div class="sp-header">💰 額度面板<span class="sp-header-sub">累計 ${s.count} 次對話的本地統計</span><button class="sp-close-btn" id="sp-close-btn" title="關閉">✕</button></div>
 
                 <div class="sp-card">
                     <div class="sp-big">$${s.totalCost.toFixed(4)}</div>
@@ -189,6 +204,16 @@
                 if (confirm('清空所有累計花費紀錄？此動作不可逆。')) {
                     localStorage.removeItem(STORAGE_KEY);
                     launch(container);  // 重 render
+                }
+            });
+        }
+
+        // 綁關閉按鈕（走 PhoneSystem.goHome → control_center 註冊的 doClose）
+        const closeBtn = container.querySelector('#sp-close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                if (window.PhoneSystem && typeof window.PhoneSystem.goHome === 'function') {
+                    window.PhoneSystem.goHome();
                 }
             });
         }

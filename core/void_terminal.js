@@ -1117,7 +1117,7 @@ const IRIS_IDLE = [
                     <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
                     <button class="void-hist-btn" data-os-launch="map" title="地圖"><span class="vhb-em">🗺️</span><span>地圖</span></button>
-                    <button class="void-hist-btn" data-app-launch="spend" title="額度面板"><span class="vhb-em">💰</span><span>額度</span></button>
+                    <button class="void-hist-btn" data-app-launch="spend" title="額度面板" style="display:none;"><span class="vhb-em">💰</span><span>額度</span></button>
                 </div>
                 <!-- Claude 房間：inline picker bar（mode-claude 才顯示）-->
                 <div class="claude-picker-bar" id="claude-picker-bar">
