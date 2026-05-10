@@ -167,6 +167,102 @@
         .bg-db-key-tag:hover { border-color: var(--gold-s); background: rgba(212,175,55,0.1); }
         .bg-db-key-tag-del { cursor: pointer; color: #888; font-size: 14px; transition: 0.2s; }
         .bg-db-key-tag-del:hover { color: #ff4444; }
+
+        /* === STATE TRACKING tab：黑金骨架 + 瀅瀅紙感（卡片留白 / 暖色邊框 / 字體層級）=== */
+        .st-section-title { font-size:14px; color:var(--gold-p); margin-bottom:14px; border-bottom:1px solid #3a3220; padding-bottom:8px; font-family:'Cinzel',sans-serif; font-weight:bold; letter-spacing:2px; }
+        .st-section-title small { font-size:11px; color:#6a5d3e; font-weight:normal; letter-spacing:1px; margin-left:10px; }
+
+        .st-card { background: linear-gradient(180deg, rgba(20,18,14,0.7), rgba(15,13,10,0.85)); border:1px solid #2a2418; border-radius:6px; padding:14px 16px; margin-bottom:12px; transition: border-color 0.3s; }
+        .st-card:hover { border-color: #3a3220; }
+        .st-card-title { font-size:10px; color:var(--gold-s); letter-spacing:2px; text-transform:uppercase; font-family:'Cinzel',sans-serif; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+        .st-card-title::before { content:''; width:3px; height:12px; background:var(--gold-p); box-shadow:0 0 6px rgba(212,175,55,0.4); border-radius:1px; }
+        .st-card-title-count { font-size:10px; color:#6a5d3e; margin-left:auto; font-family:monospace; letter-spacing:0; text-transform:none; }
+
+        .st-toggle-row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+        .st-toggle-row-label { flex:1; min-width:0; }
+        .st-toggle-row-name { font-size:13px; color:#d4cdb8; margin-bottom:3px; font-weight:500; }
+        .st-toggle-row-desc { font-size:10px; color:#6a5d3e; line-height:1.5; }
+
+        .st-field-list { max-height:240px; overflow-y:auto; padding-right:4px; }
+        .st-field-list::-webkit-scrollbar { width:4px; }
+        .st-field-list::-webkit-scrollbar-track { background:transparent; }
+        .st-field-list::-webkit-scrollbar-thumb { background:#3a3220; border-radius:2px; }
+        .st-field-item { display:flex; flex-direction:column; gap:4px; padding:10px 12px; border-left:2px solid #3a3220; background:rgba(25,22,15,0.4); border-radius:0 4px 4px 0; margin-bottom:6px; transition:all 0.2s; }
+        .st-field-item:hover { border-left-color:var(--gold-p); background:rgba(35,30,18,0.5); }
+        .st-field-row { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+        .st-field-name { color:var(--gold-p); font-size:12px; font-weight:500; }
+        .st-field-type { font-size:9px; color:#8b7c5a; background:rgba(212,175,55,0.08); border:1px solid #3a3220; border-radius:2px; padding:1px 6px; letter-spacing:1px; text-transform:uppercase; }
+        .st-field-desc { font-size:11px; color:#8b8170; line-height:1.5; font-style:italic; }
+
+        .st-current-list { max-height:320px; overflow-y:auto; padding-right:4px; }
+        .st-current-list::-webkit-scrollbar { width:4px; }
+        .st-current-list::-webkit-scrollbar-thumb { background:#3a3220; border-radius:2px; }
+        .st-current-row { display:flex; justify-content:space-between; gap:16px; padding:8px 4px; border-bottom:1px dashed rgba(212,175,55,0.08); font-size:12px; transition:background 0.2s; }
+        .st-current-row:hover { background:rgba(212,175,55,0.03); }
+        .st-current-row:last-child { border-bottom:none; }
+        .st-current-key { color:#b8ad95; flex-shrink:0; }
+        .st-current-value { color:var(--gold-p); font-family:'JetBrains Mono','Courier New',monospace; word-break:break-all; text-align:right; }
+
+        .st-empty { padding:40px 20px; text-align:center; }
+        .st-empty-icon { font-size:32px; opacity:0.4; margin-bottom:12px; }
+        .st-empty-text { color:#6a5d3e; font-size:12px; line-height:1.6; }
+        .st-empty-hint { color:#4a4030; font-size:10px; margin-top:8px; line-height:1.7; }
+
+        .st-btn-row { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+        .st-btn { padding:10px 12px; background:rgba(20,18,12,0.7); border:1px solid #2a2418; border-radius:4px; color:#b8ad95; cursor:pointer; font-size:11px; font-family:'Cinzel',sans-serif; letter-spacing:1px; transition:all 0.2s; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .st-btn:hover { border-color:var(--gold-s); color:var(--gold-p); transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.4); }
+        .st-btn-danger { color:#a55d5d; border-color:#3a2020; }
+        .st-btn-danger:hover { color:#cc7777; border-color:#5a3030; box-shadow:0 2px 8px rgba(80,20,20,0.4); }
+        .st-btn-ghost { width:100%; margin-top:12px; padding:12px; background:transparent; border:1px dashed #3a3220; color:#8b7c5a; cursor:pointer; font-size:11px; letter-spacing:1px; transition:all 0.2s; border-radius:4px; font-family:'Cinzel',sans-serif; }
+        .st-btn-ghost:hover { border-style:solid; border-color:var(--gold-s); color:var(--gold-p); background:rgba(212,175,55,0.04); }
+
+        .st-init-card { text-align:center; padding:50px 30px; background: radial-gradient(circle at 50% 0%, rgba(212,175,55,0.06), transparent 60%), linear-gradient(180deg, rgba(25,22,15,0.5), rgba(15,13,10,0.85)); border:1px solid #2a2418; border-radius:8px; }
+        .st-init-icon { font-size:56px; margin-bottom:18px; filter:drop-shadow(0 0 12px rgba(212,175,55,0.25)); }
+        .st-init-title { font-size:14px; color:#d4cdb8; margin-bottom:10px; letter-spacing:1px; }
+        .st-init-desc { font-size:11px; color:#8b7c5a; line-height:1.8; margin-bottom:28px; }
+        .st-init-btn { padding:14px 36px; background:linear-gradient(180deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05)); border:1px solid var(--gold-p); border-radius:4px; color:var(--gold-p); font-family:'Cinzel',sans-serif; font-size:13px; letter-spacing:2px; cursor:pointer; transition:all 0.3s; }
+        .st-init-btn:hover { background:linear-gradient(180deg, rgba(212,175,55,0.25), rgba(212,175,55,0.1)); box-shadow:0 0 20px rgba(212,175,55,0.3); transform:translateY(-1px); }
+        .st-init-footnote { font-size:10px; color:#4a4030; margin-top:18px; line-height:1.7; }
+
+        .st-loading { padding:60px 20px; text-align:center; color:#4a4030; font-size:11px; letter-spacing:2px; }
+        .st-loading-icon { font-size:28px; opacity:0.6; margin-bottom:14px; animation: stPulse 2s ease-in-out infinite; }
+        @keyframes stPulse { 0%,100% { opacity:0.4; } 50% { opacity:0.8; } }
+
+        /* STATE 子 tab（Schema / Current 切換）*/
+        .st-subtab-bar { display:flex; gap:4px; border-bottom:1px solid #3a3220; margin-bottom:12px; }
+        .st-subtab-btn { flex:1; padding:10px 8px; background:transparent; border:none; color:#6a5d3e; font-size:11px; font-family:'Cinzel',sans-serif; letter-spacing:1.5px; cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; text-align:center; text-transform:uppercase; }
+        .st-subtab-btn:hover { color:#b8ad95; }
+        .st-subtab-btn.active { color:var(--gold-p); border-bottom-color:var(--gold-p); }
+        .st-subtab-count { font-size:9px; color:#4a4030; margin-left:6px; font-family:monospace; letter-spacing:0; }
+        .st-subtab-btn.active .st-subtab-count { color:var(--gold-s); }
+        .st-subtab-content { display:none; }
+        .st-subtab-content.active { display:block; animation:stFadeIn 0.3s ease; }
+        @keyframes stFadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+        /* schema 欄位編輯（hover 顯示按鈕、in-place 展開編輯）*/
+        .st-field-item { position:relative; }
+        .st-field-actions { position:absolute; right:8px; top:8px; display:none; gap:4px; }
+        .st-field-item:hover .st-field-actions { display:flex; }
+        .st-field-action-btn { width:24px; height:24px; background:rgba(20,18,12,0.92); border:1px solid #3a3220; border-radius:3px; color:#8b7c5a; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.2s; padding:0; }
+        .st-field-action-btn:hover { color:var(--gold-p); border-color:var(--gold-s); }
+        .st-field-action-btn.danger:hover { color:#cc7777; border-color:#5a3030; }
+
+        .st-field-edit { padding:14px; background:rgba(35,30,18,0.6); border-left:2px solid var(--gold-p); border-radius:0 4px 4px 0; margin-bottom:6px; animation:stFadeIn 0.2s ease; }
+        .st-field-edit-row { display:flex; align-items:flex-start; gap:8px; margin-bottom:8px; }
+        .st-field-edit-label { font-size:10px; color:#8b7c5a; min-width:42px; letter-spacing:1px; text-transform:uppercase; padding-top:7px; flex-shrink:0; }
+        .st-field-edit-input { flex:1; padding:6px 10px; background:rgba(15,13,10,0.8); border:1px solid #3a3220; border-radius:3px; color:#d4cdb8; font-size:12px; font-family:inherit; outline:none; transition:border-color 0.2s; min-width:0; }
+        .st-field-edit-input:focus { border-color:var(--gold-s); }
+        .st-field-edit-input:disabled { color:#6a5d3e; cursor:not-allowed; background:rgba(15,13,10,0.4); }
+        .st-field-edit-textarea { flex:1; padding:6px 10px; background:rgba(15,13,10,0.8); border:1px solid #3a3220; border-radius:3px; color:#d4cdb8; font-size:11px; font-family:inherit; resize:vertical; min-height:50px; outline:none; transition:border-color 0.2s; min-width:0; }
+        .st-field-edit-textarea:focus { border-color:var(--gold-s); }
+        .st-field-edit-actions { display:flex; gap:6px; justify-content:flex-end; margin-top:6px; }
+        .st-field-edit-btn { padding:6px 16px; background:rgba(212,175,55,0.12); border:1px solid var(--gold-s); color:var(--gold-p); cursor:pointer; font-size:10px; border-radius:3px; letter-spacing:1.5px; transition:0.2s; font-family:'Cinzel',sans-serif; }
+        .st-field-edit-btn:hover { background:rgba(212,175,55,0.22); }
+        .st-field-edit-btn.cancel { color:#8b7c5a; border-color:#3a3220; background:transparent; }
+        .st-field-edit-btn.cancel:hover { color:#b8ad95; }
+
+        .st-field-add { padding:14px; border:1px dashed #3a3220; border-radius:4px; text-align:center; color:#6a5d3e; cursor:pointer; font-size:11px; letter-spacing:1.5px; margin-top:8px; transition:0.2s; font-family:'Cinzel',sans-serif; }
+        .st-field-add:hover { border-color:var(--gold-s); color:var(--gold-p); background:rgba(212,175,55,0.04); }
     `;
 
     // === 2. HTML 模板 ===
@@ -232,51 +328,68 @@
                 </div>
 
                 <div class="bg-tab-content" data-content="STATE">
-                    <div style="font-size:14px; color:var(--gold-p); margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:6px; font-family:'Cinzel'; font-weight:bold;">STATE TRACKING / 狀態追蹤</div>
+                    <div class="st-section-title">⚛  STATE TRACKING<small>/ 狀態追蹤</small></div>
 
                     <!-- LOADING VIEW -->
-                    <div id="sp-state-loading-view" style="display:none; padding:30px; text-align:center; color:#666; font-size:12px;">
-                        <div style="font-size:24px; margin-bottom:10px;">⏳</div>讀取狀態中...
+                    <div id="sp-state-loading-view" class="st-loading" style="display:none;">
+                        <div class="st-loading-icon">◌</div>
+                        SCANNING STATE
                     </div>
 
                     <!-- INIT VIEW (no schema) -->
-                    <div id="sp-state-init-view" style="display:none; padding:30px 20px; text-align:center;">
-                        <div style="font-size:48px; margin-bottom:15px;">🛰️</div>
-                        <div style="font-size:14px; color:#bbb; margin-bottom:8px;">這個世界尚未生成狀態 schema</div>
-                        <div style="font-size:11px; color:#666; line-height:1.7; margin-bottom:25px;">
-                            主模型會讀世界書 + 角色卡 + 開頭劇情，<br>
-                            自動決定本世界要追蹤的狀態欄位<br>
-                            <span style="color:#888;">（好感度 / 倒計時 / 任務 / 場景 等）</span>
+                    <div id="sp-state-init-view" style="display:none;">
+                        <div class="st-init-card">
+                            <div class="st-init-icon">🛰</div>
+                            <div class="st-init-title">這個世界尚未生成 schema</div>
+                            <div class="st-init-desc">
+                                主模型會讀世界書 + 角色卡 + 開頭劇情<br>
+                                自動決定本世界要追蹤的狀態欄位<br>
+                                <span style="color:#6a5d3e;">好感度 · 倒計時 · 任務 · 場景 · …</span>
+                            </div>
+                            <button class="st-init-btn" onclick="window.OS_STATE_SCHEMA?.generate?.();">INITIALIZE  ▸</button>
+                            <div class="st-init-footnote">
+                                主模型一次性生成（耗時 5-30 秒）<br>
+                                之後每輪自動更新由副模型負責
+                            </div>
                         </div>
-                        <button class="bg-btn-action gold" style="padding:12px 30px; font-size:13px;" onclick="window.OS_STATE_SCHEMA?.generate?.();">
-                            🧬 INITIALIZE STATE SCHEMA
-                        </button>
-                        <div style="font-size:10px; color:#444; margin-top:15px;">用主模型一次性生成 schema（耗時 5-30 秒）<br>之後每輪自動更新會用副模型</div>
                     </div>
 
                     <!-- MAIN VIEW (schema exists) -->
                     <div id="sp-state-main-view" style="display:none;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:rgba(20,20,20,0.5); border:1px solid #2a2a2a; border-radius:4px; margin-bottom:12px;">
-                            <div>
-                                <div style="font-size:13px; color:#ddd;">啟用即時抽取</div>
-                                <div style="font-size:10px; color:#555;">每輪主模型回覆後，副模型按 schema 抽變化</div>
+                        <div class="st-card">
+                            <div class="st-toggle-row">
+                                <div class="st-toggle-row-label">
+                                    <div class="st-toggle-row-name">啟用即時抽取</div>
+                                    <div class="st-toggle-row-desc">每輪主模型回覆後，副模型按 schema 抽變化</div>
+                                </div>
+                                <div class="sp-sync-toggle" id="sp-toggle-state-runtime" data-key="aurelia_state_runtime_enabled" style="width:42px; height:24px; border-radius:12px; background:#1a1a1a; border:1px solid #3a3220; cursor:pointer; position:relative; transition:all 0.3s; flex-shrink:0;"></div>
                             </div>
-                            <div class="sp-sync-toggle" id="sp-toggle-state-runtime" data-key="aurelia_state_runtime_enabled" style="width:40px; height:22px; border-radius:11px; background:#1a1a1a; border:1px solid #333; cursor:pointer; position:relative; transition:all 0.3s; flex-shrink:0;"></div>
                         </div>
 
-                        <div style="font-size:10px; color:#666; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px;">SCHEMA / 追蹤欄位 (<span id="sp-state-schema-count">0</span>)</div>
-                        <div id="sp-state-schema-list" style="margin-bottom:15px; max-height:180px; overflow-y:auto; padding:8px; background:rgba(15,15,15,0.6); border:1px solid #2a2a2a; border-radius:4px; font-size:11px; line-height:1.7;"></div>
-
-                        <div style="font-size:10px; color:#666; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px;">CURRENT / 當前狀態 · <span id="sp-state-patches-count">0</span> patches</div>
-                        <div id="sp-state-current-list" style="margin-bottom:15px; max-height:260px; overflow-y:auto; padding:10px; background:rgba(15,15,15,0.6); border:1px solid #2a2a2a; border-radius:4px; font-size:11px; line-height:1.8;"></div>
-
-                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                            <button class="bg-btn-action" style="flex:1; min-width:120px; font-size:11px; padding:9px;" onclick="if(confirm('重新生成 schema？舊 patches 保留。')) window.OS_STATE_SCHEMA?.generate?.();">🧬 重生 schema</button>
-                            <button class="bg-btn-action" style="flex:1; min-width:100px; font-size:11px; padding:9px;" onclick="window.OS_STATE_RUNTIME?.forceExtract?.();">🛰️ 立即抽一次</button>
-                            <button class="bg-btn-action" style="flex:1; min-width:100px; font-size:11px; padding:9px; color:#a55;" onclick="if(confirm('清空所有 state patches？schema 保留。')) window.OS_STATE_RUNTIME?.clearPatches?.();">🧹 清 patches</button>
+                        <div class="st-card">
+                            <div class="st-subtab-bar">
+                                <button class="st-subtab-btn active" data-subtab="schema">
+                                    Schema · 追蹤欄位<span class="st-subtab-count" id="sp-state-schema-count">0</span>
+                                </button>
+                                <button class="st-subtab-btn" data-subtab="current">
+                                    Current · 當前狀態<span class="st-subtab-count" id="sp-state-patches-count">0</span>
+                                </button>
+                            </div>
+                            <div class="st-subtab-content active" data-subcontent="schema">
+                                <div id="sp-state-schema-list" class="st-field-list"></div>
+                            </div>
+                            <div class="st-subtab-content" data-subcontent="current">
+                                <div id="sp-state-current-list" class="st-current-list"></div>
+                            </div>
                         </div>
 
-                        <button class="bg-btn-action" style="margin-top:10px; width:100%; font-size:11px; padding:9px;" onclick="window.RPG_PANEL?.openStateManagerModal?.();">🌐 跨世界管理（所有已生成 schema 的世界）</button>
+                        <div class="st-btn-row">
+                            <button class="st-btn" onclick="if(confirm('重新生成 schema？舊 patches 保留。')) window.OS_STATE_SCHEMA?.generate?.();">🧬 重生</button>
+                            <button class="st-btn" onclick="window.OS_STATE_RUNTIME?.forceExtract?.();">🛰️ 立即抽</button>
+                            <button class="st-btn st-btn-danger" onclick="if(confirm('清空所有 state patches？schema 保留。')) window.OS_STATE_RUNTIME?.clearPatches?.();">🧹 清 patches</button>
+                        </div>
+
+                        <button class="st-btn-ghost" onclick="window.RPG_PANEL?.openStateManagerModal?.();">🌐 跨世界管理 — 所有已生成 schema 的世界</button>
                     </div>
                 </div>
 
@@ -1589,6 +1702,14 @@ ${getCharCardTemplate()}`;
             if (this.getAttribute('data-tab') === 'STATE') refreshStateUI();
         }));
 
+        // STATE tab 內的子 tab 切換（Schema / Current）
+        const subBtns = container.querySelectorAll('.st-subtab-btn');
+        const subContents = container.querySelectorAll('.st-subtab-content');
+        subBtns.forEach(btn => btn.addEventListener('click', function() {
+            subBtns.forEach(b => b.classList.remove('active')); this.classList.add('active');
+            subContents.forEach(c => c.classList.toggle('active', c.getAttribute('data-subcontent') === this.getAttribute('data-subtab')));
+        }));
+
         // 點擊外部關閉 Modal
         container.querySelectorAll('.rpg-modal-overlay').forEach(m => m.addEventListener('click', function(e) {
             if (e.target === this) this.classList.remove('active');
@@ -1617,6 +1738,72 @@ ${getCharCardTemplate()}`;
         initDbAndLogs();
         refreshStateUI();   // 副模型抽取區塊：填欄位/patches 計數
     }
+
+    // === schema 欄位編輯（in-place 展開表單）===
+    let _editingFieldName = null; // null / 欄位名 / '__new__'
+
+    const TYPE_OPTIONS = ['string', 'number', 'enum', 'list'];
+    function renderFieldEdit(name, type, desc, isNew) {
+        const dataName = isNew ? '__new__' : name;
+        const safeOriginal = escapeHtml(dataName).replace(/'/g, '&#39;');
+        return `<div class="st-field-edit" data-edit-name="${escapeHtml(dataName)}">
+            <div class="st-field-edit-row">
+                <span class="st-field-edit-label">名稱</span>
+                <input class="st-field-edit-input" data-edit-key="name" ${isNew ? 'data-edit-focus placeholder="例：我的偏好 / 體力 / 心情" value=""' : `value="${escapeHtml(name)}" disabled`} />
+            </div>
+            <div class="st-field-edit-row">
+                <span class="st-field-edit-label">類型</span>
+                <select class="st-field-edit-input" data-edit-key="type">
+                    ${TYPE_OPTIONS.map(t => `<option value="${t}" ${t === type ? 'selected' : ''}>${t.toUpperCase()}</option>`).join('')}
+                </select>
+            </div>
+            <div class="st-field-edit-row">
+                <span class="st-field-edit-label">描述</span>
+                <textarea class="st-field-edit-textarea" data-edit-key="desc" ${isNew ? '' : 'data-edit-focus'} placeholder="這欄位記什麼，何時會變">${escapeHtml(desc || '')}</textarea>
+            </div>
+            <div class="st-field-edit-actions">
+                <button class="st-field-edit-btn cancel" onclick="window.RPG_PANEL.cancelEditField()">取消</button>
+                <button class="st-field-edit-btn" onclick="window.RPG_PANEL.saveFieldEdit('${safeOriginal}')">${isNew ? '新增' : '儲存'}</button>
+            </div>
+        </div>`;
+    }
+
+    API.startEditField = function(name) {
+        _editingFieldName = name;
+        refreshStateUI();
+    };
+    API.startAddField = function() {
+        _editingFieldName = '__new__';
+        refreshStateUI();
+    };
+    API.cancelEditField = function() {
+        _editingFieldName = null;
+        refreshStateUI();
+    };
+    API.saveFieldEdit = async function(originalName) {
+        const card = document.querySelector(`.st-field-edit[data-edit-name="${originalName.replace(/"/g, '&quot;')}"]`)
+                  || document.querySelector('.st-field-edit');
+        if (!card) return;
+        const isNew = originalName === '__new__';
+        const name = (card.querySelector('[data-edit-key="name"]')?.value || '').trim();
+        const type = (card.querySelector('[data-edit-key="type"]')?.value || 'string').trim();
+        const desc = (card.querySelector('[data-edit-key="desc"]')?.value || '').trim();
+        if (isNew && !name) { alert('請輸入欄位名'); return; }
+        if (isNew) {
+            const ok = await window.OS_STATE_SCHEMA?.addField?.(name, { type, desc });
+            if (!ok) return;
+        } else {
+            await window.OS_STATE_SCHEMA?.updateField?.(originalName, { type, desc });
+        }
+        _editingFieldName = null;
+        refreshStateUI();
+    };
+    API.deleteFieldConfirm = async function(name) {
+        if (!confirm(`刪除欄位「${name}」？\n會從 schema、current、所有 patches 一起清掉，不可復原。`)) return;
+        await window.OS_STATE_SCHEMA?.deleteField?.(name);
+        if (_editingFieldName === name) _editingFieldName = null;
+        refreshStateUI();
+    };
 
     // === STATE tab UI 刷新（chatId-aware：無 schema 顯示 init view / 有 schema 顯示 main view）===
     async function refreshStateUI() {
@@ -1662,28 +1849,54 @@ ${getCharCardTemplate()}`;
             if (patchesCountEl) patchesCountEl.textContent = Object.keys(patches).length;
 
             if (schemaList) {
-                schemaList.innerHTML = Object.entries(fields).map(([name, def]) => {
+                let html = Object.entries(fields).map(([name, def]) => {
                     const type = (def && def.type) || '?';
                     const desc = (def && def.desc) || '';
-                    return `<div style="padding:4px 0; border-bottom:1px dashed #2a2a2a;">
-                        <span style="color:var(--gold-p);">${escapeHtml(name)}</span>
-                        <span style="color:#555; font-size:10px;"> · ${escapeHtml(type)}</span>
-                        ${desc ? `<div style="color:#777; font-size:10px; padding-left:12px; margin-top:2px;">${escapeHtml(desc)}</div>` : ''}
+                    if (_editingFieldName === name) {
+                        return renderFieldEdit(name, type, desc, false);
+                    }
+                    return `<div class="st-field-item">
+                        <div class="st-field-actions">
+                            <button class="st-field-action-btn" onclick="window.RPG_PANEL.startEditField('${escapeHtml(name).replace(/'/g, '&#39;')}')" title="編輯">✏</button>
+                            <button class="st-field-action-btn danger" onclick="window.RPG_PANEL.deleteFieldConfirm('${escapeHtml(name).replace(/'/g, '&#39;')}')" title="刪除">×</button>
+                        </div>
+                        <div class="st-field-row">
+                            <span class="st-field-name">${escapeHtml(name)}</span>
+                            <span class="st-field-type">${escapeHtml(type)}</span>
+                        </div>
+                        ${desc ? `<div class="st-field-desc">${escapeHtml(desc)}</div>` : ''}
                     </div>`;
                 }).join('');
+
+                if (_editingFieldName === '__new__') {
+                    html += renderFieldEdit('', 'string', '', true);
+                } else {
+                    html += `<div class="st-field-add" onclick="window.RPG_PANEL.startAddField()">＋ 添加自訂欄位</div>`;
+                }
+                schemaList.innerHTML = html;
+
+                // edit 開啟後自動 focus
+                setTimeout(() => {
+                    const focusEl = schemaList.querySelector('[data-edit-focus]');
+                    if (focusEl) focusEl.focus();
+                }, 50);
             }
 
             if (currentList) {
                 const keys = Object.keys(cur);
                 if (keys.length === 0) {
-                    currentList.innerHTML = '<div style="color:#666; text-align:center; padding:20px;">（尚未抽取狀態變化）<br><span style="font-size:10px; color:#444;">開啟即時抽取後等下一輪劇情，或按下方「立即抽一次」</span></div>';
+                    currentList.innerHTML = `<div class="st-empty">
+                        <div class="st-empty-icon">◇</div>
+                        <div class="st-empty-text">尚未抽取狀態變化</div>
+                        <div class="st-empty-hint">開啟即時抽取後等下一輪劇情<br>或按下方「立即抽」</div>
+                    </div>`;
                 } else {
                     currentList.innerHTML = keys.map(k => {
                         const v = cur[k];
                         const vStr = typeof v === 'object' ? JSON.stringify(v) : String(v);
-                        return `<div style="display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px dashed #2a2a2a;">
-                            <span style="color:#aaa; flex-shrink:0;">${escapeHtml(k)}</span>
-                            <span style="color:var(--gold-p); font-family:monospace; word-break:break-all; text-align:right;">${escapeHtml(vStr)}</span>
+                        return `<div class="st-current-row">
+                            <span class="st-current-key">${escapeHtml(k)}</span>
+                            <span class="st-current-value">${escapeHtml(vStr)}</span>
                         </div>`;
                     }).join('');
                 }
