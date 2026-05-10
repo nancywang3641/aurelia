@@ -1117,6 +1117,7 @@ const IRIS_IDLE = [
                     <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
                     <button class="void-hist-btn" data-os-launch="map" title="地圖"><span class="vhb-em">🗺️</span><span>地圖</span></button>
+                    <button class="void-hist-btn" data-app-launch="spend" title="額度面板"><span class="vhb-em">💰</span><span>額度</span></button>
                 </div>
                 <!-- Claude 房間：inline picker bar（mode-claude 才顯示）-->
                 <div class="claude-picker-bar" id="claude-picker-bar">
@@ -2403,6 +2404,11 @@ const IRIS_IDLE = [
             const thinking = result.thinking || null;
             const usage = result.usage || null;
             const toolsUsed = (Array.isArray(result.toolsUsed) && result.toolsUsed.length) ? result.toolsUsed : null;
+
+            // 累計到額度面板（💰 app）
+            if (usage && window.OS_SPEND_PANEL && typeof window.OS_SPEND_PANEL.record === 'function') {
+                try { window.OS_SPEND_PANEL.record(usage); } catch (_) {}
+            }
 
             // 移除 stream 期間最後一個 placeholder wrap，下面做最終 render（含 markdown）
             if (streamWrap && streamWrap.parentNode) {

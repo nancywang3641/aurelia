@@ -707,6 +707,7 @@
             map:        () => window.OS_MAP?.launchApp,
             rpg:        () => window.RPG_PANEL?.launch,
             worldbook:  () => window.OS_WORLDBOOK?.launch,
+            spend:      () => window.OS_SPEND_PANEL?.launch,
         };
         const getFn = GAME_APP_MAP[key];
         if (!getFn) return;
