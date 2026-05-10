@@ -53,6 +53,7 @@ const PHONE_FILES = [
     'os/os_backup.js',
     'os/os_404_store.js',
     'os/os_tarot.js',
+    'os/os_spend_panel.js',
     'os/os_card_import.js',
 
     // === 📖 VN 視覺小說系統 ===
