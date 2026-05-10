@@ -201,16 +201,20 @@
      * @returns {Promise<{reply: string, sessionFallback: boolean}>}
      *   sessionFallback=true 表 cc-bridge resume 失敗、退回新 session（Claude 失憶警告）
      */
-    ClaudeTerminal.send = async function(userText, attachments) {
+    ClaudeTerminal.send = async function(userText, attachments, onProgress) {
         const cfg = ClaudeTerminal.getConfig();
         if (!cfg) throw new Error('SETTINGS_MISSING:OS_SETTINGS 未載入');
         if (!cfg.url || !cfg.key) throw new Error('NOT_CONFIGURED:還沒填 URL 跟 密鑰，去設定 → 🦀 Claude 的房間');
 
+        // onProgress(event) callback：cc-bridge 路徑會在 streaming 過程中即時回呼
+        //   event.type === 'text'     → { type:'text', delta: '...', accumulated: '...' }
+        //   event.type === 'tool_use' → { type:'tool_use', tool: { name, input } }
+        // Anthropic 直連模式暫不支援 progress（仍走 await 整段）
         // 依 URL 自動分流：Anthropic 直連 vs cc-bridge / OpenAI 兼容
         if (cfg.isAnthropicDirect) {
             return _sendAnthropicDirect(userText, attachments, cfg);
         }
-        return _sendCcBridge(userText, attachments, cfg);
+        return _sendCcBridge(userText, attachments, cfg, onProgress);
     };
 
     // ===== Anthropic 直連（朋友最常用、不需任何 server）=====
@@ -331,7 +335,7 @@
     }
 
     // ===== cc-bridge / OpenAI 兼容路徑（Rae 自架 server 用）=====
-    async function _sendCcBridge(userText, attachments, cfg) {
+    async function _sendCcBridge(userText, attachments, cfg, onProgress) {
         const history = await ClaudeTerminal.loadHistory();
         const newUserMsg = { role: 'user', content: userText, timestamp: Date.now() };
         const updatedHistory = [...history, newUserMsg];
@@ -348,7 +352,7 @@
         const body = {
             model: cfg.model,
             messages: apiMessages,
-            stream: false,
+            stream: true,  // 走真 streaming 拿 block-level 漸進輸出
             max_tokens: cfg.maxTokens,
         };
         if (incomingSid) body.session_id = incomingSid;
@@ -357,13 +361,14 @@
         if (attachments && attachments.length) body.attachments = attachments;
         if (cfg.inlineEffort) body.cc_api_effort = cfg.inlineEffort;
 
-        let resp, data;
+        let resp;
         try {
             resp = await fetch(cfg.url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + cfg.key,
+                    'Accept': 'text/event-stream',
                 },
                 body: JSON.stringify(body),
             });
@@ -372,33 +377,85 @@
             throw new Error('NETWORK:cc-bridge 沒在跑？或網路斷線。原始：' + (e.message || e));
         }
 
-        try { data = await resp.json(); }
-        catch (e) {
-            await ClaudeTerminal.saveHistory(history);
-            throw new Error('BAD_JSON:cc-bridge 回應無法解析 JSON');
-        }
-
         if (!resp.ok) {
             await ClaudeTerminal.saveHistory(history);
-            const errMsg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
+            let errMsg = `HTTP ${resp.status}`;
+            try { const j = await resp.json(); if (j && j.error && j.error.message) errMsg = j.error.message; } catch (_) {}
             if (resp.status === 401 || resp.status === 403) throw new Error('AUTH:密鑰不對。');
             if (resp.status >= 500) throw new Error('SERVER:server 跑出錯：' + errMsg);
             throw new Error('API:' + errMsg);
         }
 
-        const reply = data && data.choices && data.choices[0] && data.choices[0].message
-            ? (data.choices[0].message.content || '').trim() : '';
+        if (!resp.body || !resp.body.getReader) {
+            await ClaudeTerminal.saveHistory(history);
+            throw new Error('STREAM:browser 不支援 ReadableStream');
+        }
+
+        // 解析 SSE：data: <json>\n\n
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let replyAcc = '';
+        const toolsUsed = [];
+        let newSid = null;
+        let usageMeta = null;
+        let thinking = null;
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+
+                // SSE 事件以 \n\n 分隔，每事件可能多行（我們只解 data:）
+                let sepIdx;
+                while ((sepIdx = buf.indexOf('\n\n')) !== -1) {
+                    const rawEvent = buf.slice(0, sepIdx);
+                    buf = buf.slice(sepIdx + 2);
+
+                    // 拆每行（但通常只有 data: 一行）
+                    for (const line of rawEvent.split('\n')) {
+                        if (!line.startsWith('data:')) continue;
+                        const dataStr = line.slice(5).trim();
+                        if (!dataStr || dataStr === '[DONE]') continue;
+                        let chunk;
+                        try { chunk = JSON.parse(dataStr); } catch (_) { continue; }
+
+                        const delta = (chunk.choices && chunk.choices[0] && chunk.choices[0].delta) || {};
+                        // 文字 delta（漸進式 append）
+                        if (typeof delta.content === 'string' && delta.content.length) {
+                            replyAcc += delta.content;
+                            if (typeof onProgress === 'function') {
+                                try { onProgress({ type: 'text', delta: delta.content, accumulated: replyAcc }); } catch (_) {}
+                            }
+                        }
+                        // 自定欄位：tool_use（後端即時送）
+                        if (chunk.tool_use) {
+                            toolsUsed.push(chunk.tool_use);
+                            if (typeof onProgress === 'function') {
+                                try { onProgress({ type: 'tool_use', tool: chunk.tool_use }); } catch (_) {}
+                            }
+                        }
+                        // 自定欄位（done chunk 才會有）
+                        if (chunk.session_id !== undefined) newSid = chunk.session_id;
+                        if (chunk.usage_meta) usageMeta = chunk.usage_meta;
+                        if (typeof chunk.thinking === 'string' && chunk.thinking.trim()) thinking = chunk.thinking;
+                    }
+                }
+            }
+        } catch (e) {
+            await ClaudeTerminal.saveHistory(history);
+            throw new Error('STREAM:讀取流失敗：' + (e.message || e));
+        }
+
+        const reply = replyAcc.trim();
         if (!reply) {
             await ClaudeTerminal.saveHistory(history);
             throw new Error('EMPTY:Claude 沒回半個字。');
         }
 
-        const newSid = data.session_id || null;
         if (newSid) ClaudeTerminal.setSessionId(newSid);
         const sessionFallback = !!(incomingSid && newSid && incomingSid !== newSid);
-        const thinking = (typeof data.thinking === 'string' && data.thinking.trim()) ? data.thinking : null;
-        const usageMeta = data.usage_meta || null;
-        const toolsUsed = Array.isArray(data.tools_used) ? data.tools_used : [];
 
         const assistantMsg = { role: 'assistant', content: reply, timestamp: Date.now() };
         if (thinking) assistantMsg.thinking = thinking;

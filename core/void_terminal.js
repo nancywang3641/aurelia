@@ -2198,8 +2198,9 @@ const IRIS_IDLE = [
 
         const bubble = document.createElement('div');
         bubble.className = 'claude-bubble ' + (isUser ? 'from-user' : 'from-claude');
-        if (isUser) {
-            // User 訊息：raw text 顯示（user 自己打的不渲染 markdown，更安全）
+        if (isUser || opts.suppressMarkdown) {
+            // User 訊息 / streaming 中：raw text 顯示（streaming 期間每 chunk re-render
+            // 一次 markdown 太貴，stream 結束最後一次 render 才開 markdown）
             bubble.textContent = content;
         } else {
             // Claude 回覆：解析 markdown 後 sanitize 再插入
@@ -2368,11 +2369,46 @@ const IRIS_IDLE = [
         _setClaudePortraitState('thinking');
 
         try {
-            const result = await window.ClaudeTerminal.send(text, attachmentsSnapshot);
+            // streaming 漸進式 render：stream 期間每收到 text/tool 事件就 destroy 舊 wrapper
+            // 重 render 一個（用 suppressMarkdown 跳過 markdown，避免每 chunk 重 render markdown 閃爍）
+            // stream 結束後最終 render 才開 markdown
+            const acc = { text: '', tools: [] };
+            let streamWrap = null;
+            const stream = document.getElementById('claude-chat-stream');
+
+            const rerenderStreaming = () => {
+                if (streamWrap && streamWrap.parentNode) {
+                    streamWrap.parentNode.removeChild(streamWrap);
+                }
+                _renderClaudeBubble('assistant', acc.text || '⏳ ...', {
+                    toolsUsed: acc.tools.length ? acc.tools : null,
+                    suppressMarkdown: true,
+                });
+                streamWrap = stream && stream.lastElementChild;
+            };
+
+            const onProgress = (ev) => {
+                if (!ev) return;
+                if (ev.type === 'text') {
+                    acc.text = ev.accumulated || (acc.text + (ev.delta || ''));
+                    rerenderStreaming();
+                } else if (ev.type === 'tool_use' && ev.tool) {
+                    acc.tools.push(ev.tool);
+                    rerenderStreaming();
+                }
+            };
+
+            const result = await window.ClaudeTerminal.send(text, attachmentsSnapshot, onProgress);
             const reply = result.reply;
             const thinking = result.thinking || null;
             const usage = result.usage || null;
             const toolsUsed = (Array.isArray(result.toolsUsed) && result.toolsUsed.length) ? result.toolsUsed : null;
+
+            // 移除 stream 期間最後一個 placeholder wrap，下面做最終 render（含 markdown）
+            if (streamWrap && streamWrap.parentNode) {
+                streamWrap.parentNode.removeChild(streamWrap);
+                streamWrap = null;
+            }
 
             // assistant reply 寫進 history（含 thinking / usage / tools_used 一起存）
             const assistantRecord = { role: 'assistant', content: reply, ts: Date.now() };
