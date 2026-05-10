@@ -750,6 +750,11 @@ body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
 
 /* 聊天室面板（其他 mode 不顯示） */
 .claude-chat-panel { display: none; }
+/* 💰 額度按鈕只在 Claude 房間顯示（其他場景藏） */
+.void-tab.mode-claude .void-hist-btn[data-app-launch="spend"] {
+    display: flex !important;
+}
+
 .void-tab.mode-claude .claude-chat-panel {
     display: flex !important;
     flex-direction: column;
