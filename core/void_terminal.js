@@ -961,6 +961,9 @@ const IRIS_IDLE = [
                     <div class="void-top-sub-label" style="font-size:9px;color:#B78456;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px;font-weight:bold;">NEXUS PARALLAX // LUNA-VII</div>
                     <div id="home-chat-title" style="font-size:12px;font-weight:800;color:#FBDFA2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.5px;">Parallax Archive & Cafe</div>
                 </div>
+                <button id="aurelia-fullscreen-btn" title="進入全屏"
+                    style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;color:inherit;"
+                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">⛶</button>
                 <button id="lobby-bgm-toggle" title="音樂開關"
                     style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;"
                     onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">🔊</button>
@@ -1267,6 +1270,18 @@ const IRIS_IDLE = [
             if (bgmBtn) {
                 bgmBtn.textContent = bgmEnabled ? '🔊' : '🔇';
                 bgmBtn.onclick = toggleLobbyBgm;
+            }
+
+            const fsBtn = tab.querySelector('#aurelia-fullscreen-btn');
+            if (fsBtn) {
+                const inFs = !!(window.AureliaControlCenter?.isFullscreen?.());
+                fsBtn.textContent = inFs ? '🗗' : '⛶';
+                fsBtn.title = inFs ? '退出全屏 (ESC)' : '進入全屏';
+                fsBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.AureliaControlCenter?.toggleFullscreen?.();
+                };
             }
 
 
@@ -2036,6 +2051,51 @@ const IRIS_IDLE = [
         return '📎';
     }
 
+    let _claudeMdConverter = null;
+    function _claudeMarkdownToSafeHtml(text) {
+        if (!window.showdown || !window.DOMPurify) return null;
+        if (!_claudeMdConverter) {
+            _claudeMdConverter = new window.showdown.Converter({
+                tables: true,
+                strikethrough: true,
+                simpleLineBreaks: true,
+                openLinksInNewWindow: true,
+                disableForced4SpacesIndentedSublists: true,
+                ghCodeBlocks: true,
+                tasklists: true,
+            });
+        }
+        const html = _claudeMdConverter.makeHtml(String(text == null ? '' : text));
+
+        // sanitize：放行 input 給 task list checkbox，下面後處理會把非 checkbox 的 input 砍掉
+        const safe = window.DOMPurify.sanitize(html, {
+            ADD_TAGS: ['input'],
+            ADD_ATTR: ['type', 'disabled', 'checked'],
+        });
+
+        // 後處理：(1) 過濾 input 只留 disabled checkbox  (2) hljs 套語法高亮
+        const tmp = document.createElement('div');
+        tmp.innerHTML = safe;
+
+        tmp.querySelectorAll('input').forEach(el => {
+            if (el.getAttribute('type') !== 'checkbox') {
+                el.remove();
+            } else {
+                el.setAttribute('disabled', '');  // 強制 disabled，使用者點不到
+            }
+        });
+
+        if (window.hljs) {
+            tmp.querySelectorAll('pre code').forEach(el => {
+                try {
+                    window.hljs.highlightElement(el);
+                } catch (_) { /* 忽略：可能已 highlighted 或語言未支援 */ }
+            });
+        }
+
+        return tmp.innerHTML;
+    }
+
     function _renderClaudeBubble(role, content, opts = {}) {
         const stream = document.getElementById('claude-chat-stream');
         if (!stream) return;
@@ -2059,7 +2119,19 @@ const IRIS_IDLE = [
 
         const bubble = document.createElement('div');
         bubble.className = 'claude-bubble ' + (isUser ? 'from-user' : 'from-claude');
-        bubble.textContent = content;
+        if (isUser) {
+            // User 訊息：raw text 顯示（user 自己打的不渲染 markdown，更安全）
+            bubble.textContent = content;
+        } else {
+            // Claude 回覆：解析 markdown 後 sanitize 再插入
+            const safeHtml = _claudeMarkdownToSafeHtml(content);
+            if (safeHtml !== null) {
+                bubble.innerHTML = safeHtml;
+                bubble.classList.add('claude-bubble-md');
+            } else {
+                bubble.textContent = content;
+            }
+        }
 
         // 附件 chip（顯示這條訊息附了哪些檔）
         if (Array.isArray(opts.attachments) && opts.attachments.length) {
