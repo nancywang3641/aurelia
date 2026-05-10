@@ -208,6 +208,7 @@
                 <button class="bg-tab-btn active" data-tab="WORLD">🌍 小世界</button>
                 <button class="bg-tab-btn" data-tab="CLAN">📊 數據庫</button>
                 <button class="bg-tab-btn" data-tab="LOGS">📋 記錄</button>
+                <button class="bg-tab-btn" data-tab="STATE">🛰️ 狀態</button>
                 <button class="bg-tab-btn" data-tab="SET" style="flex:0.6; border-left:1px solid #222;">⚙️ 操作</button>
             </div>
             
@@ -253,6 +254,55 @@
                     </div>
                 </div>
 
+                <div class="bg-tab-content" data-content="STATE">
+                    <div style="font-size:14px; color:var(--gold-p); margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:6px; font-family:'Cinzel'; font-weight:bold;">STATE TRACKING / 狀態追蹤</div>
+
+                    <!-- LOADING VIEW -->
+                    <div id="sp-state-loading-view" style="display:none; padding:30px; text-align:center; color:#666; font-size:12px;">
+                        <div style="font-size:24px; margin-bottom:10px;">⏳</div>讀取狀態中...
+                    </div>
+
+                    <!-- INIT VIEW (no schema) -->
+                    <div id="sp-state-init-view" style="display:none; padding:30px 20px; text-align:center;">
+                        <div style="font-size:48px; margin-bottom:15px;">🛰️</div>
+                        <div style="font-size:14px; color:#bbb; margin-bottom:8px;">這個世界尚未生成狀態 schema</div>
+                        <div style="font-size:11px; color:#666; line-height:1.7; margin-bottom:25px;">
+                            副模型會讀世界書 + 角色卡 + 開頭劇情，<br>
+                            自動決定本世界要追蹤的狀態欄位<br>
+                            <span style="color:#888;">（好感度 / 倒計時 / 任務 / 場景 等）</span>
+                        </div>
+                        <button class="bg-btn-action gold" style="padding:12px 30px; font-size:13px;" onclick="window.OS_STATE_SCHEMA?.generate?.();">
+                            🧬 INITIALIZE STATE SCHEMA
+                        </button>
+                        <div style="font-size:10px; color:#444; margin-top:15px;">需先在 OS 設定好副模型 Profile（生成耗時 5-30 秒）</div>
+                    </div>
+
+                    <!-- MAIN VIEW (schema exists) -->
+                    <div id="sp-state-main-view" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:rgba(20,20,20,0.5); border:1px solid #2a2a2a; border-radius:4px; margin-bottom:12px;">
+                            <div>
+                                <div style="font-size:13px; color:#ddd;">啟用即時抽取</div>
+                                <div style="font-size:10px; color:#555;">每輪主模型回覆後，副模型按 schema 抽變化</div>
+                            </div>
+                            <div class="sp-sync-toggle" id="sp-toggle-state-runtime" data-key="aurelia_state_runtime_enabled" style="width:40px; height:22px; border-radius:11px; background:#1a1a1a; border:1px solid #333; cursor:pointer; position:relative; transition:all 0.3s; flex-shrink:0;"></div>
+                        </div>
+
+                        <div style="font-size:10px; color:#666; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px;">SCHEMA / 追蹤欄位 (<span id="sp-state-schema-count">0</span>)</div>
+                        <div id="sp-state-schema-list" style="margin-bottom:15px; max-height:180px; overflow-y:auto; padding:8px; background:rgba(15,15,15,0.6); border:1px solid #2a2a2a; border-radius:4px; font-size:11px; line-height:1.7;"></div>
+
+                        <div style="font-size:10px; color:#666; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px;">CURRENT / 當前狀態 · <span id="sp-state-patches-count">0</span> patches</div>
+                        <div id="sp-state-current-list" style="margin-bottom:15px; max-height:260px; overflow-y:auto; padding:10px; background:rgba(15,15,15,0.6); border:1px solid #2a2a2a; border-radius:4px; font-size:11px; line-height:1.8;"></div>
+
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            <button class="bg-btn-action" style="flex:1; min-width:120px; font-size:11px; padding:9px;" onclick="if(confirm('重新生成 schema？舊 patches 保留。')) window.OS_STATE_SCHEMA?.generate?.();">🧬 重生 schema</button>
+                            <button class="bg-btn-action" style="flex:1; min-width:100px; font-size:11px; padding:9px;" onclick="window.OS_STATE_RUNTIME?.forceExtract?.();">🛰️ 立即抽一次</button>
+                            <button class="bg-btn-action" style="flex:1; min-width:100px; font-size:11px; padding:9px; color:#a55;" onclick="if(confirm('清空所有 state patches？schema 保留。')) window.OS_STATE_RUNTIME?.clearPatches?.();">🧹 清 patches</button>
+                        </div>
+
+                        <button class="bg-btn-action" style="margin-top:10px; width:100%; font-size:11px; padding:9px;" onclick="window.RPG_PANEL?.openStateManagerModal?.();">🌐 跨世界管理（所有已生成 schema 的世界）</button>
+                    </div>
+                </div>
+
                 <div class="bg-tab-content" data-content="SET">
                     <div style="font-size:14px; color:var(--gold-p); margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:6px; font-family:'Cinzel'; font-weight:bold;">STORY ACTIONS / 劇情操作</div>
                     
@@ -276,30 +326,6 @@
                         <button class="bg-btn-action" onclick="window.RPG_PANEL.openStickerModal()" style="flex:1;">
                             📌 小貼示管理
                         </button>
-                    </div>
-
-                    <div style="margin-top:20px; border-top:1px dashed #2a2a2a; padding-top:15px;">
-                        <div style="font-size:11px; color:#555; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">📡 SECONDARY STATE EXTRACTION / 副模型抽取</div>
-
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
-                            <div>
-                                <div style="font-size:12px; color:#bbb;">啟用即時抽取</div>
-                                <div style="font-size:10px; color:#555;">每輪主模型回覆後，副模型按 schema 抽狀態變化</div>
-                            </div>
-                            <div class="sp-sync-toggle" id="sp-toggle-state-runtime" data-key="aurelia_state_runtime_enabled" style="width:40px; height:22px; border-radius:11px; background:#1a1a1a; border:1px solid #333; cursor:pointer; position:relative; transition:all 0.3s; flex-shrink:0;"></div>
-                        </div>
-
-                        <div style="margin-top:10px; padding:10px; background:rgba(20,20,20,0.5); border:1px solid #2a2a2a; border-radius:4px; font-size:11px; color:#888; line-height:1.8;">
-                            當前 schema 欄位：<span id="sp-state-schema-count" style="color:var(--gold-p); font-family:monospace;">—</span><br>
-                            已累積 patches：<span id="sp-state-patches-count" style="color:#888; font-family:monospace;">0</span> 條<br>
-                            當前狀態：<span id="sp-state-current-preview" style="color:#666; font-family:monospace; font-size:10px;">（尚未抽取）</span>
-                        </div>
-
-                        <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
-                            <button class="bg-btn-action" style="flex:1; min-width:120px; font-size:11px; padding:8px;" onclick="window.OS_STATE_SCHEMA?.generate?.();">🧬 生成 / 重生 schema</button>
-                            <button class="bg-btn-action" style="flex:1; min-width:100px; font-size:11px; padding:8px;" onclick="window.OS_STATE_RUNTIME?.forceExtract?.();">🛰️ 立即抽一次</button>
-                            <button class="bg-btn-action" style="flex:1; min-width:100px; font-size:11px; padding:8px; color:#a55;" onclick="if(confirm('清空所有 state patches？schema 保留。')) window.OS_STATE_RUNTIME?.clearPatches?.();">🧹 清 patches</button>
-                        </div>
                     </div>
 
                     <div style="margin-top:20px; font-size:14px; color:var(--gold-p); margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:6px; font-family:'Cinzel'; font-weight:bold;">SYSTEM / 系統設置</div>
@@ -556,6 +582,20 @@
                     <div id="world-gen-status" style="font-size:12px; color:#888; margin-top:10px; min-height:20px; text-align:center;"></div>
                     
                     <button class="bg-btn-action" style="margin-top:15px;" onclick="document.getElementById('rpg-world-gen-modal').classList.remove('active')">關閉</button>
+                </div>
+            </div>
+
+            <div id="rpg-state-manager-modal" class="rpg-modal-overlay">
+                <div class="rpg-modal-card" style="max-width:680px; text-align:left;">
+                    <div class="rpg-modal-title">🌐 跨世界 STATE 管理</div>
+                    <div style="font-size:11px; color:#666; margin-bottom:12px; line-height:1.6;">
+                        所有曾經 INITIALIZE 過的世界資料。<br>
+                        <span style="color:#888;">⭐ 標記 = 當前 chatId · 🗑 刪除單筆 · 酒館刪 chat 時會自動清</span>
+                    </div>
+                    <div id="rpg-state-manager-list" style="max-height:60vh; overflow-y:auto; border:1px solid #2a2a2a; border-radius:4px; padding:8px; background:rgba(15,15,15,0.6);"></div>
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button class="bg-btn-action" style="flex:1;" onclick="document.getElementById('rpg-state-manager-modal').classList.remove('active')">關閉</button>
+                    </div>
                 </div>
             </div>
 
@@ -1648,6 +1688,8 @@ ${getCharCardTemplate()}`;
         btns.forEach(btn => btn.addEventListener('click', function() {
             btns.forEach(b => b.classList.remove('active')); this.classList.add('active');
             contents.forEach(c => c.classList.toggle('active', c.getAttribute('data-content') === this.getAttribute('data-tab')));
+            // STATE tab：每次切進來都讀最新 OS_DB（chatId 可能已切換）
+            if (this.getAttribute('data-tab') === 'STATE') refreshStateUI();
         }));
 
         // 點擊外部關閉 Modal
@@ -1680,33 +1722,74 @@ ${getCharCardTemplate()}`;
         refreshStateUI();   // 副模型抽取區塊：填欄位/patches 計數
     }
 
-    // === 副模型抽取狀態 UI 刷新 ===
+    // === STATE tab UI 刷新（chatId-aware：無 schema 顯示 init view / 有 schema 顯示 main view）===
     async function refreshStateUI() {
         try {
             const win = window.parent || window;
-            if (!win.OS_DB?.getStateData) return;
+            const loadingView = document.getElementById('sp-state-loading-view');
+            const initView    = document.getElementById('sp-state-init-view');
+            const mainView    = document.getElementById('sp-state-main-view');
+            if (!loadingView || !initView || !mainView) return;
+
+            loadingView.style.display = 'block';
+            initView.style.display    = 'none';
+            mainView.style.display    = 'none';
+
             const ctx = win.SillyTavern?.getContext?.();
             const chatId = ctx?.chatId || '';
-            if (!chatId) return;
+            if (!chatId || !win.OS_DB?.getStateData) {
+                loadingView.style.display = 'none';
+                initView.style.display    = 'block';
+                return;
+            }
+
             const data = await win.OS_DB.getStateData(chatId);
+            loadingView.style.display = 'none';
+
+            const hasSchema = data?.schema && Object.keys(data.schema).length > 0;
+            if (!hasSchema) {
+                initView.style.display = 'block';
+                return;
+            }
+
+            mainView.style.display = 'block';
+
+            const fields = data.schema;
+            const cur = data.current || {};
+            const patches = data.patches || {};
             const schemaCountEl  = document.getElementById('sp-state-schema-count');
             const patchesCountEl = document.getElementById('sp-state-patches-count');
-            const previewEl      = document.getElementById('sp-state-current-preview');
-            if (!schemaCountEl || !patchesCountEl) return;
+            const schemaList     = document.getElementById('sp-state-schema-list');
+            const currentList    = document.getElementById('sp-state-current-list');
 
-            const schemaCount  = data?.schema  ? Object.keys(data.schema).length  : 0;
-            const patchesCount = data?.patches ? Object.keys(data.patches).length : 0;
-            schemaCountEl.textContent  = schemaCount > 0 ? schemaCount + ' 個' : '未生成';
-            patchesCountEl.textContent = patchesCount;
+            if (schemaCountEl)  schemaCountEl.textContent  = Object.keys(fields).length;
+            if (patchesCountEl) patchesCountEl.textContent = Object.keys(patches).length;
 
-            if (previewEl) {
-                if (!data?.current || !Object.keys(data.current).length) {
-                    previewEl.textContent = '（尚未抽取）';
+            if (schemaList) {
+                schemaList.innerHTML = Object.entries(fields).map(([name, def]) => {
+                    const type = (def && def.type) || '?';
+                    const desc = (def && def.desc) || '';
+                    return `<div style="padding:4px 0; border-bottom:1px dashed #2a2a2a;">
+                        <span style="color:var(--gold-p);">${escapeHtml(name)}</span>
+                        <span style="color:#555; font-size:10px;"> · ${escapeHtml(type)}</span>
+                        ${desc ? `<div style="color:#777; font-size:10px; padding-left:12px; margin-top:2px;">${escapeHtml(desc)}</div>` : ''}
+                    </div>`;
+                }).join('');
+            }
+
+            if (currentList) {
+                const keys = Object.keys(cur);
+                if (keys.length === 0) {
+                    currentList.innerHTML = '<div style="color:#666; text-align:center; padding:20px;">（尚未抽取狀態變化）<br><span style="font-size:10px; color:#444;">開啟即時抽取後等下一輪劇情，或按下方「立即抽一次」</span></div>';
                 } else {
-                    const preview = Object.entries(data.current).slice(0, 5)
-                        .map(([k,v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v).slice(0,30) : String(v).slice(0,30)}`)
-                        .join(' / ');
-                    previewEl.textContent = preview + (Object.keys(data.current).length > 5 ? ' …' : '');
+                    currentList.innerHTML = keys.map(k => {
+                        const v = cur[k];
+                        const vStr = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                        return `<div style="display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px dashed #2a2a2a;">
+                            <span style="color:#aaa; flex-shrink:0;">${escapeHtml(k)}</span>
+                            <span style="color:var(--gold-p); font-family:monospace; word-break:break-all; text-align:right;">${escapeHtml(vStr)}</span>
+                        </div>`;
+                    }).join('');
                 }
             }
         } catch(e) {
@@ -1714,11 +1797,70 @@ ${getCharCardTemplate()}`;
         }
     }
 
+    // === 跨世界管理 modal：列所有 state_data + 單刪 ===
+    async function renderStateManager() {
+        const win = window.parent || window;
+        const listEl = document.getElementById('rpg-state-manager-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<div style="text-align:center; padding:30px; color:#666;">載入中...</div>';
+
+        if (!win.OS_STATE_RUNTIME?.listAllStateData) {
+            listEl.innerHTML = '<div style="color:#a55; padding:20px;">OS_STATE_RUNTIME 未載入</div>';
+            return;
+        }
+
+        try {
+            const all = await win.OS_STATE_RUNTIME.listAllStateData();
+            if (!all.length) {
+                listEl.innerHTML = '<div style="text-align:center; padding:30px; color:#666;">尚未有任何世界生成過 schema</div>';
+                return;
+            }
+
+            const ctx = win.SillyTavern?.getContext?.();
+            const currentId = win.OS_STATE_RUNTIME.normalizeChatId?.(ctx?.chatId) || '';
+
+            listEl.innerHTML = all.map(e => {
+                const isCur = e.chatId === currentId;
+                const date = e.timestamp ? new Date(e.timestamp).toLocaleString() : '—';
+                return `<div style="display:flex; align-items:center; gap:10px; padding:10px; border-bottom:1px dashed #2a2a2a; ${isCur ? 'background:rgba(212,175,55,0.05);' : ''}">
+                    <div style="flex:1; min-width:0;">
+                        <div style="color:${isCur ? 'var(--gold-p)' : '#bbb'}; font-size:12px; font-family:monospace; word-break:break-all;">${isCur ? '⭐ ' : ''}${escapeHtml(e.chatId)}</div>
+                        <div style="font-size:10px; color:#666; margin-top:3px;">
+                            欄位 <span style="color:#999;">${e.schemaCount}</span> ·
+                            patches <span style="color:#999;">${e.patchesCount}</span> ·
+                            當前狀態 <span style="color:#999;">${e.currentCount}</span> 項<br>
+                            <span style="color:#555;">最後更新：${date}</span>
+                        </div>
+                    </div>
+                    <button class="bg-btn-action" style="font-size:11px; padding:6px 10px; color:#a55; flex-shrink:0;" data-state-del="${escapeHtml(e.chatId)}">🗑</button>
+                </div>`;
+            }).join('');
+
+            listEl.querySelectorAll('[data-state-del]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.getAttribute('data-state-del');
+                    if (!confirm(`確定刪除 [${id}] 的 state 資料？\nschema + patches + current 全部清掉，不可復原。`)) return;
+                    await win.OS_STATE_RUNTIME.removeStateData(id);
+                    renderStateManager();
+                    refreshStateUI();
+                });
+            });
+        } catch(e) {
+            console.error('[Status Panel] renderStateManager error:', e);
+            listEl.innerHTML = `<div style="color:#a55; padding:20px;">載入失敗：${escapeHtml(String(e?.message || e))}</div>`;
+        }
+    }
+
+    API.openStateManagerModal = function() {
+        document.getElementById('rpg-state-manager-modal').classList.add('active');
+        renderStateManager();
+    };
+
     // 監聽副模型抽取事件 → 自動刷新 UI（如果面板正開著）
     (function setupStateEventHooks() {
         const win = window.parent || window;
         if (!win.eventOn) { setTimeout(setupStateEventHooks, 1000); return; }
-        ['AURELIA_STATE_SCHEMA_GENERATED', 'AURELIA_STATE_PATCHED', 'AURELIA_STATE_RUNTIME_TOGGLED'].forEach(ev => {
+        ['AURELIA_STATE_SCHEMA_GENERATED', 'AURELIA_STATE_PATCHED', 'AURELIA_STATE_RUNTIME_TOGGLED', 'AURELIA_STATE_DATA_REMOVED'].forEach(ev => {
             try { win.eventOn(ev, () => refreshStateUI()); } catch(e) {}
         });
     })();

@@ -22,10 +22,18 @@
     };
 
     // --- 工具 ---
+    // 與 state_runtime.js 共用 normalize 邏輯（剝路徑、砍 .jsonl）
+    function normalizeChatId(raw) {
+        if (!raw) return '';
+        let s = String(raw).split(/[\\/]/).pop() || '';
+        s = s.replace(/\.jsonl?$/i, '');
+        return s.trim();
+    }
+
     function getChatId() {
         try {
             const ctx = win.SillyTavern?.getContext?.();
-            return ctx?.chatId || '';
+            return normalizeChatId(ctx?.chatId);
         } catch(e) { return ''; }
     }
 
