@@ -267,14 +267,14 @@
                         <div style="font-size:48px; margin-bottom:15px;">🛰️</div>
                         <div style="font-size:14px; color:#bbb; margin-bottom:8px;">這個世界尚未生成狀態 schema</div>
                         <div style="font-size:11px; color:#666; line-height:1.7; margin-bottom:25px;">
-                            副模型會讀世界書 + 角色卡 + 開頭劇情，<br>
+                            主模型會讀世界書 + 角色卡 + 開頭劇情，<br>
                             自動決定本世界要追蹤的狀態欄位<br>
                             <span style="color:#888;">（好感度 / 倒計時 / 任務 / 場景 等）</span>
                         </div>
                         <button class="bg-btn-action gold" style="padding:12px 30px; font-size:13px;" onclick="window.OS_STATE_SCHEMA?.generate?.();">
                             🧬 INITIALIZE STATE SCHEMA
                         </button>
-                        <div style="font-size:10px; color:#444; margin-top:15px;">需先在 OS 設定好副模型 Profile（生成耗時 5-30 秒）</div>
+                        <div style="font-size:10px; color:#444; margin-top:15px;">用主模型一次性生成 schema（耗時 5-30 秒）<br>之後每輪自動更新會用副模型</div>
                     </div>
 
                     <!-- MAIN VIEW (schema exists) -->
@@ -1823,8 +1823,8 @@ ${getCharCardTemplate()}`;
                 const isCur = e.chatId === currentId;
                 const date = e.timestamp ? new Date(e.timestamp).toLocaleString() : '—';
                 return `<div style="display:flex; align-items:center; gap:10px; padding:10px; border-bottom:1px dashed #2a2a2a; ${isCur ? 'background:rgba(212,175,55,0.05);' : ''}">
-                    <div style="flex:1; min-width:0;">
-                        <div style="color:${isCur ? 'var(--gold-p)' : '#bbb'}; font-size:12px; font-family:monospace; word-break:break-all;">${isCur ? '⭐ ' : ''}${escapeHtml(e.chatId)}</div>
+                    <div style="flex:1; min-width:0; overflow:hidden;">
+                        <div style="color:${isCur ? 'var(--gold-p)' : '#bbb'}; font-size:12px; font-family:monospace; word-break:break-word; overflow-wrap:break-word;">${isCur ? '⭐ ' : ''}${escapeHtml(e.chatId)}</div>
                         <div style="font-size:10px; color:#666; margin-top:3px;">
                             欄位 <span style="color:#999;">${e.schemaCount}</span> ·
                             patches <span style="color:#999;">${e.patchesCount}</span> ·
@@ -1832,7 +1832,7 @@ ${getCharCardTemplate()}`;
                             <span style="color:#555;">最後更新：${date}</span>
                         </div>
                     </div>
-                    <button class="bg-btn-action" style="font-size:11px; padding:6px 10px; color:#a55; flex-shrink:0;" data-state-del="${escapeHtml(e.chatId)}">🗑</button>
+                    <button data-state-del="${escapeHtml(e.chatId)}" title="刪除此世界資料" style="width:auto; font-size:14px; padding:6px 12px; background:#1a1010; border:1px solid #553; color:#a55; cursor:pointer; border-radius:4px; flex-shrink:0;">🗑</button>
                 </div>`;
             }).join('');
 
