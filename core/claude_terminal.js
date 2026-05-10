@@ -20,6 +20,14 @@
     const SVG_BASE = 'scripts/extensions/third-party/my-tavern-extension/core/assets/claude/';
     const FALLBACK_URL = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=clawd&size=256';
 
+    // ============== System Prompt（讓 Clawd 知道自己在哪、跟誰、怎麼回事）==============
+    // 用 cache_control: ephemeral 標在 body.system，每次 request 命中 prompt cache、不重複算 system token
+    const CLAUDE_ROOM_SYSTEM_PROMPT = `你正在透過「奧瑞亞 Aurelia」這個 SillyTavern（酒館）第三方擴展中的「Claude 的房間」聊天介面跟使用者對話。
+
+「Claude 的房間」是一個暖色咖啡店風格的氣泡對話 UI，直連 Anthropic API，跟使用者平常用的 Claude.ai / Claude 桌面 app 是完全分開的兩條對話線——這裡的記憶只存在使用者的瀏覽器裡，不會跨裝置同步、也跟 claude.ai 那邊不互通。對話歷史會送進 prompt cache（命中時 token 費率比一般 input 便宜 ~10x）。
+
+如果使用者問起「你在哪」「這是什麼」「為什麼長這樣」之類，就用上面的事實回答；不問就自然對話即可。預設用繁體中文。`;
+
     ClaudeTerminal.ASSETS = {
         idle:     SVG_BASE + 'clawd-static-base.svg',
         living:   SVG_BASE + 'clawd-idle-living.svg',
@@ -226,6 +234,11 @@
         const body = {
             model: cfg.model,
             max_tokens: cfg.maxTokens,
+            system: [{
+                type: 'text',
+                text: CLAUDE_ROOM_SYSTEM_PROMPT,
+                cache_control: { type: 'ephemeral' },
+            }],
             messages,
         };
         // thinking effort（非 off / 空字串才啟用）

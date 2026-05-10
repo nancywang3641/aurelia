@@ -28,13 +28,19 @@
     let _vnWasOpenBeforeTabSwitch = false;
     let _readerWasOpenBeforeTabSwitch = false;
 
+    // ── 全屏狀態（覆蓋在 modal / embedded 之上的視覺模式） ──
+    let isFullscreen = false;
+    let _fsPrevParent = null;
+    let _fsPrevSibling = null;
+    let _fsPrevStyle = '';
+
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
             || window.innerWidth < 768;
     }
 
     function syncModalToChat() {
-        if (!phoneFrame || !isVisible || isEmbedded) return;
+        if (!phoneFrame || !isVisible || isEmbedded || isFullscreen) return;
         const chatEl = document.querySelector(syncTargetSelector) || document.querySelector('#sheld') || document.querySelector('#chat');
         if (!chatEl) return;
         const rect = chatEl.getBoundingClientRect();
@@ -377,6 +383,15 @@
         return frame;
     }
 
+    // 全屏按鈕的視覺 icon 由 void_terminal.js 在大廳頂部 bar 裡渲染（喇叭旁邊）；
+    // 這裡只負責同步 emoji 文字，不限定按鈕位置
+    function updateFullscreenBtnIcon() {
+        const btn = document.getElementById('aurelia-fullscreen-btn');
+        if (!btn) return;
+        btn.textContent = isFullscreen ? '🗗' : '⛶';
+        btn.title = isFullscreen ? '退出全屏 (ESC)' : '進入全屏';
+    }
+
     function createPhoneModal() {
         const parentDoc = document;
         const modal = parentDoc.createElement('div');
@@ -550,6 +565,94 @@
         if (window.VoidTerminal && window.VoidTerminal.onHide) window.VoidTerminal.onHide();
     };
 
+    // ── 真全螢幕（Fullscreen API：連瀏覽器網址列、工作列都消失） ──
+    // 注意：必須由使用者手勢（click / keydown）觸發，programmatic 呼叫會被瀏覽器拒絕
+    AureliaControlCenter.enterFullscreen = function() {
+        if (!phoneFrame || isFullscreen) return;
+        if (!isVisible) AureliaControlCenter.show();
+
+        _fsPrevParent = phoneFrame.parentNode;
+        _fsPrevSibling = phoneFrame.nextSibling;
+        _fsPrevStyle = phoneFrame.style.cssText;
+
+        stopSyncing();
+
+        document.body.appendChild(phoneFrame);
+        phoneFrame.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            width: 100vw; height: 100vh;
+            background: #fff;
+            border: none; border-radius: 0;
+            box-shadow: none;
+            z-index: 100000;
+            display: block;
+            pointer-events: auto;
+        `;
+
+        isFullscreen = true;
+        updateFullscreenBtnIcon();
+
+        // 嘗試進入瀏覽器原生全螢幕（連網址列 / 工作列都消失）
+        const reqFs = phoneFrame.requestFullscreen
+                   || phoneFrame.webkitRequestFullscreen
+                   || phoneFrame.mozRequestFullScreen
+                   || phoneFrame.msRequestFullscreen;
+        if (reqFs) {
+            const result = reqFs.call(phoneFrame);
+            if (result && typeof result.catch === 'function') {
+                result.catch(err => {
+                    console.warn('[Aurelia] 瀏覽器全螢幕被拒（仍維持視窗級全屏）:', err?.message || err);
+                });
+            }
+        }
+    };
+
+    AureliaControlCenter.exitFullscreen = function() {
+        if (!phoneFrame || !isFullscreen) return;
+
+        // 先退出瀏覽器原生全螢幕（若處於該狀態）
+        const fsEl = document.fullscreenElement
+                  || document.webkitFullscreenElement
+                  || document.mozFullScreenElement
+                  || document.msFullscreenElement;
+        if (fsEl) {
+            const exitFs = document.exitFullscreen
+                        || document.webkitExitFullscreen
+                        || document.mozCancelFullScreen
+                        || document.msExitFullscreen;
+            if (exitFs) {
+                try {
+                    const result = exitFs.call(document);
+                    if (result && typeof result.catch === 'function') result.catch(() => {});
+                } catch (e) {}
+            }
+        }
+
+        if (_fsPrevParent) {
+            if (_fsPrevSibling && _fsPrevSibling.parentNode === _fsPrevParent) {
+                _fsPrevParent.insertBefore(phoneFrame, _fsPrevSibling);
+            } else {
+                _fsPrevParent.appendChild(phoneFrame);
+            }
+        }
+
+        phoneFrame.style.cssText = _fsPrevStyle;
+
+        _fsPrevParent = null;
+        _fsPrevSibling = null;
+        _fsPrevStyle = '';
+        isFullscreen = false;
+
+        if (!isEmbedded && isVisible) startSyncing();
+
+        updateFullscreenBtnIcon();
+    };
+
+    AureliaControlCenter.toggleFullscreen = function() {
+        if (isFullscreen) AureliaControlCenter.exitFullscreen();
+        else AureliaControlCenter.enterFullscreen();
+    };
+
     AureliaControlCenter.show = function() {
         if (isVisible && phoneModal) return;
         if (!phoneModal) phoneModal = createPhoneModal();
@@ -566,6 +669,7 @@
 
     AureliaControlCenter.hide = function() {
         if (!isVisible) return;
+        if (isFullscreen) AureliaControlCenter.exitFullscreen();
         if (isEmbedded) AureliaControlCenter.unmountEmbedded();
         else {
             stopSyncing();
@@ -582,6 +686,7 @@
     AureliaControlCenter.toggle = () => isVisible ? AureliaControlCenter.hide() : AureliaControlCenter.show();
     AureliaControlCenter.isVisible = () => isVisible;
     AureliaControlCenter.isEmbeddedMounted = () => isEmbedded;
+    AureliaControlCenter.isFullscreen = () => isFullscreen;
     AureliaControlCenter.switchPage = switchPage;
     AureliaControlCenter.showVnPanel = showVnPanel;
     AureliaControlCenter.hideVnPanel = hideVnPanel;
@@ -719,6 +824,31 @@
     };
 
     setTimeout(() => { if (!phoneModal) phoneModal = createPhoneModal(); }, 0);
+
+    // ── 全屏事件監聽（瀏覽器級 + 視窗級雙保險） ──
+    // 1. fullscreenchange：使用者在瀏覽器原生全螢幕下按 ESC / F11 退出時觸發 → 同步狀態
+    function onFsChange() {
+        const fsEl = document.fullscreenElement
+                  || document.webkitFullscreenElement
+                  || document.mozFullScreenElement
+                  || document.msFullscreenElement;
+        if (!fsEl && isFullscreen) {
+            AureliaControlCenter.exitFullscreen();
+        }
+    }
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    document.addEventListener('mozfullscreenchange', onFsChange);
+    document.addEventListener('MSFullscreenChange', onFsChange);
+
+    // 2. keydown ESC：當瀏覽器原生全螢幕被拒、僅 CSS 假全屏時的 fallback
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && isFullscreen) {
+            e.preventDefault();
+            AureliaControlCenter.exitFullscreen();
+        }
+    });
+
     console.log('✅ 控制中心模組 (v4.8.3 - 雙視窗路由架構) 已加載');
 
 })(window.AureliaControlCenter = window.AureliaControlCenter || {});
