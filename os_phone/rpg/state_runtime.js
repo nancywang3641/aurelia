@@ -155,8 +155,18 @@
         throw lastErr || new Error('副模型重試耗盡');
     }
 
-    // --- prompt：給 schema + current + 最近劇情 → 抽 diff ---
-    function buildExtractPrompt(schema, current, recentText) {
+    // --- prompt：給 schema + current + 最近劇情 → 抽 diff（或初始 fill）---
+    function buildExtractPrompt(schema, current, recentText, isInitialFill) {
+        const modeRules = isInitialFill
+            ? `【初始化模式 / FIRST RUN】
+- 這是首次抽取，當下狀態為空
+- 必須把 schema 中**所有欄位**的當下值都填進 updates，不能漏
+- 從劇情推斷；劇情沒明說的欄位，依世界觀給合理初值（好感類給 0 / 能力類給基準值 / 倒計時看 schema.desc 的初值）
+- 寧可用 schema.desc 裡的範圍初值，也不要留空`
+            : `【更新模式 / DIFF】
+- 只輸出**這輪有變化**的欄位；沒變的不要寫進 updates
+- 如果這輪劇情完全沒觸發任何欄位變化，輸出 { "updates": {} }`;
+
         return `你是劇情狀態追蹤抽取器。根據 schema 與最近的劇情，找出狀態欄位的變化。
 
 【schema 定義】
@@ -178,13 +188,13 @@ ${recentText || '（無）'}
   }
 }
 
-【規則】
-- 只輸出**這輪有變化**的欄位；沒變的不要寫進 updates
+${modeRules}
+
+【通用規則】
 - 數字欄位：直接給新數值（例：當下好感 12 + 升 3 → 15）
 - 字串/enum 欄位：給新字串
 - list 欄位：給完整陣列（追加項就 push 後完整輸出）
-- 如果這輪劇情完全沒觸發任何欄位變化，輸出 { "updates": {} }
-- 不要編造劇情沒寫的事`;
+- 不要編造劇情沒寫的事（但初始化模式可以從 schema.desc 推合理初值）`;
     }
 
     // --- 主流程：抽一次 ---
@@ -207,7 +217,9 @@ ${recentText || '（無）'}
             // 已經抽過這個 msgId，跳過
             if (data.patches && data.patches[lastId] !== undefined) return;
 
-            const prompt = buildExtractPrompt(data.schema, data.current || {}, recentText);
+            // 判斷是不是首次抽取（current 為空）→ 走初始化模式，要副模型把所有欄位填齊
+            const isInitialFill = !data.current || Object.keys(data.current).length === 0;
+            const prompt = buildExtractPrompt(data.schema, data.current || {}, recentText, isInitialFill);
             const json = await runWithRetry(prompt);
             const updates = json.updates || {};
 
@@ -302,7 +314,9 @@ ${recentText || '（無）'}
             patches: {},
             current: {}
         });
-        showToast('🧹 已清空所有 state patches', 'info');
+        showToast('🧹 已清空 patches，副模型即將重新初始化', 'info');
+        // 自動跑一次 extract（current 已清空 → 進初始化模式 → 重新填齊全部欄位）
+        setTimeout(() => extractOnce(), 500);
     }
 
     async function forceExtract() {

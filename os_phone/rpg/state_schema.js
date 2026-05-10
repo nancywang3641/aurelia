@@ -236,8 +236,17 @@ ${materials.headMessages || '（無）'}
             });
 
             const count = Object.keys(json.fields).length;
-            showToast(`✅ Schema 生成完成（${count} 個欄位）`, 'success');
+            showToast(`✅ Schema 生成完成（${count} 個欄位） · 副模型即將初始化當前狀態`, 'success');
             try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: json.fields }); } catch(e) {}
+
+            // 自動跑一次 extract → current 為空時走「初始化模式」把全部欄位填上初值
+            // 不必等 GENERATION_ENDED 也不必看「啟用即時抽取」總開關
+            if (!opts.skipInitialFill && win.OS_STATE_RUNTIME?.extractOnce) {
+                setTimeout(() => {
+                    try { win.OS_STATE_RUNTIME.extractOnce(); } catch(e) { console.warn('[State Schema] 初始填充觸發失敗:', e); }
+                }, 800);
+            }
+
             return json.fields;
         } catch(e) {
             console.error('[State Schema] 生成失敗:', e);
@@ -253,9 +262,79 @@ ${materials.headMessages || '（無）'}
         return data?.schema || null;
     }
 
+    // === 用戶手動編輯 schema（增 / 改 / 刪欄位）===
+    async function addField(name, def) {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return false;
+        if (!name || !name.trim()) { showToast('⚠️ 欄位名不能空', 'warning'); return false; }
+        const data = (await win.OS_DB.getStateData(chatId)) || {};
+        const schema = { ...(data.schema || {}) };
+        if (schema[name]) { showToast(`⚠️ 欄位「${name}」已存在`, 'warning'); return false; }
+        schema[name] = {
+            type: (def && def.type) || 'string',
+            desc: (def && def.desc) || '',
+            init: (def && def.init) || ''
+        };
+        await win.OS_DB.saveStateData(chatId, {
+            schema,
+            patches: data.patches || {},
+            current: data.current || {}
+        });
+        try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
+        showToast(`✅ 新增欄位「${name}」`, 'success');
+        return true;
+    }
+
+    async function updateField(name, def) {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return false;
+        const data = (await win.OS_DB.getStateData(chatId)) || {};
+        const schema = { ...(data.schema || {}) };
+        if (!schema[name]) return false;
+        schema[name] = {
+            ...schema[name],
+            type: (def && def.type) || schema[name].type,
+            desc: def && def.desc !== undefined ? def.desc : schema[name].desc
+        };
+        await win.OS_DB.saveStateData(chatId, {
+            schema,
+            patches: data.patches || {},
+            current: data.current || {}
+        });
+        try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
+        showToast(`✏️ 已更新「${name}」`, 'success');
+        return true;
+    }
+
+    async function deleteField(name) {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return false;
+        const data = (await win.OS_DB.getStateData(chatId)) || {};
+        const schema = { ...(data.schema || {}) };
+        if (!schema[name]) return false;
+        delete schema[name];
+        // 從 current 砍
+        const current = { ...(data.current || {}) };
+        delete current[name];
+        // 從每筆 patch 砍掉這欄位
+        const patches = {};
+        for (const [pid, p] of Object.entries(data.patches || {})) {
+            const np = { ...p };
+            delete np[name];
+            if (Object.keys(np).length > 0) patches[pid] = np;
+        }
+        await win.OS_DB.saveStateData(chatId, { schema, patches, current });
+        try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
+        showToast(`🗑 已刪除欄位「${name}」`, 'info');
+        return true;
+    }
+
     win.OS_STATE_SCHEMA = {
         generate,
         getCurrentSchema,
+        addField,
+        updateField,
+        deleteField,
         CONFIG
     };
 
