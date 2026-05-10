@@ -516,29 +516,37 @@
                     if (stProfileId) {
                         const doc = win.document;
                         const profilesSelect = doc?.getElementById('connection_profiles');
-                        if (profilesSelect && profilesSelect.value !== stProfileId) {
-                            profilesSelect.value = stProfileId;
-                            await new Promise((resolve) => {
-                                const timeout = setTimeout(resolve, 10000);
-                                context.eventSource.once(context.eventTypes.CONNECTION_PROFILE_LOADED, () => {
-                                    clearTimeout(timeout);
-                                    resolve();
+                        const oldProfileId = profilesSelect?.value || '';
+
+                        try {
+                            // 切到副 profile，等 CONNECTION_PROFILE_LOADED 確認切換完成
+                            // timeout 從原本的 10s 縮到 3s（一般切換 < 500ms，3s 已是極端 fallback）
+                            if (profilesSelect && profilesSelect.value !== stProfileId) {
+                                profilesSelect.value = stProfileId;
+                                await new Promise((resolve) => {
+                                    const timeout = setTimeout(resolve, 3000);
+                                    context.eventSource.once(context.eventTypes.CONNECTION_PROFILE_LOADED, () => {
+                                        clearTimeout(timeout);
+                                        resolve();
+                                    });
+                                    profilesSelect.dispatchEvent(new Event('change'));
                                 });
+                            }
+                            const response = await context.ConnectionManagerRequestService.sendRequest(
+                                stProfileId, cleanMessages, maxTokens,
+                                undefined,
+                                { temperature, ...extraParams }
+                            );
+                            rawApiResponse = response;
+                            fullText = normalizeResponse(response);
+                        } finally {
+                            // 切回主 profile：fire-and-forget 不等事件（不阻塞 chatSecondary 返回）
+                            // 主模型下一次呼叫由酒館自己 await profile 切換，不需要這裡等
+                            if (profilesSelect && oldProfileId && profilesSelect.value !== oldProfileId) {
+                                profilesSelect.value = oldProfileId;
                                 profilesSelect.dispatchEvent(new Event('change'));
-                            });
+                            }
                         }
-                        const currentModel = (typeof context.getChatCompletionModel === 'function')
-                            ? context.getChatCompletionModel()
-                            : undefined;
-                        const response = await context.ConnectionManagerRequestService.sendRequest(
-                            stProfileId, cleanMessages, maxTokens,
-                            undefined,
-                            currentModel
-                                ? { temperature, ...extraParams, model: currentModel }
-                                : { temperature, ...extraParams }
-                        );
-                        rawApiResponse = response; 
-                        fullText = normalizeResponse(response);
                     } else {
                         const headers = context.getRequestHeaders();
                         const activeSource = context.oai_settings?.chat_completion_source
