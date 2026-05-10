@@ -28,10 +28,19 @@
     let _lastInjectUninject = null; // 上次 injectPrompts 的 uninject 函式
 
     // --- 工具 ---
+    // 把 ctx.chatId 或 chat_file_name 清乾淨：剝路徑、砍 .jsonl/.json
+    // 統一格式才能跟 CHAT_DELETED 事件 payload 對齊
+    function normalizeChatId(raw) {
+        if (!raw) return '';
+        let s = String(raw).split(/[\\/]/).pop() || '';
+        s = s.replace(/\.jsonl?$/i, '');
+        return s.trim();
+    }
+
     function getChatId() {
         try {
             const ctx = win.SillyTavern?.getContext?.();
-            return ctx?.chatId || '';
+            return normalizeChatId(ctx?.chatId);
         } catch(e) { return ''; }
     }
 
@@ -344,15 +353,91 @@ ${recentText || '（無）'}
             });
         }
 
+        // chat 被酒館刪 → 自動清對應 state_data（避免孤兒資料）
+        if (win.tavern_events.CHAT_DELETED) {
+            win.eventOn(win.tavern_events.CHAT_DELETED, async (chatFileName) => {
+                try {
+                    const id = normalizeChatId(chatFileName);
+                    if (!id || !win.OS_DB?.getStateData) return;
+                    const data = await win.OS_DB.getStateData(id);
+                    if (!data) return;
+                    await win.OS_DB.deleteStateData(id);
+                    console.log(`🛰️ [State Runtime] chat 被刪 → 自動清 state_data: ${id}`);
+                    try { win.eventEmit?.('AURELIA_STATE_DATA_REMOVED', { chatId: id }); } catch(e) {}
+                } catch(e) {
+                    console.warn('[State Runtime] CHAT_DELETED 清理失敗:', e);
+                }
+            });
+        }
+
         console.log('🛰️ [State Runtime] Ready');
+    }
+
+    // === 跨世界資料管理 ===
+    async function listAllStateData() {
+        if (!win.OS_DB?.getAllStateData) return [];
+        const all = await win.OS_DB.getAllStateData();
+        return all.map(e => ({
+            chatId: e.id,
+            schemaCount: e.schema ? Object.keys(e.schema).length : 0,
+            patchesCount: e.patches ? Object.keys(e.patches).length : 0,
+            currentCount: e.current ? Object.keys(e.current).length : 0,
+            timestamp: e.timestamp || 0
+        })).sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    async function removeStateData(chatId) {
+        if (!chatId || !win.OS_DB?.deleteStateData) return false;
+        await win.OS_DB.deleteStateData(chatId);
+        try { win.eventEmit?.('AURELIA_STATE_DATA_REMOVED', { chatId }); } catch(e) {}
+        return true;
+    }
+
+    // === Migration：舊資料 key 含路徑 / .jsonl 的，搬成 cleaned key ===
+    const MIGRATION_FLAG = 'aurelia_state_migrated_v1';
+    async function runMigration() {
+        if (localStorage.getItem(MIGRATION_FLAG) === '1') return;
+        if (!win.OS_DB?.getAllStateData) return;
+        try {
+            const all = await win.OS_DB.getAllStateData();
+            let migrated = 0, skipped = 0;
+            for (const entry of all) {
+                const oldId = entry.id;
+                const newId = normalizeChatId(oldId);
+                if (!newId || oldId === newId) continue;
+                // 衝突：新 key 已存在 → 砍舊 key（保留新的）
+                const exists = await win.OS_DB.getStateData(newId);
+                if (exists) {
+                    await win.OS_DB.deleteStateData(oldId);
+                    skipped++;
+                } else {
+                    await win.OS_DB.saveStateData(newId, {
+                        schema: entry.schema,
+                        patches: entry.patches,
+                        current: entry.current
+                    });
+                    await win.OS_DB.deleteStateData(oldId);
+                    migrated++;
+                }
+            }
+            localStorage.setItem(MIGRATION_FLAG, '1');
+            if (migrated || skipped) console.log(`🛰️ [State Runtime] migration：搬 ${migrated} 筆 / 衝突砍 ${skipped} 筆`);
+        } catch(e) {
+            console.warn('[State Runtime] migration 失敗:', e);
+        }
     }
 
     win.OS_STATE_RUNTIME = {
         isEnabled, setEnabled,
         forceExtract, clearPatches,
         injectCurrent, extractOnce,
+        listAllStateData, removeStateData,
+        normalizeChatId,
         CONFIG
     };
+
+    // 啟動時跑 migration（fire-and-forget）
+    runMigration();
 
     init();
 })();
