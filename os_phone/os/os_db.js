@@ -1,14 +1,14 @@
 // ----------------------------------------------------------------
-// [檔案] os_db.js (V21 - 加入向量記憶庫 vn_memories)
+// [檔案] os_db.js (V23 - 加入狀態資料庫 state_data)
 // 路徑：os_phone/os/os_db.js
 // 職責：管理 IndexedDB 資料庫。支援酒館與獨立版雙通向。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[PhoneOS] 載入系統資料庫 (System Storage V21)...');
+    console.log('[PhoneOS] 載入系統資料庫 (System Storage V23)...');
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 22; // 🔥 升級至 V22：大總結儲存
+    const DB_VERSION = 23; // 🔥 V23：狀態資料庫 state_data（副模型抽劇情狀態）
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -29,6 +29,7 @@
     const STORE_NAME_STUDIO_DRAFTS = 'studio_drafts';
     const STORE_NAME_VN_MEMORIES  = 'vn_memories';   // 🔥 V21：向量記憶庫
     const STORE_NAME_VN_SUMMARIES = 'vn_grand_summaries'; // V22：大總結儲存
+    const STORE_NAME_STATE_DATA   = 'state_data';    // 🔥 V23：狀態資料庫（副模型抽劇情狀態，key = chatId）
 
     let dbInstance = null;
 
@@ -52,7 +53,8 @@
                         STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO,
                         STORE_NAME_STUDIO_DRAFTS,
                         STORE_NAME_VN_MEMORIES,  // 🔥 V21：向量記憶庫
-                        STORE_NAME_VN_SUMMARIES  // 🔥 V22：大總結儲存
+                        STORE_NAME_VN_SUMMARIES, // 🔥 V22：大總結儲存
+                        STORE_NAME_STATE_DATA    // 🔥 V23：狀態資料庫
                     ];
 
                     stores.forEach(name => {
@@ -867,6 +869,61 @@
         getAllVNTagTemplates: async function() {
             const allTpls = await this.getAllUITemplates();
             return allTpls.filter(t => t.regexString || t.isBlock || t.isVNTag);
+        }
+    });
+
+    // === 🔥 V23：狀態資料庫（state_data）===
+    // key = chatId，value = { id, schema, patches, current, timestamp }
+    // 配合 state_schema.js (Stage 1 生 schema) + state_runtime.js (Stage 2 抽取 + injectPrompts)
+    Object.assign(win.OS_DB, {
+        saveStateData: async function(chatId, data) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const entry = {
+                        id: chatId,
+                        schema: data.schema || null,       // Stage 1 生成的欄位定義
+                        patches: data.patches || {},       // 每 msgId 一筆 patch
+                        current: data.current || {},       // patches 累積後的當下狀態
+                        timestamp: Date.now()
+                    };
+                    const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_STATE_DATA).put(entry);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+        getStateData: async function(chatId) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_STATE_DATA, 'readonly').objectStore(STORE_NAME_STATE_DATA).get(chatId);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+        deleteStateData: async function(chatId) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_STATE_DATA).delete(chatId);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+        getAllStateData: async function() {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_STATE_DATA, 'readonly').objectStore(STORE_NAME_STATE_DATA).getAll();
+                    req.onsuccess = () => resolve(req.result || []);
+                    req.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
         }
     });
 

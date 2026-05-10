@@ -279,20 +279,26 @@
                     </div>
 
                     <div style="margin-top:20px; border-top:1px dashed #2a2a2a; padding-top:15px;">
-                        <div style="font-size:11px; color:#555; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">LOREBOOK SYNC / 世界書同步</div>
+                        <div style="font-size:11px; color:#555; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">📡 SECONDARY STATE EXTRACTION / 副模型抽取</div>
+
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
                             <div>
-                                <div style="font-size:12px; color:#bbb; font-family:monospace;">[RPG_DATA]</div>
-                                <div style="font-size:10px; color:#555;">角色表 · 好感度 · 頭像庫</div>
+                                <div style="font-size:12px; color:#bbb;">啟用即時抽取</div>
+                                <div style="font-size:10px; color:#555;">每輪主模型回覆後，副模型按 schema 抽狀態變化</div>
                             </div>
-                            <div class="sp-sync-toggle" id="sp-toggle-rpg-data" data-key="rpg_sync_rpgdata" style="width:40px; height:22px; border-radius:11px; background:#1a1a1a; border:1px solid #333; cursor:pointer; position:relative; transition:all 0.3s; flex-shrink:0;"></div>
+                            <div class="sp-sync-toggle" id="sp-toggle-state-runtime" data-key="aurelia_state_runtime_enabled" style="width:40px; height:22px; border-radius:11px; background:#1a1a1a; border:1px solid #333; cursor:pointer; position:relative; transition:all 0.3s; flex-shrink:0;"></div>
                         </div>
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
-                            <div>
-                                <div style="font-size:12px; color:#bbb; font-family:monospace;">[RPG_LOG]</div>
-                                <div style="font-size:10px; color:#555;">事件日誌記錄</div>
-                            </div>
-                            <div class="sp-sync-toggle" id="sp-toggle-rpg-log" data-key="rpg_sync_rpglog" style="width:40px; height:22px; border-radius:11px; background:#1a1a1a; border:1px solid #333; cursor:pointer; position:relative; transition:all 0.3s; flex-shrink:0;"></div>
+
+                        <div style="margin-top:10px; padding:10px; background:rgba(20,20,20,0.5); border:1px solid #2a2a2a; border-radius:4px; font-size:11px; color:#888; line-height:1.8;">
+                            當前 schema 欄位：<span id="sp-state-schema-count" style="color:var(--gold-p); font-family:monospace;">—</span><br>
+                            已累積 patches：<span id="sp-state-patches-count" style="color:#888; font-family:monospace;">0</span> 條<br>
+                            當前狀態：<span id="sp-state-current-preview" style="color:#666; font-family:monospace; font-size:10px;">（尚未抽取）</span>
+                        </div>
+
+                        <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
+                            <button class="bg-btn-action" style="flex:1; min-width:120px; font-size:11px; padding:8px;" onclick="window.OS_STATE_SCHEMA?.generate?.();">🧬 生成 / 重生 schema</button>
+                            <button class="bg-btn-action" style="flex:1; min-width:100px; font-size:11px; padding:8px;" onclick="window.OS_STATE_RUNTIME?.forceExtract?.();">🛰️ 立即抽一次</button>
+                            <button class="bg-btn-action" style="flex:1; min-width:100px; font-size:11px; padding:8px; color:#a55;" onclick="if(confirm('清空所有 state patches？schema 保留。')) window.OS_STATE_RUNTIME?.clearPatches?.();">🧹 清 patches</button>
                         </div>
                     </div>
 
@@ -1671,13 +1677,57 @@ ${getCharCardTemplate()}`;
         API.renderStickerToggles();
         API.renderWorldList();
         initDbAndLogs();
+        refreshStateUI();   // 副模型抽取區塊：填欄位/patches 計數
     }
 
+    // === 副模型抽取狀態 UI 刷新 ===
+    async function refreshStateUI() {
+        try {
+            const win = window.parent || window;
+            if (!win.OS_DB?.getStateData) return;
+            const ctx = win.SillyTavern?.getContext?.();
+            const chatId = ctx?.chatId || '';
+            if (!chatId) return;
+            const data = await win.OS_DB.getStateData(chatId);
+            const schemaCountEl  = document.getElementById('sp-state-schema-count');
+            const patchesCountEl = document.getElementById('sp-state-patches-count');
+            const previewEl      = document.getElementById('sp-state-current-preview');
+            if (!schemaCountEl || !patchesCountEl) return;
+
+            const schemaCount  = data?.schema  ? Object.keys(data.schema).length  : 0;
+            const patchesCount = data?.patches ? Object.keys(data.patches).length : 0;
+            schemaCountEl.textContent  = schemaCount > 0 ? schemaCount + ' 個' : '未生成';
+            patchesCountEl.textContent = patchesCount;
+
+            if (previewEl) {
+                if (!data?.current || !Object.keys(data.current).length) {
+                    previewEl.textContent = '（尚未抽取）';
+                } else {
+                    const preview = Object.entries(data.current).slice(0, 5)
+                        .map(([k,v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v).slice(0,30) : String(v).slice(0,30)}`)
+                        .join(' / ');
+                    previewEl.textContent = preview + (Object.keys(data.current).length > 5 ? ' …' : '');
+                }
+            }
+        } catch(e) {
+            console.warn('[Status Panel] refreshStateUI 失敗:', e);
+        }
+    }
+
+    // 監聽副模型抽取事件 → 自動刷新 UI（如果面板正開著）
+    (function setupStateEventHooks() {
+        const win = window.parent || window;
+        if (!win.eventOn) { setTimeout(setupStateEventHooks, 1000); return; }
+        ['AURELIA_STATE_SCHEMA_GENERATED', 'AURELIA_STATE_PATCHED', 'AURELIA_STATE_RUNTIME_TOGGLED'].forEach(ev => {
+            try { win.eventOn(ev, () => refreshStateUI()); } catch(e) {}
+        });
+    })();
+
     // 暴露 API
-    window.RPG_PANEL = { 
-        launch: render, 
-        launchApp: render, 
-        ...API 
+    window.RPG_PANEL = {
+        launch: render,
+        launchApp: render,
+        ...API
     };
 
 })();
