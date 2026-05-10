@@ -5,7 +5,7 @@
 // 1. [小世界] 生成與管理場景設定、地圖。(生成器已獨立為視窗模式)
 // 2. [數據庫] 管理常駐世界書，支援極簡雙模式分類(備注開頭/Key包含)，支援 藍球/綠球/鎖鏈 類型即時切換。
 // 3. [記錄] 預覽與管理 LOG，包含刑偵、寶寶記錄，支援批次刪除。
-// 4. [操作] 生成大總結、管理黑名單、管理小貼示。
+// 4. [操作] 生成大總結、管理黑名單。
 // ----------------------------------------------------------------
 (function() {
     console.log('📝 [Status Panel] V24 (Black Gold + Simple DB Category + World Modal) 載入...');
@@ -38,18 +38,6 @@
         .rpg-chat-id { font-family: 'Cinzel'; font-size: 10px; color: #666; letter-spacing: 1px; }
         .rpg-back-btn { font-size: 22px; color: var(--gold-p); cursor: pointer; transition: 0.3s; width: 30px; }
         .rpg-back-btn:hover { color: #fff; transform: translateX(-3px); }
-
-        /* --- 小貼示快捷開關列 --- */
-        #bg-sticker-toggles {
-            padding: 8px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-shrink: 0;
-            background: rgba(10, 10, 10, 0.8);
-        }
-        .bg-sticker-toggle-label { font-size: 11px; color: #555; letter-spacing: 1px; text-transform: uppercase; margin-right: 2px; transition: color 0.2s, border-color 0.2s; border: 1px solid #333; border-radius: 3px; padding: 3px 6px; display: inline-flex; align-items: center; cursor: pointer; }
-        .bg-sticker-toggle-label:hover { color: var(--gold-p); border-color: var(--gold-s); }
-        .bg-sticker-toggle-btn { padding: 4px 10px; background: transparent; border: 1px solid #333; border-radius: 3px; font-size: 11px; color: #555; cursor: pointer; transition: 0.2s; user-select: none; font-family: 'Cinzel', 'Microsoft YaHei'; }
-        .bg-sticker-toggle-btn:hover { border-color: #666; color: #888; }
-        .bg-sticker-toggle-btn.active { color: var(--gold-p); border-color: var(--gold-s); text-shadow: 0 0 6px rgba(212, 175, 55, 0.4); background: rgba(212, 175, 55, 0.05); }
 
         /* --- Tab 導航欄 --- */
         .bg-tabs-header {
@@ -114,21 +102,11 @@
         .rpg-opt-label input[type="radio"], .rpg-opt-label input[type="checkbox"] { margin-right: 8px; accent-color: var(--gold-p); width: 16px; height: 16px; cursor: pointer; }
         .rpg-opt-desc { font-size: 11px; color: #666; margin-left: 24px; display: block; font-style: italic; }
 
-        /* --- 黑名單 & 小貼示 --- */
+        /* --- 黑名單 --- */
         .rpg-blacklist-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #151515; border: 1px solid #333; margin-bottom: 6px; border-left: 3px solid #ff4444; border-radius: 4px; }
         .rpg-blacklist-item.safe { border-left-color: #ffaa00; }
         .rpg-blacklist-item button { background: transparent; border: 1px solid #444; color: #ccc; border-radius: 4px; padding: 4px 8px; cursor: pointer; transition: 0.2s; }
         .rpg-blacklist-item button:hover { border-color: var(--gold-p); color: var(--gold-p); }
-        
-        .bg-sticker-item { display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid #333; border-radius: 4px; margin-bottom: 8px; transition: 0.2s; }
-        .bg-sticker-item:hover { border-color: var(--gold-s); background: rgba(255, 255, 255, 0.05); }
-        .bg-sticker-item.active { border-left: 3px solid var(--gold-p); background: rgba(212, 175, 55, 0.1); }
-        .bg-sticker-item.inactive { opacity: 0.5; border-left: 3px solid #666; }
-        .bg-sticker-btn-toggle { padding: 4px 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid #444; border-radius: 4px; color: #888; font-size: 12px; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
-        .bg-sticker-btn-toggle.active { background: rgba(212, 175, 55, 0.2); border-color: var(--gold-p); color: var(--gold-p); }
-        .bg-sticker-content { flex: 1; font-size: 13px; color: #ccc; word-break: break-word; text-align: left; }
-        .bg-sticker-delete { width: 28px; height: 28px; background: rgba(255, 68, 68, 0.2); border: 1px solid #ff4444; color: #ff4444; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; transition: 0.2s; }
-        .bg-sticker-delete:hover { background: rgba(255, 68, 68, 0.3); transform: scale(1.1); }
 
         /* --- 小世界 --- */
         .bg-world-container { display: flex; flex-direction: column; gap: 10px; padding: 5px 0; }
@@ -202,7 +180,6 @@
                 <div class="rpg-chat-id" id="status-chat-id">載入中...</div>
             </div>
 
-            <div id="bg-sticker-toggles" style="display:none;"></div>
 
             <div class="bg-tabs-header">
                 <button class="bg-tab-btn active" data-tab="WORLD">🌍 小世界</button>
@@ -319,14 +296,9 @@
                         🔀 合併多個大總結
                     </button>
 
-                    <div style="display:flex; gap:10px;">
-                        <button class="bg-btn-action" onclick="window.RPG_PANEL.openBlacklistModal()" style="flex:1;">
-                            🚫 黑名單管理
-                        </button>
-                        <button class="bg-btn-action" onclick="window.RPG_PANEL.openStickerModal()" style="flex:1;">
-                            📌 小貼示管理
-                        </button>
-                    </div>
+                    <button class="bg-btn-action" onclick="window.RPG_PANEL.openBlacklistModal()">
+                        🚫 黑名單管理
+                    </button>
 
                     <div style="margin-top:20px; font-size:14px; color:var(--gold-p); margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:6px; font-family:'Cinzel'; font-weight:bold;">SYSTEM / 系統設置</div>
                     <div style="padding:15px; background: rgba(20,20,20,0.8); border: 1px solid #333; border-radius: 6px; text-align:center; color:#888; font-size:12px; line-height:1.6;">
@@ -379,22 +351,6 @@
                     </div>
                     <div id="blacklist-content" style="flex:1; overflow-y:auto; text-align:left; border:1px solid #222; border-radius:4px; padding:10px; background:#0f0f0f; min-height:200px;">載入中...</div>
                     <button class="bg-btn-action" style="margin-top:15px;" onclick="document.getElementById('rpg-blacklist-modal').classList.remove('active')">關閉</button>
-                </div>
-            </div>
-
-            <div id="rpg-sticker-modal" class="rpg-modal-overlay">
-                <div class="rpg-modal-card" style="max-width: 500px;">
-                    <div class="rpg-modal-title">📌 小貼示管理</div>
-                    <div style="margin-bottom:15px; background:rgba(255,255,255,0.03); padding:15px; border-radius:6px; border:1px solid #333;">
-                        <input type="text" id="sticker-title-input" class="rpg-range-input" style="margin:0 0 10px 0;" placeholder="標題（顯示在按鈕上）...">
-                        <input type="text" id="sticker-content-input" class="rpg-range-input" style="margin:0 0 10px 0;" placeholder="內容（發送時自動追加）...">
-                        <button class="bg-btn-action gold" style="margin:0;" onclick="window.RPG_PANEL.addSticker()">+ 新增小貼示</button>
-                    </div>
-                    <div id="sticker-content" style="flex:1; overflow-y:auto; text-align:left; border:1px solid #222; border-radius:4px; padding:10px; background:#0f0f0f; min-height:200px;">載入中...</div>
-                    <div style="font-size:11px; color:#666; margin-top:10px; padding-top:10px; border-top:1px solid #333; text-align:left;">
-                        💡 提示：開啟的小貼示會在選擇劇情選項或發送對話時，自動作為系統提示追加到輸入框中。
-                    </div>
-                    <button class="bg-btn-action" style="margin-top:15px;" onclick="document.getElementById('rpg-sticker-modal').classList.remove('active')">關閉</button>
                 </div>
             </div>
 
@@ -1123,66 +1079,7 @@
         } catch(e) { alert('失敗:'+e.message); }
     };
 
-    // --- C. 小貼示管理 ---
-    API.openStickerModal = function() {
-        document.getElementById('rpg-sticker-modal').classList.add('active');
-        API.renderStickers();
-    };
-
-    API.renderStickers = function() {
-        const stickers = JSON.parse(localStorage.getItem('rpg_stickers') || '[]');
-        const div = document.getElementById('sticker-content');
-        if(stickers.length === 0) return div.innerHTML = '<div style="color:#666; text-align:center; padding:20px;">暫無小貼示</div>';
-        
-        div.innerHTML = stickers.map((s, i) => `
-            <div class="bg-sticker-item ${s.enabled ? 'active' : 'inactive'}">
-                <button class="bg-sticker-btn-toggle ${s.enabled ? 'active' : ''}" onclick="window.RPG_PANEL.toggleSticker(${i})">${s.enabled ? '✓' : ''}</button>
-                <div class="bg-sticker-content">
-                    <div style="font-weight:bold; color:var(--gold-p);">${escapeHtml(s.title || s.content)}</div>
-                    <div style="font-size:11px; color:#888;">${escapeHtml(s.content)}</div>
-                </div>
-                <div class="bg-sticker-delete" onclick="window.RPG_PANEL.deleteSticker(${i})">×</div>
-            </div>
-        `).join('');
-    };
-
-    API.addSticker = function() {
-        const t = document.getElementById('sticker-title-input').value.trim();
-        const c = document.getElementById('sticker-content-input').value.trim();
-        if(!t && !c) return;
-        const stickers = JSON.parse(localStorage.getItem('rpg_stickers') || '[]');
-        stickers.push({ title: t||c, content: c||t, enabled: true, id: Date.now() });
-        localStorage.setItem('rpg_stickers', JSON.stringify(stickers));
-        document.getElementById('sticker-title-input').value = '';
-        document.getElementById('sticker-content-input').value = '';
-        API.renderStickers();
-        API.renderStickerToggles();
-    };
-
-    API.toggleSticker = function(i) {
-        const stickers = JSON.parse(localStorage.getItem('rpg_stickers') || '[]');
-        if(stickers[i]) { stickers[i].enabled = !stickers[i].enabled; localStorage.setItem('rpg_stickers', JSON.stringify(stickers)); }
-        API.renderStickers(); API.renderStickerToggles();
-    };
-
-    API.deleteSticker = function(i) {
-        const stickers = JSON.parse(localStorage.getItem('rpg_stickers') || '[]');
-        stickers.splice(i, 1); localStorage.setItem('rpg_stickers', JSON.stringify(stickers));
-        API.renderStickers(); API.renderStickerToggles();
-    };
-
-    API.renderStickerToggles = function() {
-        const stickers = JSON.parse(localStorage.getItem('rpg_stickers') || '[]');
-        const container = document.getElementById('bg-sticker-toggles');
-        if(!container) return;
-        if(stickers.length === 0) return container.style.display = 'none';
-        
-        let html = '<span class="bg-sticker-toggle-label" onclick="window.RPG_PANEL.openStickerModal()" title="小貼示管理">📌</span>';
-        stickers.forEach((s, i) => html += `<button class="bg-sticker-toggle-btn ${s.enabled?'active':''}" onclick="window.RPG_PANEL.toggleSticker(${i})">${escapeHtml(s.title||s.content)}</button>`);
-        container.innerHTML = html; container.style.display = 'flex';
-    };
-
-    // --- D. 小世界生成器 ---
+    // --- C. 小世界生成器 ---
     API.generateWorldFromTab = async function() {
         const scene = document.getElementById('world-scene-input').value.trim();
         const note = document.getElementById('world-user-note').value.trim();
@@ -1716,7 +1613,6 @@ ${getCharCardTemplate()}`;
             });
         });
 
-        API.renderStickerToggles();
         API.renderWorldList();
         initDbAndLogs();
         refreshStateUI();   // 副模型抽取區塊：填欄位/patches 計數
