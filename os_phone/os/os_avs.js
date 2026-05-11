@@ -125,7 +125,10 @@
                     <div id="avs-view-rules" class="avs-view"></div>
                     <div id="avs-view-modes" class="avs-view"></div>
                     <div id="avs-view-packs" class="avs-view">
-                        <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack">＋ 創建新變數包</div>
+                        <div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+                            <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack" style="flex:1; min-width:140px;">＋ 創建新變數包</div>
+                            <div class="avs-btn avs-btn-outline" id="avs-btn-ai-gen-pack" style="flex:1; min-width:140px; display:none;">🧬 AI 從世界生成</div>
+                        </div>
                         <div id="avs-pack-list" style="display:flex; flex-direction:column; gap:10px;"></div>
                         <div id="avs-pack-editor" class="avs-card" style="display:none;">
                             <div class="avs-label">變數包名稱</div>
@@ -241,6 +244,51 @@
         btnNew.onclick = () => openPackEditor(container, null);
         btnCancel.onclick = () => { container.querySelector('#avs-pack-editor').style.display = 'none'; container.querySelector('#avs-pack-list').style.display = 'flex'; btnNew.style.display = 'inline-flex'; };
         btnAddVar.onclick = () => addVarRow(rowsContainer, '', '');
+
+        // 酒館特有：AI 從世界書/角色卡/開頭劇情生成變數包（PWA 有 VN_STORY_STARTED 自動觸發，不需此按鈕）
+        const btnAiGen = container.querySelector('#avs-btn-ai-gen-pack');
+        const isTavern = !(win.OS_API?.isStandalone?.());
+        if (btnAiGen && isTavern) {
+            btnAiGen.style.display = 'inline-flex';
+            btnAiGen.onclick = async () => {
+                if (!win.OS_STATE_SCHEMA?.generate) {
+                    alert('OS_STATE_SCHEMA 不可用（請確認 state_schema.js 已載入）');
+                    return;
+                }
+                const original = btnAiGen.textContent;
+                btnAiGen.textContent = '🧬 AI 分析中...';
+                btnAiGen.style.pointerEvents = 'none';
+                try {
+                    const schema = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true });
+                    if (!schema || !Object.keys(schema).length) {
+                        return;   // generate 內部已 showToast 失敗訊息
+                    }
+                    // 把 schema 轉換成變數包格式
+                    const variables = Object.entries(schema).map(([name, def]) => ({
+                        name,
+                        defaultValue: (def && def.init !== undefined && def.init !== '')
+                            ? def.init
+                            : (def?.type === 'number' ? 0 : '')
+                    }));
+                    const title = win.OS_AVS_ADAPTER?.getStoryTitle?.() || '新世界';
+                    const pack = {
+                        id: 'pack_' + Date.now(),
+                        name: `${title} (AI 生成)`,
+                        notes: '由主模型讀世界書 + 角色卡 + 開頭劇情自動生成。可手動編輯增/減/改變數。',
+                        variables
+                    };
+                    await win.OS_DB.saveVarPack(pack);
+                    await loadAllData(container);
+                    if (win.toastr) win.toastr.success(`✅ 已生成變數包「${pack.name}」（${variables.length} 個變數）`);
+                } catch(e) {
+                    console.error('[AVS] AI 生成變數包失敗:', e);
+                    alert('生成失敗：' + (e?.message || e));
+                } finally {
+                    btnAiGen.textContent = original;
+                    btnAiGen.style.pointerEvents = '';
+                }
+            };
+        }
 
         btnSave.onclick = async () => {
             const name = container.querySelector('#avs-pack-name').value;
@@ -423,14 +471,18 @@
         if (!el) return;
 
         const eng = win._AVS_ENGINE;
-        const storyId = localStorage.getItem('vn_current_story_id') || '';
+        // V1.2 → 改用 adapter：酒館下 storyId = chatId（透過 adapter），PWA 仍走原 localStorage
+        const storyId = win.OS_AVS_ADAPTER?.getStoryId?.() || localStorage.getItem('vn_current_story_id') || '';
         const stateKey = eng ? eng.getKey() : (storyId ? `avs_state_${storyId}` : 'avs_current_state');
+        // 直接從 engine 讀 state（engine 內部已透過 adapter 自動切換來源）
         let state = {};
-        try { state = JSON.parse(localStorage.getItem(stateKey) || '{}'); } catch(e) {}
+        try { state = (eng?.read?.()) || JSON.parse(localStorage.getItem(stateKey) || '{}'); } catch(e) {}
 
         const entries = Object.entries(state);
-        const storyLabel = storyId
-            ? `<span style="color:#FBDFA2;">${localStorage.getItem('vn_current_story_title') || storyId}</span>`
+        // 標題：酒館下 adapter 回角色卡名 fallback chatId；PWA 走 vn_current_story_title
+        const storyTitleResolved = win.OS_AVS_ADAPTER?.getStoryTitle?.() || localStorage.getItem('vn_current_story_title') || storyId;
+        const storyLabel = storyTitleResolved
+            ? `<span style="color:#FBDFA2;">${storyTitleResolved}</span>`
             : '<span style="color:rgba(251,223,162,0.45);">（未開啟故事）</span>';
 
         // 快照數量

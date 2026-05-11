@@ -134,6 +134,20 @@
             return getCurrentChatId();
         },
 
+        /** 故事標題（給變數工坊 UI 顯示「當前故事」用）
+         *  PWA → vn_current_story_title；酒館 → 角色卡名 fallback chatId
+         */
+        getStoryTitle() {
+            if (isStandalone()) {
+                return localStorage.getItem('vn_current_story_title') || localStorage.getItem('vn_current_story_id') || '';
+            }
+            try {
+                const ctx = win.SillyTavern?.getContext?.();
+                const charName = ctx?.name2 || ctx?.characters?.[ctx?.characterId]?.name;
+                return charName || getCurrentChatId() || '';
+            } catch(e) { return getCurrentChatId() || ''; }
+        },
+
         /** 取當前 cache snapshot（給 UI 顯示用，不要修改回傳值）*/
         getCache() { return { ..._cache }; },
 
