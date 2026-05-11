@@ -203,9 +203,12 @@ ${modeRules}
     // --- 從 AVS 變數包合併出 schema（融合：schema 來源從 OS_DB.state_data.schema → AVS 變數包）---
     async function getActiveSchema() {
         if (!win.OS_DB?.getAllVarPacks) return null;
-        const packs = await win.OS_DB.getAllVarPacks();
-        if (!packs.length) return null;
-        // 合併所有變數包的變數定義（後來的覆蓋先前的）
+        const allPacks = await win.OS_DB.getAllVarPacks();
+        if (!allPacks.length) return null;
+        // 只用「沒綁 chatId（全域 pack）」或「綁定當前 chatId」的 pack
+        // 避免跨 chat / 跨角色卡的 pack 互相污染（每個 chat 角色不同、變數不同）
+        const chatId = getChatId();
+        const packs = allPacks.filter(p => !p.chatId || p.chatId === chatId);
         const schema = {};
         for (const pack of packs) {
             if (!Array.isArray(pack.variables)) continue;
