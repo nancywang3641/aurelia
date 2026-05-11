@@ -232,10 +232,12 @@
         const targetComment = `[本世界狀態變數說明書] - ${chatId}`;
 
         try {
-            const packs = await win.OS_DB.getAllVarPacks();
-            // 合併所有 pack 的變數
+            const allPacks = await win.OS_DB.getAllVarPacks();
+            // 只用「沒綁 chatId（全域 pack）」或「綁定當前 chatId」的 pack
+            // 跨角色卡 / 跨 chat 的 pack 不應該混進當前 chat 的世界書
+            const packs = (allPacks || []).filter(p => !p.chatId || p.chatId === chatId);
             const allVars = [];
-            for (const pack of (packs || [])) {
+            for (const pack of packs) {
                 if (!Array.isArray(pack.variables)) continue;
                 for (const v of pack.variables) {
                     if (v.name) allVars.push(v);
@@ -382,11 +384,13 @@ ${lines.join('\n')}
                         };
                     });
                     const title = win.OS_AVS_ADAPTER?.getStoryTitle?.() || '新世界';
+                    const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
                     const pack = {
                         id: 'pack_' + Date.now(),
                         name: `${title} (AI 生成)`,
                         notes: '由主模型讀世界書 + 角色卡 + 開頭劇情自動生成。可手動編輯增/減/改變數。',
-                        variables
+                        variables,
+                        chatId: currentChatId   // 綁 chatId / storyId，sync 跟 schema 抽取只用當前 chat 的 pack
                     };
                     await win.OS_DB.saveVarPack(pack);
                     await loadAllData(container);
