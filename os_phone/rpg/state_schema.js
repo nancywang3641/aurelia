@@ -152,7 +152,16 @@ ${materials.headMessages || '（無）'}
       "desc": "<這欄位記什麼，何時會變>",
       "init": <初始值>
     }
-  }
+  },
+  "rules": [
+    {
+      "name": "<規則名>",
+      "path": "<變數名>",
+      "op": "<>= | <= | > | < | = | !=>",
+      "value": <比較值>,
+      "content": "<當條件成立時主模型該如何調整劇情/對話>"
+    }
+  ]
 }
 
 【init 型別規則】
@@ -165,6 +174,16 @@ ${materials.headMessages || '（無）'}
 - **倒計時類**註明起始值與終止條件，例：「末日倒計時 (90 開始，可變負，-30 完全末日)」
 - **絕對禁止**寫沒上限的 desc，例「好感度，互動上升」← 這種寫法會讓 AI 累加到 999999
 - enum 型 desc 必須列出**完整可選值**，例：「狀態。可選值: 健康/受傷/重傷/死亡」
+
+【rules 設計規則】
+- 3-6 條規則，**每條對應 fields 中的某個變數**（path = 變數名）
+- 設計值得觸發行為調整的閾值，例：
+  - 「好感度高觸發親密」: path="好感度" op=">=" value=80 content="角色對主角極度親密，主動拉近距離，語氣溫柔"
+  - 「危急狀態」: path="HP" op="<=" value=20 content="角色處於瀕死，行動受限，語氣虛弱"
+  - 「末日階段」: path="末日倒計時" op="<=" value=0 content="末日已至，環境崩壞，NPC 行動模式轉為求生"
+- content 用 30-60 字描述「AI 應該如何寫劇情」，不要寫設定本身
+- 規則應依世界觀題材取捨（戀愛 → 好感階段；末日 → 倒計時階段；推理 → 線索觸發）
+- 不要用 markdown 符號、不要分項列點，純文字一段話
 
 【整體規則】
 - 欄位數 ${CONFIG.minFields}-${CONFIG.maxFields} 個
@@ -238,12 +257,14 @@ ${materials.headMessages || '（無）'}
             const json = await runWithRetry(prompt);
 
             // V2 之後：generate 不再寫 state_data.schema（schema 已搬到 AVS 變數包）
-            // 純生成並回傳；呼叫端（os_avs.js）負責寫 var_pack 跟觸發初始填充
+            // 純生成並回傳；呼叫端（os_avs.js）負責寫 var_pack + rules
+            // V3：同時返回 fields 跟 rules（AI 生成階段同步出條件規則，跟變數包綁定）
             const count = Object.keys(json.fields).length;
-            showToast(`✅ Schema 生成完成（${count} 個欄位）`, 'success');
-            try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: json.fields }); } catch(e) {}
+            const ruleCount = Array.isArray(json.rules) ? json.rules.length : 0;
+            showToast(`✅ Schema 生成完成（${count} 個欄位 / ${ruleCount} 條規則）`, 'success');
+            try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: json.fields, rules: json.rules }); } catch(e) {}
 
-            return json.fields;
+            return { fields: json.fields, rules: Array.isArray(json.rules) ? json.rules : [] };
         } catch(e) {
             console.error('[State Schema] 生成失敗:', e);
             showToast(`❌ Schema 生成失敗：${e.message || e}`, 'error');
