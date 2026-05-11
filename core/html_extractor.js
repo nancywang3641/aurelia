@@ -360,6 +360,59 @@
                 this.activeTab = tabOrder[0];
             }
             this.switchTab(this.activeTab);
+
+            // 異步注入「狀態面板」固定 tab（從展廳啟用的 UI 模板渲染 + 當前變數值）
+            // chatId-aware：不同 chat 對應不同 pack 的 active 模板
+            this._injectStatePanelTab().catch(e => console.warn('[Extractor] 狀態面板注入失敗:', e));
+        },
+
+        async _injectStatePanelTab() {
+            const win = window.parent || window;
+            if (!win.OS_DB?.getAllUITemplates || !win.OS_AVS_ADAPTER) return;
+
+            const chatId = win.OS_AVS_ADAPTER.getCurrentChatId?.() || '';
+            if (!chatId) return;
+
+            // 找當前 chat 對應的 pack（!pack.chatId 視為通用 fallback）
+            const allPacks = await win.OS_DB.getAllVarPacks();
+            const myPackIds = (allPacks || [])
+                .filter(p => !p.chatId || p.chatId === chatId)
+                .map(p => p.id);
+            if (!myPackIds.length) return;
+
+            // 找啟用中的 UI 模板（綁定我這些 pack 的）
+            const templates = await win.OS_DB.getAllUITemplates();
+            const activeTpl = (templates || []).find(t => t.isActive && myPackIds.includes(t.packId));
+            if (!activeTpl) return;   // 沒煉丹過 / 沒啟用任何模板 → 不注入
+
+            // 拿當前變數值（從 AVS engine state）替換 {{變數名}} placeholder
+            const state = win._AVS_ENGINE?.read?.() || {};
+            let html = activeTpl.htmlContent || '';
+            for (const [k, v] of Object.entries(state)) {
+                const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                html = html.split(`{{${k}}}`).join(val);
+            }
+            if (activeTpl.cssContent) {
+                html = `<style>${activeTpl.cssContent}</style>${html}`;
+            }
+
+            // 建 tab（重複建立會留下舊的，先清掉）
+            const doc = win.document || document;
+            const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
+            if (!overlay) return;
+            const oldBtn  = overlay.querySelector('#tab-btn-aurelia_state_panel');
+            const oldPane = overlay.querySelector('#tab-pane-aurelia_state_panel');
+            if (oldBtn)  oldBtn.remove();
+            if (oldPane) oldPane.remove();
+
+            this.createTab('aurelia_state_panel', '🎲 狀態面板', html);
+
+            // 把這個 tab 推到第一個位置（不在預設 tabOrder 內，加完是最後一個）
+            const tabBar = overlay.querySelector('#ue-tab-bar');
+            const newBtn = overlay.querySelector('#tab-btn-aurelia_state_panel');
+            if (tabBar && newBtn && tabBar.firstChild !== newBtn) {
+                tabBar.insertBefore(newBtn, tabBar.firstChild);
+            }
         },
 
         createTab(id, name, contentHtml) {
