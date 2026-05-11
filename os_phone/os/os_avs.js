@@ -212,6 +212,87 @@
         renderPackList(container);
     }
 
+    // === 同步變數包定義到酒館世界書（讓酒館主模型寫劇情時看到變數說明）===
+    // 觸發時機：AI 生成 / 編輯儲存 / 刪除變數包 之後
+    // PWA 不需要（PWA 的主模型走自家機制，不靠酒館世界書）
+    async function syncVarPackToLorebook() {
+        if (win.OS_API?.isStandalone?.()) return;
+        if (!win.TavernHelper?.getLorebookEntries) return;
+
+        const chatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+        if (!chatId) return;
+
+        const bookName = win.TavernHelper.getCurrentCharPrimaryLorebook?.()
+            || win.TavernHelper.getCharWorldbookNames?.('current')?.primary;
+        if (!bookName) {
+            console.warn('[AVS Sync] 未綁定世界書，跳過同步');
+            return;
+        }
+
+        const targetComment = `[本世界狀態變數說明書] - ${chatId}`;
+
+        try {
+            const packs = await win.OS_DB.getAllVarPacks();
+            // 合併所有 pack 的變數
+            const allVars = [];
+            for (const pack of (packs || [])) {
+                if (!Array.isArray(pack.variables)) continue;
+                for (const v of pack.variables) {
+                    if (v.name) allVars.push(v);
+                }
+            }
+
+            const entries = await win.TavernHelper.getLorebookEntries(bookName);
+            const existing = entries.find(e => e.comment === targetComment);
+
+            // 沒任何變數 → 刪掉舊條目（避免殘留誤導 AI）
+            if (allVars.length === 0) {
+                if (existing) {
+                    await win.TavernHelper.updateLorebookEntriesWith(bookName, list =>
+                        list.filter(e => e.comment !== targetComment)
+                    );
+                    console.log('[AVS Sync] 變數包已清空，刪除世界書條目');
+                }
+                return;
+            }
+
+            // 組變數說明書內容
+            const lines = allVars.map(v => {
+                const typeStr = v.type ? ` (${v.type})` : '';
+                const descStr = v.desc ? `：${v.desc}` : '';
+                return `- ${v.name}${typeStr}${descStr}`;
+            });
+            const content = `[本世界狀態變數說明書]
+本世界劇情中追蹤的狀態變數定義。劇情演進時請依各變數的描述與範圍合理推進，不要違反枚舉值範圍或數值上下限。
+
+${lines.join('\n')}
+
+註：變數的「當前值」會由系統另行注入，本條目僅是變數定義說明書。`;
+
+            const entryData = {
+                comment: targetComment,
+                keys: [],
+                content,
+                constant: true,
+                enabled: true,
+                position: 'at_depth_as_system',
+                depth: 1,
+                order: 9990
+            };
+
+            if (existing) {
+                await win.TavernHelper.updateLorebookEntriesWith(bookName, list =>
+                    list.map(e => e.comment === targetComment ? { ...e, ...entryData } : e)
+                );
+            } else {
+                await win.TavernHelper.createLorebookEntries(bookName, [entryData]);
+            }
+            console.log(`📖 [AVS Sync] 變數說明書已同步到世界書: ${targetComment} (${allVars.length} 變數)`);
+        } catch(e) {
+            console.warn('[AVS Sync] 同步世界書失敗:', e);
+        }
+    }
+
     function renderPackList(container) {
         const listEl = container.querySelector('#avs-pack-list');
         listEl.innerHTML = '';
@@ -228,7 +309,10 @@
             `;
             card.querySelector('.btn-edit').onclick = () => openPackEditor(container, pack);
             card.querySelector('.btn-del').onclick = async () => {
-                if (confirm('刪除？')) { await win.OS_DB.deleteVarPack(pack.id); await loadAllData(container); }
+                if (!confirm('刪除？')) return;
+                await win.OS_DB.deleteVarPack(pack.id);
+                await loadAllData(container);
+                await syncVarPackToLorebook();
             };
             listEl.appendChild(card);
         });
@@ -306,7 +390,9 @@
                     };
                     await win.OS_DB.saveVarPack(pack);
                     await loadAllData(container);
-                    if (win.toastr) win.toastr.success(`✅ 已生成變數包「${pack.name}」（${variables.length} 個變數）`);
+                    // 寫完變數包後同步到酒館世界書（讓主模型寫劇情時看到變數說明）
+                    await syncVarPackToLorebook();
+                    if (win.toastr) win.toastr.success(`✅ 已生成變數包「${pack.name}」（${variables.length} 個變數），世界書已同步`);
 
                     // 寫完變數包後觸發副模型初始填充（current 為空 → initial 模式 → 填齊所有欄位）
                     if (win.OS_STATE_RUNTIME?.extractOnce) {
@@ -344,6 +430,7 @@
             pack.name = name; pack.notes = container.querySelector('#avs-pack-notes').value; pack.variables = variables;
             await win.OS_DB.saveVarPack(pack);
             btnCancel.onclick(); await loadAllData(container);
+            await syncVarPackToLorebook();
         };
     }
 
@@ -780,6 +867,7 @@
 
     win.OS_AVS = {
         launch: launchApp,
+        syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發
         activateTemplateForPack,
         /** 還原上一個 AVS 快照（可在 reroll/重試 時外部呼叫） */
         restoreSnapshot: () => win._AVS_ENGINE?.restore?.() ?? null,
