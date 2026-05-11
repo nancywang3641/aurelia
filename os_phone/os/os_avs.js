@@ -264,12 +264,34 @@
                         return;   // generate 內部已 showToast 失敗訊息
                     }
                     // 把 schema 轉換成變數包格式
-                    const variables = Object.entries(schema).map(([name, def]) => ({
-                        name,
-                        defaultValue: (def && def.init !== undefined && def.init !== '')
-                            ? def.init
-                            : (def?.type === 'number' ? 0 : '')
-                    }));
+                    const variables = Object.entries(schema).map(([name, def]) => {
+                        const init = def?.init;
+                        const t = def?.type;
+                        let defaultValue;
+
+                        if (t === 'list') {
+                            // list 型強制驗證為合法 JSON 陣列字串（防主模型亂吐 "["、單字串、null 等）
+                            if (Array.isArray(init)) {
+                                defaultValue = JSON.stringify(init);
+                            } else if (typeof init === 'string' && init.trim()) {
+                                try {
+                                    const parsed = JSON.parse(init);
+                                    defaultValue = Array.isArray(parsed) ? JSON.stringify(parsed) : '[]';
+                                } catch(e) {
+                                    defaultValue = '[]';
+                                }
+                            } else {
+                                defaultValue = '[]';
+                            }
+                        } else if (init === undefined || init === null || init === '') {
+                            defaultValue = t === 'number' ? 0 : '';
+                        } else if (typeof init === 'object') {
+                            try { defaultValue = JSON.stringify(init); } catch(e) { defaultValue = ''; }
+                        } else {
+                            defaultValue = init;
+                        }
+                        return { name, defaultValue };
+                    });
                     const title = win.OS_AVS_ADAPTER?.getStoryTitle?.() || '新世界';
                     const pack = {
                         id: 'pack_' + Date.now(),
@@ -308,7 +330,11 @@
     function addVarRow(container, name, val) {
         const row = document.createElement('div');
         row.className = 'avs-var-row';
-        row.innerHTML = `<input class="avs-input var-name" placeholder="名" value="${name}" style="flex:2;"><input class="avs-input var-default" placeholder="值" value="${val}" style="flex:1;"><div style="color:red; cursor:pointer;" onclick="this.parentElement.remove()">✖</div>`;
+        // 修：用 DOM API 設 value 避開 innerHTML 解析衝突
+        // （JSON 字串含雙引號會撞 value="${...}" 的屬性邊界，導致只取到第一個雙引號前的字元如「[」）
+        row.innerHTML = `<input class="avs-input var-name" placeholder="名" style="flex:2;"><input class="avs-input var-default" placeholder="值" style="flex:1;"><div style="color:red; cursor:pointer;" onclick="this.parentElement.remove()">✖</div>`;
+        row.querySelector('.var-name').value = name != null ? String(name) : '';
+        row.querySelector('.var-default').value = val != null ? String(val) : '';
         container.appendChild(row);
     }
 
