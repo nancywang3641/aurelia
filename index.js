@@ -44,6 +44,7 @@ const PHONE_FILES = [
     'os/os_avs_adapter.js',   // 雙端切換層：必須在 engine / rules 之前載入
     'os/os_avs_engine.js',
     'os/os_avs_rules.js',
+    'os/os_avs.js',           // 變數工坊 UI（PWA / 酒館共用一套面板）
     'os/os_api_engine.js',
     'os/phone_system.js',
     'os/os_monitor.js',
