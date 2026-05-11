@@ -392,6 +392,17 @@
                 const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
                 html = html.split(`{{${k}}}`).join(val);
             }
+            // 殘留沒對應 state 的 {{xxx}} → 改顯示「—」並 console 報缺
+            const missing = [];
+            html = html.replace(/\{\{([^{}]+)\}\}/g, (_, name) => {
+                missing.push(name.trim());
+                return '<span style="opacity:0.45; font-style:italic;">—</span>';
+            });
+            if (missing.length) {
+                console.warn('[Extractor] 狀態面板模板缺以下變數（state 沒對應 key）:', [...new Set(missing)]);
+                console.warn('[Extractor] 當前 state keys:', Object.keys(state));
+                console.warn('[Extractor] 建議：模板 {{xxx}} 跟變數包名要一致，或編輯變數包補上這些 key');
+            }
             if (activeTpl.cssContent) {
                 html = `<style>${activeTpl.cssContent}</style>${html}`;
             }
