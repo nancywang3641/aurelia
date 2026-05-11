@@ -243,7 +243,7 @@
 
         btnNew.onclick = () => openPackEditor(container, null);
         btnCancel.onclick = () => { container.querySelector('#avs-pack-editor').style.display = 'none'; container.querySelector('#avs-pack-list').style.display = 'flex'; btnNew.style.display = 'inline-flex'; };
-        btnAddVar.onclick = () => addVarRow(rowsContainer, '', '');
+        btnAddVar.onclick = () => addVarRow(rowsContainer, '', '', '', 'string');
 
         // 酒館特有：AI 從世界書/角色卡/開頭劇情生成變數包（PWA 有 VN_STORY_STARTED 自動觸發，不需此按鈕）
         const btnAiGen = container.querySelector('#avs-btn-ai-gen-pack');
@@ -263,10 +263,10 @@
                     if (!schema || !Object.keys(schema).length) {
                         return;   // generate 內部已 showToast 失敗訊息
                     }
-                    // 把 schema 轉換成變數包格式
+                    // 把 schema 完整融合進變數包（保留 desc / type / init 給 AI 跑團時看）
                     const variables = Object.entries(schema).map(([name, def]) => {
                         const init = def?.init;
-                        const t = def?.type;
+                        const t = def?.type || 'string';
                         let defaultValue;
 
                         if (t === 'list') {
@@ -290,7 +290,12 @@
                         } else {
                             defaultValue = init;
                         }
-                        return { name, defaultValue };
+                        return {
+                            name,
+                            defaultValue,
+                            desc: def?.desc || '',   // ← 約束 AI 跑團不亂改的關鍵
+                            type: t                  // ← 型別暗示
+                        };
                     });
                     const title = win.OS_AVS_ADAPTER?.getStoryTitle?.() || '新世界';
                     const pack = {
@@ -302,6 +307,15 @@
                     await win.OS_DB.saveVarPack(pack);
                     await loadAllData(container);
                     if (win.toastr) win.toastr.success(`✅ 已生成變數包「${pack.name}」（${variables.length} 個變數）`);
+
+                    // 寫完變數包後觸發副模型初始填充（current 為空 → initial 模式 → 填齊所有欄位）
+                    if (win.OS_STATE_RUNTIME?.extractOnce) {
+                        setTimeout(() => {
+                            try { win.OS_STATE_RUNTIME.extractOnce(); } catch(e) {
+                                console.warn('[AVS] 觸發副模型初始填充失敗:', e);
+                            }
+                        }, 500);
+                    }
                 } catch(e) {
                     console.error('[AVS] AI 生成變數包失敗:', e);
                     alert('生成失敗：' + (e?.message || e));
@@ -318,7 +332,13 @@
             const variables = [];
             rowsContainer.querySelectorAll('.avs-var-row').forEach(row => {
                 const vn = row.querySelector('.var-name').value;
-                if (vn) variables.push({ name: vn, defaultValue: row.querySelector('.var-default').value });
+                if (!vn) return;
+                variables.push({
+                    name: vn,
+                    defaultValue: row.querySelector('.var-default').value,
+                    desc: row.querySelector('.var-desc')?.value || '',
+                    type: row.querySelector('.var-type')?.value || 'string'
+                });
             });
             const pack = activeEditingPack ? { ...activeEditingPack } : { id: 'pack_' + Date.now() };
             pack.name = name; pack.notes = container.querySelector('#avs-pack-notes').value; pack.variables = variables;
@@ -327,14 +347,29 @@
         };
     }
 
-    function addVarRow(container, name, val) {
+    function addVarRow(container, name, val, desc, type) {
         const row = document.createElement('div');
         row.className = 'avs-var-row';
-        // 修：用 DOM API 設 value 避開 innerHTML 解析衝突
-        // （JSON 字串含雙引號會撞 value="${...}" 的屬性邊界，導致只取到第一個雙引號前的字元如「[」）
-        row.innerHTML = `<input class="avs-input var-name" placeholder="名" style="flex:2;"><input class="avs-input var-default" placeholder="值" style="flex:1;"><div style="color:red; cursor:pointer;" onclick="this.parentElement.remove()">✖</div>`;
+        // 用 column flex，name+value+刪除 一行、desc 一行（折疊式：focus 才高展開）
+        row.style.cssText = 'flex-direction:column; align-items:stretch;';
+        row.innerHTML = `
+            <div style="display:flex; gap:10px; align-items:center; width:100%;">
+                <input class="avs-input var-name" placeholder="變數名" style="flex:2;">
+                <input class="avs-input var-default" placeholder="預設值" style="flex:1;">
+                <select class="avs-select var-type" style="flex:0 0 90px; font-size:12px;">
+                    <option value="string">字串</option>
+                    <option value="number">數字</option>
+                    <option value="list">陣列</option>
+                    <option value="enum">枚舉</option>
+                </select>
+                <div style="color:#e74c3c; cursor:pointer; flex-shrink:0; padding:0 4px;" onclick="this.closest('.avs-var-row').remove()">✖</div>
+            </div>
+            <textarea class="avs-textarea var-desc" placeholder="📝 說明（AI 跑團看這個約束變數，例：好感度 0-100，互動正面 +1~5）" style="font-size:12px; min-height:40px; opacity:0.7;" onfocus="this.style.opacity=1; this.style.minHeight='60px';" onblur="this.style.opacity=0.7;"></textarea>
+        `;
         row.querySelector('.var-name').value = name != null ? String(name) : '';
         row.querySelector('.var-default').value = val != null ? String(val) : '';
+        row.querySelector('.var-desc').value = desc != null ? String(desc) : '';
+        if (type) row.querySelector('.var-type').value = type;
         container.appendChild(row);
     }
 
@@ -345,11 +380,12 @@
         const editor = container.querySelector('#avs-pack-editor');
         editor.style.display = 'block';
         container.querySelector('#avs-pack-name').value = pack ? pack.name : '';
-        container.querySelector('#avs-pack-notes').value = pack ? pack.notes : '';
+        // 修 PWA「undefined」bug：notes 沒填時用空字串而不是 undefined → 字串
+        container.querySelector('#avs-pack-notes').value = (pack && pack.notes) || '';
         const rows = container.querySelector('#avs-var-rows-container');
         rows.innerHTML = '';
-        if (pack) pack.variables.forEach(v => addVarRow(rows, v.name, v.defaultValue));
-        else addVarRow(rows, '', '');
+        if (pack) pack.variables.forEach(v => addVarRow(rows, v.name, v.defaultValue, v.desc, v.type));
+        else addVarRow(rows, '', '', '', 'string');
     }
 
     function refreshFurnacePackSelect(container) {

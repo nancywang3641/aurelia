@@ -1833,9 +1833,11 @@ ${getCharCardTemplate()}`;
             }
 
             const data = await win.OS_DB.getStateData(chatId);
+            // V2：schema 從 AVS 變數包讀（不再讀 state_data.schema）
+            const fieldsFromPacks = await win.OS_STATE_RUNTIME?.getActiveSchema?.();
             loadingView.style.display = 'none';
 
-            const hasSchema = data?.schema && Object.keys(data.schema).length > 0;
+            const hasSchema = fieldsFromPacks && Object.keys(fieldsFromPacks).length > 0;
             if (!hasSchema) {
                 initView.style.display = 'block';
                 return;
@@ -1843,9 +1845,10 @@ ${getCharCardTemplate()}`;
 
             mainView.style.display = 'block';
 
-            const fields = data.schema;
-            const cur = data.current || {};
-            const patches = data.patches || {};
+            const fields = fieldsFromPacks;
+            // V2：current 從 AVS engine state 讀（透過 adapter 接到 state_data.current）
+            const cur = win._AVS_ENGINE?.read?.() || data?.current || {};
+            const patches = data?.patches || {};
             const schemaCountEl  = document.getElementById('sp-state-schema-count');
             const patchesCountEl = document.getElementById('sp-state-patches-count');
             const schemaList     = document.getElementById('sp-state-schema-list');

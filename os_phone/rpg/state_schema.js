@@ -221,7 +221,7 @@ ${materials.headMessages || '（無）'}
         const chatId = getChatId();
         if (!chatId) { showToast('⚠️ 沒有 chatId，無法生成 schema', 'warning'); return null; }
 
-        showToast('🧬 主模型正在分析世界 → 生成狀態 schema...', 'info');
+        showToast('🧬 主模型正在分析世界 → 生成 schema...', 'info');
         try {
             const [worldbook, userPersona, charCard, headMessages] = await Promise.all([
                 gatherWorldbookText(),
@@ -232,25 +232,11 @@ ${materials.headMessages || '（無）'}
             const prompt = buildPrompt({ worldbook, userPersona, charCard, headMessages });
             const json = await runWithRetry(prompt);
 
-            // 寫進 OS_DB（保留舊 patches/current，只覆蓋 schema）
-            const existing = (win.OS_DB?.getStateData ? await win.OS_DB.getStateData(chatId) : null) || {};
-            await win.OS_DB.saveStateData(chatId, {
-                schema: json.fields,
-                patches: opts.resetPatches ? {} : (existing.patches || {}),
-                current: opts.resetPatches ? {} : (existing.current || {})
-            });
-
+            // V2 之後：generate 不再寫 state_data.schema（schema 已搬到 AVS 變數包）
+            // 純生成並回傳；呼叫端（os_avs.js）負責寫 var_pack 跟觸發初始填充
             const count = Object.keys(json.fields).length;
-            showToast(`✅ Schema 生成完成（${count} 個欄位） · 副模型即將初始化當前狀態`, 'success');
+            showToast(`✅ Schema 生成完成（${count} 個欄位）`, 'success');
             try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: json.fields }); } catch(e) {}
-
-            // 自動跑一次 extract → current 為空時走「初始化模式」把全部欄位填上初值
-            // 不必等 GENERATION_ENDED 也不必看「啟用即時抽取」總開關
-            if (!opts.skipInitialFill && win.OS_STATE_RUNTIME?.extractOnce) {
-                setTimeout(() => {
-                    try { win.OS_STATE_RUNTIME.extractOnce(); } catch(e) { console.warn('[State Schema] 初始填充觸發失敗:', e); }
-                }, 800);
-            }
 
             return json.fields;
         } catch(e) {

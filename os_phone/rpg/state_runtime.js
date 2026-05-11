@@ -171,7 +171,7 @@
 
         return `你是劇情狀態追蹤抽取器。根據 schema 與最近的劇情，找出狀態欄位的變化。
 
-【schema 定義】
+【schema 定義 / 每個欄位的 desc 就是 AI 必須嚴守的約束】
 ${JSON.stringify(schema, null, 2)}
 
 【上一輪後的當下狀態】
@@ -196,7 +196,29 @@ ${modeRules}
 - 數字欄位：直接給新數值（例：當下好感 12 + 升 3 → 15）
 - 字串/enum 欄位：給新字串
 - list 欄位：給完整陣列（追加項就 push 後完整輸出）
-- 不要編造劇情沒寫的事（但初始化模式可以從 schema.desc 推合理初值）`;
+- 不要編造劇情沒寫的事（但初始化模式可以從 schema.desc 推合理初值）
+- **嚴守每個欄位的 desc 約束**：例如 desc 寫「0-100」就不准超出範圍、寫「枚舉值：A/B/C」就不准給其他值`;
+    }
+
+    // --- 從 AVS 變數包合併出 schema（融合：schema 來源從 OS_DB.state_data.schema → AVS 變數包）---
+    async function getActiveSchema() {
+        if (!win.OS_DB?.getAllVarPacks) return null;
+        const packs = await win.OS_DB.getAllVarPacks();
+        if (!packs.length) return null;
+        // 合併所有變數包的變數定義（後來的覆蓋先前的）
+        const schema = {};
+        for (const pack of packs) {
+            if (!Array.isArray(pack.variables)) continue;
+            for (const v of pack.variables) {
+                if (!v.name) continue;
+                schema[v.name] = {
+                    type: v.type || 'string',
+                    desc: v.desc || '',
+                    init: v.defaultValue
+                };
+            }
+        }
+        return Object.keys(schema).length ? schema : null;
     }
 
     // --- 主流程：抽一次 ---
@@ -207,35 +229,45 @@ ${modeRules}
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
 
-            const data = await win.OS_DB.getStateData(chatId);
-            if (!data || !data.schema || !Object.keys(data.schema).length) {
-                // 沒 schema 不抽（要先按按鈕生 schema）
+            // 改：schema 來源從變數包讀（不再讀 state_data.schema）
+            const schema = await getActiveSchema();
+            if (!schema || !Object.keys(schema).length) {
+                // 沒變數包不抽（要先按「🧬 AI 從世界生成」生變數包）
                 return;
             }
+
+            // current 從 AVS engine state 讀（透過 adapter 接到 state_data.current）
+            const currentState = win._AVS_ENGINE?.read?.() || {};
 
             const { text: recentText, lastId } = await gatherRecentMessages();
             if (!recentText || lastId < 0) return;
 
-            // 已經抽過這個 msgId，跳過
+            // patches 仍由 state_data 維護（reroll/swipe 回退用）
+            const data = (await win.OS_DB.getStateData(chatId)) || {};
             if (data.patches && data.patches[lastId] !== undefined) return;
 
             // 判斷是不是首次抽取（current 為空）→ 走初始化模式，要副模型把所有欄位填齊
-            const isInitialFill = !data.current || Object.keys(data.current).length === 0;
-            const prompt = buildExtractPrompt(data.schema, data.current || {}, recentText, isInitialFill);
+            const isInitialFill = !currentState || Object.keys(currentState).length === 0;
+            const prompt = buildExtractPrompt(schema, currentState, recentText, isInitialFill);
             const json = await runWithRetry(prompt);
             const updates = json.updates || {};
 
             // 過濾：只接受 schema 裡有的欄位
             const filtered = {};
             for (const k of Object.keys(updates)) {
-                if (data.schema[k] !== undefined) filtered[k] = updates[k];
+                if (schema[k] !== undefined) filtered[k] = updates[k];
             }
 
-            // 寫 patch
+            // 寫 patch（仍存 state_data，給 reroll 用）
             const newPatches = trimPatches({ ...(data.patches || {}), [lastId]: filtered });
             const newCurrent = recomputeCurrent(newPatches);
+
+            // current 透過 AVS engine 寫（engine 內部走 adapter → 酒館下實際寫 state_data.current）
+            try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
+
+            // patches 仍 partial 寫 state_data
             await win.OS_DB.saveStateData(chatId, {
-                schema: data.schema,
+                ...data,
                 patches: newPatches,
                 current: newCurrent
             });
@@ -482,6 +514,7 @@ ${modeRules}
         injectCurrent, injectRules, extractOnce,
         listAllStateData, removeStateData,
         normalizeChatId,
+        getActiveSchema,   // V2：schema 從 AVS 變數包合併（給 status_panel 等外部 UI 用）
         CONFIG
     };
 
