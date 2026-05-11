@@ -112,9 +112,9 @@
     // 三、公開 API
     // ================================================================
 
-    function getActiveContext(state) {
+    function getActiveContext(state, activePackIds = null) {
         if (!state || typeof state !== 'object') return '';
-        
+
         // V1.4：worldId 走 adapter（酒館：當前 chatId / PWA：vn_current_world_id）
         const currentWorldId = win.OS_AVS_ADAPTER?.getWorldId?.() || localStorage.getItem('vn_current_world_id') || '';
         let activePackId = '';
@@ -129,7 +129,11 @@
                 if (target === 'pool') return false; // 放置區不生效
                 return target === 'global' || target === activePackId;
             }
-            // 如果是一般規則
+            // V3：規則綁 packId（酒館用）→ caller 傳入當前 chat 對應的 pack IDs，filter 通過才生效
+            if (r.packId && Array.isArray(activePackIds)) {
+                return activePackIds.includes(r.packId);
+            }
+            // 沒 packId → 退回原 worldId filter（PWA / 舊資料）
             if (!r.worldId) return true;
             return r.worldId === currentWorldId;
         });
@@ -860,6 +864,7 @@
             value: rule.value,
             content: rule.content || '',
             worldId: rule.worldId || '',
+            packId: rule.packId || '',   // V3：規則綁變數包（酒館用，PWA 規則 packId 留空）
             priority: rule.priority ?? 50,
             folder: rule.folder || ''
         };

@@ -117,12 +117,10 @@
                     <div class="avs-tab" data-tab="packs">📦 變數包</div>
                     <div class="avs-tab" data-tab="furnace">🔥 煉丹爐</div>
                     <div class="avs-tab" data-tab="gallery">🖼️ 展廳</div>
-                    <div class="avs-tab" data-tab="rules">⚡ 條件規則</div>
                     <div class="avs-tab" data-tab="modes">🎭 模式</div>
                 </div>
                 <div class="avs-content">
                     <div id="avs-view-state" class="avs-view active"></div>
-                    <div id="avs-view-rules" class="avs-view"></div>
                     <div id="avs-view-modes" class="avs-view"></div>
                     <div id="avs-view-packs" class="avs-view">
                         <div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
@@ -164,6 +162,24 @@
                         <div id="avs-template-list" style="display:flex; flex-direction:column; gap:15px;"></div>
                     </div>
                 </div>
+
+                <!-- V3：條件規則 modal（從變數包卡片「⚡ 規則」按鈕觸發）-->
+                <div id="avs-rules-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; overflow-y:auto;">
+                    <div style="max-width:600px; margin:20px auto; background:#1a0d0a; border:1px solid #FBDFA2; border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(251,223,162,0.2);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(251,223,162,0.3);">
+                            <strong style="font-size:16px; color:#FBDFA2;">⚡ <span id="avs-rules-modal-title">變數包</span> · 條件規則</strong>
+                            <div style="color:#FBDFA2; cursor:pointer; font-size:20px;" id="avs-rules-modal-close">✕</div>
+                        </div>
+                        <div style="font-size:11px; color:rgba(251,223,162,0.5); margin-bottom:12px; line-height:1.6;">
+                            條件滿足時注入主模型 system prompt，引導劇情走向。<br>例：「好感度 ≥ 80 時對主角親暱稱呼」
+                        </div>
+                        <div id="avs-rules-modal-list" style="display:flex; flex-direction:column; gap:10px; max-height:60vh; overflow-y:auto; padding:4px;"></div>
+                        <div style="display:flex; gap:10px; margin-top:15px;">
+                            <div class="avs-btn avs-btn-primary" id="avs-rules-modal-add" style="flex:1;">＋ 添加規則</div>
+                            <div class="avs-btn avs-btn-outline" id="avs-rules-modal-close-btn" style="flex:0 0 100px;">關閉</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -172,6 +188,17 @@
         const helpOverlay = container.querySelector('#avs-help-overlay');
         container.querySelector('#avs-btn-help').onclick  = () => { helpOverlay.style.display = 'block'; };
         container.querySelector('#avs-help-close').onclick = () => { helpOverlay.style.display = 'none'; };
+
+        // V3：規則 modal 關閉 + 添加按鈕
+        const rulesModalCloseBtn = container.querySelector('#avs-rules-modal-close');
+        const rulesModalCloseBtn2 = container.querySelector('#avs-rules-modal-close-btn');
+        const rulesModalAddBtn = container.querySelector('#avs-rules-modal-add');
+        if (rulesModalCloseBtn)  rulesModalCloseBtn.onclick = () => closeRulesModal(container);
+        if (rulesModalCloseBtn2) rulesModalCloseBtn2.onclick = () => closeRulesModal(container);
+        if (rulesModalAddBtn) rulesModalAddBtn.onclick = () => {
+            _editingRuleIdInModal = '__new__';
+            renderRulesModalList(container);
+        };
 
         const tabs = container.querySelectorAll('.avs-tab');
         tabs.forEach(tab => {
@@ -188,7 +215,7 @@
                     });
                 }
                 if (tab.dataset.tab === 'state') renderStateView(container);
-                if (tab.dataset.tab === 'rules') win.OS_AVS_RULES?.renderTab?.(container);
+                // V3：條件規則 tab 砍掉，改在「📦 變數包」每張卡片內當「⚡ 條件規則」子按鈕，每個 pack 自己一份
                 if (tab.dataset.tab === 'modes') win.OS_AVS_RULES?.renderModesTab?.(container);
             };
         });
@@ -298,40 +325,165 @@ ${lines.join('\n')}
     function renderPackList(container) {
         const listEl = container.querySelector('#avs-pack-list');
         listEl.innerHTML = '';
+        const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
         currentPacks.forEach(pack => {
+            const rulesCount = allRules.filter(r => r.packId === pack.id).length;
             const card = document.createElement('div');
             card.className = 'avs-card';
             card.innerHTML = `
                 <strong style="color:#FBDFA2;">${pack.name}</strong>
-                <p style="font-size:12px; color:rgba(251,223,162,0.45);">${pack.variables.length} 個變數</p>
-                <div style="display:flex; gap:10px; margin-top:10px;">
-                    <div class="avs-btn avs-btn-outline btn-edit" style="flex:1; padding:6px;">編輯</div>
+                <p style="font-size:12px; color:rgba(251,223,162,0.45);">${pack.variables.length} 個變數${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <div class="avs-btn avs-btn-outline btn-edit" style="flex:1; min-width:60px; padding:6px;">編輯</div>
+                    <div class="avs-btn avs-btn-outline btn-rules" style="flex:1; min-width:90px; padding:6px;">⚡ 規則${rulesCount ? ` (${rulesCount})` : ''}</div>
                     <div class="avs-btn avs-btn-danger btn-del" style="padding:6px 12px;">刪除</div>
                 </div>
             `;
             card.querySelector('.btn-edit').onclick = () => openPackEditor(container, pack);
+            card.querySelector('.btn-rules').onclick = () => openRulesModal(container, pack);
             card.querySelector('.btn-del').onclick = async () => {
-                // 列出此 pack 綁定的展廳 UI 模板（讓用戶看清楚會連帶刪什麼）
+                // 列出此 pack 綁定的展廳 UI 模板 + 條件規則（讓用戶看清楚會連帶刪什麼）
                 const tplsAll = await win.OS_DB.getAllUITemplates();
-                const orphaned = (tplsAll || []).filter(t => t.packId === pack.id);
-                const tplWarning = orphaned.length
-                    ? `\n\n⚠️ 同時會刪除這個變數包對應的 ${orphaned.length} 個展廳 UI 模板`
-                    : '';
+                const orphanedTpls = (tplsAll || []).filter(t => t.packId === pack.id);
+                const orphanedRules = (win.OS_AVS_RULES?.loadRules?.() || []).filter(r => r.packId === pack.id);
+
+                const warn = [];
+                if (orphanedTpls.length)  warn.push(`${orphanedTpls.length} 個展廳 UI 模板`);
+                if (orphanedRules.length) warn.push(`${orphanedRules.length} 條條件規則`);
+                const tplWarning = warn.length ? `\n\n⚠️ 同時會刪除這個變數包對應的：\n  · ${warn.join('\n  · ')}` : '';
                 if (!confirm(`刪除變數包「${pack.name}」？${tplWarning}\n\n世界書內變數說明書條目會自動更新（沒其他變數時也會被刪）。`)) return;
 
                 // 1. 刪變數包本體
                 await win.OS_DB.deleteVarPack(pack.id);
                 // 2. 刪所有綁此 packId 的展廳 UI 模板
-                for (const tpl of orphaned) {
+                for (const tpl of orphanedTpls) {
                     try { await win.OS_DB.deleteUITemplate(tpl.id); } catch(e) {}
                 }
-                // 3. reload UI + sync 世界書（沒變數時 sync 會自動刪世界書條目）
+                // 3. 刪所有綁此 packId 的條件規則
+                for (const r of orphanedRules) {
+                    try { win.OS_AVS_RULES?.deleteRule?.(r.id); } catch(e) {}
+                }
+                // 4. reload UI + sync 世界書（沒變數時 sync 會自動刪世界書條目）
                 await loadAllData(container);
                 await syncVarPackToLorebook();
-                console.log(`[AVS] 已刪除變數包「${pack.name}」+ ${orphaned.length} 個展廳模板`);
+                console.log(`[AVS] 已刪除變數包「${pack.name}」+ ${orphanedTpls.length} 模板 + ${orphanedRules.length} 規則`);
             };
             listEl.appendChild(card);
         });
+    }
+
+    // ================================================================
+    // V3：條件規則 modal（每個變數包自己一份規則）
+    // ================================================================
+    let _currentRulesPack = null;        // 當前開啟 modal 的 pack
+    let _editingRuleIdInModal = null;    // null / ruleId / '__new__'
+
+    function openRulesModal(container, pack) {
+        _currentRulesPack = pack;
+        _editingRuleIdInModal = null;
+        container.querySelector('#avs-rules-modal-title').textContent = pack.name;
+        container.querySelector('#avs-rules-modal').style.display = 'block';
+        renderRulesModalList(container);
+    }
+
+    function closeRulesModal(container) {
+        _currentRulesPack = null;
+        _editingRuleIdInModal = null;
+        container.querySelector('#avs-rules-modal').style.display = 'none';
+        // 規則數可能變了，刷新 pack 列表（重新計算 N 條規則徽章）
+        loadAllData(container);
+    }
+
+    const RULE_OPS = ['>=', '<=', '>', '<', '=', '!='];
+
+    function renderRuleEditForm(pack, rule, isNew) {
+        const id = isNew ? '__new__' : rule.id;
+        const safeId = String(id).replace(/'/g, '&#39;');
+        const fieldNames = (pack.variables || []).map(v => v.name).filter(Boolean);
+        const curPath = rule?.path || fieldNames[0] || '';
+        const curOp = rule?.op || '>=';
+        const curVal = rule?.value !== undefined ? String(rule.value) : '';
+        const curName = rule?.name || '';
+        const curContent = rule?.content || '';
+
+        return `<div class="avs-card" data-rule-edit="${id}" style="background:rgba(120,55,25,0.95); border-color:#FBDFA2;">
+            <div style="margin-bottom:8px;"><span style="font-size:11px; color:rgba(251,223,162,0.6);">名稱</span>
+                <input class="avs-input" data-rule-key="name" value="${escapeAttr(curName)}" placeholder="例：高好感親密化 / 末日緊張感">
+            </div>
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <div style="flex:2;"><span style="font-size:11px; color:rgba(251,223,162,0.6);">變數</span>
+                    <select class="avs-select" data-rule-key="path">
+                        ${fieldNames.length === 0
+                          ? '<option value="">（變數包無變數）</option>'
+                          : fieldNames.map(n => `<option value="${escapeAttr(n)}" ${n === curPath ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+                    </select>
+                </div>
+                <div style="flex:0 0 70px;"><span style="font-size:11px; color:rgba(251,223,162,0.6);">運算</span>
+                    <select class="avs-select" data-rule-key="op">
+                        ${RULE_OPS.map(o => `<option value="${o}" ${o === curOp ? 'selected' : ''}>${o}</option>`).join('')}
+                    </select>
+                </div>
+                <div style="flex:1;"><span style="font-size:11px; color:rgba(251,223,162,0.6);">值</span>
+                    <input class="avs-input" data-rule-key="value" value="${escapeAttr(curVal)}" placeholder="例 80">
+                </div>
+            </div>
+            <div style="margin-bottom:8px;"><span style="font-size:11px; color:rgba(251,223,162,0.6);">注入內容（給主模型看的指示）</span>
+                <textarea class="avs-textarea" data-rule-key="content" style="min-height:60px;" placeholder="條件滿足時主模型該怎麼寫劇情。例：對主角的稱呼從「你」改為親暱稱呼，對話帶撒嬌語氣">${escapeHtml(curContent)}</textarea>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <div class="avs-btn avs-btn-outline" onclick="window.OS_AVS?._cancelEditRule?.()">取消</div>
+                <div class="avs-btn avs-btn-primary" onclick="window.OS_AVS?._saveEditRule?.('${safeId}')">${isNew ? '新增' : '儲存'}</div>
+            </div>
+        </div>`;
+    }
+
+    function renderRulesModalList(container) {
+        if (!_currentRulesPack) return;
+        const listEl = container.querySelector('#avs-rules-modal-list');
+        if (!listEl) return;
+        const pack = _currentRulesPack;
+        const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
+        const packRules = allRules.filter(r => r.packId === pack.id);
+
+        let html = '';
+        for (const r of packRules) {
+            if (_editingRuleIdInModal === r.id) {
+                html += renderRuleEditForm(pack, r, false);
+                continue;
+            }
+            const enabled = r.enabled !== false;
+            html += `<div class="avs-card" style="${!enabled ? 'opacity:0.5;' : ''}">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <strong style="color:#FBDFA2; font-size:13px;">${escapeHtml(r.name || '未命名規則')}</strong>
+                    <div style="display:flex; gap:6px; flex-shrink:0;">
+                        <div class="avs-btn avs-btn-outline" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._toggleRule?.('${escapeAttr(r.id)}')">${enabled ? '啟用' : '停用'}</div>
+                        <div class="avs-btn avs-btn-outline" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._editRule?.('${escapeAttr(r.id)}')">編輯</div>
+                        <div class="avs-btn avs-btn-danger" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._delRule?.('${escapeAttr(r.id)}')">✖</div>
+                    </div>
+                </div>
+                <div style="font-size:12px; margin-top:6px; color:rgba(251,223,162,0.75); font-family:monospace;">
+                    ${escapeHtml(r.path || '?')} <span style="color:#FBDFA2; margin:0 4px;">${r.op}</span> <span style="color:#FBDFA2;">${escapeHtml(String(r.value ?? ''))}</span>
+                </div>
+                <div style="font-size:12px; margin-top:6px; color:rgba(255,248,231,0.85); line-height:1.6;">${escapeHtml(r.content || '（無注入內容）')}</div>
+            </div>`;
+        }
+        if (_editingRuleIdInModal === '__new__') {
+            html += renderRuleEditForm(pack, null, true);
+        }
+        if (!packRules.length && _editingRuleIdInModal !== '__new__') {
+            html = `<div style="text-align:center; padding:40px 20px; color:rgba(251,223,162,0.4); font-size:12px;">
+                這個變數包還沒設規則。點下方「＋ 添加規則」開始。
+            </div>` + html;
+        }
+        listEl.innerHTML = html;
+    }
+
+    // escape helpers（os_avs.js 內未必有，定義一下）
+    function escapeHtml(s) {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s) {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function bindPackEditorEvents(container) {
@@ -359,7 +511,10 @@ ${lines.join('\n')}
                 btnAiGen.textContent = '🧬 AI 分析中...';
                 btnAiGen.style.pointerEvents = 'none';
                 try {
-                    const schema = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true });
+                    const result = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true });
+                    // V3：generate 現在返回 { fields, rules }（同步出規則）
+                    const schema = result?.fields || result;   // 向前兼容舊版只返回 fields
+                    const aiRules = Array.isArray(result?.rules) ? result.rules : [];
                     if (!schema || !Object.keys(schema).length) {
                         return;   // generate 內部已 showToast 失敗訊息
                     }
@@ -407,10 +562,33 @@ ${lines.join('\n')}
                         chatId: currentChatId   // 綁 chatId / storyId，sync 跟 schema 抽取只用當前 chat 的 pack
                     };
                     await win.OS_DB.saveVarPack(pack);
+
+                    // V3：把 AI 同步生成的條件規則寫進 OS_AVS_RULES（每條綁此 pack.id）
+                    let savedRuleCount = 0;
+                    if (aiRules.length && win.OS_AVS_RULES?.addRule) {
+                        for (const r of aiRules) {
+                            if (!r || !r.path || !r.op || !r.content) continue;
+                            // 數值欄 → 轉 number
+                            let val = r.value;
+                            const n = parseFloat(val);
+                            if (!isNaN(n) && String(n) === String(val)) val = n;
+                            win.OS_AVS_RULES.addRule({
+                                name: r.name || `${r.path} ${r.op} ${r.value}`,
+                                path: String(r.path).trim(),
+                                op: String(r.op).trim(),
+                                value: val,
+                                content: String(r.content).trim(),
+                                enabled: true,
+                                packId: pack.id   // V3：規則綁變數包
+                            });
+                            savedRuleCount++;
+                        }
+                    }
+
                     await loadAllData(container);
                     // 寫完變數包後同步到酒館世界書（讓主模型寫劇情時看到變數說明）
                     await syncVarPackToLorebook();
-                    if (win.toastr) win.toastr.success(`✅ 已生成變數包「${pack.name}」（${variables.length} 個變數），世界書已同步`);
+                    if (win.toastr) win.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 變數 / ${savedRuleCount} 規則），世界書已同步`);
 
                     // 寫完變數包後觸發副模型初始填充（current 為空 → initial 模式 → 填齊所有欄位）
                     if (win.OS_STATE_RUNTIME?.extractOnce) {
@@ -885,9 +1063,53 @@ ${lines.join('\n')}
         }
     }
 
+    // V3：規則 modal 內 inline onclick 呼叫的 helper
+    function _ruleModalContainer() {
+        // modal 在 launchApp container 內，但 id 唯一，用 document 抓即可
+        return document.querySelector('#avs-rules-modal')?.closest('.avs-container') || document;
+    }
+    function _editRule(id) { _editingRuleIdInModal = id; renderRulesModalList(_ruleModalContainer()); }
+    function _cancelEditRule() { _editingRuleIdInModal = null; renderRulesModalList(_ruleModalContainer()); }
+    function _toggleRule(id) {
+        win.OS_AVS_RULES?.toggleRule?.(id);
+        renderRulesModalList(_ruleModalContainer());
+    }
+    function _delRule(id) {
+        if (!confirm('刪除這條規則？')) return;
+        win.OS_AVS_RULES?.deleteRule?.(id);
+        if (_editingRuleIdInModal === id) _editingRuleIdInModal = null;
+        renderRulesModalList(_ruleModalContainer());
+    }
+    function _saveEditRule(id) {
+        const pack = _currentRulesPack;
+        if (!pack) return;
+        const card = document.querySelector(`.avs-card[data-rule-edit="${id}"]`);
+        if (!card) return;
+        const isNew = id === '__new__';
+        const name = (card.querySelector('[data-rule-key="name"]')?.value || '').trim();
+        const path = (card.querySelector('[data-rule-key="path"]')?.value || '').trim();
+        const op = (card.querySelector('[data-rule-key="op"]')?.value || '>=').trim();
+        const rawVal = (card.querySelector('[data-rule-key="value"]')?.value || '').trim();
+        const content = (card.querySelector('[data-rule-key="content"]')?.value || '').trim();
+        if (!path) { alert('請選擇變數'); return; }
+        if (!content) { alert('請填注入內容'); return; }
+        const n = parseFloat(rawVal);
+        const value = (!isNaN(n) && String(n) === rawVal) ? n : rawVal;
+        const data = { name: name || path, path, op, value, content, enabled: true, packId: pack.id };
+        if (isNew) {
+            win.OS_AVS_RULES?.addRule?.(data);
+        } else {
+            win.OS_AVS_RULES?.updateRule?.(id, data);
+        }
+        _editingRuleIdInModal = null;
+        renderRulesModalList(_ruleModalContainer());
+    }
+
     win.OS_AVS = {
         launch: launchApp,
         syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發
+        // V3：規則 modal helper（給 inline onclick 呼叫）
+        _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,
         activateTemplateForPack,
         /** 還原上一個 AVS 快照（可在 reroll/重試 時外部呼叫） */
         restoreSnapshot: () => win._AVS_ENGINE?.restore?.() ?? null,

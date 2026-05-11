@@ -301,7 +301,19 @@ ${modeRules}
             const state = win.OS_AVS_ADAPTER?.readState?.() || {};
             if (!state || !Object.keys(state).length) return;
 
-            const ctx = win.OS_AVS_RULES.getActiveContext(state) || '';
+            // V3：拿當前 chat 對應的 active pack IDs，傳給 getActiveContext 做 packId filter
+            let activePackIds = null;
+            try {
+                if (win.OS_DB?.getAllVarPacks) {
+                    const chatId = getChatId();
+                    const allPacks = await win.OS_DB.getAllVarPacks();
+                    activePackIds = (allPacks || [])
+                        .filter(p => !p.chatId || p.chatId === chatId)
+                        .map(p => p.id);
+                }
+            } catch(e) { /* fallback：activePackIds 留 null，走 worldId filter */ }
+
+            const ctx = win.OS_AVS_RULES.getActiveContext(state, activePackIds) || '';
             if (!ctx.trim()) return;   // 沒命中任何規則就不 inject
 
             const result = win.TavernHelper.injectPrompts([{
