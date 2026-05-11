@@ -645,16 +645,7 @@
 
                 console.log("🧹 [OS_API] 最終清洗文本:", fullText.substring(0, 100).replace(/\n/g, ' ') + "...");
 
-                if (enableStreaming || options.disableTyping) { if (onFinish) onFinish(fullText); } 
-                else {
-                    let displayedText = "";
-                    for (let i = 0; i < fullText.length; i++) {
-                        displayedText += fullText[i];
-                        if (onChunk) onChunk(displayedText);
-                        await new Promise(r => setTimeout(r, 10));
-                    }
-                    if (onFinish) onFinish(fullText);
-                }
+                if (onFinish) onFinish(fullText);
             } catch (err) {
                 console.error("[OS_API Error]", err);
                 try { window._OS_DBG_RESPONSE?.(_dbgId, 'error', err.message, Date.now() - _dbgStart); } catch(e) {}
