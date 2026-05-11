@@ -20,12 +20,14 @@
         recentMsgs: 4,              // 抽取時參考最近幾條訊息
         maxPatches: 80,             // patches 上限，超過砍最舊
         injectId: 'aurelia_state_brief',
+        rulesInjectId: 'aurelia_avs_rules',
         storageKey: 'aurelia_state_runtime_enabled'
     };
 
     let _debounceTimer = null;
     let _running = false;           // 防止並發抽取
-    let _lastInjectUninject = null; // 上次 injectPrompts 的 uninject 函式
+    let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
+    let _lastRulesUninject = null;  // 上次 rules inject 的 uninject 函式
 
     // --- 工具 ---
     // 把 ctx.chatId 或 chat_file_name 清乾淨：剝路徑、砍 .jsonl/.json
@@ -250,6 +252,36 @@ ${modeRules}
         }
     }
 
+    // --- inject AVS rules：把當前生效規則的 <behavior_rules> 塞主模型 system prompt ---
+    // 跟 injectCurrent 並列；用獨立 inject id 互不影響
+    async function injectRules() {
+        try {
+            try { _lastRulesUninject?.(); } catch(e) {}
+            _lastRulesUninject = null;
+
+            if (!win.TavernHelper?.injectPrompts) return;
+            if (!win.OS_AVS_RULES?.getActiveContext) return;
+
+            // 變數狀態：優先用 adapter cache（已 refresh 過 OS_DB）
+            const state = win.OS_AVS_ADAPTER?.readState?.() || {};
+            if (!state || !Object.keys(state).length) return;
+
+            const ctx = win.OS_AVS_RULES.getActiveContext(state) || '';
+            if (!ctx.trim()) return;   // 沒命中任何規則就不 inject
+
+            const result = win.TavernHelper.injectPrompts([{
+                id: CONFIG.rulesInjectId,
+                content: ctx,
+                position: 'in_chat',
+                depth: 1,
+                role: 'system'
+            }], { once: true });
+            _lastRulesUninject = result?.uninject || null;
+        } catch(e) {
+            console.warn('[State Runtime] rules inject 失敗:', e?.message || e);
+        }
+    }
+
     // --- inject：把 current 塞進下一輪主模型 system prompt ---
     async function injectCurrent() {
         try {
@@ -343,11 +375,13 @@ ${modeRules}
             _debounceTimer = setTimeout(extractOnce, CONFIG.debounceMs);
         });
 
-        // 主模型開始生成 → inject current 給它看
+        // 主模型開始生成 → inject current 給它看（state 摘要）+ inject AVS rules（行為規範）
         if (win.tavern_events.GENERATION_STARTED) {
             win.eventOn(win.tavern_events.GENERATION_STARTED, () => {
-                if (!isEnabled()) return;
-                injectCurrent();
+                // state 摘要受「即時抽取總開關」控制
+                if (isEnabled()) injectCurrent();
+                // AVS rules 永遠評估（不受抽取開關影響；沒命中規則就不 inject）
+                injectRules();
             });
         }
 
@@ -364,6 +398,7 @@ ${modeRules}
         if (win.tavern_events.CHAT_CHANGED) {
             win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
                 try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
+                try { _lastRulesUninject?.(); _lastRulesUninject = null; } catch(e) {}
             });
         }
 
@@ -444,7 +479,7 @@ ${modeRules}
     win.OS_STATE_RUNTIME = {
         isEnabled, setEnabled,
         forceExtract, clearPatches,
-        injectCurrent, extractOnce,
+        injectCurrent, injectRules, extractOnce,
         listAllStateData, removeStateData,
         normalizeChatId,
         CONFIG
