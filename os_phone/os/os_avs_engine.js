@@ -1,21 +1,25 @@
 // ----------------------------------------------------------------
-// [檔案] os_avs_engine.js (V1.3 - AVS 核心引擎，支援行內註解版)
+// [檔案] os_avs_engine.js (V1.4 - 支援 OS_AVS_ADAPTER 雙端切換)
 // 路徑：os_phone/os/os_avs_engine.js
 // 職責：AVS 變數系統底層引擎。負責狀態讀寫、快照、<vars> 解析。
-//       升級：防呆正則表達式、強制儲存錯誤攔截、新增「新故事自動初始化」監聽。
-//       V1.3 新增：支援行內註解 (//) 過濾，完美支援 vars_analyze 提示詞。
+//       V1.3 升級：支援行內註解 (//) 過濾。
+//       V1.4 新增：所有 storage 存取改走 OS_AVS_ADAPTER（有 adapter 走 adapter，
+//                   沒有則 fallback 原 localStorage 路徑），讓酒館端能用 OS_DB 當變數源。
 // ----------------------------------------------------------------
 (function() {
-    console.log('[AVS Engine] 載入 AVS 核心引擎 V1.3...');
+    console.log('[AVS Engine] 載入 AVS 核心引擎 V1.4...');
     const win = window.parent || window;
 
     // ================================================================
-    // 一、狀態 Key 管理（按 storyId 分艙）
+    // 一、狀態 Key 管理（按 storyId / chatId 分艙）
     // ================================================================
 
     function _avsKey() {
-        const sid = localStorage.getItem('vn_current_story_id') || '';
-        return sid ? `avs_state_${sid}` : 'avs_current_state';
+        // 優先走 adapter（酒館：chatId / PWA：storyId）；fallback PWA 舊行為
+        const sid = win.OS_AVS_ADAPTER?.getStoryId?.();
+        if (sid !== undefined) return sid ? `avs_state_${sid}` : 'avs_current_state';
+        const fallback = localStorage.getItem('vn_current_story_id') || '';
+        return fallback ? `avs_state_${fallback}` : 'avs_current_state';
     }
 
     // ================================================================
@@ -23,15 +27,26 @@
     // ================================================================
 
     function _avsRead() {
+        // 優先走 adapter（酒館：從 OS_DB cache / PWA：從 localStorage）
+        if (win.OS_AVS_ADAPTER?.readState) {
+            try { return win.OS_AVS_ADAPTER.readState() || {}; } catch(e) { return {}; }
+        }
+        // fallback：原 localStorage 路徑
         try { return JSON.parse(localStorage.getItem(_avsKey()) || '{}'); } catch(e) { return {}; }
     }
 
     function _avsWrite(state) {
-        try {
-            // 🔥 預防 localStorage 容量滿導致的崩潰
-            localStorage.setItem(_avsKey(), JSON.stringify(state));
-        } catch(e) {
-            console.error('[AVS] 寫入 Storage 失敗 (可能系統空間不足):', e);
+        // 優先走 adapter（酒館：寫 OS_DB.state_data.current / PWA：寫 localStorage）
+        if (win.OS_AVS_ADAPTER?.writeState) {
+            try { win.OS_AVS_ADAPTER.writeState(state); } catch(e) {
+                console.error('[AVS] adapter 寫入失敗:', e);
+            }
+        } else {
+            try {
+                localStorage.setItem(_avsKey(), JSON.stringify(state));
+            } catch(e) {
+                console.error('[AVS] 寫入 Storage 失敗 (可能系統空間不足):', e);
+            }
         }
         if (win.dispatchEvent) win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: state }));
         console.log('🎲 [AVS] 變數已更新 →', JSON.stringify(state));

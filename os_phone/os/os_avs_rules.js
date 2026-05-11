@@ -8,18 +8,25 @@
 (function () {
     'use strict';
     const win = window.parent || window;
-    const LSKEY = 'avs_condition_rules';
+    const LSKEY = 'avs_condition_rules';   // 保留作 PWA fallback
 
     // ================================================================
-    // 一、資料存取與同步
+    // 一、資料存取與同步（V1.4：規則 storage 走 adapter）
+    //   PWA：adapter 讀 'avs_condition_rules'（原行為）
+    //   酒館：adapter 讀 'aurelia_rules_tavern'（跨 chat 共用）
     // ================================================================
 
     function _loadRules() {
+        if (win.OS_AVS_ADAPTER?.loadRules) return win.OS_AVS_ADAPTER.loadRules();
         try { return JSON.parse(localStorage.getItem(LSKEY) || '[]'); } catch(e) { return []; }
     }
 
     function _saveRules(rules) {
-        localStorage.setItem(LSKEY, JSON.stringify(rules));
+        if (win.OS_AVS_ADAPTER?.saveRules) {
+            win.OS_AVS_ADAPTER.saveRules(rules);
+        } else {
+            localStorage.setItem(LSKEY, JSON.stringify(rules));
+        }
         syncModesToPrompt(); // 🔥 每次儲存時，自動同步模式清單給 Prompt
     }
 
@@ -108,7 +115,8 @@
     function getActiveContext(state) {
         if (!state || typeof state !== 'object') return '';
         
-        const currentWorldId = localStorage.getItem('vn_current_world_id') || '';
+        // V1.4：worldId 走 adapter（酒館：當前 chatId / PWA：vn_current_world_id）
+        const currentWorldId = win.OS_AVS_ADAPTER?.getWorldId?.() || localStorage.getItem('vn_current_world_id') || '';
         let activePackId = '';
         const tpls = JSON.parse(localStorage.getItem('avs_active_ui_templates') || '[]');
         if (tpls.length > 0) activePackId = tpls[0].packId;
@@ -840,6 +848,54 @@
     // 六、掛載
     // ================================================================
 
-    win.OS_AVS_RULES = { getActiveContext, generateRulesForWorld, renderTab, renderModesTab };
+    // 對外 CRUD（給其他 UI 用，例如酒館 STATE tab 的 Rules 子 tab）
+    function addRule(rule) {
+        const rules = _loadRules();
+        const r = {
+            id: rule.id || _newId(),
+            name: rule.name || rule.path || '未命名規則',
+            enabled: rule.enabled !== false,
+            path: rule.path || '',
+            op: rule.op || '>=',
+            value: rule.value,
+            content: rule.content || '',
+            worldId: rule.worldId || '',
+            priority: rule.priority ?? 50,
+            folder: rule.folder || ''
+        };
+        rules.push(r);
+        _saveRules(rules);
+        return r;
+    }
+    function updateRule(id, patch) {
+        const rules = _loadRules();
+        const idx = rules.findIndex(r => r.id === id);
+        if (idx < 0) return false;
+        rules[idx] = { ...rules[idx], ...patch };
+        _saveRules(rules);
+        return true;
+    }
+    function deleteRule(id) {
+        const rules = _loadRules().filter(r => r.id !== id);
+        _saveRules(rules);
+        return true;
+    }
+    function toggleRule(id) {
+        const rules = _loadRules();
+        const r = rules.find(x => x.id === id);
+        if (!r) return false;
+        r.enabled = r.enabled === false ? true : false;
+        _saveRules(rules);
+        return r.enabled;
+    }
+
+    win.OS_AVS_RULES = {
+        getActiveContext, generateRulesForWorld, renderTab, renderModesTab,
+        // CRUD（V1.4 加入，給外部 UI 用）
+        loadRules: _loadRules,
+        saveRules: _saveRules,
+        addRule, updateRule, deleteRule, toggleRule,
+        newId: _newId
+    };
     console.log('[AVS Rules] ✅ 條件與插槽引擎就緒');
 })();

@@ -41,6 +41,7 @@ const PHONE_FILES = [
     'os/os_contacts.js',
     'os/os_tavern_bridge.js',
     'os/os_bridge.js',
+    'os/os_avs_adapter.js',   // 雙端切換層：必須在 engine / rules 之前載入
     'os/os_avs_engine.js',
     'os/os_avs_rules.js',
     'os/os_api_engine.js',
