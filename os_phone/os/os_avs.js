@@ -311,10 +311,24 @@ ${lines.join('\n')}
             `;
             card.querySelector('.btn-edit').onclick = () => openPackEditor(container, pack);
             card.querySelector('.btn-del').onclick = async () => {
-                if (!confirm('刪除？')) return;
+                // 列出此 pack 綁定的展廳 UI 模板（讓用戶看清楚會連帶刪什麼）
+                const tplsAll = await win.OS_DB.getAllUITemplates();
+                const orphaned = (tplsAll || []).filter(t => t.packId === pack.id);
+                const tplWarning = orphaned.length
+                    ? `\n\n⚠️ 同時會刪除這個變數包對應的 ${orphaned.length} 個展廳 UI 模板`
+                    : '';
+                if (!confirm(`刪除變數包「${pack.name}」？${tplWarning}\n\n世界書內變數說明書條目會自動更新（沒其他變數時也會被刪）。`)) return;
+
+                // 1. 刪變數包本體
                 await win.OS_DB.deleteVarPack(pack.id);
+                // 2. 刪所有綁此 packId 的展廳 UI 模板
+                for (const tpl of orphaned) {
+                    try { await win.OS_DB.deleteUITemplate(tpl.id); } catch(e) {}
+                }
+                // 3. reload UI + sync 世界書（沒變數時 sync 會自動刪世界書條目）
                 await loadAllData(container);
                 await syncVarPackToLorebook();
+                console.log(`[AVS] 已刪除變數包「${pack.name}」+ ${orphaned.length} 個展廳模板`);
             };
             listEl.appendChild(card);
         });
@@ -765,17 +779,19 @@ ${lines.join('\n')}
             card.style.borderColor = tpl.isActive ? 'rgba(251,223,162,0.8)' : 'rgba(251,223,162,0.3)';
 
             // 用當前狀態（或假值）替換佔位符做預覽
+            // 用 OS_AVS_ADAPTER.formatVarValue 共用 formatter（list 顯示用頓號，避免 JSON 醜樣）
             const previewState = win._AVS_ENGINE?.read?.() || {};
             let previewHtml = tpl.htmlContent || '';
             let previewCss  = tpl.cssContent  || '';
+            const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
             // 先用真實狀態替換
             Object.entries(previewState).forEach(([k, v]) => {
-                previewHtml = previewHtml.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+                previewHtml = previewHtml.split(`{{${k}}}`).join(fmt(v));
             });
             // 剩餘未替換的佔位符用假值（變數名本身）填充
             if (pack) {
                 (pack.variables || []).forEach(v => {
-                    previewHtml = previewHtml.replace(new RegExp(`\\{\\{${v.name}\\}\\}`, 'g'), v.defaultValue ?? '0');
+                    previewHtml = previewHtml.split(`{{${v.name}}}`).join(fmt(v.defaultValue ?? '0'));
                 });
             }
             previewHtml = previewHtml.replace(/\{\{[\w.]+\}\}/g, '—');
