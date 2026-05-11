@@ -134,6 +134,31 @@
             return getCurrentChatId();
         },
 
+        /** 格式化變數值給 UI 顯示用（list / JSON array 字串 → 頓號連接純文字）
+         *  程式儲存層仍是 array / JSON 字串，這只是顯示層美化
+         */
+        formatVarValue(v) {
+            if (v == null) return '';
+            if (Array.isArray(v)) return v.map(x => String(x)).join('、');
+            if (typeof v === 'string') {
+                const trim = v.trim();
+                if (trim.startsWith('[') && trim.endsWith(']')) {
+                    try {
+                        const arr = JSON.parse(trim);
+                        if (Array.isArray(arr)) return arr.map(x => String(x)).join('、');
+                    } catch(e) {
+                        // 不合法 JSON 但長相像陣列 → 拿掉方括號 + 引號，按逗號切
+                        return trim.slice(1, -1).replace(/["']/g, '').split(',').map(s => s.trim()).filter(Boolean).join('、');
+                    }
+                }
+                return v;
+            }
+            if (typeof v === 'object') {
+                try { return JSON.stringify(v); } catch(e) { return String(v); }
+            }
+            return String(v);
+        },
+
         /** 故事標題（給變數工坊 UI 顯示「當前故事」用）
          *  PWA → vn_current_story_title；酒館 → 角色卡名 fallback chatId
          */

@@ -375,33 +375,43 @@
 
             // 找當前 chat 對應的 pack（!pack.chatId 視為通用 fallback）
             const allPacks = await win.OS_DB.getAllVarPacks();
-            const myPackIds = (allPacks || [])
-                .filter(p => !p.chatId || p.chatId === chatId)
-                .map(p => p.id);
-            if (!myPackIds.length) return;
+            const myPacks = (allPacks || []).filter(p => !p.chatId || p.chatId === chatId);
+            if (!myPacks.length) return;
+            const myPackIds = myPacks.map(p => p.id);
 
             // 找啟用中的 UI 模板（綁定我這些 pack 的）
             const templates = await win.OS_DB.getAllUITemplates();
             const activeTpl = (templates || []).find(t => t.isActive && myPackIds.includes(t.packId));
             if (!activeTpl) return;   // 沒煉丹過 / 沒啟用任何模板 → 不注入
 
-            // 拿當前變數值（從 AVS engine state）替換 {{變數名}} placeholder
+            // 找此模板綁定的 pack（給第二層 fallback 用）
+            const tplPack = myPacks.find(p => p.id === activeTpl.packId);
+
+            // === 三層 fallback 替換（仿展廳 renderTemplateList 邏輯）===
+            // 用 OS_AVS_ADAPTER.formatVarValue 共用 formatter（展廳跟資料中心一致）
             const state = win._AVS_ENGINE?.read?.() || {};
             let html = activeTpl.htmlContent || '';
+            const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
+
+            // 第 1 層：AVS engine state 真實值
             for (const [k, v] of Object.entries(state)) {
-                const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
-                html = html.split(`{{${k}}}`).join(val);
+                html = html.split(`{{${k}}}`).join(fmt(v));
             }
-            // 殘留沒對應 state 的 {{xxx}} → 改顯示「—」並 console 報缺
+            // 第 2 層：pack.variables 的 defaultValue（變數還沒被副模型抽到時用）
+            if (tplPack && Array.isArray(tplPack.variables)) {
+                for (const v of tplPack.variables) {
+                    if (!v.name) continue;
+                    html = html.split(`{{${v.name}}}`).join(fmt(v.defaultValue ?? '0'));
+                }
+            }
+            // 第 3 層：殘留沒對應的 {{xxx}} 顯示「—」
             const missing = [];
             html = html.replace(/\{\{([^{}]+)\}\}/g, (_, name) => {
                 missing.push(name.trim());
                 return '<span style="opacity:0.45; font-style:italic;">—</span>';
             });
             if (missing.length) {
-                console.warn('[Extractor] 狀態面板模板缺以下變數（state 沒對應 key）:', [...new Set(missing)]);
-                console.warn('[Extractor] 當前 state keys:', Object.keys(state));
-                console.warn('[Extractor] 建議：模板 {{xxx}} 跟變數包名要一致，或編輯變數包補上這些 key');
+                console.warn('[Extractor] 狀態面板殘缺（不在 state 也不在 pack）:', [...new Set(missing)]);
             }
             if (activeTpl.cssContent) {
                 html = `<style>${activeTpl.cssContent}</style>${html}`;
