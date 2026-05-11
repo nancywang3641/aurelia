@@ -374,9 +374,6 @@
                                 <button class="st-subtab-btn" data-subtab="current">
                                     Current · 當前狀態<span class="st-subtab-count" id="sp-state-patches-count">0</span>
                                 </button>
-                                <button class="st-subtab-btn" data-subtab="rules">
-                                    Rules · 行為規則<span class="st-subtab-count" id="sp-state-rules-count">0</span>
-                                </button>
                             </div>
                             <div class="st-subtab-content active" data-subcontent="schema">
                                 <div id="sp-state-schema-list" class="st-field-list"></div>
@@ -384,9 +381,9 @@
                             <div class="st-subtab-content" data-subcontent="current">
                                 <div id="sp-state-current-list" class="st-current-list"></div>
                             </div>
-                            <div class="st-subtab-content" data-subcontent="rules">
-                                <div id="sp-state-rules-list" class="st-field-list"></div>
-                            </div>
+                        </div>
+                        <div style="margin-top:8px; font-size:10px; color:#6a5d3e; text-align:center; line-height:1.7;">
+                            行為規則編輯已搬到變數工坊 · 每個變數包卡片有「⚡ 規則」按鈕
                         </div>
 
                         <div class="st-btn-row">
@@ -1911,171 +1908,15 @@ ${getCharCardTemplate()}`;
                 }
             }
 
-            // === rules 子 tab ===
-            renderRulesList(fields);
+            // V3：Rules 子 tab 已砍除，編輯統一搬到變數工坊（變數包卡片內「⚡ 規則」modal）
 
         } catch(e) {
             console.warn('[Status Panel] refreshStateUI 失敗:', e);
         }
     }
 
-    // === Rules 子 tab：列表 + in-place 編輯 + CRUD ===
-    let _editingRuleId = null;   // null / id / '__new__'
-    const OP_OPTIONS = ['>=', '<=', '>', '<', '=', '!='];
+    // === V3：Rules 子 tab 已砍除（搬到變數工坊 → 變數包卡片「⚡ 規則」modal）===
 
-    function _opLabel(op) {
-        return { '=':'=', '==':'=', '!=':'≠', '>':'>', '<':'<', '>=':'≥', '<=':'≤' }[op] || op;
-    }
-
-    function renderRuleEdit(rule, schemaFields) {
-        const isNew = !rule;
-        const id = isNew ? '__new__' : rule.id;
-        const safeId = String(id).replace(/'/g, '&#39;');
-        const fieldNames = Object.keys(schemaFields || {});
-        const curPath = rule?.path || (fieldNames[0] || '');
-        const curOp = rule?.op || '>=';
-        const curVal = rule?.value !== undefined ? String(rule.value) : '';
-        const curName = rule?.name || '';
-        const curContent = rule?.content || '';
-        const isolated = !!(rule && rule.worldId);
-
-        return `<div class="st-field-edit" data-rule-edit="${escapeHtml(String(id))}">
-            <div class="st-field-edit-row">
-                <span class="st-field-edit-label">名稱</span>
-                <input class="st-field-edit-input" data-rule-key="name" ${isNew ? 'data-edit-focus' : ''} value="${escapeHtml(curName)}" placeholder="例：高好感親密化 / 末日緊張感" />
-            </div>
-            <div class="st-field-edit-row">
-                <span class="st-field-edit-label">條件</span>
-                <div style="flex:1; display:flex; gap:6px; min-width:0;">
-                    <select class="st-field-edit-input" data-rule-key="path" style="flex:2;">
-                        ${fieldNames.length === 0
-                          ? '<option value="">（請先 INITIALIZE schema）</option>'
-                          : fieldNames.map(n => `<option value="${escapeHtml(n)}" ${n === curPath ? 'selected':''}>${escapeHtml(n)}</option>`).join('')}
-                    </select>
-                    <select class="st-field-edit-input" data-rule-key="op" style="flex:0 0 60px;">
-                        ${OP_OPTIONS.map(o => `<option value="${o}" ${o === curOp ? 'selected':''}>${_opLabel(o)}</option>`).join('')}
-                    </select>
-                    <input class="st-field-edit-input" data-rule-key="value" style="flex:1;" value="${escapeHtml(curVal)}" placeholder="值" />
-                </div>
-            </div>
-            <div class="st-field-edit-row">
-                <span class="st-field-edit-label">注入</span>
-                <textarea class="st-field-edit-textarea" data-rule-key="content" placeholder="當條件滿足時注入主模型的行為指示，例：對主角的稱呼從「你」改為親暱稱呼，對話帶撒嬌語氣">${escapeHtml(curContent)}</textarea>
-            </div>
-            <div class="st-field-edit-row" style="align-items:center;">
-                <span class="st-field-edit-label">隔離</span>
-                <label style="display:flex; align-items:center; gap:8px; color:#8b7c5a; font-size:11px; cursor:pointer;">
-                    <input type="checkbox" data-rule-key="isolate" ${isolated ? 'checked' : ''} style="accent-color:var(--gold-p);" />
-                    限定此 chat 使用（無限流換世界書時勾選）
-                </label>
-            </div>
-            <div class="st-field-edit-actions">
-                <button class="st-field-edit-btn cancel" onclick="window.RPG_PANEL.cancelEditRule()">取消</button>
-                <button class="st-field-edit-btn" onclick="window.RPG_PANEL.saveRuleEdit('${safeId}')">${isNew ? '新增' : '儲存'}</button>
-            </div>
-        </div>`;
-    }
-
-    function renderRulesList(schemaFields) {
-        const listEl = document.getElementById('sp-state-rules-list');
-        const countEl = document.getElementById('sp-state-rules-count');
-        if (!listEl) return;
-        const win = window.parent || window;
-        const rules = win.OS_AVS_RULES?.loadRules?.() || [];
-        // 酒館下只顯示「規則 worldId 為空 或 等於當前 chatId」 的（跟 inject filter 一致）
-        const currentWorldId = win.OS_AVS_ADAPTER?.getWorldId?.() || '';
-        const visibleRules = rules.filter(r => !r.worldId || r.worldId === currentWorldId);
-
-        if (countEl) countEl.textContent = visibleRules.length;
-
-        let html = visibleRules.map(r => {
-            if (_editingRuleId === r.id) return renderRuleEdit(r, schemaFields);
-            const isolated = !!r.worldId;
-            return `<div class="st-field-item">
-                <div class="st-field-actions">
-                    <button class="st-field-action-btn" onclick="window.RPG_PANEL.toggleRuleEnabled('${escapeHtml(r.id).replace(/'/g,'&#39;')}')" title="${r.enabled === false ? '啟用' : '停用'}">${r.enabled === false ? '○' : '●'}</button>
-                    <button class="st-field-action-btn" onclick="window.RPG_PANEL.startEditRule('${escapeHtml(r.id).replace(/'/g,'&#39;')}')" title="編輯">✏</button>
-                    <button class="st-field-action-btn danger" onclick="window.RPG_PANEL.deleteRuleConfirm('${escapeHtml(r.id).replace(/'/g,'&#39;')}')" title="刪除">×</button>
-                </div>
-                <div class="st-field-row">
-                    <span class="st-field-name" style="${r.enabled === false ? 'opacity:0.4;text-decoration:line-through;' : ''}">${escapeHtml(r.name || '未命名')}</span>
-                    ${isolated ? '<span class="st-field-type" style="background:rgba(212,80,80,0.1); border-color:#552020; color:#a55;">ISOLATED</span>' : ''}
-                </div>
-                <div class="st-field-desc" style="font-style:normal;">
-                    <span style="color:#b8ad95;">${escapeHtml(r.path || '?')}</span>
-                    <span style="color:var(--gold-s); margin:0 6px;">${_opLabel(r.op)}</span>
-                    <span style="color:var(--gold-p); font-family:monospace;">${escapeHtml(String(r.value ?? ''))}</span>
-                </div>
-                <div class="st-field-desc">${escapeHtml(r.content || '（無注入內容）')}</div>
-            </div>`;
-        }).join('');
-
-        if (_editingRuleId === '__new__') {
-            html += renderRuleEdit(null, schemaFields);
-        } else {
-            const disabledHint = Object.keys(schemaFields || {}).length === 0
-                ? `<div class="st-empty" style="padding:20px;"><div class="st-empty-text">請先 INITIALIZE schema</div><div class="st-empty-hint">規則需要欄位才能定義條件</div></div>`
-                : `<div class="st-field-add" onclick="window.RPG_PANEL.startAddRule()">＋ 添加行為規則</div>`;
-            html += disabledHint;
-        }
-        listEl.innerHTML = html;
-
-        setTimeout(() => {
-            const f = listEl.querySelector('[data-edit-focus]');
-            if (f) f.focus();
-        }, 50);
-    }
-
-    API.startEditRule = function(id) {
-        _editingRuleId = id;
-        refreshStateUI();
-    };
-    API.startAddRule = function() {
-        _editingRuleId = '__new__';
-        refreshStateUI();
-    };
-    API.cancelEditRule = function() {
-        _editingRuleId = null;
-        refreshStateUI();
-    };
-    API.saveRuleEdit = function(id) {
-        const win = window.parent || window;
-        const card = document.querySelector(`[data-rule-edit="${id.replace(/"/g, '&quot;')}"]`)
-                  || document.querySelector('[data-rule-edit]');
-        if (!card) return;
-        const isNew = id === '__new__';
-        const name = (card.querySelector('[data-rule-key="name"]')?.value || '').trim();
-        const path = (card.querySelector('[data-rule-key="path"]')?.value || '').trim();
-        const op = (card.querySelector('[data-rule-key="op"]')?.value || '>=').trim();
-        const rawVal = (card.querySelector('[data-rule-key="value"]')?.value || '').trim();
-        const content = (card.querySelector('[data-rule-key="content"]')?.value || '').trim();
-        const isolate = !!card.querySelector('[data-rule-key="isolate"]')?.checked;
-        if (!path) { alert('請選擇欄位（先 INITIALIZE schema）'); return; }
-        if (!content) { alert('請填寫注入內容'); return; }
-        const n = parseFloat(rawVal);
-        const value = isNaN(n) ? rawVal : n;
-        const worldId = isolate ? (win.OS_AVS_ADAPTER?.getWorldId?.() || '') : '';
-        const ruleData = { name: name || path, path, op, value, content, worldId, enabled: true };
-        if (isNew) {
-            win.OS_AVS_RULES?.addRule?.(ruleData);
-        } else {
-            win.OS_AVS_RULES?.updateRule?.(id, ruleData);
-        }
-        _editingRuleId = null;
-        refreshStateUI();
-    };
-    API.deleteRuleConfirm = function(id) {
-        if (!confirm('刪除這條規則？')) return;
-        const win = window.parent || window;
-        win.OS_AVS_RULES?.deleteRule?.(id);
-        if (_editingRuleId === id) _editingRuleId = null;
-        refreshStateUI();
-    };
-    API.toggleRuleEnabled = function(id) {
-        const win = window.parent || window;
-        win.OS_AVS_RULES?.toggleRule?.(id);
-        refreshStateUI();
-    };
 
     // === 跨世界管理 modal：列所有 state_data + 單刪 ===
     async function renderStateManager() {
