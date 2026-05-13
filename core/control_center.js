@@ -287,10 +287,10 @@
                     <button class="write-tab-btn" data-app="設置"><i class="fa-solid fa-gear"></i><span>API 設置</span></button>
                     <button class="write-tab-btn" id="btn-launch-workshop"><i class="fa-solid fa-wand-magic-sparkles"></i><span>VN煉丹</span></button>
                     <button class="write-tab-btn" data-app="avs"><i class="fa-solid fa-dice"></i><span>變數工坊</span></button>
+                    <button class="write-tab-btn" id="btn-launch-studio"><i class="fa-solid fa-palette"></i><span>靈感創作室</span></button>
                     ${isStandalone ? `
                     <button class="write-tab-btn" data-app="提示詞"><i class="fa-solid fa-sliders"></i><span>提示詞管理</span></button>
                     <button class="write-tab-btn" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></button>
-                    <button class="write-tab-btn" id="btn-launch-studio"><i class="fa-solid fa-palette"></i><span>靈感創作室</span></button>
                     ` : ''}
                 </div>
                 <button class="write-tab-logout-btn" id="write-logout-btn">
