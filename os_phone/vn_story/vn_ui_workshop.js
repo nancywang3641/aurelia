@@ -37,6 +37,27 @@
         
         #vn-ws-idea-overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
         .vn-ws-idea-modal { background: #1a0d0a; border: 1px solid #FBDFA2; border-radius: 12px; width: 85%; max-width: 400px; padding: 25px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 15px 40px rgba(0,0,0,0.9); }
+
+        /* === 修改範圍 (scope) radio === */
+        .vn-ws-scope-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+        .vn-ws-scope-row label { display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 14px; border: 1px solid rgba(251,223,162,0.25); font-size: 12px; color: #ddd; cursor: pointer; font-weight: normal; transition: 0.2s; }
+        .vn-ws-scope-row label:hover { border-color: #FBDFA2; }
+        .vn-ws-scope-row input[type="radio"] { accent-color: #FBDFA2; margin: 0; }
+        .vn-ws-scope-row label.checked { background: rgba(251,223,162,0.18); border-color: #FBDFA2; color: #FBDFA2; }
+
+        /* === 歷史快照面板 === */
+        #vn-ws-history-area { display: none; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.45); border: 1px solid rgba(251,223,162,0.2); border-radius: 8px; max-height: 320px; overflow-y: auto; }
+        .vn-ws-history-empty { color: #888; font-size: 12px; text-align: center; padding: 20px 0; }
+        .vn-ws-history-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(20,10,5,0.7); border: 1px solid rgba(251,223,162,0.12); border-radius: 6px; margin-bottom: 6px; font-size: 12px; transition: 0.15s; }
+        .vn-ws-history-item:hover { border-color: rgba(251,223,162,0.5); background: rgba(30,15,8,0.9); }
+        .vn-ws-history-item .h-time { color: #888; font-family: monospace; flex-shrink: 0; }
+        .vn-ws-history-item .h-note { color: #ccc; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vn-ws-history-item.pinned { border-color: rgba(241,196,15,0.6); background: rgba(40,30,5,0.6); }
+        .vn-ws-history-item .h-btn { background: transparent; border: 1px solid rgba(251,223,162,0.4); color: #FBDFA2; font-size: 11px; padding: 3px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
+        .vn-ws-history-item .h-btn:hover { background: rgba(251,223,162,0.15); }
+        .vn-ws-history-item .h-btn.danger { border-color: rgba(231,76,60,0.5); color: #e74c3c; }
+        .vn-ws-history-item .h-btn.danger:hover { background: rgba(231,76,60,0.15); }
+        .vn-ws-history-hint { font-size: 11px; color: #aaa; margin-bottom: 8px; line-height: 1.4; }
     `;
 
     const workshopHTML = `
@@ -83,7 +104,17 @@
                         <div class="vn-ws-group">
                             <label style="color:#e67e22;">💡 效果不滿意？告訴 AI 怎麼修改：</label>
                             <textarea class="vn-ws-textarea" id="vn-ws-refine-desc" placeholder="例如：背景顏色改暗一點..."></textarea>
-                            <button class="vn-ws-btn" id="vn-ws-btn-refine" style="background: rgba(230,126,34,0.1); color:#e67e22; border-color:#e67e22;">🛠️ 根據建議進行微調</button>
+                            <label style="color:#e67e22; font-size:12px; margin-top:4px;">修改範圍（限縮範圍可大幅省 token、避免改壞其他部分）</label>
+                            <div class="vn-ws-scope-row" id="vn-ws-scope-row">
+                                <label><input type="radio" name="vn-ws-scope" value="all" checked> 全部</label>
+                                <label><input type="radio" name="vn-ws-scope" value="css"> 🎨 CSS</label>
+                                <label><input type="radio" name="vn-ws-scope" value="js"> ⚙️ JS</label>
+                                <label><input type="radio" name="vn-ws-scope" value="html"> 🧱 HTML</label>
+                                <label><input type="radio" name="vn-ws-scope" value="demoFormat"> 📋 格式</label>
+                            </div>
+                            <button class="vn-ws-btn" id="vn-ws-btn-refine" style="background: rgba(230,126,34,0.1); color:#e67e22; border-color:#e67e22; margin-top:8px;">🛠️ 根據建議進行微調</button>
+                            <button class="vn-ws-btn" id="vn-ws-btn-history" style="background: rgba(155,89,182,0.1); color:#9b59b6; border-color:#9b59b6; margin-top:6px;">⏪ 歷史快照 (<span id="vn-ws-history-count">0</span>)</button>
+                            <div id="vn-ws-history-area"></div>
                         </div>
                     </div>
 
@@ -187,14 +218,39 @@
         document.getElementById('vn-ws-btn-refine').onclick = async () => {
             const refineMsg = document.getElementById('vn-ws-refine-desc').value.trim();
             if (!refineMsg) return alert('請輸入修改建議！');
+            if (!generatedData) return alert('還沒有可微調的對象，請先「全新生成」');
+
+            const scopeEl = document.querySelector('input[name="vn-ws-scope"]:checked');
+            const scope = scopeEl ? scopeEl.value : 'all';
+
+            // 🔪 修改前先拍快照（FIFO 上限 10，pinned 不計）
+            snapshotCurrentState(refineMsg, scope);
 
             document.getElementById('vn-ws-loading').style.display = 'block';
             document.getElementById('vn-ws-btn-refine').disabled = true;
 
-            await requestAIGeneration(null, null, refineMsg, true);
+            await requestAIGeneration(null, null, refineMsg, true, scope);
 
             document.getElementById('vn-ws-loading').style.display = 'none';
             document.getElementById('vn-ws-btn-refine').disabled = false;
+            renderHistoryArea();
+        };
+
+        // scope radio 視覺反饋
+        document.getElementById('vn-ws-scope-row').addEventListener('change', (e) => {
+            document.querySelectorAll('#vn-ws-scope-row label').forEach(l => l.classList.remove('checked'));
+            if (e.target.checked) e.target.closest('label').classList.add('checked');
+        });
+        // 預設「全部」高亮
+        const defaultScopeLabel = document.querySelector('#vn-ws-scope-row input[value="all"]')?.closest('label');
+        if (defaultScopeLabel) defaultScopeLabel.classList.add('checked');
+
+        // 歷史快照展開/收合
+        document.getElementById('vn-ws-btn-history').onclick = () => {
+            const area = document.getElementById('vn-ws-history-area');
+            const isOpen = area.style.display === 'block';
+            area.style.display = isOpen ? 'none' : 'block';
+            if (!isOpen) renderHistoryArea();
         };
 
         document.getElementById('vn-ws-btn-save').onclick = async () => {
@@ -233,24 +289,42 @@
         return "```\n" + fullHtml + "\n```";
     }
 
-    // 🔪 將標籤說明優雅地折疊進當前角色的主世界書中 (自動去除多餘外套)
+    // 🔪 將標籤說明拆成「一個面板一個條目」折疊進主世界書，吃綠燈關鍵字觸發
     async function syncPromptToWorldbook(th, data) {
         if (typeof th.getCharWorldbookNames !== 'function') return false;
 
         const charWbInfo = th.getCharWorldbookNames('current');
         const primaryWb = charWbInfo?.primary;
-        
+
         if (!primaryWb) return false;
 
-        const ENTRY_NAME = 'VN動態面板大全';
-        
+        const safeTagId = (data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeTagId) return false;
+        const ENTRY_NAME = `[VN面板] ${safeTagId}`;
+
         // 暴力扒掉 AI 在 demoFormat 裡自作主張加上的外層標籤，確保純淨
         let cleanFormat = (data.demoFormat || '').trim();
         const regStart = new RegExp(`^<${data.tagId}>\\s*`, 'i');
         const regEnd = new RegExp(`\\s*<\\/${data.tagId}>$`, 'i');
         cleanFormat = cleanFormat.replace(regStart, '').replace(regEnd, '').trim();
 
-        const tagBlock = `【標籤：${data.tagId}】\n說明：${data.usageDesc || '無'}\n格式示範：\n<${data.tagId}>\n${cleanFormat}\n</${data.tagId}>`;
+        // 關鍵字保底：AI 沒給就拿 tagId 當唯一 key
+        let keywords = Array.isArray(data.keywords)
+            ? data.keywords.filter(k => typeof k === 'string' && k.trim()).map(k => k.trim())
+            : [];
+        if (keywords.length === 0) keywords = [safeTagId];
+        // 強制保留 tagId 自身為 key
+        if (!keywords.includes(safeTagId)) keywords.unshift(safeTagId);
+
+        const content = `### [動態特效標籤：${data.tagId}]
+劇情提到相關情境時，請輸出此標籤強化視覺效果：
+
+【標籤：${data.tagId}】
+說明：${data.usageDesc || '無'}
+格式示範：
+<${data.tagId}>
+${cleanFormat}
+</${data.tagId}>`;
 
         let entries = [];
         try {
@@ -259,29 +333,25 @@
             console.error('[VN Workshop] 讀取主世界書失敗:', e);
             return false;
         }
-        
-        let targetEntry = entries.find(e => e.name === ENTRY_NAME);
 
-        if (targetEntry) {
+        const exists = entries.some(e => e.name === ENTRY_NAME);
+
+        if (exists) {
             await th.updateWorldbookWith(primaryWb, (wbEntries) => {
                 const entry = wbEntries.find(e => e.name === ENTRY_NAME);
                 if (entry) {
-                    const regex = new RegExp(`【標籤：${data.tagId}】[\\s\\S]*?(?=(?:\\n\\n【標籤：|$))`);
-                    if (regex.test(entry.content)) {
-                        entry.content = entry.content.replace(regex, tagBlock).trim();
-                    } else {
-                        entry.content = (entry.content.trim() + '\n\n' + tagBlock).trim();
-                    }
+                    entry.enabled = true;
+                    entry.content = content;
+                    entry.strategy = { type: 'selective', keys: keywords };
                 }
                 return wbEntries;
             });
         } else {
-            const initContent = `### [擴充動態特效標籤]\n你現在擁有額外的視覺特效標籤可以使用。請根據劇情氛圍，在最適合的時機輸出這些標籤來增強沉浸感：\n\n${tagBlock}`;
             await th.createWorldbookEntries(primaryWb, [{
                 name: ENTRY_NAME,
                 enabled: true,
-                content: initContent,
-                strategy: { type: 'constant' }, 
+                content: content,
+                strategy: { type: 'selective', keys: keywords },
                 position: { type: 'before_author_note', order: -5 }
             }]);
         }
@@ -330,7 +400,10 @@
             try {
                 const wbSynced = await syncPromptToWorldbook(th, data);
                 if (wbSynced) {
-                    wbMsg = "\n✅ 已優雅地將使用說明折疊至角色的主世界書中。";
+                    const keywordHint = Array.isArray(data.keywords) && data.keywords.length
+                        ? `\n   觸發關鍵字：${data.keywords.join('、')}`
+                        : '';
+                    wbMsg = `\n✅ 已折疊至角色主世界書（綠燈觸發，劇情提到關鍵字才激活，省 token）${keywordHint}`;
                 } else {
                     wbMsg = "\n⚠️ 未找到角色綁定的主世界書，跳過提示詞同步。";
                 }
@@ -531,11 +604,74 @@
         } catch (error) { alert('點子轉換失敗，請檢查 API 連線。\n錯誤: ' + error.message); }
     }
 
-    async function requestAIGeneration(tagId, format, desc, isRefine) {
-        document.getElementById('vn-ws-code').innerText = isRefine ? "正在請 AI 進行修改..." : "開始呼叫底層 API (純淨模式)...";
-        let messages = [];
+    // === scope-based partial refine：只重寫指定欄位 ===
+    const SCOPE_FIELD_INFO = {
+        css:        { tag: 'css',        label: 'CSS 樣式',      hint: '只重寫 CSS，HTML 與 JS 不變' },
+        js:         { tag: 'js',         label: 'JS 互動腳本',    hint: '只重寫 JS，HTML 與 CSS 不變' },
+        html:       { tag: 'html',       label: 'HTML 骨架',     hint: '只重寫 HTML，CSS 與 JS 不變' },
+        demoFormat: { tag: 'demoFormat', label: '劇情格式範例',   hint: '只重寫 demoFormat' }
+    };
 
-        if (!isRefine) {
+    function buildPartialRefinePrompt(scope, refineMsg) {
+        const info = SCOPE_FIELD_INFO[scope];
+        if (!info || !generatedData) return null;
+
+        const currentVal = generatedData[scope] || '';
+
+        // 給上下文：除了目標欄位以外，其他欄位都當「不可改」的參考
+        const contextLines = [];
+        if (scope !== 'html')       contextLines.push(`\n### 【當前 HTML（不要修改、僅供參考）】\n${generatedData.html || ''}`);
+        if (scope !== 'css')        contextLines.push(`\n### 【當前 CSS（不要修改、僅供參考）】\n${generatedData.css || ''}`);
+        if (scope !== 'js')         contextLines.push(`\n### 【當前 JS（不要修改、僅供參考）】\n${generatedData.js || ''}`);
+        if (scope !== 'demoFormat') contextLines.push(`\n### 【當前 demoFormat（不要修改、僅供參考）】\n${generatedData.demoFormat || ''}`);
+
+        return `你是一個 VN 視覺小說引擎的 UI 工程師。
+用戶已有一個動態面板（tagId: ${generatedData.tagId}），現在他**只想修改 ${info.label} 這一塊**，其他部分維持不動。
+
+${contextLines.join('\n')}
+
+### 【需要修改的當前 ${info.label}】
+${currentVal}
+
+### 【用戶的修改建議】
+${refineMsg}
+
+### 【輸出規範】
+- 只輸出新的 ${info.label} 內容，**完全不要輸出其他欄位、不要 JSON、不要解釋**
+- 必須用 <${info.tag}> 與 </${info.tag}> 標籤精準包裹
+${scope === 'css' ? '- CSS 必須繼續使用 .vn-dynamic-panel-' + (generatedData.tagId || 'xxx') + ' 作為樣式前綴' : ''}
+${scope === 'js' ? '- JS 仍會被 new Function(container, lines, onComplete, js) 包裝；保持原本變數可用；圖片走 window.__IS_PREVIEW 隔離' : ''}
+
+請輸出：
+<${info.tag}>
+（你的新內容）
+</${info.tag}>`;
+    }
+
+    function parsePartialResponse(scope, responseText) {
+        const info = SCOPE_FIELD_INFO[scope];
+        if (!info) return null;
+        const re = new RegExp(`<${info.tag}>([\\s\\S]*?)<\\/${info.tag}>`, 'i');
+        const m = responseText.match(re);
+        if (m && m[1] !== undefined) return m[1].trim();
+        // 退路：直接撈 ``` 區塊
+        const fence = responseText.match(/```(?:\w+)?\s*([\s\S]*?)```/);
+        if (fence) return fence[1].trim();
+        // 最後退路：整段回傳（去頭尾空白）
+        return responseText.trim();
+    }
+
+    async function requestAIGeneration(tagId, format, desc, isRefine, scope) {
+        if (!scope) scope = 'all';
+        document.getElementById('vn-ws-code').innerText = isRefine ? `正在請 AI 進行修改 (範圍：${scope})...` : "開始呼叫底層 API (純淨模式)...";
+        let messages = [];
+        let mode = 'full'; // 'full' 全包 JSON ／ 'partial' 單欄位
+
+        if (isRefine && scope !== 'all' && generatedData && SCOPE_FIELD_INFO[scope]) {
+            mode = 'partial';
+            const partialPrompt = buildPartialRefinePrompt(scope, desc);
+            messages = [{ role: 'user', content: partialPrompt }];
+        } else if (!isRefine) {
             basePrompt = `你是一個擁有頂級美學的 UI/UX 設計師、資深前端工程師與 VN 引擎架構師。
 使用者需要建立一個全新的動態面板，它會以「區塊（Block）」模式攔截多行文本，並由你編寫的 JS 來解析與呈現這些文本。
 
@@ -562,8 +698,8 @@ ${desc}
 (async () => {
     let promptDesc = "a glowing magic sword"; // 解析出來的提示詞
     // 🛡️ 防護機制：預覽環境給佔位圖；正式劇情才呼叫 API
-    const imgUrl = window.__IS_PREVIEW 
-        ? 'https://via.placeholder.com/512/333333/FBDFA2?text=Preview+Image' 
+    const imgUrl = window.__IS_PREVIEW
+        ? ('https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(promptDesc))
         : await window.OS_IMAGE_MANAGER.generate(promptDesc, "item");
     container.querySelector('.my-image-element').src = imgUrl;
 })();
@@ -576,6 +712,14 @@ ${desc}
 3. \x60onComplete\x60: 結束時務必呼叫。
 4. ⚠️ 絕對禁止在 CSS 使用 \x60position: fixed\x60、\x60100vw\x60 或 \x60100vh\x60！
 
+### 🔑 觸發關鍵字 (keywords) — 用於世界書綠燈激活
+你必須輸出一組 3-6 個觸發關鍵字，當劇本 AI 講到這些詞時，這個標籤的提示詞才會被酒館世界書注入（避免一直常駐浪費 token）。
+- 必須包含：tagId 本身（英文）
+- 應該包含：2-4 個中文情境詞（用戶會用什麼詞描述觸發場景）
+- 可以包含：1-2 個英文同義詞
+- 範例（拍賣面板）：["auction", "拍賣", "競標", "出價", "amount"]
+- 範例（戰鬥面板）：["battle", "戰鬥", "交戰", "攻擊", "傷害"]
+
 【最終輸出 JSON 格式規範】(必須輸出此區塊)
 <json>
 {
@@ -585,7 +729,8 @@ ${desc}
   "css": "你的頂級 CSS (包含 .vn-dynamic-panel-xxx 前綴)",
   "js": "你的 JS 互動邏輯腳本 (若需圖片記得套用上述的 window.__IS_PREVIEW 隔離機制)",
   "usageDesc": "給劇本 AI 的使用說明 (什麼情境用、欄位是什麼意思)",
-  "demoFormat": "你設計的格式"
+  "demoFormat": "你設計的格式",
+  "keywords": ["tagId本身", "中文情境詞1", "中文情境詞2", "英文同義詞"]
 }
 </json>
 ⚠️ JSON 的字串值內部「絕對禁止」出現真實的換行符號！換行請寫成 "\\n"，雙引號轉義為 "\\""！`;
@@ -610,6 +755,19 @@ ${desc}
             });
 
             if (!responseText) throw new Error('AI 回傳空白');
+
+            if (mode === 'partial') {
+                // === 只回單一欄位（<css>...</css> 等）===
+                const newVal = parsePartialResponse(scope, responseText);
+                if (newVal === null || newVal === '') throw new Error(`AI 未回傳有效的 <${SCOPE_FIELD_INFO[scope].tag}> 區段`);
+                generatedData = { ...generatedData, [scope]: newVal };
+                renderPreview(generatedData);
+                document.getElementById('vn-ws-refine-area').style.display = 'block';
+                renderHistoryArea();
+                return;
+            }
+
+            // === 全包 JSON 模式（原始邏輯）===
             let cleanJsonStr = responseText;
             const xmlMatch = cleanJsonStr.match(/<json>([\s\S]*?)<\/json>/i);
             if (xmlMatch) cleanJsonStr = xmlMatch[1].trim();
@@ -622,15 +780,131 @@ ${desc}
             const resultObj = JSON.parse(cleanJsonStr);
 
             if (isRefine && generatedData) {
+                // 保留 history（AI 不該動到的本地 metadata）
+                const keepHistory = generatedData.history;
                 generatedData = { ...generatedData, ...resultObj };
+                if (keepHistory) generatedData.history = keepHistory;
             } else {
                 generatedData = resultObj;
             }
 
             renderPreview(generatedData);
             document.getElementById('vn-ws-refine-area').style.display = 'block';
+            renderHistoryArea();
 
         } catch (error) { alert('API 調用失敗: ' + error.message); }
+    }
+
+    // ============================================================
+    // === 快照系統 (history)：refine 前自動拍 / 還原 / 釘住 / 刪除 ===
+    // ============================================================
+    const HISTORY_LIMIT = 10;
+
+    function snapshotCurrentState(note, scope) {
+        if (!generatedData) return;
+        if (!Array.isArray(generatedData.history)) generatedData.history = [];
+
+        const snap = {
+            ts: Date.now(),
+            html: generatedData.html || '',
+            css: generatedData.css || '',
+            js: generatedData.js || '',
+            demoFormat: generatedData.demoFormat || '',
+            usageDesc: generatedData.usageDesc || '',
+            isBlock: !!generatedData.isBlock,
+            keywords: Array.isArray(generatedData.keywords) ? [...generatedData.keywords] : [],
+            note: note || '',
+            scope: scope || 'all',
+            pinned: false
+        };
+        generatedData.history.unshift(snap); // 新的在最前
+
+        // FIFO 清理：超過 HISTORY_LIMIT 時，從尾巴砍非 pinned 的
+        const unpinnedCount = generatedData.history.filter(h => !h.pinned).length;
+        if (unpinnedCount > HISTORY_LIMIT) {
+            let toRemove = unpinnedCount - HISTORY_LIMIT;
+            for (let i = generatedData.history.length - 1; i >= 0 && toRemove > 0; i--) {
+                if (!generatedData.history[i].pinned) {
+                    generatedData.history.splice(i, 1);
+                    toRemove--;
+                }
+            }
+        }
+    }
+
+    function restoreFromSnapshot(idx) {
+        if (!generatedData || !Array.isArray(generatedData.history)) return;
+        const snap = generatedData.history[idx];
+        if (!snap) return;
+
+        // 還原前先拍當前狀態（防後悔）
+        snapshotCurrentState(`還原前自動備份（即將套用 ${formatSnapTime(snap.ts)}）`, 'all');
+
+        generatedData.html = snap.html;
+        generatedData.css = snap.css;
+        generatedData.js = snap.js;
+        generatedData.demoFormat = snap.demoFormat;
+        generatedData.usageDesc = snap.usageDesc;
+        if (typeof snap.isBlock === 'boolean') generatedData.isBlock = snap.isBlock;
+        if (Array.isArray(snap.keywords)) generatedData.keywords = snap.keywords;
+
+        const fmtEl = document.getElementById('vn-ws-format');
+        if (fmtEl) fmtEl.value = generatedData.demoFormat || '';
+
+        renderPreview(generatedData);
+        renderHistoryArea();
+    }
+
+    function formatSnapTime(ts) {
+        const d = new Date(ts);
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function renderHistoryArea() {
+        const area = document.getElementById('vn-ws-history-area');
+        const countEl = document.getElementById('vn-ws-history-count');
+        if (!area) return;
+
+        const list = (generatedData && Array.isArray(generatedData.history)) ? generatedData.history : [];
+        if (countEl) countEl.textContent = list.length;
+
+        if (list.length === 0) {
+            area.innerHTML = '<div class="vn-ws-history-empty">尚無快照。每次「微調」前會自動拍一張，最多保留 ' + HISTORY_LIMIT + ' 張（📌 釘住的不計入）。</div>';
+            return;
+        }
+
+        area.innerHTML = '<div class="vn-ws-history-hint">📸 由新到舊。點「還原」可回到該版本（會先自動備份當前）。釘住的快照不會被自動清理。</div>';
+
+        list.forEach((snap, idx) => {
+            const item = document.createElement('div');
+            item.className = 'vn-ws-history-item' + (snap.pinned ? ' pinned' : '');
+            const scopeBadge = snap.scope && snap.scope !== 'all' ? `[${snap.scope}] ` : '';
+            const noteText = (scopeBadge + (snap.note || '(無備註)')).replace(/</g, '&lt;');
+            item.innerHTML = `
+                <span class="h-time">${formatSnapTime(snap.ts)}</span>
+                <span class="h-note" title="${noteText}">${noteText}</span>
+                <button class="h-btn btn-restore">⏪ 還原</button>
+                <button class="h-btn btn-pin">${snap.pinned ? '📌' : '📍'}</button>
+                <button class="h-btn danger btn-del">✖</button>
+            `;
+            item.querySelector('.btn-restore').onclick = () => {
+                if (confirm('要還原到這個版本嗎？目前未儲存的修改會先拍進快照，可以再還原回來。')) {
+                    restoreFromSnapshot(idx);
+                }
+            };
+            item.querySelector('.btn-pin').onclick = () => {
+                snap.pinned = !snap.pinned;
+                renderHistoryArea();
+            };
+            item.querySelector('.btn-del').onclick = () => {
+                if (confirm('刪除這張快照？')) {
+                    generatedData.history.splice(idx, 1);
+                    renderHistoryArea();
+                }
+            };
+            area.appendChild(item);
+        });
     }
 
     function renderPreview(data) {
