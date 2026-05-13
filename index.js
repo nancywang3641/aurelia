@@ -45,6 +45,7 @@ const PHONE_FILES = [
     'os/os_avs_engine.js',
     'os/os_avs_rules.js',
     'os/os_avs.js',           // 變數工坊 UI（PWA / 酒館共用一套面板）
+    'os/os_studio.js',        // 靈感創作室（VN UI 煉丹 + 世界書設計師，PWA / 酒館共用）
     'os/os_api_engine.js',
     'os/phone_system.js',
     'os/os_monitor.js',

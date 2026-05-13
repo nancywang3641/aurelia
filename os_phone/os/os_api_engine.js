@@ -319,9 +319,16 @@
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
             const globalUserName = this.getGlobalUserName();
+            // 兼容 multimodal：content 可能是字串或 [{type:'text',...},{type:'image_url',...}] 陣列
             messages.forEach(m => {
-                if (m.content && typeof m.content === 'string') {
+                if (typeof m.content === 'string') {
                     m.content = m.content.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
+                } else if (Array.isArray(m.content)) {
+                    m.content.forEach(part => {
+                        if (part && part.type === 'text' && typeof part.text === 'string') {
+                            part.text = part.text.replace(/\{\{\s*user\s*\}\}/gi, globalUserName);
+                        }
+                    });
                 }
             });
 
@@ -353,7 +360,14 @@
             let totalTokens = 0;
             let totalChars = 0;
             try {
-                const fullPromptString = messages.map(m => m.content).join('\n');
+                // 兼容陣列 content：抽 text 部分計算 token；圖片不計入文字字數但會在送 API 時算 token
+                const fullPromptString = messages.map(m => {
+                    if (typeof m.content === 'string') return m.content;
+                    if (Array.isArray(m.content)) {
+                        return m.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n');
+                    }
+                    return '';
+                }).join('\n');
                 totalChars = fullPromptString.length;
                 if (win.SillyTavern && typeof win.SillyTavern.getTokenCountAsync === 'function') {
                     totalTokens = await win.SillyTavern.getTokenCountAsync(fullPromptString);
@@ -385,9 +399,20 @@
                 const groups = { prompts: [], char: [], lore: [], reality: [], chat: [], persona: [] };
 
                 messages.forEach((msg, index) => {
-                    const content = msg.content || "";
+                    // 兼容陣列 content：preview 抽 text 部分 + 標記圖片數
+                    let textContent = '';
+                    let imgCount = 0;
+                    if (typeof msg.content === 'string') {
+                        textContent = msg.content;
+                    } else if (Array.isArray(msg.content)) {
+                        textContent = msg.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n');
+                        imgCount = msg.content.filter(p => p && p.type === 'image_url').length;
+                    }
+                    const content = textContent || "";
+                    const imgTag = imgCount > 0 ? ` [📎×${imgCount}]` : '';
                     let preview = content.length > 80 ? content.substring(0, 80).replace(/\n/g, ' ') + "..." : content.replace(/\n/g, ' ');
-                    
+                    preview += imgTag;
+
                     const item = { "#": index, "Role": msg.role, "預覽": preview, "Length": content.length };
                     
                     if (msg.role === 'system') {
@@ -468,7 +493,12 @@
 
             let cleanMessages = messages
                 .map(m => { const { _source, _isProto, _chatId, ...rest } = m; return rest; })
-                .filter(m => m.content && m.content.trim().length > 0);
+                .filter(m => {
+                    // 字串非空 或 陣列非空（含 text/image 任一）
+                    if (typeof m.content === 'string') return m.content.trim().length > 0;
+                    if (Array.isArray(m.content)) return m.content.length > 0;
+                    return false;
+                });
 
             try {
                 let stringifiedPayload = JSON.stringify(cleanMessages);

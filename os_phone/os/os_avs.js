@@ -115,8 +115,6 @@
                 <div class="avs-tabs">
                     <div class="avs-tab active" data-tab="state">📊 目前狀態</div>
                     <div class="avs-tab" data-tab="packs">📦 變數包</div>
-                    <div class="avs-tab" data-tab="furnace">🔥 煉丹爐</div>
-                    <div class="avs-tab" data-tab="gallery">🖼️ 展廳</div>
                     <div class="avs-tab" data-tab="modes">🎭 模式</div>
                 </div>
                 <div class="avs-content">
@@ -141,10 +139,22 @@
                             </div>
                         </div>
                     </div>
-                    <div id="avs-view-furnace" class="avs-view">
-                        <div class="avs-card" id="furnace-card">
-                            <div class="avs-label">選擇變數包</div>
-                            <select class="avs-select" id="furnace-pack-select" style="margin-bottom:15px;"></select>
+                </div>
+
+                <!-- 🔥 煉丹爐 modal（從變數包 tab 頂部按鈕 / 卡片按鈕觸發）-->
+                <div id="avs-furnace-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
+                    <div style="max-width:600px; width:100%; background:#1a0d0a; border:1px solid #FBDFA2; border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(251,223,162,0.2); margin:auto;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(251,223,162,0.3);">
+                            <strong style="font-size:16px; color:#FBDFA2;">🔥 煉丹爐 · 為變數包煉個 UI 面板</strong>
+                            <div style="color:#FBDFA2; cursor:pointer; font-size:20px;" id="avs-furnace-close">✕</div>
+                        </div>
+                        <div class="avs-card" id="furnace-card" style="background:transparent; border:none; padding:0;">
+                            <!-- 預選 pack 顯示（煉丹爐永遠從變數包卡片進入，所以一定知道是哪個 pack）-->
+                            <div id="furnace-pack-display" style="margin-bottom:15px; padding:10px 12px; background:rgba(251,223,162,0.08); border:1px solid rgba(251,223,162,0.3); border-radius:6px; font-size:13px; color:#FBDFA2;">
+                                正在為 <strong id="furnace-pack-display-name" style="color:#d4af37;">?</strong> 煉丹
+                            </div>
+                            <!-- 內部用的 hidden select，存當前 packId 供煉丹流程讀取 -->
+                            <select id="furnace-pack-select" style="display:none;"></select>
 
                             <!-- 風格建議下拉（有建議時才顯示） -->
                             <div id="furnace-presets-wrap" style="display:none;margin-bottom:14px;">
@@ -157,9 +167,6 @@
                             <div class="avs-btn avs-btn-primary" id="furnace-start-btn" style="width:100%;">🔥 開始煉丹</div>
                             <div class="furnace-log" id="furnace-log-output" style="margin-top:15px;">等待點火...</div>
                         </div>
-                    </div>
-                    <div id="avs-view-gallery" class="avs-view">
-                        <div id="avs-template-list" style="display:flex; flex-direction:column; gap:15px;"></div>
                     </div>
                 </div>
 
@@ -207,18 +214,20 @@
                 container.querySelectorAll('.avs-view').forEach(v => v.classList.remove('active'));
                 tab.classList.add('active');
                 container.querySelector(`#avs-view-${tab.dataset.tab}`).classList.add('active');
-                if (tab.dataset.tab === 'furnace') refreshFurnacePackSelect(container);
-                if (tab.dataset.tab === 'gallery') {
-                    win.OS_DB?.getAllUITemplates?.().then(tpls => {
-                        currentTemplates = tpls || [];
-                        renderTemplateList(container);
-                    });
-                }
                 if (tab.dataset.tab === 'state') renderStateView(container);
-                // V3：條件規則 tab 砍掉，改在「📦 變數包」每張卡片內當「⚡ 條件規則」子按鈕，每個 pack 自己一份
+                // V3：條件規則 tab 砍掉，改在「📦 變數包」每張卡片內當「⚡ 條件規則」子按鈕
                 if (tab.dataset.tab === 'modes') win.OS_AVS_RULES?.renderModesTab?.(container);
             };
         });
+
+        // 🔥 煉丹爐 modal 關閉（開啟由變數包卡片內按鈕觸發，沒有獨立頂部入口）
+        const furnaceModal = container.querySelector('#avs-furnace-modal');
+        const closeFurnaceBtn = container.querySelector('#avs-furnace-close');
+        if (closeFurnaceBtn) closeFurnaceBtn.onclick = () => closeFurnaceModal(container);
+        // 點空白處關閉 modal
+        if (furnaceModal) furnaceModal.onclick = (e) => {
+            if (e.target === furnaceModal) closeFurnaceModal(container);
+        };
 
         await loadAllData(container);
         bindPackEditorEvents(container);
@@ -322,12 +331,42 @@ ${lines.join('\n')}
         }
     }
 
+    // 🔥 開煉丹爐 modal（永遠帶 packId，從變數包卡片內按鈕進入）
+    function openFurnaceModal(container, packId) {
+        if (!packId) { console.warn('[AVS] openFurnaceModal 需要 packId'); return; }
+        const modal = container.querySelector('#avs-furnace-modal');
+        const displayName = container.querySelector('#furnace-pack-display-name');
+        const select = container.querySelector('#furnace-pack-select');
+
+        refreshFurnacePackSelect(container); // 填 hidden select 的 option
+
+        const pack = currentPacks.find(p => p.id === packId);
+        if (displayName) displayName.textContent = pack ? pack.name : '?';
+        if (select) select.value = packId;
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function closeFurnaceModal(container) {
+        const modal = container.querySelector('#avs-furnace-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
     function renderPackList(container) {
         const listEl = container.querySelector('#avs-pack-list');
         listEl.innerHTML = '';
         const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
+
+        if (currentPacks.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(251,223,162,0.4); font-size:13px;">尚無變數包<br><br>點上方「＋ 創建新變數包」開始</div>';
+            return;
+        }
+
         currentPacks.forEach(pack => {
             const rulesCount = allRules.filter(r => r.packId === pack.id).length;
+            // 找此 pack 的 UI 面板（只看屬於 AVS 的：有 packId + 沒 VN 標記）
+            const packTpls = currentTemplates.filter(t => t.packId === pack.id && !t.isVNTag && !t.isBlock && !t.tagId);
+            const activeTpl = packTpls.find(t => t.isActive) || packTpls[0] || null;
+
             const card = document.createElement('div');
             card.className = 'avs-card';
             card.innerHTML = `
@@ -338,7 +377,79 @@ ${lines.join('\n')}
                     <div class="avs-btn avs-btn-outline btn-rules" style="flex:1; min-width:90px; padding:6px;">⚡ 規則${rulesCount ? ` (${rulesCount})` : ''}</div>
                     <div class="avs-btn avs-btn-danger btn-del" style="padding:6px 12px;">刪除</div>
                 </div>
+                <div class="pack-ui-area" style="margin-top:14px; padding-top:12px; border-top:1px dashed rgba(251,223,162,0.2);"></div>
             `;
+
+            // === 嵌入 UI 面板區（取代原本獨立「展廳」tab）===
+            const uiArea = card.querySelector('.pack-ui-area');
+            if (!activeTpl) {
+                uiArea.innerHTML = `
+                    <div style="font-size:12px; color:rgba(251,223,162,0.45); margin-bottom:8px;">🖼️ UI 面板：<span style="color:#888;">無</span></div>
+                    <div class="avs-btn avs-btn-outline btn-go-furnace" style="width:100%; padding:8px; font-size:12px;">✨ 為這個變數包煉個 UI 面板</div>
+                `;
+                uiArea.querySelector('.btn-go-furnace').onclick = () => openFurnaceModal(container, pack.id);
+            } else {
+                // 用當前狀態 + 預設值替換佔位符做預覽
+                const previewState = win._AVS_ENGINE?.read?.() || {};
+                const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
+                let previewHtml = activeTpl.htmlContent || '';
+                Object.entries(previewState).forEach(([k, v]) => {
+                    previewHtml = previewHtml.split(`{{${k}}}`).join(fmt(v));
+                });
+                (pack.variables || []).forEach(v => {
+                    previewHtml = previewHtml.split(`{{${v.name}}}`).join(fmt(v.defaultValue ?? '0'));
+                });
+                previewHtml = previewHtml.replace(/\{\{[\w.]+\}\}/g, '—');
+
+                const scopeId = `pack-tpl-preview-${activeTpl.id}`;
+                let scopedCssText = '';
+                if (activeTpl.cssContent) {
+                    scopedCssText = activeTpl.cssContent.replace(/([^{}@][^{}]*)\{/g, (m, selector) => {
+                        const scoped = selector.trim().split(',').map(s => `#${scopeId} ${s.trim()}`).join(', ');
+                        return `${scoped} {`;
+                    });
+                }
+
+                uiArea.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:12px; color:rgba(251,223,162,0.65);">🖼️ UI 面板：<span style="color:#d4af37;">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
+                    </div>
+                    ${scopedCssText ? `<style>${scopedCssText}</style>` : ''}
+                    <div id="${scopeId}" style="margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; min-height:60px; overflow:hidden;">
+                        ${previewHtml || '<span style="color:rgba(251,223,162,0.4);font-size:12px;">（無預覽內容）</span>'}
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <div class="avs-btn avs-btn-outline btn-toggle-active" style="flex:1; padding:6px; font-size:12px;">${activeTpl.isActive ? '✓ 取消啟用' : '設為啟用'}</div>
+                        <div class="avs-btn avs-btn-outline btn-refurnace" style="flex:1; padding:6px; font-size:12px;">🔄 重新煉丹</div>
+                        <div class="avs-btn avs-btn-danger btn-del-tpl" style="padding:6px 12px; font-size:12px;">🗑</div>
+                    </div>
+                `;
+
+                uiArea.querySelector('.btn-toggle-active').onclick = async () => {
+                    // 同一個 pack 只能有一個 active
+                    if (!activeTpl.isActive) {
+                        const otherActive = currentTemplates.find(t => t.packId === activeTpl.packId && t.isActive && t.id !== activeTpl.id);
+                        if (otherActive) {
+                            otherActive.isActive = false;
+                            await win.OS_DB.saveUITemplate(otherActive);
+                        }
+                    }
+                    activeTpl.isActive = !activeTpl.isActive;
+                    await win.OS_DB.saveUITemplate(activeTpl);
+                    currentTemplates = await win.OS_DB.getAllUITemplates();
+                    updateActiveTemplatesCache();
+                    renderPackList(container);
+                };
+                uiArea.querySelector('.btn-refurnace').onclick = () => openFurnaceModal(container, pack.id);
+                uiArea.querySelector('.btn-del-tpl').onclick = async () => {
+                    if (!confirm(`刪除這個變數包對應的 UI 面板？變數包本身保留。`)) return;
+                    await win.OS_DB.deleteUITemplate(activeTpl.id);
+                    currentTemplates = await win.OS_DB.getAllUITemplates();
+                    updateActiveTemplatesCache();
+                    renderPackList(container);
+                };
+            }
+
             card.querySelector('.btn-edit').onclick = () => openPackEditor(container, pack);
             card.querySelector('.btn-rules').onclick = () => openRulesModal(container, pack);
             card.querySelector('.btn-del').onclick = async () => {
@@ -793,15 +904,15 @@ ${lines.join('\n')}
                     createdAt: Date.now(),
                 });
 
-                log.innerHTML = '🎉 煉丹完成！已存入展廳，切換到展廳 tab 即可查看。';
+                log.innerHTML = '🎉 煉丹完成！已嵌入到變數包卡片中。';
 
-                // 若目前就在 gallery tab 則立即刷新
-                if (container.querySelector('#avs-view-gallery')?.classList.contains('active')) {
-                    win.OS_DB.getAllUITemplates().then(tpls => {
-                        currentTemplates = tpls || [];
-                        renderTemplateList(container);
-                    });
-                }
+                // 刷新變數包列表（卡片底部 UI 面板區會自動顯示新煉的）
+                win.OS_DB.getAllUITemplates().then(tpls => {
+                    currentTemplates = tpls || [];
+                    renderPackList(container);
+                });
+                // 1.5 秒後自動關閉 modal
+                setTimeout(() => closeFurnaceModal(container), 1500);
             } catch (e) {
                 console.error('[AVS Furnace]', e);
                 log.innerHTML = `❌ 炸鍋了：${e.message}`;
@@ -947,10 +1058,22 @@ ${lines.join('\n')}
         };
     }
 
+    // DEPRECATED：原獨立「展廳」tab 的渲染函數，現已內嵌到變數包卡片內。
+    // 保留簽名 alias 到 renderPackList，避免內部其他地方還有 ref 時崩潰。
     function renderTemplateList(container) {
+        return renderPackList(container);
+    }
+    // === 以下舊邏輯保留為死代碼（不會被呼叫），下版本清理 ===
+    function _DEPRECATED_renderTemplateList_old(container) {
         const list = container.querySelector('#avs-template-list');
+        if (!list) return;
         list.innerHTML = '';
         currentTemplates.forEach(tpl => {
+            // 🛡️ 只渲染真正屬於 AVS 變數包系統的模板（有 packId）
+            // VN 煉丹爐的標籤模板（有 tagId / isBlock / isVNTag）跟外部模板一律跳過
+            if (!tpl.packId) return;
+            if (tpl.isVNTag || tpl.isBlock || tpl.tagId) return;
+
             const pack = currentPacks.find(p => p.id === tpl.packId);
             const card = document.createElement('div');
             card.className = 'avs-card';
@@ -989,7 +1112,7 @@ ${lines.join('\n')}
             card.innerHTML = `
                 ${scopedCss}
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <strong style="font-size:13px;color:#d4af37;">${pack ? pack.name : (tpl.packName || '未知')} - 面板</strong>
+                    <strong style="font-size:13px;color:#d4af37;">${pack ? pack.name : (tpl.packName || '已刪除的變數包')} - 面板</strong>
                     ${tpl.isActive ? '<span style="font-size:10px;color:#FBDFA2;border:1px solid rgba(251,223,162,0.4);padding:2px 7px;border-radius:3px;">啟用中</span>' : ''}
                 </div>
                 <div id="${scopeId}" style="margin-bottom:12px;padding:10px;background:rgba(0,0,0,0.3);border-radius:6px;min-height:60px;overflow:hidden;">
