@@ -11,7 +11,7 @@
     // === 1. IDB 核心快取系統 ===
     function _openIDB() {
         return new Promise((res, rej) => {
-            const req = indexedDB.open('vn_player_db', 6);
+            const req = indexedDB.open('vn_player_db', 7);
             req.onupgradeneeded = e => {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains('bg_cache'))     db.createObjectStore('bg_cache');
@@ -19,6 +19,7 @@
                 if (!db.objectStoreNames.contains('item_cache'))   db.createObjectStore('item_cache');
                 if (!db.objectStoreNames.contains('chat_bg'))      db.createObjectStore('chat_bg');
                 if (!db.objectStoreNames.contains('scene_cache'))  db.createObjectStore('scene_cache');
+                if (!db.objectStoreNames.contains('sprite_cache')) db.createObjectStore('sprite_cache');
                 if (db.objectStoreNames.contains('handles'))       db.deleteObjectStore('handles');
             };
             req.onsuccess = e => res(e.target.result);
@@ -73,6 +74,8 @@
             } catch(e) { return []; }
         }
     };
+    // 暴露給其他擴展腳本（os_settings 角色立繪面板、wx_view 等）
+    window.VN_Cache = VN_Cache;
 
     // === 2. 系統配置 & 生圖引擎 ===
     const VN_Config = {
@@ -780,87 +783,6 @@
             this.stopSFX();
         },
 
-        // ----------------------------------------------------------------
-        // 角色存檔器：從 <profile> Markdown 表格抽取角色資料存入 OS_WORLDBOOK
-        // 防重複：以「角色名」為 key，已存在則跳過
-        // ----------------------------------------------------------------
-        _extractAndSaveProfiles: async function(rawText) {
-            if (!win.OS_DB || typeof win.OS_DB.saveWorldbookEntry !== 'function') return;
-
-            const profileReg = /<profile>([\s\S]*?)<\/profile>/gi;
-            const newChars = [];
-            let pm;
-
-            while ((pm = profileReg.exec(rawText)) !== null) {
-                const profileContent = pm[1];
-                const rows = profileContent.split('\n').filter(l => l.trim().startsWith('|'));
-
-                let isHeaderRow = true;
-                for (const row of rows) {
-                    const cells = row.split('|').map(c => c.trim()).filter(c => c);
-                    if (!cells.length) continue;
-                    // 分隔行（---）
-                    if (cells.every(c => /^:?-+:?$/.test(c))) continue;
-                    // 第一個有效行 = 標題行，跳過
-                    if (isHeaderRow) { isHeaderRow = false; continue; }
-                    // 角色資料行
-                    if (cells[0]) newChars.push({ name: cells[0].trim(), cells, rawRow: row });
-                }
-            }
-
-            if (!newChars.length) return;
-
-            // 讀現有條目做防重複
-            let existingTitles = new Set();
-            try {
-                const existing = await win.OS_DB.getAllWorldbookEntries();
-                existing.forEach(e => existingTitles.add(e.title));
-            } catch(e) {}
-
-            const headers = ['名字', '身份', '性格核心', '衣着', '形象'];
-            let saved = 0;
-
-            for (const char of newChars) {
-                if (existingTitles.has(char.name)) continue; // 已存在，跳過
-
-                // 格式化內容
-                const contentLines = char.cells.map((cell, i) => {
-                    const label = headers[i] || `欄位${i + 1}`;
-                    return `${label}：${cell}`;
-                }).join('\n');
-
-                // 如果 <avatar> 已解析出這個角色的生圖 prompt，一併存入
-                const avatarPrompt = this.avatars?.[char.name] || '';
-                const fullContent = avatarPrompt
-                    ? `${contentLines}\n\n[外觀生圖標籤 (NAI)]\n${avatarPrompt}`
-                    : contentLines;
-
-                const entry = {
-                    id: 'wb_char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-                    title: char.name,
-                    content: fullContent,
-                    category: '角色設定',
-                    enabled: true,
-                    order: Date.now() + saved,
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                };
-
-                try {
-                    await win.OS_DB.saveWorldbookEntry(entry);
-                    existingTitles.add(char.name); // 同批次防重複
-                    saved++;
-                } catch(e) {
-                    console.warn('[VN] 角色存入世界書失敗:', char.name, e);
-                }
-            }
-
-            if (saved > 0) {
-                console.log(`[VN] ✅ 已記錄 ${saved} 個新角色到獨立世界書（角色設定）`);
-                if (win.toastr) win.toastr.info(`記錄了 ${saved} 個新角色`, '📖 角色登錄');
-            }
-        },
-
         loadScript: function (txt, messageId) {
             // 新一輪劇本載入時，自動關閉檔案庫面板
             if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) {
@@ -885,13 +807,6 @@
                         return `[Choice|${cleanLine}]`;
                     })
                 : [];
-
-            // 🧹 從 storyText 移除 <profile> 區塊（含 <details> 包裝）
-            // 角色表不應出現在 VN 對話流中；資料會另存至 OS_WORLDBOOK
-            storyText = storyText.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, match =>
-                match.includes('<profile>') ? '' : match
-            );
-            storyText = storyText.replace(/<profile>[\s\S]*?<\/profile>/gi, ''); 
 
             this.script = storyText.split('\n').map(l=>l.trim()).filter(l=>l!=='');
             // 移除 HTML 註解行（如作者思維鏈 <!-- 分析內容 --> 等），含跨行註解
@@ -960,44 +875,6 @@
             while ((m = reg.exec(txtString)) !== null) {
                 m[1].split('\n').forEach(l => { if(l.includes(':')) { const [n, d] = l.split(':'); this.avatars[n.trim()] = d.trim(); } });
             }
-
-            // 2. 新式：從 <profile> 表格的「頭像提示詞」欄讀取（最後一欄）
-            const profReg = /<profile>([\s\S]*?)<\/profile>/g; let pm;
-            while ((pm = profReg.exec(txtString)) !== null) {
-                const rows = pm[1].split('\n').filter(l => l.trim().startsWith('|'));
-                let headers = null;
-                for (const row of rows) {
-                    const cells = row.split('|').map(c => c.trim()).filter(c => c);
-                    if (!cells.length) continue;
-                    if (cells.every(c => /^:?-+:?$/.test(c))) continue; // 分隔行
-                    if (!headers) { headers = cells; continue; }          // 標題行
-                    const nameIdx  = 0;
-                    // 找「頭像提示詞」欄位索引
-                    const avatarIdx = headers.findIndex(h => /頭像|avatar|prompt/i.test(h));
-                    if (avatarIdx < 0 || avatarIdx >= cells.length) continue;
-                    const charName   = cells[nameIdx]?.trim();
-                    const avatarPmt  = cells[avatarIdx]?.trim();
-                    if (charName && avatarPmt && !this.avatars[charName]) {
-                        this.avatars[charName] = avatarPmt;
-                    }
-                }
-            }
-
-            // 3. 新式：從 <summary> 的 char_new: 行讀取頭像 prompt（取代 <profile> 表格）
-            const smReg = /<summary>([\s\S]*?)<\/summary>/g; let sm;
-            while ((sm = smReg.exec(txtString)) !== null) {
-                for (const line of sm[1].split('\n')) {
-                    const cnMatch = line.match(/char_new\s*[:：]\s*([^|]+)\|(.+)/);
-                    if (!cnMatch) continue;
-                    const cnName = cnMatch[1].trim();
-                    if (!cnName || this.avatars[cnName]) continue; // 已有則跳過（首次登場原則）
-                    const kvStr = cnMatch[2];
-                    const avatarKv = kvStr.match(/頭像\s*=\s*([^|]+)/);
-                    if (avatarKv) this.avatars[cnName] = avatarKv[1].trim();
-                }
-            }
-
-            // ⚠️ _extractAndSaveProfiles 已停用：自動把 VN 劇情角色寫入 OS_WORLDBOOK 會汙染世界書資料
 
             // 將 <branches> 選項附加到 script 末尾（由現有 [Choice|] 機制驅動顯示）
             if (_branchLines.length) {
@@ -1165,7 +1042,7 @@
                     'display:flex;flex-direction:column;justify-content:center;padding:20px 16px 14px;',
                     'transform:translateY(100%);transition:transform .35s cubic-bezier(.22,1,.36,1);overflow:hidden}',
                     '#vn-dom-block-overlay.active{transform:translateY(0)}',
-                    '#vn-dom-block-body{max-height:65%;overflow-y:auto;overflow-x:hidden;color:#e8dfc8}',
+                    '#vn-dom-block-body{max-height:calc(100% - 60px);overflow-y:auto;overflow-x:hidden;color:#e8dfc8}',
                     '#vn-dom-block-body::-webkit-scrollbar{width:3px}',
                     '#vn-dom-block-body::-webkit-scrollbar-thumb{background:rgba(212,175,55,.3);border-radius:2px}',
                     /* 確保圖片（如 SD 插件的 sd-ui-image）在缺少原插件 CSS 時仍可見 */
@@ -1722,7 +1599,7 @@
         _prewarmAvatars: function() {
             if (VN_Config.data.spriteBase) return;
             const names = Object.keys(this.avatars);
-            // 把 persona 名字也納入預熱（即使 AI 沒輸出 <profile>）
+            // 把 persona 名字也納入預熱
             try {
                 const uName = win.OS_PERSONA?.getName?.() || win.OS_API?.getGlobalUserName?.();
                 if (uName && !this.avatars[uName] && !names.includes(uName)) names.push(uName);
@@ -2723,7 +2600,7 @@
             tryNext();
         },
 
-        updateSprite: function(name, exp) {
+        updateSprite: async function(name, exp) {
             const prevName = this.currentName;
             this.currentName = name; this.currentExp = exp;
             const img = document.getElementById('game-char');
@@ -2731,19 +2608,38 @@
             if (prevName !== name) {
                 this._hideEl(document.getElementById('char-portrait'));
                 this._hideEl(img);
+                img.dataset.slideIn = '1';
             }
 
             const triggerAnim = (target) => {
                 const isPortrait = target.id === 'char-portrait';
                 const shakeClass = isPortrait ? 'portrait-shake' : 'sprite-shake';
                 const jumpClass  = isPortrait ? 'portrait-jumpscare' : 'sprite-jumpscare';
-                
-                target.classList.remove(shakeClass, jumpClass);
-                void target.offsetWidth; 
-                
-                if (exp === 'Surprised') target.classList.add(shakeClass);
-                if (exp === 'JumpScare') target.classList.add(jumpClass);
+
+                target.classList.remove(shakeClass, jumpClass, 'sprite-slide-in-right');
+                void target.offsetWidth;
+
+                const isNewChar = !isPortrait && target.dataset.slideIn === '1';
+                if (isNewChar) {
+                    target.classList.add('sprite-slide-in-right');
+                    delete target.dataset.slideIn;
+                } else {
+                    if (exp === 'Surprised') target.classList.add(shakeClass);
+                    if (exp === 'JumpScare') target.classList.add(jumpClass);
+                }
             };
+
+            // 🆕 最優先：sprite_cache（用戶在設定 → 畫廊 → 頭像 → 角色立繪生成的透明 PNG）
+            // 真立繪、2:3 直立、套 #game-char（貼底容器），不用頭像框
+            for (const v of this._nameVariants(name)) {
+                const cached = await VN_Cache.get('sprite_cache', v);
+                if (cached?.url) {
+                    if (this.currentName !== name) return; // 防角色切換
+                    this._showEl(img, cached.url);
+                    triggerAnim(img);
+                    return;
+                }
+            }
 
             if (VN_Config.data.spriteBase) {
                 const urls = this._nameVariants(name).map(v => `${VN_Config.data.spriteBase}${v}_${exp}.png`);
@@ -2771,10 +2667,16 @@
                 const isPortrait = target.id === 'char-portrait';
                 const shakeClass = isPortrait ? 'portrait-shake' : 'sprite-shake';
                 const jumpClass  = isPortrait ? 'portrait-jumpscare' : 'sprite-jumpscare';
-                target.classList.remove(shakeClass, jumpClass);
+                target.classList.remove(shakeClass, jumpClass, 'sprite-slide-in-right');
                 void target.offsetWidth;
-                if (this.currentExp === 'Surprised') target.classList.add(shakeClass);
-                if (this.currentExp === 'JumpScare') target.classList.add(jumpClass);
+                const isNewChar = !isPortrait && target.dataset.slideIn === '1';
+                if (isNewChar) {
+                    target.classList.add('sprite-slide-in-right');
+                    delete target.dataset.slideIn;
+                } else {
+                    if (this.currentExp === 'Surprised') target.classList.add(shakeClass);
+                    if (this.currentExp === 'JumpScare') target.classList.add(jumpClass);
+                }
             };
 
             if (base) {
@@ -4154,8 +4056,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             if (hasChoices) {
                 this._addTab(tabBar, contentArea, 'choices', '🎯 做出選擇', this._choicesHtml(), true);
             }
-            this._addTab(tabBar, contentArea, 'profiles', '📜 本章角色', await this._profilesHtml(), !hasChoices);
-            this._addTab(tabBar, contentArea, 'avs',      '📊 狀態',      await this._avsHtml(),       false);
+            this._addTab(tabBar, contentArea, 'avs',      '📊 狀態',      await this._avsHtml(),       !hasChoices);
             this._addTab(tabBar, contentArea, 'wallet',   '💰 錢包',      this._walletHtml(),          false);
 
             // AVS_VARS_UPDATED 事件 → 自動刷新狀態 tab
@@ -4300,74 +4201,6 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 </div>`;
         },
 
-        async _profilesHtml() {
-            // 掃描所有章節，解析 <profile> 表格（舊式）與 <summary> char_new:（新式）
-            if (!win.OS_DB?.getAllVnChapters) return '<div style="padding:30px;text-align:center;color:#999">OS_DB 未載入</div>';
-            try {
-                const allChapters = await win.OS_DB.getAllVnChapters();
-                const currentStoryId = window.VN_Core?._currentStoryId || '';
-                const chapters = currentStoryId
-                    ? allChapters.filter(ch => ch.storyId === currentStoryId)
-                    : allChapters.filter(ch => !ch.storyId);
-                // 從舊到新，後出現同名角色不覆蓋（首次登場原則）
-                const allChars = {}; // name → { headers, cells }
-                const _stdHeaders = ['名字', '身份', '性格', '外觀描述', '頭像提示詞'];
-                chapters.slice().reverse().forEach(ch => {
-                    const content = ch.content || '';
-                    // ── 舊式 <profile> 表格 ──
-                    const profReg = /<profile>([\s\S]*?)<\/profile>/gi; let pm;
-                    while ((pm = profReg.exec(content)) !== null) {
-                        const rows = pm[1].split('\n').filter(l => l.trim().startsWith('|'));
-                        let headers = null;
-                        for (const row of rows) {
-                            const cells = row.split('|').map(c => c.trim()).filter(c => c);
-                            if (!cells.length) continue;
-                            if (cells.every(c => /^:?-+:?$/.test(c))) continue;
-                            if (!headers) { headers = cells; continue; }
-                            const name = cells[0]?.trim();
-                            if (name && !allChars[name]) allChars[name] = { headers, cells };
-                        }
-                    }
-                    // ── 新式 <summary> char_new: ──
-                    const smReg = /<summary>([\s\S]*?)<\/summary>/gi; let sm;
-                    while ((sm = smReg.exec(content)) !== null) {
-                        for (const line of sm[1].split('\n')) {
-                            const cnMatch = line.match(/char_new\s*[:：]\s*([^|]+)\|(.+)/);
-                            if (!cnMatch) continue;
-                            const name = cnMatch[1].trim();
-                            if (!name || allChars[name]) continue;
-                            const kvStr = cnMatch[2];
-                            const get = key => (kvStr.match(new RegExp(`${key}\\s*=\\s*([^|]+)`)) || [])[1]?.trim() || '—';
-                            allChars[name] = {
-                                headers: _stdHeaders,
-                                cells: [name, get('身份'), get('性格'), get('外觀'), get('頭像')]
-                            };
-                        }
-                    }
-                });
-                const keys = Object.keys(allChars);
-                if (!keys.length) return `<div style="padding:30px;text-align:center;color:#999">
-                    <div style="font-size:36px;margin-bottom:8px">📭</div>
-                    尚無角色資料。生成劇情後，AI 在摘要中的 char_new: 資料會累積於此。</div>`;
-                return keys.map(name => {
-                    const { headers, cells } = allChars[name];
-                    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                    const rows = headers.map((h, i) => {
-                        if (i === 0) return ''; // 名字欄已作標題
-                        const val = cells[i] || '—';
-                        return `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
-                            <span style="color:#666;font-size:11px;min-width:60px;flex-shrink:0;">${esc(h)}</span>
-                            <span style="color:#aaa;font-size:11px;line-height:1.5;">${esc(val)}</span>
-                        </div>`;
-                    }).join('');
-                    return `<div style="margin-bottom:14px;padding:12px 14px;background:rgba(212,175,55,0.04);border:1px solid rgba(212,175,55,0.15);border-radius:6px;">
-                        <div style="font-size:13px;color:#d4af37;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">👤 ${esc(name)}</div>
-                        ${rows}
-                    </div>`;
-                }).join('');
-            } catch(e) { return `<div style="padding:20px;color:#e74c3c">讀取失敗: ${e.message}</div>`; }
-        },
-
         async _avsHtml() {
             const storyId = window.VN_Core?._currentStoryId || '';
             const stateKey = storyId ? `avs_state_${storyId}` : 'avs_current_state';
@@ -4398,14 +4231,63 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             let panelHtml = '';
             if (activeTpls.length > 0) {
                 let rendered = '';
+                const _getByPath = (obj, path) => {
+                    let cur = obj;
+                    for (const k of String(path).split('.')) {
+                        if (cur == null || typeof cur !== 'object') return undefined;
+                        cur = cur[k];
+                    }
+                    return cur;
+                };
+                // 載入變數包：給 object 型變數補初值（pack 初值當底，state 即時值深合併蓋上去）
+                let _allPacks = [];
+                try { _allPacks = await win.OS_DB?.getAllVarPacks?.() || []; } catch(e) {}
+                const _deepMerge = (base, over) => {
+                    if (over == null) return base;
+                    if (typeof base !== 'object' || typeof over !== 'object' || Array.isArray(base) || Array.isArray(over)) return over;
+                    const out = { ...base };
+                    for (const k of Object.keys(over)) out[k] = _deepMerge(base[k], over[k]);
+                    return out;
+                };
                 for (const tpl of activeTpls) {
                     let html = tpl.htmlContent || '';
                     let css  = tpl.cssContent  || '';
-                    Object.entries(state).forEach(([k, v]) => {
+                    // object 型變數：pack 初值當底，state 即時值深合併（副模型只抽到部分時其餘仍顯示初值）
+                    let tplState = state;
+                    const tplPack = _allPacks.find(p => p.id === tpl.packId);
+                    if (tplPack && Array.isArray(tplPack.variables)) {
+                        tplState = { ...state };
+                        for (const v of tplPack.variables) {
+                            if (v.type !== 'object') continue;
+                            let initStruct = {};
+                            try { initStruct = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch(e) {}
+                            tplState[v.name] = _deepMerge(initStruct, tplState[v.name]);
+                        }
+                    }
+                    // {{#each 容器}}...{{/each}} 迴圈塊（object 型變數，對每個實體重複渲染卡片）
+                    html = html.replace(/\{\{#each\s+([^\s{}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (m, cp, inner) => {
+                        const container = _getByPath(tplState, cp);
+                        if (!container || typeof container !== 'object') return '';
+                        let blocks = '';
+                        for (const [ek, ev] of Object.entries(container)) {
+                            let block = inner.split('{{@key}}').join(ek);
+                            if (ev && typeof ev === 'object') {
+                                for (const [ak, av] of Object.entries(ev)) {
+                                    block = block.split(`{{${ak}}}`).join(typeof av === 'object' ? JSON.stringify(av) : String(av));
+                                }
+                            }
+                            block = block.replace(/\{\{[^{}]+\}\}/g, '—');
+                            blocks += block;
+                        }
+                        return blocks;
+                    });
+                    // 扁平變數替換（object 型已由 each 處理，跳過）
+                    Object.entries(tplState).forEach(([k, v]) => {
+                        if (v && typeof v === 'object') return;
                         const re = new RegExp(`\\{\\{${k}\\}\\}`, 'g');
                         html = html.replace(re, String(v));
                     });
-                    html = html.replace(/\{\{[\w.]+\}\}/g, '—');
+                    html = html.replace(/\{\{[^{}]+\}\}/g, '—');
                     rendered += `<style>${css}</style>${html}`;
                 }
                 panelHtml = `<div class="native-render-wrapper">${rendered}</div>`;
@@ -4690,7 +4572,6 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 // 1. 先移除不需要顯示的整個 block（順序很重要，必須在剝 tag 之前）
                 s = s.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '');
                 s = s.replace(/<summary>[\s\S]*?<\/summary>/gi, '');
-                s = s.replace(/<profile>[\s\S]*?<\/profile>/gi, '');
                 s = s.replace(/<avatar>[\s\S]*?<\/avatar>/gi, '');
                 s = s.replace(/<status>[\s\S]*?<\/status>/gi, '');
                 // 2. 從 <content> block 取正文（若有），移除包裹 tag

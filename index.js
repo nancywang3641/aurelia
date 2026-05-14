@@ -83,7 +83,6 @@ const PHONE_FILES = [
     'map/world_generator.js',
     'map/schedule_engine.js',
     'map/scene_map_engine.js',
-    'map/vn_bridge.js',
     'map/map_core.js',
 
     // === 🔵 微信 (WeChat) ===

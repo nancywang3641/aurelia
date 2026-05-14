@@ -154,23 +154,10 @@ E. 區域轉換主角前往→（具體設施或地點名稱）]
 <summary>
 [SessionEnd|本章劇情摘要]    ← 章節結束標記，摘要用於系統記錄
 故事時間: 第X年X季（必填，每章更新，例：第一年冬季第三週）
-char_new: 角色名|身份=...|性格=...|外觀=...|頭像=NAI英文頭像提示詞
-char_exit: 角色名|狀態=現況描述|位置=所在地點|備注=補充說明
 </summary>
 
 填寫規則：
-【故事時間】每章必填，讓系統追蹤時間流逝以推算角色現況
-
-【char_new】本章首次登場的新角色，每人獨立一行，只寫一次（後續章節相同角色不重複）
-- 身份/性格/外觀 用中文描述
-- 頭像 用英文 NAI Danbooru Tags，風格：bust shot, 2D半厚塗，描述髮型/髮色/瞳色/服裝
-- 名字必須與 [Char|名字|] tag 內一致（短名/常用名，不帶姓氏）
-- 嚴禁在頭像欄使用 realistic/photo/real person 等寫實詞
-- 例：char_new: 卡蜜拉|身份=神秘旅人|性格=冷靜睿智|外觀=銀髮短髮，紫瞳，修長|頭像=1girl, mature adult, bust shot, silver short hair, purple eyes, calm expression, dark coat, simple background
-
-【char_exit】本章有「角色離場、狀態重大變化、時間跳躍導致現況改變」時必填，每人獨立一行
-- 持續在場且無變化的角色不必填
-- 例：char_exit: NPC_B|狀態=輕傷住院中|位置=中央醫院|備注=傷勢不重，預計兩週康復
+【故事時間】每章必填，讓系統追蹤時間流逝
 
 
 ### 直播間模式 (SPADE_LIVE)

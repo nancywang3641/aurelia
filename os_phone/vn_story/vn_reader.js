@@ -82,7 +82,6 @@
         let s = text;
         s = s.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '');
         s = s.replace(/<summary>[\s\S]*?<\/summary>/gi, '');
-        s = s.replace(/<profile>[\s\S]*?<\/profile>/gi, '');
         s = s.replace(/<avatar>[\s\S]*?<\/avatar>/gi, '');
         s = s.replace(/<status>[\s\S]*?<\/status>/gi, '');
         const cm = s.match(/<content>([\s\S]*?)<\/content>/i);
