@@ -3460,6 +3460,32 @@ ${irisSupplement ? `\n\n---\n\n${irisSupplement}` : ''}`;
         }
     };
 
+    // ===== 內部橋（給 core/void/ 子模組借用核心狀態與函式）=====
+    function resetActiveHistory() {
+        IRIS_STATE.history = [];
+        _irisHistoryBackup = [];
+        _cheshireHistoryBackup = [];
+    }
+    VoidTerminal._bridge = {
+        // claude-room.js
+        activeHistory: () => IRIS_STATE.history,
+        scheduleSave:  () => debouncedSave(),
+        isClaudeRoom:  () => isClaudeRoom,
+        // canvas.js
+        is404: () => is404Room,
+        // ambient.js
+        isActivitySuspended: () => _isActivitySuspended,
+        // login.js
+        loadLobbyHistory:      (id) => loadLobbyHistory(id),
+        saveLobbyHistory:      () => saveLobbyHistory(),
+        applyLoadedLobbyState: () => _applyLoadedLobbyState(),
+        getChatId:             () => getChatId(),
+        applyLayoutMode:       () => applyLayoutMode(),
+        setCurrentChatId:      (id) => { _currentChatId = id; },
+        setUserName:           (v) => { IRIS_STATE.userName = v; },
+        resetActiveHistory:    () => resetActiveHistory(),
+    };
+
     console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (大廳書櫃整合版)');
 
 })(window.VoidTerminal = window.VoidTerminal || {});
