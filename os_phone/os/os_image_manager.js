@@ -79,10 +79,24 @@
             }
         },
 
-        // --- 核心生成函數 (整合翻譯) ---
+        // --- 同 (prompt, type) 結果快取 ---
+        // 解決 011.html 這類「ST 正則注入面板」script 多次重跑導致每次都吃新 seed / 耗 token 的問題。
+        // 同 prompt + type 第二次呼叫直接回傳第一次的 URL（Pollinations 是 deterministic-on-seed，
+        // 鎖住 URL = 鎖住圖；NAI 則直接複用既有 blob URL）。
+        // options.force = true 可跳過 cache 強制重生。
+        _urlCache: new Map(),
+
+        // --- 核心生成函數 (整合翻譯 + cache) ---
         generate: async function(prompt, type = 'scene', options = {}) {
+            // 🔥 步驟 0: cache 命中
+            const cacheKey = type + '|' + (prompt || '');
+            if (!options.force && this._urlCache.has(cacheKey)) {
+                console.log(`[ImageManager] cache hit [${type}]: ${prompt}`);
+                return this._urlCache.get(cacheKey);
+            }
+
             console.log(`[ImageManager] Raw Input [${type}]: ${prompt}`);
-            
+
             // 🔥 步驟 1: 自動翻譯
             let englishPrompt = prompt;
             if (win.TranslationManager) {
@@ -99,25 +113,46 @@
 
             // 🔥 步驟 2: 路由判斷（char/item/scene 有 NAI token 走 NAI；背景底板走 generateBackgroundAsync）
             const isNaiType = (type === 'char' || type === 'item' || type === 'scene');
+            let result;
             if (isNaiType && this.config.service === 'novelai' && this.config.novelai.token) {
                 // NAI 使用 Danbooru tag 格式，底詞/負詞在 _genNovelAI 內部處理
-                console.log(`[ImageManager] Final Prompt [${type}→NAI]: ${englishPrompt}`);
-                return await this._genNovelAI(englishPrompt, type, options);
+                console.log(`[ImageManager] Final Prompt [${type}→NAI${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
+                result = await this._genNovelAI(englishPrompt, type, options);
+            } else {
+                // 🔥 步驟 3: Pollinations 底詞（只在走 Pollinations 時套用；options.raw=true 跳過）
+                if (type === 'char' && !options.raw) {
+                    const charBase = this.config.pollinations.charBasePrompt;
+                    if (charBase) englishPrompt = charBase + ', ' + englishPrompt;
+                }
+                console.log(`[ImageManager] Final Prompt [${type}→Pol${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
+
+                // 🔥 步驟 4: Pollinations 負詞（options.raw=true 跳過）
+                if (!options.negativePrompt && type === 'char' && !options.raw) {
+                    options = { ...options, negativePrompt: this.config.pollinations.charNegPrompt || undefined };
+                }
+
+                result = this._genPollinations(englishPrompt, type, options);
             }
 
-            // 🔥 步驟 3: Pollinations 底詞（只在走 Pollinations 時套用）
-            if (type === 'char') {
-                const charBase = this.config.pollinations.charBasePrompt;
-                if (charBase) englishPrompt = charBase + ', ' + englishPrompt;
+            if (result) {
+                this._urlCache.set(cacheKey, result);
+                if (type === 'scene') this._recordUsage();  // 只統計場景插圖
             }
-            console.log(`[ImageManager] Final Prompt [${type}→Pol]: ${englishPrompt}`);
+            return result;
+        },
 
-            // 🔥 步驟 4: Pollinations 負詞
-            if (!options.negativePrompt && type === 'char') {
-                options = { ...options, negativePrompt: this.config.pollinations.charNegPrompt || undefined };
-            }
-
-            return this._genPollinations(englishPrompt, type, options);
+        // --- 用量統計：每次「場景插圖」真實生成記一筆，供「會員方案划算度」估算 ---
+        _recordUsage: function() {
+            try {
+                const KEY = 'os_image_usage';
+                let u = {};
+                try { u = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e) {}
+                u.total = (u.total || 0) + 1;
+                const ym = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+                u.byMonth = u.byMonth || {};
+                u.byMonth[ym] = (u.byMonth[ym] || 0) + 1;
+                localStorage.setItem(KEY, JSON.stringify(u));
+            } catch(e) { /* 統計失敗不影響生成流程 */ }
         },
 
         // --- Pollinations 生成邏輯 ---
@@ -220,19 +255,23 @@
             // 底詞：NAI Danbooru tag 格式（設定可自訂）
             // scene / char 已由呼叫方（getScene/getAvatar）預先 join avatarBasePrompt，
             // 這裡再前置 NAI 品質底詞（masterpiece, best quality…）
+            // options.raw = true 完全跳過底詞 / 負詞注入（立繪用，自己帶模板）
             let finalPrompt = prompt;
-            if (isChar && cfg.charBasePrompt) {
-                finalPrompt = cfg.charBasePrompt + ', ' + prompt;
-            } else if (!isChar && cfg.itemBasePrompt) {
-                finalPrompt = cfg.itemBasePrompt + ', ' + prompt;
+            if (!options.raw) {
+                if (isChar && cfg.charBasePrompt) {
+                    finalPrompt = cfg.charBasePrompt + ', ' + prompt;
+                } else if (!isChar && cfg.itemBasePrompt) {
+                    finalPrompt = cfg.itemBasePrompt + ', ' + prompt;
+                }
             }
 
             // 負向提示詞：優先使用呼叫方傳入的 options.negativePrompt（使用者自訂），
             // 否則按類型使用預設值
             const negativePrompt = options.negativePrompt ||
-                (isChar
-                    ? (cfg.charNegPrompt || 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry')
-                    : (cfg.itemNegPrompt || 'person, human, body, face, hands, worst quality, low quality, blurry, watermark, text'));
+                (options.raw ? '' :
+                    (isChar
+                        ? (cfg.charNegPrompt || 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry')
+                        : (cfg.itemNegPrompt || 'person, human, body, face, hands, worst quality, low quality, blurry, watermark, text')));
 
             const model   = cfg.model    || 'nai-diffusion-3';
             const isV4    = model.includes('nai-diffusion-4');

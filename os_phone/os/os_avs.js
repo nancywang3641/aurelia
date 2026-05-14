@@ -389,17 +389,10 @@ ${lines.join('\n')}
                 `;
                 uiArea.querySelector('.btn-go-furnace').onclick = () => openFurnaceModal(container, pack.id);
             } else {
-                // 用當前狀態 + 預設值替換佔位符做預覽
+                // 用當前狀態 + 預設值替換佔位符做預覽（支援 object 型 {{#each}} 迴圈）
                 const previewState = win._AVS_ENGINE?.read?.() || {};
                 const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
-                let previewHtml = activeTpl.htmlContent || '';
-                Object.entries(previewState).forEach(([k, v]) => {
-                    previewHtml = previewHtml.split(`{{${k}}}`).join(fmt(v));
-                });
-                (pack.variables || []).forEach(v => {
-                    previewHtml = previewHtml.split(`{{${v.name}}}`).join(fmt(v.defaultValue ?? '0'));
-                });
-                previewHtml = previewHtml.replace(/\{\{[\w.]+\}\}/g, '—');
+                let previewHtml = _avsRenderTemplate(activeTpl.htmlContent || '', previewState, pack.variables || [], fmt);
 
                 const scopeId = `pack-tpl-preview-${activeTpl.id}`;
                 let scopedCssText = '';
@@ -726,11 +719,16 @@ ${lines.join('\n')}
             rowsContainer.querySelectorAll('.avs-var-row').forEach(row => {
                 const vn = row.querySelector('.var-name').value;
                 if (!vn) return;
+                const vtype = row.querySelector('.var-type')?.value || 'string';
+                // 物件型的預設值來自大文字框（var-default-obj），其餘來自單行 input
+                const defVal = vtype === 'object'
+                    ? (row.querySelector('.var-default-obj')?.value || '')
+                    : (row.querySelector('.var-default')?.value || '');
                 variables.push({
                     name: vn,
-                    defaultValue: row.querySelector('.var-default').value,
+                    defaultValue: defVal,
                     desc: row.querySelector('.var-desc')?.value || '',
-                    type: row.querySelector('.var-type')?.value || 'string'
+                    type: vtype
                 });
             });
             const pack = activeEditingPack ? { ...activeEditingPack } : { id: 'pack_' + Date.now() };
@@ -739,6 +737,192 @@ ${lines.join('\n')}
             btnCancel.onclick(); await loadAllData(container);
             await syncVarPackToLorebook();
         };
+    }
+
+    // ================================================================
+    // UI 模板渲染引擎：{{變數}} 佔位符 + {{#each 容器}}...{{/each}} 迴圈
+    //   迴圈用於 object 型變數（如「角色狀態」），對每個實體重複渲染卡片
+    //   迴圈內可用 {{@key}}（實體名）與 {{屬性名}}（該實體的屬性值）
+    //   → 跑團新增的角色會自動長出卡片，不必重煉
+    // ================================================================
+    function _avsGetByPath(obj, path) {
+        const keys = String(path).split('.');
+        let cur = obj;
+        for (const k of keys) {
+            if (cur == null || typeof cur !== 'object') return undefined;
+            cur = cur[k];
+        }
+        return cur;
+    }
+    function _avsRenderTemplate(html, state, packVars, fmt) {
+        const f = fmt || (v => String(v == null ? '' : v));
+        let out = String(html || '');
+        // 1. {{#each 容器}}...{{/each}} 迴圈塊（object 型變數用）
+        const _avsDeepMerge = (base, over) => {
+            if (over == null) return base;
+            if (typeof base !== 'object' || typeof over !== 'object' || Array.isArray(base) || Array.isArray(over)) return over;
+            const o = { ...base };
+            for (const k of Object.keys(over)) o[k] = _avsDeepMerge(base[k], over[k]);
+            return o;
+        };
+        out = out.replace(/\{\{#each\s+([^\s{}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (m, containerPath, innerTpl) => {
+            let container = _avsGetByPath(state, containerPath);
+            // pack 初值當底，state 即時值深合併蓋上去（副模型只抽到部分時其餘仍顯示初值）
+            const pv = (packVars || []).find(v => v.name === containerPath && v.type === 'object');
+            if (pv) {
+                let initStruct = {};
+                try { initStruct = win._AVS_ENGINE?.parseTree?.(pv.defaultValue) || {}; } catch(e) {}
+                container = _avsDeepMerge(initStruct, container);
+            }
+            if (!container || typeof container !== 'object') return '';
+            let blocks = '';
+            for (const [entityKey, entityVal] of Object.entries(container)) {
+                let block = innerTpl;
+                block = block.split('{{@key}}').join(entityKey);
+                if (entityVal && typeof entityVal === 'object') {
+                    for (const [ak, av] of Object.entries(entityVal)) {
+                        const sv = (av && typeof av === 'object') ? JSON.stringify(av) : f(av);
+                        block = block.split(`{{${ak}}}`).join(sv);
+                    }
+                }
+                block = block.replace(/\{\{[^{}]+\}\}/g, '—'); // 該實體沒有的屬性
+                blocks += block;
+            }
+            return blocks;
+        });
+        // 2. 一般佔位符 {{變數}}（扁平變數；object 型已由 each 處理，跳過）
+        Object.entries(state || {}).forEach(([k, v]) => {
+            if (v && typeof v === 'object') return;
+            out = out.split(`{{${k}}}`).join(f(v));
+        });
+        (packVars || []).forEach(v => {
+            if (v.type === 'object') return;
+            out = out.split(`{{${v.name}}}`).join(f(v.defaultValue == null ? '0' : v.defaultValue));
+        });
+        // 3. 殘留佔位符 → —
+        out = out.replace(/\{\{[^{}]+\}\}/g, '—');
+        return out;
+    }
+
+    // ================================================================
+    // 物件型變數的「遞迴資料夾樹」GUI（小白友善，免手寫 JSON）
+    //   📁 資料夾 = 容器，底下可遞迴放東西；🏷️ 數值 = 葉節點（名稱=值）
+    //   GUI 任何改動即時 serialize 寫回隱藏 textarea（.var-default-obj）
+    // ================================================================
+    function _avsCoerceVal(raw) {
+        const s = String(raw == null ? '' : raw).trim();
+        if (s === '' || s === '{}') return {};
+        if (s === '[]') return [];
+        if (s === 'true')  return true;
+        if (s === 'false') return false;
+        if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+        if (/^".*"$/.test(s) || /^'.*'$/.test(s)) return s.slice(1, -1);
+        return s;
+    }
+    function _avsValToStr(v) {
+        if (v == null) return '';
+        if (typeof v === 'object') return Array.isArray(v) ? '[]' : '{}';
+        return String(v);
+    }
+    // 讀 DOM 樹 → JS 物件
+    function _avsSerializeTree(childrenEl) {
+        const obj = {};
+        for (const node of childrenEl.children) {
+            if (node.classList.contains('avs-obj-folder')) {
+                const ki = node.querySelector('.avs-obj-folder-head .avs-obj-key');
+                const key = ki ? ki.value.trim() : '';
+                if (!key) continue;
+                const childEl = node.querySelector('.avs-obj-children');
+                obj[key] = childEl ? _avsSerializeTree(childEl) : {};
+            } else if (node.classList.contains('avs-obj-leaf')) {
+                const ki = node.querySelector('.avs-obj-key');
+                const key = ki ? ki.value.trim() : '';
+                if (!key) continue;
+                const vi = node.querySelector('.avs-obj-val');
+                obj[key] = _avsCoerceVal(vi ? vi.value : '');
+            }
+        }
+        return obj;
+    }
+    // 把整棵樹 serialize 寫回該 row 的隱藏 textarea
+    function _avsSyncTree(anyEl) {
+        const row = anyEl.closest('.avs-var-row');
+        if (!row) return;
+        const rootChildren = row.querySelector('.var-obj-gui > .avs-obj-children');
+        const ta = row.querySelector('.var-default-obj');
+        if (rootChildren && ta) {
+            try { ta.value = JSON.stringify(_avsSerializeTree(rootChildren), null, 2); } catch(e) {}
+        }
+    }
+    // 葉節點：名稱 = 值
+    function _avsMakeLeaf(key, val) {
+        const el = document.createElement('div');
+        el.className = 'avs-obj-leaf';
+        el.style.cssText = 'display:flex; gap:6px; align-items:center; margin:3px 0;';
+        el.innerHTML = `
+            <span style="flex-shrink:0;">🏷️</span>
+            <input class="avs-input avs-obj-key" placeholder="名稱" style="flex:1; font-size:12px;">
+            <span style="flex-shrink:0; color:#888;">=</span>
+            <input class="avs-input avs-obj-val" placeholder="值（數字/文字/{}）" style="flex:1; font-size:12px;">
+            <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;">✖</span>
+        `;
+        el.querySelector('.avs-obj-key').value = key != null ? String(key) : '';
+        el.querySelector('.avs-obj-val').value = _avsValToStr(val);
+        el.querySelector('.avs-obj-key').addEventListener('input', () => _avsSyncTree(el));
+        el.querySelector('.avs-obj-val').addEventListener('input', () => _avsSyncTree(el));
+        el.querySelector('.avs-obj-del').addEventListener('click', () => { const p = el.parentElement; el.remove(); if (p) _avsSyncTree(p); });
+        return el;
+    }
+    // 資料夾節點：底下可遞迴
+    function _avsMakeFolder(key, dataObj) {
+        const el = document.createElement('div');
+        el.className = 'avs-obj-folder';
+        el.style.cssText = 'margin:4px 0; border:1px solid rgba(251,223,162,0.2); border-radius:4px; padding:4px 6px; background:rgba(0,0,0,0.15);';
+        el.innerHTML = `
+            <div class="avs-obj-folder-head" style="display:flex; gap:6px; align-items:center;">
+                <span style="flex-shrink:0;">📁</span>
+                <input class="avs-input avs-obj-key" placeholder="項目名" style="flex:1; font-size:12px; font-weight:600;">
+                <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;">✖</span>
+            </div>
+            <div class="avs-obj-children" style="margin-left:14px; border-left:1px solid rgba(251,223,162,0.15); padding-left:8px; margin-top:2px;"></div>
+        `;
+        const headKey = el.querySelector('.avs-obj-folder-head .avs-obj-key');
+        headKey.value = key != null ? String(key) : '';
+        headKey.addEventListener('input', () => _avsSyncTree(el));
+        el.querySelector('.avs-obj-folder-head .avs-obj-del').addEventListener('click', () => { const p = el.parentElement; el.remove(); if (p) _avsSyncTree(p); });
+        _avsRenderTree(el.querySelector('.avs-obj-children'), dataObj || {});
+        return el;
+    }
+    // 「+ 新增」工具列
+    function _avsMakeAddBar(childrenEl) {
+        const bar = document.createElement('div');
+        bar.className = 'avs-obj-addbar';
+        bar.style.cssText = 'display:flex; gap:6px; margin:4px 0;';
+        bar.innerHTML = `
+            <button type="button" class="avs-obj-add-folder" style="font-size:11px; padding:2px 8px; background:rgba(251,223,162,0.12); border:1px solid rgba(251,223,162,0.3); color:#FBDFA2; border-radius:3px; cursor:pointer;">+ 📁 資料夾</button>
+            <button type="button" class="avs-obj-add-leaf" style="font-size:11px; padding:2px 8px; background:rgba(251,223,162,0.12); border:1px solid rgba(251,223,162,0.3); color:#FBDFA2; border-radius:3px; cursor:pointer;">+ 🏷️ 數值</button>
+        `;
+        bar.querySelector('.avs-obj-add-folder').addEventListener('click', () => {
+            childrenEl.insertBefore(_avsMakeFolder('', {}), bar);
+            _avsSyncTree(childrenEl);
+        });
+        bar.querySelector('.avs-obj-add-leaf').addEventListener('click', () => {
+            childrenEl.insertBefore(_avsMakeLeaf('', ''), bar);
+            _avsSyncTree(childrenEl);
+        });
+        return bar;
+    }
+    // 遞迴渲染：JS 物件 → 樹，最後補一條 addbar
+    function _avsRenderTree(childrenEl, dataObj) {
+        childrenEl.innerHTML = '';
+        for (const [k, v] of Object.entries(dataObj || {})) {
+            if (v && typeof v === 'object' && !Array.isArray(v)) {
+                childrenEl.appendChild(_avsMakeFolder(k, v));
+            } else {
+                childrenEl.appendChild(_avsMakeLeaf(k, v));
+            }
+        }
+        childrenEl.appendChild(_avsMakeAddBar(childrenEl));
     }
 
     function addVarRow(container, name, val, desc, type) {
@@ -755,15 +939,69 @@ ${lines.join('\n')}
                     <option value="number">數字</option>
                     <option value="list">陣列</option>
                     <option value="enum">枚舉</option>
+                    <option value="object">物件（巢狀結構）</option>
                 </select>
                 <div style="color:#e74c3c; cursor:pointer; flex-shrink:0; padding:0 4px;" onclick="this.closest('.avs-var-row').remove()">✖</div>
             </div>
+            <div class="var-obj-gui" style="display:none; margin-top:6px; padding:6px; background:rgba(0,0,0,0.2); border-radius:4px;">
+                <div class="avs-obj-children"></div>
+            </div>
+            <details class="var-obj-adv" style="display:none; margin-top:4px;">
+                <summary style="cursor:pointer; color:#B78456; font-size:11px;">▸ 進階：直接編 JSON（老手用，平常不用碰）</summary>
+                <textarea class="avs-textarea var-default-obj" placeholder="{}" style="font-size:11px; min-height:80px; font-family:monospace; white-space:pre; line-height:1.4; margin-top:4px;"></textarea>
+            </details>
             <textarea class="avs-textarea var-desc" placeholder="📝 說明（AI 跑團看這個約束變數，例：好感度 0-100，互動正面 +1~5）" style="font-size:12px; min-height:40px; opacity:0.7;" onfocus="this.style.opacity=1; this.style.minHeight='60px';" onblur="this.style.opacity=0.7;"></textarea>
         `;
+        const typeSel  = row.querySelector('.var-type');
+        const defInput = row.querySelector('.var-default');
+        const objGui   = row.querySelector('.var-obj-gui');
+        const objAdv   = row.querySelector('.var-obj-adv');
+        const objArea  = row.querySelector('.var-default-obj');
+        const objChildren = row.querySelector('.var-obj-gui > .avs-obj-children');
+
+        // 物件型：隱藏單行 input，顯示資料夾樹 GUI + 進階 JSON 摺疊
+        const syncTypeUI = () => {
+            const isObj = typeSel.value === 'object';
+            defInput.style.display = isObj ? 'none' : '';
+            objGui.style.display   = isObj ? 'block' : 'none';
+            objAdv.style.display   = isObj ? 'block' : 'none';
+        };
+        typeSel.addEventListener('change', () => {
+            syncTypeUI();
+            // 切成 object 且 GUI 還空 → 依 textarea 初始化
+            if (typeSel.value === 'object' && !objChildren.children.length) {
+                let data = {};
+                try { data = objArea.value.trim() ? JSON.parse(objArea.value) : {}; } catch(e) {}
+                _avsRenderTree(objChildren, data);
+                _avsSyncTree(objChildren);
+            }
+        });
+        // 進階 textarea 手動編輯 → blur 重繪 GUI（JSON 壞了不重繪，保留編輯）
+        objArea.addEventListener('blur', () => {
+            let data;
+            try { data = objArea.value.trim() ? JSON.parse(objArea.value) : {}; } catch(e) { return; }
+            _avsRenderTree(objChildren, data);
+        });
+
         row.querySelector('.var-name').value = name != null ? String(name) : '';
-        row.querySelector('.var-default').value = val != null ? String(val) : '';
         row.querySelector('.var-desc').value = desc != null ? String(desc) : '';
-        if (type) row.querySelector('.var-type').value = type;
+        if (type) typeSel.value = type;
+
+        if (typeSel.value === 'object') {
+            // 載入既有資料：val 通常是 JSON 字串；舊縮排格式則 fallback 走 parseTree
+            let data = {};
+            if (val != null && String(val).trim()) {
+                try { data = JSON.parse(String(val)); }
+                catch(e) {
+                    try { data = win._AVS_ENGINE?.parseTree?.(String(val)) || {}; } catch(e2) { data = {}; }
+                }
+            }
+            objArea.value = JSON.stringify(data, null, 2);
+            _avsRenderTree(objChildren, data);
+        } else {
+            defInput.value = val != null ? String(val) : '';
+        }
+        syncTypeUI();
         container.appendChild(row);
     }
 
@@ -863,16 +1101,39 @@ ${lines.join('\n')}
             btn.disabled = true;
 
             try {
-                const varList = pack.variables.map(v => `{{${v.name}}}`).join('、');
-                const fullPrompt =
+                const flatVars = pack.variables.filter(v => v.type !== 'object');
+                const objVars  = pack.variables.filter(v => v.type === 'object');
+                // 解析 object 型變數的結構，列出實體屬性給 AI 看
+                const objVarDesc = objVars.map(v => {
+                    let struct = {};
+                    try { struct = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch(e) {}
+                    const firstEntity = Object.values(struct)[0];
+                    const attrs = (firstEntity && typeof firstEntity === 'object') ? Object.keys(firstEntity) : [];
+                    return `  - 「${v.name}」內含多個實體，每個實體屬性：${attrs.join('、') || '（動態）'}`;
+                }).join('\n');
+
+                let fullPrompt =
                     `你是一個頂級 UI 設計師。嚴格遵守以下規則，不得輸出任何解釋或說明文字，只輸出指定格式。\n\n` +
                     `輸出格式（不得更改標籤名稱，不得輸出標籤外的任何內容）：\n` +
                     `<ui_template>\n` +
                     `<style>\n/* 所有 CSS，父類必須是 .custom-status-panel */\n</style>\n` +
-                    `<!-- HTML 結構，使用 ${varList} 作為數值佔位符 -->\n` +
+                    `<!-- HTML 結構 -->\n` +
                     `</ui_template>\n\n` +
-                    `風格要求：${stylePromptVal}\n` +
-                    `變數清單：${pack.variables.map(v => v.name).join('、')}`;
+                    `風格要求：${stylePromptVal}\n\n` +
+                    `【一般變數】用 {{變數名}} 當佔位符：\n` +
+                    (flatVars.map(v => `  - {{${v.name}}}`).join('\n') || '  （無）');
+                if (objVars.length) {
+                    fullPrompt +=
+                        `\n\n【物件型變數】內含多個實體（如多個角色），**必須用迴圈渲染，禁止直接寫 {{變數名}}**：\n` +
+                        objVarDesc + `\n` +
+                        `迴圈語法：{{#each 變數名}} ...單一實體的卡片HTML... {{/each}}\n` +
+                        `迴圈內可用：{{@key}} = 實體名（如角色名）；{{屬性名}} = 該實體的屬性值\n` +
+                        `範例：\n` +
+                        `{{#each ${objVars[0].name}}}\n` +
+                        `  <div class="char-card"><h4>{{@key}}</h4><span>HP：{{HP}}</span></div>\n` +
+                        `{{/each}}\n` +
+                        `★ 迴圈會對每個實體自動重複，跑團新增的角色也會自動出現，**絕對不要寫死角色名**`;
+                }
 
                 // 使用與其他模組一致的 generateText 介面
                 const full = await (
@@ -1082,20 +1343,10 @@ ${lines.join('\n')}
             // 用當前狀態（或假值）替換佔位符做預覽
             // 用 OS_AVS_ADAPTER.formatVarValue 共用 formatter（list 顯示用頓號，避免 JSON 醜樣）
             const previewState = win._AVS_ENGINE?.read?.() || {};
-            let previewHtml = tpl.htmlContent || '';
             let previewCss  = tpl.cssContent  || '';
             const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
-            // 先用真實狀態替換
-            Object.entries(previewState).forEach(([k, v]) => {
-                previewHtml = previewHtml.split(`{{${k}}}`).join(fmt(v));
-            });
-            // 剩餘未替換的佔位符用假值（變數名本身）填充
-            if (pack) {
-                (pack.variables || []).forEach(v => {
-                    previewHtml = previewHtml.split(`{{${v.name}}}`).join(fmt(v.defaultValue ?? '0'));
-                });
-            }
-            previewHtml = previewHtml.replace(/\{\{[\w.]+\}\}/g, '—');
+            // 渲染（支援 object 型 {{#each}} 迴圈）
+            let previewHtml = _avsRenderTemplate(tpl.htmlContent || '', previewState, pack ? (pack.variables || []) : [], fmt);
 
             const scopeId = `tpl-preview-${tpl.id}`;
             // 逐條 selector 前綴 #scopeId，避免 CSS nesting 問題

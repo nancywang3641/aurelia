@@ -6,8 +6,6 @@
 // 2. 監聽 GENERATION_STARTED → injectPrompts 把 current state 注入下一輪主模型 system prompt
 // 3. 監聽 MESSAGE_DELETED / SWIPED / UPDATED / EDITED → 砍對應 patch → 重算 current
 // 4. 對外：setEnabled / forceExtract / clearPatches
-//
-// 對應 map 的 vn_bridge：監聽 → 抽 → patch → 累積
 // ----------------------------------------------------------------
 (function() {
     console.log('🛰️ [State Runtime] V1 載入');
@@ -74,12 +72,28 @@
     }
 
     // --- patch 累積：把 patches 按 msgId 由小到大套到 current ---
+    // 把點記法 key（角色.卡蜜拉.HP）展開寫進巢狀物件，與 AVS 引擎的 <vars> 點記法結構一致
+    function _setDeep(obj, path, val) {
+        const keys = path.split('.');
+        let cur = obj;
+        for (let i = 0; i < keys.length - 1; i++) {
+            const k = keys[i];
+            if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
+            cur = cur[k];
+        }
+        cur[keys[keys.length - 1]] = val;
+    }
+
     function recomputeCurrent(patches) {
         const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
         const cur = {};
         for (const id of ids) {
             const p = patches[id];
-            if (p && typeof p === 'object') Object.assign(cur, p);
+            if (!p || typeof p !== 'object') continue;
+            for (const [k, v] of Object.entries(p)) {
+                if (k.includes('.')) _setDeep(cur, k, v);  // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
+                else cur[k] = v;                            // 一般扁平欄位
+            }
         }
         return cur;
     }
@@ -197,7 +211,15 @@ ${modeRules}
 - 字串/enum 欄位：給新字串
 - list 欄位：給完整陣列（追加項就 push 後完整輸出）
 - 不要編造劇情沒寫的事（但初始化模式可以從 schema.desc 推合理初值）
-- **嚴守每個欄位的 desc 約束**：例如 desc 寫「0-100」就不准超出範圍、寫「枚舉值：A/B/C」就不准給其他值`;
+- **嚴守每個欄位的 desc 約束**：例如 desc 寫「0-100」就不准超出範圍、寫「枚舉值：A/B/C」就不准給其他值
+
+【物件型欄位 / 動態實體（重要）】
+- 若某欄位 type 是 "object"，代表它用來裝「多個實體各自的屬性」（例如每個角色的 HP/SAN）
+- 這時 updates 的 key 要用點記法：「欄位名.實體名.屬性」，值放在最末層
+  例：schema 有 object 欄位「角色」→ 輸出 { "角色.卡蜜拉.HP": 70, "角色.路人甲.SAN": 50 }
+- **對劇情中所有出場角色都要抽**，包含臨時 / 隨機 NPC（路人、店主、士兵…），不限主要角色
+- 該欄位的 desc 會說明「基礎屬性組」有哪些、數值範圍，嚴格照辦
+- **新角色首次登場時**：按 desc 的「基礎屬性組」幫他補齊每一個基礎屬性的初值（例 desc 寫基礎屬性是 HP/好感度/信任度 → 新角色這三個都要給初值），之後才依劇情加特有屬性`;
     }
 
     // --- 從 AVS 變數包合併出 schema（融合：schema 來源從 OS_DB.state_data.schema → AVS 變數包）---
@@ -214,11 +236,21 @@ ${modeRules}
             if (!Array.isArray(pack.variables)) continue;
             for (const v of pack.variables) {
                 if (!v.name) continue;
-                schema[v.name] = {
+                const entry = {
                     type: v.type || 'string',
                     desc: v.desc || '',
                     init: v.defaultValue
                 };
+                // 物件型：把縮排結構文字 parse 成巢狀範本，讓副模型看得到有哪些子欄位
+                if (v.type === 'object' && win._AVS_ENGINE?.parseTree) {
+                    try {
+                        const tree = win._AVS_ENGINE.parseTree(v.defaultValue);
+                        const keys = Object.keys(tree);
+                        entry.structure = (keys.length === 1 && keys[0] === v.name) ? tree[v.name] : tree;
+                        delete entry.init; // structure 已完整表達，init 原始字串多餘
+                    } catch(e) {}
+                }
+                schema[v.name] = entry;
             }
         }
         return Object.keys(schema).length ? schema : null;
@@ -255,10 +287,12 @@ ${modeRules}
             const json = await runWithRetry(prompt);
             const updates = json.updates || {};
 
-            // 過濾：只接受 schema 裡有的欄位
+            // 過濾：接受 schema 裡有的欄位；或「點記法 key 的根」在 schema 裡
+            // （動態實體用：schema 定義 object 欄位「角色」，副模型可寫 角色.路人甲.HP，含臨時 NPC）
             const filtered = {};
             for (const k of Object.keys(updates)) {
-                if (schema[k] !== undefined) filtered[k] = updates[k];
+                const root = k.split('.')[0];
+                if (schema[k] !== undefined || schema[root] !== undefined) filtered[k] = updates[k];
             }
 
             // 寫 patch（仍存 state_data，給 reroll 用）
