@@ -166,6 +166,7 @@
             sceneGen: {
                 enabled: false,
                 promptStyle: 'auto',
+                size: '1024x1024',
 
                 sceneBasePrompt: '',
                 sceneNegPrompt: 'worst quality, low quality, blurry, watermark, text, signature',
@@ -1215,6 +1216,21 @@ EXAMPLE "prompt" value:
                             <div class="set-desc" style="margin-top:6px;">開啟後，VN 播放前會呼叫 AI 分析劇情並自動插入場景插圖。僅獨立版有效；ST 模式請使用 SD 插件。</div>
 
                             <div id="img-scene-body" style="${imgConfig.sceneGen?.enabled ? '' : 'opacity:0.5; pointer-events:none;'} margin-top:14px;">
+
+                                <!-- ── 場景插圖尺寸（獨立於主圖片尺寸）── -->
+                                <div style="margin-bottom:12px;">
+                                    <div class="set-label" style="font-size:11px;">📐 場景插圖尺寸</div>
+                                    <select class="set-select" id="img-scene-size" style="font-size:12px;">
+                                        <option value="512x512"   ${(imgConfig.sceneGen?.size||'1024x1024')==='512x512'   ? 'selected':''}>512×512（最快最省，較糊）</option>
+                                        <option value="768x768"   ${(imgConfig.sceneGen?.size||'1024x1024')==='768x768'   ? 'selected':''}>768×768（平衡）</option>
+                                        <option value="1024x1024" ${(imgConfig.sceneGen?.size||'1024x1024')==='1024x1024' ? 'selected':''}>1024×1024（清晰，推薦）</option>
+                                        <option value="1024x768"  ${(imgConfig.sceneGen?.size||'1024x1024')==='1024x768'  ? 'selected':''}>1024×768（橫幅）</option>
+                                        <option value="768x1024"  ${(imgConfig.sceneGen?.size||'1024x1024')==='768x1024'  ? 'selected':''}>768×1024（直幅）</option>
+                                        <option value="1216x832"  ${(imgConfig.sceneGen?.size||'1024x1024')==='1216x832'  ? 'selected':''}>1216×832（NAI 橫幅）</option>
+                                        <option value="832x1216"  ${(imgConfig.sceneGen?.size||'1024x1024')==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
+                                    </select>
+                                    <div style="font-size:11px; color:#B78456; margin-top:3px;">← 越大越清晰但越耗點數。獨立於主圖片尺寸設定。</div>
+                                </div>
 
                                 <!-- ── Prompt 風格 ── -->
                                 <div style="margin-bottom:12px;">
@@ -2288,6 +2304,7 @@ EXAMPLE "prompt" value:
                     sceneGen: {
                         enabled:          container.querySelector('#img-scene-enabled')?.checked ?? false,
                         promptStyle:      container.querySelector('#img-scene-prompt-style')?.value || 'auto',
+                        size:             container.querySelector('#img-scene-size')?.value || '1024x1024',
                         sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
                         sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
                         specPrompt:      (container.querySelector('#img-scene-spec-prompt')?.value  || '').trim(),
