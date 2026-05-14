@@ -68,50 +68,13 @@
     let _pendingClaudeAttachments = []; // 當前訊息要附的檔（每筆 {path, filename, mime, size}），送出後清空
     let lastFailedInput = '';        // 最後一次失敗的輸入內容
     let pendingRestoreLobby = false; // 等用戶讀完再返回大廳的旗標
-    let bgmEnabled = true;           // 大廳 BGM 開關狀態
     let _isActivitySuspended = false; // 控制大廳活動是否被暫停 (避免與App或劇情重疊)
     let _currentChatId = null;       // 當前載入的 chatId (對話存檔鍵)
     let _saveDebounceTimer = null;   // 防抖存檔計時器
 
-    // 大廳 BG 依本地時段切換：day(6-18) / evening(18-21) / night(21-6)
-    function _getCafeBgPeriod() {
-        const h = new Date().getHours();
-        if (h >= 6 && h < 18) return 'day';
-        if (h >= 18 && h < 21) return 'evening';
-        return 'night';
-    }
     const URLS = {
-        get BG() {
-            return `https://nancywang3641.github.io/sound-files/home-page/YingyingCafe_${_getCafeBgPeriod()}.png`;
-        },
         IRIS_AVATAR: 'https://nancywang3641.github.io/sound-files/char_presets/ying.png',
-        BGM_LOBBY: 'https://nancywang3641.github.io/sound-files/home-page/home_yingcafe.mp3',
-        BGM_404:   'https://nancywang3641.github.io/sound-files/home-page/home_room404.mp3'
     };
-
-    // 算「現在 → 下一個時段邊界（06:00 / 18:00 / 21:00）」的毫秒數
-    function _msToNextCafePeriod() {
-        const now = new Date();
-        const next = new Date(now);
-        next.setMinutes(0, 0, 0);
-        const h = now.getHours();
-        if (h < 6)       next.setHours(6);
-        else if (h < 18) next.setHours(18);
-        else if (h < 21) next.setHours(21);
-        else { next.setDate(next.getDate() + 1); next.setHours(6); }
-        return next.getTime() - now.getTime() + 1000; // +1s buffer 確保跨過邊界
-    }
-
-    // 在每個時段邊界自動重套大廳 BG（一天只觸發 3 次）
-    let _cafeBgTimer = null;
-    function _scheduleCafeBgUpdate() {
-        if (_cafeBgTimer) clearTimeout(_cafeBgTimer);
-        _cafeBgTimer = setTimeout(() => {
-            if (window.AureliaVoidStyles) window.AureliaVoidStyles.inject(URLS.BG);
-            _scheduleCafeBgUpdate();
-        }, _msToNextCafePeriod());
-    }
-    _scheduleCafeBgUpdate();
 
     // ===== 語音與反應池 (瀅瀅專屬) =====
     const IRIS_POKE = [
@@ -149,78 +112,6 @@ const IRIS_IDLE = [
     let _reactionTimer = null; 
     let _reactionHideTimer = null;
     const IDLE_INTERVAL = 3 * 60 * 1000;  
-
-    // ===== BGM 系統 =====
-    (function initBgmState() {
-        const saved = localStorage.getItem('aurelia_bgm_enabled');
-        if (saved !== null) bgmEnabled = saved !== 'false';
-    })();
-
-    function getLobbyBgmEl() { return document.getElementById('lobby-bgm-player'); }
-
-    const BGM_VOLUME = 0.3; 
-    let _bgmRetryTimer = null;
-    let _bgmRetryCount = 0;
-    const BGM_MAX_RETRY = 5;
-    const BGM_RETRY_DELAY = 8000; 
-
-    function playLobbyBgm(url) {
-        if (_isActivitySuspended) return; // 如果被暫停，就不播放
-        const audio = getLobbyBgmEl();
-        if (!audio) return;
-        audio.volume = BGM_VOLUME;
-
-        if (audio.src !== url) {
-            audio.src = url;
-            audio.load();
-            _bgmRetryCount = 0;
-
-            audio.onerror = () => {
-                if (!bgmEnabled) return;
-                if (_bgmRetryCount >= BGM_MAX_RETRY) return;
-                _bgmRetryCount++;
-                clearTimeout(_bgmRetryTimer);
-                _bgmRetryTimer = setTimeout(() => {
-                    audio.load();
-                    audio.play().catch(() => {});
-                }, BGM_RETRY_DELAY);
-            };
-        }
-
-        if (bgmEnabled) audio.play().catch(() => {});
-    }
-
-    function switchLobbyBgm(url) {
-        const audio = getLobbyBgmEl();
-        if (!audio) return;
-        const fade = setInterval(() => {
-            if (audio.volume > 0.05) { audio.volume = Math.max(0, audio.volume - 0.05); }
-            else {
-                clearInterval(fade);
-                audio.pause();
-                audio.volume = BGM_VOLUME;
-                playLobbyBgm(url);
-            }
-        }, 40);
-    }
-
-    function toggleLobbyBgm() {
-        bgmEnabled = !bgmEnabled;
-        localStorage.setItem('aurelia_bgm_enabled', bgmEnabled);
-        const audio = getLobbyBgmEl();
-        const btn = document.getElementById('lobby-bgm-toggle');
-        if (!audio || !btn) return;
-        if (bgmEnabled) {
-            btn.textContent = '🔊';
-            _bgmRetryCount = 0;
-            audio.load();
-            if (!_isActivitySuspended) audio.play().catch(() => {});
-        } else {
-            btn.textContent = '🔇';
-            clearTimeout(_bgmRetryTimer);
-            audio.pause();
-        }
-    }
 
     // ===== 互動與放置反應 (完全無縫切換版) =====
     function _showReactionBox() {
@@ -329,8 +220,7 @@ const IRIS_IDLE = [
         if (document.hidden) {
             // 使用者切走分頁 / 最小化瀏覽器
             _hiddenByTab = true;
-            const audio = getLobbyBgmEl();
-            if (audio) audio.pause();
+            VoidAmbient.pauseBgm();
             stopIdleTimer();
             if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; }
         } else {
@@ -340,8 +230,7 @@ const IRIS_IDLE = [
             // 面板沒開就不恢復 BGM
             if (!_isPanelOpen || _isActivitySuspended) return;
             if (isClaudeRoom) { startIdleTimer(); return; } // Claude 場景靜音
-            const bgmUrl = is404Room ? URLS.BGM_404 : URLS.BGM_LOBBY;
-            playLobbyBgm(bgmUrl);
+            VoidAmbient.playBgm(is404Room ? '404' : 'lobby');
             startIdleTimer();
         }
     });
@@ -352,8 +241,7 @@ const IRIS_IDLE = [
         applyLayoutMode(); // 確保重新開啟時佈局正確
         if (_isActivitySuspended) return;
         if (!isClaudeRoom) {
-            const bgmUrl = is404Room ? URLS.BGM_404 : URLS.BGM_LOBBY;
-            playLobbyBgm(bgmUrl);
+            VoidAmbient.playBgm(is404Room ? '404' : 'lobby');
         }
         startIdleTimer();
         
@@ -397,16 +285,14 @@ const IRIS_IDLE = [
 
     VoidTerminal.onHide = function() {
         _isPanelOpen = false;
-        const audio = getLobbyBgmEl();
-        if (audio) audio.pause();
+        VoidAmbient.pauseBgm();
         stopIdleTimer();
     };
 
     // ===== 外部控制大廳活動 API =====
     VoidTerminal.suspendLobbyActivity = function() {
         _isActivitySuspended = true;
-        const audio = getLobbyBgmEl();
-        if (audio) audio.pause();
+        VoidAmbient.pauseBgm();
         stopIdleTimer();
         if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; }
         _hideReactionBox();
@@ -414,8 +300,8 @@ const IRIS_IDLE = [
 
     VoidTerminal.resumeLobbyActivity = function() {
         _isActivitySuspended = false;
-        const audio = getLobbyBgmEl();
-        if (audio && bgmEnabled) audio.play().catch(() => {});
+        const audio = VoidAmbient.getBgmEl();
+        if (audio && VoidAmbient.isEnabled()) audio.play().catch(() => {});
         startIdleTimer();
     };
 
@@ -857,7 +743,7 @@ const IRIS_IDLE = [
                 nav.querySelectorAll('.nav-button').forEach(b => b.classList.remove('active-gold'));
             }
             document.getElementById('aurelia-phone-screen')?.classList.add('mode-404');
-            switchLobbyBgm(URLS.BGM_404);
+            VoidAmbient.switchBgm('404');
         } else {
             // 非 404 模式：還原瀅瀅與復古拿鐵 UI
             const tab = document.getElementById('aurelia-home-tab');
@@ -889,7 +775,7 @@ const IRIS_IDLE = [
                 });
             }
             document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
-            switchLobbyBgm(URLS.BGM_LOBBY);
+            VoidAmbient.switchBgm('lobby');
         }
         // 有對話歷史：顯示「繼續」提示；沒有：播放初始歡迎動畫
         const histTotal = IRIS_STATE.history.length + _cheshireHistoryBackup.length + _irisHistoryBackup.length;
@@ -913,7 +799,7 @@ const IRIS_IDLE = [
 
     // ── 書架視窗 → 已移至 os_phone/qb/qb_bookshelf.js（QbBookshelf 模組）──
     VoidTerminal.createTab = function(parentDoc) {
-        if (window.AureliaVoidStyles) window.AureliaVoidStyles.inject(URLS.BG);
+        if (window.AureliaVoidStyles) window.AureliaVoidStyles.inject(VoidAmbient.currentBgUrl());
         
         // CSS 已經全部整合進 aurelia_core.css，不再動態注入 style
 
@@ -1269,8 +1155,8 @@ const IRIS_IDLE = [
 
             const bgmBtn = tab.querySelector('#lobby-bgm-toggle');
             if (bgmBtn) {
-                bgmBtn.textContent = bgmEnabled ? '🔊' : '🔇';
-                bgmBtn.onclick = toggleLobbyBgm;
+                bgmBtn.textContent = VoidAmbient.isEnabled() ? '🔊' : '🔇';
+                bgmBtn.onclick = VoidAmbient.toggleBgm;
             }
 
             const fsBtn = tab.querySelector('#aurelia-fullscreen-btn');
@@ -1727,8 +1613,7 @@ const IRIS_IDLE = [
         if (layer) { layer.innerHTML = ''; }
 
         // BGM 靜音
-        const audio = getLobbyBgmEl();
-        if (audio) audio.pause();
+        VoidAmbient.pauseBgm();
 
         // bottom nav 還原 home active 顏色
         const nav = document.getElementById('aurelia-bottom-nav');
@@ -1834,7 +1719,7 @@ const IRIS_IDLE = [
             const bg = tab.querySelector('.void-bg');
             if (bg) bg.style.backgroundColor = '#452216';
 
-            switchLobbyBgm(URLS.BGM_LOBBY);
+            VoidAmbient.switchBgm('lobby');
 
             if (avatarR) {
                 avatarR.onerror = function(){ this.style.display='none'; };
@@ -2485,7 +2370,7 @@ const IRIS_IDLE = [
 
         setTimeout(() => {
             tab.classList.remove('glitch-crash'); tab.classList.add('mode-404');
-            switchLobbyBgm(URLS.BGM_404);
+            VoidAmbient.switchBgm('404');
 
             if (avatar) {
                 avatar.src = 'https://files.catbox.moe/1gddlp.png';
@@ -2540,7 +2425,7 @@ const IRIS_IDLE = [
 
         setTimeout(() => {
             tab.classList.remove('glitch-crash'); tab.classList.remove('mode-404');
-            switchLobbyBgm(URLS.BGM_LOBBY);
+            VoidAmbient.switchBgm('lobby');
 
             if (avatarR) {
                 avatarR.src = URLS.IRIS_AVATAR;

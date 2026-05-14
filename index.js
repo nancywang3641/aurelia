@@ -22,6 +22,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'claude_terminal', path: './scripts/extensions/third-party/my-tavern-extension/core/claude_terminal.js', key: 'claudeTerminal' },
     { name: 'void_panels', path: './scripts/extensions/third-party/my-tavern-extension/core/void/panels.js', key: 'voidPanels' },
     { name: 'void_prompts', path: './scripts/extensions/third-party/my-tavern-extension/core/void/prompts.js', key: 'voidPrompts' },
+    { name: 'void_ambient', path: './scripts/extensions/third-party/my-tavern-extension/core/void/ambient.js', key: 'voidAmbient' },
     { name: 'void_terminal', path: './scripts/extensions/third-party/my-tavern-extension/core/void_terminal.js', key: 'voidTerminal' },
     { name: 'control_center', path: './scripts/extensions/third-party/my-tavern-extension/core/control_center.js', key: 'controlCenter' },
     { name: 'html_extractor', path: './scripts/extensions/third-party/my-tavern-extension/core/html_extractor.js', key: 'htmlExtractor' },
