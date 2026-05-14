@@ -203,7 +203,14 @@
                 //   OS_IMAGE_MANAGER._genNovelAI 會自動套用 os_settings.js 中的
                 //   charBasePrompt / charNegPrompt（避免用空的 VN_Config.data 設定）
                 // NAI 免費無限小圖：直式插圖 512×768（不耗 Anlas）
-                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: 512, height: 768 });
+                // 場景插圖尺寸：讀「圖片設置 → 場景插圖尺寸」下拉（獨立設定），預設 1024×1024
+                let _sw = 1024, _sh = 1024;
+                try {
+                    const _sz = (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen || {}).size || '1024x1024';
+                    const _p = String(_sz).split('x').map(Number);
+                    if (_p[0] && _p[1]) { _sw = _p[0]; _sh = _p[1]; }
+                } catch(e) {}
+                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh });
             } return "";
         }
     };
