@@ -5,8 +5,7 @@
 //        - 預設世界：奧瑞亞 (Aurealis)，從 AUREALIS_DATA 包進來
 //        - 動態世界：從 OS_DB 載入 / world_generator 灌入
 //        - 角色排程：schedule_engine 寫入後存活在 currentWorld.schedules
-//        - 即時狀態：vn_bridge 為每條訊息存 patch；liveStates 是計算結果
-//                   reroll/swipe/delete 訊息會自動清掉對應 patch
+//        - 即時狀態：liveStates / patches 機制（VN→Map 連動已移除，目前永遠空跑）
 //        - 動態地點：DYNAMIC: 前綴自動加成 Z_DYNAMIC 虛擬設施
 //        - chatId 變動時自動切換，找不到就標記為「待初始化」
 //        - 預覽模式：使用者可暫時觀察別的世界，互動全鎖
@@ -135,7 +134,7 @@
         return true;
     }
 
-    // 即時狀態（vn_bridge 抽取的 liveStates）─────────────────
+    // 即時狀態（liveStates，VN→Map 連動移除後永遠空跑）─────────────────
     // 結構: liveStates[charName] = {
     //   location_id, action, dialogue,
     //   until_period: '晚上',     // 過了該時段就過期

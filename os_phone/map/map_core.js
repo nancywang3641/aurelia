@@ -645,7 +645,7 @@ ${facilityText}
                         <div class="am-title" id="am-main-title">AUREALIS</div>
                     </div>
                     <div style="display:flex; align-items:center;">
-                        <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.showVnBridgeSettings()" title="VN ↔ Map 對接設置">⚙️</div>
+                        <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.showMapSettings()" title="地圖設置">⚙️</div>
                         <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.showWorldManager()" title="多世界管理">🌐</div>
                         <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.generateSchedules()" title="生成/重生角色排程">📋 排程</div>
                         <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.refreshEvents()">⟳ 情報</div>
@@ -903,91 +903,20 @@ ${facilityText}
         }
     }
 
-    // 🔥 V5.0：VN ↔ Map 對接設置面板
-    function showVnBridgeSettings() {
-        if (!win.VN_BRIDGE) {
-            if (win.toastr) win.toastr.error('VN_BRIDGE 未就緒', 'Map');
-            return;
-        }
-        const cfg = win.VN_BRIDGE.getConfig();
-
+    // 地圖設置面板（精簡版）
+    function showMapSettings() {
         const modal = document.getElementById('am-char-modal');
         modal.innerHTML = `
             <div class="am-modal-card" style="max-width:380px; max-height:85vh; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
                 <div style="padding:14px 16px 10px; border-bottom:1px solid #222;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h3 style="margin:0; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px;">⚙️ VN ↔ MAP 對接</h3>
+                        <h3 style="margin:0; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px;">⚙️ 地圖設置</h3>
                         <span class="am-btn-icon" onclick="window.AUREALIS_MAP.closeModal()" style="font-size:18px;">×</span>
                     </div>
-                    <div style="font-size:10px; color:#666; margin-top:4px;">用副模型 (flash) 即時抽取劇情位置變化 → 寫進地圖</div>
                 </div>
 
                 <div style="padding:14px 16px; overflow-y:auto; flex:1;">
-                    <!-- 總開關 -->
-                    <div style="background:rgba(20,20,20,0.6); border:1px solid #333; border-radius:6px; padding:12px; margin-bottom:12px;">
-                        <label style="display:flex; align-items:center; cursor:pointer; gap:10px;">
-                            <input type="checkbox" id="vnb-enabled" ${cfg.enabled ? 'checked' : ''}
-                                style="width:18px; height:18px; accent-color:#D4AF37;">
-                            <div style="flex:1;">
-                                <div style="color:#D4AF37; font-weight:bold; font-size:13px;">啟用即時抽取</div>
-                                <div style="color:#888; font-size:10px; margin-top:2px;">監聽 GENERATION_ENDED → 副模型抽 → 寫 patch</div>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- 觸發參數 -->
-                    <div style="color:#aaa; font-size:11px; margin:12px 0 6px; letter-spacing:1px; font-family:'Cinzel';">TRIGGER</div>
-                    <div style="background:rgba(20,20,20,0.4); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
-                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-                            <span style="color:#ccc; font-size:12px;">防抖延遲（ms）</span>
-                            <input type="number" id="vnb-debounce" value="${cfg.debounceMs}" min="0" max="10000" step="100"
-                                style="width:80px; background:#111; border:1px solid #444; color:#D4AF37; padding:4px 8px; border-radius:4px; font-size:12px; text-align:right;">
-                        </div>
-                        <div style="color:#666; font-size:10px;">事件觸發後等多久才跑（避免快速連發爆 API）</div>
-                    </div>
-                    <div style="background:rgba(20,20,20,0.4); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
-                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-                            <span style="color:#ccc; font-size:12px;">歷史訊息數</span>
-                            <input type="number" id="vnb-history" value="${cfg.historyCount}" min="1" max="20" step="1"
-                                style="width:80px; background:#111; border:1px solid #444; color:#D4AF37; padding:4px 8px; border-radius:4px; font-size:12px; text-align:right;">
-                        </div>
-                        <div style="color:#666; font-size:10px;">餵給 flash 的最近訊息數量（越多越準但 token 越貴）</div>
-                    </div>
-
-                    <!-- 容錯參數 -->
-                    <div style="color:#aaa; font-size:11px; margin:12px 0 6px; letter-spacing:1px; font-family:'Cinzel';">FALLBACK</div>
-                    <div style="background:rgba(20,20,20,0.4); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
-                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-                            <span style="color:#ccc; font-size:12px;">重試次數</span>
-                            <input type="number" id="vnb-retry" value="${cfg.retryCount}" min="0" max="10" step="1"
-                                style="width:80px; background:#111; border:1px solid #444; color:#D4AF37; padding:4px 8px; border-radius:4px; font-size:12px; text-align:right;">
-                        </div>
-                        <div style="color:#666; font-size:10px;">JSON 解析失敗或 API 錯誤時自動重試</div>
-                    </div>
-                    <div style="background:rgba(20,20,20,0.4); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
-                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-                            <span style="color:#ccc; font-size:12px;">超時（秒）</span>
-                            <input type="number" id="vnb-timeout" value="${Math.round(cfg.timeoutMs/1000)}" min="5" max="300" step="5"
-                                style="width:80px; background:#111; border:1px solid #444; color:#D4AF37; padding:4px 8px; border-radius:4px; font-size:12px; text-align:right;">
-                        </div>
-                        <div style="color:#666; font-size:10px;">副模型超過此時間直接放棄</div>
-                    </div>
-                    <div style="background:rgba(20,20,20,0.4); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
-                        <div style="color:#ccc; font-size:12px; margin-bottom:6px;">失敗策略</div>
-                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:4px;">
-                            <input type="radio" name="vnb-fallback" value="silent" ${cfg.silentFallback ? 'checked' : ''}
-                                style="accent-color:#D4AF37;">
-                            <span style="color:#aaa; font-size:11px;">靜默 fallback（schedule 繼續用）</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                            <input type="radio" name="vnb-fallback" value="toast" ${!cfg.silentFallback ? 'checked' : ''}
-                                style="accent-color:#D4AF37;">
-                            <span style="color:#aaa; font-size:11px;">顯示 Toast 警告</span>
-                        </label>
-                    </div>
-
-                    <!-- 場景地標：底板補圖開關 -->
-                    <div style="color:#aaa; font-size:11px; margin:12px 0 6px; letter-spacing:1px; font-family:'Cinzel';">SCENE MAP</div>
+                    <div style="color:#aaa; font-size:11px; margin:0 0 6px; letter-spacing:1px; font-family:'Cinzel';">SCENE MAP</div>
                     <div style="background:rgba(20,20,20,0.4); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
                         <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
                             <input type="checkbox" id="scenemap-backdrop-auto"
@@ -999,22 +928,11 @@ ${facilityText}
                             </div>
                         </label>
                     </div>
-
-                    <!-- 工具區 -->
-                    <div style="color:#aaa; font-size:11px; margin:12px 0 6px; letter-spacing:1px; font-family:'Cinzel';">TOOLS</div>
-                    <div style="display:flex; gap:6px;">
-                        <button class="am-btn-full" style="background:#1a1a2e; color:#88d3ce; border:1px solid #2a4a5a; padding:8px; border-radius:4px; cursor:pointer; font-size:11px;"
-                                onclick="window.AUREALIS_MAP._vnTestRun()">🧪 立即跑一次</button>
-                        <button class="am-btn-full" style="background:#3a1010; color:#ff7755; border:1px solid #5a2020; padding:8px; border-radius:4px; cursor:pointer; font-size:11px;"
-                                onclick="window.AUREALIS_MAP._vnClearAll()">🧹 清空所有 patch</button>
-                    </div>
                 </div>
 
                 <div style="padding:10px 16px; border-top:1px solid #222; display:flex; gap:6px;">
-                    <button class="am-btn-full" style="background:#222; color:#888; border:1px solid #333; padding:8px; border-radius:4px; cursor:pointer; font-size:11px;"
-                            onclick="window.AUREALIS_MAP._vnResetConfig()">🔄 預設值</button>
                     <button class="am-btn-full am-btn-main" style="padding:8px; border-radius:4px; cursor:pointer; font-size:11px;"
-                            onclick="window.AUREALIS_MAP._vnSaveConfig()">💾 儲存並關閉</button>
+                            onclick="window.AUREALIS_MAP._mapSaveSettings()">💾 儲存並關閉</button>
                 </div>
             </div>
         `;
@@ -1022,60 +940,13 @@ ${facilityText}
         modal.onclick = (e) => { if (e.target === modal) closeModal(); };
     }
 
-    function _vnSaveConfig() {
-        const enabled = document.getElementById('vnb-enabled').checked;
-        const debounceMs = parseInt(document.getElementById('vnb-debounce').value, 10) || 1000;
-        const historyCount = parseInt(document.getElementById('vnb-history').value, 10) || 4;
-        const retryCount = parseInt(document.getElementById('vnb-retry').value, 10) || 3;
-        const timeoutSec = parseInt(document.getElementById('vnb-timeout').value, 10) || 30;
-        const fallbackRadio = document.querySelector('input[name="vnb-fallback"]:checked');
-        const silentFallback = !fallbackRadio || fallbackRadio.value === 'silent';
-
-        win.VN_BRIDGE.setConfig({
-            enabled,
-            debounceMs: Math.max(0, debounceMs),
-            historyCount: Math.max(1, Math.min(20, historyCount)),
-            retryCount: Math.max(0, Math.min(10, retryCount)),
-            timeoutMs: Math.max(5000, timeoutSec * 1000),
-            silentFallback
-        });
-
-        // 順便存 SceneMap 開關
+    function _mapSaveSettings() {
         const scenemapBackdrop = document.getElementById('scenemap-backdrop-auto');
         if (scenemapBackdrop && win.SCENE_MAP_ENGINE && typeof win.SCENE_MAP_ENGINE.setBackdropAuto === 'function') {
             win.SCENE_MAP_ENGINE.setBackdropAuto(scenemapBackdrop.checked);
         }
-
-        if (win.toastr) win.toastr.success(`設置已儲存（${enabled ? '已啟用' : '已停用'}）`, 'Map');
+        if (win.toastr) win.toastr.success('設置已儲存', 'Map');
         closeModal();
-    }
-
-    function _vnResetConfig() {
-        const ok = window.confirm('確定恢復成預設值？目前的設定會被覆蓋（包含啟用狀態 → 關）。');
-        if (!ok) return;
-        win.VN_BRIDGE.resetConfig();
-        showVnBridgeSettings(); // 重新渲染
-        if (win.toastr) win.toastr.info('已恢復預設值', 'Map');
-    }
-
-    async function _vnTestRun() {
-        if (!win.VN_BRIDGE) return;
-        if (win.toastr) win.toastr.info('立即抽取中...', 'Map');
-        await win.VN_BRIDGE.testRun();
-        if (win.toastr) win.toastr.success('抽取完成（看 console 詳情）', 'Map');
-    }
-
-    async function _vnClearAll() {
-        const ok = window.confirm('確定清空所有 patch 與 liveStates？\n（此操作會把 VN 對接抽出來的所有即時狀態全清掉，但不會影響 schedule。）');
-        if (!ok) return;
-        try {
-            await win.WORLD_RUNTIME.clearAllLiveStates();
-            await win.WORLD_RUNTIME.cleanOrphanDynamics();
-            if (win.toastr) win.toastr.success('已清空所有 patch', 'Map');
-        } catch (e) {
-            console.error(e);
-            if (win.toastr) win.toastr.error('清空失敗', 'Map');
-        }
     }
 
     // 🔥 V4.0：多世界管理器
@@ -2005,11 +1876,8 @@ ${facilityText}
         _switchScheduleTab,
         _regenerateSchedules,
         showWorldManager,
-        showVnBridgeSettings,
-        _vnSaveConfig,
-        _vnResetConfig,
-        _vnTestRun,
-        _vnClearAll,
+        showMapSettings,
+        _mapSaveSettings,
         exitPreview: exitPreviewMap,
         _previewWorld,
         _deleteWorld,

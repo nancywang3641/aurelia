@@ -392,6 +392,17 @@ EXAMPLE "prompt" value:
         const llmConfig = loadLlmConfig();
         const secLlmConfig = loadSecLlmConfig();
         const imgConfig = loadImageConfig();
+        // 圖片用量統計（給「會員方案划算度」估算）
+        let imgUsage = {};
+        try { imgUsage = JSON.parse(localStorage.getItem('os_image_usage') || '{}'); } catch(e) {}
+        const _usageYM = new Date().toISOString().slice(0, 7);
+        const _usageMonthCount = (imgUsage.byMonth && imgUsage.byMonth[_usageYM]) || 0;
+        const _usagePerGen = imgUsage.perGen || 0;
+        const _usageMonthPts = (_usageMonthCount * _usagePerGen);
+        const _usageMonthList = Object.entries(imgUsage.byMonth || {})
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .slice(0, 6)
+            .map(([m, n]) => `${m} ${n}次`).join('　');
         const minimaxConfig = loadMinimaxConfig();
         const claudeRoomConfig = loadClaudeRoomConfig();
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
@@ -417,6 +428,268 @@ EXAMPLE "prompt" value:
                 } else if (tabId === 'bg' && window.VN_PLAYER?.loadBgManager) {
                     window.VN_PLAYER.loadBgManager('vncfg-bg-mgr-list');
                 }
+            };
+        }
+
+        // ───── 頭像 tab 內層子 tab：頭像快取 / 角色立繪 ─────
+        if (!window._switchAvatarSub) {
+            window._switchAvatarSub = function(el, subId) {
+                document.querySelectorAll('.av-sub').forEach(t => {
+                    t.classList.remove('active');
+                    t.style.color = '#B78456';
+                    t.style.borderColor = '#444';
+                    t.style.background = 'transparent';
+                });
+                el.classList.add('active');
+                el.style.color = '#FBDFA2';
+                el.style.borderColor = '#FBDFA2';
+                el.style.background = 'rgba(251,223,162,0.1)';
+                document.querySelectorAll('.avatar-sub-view').forEach(v => v.style.display = 'none');
+                const target = document.getElementById('avatar-sub-' + subId);
+                if (target) target.style.display = 'block';
+                if (subId === 'sprite' && window._initSpriteUI) window._initSpriteUI();
+            };
+        }
+
+        // ───── 角色立繪 UI：lazy 初始化 ─────
+        if (!window._initSpriteUI) {
+            const DEF_PREFIX = '2D illustration, high-end CG illustration, thick impasto, upper body, clothes and pants, ';
+            const DEF_SUFFIX = 'solid dark brown background, isolated character, dramatic lighting, unique artistic style, high-end aesthetic, aesthetic lighting,';
+            const LS_PFX = 'os_sprite_tpl_prefix';
+            const LS_SFX = 'os_sprite_tpl_suffix';
+            const state = { inited: false, bgRemover: null, blob: null, blobUrl: null, isRemoved: false };
+
+            const setStatus = (msg, isErr) => {
+                const el = document.getElementById('sprite-status');
+                if (!el) return;
+                el.textContent = msg || '';
+                el.style.color = isErr ? '#fc8181' : '#B78456';
+            };
+            const enableBtn = (id, on) => {
+                const b = document.getElementById(id);
+                if (!b) return;
+                b.style.opacity = on ? '1' : '0.5';
+                b.style.pointerEvents = on ? 'auto' : 'none';
+            };
+
+            // 清洗頭像 prompt：剝掉跟立繪衝突的構圖 / 背景 / 視角 tag
+            // 原 prompt 可能含 "bust shot, soft background, looking at viewer"，會跟模板的 upper body / dark background 打架
+            function stripPromptForSprite(p) {
+                if (!p) return '';
+                const patterns = [
+                    // 構圖類
+                    /\bbust(\s+|-)?shot\b/gi, /\bportrait\b/gi, /\bheadshot\b/gi, /\bhead\s+shot\b/gi,
+                    /\bclose[\s-]?up\b/gi, /\bcowboy(\s+|-)?shot\b/gi,
+                    /\bupper(\s+|-)?body\b/gi, /\bfull(\s+|-)?body\b/gi,
+                    /\bhead\s+and\s+shoulders\b/gi, /\bwaist[\s-]?up\b/gi, /\bchest[\s-]?up\b/gi,
+                    // 背景類（白底/簡單/純色/任意 *background*）
+                    /\b[a-z]*\s*background\b/gi,
+                    /\bisolated\b/gi, /\bno\s+bg\b/gi,
+                    // 燈光（避免跟模板的 dramatic lighting 重複）
+                    /\bsoft\s+lighting\b/gi, /\bstudio\s+lighting\b/gi, /\bflat\s+lighting\b/gi,
+                    // 視角
+                    /\bfrom\s+(above|below|side|behind|front)\b/gi,
+                ];
+                let s = p;
+                patterns.forEach(rx => { s = s.replace(rx, ''); });
+                // 清理多餘逗號 / 空白
+                s = s.replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
+                return s;
+            }
+
+            async function spriteGenerate(name, finalPrompt) {
+                // finalPrompt 來自卡片內 textarea，預填清洗版、可由用戶微調，這裡不再清洗
+                const win2 = window.parent || window;
+                if (!name) { setStatus('請從上方列表點一個角色', true); return; }
+                if (!finalPrompt) { setStatus('「' + name + '」的 prompt 為空', true); return; }
+                if (!win2.OS_IMAGE_MANAGER) { setStatus('OS_IMAGE_MANAGER 未就緒', true); return; }
+
+                state.selectedName = name;
+                state.selectedPrompt = finalPrompt;  // 存用戶最終確認的版本（供 spriteSave）
+                document.getElementById('sprite-selected-info').innerHTML =
+                    '🎯 當前：<b style="color:#FBDFA2;">' + name + '</b>';
+
+                const fullPrompt = document.getElementById('sprite-tpl-prefix').value + finalPrompt + document.getElementById('sprite-tpl-suffix').value;
+                setStatus('⏳ 為「' + name + '」生立繪中（5–30 秒）...');
+                document.getElementById('sprite-preview').innerHTML = '<span style="color:#666;font-size:11px;">生成中...</span>';
+                enableBtn('sprite-removebg-btn', false);
+                enableBtn('sprite-save-btn', false);
+
+                try {
+                    // 立繪固定 512×768 (2:3 直立)、跳過 cache、raw 模式（不套頭像底詞 / 負詞，全靠模板）
+                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: 512, height: 768, raw: true });
+                    if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error('抓圖失敗 HTTP ' + res.status);
+                    const blob = await res.blob();
+
+                    if (state.blobUrl) { try { URL.revokeObjectURL(state.blobUrl); } catch(_){} }
+                    state.blob = blob;
+                    state.blobUrl = URL.createObjectURL(blob);
+                    state.isRemoved = false;
+
+                    document.getElementById('sprite-preview').innerHTML = '<img src="' + state.blobUrl + '" style="max-width:100%;max-height:300px;border-radius:4px;">';
+                    setStatus('✅ 生成完成');
+                    enableBtn('sprite-removebg-btn', true);
+                    enableBtn('sprite-save-btn', true);
+                } catch (e) {
+                    console.error('[Sprite] 生成失敗:', e);
+                    setStatus('❌ ' + e.message, true);
+                    document.getElementById('sprite-preview').innerHTML = '<span style="color:#fc8181;font-size:11px;">生成失敗</span>';
+                }
+            }
+
+            async function renderAvatarPicker() {
+                const win2 = window.parent || window;
+                const listEl = document.getElementById('sprite-picker-list');
+                if (!listEl) return;
+                if (!win2.VN_Cache) { listEl.innerHTML = '<span style="color:#fc8181;">VN_Cache 未就緒，請先進 VN 一次再回來</span>'; return; }
+                try {
+                    const all = await win2.VN_Cache.getAll('avatar_cache');
+                    const valid = all.filter(e => e.url && !e.url.startsWith('blob:'));
+                    if (!valid.length) {
+                        listEl.innerHTML = '<span style="color:#666;">頭像快取為空，請先在 VN 跑出角色頭像</span>';
+                        return;
+                    }
+                    const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                    listEl.innerHTML = valid.map(e => {
+                        const cleaned = stripPromptForSprite(e.prompt || '');
+                        const keyEnc = encodeURIComponent(e.key);
+                        return (
+                            '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px;background:rgba(0,0,0,0.25);border-radius:4px;margin-bottom:6px;">'
+                            + '<img src="' + e.url + '" style="width:48px;height:48px;object-fit:cover;border-radius:3px;background:#222;flex-shrink:0;">'
+                            + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">'
+                            + '<div style="color:#FBDFA2;font-size:12px;font-weight:600;">' + esc(e.key) + '</div>'
+                            + '<textarea data-prompt-for="' + keyEnc + '" placeholder="清洗後 prompt（可微調）" style="width:100%;min-height:46px;background:rgba(0,0,0,0.4);border:1px solid #444;color:#ccc;font-size:11px;padding:4px 6px;border-radius:3px;font-family:inherit;resize:vertical;box-sizing:border-box;">' + esc(cleaned) + '</textarea>'
+                            + '</div>'
+                            + '<button class="btn-test" data-pick="' + keyEnc + '" style="padding:4px 10px;font-size:11px;color:#FBDFA2;flex-shrink:0;">✨ 生立繪</button>'
+                            + '</div>'
+                        );
+                    }).join('');
+                    listEl.querySelectorAll('[data-pick]').forEach(b => {
+                        b.onclick = () => {
+                            const keyEnc = b.getAttribute('data-pick');
+                            const k = decodeURIComponent(keyEnc);
+                            const ta = listEl.querySelector('[data-prompt-for="' + keyEnc + '"]');
+                            const prompt = ta ? ta.value.trim() : '';
+                            spriteGenerate(k, prompt);
+                        };
+                    });
+                } catch (e) {
+                    listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗: ' + e.message + '</span>';
+                }
+            }
+
+            async function spriteRemoveBg() {
+                if (!state.blob) { setStatus('沒圖可去背', true); return; }
+                if (state.isRemoved) { setStatus('已經去過背了', true); return; }
+                enableBtn('sprite-removebg-btn', false);
+                setStatus('⏳ 載入 AI 模型（第一次 ~40MB，之後快）...');
+                try {
+                    if (!state.bgRemover) {
+                        const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
+                        state.bgRemover = m.removeBackground;
+                    }
+                    setStatus('🪄 AI 去背中（單執行緒約 10–30 秒）...');
+                    const removed = await state.bgRemover(state.blob, {
+                        model: 'isnet_fp16',
+                        output: { format: 'image/png', quality: 1.0 },
+                        progress: (k, c, t) => { if (t > 0) setStatus('🪄 ' + k + ': ' + Math.round(c/t*100) + '%'); }
+                    });
+                    if (state.blobUrl) { try { URL.revokeObjectURL(state.blobUrl); } catch(_){} }
+                    state.blob = removed;
+                    state.blobUrl = URL.createObjectURL(removed);
+                    state.isRemoved = true;
+                    document.getElementById('sprite-preview').innerHTML = '<img src="' + state.blobUrl + '" style="max-width:100%;max-height:300px;border-radius:4px;background:linear-gradient(45deg,#2a2018 25%,transparent 25%),linear-gradient(-45deg,#2a2018 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2a2018 75%),linear-gradient(-45deg,transparent 75%,#2a2018 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0;">';
+                    setStatus('✅ 去背完成');
+                } catch (e) {
+                    console.error('[Sprite] 去背失敗:', e);
+                    setStatus('❌ 去背失敗: ' + e.message, true);
+                    enableBtn('sprite-removebg-btn', true);
+                }
+            }
+
+            async function spriteSave() {
+                const win2 = window.parent || window;
+                const name = state.selectedName;
+                if (!name) { setStatus('沒有選中的角色', true); return; }
+                if (!state.blob) { setStatus('沒圖可存', true); return; }
+                if (!win2.VN_Cache) { setStatus('VN_Cache 未就緒，請先進 VN 一次再回來', true); return; }
+                setStatus('⏳ 儲存中...');
+                try {
+                    const dataUrl = await new Promise((res, rej) => {
+                        const r = new FileReader();
+                        r.onload = () => res(r.result);
+                        r.onerror = rej;
+                        r.readAsDataURL(state.blob);
+                    });
+                    const prefix = document.getElementById('sprite-tpl-prefix').value;
+                    const suffix = document.getElementById('sprite-tpl-suffix').value;
+                    await win2.VN_Cache.set('sprite_cache', name, {
+                        url: dataUrl,
+                        prompt: prefix + (state.selectedPrompt || '') + suffix,
+                        isRemoved: state.isRemoved,
+                        createdAt: Date.now()
+                    });
+                    setStatus('✅ 已存「' + name + '」立繪');
+                    refreshList();
+                } catch (e) {
+                    console.error('[Sprite] 儲存失敗:', e);
+                    setStatus('❌ 儲存失敗: ' + e.message, true);
+                }
+            }
+
+            async function refreshList() {
+                const win2 = window.parent || window;
+                const listEl = document.getElementById('sprite-list');
+                if (!listEl) return;
+                if (!win2.VN_Cache) { listEl.innerHTML = '<span style="color:#fc8181;">VN_Cache 未就緒，請先進 VN 一次再回來</span>'; return; }
+                try {
+                    const all = await win2.VN_Cache.getAll('sprite_cache');
+                    if (!all.length) { listEl.innerHTML = '<span style="color:#666;">尚無已存立繪</span>'; return; }
+                    listEl.innerHTML = all.map(e =>
+                        '<div style="display:flex;align-items:center;gap:8px;padding:6px;background:rgba(0,0,0,0.3);border-radius:4px;margin-bottom:6px;">'
+                        + '<img src="' + e.url + '" style="width:36px;height:48px;object-fit:cover;border-radius:2px;background:#222;">'
+                        + '<div style="flex:1;min-width:0;">'
+                        + '<div style="color:#FBDFA2;font-size:12px;font-weight:600;">' + e.key + '</div>'
+                        + '<div style="color:#B78456;font-size:10px;">' + (e.isRemoved ? '🪄 已去背' : '原圖') + ' · ' + new Date(e.createdAt || 0).toLocaleDateString() + '</div>'
+                        + '</div>'
+                        + '<button class="btn-test" data-sprite-del="' + e.key + '" style="padding:3px 8px;font-size:10px;color:#fc8181;">🗑️</button>'
+                        + '</div>'
+                    ).join('');
+                    listEl.querySelectorAll('[data-sprite-del]').forEach(b => {
+                        b.addEventListener('click', async () => {
+                            const k = b.getAttribute('data-sprite-del');
+                            if (!confirm('刪除「' + k + '」立繪？')) return;
+                            await win2.VN_Cache.delete('sprite_cache', k);
+                            refreshList();
+                        });
+                    });
+                } catch (e) {
+                    listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗: ' + e.message + '</span>';
+                }
+            }
+
+            // 每次切到 sprite tab 都跑一次：DOM 是新的時要重新綁事件
+            // 用 onclick/onchange 覆寫，不用 addEventListener（避免重複疊加），安全
+            window._initSpriteUI = function() {
+                const prefixEl = document.getElementById('sprite-tpl-prefix');
+                const suffixEl = document.getElementById('sprite-tpl-suffix');
+                if (!prefixEl || !suffixEl) return;
+                prefixEl.value = localStorage.getItem(LS_PFX) || DEF_PREFIX;
+                suffixEl.value = localStorage.getItem(LS_SFX) || DEF_SUFFIX;
+                prefixEl.onchange = () => localStorage.setItem(LS_PFX, prefixEl.value);
+                suffixEl.onchange = () => localStorage.setItem(LS_SFX, suffixEl.value);
+                document.getElementById('sprite-tpl-reset').onclick = () => {
+                    prefixEl.value = DEF_PREFIX;
+                    suffixEl.value = DEF_SUFFIX;
+                    localStorage.removeItem(LS_PFX);
+                    localStorage.removeItem(LS_SFX);
+                };
+                document.getElementById('sprite-removebg-btn').onclick = spriteRemoveBg;
+                document.getElementById('sprite-save-btn').onclick = spriteSave;
+                renderAvatarPicker();
+                refreshList();
             };
         }
 
@@ -1031,6 +1304,31 @@ EXAMPLE "prompt" value:
                             </div>
                         </div>
 
+                        <div class="set-group" style="border-top:1px dashed rgba(251,223,162,0.2); padding-top:14px; margin-top:14px;">
+                            <div class="set-label">📊 場景插圖用量統計 <span style="font-size:11px; color:#B78456; font-weight:normal;">算哪個會員方案划算</span></div>
+                            <div class="set-desc" style="margin-bottom:8px;">只記「場景插圖」每次真實生成（cache 命中、角色/物品圖都不算）。填「每次消耗點數」後，自動算本月估算花費。</div>
+                            <div class="set-label" style="font-size:12px; margin-top:6px;">每次場景插圖消耗點數</div>
+                            <input class="set-input" id="img-usage-pergen" type="number" min="0" step="0.0001"
+                                placeholder="例：0.002（看你常用的模型）" value="${_usagePerGen || ''}"
+                                onchange="(function(el){let u={};try{u=JSON.parse(localStorage.getItem('os_image_usage')||'{}')}catch(e){}u.perGen=parseFloat(el.value)||0;localStorage.setItem('os_image_usage',JSON.stringify(u));})(this)">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+                                <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:10px; text-align:center;">
+                                    <div style="font-size:11px; color:#B78456;">本月場景插圖次數</div>
+                                    <div style="font-size:22px; color:#FBDFA2; font-weight:bold;">${_usageMonthCount}</div>
+                                </div>
+                                <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:10px; text-align:center;">
+                                    <div style="font-size:11px; color:#B78456;">本月估算點數</div>
+                                    <div style="font-size:22px; color:#FBDFA2; font-weight:bold;">${_usageMonthPts ? _usageMonthPts.toFixed(3) : '—'}</div>
+                                </div>
+                            </div>
+                            <div class="set-desc" style="margin-top:8px; line-height:1.6;">
+                                累計場景插圖：<b style="color:#FBDFA2;">${imgUsage.total || 0}</b> 次<br>
+                                ${_usageMonthList ? '各月：' + _usageMonthList : '（尚無紀錄，生成幾張場景插圖後回來看）'}
+                            </div>
+                            <button class="set-btn" style="margin-top:10px; background:rgba(231,76,60,0.15); border:1px solid rgba(231,76,60,0.4); color:#e74c3c;"
+                                onclick="if(confirm('確定清空所有用量統計？此動作無法復原。')){localStorage.removeItem('os_image_usage');location.reload();}">🗑️ 重置統計</button>
+                        </div>
+
                         </div><!-- /view-img-api -->
                         <div id="view-img-prompt" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
@@ -1060,11 +1358,59 @@ EXAMPLE "prompt" value:
                             </div>
                         </div>
                         <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
-                            <div class="set-group">
-                                <div class="set-label">🎭 角色立繪快取 <span style="font-weight:normal; color:#B78456; font-size:11px;">防重複生圖</span></div>
-                                <div id="vncfg-avatar-mgr-list" style="margin-top:8px;"></div>
+                            <!-- 內層子 tab：頭像快取 vs 角色立繪 -->
+                            <div style="display:flex;gap:6px;padding:0 0 10px;border-bottom:1px solid rgba(251,223,162,0.1);margin-bottom:10px;">
+                                <div class="av-sub active" data-avsub="cache"  style="cursor:pointer;padding:4px 10px;font-size:12px;color:#FBDFA2;border:1px solid #FBDFA2;border-radius:4px;background:rgba(251,223,162,0.1);" onclick="_switchAvatarSub(this,'cache')">📦 頭像快取</div>
+                                <div class="av-sub"        data-avsub="sprite" style="cursor:pointer;padding:4px 10px;font-size:12px;color:#B78456;border:1px solid #444;border-radius:4px;"                              onclick="_switchAvatarSub(this,'sprite')">🎨 角色立繪</div>
                             </div>
-                            <div class="set-desc" style="margin-top:4px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。</div>
+
+                            <!-- 子: 頭像快取 -->
+                            <div id="avatar-sub-cache" class="avatar-sub-view">
+                                <div class="set-group">
+                                    <div class="set-label">🎭 角色頭像快取 <span style="font-weight:normal; color:#B78456; font-size:11px;">防重複生圖</span></div>
+                                    <div id="vncfg-avatar-mgr-list" style="margin-top:8px;"></div>
+                                </div>
+                                <div class="set-desc" style="margin-top:4px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。</div>
+                            </div>
+
+                            <!-- 子: 角色立繪 -->
+                            <div id="avatar-sub-sprite" class="avatar-sub-view" style="display:none;">
+                                <div class="set-group">
+                                    <div class="set-label">🎨 從頭像快取轉立繪 <span style="font-weight:normal; color:#B78456; font-size:11px;">點任一角色 → 用其 prompt 生立繪</span></div>
+
+                                    <div id="sprite-picker-list" style="margin-top:8px;max-height:280px;overflow-y:auto;font-size:11px;color:#888;">載入中...</div>
+
+                                    <details style="margin-top:10px;">
+                                        <summary style="cursor:pointer;color:#FBDFA2;font-size:12px;padding:4px 0;">📜 Prompt 模板（可編輯）</summary>
+                                        <div class="set-label" style="margin-top:8px;font-size:11px;">前綴（頭像 prompt 之前）</div>
+                                        <textarea class="set-input" id="sprite-tpl-prefix" style="margin-top:4px;min-height:50px;font-family:inherit;font-size:12px;"></textarea>
+                                        <div class="set-label" style="margin-top:8px;font-size:11px;">後綴（頭像 prompt 之後）</div>
+                                        <textarea class="set-input" id="sprite-tpl-suffix" style="margin-top:4px;min-height:50px;font-family:inherit;font-size:12px;"></textarea>
+                                        <div style="margin-top:6px;display:flex;gap:6px;">
+                                            <button class="btn-test" id="sprite-tpl-reset" style="padding:4px 10px;font-size:11px;">↻ 還原預設</button>
+                                        </div>
+                                    </details>
+
+                                    <div id="sprite-selected-info" style="margin-top:10px;font-size:11px;color:#666;padding:6px 8px;background:rgba(0,0,0,0.25);border-radius:4px;">尚未選擇角色</div>
+
+                                    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                                        <button class="btn-test" id="sprite-removebg-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">🪄 去背</button>
+                                        <button class="btn-test" id="sprite-save-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">💾 存到立繪庫</button>
+                                    </div>
+                                    <div id="sprite-status" style="margin-top:8px;font-size:11px;color:#B78456;min-height:14px;"></div>
+
+                                    <div id="sprite-preview" style="margin-top:10px;border:1px solid rgba(251,223,162,0.2);border-radius:4px;padding:8px;background:rgba(0,0,0,0.3);min-height:120px;display:flex;align-items:center;justify-content:center;">
+                                        <span style="color:#666;font-size:11px;">尚無預覽</span>
+                                    </div>
+                                </div>
+
+                                <div class="set-group" style="margin-top:14px;">
+                                    <div class="set-label">📚 已存立繪</div>
+                                    <div id="sprite-list" style="margin-top:8px;font-size:11px;color:#888;">載入中...</div>
+                                </div>
+
+                                <div class="set-desc" style="margin-top:6px;">* 第一次按「去背」會下載 AI 模型（~40MB），之後快。立繪存進瀏覽器 IndexedDB，VN 後續會優先讀取。</div>
+                            </div>
                         </div>
                         <div id="view-img-bg" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
@@ -1207,7 +1553,7 @@ EXAMPLE "prompt" value:
                                 </label>
                             </div>
                             <div class="set-desc">
-                                <b>關閉</b>：char_new/char_exit 全量注入（輕量，短劇推薦）<br>
+                                <b>關閉</b>：不啟用記憶召回（依靠章節原文 + 摘要）<br>
                                 <b>開啟</b>：副模型背景提取 → 向量搜尋按需召回（長劇/多NPC推薦）
                             </div>
                         </div>

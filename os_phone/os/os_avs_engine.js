@@ -167,6 +167,60 @@
     }
 
     // ================================================================
+    // 四之二、縮排結構文字 → 巢狀物件（物件型變數的預設值用）
+    //   支援格式（YAML 子集）：
+    //     key:            → 容器（往下還有子項）
+    //     key: value      → 葉節點，value 自動辨識 number / true / false / {} / [] / 字串
+    //   縮排（空格 / tab）決定層級；// 與 # 開頭的行視為註解
+    // ================================================================
+    function _parseIndentTree(text) {
+        const s = String(text || '').trim();
+        if (!s) return {};
+        // AI 生成 / 匯入時，預設值可能直接是 JSON 物件字串 → 直接 parse
+        if (s.startsWith('{')) {
+            try { return JSON.parse(s); } catch(e) { /* 不是合法 JSON，落回縮排解析 */ }
+        }
+        const lines = s
+            .split('\n')
+            .map(l => l.replace(/\t/g, '  ').replace(/\s+$/, ''))
+            .filter(l => l.trim() && !l.trim().startsWith('//') && !l.trim().startsWith('#'));
+        if (!lines.length) return {};
+
+        const coerce = (raw) => {
+            if (raw === '' || raw === '{}') return {};
+            if (raw === '[]') return [];
+            if (raw === 'true')  return true;
+            if (raw === 'false') return false;
+            if (/^-?\d+(\.\d+)?$/.test(raw)) return parseFloat(raw);
+            if (/^".*"$/.test(raw) || /^'.*'$/.test(raw)) return raw.slice(1, -1);
+            return raw; // 純字串（无 / 专注练习 …）
+        };
+
+        const root = {};
+        const stack = [{ indent: -1, obj: root }];
+        for (const line of lines) {
+            const indent = line.length - line.replace(/^\s+/, '').length;
+            const content = line.trim();
+            const ci = content.indexOf(':');
+            const key = ci < 0 ? content : content.slice(0, ci).trim();
+            const rawVal = ci < 0 ? '' : content.slice(ci + 1).trim();
+            const hasValue = ci >= 0 && rawVal !== '';
+
+            // 退棧到正確的父層
+            while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
+            const parent = stack[stack.length - 1].obj;
+
+            if (hasValue) {
+                parent[key] = coerce(rawVal);
+            } else {
+                parent[key] = {};
+                stack.push({ indent, obj: parent[key] });
+            }
+        }
+        return root;
+    }
+
+    // ================================================================
     // 五、公開 API（掛載到 window._AVS_ENGINE）
     // ================================================================
 
@@ -186,6 +240,9 @@
         /** 解析並套用 <vars> 文字 */
         apply: _avsApplyVars,
 
+        /** 解析縮排結構文字 → 巢狀物件（物件型變數用，供 state_runtime 建 schema） */
+        parseTree: _parseIndentTree,
+
         /** 還原上一個快照（reroll 時呼叫） */
         restore: function() {
             const skey = `avs_snap_${_avsKey()}`;
@@ -203,6 +260,17 @@
             if (!pack || !Array.isArray(pack.variables)) return;
             const state = {};
             pack.variables.forEach(v => {
+                if (v.type === 'object') {
+                    // 物件型：預設值是縮排結構文字 → parse 成巢狀物件
+                    // 容錯：若最外層只有一個 key 且等於變數名，剝掉那層（使用者連變數名也貼了）
+                    let tree = {};
+                    try { tree = _parseIndentTree(v.defaultValue); } catch(e) {
+                        console.warn(`[AVS] 物件型變數「${v.name}」結構解析失敗:`, e);
+                    }
+                    const keys = Object.keys(tree);
+                    state[v.name] = (keys.length === 1 && keys[0] === v.name) ? tree[v.name] : tree;
+                    return;
+                }
                 const n = parseFloat(v.defaultValue);
                 state[v.name] = isNaN(n) ? (v.defaultValue || '') : n;
             });

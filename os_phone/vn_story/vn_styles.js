@@ -376,7 +376,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         #game-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #050505; background-size: cover; background-position: center; transition: background-image 0.8s ease; z-index: 1; }
         #game-char-container { position: absolute; bottom: 0; left: 0; width: 100%; height: 85%; display: flex; justify-content: center; align-items: flex-end; z-index: 2; pointer-events: none; }
-        #game-char { height: 95%; object-fit: contain; transition: opacity 0.4s ease; display: none; filter: drop-shadow(0 0 20px rgba(0,0,0,0.8)); }
+        #game-char { height: 95%; max-width: 100%; object-fit: contain; object-position: center bottom; transition: opacity 0.4s ease; display: none; filter: drop-shadow(0 0 20px rgba(0,0,0,0.8)); }
 
         /* 🎬 場景CG overlay（人物+場景合圖，z-index 5 = sprites之上、text-panel之下）*/
         #scene-cg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; display: none; background: #000; align-items: center; justify-content: center; }
@@ -396,13 +396,14 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             display: none; opacity: 0; z-index: 9;
             transition: opacity 0.18s ease;
         }
-        /* 最終 Fallback 剪影立繪 — 不套頭像框，當成普通立繪顯示 */
+        /* 最終 Fallback 剪影立繪 — 不套頭像框，底邊壓在對話框頂端 */
         #char-portrait.no-frame {
             border: none !important; padding: 0 !important;
             background: transparent !important; box-shadow: none !important;
             width: 55% !important; max-width: 380px !important;
-            height: auto !important; max-height: 72% !important;
-            top: 42% !important;
+            height: auto !important; max-height: 60% !important;
+            top: auto !important; bottom: 215px !important;
+            transform: translateX(-50%) !important;
             object-fit: contain; object-position: center bottom;
         }
 
@@ -416,6 +417,13 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             20%, 40%, 60%, 80% { transform: translateX(8px); }
         }
         .sprite-shake { animation: anim-sprite-shake 0.4s ease-in-out; }
+
+        /* 切角色入場：從右滑入 */
+        @keyframes anim-sprite-slide-in-right {
+            from { opacity: 0; transform: translateX(40px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+        .sprite-slide-in-right { animation: anim-sprite-slide-in-right 0.45s cubic-bezier(.22,1,.36,1) both; }
 
         @keyframes anim-sprite-jumpscare {
             0%   { transform: scale(1) translateY(0); filter: brightness(1); }

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>Pixel Lab — Pollinations 圖生圖測試</title>
+<style>
+  :root {
+    --bg: #1a1410;
+    --panel: #241c15;
+    --panel-2: #2e251c;
+    --border: #4a3a28;
+    --text: #f5e6cc;
+    --text-dim: #b78456;
+    --accent: #fbdfa2;
+    --accent-2: #e89b5c;
+    --danger: #d04848;
+    --success: #6bbf6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 20px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 22px;
+    color: var(--accent);
+    margin: 0 0 4px 0;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .panel-title {
+    font-size: 14px;
+    color: var(--accent);
+    margin: 0 0 12px 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .field { margin-bottom: 12px; }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  input[type="text"], input[type="password"], input[type="number"], textarea, select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button {
+    background: var(--accent-2);
+    color: #2a1a0a;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 13px;
+    transition: filter 0.15s;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .btn-primary-big {
+    width: 100%;
+    padding: 14px;
+    font-size: 15px;
+    background: var(--accent);
+    color: #2a1a0a;
+    margin-top: 8px;
+  }
+  .url-line {
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    word-break: break-all;
+    background: var(--bg);
+    padding: 6px 8px;
+    border-radius: 4px;
+    margin-top: 6px;
+    border: 1px solid var(--border);
+  }
+  .result-area {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel-2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    position: relative;
+    padding: 12px;
+  }
+  .result-area img {
+    max-width: 100%;
+    max-height: 500px;
+    border-radius: 4px;
+  }
+  .result-area img.pixel {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  .status {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-top: 10px;
+    display: none;
+  }
+  .status.show { display: block; }
+  .status.info { background: rgba(251, 223, 162, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+  .status.error { background: rgba(208, 72, 72, 0.15); color: var(--danger); border: 1px solid var(--danger); }
+  .status.success { background: rgba(107, 191, 107, 0.15); color: var(--success); border: 1px solid var(--success); }
+  .hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .toggle-row input { width: auto; }
+  details summary {
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 4px 0;
+  }
+  details[open] summary { color: var(--accent); }
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .placeholder-text {
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 去背 AI 模組：頁面開啟時預載，使用者第一次按按鈕才會真的下載模型 (~20MB) -->
+<script type="module">
+  import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm')
+    .then(m => {
+      window.__bgRemover = m.removeBackground;
+      console.log('[Pixel Lab] 去背模組已預載');
+      window.dispatchEvent(new CustomEvent('bg-remover-ready'));
+    })
+    .catch(e => console.warn('[Pixel Lab] 去背模組預載失敗:', e));
+</script>
+
+<h1>🎨 Pixel Lab</h1>
+<div class="subtitle">Pollinations 文生圖測試台 · 立繪比例 / 像素風偏好</div>
+
+<div class="layout">
+
+  <!-- 左：輸入 -->
+  <div class="panel">
+    <div class="panel-title">📥 輸入</div>
+
+    <!-- Prompt -->
+    <div class="field">
+      <label>提示詞（英文，描述你要改成什麼樣子）</label>
+      <textarea id="prompt" placeholder="pixel art, chibi character with messy brown hair, retro game sprite, 16-bit style"></textarea>
+    </div>
+
+    <!-- 模型 / 尺寸 / Seed -->
+    <div class="row">
+      <div class="field">
+        <label>模型</label>
+        <select id="model">
+          <option value="zimage">🟢 Z-Image Turbo</option>
+          <option value="flux">🟢 Flux Schnell</option>
+          <option value="flux-2-dev">🔵 FLUX.2 Dev</option>
+          <option value="klein">🟠 FLUX.2 Klein 4B</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>尺寸</label>
+        <select id="size">
+          <optgroup label="🧍 立繪（直立長方形）">
+            <option value="512x768" selected>512×768（2:3 標準立繪）</option>
+            <option value="640x960">640×960（2:3 高解析）</option>
+            <option value="768x1024">768×1024（3:4 更寬）</option>
+            <option value="512x1024">512×1024（1:2 瘦長）</option>
+          </optgroup>
+          <optgroup label="◼ 方形">
+            <option value="256x256">256×256（像素適合）</option>
+            <option value="384x384">384×384</option>
+            <option value="512x512">512×512</option>
+            <option value="768x768">768×768</option>
+            <option value="1024x1024">1024×1024</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Seed（留空隨機）</label>
+        <input type="number" id="seed" placeholder="隨機">
+      </div>
+      <div class="field" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
+        <button class="btn-ghost" id="randSeed" type="button">🎲 隨機</button>
+      </div>
+    </div>
+
+    <details>
+      <summary>進階設定</summary>
+      <div class="field" style="margin-top:8px">
+        <label>負面提示詞（可空）</label>
+        <textarea id="negPrompt" placeholder="blurry, low quality, jpeg artifacts" style="min-height:50px"></textarea>
+      </div>
+      <div class="field">
+        <label>Pollinations API Key（可空，免費跑會慢/排隊）</label>
+        <input type="password" id="apiKey" placeholder="貼一次自動存（從 ST 設定面板複製）">
+      </div>
+      <label class="toggle-row">
+        <input type="checkbox" id="pixelMode" checked>
+        <span>像素渲染模式（縮放不糊）</span>
+      </label>
+    </details>
+
+    <button class="btn-primary-big" id="genBtn">✨ 生成</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <!-- 右：結果 -->
+  <div class="panel">
+    <div class="panel-title">🖼️ 結果</div>
+    <div class="result-area" id="resultArea">
+      <div class="placeholder-text">生成的圖片會出現在這裡</div>
+    </div>
+    <div class="field" style="margin-top:12px">
+      <div class="url-line" id="resultUrl" style="display:none"></div>
+      <div class="row" style="margin-top:8px" id="resultActions" style="display:none">
+        <button class="btn-secondary" id="copyUrl" type="button">📋 複製 URL</button>
+        <button class="btn-secondary" id="openNew" type="button">↗ 新分頁開啟</button>
+        <button class="btn-secondary" id="downloadBtn" type="button">⬇ 下載</button>
+      </div>
+      <div class="row" style="margin-top:8px" id="bgRemoveRow" style="display:none">
+        <button class="btn-secondary" id="bgRemoveBtn" type="button">🪄 去背（透明 PNG）</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ============= DOM 引用 =============
+  const $ = id => document.getElementById(id);
+  const promptInput = $('prompt');
+  const negPromptInput = $('negPrompt');
+  const modelSelect = $('model');
+  const sizeSelect = $('size');
+  const seedInput = $('seed');
+  const randSeedBtn = $('randSeed');
+  const apiKeyInput = $('apiKey');
+  const pixelModeCheck = $('pixelMode');
+  const genBtn = $('genBtn');
+  const statusEl = $('status');
+  const resultArea = $('resultArea');
+  const resultUrl = $('resultUrl');
+  const resultActions = $('resultActions');
+  const copyUrlBtn = $('copyUrl');
+  const openNewBtn = $('openNew');
+  const downloadBtn = $('downloadBtn');
+  const bgRemoveRow = $('bgRemoveRow');
+  const bgRemoveBtn = $('bgRemoveBtn');
+
+  // 保存「當前可下載/去背」的圖：原圖或去背後的版本
+  let currentBlob = null;
+  let currentBlobUrl = null;
+  let currentIsRemoved = false;  // 是否已去背
+
+  // ============= localStorage 恢復 =============
+  const LS_KEY_API = 'pixel_lab_pollinations_apikey';
+  const LS_KEY_PROMPT = 'pixel_lab_last_prompt';
+  const LS_KEY_NEG = 'pixel_lab_last_neg';
+  const LS_KEY_MODEL = 'pixel_lab_last_model';
+  const LS_KEY_SIZE = 'pixel_lab_last_size';
+
+  apiKeyInput.value = localStorage.getItem(LS_KEY_API) || '';
+  promptInput.value = localStorage.getItem(LS_KEY_PROMPT) || '';
+  negPromptInput.value = localStorage.getItem(LS_KEY_NEG) || '';
+  if (localStorage.getItem(LS_KEY_MODEL)) modelSelect.value = localStorage.getItem(LS_KEY_MODEL);
+  if (localStorage.getItem(LS_KEY_SIZE)) sizeSelect.value = localStorage.getItem(LS_KEY_SIZE);
+
+  apiKeyInput.addEventListener('change', () => localStorage.setItem(LS_KEY_API, apiKeyInput.value.trim()));
+  promptInput.addEventListener('change', () => localStorage.setItem(LS_KEY_PROMPT, promptInput.value));
+  negPromptInput.addEventListener('change', () => localStorage.setItem(LS_KEY_NEG, negPromptInput.value));
+  modelSelect.addEventListener('change', () => localStorage.setItem(LS_KEY_MODEL, modelSelect.value));
+  sizeSelect.addEventListener('change', () => localStorage.setItem(LS_KEY_SIZE, sizeSelect.value));
+
+  // ============= 狀態提示 =============
+  function showStatus(msg, type = 'info') {
+    statusEl.textContent = msg;
+    statusEl.className = 'status show ' + type;
+  }
+  function hideStatus() {
+    statusEl.className = 'status';
+  }
+
+  // ============= Seed 隨機 =============
+  randSeedBtn.addEventListener('click', () => {
+    seedInput.value = Math.floor(Math.random() * 999999);
+  });
+
+  // ============= 生成 =============
+  function parseSize(s) {
+    const [w, h] = s.split('x').map(Number);
+    return { width: w, height: h };
+  }
+
+  function buildUrl() {
+    const prompt = promptInput.value.trim();
+    if (!prompt) throw new Error('請填提示詞');
+
+    const { width, height } = parseSize(sizeSelect.value);
+    const model = modelSelect.value;
+    const seed = seedInput.value || Math.floor(Math.random() * 999999);
+    const apiKey = apiKeyInput.value.trim();
+    const neg = negPromptInput.value.trim();
+
+    const params = new URLSearchParams({
+      width: String(width),
+      height: String(height),
+      model,
+      seed: String(seed),
+      nologo: 'true',
+    });
+    if (neg) params.set('negative_prompt', neg);
+    if (apiKey) {
+      params.set('private', 'true');
+      params.set('key', apiKey);
+    }
+
+    return `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?${params.toString()}`;
+  }
+
+  async function generate() {
+    let url;
+    try {
+      url = buildUrl();
+    } catch (err) {
+      showStatus('❌ ' + err.message, 'error');
+      return;
+    }
+
+    genBtn.disabled = true;
+    resultArea.innerHTML = '<div class="spinner"></div>';
+    resultUrl.style.display = 'none';
+    resultActions.style.display = 'none';
+    bgRemoveRow.style.display = 'none';
+    showStatus('⏳ Pollinations 生成中（可能 5–30 秒）...', 'info');
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        let body = '';
+        try { body = (await res.text()).slice(0, 400); } catch(_) {}
+        throw new Error(`HTTP ${res.status} ${res.statusText}\n${body}`);
+      }
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.startsWith('image/')) {
+        const body = (await res.text()).slice(0, 400);
+        throw new Error(`非圖片回應 (${ct})\n${body}`);
+      }
+      const blob = await res.blob();
+
+      // 清掉上一張圖的 blob URL，避免記憶體洩漏
+      if (currentBlobUrl) { try { URL.revokeObjectURL(currentBlobUrl); } catch(_){} }
+      currentBlob = blob;
+      currentBlobUrl = URL.createObjectURL(blob);
+      currentIsRemoved = false;
+
+      const img = new Image();
+      if (pixelModeCheck.checked) img.classList.add('pixel');
+      img.onload = () => {
+        resultArea.innerHTML = '';
+        resultArea.appendChild(img);
+        resultUrl.style.display = 'block';
+        resultUrl.textContent = url;
+        resultActions.style.display = 'flex';
+        bgRemoveRow.style.display = 'flex';
+        bgRemoveBtn.disabled = false;
+        bgRemoveBtn.textContent = '🪄 去背（透明 PNG）';
+        showStatus('✅ 完成', 'success');
+        genBtn.disabled = false;
+        setTimeout(hideStatus, 2500);
+      };
+      img.src = currentBlobUrl;
+    } catch (err) {
+      console.error('[Pixel Lab] 生成失敗:', err);
+      resultArea.innerHTML = `<pre style="color:var(--danger); font-size:11px; white-space:pre-wrap; word-break:break-all; padding:12px; margin:0;">${err.message}</pre>`;
+      showStatus('❌ ' + err.message.split('\n')[0], 'error');
+      genBtn.disabled = false;
+    }
+  }
+
+  genBtn.addEventListener('click', generate);
+
+  // 像素模式切換即時生效
+  pixelModeCheck.addEventListener('change', () => {
+    const img = resultArea.querySelector('img');
+    if (img) img.classList.toggle('pixel', pixelModeCheck.checked);
+  });
+
+  // ============= 結果動作 =============
+  copyUrlBtn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(resultUrl.textContent);
+    copyUrlBtn.textContent = '✅ 已複製';
+    setTimeout(() => copyUrlBtn.textContent = '📋 複製 URL', 1500);
+  });
+  openNewBtn.addEventListener('click', () => {
+    window.open(resultUrl.textContent, '_blank');
+  });
+  downloadBtn.addEventListener('click', () => {
+    if (!currentBlob) {
+      showStatus('❌ 沒有圖片可下載', 'error');
+      return;
+    }
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(currentBlob);
+      a.download = `pixel_lab_${Date.now()}${currentIsRemoved ? '_nobg' : ''}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (err) {
+      showStatus('❌ 下載失敗：' + err.message, 'error');
+    }
+  });
+
+  // ============= 🪄 去背 =============
+  async function ensureBgRemover() {
+    if (window.__bgRemover) return window.__bgRemover;
+    // 模組還沒載完 → 等 ready 事件，最多等 30 秒
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('去背模組載入超時，請檢查網路')), 30000);
+      window.addEventListener('bg-remover-ready', () => {
+        clearTimeout(t);
+        resolve(window.__bgRemover);
+      }, { once: true });
+    });
+  }
+
+  bgRemoveBtn.addEventListener('click', async () => {
+    if (!currentBlob) {
+      showStatus('❌ 沒有圖片可去背', 'error');
+      return;
+    }
+    if (currentIsRemoved) {
+      showStatus('ℹ️ 已經是去背版了', 'info');
+      setTimeout(hideStatus, 2000);
+      return;
+    }
+
+    bgRemoveBtn.disabled = true;
+    bgRemoveBtn.textContent = '🪄 去背中...';
+    showStatus('⏳ 載入 AI 模型中（第一次會下載 ~20MB，之後快）...', 'info');
+
+    try {
+      const removeBackground = await ensureBgRemover();
+      showStatus('🪄 AI 去背處理中（512×768 大概 3–10 秒）...', 'info');
+
+      const removedBlob = await removeBackground(currentBlob, {
+        // medium 等級：isnet_fp16 半精度模型（~40MB，第一次下載慢但邊緣比預設 quint8 乾淨）
+        model: 'isnet_fp16',
+        output: { format: 'image/png', quality: 1.0 },
+        progress: (key, current, total) => {
+          if (total > 0) {
+            const pct = Math.round((current / total) * 100);
+            showStatus(`🪄 ${key}: ${pct}%`, 'info');
+          }
+        }
+      });
+
+      // 替換當前圖
+      if (currentBlobUrl) { try { URL.revokeObjectURL(currentBlobUrl); } catch(_){} }
+      currentBlob = removedBlob;
+      currentBlobUrl = URL.createObjectURL(removedBlob);
+      currentIsRemoved = true;
+
+      // 用棋盤格背景顯示透明區（從 .pixel 樣式來看 resultArea 應該夠用）
+      const img = new Image();
+      if (pixelModeCheck.checked) img.classList.add('pixel');
+      img.style.background = `
+        linear-gradient(45deg, #2a2018 25%, transparent 25%),
+        linear-gradient(-45deg, #2a2018 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #2a2018 75%),
+        linear-gradient(-45deg, transparent 75%, #2a2018 75%)`;
+      img.style.backgroundSize = '16px 16px';
+      img.style.backgroundPosition = '0 0, 0 8px, 8px -8px, -8px 0px';
+      img.onload = () => {
+        resultArea.innerHTML = '';
+        resultArea.appendChild(img);
+        bgRemoveBtn.textContent = '✅ 已去背';
+        bgRemoveBtn.disabled = true;
+        showStatus('✅ 去背完成（點下載拿透明 PNG）', 'success');
+        setTimeout(hideStatus, 3000);
+      };
+      img.src = currentBlobUrl;
+    } catch (err) {
+      console.error('[Pixel Lab] 去背失敗:', err);
+      bgRemoveBtn.disabled = false;
+      bgRemoveBtn.textContent = '🪄 去背（透明 PNG）';
+      showStatus('❌ 去背失敗：' + err.message, 'error');
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>
