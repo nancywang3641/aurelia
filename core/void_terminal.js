@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ========================
  * Void Terminal (v6.0 - Yingying Bookshelf & Vintage Latte Theme)
  * 視差書咖與敘事引擎核心 (整合大廳動態書櫃)
@@ -458,7 +458,7 @@ const IRIS_IDLE = [
             if (tab) { tab.classList.remove('mode-404'); tab.classList.remove('mode-claude'); }
             // 還原背景色（從 Claude 房間出來時可能殘留紫色）
             const bg = tab && tab.querySelector('.void-bg');
-            if (bg) bg.style.backgroundColor = '#452216';
+            if (bg) bg.style.backgroundColor = '';
             const avatar = document.getElementById('iris-avatar');
             if (avatar) { avatar.onerror = function(){ this.style.display='none'; }; avatar.src = URLS.IRIS_AVATAR; avatar.title = '戳戳 瀅瀅'; avatar.style.opacity = '1'; avatar.style.display = ''; }
             const titleEl = document.getElementById('home-chat-title');
@@ -516,7 +516,7 @@ const IRIS_IDLE = [
         tab.className = 'aurelia-tab void-tab';
 
         const FEED_PALETTE = {
-            SYS:  { c:'#FBDFA2', r:'251,223,162'  },
+            SYS:  { c:'rgba(26,28,40,0.25)', r:'251,223,162'  },
             ECHO: { c:'#9f7aea', r:'159,122,234' },
         };
         const FEED_ENTRIES = [
@@ -541,34 +541,107 @@ const IRIS_IDLE = [
         ` : '';
 
         tab.innerHTML = `
-            <div class="void-bg" style="background-color: #452216;"></div>
+            <div class="void-bg" style="background-color: #EEF0F6;"></div>
             <div class="void-grid"></div>
 
-            <div class="void-top-bar" style="background: rgba(69,34,22,0.85); color: #FBDFA2; border-bottom: 1px solid rgba(251,223,162,0.2);">
-                <button class="void-mode-toggle-btn" id="room-portal-btn" title="傳送至 404 號房" style="display:none;">
-                    <span class="void-mode-toggle-label">⬡ 404</span>
-                </button>
-                <button class="void-mode-toggle-btn" id="claude-portal-btn" title="進入 Claude 的房間" style="margin-left:4px;">
-                    <span class="void-mode-toggle-label">🦀 Claude</span>
-                </button>
-                <div style="min-width:0;flex:1;margin-left:8px;">
-                    <div class="void-top-sub-label" style="font-size:9px;color:#B78456;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px;font-weight:bold;">NEXUS PARALLAX // LUNA-VII</div>
-                    <div id="home-chat-title" style="font-size:12px;font-weight:800;color:#FBDFA2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.5px;">Parallax Archive & Cafe</div>
+            <div class="void-top-bar">
+                <div class="lb-top-brand">
+                    <div class="lb-logo"></div>
+                    <div class="lb-top-brand-text">
+                        <div class="void-top-sub-label">NEXUS PARALLAX // LUNA-VII</div>
+                        <div id="home-chat-title">Parallax Archive & Cafe</div>
+                    </div>
                 </div>
-                <button id="aurelia-fullscreen-btn" title="進入全屏"
-                    style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;color:inherit;"
-                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">⛶</button>
-                <button id="lobby-bgm-toggle" title="音樂開關"
-                    style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;line-height:1;opacity:0.7;transition:opacity 0.2s;"
-                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">🔊</button>
-                <audio id="lobby-bgm-player" loop style="display:none;"></audio>
+                <div class="lb-top-sysinfo">
+                    <div class="lb-sys-cell"><span class="lb-sys-k">System Time</span><span class="lb-sys-v" id="lb-sys-time">--:--:--</span></div>
+                    <div class="lb-sys-cell lb-sys-opt"><span class="lb-sys-k">Current Date</span><span class="lb-sys-v" id="lb-sys-date">----/--/--</span></div>
+                    <div class="lb-sys-cell lb-sys-opt"><span class="lb-sys-k">Weather</span><span class="lb-sys-v" id="lb-sys-weather">--</span></div>
+                    <div class="lb-sys-cell lb-sys-opt"><span class="lb-sys-k">User</span><span class="lb-sys-v" id="lb-sys-user">GUEST</span></div>
+                </div>
+                <div class="lb-top-ctrls">
+                    <button class="void-mode-toggle-btn" id="room-portal-btn" title="傳送至 404 號房" style="display:none;">
+                        <span class="void-mode-toggle-label">⬡ 404</span>
+                    </button>
+                    <button class="void-mode-toggle-btn" id="claude-portal-btn" title="進入 Claude 的房間">
+                        <span class="void-mode-toggle-label">🦀 Claude</span>
+                    </button>
+                    <button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏">⛶</button>
+                    <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關">🔊</button>
+                    <audio id="lobby-bgm-player" loop style="display:none;"></audio>
+                </div>
             </div>
 
 
             <div class="void-bubble-layer" id="void-bubble-layer" data-next-slot="2">${feedHTML}</div>
 
-            <div class="void-char-area">
-                <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" onerror="this.style.display='none'" alt="瀅瀅" style="cursor:pointer;" title="戳戳 瀅瀅">
+            <div class="lobby-body">
+                <div class="lobby-left">
+                    <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" alt="瀅瀅" style="display:none;">
+                    <div class="lb-char-id">
+                        <div class="lb-char-name" id="lb-char-name" data-name-404="柴郡">瀅瀅</div>
+                        <div class="lb-char-sub" id="lb-char-sub" data-sub-404="系統異常部門 · 灰色夢魘組">視差書咖 · 館長</div>
+                    </div>
+                    <div class="lb-signature"></div>
+                    <div class="void-dialogue-wrap">
+                        <div style="position: relative; width: 100%;">
+                            <div class="void-dialogue-box" id="iris-dialogue-box">
+                                <img class="void-dlg-bg" src="https://files.catbox.moe/5edth7.png" alt="">
+                                <div class="void-name-tag" id="iris-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
+                                <div class="void-text" id="iris-text">載入中...</div>
+                                <div class="void-next" id="iris-next">▼</div>
+                            </div>
+                            <div class="void-dialogue-box" id="iris-reaction-box" style="display:none; cursor:pointer;" title="點擊跳過">
+                                <img class="void-dlg-bg" src="https://files.catbox.moe/5edth7.png" alt="">
+                                <div class="void-name-tag" id="iris-reaction-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
+                                <div class="void-text" id="iris-reaction-text">...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="lobby-right">
+                    <div class="lb-menu-head">
+                        <div class="lb-menu-head-title">MAIN MENU</div>
+                        <div class="lb-menu-head-sub">AURELIS CORE INTERFACE</div>
+                        <div class="lb-menu-head-rule"></div>
+                    </div>
+                    <div class="void-btn" id="void-quest-btn">
+                        <div class="void-btn-inner">
+                            <span class="lb-menu-no">01</span>
+                            <span class="lb-menu-cn" data-cn-404="禁庫">藏書</span>
+                            <span class="lb-menu-en" data-en-404="BLACK VAULT">ARCHIVE</span>
+                            <span class="lb-menu-desc" data-desc-404="R18／禁區內容／成人文檔">角色檔案／關係網絡／故事線索</span>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-story-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel(window.OS_API?.isStandalone?.() ? 'generate' : 'story');">
+                        <div class="void-btn-inner"><span>踏入故事</span></div>
+                    </div>
+                    <div class="void-btn" id="void-chapter-btn">
+                        <div class="void-btn-inner">
+                            <span class="lb-menu-no">02</span>
+                            <span class="lb-menu-cn" data-cn-404="異常記錄">章節選擇</span>
+                            <span class="lb-menu-en" data-en-404="ANOMALY LOG">CHAPTER SELECT</span>
+                            <span class="lb-menu-desc" data-desc-404="系統異常／失控事件／未公開檔案">事件檔案／章節進度／開幕進度</span>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-exit-btn" data-os-launch="map">
+                        <div class="void-btn-inner">
+                            <span class="lb-menu-no">03</span>
+                            <span class="lb-menu-cn" data-cn-404="墜入404">出門</span>
+                            <span class="lb-menu-en" data-en-404="ENTER 404">DEPART</span>
+                            <span class="lb-menu-desc" data-desc-404="黑市交易／賭場遊戲／夜之都市">離開咖啡廳／進入廣闊世界</span>
+                        </div>
+                    </div>
+                    <div class="lb-info-cards">
+                        <div class="lb-info-card">
+                            <span class="lb-info-card-k">TODAY'S SPECIAL</span>
+                            <span class="lb-info-card-v" id="lb-special-name">藍莓拿鐵</span>
+                        </div>
+                        <div class="lb-info-card">
+                            <span class="lb-info-card-k" id="lb-points-label">SPENT POINT</span>
+                            <span class="lb-info-card-v" id="lb-points-val">--</span>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div class="qb-bookshelf-overlay" id="qb-bookshelf-overlay" style="display:none; position:absolute; top:8%; left:4%; right:4%; bottom:15%; background:#1e1208; border:3px solid #6b4c3a; border-radius:8px; z-index:100; flex-direction:column; box-shadow:inset 0 0 50px rgba(0,0,0,0.8), 0 15px 40px rgba(0,0,0,0.9); overflow:hidden;">
@@ -576,8 +649,8 @@ const IRIS_IDLE = [
                 <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(90,55,25,0.35) 0%, transparent 70%); pointer-events:none;"></div>
 
                 <div style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, #3e271a, #2c1e16); border-bottom:2px solid #1a110b; padding:12px 15px; box-shadow:0 4px 15px rgba(0,0,0,0.4);">
-                    <div style="color:#FBDFA2; font-weight:bold; font-size:16px; font-family:'Cinzel', serif; letter-spacing:1px; text-shadow:2px 2px 4px rgba(0,0,0,0.5);">📖 瀅瀅的館藏書架</div>
-                    <button id="close-bookshelf-btn" style="background:none; border:none; color:#B78456; font-size:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#B78456'">✕</button>
+                    <div style="color:#1A1C28; font-weight:bold; font-size:16px; font-family:'Cinzel', serif; letter-spacing:1px; text-shadow:2px 2px 4px rgba(0,0,0,0.5);">📖 瀅瀅的館藏書架</div>
+                    <button id="close-bookshelf-btn" style="background:none; border:none; color:rgba(26,28,40,0.72); font-size:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(26,28,40,0.40)'">✕</button>
                 </div>
 
                 <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">
@@ -602,27 +675,27 @@ const IRIS_IDLE = [
                 </div>
 
                 <div id="qb-shelf-nav" style="display:none; flex-shrink:0; align-items:center; justify-content:center; gap:16px; padding:6px 0; background:rgba(26,12,6,0.95); border-top:1px solid rgba(107,76,58,0.4);">
-                    <button id="qb-page-prev" style="background:none; border:1px solid rgba(251,223,162,0.35); color:#FBDFA2; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">‹</button>
-                    <span id="qb-page-label" style="color:#B78456; font-size:13px; font-family:monospace; letter-spacing:1px;"></span>
-                    <button id="qb-page-next" style="background:none; border:1px solid rgba(251,223,162,0.35); color:#FBDFA2; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">›</button>
+                    <button id="qb-page-prev" style="background:none; border:1px solid rgba(26,28,40,0.18); color:#1A1C28; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">‹</button>
+                    <span id="qb-page-label" style="color:rgba(26,28,40,0.72); font-size:13px; font-family:monospace; letter-spacing:1px;"></span>
+                    <button id="qb-page-next" style="background:none; border:1px solid rgba(26,28,40,0.18); color:#1A1C28; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">›</button>
                 </div>
             </div>
 
 
-            <div id="iris-history-overlay" style="display:none; background:rgba(69,34,22,0.95);">
-                <div class="hist-header" style="border-bottom: 1px solid rgba(251,223,162,0.3);">
+            <div id="iris-history-overlay" style="display:none; background:rgba(228,232,245,0.97);">
+                <div class="hist-header" style="border-bottom: 1px solid rgba(26,28,40,0.15);">
                     <div style="display:flex;align-items:center;">
-                        <span class="hist-title" id="hist-title" style="color:#FBDFA2;">故事素材紀錄</span>
-                        <span class="hist-char-badge iris" id="hist-char-badge" style="background:rgba(251,223,162,0.2); color:#FBDFA2; border:1px solid #FBDFA2;">瀅瀅</span>
+                        <span class="hist-title" id="hist-title" style="color:#1A1C28;">故事素材紀錄</span>
+                        <span class="hist-char-badge iris" id="hist-char-badge" style="background:rgba(26,28,40,0.10); color:#1A1C28; border:1px solid rgba(26,28,40,0.25);">瀅瀅</span>
                     </div>
-                    <button class="hist-close" id="hist-close-btn" style="color:#FBDFA2;">✕</button>
+                    <button class="hist-close" id="hist-close-btn" style="color:#1A1C28;">✕</button>
                 </div>
-                <div class="hist-toolbar" style="background:rgba(0,0,0,0.5); border-bottom: 1px solid rgba(251,223,162,0.1);">
-                    <label class="hist-check-all-label" style="color:#FFF8E7;"><input type="checkbox" id="hist-check-all"> 全選</label>
+                <div class="hist-toolbar" style="background:rgba(0,0,0,0.5); border-bottom: 1px solid rgba(26,28,40,0.06);">
+                    <label class="hist-check-all-label" style="color:#1A1C28;"><input type="checkbox" id="hist-check-all"> 全選</label>
                     <button class="hist-action-btn danger" id="hist-del-sel" disabled style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">刪除選中</button>
                     <button class="hist-action-btn danger" id="hist-clear-btn" style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">清空全部</button>
                     <button class="hist-action-btn" id="hist-new-claude-conv" style="display:none; background:rgba(217,81,34,0.15); color:#D95122; border:1px solid #EAB05C;" title="清掉對話歷史 + session_id，下次從零開始">🔄 開新對話</button>
-                    <span class="hist-count" id="hist-count" style="color:#B78456;"></span>
+                    <span class="hist-count" id="hist-count" style="color:rgba(26,28,40,0.72);"></span>
                 </div>
                 <div class="hist-list" id="hist-list"></div>
             </div>
@@ -651,32 +724,8 @@ const IRIS_IDLE = [
                 <div id="store-panel-body" style="display:contents;"></div>
             </div>
 
-            <div class="void-dialogue-wrap">
-                <div style="margin-bottom:8px; display:flex; flex-direction:column; align-items:flex-end; gap: 8px;">
-                    <div class="void-btn" id="void-quest-btn">
-                        <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-bolt"></i><span>館藏</span></div>
-                    </div>
-                    <div class="void-btn" id="void-story-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel(window.OS_API?.isStandalone?.() ? 'generate' : 'story');">
-                        <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-play"></i><span>踏入故事</span></div>
-                    </div>
-                    <div class="void-btn" id="void-chapter-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel('chapter');">
-                        <div class="void-btn-inner" style="color: #FBDFA2;"><i class="fa-solid fa-book-open"></i><span>選擇章節</span></div>
-                    </div>
-                </div>
-                <div style="position: relative; width: 100%;">
-                    <div class="void-dialogue-box" id="iris-dialogue-box">
-                        <img class="void-dlg-bg" src="https://files.catbox.moe/5edth7.png" alt="">
-                        <div class="void-name-tag" id="iris-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
-                        <div class="void-text" id="iris-text">載入中...</div>
-                        <div class="void-next" id="iris-next">▼</div>
-                    </div>
-                    <div class="void-dialogue-box" id="iris-reaction-box" style="display:none; cursor:pointer;" title="點擊跳過">
-                        <img class="void-dlg-bg" src="https://files.catbox.moe/5edth7.png" alt="">
-                        <div class="void-name-tag" id="iris-reaction-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
-                        <div class="void-text" id="iris-reaction-text">...</div>
-                    </div>
-                </div>
-            </div>
+            <!-- .void-dialogue-wrap（選單按鈕 + 對話框）已移入 .lobby-body 的左右欄 -->
+
 
             <!-- 🦀 Claude 月夜咖啡聊天室面板（mode-claude 才顯示，由 CSS 控制） -->
             <div class="claude-chat-panel" id="claude-chat-panel">
@@ -697,20 +746,25 @@ const IRIS_IDLE = [
                 </div>
             </div>
 
-            <div class="void-chat-bar" style="background: rgba(69,34,22,0.9); border-top: 1px solid rgba(251,223,162,0.3);">
+            <div class="void-chat-bar">
+                <div class="lb-botbar-info">
+                    <div class="lb-newsfeed">
+                        <span class="lb-newsfeed-tag">NEWS FEED</span>
+                        <span class="lb-newsfeed-track" id="lb-newsfeed-track">LUNA-VII 敘事協議就緒 ▸ 視差書咖待機中 ▸ 等待靈感導入</span>
+                    </div>
+                </div>
 
                 <div class="void-chat-btns">
-                    <button class="void-hist-btn" id="iris-hist-btn" title="瀅瀅 素材歷史" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>瀅瀅</span></button>
+                    <button class="void-hist-btn" id="iris-hist-btn" title="瀅瀅 素材歷史"><i class="fa-solid fa-clock-rotate-left"></i><span>瀅瀅</span></button>
                     <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
                     <button class="void-hist-btn" id="claude-hist-btn" title="Claude 對話歷史" style="display:none; color: #FFF5E1; background: rgba(217,81,34,0.7); border: 1px solid rgba(234,176,92,0.4);"><i class="fa-solid fa-clock-rotate-left"></i><span>Claude</span></button>
-                    <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單" style="color: #FBDFA2; background: rgba(120,55,25,0.6); border: 1px solid rgba(251,223,162,0.2);"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
+                    <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
                     ${extraAppsHtml}
                     <button class="void-hist-btn" id="vn-reader-lobby-btn" title="劇情閱讀器"><span class="vhb-em">📖</span><span>閱讀</span></button>
                     <button class="void-hist-btn" data-app-launch="tarot" title="塔羅"><span class="vhb-em">🔮</span><span>塔羅</span></button>
                     <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
-                    <button class="void-hist-btn" data-os-launch="map" title="地圖"><span class="vhb-em">🗺️</span><span>地圖</span></button>
                     <button class="void-hist-btn" data-app-launch="spend" title="額度面板" style="display:none;"><span class="vhb-em">💰</span><span>額度</span></button>
                 </div>
                 <!-- Claude 房間：inline picker bar（mode-claude 才顯示）-->
@@ -731,10 +785,64 @@ const IRIS_IDLE = [
                 <div class="claude-attach-chips" id="claude-attach-chips"></div>
                 <input type="file" id="claude-file-input" multiple style="display:none;" accept="image/*,application/pdf,.txt,.md,.json,.csv,.js,.ts,.py,.html,.css,.yml,.yaml,.toml,.log">
                 <div class="void-chat-input-row">
-                    <input type="text" id="iris-input" class="void-input" style="background: rgba(120,55,25,0.8); border: 1px solid rgba(251,223,162,0.3); color: #FFF8E7;" placeholder="提供故事素材或與瀅瀅對話..." autocomplete="off">
+                    <input type="text" id="iris-input" class="void-input" placeholder="提供故事素材或與瀅瀅對話..." autocomplete="off">
                     <button class="void-attach-btn" id="claude-attach-btn" title="附加檔案" style="display:none;">📎</button>
                     <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
-                    <button class="void-send-btn" id="iris-send-btn" style="background: linear-gradient(135deg, #FBDFA2, #B78456); color: #452216;"><i class="fa-solid fa-paper-plane"></i></button>
+                    <button class="void-send-btn" id="iris-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
+
+            <!-- 📖 大廳章節選擇面板 -->
+            <div id="lobby-chapter-panel" class="lcp-overlay">
+                <div class="lcp-notebook">
+                    <div class="lcp-rings"><div class="lcp-ring"></div><div class="lcp-ring"></div><div class="lcp-ring"></div></div>
+                    <button class="lcp-close-btn" id="lcp-close-btn">✕</button>
+                    <div class="lcp-inner">
+                        <div class="lcp-header">
+                            <div class="lcp-hdr-left">
+                                <div class="lcp-title">章節選擇</div>
+                                <div class="lcp-title-en">Chapter Select</div>
+                            </div>
+                            <div class="lcp-hdr-divider"></div>
+                            <div class="lcp-hdr-right">
+                                <div class="lcp-hdr-zh">故事書館</div>
+                                <div class="lcp-hdr-en">Story Bookmarks</div>
+                            </div>
+                        </div>
+                        <div class="lcp-cards-area">
+                            <div class="lcp-cards-viewport">
+                                <button class="lcp-nav lcp-prev" id="lcp-prev-btn" disabled>‹</button>
+                                <div class="lcp-cards-track" id="lcp-cards-track"></div>
+                                <button class="lcp-nav lcp-next" id="lcp-next-btn">›</button>
+                            </div>
+                            <div class="lcp-dots" id="lcp-dots"></div>
+                        </div>
+                        <div class="lcp-bottom">
+                            <div class="lcp-bottom-sec lcp-last-read">
+                                <div class="lcp-last-thumb"></div>
+                                <div class="lcp-last-info">
+                                    <div class="lcp-sec-label">最近選取</div>
+                                    <div class="lcp-sec-en">LAST SELECTED</div>
+                                    <div class="lcp-last-title" id="lcp-last-title">—</div>
+                                    <div class="lcp-last-meta" id="lcp-last-meta"></div>
+                                </div>
+                            </div>
+                            <div class="lcp-bottom-sec lcp-stat-sec">
+                                <div class="lcp-sec-label">故事數量</div>
+                                <div class="lcp-sec-en">TOTAL STORIES</div>
+                                <div class="lcp-big-num" id="lcp-story-count">—</div>
+                            </div>
+                            <div class="lcp-bottom-sec lcp-quote-sec">
+                                <div class="lcp-quote-text">「故事還在繼續，<br>而我們也在。」</div>
+                                <div class="lcp-quote-author">— Sohee</div>
+                            </div>
+                            <div class="lcp-bottom-sec lcp-back-sec" id="lcp-back-btn">
+                                <div class="lcp-back-zh">返回大廳</div>
+                                <div class="lcp-back-en">BACK TO MAIN</div>
+                                <div class="lcp-back-arrow">›</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -945,10 +1053,139 @@ const IRIS_IDLE = [
                 });
             });
 
+            // 📖 大廳章節選擇面板 (LobbyChapterPanel)
+            const LobbyChapterPanel = (() => {
+                const PER_PAGE = 3;
+                const BK_IMG = 'https://files.catbox.moe/a1y4su.png';
+                const PALETTES = [
+                    'linear-gradient(180deg,#7a8a9a,#5a6a7a 50%,#8a8070)',
+                    'linear-gradient(135deg,#7a6a5a,#5a4a3a 50%,#8a7a6a)',
+                    'linear-gradient(135deg,#4a5a7a,#2a3a5a 50%,#6a7a9a)',
+                    'linear-gradient(180deg,#6a7a5a,#4a5a3a 50%,#7a8a6a)',
+                    'linear-gradient(135deg,#7a5a7a,#5a3a5a 50%,#9a7a9a)',
+                ];
+                let _all = [], _page = 0, _pages = 1;
+
+                function _palette(sid) {
+                    let h = 0; for (const c of (sid||'')) h = (h*31+c.charCodeAt(0))&0xffffffff;
+                    return PALETTES[Math.abs(h)%PALETTES.length];
+                }
+                function _chNum(ch) {
+                    const same = _all.filter(c=>c.storyId===ch.storyId).sort((a,b)=>a.createdAt-b.createdAt);
+                    return String(same.findIndex(c=>c.id===ch.id)+1).padStart(2,'0');
+                }
+                function _render() {
+                    const track = document.getElementById('lcp-cards-track');
+                    const dotsEl = document.getElementById('lcp-dots');
+                    if (!track) return;
+                    const slice = _all.slice(_page*PER_PAGE, (_page+1)*PER_PAGE);
+                    track.innerHTML = '';
+                    if (!slice.length) {
+                        track.innerHTML = '<div class="lcp-empty"><div style="font-size:28px;opacity:0.45">📖</div><div>尚無故事章節<br><span style="font-size:10px;opacity:0.6">去 VN 播放器生成第一章吧</span></div></div>';
+                    } else {
+                        slice.forEach((ch, i) => {
+                            const num = _chNum(ch);
+                            const isGold = (i===0 && _page===0);
+                            const bg = _palette(ch.storyId);
+                            const d = ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('zh-TW',{month:'2-digit',day:'2-digit'}) : '';
+                            const card = document.createElement('div');
+                            card.className = 'lcp-card' + (i===0 ? ' lcp-active' : '');
+                            card.innerHTML = `
+                                <div class="lcp-ribbon${isGold?' gold':''}"><img src="${BK_IMG}" alt=""></div>
+                                <div class="lcp-spacer"></div>
+                                <div class="lcp-chapter-label">CHAPTER</div>
+                                <div class="lcp-chapter-num">${num}</div>
+                                <div class="lcp-chapter-title">${ch.title||'未命名章節'}</div>
+                                <div class="lcp-chapter-story">${ch.storyTitle||''}</div>
+                                <div class="lcp-scene" style="background:${bg}">📖</div>
+                                <div class="lcp-card-date">${d}</div>
+                                <div class="lcp-card-status">
+                                    <span class="lcp-status-txt">已完成</span>
+                                    <div class="lcp-status-bar"><div class="lcp-status-fill"></div></div>
+                                    <span class="lcp-status-pct">100%</span>
+                                </div>`;
+                            card.addEventListener('click', () => _select(ch));
+                            track.appendChild(card);
+                        });
+                    }
+                    if (dotsEl) {
+                        dotsEl.innerHTML = '';
+                        for (let i=0;i<_pages;i++) {
+                            const dot = document.createElement('button');
+                            dot.className = 'lcp-dot'+(i===_page?' active':'');
+                            dot.addEventListener('click', ()=>{ _page=i; _render(); });
+                            dotsEl.appendChild(dot);
+                        }
+                    }
+                    const prev = document.getElementById('lcp-prev-btn');
+                    const next = document.getElementById('lcp-next-btn');
+                    if (prev) prev.disabled = _page===0;
+                    if (next) next.disabled = _page>=_pages-1;
+                }
+                function _select(ch) {
+                    try { localStorage.setItem('lcp_last', JSON.stringify({title:ch.title,storyTitle:ch.storyTitle,date:ch.createdAt})); } catch(e){}
+                    if (window.VN_Core?._setStoryId) window.VN_Core._setStoryId(ch.storyId||'', ch.storyTitle||'');
+                    window._lobbyPendingChapter = ch;
+                    _close();
+                    if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
+                }
+                function _updateLast() {
+                    try {
+                        const last = JSON.parse(localStorage.getItem('lcp_last')||'null');
+                        const t = document.getElementById('lcp-last-title');
+                        const m = document.getElementById('lcp-last-meta');
+                        if (last && t) { t.textContent = last.title||'—'; if(m) m.textContent = last.storyTitle||''; }
+                    } catch(e){}
+                }
+                async function _open() {
+                    // 酒館模式章節來自聊天歷史，直接走 VN 面板
+                    const isStandalone = window.OS_API?.isStandalone?.() ?? false;
+                    if (!isStandalone) {
+                        if (window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel('chapter');
+                        return;
+                    }
+                    const panel = document.getElementById('lobby-chapter-panel');
+                    if (!panel) return;
+                    _page = 0; _all = [];
+                    const track = document.getElementById('lcp-cards-track');
+                    if (track) track.innerHTML = '<div class="lcp-empty"><div style="font-size:22px">⏳</div><div>讀取中...</div></div>';
+                    panel.classList.add('active');
+                    _updateLast();
+                    try {
+                        if (window.OS_DB?.getAllVnChapters) {
+                            const chapters = await window.OS_DB.getAllVnChapters();
+                            chapters.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+                            _all = chapters;
+                            const ids = new Set(chapters.map(c=>c.storyId).filter(Boolean));
+                            const cnt = document.getElementById('lcp-story-count');
+                            if (cnt) cnt.textContent = String(ids.size||chapters.length);
+                        }
+                    } catch(e) { console.warn('[LCP] DB err', e); }
+                    _pages = Math.max(1, Math.ceil(_all.length/PER_PAGE));
+                    _render();
+                }
+                function _close() { document.getElementById('lobby-chapter-panel')?.classList.remove('active'); }
+                function _init() {
+                    document.getElementById('lcp-close-btn')?.addEventListener('click', _close);
+                    document.getElementById('lcp-back-btn')?.addEventListener('click', _close);
+                    document.getElementById('lcp-prev-btn')?.addEventListener('click', ()=>{ if(_page>0){_page--;_render();} });
+                    document.getElementById('lcp-next-btn')?.addEventListener('click', ()=>{ if(_page<_pages-1){_page++;_render();} });
+                    document.getElementById('lobby-chapter-panel')?.addEventListener('click', e=>{ if(e.target.id==='lobby-chapter-panel') _close(); });
+                }
+                return { open: _open, close: _close, init: _init };
+            })();
+            LobbyChapterPanel.init();
+
             // 📖 獨立閱讀器按鈕
             const vnReaderBtn = tab.querySelector('#vn-reader-lobby-btn');
             if (vnReaderBtn) vnReaderBtn.addEventListener('click', () => {
                 if (window.VN_READER) window.VN_READER.show();
+            });
+
+            // 📚 章節選擇大廳面板
+            const chapterBtn = tab.querySelector('#void-chapter-btn');
+            if (chapterBtn) chapterBtn.addEventListener('click', () => {
+                LobbyChapterPanel.open();
             });
 
             const storeCloseBtn = tab.querySelector('#store-close-btn');
@@ -1097,7 +1334,7 @@ const IRIS_IDLE = [
         const badgeEl = document.getElementById('hist-char-badge');
         const newConvBtn = document.getElementById('hist-new-claude-conv');
         if (char === 'iris') {
-            if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = '#FBDFA2'; badgeEl.style.borderColor = '#FBDFA2'; badgeEl.style.background = 'rgba(251,223,162,0.2)'; }
+            if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = 'rgba(26,28,40,0.25)'; badgeEl.style.borderColor = 'rgba(26,28,40,0.25)'; badgeEl.style.background = 'rgba(26,28,40,0.10)'; }
             if (newConvBtn) newConvBtn.style.display = 'none';
         } else if (char === 'claude') {
             if (badgeEl) { badgeEl.className = 'hist-char-badge claude'; badgeEl.textContent = '☕ Claude'; badgeEl.style.color = '#D95122'; badgeEl.style.borderColor = '#D95122'; badgeEl.style.background = 'rgba(217,81,34,0.18)'; }
@@ -1124,7 +1361,7 @@ const IRIS_IDLE = [
         const history = getCharHistory(_historyPanel.char);
         if (countEl) countEl.textContent = `${history.length} 條記錄`;
         if (history.length === 0) {
-            listEl.innerHTML = `<div class="hist-empty" style="color:#B78456; text-align:center; padding: 20px;">── 尚無紀錄 ──</div>`;
+            listEl.innerHTML = `<div class="hist-empty" style="color:rgba(26,28,40,0.72); text-align:center; padding: 20px;">── 尚無紀錄 ──</div>`;
             updateHistoryToolbar();
             return;
         }
@@ -1141,18 +1378,18 @@ const IRIS_IDLE = [
             item.className = 'hist-item';
             item.dataset.index = index;
             // 替換顏色：USER 走拿鐵金，AI 依角色配色
-            let badgeStyle = isUser ? `background: rgba(251,223,162,0.2); color:#FBDFA2; border:1px solid #FBDFA2;` :
+            let badgeStyle = isUser ? `background: rgba(26,28,40,0.10); color:#1A1C28; border:1px solid rgba(26,28,40,0.25);` :
                              isClaude ? `background: rgba(217,81,34,0.18); color:#D95122; border:1px solid #D95122;` :
                              isCheshire ? `background: rgba(0,255,65,0.2); color:#00ff41; border:1px solid #00ff41;` :
-                             `background: rgba(226,232,240,0.1); color:#FFF8E7; border:1px solid #FFF8E7;`;
+                             `background: rgba(226,232,240,0.1); color:#1A1C28; border:1px solid #1A1C28;`;
 
             item.innerHTML = `
                 <input type="checkbox" class="hist-item-check">
                 <span class="hist-role-badge" style="${badgeStyle}">${roleLabel}</span>
-                <div class="hist-item-body"><div class="hist-item-text" style="color:#E0D8C8;">${safeText}</div></div>
+                <div class="hist-item-body"><div class="hist-item-text" style="color:#3A3F5C;">${safeText}</div></div>
                 <div class="hist-item-actions">
-                    <button class="hist-icon-btn edit" title="編輯此條" style="color:#B78456;">✎</button>
-                    <button class="hist-icon-btn rollback" title="回退到此點" style="color:#B78456;">↩</button>
+                    <button class="hist-icon-btn edit" title="編輯此條" style="color:rgba(26,28,40,0.72);">✎</button>
+                    <button class="hist-icon-btn rollback" title="回退到此點" style="color:rgba(26,28,40,0.72);">↩</button>
                 </div>`;
 
             const textEl = item.querySelector('.hist-item-text');
@@ -1211,7 +1448,7 @@ const IRIS_IDLE = [
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = '取消';
-        cancelBtn.style.cssText = `background:none;border:1px solid rgba(255,255,255,0.1);color:#E0D8C8;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:11px;`;
+        cancelBtn.style.cssText = `background:none;border:1px solid rgba(255,255,255,0.1);color:#3A3F5C;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:11px;`;
         cancelBtn.addEventListener('click', () => banner.remove());
 
         banner.appendChild(msgSpan);
@@ -1233,10 +1470,10 @@ const IRIS_IDLE = [
         const currentText = history[index].content;
 
         textEl.innerHTML = `
-            <textarea class="hist-item-edit-area" style="background:rgba(120,55,25,0.9); color:#FFF8E7; border:1px solid #FBDFA2;">${currentText.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+            <textarea class="hist-item-edit-area" style="background:rgba(228,232,245,0.95); color:#1A1C28; border:1px solid rgba(26,28,40,0.20);">${currentText.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
             <div class="hist-edit-confirm-row">
-                <button class="hist-edit-confirm-btn" style="background:#FBDFA2; color:#452216;">保存</button>
-                <button class="hist-edit-cancel-btn" style="background:rgba(255,255,255,0.1); color:#FFF8E7;">取消</button>
+                <button class="hist-edit-confirm-btn" style="background:#1A1C28; color:#EEF0F6;">保存</button>
+                <button class="hist-edit-cancel-btn" style="background:rgba(26,28,40,0.08); color:#1A1C28;">取消</button>
             </div>`;
 
         const ta = textEl.querySelector('textarea');
@@ -1250,7 +1487,7 @@ const IRIS_IDLE = [
     VoidTerminal.panelBack  = () => {};
 
     // ===== 世界頻道 =====
-    const FEED_PALETTE_MAP = { SYS: { c:'#FBDFA2', r:'251,223,162' }, ECHO: { c:'#9f7aea', r:'159,122,234' } };
+    const FEED_PALETTE_MAP = { SYS: { c:'rgba(26,28,40,0.25)', r:'251,223,162' }, ECHO: { c:'#9f7aea', r:'159,122,234' } };
 
     function addFeedEntry(tag, text) {
         const layer = document.getElementById('void-bubble-layer');
@@ -1258,7 +1495,7 @@ const IRIS_IDLE = [
         const pal = FEED_PALETTE_MAP[tag.toUpperCase()] || FEED_PALETTE_MAP.SYS;
         const item = document.createElement('div');
         item.className = 'void-bubble';
-        item.style.cssText = `--bc:${pal.c}; --bc-rgb:${pal.r}; background: rgba(69,34,22,0.9) !important; color: #FFF8E7 !important; border: 1px solid rgba(251,223,162,0.3); box-shadow: 0 4px 10px rgba(0,0,0,0.5);`;
+        item.style.cssText = `--bc:${pal.c}; --bc-rgb:${pal.r}; background: rgba(228,232,245,0.96) !important; color:#1A1C28 !important; border: 1px solid rgba(26,28,40,0.15); box-shadow: 0 4px 10px rgba(0,0,0,0.5);`;
         item.innerHTML = `<div class="void-bubble-tag">${tag.toUpperCase()}</div><div class="void-bubble-text">${text}</div>`;
         layer.appendChild(item);
         // 超過 7 條時移除最舊的
@@ -1348,7 +1585,7 @@ const IRIS_IDLE = [
 
             // 還原拿鐵棕背景
             const bg = tab.querySelector('.void-bg');
-            if (bg) bg.style.backgroundColor = '#452216';
+            if (bg) bg.style.backgroundColor = '';
 
             VoidAmbient.switchBgm('lobby');
 
@@ -1365,9 +1602,9 @@ const IRIS_IDLE = [
             const inputField = document.getElementById('iris-input');
             if (inputField) {
                 inputField.placeholder = '提供故事素材或與瀅瀅對話...';
-                inputField.style.background = 'rgba(120,55,25,0.8)';
-                inputField.style.borderColor = 'rgba(251,223,162,0.3)';
-                inputField.style.color = '#FFF8E7';
+                inputField.style.background = '';
+                inputField.style.borderColor = '';
+                inputField.style.color = '';
             }
             const nameBox = document.getElementById('iris-name-tag');
             if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='瀅瀅'; }

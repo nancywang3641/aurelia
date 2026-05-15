@@ -1,4 +1,4 @@
-// ----------------------------------------------------------------
+﻿// ----------------------------------------------------------------
 // [檔案] st_studio_regex.js (純淨版 - F12 直通酒館局部正則)
 // ----------------------------------------------------------------
 (function() {
@@ -46,9 +46,9 @@ JS 腳本會被自動包裝執行，你擁有以下變數可用：
 </json>`;
 
     const uiHtml = `
-        <div id="st-regex-studio" style="position:fixed; top:5%; left:10%; width:80%; height:90%; background:#1a0d0a; border:2px solid #bfa982; border-radius:12px; z-index:9999; display:flex; flex-direction:column; font-family:'Noto Sans TC',sans-serif; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+        <div id="st-regex-studio" style="position:fixed; top:5%; left:10%; width:80%; height:90%; background:#EEF0F6; border:2px solid #bfa982; border-radius:12px; z-index:9999; display:flex; flex-direction:column; font-family:'Noto Sans TC',sans-serif; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
             <div style="padding:15px 20px; background:linear-gradient(135deg, #3e271a, #2c1e16); border-bottom:1px solid #6b4c3a; display:flex; justify-content:space-between; align-items:center;">
-                <span style="color:#FBDFA2; font-weight:bold; font-size:16px;">✨ 局部正則煉丹爐 (ST 專屬)</span>
+                <span style="color:#1A1C28; font-weight:bold; font-size:16px;">✨ 局部正則煉丹爐 (ST 專屬)</span>
                 <button id="st-rs-close" style="background:none; border:none; color:#bfa982; font-size:20px; cursor:pointer;">✖</button>
             </div>
             <div style="flex:1; display:flex; overflow:hidden;">
@@ -56,11 +56,11 @@ JS 腳本會被自動包裝執行，你擁有以下變數可用：
                     <div id="st-rs-chat" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:15px;"></div>
                     <div style="padding:15px; border-top:1px solid #6b4c3a; display:flex; gap:10px;">
                         <textarea id="st-rs-input" style="flex:1; background:rgba(0,0,0,0.5); border:1px solid #bfa982; color:#fff; border-radius:6px; padding:10px; outline:none; resize:none; height:40px;"></textarea>
-                        <button id="st-rs-send" style="background:linear-gradient(135deg, #3e271a, #2c1e16); color:#FBDFA2; border:1px solid #bfa982; border-radius:6px; padding:0 20px; cursor:pointer; font-weight:bold;">發送</button>
+                        <button id="st-rs-send" style="background:linear-gradient(135deg, #3e271a, #2c1e16); color:#1A1C28; border:1px solid #bfa982; border-radius:6px; padding:0 20px; cursor:pointer; font-weight:bold;">發送</button>
                     </div>
                 </div>
                 <div style="flex:1; padding:20px; background:#110805; display:flex; flex-direction:column;">
-                    <div style="color:#B78456; font-size:14px; font-weight:bold; margin-bottom:10px; border-bottom:1px solid #6b4c3a; padding-bottom:10px;">🛠️ 當前生成的靈魂 (預覽)</div>
+                    <div style="color:rgba(26,28,40,0.72); font-size:14px; font-weight:bold; margin-bottom:10px; border-bottom:1px solid #6b4c3a; padding-bottom:10px;">🛠️ 當前生成的靈魂 (預覽)</div>
                     <pre id="st-rs-preview" style="flex:1; overflow-y:auto; color:#d0d0d0; font-family:monospace; font-size:12px; white-space:pre-wrap; background:#000; padding:15px; border-radius:6px; border:1px dashed #6b4c3a;"></pre>
                     <button id="st-rs-inject" style="margin-top:15px; padding:12px; background:#2ecc71; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; display:none;">⚡ 注入當前角色局部正則</button>
                 </div>
@@ -80,7 +80,7 @@ JS 腳本會被自動包裝執行，你擁有以下變數可用：
     const renderChat = () => {
         const c = document.getElementById('st-rs-chat');
         c.innerHTML = messages.filter(m => m.role !== 'system').map(m => `
-            <div style="max-width:85%; padding:10px 15px; border-radius:8px; font-size:13px; line-height:1.5; white-space:pre-wrap; align-self:${m.role==='user'?'flex-end':'flex-start'}; background:${m.role==='user'?'rgba(183,132,86,0.3)':'rgba(255,255,255,0.05)'}; color:${m.role==='user'?'#FBDFA2':'#FFF8E7'}; border:1px solid ${m.role==='user'?'rgba(251,223,162,0.4)':'rgba(255,255,255,0.1)'};">
+            <div style="max-width:85%; padding:10px 15px; border-radius:8px; font-size:13px; line-height:1.5; white-space:pre-wrap; align-self:${m.role==='user'?'flex-end':'flex-start'}; background:${m.role==='user'?'rgba(210,215,235,0.3)':'rgba(255,255,255,0.05)'}; color:${m.role==='user'?'rgba(26,28,40,0.25)':'#1A1C28'}; border:1px solid ${m.role==='user'?'rgba(26,28,40,0.4)':'rgba(255,255,255,0.1)'};">
                 ${m.content.replace(/<(script|iframe)[^>]*>[\s\S]*?<\/\1>/gi, '').replace(/<json>[\s\S]*?(<\/json>|$)/gi, '<div style="color:#2ecc71;font-weight:bold;">✨ 面板資料已提取至右側</div>')}
             </div>
         `).join('');
