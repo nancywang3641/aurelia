@@ -30,13 +30,13 @@
         /* 書包與搜尋區 */
         .wb-tool-bar { padding:8px 12px; background:rgba(228,232,245,0.96); border-bottom:1px solid rgba(26,28,40,0.15); flex-shrink:0; display:flex; flex-direction:column; gap:8px; }
         .wb-book-row { display:flex; align-items:center; gap:8px; }
-        .wb-book-select { flex:1; background:rgba(0,0,0,0.4); border:1px solid rgba(26,28,40,0.25); border-radius:6px; color:#1A1C28; font-size:13px; font-weight:600; padding:6px 8px; outline:none; cursor:pointer; font-family:inherit; }
+        .wb-book-select { flex:1; background:#EEF0F6; border:1px solid rgba(26,28,40,0.25); border-radius:6px; color:#1A1C28; font-size:13px; font-weight:600; padding:6px 8px; outline:none; cursor:pointer; font-family:inherit; color-scheme:light; }
         .wb-book-btn { display:flex; align-items:center; justify-content:center; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.20); color:#1A1C28; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:12px; font-weight:700; transition:.2s; white-space:nowrap; }
         .wb-book-btn:hover { background:rgba(26,28,40,0.12); }
         .wb-book-btn.danger { background:rgba(252,129,129,0.1); border-color:rgba(252,129,129,0.4); color:#fc8181; }
         .wb-book-btn.danger:hover { background:rgba(252,129,129,0.25); }
         
-        .wb-search { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); border-radius:20px; color:#1A1C28; font-size:12px; padding:6px 14px; outline:none; box-sizing:border-box; }
+        .wb-search { width:100%; background:#EEF0F6; border:1px solid rgba(26,28,40,0.20); border-radius:20px; color:#1A1C28; font-size:12px; padding:6px 14px; outline:none; box-sizing:border-box; }
         .wb-search:focus { border-color:#1A1C28; }
 
         .wb-cat-bar { display:flex; gap:4px; padding:8px 10px; background:rgba(228,232,245,0.96); overflow-x:auto; flex-shrink:0; scrollbar-width:none; border-bottom:1px solid rgba(26,28,40,0.15); }
@@ -85,10 +85,10 @@
         .wb-form-cancel:hover { color:#1A1C28; background:rgba(26,28,40,0.06); }
         .wb-form-body { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:12px; }
         .wb-field label { display:block; font-size:11px; color:rgba(26,28,40,0.72); margin-bottom:5px; letter-spacing:.3px; font-weight:600; }
-        .wb-field input, .wb-field select, .wb-field textarea { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); border-radius:8px; color:#1A1C28; font-size:13px; padding:8px 10px; box-sizing:border-box; outline:none; transition:border-color .2s; font-family:inherit; }
+        .wb-field input, .wb-field select, .wb-field textarea { width:100%; background:#EEF0F6; border:1px solid rgba(26,28,40,0.20); border-radius:8px; color:#1A1C28; font-size:13px; padding:8px 10px; box-sizing:border-box; outline:none; transition:border-color .2s; font-family:inherit; color-scheme:light; }
         .wb-field input:focus, .wb-field select:focus, .wb-field textarea:focus { border-color:#1A1C28; }
         .wb-field textarea { resize:vertical; min-height:180px; line-height:1.6; }
-        .wb-field select option { background:rgba(228,232,245,0.97); }
+        .wb-field select option { background:#EEF0F6; color:#1A1C28; }
         .wb-field-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(26,28,40,0.10); }
         .wb-field-row label { font-size:12px; color:#3A3F5C; margin:0; }
 

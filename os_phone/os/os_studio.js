@@ -11,7 +11,7 @@
         .studio-header { padding: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 12px; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; box-sizing: border-box; }
         .studio-title { font-size: 16px; font-weight: bold; color: #1A1C28; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .studio-channel-badge { font-size: 11px; background: rgba(26,28,40,0.08); border: 1px solid rgba(26,28,40,0.30); color: rgba(26,28,40,0.72); padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: normal; }
-        .studio-mode-select { background: #EEF0F6; appearance: none; -webkit-appearance: none; border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer; }
+        .studio-mode-select { background: #EEF0F6; appearance: none; -webkit-appearance: none; border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer; color-scheme: light; }
         .studio-mode-select option { background: #EEF0F6; color: #1A1C28; }
         .studio-icon-btn { background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
         .studio-icon-btn:hover { background: rgba(26,28,40,0.10); border-color: #1A1C28; }
