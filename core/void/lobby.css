@@ -1,0 +1,511 @@
+/* =========================================================
+   core/void/lobby.css
+   大廳 / 404 房間 — 2087 OS 儀表板視覺改版（方案 B：PWA + 酒館共用）
+   瀅瀅 = 預設皮膚；柴郡 = .void-tab.mode-404 皮膚
+   設計 spec：docs/superpowers/specs/2026-05-15-void-lobby-redesign-design.md
+
+   載入：index.html（PWA）+ index.js（酒館）各一行，排在 aurelia_core(_st).css 之後。
+   區塊：1 頂部狀態列 / 2 主體（左立繪 + 右 MAIN MENU）/ 3 底部列。
+   舊的 .void-* 大廳樣式清理 → 見 spec「待辦」，本檔以較後載入覆蓋之。
+   ========================================================= */
+
+/* ─────────────────────────────────────────────
+   皮膚變數 — 瀅瀅（預設，霧白儀表板）
+   面板 / 頂部列 / 底部列 → 白底深字
+   左欄立繪 / 選單卡片暗膜 → 繼續深底白字（見下方 override）
+   ───────────────────────────────────────────── */
+.void-tab {
+    --lb-ink:        #1A1C28;              /* 主文字（深藍黑，用於白底面板）*/
+    --lb-ink-dim:    rgba(26,28,40,0.72);  /* 次文字 */
+    --lb-panel:      rgba(250,251,255,0.92); /* 列 / 卡片底（近白）*/
+    --lb-panel-2:    rgba(228,232,245,0.75); /* hover / 次層底（淺藍白）*/
+    --lb-line:       rgba(26,28,40,0.12);
+    --lb-line-soft:  rgba(26,28,40,0.06);
+    --lb-glow:       rgba(180,185,220,0.40);
+    --lb-menu-veil:  rgba(250,251,255,0.88); /* 選單卡片壓白膜（白底→深字）*/
+    --lb-scrim:      linear-gradient(to top, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.28) 32%, transparent 58%);
+}
+/* ─────────────────────────────────────────────
+   皮膚變數 — 柴郡（404，暗黑賽博綠）
+   ───────────────────────────────────────────── */
+.void-tab.mode-404 {
+    --lb-ink:        #00ff41;
+    --lb-ink-dim:    #15a82f;
+    --lb-panel:      rgba(0,10,2,0.92);
+    --lb-panel-2:    rgba(0,32,8,0.5);
+    --lb-line:       rgba(0,255,65,0.22);
+    --lb-line-soft:  rgba(0,255,65,0.10);
+    --lb-glow:       rgba(0,255,65,0.30);
+    --lb-menu-veil:  rgba(0,8,2,0.93);
+    --lb-scrim:      none; /* 柴郡圖本身已夠暗，不疊壓暗膜 */
+}
+
+/* 瀅瀅模式：底色改白，壓掉 void-tab / void-bg 的暗棕 (#EEF0F6) */
+.void-tab:not(.mode-404):not(.mode-claude) { background: #EEF0F6 !important; }
+.void-tab:not(.mode-404):not(.mode-claude) .void-bg { background-color: #EEF0F6 !important; }
+
+/* 舊大廳殘留元素：新版型用不到，收掉 */
+.void-tab .void-bubble-layer { display:none; }
+
+/* ─────────────────────────────────────────────
+   舊立繪清理：素材已是「背景＋人物」合成圖，
+   舊的獨立立繪 #iris-avatar 一律不顯示。
+   restoreLobby() 等函式會清掉它的 inline display，
+   故用 !important 鎖死，JS 改 inline 也蓋不過。
+   ───────────────────────────────────────────── */
+.void-tab .void-char-img { display: none !important; }
+
+/* =========================================================
+   區塊 1：頂部狀態列  .void-top-bar
+   左 = LOGO + chatId 標題 / 中 = 系統資訊 / 右 = 3 控制
+   （沿用既有 absolute top:0 定位，只重設視覺與內部排版）
+   ========================================================= */
+.void-tab .void-top-bar {
+    height: 52px; box-sizing: border-box;
+    padding: 6px 14px !important;
+    gap: 14px;
+    background: var(--lb-panel) !important;
+    color: var(--lb-ink) !important;
+    border-bottom: 1px solid var(--lb-line) !important;
+    font-family: 'Noto Sans TC', sans-serif;
+}
+
+/* 左：品牌區 */
+.lb-top-brand { display:flex; align-items:center; gap:9px; flex-shrink:0; min-width:0; max-width:25%; }
+.lb-logo {
+    width:24px; height:32px; flex-shrink:0;
+    background: url(../../aseets/LOGO.png) center/contain no-repeat;
+    /* LOGO.png 是黑底白紋章 → screen 混合去黑底，留白色紋章（兩皮膚底色都夠暗）*/
+    mix-blend-mode: screen;
+}
+.lb-top-brand-text { min-width:0; }
+.void-top-sub-label {
+    font-size:9px; color:var(--lb-ink-dim); text-transform:uppercase;
+    letter-spacing:2px; margin-bottom:2px; font-weight:bold; white-space:nowrap;
+}
+#home-chat-title {
+    font-size:12px; font-weight:800; color:var(--lb-ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:0.5px;
+}
+
+/* 中：系統資訊（時間 / 日期 / 天氣 / USER）*/
+.lb-top-sysinfo {
+    display:flex; align-items:center; gap:18px;
+    flex:1; justify-content:center; min-width:0; overflow:hidden;
+}
+.lb-sys-cell { display:flex; flex-direction:column; gap:1px; line-height:1.15; white-space:nowrap; }
+.lb-sys-k { font-size:7px; letter-spacing:1.5px; color:var(--lb-ink-dim); text-transform:uppercase; font-weight:800; }
+.lb-sys-v { font-size:11px; color:var(--lb-ink); font-weight:700; font-family:'Courier New',monospace; }
+@media (max-width:680px) {
+    .lb-top-sysinfo { gap:10px; }
+    .lb-sys-cell.lb-sys-opt { display:none; }   /* 窄螢幕收掉次要欄位 */
+}
+
+/* 右：3 控制（房間切換 / 全屏 / 喇叭）*/
+.lb-top-ctrls { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.void-tab .void-mode-toggle-btn {
+    background: var(--lb-panel-2); border:1px solid var(--lb-line);
+    color: var(--lb-ink); padding:5px 9px; border-radius:5px;
+    font-size:11px; font-weight:700; letter-spacing:0.5px; cursor:pointer;
+    white-space:nowrap; transition:all 0.2s; display:flex; align-items:center; gap:4px;
+}
+.void-tab .void-mode-toggle-btn:hover { background:var(--lb-line-soft); border-color:var(--lb-ink); }
+.lb-icon-btn {
+    background:none; border:1px solid transparent; cursor:pointer;
+    font-size:16px; line-height:1; padding:5px 6px; border-radius:5px;
+    color:var(--lb-ink); opacity:0.72; transition:all 0.2s;
+}
+.lb-icon-btn:hover { opacity:1; border-color:var(--lb-line); background:var(--lb-line-soft); }
+
+/* =========================================================
+   區塊 2：主體  .lobby-body  →  左立繪 .lobby-left + 右選單 .lobby-right
+   絕對定位夾在頂部列與底部列之間（沿用「各區塊獨立 absolute」的版型模型）
+   ========================================================= */
+.lobby-body {
+    position:absolute; left:0; right:0; top:52px; bottom:114px;
+    z-index:6; display:flex; gap:0;
+    box-sizing:border-box; overflow:hidden;
+}
+/* Claude 房間（mode-claude）不在本次改版範圍 → 直接收掉新主體，沿用其既有面板 */
+.void-tab.mode-claude .lobby-body { display:none; }
+
+/* ── 2a. 左欄：合成立繪（人物＋背景同圖）＋ 疊字 ── */
+.lobby-left {
+    position:relative; flex:0 0 60%; min-width:0; overflow:hidden;
+    background: url(../../aseets/yingying.png) center top / cover no-repeat;
+    border-right:1px solid var(--lb-line);
+}
+.void-tab.mode-404 .lobby-left {
+    background-image: url(../../aseets/cheshire.png);
+}
+/* 404 左欄格子疊層（只蓋立繪，不碰右側面板與按鈕）*/
+.void-tab.mode-404 .lobby-left::before {
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(rgba(0,255,65,0.07) 1px,transparent 1px),
+               linear-gradient(90deg,rgba(0,255,65,0.07) 1px,transparent 1px);
+    background-size:30px 30px;
+}
+/* 底部壓暗膜：讓疊在立繪上的字看得清 */
+.lobby-left::after {
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background: var(--lb-scrim);
+}
+
+/* 角色名牌（左上疊字） */
+.lb-char-id {
+    position:absolute; top:14px; left:16px; z-index:2;
+}
+.lb-char-name {
+    font-size:22px; font-weight:900; letter-spacing:3px;
+    color:#FFFFFF; text-shadow:0 2px 10px rgba(0,0,0,0.7); /* 立繪上→鎖死白 */
+    font-family:'Cinzel','Noto Sans TC',serif;
+}
+.lb-char-sub {
+    font-size:10px; color:#fff; opacity:0.82; letter-spacing:1px;
+    margin-top:6px; text-shadow:0 1px 6px rgba(0,0,0,0.8);
+}
+/* 簽名圖 */
+.lb-signature {
+    position:absolute; top:96px; left:18px; z-index:2;
+    width:130px; height:46px;
+    background:url(../../aseets/yingying_signature.png) left center/contain no-repeat;
+    opacity:0.9; pointer-events:none;
+}
+.void-tab.mode-404 .lb-signature {
+    background-image:url(../../aseets/cheshire_signature.png);
+}
+
+/* 對話框：移進左欄底部、疊在立繪上 */
+.lobby-left .void-dialogue-wrap {
+    position:absolute; left:0; right:0; bottom:0; top:auto;
+    z-index:3; padding:0 16px 16px;
+}
+.lobby-left .void-dialogue-box { max-width:none; margin:0; }
+
+/* 白主題對話框：仿 404 框線卡片，改白霧版 */
+.void-tab:not(.mode-404) .lobby-left .void-dlg-bg    { display:none !important; }
+.void-tab:not(.mode-404) .lobby-left .void-nametag-bg { display:none !important; }
+.void-tab:not(.mode-404) .lobby-left .void-dialogue-box {
+    background: rgba(255,255,255,0.88) !important;
+    border: 1px solid rgba(26,28,40,0.18) !important;
+    box-shadow: 0 4px 24px rgba(14,16,26,0.10) !important;
+    border-radius: 4px !important;
+    padding: 14px 18px !important;
+    min-height: 72px !important;
+}
+.void-tab:not(.mode-404) .lobby-left .void-name-tag {
+    width:auto !important; aspect-ratio:unset !important;
+    background: rgba(255,255,255,0.96) !important;
+    border: 1px solid rgba(26,28,40,0.20) !important;
+    border-radius: 3px !important;
+    padding: 3px 10px !important;
+    display: flex !important; align-items: center !important;
+}
+.void-tab:not(.mode-404) .lobby-left .void-name-tag > span {
+    position: static !important;
+    color: #1A1C28 !important;
+    font-size: clamp(11px,1.4vw,13px) !important;
+    font-weight: 700 !important; letter-spacing: 1.5px !important;
+    text-shadow: none !important;
+}
+.void-tab:not(.mode-404) .lobby-left .void-text {
+    color: #2A2C3A !important;
+    line-height: 1.75 !important;
+}
+
+/* ── 2b. 右欄：MAIN MENU ── */
+.lobby-right {
+    position:relative; flex:1 1 40%; min-width:0;
+    display:flex; flex-direction:column;
+    padding:14px 16px; gap:10px; overflow-y:auto;
+    background:var(--lb-panel);
+    scrollbar-width:thin; scrollbar-color:var(--lb-line) transparent;
+}
+.lobby-right::-webkit-scrollbar { width:4px; }
+.lobby-right::-webkit-scrollbar-thumb { background:var(--lb-line); border-radius:2px; }
+
+.lb-menu-head { flex-shrink:0; margin-bottom:2px; }
+.lb-menu-head-title {
+    font-size:15px; font-weight:900; letter-spacing:4px;
+    color:var(--lb-ink); text-transform:uppercase;
+}
+.lb-menu-head-sub {
+    font-size:8px; letter-spacing:3px; color:var(--lb-ink-dim);
+    text-transform:uppercase; font-weight:700; margin-top:2px;
+}
+.lb-menu-head-rule {
+    height:1px; margin-top:8px;
+    background:linear-gradient(90deg, var(--lb-ink) 0%, var(--lb-line) 40%, transparent 100%);
+}
+
+/* 選單入口（3 個）— 共用樣式，背景圖靠 ID 在皮膚分支指定 */
+.lobby-right .void-btn {
+    flex:0 0 auto; height:clamp(104px, 21vh, 150px);
+    display:block; padding:0; min-width:0; width:100%;
+    background-color:var(--lb-panel-2);
+    background-size:cover; background-position:center right; background-repeat:no-repeat;
+    border:1px solid var(--lb-line); border-radius:5px;
+    transform:none; box-shadow:0 2px 12px rgba(0,0,0,0.4);
+    overflow:hidden; cursor:pointer; transition:all 0.22s cubic-bezier(0.2,0.8,0.2,1);
+}
+.lobby-right .void-btn::before { display:none; }   /* 關掉舊的斜掃光 */
+.lobby-right .void-btn:hover {
+    transform:translateX(5px);
+    border-color:var(--lb-ink); box-shadow:0 4px 22px var(--lb-glow);
+}
+.lobby-right .void-btn-inner {
+    transform:none; height:100%;
+    display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:2px;
+    padding:14px 24px;
+    /* 漸層壓暗膜：左端不透明（文字清楚）→ 右端透明（露出背景圖）*/
+    background:linear-gradient(100deg, var(--lb-menu-veil) 0%, var(--lb-menu-veil) 42%, rgba(0,0,0,0.05) 92%);
+}
+/* 編號 + 中文名 + 英文副標（用 ::before / 結構由模板給）*/
+.lb-menu-no {
+    font-size:18px; font-weight:800; letter-spacing:2px;
+    color:var(--lb-ink-dim); font-family:'Courier New',monospace;
+}
+.lb-menu-cn {
+    font-size:20px; font-weight:900; letter-spacing:4px; color:var(--lb-ink);
+    text-shadow:none;
+    font-family:'Cinzel','Noto Sans TC',serif;
+}
+.lobby-right .void-btn-inner > i { display:none; }   /* 舊 fa 圖示不要了 */
+.lb-menu-en {
+    font-size:9px; letter-spacing:3px; color:var(--lb-ink);
+    opacity:0.75; text-transform:uppercase; font-weight:700;
+}
+.lb-menu-desc {
+    font-size:9px; color:var(--lb-ink-dim); letter-spacing:0.5px; margin-top:1px;
+}
+/* 柴郡皮膚：選單標籤換字（CSS-only，無需額外 JS）*/
+.void-tab.mode-404 .lb-menu-cn          { font-size:0; }
+.void-tab.mode-404 .lb-menu-cn::after   { content:attr(data-cn-404);   font-size:20px; }
+.void-tab.mode-404 .lb-menu-en          { font-size:0; }
+.void-tab.mode-404 .lb-menu-en::after   { content:attr(data-en-404);   font-size:9px; }
+.void-tab.mode-404 .lb-menu-desc        { font-size:0; }
+.void-tab.mode-404 .lb-menu-desc::after { content:attr(data-desc-404); font-size:9px; }
+/* 柴郡皮膚：左欄角色名 / 副標換字 */
+.void-tab.mode-404 .lb-char-name        { font-size:0; }
+.void-tab.mode-404 .lb-char-name::after { content:attr(data-name-404); font-size:22px; }
+.void-tab.mode-404 .lb-char-sub         { font-size:0; }
+.void-tab.mode-404 .lb-char-sub::after  { content:attr(data-sub-404); font-size:10px; }
+
+/* 選單背景圖 — 瀅瀅皮膚 */
+#void-quest-btn   { background-image:url(../../aseets/藏書_ying.png); }
+#void-chapter-btn { background-image:url(../../aseets/章節選擇_ying.png); }
+#void-exit-btn    { background-image:url(../../aseets/出門_ying.png); }
+/* 選單背景圖 — 柴郡皮膚 */
+.void-tab.mode-404 #void-quest-btn   { background-image:url(../../aseets/禁庫_cheshire.png); }
+.void-tab.mode-404 #void-chapter-btn { background-image:url(../../aseets/異常紀錄_cheshire.png); }
+.void-tab.mode-404 #void-exit-btn    { background-image:url(../../aseets/墜入404_cheshire.png); }
+
+/* 踏入故事：設計圖只有 3 格 → 移出主選單，PWA 暫掛底部（見模板）*/
+.lobby-right #void-story-btn { display:none; }
+
+/* 出門下方：TODAY'S SPECIAL + SPENT POINT 左右卡片 */
+.lb-info-cards {
+    display:flex; gap:8px; flex-shrink:0;
+}
+.lb-info-card {
+    flex:1; display:flex; flex-direction:column; gap:3px;
+    background:var(--lb-panel-2); border:1px solid var(--lb-line);
+    border-radius:5px; padding:10px 14px;
+}
+.lb-info-card-k {
+    font-size:8px; font-weight:800; letter-spacing:1.5px;
+    color:var(--lb-ink-dim); text-transform:uppercase;
+}
+.lb-info-card-v {
+    font-size:13px; font-weight:700; color:var(--lb-ink);
+    font-family:'Courier New',monospace; letter-spacing:0.5px;
+}
+
+/* =========================================================
+   區塊 3：底部列  .void-chat-bar
+   NEWS 跑馬燈 + 今日特調 + 點數 + APP 圖標列 + 輸入框
+   （沿用既有 absolute bottom:0；APP 列在上、輸入框在下不變）
+   ========================================================= */
+.void-tab .void-chat-bar {
+    background: var(--lb-panel) !important;
+    border-top:1px solid var(--lb-line) !important;
+    padding:5px 10px; gap:5px;
+}
+
+/* 3a. 資訊條：NEWS / 今日特調 / 點數 */
+.lb-botbar-info {
+    display:flex; align-items:center; gap:12px;
+    padding:2px 2px 4px; border-bottom:1px solid var(--lb-line-soft);
+    font-size:9px; min-width:0;
+}
+.lb-newsfeed {
+    flex:1; min-width:0; display:flex; align-items:center; gap:6px; overflow:hidden;
+}
+.lb-newsfeed-tag {
+    flex-shrink:0; font-size:8px; font-weight:900; letter-spacing:1px;
+    color:var(--lb-ink); border:1px solid var(--lb-line); border-radius:3px;
+    padding:1px 5px; text-transform:uppercase;
+}
+.lb-newsfeed-track {
+    flex:1; min-width:0; white-space:nowrap; overflow:hidden;
+    color:var(--lb-ink-dim); letter-spacing:0.5px;
+}
+.lb-special, .lb-points {
+    flex-shrink:0; display:flex; align-items:center; gap:5px;
+    color:var(--lb-ink-dim); white-space:nowrap;
+}
+.lb-special-name, .lb-points-val { color:var(--lb-ink); font-weight:800; }
+.lb-points-val { font-family:'Courier New',monospace; }
+@media (max-width:680px) {
+    .lb-special { display:none; }   /* 窄螢幕先收今日特調 */
+}
+
+/* 3b. APP 圖標列 */
+.void-tab:not(.mode-404):not(.mode-claude) .void-hist-btn {
+    background: rgba(228,232,245,0.80) !important;
+    border: 1px solid rgba(26,28,40,0.12) !important;
+    color: #1A1C28 !important;
+}
+.void-tab:not(.mode-404):not(.mode-claude) .void-hist-btn:hover {
+    background: rgba(210,215,235,0.95) !important;
+    border-color: rgba(26,28,40,0.25) !important;
+}
+
+/* 3c. 輸入列 */
+.void-tab .void-input { transform:none; border-radius:4px; }
+.void-tab .void-input:focus { border-color:var(--lb-ink); box-shadow:0 0 0 2px var(--lb-line-soft); }
+.void-tab .void-send-btn { transform:none; border-radius:4px; }
+.void-tab .void-send-btn > i { transform:none; }
+.void-tab .void-retry-btn { transform:none; border-radius:4px; border-color:var(--lb-ink); color:var(--lb-ink); }
+.void-tab .void-retry-btn > i { transform:none; }
+
+/* =========================================================
+   窄螢幕：左右欄改上下堆疊（沿用既有斷點機制）
+   ========================================================= */
+@media (max-width:560px) {
+    .lobby-body { flex-direction:column; top:46px; bottom:92px; }
+    .lobby-left { flex:0 0 42%; border-right:none; border-bottom:1px solid var(--lb-line); }
+    .lobby-right { flex:1 1 auto; }
+    .lobby-right .void-btn { min-height:64px; }
+    .lb-signature { display:none; }
+}
+
+/* =========================================================
+   大廳章節選擇面板 .lcp-*
+   筆記本風格，疊加在大廳右側
+   ========================================================= */
+.lcp-overlay {
+    position:absolute; inset:0; z-index:50;
+    display:flex; align-items:center; justify-content:flex-end;
+    background:rgba(8,10,20,0.42); backdrop-filter:blur(3px);
+    padding:12px 14px 58px 12px;
+    opacity:0; pointer-events:none;
+    transition:opacity 0.32s ease;
+}
+.lcp-overlay.active { opacity:1; pointer-events:auto; }
+
+.lcp-notebook {
+    position:relative;
+    width:min(680px,88vw); max-height:100%;
+    background-image:url('https://files.catbox.moe/5nyb8d.png');
+    background-size:cover; background-position:center;
+    border-radius:6px;
+    box-shadow:0 14px 52px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+    overflow:hidden; display:flex; flex-direction:column;
+    animation:lcpSlideIn 0.32s ease both;
+}
+@keyframes lcpSlideIn { from{transform:translateX(18px);opacity:0} to{transform:none;opacity:1} }
+
+/* Spine shadow on left */
+.lcp-notebook::before {
+    content:''; position:absolute; left:0; top:0; bottom:0; width:36px;
+    background:linear-gradient(90deg,rgba(80,90,120,0.22) 0%,rgba(80,90,120,0.06) 60%,transparent 100%);
+    z-index:2; pointer-events:none;
+}
+
+/* Ring holes */
+.lcp-rings { position:absolute; right:5px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:68px; z-index:3; pointer-events:none; }
+.lcp-ring { width:10px; height:10px; border-radius:50%; border:1.5px solid rgba(145,135,120,0.32); background:rgba(30,40,60,0.18); }
+
+/* Close button */
+.lcp-close-btn { position:absolute; top:16px; right:20px; width:26px; height:26px; border-radius:50%; background:rgba(175,166,152,0.44); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10; color:#6b6157; font-size:12px; transition:background 0.2s; line-height:1; }
+.lcp-close-btn:hover { background:rgba(155,145,130,0.64); }
+
+/* Inner */
+.lcp-inner { padding:20px 26px 16px 44px; display:flex; flex-direction:column; height:100%; min-height:0; gap:10px; }
+
+/* Header */
+.lcp-header { display:flex; align-items:baseline; gap:14px; flex-shrink:0; }
+.lcp-hdr-left { display:flex; flex-direction:column; }
+.lcp-title { font-size:22px; font-weight:900; color:#3a3530; letter-spacing:5px; line-height:1.2; }
+.lcp-title-en { font-size:9px; color:#9c9083; letter-spacing:3px; text-transform:uppercase; margin-top:2px; }
+.lcp-hdr-divider { width:1.5px; height:32px; background:#9c9083; opacity:0.32; align-self:center; flex-shrink:0; }
+.lcp-hdr-zh { font-size:11px; font-weight:600; color:#6b6157; letter-spacing:2px; }
+.lcp-hdr-en { font-size:8.5px; color:#9c9083; letter-spacing:2px; text-transform:uppercase; }
+
+/* Cards area */
+.lcp-cards-area { flex:1; min-height:0; display:flex; flex-direction:column; }
+.lcp-cards-viewport { flex:1; min-height:0; position:relative; display:flex; align-items:stretch; }
+.lcp-cards-track { flex:1; display:flex; gap:12px; padding:2px 2px 6px 2px; overflow:hidden; }
+
+/* Card */
+.lcp-card { flex:1; min-width:0; background:rgba(246,241,232,0.93); border:1.5px solid #d4c9b6; border-radius:10px; position:relative; display:flex; flex-direction:column; padding:0 11px 11px 11px; cursor:pointer; transition:transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s; box-shadow:0 2px 8px rgba(58,53,48,0.12); animation:lcpCardIn 0.4s ease both; }
+.lcp-card:nth-child(1){animation-delay:0.05s} .lcp-card:nth-child(2){animation-delay:0.15s} .lcp-card:nth-child(3){animation-delay:0.25s}
+@keyframes lcpCardIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.lcp-card:hover { transform:translateY(-3px); box-shadow:0 7px 22px rgba(58,53,48,0.22); border-color:#7a9ab5; }
+.lcp-card.lcp-active { border-color:#7a9ab5; box-shadow:0 2px 14px rgba(122,154,181,0.25); }
+
+/* Bookmark ribbon */
+.lcp-ribbon { position:absolute; top:-5px; left:50%; transform:translateX(-50%); width:42px; height:50px; z-index:2; }
+.lcp-ribbon img { width:100%; height:100%; object-fit:contain; }
+.lcp-ribbon.gold { filter:hue-rotate(28deg) saturate(1.1) brightness(1.06); }
+.lcp-spacer { height:44px; }
+
+.lcp-chapter-label { font-size:8px; letter-spacing:3px; text-transform:uppercase; color:#9c9083; text-align:center; margin-top:3px; }
+.lcp-chapter-num { font-size:28px; font-weight:500; color:#3a3530; text-align:center; line-height:1; margin:2px 0 4px; font-family:'Georgia',serif; }
+.lcp-chapter-title { font-size:12px; font-weight:700; color:#3a3530; text-align:center; letter-spacing:1.5px; line-height:1.3; }
+.lcp-chapter-story { font-size:9px; color:#9c9083; text-align:center; margin-top:2px; margin-bottom:6px; letter-spacing:0.5px; font-style:italic; }
+.lcp-scene { width:100%; aspect-ratio:4/3; border-radius:5px; overflow:hidden; margin-bottom:7px; display:flex; align-items:center; justify-content:center; font-size:22px; }
+.lcp-card-date { font-size:8.5px; color:#9c9083; text-align:center; margin-bottom:5px; }
+.lcp-card-status { margin-top:auto; display:flex; align-items:center; gap:5px; }
+.lcp-status-txt { font-size:8.5px; font-weight:700; color:#5c7e99; letter-spacing:1px; white-space:nowrap; }
+.lcp-status-bar { flex:1; height:2.5px; background:#d6cfc3; border-radius:2px; overflow:hidden; }
+.lcp-status-fill { height:100%; width:100%; background:#7a9ab5; border-radius:2px; }
+.lcp-status-pct { font-size:9.5px; color:#6b6157; min-width:26px; text-align:right; }
+
+/* Nav */
+.lcp-nav { position:absolute; top:50%; transform:translateY(-50%); width:24px; height:24px; border-radius:50%; background:rgba(195,186,172,0.52); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:5; color:#6b6157; font-size:15px; line-height:1; transition:background 0.2s; padding:0; }
+.lcp-nav:hover { background:rgba(175,165,150,0.72); }
+.lcp-nav:disabled { opacity:0.28; cursor:default; }
+.lcp-prev { left:-13px; }
+.lcp-next { right:-16px; }
+
+/* Dots */
+.lcp-dots { display:flex; justify-content:center; gap:6px; padding:6px 0 8px; flex-shrink:0; }
+.lcp-dot { width:6px; height:6px; border-radius:50%; background:#d6cfc3; border:none; cursor:pointer; transition:all 0.28s; padding:0; }
+.lcp-dot.active { background:#7a9ab5; width:15px; border-radius:3px; }
+
+/* Bottom */
+.lcp-bottom { display:flex; align-items:stretch; background:rgba(238,232,220,0.58); border:1px solid #d4c9b6; border-radius:7px; overflow:hidden; min-height:62px; flex-shrink:0; }
+.lcp-bottom-sec { padding:8px 13px; display:flex; align-items:center; gap:9px; }
+.lcp-bottom-sec:not(:last-child) { border-right:1px solid #d4c9b6; }
+.lcp-last-read { flex:1.2; }
+.lcp-last-thumb { width:44px; height:32px; border-radius:4px; background:linear-gradient(135deg,#7a8a9a,#5a6a7a); flex-shrink:0; }
+.lcp-last-info { display:flex; flex-direction:column; gap:1px; }
+.lcp-sec-label { font-size:8px; color:#9c9083; letter-spacing:1px; font-weight:600; }
+.lcp-sec-en { font-size:7px; color:#9c9083; letter-spacing:1.5px; text-transform:uppercase; opacity:0.7; }
+.lcp-last-title { font-size:11px; font-weight:600; color:#3a3530; letter-spacing:0.5px; }
+.lcp-last-meta { font-size:8px; color:#9c9083; }
+.lcp-stat-sec { flex-direction:column; align-items:flex-start; justify-content:center; gap:2px; flex:0.65; }
+.lcp-big-num { font-size:26px; font-weight:500; color:#3a3530; line-height:1; font-family:'Georgia',serif; }
+.lcp-quote-sec { flex:1; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:3px; padding:8px 10px; }
+.lcp-quote-text { font-size:10px; color:#6b6157; font-style:italic; line-height:1.5; letter-spacing:0.5px; }
+.lcp-quote-author { font-size:8.5px; color:#9c9083; font-style:italic; }
+.lcp-back-sec { flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; gap:1px; cursor:pointer; transition:background 0.2s; padding:8px 12px; }
+.lcp-back-sec:hover { background:rgba(195,186,172,0.28); }
+.lcp-back-zh { font-size:10.5px; font-weight:600; color:#3a3530; letter-spacing:2px; white-space:nowrap; }
+.lcp-back-en { font-size:7px; color:#9c9083; letter-spacing:1.5px; text-transform:uppercase; }
+.lcp-back-arrow { font-size:14px; color:#9c9083; }
+
+/* Empty state */
+.lcp-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:#9c9083; font-size:12px; gap:8px; padding:20px; text-align:center; line-height:1.6; }

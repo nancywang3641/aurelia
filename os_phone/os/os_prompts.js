@@ -1,4 +1,4 @@
-// ----------------------------------------------------------------
+﻿// ----------------------------------------------------------------
 // [檔案] os_prompts.js (V4.6 - Ultimate Isolation & Full UI Restored)
 // 職責：管理 AI 提示詞。硬編碼系統Prompt不開放編輯；
 //       行為條目 (COT) 與 Iris/Cheshire 人設可由用戶自訂。
@@ -822,37 +822,37 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     // ================================================================
 
     const CSS = `
-        .pm-wrap { background:#1a0d0a; color:#FFF8E7; height:100%; display:flex; flex-direction:column; font-family:sans-serif; position:relative; overflow:hidden; }
+        .pm-wrap { background:#EEF0F6; color:#1A1C28; height:100%; display:flex; flex-direction:column; font-family:sans-serif; position:relative; overflow:hidden; }
 
         /* Header */
-        .pm-header { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:rgba(69,34,22,0.85); border-bottom:1px solid rgba(251,223,162,0.3); flex-shrink:0; }
+        .pm-header { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:rgba(228,232,245,0.92); border-bottom:1px solid rgba(26,28,40,0.15); flex-shrink:0; }
         .pm-header { padding-top:calc(15px + env(safe-area-inset-top, 0px)); }
         body.layout-pad-ios .pm-header { padding-top:55px !important; }
-        .pm-back-btn { font-size:24px; cursor:pointer; color:#B78456; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:50%; transition:all 0.2s; user-select:none; }
-        .pm-title { font-weight:800; font-size:18px; letter-spacing:2px; flex:1; text-align:center; color:#FBDFA2; }
+        .pm-back-btn { font-size:24px; cursor:pointer; color:rgba(26,28,40,0.72); width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:50%; transition:all 0.2s; user-select:none; }
+        .pm-title { font-weight:800; font-size:18px; letter-spacing:2px; flex:1; text-align:center; color:#1A1C28; }
         .pm-header-actions { display: flex; align-items: center; }
-        .pm-header-action { font-size: 16px; cursor: pointer; color: #B78456; padding: 4px; margin-left: 8px; border-radius: 4px; transition: .2s; }
-        .pm-header-action:hover { color: #FBDFA2; background: rgba(251,223,162,.1); }
+        .pm-header-action { font-size: 16px; cursor: pointer; color: rgba(26,28,40,0.72); padding: 4px; margin-left: 8px; border-radius: 4px; transition: .2s; }
+        .pm-header-action:hover { color: #1A1C28; background: rgba(26,28,40,0.1); }
 
         /* Tabs */
-        .pm-tabs  { display:flex; border-bottom:1px solid rgba(251,223,162,0.3); flex-shrink:0; background:rgba(69,34,22,0.9); }
-        .pm-tab   { flex:1; padding:10px 0; text-align:center; font-size:13px; cursor:pointer; color:#B78456; border-bottom:2px solid transparent; transition:all .2s; }
-        .pm-tab.active { color:#FBDFA2; border-bottom-color:#FBDFA2; }
+        .pm-tabs  { display:flex; border-bottom:1px solid rgba(26,28,40,0.15); flex-shrink:0; background:rgba(228,232,245,0.96); }
+        .pm-tab   { flex:1; padding:10px 0; text-align:center; font-size:13px; cursor:pointer; color:rgba(26,28,40,0.72); border-bottom:2px solid transparent; transition:all .2s; }
+        .pm-tab.active { color:#1A1C28; border-bottom-color:#1A1C28; }
 
         /* Body */
         .pm-body  { flex:1; overflow-y:auto; padding:10px 10px 80px; }
 
         /* ── 統一列表（預設包列表）── */
-        .pm-uni-item { background:rgba(120,55,25,0.6); border:1px solid rgba(251,223,162,0.2); border-radius:8px; margin-bottom:8px; overflow:hidden; cursor:grab; user-select:none; transition:border-color .15s,background .15s; }
-        .pm-uni-item:hover { border-color:#FBDFA2; }
+        .pm-uni-item { background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.10); border-radius:8px; margin-bottom:8px; overflow:hidden; cursor:grab; user-select:none; transition:border-color .15s,background .15s; }
+        .pm-uni-item:hover { border-color:#1A1C28; }
         .pm-uni-item.dragging { opacity:.4; cursor:grabbing; }
-        .pm-uni-item.drag-over { border-color:#FBDFA2; background:rgba(251,223,162,0.15); }
+        .pm-uni-item.drag-over { border-color:#1A1C28; background:rgba(26,28,40,0.08); }
         .pm-uni-head { display:flex; align-items:center; padding:10px 12px; gap:8px; }
-        .pm-uni-handle { color:#B78456; font-size:1rem; flex-shrink:0; cursor:grab; }
-        .pm-uni-label  { flex:1; font-size:14px; font-weight:600; color:#FFF8E7; }
-        .pm-entry-toggle { width:18px; height:18px; accent-color:#FBDFA2; cursor:pointer; flex-shrink:0; }
-        .pm-icon-btn { font-size:12px; color:#B78456; cursor:pointer; padding:2px 6px; border:1px solid rgba(251,223,162,0.3); border-radius:4px; background:none; flex-shrink:0; }
-        .pm-icon-btn:hover { color:#FBDFA2; background:rgba(251,223,162,0.1); }
+        .pm-uni-handle { color:rgba(26,28,40,0.72); font-size:1rem; flex-shrink:0; cursor:grab; }
+        .pm-uni-label  { flex:1; font-size:14px; font-weight:600; color:#1A1C28; }
+        .pm-entry-toggle { width:18px; height:18px; accent-color:#1A1C28; cursor:pointer; flex-shrink:0; }
+        .pm-icon-btn { font-size:12px; color:rgba(26,28,40,0.72); cursor:pointer; padding:2px 6px; border:1px solid rgba(26,28,40,0.15); border-radius:4px; background:none; flex-shrink:0; }
+        .pm-icon-btn:hover { color:#1A1C28; background:rgba(26,28,40,0.06); }
         .pm-icon-btn.del { color:#fc8181; border-color:rgba(252,129,129,0.3); }
         .pm-icon-btn.del:hover { background:rgba(252,129,129,0.1); }
 
@@ -863,81 +863,81 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         /* ── Bundle Edit Modal (slide-in, Layer 2) ── */
         .pm-bmodal { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(20,10,5,0.95); backdrop-filter: blur(5px); z-index:60; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .22s cubic-bezier(.4,0,.2,1); }
         .pm-bmodal.open { transform:translateX(0); }
-        .pm-bmodal-hd { display:flex; align-items:center; padding:0 12px; padding-top:env(safe-area-inset-top, 0px); height:calc(48px + env(safe-area-inset-top, 0px)); gap:8px; border-bottom:1px solid rgba(251,223,162,0.3); flex-shrink:0; background:rgba(69,34,22,0.9); }
-        .pm-bmodal-back { font-size:22px; color:#B78456; cursor:pointer; padding:0 6px 2px; background:none; border:none; line-height:1; flex-shrink:0; }
-        .pm-bmodal-back:hover { color:#FBDFA2; }
-        .pm-bmodal-title { flex:1; font-size:14px; font-weight:600; color:#FBDFA2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .pm-bmodal-hd { display:flex; align-items:center; padding:0 12px; padding-top:env(safe-area-inset-top, 0px); height:calc(48px + env(safe-area-inset-top, 0px)); gap:8px; border-bottom:1px solid rgba(26,28,40,0.15); flex-shrink:0; background:rgba(228,232,245,0.96); }
+        .pm-bmodal-back { font-size:22px; color:rgba(26,28,40,0.72); cursor:pointer; padding:0 6px 2px; background:none; border:none; line-height:1; flex-shrink:0; }
+        .pm-bmodal-back:hover { color:#1A1C28; }
+        .pm-bmodal-title { flex:1; font-size:14px; font-weight:600; color:#1A1C28; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .pm-bmodal-body { flex:1; overflow-y:auto; padding:10px 12px 60px; }
         /* Modal form fields */
         .pm-bundle-name-row { display:flex; gap:6px; margin:10px 0 8px; }
-        .pm-bundle-name-input { flex:1; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); color:#FFF8E7; padding:6px 8px; border-radius:4px; font-size:13px; box-sizing:border-box; }
-        .pm-bundle-save { background:#FBDFA2; color:#452216; border:none; border-radius:4px; padding:5px 14px; font-size:12px; cursor:pointer; white-space:nowrap; font-weight:bold; }
+        .pm-bundle-name-input { flex:1; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); color:#1A1C28; padding:6px 8px; border-radius:4px; font-size:13px; box-sizing:border-box; }
+        .pm-bundle-save { background:#1A1C28; color:#EEF0F6; border:none; border-radius:4px; padding:5px 14px; font-size:12px; cursor:pointer; white-space:nowrap; font-weight:bold; }
         .pm-panel-row  { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:10px; }
-        .pm-panel-row-label { font-size:11px; color:#B78456; flex-shrink:0; }
-        .pm-panel-cb   { display:flex; align-items:center; gap:3px; font-size:12px; color:#E0D8C8; cursor:pointer; user-select:none; }
-        .pm-panel-cb input { width:14px; height:14px; accent-color:#FBDFA2; cursor:pointer; }
+        .pm-panel-row-label { font-size:11px; color:rgba(26,28,40,0.72); flex-shrink:0; }
+        .pm-panel-cb   { display:flex; align-items:center; gap:3px; font-size:12px; color:#3A3F5C; cursor:pointer; user-select:none; }
+        .pm-panel-cb input { width:14px; height:14px; accent-color:#1A1C28; cursor:pointer; }
 
         /* Bundle inner drag list (sys slots + entries) */
-        .pm-bundle-inner-list { background:rgba(0,0,0,0.2); border:1px solid rgba(251,223,162,0.1); border-radius:6px; padding:5px; margin-bottom:10px; min-height:40px; }
+        .pm-bundle-inner-list { background:rgba(0,0,0,0.2); border:1px solid rgba(26,28,40,0.06); border-radius:6px; padding:5px; margin-bottom:10px; min-height:40px; }
         .pm-bitem { display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:5px; margin-bottom:3px; font-size:12px; cursor:grab; user-select:none; transition:background .1s; }
         .pm-bitem:last-child { margin-bottom:0; }
-        .pm-bitem-sys   { background:rgba(69,34,22,0.8); color:#FBDFA2; border:1px dashed rgba(251,223,162,0.5); cursor:grab; }
-        .pm-bitem-entry { background:rgba(120,55,25,0.6); color:#FFF8E7; border:1px solid rgba(251,223,162,0.2); cursor:grab; }
+        .pm-bitem-sys   { background:rgba(228,232,245,0.90); color:#1A1C28; border:1px dashed rgba(26,28,40,0.30); cursor:grab; }
+        .pm-bitem-entry { background:rgba(228,232,245,0.60); color:#1A1C28; border:1px solid rgba(26,28,40,0.10); cursor:grab; }
         .pm-bitem.dragging  { opacity:.4; }
-        .pm-bitem.drag-over { outline:1px solid #FBDFA2; background:rgba(251,223,162,.15); }
-        .pm-bi-handle { color:#B78456; flex-shrink:0; }
+        .pm-bitem.drag-over { outline:1px solid rgba(26,28,40,0.25); background:rgba(26,28,40,0.15); }
+        .pm-bi-handle { color:rgba(26,28,40,0.72); flex-shrink:0; }
         .pm-bi-icon   { font-size:13px; flex-shrink:0; }
         .pm-bi-label  { flex:1; }
-        .pm-bi-desc   { font-size:10px; color:#B78456; }
+        .pm-bi-desc   { font-size:10px; color:rgba(26,28,40,0.72); }
         .pm-bi-rm     { background:none; border:none; color:#fc8181; cursor:pointer; font-size:14px; padding:0 3px; flex-shrink:0; line-height:1; }
         
         /* 全域 CoT 編輯區塊 */
-        .pm-gcot-block { background:rgba(69,34,22,0.6); border:1px solid rgba(251,223,162,0.3); border-radius:8px; margin-bottom:12px; overflow:hidden; }
+        .pm-gcot-block { background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.15); border-radius:8px; margin-bottom:12px; overflow:hidden; }
         .pm-gcot-head  { display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; user-select:none; }
-        .pm-gcot-title { flex:1; font-size:13px; color:#FBDFA2; font-weight:600; }
-        .pm-gcot-badge { font-size:10px; color:#B78456; }
+        .pm-gcot-title { flex:1; font-size:13px; color:#1A1C28; font-weight:600; }
+        .pm-gcot-badge { font-size:10px; color:rgba(26,28,40,0.72); }
         .pm-gcot-body  { display:none; padding:0 12px 12px; }
         .pm-gcot-body.open { display:block; }
-        .pm-gcot-ta    { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); color:#FFF8E7; padding:8px; border-radius:4px; font-family:monospace; font-size:12px; min-height:100px; line-height:1.5; box-sizing:border-box; resize:vertical; }
-        .pm-gcot-save  { background:#FBDFA2; color:#452216; border:none; border-radius:4px; padding:5px 14px; font-size:12px; cursor:pointer; margin-top:8px; font-weight:bold; }
+        .pm-gcot-ta    { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); color:#1A1C28; padding:8px; border-radius:4px; font-family:monospace; font-size:12px; min-height:100px; line-height:1.5; box-sizing:border-box; resize:vertical; }
+        .pm-gcot-save  { background:#1A1C28; color:#EEF0F6; border:none; border-radius:4px; padding:5px 14px; font-size:12px; cursor:pointer; margin-top:8px; font-weight:bold; }
 
         /* Staging chips (inside bundle expand) */
-        .pm-bundle-staging-label { font-size:11px; color:#B78456; margin-bottom:6px; }
+        .pm-bundle-staging-label { font-size:11px; color:rgba(26,28,40,0.72); margin-bottom:6px; }
         .pm-bundle-staging { display:flex; flex-wrap:wrap; gap:6px; }
-        .pm-stg-chip { background:rgba(251,223,162,0.1); border:1px solid #FBDFA2; border-radius:12px; color:#FBDFA2; font-size:11px; padding:3px 10px; cursor:pointer; transition:background .1s; }
-        .pm-stg-chip:hover { background:rgba(251,223,162,0.25); }
-        .pm-stg-empty { font-size:11px; color:#B78456; }
+        .pm-stg-chip { background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.25); border-radius:12px; color:#1A1C28; font-size:11px; padding:3px 10px; cursor:pointer; transition:background .1s; }
+        .pm-stg-chip:hover { background:rgba(26,28,40,0.12); }
+        .pm-stg-empty { font-size:11px; color:rgba(26,28,40,0.72); }
 
         /* ── 預載區 (Staging pool at bottom) ── */
         .pm-staging-section { margin-top:16px; }
-        .pm-staging-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(251,223,162,0.3); }
-        .pm-staging-title { flex:1; font-size:12px; color:#B78456; font-weight:600; letter-spacing:.05em; }
-        .pm-add-btn { padding:5px 12px; background:rgba(251,223,162,0.1); border:1px solid #FBDFA2; border-radius:6px; color:#FBDFA2; font-size:12px; cursor:pointer; }
-        .pm-add-btn:hover { background:rgba(251,223,162,0.25); }
-        .pm-staging-entry { background:rgba(120,55,25,0.6); border:1px solid rgba(251,223,162,0.2); border-radius:6px; margin-bottom:6px; overflow:hidden; }
+        .pm-staging-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(26,28,40,0.15); }
+        .pm-staging-title { flex:1; font-size:12px; color:rgba(26,28,40,0.72); font-weight:600; letter-spacing:.05em; }
+        .pm-add-btn { padding:5px 12px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.25); border-radius:6px; color:#1A1C28; font-size:12px; cursor:pointer; }
+        .pm-add-btn:hover { background:rgba(26,28,40,0.12); }
+        .pm-staging-entry { background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.10); border-radius:6px; margin-bottom:6px; overflow:hidden; }
         .pm-staging-head  { display:flex; align-items:center; gap:8px; padding:8px 10px; }
-        .pm-staging-name  { flex:1; font-size:13px; color:#FFF8E7; }
+        .pm-staging-name  { flex:1; font-size:13px; color:#1A1C28; }
         .pm-staging-body  { display:none; padding:0 10px 10px; cursor:default; }
         .pm-staging-body.open { display:block; }
-        .pm-entry-name-input { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); color:#FFF8E7; padding:6px 8px; border-radius:4px; font-size:13px; margin-bottom:6px; box-sizing:border-box; }
-        .pm-entry-ta { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); color:#FFF8E7; padding:8px; border-radius:4px; font-family:monospace; font-size:12px; min-height:120px; line-height:1.5; box-sizing:border-box; resize:vertical; }
-        .pm-entry-save { background:#FBDFA2; color:#452216; border:none; border-radius:4px; padding:5px 14px; font-size:12px; cursor:pointer; margin-top:8px; font-weight:bold; }
-        .pm-staging-empty { color:#B78456; font-size:12px; text-align:center; padding:12px; }
+        .pm-entry-name-input { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); color:#1A1C28; padding:6px 8px; border-radius:4px; font-size:13px; margin-bottom:6px; box-sizing:border-box; }
+        .pm-entry-ta { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); color:#1A1C28; padding:8px; border-radius:4px; font-family:monospace; font-size:12px; min-height:120px; line-height:1.5; box-sizing:border-box; resize:vertical; }
+        .pm-entry-save { background:#1A1C28; color:#EEF0F6; border:none; border-radius:4px; padding:5px 14px; font-size:12px; cursor:pointer; margin-top:8px; font-weight:bold; }
+        .pm-staging-empty { color:rgba(26,28,40,0.72); font-size:12px; text-align:center; padding:12px; }
 
         /* New bundle button */
-        .pm-add-bundle-btn { width:100%; padding:10px; background:rgba(120,55,25,0.4); border:1px dashed #FBDFA2; border-radius:8px; color:#FBDFA2; font-size:13px; cursor:pointer; text-align:center; margin-bottom:4px; }
-        .pm-add-bundle-btn:hover { background:rgba(120,55,25,0.6); }
+        .pm-add-bundle-btn { width:100%; padding:10px; background:rgba(228,232,245,0.4); border:1px dashed rgba(26,28,40,0.25); border-radius:8px; color:#1A1C28; font-size:13px; cursor:pointer; text-align:center; margin-bottom:4px; }
+        .pm-add-bundle-btn:hover { background:rgba(228,232,245,0.60); }
 
         /* Persona tab */
-        .pm-persona-block { background:rgba(69,34,22,0.6); border:1px solid rgba(251,223,162,0.3); border-radius:8px; padding:14px; margin-bottom:12px; }
-        .pm-persona-label { font-size:13px; color:#FBDFA2; font-weight:700; margin-bottom:8px; }
-        .pm-persona-desc  { font-size:11px; color:#B78456; margin-bottom:8px; }
-        .pm-persona-ta    { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(251,223,162,0.4); color:#FFF8E7; padding:8px; border-radius:4px; font-family:monospace; font-size:12px; min-height:120px; line-height:1.5; box-sizing:border-box; resize:vertical; }
-        .pm-persona-save  { background:#FBDFA2; color:#452216; border:none; border-radius:4px; padding:6px 18px; font-size:12px; cursor:pointer; margin-top:8px; font-weight:bold; }
+        .pm-persona-block { background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.15); border-radius:8px; padding:14px; margin-bottom:12px; }
+        .pm-persona-label { font-size:13px; color:#1A1C28; font-weight:700; margin-bottom:8px; }
+        .pm-persona-desc  { font-size:11px; color:rgba(26,28,40,0.72); margin-bottom:8px; }
+        .pm-persona-ta    { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); color:#1A1C28; padding:8px; border-radius:4px; font-family:monospace; font-size:12px; min-height:120px; line-height:1.5; box-sizing:border-box; resize:vertical; }
+        .pm-persona-save  { background:#1A1C28; color:#EEF0F6; border:none; border-radius:4px; padding:6px 18px; font-size:12px; cursor:pointer; margin-top:8px; font-weight:bold; }
         .pm-persona-save:active { opacity:.7; }
 
         /* Empty hint */
-        .pm-empty { text-align:center; color:#B78456; padding:40px 20px; font-size:13px; }
+        .pm-empty { text-align:center; color:rgba(26,28,40,0.72); padding:40px 20px; font-size:13px; }
     `;
 
     const targetDoc = (window.parent && window.parent.document) ? window.parent.document : document;
@@ -1140,7 +1140,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             modal.querySelector('.pm-bmodal-title').textContent = `📦 ${newName}`;
             renderUnified(bodyEl);
             const btn = modal.querySelector('.pm-bmodal-sv');
-            btn.textContent = '已保存 ✓'; btn.style.background = '#6b8e23'; btn.style.color = '#FFF8E7';
+            btn.textContent = '已保存 ✓'; btn.style.background = '#6b8e23'; btn.style.color = '#1A1C28';
             setTimeout(() => { btn.textContent = '保存'; btn.style.background = ''; btn.style.color = ''; }, 1200);
         };
 
@@ -1172,7 +1172,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             saveUniversalCot(val);
             gcot.querySelector('.pm-gcot-badge').textContent = (val.trim() ? '已設定' : '未設定') + ' · 所有未配置面板的 fallback';
             const btn = gcot.querySelector('.pm-gcot-save');
-            btn.textContent = '✓ 已保存'; btn.style.background = '#6b8e23'; btn.style.color = '#FFF8E7'; 
+            btn.textContent = '✓ 已保存'; btn.style.background = '#6b8e23'; btn.style.color = '#1A1C28'; 
             setTimeout(() => { btn.textContent = '💾 保存'; btn.style.background = ''; btn.style.color = ''; }, 1200);
         };
         body.appendChild(gcot);
@@ -1336,7 +1336,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 saveEntries(list);
                 card.querySelector('.pm-staging-name').textContent = list[idx].name;
                 const btn = card.querySelector('.pm-entry-save');
-                btn.textContent = '已保存 ✓'; btn.style.background = '#6b8e23'; btn.style.color = '#FFF8E7';
+                btn.textContent = '已保存 ✓'; btn.style.background = '#6b8e23'; btn.style.color = '#1A1C28';
                 setTimeout(() => { btn.textContent = '保存'; btn.style.background = ''; btn.style.color = ''; }, 1200);
                 card.querySelector('.pm-staging-body').classList.remove('open');
             };
@@ -1363,12 +1363,12 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
 
         body.querySelector('#pm-iris-save').onclick = function() {
             saveIris(body.querySelector('#pm-iris-ta').value);
-            this.textContent = '已保存 ✓'; this.style.background = '#6b8e23'; this.style.color = '#FFF8E7';
+            this.textContent = '已保存 ✓'; this.style.background = '#6b8e23'; this.style.color = '#1A1C28';
             setTimeout(() => { this.textContent = '保存 Iris 人設'; this.style.background = ''; this.style.color = ''; }, 1200);
         };
         body.querySelector('#pm-chess-save').onclick = function() {
             saveCheshire(body.querySelector('#pm-chess-ta').value);
-            this.textContent = '已保存 ✓'; this.style.background = '#6b8e23'; this.style.color = '#FFF8E7';
+            this.textContent = '已保存 ✓'; this.style.background = '#6b8e23'; this.style.color = '#1A1C28';
             setTimeout(() => { this.textContent = '保存 Cheshire 人設'; this.style.background = ''; this.style.color = ''; }, 1200);
         };
     }
@@ -1437,21 +1437,21 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 <button class="pm-bundle-save" id="st-modal-import">匯入選中</button>
             </div>
             <div class="pm-bmodal-body">
-                <div style="font-size:12px; color:#B78456; margin-bottom:12px; line-height:1.4;">
+                <div style="font-size:12px; color:rgba(26,28,40,0.72); margin-bottom:12px; line-height:1.4;">
                     系統掃描到這是一個 ST Preset。<br>請勾選你想提取並轉換為「本地條目」的提示詞區塊：
                 </div>
         `;
 
         stBlocks.forEach((b, idx) => {
             html += `
-                <div class="pm-staging-entry" style="margin-bottom:8px; border-color:rgba(251,223,162,0.3);">
+                <div class="pm-staging-entry" style="margin-bottom:8px; border-color:rgba(26,28,40,0.15);">
                     <div class="pm-staging-head">
-                        <input type="checkbox" class="st-block-cb" data-idx="${idx}" checked style="width:16px; height:16px; accent-color:#FBDFA2;">
-                        <span class="pm-staging-name" style="color:#FBDFA2;">${b.title}</span>
+                        <input type="checkbox" class="st-block-cb" data-idx="${idx}" checked style="width:16px; height:16px; accent-color:#1A1C28;">
+                        <span class="pm-staging-name" style="color:#1A1C28;">${b.title}</span>
                         <button class="pm-icon-btn" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">👁️ 預覽</button>
                     </div>
                     <div class="pm-staging-body" style="padding:0 10px 10px; display:none;">
-                        <textarea class="pm-entry-ta" readonly style="height:100px; color:#E0D8C8; border-color:rgba(251,223,162,0.3);">${b.content.replace(/</g, '&lt;')}</textarea>
+                        <textarea class="pm-entry-ta" readonly style="height:100px; color:#3A3F5C; border-color:rgba(26,28,40,0.15);">${b.content.replace(/</g, '&lt;')}</textarea>
                     </div>
                 </div>
             `;

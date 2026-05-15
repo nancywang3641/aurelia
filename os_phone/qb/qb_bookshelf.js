@@ -1,4 +1,4 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // [檔案] qb_bookshelf.js (v1.6 - 動態人設防汙染預覽版)
 // 職責：書架視窗模組 — 書脊渲染、書封面展開、撰寫新書、刪除確認彈窗
 // 從 void_terminal.js 抽出，完全無狀態，依賴全域物件：
@@ -74,28 +74,28 @@
         dlg.innerHTML = `
             <div style="
                 background:linear-gradient(160deg,#1a1008,#0d0804);
-                border:1px solid rgba(183,132,86,0.45);
+                border:1px solid rgba(210,215,235,0.45);
                 border-radius:10px;padding:24px 28px;max-width:340px;width:90%;
-                box-shadow:0 8px 40px rgba(0,0,0,0.8);color:#FBDFA2;font-family:'Noto Sans TC',sans-serif;
+                box-shadow:0 8px 40px rgba(0,0,0,0.8);color:#1A1C28;font-family:'Noto Sans TC',sans-serif;
             ">
                 <div style="font-size:15px;font-weight:700;margin-bottom:8px;">📕 刪除《${cardName}》</div>
-                <div style="font-size:12px;color:rgba(251,223,162,0.6);margin-bottom:18px;line-height:1.6;">
+                <div style="font-size:12px;color:rgba(26,28,40,0.68);margin-bottom:18px;line-height:1.6;">
                     請選擇刪除範圍：
                 </div>
 
                 <div id="qb-del-scope" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
-                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:8px 10px;border-radius:6px;border:1px solid rgba(251,223,162,0.15);transition:border-color 0.2s;" id="qb-del-opt-book">
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:8px 10px;border-radius:6px;border:1px solid rgba(26,28,40,0.08);transition:border-color 0.2s;" id="qb-del-opt-book">
                         <input type="radio" name="qb-del-scope" value="book" checked style="margin-top:2px;accent-color:#e67e22;">
                         <span>
                             <strong style="font-size:13px;">只刪書籍</strong>
-                            <div style="font-size:11px;color:rgba(251,223,162,0.45);margin-top:2px;">書脊移除，其他資料保留</div>
+                            <div style="font-size:11px;color:rgba(26,28,40,0.25);margin-top:2px;">書脊移除，其他資料保留</div>
                         </span>
                     </label>
-                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:8px 10px;border-radius:6px;border:1px solid rgba(251,223,162,0.15);transition:border-color 0.2s;" id="qb-del-opt-all">
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:8px 10px;border-radius:6px;border:1px solid rgba(26,28,40,0.08);transition:border-color 0.2s;" id="qb-del-opt-all">
                         <input type="radio" name="qb-del-scope" value="all" style="margin-top:2px;accent-color:#e53e3e;">
                         <span>
                             <strong style="font-size:13px;color:#fc8181;">完整清除</strong>
-                            <div style="font-size:11px;color:rgba(251,223,162,0.45);margin-top:2px;">
+                            <div style="font-size:11px;color:rgba(26,28,40,0.25);margin-top:2px;">
                                 書籍
                                 ${hasVarPack ? '＋ 變數包' : ''}
                                 ＋ 世界書條目（分類「${cardName}」）
@@ -106,8 +106,8 @@
 
                 <div style="display:flex;gap:10px;">
                     <button id="qb-del-cancel" style="
-                        flex:1;background:rgba(251,223,162,0.08);border:1px solid rgba(251,223,162,0.2);
-                        color:rgba(251,223,162,0.6);border-radius:6px;padding:9px;font-size:13px;cursor:pointer;
+                        flex:1;background:rgba(26,28,40,0.08);border:1px solid rgba(26,28,40,0.10);
+                        color:rgba(26,28,40,0.68);border-radius:6px;padding:9px;font-size:13px;cursor:pointer;
                         font-family:inherit;transition:background 0.2s;">取消</button>
                     <button id="qb-del-confirm" style="
                         flex:1;background:rgba(180,30,30,0.7);border:1px solid rgba(220,50,50,0.4);
@@ -122,10 +122,10 @@
         const labels = [dlg.querySelector('#qb-del-opt-book'), dlg.querySelector('#qb-del-opt-all')];
         radios.forEach((r, i) => {
             r.onchange = () => labels.forEach((l, j) => {
-                l.style.borderColor = j === i ? 'rgba(251,223,162,0.5)' : 'rgba(251,223,162,0.15)';
+                l.style.borderColor = j === i ? 'rgba(26,28,40,0.30)' : 'rgba(26,28,40,0.08)';
             });
         });
-        labels[0].style.borderColor = 'rgba(251,223,162,0.5)';
+        labels[0].style.borderColor = 'rgba(26,28,40,0.30)';
 
         dlg.querySelector('#qb-del-cancel').onclick  = () => dlg.remove();
         dlg.querySelector('#qb-del-confirm').onclick = async () => {
@@ -207,7 +207,7 @@
         spine.innerHTML = `
             <div style="position:absolute;inset:0;background:rgba(0,0,0,${w.isFreeScript ? '0.3' : '0.52'});border-radius:inherit;"></div>
             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:8px 0;">
-                <span style="writing-mode:vertical-rl;text-orientation:mixed;color:${w.isFreeScript ? 'rgba(150,200,255,0.95)' : '#FBDFA2'};font-size:11px;font-weight:700;letter-spacing:3px;text-shadow:0 1px 4px #000;max-height:78%;overflow:hidden;line-height:1.3;">${w.title}</span>
+                <span style="writing-mode:vertical-rl;text-orientation:mixed;color:${w.isFreeScript ? 'rgba(150,200,255,0.95)' : 'rgba(26,28,40,0.25)'};font-size:11px;font-weight:700;letter-spacing:3px;text-shadow:0 1px 4px #000;max-height:78%;overflow:hidden;line-height:1.3;">${w.title}</span>
             </div>
             <div style="position:absolute;top:6px;left:0;right:0;text-align:center;font-size:14px;line-height:1;">${w.icon}</div>
             ${!w.isFreeScript ? `<div style="position:absolute;bottom:4px;left:0;right:0;text-align:center;color:rgba(229,62,62,0.9);font-size:8px;font-weight:bold;text-shadow:0 0 4px #000;">▲${w.danger}</div>` : ''}
@@ -241,22 +241,22 @@
         addSpine.style.cssText = `
             flex-shrink:0; width:48px; height:${bookH}px; position:relative; z-index:1;
             background:rgba(44,28,16,0.7);
-            border:1.5px dashed rgba(251,223,162,0.25);
+            border:1.5px dashed rgba(26,28,40,0.12);
             border-radius:2px; cursor:pointer;
             display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
             transition:background 0.2s, border-color 0.2s;
         `;
         addSpine.innerHTML = `
-            <span style="color:rgba(251,223,162,0.45);font-size:20px;line-height:1;">＋</span>
-            <span style="writing-mode:vertical-rl;color:rgba(251,223,162,0.35);font-size:10px;letter-spacing:3px;">撰寫新書</span>
+            <span style="color:rgba(26,28,40,0.25);font-size:20px;line-height:1;">＋</span>
+            <span style="writing-mode:vertical-rl;color:rgba(26,28,40,0.18);font-size:10px;letter-spacing:3px;">撰寫新書</span>
         `;
         addSpine.onmouseenter = () => {
             addSpine.style.background = 'rgba(62,39,22,0.9)';
-            addSpine.style.borderColor = 'rgba(251,223,162,0.5)';
+            addSpine.style.borderColor = 'rgba(26,28,40,0.30)';
         };
         addSpine.onmouseleave = () => {
             addSpine.style.background = 'rgba(44,28,16,0.7)';
-            addSpine.style.borderColor = 'rgba(251,223,162,0.25)';
+            addSpine.style.borderColor = 'rgba(26,28,40,0.12)';
         };
         addSpine.onclick = () => openCreate();
         return addSpine;
@@ -367,40 +367,40 @@
             <div style="position:absolute;inset:0;background:linear-gradient(160deg,#2a1a0e 0%,#1a0e06 100%);"></div>
             <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(180deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,transparent 1px,transparent 20px);pointer-events:none;"></div>
 
-            <button id="qb-create-back" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);border:1px solid rgba(251,223,162,0.25);color:#FBDFA2;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
+            <button id="qb-create-back" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);border:1px solid rgba(26,28,40,0.12);color:#1A1C28;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
 
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 28px 28px;z-index:2;gap:0;overflow-y:auto;">
                 <div style="font-size:30px;margin-bottom:14px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">✒️</div>
-                <div style="font-size:16px;font-weight:800;color:#FBDFA2;letter-spacing:2px;margin-bottom:6px;">撰寫新書</div>
-                <div style="font-size:11px;color:rgba(251,223,162,0.5);letter-spacing:1px;margin-bottom:18px;">描述你想前往的世界</div>
+                <div style="font-size:16px;font-weight:800;color:#1A1C28;letter-spacing:2px;margin-bottom:6px;">撰寫新書</div>
+                <div style="font-size:11px;color:rgba(26,28,40,0.30);letter-spacing:1px;margin-bottom:18px;">描述你想前往的世界</div>
 
                 <input id="qb-create-input" type="text" placeholder="例：蒸汽朋克工業帝國、末日後的海底城市…"
-                    style="width:100%;background:rgba(0,0,0,0.5);border:1px solid rgba(251,223,162,0.3);border-radius:4px;color:#FFF8E7;font-size:13px;padding:12px 14px;outline:none;text-align:center;letter-spacing:0.5px;font-family:'Noto Sans TC',sans-serif;">
-                <div style="margin-top:6px;font-size:10px;color:rgba(251,223,162,0.3);letter-spacing:0.5px;">按 Enter 或點下方按鈕送出</div>
+                    style="width:100%;background:rgba(0,0,0,0.5);border:1px solid rgba(26,28,40,0.15);border-radius:4px;color:#1A1C28;font-size:13px;padding:12px 14px;outline:none;text-align:center;letter-spacing:0.5px;font-family:'Noto Sans TC',sans-serif;">
+                <div style="margin-top:6px;font-size:10px;color:rgba(26,28,40,0.15);letter-spacing:0.5px;">按 Enter 或點下方按鈕送出</div>
 
                 <div style="width:100%;margin-top:14px;">
                     <button id="qb-wb-toggle" style="
                         width:100%;background:rgba(0,0,0,0.3);
-                        border:1px solid rgba(251,223,162,0.2);
-                        color:rgba(251,223,162,0.55);padding:8px 14px;
+                        border:1px solid rgba(26,28,40,0.10);
+                        color:rgba(26,28,40,0.68);padding:8px 14px;
                         border-radius:4px;cursor:pointer;font-size:11px;
                         letter-spacing:1px;text-align:left;transition:border-color 0.2s;">
                         📚 從世界書條目生成 ▼
                     </button>
                     <div id="qb-wb-list" style="
                         display:none;max-height:150px;overflow-y:auto;margin-top:4px;
-                        background:rgba(0,0,0,0.35);border:1px solid rgba(251,223,162,0.15);
+                        background:rgba(0,0,0,0.35);border:1px solid rgba(26,28,40,0.08);
                         border-radius:4px;padding:6px 10px;">
                         <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:10px;">
                             載入中…
                         </div>
                     </div>
-                    <div id="qb-wb-hint" style="display:none;margin-top:5px;font-size:10px;color:rgba(251,223,162,0.4);text-align:center;">
+                    <div id="qb-wb-hint" style="display:none;margin-top:5px;font-size:10px;color:rgba(26,28,40,0.20);text-align:center;">
                         已勾選的條目內容將提供給 AI 作為世界觀參考
                     </div>
                 </div>
 
-                <button id="qb-create-submit" style="margin-top:20px;background:linear-gradient(135deg,#FBDFA2,#c8a030);color:#1a0a04;font-weight:900;font-size:14px;padding:12px 36px;border:none;border-radius:3px;cursor:pointer;letter-spacing:2px;box-shadow:0 4px 20px rgba(251,223,162,0.3);transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">📖 創建世界</button>
+                <button id="qb-create-submit" style="margin-top:20px;background:linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030);color:#1a0a04;font-weight:900;font-size:14px;padding:12px 36px;border:none;border-radius:3px;cursor:pointer;letter-spacing:2px;box-shadow:0 4px 20px rgba(26,28,40,0.15);transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">📖 創建世界</button>
             </div>
         `;
 
@@ -421,7 +421,7 @@
             wbHint.style.display = isOpen ? 'none' : 'block';
             wbToggle.textContent = `📚 從世界書條目生成 ${isOpen ? '▼' : '▲'}`;
             wbToggle.style.borderColor = isOpen
-                ? 'rgba(251,223,162,0.2)' : 'rgba(251,223,162,0.5)';
+                ? 'rgba(26,28,40,0.10)' : 'rgba(26,28,40,0.30)';
 
             if (!isOpen && !wbLoaded) {
                 wbLoaded = true;
@@ -464,7 +464,7 @@
             if (!keyword && !lore) {
                 input.focus();
                 input.style.borderColor = 'rgba(255,100,100,0.6)';
-                setTimeout(() => { input.style.borderColor = 'rgba(251,223,162,0.3)'; }, 1500);
+                setTimeout(() => { input.style.borderColor = 'rgba(26,28,40,0.15)'; }, 1500);
                 return;
             }
             if (window.QB_CORE && typeof window.QB_CORE.createCustomWorld === 'function') {
@@ -728,7 +728,7 @@
             <button id="qb-cover-back" style="
                 position:absolute;top:12px;left:12px;
                 background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);
-                border:1px solid rgba(251,223,162,0.3);color:#FBDFA2;
+                border:1px solid rgba(26,28,40,0.15);color:#1A1C28;
                 padding:6px 14px;border-radius:20px;cursor:pointer;
                 font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
 
@@ -738,7 +738,7 @@
                 display:flex;flex-direction:column;align-items:center;">
                 
                 <div style="font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">${w.icon}</div>
-                <div style="font-size:24px;font-weight:900;color:#FBDFA2;
+                <div style="font-size:24px;font-weight:900;color:#1A1C28;
                             letter-spacing:3px;text-shadow:0 2px 16px rgba(0,0,0,0.9);
                             margin-bottom:14px;font-family:'Noto Sans TC',sans-serif;line-height:1.3;">${w.title}</div>
                 
@@ -750,7 +750,7 @@
                     危&ensp;險&ensp;度 &nbsp;${dangerFill}<span style="opacity:0.3;">${dangerEmpty}</span>
                 </div>
                 ` : `
-                <div style="font-size:12px;color:rgba(251,223,162,0.6);margin-bottom:16px;letter-spacing:1px;">
+                <div style="font-size:12px;color:rgba(26,28,40,0.68);margin-bottom:16px;letter-spacing:1px;">
                     收錄 ${greetings.length} 條開場白記憶
                 </div>
                 `}
@@ -759,15 +759,15 @@
                     width: 100%; margin-bottom: 24px;
                     display: flex; flex-direction: column; align-items: center; gap: 8px;">
                     <div style="display:flex; align-items:center; gap:8px; width:75%;">
-                        <div style="flex:1; height:1px; background:linear-gradient(90deg, transparent, rgba(251,223,162,0.25));"></div>
-                        <span style="font-size:10px; color:rgba(251,223,162,0.5); letter-spacing:3px; text-shadow:0 1px 2px #000; font-weight:bold;">擴充館藏</span>
-                        <div style="flex:1; height:1px; background:linear-gradient(270deg, transparent, rgba(251,223,162,0.25));"></div>
+                        <div style="flex:1; height:1px; background:linear-gradient(90deg, transparent, rgba(26,28,40,0.12));"></div>
+                        <span style="font-size:10px; color:rgba(26,28,40,0.30); letter-spacing:3px; text-shadow:0 1px 2px #000; font-weight:bold;">擴充館藏</span>
+                        <div style="flex:1; height:1px; background:linear-gradient(270deg, transparent, rgba(26,28,40,0.12));"></div>
                     </div>
                     <div style="display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:6px; width:100%;">
                         <div id="qb-wb-pack-tags" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;"></div>
                         <select id="qb-wb-pack-add" style="
-                            background:rgba(0,0,0,0.4); border:1px dashed rgba(251,223,162,0.3);
-                            border-radius:12px; color:rgba(251,223,162,0.5); font-size:10px;
+                            background:rgba(0,0,0,0.4); border:1px dashed rgba(26,28,40,0.15);
+                            border-radius:12px; color:rgba(26,28,40,0.30); font-size:10px;
                             padding:3px 8px; outline:none; font-family:inherit; cursor:pointer; text-align:center;
                             transition:all 0.2s;">
                             <option value="">＋ 掛載</option>
@@ -777,10 +777,10 @@
 
                 <div id="qb-var-pack-row" style="
                     width:78%; display:flex; align-items:center; gap:8px; margin-bottom:16px;">
-                    <span style="font-size:10px; color:rgba(251,223,162,0.45); letter-spacing:2px; white-space:nowrap; flex-shrink:0;">⚙ 變數包</span>
+                    <span style="font-size:10px; color:rgba(26,28,40,0.25); letter-spacing:2px; white-space:nowrap; flex-shrink:0;">⚙ 變數包</span>
                     <select id="qb-var-pack-sel" style="
-                        flex:1; background:rgba(0,0,0,0.45); border:1px solid rgba(251,223,162,0.2);
-                        border-radius:12px; color:rgba(251,223,162,0.75); font-size:10px;
+                        flex:1; background:rgba(0,0,0,0.45); border:1px solid rgba(26,28,40,0.10);
+                        border-radius:12px; color:rgba(26,28,40,0.68); font-size:10px;
                         padding:4px 10px; outline:none; font-family:inherit; cursor:pointer;
                         transition:border-color 0.2s;">
                         <option value="">— 未連結 —</option>
@@ -790,19 +790,19 @@
                 <div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;">
                     ${isCard ? `
                     <button id="qb-open-inner-btn" style="
-                        background:linear-gradient(135deg,#FBDFA2,#c8a030);color:#1a0a04;
+                        background:linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030);color:#1a0a04;
                         font-weight:900;font-size:15px;padding:14px 44px;border:none;
                         border-radius:3px;cursor:pointer;letter-spacing:3px;
-                        box-shadow:0 4px 24px rgba(251,223,162,0.35);transition:opacity 0.2s;"
+                        box-shadow:0 4px 24px rgba(26,28,40,0.18);transition:opacity 0.2s;"
                         onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
                         📖 翻閱開場白
                     </button>
                     ` : `
                     <button class="qb-dive-world-btn" data-wid="${w.id}" style="
-                        background:linear-gradient(135deg,#FBDFA2,#c8a030);color:#1a0a04;
+                        background:linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030);color:#1a0a04;
                         font-weight:900;font-size:15px;padding:14px 44px;border:none;
                         border-radius:3px;cursor:pointer;letter-spacing:3px;
-                        box-shadow:0 4px 24px rgba(251,223,162,0.35);transition:opacity 0.2s;"
+                        box-shadow:0 4px 24px rgba(26,28,40,0.18);transition:opacity 0.2s;"
                         onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
                         踏入故事
                     </button>
@@ -821,36 +821,36 @@
                 background:rgba(20,12,8,0.98);
                 flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
                 
-                <div style="padding:16px 20px;border-bottom:1px solid rgba(251,223,162,0.15);
+                <div style="padding:16px 20px;border-bottom:1px solid rgba(26,28,40,0.08);
                             display:flex;align-items:center;justify-content:space-between;
                             background:rgba(0,0,0,0.3);flex-shrink:0;">
-                    <div style="font-size:14px;font-weight:bold;color:#FBDFA2;letter-spacing:1px;">
+                    <div style="font-size:14px;font-weight:bold;color:#1A1C28;letter-spacing:1px;">
                         📖 選擇開場白：${w.title}
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <button id="qb-greet-replace-btn" title="文字取代" style="
-                            background:rgba(251,223,162,0.12);border:1px solid rgba(251,223,162,0.3);
-                            color:rgba(251,223,162,0.75);font-size:13px;cursor:pointer;
+                            background:rgba(26,28,40,0.12);border:1px solid rgba(26,28,40,0.15);
+                            color:rgba(26,28,40,0.68);font-size:13px;cursor:pointer;
                             border-radius:6px;padding:4px 10px;letter-spacing:0.5px;white-space:nowrap;"
-                            onmouseover="this.style.background='rgba(251,223,162,0.22)'" onmouseout="this.style.background='rgba(251,223,162,0.12)'">🔄 取代</button>
+                            onmouseover="this.style.background='rgba(26,28,40,0.22)'" onmouseout="this.style.background='rgba(26,28,40,0.12)'">🔄 取代</button>
                         <button id="qb-inner-close" style="
-                            background:none;border:none;color:rgba(251,223,162,0.6);
+                            background:none;border:none;color:rgba(26,28,40,0.68);
                             font-size:24px;cursor:pointer;line-height:1;padding:0 5px;"
-                            onmouseover="this.style.color='#FBDFA2'" onmouseout="this.style.color='rgba(251,223,162,0.6)'">×</button>
+                            onmouseover="this.style.color='rgba(26,28,40,0.25)'" onmouseout="this.style.color='rgba(26,28,40,0.5)'">×</button>
                     </div>
                 </div>
 
-                <div id="qb-greet-replace-panel" style="display:none;padding:14px 20px;background:rgba(30,18,8,0.97);border-bottom:1px solid rgba(251,223,162,0.2);flex-shrink:0;flex-direction:column;gap:10px;">
-                    <div style="font-size:12px;color:rgba(251,223,162,0.5);letter-spacing:1px;margin-bottom:2px;">全部開場白批量取代</div>
+                <div id="qb-greet-replace-panel" style="display:none;padding:14px 20px;background:rgba(30,18,8,0.97);border-bottom:1px solid rgba(26,28,40,0.10);flex-shrink:0;flex-direction:column;gap:10px;">
+                    <div style="font-size:12px;color:rgba(26,28,40,0.30);letter-spacing:1px;margin-bottom:2px;">全部開場白批量取代</div>
                     <div style="display:flex;gap:8px;align-items:center;">
-                        <input id="qb-greet-find" placeholder="搜尋文字…" style="flex:1;background:rgba(0,0,0,0.5);border:1px solid rgba(251,223,162,0.25);border-radius:6px;color:#FFF8E7;padding:8px 10px;font-size:13px;outline:none;">
-                        <span style="color:rgba(251,223,162,0.4);font-size:16px;">→</span>
-                        <input id="qb-greet-repl" placeholder="替換為…" style="flex:1;background:rgba(0,0,0,0.5);border:1px solid rgba(251,223,162,0.25);border-radius:6px;color:#FFF8E7;padding:8px 10px;font-size:13px;outline:none;">
-                        <button id="qb-greet-replace-do" style="background:linear-gradient(135deg,rgba(251,223,162,0.25),rgba(200,160,48,0.3));border:1px solid rgba(251,223,162,0.4);color:#FBDFA2;border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;white-space:nowrap;font-weight:bold;">取代全部</button>
+                        <input id="qb-greet-find" placeholder="搜尋文字…" style="flex:1;background:rgba(0,0,0,0.5);border:1px solid rgba(26,28,40,0.12);border-radius:6px;color:#1A1C28;padding:8px 10px;font-size:13px;outline:none;">
+                        <span style="color:rgba(26,28,40,0.20);font-size:16px;">→</span>
+                        <input id="qb-greet-repl" placeholder="替換為…" style="flex:1;background:rgba(0,0,0,0.5);border:1px solid rgba(26,28,40,0.12);border-radius:6px;color:#1A1C28;padding:8px 10px;font-size:13px;outline:none;">
+                        <button id="qb-greet-replace-do" style="background:linear-gradient(135deg,rgba(26,28,40,0.12),rgba(200,160,48,0.3));border:1px solid rgba(26,28,40,0.20);color:#1A1C28;border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;white-space:nowrap;font-weight:bold;">取代全部</button>
                     </div>
                     <div id="qb-greet-replace-msg" style="font-size:12px;color:rgba(150,220,130,0.8);min-height:16px;"></div>
-                    <div id="qb-greet-saved-rules" style="display:none;border-top:1px solid rgba(251,223,162,0.1);padding-top:10px;display:flex;flex-direction:column;gap:6px;">
-                        <div style="font-size:11px;color:rgba(251,223,162,0.3);letter-spacing:1px;margin-bottom:2px;">📌 已儲存規則（點擊套用）</div>
+                    <div id="qb-greet-saved-rules" style="display:none;border-top:1px solid rgba(26,28,40,0.06);padding-top:10px;display:flex;flex-direction:column;gap:6px;">
+                        <div style="font-size:11px;color:rgba(26,28,40,0.15);letter-spacing:1px;margin-bottom:2px;">📌 已儲存規則（點擊套用）</div>
                         <div id="qb-greet-rules-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
                     </div>
                 </div>
@@ -860,23 +860,23 @@
                         
                         ${greetings.map((g, i) => `
                             <div class="qb-greet-slide" data-greet-idx="${i}" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 20px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
-                                <div style="border:1px solid rgba(251,223,162,0.25); background:rgba(0,0,0,0.5); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column;">
-                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid rgba(251,223,162,0.15);padding-bottom:12px;">
-                                        <span style="font-size:14px;color:#FBDFA2;letter-spacing:2px;font-weight:bold;">
+                                <div style="border:1px solid rgba(26,28,40,0.12); background:rgba(0,0,0,0.5); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column;">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid rgba(26,28,40,0.08);padding-bottom:12px;">
+                                        <span style="font-size:14px;color:#1A1C28;letter-spacing:2px;font-weight:bold;">
                                             開場白 ${i + 1}
                                         </span>
                                         <div style="display:flex;align-items:center;gap:6px;">
-                                            <button class="qb-greet-edit-btn" data-idx="${i}" title="編輯此開場白" style="background:rgba(251,223,162,0.1);border:1px solid rgba(251,223,162,0.25);color:rgba(251,223,162,0.6);font-size:13px;cursor:pointer;border-radius:5px;padding:3px 8px;line-height:1.4;">✏️ 編輯</button>
+                                            <button class="qb-greet-edit-btn" data-idx="${i}" title="編輯此開場白" style="background:rgba(26,28,40,0.06);border:1px solid rgba(26,28,40,0.12);color:rgba(26,28,40,0.68);font-size:13px;cursor:pointer;border-radius:5px;padding:3px 8px;line-height:1.4;">✏️ 編輯</button>
                                             <input type="radio" name="qb-greeting" value="${i}" ${i === 0 ? 'checked' : ''} style="display:none;">
                                         </div>
                                     </div>
                                     <div class="qb-greet-text" data-idx="${i}" style="font-size:14px;color:rgba(255,248,231,0.88);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">
                                         ${_escHtml(g).replace(/\{\{\s*user\s*\}\}/gi, currentUserName).replace(/\{\{\s*char\s*\}\}/gi, w.title)}
                                     </div>
-                                    <textarea class="qb-greet-editor" data-idx="${i}" style="display:none;flex:1;min-height:200px;background:rgba(0,0,0,0.6);border:1px solid rgba(251,223,162,0.35);border-radius:6px;color:#FFF8E7;font-size:13px;line-height:1.8;padding:12px;resize:vertical;font-family:inherit;outline:none;"></textarea>
+                                    <textarea class="qb-greet-editor" data-idx="${i}" style="display:none;flex:1;min-height:200px;background:rgba(0,0,0,0.6);border:1px solid rgba(26,28,40,0.18);border-radius:6px;color:#1A1C28;font-size:13px;line-height:1.8;padding:12px;resize:vertical;font-family:inherit;outline:none;"></textarea>
                                     <div class="qb-greet-save-row" data-idx="${i}" style="display:none;justify-content:flex-end;gap:8px;margin-top:10px;">
                                         <button class="qb-greet-cancel-btn" data-idx="${i}" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:rgba(255,248,231,0.6);border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;">取消</button>
-                                        <button class="qb-greet-save-btn" data-idx="${i}" style="background:linear-gradient(135deg,rgba(251,223,162,0.25),rgba(200,160,48,0.3));border:1px solid rgba(251,223,162,0.4);color:#FBDFA2;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:bold;">儲存</button>
+                                        <button class="qb-greet-save-btn" data-idx="${i}" style="background:linear-gradient(135deg,rgba(26,28,40,0.12),rgba(200,160,48,0.3));border:1px solid rgba(26,28,40,0.20);color:#1A1C28;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:bold;">儲存</button>
                                     </div>
                                 </div>
                             </div>
@@ -893,36 +893,36 @@
 
                     </div>
                     
-                    <button id="qb-greet-prev-btn" style="position:absolute;left:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid rgba(251,223,162,0.3);color:#FBDFA2;width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">◀</button>
-                    <button id="qb-greet-next-btn" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid rgba(251,223,162,0.3);color:#FBDFA2;width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">▶</button>
+                    <button id="qb-greet-prev-btn" style="position:absolute;left:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid rgba(26,28,40,0.15);color:#1A1C28;width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">◀</button>
+                    <button id="qb-greet-next-btn" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid rgba(26,28,40,0.15);color:#1A1C28;width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">▶</button>
                 </div>
 
-                <div style="padding:14px 20px 24px;border-top:1px solid rgba(251,223,162,0.15);
+                <div style="padding:14px 20px 24px;border-top:1px solid rgba(26,28,40,0.08);
                             background:rgba(0,0,0,0.4);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:16px;">
                     
                     <div id="qb-greet-dots" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:80%;">
-                        ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:#FBDFA2;opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
+                        ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:#1A1C28;opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
                         <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:#4a9eff;opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
                     </div>
 
                     <div style="width:100%;max-width:340px;position:relative;">
-                        <div style="font-size:11px;color:rgba(251,223,162,0.4);letter-spacing:1px;margin-bottom:6px;text-align:left;">💬 你的第一句回應（可選）</div>
+                        <div style="font-size:11px;color:rgba(26,28,40,0.20);letter-spacing:1px;margin-bottom:6px;text-align:left;">💬 你的第一句回應（可選）</div>
                         <textarea id="qb-user-reply" rows="2" placeholder="輸入你對開場白的回應，例如：「沒事，你繼續說。」" style="
                             width:100%;box-sizing:border-box;
-                            background:rgba(0,0,0,0.45);border:1px solid rgba(251,223,162,0.2);
-                            border-radius:8px;color:#FFF8E7;font-size:13px;line-height:1.6;
+                            background:rgba(0,0,0,0.45);border:1px solid rgba(26,28,40,0.10);
+                            border-radius:8px;color:#1A1C28;font-size:13px;line-height:1.6;
                             padding:10px 12px;resize:none;font-family:inherit;outline:none;
                             transition:border-color 0.2s;scrollbar-width:none;"
-                            onfocus="this.style.borderColor='rgba(251,223,162,0.45)'"
-                            onblur="this.style.borderColor='rgba(251,223,162,0.2)'"></textarea>
+                            onfocus="this.style.borderColor='rgba(26,28,40,0.25)'"
+                            onblur="this.style.borderColor='rgba(26,28,40,0.10)'"></textarea>
                     </div>
 
                     <button class="qb-dive-world-btn" data-wid="${w.id}" style="
                         width:100%;max-width:340px;
-                        background:linear-gradient(135deg,#FBDFA2,#c8a030);color:#1a0a04;
+                        background:linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030);color:#1a0a04;
                         font-weight:900;font-size:16px;padding:15px;border:none;
                         border-radius:6px;cursor:pointer;letter-spacing:4px;
-                        box-shadow:0 4px 24px rgba(251,223,162,0.25);transition:opacity 0.2s;"
+                        box-shadow:0 4px 24px rgba(26,28,40,0.12);transition:opacity 0.2s;"
                         onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
                         與TA相遇 🚀
                     </button>
@@ -956,9 +956,9 @@
                 const chip = document.createElement('div');
                 // 美化：輕量化的半透明小標籤
                 chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;
-                    background:rgba(251,223,162,0.1);border:1px solid rgba(251,223,162,0.25);
+                    background:rgba(26,28,40,0.06);border:1px solid rgba(26,28,40,0.12);
                     border-radius:12px;padding:3px 10px;font-size:10px;
-                    color:rgba(251,223,162,0.8);backdrop-filter:blur(2px);`;
+                    color:rgba(26,28,40,0.68);backdrop-filter:blur(2px);`;
                 chip.innerHTML = `<span>${_escHtml(pack)}</span>
                     <span style="cursor:pointer;opacity:0.6;font-size:12px;line-height:1;margin-left:2px;"
                           class="wb-chip-remove" data-pack="${_escHtml(pack)}">×</span>`;
@@ -1039,10 +1039,10 @@
                     try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
                 }
                 // 高亮邊框反饋
-                varSel.style.borderColor = w.autoPackId ? 'rgba(251,223,162,0.6)' : 'rgba(251,223,162,0.2)';
+                varSel.style.borderColor = w.autoPackId ? 'rgba(26,28,40,0.5)' : 'rgba(26,28,40,0.10)';
             };
             // 初始高亮
-            if (w.autoPackId) varSel.style.borderColor = 'rgba(251,223,162,0.6)';
+            if (w.autoPackId) varSel.style.borderColor = 'rgba(26,28,40,0.5)';
         })();
         // ──────────────────────────────────────────────────────────
 
@@ -1232,7 +1232,7 @@
                 rulesList.innerHTML = '';
                 rules.forEach(r => {
                     const chip = document.createElement('div');
-                    chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:rgba(251,223,162,0.08);border:1px solid rgba(251,223,162,0.2);border-radius:20px;padding:4px 10px 4px 12px;cursor:pointer;transition:background 0.15s;max-width:100%;';
+                    chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:rgba(26,28,40,0.08);border:1px solid rgba(26,28,40,0.10);border-radius:20px;padding:4px 10px 4px 12px;cursor:pointer;transition:background 0.15s;max-width:100%;';
                     chip.title = `點擊填入：「${r.find}」→「${r.repl}」`;
 
                     const label = document.createElement('span');
@@ -1251,8 +1251,8 @@
 
                     chip.appendChild(label);
                     chip.appendChild(del);
-                    chip.addEventListener('mouseenter', () => chip.style.background = 'rgba(251,223,162,0.16)');
-                    chip.addEventListener('mouseleave', () => chip.style.background = 'rgba(251,223,162,0.08)');
+                    chip.addEventListener('mouseenter', () => chip.style.background = 'rgba(26,28,40,0.16)');
+                    chip.addEventListener('mouseleave', () => chip.style.background = 'rgba(26,28,40,0.08)');
                     // 點擊 chip → 填入輸入框並立即執行
                     chip.onclick = () => {
                         if (findInput) findInput.value = r.find;

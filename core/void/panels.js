@@ -1,4 +1,4 @@
-/**
+﻿/**
  * core/void/panels.js — 成就面板 + 404 商店面板
  * 從 void_terminal.js 抽出。零橋接：只摸 DOM + window.OS_*。
  */
@@ -51,7 +51,7 @@
         }
 
         if (achievements.length === 0) {
-            listEl.innerHTML = '<div class="ach-empty">── 尚無成就記錄 ──<br><span style="font-size:10px;color:#B78456;font-weight:normal;">在 VN 劇情中觸發特殊選擇以解鎖成就</span></div>';
+            listEl.innerHTML = '<div class="ach-empty">── 尚無成就記錄 ──<br><span style="font-size:10px;color:rgba(26,28,40,0.72);font-weight:normal;">在 VN 劇情中觸發特殊選擇以解鎖成就</span></div>';
             return;
         }
 

@@ -1,4 +1,4 @@
-// ----------------------------------------------------------------
+﻿// ----------------------------------------------------------------
 // [檔案] vn_ui_workshop.js (VN 動態標籤煉丹爐 - 終極純淨版 + 世界書同步)
 // 職責：生成 VN 美化標籤，並提供一鍵寫入酒館正則與主世界書的絲滑體驗，自動過濾重複標籤。
 // ----------------------------------------------------------------
@@ -7,54 +7,54 @@
     console.log('[PhoneOS] 啟動 VN 標籤煉丹爐 (酒館專屬全自動版)...');
 
     const workshopStyle = `
-        .vn-ws-container { width: 100%; height: 100%; background: #1a0d0a; color: #FFF8E7; display: flex; flex-direction: column; font-family: 'Noto Sans TC', sans-serif; position: relative; z-index: 9999; }
-        .vn-ws-header { padding: calc(15px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 15px; background: rgba(69,34,22,0.9); border-bottom: 1px solid rgba(251,223,162,0.3); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
-        .vn-ws-title { font-size: 18px; font-weight: bold; color: #FBDFA2; display: flex; align-items: center; gap: 10px; }
-        .vn-ws-close { background: none; border: none; color: #FBDFA2; font-size: 20px; cursor: pointer; }
-        .vn-ws-idea-btn { background: rgba(251,223,162,0.2); border: 1px solid #FBDFA2; color: #FBDFA2; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; transition: 0.2s; }
-        .vn-ws-idea-btn:hover { background: #FBDFA2; color: #1a0d0a; box-shadow: 0 0 10px rgba(251,223,162,0.8); }
-        .vn-ws-tabs { display: flex; background: rgba(69,34,22,0.9); border-bottom: 1px solid rgba(251,223,162,0.3); flex-shrink: 0; }
-        .vn-ws-tab { flex: 1; text-align: center; padding: 12px 0; font-size: 14px; color: #B78456; cursor: pointer; font-weight: bold; transition: 0.3s; position: relative; letter-spacing: 1px; }
-        .vn-ws-tab.active { color: #FBDFA2; }
-        .vn-ws-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #FBDFA2; box-shadow: 0 -2px 8px rgba(251,223,162,0.5); }
+        .vn-ws-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; font-family: 'Noto Sans TC', sans-serif; position: relative; z-index: 9999; }
+        .vn-ws-header { padding: calc(15px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 15px; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
+        .vn-ws-title { font-size: 18px; font-weight: bold; color: #1A1C28; display: flex; align-items: center; gap: 10px; }
+        .vn-ws-close { background: none; border: none; color: #1A1C28; font-size: 20px; cursor: pointer; }
+        .vn-ws-idea-btn { background: rgba(26,28,40,0.10); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        .vn-ws-idea-btn:hover { background: #1A1C28; color: #EEF0F6; box-shadow: 0 0 10px rgba(26,28,40,0.5); }
+        .vn-ws-tabs { display: flex; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; }
+        .vn-ws-tab { flex: 1; text-align: center; padding: 12px 0; font-size: 14px; color: rgba(26,28,40,0.72); cursor: pointer; font-weight: bold; transition: 0.3s; position: relative; letter-spacing: 1px; }
+        .vn-ws-tab.active { color: #1A1C28; }
+        .vn-ws-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; box-shadow: 0 -2px 8px rgba(26,28,40,0.30); }
         .vn-ws-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
         .vn-ws-view { display: none; flex-direction: column; gap: 15px; }
         .vn-ws-view.active { display: flex; animation: fadeIn 0.4s ease-out; }
         .vn-ws-group { display: flex; flex-direction: column; gap: 8px; }
-        .vn-ws-group label { font-size: 14px; color: #FBDFA2; font-weight: bold; }
-        .vn-ws-input, .vn-ws-textarea { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(251,223,162,0.4); color: #FFF; padding: 10px; border-radius: 6px; font-size: 14px; outline: none; transition: 0.2s; }
-        .vn-ws-input:focus, .vn-ws-textarea:focus { border-color: #FBDFA2; box-shadow: 0 0 8px rgba(251,223,162,0.2); }
+        .vn-ws-group label { font-size: 14px; color: #1A1C28; font-weight: bold; }
+        .vn-ws-input, .vn-ws-textarea { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(26,28,40,0.20); color: #FFF; padding: 10px; border-radius: 6px; font-size: 14px; outline: none; transition: 0.2s; }
+        .vn-ws-input:focus, .vn-ws-textarea:focus { border-color: #1A1C28; box-shadow: 0 0 8px rgba(26,28,40,0.10); }
         .vn-ws-textarea { resize: vertical; min-height: 80px; }
-        .vn-ws-btn { background: transparent; color: #FBDFA2; border: 1px solid #FBDFA2; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; text-align: center; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .vn-ws-btn:hover { background: rgba(251,223,162,0.1); }
+        .vn-ws-btn { background: transparent; color: #1A1C28; border: 1px solid rgba(26,28,40,0.25); padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; text-align: center; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .vn-ws-btn:hover { background: rgba(26,28,40,0.06); }
         .vn-ws-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .vn-ws-preview-box { border: 1px dashed rgba(251,223,162,0.5); padding: 15px; border-radius: 6px; min-height: 120px; position: relative; background: #000; overflow: hidden;}
+        .vn-ws-preview-box { border: 1px dashed rgba(26,28,40,0.30); padding: 15px; border-radius: 6px; min-height: 120px; position: relative; background: #000; overflow: hidden;}
         .vn-ws-code-box { background: #0d0d0d; color: #00ffcc; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border: 1px solid #333; }
         #vn-ws-loading { display: none; text-align: center; color: #00ffcc; font-size: 14px; margin-top: 10px; letter-spacing: 1px; }
-        .vn-ws-card { background: rgba(20, 10, 5, 0.85); border-radius: 12px; padding: 20px; border: 1px solid rgba(251,223,162,0.2); margin-bottom: 15px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
-        #vn-ws-refine-area { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed rgba(251,223,162,0.4); animation: fadeIn 0.5s; }
+        .vn-ws-card { background: rgba(20, 10, 5, 0.85); border-radius: 12px; padding: 20px; border: 1px solid rgba(26,28,40,0.10); margin-bottom: 15px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+        #vn-ws-refine-area { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed rgba(26,28,40,0.20); animation: fadeIn 0.5s; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
         
         #vn-ws-idea-overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
-        .vn-ws-idea-modal { background: #1a0d0a; border: 1px solid #FBDFA2; border-radius: 12px; width: 85%; max-width: 400px; padding: 25px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 15px 40px rgba(0,0,0,0.9); }
+        .vn-ws-idea-modal { background: #EEF0F6; border: 1px solid rgba(26,28,40,0.25); border-radius: 12px; width: 85%; max-width: 400px; padding: 25px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 15px 40px rgba(0,0,0,0.9); }
 
         /* === 修改範圍 (scope) radio === */
         .vn-ws-scope-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-        .vn-ws-scope-row label { display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 14px; border: 1px solid rgba(251,223,162,0.25); font-size: 12px; color: #ddd; cursor: pointer; font-weight: normal; transition: 0.2s; }
-        .vn-ws-scope-row label:hover { border-color: #FBDFA2; }
-        .vn-ws-scope-row input[type="radio"] { accent-color: #FBDFA2; margin: 0; }
-        .vn-ws-scope-row label.checked { background: rgba(251,223,162,0.18); border-color: #FBDFA2; color: #FBDFA2; }
+        .vn-ws-scope-row label { display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 14px; border: 1px solid rgba(26,28,40,0.12); font-size: 12px; color: #ddd; cursor: pointer; font-weight: normal; transition: 0.2s; }
+        .vn-ws-scope-row label:hover { border-color: #1A1C28; }
+        .vn-ws-scope-row input[type="radio"] { accent-color: #1A1C28; margin: 0; }
+        .vn-ws-scope-row label.checked { background: rgba(26,28,40,0.09); border-color: #1A1C28; color: #1A1C28; }
 
         /* === 歷史快照面板 === */
-        #vn-ws-history-area { display: none; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.45); border: 1px solid rgba(251,223,162,0.2); border-radius: 8px; max-height: 320px; overflow-y: auto; }
+        #vn-ws-history-area { display: none; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.45); border: 1px solid rgba(26,28,40,0.10); border-radius: 8px; max-height: 320px; overflow-y: auto; }
         .vn-ws-history-empty { color: #888; font-size: 12px; text-align: center; padding: 20px 0; }
-        .vn-ws-history-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(20,10,5,0.7); border: 1px solid rgba(251,223,162,0.12); border-radius: 6px; margin-bottom: 6px; font-size: 12px; transition: 0.15s; }
-        .vn-ws-history-item:hover { border-color: rgba(251,223,162,0.5); background: rgba(30,15,8,0.9); }
+        .vn-ws-history-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(20,10,5,0.7); border: 1px solid rgba(26,28,40,0.12); border-radius: 6px; margin-bottom: 6px; font-size: 12px; transition: 0.15s; }
+        .vn-ws-history-item:hover { border-color: rgba(26,28,40,0.30); background: rgba(30,15,8,0.9); }
         .vn-ws-history-item .h-time { color: #888; font-family: monospace; flex-shrink: 0; }
         .vn-ws-history-item .h-note { color: #ccc; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .vn-ws-history-item.pinned { border-color: rgba(241,196,15,0.6); background: rgba(40,30,5,0.6); }
-        .vn-ws-history-item .h-btn { background: transparent; border: 1px solid rgba(251,223,162,0.4); color: #FBDFA2; font-size: 11px; padding: 3px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
-        .vn-ws-history-item .h-btn:hover { background: rgba(251,223,162,0.15); }
+        .vn-ws-history-item .h-btn { background: transparent; border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; font-size: 11px; padding: 3px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
+        .vn-ws-history-item .h-btn:hover { background: rgba(26,28,40,0.08); }
         .vn-ws-history-item .h-btn.danger { border-color: rgba(231,76,60,0.5); color: #e74c3c; }
         .vn-ws-history-item .h-btn.danger:hover { background: rgba(231,76,60,0.15); }
         .vn-ws-history-hint { font-size: 11px; color: #aaa; margin-bottom: 8px; line-height: 1.4; }
@@ -92,7 +92,7 @@
                         <label>3. 外觀與動畫描述 (交給 AI 設計師)</label>
                         <textarea class="vn-ws-textarea" id="vn-ws-desc" placeholder="UI描述..." style="min-height: 100px;"></textarea>
                     </div>
-                    <button class="vn-ws-btn" id="vn-ws-btn-generate" style="background: rgba(251,223,162,0.1);">讓 AI 開始煉丹 (全新生成)</button>
+                    <button class="vn-ws-btn" id="vn-ws-btn-generate" style="background: rgba(26,28,40,0.06);">讓 AI 開始煉丹 (全新生成)</button>
                     <div id="vn-ws-loading">AI 正在撰寫特效代碼，請稍候...</div>
                     
                     <div class="vn-ws-group" style="margin-top: 10px;">
@@ -128,7 +128,7 @@
 
             <div id="vn-ws-idea-overlay">
                 <div class="vn-ws-idea-modal">
-                    <h3 style="color:#FBDFA2; margin:0; display:flex; align-items:center; gap:8px;">💡 點子 AI 助手</h3>
+                    <h3 style="color:#1A1C28; margin:0; display:flex; align-items:center; gap:8px;">💡 點子 AI 助手</h3>
                     <p style="font-size:12px; color:#aaa; margin:0; line-height:1.5;">不會寫 UI 指令嗎？直接用大白話許願！</p>
                     <textarea id="vn-ws-idea-input" class="vn-ws-textarea" placeholder="請用白話文描述你想做的介面..." style="min-height: 100px;"></textarea>
                     <div style="display:flex; flex-direction:column; gap:10px; margin-top:5px;">
@@ -444,17 +444,17 @@ ${cleanFormat}
 
                 card.innerHTML = `
                     ${scopedCss}
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px; border-bottom: 1px solid rgba(251,223,162,0.15); padding-bottom: 10px;">
-                        <strong style="color:#FBDFA2; font-size:16px; letter-spacing: 1px;">[${tpl.tagId || '未知'}] 視覺模組</strong>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px; border-bottom: 1px solid rgba(26,28,40,0.08); padding-bottom: 10px;">
+                        <strong style="color:#1A1C28; font-size:16px; letter-spacing: 1px;">[${tpl.tagId || '未知'}] 視覺模組</strong>
                     </div>
                     
                     <div style="font-size:12px; color:#2ecc71; margin-bottom:10px; padding:8px 12px; background:rgba(46,204,113,0.08); border-left:3px solid #2ecc71; border-radius: 0 4px 4px 0; line-height: 1.5;">
                         💡 <b>AI 使用說明：</b><br>${tpl.usageDesc || '無特別說明'}
                     </div>
 
-                    <div class="format-display-box" style="margin-bottom:15px; padding:12px; background:rgba(0,0,0,0.6); border-left:3px solid #B78456; border-radius:4px; position:relative;">
-                        <div class="format-text" style="font-family:monospace; font-size:12px; color:#E0D8C8; white-space:pre-wrap; word-break:break-all;">${safeDemoFormat}</div>
-                        <textarea class="format-input" style="display:none; width:100%; min-height:100px; background:rgba(0,0,0,0.8); color:#FFF; border:1px solid #FBDFA2; font-family:monospace; line-height:1.4; font-size:12px; padding:8px; border-radius:4px; box-sizing:border-box;">${tpl.demoFormat || ''}</textarea>
+                    <div class="format-display-box" style="margin-bottom:15px; padding:12px; background:rgba(0,0,0,0.6); border-left:3px solid rgba(26,28,40,0.40); border-radius:4px; position:relative;">
+                        <div class="format-text" style="font-family:monospace; font-size:12px; color:#3A3F5C; white-space:pre-wrap; word-break:break-all;">${safeDemoFormat}</div>
+                        <textarea class="format-input" style="display:none; width:100%; min-height:100px; background:rgba(0,0,0,0.8); color:#FFF; border:1px solid rgba(26,28,40,0.25); font-family:monospace; line-height:1.4; font-size:12px; padding:8px; border-radius:4px; box-sizing:border-box;">${tpl.demoFormat || ''}</textarea>
                         
                         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
                             <button class="vn-ws-btn btn-edit-format" style="padding:4px 12px; font-size:12px; background:rgba(52, 152, 219, 0.1); border-color:#3498db; color:#3498db;">✏️ 編輯格式</button>
@@ -463,7 +463,7 @@ ${cleanFormat}
                         </div>
                     </div>
                     
-                    <div style="margin-bottom:15px; padding:15px; background:rgba(0,0,0,0.6); border-radius:8px; min-height:150px; position:relative; overflow:hidden; border: 1px solid rgba(251,223,162,0.1);">
+                    <div style="margin-bottom:15px; padding:15px; background:rgba(0,0,0,0.6); border-radius:8px; min-height:150px; position:relative; overflow:hidden; border: 1px solid rgba(26,28,40,0.06);">
                         <div class="vn-dynamic-panel-${safeTagId}" style="position:relative; transform:none; left:0; top:0; width:100%; height:100%; min-height:150px; display:flex; flex-direction:column; justify-content:center;">
                             ${previewHtml}
                         </div>
