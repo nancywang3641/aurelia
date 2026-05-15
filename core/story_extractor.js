@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Story Extractor (開場白提取器)
  * 把開場白整段渲染在單一區域（純文字 + HTML 區塊依原本順序堆疊）
  */
@@ -65,32 +65,32 @@
                 /* === 亮版（默認）：視差書咖風，對齊主大廳 === */
                 #se-root-wrapper {
                     width: 100%; height: 100%; display: flex; flex-direction: column;
-                    background: #452216; position: relative;
+                    background: #EEF0F6; position: relative;
                     overflow: hidden; box-sizing: border-box;
                     font-family: 'Noto Sans TC', sans-serif;
-                    color: #FBDFA2;
+                    color: #1A1C28;
                     background-image:
-                        linear-gradient(rgba(251,223,162,0.05) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(251,223,162,0.05) 1px, transparent 1px);
+                        linear-gradient(rgba(26,28,40,0.04) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(26,28,40,0.04) 1px, transparent 1px);
                     background-size: 30px 30px;
                 }
 
                 #se-toolbar {
                     display: flex; justify-content: space-between; align-items: center;
                     padding: 0 15px;
-                    background: rgba(69,34,22,0.85);
-                    border-bottom: 1px solid rgba(251,223,162,0.2);
+                    background: rgba(228,232,245,0.92);
+                    border-bottom: 1px solid rgba(26,28,40,0.10);
                     box-shadow: 0 2px 8px rgba(0,0,0,0.25);
                     flex-shrink: 0; height: 50px;
                 }
-                .se-title { font-weight: 700; font-size: 16px; color: #FBDFA2; letter-spacing: 2px; font-family: 'Noto Sans TC', sans-serif; }
+                .se-title { font-weight: 700; font-size: 16px; color: #1A1C28; letter-spacing: 2px; font-family: 'Noto Sans TC', sans-serif; }
                 .se-controls { display: flex; gap: 8px; }
                 .se-icon-btn {
                     border: none; background: transparent; cursor: pointer;
-                    font-size: 18px; color: #B78456; transition: all 0.2s;
+                    font-size: 18px; color:rgba(26,28,40,0.72); transition: all 0.2s;
                     width: 32px; height: 32px; border-radius: 50%;
                 }
-                .se-icon-btn:hover { color: #FBDFA2; background: rgba(251,223,162,0.1); }
+                .se-icon-btn:hover { color: #1A1C28; background: rgba(26,28,40,0.06); }
 
                 #se-content-area {
                     flex: 1; position: relative; width: 100%;
@@ -101,10 +101,10 @@
 
                 /* 純文字容器：套用書咖卡片裝飾 */
                 #se-root-wrapper .native-render-wrapper {
-                    color: #FBDFA2; display: flow-root; width: 100%; margin-bottom: 15px;
-                    background: rgba(69,34,22,0.55);
-                    border: 1px solid rgba(251,223,162,0.18);
-                    border-left: 2px solid rgba(251,223,162,0.45);
+                    color: #1A1C28; display: flow-root; width: 100%; margin-bottom: 15px;
+                    background: rgba(228,232,245,0.60);
+                    border: 1px solid rgba(26,28,40,0.09);
+                    border-left: 2px solid rgba(26,28,40,0.25);
                     padding: 15px; border-radius: 4px;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
                     font-size: calc(var(--mainFontSize, 16px) + 2px);
@@ -128,12 +128,12 @@
                 #se-root-wrapper .native-render-wrapper q::after {
                     content: none !important;
                 }
-                #se-root-wrapper .native-render-wrapper p, #se-root-wrapper .native-render-wrapper li, #se-root-wrapper .native-render-wrapper td { color: #FBDFA2; }
+                #se-root-wrapper .native-render-wrapper p, #se-root-wrapper .native-render-wrapper li, #se-root-wrapper .native-render-wrapper td { color: #1A1C28; }
                 #se-root-wrapper .native-render-wrapper h1, #se-root-wrapper .native-render-wrapper h2, #se-root-wrapper .native-render-wrapper h3 {
-                    color: #FBDFA2; border-bottom: 1px solid rgba(251,223,162,0.3);
+                    color: #1A1C28; border-bottom: 1px solid rgba(26,28,40,0.15);
                 }
                 #se-root-wrapper .native-render-wrapper svg text, #se-root-wrapper .native-render-wrapper .nodeLabel, #se-root-wrapper .native-render-wrapper .edgeLabel {
-                    color: #FBDFA2 !important; fill: #FBDFA2 !important;
+                    color: #1A1C28 !important; fill: #1A1C28 !important;
                 }
 
                 /* === 暗版：404 終端風（綠霓虹，對齊大廳 mode-404） === */
@@ -243,8 +243,8 @@
                 /* === 輸入區底座（劫持 #form_sheld 進來用） === */
                 #se-root-wrapper #se-input-area {
                     flex-shrink: 0; width: 100%;
-                    background: rgba(69, 34, 22, 0.85);
-                    border-top: 1px solid rgba(251, 223, 162, 0.25);
+                    background: rgba(228,232,245,0.85);
+                    border-top: 1px solid rgba(26,28,40,0.15);
                     z-index: 10; min-height: 50px;
                     box-sizing: border-box;
                 }
@@ -297,7 +297,7 @@
                     panelContainer.id = 'story-panel-container';
                     panelContainer.style.cssText = `
                         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                        background: #1a1a1a; z-index: 50;
+                        background: #EEF0F6; z-index: 50;
                         transform: translateX(100%); transition: transform 0.3s ease;
                         display: flex; flex-direction: column;
                     `;

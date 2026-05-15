@@ -1,4 +1,4 @@
-/**
+﻿/**
  * core/void/login.js — 登入畫面 + 存檔管理
  * 從 void_terminal.js 抽出。橋：loadLobbyHistory / saveLobbyHistory / applyLoadedLobbyState
  *   / getChatId / applyLayoutMode / setCurrentChatId / setUserName / resetActiveHistory。
@@ -78,7 +78,7 @@
             const val = inputEl.value.trim();
             if (!val) {
                 inputEl.style.borderColor = '#fc8181';
-                setTimeout(() => inputEl.style.borderColor = 'rgba(251,223,162,0.4)', 1000);
+                setTimeout(() => inputEl.style.borderColor = 'rgba(26,28,40,0.20)', 1000);
                 return;
             }
             submitBtn.disabled = true;
@@ -153,13 +153,13 @@
 
             // 佈局設定區塊 (iOS 解決方案)
             const currentMode = localStorage.getItem('aurelia_layout_mode') || 'auto';
-            html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #B78456; background: rgba(69,34,22,0.9);">🖥️ 介面佈局 (解決頂部遮擋)</div>`;
+            html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96);">🖥️ 介面佈局 (解決頂部遮擋)</div>`;
             html += `<div class="void-persona-item ${currentMode === 'auto' ? 'is-selected' : ''}" data-layout="auto"><span>📱 自動適配 (Auto/預設)</span></div>`;
             html += `<div class="void-persona-item ${currentMode === 'pad-ios' ? 'is-selected' : ''}" data-layout="pad-ios"><span>🍎 強制下移 (iOS 動態島/瀏海)</span></div>`;
 
             // 角色切換區塊 (僅酒館模式顯示)
             if (!isStandalone) {
-                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #B78456; background: rgba(69,34,22,0.9); margin-top: 5px;">👤 酒館人設 (Persona)</div>`;
+                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96); margin-top: 5px;">👤 酒館人設 (Persona)</div>`;
                 const list = await _fetchPersonaList();
                 if (!list.length) {
                     html += '<div class="void-persona-empty">⚠ 未找到酒館人設</div>';
@@ -171,7 +171,7 @@
                     });
                 }
             } else {
-                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color: #B78456; background: rgba(69,34,22,0.9); margin-top: 5px;">👤 獨立模式</div>`;
+                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96); margin-top: 5px;">👤 獨立模式</div>`;
                 html += `<div class="void-persona-empty" style="padding:8px 14px;">獨立 API 模式下，請直接在上方輸入您的代號。</div>`;
             }
 
@@ -267,7 +267,7 @@
             card.className = 'void-session-card' + (isCur ? ' is-current' : '');
 
             // 如果存檔裡有 userName，顯示出來
-            const nameBadge = s.userName ? `<span style="color:#FBDFA2;">[${s.userName}]</span> ` : '';
+            const nameBadge = s.userName ? `<span style="color:#1A1C28;">[${s.userName}]</span> ` : '';
 
             card.innerHTML = `
                 <div class="void-session-card-info">

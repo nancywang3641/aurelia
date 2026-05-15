@@ -1,4 +1,4 @@
-// ----------------------------------------------------------------
+﻿// ----------------------------------------------------------------
 // [檔案] vn_settings.js  (VN 系統設置面板模組)
 // 職責：管理 VN 面板的路徑、Prompt 設置，供 os_settings.js 外接調用。
 //       資料存於 localStorage['vn_cfg_v4']，與 vn_core.js VN_Config 同一鍵。
@@ -72,7 +72,7 @@
             const isStandalone = !!(window.OS_API?.isStandalone?.());
             const ctxChaptersBlock = isStandalone ? `
         <div class="set-group">
-            <div class="set-label">📚 Context 保留最近幾章全文 <span style="font-weight:normal; color:#B78456; font-size:11px;">其餘舊章節自動縮成摘要</span></div>
+            <div class="set-label">📚 Context 保留最近幾章全文 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">其餘舊章節自動縮成摘要</span></div>
             <input class="set-input" type="number" id="vncfg-ctx-chapters" min="1" max="20" placeholder="5" value="${d.ctxChapters ?? 5}" style="width:120px;">
             <div class="set-desc">建議 3–6 章。設 0 或留空 = 全送（不限制）。</div>
         </div>` : '';
@@ -100,12 +100,12 @@
     </div>
 
     <div class="set-group">
-        <div class="set-label">🧍 角色預設圖目錄 <span style="font-weight:normal; color:#B78456; font-size:11px;">Fallback 1 — 自動拼接 角色名_presets.png</span></div>
+        <div class="set-label">🧍 角色預設圖目錄 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">Fallback 1 — 自動拼接 角色名_presets.png</span></div>
         <input class="set-input" id="vncfg-char-default-base" placeholder="./presets/" value="${d.charDefaultBase}">
     </div>
 
     <div class="set-group">
-        <div class="set-label">🌑 最終預設立繪 <span style="font-weight:normal; color:#B78456; font-size:11px;">Fallback 2 — 所有渠道失敗時顯示</span></div>
+        <div class="set-label">🌑 最終預設立繪 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">Fallback 2 — 所有渠道失敗時顯示</span></div>
         <input class="set-input" id="vncfg-final-fallback" placeholder="https://files.catbox.moe/9je7j2.png" value="${d.finalFallbackSprite}">
         <div class="set-desc">建議用透明背景 PNG 剪影。</div>
     </div>
