@@ -12,7 +12,7 @@
     // 定義系統級樣式 (全面替換為 Aurelia 咖啡流金風格)
     const appStyle = `
         /* 基礎容器 */
-        .set-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; }
+        .set-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; color-scheme: light; }
         .set-header { padding: 15px 20px; background: rgba(228,232,245,0.85); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; color: #1A1C28; }
         
         /* 🔥 iOS 安全區域自動適應與手動強制下移 */
@@ -41,9 +41,9 @@
         .set-group { background: rgba(228,232,245,0.85); border-radius: 8px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px; border: 1px solid rgba(26,28,40,0.15); box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
         .set-label { font-size: 13px; color: #1A1C28; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-weight: 800; letter-spacing: 1px; }
         .set-desc { font-size: 11px; color: #3A3F5C; line-height: 1.6; margin-bottom: 5px; }
-        .set-input, .set-select, .set-textarea { background: #EEF0F6; border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; padding: 12px; border-radius: 4px; font-size: 13px; outline: none; width: 100%; box-sizing: border-box; transition: all 0.2s; color-scheme: light; }
-        .set-input:focus, .set-textarea:focus, .set-select:focus { border-color: #1A1C28; background: #EEF0F6; box-shadow: 0 0 0 2px rgba(26,28,40,0.10); }
-        .set-select option { background: #EEF0F6; color: #1A1C28; }
+        .set-input, .set-select, .set-textarea { background: #EEF0F6 !important; border: 1px solid rgba(26,28,40,0.20); color: #1A1C28 !important; padding: 12px; border-radius: 4px; font-size: 13px; outline: none; width: 100%; box-sizing: border-box; transition: all 0.2s; color-scheme: light; }
+        .set-input:focus, .set-textarea:focus, .set-select:focus { border-color: #1A1C28; background: #EEF0F6 !important; box-shadow: 0 0 0 2px rgba(26,28,40,0.10); }
+        .set-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
         .set-textarea { resize: vertical; min-height: 80px; font-family: monospace; line-height: 1.5; }
         
         /* 滑桿 */
