@@ -788,7 +788,7 @@ const IRIS_IDLE = [
                 <div class="claude-attach-chips" id="claude-attach-chips"></div>
                 <input type="file" id="claude-file-input" multiple style="display:none;" accept="image/*,application/pdf,.txt,.md,.json,.csv,.js,.ts,.py,.html,.css,.yml,.yaml,.toml,.log">
                 <div class="void-chat-input-row">
-                    <input type="text" id="iris-input" class="void-input" placeholder="提供故事素材或與瀅瀅對話..." autocomplete="off">
+                    <textarea id="iris-input" class="void-input" placeholder="提供故事素材或與瀅瀅對話..." rows="1" autocomplete="off"></textarea>
                     <button class="void-attach-btn" id="claude-attach-btn" title="附加檔案" style="display:none;">📎</button>
                     <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
                     <button class="void-send-btn" id="iris-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
@@ -859,7 +859,22 @@ const IRIS_IDLE = [
 
             if (dialogueBox) dialogueBox.onclick = advanceIrisVn;
             if (sendBtn) sendBtn.onclick = sendIrisMessage;
-            if (inputField) inputField.onkeypress = (e) => { if (e.key === 'Enter') sendIrisMessage(); };
+            if (inputField) {
+                // Enter 送出、Shift+Enter 換行
+                inputField.onkeydown = (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                        e.preventDefault();
+                        sendIrisMessage();
+                    }
+                };
+                // 自動增高（textarea 隨內容變高、撞到 max-height 開始捲）
+                const autoGrow = () => {
+                    inputField.style.height = 'auto';
+                    inputField.style.height = Math.min(inputField.scrollHeight, 200) + 'px';
+                };
+                inputField.addEventListener('input', autoGrow);
+                autoGrow();
+            }
             if (avatar) avatar.onclick = pokeIris;
 
             // Claude 房間：📎 附件按鈕（只在 mode-claude 顯示，由 CSS 控制 display）
@@ -1995,23 +2010,30 @@ const IRIS_IDLE = [
         const text = input.value.trim();
         if (!text) return;
 
+        // textarea 多行模式：清空後重設高度回單行
+        const clearInput = () => {
+            input.value = '';
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+        };
+
         // 🦀 Claude 房間獨立分支：走 cc-bridge / OpenAI 兼容、跟瀅瀅柴郡完全隔離
         if (isClaudeRoom) {
-            input.value = '';
+            clearInput();
             return VoidClaudeRoom.sendMessage(text);
         }
 
         startIdleTimer();
 
-        if (text.toUpperCase() === 'ERR_404') { input.value = ''; enter404Room(); return; }
+        if (text.toUpperCase() === 'ERR_404') { clearInput(); enter404Room(); return; }
         if (is404Room && text.toUpperCase() === 'SYS_RESTORE') {
-            input.value = '';
+            clearInput();
             playIrisSequence("[Nar|馬賽克雜訊短暫浮現在柴郡的輪廓邊緣，他懶洋洋地抬起一根手指。]\n[Char|柴郡|smirk|......用作弊碼回去，真沒意思。門開了。別讓我後悔打開它。]");
             setTimeout(() => restoreLobby(), 3500);
             return;
         }
 
-        input.value = '';
+        clearInput();
         IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
 
         // 確保發送消息時隱藏閒聊，還原主線
