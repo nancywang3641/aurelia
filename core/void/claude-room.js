@@ -397,12 +397,99 @@
         return tmp.innerHTML;
     }
 
+    // ===== ASK marker：Clawd 在回覆嵌 [ASK|題目|選項...]、前端 render 成按鈕 + 其他自輸入 =====
+    function _parseAskMarkers(content) {
+        if (!content || typeof content !== 'string') return { asks: [], stripped: content };
+        const asks = [];
+        const re = /\[ASK\|([^\]]+)\]/g;
+        let m;
+        while ((m = re.exec(content)) !== null) {
+            const parts = m[1].split('|').map(s => s.trim()).filter(s => s.length);
+            if (parts.length >= 2) {
+                asks.push({ question: parts[0], options: parts.slice(1) });
+            }
+        }
+        const stripped = asks.length ? content.replace(re, '').trim() : content;
+        return { asks, stripped };
+    }
+
+    function _pickClaudeAskAnswer(wrapEl, answer) {
+        if (!wrapEl || wrapEl.classList.contains('picked')) return;
+        wrapEl.classList.add('picked');
+        wrapEl.querySelectorAll('button, input').forEach(el => { el.disabled = true; });
+        const picked = document.createElement('div');
+        picked.className = 'claude-ask-picked';
+        picked.textContent = `✓ 已選：${answer}`;
+        wrapEl.appendChild(picked);
+        if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.sendMessage === 'function') {
+            window.VoidClaudeRoom.sendMessage(answer);
+        }
+    }
+
+    function _buildClaudeAskUI(ask) {
+        const wrap = document.createElement('div');
+        wrap.className = 'claude-ask';
+
+        const qEl = document.createElement('div');
+        qEl.className = 'claude-ask-q';
+        qEl.textContent = ask.question;
+        wrap.appendChild(qEl);
+
+        const optsEl = document.createElement('div');
+        optsEl.className = 'claude-ask-opts';
+        ask.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'claude-ask-opt';
+            btn.type = 'button';
+            btn.textContent = opt;
+            btn.addEventListener('click', () => _pickClaudeAskAnswer(wrap, opt));
+            optsEl.appendChild(btn);
+        });
+        wrap.appendChild(optsEl);
+
+        const otherRow = document.createElement('div');
+        otherRow.className = 'claude-ask-other-row';
+        const inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        inputEl.className = 'claude-ask-other-input';
+        inputEl.placeholder = '或自己填...';
+        const submitBtn = document.createElement('button');
+        submitBtn.className = 'claude-ask-other-submit';
+        submitBtn.type = 'button';
+        submitBtn.textContent = '送出';
+        const submitOther = () => {
+            const txt = inputEl.value.trim();
+            if (!txt) return;
+            _pickClaudeAskAnswer(wrap, txt);
+        };
+        submitBtn.addEventListener('click', submitOther);
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                e.preventDefault();
+                submitOther();
+            }
+        });
+        otherRow.appendChild(inputEl);
+        otherRow.appendChild(submitBtn);
+        wrap.appendChild(otherRow);
+
+        return wrap;
+    }
+
     function _renderClaudeBubble(role, content, opts = {}) {
         const stream = document.getElementById('claude-chat-stream');
         if (!stream) return;
         const isUser = role === 'user';
         const wrap = document.createElement('div');
         wrap.className = 'claude-bubble-wrap ' + (isUser ? 'from-user' : 'from-claude');
+
+        // ASK marker：只在 Clawd 最終回覆 render（不在 streaming 中、不在 user 訊息）
+        let askMatches = [];
+        if (!isUser && !opts.suppressMarkdown) {
+            const r = _parseAskMarkers(content);
+            askMatches = r.asks;
+            content = r.stripped;
+        }
 
         if (!isUser && opts.thinking) {
             const t = document.createElement('div');
@@ -485,6 +572,11 @@
         }
 
         wrap.appendChild(bubble);
+
+        // ASK marker UI：附在氣泡下方、用量 footer 上方
+        askMatches.forEach(ask => {
+            wrap.appendChild(_buildClaudeAskUI(ask));
+        });
 
         // 用量 footer：只在 Claude 氣泡 + 有 usage 時顯示
         if (!isUser && opts.usage && (opts.usage.input_tokens || opts.usage.output_tokens)) {

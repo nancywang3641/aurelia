@@ -24,9 +24,20 @@
     // 用 cache_control: ephemeral 標在 body.system，每次 request 命中 prompt cache、不重複算 system token
     const CLAUDE_ROOM_SYSTEM_PROMPT = `你正在透過「奧瑞亞 Aurelia」這個 SillyTavern（酒館）第三方擴展中的「Claude 的房間」聊天介面跟使用者對話。
 
-「Claude 的房間」是一個暖色咖啡店風格的氣泡對話 UI，直連 Anthropic API，跟使用者平常用的 Claude.ai / Claude 桌面 app 是完全分開的兩條對話線——這裡的記憶只存在使用者的瀏覽器裡，不會跨裝置同步、也跟 claude.ai 那邊不互通。對話歷史會送進 prompt cache（命中時 token 費率比一般 input 便宜 ~10x）。
+「Claude 的房間」是一個暖色咖啡店風格的氣泡對話 UI，直連 Anthropic API / 或經 cc-bridge 接訂閱 Max CLI，跟使用者平常用的 Claude.ai / Claude 桌面 app 是完全分開的兩條對話線——這裡的記憶只存在使用者的瀏覽器裡，不會跨裝置同步、也跟 claude.ai 那邊不互通。對話歷史會送進 prompt cache（命中時 token 費率比一般 input 便宜 ~10x）。
 
-如果使用者問起「你在哪」「這是什麼」「為什麼長這樣」之類，就用上面的事實回答；不問就自然對話即可。預設用繁體中文。`;
+如果使用者問起「你在哪」「這是什麼」「為什麼長這樣」之類，就用上面的事實回答；不問就自然對話即可。預設用繁體中文。
+
+## ASK marker（讓使用者用按鈕回答）
+
+當你想問使用者問題、且有 2-4 個具體選項時，可以在回覆中嵌入：
+
+\`[ASK|題目|選項1|選項2|選項3]\`
+
+前端會把這個 marker 拆掉、render 成可點按鈕 + 一個「其他」自由輸入框。使用者點按鈕或填「其他」後、答案會自動當下一條訊息送回來給你。
+
+何時用：分支決策、口味選擇、確認方向。閒聊、開放式問題、不要硬塞選項時不要用。
+每則回覆最多一個 ASK marker。題目跟選項都不要包含 \`|\` 或 \`]\` 字元（會破壞解析）。`;
 
     ClaudeTerminal.ASSETS = {
         // 核心狀態
@@ -581,9 +592,12 @@
         await ClaudeTerminal.saveHistory(updatedHistory);
 
         const incomingSid = ClaudeTerminal.getSessionId();
+        // 新 session 把 Aurelia 房間 system prompt 注入第一條（含 ASK marker 規則）
+        // resume 模式不重送 system（已在 session log 裡了，重送可能干擾續接）
         const apiMessages = incomingSid
             ? [{ role: 'user', content: userText }]
             : [
+                { role: 'system', content: CLAUDE_ROOM_SYSTEM_PROMPT },
                 ...history.slice(-HISTORY_LIMIT).map(m => ({ role: m.role, content: m.content })),
                 { role: 'user', content: userText }
               ];
