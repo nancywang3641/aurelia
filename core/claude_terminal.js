@@ -1,22 +1,22 @@
 /**
  * ========================
- * Claude Terminal (v0.1 - MVP)
+ * Claude Terminal (v0.2 - multi-conv)
  * 「Claude 的房間」獨立對話接口
  * ========================
  * 職責：
- * 1. 走 cc-bridge / OpenAI 兼容 API（不經 OS_API、跟主/副模型隔離、不污染 preset）
- * 2. 對話歷史持久化至 IndexedDB（os_db studio_chats，modeId = 'claude_room_main'）
- * 3. 提供立繪資源映射（本機 Clawd SVG，朋友 fallback DiceBear pixel-art）
+ * 1. 走 cc-bridge / OpenAI 兼容 API / Anthropic 直連（跟主/副模型隔離、不污染 preset）
+ * 2. 多會話系統（兩 tab：訂閱 Max / Anthropic API），每 conv 自己的訊息 + sid
+ *    - 索引：localStorage（claude_max_convs, claude_api_convs, claude_*_active, claude_active_tab）
+ *    - 訊息：IndexedDB studio_chats，key = `claude_conv_<id>`
+ * 3. 自動把舊版 `claude_room_main` 一條歷史 → Max tab 的 conv_legacy
  *
- * 不負責 UI 渲染——UI 由 void_terminal 共用大廳場景；本檔僅 API + 持久化 + 資源 helper。
+ * UI 在 void_terminal；本檔僅資料層 + API + 資源 helper。
  */
 
 (function(ClaudeTerminal) {
     'use strict';
 
-    const HISTORY_MODE_ID = 'claude_room_main';
-    const HISTORY_LIMIT = 100; // 最近 100 條（約 50 輪），新對話模式才用；resume 模式只送新訊息
-    const SESSION_ID_KEY = 'claude_room_session_id'; // localStorage key（明天會被 multi-conv 系統取代）
+    const HISTORY_LIMIT = 100; // 每個 conv 最近 100 條（新對話模式才用；resume 模式只送新訊息）
     const SVG_BASE = 'scripts/extensions/third-party/my-tavern-extension/core/assets/claude/';
     const FALLBACK_URL = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=clawd&size=256';
 
@@ -89,7 +89,6 @@
             temperature: Number(c.temperature),
             top_p: Number(c.top_p),
             inlineEffort:  (c.inlineEffort  || '').trim(),
-            // inlineBackend 已棄用（picker 砍 BACKEND section 了），保留讀但不送 body
         };
     };
 
@@ -98,12 +97,235 @@
         return !!(c && c.url && c.key);
     };
 
-    // ============== 歷史持久化（os_db studio_chats）==============
+    // ============== Multi-conv 系統 ==============
+    // 兩 tab：'max'（訂閱版、PC dancc CLI）/ 'api'（Anthropic 直連 / VPS cc-bridge / custom）
+    // localStorage 索引 + IndexedDB(studio_chats) 訊息
+
+    const TABS = ['max', 'api'];
+    const LS_KEYS = {
+        activeTab: 'claude_active_tab',
+        maxConvs:  'claude_max_convs',
+        maxActive: 'claude_max_active',
+        apiConvs:  'claude_api_convs',
+        apiActive: 'claude_api_active',
+    };
+    const CONV_IDB_PREFIX = 'claude_conv_';
+    const LEGACY_IDB_KEY  = 'claude_room_main';
+    const LEGACY_SID_KEY  = 'claude_room_session_id';
+
+    function _lsGetJson(key, fallback) {
+        try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+        catch (_) { return fallback; }
+    }
+    function _lsSetJson(key, val) {
+        try { localStorage.setItem(key, JSON.stringify(val)); } catch (_) {}
+    }
+    function _lsGetRaw(key) {
+        try { return localStorage.getItem(key); } catch (_) { return null; }
+    }
+    function _lsSetRaw(key, val) {
+        try {
+            if (val === null || val === undefined) localStorage.removeItem(key);
+            else localStorage.setItem(key, String(val));
+        } catch (_) {}
+    }
+    function _convsKey(tab)  { return tab === 'api' ? LS_KEYS.apiConvs : LS_KEYS.maxConvs; }
+    function _activeKey(tab) { return tab === 'api' ? LS_KEYS.apiActive : LS_KEYS.maxActive; }
+    function _genConvId() {
+        return 'conv_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    }
+    function _normalizeTab(tab) {
+        return TABS.includes(tab) ? tab : ClaudeTerminal.getActiveTab();
+    }
+
+    ClaudeTerminal.getActiveTab = function() {
+        const t = _lsGetRaw(LS_KEYS.activeTab);
+        return TABS.includes(t) ? t : 'max';
+    };
+
+    ClaudeTerminal.setActiveTab = function(tab) {
+        _lsSetRaw(LS_KEYS.activeTab, TABS.includes(tab) ? tab : 'max');
+    };
+
+    ClaudeTerminal.listConversations = function(tab) {
+        tab = _normalizeTab(tab);
+        const arr = _lsGetJson(_convsKey(tab), []);
+        return Array.isArray(arr) ? arr : [];
+    };
+
+    ClaudeTerminal._saveConvsList = function(tab, list) {
+        tab = _normalizeTab(tab);
+        _lsSetJson(_convsKey(tab), Array.isArray(list) ? list : []);
+    };
+
+    ClaudeTerminal.getActiveConvId = function(tab) {
+        tab = _normalizeTab(tab);
+        return _lsGetRaw(_activeKey(tab)) || null;
+    };
+
+    ClaudeTerminal.setActiveConvId = function(tab, convId) {
+        tab = _normalizeTab(tab);
+        _lsSetRaw(_activeKey(tab), convId);
+    };
+
+    /** 給 convId 查所屬 tab + index + meta，沒找到回 null */
+    ClaudeTerminal.findConv = function(convId) {
+        if (!convId) return null;
+        for (const tab of TABS) {
+            const list = ClaudeTerminal.listConversations(tab);
+            const idx = list.findIndex(c => c && c.id === convId);
+            if (idx >= 0) return { tab, idx, meta: list[idx] };
+        }
+        return null;
+    };
+
+    /** 建新會話；自動設為該 tab 的 active，回 conv id */
+    ClaudeTerminal.createConversation = function(tab, opts) {
+        tab = _normalizeTab(tab);
+        opts = opts || {};
+        const id = opts.id || _genConvId();
+        const meta = {
+            id,
+            title: (opts.title || '新會話').slice(0, 50),
+            sid: opts.sid || null,
+            lastActive: Date.now(),
+            msgCount: 0,
+        };
+        if (tab === 'api') meta.presetId = opts.presetId || '';
+        const list = ClaudeTerminal.listConversations(tab);
+        list.unshift(meta);
+        ClaudeTerminal._saveConvsList(tab, list);
+        ClaudeTerminal.setActiveConvId(tab, id);
+        return id;
+    };
+
+    /** 更新 conv meta（同時 bump lastActive、依時間倒序重排） */
+    ClaudeTerminal.touchConversation = function(convId, partial) {
+        const found = ClaudeTerminal.findConv(convId);
+        if (!found) return false;
+        const list = ClaudeTerminal.listConversations(found.tab);
+        Object.assign(list[found.idx], partial || {}, { lastActive: Date.now() });
+        list.sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
+        ClaudeTerminal._saveConvsList(found.tab, list);
+        return true;
+    };
+
+    ClaudeTerminal.renameConversation = function(convId, title) {
+        if (!title) return false;
+        return ClaudeTerminal.touchConversation(convId, { title: String(title).slice(0, 50) });
+    };
+
+    ClaudeTerminal.deleteConversation = async function(convId) {
+        const found = ClaudeTerminal.findConv(convId);
+        if (!found) return false;
+        const list = ClaudeTerminal.listConversations(found.tab);
+        list.splice(found.idx, 1);
+        ClaudeTerminal._saveConvsList(found.tab, list);
+        if (ClaudeTerminal.getActiveConvId(found.tab) === convId) {
+            ClaudeTerminal.setActiveConvId(found.tab, list[0] ? list[0].id : null);
+        }
+        if (window.OS_DB && typeof window.OS_DB.clearStudioChat === 'function') {
+            try { await window.OS_DB.clearStudioChat(CONV_IDB_PREFIX + convId); } catch (_) {}
+        }
+        return true;
+    };
+
+    /** 載入指定 conv 的 meta + messages，沒找到回 null */
+    ClaudeTerminal.loadConversation = async function(convId) {
+        const found = ClaudeTerminal.findConv(convId);
+        if (!found) return null;
+        let messages = [];
+        if (window.OS_DB && typeof window.OS_DB.getStudioChat === 'function') {
+            try {
+                const m = await window.OS_DB.getStudioChat(CONV_IDB_PREFIX + convId);
+                if (Array.isArray(m)) messages = m;
+            } catch (e) {
+                console.warn('[ClaudeTerminal] loadConversation failed:', e);
+            }
+        }
+        return { meta: found.meta, messages };
+    };
+
+    /** 切到指定 conv：自動切 tab、設 active、回 {meta, messages} */
+    ClaudeTerminal.switchConversation = async function(convId) {
+        const found = ClaudeTerminal.findConv(convId);
+        if (!found) return null;
+        ClaudeTerminal.setActiveTab(found.tab);
+        ClaudeTerminal.setActiveConvId(found.tab, convId);
+        return await ClaudeTerminal.loadConversation(convId);
+    };
+
+    /** 確保當前 tab 至少有一個 active conv（沒有就建一個），回 active conv id */
+    ClaudeTerminal.ensureActiveConv = function(tab) {
+        tab = _normalizeTab(tab);
+        const activeId = ClaudeTerminal.getActiveConvId(tab);
+        if (activeId && ClaudeTerminal.findConv(activeId)) return activeId;
+        // active 失效：找列表第一個
+        const list = ClaudeTerminal.listConversations(tab);
+        if (list.length) {
+            ClaudeTerminal.setActiveConvId(tab, list[0].id);
+            return list[0].id;
+        }
+        // 列表也空：建新會話
+        return ClaudeTerminal.createConversation(tab);
+    };
+
+    // ============== Legacy migration ==============
+    // studio_chats[claude_room_main] + claude_room_session_id → Max tab conv_legacy
+    let _migrationPromise = null;
+    function _ensureMigrated() {
+        if (!_migrationPromise) _migrationPromise = ClaudeTerminal.migrateLegacyHistoryIfNeeded();
+        return _migrationPromise;
+    }
+    let _migrationDone = false;
+    ClaudeTerminal.migrateLegacyHistoryIfNeeded = async function() {
+        if (_migrationDone) return;
+        _migrationDone = true;
+        try {
+            // 已有 Max conv 就不 migrate（避免重跑）
+            if (ClaudeTerminal.listConversations('max').length) return;
+            if (!window.OS_DB || typeof window.OS_DB.getStudioChat !== 'function') return;
+            const oldMsgs = await window.OS_DB.getStudioChat(LEGACY_IDB_KEY);
+            if (!Array.isArray(oldMsgs) || !oldMsgs.length) return;
+
+            const oldSid = _lsGetRaw(LEGACY_SID_KEY);
+            const firstUser = oldMsgs.find(m => m && m.role === 'user' && typeof m.content === 'string');
+            const title = (firstUser && firstUser.content) ? firstUser.content.slice(0, 30) : '舊對話';
+
+            const id = 'conv_legacy';
+            const meta = {
+                id, title,
+                sid: oldSid || null,
+                lastActive: Date.now(),
+                msgCount: oldMsgs.length,
+            };
+            ClaudeTerminal._saveConvsList('max', [meta]);
+            ClaudeTerminal.setActiveConvId('max', id);
+            ClaudeTerminal.setActiveTab('max');
+
+            if (typeof window.OS_DB.saveStudioChat === 'function') {
+                await window.OS_DB.saveStudioChat(CONV_IDB_PREFIX + id, oldMsgs);
+            }
+            if (typeof window.OS_DB.clearStudioChat === 'function') {
+                await window.OS_DB.clearStudioChat(LEGACY_IDB_KEY);
+            }
+            _lsSetRaw(LEGACY_SID_KEY, null);
+            console.log('[ClaudeTerminal] 舊對話已遷移到 Max tab → conv_legacy（' + oldMsgs.length + ' 訊息）');
+        } catch (e) {
+            console.warn('[ClaudeTerminal] migration failed:', e);
+        }
+    };
+
+    // ============== 歷史持久化（conv-aware，路由到 active conv）==============
 
     ClaudeTerminal.loadHistory = async function() {
+        await _ensureMigrated();
+        const tab = ClaudeTerminal.getActiveTab();
+        const convId = ClaudeTerminal.getActiveConvId(tab);
+        if (!convId) return [];
         if (!window.OS_DB || typeof window.OS_DB.getStudioChat !== 'function') return [];
         try {
-            const msgs = await window.OS_DB.getStudioChat(HISTORY_MODE_ID);
+            const msgs = await window.OS_DB.getStudioChat(CONV_IDB_PREFIX + convId);
             return Array.isArray(msgs) ? msgs : [];
         } catch (e) {
             console.warn('[ClaudeTerminal] loadHistory failed:', e);
@@ -113,39 +335,59 @@
 
     ClaudeTerminal.saveHistory = async function(messages) {
         if (!window.OS_DB || typeof window.OS_DB.saveStudioChat !== 'function') return;
+        const tab = ClaudeTerminal.getActiveTab();
+        const convId = ClaudeTerminal.ensureActiveConv(tab);
         try {
-            await window.OS_DB.saveStudioChat(HISTORY_MODE_ID, messages || []);
+            await window.OS_DB.saveStudioChat(CONV_IDB_PREFIX + convId, messages || []);
+            // 自動更新 conv meta：msgCount + 若還是「新會話」就用首條 user msg 當標題
+            const found = ClaudeTerminal.findConv(convId);
+            if (found) {
+                const partial = { msgCount: (messages || []).length };
+                if (found.meta.title === '新會話' && Array.isArray(messages) && messages.length) {
+                    const firstUser = messages.find(m => m && m.role === 'user' && typeof m.content === 'string');
+                    if (firstUser && firstUser.content) {
+                        partial.title = firstUser.content.slice(0, 30);
+                    }
+                }
+                ClaudeTerminal.touchConversation(convId, partial);
+            }
         } catch (e) {
             console.warn('[ClaudeTerminal] saveHistory failed:', e);
         }
     };
 
+    /** 清掉 active conv 的訊息（保留 conv 本身、reset sid） */
     ClaudeTerminal.clearHistory = async function() {
-        if (!window.OS_DB || typeof window.OS_DB.clearStudioChat !== 'function') return;
-        try {
-            await window.OS_DB.clearStudioChat(HISTORY_MODE_ID);
-        } catch (e) {
-            console.warn('[ClaudeTerminal] clearHistory failed:', e);
+        const tab = ClaudeTerminal.getActiveTab();
+        const convId = ClaudeTerminal.getActiveConvId(tab);
+        if (!convId) return;
+        if (window.OS_DB && typeof window.OS_DB.clearStudioChat === 'function') {
+            try { await window.OS_DB.clearStudioChat(CONV_IDB_PREFIX + convId); } catch (_) {}
         }
+        ClaudeTerminal.touchConversation(convId, { msgCount: 0, sid: null });
     };
 
-    // ============== Session ID（給 cc-bridge resume 用，省 prompt cache） ==============
+    // ============== Session ID（per-conv，存在 conv meta 裡）==============
 
     ClaudeTerminal.getSessionId = function() {
-        try { return localStorage.getItem(SESSION_ID_KEY) || null; } catch (e) { return null; }
+        const tab = ClaudeTerminal.getActiveTab();
+        const convId = ClaudeTerminal.getActiveConvId(tab);
+        if (!convId) return null;
+        const found = ClaudeTerminal.findConv(convId);
+        return (found && found.meta.sid) || null;
     };
 
     ClaudeTerminal.setSessionId = function(sid) {
-        try {
-            if (sid) localStorage.setItem(SESSION_ID_KEY, sid);
-            else localStorage.removeItem(SESSION_ID_KEY);
-        } catch (e) {}
+        const tab = ClaudeTerminal.getActiveTab();
+        const convId = ClaudeTerminal.getActiveConvId(tab);
+        if (!convId) return;
+        ClaudeTerminal.touchConversation(convId, { sid: sid || null });
     };
 
-    /** 開新對話：清 session_id + 清歷史。給 hist 視窗按鈕用 */
-    ClaudeTerminal.startNewConversation = async function() {
-        ClaudeTerminal.setSessionId(null);
-        await ClaudeTerminal.clearHistory();
+    /** 開新對話：在當前 active tab 建新 conv（舊 conv 保留），回新 conv id */
+    ClaudeTerminal.startNewConversation = function(tab) {
+        tab = _normalizeTab(tab);
+        return ClaudeTerminal.createConversation(tab);
     };
 
     // ============== 檔案上傳 ==============
@@ -191,15 +433,10 @@
      * 發送一條 user message → cc-bridge → 回 assistant reply。
      *
      * 兩種模式：
-     *   1. resume 模式（有 session_id）：只送新 user message，cc-bridge 用 `claude --resume <id>` 續接
+     *   1. resume 模式（active conv 有 sid）：只送新 user message，cc-bridge 用 `claude --resume <id>` 續接
      *      → Anthropic prompt cache 命中、Max 訂閱限額消耗 ~1/10
-     *   2. 新對話模式（沒 session_id）：送整個 history，cc-bridge 開新 session
-     *      → 第一次或 startNewConversation 後走此路
-     *
-     * @param {string} userText
-     * @param {Array<{path,filename,mime}>} [attachments] 上傳完的附件清單（已是 cc-bridge 本機路徑）
-     * @returns {Promise<{reply: string, sessionFallback: boolean}>}
-     *   sessionFallback=true 表 cc-bridge resume 失敗、退回新 session（Claude 失憶警告）
+     *   2. 新對話模式（active conv 沒 sid）：送整個 history，cc-bridge 開新 session
+     *      → 第一次或剛 startNewConversation 後走此路
      */
     ClaudeTerminal.send = async function(userText, attachments, onProgress) {
         const cfg = ClaudeTerminal.getConfig();
@@ -210,25 +447,20 @@
         //   event.type === 'text'     → { type:'text', delta: '...', accumulated: '...' }
         //   event.type === 'tool_use' → { type:'tool_use', tool: { name, input } }
         // Anthropic 直連模式暫不支援 progress（仍走 await 整段）
-        // 依 URL 自動分流：Anthropic 直連 vs cc-bridge / OpenAI 兼容
         if (cfg.isAnthropicDirect) {
             return _sendAnthropicDirect(userText, attachments, cfg);
         }
         return _sendCcBridge(userText, attachments, cfg, onProgress);
     };
 
-    // ===== Anthropic 直連（朋友最常用、不需任何 server）=====
+    // ===== Anthropic 直連 =====
     async function _sendAnthropicDirect(userText, attachments, cfg) {
         const history = await ClaudeTerminal.loadHistory();
         const newUserMsg = { role: 'user', content: userText, timestamp: Date.now() };
         const updatedHistory = [...history, newUserMsg];
         await ClaudeTerminal.saveHistory(updatedHistory);
 
-        // 攻略：把附件圖片讀成 base64 image_block（瀏覽器原生 file 物件處理）
-        // 注意：附件物件目前只在 cc-bridge 路徑生產（path 是 server 上的）
-        // 直連模式暫不支援 path-based 附件，只走純文字（後續可加 FileReader 直接讀）
         // 重點：cache_control: ephemeral 標在最後一條 user msg → 把所有 prior history 全 cache 住
-        // 下次發訊息時前面歷史命中 cache、token 算 cache_read 費率（比 input 便宜 ~10x）
         const lastUserBlocks = [{ type: 'text', text: userText, cache_control: { type: 'ephemeral' } }];
 
         const messages = history.slice(-HISTORY_LIMIT).map(m => ({
@@ -245,7 +477,6 @@
             }],
             messages,
         };
-        // thinking effort（非 off / 空字串才啟用）
         const eff = (cfg.inlineEffort || '').toLowerCase();
         if (eff && eff !== 'off') {
             body.thinking = { type: 'adaptive', display: 'summarized' };
@@ -283,7 +514,6 @@
             throw new Error('API:' + errMsg);
         }
 
-        // 拆 content blocks（可能有 thinking + text）
         let replyText = '';
         let thinkingText = '';
         for (const block of (data.content || [])) {
@@ -299,7 +529,6 @@
 
         const thinking = thinkingText.trim() || null;
 
-        // 算 cost（Opus 4.x 預設定價、其他可加擴展）
         const usageRaw = data.usage || {};
         const usageMeta = {
             input_tokens:  usageRaw.input_tokens || 0,
@@ -352,7 +581,7 @@
         const body = {
             model: cfg.model,
             messages: apiMessages,
-            stream: true,  // 走真 streaming 拿 block-level 漸進輸出
+            stream: true,
             max_tokens: cfg.maxTokens,
         };
         if (incomingSid) body.session_id = incomingSid;
@@ -407,13 +636,11 @@
                 if (done) break;
                 buf += decoder.decode(value, { stream: true });
 
-                // SSE 事件以 \n\n 分隔，每事件可能多行（我們只解 data:）
                 let sepIdx;
                 while ((sepIdx = buf.indexOf('\n\n')) !== -1) {
                     const rawEvent = buf.slice(0, sepIdx);
                     buf = buf.slice(sepIdx + 2);
 
-                    // 拆每行（但通常只有 data: 一行）
                     for (const line of rawEvent.split('\n')) {
                         if (!line.startsWith('data:')) continue;
                         const dataStr = line.slice(5).trim();
@@ -422,21 +649,18 @@
                         try { chunk = JSON.parse(dataStr); } catch (_) { continue; }
 
                         const delta = (chunk.choices && chunk.choices[0] && chunk.choices[0].delta) || {};
-                        // 文字 delta（漸進式 append）
                         if (typeof delta.content === 'string' && delta.content.length) {
                             replyAcc += delta.content;
                             if (typeof onProgress === 'function') {
                                 try { onProgress({ type: 'text', delta: delta.content, accumulated: replyAcc }); } catch (_) {}
                             }
                         }
-                        // 自定欄位：tool_use（後端即時送）
                         if (chunk.tool_use) {
                             toolsUsed.push(chunk.tool_use);
                             if (typeof onProgress === 'function') {
                                 try { onProgress({ type: 'tool_use', tool: chunk.tool_use }); } catch (_) {}
                             }
                         }
-                        // 自定欄位（done chunk 才會有）
                         if (chunk.session_id !== undefined) newSid = chunk.session_id;
                         if (chunk.usage_meta) usageMeta = chunk.usage_meta;
                         if (typeof chunk.thinking === 'string' && chunk.thinking.trim()) thinking = chunk.thinking;
@@ -472,6 +696,6 @@
         return h.length;
     };
 
-    console.log('[ClaudeTerminal] 模組已載入 (v0.1 MVP)');
+    console.log('[ClaudeTerminal] 模組已載入 (v0.2 multi-conv)');
 
 })(window.ClaudeTerminal = window.ClaudeTerminal || {});
