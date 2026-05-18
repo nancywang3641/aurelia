@@ -197,6 +197,43 @@ body.mode-404 { background: #000000; }
     background-size: 30px 30px !important;
 }
 
+/* === 寫作設置 TAB ─ 瀅瀅模式（預設）：城市背景 + 灰白遮罩 === */
+html:not(:has(.mode-404)) .write-tab {
+    background-image:
+        linear-gradient(rgba(26,28,40,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26,28,40,0.03) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(150,160,180,0.97) 0%, rgba(150,160,180,0.90) 45%, rgba(150,160,180,0.72) 100%),
+        url('https://files.catbox.moe/dszwdy.png') !important;
+    background-size: 30px 30px, 30px 30px, 100% 100%, contain !important;
+    background-position: top left, top left, center, center bottom !important;
+    background-repeat: repeat, repeat, no-repeat, no-repeat !important;
+}
+
+/* === 寫作設置 TAB ─ 404 模式：終端機 i717lk 背景 + 深綠遮罩 === */
+html:has(.mode-404) .write-tab {
+    background-color: #050d05 !important;
+    background-image:
+        linear-gradient(rgba(0,255,65,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,65,0.06) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(0,15,5,0.88) 0%, rgba(0,15,5,0.80) 45%, rgba(0,15,5,0.60) 100%),
+        url('https://files.catbox.moe/i717lk.png') !important;
+    background-size: 30px 30px, 30px 30px, 100% 100%, contain !important;
+    background-position: top left, top left, center, center bottom !important;
+    background-repeat: repeat, repeat, no-repeat, no-repeat !important;
+}
+/* 404 — 標題 / 副標 */
+html:has(.mode-404) .write-tab-title { color:#00ff41 !important; font-family:'Courier New',monospace !important; text-shadow:0 0 8px rgba(0,255,65,0.40) !important; }
+html:has(.mode-404) .write-tab-subtitle { color:rgba(0,255,65,0.60) !important; font-family:'Courier New',monospace !important; }
+/* 404 — 主按鈕（API設置 / VN煉丹 / 變數工坊 / 創作室 / 提示詞 / 世界書）*/
+html:has(.mode-404) .write-tab-btn { background:rgba(0,18,0,0.78) !important; border:1px solid rgba(0,255,65,0.30) !important; color:#b8ffcb !important; font-family:'Courier New',monospace !important; }
+html:has(.mode-404) .write-tab-btn:hover { background:rgba(0,255,65,0.10) !important; border-color:#00ff41 !important; color:#00ff41 !important; box-shadow:0 5px 15px rgba(0,255,65,0.18) !important; }
+/* 404 — 登出按鈕 */
+html:has(.mode-404) .write-tab-logout-btn { margin-top:12px; padding:12px 22px; display:flex; align-items:center; gap:12px; background:rgba(0,30,0,0.80); border:1px solid rgba(0,255,65,0.40); color:#00ff41; cursor:pointer; border-radius:3px; font-size:13px; font-weight:700; letter-spacing:1px; transition:all 0.2s; backdrop-filter:blur(5px); transform:skewX(-8deg); font-family:'Courier New',monospace; }
+html:has(.mode-404) .write-tab-logout-btn > * { transform:skewX(8deg); }
+html:has(.mode-404) .write-tab-logout-btn i { font-size:15px; flex-shrink:0; }
+html:has(.mode-404) .write-tab-logout-btn:hover { background:rgba(0,50,0,0.92); border-color:#00ff41; color:#00ff41; transform:skewX(-8deg) translateY(-2px); box-shadow:0 5px 15px rgba(0,255,65,0.30); }
+
+
 /* ── 子面板 TAB 切換按鈕懸停效果 (拿鐵主題) ── */
 .set-tab, .pm-tab, .avs-tab, .wb-cat-tab { transition: all 0.2s ease; }
 .set-tab:hover, .pm-tab:hover, .avs-tab:hover { background: rgba(26,28,40,0.06) !important; color: #1A1C28 !important; }
@@ -212,6 +249,12 @@ body.mode-404 { background: #000000; }
 .write-tab-btn i { font-size:16px; flex-shrink:0; }
 .write-tab-btn span { flex:1; text-align:left; }
 .write-tab-btn:hover { background:rgba(26,28,40,0.08); border-color:#1A1C28; transform:skewX(-8deg) translateY(-2px); box-shadow:0 5px 15px rgba(26,28,40,0.10); }
+/* 瀅瀅模式 — 登出按鈕（淡紅玻璃 + skewX 同調）*/
+html:not(:has(.mode-404)) .write-tab-logout-btn { margin-top:12px; padding:12px 22px; display:flex; align-items:center; gap:12px; background:rgba(252,225,225,0.78); border:1px solid rgba(180,70,70,0.30); color:#9a3a3a; cursor:pointer; border-radius:3px; font-size:13px; font-weight:700; letter-spacing:1px; transition:all 0.2s; backdrop-filter:blur(5px); transform:skewX(-8deg); }
+html:not(:has(.mode-404)) .write-tab-logout-btn > * { transform:skewX(8deg); }
+html:not(:has(.mode-404)) .write-tab-logout-btn i { font-size:15px; flex-shrink:0; }
+html:not(:has(.mode-404)) .write-tab-logout-btn:hover { background:rgba(248,200,200,0.92); border-color:#b04040; color:#7a2828; transform:skewX(-8deg) translateY(-2px); box-shadow:0 5px 15px rgba(180,70,70,0.20); }
+/* fallback (老瀏覽器不支援 :has) */
 .write-tab-logout-btn { margin-top:8px; padding:10px 20px; display:flex; align-items:center; gap:10px; background:transparent; border:1px solid rgba(252,129,129,0.3); color:rgba(252,129,129,0.7); cursor:pointer; border-radius:3px; font-size:12px; font-weight:600; letter-spacing:1px; transition:all 0.2s; }
 .write-tab-logout-btn:hover { border-color:#fc8181; color:#fc8181; background:rgba(252,129,129,0.08); }
 

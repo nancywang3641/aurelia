@@ -7,117 +7,6 @@
     const win = window.parent || window;
 
     // === 1. 樣式定義 (404 駭客終端機風格) ===
-    const appStyle = `
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-
-        #chaos-modal-root {
-            position: absolute; inset: 0;
-            background: rgba(0, 10, 0, 0.92); backdrop-filter: blur(4px);
-            z-index: 2000; display: flex; justify-content: center; align-items: center;
-            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-            font-family: 'Noto Sans TC', monospace, sans-serif;
-        }
-        #chaos-modal-root.active { opacity: 1; pointer-events: auto; }
-
-        .chaos-box {
-            width: 90%; max-width: 500px; height: 85%; max-height: 800px;
-            background: #000a00; border: 2px solid #00cc33;
-            border-radius: 4px; display: flex; flex-direction: column;
-            box-shadow: 0 0 25px rgba(0, 255, 65, 0.25), inset 0 0 20px rgba(0, 255, 65, 0.05);
-            overflow: hidden; position: relative;
-        }
-
-        /* 頂部標題列 */
-        .chaos-header {
-            background: #001a00; border-bottom: 2px solid #00cc33;
-            padding: 12px 15px; text-align: center; position: relative;
-            color: #00ff41; font-weight: 900; font-size: 1.2rem; letter-spacing: 3px;
-            text-shadow: 0 0 8px rgba(0,255,65,0.6);
-        }
-        .chaos-header::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,65,0.03) 2px, rgba(0,255,65,0.03) 4px);
-            pointer-events: none;
-        }
-        .chaos-close-btn {
-            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-            background: #001a00; color: #00cc33; border: 1px solid #00cc33;
-            width: 28px; height: 28px; border-radius: 2px;
-            font-weight: bold; cursor: pointer; display: flex;
-            align-items: center; justify-content: center; font-size: 1rem;
-            transition: 0.2s;
-        }
-        .chaos-close-btn:hover { background: #00cc33; color: #000; }
-
-        /* 內容區 */
-        .chaos-content {
-            flex: 1; padding: 12px; overflow-y: auto;
-            color: #b8ffcb; scrollbar-width: thin; scrollbar-color: #00cc33 #001a00;
-        }
-        .chaos-content::-webkit-scrollbar { width: 6px; }
-        .chaos-content::-webkit-scrollbar-thumb { background: #00cc33; border-radius: 0; }
-        .chaos-content::-webkit-scrollbar-track { background: #001a00; }
-
-        .chaos-section {
-            background: rgba(0, 255, 65, 0.04); border: 1px dashed rgba(0, 204, 51, 0.5);
-            border-radius: 2px; padding: 12px; margin-bottom: 12px;
-        }
-        .chaos-section-title {
-            color: #00ff41; font-size: 0.95rem; font-weight: bold; margin-bottom: 10px;
-            text-shadow: 0 0 6px rgba(0,255,65,0.5); display: flex; align-items: center; gap: 8px;
-            letter-spacing: 1px;
-        }
-
-        /* 輸入框 */
-        .chaos-input {
-            width: 100%; background: #001a00; border: 1px solid rgba(0, 204, 51, 0.5);
-            color: #00ff41; padding: 9px 10px; border-radius: 2px; font-size: 0.95rem;
-            box-sizing: border-box; outline: none; transition: 0.2s;
-            font-family: 'Noto Sans TC', monospace, sans-serif;
-        }
-        .chaos-input:focus { border-color: #00ff41; box-shadow: 0 0 8px rgba(0,255,65,0.3); }
-        .chaos-input::placeholder { color: rgba(0,204,51,0.4); }
-
-        /* 任務卡片 (Checkboxes) */
-        .chaos-task-list {
-            display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow-y: auto;
-            padding-right: 4px; margin-bottom: 10px;
-        }
-        .chaos-task-list::-webkit-scrollbar { width: 4px; }
-        .chaos-task-list::-webkit-scrollbar-thumb { background: #00cc33; }
-        .chaos-task-list::-webkit-scrollbar-track { background: #001a00; }
-        .chaos-task-item {
-            display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
-            background: #001a00; padding: 9px 10px; border-radius: 2px; border: 1px solid rgba(0,204,51,0.25);
-            transition: 0.2s;
-        }
-        .chaos-task-item:hover { border-color: rgba(0,255,65,0.6); background: rgba(0,255,65,0.06); }
-        .chaos-task-item.selected { border-color: #00ff41; background: rgba(0,255,65,0.12); }
-        .chaos-task-checkbox { flex-shrink: 0; margin-top: 3px; accent-color: #00ff41; width: 15px; height: 15px; }
-        .chaos-task-text { font-size: 0.88rem; color: #b8ffcb; line-height: 1.5; }
-
-        /* 底部按鈕區 */
-        .chaos-footer {
-            padding: 12px; background: #001a00; border-top: 2px solid #00cc33;
-            display: flex; flex-direction: column; gap: 8px;
-        }
-        .chaos-btn {
-            width: 100%; padding: 11px; border: none; border-radius: 2px;
-            font-size: 1rem; font-weight: bold; cursor: pointer;
-            transition: 0.2s; letter-spacing: 1px;
-            font-family: 'Noto Sans TC', monospace, sans-serif;
-        }
-        .btn-start { background: #004d00; color: #00ff41; border: 1px solid #00cc33; }
-        .btn-start:hover:not(:disabled) { background: #006600; box-shadow: 0 0 12px rgba(0,255,65,0.4); }
-        .btn-inject { background: #003344; color: #00e5ff; border: 1px solid #0099bb; }
-        .btn-inject:hover:not(:disabled) { background: #004466; box-shadow: 0 0 12px rgba(0,229,255,0.3); }
-        .btn-random { background: #002200; color: #00cc33; border: 1px solid rgba(0,204,51,0.4);
-            margin-bottom: 0; font-size: 0.85rem; padding: 6px 10px; }
-        .btn-random:hover:not(:disabled) { background: #003300; border-color: #00cc33; }
-        .btn-gen-chaos { background: #003344; color: #00e5ff; border-color: #0099bb; }
-        .btn-gen-chaos:hover:not(:disabled) { background: #005577; border-color: #00e5ff; box-shadow: 0 0 8px rgba(0,229,255,0.4); }
-        .btn-random:disabled, .btn-gen-chaos:disabled { opacity: 0.5; cursor: not-allowed; }
-    `;
 
     // === 2. 沙雕數據庫 (基礎預設題庫 - 解藥任務) ===
     const DB_TASKS = [
@@ -248,12 +137,6 @@
 
     // === 4. 核心邏輯 ===
     function init() {
-        if (!document.getElementById('chaos-style')) {
-            const style = document.createElement('style');
-            style.id = 'chaos-style';
-            style.innerHTML = appStyle;
-            document.head.appendChild(style);
-        }
         if (!document.getElementById('chaos-modal-root')) {
             const homeTab = document.getElementById('aurelia-home-tab');
             const container = homeTab || document.body;

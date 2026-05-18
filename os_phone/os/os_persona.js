@@ -47,64 +47,6 @@
     }
 
     // ── 新版拿鐵咖啡 UI 樣式 ──
-    function injectStyles() {
-        const sid = 'os-persona-styles';
-        if (doc.getElementById(sid)) return;
-        const s = doc.createElement('style');
-        s.id = sid;
-        s.textContent = `
-        .ps-app { display:flex; flex-direction:column; height:100%; width:100%; background:#EEF0F6; color:#1A1C28; font-family:'Noto Sans TC',sans-serif; overflow:hidden; position:relative; }
-        .ps-app::before { content:''; position:absolute; inset:0; pointer-events:none; z-index:0; background-image:linear-gradient(rgba(26,28,40,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(26,28,40,0.04) 1px, transparent 1px); background-size: 30px 30px; opacity: 0.8; }
-        
-        .ps-header { display:flex; align-items:center; justify-content:center; height:56px; background:rgba(228,232,245,0.92); border-bottom:1px solid rgba(26,28,40,0.10); flex-shrink:0; box-shadow:0 2px 10px rgba(0,0,0,0.3); position:relative; z-index:2; }
-        .ps-title { font-size:15px; font-weight:800; color:#1A1C28; letter-spacing:1px; text-transform:uppercase; }
-        
-        .ps-body { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; position:relative; z-index:2; }
-        .ps-body::-webkit-scrollbar { width:4px; }
-        .ps-body::-webkit-scrollbar-thumb { background:rgba(26,28,40,0.20); border-radius:4px; }
-        
-        .ps-card { display:flex; align-items:center; background:rgba(228,232,245,0.95); border:1px solid rgba(26,28,40,0.10); border-left:3px solid rgba(26,28,40,0.40); border-radius:8px; padding:14px; gap:14px; transition:all 0.2s ease; position:relative; box-shadow:0 4px 15px rgba(0,0,0,0.3); cursor:pointer; }
-        .ps-card:hover { background:rgba(210,215,235,0.95); border-color:#1A1C28; border-left-color:#1A1C28; transform:translateX(4px); box-shadow:0 6px 20px rgba(26,28,40,0.08); }
-        .ps-card.active { background:rgba(210,215,235,0.95); border-color:#1A1C28; border-left-color:#1A1C28; box-shadow:0 4px 15px rgba(26,28,40,0.12); }
-        
-        .ps-avatar { width:52px; height:52px; border-radius:50%; background:rgba(228,232,245,0.90); object-fit:cover; flex-shrink:0; border:2px solid rgba(26,28,40,0.30); box-shadow:0 2px 8px rgba(0,0,0,0.4); transition:0.2s; }
-        .ps-card.active .ps-avatar { border-color:#1A1C28; box-shadow:0 0 10px rgba(26,28,40,0.30); }
-        
-        .ps-info { flex:1; min-width:0; padding-right:10px; }
-        .ps-name { font-size:15px; font-weight:800; color:#1A1C28; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; }
-        .ps-desc { font-size:11px; color:rgba(26,28,40,0.72); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-        
-        .ps-actions { display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
-        .ps-btn-edit, .ps-btn-del { background:none; border:none; font-size:13px; cursor:pointer; padding:8px; border-radius:6px; transition:.2s; display:flex; align-items:center; justify-content:center; }
-        .ps-btn-edit { color:#1A1C28; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.15); }
-        .ps-btn-edit:hover { background:rgba(26,28,40,0.10); border-color:#1A1C28; box-shadow:0 0 8px rgba(26,28,40,0.15); }
-        .ps-btn-del { color:#fc8181; background:rgba(252,129,129,0.1); border:1px solid rgba(252,129,129,0.3); }
-        .ps-btn-del:hover { background:rgba(252,129,129,0.2); border-color:#fc8181; box-shadow:0 0 8px rgba(252,129,129,0.3); }
-
-        .ps-add-btn { width:100%; padding:14px; background:#1A1C28; border:none; border-radius:8px; color:#EEF0F6; font-size:13px; font-weight:900; cursor:pointer; transition:.2s; display:flex; align-items:center; justify-content:center; gap:8px; margin-top:8px; letter-spacing:1px; box-shadow:0 4px 15px rgba(26,28,40,0.10); }
-        .ps-add-btn:hover { filter:brightness(1.1); transform:translateY(-2px); box-shadow:0 6px 20px rgba(26,28,40,0.20); }
-
-        .ps-modal-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.6); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; opacity:0; pointer-events:none; transition:opacity 0.2s; backdrop-filter:blur(4px); }
-        .ps-modal-overlay.show { opacity:1; pointer-events:auto; }
-        .ps-modal { width:100%; max-width:340px; background:rgba(228,232,245,0.97); border:1px solid rgba(26,28,40,0.25); border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 15px 50px rgba(0,0,0,0.6); transform:translateY(15px); transition:transform 0.2s; }
-        .ps-modal-overlay.show .ps-modal { transform:translateY(0); }
-        
-        .ps-modal-header { padding:16px; background:rgba(228,232,245,0.96); border-bottom:1px solid rgba(26,28,40,0.15); font-size:15px; font-weight:800; color:#1A1C28; text-align:center; letter-spacing:1px; }
-        .ps-modal-body { padding:20px 16px; display:flex; flex-direction:column; gap:14px; }
-        .ps-field label { display:block; font-size:11px; font-weight:800; color:rgba(26,28,40,0.72); margin-bottom:6px; letter-spacing:0.5px; }
-        .ps-field input, .ps-field textarea { width:100%; background:rgba(228,232,245,0.90); border:1px solid rgba(26,28,40,0.20); border-radius:6px; color:#1A1C28; font-size:13px; padding:12px; box-sizing:border-box; outline:none; transition:border-color 0.2s, box-shadow 0.2s; font-family:inherit; }
-        .ps-field input:focus, .ps-field textarea:focus { border-color:#1A1C28; box-shadow:0 0 0 3px rgba(26,28,40,0.10); background:rgba(228,232,245,0.95); }
-        .ps-field textarea { resize:vertical; min-height:90px; line-height:1.5; }
-        
-        .ps-modal-footer { display:flex; border-top:1px solid rgba(26,28,40,0.15); background:rgba(228,232,245,0.60); }
-        .ps-modal-btn { flex:1; padding:14px; background:none; border:none; font-size:13px; font-weight:800; cursor:pointer; transition:0.2s; letter-spacing:1px; }
-        .ps-modal-cancel { color:rgba(26,28,40,0.72); border-right:1px solid rgba(26,28,40,0.10); }
-        .ps-modal-cancel:hover { background:rgba(26,28,40,0.06); color:#1A1C28; }
-        .ps-modal-save { color:#1A1C28; }
-        .ps-modal-save:hover { background:rgba(26,28,40,0.08); text-shadow:0 0 8px rgba(26,28,40,0.30); }
-        `;
-        doc.head.appendChild(s);
-    }
 
     // ── 完全還原 V5.0 的 ST 狀態同步邏輯 ──
     function syncFromST() {
@@ -239,9 +181,9 @@
         }
 
         listContainer.innerHTML = `
-            <div style="margin-bottom: 12px; font-size: 11px; color: rgba(26,28,40,0.72); text-align: center; background: rgba(228,232,245,0.90); padding: 10px; border-radius: 8px; border: 1px solid rgba(26,28,40,0.10);">
-                <i class="fa-solid fa-link" style="color:#1A1C28;"></i> <b>已與 ST 酒館人設同步</b><br>
-                <span style="font-size:10px; opacity:0.8;">(若需新增或編輯，請使用右側原生面板)</span>
+            <div class="ps-sync-info">
+                <i class="fa-solid fa-link"></i> <b>已與 ST 酒館人設同步</b><br>
+                <span class="ps-sync-sub">(若需新增或編輯，請使用右側原生面板)</span>
             </div>
         ` + listToRender.map(p => `
             <div class="ps-card ${p.active ? 'active' : ''}" data-id="${p.id}" data-name="${p.name}">
@@ -435,7 +377,6 @@
     const API = {
         launch: function(container) {
             if (!container) return; 
-            injectStyles();
             renderApp(container);
             // 啟動時也啟動輪詢同步，確保不會掉速 (還原 V5.0 穩定度)
             if (!isStandalone() && !win._os_persona_sync_interval) {

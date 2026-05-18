@@ -10,80 +10,9 @@
     console.log('[PhoneOS] 載入系統設置模塊 (V6.0.0 Aurelia Style & Sync & Reset)...');
 
     // 定義系統級樣式 (全面替換為 Aurelia 咖啡流金風格)
-    const appStyle = `
-        /* 基礎容器 */
-        .set-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; color-scheme: light; }
-        .set-header { padding: 15px 20px; background: rgba(228,232,245,0.85); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; color: #1A1C28; }
-        
-        /* 🔥 iOS 安全區域自動適應與手動強制下移 */
-        .set-header { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
-        body.layout-pad-ios .set-header { padding-top: 55px !important; }
-
-        .set-title { font-size: 18px; font-weight: 800; letter-spacing: 2px; }
-        .set-back-btn { font-size: 24px; color: rgba(26,28,40,0.72); cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; }
-        .set-back-btn:hover { background: rgba(26,28,40,0.08); color: #1A1C28; }
-        
-        /* Tab 導航 */
-        .set-tabs { display: flex; background: rgba(228,232,245,0.9); padding: 0 10px; border-bottom: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-        .set-tabs::-webkit-scrollbar { display: none; }
-        .set-tab { flex: 1; min-width: 70px; text-align: center; padding: 12px 0; font-size: 13px; color: rgba(26,28,40,0.72); cursor: pointer; position: relative; transition: 0.3s; font-weight: 600; letter-spacing: 0.5px; }
-        .set-tab.active { color: #1A1C28; font-weight: 800; }
-        .set-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; border-radius: 3px 3px 0 0; box-shadow: 0 -2px 8px rgba(26,28,40,0.30); }
-        
-        /* 內容區 */
-        .set-content { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
-        .set-content::-webkit-scrollbar { width: 4px; }
-        .set-content::-webkit-scrollbar-thumb { background: rgba(26,28,40,0.15); border-radius: 2px; }
-        .tab-view { display: none; animation: fadeIn 0.3s cubic-bezier(0.2,0.8,0.2,1); }
-        .tab-view.active { display: block; }
-        
-        /* 組件 */
-        .set-group { background: rgba(228,232,245,0.85); border-radius: 8px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px; border: 1px solid rgba(26,28,40,0.15); box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
-        .set-label { font-size: 13px; color: #1A1C28; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-weight: 800; letter-spacing: 1px; }
-        .set-desc { font-size: 11px; color: #3A3F5C; line-height: 1.6; margin-bottom: 5px; }
-        .set-input, .set-select, .set-textarea { background: #EEF0F6 !important; border: 1px solid rgba(26,28,40,0.20); color: #1A1C28 !important; padding: 12px; border-radius: 4px; font-size: 13px; outline: none; width: 100%; box-sizing: border-box; transition: all 0.2s; color-scheme: light; }
-        .set-input:focus, .set-textarea:focus, .set-select:focus { border-color: #1A1C28; background: #EEF0F6 !important; box-shadow: 0 0 0 2px rgba(26,28,40,0.10); }
-        .set-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
-        .set-textarea { resize: vertical; min-height: 80px; font-family: monospace; line-height: 1.5; }
-        
-        /* 滑桿 */
-        .set-slider-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-        .set-slider { -webkit-appearance: none; width: 100%; height: 4px; background: rgba(228,232,245,0.9); border: 1px solid rgba(26,28,40,0.10); border-radius: 2px; outline: none; }
-        .set-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #1A1C28; border-radius: 50%; cursor: pointer; transition: 0.2s; box-shadow: 0 0 8px rgba(26,28,40,0.30); }
-        .set-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
-        .set-slider-val { font-family: 'Courier New', monospace; color: #1A1C28; font-weight: 800; }
-
-        /* 按鈕與開關 */
-        .model-row { display: flex; gap: 10px; align-items: center; }
-        .btn-fetch { background: rgba(228,232,245,0.6); color: #1A1C28; border: 1px solid rgba(26,28,40,0.20); width: 44px; height: 42px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; flex-shrink: 0; transition: all 0.2s; }
-        .btn-fetch:hover { background: rgba(26,28,40,0.08); border-color: #1A1C28; }
-        .btn-save { padding: 14px; border-radius: 4px; text-align: center; font-weight: 900; cursor: pointer; margin-top: 10px; background: #1A1C28; color: #EEF0F6; user-select: none; box-shadow: 0 4px 15px rgba(26,28,40,0.15); transition: all 0.2s; letter-spacing: 2px; }
-        .btn-save:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(26,28,40,0.20); }
-        .btn-test { padding: 12px; border-radius: 4px; text-align: center; font-weight: 800; cursor: pointer; margin-top: 10px; background: rgba(26,28,40,0.06); color: #1A1C28; border: 1px solid rgba(26,28,40,0.20); transition: all 0.2s; }
-        .btn-test:hover { background: rgba(26,28,40,0.10); border-color: #1A1C28; }
-        
-        /* 🔥 新增：危險區域與格式化按鈕 */
-        .danger-zone { margin-top: 30px; border: 1px solid rgba(252, 129, 129, 0.3); background: rgba(252, 129, 129, 0.05); padding: 15px; border-radius: 12px; }
-        .danger-zone h3 { color: #fc8181; font-size: 15px; margin-bottom: 8px; font-weight: bold; }
-        .danger-zone p { font-size: 12px; color: rgba(26,28,40,0.65); margin-bottom: 12px; line-height: 1.4; }
-        .btn-danger { padding: 12px; border-radius: 4px; text-align: center; font-weight: 800; cursor: pointer; background: rgba(252, 129, 129, 0.2); color: #fc8181; border: 1px solid rgba(252, 129, 129, 0.5); transition: all 0.2s; }
-        .btn-danger:hover { background: rgba(252, 129, 129, 0.3); box-shadow: 0 0 10px rgba(252, 129, 129, 0.3); }
-
-        .toggle-switch { position: relative; width: 42px; height: 22px; flex-shrink: 0; }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(228,232,245,0.6); border: 1px solid rgba(26,28,40,0.15); transition: .3s; border-radius: 22px; }
-        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: rgba(26,28,40,0.72); transition: .3s; border-radius: 50%; }
-        input:checked + .slider { background-color: rgba(26,28,40,0.10); border-color: #1A1C28; }
-        input:checked + .slider:before { transform: translateX(20px); background-color: #1A1C28; box-shadow: 0 0 8px rgba(26,28,40,0.5); }
-        .set-status { font-size: 11px; font-weight: bold; color: rgba(26,28,40,0.72); text-align: center; margin-top: 20px; min-height: 20px; padding-bottom: 20px; letter-spacing: 1px; }
-        .hidden { display: none !important; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    `;
 
     const targetDoc = (window.parent && window.parent.document) ? window.parent.document : document;
     if (!targetDoc.getElementById('os-settings-css')) {
-        const s = targetDoc.createElement('style'); s.id = 'os-settings-css'; s.innerHTML = appStyle; targetDoc.head.appendChild(s);
     } else {
         targetDoc.getElementById('os-settings-css').innerHTML = appStyle;
     }

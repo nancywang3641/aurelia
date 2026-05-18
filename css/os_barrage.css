@@ -1,0 +1,112 @@
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+
+        .ob-container { 
+            width: 100%; height: 100%; 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            color: #fff; 
+            display: flex; flex-direction: column; 
+            overflow: hidden; 
+            font-family: 'Noto Sans TC', sans-serif; 
+            position: relative;
+        }
+
+        /* 頂部導航 */
+        .ob-header { 
+            padding: 15px; 
+            background: rgba(0, 0, 0, 0.6); 
+            border-bottom: 1px solid rgba(255, 64, 129, 0.3); 
+            display: flex; align-items: center; justify-content: space-between; 
+            backdrop-filter: blur(5px);
+            z-index: 10;
+        }
+        .ob-title { 
+            font-size: 16px; font-weight: bold; color: #FF4081; 
+            display: flex; align-items: center; gap: 8px;
+            text-shadow: 0 0 10px rgba(255, 64, 129, 0.4);
+        }
+        .ob-status { font-size: 10px; color: #aaa; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; }
+        .ob-btn-icon { cursor: pointer; font-size: 18px; color: #fff; transition: 0.2s; width: 30px; text-align: center; }
+        .ob-btn-icon:hover { color: #FF4081; transform: scale(1.1); }
+
+        /* 彈幕列表區 */
+        .ob-list-area { 
+            flex: 1; 
+            padding: 15px; 
+            overflow-y: auto; 
+            display: flex; flex-direction: column; gap: 12px;
+            scroll-behavior: smooth;
+        }
+        
+        /* 彈幕氣泡 */
+        .ob-item { 
+            background: rgba(255, 255, 255, 0.05); 
+            border-radius: 12px; 
+            padding: 10px 12px; 
+            border-left: 3px solid #555;
+            animation: slideIn 0.3s ease-out;
+            transition: 0.2s;
+            position: relative;
+        }
+        .ob-item:hover { background: rgba(255, 255, 255, 0.1); transform: translateX(2px); }
+        
+        /* 不同類型的彈幕樣式 */
+        .ob-item.type-fan { border-left-color: #FF4081; background: linear-gradient(90deg, rgba(255, 64, 129, 0.1), transparent); }
+        .ob-item.type-hater { border-left-color: #444; color: #ccc; }
+        .ob-item.type-funny { border-left-color: #FFD700; }
+        .ob-item.type-system { border-left-color: #00E5FF; background: rgba(0, 229, 255, 0.05); text-align: center; font-size: 12px; color: #00E5FF; border: 1px solid rgba(0, 229, 255, 0.2); }
+
+        .ob-user-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .ob-username { font-size: 12px; font-weight: bold; color: #ddd; }
+        .ob-time { font-size: 10px; color: #666; }
+        .ob-content { font-size: 14px; line-height: 1.4; color: #fff; word-wrap: break-word; }
+
+        /* 底部操作區 */
+        .ob-footer { 
+            padding: 15px; 
+            background: rgba(0, 0, 0, 0.8); 
+            border-top: 1px solid rgba(255, 255, 255, 0.1); 
+            display: flex; gap: 10px;
+            align-items: center;
+        }
+        
+        .ob-btn-main {
+            flex: 1;
+            background: linear-gradient(90deg, #FF4081, #d81b60);
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 64, 129, 0.3);
+            transition: 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .ob-btn-main:hover { filter: brightness(1.2); transform: translateY(-2px); }
+        .ob-btn-main:active { transform: translateY(0); }
+        .ob-btn-main:disabled { background: #444; color: #888; cursor: wait; box-shadow: none; transform: none; }
+
+        .ob-btn-clear {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: 0.2s;
+        }
+        .ob-btn-clear:hover { background: rgba(255, 255, 255, 0.2); color: #FF4081; }
+
+        /* 空狀態 */
+        .ob-empty { 
+            height: 100%; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; 
+            color: #666; text-align: center; gap: 10px;
+        }
+        .ob-empty-icon { font-size: 48px; opacity: 0.5; animation: float 3s infinite ease-in-out; }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes float { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }

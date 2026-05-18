@@ -6,289 +6,22 @@
     const win = window.parent || window;
     console.log('[PhoneOS] 啟動通用靈感創作室 (Creator Studio V2.5)...');
 
-    const studioStyle = `
-        .studio-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; font-family: 'Noto Sans TC', sans-serif; position: relative; z-index: 9999; }
-        .studio-header { padding: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 12px; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; box-sizing: border-box; }
-        .studio-title { font-size: 16px; font-weight: bold; color: #1A1C28; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .studio-channel-badge { font-size: 11px; background: rgba(26,28,40,0.08); border: 1px solid rgba(26,28,40,0.30); color: rgba(26,28,40,0.72); padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: normal; }
-        .studio-mode-select { background: #EEF0F6 !important; appearance: none; -webkit-appearance: none; border: 1px solid rgba(26,28,40,0.25); color: #1A1C28 !important; padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer; color-scheme: light; }
-        .studio-mode-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
-        .studio-icon-btn { background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
-        .studio-icon-btn:hover { background: rgba(26,28,40,0.10); border-color: #1A1C28; }
-        .studio-icon-btn.danger { color: #fc8181; border-color: #fc8181; background: rgba(252,129,129,0.1); }
-        .studio-icon-btn.danger:hover { background: rgba(252,129,129,0.2); }
-        .studio-body { flex: 1; display: flex; overflow: hidden; }
-        .studio-left { flex: 1; display: flex; flex-direction: column; border-right: 1px solid rgba(26,28,40,0.15); background: rgba(228,232,245,0.25); min-width: 300px; position: relative; }
-        .studio-right { flex: 1.2; display: flex; flex-direction: column; background: #EEF0F6; min-width: 300px; position: relative; }
-        .studio-chat-history { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
-        .studio-bubble { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; position: relative; }
-        .studio-bubble.user { align-self: flex-end; background: rgba(210,215,235,0.3); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-bottom-right-radius: 2px; }
-        .studio-bubble.ai { align-self: flex-start; background: rgba(228,232,245,0.65); border: 1px solid rgba(26,28,40,0.12); color: #1A1C28; border-bottom-left-radius: 2px; }
-        .studio-input-wrap { padding: 10px 15px 0; background: rgba(228,232,245,0.96); border-top: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
-        .studio-pending-images { display: none; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
-        .studio-pending-images.active { display: flex; }
-        .studio-pending-img { position: relative; width: 60px; height: 60px; border-radius: 6px; overflow: hidden; border: 1px solid rgba(26,28,40,0.20); background: rgba(228,232,245,0.8); }
-        .studio-pending-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .studio-pending-img .pi-del { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.3); transition: 0.15s; }
-        .studio-pending-img .pi-del:hover { background: #e74c3c; }
-        .studio-pending-img .pi-size { position: absolute; bottom: 2px; left: 2px; right: 2px; background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.85); font-size: 9px; text-align: center; border-radius: 3px; padding: 1px 2px; }
-
-        .studio-input-area { padding: 5px 0 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; flex-shrink: 0; align-items: flex-end; }
-        .studio-attach-btn { background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 8px; padding: 0 12px; height: 50px; cursor: pointer; font-size: 18px; transition: 0.2s; flex-shrink: 0; }
-        .studio-attach-btn:hover { background: rgba(26,28,40,0.08); }
-        .studio-attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .studio-textarea { flex: 1; box-sizing: border-box; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; padding: 10px 14px; border-radius: 8px; font-size: 13px; outline: none; resize: none; min-height: 50px; max-height: 200px; height: 50px; font-family: inherit; line-height: 1.5; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(26,28,40,0.15) transparent; }
-        .studio-textarea:focus { border-color: #1A1C28; }
-
-        /* === 全局滾動條樣式：整個創作室內所有可捲區域 === */
-        .studio-container, .studio-container * { scrollbar-width: thin; scrollbar-color: rgba(26,28,40,0.28) transparent; }
-        .studio-container ::-webkit-scrollbar,
-        .studio-container::-webkit-scrollbar { width: 8px; height: 8px; }
-        .studio-container ::-webkit-scrollbar-track,
-        .studio-container::-webkit-scrollbar-track { background: transparent; }
-        .studio-container ::-webkit-scrollbar-thumb,
-        .studio-container::-webkit-scrollbar-thumb { background: rgba(26,28,40,0.28); border-radius: 4px; transition: background 0.2s; }
-        .studio-container ::-webkit-scrollbar-thumb:hover,
-        .studio-container::-webkit-scrollbar-thumb:hover { background: rgba(26,28,40,0.5); }
-        .studio-container ::-webkit-scrollbar-corner,
-        .studio-container::-webkit-scrollbar-corner { background: transparent; }
-        /* textarea 用更窄一點的（個別覆蓋全局） */
-        .studio-textarea::-webkit-scrollbar { width: 6px; }
-        .studio-textarea::-webkit-scrollbar-thumb { background: rgba(26,28,40,0.15); border-radius: 3px; }
-        .studio-textarea::-webkit-scrollbar-thumb:hover { background: rgba(26,28,40,0.5); }
-        .studio-send-btn { background: #1A1C28; color: #EEF0F6; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; transition: 0.2s; height: 50px; flex-shrink: 0; }
-        .studio-right-header { display: flex; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; align-items: center; }
-        .mobile-sidebar-btn { display: none; }
-        .mobile-sidebar-close { display: none; }
-        .studio-tab { flex: 1; text-align: center; padding: 15px 0; font-size: 13px; color: rgba(26,28,40,0.72); cursor: pointer; font-weight: bold; transition: 0.3s; position: relative; }
-        .studio-tab.active { color: #1A1C28; }
-        .studio-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; }
-        .studio-preview-content { flex: 1; overflow: hidden; display: flex; flex-direction: row; position: relative; }
-        .studio-wb-sidebar { display: none; }
-        .studio-preview-main { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
-        .tree-project { color: #1A1C28; font-weight: bold; font-size: 13px; margin-bottom: 5px; cursor: pointer; padding: 8px; border-radius: 6px; background: rgba(26,28,40,0.06); transition: 0.2s; }
-        .tree-project:hover { background: rgba(26,28,40,0.10); }
-        .tree-folder { color: rgba(26,28,40,0.72); font-size: 12px; margin-top: 8px; margin-left: 10px; padding-bottom: 2px; border-bottom: 1px solid rgba(210,215,235,0.3); }
-        .tree-item { color: rgba(26,28,40,0.72); font-size: 12px; padding: 6px 10px 6px 20px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 6px; }
-        .tree-item:hover { background: rgba(26,28,40,0.06); color: #1A1C28; }
-        .tree-item.active { background: rgba(26,28,40,0.08); color: #1A1C28; border-left: 2px solid rgba(26,28,40,0.25); }
-        .studio-source-content { flex: 1; overflow-y: auto; padding: 20px; background: #000; color: #00ffcc; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; display: none; }
-        .studio-action-area { padding: 15px; background: rgba(228,232,245,0.96); border-top: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; display: flex; justify-content: flex-end; }
-        .studio-export-btn { background: #1A1C28; color: #EEF0F6; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; transition: 0.2s; display: none; }
-        .studio-card { background: rgba(228,232,245,0.5); border: 1px solid rgba(26,28,40,0.15); border-radius: 8px; padding: 16px; margin-bottom: 15px; }
-        .studio-card-title { font-size: 15px; font-weight: bold; color: #1A1C28; margin-bottom: 10px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 8px; }
-        .studio-empty { text-align: center; color: rgba(26,28,40,0.20); padding: 50px 20px; font-size: 13px; letter-spacing: 1px; }
-        #os_studio_app:not([data-mode="worldbook"]) .studio-ch-panel { display: none !important; }
-        .studio-preview-fab { display: none; position: absolute; bottom: 80px; right: 16px; background: rgba(26,28,40,0.5); color: #EEF0F6; border: none; border-radius: 20px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; z-index: 48; box-shadow: 0 4px 14px rgba(0,0,0,0.5); align-items: center; gap: 6px; white-space: nowrap; }
-        .studio-drawer-handle { display: none; }
-        @media (max-width: 768px) {
-            .studio-body { flex-direction: column; position: relative; overflow: hidden; }
-            .studio-left { order: 1; flex: 1; min-height: 0; border-right: none; }
-            .studio-right { position: absolute; left: 0; right: 0; bottom: 0; height: 88%; min-width: 0; background: #EEF0F6; border-top: 2px solid rgba(26,28,40,0.25); border-radius: 14px 14px 0 0; box-shadow: 0 -8px 30px rgba(0,0,0,0.75); transform: translateY(103%); transition: transform 0.34s cubic-bezier(0.4,0,0.2,1); z-index: 50; display: flex; flex-direction: column; overflow: hidden; will-change: transform; }
-            .studio-right.drawer-open { transform: translateY(0); }
-            .studio-drawer-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.58); z-index: 49; opacity: 0; pointer-events: none; transition: opacity 0.34s ease; }
-            .studio-drawer-backdrop.active { opacity: 1; pointer-events: auto; }
-            .studio-drawer-handle { display: block; text-align: center; padding: 10px 0 4px; cursor: pointer; flex-shrink: 0; }
-            .studio-drawer-handle::after { content: ''; display: inline-block; width: 38px; height: 4px; background: rgba(26,28,40,0.18); border-radius: 2px; }
-            .studio-preview-fab { display: flex; }
-            #os_studio_app[data-mode="worldbook"] #mobile-ch-btn { display: inline-block !important; }
-            .studio-icon-btn span { display: none; }
-        }
-        .studio-bubble h1,.studio-bubble h2,.studio-bubble h3 { font-family: 'Noto Sans TC',sans-serif; font-weight: bold; margin: 10px 0 6px; line-height: 1.3; }
-        .studio-bubble h1 { font-size: 1.15rem; color: #1A1C28; border-bottom: 1px solid rgba(26,28,40,0.12); padding-bottom: 4px; }
-        .studio-bubble h2 { font-size: 1.05rem; color: #1A1C28; }
-        .studio-bubble h3 { font-size: 0.98rem; color: rgba(26,28,40,0.80); }
-        .studio-bubble blockquote { border-left: 3px solid rgba(26,28,40,0.20); margin: 6px 0; padding: 4px 12px; color: rgba(26,28,40,0.65); font-style: italic; background: rgba(26,28,40,0.04); border-radius: 0 4px 4px 0; }
-        .studio-bubble li { list-style: none; padding-left: 14px; margin: 2px 0; position: relative; }
-        .studio-bubble li::before { content: '•'; position: absolute; left: 0; color: #1A1C28; }
-        .studio-bubble hr { border: none; border-top: 1px solid rgba(26,28,40,0.10); margin: 10px 0; }
-        .studio-bubble code { background: rgba(26,28,40,0.08); color: #2d6a4f; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 0.88em; }
-        .studio-bubble strong { color: #1A1C28; font-weight: bold; }
-        .studio-bubble em { color: rgba(26,28,40,0.72); font-style: italic; }
-
-        /* ── 旋轉動畫 ── */
-        @keyframes os-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .os-studio-spinner { width: 16px; height: 16px; border: 2px solid rgba(26,28,40,0.15); border-top-color: #1A1C28; border-radius: 50%; animation: os-spin 1s linear infinite; flex-shrink: 0; }
-        /* ── 打字指示器 ── */
-        @keyframes studio-dot-pulse { 0%,80%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
-        .studio-typing-wrap { display:flex; align-items:center; gap:5px; padding:4px 2px; }
-        .studio-typing-dot { width:7px; height:7px; border-radius:50%; background:#1A1C28; display:inline-block; animation:studio-dot-pulse 1.4s infinite ease-in-out; }
-        .studio-typing-dot:nth-child(2) { animation-delay:0.2s; }
-        .studio-typing-dot:nth-child(3) { animation-delay:0.4s; }
-        /* ── 多泡泡入場動畫 ── */
-        @keyframes studio-bubble-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-        .studio-bubble-enter { animation: studio-bubble-in 0.22s ease-out forwards; }
-        /* ── 展廳 ── */
-        .studio-gallery-list { display:flex; flex-direction:column; gap:15px; }
-        .studio-gallery-card { background:rgba(228,232,245,0.5); border:1px solid rgba(26,28,40,0.15); border-radius:8px; padding:14px; }
-        .studio-gallery-card.active-tag { border-color: #1A1C28; }
-        .sgc-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-        .sgc-title { color:#1A1C28; font-size:15px; font-weight:bold; }
-        .sgc-status { font-size:12px; }
-        .sgc-usage { font-size:12px; color:rgba(26,28,40,0.72); padding:6px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.35); border-radius:0 4px 4px 0; margin-bottom:8px; }
-        .sgc-format-box { padding:10px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.40); border-radius:4px; margin-bottom:10px; position:relative; }
-        .sgc-format-text { font-family:monospace; font-size:12px; color:#3A3F5C; white-space:pre-wrap; word-break:break-all; }
-        .sgc-format-input { display:none; width:100%; min-height:80px; background:rgba(228,232,245,0.8); color:#1A1C28; border:1px solid rgba(26,28,40,0.25); font-family:monospace; font-size:12px; padding:8px; border-radius:4px; box-sizing:border-box; resize:vertical; }
-        .sgc-preview { padding:0; background:rgba(228,232,245,0.3); border-radius:6px; min-height:200px; max-height:700px; margin-bottom:10px; overflow-y:auto; position:relative; }
-        .sgc-btns { display:flex; gap:8px; }
-        .sgc-btn { flex:1; padding:8px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; text-align:center; border:1px solid; transition:0.2s; }
-        /* ── render 泡泡 ── */
-        .studio-bubble.render-bubble { padding: 0; overflow: hidden; background: rgba(228,232,245,0.5); border-color: rgba(26,28,40,0.12); }
-        .studio-render-wrap { padding: 12px; }
-        /* ── 錯誤泡泡 + 重試按鈕 ── */
-        .studio-bubble.studio-error-bubble { background: rgba(252,129,129,0.08); border-color: rgba(252,129,129,0.5); padding: 12px 14px; }
-        .studio-error-msg { color: #fc8181; font-size: 13px; line-height: 1.5; margin-bottom: 10px; word-break: break-word; }
-        .studio-retry-btn { background: rgba(252,129,129,0.15); border: 1px solid rgba(252,129,129,0.6); color: #fcc; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit; transition: 0.18s; }
-        .studio-retry-btn:hover { background: rgba(252,129,129,0.3); border-color: #fc8181; color: #fff; }
-        /* ── Todo 任務面板（worldbook 模式專用，右側 tab 內） ── */
-        #studio-todo-content { background: rgba(228,232,245,0.15); }
-        .todo-side-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(26,28,40,0.10); }
-        .todo-side-title { flex: 1; font-size: 15px; color: #1A1C28; font-weight: bold; letter-spacing: 1px; }
-        .todo-side-stats { color: rgba(26,28,40,0.68); font-weight: normal; font-size: 13px; margin-left: 4px; }
-        .todo-side-progress { height: 4px; background: rgba(26,28,40,0.12); border-radius: 2px; margin-bottom: 14px; overflow: hidden; }
-        .todo-side-progress-bar { height: 100%; background: linear-gradient(90deg, #1A1C28, rgba(26,28,40,0.60)); border-radius: 2px; transition: width 0.4s ease; }
-        .todo-add-btn { background: rgba(26,28,40,0.08); border: 1px solid rgba(26,28,40,0.30); color: #1A1C28; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: inherit; transition: 0.18s; }
-        .todo-add-btn:hover { background: rgba(26,28,40,0.14); }
-        .todo-list { display: flex; flex-direction: column; gap: 6px; }
-        .todo-list:empty::before { content: '尚無任務。AI 會在第一次回應時自動建立路線圖（或點上方「＋ 新增」自己加）。'; font-size: 12px; color: rgba(26,28,40,0.25); padding: 16px 6px; display: block; text-align: center; line-height: 1.6; }
-        .todo-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; background: rgba(228,232,245,0.6); border: 1px solid rgba(26,28,40,0.08); transition: 0.15s; }
-        .todo-item:hover { background: rgba(210,215,235,0.85); border-color: rgba(26,28,40,0.15); }
-        .todo-item.done { opacity: 0.55; background: rgba(26,28,40,0.04); border-color: rgba(26,28,40,0.12); }
-        .todo-checkbox { width: 18px; height: 18px; border: 1.5px solid rgba(26,28,40,0.30); border-radius: 4px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: transparent; transition: 0.15s; background: rgba(228,232,245,0.8); }
-        .todo-item.done .todo-checkbox { background: #1A1C28; border-color: #1A1C28; color: #EEF0F6; }
-        .todo-checkbox::before { content: '✓'; }
-        .todo-text { flex: 1; font-size: 13px; color: #1A1C28; line-height: 1.5; cursor: text; padding: 2px 4px; border-radius: 3px; word-break: break-word; }
-        .todo-item.done .todo-text { text-decoration: line-through; color: rgba(26,28,40,0.35); }
-        .todo-text:hover { background: rgba(26,28,40,0.06); }
-        .todo-text-input { flex: 1; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; padding: 3px 6px; border-radius: 3px; font-size: 13px; outline: none; font-family: inherit; min-width: 0; }
-        .todo-del-btn { background: transparent; border: none; color: rgba(252,129,129,0); font-size: 12px; cursor: pointer; padding: 3px 6px; border-radius: 3px; flex-shrink: 0; transition: color 0.15s; }
-        .todo-item:hover .todo-del-btn { color: rgba(252,129,129,0.65); }
-        .todo-del-btn:hover { color: #fc8181 !important; background: rgba(252,129,129,0.12); }
-        .todo-add-row { display: flex; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(26,28,40,0.10); }
-        .todo-add-input { flex: 1; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; padding: 7px 10px; border-radius: 5px; font-size: 13px; outline: none; font-family: inherit; min-width: 0; }
-        .todo-add-confirm, .todo-add-cancel { background: rgba(26,28,40,0.08); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; width: 32px; border-radius: 5px; cursor: pointer; font-size: 14px; padding: 0; }
-        .todo-add-cancel { background: rgba(26,28,40,0.04); border-color: rgba(26,28,40,0.15); color: rgba(26,28,40,0.60); }
-
-        /* ── 手動壓縮按鈕（worldbook 模式專用，浮動於聊天區右上）── */
-        #studio-wb-compress-btn { display: none; position: absolute; top: 10px; right: 14px; background: rgba(155,89,182,0.15); border: 1px solid rgba(155,89,182,0.6); color: #c39bf2; border-radius: 14px; padding: 5px 11px; font-size: 11px; cursor: pointer; z-index: 4; transition: 0.2s; backdrop-filter: blur(8px); }
-        #studio-wb-compress-btn:hover { background: rgba(155,89,182,0.32); border-color: #c39bf2; }
-        #studio-wb-compress-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        #studio-wb-compress-btn.active { display: block; }
-        /* ── 摘要泡泡（副模型壓縮舊對話為記憶）── */
-        .studio-bubble.studio-summary-bubble { max-width: 100%; align-self: stretch; background: linear-gradient(135deg, rgba(155,89,182,0.12), rgba(155,89,182,0.05)); border: 1px dashed rgba(155,89,182,0.5); padding: 12px 14px; }
-        .summary-header { font-size: 12px; color: #c39bf2; font-weight: bold; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(155,89,182,0.3); }
-        .summary-content { font-size: 12px; color: rgba(26,28,40,0.85); line-height: 1.65; white-space: pre-wrap; }
-        .summary-content strong { color: #d4af37; }
-        .summary-foot { font-size: 10px; color: rgba(155,89,182,0.55); margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(155,89,182,0.2); font-style: italic; }
-        /* ── choices 泡泡（AI 給選項按鈕） ── */
-        .studio-bubble.choices-bubble { background: rgba(228,232,245,0.6); border-color: rgba(26,28,40,0.20); padding: 12px 14px; }
-        .studio-choices-hint { font-size: 12px; color: rgba(26,28,40,0.72); margin-bottom: 8px; letter-spacing: 0.5px; }
-        .studio-choices-row { display: flex; flex-direction: column; gap: 6px; }
-        .studio-choice-btn { background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; text-align: left; line-height: 1.4; transition: 0.18s; font-family: inherit; }
-        .studio-choice-btn:hover { background: rgba(210,215,235,0.95); border-color: #1A1C28; color: #1A1C28; transform: translateX(2px); }
-        .studio-choice-btn.studio-choice-other { background: rgba(26,28,40,0.08); border-color: rgba(26,28,40,0.20); color: #1A1C28; margin-top: 2px; }
-        .studio-choice-btn.studio-choice-other:hover { background: rgba(26,28,40,0.09); border-color: #1A1C28; }
-        /* 選後的「已選展示」狀態 */
-        .studio-bubble.choices-bubble.selected { background: rgba(210,215,235,0.6); border-color: rgba(26,28,40,0.30); }
-        .studio-bubble.choices-bubble.selected .studio-choices-hint { color: #1A1C28; }
-        .studio-choice-selected { padding: 10px 12px; background: rgba(228,232,245,0.6); border: 1px solid rgba(26,28,40,0.20); border-radius: 8px; color: #1A1C28; font-size: 13px; line-height: 1.5; }
-        .studio-choice-selected strong { color: #1A1C28; }
-        /* ── genimg 泡泡 ── */
-        .studio-bubble.genimg-bubble img { max-width: 100%; border-radius: 6px; display: block; }
-        .studio-bubble.genimg-bubble { padding: 8px; }
-        /* ── 頻道面板 ── */
-        .studio-ch-panel { width:200px; flex-shrink:0; background:rgba(228,232,245,0.5); border-right:1px solid rgba(26,28,40,0.14); display:flex; flex-direction:column; overflow:hidden; }
-        .studio-ch-panel-hdr { padding:12px 14px 8px; font-size:10px; color:rgba(26,28,40,0.25); letter-spacing:1.5px; text-transform:uppercase; border-bottom:1px solid rgba(26,28,40,0.06); display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
-        .studio-ch-panel-close { display:none; background:none; border:none; color:rgba(26,28,40,0.72); font-size:14px; cursor:pointer; padding:0; }
-        .studio-new-ch-zone { padding:8px; border-bottom:1px solid rgba(26,28,40,0.08); flex-shrink:0; }
-        .studio-new-ch-btn { width:100%; background:rgba(26,28,40,0.05); border:1px dashed rgba(26,28,40,0.30); color:#1A1C28; border-radius:8px; padding:8px; font-size:12px; cursor:pointer; text-align:center; transition:0.2s; }
-        .studio-new-ch-btn:hover { background:rgba(26,28,40,0.10); }
-        .studio-new-ch-bar { display:none; gap:4px; margin-bottom:6px; }
-        .studio-new-ch-bar.open { display:flex; }
-        .studio-new-ch-inp { flex:1; background:rgba(228,232,245,0.8); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:5px 8px; border-radius:6px; font-size:12px; outline:none; min-width:0; }
-        .studio-new-ch-ok { background:#1A1C28; border:none; color:#EEF0F6; border-radius:6px; padding:5px 8px; font-size:12px; cursor:pointer; font-weight:bold; }
-        .studio-new-ch-cancel { background:rgba(26,28,40,0.05); border:1px solid rgba(26,28,40,0.20); color:rgba(26,28,40,0.60); border-radius:6px; padding:5px 7px; font-size:12px; cursor:pointer; }
-        .studio-ch-tree { flex:1; overflow-y:auto; padding:4px 0 12px; }
-        .studio-ch-entry { padding:9px 14px; font-size:12px; color:rgba(26,28,40,0.72); cursor:pointer; display:flex; align-items:center; gap:6px; transition:background 0.15s; }
-        .studio-ch-entry:hover { background:rgba(26,28,40,0.06); color:#1A1C28; }
-        .studio-ch-entry.active-ch { background:rgba(26,28,40,0.13); color:#1A1C28; font-weight:bold; border-left:2px solid rgba(26,28,40,0.25); }
-        .studio-ch-file { padding:5px 14px 5px 30px; font-size:11px; color:rgba(26,28,40,0.60); cursor:pointer; display:flex; align-items:center; gap:5px; transition:background 0.12s; }
-        .studio-ch-file:hover { background:rgba(26,28,40,0.06); color:rgba(26,28,40,0.90); }
-        .studio-ch-file.active-file { color:#1A1C28; }
-        .studio-ch-divider { height:1px; background:rgba(26,28,40,0.08); margin:4px 10px; }
-        .studio-ch-del { background:none; border:none; color:rgba(252,129,129,0); font-size:11px; cursor:pointer; padding:1px 4px; border-radius:4px; flex-shrink:0; transition:color 0.15s; line-height:1; }
-        .studio-ch-file:hover .studio-ch-del, .studio-ch-entry:hover .studio-ch-del { color:rgba(252,129,129,0.55); }
-        .studio-ch-del:hover { color:#fc8181 !important; background:rgba(252,129,129,0.1); }
-        @media (hover: none) {
-            .studio-ch-del { color:rgba(252,129,129,0.45); }
-        }
-        @media (max-width:768px) {
-            .studio-ch-panel { position:absolute; left:0; top:0; height:100%; z-index:100; width:80%; max-width:260px; background:#EEF0F6; transform:translateX(-100%); transition:transform 0.3s cubic-bezier(0.4,0,0.2,1); }
-            .studio-ch-panel.mobile-open { transform:translateX(0); box-shadow:6px 0 24px rgba(0,0,0,0.8); }
-            .studio-ch-panel-close { display:block; }
-        }
-
-        /* === 世界編撰啟動頁 === */
-        #studio-welcome { display: none; position: absolute; inset: 0; z-index: 5; background: #EEF0F6; flex-direction: column; align-items: center; justify-content: center; padding: 30px 20px; overflow-y: auto; }
-        #studio-welcome.active { display: flex; }
-        .welcome-inner { max-width: 480px; width: 100%; text-align: center; }
-        .welcome-icon { font-size: 56px; margin-bottom: 8px; }
-        .welcome-title { color: #1A1C28; font-size: 22px; margin: 0 0 6px; font-weight: bold; letter-spacing: 2px; }
-        .welcome-desc { color: rgba(26,28,40,0.72); font-size: 13px; margin: 0 0 28px; line-height: 1.5; }
-        .welcome-section-label { font-size: 11px; color: rgba(26,28,40,0.30); letter-spacing: 1.5px; margin: 16px 0 8px; text-align: left; text-transform: uppercase; }
-        .welcome-channel-list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; margin-bottom: 4px; }
-        .welcome-channel-list:empty + .welcome-section-label { display: none; }
-        .welcome-channel-item { background: rgba(228,232,245,0.6); border: 1px solid rgba(26,28,40,0.12); color: #1A1C28; padding: 12px 14px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 13px; transition: 0.18s; display: flex; align-items: center; gap: 10px; }
-        .welcome-channel-item:hover { background: rgba(26,28,40,0.06); border-color: #1A1C28; transform: translateX(3px); }
-        .welcome-channel-item .ch-icon { font-size: 18px; flex-shrink: 0; }
-        .welcome-channel-item .ch-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .welcome-channel-item .ch-meta { font-size: 10px; color: rgba(26,28,40,0.55); flex-shrink: 0; }
-        .welcome-new-btn { background: #1A1C28; color: #EEF0F6; border: none; padding: 14px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: bold; transition: 0.2s; box-shadow: 0 4px 12px rgba(26,28,40,0.15); margin-top: 8px; width: 100%; }
-        .welcome-new-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(26,28,40,0.25); }
-        .welcome-hint { font-size: 11px; color: rgba(26,28,40,0.60); margin-top: 14px; line-height: 1.5; }
-
-        /* === 頻道名 inline 編輯 === */
-        .studio-ch-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; padding: 2px 4px; border-radius: 3px; }
-        .studio-ch-name:hover { background: rgba(26,28,40,0.08); }
-        .studio-ch-name-input { flex: 1; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; padding: 2px 6px; border-radius: 3px; font-size: 12px; outline: none; font-family: inherit; min-width: 0; }
-
-        /* === VN 煉丹工具列：歷史快照 + 整體重做按鈕 (只在 vn_ui 模式 + 有 currentParsedData 時顯示) === */
-        #studio-vn-toolbar { display:none; padding:8px 15px 0; background:rgba(228,232,245,0.60); border-top:1px solid rgba(26,28,40,0.09); flex-direction:column; gap:6px; flex-shrink:0; }
-        #studio-vn-toolbar.active { display:flex; }
-        .vn-toolbar-row { display:flex; gap:8px; flex-wrap:wrap; }
-        #vn-studio-history-btn { background:rgba(155,89,182,0.1); border:1px solid #9b59b6; color:#9b59b6; padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer; transition:0.2s; }
-        #vn-studio-history-btn:hover { background:rgba(155,89,182,0.2); }
-        #vn-studio-redesign-btn { background:rgba(230,126,34,0.1); border:1px solid #e67e22; color:#e67e22; padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer; transition:0.2s; }
-        #vn-studio-redesign-btn:hover { background:rgba(230,126,34,0.2); }
-        #vn-studio-history-area { display:none; margin-top:6px; padding:10px; background:rgba(228,232,245,0.4); border:1px solid rgba(26,28,40,0.09); border-radius:6px; max-height:260px; overflow-y:auto; }
-        .vn-history-empty { color:rgba(26,28,40,0.55); font-size:11px; text-align:center; padding:14px 0; }
-        .vn-history-hint { font-size:10px; color:rgba(26,28,40,0.60); margin-bottom:6px; line-height:1.4; }
-        .vn-history-item { display:flex; align-items:center; gap:6px; padding:6px 8px; background:rgba(228,232,245,0.6); border:1px solid rgba(26,28,40,0.12); border-radius:5px; margin-bottom:5px; font-size:11px; transition:0.15s; }
-        .vn-history-item:hover { border-color:rgba(26,28,40,0.30); background:rgba(210,215,235,0.85); }
-        .vn-history-item.pinned { border-color:rgba(241,196,15,0.6); background:rgba(255,250,230,0.6); }
-        .vn-history-item .h-time { color:rgba(26,28,40,0.55); font-family:monospace; flex-shrink:0; font-size:10px; }
-        .vn-history-item .h-note { color:rgba(26,28,40,0.80); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .vn-history-item .h-btn { background:transparent; border:1px solid rgba(26,28,40,0.20); color:#1A1C28; font-size:10px; padding:2px 6px; border-radius:4px; cursor:pointer; flex-shrink:0; }
-        .vn-history-item .h-btn:hover { background:rgba(26,28,40,0.08); }
-        .vn-history-item .h-btn.danger { border-color:rgba(231,76,60,0.5); color:#e74c3c; }
-        .vn-history-item .h-btn.danger:hover { background:rgba(231,76,60,0.15); }
-    `;
 
     const studioHTML = `
         <div class="studio-container">
             <div class="studio-header">
                 <div class="studio-title">
+                    <div class="studio-back-btn" id="studio-back-btn" title="返回大廳">‹</div>
                     🎨 創作室
                     <select id="studio-mode-select" class="studio-mode-select">
                         <option value="vn_ui">✨ VN UI 煉丹</option>
                         <option value="worldbook">📖 純淨草稿編撰</option>
                     </select>
                     <span id="studio-channel-badge" class="studio-channel-badge" style="display:none;"></span>
-                    <button id="mobile-ch-btn" style="display:none; background:none; border:1px solid rgba(26,28,40,0.15); color:#1A1C28; border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer;">📁 頻道</button>
+                    <button id="mobile-ch-btn" class="studio-mobile-ch-btn" style="display:none;">📁 頻道</button>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="studio-icon-btn danger" id="studio-clear-btn" title="清空當前頻道的對話紀錄">🗑️ <span>清空</span></button>
-                    <button class="studio-icon-btn" id="studio-close-btn" title="關閉">✖</button>
                 </div>
             </div>
 
@@ -339,8 +72,8 @@
                     <!-- VN 煉丹專用工具列：歷史快照 + 整體重做 -->
                     <div id="studio-vn-toolbar">
                         <div class="vn-toolbar-row">
-                            <button id="vn-studio-history-btn">⏪ 歷史快照 (<span id="vn-studio-history-count">0</span>)</button>
-                            <button id="vn-studio-redesign-btn" title="不滿意整體風格時用：強制 AI 重新設計整個面板">🔄 重新設計</button>
+                            <button class="studio-history-btn" id="vn-studio-history-btn">⏪ 歷史快照 (<span id="vn-studio-history-count">0</span>)</button>
+                            <button class="studio-redesign-btn" id="vn-studio-redesign-btn" title="不滿意整體風格時用：強制 AI 重新設計整個面板">🔄 重新設計</button>
                         </div>
                         <div id="vn-studio-history-area"></div>
                     </div>
@@ -873,12 +606,6 @@ System Environment set to CHESSBOARD mode.
         let existing = document.getElementById('os_studio_app');
         if (existing) existing.remove();
 
-        if (!document.getElementById('os_studio_style')) {
-            const styleElement = document.createElement('style');
-            styleElement.id = 'os_studio_style';
-            styleElement.innerHTML = studioStyle;
-            document.head.appendChild(styleElement);
-        }
 
         const appDiv = document.createElement('div');
         appDiv.id = 'os_studio_app';
@@ -896,7 +623,7 @@ System Environment set to CHESSBOARD mode.
     }
 
     function bindEvents() {
-        document.getElementById('studio-close-btn').onclick = () => document.getElementById('os_studio_app').remove();
+        document.getElementById('studio-back-btn').onclick = () => document.getElementById('os_studio_app').remove();
         document.getElementById('studio-mode-select').onchange = (e) => loadMode(e.target.value);
         _setupRawEditModalEvents();
 
