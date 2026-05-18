@@ -91,11 +91,13 @@
 .hist-item.claude-recent .claude-recent-actions {
     display: flex;
     gap: 4px;
-    opacity: 0;
+    opacity: 0.55;
     transition: opacity 0.15s ease;
+    flex-shrink: 0;
 }
 
-.hist-item.claude-recent:hover .claude-recent-actions {
+.hist-item.claude-recent:hover .claude-recent-actions,
+.hist-item.claude-recent:focus-within .claude-recent-actions {
     opacity: 1;
 }
 
@@ -119,4 +121,61 @@
     background: rgba(252, 129, 129, 0.15);
     color: #fc8181;
     border-color: #fc8181;
+}
+
+/* inline 改名輸入框（取代標題 span） */
+.claude-recent-rename-input {
+    width: 100%;
+    background: #fff;
+    color: #1A1C28;
+    border: 1px solid #D95122;
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.claude-recent-rename-input:focus {
+    box-shadow: 0 0 0 2px rgba(217, 81, 34, 0.20);
+}
+
+/* 右鍵 context menu（floating） */
+.claude-recent-ctx-menu {
+    position: fixed;
+    z-index: 9999;
+    background: #fff;
+    border: 1px solid rgba(26, 28, 40, 0.20);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 100px;
+}
+
+.claude-recent-ctx-menu .cr-ctx-item {
+    background: transparent;
+    border: none;
+    color: #1A1C28;
+    padding: 7px 12px;
+    text-align: left;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.12s ease;
+}
+
+.claude-recent-ctx-menu .cr-ctx-item:hover {
+    background: rgba(217, 81, 34, 0.10);
+    color: #D95122;
+}
+
+.claude-recent-ctx-menu .cr-ctx-item.danger:hover {
+    background: rgba(252, 129, 129, 0.12);
+    color: #fc8181;
 }
