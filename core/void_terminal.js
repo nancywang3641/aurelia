@@ -1516,10 +1516,146 @@ const IRIS_IDLE = [
                     <div class="claude-recent-title">${checkMark}${titleSafe}</div>
                     <div class="claude-recent-meta">${conv.msgCount || 0} 條訊息 · ${_claudeRelTime(conv.lastActive)}</div>
                 </div>
+                <div class="claude-recent-actions">
+                    <button class="cr-icon-btn" data-act="rename" title="改名">✎</button>
+                    <button class="cr-icon-btn danger" data-act="delete" title="刪除">✕</button>
+                </div>
             `;
+            // 點 item body 切換 conv；點 action 按鈕單獨處理（stopPropagation）
             item.addEventListener('click', () => _switchToClaudeConv(conv.id));
+            const renameBtn = item.querySelector('[data-act="rename"]');
+            const delBtn    = item.querySelector('[data-act="delete"]');
+            if (renameBtn) renameBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _startRenameClaudeConv(item, conv);
+            });
+            if (delBtn) delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _confirmDeleteClaudeConv(conv);
+            });
+            // 桌面右鍵也跳改名/刪除 mini menu（簡單版：直接 confirm 後執行）
+            item.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                _showClaudeConvContextMenu(e.pageX, e.pageY, item, conv);
+            });
             listEl.appendChild(item);
         });
+    }
+
+    function _startRenameClaudeConv(itemEl, conv) {
+        if (!window.ClaudeTerminal) return;
+        const titleEl = itemEl.querySelector('.claude-recent-title');
+        if (!titleEl || titleEl.querySelector('input')) return;
+        const oldTitle = conv.title || '新會話';
+
+        titleEl.innerHTML = '';
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'claude-recent-rename-input';
+        inp.value = oldTitle;
+        inp.maxLength = 50;
+
+        let done = false;
+        const commit = () => {
+            if (done) return; done = true;
+            const newTitle = inp.value.trim();
+            if (newTitle && newTitle !== oldTitle) {
+                window.ClaudeTerminal.renameConversation(conv.id, newTitle);
+            }
+            renderHistoryList();
+        };
+        const cancel = () => {
+            if (done) return; done = true;
+            renderHistoryList();
+        };
+        inp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                e.preventDefault(); commit();
+            } else if (e.key === 'Escape') {
+                e.preventDefault(); cancel();
+            }
+        });
+        inp.addEventListener('blur', commit);
+        inp.addEventListener('click', (e) => e.stopPropagation());
+
+        titleEl.appendChild(inp);
+        inp.focus();
+        inp.select();
+    }
+
+    async function _confirmDeleteClaudeConv(conv) {
+        if (!window.ClaudeTerminal) return;
+        const title = conv.title || '新會話';
+        const msg = `將永久刪除「${title}」（${conv.msgCount || 0} 條訊息）。\n此操作不可復原。`;
+        showHistoryConfirm(msg, 'danger', async () => {
+            const tab = window.ClaudeTerminal.getActiveTab();
+            const wasActive = window.ClaudeTerminal.getActiveConvId(tab) === conv.id;
+            await window.ClaudeTerminal.deleteConversation(conv.id);
+            // 剛刪的是 active conv 且當前在 Claude 房間：載入新的 active 或清空畫面
+            if (wasActive && isClaudeRoom) {
+                const nextActive = window.ClaudeTerminal.getActiveConvId(tab);
+                if (nextActive) {
+                    // _switchToClaudeConv 會 closeHistoryPanel，刪除完讓 Recents 留著、直接重渲
+                    const result = await window.ClaudeTerminal.loadConversation(nextActive);
+                    if (result) {
+                        IRIS_STATE.history = (result.messages || []).map(m => ({
+                            role: m.role, content: m.content,
+                            ts: m.timestamp || Date.now(),
+                            thinking: m.thinking, usage: m.usage,
+                            tools_used: m.tools_used, attachments: m.attachments,
+                        }));
+                        const stream = document.getElementById('claude-chat-stream');
+                        if (stream) stream.innerHTML = '';
+                        if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.hydrateStream === 'function') {
+                            window.VoidClaudeRoom.hydrateStream();
+                        }
+                    }
+                } else {
+                    // 沒剩 conv：清 chat stream，下次發訊息會自動新建
+                    IRIS_STATE.history = [];
+                    const stream = document.getElementById('claude-chat-stream');
+                    if (stream) stream.innerHTML = '';
+                    if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.renderBubble === 'function') {
+                        window.VoidClaudeRoom.renderBubble('assistant', '對話都刪完了。發新訊息會自動開始新對話。');
+                    }
+                }
+            }
+            renderHistoryList();
+            debouncedSave();
+        });
+    }
+
+    function _showClaudeConvContextMenu(x, y, itemEl, conv) {
+        const existing = document.getElementById('claude-recent-ctx-menu');
+        if (existing) existing.remove();
+        const menu = document.createElement('div');
+        menu.id = 'claude-recent-ctx-menu';
+        menu.className = 'claude-recent-ctx-menu';
+        menu.innerHTML = `
+            <button class="cr-ctx-item" data-act="rename">✎ 改名</button>
+            <button class="cr-ctx-item danger" data-act="delete">✕ 刪除</button>
+        `;
+        const close = () => menu.remove();
+        menu.querySelector('[data-act="rename"]').addEventListener('click', (e) => {
+            e.stopPropagation(); close(); _startRenameClaudeConv(itemEl, conv);
+        });
+        menu.querySelector('[data-act="delete"]').addEventListener('click', (e) => {
+            e.stopPropagation(); close(); _confirmDeleteClaudeConv(conv);
+        });
+        document.body.appendChild(menu);
+        // 視窗內定位（避免出邊界）
+        const r = menu.getBoundingClientRect();
+        const px = Math.min(x, window.innerWidth - r.width - 8);
+        const py = Math.min(y, window.innerHeight - r.height - 8);
+        menu.style.left = px + 'px';
+        menu.style.top  = py + 'px';
+        // 任意點擊關閉
+        setTimeout(() => {
+            const off = (e) => {
+                if (!menu.contains(e.target)) { close(); document.removeEventListener('click', off, true); }
+            };
+            document.addEventListener('click', off, true);
+        }, 0);
     }
 
     async function _switchToClaudeConv(convId) {
