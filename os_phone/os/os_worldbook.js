@@ -16,128 +16,6 @@
     const DEFAULT_BOOKS = ['預設書包'];
 
     // ── 樣式注入 ────────────────────────────────────────────────────
-    function injectStyles() {
-        const existing = document.getElementById('os-wb-styles');
-        if (existing) existing.remove();
-        const s = document.createElement('style');
-        s.id = 'os-wb-styles';
-        s.textContent = `
-        .wb-app { display:flex; flex-direction:column; height:100%; background:#EEF0F6; color:#1A1C28; font-size:13px; overflow:hidden; position:relative; }
-        
-        /* 頂部按鈕懸停效果 */
-        .wb-header-btn-hover:hover { color:#1A1C28 !important; background:rgba(26,28,40,0.15) !important; }
-        
-        /* 書包與搜尋區 */
-        .wb-tool-bar { padding:8px 12px; background:rgba(228,232,245,0.96); border-bottom:1px solid rgba(26,28,40,0.15); flex-shrink:0; display:flex; flex-direction:column; gap:8px; }
-        .wb-book-row { display:flex; align-items:center; gap:8px; }
-        .wb-book-select { flex:1; background:#EEF0F6 !important; border:1px solid rgba(26,28,40,0.25); border-radius:6px; color:#1A1C28 !important; font-size:13px; font-weight:600; padding:6px 8px; outline:none; cursor:pointer; font-family:inherit; color-scheme:light; }
-        .wb-book-btn { display:flex; align-items:center; justify-content:center; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.20); color:#1A1C28; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:12px; font-weight:700; transition:.2s; white-space:nowrap; }
-        .wb-book-btn:hover { background:rgba(26,28,40,0.12); }
-        .wb-book-btn.danger { background:rgba(252,129,129,0.1); border-color:rgba(252,129,129,0.4); color:#fc8181; }
-        .wb-book-btn.danger:hover { background:rgba(252,129,129,0.25); }
-        
-        .wb-search { width:100%; background:#EEF0F6; border:1px solid rgba(26,28,40,0.20); border-radius:20px; color:#1A1C28; font-size:12px; padding:6px 14px; outline:none; box-sizing:border-box; }
-        .wb-search:focus { border-color:#1A1C28; }
-
-        .wb-cat-bar { display:flex; gap:4px; padding:8px 10px; background:rgba(228,232,245,0.96); overflow-x:auto; flex-shrink:0; scrollbar-width:none; border-bottom:1px solid rgba(26,28,40,0.15); }
-        .wb-cat-bar::-webkit-scrollbar { display:none; }
-        .wb-cat-tab { flex-shrink:0; padding:4px 12px; border-radius:20px; border:1px solid rgba(26,28,40,0.15); background:none; color:rgba(26,28,40,0.72); font-size:11px; cursor:pointer; transition:.2s; }
-        .wb-cat-tab.active { background:#1A1C28; border-color:#1A1C28; color:#EEF0F6; font-weight:700; }
-        
-        .wb-list { flex:1; overflow-y:auto; padding:8px 10px 75px 10px; display:flex; flex-direction:column; gap:6px; }
-        .wb-list::-webkit-scrollbar { width:3px; } .wb-list::-webkit-scrollbar-thumb { background:rgba(26,28,40,0.15); border-radius:2px; }
-        
-        .wb-entry { display:flex; align-items:center; background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.10); border-radius:10px; padding:10px 12px; gap:10px; transition:border-color .2s; }
-        .wb-entry:hover { border-color:#1A1C28; }
-        .wb-entry.disabled { opacity:.45; }
-        .wb-entry-info { flex:1; min-width:0; }
-        .wb-entry-title { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#1A1C28; display:flex; align-items:center; gap:6px; }
-        .wb-entry-order { background:rgba(228,232,245,0.90); color:#1A1C28; padding:1px 5px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid rgba(26,28,40,0.10); }
-        .wb-entry-meta { font-size:10px; color:#3A3F5C; margin-top:4px; }
-        .wb-entry-cat { display:inline-block; padding:1px 7px; border-radius:10px; background:rgba(228,232,245,0.90); border:1px solid rgba(26,28,40,0.15); font-size:9px; color:#1A1C28; margin-right:4px; }
-        
-        .wb-entry-edit, .wb-entry-del { background:none; border:none; cursor:pointer; font-size:14px; padding:5px; border-radius:6px; transition:.2s; flex-shrink:0; }
-        .wb-entry-edit { color:rgba(26,28,40,0.72); }
-        .wb-entry-edit:hover { color:#1A1C28; background:rgba(26,28,40,0.15); }
-        .wb-entry-del { color:#fc8181; margin-left:2px; }
-        .wb-entry-del:hover { color:#ff9999; background:rgba(252,129,129,.15); }
-        
-        .wb-toggle { position:relative; width:34px; height:18px; flex-shrink:0; }
-        .wb-toggle input { opacity:0; width:0; height:0; position:absolute; }
-        .wb-toggle-slider { position:absolute; inset:0; background:rgba(26,28,40,0.15); border-radius:18px; cursor:pointer; transition:.25s; }
-        .wb-toggle input:checked + .wb-toggle-slider { background:#1A1C28; }
-        .wb-toggle-slider:before { content:''; position:absolute; width:12px; height:12px; left:3px; top:3px; background:#EEF0F6; border-radius:50%; transition:.25s; }
-        .wb-toggle input:checked + .wb-toggle-slider:before { transform:translateX(16px); }
-        .wb-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:rgba(26,28,40,0.72); gap:8px; text-align:center; padding:20px; }
-        .wb-empty-icon { font-size:40px; opacity:.4; margin-bottom:8px; }
-        
-        .wb-fab { position:absolute; bottom:70px; right:16px; width:44px; height:44px; border-radius:50%; background:#1A1C28; border:none; color:#EEF0F6; font-size:22px; cursor:pointer; box-shadow:0 4px 16px rgba(26,28,40,0.35); display:flex; align-items:center; justify-content:center; transition:.2s; z-index:10; }
-        .wb-fab:hover { background:#fce8b2; transform:scale(1.05); }
-
-        .wb-overlay { position:absolute; inset:0; background:rgba(20,10,5,.95); backdrop-filter:blur(3px); z-index:50; display:flex; flex-direction:column; padding-bottom: 55px; box-sizing: border-box; }
-        .wb-overlay.hidden { display:none; }
-        .wb-form { flex:1; background:rgba(228,232,245,0.97); display:flex; flex-direction:column; overflow:hidden; border-top-left-radius:8px; border-top-right-radius:8px; border-top:1px solid rgba(26,28,40,0.15); }
-        .wb-form-header { display:flex; align-items:center; padding:12px 14px; padding-top:calc(12px + env(safe-area-inset-top, 0px)); border-bottom:1px solid rgba(26,28,40,0.15); gap:8px; }
-        .wb-form-title-text { flex:1; font-size:14px; font-weight:600; color:#1A1C28; }
-        .wb-form-save { background:#1A1C28; border:none; color:#EEF0F6; font-size:12px; font-weight:700; padding:5px 14px; border-radius:20px; cursor:pointer; }
-        .wb-form-save:hover { background:#fce8b2; }
-        .wb-form-cancel { background:none; border:1px solid rgba(26,28,40,0.15); color:rgba(26,28,40,0.72); font-size:12px; padding:5px 12px; border-radius:20px; cursor:pointer; }
-        .wb-form-cancel:hover { color:#1A1C28; background:rgba(26,28,40,0.06); }
-        .wb-form-body { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:12px; }
-        .wb-field label { display:block; font-size:11px; color:rgba(26,28,40,0.72); margin-bottom:5px; letter-spacing:.3px; font-weight:600; }
-        .wb-field input, .wb-field select, .wb-field textarea { width:100%; background:#EEF0F6 !important; border:1px solid rgba(26,28,40,0.20); border-radius:8px; color:#1A1C28 !important; font-size:13px; padding:8px 10px; box-sizing:border-box; outline:none; transition:border-color .2s; font-family:inherit; color-scheme:light; }
-        .wb-field input:focus, .wb-field select:focus, .wb-field textarea:focus { border-color:#1A1C28; }
-        .wb-field textarea { resize:vertical; min-height:180px; line-height:1.6; }
-        .wb-field select option { background:#EEF0F6; color:#1A1C28; }
-        .wb-field-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(26,28,40,0.10); }
-        .wb-field-row label { font-size:12px; color:#3A3F5C; margin:0; }
-
-        .wb-tag-box { display:flex; flex-wrap:wrap; gap:6px; padding:6px 10px; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); border-radius:8px; align-items:center; transition:.2s; min-height:34px; box-sizing:border-box; cursor:text; }
-        .wb-tag-box:focus-within { border-color:#1A1C28; }
-        .wb-tag-item { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.15); border-radius:12px; font-size:11px; color:#1A1C28; font-weight:500; }
-        .wb-tag-remove { background:none; border:none; color:#fc8181; font-size:12px; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; }
-        .wb-tag-remove:hover { color:#ff9999; }
-        .wb-tag-input { flex:1; min-width:80px; background:transparent !important; border:none !important; color:#1A1C28; font-size:12px; outline:none !important; font-family:inherit; padding:0 !important; }
-        .wb-tag-sug-area { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
-        .wb-tag-sug { background:rgba(228,232,245,0.4); border:1px dashed rgba(26,28,40,0.20); color:rgba(26,28,40,0.72); padding:3px 10px; border-radius:12px; font-size:10px; cursor:pointer; transition:.2s; }
-        .wb-tag-sug:hover { border-color:#1A1C28; color:#1A1C28; background:rgba(26,28,40,0.15); }
-
-        .wb-settings { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:14px; }
-        .wb-section { background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.15); border-radius:10px; padding:12px 14px; }
-        .wb-section-title { font-size:11px; color:#1A1C28; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; font-weight:600; }
-        .wb-input { width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(26,28,40,0.20); border-radius:8px; color:#1A1C28; font-size:12px; padding:7px 10px; box-sizing:border-box; outline:none; margin-bottom:7px; font-family:inherit; }
-        .wb-input:focus { border-color:#1A1C28; }
-        .wb-btn { width:100%; padding:9px; border-radius:8px; border:none; font-size:13px; cursor:pointer; font-weight:600; margin-top:4px; transition:.2s; }
-        .wb-btn-primary { background:#1A1C28; color:#EEF0F6; }
-        .wb-btn-primary:hover { background:#fce8b2; }
-        .wb-btn-secondary { background:rgba(228,232,245,0.60); color:#1A1C28; border:1px solid rgba(26,28,40,0.15); }
-        .wb-btn-secondary:hover { background:rgba(228,232,245,0.80); }
-        .wb-btn-danger { background:rgba(252,129,129,.15); color:#fc8181; border:1px solid rgba(252,129,129,.3); }
-        .wb-btn-danger:hover { background:rgba(252,129,129,.25); }
-        .wb-hint { font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px; line-height:1.5; }
-
-        /* ── 匯出選擇器 ── */
-        .wb-export-modal { position:absolute; inset:0; background:rgba(10,5,2,0.88); backdrop-filter:blur(4px); z-index:80; display:flex; align-items:flex-end; justify-content:center; }
-        .wb-export-modal.hidden { display:none; }
-        .wb-export-sheet { width:100%; background:rgba(50,22,10,0.98); border-top:1px solid rgba(26,28,40,0.18); border-radius:16px 16px 0 0; padding:18px 16px 28px; display:flex; flex-direction:column; gap:12px; max-height:70%; overflow:hidden; }
-        .wb-export-title { font-size:14px; font-weight:700; color:#1A1C28; letter-spacing:1px; text-align:center; }
-        .wb-export-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:2px; }
-        .wb-export-list::-webkit-scrollbar { width:3px; } .wb-export-list::-webkit-scrollbar-thumb { background:rgba(26,28,40,0.15); border-radius:2px; }
-        .wb-export-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:rgba(228,232,245,0.4); border:1px solid rgba(26,28,40,0.08); border-radius:8px; cursor:pointer; transition:.2s; }
-        .wb-export-row:hover, .wb-export-row.checked { border-color:rgba(26,28,40,0.30); background:rgba(228,232,245,0.70); }
-        .wb-export-row input[type=checkbox] { accent-color:#1A1C28; width:15px; height:15px; flex-shrink:0; cursor:pointer; }
-        .wb-export-row-name { flex:1; font-size:13px; color:#1A1C28; }
-        .wb-export-row-count { font-size:11px; color:rgba(26,28,40,0.72); }
-        .wb-export-actions { display:flex; gap:8px; flex-shrink:0; }
-        .wb-export-sel-all { font-size:11px; color:rgba(26,28,40,0.72); cursor:pointer; padding:4px 10px; border:1px solid rgba(26,28,40,0.10); border-radius:12px; background:none; transition:.2s; }
-        .wb-export-sel-all:hover { color:#1A1C28; border-color:rgba(26,28,40,0.20); }
-        .wb-export-confirm { flex:1; padding:10px; background:#1A1C28; color:#EEF0F6; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:.2s; }
-        .wb-export-confirm:hover { background:#fce8b2; }
-        .wb-export-cancel { padding:10px 16px; background:none; color:rgba(26,28,40,0.72); border:1px solid rgba(26,28,40,0.12); border-radius:8px; font-size:13px; cursor:pointer; }
-        .wb-export-cancel:hover { color:#1A1C28; }
-        `;
-        document.head.appendChild(s);
-    }
 
     // ── 資料存取 ────────────────────────────────────────────────────
     function getCats() {
@@ -190,12 +68,10 @@
     function buildHTML() {
         return `
         <div class="wb-app" id="wb-root">
-          <div class="wb-header" style="display:flex!important;align-items:center!important;justify-content:space-between!important;width:100%!important;padding:15px 20px!important;padding-top:calc(15px + env(safe-area-inset-top,0px))!important;background:rgba(228,232,245,0.92)!important;border-bottom:1px solid rgba(26,28,40,0.15)!important;flex-shrink:0!important;box-sizing:border-box!important;">
-            <button onclick="goHome()" title="返回大廳" class="wb-header-btn-hover"
-              style="font-size:24px!important;color:rgba(26,28,40,0.72)!important;width:32px!important;height:32px!important;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all 0.2s;flex-shrink:0;">‹</button>
-            <span style="flex:1!important;text-align:center!important;font-size:18px!important;font-weight:800!important;letter-spacing:2px!important;color:#1A1C28!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">世界書工坊</span>
-            <button id="wb-settings-btn" title="系統管理" class="wb-header-btn-hover"
-              style="width:32px!important;height:32px!important;background:none;border:none;color:rgba(26,28,40,0.72);cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:0.2s;flex-shrink:0;">⚙️</button>
+          <div class="wb-header">
+            <button onclick="goHome()" title="返回大廳" class="wb-back-btn wb-header-btn-hover">‹</button>
+            <span class="wb-title">世界書工坊</span>
+            <button id="wb-settings-btn" title="系統管理" class="wb-settings-btn wb-header-btn-hover">⚙️</button>
           </div>
 
           <div class="wb-tool-bar">
@@ -870,7 +746,6 @@
     win.OS_WORLDBOOK = {
         launch: function(container) {
             if (!container) return;
-            injectStyles();
             container.innerHTML = buildHTML();
             const root = container.querySelector('#wb-root') || container;
             bindEvents(root);
