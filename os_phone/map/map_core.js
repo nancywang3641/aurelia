@@ -23,173 +23,7 @@
     ];
 
     // === 1. 樣式定義 (新增紅點與任務卡) ===
-    const mapStyle = `
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
 
-        .am-container { width: 100%; height: 100%; background: #050505; color: #D4AF37; display: flex; flex-direction: column; overflow: hidden; font-family: 'Playfair Display', serif; position: relative; }
-        .am-backdrop { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; transition: background-image 0.8s ease-in-out, filter 0.5s; z-index: 0; }
-        .am-backdrop.blur { filter: blur(5px) brightness(0.5); }
-        
-        .am-header { z-index: 20; padding: 15px; background: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6)); border-bottom: 1px solid rgba(212, 175, 55, 0.1); display: flex; align-items: center; justify-content: space-between; height: 60px; box-sizing: border-box; }
-        .am-title { font-family: 'Cinzel', serif; font-size: 18px; font-weight: 700; color: #D4AF37; letter-spacing: 3px; text-shadow: 0 0 10px rgba(212, 175, 55, 0.5); }
-        .am-btn-icon { font-size: 24px; cursor: pointer; color: #D4AF37; transition: 0.2s; width: 30px; text-align: center; }
-        .am-btn-icon:hover { text-shadow: 0 0 8px #fff; transform: scale(1.1); }
-        
-        /* 區域選擇層 */
-        .am-home-layer { z-index: 5; position: absolute; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.5s; }
-        .am-home-layer.active { opacity: 1; pointer-events: auto; }
-        .am-zone-selector { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; width: 100%; max-width: 800px; padding: 20px; animation: floatUp 0.8s ease-out; }
-
-        /* === 大世界地圖 marker 模式（zone 浮在 worldMap 底圖上）=== */
-        .am-zone-selector.am-marker-mode { display: block; position: absolute; inset: 0; max-width: none; padding: 0; animation: floatUp 0.6s ease-out; pointer-events: none; background-size: cover; background-position: center; background-repeat: no-repeat; }
-        .am-zone-marker { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; pointer-events: auto; transition: transform 0.2s; }
-        .am-zone-marker:hover { transform: translate(-50%, -50%) scale(1.15); z-index: 10; }
-        .am-zone-marker-emoji { font-size: 38px; line-height: 1; filter: drop-shadow(0 0 10px rgba(0,0,0,0.85)); animation: am-marker-pulse 2.6s ease-in-out infinite; }
-        @keyframes am-marker-pulse { 0%, 100% { filter: drop-shadow(0 0 10px rgba(0,0,0,0.85)); } 50% { filter: drop-shadow(0 0 18px rgba(212,175,55,0.7)); } }
-        .am-zone-marker-label { background: rgba(0,0,0,0.78); color: #D4AF37; padding: 4px 12px; border-radius: 14px; font-size: 11px; white-space: nowrap; border: 1px solid rgba(212,175,55,0.55); letter-spacing: 1.5px; font-family: 'Cinzel', serif; box-shadow: 0 4px 10px rgba(0,0,0,0.6); }
-        .am-zone-marker .am-zone-dot { top: 0; right: 8px; left: auto; }
-        .am-zone-entrance { width: 100px; height: 120px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; backdrop-filter: blur(5px); position: relative; overflow: visible; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .am-zone-entrance:hover { transform: translateY(-10px) scale(1.05); background: rgba(20,20,20,0.8); border-color: #D4AF37; box-shadow: 0 0 25px rgba(212, 175, 55, 0.4); }
-        .am-zone-letter { font-family: 'Cinzel'; font-size: 42px; font-weight: bold; margin-bottom: 5px; background: linear-gradient(45deg, #D4AF37, #FFF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .am-zone-emoji { font-size: 44px; line-height: 1; margin-bottom: 6px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6)); }
-        .am-zone-label { font-size: 9px; color: #bbb; text-transform: uppercase; letter-spacing: 2px; text-align: center; font-weight: bold; }
-        
-        /* 設施網格層 */
-        .am-inner-layer { z-index: 5; position: absolute; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 20px; box-sizing: border-box; }
-        .am-inner-layer.active { opacity: 1; pointer-events: auto; }
-        .am-grid-view { width: 100%; height: 100%; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px; align-content: start; padding-bottom: 20px; scrollbar-width: none; }
-        
-        /* 設施卡片 */
-        .am-fac-card { background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; cursor: pointer; transition: 0.2s; backdrop-filter: blur(10px); height: 110px; text-align: center; position: relative; }
-        .am-fac-card:hover { border-color: #D4AF37; background: rgba(20, 20, 20, 0.9); transform: translateY(-3px); box-shadow: 0 5px 20px rgba(0,0,0,0.6); }
-        .am-fac-icon { font-size: 36px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2)); }
-        .am-fac-name { font-family: 'Cinzel'; font-size: 13px; color: #eee; font-weight: bold; letter-spacing: 0.5px; }
-
-        /* 🔥 紅點系統 */
-        .am-red-dot { position: absolute; top: 8px; right: 8px; width: 10px; height: 10px; background: #ff453a; border-radius: 50%; box-shadow: 0 0 8px #ff453a; animation: pulse 2s infinite; pointer-events: none; }
-        .am-zone-dot { position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; background: #ff453a; border-radius: 50%; border: 2px solid #000; z-index: 10; animation: pulse 2s infinite; }
-
-        /* 詳情頁覆蓋層 */
-        .am-detail-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 100; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 0.4s; background-size: cover; background-position: center; }
-        .am-detail-overlay.active { opacity: 1; pointer-events: auto; }
-        .am-detail-header { padding: 15px; display: flex; align-items: center; gap: 12px; background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent); }
-        .am-detail-title-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.2; }
-        .am-detail-zone { font-size: 10px; color: #888; letter-spacing: 2px; text-transform: uppercase; font-family: 'Cinzel', serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .am-detail-facility { font-size: 16px; color: #D4AF37; font-weight: bold; letter-spacing: 1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        .am-center-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px; overflow-y: auto; gap: 15px; }
-
-        /* 🔥 任務卡片樣式 */
-        .am-mission-card { width: 90%; max-width: 400px; background: rgba(20, 0, 0, 0.85); border: 1px solid #ff453a; border-radius: 8px; padding: 15px; margin-bottom: 20px; box-shadow: 0 5px 20px rgba(255, 69, 58, 0.3); animation: slideDown 0.5s; display: none; }
-        .am-mission-card.active { display: block; }
-        .am-mission-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 69, 58, 0.3); padding-bottom: 8px; margin-bottom: 8px; }
-        .am-mission-tag { background: #ff453a; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
-        .am-mission-title { font-size: 16px; font-weight: bold; color: #fff; font-family: 'Cinzel', serif; }
-        .am-mission-body { font-size: 13px; color: #ddd; line-height: 1.4; margin-bottom: 12px; }
-        .am-mission-reward { font-size: 14px; color: #ffd700; font-weight: bold; text-align: right; }
-        .am-accept-btn { width: 100%; background: linear-gradient(90deg, #8B0000, #ff453a); border: none; padding: 10px; color: white; font-weight: bold; cursor: pointer; margin-top: 10px; border-radius: 4px; transition: 0.3s; }
-        .am-accept-btn:hover { filter: brightness(1.2); }
-
-        /* 掃描結果區 */
-        .am-scan-results { width: 100%; display: none; flex-direction: column; gap: 20px; }
-        .am-scan-results.active { display: flex; }
-        
-        .am-detail-footer { padding: 20px; display: flex; justify-content: center; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); }
-        .am-scan-btn { background: #D4AF37; color: #000; border: none; padding: 12px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 0 15px rgba(212, 175, 55, 0.3); font-family: 'Cinzel'; display: flex; align-items: center; gap: 8px; }
-
-        /* 角色與模態窗 */
-        .am-char-grid-display { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; width: 100%; }
-        .am-char-card { background: rgba(10, 10, 10, 0.9); border: 1px solid #555; border-radius: 8px; overflow: hidden; cursor: pointer; }
-        .am-char-card:hover { border-color: #D4AF37; transform: translateY(-3px); }
-        .am-char-img-area { height: 100px; background-size: cover; background-position: center; }
-        .am-char-info { padding: 10px; }
-        .am-char-name { color: #D4AF37; font-weight: bold; font-size: 14px; }
-        .am-char-role { color: #888; font-size: 11px; }
-
-        .am-modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
-        .am-modal-overlay.active { opacity: 1; pointer-events: auto; }
-        .am-modal-card { width: 85%; max-width: 320px; background: #050505; border: 1px solid #D4AF37; border-radius: 12px; overflow: hidden; }
-        .am-modal-content { padding: 20px; text-align: center; }
-        .am-btn-row { display: flex; gap: 10px; margin-top: 15px; }
-        .am-btn-full { flex: 1; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .am-btn-main { background: #D4AF37; border: none; color: #000; }
-
-        /* --- 動態小人與頭像樣式 --- */
-        .am-scene-stage { position: relative; width: 100%; max-width: 640px; aspect-ratio: 2 / 1; overflow: hidden; border-radius: 12px; margin: 20px auto 0; border: 1px solid rgba(212, 175, 55, 0.3); background: rgba(0,0,0,0.3); background-size: cover; background-position: center; transition: background-image 0.6s ease-in-out; }
-        .walking-character { position: absolute; display: flex; flex-direction: column; align-items: center; cursor: pointer; z-index: 5; transition: left 0.05s linear, top 0.05s linear; top: 75%; transform: translate(-50%, -50%); will-change: transform, left, top; }
-
-        /* --- 場景地標：emoji+短名永遠顯示；點擊（移動端友善）彈出長描述 popup --- */
-        .am-landmark { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; z-index: 3; pointer-events: auto; opacity: 0.92; user-select: none; cursor: pointer; }
-        .am-landmark-emoji { font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)); }
-        .am-landmark-label { background: rgba(0,0,0,0.7); color: #ddd; padding: 2px 6px; border-radius: 8px; font-size: 9px; white-space: nowrap; border: 1px solid rgba(212,175,55,0.35); letter-spacing: 0.5px; }
-        .am-landmark-popup { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: rgba(15,15,15,0.96); color: #f0f0f0; padding: 8px 12px; border-radius: 10px; font-size: 11px; max-width: 180px; min-width: 110px; white-space: normal; word-break: break-word; text-align: center; line-height: 1.55; border: 1px solid rgba(212,175,55,0.55); box-shadow: 0 6px 14px rgba(0,0,0,0.7); z-index: 25; pointer-events: none; }
-        .am-landmark-popup::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px; border: 6px solid transparent; border-top-color: rgba(15,15,15,0.96); }
-        .am-landmark.am-landmark-open { z-index: 24; }
-        .am-landmark.am-landmark-open .am-landmark-popup { display: block; animation: am-landmark-fade 0.18s ease; }
-        @keyframes am-landmark-fade { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-
-        /* 邊緣自動翻向：y 太上 → popup 改下方；x 太左/右 → popup 對齊邊緣 */
-        .am-landmark.popup-below .am-landmark-popup { bottom: auto; top: calc(100% + 6px); }
-        .am-landmark.popup-below .am-landmark-popup::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: rgba(15,15,15,0.96); }
-        .am-landmark.popup-left .am-landmark-popup { left: -10px; transform: none; }
-        .am-landmark.popup-left .am-landmark-popup::after { left: 18px; margin-left: 0; }
-        .am-landmark.popup-right .am-landmark-popup { left: auto; right: -10px; transform: none; }
-        .am-landmark.popup-right .am-landmark-popup::after { left: auto; right: 18px; margin-left: 0; }
-        .am-landmark.popup-left.am-landmark-open .am-landmark-popup,
-        .am-landmark.popup-right.am-landmark-open .am-landmark-popup { animation: am-landmark-fade-side 0.18s ease; }
-        @keyframes am-landmark-fade-side { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-        .am-landmark:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.08); transition: transform 0.15s ease; }
-        .am-scene-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 6; background: rgba(0,0,0,0.4); color: #D4AF37; font-family: 'Cinzel', serif; letter-spacing: 2px; font-size: 12px; pointer-events: none; }
-        .am-scene-loading::before { content: '◐'; display: inline-block; margin-right: 8px; animation: am-spin 1s linear infinite; }
-        @keyframes am-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .walking-character:hover { transform: translate(-50%, -50%) scale(1.1); z-index: 10; }
-        
-        /* 新增：圓形大頭像 */
-        .character-avatar { width: 45px; height: 45px; border-radius: 50%; background-size: cover; background-position: center; border: 2px solid #D4AF37; margin-bottom: -15px; z-index: 10; background-color: #000; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
-        
-        .character-chibi { width: 35px; height: 45px; border-radius: 20px 20px 10px 10px; position: relative; background-color: #D4AF37; z-index: 5; }
-        /* 隱藏原本 CSS 小人的眼睛，因為上面已經有頭像了 */
-        .character-chibi::before, .character-chibi::after { display: none; }
-        
-        .character-name { margin-top: 5px; background-color: rgba(0, 0, 0, 0.8); color: #D4AF37; padding: 3px 8px; border-radius: 10px; font-size: 12px; white-space: nowrap; border: 1px solid #D4AF37; z-index: 15; }
-        
-        /* 氣泡拉高，避免擋到大頭 */
-        .character-dialogue-bubble { position: absolute; bottom: calc(100% + 40px); left: 50%; transform: translateX(-50%); background-color: rgba(255,255,255,0.9); color: #000; padding: 5px 10px; border-radius: 10px; font-size: 12px; white-space: nowrap; font-weight: bold; margin-bottom: 5px; opacity: 0; transition: opacity 0.5s ease; pointer-events: none; z-index: 20; }
-        .character-dialogue-bubble.show { opacity: 0.95; }
-        .character-dialogue-bubble::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: rgba(255,255,255,0.9) transparent transparent transparent; }
-
-        /* 行走動畫：讓頭像和身體一起跳動 */
-        .walking-character .character-chibi, .walking-character .character-avatar { animation: bounce 0.8s infinite alternate; }
-        @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-4px); } }
-
-        /* 朝向翻轉：往左移時整個小人鏡像（保留 translate 校正中心錨點）；名字 + 泡泡反向抵消，避免文字翻過去看不懂 */
-        .walking-character.walking-left { transform: translate(-50%, -50%) scaleX(-1); }
-        .walking-character.walking-left:hover { transform: translate(-50%, -50%) scaleX(-1) scale(1.1); }
-        .walking-character.walking-left .character-name { transform: scaleX(-1); }
-        .walking-character.walking-left .character-dialogue-bubble { transform: translateX(-50%) scaleX(-1); }
-        
-
-        
-        
-        /* 🔥 模式選擇器 */
-        .am-mode-selector { display: flex; gap: 8px; justify-content: center; margin: 15px 0; }
-        .am-mode-opt { padding: 8px 16px; border: 1px solid #333; color: #666; border-radius: 6px; font-size: 12px; cursor: pointer; transition: 0.2s; font-family: 'Cinzel', serif; letter-spacing: 1px; background: transparent; }
-        .am-mode-opt:hover { border-color: #888; color: #aaa; }
-        .am-mode-opt.active { border-color: #D4AF37; background: #D4AF37; color: #000; font-weight: bold; }
-
-        /* 刷新按鈕 */
-        .am-refresh-btn { font-size: 12px; border: 1px solid #333; padding: 5px 10px; border-radius: 15px; background: rgba(0,0,0,0.5); cursor: pointer; color: #888; margin-right: 10px; }
-        .am-refresh-btn:hover { color: #fff; border-color: #fff; }
-
-        @keyframes floatUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 0.8; } }
-        @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    `;
-
-    const doc = window.parent.document || document;
-    if (!doc.getElementById('aurealis-map-css')) {
-        const s = doc.createElement('style'); s.id = 'aurealis-map-css'; s.innerHTML = mapStyle; doc.head.appendChild(s);
-    }
 
     // === 2. 狀態管理 ===
     let STATE = {
@@ -709,26 +543,118 @@ ${facilityText}
 
         // 🔥 V2.0：判斷是否需要初始化此世界
         if (win.WORLD_RUNTIME && win.WORLD_RUNTIME.needsInit && win.WORLD_RUNTIME.needsInit()) {
-            title.innerText = "NEW WORLD";
+            title.innerText = "";
             selector.innerHTML = `
-                <div style="display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px; max-width:340px;">
-                    <div style="font-size:24px; color:#D4AF37; letter-spacing:8px; margin-top:8px; font-weight:bold;">未知大陸</div>
-                    <div style="width:40px; height:1px; background:linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent); margin-bottom:4px;"></div>
-                    <div style="color:#aaa; font-size:12px; line-height:1.8; text-align:center; margin-bottom:18px; letter-spacing:0.5px;">
-                        此聊天室尚未生成世界地圖<br>
-                        讓 AI 根據當前世界書動態生成<br>
-                        或直接使用奧瑞亞作為預設世界
+                <div class="am-navi-entry">
+                    <div class="am-navi-left">
+                        <div class="am-navi-block">
+                            <div class="am-navi-section-label">▶ NAVIGATION TERMINAL</div>
+                            <h2 class="am-navi-cn-title">出門導航終端</h2>
+                            <div class="am-navi-en-sub">AUREALIS NAVI SYS_01</div>
+                            <p class="am-navi-desc">尚未建立當前世界地圖資料。<br>LUNA-VII 將根據當前角色卡、世界書與劇情上下文，生成可探索的區域、設施與角色排程。</p>
+                        </div>
+                        <div class="am-navi-letter">
+                            <div class="am-navi-letter-head">
+                                <span class="am-navi-letter-title">瀅瀅的話</span>
+                                <span class="am-navi-letter-clip">📎</span>
+                            </div>
+                            <p class="am-navi-letter-body">還沒決定去哪裡嗎？<br>沒關係，<br>我們先把世界的門牌<br>找出來。</p>
+                            <div class="am-navi-letter-sign">— Yingying ♡</div>
+                        </div>
                     </div>
-                    <button class="am-zone-entrance" style="width:280px; height:auto; padding:14px 20px; justify-content:center; cursor:pointer; background:rgba(40,30,5,0.45); border-color:rgba(212,175,55,0.5);"
-                            onclick="window.AUREALIS_MAP.initCurrentWorld()">
-                        <span style="font-size:14px; color:#D4AF37; letter-spacing:3px; font-weight:bold;">生成世界地圖</span>
-                    </button>
-                    <button class="am-zone-entrance" style="width:280px; height:auto; padding:11px 20px; justify-content:center; cursor:pointer; opacity:0.7; background:rgba(15,15,15,0.5); border-color:rgba(120,120,120,0.25);"
-                            onclick="window.AUREALIS_MAP.useAurealisFallback()">
-                        <span style="font-size:12px; color:#aaa; letter-spacing:3px;">使用奧瑞亞預設</span>
-                    </button>
+
+                    <div class="am-navi-center">
+                        <div class="am-navi-frame">
+                            <span class="am-navi-corner tl"></span>
+                            <span class="am-navi-corner tr"></span>
+                            <span class="am-navi-corner bl"></span>
+                            <span class="am-navi-corner br"></span>
+                            <div class="am-navi-no-data">NO MAP DATA</div>
+                            <div class="am-navi-no-data-sub">WAITING FOR WORLD INITIALIZATION</div>
+                            <div class="am-navi-divider"></div>
+                            <div class="am-navi-no-data-hint">尚未生成當前世界地圖</div>
+                            <div class="am-navi-progress-row">
+                                <span class="am-navi-progress-label">SYSTEM STATUS · STANDBY</span>
+                                <div class="am-navi-progress-bar"><div class="am-navi-progress-fill"></div></div>
+                                <span class="am-navi-progress-val">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="am-navi-right">
+                        <div class="am-navi-block">
+                            <div class="am-navi-section-label-r">INITIALIZATION INFO</div>
+                            <div class="am-navi-info-card">
+                                <div class="am-navi-info-icon">👤</div>
+                                <div class="am-navi-info-body">
+                                    <div class="am-navi-info-title">角色卡</div>
+                                    <div class="am-navi-info-val" id="am-navi-info-chars">未連接</div>
+                                </div>
+                            </div>
+                            <div class="am-navi-info-card">
+                                <div class="am-navi-info-icon">📖</div>
+                                <div class="am-navi-info-body">
+                                    <div class="am-navi-info-title">世界書</div>
+                                    <div class="am-navi-info-val" id="am-navi-info-wb">未綁定</div>
+                                </div>
+                            </div>
+                            <div class="am-navi-info-card">
+                                <div class="am-navi-info-icon">📋</div>
+                                <div class="am-navi-info-body">
+                                    <div class="am-navi-info-title">劇情上下文</div>
+                                    <div class="am-navi-info-val" id="am-navi-info-chapter">尚未開始</div>
+                                </div>
+                            </div>
+                            <div class="am-navi-info-card">
+                                <div class="am-navi-info-icon">💠</div>
+                                <div class="am-navi-info-body">
+                                    <div class="am-navi-info-title">系統模型</div>
+                                    <div class="am-navi-info-val">LUNA-VII v3.2.7</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="am-navi-tips">
+                            <div class="am-navi-tips-label">TIPS</div>
+                            <p class="am-navi-tips-body">💡 地圖生成時間會依據世界複雜度約需 10-30 秒，請稍候片刻。</p>
+                        </div>
+                    </div>
+
+                    <div class="am-navi-actions">
+                        <button class="am-navi-btn primary" onclick="window.AUREALIS_MAP.initCurrentWorld()">
+                            <span class="am-navi-btn-icon">⊕</span>
+                            <div class="am-navi-btn-text">
+                                <div class="am-navi-btn-title">生成此世界地圖</div>
+                                <div class="am-navi-btn-sub">根據當前資料進行動態生成</div>
+                            </div>
+                            <span class="am-navi-btn-arrow">›</span>
+                        </button>
+                        <button class="am-navi-btn secondary" onclick="window.AUREALIS_MAP.useAurealisFallback()">
+                            <span class="am-navi-btn-icon">🏙</span>
+                            <div class="am-navi-btn-text">
+                                <div class="am-navi-btn-title">使用奧瑞亞預設城市</div>
+                                <div class="am-navi-btn-sub">載入 Aurelia Core 預設區域</div>
+                            </div>
+                            <span class="am-navi-btn-arrow">›</span>
+                        </button>
+                    </div>
                 </div>
             `;
+
+            // 動態填入 INITIALIZATION INFO（角色卡 / 世界書 / 劇情上下文）
+            try {
+                const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                const charName = ctx && ctx.characters && ctx.characters[ctx.characterId] ? ctx.characters[ctx.characterId].name : null;
+                const lbName = win.TavernHelper && win.TavernHelper.getCurrentCharPrimaryLorebook ? win.TavernHelper.getCurrentCharPrimaryLorebook() : null;
+                const msgCount = ctx && ctx.chat ? ctx.chat.length : 0;
+
+                const cE = document.getElementById('am-navi-info-chars');
+                const wE = document.getElementById('am-navi-info-wb');
+                const chE = document.getElementById('am-navi-info-chapter');
+                if (cE && charName) cE.textContent = charName;
+                if (wE && lbName) wE.textContent = lbName;
+                if (chE) chE.textContent = msgCount > 0 ? `${msgCount} 則訊息` : '尚未開始';
+            } catch(e) { console.warn('[Map] 動態資訊填入失敗', e); }
+
             return;
         }
 
@@ -837,9 +763,18 @@ ${facilityText}
         const selector = document.getElementById('am-zone-selector');
         if (selector) {
             selector.innerHTML = `
-                <div style="text-align:center; padding:30px; color:#D4AF37;">
-                    <div style="font-family:'Cinzel'; font-size:18px; letter-spacing:2px; margin-bottom:12px;">GENERATING...</div>
-                    <div id="am-gen-status" style="color:#aaa; font-size:12px;">正在掃描世界書...</div>
+                <div class="am-navi-loading">
+                    <div class="am-navi-loading-frame">
+                        <span class="am-navi-corner tl"></span>
+                        <span class="am-navi-corner tr"></span>
+                        <span class="am-navi-corner bl"></span>
+                        <span class="am-navi-corner br"></span>
+                        <div class="am-navi-loading-spinner"></div>
+                        <div class="am-navi-loading-title">GENERATING</div>
+                        <div class="am-navi-loading-sub">AI IS DRAFTING THE WORLD MAP</div>
+                        <div class="am-navi-divider"></div>
+                        <div class="am-navi-loading-status" id="am-gen-status">正在掃描世界書...</div>
+                    </div>
                 </div>
             `;
         }

@@ -6,59 +6,6 @@
     const win = window.parent || window;
     console.log('[PhoneOS] 啟動 VN 標籤煉丹爐 (酒館專屬全自動版)...');
 
-    const workshopStyle = `
-        .vn-ws-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; font-family: 'Noto Sans TC', sans-serif; position: relative; z-index: 9999; }
-        .vn-ws-header { padding: calc(15px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 15px; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
-        .vn-ws-title { font-size: 18px; font-weight: bold; color: #1A1C28; display: flex; align-items: center; gap: 10px; }
-        .vn-ws-close { background: none; border: none; color: #1A1C28; font-size: 20px; cursor: pointer; }
-        .vn-ws-idea-btn { background: rgba(26,28,40,0.10); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; transition: 0.2s; }
-        .vn-ws-idea-btn:hover { background: #1A1C28; color: #EEF0F6; box-shadow: 0 0 10px rgba(26,28,40,0.5); }
-        .vn-ws-tabs { display: flex; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; }
-        .vn-ws-tab { flex: 1; text-align: center; padding: 12px 0; font-size: 14px; color: rgba(26,28,40,0.72); cursor: pointer; font-weight: bold; transition: 0.3s; position: relative; letter-spacing: 1px; }
-        .vn-ws-tab.active { color: #1A1C28; }
-        .vn-ws-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; box-shadow: 0 -2px 8px rgba(26,28,40,0.30); }
-        .vn-ws-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
-        .vn-ws-view { display: none; flex-direction: column; gap: 15px; }
-        .vn-ws-view.active { display: flex; animation: fadeIn 0.4s ease-out; }
-        .vn-ws-group { display: flex; flex-direction: column; gap: 8px; }
-        .vn-ws-group label { font-size: 14px; color: #1A1C28; font-weight: bold; }
-        .vn-ws-input, .vn-ws-textarea { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(26,28,40,0.20); color: #FFF; padding: 10px; border-radius: 6px; font-size: 14px; outline: none; transition: 0.2s; }
-        .vn-ws-input:focus, .vn-ws-textarea:focus { border-color: #1A1C28; box-shadow: 0 0 8px rgba(26,28,40,0.10); }
-        .vn-ws-textarea { resize: vertical; min-height: 80px; }
-        .vn-ws-btn { background: transparent; color: #1A1C28; border: 1px solid rgba(26,28,40,0.25); padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; text-align: center; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .vn-ws-btn:hover { background: rgba(26,28,40,0.06); }
-        .vn-ws-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .vn-ws-preview-box { border: 1px dashed rgba(26,28,40,0.30); padding: 15px; border-radius: 6px; min-height: 120px; position: relative; background: #000; overflow: hidden;}
-        .vn-ws-code-box { background: #0d0d0d; color: #00ffcc; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border: 1px solid #333; }
-        #vn-ws-loading { display: none; text-align: center; color: #00ffcc; font-size: 14px; margin-top: 10px; letter-spacing: 1px; }
-        .vn-ws-card { background: rgba(20, 10, 5, 0.85); border-radius: 12px; padding: 20px; border: 1px solid rgba(26,28,40,0.10); margin-bottom: 15px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
-        #vn-ws-refine-area { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed rgba(26,28,40,0.20); animation: fadeIn 0.5s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
-        
-        #vn-ws-idea-overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
-        .vn-ws-idea-modal { background: #EEF0F6; border: 1px solid rgba(26,28,40,0.25); border-radius: 12px; width: 85%; max-width: 400px; padding: 25px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 15px 40px rgba(0,0,0,0.9); }
-
-        /* === 修改範圍 (scope) radio === */
-        .vn-ws-scope-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-        .vn-ws-scope-row label { display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 14px; border: 1px solid rgba(26,28,40,0.12); font-size: 12px; color: #ddd; cursor: pointer; font-weight: normal; transition: 0.2s; }
-        .vn-ws-scope-row label:hover { border-color: #1A1C28; }
-        .vn-ws-scope-row input[type="radio"] { accent-color: #1A1C28; margin: 0; }
-        .vn-ws-scope-row label.checked { background: rgba(26,28,40,0.09); border-color: #1A1C28; color: #1A1C28; }
-
-        /* === 歷史快照面板 === */
-        #vn-ws-history-area { display: none; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.45); border: 1px solid rgba(26,28,40,0.10); border-radius: 8px; max-height: 320px; overflow-y: auto; }
-        .vn-ws-history-empty { color: #888; font-size: 12px; text-align: center; padding: 20px 0; }
-        .vn-ws-history-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(20,10,5,0.7); border: 1px solid rgba(26,28,40,0.12); border-radius: 6px; margin-bottom: 6px; font-size: 12px; transition: 0.15s; }
-        .vn-ws-history-item:hover { border-color: rgba(26,28,40,0.30); background: rgba(30,15,8,0.9); }
-        .vn-ws-history-item .h-time { color: #888; font-family: monospace; flex-shrink: 0; }
-        .vn-ws-history-item .h-note { color: #ccc; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .vn-ws-history-item.pinned { border-color: rgba(241,196,15,0.6); background: rgba(40,30,5,0.6); }
-        .vn-ws-history-item .h-btn { background: transparent; border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; font-size: 11px; padding: 3px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
-        .vn-ws-history-item .h-btn:hover { background: rgba(26,28,40,0.08); }
-        .vn-ws-history-item .h-btn.danger { border-color: rgba(231,76,60,0.5); color: #e74c3c; }
-        .vn-ws-history-item .h-btn.danger:hover { background: rgba(231,76,60,0.15); }
-        .vn-ws-history-hint { font-size: 11px; color: #aaa; margin-bottom: 8px; line-height: 1.4; }
-    `;
 
     const workshopHTML = `
         <div class="vn-ws-container">
@@ -148,13 +95,6 @@
 
         let existing = document.getElementById('vn_workshop_app');
         if (existing) existing.remove();
-
-        if (!document.getElementById('vn_workshop_style')) {
-            const styleElement = document.createElement('style');
-            styleElement.id = 'vn_workshop_style';
-            styleElement.innerHTML = workshopStyle;
-            document.head.appendChild(styleElement);
-        }
 
         const appDiv = document.createElement('div');
         appDiv.id = 'vn_workshop_app';

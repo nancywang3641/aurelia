@@ -26,43 +26,8 @@
     };
 
     // --- 1. CSS ---
-    const osUserStyle = `
-        .os-modal-overlay {
-            position: fixed; top: 10px; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); z-index: 10000000;
-            display: none; align-items: center; justify-content: center;
-            backdrop-filter: blur(2px); animation: osFadeIn 0.2s;
-        }
-        .os-modal-overlay.show { display: flex; }
-        .os-modal-box {
-            background: #ffffff; width: 85%; max-width: 320px;
-            border-radius: 12px; padding: 0;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            color: #333; display: flex; flex-direction: column;
-            max-height: 80vh; overflow: hidden;
-            animation: osPopIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            font-family: sans-serif;
-        }
-        .os-header { padding: 15px; border-bottom: 1px solid #eee; font-weight: bold; text-align: center; font-size: 16px; background: #f9f9f9; }
-        .os-body { overflow-y: auto; padding: 0; }
-        .os-footer { padding: 10px; border-top: 1px solid #eee; text-align: center; background: #fff; }
-
-        .os-p-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.1s; }
-        .os-p-item:active { background: #f0f0f0; }
-        .os-p-item.active { background: #f0f9f0; }
-        .os-p-avatar { width: 40px; height: 40px; border-radius: 4px; background-size: cover; background-position: center; margin-right: 15px; background-color: #eee; border: 1px solid #ddd; flex-shrink: 0; }
-        .os-p-check { color: #07c160; font-weight: bold; font-size: 18px; margin-left: auto; }
-
-        .os-btn { border: none; background: #f2f2f2; color: #333; padding: 10px 30px; border-radius: 6px; font-size: 14px; cursor: pointer; }
-        .os-btn:hover { background: #e6e6e6; }
-        .os-btn-primary { background: #07c160; color: white; }
-
-        @keyframes osFadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes osPopIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-    `;
 
     if (!doc.getElementById('os-user-css')) {
-        const s = doc.createElement('style'); s.id = 'os-user-css'; s.innerHTML = osUserStyle; doc.head.appendChild(s);
     }
 
     // --- 2. Modal DOM ---

@@ -208,106 +208,8 @@
     // 四、UI（條件規則 tab，原樣保留）
     // ================================================================
 
-    const CSS = `
-    .avsr-list { display:flex; flex-direction:column; gap:4px; }
-    .avsr-group-header {
-        display:flex; align-items:center; gap:8px;
-        padding:8px 12px; margin-top:6px;
-        background:rgba(0,0,0,0.3); border-radius:6px;
-        cursor:pointer; user-select:none;
-        border:1px solid rgba(212,175,55,0.15);
-        transition:background 0.15s; }
-    .avsr-group-header:hover { background:rgba(212,175,55,0.08); }
-    .avsr-group-arrow { font-size:10px; color:#888; flex-shrink:0; width:12px; }
-    .avsr-group-title { flex:1; font-size:12px; font-weight:600; color:#c8a030; letter-spacing:1px; }
-    .avsr-group-count { font-size:10px; color:#555;
-        background:rgba(255,255,255,0.06); padding:1px 7px; border-radius:10px; }
-    .avsr-group-body { display:flex; flex-direction:column; gap:6px;
-        padding:6px 0 6px 10px; border-left:2px solid rgba(212,175,55,0.12); margin-left:6px; }
-
-    .avsr-card { background:rgba(212,175,55,0.06); border:1px solid rgba(212,175,55,0.2);
-        border-radius:8px; padding:12px 14px; display:flex; align-items:flex-start; gap:10px; }
-    .avsr-card.disabled { opacity:0.45; }
-    .avsr-info { flex:1; min-width:0; }
-    .avsr-name { font-size:13px; font-weight:600; color:#d4af37; margin-bottom:4px;
-        display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
-    .avsr-cond { font-size:11px; color:#888; font-family:monospace; margin-bottom:4px; }
-    .avsr-preview { font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .avsr-actions { display:flex; gap:4px; flex-shrink:0; }
-    .avsr-btn-sm { background:none; border:1px solid rgba(212,175,55,0.25); color:#888;
-        font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer; }
-    .avsr-btn-sm:hover { color:#d4af37; border-color:#d4af37; }
-    .avsr-btn-sm.danger:hover { color:#e74c3c; border-color:#e74c3c; }
-    .avsr-toggle { cursor:pointer; font-size:18px; flex-shrink:0; user-select:none; }
-    .avsr-empty { padding:40px 0; text-align:center; color:#555; font-size:12px; }
-    .avsr-folder-tag { font-size:9px; color:#7fb3d3;
-        background:rgba(127,179,211,0.12); border:1px solid rgba(127,179,211,0.25);
-        padding:1px 6px; border-radius:3px; font-weight:400; }
-
-    .avsr-editor { 
-        position: fixed; 
-        top: calc(115px + env(safe-area-inset-top, 0px)); 
-        bottom: calc(90px + env(safe-area-inset-bottom, 0px));
-        left: 15px; right: 15px; 
-        background: rgba(26, 13, 10, 0.98); 
-        border: 1px solid rgba(251, 223, 162, 0.4);
-        border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-        z-index: 9999; display: flex; flex-direction: column; overflow: hidden; 
-    }
-    .avsr-editor.hidden { display:none; }
-    .avsr-editor-header { display:flex; align-items:center; padding:12px 14px;
-        border-bottom:1px solid rgba(212,175,55,0.2); gap:8px; }
-    .avsr-editor-title { flex:1; font-size:14px; font-weight:600; color:#d4af37; }
-    .avsr-editor-body { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:12px; }
-    .avsr-field label { display:block; font-size:11px; color:#888; margin-bottom:4px; letter-spacing:.3px; }
-    .avsr-field input, .avsr-field select, .avsr-field textarea {
-        width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(212,175,55,0.25);
-        border-radius:6px; color:#e0d0a0; font-size:13px; padding:8px 10px;
-        box-sizing:border-box; outline:none; font-family:inherit; }
-    .avsr-field input:focus, .avsr-field select:focus, .avsr-field textarea:focus {
-        border-color:#d4af37; }
-    .avsr-field textarea { resize:vertical; min-height:100px; }
-    .avsr-cond-row { display:flex; gap:8px; align-items:center; }
-    .avsr-cond-row input { flex:1; }
-    .avsr-cond-row select { width:72px; flex-shrink:0; }
-    .avsr-editor-footer { padding:12px 14px; border-top:1px solid rgba(212,175,55,0.2);
-        display:flex; gap:8px; }
-    .avsr-btn-save { flex:1; background:#d4af37; border:none; color:#1a1200;
-        font-size:13px; font-weight:700; padding:10px; border-radius:6px; cursor:pointer; }
-    .avsr-btn-cancel { background:none; border:1px solid rgba(212,175,55,0.3); color:#888;
-        font-size:13px; padding:10px 16px; border-radius:6px; cursor:pointer; }
-    .avsr-add-btn { width:100%; padding:10px; border:1px dashed rgba(212,175,55,0.3);
-        background:none; color:#888; font-size:12px; border-radius:6px; cursor:pointer;
-        margin-bottom:12px; }
-    .avsr-add-btn:hover { color:#d4af37; border-color:#d4af37; }
-
-    /* ── 模式插槽管理 專屬樣式 ── */
-    .avsm-status { display:flex; align-items:center; gap:8px; padding:10px 14px;
-        background:rgba(0,0,0,0.3); border-radius:8px; margin-bottom:10px;
-        border:1px solid rgba(212,175,55,0.2); }
-    .avsm-status-label { font-size:11px; color:#888; letter-spacing:1px; }
-    .avsm-status-value { font-size:14px; font-weight:700; color:#d4af37; }
-    .avsm-card { background:rgba(212,175,55,0.06); border:1px solid rgba(212,175,55,0.2);
-        border-radius:8px; padding:12px 14px; display:flex; align-items:flex-start; gap:10px; }
-    .avsm-card.active-mode { border-color:rgba(212,175,55,0.65);
-        background:rgba(212,175,55,0.12); box-shadow:0 0 10px rgba(212,175,55,0.1); }
-    .avsm-card.disabled { opacity:0.45; }
-    .avsm-icon { font-size:24px; flex-shrink:0; line-height:1; padding-top:2px; }
-    .avsm-info { flex:1; min-width:0; }
-    .avsm-name { font-size:13px; font-weight:600; color:#d4af37; margin-bottom:3px;
-        display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
-    .avsm-cond { font-size:11px; color:#888; font-family:monospace; margin-bottom:3px; }
-    .avsm-tag-on { font-size:9px; color:#4caf50; background:rgba(76,175,80,0.15);
-        border:1px solid rgba(76,175,80,0.3); padding:1px 6px; border-radius:3px; }
-    `;
 
     function renderTab(container) {
-        if (!document.getElementById('avsr-styles')) {
-            const s = document.createElement('style');
-            s.id = 'avsr-styles';
-            s.textContent = CSS;
-            document.head.appendChild(s);
-        }
 
         const el = container.querySelector('#avs-view-rules');
         if (!el) return;
@@ -610,12 +512,6 @@
         const el = container.querySelector('#avs-view-modes');
         if (!el) return;
         
-        if (!document.getElementById('avsr-styles')) {
-            const s = document.createElement('style');
-            s.id = 'avsr-styles';
-            s.textContent = CSS;
-            document.head.appendChild(s);
-        }
 
         el.style.position = 'relative';
         el.style.overflow = 'hidden';

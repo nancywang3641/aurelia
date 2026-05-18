@@ -1,0 +1,93 @@
+        .ws-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #ededed; z-index: 500; display: none;
+            flex-direction: column; animation: wsSlideIn 0.25s ease-out;
+            font-family: -apple-system, sans-serif;
+        }
+        .ws-overlay.show { display: flex; }
+        @keyframes wsSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        
+        .ws-header { height: 50px; background: #fff; display: flex; align-items: center; justify-content: center; padding: 0 15px; border-bottom: 1px solid #e5e5e5; flex-shrink: 0; position: relative; }
+        .ws-title { font-weight: bold; font-size: 17px; color: #000; }
+        .ws-close { position: absolute; left: 10px; font-size: 16px; color: #000; cursor: pointer; display: flex; align-items: center; height: 100%; font-weight: 500; }
+        .ws-close:before { content: '‹'; font-size: 26px; margin-right: 2px; margin-top: -3px; font-weight: 300; }
+        
+        .ws-body { flex: 1; overflow-y: auto; padding-bottom: 40px; }
+        .ws-group { margin-top: 10px; background: #fff; }
+        
+        .ws-cell { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; position: relative; border-bottom: 1px solid #f0f0f0; min-height: 30px; }
+        .ws-cell:active { background-color: #f5f5f5; }
+        .ws-group .ws-cell:last-child { border-bottom: none; }
+        
+        .ws-label { font-size: 16px; color: #000; }
+        .ws-right { display: flex; align-items: center; color: #999; font-size: 16px; max-width: 60%; position: relative; }
+        
+        .ws-input { border: none; text-align: right; width: 100%; font-size: 16px; color: #666; outline: none; background: transparent; font-family: inherit; }
+        .ws-arrow { margin-left: 8px; color: #ccc; font-size: 18px; margin-top: 2px; }
+        
+        /* 頭像樣式 */
+        .ws-avatar-circle { width: 44px; height: 44px; border-radius: 50%; background-color: #eee; background-size: cover; background-position: center; border: 1px solid #ddd; position: relative; overflow: hidden; cursor: pointer; }
+        .ws-avatar-icon { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.05); color: #666; font-size: 20px; pointer-events: none; }
+        .ws-file-input-hidden { display: none !important; }
+        .ws-bg-preview { width: 30px; height: 30px; border-radius: 4px; background-size: cover; border: 1px solid #ddd; margin-right: 5px; }
+
+        /* 群成員 Grid */
+        .ws-member-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 15px 10px; }
+        .ws-member-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .ws-member-avatar { width: 48px; height: 48px; border-radius: 6px; background-color: #eee; background-size: cover; background-position: center; }
+        .ws-member-name { font-size: 11px; color: #666; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 50px; }
+        .ws-member-add { width: 48px; height: 48px; border-radius: 6px; border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #999; cursor: pointer; }
+
+        /* 按鈕樣式 */
+        .ws-footer { padding: 30px 20px; }
+        .ws-btn-del { width: 100%; background: #fff; color: #fa5151; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-top: 10px; }
+        .ws-btn-del:active { background: #f9f9f9; }
+        .ws-btn-save { width: 100%; background: #07c160; color: #fff; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .ws-section-header { font-size: 13px; color: #888; margin: 15px 16px 5px; }
+        
+        /* 群聊記憶彈窗 */
+        .ws-memory-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 600; display: none; align-items: center; justify-content: center; }
+        .ws-memory-overlay.show { display: flex; }
+        .ws-memory-panel { background: #fff; width: 90%; max-width: 500px; max-height: 80vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+        .ws-memory-header { padding: 15px 20px; border-bottom: 1px solid #e5e5e5; display: flex; align-items: center; justify-content: space-between; }
+        .ws-memory-title { font-size: 18px; font-weight: bold; }
+        .ws-memory-close { font-size: 24px; color: #999; cursor: pointer; }
+        .ws-memory-body { flex: 1; overflow-y: auto; padding: 15px; }
+        .ws-memory-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0; }
+        .ws-memory-item:last-child { border-bottom: none; }
+        .ws-memory-checkbox { width: 20px; height: 20px; margin-right: 12px; cursor: pointer; }
+        .ws-memory-info { flex: 1; }
+        .ws-memory-name { font-size: 16px; color: #000; margin-bottom: 4px; }
+        .ws-memory-desc { font-size: 12px; color: #999; }
+        .ws-memory-footer { padding: 15px 20px; border-top: 1px solid #e5e5e5; display: flex; gap: 10px; }
+        .ws-memory-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .ws-memory-btn-cancel { background: #f5f5f5; color: #333; }
+        .ws-memory-btn-save { background: #07c160; color: #fff; }
+        
+        /* 人設設置彈窗 */
+        .ws-persona-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 600; display: none; align-items: center; justify-content: center; }
+        .ws-persona-overlay.show { display: flex; }
+        .ws-persona-panel { background: #fff; width: 90%; max-width: 600px; max-height: 80vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+        .ws-persona-header { padding: 15px 20px; border-bottom: 1px solid #e5e5e5; display: flex; align-items: center; justify-content: space-between; }
+        .ws-persona-title { font-size: 18px; font-weight: bold; }
+        .ws-persona-close { font-size: 24px; color: #999; cursor: pointer; }
+        .ws-persona-body { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 20px; }
+        .ws-persona-section { border-bottom: 1px solid #f0f0f0; padding-bottom: 15px; }
+        .ws-persona-section:last-child { border-bottom: none; }
+        .ws-persona-section-title { font-size: 14px; color: #888; margin-bottom: 10px; font-weight: bold; }
+        .ws-persona-entry { display: flex; align-items: flex-start; padding: 12px; border: 1px solid #e5e5e5; border-radius: 6px; margin-bottom: 8px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .ws-persona-entry:hover { background: #f5f5f5; }
+        .ws-persona-entry:active { background: #e8e8e8; }
+        .ws-persona-entry-checkbox { width: 24px; height: 24px; margin-right: 12px; margin-top: 2px; cursor: pointer; flex-shrink: 0; -webkit-appearance: none; appearance: none; border: 2px solid #ccc; border-radius: 50%; position: relative; }
+        .ws-persona-entry-checkbox:checked { border-color: #07c160; background: #07c160; }
+        .ws-persona-entry-checkbox:checked::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: #fff; border-radius: 50%; }
+        .ws-persona-entry-info { flex: 1; min-width: 0; overflow: hidden; }
+        .ws-persona-entry-name { font-size: 15px; font-weight: bold; color: #000; margin-bottom: 6px; line-height: 1.4; }
+        .ws-persona-entry-keys { font-size: 12px; color: #666; margin-bottom: 6px; line-height: 1.4; word-break: break-word; }
+        .ws-persona-entry-content { font-size: 13px; color: #666; line-height: 1.5; max-height: 80px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; word-break: break-word; white-space: pre-wrap; }
+        .ws-persona-input-wrapper { margin-top: 10px; }
+        .ws-persona-textarea { width: 100%; min-height: 120px; padding: 10px; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; }
+        .ws-persona-footer { padding: 15px 20px; border-top: 1px solid #e5e5e5; display: flex; gap: 10px; }
+        .ws-persona-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .ws-persona-btn-cancel { background: #f5f5f5; color: #333; }
+        .ws-persona-btn-save { background: #07c160; color: #fff; }

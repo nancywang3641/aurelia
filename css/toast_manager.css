@@ -1,0 +1,207 @@
+                /* 提示容器样式 */
+                .aurelia-toast-container {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 100000;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                    pointer-events: none;
+                    max-width: 400px;
+                }
+
+                .aurelia-toast {
+                    background: #EEF0F6;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 12px;
+                    padding: 16px 20px;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    pointer-events: auto;
+                    animation: toastSlideIn 0.3s ease-out;
+                    min-width: 300px;
+                    max-width: 400px;
+                }
+
+                @keyframes toastSlideIn {
+                    from {
+                        transform: translateX(100%);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+
+                @keyframes toastSlideOut {
+                    from {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                    to {
+                        transform: translateX(100%);
+                        opacity: 0;
+                    }
+                }
+
+                .aurelia-toast.slide-out {
+                    animation: toastSlideOut 0.3s ease-in;
+                }
+
+                .aurelia-toast-icon {
+                    font-size: 24px;
+                    flex-shrink: 0;
+                }
+
+                .aurelia-toast-content {
+                    flex: 1;
+                    color: #ffffff;
+                    font-size: 14px;
+                    line-height: 1.5;
+                    word-wrap: break-word;
+                }
+
+                /* 不同类型提示的样式 */
+                .aurelia-toast.success {
+                    border-left: 4px solid #4caf50;
+                }
+
+                .aurelia-toast.success .aurelia-toast-icon {
+                    color: #4caf50;
+                }
+
+                .aurelia-toast.error {
+                    border-left: 4px solid #f44336;
+                }
+
+                .aurelia-toast.error .aurelia-toast-icon {
+                    color: #f44336;
+                }
+
+                .aurelia-toast.warning {
+                    border-left: 4px solid #ff9800;
+                }
+
+                .aurelia-toast.warning .aurelia-toast-icon {
+                    color: #ff9800;
+                }
+
+                .aurelia-toast.info {
+                    border-left: 4px solid #2196f3;
+                }
+
+                .aurelia-toast.info .aurelia-toast-icon {
+                    color: #2196f3;
+                }
+
+                /* 确认对话框样式 */
+                .aurelia-confirm-dialog {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 100001;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .aurelia-confirm-dialog.show {
+                    display: flex;
+                }
+
+                .aurelia-confirm-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.6);
+                    backdrop-filter: blur(4px);
+                }
+
+                .aurelia-confirm-content {
+                    position: relative;
+                    background: #EEF0F6;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 16px;
+                    padding: 24px;
+                    max-width: 400px;
+                    width: 90%;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+                    animation: confirmFadeIn 0.3s ease-out;
+                }
+
+                @keyframes confirmFadeIn {
+                    from {
+                        opacity: 0;
+                        transform: scale(0.9);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: scale(1);
+                    }
+                }
+
+                .aurelia-confirm-icon {
+                    font-size: 48px;
+                    text-align: center;
+                    margin-bottom: 16px;
+                }
+
+                .aurelia-confirm-title {
+                    color: #ffffff;
+                    font-size: 20px;
+                    font-weight: 600;
+                    text-align: center;
+                    margin-bottom: 12px;
+                }
+
+                .aurelia-confirm-message {
+                    color: rgba(255, 255, 255, 0.8);
+                    font-size: 14px;
+                    line-height: 1.6;
+                    text-align: center;
+                    margin-bottom: 24px;
+                    word-wrap: break-word;
+                }
+
+                .aurelia-confirm-buttons {
+                    display: flex;
+                    gap: 12px;
+                    justify-content: center;
+                }
+
+                .aurelia-confirm-btn {
+                    flex: 1;
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+
+                .aurelia-confirm-cancel {
+                    background: rgba(255, 255, 255, 0.1);
+                    color: #ffffff;
+                }
+
+                .aurelia-confirm-cancel:hover {
+                    background: rgba(255, 255, 255, 0.2);
+                }
+
+                .aurelia-confirm-ok {
+                    background: #2196f3;
+                    color: #ffffff;
+                }
+
+                .aurelia-confirm-ok:hover {
+                    background: #1976d2;
+                }

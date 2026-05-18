@@ -133,11 +133,34 @@
             if(cb) cb.scrollTop = cb.scrollHeight;
         },
 
+        // ───────── 廣義 tag 辨識器（防 AI 自創變體）─────────
+        // 任何 tag 名含這些 substring 就當該類型，未來不用再加新 regex
+        _IMAGE_ALIAS: ['圖片','图片','圖像','图像','圖檔','图档','圖示','图示','插圖','插图','照片','畫面','画面','截圖','截图','圖','图','Image','Img','Photo','Pic','Picture','Screen','Snapshot','Screenshot','Screencap','Snap','Capture','Capt'],
+        _VOICE_ALIAS: ['語音','语音','錄音','录音','Voice','Audio','Recording'],
+        _STICKER_ALIAS: ['表情包','貼紙','贴纸','表情','Sticker','Emote'],
+        _isAliasTag: function(content, aliases) {
+            const m = content.match(/^\[([^\]\[:：]+)[：:]/);
+            if (!m) return false;
+            const tag = m[1].trim();
+            return aliases.some(a => tag.toLowerCase().includes(a.toLowerCase()));
+        },
+        _normalizeImageTag: function(content) {
+            // 任何「[X含圖/Image/Photo/Screen/...: 描述]」統一改成 [圖片: 描述]
+            if (this._isAliasTag(content, this._IMAGE_ALIAS)) {
+                const m = content.match(/^\[[^\]\[:：]+[：:]\s*([\s\S]*?)\]$/);
+                if (m) return `[圖片: ${m[1]}]`;
+            }
+            return content;
+        },
+
         // 自動分割混合文字+表情包的訊息
         // 例: "哈哈哈[笑死我了.gif]" → ["哈哈哈", "[表情包:URL]"]
         _splitStickerContent: function(content) {
-            // 已是特殊格式，不處理
-            if (/^\[(表情包|Sticker|貼紙|贴纸|圖片|图片|Image|Photo|Img|語音|语音|Voice|轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|文件|File)[：:]/i.test(content)) return [content];
+            // 已是特殊格式，不處理（含 AI 自創的圖片變體）
+            if (this._isAliasTag(content, this._IMAGE_ALIAS) ||
+                this._isAliasTag(content, this._VOICE_ALIAS) ||
+                this._isAliasTag(content, this._STICKER_ALIAS) ||
+                /^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|文件|File)[：:]/i.test(content)) return [content];
             if (content.startsWith('[撤回]')) return [content];
 
             const re = /\[([^\]]+\.(?:gif|jpg|jpeg|png))\]/gi;
@@ -186,6 +209,8 @@
                 avatarHTML = `<img src="${lbUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="var p=this.parentNode;this.remove();p.style.padding='';p.textContent='${letter}';">`;
             }
 
+            // 任何圖片變體先 normalize 成 [圖片: xxx]
+            content = this._normalizeImageTag(content);
             const imgM  = content.match(/^\[(圖片|图片|Image|Photo|Img)[：:]\s*([\s\S]*?)\]$/i);
             const vocM  = content.match(/^\[(語音|语音|Voice)[：:]\s*(.*?)\]$/i);
             const stkM  = content.match(/^\[(表情包|Sticker|貼紙|贴纸)[：:]\s*([\s\S]*?)\]$/i);
@@ -200,7 +225,16 @@
             if (imgM) {
                 const desc = imgM[2] || '圖片';
                 if (desc.match(/^(https?:\/\/|data:|blob:)/i)) { inner = `<img src="${desc}" style="max-width:185px; border-radius:6px; display:block; cursor:pointer;" onclick="window.open(this.src)">`; }
-                else { inner = `<div class="wx-img-msg"><span class="wx-img-icon">🖼️</span><span class="wx-img-desc">${desc}</span></div>`; }
+                else {
+                    // 完整 desc 保留給 AI 生圖（含 (角色:外貌) 括號）；顯示用版本剝掉半形括號內容
+                    const escDescFull = String(desc).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+                    const displayDesc = String(desc).replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+                    inner = `<div class="wx-img-msg" data-prompt="${escDescFull}">
+                        <span class="wx-img-icon"></span>
+                        <span class="wx-img-desc">${displayDesc}</span>
+                        <button class="wx-img-gen" onclick="window.VN_Phone._genImg(this); event.stopPropagation();">展開圖片</button>
+                    </div>`;
+                }
             } else if (vocM) {
                 const txt = vocM[2] || ''; const sec = Math.min(60, Math.max(2, Math.ceil(txt.length / 2)));
                 const transHTML = txt ? `<div class="wx-voice-trans">${txt}</div>` : '';
@@ -254,6 +288,47 @@
             }
             const rowHTML = `<div class="chat-row ${isMe ? 'you' : 'other'}"><div class="chat-avatar" style="${avatarStyle}">${avatarHTML}</div><div class="chat-content">${inner}</div></div>`;
             return nameHTML ? `<div class="chat-outer">${nameHTML}${rowHTML}</div>` : rowHTML;
+        },
+
+        // ==========================================
+        //  ✨ 點按「生成圖片」鈕：呼叫 VN_Image.getScene 補真實圖
+        // ==========================================
+        _genImg: async function(btnEl) {
+            const card = btnEl.closest('.wx-img-msg');
+            if (!card || card.dataset.gening === '1') return;
+            const prompt = card.dataset.prompt || card.querySelector('.wx-img-desc')?.textContent || '';
+            if (!prompt.trim()) return;
+
+            card.dataset.gening = '1';
+            const origText = btnEl.textContent;
+            btnEl.textContent = '載入中…';
+            btnEl.disabled = true;
+            card.classList.add('wx-img-loading');
+
+            try {
+                const _mgr = win.OS_IMAGE_MANAGER || (win.parent && win.parent.OS_IMAGE_MANAGER);
+                if (!_mgr?.generate) throw new Error('OS_IMAGE_MANAGER 未載入');
+                // 聊天裡的「圖片」走角色那條接口（type='char'）— scene 是 VN 場景插圖獨立系統不共用
+                // type='char' 時：Pollinations 自動套 pollinations.charBasePrompt/charNegPrompt；NAI 自動套 novelai.charBasePrompt/charNegPrompt
+                const url = await _mgr.generate(prompt, 'char', { width: 1024, height: 1024 });
+                if (!url) throw new Error('未取得圖片');
+                const safeUrl = String(url).replace(/"/g, '%22');
+                // 先預載完才替換，避免容器立即消失留空白
+                await new Promise((resolve, reject) => {
+                    const pre = new Image();
+                    pre.onload = resolve;
+                    pre.onerror = reject;
+                    pre.src = safeUrl;
+                });
+                card.outerHTML = `<img src="${safeUrl}" style="max-width:240px; border-radius:8px; display:block; cursor:pointer;" onclick="window.open(this.src)">`;
+            } catch(e) {
+                console.warn('[wx-img-gen] 失敗:', e);
+                btnEl.textContent = '失敗，重試';
+                btnEl.disabled = false;
+                card.classList.remove('wx-img-loading');
+                card.dataset.gening = '0';
+                setTimeout(() => { if (btnEl.isConnected) btnEl.textContent = origText; }, 2000);
+            }
         },
 
         // ==========================================

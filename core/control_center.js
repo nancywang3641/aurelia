@@ -198,6 +198,11 @@
                 if (action === 'story' && window.StoryExtractor) window.StoryExtractor.show();
                 else if (action === 'generate' && window.VN_PLAYER) window.VN_PLAYER.openGeneratePanel();
                 else if (action === 'chapter' && window.VN_PLAYER) window.VN_PLAYER.openChapterPanel();
+                else if (action === 'autoload' && window._lobbyPendingChapter && window.VN_Core) {
+                    const p = window._lobbyPendingChapter;
+                    window._lobbyPendingChapter = null;
+                    window.VN_Core._showStartLoader(4000, () => window.VN_Core._loadWithSceneAnalysis(p.content, null));
+                }
             }, delay);
         }
 
@@ -322,8 +327,8 @@
         // 🌟 雙層架構 1：寫作 TAB 專用的視窗 (只會覆蓋寫作頁面)
         const writePanel = parentDoc.createElement('div');
         writePanel.id = 'write-panel-container';
-        writePanel.style.cssText = `position: absolute; top:0; left:0; width:100%; height:100%; background: #1a1a1a; z-index: 50; display: none; flex-direction: column;`;
-        writePanel.innerHTML = `<div id="write-iframe-container" style="width:100%; height:100%; background:#000; overflow:hidden; position:relative;"></div>`;
+        writePanel.style.cssText = `position: absolute; top:0; left:0; width:100%; height:100%; background: #EEF0F6; z-index: 50; display: none; flex-direction: column;`;
+        writePanel.innerHTML = `<div id="write-iframe-container" style="width:100%; height:100%; background:#EEF0F6; overflow:hidden; position:relative;"></div>`;
         writeTab.appendChild(writePanel);
 
         container.appendChild(homeTab);
@@ -342,8 +347,8 @@
         // 🌟 雙層架構 2：全螢幕全域視窗 (給遊戲 Apps 使用，避開底部導覽列)
         const slidePanel = parentDoc.createElement('div');
         slidePanel.id = 'aurelia-panel-container';
-        slidePanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom:calc(55px + env(safe-area-inset-bottom, 0px)); background: #1a1a1a; z-index: 50; display: none; flex-direction: column;`;
-        slidePanel.innerHTML = `<div id=\"aurelia-iframe-container\" style=\"width:100%; height:100%; background:#000; overflow:hidden; position:relative;\"></div>`;
+        slidePanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom:calc(55px + env(safe-area-inset-bottom, 0px)); background: #EEF0F6; z-index: 50; display: none; flex-direction: column;`;
+        slidePanel.innerHTML = `<div id=\"aurelia-iframe-container\" style=\"width:100%; height:100%; background:#EEF0F6; overflow:hidden; position:relative;\"></div>`;
         screen.appendChild(slidePanel);
 
         // 🌟 VN 專用全螢幕 overlay（從大廳直接彈出，z-index 51 覆蓋其他 overlay）
@@ -767,7 +772,7 @@
         if (container) {
             container.innerHTML = '';
             const div = document.createElement('div');
-            div.style.cssText = 'width: 100%; height: 100%; overflow: auto; background: #1e1e1e;';
+            div.style.cssText = 'width: 100%; height: 100%; overflow: auto; background: #EEF0F6;';
             container.appendChild(div);
 
             const map = {

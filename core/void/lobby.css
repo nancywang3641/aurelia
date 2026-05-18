@@ -383,10 +383,37 @@
    窄螢幕：左右欄改上下堆疊（沿用既有斷點機制）
    ========================================================= */
 @media (max-width:560px) {
-    .lobby-body { flex-direction:column; top:46px; bottom:92px; }
-    .lobby-left { flex:0 0 42%; border-right:none; border-bottom:1px solid var(--lb-line); }
-    .lobby-right { flex:1 1 auto; }
-    .lobby-right .void-btn { min-height:64px; }
+    .lobby-body { flex-direction:column; top:46px; bottom:60px; }
+    /* 立繪螢幕佔大部分 */
+    .lobby-left { flex:1 1 auto; border-right:none; border-bottom:1px solid var(--lb-line); min-height:0; }
+    /* 大廳右欄 3 個 main menu 按鈕並排，緊湊小 */
+    .lobby-right {
+        flex:0 0 auto;
+        display:grid !important;
+        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-areas:
+            "head head head"
+            "b1 b2 b3"
+            "info info info";
+        gap:6px;
+        padding:8px 12px;
+    }
+    .lobby-right .lb-menu-head-title { font-size:11px; letter-spacing:2.5px; }
+    .lobby-right .lb-menu-head-sub { font-size:7px; }
+    .lobby-right .lb-menu-head-rule { margin-top:4px; }
+    .lobby-right .void-btn { min-height:70px; }
+    .lobby-right .lb-menu-head { grid-area:head; }
+    .lobby-right #void-quest-btn { grid-area:b1; }
+    .lobby-right #void-chapter-btn { grid-area:b2; }
+    .lobby-right #void-exit-btn { grid-area:b3; }
+    .lobby-right .lb-info-cards { grid-area:info; }
+    .lobby-right .void-btn { width:100%; min-height:90px; height:auto; }
+    .lobby-right .void-btn:hover { transform:translateY(-2px); }
+    .lobby-right .void-btn-inner { padding:10px 8px; gap:1px; }
+    .lobby-right .lb-menu-no { font-size:9px; }
+    .lobby-right .lb-menu-cn { font-size:13px; letter-spacing:2px; }
+    .lobby-right .lb-menu-en { font-size:8px; letter-spacing:1.5px; }
+    .lobby-right .lb-menu-desc { display:none; }
     .lb-signature { display:none; }
 }
 

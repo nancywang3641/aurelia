@@ -60,7 +60,9 @@
     const BGM_RETRY_DELAY = 8000;
 
     function playLobbyBgm(url) {
-        if (_bridge() && _bridge().isActivitySuspended()) return; // 如果被暫停，就不播放
+        const br = _bridge();
+        if (br && br.isActivitySuspended()) return; // 如果被暫停，就不播放
+        if (br && br.isPanelOpen && !br.isPanelOpen()) return; // 奧瑞亞面板沒打開 → 不播
         const audio = getLobbyBgmEl();
         if (!audio) return;
         audio.volume = BGM_VOLUME;
@@ -86,6 +88,8 @@
     }
 
     function switchLobbyBgm(url) {
+        const br = _bridge();
+        if (br && br.isPanelOpen && !br.isPanelOpen()) return; // 面板沒打開直接不切換（也不播）
         const audio = getLobbyBgmEl();
         if (!audio) return;
         const fade = setInterval(() => {

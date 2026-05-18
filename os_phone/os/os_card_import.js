@@ -434,7 +434,7 @@
                         justify-content:center;padding:28px;z-index:2;gap:14px;text-align:center;">
                 <div style="font-size:48px;filter:drop-shadow(0 2px 12px rgba(0,200,100,0.5));">✅</div>
                 <div style="font-size:18px;font-weight:900;color:#a8ffcc;letter-spacing:2px;">匯入成功</div>
-                <div style="font-size:15px;font-weight:700;color:#FBDFA2;">${_esc(name)}</div>
+                <div style="font-size:15px;font-weight:700;color:#1A1C28;">${_esc(name)}</div>
                 <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.7;max-width:260px;">
                     ${_esc(worldDesc)}
                 </div>
@@ -451,10 +451,10 @@
                     }
                 </div>
                 <button id="ci-go-back" style="
-                    margin-top:8px;background:linear-gradient(135deg,#FBDFA2,#c8a030);
+                    margin-top:8px;background:linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030);
                     color:#1a0a04;font-weight:900;font-size:14px;padding:12px 36px;
                     border:none;border-radius:3px;cursor:pointer;letter-spacing:2px;
-                    box-shadow:0 4px 20px rgba(251,223,162,0.3);
+                    box-shadow:0 4px 20px rgba(26,28,40,0.15);
                 ">📖 回到書架</button>
             </div>
         `;
@@ -493,7 +493,7 @@
             <button id="ci-back" style="
                 position:absolute;top:12px;left:12px;
                 background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);
-                border:1px solid rgba(251,223,162,0.25);color:#FBDFA2;
+                border:1px solid rgba(26,28,40,0.12);color:#1A1C28;
                 padding:6px 14px;border-radius:20px;cursor:pointer;
                 font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
 
@@ -503,9 +503,9 @@
 
                 <div style="font-size:30px;margin-bottom:14px;
                             filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">📥</div>
-                <div style="font-size:16px;font-weight:800;color:#FBDFA2;
+                <div style="font-size:16px;font-weight:800;color:#1A1C28;
                             letter-spacing:2px;margin-bottom:6px;">匯入角色卡</div>
-                <div style="font-size:11px;color:rgba(251,223,162,0.5);
+                <div style="font-size:11px;color:rgba(26,28,40,0.30);
                             letter-spacing:1px;margin-bottom:22px;">
                     支援 SillyTavern PNG 角色卡（V1 / V2 / V3）
                 </div>
@@ -530,7 +530,7 @@
                     <div style="font-size:11px;color:rgba(100,200,255,0.8);
                                 letter-spacing:1px;margin-bottom:8px;">✓ 讀取成功</div>
                     <div id="ci-preview-name" style="font-size:15px;font-weight:700;
-                                                     color:#FBDFA2;margin-bottom:4px;"></div>
+                                                     color:#1A1C28;margin-bottom:4px;"></div>
                     <div id="ci-preview-desc" style="font-size:11px;color:rgba(255,255,255,0.5);
                                                      line-height:1.6;max-height:60px;overflow:hidden;"></div>
                     <div id="ci-preview-stats" style="font-size:10px;
