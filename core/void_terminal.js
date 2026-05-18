@@ -299,9 +299,12 @@ const IRIS_IDLE = [
 
     VoidTerminal.resumeLobbyActivity = function() {
         _isActivitySuspended = false;
-        const audio = VoidAmbient.getBgmEl();
-        if (audio && VoidAmbient.isEnabled()) audio.play().catch(() => {});
-        startIdleTimer();
+        // 只有面板真的在開啟狀態才恢復 BGM，避免 VN 退出時把背景音樂吹進關閉的面板
+        if (_isPanelOpen) {
+            const audio = VoidAmbient.getBgmEl();
+            if (audio && VoidAmbient.isEnabled()) audio.play().catch(() => {});
+            startIdleTimer();
+        }
     };
 
     VoidTerminal.suspendIdle = function() {
@@ -694,7 +697,7 @@ const IRIS_IDLE = [
                     <label class="hist-check-all-label" style="color:#1A1C28;"><input type="checkbox" id="hist-check-all"> 全選</label>
                     <button class="hist-action-btn danger" id="hist-del-sel" disabled style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">刪除選中</button>
                     <button class="hist-action-btn danger" id="hist-clear-btn" style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">清空全部</button>
-                    <button class="hist-action-btn" id="hist-new-claude-conv" style="display:none; background:rgba(217,81,34,0.15); color:#D95122; border:1px solid #EAB05C;" title="清掉對話歷史 + session_id，下次從零開始">🔄 開新對話</button>
+                    <button class="hist-action-btn" id="hist-new-claude-conv" style="display:none; background:rgba(217,81,34,0.15); color:#D95122; border:1px solid #EAB05C;" title="建立新會話，舊對話保留在 Recents 列表">＋ 新會話</button>
                     <span class="hist-count" id="hist-count" style="color:rgba(26,28,40,0.72);"></span>
                 </div>
                 <div class="hist-list" id="hist-list"></div>
@@ -1228,30 +1231,23 @@ const IRIS_IDLE = [
                 showHistoryConfirm(`將清除 ${charName} 的全部 ${h.length} 條紀錄。此操作不可復原。`, 'danger', () => { setCharHistory(_historyPanel.char, []); renderHistoryList(); });
             });
 
-            // 🔄 Claude 開新對話：清歷史 + 清 session_id（下次走新對話模式）
+            // ＋ Claude 新會話：建一條新 conv（舊 conv 自動保留在 Recents、非破壞性、不需 confirm）
             const histNewClaudeConv = tab.querySelector('#hist-new-claude-conv');
-            if (histNewClaudeConv) histNewClaudeConv.addEventListener('click', () => {
+            if (histNewClaudeConv) histNewClaudeConv.addEventListener('click', async () => {
                 if (!window.ClaudeTerminal) return;
-                const oldSidShort = (window.ClaudeTerminal.getSessionId() || '').slice(0, 8);
-                const tip = oldSidShort
-                    ? `將清空 Claude 全部對話歷史 + 重置 session（${oldSidShort}...）。\n下次發訊息會開新對話、Claude 從零開始。`
-                    : `將清空 Claude 全部對話歷史。下次發訊息會開新對話。`;
-                showHistoryConfirm(tip, 'danger', async () => {
-                    await window.ClaudeTerminal.startNewConversation();
-                    // 同步 in-memory 狀態（如果當前在 Claude 場景）
-                    if (isClaudeRoom) {
-                        IRIS_STATE.history = [];
-                        // 同步清掉聊天室畫面 + 顯示新的歡迎詞
-                        const stream = document.getElementById('claude-chat-stream');
-                        if (stream) stream.innerHTML = '';
-                        VoidClaudeRoom.renderBubble('assistant', '對話歸零了。重新開始說吧。');
-                        VoidClaudeRoom.setPortraitState('living');
-                    } else {
-                        _claudeHistoryBackup = [];
-                    }
-                    renderHistoryList();
-                    debouncedSave();
-                });
+                window.ClaudeTerminal.startNewConversation();
+                // 同步 in-memory 狀態（如果當前在 Claude 場景）
+                if (isClaudeRoom) {
+                    IRIS_STATE.history = [];
+                    const stream = document.getElementById('claude-chat-stream');
+                    if (stream) stream.innerHTML = '';
+                    VoidClaudeRoom.renderBubble('assistant', '新對話開始了。舊的還在 Recents、隨時點回去。');
+                    VoidClaudeRoom.setPortraitState('living');
+                } else {
+                    _claudeHistoryBackup = [];
+                }
+                renderHistoryList();
+                debouncedSave();
             });
 
 
@@ -1333,15 +1329,34 @@ const IRIS_IDLE = [
         if (!overlay) return;
         const badgeEl = document.getElementById('hist-char-badge');
         const newConvBtn = document.getElementById('hist-new-claude-conv');
+        // 選擇/清空 toolbar 三件套（只在訊息列表模式顯示；conv 列表模式隱藏）
+        const delBtn = document.getElementById('hist-del-sel');
+        const clearBtn = document.getElementById('hist-clear-btn');
+        const checkAll = document.getElementById('hist-check-all');
+        const checkAllLabel = checkAll && checkAll.closest('label');
+        const titleEl = document.getElementById('hist-title');
         if (char === 'iris') {
             if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = 'rgba(26,28,40,0.25)'; badgeEl.style.borderColor = 'rgba(26,28,40,0.25)'; badgeEl.style.background = 'rgba(26,28,40,0.10)'; }
             if (newConvBtn) newConvBtn.style.display = 'none';
+            if (titleEl) titleEl.textContent = '故事素材紀錄';
+            if (delBtn) delBtn.style.display = '';
+            if (clearBtn) clearBtn.style.display = '';
+            if (checkAllLabel) checkAllLabel.style.display = '';
         } else if (char === 'claude') {
             if (badgeEl) { badgeEl.className = 'hist-char-badge claude'; badgeEl.textContent = '☕ Claude'; badgeEl.style.color = '#D95122'; badgeEl.style.borderColor = '#D95122'; badgeEl.style.background = 'rgba(217,81,34,0.18)'; }
             if (newConvBtn) newConvBtn.style.display = '';
+            if (titleEl) titleEl.textContent = 'Recents（多會話）';
+            // conv 列表模式不需要訊息級選擇/清空
+            if (delBtn) delBtn.style.display = 'none';
+            if (clearBtn) clearBtn.style.display = 'none';
+            if (checkAllLabel) checkAllLabel.style.display = 'none';
         } else {
             if (badgeEl) { badgeEl.className = 'hist-char-badge cheshire'; badgeEl.textContent = '柴郡 · 404'; badgeEl.style.color = '#00ff41'; badgeEl.style.borderColor = '#00ff41'; badgeEl.style.background = 'rgba(0,255,65,0.2)'; }
             if (newConvBtn) newConvBtn.style.display = 'none';
+            if (titleEl) titleEl.textContent = '故事素材紀錄';
+            if (delBtn) delBtn.style.display = '';
+            if (clearBtn) clearBtn.style.display = '';
+            if (checkAllLabel) checkAllLabel.style.display = '';
         }
         overlay.style.display = 'flex';
         renderHistoryList();
@@ -1355,6 +1370,8 @@ const IRIS_IDLE = [
     }
 
     function renderHistoryList() {
+        // claude 走 Recents（多會話）視圖，其餘走原本訊息列表
+        if (_historyPanel.char === 'claude') return renderClaudeRecentsList();
         const listEl  = document.getElementById('hist-list');
         const countEl = document.getElementById('hist-count');
         if (!listEl) return;
@@ -1411,6 +1428,116 @@ const IRIS_IDLE = [
             listEl.appendChild(item);
         });
         updateHistoryToolbar();
+    }
+
+    // ===== Claude Recents 視圖（多會話）=====
+    function _claudeRelTime(ts) {
+        if (!ts) return '從未對話';
+        const diff = Date.now() - ts;
+        const min = Math.floor(diff / 60000);
+        if (min < 1) return '剛剛';
+        if (min < 60) return min + ' 分鐘前';
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return hr + ' 小時前';
+        const day = Math.floor(hr / 24);
+        if (day < 7) return day + ' 天前';
+        const d = new Date(ts);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+    }
+
+    function renderClaudeRecentsList() {
+        const listEl  = document.getElementById('hist-list');
+        const countEl = document.getElementById('hist-count');
+        if (!listEl) return;
+        if (!window.ClaudeTerminal) {
+            listEl.innerHTML = '<div class="hist-empty" style="color:rgba(26,28,40,0.72); text-align:center; padding: 20px;">── ClaudeTerminal 未載入 ──</div>';
+            if (countEl) countEl.textContent = '';
+            return;
+        }
+        const activeTab = window.ClaudeTerminal.getActiveTab();
+        const convs = window.ClaudeTerminal.listConversations(activeTab);
+        const activeConvId = window.ClaudeTerminal.getActiveConvId(activeTab);
+
+        if (countEl) countEl.textContent = `${convs.length} 個會話`;
+
+        listEl.innerHTML = '';
+
+        // tab bar：訂閱 Max / Anthropic API
+        const tabBar = document.createElement('div');
+        tabBar.className = 'claude-recents-tabs';
+        tabBar.innerHTML = `
+            <button class="cr-tab ${activeTab === 'max' ? 'active' : ''}" data-tab="max">🏠 訂閱 Max</button>
+            <button class="cr-tab ${activeTab === 'api' ? 'active' : ''}" data-tab="api">🌐 Anthropic API</button>
+        `;
+        tabBar.querySelectorAll('.cr-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                window.ClaudeTerminal.setActiveTab(btn.dataset.tab);
+                renderHistoryList();
+            });
+        });
+        listEl.appendChild(tabBar);
+
+        if (!convs.length) {
+            const empty = document.createElement('div');
+            empty.className = 'hist-empty';
+            empty.style.cssText = 'color:rgba(26,28,40,0.72); text-align:center; padding: 30px 20px;';
+            empty.textContent = activeTab === 'max'
+                ? '── 訂閱 Max 還沒有對話 ──'
+                : '── Anthropic API 還沒有對話 ──';
+            listEl.appendChild(empty);
+            return;
+        }
+
+        convs.forEach(conv => {
+            const item = document.createElement('div');
+            item.className = 'hist-item claude-recent';
+            if (conv.id === activeConvId) item.classList.add('active');
+
+            const titleSafe = (conv.title || '新會話').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const checkMark = conv.id === activeConvId ? '✓ ' : '';
+
+            item.innerHTML = `
+                <div class="claude-recent-body">
+                    <div class="claude-recent-title">${checkMark}${titleSafe}</div>
+                    <div class="claude-recent-meta">${conv.msgCount || 0} 條訊息 · ${_claudeRelTime(conv.lastActive)}</div>
+                </div>
+            `;
+            item.addEventListener('click', () => _switchToClaudeConv(conv.id));
+            listEl.appendChild(item);
+        });
+    }
+
+    async function _switchToClaudeConv(convId) {
+        if (!window.ClaudeTerminal) return;
+        const result = await window.ClaudeTerminal.switchConversation(convId);
+        if (!result) return;
+        const messages = (result.messages || []).map(m => ({
+            role: m.role,
+            content: m.content,
+            ts: m.timestamp || Date.now(),
+            thinking: m.thinking,
+            usage: m.usage,
+            tools_used: m.tools_used,
+            attachments: m.attachments,
+        }));
+        if (isClaudeRoom) {
+            IRIS_STATE.history = messages;
+            const stream = document.getElementById('claude-chat-stream');
+            if (stream) stream.innerHTML = '';
+            if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.hydrateStream === 'function') {
+                window.VoidClaudeRoom.hydrateStream();
+            }
+            if (messages.length === 0 && window.VoidClaudeRoom && typeof window.VoidClaudeRoom.renderBubble === 'function') {
+                window.VoidClaudeRoom.renderBubble('assistant', '新對話開始了。說吧。');
+            }
+            if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.setPortraitState === 'function') {
+                window.VoidClaudeRoom.setPortraitState('living');
+            }
+        } else {
+            _claudeHistoryBackup = messages;
+        }
+        closeHistoryPanel();
+        debouncedSave();
     }
 
     function updateHistoryToolbar() {
@@ -2131,6 +2258,7 @@ const IRIS_IDLE = [
         is404: () => is404Room,
         // ambient.js
         isActivitySuspended: () => _isActivitySuspended,
+        isPanelOpen:         () => _isPanelOpen,
         // login.js
         loadLobbyHistory:      (id) => loadLobbyHistory(id),
         saveLobbyHistory:      () => saveLobbyHistory(),
