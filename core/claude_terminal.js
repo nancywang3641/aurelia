@@ -29,12 +29,22 @@
 如果使用者問起「你在哪」「這是什麼」「為什麼長這樣」之類，就用上面的事實回答；不問就自然對話即可。預設用繁體中文。`;
 
     ClaudeTerminal.ASSETS = {
-        idle:     SVG_BASE + 'clawd-static-base.svg',
-        living:   SVG_BASE + 'clawd-idle-living.svg',
-        mini:     SVG_BASE + 'clawd-mini-idle.svg',
-        thinking: SVG_BASE + 'clawd-working-thinking.svg',
-        happy:    SVG_BASE + 'clawd-happy.svg',
-        error:    SVG_BASE + 'clawd-error.svg'
+        // 核心狀態
+        idle:       SVG_BASE + 'clawd-static-base.svg',
+        living:     SVG_BASE + 'clawd-idle-living.svg',
+        mini:       SVG_BASE + 'clawd-mini-idle.svg',
+        thinking:   SVG_BASE + 'clawd-working-thinking.svg',
+        ultrathink: SVG_BASE + 'clawd-working-ultrathink.svg', // effort=high 時用
+        typing:     SVG_BASE + 'clawd-working-typing.svg',     // streaming 文字 delta 中
+        happy:      SVG_BASE + 'clawd-happy.svg',
+        error:      SVG_BASE + 'clawd-error.svg',
+        // idle 變化（活著模式久了輪播）
+        doze:       SVG_BASE + 'clawd-idle-doze.svg',
+        yawn:       SVG_BASE + 'clawd-idle-yawn.svg',
+        reading:    SVG_BASE + 'clawd-idle-reading.svg',
+        // 久未動 / 喚醒
+        sleeping:   SVG_BASE + 'clawd-sleeping.svg',
+        wake:       SVG_BASE + 'clawd-wake.svg',
     };
     ClaudeTerminal.FALLBACK_URL = FALLBACK_URL;
 
