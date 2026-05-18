@@ -230,14 +230,59 @@
 
     // ===== Claude 聊天室渲染（取代 VN 翻頁） =====
 
-    // 切換上半立繪狀態（idle / living / thinking / happy / error）
-    function _setClaudePortraitState(state) {
+    // 立繪狀態機（idle / living / thinking / ultrathink / typing / happy / error
+    //          / doze / yawn / reading / sleeping / wake）
+    // living 進場後會依下表逐段切到 idle 變化、最後沉睡；任何 setState 都重置
+    let _idleTimer = null;
+    let _idleStage = 0;
+    let _currentPortraitState = 'living';
+    const IDLE_STAGES = [
+        { state: 'doze',     delay: 120000 }, // 2 分鐘：打盹
+        { state: 'reading',  delay: 180000 }, // +3 分（5 分總）：翻書
+        { state: 'yawn',     delay: 180000 }, // +3 分（8 分總）：哈欠
+        { state: 'sleeping', delay: 420000 }, // +7 分（15 分總）：沉睡
+    ];
+
+    function _swapPortraitImg(state) {
         const img = document.getElementById('claude-portrait-img');
         if (!img) return;
         const ASSETS = (window.ClaudeTerminal && window.ClaudeTerminal.ASSETS) || {};
         const FB = (window.ClaudeTerminal && window.ClaudeTerminal.FALLBACK_URL) || '';
         img.onerror = function(){ this.onerror = null; this.src = FB; };
         img.src = ASSETS[state] || ASSETS.living || ASSETS.idle || FB;
+        _currentPortraitState = state;
+    }
+
+    function _clearIdleTimer() {
+        if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+    }
+
+    function _scheduleNextIdle() {
+        _clearIdleTimer();
+        if (_idleStage >= IDLE_STAGES.length) return; // 已 sleeping、停
+        const next = IDLE_STAGES[_idleStage];
+        _idleTimer = setTimeout(() => {
+            _swapPortraitImg(next.state);
+            _idleStage++;
+            _scheduleNextIdle();
+        }, next.delay);
+    }
+
+    function _setClaudePortraitState(state) {
+        _clearIdleTimer();
+        _idleStage = 0;
+        const wasSleeping = _currentPortraitState === 'sleeping';
+        if (wasSleeping && state !== 'sleeping') {
+            // 從沉睡醒來：先 wake 一下、~350ms 後切目標狀態
+            _swapPortraitImg('wake');
+            setTimeout(() => {
+                _swapPortraitImg(state);
+                if (state === 'living') _scheduleNextIdle();
+            }, 350);
+            return;
+        }
+        _swapPortraitImg(state);
+        if (state === 'living') _scheduleNextIdle();
     }
 
     function _scrollClaudeChatToBottom() {
@@ -578,8 +623,11 @@
         });
         _renderClaudeBubble('user', text, { attachments: attachmentsSnapshot });
 
-        // 立繪切 thinking
-        _setClaudePortraitState('thinking');
+        // 立繪切 thinking（effort=high/xhigh/max 用 ultrathink）
+        const _cfgForState = window.ClaudeTerminal.getConfig();
+        const _eff = ((_cfgForState && _cfgForState.inlineEffort) || '').toLowerCase();
+        const _thinkState = (_eff === 'high' || _eff === 'xhigh' || _eff === 'max') ? 'ultrathink' : 'thinking';
+        _setClaudePortraitState(_thinkState);
 
         try {
             // streaming 漸進式 render：stream 期間每收到 text/tool 事件就 destroy 舊 wrapper
@@ -587,6 +635,7 @@
             // stream 結束後最終 render 才開 markdown
             const acc = { text: '', tools: [] };
             let streamWrap = null;
+            let _typingSwitched = false;
             const stream = document.getElementById('claude-chat-stream');
 
             const rerenderStreaming = () => {
@@ -603,6 +652,11 @@
             const onProgress = (ev) => {
                 if (!ev) return;
                 if (ev.type === 'text') {
+                    // 第一個文字 delta 抵達：thinking/ultrathink → typing
+                    if (!_typingSwitched) {
+                        _typingSwitched = true;
+                        _setClaudePortraitState('typing');
+                    }
                     acc.text = ev.accumulated || (acc.text + (ev.delta || ''));
                     rerenderStreaming();
                 } else if (ev.type === 'tool_use' && ev.tool) {
