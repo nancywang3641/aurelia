@@ -15,6 +15,41 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
     <link rel="stylesheet" href="aurelia_core.css" />
+    <link rel="stylesheet" href="core/void/lobby.css" />
+
+    <!-- core 模組 CSS -->
+    <link rel="stylesheet" href="css/toast_manager.css" />
+    <link rel="stylesheet" href="css/story_extractor.css" />
+    <link rel="stylesheet" href="css/html_extractor.css" />
+    <link rel="stylesheet" href="css/image_settings_panel.css" />
+    <link rel="stylesheet" href="css/settings_manager.css" />
+
+    <!-- os_phone/os 模組 CSS -->
+    <link rel="stylesheet" href="css/os_settings.css" />
+    <link rel="stylesheet" href="css/os_studio.css" />
+    <link rel="stylesheet" href="css/os_worldbook.css" />
+    <link rel="stylesheet" href="css/os_persona.css" />
+    <link rel="stylesheet" href="css/os_prompts.css" />
+    <link rel="stylesheet" href="css/os_avs.css" />
+    <link rel="stylesheet" href="css/os_avs_rules.css" />
+    <link rel="stylesheet" href="css/os_think.css" />
+    <link rel="stylesheet" href="css/os_debug_panel.css" />
+    <link rel="stylesheet" href="css/os_tarot.css" />
+    <link rel="stylesheet" href="css/os_user_center.css" />
+    <link rel="stylesheet" href="css/os_monitor.css" />
+    <link rel="stylesheet" href="css/os_barrage.css" />
+
+    <!-- vn_story / qb / wx / map / rpg 模組 CSS -->
+    <link rel="stylesheet" href="css/vn_styles.css" />
+    <link rel="stylesheet" href="css/vn_core.css" />
+    <link rel="stylesheet" href="css/vn_tts_panel.css" />
+    <link rel="stylesheet" href="css/vn_ui_workshop.css" />
+    <link rel="stylesheet" href="css/qb_core.css" />
+    <link rel="stylesheet" href="css/qb_os_404_chaos.css" />
+    <link rel="stylesheet" href="css/wx_chat_settings.css" />
+    <link rel="stylesheet" href="css/map_core.css" />
+    <link rel="stylesheet" href="css/rpg_status_panel.css" />
+    <link rel="stylesheet" href="css/void_achievement.css" />
 </head>
 <body>
 
@@ -76,7 +111,16 @@
     <script src="os_phone/vn_story/vn_styles.js"></script>
     <script src="os_phone/vn_story/vn_settings.js"></script>
     <script src="os_phone/vn_story/vn_dynamic_parser.js"></script>
+    <!-- vn_core 拆分後的底層工具（必須先於 vn_core.js 載入） -->
+    <script src="os_phone/vn_story/vn_cache.js"></script>
+    <script src="os_phone/vn_story/vn_config.js"></script>
+    <script src="os_phone/vn_story/vn_monitor.js"></script>
+    <script src="os_phone/vn_story/vn_summary.js"></script>
+    <script src="os_phone/vn_story/vn_sticker.js"></script>
+    <script src="os_phone/vn_story/vn_panels.js"></script>
+    <script src="os_phone/vn_story/vn_generator.js"></script>
     <script src="os_phone/vn_story/vn_core.js"></script>
+    <script src="os_phone/vn_story/vn_inspect.js"></script>
     <script src="os_phone/vn_story/vn_reader.js"></script>
     <script src="os_phone/vn_story/vn_phone.js"></script>
     <script src="os_phone/vn_story/vn_ui_workshop.js"></script>

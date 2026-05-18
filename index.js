@@ -70,7 +70,16 @@ const PHONE_FILES = [
     'vn_story/vn_settings.js',
     'vn_story/vn_tts.js',
     'vn_story/vn_tts_panel.js',
+    // vn_core 拆分後的底層工具（必須先於 vn_core.js 載入）
+    'vn_story/vn_cache.js',
+    'vn_story/vn_config.js',
+    'vn_story/vn_monitor.js',
+    'vn_story/vn_summary.js',
+    'vn_story/vn_sticker.js',
+    'vn_story/vn_panels.js',
+    'vn_story/vn_generator.js',
     'vn_story/vn_core.js',
+    'vn_story/vn_inspect.js',
     'vn_story/vn_phone.js',
     'vn_story/vn_reader.js',
     'vn_story/vn_ui_workshop.js',
@@ -165,13 +174,23 @@ function setupMessageListener() {
                     const content = lastMsg.mes;
                     
                     // 🏆 成就解鎖（全局監聽）
-                    const achRegex = /\[Achievement\|([^\]|]+)\|?([^\]]*)\]/g;
+                    //   新格式：[Achievement|emotion|名|描述]   (V1.2+)
+                    //   舊格式：[Achievement|名|描述]           (向下相容)
+                    const achRegex = /\[Achievement\|([^\]]+)\]/g;
                     let achMatch;
                     while ((achMatch = achRegex.exec(content)) !== null) {
-                        const achName = achMatch[1].trim();
-                        const achDesc = achMatch[2].trim();
+                        const parts = achMatch[1].split('|').map(s => s.trim());
+                        let achEmotion = null, achName = '', achDesc = '';
+                        if (parts.length >= 3) {
+                            achEmotion = parts[0] || null;
+                            achName    = parts[1] || '';
+                            achDesc    = parts[2] || '';
+                        } else {
+                            achName = parts[0] || '';
+                            achDesc = parts[1] || '';
+                        }
                         if (achName && window.OS_ACHIEVEMENT?.unlock) {
-                            window.OS_ACHIEVEMENT.unlock(achName, achDesc);
+                            window.OS_ACHIEVEMENT.unlock(achEmotion, achName, achDesc);
                         }
                     }
                 } catch (err) { console.error('監聽錯誤:', err); }
@@ -188,6 +207,43 @@ async function initializeExtension() {
         // 🔥 1. 強制載入核心 CSS，解決大廳與設置破圖問題
         console.log('[System] 正在載入核心樣式 (CSS)...');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/aurelia_core_st.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/core/void/lobby.css');
+
+        // core 模組 CSS（兩版共用，selector 已 scoped 不污染酒館）
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/toast_manager.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/story_extractor.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/html_extractor.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/image_settings_panel.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/settings_manager.css');
+
+        // os_phone/os 模組 CSS
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_settings.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_studio.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_worldbook.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_persona.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_prompts.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_avs.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_avs_rules.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_think.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_debug_panel.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_tarot.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_user_center.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_monitor.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_barrage.css');
+
+        // vn_story / qb / wx / map / rpg 模組 CSS
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/vn_styles.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/vn_core.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/vn_tts_panel.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/vn_ui_workshop.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/qb_core.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/qb_os_404_chaos.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/wx_chat_settings.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/map_core.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/rpg_status_panel.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_achievement.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_claude_recents.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_claude_ask.css');
 
         for (const conf of MODULE_LOAD_ORDER) await loadModule(conf);
 
