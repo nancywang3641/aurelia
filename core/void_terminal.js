@@ -734,6 +734,12 @@ const IRIS_IDLE = [
             <div class="claude-chat-panel" id="claude-chat-panel">
                 <div class="claude-portrait-area">
                     <img id="claude-portrait-img" class="claude-portrait-img" alt="Clawd">
+                    <!-- 當前會話標題小卡：點開 Recents -->
+                    <div class="claude-conv-chip" id="claude-conv-chip" title="點開 Recents 多會話列表">
+                        <span class="ccc-tab" id="ccc-tab">☕</span>
+                        <span class="ccc-title" id="ccc-title">—</span>
+                        <span class="ccc-arrow">▾</span>
+                    </div>
                 </div>
                 <div class="claude-chat-stream" id="claude-chat-stream"></div>
             </div>
@@ -903,6 +909,15 @@ const IRIS_IDLE = [
                         VoidClaudeRoom.openPicker();
                     }
                 };
+            }
+
+            // 左上角 conv 標題小卡 → 點開 Recents
+            const convChip = tab.querySelector('#claude-conv-chip');
+            if (convChip) {
+                convChip.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openHistoryPanel('claude');
+                });
             }
 
             // 點擊反應對話框直接跳過 (恢復主線)
@@ -1262,6 +1277,7 @@ const IRIS_IDLE = [
                     _claudeHistoryBackup = [];
                 }
                 renderHistoryList();
+                _updateClaudeConvChip();
                 debouncedSave();
             });
 
@@ -1446,6 +1462,29 @@ const IRIS_IDLE = [
     }
 
     // ===== Claude Recents 視圖（多會話）=====
+
+    /** 更新左上角 conv 標題小卡：tab icon + title + 下拉箭頭。
+     *  在 enter room / switch conv / delete conv / 新會話 / 送完訊息（title 可能自動改）後呼叫。
+     */
+    function _updateClaudeConvChip() {
+        const chip = document.getElementById('claude-conv-chip');
+        if (!chip || !window.ClaudeTerminal) return;
+        const tab = window.ClaudeTerminal.getActiveTab();
+        const convId = window.ClaudeTerminal.getActiveConvId(tab);
+        const tabIcon = tab === 'api' ? '🌐' : '☕';
+        const tabEl = document.getElementById('ccc-tab');
+        const titleEl = document.getElementById('ccc-title');
+        if (tabEl) tabEl.textContent = tabIcon;
+        if (!convId) {
+            if (titleEl) titleEl.textContent = '新會話';
+            return;
+        }
+        const found = window.ClaudeTerminal.findConv(convId);
+        if (titleEl) titleEl.textContent = (found && found.meta.title) || '新會話';
+    }
+    // 暴露給 claude-room.js（送訊息完成後呼叫、因為新 conv 第一條 user msg 會自動設標題）
+    window._VoidClaudeUpdateChip = _updateClaudeConvChip;
+
     function _claudeRelTime(ts) {
         if (!ts) return '從未對話';
         const diff = Date.now() - ts;
@@ -1621,6 +1660,7 @@ const IRIS_IDLE = [
                 }
             }
             renderHistoryList();
+            _updateClaudeConvChip();
             debouncedSave();
         });
     }
@@ -1687,6 +1727,7 @@ const IRIS_IDLE = [
         } else {
             _claudeHistoryBackup = messages;
         }
+        _updateClaudeConvChip();
         closeHistoryPanel();
         debouncedSave();
     }
@@ -1830,6 +1871,7 @@ const IRIS_IDLE = [
             if (IRIS_STATE.history.length === 0) {
                 VoidClaudeRoom.renderBubble('assistant', '在這裡，我跟妳的對話跟外面是兩條線。妳說什麼吧。');
             }
+            _updateClaudeConvChip();
 
             _updatePortalBtn();
             VoidClaudeRoom.updatePortalBtn();
