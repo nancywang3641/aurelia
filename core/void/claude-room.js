@@ -797,6 +797,10 @@
                 setTimeout(() => _setClaudePortraitState('living'), 600);
             }
             _bridge().scheduleSave();
+            // 新 conv 的標題會在 saveHistory 自動從第一條 user msg 抓 → 更新左上角小卡
+            if (typeof window._VoidClaudeUpdateChip === 'function') {
+                try { window._VoidClaudeUpdateChip(); } catch (_) {}
+            }
         } catch (e) {
             // 失敗：回滾剛 push 的 user message
             if (_bridge().activeHistory().length > 0 && _bridge().activeHistory()[_bridge().activeHistory().length - 1].role === 'user') {
