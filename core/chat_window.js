@@ -28,7 +28,10 @@
                 h: Math.min(window.innerHeight - 60, 660),
             };
         }
-        return { w: 480, h: 700 };
+        return {
+            w: 480,
+            h: Math.min(700, window.innerHeight - 40),
+        };
     }
 
     function _centerPos(size) {
