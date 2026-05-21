@@ -26,6 +26,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_canvas', path: './scripts/extensions/third-party/my-tavern-extension/core/void/canvas.js', key: 'voidCanvas' },
     { name: 'void_claude_room', path: './scripts/extensions/third-party/my-tavern-extension/core/void/claude-room.js', key: 'voidClaudeRoom' },
     { name: 'void_login', path: './scripts/extensions/third-party/my-tavern-extension/core/void/login.js', key: 'voidLogin' },
+    { name: 'chat_window', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_window.js', key: 'chatWindow' },
     { name: 'void_terminal', path: './scripts/extensions/third-party/my-tavern-extension/core/void_terminal.js', key: 'voidTerminal' },
     { name: 'control_center', path: './scripts/extensions/third-party/my-tavern-extension/core/control_center.js', key: 'controlCenter' },
     { name: 'html_extractor', path: './scripts/extensions/third-party/my-tavern-extension/core/html_extractor.js', key: 'htmlExtractor' },
@@ -64,6 +65,8 @@ const PHONE_FILES = [
     'os/os_tarot.js',
     'os/os_spend_panel.js',
     'os/os_card_import.js',
+    'os/os_journal.js',
+    'os/os_workbench.js',
 
     // === 📖 VN 視覺小說系統 ===
     'vn_story/vn_styles.js',
@@ -227,6 +230,8 @@ async function initializeExtension() {
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_think.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_debug_panel.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_tarot.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_journal.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_workbench.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_user_center.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_monitor.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_barrage.css');
@@ -244,6 +249,7 @@ async function initializeExtension() {
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_achievement.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_claude_recents.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_claude_ask.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/chat_window.css');
 
         for (const conf of MODULE_LOAD_ORDER) await loadModule(conf);
 
