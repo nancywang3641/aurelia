@@ -468,24 +468,42 @@
         spend: '💰 額度', recents: '🕘 Recents',
     };
 
+    // 工作檯 / 額度模組自帶關閉鈕（原本呼叫 PhoneSystem.goHome）→ 改接 closeSubPanel
+    function _hijackModuleClose(body, selector) {
+        const btn = body.querySelector(selector);
+        if (btn) {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                ChatWindow.closeSubPanel();
+            };
+        }
+    }
+
     ChatWindow.openSubPanel = function (name) {
         if (!_winEl) return;
         _subPanel = name;
         const sp = _winEl.querySelector('#cw-subpanel');
+        const head = _winEl.querySelector('.cw-subpanel-head');
         const title = _winEl.querySelector('#cw-subpanel-title');
         const body = _winEl.querySelector('#cw-subpanel-body');
         if (!sp || !body) return;
+        // 工作檯 / 額度自帶 header + 關閉鈕 → 藏浮窗自己的 header，避免雙標題雙 ✕
+        const moduleOwnsHeader = (name === 'workbench' || name === 'spend');
+        if (head) head.style.display = moduleOwnsHeader ? 'none' : 'flex';
         if (title) title.textContent = _SUBPANEL_TITLES[name] || name;
         body.innerHTML = '';
         if (name === 'workbench') {
             if (window.OS_WORKBENCH && typeof window.OS_WORKBENCH.launch === 'function') {
                 window.OS_WORKBENCH.launch(body);
+                _hijackModuleClose(body, '#wb-close');
             } else {
                 body.innerHTML = '<div class="cw-sub-missing">工作檯模組未載入</div>';
             }
         } else if (name === 'spend') {
             if (window.OS_SPEND_PANEL && typeof window.OS_SPEND_PANEL.launch === 'function') {
                 window.OS_SPEND_PANEL.launch(body);
+                _hijackModuleClose(body, '#sp-close-btn');
             } else {
                 body.innerHTML = '<div class="cw-sub-missing">額度模組未載入</div>';
             }
