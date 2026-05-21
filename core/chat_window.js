@@ -496,6 +496,10 @@
         _isOpen = true;
         if (_menuEl) _menuEl.style.display = 'none';
         ChatWindow.closeSubPanel();
+        // 進房間靜音大廳 BGM（浮窗本身不放 BGM）
+        if (window.VoidAmbient && typeof window.VoidAmbient.pauseBgm === 'function') {
+            window.VoidAmbient.pauseBgm();
+        }
         await _loadRoom(provider);
     };
 
@@ -504,6 +508,10 @@
         if (_winEl) _winEl.style.display = 'none';
         ChatWindow.closeSubPanel();
         _isOpen = false;
+        // 回大廳：恢復大廳 BGM（resumeLobbyActivity 內含 bgmEnabled 判斷）
+        if (window.VoidTerminal && typeof window.VoidTerminal.resumeLobbyActivity === 'function') {
+            window.VoidTerminal.resumeLobbyActivity();
+        }
     };
 
     // 啟動選單：點酒館輸入列那顆鈕 → 跳小選單選 Claude / Codex
