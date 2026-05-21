@@ -1,0 +1,132 @@
+/* ============================================================
+ * css/chat_window.css — Claude / Codex 獨立浮窗
+ * 全部 scoped 在 #aurelia-chat-window，不污染酒館 / 大廳。
+ * 聊天室氣泡 / picker / 附件等樣式於 Phase 2 補入。
+ * ============================================================ */
+
+#aurelia-chat-window.cw-window {
+    position: fixed;
+    z-index: 10000;
+    display: none;               /* JS 控制 flex / none */
+    flex-direction: column;
+    background: #1a1a2e;
+    color: #FFF5E1;
+    border-radius: 10px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+#aurelia-chat-window.cw-window.cw-codex {
+    background: #0e1c2e;         /* Codex 深藍 */
+}
+
+/* ── 標題列（拖動把手）── */
+#aurelia-chat-window .cw-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: move;
+    user-select: none;
+    background: rgba(0, 0, 0, 0.30);
+    flex-shrink: 0;
+}
+
+#aurelia-chat-window .cw-identity {
+    flex: 1;
+    font-weight: 700;
+    font-size: 13px;
+    color: #FFF5E1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#aurelia-chat-window .cw-toolbar {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+#aurelia-chat-window .cw-tool-btn,
+#aurelia-chat-window .cw-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #FFF5E1;
+    font-size: 15px;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 5px;
+    transition: background 0.15s;
+}
+
+#aurelia-chat-window .cw-tool-btn:hover,
+#aurelia-chat-window .cw-close:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+#aurelia-chat-window .cw-close {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+/* ── 視窗主體 ── */
+#aurelia-chat-window .cw-body {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* ── 子面板浮層（設置 / 工作檯 / 額度 / Recents）── */
+#aurelia-chat-window .cw-subpanel {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: #1a1a2e;
+    display: none;               /* JS 控制 flex / none */
+    flex-direction: column;
+}
+
+#aurelia-chat-window.cw-codex .cw-subpanel {
+    background: #0e1c2e;
+}
+
+#aurelia-chat-window .cw-subpanel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.30);
+    flex-shrink: 0;
+}
+
+#aurelia-chat-window .cw-subpanel-title {
+    font-weight: 700;
+    font-size: 13px;
+    color: #FFF5E1;
+}
+
+#aurelia-chat-window .cw-subpanel-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #FFF5E1;
+    font-size: 14px;
+    padding: 3px 5px;
+    border-radius: 5px;
+}
+
+#aurelia-chat-window .cw-subpanel-close:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+#aurelia-chat-window .cw-subpanel-body {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+}
