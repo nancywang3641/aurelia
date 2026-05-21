@@ -1,19 +1,19 @@
 /**
  * core/chat_window.js — Claude / Codex 獨立浮窗外殼
- * 職責：浮動框、標題列拖動、開關、跟奧瑞亞主面板互斥、子面板路由。
+ * 職責：浮動框、標題列拖動、開關、子面板路由、啟動選單。
+ * 純浮層 —— 浮在最上層，不隱藏 / 不影響奧瑞亞大廳。
  * 聊天室 UI 由 chat_room.js（window.VoidClaudeRoom）渲染進 #cw-body。
  */
 (function (ChatWindow) {
     'use strict';
 
     const WIN_ID = 'aurelia-chat-window';
-    const AURELIA_FRAME_ID = 'aurelia-phone-frame';
 
     let _winEl = null;
+    let _menuEl = null;              // Claude/Codex 啟動選單
     let _provider = 'claude';        // 'claude' | 'codex'
     let _isOpen = false;
     let _subPanel = null;            // 當前開啟的子面板名（null = 沒開）
-    let _aureliaPrevDisplay = null;  // 開窗前奧瑞亞 frame 的 display，關窗還原
 
     const IDENTITY = {
         claude: '🦀 Claude’s Room',
@@ -188,21 +188,6 @@
         }
     }
 
-    function _hideAurelia() {
-        const frame = document.getElementById(AURELIA_FRAME_ID);
-        if (frame) {
-            _aureliaPrevDisplay = frame.style.display;
-            frame.style.display = 'none';
-        }
-    }
-    function _showAurelia() {
-        const frame = document.getElementById(AURELIA_FRAME_ID);
-        if (frame && _aureliaPrevDisplay !== null) {
-            frame.style.display = _aureliaPrevDisplay;
-        }
-        _aureliaPrevDisplay = null;
-    }
-
     // 載入當前 provider 的 conv 歷史並渲染進浮窗
     async function _loadRoom(provider) {
         if (window.ClaudeTerminal && typeof window.ClaudeTerminal.setProvider === 'function') {
@@ -232,8 +217,8 @@
         if (idEl) idEl.textContent = IDENTITY[provider];
         _winEl.classList.toggle('cw-codex', provider === 'codex');
         _winEl.style.display = 'flex';
-        if (!_isOpen) _hideAurelia();
         _isOpen = true;
+        if (_menuEl) _menuEl.style.display = 'none';
         ChatWindow.closeSubPanel();
         await _loadRoom(provider);
     };
@@ -242,8 +227,43 @@
         if (!_isOpen) return;
         if (_winEl) _winEl.style.display = 'none';
         ChatWindow.closeSubPanel();
-        _showAurelia();
         _isOpen = false;
+    };
+
+    // 啟動選單：點酒館輸入列那顆鈕 → 跳小選單選 Claude / Codex
+    ChatWindow.toggleLauncherMenu = function (anchorEl) {
+        if (_menuEl && _menuEl.style.display !== 'none') {
+            _menuEl.style.display = 'none';
+            return;
+        }
+        if (!_menuEl) {
+            _menuEl = document.createElement('div');
+            _menuEl.id = 'cw-launcher-menu';
+            _menuEl.innerHTML =
+                '<button class="cw-lm-item" data-p="claude" type="button">🦀 Claude 的房間</button>' +
+                '<button class="cw-lm-item" data-p="codex" type="button">🔷 Codex 的房間</button>';
+            document.body.appendChild(_menuEl);
+            _menuEl.querySelectorAll('.cw-lm-item').forEach(b => {
+                b.addEventListener('click', () => {
+                    _menuEl.style.display = 'none';
+                    ChatWindow.open(b.dataset.p);
+                });
+            });
+            document.addEventListener('click', (e) => {
+                if (!_menuEl || _menuEl.style.display === 'none') return;
+                if (_menuEl.contains(e.target)) return;
+                if (e.target && e.target.closest && e.target.closest('#aurelia-chat-launcher')) return;
+                _menuEl.style.display = 'none';
+            });
+        }
+        _menuEl.style.display = 'flex';
+        const r = anchorEl.getBoundingClientRect();
+        const mw = _menuEl.offsetWidth || 170;
+        const mh = _menuEl.offsetHeight || 84;
+        let left = r.left;
+        if (left + mw > window.innerWidth) left = window.innerWidth - mw - 8;
+        _menuEl.style.left = Math.max(8, left) + 'px';
+        _menuEl.style.top = Math.max(8, r.top - mh - 6) + 'px';
     };
 
     ChatWindow.openSubPanel = function (name) {

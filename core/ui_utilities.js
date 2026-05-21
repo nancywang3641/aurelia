@@ -36,27 +36,41 @@
         },
 
         createIcon() {
-            // 如果已經有了就不要重複創
-            if (document.getElementById('aurelia-floating-icon')) return;
+            // 🏰 奧瑞亞主面板鈕
+            if (!document.getElementById('aurelia-floating-icon')) {
+                const icon = document.createElement('div');
+                icon.id = 'aurelia-floating-icon';
+                // 預設隱藏，由 moveToInputBox / moveToQRBar 放定位後再顯示
+                icon.style.display = 'none';
+                icon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    if (window.AureliaControlCenter) {
+                        window.AureliaControlCenter.toggle();
+                    } else {
+                        console.warn('控制中心尚未加載');
+                    }
+                });
+                document.body.appendChild(icon);
+                this.iconElement = icon;
+            }
 
-            const icon = document.createElement('div');
-            icon.id = 'aurelia-floating-icon';
-            // 預設隱藏，由 moveToInputBox / moveToQRBar 放定位後再顯示
-            icon.style.display = 'none';
-
-            // 點擊事件：切換控制中心
-            icon.addEventListener('click', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                if (window.AureliaControlCenter) {
-                    window.AureliaControlCenter.toggle();
-                } else {
-                    console.warn('控制中心尚未加載');
-                }
-            });
-
-            document.body.appendChild(icon);
-            this.iconElement = icon;
+            // 💬 Claude / Codex 浮窗啟動鈕（點了跳小選單）
+            if (!document.getElementById('aurelia-chat-launcher')) {
+                const chatIcon = document.createElement('div');
+                chatIcon.id = 'aurelia-chat-launcher';
+                chatIcon.style.display = 'none';
+                chatIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    if (window.ChatWindow && typeof window.ChatWindow.toggleLauncherMenu === 'function') {
+                        window.ChatWindow.toggleLauncherMenu(chatIcon);
+                    } else {
+                        console.warn('ChatWindow 尚未加載');
+                    }
+                });
+                document.body.appendChild(chatIcon);
+            }
         },
 
         // 桌面端邏輯：把圖標塞進輸入框 (LeftSendForm)
@@ -87,6 +101,26 @@
 
                 leftSendForm.insertBefore(icon, leftSendForm.firstChild);
             }
+
+            // 💬 啟動鈕：緊跟在 🏰 右邊
+            const chatIcon = document.getElementById('aurelia-chat-launcher');
+            if (leftSendForm && chatIcon && chatIcon.parentElement !== leftSendForm) {
+                chatIcon.className = '';
+                chatIcon.innerHTML = '💬';
+                chatIcon.title = 'Claude / Codex 浮窗';
+                Object.assign(chatIcon.style, {
+                    position: 'static', width: '30px', height: '30px',
+                    borderRadius: '5px', marginRight: '4px', marginLeft: '2px',
+                    boxShadow: 'none', transform: 'none', fontSize: '18px',
+                    flexShrink: '0', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                });
+                const castle = document.getElementById('aurelia-floating-icon');
+                if (castle && castle.parentElement === leftSendForm) {
+                    leftSendForm.insertBefore(chatIcon, castle.nextSibling);
+                } else {
+                    leftSendForm.insertBefore(chatIcon, leftSendForm.firstChild);
+                }
+            }
         },
 
         // 移動端邏輯：嵌入 QR 欄 (#qr--bar) 的內層 .qr--buttons
@@ -98,6 +132,8 @@
             const qrBar = document.getElementById('qr--bar');
             if (!qrBar) {
                 icon.style.display = 'none';
+                const ci = document.getElementById('aurelia-chat-launcher');
+                if (ci) ci.style.display = 'none';
                 return;
             }
 
@@ -115,6 +151,20 @@
             icon.innerHTML = '<div class="qr--button-label">🏰 奧瑞亞</div>';
             icon.title = '奧瑞亞面板';
             target.appendChild(icon);
+
+            // 💬 啟動鈕：跟 🏰 並排
+            const chatIcon = document.getElementById('aurelia-chat-launcher');
+            if (chatIcon) {
+                if (chatIcon.parentElement === target) {
+                    chatIcon.style.display = '';
+                } else {
+                    chatIcon.style.cssText = 'cursor:pointer; flex-shrink:0;';
+                    chatIcon.className = 'qr--button menu_button interactable';
+                    chatIcon.innerHTML = '<div class="qr--button-label">💬 助手</div>';
+                    chatIcon.title = 'Claude / Codex 浮窗';
+                    target.appendChild(chatIcon);
+                }
+            }
         },
 
         handleResize() {
