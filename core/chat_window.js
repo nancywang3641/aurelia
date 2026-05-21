@@ -104,6 +104,9 @@
         _bindDrag(el.querySelector('#cw-titlebar'), el);
         _bindChatInput(el);
 
+        const chip = el.querySelector('#claude-conv-chip');
+        if (chip) chip.addEventListener('click', () => ChatWindow.openSubPanel('recents'));
+
         const size = _sizeForViewport();
         const pos = _centerPos(size);
         el.style.width  = size.w + 'px';
@@ -207,6 +210,200 @@
                 ? '這裡是 Codex 的房間，跟外面是分開的線。說吧。'
                 : '在這裡，我跟妳的對話跟外面是兩條線。妳說什麼吧。');
         }
+        _updateChip();
+    }
+
+    // 更新左上角會話小卡（tab emoji + 當前 conv 標題）
+    function _updateChip() {
+        if (!_winEl || !window.ClaudeTerminal) return;
+        const CT = window.ClaudeTerminal;
+        const tab = CT.getActiveTab ? CT.getActiveTab() : 'max';
+        const convId = CT.getActiveConvId ? CT.getActiveConvId(tab) : null;
+        const tabEl = _winEl.querySelector('#ccc-tab');
+        const titleEl = _winEl.querySelector('#ccc-title');
+        if (tabEl) tabEl.textContent = tab === 'codex' ? '🔷' : tab === 'api' ? '🌐' : '☕';
+        if (titleEl) {
+            let title = '新會話';
+            if (convId && CT.findConv) {
+                const f = CT.findConv(convId);
+                if (f && f.meta && f.meta.title) title = f.meta.title;
+            }
+            titleEl.textContent = title;
+        }
+    }
+    window._VoidClaudeUpdateChip = _updateChip;
+
+    function _esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ⚙️ 設置子面板 —— Claude 連線預設管理 + 預設值（讀寫 os_claude_room_config）
+    function _renderSettingsPanel(body) {
+        const OS = window.OS_SETTINGS;
+        if (!OS || typeof OS.getClaudeRoomConfig !== 'function') {
+            body.innerHTML = '<div class="cw-sub-missing">設定模組未載入</div>';
+            return;
+        }
+        const cfg = OS.getClaudeRoomConfig();
+        const save = () => {
+            try { OS.saveClaudeRoomConfig(cfg); } catch (_) {}
+            if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.updatePickerLabel === 'function') {
+                window.VoidClaudeRoom.updatePickerLabel();
+            }
+        };
+
+        body.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'cw-set';
+
+        const presetSec = document.createElement('div');
+        presetSec.className = 'cw-set-sec';
+        presetSec.innerHTML = '<div class="cw-set-h">連線預設（填 URL + 密鑰即可用）</div>';
+        const listEl = document.createElement('div');
+        presetSec.appendChild(listEl);
+        const addBtn = document.createElement('button');
+        addBtn.className = 'cw-set-add';
+        addBtn.type = 'button';
+        addBtn.textContent = '➕ 新增預設';
+        presetSec.appendChild(addBtn);
+        wrap.appendChild(presetSec);
+
+        function renderPresets() {
+            listEl.innerHTML = '';
+            (cfg.presets || []).forEach((p, idx) => {
+                const card = document.createElement('div');
+                card.className = 'cw-set-preset';
+                card.innerHTML =
+                    '<div class="cw-set-prow">' +
+                    '<input type="radio" name="cw-active-preset" ' + (p.id === cfg.activePresetId ? 'checked' : '') + '>' +
+                    '<input type="text" class="cw-set-in cw-set-name" placeholder="名稱" value="' + _esc(p.name) + '">' +
+                    '<button class="cw-set-del" type="button" title="刪除">✕</button>' +
+                    '</div>' +
+                    '<input type="text" class="cw-set-in cw-set-url" placeholder="URL" value="' + _esc(p.url) + '">' +
+                    '<input type="password" class="cw-set-in cw-set-key" placeholder="密鑰 / Bearer token" value="' + _esc(p.key) + '">';
+                card.querySelector('input[type=radio]').addEventListener('change', () => { cfg.activePresetId = p.id; save(); });
+                card.querySelector('.cw-set-name').addEventListener('input', e => { p.name = e.target.value; save(); });
+                card.querySelector('.cw-set-url').addEventListener('input', e => { p.url = e.target.value; save(); });
+                card.querySelector('.cw-set-key').addEventListener('input', e => { p.key = e.target.value; save(); });
+                card.querySelector('.cw-set-del').addEventListener('click', () => {
+                    cfg.presets.splice(idx, 1);
+                    if (cfg.activePresetId === p.id) cfg.activePresetId = (cfg.presets[0] && cfg.presets[0].id) || '';
+                    save(); renderPresets();
+                });
+                listEl.appendChild(card);
+            });
+        }
+        addBtn.addEventListener('click', () => {
+            cfg.presets = cfg.presets || [];
+            const id = 'p_' + Date.now().toString(36);
+            cfg.presets.push({ id, name: '新預設', url: '', key: '' });
+            if (!cfg.activePresetId) cfg.activePresetId = id;
+            save(); renderPresets();
+        });
+        renderPresets();
+
+        const defSec = document.createElement('div');
+        defSec.className = 'cw-set-sec';
+        defSec.innerHTML =
+            '<div class="cw-set-h">預設值</div>' +
+            '<label class="cw-set-field"><span>Max Tokens</span>' +
+            '<input type="number" class="cw-set-in" id="cw-set-maxtok" min="100" max="200000" step="100" value="' + (cfg.maxTokens || 4096) + '"></label>' +
+            '<label class="cw-set-field"><span>Temperature</span>' +
+            '<input type="number" class="cw-set-in" id="cw-set-temp" min="0" max="2" step="0.05" value="' + (cfg.temperature != null ? cfg.temperature : 1) + '"></label>' +
+            '<label class="cw-set-field"><span>Top P</span>' +
+            '<input type="number" class="cw-set-in" id="cw-set-topp" min="0" max="1" step="0.01" value="' + (cfg.top_p != null ? cfg.top_p : 1) + '"></label>';
+        wrap.appendChild(defSec);
+        defSec.querySelector('#cw-set-maxtok').addEventListener('input', e => { cfg.maxTokens = parseInt(e.target.value, 10) || 4096; save(); });
+        defSec.querySelector('#cw-set-temp').addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isNaN(v)) { cfg.temperature = v; save(); } });
+        defSec.querySelector('#cw-set-topp').addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isNaN(v)) { cfg.top_p = v; save(); } });
+
+        body.appendChild(wrap);
+    }
+
+    // 🕘 Recents 子面板 —— 多會話列表
+    function _renderRecentsPanel(body) {
+        const CT = window.ClaudeTerminal;
+        if (!CT || typeof CT.listConversations !== 'function') {
+            body.innerHTML = '<div class="cw-sub-missing">會話模組未載入</div>';
+            return;
+        }
+        body.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'cw-rec';
+
+        const isCodex = _provider === 'codex';
+        const curTab = CT.getActiveTab ? CT.getActiveTab() : (isCodex ? 'codex' : 'max');
+
+        if (!isCodex) {
+            const tabBar = document.createElement('div');
+            tabBar.className = 'cw-rec-tabs';
+            [['max', '🏠 訂閱 Max'], ['api', '🌐 API']].forEach(pair => {
+                const tb = document.createElement('button');
+                tb.type = 'button';
+                tb.className = 'cw-rec-tab' + (pair[0] === curTab ? ' active' : '');
+                tb.textContent = pair[1];
+                tb.addEventListener('click', () => {
+                    if (CT.setActiveTab) CT.setActiveTab(pair[0]);
+                    _renderRecentsPanel(body);
+                });
+                tabBar.appendChild(tb);
+            });
+            wrap.appendChild(tabBar);
+        }
+
+        const newBtn = document.createElement('button');
+        newBtn.type = 'button';
+        newBtn.className = 'cw-rec-new';
+        newBtn.textContent = '＋ 新會話';
+        newBtn.addEventListener('click', async () => {
+            if (CT.startNewConversation) CT.startNewConversation(curTab);
+            await _loadRoom(_provider);
+            ChatWindow.closeSubPanel();
+        });
+        wrap.appendChild(newBtn);
+
+        const listEl = document.createElement('div');
+        listEl.className = 'cw-rec-list';
+        const convs = CT.listConversations(curTab) || [];
+        const activeId = CT.getActiveConvId ? CT.getActiveConvId(curTab) : null;
+        if (!convs.length) {
+            listEl.innerHTML = '<div class="cw-rec-empty">還沒有會話。發個訊息就會開始第一個。</div>';
+        } else {
+            convs.forEach(c => {
+                const row = document.createElement('div');
+                row.className = 'cw-rec-row' + (c.id === activeId ? ' active' : '');
+                const info = document.createElement('div');
+                info.className = 'cw-rec-info';
+                info.innerHTML = '<div class="cw-rec-title">' + _esc(c.title || '新會話') + '</div>' +
+                    '<div class="cw-rec-meta">' + (c.msgCount || 0) + ' 則</div>';
+                info.addEventListener('click', async () => {
+                    if (CT.switchConversation) await CT.switchConversation(c.id);
+                    await _loadRoom(_provider);
+                    ChatWindow.closeSubPanel();
+                });
+                const ren = document.createElement('button');
+                ren.type = 'button'; ren.className = 'cw-rec-act'; ren.textContent = '✏️'; ren.title = '改名';
+                ren.addEventListener('click', () => {
+                    const nt = window.prompt('新的會話名稱', c.title || '');
+                    if (nt && CT.renameConversation) { CT.renameConversation(c.id, nt); _renderRecentsPanel(body); }
+                });
+                const del = document.createElement('button');
+                del.type = 'button'; del.className = 'cw-rec-act'; del.textContent = '🗑️'; del.title = '刪除';
+                del.addEventListener('click', async () => {
+                    if (!window.confirm('刪除這個會話？')) return;
+                    if (CT.deleteConversation) await CT.deleteConversation(c.id);
+                    _renderRecentsPanel(body);
+                });
+                row.appendChild(info);
+                row.appendChild(ren);
+                row.appendChild(del);
+                listEl.appendChild(row);
+            });
+        }
+        wrap.appendChild(listEl);
+        body.appendChild(wrap);
     }
 
     ChatWindow.open = async function (provider) {
@@ -266,14 +463,38 @@
         _menuEl.style.top = Math.max(8, r.top - mh - 6) + 'px';
     };
 
+    const _SUBPANEL_TITLES = {
+        settings: '⚙️ 設置', workbench: '🛠️ 工作檯',
+        spend: '💰 額度', recents: '🕘 Recents',
+    };
+
     ChatWindow.openSubPanel = function (name) {
         if (!_winEl) return;
-        // Phase 3 接內容；此階段先只切顯示
         _subPanel = name;
         const sp = _winEl.querySelector('#cw-subpanel');
         const title = _winEl.querySelector('#cw-subpanel-title');
-        if (title) title.textContent = name;
-        if (sp) sp.style.display = 'flex';
+        const body = _winEl.querySelector('#cw-subpanel-body');
+        if (!sp || !body) return;
+        if (title) title.textContent = _SUBPANEL_TITLES[name] || name;
+        body.innerHTML = '';
+        if (name === 'workbench') {
+            if (window.OS_WORKBENCH && typeof window.OS_WORKBENCH.launch === 'function') {
+                window.OS_WORKBENCH.launch(body);
+            } else {
+                body.innerHTML = '<div class="cw-sub-missing">工作檯模組未載入</div>';
+            }
+        } else if (name === 'spend') {
+            if (window.OS_SPEND_PANEL && typeof window.OS_SPEND_PANEL.launch === 'function') {
+                window.OS_SPEND_PANEL.launch(body);
+            } else {
+                body.innerHTML = '<div class="cw-sub-missing">額度模組未載入</div>';
+            }
+        } else if (name === 'settings') {
+            _renderSettingsPanel(body);
+        } else if (name === 'recents') {
+            _renderRecentsPanel(body);
+        }
+        sp.style.display = 'flex';
     };
 
     ChatWindow.closeSubPanel = function () {
