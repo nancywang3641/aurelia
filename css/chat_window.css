@@ -21,6 +21,60 @@
     background: #0e1c2e;         /* Codex 深藍 */
 }
 
+/* Codex 房間冷色主題：覆寫 --cl-* 變數，氣泡 / picker / 輸入列等
+ * 用 var(--cl-*) 的部分自動轉藍（同 aurelia_core.css 的 .void-tab.mode-codex）。 */
+#aurelia-chat-window.cw-codex {
+    --cl-cream:           #e9eef4;
+    --cl-cream-light:     #f5f8fc;
+    --cl-beeswax:         #5b9bd5;
+    --cl-beeswax-soft:    rgba(26, 28, 40, 0.25);
+    --cl-grenadine:       #2f6fc4;
+    --cl-cafe-latte:      #5a7a96;
+    --cl-text-deep:       #13283f;
+    --cl-paper-grain:     rgba(70, 100, 140, 0.05);
+    --cl-warm-shadow:     rgba(70, 100, 140, 0.18);
+    --cl-warm-glow:       rgba(91, 155, 213, 0.50);
+    --cl-portrait-bg-1:   var(--cl-beeswax-soft);
+    --cl-portrait-bg-2:   var(--cl-beeswax);
+    --cl-portrait-bg-3:   var(--cl-grenadine);
+}
+
+/* 輸入列裡寫死的暖色 rgba（無法吃變數）→ Codex 改藍 */
+#aurelia-chat-window.cw-codex .cw-input-row {
+    border-top-color: rgba(91, 155, 213, 0.5);
+}
+#aurelia-chat-window.cw-codex .cw-input::placeholder {
+    color: rgba(90, 122, 150, 0.6);
+}
+#aurelia-chat-window.cw-codex .cw-attach-btn {
+    background: rgba(91, 155, 213, 0.25);
+    border-color: rgba(91, 155, 213, 0.5);
+}
+#aurelia-chat-window.cw-codex .cw-attach-btn:hover {
+    background: rgba(91, 155, 213, 0.4);
+    box-shadow: 0 0 8px rgba(91, 155, 213, 0.4);
+}
+#aurelia-chat-window.cw-codex .cw-send-btn {
+    border-color: rgba(47, 111, 196, 0.5);
+}
+#aurelia-chat-window.cw-codex .cw-send-btn:hover {
+    box-shadow: 0 0 12px rgba(47, 111, 196, 0.4);
+}
+
+/* picker 橫條 + 氣泡陰影裡寫死的暖色 → Codex 改藍 */
+#aurelia-chat-window.cw-codex .claude-picker-bar {
+    background: rgba(91, 155, 213, 0.10);
+    border-bottom-color: rgba(91, 155, 213, 0.25);
+}
+#aurelia-chat-window.cw-codex .claude-bubble.from-user {
+    box-shadow: 0 4px 12px rgba(47, 111, 196, 0.3);
+}
+#aurelia-chat-window.cw-codex .claude-bubble.from-claude {
+    box-shadow:
+        0 0 0 2px rgba(91, 155, 213, 0.18),
+        0 4px 12px var(--cl-warm-shadow, rgba(70, 100, 140, 0.18));
+}
+
 /* ── 標題列（拖動把手）── */
 #aurelia-chat-window .cw-titlebar {
     display: flex;
