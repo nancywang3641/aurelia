@@ -374,35 +374,114 @@
             convs.forEach(c => {
                 const row = document.createElement('div');
                 row.className = 'cw-rec-row' + (c.id === activeId ? ' active' : '');
-                const info = document.createElement('div');
-                info.className = 'cw-rec-info';
-                info.innerHTML = '<div class="cw-rec-title">' + _esc(c.title || '新會話') + '</div>' +
-                    '<div class="cw-rec-meta">' + (c.msgCount || 0) + ' 則</div>';
-                info.addEventListener('click', async () => {
-                    if (CT.switchConversation) await CT.switchConversation(c.id);
-                    await _loadRoom(_provider);
-                    ChatWindow.closeSubPanel();
-                });
-                const ren = document.createElement('button');
-                ren.type = 'button'; ren.className = 'cw-rec-act'; ren.textContent = '✏️'; ren.title = '改名';
-                ren.addEventListener('click', () => {
-                    const nt = window.prompt('新的會話名稱', c.title || '');
-                    if (nt && CT.renameConversation) { CT.renameConversation(c.id, nt); _renderRecentsPanel(body); }
-                });
-                const del = document.createElement('button');
-                del.type = 'button'; del.className = 'cw-rec-act'; del.textContent = '🗑️'; del.title = '刪除';
-                del.addEventListener('click', async () => {
-                    if (!window.confirm('刪除這個會話？')) return;
-                    if (CT.deleteConversation) await CT.deleteConversation(c.id);
-                    _renderRecentsPanel(body);
-                });
-                row.appendChild(info);
-                row.appendChild(ren);
-                row.appendChild(del);
+
+                // 一般狀態：標題 + ✏️ + 🗑️
+                function renderNormal() {
+                    row.innerHTML = '';
+                    row.classList.remove('confirming');
+                    const info = document.createElement('div');
+                    info.className = 'cw-rec-info';
+                    const t = document.createElement('div');
+                    t.className = 'cw-rec-title';
+                    t.textContent = c.title || '新會話';
+                    const m = document.createElement('div');
+                    m.className = 'cw-rec-meta';
+                    m.textContent = (c.msgCount || 0) + ' 則';
+                    info.appendChild(t);
+                    info.appendChild(m);
+                    info.addEventListener('click', async () => {
+                        if (CT.switchConversation) await CT.switchConversation(c.id);
+                        await _loadRoom(_provider);
+                        ChatWindow.closeSubPanel();
+                    });
+                    const ren = document.createElement('button');
+                    ren.type = 'button'; ren.className = 'cw-rec-act'; ren.textContent = '✏️'; ren.title = '改名';
+                    ren.addEventListener('click', renderRename);
+                    const del = document.createElement('button');
+                    del.type = 'button'; del.className = 'cw-rec-act'; del.textContent = '🗑️'; del.title = '刪除';
+                    del.addEventListener('click', renderConfirm);
+                    row.appendChild(info);
+                    row.appendChild(ren);
+                    row.appendChild(del);
+                }
+
+                // 刪除確認：窗內自訂 UI（不用原生 confirm —— 會被瀏覽器「禁止對話框」擋掉）
+                function renderConfirm() {
+                    row.innerHTML = '';
+                    row.classList.add('confirming');
+                    const msg = document.createElement('div');
+                    msg.className = 'cw-rec-info cw-rec-cmsg';
+                    msg.textContent = '刪除這個會話？';
+                    const yes = document.createElement('button');
+                    yes.type = 'button'; yes.className = 'cw-rec-act cw-rec-yes'; yes.textContent = '刪除';
+                    yes.addEventListener('click', async () => {
+                        if (CT.deleteConversation) await CT.deleteConversation(c.id);
+                        _renderRecentsPanel(body);
+                    });
+                    const no = document.createElement('button');
+                    no.type = 'button'; no.className = 'cw-rec-act cw-rec-no'; no.textContent = '取消';
+                    no.addEventListener('click', renderNormal);
+                    row.appendChild(msg);
+                    row.appendChild(yes);
+                    row.appendChild(no);
+                }
+
+                // 改名：窗內 inline input（不用原生 prompt）
+                function renderRename() {
+                    row.innerHTML = '';
+                    const inp = document.createElement('input');
+                    inp.type = 'text';
+                    inp.className = 'cw-rec-rename-in';
+                    inp.value = c.title || '';
+                    let done = false;
+                    const commit = () => {
+                        if (done) return;
+                        done = true;
+                        const nt = inp.value.trim();
+                        if (nt && CT.renameConversation) { CT.renameConversation(c.id, nt); c.title = nt; }
+                        renderNormal();
+                    };
+                    inp.addEventListener('keydown', e => {
+                        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                        else if (e.key === 'Escape') { done = true; renderNormal(); }
+                    });
+                    inp.addEventListener('blur', commit);
+                    row.appendChild(inp);
+                    inp.focus();
+                    inp.select();
+                }
+
+                renderNormal();
                 listEl.appendChild(row);
             });
         }
         wrap.appendChild(listEl);
+
+        // 清空全部（窗內確認，不用原生 confirm）
+        if (convs.length) {
+            const clearBtn = document.createElement('button');
+            clearBtn.type = 'button';
+            clearBtn.className = 'cw-rec-clear';
+            clearBtn.textContent = '🗑️ 清空全部';
+            clearBtn.addEventListener('click', () => {
+                if (clearBtn.dataset.armed === '1') {
+                    clearBtn.disabled = true;
+                    clearBtn.textContent = '清空中…';
+                    (async () => {
+                        for (const c of convs) {
+                            if (CT.deleteConversation) { try { await CT.deleteConversation(c.id); } catch (_) {} }
+                        }
+                        _renderRecentsPanel(body);
+                    })();
+                } else {
+                    clearBtn.dataset.armed = '1';
+                    clearBtn.classList.add('armed');
+                    clearBtn.textContent = '確定清空全部 ' + convs.length + ' 個？再按一次';
+                }
+            });
+            wrap.appendChild(clearBtn);
+        }
+
         body.appendChild(wrap);
     }
 
