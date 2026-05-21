@@ -140,6 +140,17 @@
 /* 立繪區在浮窗為 flex 子項（aurelia_core.css 的 .claude-portrait-area
  * 用 flex:0 0 35%，於浮窗 flex column 直接生效）。 */
 
+/* 房間背景圖：立繪場景區 —— Claude 暖色書房 / Codex 冷色科技間 */
+#aurelia-chat-window .claude-portrait-area {
+    background-image: url('../aseets/claude_room.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+#aurelia-chat-window.cw-codex .claude-portrait-area {
+    background-image: url('../aseets/codex_room.png');
+}
+
 /* picker 橫條：原本 display:none，浮窗內顯示 */
 #aurelia-chat-window .claude-picker-bar {
     display: block;
