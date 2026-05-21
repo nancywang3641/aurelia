@@ -53,7 +53,37 @@
                 </div>
                 <button class="cw-close" id="cw-close" type="button" title="關閉">✕</button>
             </div>
-            <div class="cw-body" id="cw-body"></div>
+            <div class="cw-body" id="cw-body">
+                <div class="claude-portrait-area">
+                    <img id="claude-portrait-img" class="claude-portrait-img" alt="Clawd">
+                    <div id="codex-portrait-sprite" class="codex-portrait-sprite"></div>
+                    <div class="claude-conv-chip" id="claude-conv-chip" title="點開 Recents 多會話列表">
+                        <span class="ccc-tab" id="ccc-tab">☕</span>
+                        <span class="ccc-title" id="ccc-title">—</span>
+                        <span class="ccc-arrow">▾</span>
+                    </div>
+                </div>
+                <div class="claude-chat-stream" id="claude-chat-stream"></div>
+                <div class="claude-picker-bar" id="claude-picker-bar">
+                    <button class="claude-picker-btn" id="claude-picker-btn" type="button">
+                        <span id="claude-pick-model">Opus 4.7</span>
+                        <span class="claude-pick-sep" id="claude-pick-sep1">·</span>
+                        <span id="claude-pick-effort">🧠 medium</span>
+                        <span class="claude-pick-sep" id="claude-pick-sep2">·</span>
+                        <span id="claude-pick-endpoint">☁️ VPS</span>
+                        <span class="claude-pick-arrow">▼</span>
+                    </button>
+                </div>
+                <div class="claude-picker-popup" id="claude-picker-popup" style="display:none;"></div>
+                <div class="claude-attach-chips" id="claude-attach-chips"></div>
+                <input type="file" id="claude-file-input" multiple style="display:none;"
+                       accept="image/*,application/pdf,.txt,.md,.json,.csv,.js,.ts,.py,.html,.css,.yml,.yaml,.toml,.log">
+                <div class="cw-input-row">
+                    <textarea id="cw-input" class="cw-input" placeholder="對 Claude 說點什麼..." rows="1" autocomplete="off"></textarea>
+                    <button class="cw-attach-btn" id="claude-attach-btn" type="button" title="附加檔案">📎</button>
+                    <button class="cw-send-btn" id="cw-send-btn" type="button"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
             <div class="cw-subpanel" id="cw-subpanel" style="display:none;">
                 <div class="cw-subpanel-head">
                     <span class="cw-subpanel-title" id="cw-subpanel-title"></span>
@@ -69,6 +99,7 @@
             b.addEventListener('click', () => ChatWindow.openSubPanel(b.dataset.panel));
         });
         _bindDrag(el.querySelector('#cw-titlebar'), el);
+        _bindChatInput(el);
 
         const size = _sizeForViewport();
         const pos = _centerPos(size);
@@ -107,6 +138,51 @@
         };
         handle.addEventListener('pointerup', end);
         handle.addEventListener('pointercancel', end);
+    }
+
+    function _bindChatInput(el) {
+        const input = el.querySelector('#cw-input');
+        const sendBtn = el.querySelector('#cw-send-btn');
+        const attachBtn = el.querySelector('#claude-attach-btn');
+        const fileInput = el.querySelector('#claude-file-input');
+        const pickerBtn = el.querySelector('#claude-picker-btn');
+
+        if (sendBtn) sendBtn.onclick = ChatWindow.submitInput;
+        if (input) {
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                    e.preventDefault();
+                    ChatWindow.submitInput();
+                }
+            };
+            const autoGrow = () => {
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+            };
+            input.addEventListener('input', autoGrow);
+            autoGrow();
+        }
+        if (attachBtn && fileInput) {
+            attachBtn.onclick = () => fileInput.click();
+            fileInput.onchange = async (e) => {
+                const files = e.target.files;
+                if (files && files.length && window.VoidClaudeRoom) {
+                    await window.VoidClaudeRoom.handleFilePick(files);
+                }
+                fileInput.value = '';
+            };
+        }
+        if (pickerBtn) {
+            pickerBtn.onclick = (e) => {
+                e.stopPropagation();
+                const popup = el.querySelector('#claude-picker-popup');
+                if (popup && popup.style.display !== 'none') {
+                    if (window.VoidClaudeRoom) window.VoidClaudeRoom.closePicker();
+                } else {
+                    if (window.VoidClaudeRoom) window.VoidClaudeRoom.openPicker();
+                }
+            };
+        }
     }
 
     function _hideAurelia() {
@@ -160,6 +236,19 @@
         if (!_winEl) return;
         const sp = _winEl.querySelector('#cw-subpanel');
         if (sp) sp.style.display = 'none';
+    };
+
+    ChatWindow.submitInput = function () {
+        if (!_winEl) return;
+        const input = _winEl.querySelector('#cw-input');
+        if (!input) return;
+        const txt = input.value.trim();
+        if (!txt) return;
+        input.value = '';
+        input.style.height = 'auto';
+        if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.sendMessage === 'function') {
+            window.VoidClaudeRoom.sendMessage(txt);
+        }
     };
 
     ChatWindow.isOpen      = function () { return _isOpen; };
