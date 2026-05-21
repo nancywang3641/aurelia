@@ -370,8 +370,8 @@ const IRIS_IDLE = [
         try {
             const d = await db.getLobbyHistory(chatId);
             if (!d) return false;
-            const inClaude = !!d.isClaudeRoom;
-            const in404    = !inClaude && !!d.is404Room;
+            const inClaude = false;  // 浮窗化後大廳不再有 Claude 場景；舊存檔的 isClaudeRoom 一律忽略
+            const in404    = !!d.is404Room;
             const prov     = d.chatProvider === 'codex' ? 'codex' : 'claude';
             // 把當前場景的歷史填進 IRIS_STATE.history，其餘存到對應 backup
             if (inClaude) {
@@ -752,21 +752,6 @@ const IRIS_IDLE = [
             <!-- .void-dialogue-wrap（選單按鈕 + 對話框）已移入 .lobby-body 的左右欄 -->
 
 
-            <!-- 🦀 Claude 月夜咖啡聊天室面板（mode-claude 才顯示，由 CSS 控制） -->
-            <div class="claude-chat-panel" id="claude-chat-panel">
-                <div class="claude-portrait-area">
-                    <img id="claude-portrait-img" class="claude-portrait-img" alt="Clawd">
-                    <div id="codex-portrait-sprite" class="codex-portrait-sprite"></div>
-                    <!-- 當前會話標題小卡：點開 Recents -->
-                    <div class="claude-conv-chip" id="claude-conv-chip" title="點開 Recents 多會話列表">
-                        <span class="ccc-tab" id="ccc-tab">☕</span>
-                        <span class="ccc-title" id="ccc-title">—</span>
-                        <span class="ccc-arrow">▾</span>
-                    </div>
-                </div>
-                <div class="claude-chat-stream" id="claude-chat-stream"></div>
-            </div>
-
             <!-- 大廳畫布覆蓋層：VN 面板風格，對話結束後才彈出 -->
             <div id="lobby-canvas-overlay" style="display:none; position:absolute; inset:0; z-index:25; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
                 <div id="lobby-canvas-area" class="lobby-canvas-area">
@@ -782,7 +767,6 @@ const IRIS_IDLE = [
                 <div class="void-chat-btns">
                     <button class="void-hist-btn" id="iris-hist-btn" title="瀅瀅 素材歷史"><i class="fa-solid fa-clock-rotate-left"></i><span>瀅瀅</span></button>
                     <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
-                    <button class="void-hist-btn" id="claude-hist-btn" title="Claude 對話歷史" style="display:none; color: #FFF5E1; background: rgba(217,81,34,0.7); border: 1px solid rgba(234,176,92,0.4);"><i class="fa-solid fa-clock-rotate-left"></i><span>Claude</span></button>
                     <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
                     <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
                     ${extraAppsHtml}
@@ -790,29 +774,9 @@ const IRIS_IDLE = [
                     <button class="void-hist-btn" data-app-launch="tarot" title="塔羅"><span class="vhb-em">🔮</span><span>塔羅</span></button>
                     <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
                     <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
-                    <button class="void-hist-btn" data-app-launch="workbench" title="工作檯"><span class="vhb-em">🛠️</span><span>工作檯</span></button>
-                    <button class="void-hist-btn" data-app-launch="spend" title="額度面板" style="display:none;"><span class="vhb-em">💰</span><span>額度</span></button>
                 </div>
-                <!-- Claude 房間：inline picker bar（mode-claude 才顯示）-->
-                <div class="claude-picker-bar" id="claude-picker-bar">
-                    <button class="claude-picker-btn" id="claude-picker-btn" type="button">
-                        <span id="claude-pick-model">Opus 4.7</span>
-                        <span class="claude-pick-sep" id="claude-pick-sep1">·</span>
-                        <span id="claude-pick-effort">🧠 medium</span>
-                        <span class="claude-pick-sep" id="claude-pick-sep2">·</span>
-                        <span id="claude-pick-endpoint">☁️ VPS</span>
-                        <span class="claude-pick-arrow">▼</span>
-                    </button>
-                </div>
-                <!-- Claude inline picker popup（預設藏） -->
-                <div class="claude-picker-popup" id="claude-picker-popup" style="display:none;"></div>
-
-                <!-- Claude 房間：附件 chip 預覽列（mode-claude 才顯示，由 CSS 控制） -->
-                <div class="claude-attach-chips" id="claude-attach-chips"></div>
-                <input type="file" id="claude-file-input" multiple style="display:none;" accept="image/*,application/pdf,.txt,.md,.json,.csv,.js,.ts,.py,.html,.css,.yml,.yaml,.toml,.log">
                 <div class="void-chat-input-row">
                     <textarea id="iris-input" class="void-input" placeholder="提供故事素材或與瀅瀅對話..." rows="1" autocomplete="off"></textarea>
-                    <button class="void-attach-btn" id="claude-attach-btn" title="附加檔案" style="display:none;">📎</button>
                     <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
                     <button class="void-send-btn" id="iris-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
@@ -899,43 +863,6 @@ const IRIS_IDLE = [
                 autoGrow();
             }
             if (avatar) avatar.onclick = pokeIris;
-
-            // Claude 房間：📎 附件按鈕（只在 mode-claude 顯示，由 CSS 控制 display）
-            const attachBtn = tab.querySelector('#claude-attach-btn');
-            const fileInput = tab.querySelector('#claude-file-input');
-            if (attachBtn && fileInput) {
-                attachBtn.onclick = () => fileInput.click();
-                fileInput.onchange = async (e) => {
-                    const files = e.target.files;
-                    if (files && files.length) {
-                        await VoidClaudeRoom.handleFilePick(files);
-                    }
-                    fileInput.value = '';  // 重置 input 才能再次選同一個檔
-                };
-            }
-
-            // Claude inline picker bar 點開 popup
-            const pickerBtn = tab.querySelector('#claude-picker-btn');
-            if (pickerBtn) {
-                pickerBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    const popup = document.getElementById('claude-picker-popup');
-                    if (popup && popup.style.display !== 'none') {
-                        VoidClaudeRoom.closePicker();
-                    } else {
-                        VoidClaudeRoom.openPicker();
-                    }
-                };
-            }
-
-            // 左上角 conv 標題小卡 → 點開 Recents
-            const convChip = tab.querySelector('#claude-conv-chip');
-            if (convChip) {
-                convChip.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    openHistoryPanel('claude');
-                });
-            }
 
             // 點擊反應對話框直接跳過 (恢復主線)
             const reactionBox = tab.querySelector('#iris-reaction-box');
