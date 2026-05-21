@@ -715,12 +715,12 @@ EXAMPLE "prompt" value:
                 <div class="set-tabs">
                     <div class="set-tab active" data-tab="llm">🧠 主模型</div>
                     <div class="set-tab" data-tab="sec-llm">⚡ 副模型</div>
-                    <div class="set-tab" data-tab="claude-room">🦀 Claude 的房間</div>
                     <div class="set-tab" data-tab="img">🎨 畫廊</div>
                     <div class="set-tab" data-tab="voice">🎵 語音</div>
                     <div class="set-tab" data-tab="vn">🎮 VN</div>
                     <div class="set-tab" data-tab="vec"${!isStandalone ? ' style="display:none"' : ''}>🔮 記憶向量</div>
                     <div class="set-tab" data-tab="sys"${!isStandalone ? ' style="display:none"' : ''}>⚙️ 系統/備份</div>
+                    <div class="set-tab" data-tab="lobby-persona">🎭 大廳人設</div>
                 </div>
 
                 <div class="set-content">
@@ -907,48 +907,6 @@ EXAMPLE "prompt" value:
                             <div class="btn-test" id="sec-test-btn">發送測試訊息</div>
                             <div id="sec-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#3A3F5C; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
-                    </div>
-
-                    <div id="view-claude-room" class="tab-view hidden">
-                        <div style="background:rgba(180,150,200,0.12); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.15); font-size:12px; color:#1A1C28; line-height:1.6;">
-                            🦀 <b>Claude 的房間</b>：跟其他 AI 一樣填 URL + 密鑰即可。<br>
-                            最常見填法：<br>
-                            • <b>Anthropic 官方</b>（最簡單）：URL 留預設、密鑰填 sk-ant-...<br>
-                            • <b>自架 cc-bridge</b>：URL 改成你的 cc-bridge 端點、密鑰填 Bearer token<br>
-                            模型 / 推理深度可在聊天室那條橫條快速切，不用回這裡。
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">📍 連線預設（可建多組、隨時切換）</div>
-                            <div id="claude-presets-list"></div>
-                            <button class="btn-test" id="claude-preset-add-btn" style="margin-top:8px;">➕ 新增預設</button>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">⚙️ 預設值（聊天時 inline picker 不選的話用這些）</div>
-                            <div class="set-slider-container">
-                                <div class="set-label"><span>Max Tokens</span></div>
-                                <input type="number" min="100" max="200000" step="100" value="${claudeRoomConfig.maxTokens}" class="set-input" id="claude-room-max-tokens" style="margin-top:6px;">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Temperature</span><span class="set-slider-val" id="claude-room-val-temp">${claudeRoomConfig.temperature}</span></div>
-                                <input type="range" min="0" max="2" step="0.05" value="${claudeRoomConfig.temperature}" class="set-slider" id="claude-room-temperature">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Top P</span><span class="set-slider-val" id="claude-room-val-topp">${claudeRoomConfig.top_p}</span></div>
-                                <input type="range" min="0" max="1" step="0.01" value="${claudeRoomConfig.top_p}" class="set-slider" id="claude-room-top-p">
-                            </div>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="btn-test" id="claude-room-test-btn">🔍 測試當前預設的連線</div>
-                            <div id="claude-room-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#3A3F5C; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
-                        </div>
-
-                        <!-- 隱藏：保存當前 presets 序列化（runtime 用，不顯示）-->
-                        <input type="hidden" id="claude-presets-json" value='${JSON.stringify(claudeRoomConfig.presets || [])}'>
-                        <input type="hidden" id="claude-active-preset-id" value="${claudeRoomConfig.activePresetId || ''}">
-                        <input type="hidden" id="claude-room-model" value="${claudeRoomConfig.model || ''}">
                     </div>
 
                     <div id="view-img" class="tab-view hidden">
@@ -1585,6 +1543,38 @@ EXAMPLE "prompt" value:
                         <div id="bk-status" style="font-size:12px; color:rgba(26,28,40,0.72); text-align:center; padding:10px 0; min-height:20px;"></div>
                     </div>
 
+                    <!-- 🎭 大廳人設：瀅瀅 / 柴郡 系統 Prompt 補充。從 os_prompts 的人設分頁搬過來、酒館 PWA 都能用 -->
+                    <div id="view-lobby-persona" class="tab-view hidden">
+                        <div style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.10); font-size:12px; color:#1A1C28;">
+                            🎭 這裡編輯的內容會 append 到大廳「瀅瀅」/「柴郡」的系統 Prompt 末段。<br>
+                            <b>跟酒館的角色卡 / 預設無關</b>—— 這是大廳這層獨有的人設補充，影響你在 NEXUS PARALLAX 大廳跟她們聊天時的人設細節。
+                        </div>
+
+                        <div class="set-group">
+                            <div class="set-label">🌐 世界觀補充（共用）</div>
+                            <div class="set-desc">大廳的世界觀、店裡規矩、特殊設定、隱藏 lore...瀅瀅跟柴郡都會看到。可以慢慢添加、累積成你的私人世界書。</div>
+                            <textarea class="set-input" id="lp-world-ta" rows="10" style="resize:vertical; min-height:150px; font-family:inherit;" placeholder="例：&#10;- 視差書咖位於 LUNA-VII 軌道站第 7 層、玻璃天頂下&#10;- 店裡禁止談論 [REDACTED] 事件&#10;- 雷伊投資人來訪日固定週四晚上..."></textarea>
+                            <div class="btn-save" id="lp-world-save-btn" style="margin-top:8px;">💾 保存世界觀</div>
+                            <div id="lp-world-status" style="font-size:11px; color:rgba(26,28,40,0.55); margin-top:4px; min-height:14px;"></div>
+                        </div>
+
+                        <div class="set-group">
+                            <div class="set-label">🌸 瀅瀅 (Iris) 人設補充</div>
+                            <div class="set-desc">寫進你想讓瀅瀅額外記住的個性、口頭禪、與你之間的設定...留空就只用內建骨架。</div>
+                            <textarea class="set-input" id="lp-iris-ta" rows="8" style="resize:vertical; min-height:120px; font-family:inherit;" placeholder="例：瀅瀅特別喜歡桂花茶、講話偶爾混用日文片假名..."></textarea>
+                            <div class="btn-save" id="lp-iris-save-btn" style="margin-top:8px;">💾 保存瀅瀅人設</div>
+                            <div id="lp-iris-status" style="font-size:11px; color:rgba(26,28,40,0.55); margin-top:4px; min-height:14px;"></div>
+                        </div>
+
+                        <div class="set-group">
+                            <div class="set-label">😸 柴郡 (Cheshire) 人設補充</div>
+                            <div class="set-desc">柴郡的個性補充：嗆人習慣、特殊指令、暗號回應方式...</div>
+                            <textarea class="set-input" id="lp-chess-ta" rows="8" style="resize:vertical; min-height:120px; font-family:inherit;" placeholder="例：柴郡看到 'ERR_777' 會打開隱藏選單..."></textarea>
+                            <div class="btn-save" id="lp-chess-save-btn" style="margin-top:8px;">💾 保存柴郡人設</div>
+                            <div id="lp-chess-status" style="font-size:11px; color:rgba(26,28,40,0.55); margin-top:4px; min-height:14px;"></div>
+                        </div>
+                    </div>
+
                     <div class="btn-save" id="os-save-btn">保存所有設定</div>
                     <div class="set-status" id="os-status"></div>
                 </div>
@@ -1610,6 +1600,40 @@ EXAMPLE "prompt" value:
 
         // 備份分頁
         bindBackupTab(container);
+
+        // 🎭 大廳人設分頁：textarea 預載 + 儲存
+        (() => {
+            const winP = window.parent || window;
+            const prompts = winP.OS_PROMPTS;
+            if (!prompts) return;
+            const worldTa = container.querySelector('#lp-world-ta');
+            const irisTa  = container.querySelector('#lp-iris-ta');
+            const chessTa = container.querySelector('#lp-chess-ta');
+            if (worldTa && prompts.loadWorld)    worldTa.value = prompts.loadWorld();
+            if (irisTa  && prompts.loadIris)     irisTa.value  = prompts.loadIris();
+            if (chessTa && prompts.loadCheshire) chessTa.value = prompts.loadCheshire();
+            const _flash = (statusEl, txt) => {
+                if (!statusEl) return;
+                statusEl.textContent = txt;
+                statusEl.style.color = '#6b8e23';
+                setTimeout(() => { statusEl.textContent = ''; }, 1500);
+            };
+            const worldSave = container.querySelector('#lp-world-save-btn');
+            if (worldSave) worldSave.onclick = () => {
+                prompts.saveWorld && prompts.saveWorld(worldTa.value);
+                _flash(container.querySelector('#lp-world-status'), '✅ 已保存');
+            };
+            const irisSave = container.querySelector('#lp-iris-save-btn');
+            if (irisSave) irisSave.onclick = () => {
+                prompts.saveIris && prompts.saveIris(irisTa.value);
+                _flash(container.querySelector('#lp-iris-status'), '✅ 已保存');
+            };
+            const chessSave = container.querySelector('#lp-chess-save-btn');
+            if (chessSave) chessSave.onclick = () => {
+                prompts.saveCheshire && prompts.saveCheshire(chessTa.value);
+                _flash(container.querySelector('#lp-chess-status'), '✅ 已保存');
+            };
+        })();
 
         // 綁定元素 (主模型)
         const elSystemApi = container.querySelector('#os-system-api');
