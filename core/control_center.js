@@ -98,6 +98,10 @@
             btn.onclick = () => {
                 if (item.isClose) {
                     if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) window.AureliaHtmlExtractor.hide();
+                    // 🛟 StoryExtractor 也劫持了 #form_sheld，沒先呼叫 hide 還原會讓酒館輸入框跟著消失
+                    if (window.StoryExtractor && window.StoryExtractor.isVisible) {
+                        try { window.StoryExtractor.hide(); } catch (_) {}
+                    }
                     AureliaControlCenter.hide();
                 } else switchPage(item.id);
             };
@@ -232,6 +236,12 @@
     function hideVnPanel() {
         const vnPanel = document.getElementById('aurelia-vn-panel');
         if (vnPanel) vnPanel.style.display = 'none';
+
+        // 🛟 先呼叫 StoryExtractor.hide() 把劫持的 #form_sheld 還回原位，
+        // 否則直接藏 storyExtractorContainer 會讓酒館原生輸入框跟著消失
+        if (window.StoryExtractor?.hide) {
+            try { window.StoryExtractor.hide(); } catch (_) {}
+        }
 
         const extractorContainer = document.getElementById('aurelia-extractor-container-vn');
         if (extractorContainer) { extractorContainer.style.display = 'none'; extractorContainer.classList.remove('show'); }
@@ -712,7 +722,7 @@
             map:        () => window.OS_MAP?.launchApp,
             rpg:        () => window.RPG_PANEL?.launch,
             worldbook:  () => window.OS_WORLDBOOK?.launch,
-            spend:      () => window.OS_SPEND_PANEL?.launch,
+            journal:    () => window.OS_JOURNAL?.launch,
         };
         const getFn = GAME_APP_MAP[key];
         if (!getFn) return;
