@@ -462,3 +462,65 @@
     font-size: 12px;
     line-height: 1.6;
 }
+
+/* Recents：窗內刪除確認 / 改名 / 清空（取代原生 confirm / prompt）*/
+#aurelia-chat-window .cw-rec-row.confirming {
+    background: rgba(217, 81, 34, 0.14);
+    border: 1px solid rgba(217, 81, 34, 0.4);
+}
+
+#aurelia-chat-window .cw-rec-cmsg {
+    font-size: 12px;
+    color: #ff9b78;
+}
+
+#aurelia-chat-window .cw-rec-yes,
+#aurelia-chat-window .cw-rec-no {
+    width: auto;
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+#aurelia-chat-window .cw-rec-yes {
+    color: #ff9b78;
+    font-weight: 700;
+}
+
+#aurelia-chat-window .cw-rec-no {
+    color: #b9b5c8;
+}
+
+#aurelia-chat-window .cw-rec-rename-in {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(234, 176, 92, 0.5);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+    color: #1a1c28;
+    font-family: inherit;
+    outline: none;
+}
+
+#aurelia-chat-window .cw-rec-clear {
+    background: rgba(217, 81, 34, 0.15);
+    color: #ff9b78;
+    border: 1px solid rgba(217, 81, 34, 0.35);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 4px;
+}
+
+#aurelia-chat-window .cw-rec-clear.armed {
+    background: rgba(217, 81, 34, 0.32);
+    font-weight: 700;
+}
+
+#aurelia-chat-window .cw-rec-clear:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
