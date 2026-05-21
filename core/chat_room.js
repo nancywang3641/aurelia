@@ -1,91 +1,56 @@
 /**
- * core/void/claude-room.js — Claude 房間 UI 層
- * 從 void_terminal.js 抽出。橋：activeHistory() / scheduleSave() / isClaudeRoom()。會呼叫 VoidAmbient。
+ * core/chat_room.js — Claude / Codex 聊天室 UI 層
+ * 渲染進 ChatWindow（core/chat_window.js）的浮窗。
+ * 歷史由本檔的 _roomHistory 持有，持久化走 ClaudeTerminal.saveHistory。
  * 注意：與 core/claude_terminal.js 不同 —— 那個是後端（API/持久化），本檔是 UI。
  */
 (function (VoidClaudeRoom) {
     'use strict';
 
-    function _bridge() { return window.VoidTerminal._bridge; }
+    /** 當前房間 provider：'claude' | 'codex'（由 ChatWindow 決定） */
+    function _provider() {
+        return (window.ChatWindow && typeof window.ChatWindow.getProvider === 'function'
+            && window.ChatWindow.getProvider()) || 'claude';
+    }
+
+    /** 取浮窗內元素（避免抓到大廳 createTab 模板殘留的同 id 元素） */
+    function _el(id) {
+        const body = (window.ChatWindow && typeof window.ChatWindow.getBody === 'function')
+            ? window.ChatWindow.getBody() : null;
+        return body ? body.querySelector('#' + id) : document.getElementById(id);
+    }
+
+    // 當前浮窗對話歷史。ChatWindow.open 時由 setHistory() 灌入，送訊息時 push。
+    let _roomHistory = [];
+    function _activeHistory() { return _roomHistory; }
+
+    // 持久化（debounced）：寫回 ClaudeTerminal 當前 conv 的 IndexedDB
+    let _saveTimer = null;
+    function _scheduleSave() {
+        if (_saveTimer) clearTimeout(_saveTimer);
+        _saveTimer = setTimeout(() => {
+            _saveTimer = null;
+            if (window.ClaudeTerminal && typeof window.ClaudeTerminal.saveHistory === 'function') {
+                window.ClaudeTerminal.saveHistory(_roomHistory);
+            }
+        }, 600);
+    }
 
     let _pendingClaudeAttachments = []; // 當前訊息要附的檔（每筆 {path, filename, mime, size}），送出後清空
+    let _claudeAbortCtrl = null;        // 當前 send 的 AbortController（client-side fetch 中止）
+    let _claudeTaskId    = null;        // 當前 send 的 task_id（給 /v1/cancel/{taskId} 用）
 
-    // 套用 Claude 場景的 UI（不負責切場動畫，給 enter/loadState 共用）
+    // 套用浮窗聊天室 UI（picker 文字 / 立繪 / 輸入框 placeholder）
     function _applyClaudeRoomUi() {
-        const tab = document.getElementById('aurelia-home-tab');
-        if (!tab) return;
-        tab.classList.remove('mode-404');
-        tab.classList.add('mode-claude');
-
-        const bg = tab.querySelector('.void-bg');
-        if (bg) bg.style.backgroundColor = '#1a1a2e';
-
-        // 舊的 VN 立繪在 mode-claude 被 CSS 藏起來；新的聊天室立繪在 .claude-portrait-img
-        // 但 iris-avatar 還是要保留設定（以防 mode 切回去時殘留）
-        const avatar = document.getElementById('iris-avatar');
-        if (avatar) {
-            avatar.style.opacity = '1';
-            avatar.style.display = '';
-        }
-        // 新聊天室立繪設成 living（會動的）
+        const isCodex = _provider() === 'codex';
         _setClaudePortraitState('living');
-
-        // 更新 inline picker bar 文字
         _updateClaudePickerLabel();
-
-        const titleEl = document.getElementById('home-chat-title');
-        if (titleEl) titleEl.textContent = "Claude's Room · 月光終端";
-
-        // 輸入框配色由 CSS .void-tab.mode-claude .void-input 接管，這裡只改 placeholder
-        const inputField = document.getElementById('iris-input');
-        if (inputField) inputField.placeholder = '對 Claude 說點什麼...';
-
-        const nameBox = document.getElementById('iris-name-tag');
-        if (nameBox) {
-            nameBox.style.display = 'block';
-            const _s = nameBox.querySelector('span'); if (_s) _s.textContent = 'Claude';
-        }
-
-        // 隱藏瀅瀅 / 柴郡的歷史按鈕，顯示 Claude 自己的
-        const irisHistBtn     = document.getElementById('iris-hist-btn');
-        const cheshireHistBtn = document.getElementById('cheshire-hist-btn');
-        const claudeHistBtn   = document.getElementById('claude-hist-btn');
-        if (irisHistBtn) irisHistBtn.style.display = 'none';
-        if (cheshireHistBtn) cheshireHistBtn.style.display = 'none';
-        if (claudeHistBtn) claudeHistBtn.style.display = '';
-
-        // 清掉世界頻道氣泡層（避免瀅瀅的訊息殘留）
-        const layer = document.getElementById('void-bubble-layer');
-        if (layer) { layer.innerHTML = ''; }
-
-        // BGM 靜音
-        VoidAmbient.pauseBgm();
-
-        // bottom nav 還原 home active 顏色
-        const nav = document.getElementById('aurelia-bottom-nav');
-        if (nav) {
-            nav.classList.remove('mode-404');
-            nav.querySelectorAll('.nav-button').forEach(b => {
-                const isHome = b.dataset.navId === 'nav-home';
-                if (isHome) b.classList.add('active-gold');
-                else b.classList.remove('active-gold');
-            });
-        }
-        document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
+        const inputField = _el('cw-input');
+        if (inputField) inputField.placeholder = isCodex ? '對 Codex 說點什麼...' : '對 Claude 說點什麼...';
     }
 
-    function _updateClaudePortalBtn() {
-        const btn = document.getElementById('claude-portal-btn');
-        if (!btn) return;
-        const label = btn.querySelector('.void-mode-toggle-label');
-        if (_bridge().isClaudeRoom()) {
-            if (label) label.textContent = '⬡ 視差書咖';
-            btn.title = '返回視差書咖';
-        } else {
-            if (label) label.textContent = '🦀 Claude';
-            btn.title = '進入 Claude 的房間';
-        }
-    }
+    // 浮窗化後大廳傳送門按鈕為固定文字（🦀 Claude / 🔷 Codex），不再反映房間狀態
+    function _updateClaudePortalBtn() {}
 
     // Claude 回覆切多頁（套奧瑞亞 VN 翻頁體驗，避免長文字爆出對話框）
     // 優先度：段落空行 > 單換行 > 句末標點 > 逗號 > 字數硬切
@@ -145,12 +110,18 @@
     function _updateClaudePickerLabel() {
         const cfg = _getClaudeRoomCfg();
         if (!cfg) return;
-        const m = document.getElementById('claude-pick-model');
-        const e = document.getElementById('claude-pick-effort');
-        const ep = document.getElementById('claude-pick-endpoint');
-        const bk = document.getElementById('claude-pick-backend');
-        if (m)  m.textContent  = _shortModelLabel(cfg.inlineModel || cfg.model);
-        if (e)  e.textContent  = _shortEffortLabel(cfg.inlineEffort);
+        const isCodex = _provider() === 'codex';
+        const m = _el('claude-pick-model');
+        const e = _el('claude-pick-effort');
+        const ep = _el('claude-pick-endpoint');
+        const bk = _el('claude-pick-backend');
+        const sep1 = _el('claude-pick-sep1');
+        // Codex 房間：模型 / 思考 picker 對 codex 無效（模型由 ~/.codex/config.toml 決定），
+        // 只留「🔷 Codex」標示 + 連線預設
+        if (e)    e.style.display    = isCodex ? 'none' : '';
+        if (sep1) sep1.style.display = isCodex ? 'none' : '';
+        if (m)  m.textContent  = isCodex ? '🔷 Codex' : _shortModelLabel(cfg.inlineModel || cfg.model);
+        if (e && !isCodex)  e.textContent  = _shortEffortLabel(cfg.inlineEffort);
         if (ep) ep.textContent = _shortEndpointLabel(cfg);
         // backend 在 Anthropic 直連模式下沒意義，藏起來
         if (bk) {
@@ -165,7 +136,7 @@
     function _openClaudePickerPopup() {
         const cfg = _getClaudeRoomCfg();
         if (!cfg) return;
-        const popup = document.getElementById('claude-picker-popup');
+        const popup = _el('claude-picker-popup');
         if (!popup) return;
         const curModel   = cfg.inlineModel   || cfg.model || 'claude-opus-4-7';
         const curEffort  = cfg.inlineEffort  || '';
@@ -189,7 +160,10 @@
             label: (p.name || p.id) + (p.url ? '' : ' (未設定)'),
         }));
 
-        popup.innerHTML = `
+        // Codex 房間：模型 / 思考對 codex 無效，popup 只給連線預設
+        popup.innerHTML = _provider() === 'codex'
+            ? sectionHtml('連線預設', presetList, curPresetId, 'preset')
+            : `
             ${sectionHtml('連線預設',     presetList,        curPresetId, 'preset')}
             ${sectionHtml('Model',        CLAUDE_MODELS,     curModel,    'model')}
             ${sectionHtml('Thinking 思考', CLAUDE_EFFORTS,    curEffort || 'medium', 'effort')}
@@ -215,15 +189,15 @@
     }
 
     function _closeClaudePickerPopup() {
-        const p = document.getElementById('claude-picker-popup');
+        const p = _el('claude-picker-popup');
         if (p) p.style.display = 'none';
     }
 
     // 點 popup 外面關閉
     document.addEventListener('click', (e) => {
-        const popup = document.getElementById('claude-picker-popup');
+        const popup = _el('claude-picker-popup');
         if (!popup || popup.style.display === 'none') return;
-        const btn = document.getElementById('claude-picker-btn');
+        const btn = _el('claude-picker-btn');
         if (popup.contains(e.target) || (btn && btn.contains(e.target))) return;
         _closeClaudePickerPopup();
     });
@@ -243,11 +217,57 @@
         { state: 'sleeping', delay: 420000 }, // +7 分（15 分總）：沉睡
     ];
 
+    // 🔷 Codex 寵物 spritesheet 動畫：8 欄 × 9 列，每列一種動作。
+    // 來源 = OpenAI ChatGPT 擴展的 codex 寵物，逐幀切 background-position 播放。
+    const CODEX_SHEET_COLS = 8, CODEX_SHEET_ROWS = 9;
+    const CODEX_ANIMS = {
+        idle:    { row: 0, count: 6, dur: 600 },
+        waiting: { row: 6, count: 6, dur: 240 },
+        running: { row: 7, count: 6, dur: 130 },
+        waving:  { row: 3, count: 4, dur: 200 },
+        failed:  { row: 5, count: 8, dur: 160 },
+        jumping: { row: 4, count: 5, dur: 180 },
+    };
+    // 房間立繪狀態 → Codex 寵物動作
+    const CODEX_STATE_ANIM = {
+        living: 'idle', idle: 'idle', mini: 'idle', reading: 'idle',
+        doze: 'idle', yawn: 'idle', sleeping: 'idle',
+        thinking: 'waiting', ultrathink: 'waiting',
+        typing: 'running', happy: 'waving', error: 'failed', wake: 'jumping',
+    };
+    let _codexFrameTimer = null;
+
+    /** 在 #codex-portrait-sprite 上逐幀循環播放對應動作 */
+    function _codexSpritePlay(state) {
+        const sprite = _el('codex-portrait-sprite');
+        if (!sprite) return;
+        const anim = CODEX_ANIMS[CODEX_STATE_ANIM[state]] || CODEX_ANIMS.idle;
+        let frame = 0;
+        const step = () => {
+            if (_provider() !== 'codex') { _codexFrameTimer = null; return; }  // 已離開 Codex 房間，停
+            const col = frame % anim.count;
+            const x = (col / (CODEX_SHEET_COLS - 1)) * 100;
+            const y = (anim.row / (CODEX_SHEET_ROWS - 1)) * 100;
+            sprite.style.backgroundPosition = x + '% ' + y + '%';
+            frame++;
+            _codexFrameTimer = setTimeout(step, anim.dur);
+        };
+        step();
+    }
+
     function _swapPortraitImg(state) {
-        const img = document.getElementById('claude-portrait-img');
+        // 切換立繪前先停掉 Codex spritesheet 的逐幀計時器
+        if (_codexFrameTimer) { clearTimeout(_codexFrameTimer); _codexFrameTimer = null; }
+        if (_provider() === 'codex') {
+            _codexSpritePlay(state);
+            _currentPortraitState = state;
+            return;
+        }
+        const img = _el('claude-portrait-img');
         if (!img) return;
-        const ASSETS = (window.ClaudeTerminal && window.ClaudeTerminal.ASSETS) || {};
-        const FB = (window.ClaudeTerminal && window.ClaudeTerminal.FALLBACK_URL) || '';
+        const CT = window.ClaudeTerminal || {};
+        const ASSETS = CT.ASSETS || {};
+        const FB = CT.FALLBACK_URL || '';
         img.onerror = function(){ this.onerror = null; this.src = FB; };
         img.src = ASSETS[state] || ASSETS.living || ASSETS.idle || FB;
         _currentPortraitState = state;
@@ -286,7 +306,7 @@
     }
 
     function _scrollClaudeChatToBottom() {
-        const stream = document.getElementById('claude-chat-stream');
+        const stream = _el('claude-chat-stream');
         if (stream) stream.scrollTop = stream.scrollHeight;
     }
 
@@ -477,7 +497,7 @@
     }
 
     function _renderClaudeBubble(role, content, opts = {}) {
-        const stream = document.getElementById('claude-chat-stream');
+        const stream = _el('claude-chat-stream');
         if (!stream) return;
         const isUser = role === 'user';
         const wrap = document.createElement('div');
@@ -596,12 +616,12 @@
         _scrollClaudeChatToBottom();
     }
 
-    /** 進入 Claude 房間時用：把 IRIS_STATE.history 全部 render 成氣泡（含附件 + thinking + usage） */
+    /** 進入浮窗時用：把 _roomHistory 全部 render 成氣泡（含附件 + thinking + usage） */
     function _hydrateClaudeStream() {
-        const stream = document.getElementById('claude-chat-stream');
+        const stream = _el('claude-chat-stream');
         if (!stream) return;
         stream.innerHTML = '';
-        (_bridge().activeHistory() || []).forEach(m => {
+        (_activeHistory() || []).forEach(m => {
             _renderClaudeBubble(
                 m.role === 'user' ? 'user' : 'assistant',
                 m.content,
@@ -618,7 +638,7 @@
 
     // ===== 附件 chip 預覽列（輸入框上方）=====
     function _renderClaudeAttachChips() {
-        const row = document.getElementById('claude-attach-chips');
+        const row = _el('claude-attach-chips');
         if (!row) return;
         row.innerHTML = '';
         _pendingClaudeAttachments.forEach((a, idx) => {
@@ -709,7 +729,7 @@
         _renderClaudeAttachChips();
 
         // 即時把 user message（含附件）push 進 history + 立刻 render 成右側橘氣泡
-        _bridge().activeHistory().push({
+        _activeHistory().push({
             role: 'user', content: text, ts: Date.now(),
             attachments: attachmentsSnapshot.length ? attachmentsSnapshot : undefined,
         });
@@ -721,6 +741,22 @@
         const _thinkState = (_eff === 'high' || _eff === 'xhigh' || _eff === 'max') ? 'ultrathink' : 'thinking';
         _setClaudePortraitState(_thinkState);
 
+        // 送出鈕換 ⏹ 停止：click 觸發 abort + 呼叫 cc-bridge /v1/cancel/{taskId}
+        // 訂閱版（CLI）→ /v1/cancel kill 子進程；API 直連版 → abort fetch（server 端目前沒 cancel 機制）
+        _claudeAbortCtrl = new AbortController();
+        _claudeTaskId    = (window.crypto?.randomUUID && window.crypto.randomUUID()) || ('t-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+        const sendBtn = _el('cw-send-btn');
+        if (sendBtn) {
+            sendBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+            sendBtn.onclick = async () => {
+                // 先 server-side kill（cc-bridge 訂閱版才生效），再 client-side abort fetch
+                if (_claudeTaskId) {
+                    try { await window.ClaudeTerminal.cancelTask?.(_claudeTaskId); } catch (_) {}
+                }
+                if (_claudeAbortCtrl) _claudeAbortCtrl.abort();
+            };
+        }
+
         try {
             // streaming 漸進式 render：stream 期間每收到 text/tool 事件就 destroy 舊 wrapper
             // 重 render 一個（用 suppressMarkdown 跳過 markdown，避免每 chunk 重 render markdown 閃爍）
@@ -728,7 +764,7 @@
             const acc = { text: '', tools: [] };
             let streamWrap = null;
             let _typingSwitched = false;
-            const stream = document.getElementById('claude-chat-stream');
+            const stream = _el('claude-chat-stream');
 
             const rerenderStreaming = () => {
                 if (streamWrap && streamWrap.parentNode) {
@@ -757,7 +793,10 @@
                 }
             };
 
-            const result = await window.ClaudeTerminal.send(text, attachmentsSnapshot, onProgress);
+            const result = await window.ClaudeTerminal.send(text, attachmentsSnapshot, onProgress, {
+                taskId: _claudeTaskId,
+                signal: _claudeAbortCtrl?.signal,
+            });
             const reply = result.reply;
             const thinking = result.thinking || null;
             const usage = result.usage || null;
@@ -779,7 +818,7 @@
             if (thinking) assistantRecord.thinking = thinking;
             if (usage) assistantRecord.usage = usage;
             if (toolsUsed) assistantRecord.tools_used = toolsUsed;
-            _bridge().activeHistory().push(assistantRecord);
+            _activeHistory().push(assistantRecord);
 
             // session_id resume 失敗：cc-bridge 退回新 session、Claude 不記得前文
             if (result.sessionFallback) {
@@ -796,39 +835,57 @@
                 _setClaudePortraitState('happy');
                 setTimeout(() => _setClaudePortraitState('living'), 600);
             }
-            _bridge().scheduleSave();
+            _scheduleSave();
             // 新 conv 的標題會在 saveHistory 自動從第一條 user msg 抓 → 更新左上角小卡
             if (typeof window._VoidClaudeUpdateChip === 'function') {
                 try { window._VoidClaudeUpdateChip(); } catch (_) {}
             }
         } catch (e) {
-            // 失敗：回滾剛 push 的 user message
-            if (_bridge().activeHistory().length > 0 && _bridge().activeHistory()[_bridge().activeHistory().length - 1].role === 'user') {
-                _bridge().activeHistory().pop();
+            const isAbort = e?.name === 'AbortError' || /abort/i.test(e?.message || '');
+            // 失敗：回滾剛 push 的 user message（無論主動停止 / 真錯誤都不該留半條對話）
+            if (_activeHistory().length > 0 && _activeHistory()[_activeHistory().length - 1].role === 'user') {
+                _activeHistory().pop();
             }
 
-            _setClaudePortraitState('error');
-
-            const raw = (e && e.message) || '未知錯誤';
-            const [code, ...rest] = raw.split(':');
-            const detail = rest.join(':') || raw;
-            let userMsg;
-            switch (code) {
-                case 'NOT_CONFIGURED': userMsg = '⚠️ 還沒設定 cc-bridge URL / Key。\n\n去「寫作 → API 設置 → 🦀 Claude 的房間」填好。'; break;
-                case 'AUTH':           userMsg = '🔒 ' + detail; break;
-                case 'NETWORK':        userMsg = '🌐 ' + detail; break;
-                case 'SERVER':         userMsg = '💥 ' + detail; break;
-                case 'EMPTY':          userMsg = '🤔 ' + detail; break;
-                case 'API':            userMsg = '⚠️ API 錯誤：' + detail; break;
-                case 'BAD_JSON':       userMsg = '⚠️ ' + detail; break;
-                case 'SETTINGS_MISSING': userMsg = '⚠️ ' + detail; break;
-                default:               userMsg = '⚠️ ' + raw;
+            if (isAbort) {
+                // 主動停止：靜默顯示已停止氣泡，不噴錯誤
+                _setClaudePortraitState('living');
+                _renderClaudeBubble('assistant', '⏹ 已停止');
+            } else {
+                _setClaudePortraitState('error');
+                const raw = (e && e.message) || '未知錯誤';
+                const [code, ...rest] = raw.split(':');
+                const detail = rest.join(':') || raw;
+                let userMsg;
+                switch (code) {
+                    case 'NOT_CONFIGURED': userMsg = '⚠️ 還沒設定 cc-bridge URL / Key。\n\n去「寫作 → API 設置 → 🦀 Claude 的房間」填好。'; break;
+                    case 'AUTH':           userMsg = '🔒 ' + detail; break;
+                    case 'NETWORK':        userMsg = '🌐 ' + detail; break;
+                    case 'SERVER':         userMsg = '💥 ' + detail; break;
+                    case 'EMPTY':          userMsg = '🤔 ' + detail; break;
+                    case 'API':            userMsg = '⚠️ API 錯誤：' + detail; break;
+                    case 'BAD_JSON':       userMsg = '⚠️ ' + detail; break;
+                    case 'SETTINGS_MISSING': userMsg = '⚠️ ' + detail; break;
+                    default:               userMsg = '⚠️ ' + raw;
+                }
+                _renderClaudeBubble('assistant', userMsg);
+                setTimeout(() => _setClaudePortraitState('living'), 1500);
             }
-            _renderClaudeBubble('assistant', userMsg);
-            setTimeout(() => _setClaudePortraitState('living'), 1500);
+        } finally {
+            // 還原送出鈕：icon 回紙飛機、onclick 回浮窗的 submitInput
+            _claudeAbortCtrl = null;
+            _claudeTaskId    = null;
+            const sb = _el('cw-send-btn');
+            if (sb) {
+                sb.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+                const fn = window.ChatWindow && window.ChatWindow.submitInput;
+                if (typeof fn === 'function') sb.onclick = fn;
+            }
         }
     }
 
+    VoidClaudeRoom.setHistory        = function (arr) { _roomHistory = Array.isArray(arr) ? arr : []; };
+    VoidClaudeRoom.getHistory        = _activeHistory;
     VoidClaudeRoom.applyRoomUi       = _applyClaudeRoomUi;
     VoidClaudeRoom.updatePortalBtn   = _updateClaudePortalBtn;
     VoidClaudeRoom.updatePickerLabel = _updateClaudePickerLabel;

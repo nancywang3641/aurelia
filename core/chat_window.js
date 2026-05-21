@@ -200,7 +200,28 @@
         _aureliaPrevDisplay = null;
     }
 
-    ChatWindow.open = function (provider) {
+    // 載入當前 provider 的 conv 歷史並渲染進浮窗
+    async function _loadRoom(provider) {
+        if (window.ClaudeTerminal && typeof window.ClaudeTerminal.setProvider === 'function') {
+            window.ClaudeTerminal.setProvider(provider);
+        }
+        let hist = [];
+        if (window.ClaudeTerminal && typeof window.ClaudeTerminal.loadHistory === 'function') {
+            try { hist = await window.ClaudeTerminal.loadHistory(); } catch (_) { hist = []; }
+        }
+        const room = window.VoidClaudeRoom;
+        if (!room) return;
+        if (typeof room.setHistory === 'function') room.setHistory(hist || []);
+        if (typeof room.applyRoomUi === 'function') room.applyRoomUi();
+        if (typeof room.hydrateStream === 'function') room.hydrateStream();
+        if ((!hist || !hist.length) && typeof room.renderBubble === 'function') {
+            room.renderBubble('assistant', provider === 'codex'
+                ? '這裡是 Codex 的房間，跟外面是分開的線。說吧。'
+                : '在這裡，我跟妳的對話跟外面是兩條線。妳說什麼吧。');
+        }
+    }
+
+    ChatWindow.open = async function (provider) {
         provider = provider === 'codex' ? 'codex' : 'claude';
         _provider = provider;
         if (!_winEl) _winEl = _buildWindow();
@@ -211,6 +232,7 @@
         if (!_isOpen) _hideAurelia();
         _isOpen = true;
         ChatWindow.closeSubPanel();
+        await _loadRoom(provider);
     };
 
     ChatWindow.close = function () {
