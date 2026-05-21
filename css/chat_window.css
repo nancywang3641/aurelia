@@ -130,3 +130,102 @@
     overflow: auto;
     min-height: 0;
 }
+
+/* ============================================================
+ * 聊天室內容（Phase 2）
+ * 氣泡 / markdown / picker 等沿用 aurelia_core.css 的裸 .claude-* 規則；
+ * 此處只補：浮窗內顯示切換、Codex 立繪、自己的輸入列。
+ * ============================================================ */
+
+/* 立繪區在浮窗為 flex 子項（aurelia_core.css 的 .claude-portrait-area
+ * 用 flex:0 0 35%，於浮窗 flex column 直接生效）。 */
+
+/* picker 橫條：原本 display:none，浮窗內顯示 */
+#aurelia-chat-window .claude-picker-bar {
+    display: block;
+    padding: 4px 10px;
+    background: rgba(234, 176, 92, 0.10);
+    border-bottom: 1px solid rgba(234, 176, 92, 0.25);
+    flex-shrink: 0;
+}
+
+/* 附件 chip 列：原本 display:none，浮窗內有檔時顯示 */
+#aurelia-chat-window .claude-attach-chips:not(:empty) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 4px 4px 4px;
+    margin-bottom: 2px;
+}
+
+/* Codex 立繪 spritesheet：cw-codex 時取代 Claude 立繪 */
+#aurelia-chat-window.cw-codex .claude-portrait-img   { display: none; }
+#aurelia-chat-window.cw-codex .codex-portrait-sprite { display: block; }
+
+/* ── 浮窗自己的輸入列（取代大廳共用的 iris-input / iris-send-btn）── */
+#aurelia-chat-window .cw-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--cl-cream-light, #fff5e1);
+    border-top: 1px solid rgba(234, 176, 92, 0.5);
+    flex-shrink: 0;
+}
+
+#aurelia-chat-window .cw-input {
+    flex: 1;
+    min-width: 0;
+    resize: none;
+    max-height: 160px;
+    padding: 9px 11px;
+    border: 1px solid var(--cl-beeswax, #EAB05C);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--cl-text-deep, #3d2010);
+    caret-color: var(--cl-grenadine, #D95122);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    outline: none;
+}
+
+#aurelia-chat-window .cw-input::placeholder {
+    color: rgba(137, 102, 69, 0.55);
+}
+
+#aurelia-chat-window .cw-attach-btn,
+#aurelia-chat-window .cw-send-btn {
+    flex-shrink: 0;
+    height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#aurelia-chat-window .cw-attach-btn {
+    width: 40px;
+    background: rgba(234, 176, 92, 0.25);
+    color: var(--cl-cafe-latte, #896645);
+    border: 1px solid rgba(234, 176, 92, 0.5);
+    transition: all 0.2s;
+}
+
+#aurelia-chat-window .cw-attach-btn:hover {
+    background: rgba(234, 176, 92, 0.4);
+    box-shadow: 0 0 8px rgba(234, 176, 92, 0.4);
+}
+
+#aurelia-chat-window .cw-send-btn {
+    width: 44px;
+    background: linear-gradient(135deg, var(--cl-beeswax, #EAB05C), var(--cl-grenadine, #D95122));
+    color: #ffffff;
+    border: 1px solid rgba(217, 81, 34, 0.5);
+}
+
+#aurelia-chat-window .cw-send-btn:hover {
+    box-shadow: 0 0 12px rgba(217, 81, 34, 0.4);
+}
