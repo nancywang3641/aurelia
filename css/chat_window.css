@@ -262,3 +262,203 @@
 #cw-launcher-menu .cw-lm-item:hover {
     background: rgba(255, 255, 255, 0.12);
 }
+
+/* ============================================================
+ * 子面板內容（Phase 3）：⚙️ 設置 / 🕘 Recents
+ * 工作檯 / 額度由各自模組 launch() 自帶樣式。
+ * ============================================================ */
+
+#aurelia-chat-window .cw-sub-missing {
+    padding: 24px;
+    text-align: center;
+    color: #d9a;
+    font-size: 13px;
+}
+
+/* ⚙️ 設置 */
+#aurelia-chat-window .cw-set {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#aurelia-chat-window .cw-set-sec {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#aurelia-chat-window .cw-set-h {
+    font-size: 12px;
+    font-weight: 700;
+    color: #EAB05C;
+}
+
+#aurelia-chat-window .cw-set-preset {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+#aurelia-chat-window .cw-set-prow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#aurelia-chat-window .cw-set-in {
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(234, 176, 92, 0.4);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: #1a1c28;
+    font-family: inherit;
+    outline: none;
+}
+
+#aurelia-chat-window .cw-set-prow .cw-set-name {
+    flex: 1;
+    min-width: 0;
+}
+
+#aurelia-chat-window .cw-set-preset .cw-set-url,
+#aurelia-chat-window .cw-set-preset .cw-set-key {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#aurelia-chat-window .cw-set-del {
+    background: rgba(217, 81, 34, 0.2);
+    color: #ff9b78;
+    border: 1px solid rgba(217, 81, 34, 0.4);
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+#aurelia-chat-window .cw-set-add {
+    background: rgba(234, 176, 92, 0.2);
+    color: #EAB05C;
+    border: 1px solid rgba(234, 176, 92, 0.4);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+#aurelia-chat-window .cw-set-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: #FFF5E1;
+}
+
+#aurelia-chat-window .cw-set-field .cw-set-in {
+    width: 110px;
+}
+
+/* 🕘 Recents */
+#aurelia-chat-window .cw-rec {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#aurelia-chat-window .cw-rec-tabs {
+    display: flex;
+    gap: 6px;
+}
+
+#aurelia-chat-window .cw-rec-tab {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.06);
+    color: #b9b5c8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 7px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+#aurelia-chat-window .cw-rec-tab.active {
+    background: rgba(234, 176, 92, 0.2);
+    color: #EAB05C;
+    border-color: rgba(234, 176, 92, 0.5);
+}
+
+#aurelia-chat-window .cw-rec-new {
+    background: rgba(234, 176, 92, 0.2);
+    color: #EAB05C;
+    border: 1px solid rgba(234, 176, 92, 0.4);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+#aurelia-chat-window .cw-rec-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+#aurelia-chat-window .cw-rec-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+#aurelia-chat-window .cw-rec-row.active {
+    background: rgba(234, 176, 92, 0.16);
+    border: 1px solid rgba(234, 176, 92, 0.4);
+}
+
+#aurelia-chat-window .cw-rec-info {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+#aurelia-chat-window .cw-rec-title {
+    font-size: 13px;
+    color: #FFF5E1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#aurelia-chat-window .cw-rec-meta {
+    font-size: 11px;
+    color: #8a86a0;
+    margin-top: 2px;
+}
+
+#aurelia-chat-window .cw-rec-act {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    flex-shrink: 0;
+}
+
+#aurelia-chat-window .cw-rec-empty {
+    padding: 24px 12px;
+    text-align: center;
+    color: #8a86a0;
+    font-size: 12px;
+    line-height: 1.6;
+}
