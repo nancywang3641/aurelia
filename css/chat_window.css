@@ -671,3 +671,87 @@
 #aurelia-chat-window .cg-bubble.cg-error {
     color: #d9534f;
 }
+
+/* ============================================================
+ * 群聊區通用畫布（cw-canvas）—— 只在群聊模式顯示
+ * ============================================================ */
+
+/* 單人房間模式一律不顯示畫布 */
+#aurelia-chat-window:not(.cw-group) .cw-canvas,
+#aurelia-chat-window:not(.cw-group) .cw-canvas-tab {
+    display: none !important;
+}
+
+#aurelia-chat-window .cw-canvas {
+    flex: 0 0 45%;
+    min-height: 0;
+    flex-direction: column;
+    background: #16161f;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+    /* display 由 JS 控制 flex / none */
+}
+
+#aurelia-chat-window .cw-canvas-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+
+#aurelia-chat-window .cw-canvas-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 700;
+    color: #cfd2e6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#aurelia-chat-window .cw-canvas-collapse,
+#aurelia-chat-window .cw-canvas-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #cfd2e6;
+    font-size: 13px;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 5px;
+}
+
+#aurelia-chat-window .cw-canvas-collapse:hover,
+#aurelia-chat-window .cw-canvas-close:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+#aurelia-chat-window .cw-canvas-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+#aurelia-chat-window .cw-canvas-tab {
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    font-size: 11px;
+    color: #9a93a8;
+    background: #16161f;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+    /* display 由 JS 控制 flex / none */
+}
+
+#aurelia-chat-window .cw-canvas-tab:hover {
+    color: #cfd2e6;
+}
+
+#aurelia-chat-window .cw-canvas-err {
+    color: #d9534f;
+    font-size: 11px;
+    padding: 6px 8px;
+}
