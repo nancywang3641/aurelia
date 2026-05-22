@@ -786,6 +786,28 @@ body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
     --cl-portrait-bg-3:   var(--cl-grenadine);
 }
 
+/* =========================================================
+   5b-codex. 🧊 Codex 的房間 — 冷色藍版（mode-codex）
+   Codex 房間 DOM 同時掛 mode-claude（吃全部結構規則）+ mode-codex，
+   這裡只覆寫 --cl-* 變數成藍色系，零結構複製。
+   ========================================================= */
+.void-tab.mode-codex {
+    --cl-cream:           #e9eef4;
+    --cl-cream-light:     #f5f8fc;
+    --cl-beeswax:         #5b9bd5;
+    --cl-beeswax-soft:    rgba(26,28,40,0.25);
+    --cl-grenadine:       #2f6fc4;
+    --cl-cafe-latte:      #5a7a96;
+    --cl-text-deep:       #13283f;
+    --cl-paper-grain:     rgba(70,100,140,0.05);
+    --cl-warm-shadow:     rgba(70,100,140,0.18);
+    --cl-warm-glow:       rgba(91,155,213,0.50);
+
+    --cl-portrait-bg-1:   var(--cl-beeswax-soft);
+    --cl-portrait-bg-2:   var(--cl-beeswax);
+    --cl-portrait-bg-3:   var(--cl-grenadine);
+}
+
 /* mode-claude 啟動時：藏掉 VN 對話、立繪、世界頻道泡泡（聊天室自己接管） */
 .void-tab.mode-claude .void-char-area,
 .void-tab.mode-claude .void-dialogue-wrap,
@@ -809,17 +831,15 @@ body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
     overflow: hidden;
 }
 
-/* 上半立繪區（暖漸層，可被 --cl-portrait-bg-image 整個換掉） */
+/* 上半立繪區（白底 + 橘色格線，可被 --cl-portrait-bg-image 整個換掉） */
 .claude-portrait-area {
     flex: 0 0 35%;
     position: relative;
-    background: var(--cl-portrait-bg-image,
-        linear-gradient(135deg,
-            var(--cl-portrait-bg-1, rgba(26,28,40,0.25)) 0%,
-            var(--cl-portrait-bg-2, #EAB05C) 55%,
-            var(--cl-portrait-bg-3, #D95122) 100%));
-    background-size: cover;
-    background-position: center;
+    background:
+        var(--cl-portrait-bg-image,
+            linear-gradient(rgba(234,176,92,0.35) 1px, transparent 1px) 0 0 / 28px 28px,
+            linear-gradient(90deg, rgba(234,176,92,0.35) 1px, transparent 1px) 0 0 / 28px 28px,
+            #ffffff);
     overflow: hidden;
     border-bottom: 1px solid var(--cl-beeswax, #EAB05C);
 }
@@ -840,6 +860,23 @@ body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
     0%,100% { transform: translateY(0); }
     50%     { transform: translateY(-6px); }
 }
+/* 🔷 Codex 房間立繪：OpenAI Codex 寵物 spritesheet（8 欄 × 9 列）。
+   逐幀由 claude-room.js 切 background-position；mode-codex 才顯示、取代 .claude-portrait-img */
+.codex-portrait-sprite {
+    display: none;
+    position: absolute; inset: 0; margin: auto;
+    height: 75%; max-height: 240px;
+    aspect-ratio: 192 / 208;
+    background-image: url(core/assets/codex/codex-spritesheet.webp);
+    background-repeat: no-repeat;
+    background-size: 800% 900%;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 8px 24px rgba(47,111,196,0.40));
+    animation: claude-portrait-float 3s ease-in-out infinite;
+    z-index: 2;
+}
+.void-tab.mode-codex .claude-portrait-img   { display: none; }
+.void-tab.mode-codex .codex-portrait-sprite { display: block; }
 
 /* 下半訊息區（同樣奶油紙底，跟立繪區暖色連通） */
 .claude-chat-stream {
@@ -1263,6 +1300,7 @@ body.layout-pad-ios #aurelia-bottom-nav { padding-bottom: 20px !important; }
 @media (max-width: 600px) {
     .claude-portrait-area { flex: 0 0 32%; }
     .claude-portrait-img { max-height: 180px; height: 80%; }
+    .codex-portrait-sprite { max-height: 180px; height: 80%; }
     .claude-bubble { font-size: 13px; }
     .claude-chat-stream { padding: 12px 10px; }
     .claude-picker-popup { width: calc(100% - 24px); left: 12px; right: 12px; }
