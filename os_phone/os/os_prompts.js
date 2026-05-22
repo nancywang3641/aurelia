@@ -691,6 +691,9 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     function saveIris(v)    { localStorage.setItem(IRIS_KEY, v); }
     function loadCheshire() { return localStorage.getItem(CHESS_KEY)  || ''; }
     function saveCheshire(v){ localStorage.setItem(CHESS_KEY, v); }
+    const WORLD_KEY = 'os_lobby_world';
+    function loadWorld()    { return localStorage.getItem(WORLD_KEY)  || ''; }
+    function saveWorld(v)   { localStorage.setItem(WORLD_KEY, v); }
 
     // ================================================================
     // 三、公開 API
@@ -812,6 +815,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         getFormat: (key) => HARDCODED[key] || '',   // 只取硬編碼格式提示詞
         getEntries: loadEntries,
         getBundles: loadBundles,
+        // 大廳人設補充（瀅瀅 / 柴郡 / 世界觀）— 給 os_settings「大廳人設」分頁讀寫用
+        loadIris, saveIris, loadCheshire, saveCheshire, loadWorld, saveWorld,
         PANELS,
         launchApp: null
     };
@@ -1449,7 +1454,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 <div class="pm-tabs">
                     <div class="pm-tab active" data-tab="unified">📦 預設包</div>
                     <div class="pm-tab" data-tab="library">📝 條目庫</div>
-                    <div class="pm-tab" data-tab="personas">🎭 人設</div>
+                    <!-- 🎭 人設 tab 已搬到 os_settings 的「大廳人設」分頁，這裡移除避免酒館 PWA 雙地方混淆 -->
                 </div>
                 <div class="pm-body" id="pm-body"></div>
             </div>
@@ -1458,14 +1463,13 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         const body = container.querySelector('#pm-body');
         renderUnified(body);
 
-        // Tab 切換邏輯
+        // Tab 切換邏輯（人設已搬到 os_settings，這裡不再處理 personas）
         container.querySelectorAll('.pm-tab').forEach(tab => {
             tab.onclick = function() {
                 container.querySelectorAll('.pm-tab').forEach(t => t.classList.remove('active'));
                 this.classList.add('active');
                 if (this.dataset.tab === 'unified') renderUnified(body);
                 else if (this.dataset.tab === 'library') renderLibrary(body);
-                else renderPersonas(body);
             };
         });
 
@@ -1482,7 +1486,6 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                     const activeTab = container.querySelector('.pm-tab.active').dataset.tab;
                     if (activeTab === 'unified') renderUnified(body);
                     else if (activeTab === 'library') renderLibrary(body);
-                    else renderPersonas(body);
                 });
             }
             e.target.value = ''; // 清空選擇，允許重複選擇同一個檔案
