@@ -8,7 +8,7 @@
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 23; // 🔥 V23：狀態資料庫 state_data（副模型抽劇情狀態）
+    const DB_VERSION = 24; // 🔥 V24：酒館大廳的跨卡總結索引 lobby_summary_index
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -30,6 +30,7 @@
     const STORE_NAME_VN_MEMORIES  = 'vn_memories';   // 🔥 V21：向量記憶庫
     const STORE_NAME_VN_SUMMARIES = 'vn_grand_summaries'; // V22：大總結儲存
     const STORE_NAME_STATE_DATA   = 'state_data';    // 🔥 V23：狀態資料庫（副模型抽劇情狀態，key = chatId）
+    const STORE_NAME_LOBBY_SUM_IDX = 'lobby_summary_index'; // 🔥 V24：酒館大廳跨卡總結索引（結語 + 角色名單，給瀅瀅/柴郡注 sysPrompt）
 
     let dbInstance = null;
 
@@ -54,7 +55,8 @@
                         STORE_NAME_STUDIO_DRAFTS,
                         STORE_NAME_VN_MEMORIES,  // 🔥 V21：向量記憶庫
                         STORE_NAME_VN_SUMMARIES, // 🔥 V22：大總結儲存
-                        STORE_NAME_STATE_DATA    // 🔥 V23：狀態資料庫
+                        STORE_NAME_STATE_DATA,   // 🔥 V23：狀態資料庫
+                        STORE_NAME_LOBBY_SUM_IDX // 🔥 V24：酒館大廳跨卡總結索引
                     ];
 
                     stores.forEach(name => {
@@ -756,6 +758,91 @@
                     tx.oncomplete = () => r(true);
                 } catch(e) { j(e); }
             });
+        },
+
+        // ── lobby_summary_index：酒館大廳跨卡總結索引（V24）─────────
+        //   給 status_panel.js 生成大總結後寫 brief + 角色名單，供瀅瀅/柴郡 sysPrompt 注入
+        //   entry: { id, cardName, chatId, summaryCount, brief, characters: [], lorebookBook, lorebookKey, timestamp }
+        saveLobbySummaryIndex: async function(entry) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!entry.id) entry.id = 'lsi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+                    if (!entry.timestamp) entry.timestamp = Date.now();
+                    const tx = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readwrite');
+                    tx.objectStore(STORE_NAME_LOBBY_SUM_IDX).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                    tx.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllLobbySummaryIndex: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readonly').objectStore(STORE_NAME_LOBBY_SUM_IDX).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+                    req.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteLobbySummaryIndex: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readwrite');
+                    tx.objectStore(STORE_NAME_LOBBY_SUM_IDX).delete(id);
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
+        },
+
+        // ── 給瀅瀅/柴郡 sysPrompt 注入用：每張卡 + 每個聊天室聚合最近 N 條結語 + 全角色名單（去重） ─────
+        //   分組維度：cardName + chatId（同卡不同 chat 算不同故事線，避免跨 chat 混在一起）
+        //   回傳：[{ cardName, chatId, storyTitle, briefs: [{ count, brief, ts }] 最新 N 條, characters: [{ name, row }] 同 chat 累積 }]
+        //   briefsLimit 預設 5
+        getLobbySummaryForPrompt: async function(briefsLimit = 5) {
+            const all = await this.getAllLobbySummaryIndex();
+            const byStory = new Map();
+            for (const r of all) {
+                const key = `${r.cardName || '(未命名)'}|||${r.chatId || ''}`;
+                if (!byStory.has(key)) byStory.set(key, {
+                    cardName: r.cardName || '(未命名)',
+                    chatId:   r.chatId || '',
+                    storyTitle: '',
+                    _recs: [],
+                    characters: [],
+                });
+                byStory.get(key)._recs.push(r);
+            }
+            const result = [];
+            for (const bundle of byStory.values()) {
+                bundle._recs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                // storyTitle 取最新一筆有值的（寫入端已沿用第一次的標題，這裡 newest 也是第一次的）
+                bundle.storyTitle = bundle._recs.find(r => r.storyTitle)?.storyTitle || '';
+                // bgCacheId 取最新一筆有值的，給封面圖去 VN bg_cache 撈用
+                bundle.bgCacheId  = bundle._recs.find(r => r.bgCacheId)?.bgCacheId || '';
+                bundle.briefs = bundle._recs.slice(0, briefsLimit).map(r => ({
+                    count: r.summaryCount || 0,
+                    brief: r.brief || '',
+                    ts:    r.timestamp || 0,
+                }));
+                const seen = new Set();
+                // 由舊到新走，早出場的角色排前面
+                for (let i = bundle._recs.length - 1; i >= 0; i--) {
+                    for (const c of (bundle._recs[i].characters || [])) {
+                        const name = c.name || c;
+                        if (!name || seen.has(name)) continue;
+                        seen.add(name);
+                        bundle.characters.push(typeof c === 'string' ? { name: c, row: c } : c);
+                    }
+                }
+                delete bundle._recs;
+                result.push(bundle);
+            }
+            // 按最新一筆 brief 時間排序整個 stories 列表
+            result.sort((a, b) => (b.briefs[0]?.ts || 0) - (a.briefs[0]?.ts || 0));
+            return result;
         },
 
         // ── vn_memories：向量記憶條目 CRUD ──────────────────────────

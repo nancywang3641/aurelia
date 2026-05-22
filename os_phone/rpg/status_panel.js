@@ -622,7 +622,8 @@
 
 【角色表】
 - 所有对剧情有影响的角色均需出现(包括没有实体的角色)
-姓名 | 身份 | 性格行為攝影(100字) | 状态/位置 |  关键特征 | 與MC的关系/初遇事件100字內描述 |备注(目標) |
+- 姓名欄格式硬規定：「名_姓氏」（用半形底線分隔）；必須依角色提供的完整正式全名寫入；不可使用模糊小名、暱稱、外號、稱謂；沒有姓氏的角色姓氏欄寫「無」
+姓名(名_姓氏) | 身份 | 性格行為攝影(100字) | 状态/位置 |  关键特征 | 與MC的关系/初遇事件100字內描述 |备注(目標) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 
 
@@ -649,7 +650,13 @@
 
 【性事紀】(以免出現AI角色後續忘記有過性事，導致角色OOC變成拔屌無情的渣男渣女)
 | 性事事件 | 事件描述 | 參與角色 | 備註 |
-| :--- | :--- | :--- | :--- |`;
+| :--- | :--- | :--- | :--- |
+
+【結語】(必填，100字以內純文字，用一段話描述本章核心走向與結束時的關鍵狀態，給其他系統做跨卡索引用，不要加任何標題、序號、表格或裝飾符號)
+
+【故事標題】(必填，30字以內，給這次跑團/這個聊天室的主題下一個標題，例如本次劇情的核心衝突或主線；純文字一行，不要加引號或裝飾符號)
+
+【場景索引】(選填，從本章原文裡找出最具代表性的一個 [Bg|...] 標籤、原封不動複製貼上一行；格式範例：[Bg|季節|時段_場景名|描述]。沒有合適的就留空、整段省略此欄)`;
 
     function getSummaryTemplate() {
         return localStorage.getItem('sp_summary_tpl') || SUMMARY_DEFAULT_TPL;
@@ -853,7 +860,7 @@
 
             const newEntry = { comment: `[大总结] - ${chatId} - 第${summaryCount}次 - ${now}`, keys: [`[SUMMARY_${chatId}_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
             await helper.createLorebookEntries(bookName, [newEntry]);
-            
+
             // 嘗試注入 KEY
             try {
                 const lastId = await helper.getLastMessageId();
@@ -865,7 +872,89 @@
                     }
                 }
             } catch(e) {}
-            
+
+            // 🌟 V24：parse【結語】+ 角色名單 → 寫 lobby_summary_index（給瀅瀅/柴郡注 sysPrompt）
+            try {
+                const osDb = window.parent.OS_DB;
+                if (osDb && osDb.saveLobbySummaryIndex) {
+                    // 結語：抓【結語】後面到字串結尾或下一個【...】之前的純文字（去前後空白與裝飾）
+                    const briefMatch = finalContent.match(/【結語】[^\n]*\n+([\s\S]*?)(?:\n【|$)/);
+                    const briefRaw = briefMatch ? briefMatch[1] : '';
+                    const brief = briefRaw.replace(/\|/g, '').replace(/^[-*\s]+|[-*\s]+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+
+                    // 角色名單：抓【角色表】底下 markdown table 的每一資料行
+                    //   每筆存 { name, row } —— row 是該角色的完整 markdown 行（含身份/性格/關係/備註等）
+                    //   給瀅瀅/柴郡注 sysPrompt 用：跨卡也能透過 row 看出角色背景，不只剩名字
+                    //   接受兩種格式：「| A | B |」 與「A | B」(table 表頭那種無開頭 |)
+                    //   跳過：表頭(姓名)、對齊列(:---)、純分隔行、空字、過長字
+                    const characters = [];
+                    const charNameSet = new Set();
+                    const charSectionMatch = finalContent.match(/【角色表】[\s\S]*?(?=\n【|$)/);
+                    if (charSectionMatch) {
+                        const lines = charSectionMatch[0].split('\n');
+                        for (const line of lines) {
+                            const trimmed = line.trim();
+                            if (!trimmed.includes('|')) continue;           // 不是 table 行
+                            if (/^[|\s:\-]+$/.test(trimmed)) continue;       // 純對齊/分隔線
+                            const cols = trimmed.split('|').map(s => s.trim()).filter(Boolean);
+                            if (!cols.length) continue;
+                            const name = cols[0];
+                            if (!name) continue;
+                            if (name === '姓名') continue;                   // 表頭
+                            if (/^[-:\s]+$/.test(name)) continue;            // 看起來像 :--- 的分隔
+                            if (name.length > 40) continue;                  // 太長八成不是名字
+                            if (charNameSet.has(name)) continue;
+                            charNameSet.add(name);
+                            characters.push({ name, row: trimmed });
+                        }
+                    }
+                    // 留 debug log（萬一 parse 出不來可看 console）
+                    console.log('[lobby_summary_index] parsed:', { brief: brief?.slice(0,60), charsCount: characters.length, firstChar: characters[0] });
+
+                    const cardName = (helper.getCharData?.()?.name) || helper.getCurrentCharPrimaryLorebook?.() || '';
+
+                    // 故事標題：parse AI 出的【故事標題】，但同 chatId 已有 record 就沿用第一次的（避免漂移）
+                    const titleMatch = finalContent.match(/【故事標題】[^\n]*\n+([^\n【]+)/);
+                    let storyTitle = (titleMatch ? titleMatch[1] : '').replace(/[「」"']/g, '').trim().slice(0, 50);
+
+                    // 場景索引：抓 [Bg|季節|時段_場景名|...] 第三段就是 VN_Cache bg_cache 的 key
+                    const bgMatch = finalContent.match(/\[Bg\|[^|]*\|([^|]+)\|/);
+                    const bgCacheId = bgMatch ? bgMatch[1].trim() : '';
+
+                    // 跨總結去重：以 cardName + chatId 為分組維度
+                    //   - 沿用該 chatId 已有的 storyTitle（如果有），避免第 2 次總結 AI 換標題
+                    //   - characters 也只在同 chatId 範圍內去重，跨 chat 的同名角色視為不同故事的人
+                    let newCharacters = characters;
+                    try {
+                        const existing = await osDb.getAllLobbySummaryIndex();
+                        const seen = new Set();
+                        for (const r of existing) {
+                            if ((r.cardName || '') !== cardName) continue;
+                            if ((r.chatId || '') !== chatId) continue;
+                            for (const c of (r.characters || [])) seen.add(c.name || c);
+                            if (r.storyTitle && !storyTitle) storyTitle = r.storyTitle;
+                            if (r.storyTitle) storyTitle = r.storyTitle;  // 強制沿用第一次（覆寫本次 AI 寫的）
+                        }
+                        newCharacters = characters.filter(c => !seen.has(c.name));
+                    } catch (_) { /* fallback：dedup 失敗就照寫，不卡主流程 */ }
+
+                    if (brief || newCharacters.length) {
+                        await osDb.saveLobbySummaryIndex({
+                            cardName,
+                            chatId,
+                            storyTitle,
+                            bgCacheId,
+                            summaryCount,
+                            brief,
+                            characters: newCharacters,
+                            lorebookBook: bookName,
+                            lorebookKey: newEntry.keys[0],
+                        });
+                    }
+                    console.log('[lobby_summary_index]', { storyTitle, bgCacheId, allChars: characters.length, newChars: newCharacters.length });
+                }
+            } catch(e) { console.warn('[status_panel] 寫 lobby_summary_index 失敗（不影響大總結）:', e); }
+
             alert(`✅ 第 ${summaryCount} 次大總結已生成！`);
         } catch(e) { alert("生成失敗: " + e.message); } finally {
             btn.innerText = "📝 生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning');

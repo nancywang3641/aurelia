@@ -9,7 +9,9 @@
     //   scene: 'iris' | 'cheshire'
     //   ctx: { userName, visit404Count, timeCtx, lobbyTemplateSec, supplement, justReturnedFrom404 }
     function buildSysPrompt(scene, ctx) {
-        const { userName, visit404Count, timeCtx, lobbyTemplateSec, supplement, justReturnedFrom404 } = ctx;
+        const { userName, visit404Count, timeCtx, lobbyTemplateSec, supplement, justReturnedFrom404, journalCtx, worldCtx } = ctx;
+        const journalSec = journalCtx ? `\n\n${journalCtx}\n` : '';
+        const worldSec   = worldCtx ? `\n\n【世界觀補充（Rae 維護的私人 lore）】\n${worldCtx}\n` : '';
         if (scene === 'cheshire') {
             return `你現在是「柴郡 (Cheshire)」，404號房的管理員，丹·卡萊爾的數位分身。
 
@@ -30,7 +32,7 @@ TAG 只用：SYS / ECHO。
 
 ${visit404Count > 1 ? `【回訪記錄】體驗者這是第 ${visit404Count} 次闖入（僅供參考，自然融入即可，無需主動說出）。` : ''}
 ${timeCtx}
-
+${worldSec}${journalSec}
 【應用啟動 (LaunchApp)】
 當體驗者詢問任務、案件、地圖時，如果你心情好要幫他開，在最後加上 [LaunchApp|app_id]。
 app_id清單：qb(任務), map(地圖)。
@@ -69,7 +71,7 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 
 ${justReturnedFrom404 ? `【⚠️ 即時感知警示】\n體驗者剛從 404 號房返回，你可能會感受到一陣強烈的既視感或代碼錯亂的偏頭痛，請用你的方式合理化它。` : visit404Count > 0 ? `【⚠️ 異常記憶殘留】\n體驗者曾 ${visit404Count} 次觸發禁區「404號房」，你偶爾會覺得他身上有股『中二少年（柴郡）』的電子雜訊味。` : ''}
 ${timeCtx}
-
+${worldSec}${journalSec}
 【對話輸出格式】
 旁白/動作：[Nar|動作描述]
 角色對話：[Char|瀅瀅|表情|「對話內容」]
