@@ -63,6 +63,28 @@
         bubbleEl.textContent = clean;
     }
 
+    // 把附件陣列建成氣泡內的附件區塊（圖片 → 縮圖點放大；非圖 → 📎 chip）。空 → null。
+    function _buildAttachmentsBox(attachments) {
+        if (!Array.isArray(attachments) || !attachments.length) return null;
+        const box = document.createElement('div');
+        box.className = 'cg-bubble-attachments';
+        attachments.forEach(function (a) {
+            if (a && a.thumb && a.mime && a.mime.indexOf('image/') === 0) {
+                const im = document.createElement('img');
+                im.className = 'cg-attach-img';
+                im.src = a.thumb;
+                im.addEventListener('click', function () { _openImageOverlay(a.thumb); });
+                box.appendChild(im);
+            } else {
+                const chip = document.createElement('span');
+                chip.className = 'cg-attach-chip';
+                chip.textContent = '📎 ' + ((a && a.filename) || 'file');
+                box.appendChild(chip);
+            }
+        });
+        return box;
+    }
+
     function _renderBubble(speaker, content, attachments) {
         if (!_streamEl) return null;
         const wrap = document.createElement('div');
@@ -78,25 +100,8 @@
         _setBubbleContent(b, speaker, content);
 
         // 附件：圖片 → 內嵌縮圖（點放大）；非圖 → 📎 chip
-        if (Array.isArray(attachments) && attachments.length) {
-            const box = document.createElement('div');
-            box.className = 'cg-bubble-attachments';
-            attachments.forEach(function (a) {
-                if (a && a.thumb && a.mime && a.mime.indexOf('image/') === 0) {
-                    const im = document.createElement('img');
-                    im.className = 'cg-attach-img';
-                    im.src = a.thumb;
-                    im.addEventListener('click', function () { _openImageOverlay(a.thumb); });
-                    box.appendChild(im);
-                } else {
-                    const chip = document.createElement('span');
-                    chip.className = 'cg-attach-chip';
-                    chip.textContent = '📎 ' + ((a && a.filename) || 'file');
-                    box.appendChild(chip);
-                }
-            });
-            b.appendChild(box);
-        }
+        const attBox = _buildAttachmentsBox(attachments);
+        if (attBox) b.appendChild(attBox);
 
         wrap.appendChild(b);
         _streamEl.appendChild(wrap);
@@ -377,21 +382,28 @@
 
         const displayText = _stripForDisplay(result.reply);
         const transcriptText = _stripForTranscript(result.reply);
+        const imgAtts = (Array.isArray(result.images) && result.images.length) ? result.images : null;
 
-        if (!transcriptText) {
-            // 整則只有 <lobbyPanel>、沒文字也沒標記：移掉空氣泡，不進 transcript
+        if (!transcriptText && !imgAtts) {
+            // 整則只有 <lobbyPanel>、沒文字沒標記沒圖：移掉空氣泡，不進 transcript
             if (typingWrap && typingWrap.parentNode) typingWrap.parentNode.removeChild(typingWrap);
             _seen[provider] = _transcript.length - 1;
             return { spoke: true, failed: false, markers: markers };
         }
-        if (!displayText) {
-            // 只有標記、沒閒聊文字：移掉氣泡，但 transcript 仍要記（對手要看到 [MOVE]）
+        if (!displayText && !imgAtts) {
+            // 只有標記、沒閒聊文字也沒圖：移掉氣泡，但 transcript 仍要記（對手要看到 [MOVE]）
             if (typingWrap && typingWrap.parentNode) typingWrap.parentNode.removeChild(typingWrap);
         } else if (bubbleEl) {
             bubbleEl.classList.remove('cg-typing');
             _setBubbleContent(bubbleEl, provider, result.reply);
+            if (imgAtts) {
+                const box = _buildAttachmentsBox(imgAtts);
+                if (box) bubbleEl.appendChild(box);
+            }
         }
-        _transcript.push({ speaker: provider, content: transcriptText, ts: Date.now(), usage: result.usage || null });
+        const turnEntry = { speaker: provider, content: transcriptText, ts: Date.now(), usage: result.usage || null };
+        if (imgAtts) turnEntry.attachments = imgAtts;
+        _transcript.push(turnEntry);
         _seen[provider] = _transcript.length - 1;
         _save();
         return { spoke: true, failed: false, markers: markers };

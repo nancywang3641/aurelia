@@ -740,6 +740,43 @@
         return Math.round(((usage.input_tokens||0)*p.in + (usage.output_tokens||0)*p.out + (usage.cache_creation_input_tokens||0)*p.cw + (usage.cache_read_input_tokens||0)*p.cr) / 1000) / 1000;
     }
 
+    // ── Codex 生成圖：cc-bridge 把整張圖 base64 帶回來，這裡縮成 ≤1280 的 JPEG ──
+    // 縮圖（小、適合存進聊天紀錄）；原圖仍留在 Codex 的 generated_images 資料夾。
+    function _imageDataUrlToThumb(dataUrl, maxEdge) {
+        return new Promise(function (resolve) {
+            if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image/') !== 0) {
+                resolve(dataUrl); return;
+            }
+            const img = new Image();
+            img.onload = function () {
+                try {
+                    let w = img.naturalWidth || 1, h = img.naturalHeight || 1;
+                    const scale = Math.min(1, maxEdge / Math.max(w, h));
+                    w = Math.max(1, Math.round(w * scale));
+                    h = Math.max(1, Math.round(h * scale));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.85));
+                } catch (e) { resolve(dataUrl); }
+            };
+            img.onerror = function () { resolve(dataUrl); };
+            img.src = dataUrl;
+        });
+    }
+
+    // cc-bridge 回的 images（[{filename,mime,data}]）→ 縮圖後的附件物件（[{filename,mime,thumb}]）
+    async function _processIncomingImages(images) {
+        if (!Array.isArray(images) || !images.length) return [];
+        const out = [];
+        for (const im of images) {
+            if (!im || !im.data) continue;
+            const thumb = await _imageDataUrlToThumb(im.data, 1280);
+            out.push({ filename: im.filename || 'codex-image.png', mime: 'image/jpeg', thumb: thumb });
+        }
+        return out;
+    }
+
     // ===== cc-bridge / OpenAI 兼容路徑（Rae 自架 server 用）=====
     async function _sendCcBridge(userText, attachments, cfg, onProgress, sendOpts) {
         const history = await ClaudeTerminal.loadHistory();
@@ -816,6 +853,7 @@
         let newSid = null;
         let usageMeta = null;
         let thinking = null;
+        let imagesAcc = null;
 
         try {
             while (true) {
@@ -851,6 +889,7 @@
                         if (chunk.session_id !== undefined) newSid = chunk.session_id;
                         if (chunk.usage_meta) usageMeta = chunk.usage_meta;
                         if (typeof chunk.thinking === 'string' && chunk.thinking.trim()) thinking = chunk.thinking;
+                        if (Array.isArray(chunk.images) && chunk.images.length) imagesAcc = chunk.images;
                     }
                 }
             }
@@ -860,7 +899,9 @@
         }
 
         const reply = replyAcc.trim();
-        if (!reply) {
+        // Codex 生圖回合可能整段沒文字、只有圖 —— 有圖就不算 EMPTY
+        const imageAttachments = await _processIncomingImages(imagesAcc);
+        if (!reply && !imageAttachments.length) {
             await ClaudeTerminal.saveHistory(history);
             throw new Error('EMPTY:Claude 沒回半個字。');
         }
@@ -872,9 +913,10 @@
         if (thinking) assistantMsg.thinking = thinking;
         if (usageMeta) assistantMsg.usage = usageMeta;
         if (toolsUsed.length) assistantMsg.tools_used = toolsUsed;
+        if (imageAttachments.length) assistantMsg.attachments = imageAttachments;
         await ClaudeTerminal.saveHistory([...updatedHistory, assistantMsg]);
 
-        return { reply, thinking, usage: usageMeta, sessionFallback, toolsUsed };
+        return { reply, thinking, usage: usageMeta, sessionFallback, toolsUsed, images: imageAttachments };
     }
 
     // ============== 群聊區送訊息（不綁多會話 conv 系統）==============
@@ -913,7 +955,7 @@
         }
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
-        let buf = '', replyAcc = '', newSid = null, usageMeta = null;
+        let buf = '', replyAcc = '', newSid = null, usageMeta = null, imagesAcc = null;
         try {
             while (true) {
                 const { done, value } = await reader.read();
@@ -938,6 +980,7 @@
                         }
                         if (chunk.session_id !== undefined) newSid = chunk.session_id;
                         if (chunk.usage_meta) usageMeta = chunk.usage_meta;
+                        if (Array.isArray(chunk.images) && chunk.images.length) imagesAcc = chunk.images;
                     }
                 }
             }
@@ -946,8 +989,9 @@
             throw new Error('STREAM:讀取流失敗：' + (e.message || e));
         }
         const reply = replyAcc.trim();
-        if (!reply) throw new Error('EMPTY:沒回半個字。');
-        return { reply: reply, newSid: newSid, usage: usageMeta };
+        const images = await _processIncomingImages(imagesAcc);
+        if (!reply && !images.length) throw new Error('EMPTY:沒回半個字。');
+        return { reply: reply, newSid: newSid, usage: usageMeta, images: images };
     }
 
     // cc-bridge 請求排隊：一次只跑一個，避免群聊與畫布同時打 cc-bridge 撞串流。
@@ -989,7 +1033,7 @@
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
 
         const r = await _ccBridgePostQueued(cfg, body, opts.onProgress, opts.signal);
-        return { reply: r.reply, sessionId: r.newSid || sid, usage: r.usage };
+        return { reply: r.reply, sessionId: r.newSid || sid, usage: r.usage, images: r.images || [] };
     };
 
     /**
@@ -1016,7 +1060,7 @@
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
 
         const r = await _ccBridgePostQueued(cfg, body, opts.onProgress, opts.signal);
-        return { reply: r.reply, usage: r.usage };
+        return { reply: r.reply, usage: r.usage, images: r.images || [] };
     };
 
     /** 對話總數（給 UI badge / 標題用） */
