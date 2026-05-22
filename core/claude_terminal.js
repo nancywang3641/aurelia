@@ -984,6 +984,7 @@
         };
         if (provider === 'codex') body.cc_backend = 'codex';
         if (sid) body.session_id = sid;
+        if (Array.isArray(opts.attachments) && opts.attachments.length) body.attachments = opts.attachments;
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
 
