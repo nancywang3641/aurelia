@@ -15,6 +15,8 @@
     let _seen = { claude: -1, codex: -1 };  // 各 AI 已被送到第幾則 transcript index
     let _busy = false;
     let _streamEl = null;   // 渲染目標（窗內 chat-stream）
+    let _game = null;             // 遊戲模式：{ players:[p1,p2], turnIdx, moveCount, raeResolver, endSignal }
+    const GAME_TURN_LIMIT = 60;   // 安全閥：總手數上限，防無限迴圈 + 訂閱額度爆
 
     function _lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
     function _lsSet(k, v) {
@@ -57,7 +59,7 @@
         }
         const b = document.createElement('div');
         b.className = 'cg-bubble cg-from-' + speaker;
-        b.textContent = content;
+        b.textContent = _stripForDisplay(content);
         wrap.appendChild(b);
         _streamEl.appendChild(wrap);
         _scrollBottom();
@@ -92,6 +94,50 @@
         }
         _transcript.forEach(m => _renderBubble(m.speaker, m.content));
     };
+
+    // ── 遊戲標記解析 ──
+    const RE_PANEL    = /<lobbyPanel>[\s\S]*?<\/lobbyPanel>/i;
+    const RE_GAME     = /\[GAME\|\s*([a-z]+)\s*,\s*([a-z]+)\s*\]/i;
+    const RE_MOVE     = /\[MOVE\|([^\]]*)\]/i;
+    const RE_GAMEOVER = /\[GAMEOVER\|([^\]]*)\]/i;
+
+    function _normPlayer(s) {
+        s = (s || '').toLowerCase();
+        return (s === 'claude' || s === 'codex' || s === 'rae') ? s : null;
+    }
+
+    // 解析回覆裡的遊戲標記。回 { game:{p1,p2}|null, move:string|null, gameover:string|null }
+    function _parseGameMarkers(text) {
+        const t = text || '';
+        const g = t.match(RE_GAME);
+        const m = t.match(RE_MOVE);
+        const o = t.match(RE_GAMEOVER);
+        let game = null;
+        if (g) {
+            const p1 = _normPlayer(g[1]), p2 = _normPlayer(g[2]);
+            if (p1 && p2) game = { p1: p1, p2: p2 };
+        }
+        return {
+            game: game,
+            move: m ? m[1].trim() : null,
+            gameover: o ? o[1].trim() : null,
+        };
+    }
+
+    // 給對手看：剝掉 <lobbyPanel> 大 HTML（畫布已渲染、不重送），保留遊戲標記
+    function _stripForTranscript(text) {
+        return (text || '').replace(RE_PANEL, '').trim();
+    }
+
+    // 給氣泡顯示：剝掉 panel + 所有遊戲標記
+    function _stripForDisplay(text) {
+        return (text || '')
+            .replace(RE_PANEL, '')
+            .replace(RE_GAME, '')
+            .replace(RE_MOVE, '')
+            .replace(RE_GAMEOVER, '')
+            .trim();
+    }
 
     // ── 傳話增量：transcript 自 _seen[provider] 之後、非該 provider 自己的話 ──
     function _buildDelta(provider) {
