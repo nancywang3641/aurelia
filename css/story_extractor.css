@@ -194,8 +194,95 @@
                     box-shadow: none !important;
                     padding: 10px !important; margin: 0 !important;
                 }
+                /* ── 把酒館原生輸入框（form_sheld 內部）洗成大廳白主題 ──
+                   只在 #se-input-area 內生效；form_sheld 還回原位後 selector 不再匹配，ST 原樣式自動回來 */
+                #se-root-wrapper #se-input-area #send_textarea,
+                #se-root-wrapper #se-input-area textarea {
+                    background: rgba(255,255,255,0.92) !important;
+                    color: #1A1C28 !important;
+                    border: 1px solid rgba(26,28,40,0.15) !important;
+                    border-radius: 4px !important;
+                    box-shadow: none !important;
+                    font-family: 'Noto Sans TC', sans-serif !important;
+                }
+                #se-root-wrapper #se-input-area #send_textarea::placeholder {
+                    color: rgba(26,28,40,0.45) !important;
+                }
+                #se-root-wrapper #se-input-area #send_textarea:focus,
+                #se-root-wrapper #se-input-area textarea:focus {
+                    background: #fff !important;
+                    border-color: rgba(26,28,40,0.55) !important;
+                    box-shadow: 0 0 0 2px rgba(26,28,40,0.06) !important;
+                    outline: none !important;
+                }
+                /* ST 輸入區的所有 div / span 子層級背景洗掉，避免黑底外露 */
+                #se-root-wrapper #se-input-area #form_sheld > div,
+                #se-root-wrapper #se-input-area #form_sheld > form,
+                #se-root-wrapper #se-input-area #send_form,
+                #se-root-wrapper #se-input-area #nonQRFormItems,
+                #se-root-wrapper #se-input-area #leftSendForm,
+                #se-root-wrapper #se-input-area #rightSendForm {
+                    background: transparent !important;
+                    box-shadow: none !important;
+                    border: none !important;
+                }
+                /* 圖示與按鈕：只針對 ST 已知會出現的 icon / button 元件，
+                   避免用 * 萬用 selector（大量 style invalidation 會讓 form_sheld 進出時卡） */
+                #se-root-wrapper #se-input-area i,
+                #se-root-wrapper #se-input-area svg,
+                #se-root-wrapper #se-input-area .fa,
+                #se-root-wrapper #se-input-area .fa-solid,
+                #se-root-wrapper #se-input-area .fa-regular,
+                #se-root-wrapper #se-input-area .fa-brands,
+                #se-root-wrapper #se-input-area [class*="fa-"],
+                #se-root-wrapper #se-input-area .menu_button,
+                #se-root-wrapper #se-input-area #send_but,
+                #se-root-wrapper #se-input-area .send_but,
+                #se-root-wrapper #se-input-area #options_button,
+                #se-root-wrapper #se-input-area label,
+                #se-root-wrapper #se-input-area button {
+                    color: #1A1C28 !important;
+                    fill: #1A1C28 !important;
+                    opacity: 1 !important;
+                    text-shadow: none !important;
+                }
+                #se-root-wrapper #se-input-area #send_but,
+                #se-root-wrapper #se-input-area .send_but {
+                    background: rgba(228,232,245,0.85) !important;
+                    border: 1px solid rgba(26,28,40,0.12) !important;
+                    border-radius: 4px !important;
+                }
+                #se-root-wrapper #se-input-area #send_but:hover,
+                #se-root-wrapper #se-input-area .send_but:hover {
+                    background: #1A1C28 !important;
+                    color: #fff !important;
+                }
                 /* 暗版：404 終端風的輸入區 */
                 #se-root-wrapper.theme-darkgold #se-input-area {
                     background: rgba(0, 15, 0, 0.85);
                     border-top: 1px solid rgba(0, 255, 65, 0.25);
+                }
+                #se-root-wrapper.theme-darkgold #se-input-area #send_textarea,
+                #se-root-wrapper.theme-darkgold #se-input-area textarea {
+                    background: rgba(0,15,0,0.85) !important;
+                    color: #00ff41 !important;
+                    border-color: rgba(0,255,65,0.3) !important;
+                }
+                #se-root-wrapper.theme-darkgold #se-input-area #send_textarea::placeholder {
+                    color: rgba(0,255,65,0.35) !important;
+                }
+                #se-root-wrapper.theme-darkgold #se-input-area #send_but,
+                #se-root-wrapper.theme-darkgold #se-input-area .send_but {
+                    background: #001a00 !important;
+                    color: #00ff41 !important;
+                    border-color: rgba(0,255,65,0.4) !important;
+                }
+                /* 暗版圖示一律綠 */
+                #se-root-wrapper.theme-darkgold #se-input-area,
+                #se-root-wrapper.theme-darkgold #se-input-area *,
+                #se-root-wrapper.theme-darkgold #se-input-area *::before,
+                #se-root-wrapper.theme-darkgold #se-input-area *::after {
+                    color: #00ff41 !important;
+                    fill: #00ff41 !important;
+                    text-shadow: none !important;
                 }

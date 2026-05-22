@@ -97,7 +97,7 @@
                     header.innerHTML = `
                         <div style="font-size:14px">📖 開場白提取</div>
                         <div style="cursor:pointer; padding:5px;" onclick="
-                            this.closest('#story-panel-container').style.transform='translateX(100%)';
+                            window.StoryExtractor && window.StoryExtractor.hide();
                             const home=document.getElementById('aurelia-home-tab');
                             if(home) home.style.display='flex';
                         ">✕</div>
@@ -446,6 +446,14 @@
         },
 
         hide() {
+            // reentry guard：hideVnPanel 內呼叫 StoryExtractor.hide()，而 hide() 內又會
+            // 經 _maybeHideVnPanel → hideVnPanel 回呼 → 無限遞迴卡頓
+            if (this._hiding) return;
+            this._hiding = true;
+            try { this._doHide(); } finally { this._hiding = false; }
+        },
+
+        _doHide() {
             console.log('[StoryExtractor] 🔍 hide() 被調用');
 
             // 還原 #form_sheld 回原本的家（最先做，避免後續 DOM 操作把它連帶清掉）
