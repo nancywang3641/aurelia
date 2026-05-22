@@ -320,28 +320,69 @@
         _busy = false;
     }
 
-    // ── 你發訊息 → 骰子編排 ──
+    // 偵測某回合的回覆是否開了一局遊戲。是 → 進遊戲模式、啟動迴圈、回 true
+    function _maybeStartGame(mover, res) {
+        if (_game || !res || !res.markers || !res.markers.game) return false;
+        const g = res.markers.game;
+        _game = { players: [g.p1, g.p2], turnIdx: 0, moveCount: 0, raeResolver: null, endSignal: null };
+        // 開局回覆若已落第一手（且開局者就是先手）→ 算進去、補畫
+        if (res.markers.move != null && mover === g.p1) {
+            _game.turnIdx = 1;
+            _game.moveCount = 1;
+            if (window.ChatCanvas && typeof window.ChatCanvas.applyMove === 'function') {
+                window.ChatCanvas.applyMove(res.markers.move, mover);
+            }
+        }
+        _busy = true;   // 遊戲模式期間維持 busy，由 _endGameInternal 釋放
+        _runGameLoop().catch(function (e) {
+            console.error('[ChatGroup] 遊戲迴圈錯誤：', e);
+            _game = null;
+            _busy = false;
+        });
+        return true;
+    }
+
+    // ── 你發訊息 ──
     ChatGroup.sendUserMessage = async function (text) {
-        if (_busy || !text || !text.trim()) return;
+        if (!text || !text.trim()) return;
+
+        // 遊戲進行中：Rae 的話只進 transcript + 渲染，不另起一輪
+        // —— 跑著的遊戲迴圈會在下個 AI 回合的 delta 自然看到（能邊看邊嗆）
+        if (_game) {
+            _transcript.push({ speaker: 'rae', content: text, ts: Date.now() });
+            _renderBubble('rae', text);
+            _save();
+            return;
+        }
+
+        if (_busy) return;
         _busy = true;
         try {
             _transcript.push({ speaker: 'rae', content: text, ts: Date.now() });
             _renderBubble('rae', text);
             _save();
 
-            // 兩個 AI 每次都拿到發言權 —— 各自用 [PASS] 決定要不要回。
-            // 這樣你直接點名某個模型時，它一定會被叫到，不會被骰子跳過。
-            // 骰子只決定「順序」，避免每次都同一個先講。
+            // 兩個 AI 每次都拿到發言權，各自用 [PASS] 決定回不回；骰子只決定順序。
             const order = Math.random() < 0.5 ? ['claude', 'codex'] : ['codex', 'claude'];
-            await _runTurn(order[0]);
-            await _runTurn(order[1]);
+            const r0 = await _runTurn(order[0]);
+            if (_maybeStartGame(order[0], r0)) return;   // 開局了 → 交給遊戲迴圈
+            const r1 = await _runTurn(order[1]);
+            if (_maybeStartGame(order[1], r1)) return;
         } finally {
-            _busy = false;
+            // 進了遊戲模式則 _busy 維持 true（由 _endGameInternal 釋放）；否則放掉
+            if (!_game) _busy = false;
         }
     };
 
-    // ── 清空群聊（transcript + 兩條 session）──
+    // ── 清空群聊（transcript + 兩條 session + 進行中的對局）──
     ChatGroup.clear = function () {
+        if (_game) {
+            // 中止進行中的對局：先解開可能卡住的 Rae await，再清狀態
+            const g = _game;
+            _game = null;
+            if (typeof g.raeResolver === 'function') g.raeResolver(null);
+        }
+        _busy = false;
         _transcript = [];
         _seen = { claude: -1, codex: -1 };
         _lsSet(SID_CLAUDE, null);
