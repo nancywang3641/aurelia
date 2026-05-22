@@ -150,10 +150,14 @@
         return lines.join('\n\n');
     }
 
-    // ── 一個 AI 的回合：回傳 true=講了話 / false=PASS 或失敗 ──
+    // ── 一個 AI 的回合 ──
+    // 回傳 { spoke:bool, failed:bool, markers:{game,move,gameover} }
     async function _runTurn(provider) {
         const delta = _buildDelta(provider);
-        if (!delta.trim()) { _seen[provider] = _transcript.length - 1; return false; }
+        if (!delta.trim()) {
+            _seen[provider] = _transcript.length - 1;
+            return { spoke: false, failed: false, markers: {} };
+        }
 
         const typingWrap = _renderTyping(provider);
         const bubbleEl = typingWrap && typingWrap.querySelector('.cg-bubble');
@@ -169,7 +173,7 @@
                         acc = ev.accumulated || (acc + (ev.delta || ''));
                         if (bubbleEl) {
                             bubbleEl.classList.remove('cg-typing');
-                            bubbleEl.textContent = acc;
+                            bubbleEl.textContent = _stripForDisplay(acc);
                             _scrollBottom();
                         }
                     }
@@ -181,46 +185,58 @@
                 bubbleEl.classList.add('cg-error');
                 bubbleEl.textContent = '⚠️ ' + ((e && e.message) || '送出失敗');
             }
-            // 送出失敗：不推進 _seen —— 這個 AI 沒真的收到增量，下一輪再補送
-            return false;
+            // 送出失敗：不推進 _seen —— 下一輪再補送
+            return { spoke: false, failed: true, markers: {} };
         }
         if (result.sessionId) _lsSet(_sidKey(provider), result.sessionId);
 
         const reply = (result.reply || '').trim();
         if (/^\[PASS\]$/i.test(reply)) {
-            // 略過：移掉氣泡。它看過增量了 → 推進 _seen
             if (typingWrap && typingWrap.parentNode) typingWrap.parentNode.removeChild(typingWrap);
             _seen[provider] = _transcript.length - 1;
-            return false;
+            return { spoke: false, failed: false, markers: {} };
         }
-        // 偵測 <lobbyPanel> 畫布 marker → 渲染進畫布區、從顯示文字剝掉
-        let displayText = result.reply;
+
+        const markers = _parseGameMarkers(result.reply);
+
+        // <lobbyPanel> 畫布：永遠渲染（開局棋盤經此上來）
         if (window.VoidCanvas && typeof window.VoidCanvas.parseLobbyPanel === 'function') {
             const panel = window.VoidCanvas.parseLobbyPanel(result.reply);
-            if (panel) {
-                displayText = result.reply.replace(/<lobbyPanel>[\s\S]*?<\/lobbyPanel>/i, '').trim();
-                if (window.ChatCanvas && typeof window.ChatCanvas.render === 'function') {
-                    window.ChatCanvas.render(panel);
-                }
+            if (panel && window.ChatCanvas && typeof window.ChatCanvas.render === 'function') {
+                window.ChatCanvas.render(panel);
             }
         }
+
+        // 落子 → 餵畫布（只在遊戲模式中；開局首手由 _maybeStartGame 另外處理）
+        if (markers.move != null && _game &&
+            window.ChatCanvas && typeof window.ChatCanvas.applyMove === 'function') {
+            window.ChatCanvas.applyMove(markers.move, provider);
+        }
+
         if (result.usage && window.OS_SPEND_PANEL && typeof window.OS_SPEND_PANEL.record === 'function') {
             try { window.OS_SPEND_PANEL.record(result.usage); } catch (_) {}
         }
-        if (!displayText) {
-            // 這則回覆只有畫布、沒對話文字：移掉空氣泡、不進 transcript（畫布已渲染）
+
+        const displayText = _stripForDisplay(result.reply);
+        const transcriptText = _stripForTranscript(result.reply);
+
+        if (!transcriptText) {
+            // 整則只有 <lobbyPanel>、沒文字也沒標記：移掉空氣泡，不進 transcript
             if (typingWrap && typingWrap.parentNode) typingWrap.parentNode.removeChild(typingWrap);
             _seen[provider] = _transcript.length - 1;
-            return true;
+            return { spoke: true, failed: false, markers: markers };
         }
-        if (bubbleEl) {
+        if (!displayText) {
+            // 只有標記、沒閒聊文字：移掉氣泡，但 transcript 仍要記（對手要看到 [MOVE]）
+            if (typingWrap && typingWrap.parentNode) typingWrap.parentNode.removeChild(typingWrap);
+        } else if (bubbleEl) {
             bubbleEl.classList.remove('cg-typing');
             bubbleEl.textContent = displayText;
         }
-        _transcript.push({ speaker: provider, content: displayText, ts: Date.now(), usage: result.usage || null });
+        _transcript.push({ speaker: provider, content: transcriptText, ts: Date.now(), usage: result.usage || null });
         _seen[provider] = _transcript.length - 1;
         _save();
-        return true;
+        return { spoke: true, failed: false, markers: markers };
     }
 
     // ── 你發訊息 → 骰子編排 ──
