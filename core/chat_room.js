@@ -897,6 +897,7 @@
     VoidClaudeRoom.hydrateStream     = _hydrateClaudeStream;
     VoidClaudeRoom.handleFilePick    = _handleClaudeFilePick;
     VoidClaudeRoom.sendMessage       = _sendClaudeMessage;
+    VoidClaudeRoom.markdownToSafeHtml = _claudeMarkdownToSafeHtml;
 
     console.log('✅ VoidClaudeRoom（Claude 房間 UI）模組就緒');
 })(window.VoidClaudeRoom = window.VoidClaudeRoom || {});
