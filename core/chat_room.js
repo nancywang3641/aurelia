@@ -496,6 +496,17 @@
         return wrap;
     }
 
+    // 點生成圖縮圖 → 全螢幕放大（點任意處關閉）。重用群聊的 .cg-img-overlay 樣式。
+    function _openClaudeImageOverlay(src) {
+        const ov = document.createElement('div');
+        ov.className = 'cg-img-overlay';
+        const im = document.createElement('img');
+        im.src = src;
+        ov.appendChild(im);
+        ov.addEventListener('click', () => { if (ov.parentNode) ov.parentNode.removeChild(ov); });
+        document.body.appendChild(ov);
+    }
+
     function _renderClaudeBubble(role, content, opts = {}) {
         const stream = _el('claude-chat-stream');
         if (!stream) return;
@@ -578,15 +589,23 @@
             }
         }
 
-        // 附件 chip（顯示這條訊息附了哪些檔）
+        // 附件：圖片 → 內嵌縮圖（點放大）；非圖 → chip
         if (Array.isArray(opts.attachments) && opts.attachments.length) {
             const attachBox = document.createElement('div');
             attachBox.className = 'claude-bubble-attachments';
             opts.attachments.forEach(a => {
-                const item = document.createElement('span');
-                item.className = 'claude-bubble-attach-item';
-                item.textContent = `${_attachIcon(a.mime, a.filename)} ${a.filename || 'file'}`;
-                attachBox.appendChild(item);
+                if (a && a.thumb && a.mime && a.mime.indexOf('image/') === 0) {
+                    const im = document.createElement('img');
+                    im.className = 'cg-attach-img';
+                    im.src = a.thumb;
+                    im.addEventListener('click', () => _openClaudeImageOverlay(a.thumb));
+                    attachBox.appendChild(im);
+                } else {
+                    const item = document.createElement('span');
+                    item.className = 'claude-bubble-attach-item';
+                    item.textContent = `${_attachIcon(a.mime, a.filename)} ${a.filename || 'file'}`;
+                    attachBox.appendChild(item);
+                }
             });
             bubble.appendChild(attachBox);
         }
@@ -801,6 +820,7 @@
             const thinking = result.thinking || null;
             const usage = result.usage || null;
             const toolsUsed = (Array.isArray(result.toolsUsed) && result.toolsUsed.length) ? result.toolsUsed : null;
+            const images = (Array.isArray(result.images) && result.images.length) ? result.images : null;
 
             // 累計到額度面板（💰 app）
             if (usage && window.OS_SPEND_PANEL && typeof window.OS_SPEND_PANEL.record === 'function') {
@@ -818,6 +838,7 @@
             if (thinking) assistantRecord.thinking = thinking;
             if (usage) assistantRecord.usage = usage;
             if (toolsUsed) assistantRecord.tools_used = toolsUsed;
+            if (images) assistantRecord.attachments = images;
             _activeHistory().push(assistantRecord);
 
             // session_id resume 失敗：cc-bridge 退回新 session、Claude 不記得前文
@@ -826,12 +847,12 @@
                     '⚠️ 之前的 session 失效了（cc-bridge 重啟過 / log 被清 / 太久沒聊）。\n\n' +
                     '我從零開始記新對話了。如果想讓我知道之前聊過什麼，把重點再講一次給我聽吧。\n\n' +
                     '---\n\n' + reply,
-                    { thinking, usage, toolsUsed }
+                    { thinking, usage, toolsUsed, attachments: images }
                 );
                 _setClaudePortraitState('happy');
                 setTimeout(() => _setClaudePortraitState('living'), 600);
             } else {
-                _renderClaudeBubble('assistant', reply, { thinking, usage, toolsUsed });
+                _renderClaudeBubble('assistant', reply, { thinking, usage, toolsUsed, attachments: images });
                 _setClaudePortraitState('happy');
                 setTimeout(() => _setClaudePortraitState('living'), 600);
             }
