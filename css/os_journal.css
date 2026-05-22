@@ -1,0 +1,519 @@
+/* ============================================================
+   os_journal.css —— 瀅瀅的故事日誌（Story Journal）
+   讀 OS_DB.lobby_summary_index，顯示跨卡跨 chat 的故事線索引
+   配色：暖奶油底 + 粉粉強調 + 棕字
+   ============================================================ */
+.jrnl-root {
+    width: 100%; height: 100%; box-sizing: border-box;
+    display: flex; gap: 0; overflow: hidden; position: relative;
+    background:
+        radial-gradient(circle at 90% 10%, rgba(248,228,232,0.55) 0%, transparent 35%),
+        radial-gradient(circle at 8% 92%, rgba(252,236,222,0.6) 0%, transparent 38%),
+        linear-gradient(135deg, #fdf6e8 0%, #faf0e0 100%);
+    font-family: 'Playfair Display', 'Songti TC', 'Microsoft JhengHei', serif;
+    color: #5a4836;
+}
+
+/* ── 左欄：標題 + 搜尋 + 故事卡列表 ─────────────────────── */
+.jrnl-left {
+    flex: 0 0 320px; min-width: 0; padding: 22px 18px 18px;
+    border-right: 1px dashed #d8c8b0;
+    display: flex; flex-direction: column; gap: 12px;
+    overflow: hidden; position: relative; z-index: 2;
+}
+.jrnl-brand { flex-shrink: 0; padding-left: 4px; }
+.jrnl-brand h1 {
+    font-size: 26px; font-weight: 900; margin: 0; line-height: 1.15;
+    color: #5a4836; letter-spacing: 1.5px;
+}
+.jrnl-brand h1 span { color: #c97a8e; }
+.jrnl-brand-sub {
+    font-style: italic; color: #c89aa3; font-size: 13px;
+    letter-spacing: 2px; margin-top: 2px;
+}
+.jrnl-brand-tagline {
+    font-size: 11px; color: #9a8678; margin-top: 8px;
+    letter-spacing: 1px;
+}
+
+.jrnl-search {
+    width: 100%; box-sizing: border-box;
+    padding: 9px 12px; font-size: 12px;
+    background: rgba(255,250,243,0.85);
+    border: 1px solid #e8d8c0; border-radius: 6px;
+    color: #5a4836; outline: none;
+    font-family: inherit;
+}
+.jrnl-search::placeholder { color: #b0a08e; }
+.jrnl-search:focus { border-color: #d4a3b3; background: #fff; }
+
+.jrnl-toolbar { display: flex; gap: 8px; align-items: center; }
+.jrnl-sort {
+    flex: 1; padding: 7px 10px; font-size: 12px;
+    /* !important 強制壓過 ST 原生 select 深色樣式 */
+    background: rgba(255,250,243,0.85) !important;
+    color: #5a4836 !important;
+    border: 1px solid #e8d8c0 !important;
+    border-radius: 6px;
+    outline: none; cursor: pointer;
+    font-family: inherit;
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, #9a8678 50%),
+                      linear-gradient(135deg, #9a8678 50%, transparent 50%) !important;
+    background-position: calc(100% - 16px) 14px, calc(100% - 11px) 14px;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 28px;
+}
+.jrnl-sort option { background: #fffaf3; color: #5a4836; }
+
+.jrnl-list {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+    padding-right: 4px;
+}
+.jrnl-list::-webkit-scrollbar { width: 4px; }
+.jrnl-list::-webkit-scrollbar-thumb { background: #d8c8b0; border-radius: 2px; }
+
+.jrnl-card {
+    background: rgba(255,250,243,0.92);
+    border: 1px solid #e8d8c0; border-radius: 10px;
+    padding: 10px 12px;
+    display: flex; gap: 10px;
+    cursor: pointer; transition: all 0.2s;
+    position: relative; flex-shrink: 0;
+}
+.jrnl-card:hover {
+    border-color: #d4a3b3;
+    background: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(212,163,179,0.18);
+}
+.jrnl-card.active {
+    border-color: #c97a8e; border-left: 3px solid #c97a8e;
+    background: linear-gradient(90deg, #fff0f0 0%, #fff 60%);
+}
+.jrnl-card-num {
+    position: absolute; top: 4px; left: 6px;
+    font-size: 10px; color: #c89aa3;
+    font-style: italic; font-weight: 700;
+    width: 18px; height: 18px; line-height: 18px;
+    text-align: center; background: rgba(255,255,255,0.7);
+    border-radius: 50%; z-index: 2;
+}
+.jrnl-card-img {
+    width: 56px; height: 56px; flex-shrink: 0;
+    border-radius: 6px;
+    background-size: cover; background-position: center;
+    background-color: #f4e8d8;
+    border: 1px solid #e8d8c0;
+}
+.jrnl-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.jrnl-card-head { display: flex; align-items: center; gap: 6px; }
+.jrnl-card-title {
+    font-size: 14px; font-weight: 700; color: #5a4836;
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    letter-spacing: 0.5px;
+}
+.jrnl-card-badge {
+    font-size: 9px; padding: 1px 6px; border-radius: 8px;
+    background: #fce4e7; color: #c97a8e; flex-shrink: 0;
+    border: 1px solid #f0c8d2;
+}
+.jrnl-card-sub {
+    font-size: 10px; color: #9a8678; line-height: 1.4;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jrnl-card-brief {
+    font-size: 10px; color: #7a6856; line-height: 1.5;
+    margin-top: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.jrnl-card-meta {
+    display: flex; gap: 8px; align-items: center;
+    margin-top: 6px; font-size: 9px; color: #b0a08e;
+    flex-wrap: wrap;
+}
+.jrnl-card-meta span { white-space: nowrap; }
+
+/* ── 右欄：選中故事的詳情 ─────────────────────────────── */
+.jrnl-right {
+    flex: 1; min-width: 0; padding: 22px 24px;
+    overflow-y: auto; position: relative; z-index: 2;
+}
+.jrnl-right::-webkit-scrollbar { width: 4px; }
+.jrnl-right::-webkit-scrollbar-thumb { background: #d8c8b0; border-radius: 2px; }
+
+.jrnl-empty {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px;
+    color: #b0a08e; text-align: center;
+}
+.jrnl-empty-icon { font-size: 48px; opacity: 0.4; }
+.jrnl-empty-txt { font-size: 13px; line-height: 1.7; }
+
+.jrnl-d-head {
+    background: rgba(255,250,243,0.92);
+    border: 1px solid #e8d8c0; border-radius: 14px;
+    overflow: hidden; margin-bottom: 18px;
+    display: flex; gap: 18px; align-items: center;
+    padding: 18px 22px; position: relative;
+}
+.jrnl-d-img {
+    width: 110px; height: 110px; flex-shrink: 0;
+    border-radius: 10px;
+    background-size: cover; background-position: center;
+    background-color: #f4e8d8;
+    border: 1px solid #e8d8c0;
+}
+.jrnl-d-info { flex: 1; min-width: 0; }
+.jrnl-d-title {
+    margin: 0; font-size: 26px; font-weight: 900;
+    color: #5a4836; letter-spacing: 1.5px;
+}
+.jrnl-d-sub {
+    font-size: 13px; color: #9a8678; margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+.jrnl-d-tags {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 10px; font-size: 11px;
+}
+.jrnl-d-tag-chat {
+    background: rgba(244,232,216,0.7); color: #7a6856;
+    padding: 3px 9px; border-radius: 4px;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    border: 1px solid #e8d8c0;
+}
+.jrnl-d-tag-status {
+    background: #fce4e7; color: #c97a8e;
+    padding: 3px 9px; border-radius: 4px;
+    border: 1px solid #f0c8d2;
+}
+.jrnl-d-tag-date {
+    color: #9a8678; padding: 3px 0;
+}
+
+.jrnl-d-section {
+    background: rgba(255,250,243,0.7);
+    border: 1px solid #e8d8c0; border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 14px;
+}
+.jrnl-d-section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+}
+.jrnl-d-section h3 {
+    margin: 0; font-size: 15px; font-weight: 700;
+    color: #5a4836; letter-spacing: 1.5px;
+    display: flex; align-items: center; gap: 6px;
+}
+.jrnl-d-section h3::before { content: '✦'; color: #c97a8e; font-size: 12px; }
+.jrnl-d-count {
+    font-size: 11px; color: #9a8678; font-weight: 400;
+    background: rgba(255,255,255,0.7); padding: 3px 10px;
+    border-radius: 12px; border: 1px solid #e8d8c0;
+}
+
+/* 劇情時間軸 */
+.jrnl-timeline { list-style: none; margin: 0; padding: 0 0 0 18px; position: relative; }
+.jrnl-timeline::before {
+    content: ''; position: absolute; left: 6px; top: 8px; bottom: 8px;
+    width: 1px; background: #e8d8c0;
+}
+.jrnl-tl-item {
+    position: relative; padding: 6px 0 12px;
+    display: flex; gap: 12px; align-items: flex-start;
+}
+.jrnl-tl-num {
+    position: absolute; left: -18px; top: 6px;
+    width: 22px; height: 22px; line-height: 22px;
+    border-radius: 50%; text-align: center;
+    background: #fce4e7; color: #c97a8e;
+    font-size: 11px; font-weight: 700;
+    border: 1px solid #f0c8d2;
+}
+.jrnl-tl-body { flex: 1; min-width: 0; padding-left: 18px; }
+.jrnl-tl-head {
+    display: flex; gap: 12px; align-items: baseline;
+    font-size: 13px; color: #5a4836; font-weight: 700;
+    margin-bottom: 4px;
+}
+.jrnl-tl-head time { font-size: 10px; color: #b0a08e; font-weight: 400; }
+.jrnl-tl-brief {
+    font-size: 12px; color: #7a6856; line-height: 1.7;
+}
+
+/* 出場角色卡片網格 */
+.jrnl-chars-grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.jrnl-char-card {
+    background: rgba(255,255,255,0.85);
+    border: 1px solid #e8d8c0; border-radius: 10px;
+    padding: 10px; display: flex; flex-direction: column; gap: 4px;
+    position: relative;
+}
+.jrnl-char-img {
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 8px;
+    background: linear-gradient(135deg, #f4e8d8 0%, #faf0e0 100%);
+    border: 1px solid #e8d8c0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; color: #d4a3b3;
+    margin-bottom: 4px;
+}
+.jrnl-char-name {
+    font-size: 13px; font-weight: 700; color: #5a4836;
+    letter-spacing: 0.5px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jrnl-char-role { font-size: 10px; color: #9a8678; line-height: 1.4; }
+.jrnl-char-trait {
+    font-size: 10px; color: #7a6856; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; min-height: 28px;
+}
+.jrnl-char-tag {
+    margin-top: 4px; align-self: flex-start;
+    font-size: 9px; padding: 2px 8px; border-radius: 8px;
+    background: #fce4e7; color: #c97a8e;
+    border: 1px solid #f0c8d2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+
+/* 底部「查看完整總結」按鈕 */
+.jrnl-d-foot {
+    margin-top: 12px; padding: 14px 20px;
+    background: linear-gradient(90deg, #fce4e7 0%, #fff0e8 100%);
+    border: 1px solid #f0c8d2; border-radius: 12px;
+    text-align: center;
+}
+.jrnl-view-full {
+    background: transparent; border: none; cursor: pointer;
+    color: #c97a8e; font-size: 13px; font-weight: 700;
+    letter-spacing: 1.5px; font-family: inherit;
+    padding: 4px 12px;
+}
+.jrnl-view-full:hover { color: #b85f73; }
+.jrnl-view-full-sub {
+    display: block; font-size: 10px; color: #9a8678;
+    font-weight: 400; letter-spacing: 0; margin-top: 2px;
+}
+
+/* 關閉鈕 */
+.jrnl-close {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(255,255,255,0.9); border: 1px solid #e8d8c0;
+    color: #9a8678; cursor: pointer; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+}
+.jrnl-close:hover {
+    background: #fce4e7; color: #c97a8e; border-color: #f0c8d2;
+}
+
+/* ── 裝飾性 sprite（角落花飾）─────────────────────────── */
+.jrnl-deco {
+    position: absolute; pointer-events: none;
+    background-size: contain; background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.85; z-index: 1;
+}
+.jrnl-deco-tr { top: 8px; right: 14px; width: 90px; height: 90px;
+    background-image: url('../aseets/sprites_1779200785261/sprite_022.png');
+    opacity: 0.95; transform: rotate(8deg); }
+/* 左下「日記標籤」—— SVG 紙條 + 迴紋針 + 文字 + 花飾 (sprite_006.png) 在前 */
+.jrnl-note-bl {
+    position: absolute; bottom: 12px; left: 14px;
+    width: 290px; height: 130px;
+    pointer-events: none; z-index: 1;
+    opacity: 0.92;
+}
+.jrnl-note-svg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+}
+.jrnl-note-flower {
+    position: absolute;
+    bottom: -10px; left: -28px;
+    width: 110px; height: 110px;
+    background-image: url('../aseets/sprites_1779200785261/sprite_006.png');
+    background-size: contain; background-repeat: no-repeat; background-position: center;
+    z-index: 2;
+    transform: rotate(-6deg);
+}
+.jrnl-deco-br { bottom: 14px; right: 14px; width: 100px; height: 80px;
+    background-image: url('../aseets/sprites_1779200785261/sprite_025.png');
+    transform: rotate(-4deg); }
+.jrnl-deco-petal1 { top: 30%; left: 22%; width: 24px; height: 24px;
+    background-image: url('../aseets/sprites_1779200785261/sprite_030.png');
+    opacity: 0.5; }
+.jrnl-deco-petal2 { top: 70%; right: 28%; width: 20px; height: 20px;
+    background-image: url('../aseets/sprites_1779200785261/sprite_033.png');
+    opacity: 0.5; transform: rotate(45deg); }
+
+/* 完整總結 modal —— 取代 alert()，奶油信紙風 */
+.jrnl-modal {
+    position: absolute; inset: 0; z-index: 100;
+    background: rgba(60, 45, 30, 0.45);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; box-sizing: border-box;
+    animation: jrnlModalFadeIn 0.2s ease;
+}
+@keyframes jrnlModalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.jrnl-modal-card {
+    background: linear-gradient(180deg, #fffaf3 0%, #fdf6e8 100%);
+    border: 1px solid #e8d8c0;
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(60,45,30,0.35), 0 0 0 8px rgba(255,255,255,0.4);
+    width: 100%; max-width: 720px; max-height: 84%;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    animation: jrnlModalSlideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes jrnlModalSlideIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.jrnl-modal-head {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px;
+    background: linear-gradient(90deg, #fce4e7 0%, #fff0e8 100%);
+    border-bottom: 1px solid #f0c8d2;
+}
+.jrnl-modal-title {
+    font-size: 16px; font-weight: 900;
+    color: #5a4836; letter-spacing: 1.5px;
+    font-family: 'Playfair Display', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+.jrnl-modal-close {
+    background: rgba(255,255,255,0.7); border: 1px solid #f0c8d2;
+    color: #c97a8e; cursor: pointer; font-size: 14px;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; padding: 0;
+}
+.jrnl-modal-close:hover {
+    background: #c97a8e; color: #fff; border-color: #c97a8e;
+}
+.jrnl-modal-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 20px 26px;
+    color: #5a4836; font-size: 13px; line-height: 1.8;
+    font-family: 'Songti TC', 'Microsoft JhengHei', sans-serif;
+    word-break: break-word;
+}
+.jrnl-modal-body::-webkit-scrollbar { width: 5px; }
+.jrnl-modal-body::-webkit-scrollbar-thumb { background: #d8c8b0; border-radius: 2px; }
+
+/* modal 內部 markdown 渲染樣式 */
+.jrnl-modal-body p { margin: 4px 0; }
+.jrnl-modal-body br { line-height: 0.5; }
+.jrnl-modal-body .jrnl-md-h {
+    margin: 16px 0 10px;
+    font-size: 14px; font-weight: 900;
+    color: #c97a8e; letter-spacing: 2px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed #f0c8d2;
+    font-family: 'Playfair Display', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+.jrnl-modal-body .jrnl-md-h:first-child { margin-top: 0; }
+.jrnl-modal-body .jrnl-md-table {
+    width: 100%; border-collapse: collapse;
+    margin: 8px 0 14px;
+    font-size: 12px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid #e8d8c0; border-radius: 6px;
+    overflow: hidden;
+}
+.jrnl-modal-body .jrnl-md-table thead {
+    background: linear-gradient(90deg, #fce4e7 0%, #fff0e8 100%);
+}
+.jrnl-modal-body .jrnl-md-table th {
+    padding: 8px 10px; text-align: left;
+    font-weight: 700; color: #5a4836;
+    border-bottom: 1px solid #f0c8d2;
+    font-size: 11px; letter-spacing: 0.5px;
+}
+.jrnl-modal-body .jrnl-md-table td {
+    padding: 8px 10px; vertical-align: top;
+    color: #5a4836; line-height: 1.6;
+    border-top: 1px dashed #ecddc6;
+    word-break: break-word;
+}
+.jrnl-modal-body .jrnl-md-table tbody tr:nth-child(odd) td {
+    background: rgba(252,246,232,0.5);
+}
+.jrnl-modal-body .jrnl-md-table tbody tr:hover td {
+    background: rgba(252,228,231,0.4);
+}
+
+/* 故事卡封面池 —— class 對應 sprite 索引（路徑相對 CSS 檔，會正確解析） */
+.jrnl-cover-0 { background-image: url('../aseets/sprites_1779200785261/sprite_004.png'); }
+.jrnl-cover-1 { background-image: url('../aseets/sprites_1779200785261/sprite_005.png'); }
+.jrnl-cover-2 { background-image: url('../aseets/sprites_1779200785261/sprite_010.png'); }
+.jrnl-cover-3 { background-image: url('../aseets/sprites_1779200785261/sprite_012.png'); }
+.jrnl-cover-4 { background-image: url('../aseets/sprites_1779200785261/sprite_015.png'); }
+.jrnl-cover-5 { background-image: url('../aseets/sprites_1779200785261/sprite_020.png'); }
+
+/* 詳情頁返回鍵（桌機隱藏、手機才出現） */
+.jrnl-back-mobile {
+    display: none;
+    align-items: center; gap: 4px;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid #e8d8c0;
+    color: #c97a8e; cursor: pointer;
+    padding: 6px 12px; border-radius: 18px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+    font-family: inherit;
+    margin-bottom: 12px; flex-shrink: 0;
+    transition: all 0.2s;
+}
+.jrnl-back-mobile:hover {
+    background: #fce4e7; border-color: #f0c8d2;
+}
+
+/* 窄螢幕（手機）— master-detail 切換：預設只看列表，點卡片滑進詳情 */
+@media (max-width: 720px) {
+    .jrnl-root { flex-direction: column; }
+    /* 預設：左邊（列表）佔滿、右邊（詳情）隱藏 */
+    .jrnl-left {
+        flex: 1; max-height: none;
+        border-right: none; border-bottom: none;
+        padding: 18px 14px 14px;
+    }
+    .jrnl-right { display: none; }
+
+    /* 切到詳情狀態（JS 加 .show-detail-mobile）：左藏、右全屏 */
+    .jrnl-root.show-detail-mobile .jrnl-left { display: none; }
+    .jrnl-root.show-detail-mobile .jrnl-right {
+        display: block; flex: 1;
+        padding: 14px;
+        overflow-y: auto;
+    }
+
+    .jrnl-back-mobile { display: inline-flex; }
+    .jrnl-d-head {
+        flex-direction: column; align-items: flex-start; gap: 12px;
+        padding: 14px;
+    }
+    .jrnl-d-img { width: 100%; height: 160px; }
+    .jrnl-d-title { font-size: 20px; }
+    .jrnl-chars-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+    .jrnl-deco-tr, .jrnl-deco-br { opacity: 0.4; transform: scale(0.7); }
+    /* 手機窄屏不顯示日記標籤（會壓到卡片捲動區） */
+    .jrnl-note-bl { display: none; }
+
+    /* modal 在手機改成幾乎全屏 */
+    .jrnl-modal { padding: 8px; }
+    .jrnl-modal-card { max-width: 100%; max-height: 95%; }
+    .jrnl-modal-head { padding: 10px 14px; }
+    .jrnl-modal-title { font-size: 14px; }
+    .jrnl-modal-body { padding: 14px 16px; font-size: 12px; }
+}
