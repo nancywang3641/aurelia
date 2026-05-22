@@ -168,7 +168,7 @@ body.mode-404 { background: #000000; }
 .void-tab.mode-404 .lca-close  { color:#00cc33; }
 
 .void-chat-input-row { display:flex; gap:8px; align-items:center; }
-.void-input { flex:1; background:rgba(228,232,245,0.95); border:1px solid rgba(26,28,40,0.15); color:#1A1C28; padding:10px 16px; border-radius:4px; font-size:13px; outline:none; transition:0.2s; }
+.void-input { flex:1; background:rgba(228,232,245,0.95); border:1px solid rgba(26,28,40,0.15); color:#1A1C28; padding:10px 16px; border-radius:4px; font-size:13px; outline:none; transition:0.2s; font-family:inherit; line-height:1.5; resize:none; min-height:38px; max-height:200px; overflow-y:auto; box-sizing:border-box; }
 .void-input:focus { background:#fff; border-color:rgba(26,28,40,0.60); box-shadow:0 0 0 2px rgba(26,28,40,0.06); }
 .void-send-btn { width:36px; height:36px; background:#2A2C3A; border-radius:4px; border:none; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; box-shadow:none; transition:0.2s; }
 .void-send-btn > i { transform:none; }
@@ -851,6 +851,28 @@ body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
     --cl-portrait-bg-3:   var(--cl-grenadine);
 }
 
+/* =========================================================
+   5b-codex. 🧊 Codex 的房間 — 冷色藍版（mode-codex）
+   Codex 房間 DOM 同時掛 mode-claude（吃全部結構規則）+ mode-codex，
+   這裡只覆寫 --cl-* 變數成藍色系，零結構複製。呼應 OpenAI/Sora 冷藍。
+   ========================================================= */
+.void-tab.mode-codex {
+    --cl-cream:           #e9eef4;     /* 冷調紙底（取代奶油） */
+    --cl-cream-light:     #f5f8fc;     /* 更亮的冷白 */
+    --cl-beeswax:         #5b9bd5;     /* 天空藍，主 accent（取代焦糖黃） */
+    --cl-beeswax-soft:    rgba(26,28,40,0.25);     /* 中性過渡，沿用 */
+    --cl-grenadine:       #2f6fc4;     /* 強藍（user 氣泡 / 送出按鈕，取代深橘） */
+    --cl-cafe-latte:      #5a7a96;     /* 板岩藍邊 / 副文字（取代棕） */
+    --cl-text-deep:       #13283f;     /* 深海軍藍主文字 */
+    --cl-paper-grain:     rgba(70,100,140,0.05);
+    --cl-warm-shadow:     rgba(70,100,140,0.18);   /* 冷陰影 */
+    --cl-warm-glow:       rgba(91,155,213,0.50);   /* 冷光暈 */
+
+    --cl-portrait-bg-1:   var(--cl-beeswax-soft);
+    --cl-portrait-bg-2:   var(--cl-beeswax);
+    --cl-portrait-bg-3:   var(--cl-grenadine);
+}
+
 /* mode-claude 啟動時：藏掉 VN 對話、立繪、世界頻道泡泡（聊天室自己接管） */
 .void-tab.mode-claude .void-char-area,
 .void-tab.mode-claude .void-dialogue-wrap,
@@ -874,17 +896,15 @@ body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
     overflow: hidden;
 }
 
-/* 上半立繪區（暖漸層，可被 --cl-portrait-bg-image 整個換掉） */
+/* 上半立繪區（白底 + 橘色格線，可被 --cl-portrait-bg-image 整個換掉） */
 .claude-portrait-area {
     flex: 0 0 35%;
     position: relative;
-    background: var(--cl-portrait-bg-image,
-        linear-gradient(135deg,
-            var(--cl-portrait-bg-1, rgba(26,28,40,0.25)) 0%,
-            var(--cl-portrait-bg-2, #EAB05C) 55%,
-            var(--cl-portrait-bg-3, #D95122) 100%));
-    background-size: cover;
-    background-position: center;
+    background:
+        var(--cl-portrait-bg-image,
+            linear-gradient(rgba(234,176,92,0.35) 1px, transparent 1px) 0 0 / 28px 28px,
+            linear-gradient(90deg, rgba(234,176,92,0.35) 1px, transparent 1px) 0 0 / 28px 28px,
+            #ffffff);
     overflow: hidden;
     border-bottom: 1px solid var(--cl-beeswax, #EAB05C);
 }
@@ -905,6 +925,23 @@ body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
     0%,100% { transform: translateY(0); }
     50%     { transform: translateY(-6px); }
 }
+/* 🔷 Codex 房間立繪：OpenAI Codex 寵物 spritesheet（8 欄 × 9 列）。
+   逐幀由 claude-room.js 切 background-position；mode-codex 才顯示、取代 .claude-portrait-img */
+.codex-portrait-sprite {
+    display: none;
+    position: absolute; inset: 0; margin: auto;
+    height: 75%; max-height: 240px;
+    aspect-ratio: 192 / 208;
+    background-image: url(core/assets/codex/codex-spritesheet.webp);
+    background-repeat: no-repeat;
+    background-size: 800% 900%;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 8px 24px rgba(47,111,196,0.40));
+    animation: claude-portrait-float 3s ease-in-out infinite;
+    z-index: 2;
+}
+.void-tab.mode-codex .claude-portrait-img   { display: none; }
+.void-tab.mode-codex .codex-portrait-sprite { display: block; }
 
 /* 下半訊息區（同樣奶油紙底，跟立繪區暖色連通） */
 .claude-chat-stream {
@@ -1330,6 +1367,7 @@ body.layout-pad-ios #aurelia-standalone-root #aurelia-tab-container {
 @media (max-width: 600px) {
     .claude-portrait-area { flex: 0 0 32%; }
     .claude-portrait-img { max-height: 180px; height: 80%; }
+    .codex-portrait-sprite { max-height: 180px; height: 80%; }
     .claude-bubble { font-size: 13px; }
     .claude-chat-stream { padding: 12px 10px; }
     .claude-picker-popup { width: calc(100% - 24px); left: 12px; right: 12px; }
