@@ -544,39 +544,16 @@
                     if (!context) throw new Error("無 Context");
                     
                     if (stProfileId) {
-                        const doc = win.document;
-                        const profilesSelect = doc?.getElementById('connection_profiles');
-                        const oldProfileId = profilesSelect?.value || '';
-
-                        try {
-                            // 切到副 profile，等 CONNECTION_PROFILE_LOADED 確認切換完成
-                            // timeout 從原本的 10s 縮到 3s（一般切換 < 500ms，3s 已是極端 fallback）
-                            if (profilesSelect && profilesSelect.value !== stProfileId) {
-                                profilesSelect.value = stProfileId;
-                                await new Promise((resolve) => {
-                                    const timeout = setTimeout(resolve, 3000);
-                                    context.eventSource.once(context.eventTypes.CONNECTION_PROFILE_LOADED, () => {
-                                        clearTimeout(timeout);
-                                        resolve();
-                                    });
-                                    profilesSelect.dispatchEvent(new Event('change'));
-                                });
-                            }
-                            const response = await context.ConnectionManagerRequestService.sendRequest(
-                                stProfileId, cleanMessages, maxTokens,
-                                undefined,
-                                { temperature, ...extraParams }
-                            );
-                            rawApiResponse = response;
-                            fullText = normalizeResponse(response);
-                        } finally {
-                            // 切回主 profile：fire-and-forget 不等事件（不阻塞 chatSecondary 返回）
-                            // 主模型下一次呼叫由酒館自己 await profile 切換，不需要這裡等
-                            if (profilesSelect && oldProfileId && profilesSelect.value !== oldProfileId) {
-                                profilesSelect.value = oldProfileId;
-                                profilesSelect.dispatchEvent(new Event('change'));
-                            }
-                        }
+                        // 砍掉舊的 UI profile switching dance（之前會把 #connection_profiles select 切過去再切回來）
+                        // 原因：並發呼叫會互相 abort 對方的 in-flight fetch，console 噴 "Canceled because main api changed"
+                        // ST 的 sendRequest(profileId, ...) 本身就會用對應 profile 的 url/key/model，不需要 UI 同步切
+                        const response = await context.ConnectionManagerRequestService.sendRequest(
+                            stProfileId, cleanMessages, maxTokens,
+                            undefined,
+                            { temperature, ...extraParams }
+                        );
+                        rawApiResponse = response;
+                        fullText = normalizeResponse(response);
                     } else {
                         const headers = context.getRequestHeaders();
                         const activeSource = context.oai_settings?.chat_completion_source
