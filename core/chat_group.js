@@ -151,6 +151,8 @@
             .replace(RE_GAME, '')
             .replace(RE_MOVE, '')
             .replace(RE_GAMEOVER, '')
+            .replace(/[ \t]+\n/g, '\n')      // 標記剝掉後行尾留的空白
+            .replace(/\n{3,}/g, '\n\n')      // 標記剝掉後留下的空行 → 收斂成單一段落間距
             .trim();
     }
 
