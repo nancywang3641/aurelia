@@ -122,12 +122,17 @@
    絕對定位夾在頂部列與底部列之間（沿用「各區塊獨立 absolute」的版型模型）
    ========================================================= */
 .lobby-body {
-    position:absolute; left:0; right:0; top:52px; bottom:114px;
+    position:absolute; left:0; right:0; top:52px; bottom:92px;
     z-index:6; display:flex; gap:0;
     box-sizing:border-box; overflow:hidden;
 }
 /* Claude 房間（mode-claude）不在本次改版範圍 → 直接收掉新主體，沿用其既有面板 */
 .void-tab.mode-claude .lobby-body { display:none; }
+/* Claude 房間裡不顯示 404 切換按鈕（只留 Claude 切回鈕） */
+.void-tab.mode-claude #room-portal-btn { display:none !important; }
+/* .void-bg 的 background-image 是 ui_utilities.js 設的 --void-bg-url 舊大廳圖，
+   Claude 房間沒有專屬覆蓋會穿透，這裡清掉只留 claude-room.js 設的 #1a1a2e 純色 */
+.void-tab.mode-claude .void-bg { background-image: none !important; }
 
 /* ── 2a. 左欄：合成立繪（人物＋背景同圖）＋ 疊字 ── */
 .lobby-left {
@@ -211,6 +216,14 @@
 .void-tab:not(.mode-404) .lobby-left .void-text {
     color: #2A2C3A !important;
     line-height: 1.75 !important;
+    /* aurelia_core.css 把 .void-text 設成 position:absolute + top18%/bottom14% + flex center + overflow:hidden，
+       配 dialogue-box min-height:72px 會把長對話頭尾都切。改回自然流 + 內捲滾。 */
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    overflow-y: auto !important;
+    max-height: 22vh !important;
+    scrollbar-width: thin;
 }
 
 /* ── 2b. 右欄：MAIN MENU ── */
@@ -378,6 +391,32 @@
 .void-tab .void-send-btn > i { transform:none; }
 .void-tab .void-retry-btn { transform:none; border-radius:4px; border-color:var(--lb-ink); color:var(--lb-ink); }
 .void-tab .void-retry-btn > i { transform:none; }
+/* 瀅瀅白主題：ST 本身 textarea 預設深底會穿透，強制白霧 + 深字 */
+.void-tab:not(.mode-404):not(.mode-claude) .void-input {
+    background: rgba(255,255,255,0.92) !important;
+    border: 1px solid var(--lb-line) !important;
+    color: var(--lb-ink) !important;
+}
+.void-tab:not(.mode-404):not(.mode-claude) .void-input::placeholder {
+    color: var(--lb-ink-dim) !important;
+}
+.void-tab:not(.mode-404):not(.mode-claude) .void-input:focus {
+    background: #fff !important;
+    border-color: var(--lb-ink) !important;
+}
+/* 送出鈕從 #2A2C3A 深黑改成跟主題搭的白底 + 深字邊框（也可以 hover 反白） */
+.void-tab:not(.mode-404):not(.mode-claude) .void-send-btn {
+    background: var(--lb-panel-2) !important;
+    color: var(--lb-ink) !important;
+    border: 1px solid var(--lb-line) !important;
+    box-shadow: none !important;
+}
+.void-tab:not(.mode-404):not(.mode-claude) .void-send-btn:hover {
+    background: var(--lb-ink) !important;
+    color: #fff !important;
+    border-color: var(--lb-ink) !important;
+    box-shadow: 0 2px 8px rgba(26,28,40,0.15) !important;
+}
 
 /* =========================================================
    窄螢幕：左右欄改上下堆疊（沿用既有斷點機制）
@@ -401,6 +440,13 @@
     .lobby-right .lb-menu-head-title { font-size:11px; letter-spacing:2.5px; }
     .lobby-right .lb-menu-head-sub { font-size:7px; }
     .lobby-right .lb-menu-head-rule { margin-top:4px; }
+    /* 手機把 portal 按鈕（視差書咖 / Claude）從頂部搬到 MAIN MENU head 右側（JS 搬 DOM, CSS 排位）
+       head 改 flex，title 吃左半 + 按鈕貼右，sub/rule 換行到下排 */
+    .lobby-right .lb-menu-head { display:flex; align-items:center; flex-wrap:wrap; column-gap:6px; row-gap:0; }
+    .lobby-right .lb-menu-head-title { flex:1 1 auto; }
+    .lobby-right .lb-menu-head-sub, .lobby-right .lb-menu-head-rule { flex-basis:100%; }
+    .lobby-right .lb-menu-head .void-mode-toggle-btn { font-size:9px; padding:3px 7px; flex-shrink:0; gap:3px; }
+    .lobby-right .lb-menu-head .void-mode-toggle-btn .void-mode-toggle-label { font-size:9px; }
     .lobby-right .void-btn { min-height:70px; }
     .lobby-right .lb-menu-head { grid-area:head; }
     .lobby-right #void-quest-btn { grid-area:b1; }
@@ -414,6 +460,10 @@
     .lobby-right .lb-menu-cn { font-size:13px; letter-spacing:2px; }
     .lobby-right .lb-menu-en { font-size:8px; letter-spacing:1.5px; }
     .lobby-right .lb-menu-desc { display:none; }
+    /* 404 模式文字在 ::after 上有寫死的 20px / 9px，手機要同步縮 */
+    .void-tab.mode-404 .lobby-right .lb-menu-cn::after { font-size:13px !important; }
+    .void-tab.mode-404 .lobby-right .lb-menu-en::after { font-size:8px !important; }
+    .void-tab.mode-404 .lobby-right .lb-menu-desc { display:none !important; }
     .lb-signature { display:none; }
 }
 
