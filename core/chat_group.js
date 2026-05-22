@@ -147,15 +147,32 @@
             _seen[provider] = _transcript.length - 1;
             return false;
         }
-        if (bubbleEl) {
-            bubbleEl.classList.remove('cg-typing');
-            bubbleEl.textContent = result.reply;
+        // 偵測 <lobbyPanel> 畫布 marker → 渲染進畫布區、從顯示文字剝掉
+        let displayText = result.reply;
+        if (window.VoidCanvas && typeof window.VoidCanvas.parseLobbyPanel === 'function') {
+            const panel = window.VoidCanvas.parseLobbyPanel(result.reply);
+            if (panel) {
+                displayText = result.reply.replace(/<lobbyPanel>[\s\S]*?<\/lobbyPanel>/i, '').trim();
+                if (window.ChatCanvas && typeof window.ChatCanvas.render === 'function') {
+                    window.ChatCanvas.render(panel);
+                }
+            }
         }
-        _transcript.push({ speaker: provider, content: result.reply, ts: Date.now(), usage: result.usage || null });
-        _seen[provider] = _transcript.length - 1;
         if (result.usage && window.OS_SPEND_PANEL && typeof window.OS_SPEND_PANEL.record === 'function') {
             try { window.OS_SPEND_PANEL.record(result.usage); } catch (_) {}
         }
+        if (!displayText) {
+            // 這則回覆只有畫布、沒對話文字：移掉空氣泡、不進 transcript（畫布已渲染）
+            if (typingWrap && typingWrap.parentNode) typingWrap.parentNode.removeChild(typingWrap);
+            _seen[provider] = _transcript.length - 1;
+            return true;
+        }
+        if (bubbleEl) {
+            bubbleEl.classList.remove('cg-typing');
+            bubbleEl.textContent = displayText;
+        }
+        _transcript.push({ speaker: provider, content: displayText, ts: Date.now(), usage: result.usage || null });
+        _seen[provider] = _transcript.length - 1;
         _save();
         return true;
     }

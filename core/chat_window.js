@@ -58,6 +58,15 @@
                 <button class="cw-close" id="cw-close" type="button" title="關閉">✕</button>
             </div>
             <div class="cw-body" id="cw-body">
+                <div class="cw-canvas" id="cw-canvas" style="display:none;">
+                    <div class="cw-canvas-bar">
+                        <span class="cw-canvas-title">🎮 畫布</span>
+                        <button class="cw-canvas-collapse" type="button" title="收合">▲</button>
+                        <button class="cw-canvas-close" type="button" title="關閉">✕</button>
+                    </div>
+                    <div class="cw-canvas-content"></div>
+                </div>
+                <div class="cw-canvas-tab" id="cw-canvas-tab" style="display:none;">▾ 展開畫布</div>
                 <div class="claude-portrait-area">
                     <img id="claude-portrait-img" class="claude-portrait-img" alt="Clawd">
                     <div id="codex-portrait-sprite" class="codex-portrait-sprite"></div>
@@ -107,6 +116,10 @@
 
         const chip = el.querySelector('#claude-conv-chip');
         if (chip) chip.addEventListener('click', () => ChatWindow.openSubPanel('recents'));
+
+        if (window.ChatCanvas && typeof window.ChatCanvas.mount === 'function') {
+            window.ChatCanvas.mount(el.querySelector('#cw-canvas'), el.querySelector('#cw-canvas-tab'));
+        }
 
         const size = _sizeForViewport();
         const pos = _centerPos(size);
@@ -206,6 +219,10 @@
             return;
         }
         if (cwBody) cwBody.classList.remove('cw-body-group');
+        // 離開群聊 → 收掉畫布，不殘留到單人房間
+        if (window.ChatCanvas && typeof window.ChatCanvas.close === 'function') {
+            window.ChatCanvas.close();
+        }
         if (window.ClaudeTerminal && typeof window.ClaudeTerminal.setProvider === 'function') {
             window.ClaudeTerminal.setProvider(provider);
         }
