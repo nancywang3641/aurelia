@@ -16,6 +16,7 @@
     let _busy = false;
     let _streamEl = null;   // 渲染目標（窗內 chat-stream）
     let _game = null;             // 遊戲模式：{ players:[p1,p2], turnIdx, moveCount, raeResolver, endSignal }
+    let _pendingAttachments = []; // 待送附件：{path,filename,mime,size,thumb} 或 {_uploading:true,filename,mime,size}
     const GAME_TURN_LIMIT = 60;   // 安全閥：總手數上限，防無限迴圈 + 訂閱額度爆
 
     function _lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
@@ -108,9 +109,75 @@
         _scrollBottom();
     }
 
+    // 把圖檔縮到長邊 ≤ maxEdge、轉 JPEG base64 data URL。失敗回 null。
+    function _makeThumb(file, maxEdge) {
+        return new Promise(function (resolve) {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = function () {
+                URL.revokeObjectURL(url);
+                let w = img.naturalWidth || 1, h = img.naturalHeight || 1;
+                const scale = Math.min(1, maxEdge / Math.max(w, h));
+                w = Math.max(1, Math.round(w * scale));
+                h = Math.max(1, Math.round(h * scale));
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.82));
+                } catch (e) { resolve(null); }
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); resolve(null); };
+            img.src = url;
+        });
+    }
+
+    // 待送附件 chip 列（重用浮窗既有的 #claude-attach-chips 容器）
+    function _attachChipsEl() {
+        const body = (window.ChatWindow && typeof window.ChatWindow.getBody === 'function')
+            ? window.ChatWindow.getBody() : null;
+        return body ? body.querySelector('#claude-attach-chips') : null;
+    }
+
+    function _renderPendingAttachments() {
+        const row = _attachChipsEl();
+        if (!row) return;
+        row.innerHTML = '';
+        _pendingAttachments.forEach(function (a, idx) {
+            const chip = document.createElement('div');
+            chip.className = 'cg-pending-chip' + (a._uploading ? ' cg-pending-uploading' : '');
+            if (a.thumb) {
+                const im = document.createElement('img');
+                im.className = 'cg-pending-thumb';
+                im.src = a.thumb;
+                chip.appendChild(im);
+            } else {
+                const ic = document.createElement('span');
+                ic.textContent = a._uploading ? '⏳' : '📎';
+                chip.appendChild(ic);
+            }
+            const nm = document.createElement('span');
+            nm.className = 'cg-pending-name';
+            nm.textContent = a.filename || 'file';
+            chip.appendChild(nm);
+            const x = document.createElement('span');
+            x.className = 'cg-pending-x';
+            x.textContent = '×';
+            x.addEventListener('click', function (e) {
+                e.stopPropagation();
+                _pendingAttachments.splice(idx, 1);
+                _renderPendingAttachments();
+            });
+            chip.appendChild(x);
+            row.appendChild(chip);
+        });
+    }
+
     /** 把整條 transcript 渲染進 streamEl（進群聊時用） */
     ChatGroup.hydrate = function (streamEl) {
         _streamEl = streamEl;
+        _pendingAttachments = [];
+        _renderPendingAttachments();
         if (!_streamEl) return;
         _streamEl.innerHTML = '';
         if (!_transcript.length) {
@@ -438,6 +505,45 @@
             _game.raeResolver = null;
             r(null);
         }
+    };
+
+    // 選檔 → 上傳 cc-bridge + 圖檔做縮圖 → 進 _pendingAttachments
+    ChatGroup.handleFilePick = async function (fileList) {
+        if (!fileList || !fileList.length) return;
+        if (!window.ClaudeTerminal || typeof window.ClaudeTerminal.uploadFiles !== 'function') {
+            _renderSystemLine('⚠️ ClaudeTerminal 未載入，無法上傳。');
+            return;
+        }
+        const baseIdx = _pendingAttachments.length;
+        const files = Array.from(fileList);
+        files.forEach(function (f) {
+            _pendingAttachments.push({ _uploading: true, filename: f.name, mime: f.type || '', size: f.size });
+        });
+        _renderPendingAttachments();
+
+        // 圖檔做縮圖（跟上傳並行）
+        const thumbs = await Promise.all(files.map(function (f) {
+            return (f.type && f.type.indexOf('image/') === 0) ? _makeThumb(f, 720) : Promise.resolve(null);
+        }));
+
+        try {
+            const result = await window.ClaudeTerminal.uploadFiles(fileList);
+            (result.files || []).forEach(function (meta, i) {
+                _pendingAttachments[baseIdx + i] = {
+                    path: meta.path, filename: meta.filename, mime: meta.mime, size: meta.size,
+                    thumb: thumbs[i] || null,
+                };
+            });
+        } catch (e) {
+            _pendingAttachments.splice(baseIdx, files.length);
+            _renderSystemLine('⚠️ 上傳失敗：' + ((e && e.message) || '未知錯誤'));
+        }
+        _renderPendingAttachments();
+    };
+
+    // 有沒有上傳完成、可送的附件（給 chat_window 的 submitInput 判斷純附件送出用）
+    ChatGroup.hasPending = function () {
+        return _pendingAttachments.some(function (a) { return a && a.path; });
     };
 
     ChatGroup.isBusy = function () { return _busy; };
