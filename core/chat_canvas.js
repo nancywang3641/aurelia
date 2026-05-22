@@ -9,6 +9,7 @@
 
     let _canvasEl = null;   // #cw-canvas（含 bar + content）
     let _tabEl = null;      // 收合後的細 tab
+    let _onMoveCb = null;   // panel 透過 LP.onMove 註冊的落子顯示回調
 
     // ── host 接口 LP（訂閱版）──
     function _makeChatPanelAPI() {
@@ -27,46 +28,6 @@
                 return (r.reply || '').trim();
             },
 
-            // 回合制棋盤落子。board2d：二維陣列，每格 'AI'|'USER'|null。回 {row,col,line}
-            move: async function (board2d, opts) {
-                opts = opts || {};
-                const provider = opts.provider === 'codex' ? 'codex' : 'claude';
-                if (!window.ClaudeTerminal || typeof window.ClaudeTerminal.sendRaw !== 'function') {
-                    throw new Error('ClaudeTerminal 未載入');
-                }
-                const size = board2d.length;
-                const aiSym   = opts.aiSymbol   || '●';
-                const userSym = opts.userSymbol || '○';
-                const game    = opts.gameName   || '棋盤遊戲';
-                const colHeader = '    ' + Array.from({ length: size }, function (_, i) {
-                    return String(i).padStart(2);
-                }).join('');
-                const rows = board2d.map(function (row, r) {
-                    return String(r).padStart(2) + ' |' + row.map(function (cell) {
-                        return cell === 'AI' ? ' ' + aiSym : cell === 'USER' ? ' ' + userSym : ' .';
-                    }).join('');
-                });
-                const boardText = [colHeader].concat(rows).join('\n');
-                const prompt = '你正在玩「' + game + '」。你的棋子：' + aiSym + '　對手棋子：' + userSym + '\n\n' +
-                    '當前棋盤（行 / 列從 0 開始）：\n' + boardText + '\n\n' +
-                    (opts.extraContext || '') +
-                    '\n請分析棋盤、選最佳落子。嚴格按以下格式回應、不可省略任何欄位：\n' +
-                    'MOVE:(行),(列)\nLINE:[用一句話講，10-20 字]';
-                const r = await window.ClaudeTerminal.sendRaw({
-                    provider: provider,
-                    messages: [{ role: 'system', content: prompt }],
-                });
-                const raw = (r.reply || '').trim();
-                const mv = raw.match(/MOVE:\s*(\d+)\s*,\s*(\d+)/i);
-                const ln = raw.match(/LINE:\s*(.+)/i);
-                if (!mv) return { row: -1, col: -1, line: raw.slice(0, 40) };
-                return {
-                    row: parseInt(mv[1], 10),
-                    col: parseInt(mv[2], 10),
-                    line: ln ? ln[1].trim() : '',
-                };
-            },
-
             // 生圖，回圖片 URL
             image: async function (prompt, type) {
                 if (window.__IS_PREVIEW || !window.OS_IMAGE_MANAGER) {
@@ -76,6 +37,25 @@
             },
 
             close: function () { ChatCanvas.close(); },
+
+            // 遊戲：panel 註冊落子顯示回調。host 每有一手 → cb(payload, mover)
+            onMove: function (cb) {
+                _onMoveCb = (typeof cb === 'function') ? cb : null;
+            },
+
+            // 遊戲：panel 把使用者(Rae)的一手推進編排迴圈（不要自己畫，畫圖等 onMove 回呼）
+            submitMove: function (payload) {
+                if (window.ChatGroup && typeof window.ChatGroup.submitPlayerMove === 'function') {
+                    window.ChatGroup.submitPlayerMove(String(payload == null ? '' : payload));
+                }
+            },
+
+            // 遊戲：panel 偵測到勝負 → 收場
+            gameEnd: function (resultText) {
+                if (window.ChatGroup && typeof window.ChatGroup.endGame === 'function') {
+                    window.ChatGroup.endGame(String(resultText == null ? '' : resultText));
+                }
+            },
         };
     }
 
@@ -117,6 +97,18 @@
         }
         if (_tabEl) _tabEl.style.display = 'none';
         window.__CW_LP = null;
+        _onMoveCb = null;
+        if (window.ChatGroup && typeof window.ChatGroup.endGame === 'function') {
+            window.ChatGroup.endGame('（畫布關閉，對局中止）');
+        }
+    };
+
+    // ── 套用一手：host 抽到 [MOVE] / Rae 落子時呼叫，觸發 panel 註冊的 onMove 回調 ──
+    ChatCanvas.applyMove = function (payload, mover) {
+        if (typeof _onMoveCb === 'function') {
+            try { _onMoveCb(payload, mover); }
+            catch (e) { console.warn('[ChatCanvas] onMove 回調錯誤：', e); }
+        }
     };
 
     // ── 渲染一個 panel（panelData: {title, html, css, js}）──
@@ -134,6 +126,7 @@
         }
         styleEl.textContent = panelData.css || '';
 
+        _onMoveCb = null;
         content.innerHTML = panelData.html || '';
         if (titleEl) titleEl.textContent = panelData.title || '🎮 畫布';
         ChatCanvas.expand();
