@@ -63,7 +63,7 @@
         bubbleEl.textContent = clean;
     }
 
-    function _renderBubble(speaker, content) {
+    function _renderBubble(speaker, content, attachments) {
         if (!_streamEl) return null;
         const wrap = document.createElement('div');
         wrap.className = 'cg-bubble-wrap cg-from-' + speaker;
@@ -76,6 +76,28 @@
         const b = document.createElement('div');
         b.className = 'cg-bubble cg-from-' + speaker;
         _setBubbleContent(b, speaker, content);
+
+        // 附件：圖片 → 內嵌縮圖（點放大）；非圖 → 📎 chip
+        if (Array.isArray(attachments) && attachments.length) {
+            const box = document.createElement('div');
+            box.className = 'cg-bubble-attachments';
+            attachments.forEach(function (a) {
+                if (a && a.thumb && a.mime && a.mime.indexOf('image/') === 0) {
+                    const im = document.createElement('img');
+                    im.className = 'cg-attach-img';
+                    im.src = a.thumb;
+                    im.addEventListener('click', function () { _openImageOverlay(a.thumb); });
+                    box.appendChild(im);
+                } else {
+                    const chip = document.createElement('span');
+                    chip.className = 'cg-attach-chip';
+                    chip.textContent = '📎 ' + ((a && a.filename) || 'file');
+                    box.appendChild(chip);
+                }
+            });
+            b.appendChild(box);
+        }
+
         wrap.appendChild(b);
         _streamEl.appendChild(wrap);
         _scrollBottom();
@@ -107,6 +129,19 @@
         d.textContent = text;
         _streamEl.appendChild(d);
         _scrollBottom();
+    }
+
+    // 點縮圖 → 全螢幕放大 overlay（點任意處關閉）
+    function _openImageOverlay(src) {
+        const ov = document.createElement('div');
+        ov.className = 'cg-img-overlay';
+        const im = document.createElement('img');
+        im.src = src;
+        ov.appendChild(im);
+        ov.addEventListener('click', function () {
+            if (ov.parentNode) ov.parentNode.removeChild(ov);
+        });
+        document.body.appendChild(ov);
     }
 
     // 把圖檔縮到長邊 ≤ maxEdge、轉 JPEG base64 data URL。失敗回 null。
@@ -187,8 +222,9 @@
         _transcript.forEach(function (m) {
             // 系統注入提示、純標記行（如落子）剝完是空的 —— 不渲染
             if (m.speaker === 'rae' && m.content && m.content.indexOf('（系統）') === 0) return;
-            if (!_stripForDisplay(m.content)) return;
-            _renderBubble(m.speaker, m.content);
+            const hasAtt = Array.isArray(m.attachments) && m.attachments.length;
+            if (!_stripForDisplay(m.content) && !hasAtt) return;
+            _renderBubble(m.speaker, m.content, m.attachments);
         });
     };
 
