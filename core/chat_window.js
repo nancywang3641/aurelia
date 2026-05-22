@@ -186,8 +186,13 @@
             attachBtn.onclick = () => fileInput.click();
             fileInput.onchange = async (e) => {
                 const files = e.target.files;
-                if (files && files.length && window.VoidClaudeRoom) {
-                    await window.VoidClaudeRoom.handleFilePick(files);
+                if (files && files.length) {
+                    if (_provider === 'group' && window.ChatGroup
+                        && typeof window.ChatGroup.handleFilePick === 'function') {
+                        await window.ChatGroup.handleFilePick(files);
+                    } else if (window.VoidClaudeRoom) {
+                        await window.VoidClaudeRoom.handleFilePick(files);
+                    }
                 }
                 fileInput.value = '';
             };
@@ -680,7 +685,9 @@
         const input = _winEl.querySelector('#cw-input');
         if (!input) return;
         const txt = input.value.trim();
-        if (!txt) return;
+        const groupHasAttach = _provider === 'group' && window.ChatGroup
+            && typeof window.ChatGroup.hasPending === 'function' && window.ChatGroup.hasPending();
+        if (!txt && !groupHasAttach) return;
         input.value = '';
         input.style.height = 'auto';
         if (_provider === 'group') {
