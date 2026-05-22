@@ -672,6 +672,13 @@
     color: #d9534f;
 }
 
+/* markdown 氣泡：覆寫 .cg-bubble 的 pre-wrap。
+ * 否則 showdown 輸出 HTML 標籤間的排版換行會被當成真空白渲染 → 列表項間爆大空格。
+ * 用 .cg-bubble.claude-bubble-md（id + 2 class）才壓得過 #...　.cg-bubble。 */
+#aurelia-chat-window .cg-bubble.claude-bubble-md {
+    white-space: normal;
+}
+
 #aurelia-chat-window .cg-system-line {
     align-self: center;
     text-align: center;
