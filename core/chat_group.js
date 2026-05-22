@@ -47,6 +47,21 @@
     // ── 渲染 ──
     function _scrollBottom() { if (_streamEl) _streamEl.scrollTop = _streamEl.scrollHeight; }
 
+    // 把內容塞進氣泡：AI → markdown 渲染；Rae → 純文字。一律先剝遊戲標記。
+    function _setBubbleContent(bubbleEl, speaker, content) {
+        const clean = _stripForDisplay(content);
+        if (speaker !== 'rae' && window.VoidClaudeRoom
+            && typeof window.VoidClaudeRoom.markdownToSafeHtml === 'function') {
+            const html = window.VoidClaudeRoom.markdownToSafeHtml(clean);
+            if (html !== null && html !== undefined) {
+                bubbleEl.innerHTML = html;
+                bubbleEl.classList.add('claude-bubble-md');
+                return;
+            }
+        }
+        bubbleEl.textContent = clean;
+    }
+
     function _renderBubble(speaker, content) {
         if (!_streamEl) return null;
         const wrap = document.createElement('div');
@@ -59,7 +74,7 @@
         }
         const b = document.createElement('div');
         b.className = 'cg-bubble cg-from-' + speaker;
-        b.textContent = _stripForDisplay(content);
+        _setBubbleContent(b, speaker, content);
         wrap.appendChild(b);
         _streamEl.appendChild(wrap);
         _scrollBottom();
@@ -254,7 +269,7 @@
             if (typingWrap && typingWrap.parentNode) typingWrap.parentNode.removeChild(typingWrap);
         } else if (bubbleEl) {
             bubbleEl.classList.remove('cg-typing');
-            bubbleEl.textContent = displayText;
+            _setBubbleContent(bubbleEl, provider, result.reply);
         }
         _transcript.push({ speaker: provider, content: transcriptText, ts: Date.now(), usage: result.usage || null });
         _seen[provider] = _transcript.length - 1;
