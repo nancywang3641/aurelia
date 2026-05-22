@@ -944,6 +944,15 @@
         return { reply: reply, newSid: newSid, usage: usageMeta };
     }
 
+    // cc-bridge 請求排隊：一次只跑一個，避免群聊與畫布同時打 cc-bridge 撞串流。
+    let _ccQueue = Promise.resolve();
+    function _ccBridgePostQueued(cfg, body, onProgress, signal) {
+        const run = function () { return _ccBridgePost(cfg, body, onProgress, signal); };
+        const result = _ccQueue.then(run, run);   // 不管前一個成功失敗，輪到就跑
+        _ccQueue = result.then(function () {}, function () {});  // 佇列繼續，不被失敗中斷
+        return result;
+    }
+
     ClaudeTerminal.sendGroup = async function(opts) {
         opts = opts || {};
         const provider = opts.provider === 'codex' ? 'codex' : 'claude';
@@ -972,7 +981,7 @@
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
 
-        const r = await _ccBridgePost(cfg, body, opts.onProgress, opts.signal);
+        const r = await _ccBridgePostQueued(cfg, body, opts.onProgress, opts.signal);
         return { reply: r.reply, sessionId: r.newSid || sid, usage: r.usage };
     };
 
@@ -999,7 +1008,7 @@
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
 
-        const r = await _ccBridgePost(cfg, body, opts.onProgress, opts.signal);
+        const r = await _ccBridgePostQueued(cfg, body, opts.onProgress, opts.signal);
         return { reply: r.reply, usage: r.usage };
     };
 
