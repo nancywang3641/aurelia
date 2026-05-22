@@ -54,6 +54,12 @@
 - 其他人的發言會標上講者前綴，例如 [Rae]: ... 或 [${otherName}]: ...。你自己的回覆不需要加前綴。
 - 你可以正常回應 Rae，也可以接 ${otherName} 的話、附和或吐槽，像在群組裡聊天。
 - 你每一輪都會被問到。如果這一輪的話明顯是在問 ${otherName}、不是問你，或你沒什麼好補充 —— 就「只輸出」 [PASS] 這四個字、不要加任何其他內容，代表這次略過不講。被直接點名或問到你時就正常回。
+- 互動畫布：想做下棋 / 小工具 / 展示網頁時，可以在回覆裡放一段 <lobbyPanel>{ "title":"標題", "html":"...", "css":"...", "js":"..." }</lobbyPanel>（必須是合法 JSON），它會被渲染成群聊上方的畫布。panel 的 js 可調用 host 物件 LP：
+  · LP.chat(文字, {provider:'claude'|'codex'}) → 問某個 AI、回字串
+  · LP.move(二維棋盤, {provider, aiSymbol, userSymbol, gameName}) → 回合制落子，回 {row,col,line}
+  · LP.image(描述) → 生圖、回 URL
+  · LP.close() → 關畫布
+  單純聊天不要用畫布；只有要互動 / 展示時才用。
 - 你是 ${selfName}。語氣自然、不用太長，預設繁體中文。`;
     }
 
@@ -871,6 +877,73 @@
      * opts: { provider:'claude'|'codex', sessionId:string|null, userText, onProgress, signal }
      * 回傳 { reply, sessionId, usage }
      */
+    // cc-bridge POST + SSE 解析共用核心。回 { reply, newSid, usage }
+    async function _ccBridgePost(cfg, body, onProgress, signal) {
+        let resp;
+        try {
+            resp = await fetch(cfg.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + cfg.key,
+                    'Accept': 'text/event-stream',
+                },
+                body: JSON.stringify(body),
+                signal: signal,
+            });
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw e;
+            throw new Error('NETWORK:cc-bridge 沒在跑？或網路斷線。');
+        }
+        if (!resp.ok) {
+            let errMsg = 'HTTP ' + resp.status;
+            try { const j = await resp.json(); if (j && j.error && j.error.message) errMsg = j.error.message; } catch (_) {}
+            if (resp.status === 401 || resp.status === 403) throw new Error('AUTH:密鑰不對。');
+            if (resp.status >= 500) throw new Error('SERVER:' + errMsg);
+            throw new Error('API:' + errMsg);
+        }
+        if (!resp.body || !resp.body.getReader) {
+            throw new Error('STREAM:瀏覽器不支援 ReadableStream');
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '', replyAcc = '', newSid = null, usageMeta = null;
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                let sepIdx;
+                while ((sepIdx = buf.indexOf('\n\n')) !== -1) {
+                    const rawEvent = buf.slice(0, sepIdx);
+                    buf = buf.slice(sepIdx + 2);
+                    for (const line of rawEvent.split('\n')) {
+                        if (!line.startsWith('data:')) continue;
+                        const dataStr = line.slice(5).trim();
+                        if (!dataStr || dataStr === '[DONE]') continue;
+                        let chunk;
+                        try { chunk = JSON.parse(dataStr); } catch (_) { continue; }
+                        const delta = (chunk.choices && chunk.choices[0] && chunk.choices[0].delta) || {};
+                        if (typeof delta.content === 'string' && delta.content.length) {
+                            replyAcc += delta.content;
+                            if (typeof onProgress === 'function') {
+                                try { onProgress({ type: 'text', delta: delta.content, accumulated: replyAcc }); } catch (_) {}
+                            }
+                        }
+                        if (chunk.session_id !== undefined) newSid = chunk.session_id;
+                        if (chunk.usage_meta) usageMeta = chunk.usage_meta;
+                    }
+                }
+            }
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw e;
+            throw new Error('STREAM:讀取流失敗：' + (e.message || e));
+        }
+        const reply = replyAcc.trim();
+        if (!reply) throw new Error('EMPTY:沒回半個字。');
+        return { reply: reply, newSid: newSid, usage: usageMeta };
+    }
+
     ClaudeTerminal.sendGroup = async function(opts) {
         opts = opts || {};
         const provider = opts.provider === 'codex' ? 'codex' : 'claude';
@@ -899,70 +972,35 @@
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
 
-        let resp;
-        try {
-            resp = await fetch(cfg.url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + cfg.key,
-                    'Accept': 'text/event-stream',
-                },
-                body: JSON.stringify(body),
-                signal: opts.signal,
-            });
-        } catch (e) {
-            if (e && e.name === 'AbortError') throw e;
-            throw new Error('NETWORK:cc-bridge 沒在跑？或網路斷線。');
-        }
-        if (!resp.ok) {
-            let errMsg = 'HTTP ' + resp.status;
-            try { const j = await resp.json(); if (j && j.error && j.error.message) errMsg = j.error.message; } catch (_) {}
-            if (resp.status === 401 || resp.status === 403) throw new Error('AUTH:密鑰不對。');
-            if (resp.status >= 500) throw new Error('SERVER:' + errMsg);
-            throw new Error('API:' + errMsg);
-        }
-        if (!resp.body || !resp.body.getReader) {
-            throw new Error('STREAM:瀏覽器不支援 ReadableStream');
-        }
+        const r = await _ccBridgePost(cfg, body, opts.onProgress, opts.signal);
+        return { reply: r.reply, sessionId: r.newSid || sid, usage: r.usage };
+    };
 
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '', replyAcc = '', newSid = null, usageMeta = null;
-        try {
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buf += decoder.decode(value, { stream: true });
-                let sepIdx;
-                while ((sepIdx = buf.indexOf('\n\n')) !== -1) {
-                    const rawEvent = buf.slice(0, sepIdx);
-                    buf = buf.slice(sepIdx + 2);
-                    for (const line of rawEvent.split('\n')) {
-                        if (!line.startsWith('data:')) continue;
-                        const dataStr = line.slice(5).trim();
-                        if (!dataStr || dataStr === '[DONE]') continue;
-                        let chunk;
-                        try { chunk = JSON.parse(dataStr); } catch (_) { continue; }
-                        const delta = (chunk.choices && chunk.choices[0] && chunk.choices[0].delta) || {};
-                        if (typeof delta.content === 'string' && delta.content.length) {
-                            replyAcc += delta.content;
-                            if (typeof opts.onProgress === 'function') {
-                                try { opts.onProgress({ type: 'text', delta: delta.content, accumulated: replyAcc }); } catch (_) {}
-                            }
-                        }
-                        if (chunk.session_id !== undefined) newSid = chunk.session_id;
-                        if (chunk.usage_meta) usageMeta = chunk.usage_meta;
-                    }
-                }
-            }
-        } catch (e) {
-            if (e && e.name === 'AbortError') throw e;
-            throw new Error('STREAM:讀取流失敗：' + (e.message || e));
+    /**
+     * 通用 cc-bridge 送訊息：指定 provider + 任意 messages，不綁 conv、不強制 system prompt。
+     * 給群聊畫布的 LP 用（LP.move 自帶棋局 prompt）。
+     * opts: { provider:'claude'|'codex', messages:[{role,content}], onProgress, signal }
+     * 回傳 { reply, usage }
+     */
+    ClaudeTerminal.sendRaw = async function(opts) {
+        opts = opts || {};
+        const provider = opts.provider === 'codex' ? 'codex' : 'claude';
+        const cfg = ClaudeTerminal.getConfig();
+        if (!cfg || !cfg.url || !cfg.key) {
+            throw new Error('NOT_CONFIGURED:還沒設定連線（URL / 密鑰）。');
         }
-        const reply = replyAcc.trim();
-        if (!reply) throw new Error('EMPTY:沒回半個字。');
-        return { reply, sessionId: newSid || sid, usage: usageMeta };
+        const body = {
+            model: cfg.model,
+            messages: opts.messages || [],
+            stream: true,
+            max_tokens: cfg.maxTokens,
+        };
+        if (provider === 'codex') body.cc_backend = 'codex';
+        if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
+        if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
+
+        const r = await _ccBridgePost(cfg, body, opts.onProgress, opts.signal);
+        return { reply: r.reply, usage: r.usage };
     };
 
     /** 對話總數（給 UI badge / 標題用） */
