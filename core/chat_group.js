@@ -102,7 +102,12 @@
             _renderBubble('claude', '群聊區開張了 —— 你、Claude、Codex 三個人。說點什麼吧。');
             return;
         }
-        _transcript.forEach(m => _renderBubble(m.speaker, m.content));
+        _transcript.forEach(function (m) {
+            // 系統注入提示、純標記行（如落子）剝完是空的 —— 不渲染
+            if (m.speaker === 'rae' && m.content && m.content.indexOf('（系統）') === 0) return;
+            if (!_stripForDisplay(m.content)) return;
+            _renderBubble(m.speaker, m.content);
+        });
     };
 
     // ── 遊戲標記解析 ──
@@ -161,12 +166,18 @@
     }
 
     // ── 一個 AI 的回合 ──
+    // opts.gameTurn=true：遊戲回合，即使沒有新增量也要催它落子
     // 回傳 { spoke:bool, failed:bool, markers:{game,move,gameover} }
-    async function _runTurn(provider) {
-        const delta = _buildDelta(provider);
+    async function _runTurn(provider, opts) {
+        opts = opts || {};
+        let delta = _buildDelta(provider);
         if (!delta.trim()) {
-            _seen[provider] = _transcript.length - 1;
-            return { spoke: false, failed: false, markers: {} };
+            if (!opts.gameTurn) {
+                _seen[provider] = _transcript.length - 1;
+                return { spoke: false, failed: false, markers: {} };
+            }
+            // 遊戲回合沒新增量（例：開局先手的第一手）→ 催落子
+            delta = '（系統）輪到你下棋了，請依先前約定的格式落子。';
         }
 
         const typingWrap = _renderTyping(provider);
@@ -277,7 +288,7 @@
             }
 
             // 輪到 AI
-            const res = await _runTurn(mover);
+            const res = await _runTurn(mover, { gameTurn: true });
             if (!_game) return;
             if (_game.endSignal) break;
             if (res.failed) {
