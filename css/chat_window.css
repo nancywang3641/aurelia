@@ -672,6 +672,15 @@
     color: #d9534f;
 }
 
+#aurelia-chat-window .cg-system-line {
+    align-self: center;
+    text-align: center;
+    font-size: 12px;
+    color: #9a93a8;
+    margin: 6px 0;
+    padding: 0 16px;
+}
+
 /* ============================================================
  * 群聊區通用畫布（cw-canvas）—— 只在群聊模式顯示
  * ============================================================ */
