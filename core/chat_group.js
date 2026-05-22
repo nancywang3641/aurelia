@@ -169,14 +169,12 @@
             _renderBubble('rae', text);
             _save();
 
-            const first  = Math.random() < 0.5 ? 'claude' : 'codex';
-            const second = first === 'claude' ? 'codex' : 'claude';
-
-            const firstSpoke = await _runTurn(first);
-            // 第二位：~70% 機率；第一位沒講（PASS / 失敗）→ 100% 保證輪到，不冷場
-            if (!firstSpoke || Math.random() < 0.7) {
-                await _runTurn(second);
-            }
+            // 兩個 AI 每次都拿到發言權 —— 各自用 [PASS] 決定要不要回。
+            // 這樣你直接點名某個模型時，它一定會被叫到，不會被骰子跳過。
+            // 骰子只決定「順序」，避免每次都同一個先講。
+            const order = Math.random() < 0.5 ? ['claude', 'codex'] : ['codex', 'claude'];
+            await _runTurn(order[0]);
+            await _runTurn(order[1]);
         } finally {
             _busy = false;
         }
