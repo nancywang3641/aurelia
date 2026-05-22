@@ -764,3 +764,84 @@
     font-size: 11px;
     padding: 6px 8px;
 }
+
+/* ============================================================
+ * 群聊區附件（待送列 / 氣泡內附件 / 放大 overlay）
+ * ============================================================ */
+
+/* 待送附件列：渲染進共用的 #claude-attach-chips（:not(:empty) 規則已使其顯示） */
+#aurelia-chat-window .cg-pending-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    font-size: 12px;
+    color: #cfd2e6;
+    max-width: 180px;
+}
+#aurelia-chat-window .cg-pending-chip.cg-pending-uploading {
+    opacity: 0.6;
+}
+#aurelia-chat-window .cg-pending-thumb {
+    width: 28px;
+    height: 28px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+#aurelia-chat-window .cg-pending-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#aurelia-chat-window .cg-pending-x {
+    cursor: pointer;
+    color: #ff9b78;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* 氣泡內附件 */
+#aurelia-chat-window .cg-bubble-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+#aurelia-chat-window .cg-attach-img {
+    max-width: 220px;
+    max-height: 220px;
+    border-radius: 8px;
+    cursor: zoom-in;
+    display: block;
+}
+#aurelia-chat-window .cg-attach-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    font-size: 12px;
+    color: #555;
+}
+
+/* 圖片放大 overlay（掛 body、非 scoped） */
+.cg-img-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10010;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.82);
+    cursor: zoom-out;
+}
+.cg-img-overlay img {
+    max-width: 92vw;
+    max-height: 92vh;
+    border-radius: 6px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
