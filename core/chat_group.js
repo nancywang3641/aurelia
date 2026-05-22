@@ -83,6 +83,16 @@
         return wrap;
     }
 
+    // 系統通知行（置中、淡色，例如收場 / 中止）
+    function _renderSystemLine(text) {
+        if (!_streamEl) return;
+        const d = document.createElement('div');
+        d.className = 'cg-system-line';
+        d.textContent = text;
+        _streamEl.appendChild(d);
+        _scrollBottom();
+    }
+
     /** 把整條 transcript 渲染進 streamEl（進群聊時用） */
     ChatGroup.hydrate = function (streamEl) {
         _streamEl = streamEl;
@@ -239,6 +249,77 @@
         return { spoke: true, failed: false, markers: markers };
     }
 
+    // ── 自動多輪遊戲迴圈 ──
+    // _game 為 truthy 時運轉；用 _game.endSignal 統一收場。整個生命週期由本迴圈獨佔。
+    async function _runGameLoop() {
+        while (_game && !_game.endSignal) {
+            if (_game.moveCount >= GAME_TURN_LIMIT) {
+                _game.endSignal = { text: '已達回合上限 ' + GAME_TURN_LIMIT + ' 手，自動對弈停止。' };
+                break;
+            }
+            const mover = _game.players[_game.turnIdx % 2];
+
+            if (mover === 'rae') {
+                // 輪到 Rae：暫停迴圈，等畫布捕捉點擊 → LP.submitMove → resolve
+                const payload = await new Promise(function (resolve) { _game.raeResolver = resolve; });
+                if (!_game) return;                       // 等待期間遊戲被清掉
+                _game.raeResolver = null;
+                if (_game.endSignal) break;               // 等待期間被收場
+                if (payload == null) break;               // 中止信號
+                if (window.ChatCanvas && typeof window.ChatCanvas.applyMove === 'function') {
+                    window.ChatCanvas.applyMove(payload, 'rae');
+                }
+                _transcript.push({ speaker: 'rae', content: '[MOVE|' + payload + ']', ts: Date.now() });
+                _save();
+                _game.moveCount++;
+                _game.turnIdx++;
+                continue;
+            }
+
+            // 輪到 AI
+            const res = await _runTurn(mover);
+            if (!_game) return;
+            if (_game.endSignal) break;
+            if (res.failed) {
+                _game.endSignal = { text: LABEL[mover] + ' 連線失敗，對局中止。' };
+                break;
+            }
+            if (res.markers && res.markers.gameover != null) {
+                _game.endSignal = { text: res.markers.gameover };
+                break;
+            }
+            if (res.markers && res.markers.move != null) {
+                _game.moveCount++;
+                _game.turnIdx++;
+                continue;
+            }
+            // 該下棋卻沒落子也沒收場 → 中止（不重試，YAGNI）
+            _game.endSignal = { text: LABEL[mover] + ' 這手沒有落子，對局中止。' };
+            break;
+        }
+        const sig = _game && _game.endSignal;
+        await _endGameInternal(sig ? sig.text : null);
+    }
+
+    // ── 收場：退出遊戲模式 + 收場講評一輪 ──
+    async function _endGameInternal(resultText) {
+        _game = null;
+        if (resultText) _renderSystemLine('🏁 ' + resultText);
+
+        // 收場講評一輪：注入系統提示進 transcript（不渲染這條），兩個 AI 各講評一句
+        _transcript.push({
+            speaker: 'rae',
+            content: '（系統）這盤對局結束了。請用一句話講評，不要再落子、不要再輸出任何遊戲標記。',
+            ts: Date.now(),
+        });
+        _save();
+        const order = Math.random() < 0.5 ? ['claude', 'codex'] : ['codex', 'claude'];
+        await _runTurn(order[0]);
+        await _runTurn(order[1]);
+
+        _busy = false;
+    }
+
     // ── 你發訊息 → 骰子編排 ──
     ChatGroup.sendUserMessage = async function (text) {
         if (_busy || !text || !text.trim()) return;
@@ -267,6 +348,27 @@
         _lsSet(SID_CODEX, null);
         _save();
         if (_streamEl) ChatGroup.hydrate(_streamEl);
+    };
+
+    // 畫布(LP.submitMove)呼叫：把 Rae 的一手推進迴圈
+    ChatGroup.submitPlayerMove = function (payload) {
+        if (_game && typeof _game.raeResolver === 'function') {
+            const r = _game.raeResolver;
+            _game.raeResolver = null;
+            r(String(payload == null ? '' : payload));
+        }
+    };
+
+    // 畫布(LP.gameEnd / LP.close)呼叫：請求收場。設 endSignal，迴圈會自行收尾。
+    ChatGroup.endGame = function (text) {
+        if (!_game) return;
+        _game.endSignal = { text: String(text == null ? '' : text) || '對局結束。' };
+        // 若迴圈正等 Rae 落子 → 喚醒它，好讓它看到 endSignal 後退出
+        if (typeof _game.raeResolver === 'function') {
+            const r = _game.raeResolver;
+            _game.raeResolver = null;
+            r(null);
+        }
     };
 
     ChatGroup.isBusy = function () { return _busy; };
