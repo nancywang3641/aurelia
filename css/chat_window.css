@@ -589,3 +589,85 @@
     opacity: 0.5;
     cursor: default;
 }
+
+/* ============================================================
+ * 群聊區（cw-group）—— 你 / Claude / Codex 三方
+ * ============================================================ */
+
+#aurelia-chat-window.cw-window.cw-group {
+    background: #1e1e2a;            /* 中性深色，不偏暖橘也不偏冷藍 */
+}
+
+/* 群聊隱藏立繪 + picker；chat-stream 撐滿、改中性底 */
+#aurelia-chat-window .cw-body-group .claude-portrait-area,
+#aurelia-chat-window .cw-body-group .claude-picker-bar,
+#aurelia-chat-window .cw-body-group #claude-picker-popup {
+    display: none !important;
+}
+#aurelia-chat-window .cw-body-group .claude-chat-stream {
+    background: #ece9f0;           /* 中性淺灰紫紙底 */
+    box-shadow: none;
+}
+#aurelia-chat-window.cw-group .cw-input-row {
+    background: #2a2738;
+    border-top-color: rgba(255, 255, 255, 0.10);
+}
+
+/* ── 三方氣泡 ── */
+#aurelia-chat-window .cg-bubble-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-width: 85%;
+    margin-bottom: 4px;
+}
+#aurelia-chat-window .cg-bubble-wrap.cg-from-rae {
+    align-self: flex-end;
+    align-items: flex-end;
+}
+#aurelia-chat-window .cg-bubble-wrap.cg-from-claude,
+#aurelia-chat-window .cg-bubble-wrap.cg-from-codex {
+    align-self: flex-start;
+    align-items: flex-start;
+}
+
+#aurelia-chat-window .cg-bubble-hdr {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 4px;
+}
+#aurelia-chat-window .cg-hdr-claude { color: #c77b3a; }
+#aurelia-chat-window .cg-hdr-codex  { color: #3f6fc4; }
+
+#aurelia-chat-window .cg-bubble {
+    padding: 9px 13px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+#aurelia-chat-window .cg-bubble.cg-from-rae {
+    background: #6c5ce7;
+    color: #ffffff;
+    border-top-right-radius: 4px;
+}
+#aurelia-chat-window .cg-bubble.cg-from-claude {
+    background: #ffffff;
+    color: #2a2433;
+    border: 1px solid rgba(217, 81, 34, 0.5);
+    border-top-left-radius: 4px;
+}
+#aurelia-chat-window .cg-bubble.cg-from-codex {
+    background: #ffffff;
+    color: #1a2333;
+    border: 1px solid rgba(47, 111, 196, 0.5);
+    border-top-left-radius: 4px;
+}
+#aurelia-chat-window .cg-bubble.cg-typing {
+    color: #9a93a8;
+    font-style: italic;
+}
+#aurelia-chat-window .cg-bubble.cg-error {
+    color: #d9534f;
+}
