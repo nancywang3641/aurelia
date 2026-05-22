@@ -28,6 +28,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'chat_window', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_window.js', key: 'chatWindow' },
     { name: 'chat_room', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_room.js', key: 'voidClaudeRoom' },
     { name: 'chat_group', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_group.js', key: 'chatGroup' },
+    { name: 'chat_canvas', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_canvas.js', key: 'chatCanvas' },
     { name: 'void_terminal', path: './scripts/extensions/third-party/my-tavern-extension/core/void_terminal.js', key: 'voidTerminal' },
     { name: 'control_center', path: './scripts/extensions/third-party/my-tavern-extension/core/control_center.js', key: 'controlCenter' },
     { name: 'html_extractor', path: './scripts/extensions/third-party/my-tavern-extension/core/html_extractor.js', key: 'htmlExtractor' },
