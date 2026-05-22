@@ -249,12 +249,28 @@
         return lines.join('\n\n');
     }
 
+    // 跟 _buildDelta 同範圍：收集增量涵蓋的 rae 附件（去掉 thumb，cc-bridge 只要 path）
+    function _collectDeltaAttachments(provider) {
+        const out = [];
+        for (let i = _seen[provider] + 1; i < _transcript.length; i++) {
+            const m = _transcript[i];
+            if (m.speaker === provider) continue;
+            if (Array.isArray(m.attachments)) {
+                m.attachments.forEach(function (a) {
+                    if (a && a.path) out.push({ path: a.path, filename: a.filename, mime: a.mime, size: a.size });
+                });
+            }
+        }
+        return out;
+    }
+
     // ── 一個 AI 的回合 ──
     // opts.gameTurn=true：遊戲回合，即使沒有新增量也要催它落子
     // 回傳 { spoke:bool, failed:bool, markers:{game,move,gameover} }
     async function _runTurn(provider, opts) {
         opts = opts || {};
         let delta = _buildDelta(provider);
+        const deltaAttachments = _collectDeltaAttachments(provider);
         if (!delta.trim()) {
             if (!opts.gameTurn) {
                 _seen[provider] = _transcript.length - 1;
@@ -273,6 +289,7 @@
                 provider: provider,
                 sessionId: _lsGet(_sidKey(provider)),
                 userText: delta,
+                attachments: deltaAttachments,
                 onProgress: function (ev) {
                     if (ev && ev.type === 'text') {
                         acc = ev.accumulated || (acc + (ev.delta || ''));
@@ -439,22 +456,36 @@
 
     // ── 你發訊息 ──
     ChatGroup.sendUserMessage = async function (text) {
-        if (!text || !text.trim()) return;
+        text = text || '';
+        const hasAtt = _pendingAttachments.some(function (a) { return a && a.path; });
+        if (!text.trim() && !hasAtt) return;
+        // 一般忙碌中（非遊戲）→ 擋，不動 pending，使用者可稍後重送
+        if (!_game && _busy) return;
 
-        // 遊戲進行中：Rae 的話只進 transcript + 渲染，不另起一輪
-        // —— 跑著的遊戲迴圈會在下個 AI 回合的 delta 自然看到（能邊看邊嗆）
+        // 快照待送附件（只取上傳完成、有 path 的），清空 pending
+        const atts = _pendingAttachments
+            .filter(function (a) { return a && a.path; })
+            .map(function (a) {
+                return { path: a.path, filename: a.filename, mime: a.mime, size: a.size, thumb: a.thumb || null };
+            });
+        _pendingAttachments = [];
+        _renderPendingAttachments();
+
+        const entry = { speaker: 'rae', content: text, ts: Date.now() };
+        if (atts.length) entry.attachments = atts;
+
+        // 遊戲進行中：只進 transcript + 渲染，不另起一輪（迴圈下個回合自然帶到）
         if (_game) {
-            _transcript.push({ speaker: 'rae', content: text, ts: Date.now() });
-            _renderBubble('rae', text);
+            _transcript.push(entry);
+            _renderBubble('rae', text, atts);
             _save();
             return;
         }
 
-        if (_busy) return;
         _busy = true;
         try {
-            _transcript.push({ speaker: 'rae', content: text, ts: Date.now() });
-            _renderBubble('rae', text);
+            _transcript.push(entry);
+            _renderBubble('rae', text, atts);
             _save();
 
             // 兩個 AI 每次都拿到發言權，各自用 [PASS] 決定回不回；骰子只決定順序。
