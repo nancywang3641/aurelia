@@ -498,6 +498,35 @@
         body.appendChild(wrap);
     }
 
+    // 群聊區的 🕘 子面板 —— 群聊是單一條對話，沒有多會話，只提供「清空」
+    function _renderGroupPanel(body) {
+        body.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'cw-rec';
+        const note = document.createElement('div');
+        note.className = 'cw-rec-empty';
+        note.textContent = '群聊區目前是單一條對話。清空會把你、Claude、Codex 的對話全部清掉，並重置兩邊的 session。';
+        wrap.appendChild(note);
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'cw-rec-clear';
+        clearBtn.textContent = '🗑️ 清空群聊';
+        clearBtn.addEventListener('click', () => {
+            if (clearBtn.dataset.armed === '1') {
+                if (window.ChatGroup && typeof window.ChatGroup.clear === 'function') {
+                    window.ChatGroup.clear();
+                }
+                ChatWindow.closeSubPanel();
+            } else {
+                clearBtn.dataset.armed = '1';
+                clearBtn.classList.add('armed');
+                clearBtn.textContent = '確定清空整個群聊？再按一次';
+            }
+        });
+        wrap.appendChild(clearBtn);
+        body.appendChild(wrap);
+    }
+
     ChatWindow.open = async function (provider) {
         provider = (provider === 'codex' || provider === 'group') ? provider : 'claude';
         _provider = provider;
@@ -612,7 +641,12 @@
         } else if (name === 'settings') {
             _renderSettingsPanel(body);
         } else if (name === 'recents') {
-            _renderRecentsPanel(body);
+            if (_provider === 'group') {
+                if (title) title.textContent = '🕘 群聊';
+                _renderGroupPanel(body);
+            } else {
+                _renderRecentsPanel(body);
+            }
         }
         sp.style.display = 'flex';
     };
