@@ -18,6 +18,7 @@
     const IDENTITY = {
         claude: '🦀 Claude’s Room',
         codex:  '🔷 Codex’s Room',
+        group:  '👥 群聊區',
     };
 
     function _sizeForViewport() {
@@ -193,6 +194,18 @@
 
     // 載入當前 provider 的 conv 歷史並渲染進浮窗
     async function _loadRoom(provider) {
+        const cwBody = _winEl && _winEl.querySelector('#cw-body');
+        // 群聊區：交給 ChatGroup，跳過單房間流程
+        if (provider === 'group') {
+            if (cwBody) cwBody.classList.add('cw-body-group');
+            const stream = _winEl && _winEl.querySelector('#claude-chat-stream');
+            if (window.ChatGroup) {
+                await window.ChatGroup.load();
+                if (stream) window.ChatGroup.hydrate(stream);
+            }
+            return;
+        }
+        if (cwBody) cwBody.classList.remove('cw-body-group');
         if (window.ClaudeTerminal && typeof window.ClaudeTerminal.setProvider === 'function') {
             window.ClaudeTerminal.setProvider(provider);
         }
@@ -486,12 +499,13 @@
     }
 
     ChatWindow.open = async function (provider) {
-        provider = provider === 'codex' ? 'codex' : 'claude';
+        provider = (provider === 'codex' || provider === 'group') ? provider : 'claude';
         _provider = provider;
         if (!_winEl) _winEl = _buildWindow();
         const idEl = _winEl.querySelector('#cw-identity');
         if (idEl) idEl.textContent = IDENTITY[provider];
         _winEl.classList.toggle('cw-codex', provider === 'codex');
+        _winEl.classList.toggle('cw-group', provider === 'group');
         _winEl.style.display = 'flex';
         _isOpen = true;
         if (_menuEl) _menuEl.style.display = 'none';
@@ -525,7 +539,8 @@
             _menuEl.id = 'cw-launcher-menu';
             _menuEl.innerHTML =
                 '<button class="cw-lm-item" data-p="claude" type="button">🦀 Claude 的房間</button>' +
-                '<button class="cw-lm-item" data-p="codex" type="button">🔷 Codex 的房間</button>';
+                '<button class="cw-lm-item" data-p="codex" type="button">🔷 Codex 的房間</button>' +
+                '<button class="cw-lm-item" data-p="group" type="button">👥 群聊區</button>';
             document.body.appendChild(_menuEl);
             _menuEl.querySelectorAll('.cw-lm-item').forEach(b => {
                 b.addEventListener('click', () => {
@@ -617,7 +632,11 @@
         if (!txt) return;
         input.value = '';
         input.style.height = 'auto';
-        if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.sendMessage === 'function') {
+        if (_provider === 'group') {
+            if (window.ChatGroup && typeof window.ChatGroup.sendUserMessage === 'function') {
+                window.ChatGroup.sendUserMessage(txt);
+            }
+        } else if (window.VoidClaudeRoom && typeof window.VoidClaudeRoom.sendMessage === 'function') {
             window.VoidClaudeRoom.sendMessage(txt);
         }
     };
