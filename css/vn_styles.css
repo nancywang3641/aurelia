@@ -269,6 +269,16 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                 height: min(88%, 720px) !important;
                 aspect-ratio: auto !important;
             }
+            /* 手機版底圖：瀅瀅換筆記簿_手機板.png（desktop #chapter-window (1,0,0)，這條 (2,1,0) 蓋掉） */
+            #aurelia-phone-screen #chapter-window {
+                background-image: url('../aseets/筆記簿_手機板.png') !important;
+            }
+            /* 404 模式底圖：手機版換 404終端_手機板.png
+               desktop 404 是 #aurelia-phone-screen.mode-404 #chapter-window (2,1,0)，
+               同 selector 在 @media 內早於 desktop 規則會輸源序，加 body 提升到 (2,1,1) */
+            body #aurelia-phone-screen.mode-404 #chapter-window {
+                background-image: url('../aseets/404終端_手機板.png') !important;
+            }
             /* 隱藏右頁 + 書脊，只 zoom 到左頁 */
             .ch-book-spine, .ch-page-right { display: none !important; }
             .ch-page-left {
@@ -279,51 +289,136 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             }
             /* 內容區改直向排版 */
             #chapter-window .ch-nb-inner { top: 4% !important; left: 6% !important; right: 6% !important; bottom: 4% !important; }
-            /* Header 縮小 */
-            .ch-header { flex-shrink: 0; }
+            /* Header 縮小 + 滿寬（desktop 是 left:6.05% width:42.42% 只佔左頁，手機要橫跨整頁） */
+            #aurelia-phone-screen #chapter-window .ch-header { left: 6% !important; right: 6% !important; width: auto !important; }
             .ch-title-main { font-size: 18px !important; letter-spacing: 3px !important; }
             .ch-title-sub { font-size: 10px !important; }
             .ch-hdr-divider { height: 28px !important; }
             .ch-src-zh { font-size: 11px !important; }
             .ch-src-en { font-size: 8px !important; }
 
-            /* 章節卡容器：垂直 stack + 可滾動 */
+            /* 章節卡容器：垂直 stack + 可滾動
+               desktop 是 display:block + nowrap + font-size:0（撐 inline-block 卡橫排）
+               手機要改回真的 flex column，並清掉 nowrap / font-size:0 / drop-shadow */
             .ch-cards-viewport { flex: 1; min-height: 0; }
             .ch-cards-container {
+                display: flex !important;
                 flex-direction: column !important;
                 align-items: stretch !important;
                 justify-content: flex-start !important;
                 gap: 10px !important;
                 width: 100% !important;
-                padding: 4px 2px !important;
+                padding: 12px 2px 4px !important;
                 overflow-y: auto !important;
                 height: 100% !important;
+                white-space: normal !important;
+                font-size: initial !important;
+                text-align: left !important;
+                filter: none !important;
             }
             /* 隱藏左右切換箭頭 + dots (手機改成滾動) */
             .ch-nav-arrow, .ch-carousel-dots { display: none !important; }
 
-            /* 章節卡改橫向長方 */
-            .ch-card {
-                width: 100% !important;
-                flex-direction: row !important;
+            /* 章節卡改橫向長方
+               desktop 用 inline-block + 38vh portrait + webkit-mask 凹角 + 子元素全 absolute
+               手機改 grid：tab 左 / label+num 直疊 / title 吃中間 / scene 右
+               用 #aurelia-phone-screen #chapter-window 雙 id 壓過 desktop 同 selector !important */
+            #aurelia-phone-screen #chapter-window .ch-card {
+                display: grid !important;
+                grid-template-columns: 9px auto 1fr 56px !important;
+                grid-template-rows: auto auto !important;
+                grid-template-areas:
+                    "tab label title scene"
+                    "tab num   title scene" !important;
                 align-items: center !important;
+                column-gap: 10px !important;
+                row-gap: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 80px !important;
+                margin: 0 !important;
                 padding: 10px 14px !important;
-                gap: 12px !important;
                 flex-shrink: 0 !important;
+                -webkit-mask: none !important;
+                mask: none !important;
+                border: 1px solid rgba(80,65,50,0.32) !important;
+                border-radius: 8px !important;
+                container-type: normal !important;
+                /* hover 大跳會撞到容器邊讓寬度看起來變，這裡也限制 transform-origin 在 box 內 */
+                box-sizing: border-box !important;
+                transform-origin: center center !important;
             }
-            .ch-tab-wrap { margin: 0 4px 0 0 !important; align-self: center !important; }
-            .ch-tab { width: 20px !important; height: 30px !important; }
-            .ch-chapter-label { font-size: 7px !important; margin-bottom: 1px !important; }
-            .ch-chapter-num { font-size: 18px !important; margin-bottom: 0 !important; line-height: 1; }
-            .ch-chapter-title { font-size: 13px !important; margin-bottom: 0 !important; letter-spacing: 1px !important; text-align: left !important; -webkit-line-clamp: 1 !important; flex: 1 !important; }
-            .ch-scene { width: 56px !important; height: 56px !important; margin-bottom: 0 !important; flex-shrink: 0 !important; font-size: 18px !important; }
-            .ch-card-info { width: auto !important; margin-bottom: 0 !important; gap: 2px !important; flex: 1 !important; min-width: 0 !important; }
-            .ch-info-row { font-size: 9px !important; }
-            .ch-card-progress { width: 80px !important; flex-shrink: 0 !important; margin-top: 0 !important; }
-            .ch-progress-bar { height: 2px !important; }
+            /* 各 grid slot 指派 */
+            #aurelia-phone-screen #chapter-window .ch-card > .ch-tab-wrap     { grid-area: tab !important; align-self: stretch !important; }
+            #aurelia-phone-screen #chapter-window .ch-card > .ch-chapter-label{ grid-area: label !important; align-self: end !important; }
+            #aurelia-phone-screen #chapter-window .ch-card > .ch-chapter-num  { grid-area: num !important; align-self: start !important; }
+            #aurelia-phone-screen #chapter-window .ch-card > .ch-chapter-title{ grid-area: title !important; align-self: center !important; }
+            #aurelia-phone-screen #chapter-window .ch-card > .ch-scene        { grid-area: scene !important; align-self: center !important; }
+            /* 子元素：desktop 全 position:absolute + % 定位 + transform，手機全清掉讓 grid 接手 */
+            #aurelia-phone-screen #chapter-window .ch-card > * { position: static !important; transform: none !important; }
+            /* hover/active：desktop 是 -16px + scale(1.04)，橫排會放大寬度導致溢出/裁切，改純 -2px 上浮 */
+            #aurelia-phone-screen #chapter-window .ch-card:hover { transform: translateY(-2px) !important; }
+            #aurelia-phone-screen #chapter-window .ch-card.ch-active { transform: none !important; }
+            #aurelia-phone-screen #chapter-window .ch-card.ch-active:hover { transform: translateY(-2px) !important; }
+            /* 內框線 desktop 是凹角描邊（依附 mask），手機 mask 沒了所以隱藏 */
+            .ch-card::before { display: none !important; }
+            /* 右下印章縮小避免擋進度條 */
+            .ch-card::after { width: 38px !important; right: 8px !important; bottom: 4px !important; opacity: 0.35 !important; }
 
-            /* 底部書籤卡片縮窄 */
-            #chapter-window .ch-bottom-panel { max-width: 92% !important; padding: 10px 16px !important; margin-top: 10px !important; }
+            /* specificity 戰：desktop .ch-tab-wrap (line 928) 同樣 !important + 源序在後會贏，
+               404 mode 還多一個 id 更難壓。用 #aurelia-phone-screen #chapter-window 把兩種模式都蓋掉 */
+            #aurelia-phone-screen #chapter-window .ch-tab-wrap { width: 9px !important; aspect-ratio: 1/1.55 !important; flex-shrink: 0 !important; position: static !important; left: auto !important; top: auto !important; margin: 0 !important; transform: none !important; }
+            #aurelia-phone-screen #chapter-window .ch-tab { width: 100% !important; height: 100% !important; }
+            .ch-chapter-label { font-size: 7px !important; width: auto !important; margin-bottom: 1px !important; flex-shrink: 0 !important; text-align: center !important; }
+            .ch-chapter-num { font-size: 20px !important; width: auto !important; min-width: 28px !important; margin-bottom: 0 !important; line-height: 1 !important; flex-shrink: 0 !important; text-align: center !important; }
+            .ch-chapter-title { font-size: 13px !important; width: auto !important; margin-bottom: 0 !important; letter-spacing: 1px !important; text-align: left !important; -webkit-line-clamp: 2 !important; flex: 1 1 0 !important; min-width: 0 !important; }
+            .ch-scene { width: 56px !important; height: 56px !important; margin-bottom: 0 !important; flex-shrink: 0 !important; font-size: 18px !important; border-radius: 6px !important; }
+            /* 手機隱藏 地點/世界/已完成/進度條，標題自動吃掉空間 */
+            #aurelia-phone-screen #chapter-window .ch-card-info,
+            #aurelia-phone-screen #chapter-window .ch-card-progress { display: none !important; }
+
+            /* 卡片區：往上貼 header（desktop top:32% 在手機留下大縫）+ 留底部空間給 bottom-panel */
+            #aurelia-phone-screen #chapter-window .ch-cards-area { top: 22% !important; height: 62% !important; }
+            /* 「故事還在繼續…」面板：desktop 在右上 (top:4% right:16%)，手機改貼到卡片列表下方 */
+            #aurelia-phone-screen #chapter-window .ch-bottom-panel {
+                top: auto !important; bottom: 3% !important;
+                left: 6% !important; right: 6% !important; width: auto !important;
+                height: 11% !important;
+                transform: none !important;
+                padding: 0 !important;
+            }
+
+            /* ─── 404 模式專屬手機簡化 ───
+               desktop 404 給卡片緞帶塞 'EYES ONLY' / 'CLASSIFIED' 等大字 + 底部塞 TERMINAL + SYSTEM STATUS 雙欄
+               塞到手機窄螢幕全擠成一團，全藏掉只留乾淨的「× 關閉」按鈕 */
+            /* 補回 404 卡片綠框 + 光暈（被我手機 .ch-card 的 brown border 蓋掉了） */
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-card {
+                border: 1px solid rgba(0,255,136,0.4) !important;
+                border-radius: 10px !important;
+                box-shadow: inset 0 0 16px rgba(0,255,136,0.12),
+                            0 0 14px rgba(0,255,136,0.18) !important;
+            }
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-tab::before { display: none !important; }
+            /* 左欄 TERMINAL 區整塊隱藏 */
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-quote-sec { display: none !important; }
+            /* 右欄 SYSTEM STATUS 標籤與 3 條 ASCII bar 全藏 */
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-bottom-close::before,
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-close-zh,
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-close-en,
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-close-arrow { display: none !important; }
+            /* 關閉按鈕撐滿底欄，只剩置中的「× 關閉」 */
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-bottom-close {
+                flex: 1 1 100% !important;
+                padding: 6px !important;
+                align-items: center !important;
+                justify-content: center !important;
+                border: 1px solid rgba(255,80,80,0.4) !important;
+            }
+            #aurelia-phone-screen.mode-404 #chapter-window .ch-bottom-close::after {
+                position: static !important;
+                font-size: 13px !important;
+                letter-spacing: 2px !important;
+            }
         }
         #chapter-overlay.active #chapter-window { transform: scale(1); opacity: 1; }
 
