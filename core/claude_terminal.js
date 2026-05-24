@@ -1039,7 +1039,7 @@
             // 不被使用者當前選的 opus 干擾。
             model: opts.model || cfg.model,
             messages: opts.messages || [],
-            stream: opts.stream !== false,  // 預設 stream true;可傳 false 關掉(摘要不需要)
+            stream: true,  // 必須 stream:_ccBridgePost 只解析 SSE,傳 false 會收到 JSON 但 parser 認不得 → EMPTY
             max_tokens: cfg.maxTokens,
         };
         if (provider === 'codex')    body.cc_backend = 'codex';
