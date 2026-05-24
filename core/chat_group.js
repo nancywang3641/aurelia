@@ -6,13 +6,15 @@
 (function (ChatGroup) {
     'use strict';
 
-    const STORE_KEY  = 'group_chat_main';     // OS_DB transcript
-    const SID_CLAUDE = 'group_claude_sid';    // localStorage
-    const SID_CODEX  = 'group_codex_sid';
-    const LABEL = { rae: 'Rae', claude: 'Claude', codex: 'Codex' };
+    const STORE_KEY    = 'group_chat_main';     // OS_DB transcript
+    const SID_CLAUDE   = 'group_claude_sid';    // localStorage
+    const SID_CODEX    = 'group_codex_sid';
+    const SID_DEEPSEEK = 'group_deepseek_sid';  // 蘇景明(DeepSeek/CodeWhale)
+    const LABEL = { rae: 'Rae', claude: 'Claude', codex: 'Codex', deepseek: '蘇景明', recap: '前情提要' };
+    const AI_PROVIDERS = ['claude', 'codex', 'deepseek'];  // fan-out / random shuffle 用
 
-    let _transcript = [];   // [{ speaker:'rae'|'claude'|'codex', content, ts, usage? }]
-    let _seen = { claude: -1, codex: -1 };  // 各 AI 已被送到第幾則 transcript index
+    let _transcript = [];   // [{ speaker:'rae'|'claude'|'codex'|'deepseek', content, ts, usage? }]
+    let _seen = { claude: -1, codex: -1, deepseek: -1 };  // 各 AI 已被送到第幾則 transcript index
     let _busy = false;
     let _streamEl = null;   // 渲染目標（窗內 chat-stream）
     let _game = null;             // 遊戲模式：{ players:[p1,p2], turnIdx, moveCount, raeResolver, endSignal }
@@ -23,7 +25,11 @@
     function _lsSet(k, v) {
         try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (_) {}
     }
-    function _sidKey(p) { return p === 'codex' ? SID_CODEX : SID_CLAUDE; }
+    function _sidKey(p) {
+        if (p === 'codex')    return SID_CODEX;
+        if (p === 'deepseek') return SID_DEEPSEEK;
+        return SID_CLAUDE;
+    }
 
     function _save() {
         if (window.OS_DB && typeof window.OS_DB.saveStudioChat === 'function') {
@@ -40,9 +46,10 @@
                 if (Array.isArray(m)) _transcript = m;
             } catch (_) {}
         }
-        // 兩個 AI 的 session 已續到上次存檔點 → seen 設為 transcript 末端
-        _seen.claude = _transcript.length - 1;
-        _seen.codex  = _transcript.length - 1;
+        // 三個 AI 的 session 已續到上次存檔點 → seen 設為 transcript 末端
+        _seen.claude   = _transcript.length - 1;
+        _seen.codex    = _transcript.length - 1;
+        _seen.deepseek = _transcript.length - 1;
     };
 
     // ── 渲染 ──
@@ -87,12 +94,31 @@
 
     function _renderBubble(speaker, content, attachments) {
         if (!_streamEl) return null;
+        // 'recap' = 「🧹 摘要重啟」按鈕生成的前情提要,render 成置中分隔卡(非氣泡)
+        if (speaker === 'recap') {
+            const card = document.createElement('div');
+            card.className = 'cg-recap-card';
+            const hdr = document.createElement('div');
+            hdr.className = 'cg-recap-hdr';
+            hdr.textContent = '📋 前情提要(已壓縮)';
+            const body = document.createElement('div');
+            body.className = 'cg-recap-body';
+            _setBubbleContent(body, speaker, content);
+            card.appendChild(hdr);
+            card.appendChild(body);
+            _streamEl.appendChild(card);
+            _scrollBottom();
+            return body;
+        }
         const wrap = document.createElement('div');
         wrap.className = 'cg-bubble-wrap cg-from-' + speaker;
         if (speaker !== 'rae') {
             const hdr = document.createElement('div');
             hdr.className = 'cg-bubble-hdr cg-hdr-' + speaker;
-            hdr.textContent = (speaker === 'codex' ? '🔷 Codex' : '🦀 Claude');
+            const _hdrText = speaker === 'codex'    ? '🔷 Codex'
+                           : speaker === 'deepseek' ? '🟢 蘇景明'
+                           :                          '🦀 Claude';
+            hdr.textContent = _hdrText;
             wrap.appendChild(hdr);
         }
         const b = document.createElement('div');
@@ -115,7 +141,9 @@
         wrap.className = 'cg-bubble-wrap cg-from-' + speaker;
         const hdr = document.createElement('div');
         hdr.className = 'cg-bubble-hdr cg-hdr-' + speaker;
-        hdr.textContent = (speaker === 'codex' ? '🔷 Codex' : '🦀 Claude');
+        hdr.textContent = speaker === 'codex'    ? '🔷 Codex'
+                        : speaker === 'deepseek' ? '🟢 蘇景明'
+                        :                          '🦀 Claude';
         const b = document.createElement('div');
         b.className = 'cg-bubble cg-from-' + speaker + ' cg-typing';
         b.textContent = '正在輸入…';
@@ -221,7 +249,7 @@
         if (!_streamEl) return;
         _streamEl.innerHTML = '';
         if (!_transcript.length) {
-            _renderBubble('claude', '群聊區開張了 —— 你、Claude、Codex 三個人。說點什麼吧。');
+            _renderBubble('claude', '群聊區開張了 —— 你、Claude、Codex、蘇景明 四個人。@誰就只叫誰,不 @ 就大家一起回。');
             return;
         }
         _transcript.forEach(function (m) {
@@ -502,6 +530,35 @@
         return true;
     }
 
+    // ── @-mention 解析（給 sendUserMessage 用）──
+    // 支援:@Claude/@claude/@丹 → claude;@Codex/@codex/@阿洛 → codex;
+    //      @蘇景明/@景明/@deepseek/@deepseek → deepseek。
+    // 回傳 [] / ['claude'] / ['codex'] / ['deepseek'] / 多選的子集合。
+    function _parseMentions(text) {
+        if (!text) return [];
+        const out = new Set();
+        const re = /@(Claude|Codex|丹|阿洛|蘇景明|景明|deepseek|deepseek)/gi;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            const name = m[1].toLowerCase();
+            if (name === 'claude' || name === '丹')             out.add('claude');
+            else if (name === 'codex' || name === '阿洛')        out.add('codex');
+            else if (name === '蘇景明' || name === '景明'
+                  || name === 'deepseek' || name === 'deepseek') out.add('deepseek');
+        }
+        return Array.from(out);
+    }
+
+    // Fisher-Yates shuffle:三人桌的順序隨機,避免老是同一隻先講
+    function _shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+    }
+
     // ── 你發訊息 ──
     ChatGroup.sendUserMessage = async function (text) {
         text = text || '';
@@ -536,19 +593,86 @@
             _renderBubble('rae', text, atts);
             _save();
 
-            // 兩個 AI 每次都拿到發言權，各自用 [PASS] 決定回不回；骰子只決定順序。
-            const order = Math.random() < 0.5 ? ['claude', 'codex'] : ['codex', 'claude'];
-            const r0 = await _runTurn(order[0]);
-            if (_maybeStartGame(order[0], r0)) return;   // 開局了 → 交給遊戲迴圈
-            const r1 = await _runTurn(order[1]);
-            if (_maybeStartGame(order[1], r1)) return;
+            // @-mention 路由:
+            //  - 明確 @ 某幾隻 → 只叫那些(省 token、其他人完全跳過)
+            //  - 無 @ → 三人都叫、Fisher-Yates 洗順序、各自 [PASS] 自決
+            // 蘇景明(DeepSeek)雖然便宜,但他人設是「被叫才出現」,fan-out 時順序隨機就好。
+            const mentions = _parseMentions(text);
+            const order = mentions.length > 0 ? mentions : _shuffle(AI_PROVIDERS);
+            for (let i = 0; i < order.length; i++) {
+                const r = await _runTurn(order[i]);
+                if (_maybeStartGame(order[i], r)) return;   // 開局了 → 交給遊戲迴圈
+            }
         } finally {
             // 進了遊戲模式則 _busy 維持 true（由 _endGameInternal 釋放）；否則放掉
             if (!_game) _busy = false;
         }
     };
 
-    // ── 清空群聊（transcript + 兩條 session + 進行中的對局）──
+    // ── 摘要 & 重啟:對話太長時用一次 Sonnet 把整段壓成「前情提要」,
+    //    清三人 session(各自的 CLI session 也 reset → 從零開始 stateful 對話),
+    //    把摘要塞回 transcript 第 0 條,下次 Rae 一發訊息就會把摘要當前情送給三人。
+    //    走 Claude Sonnet:Rae 的 Max 訂閱配額用不完,後台雜活 0 元最划算。
+    ChatGroup.compact = async function () {
+        if (_busy) return { ok: false, reason: 'busy' };
+        if (_game)  return { ok: false, reason: 'in_game' };
+        // 整段對話太短就沒必要(避免誤觸):至少 6 則訊息才做
+        const compactable = _transcript.filter(m => m.speaker !== 'recap' || m.content);
+        if (compactable.length < 6) return { ok: false, reason: 'too_short' };
+
+        _busy = true;
+        const restore = () => { _busy = false; };
+        try {
+            // 把所有舊訊息(含舊 recap)組成可讀的對話腳本給 Sonnet
+            const scriptLines = compactable.map(m => {
+                const tag = LABEL[m.speaker] || m.speaker;
+                const body = (m.content || '').replace(/\s+$/g, '');
+                return `[${tag}]\n${body}`;
+            }).join('\n\n');
+
+            const sysPrompt =
+                '你是個對話摘要助手。下方是 Rae 跟三個 AI(Claude、Codex、蘇景明)的群聊紀錄,' +
+                '幫我壓縮成一頁「前情提要」,供他們之後接續聊天用。\n\n' +
+                '規則:\n' +
+                '1. 用第三人稱、自然中文敘述(像「Rae 跟大家聊到 X,Claude 說 Y,蘇景明吐槽 Z」)\n' +
+                '2. 保留:主題、結論、未完的事、人物之間的梗或語感\n' +
+                '3. 跳過:重複的問候、寒暄、純表情、已解決的小問題\n' +
+                '4. 控制在 300-600 字之間(對話越長可以越長,但別超過)\n' +
+                '5. 直接輸出摘要本文,不要加標題、不要加「以下是摘要:」這種開場白';
+
+            const r = await window.ClaudeTerminal.sendRaw({
+                provider: 'claude',
+                model: 'sonnet',  // 強制 Sonnet,不被使用者當前選的 opus 干擾
+                stream: false,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user',   content: scriptLines },
+                ],
+            });
+            const recap = (r && r.reply || '').trim();
+            if (!recap) {
+                restore();
+                return { ok: false, reason: 'empty_reply' };
+            }
+
+            // 清三人 session(各自 CLI session 重新 boot,從零累積 context)
+            _lsSet(SID_CLAUDE, null);
+            _lsSet(SID_CODEX, null);
+            _lsSet(SID_DEEPSEEK, null);
+            // transcript reset + 塞入摘要;_seen 全 -1,下次 sendUserMessage 會把摘要 + 新訊息一起送
+            _transcript = [{ speaker: 'recap', content: recap, ts: Date.now() }];
+            _seen = { claude: -1, codex: -1, deepseek: -1 };
+            _save();
+            if (_streamEl) ChatGroup.hydrate(_streamEl);
+            restore();
+            return { ok: true, recap: recap };
+        } catch (e) {
+            restore();
+            return { ok: false, reason: 'error', error: (e && e.message) || String(e) };
+        }
+    };
+
+    // ── 清空群聊（transcript + 三條 session + 進行中的對局）──
     ChatGroup.clear = function () {
         if (_game) {
             // 中止進行中的對局：先解開可能卡住的 Rae await，再清狀態
@@ -558,9 +682,10 @@
         }
         _busy = false;
         _transcript = [];
-        _seen = { claude: -1, codex: -1 };
+        _seen = { claude: -1, codex: -1, deepseek: -1 };
         _lsSet(SID_CLAUDE, null);
         _lsSet(SID_CODEX, null);
+        _lsSet(SID_DEEPSEEK, null);
         _save();
         if (_streamEl) ChatGroup.hydrate(_streamEl);
     };
