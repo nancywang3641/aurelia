@@ -66,6 +66,7 @@ const PHONE_FILES = [
     'os/os_404_store.js',
     'os/os_tarot.js',
     'os/os_spend_panel.js',
+    'os/os_board.js',
     'os/os_card_import.js',
     'os/os_journal.js',
     'os/os_workbench.js',
@@ -252,6 +253,7 @@ async function initializeExtension() {
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_claude_recents.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_claude_ask.css');
         await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/chat_window.css');
+        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_board.css');
 
         for (const conf of MODULE_LOAD_ORDER) await loadModule(conf);
 
