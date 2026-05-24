@@ -102,34 +102,34 @@
         return `${emoji} ${active.name || active.id}`;
     }
 
-    function _isAnthropicDirect(url) {
-        return /api\.anthropic\.com/i.test(url || '') || (url || '').endsWith('/v1/messages');
-    }
-
     /** 聊天室上方那條橫條的文字更新 */
     function _updateClaudePickerLabel() {
         const cfg = _getClaudeRoomCfg();
         if (!cfg) return;
-        const isCodex = _provider() === 'codex';
+        const prov = _provider();
+        const isCodex    = prov === 'codex';
+        const isOpencode = prov === 'deepseek';
+        // Codex / 蘇景明:模型 / 思考 picker 對它們無效
+        //   - codex 模型由 ~/.codex/config.toml 決定
+        //   - deepseek 模型由 deepseek auth login 設好的預設 provider 決定
+        // 只留身分標示 + 連線預設
+        const isAgentBackend = isCodex || isOpencode;
         const m = _el('claude-pick-model');
         const e = _el('claude-pick-effort');
         const ep = _el('claude-pick-endpoint');
         const bk = _el('claude-pick-backend');
         const sep1 = _el('claude-pick-sep1');
-        // Codex 房間：模型 / 思考 picker 對 codex 無效（模型由 ~/.codex/config.toml 決定），
-        // 只留「🔷 Codex」標示 + 連線預設
-        if (e)    e.style.display    = isCodex ? 'none' : '';
-        if (sep1) sep1.style.display = isCodex ? 'none' : '';
-        if (m)  m.textContent  = isCodex ? '🔷 Codex' : _shortModelLabel(cfg.inlineModel || cfg.model);
-        if (e && !isCodex)  e.textContent  = _shortEffortLabel(cfg.inlineEffort);
-        if (ep) ep.textContent = _shortEndpointLabel(cfg);
-        // backend 在 Anthropic 直連模式下沒意義，藏起來
-        if (bk) {
-            const presets = cfg?.presets || [];
-            const active = presets.find(p => p.id === cfg.activePresetId) || presets[0];
-            const direct = active && _isAnthropicDirect(active.url);
-            bk.style.display = direct ? 'none' : '';
+        if (e)    e.style.display    = isAgentBackend ? 'none' : '';
+        if (sep1) sep1.style.display = isAgentBackend ? 'none' : '';
+        if (m) {
+            m.textContent = isCodex    ? '🔷 Codex'
+                          : isOpencode ? '🟢 蘇景明'
+                          :              _shortModelLabel(cfg.inlineModel || cfg.model);
         }
+        if (e && !isAgentBackend) e.textContent = _shortEffortLabel(cfg.inlineEffort);
+        if (ep) ep.textContent = _shortEndpointLabel(cfg);
+        // backend 選單一律顯示（Anthropic 直連分支已於 2026-05-24 移除）
+        if (bk) bk.style.display = '';
     }
 
     /** popup 內容生成 + 展開 */
@@ -776,24 +776,55 @@
             };
         }
 
+        // 提到 try 外:finally / catch 也要碰這兩個變數(清 throttle timer + 殘留 stream bubble)
+        let streamWrap = null;
+        let _rerenderTimer = null;
+
         try {
             // streaming 漸進式 render：stream 期間每收到 text/tool 事件就 destroy 舊 wrapper
             // 重 render 一個（用 suppressMarkdown 跳過 markdown，避免每 chunk 重 render markdown 閃爍）
             // stream 結束後最終 render 才開 markdown
             const acc = { text: '', tools: [] };
-            let streamWrap = null;
             let _typingSwitched = false;
             const stream = _el('claude-chat-stream');
 
-            const rerenderStreaming = () => {
-                if (streamWrap && streamWrap.parentNode) {
-                    streamWrap.parentNode.removeChild(streamWrap);
+            // streaming 期間用 incremental update:bubble 只建一次,後續只更新 textContent。
+            // 為何不每次 _renderClaudeBubble:那樣是 createElement+appendChild 全新 DOM node,
+            //   CSS 進場動畫重播 + layout/paint → 視覺上「一直閃爍」,throttle 多慢都治不了
+            //   (因為閃的是動畫重播,不是頻率)。
+            // 寫法:
+            //   _ensureStreamShell()  → 第一次建 wrap + bubble + (optional) tool placeholder
+            //   後續呼叫 → 直接 textContent = acc.text,零重排
+            //   stream 結束 → finally 移除 streamWrap,再走 _renderClaudeBubble final(帶 markdown)
+            let _streamBubbleEl = null;
+            let _streamToolEl = null;
+            const _ensureStreamShell = () => {
+                if (streamWrap) return;
+                streamWrap = document.createElement('div');
+                streamWrap.className = 'claude-bubble-wrap from-claude';
+                _streamBubbleEl = document.createElement('div');
+                _streamBubbleEl.className = 'claude-bubble from-claude';
+                streamWrap.appendChild(_streamBubbleEl);
+                stream.appendChild(streamWrap);
+            };
+            const _flushStreamingRender = () => {
+                _rerenderTimer = null;
+                _ensureStreamShell();
+                _streamBubbleEl.textContent = acc.text || '⏳ ...';
+                if (acc.tools.length) {
+                    if (!_streamToolEl) {
+                        _streamToolEl = document.createElement('div');
+                        _streamToolEl.className = 'claude-tool-summary streaming-placeholder';
+                        streamWrap.insertBefore(_streamToolEl, _streamBubbleEl);
+                    }
+                    _streamToolEl.textContent = `🔧 使用工具中...(${acc.tools.length})`;
                 }
-                _renderClaudeBubble('assistant', acc.text || '⏳ ...', {
-                    toolsUsed: acc.tools.length ? acc.tools : null,
-                    suppressMarkdown: true,
-                });
-                streamWrap = stream && stream.lastElementChild;
+                // 自動黏底:streaming 中持續滾到最新
+                if (stream) stream.scrollTop = stream.scrollHeight;
+            };
+            const rerenderStreaming = () => {
+                if (_rerenderTimer) return;  // 已排程,等它 fire 就好
+                _rerenderTimer = setTimeout(_flushStreamingRender, 60);
             };
 
             const onProgress = (ev) => {
@@ -825,6 +856,12 @@
             // 累計到額度面板（💰 app）
             if (usage && window.OS_SPEND_PANEL && typeof window.OS_SPEND_PANEL.record === 'function') {
                 try { window.OS_SPEND_PANEL.record(usage); } catch (_) {}
+            }
+
+            // 先取消還在排程中的 throttled rerender,避免 final render 後又冒一個多餘 stream bubble
+            if (_rerenderTimer) {
+                clearTimeout(_rerenderTimer);
+                _rerenderTimer = null;
             }
 
             // 移除 stream 期間最後一個 placeholder wrap，下面做最終 render（含 markdown）
@@ -893,6 +930,16 @@
                 setTimeout(() => _setClaudePortraitState('living'), 1500);
             }
         } finally {
+            // 兜底:無論 success/error/abort 都清掉 throttle timer 跟殘留 stream bubble
+            if (_rerenderTimer) {
+                clearTimeout(_rerenderTimer);
+                _rerenderTimer = null;
+            }
+            if (streamWrap && streamWrap.parentNode) {
+                streamWrap.parentNode.removeChild(streamWrap);
+                streamWrap = null;
+            }
+
             // 還原送出鈕：icon 回紙飛機、onclick 回浮窗的 submitInput
             _claudeAbortCtrl = null;
             _claudeTaskId    = null;
