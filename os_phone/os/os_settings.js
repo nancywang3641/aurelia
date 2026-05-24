@@ -196,12 +196,12 @@ EXAMPLE "prompt" value:
     // - Rae 可加多組（例如本機 cc-bridge / VPS cc-bridge / Anthropic 直連）
     function loadClaudeRoomConfig() {
         let saved = localStorage.getItem(CLAUDE_ROOM_STORAGE_KEY);
-        const defaultPresets = [
-            { id: 'anthropic', name: 'Anthropic 直連', url: 'https://api.anthropic.com/v1/messages', key: '' },
-        ];
+        // 2026-05-24:Anthropic 直連預設拔除;奧瑞亞 = agent 前端,新安裝預設空 preset,
+        // 使用者自己加 cc-bridge / VPS cc-bridge 等端點。
+        const defaultPresets = [];
         let config = {
             presets: defaultPresets,
-            activePresetId: 'anthropic',
+            activePresetId: '',
             // 預設值（聊天時 inline picker 不選的話用這些）
             model: 'claude-opus-4-7',
             maxTokens: 4096,

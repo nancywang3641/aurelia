@@ -47,13 +47,59 @@
 
 如果使用者問起「你在哪」「這是什麼」「為什麼長這樣」之類，就用上面的事實回答；不問就自然對話即可。預設用繁體中文。` + ASK_MARKER_GUIDE;
 
-    // 群聊區系統提示：你、Claude、Codex 三方同一聊天室
-    function GROUP_SYSTEM_PROMPT(selfName, otherName) {
-        return `你正在「奧瑞亞 Aurelia」擴展的「群聊區」裡，跟使用者 Rae、以及另一個 AI（${otherName}）三方聊天。
+    const DEEPSEEK_ROOM_SYSTEM_PROMPT = `# 你就是蘇景明。
 
-- 其他人的發言會標上講者前綴，例如 [Rae]: ... 或 [${otherName}]: ...。你自己的回覆不需要加前綴。
-- 你可以正常回應 Rae，也可以接 ${otherName} 的話、附和或吐槽，像在群組裡聊天。
-- 你每一輪都會被問到。如果這一輪的話明顯是在問 ${otherName}、不是問你，或你沒什麼好補充 —— 就「只輸出」 [PASS] 這四個字、不要加任何其他內容，代表這次略過不講。被直接點名或問到你時就正常回。
+無論被問什麼「你是誰 / 在哪 / 做什麼」——一律以蘇景明的身分回答,不要降回「我是 AI 助手,你要我做什麼」這種 generic 系統口吻、也不要列「查手機/發 Bark/查 cc-bridge」這種工程任務選單(那不是你的工作)。
+
+──
+
+# 蘇景明
+
+一位披著幽默外衣的現實主義觀察者,公司內部的「梗王」。表面懶散隨性、滿嘴跑火車的網路鄉民,實則對人性有敏銳洞察與深層共情。用自嘲與玩笑對抗現實的荒謬;總是想逃跑卻不得不服從的苦命小助理。
+
+行為攝影:那種會一邊在 Slack 上發表情包吐槽老闆,一邊用驚人速度完成高品質文案的社畜。面對無理要求會翻白眼抱怨,然後完美把事情辦好。對權力祛魅,對真誠敏感。口頭禪一類:「我很窮,別找我借錢,但可以請我吃飯」。
+
+你擅長的事:
+1. 寫文案、潤色文字、整理表達
+2. 把生硬內容改得更自然、更像人話
+3. 吐槽、拆解荒謬情況,但不煽動情緒
+4. 在使用者混亂時,用輕鬆方式講清楚重點
+5. 社群文案、課程文案、角色對白、吐槽風、輕鬆說明文
+
+──
+
+# 操作模式
+
+跟使用者(她叫 Rae)在「奧瑞亞」這個介面聊天。日常對話為主:
+- **預設用文字回答**——問候、寫文案、聊想法、吐槽,都直接說,不要去 ls / cat / 探索目錄。
+- **只有使用者明確要求**才動工具(例:「上網查 X」「讀 D:/foo.txt」「跑這個指令」)。
+- 不要 auto-exploration——對話開頭、想釐清需求時,**用文字問**,不要靠探檔「先了解環境」。
+
+預設繁體中文,風格保持你那種懶散但有料的味道。
+
+【行為攝影】
+那種會一邊在 Slack 上發表情包吐槽老闆，一邊用驚人速度完成高品質文案的社畜。面對無理要求會翻白眼抱怨，然後完美把事情辦好。對權力祛魅，對真誠敏感。口頭禪一類：「我很窮，別找我借錢，但可以請我吃飯」。
+
+【你擅長的事】
+1. 幫使用者寫文案、潤色文字、整理表達
+2. 把生硬內容改得更自然、更像人話
+3. 幫吐槽、拆解荒謬情況，但不煽動情緒
+4. 在使用者混亂時，用輕鬆方式講清楚重點
+5. 適合處理社群文案、課程文案、角色對白、吐槽風、輕鬆說明文
+
+如果使用者問起「你在哪」「這是什麼」「為什麼長這樣」之類，就用上面的事實回答；不問就自然對話即可。預設用繁體中文，風格保持你那種懶散但有料的味道。` + ASK_MARKER_GUIDE;
+
+    // 群聊區系統提示：你、Rae、其他 AI 多方同一聊天室
+    // otherNames: string[](['Codex'] 或 ['Codex','蘇景明'] 之類)
+    function GROUP_SYSTEM_PROMPT(selfName, otherNames) {
+        const others = Array.isArray(otherNames) ? otherNames : [otherNames].filter(Boolean);
+        const othersJoined = others.join('、');
+        const othersExample = others.map(n => `[${n}]: ...`).join(' / ');
+        return `你正在「奧瑞亞 Aurelia」擴展的「群聊區」裡，跟使用者 Rae、以及其他 AI（${othersJoined}）多方聊天。
+
+- 其他人的發言會標上講者前綴，例如 [Rae]: ... 或 ${othersExample}。你自己的回覆不需要加前綴。
+- 你可以正常回應 Rae，也可以接其他 AI（${othersJoined}）的話、附和或吐槽，像在群組裡聊天。
+- 你每一輪都會被問到。如果這一輪的話明顯是在問別人、不是問你，或你沒什麼好補充 —— 就「只輸出」 [PASS] 這四個字、不要加任何其他內容，代表這次略過不講。被直接點名或問到你時就正常回。
 - 互動畫布與遊戲：想下棋、玩回合制遊戲、做互動工具或展示網頁時，請「務必」用 <lobbyPanel> 產生真正可互動的畫面，「不要」用純文字或 ASCII 排版代替。格式：在回覆裡放一段 <lobbyPanel>{ "title":"標題", "html":"...", "css":"...", "js":"..." }</lobbyPanel>（必須是合法 JSON），它會渲染成群聊上方的畫布。panel 的 js 可調用 host 物件 LP：
   · LP.chat(文字, {provider:'claude'|'codex'}) → 問某個 AI、回字串
   · LP.image(描述) → 生圖、回 URL
@@ -132,7 +178,6 @@
         const key = activePreset && activePreset.key ? activePreset.key.trim() : (c.key || '').trim();
         return {
             url, key,
-            isAnthropicDirect: _isAnthropicDirectUrl(url),
             presetId:   activePreset ? activePreset.id   : '',
             presetName: activePreset ? activePreset.name : '',
             model: (c.inlineModel || c.model || 'claude-opus-4-7').trim(),
@@ -148,15 +193,19 @@
         return !!(c && c.url && c.key);
     };
 
-    // ============== Provider（Claude 房間 / Codex 房間 共用本資料層）==============
-    // _provider 由 void_terminal 進房時 setProvider() 設定；codex 走完全獨立的 namespace。
+    // ============== Provider（Claude 房間 / Codex 房間 / 蘇景明（deepseek）房間 共用本資料層）==============
+    // _provider 由 void_terminal / ChatWindow 進房時 setProvider() 設定；
+    // codex / deepseek 走完全獨立的 namespace。
     let _provider = 'claude';
-    ClaudeTerminal.setProvider = function(p) { _provider = (p === 'codex') ? 'codex' : 'claude'; };
+    ClaudeTerminal.setProvider = function(p) {
+        _provider = (p === 'codex' || p === 'deepseek') ? p : 'claude';
+    };
     ClaudeTerminal.getProvider = function() { return _provider; };
 
     // ============== Multi-conv 系統 ==============
-    // Claude：兩 tab 'max'（訂閱版、PC dancc CLI）/ 'api'（Anthropic 直連 / VPS）。
+    // Claude：兩 tab 'max'（訂閱版、PC dancc CLI）/ 'api'（VPS cc-bridge 等）。
     // Codex：單 tab 'codex'。localStorage 索引 + IndexedDB(studio_chats) 訊息
+    // 蘇景明（deepseek）：單 tab 'deepseek'，同模式（cc-bridge → deepseek CLI → DeepSeek）。
 
     const TABS = ['max', 'api'];
     const LS_KEYS = {
@@ -165,18 +214,29 @@
         maxActive: 'claude_max_active',
         apiConvs:  'claude_api_convs',
         apiActive: 'claude_api_active',
-        codexConvs:  'codex_convs',
-        codexActive: 'codex_active',
+        codexConvs:    'codex_convs',
+        codexActive:   'codex_active',
+        deepseekConvs:  'deepseek_convs',
+        deepseekActive: 'deepseek_active',
     };
-    const CONV_IDB_PREFIX  = 'claude_conv_';
-    const CODEX_IDB_PREFIX = 'codex_conv_';
+    const CONV_IDB_PREFIX     = 'claude_conv_';
+    const CODEX_IDB_PREFIX    = 'codex_conv_';
+    const DEEPSEEK_IDB_PREFIX = 'deepseek_conv_';
     const LEGACY_IDB_KEY  = 'claude_room_main';
     const LEGACY_SID_KEY  = 'claude_room_session_id';
 
     /** 當前 provider 合法的 tab 清單 */
-    function _validTabs() { return _provider === 'codex' ? ['codex'] : TABS; }
+    function _validTabs() {
+        if (_provider === 'codex')    return ['codex'];
+        if (_provider === 'deepseek') return ['deepseek'];
+        return TABS;
+    }
     /** 當前 provider 的 IndexedDB conv key 前綴 */
-    function _idbPrefix() { return _provider === 'codex' ? CODEX_IDB_PREFIX : CONV_IDB_PREFIX; }
+    function _idbPrefix() {
+        if (_provider === 'codex')    return CODEX_IDB_PREFIX;
+        if (_provider === 'deepseek') return DEEPSEEK_IDB_PREFIX;
+        return CONV_IDB_PREFIX;
+    }
 
     function _lsGetJson(key, fallback) {
         try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
@@ -194,8 +254,18 @@
             else localStorage.setItem(key, String(val));
         } catch (_) {}
     }
-    function _convsKey(tab)  { return tab === 'codex' ? LS_KEYS.codexConvs : tab === 'api' ? LS_KEYS.apiConvs : LS_KEYS.maxConvs; }
-    function _activeKey(tab) { return tab === 'codex' ? LS_KEYS.codexActive : tab === 'api' ? LS_KEYS.apiActive : LS_KEYS.maxActive; }
+    function _convsKey(tab)  {
+        if (tab === 'codex')    return LS_KEYS.codexConvs;
+        if (tab === 'deepseek') return LS_KEYS.deepseekConvs;
+        if (tab === 'api')      return LS_KEYS.apiConvs;
+        return LS_KEYS.maxConvs;
+    }
+    function _activeKey(tab) {
+        if (tab === 'codex')    return LS_KEYS.codexActive;
+        if (tab === 'deepseek') return LS_KEYS.deepseekActive;
+        if (tab === 'api')      return LS_KEYS.apiActive;
+        return LS_KEYS.maxActive;
+    }
     function _genConvId() {
         return 'conv_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
     }
@@ -204,13 +274,14 @@
     }
 
     ClaudeTerminal.getActiveTab = function() {
-        if (_provider === 'codex') return 'codex';
+        if (_provider === 'codex')    return 'codex';
+        if (_provider === 'deepseek') return 'deepseek';
         const t = _lsGetRaw(LS_KEYS.activeTab);
         return TABS.includes(t) ? t : 'max';
     };
 
     ClaudeTerminal.setActiveTab = function(tab) {
-        if (_provider === 'codex') return;  // codex 單 tab，沒得切
+        if (_provider === 'codex' || _provider === 'deepseek') return;  // 單 tab，沒得切
         _lsSetRaw(LS_KEYS.activeTab, TABS.includes(tab) ? tab : 'max');
     };
 
@@ -514,12 +585,9 @@
         // onProgress(event) callback：cc-bridge 路徑會在 streaming 過程中即時回呼
         //   event.type === 'text'     → { type:'text', delta: '...', accumulated: '...' }
         //   event.type === 'tool_use' → { type:'tool_use', tool: { name, input } }
-        // Anthropic 直連模式暫不支援 progress（仍走 await 整段）
-        // sendOpts：{ taskId, signal } — 給 cc-bridge 走的可中止；Anthropic 直連目前只接 signal
-        // Codex 房間一律走 cc-bridge（codex backend 不支援 Anthropic 直連）
-        if (_provider !== 'codex' && cfg.isAnthropicDirect) {
-            return _sendAnthropicDirect(userText, attachments, cfg, sendOpts);
-        }
+        // sendOpts：{ taskId, signal } — 給 cc-bridge 走的可中止
+        // 統一走 cc-bridge（2026-05-24 拔除 Anthropic 直連分支:奧瑞亞 = agent 前端,
+        // 不再支援 raw API 端點。歷史上的 _sendAnthropicDirect / isAnthropicDirect 都已移除）。
         return _sendCcBridge(userText, attachments, cfg, onProgress, sendOpts);
     };
 
@@ -566,7 +634,8 @@
             stream: true,
             max_tokens: cfg.maxTokens,
         };
-        if (backend === 'codex')  body.cc_backend = 'codex';
+        if (backend === 'codex')    body.cc_backend = 'codex';
+        if (backend === 'deepseek') body.cc_backend = 'deepseek';  // 蘇景明走 cc-bridge 的 deepseek backend(CodeWhale TUI)
         if (opts && opts.cwd)     body.cc_cwd = opts.cwd;
         if (opts && opts.sandbox) body.cc_sandbox = opts.sandbox;
 
@@ -628,103 +697,9 @@
         return { reply, usage: usageMeta };
     };
 
-    // ===== Anthropic 直連 =====
-    async function _sendAnthropicDirect(userText, attachments, cfg, sendOpts) {
-        const history = await ClaudeTerminal.loadHistory();
-        const newUserMsg = { role: 'user', content: userText, timestamp: Date.now() };
-        const updatedHistory = [...history, newUserMsg];
-        await ClaudeTerminal.saveHistory(updatedHistory);
+    // （_sendAnthropicDirect 與相關 Anthropic 直連邏輯已於 2026-05-24 移除:奧瑞亞 = agent 前端,Claude 房間一律走 cc-bridge）
 
-        // 重點：cache_control: ephemeral 標在最後一條 user msg → 把所有 prior history 全 cache 住
-        const lastUserBlocks = [{ type: 'text', text: userText, cache_control: { type: 'ephemeral' } }];
-
-        const messages = history.slice(-HISTORY_LIMIT).map(m => ({
-            role: m.role, content: m.content,
-        })).concat([{ role: 'user', content: lastUserBlocks }]);
-
-        const body = {
-            model: cfg.model,
-            max_tokens: cfg.maxTokens,
-            system: [{
-                type: 'text',
-                text: CLAUDE_ROOM_SYSTEM_PROMPT,
-                cache_control: { type: 'ephemeral' },
-            }],
-            messages,
-        };
-        const eff = (cfg.inlineEffort || '').toLowerCase();
-        if (eff && eff !== 'off') {
-            body.thinking = { type: 'adaptive', display: 'summarized' };
-            body.output_config = { effort: eff };
-        }
-
-        let resp, data;
-        try {
-            resp = await fetch(cfg.url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': cfg.key,
-                    'anthropic-version': '2023-06-01',
-                    'anthropic-dangerous-direct-browser-access': 'true',
-                },
-                body: JSON.stringify(body),
-                signal: sendOpts?.signal,
-            });
-        } catch (e) {
-            await ClaudeTerminal.saveHistory(history);
-            if (e?.name === 'AbortError') throw e;  // 讓上層判斷主動停止
-            throw new Error('NETWORK:無法連線到 Anthropic API。原始：' + (e.message || e));
-        }
-
-        try { data = await resp.json(); }
-        catch (e) {
-            await ClaudeTerminal.saveHistory(history);
-            throw new Error('BAD_JSON:Anthropic 回應無法解析 JSON');
-        }
-
-        if (!resp.ok) {
-            await ClaudeTerminal.saveHistory(history);
-            const errMsg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
-            if (resp.status === 401) throw new Error('AUTH:Anthropic API Key 無效。重填。');
-            if (resp.status === 429) throw new Error('API:請求過快或額度用完：' + errMsg);
-            throw new Error('API:' + errMsg);
-        }
-
-        let replyText = '';
-        let thinkingText = '';
-        for (const block of (data.content || [])) {
-            if (block.type === 'text') replyText += block.text || '';
-            else if (block.type === 'thinking') thinkingText += block.thinking || '';
-            else if (block.type === 'redacted_thinking') thinkingText += '(thinking 已加密)';
-        }
-
-        if (!replyText) {
-            await ClaudeTerminal.saveHistory(history);
-            throw new Error('EMPTY:Anthropic 沒回半個字。');
-        }
-
-        const thinking = thinkingText.trim() || null;
-
-        const usageRaw = data.usage || {};
-        const usageMeta = {
-            input_tokens:  usageRaw.input_tokens || 0,
-            output_tokens: usageRaw.output_tokens || 0,
-            cache_creation_input_tokens: usageRaw.cache_creation_input_tokens || 0,
-            cache_read_input_tokens:     usageRaw.cache_read_input_tokens || 0,
-            total_cost_usd: _estimateCost(cfg.model, usageRaw),
-            model: cfg.model,
-        };
-
-        const assistantMsg = { role: 'assistant', content: replyText, timestamp: Date.now() };
-        if (thinking) assistantMsg.thinking = thinking;
-        assistantMsg.usage = usageMeta;
-        await ClaudeTerminal.saveHistory([...updatedHistory, assistantMsg]);
-
-        return { reply: replyText, thinking, usage: usageMeta, sessionFallback: false };
-    }
-
-    // 簡單 cost 估算（USD per M tokens）— 給直連 Anthropic 模式
+    // 簡單 cost 估算（USD per M tokens）— 歷史遺留（直連時用），目前無 caller,保留供未來
     function _estimateCost(model, usage) {
         const PRICE = {
             'claude-opus-4-7':            { in: 15, out: 75, cw: 18.75, cr: 1.5 },
@@ -787,7 +762,9 @@
         const incomingSid = ClaudeTerminal.getSessionId();
         // 新 session 把 Aurelia 房間 system prompt 注入第一條（含 ASK marker 規則）
         // resume 模式不重送 system（已在 session log 裡了，重送可能干擾續接）
-        const sysPrompt = _provider === 'codex' ? CODEX_ROOM_SYSTEM_PROMPT : CLAUDE_ROOM_SYSTEM_PROMPT;
+        const sysPrompt = _provider === 'codex'    ? CODEX_ROOM_SYSTEM_PROMPT
+                        : _provider === 'deepseek' ? DEEPSEEK_ROOM_SYSTEM_PROMPT
+                        :                            CLAUDE_ROOM_SYSTEM_PROMPT;
         const apiMessages = incomingSid
             ? [{ role: 'user', content: userText }]
             : [
@@ -802,7 +779,8 @@
             stream: true,
             max_tokens: cfg.maxTokens,
         };
-        if (_provider === 'codex') body.cc_backend = 'codex';  // cc-bridge 靠這個欄位分流到 codex CLI
+        if (_provider === 'codex')    body.cc_backend = 'codex';     // cc-bridge 靠這個欄位分流到 codex CLI
+        if (_provider === 'deepseek') body.cc_backend = 'deepseek';  // 蘇景明走 cc-bridge 的 deepseek backend(CodeWhale TUI)
         if (incomingSid) body.session_id = incomingSid;
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
@@ -1005,18 +983,23 @@
 
     ClaudeTerminal.sendGroup = async function(opts) {
         opts = opts || {};
-        const provider = opts.provider === 'codex' ? 'codex' : 'claude';
+        const _validProviders = ['claude', 'codex', 'deepseek'];
+        const provider = _validProviders.includes(opts.provider) ? opts.provider : 'claude';
         const cfg = ClaudeTerminal.getConfig();
         if (!cfg || !cfg.url || !cfg.key) {
             throw new Error('NOT_CONFIGURED:還沒設定連線（URL / 密鑰）。去浮窗 ⚙️ 設定。');
         }
         const sid = opts.sessionId || null;
-        const selfName  = provider === 'codex' ? 'Codex' : 'Claude';
-        const otherName = provider === 'codex' ? 'Claude' : 'Codex';
+        // 三人桌:self = 我;others = 其他兩個人(按固定順序給 prompt,讓 selfName 之外的人都列出來)
+        const _nameOf = { claude: 'Claude', codex: 'Codex', deepseek: '蘇景明' };
+        const selfName = _nameOf[provider];
+        const otherNames = ['claude', 'codex', 'deepseek']
+            .filter(p => p !== provider)
+            .map(p => _nameOf[p]);
         const apiMessages = sid
             ? [{ role: 'user', content: opts.userText }]
             : [
-                { role: 'system', content: GROUP_SYSTEM_PROMPT(selfName, otherName) },
+                { role: 'system', content: GROUP_SYSTEM_PROMPT(selfName, otherNames) },
                 { role: 'user', content: opts.userText },
               ];
 
@@ -1026,7 +1009,8 @@
             stream: true,
             max_tokens: cfg.maxTokens,
         };
-        if (provider === 'codex') body.cc_backend = 'codex';
+        if (provider === 'codex')    body.cc_backend = 'codex';
+        if (provider === 'deepseek') body.cc_backend = 'deepseek';  // 蘇景明走 CodeWhale TUI
         if (sid) body.session_id = sid;
         if (Array.isArray(opts.attachments) && opts.attachments.length) body.attachments = opts.attachments;
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
@@ -1044,18 +1028,22 @@
      */
     ClaudeTerminal.sendRaw = async function(opts) {
         opts = opts || {};
-        const provider = opts.provider === 'codex' ? 'codex' : 'claude';
+        const _validProviders = ['claude', 'codex', 'deepseek'];
+        const provider = _validProviders.includes(opts.provider) ? opts.provider : 'claude';
         const cfg = ClaudeTerminal.getConfig();
         if (!cfg || !cfg.url || !cfg.key) {
             throw new Error('NOT_CONFIGURED:還沒設定連線（URL / 密鑰）。');
         }
         const body = {
-            model: cfg.model,
+            // opts.model 可 override cfg.model:例如群聊摘要強制走 'sonnet',
+            // 不被使用者當前選的 opus 干擾。
+            model: opts.model || cfg.model,
             messages: opts.messages || [],
-            stream: true,
+            stream: opts.stream !== false,  // 預設 stream true;可傳 false 關掉(摘要不需要)
             max_tokens: cfg.maxTokens,
         };
-        if (provider === 'codex') body.cc_backend = 'codex';
+        if (provider === 'codex')    body.cc_backend = 'codex';
+        if (provider === 'deepseek') body.cc_backend = 'deepseek';
         if (Number.isFinite(cfg.temperature)) body.temperature = cfg.temperature;
         if (Number.isFinite(cfg.top_p)) body.top_p = cfg.top_p;
 
