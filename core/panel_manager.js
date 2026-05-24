@@ -19,7 +19,7 @@
         TYPES: {
             VN: { id: 'vn-panel', name: 'VN面板', icon: '📖' } // 🔥 不再使用 iframe，改由 VN_PLAYER.launchApp 注入
         },
-        BASE_PATH: './scripts/extensions/third-party/my-tavern-extension/panels/',
+        BASE_PATH: (window.AURELIA_EXT_BASE || './scripts/extensions/third-party/my-tavern-extension') + '/panels/',
         Z_INDEX: 99999
     };
 
