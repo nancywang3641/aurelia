@@ -643,7 +643,6 @@
             const r = await window.ClaudeTerminal.sendRaw({
                 provider: 'claude',
                 model: 'sonnet',  // 強制 Sonnet,不被使用者當前選的 opus 干擾
-                stream: false,
                 messages: [
                     { role: 'system', content: sysPrompt },
                     { role: 'user',   content: scriptLines },
