@@ -30,7 +30,7 @@
         
         // 🔥 這裡只留您需要的面板路徑
         PANELS: {
-            VN: './scripts/extensions/third-party/my-tavern-extension/panels/vn/vn_panel.html'
+            VN: (window.AURELIA_EXT_BASE || './scripts/extensions/third-party/my-tavern-extension') + '/panels/vn/vn_panel.html'
         },
         
         // UI 基礎配置
@@ -108,7 +108,7 @@
     const ErrorHandler = {
         init() {
             window.addEventListener('error', (e) => {
-                if (e.filename && e.filename.includes('my-tavern-extension')) {
+                if (e.filename && e.filename.includes(window.AURELIA_EXT_NAME || 'my-tavern-extension')) {
                     Logger.error('擴展內部錯誤:', e.message);
                 }
             });

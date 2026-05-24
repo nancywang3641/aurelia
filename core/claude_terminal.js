@@ -17,7 +17,7 @@
     'use strict';
 
     const HISTORY_LIMIT = 100; // 每個 conv 最近 100 條（新對話模式才用；resume 模式只送新訊息）
-    const SVG_BASE = 'scripts/extensions/third-party/my-tavern-extension/core/assets/claude/';
+    const SVG_BASE = 'scripts/extensions/third-party/' + (window.AURELIA_EXT_NAME || 'my-tavern-extension') + '/core/assets/claude/';
     const FALLBACK_URL = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=clawd&size=256';
 
     // ============== System Prompt（讓房間主角知道自己在哪、跟誰、怎麼回事）==============
