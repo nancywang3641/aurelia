@@ -161,6 +161,16 @@
         return u + '/v1/chat/completions';
     }
 
+    // helper:從 cfg 按 provider 取對應 model
+    //   cfg.providerModels = { claude: '...', codex: '...', deepseek: '...' }
+    //   claude 兼容舊欄位 inlineModel(歷史遺產)
+    //   codex/deepseek 預設空字串 = 不傳 --model,讓 CLI 自己用預設
+    function _modelFor(c, prov) {
+        const pm = (c && c.providerModels) || {};
+        if (prov === 'claude') return (pm.claude || c.inlineModel || c.model || 'claude-opus-4-7').trim();
+        return (pm[prov] || '').trim();
+    }
+
     ClaudeTerminal.getConfig = function() {
         if (!window.OS_SETTINGS || typeof window.OS_SETTINGS.getClaudeRoomConfig !== 'function') {
             return null;
@@ -180,7 +190,10 @@
             url, key,
             presetId:   activePreset ? activePreset.id   : '',
             presetName: activePreset ? activePreset.name : '',
-            model: (c.inlineModel || c.model || 'claude-opus-4-7').trim(),
+            // model: 看當前 _provider 給對應 model(claude/codex/deepseek 各自存)
+            model: _modelFor(c, _provider),
+            // 暴露完整 providerModels 供上層(sendGroup 群聊)按各別 provider 取用
+            providerModels: c.providerModels || {},
             maxTokens: Number(c.maxTokens) || 4096,
             temperature: Number(c.temperature),
             top_p: Number(c.top_p),
@@ -1003,8 +1016,13 @@
                 { role: 'user', content: opts.userText },
               ];
 
+        // 群聊每輪指定不同 provider,model 也要按 provider 取(不能直接用 cfg.model,
+        // 因為那個是按當前 _provider 算的,group 場景下會錯給)
+        const pmGroup = cfg.providerModels || {};
+        const modelForThis = provider === 'claude' ? (pmGroup.claude || cfg.model)
+                                                   : (pmGroup[provider] || '');
         const body = {
-            model: cfg.model,
+            model: modelForThis,
             messages: apiMessages,
             stream: true,
             max_tokens: cfg.maxTokens,
