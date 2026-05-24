@@ -637,7 +637,7 @@ const VN_TTS_Panel = {
         if (!tts || !input.files.length) return;
 
         const stRoot   = tts.config.stRoot || '';
-        const EXT_REL  = 'public\\scripts\\extensions\\third-party\\my-tavern-extension\\models';
+        const EXT_REL  = 'public\\scripts\\extensions\\third-party\\' + (window.AURELIA_EXT_NAME || 'my-tavern-extension') + '\\models';
         const basePath = stRoot ? `${stRoot}\\${EXT_REL}` : '';
 
         // 把 FileList 按第一層子資料夾分組
@@ -716,7 +716,7 @@ const VN_TTS_Panel = {
         if (!tts) return;
 
         // 固定 URL：SillyTavern 會把 public/ 下的內容直接 serve
-        const url = '/scripts/extensions/third-party/my-tavern-extension/models/tts_models.json';
+        const url = '/scripts/extensions/third-party/' + (window.AURELIA_EXT_NAME || 'my-tavern-extension') + '/models/tts_models.json';
         let data;
         try {
             const resp = await fetch(`${url}?_=${Date.now()}`); // 繞過瀏覽器快取
