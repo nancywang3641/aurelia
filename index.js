@@ -5,6 +5,22 @@
 // @author       none
 // @license      MIT
 
+// 🔥 0. 動態偵測擴展資料夾名（本地可能 my-tavern-extension，發佈到 GitHub 後可能 aurelia）
+const _AURELIA_EXT_NAME = (() => {
+    try {
+        const scripts = document.getElementsByTagName('script');
+        for (let i = scripts.length - 1; i >= 0; i--) {
+            const src = scripts[i].src || '';
+            const m = src.match(/scripts\/extensions\/third-party\/([^\/]+)\/index\.js/);
+            if (m) return m[1];
+        }
+    } catch (e) {}
+    return 'my-tavern-extension'; // fallback
+})();
+const _AURELIA_EXT_BASE = './scripts/extensions/third-party/' + _AURELIA_EXT_NAME;
+window.AURELIA_EXT_NAME = _AURELIA_EXT_NAME;
+window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
+
 // 🔥 1. 全局通訊狀態
 window.PANEL_COMMUNICATION = {
     ready: false,
@@ -14,31 +30,31 @@ window.PANEL_COMMUNICATION = {
 
 // 🔥 2. 模組加載順序
 const MODULE_LOAD_ORDER = [
-    { name: 'bgm_collector', path: './scripts/extensions/third-party/my-tavern-extension/bgm-global-collector.js', key: 'bgmCollector' },
-    { name: 'loader_core', path: './scripts/extensions/third-party/my-tavern-extension/core/loader_core.js', key: 'core' },
-    { name: 'ui_utilities', path: './scripts/extensions/third-party/my-tavern-extension/core/ui_utilities.js', key: 'utilities' },
-    { name: 'tavern_bridge', path: './scripts/extensions/third-party/my-tavern-extension/core/tavern_bridge.js', key: 'bridge' },
-    { name: 'panel_manager', path: './scripts/extensions/third-party/my-tavern-extension/core/panel_manager.js', key: 'panelManager' },
-    { name: 'claude_terminal', path: './scripts/extensions/third-party/my-tavern-extension/core/claude_terminal.js', key: 'claudeTerminal' },
-    { name: 'void_panels', path: './scripts/extensions/third-party/my-tavern-extension/core/void/panels.js', key: 'voidPanels' },
-    { name: 'void_prompts', path: './scripts/extensions/third-party/my-tavern-extension/core/void/prompts.js', key: 'voidPrompts' },
-    { name: 'void_ambient', path: './scripts/extensions/third-party/my-tavern-extension/core/void/ambient.js', key: 'voidAmbient' },
-    { name: 'void_canvas', path: './scripts/extensions/third-party/my-tavern-extension/core/void/canvas.js', key: 'voidCanvas' },
-    { name: 'void_login', path: './scripts/extensions/third-party/my-tavern-extension/core/void/login.js', key: 'voidLogin' },
-    { name: 'chat_window', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_window.js', key: 'chatWindow' },
-    { name: 'chat_room', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_room.js', key: 'voidClaudeRoom' },
-    { name: 'chat_group', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_group.js', key: 'chatGroup' },
-    { name: 'chat_canvas', path: './scripts/extensions/third-party/my-tavern-extension/core/chat_canvas.js', key: 'chatCanvas' },
-    { name: 'void_terminal', path: './scripts/extensions/third-party/my-tavern-extension/core/void_terminal.js', key: 'voidTerminal' },
-    { name: 'control_center', path: './scripts/extensions/third-party/my-tavern-extension/core/control_center.js', key: 'controlCenter' },
-    { name: 'html_extractor', path: './scripts/extensions/third-party/my-tavern-extension/core/html_extractor.js', key: 'htmlExtractor' },
-    { name: 'story_extractor', path: './scripts/extensions/third-party/my-tavern-extension/core/story_extractor.js', key: 'storyExtractor' },
-    { name: 'regex_bridge', path: './scripts/extensions/third-party/my-tavern-extension/core/aurelia_regex_bridge.js', key: 'regexBridge' },
-    { name: 'vn_dom_bridge', path: './scripts/extensions/third-party/my-tavern-extension/core/vn_dom_bridge.js', key: 'vnDomBridge' }
+    { name: 'bgm_collector', path: _AURELIA_EXT_BASE + '/bgm-global-collector.js', key: 'bgmCollector' },
+    { name: 'loader_core', path: _AURELIA_EXT_BASE + '/core/loader_core.js', key: 'core' },
+    { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
+    { name: 'tavern_bridge', path: _AURELIA_EXT_BASE + '/core/tavern_bridge.js', key: 'bridge' },
+    { name: 'panel_manager', path: _AURELIA_EXT_BASE + '/core/panel_manager.js', key: 'panelManager' },
+    { name: 'claude_terminal', path: _AURELIA_EXT_BASE + '/core/claude_terminal.js', key: 'claudeTerminal' },
+    { name: 'void_panels', path: _AURELIA_EXT_BASE + '/core/void/panels.js', key: 'voidPanels' },
+    { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },
+    { name: 'void_ambient', path: _AURELIA_EXT_BASE + '/core/void/ambient.js', key: 'voidAmbient' },
+    { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
+    { name: 'void_login', path: _AURELIA_EXT_BASE + '/core/void/login.js', key: 'voidLogin' },
+    { name: 'chat_window', path: _AURELIA_EXT_BASE + '/core/chat_window.js', key: 'chatWindow' },
+    { name: 'chat_room', path: _AURELIA_EXT_BASE + '/core/chat_room.js', key: 'voidClaudeRoom' },
+    { name: 'chat_group', path: _AURELIA_EXT_BASE + '/core/chat_group.js', key: 'chatGroup' },
+    { name: 'chat_canvas', path: _AURELIA_EXT_BASE + '/core/chat_canvas.js', key: 'chatCanvas' },
+    { name: 'void_terminal', path: _AURELIA_EXT_BASE + '/core/void_terminal.js', key: 'voidTerminal' },
+    { name: 'control_center', path: _AURELIA_EXT_BASE + '/core/control_center.js', key: 'controlCenter' },
+    { name: 'html_extractor', path: _AURELIA_EXT_BASE + '/core/html_extractor.js', key: 'htmlExtractor' },
+    { name: 'story_extractor', path: _AURELIA_EXT_BASE + '/core/story_extractor.js', key: 'storyExtractor' },
+    { name: 'regex_bridge', path: _AURELIA_EXT_BASE + '/core/aurelia_regex_bridge.js', key: 'regexBridge' },
+    { name: 'vn_dom_bridge', path: _AURELIA_EXT_BASE + '/core/vn_dom_bridge.js', key: 'vnDomBridge' }
 ];
 
 // 🔥 [配置] 手機系統檔案列表 (已移除寵物/不夜城/育兒/刑偵/WB/錢包，且移除酒館不需要的 AVS 與獨立世界書)
-const PHONE_BASE_PATH = './scripts/extensions/third-party/my-tavern-extension/os_phone/';
+const PHONE_BASE_PATH = _AURELIA_EXT_BASE + '/os_phone/';
 const PHONE_FILES = [
     // === 🟢 OS 層 (系統基礎) ===
     'os/os_settings.js',
@@ -212,48 +228,48 @@ async function initializeExtension() {
 
         // 🔥 1. 強制載入核心 CSS，解決大廳與設置破圖問題
         console.log('[System] 正在載入核心樣式 (CSS)...');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/aurelia_core_st.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/core/void/lobby.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/aurelia_core_st.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/core/void/lobby.css');
 
         // core 模組 CSS（兩版共用，selector 已 scoped 不污染酒館）
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/toast_manager.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/story_extractor.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/html_extractor.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/image_settings_panel.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/settings_manager.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/toast_manager.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/story_extractor.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/html_extractor.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/image_settings_panel.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/settings_manager.css');
 
         // os_phone/os 模組 CSS
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_settings.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_studio.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_worldbook.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_persona.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_prompts.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_avs.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_avs_rules.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_think.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_debug_panel.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_tarot.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_journal.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_workbench.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_user_center.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_monitor.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_barrage.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_studio.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_worldbook.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_persona.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_prompts.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs_rules.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_think.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_debug_panel.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_tarot.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_workbench.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_user_center.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_monitor.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_barrage.css');
 
         // vn_story / qb / wx / map / rpg 模組 CSS
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/vn_styles.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/vn_core.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/vn_tts_panel.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/vn_ui_workshop.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/qb_core.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/qb_os_404_chaos.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/wx_chat_settings.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/map_core.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/rpg_status_panel.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_achievement.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_claude_recents.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/void_claude_ask.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/chat_window.css');
-        await loadCSS('./scripts/extensions/third-party/my-tavern-extension/css/os_board.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_styles.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_core.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_tts_panel.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_ui_workshop.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/qb_core.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/qb_os_404_chaos.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/wx_chat_settings.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/map_core.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/rpg_status_panel.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/void_achievement.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/void_claude_recents.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/void_claude_ask.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/chat_window.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_board.css');
 
         for (const conf of MODULE_LOAD_ORDER) await loadModule(conf);
 
@@ -311,7 +327,7 @@ async function initializeExtension() {
 function registerSettingsPage() {
     try {
         if (typeof window.registerSettings === 'function') {
-            window.registerSettings('多功能面板系統', './scripts/extensions/third-party/my-tavern-extension/settings.html');
+            window.registerSettings('多功能面板系統', _AURELIA_EXT_BASE + '/settings.html');
         } else {
             createManualSettingsPage();
         }
@@ -352,7 +368,7 @@ function injectSettingsPage() {
 
 function loadSettingsContent() {
     try {
-        fetch('./scripts/extensions/third-party/my-tavern-extension/settings.html')
+        fetch(_AURELIA_EXT_BASE + '/settings.html')
             .then(response => {
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 return response.text();
