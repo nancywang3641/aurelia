@@ -75,6 +75,58 @@
         0 4px 12px var(--cl-warm-shadow, rgba(70, 100, 140, 0.18));
 }
 
+/* ── 蘇景明（deepseek/DeepSeek）房間：清新綠系 ── */
+#aurelia-chat-window.cw-window.cw-deepseek {
+    background: #14241a;         /* 蘇景明 深綠 */
+}
+#aurelia-chat-window.cw-deepseek {
+    --cl-cream:           #ebf2ec;
+    --cl-cream-light:     #f5faf6;
+    --cl-beeswax:         #6fa572;
+    --cl-beeswax-soft:    rgba(30, 50, 35, 0.25);
+    --cl-grenadine:       #3d8048;
+    --cl-cafe-latte:      #5e8068;
+    --cl-text-deep:       #16321f;
+    --cl-paper-grain:     rgba(80, 130, 95, 0.05);
+    --cl-warm-shadow:     rgba(80, 130, 95, 0.18);
+    --cl-warm-glow:       rgba(111, 165, 114, 0.50);
+    --cl-portrait-bg-1:   var(--cl-beeswax-soft);
+    --cl-portrait-bg-2:   var(--cl-beeswax);
+    --cl-portrait-bg-3:   var(--cl-grenadine);
+}
+#aurelia-chat-window.cw-deepseek .cw-input-row {
+    border-top-color: rgba(111, 165, 114, 0.5);
+}
+#aurelia-chat-window.cw-deepseek .cw-input::placeholder {
+    color: rgba(94, 128, 104, 0.6);
+}
+#aurelia-chat-window.cw-deepseek .cw-attach-btn {
+    background: rgba(111, 165, 114, 0.25);
+    border-color: rgba(111, 165, 114, 0.5);
+}
+#aurelia-chat-window.cw-deepseek .cw-attach-btn:hover {
+    background: rgba(111, 165, 114, 0.4);
+    box-shadow: 0 0 8px rgba(111, 165, 114, 0.4);
+}
+#aurelia-chat-window.cw-deepseek .cw-send-btn {
+    border-color: rgba(61, 128, 72, 0.5);
+}
+#aurelia-chat-window.cw-deepseek .cw-send-btn:hover {
+    box-shadow: 0 0 12px rgba(61, 128, 72, 0.4);
+}
+#aurelia-chat-window.cw-deepseek .claude-picker-bar {
+    background: rgba(111, 165, 114, 0.10);
+    border-bottom-color: rgba(111, 165, 114, 0.25);
+}
+#aurelia-chat-window.cw-deepseek .claude-bubble.from-user {
+    box-shadow: 0 4px 12px rgba(61, 128, 72, 0.3);
+}
+#aurelia-chat-window.cw-deepseek .claude-bubble.from-claude {
+    box-shadow:
+        0 0 0 2px rgba(111, 165, 114, 0.18),
+        0 4px 12px var(--cl-warm-shadow, rgba(80, 130, 95, 0.18));
+}
+
 /* ── 標題列（拖動把手）── */
 #aurelia-chat-window .cw-titlebar {
     display: flex;
@@ -236,12 +288,15 @@
     background: var(--cl-cream-light, #fff5e1);
     border-top: 1px solid rgba(234, 176, 92, 0.5);
     flex-shrink: 0;
+    position: relative;   /* 給 @-mention popup 當定位錨點 */
 }
 
 #aurelia-chat-window .cw-input {
     flex: 1;
     min-width: 0;
     resize: none;
+    box-sizing: border-box;
+    min-height: 38px;
     max-height: 160px;
     padding: 9px 11px;
     border: 1px solid var(--cl-beeswax, #EAB05C);
@@ -257,6 +312,48 @@
 
 #aurelia-chat-window .cw-input::placeholder {
     color: rgba(137, 102, 69, 0.55);
+}
+
+/* ── @-mention 下拉(群聊 only) ── */
+#aurelia-chat-window .cw-mention-popup {
+    position: absolute;
+    bottom: 100%;                  /* 緊貼 input-row 上緣 */
+    left: 8px;
+    right: 8px;
+    margin-bottom: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+    background: #fffaf0;
+    border: 1px solid var(--cl-beeswax, #EAB05C);
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(60, 40, 20, 0.2);
+    z-index: 200;
+    padding: 4px 0;
+}
+#aurelia-chat-window .cw-mention-popup-hidden {
+    display: none;
+}
+#aurelia-chat-window .cw-mention-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--cl-text-deep, #3d2010);
+    user-select: none;
+}
+#aurelia-chat-window .cw-mention-item:hover,
+#aurelia-chat-window .cw-mention-item.active {
+    background: rgba(217, 81, 34, 0.12);
+    color: #D95122;
+}
+#aurelia-chat-window .cw-mention-emoji {
+    font-size: 16px;
+    line-height: 1;
+}
+#aurelia-chat-window .cw-mention-label {
+    font-weight: 600;
 }
 
 #aurelia-chat-window .cw-attach-btn,
@@ -626,7 +723,8 @@
     align-items: flex-end;
 }
 #aurelia-chat-window .cg-bubble-wrap.cg-from-claude,
-#aurelia-chat-window .cg-bubble-wrap.cg-from-codex {
+#aurelia-chat-window .cg-bubble-wrap.cg-from-codex,
+#aurelia-chat-window .cg-bubble-wrap.cg-from-deepseek {
     align-self: flex-start;
     align-items: flex-start;
 }
@@ -636,8 +734,9 @@
     font-weight: 700;
     padding: 0 4px;
 }
-#aurelia-chat-window .cg-hdr-claude { color: #c77b3a; }
-#aurelia-chat-window .cg-hdr-codex  { color: #3f6fc4; }
+#aurelia-chat-window .cg-hdr-claude   { color: #c77b3a; }
+#aurelia-chat-window .cg-hdr-codex    { color: #3f6fc4; }
+#aurelia-chat-window .cg-hdr-deepseek { color: #4f9a5a; }  /* 蘇景明:綠色,跟單聊房同色系 */
 
 #aurelia-chat-window .cg-bubble {
     padding: 9px 13px;
@@ -664,12 +763,43 @@
     border: 1px solid rgba(47, 111, 196, 0.5);
     border-top-left-radius: 4px;
 }
+#aurelia-chat-window .cg-bubble.cg-from-deepseek {
+    background: #ffffff;
+    color: #1f2a23;
+    border: 1px solid rgba(79, 154, 90, 0.5);
+    border-top-left-radius: 4px;
+}
 #aurelia-chat-window .cg-bubble.cg-typing {
     color: #9a93a8;
     font-style: italic;
 }
 #aurelia-chat-window .cg-bubble.cg-error {
     color: #d9534f;
+}
+
+/* 🧹 摘要 & 重啟產生的「前情提要」分隔卡:置中、灰底、淡邊框、跟氣泡完全分開 */
+#aurelia-chat-window .cg-recap-card {
+    align-self: stretch;
+    margin: 8px 12px 14px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 245, 225, 0.35);
+    border-radius: 10px;
+    color: #d8d2c4;
+}
+#aurelia-chat-window .cg-recap-hdr {
+    font-size: 11px;
+    font-weight: 700;
+    color: #b9a880;
+    margin-bottom: 6px;
+    text-transform: none;
+    letter-spacing: 0.5px;
+}
+#aurelia-chat-window .cg-recap-body {
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 /* markdown 氣泡：覆寫 .cg-bubble 的 pre-wrap。

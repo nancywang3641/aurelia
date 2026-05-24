@@ -16,9 +16,10 @@
     let _subPanel = null;            // 當前開啟的子面板名（null = 沒開）
 
     const IDENTITY = {
-        claude: '🦀 Claude’s Room',
-        codex:  '🔷 Codex’s Room',
-        group:  '👥 群聊區',
+        claude:   '🦀 Claude’s Room',
+        codex:    '🔷 Codex’s Room',
+        deepseek: '🟢 蘇景明 的房間',
+        group:    '👥 群聊區',
     };
 
     function _sizeForViewport() {
@@ -53,7 +54,9 @@
                     <button class="cw-tool-btn" data-panel="settings"  type="button" title="設置">⚙️</button>
                     <button class="cw-tool-btn" data-panel="workbench" type="button" title="工作檯">🛠️</button>
                     <button class="cw-tool-btn" data-panel="spend"     type="button" title="額度">💰</button>
+                    <button class="cw-tool-btn" data-panel="board"     type="button" title="留言板">📝</button>
                     <button class="cw-tool-btn" data-panel="recents"   type="button" title="Recents">🕘</button>
+                    <button class="cw-tool-btn cw-tool-compact" data-action="compact" type="button" title="摘要 & 重啟群聊(壓縮上下文,清三人 session,留前情提要)" style="display:none;">🧹</button>
                 </div>
                 <button class="cw-close" id="cw-close" type="button" title="關閉">✕</button>
             </div>
@@ -109,7 +112,13 @@
         el.querySelector('#cw-close').addEventListener('click', () => ChatWindow.close());
         el.querySelector('#cw-subpanel-close').addEventListener('click', () => ChatWindow.closeSubPanel());
         el.querySelectorAll('.cw-tool-btn').forEach(b => {
-            b.addEventListener('click', () => ChatWindow.openSubPanel(b.dataset.panel));
+            b.addEventListener('click', () => {
+                if (b.dataset.action === 'compact') {
+                    ChatWindow.compactGroup(b);
+                } else if (b.dataset.panel) {
+                    ChatWindow.openSubPanel(b.dataset.panel);
+                }
+            });
         });
         _bindDrag(el.querySelector('#cw-titlebar'), el);
         _bindChatInput(el);
@@ -169,7 +178,120 @@
 
         if (sendBtn) sendBtn.onclick = ChatWindow.submitInput;
         if (input) {
+            // ── @-mention 自動完成（只在群聊 provider 啟用）──
+            const MENTIONS = [
+                { key: 'claude',   label: 'Claude',   emoji: '🦀', alias: ['claude', '丹'] },
+                { key: 'codex',    label: 'Codex',    emoji: '🔷', alias: ['codex', '阿洛'] },
+                { key: 'deepseek', label: '蘇景明',   emoji: '🟢', alias: ['蘇景明', '景明', 'deepseek', 'deepseek'] },
+            ];
+            const inputRow = el.querySelector('.cw-input-row');
+            let popup = el.querySelector('#cw-mention-popup');
+            if (!popup) {
+                popup = document.createElement('div');
+                popup.id = 'cw-mention-popup';
+                popup.className = 'cw-mention-popup cw-mention-popup-hidden';
+                (inputRow || el).appendChild(popup);
+            }
+            const mState = { active: false, items: [], idx: 0, atPos: -1 };
+
+            const _getMentionRange = () => {
+                if (_provider !== 'group') return null;
+                const text = input.value;
+                const caret = input.selectionStart;
+                for (let i = caret - 1; i >= 0; i--) {
+                    const ch = text[i];
+                    if (ch === '@') {
+                        const query = text.slice(i + 1, caret);
+                        if (/\s/.test(query)) return null;
+                        return { atPos: i, query };
+                    }
+                    if (/\s/.test(ch)) return null;
+                }
+                return null;
+            };
+
+            const _renderMention = () => {
+                if (!mState.active || !mState.items.length) {
+                    popup.classList.add('cw-mention-popup-hidden');
+                    return;
+                }
+                popup.innerHTML = mState.items.map((it, i) => `
+                    <div class="cw-mention-item${i === mState.idx ? ' active' : ''}" data-key="${it.key}">
+                        <span class="cw-mention-emoji">${it.emoji}</span>
+                        <span class="cw-mention-label">${it.label}</span>
+                    </div>
+                `).join('');
+                popup.classList.remove('cw-mention-popup-hidden');
+                popup.querySelectorAll('.cw-mention-item').forEach((node) => {
+                    node.addEventListener('mousedown', (ev) => {
+                        ev.preventDefault(); // 別讓 input blur
+                        _commitMention(node.dataset.key);
+                    });
+                });
+            };
+
+            const _commitMention = (key) => {
+                const item = MENTIONS.find((m) => m.key === key);
+                if (!item || mState.atPos < 0) return;
+                const text = input.value;
+                const before = text.slice(0, mState.atPos);
+                const afterCaret = text.slice(input.selectionStart);
+                const insert = `@${item.label} `;
+                input.value = before + insert + afterCaret;
+                const newCaret = before.length + insert.length;
+                input.setSelectionRange(newCaret, newCaret);
+                mState.active = false;
+                _renderMention();
+                input.focus();
+                input.dispatchEvent(new Event('input'));
+            };
+
+            const _refreshMention = () => {
+                const range = _getMentionRange();
+                if (!range) {
+                    mState.active = false;
+                    _renderMention();
+                    return;
+                }
+                const q = range.query.toLowerCase();
+                const items = MENTIONS.filter((m) =>
+                    m.alias.some((a) => a.toLowerCase().startsWith(q))
+                );
+                mState.active = true;
+                mState.items = items;
+                mState.idx = 0;
+                mState.atPos = range.atPos;
+                _renderMention();
+            };
+
             input.onkeydown = (e) => {
+                // @-mention popup 鍵盤導航(優先)
+                if (mState.active && mState.items.length) {
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        mState.idx = (mState.idx + 1) % mState.items.length;
+                        _renderMention();
+                        return;
+                    }
+                    if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        mState.idx = (mState.idx - 1 + mState.items.length) % mState.items.length;
+                        _renderMention();
+                        return;
+                    }
+                    if ((e.key === 'Enter' || e.key === 'Tab') && !e.isComposing) {
+                        e.preventDefault();
+                        _commitMention(mState.items[mState.idx].key);
+                        return;
+                    }
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        mState.active = false;
+                        _renderMention();
+                        return;
+                    }
+                }
+                // 一般送出
                 if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                     e.preventDefault();
                     ChatWindow.submitInput();
@@ -179,7 +301,17 @@
                 input.style.height = 'auto';
                 input.style.height = Math.min(input.scrollHeight, 160) + 'px';
             };
-            input.addEventListener('input', autoGrow);
+            input.addEventListener('input', () => {
+                autoGrow();
+                _refreshMention();
+            });
+            input.addEventListener('blur', () => {
+                // 延遲關，讓 mousedown 來得及 fire
+                setTimeout(() => {
+                    mState.active = false;
+                    _renderMention();
+                }, 150);
+            });
             autoGrow();
         }
         if (attachBtn && fileInput) {
@@ -213,6 +345,9 @@
     // 載入當前 provider 的 conv 歷史並渲染進浮窗
     async function _loadRoom(provider) {
         const cwBody = _winEl && _winEl.querySelector('#cw-body');
+        // 🧹 摘要按鈕只在群聊房顯示
+        const compactBtn = _winEl && _winEl.querySelector('.cw-tool-compact');
+        if (compactBtn) compactBtn.style.display = (provider === 'group') ? '' : 'none';
         // 群聊區：交給 ChatGroup，跳過單房間流程
         if (provider === 'group') {
             if (cwBody) cwBody.classList.add('cw-body-group');
@@ -550,13 +685,14 @@
     }
 
     ChatWindow.open = async function (provider) {
-        provider = (provider === 'codex' || provider === 'group') ? provider : 'claude';
+        provider = (provider === 'codex' || provider === 'deepseek' || provider === 'group') ? provider : 'claude';
         _provider = provider;
         if (!_winEl) _winEl = _buildWindow();
         const idEl = _winEl.querySelector('#cw-identity');
         if (idEl) idEl.textContent = IDENTITY[provider];
-        _winEl.classList.toggle('cw-codex', provider === 'codex');
-        _winEl.classList.toggle('cw-group', provider === 'group');
+        _winEl.classList.toggle('cw-codex',    provider === 'codex');
+        _winEl.classList.toggle('cw-deepseek', provider === 'deepseek');
+        _winEl.classList.toggle('cw-group',    provider === 'group');
         _winEl.style.display = 'flex';
         _isOpen = true;
         if (_menuEl) _menuEl.style.display = 'none';
@@ -591,6 +727,7 @@
             _menuEl.innerHTML =
                 '<button class="cw-lm-item" data-p="claude" type="button">🦀 Claude 的房間</button>' +
                 '<button class="cw-lm-item" data-p="codex" type="button">🔷 Codex 的房間</button>' +
+                '<button class="cw-lm-item" data-p="deepseek" type="button">🟢 蘇景明 的房間</button>' +
                 '<button class="cw-lm-item" data-p="group" type="button">👥 群聊區</button>';
             document.body.appendChild(_menuEl);
             _menuEl.querySelectorAll('.cw-lm-item').forEach(b => {
@@ -618,7 +755,7 @@
 
     const _SUBPANEL_TITLES = {
         settings: '⚙️ 設置', workbench: '🛠️ 工作檯',
-        spend: '💰 額度', recents: '🕘 Recents',
+        spend: '💰 額度', board: '📝 留言板', recents: '🕘 Recents',
     };
 
     // 工作檯 / 額度模組自帶關閉鈕（原本呼叫 PhoneSystem.goHome）→ 改接 closeSubPanel
@@ -641,8 +778,8 @@
         const title = _winEl.querySelector('#cw-subpanel-title');
         const body = _winEl.querySelector('#cw-subpanel-body');
         if (!sp || !body) return;
-        // 工作檯 / 額度自帶 header + 關閉鈕 → 藏浮窗自己的 header，避免雙標題雙 ✕
-        const moduleOwnsHeader = (name === 'workbench' || name === 'spend');
+        // 工作檯 / 額度 / 留言板自帶 header + 關閉鈕 → 藏浮窗自己的 header，避免雙標題雙 ✕
+        const moduleOwnsHeader = (name === 'workbench' || name === 'spend' || name === 'board');
         if (head) head.style.display = moduleOwnsHeader ? 'none' : 'flex';
         if (title) title.textContent = _SUBPANEL_TITLES[name] || name;
         body.innerHTML = '';
@@ -659,6 +796,13 @@
                 _hijackModuleClose(body, '#sp-close-btn');
             } else {
                 body.innerHTML = '<div class="cw-sub-missing">額度模組未載入</div>';
+            }
+        } else if (name === 'board') {
+            if (window.OS_BOARD && typeof window.OS_BOARD.launch === 'function') {
+                window.OS_BOARD.launch(body);
+                _hijackModuleClose(body, '#ob-close-btn');
+            } else {
+                body.innerHTML = '<div class="cw-sub-missing">留言板模組未載入</div>';
             }
         } else if (name === 'settings') {
             _renderSettingsPanel(body);
@@ -678,6 +822,40 @@
         if (!_winEl) return;
         const sp = _winEl.querySelector('#cw-subpanel');
         if (sp) sp.style.display = 'none';
+    };
+
+    // 🧹 按鈕觸發:對群聊做一次「摘要 & 重啟」
+    //   呼叫 Sonnet 壓縮整段對話 → 清三人 session → 留下「前情提要」卡片在頂部
+    //   Sonnet 走 Rae 的 Max 訂閱配額,後台雜活 0 元
+    ChatWindow.compactGroup = async function (btnEl) {
+        if (_provider !== 'group') return;
+        if (!window.ChatGroup || typeof window.ChatGroup.compact !== 'function') return;
+        const ok = window.confirm(
+            '把整段群聊壓成一頁「前情提要」,並清掉三人的 session?\n\n' +
+            '會用 Claude Sonnet 生成摘要(走 Max 訂閱,免費)。\n' +
+            '之後三人從零開始記新對話,但會看到前情提要。'
+        );
+        if (!ok) return;
+        const _btn = btnEl || (_winEl && _winEl.querySelector('.cw-tool-compact'));
+        const _origText = _btn ? _btn.textContent : null;
+        if (_btn) { _btn.disabled = true; _btn.textContent = '⏳'; }
+        try {
+            const r = await window.ChatGroup.compact();
+            if (r && r.ok) {
+                // 成功:hydrate 已重畫過,不用再動 UI
+                return;
+            }
+            const why = (r && r.reason) || 'unknown';
+            const msg = why === 'busy'        ? '群聊還在忙(有 AI 在回應),稍後再試。'
+                      : why === 'in_game'     ? '對局進行中不能摘要,先 endGame 或等對局結束。'
+                      : why === 'too_short'   ? '對話太短(<6 則)沒必要壓縮。'
+                      : why === 'empty_reply' ? '摘要結果是空的,Sonnet 可能罷工,過幾秒重試。'
+                      : why === 'error'       ? '出錯了:' + ((r && r.error) || '未知')
+                      :                         '未知狀況:' + why;
+            window.alert(msg);
+        } finally {
+            if (_btn) { _btn.disabled = false; if (_origText !== null) _btn.textContent = _origText; }
+        }
     };
 
     ChatWindow.submitInput = function () {
