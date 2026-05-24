@@ -62,6 +62,51 @@
         { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6'    },
         { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5'     },
     ];
+    // Codex CLI 走 ~/.codex/config.toml 決定預設主模型,也接受 --model 字串 hint。
+    // 清單按 ChatGPT App / Codex 訂閱帳號當前能 access 的 model 命名(小寫破折號)。
+    // 如果跑時報 "model not found" → 回 picker 選「預設」交給 config.toml。
+    const CODEX_MODELS = [
+        { id: '',               label: '預設(走 ~/.codex/config.toml)⭐' },
+        { id: 'gpt-5.5',        label: 'GPT-5.5(旗艦)' },
+        { id: 'gpt-5.4',        label: 'GPT-5.4' },
+        { id: 'gpt-5.4-mini',   label: 'GPT-5.4-Mini(快版,便宜)' },
+        { id: 'gpt-5.3-codex',  label: 'GPT-5.3-Codex(寫程式專用)' },
+        { id: 'gpt-5.2',        label: 'GPT-5.2(舊版)' },
+    ];
+    // DeepSeek V4 系列(2026 起,V3 chat/coder/reasoner 已下架)
+    // `deepseek models` 列出來只有兩個:pro 是預設旗艦、flash 是便宜快版
+    // 空 id = 不傳 --model,讓 CodeWhale 用預設(目前 = v4-pro)
+    const DEEPSEEK_MODELS = [
+        { id: '',                  label: 'CodeWhale 預設(v4-pro)⭐' },
+        { id: 'deepseek-v4-pro',   label: 'deepseek-v4-pro(強版,推理/規劃)' },
+        { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash(快版,便宜)' },
+    ];
+    // helper:依當前 provider 取對應的 model 清單
+    function _modelsForProvider(prov) {
+        if (prov === 'codex')    return CODEX_MODELS;
+        if (prov === 'deepseek') return DEEPSEEK_MODELS;
+        return CLAUDE_MODELS;
+    }
+    // helper:從 cfg 取「該 provider 目前選的 model id」
+    //   cfg.providerModels = { claude: '...', codex: '...', deepseek: '...' }
+    //   claude 兼容舊欄位 cfg.inlineModel(歷史遺產,純 Claude 時代用的)
+    function _getProviderModel(cfg, prov) {
+        const pm = (cfg && cfg.providerModels) || {};
+        if (prov === 'claude') return pm.claude || cfg.inlineModel || cfg.model || 'claude-opus-4-7';
+        return pm[prov] || '';  // codex/deepseek 預設空 = 不指定、讓 CLI 自己用預設
+    }
+    // helper:設定「該 provider 的 model id」回寫進 cfg
+    function _setProviderModel(cfg, prov, modelId) {
+        cfg.providerModels = cfg.providerModels || {};
+        cfg.providerModels[prov] = modelId;
+        if (prov === 'claude') cfg.inlineModel = modelId;  // 同步舊欄位,避免別處取值落差
+    }
+    // helper:把 model id 轉成顯示用 label(找不到就回 id)
+    function _modelLabel(modelId, prov) {
+        const list = _modelsForProvider(prov);
+        const found = list.find(x => x.id === modelId);
+        return found ? found.label.replace(' ⭐', '') : (modelId || list[0].label.replace(' ⭐', ''));
+    }
     const CLAUDE_EFFORTS = [
         { id: 'off',    label: 'Off · 不思考' },
         { id: 'low',    label: 'Low · 簡單問題跳過' },
@@ -108,25 +153,21 @@
         if (!cfg) return;
         const prov = _provider();
         const isCodex    = prov === 'codex';
-        const isOpencode = prov === 'deepseek';
-        // Codex / 蘇景明:模型 / 思考 picker 對它們無效
-        //   - codex 模型由 ~/.codex/config.toml 決定
-        //   - deepseek 模型由 deepseek auth login 設好的預設 provider 決定
-        // 只留身分標示 + 連線預設
-        const isAgentBackend = isCodex || isOpencode;
+        const isDeepseek = prov === 'deepseek';
+        // thinking effort 只 Claude 有(Codex/DeepSeek model 不吃 effort 參數)
+        const hasEffort = !isCodex && !isDeepseek;
         const m = _el('claude-pick-model');
         const e = _el('claude-pick-effort');
         const ep = _el('claude-pick-endpoint');
         const bk = _el('claude-pick-backend');
         const sep1 = _el('claude-pick-sep1');
-        if (e)    e.style.display    = isAgentBackend ? 'none' : '';
-        if (sep1) sep1.style.display = isAgentBackend ? 'none' : '';
+        if (e)    e.style.display    = hasEffort ? '' : 'none';
+        if (sep1) sep1.style.display = hasEffort ? '' : 'none';
         if (m) {
-            m.textContent = isCodex    ? '🔷 Codex'
-                          : isOpencode ? '🟢 蘇景明'
-                          :              _shortModelLabel(cfg.inlineModel || cfg.model);
+            const emoji = isCodex ? '🔷 ' : isDeepseek ? '🟢 ' : '';
+            m.textContent = emoji + _modelLabel(_getProviderModel(cfg, prov), prov);
         }
-        if (e && !isAgentBackend) e.textContent = _shortEffortLabel(cfg.inlineEffort);
+        if (e && hasEffort) e.textContent = _shortEffortLabel(cfg.inlineEffort);
         if (ep) ep.textContent = _shortEndpointLabel(cfg);
         // backend 選單一律顯示（Anthropic 直連分支已於 2026-05-24 移除）
         if (bk) bk.style.display = '';
@@ -138,10 +179,14 @@
         if (!cfg) return;
         const popup = _el('claude-picker-popup');
         if (!popup) return;
-        const curModel   = cfg.inlineModel   || cfg.model || 'claude-opus-4-7';
-        const curEffort  = cfg.inlineEffort  || '';
-        const curBackend = cfg.inlineBackend || '';
+        const prov        = _provider();
+        const models      = _modelsForProvider(prov);
+        const curModel    = _getProviderModel(cfg, prov);
+        const curEffort   = cfg.inlineEffort  || '';
         const curPresetId = cfg.activePresetId || '';
+        const modelSectionTitle = prov === 'codex'    ? 'Codex Model'
+                                : prov === 'deepseek' ? '蘇景明 Model'
+                                :                       'Claude Model';
 
         const sectionHtml = (title, list, curId, dataKey) => `
             <div class="claude-picker-section-title">${title}</div>
@@ -160,13 +205,12 @@
             label: (p.name || p.id) + (p.url ? '' : ' (未設定)'),
         }));
 
-        // Codex 房間：模型 / 思考對 codex 無效，popup 只給連線預設
-        popup.innerHTML = _provider() === 'codex'
-            ? sectionHtml('連線預設', presetList, curPresetId, 'preset')
-            : `
-            ${sectionHtml('連線預設',     presetList,        curPresetId, 'preset')}
-            ${sectionHtml('Model',        CLAUDE_MODELS,     curModel,    'model')}
-            ${sectionHtml('Thinking 思考', CLAUDE_EFFORTS,    curEffort || 'medium', 'effort')}
+        // 三段:連線預設 / Model(provider-aware) / Thinking(只 Claude)
+        const showEffort = (prov === 'claude');
+        popup.innerHTML = `
+            ${sectionHtml('連線預設',  presetList, curPresetId, 'preset')}
+            ${sectionHtml(modelSectionTitle, models, curModel, 'model')}
+            ${showEffort ? sectionHtml('Thinking 思考', CLAUDE_EFFORTS, curEffort || 'medium', 'effort') : ''}
         `;
         popup.style.display = 'block';
 
@@ -179,7 +223,9 @@
             _updateClaudePickerLabel(); _openClaudePickerPopup();
         });
         popup.querySelectorAll('[data-model]').forEach(el => el.onclick = () => {
-            const c = _getClaudeRoomCfg(); c.inlineModel = el.dataset.model; _saveClaudeRoomCfg(c);
+            const c = _getClaudeRoomCfg();
+            _setProviderModel(c, prov, el.dataset.model);
+            _saveClaudeRoomCfg(c);
             _updateClaudePickerLabel(); _openClaudePickerPopup();
         });
         popup.querySelectorAll('[data-effort]').forEach(el => el.onclick = () => {
@@ -624,10 +670,13 @@
                 ? `$${u.total_cost_usd.toFixed(4)}` : '$0.0000';
             const cacheNote = (u.cache_read_input_tokens > 0)
                 ? ` · cache ${u.cache_read_input_tokens}r` : '';
+            // 顯示「實際 model」:讓 Rae 確認跑的是誰(picker 選的跟實際可能不一致,
+            // 例如 deepseek 空字串會 fallback CodeWhale 預設、Claude 訂閱可能 route 到不同版本)
+            const modelStr = u.model ? ` · ${u.model}` : '';
             const footer = document.createElement('div');
             footer.className = 'claude-bubble-usage';
             footer.title = `model: ${u.model || '?'}\ninput: ${u.input_tokens || 0}\noutput: ${u.output_tokens || 0}\ncache write: ${u.cache_creation_input_tokens || 0}\ncache read: ${u.cache_read_input_tokens || 0}\ncost: ${cost}`;
-            footer.textContent = `💰 ${cost} · ${u.input_tokens || 0}↑ ${u.output_tokens || 0}↓${cacheNote}`;
+            footer.textContent = `💰 ${cost} · ${u.input_tokens || 0}↑ ${u.output_tokens || 0}↓${cacheNote}${modelStr}`;
             wrap.appendChild(footer);
         }
 
