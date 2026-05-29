@@ -429,24 +429,90 @@
          */
         // tagHint：觸發此次 DOM block 的 VN 標籤名（可選）
         // 用於排除 ST 渲染後與 VN 標籤同名的 HTML 元素（避免把 AI 的 <news> 當作注入內容計數）
-        _showDomBlock: function(tagHint) {
+        // 拿一段文字（整顆區塊）去酒館正則對照表找「卡片型」規則，命中就用 replace_string 渲染成卡片 HTML。
+        // 支援任意格式的區塊（<tag>…</tag>、【…|…】 等），因為是拿整段去比對 find_regex，不靠 tag 名。
+        // 回傳：完整 HTML 文件→包成 iframe；一般 HTML→直接回傳；沒命中→ ''。
+        _grabRegexCardHtml: function(blockText) {
+            if (!blockText) return '';
+            const _win = window.parent || window;
+            const _th = (_win && _win.TavernHelper) || window.TavernHelper;
+            if (!_th || typeof _th.getTavernRegexes !== 'function') return '';
+            // 把 "/pattern/flags" 字串轉成 RegExp（酒館 find_regex 是這個格式）
+            const _parseRegex = (str) => {
+                if (!str) return null;
+                try {
+                    const m = String(str).match(/^\/([\s\S]*)\/([a-z]*)$/i);
+                    if (m) return new RegExp(m[1], (m[2] || '').replace(/g/g, ''));
+                    return new RegExp(str, 'i');
+                } catch (e) { return null; }
+            };
+            let _regexes = [];
+            try { _regexes = _regexes.concat(_th.getTavernRegexes({ type: 'global' }) || []); } catch (e) {}
+            try { _regexes = _regexes.concat(_th.getTavernRegexes({ type: 'character', name: 'current' }) || []); } catch (e) {}
+            for (const r of _regexes) {
+                if (!r || r.enabled === false || !r.find_regex) continue;
+                const _rs = r.replace_string || '';
+                // 只認「卡片型」規則（取代內容含任何 HTML 標籤），避免純文字替換或一般旁白被誤判成卡片
+                if (!/<[a-z!\/]/i.test(_rs)) continue;
+                const _fr = _parseRegex(r.find_regex);
+                if (!_fr || !_fr.test(blockText)) continue;
+                _fr.lastIndex = 0;
+                let _card = String(blockText).replace(_fr, _rs);
+                // 去掉 ```html 圍欄
+                _card = _card.replace(/^\s*```html\s*/i, '').replace(/```\s*$/, '').trim();
+                // 完整 HTML 文件 → 包成 iframe（讓內嵌 <script> / 完整文件正常渲染，等同酒館做法）
+                if (/<!DOCTYPE|<html[\s>]|<body[\s>]/i.test(_card)) {
+                    const _esc = _card.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+                    return '<iframe class="vn-regex-card" scrolling="no" srcdoc="' + _esc + '"></iframe>';
+                }
+                return _card;
+            }
+            return '';
+        },
+
+        // tagHint：觸發的 <tag> 名（會去原始訊息撈整顆 <tag>…</tag> 來比對）
+        // rawBlockOverride：直接給整段區塊文字（如 【…】 這種非 tag 形式）
+        // precomputedHtml：偵測階段已算好的卡片 HTML（避免重複掃描正則）
+        _showDomBlock: function(tagHint, rawBlockOverride, precomputedHtml) {
             const _win = window.parent || window;
             const _doc = _win.document || document;
 
-            // (前面取得 chatNode 的邏輯不變...)
-            let chatNode = this._currentMessageId
-                ? _doc.querySelector(`.mes[mesid="${this._currentMessageId}"] .mes_text`)
-                : _doc.querySelector('#chat .mes.last_mes .mes_text');
-            if (!chatNode) {
-                chatNode = this._currentMessageId
-                    ? _doc.querySelector(`.mes[mesid="${this._currentMessageId}"]`)
-                    : _doc.querySelector('#chat .mes.last_mes');
+            // 🔥 彈窗後「抓正則」(取代「抓 DOM」)：找配得上這段區塊的正則，用 replace_string 渲染；不靠 live DOM。
+            let _regexCardHtml = precomputedHtml || '';
+            if (!_regexCardHtml) {
+                let _block = rawBlockOverride || '';
+                if (!_block && tagHint) {
+                    const _th = (_win && _win.TavernHelper) || window.TavernHelper;
+                    if (_th && typeof _th.getChatMessages === 'function') {
+                        try {
+                            const _mid = (this._currentMessageId != null) ? this._currentMessageId : -1;
+                            const _msg = _th.getChatMessages(_mid)[0];
+                            const _raw = (_msg && _msg.message) || '';
+                            const _bm = _raw.match(new RegExp('<' + tagHint + '\\b[^>]*>[\\s\\S]*?<\\/' + tagHint + '>', 'i'));
+                            if (_bm) _block = _bm[0];
+                        } catch (e) {}
+                    }
+                }
+                if (_block) _regexCardHtml = this._grabRegexCardHtml(_block);
             }
 
-            if (!chatNode) { this.next(); return; }
+            // 退路：override(【…】等非 tag) 沒命中 → 不彈窗，當普通行繼續；tag 模式沒命中 → 抓 DOM
+            let chatNode = null;
+            if (!_regexCardHtml) {
+                if (rawBlockOverride) { this.next(); return; }
+                chatNode = this._currentMessageId
+                    ? _doc.querySelector(`.mes[mesid="${this._currentMessageId}"] .mes_text`)
+                    : _doc.querySelector('#chat .mes.last_mes .mes_text');
+                if (!chatNode) {
+                    chatNode = this._currentMessageId
+                        ? _doc.querySelector(`.mes[mesid="${this._currentMessageId}"]`)
+                        : _doc.querySelector('#chat .mes.last_mes');
+                }
+                if (!chatNode) { this.next(); return; }
+            }
 
             const tmpDiv = _doc.createElement('div');
-            tmpDiv.innerHTML = chatNode.innerHTML;
+            tmpDiv.innerHTML = _regexCardHtml || chatNode.innerHTML;
 
             // ▼▼▼ 暴力拆解法：無情斬斷 <content> 之前的所有內容 ▼▼▼
             const contentNode = tmpDiv.querySelector('content');
@@ -503,7 +569,10 @@
                 if (_tagHintUp && tag === _tagHintUp) return false;
                 return _BT.includes(tag) || (el.className && el.className.trim()) || !_STD.has(tag);
             });
-            const domEl = blocks[this._domBlockCursor++];
+            // 正則路徑：tmpDiv 只有目標那一顆卡，直接取，不動 _domBlockCursor（cursor 是給「抓 DOM」整則訊息計數用的）
+            const domEl = _regexCardHtml
+                ? (blocks[0] || tmpDiv.firstElementChild)
+                : blocks[this._domBlockCursor++];
             if (!domEl) { this.next(); return; }
 
             // 注入樣式（只做一次）
@@ -521,6 +590,7 @@
                     /* 確保圖片（如 SD 插件的 sd-ui-image）在缺少原插件 CSS 時仍可見 */
                     '#vn-dom-block-body img{max-width:100%;height:auto;display:block;margin:0 auto;border-radius:6px}',
                     '#vn-dom-block-body>div,#vn-dom-block-body>section,#vn-dom-block-body>article{display:block;width:100%}',
+                    '.vn-regex-card{width:100%;border:0;display:block;background:transparent}',
                     '#vn-dom-block-hint{flex-shrink:0;margin-top:16px;text-align:center;',
                     'color:rgba(180,180,180,0.45);font-size:11px;letter-spacing:1px;pointer-events:none}'
                 ].join('');
@@ -555,6 +625,19 @@
             });
 
             document.getElementById('vn-dom-block-body').innerHTML = domEl.outerHTML;
+            // 正則卡片(iframe)依內容自動撐高：避免固定高度留白，也免掉 iframe 內建醜滾動條（真的太高時溢出交給外層美化捲軸）
+            const _vCardFrame = document.getElementById('vn-dom-block-body').querySelector('iframe.vn-regex-card');
+            if (_vCardFrame) {
+                const _fitFrame = () => {
+                    try {
+                        const _fd = _vCardFrame.contentDocument;
+                        const _h = Math.max(_fd.body ? _fd.body.scrollHeight : 0, _fd.documentElement ? _fd.documentElement.scrollHeight : 0);
+                        if (_h) _vCardFrame.style.height = _h + 'px';
+                    } catch (e) { _vCardFrame.style.height = '70vh'; }
+                };
+                _vCardFrame.addEventListener('load', () => { _fitFrame(); setTimeout(_fitFrame, 400); });
+                setTimeout(_fitFrame, 50);
+            }
             void overlay.offsetWidth; // 強制 reflow 確保 transition 生效
             overlay.classList.add('active');
         },
@@ -1362,6 +1445,19 @@
 
                 // 格式A：<XXX>
                 const _fOpenA = line.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
+                // 單行整顆 <XXX>…</XXX>（如 <live_popup>[EventText|…]</live_popup>）→ 直接彈窗，不需推進 index
+                const _fSelfA = line.match(/^<([A-Za-z一-鿿][\w一-鿿-]*)>[\s\S]*<\/\1>$/);
+                if (_fSelfA && !_sysXml.includes(_fSelfA[1].toLowerCase())) {
+                    this._showDomBlock(_fSelfA[1]);
+                    return;
+                }
+
+                // 全形框卡片：整行 【…】（如 【姓名：…|…】）→ 有對應「卡片型」正則才彈窗，否則照常當旁白顯示
+                if (line.charAt(0) === '【' && line.charAt(line.length - 1) === '】') {
+                    const _lentCard = this._grabRegexCardHtml(line);
+                    if (_lentCard) { this._showDomBlock(null, line, _lentCard); return; }
+                }
+
                 if (_fOpenA && !_sysXml.includes(_fOpenA[1].toLowerCase())) {
                     let _ei = this.index + 1;
                     const _ct = `</${_fOpenA[1]}>`;
