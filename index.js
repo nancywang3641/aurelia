@@ -52,6 +52,11 @@ const _AURELIA_EXT_BASE = _AURELIA_EXT_NAME
 window.AURELIA_EXT_NAME = _AURELIA_EXT_NAME;
 window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 
+// 🔥 防快取參數開關：
+//   本機(原生安裝，EXT_NAME 有值) → 加 ?v=時間，方便你開發時即時看到改動。
+//   CDN(酒館助手，EXT_NAME 為 null) → 不加 → 讓 jsdelivr / 瀏覽器能快取，130 個檔不用每次冷抓 → 載入快很多。
+const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : '';
+
 // 🔥 1. 全局通訊狀態
 window.PANEL_COMMUNICATION = {
     ready: false,
@@ -165,7 +170,7 @@ function loadCSS(path) {
     return new Promise((resolve) => {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = path + '?v=' + Date.now();
+        link.href = path + _AURELIA_CACHE_BUST;
         link.onload = () => resolve();
         link.onerror = () => { console.error(`[Aurelia] 核心樣式載入失敗: ${path}`); resolve(); }; 
         document.head.appendChild(link);
@@ -176,7 +181,7 @@ function loadCSS(path) {
 async function loadModule(conf) {
     return new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = conf.path + '?v=' + Date.now();
+        s.src = conf.path + _AURELIA_CACHE_BUST;
         s.async = false;
         s.onload = () => { window.PANEL_COMMUNICATION.modulesLoaded[conf.key] = true; resolve(); };
         s.onerror = () => { console.error(`載入失敗: ${conf.name}`); reject(new Error(`Load failed: ${conf.name}`)); };
@@ -188,7 +193,7 @@ async function loadModule(conf) {
 function loadPhoneScript(path) {
     return new Promise((resolve) => {
         const s = document.createElement('script');
-        s.src = PHONE_BASE_PATH + path + '?v=' + Date.now();
+        s.src = PHONE_BASE_PATH + path + _AURELIA_CACHE_BUST;
         s.onload = () => resolve();
         s.onerror = () => { console.error(`[PhoneOS] 缺失腳本: ${path}`); resolve(); }; 
         document.head.appendChild(s);
