@@ -1,0 +1,17 @@
+{
+  "type": "script",
+  "enabled": true,
+  "name": "奧瑞亞 · 多功能面板系統",
+  "id": "2f91eced-578c-4f07-96ab-d21d0f9c2fc8",
+  "content": "import 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia@main/index.js'",
+  "info": "匯入後即可使用。之後奧瑞亞更新會自動跟著 GitHub，朋友不用重新匯入（更新約半天內生效）。",
+  "button": {
+    "enabled": true,
+    "buttons": []
+  },
+  "data": {},
+  "export_with": {
+    "data": true,
+    "button": true
+  }
+}

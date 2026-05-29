@@ -5,7 +5,11 @@
 // @author       none
 // @license      MIT
 
-// 🔥 0. 動態偵測擴展資料夾名（本地可能 my-tavern-extension，發佈到 GitHub 後可能 aurelia）
+// 🔥 0. 偵測載入來源，決定所有檔案（JS / CSS / settings.html）要從哪裡載
+//    ① 原生擴展安裝（酒館 Extensions 直接裝）→ 偵測得到 index.js 的 script 標籤 → 走本地路徑（行為不變）
+//    ② 酒館助手匯入（朋友貼 JSON，從 CDN 載入）→ 偵測不到 → 走 GitHub CDN，113 個檔全部從 repo 載
+//    兩種裝法並存、互不影響；改動只多了一條 CDN fallback。
+const _AURELIA_CDN_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia@main';
 const _AURELIA_EXT_NAME = (() => {
     try {
         const scripts = document.getElementsByTagName('script');
@@ -15,9 +19,13 @@ const _AURELIA_EXT_NAME = (() => {
             if (m) return m[1];
         }
     } catch (e) {}
-    return 'my-tavern-extension'; // fallback
+    return null; // 偵測不到 = 不是原生安裝（多半是酒館助手從 CDN 匯入）
 })();
-const _AURELIA_EXT_BASE = './scripts/extensions/third-party/' + _AURELIA_EXT_NAME;
+const _AURELIA_EXT_BASE = _AURELIA_EXT_NAME
+    ? './scripts/extensions/third-party/' + _AURELIA_EXT_NAME
+    : _AURELIA_CDN_BASE;
+// CDN 模式下 EXT_NAME 為 null；下游用到它的本地路徑（TTS 本機模型等）會自行 `|| 'my-tavern-extension'` fallback，
+// 那些是本機限定功能，朋友端載不到很正常（會優雅降級，不影響面板本體）。
 window.AURELIA_EXT_NAME = _AURELIA_EXT_NAME;
 window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 
