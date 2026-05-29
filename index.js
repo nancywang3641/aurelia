@@ -565,9 +565,19 @@ function setupEventBridge() {
             } catch (e) { return false; }
         }
     };
-    window.TavernHelper = Helper;
-    window.getLorebookEntries = Helper.getLorebookEntries;
-    if (window.top) window.top.TavernHelper = Helper;
+    // 🔥 不要用 shim 蓋掉酒館助手「真正的」TavernHelper！
+    //   真 API 的 getChatMessages 是同步回陣列；shim 是 async 回 Promise，會害沒 await 的呼叫(如 vn_panels)炸掉。
+    //   有真 API → 保留它，只補它缺的方法；沒有(PWA/舊酒館) → 才裝完整 shim。
+    const _realTH = window.TavernHelper;
+    if (_realTH && typeof _realTH.getChatMessages === 'function') {
+        ['getLorebookEntries', 'setLorebookEntries'].forEach(k => {
+            if (typeof _realTH[k] !== 'function') _realTH[k] = Helper[k];
+        });
+    } else {
+        window.TavernHelper = Helper;
+    }
+    window.getLorebookEntries = (window.TavernHelper && window.TavernHelper.getLorebookEntries) || Helper.getLorebookEntries;
+    if (window.top && window.top !== window && !window.top.TavernHelper) window.top.TavernHelper = window.TavernHelper;
 
     function tryBridgeEventSource() {
         if (window.SillyTavern?.getContext) {
