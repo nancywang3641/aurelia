@@ -10,6 +10,29 @@
 //    ② 酒館助手匯入（朋友貼 JSON，從 CDN 載入）→ 偵測不到 → 走 GitHub CDN，113 個檔全部從 repo 載
 //    兩種裝法並存、互不影響；改動只多了一條 CDN fallback。
 const _AURELIA_CDN_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia@main';
+
+// 🔥 0a. 酒館助手把匯入的腳本丟進「沙盒 <iframe>」跑：裸 document 指向 iframe 自己，UI 注入不到主頁面（按鈕出不來）。
+//    對策：偵測到「自己不在主頁面、但 parent 才是主頁面」→ 把 index.js 重新注入主頁面以 classic script 執行，
+//    讓整個擴展（含 100+ 模組）都跑在主頁面，裸 document 自動＝主頁面、UI 正常注入；iframe 這份隨即停手。
+//    原生安裝時「自己就在主頁面」→ 不觸發，行為完全不變。
+let _AURELIA_SKIP = false;
+(function () {
+    try {
+        const _hasST = (d) => { try { return !!(d && (d.getElementById('chat') || d.getElementById('sheld') || d.querySelector('#send_form'))); } catch (e) { return false; } };
+        if (!_hasST(document) && window.parent && window.parent !== window && _hasST(window.parent.document)) {
+            _AURELIA_SKIP = true; // 我在酒館助手沙盒 iframe，主頁面在 parent
+            const pwin = window.parent, pdoc = pwin.document;
+            if (!pwin.__AURELIA_BOOTSTRAPPED__) {
+                pwin.__AURELIA_BOOTSTRAPPED__ = true;
+                const s = pdoc.createElement('script');
+                s.src = _AURELIA_CDN_BASE + '/index.js?boot=' + Date.now();
+                pdoc.head.appendChild(s);
+                console.log('[Aurelia] 偵測到酒館助手沙盒 → 已將擴展重新注入主頁面執行');
+            }
+        }
+    } catch (e) { console.warn('[Aurelia] 沙盒偵測失敗，照原樣在當前環境執行', e); }
+})();
+
 const _AURELIA_EXT_NAME = (() => {
     try {
         const scripts = document.getElementsByTagName('script');
@@ -613,5 +636,8 @@ function setupEventBridge() {
     });
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeExtension);
-else initializeExtension();
+if (!_AURELIA_SKIP) {
+    // 沙盒 iframe 那份(_AURELIA_SKIP=true)不啟動；真正執行的是被重新注入主頁面的那份
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeExtension);
+    else initializeExtension();
+}
