@@ -172,8 +172,9 @@ function loadCSS(path) {
         link.rel = 'stylesheet';
         link.href = path + _AURELIA_CACHE_BUST;
         link.onload = () => resolve();
-        link.onerror = () => { console.error(`[Aurelia] 核心樣式載入失敗: ${path}`); resolve(); }; 
+        link.onerror = () => { console.error(`[Aurelia] 核心樣式載入失敗: ${path}`); resolve(); };
         document.head.appendChild(link);
+        if (!_AURELIA_EXT_NAME) resolve(); // CDN 模式：append 後立即放行，讓 CSS 平行下載(本機維持等 onload，不變)
     });
 }
 
@@ -198,6 +199,18 @@ function loadPhoneScript(path) {
         s.onerror = () => { console.error(`[PhoneOS] 缺失腳本: ${path}`); resolve(); }; 
         document.head.appendChild(s);
     });
+}
+
+// CDN 並行載入器：一次插入全部 <script>，async=false → 平行下載、依插入順序執行(保留依賴順序)
+function _loadBatchOrdered(list) {
+    return Promise.all(list.map(item => new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = item.src;
+        s.async = false;
+        s.onload = () => { if (item.key) window.PANEL_COMMUNICATION.modulesLoaded[item.key] = true; resolve(); };
+        s.onerror = () => { console.error('[Aurelia] 並行載入失敗:', item.src); resolve(); };
+        document.head.appendChild(s);
+    })));
 }
 
 // 讀取設置
@@ -307,10 +320,18 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/chat_window.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_board.css');
 
-        for (const conf of MODULE_LOAD_ORDER) await loadModule(conf);
-
-        console.log('[System] 正在掛載手機模組...');
-        for (const file of PHONE_FILES) await loadPhoneScript(file);
+        if (_AURELIA_EXT_NAME) {
+            // 本機：維持原樣(本地讀檔極快、且已驗證穩定，不動)
+            for (const conf of MODULE_LOAD_ORDER) await loadModule(conf);
+            console.log('[System] 正在掛載手機模組...');
+            for (const file of PHONE_FILES) await loadPhoneScript(file);
+        } else {
+            // CDN：並行下載、依序執行 → 解決 130 個檔排隊造成的數秒延遲
+            console.log('[System] CDN 並行載入核心模組...');
+            await _loadBatchOrdered(MODULE_LOAD_ORDER.map(c => ({ src: c.path + _AURELIA_CACHE_BUST, key: c.key })));
+            console.log('[System] CDN 並行載入手機模組...');
+            await _loadBatchOrdered(PHONE_FILES.map(f => ({ src: PHONE_BASE_PATH + f + _AURELIA_CACHE_BUST })));
+        }
         
         // 延遲執行：確保 PhoneSystem 和各個 App 模組都載入完畢後再註冊圖標
         setTimeout(() => {
