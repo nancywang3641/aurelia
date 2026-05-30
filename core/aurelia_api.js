@@ -22,6 +22,47 @@
     };
     const _ctx = () => (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
 
+    // ===== 世界書轉換工具：酒館原生條目形狀 ↔ TavernHelper 形狀 =====
+    //   只映射實際用到的欄位；寫入直接接 getContext().loadWorldInfo / saveWorldInfo。
+    const _POS_ST2TH = { 0: 'before_character_definition', 1: 'after_character_definition', 2: 'before_author_note', 3: 'after_author_note', 4: 'at_depth_as_system' };
+    const _POS_TH2ST = { before_character_definition: 0, after_character_definition: 1, before_example_messages: 0, after_example_messages: 1, before_author_note: 2, after_author_note: 3, at_depth_as_system: 4, at_depth_as_assistant: 4, at_depth_as_user: 4 };
+    const _loadWI = async (name) => { const c = _ctx(); return (c && typeof c.loadWorldInfo === 'function') ? await c.loadWorldInfo(name) : null; };
+    const _saveWI = async (name, data) => { const c = _ctx(); if (c && typeof c.saveWorldInfo === 'function') await c.saveWorldInfo(name, data, true); };
+    const _entriesArr = (data) => (data && data.entries) ? Object.keys(data.entries).map((k) => data.entries[k]) : [];
+    // 酒館原生條目 → TavernHelper LorebookEntry（讀取用；同時保留原生 .key/.disable 相容舊碼）
+    const _st2th = (e) => ({
+        uid: e.uid, display_index: e.displayIndex, comment: e.comment || '', enabled: !e.disable,
+        type: e.constant ? 'constant' : (e.vectorized ? 'vectorized' : 'selective'),
+        position: (_POS_ST2TH[e.position] != null ? _POS_ST2TH[e.position] : 'before_character_definition'),
+        depth: (e.depth == null ? null : e.depth), order: e.order, probability: e.probability,
+        keys: Array.isArray(e.key) ? e.key.slice() : [], content: e.content || '',
+        key: Array.isArray(e.key) ? e.key.slice() : [], disable: !!e.disable
+    });
+    // TavernHelper partial → 套到原生條目（寫入用；TH 名與原生名都接）
+    const _applyTh2St = (e, p) => {
+        if (!p) return e;
+        if (p.content !== undefined) e.content = p.content;
+        if (p.comment !== undefined) e.comment = p.comment;
+        if (p.keys !== undefined) e.key = Array.isArray(p.keys) ? p.keys : [p.keys];
+        if (p.key !== undefined) e.key = Array.isArray(p.key) ? p.key : [p.key];
+        if (p.enabled !== undefined) e.disable = !p.enabled;
+        if (p.disable !== undefined) e.disable = !!p.disable;
+        if (p.order !== undefined) e.order = p.order;
+        if (p.position !== undefined) e.position = (_POS_TH2ST[p.position] != null ? _POS_TH2ST[p.position] : (typeof p.position === 'number' ? p.position : e.position));
+        if (p.type !== undefined) { e.constant = p.type === 'constant'; e.vectorized = p.type === 'vectorized'; e.selective = p.type === 'selective'; }
+        if (p.constant !== undefined) e.constant = !!p.constant;
+        if (p.selective !== undefined) e.selective = !!p.selective;
+        return e;
+    };
+    const _newStEntry = (uid) => ({
+        uid: uid, key: [], keysecondary: [], comment: '', content: '', constant: false, vectorized: false,
+        selective: true, selectiveLogic: 0, addMemo: true, order: 100, position: 0, disable: false,
+        excludeRecursion: false, preventRecursion: false, delayUntilRecursion: false, probability: 100, useProbability: true,
+        depth: 4, group: '', groupOverride: false, groupWeight: 100, scanDepth: null, caseSensitive: null,
+        matchWholeWords: null, useGroupScoring: null, automationId: '', role: 0, sticky: 0, cooldown: 0, delay: 0, displayIndex: uid
+    });
+    const _nextUid = (data) => { let m = -1; _entriesArr(data).forEach((e) => { if (typeof e.uid === 'number' && e.uid > m) m = e.uid; }); return m + 1; };
+
     // =========================================================
     // 原生備用實作（助手不在時，用酒館原生 getContext 自己組）
     //   ↓↓↓ 以後要補更多方法的原生退路，就加在這個 native 物件裡 ↓↓↓
@@ -53,28 +94,42 @@
             return arr;
         },
         getLastMessageId: function () { return _chatArr().length - 1; },
-        getLorebookEntries: async function (lorebookName) {
-            if (!window.world_info) await new Promise(r => setTimeout(r, 500));
-            if (window.world_info && window.world_info.globalSelect) return window.world_info.globalSelect;
-            const ctx = _ctx();
-            if (ctx && ctx.worldInfo && ctx.worldInfo.globalSelect) return ctx.worldInfo.globalSelect;
-            return [];
+        // ===== 世界書（原生備用，直接接 getContext().loadWorldInfo / saveWorldInfo）=====
+        // ⚠️ 寫入(set/create/update/delete)會動到真實世界書檔，務必先拿「備用世界書」測，別拿真 lore。
+        getLorebookEntries: async function (lorebook) { return _entriesArr(await _loadWI(lorebook)).map(_st2th); },
+        getWorldbook: async function (worldbook_name) { return _entriesArr(await _loadWI(worldbook_name)).map(_st2th); },
+        getCurrentCharPrimaryLorebook: function () {
+            try { const c = _ctx(); const ch = c && c.characters && c.characters[c.characterId]; return (ch && ch.data && ch.data.extensions && ch.data.extensions.world) || null; }
+            catch (e) { return null; }
         },
-        setLorebookEntries: async function (lorebookName, entries) {
-            try {
-                const context = _ctx();
-                let sourceData = (context && context.worldInfos) || window.world_info;
-                let booksArray = Array.isArray(sourceData) ? sourceData
-                    : (sourceData && typeof sourceData === 'object' ? Object.values(sourceData) : []);
-                const lorebook = booksArray.find(wi => wi.name === lorebookName);
-                if (lorebook) {
-                    lorebook.entries = entries;
-                    if (context && context.saveWorldInfo) await context.saveWorldInfo(lorebookName);
-                    else if (window.saveWorldInfo) window.saveWorldInfo(lorebookName);
-                    return true;
-                }
-                return false;
-            } catch (e) { return false; }
+        getCharWorldbookNames: function (character_name) {
+            try { const c = _ctx(); const ch = c && c.characters && c.characters[c.characterId]; return { primary: (ch && ch.data && ch.data.extensions && ch.data.extensions.world) || null, additional: [] }; }
+            catch (e) { return { primary: null, additional: [] }; }
+        },
+        setLorebookEntries: async function (lorebook, entries) {
+            const data = await _loadWI(lorebook); if (!data || !data.entries) return [];
+            (entries || []).forEach((p) => { if (p && p.uid != null && data.entries[p.uid]) _applyTh2St(data.entries[p.uid], p); });
+            await _saveWI(lorebook, data); return _entriesArr(data).map(_st2th);
+        },
+        updateLorebookEntriesWith: async function (lorebook, updater) {
+            const data = await _loadWI(lorebook); if (!data || !data.entries) return [];
+            let out = updater(_entriesArr(data).map(_st2th)); if (out && typeof out.then === 'function') out = await out;
+            (out || []).forEach((p) => { if (p && p.uid != null && data.entries[p.uid]) _applyTh2St(data.entries[p.uid], p); });
+            await _saveWI(lorebook, data); return _entriesArr(data).map(_st2th);
+        },
+        updateWorldbookWith: async function (worldbook_name, updater) { return native.updateLorebookEntriesWith(worldbook_name, updater); },
+        createLorebookEntries: async function (lorebook, entries) {
+            const data = await _loadWI(lorebook); if (!data) return { entries: [], new_uids: [] };
+            if (!data.entries) data.entries = {};
+            const new_uids = [];
+            (entries || []).forEach((p) => { const uid = _nextUid(data); data.entries[uid] = _applyTh2St(_newStEntry(uid), p); new_uids.push(uid); });
+            await _saveWI(lorebook, data); return { entries: _entriesArr(data).map(_st2th), new_uids: new_uids };
+        },
+        deleteLorebookEntries: async function (lorebook, uids) {
+            const data = await _loadWI(lorebook); if (!data || !data.entries) return { entries: [], delete_occurred: false };
+            let occurred = false;
+            (uids || []).forEach((u) => { if (data.entries[u]) { delete data.entries[u]; occurred = true; } });
+            if (occurred) await _saveWI(lorebook, data); return { entries: _entriesArr(data).map(_st2th), delete_occurred: occurred };
         }
     };
 
