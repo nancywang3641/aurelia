@@ -66,6 +66,7 @@ window.PANEL_COMMUNICATION = {
 
 // 🔥 2. 模組加載順序
 const MODULE_LOAD_ORDER = [
+    { name: 'aurelia_api', path: _AURELIA_EXT_BASE + '/core/aurelia_api.js', key: 'aureliaApi' }, // 📦 統一資料入口(備用版插座)— 必須最先載
     { name: 'bgm_collector', path: _AURELIA_EXT_BASE + '/bgm-global-collector.js', key: 'bgmCollector' },
     { name: 'loader_core', path: _AURELIA_EXT_BASE + '/core/loader_core.js', key: 'core' },
     { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
@@ -561,79 +562,9 @@ function setupEventBridge() {
             window.dispatchEvent(new CustomEvent(eventName, { detail: data }));
         };
     }
-    const Helper = {
-        // 原生備用版：助手不在時，用酒館原生 getContext().chat 自己組（形狀對齊 TavernHelper 的 ChatMessage：同步回陣列）
-        getChatMessages: function (range, opts) {
-            const _ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
-            const _chat = (_ctx && _ctx.chat) || window.chat || [];
-            let arr = _chat.map((m, i) => ({
-                message_id: i,
-                name: m.name,
-                role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
-                is_hidden: !!m.is_system,
-                message: m.mes || '',
-                data: m.variables || {},
-                extra: m.extra || {}
-            }));
-            // 解析 range：數字 / "A-B" / 負數(從尾算)
-            if (range !== undefined && range !== null && range !== '') {
-                const last = arr.length - 1;
-                const norm = (n) => { n = parseInt(n, 10); return isNaN(n) ? null : (n < 0 ? last + 1 + n : n); };
-                const mm = String(range).match(/^(-?\d+)\s*-\s*(-?\d+)$/);
-                if (mm) { let a = norm(mm[1]), b = norm(mm[2]); if (a !== null && b !== null) { if (a > b) { const t = a; a = b; b = t; } arr = arr.slice(a, b + 1); } }
-                else { const one = norm(String(range)); if (one !== null) arr = arr[one] ? [arr[one]] : []; }
-            }
-            // opts.role / hide_state 篩選
-            if (opts && opts.role && opts.role !== 'all') arr = arr.filter(x => x.role === opts.role);
-            if (opts && opts.hide_state === 'unhidden') arr = arr.filter(x => !x.is_hidden);
-            else if (opts && opts.hide_state === 'hidden') arr = arr.filter(x => x.is_hidden);
-            return arr;
-        },
-        getLastMessageId: function () {
-            const _ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
-            const _chat = (_ctx && _ctx.chat) || window.chat || [];
-            return _chat.length - 1;
-        },
-        getLorebookEntries: async (lorebookName) => {
-            if (!window.world_info) await new Promise(r => setTimeout(r, 500));
-            if (window.world_info && window.world_info.globalSelect) return window.world_info.globalSelect;
-            if (window.SillyTavern?.getContext) {
-                const ctx = window.SillyTavern.getContext();
-                if (ctx.worldInfo?.globalSelect) return ctx.worldInfo.globalSelect;
-            }
-            return [];
-        },
-        setLorebookEntries: async (lorebookName, entries) => {
-            try {
-                let context = window.SillyTavern?.getContext();
-                let sourceData = (context && context.worldInfos) || window.world_info;
-                let booksArray = [];
-                if (Array.isArray(sourceData)) booksArray = sourceData;
-                else if (typeof sourceData === 'object' && sourceData) booksArray = Object.values(sourceData);
-                const lorebook = booksArray.find(wi => wi.name === lorebookName);
-                if (lorebook) {
-                    lorebook.entries = entries;
-                    if (context?.saveWorldInfo) await context.saveWorldInfo(lorebookName);
-                    else if (window.saveWorldInfo) window.saveWorldInfo(lorebookName);
-                    return true;
-                }
-                return false;
-            } catch (e) { return false; }
-        }
-    };
-    // 🔥 不要用 shim 蓋掉酒館助手「真正的」TavernHelper！
-    //   真 API 的 getChatMessages 是同步回陣列；shim 是 async 回 Promise，會害沒 await 的呼叫(如 vn_panels)炸掉。
-    //   有真 API → 保留它，只補它缺的方法；沒有(PWA/舊酒館) → 才裝完整 shim。
-    const _realTH = window.TavernHelper;
-    if (_realTH && typeof _realTH.getChatMessages === 'function') {
-        ['getLorebookEntries', 'setLorebookEntries'].forEach(k => {
-            if (typeof _realTH[k] !== 'function') _realTH[k] = Helper[k];
-        });
-    } else {
-        window.TavernHelper = Helper;
-    }
-    window.getLorebookEntries = (window.TavernHelper && window.TavernHelper.getLorebookEntries) || Helper.getLorebookEntries;
-    if (window.top && window.top !== window && !window.top.TavernHelper) window.top.TavernHelper = window.TavernHelper;
+    // 📦 「統一資料入口 / 備用版插座」已搬到獨立模塊 core/aurelia_api.js（它在模組載入第一個就跑）。
+    //    那裡負責設好 window.AureliaAPI + window.TavernHelper fallback —— 助手在用助手、不在走原生備用。
+    //    要補更多原生備用方法，只改 aurelia_api.js 一處，不再散落在 index.js。
 
     function tryBridgeEventSource() {
         if (window.SillyTavern?.getContext) {
