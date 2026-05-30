@@ -144,8 +144,45 @@
         createWorldbookEntries: function (worldbook_name, entries) { return native.createLorebookEntries(worldbook_name, entries); },
 
         // ===== 助手不在時的「優雅降級」：回安全預設 + 提醒，不讓 handler 崩；要正式原生化再個別補 =====
-        createChatMessages: async function () { console.warn('[AureliaAPI] 助手不在：createChatMessages 暫無原生備用，已略過(訊息不會新增)'); return []; },
-        setChatMessages: async function () { console.warn('[AureliaAPI] 助手不在：setChatMessages 暫無原生備用，已略過'); return []; },
+        // 轉發/新增訊息到酒館對話框（原生：push 進 chat + addOneMessage 渲染 + saveChat）
+        //   兼容 {message} 與 {content} 兩種寫法；role: user/system/assistant。
+        createChatMessages: async function (chat_messages, opt) {
+            const ctx = _ctx(); if (!ctx || !Array.isArray(ctx.chat)) return;
+            opt = opt || {};
+            const ib = (opt.insert_before !== undefined) ? opt.insert_before : opt.insert_at;
+            const atEnd = (ib === undefined || ib === 'end' || typeof ib !== 'number');
+            const stamp = (typeof window.getMessageTimeStamp === 'function') ? window.getMessageTimeStamp() : new Date().toISOString();
+            const built = (chat_messages || []).map((m) => {
+                const text = (m.message != null) ? m.message : (m.content != null ? m.content : '');
+                const isUser = m.role === 'user', isSystem = m.role === 'system';
+                return {
+                    name: m.name || (isUser ? (ctx.name1 || 'You') : (isSystem ? 'System' : (ctx.name2 || 'Assistant'))),
+                    is_user: isUser, is_system: isSystem, mes: String(text), send_date: stamp, extra: m.extra || {}
+                };
+            });
+            if (atEnd) {
+                for (const msg of built) { ctx.chat.push(msg); if (opt.refresh !== 'none' && typeof ctx.addOneMessage === 'function') ctx.addOneMessage(msg); }
+            } else {
+                ctx.chat.splice(ib, 0, ...built);
+                if (opt.refresh !== 'none' && typeof ctx.reloadCurrentChat === 'function') await ctx.reloadCurrentChat();
+            }
+            if (typeof ctx.saveChat === 'function') await ctx.saveChat();
+        },
+        setChatMessages: async function (chat_messages, opt) {
+            const ctx = _ctx(); if (!ctx || !Array.isArray(ctx.chat)) return;
+            opt = opt || {}; let touched = false;
+            (chat_messages || []).forEach((p) => {
+                const id = p.message_id; if (id == null || !ctx.chat[id]) return;
+                const m = ctx.chat[id];
+                if (p.message !== undefined) m.mes = p.message;
+                if (p.mes !== undefined) m.mes = p.mes;
+                if (p.data !== undefined) m.variables = p.data;
+                if (p.extra !== undefined) m.extra = p.extra;
+                touched = true;
+                if (opt.refresh !== 'none' && typeof ctx.updateMessageBlock === 'function') { try { ctx.updateMessageBlock(id, m); } catch (e) {} }
+            });
+            if (touched && typeof ctx.saveChat === 'function') await ctx.saveChat();
+        },
         getTavernRegexes: function () { console.warn('[AureliaAPI] 助手不在：getTavernRegexes 回空陣列'); return []; },
         updateTavernRegexesWith: async function () { console.warn('[AureliaAPI] 助手不在：updateTavernRegexesWith 已略過'); return []; },
         generateRaw: async function () { console.warn('[AureliaAPI] 助手不在：generateRaw 無原生備用，回空字串'); return ''; },
