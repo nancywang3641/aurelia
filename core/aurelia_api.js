@@ -129,7 +129,28 @@
             let occurred = false;
             (uids || []).forEach((u) => { if (data.entries[u]) { delete data.entries[u]; occurred = true; } });
             if (occurred) await _saveWI(lorebook, data); return { entries: _entriesArr(data).map(_st2th), delete_occurred: occurred };
-        }
+        },
+        replaceLorebookEntries: async function (lorebook, entries) {
+            const data = await _loadWI(lorebook); if (!data) return;
+            const map = {}; let auto = 0;
+            (entries || []).forEach((p) => {
+                let uid = (p && p.uid != null) ? p.uid : auto++;
+                while (map[uid] != null) uid = auto++;
+                const base = (data.entries && data.entries[uid]) ? data.entries[uid] : _newStEntry(uid);
+                base.uid = uid; map[uid] = _applyTh2St(base, p);
+            });
+            data.entries = map; await _saveWI(lorebook, data);
+        },
+        createWorldbookEntries: function (worldbook_name, entries) { return native.createLorebookEntries(worldbook_name, entries); },
+
+        // ===== 助手不在時的「優雅降級」：回安全預設 + 提醒，不讓 handler 崩；要正式原生化再個別補 =====
+        createChatMessages: async function () { console.warn('[AureliaAPI] 助手不在：createChatMessages 暫無原生備用，已略過(訊息不會新增)'); return []; },
+        setChatMessages: async function () { console.warn('[AureliaAPI] 助手不在：setChatMessages 暫無原生備用，已略過'); return []; },
+        getTavernRegexes: function () { console.warn('[AureliaAPI] 助手不在：getTavernRegexes 回空陣列'); return []; },
+        updateTavernRegexesWith: async function () { console.warn('[AureliaAPI] 助手不在：updateTavernRegexesWith 已略過'); return []; },
+        generateRaw: async function () { console.warn('[AureliaAPI] 助手不在：generateRaw 無原生備用，回空字串'); return ''; },
+        triggerSlash: async function () { console.warn('[AureliaAPI] 助手不在：triggerSlash 無原生備用，已略過'); return ''; },
+        injectPrompts: function () { console.warn('[AureliaAPI] 助手不在：injectPrompts 已略過'); }
     };
 
     // =========================================================
