@@ -35,18 +35,17 @@
         type: e.constant ? 'constant' : (e.vectorized ? 'vectorized' : 'selective'),
         position: (_POS_ST2TH[e.position] != null ? _POS_ST2TH[e.position] : 'before_character_definition'),
         depth: (e.depth == null ? null : e.depth), order: e.order, probability: e.probability,
-        keys: Array.isArray(e.key) ? e.key.slice() : [], content: e.content || '',
-        key: Array.isArray(e.key) ? e.key.slice() : [], disable: !!e.disable
+        keys: Array.isArray(e.key) ? e.key.slice() : [], content: e.content || ''
     });
     // TavernHelper partial → 套到原生條目（寫入用；TH 名與原生名都接）
     const _applyTh2St = (e, p) => {
         if (!p) return e;
         if (p.content !== undefined) e.content = p.content;
         if (p.comment !== undefined) e.comment = p.comment;
-        if (p.keys !== undefined) e.key = Array.isArray(p.keys) ? p.keys : [p.keys];
         if (p.key !== undefined) e.key = Array.isArray(p.key) ? p.key : [p.key];
-        if (p.enabled !== undefined) e.disable = !p.enabled;
+        if (p.keys !== undefined) e.key = Array.isArray(p.keys) ? p.keys : [p.keys];   // keys 優先，別讓帶著的舊 key 蓋掉
         if (p.disable !== undefined) e.disable = !!p.disable;
+        if (p.enabled !== undefined) e.disable = !p.enabled;                            // enabled 優先
         if (p.order !== undefined) e.order = p.order;
         if (p.position !== undefined) e.position = (_POS_TH2ST[p.position] != null ? _POS_TH2ST[p.position] : (typeof p.position === 'number' ? p.position : e.position));
         if (p.type !== undefined) { e.constant = p.type === 'constant'; e.vectorized = p.type === 'vectorized'; e.selective = p.type === 'selective'; }
