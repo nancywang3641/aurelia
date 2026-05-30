@@ -562,8 +562,38 @@ function setupEventBridge() {
         };
     }
     const Helper = {
-        getChatMessages: async () => window.chat || [],
-        getLastMessageId: async () => (window.chat ? window.chat.length - 1 : -1),
+        // 原生備用版：助手不在時，用酒館原生 getContext().chat 自己組（形狀對齊 TavernHelper 的 ChatMessage：同步回陣列）
+        getChatMessages: function (range, opts) {
+            const _ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+            const _chat = (_ctx && _ctx.chat) || window.chat || [];
+            let arr = _chat.map((m, i) => ({
+                message_id: i,
+                name: m.name,
+                role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
+                is_hidden: !!m.is_system,
+                message: m.mes || '',
+                data: m.variables || {},
+                extra: m.extra || {}
+            }));
+            // 解析 range：數字 / "A-B" / 負數(從尾算)
+            if (range !== undefined && range !== null && range !== '') {
+                const last = arr.length - 1;
+                const norm = (n) => { n = parseInt(n, 10); return isNaN(n) ? null : (n < 0 ? last + 1 + n : n); };
+                const mm = String(range).match(/^(-?\d+)\s*-\s*(-?\d+)$/);
+                if (mm) { let a = norm(mm[1]), b = norm(mm[2]); if (a !== null && b !== null) { if (a > b) { const t = a; a = b; b = t; } arr = arr.slice(a, b + 1); } }
+                else { const one = norm(String(range)); if (one !== null) arr = arr[one] ? [arr[one]] : []; }
+            }
+            // opts.role / hide_state 篩選
+            if (opts && opts.role && opts.role !== 'all') arr = arr.filter(x => x.role === opts.role);
+            if (opts && opts.hide_state === 'unhidden') arr = arr.filter(x => !x.is_hidden);
+            else if (opts && opts.hide_state === 'hidden') arr = arr.filter(x => x.is_hidden);
+            return arr;
+        },
+        getLastMessageId: function () {
+            const _ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+            const _chat = (_ctx && _ctx.chat) || window.chat || [];
+            return _chat.length - 1;
+        },
         getLorebookEntries: async (lorebookName) => {
             if (!window.world_info) await new Promise(r => setTimeout(r, 500));
             if (window.world_info && window.world_info.globalSelect) return window.world_info.globalSelect;
