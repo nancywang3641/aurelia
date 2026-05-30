@@ -62,6 +62,18 @@
     });
     const _nextUid = (data) => { let m = -1; _entriesArr(data).forEach((e) => { if (typeof e.uid === 'number' && e.uid > m) m = e.uid; }); return m + 1; };
 
+    // 酒館原生正則 → TavernHelper TavernRegex（讀取用；VN「彈窗抓正則」靠這拿卡片）
+    const _st2thRegex = (r) => {
+        const p = Array.isArray(r.placement) ? r.placement : [];
+        return {
+            id: r.id, script_name: r.scriptName, enabled: !r.disabled,
+            find_regex: r.findRegex, replace_string: r.replaceString, trim_strings: r.trimStrings,
+            source: { user_input: p.indexOf(1) >= 0, ai_output: p.indexOf(2) >= 0, slash_command: p.indexOf(3) >= 0, world_info: p.indexOf(5) >= 0 },
+            destination: { display: !r.promptOnly, prompt: !r.markdownOnly },
+            run_on_edit: r.runOnEdit, min_depth: r.minDepth, max_depth: r.maxDepth
+        };
+    };
+
     // =========================================================
     // 原生備用實作（助手不在時，用酒館原生 getContext 自己組）
     //   ↓↓↓ 以後要補更多方法的原生退路，就加在這個 native 物件裡 ↓↓↓
@@ -183,7 +195,19 @@
             });
             if (touched && typeof ctx.saveChat === 'function') await ctx.saveChat();
         },
-        getTavernRegexes: function () { console.warn('[AureliaAPI] 助手不在：getTavernRegexes 回空陣列'); return []; },
+        getTavernRegexes: function (option) {
+            const ctx = _ctx(); if (!ctx) return [];
+            option = option || {}; let raw = [];
+            try {
+                if (option.type === 'character') {
+                    const ch = ctx.characters && ctx.characters[ctx.characterId];
+                    raw = (ch && ch.data && ch.data.extensions && ch.data.extensions.regex_scripts) || [];
+                } else {
+                    raw = (ctx.extensionSettings && ctx.extensionSettings.regex) || [];
+                }
+            } catch (e) { raw = []; }
+            return (raw || []).map(_st2thRegex);
+        },
         updateTavernRegexesWith: async function () { console.warn('[AureliaAPI] 助手不在：updateTavernRegexesWith 已略過'); return []; },
         generateRaw: async function () { console.warn('[AureliaAPI] 助手不在：generateRaw 無原生備用，回空字串'); return ''; },
         triggerSlash: async function () { console.warn('[AureliaAPI] 助手不在：triggerSlash 無原生備用，已略過'); return ''; },
