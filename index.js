@@ -9,7 +9,17 @@
 //    ① 原生擴展安裝（酒館 Extensions 直接裝）→ 偵測得到 index.js 的 script 標籤 → 走本地路徑（行為不變）
 //    ② 酒館助手匯入（朋友貼 JSON，從 CDN 載入）→ 偵測不到 → 走 GitHub CDN，113 個檔全部從 repo 載
 //    兩種裝法並存、互不影響；改動只多了一條 CDN fallback。
-const _AURELIA_CDN_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia@main';
+// 🔥 CDN 來源 ref：助手 JSON 可在「動態 import 前」設 globalThis.__AURELIA_REF__='<commit hash>'，
+//    讓整包（index.js + 全部模組 + CSS）統一鎖那個不可變 commit —— jsdelivr 對 commit 永遠正確、零快取陳舊問題。
+//    沒設則預設 'main'（自動跟更新，但有 jsdelivr @main 邊緣快取延遲，更新約半天內生效）。
+const _AURELIA_REF = (function () {
+    try {
+        if (window.__AURELIA_REF__) return String(window.__AURELIA_REF__);
+        if (window.parent && window.parent !== window) { try { if (window.parent.__AURELIA_REF__) return String(window.parent.__AURELIA_REF__); } catch (e) {} }
+    } catch (e) {}
+    return 'main';
+})();
+const _AURELIA_CDN_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia@' + _AURELIA_REF;
 
 // 🔥 0a. 酒館助手把匯入的腳本丟進「沙盒 <iframe>」跑：裸 document 指向 iframe 自己，UI 注入不到主頁面（按鈕出不來）。
 //    對策：偵測到「自己不在主頁面、但 parent 才是主頁面」→ 把 index.js 重新注入主頁面以 classic script 執行，
@@ -24,6 +34,7 @@ let _AURELIA_SKIP = false;
             const pwin = window.parent, pdoc = pwin.document;
             if (!pwin.__AURELIA_BOOTSTRAPPED__) {
                 pwin.__AURELIA_BOOTSTRAPPED__ = true;
+                pwin.__AURELIA_REF__ = _AURELIA_REF; // 把 ref 傳進主頁面，讓重注入的 index.js + 模組都鎖同一 commit
                 const s = pdoc.createElement('script');
                 s.src = _AURELIA_CDN_BASE + '/index.js?boot=' + Date.now();
                 pdoc.head.appendChild(s);
