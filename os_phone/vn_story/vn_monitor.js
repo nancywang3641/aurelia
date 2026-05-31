@@ -83,6 +83,7 @@
                         const _org = (win && win.location && win.location.origin) || (window.location && window.location.origin) || '';
                         url = _org + '/scripts/itemized-prompts.js';
                     }
+                    this._itemizedModUrl = url;
                     this._itemizedMod = import(url);
                 }
                 catch (e) { this._itemizedMod = Promise.reject(e); }
@@ -94,9 +95,14 @@
         _readFromItemized: async function() {
             try {
                 let mod;
-                try { mod = await this._getItemizedMod(); } catch (e) { return false; }
-                if (!mod || typeof mod.itemizedParams !== 'function') return false;
+                try { mod = await this._getItemizedMod(); }
+                catch (e) { console.log('[CTX-DBG] import 失敗 url=', this._itemizedModUrl, '| err=', String(e)); return false; }
+                if (!mod || typeof mod.itemizedParams !== 'function') {
+                    console.log('[CTX-DBG] mod 拿到但無 itemizedParams. url=', this._itemizedModUrl, '| typeof itemizedParams=', mod && typeof mod.itemizedParams);
+                    return false;
+                }
                 const items = mod.itemizedPrompts;
+                console.log('[CTX-DBG] url=', this._itemizedModUrl, '| itemsLen=', Array.isArray(items) ? items.length : ('非陣列:' + typeof items));
                 if (!Array.isArray(items) || items.length === 0) return false;
                 // 挑「最大的一筆」= 真正的主對話上下文。
                 // （不能只挑最新 mesId：TauriTavern 等環境會多出高 mesId 的小型/幻影紀錄，
@@ -117,12 +123,14 @@
                     const sc = _score(items[i]);
                     if (sc > best) { best = sc; idx = i; }
                 }
+                try { console.log('[CTX-DBG] 各筆 score=', JSON.stringify(items.map(function (it) { return _score(it); })), '| 選中 idx=', idx, '| mesId=', items[idx] && items[idx].mesId); } catch (e) {}
                 if (idx < 0) return false;
                 const p = await mod.itemizedParams(items, idx, Number(items[idx].mesId));
-                if (!p) return false;
+                if (!p) { console.log('[CTX-DBG] itemizedParams 回 null'); return false; }
                 const n = (v) => { const x = Number(v); return isNaN(x) ? 0 : x; };
                 const isOai = p.this_main_api === 'openai';
                 const total = n(p.finalPromptTokens) || n(p.totalTokensInPrompt);
+                console.log('[CTX-DBG] api=', p.this_main_api, '| finalPromptTokens=', p.finalPromptTokens, '| totalTokensInPrompt=', p.totalTokensInPrompt, '| world=', p.worldInfoStringTokens, '| chat=', p.ActualChatHistoryTokens, '| total用=', total);
                 if (!total) return false;
                 const world    = n(p.worldInfoStringTokens);
                 const chat     = n(p.ActualChatHistoryTokens);
