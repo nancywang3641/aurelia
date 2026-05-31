@@ -706,7 +706,9 @@
                         // 存檔（含思考鏈，沿用當前 storyId）
                         try {
                             const tm = fullText.match(/\[Chapter\|(?:\d+\|)?([^\]|]+)\]/i) || fullText.match(/\[Story\|([^\]]+)\]/i);
-                            const _thinking = win.OS_THINK?.getLatest()?.content?.trim() || '';
+                            let _thinking = win.OS_THINK?.getLatest()?.content?.trim() || '';
+                            // 酒館模式 OS_THINK 抓不到 → 讀酒館原生 reasoning（extra.reasoning）
+                            if (!_thinking) _thinking = (win.AureliaAPI || window.AureliaAPI)?.getLatestReasoning?.() || '';
                             const _storyId    = window.VN_Core._currentStoryId    || '';
                             const _storyTitle = window.VN_Core._currentStoryTitle || '';
                             await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${choice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: choice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
@@ -2481,18 +2483,30 @@
         showThinkPopup() {
             const popup = document.getElementById('vn-think-popup');
             if (!popup) return;
-            if (popup.classList.contains('active')) { popup.classList.remove('active'); return; }
+            if (popup.classList.contains('active')) { this.hideThinkPopup(); return; }
             const body = document.getElementById('vn-think-popup-body');
             // OS_THINK.log 最新一筆（entries.unshift，index 0 = 最新）
             const lastEntry = win.OS_THINK?.getLatest();
-            const thinkContent = lastEntry?.content?.trim() || '';
+            let thinkContent = lastEntry?.content?.trim() || '';
+            // 酒館模式 OS_THINK 不在 → 讀酒館原生 reasoning（最近一則 AI 訊息的 extra.reasoning）
+            if (!thinkContent) thinkContent = (win.AureliaAPI || window.AureliaAPI)?.getLatestReasoning?.() || '';
             body.innerHTML = thinkContent
                 ? thinkContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')
                 : '<div class="think-empty-msg">本章無思考記錄<br><small>（需啟用 enable_thinking 且 AI 支援）</small></div>';
             popup.classList.add('active');
+            // 點彈窗外面 → 關閉（click capture，吃掉這次點擊避免順便推進劇情；排除 COT 按鈕本身）
+            const self = this;
+            this._thinkAway = function(e) {
+                if (popup.contains(e.target)) return;
+                if (e.target.closest && e.target.closest('#vn-btn-think')) return;
+                e.stopPropagation();
+                self.hideThinkPopup();
+            };
+            setTimeout(function () { document.addEventListener('click', self._thinkAway, true); }, 0);
         },
         hideThinkPopup() {
             document.getElementById('vn-think-popup')?.classList.remove('active');
+            if (this._thinkAway) { document.removeEventListener('click', this._thinkAway, true); this._thinkAway = null; }
         },
 
         // 📖 劇情閱讀器（轉發給獨立模組 VN_READER）

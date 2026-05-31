@@ -1249,9 +1249,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #char-portrait.no-frame {
             border: none !important; padding: 0 !important;
             background: transparent !important; box-shadow: none !important;
-            width: 55% !important; max-width: 380px !important;
-            height: auto !important; max-height: 60% !important;
-            top: auto !important; bottom: 215px !important;
+            width: auto !important; max-width: 90% !important;
+            height: 80% !important; max-height: 80% !important;
+            top: auto !important; bottom: 0 !important;
             transform: translateX(-50%) !important;
             object-fit: contain; object-position: center bottom;
         }
@@ -1525,6 +1525,17 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .ctx-usage-text { font-size: 0.65rem; color: #777; text-align: right; margin-top: 2px; font-family: var(--font-sans); }
         .ctx-usage-text.warn   { color: #f6ad55; }
         .ctx-usage-text.danger { color: #ff6b6b; font-weight: bold; }
+        /* --- 細項拆解（上下文組成）--- */
+        .ctx-breakdown { display: none; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; }
+        .ctx-bd-head { color: var(--gold); font-size: 0.62rem; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.75; margin-bottom: 6px; font-family: var(--font-sans); }
+        .ctx-bd-item { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+        .ctx-bd-label { color: #999; font-size: 0.66rem; letter-spacing: 0.5px; white-space: nowrap; width: 72px; flex-shrink: 0; font-family: var(--font-sans); }
+        .ctx-bd-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+        .ctx-bd-fill { display: block; height: 100%; width: 0%; border-radius: 2px; background: var(--gold); opacity: 0.6; transition: width 0.4s ease; }
+        .ctx-bd-val { color: #ccc; font-size: 0.68rem; font-variant-numeric: tabular-nums; width: 52px; text-align: right; flex-shrink: 0; font-family: var(--font-sans); }
+        .ctx-bd-total { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .ctx-bd-total .ctx-bd-label { color: var(--gold); width: auto; }
+        .ctx-bd-total .ctx-bd-val { color: var(--gold); font-weight: bold; width: auto; }
         .ctx-limit-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); }
         .ctx-limit-label { color: #555; font-size: 0.65rem; white-space: nowrap; }
         .ctx-limit-input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 3px; color: #aaa; font-size: 0.7rem; padding: 2px 5px; text-align: right; width: 60px; outline: none; }
