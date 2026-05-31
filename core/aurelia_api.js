@@ -202,6 +202,9 @@
                 if (option.type === 'character') {
                     const ch = ctx.characters && ctx.characters[ctx.characterId];
                     raw = (ch && ch.data && ch.data.extensions && ch.data.extensions.regex_scripts) || [];
+                } else if (option.type === 'preset') {
+                    const pm = ctx.getPresetManager && ctx.getPresetManager();
+                    raw = (pm && typeof pm.readPresetExtensionField === 'function') ? (pm.readPresetExtensionField({ path: 'regex_scripts' }) || []) : [];
                 } else {
                     raw = (ctx.extensionSettings && ctx.extensionSettings.regex) || [];
                 }
