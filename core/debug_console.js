@@ -74,13 +74,13 @@
         if (btn || !document.body) return;
         injectStyle();
 
+        // 🐛 浮動按鈕「永遠不自動出現」（會遮到手機畫面）。log 仍在背景持續攔截。
+        // 要叫出 debug 面板：在 console 或任意處呼叫 window.AureliaDebug.show()。
         btn = document.createElement('div');
         btn.id = 'aurelia-dbg-btn';
         btn.textContent = '🐛';
         btn.title = 'Debug Console';
-        // 預設隱藏（不打擾朋友）；要顯示：localStorage.setItem('aurelia_debug','1') 後重載，
-        // 或直接呼叫 window.AureliaDebug.show()（log 一直在背景攔截，隨時可叫出來）。
-        if (localStorage.getItem('aurelia_debug') !== '1') btn.style.display = 'none';
+        btn.style.display = 'none'; // 一律隱藏，不靠 localStorage 開關（避免殘留旗標害它冒出來）
         btn.addEventListener('click', function () { open ? hide() : show(); });
 
         panel = document.createElement('div');
@@ -121,7 +121,7 @@
         body.scrollTop = body.scrollHeight;
     }
 
-    function show() { ensureUI(); open = true; if (btn) btn.style.display = ''; if (panel) panel.style.display = 'flex'; render(); }
+    function show() { ensureUI(); open = true; if (panel) panel.style.display = 'flex'; render(); } // 不再顯示浮動 🐛 鈕，只開面板
     function hide() { open = false; if (panel) panel.style.display = 'none'; }
 
     window.AureliaDebug = {
@@ -134,5 +134,5 @@
     if (document.body) ensureUI();
     else window.addEventListener('DOMContentLoaded', ensureUI);
 
-    console.log('[AureliaDebug] 螢幕 console 就緒（點右下 🐛 開啟）');
+    console.log('[AureliaDebug] 螢幕 console 就緒（呼叫 AureliaDebug.show() 開啟，無浮動按鈕）');
 })();
