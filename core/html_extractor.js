@@ -154,6 +154,48 @@
             const extractedData = {}; 
             let tabOrder = []; 
 
+            // 🔥 抓正則匹配(主)：從原始訊息 + 生效正則(全域/區域/preset)重建 content 以外的所有卡片；
+            //    不靠 live DOM、不綁 .TH-render。抓不到才退回舊的抓 DOM。
+            const _th = (window.parent && window.parent.TavernHelper) || window.TavernHelper;
+            let _usedRegex = false;
+            if (_th && typeof _th.getTavernRegexes === 'function' && typeof _th.getChatMessages === 'function') {
+                try {
+                    const _mid = (typeof _th.getLastMessageId === 'function') ? _th.getLastMessageId() : -1;
+                    const _msgs = _th.getChatMessages(_mid);
+                    const _raw = (_msgs && _msgs[0] && (_msgs[0].message || _msgs[0].mes)) || '';
+                    if (_raw) {
+                        const _body = _raw.replace(/<content>[\s\S]*?<\/content>/i, ''); // 只要 content 以外的卡
+                        let _rx = [];
+                        try { _rx = _rx.concat(_th.getTavernRegexes({ type: 'global' }) || []); } catch (e) {}
+                        try { _rx = _rx.concat(_th.getTavernRegexes({ type: 'character', name: 'current' }) || []); } catch (e) {}
+                        try { _rx = _rx.concat(_th.getTavernRegexes({ type: 'preset', name: 'in_use' }) || []); } catch (e) {}
+                        const _toRe = (s, g) => { try { const m = String(s).match(/^\/([\s\S]*)\/([a-z]*)$/i); const fl = (m ? (m[2] || '') : 'i').replace(/[gy]/g, '') + (g ? 'g' : ''); return new RegExp(m ? m[1] : s, fl); } catch (e) { return null; } };
+                        let _idx = 0;
+                        _rx.forEach((r) => {
+                            if (!r || r.enabled === false || !r.find_regex || !r.replace_string) return;
+                            if (!/<[a-z!\/]/i.test(r.replace_string)) return; // 只認卡片型(含 HTML)
+                            const _gre = _toRe(r.find_regex, true), _sre = _toRe(r.find_regex, false);
+                            if (!_gre || !_sre) return;
+                            let _m;
+                            while ((_m = _gre.exec(_body)) !== null) {
+                                if (_m[0] === '') { _gre.lastIndex++; continue; }
+                                let _card = String(_m[0]).replace(_sre, r.replace_string).replace(/^\s*```html\s*/i, '').replace(/```\s*$/, '').trim();
+                                const _node = /<!DOCTYPE|<html[\s>]|<body[\s>]/i.test(_card)
+                                    ? '<iframe class="ue-regex-card" scrolling="no" srcdoc="' + _card.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '" style="width:100%;border:0;display:block;"></iframe>'
+                                    : _card;
+                                let _name = r.script_name || '自定義面板';
+                                const _tm = _card.match(/<title>([\s\S]*?)<\/title>/i); if (_tm && _tm[1].trim()) _name = _tm[1].trim();
+                                const _pid = 'th_panel_' + (_idx++);
+                                extractedData[_pid] = { name: _name, html: ['<div class="native-render-wrapper">' + _node + '</div>'] };
+                                tabOrder.push(_pid);
+                            }
+                        });
+                        if (tabOrder.length > 0) _usedRegex = true;
+                    }
+                } catch (e) { console.warn('[Extractor] 抓正則失敗，回退抓 DOM:', e); }
+            }
+
+            if (!_usedRegex) {
             const lastMes = doc.querySelector('#chat .mes.last_mes .mes_text');
             
             if (!lastMes) {
@@ -217,6 +259,7 @@
                 }
                 extractedData['others'].html = othersHtml;
             }
+            } // ← end if(!_usedRegex)：抓正則沒結果時才走的舊抓 DOM 退路
 
             if (tabOrder.length === 0) {
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
