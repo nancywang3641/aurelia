@@ -82,11 +82,17 @@
                                 <div class="ctx-row"><span class="ctx-label">↓ 回應 Tokens</span><span class="ctx-val" id="ctx-recv-tokens">—</span></div>
                                 <div class="ctx-row"><span class="ctx-label">↓ 回應 Chars</span><span class="ctx-val" id="ctx-recv-chars">—</span></div>
                                 <div class="ctx-row"><span class="ctx-label">訊息數</span><span class="ctx-val" id="ctx-msgs">—</span></div>
-                                <div id="ctx-breakdown" style="display:none; margin-top:7px; border-top:1px solid rgba(255,255,255,0.1); padding-top:7px;">
-                                    <div class="ctx-row"><span class="ctx-label">　系統/角色</span><span class="ctx-val" id="ctx-bd-system">—</span></div>
-                                    <div class="ctx-row"><span class="ctx-label">　世界資訊</span><span class="ctx-val" id="ctx-bd-world">—</span></div>
-                                    <div class="ctx-row"><span class="ctx-label">　聊天記錄</span><span class="ctx-val" id="ctx-bd-chat">—</span></div>
-                                    <div class="ctx-row"><span class="ctx-label">　擴充功能</span><span class="ctx-val" id="ctx-bd-ext">—</span></div>
+                                <div id="ctx-breakdown" class="ctx-breakdown">
+                                    <div class="ctx-bd-head">上下文組成</div>
+                                    <div class="ctx-bd-item" id="ctx-bd-i-system"><span class="ctx-bd-label">系統提示</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-system"></span></span><span class="ctx-bd-val" id="ctx-bd-system">—</span></div>
+                                    <div class="ctx-bd-item" id="ctx-bd-i-character"><span class="ctx-bd-label">角色卡</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-character"></span></span><span class="ctx-bd-val" id="ctx-bd-character">—</span></div>
+                                    <div class="ctx-bd-item" id="ctx-bd-i-world"><span class="ctx-bd-label">世界資訊</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-world"></span></span><span class="ctx-bd-val" id="ctx-bd-world">—</span></div>
+                                    <div class="ctx-bd-item" id="ctx-bd-i-examples"><span class="ctx-bd-label">對話範例</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-examples"></span></span><span class="ctx-bd-val" id="ctx-bd-examples">—</span></div>
+                                    <div class="ctx-bd-item" id="ctx-bd-i-chat"><span class="ctx-bd-label">聊天記錄</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-chat"></span></span><span class="ctx-bd-val" id="ctx-bd-chat">—</span></div>
+                                    <div class="ctx-bd-item" id="ctx-bd-i-persona"><span class="ctx-bd-label">使用者角色</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-persona"></span></span><span class="ctx-bd-val" id="ctx-bd-persona">—</span></div>
+                                    <div class="ctx-bd-item" id="ctx-bd-i-note"><span class="ctx-bd-label">作者備註</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-note"></span></span><span class="ctx-bd-val" id="ctx-bd-note">—</span></div>
+                                    <div class="ctx-bd-item" id="ctx-bd-i-inject"><span class="ctx-bd-label">注入/擴充</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-inject"></span></span><span class="ctx-bd-val" id="ctx-bd-inject">—</span></div>
+                                    <div class="ctx-bd-total"><span class="ctx-bd-label">合計</span><span class="ctx-bd-val" id="ctx-bd-total-val">—</span></div>
                                 </div>
                                 <div class="ctx-limit-row">
                                     <span class="ctx-limit-label">⚠️ 警戒 Tokens</span>
