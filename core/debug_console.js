@@ -78,7 +78,9 @@
         btn.id = 'aurelia-dbg-btn';
         btn.textContent = '🐛';
         btn.title = 'Debug Console';
-        if (localStorage.getItem('aurelia_debug') === '0') btn.style.display = 'none';
+        // 預設隱藏（不打擾朋友）；要顯示：localStorage.setItem('aurelia_debug','1') 後重載，
+        // 或直接呼叫 window.AureliaDebug.show()（log 一直在背景攔截，隨時可叫出來）。
+        if (localStorage.getItem('aurelia_debug') !== '1') btn.style.display = 'none';
         btn.addEventListener('click', function () { open ? hide() : show(); });
 
         panel = document.createElement('div');
