@@ -66,11 +66,24 @@
         _getItemizedMod: function() {
             if (!this._itemizedMod) {
                 try {
-                    // ⚠️ 用完整 origin 絕對網址：CDN(助手)版這支是從 jsdelivr 載入的，
-                    //    裸 '/scripts/...' 會被解析到 jsdelivr origin → 404 → import 失敗 → CTX 死。
-                    //    用 location.origin 明確指向酒館本身（本地/CDN 都對；且與酒館 import 的同一 URL = 同一模組實例）。
-                    const _org = (win && win.location && win.location.origin) || (window.location && window.location.origin) || '';
-                    this._itemizedMod = import(_org + '/scripts/itemized-prompts.js');
+                    // 動態 import 酒館的 itemized-prompts.js。難點：CDN(助手)版這支從 jsdelivr 載入，
+                    // 裸 '/scripts/...' 會解析到 jsdelivr origin → 404；而 TauriTavern 等改後端的環境，
+                    // 前端路徑也可能不是 origin+/scripts/。最耐的做法：找酒館主腳本 script.js 實際在哪，
+                    // 據此組 itemized-prompts.js 的絕對網址（跟著酒館自己的路徑走）。
+                    let url = '';
+                    try {
+                        const doc = (win && win.document) || document;
+                        const tags = doc.querySelectorAll('script[src]');
+                        for (let i = 0; i < tags.length; i++) {
+                            const mm = (tags[i].src || '').match(/^(.*)\/script\.js(?:\?|$)/);
+                            if (mm) { url = mm[1] + '/scripts/itemized-prompts.js'; break; }
+                        }
+                    } catch (e) {}
+                    if (!url) {
+                        const _org = (win && win.location && win.location.origin) || (window.location && window.location.origin) || '';
+                        url = _org + '/scripts/itemized-prompts.js';
+                    }
+                    this._itemizedMod = import(url);
                 }
                 catch (e) { this._itemizedMod = Promise.reject(e); }
             }
