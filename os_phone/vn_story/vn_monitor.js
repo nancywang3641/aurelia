@@ -98,11 +98,24 @@
                 if (!mod || typeof mod.itemizedParams !== 'function') return false;
                 const items = mod.itemizedPrompts;
                 if (!Array.isArray(items) || items.length === 0) return false;
-                // 找最新一筆（mesId 最大）= 當前對話最近一次生成的上下文
-                let idx = -1, maxMes = -Infinity;
+                // 挑「最大的一筆」= 真正的主對話上下文。
+                // （不能只挑最新 mesId：TauriTavern 等環境會多出高 mesId 的小型/幻影紀錄，
+                //   會把真正的大上下文蓋掉 → CTX 顯示成那筆小的。改用 token 量挑最大最穩。）
+                const _score = function (it) {
+                    if (!it) return -1;
+                    let s = Number(it.oaiTotalTokens);
+                    if (!s || isNaN(s)) {
+                        s = (Number(it.oaiConversationTokens) || 0)
+                          + (Number(it.oaiMainTokens) || 0)
+                          + (typeof it.worldInfoString === 'string' ? Math.ceil(it.worldInfoString.length / 4) : 0)
+                          + (typeof it.finalPrompt === 'string' ? Math.ceil(it.finalPrompt.length / 4) : 0);
+                    }
+                    return isNaN(s) ? 0 : s;
+                };
+                let idx = -1, best = -1;
                 for (let i = 0; i < items.length; i++) {
-                    const m = Number(items[i] && items[i].mesId);
-                    if (!isNaN(m) && m >= maxMes) { maxMes = m; idx = i; }
+                    const sc = _score(items[i]);
+                    if (sc > best) { best = sc; idx = i; }
                 }
                 if (idx < 0) return false;
                 const p = await mod.itemizedParams(items, idx, Number(items[idx].mesId));
