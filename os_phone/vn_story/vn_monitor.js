@@ -101,6 +101,20 @@
                     console.log('[CTX-DBG] mod 拿到但無 itemizedParams. url=', this._itemizedModUrl, '| typeof itemizedParams=', mod && typeof mod.itemizedParams);
                     return false;
                 }
+                // ⚠️ TauriTavern 等「bundle 前端」環境下，import 到的是「獨立、陳舊」的 itemized 實例
+                // （in-memory 只有殘缺舊資料）。但酒館每次存檔都會把最新 itemized 寫進共用的
+                //   IndexedDB「SillyTavern_Prompts」(script.js saveItemizedPrompts)。
+                //   所以先用 loadItemizedPrompts(chatId) 從那個共用 DB 刷新，就能拿到真正的最新資料。
+                try {
+                    const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                    const chatId = ctx ? (typeof ctx.getCurrentChatId === 'function' ? ctx.getCurrentChatId() : ctx.chatId) : null;
+                    if (chatId && typeof mod.loadItemizedPrompts === 'function') {
+                        await mod.loadItemizedPrompts(chatId);
+                        console.log('[CTX-DBG] 已從 IndexedDB 刷新 itemized. chatId=', chatId);
+                    } else {
+                        console.log('[CTX-DBG] 無法刷新：chatId=', chatId, '| loadItemizedPrompts=', typeof mod.loadItemizedPrompts);
+                    }
+                } catch (e) { console.log('[CTX-DBG] loadItemizedPrompts 刷新失敗:', String(e)); }
                 const items = mod.itemizedPrompts;
                 console.log('[CTX-DBG] url=', this._itemizedModUrl, '| itemsLen=', Array.isArray(items) ? items.length : ('非陣列:' + typeof items));
                 if (!Array.isArray(items) || items.length === 0) return false;
