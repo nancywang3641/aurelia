@@ -449,6 +449,7 @@
             let _regexes = [];
             try { _regexes = _regexes.concat(_th.getTavernRegexes({ type: 'global' }) || []); } catch (e) {}
             try { _regexes = _regexes.concat(_th.getTavernRegexes({ type: 'character', name: 'current' }) || []); } catch (e) {}
+            try { _regexes = _regexes.concat(_th.getTavernRegexes({ type: 'preset', name: 'in_use' }) || []); } catch (e) {}
             for (const r of _regexes) {
                 if (!r || r.enabled === false || !r.find_regex) continue;
                 const _rs = r.replace_string || '';
