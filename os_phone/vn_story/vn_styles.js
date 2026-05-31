@@ -82,6 +82,12 @@
                                 <div class="ctx-row"><span class="ctx-label">↓ 回應 Tokens</span><span class="ctx-val" id="ctx-recv-tokens">—</span></div>
                                 <div class="ctx-row"><span class="ctx-label">↓ 回應 Chars</span><span class="ctx-val" id="ctx-recv-chars">—</span></div>
                                 <div class="ctx-row"><span class="ctx-label">訊息數</span><span class="ctx-val" id="ctx-msgs">—</span></div>
+                                <div id="ctx-breakdown" style="display:none; margin-top:7px; border-top:1px solid rgba(255,255,255,0.1); padding-top:7px;">
+                                    <div class="ctx-row"><span class="ctx-label">　系統/角色</span><span class="ctx-val" id="ctx-bd-system">—</span></div>
+                                    <div class="ctx-row"><span class="ctx-label">　世界資訊</span><span class="ctx-val" id="ctx-bd-world">—</span></div>
+                                    <div class="ctx-row"><span class="ctx-label">　聊天記錄</span><span class="ctx-val" id="ctx-bd-chat">—</span></div>
+                                    <div class="ctx-row"><span class="ctx-label">　擴充功能</span><span class="ctx-val" id="ctx-bd-ext">—</span></div>
+                                </div>
                                 <div class="ctx-limit-row">
                                     <span class="ctx-limit-label">⚠️ 警戒 Tokens</span>
                                     <input class="ctx-limit-input" id="ctx-limit-input" type="number" min="1000" max="2000000" value="50000" onchange="window.VN_Core._saveCtxLimit(this.value)" />
