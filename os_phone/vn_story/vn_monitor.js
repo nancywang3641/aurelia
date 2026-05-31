@@ -96,27 +96,13 @@
             try {
                 let mod;
                 try { mod = await this._getItemizedMod(); }
-                catch (e) { console.log('[CTX-DBG] import 失敗 url=', this._itemizedModUrl, '| err=', String(e)); return false; }
-                if (!mod || typeof mod.itemizedParams !== 'function') {
-                    console.log('[CTX-DBG] mod 拿到但無 itemizedParams. url=', this._itemizedModUrl, '| typeof itemizedParams=', mod && typeof mod.itemizedParams);
-                    return false;
-                }
-                // ⚠️ TauriTavern 等「bundle 前端」環境下，import 到的是「獨立、陳舊」的 itemized 實例
-                // （in-memory 只有殘缺舊資料）。但酒館每次存檔都會把最新 itemized 寫進共用的
-                //   IndexedDB「SillyTavern_Prompts」(script.js saveItemizedPrompts)。
-                //   所以先用 loadItemizedPrompts(chatId) 從那個共用 DB 刷新，就能拿到真正的最新資料。
-                try {
-                    const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
-                    const chatId = ctx ? (typeof ctx.getCurrentChatId === 'function' ? ctx.getCurrentChatId() : ctx.chatId) : null;
-                    if (chatId && typeof mod.loadItemizedPrompts === 'function') {
-                        await mod.loadItemizedPrompts(chatId);
-                        console.log('[CTX-DBG] 已從 IndexedDB 刷新 itemized. chatId=', chatId);
-                    } else {
-                        console.log('[CTX-DBG] 無法刷新：chatId=', chatId, '| loadItemizedPrompts=', typeof mod.loadItemizedPrompts);
-                    }
-                } catch (e) { console.log('[CTX-DBG] loadItemizedPrompts 刷新失敗:', String(e)); }
+                catch (e) { return false; }
+                if (!mod || typeof mod.itemizedParams !== 'function') return false;
+                // 注意：TauriTavern 等「bundle 前端」環境下，import 到的會是獨立、陳舊的 itemized 實例
+                // （拿不到酒館本尊記憶體裡的最新資料，也沒持久化），CTX 在那種環境會顯示不準 —— 已知限制。
+                // 原版酒館(非 bundle)兩者同一實例，正確。不要在這裡呼叫 loadItemizedPrompts 刷新：
+                // 那會覆寫酒館本尊的 live 陣列（若剛生成未存檔，會把記憶體新資料蓋掉）。
                 const items = mod.itemizedPrompts;
-                console.log('[CTX-DBG] url=', this._itemizedModUrl, '| itemsLen=', Array.isArray(items) ? items.length : ('非陣列:' + typeof items));
                 if (!Array.isArray(items) || items.length === 0) return false;
                 // 挑「最大的一筆」= 真正的主對話上下文。
                 // （不能只挑最新 mesId：TauriTavern 等環境會多出高 mesId 的小型/幻影紀錄，
@@ -137,14 +123,12 @@
                     const sc = _score(items[i]);
                     if (sc > best) { best = sc; idx = i; }
                 }
-                try { console.log('[CTX-DBG] 各筆 score=', JSON.stringify(items.map(function (it) { return _score(it); })), '| 選中 idx=', idx, '| mesId=', items[idx] && items[idx].mesId); } catch (e) {}
                 if (idx < 0) return false;
                 const p = await mod.itemizedParams(items, idx, Number(items[idx].mesId));
-                if (!p) { console.log('[CTX-DBG] itemizedParams 回 null'); return false; }
+                if (!p) return false;
                 const n = (v) => { const x = Number(v); return isNaN(x) ? 0 : x; };
                 const isOai = p.this_main_api === 'openai';
                 const total = n(p.finalPromptTokens) || n(p.totalTokensInPrompt);
-                console.log('[CTX-DBG] api=', p.this_main_api, '| finalPromptTokens=', p.finalPromptTokens, '| totalTokensInPrompt=', p.totalTokensInPrompt, '| world=', p.worldInfoStringTokens, '| chat=', p.ActualChatHistoryTokens, '| total用=', total);
                 if (!total) return false;
                 const world    = n(p.worldInfoStringTokens);
                 const chat     = n(p.ActualChatHistoryTokens);
