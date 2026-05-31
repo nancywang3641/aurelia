@@ -1500,10 +1500,22 @@
                 } else if (VN_Config.data.bgm && audio) {
                     const _self = this;
                     const tryPlay = (filename, fuzzyHint) => {
+                        // iOS 要靠 Web Audio 調 BGM 音量就得開 CORS；crossOrigin 必須在設 src 前設好，
+                        // 否則跨域音訊接進 Web Audio 會被當 tainted 而靜音。
+                        if (win.VN_AudioGain && win.VN_AudioGain.isIOS() && !audio.dataset.noCors) {
+                            audio.crossOrigin = 'anonymous';
+                        }
                         audio.src = VN_Config.data.bgm + filename + '.mp3';
                         const onOk  = () => { _self._showBgmToast(fuzzyHint ? `${filename} ←≈ ${name}` : filename, true); cleanup(); };
                         const onErr = async () => {
                             cleanup();
+                            // 保命：BGM 主機沒開 CORS 時 crossOrigin 會害載入失敗 → 清掉重試純播放（放棄音量控制但確保有聲音）
+                            if (audio.crossOrigin === 'anonymous' && !audio.dataset.noCors) {
+                                audio.dataset.noCors = '1';
+                                audio.removeAttribute('crossorigin');
+                                tryPlay(filename, fuzzyHint);
+                                return;
+                            }
                             // exact 失敗 → 嘗試 fuzzy match
                             if (!fuzzyHint && win.VN_BgmIndex) {
                                 await win.VN_BgmIndex.load();
