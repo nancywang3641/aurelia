@@ -15,6 +15,7 @@
         sendTokens: null, sendChars: null,
         recvTokens: null, recvChars: null,
         msgs: null, lastUpdate: null,
+        breakdown: null,
 
         // 讀取用戶設定的警戒 token 上限（localStorage 持久化）
         getLimit: function() {
@@ -58,6 +59,29 @@
             } catch(e) { return false; }
         },
 
+        // ST 模式優先：讀酒館原生 itemizedPrompts(getContext)，準確且有細項拆解
+        _readFromItemized: function() {
+            try {
+                const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                const items = ctx && ctx.itemizedPrompts;
+                if (!Array.isArray(items) || items.length === 0) return false;
+                const it = items[items.length - 1];
+                if (!it) return false;
+                const n = (v) => { const x = Number(v); return isNaN(x) ? 0 : x; };
+                const total = n(it.oaiTotalTokens) || n(it.finalPromptTokens);
+                if (!total) return false;
+                const world = n(it.worldInfoStringTokens);
+                const chat  = n(it.ActualChatHistoryTokens);
+                const ext   = n(it.chatInjects) + n(it.summarizeStringTokens) + n(it.authorsNoteStringTokens) + n(it.smartContextStringTokens) + n(it.chatVectorsStringTokens) + n(it.dataBankVectorsStringTokens);
+                const system = Math.max(0, total - world - chat - ext);
+                this.sendTokens = total;
+                this.sendChars = null;
+                this.breakdown = { system: system, world: world, chat: chat, ext: ext };
+                this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return true;
+            } catch (e) { return false; }
+        },
+
         // 從 console 攔截更新（ST 模式插件未安裝時備援）
         updateSend: function(tokens, chars) {
             this.sendTokens = tokens; this.sendChars = chars;
@@ -75,12 +99,16 @@
 
         // 點開 Ctx 時呼叫
         poll: function() {
+            this.breakdown = null;
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
             if (isStandalone) {
                 this._readFromStandalone();
             } else {
-                this._readFromPlugin();
-                this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                // 優先讀酒館原生 itemizedPrompts（準+有細項）；拿不到再退回插件全域
+                if (!this._readFromItemized()) {
+                    this._readFromPlugin();
+                    this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
             }
             // 同步 input 顯示值
             const limitInput = document.getElementById('ctx-limit-input');
@@ -102,6 +130,18 @@
                 if (eRC) eRC.textContent = this.recvChars  != null ? this.recvChars.toLocaleString()  : '—';
                 if (eM)  eM.textContent  = this.msgs       != null ? this.msgs.toLocaleString()       : '—';
                 if (eTime) eTime.textContent = this.lastUpdate ? `更新 ${this.lastUpdate}` : '尚未偵測到數據';
+
+                // 細項拆解（來自酒館原生 itemizedPrompts；沒資料就隱藏）
+                const bd = this.breakdown;
+                const bdWrap = document.getElementById('ctx-breakdown');
+                if (bdWrap) bdWrap.style.display = bd ? 'block' : 'none';
+                if (bd) {
+                    const _setBd = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = (v != null ? v.toLocaleString() : '—'); };
+                    _setBd('ctx-bd-system', bd.system);
+                    _setBd('ctx-bd-world', bd.world);
+                    _setBd('ctx-bd-chat', bd.chat);
+                    _setBd('ctx-bd-ext', bd.ext);
+                }
 
                 // 進度條
                 const barFill   = document.getElementById('ctx-bar-fill');
