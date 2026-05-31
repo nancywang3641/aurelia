@@ -54,8 +54,11 @@ window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 
 // 🔥 防快取參數開關：
 //   本機(原生安裝，EXT_NAME 有值) → 加 ?v=時間，方便你開發時即時看到改動。
-//   CDN(酒館助手，EXT_NAME 為 null) → 不加 → 讓 jsdelivr / 瀏覽器能快取，130 個檔不用每次冷抓 → 載入快很多。
-const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : '';
+//   CDN(酒館助手，EXT_NAME 為 null) → 加 ?v=版本號 → 同版本內 jsdelivr/瀏覽器照樣快取(載入快)，
+//      但每次「改版 bump _AURELIA_VERSION」後，朋友的瀏覽器會自動重抓模組，不用手動清快取。
+//      （index.js 本身是 ?boot= 強制重抓的，所以這個版本號一改、下次載入就生效。）
+const _AURELIA_VERSION = '2026.05.31.1'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
+const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : ('?v=' + _AURELIA_VERSION);
 
 // 🔥 1. 全局通訊狀態
 window.PANEL_COMMUNICATION = {
