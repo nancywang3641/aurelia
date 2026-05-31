@@ -120,9 +120,17 @@
         },
         _applyTtsVol: function(v) {
             const vol = parseInt(v) / 100;
-            win._vnTtsVolume = vol;   // OS_MINIMAX 播放前會讀取此值
-            const el = win.document.getElementById('os-minimax-tts-player');
-            if (el) VN_AudioGain.set(el, vol); // 即時更新正在播放的音量（iOS 走 GainNode）
+            // ① MiniMax 引擎：播放前讀此值
+            win._vnTtsVolume = vol;
+            const mmEl = win.document.getElementById('os-minimax-tts-player');
+            if (mmEl) VN_AudioGain.set(mmEl, vol); // 即時更新正在播放的音量（iOS 走 GainNode）
+            // ② GPT-SoVITS（VN_TTS）引擎：有自己的 config.volume，這裡一併同步並即時套到正在播的音訊
+            const tts = win.VN_TTS || window.VN_TTS;
+            if (tts && tts.config) {
+                tts.config.volume = vol;
+                if (typeof tts.save === 'function') tts.save();
+                if (tts._currentAudio) VN_AudioGain.set(tts._currentAudio, vol);
+            }
         },
         _applyColors: function() {
             const root = document.documentElement;
