@@ -65,7 +65,13 @@
         _itemizedMod: null,
         _getItemizedMod: function() {
             if (!this._itemizedMod) {
-                try { this._itemizedMod = import('/scripts/itemized-prompts.js'); }
+                try {
+                    // ⚠️ 用完整 origin 絕對網址：CDN(助手)版這支是從 jsdelivr 載入的，
+                    //    裸 '/scripts/...' 會被解析到 jsdelivr origin → 404 → import 失敗 → CTX 死。
+                    //    用 location.origin 明確指向酒館本身（本地/CDN 都對；且與酒館 import 的同一 URL = 同一模組實例）。
+                    const _org = (win && win.location && win.location.origin) || (window.location && window.location.origin) || '';
+                    this._itemizedMod = import(_org + '/scripts/itemized-prompts.js');
+                }
                 catch (e) { this._itemizedMod = Promise.reject(e); }
             }
             return this._itemizedMod;
