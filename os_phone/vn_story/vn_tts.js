@@ -233,7 +233,8 @@ const VN_TTS = {
     _playBlobUrl(blobUrl) {
         this.stop();
         const a = new Audio(blobUrl);
-        a.volume = this.config.volume;
+        const _g = (window.parent || window).VN_AudioGain;
+        if (_g) _g.set(a, this.config.volume); else a.volume = this.config.volume; // iOS 走 GainNode
         a.play().catch(e => console.warn('[VN_TTS] play error', e));
         this._currentAudio = a;
     },
@@ -246,7 +247,8 @@ const VN_TTS = {
         const audio = new Audio(msUrl);
         this._currentMsUrl = msUrl;
         this._currentAudio = audio;
-        audio.volume = this.config.volume;
+        const _g = (window.parent || window).VN_AudioGain;
+        if (_g) _g.set(audio, this.config.volume); else audio.volume = this.config.volume; // iOS 走 GainNode
         const chunks = [];
 
         ms.addEventListener('sourceopen', async () => {
