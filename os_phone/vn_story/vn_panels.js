@@ -15,6 +15,82 @@
     const VN_Image = window.VN_Image;
 
     /* =========================================
+       🔊 iOS 音量修正：Web Audio GainNode
+       iOS / iPadOS 把 HTMLMediaElement.volume 設成唯讀，JS 寫了不生效（音量只能靠機身實體鍵）。
+       唯一能用程式控制音量的辦法是把音訊接進 Web Audio 的 GainNode 調增益。
+       非 iOS 平台 .volume 本來就能用，這裡完全不碰，零回歸風險。
+       ========================================= */
+    const VN_AudioGain = (function () {
+        let ctx = null;
+        let hooked = false;
+        const routed = new WeakMap();   // audioEl -> GainNode
+
+        function isIOS() {
+            const ua = navigator.userAgent || '';
+            return /iPhone|iPad|iPod/i.test(ua) ||
+                   (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1); // iPadOS 偽裝成 Mac
+        }
+        function _AC() { return win.AudioContext || win.webkitAudioContext; }
+        function _ensureCtx() {
+            if (ctx) return ctx;
+            const AC = _AC();
+            if (!AC) return null;
+            try { ctx = new AC(); } catch (e) { return null; }
+            return ctx;
+        }
+        // iOS 的 AudioContext 一開始是 suspended，必須在使用者手勢內 resume 才會出聲。
+        function _hookUnlock() {
+            if (hooked) return;
+            hooked = true;
+            const unlock = () => {
+                const c = _ensureCtx();
+                if (c && c.state === 'suspended') c.resume().catch(() => {});
+            };
+            const docs = (win.document === document) ? [document] : [win.document, document];
+            docs.forEach(d => ['touchend', 'pointerup', 'mousedown', 'keydown'].forEach(ev =>
+                d.addEventListener(ev, unlock, { passive: true })));
+        }
+        function _route(el) {
+            if (!el) return null;
+            if (routed.has(el)) return routed.get(el);
+            const c = _ensureCtx();
+            if (!c) return null;
+            let gain;
+            try {
+                const src = c.createMediaElementSource(el);
+                gain = c.createGain();
+                src.connect(gain);
+                gain.connect(c.destination);
+            } catch (e) {
+                console.warn('[VN_AudioGain] 接線失敗（可能跨域未開 CORS）:', e);
+                return null;
+            }
+            routed.set(el, gain);
+            return gain;
+        }
+        // iOS 一載入就掛手勢解鎖：使用者第一次點擊（進故事/翻頁）後 context 就 running，
+        // 之後 BGM / TTS 播放才不會因 context 還 suspended 而靜音。
+        if (isIOS() && _AC()) _hookUnlock();
+
+        return {
+            isIOS,
+            // 設音量 0..1。非 iOS 走原生 .volume；iOS 走 GainNode。
+            set: function (el, v) {
+                if (!el) return;
+                v = Math.max(0, Math.min(1, Number(v) || 0));
+                try { el.volume = v; } catch (e) {}   // 非 iOS 有效；iOS 無效但無害
+                if (!isIOS()) return;
+                const gain = _route(el);
+                if (gain && ctx) {
+                    gain.gain.value = v;
+                    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+                }
+            }
+        };
+    })();
+    win.VN_AudioGain = VN_AudioGain;
+
+    /* =========================================
        ⚙ 遊戲內設定
        ========================================= */
     const VN_Settings = {
@@ -38,12 +114,15 @@
         // VN_Core 在運行期已載入（vn_core.js 後於本檔），透過 window 取
         _applyTwSpeed: function(v) { if (window.VN_Core) window.VN_Core._twSpeed = parseInt(v); },
         _applyDanmuSpeed: function(v) { if (window.VN_Core) window.VN_Core._danmuSpeed = parseInt(v); },
-        _applyBgmVol: function(v) { document.getElementById('bgm-player').volume = parseInt(v) / 100; },
+        _applyBgmVol: function(v) {
+            const el = document.getElementById('bgm-player');
+            if (el) VN_AudioGain.set(el, parseInt(v) / 100); // iOS 走 GainNode，其他平台走原生 .volume
+        },
         _applyTtsVol: function(v) {
             const vol = parseInt(v) / 100;
             win._vnTtsVolume = vol;   // OS_MINIMAX 播放前會讀取此值
             const el = win.document.getElementById('os-minimax-tts-player');
-            if (el) el.volume = vol; // 即時更新正在播放的音量
+            if (el) VN_AudioGain.set(el, vol); // 即時更新正在播放的音量（iOS 走 GainNode）
         },
         _applyColors: function() {
             const root = document.documentElement;
@@ -537,7 +616,10 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 return;
             }
 
-            const PER = 5;
+            // 手機（≤768px）CSS 把左右翻頁箭頭與圓點藏了、卡片容器改垂直滾動，
+            // 所以手機一頁塞全部章節靠滾動看；桌機維持每頁 5 張的卡片輪播。
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+            const PER = isMobile ? chapters.length : 5;
             _pages = [];
             for (let i = 0; i < chapters.length; i += PER) _pages.push(chapters.slice(i, i + PER));
             _renderPage(0);

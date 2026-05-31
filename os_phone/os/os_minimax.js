@@ -310,7 +310,8 @@
                 const blobUrl = URL.createObjectURL(blob);
                 _currentBlobUrl = blobUrl;
                 const audio = getAudioEl();
-                audio.volume = typeof win._vnTtsVolume === 'number' ? win._vnTtsVolume : 0.8;
+                const _ttsVol = typeof win._vnTtsVolume === 'number' ? win._vnTtsVolume : 0.8;
+                if (win.VN_AudioGain) win.VN_AudioGain.set(audio, _ttsVol); else audio.volume = _ttsVol; // iOS 走 GainNode
                 audio.onended = () => {
                     _isPlaying = false;
                     if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
@@ -441,7 +442,8 @@
                 const blobUrl = URL.createObjectURL(_replayBlob);
                 _currentBlobUrl = blobUrl;
                 const audio = getAudioEl();
-                audio.volume = typeof win._vnTtsVolume === 'number' ? win._vnTtsVolume : 0.8;
+                const _ttsVol = typeof win._vnTtsVolume === 'number' ? win._vnTtsVolume : 0.8;
+                if (win.VN_AudioGain) win.VN_AudioGain.set(audio, _ttsVol); else audio.volume = _ttsVol; // iOS 走 GainNode
                 audio.onended = () => {
                     _isPlaying = false;
                     if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
