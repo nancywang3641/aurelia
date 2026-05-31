@@ -235,7 +235,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 木桌俯視撲滿（書本攤在桌面上）*/
         #chapter-overlay > .ch-table-bg {
             position: absolute; inset: 0;
-            background: url('../aseets/木桌.png') center center / cover no-repeat;
+            background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/木桌.png') center center / cover no-repeat;
             z-index: 0; pointer-events: none;
         }
         /* chapter-window 採翻開書兩頁攤開 layout（從舊 idcard 專案精簡）*/
@@ -244,7 +244,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             position: absolute;
             top: 5%; left: 4%;
             width: 92%; height: 90%;
-            background-image: url('../aseets/筆記簿.png');
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/筆記簿.png');
             background-size: 100% 100%; background-repeat: no-repeat; background-position: center;
             border: none; border-radius: 0;
             overflow: visible; z-index: 2;
@@ -271,13 +271,13 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             }
             /* 手機版底圖：瀅瀅換筆記簿_手機板.png（desktop #chapter-window (1,0,0)，這條 (2,1,0) 蓋掉） */
             #aurelia-phone-screen #chapter-window {
-                background-image: url('../aseets/筆記簿_手機板.png') !important;
+                background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/筆記簿_手機板.png') !important;
             }
             /* 404 模式底圖：手機版換 404終端_手機板.png
                desktop 404 是 #aurelia-phone-screen.mode-404 #chapter-window (2,1,0)，
                同 selector 在 @media 內早於 desktop 規則會輸源序，加 body 提升到 (2,1,1) */
             body #aurelia-phone-screen.mode-404 #chapter-window {
-                background-image: url('../aseets/404終端_手機板.png') !important;
+                background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/404終端_手機板.png') !important;
             }
             /* 隱藏右頁 + 書脊，只 zoom 到左頁 */
             .ch-book-spine, .ch-page-right { display: none !important; }
@@ -426,7 +426,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            404 模式 — 柴郡終端機風（覆蓋瀅瀅書籤風）
            ═══════════════════════════════════════════════════ */
         #aurelia-phone-screen.mode-404 #chapter-window {
-            background-image: url('../aseets/404終端機.png') !important;
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/404終端機.png') !important;
             background-size: 100% 100% !important;
             /* 終端機 PNG 邊框緊貼螢幕，不要瀅瀅那個 4-5% 木桌外邊距 */
             top: 0 !important; left: 0 !important;
@@ -439,7 +439,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 404 卡片：終端機螢幕質感 + 圓角
            保留對稱綠光暈（螢幕浮起感），刪掉父層方向性陰影（書籤立桌感） */
         #aurelia-phone-screen.mode-404 .ch-card {
-            background-image: url('../aseets/螢幕終端機質感.png') !important;
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/螢幕終端機質感.png') !important;
             -webkit-mask: none !important;  /* 凹角廢 */
             mask: none !important;
             border: 1px solid rgba(0,255,136,0.4) !important;
@@ -877,7 +877,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             top: 4%; right: 16%; left: auto; transform: none;
             width: 42%; height: 14%;
             display: flex; align-items: center; justify-content: center;
-            background-image: url('../aseets/書籤紙質圖.png');
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/書籤紙質圖.png');
             background-size: cover; background-position: center;
             border: 1px solid rgba(80, 65, 50, 0.4);
             border-radius: 0;
@@ -898,7 +898,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .ch-quote-text { font-size: 11px; color: #6b6157; font-style: italic; line-height: 1.5; letter-spacing: 1px; text-align: center; }
         .ch-quote-signature {
             width: 80px; height: 22px;
-            background-image: url('../aseets/yingying_signature_blue.png');
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/yingying_signature_blue.png');
             background-size: contain; background-repeat: no-repeat; background-position: center;
         }
         /* === 6. 關閉按鈕 — Rae spec (全域 %): top 90% left 80% w 5% h 5%
@@ -927,7 +927,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             width: calc(38vh * 0.42);
             margin: 0 0.6%;
             container-type: inline-size;
-            background-image: url('../aseets/書籤紙質圖.png');
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/書籤紙質圖.png');
             background-size: cover; background-position: center;
             position: relative;
             padding: 0; cursor: pointer;
@@ -1035,7 +1035,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             display: block !important;
             width: 100% !important;
             height: 100% !important;
-            background-image: url('../aseets/緞帶紙質圖.png');
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/緞帶紙質圖.png');
             background-size: cover; background-position: center;
             clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
             border-radius: 0 !important;
@@ -1048,7 +1048,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             top: 18%; left: 50%;
             width: 70%; aspect-ratio: 1 / 1;
             transform: translateX(-50%);
-            background-image: url('../aseets/LOGO.png');
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/LOGO.png');
             background-size: contain; background-repeat: no-repeat; background-position: center;
             opacity: 0.85;
             pointer-events: none;
@@ -1059,7 +1059,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             position: absolute;
             right: 4%; bottom: 8%;
             width: 32%; aspect-ratio: 1 / 1;
-            background-image: url('../aseets/LOGO_seal.png');
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/LOGO_seal.png');
             background-size: contain; background-repeat: no-repeat; background-position: center;
             transform: rotate(-12deg);
             opacity: 0.55;
