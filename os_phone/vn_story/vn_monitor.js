@@ -59,24 +59,60 @@
             } catch(e) { return false; }
         },
 
-        // ST 模式優先：讀酒館原生 itemizedPrompts(getContext)，準確且有細項拆解
-        _readFromItemized: function() {
+        // 動態 import 酒館原生 itemized-prompts 模組（同源、同一實例、live 陣列）。
+        // 注意：itemizedPrompts/itemizedParams「不在」getContext() 上，是該模組的匯出，
+        //       只能 import 拿；且 token 數字沒存在 entry，要呼叫 itemizedParams() 現算。
+        _itemizedMod: null,
+        _getItemizedMod: function() {
+            if (!this._itemizedMod) {
+                try { this._itemizedMod = import('/scripts/itemized-prompts.js'); }
+                catch (e) { this._itemizedMod = Promise.reject(e); }
+            }
+            return this._itemizedMod;
+        },
+
+        // ST 模式優先：讀酒館原生 itemized 資料，準確且有細項拆解
+        _readFromItemized: async function() {
             try {
-                const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
-                const items = ctx && ctx.itemizedPrompts;
+                let mod;
+                try { mod = await this._getItemizedMod(); } catch (e) { return false; }
+                if (!mod || typeof mod.itemizedParams !== 'function') return false;
+                const items = mod.itemizedPrompts;
                 if (!Array.isArray(items) || items.length === 0) return false;
-                const it = items[items.length - 1];
-                if (!it) return false;
+                // 找最新一筆（mesId 最大）= 當前對話最近一次生成的上下文
+                let idx = -1, maxMes = -Infinity;
+                for (let i = 0; i < items.length; i++) {
+                    const m = Number(items[i] && items[i].mesId);
+                    if (!isNaN(m) && m >= maxMes) { maxMes = m; idx = i; }
+                }
+                if (idx < 0) return false;
+                const p = await mod.itemizedParams(items, idx, Number(items[idx].mesId));
+                if (!p) return false;
                 const n = (v) => { const x = Number(v); return isNaN(x) ? 0 : x; };
-                const total = n(it.oaiTotalTokens) || n(it.finalPromptTokens);
+                const isOai = p.this_main_api === 'openai';
+                const total = n(p.finalPromptTokens) || n(p.totalTokensInPrompt);
                 if (!total) return false;
-                const world = n(it.worldInfoStringTokens);
-                const chat  = n(it.ActualChatHistoryTokens);
-                const ext   = n(it.chatInjects) + n(it.summarizeStringTokens) + n(it.authorsNoteStringTokens) + n(it.smartContextStringTokens) + n(it.chatVectorsStringTokens) + n(it.dataBankVectorsStringTokens);
-                const system = Math.max(0, total - world - chat - ext);
+                const world    = n(p.worldInfoStringTokens);
+                const chat     = n(p.ActualChatHistoryTokens);
+                const examples = n(p.examplesStringTokens);
+                const inject   = n(p.chatInjects) + n(p.summarizeStringTokens) + n(p.smartContextStringTokens) + n(p.chatVectorsStringTokens) + n(p.dataBankVectorsStringTokens);
+                let system, character, persona, note, bias;
+                if (isOai) {
+                    system    = n(p.oaiSystemTokens);
+                    character = n(p.charDescriptionTokens) + n(p.charPersonalityTokens) + n(p.scenarioTextTokens);
+                    persona   = n(p.userPersonaStringTokens);
+                    note      = n(p.authorsNoteStringTokens);
+                    bias      = n(p.oaiBiasTokens);
+                } else {
+                    system    = 0;
+                    character = n(p.storyStringTokens);   // 文字補全：角色卡（已扣世界書）
+                    persona   = 0;
+                    note      = n(p.allAnchorsTokens);
+                    bias      = n(p.promptBiasTokens);
+                }
                 this.sendTokens = total;
-                this.sendChars = null;
-                this.breakdown = { system: system, world: world, chat: chat, ext: ext };
+                this.sendChars  = null;
+                this.breakdown  = { system, character, world, examples, chat, persona, note, inject, bias, total };
                 this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 return true;
             } catch (e) { return false; }
@@ -97,15 +133,19 @@
             this._refreshDisplay();
         },
 
-        // 點開 Ctx 時呼叫
-        poll: function() {
+        // 點開 Ctx 時呼叫（async：原生算 token 是非同步的）
+        poll: async function() {
             this.breakdown = null;
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
             if (isStandalone) {
                 this._readFromStandalone();
             } else {
+                // 同步 input + 先 refresh 一次（避免等算 token 時面板空白），再非同步補上細項
+                const limitInputEarly = document.getElementById('ctx-limit-input');
+                if (limitInputEarly) limitInputEarly.value = this.getLimit();
+                this._refreshDisplay();
                 // 優先讀酒館原生 itemizedPrompts（準+有細項）；拿不到再退回插件全域
-                if (!this._readFromItemized()) {
+                if (!(await this._readFromItemized())) {
                     this._readFromPlugin();
                     this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 }
@@ -136,11 +176,29 @@
                 const bdWrap = document.getElementById('ctx-breakdown');
                 if (bdWrap) bdWrap.style.display = bd ? 'block' : 'none';
                 if (bd) {
-                    const _setBd = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = (v != null ? v.toLocaleString() : '—'); };
-                    _setBd('ctx-bd-system', bd.system);
-                    _setBd('ctx-bd-world', bd.world);
-                    _setBd('ctx-bd-chat', bd.chat);
-                    _setBd('ctx-bd-ext', bd.ext);
+                    const total = bd.total || this.sendTokens || 0;
+                    const ROWS = [
+                        ['system',    bd.system],
+                        ['character', bd.character],
+                        ['world',     bd.world],
+                        ['examples',  bd.examples],
+                        ['chat',      bd.chat],
+                        ['persona',   bd.persona],
+                        ['note',      bd.note],
+                        ['inject',    bd.inject],
+                    ];
+                    ROWS.forEach(function(row) {
+                        const key = row[0];
+                        const v = Number(row[1]) || 0;
+                        const item = document.getElementById('ctx-bd-i-' + key);
+                        const eVal = document.getElementById('ctx-bd-' + key);
+                        const eBar = document.getElementById('ctx-bd-bar-' + key);
+                        if (item) item.style.display = v > 0 ? 'flex' : 'none';
+                        if (eVal) eVal.textContent = v.toLocaleString();
+                        if (eBar) eBar.style.width = (total > 0 ? Math.min(100, Math.round(v / total * 100)) : 0) + '%';
+                    });
+                    const eTot = document.getElementById('ctx-bd-total-val');
+                    if (eTot) eTot.textContent = total.toLocaleString();
                 }
 
                 // 進度條

@@ -404,7 +404,9 @@
                             const titleMatch = fullText.match(/\[Chapter\|(?:\d+\|)?([^\]|]+)\]/i)
                                             || fullText.match(/\[Story\|([^\]]+)\]/i);
                             const title = titleMatch ? titleMatch[1].trim() : `章節 ${new Date().toLocaleString('zh-TW')}`;
-                            const _thinking = win.OS_THINK?.getLatest()?.content?.trim() || '';
+                            let _thinking = win.OS_THINK?.getLatest()?.content?.trim() || '';
+                            // 酒館模式 OS_THINK 抓不到 → 讀酒館原生 reasoning（extra.reasoning）
+                            if (!_thinking) _thinking = (win.AureliaAPI || window.AureliaAPI)?.getLatestReasoning?.() || '';
 
                             const now = Date.now();
                             const storyTitle = window.VN_Core._extractStoryTitle(fullText) || presetTitle || '未命名故事';
