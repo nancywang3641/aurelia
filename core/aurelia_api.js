@@ -105,6 +105,21 @@
             return arr;
         },
         getLastMessageId: function () { return _chatArr().length - 1; },
+        // 讀最近一則 AI 訊息的思考鏈：酒館原生 reasoning 模組把 <thinking>…</thinking>
+        // 解析後存在 extra.reasoning（已套 REASONING 正則 = 對話框「思考了一段時間」摺疊塊的內容）。
+        // COT 在酒館模式拿不到 OS_THINK 時，用這個頂上。
+        getLatestReasoning: function () {
+            try {
+                const arr = _chatArr();
+                for (let i = arr.length - 1; i >= 0; i--) {
+                    const m = arr[i];
+                    if (m && !m.is_user && m.extra && m.extra.reasoning) {
+                        return String(m.extra.reasoning).trim();
+                    }
+                }
+            } catch (e) {}
+            return '';
+        },
         // ===== 世界書（原生備用，直接接 getContext().loadWorldInfo / saveWorldInfo）=====
         // ⚠️ 寫入(set/create/update/delete)會動到真實世界書檔，務必先拿「備用世界書」測，別拿真 lore。
         getLorebookEntries: async function (lorebook) { return _entriesArr(await _loadWI(lorebook)).map(_st2th); },
