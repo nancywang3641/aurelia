@@ -256,6 +256,12 @@
     border: 1px solid #e8d8c0; border-radius: 10px;
     padding: 10px; display: flex; flex-direction: column; gap: 4px;
     position: relative;
+    cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.jrnl-char-card:hover {
+    transform: translateY(-2px);
+    border-color: #f0c8d2;
+    box-shadow: 0 6px 16px rgba(201,122,142,0.18);
 }
 .jrnl-char-img {
     width: 100%; aspect-ratio: 1 / 1; border-radius: 8px;
@@ -324,7 +330,7 @@
     opacity: 0.85; z-index: 1;
 }
 .jrnl-deco-tr { top: 8px; right: 14px; width: 90px; height: 90px;
-    background-image: url('../aseets/sprites_1779200785261/sprite_022.png');
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_022.png');
     opacity: 0.95; transform: rotate(8deg); }
 /* 左下「日記標籤」—— SVG 紙條 + 迴紋針 + 文字 + 花飾 (sprite_006.png) 在前 */
 .jrnl-note-bl {
@@ -342,19 +348,19 @@
     position: absolute;
     bottom: -10px; left: -28px;
     width: 110px; height: 110px;
-    background-image: url('../aseets/sprites_1779200785261/sprite_006.png');
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_006.png');
     background-size: contain; background-repeat: no-repeat; background-position: center;
     z-index: 2;
     transform: rotate(-6deg);
 }
 .jrnl-deco-br { bottom: 14px; right: 14px; width: 100px; height: 80px;
-    background-image: url('../aseets/sprites_1779200785261/sprite_025.png');
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_025.png');
     transform: rotate(-4deg); }
 .jrnl-deco-petal1 { top: 30%; left: 22%; width: 24px; height: 24px;
-    background-image: url('../aseets/sprites_1779200785261/sprite_030.png');
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_030.png');
     opacity: 0.5; }
 .jrnl-deco-petal2 { top: 70%; right: 28%; width: 20px; height: 20px;
-    background-image: url('../aseets/sprites_1779200785261/sprite_033.png');
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_033.png');
     opacity: 0.5; transform: rotate(45deg); }
 
 /* 完整總結 modal —— 取代 alert()，奶油信紙風 */
@@ -454,13 +460,32 @@
     background: rgba(252,228,231,0.4);
 }
 
+/* 角色詳情 modal（沿用 .jrnl-modal 外殼，內容換成頭像 + 欄位列表） */
+.jrnl-modal-char { max-width: 460px; }
+.jrnl-cm-top { display: flex; justify-content: center; margin-bottom: 18px; }
+.jrnl-cm-avatar {
+    width: 112px; height: 112px; border-radius: 12px;
+    background: linear-gradient(135deg, #f4e8d8 0%, #faf0e0 100%);
+    border: 1px solid #e8d8c0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 44px; color: #d4a3b3; flex-shrink: 0;
+}
+.jrnl-cm-fields { display: flex; flex-direction: column; gap: 11px; }
+.jrnl-cm-row { display: flex; gap: 12px; align-items: baseline; }
+.jrnl-cm-k {
+    flex-shrink: 0; width: 76px; text-align: right;
+    font-size: 12px; font-weight: 700; color: #c97a8e; letter-spacing: 0.5px;
+}
+.jrnl-cm-v { flex: 1; min-width: 0; font-size: 13px; color: #5a4836; line-height: 1.7; word-break: break-word; }
+.jrnl-cm-empty { text-align: center; color: #9a8678; font-size: 12px; padding: 16px 0; }
+
 /* 故事卡封面池 —— class 對應 sprite 索引（路徑相對 CSS 檔，會正確解析） */
-.jrnl-cover-0 { background-image: url('../aseets/sprites_1779200785261/sprite_004.png'); }
-.jrnl-cover-1 { background-image: url('../aseets/sprites_1779200785261/sprite_005.png'); }
-.jrnl-cover-2 { background-image: url('../aseets/sprites_1779200785261/sprite_010.png'); }
-.jrnl-cover-3 { background-image: url('../aseets/sprites_1779200785261/sprite_012.png'); }
-.jrnl-cover-4 { background-image: url('../aseets/sprites_1779200785261/sprite_015.png'); }
-.jrnl-cover-5 { background-image: url('../aseets/sprites_1779200785261/sprite_020.png'); }
+.jrnl-cover-0 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_004.png'); }
+.jrnl-cover-1 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_005.png'); }
+.jrnl-cover-2 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_010.png'); }
+.jrnl-cover-3 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_012.png'); }
+.jrnl-cover-4 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_015.png'); }
+.jrnl-cover-5 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_020.png'); }
 
 /* 詳情頁返回鍵（桌機隱藏、手機才出現） */
 .jrnl-back-mobile {
