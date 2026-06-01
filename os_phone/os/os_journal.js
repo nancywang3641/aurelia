@@ -25,6 +25,20 @@
         };
     }
 
+    // 「名_姓」總結標籤 → 顯示用「姓名」（姓在前）。只在顯示層轉，配頭像仍用原始字串。
+    //   子寒_应 → 应子寒、予_纪 → 纪予、無_老狗 → 老狗（無=沒有姓）。
+    //   格式怪的（如沒填好的範本「姓名(名_姓氏)」）原樣留著，不硬轉成亂碼。
+    function _displayName(raw) {
+        const s = String(raw || '').trim();
+        if (!s) return s;
+        if (!/^[^\s_（）()]+_[^\s_（）()]+$/.test(s)) return s; // 僅處理乾淨的「名_姓」
+        const parts = s.split('_').map(p => p.trim());
+        const given = parts[0], surname = parts[1];
+        if (surname === '無' || surname === '无') return given;   // 沒有姓
+        if (given   === '無' || given   === '无') return surname;
+        return surname + given; // 姓 + 名
+    }
+
     function _escape(s) {
         return String(s ?? '').replace(/[&<>"']/g, c =>
             ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])
@@ -199,16 +213,16 @@
             </li>
         `).join('');
 
-        const charsHtml = story.characters.map(c => {
+        const charsHtml = story.characters.map((c, i) => {
             const parsed = _parseCharRow(c.row);
-            const name = c.name || parsed.name;
+            const name = c.name || parsed.name;          // 原始「名_姓」：配頭像 / 查詳情用
             const role = parsed.role;
             const trait = (parsed.person || parsed.feature || '').slice(0, 30);
             const tag = parsed.status || parsed.relate || '';
             return `
-                <div class="jrnl-char-card" title="${_escape(parsed.row || c.row || '')}">
+                <div class="jrnl-char-card" data-char-idx="${i}" title="${_escape(parsed.row || c.row || '')}">
                     <div class="jrnl-char-img" data-avatar-key="${_escape(name)}"><span class="jrnl-char-img-fallback">✿</span></div>
-                    <div class="jrnl-char-name">${_escape(name)}</div>
+                    <div class="jrnl-char-name">${_escape(_displayName(name))}</div>
                     ${role ? `<div class="jrnl-char-role">${_escape(role)}</div>` : ''}
                     ${trait ? `<div class="jrnl-char-trait">${_escape(trait)}</div>` : ''}
                     ${tag ? `<div class="jrnl-char-tag">${_escape(tag.slice(0, 12))}</div>` : ''}
@@ -262,6 +276,8 @@
             container.innerHTML = `<div style="padding:40px; text-align:center; color:#9a8678;">⚠️ OS_DB 未載入</div>`;
             return;
         }
+
+        let avatarPool = []; // 頭像快取池：_hydrateVnImages 填，角色詳情 modal 共用
 
         // 拉所有故事線
         let stories = [];
@@ -402,8 +418,7 @@
                     el.classList.forEach(c => { if (c.startsWith('jrnl-cover-')) el.classList.remove(c); });
                 }
             });
-            // Avatar：一次性 getAll、然後在記憶體做 fuzzy 比對
-            let avatarPool = [];
+            // Avatar：一次性 getAll、然後在記憶體做 fuzzy 比對（存到 launch 層 avatarPool 供 modal 共用）
             try { avatarPool = (await win.VN_Cache?.getAll?.('avatar_cache')) || []; } catch (_) {}
             container.querySelectorAll('[data-avatar-key]').forEach((el) => {
                 const name = el.dataset.avatarKey;
@@ -448,6 +463,74 @@
                     }
                 };
             }
+
+            // 角色卡片點擊 → 跳 modal 看完整內容（卡片塞不下全部）
+            rightEl.querySelectorAll('.jrnl-char-card').forEach(card => {
+                card.onclick = () => {
+                    const idx = parseInt(card.dataset.charIdx, 10);
+                    const c = (active && active.characters && !isNaN(idx)) ? active.characters[idx] : null;
+                    if (c) _openCharModal(c);
+                };
+            });
+        }
+
+        // 角色詳情 modal：沿用 .jrnl-modal 外殼，內容換成欄位列表 + 頭像
+        function _openCharModal(c) {
+            if (!c) return;
+            const old = container.querySelector('.jrnl-modal');
+            if (old) old.remove();
+
+            const parsed = _parseCharRow(c.row);
+            const rawName = c.name || parsed.name;       // 配頭像用原始「名_姓」
+            const disp = _displayName(rawName);          // 顯示用「姓名」
+            const fields = [
+                ['身份', parsed.role],
+                ['性格', parsed.person],
+                ['狀態', parsed.status],
+                ['特徵', parsed.feature],
+                ['與主角關係', parsed.relate],
+                ['備註', parsed.note],
+            ].filter(([, v]) => v && String(v).trim());
+            const fieldsHtml = fields.length
+                ? fields.map(([k, v]) =>
+                    `<div class="jrnl-cm-row"><span class="jrnl-cm-k">${_escape(k)}</span><span class="jrnl-cm-v">${_escape(v)}</span></div>`
+                  ).join('')
+                : '<div class="jrnl-cm-empty">這個角色還沒有更多資料</div>';
+
+            const modal = document.createElement('div');
+            modal.className = 'jrnl-modal';
+            modal.innerHTML = `
+                <div class="jrnl-modal-card jrnl-modal-char">
+                    <div class="jrnl-modal-head">
+                        <span class="jrnl-modal-title">${_escape(disp)}</span>
+                        <button class="jrnl-modal-close" title="關閉">✕</button>
+                    </div>
+                    <div class="jrnl-modal-body">
+                        <div class="jrnl-cm-top">
+                            <div class="jrnl-cm-avatar" data-avatar-key="${_escape(rawName)}"><span class="jrnl-char-img-fallback">✿</span></div>
+                        </div>
+                        <div class="jrnl-cm-fields">${fieldsHtml}</div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(modal);
+
+            // 補頭像（用已抓好的 avatarPool 做 fuzzy 配對）
+            const avEl = modal.querySelector('[data-avatar-key]');
+            const url = _matchAvatar(rawName, avatarPool);
+            if (url && avEl) {
+                avEl.style.backgroundImage = `url("${url}")`;
+                avEl.style.backgroundSize = 'cover';
+                avEl.style.backgroundPosition = 'center';
+                const fb = avEl.querySelector('.jrnl-char-img-fallback');
+                if (fb) fb.style.display = 'none';
+            }
+
+            const close = () => modal.remove();
+            modal.querySelector('.jrnl-modal-close').onclick = close;
+            modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+            const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+            document.addEventListener('keydown', onKey);
         }
 
         // 自訂 modal：在 container 內疊一層、不用瀏覽器 alert
