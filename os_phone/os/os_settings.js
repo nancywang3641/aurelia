@@ -384,7 +384,7 @@ EXAMPLE "prompt" value:
 
         // ───── 角色立繪 UI：lazy 初始化 ─────
         if (!window._initSpriteUI) {
-            const DEF_PREFIX = '2D illustration, high-end CG illustration, thick impasto, upper body, clothes and pants, ';
+            const DEF_PREFIX = '2D illustration, high-end CG illustration, thick impasto, full body, clothes and pants, ';
             const DEF_SUFFIX = 'solid dark brown background, isolated character, dramatic lighting, unique artistic style, high-end aesthetic, aesthetic lighting,';
             const LS_PFX = 'os_sprite_tpl_prefix';
             const LS_SFX = 'os_sprite_tpl_suffix';
@@ -448,13 +448,13 @@ EXAMPLE "prompt" value:
                 enableBtn('sprite-save-btn', false);
 
                 try {
-                    // 立繪固定 512×768 (2:3 直立)、跳過 cache。
+                    // 立繪固定 512×896 (約 4:7 直立，full body 站姿放得下腿)、跳過 cache。
                     // NAI 的提示詞格式跟 Pollinations 完全不同，純靠通用模板會很裸/畫質差 →
                     // 真的會走 NAI 時就「不 raw」，讓它套用「圖片設置」裡設好的 NAI 底詞/負詞（跟頭像同一套畫風）；
                     // Pollinations（或 NAI 沒 token 退回）維持 raw（純模板，行為不變）。
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
-                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: 512, height: 768, raw: !_useNAI });
+                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: 512, height: 896, raw: !_useNAI });
                     if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
                     const res = await fetch(url);
                     if (!res.ok) throw new Error('抓圖失敗 HTTP ' + res.status);
