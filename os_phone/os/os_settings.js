@@ -444,6 +444,7 @@ EXAMPLE "prompt" value:
                 setStatus('⏳ 為「' + name + '」生立繪中（5–30 秒）...');
                 document.getElementById('sprite-preview').innerHTML = '<span style="color:#666;font-size:11px;">生成中...</span>';
                 enableBtn('sprite-removebg-btn', false);
+                enableBtn('sprite-removebg-canvas-btn', false);
                 enableBtn('sprite-save-btn', false);
 
                 try {
@@ -467,6 +468,7 @@ EXAMPLE "prompt" value:
                     document.getElementById('sprite-preview').innerHTML = '<img src="' + state.blobUrl + '" style="max-width:100%;max-height:300px;border-radius:4px;">';
                     setStatus('✅ 生成完成');
                     enableBtn('sprite-removebg-btn', true);
+                    enableBtn('sprite-removebg-canvas-btn', true);
                     enableBtn('sprite-save-btn', true);
                 } catch (e) {
                     console.error('[Sprite] 生成失敗:', e);
@@ -532,16 +534,98 @@ EXAMPLE "prompt" value:
                         output: { format: 'image/png', quality: 1.0 },
                         progress: (k, c, t) => { if (t > 0) setStatus('🪄 ' + k + ': ' + Math.round(c/t*100) + '%'); }
                     });
-                    if (state.blobUrl) { try { URL.revokeObjectURL(state.blobUrl); } catch(_){} }
-                    state.blob = removed;
-                    state.blobUrl = URL.createObjectURL(removed);
-                    state.isRemoved = true;
-                    document.getElementById('sprite-preview').innerHTML = '<img src="' + state.blobUrl + '" style="max-width:100%;max-height:300px;border-radius:4px;background:linear-gradient(45deg,#2a2018 25%,transparent 25%),linear-gradient(-45deg,#2a2018 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2a2018 75%),linear-gradient(-45deg,transparent 75%,#2a2018 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0;">';
-                    setStatus('✅ 去背完成');
+                    _applyRemovedBlob(removed);
+                    setStatus('✅ AI 去背完成');
                 } catch (e) {
-                    console.error('[Sprite] 去背失敗:', e);
-                    setStatus('❌ 去背失敗: ' + e.message, true);
+                    console.error('[Sprite] AI 去背失敗:', e);
+                    setStatus('❌ AI 去背失敗: ' + e.message, true);
                     enableBtn('sprite-removebg-btn', true);
+                    enableBtn('sprite-removebg-canvas-btn', true);
+                }
+            }
+
+            // 去背成功後共用：換 state.blob + 預覽（透明用棋盤格底襯托）
+            const REMOVED_PREVIEW_BG = 'background:linear-gradient(45deg,#2a2018 25%,transparent 25%),linear-gradient(-45deg,#2a2018 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2a2018 75%),linear-gradient(-45deg,transparent 75%,#2a2018 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0;';
+            function _applyRemovedBlob(removed) {
+                if (state.blobUrl) { try { URL.revokeObjectURL(state.blobUrl); } catch(_){} }
+                state.blob = removed;
+                state.blobUrl = URL.createObjectURL(removed);
+                state.isRemoved = true;
+                document.getElementById('sprite-preview').innerHTML =
+                    '<img src="' + state.blobUrl + '" style="max-width:100%;max-height:300px;border-radius:4px;' + REMOVED_PREVIEW_BG + '">';
+                enableBtn('sprite-save-btn', true);
+            }
+
+            // ✂️ 純色去背（canvas）：抓四角背景色 → 從邊緣 flood-fill 把「接近背景色且與邊緣連通」的像素設透明。
+            //   只去除邊緣連通的背景 → 角色內部不會被打洞；二值 alpha → 不會像 AI matting 把角色弄半透明。
+            //   專治純色背景立繪（尤其 NAI 圖被 AI 模型過度透明化的情況）。不下載模型、瞬間完成。
+            async function spriteRemoveBgCanvas() {
+                if (!state.blob) { setStatus('沒圖可去背', true); return; }
+                if (state.isRemoved) { setStatus('已經去過背了（要換方式請重新生成）', true); return; }
+                enableBtn('sprite-removebg-btn', false);
+                enableBtn('sprite-removebg-canvas-btn', false);
+                setStatus('✂️ 純色去背中...');
+                try {
+                    const bmp = await createImageBitmap(state.blob);
+                    const W = bmp.width, H = bmp.height;
+                    const cv = document.createElement('canvas');
+                    cv.width = W; cv.height = H;
+                    const ctx = cv.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(bmp, 0, 0);
+                    if (bmp.close) bmp.close();
+                    const imgData = ctx.getImageData(0, 0, W, H);
+                    const d = imgData.data;
+
+                    // 背景色：四角各取 ~6×6 平均（立繪是純色背景＋角色置中，角落必為背景）
+                    const sampleCorner = (x0, y0) => {
+                        let r = 0, g = 0, b = 0, n = 0;
+                        for (let y = y0; y < Math.min(y0 + 6, H); y++)
+                            for (let x = x0; x < Math.min(x0 + 6, W); x++) {
+                                const i = (y * W + x) * 4; r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
+                            }
+                        return n ? [r / n, g / n, b / n] : [0, 0, 0];
+                    };
+                    const cs = [sampleCorner(0, 0), sampleCorner(Math.max(0, W - 6), 0),
+                                sampleCorner(0, Math.max(0, H - 6)), sampleCorner(Math.max(0, W - 6), Math.max(0, H - 6))];
+                    const bg = [0, 1, 2].map(k => cs.reduce((s, c) => s + c[k], 0) / cs.length);
+
+                    // 去背強度滑桿 → 容差（顏色距離平方）。strength 0..100 → tol 20..110
+                    const strEl = document.getElementById('sprite-bg-strength');
+                    const strength = strEl ? parseInt(strEl.value, 10) : 50;
+                    const tol = 20 + (isNaN(strength) ? 50 : strength) * 0.9;
+                    const tol2 = tol * tol * 3;
+                    const isBg = (p) => {
+                        const i = p * 4, dr = d[i] - bg[0], dg = d[i + 1] - bg[1], db = d[i + 2] - bg[2];
+                        return (dr * dr + dg * dg + db * db) <= tol2;
+                    };
+
+                    // 從四條邊入種子，flood-fill 連通的背景像素
+                    const visited = new Uint8Array(W * H);
+                    const stack = [];
+                    for (let x = 0; x < W; x++) { stack.push(x); stack.push((H - 1) * W + x); }
+                    for (let y = 0; y < H; y++) { stack.push(y * W); stack.push(y * W + W - 1); }
+                    while (stack.length) {
+                        const p = stack.pop();
+                        if (visited[p]) continue;
+                        visited[p] = 1;
+                        if (!isBg(p)) continue;
+                        d[p * 4 + 3] = 0; // 透明
+                        const x = p % W, y = (p / W) | 0;
+                        if (x > 0) stack.push(p - 1);
+                        if (x < W - 1) stack.push(p + 1);
+                        if (y > 0) stack.push(p - W);
+                        if (y < H - 1) stack.push(p + W);
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                    const removed = await new Promise(res => cv.toBlob(res, 'image/png'));
+                    if (!removed) throw new Error('canvas 轉檔失敗');
+                    _applyRemovedBlob(removed);
+                    setStatus('✅ 純色去背完成');
+                } catch (e) {
+                    console.error('[Sprite] 純色去背失敗:', e);
+                    setStatus('❌ 純色去背失敗: ' + e.message, true);
+                    enableBtn('sprite-removebg-btn', true);
+                    enableBtn('sprite-removebg-canvas-btn', true);
                 }
             }
 
@@ -623,6 +707,7 @@ EXAMPLE "prompt" value:
                     localStorage.removeItem(LS_SFX);
                 };
                 document.getElementById('sprite-removebg-btn').onclick = spriteRemoveBg;
+                document.getElementById('sprite-removebg-canvas-btn').onclick = spriteRemoveBgCanvas;
                 document.getElementById('sprite-save-btn').onclick = spriteSave;
                 renderAvatarPicker();
                 refreshList();
@@ -1303,8 +1388,14 @@ EXAMPLE "prompt" value:
                                     <div id="sprite-selected-info" style="margin-top:10px;font-size:11px;color:#666;padding:6px 8px;background:rgba(0,0,0,0.25);border-radius:4px;">尚未選擇角色</div>
 
                                     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
-                                        <button class="btn-test" id="sprite-removebg-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">🪄 去背</button>
+                                        <button class="btn-test" id="sprite-removebg-canvas-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">✂️ 純色去背</button>
+                                        <button class="btn-test" id="sprite-removebg-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">🪄 AI 去背</button>
                                         <button class="btn-test" id="sprite-save-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">💾 存到立繪庫</button>
+                                    </div>
+                                    <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+                                        <span style="font-size:11px;color:rgba(26,28,40,0.72);white-space:nowrap;">純色去背強度</span>
+                                        <input type="range" id="sprite-bg-strength" min="0" max="100" value="50" class="set-slider" style="flex:1;">
+                                        <span style="font-size:10px;color:rgba(26,28,40,0.50);white-space:nowrap;">背景有漸層就調高</span>
                                     </div>
                                     <div id="sprite-status" style="margin-top:8px;font-size:11px;color:rgba(26,28,40,0.72);min-height:14px;"></div>
 
@@ -1318,7 +1409,7 @@ EXAMPLE "prompt" value:
                                     <div id="sprite-list" style="margin-top:8px;font-size:11px;color:#888;">載入中...</div>
                                 </div>
 
-                                <div class="set-desc" style="margin-top:6px;">* 第一次按「去背」會下載 AI 模型（~40MB），之後快。立繪存進瀏覽器 IndexedDB，VN 後續會優先讀取。</div>
+                                <div class="set-desc" style="margin-top:6px;">* ✂️ 純色去背：純本機、瞬間完成、不下載模型，最適合純色背景的立繪（NAI 圖建議用這個，不會把角色弄半透明）。🪄 AI 去背：第一次下載模型（~40MB），適合背景比較雜的圖。立繪存進瀏覽器 IndexedDB，VN 後續會優先讀取。</div>
                             </div>
                         </div>
                         <div id="view-img-bg" class="img-subtab-view" style="display:none;">
