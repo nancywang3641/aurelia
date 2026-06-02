@@ -199,47 +199,120 @@
     }
 
     /* =========================================
-       系統設置：角色快取管理
+       系統設置：圖片快取管理（🌍 世界感知統一版）
+       依當前世界(chatId)分組顯示；舊圖歸「未分類」可移到世界/刪除；支援收藏、複製到當前世界。
        ========================================= */
-    async function loadAvatarManager(listId) {
-        const list = document.getElementById(listId || 'avatar-mgr-list'); if (!list) return;
-        const entries = await VN_Cache.getAll('avatar_cache'); list.innerHTML = '';
-        if (entries.length === 0) { list.innerHTML = '<div style="color:#666; font-size:0.85rem; padding:15px 0; text-align:center;">尚無快取紀錄（角色首次出現時自動建立）</div>'; return; }
-        const clearAllBtn = document.createElement('button');
-        clearAllBtn.textContent = '🗑 清空全部快取';
-        clearAllBtn.style.cssText = 'display:block;width:100%;margin-bottom:12px;padding:8px;background:rgba(180,60,60,0.15);border:1px solid rgba(200,80,80,0.35);color:#e07070;border-radius:6px;cursor:pointer;font-size:12px;letter-spacing:1px;';
-        clearAllBtn.onclick = async () => {
-            if (!confirm(`確定要清空全部 ${entries.length} 筆頭像快取？此動作無法復原。`)) return;
-            for (const e of entries) await VN_Cache.delete('avatar_cache', e.key);
-            if (window.VN_PLAYER) window.VN_PLAYER._avatarMemCache = {};
-            loadAvatarManager(listId);
-        };
-        list.appendChild(clearAllBtn);
+    const _mgrState = {};   // listId -> { world }
+    function _worldLabel(world, curWorld) {
+        if (!world) return '📦 未分類（舊資料）';
+        const short = world.length > 24 ? ('…' + world.slice(-22)) : world;
+        return (world === curWorld ? '★ 當前世界 · ' : '') + short;
+    }
+    async function _imgToDataUrl(raw) {
+        try {
+            const res = await fetch(raw); const blob = await res.blob();
+            return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
+        } catch (e) { return ''; }
+    }
+    async function _renderImgMgr(cfg) {
+        const list = document.getElementById(cfg.listId); if (!list) return;
+        const store = cfg.store, curWorld = VN_Cache.getCurrentWorld();
+        const all = await VN_Cache.getAll(store);
+        const groups = {};
+        all.forEach(e => { const w = VN_Cache.worldOf(e); (groups[w] = groups[w] || []).push(e); });
+        const st = _mgrState[cfg.listId] || (_mgrState[cfg.listId] = { world: curWorld });
+        if (groups[st.world] === undefined && st.world !== curWorld) st.world = curWorld;
+        list.innerHTML = '';
+
+        // ── 工具列：世界選擇器 ──
+        const bar = document.createElement('div');
+        bar.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;';
+        const sel = document.createElement('select');
+        sel.style.cssText = 'flex:1;min-width:0;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.08);color:inherit;border:1px solid rgba(128,128,128,0.35);font-size:12px;';
+        const wkeys = Object.keys(groups).sort((a, b) => {
+            if (a === curWorld) return -1; if (b === curWorld) return 1;
+            if (a === '') return 1; if (b === '') return -1; return a < b ? -1 : 1;
+        });
+        if (!wkeys.includes(curWorld)) wkeys.unshift(curWorld);
+        wkeys.forEach(w => {
+            const o = document.createElement('option');
+            o.value = w; o.textContent = _worldLabel(w, curWorld) + ` (${(groups[w] || []).length})`;
+            if (w === st.world) o.selected = true;
+            sel.appendChild(o);
+        });
+        sel.onchange = () => { st.world = sel.value; _renderImgMgr(cfg); };
+        bar.appendChild(sel);
+        list.appendChild(bar);
+
+        const entries = (groups[st.world] || []).slice();
+        if (!entries.length) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'color:#888;font-size:0.85rem;padding:18px 0;text-align:center;';
+            empty.textContent = st.world === '' ? '未分類沒有圖片' : (st.world === curWorld ? '這個世界還沒有圖片（劇情出現時自動生成）' : '這個世界沒有圖片');
+            list.appendChild(empty); return;
+        }
+        entries.sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0));
+
         entries.forEach(entry => {
+            const fullKey = entry.key;
+            const bare = VN_Cache.bareKeyOf(entry);
+            const { key: _omit, ...val } = entry;   // 純 value（去掉 getAll 加的 key）
+
             const item = document.createElement('div'); item.className = 'avatar-mgr-item';
-            const img = document.createElement('img'); img.className = 'avatar-preview'; img.title = entry.key;
-            img.onerror = () => { img.style.opacity = '0.25'; img.title = entry.key + '（圖片失效，請重新生成）'; };
-            // blob URL 在重開後無效，直接跳過不顯示
-            if (entry.url && !entry.url.startsWith('blob:')) {
-                img.src = entry.url;
-            } else if (entry.url && entry.url.startsWith('blob:')) {
-                img.style.opacity = '0.25'; img.title = entry.key + '（快取已過期，請點↺重生成）';
-                // 同步清掉無效的 blob URL 記錄，下次打開面板不再顯示
-                VN_Cache.delete('avatar_cache', entry.key);
+            const img = document.createElement('img'); img.className = 'avatar-preview'; img.title = bare;
+            if (cfg.kind === 'bg') img.style.cssText = 'width:96px;height:56px;object-fit:cover;border-radius:4px;flex-shrink:0;';
+            img.onerror = () => { img.style.opacity = '0.25'; };
+            if (entry.url && !entry.url.startsWith('blob:')) img.src = entry.url; else img.style.opacity = '0.25';
+
+            const info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
+            const nameEl = document.createElement('div'); nameEl.className = 'avatar-mgr-name';
+            nameEl.textContent = (entry.favorite ? '★ ' : '') + bare;
+            if (cfg.kind === 'bg') nameEl.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:4px;word-break:break-all;';
+            const ta = document.createElement('textarea'); ta.className = 'avatar-mgr-prompt'; ta.value = entry.prompt || '';
+            info.appendChild(nameEl); info.appendChild(ta);
+
+            const bw = document.createElement('div'); bw.style.cssText = 'display:flex;flex-direction:column;gap:6px;flex-shrink:0;';
+            const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; b.style.fontSize = '11px'; b.style.whiteSpace = 'nowrap'; b.onclick = fn; return b; };
+
+            bw.appendChild(mk('↺ 重生成', 'avatar-regen-btn', async (ev) => {
+                const btn = ev.currentTarget; const prompt = (ta.value || '').trim(); if (!prompt) return;
+                const o = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true;
+                try {
+                    const raw = cfg.kind === 'bg' ? await VN_Image.getBg(prompt, {}) : await VN_Image.getAvatar(prompt, 'Neutral');
+                    if (raw) {
+                        const url = (await _imgToDataUrl(raw)) || raw;
+                        await VN_Cache.setRaw(store, fullKey, { ...val, prompt, url, rawUrl: raw });
+                        img.src = url; img.style.opacity = '1';
+                    }
+                } catch (err) { console.error('[VN] 重生成失敗', err); }
+                btn.textContent = o; btn.disabled = false;
+            }));
+            bw.appendChild(mk(entry.favorite ? '★ 取消收藏' : '☆ 收藏', 'avatar-regen-btn', async () => {
+                await VN_Cache.setRaw(store, fullKey, { ...val, favorite: !entry.favorite });
+                _renderImgMgr(cfg);
+            }));
+            if (st.world === '') {
+                bw.appendChild(mk('→ 移到當前世界', 'avatar-regen-btn', async () => {
+                    await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld });
+                    await VN_Cache.deleteRaw(store, fullKey);
+                    _renderImgMgr(cfg);
+                }));
+            } else if (st.world !== curWorld) {
+                bw.appendChild(mk('⧉ 複製到當前世界', 'avatar-regen-btn', async () => {
+                    await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld });
+                    alert('已複製到當前世界');
+                }));
             }
-            const info = document.createElement('div'); info.style.cssText = 'flex:1; min-width:0;';
-            const nameEl = document.createElement('div'); nameEl.className = 'avatar-mgr-name'; nameEl.textContent = entry.key;
-            const textarea = document.createElement('textarea'); textarea.className = 'avatar-mgr-prompt'; textarea.value = entry.prompt || '';
-            info.appendChild(nameEl); info.appendChild(textarea);
-            const btnWrap = document.createElement('div'); btnWrap.style.cssText = 'display:flex; flex-direction:column; gap:8px; flex-shrink:0;';
-            const btn = document.createElement('button'); btn.className = 'avatar-regen-btn'; btn.textContent = '↺ 重生成';
-            btn.onclick = () => regenerateAvatarEntry(btn, entry.key, textarea, img);
-            const delBtn = document.createElement('button'); delBtn.className = 'avatar-del-btn'; delBtn.textContent = '✕ 刪除';
-            delBtn.onclick = () => deleteAvatarEntry(entry.key, item, list);
-            btnWrap.appendChild(btn); btnWrap.appendChild(delBtn);
-            item.appendChild(img); item.appendChild(info); item.appendChild(btnWrap); list.appendChild(item);
+            bw.appendChild(mk('✕ 刪除', 'avatar-del-btn', async () => {
+                await VN_Cache.deleteRaw(store, fullKey);
+                if (cfg.kind === 'avatar' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; } catch (e) {} }
+                item.style.transition = 'opacity 0.2s'; item.style.opacity = '0';
+                setTimeout(() => _renderImgMgr(cfg), 180);
+            }));
+            item.appendChild(img); item.appendChild(info); item.appendChild(bw); list.appendChild(item);
         });
     }
+    async function loadAvatarManager(listId) { return _renderImgMgr({ store: 'avatar_cache', listId: listId || 'avatar-mgr-list', kind: 'avatar' }); }
     async function regenerateAvatarEntry(btn, name, textarea, previewImg) {
         const prompt = textarea.value.trim(); if (!prompt) return;
         const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
@@ -275,46 +348,7 @@
         setTimeout(() => { itemEl.remove(); const list = listEl || document.getElementById('avatar-mgr-list'); if (list && list.children.length === 0) list.innerHTML = _empty; }, 200);
     }
 
-    async function loadBgManager(listId) {
-        const list = document.getElementById(listId || 'bg-mgr-list'); if (!list) return;
-        const entries = await VN_Cache.getAll('bg_cache'); list.innerHTML = '';
-        const _empty = '<div style="color:#666; font-size:0.85rem; padding:15px 0; text-align:center;">尚無快取紀錄（場景首次生成時自動建立）</div>';
-        if (entries.length === 0) { list.innerHTML = _empty; return; }
-        const clearAllBtn = document.createElement('button');
-        clearAllBtn.textContent = `🗑 清空全部快取（${entries.length} 筆）`;
-        clearAllBtn.style.cssText = 'display:block;width:100%;margin-bottom:12px;padding:8px;background:rgba(180,60,60,0.15);border:1px solid rgba(200,80,80,0.35);color:#e07070;border-radius:6px;cursor:pointer;font-size:12px;letter-spacing:1px;';
-        clearAllBtn.onclick = async () => {
-            if (!confirm(`確定要清空全部 ${entries.length} 筆背景快取？此動作無法復原。`)) return;
-            for (const e of entries) await VN_Cache.delete('bg_cache', e.key);
-            loadBgManager(listId);
-        };
-        list.appendChild(clearAllBtn);
-        entries.forEach(entry => {
-            const item = document.createElement('div'); item.className = 'avatar-mgr-item';
-            const img = document.createElement('img'); img.className = 'avatar-preview';
-            img.style.cssText = 'width:96px;height:56px;object-fit:cover;border-radius:4px;flex-shrink:0;';
-            img.title = entry.key;
-            img.onerror = () => { img.style.opacity = '0.25'; img.title = entry.key + '（圖片失效）'; };
-            if (entry.url && !entry.url.startsWith('blob:')) {
-                img.src = entry.url;
-            } else {
-                img.style.opacity = '0.25'; img.title = entry.key + '（快取已過期）';
-                VN_Cache.delete('bg_cache', entry.key);
-            }
-            const info = document.createElement('div'); info.style.cssText = 'flex:1; min-width:0;';
-            const nameEl = document.createElement('div'); nameEl.className = 'avatar-mgr-name';
-            nameEl.textContent = entry.key; nameEl.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:4px;word-break:break-all;';
-            const textarea = document.createElement('textarea'); textarea.className = 'avatar-mgr-prompt'; textarea.value = entry.prompt || '';
-            info.appendChild(nameEl); info.appendChild(textarea);
-            const btnWrap = document.createElement('div'); btnWrap.style.cssText = 'display:flex; flex-direction:column; gap:8px; flex-shrink:0;';
-            const regenBtn = document.createElement('button'); regenBtn.className = 'avatar-regen-btn'; regenBtn.textContent = '↺ 重生成';
-            regenBtn.onclick = () => regenerateBgEntry(regenBtn, entry.key, textarea, img);
-            const delBtn = document.createElement('button'); delBtn.className = 'avatar-del-btn'; delBtn.textContent = '✕ 刪除';
-            delBtn.onclick = () => deleteBgEntry(entry.key, item, list);
-            btnWrap.appendChild(regenBtn); btnWrap.appendChild(delBtn);
-            item.appendChild(img); item.appendChild(info); item.appendChild(btnWrap); list.appendChild(item);
-        });
-    }
+    async function loadBgManager(listId) { return _renderImgMgr({ store: 'bg_cache', listId: listId || 'bg-mgr-list', kind: 'bg' }); }
     async function regenerateBgEntry(btn, key, textarea, previewImg) {
         const prompt = textarea.value.trim(); if (!prompt) return;
         const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
