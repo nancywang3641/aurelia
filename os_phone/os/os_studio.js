@@ -1380,7 +1380,6 @@ ${dialogueText}
 - #game-bg：全螢幕背景容器。只能疊半透明的遮罩/濾鏡/暈影/漸層或邊框氛圍，「絕對不要」設 background-image 或不透明背景蓋掉劇情實際的背景圖。
 - #vn-panel-controls 與 .vn-panel-btn：對話框上方的 SKIP / LOG / AUTO 等控制按鈕（.vn-panel-btn.active 為啟用態）。
 - #btn-home、#btn-settings、#btn-reader：畫面右上角的頂部按鈕（返回 / 設定 / 閱讀器），請給它們統一的風格。
-- .vn-choice-btn：選項按鈕。
 規則：
 1. 只改外觀（背景/顏色/邊框/圓角/陰影/字體/裝飾/動畫）。可用 @import 載字體、用 ::before/::after 加裝飾、用 @keyframes 做動畫。
 2. 嚴禁改 position / top / left / right / bottom / width / height / transform 的「定位」屬性，以免破版。
@@ -1417,14 +1416,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 .inner-mode #dialogue-text{color:var(--em-color);font-style:italic;letter-spacing:1px;}
 #dialogue-text em{font-style:italic;color:var(--em-color);}
 #dialogue-text strong{font-weight:bold;color:#fff;}
-.vn-choices{display:flex;flex-direction:column;align-items:center;gap:7px;margin-top:10px;position:relative;z-index:5;}
-.vn-choice-btn{width:92%;max-width:360px;padding:9px 16px;background:rgba(10,8,4,0.85);border:1px solid rgba(212,175,55,0.35);color:#d4af37;font-family:var(--font-classic);font-size:0.8rem;letter-spacing:1.5px;cursor:pointer;border-radius:2px;text-align:center;}
 `;
     let _vthMode = 'char-mode';
 
     function _vthBuildSrcdoc(css, mode, thumb) {
         const m = mode || _vthMode;
-        const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-reader,#vn-panel-controls,.vn-choices{display:none;}' : '';
+        const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-reader,#vn-panel-controls{display:none;}' : '';
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${css || ''}</style></head><body>
 <div id="game-bg"></div>
 <button id="btn-home">⌂ 返回</button>
@@ -1436,7 +1433,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 <div id="speaker-name">角色</div>
 <div id="dialogue-text">範例對白，用來預覽主題的字體、顏色與框線。<em>斜體強調</em>與<strong>粗體重點</strong>也會跟著套用。</div>
 </div>
-<div class="vn-choices"><button class="vn-choice-btn">選項 A</button><button class="vn-choice-btn">選項 B</button></div>
 </div>
 </body></html>`;
     }
@@ -1452,7 +1448,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #game-bg（背景容器，只疊遮罩別蓋圖）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）\n#btn-home / #btn-settings / #btn-reader（右上頂部鈕）  .vn-choice-btn（選項鈕）\n（立繪 #game-char 不歸主題管）';
+        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #game-bg（背景容器，只疊遮罩別蓋圖）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）\n#btn-home / #btn-settings / #btn-reader（右上頂部鈕）\n（立繪 #game-char 不歸主題管）';
         host.innerHTML = `<div class="vth-wrap">
             <div class="vth-css-bar">
                 <span class="vth-css-world">🌍 ${esc(chatId || '(未知，先進 VN 一次)')}</span>
