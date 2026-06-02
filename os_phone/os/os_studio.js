@@ -99,6 +99,7 @@
                         <div class="studio-tab" data-tab="todo" id="studio-tab-todo" style="display:none;">📋 任務進度</div>
                         <div class="studio-tab" data-tab="source" id="studio-tab-source">💻 原始碼</div>
                         <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;">🎮 展廳</div>
+                        <div class="studio-tab" data-tab="theme" id="studio-tab-theme">🎨 主題</div>
                     </div>
                     <div class="studio-preview-content" id="studio-preview-content">
                         <div id="studio-preview-main" class="studio-preview-main">
@@ -109,6 +110,8 @@
                     <div id="studio-gallery-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
                         <div class="studio-gallery-list" id="studio-gallery-list"></div>
                     </div>
+                    <!-- 🎨 劇情面板主題 view -->
+                    <div id="studio-theme-content" style="display:none; flex:1; overflow-y:auto; padding:20px;"></div>
                     <!-- 📋 任務進度 view（worldbook 模式專用）-->
                     <div id="studio-todo-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
                         <div id="studio-todo-panel-side"></div>
@@ -767,8 +770,10 @@ System Environment set to CHESSBOARD mode.
                 document.getElementById('studio-source-content').style.display   = tab.dataset.tab === 'source'  ? 'block'  : 'none';
                 document.getElementById('studio-gallery-content').style.display  = tab.dataset.tab === 'gallery' ? 'block'  : 'none';
                 document.getElementById('studio-todo-content').style.display     = tab.dataset.tab === 'todo'    ? 'block'  : 'none';
+                const _tc = document.getElementById('studio-theme-content'); if (_tc) _tc.style.display = tab.dataset.tab === 'theme' ? 'block' : 'none';
                 if (tab.dataset.tab === 'gallery') loadStudioGallery();
                 if (tab.dataset.tab === 'todo') renderTodoPanel();
+                if (tab.dataset.tab === 'theme') renderThemePanel();
             };
         });
 
@@ -1365,6 +1370,114 @@ ${dialogueText}
             _saveTodos(chatId, todos);
             renderTodoPanel();
         }
+    }
+
+    // ── 🎨 劇情面板主題管理 ──────────────────────────────────────
+    function _vthHex(val, def) {
+        if (!val) return def;
+        const m = String(val).match(/#([0-9a-fA-F]{6})/);
+        return m ? '#' + m[1] : def;
+    }
+    function _openThemeEditor(theme) {
+        const VT = (window.parent || window).VN_Theme || window.VN_Theme; if (!VT) return;
+        const editing = theme && !theme.builtin ? theme : null;
+        const v = (theme && theme.vars) || {};
+        const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const fonts = [['', '（預設）'], ["'Georgia','Noto Serif TC',serif", '襯線 Serif'], ["'Noto Sans TC',sans-serif", '黑體 Sans'], ["'Courier New',monospace", '等寬 Mono'], ["'KaiTi','Noto Serif TC',serif", '楷體']];
+        const ov = document.createElement('div'); ov.className = 'vth-modal';
+        ov.innerHTML = `<div class="vth-modal-box">
+            <h4>${editing ? '編輯主題' : '新建自訂主題'}</h4>
+            <label>名稱<input id="vthe-name" value="${esc((theme && theme.name) || '')}"></label>
+            <label>強調色（金/邊框）<input type="color" id="vthe-gold" value="${_vthHex(v['--gold'], '#d4af37')}"></label>
+            <label>文字色<input type="color" id="vthe-text" value="${_vthHex(v['--text-color'], '#dcd8d0')}"></label>
+            <label>強調文字色（內心/em）<input type="color" id="vthe-em" value="${_vthHex(v['--em-color'], '#d4af37')}"></label>
+            <label>對話框底色<input type="color" id="vthe-bg" value="${_vthHex(v['--vn-dialog-bg-solid'], '#0a0a0e')}"></label>
+            <label>字體<select id="vthe-font">${fonts.map(f => `<option value="${esc(f[0])}"${(v['--font-classic'] || '') === f[0] ? ' selected' : ''}>${f[1]}</option>`).join('')}</select></label>
+            <div class="vth-modal-acts"><button class="vth-mini" id="vthe-cancel">取消</button><button class="vth-mini primary" id="vthe-save">儲存</button></div>
+        </div>`;
+        ov.onclick = e => { if (e.target === ov) ov.remove(); };
+        document.body.appendChild(ov);
+        ov.querySelector('#vthe-cancel').onclick = () => ov.remove();
+        ov.querySelector('#vthe-save').onclick = () => {
+            const name = ov.querySelector('#vthe-name').value.trim() || '自訂主題';
+            const gold = ov.querySelector('#vthe-gold').value, text = ov.querySelector('#vthe-text').value;
+            const em = ov.querySelector('#vthe-em').value, bg = ov.querySelector('#vthe-bg').value;
+            const font = ov.querySelector('#vthe-font').value;
+            const vars = { '--gold': gold, '--gold-dark': gold, '--text-color': text, '--em-color': em, '--name-color': gold, '--vn-dialog-bg': bg, '--vn-dialog-bg-solid': bg, '--vn-name-bg': bg };
+            if (font) vars['--font-classic'] = font;
+            VT.saveCustom({ id: editing ? editing.id : ('c_' + Date.now()), name, vars });
+            ov.remove(); renderThemePanel();
+        };
+    }
+    function renderThemePanel() {
+        const host = document.getElementById('studio-theme-content'); if (!host) return;
+        const VT = (window.parent || window).VN_Theme || window.VN_Theme;
+        const VC = (window.parent || window).VN_Cache || window.VN_Cache;
+        if (!VT) { host.innerHTML = '<div style="color:#fc8181;padding:10px;">VN_Theme 未載入，請先進 VN 一次再回來</div>'; return; }
+        const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : '';
+        const all = VT.getAll();
+        const manual = VT.getManual(chatId);
+        const map = VT.getMap();
+        const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const swatch = t => {
+            const v = t.vars || {};
+            const bg = v['--vn-dialog-bg'] || 'linear-gradient(180deg,#0c0c10,#040406)';
+            const gold = v['--gold'] || '#d4af37', text = v['--text-color'] || '#dcd8d0';
+            const font = v['--font-classic'] || 'serif';
+            return `<div class="vth-swatch" style="background:${bg};border-color:${gold};"><span style="color:${gold};font-family:${font};">名</span><span style="color:${text};font-family:${font};">字</span></div>`;
+        };
+        const opts = sel => all.map(t => `<option value="${t.id}"${sel === t.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
+
+        let html = '<div class="vth-wrap">';
+        html += `<div class="vth-sec">
+            <div class="vth-sec-t">當前世界主題</div>
+            <div class="vth-cur">世界：<b>${esc(chatId || '(未知，先進 VN 一次)')}</b></div>
+            <select class="vth-sel" id="vth-manual">
+                <option value="auto"${manual === 'auto' ? ' selected' : ''}>🪄 跟隨劇情 [World|]（自動）</option>
+                ${opts(manual)}
+            </select>
+            <div class="vth-hint">「跟隨劇情」＝由 [World|] 自動換；選某主題＝鎖定這個世界用它。</div>
+        </div>`;
+
+        html += '<div class="vth-sec"><div class="vth-sec-t">主題包</div><div class="vth-list">';
+        all.forEach(t => {
+            html += `<div class="vth-card">${swatch(t)}<div class="vth-card-name">${esc(t.name)}</div>
+                <div class="vth-card-acts">
+                    <button class="vth-mini" data-use="${t.id}">用於此世界</button>
+                    ${t.builtin ? '' : `<button class="vth-mini" data-edit="${t.id}">編輯</button><button class="vth-mini danger" data-del="${t.id}">刪</button>`}
+                </div></div>`;
+        });
+        html += '<button class="vth-mini primary" id="vth-new">＋ 新建自訂主題</button>';
+        html += '</div></div>';
+
+        html += `<div class="vth-sec"><div class="vth-sec-t">World → 主題 對照表 <span class="vth-hint">AI 輸出 [World|關鍵字] 時自動套</span></div><div id="vth-map">`;
+        Object.keys(map).forEach(k => {
+            html += `<div class="vth-map-row"><input class="vth-map-k" value="${esc(k)}">→<select class="vth-map-v">${opts(map[k])}</select><button class="vth-mini danger" data-mapdel="${esc(k)}">×</button></div>`;
+        });
+        html += `</div><div class="vth-map-row"><input class="vth-map-k" id="vth-newk" placeholder="關鍵字（如 古代）">→<select id="vth-newv">${opts('')}</select><button class="vth-mini primary" id="vth-mapadd">＋ 加</button></div></div>`;
+        html += '</div>';
+        host.innerHTML = html;
+
+        host.querySelector('#vth-manual').onchange = e => { VT.setManual(chatId, e.target.value); if (e.target.value !== 'auto') VT.apply(e.target.value); };
+        host.querySelectorAll('[data-use]').forEach(b => b.onclick = () => { VT.setManual(chatId, b.dataset.use); VT.apply(b.dataset.use); renderThemePanel(); });
+        host.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => _openThemeEditor(VT.byId(b.dataset.edit)));
+        host.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { if (confirm('刪除這個自訂主題？')) { VT.deleteCustom(b.dataset.del); renderThemePanel(); } });
+        host.querySelector('#vth-new').onclick = () => _openThemeEditor(null);
+        const saveMap = () => {
+            const m = {};
+            host.querySelectorAll('#vth-map .vth-map-row').forEach(row => {
+                const k = row.querySelector('.vth-map-k'), v = row.querySelector('.vth-map-v');
+                if (k && v && k.value.trim()) m[k.value.trim()] = v.value;
+            });
+            VT.setMap(m);
+        };
+        host.querySelectorAll('#vth-map .vth-map-v').forEach(s => s.onchange = saveMap);
+        host.querySelectorAll('#vth-map .vth-map-k').forEach(inp => inp.onchange = saveMap);
+        host.querySelectorAll('[data-mapdel]').forEach(b => b.onclick = () => { const m = VT.getMap(); delete m[b.dataset.mapdel]; VT.setMap(m); renderThemePanel(); });
+        host.querySelector('#vth-mapadd').onclick = () => {
+            const k = host.querySelector('#vth-newk').value.trim(), v = host.querySelector('#vth-newv').value;
+            if (!k) return; const m = VT.getMap(); m[k] = v; VT.setMap(m); renderThemePanel();
+        };
     }
 
     function renderTodoPanel() {

@@ -125,3 +125,29 @@
 .vrd-detail-title { flex:1; min-width:0; font-size:14px; font-weight:700; color:#d4af37; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .vrd-back-btn { background:transparent; border:1px solid rgba(212,175,55,0.3); color:#d4af37; padding:6px 14px; border-radius:8px; cursor:pointer; font-size:12px; flex-shrink:0; }
 .vrd-back-btn:hover { background:rgba(212,175,55,0.1); }
+
+/* ── 創作室：劇情面板主題管理 ── */
+.vth-wrap { display:flex; flex-direction:column; gap:18px; }
+.vth-sec { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; }
+.vth-sec-t { font-size:14px; font-weight:800; color:#e8dfc8; margin-bottom:10px; }
+.vth-cur { font-size:12px; color:#bbb; margin-bottom:8px; }
+.vth-cur b { color:#d4af37; word-break:break-all; }
+.vth-sel { width:100%; padding:9px 10px; border-radius:8px; background:rgba(255,255,255,0.07); color:inherit; border:1px solid rgba(128,128,128,0.35); font-size:13px; box-sizing:border-box; }
+.vth-hint { font-size:11px; color:#888; margin-top:6px; line-height:1.5; font-weight:400; }
+.vth-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px; }
+.vth-card { background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+.vth-swatch { width:100%; height:54px; border-radius:8px; border:2px solid #d4af37; display:flex; align-items:center; justify-content:center; gap:8px; font-size:15px; font-weight:700; box-sizing:border-box; }
+.vth-card-name { font-size:12px; color:#ddd; text-align:center; }
+.vth-card-acts { display:flex; gap:5px; flex-wrap:wrap; justify-content:center; }
+.vth-mini { padding:5px 10px; font-size:11px; border-radius:6px; border:1px solid rgba(128,128,128,0.35); background:rgba(255,255,255,0.06); color:inherit; cursor:pointer; white-space:nowrap; }
+.vth-mini.primary { background:#d4af37; color:#1a1a1a; font-weight:700; border-color:#d4af37; }
+.vth-mini.danger { color:#ff8a8a; border-color:rgba(255,138,138,0.4); }
+.vth-map-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.vth-map-k, .vth-map-v { flex:1; min-width:0; padding:6px 8px; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(128,128,128,0.35); color:#ddd; font-size:12px; }
+.vth-modal { position:fixed; inset:0; z-index:100002; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; padding:20px; }
+.vth-modal-box { width:min(380px,92vw); background:#23252e; border-radius:14px; padding:18px; box-shadow:0 16px 50px rgba(0,0,0,0.55); display:flex; flex-direction:column; gap:10px; }
+.vth-modal-box h4 { margin:0 0 6px; font-size:15px; color:#f0f0f4; }
+.vth-modal-box label { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:#ccc; }
+.vth-modal-box input, .vth-modal-box select { background:rgba(0,0,0,0.25); border:1px solid rgba(128,128,128,0.35); border-radius:6px; color:#ddd; font-size:13px; padding:6px 8px; flex:1; min-width:0; }
+.vth-modal-box input[type=color] { padding:2px; height:32px; width:54px; flex:0 0 auto; }
+.vth-modal-acts { display:flex; gap:8px; justify-content:flex-end; margin-top:6px; }
