@@ -256,16 +256,17 @@
             this.stopSFX();
         },
 
-        loadScript: async function (txt, messageId) {
+        loadScript: function (txt, messageId) {
             // 新一輪劇本載入時，自動關閉檔案庫面板
             if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) {
                 window.AureliaHtmlExtractor.hide();
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
-            // 🔄 學 PWA：每次開播都重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 即時生效。
-            //    （activeTemplates 原本只在開機 autoWakeup 載一次；多視窗下別的視窗存了新 tag，這邊會吃到舊資料）
-            try { if (window.VN_DynamicParser && window.VN_DynamicParser.init) await window.VN_DynamicParser.init(); } catch (e) {}
+            // 🔄 學 PWA：重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 生效。
+            //    ⚠️ 不可 await（呼叫端是 loadScript()→next() 同步契約，await 會讓 next() 在空腳本上跑→劇情跳過）。
+            //    fire-and-forget：本次載入吃現有快取，刷新供後續播放/下次開播用。
+            try { if (window.VN_DynamicParser && window.VN_DynamicParser.init) window.VN_DynamicParser.init(); } catch (e) {}
             const contentMatch = txt.match(/<content>([\s\S]*?)<\/content>/i);
             let storyText = contentMatch ? contentMatch[1] : txt;
 
