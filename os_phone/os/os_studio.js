@@ -1395,6 +1395,11 @@ ${dialogueText}
 【完成度 — 成套，不准半吊子】
 - 所有元素用「同一套設計語言」做成完整一組，不可以對話框做得很炫、名牌和按鈕卻還停在預設黑。控制鈕和頂部鈕也要呼應對話框的主風格與質感。
 
+【裝飾技法 — 鼓勵大膽用，讓設計有記憶點】
+- 善用 ::before / ::after 偽元素在對話框上做「偽容器」裝飾：底部花邊條、四角紋飾、貼紙、徽章、圖標、雙層描邊都可以。可用內聯 SVG（background-image:url("data:image/svg+xml,...")）做 pattern 或圖示，或用 repeating-linear-gradient / radial-gradient 做斜紋、網點、掃描線等紋理。
+- 但所有裝飾「一律加 pointer-events:none」（對話框是點一下繼續劇情的，裝飾蓋住會擋住推進）；且必須放在 #dialogue-text 的下層或邊緣、不可蓋住內文。
+- 每個元素只有 ::before / ::after 兩個偽元素；需要更多層次就在同一 background 疊多張漸層/圖，或借用 #speaker-name、#top-badge 的偽元素。
+
 規則：
 1. 可用 @import 載字體、用 ::before/::after 加裝飾、用 @keyframes 做動畫。
 2. 「絕對不要」對 #game-char / #game-char-container（角色立繪）或 #game-bg（全螢幕背景圖層，會被劇情背景圖蓋掉、改了也看不到）寫任何樣式——它們不歸主題管。
