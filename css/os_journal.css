@@ -464,24 +464,51 @@
     background: rgba(252,228,231,0.4);
 }
 
-/* 角色詳情 modal（沿用 .jrnl-modal 外殼，內容換成頭像 + 欄位列表） */
-.jrnl-modal-char { max-width: 460px; }
-.jrnl-cm-top { display: flex; justify-content: center; margin-bottom: 18px; }
-.jrnl-cm-avatar {
-    width: 112px; height: 112px; border-radius: 12px;
+/* 角色詳情 modal — 模板 B：左大圖 + 右資料分欄（淺色） */
+.jrnl-modal-char {
+    max-width: 720px; max-height: 86%;
+    flex-direction: row; padding: 0; position: relative;
+}
+.jrnl-cm-close {
+    position: absolute; top: 14px; right: 14px; z-index: 5;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer; padding: 0;
+    background: rgba(255,255,255,0.85); border: 1px solid #f0c8d2; color: #c97a8e;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+    transition: all 0.2s;
+}
+.jrnl-cm-close:hover { background: #c97a8e; color: #fff; border-color: #c97a8e; }
+.jrnl-cm-photo {
+    flex: 0 0 42%; align-self: stretch; min-height: 340px;
     background: linear-gradient(135deg, #f4e8d8 0%, #faf0e0 100%);
-    border: 1px solid #e8d8c0;
+    background-size: cover; background-position: center; background-repeat: no-repeat;
     display: flex; align-items: center; justify-content: center;
-    font-size: 44px; color: #d4a3b3; flex-shrink: 0;
+    font-size: 60px; color: #d4a3b3;
 }
-.jrnl-cm-fields { display: flex; flex-direction: column; gap: 11px; }
-.jrnl-cm-row { display: flex; gap: 12px; align-items: baseline; }
+.jrnl-cm-side {
+    flex: 1; min-width: 0; padding: 28px 26px; overflow-y: auto;
+    display: flex; flex-direction: column;
+}
+.jrnl-cm-side::-webkit-scrollbar { width: 5px; }
+.jrnl-cm-side::-webkit-scrollbar-thumb { background: #d8c8b0; border-radius: 2px; }
+.jrnl-cm-name {
+    font-size: 22px; font-weight: 900; color: #5a4836; letter-spacing: 1px;
+    font-family: 'Playfair Display', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+.jrnl-cm-sub { font-size: 12px; color: #9a8678; letter-spacing: 0.5px; margin: 4px 0 16px; }
+.jrnl-cm-fields { display: flex; flex-direction: column; gap: 13px; }
+.jrnl-cm-row { display: flex; flex-direction: column; gap: 3px; }
 .jrnl-cm-k {
-    flex-shrink: 0; width: 76px; text-align: right;
-    font-size: 12px; font-weight: 700; color: #c97a8e; letter-spacing: 0.5px;
+    font-size: 12px; font-weight: 700; color: #c97a8e; letter-spacing: 1px;
 }
-.jrnl-cm-v { flex: 1; min-width: 0; font-size: 13px; color: #5a4836; line-height: 1.7; word-break: break-word; }
+.jrnl-cm-v { font-size: 13px; color: #5a4836; line-height: 1.75; word-break: break-word; }
 .jrnl-cm-empty { text-align: center; color: #9a8678; font-size: 12px; padding: 16px 0; }
+/* 手機：上下堆疊（圖在上、資料在下） */
+@media (max-width: 600px) {
+    .jrnl-modal-char { flex-direction: column; max-height: 92%; }
+    .jrnl-cm-photo { flex: 0 0 220px; min-height: 220px; }
+    .jrnl-cm-side { padding: 18px 18px 22px; }
+    .jrnl-cm-name { font-size: 19px; }
+}
 
 /* 故事卡封面池 —— class 對應 sprite 索引（路徑相對 CSS 檔，會正確解析） */
 .jrnl-cover-0 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_004.png'); }
