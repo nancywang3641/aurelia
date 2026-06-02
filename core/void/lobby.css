@@ -275,12 +275,18 @@
 .lobby-right {
     position:relative; flex:1 1 40%; min-width:0;
     display:flex; flex-direction:column;
-    padding:14px 16px; gap:10px; overflow-y:auto;
+    padding:14px 16px; gap:10px; overflow:hidden;
     background:var(--lb-panel);
+}
+/* 按鈕子容器：MAIN MENU header 固定不動，只有這層捲動 */
+.lb-menu-scroll {
+    flex:1 1 auto; min-height:0;
+    display:flex; flex-direction:column; gap:10px;
+    overflow-y:auto; overflow-x:hidden;
     scrollbar-width:thin; scrollbar-color:var(--lb-line) transparent;
 }
-.lobby-right::-webkit-scrollbar { width:4px; }
-.lobby-right::-webkit-scrollbar-thumb { background:var(--lb-line); border-radius:2px; }
+.lb-menu-scroll::-webkit-scrollbar { width:4px; }
+.lb-menu-scroll::-webkit-scrollbar-thumb { background:var(--lb-line); border-radius:2px; }
 
 .lb-menu-head { flex-shrink:0; margin-bottom:2px; }
 .lb-menu-head-title {
@@ -486,6 +492,8 @@
         gap:6px;
         padding:8px 12px;
     }
+    /* 手機改 grid：子容器透明化，讓按鈕回到 .lobby-right 直接子項，grid-area 才生效 */
+    .lb-menu-scroll { display:contents; }
     .lobby-right .lb-menu-head-title { font-size:11px; letter-spacing:2.5px; }
     .lobby-right .lb-menu-head-sub { font-size:7px; }
     .lobby-right .lb-menu-head-rule { margin-top:4px; }
