@@ -149,16 +149,27 @@
             requestAnimationFrame(() => overlay.style.opacity = '1');
 
             // 定義完成回調：關閉 UI，呼叫 VN Core 繼續
+            let _done = false;
             const onComplete = () => {
+                if (_done) return; _done = true;
                 overlay.style.opacity = '0';
-                setTimeout(() => { 
-                    overlay.remove(); 
+                setTimeout(() => {
+                    overlay.remove();
                     // 恢復原生 VN 面板
                     if (vnCore.showVNPanel) vnCore.showVNPanel();
                     else if (vnCore.toggleUI) vnCore.toggleUI('vn');
-                    vnCore.next(); 
+                    vnCore.next();
                 }, 300);
             };
+
+            // 跳過/繼續：點擊卡片外的暗背景或空白處 → 收掉繼續。
+            // 純顯示卡（如 ChapterCard）沒自帶按鈕時的退路，對齊舊 _showDomBlock 的「點擊背景關閉」。
+            // 只認 overlay/panel 本身（暗區、空白 padding），點到卡片內容（子元素）不關 → 不影響互動卡。
+            overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target === panel) onComplete(); });
+            const _hint = document.createElement('div');
+            _hint.textContent = '點擊空白處繼續';
+            _hint.style.cssText = 'position:absolute;left:0;right:0;bottom:10px;text-align:center;color:rgba(255,255,255,0.45);font-size:11px;letter-spacing:1px;pointer-events:none;z-index:1;';
+            overlay.appendChild(_hint);
 
             // 沙盒執行 AI 生成的 JS
             try {
