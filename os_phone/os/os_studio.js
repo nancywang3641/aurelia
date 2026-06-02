@@ -1379,12 +1379,13 @@ ${dialogueText}
 - #text-panel：對話框外框，整個畫面的「主視覺、主力，你要重點發揮的地方」。⚠️它一定帶三狀態 class 之一：.char-mode（角色說話，最常見）/ .nar-mode（旁白）/ .inner-mode（內心）。預設已分別對 #text-panel.char-mode、.nar-mode、.inner-mode 設了背景，特異性比純 #text-panel 高，所以換背景/邊框「必須」分別寫這三條，否則沒效果。三態都要做。背景、邊框、外框、圓角、clip-path 造型、::before/::after 裝飾、材質紋理、字體、陰影、動畫……都大膽用，做出有記憶點的設計，別只是換顏色。唯一限制：它要維持在「畫面底部、水平置中」，別用 position/transform 把 #text-panel 或外層 #text-panel-wrapper 搬走。
 - #dialogue-text：對話內文（字體 / 字色 / 行距），配合對話框設計。⚠️文字對齊保持預設靠左，不要置中（見下方鐵則）。
 - #speaker-name：角色名牌（固定浮在對話框左上，旁白時自動隱藏）。只重新設計它的外觀（底色/邊框/圓角/字體/造型）配合對話框，「位置不要動」。
-- #game-bg：全螢幕背景容器。只能疊「半透明」遮罩/濾鏡/暈影/漸層（alpha ≤ 0.35），絕不要設 background-image 或不透明底蓋掉劇情實際的背景圖。
+- #top-badge：左上角的「場景牌」，顯示當前時間・地點（例如「黃昏 南城舊巷」，文字兩側有金色短線裝飾，那是 ::before / ::after）。可重新設計它的外觀（底色/漸隱/邊框/圓角/字體/裝飾線）配合主題，但「位置不要動」（固定左上）。註：直播模式時同樣內容會改顯示在 #stream-scene-row（內含 #stream-scene-label），請一併配合上色。
+- #game-bg：全螢幕背景「壁紙」圖層（裝載劇情背景圖的那層，不是場景牌）。只能疊「半透明」遮罩/濾鏡/暈影/漸層（alpha ≤ 0.35）營造氛圍，絕不要設 background-image 或不透明底蓋掉那張背景圖。
 - #vn-panel-controls 與 .vn-panel-btn：對話框上方的 SKIP / LOG / AUTO 控制按鈕（.vn-panel-btn.active 為啟用態）。「位置不要動」，只重新上色/造型配合主題。
 - #btn-home、#btn-settings、#btn-reader：畫面右上角的頂部按鈕（返回 / 設定 / 閱讀器）。「位置不要動」，只重新統一它們的外觀配合主題。
 
 【最重要的鐵則 — 配件一律不准移動】
-- 除了對話框維持在底部置中之外，名牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-reader 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
+- 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-reader 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
 
 【可讀性 — 最優先】
 - 對話框「文字所在那層」的底必須夠不透明：實心色，或 alpha ≥ 0.82。要玻璃感就把透明留外緣，文字正下方壓一層實底，確保字不被背景圖洗掉。
@@ -1413,6 +1414,9 @@ html,body{margin:0;height:100%;}
 body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:14px;}
 /* 預覽用示意場景：代表真實 VN 裡 #game-bg 載入的劇情背景圖，故意偏亮偏雜，方便看出遮罩效果＋檢驗文字可讀性 */
 #game-bg{position:absolute;inset:0;background-color:#050505;background-image:linear-gradient(160deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%), linear-gradient(135deg, #4a6b8a 0%, #7a6a8c 38%, #c89a6a 72%, #e8cf9e 100%);background-size:cover;background-position:center;z-index:1;}
+#top-badge{position:absolute;top:14px;left:14px;z-index:10;border:none;box-shadow:none;border-radius:0;background:linear-gradient(to right,transparent 0%,rgba(0,0,0,0.55) 12%,rgba(0,0,0,0.55) 88%,transparent 100%);color:#f0e8d0;display:inline-block;padding:7px 28px;font-weight:700;font-size:0.88rem;letter-spacing:2.5px;line-height:1.5;text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,0.9);}
+#top-badge::before{content:'';display:inline-block;vertical-align:middle;width:16px;height:1px;background:linear-gradient(to right,transparent,#c8a96e);margin-right:10px;margin-bottom:2px;}
+#top-badge::after{content:'';display:inline-block;vertical-align:middle;width:16px;height:1px;background:linear-gradient(to left,transparent,#c8a96e);margin-left:10px;margin-bottom:2px;}
 #btn-home,#btn-settings,#btn-reader{position:absolute;z-index:15;background:rgba(10,10,12,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);border:1px solid rgba(212,175,55,0.3);color:var(--gold-dark);padding:6px 12px;cursor:pointer;font-size:0.7rem;font-family:var(--font-classic);letter-spacing:1px;border-radius:2px;text-transform:uppercase;}
 #btn-reader{top:12px;right:12px;padding:6px 10px;}
 #btn-settings{top:12px;right:70px;}
@@ -1438,9 +1442,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
     function _vthBuildSrcdoc(css, mode, thumb) {
         const m = mode || _vthMode;
-        const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-reader,#vn-panel-controls{display:none;}' : '';
+        const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-reader,#vn-panel-controls,#top-badge{display:none;}' : '';
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${css || ''}</style></head><body>
 <div id="game-bg"></div>
+<div id="top-badge">黃昏 南城舊巷</div>
 <button id="btn-home">⌂ 返回</button>
 <button id="btn-settings">設定</button>
 <button id="btn-reader">📖</button>
@@ -1465,7 +1470,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #game-bg（背景容器，只疊遮罩別蓋圖）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）\n#btn-home / #btn-settings / #btn-reader（右上頂部鈕）\n（立繪 #game-char 不歸主題管）';
+        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#game-bg（全螢幕壁紙層，只疊遮罩別蓋圖）  #vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）\n#btn-home / #btn-settings / #btn-reader（右上頂部鈕）\n（配件位置固定只配色；立繪 #game-char 不歸主題管）';
         host.innerHTML = `<div class="vth-wrap">
             <div class="vth-css-bar">
                 <span class="vth-css-world">🌍 ${esc(chatId || '(未知，先進 VN 一次)')}</span>
