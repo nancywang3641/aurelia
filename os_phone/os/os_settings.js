@@ -483,34 +483,37 @@ EXAMPLE "prompt" value:
                 if (!listEl) return;
                 if (!win2.VN_Cache) { listEl.innerHTML = '<span style="color:#fc8181;">VN_Cache 未就緒，請先進 VN 一次再回來</span>'; return; }
                 try {
-                    const all = await win2.VN_Cache.getAll('avatar_cache');
-                    const valid = all.filter(e => e.url && !e.url.startsWith('blob:'));
+                    const VC = win2.VN_Cache;
+                    const cur = VC.getCurrentWorld ? VC.getCurrentWorld() : '';
+                    const all = await VC.getAll('avatar_cache');
+                    // 只顯示「當前世界」的頭像 → 不混淆、不用滑半天
+                    const valid = all.filter(e => e.url && !e.url.startsWith('blob:') && (!VC.worldOf || VC.worldOf(e) === cur));
                     if (!valid.length) {
-                        listEl.innerHTML = '<span style="color:#666;">頭像快取為空，請先在 VN 跑出角色頭像</span>';
+                        listEl.className = '';
+                        listEl.innerHTML = '<span style="color:#666;font-size:11px;">這個世界還沒有頭像（先在 VN 跑出角色頭像）</span>';
                         return;
                     }
                     const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                    listEl.className = 'vng-grid';
                     listEl.innerHTML = valid.map(e => {
-                        const cleaned = stripPromptForSprite(e.prompt || '');
-                        const keyEnc = encodeURIComponent(e.key);
-                        return (
-                            '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px;background:rgba(0,0,0,0.25);border-radius:4px;margin-bottom:6px;">'
-                            + '<img src="' + e.url + '" style="width:48px;height:48px;object-fit:cover;border-radius:3px;background:#222;flex-shrink:0;">'
-                            + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">'
-                            + '<div style="color:#1A1C28;font-size:12px;font-weight:600;">' + esc(e.key) + '</div>'
-                            + '<textarea data-prompt-for="' + keyEnc + '" placeholder="清洗後 prompt（可微調）" style="width:100%;min-height:46px;background:rgba(0,0,0,0.4);border:1px solid #444;color:#ccc;font-size:11px;padding:4px 6px;border-radius:3px;font-family:inherit;resize:vertical;box-sizing:border-box;">' + esc(cleaned) + '</textarea>'
-                            + '</div>'
-                            + '<button class="btn-test" data-pick="' + keyEnc + '" style="padding:4px 10px;font-size:11px;color:#1A1C28;flex-shrink:0;">✨ 生立繪</button>'
-                            + '</div>'
-                        );
+                        const bare = VC.bareKeyOf ? VC.bareKeyOf(e) : e.key;
+                        return '<div class="vng-card vng-pick" data-key="' + encodeURIComponent(e.key) + '" data-name="' + esc(bare) + '" title="' + esc(bare) + '">'
+                            + '<img src="' + esc(e.url) + '">'
+                            + '<div class="vng-foot">' + esc(bare) + '</div>'
+                            + '</div>';
                     }).join('');
-                    listEl.querySelectorAll('[data-pick]').forEach(b => {
-                        b.onclick = () => {
-                            const keyEnc = b.getAttribute('data-pick');
-                            const k = decodeURIComponent(keyEnc);
-                            const ta = listEl.querySelector('[data-prompt-for="' + keyEnc + '"]');
-                            const prompt = ta ? ta.value.trim() : '';
-                            spriteGenerate(k, prompt);
+                    listEl.querySelectorAll('.vng-pick').forEach(card => {
+                        card.onclick = () => {
+                            listEl.querySelectorAll('.vng-pick').forEach(c => c.classList.remove('is-sel'));
+                            card.classList.add('is-sel');
+                            const k = decodeURIComponent(card.getAttribute('data-key'));
+                            const name = card.getAttribute('data-name');
+                            const entry = valid.find(x => x.key === k);
+                            state.selectedName = name;
+                            const cleaned = stripPromptForSprite(entry ? (entry.prompt || '') : '');
+                            const pEl = document.getElementById('sprite-sel-prompt'); if (pEl) pEl.value = cleaned;
+                            const bar = document.getElementById('sprite-sel-bar'); if (bar) bar.style.display = 'flex';
+                            const info = document.getElementById('sprite-selected-info'); if (info) info.textContent = '已選角色：' + name;
                         };
                     });
                 } catch (e) {
@@ -691,6 +694,12 @@ EXAMPLE "prompt" value:
                 document.getElementById('sprite-removebg-btn').onclick = spriteRemoveBg;
                 document.getElementById('sprite-removebg-canvas-btn').onclick = spriteRemoveBgCanvas;
                 document.getElementById('sprite-save-btn').onclick = spriteSave;
+                const _genBtn = document.getElementById('sprite-gen-btn');
+                if (_genBtn) _genBtn.onclick = () => {
+                    if (!state.selectedName) { setStatus('請先點上方一個角色', true); return; }
+                    const p = (document.getElementById('sprite-sel-prompt').value || '').trim();
+                    spriteGenerate(state.selectedName, p);
+                };
                 renderAvatarPicker();
                 refreshList();
             };
@@ -1349,49 +1358,50 @@ EXAMPLE "prompt" value:
                                 <div class="set-desc" style="margin-top:4px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。</div>
                             </div>
 
-                            <!-- 子: 角色立繪 -->
+                            <!-- 子: 角色立繪（去背工作室）-->
                             <div id="avatar-sub-sprite" class="avatar-sub-view" style="display:none;">
                                 <div class="set-group">
-                                    <div class="set-label">🎨 從頭像快取轉立繪 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">點任一角色 → 用其 prompt 生立繪</span></div>
+                                    <div class="set-label">🎨 從頭像快取轉立繪 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">點角色 → 生立繪 → 去背 → 存（只顯示當前世界）</span></div>
 
-                                    <div id="sprite-picker-list" style="margin-top:8px;max-height:280px;overflow-y:auto;font-size:11px;color:#888;">載入中...</div>
+                                    <div id="sprite-picker-list" style="margin-top:10px;max-height:300px;overflow-y:auto;">載入中...</div>
 
-                                    <details style="margin-top:10px;">
-                                        <summary style="cursor:pointer;color:#1A1C28;font-size:12px;padding:4px 0;">📜 Prompt 模板（可編輯）</summary>
-                                        <div class="set-label" style="margin-top:8px;font-size:11px;">前綴（頭像 prompt 之前）</div>
-                                        <textarea class="set-input" id="sprite-tpl-prefix" style="margin-top:4px;min-height:50px;font-family:inherit;font-size:12px;"></textarea>
-                                        <div class="set-label" style="margin-top:8px;font-size:11px;">後綴（頭像 prompt 之後）</div>
-                                        <textarea class="set-input" id="sprite-tpl-suffix" style="margin-top:4px;min-height:50px;font-family:inherit;font-size:12px;"></textarea>
-                                        <div style="margin-top:6px;display:flex;gap:6px;">
-                                            <button class="btn-test" id="sprite-tpl-reset" style="padding:4px 10px;font-size:11px;">↻ 還原預設</button>
+                                    <div id="sprite-sel-bar" class="vng-studio-sel" style="display:none;">
+                                        <div class="vng-studio-sel-name" id="sprite-selected-info">尚未選擇角色</div>
+                                        <textarea id="sprite-sel-prompt" class="vng-studio-prompt" placeholder="立繪 prompt（已清洗，可微調）"></textarea>
+                                        <div class="vng-studio-sel-row">
+                                            <button class="vng-studio-gen" id="sprite-gen-btn">✨ 生立繪</button>
+                                            <details class="vng-studio-tpl">
+                                                <summary>📜 Prompt 模板（前後綴）</summary>
+                                                <div class="set-label" style="margin-top:8px;font-size:11px;">前綴</div>
+                                                <textarea class="set-input" id="sprite-tpl-prefix" style="margin-top:4px;min-height:48px;font-family:inherit;font-size:12px;"></textarea>
+                                                <div class="set-label" style="margin-top:8px;font-size:11px;">後綴</div>
+                                                <textarea class="set-input" id="sprite-tpl-suffix" style="margin-top:4px;min-height:48px;font-family:inherit;font-size:12px;"></textarea>
+                                                <button class="btn-test" id="sprite-tpl-reset" style="margin-top:6px;padding:4px 10px;font-size:11px;">↻ 還原預設</button>
+                                            </details>
                                         </div>
-                                    </details>
-
-                                    <div id="sprite-selected-info" style="margin-top:10px;font-size:11px;color:#666;padding:6px 8px;background:rgba(0,0,0,0.25);border-radius:4px;">尚未選擇角色</div>
-
-                                    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
-                                        <button class="btn-test" id="sprite-removebg-canvas-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">✂️ 純色去背</button>
-                                        <button class="btn-test" id="sprite-removebg-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">🪄 AI 去背</button>
-                                        <button class="btn-test" id="sprite-save-btn" style="padding:6px 12px;font-size:12px;opacity:0.5;pointer-events:none;">💾 存到立繪庫</button>
                                     </div>
-                                    <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
-                                        <span style="font-size:11px;color:rgba(26,28,40,0.72);white-space:nowrap;">純色去背強度</span>
-                                        <input type="range" id="sprite-bg-strength" min="0" max="100" value="50" class="set-slider" style="flex:1;">
-                                        <span style="font-size:10px;color:rgba(26,28,40,0.50);white-space:nowrap;">背景有漸層就調高</span>
-                                    </div>
-                                    <div id="sprite-status" style="margin-top:8px;font-size:11px;color:rgba(26,28,40,0.72);min-height:14px;"></div>
 
-                                    <div id="sprite-preview" style="margin-top:10px;border:1px solid rgba(26,28,40,0.10);border-radius:4px;padding:8px;background:rgba(0,0,0,0.3);min-height:120px;display:flex;align-items:center;justify-content:center;">
-                                        <span style="color:#666;font-size:11px;">尚無預覽</span>
+                                    <div id="sprite-preview" class="vng-studio-preview"><span style="color:#888;font-size:11px;">生立繪後在這裡預覽、去背</span></div>
+
+                                    <div class="vng-studio-bar">
+                                        <button class="vng-studio-act" id="sprite-removebg-canvas-btn" style="opacity:0.5;pointer-events:none;">✂️ 純色去背</button>
+                                        <button class="vng-studio-act" id="sprite-removebg-btn" style="opacity:0.5;pointer-events:none;">🪄 AI 去背</button>
+                                        <button class="vng-studio-act primary" id="sprite-save-btn" style="opacity:0.5;pointer-events:none;">💾 存立繪</button>
                                     </div>
+                                    <div class="vng-studio-strength">
+                                        <span>純色去背強度</span>
+                                        <input type="range" id="sprite-bg-strength" min="0" max="100" value="50" class="set-slider">
+                                        <span class="vng-studio-hint">背景有漸層調高</span>
+                                    </div>
+                                    <div id="sprite-status" class="vng-studio-status"></div>
                                 </div>
 
                                 <div class="set-group" style="margin-top:14px;">
                                     <div class="set-label">📚 已存立繪</div>
-                                    <div id="sprite-list" style="margin-top:8px;font-size:11px;color:#888;">載入中...</div>
+                                    <div id="sprite-list" style="margin-top:8px;">載入中...</div>
                                 </div>
 
-                                <div class="set-desc" style="margin-top:6px;">* ✂️ 純色去背：純本機、瞬間完成、不下載模型，最適合純色背景的立繪（NAI 圖建議用這個，不會把角色弄半透明）。🪄 AI 去背：第一次下載模型（~40MB），適合背景比較雜的圖。立繪存進瀏覽器 IndexedDB，VN 後續會優先讀取。</div>
+                                <div class="set-desc" style="margin-top:6px;">* ✂️ 純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。🪄 AI 去背：首次下載模型(~40MB)，適合雜背景。立繪存進當前世界，VN 優先讀取。</div>
                             </div>
                         </div>
                         <div id="view-img-bg" class="img-subtab-view" style="display:none;">
