@@ -165,61 +165,71 @@
         return chapters;
     }
 
-    // ── 渲染章節列表 ──────────────────────────────────────────────
+    // 章節資料快取（給 _openChapter 用 index 取全文）
+    let _readerSorted = [];
+    let _readerBody = null;
+
+    // ── 渲染章節「選擇卡片」：只放 章節名 + 摘要，點進去才看全文 ──────
     function _renderChapters(chapters, body) {
         const sorted = [...chapters].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        _readerSorted = sorted; _readerBody = body;
         if (!sorted.length) {
             body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;">此故事無章節記錄</div>';
             return;
         }
-        let html = '';
+        let html = '<div class="vrd-cards">';
         sorted.forEach((ch, i) => {
-            const id        = ch.id || `ch_${i}`;
             const content   = ch.content || '';
-            const userText  = ch.request ? esc(ch.request) : '';
             const fullPlain = _strip(content);
-            const novelText = `<p style="margin:0">${_toHtml(fullPlain)}</p>`;
-            const rawText   = esc(content);
-            const thinkText = esc(ch.thinking || '');
-            const ts        = ch.createdAt ? new Date(ch.createdAt).toLocaleString('zh-TW') : '';
-
-            // 摘要：優先抽 <summary>…</summary>；沒有就用全文前段當預覽
             const sm = content.match(/<summary>([\s\S]*?)<\/summary>/i);
             let summary = sm ? sm[1].trim().replace(/<[^>]+>/g, '').trim() : '';
-            if (!summary) summary = fullPlain.slice(0, 140) + (fullPlain.length > 140 ? '…' : '');
-
-            const userBlock = userText ? `<div class="vn-reader-msg user"><div class="vn-reader-label">👤 用戶</div><div class="vn-reader-bubble">${userText}</div></div>` : '';
-            const thinkBlock = thinkText ? `<div class="vn-reader-think-wrap" id="vrth-${id}"><div class="vn-reader-think-hd" onclick="window.VN_READER._thinkToggle('${id}')"><span class="rth-arrow">▶</span><span>思考了一段時間</span></div><div class="vn-reader-think-body">${thinkText}</div></div>` : '';
-
-            html += `<div class="vrd-card" id="vrcard-${id}">
-                <div class="vrd-card-hd" onclick="window.VN_READER._cardToggle('${id}')">
+            if (!summary) summary = fullPlain.slice(0, 160) + (fullPlain.length > 160 ? '…' : '');
+            const summaryHtml = summary ? esc(summary).replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>') : '<span style="color:#666">（無摘要）</span>';
+            const ts = ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('zh-TW') : '';
+            html += `<div class="vrd-card" onclick="window.VN_READER._openChapter(${i})">
+                <div class="vrd-card-hd">
                     <span class="vrd-card-no">CH.${String(i+1).padStart(2,'0')}</span>
-                    <span class="vrd-card-title">${esc(ch.title||'未命名章節')}</span>
+                    <span class="vrd-card-title">${esc(ch.title || '未命名章節')}</span>
                     <span class="vrd-card-time">${ts}</span>
-                    <span class="vrd-card-arrow">▶</span>
                 </div>
-                <div class="vrd-card-summary">${summary ? esc(summary).replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>') : '<span style="color:#666">（無摘要）</span>'}</div>
-                <div class="vrd-card-full">
-                    ${userBlock}
-                    <div class="vn-reader-msg ai">
-                        <div class="vn-reader-msg-hd">
-                            <div class="vn-reader-label">🤖 全文</div>
-                            <div class="vn-reader-actions">
-                                <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('${id}',this)">📄 看原始 tag</button>
-                            </div>
-                        </div>
-                        ${thinkBlock}
-                        <div class="vn-reader-bubble novel-view" id="vrb-novel-${id}">${novelText || '<span style="color:#555">（無內容）</span>'}</div>
-                        <div class="vn-reader-bubble raw-view" id="vrb-raw-${id}">${rawText}</div>
-                    </div>
-                </div>
+                <div class="vrd-card-summary">${summaryHtml}</div>
+                <div class="vrd-card-readmore">點此看全文 →</div>
             </div>`;
         });
+        html += '</div>';
         body.innerHTML = html;
-        // 預設收合 → 自動展開最後一章方便接著讀
-        const last = sorted[sorted.length - 1];
-        if (last) document.getElementById('vrcard-' + (last.id || `ch_${sorted.length-1}`))?.classList.add('open');
-        body.scrollTop = body.scrollHeight;
+        body.scrollTop = 0;
+    }
+
+    // ── 點進某章 → 看全文（master-detail）──────────────────────────
+    function _openChapter(i) {
+        const body = _readerBody || document.getElementById('vn-reader-sa-body');
+        const ch = _readerSorted[i];
+        if (!body || !ch) return;
+        const id        = ch.id || `ch_${i}`;
+        const content   = ch.content || '';
+        const novelText = `<p style="margin:0">${_toHtml(_strip(content))}</p>`;
+        const rawText   = esc(content);
+        const thinkText = esc(ch.thinking || '');
+        const userText  = ch.request ? esc(ch.request) : '';
+        const ts        = ch.createdAt ? new Date(ch.createdAt).toLocaleString('zh-TW') : '';
+        const userBlock = userText ? `<div class="vn-reader-msg user"><div class="vn-reader-label">👤 用戶</div><div class="vn-reader-bubble">${userText}</div></div>` : '';
+        const thinkBlock = thinkText ? `<div class="vn-reader-think-wrap" id="vrth-${id}"><div class="vn-reader-think-hd" onclick="window.VN_READER._thinkToggle('${id}')"><span class="rth-arrow">▶</span><span>思考了一段時間</span></div><div class="vn-reader-think-body">${thinkText}</div></div>` : '';
+        body.innerHTML = `
+            <div class="vrd-detail-bar">
+                <button class="vrd-back-btn" onclick="window.VN_READER._backToCards()">← 返回章節</button>
+                <span class="vrd-detail-title">CH.${String(i+1).padStart(2,'0')}　${esc(ch.title || '')}</span>
+                <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('${id}',this)">📄 原始 tag</button>
+            </div>
+            <div style="color:#666;font-size:0.72rem;margin:0 0 12px;">${ts}</div>
+            ${userBlock}
+            ${thinkBlock}
+            <div class="vn-reader-bubble novel-view" id="vrb-novel-${id}">${novelText || '<span style="color:#555">（無內容）</span>'}</div>
+            <div class="vn-reader-bubble raw-view" id="vrb-raw-${id}">${rawText}</div>`;
+        body.scrollTop = 0;
+    }
+    function _backToCards() {
+        if (_readerBody && _readerSorted.length) _renderChapters(_readerSorted, _readerBody);
     }
 
     // ── 公開 API ──────────────────────────────────────────────────
@@ -406,10 +416,9 @@
             btn.classList.toggle('active', showRaw);
             btn.textContent = showRaw ? '📖 看小說' : '📄 看原始 tag';
         },
-        // 章節摘要卡片：展開/收合全文
-        _cardToggle(id) {
-            document.getElementById('vrcard-' + id)?.classList.toggle('open');
-        },
+        // 章節選擇卡片 → 看全文 / 返回章節
+        _openChapter,
+        _backToCards,
 
     };
 
