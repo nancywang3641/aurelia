@@ -332,6 +332,7 @@ async function initializeExtension() {
         // vn_story / qb / wx / map / rpg 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_styles.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_core.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_gallery.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_tts_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_ui_workshop.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/qb_core.css');
