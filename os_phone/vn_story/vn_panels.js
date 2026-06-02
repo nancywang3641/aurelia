@@ -247,13 +247,15 @@
         const menu = document.createElement('div'); menu.className = 'vng-menu';
         const add = (txt, fn, danger) => { const b = document.createElement('button'); if (danger) b.className = 'danger'; b.textContent = txt; b.onclick = (e) => { e.stopPropagation(); _closeCardMenus(); fn(); }; menu.appendChild(b); };
         if (entry.url) add('🔍 查看大圖', () => _vngLightbox(entry.url));
-        add('✏️ 編輯重生', () => _vngEditModal(entry.prompt, async (p) => { await _vngRegen(cfg, fullKey, val, p); rerender(); }));
-        add('↻ 直接重生', async () => { if (entry.prompt) { await _vngRegen(cfg, fullKey, val, entry.prompt); rerender(); } });
-        // 從頭像快取轉立繪：把這張頭像設成同名同世界的立繪（VN 顯示時最優先用立繪）
-        if (cfg.kind === 'avatar' && entry.url) add('🎭 設為立繪', async () => {
-            await VN_Cache.setRaw('sprite_cache', fullKey, { url: entry.url, prompt: entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
-            alert('已把「' + bare + '」設為立繪（限此世界）。\nVN 會優先用立繪顯示；要透明去背可到「立繪面板」處理。');
-        });
+        if (!cfg.noRegen) {
+            add('✏️ 編輯重生', () => _vngEditModal(entry.prompt, async (p) => { await _vngRegen(cfg, fullKey, val, p); rerender(); }));
+            add('↻ 直接重生', async () => { if (entry.prompt) { await _vngRegen(cfg, fullKey, val, entry.prompt); rerender(); } });
+            // 從頭像快取轉立繪：把這張頭像設成同名同世界的立繪（VN 顯示時最優先用立繪）
+            if (cfg.kind === 'avatar' && entry.url) add('🎭 設為立繪', async () => {
+                await VN_Cache.setRaw('sprite_cache', fullKey, { url: entry.url, prompt: entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
+                alert('已把「' + bare + '」設為立繪（限此世界）。\nVN 會優先用立繪顯示；要透明去背可到「立繪面板」處理。');
+            });
+        }
         add(entry.favorite ? '★ 取消收藏' : '☆ 加入收藏', async () => { await VN_Cache.setRaw(store, fullKey, { ...val, favorite: !entry.favorite }); rerender(); });
         if (st.world === '') {
             add('→ 移到當前世界', async () => { await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld }); await VN_Cache.deleteRaw(store, fullKey); rerender(); });
@@ -270,8 +272,8 @@
     }
     function _vngCard(cfg, entry, curWorld, st, rerender) {
         const bare = VN_Cache.bareKeyOf(entry);
-        const card = document.createElement('div'); card.className = 'vng-card' + (cfg.kind === 'bg' ? ' kind-bg' : '');
-        const _ph = () => { const d = document.createElement('div'); d.className = 'vng-ph'; d.textContent = cfg.kind === 'bg' ? '🌄' : '👤'; return d; };
+        const card = document.createElement('div'); card.className = 'vng-card' + (cfg.kind === 'bg' ? ' kind-bg' : '') + (cfg.kind === 'sprite' ? ' kind-sprite' : '');
+        const _ph = () => { const d = document.createElement('div'); d.className = 'vng-ph'; d.textContent = cfg.kind === 'bg' ? '🌄' : (cfg.kind === 'sprite' ? '🎭' : '👤'); return d; };
         if (entry.url && !entry.url.startsWith('blob:')) {
             const img = document.createElement('img'); img.src = entry.url; img.onerror = () => img.replaceWith(_ph()); card.appendChild(img);
         } else card.appendChild(_ph());
@@ -329,6 +331,7 @@
         list.appendChild(grid);
     }
     async function loadAvatarManager(listId) { return _renderImgMgr({ store: 'avatar_cache', listId: listId || 'avatar-mgr-list', kind: 'avatar' }); }
+    async function loadSpriteManager(listId) { return _renderImgMgr({ store: 'sprite_cache', listId: listId || 'sprite-list', kind: 'sprite', noRegen: true }); }
     async function regenerateAvatarEntry(btn, name, textarea, previewImg) {
         const prompt = textarea.value.trim(); if (!prompt) return;
         const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
@@ -702,7 +705,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         openGameSettings, closeGameSettings,
         openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg,
         loadAvatarManager, regenerateAvatarEntry, deleteAvatarEntry,
-        loadBgManager, regenerateBgEntry, deleteBgEntry,
+        loadBgManager, regenerateBgEntry, deleteBgEntry, loadSpriteManager,
         openChapterPanel, closeChapterPanel
     };
 })();

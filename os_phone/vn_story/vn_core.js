@@ -25,7 +25,7 @@
     const {
         openGameSettings, closeGameSettings,
         openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg,
-        loadAvatarManager, loadBgManager,
+        loadAvatarManager, loadBgManager, loadSpriteManager,
         openChapterPanel, closeChapterPanel
     } = window.VN_Panels;
 
@@ -2576,6 +2576,7 @@
         resetPromptOrder() { VN_PromptOrder.reset(); },
         loadAvatarManager,   // 供 vn_settings.js 外接調用（接受自定義 listId）
         loadBgManager,       // 供 vn_settings.js 外接調用（BG 快取列表）
+        loadSpriteManager,   // 立繪庫網格（sprite_cache，世界感知）
 
         // 💭 本章思考鏈小窗
         showThinkPopup() {
