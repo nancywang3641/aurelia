@@ -664,30 +664,12 @@ EXAMPLE "prompt" value:
                 const listEl = document.getElementById('sprite-list');
                 if (!listEl) return;
                 if (!win2.VN_Cache) { listEl.innerHTML = '<span style="color:#fc8181;">VN_Cache 未就緒，請先進 VN 一次再回來</span>'; return; }
+                // 🌍 改用畫廊網格（世界感知、圖片為主）；VN_PLAYER 未就緒時退回極簡清單
+                if (win2.VN_PLAYER && win2.VN_PLAYER.loadSpriteManager) { win2.VN_PLAYER.loadSpriteManager('sprite-list'); return; }
                 try {
                     const all = await win2.VN_Cache.getAll('sprite_cache');
-                    if (!all.length) { listEl.innerHTML = '<span style="color:#666;">尚無已存立繪</span>'; return; }
-                    listEl.innerHTML = all.map(e =>
-                        '<div style="display:flex;align-items:center;gap:8px;padding:6px;background:rgba(0,0,0,0.3);border-radius:4px;margin-bottom:6px;">'
-                        + '<img src="' + e.url + '" style="width:36px;height:48px;object-fit:cover;border-radius:2px;background:#222;">'
-                        + '<div style="flex:1;min-width:0;">'
-                        + '<div style="color:#1A1C28;font-size:12px;font-weight:600;">' + e.key + '</div>'
-                        + '<div style="color:rgba(26,28,40,0.72);font-size:10px;">' + (e.isRemoved ? '🪄 已去背' : '原圖') + ' · ' + new Date(e.createdAt || 0).toLocaleDateString() + '</div>'
-                        + '</div>'
-                        + '<button class="btn-test" data-sprite-del="' + e.key + '" style="padding:3px 8px;font-size:10px;color:#fc8181;">🗑️</button>'
-                        + '</div>'
-                    ).join('');
-                    listEl.querySelectorAll('[data-sprite-del]').forEach(b => {
-                        b.addEventListener('click', async () => {
-                            const k = b.getAttribute('data-sprite-del');
-                            if (!confirm('刪除「' + k + '」立繪？')) return;
-                            await win2.VN_Cache.delete('sprite_cache', k);
-                            refreshList();
-                        });
-                    });
-                } catch (e) {
-                    listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗: ' + e.message + '</span>';
-                }
+                    listEl.innerHTML = all.length ? all.map(e => '<div style="color:#888;font-size:11px;padding:2px 0;">' + e.key + '</div>').join('') : '<span style="color:#666;">尚無已存立繪</span>';
+                } catch (e) { listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗</span>'; }
             }
 
             // 每次切到 sprite tab 都跑一次：DOM 是新的時要重新綁事件
