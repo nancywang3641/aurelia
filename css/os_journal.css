@@ -292,7 +292,7 @@
 
 /* 底部「查看完整總結」按鈕 */
 .jrnl-d-foot {
-    margin-top: 12px;
+    margin: 12px 0 20px;
     display: flex; gap: 10px; flex-wrap: wrap;
 }
 .jrnl-view-full {
