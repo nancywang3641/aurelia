@@ -199,10 +199,10 @@
     }
 
     /* =========================================
-       系統設置：圖片快取管理（🌍 世界感知統一版）
-       依當前世界(chatId)分組顯示；舊圖歸「未分類」可移到世界/刪除；支援收藏、複製到當前世界。
+       系統設置：圖片快取管理（🌍 世界感知 · 圖片網格畫廊）
+       縮圖為主、右上「⋯」選單操作；依當前世界(chatId)分組，舊圖歸「未分類」。
        ========================================= */
-    const _mgrState = {};   // listId -> { world }
+    const _mgrState = {};   // listId -> { world, filter }
     function _worldLabel(world, curWorld) {
         if (!world) return '📦 未分類（舊資料）';
         const short = world.length > 24 ? ('…' + world.slice(-22)) : world;
@@ -214,103 +214,114 @@
             return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
         } catch (e) { return ''; }
     }
+    function _closeCardMenus() { document.querySelectorAll('.vng-menu').forEach(m => m.remove()); }
+    function _vngLightbox(url) {
+        const ov = document.createElement('div'); ov.className = 'vng-lightbox';
+        const img = document.createElement('img'); img.src = url; ov.appendChild(img);
+        ov.onclick = () => ov.remove();
+        document.body.appendChild(ov);
+    }
+    function _vngEditModal(initial, onOk) {
+        const ov = document.createElement('div'); ov.className = 'vng-modal';
+        const box = document.createElement('div'); box.className = 'vng-modal-box';
+        const h = document.createElement('h4'); h.textContent = '編輯 Prompt 後重生成';
+        const ta = document.createElement('textarea'); ta.value = initial || '';
+        const acts = document.createElement('div'); acts.className = 'vng-modal-actions';
+        const cancel = document.createElement('button'); cancel.className = 'vng-btn-cancel'; cancel.textContent = '取消'; cancel.onclick = () => ov.remove();
+        const ok = document.createElement('button'); ok.className = 'vng-btn-ok'; ok.textContent = '重生成'; ok.onclick = () => { const v = ta.value.trim(); ov.remove(); if (v) onOk(v); };
+        acts.appendChild(cancel); acts.appendChild(ok);
+        box.appendChild(h); box.appendChild(ta); box.appendChild(acts);
+        ov.appendChild(box); ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+        document.body.appendChild(ov); setTimeout(() => ta.focus(), 50);
+    }
+    async function _vngRegen(cfg, fullKey, val, prompt) {
+        const raw = cfg.kind === 'bg' ? await VN_Image.getBg(prompt, {}) : await VN_Image.getAvatar(prompt, 'Neutral');
+        if (!raw) return;
+        const url = (await _imgToDataUrl(raw)) || raw;
+        await VN_Cache.setRaw(cfg.store, fullKey, { ...val, prompt, url, rawUrl: raw });
+    }
+    function _vngCardMenu(anchor, cfg, entry, curWorld, st, rerender) {
+        _closeCardMenus();
+        const store = cfg.store, fullKey = entry.key, bare = VN_Cache.bareKeyOf(entry);
+        const { key: _o, ...val } = entry;
+        const menu = document.createElement('div'); menu.className = 'vng-menu';
+        const add = (txt, fn, danger) => { const b = document.createElement('button'); if (danger) b.className = 'danger'; b.textContent = txt; b.onclick = (e) => { e.stopPropagation(); _closeCardMenus(); fn(); }; menu.appendChild(b); };
+        if (entry.url) add('🔍 查看大圖', () => _vngLightbox(entry.url));
+        add('✏️ 編輯重生', () => _vngEditModal(entry.prompt, async (p) => { await _vngRegen(cfg, fullKey, val, p); rerender(); }));
+        add('↻ 直接重生', async () => { if (entry.prompt) { await _vngRegen(cfg, fullKey, val, entry.prompt); rerender(); } });
+        add(entry.favorite ? '★ 取消收藏' : '☆ 加入收藏', async () => { await VN_Cache.setRaw(store, fullKey, { ...val, favorite: !entry.favorite }); rerender(); });
+        if (st.world === '') {
+            add('→ 移到當前世界', async () => { await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld }); await VN_Cache.deleteRaw(store, fullKey); rerender(); });
+        } else if (st.world !== curWorld) {
+            add('⧉ 複製到當前世界', async () => { await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld }); alert('已複製到當前世界'); });
+        }
+        add('🗑 刪除', async () => { await VN_Cache.deleteRaw(store, fullKey); if (cfg.kind === 'avatar' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; } catch (e) {} } rerender(); }, true);
+        document.body.appendChild(menu);
+        const r = anchor.getBoundingClientRect();
+        let left = r.right - menu.offsetWidth; if (left < 6) left = 6;
+        let top = r.bottom + 4; if (top + menu.offsetHeight > window.innerHeight - 6) top = Math.max(6, r.top - menu.offsetHeight - 4);
+        menu.style.left = left + 'px'; menu.style.top = top + 'px';
+        setTimeout(() => document.addEventListener('click', _closeCardMenus, { once: true }), 0);
+    }
+    function _vngCard(cfg, entry, curWorld, st, rerender) {
+        const bare = VN_Cache.bareKeyOf(entry);
+        const card = document.createElement('div'); card.className = 'vng-card' + (cfg.kind === 'bg' ? ' kind-bg' : '');
+        const _ph = () => { const d = document.createElement('div'); d.className = 'vng-ph'; d.textContent = cfg.kind === 'bg' ? '🌄' : '👤'; return d; };
+        if (entry.url && !entry.url.startsWith('blob:')) {
+            const img = document.createElement('img'); img.src = entry.url; img.onerror = () => img.replaceWith(_ph()); card.appendChild(img);
+        } else card.appendChild(_ph());
+        if (entry.favorite) { const b = document.createElement('div'); b.className = 'vng-badge fav'; b.textContent = '★ 收藏'; card.appendChild(b); }
+        else if (st.world === '') { const b = document.createElement('div'); b.className = 'vng-badge unclassed'; b.textContent = '未分類'; card.appendChild(b); }
+        const foot = document.createElement('div'); foot.className = 'vng-foot'; foot.textContent = bare; card.appendChild(foot);
+        const more = document.createElement('button'); more.className = 'vng-more'; more.textContent = '⋯';
+        more.onclick = (e) => { e.stopPropagation(); _vngCardMenu(more, cfg, entry, curWorld, st, rerender); };
+        card.appendChild(more);
+        card.onclick = (e) => { if (e.target.closest('.vng-more')) return; if (entry.url) _vngLightbox(entry.url); };
+        return card;
+    }
     async function _renderImgMgr(cfg) {
         const list = document.getElementById(cfg.listId); if (!list) return;
         const store = cfg.store, curWorld = VN_Cache.getCurrentWorld();
         const all = await VN_Cache.getAll(store);
         const groups = {};
         all.forEach(e => { const w = VN_Cache.worldOf(e); (groups[w] = groups[w] || []).push(e); });
-        const st = _mgrState[cfg.listId] || (_mgrState[cfg.listId] = { world: curWorld });
+        const st = _mgrState[cfg.listId] || (_mgrState[cfg.listId] = { world: curWorld, filter: 'all' });
         if (groups[st.world] === undefined && st.world !== curWorld) st.world = curWorld;
+        const rerender = () => _renderImgMgr(cfg);
         list.innerHTML = '';
 
-        // ── 工具列：世界選擇器 ──
-        const bar = document.createElement('div');
-        bar.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;';
-        const sel = document.createElement('select');
-        sel.style.cssText = 'flex:1;min-width:0;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.08);color:inherit;border:1px solid rgba(128,128,128,0.35);font-size:12px;';
+        // 工具列：世界選擇 + 篩選
+        const bar = document.createElement('div'); bar.className = 'vng-bar';
+        const sel = document.createElement('select'); sel.className = 'vng-sel';
         const wkeys = Object.keys(groups).sort((a, b) => {
             if (a === curWorld) return -1; if (b === curWorld) return 1;
             if (a === '') return 1; if (b === '') return -1; return a < b ? -1 : 1;
         });
         if (!wkeys.includes(curWorld)) wkeys.unshift(curWorld);
-        wkeys.forEach(w => {
-            const o = document.createElement('option');
-            o.value = w; o.textContent = _worldLabel(w, curWorld) + ` (${(groups[w] || []).length})`;
-            if (w === st.world) o.selected = true;
-            sel.appendChild(o);
-        });
-        sel.onchange = () => { st.world = sel.value; _renderImgMgr(cfg); };
+        wkeys.forEach(w => { const o = document.createElement('option'); o.value = w; o.textContent = _worldLabel(w, curWorld) + ` (${(groups[w] || []).length})`; if (w === st.world) o.selected = true; sel.appendChild(o); });
+        sel.onchange = () => { st.world = sel.value; rerender(); };
         bar.appendChild(sel);
+        const chips = document.createElement('div'); chips.className = 'vng-chips';
+        [['all', '全部'], ['fav', '收藏'], ['unused', '未收藏']].forEach(([k, label]) => {
+            const c = document.createElement('button'); c.className = 'vng-chip' + (st.filter === k ? ' active' : ''); c.textContent = label;
+            c.onclick = () => { st.filter = k; rerender(); }; chips.appendChild(c);
+        });
+        bar.appendChild(chips);
         list.appendChild(bar);
 
-        const entries = (groups[st.world] || []).slice();
-        if (!entries.length) {
-            const empty = document.createElement('div');
-            empty.style.cssText = 'color:#888;font-size:0.85rem;padding:18px 0;text-align:center;';
-            empty.textContent = st.world === '' ? '未分類沒有圖片' : (st.world === curWorld ? '這個世界還沒有圖片（劇情出現時自動生成）' : '這個世界沒有圖片');
-            list.appendChild(empty); return;
-        }
+        let entries = (groups[st.world] || []).slice();
+        if (st.filter === 'fav') entries = entries.filter(e => e.favorite);
+        else if (st.filter === 'unused') entries = entries.filter(e => !e.favorite);
         entries.sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0));
 
-        entries.forEach(entry => {
-            const fullKey = entry.key;
-            const bare = VN_Cache.bareKeyOf(entry);
-            const { key: _omit, ...val } = entry;   // 純 value（去掉 getAll 加的 key）
-
-            const item = document.createElement('div'); item.className = 'avatar-mgr-item';
-            const img = document.createElement('img'); img.className = 'avatar-preview'; img.title = bare;
-            if (cfg.kind === 'bg') img.style.cssText = 'width:96px;height:56px;object-fit:cover;border-radius:4px;flex-shrink:0;';
-            img.onerror = () => { img.style.opacity = '0.25'; };
-            if (entry.url && !entry.url.startsWith('blob:')) img.src = entry.url; else img.style.opacity = '0.25';
-
-            const info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
-            const nameEl = document.createElement('div'); nameEl.className = 'avatar-mgr-name';
-            nameEl.textContent = (entry.favorite ? '★ ' : '') + bare;
-            if (cfg.kind === 'bg') nameEl.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:4px;word-break:break-all;';
-            const ta = document.createElement('textarea'); ta.className = 'avatar-mgr-prompt'; ta.value = entry.prompt || '';
-            info.appendChild(nameEl); info.appendChild(ta);
-
-            const bw = document.createElement('div'); bw.style.cssText = 'display:flex;flex-direction:column;gap:6px;flex-shrink:0;';
-            const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; b.style.fontSize = '11px'; b.style.whiteSpace = 'nowrap'; b.onclick = fn; return b; };
-
-            bw.appendChild(mk('↺ 重生成', 'avatar-regen-btn', async (ev) => {
-                const btn = ev.currentTarget; const prompt = (ta.value || '').trim(); if (!prompt) return;
-                const o = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true;
-                try {
-                    const raw = cfg.kind === 'bg' ? await VN_Image.getBg(prompt, {}) : await VN_Image.getAvatar(prompt, 'Neutral');
-                    if (raw) {
-                        const url = (await _imgToDataUrl(raw)) || raw;
-                        await VN_Cache.setRaw(store, fullKey, { ...val, prompt, url, rawUrl: raw });
-                        img.src = url; img.style.opacity = '1';
-                    }
-                } catch (err) { console.error('[VN] 重生成失敗', err); }
-                btn.textContent = o; btn.disabled = false;
-            }));
-            bw.appendChild(mk(entry.favorite ? '★ 取消收藏' : '☆ 收藏', 'avatar-regen-btn', async () => {
-                await VN_Cache.setRaw(store, fullKey, { ...val, favorite: !entry.favorite });
-                _renderImgMgr(cfg);
-            }));
-            if (st.world === '') {
-                bw.appendChild(mk('→ 移到當前世界', 'avatar-regen-btn', async () => {
-                    await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld });
-                    await VN_Cache.deleteRaw(store, fullKey);
-                    _renderImgMgr(cfg);
-                }));
-            } else if (st.world !== curWorld) {
-                bw.appendChild(mk('⧉ 複製到當前世界', 'avatar-regen-btn', async () => {
-                    await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld });
-                    alert('已複製到當前世界');
-                }));
-            }
-            bw.appendChild(mk('✕ 刪除', 'avatar-del-btn', async () => {
-                await VN_Cache.deleteRaw(store, fullKey);
-                if (cfg.kind === 'avatar' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; } catch (e) {} }
-                item.style.transition = 'opacity 0.2s'; item.style.opacity = '0';
-                setTimeout(() => _renderImgMgr(cfg), 180);
-            }));
-            item.appendChild(img); item.appendChild(info); item.appendChild(bw); list.appendChild(item);
-        });
+        if (!entries.length) {
+            const em = document.createElement('div'); em.className = 'vng-empty';
+            em.textContent = st.world === '' ? '未分類沒有圖片' : (st.filter !== 'all' ? '沒有符合的圖片' : '這個世界還沒有圖片（劇情出現時自動生成）');
+            list.appendChild(em); return;
+        }
+        const grid = document.createElement('div'); grid.className = 'vng-grid';
+        entries.forEach(entry => grid.appendChild(_vngCard(cfg, entry, curWorld, st, rerender)));
+        list.appendChild(grid);
     }
     async function loadAvatarManager(listId) { return _renderImgMgr({ store: 'avatar_cache', listId: listId || 'avatar-mgr-list', kind: 'avatar' }); }
     async function regenerateAvatarEntry(btn, name, textarea, previewImg) {
