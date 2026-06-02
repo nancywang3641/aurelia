@@ -135,3 +135,6 @@
 .vth-css-area { flex:1; min-height:360px; width:100%; box-sizing:border-box; resize:vertical; background:rgba(0,0,0,0.4); border:1px solid rgba(128,128,128,0.35); border-radius:8px; color:#d8e8ff; font-family:'Courier New',monospace; font-size:12.5px; line-height:1.6; padding:12px; outline:none; }
 .vth-css-area:focus { border-color:#d4af37; }
 .vth-css-hint { font-size:11px; color:#888; line-height:1.5; }
+.vth-ai-row { display:flex; gap:8px; align-items:center; }
+.vth-ai-desc { flex:1; min-width:0; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(128,128,128,0.35); color:#ddd; font-size:12.5px; }
+.vth-ai-desc:focus { border-color:#d4af37; outline:none; }
