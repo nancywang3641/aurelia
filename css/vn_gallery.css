@@ -23,6 +23,15 @@
     transition:transform .15s, box-shadow .15s;
 }
 .vng-card.kind-bg { aspect-ratio:16 / 10; }
+/* 立繪是透明 PNG → 棋盤格底色襯托透明區 */
+.vng-card.kind-sprite {
+    background-color:#2b2d36;
+    background-image:
+        linear-gradient(45deg, rgba(255,255,255,0.06) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.06) 75%),
+        linear-gradient(45deg, rgba(255,255,255,0.06) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.06) 75%);
+    background-size:16px 16px; background-position:0 0, 8px 8px;
+}
+.vng-card.kind-sprite img { object-fit:contain; }
 .vng-card:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(0,0,0,0.32); }
 .vng-card img { width:100%; height:100%; object-fit:cover; display:block; }
 .vng-ph { width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.4); font-size:24px; }
