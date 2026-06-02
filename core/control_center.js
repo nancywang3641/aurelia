@@ -74,9 +74,10 @@
         // 🌟 修復底部黑邊：加上 padding-bottom: env(safe-area-inset-bottom) 與 box-sizing 以適配 iPhone 底部小白條安全區域
         nav.style.cssText = `height: 55px; background: #ffffff; border-top: 1px solid #e0e5ec; display: flex; justify-content: center; align-items: center; gap: 15px; box-shadow: 0 -5px 15px rgba(0,0,0,0.02); flex-shrink: 0; z-index: 200; position: relative; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box;`;
 
+        // 「我 / 角色」TAB 已移除：人設改由大廳右上角頭像下拉接管（OS_PERSONA.launch）。
+        // 這個位置刻意留空，保留給未來新功能。
         const items = [
             { id: 'nav-home',  icon: 'fa-solid fa-cube',     active: true,  title: '大廳' },
-            { id: 'nav-user',  icon: 'fa-solid fa-user',     active: false, title: '我' },
             { id: 'nav-write', icon: 'fa-solid fa-pen-nib',  active: false, title: '寫作' },
             { id: 'nav-close', icon: 'fa-solid fa-power-off', isClose: true, title: '關閉' }
         ];
