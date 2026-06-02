@@ -256,13 +256,16 @@
             this.stopSFX();
         },
 
-        loadScript: function (txt, messageId) {
+        loadScript: async function (txt, messageId) {
             // 新一輪劇本載入時，自動關閉檔案庫面板
             if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) {
                 window.AureliaHtmlExtractor.hide();
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
+            // 🔄 學 PWA：每次開播都重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 即時生效。
+            //    （activeTemplates 原本只在開機 autoWakeup 載一次；多視窗下別的視窗存了新 tag，這邊會吃到舊資料）
+            try { if (window.VN_DynamicParser && window.VN_DynamicParser.init) await window.VN_DynamicParser.init(); } catch (e) {}
             const contentMatch = txt.match(/<content>([\s\S]*?)<\/content>/i);
             let storyText = contentMatch ? contentMatch[1] : txt;
 
@@ -434,6 +437,39 @@
         // 回傳：完整 HTML 文件→包成 iframe；一般 HTML→直接回傳；沒命中→ ''。
         _grabRegexCardHtml: function(blockText) {
             if (!blockText) return '';
+            // 🔥 學 PWA：先吃創作室（展廳）已啟用模板，沒命中才去酒館正則。
+            //    酒館正則只是給「別人角色卡自帶的卡片」用；自己在創作室建/啟用的 tag 不該被迫複製去酒館正則。
+            try {
+                const _dp = window.VN_DynamicParser;
+                if (_dp && Array.isArray(_dp.activeTemplates) && _dp.activeTemplates.length) {
+                    const _tm = String(blockText).match(/<\s*([A-Za-z0-9_-]+)[\s>]/);
+                    if (_tm) {
+                        const _tpl = _dp.activeTemplates.find(t => t.tagId && t.html &&
+                            t.tagId.toLowerCase() === _tm[1].toLowerCase());
+                        if (_tpl) {
+                            // 注入該模板 CSS（同一 tag 只注入一次）
+                            if (_tpl.css) {
+                                const _cid = 'vn-dyn-tpl-' + _tpl.tagId.toLowerCase();
+                                if (!document.getElementById(_cid)) {
+                                    const _s = document.createElement('style');
+                                    _s.id = _cid; _s.textContent = _tpl.css;
+                                    document.head.appendChild(_s);
+                                }
+                            }
+                            let _h = _tpl.html;
+                            // 正則型：用 regexString 抓 {{1}}、{{2}} 佔位（與 _renderInline 同邏輯）
+                            if (_tpl.regexString) {
+                                try {
+                                    const _rs = String(_tpl.regexString).replace(/^\^/, '').replace(/\$$/, '');
+                                    const _m = String(blockText).match(new RegExp(_rs, 'i'));
+                                    if (_m) for (let i = 1; i < _m.length; i++) _h = _h.split('{{' + i + '}}').join((_m[i] || '').trim());
+                                } catch (e) {}
+                            }
+                            return _h;
+                        }
+                    }
+                }
+            } catch (e) {}
             const _win = window.parent || window;
             const _th = (_win && _win.TavernHelper) || window.TavernHelper;
             if (!_th || typeof _th.getTavernRegexes !== 'function') return '';
