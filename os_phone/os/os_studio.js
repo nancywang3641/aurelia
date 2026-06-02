@@ -1414,7 +1414,8 @@ ${dialogueText}
 *{box-sizing:border-box;}
 html,body{margin:0;height:100%;}
 body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:14px;}
-#game-bg{position:absolute;inset:0;background-color:#050505;background-image:radial-gradient(120% 85% at 50% 0%, #2b2733 0%, #0b0a0e 70%);background-size:cover;background-position:center;z-index:1;}
+/* 預覽用示意場景：代表真實 VN 裡 #game-bg 載入的劇情背景圖，故意偏亮偏雜，方便看出遮罩效果＋檢驗文字可讀性 */
+#game-bg{position:absolute;inset:0;background-color:#050505;background-image:linear-gradient(160deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%), linear-gradient(135deg, #4a6b8a 0%, #7a6a8c 38%, #c89a6a 72%, #e8cf9e 100%);background-size:cover;background-position:center;z-index:1;}
 #btn-home,#btn-settings,#btn-reader{position:absolute;z-index:15;background:rgba(10,10,12,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);border:1px solid rgba(212,175,55,0.3);color:var(--gold-dark);padding:6px 12px;cursor:pointer;font-size:0.7rem;font-family:var(--font-classic);letter-spacing:1px;border-radius:2px;text-transform:uppercase;}
 #btn-reader{top:12px;right:12px;padding:6px 10px;}
 #btn-settings{top:12px;right:70px;}
