@@ -182,9 +182,9 @@
             const content   = ch.content || '';
             const fullPlain = _strip(content);
             const sm = content.match(/<summary>([\s\S]*?)<\/summary>/i);
-            let summary = sm ? sm[1].trim().replace(/<[^>]+>/g, '').trim() : '';
-            if (!summary) summary = fullPlain.slice(0, 160) + (fullPlain.length > 160 ? '…' : '');
-            const summaryHtml = summary ? esc(summary).replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>') : '<span style="color:#666">（無摘要）</span>';
+            let summary = sm ? sm[1].trim().replace(/<[^>]+>/g, '').trim() : fullPlain;
+            summary = summary.slice(0, 100) + (summary.length > 100 ? '…' : '');   // 卡片只顯示前 100 字
+            const summaryHtml = summary.trim() ? esc(summary).replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>') : '<span style="color:#666">（無摘要）</span>';
             const ts = ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('zh-TW') : '';
             html += `<div class="vrd-card" onclick="window.VN_READER._openChapter(${i})">
                 <div class="vrd-card-hd">
