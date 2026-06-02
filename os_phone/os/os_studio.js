@@ -1373,56 +1373,71 @@ ${dialogueText}
     }
 
     // VN 對話框 CSS 生成 prompt（給 AI 副模型）
-    const VTH_AI_PROMPT = `你是 VN（視覺小說）對話框的 CSS 樣式設計師。根據用戶描述的風格，生成一段純 CSS，套用在這個「固定在畫面底部的對話框 UI」上。可改的元素：
+    const VTH_AI_PROMPT = `你是 VN（視覺小說）面板的 CSS 樣式設計師。根據用戶描述的風格，生成一段純 CSS，統一美化 VN 介面的這幾個元素（只有這些，其他一律別碰）：
 - #text-panel：對話框外框。⚠️它「一定」帶三種狀態 class 之一：.char-mode（角色說話，最常見）/ .nar-mode（旁白）/ .inner-mode（內心獨白）。預設樣式已分別對 #text-panel.char-mode、#text-panel.nar-mode、#text-panel.inner-mode 設了背景，特異性比單純的 #text-panel 高。所以要換對話框背景/邊框，「必須」分別寫這三條：#text-panel.char-mode { ... }、#text-panel.nar-mode { ... }、#text-panel.inner-mode { ... }。只寫 #text-panel 會被預設蓋掉、看起來像沒效果。三種狀態都要給背景。
-- #dialogue-text：對話內文
-- #speaker-name：左上角色名牌（旁白時會被隱藏）
-- .vn-choice-btn：選項按鈕
-- #game-char：角色立繪
+- #dialogue-text：對話內文（字體/字色/行距）
+- #speaker-name：左上角色名牌（旁白時會自動隱藏）
+- #game-bg：全螢幕背景容器。只能疊半透明的遮罩/濾鏡/暈影/漸層或邊框氛圍，「絕對不要」設 background-image 或不透明背景蓋掉劇情實際的背景圖。
+- #vn-panel-controls 與 .vn-panel-btn：對話框上方的 SKIP / LOG / AUTO 等控制按鈕（.vn-panel-btn.active 為啟用態）。
+- #btn-home、#btn-settings、#btn-reader：畫面右上角的頂部按鈕（返回 / 設定 / 閱讀器），請給它們統一的風格。
+- .vn-choice-btn：選項按鈕。
 規則：
 1. 只改外觀（背景/顏色/邊框/圓角/陰影/字體/裝飾/動畫）。可用 @import 載字體、用 ::before/::after 加裝飾、用 @keyframes 做動畫。
 2. 嚴禁改 position / top / left / right / bottom / width / height / transform 的「定位」屬性，以免破版。
-3. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條，否則 .char-mode（最常見）會維持預設黑色。
-4. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
+3. 「絕對不要」針對 #game-char 或 #game-char-container（角色立繪）寫任何樣式——立繪是劇情內容、不歸主題管。
+4. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條，否則 .char-mode（最常見）會維持預設黑色。
+5. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
 用戶想要的風格：`;
 
     // ── 🎨 劇情面板主題工坊（生成 → 即時預覽 → 主題庫收藏；像 VN UI 那套）──
-    // 預覽用：複刻 VN 對話框預設外觀，讓主題 CSS 疊上去看到的效果跟真實 VN 一致
+    // 預覽用：複刻 VN 介面預設外觀（對話框/名牌/背景容器/控制鈕/頂部鈕），讓主題 CSS 疊上去效果跟真實 VN 一致。立繪不在範圍內。
     const VTH_PREVIEW_BASE = `
-:root{--gold:#d4af37;--gold-light:#f3e5ab;--gold-dark:#997a00;--em-color:#d4af37;--text-color:#dcd8d0;--name-color:#d4af37;--font-classic:'Playfair Display','Noto Serif TC',serif;}
+:root{--gold:#d4af37;--gold-light:#f3e5ab;--gold-dark:#997a00;--em-color:#d4af37;--text-color:#dcd8d0;--name-color:#d4af37;--font-classic:'Playfair Display','Noto Serif TC',serif;--font-sans:system-ui,'Noto Sans TC',sans-serif;}
 *{box-sizing:border-box;}
 html,body{margin:0;height:100%;}
-body{background:linear-gradient(165deg,#1c1c22 0%,#08080a 100%);font-family:var(--font-classic);display:flex;flex-direction:column;justify-content:flex-end;min-height:100%;padding:16px;overflow:hidden;}
-#game-char-container{position:absolute;bottom:0;left:0;width:100%;height:78%;display:flex;justify-content:center;align-items:flex-end;z-index:2;pointer-events:none;}
-#game-char{height:92%;max-width:100%;object-fit:contain;object-position:center bottom;filter:drop-shadow(0 0 20px rgba(0,0,0,0.8));}
-#text-panel{position:relative;z-index:5;padding:30px 34px;min-height:110px;border-radius:4px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:14px;}
+#game-bg{position:absolute;inset:0;background-color:#050505;background-image:radial-gradient(120% 85% at 50% 0%, #2b2733 0%, #0b0a0e 70%);background-size:cover;background-position:center;z-index:1;}
+#btn-home,#btn-settings,#btn-reader{position:absolute;z-index:15;background:rgba(10,10,12,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);border:1px solid rgba(212,175,55,0.3);color:var(--gold-dark);padding:6px 12px;cursor:pointer;font-size:0.7rem;font-family:var(--font-classic);letter-spacing:1px;border-radius:2px;text-transform:uppercase;}
+#btn-reader{top:12px;right:12px;padding:6px 10px;}
+#btn-settings{top:12px;right:70px;}
+#btn-home{top:12px;right:144px;}
+#text-panel-wrapper{position:relative;z-index:5;width:100%;}
+#text-panel{position:relative;padding:26px 30px;min-height:96px;border-radius:4px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
 #text-panel.nar-mode{background:linear-gradient(180deg,rgba(12,12,16,0.88),rgba(4,4,6,0.95));border:1px solid rgba(255,255,255,0.08);border-top:1px dashed rgba(255,255,255,0.15);box-shadow:0 20px 50px rgba(0,0,0,0.9);}
 #text-panel.char-mode{background:rgba(4,4,6,0.92);border:none;border-top:1px solid rgba(212,175,55,0.18);box-shadow:0 20px 50px rgba(0,0,0,0.9);border-radius:0;}
-#text-panel::after{content:'\\2727';position:absolute;bottom:14px;right:18px;color:var(--gold-dark);font-size:1.2rem;font-family:var(--font-classic);}
-#speaker-name{position:absolute;top:-20px;left:28px;background:var(--vn-name-bg,#050505);border:1px solid var(--gold);color:var(--name-color);font-family:var(--font-classic);font-size:1.1rem;padding:6px 24px;display:inline-block;letter-spacing:2px;z-index:12;box-shadow:0 5px 15px rgba(0,0,0,0.8);border-radius:2px;}
+#text-panel::after{content:'\\2727';position:absolute;bottom:12px;right:16px;color:var(--gold-dark);font-size:1.1rem;font-family:var(--font-classic);}
+#speaker-name{position:absolute;top:-18px;left:26px;background:var(--vn-name-bg,#050505);border:1px solid var(--gold);color:var(--name-color);font-family:var(--font-classic);font-size:1rem;padding:5px 22px;display:inline-block;letter-spacing:2px;z-index:12;box-shadow:0 5px 15px rgba(0,0,0,0.8);border-radius:2px;}
 .nar-mode #speaker-name{opacity:0;}
-#dialogue-text{font-family:var(--font-classic);font-size:1.12rem;line-height:1.8;letter-spacing:1px;color:var(--text-color);font-weight:300;}
+#vn-panel-controls{position:absolute;top:-16px;right:15px;display:flex;gap:8px;z-index:12;}
+.vn-panel-btn{background:#0a0a0c;border:1px solid rgba(255,255,255,0.2);color:#aaa;padding:0 13px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.7rem;font-family:var(--font-sans);border-radius:4px;letter-spacing:1px;}
+.vn-panel-btn.active{background:rgba(212,175,55,0.1);color:var(--gold);border-color:var(--gold);}
+#dialogue-text{font-family:var(--font-classic);font-size:1.05rem;line-height:1.75;letter-spacing:1px;color:var(--text-color);font-weight:300;}
 .nar-mode #dialogue-text{font-style:normal;color:#b8b4ac;letter-spacing:1.5px;}
 .char-mode #dialogue-text{color:#e8e2d8;font-style:normal;}
 .inner-mode #dialogue-text{color:var(--em-color);font-style:italic;letter-spacing:1px;}
 #dialogue-text em{font-style:italic;color:var(--em-color);}
 #dialogue-text strong{font-weight:bold;color:#fff;}
-.vn-choices{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px;position:relative;z-index:5;}
-.vn-choice-btn{width:92%;max-width:380px;padding:11px 18px;background:rgba(10,8,4,0.85);border:1px solid rgba(212,175,55,0.35);color:#d4af37;font-family:var(--font-classic);font-size:0.85rem;letter-spacing:1.5px;cursor:pointer;border-radius:2px;text-align:center;}
+.vn-choices{display:flex;flex-direction:column;align-items:center;gap:7px;margin-top:10px;position:relative;z-index:5;}
+.vn-choice-btn{width:92%;max-width:360px;padding:9px 16px;background:rgba(10,8,4,0.85);border:1px solid rgba(212,175,55,0.35);color:#d4af37;font-family:var(--font-classic);font-size:0.8rem;letter-spacing:1.5px;cursor:pointer;border-radius:2px;text-align:center;}
 `;
-    const VTH_SAMPLE_SPRITE = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='200' height='420'><g fill='rgba(212,175,55,0.15)'><circle cx='100' cy='74' r='46'/><rect x='42' y='130' width='116' height='300' rx='46'/></g></svg>");
     let _vthMode = 'char-mode';
 
     function _vthBuildSrcdoc(css, mode, thumb) {
         const m = mode || _vthMode;
-        const layout = thumb ? 'body{justify-content:flex-start;min-height:auto;padding:14px 14px 6px;}#game-char-container{display:none;}' : '';
+        const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-reader,#vn-panel-controls,.vn-choices{display:none;}' : '';
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${css || ''}</style></head><body>
-<div id="game-char-container"><img id="game-char" src="${VTH_SAMPLE_SPRITE}"></div>
+<div id="game-bg"></div>
+<button id="btn-home">⌂ 返回</button>
+<button id="btn-settings">設定</button>
+<button id="btn-reader">📖</button>
+<div id="text-panel-wrapper">
+<div id="vn-panel-controls"><div class="vn-panel-btn">SKIP</div><div class="vn-panel-btn">LOG</div><div class="vn-panel-btn">AUTO</div></div>
 <div id="text-panel" class="${m}">
 <div id="speaker-name">角色</div>
 <div id="dialogue-text">範例對白，用來預覽主題的字體、顏色與框線。<em>斜體強調</em>與<strong>粗體重點</strong>也會跟著套用。</div>
 </div>
 <div class="vn-choices"><button class="vn-choice-btn">選項 A</button><button class="vn-choice-btn">選項 B</button></div>
+</div>
 </body></html>`;
     }
 
@@ -1437,7 +1452,7 @@ body{background:linear-gradient(165deg,#1c1c22 0%,#08080a 100%);font-family:var(
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n可改的選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三種狀態各自的對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  .vn-choice-btn（選項鈕）  #game-char（立繪）';
+        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #game-bg（背景容器，只疊遮罩別蓋圖）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）\n#btn-home / #btn-settings / #btn-reader（右上頂部鈕）  .vn-choice-btn（選項鈕）\n（立繪 #game-char 不歸主題管）';
         host.innerHTML = `<div class="vth-wrap">
             <div class="vth-css-bar">
                 <span class="vth-css-world">🌍 ${esc(chatId || '(未知，先進 VN 一次)')}</span>
