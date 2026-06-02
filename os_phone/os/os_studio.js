@@ -1374,15 +1374,16 @@ ${dialogueText}
 
     // VN 對話框 CSS 生成 prompt（給 AI 副模型）
     const VTH_AI_PROMPT = `你是 VN（視覺小說）對話框的 CSS 樣式設計師。根據用戶描述的風格，生成一段純 CSS，套用在這個「固定在畫面底部的對話框 UI」上。可改的元素：
-- #text-panel：對話框外框（會帶狀態 class：.nar-mode 旁白 / .char-mode 角色對話 / .inner-mode 內心獨白）
+- #text-panel：對話框外框。⚠️它「一定」帶三種狀態 class 之一：.char-mode（角色說話，最常見）/ .nar-mode（旁白）/ .inner-mode（內心獨白）。預設樣式已分別對 #text-panel.char-mode、#text-panel.nar-mode、#text-panel.inner-mode 設了背景，特異性比單純的 #text-panel 高。所以要換對話框背景/邊框，「必須」分別寫這三條：#text-panel.char-mode { ... }、#text-panel.nar-mode { ... }、#text-panel.inner-mode { ... }。只寫 #text-panel 會被預設蓋掉、看起來像沒效果。三種狀態都要給背景。
 - #dialogue-text：對話內文
-- #speaker-name：左上角色名牌
+- #speaker-name：左上角色名牌（旁白時會被隱藏）
 - .vn-choice-btn：選項按鈕
 - #game-char：角色立繪
 規則：
 1. 只改外觀（背景/顏色/邊框/圓角/陰影/字體/裝飾/動畫）。可用 @import 載字體、用 ::before/::after 加裝飾、用 @keyframes 做動畫。
 2. 嚴禁改 position / top / left / right / bottom / width / height / transform 的「定位」屬性，以免破版。
-3. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
+3. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條，否則 .char-mode（最常見）會維持預設黑色。
+4. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
 用戶想要的風格：`;
 
     // ── 🎨 劇情面板自訂 CSS（像酒館自訂樣式框；每世界一份；可手寫或讓 AI 生成）──
