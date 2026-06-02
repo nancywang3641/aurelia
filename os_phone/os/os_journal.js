@@ -265,6 +265,9 @@
                 <button class="jrnl-view-full">📖 查看完整總結內容
                     <span class="jrnl-view-full-sub">回顧更多細節，重溫完整故事</span>
                 </button>
+                <button class="jrnl-view-full jrnl-story-tools">🛠️ 故事管理
+                    <span class="jrnl-view-full-sub">生成大總結 / 隱藏對話（作用於目前開啟的對話）</span>
+                </button>
             </div>
         `;
     }
@@ -439,6 +442,14 @@
             const backBtn = rightEl.querySelector('#jrnl-back-mobile');
             if (backBtn) backBtn.onclick = () => {
                 container.querySelector('.jrnl-root')?.classList.remove('show-detail-mobile');
+            };
+
+            // 🛠️ 故事管理：在日誌同一容器內就地展開（大總結 + 隱藏對話）
+            const toolsBtn = rightEl.querySelector('.jrnl-story-tools');
+            if (toolsBtn) toolsBtn.onclick = () => {
+                const T = win.OS_STORY_TOOLS || window.OS_STORY_TOOLS;
+                if (T && T.openPanel) T.openPanel(container);
+                else alert('故事管理工具尚未載入');
             };
 
             const viewBtn = rightEl.querySelector('.jrnl-view-full');

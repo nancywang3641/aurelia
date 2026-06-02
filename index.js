@@ -68,7 +68,7 @@ window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 //   CDN(酒館助手，EXT_NAME 為 null) → 加 ?v=版本號 → 同版本內 jsdelivr/瀏覽器照樣快取(載入快)，
 //      但每次「改版 bump _AURELIA_VERSION」後，朋友的瀏覽器會自動重抓模組，不用手動清快取。
 //      （index.js 本身是 ?boot= 強制重抓的，所以這個版本號一改、下次載入就生效。）
-const _AURELIA_VERSION = '2026.06.01.6'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
+const _AURELIA_VERSION = '2026.06.02.1'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
 const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : ('?v=' + _AURELIA_VERSION);
 
 // 🔥 1. 全局通訊狀態
@@ -137,6 +137,7 @@ const PHONE_FILES = [
     'os/os_board.js',
     'os/os_card_import.js',
     'os/os_journal.js',
+    'os/os_story_tools.js',   // 故事管理（大總結 + 隱藏對話）— 從 RPG 面板 / VN 閱讀器搬來，掛進故事日誌
     'os/os_workbench.js',
 
     // === 📖 VN 視覺小說系統 ===
@@ -315,6 +316,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_debug_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_tarot.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_story_tools.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_workbench.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_user_center.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_monitor.css');

@@ -1,0 +1,44 @@
+/* os_story_tools.css — 故事管理面板（掛在故事日誌容器內，深色金調，配合搬來的 bg-btn-action / tb / rpg-modal） */
+.ost-overlay {
+    position: absolute; inset: 0; z-index: 120;
+    background: rgba(8,6,4,0.72); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px; box-sizing: border-box;
+    animation: ostFade 0.2s ease;
+}
+@keyframes ostFade { from { opacity: 0; } to { opacity: 1; } }
+.ost-card {
+    width: 100%; max-width: 480px; max-height: 88%;
+    background: linear-gradient(180deg,#141210 0%,#0b0a09 100%);
+    border: 1px solid rgba(212,175,55,0.35); border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.ost-head {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 18px; border-bottom: 1px solid rgba(212,175,55,0.2);
+    background: rgba(212,175,55,0.05);
+}
+.ost-title { color: var(--gold-p, #d4af37); font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+.ost-close {
+    width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+    border: 1px solid rgba(212,175,55,0.3); background: transparent; color: #b89b4a;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; padding: 0;
+}
+.ost-close:hover { color: #fff; border-color: #d4af37; }
+.ost-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px; }
+.ost-note {
+    font-size: 11px; color: #b89b4a; background: rgba(212,175,55,0.06);
+    border: 1px solid rgba(212,175,55,0.18); border-radius: 6px;
+    padding: 8px 10px; margin-bottom: 16px; line-height: 1.5;
+}
+.ost-section { margin-bottom: 18px; }
+.ost-section-title {
+    font-size: 13px; color: var(--gold-p, #d4af37); font-weight: 700;
+    border-bottom: 1px solid #333; padding-bottom: 6px; margin-bottom: 10px; letter-spacing: 1px;
+}
+.ost-hint { font-size: 10px; color: #777; text-align: right; margin: -4px 0 8px; }
+.ost-body .bg-btn-action { width: 100%; box-sizing: border-box; }
+/* 隱藏對話工具列：沿用 vn_styles 的 #vn-reader-sa-toolbar .tb-* 樣式，這裡只補位置 */
+.ost-body #vn-reader-sa-toolbar { display: block; }
+.ost-body #vrs-status { margin-top: 8px; font-size: 11px; color: #999; }
