@@ -39,6 +39,12 @@ let _AURELIA_SKIP = false;
                 s.src = _AURELIA_CDN_BASE + '/index.js?boot=' + Date.now();
                 pdoc.head.appendChild(s);
                 console.log('[Aurelia] 偵測到酒館助手沙盒 → 已將擴展重新注入主頁面執行');
+            } else if (pwin.__AURELIA_REF__ !== _AURELIA_REF) {
+                // 🔁 換了 hash，但主頁面 webview 沒被銷毀、還凍結在舊 ref（TauriTavern 常見）→
+                //    一次性注入鎖會讓新 hash 永遠進不來。偵測到 ref 變更就強制重載主頁面：
+                //    重載後 __AURELIA_BOOTSTRAPPED__ 歸零，會用新 ref 重新 bootstrap。只觸發一次、不會無限重載。
+                console.log('[Aurelia] 偵測到 ref 變更（' + pwin.__AURELIA_REF__ + ' → ' + _AURELIA_REF + '）→ 強制重載主頁面套用新版');
+                try { pwin.location.reload(); } catch (e) { console.warn('[Aurelia] 強制重載失敗', e); }
             }
         }
     } catch (e) { console.warn('[Aurelia] 沙盒偵測失敗，照原樣在當前環境執行', e); }
@@ -68,7 +74,7 @@ window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 //   CDN(酒館助手，EXT_NAME 為 null) → 加 ?v=版本號 → 同版本內 jsdelivr/瀏覽器照樣快取(載入快)，
 //      但每次「改版 bump _AURELIA_VERSION」後，朋友的瀏覽器會自動重抓模組，不用手動清快取。
 //      （index.js 本身是 ?boot= 強制重抓的，所以這個版本號一改、下次載入就生效。）
-const _AURELIA_VERSION = '2026.06.02.3'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
+const _AURELIA_VERSION = '2026.06.02.4'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
 const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : ('?v=' + _AURELIA_VERSION);
 
 // 🔥 1. 全局通訊狀態
