@@ -983,10 +983,31 @@
             this._decodedImgs[cacheId] = img; 
         },
 
+        // 判斷 tag 是不是「動態標籤區塊」（創作室 isBlock 模板，如 <ChapterCard>）
+        _isDynBlockTag: function(tag) {
+            const dp = window.VN_DynamicParser;
+            if (!dp || !dp.activeTemplates || !tag) return false;
+            const t = tag.toLowerCase();
+            return dp.activeTemplates.some(x => x.isBlock && x.tagId && x.tagId.toLowerCase() === t);
+        },
+        // 回傳 this.script 中「不在動態標籤區塊內」的行。
+        // 動態區塊（如 <ChapterCard>）內容是「卡片資料」，裡面的 [Bg|]/[Item|]/[Scene|] 不是 VN 指令；
+        // prewarm 預掃必須跳過，否則會把卡片資料當真背景/道具去生成 → 污染真實 VN 的 bg/bgm。
+        _linesOutsideDynBlocks: function() {
+            const out = [];
+            let inBlock = false, closeTag = '';
+            for (const line of this.script) {
+                if (inBlock) { if (line === closeTag) inBlock = false; continue; }
+                const m = line.match(/^<([A-Za-z一-鿿][\w一-鿿-]*)>$/);
+                if (m && this._isDynBlockTag(m[1])) { inBlock = true; closeTag = '</' + m[1] + '>'; continue; }
+                out.push(line);
+            }
+            return out;
+        },
         _prewarmBgs: function() {
             const tasks = [];
             const seen = new Set();
-            for (const line of this.script) {
+            for (const line of this._linesOutsideDynBlocks()) {
                 if (!line.startsWith('[Bg|')) continue;
                 const parts = line.slice(4, -1).split('|');
                 const cacheId = parts[1];
@@ -1008,7 +1029,7 @@
         _prewarmItems: function() {
             const tasks = [];
             const seen = new Set();
-            for (const line of this.script) {
+            for (const line of this._linesOutsideDynBlocks()) {
                 if (!line.startsWith('[Item|')) continue;
                 const itemName = line.slice(6, -1).split('|')[0];
                 if (!itemName || seen.has(itemName)) continue;
@@ -1060,9 +1081,10 @@
         _prewarmScenes: function() {
             const tasks = [];
             const seen = new Set();
+            const _lines = this._linesOutsideDynBlocks();
             // 格式 A：[Scene|cacheId|prompt] 單行
-            for (let i = 0; i < this.script.length; i++) {
-                const line = this.script[i];
+            for (let i = 0; i < _lines.length; i++) {
+                const line = _lines[i];
                 if (line.startsWith('[Scene|')) {
                     const parts = line.slice(7, -1).split('|');
                     const cacheId = parts[0], prompt = parts[1];
@@ -1073,8 +1095,8 @@
                 if (line === '<scene>') {
                     const _pLines = [];
                     let j = i + 1;
-                    while (j < this.script.length && this.script[j] !== '</scene>') {
-                        const _l = this.script[j].trim();
+                    while (j < _lines.length && _lines[j] !== '</scene>') {
+                        const _l = _lines[j].trim();
                         if (_l && !_l.startsWith('//')) _pLines.push(_l);
                         j++;
                     }
