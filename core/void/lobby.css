@@ -313,7 +313,7 @@
 /* 按鈕子容器：MAIN MENU header 固定不動，只有這層捲動 */
 .lb-menu-scroll {
     flex:1 1 auto; min-height:0;
-    display:flex; flex-direction:column; gap:10px;
+    display:flex; flex-direction:column; gap:12px;
     overflow-y:auto; overflow-x:hidden;
     scrollbar-width:thin; scrollbar-color:var(--lb-line) transparent;
 }
@@ -336,7 +336,7 @@
 
 /* 選單入口卡 — 圖示｜中英標｜右箭頭，清爽奶油卡（對齊 GPT 模板）；背景圖靠 ID 在皮膚分支指定 */
 .lobby-right .void-btn {
-    flex:0 0 auto; height:clamp(82px, 14vh, 104px);
+    flex:1 1 0; min-height:72px;
     display:block; padding:0; min-width:0; width:100%;
     background-color:var(--lb-panel-2);
     background-size:cover; background-position:center right; background-repeat:no-repeat;
