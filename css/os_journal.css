@@ -292,21 +292,25 @@
 
 /* 底部「查看完整總結」按鈕 */
 .jrnl-d-foot {
-    margin-top: 12px; padding: 14px 20px;
-    background: linear-gradient(90deg, #fce4e7 0%, #fff0e8 100%);
-    border: 1px solid #f0c8d2; border-radius: 12px;
-    text-align: center;
+    margin-top: 12px;
+    display: flex; gap: 10px; flex-wrap: wrap;
 }
 .jrnl-view-full {
-    background: transparent; border: none; cursor: pointer;
+    flex: 1; min-width: 150px;
+    background: linear-gradient(90deg, #fce4e7 0%, #fff0e8 100%);
+    border: 1px solid #f0c8d2; border-radius: 12px; cursor: pointer;
     color: #c97a8e; font-size: 13px; font-weight: 700;
     letter-spacing: 1.5px; font-family: inherit;
-    padding: 4px 12px;
+    padding: 14px 16px; text-align: center;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s;
 }
-.jrnl-view-full:hover { color: #b85f73; }
+.jrnl-view-full:hover {
+    color: #b85f73; border-color: #e0a0b0;
+    transform: translateY(-1px); box-shadow: 0 4px 14px rgba(201,122,142,0.18);
+}
 .jrnl-view-full-sub {
     display: block; font-size: 10px; color: #9a8678;
-    font-weight: 400; letter-spacing: 0; margin-top: 2px;
+    font-weight: 400; letter-spacing: 0; margin-top: 4px;
 }
 
 /* 關閉鈕 */
