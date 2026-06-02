@@ -133,7 +133,8 @@
             if (vnCore.hideVNPanel) vnCore.hideVNPanel();
             else if (vnCore.toggleUI) vnCore.toggleUI('none'); 
             
-            const layer = document.getElementById('vn-game-layer') || document.body;
+            // 優先掛 VN 劇情窗口容器（酒館用 #page-game，跟 _showDomBlock 一致），沒有才退 body（避免在酒館全屏蓋整個畫面）
+            const layer = document.getElementById('vn-game-layer') || document.getElementById('page-game') || document.body;
             const overlay = document.createElement('div');
             overlay.className = 'vn-dyn-overlay block-mode';
             overlay.style.cssText = 'position:absolute;inset:0;z-index:9000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;opacity:0;transition:0.3s;';
@@ -182,7 +183,8 @@
             if (vnCore.hideVNPanel) vnCore.hideVNPanel();
             else if (vnCore.toggleUI) vnCore.toggleUI('none');
             
-            const layer = document.getElementById('vn-game-layer') || document.body;
+            // 優先掛 VN 劇情窗口容器（酒館用 #page-game，跟 _showDomBlock 一致），沒有才退 body（避免在酒館全屏蓋整個畫面）
+            const layer = document.getElementById('vn-game-layer') || document.getElementById('page-game') || document.body;
             let html = tpl.html;
             for (let i = 1; i < match.length; i++) { html = html.split(`{{${i}}}`).join((match[i] || '').trim()); }
             
