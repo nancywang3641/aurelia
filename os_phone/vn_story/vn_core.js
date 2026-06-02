@@ -358,6 +358,7 @@
                 this.script.push(..._branchLines);
             }
 
+            this._hoistSceneDirectivesFromDynBlocks();  // 卡片區塊內的 [BGM]/[Bg] 提副本到區塊前，讓引擎照常播
             this._prewarmBgs();
             this._prewarmScenes();
             this._prewarmItems();
@@ -1003,6 +1004,32 @@
                 out.push(line);
             }
             return out;
+        },
+        // 卡片區塊（如 <ChapterCard>）裡若含真 VN 場景指令（[BGM]/[Bg]/[Scene]）→ 在區塊「前面」插入副本，
+        // 讓 VN 引擎照常執行（播音樂、設背景）；區塊內原行仍被 processLine 收進卡片當顯示資料。
+        // 解決：把開場 [BGM]/[Bg] 包進美化卡後，音樂/背景失效的問題（不包時正常、包了就被吞）。
+        _hoistSceneDirectivesFromDynBlocks: function() {
+            const SCENE = /^\[(BGM|Bg|Scene)\|/i;
+            const out = [];
+            let i = 0;
+            while (i < this.script.length) {
+                const line = this.script[i];
+                const m = line.match(/^<([A-Za-z一-鿿][\w一-鿿-]*)>$/);
+                if (m && this._isDynBlockTag(m[1])) {
+                    const closeTag = '</' + m[1] + '>';
+                    let j = i + 1;
+                    while (j < this.script.length && this.script[j] !== closeTag) j++;
+                    // 先吐場景指令副本（VN 引擎執行）
+                    for (let k = i + 1; k < j; k++) { if (SCENE.test(this.script[k])) out.push(this.script[k]); }
+                    // 再吐原區塊（open ~ close）給卡片渲染
+                    for (let k = i; k <= j && k < this.script.length; k++) out.push(this.script[k]);
+                    i = j + 1;
+                } else {
+                    out.push(line);
+                    i++;
+                }
+            }
+            this.script = out;
         },
         _prewarmBgs: function() {
             const tasks = [];
