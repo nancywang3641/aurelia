@@ -650,10 +650,12 @@ const IRIS_IDLE = [
                     <div class="lb-menu-scroll">
                     <div class="void-btn" id="void-quest-btn">
                         <div class="void-btn-inner">
-                            <span class="lb-menu-no">01</span>
-                            <span class="lb-menu-cn" data-cn-404="禁庫">藏書</span>
-                            <span class="lb-menu-en" data-en-404="BLACK VAULT">ARCHIVE</span>
-                            <span class="lb-menu-desc" data-desc-404="R18／禁區內容／成人文檔">角色檔案／關係網絡／故事線索</span>
+                            <i class="lb-menu-icon fa-solid fa-book"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="禁庫">藏書</span>
+                                <span class="lb-menu-en" data-en-404="BLACK VAULT">ARCHIVE</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
                     <div class="void-btn" id="void-story-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel(window.OS_API?.isStandalone?.() ? 'generate' : 'story');">
@@ -661,34 +663,42 @@ const IRIS_IDLE = [
                     </div>
                     <div class="void-btn" id="void-chapter-btn">
                         <div class="void-btn-inner">
-                            <span class="lb-menu-no">02</span>
-                            <span class="lb-menu-cn" data-cn-404="異常記錄">章節選擇</span>
-                            <span class="lb-menu-en" data-en-404="ANOMALY LOG">CHAPTER SELECT</span>
-                            <span class="lb-menu-desc" data-desc-404="系統異常／失控事件／未公開檔案">事件檔案／章節進度／開幕進度</span>
+                            <i class="lb-menu-icon fa-solid fa-feather-pointed"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="異常記錄">章節選擇</span>
+                                <span class="lb-menu-en" data-en-404="ANOMALY LOG">CHAPTER SELECT</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
                     <div class="void-btn" id="void-exit-btn" data-os-launch="map">
                         <div class="void-btn-inner">
-                            <span class="lb-menu-no">03</span>
-                            <span class="lb-menu-cn" data-cn-404="墜入404">出門</span>
-                            <span class="lb-menu-en" data-en-404="ENTER 404">DEPART</span>
-                            <span class="lb-menu-desc" data-desc-404="黑市交易／賭場遊戲／夜之都市">離開咖啡廳／進入廣闊世界</span>
+                            <i class="lb-menu-icon fa-solid fa-umbrella"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="墜入404">出門</span>
+                                <span class="lb-menu-en" data-en-404="ENTER 404">DEPART</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
                     <div class="void-btn" id="void-journal-btn" data-app-launch="journal" title="瀅瀅的故事日誌">
                         <div class="void-btn-inner">
-                            <span class="lb-menu-no">04</span>
-                            <span class="lb-menu-cn" data-cn-404="案件日誌">故事日誌</span>
-                            <span class="lb-menu-en" data-en-404="CASE LOG">STORY JOURNAL</span>
-                            <span class="lb-menu-desc" data-desc-404="異常事件的零碎記錄">瀅瀅的創作紀錄／靈感存檔</span>
+                            <i class="lb-menu-icon fa-solid fa-book-open"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="案件日誌">故事日誌</span>
+                                <span class="lb-menu-en" data-en-404="CASE LOG">STORY JOURNAL</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
                     <div class="void-btn" id="void-achievement-btn" title="資料庫成就清單">
                         <div class="void-btn-inner">
-                            <span class="lb-menu-no">05</span>
-                            <span class="lb-menu-cn" data-cn-404="異常蒐集">成就</span>
-                            <span class="lb-menu-en" data-en-404="ANOMALY SET">ACHIEVEMENTS</span>
-                            <span class="lb-menu-desc" data-desc-404="可前往 404 黑市兌換">情緒徽章／故事里程碑</span>
+                            <i class="lb-menu-icon fa-solid fa-trophy"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="異常蒐集">成就</span>
+                                <span class="lb-menu-en" data-en-404="ANOMALY SET">ACHIEVEMENTS</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
                     <div class="lb-info-cards">
