@@ -141,7 +141,7 @@
             
             const panel = document.createElement('div');
             panel.className = `vn-dynamic-panel-${tpl.tagId}`;
-            panel.style.cssText = 'position:relative; width:100%; height:100%; overflow:hidden; box-sizing:border-box; padding:20px;';
+            panel.style.cssText = 'position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;';
             panel.innerHTML = tpl.html || ''; 
             
             overlay.appendChild(panel);
