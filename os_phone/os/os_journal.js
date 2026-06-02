@@ -14,6 +14,9 @@
     //   row 格式：姓名 | 身份 | 性格 | 狀態 | 特徵 | 與MC關係 | 備註
     function _parseCharRow(row) {
         const cols = (row || '').split('|').map(s => s.trim());
+        // markdown 表格行常有前導/結尾 |，切完首尾會多出空欄 → 去掉，否則欄位整體位移一格（身份顯示成姓名）
+        if (cols.length && cols[0] === '') cols.shift();
+        if (cols.length && cols[cols.length - 1] === '') cols.pop();
         return {
             name:    cols[0] || '',
             role:    cols[1] || '',
@@ -245,6 +248,15 @@
                 </div>
             </div>
 
+            <div class="jrnl-d-foot">
+                <button class="jrnl-view-full">📖 查看完整總結內容
+                    <span class="jrnl-view-full-sub">回顧更多細節，重溫完整故事</span>
+                </button>
+                <button class="jrnl-view-full jrnl-story-tools">🛠️ 故事管理
+                    <span class="jrnl-view-full-sub">生成大總結 / 隱藏對話（作用於目前開啟的對話）</span>
+                </button>
+            </div>
+
             <div class="jrnl-d-section">
                 <div class="jrnl-d-section-head">
                     <h3>劇情時間軸</h3>
@@ -259,15 +271,6 @@
                     <span class="jrnl-d-count">共 ${story.characters.length} 名</span>
                 </div>
                 ${charsHtml ? `<div class="jrnl-chars-grid">${charsHtml}</div>` : '<div class="jrnl-empty-txt" style="text-align:center; padding:20px;">尚無角色紀錄</div>'}
-            </div>
-
-            <div class="jrnl-d-foot">
-                <button class="jrnl-view-full">📖 查看完整總結內容
-                    <span class="jrnl-view-full-sub">回顧更多細節，重溫完整故事</span>
-                </button>
-                <button class="jrnl-view-full jrnl-story-tools">🛠️ 故事管理
-                    <span class="jrnl-view-full-sub">生成大總結 / 隱藏對話（作用於目前開啟的對話）</span>
-                </button>
             </div>
         `;
     }
@@ -496,8 +499,8 @@
             const disp = _displayName(rawName);          // 顯示用「姓名」
             const fields = [
                 ['身份', parsed.role],
-                ['性格', parsed.person],
-                ['狀態', parsed.status],
+                ['性格概述', parsed.person],
+                ['狀態 / 位置', parsed.status],
                 ['特徵', parsed.feature],
                 ['與主角關係', parsed.relate],
                 ['備註', parsed.note],
@@ -508,18 +511,16 @@
                   ).join('')
                 : '<div class="jrnl-cm-empty">這個角色還沒有更多資料</div>';
 
+            // 模板 B：左大圖 + 右資料分欄（淺色，配合日誌風格）
             const modal = document.createElement('div');
             modal.className = 'jrnl-modal';
             modal.innerHTML = `
                 <div class="jrnl-modal-card jrnl-modal-char">
-                    <div class="jrnl-modal-head">
-                        <span class="jrnl-modal-title">${_escape(disp)}</span>
-                        <button class="jrnl-modal-close" title="關閉">✕</button>
-                    </div>
-                    <div class="jrnl-modal-body">
-                        <div class="jrnl-cm-top">
-                            <div class="jrnl-cm-avatar" data-avatar-key="${_escape(rawName)}"><span class="jrnl-char-img-fallback">✿</span></div>
-                        </div>
+                    <button class="jrnl-cm-close" title="關閉">✕</button>
+                    <div class="jrnl-cm-photo" data-avatar-key="${_escape(rawName)}"><span class="jrnl-char-img-fallback">✿</span></div>
+                    <div class="jrnl-cm-side">
+                        <div class="jrnl-cm-name">${_escape(disp)}</div>
+                        <div class="jrnl-cm-sub">👤 ${_escape(rawName)}</div>
                         <div class="jrnl-cm-fields">${fieldsHtml}</div>
                     </div>
                 </div>
@@ -538,7 +539,7 @@
             }
 
             const close = () => modal.remove();
-            modal.querySelector('.jrnl-modal-close').onclick = close;
+            modal.querySelector('.jrnl-cm-close').onclick = close;
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
             const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
             document.addEventListener('keydown', onKey);
