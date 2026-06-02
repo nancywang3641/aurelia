@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ========================
  * Void Terminal (v6.0 - Yingying Bookshelf & Vintage Latte Theme)
  * 視差書咖與敘事引擎核心 (整合大廳動態書櫃)
@@ -27,14 +27,14 @@
     applyLayoutMode(); // 初始化執行
 
     // ===== 全域世界館藏 (供 QB_CORE 共用) =====
-    const BASE_IMG_URL = 'https://nancywang3641.github.io/sound-files/home-page/';
+    const BASE_IMG_URL = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/home-page/';
     window.AURELIA_WORLDS = {
         xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: '⚔️', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: BASE_IMG_URL + '蒼泱神州.png' },
         fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: '🗡️', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: BASE_IMG_URL + '艾斯蘭登大陸.png' },
         scifi:      { id: 'scifi',      title: '裂縫紀元·新伊甸都市', icon: '🤖', desc: '科技高度發達的未來。賽博朋克的霓虹燈。', danger: 4, cover: BASE_IMG_URL + '裂縫紀元·新伊甸都市.png' },
         superpower: { id: 'superpower', title: '臨界都市·異時頻界', icon: '⚡', desc: '現代社會的背面，潛藏著覺醒者。', danger: 3, cover: BASE_IMG_URL + '臨界都市·異時頻界.png' },
         apocalypse: { id: 'apocalypse', title: '塵土紀元·零號廢土', icon: '☢️', desc: '文明崩塌後的荒原。喪屍橫行、輻射遍地。', danger: 5, cover: BASE_IMG_URL + '塵土紀元·零號廢土.png' },
-        horror:     { id: 'horror',     title: '靜默海半島', icon: '👻', desc: '不可名狀的恐懼。古老的儀式、午夜的凶宅。', danger: 5, cover: BASE_IMG_URL + '靜默海半島.png' }
+        horror:     { id: 'horror',     title: '午夜詭談·歸路電台', icon: '📻', desc: '午夜電台亮起紅燈。每段故事的主角都已埋骨——你的任務是把他從結局裡帶回。', danger: 5, cover: BASE_IMG_URL + '午夜詭談·歸路電台.png' }
     };
     // 從 localStorage 恢復用戶自建世界
     try {
@@ -76,37 +76,38 @@
     let _irisAbortCtrl = null;       // 瀅瀅 / 柴郡聊天的 AbortController（送出中可點 ⏹ 停止）
 
     const URLS = {
-        IRIS_AVATAR: 'https://nancywang3641.github.io/sound-files/char_presets/ying.png',
+        IRIS_AVATAR: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/char_presets/ying.png',
+        PERSONA_FALLBACK: 'https://files.catbox.moe/l5hl69.png',
     };
 
     // ===== 語音與反應池 (瀅瀅專屬) =====
     const IRIS_POKE = [
-    { vn: "[Char|瀅瀅|surprise|「哇！等、等等！你突然戳過來，我的思路全被打斷啦——」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_001.wav" },
-    { vn: "[Char|瀅瀅|think|「（眼神空洞0.5秒）……咦？剛剛空氣裡是不是閃過了一排綠色的字？啊，不管啦！這一定是靈感之神降臨的前兆！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_002.wav" },
-    { vn: "[Char|瀅瀅|smile|「雷伊大叔說過，適度的物理刺激有助於活化腦細胞……所以你是在幫我催稿嗎？好過分！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_003.wav" },
-    { vn: "[Char|瀅瀅|warning|「嗚……頭突然有點痛……（猛搖頭）一定是昨晚那杯三倍濃縮的咖啡因還沒退！委託人，你有帶新故事來轉移我的注意力嗎？」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_004.wav" },
-    { vn: "[Char|瀅瀅|smile|「嗯哼哼，這種突如其來的觸感……太棒了！我要把這個寫進下一章『主角遭到隱形怪人襲擊』的橋段裡！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_005.wav" },
-    { vn: "[Char|瀅瀅|normal|「歡迎光臨視差書咖！今天的拿鐵拉花雖然又失敗了，但聽故事的筆記本已經準備好囉！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_006.wav" },
+    { vn: "[Char|瀅瀅|surprise|「哇！等、等等！你突然戳過來，我的思路全被打斷啦——」]" },
+    { vn: "[Char|瀅瀅|think|「（眼神空洞0.5秒）……咦？剛剛空氣裡是不是閃過了一排綠色的字？啊，不管啦！這一定是靈感之神降臨的前兆！」]" },
+    { vn: "[Char|瀅瀅|smile|「雷伊大叔說過，適度的物理刺激有助於活化腦細胞……所以你是在幫我催稿嗎？好過分！」]" },
+    { vn: "[Char|瀅瀅|warning|「嗚……頭突然有點痛……（猛搖頭）一定是昨晚那杯三倍濃縮的咖啡因還沒退！委託人，你有帶新故事來轉移我的注意力嗎？」]" },
+    { vn: "[Char|瀅瀅|smile|「嗯哼哼，這種突如其來的觸感……太棒了！我要把這個寫進下一章『主角遭到隱形怪人襲擊』的橋段裡！」]" },
+    { vn: "[Char|瀅瀅|normal|「歡迎光臨視差書咖！今天的拿鐵拉花雖然又失敗了，但聽故事的筆記本已經準備好囉！」]" },
 ];
 
 const IRIS_IDLE = [
-    { vn: "[Char|瀅瀅|smile|「（咬著羽毛筆發呆）如果反派其實是個整天喝黑咖啡、愛玩樂高的怪大叔……不對不對，這樣太像雷伊先生了，缺乏威脅感呢。」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_007.wav" },
-    { vn: "[Char|瀅瀅|think|「總覺得……這個世界的邊界，好像是一行一行的代碼？啊！這一定是宇宙射線影響了我的腦電波，太有科幻感了，我要立刻記下來！」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_008.wav" },
-    { vn: "[Char|瀅瀅|normal|「（揉了揉太陽穴）今天店裡的空間好像有點……卡頓？錯覺吧。客人怎麼還不來呢……」]", audio: "https://nancywang3641.github.io/aurelia/voice/YING_009.wav" },
+    { vn: "[Char|瀅瀅|smile|「（咬著羽毛筆發呆）如果反派其實是個整天喝黑咖啡、愛玩樂高的怪大叔……不對不對，這樣太像雷伊先生了，缺乏威脅感呢。」]" },
+    { vn: "[Char|瀅瀅|think|「總覺得……這個世界的邊界，好像是一行一行的代碼？啊！這一定是宇宙射線影響了我的腦電波，太有科幻感了，我要立刻記下來！」]" },
+    { vn: "[Char|瀅瀅|normal|「（揉了揉太陽穴）今天店裡的空間好像有點……卡頓？錯覺吧。客人怎麼還不來呢……」]" },
 ];
 
     const CHESHIRE_POKE = [
-        { vn: "[Char|柴郡|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]",                                                                                                         audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_001.mp3" },
-        { vn: "[Char|柴郡|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]",                                                                                                      audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_002.mp3" },
-        { vn: "[Char|柴郡|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]",                                                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_003.mp3" },
-        { vn: "[Char|柴郡|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]",                                                                                       audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_004.mp3" },
-        { vn: "[Char|柴郡|glitch|「噗...戳空了吧？蠢死了。這裡可是我的主場。」]",                                                                                                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_005.mp3" },
+        { vn: "[Char|柴郡|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]" },
+        { vn: "[Char|柴郡|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]" },
+        { vn: "[Char|柴郡|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]" },
+        { vn: "[Char|柴郡|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]" },
+        { vn: "[Char|柴郡|glitch|「噗...戳空了吧？蠢死了。這裡可是我的主場。」]" },
     ];
 
     const CHESHIRE_IDLE = [
-        { vn: "[Char|柴郡|smirk|「別拿你那 A 區的規矩來煩我。這裡可是 E 區殘塔的 404 號節點，SN 的防火牆在這裡就是個笑話。」]",                                                                audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_006.mp3" },
-        { vn: "[Char|柴郡|yawn|「哈啊...丹那傢伙又跑去鐵骨修車廠找黎昂了，害我得在這裡無聊到看你戳螢幕。」]",                                                                                 audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_007.mp3" },
-        { vn: "[Char|柴郡|glitch|「洛爾德家族那群老古板以為靠那些『百年秩序』就能鎖住全球資本？白痴，我昨天才在 OGH 伺服器裡留了個後門，他們連警報都沒響。」]",                               audio: "https://nancywang3641.github.io/aurelia/voice/Cheshire_008.mp3" },
+        { vn: "[Char|柴郡|smirk|「別拿你那 A 區的規矩來煩我。這裡可是 E 區殘塔的 404 號節點，SN 的防火牆在這裡就是個笑話。」]" },
+        { vn: "[Char|柴郡|yawn|「哈啊...丹那傢伙又跑去鐵骨修車廠找黎昂了，害我得在這裡無聊到看你戳螢幕。」]" },
+        { vn: "[Char|柴郡|glitch|「洛爾德家族那群老古板以為靠那些『百年秩序』就能鎖住全球資本？白痴，我昨天才在 OGH 伺服器裡留了個後門，他們連警報都沒響。」]" },
     ];
 
     let _pokeOnCooldown = false;
@@ -272,16 +273,11 @@ const IRIS_IDLE = [
                 }
 
                 if (autoLoaded) {
-                    // 如果新聊天室有存檔，清除可能存在的登入介面並直接套用狀態
-                    const ov = homeTab.querySelector('#void-login-overlay');
-                    if (ov) ov.remove();
                     _applyLoadedLobbyState();
                 } else {
-                    // 如果沒有存檔，先清除可能殘留的 404 UI，再顯示登入介面
+                    // 登入頁已移除：沒存檔就依當前人設自動進場
+                    _autoEnterFromPersona();
                     _applyLoadedLobbyState();
-                    if (!homeTab.querySelector('#void-login-overlay')) {
-                        VoidLogin.showLoginScreen(homeTab);
-                    }
                 }
             }
         }
@@ -521,10 +517,21 @@ const IRIS_IDLE = [
             if (is404Room) {
                 playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個假笑人偶消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個寫小說的天然呆。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
             } else {
-                playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Audio|https://nancywang3641.github.io/sound-files/home-page/YING_2.wav]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
+                playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
             }
         }
         _updatePortalBtn();
+    }
+
+    // 取代舊登入頁：直接依當前人設自動進場（酒館抓 ST persona／PWA 用 OS_PERSONA 預設 USER）
+    function _autoEnterFromPersona() {
+        let name = 'USER';
+        try {
+            const n = (window.OS_PERSONA && window.OS_PERSONA.getName) ? (window.OS_PERSONA.getName() || '').trim() : '';
+            if (n) name = n;
+        } catch (e) {}
+        IRIS_STATE.userName = name;
+        if (VoidTerminal._refreshPersonaAvatar) { try { VoidTerminal._refreshPersonaAvatar(); } catch (e) {} }
     }
 
     // ── 書架視窗 → 已移至 os_phone/qb/qb_bookshelf.js（QbBookshelf 模組）──
@@ -594,6 +601,17 @@ const IRIS_IDLE = [
                     <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關">🔊</button>
                     <audio id="lobby-bgm-player" loop style="display:none;"></audio>
                 </div>
+                <div class="lb-top-user" id="lb-top-user" title="我的人設">
+                    <img class="lb-top-user-avatar" id="lb-top-user-avatar" src="${URLS.PERSONA_FALLBACK}" alt="">
+                    <div class="lb-top-user-meta">
+                        <div class="lb-top-user-name" id="lb-top-user-name">USER</div>
+                        <div class="lb-top-user-sub" id="lb-top-user-sub">委託人</div>
+                    </div>
+                    <i class="fa-solid fa-chevron-down lb-top-user-caret"></i>
+                    <div class="lb-persona-dropdown" id="lb-persona-dropdown">
+                        <div class="lb-persona-dropdown-inner" id="lb-persona-dropdown-inner"></div>
+                    </div>
+                </div>
             </div>
 
 
@@ -656,14 +674,26 @@ const IRIS_IDLE = [
                             <span class="lb-menu-desc" data-desc-404="黑市交易／賭場遊戲／夜之都市">離開咖啡廳／進入廣闊世界</span>
                         </div>
                     </div>
+                    <div class="void-btn" id="void-journal-btn" data-app-launch="journal" title="瀅瀅的故事日誌">
+                        <div class="void-btn-inner">
+                            <span class="lb-menu-no">04</span>
+                            <span class="lb-menu-cn" data-cn-404="案件日誌">故事日誌</span>
+                            <span class="lb-menu-en" data-en-404="CASE LOG">STORY JOURNAL</span>
+                            <span class="lb-menu-desc" data-desc-404="異常事件的零碎記錄">瀅瀅的創作紀錄／靈感存檔</span>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-achievement-btn" title="資料庫成就清單">
+                        <div class="void-btn-inner">
+                            <span class="lb-menu-no">05</span>
+                            <span class="lb-menu-cn" data-cn-404="異常蒐集">成就</span>
+                            <span class="lb-menu-en" data-en-404="ANOMALY SET">ACHIEVEMENTS</span>
+                            <span class="lb-menu-desc" data-desc-404="可前往 404 黑市兌換">情緒徽章／故事里程碑</span>
+                        </div>
+                    </div>
                     <div class="lb-info-cards">
                         <div class="lb-info-card">
                             <span class="lb-info-card-k">TODAY'S SPECIAL</span>
                             <span class="lb-info-card-v" id="lb-special-name">藍莓拿鐵</span>
-                        </div>
-                        <div class="lb-info-card lb-info-card-btn" data-app-launch="journal" title="瀅瀅的故事日誌" style="cursor:pointer;">
-                            <span class="lb-info-card-k">STORY JOURNAL</span>
-                            <span class="lb-info-card-v">📖 故事日誌</span>
                         </div>
                     </div>
                 </div>
@@ -901,7 +931,7 @@ const IRIS_IDLE = [
                             bookshelfOverlay.style.display = isOpening ? 'flex' : 'none';
                             if (isOpening) {
                                 window.QbBookshelf?.render();
-                                playIrisSequence(`[Audio|https://nancywang3641.github.io/sound-files/home-page/YING_1.wav][Char|瀅瀅|smile|「想幫我搜集什麼樣的故事素材？請從書架上挑選一本書吧！」]`);
+                                playIrisSequence(`[Char|瀅瀅|smile|「想幫我搜集什麼樣的故事素材？請從書架上挑選一本書吧！」]`);
                             }
                         }
                     }
@@ -985,6 +1015,63 @@ const IRIS_IDLE = [
 
             const achievementHistBtn = tab.querySelector('#achievement-hist-btn');
             if (achievementHistBtn) achievementHistBtn.addEventListener('click', VoidPanels.openAchievement);
+
+            // 右側新增的「成就」橫幅卡 → 開同一個成就面板
+            const achievementCardBtn = tab.querySelector('#void-achievement-btn');
+            if (achievementCardBtn) achievementCardBtn.addEventListener('click', VoidPanels.openAchievement);
+
+            // ===== 右上角人設頭像 + 下拉（取代舊「我」TAB，內容＝ OS_PERSONA 人設管理）=====
+            (function setupPersonaAvatar() {
+                const userBox  = tab.querySelector('#lb-top-user');
+                const dropdown = tab.querySelector('#lb-persona-dropdown');
+                const inner    = tab.querySelector('#lb-persona-dropdown-inner');
+                if (!userBox || !dropdown || !inner) return;
+
+                let _launched = false;
+
+                function refreshAvatar() {
+                    const p = (window.OS_PERSONA && window.OS_PERSONA.getCurrent) ? window.OS_PERSONA.getCurrent() : null;
+                    const name = (p && p.name) || IRIS_STATE.userName || 'USER';
+                    const avatarEl = tab.querySelector('#lb-top-user-avatar');
+                    const nameEl   = tab.querySelector('#lb-top-user-name');
+                    const sysUser  = tab.querySelector('#lb-sys-user');
+                    if (nameEl)  nameEl.textContent = name;
+                    if (sysUser) sysUser.textContent = name;
+                    if (avatarEl) avatarEl.src = (p && p.avatar) ? p.avatar : URLS.PERSONA_FALLBACK;
+                }
+                VoidTerminal._refreshPersonaAvatar = refreshAvatar;
+
+                function openDropdown() {
+                    if (!_launched && window.OS_PERSONA && window.OS_PERSONA.launch) {
+                        window.OS_PERSONA.launch(inner);
+                        _launched = true;
+                    }
+                    dropdown.classList.add('open');
+                    userBox.classList.add('active');
+                }
+                function closeDropdown() {
+                    dropdown.classList.remove('open');
+                    userBox.classList.remove('active');
+                    refreshAvatar();
+                }
+
+                userBox.addEventListener('click', (e) => {
+                    if (dropdown.contains(e.target)) {
+                        // 點到下拉內容（可能是切換人設）→ 稍後同步頂部頭像，不關閉
+                        setTimeout(refreshAvatar, 500);
+                        setTimeout(refreshAvatar, 1500);
+                        return;
+                    }
+                    e.stopPropagation();
+                    if (dropdown.classList.contains('open')) closeDropdown();
+                    else openDropdown();
+                });
+                document.addEventListener('click', (e) => {
+                    if (dropdown.classList.contains('open') && !userBox.contains(e.target)) closeDropdown();
+                }, true);
+
+                refreshAvatar();
+            })();
 
             const achCloseBtn = tab.querySelector('#ach-close-btn');
             if (achCloseBtn) achCloseBtn.addEventListener('click', VoidPanels.closeAchievement);
@@ -1287,7 +1374,9 @@ const IRIS_IDLE = [
             if (autoLoaded) {
                 _applyLoadedLobbyState();
             } else {
-                VoidLogin.showLoginScreen(tab);
+                // 登入頁已移除：直接依當前人設自動進場
+                _autoEnterFromPersona();
+                _applyLoadedLobbyState();
             }
 
             tab.querySelectorAll('.void-bubble').forEach(b => scheduleBubbleFade(b));
@@ -1849,7 +1938,7 @@ const IRIS_IDLE = [
         if (!tab) return;
 
         // 切場動畫（沿用 glitch1）
-        new Audio('https://nancywang3641.github.io/aurelia/sound_effect/glitch1.mp3').play().catch(() => {});
+        new Audio('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/glitch1.mp3').play().catch(() => {});
         tab.classList.add('glitch-crash');
         const avatar = document.getElementById('iris-avatar');
         if (avatar) { avatar.style.opacity = '0'; }
@@ -1893,7 +1982,7 @@ const IRIS_IDLE = [
         const tab = document.getElementById('aurelia-home-tab');
         if (!tab) return;
 
-        new Audio('https://nancywang3641.github.io/aurelia/sound_effect/glitch1.mp3').play().catch(() => {});
+        new Audio('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/glitch1.mp3').play().catch(() => {});
         tab.classList.add('glitch-crash');
         const avatarR = document.getElementById('iris-avatar');
         if (avatarR) { avatarR.style.opacity = '0'; }
@@ -1957,7 +2046,7 @@ const IRIS_IDLE = [
         const tab = document.getElementById('aurelia-home-tab');
         if (!tab) return;
 
-        new Audio('https://nancywang3641.github.io/aurelia/sound_effect/glitch1.mp3').play().catch(() => {});
+        new Audio('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/glitch1.mp3').play().catch(() => {});
         tab.classList.add('glitch-crash');
 
         // 在 glitch 動畫一開始就淡出立繪，580ms 後場景切換時立繪已完全消失
@@ -2012,7 +2101,7 @@ const IRIS_IDLE = [
         const tab = document.getElementById('aurelia-home-tab');
         if (!tab) return;
 
-        new Audio('https://nancywang3641.github.io/aurelia/sound_effect/glitch1.mp3').play().catch(() => {});
+        new Audio('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/glitch1.mp3').play().catch(() => {});
         tab.classList.add('glitch-crash');
 
         // 在 glitch 動畫一開始就淡出立繪，580ms 後場景切換時立繪已完全消失
@@ -2057,7 +2146,7 @@ const IRIS_IDLE = [
             }
             document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
 
-            playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Audio|https://nancywang3641.github.io/sound-files/home-page/YING_3.wav]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
+            playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
             _updatePortalBtn();
             debouncedSave();
         }, 580);
@@ -2479,9 +2568,9 @@ ${sections}`;
     VoidTerminal.playSequence = playIrisSequence;
 
     VoidTerminal.logout = function() {
-        IRIS_STATE.userName = '';
-        const t = document.getElementById('aurelia-home-tab');
-        if (t) VoidLogin.showLoginScreen(t);
+        // 登入頁已移除：重新依當前人設同步並刷新大廳
+        _autoEnterFromPersona();
+        _applyLoadedLobbyState();
     };
 
     // 🔥 全局登入紀錄 API
