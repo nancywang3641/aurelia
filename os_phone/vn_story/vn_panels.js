@@ -249,6 +249,11 @@
         if (entry.url) add('🔍 查看大圖', () => _vngLightbox(entry.url));
         add('✏️ 編輯重生', () => _vngEditModal(entry.prompt, async (p) => { await _vngRegen(cfg, fullKey, val, p); rerender(); }));
         add('↻ 直接重生', async () => { if (entry.prompt) { await _vngRegen(cfg, fullKey, val, entry.prompt); rerender(); } });
+        // 從頭像快取轉立繪：把這張頭像設成同名同世界的立繪（VN 顯示時最優先用立繪）
+        if (cfg.kind === 'avatar' && entry.url) add('🎭 設為立繪', async () => {
+            await VN_Cache.setRaw('sprite_cache', fullKey, { url: entry.url, prompt: entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
+            alert('已把「' + bare + '」設為立繪（限此世界）。\nVN 會優先用立繪顯示；要透明去背可到「立繪面板」處理。');
+        });
         add(entry.favorite ? '★ 取消收藏' : '☆ 加入收藏', async () => { await VN_Cache.setRaw(store, fullKey, { ...val, favorite: !entry.favorite }); rerender(); });
         if (st.world === '') {
             add('→ 移到當前世界', async () => { await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld }); await VN_Cache.deleteRaw(store, fullKey); rerender(); });
