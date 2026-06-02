@@ -132,9 +132,36 @@
 .vth-css-wrap { display:flex; flex-direction:column; gap:10px; height:100%; }
 .vth-css-bar { display:flex; align-items:center; gap:10px; }
 .vth-css-world { flex:1; min-width:0; font-size:12px; color:#d4af37; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.vth-css-area { flex:1; min-height:360px; width:100%; box-sizing:border-box; resize:vertical; background:rgba(0,0,0,0.4); border:1px solid rgba(128,128,128,0.35); border-radius:8px; color:#d8e8ff; font-family:'Courier New',monospace; font-size:12.5px; line-height:1.6; padding:12px; outline:none; }
+.vth-css-area { min-height:180px; width:100%; box-sizing:border-box; resize:vertical; background:rgba(0,0,0,0.4); border:1px solid rgba(128,128,128,0.35); border-radius:8px; color:#d8e8ff; font-family:'Courier New',monospace; font-size:12.5px; line-height:1.6; padding:12px; outline:none; }
 .vth-css-area:focus { border-color:#d4af37; }
 .vth-css-hint { font-size:11px; color:#888; line-height:1.5; }
 .vth-ai-row { display:flex; gap:8px; align-items:center; }
 .vth-ai-desc { flex:1; min-width:0; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(128,128,128,0.35); color:#ddd; font-size:12.5px; }
 .vth-ai-desc:focus { border-color:#d4af37; outline:none; }
+.vth-mini.danger { color:#ff8a8a; border-color:rgba(255,138,138,0.4); }
+
+/* 主題工坊：生成 → 即時預覽 → 主題庫 */
+.vth-wrap { display:flex; flex-direction:column; gap:11px; }
+.vth-prev-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.vth-prev-label { font-size:12px; color:#d4af37; font-weight:700; }
+.vth-mode-tabs { display:flex; gap:4px; }
+.vth-mode { padding:4px 11px; font-size:11px; border-radius:6px; border:1px solid rgba(128,128,128,0.3); background:transparent; color:#bbb; cursor:pointer; }
+.vth-mode.active { background:#d4af37; color:#1a1a1a; border-color:#d4af37; font-weight:700; }
+.vth-preview { width:100%; height:230px; border:1px solid rgba(212,175,55,0.25); border-radius:10px; background:#08080a; display:block; }
+
+.vth-gal { border-top:1px solid rgba(128,128,128,0.2); padding-top:12px; display:flex; flex-direction:column; gap:10px; }
+.vth-gal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.vth-gal-label { font-size:12px; color:#d4af37; font-weight:700; }
+.vth-gal-save { display:flex; gap:6px; align-items:center; }
+.vth-gal-name { width:140px; padding:6px 9px; border-radius:7px; background:rgba(0,0,0,0.3); border:1px solid rgba(128,128,128,0.35); color:#ddd; font-size:12px; }
+.vth-gal-name:focus { border-color:#d4af37; outline:none; }
+.vth-gal-empty { color:#888; font-size:12px; padding:14px 2px; line-height:1.6; }
+.vth-gal-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(152px, 1fr)); gap:12px; }
+.vth-gal-card { border:1px solid rgba(128,128,128,0.2); border-radius:10px; overflow:hidden; background:rgba(255,255,255,0.03); display:flex; flex-direction:column; }
+.vth-gal-thumb-wrap { width:100%; height:108px; overflow:hidden; background:#08080a; }
+.vth-gal-thumb { width:100%; height:140px; border:none; display:block; pointer-events:none; }
+.vth-gal-name-row { padding:7px 9px 2px; }
+.vth-gal-cname { font-size:12px; color:#e8dfc8; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.vth-gal-acts { display:flex; gap:4px; padding:6px 8px 8px; }
+.vth-gal-acts .vth-mini { flex:1; padding:5px 0; font-size:11px; text-align:center; }
+.vth-gal-acts .vth-mini.danger { flex:0 0 auto; padding:5px 9px; }

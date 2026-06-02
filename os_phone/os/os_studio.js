@@ -1386,7 +1386,49 @@ ${dialogueText}
 4. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
 用戶想要的風格：`;
 
-    // ── 🎨 劇情面板自訂 CSS（像酒館自訂樣式框；每世界一份；可手寫或讓 AI 生成）──
+    // ── 🎨 劇情面板主題工坊（生成 → 即時預覽 → 主題庫收藏；像 VN UI 那套）──
+    // 預覽用：複刻 VN 對話框預設外觀，讓主題 CSS 疊上去看到的效果跟真實 VN 一致
+    const VTH_PREVIEW_BASE = `
+:root{--gold:#d4af37;--gold-light:#f3e5ab;--gold-dark:#997a00;--em-color:#d4af37;--text-color:#dcd8d0;--name-color:#d4af37;--font-classic:'Playfair Display','Noto Serif TC',serif;}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{background:linear-gradient(165deg,#1c1c22 0%,#08080a 100%);font-family:var(--font-classic);display:flex;flex-direction:column;justify-content:flex-end;min-height:100%;padding:16px;overflow:hidden;}
+#game-char-container{position:absolute;bottom:0;left:0;width:100%;height:78%;display:flex;justify-content:center;align-items:flex-end;z-index:2;pointer-events:none;}
+#game-char{height:92%;max-width:100%;object-fit:contain;object-position:center bottom;filter:drop-shadow(0 0 20px rgba(0,0,0,0.8));}
+#text-panel{position:relative;z-index:5;padding:30px 34px;min-height:110px;border-radius:4px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+#text-panel.nar-mode{background:linear-gradient(180deg,rgba(12,12,16,0.88),rgba(4,4,6,0.95));border:1px solid rgba(255,255,255,0.08);border-top:1px dashed rgba(255,255,255,0.15);box-shadow:0 20px 50px rgba(0,0,0,0.9);}
+#text-panel.char-mode{background:rgba(4,4,6,0.92);border:none;border-top:1px solid rgba(212,175,55,0.18);box-shadow:0 20px 50px rgba(0,0,0,0.9);border-radius:0;}
+#text-panel::after{content:'\\2727';position:absolute;bottom:14px;right:18px;color:var(--gold-dark);font-size:1.2rem;font-family:var(--font-classic);}
+#speaker-name{position:absolute;top:-20px;left:28px;background:var(--vn-name-bg,#050505);border:1px solid var(--gold);color:var(--name-color);font-family:var(--font-classic);font-size:1.1rem;padding:6px 24px;display:inline-block;letter-spacing:2px;z-index:12;box-shadow:0 5px 15px rgba(0,0,0,0.8);border-radius:2px;}
+.nar-mode #speaker-name{opacity:0;}
+#dialogue-text{font-family:var(--font-classic);font-size:1.12rem;line-height:1.8;letter-spacing:1px;color:var(--text-color);font-weight:300;}
+.nar-mode #dialogue-text{font-style:normal;color:#b8b4ac;letter-spacing:1.5px;}
+.char-mode #dialogue-text{color:#e8e2d8;font-style:normal;}
+.inner-mode #dialogue-text{color:var(--em-color);font-style:italic;letter-spacing:1px;}
+#dialogue-text em{font-style:italic;color:var(--em-color);}
+#dialogue-text strong{font-weight:bold;color:#fff;}
+.vn-choices{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px;position:relative;z-index:5;}
+.vn-choice-btn{width:92%;max-width:380px;padding:11px 18px;background:rgba(10,8,4,0.85);border:1px solid rgba(212,175,55,0.35);color:#d4af37;font-family:var(--font-classic);font-size:0.85rem;letter-spacing:1.5px;cursor:pointer;border-radius:2px;text-align:center;}
+`;
+    const VTH_SAMPLE_SPRITE = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='200' height='420'><g fill='rgba(212,175,55,0.15)'><circle cx='100' cy='74' r='46'/><rect x='42' y='130' width='116' height='300' rx='46'/></g></svg>");
+    let _vthMode = 'char-mode';
+
+    function _vthBuildSrcdoc(css, mode, thumb) {
+        const m = mode || _vthMode;
+        const layout = thumb ? 'body{justify-content:flex-start;min-height:auto;padding:14px 14px 6px;}#game-char-container{display:none;}' : '';
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${css || ''}</style></head><body>
+<div id="game-char-container"><img id="game-char" src="${VTH_SAMPLE_SPRITE}"></div>
+<div id="text-panel" class="${m}">
+<div id="speaker-name">角色</div>
+<div id="dialogue-text">範例對白，用來預覽主題的字體、顏色與框線。<em>斜體強調</em>與<strong>粗體重點</strong>也會跟著套用。</div>
+</div>
+<div class="vn-choices"><button class="vn-choice-btn">選項 A</button><button class="vn-choice-btn">選項 B</button></div>
+</body></html>`;
+    }
+
+    function _vthGalleryLoad() { try { return JSON.parse(localStorage.getItem('vn_theme_gallery') || '[]'); } catch (e) { return []; } }
+    function _vthGallerySave(arr) { try { localStorage.setItem('vn_theme_gallery', JSON.stringify(arr || [])); } catch (e) {} }
+
     function renderThemePanel() {
         const host = document.getElementById('studio-theme-content'); if (!host) return;
         const VT = (window.parent || window).VN_Theme || window.VN_Theme;
@@ -1395,26 +1437,59 @@ ${dialogueText}
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。可改的選擇器：\n#text-panel（對話框外框）  #dialogue-text（內文）  #speaker-name（名牌）  .vn-choice-btn（選項鈕）  #game-char（立繪）\n\n例：\n#text-panel.char-mode { background:#1a0f1f; border-top:2px solid #d36; }\n#dialogue-text { color:#f0e0ff; font-family:KaiTi,serif; }';
-        host.innerHTML = `<div class="vth-css-wrap">
+        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n可改的選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三種狀態各自的對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  .vn-choice-btn（選項鈕）  #game-char（立繪）';
+        host.innerHTML = `<div class="vth-wrap">
             <div class="vth-css-bar">
                 <span class="vth-css-world">🌍 ${esc(chatId || '(未知，先進 VN 一次)')}</span>
-                <button class="vth-mini primary" id="vth-css-apply">💾 套用</button>
+                <button class="vth-mini primary" id="vth-css-apply">💾 套用到此世界</button>
                 <button class="vth-mini" id="vth-css-clear">清空</button>
             </div>
             <div class="vth-ai-row">
                 <input id="vth-ai-desc" class="vth-ai-desc" placeholder="描述風格讓 AI 生成（例：賽博夜雨霓虹 / 古典宮廷燙金 / 陰森廢墟舊紙）">
                 <button class="vth-mini primary" id="vth-ai-gen">🤖 AI 生成</button>
             </div>
+            <div class="vth-prev-head">
+                <span class="vth-prev-label">👁️ 即時預覽</span>
+                <div class="vth-mode-tabs">
+                    <button class="vth-mode active" data-mode="char-mode">角色對話</button>
+                    <button class="vth-mode" data-mode="nar-mode">旁白</button>
+                    <button class="vth-mode" data-mode="inner-mode">內心</button>
+                </div>
+            </div>
+            <iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe>
             <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
-            <div class="vth-css-hint">CSS 直接注入頁面、套到 VN 對話框（像酒館自訂樣式框）。只動外觀，別動 position/寬高以免破版。存進此世界(chatId)，VN 開播自動套。AI 生成用的是「寫作→API 設置」的副模型。</div>
+            <div class="vth-css-hint">改框內 CSS，上方即時預覽。「套用到此世界」存進當前世界、VN 開播自動套；「收藏目前」存進下方主題庫可跨世界重用。AI 用「寫作→API 設置」的副模型。</div>
+            <div class="vth-gal">
+                <div class="vth-gal-head">
+                    <span class="vth-gal-label">📚 我的主題庫</span>
+                    <div class="vth-gal-save">
+                        <input id="vth-gal-name" class="vth-gal-name" placeholder="主題命名…">
+                        <button class="vth-mini primary" id="vth-gal-add">💾 收藏目前</button>
+                    </div>
+                </div>
+                <div class="vth-gal-list" id="vth-gal-list"></div>
+            </div>
         </div>`;
+
         const area = host.querySelector('#vth-css-area');
+        const frame = host.querySelector('#vth-preview');
+        let _t = null;
+        const refreshPreview = () => { try { frame.srcdoc = _vthBuildSrcdoc(area.value); } catch (e) {} };
+        refreshPreview();
+        area.oninput = () => { if (_t) clearTimeout(_t); _t = setTimeout(refreshPreview, 250); };
+
+        host.querySelectorAll('.vth-mode').forEach(b => b.onclick = () => {
+            _vthMode = b.dataset.mode;
+            host.querySelectorAll('.vth-mode').forEach(x => x.classList.toggle('active', x === b));
+            refreshPreview();
+        });
+
         host.querySelector('#vth-css-apply').onclick = () => {
             VT.setCss(chatId, area.value);
             const b = host.querySelector('#vth-css-apply'); const o = b.textContent; b.textContent = '✓ 已套用'; setTimeout(() => { b.textContent = o; }, 1200);
         };
-        host.querySelector('#vth-css-clear').onclick = () => { if (confirm('清空此世界的自訂 CSS？')) { VT.clear(chatId); renderThemePanel(); } };
+        host.querySelector('#vth-css-clear').onclick = () => { if (confirm('清空此世界的自訂 CSS？')) { VT.clear(chatId); area.value = ''; refreshPreview(); } };
+
         const genBtn = host.querySelector('#vth-ai-gen');
         genBtn.onclick = () => {
             const desc = host.querySelector('#vth-ai-desc').value.trim();
@@ -1430,13 +1505,52 @@ ${dialogueText}
                     const m = out.match(/```(?:css)?\s*([\s\S]*?)```/i);
                     if (m) out = m[1];
                     out = out.trim();
-                    if (out) { area.value = out; VT.setCss(chatId, out); }
-                    genBtn.textContent = '✓ 已生成並套用'; genBtn.disabled = false;
-                    setTimeout(() => { genBtn.textContent = orig; }, 1500);
+                    if (out) { area.value = out; refreshPreview(); VT.setCss(chatId, out); }
+                    genBtn.textContent = '✓ 已生成（已預覽+套用）'; genBtn.disabled = false;
+                    setTimeout(() => { genBtn.textContent = orig; }, 1800);
                 },
                 (err) => { genBtn.textContent = orig; genBtn.disabled = false; alert('生成失敗：' + ((err && err.message) || err)); }
             );
         };
+
+        // ── 主題庫（跨世界重用，像 VN UI 展廳）──
+        const renderGal = () => {
+            const list = host.querySelector('#vth-gal-list');
+            const arr = _vthGalleryLoad();
+            if (!arr.length) { list.innerHTML = '<div class="vth-gal-empty">還沒收藏。調好一個主題後按「💾 收藏目前」存起來，之後任何世界都能一鍵套用。</div>'; return; }
+            list.innerHTML = arr.map(t => `<div class="vth-gal-card" data-id="${esc(t.id)}">
+                <div class="vth-gal-thumb-wrap"><iframe class="vth-gal-thumb" sandbox="allow-same-origin" scrolling="no"></iframe></div>
+                <div class="vth-gal-name-row"><span class="vth-gal-cname">${esc(t.name)}</span></div>
+                <div class="vth-gal-acts">
+                    <button class="vth-mini primary" data-act="apply">套用</button>
+                    <button class="vth-mini" data-act="edit">編輯</button>
+                    <button class="vth-mini danger" data-act="del">刪</button>
+                </div>
+            </div>`).join('');
+            arr.forEach(t => {
+                const card = list.querySelector('.vth-gal-card[data-id="' + (window.CSS && CSS.escape ? CSS.escape(t.id) : t.id) + '"]');
+                if (!card) return;
+                try { card.querySelector('.vth-gal-thumb').srcdoc = _vthBuildSrcdoc(t.css, 'char-mode', true); } catch (e) {}
+                card.querySelector('[data-act="apply"]').onclick = () => {
+                    area.value = t.css || ''; refreshPreview(); VT.setCss(chatId, t.css || '');
+                    const bb = card.querySelector('[data-act="apply"]'); const oo = bb.textContent; bb.textContent = '✓'; setTimeout(() => { bb.textContent = oo; }, 1000);
+                };
+                card.querySelector('[data-act="edit"]').onclick = () => { area.value = t.css || ''; refreshPreview(); area.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+                card.querySelector('[data-act="del"]').onclick = () => { if (confirm('刪除主題「' + t.name + '」？')) { _vthGallerySave(_vthGalleryLoad().filter(x => x.id !== t.id)); renderGal(); } };
+            });
+        };
+        host.querySelector('#vth-gal-add').onclick = () => {
+            const nameEl = host.querySelector('#vth-gal-name');
+            const name = (nameEl.value || '').trim();
+            if (!name) { alert('幫主題取個名字'); nameEl.focus(); return; }
+            if (!area.value.trim()) { alert('CSS 是空的，先生成或貼一段再收藏'); return; }
+            const arr = _vthGalleryLoad();
+            arr.unshift({ id: 'th_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), name: name, css: area.value });
+            _vthGallerySave(arr);
+            nameEl.value = '';
+            renderGal();
+        };
+        renderGal();
     }
 
     function renderTodoPanel() {
