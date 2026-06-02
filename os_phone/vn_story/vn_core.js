@@ -267,6 +267,12 @@
             //    ⚠️ 不可 await（呼叫端是 loadScript()→next() 同步契約，await 會讓 next() 在空腳本上跑→劇情跳過）。
             //    fire-and-forget：本次載入吃現有快取，刷新供後續播放/下次開播用。
             try { if (window.VN_DynamicParser && window.VN_DynamicParser.init) window.VN_DynamicParser.init(); } catch (e) {}
+            // 🎨 依劇情 [World|] + 當前世界(chatId) 套 VN 面板主題（手動鎖 > World對照 > 預設黑金）
+            try {
+                const _wm = txt.match(/\[World\|([^\]|]+)\]/i);
+                const _chatId = (window.VN_Cache && window.VN_Cache.getCurrentWorld) ? window.VN_Cache.getCurrentWorld() : '';
+                if (window.VN_Theme) window.VN_Theme.resolveAndApply(_chatId, _wm ? _wm[1].trim() : '');
+            } catch (e) {}
             const contentMatch = txt.match(/<content>([\s\S]*?)<\/content>/i);
             let storyText = contentMatch ? contentMatch[1] : txt;
 

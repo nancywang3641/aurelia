@@ -1440,7 +1440,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         /* === 旁白模式（預設）：封閉實心框，敘述者聲音 === */
         #text-panel.nar-mode {
-            background: linear-gradient(180deg, rgba(12,12,16,0.88) 0%, rgba(4,4,6,0.95) 100%);
+            background: var(--vn-dialog-bg, linear-gradient(180deg, rgba(12,12,16,0.88) 0%, rgba(4,4,6,0.95) 100%));
             border: 1px solid rgba(255,255,255,0.08); border-top: 1px dashed rgba(255,255,255,0.15);
             box-shadow: 0 20px 50px rgba(0,0,0,0.9);
         }
@@ -1450,7 +1450,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         /* === 角色對話模式：實心框，無羽化 === */
         #text-panel.char-mode {
-            background: rgba(4, 4, 6, 0.92);
+            background: var(--vn-dialog-bg-solid, rgba(4, 4, 6, 0.92));
             border: none; border-top: 1px solid rgba(212,175,55,0.18);
             box-shadow: 0 20px 50px rgba(0,0,0,0.9);
             border-radius: 0;
@@ -1466,7 +1466,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         
         #speaker-name {
             position: absolute; top: -20px; left: 30px;
-            background: #050505; border: 1px solid var(--gold); color: var(--name-color, var(--gold));
+            background: var(--vn-name-bg, #050505); border: 1px solid var(--gold); color: var(--name-color, var(--gold));
             font-family: var(--font-classic); font-size: 1.2rem; padding: 6px 25px; 
             display: inline-block; letter-spacing: 2px; z-index: 12; 
             box-shadow: 0 5px 15px rgba(0,0,0,0.8); border-radius: 2px;
