@@ -334,53 +334,49 @@
     background:linear-gradient(90deg, var(--lb-ink) 0%, var(--lb-line) 40%, transparent 100%);
 }
 
-/* 選單入口（3 個）— 共用樣式，背景圖靠 ID 在皮膚分支指定 */
+/* 選單入口卡 — 圖示｜中英標｜右箭頭，清爽奶油卡（對齊 GPT 模板）；背景圖靠 ID 在皮膚分支指定 */
 .lobby-right .void-btn {
-    flex:0 0 auto; height:clamp(104px, 21vh, 150px);
+    flex:0 0 auto; height:clamp(82px, 14vh, 104px);
     display:block; padding:0; min-width:0; width:100%;
     background-color:var(--lb-panel-2);
     background-size:cover; background-position:center right; background-repeat:no-repeat;
-    border:1px solid var(--lb-line); border-radius:5px;
-    transform:none; box-shadow:0 2px 12px rgba(0,0,0,0.4);
+    border:1px solid rgba(26,28,40,0.07); border-radius:16px;
+    transform:none; box-shadow:0 4px 16px rgba(26,28,40,0.06);
     overflow:hidden; cursor:pointer; transition:all 0.22s cubic-bezier(0.2,0.8,0.2,1);
 }
 .lobby-right .void-btn::before { display:none; }   /* 關掉舊的斜掃光 */
 .lobby-right .void-btn:hover {
-    transform:translateX(5px);
-    border-color:var(--lb-ink); box-shadow:0 4px 22px var(--lb-glow);
+    transform:translateX(4px);
+    border-color:rgba(26,28,40,0.16); box-shadow:0 8px 26px rgba(26,28,40,0.12);
 }
 .lobby-right .void-btn-inner {
     transform:none; height:100%;
-    display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:2px;
-    padding:14px 24px;
-    /* 漸層壓暗膜：左端不透明（文字清楚）→ 右端透明（露出背景圖）*/
-    background:linear-gradient(100deg, var(--lb-menu-veil) 0%, var(--lb-menu-veil) 42%, rgba(0,0,0,0.05) 92%);
+    display:flex; flex-direction:row; align-items:center; gap:16px;
+    padding:0 20px;
+    /* 壓白膜：左不透明（圖示＋文字清楚）→ 右端半透（露出極淡 banner）*/
+    background:linear-gradient(100deg, rgba(252,253,255,0.95) 0%, rgba(252,253,255,0.88) 48%, rgba(252,253,255,0.48) 100%);
 }
-/* 編號 + 中文名 + 英文副標（用 ::before / 結構由模板給）*/
-.lb-menu-no {
-    font-size:18px; font-weight:800; letter-spacing:2px;
-    color:var(--lb-ink-dim); font-family:'Courier New',monospace;
-}
+/* 左圖示 */
+.lb-menu-icon { flex-shrink:0; width:30px; text-align:center; font-size:22px; color:var(--lb-ink-dim); }
+/* 中文名 + 英文副標 */
+.lb-menu-txt { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
 .lb-menu-cn {
-    font-size:20px; font-weight:900; letter-spacing:4px; color:var(--lb-ink);
-    text-shadow:none;
-    font-family:'Cinzel','Noto Sans TC',serif;
+    font-size:21px; font-weight:800; letter-spacing:3px; color:var(--lb-ink);
+    font-family:'Noto Sans TC',sans-serif; line-height:1.1;
 }
-.lobby-right .void-btn-inner > i { display:none; }   /* 舊 fa 圖示不要了 */
 .lb-menu-en {
-    font-size:9px; letter-spacing:3px; color:var(--lb-ink);
-    opacity:0.75; text-transform:uppercase; font-weight:700;
+    font-size:10px; letter-spacing:2px; color:var(--lb-ink-dim);
+    text-transform:uppercase; font-weight:700;
 }
-.lb-menu-desc {
-    font-size:9px; color:var(--lb-ink-dim); letter-spacing:0.5px; margin-top:1px;
-}
-/* 柴郡皮膚：選單標籤換字（CSS-only，無需額外 JS）*/
+/* 右箭頭 */
+.lb-menu-chevron { flex-shrink:0; font-size:14px; color:rgba(26,28,40,0.28); transition:color 0.2s; }
+.lobby-right .void-btn:hover .lb-menu-chevron { color:var(--lb-ink); }
+/* 柴郡皮膚：圖示/箭頭轉綠 + 選單標籤換字（CSS-only）*/
+.void-tab.mode-404 .lb-menu-chevron     { color:rgba(0,255,65,0.5); }
 .void-tab.mode-404 .lb-menu-cn          { font-size:0; }
-.void-tab.mode-404 .lb-menu-cn::after   { content:attr(data-cn-404);   font-size:20px; }
+.void-tab.mode-404 .lb-menu-cn::after   { content:attr(data-cn-404);   font-size:21px; }
 .void-tab.mode-404 .lb-menu-en          { font-size:0; }
-.void-tab.mode-404 .lb-menu-en::after   { content:attr(data-en-404);   font-size:9px; }
-.void-tab.mode-404 .lb-menu-desc        { font-size:0; }
-.void-tab.mode-404 .lb-menu-desc::after { content:attr(data-desc-404); font-size:9px; }
+.void-tab.mode-404 .lb-menu-en::after   { content:attr(data-en-404);   font-size:10px; }
 /* 柴郡皮膚：左欄角色名 / 副標換字 */
 .void-tab.mode-404 .lb-char-name        { font-size:0; }
 .void-tab.mode-404 .lb-char-name::after { content:attr(data-name-404); font-size:22px; }
@@ -401,9 +397,9 @@
 /* 踏入故事：設計圖只有 3 格 → 移出主選單，PWA 暫掛底部（見模板）*/
 .lobby-right #void-story-btn { display:none; }
 
-/* 出門下方：TODAY'S SPECIAL + SPENT POINT 左右卡片 */
+/* TODAY'S SPECIAL 小卡 — 模板右側只有 5 張選單卡、底下不放東西 → 收掉 */
 .lb-info-cards {
-    display:flex; gap:8px; flex-shrink:0;
+    display:none; gap:8px; flex-shrink:0;
 }
 .lb-info-card {
     flex:1; display:flex; flex-direction:column; gap:3px;
@@ -544,17 +540,18 @@
     .lobby-right #void-journal-btn { grid-area:b4; }
     .lobby-right #void-achievement-btn { grid-area:b5; }
     .lobby-right .lb-info-cards { grid-area:info; }
-    .lobby-right .void-btn { width:100%; min-height:90px; height:auto; }
+    .lobby-right .void-btn { width:100%; min-height:84px; height:auto; border-radius:12px; }
     .lobby-right .void-btn:hover { transform:translateY(-2px); }
-    .lobby-right .void-btn-inner { padding:10px 8px; gap:1px; }
-    .lobby-right .lb-menu-no { font-size:9px; }
-    .lobby-right .lb-menu-cn { font-size:13px; letter-spacing:2px; }
-    .lobby-right .lb-menu-en { font-size:8px; letter-spacing:1.5px; }
-    .lobby-right .lb-menu-desc { display:none; }
-    /* 404 模式文字在 ::after 上有寫死的 20px / 9px，手機要同步縮 */
+    /* 窄格：圖示上、文字下、置中、藏右箭頭 */
+    .lobby-right .void-btn-inner { flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:8px 6px; gap:4px; }
+    .lobby-right .lb-menu-icon { width:auto; font-size:18px; }
+    .lobby-right .lb-menu-txt { flex:0 0 auto; align-items:center; gap:1px; }
+    .lobby-right .lb-menu-cn { font-size:13px; letter-spacing:1.5px; }
+    .lobby-right .lb-menu-en { font-size:8px; letter-spacing:1px; }
+    .lobby-right .lb-menu-chevron { display:none; }
+    /* 404 模式文字在 ::after 上有寫死尺寸，手機同步縮 */
     .void-tab.mode-404 .lobby-right .lb-menu-cn::after { font-size:13px !important; }
     .void-tab.mode-404 .lobby-right .lb-menu-en::after { font-size:8px !important; }
-    .void-tab.mode-404 .lobby-right .lb-menu-desc { display:none !important; }
     .lb-signature { display:none; }
 }
 
