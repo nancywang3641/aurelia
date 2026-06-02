@@ -159,6 +159,7 @@ const PHONE_FILES = [
     'vn_story/vn_sticker.js',
     'vn_story/vn_panels.js',
     'vn_story/vn_generator.js',
+    'vn_story/vn_dynamic_parser.js',   // 創作室（展廳）動態標籤引擎 — 原本只有 PWA(index.html) 載，酒館漏載害自建 tag 摸不到 → 補上
     'vn_story/vn_core.js',
     'vn_story/vn_inspect.js',
     'vn_story/vn_phone.js',
