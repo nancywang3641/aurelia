@@ -486,22 +486,31 @@ EXAMPLE "prompt" value:
                     const VC = win2.VN_Cache;
                     const cur = VC.getCurrentWorld ? VC.getCurrentWorld() : '';
                     const all = await VC.getAll('avatar_cache');
-                    // 只顯示「當前世界」的頭像 → 不混淆、不用滑半天
-                    const valid = all.filter(e => e.url && !e.url.startsWith('blob:') && (!VC.worldOf || VC.worldOf(e) === cur));
-                    if (!valid.length) {
-                        listEl.className = '';
-                        listEl.innerHTML = '<span style="color:#666;font-size:11px;">這個世界還沒有頭像（先在 VN 跑出角色頭像）</span>';
-                        return;
-                    }
+                    const valid = all.filter(e => e.url && !e.url.startsWith('blob:'));
                     const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-                    listEl.className = 'vng-grid';
-                    listEl.innerHTML = valid.map(e => {
-                        const bare = VC.bareKeyOf ? VC.bareKeyOf(e) : e.key;
-                        return '<div class="vng-card vng-pick" data-key="' + encodeURIComponent(e.key) + '" data-name="' + esc(bare) + '" title="' + esc(bare) + '">'
-                            + '<img src="' + esc(e.url) + '">'
-                            + '<div class="vng-foot">' + esc(bare) + '</div>'
-                            + '</div>';
-                    }).join('');
+                    // 依世界分組（含「未分類」舊頭像）+ 下拉切換 → 舊頭像也挑得到、能繼續轉立繪
+                    const groups = {};
+                    valid.forEach(e => { const w = VC.worldOf ? VC.worldOf(e) : ''; (groups[w] = groups[w] || []).push(e); });
+                    const wkeys = Object.keys(groups).sort((a, b) => { if (a === cur) return -1; if (b === cur) return 1; if (a === '') return 1; if (b === '') return -1; return a < b ? -1 : 1; });
+                    if (!wkeys.includes(cur)) wkeys.unshift(cur);
+                    if (state.pickerWorld == null || (groups[state.pickerWorld] === undefined && state.pickerWorld !== cur)) state.pickerWorld = cur;
+                    const wlabel = w => !w ? '📦 未分類（舊頭像）' : (w === cur ? '★ 當前世界' : (w.length > 20 ? '…' + w.slice(-18) : w));
+                    let html = '<select class="vng-sel" id="sprite-picker-world" style="margin-bottom:10px;">'
+                        + wkeys.map(w => '<option value="' + esc(w) + '"' + (w === state.pickerWorld ? ' selected' : '') + '>' + wlabel(w) + ' (' + (groups[w] || []).length + ')</option>').join('')
+                        + '</select>';
+                    const pentries = groups[state.pickerWorld] || [];
+                    if (!pentries.length) {
+                        html += '<div style="color:#666;font-size:11px;padding:10px 0;">這個世界沒有頭像</div>';
+                    } else {
+                        html += '<div class="vng-grid">' + pentries.map(e => {
+                            const bare = VC.bareKeyOf ? VC.bareKeyOf(e) : e.key;
+                            return '<div class="vng-card vng-pick" data-key="' + encodeURIComponent(e.key) + '" data-name="' + esc(bare) + '" title="' + esc(bare) + '"><img src="' + esc(e.url) + '"><div class="vng-foot">' + esc(bare) + '</div></div>';
+                        }).join('') + '</div>';
+                    }
+                    listEl.className = '';
+                    listEl.innerHTML = html;
+                    const wsel = document.getElementById('sprite-picker-world');
+                    if (wsel) wsel.onchange = () => { state.pickerWorld = wsel.value; renderAvatarPicker(); };
                     listEl.querySelectorAll('.vng-pick').forEach(card => {
                         card.onclick = () => {
                             listEl.querySelectorAll('.vng-pick').forEach(c => c.classList.remove('is-sel'));
