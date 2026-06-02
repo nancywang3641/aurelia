@@ -198,7 +198,7 @@
                     <span class="vrd-card-time">${ts}</span>
                     <span class="vrd-card-arrow">▶</span>
                 </div>
-                <div class="vrd-card-summary">${esc(summary) || '<span style="color:#666">（無摘要）</span>'}</div>
+                <div class="vrd-card-summary">${summary ? esc(summary).replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>') : '<span style="color:#666">（無摘要）</span>'}</div>
                 <div class="vrd-card-full">
                     ${userBlock}
                     <div class="vn-reader-msg ai">
