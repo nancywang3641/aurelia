@@ -74,7 +74,7 @@
 .lb-top-brand { display:flex; align-items:center; gap:9px; flex-shrink:0; min-width:0; max-width:25%; }
 .lb-logo {
     width:24px; height:32px; flex-shrink:0;
-    background: url(../../aseets/LOGO.png) center/contain no-repeat;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/LOGO.png) center/contain no-repeat;
     /* LOGO.png 是黑底白紋章 → screen 混合去黑底，留白色紋章（兩皮膚底色都夠暗）*/
     mix-blend-mode: screen;
 }
@@ -118,6 +118,51 @@
 .lb-icon-btn:hover { opacity:1; border-color:var(--lb-line); background:var(--lb-line-soft); }
 
 /* =========================================================
+   區塊 1b：右上角人設頭像 + 下拉
+   取代舊「我 / 角色」TAB，點開＝ OS_PERSONA 人設管理（.ps-app）
+   頭像本身依當前人設顯示（酒館抓 ST persona／PWA 預設 USER）
+   ========================================================= */
+.void-tab .void-top-bar { overflow: visible; }   /* 讓下拉不被頂列裁切 */
+.lb-top-user {
+    position:relative; display:flex; align-items:center; gap:8px; flex-shrink:0;
+    cursor:pointer; user-select:none; padding:4px 8px 4px 5px; border-radius:999px;
+    border:1px solid var(--lb-line); background:var(--lb-panel-2); transition:all 0.2s;
+}
+.lb-top-user:hover, .lb-top-user.active { border-color:var(--lb-ink); background:var(--lb-line-soft); }
+.lb-top-user-avatar {
+    width:30px; height:30px; border-radius:50%; object-fit:cover; flex-shrink:0;
+    border:1px solid var(--lb-line); background:var(--lb-panel);
+}
+.lb-top-user-meta { display:flex; flex-direction:column; gap:1px; line-height:1.15; min-width:0; max-width:96px; }
+.lb-top-user-name {
+    font-size:12px; font-weight:800; color:var(--lb-ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.lb-top-user-sub {
+    font-size:8px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+    color:var(--lb-ink-dim); white-space:nowrap;
+}
+.lb-top-user-caret { font-size:10px; color:var(--lb-ink-dim); transition:transform 0.2s; }
+.lb-top-user.active .lb-top-user-caret { transform:rotate(180deg); }
+
+.lb-persona-dropdown {
+    position:absolute; top:calc(100% + 8px); right:0;
+    width:330px; max-width:86vw; height:460px; max-height:70vh;
+    background:var(--lb-panel); border:1px solid var(--lb-line); border-radius:12px;
+    overflow:hidden; z-index:80; cursor:default;
+    box-shadow:0 18px 50px rgba(26,28,40,0.22);
+    opacity:0; transform:translateY(-8px) scale(0.98); transform-origin:top right;
+    pointer-events:none; transition:opacity 0.18s, transform 0.18s;
+}
+.lb-persona-dropdown.open { opacity:1; transform:translateY(0) scale(1); pointer-events:auto; }
+.lb-persona-dropdown-inner { width:100%; height:100%; }
+
+@media (max-width:680px) {
+    .lb-top-user { padding:3px; gap:0; }
+    .lb-top-user-meta, .lb-top-user-caret { display:none; }  /* 窄螢幕只留頭像圓 */
+}
+
+/* =========================================================
    區塊 2：主體  .lobby-body  →  左立繪 .lobby-left + 右選單 .lobby-right
    絕對定位夾在頂部列與底部列之間（沿用「各區塊獨立 absolute」的版型模型）
    ========================================================= */
@@ -137,11 +182,11 @@
 /* ── 2a. 左欄：合成立繪（人物＋背景同圖）＋ 疊字 ── */
 .lobby-left {
     position:relative; flex:0 0 60%; min-width:0; overflow:hidden;
-    background: url(../../aseets/yingying.png) center top / cover no-repeat;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/yingying.png) center top / cover no-repeat;
     border-right:1px solid var(--lb-line);
 }
 .void-tab.mode-404 .lobby-left {
-    background-image: url(../../aseets/cheshire.png);
+    background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/cheshire.png);
 }
 /* 404 左欄格子疊層（只蓋立繪，不碰右側面板與按鈕）*/
 .void-tab.mode-404 .lobby-left::before {
@@ -173,11 +218,11 @@
 .lb-signature {
     position:absolute; top:96px; left:18px; z-index:2;
     width:130px; height:46px;
-    background:url(../../aseets/yingying_signature.png) left center/contain no-repeat;
+    background:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/yingying_signature.png) left center/contain no-repeat;
     opacity:0.9; pointer-events:none;
 }
 .void-tab.mode-404 .lb-signature {
-    background-image:url(../../aseets/cheshire_signature.png);
+    background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/cheshire_signature.png);
 }
 
 /* 對話框：移進左欄底部、疊在立繪上 */
@@ -305,13 +350,15 @@
 .void-tab.mode-404 .lb-char-sub::after  { content:attr(data-sub-404); font-size:10px; }
 
 /* 選單背景圖 — 瀅瀅皮膚 */
-#void-quest-btn   { background-image:url(../../aseets/藏書_ying.png); }
-#void-chapter-btn { background-image:url(../../aseets/章節選擇_ying.png); }
-#void-exit-btn    { background-image:url(../../aseets/出門_ying.png); }
+#void-quest-btn       { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/藏書_ying.png); }
+#void-chapter-btn     { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/章節選擇_ying.png); }
+#void-exit-btn        { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/出門_ying.png); }
+#void-journal-btn     { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/日誌_ying.png); }
+#void-achievement-btn { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/成就_ying.png); }
 /* 選單背景圖 — 柴郡皮膚 */
-.void-tab.mode-404 #void-quest-btn   { background-image:url(../../aseets/禁庫_cheshire.png); }
-.void-tab.mode-404 #void-chapter-btn { background-image:url(../../aseets/異常紀錄_cheshire.png); }
-.void-tab.mode-404 #void-exit-btn    { background-image:url(../../aseets/墜入404_cheshire.png); }
+.void-tab.mode-404 #void-quest-btn   { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/禁庫_cheshire.png); }
+.void-tab.mode-404 #void-chapter-btn { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/異常紀錄_cheshire.png); }
+.void-tab.mode-404 #void-exit-btn    { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/墜入404_cheshire.png); }
 
 /* 踏入故事：設計圖只有 3 格 → 移出主選單，PWA 暫掛底部（見模板）*/
 .lobby-right #void-story-btn { display:none; }
@@ -433,6 +480,8 @@
         grid-template-areas:
             "head head head"
             "b1 b2 b3"
+            "b4 b4 b4"
+            "b5 b5 b5"
             "info info info";
         gap:6px;
         padding:8px 12px;
@@ -452,6 +501,8 @@
     .lobby-right #void-quest-btn { grid-area:b1; }
     .lobby-right #void-chapter-btn { grid-area:b2; }
     .lobby-right #void-exit-btn { grid-area:b3; }
+    .lobby-right #void-journal-btn { grid-area:b4; }
+    .lobby-right #void-achievement-btn { grid-area:b5; }
     .lobby-right .lb-info-cards { grid-area:info; }
     .lobby-right .void-btn { width:100%; min-height:90px; height:auto; }
     .lobby-right .void-btn:hover { transform:translateY(-2px); }
