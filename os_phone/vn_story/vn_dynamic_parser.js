@@ -87,6 +87,44 @@
             return false;
         },
 
+        // st helper：與創作室預覽 _buildPreviewSt 同一套 API（md / parse / setImage）。
+        // 模板 JS 是針對 (container, lines, onComplete, st) 四參數寫的；不給 st 會「st is not defined」。
+        // 跟 PWA/酒館共用同一支引擎，創作室建的 tag 兩邊一致。
+        _buildSt: function(lines) {
+            const imgManager = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
+            return {
+                md: function(text) {
+                    if (!text) return '';
+                    return String(text)
+                        .replace(new RegExp('[*][*](.+?)[*][*]', 'g'), function(_, p1){ return '<b>' + p1 + '</b>'; })
+                        .replace(new RegExp('[*](.+?)[*]', 'g'),       function(_, p1){ return '<i>' + p1 + '</i>'; })
+                        .replace(new RegExp('[`](.+?)[`]', 'g'),       function(_, p1){ return '<code>' + p1 + '</code>'; });
+                },
+                parse: function() {
+                    const result = {};
+                    (lines || []).forEach(function(line){
+                        line = (line || '').trim();
+                        if (line.charAt(0) !== '[' || line.charAt(line.length-1) !== ']') return;
+                        const parts = line.slice(1, -1).split('|');
+                        const tag = parts[0];
+                        if (!result[tag]) result[tag] = [];
+                        result[tag].push(parts.slice(1));
+                    });
+                    return result;
+                },
+                setImage: async function(el, prompt, type) {
+                    if (!el || !prompt) return;
+                    type = type || 'scene';
+                    try {
+                        const url = window.__IS_PREVIEW
+                            ? ('https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt))
+                            : (imgManager ? await imgManager.generate(prompt, type) : '');
+                        if (url) el.src = url;
+                    } catch(e) { console.error('[VN Parser] setImage 失敗:', e); }
+                }
+            };
+        },
+
         // --- 執行區塊微型 App (核心魔法) ---
         _renderBlock: function(tagId, lines, vnCore) {
             const tpl = this.activeTemplates.find(t => t.tagId.toLowerCase() === tagId.toLowerCase());
@@ -126,9 +164,12 @@
                 let safeJs = tpl.js || '';
                 // 清洗干擾標籤
                 safeJs = safeJs.replace(new RegExp('\\x60\\x60\\x60(?:javascript|js|html|css)?', 'gi'), '').replace(new RegExp('\\x60\\x60\\x60', 'g'), '').trim();
-                
-                const runMicroApp = new Function('container', 'lines', 'onComplete', safeJs);
-                runMicroApp(panel, lines, onComplete);
+
+                // 真正播放（非預覽）→ 走真實圖片 API；並注入 st helper（與創作室同一套 API）
+                window.__IS_PREVIEW = false;
+                const st = this._buildSt(lines);
+                const runMicroApp = new Function('container', 'lines', 'onComplete', 'st', safeJs);
+                runMicroApp(panel, lines, onComplete, st);
             } catch(e) {
                 console.error(`[VN Parser] 執行標籤腳本失敗 [${tagId}]:`, e);
                 panel.innerHTML += `<div style="color:red; background:#000; padding:10px;">腳本執行錯誤: ${e.message}</div>`;
