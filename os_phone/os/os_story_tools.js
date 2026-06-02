@@ -124,14 +124,14 @@
             listEl.innerHTML = '';
             summaries.forEach(e => {
                 const row = document.createElement('label');
-                row.style.cssText = 'display:flex; align-items:flex-start; gap:8px; cursor:pointer; padding:6px; border:1px solid #2a2a2a; border-radius:4px; background:#111;';
+                row.style.cssText = 'display:flex; align-items:flex-start; gap:8px; cursor:pointer; padding:7px 9px; border:1px solid #e8d8c0; border-radius:6px; background:#fff8f0;';
                 const cb = document.createElement('input');
                 cb.type = 'checkbox'; cb.value = String(e.uid); cb.dataset.bookName = bookName;
-                cb.style.cssText = 'margin-top:2px; flex-shrink:0; accent-color:var(--gold-p);';
+                cb.style.cssText = 'margin-top:2px; flex-shrink:0; accent-color:#c97a8e;';
                 const text = document.createElement('span');
-                text.style.cssText = 'font-size:11px; color:#ccc; line-height:1.4;';
+                text.style.cssText = 'font-size:11px; color:#5a4836; line-height:1.5;';
                 const preview = (e.content || '').slice(0, 80).replace(/\n/g, ' ');
-                text.innerHTML = `<span style="color:var(--gold-p); font-size:10px;">${e.comment || ''}</span><br>${preview}${(e.content || '').length > 80 ? '...' : ''}`;
+                text.innerHTML = `<span style="color:#c97a8e; font-size:10px;">${e.comment || ''}</span><br>${preview}${(e.content || '').length > 80 ? '...' : ''}`;
                 row.appendChild(cb); row.appendChild(text);
                 listEl.appendChild(row);
             });
@@ -511,56 +511,52 @@
         _subModalsInjected = true;
         const wrap = document.createElement('div');
         wrap.innerHTML = `
-            <div id="rpg-range-modal" class="rpg-modal-overlay">
-                <div class="rpg-modal-card">
-                    <div class="rpg-modal-title">生成大總結設置</div>
-                    <div class="rpg-opt-group">
-                        <div style="font-size:12px; color:#aaa; margin-bottom:8px; font-weight:bold;">數據來源 (Source):</div>
-                        <label class="rpg-opt-label"><input type="radio" name="sum_source" value="summary" checked><span>📋 使用摘要 (summary)</span></label>
-                        <span class="rpg-opt-desc">推薦: 讀取已同步的精簡摘要</span>
-                        <label class="rpg-opt-label" style="margin-top:10px;"><input type="radio" name="sum_source" value="content"><span>📄 使用全文 (content)</span></label>
-                        <span class="rpg-opt-desc">直接讀取對話內容 (較耗時)</span>
-                        <div style="border-top:1px solid #333; margin-top:12px; padding-top:12px;">
-                            <label class="rpg-opt-label" style="margin-bottom:4px;"><input type="checkbox" id="sum_merge" checked><span>合併之前的總結</span></label>
-                            <span class="rpg-opt-desc">將舊的 [大總結] 一併發送給 AI 重整</span>
-                        </div>
+            <div id="rpg-range-modal" class="ost-modal">
+                <div class="ost-modal-card">
+                    <div class="ost-modal-title">生成大總結設置</div>
+                    <div class="ost-modal-sec">
+                        <div class="ost-modal-lab">數據來源 (Source)</div>
+                        <label class="ost-opt"><input type="radio" name="sum_source" value="summary" checked><span>📋 使用摘要 (summary)</span></label>
+                        <span class="ost-opt-desc">推薦: 讀取已同步的精簡摘要</span>
+                        <label class="ost-opt"><input type="radio" name="sum_source" value="content"><span>📄 使用全文 (content)</span></label>
+                        <span class="ost-opt-desc">直接讀取對話內容 (較耗時)</span>
+                        <label class="ost-opt ost-opt-div"><input type="checkbox" id="sum_merge" checked><span>合併之前的總結</span></label>
+                        <span class="ost-opt-desc">將舊的 [大總結] 一併發送給 AI 重整</span>
                     </div>
-                    <div style="text-align:left; font-size:13px; color:#ccc; margin-bottom:10px;">
-                        <label style="display:block; margin-bottom:5px;">起始 ID (Start):</label>
-                        <input type="number" id="range-start-id" class="rpg-range-input" value="1" min="1">
-                        <label style="display:block; margin-bottom:5px;">結束 ID (End):</label>
-                        <input type="number" id="range-end-id" class="rpg-range-input" placeholder="留空代表最後一條">
+                    <div class="ost-modal-sec">
+                        <label class="ost-modal-lab">起始 ID (Start)</label>
+                        <input type="number" id="range-start-id" class="ost-input" value="1" min="1">
+                        <label class="ost-modal-lab">結束 ID (End)</label>
+                        <input type="number" id="range-end-id" class="ost-input" placeholder="留空代表最後一條">
                     </div>
-                    <div class="rpg-btn-group">
-                        <button class="bg-btn-action" onclick="document.getElementById('rpg-range-modal').classList.remove('active')">取消</button>
-                        <button class="bg-btn-action gold" onclick="window.OS_STORY_TOOLS.confirmRangeAndGenerate()">開始生成</button>
+                    <div class="ost-modal-btns">
+                        <button class="ost-btn" onclick="document.getElementById('rpg-range-modal').classList.remove('active')">取消</button>
+                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.confirmRangeAndGenerate()">開始生成</button>
                     </div>
                 </div>
             </div>
-            <div id="rpg-merge-modal" class="rpg-modal-overlay">
-                <div class="rpg-modal-card" style="max-width:520px;">
-                    <div class="rpg-modal-title">🔀 合併大總結</div>
-                    <div style="margin-bottom:12px;">
-                        <label style="display:block; font-size:11px; color:var(--gold-p); margin-bottom:5px;">備註 / 調整要求（發給 AI）</label>
-                        <textarea id="sp-merge-note" style="width:100%; height:60px; background:#0d0d0d; border:1px solid #333; color:#ccc; font-size:11px; padding:6px; border-radius:3px; resize:vertical; box-sizing:border-box; font-family:'Microsoft YaHei',sans-serif;" placeholder="例：請特別保留角色A與B的關係細節，合併後去掉重複的物品記錄..."></textarea>
-                    </div>
-                    <div style="font-size:11px; color:#888; margin-bottom:8px;">勾選要合併的條目：</div>
-                    <div id="sp-merge-list" style="flex:1; overflow-y:auto; max-height:260px; border:1px solid #222; border-radius:4px; padding:10px; background:#0f0f0f; min-height:80px; display:flex; flex-direction:column; gap:8px;">載入中...</div>
-                    <div class="rpg-btn-group" style="margin-top:15px;">
-                        <button class="bg-btn-action" onclick="document.getElementById('rpg-merge-modal').classList.remove('active')">取消</button>
-                        <button class="bg-btn-action gold" onclick="window.OS_STORY_TOOLS.executeMergeSummaries()">🔀 開始合併</button>
+            <div id="rpg-merge-modal" class="ost-modal">
+                <div class="ost-modal-card ost-modal-wide">
+                    <div class="ost-modal-title">🔀 合併大總結</div>
+                    <label class="ost-modal-lab">備註 / 調整要求（發給 AI）</label>
+                    <textarea id="sp-merge-note" class="ost-textarea" style="height:60px;" placeholder="例：請特別保留角色A與B的關係細節，合併後去掉重複的物品記錄..."></textarea>
+                    <div class="ost-modal-lab" style="margin-top:10px;">勾選要合併的條目</div>
+                    <div id="sp-merge-list" class="ost-merge-list">載入中...</div>
+                    <div class="ost-modal-btns">
+                        <button class="ost-btn" onclick="document.getElementById('rpg-merge-modal').classList.remove('active')">取消</button>
+                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.executeMergeSummaries()">🔀 開始合併</button>
                     </div>
                 </div>
             </div>
-            <div id="rpg-summary-tpl-modal" class="rpg-modal-overlay">
-                <div class="rpg-modal-card" style="max-width:640px;">
-                    <div class="rpg-modal-title">✏️ 大總結 生成模板</div>
-                    <div style="font-size:11px; color:#666; margin-bottom:8px;">編輯後點保存，下次生成大總結時使用此模板。<br>可用佔位符：<span style="color:var(--gold-p);">{{count}}</span>（第幾次）</div>
-                    <textarea id="sp-summary-tpl-area" style="width:100%; height:400px; background:#0d0d0d; border:1px solid #333; color:#ccc; font-size:11px; padding:8px; border-radius:3px; resize:vertical; box-sizing:border-box; font-family:'Microsoft YaHei',monospace;"></textarea>
-                    <div class="rpg-btn-group" style="margin-top:12px;">
-                        <button class="bg-btn-action" onclick="window.OS_STORY_TOOLS.resetSummaryTemplate()">↺ 還原預設</button>
-                        <button class="bg-btn-action" onclick="document.getElementById('rpg-summary-tpl-modal').classList.remove('active')">關閉</button>
-                        <button class="bg-btn-action gold" onclick="window.OS_STORY_TOOLS.saveSummaryTemplate()">💾 保存</button>
+            <div id="rpg-summary-tpl-modal" class="ost-modal">
+                <div class="ost-modal-card ost-modal-wide">
+                    <div class="ost-modal-title">✏️ 大總結 生成模板</div>
+                    <div class="ost-opt-desc" style="margin-bottom:8px;">編輯後點保存，下次生成大總結時使用此模板。可用佔位符：{{count}}（第幾次）</div>
+                    <textarea id="sp-summary-tpl-area" class="ost-textarea" style="height:360px; font-family:monospace;"></textarea>
+                    <div class="ost-modal-btns">
+                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.resetSummaryTemplate()">↺ 還原預設</button>
+                        <button class="ost-btn" onclick="document.getElementById('rpg-summary-tpl-modal').classList.remove('active')">關閉</button>
+                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.saveSummaryTemplate()">💾 保存</button>
                     </div>
                 </div>
             </div>`;
@@ -584,29 +580,28 @@
                     <div class="ost-note">以下工具作用於「<b>目前開啟的對話</b>」。點故事卡片只是看該故事的總結；要生成大總結 / 隱藏，請先確定酒館開的是這個對話。</div>
                     <div class="ost-section">
                         <div class="ost-section-title">📝 大總結</div>
-                        <button class="bg-btn-action gold" id="btn-grand-summary" onclick="window.OS_STORY_TOOLS.showRangeModal()">📝 生成 / 更新大總結 (Grand Summary)</button>
+                        <button class="ost-btn ost-btn-primary" id="btn-grand-summary" onclick="window.OS_STORY_TOOLS.showRangeModal()">📝 生成 / 更新大總結 (Grand Summary)</button>
                         <div class="ost-hint">將最近的劇情壓縮成永久記憶</div>
-                        <button class="bg-btn-action" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()">✏️ 編輯大總結生成模板</button>
-                        <div style="height:8px"></div>
-                        <button class="bg-btn-action" onclick="window.OS_STORY_TOOLS.openMergeSummaryModal()">🔀 合併多個大總結</button>
+                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()">✏️ 編輯大總結生成模板</button>
+                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openMergeSummaryModal()">🔀 合併多個大總結</button>
                     </div>
                     <div class="ost-section">
                         <div class="ost-section-title">🙈 隱藏對話</div>
-                        <div id="vn-reader-sa-toolbar">
-                            <div class="tb-row">
-                                <span class="tb-label">樓層</span>
-                                <input type="number" class="tb-floor" id="vrs-hide-start" placeholder="起始" min="0">
-                                <span class="tb-sep">~</span>
-                                <input type="number" class="tb-floor" id="vrs-hide-end" placeholder="結束" min="0">
-                                <button class="tb-btn" onclick="window.OS_STORY_TOOLS._slashHide(this)">隱藏</button>
-                                <button class="tb-btn gold" onclick="window.OS_STORY_TOOLS._slashUnhide(this)">取消</button>
-                                <button class="tb-btn danger" onclick="window.OS_STORY_TOOLS._slashShowAll(this)">全顯示</button>
-                                <button class="tb-btn" onclick="window.OS_STORY_TOOLS._refreshStatus(this)" title="重新整理">🔄</button>
+                        <div class="ost-hide">
+                            <div class="ost-hide-row">
+                                <span class="ost-hide-label">樓層</span>
+                                <input type="number" class="ost-hide-input" id="vrs-hide-start" placeholder="起始" min="0">
+                                <span class="ost-hide-sep">~</span>
+                                <input type="number" class="ost-hide-input" id="vrs-hide-end" placeholder="結束" min="0">
+                                <button class="ost-hide-btn" onclick="window.OS_STORY_TOOLS._slashHide(this)">隱藏</button>
+                                <button class="ost-hide-btn primary" onclick="window.OS_STORY_TOOLS._slashUnhide(this)">取消</button>
+                                <button class="ost-hide-btn danger" onclick="window.OS_STORY_TOOLS._slashShowAll(this)">全顯示</button>
+                                <button class="ost-hide-btn" onclick="window.OS_STORY_TOOLS._refreshStatus(this)" title="重新整理">🔄</button>
                             </div>
-                            <div id="vrs-status">
-                                <span class="lab">最後樓層</span><span class="val" id="vrs-last-id">—</span>
-                                <span class="sep">｜</span>
-                                <span class="lab">已隱藏</span><span class="val" id="vrs-hidden-list">—</span>
+                            <div class="ost-hide-status">
+                                <span class="ost-hide-stat-lab">最後樓層</span><span class="ost-hide-stat-val" id="vrs-last-id">—</span>
+                                <span class="ost-hide-stat-sep">｜</span>
+                                <span class="ost-hide-stat-lab">已隱藏</span><span class="ost-hide-stat-val" id="vrs-hidden-list">—</span>
                             </div>
                         </div>
                     </div>
