@@ -1372,7 +1372,20 @@ ${dialogueText}
         }
     }
 
-    // ── 🎨 劇情面板自訂 CSS（像酒館自訂樣式框；每世界一份）──────────
+    // VN 對話框 CSS 生成 prompt（給 AI 副模型）
+    const VTH_AI_PROMPT = `你是 VN（視覺小說）對話框的 CSS 樣式設計師。根據用戶描述的風格，生成一段純 CSS，套用在這個「固定在畫面底部的對話框 UI」上。可改的元素：
+- #text-panel：對話框外框（會帶狀態 class：.nar-mode 旁白 / .char-mode 角色對話 / .inner-mode 內心獨白）
+- #dialogue-text：對話內文
+- #speaker-name：左上角色名牌
+- .vn-choice-btn：選項按鈕
+- #game-char：角色立繪
+規則：
+1. 只改外觀（背景/顏色/邊框/圓角/陰影/字體/裝飾/動畫）。可用 @import 載字體、用 ::before/::after 加裝飾、用 @keyframes 做動畫。
+2. 嚴禁改 position / top / left / right / bottom / width / height / transform 的「定位」屬性，以免破版。
+3. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
+用戶想要的風格：`;
+
+    // ── 🎨 劇情面板自訂 CSS（像酒館自訂樣式框；每世界一份；可手寫或讓 AI 生成）──
     function renderThemePanel() {
         const host = document.getElementById('studio-theme-content'); if (!host) return;
         const VT = (window.parent || window).VN_Theme || window.VN_Theme;
@@ -1381,15 +1394,19 @@ ${dialogueText}
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const ph = '貼上 / 自己寫 VN 對話框 CSS（這個世界專用）。可叫左邊 AI 幫你生成再貼進來。\n\n常用選擇器：\n#text-panel（對話框外框）  #dialogue-text（內文）\n#speaker-name（名牌）  .vn-choice-btn（選項鈕）  #game-char（立繪）\n\n例：\n#text-panel.char-mode { background:#1a0f1f; border-top:2px solid #d36; }\n#dialogue-text { color:#f0e0ff; font-family:KaiTi,serif; }';
+        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。可改的選擇器：\n#text-panel（對話框外框）  #dialogue-text（內文）  #speaker-name（名牌）  .vn-choice-btn（選項鈕）  #game-char（立繪）\n\n例：\n#text-panel.char-mode { background:#1a0f1f; border-top:2px solid #d36; }\n#dialogue-text { color:#f0e0ff; font-family:KaiTi,serif; }';
         host.innerHTML = `<div class="vth-css-wrap">
             <div class="vth-css-bar">
                 <span class="vth-css-world">🌍 ${esc(chatId || '(未知，先進 VN 一次)')}</span>
                 <button class="vth-mini primary" id="vth-css-apply">💾 套用</button>
                 <button class="vth-mini" id="vth-css-clear">清空</button>
             </div>
+            <div class="vth-ai-row">
+                <input id="vth-ai-desc" class="vth-ai-desc" placeholder="描述風格讓 AI 生成（例：賽博夜雨霓虹 / 古典宮廷燙金 / 陰森廢墟舊紙）">
+                <button class="vth-mini primary" id="vth-ai-gen">🤖 AI 生成</button>
+            </div>
             <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
-            <div class="vth-css-hint">這段 CSS 會直接注入頁面、套到 VN 對話框（像酒館自訂樣式框）。只動外觀（顏色/邊框/字體/陰影/裝飾），別動 position/寬高以免破版。存進此世界(chatId)，VN 開播自動套。</div>
+            <div class="vth-css-hint">CSS 直接注入頁面、套到 VN 對話框（像酒館自訂樣式框）。只動外觀，別動 position/寬高以免破版。存進此世界(chatId)，VN 開播自動套。AI 生成用的是「寫作→API 設置」的副模型。</div>
         </div>`;
         const area = host.querySelector('#vth-css-area');
         host.querySelector('#vth-css-apply').onclick = () => {
@@ -1397,6 +1414,28 @@ ${dialogueText}
             const b = host.querySelector('#vth-css-apply'); const o = b.textContent; b.textContent = '✓ 已套用'; setTimeout(() => { b.textContent = o; }, 1200);
         };
         host.querySelector('#vth-css-clear').onclick = () => { if (confirm('清空此世界的自訂 CSS？')) { VT.clear(chatId); renderThemePanel(); } };
+        const genBtn = host.querySelector('#vth-ai-gen');
+        genBtn.onclick = () => {
+            const desc = host.querySelector('#vth-ai-desc').value.trim();
+            if (!desc) { alert('先描述你想要的風格'); return; }
+            const api = (window.parent || window).OS_API || window.OS_API;
+            if (!api || typeof api.chatSecondary !== 'function') { alert('AI（副模型）不可用，請先到「寫作 → API 設置」設好副模型'); return; }
+            const orig = genBtn.textContent; genBtn.textContent = '生成中…'; genBtn.disabled = true;
+            api.chatSecondary(
+                [{ role: 'user', content: VTH_AI_PROMPT + desc }],
+                () => {},
+                (full) => {
+                    let out = String(full || '');
+                    const m = out.match(/```(?:css)?\s*([\s\S]*?)```/i);
+                    if (m) out = m[1];
+                    out = out.trim();
+                    if (out) { area.value = out; VT.setCss(chatId, out); }
+                    genBtn.textContent = '✓ 已生成並套用'; genBtn.disabled = false;
+                    setTimeout(() => { genBtn.textContent = orig; }, 1500);
+                },
+                (err) => { genBtn.textContent = orig; genBtn.disabled = false; alert('生成失敗：' + ((err && err.message) || err)); }
+            );
+        };
     }
 
     function renderTodoPanel() {
