@@ -1377,15 +1377,25 @@ ${dialogueText}
 - #text-panel：對話框外框。⚠️它「一定」帶三種狀態 class 之一：.char-mode（角色說話，最常見）/ .nar-mode（旁白）/ .inner-mode（內心獨白）。預設樣式已分別對 #text-panel.char-mode、#text-panel.nar-mode、#text-panel.inner-mode 設了背景，特異性比單純的 #text-panel 高。所以要換對話框背景/邊框，「必須」分別寫這三條：#text-panel.char-mode { ... }、#text-panel.nar-mode { ... }、#text-panel.inner-mode { ... }。只寫 #text-panel 會被預設蓋掉、看起來像沒效果。三種狀態都要給背景。
 - #dialogue-text：對話內文（字體/字色/行距）
 - #speaker-name：左上角色名牌（旁白時會自動隱藏）
-- #game-bg：全螢幕背景容器。只能疊半透明的遮罩/濾鏡/暈影/漸層或邊框氛圍，「絕對不要」設 background-image 或不透明背景蓋掉劇情實際的背景圖。
+- #game-bg：全螢幕背景容器。只能疊「半透明」的遮罩/濾鏡/暈影/漸層或邊框氛圍，「絕對不要」設 background-image 或不透明背景蓋掉劇情實際的背景圖。遮罩透明度要低（alpha ≤ 0.35），對話框永遠在它上面，遮罩只調氛圍、不能讓對話框或文字變糊。
 - #vn-panel-controls 與 .vn-panel-btn：對話框上方的 SKIP / LOG / AUTO 等控制按鈕（.vn-panel-btn.active 為啟用態）。
 - #btn-home、#btn-settings、#btn-reader：畫面右上角的頂部按鈕（返回 / 設定 / 閱讀器），請給它們統一的風格。
+
+【可讀性 — 最優先，違反就算失敗】
+- 對話框「文字所在的那層」背景必須夠不透明：實心色，或 alpha ≥ 0.82 的底。想要透明/玻璃感，把透明留在外緣或外層裝飾，文字正下方一定要壓一層夠深（深色主題）或夠淺（淺色主題）的實底，確保字不會被背後的劇情背景圖洗掉。
+- #dialogue-text 的字色要跟它的對話框底色「強對比」：深底配亮字、亮底配深字。絕不要把文字設成半透明、或跟底色相近的顏色。
+- 三種狀態 .char-mode / .nar-mode / .inner-mode 都要各自確保上面這兩點。
+
+【完成度 — 要成套，不准半吊子】
+- 列出的所有元素（對話框三態、名牌、背景遮罩、控制鈕、頂部鈕）要用「同一套配色語言」做成完整的一組，不可以有的套了風格、有的還停在預設黑。控制鈕和頂部鈕也要呼應主色與質感。
+
 規則：
 1. 只改外觀（背景/顏色/邊框/圓角/陰影/字體/裝飾/動畫）。可用 @import 載字體、用 ::before/::after 加裝飾、用 @keyframes 做動畫。
 2. 嚴禁改 position / top / left / right / bottom / width / height / transform 的「定位」屬性，以免破版。
 3. 「絕對不要」針對 #game-char 或 #game-char-container（角色立繪）寫任何樣式——立繪是劇情內容、不歸主題管。
 4. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條，否則 .char-mode（最常見）會維持預設黑色。
-5. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
+5. 輸出前自我檢查一次：把你寫的對話框想像疊在一張明亮、雜亂的劇情背景圖上，文字是否仍一眼清楚可讀？若會糊，就加深 / 加實文字區的底再輸出。
+6. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
 用戶想要的風格：`;
 
     // ── 🎨 劇情面板主題工坊（生成 → 即時預覽 → 主題庫收藏；像 VN UI 那套）──
