@@ -1376,20 +1376,24 @@ ${dialogueText}
     const VTH_AI_PROMPT = `你是 VN（視覺小說）面板的 UI 設計師。根據用戶描述的風格，生成一段純 CSS，重新設計 VN 介面這幾個元素（只有這些，其他一律別碰）的「外觀與排版」。目標是做出有記憶點、有設計感的整體版面——不是只換顏色。
 
 可設計的元素（括號內是它的「預設」位置，你可以自由重新擺放）：
-- #text-panel：對話框外框。⚠️它一定帶三狀態 class 之一：.char-mode（角色說話，最常見）/ .nar-mode（旁白）/ .inner-mode（內心）。預設已分別對 #text-panel.char-mode、.nar-mode、.inner-mode 設了背景，特異性比純 #text-panel 高，所以換背景/邊框「必須」分別寫這三條，否則沒效果。三態都要給背景。對話框的造型、邊框、圓角、位置、寬度都可以大膽改。
+- #text-panel：對話框外框（主容器）。⚠️它一定帶三狀態 class 之一：.char-mode（角色說話，最常見）/ .nar-mode（旁白）/ .inner-mode（內心）。預設已分別對 #text-panel.char-mode、.nar-mode、.inner-mode 設了背景，特異性比純 #text-panel 高，所以換背景/邊框「必須」分別寫這三條，否則沒效果。三態都要給背景。它的造型、邊框、圓角、背景、內距、寬高都可以大膽改——但它要維持在「畫面底部、水平置中」，別把它搬走（詳見下方版面契約）。
 - #dialogue-text：對話內文（字體 / 字色 / 行距 / 對齊）。
 - #speaker-name：角色名牌（預設浮在對話框左上，旁白時自動隱藏）。位置可移：左上、置中、右側、貼框上緣或下緣都行。
 - #game-bg：全螢幕背景容器。只能疊「半透明」遮罩/濾鏡/暈影/漸層（alpha ≤ 0.35），絕不要設 background-image 或不透明底蓋掉劇情實際的背景圖。
 - #vn-panel-controls 與 .vn-panel-btn：SKIP / LOG / AUTO 控制按鈕（預設在對話框上方，可重新擺放、改造型；.vn-panel-btn.active 為啟用態）。
 - #btn-home、#btn-settings、#btn-reader：頂部按鈕（預設右上，可移位、可重排、要統一造型）。
 
-【排版自由 — 重點，別只換色】
-- 你可以自由使用 position / top / left / right / bottom / transform / margin / flex 等，重新擺放與重塑上面的元素，做出真正不同的版面：名牌換邊、控制鈕改直排或換位、對話框換造型或挪位置、頂部鈕重新排列……都歡迎。請大膽設計。
+【版面契約 — 哪些固定、哪些可動，務必遵守】
+● 固定（不可搬離原位）：
+- 對話框「主容器」#text-panel 永遠錨定在「畫面底部、水平置中」。你可以重塑它的造型/邊框/圓角/背景/內距/寬高，但「絕對不要」用 position / left / right / top / transform 把 #text-panel 或它的外層 #text-panel-wrapper 搬離底部正中（不可移到角落、偏一邊、或飄到畫面中上方）。它是整個畫面的主視覺，必須穩穩待在底部中央。
+● 可動（可重新擺放、改造型，但有界限）：
+- #speaker-name 名牌、#vn-panel-controls / .vn-panel-btn 控制鈕、#btn-home / #btn-settings / #btn-reader 頂部鈕——這些可以換位置、改造型、重排，盡情設計。但移動後必須：
+  ① 完整留在可見畫面內，不可被裁切、不可飛出主視覺窗口（特別小心：別用負的 right/left/top 或過大的位移把元素推出邊緣）。
+  ② 不重疊、不遮住 #dialogue-text；名牌與控制鈕通常依附在對話框附近，移完仍要看得清楚。
 
-【可用性 — 底線，違反就算失敗】
-- 所有元素都要留在可見畫面內，不可被裁切或跑出螢幕外。
-- 元素之間不可互相遮蓋到看不見：名牌、控制鈕、頂部鈕都不能壓住 #dialogue-text；移動名牌後也要確保它跟內文有清楚間距、不重疊。
-- 畫面中央是角色立繪區，盡量別讓你的元素長期擋住正中央。
+【絕對界限】
+- 任何元素都不可超出可見畫面 / 主視覺窗口被切掉。寧可保守一點，也不要溢出。
+- 畫面中央是角色立繪區，別讓你的元素長期擋住正中央。
 
 【可讀性 — 最優先】
 - 對話框「文字所在那層」的底必須夠不透明：實心色，或 alpha ≥ 0.82。要玻璃感就把透明留外緣，文字正下方壓一層實底，確保字不被背景圖洗掉。
@@ -1413,14 +1417,14 @@ ${dialogueText}
 :root{--gold:#d4af37;--gold-light:#f3e5ab;--gold-dark:#997a00;--em-color:#d4af37;--text-color:#dcd8d0;--name-color:#d4af37;--font-classic:'Playfair Display','Noto Serif TC',serif;--font-sans:system-ui,'Noto Sans TC',sans-serif;}
 *{box-sizing:border-box;}
 html,body{margin:0;height:100%;}
-body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:14px;}
+body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:14px;}
 /* 預覽用示意場景：代表真實 VN 裡 #game-bg 載入的劇情背景圖，故意偏亮偏雜，方便看出遮罩效果＋檢驗文字可讀性 */
 #game-bg{position:absolute;inset:0;background-color:#050505;background-image:linear-gradient(160deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%), linear-gradient(135deg, #4a6b8a 0%, #7a6a8c 38%, #c89a6a 72%, #e8cf9e 100%);background-size:cover;background-position:center;z-index:1;}
 #btn-home,#btn-settings,#btn-reader{position:absolute;z-index:15;background:rgba(10,10,12,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);border:1px solid rgba(212,175,55,0.3);color:var(--gold-dark);padding:6px 12px;cursor:pointer;font-size:0.7rem;font-family:var(--font-classic);letter-spacing:1px;border-radius:2px;text-transform:uppercase;}
 #btn-reader{top:12px;right:12px;padding:6px 10px;}
 #btn-settings{top:12px;right:70px;}
 #btn-home{top:12px;right:144px;}
-#text-panel-wrapper{position:relative;z-index:5;width:100%;}
+#text-panel-wrapper{position:relative;z-index:5;width:88%;max-width:560px;margin:0 auto;}
 #text-panel{position:relative;padding:26px 30px;min-height:96px;border-radius:4px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
 #text-panel.nar-mode{background:linear-gradient(180deg,rgba(12,12,16,0.88),rgba(4,4,6,0.95));border:1px solid rgba(255,255,255,0.08);border-top:1px dashed rgba(255,255,255,0.15);box-shadow:0 20px 50px rgba(0,0,0,0.9);}
 #text-panel.char-mode{background:rgba(4,4,6,0.92);border:none;border-top:1px solid rgba(212,175,55,0.18);box-shadow:0 20px 50px rgba(0,0,0,0.9);border-radius:0;}
