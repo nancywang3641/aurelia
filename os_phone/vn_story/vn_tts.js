@@ -89,6 +89,27 @@ const VN_TTS = {
     _cacheKey(modelId, text) { return `${modelId}\x00${text}`; },
 
 
+    // 收集本局「已被占用」的聲音模型 id：
+    //  - charMappings：手動綁定/標過模型的角色 → 這些音不讓隨機 NPC 共用
+    //  - _npcSessionCache：本局其他 NPC 已抽到的音 → 避免兩個 NPC 撞同一個、同時同音
+    _collectUsedModelIds(exceptChar) {
+        const used = new Set();
+        const cm = this.config.charMappings || {};
+        Object.keys(cm).forEach(name => { if (cm[name]) used.add(cm[name]); });
+        const cache = this._npcSessionCache || {};
+        Object.keys(cache).forEach(name => { if (name !== exceptChar && cache[name]) used.add(cache[name]); });
+        return used;
+    },
+    // 從池子隨機抽一個「沒被占用」的聲音；全被占用時才退回整池（總比沒聲音好）
+    _pickAvailable(modelIds, usedIds) {
+        if (!modelIds || !modelIds.length) return null;
+        const valid = modelIds.filter(id => this.config.models[id]);
+        const free  = valid.filter(id => !usedIds || !usedIds.has(id));
+        const pool  = free.length ? free : valid;
+        if (!pool.length) return null;
+        return pool[Math.floor(Math.random() * pool.length)];
+    },
+
     // ── 角色 → 模型解析 ─────────────────────────────────────────────────
     _resolveModel(charName, typeHint) {
         // 0. 別名 → 主名 normalize（不分大小寫；AI 流口水用全名/小名都能對到）
@@ -117,6 +138,9 @@ const VN_TTS = {
             }
         }
 
+        // 收集已被占用的聲音（綁定角色 + 本局其他 NPC），隨機分配時避開 → 標過模型的角色那份音不給 NPC 共用
+        const _usedIds = this._collectUsedModelIds(charName);
+
         // 3. 🎭 優先匹配：如果有明確的 Type 標籤，去對應的池子抽卡！
         if (typeHint) {
             const lowerType = typeHint.toLowerCase();
@@ -129,8 +153,8 @@ const VN_TTS = {
                 });
 
                 if (hit && cat.modelIds && cat.modelIds.length) {
-                    const rid = cat.modelIds[Math.floor(Math.random() * cat.modelIds.length)];
-                    if (this.config.models[rid]) {
+                    const rid = this._pickAvailable(cat.modelIds, _usedIds);
+                    if (rid && this.config.models[rid]) {
                         this._npcSessionCache[charName] = rid; 
                         return { id: rid, ...this.config.models[rid] };
                     }
