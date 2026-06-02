@@ -647,6 +647,7 @@ const IRIS_IDLE = [
                         <div class="lb-menu-head-sub">AURELIS CORE INTERFACE</div>
                         <div class="lb-menu-head-rule"></div>
                     </div>
+                    <div class="lb-menu-scroll">
                     <div class="void-btn" id="void-quest-btn">
                         <div class="void-btn-inner">
                             <span class="lb-menu-no">01</span>
@@ -695,6 +696,7 @@ const IRIS_IDLE = [
                             <span class="lb-info-card-k">TODAY'S SPECIAL</span>
                             <span class="lb-info-card-v" id="lb-special-name">藍莓拿鐵</span>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>
