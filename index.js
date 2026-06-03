@@ -127,6 +127,7 @@ const PHONE_FILES = [
     'os/os_avs_adapter.js',   // 雙端切換層：必須在 engine / rules 之前載入
     'os/os_avs_engine.js',
     'os/os_avs_rules.js',
+    'os/os_avs_state.js',     // STATE 管理 UI（從 status_panel 搬入；必須在 os_avs.js 之前）
     'os/os_avs.js',           // 變數工坊 UI（PWA / 酒館共用一套面板）
     'os/os_studio.js',        // 靈感創作室（VN UI 煉丹 + 世界書設計師，PWA / 酒館共用）
     'os/os_api_engine.js',
