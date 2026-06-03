@@ -25,15 +25,55 @@
         return "Unsaved_Chat_" + new Date().toISOString().slice(0, 10);
     }
 
-    // === 真實最後樓號 = 聊天陣列長度-1（含隱藏訊息）===
-    // getLastMessageId / {{lastMessageId}} 在「隱藏大量訊息」後某些環境會回偏小的數(約等於可見則數)，
-    // 導致大總結窗口的 ID、隱藏面板樓層、抓取/取消隱藏的範圍全部失真。一律改用這個取真實樓號。
-    function _trueLastId() {
+    // === 取真實最後樓號（對抗 TauriTavern 懶載入）===
+    // 坑：TauriTavern 每約一百樓自動收合(show more)，getContext().chat 陣列、getLastMessageId、
+    //     getChatMessages 在收合時都只拿得到「已載入窗口」→ 樓號被騙小(179 樓卻回 99)。
+    //     懶載入只會「少報」，所以：(1) 先自動把全部展開，(2) 取各來源最大值還原真實樓號。
+
+    // 自動點「顯示更多訊息」直到全部載入（省得手動一直按）；沒有懶載入的環境(一般酒館)會直接 no-op
+    async function _ensureAllLoaded() {
         try {
-            const c = window.parent.SillyTavern?.getContext?.()?.chat;
-            if (Array.isArray(c) && c.length) return c.length - 1;
+            const pdoc = window.parent.document;
+            if (!pdoc) return;
+            const _len = () => { try { const c = win.SillyTavern?.getContext?.()?.chat; return Array.isArray(c) ? c.length : 0; } catch (e) { return 0; } };
+            let guard = 0;
+            while (guard++ < 80) {
+                const btn = pdoc.querySelector('#show_more_messages');
+                if (!btn || btn.offsetParent === null) break;   // 沒有「更多」可載入了
+                const before = _len();
+                btn.click();
+                await new Promise(r => setTimeout(r, 220));
+                if (_len() <= before) {                          // 沒長 → 再等一次渲染，仍沒長就停
+                    await new Promise(r => setTimeout(r, 350));
+                    if (_len() <= before) break;
+                }
+            }
+        } catch (e) { console.warn('[OS_STORY_TOOLS] 自動展開全部訊息失敗:', e); }
+    }
+
+    // 真實最後樓號 = 各來源最大值（懶載入只少報，取 max 還原）。要保證準確前先 await _ensureAllLoaded()
+    async function _trueLastId() {
+        let best = -1;
+        try {
+            const c = win.SillyTavern?.getContext?.()?.chat;
+            if (Array.isArray(c) && c.length) best = Math.max(best, c.length - 1);
         } catch (e) {}
-        return null;
+        try {
+            const TH = win.TavernHelper;
+            if (TH?.getChatMessages) {
+                const all = await TH.getChatMessages('0-999999');
+                if (Array.isArray(all) && all.length) {
+                    const mid = all[all.length - 1]?.message_id;
+                    if (typeof mid === 'number' && !isNaN(mid)) best = Math.max(best, mid);
+                    best = Math.max(best, all.length - 1);
+                }
+            }
+        } catch (e) {}
+        try {
+            const TH = win.TavernHelper;
+            if (TH?.getLastMessageId) { const lid = await TH.getLastMessageId(); if (typeof lid === 'number' && !isNaN(lid)) best = Math.max(best, lid); }
+        } catch (e) {}
+        return best >= 0 ? best : null;
     }
 
     // ====================================================================
@@ -196,16 +236,8 @@
         try {
             const helper = window.parent.TavernHelper;
             if (!helper) return null;
-            // 真實最後樓號 = 聊天陣列長度-1（含隱藏訊息）。
-            // 不要只靠 getLastMessageId —— 隱藏一堆訊息後它在某些環境會回傳偏小的數(約等於可見則數)，樓號會失真。
-            let currentLast = null;
-            try {
-                const c = window.parent.SillyTavern?.getContext?.()?.chat;
-                if (Array.isArray(c) && c.length) currentLast = c.length - 1;
-            } catch (e) {}
-            if (currentLast == null && typeof helper.getLastMessageId === 'function') {
-                try { currentLast = await helper.getLastMessageId(); } catch (e) {}
-            }
+            // 真實最後樓號（對抗懶載入：取各來源最大值）。CTX 是高頻背景讀取，故不強制展開全部，best-effort。
+            let currentLast = await _trueLastId();
             if (currentLast == null || isNaN(currentLast)) return null;
             const chatId = getChatIdentifier();
             let lastSummarized = 0;
@@ -236,8 +268,8 @@
         try {
             const helper = window.parent.TavernHelper;
             if (!helper) return;
-            let _endShow = _trueLastId();
-            if (_endShow == null) { const msgs = await helper.getChatMessages('0-{{lastMessageId}}'); if (msgs.length) _endShow = msgs[msgs.length - 1].message_id; }
+            await _ensureAllLoaded();                  // 先自動展開全部，結束 ID 才不會被懶載入騙小
+            const _endShow = await _trueLastId();
             if (_endShow != null && _endShow !== '') document.getElementById('range-end-id').placeholder = `最後一條 ID: ${_endShow}`;
 
             const bookName = helper.getCurrentCharPrimaryLorebook();
@@ -280,37 +312,7 @@
             const chatId = getChatIdentifier();
             const entries = await helper.getLorebookEntries(bookName);
 
-            let contentToSummarize = "";
-            let sourceDesc = "";
-
-            if (sourceType === 'summary') {
-                const logComment = `[RPG_LOG] - ${chatId}`;
-                const logEntry = entries.find(e => e.comment === logComment);
-                if (!logEntry) throw new Error(`找不到摘要日誌，請確保已同步`);
-                const lines = logEntry.content.replace(/^\[.*?\]\s*/, '').split('\n');
-                contentToSummarize = lines.filter(line => {
-                    const match = line.match(/ID:(\d+)/);
-                    if (!match) return true;
-                    const id = parseInt(match[1]);
-                    return (!startId || id >= startId) && (!endId || id <= endId);
-                }).join('\n');
-                sourceDesc = "摘要日誌";
-            } else {
-                const _tl = _trueLastId();
-                const msgs = await helper.getChatMessages(_tl != null ? `0-${_tl}` : '0-{{lastMessageId}}');
-                const filtered = msgs.filter(m => {
-                    const id = parseInt(m.message_id);
-                    return (!startId || id >= startId) && (!endId || id <= endId);
-                });
-                if (filtered.length === 0) throw new Error("範圍內無對話");
-                contentToSummarize = filtered.map(m => {
-                    const match = (m.message || m.mes || "").match(/<content>([\s\S]*?)<\/content>/i);
-                    return match ? `\n[ID:${m.message_id}] ${match[1].trim()}` : "";
-                }).join("");
-                if (!contentToSummarize.trim()) throw new Error("未找到 <content> 標籤");
-                sourceDesc = "全文對話";
-            }
-
+            // 算第幾次 + 要不要合併舊總結（讀世界書，不受懶載入影響）
             let prevSummary = "";
             let summaryCount = 1;
             const oldSummaries = entries.filter(e => e.comment && e.comment.includes(`[大总结] - ${chatId}`));
@@ -318,30 +320,38 @@
                 summaryCount = oldSummaries.length + 1;
                 if (mergePrev) prevSummary = oldSummaries.map(e => `=== 舊總結 ===\n${e.content}`).join("\n\n");
             }
-
-            let prevSection = prevSummary ? (mergePrev ? `**合并所有之前的总结数据**\n${prevSummary}\n` : `**只总结新增剧情**\n${prevSummary}\n`) : `**首次总结**\n`;
-            // 真實最後樓號 = 聊天陣列長度-1（含隱藏）；不用 getLastMessageId（隱藏一堆訊息後它會回偏小的數，存下去 Last 就錯）
-            let _trueLastId = null;
-            try { const _c = window.parent.SillyTavern?.getContext?.()?.chat; if (Array.isArray(_c) && _c.length) _trueLastId = _c.length - 1; } catch (e) {}
-            let actualLastId = endId || _trueLastId || (await helper.getLastMessageId()) || startId;
-
+            const prevSection = prevSummary ? (mergePrev ? `**合并所有之前的总结数据**\n${prevSummary}\n` : `**只总结新增剧情**\n${prevSummary}\n`) : `**首次总结**\n`;
             const tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
-            const prompt = `停止剧情输出，执行**新增大总结**\n\n${prevSection}\n${tplBody}\n=== ${sourceDesc} ===\n${contentToSummarize}`;
 
-            const osApi = window.parent.OS_API;
-            const osSet = window.parent.OS_SETTINGS;
-            if (!osApi) throw new Error("找不到 OS_API");
+            const TH = window.parent.TavernHelper;
+            if (!TH || typeof TH.generateRaw !== 'function') throw new Error("找不到 generateRaw（需要酒館助手在線）");
 
             let finalContent = '';
             async function _genOnce() {
-                let generated = "";
-                await new Promise((res, rej) => {
-                    osApi.chat([{ role: 'system', content: '剧情总结助手' }, { role: 'user', content: prompt }], osSet.getConfig(),
-                        (chunk) => { generated = chunk; }, (final) => { generated = final; res(); }, (err) => rej(err), { disableTyping: true });
-                });
-                finalContent = generated;
-                if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】\nFirst: ${startId || 1}\nLast: ${actualLastId}`);
-                else finalContent = `【大总结(第${summaryCount}次)】\nFirst: ${startId || 1}\nLast: ${actualLastId}\n\n${finalContent}`;
+                // 先自動展開全部訊息 → generateRaw 的 max_chat_history:'all' 才真的吃到完整聊天(不被懶載入窗口截斷)。
+                await _ensureAllLoaded();
+                // 用 generateRaw + max_chat_history:'all'：酒館自己用「完整聊天」組 prompt 生成總結，不需要起始/結束 ID。
+                const instruction = `停止剧情输出，执行**新增大总结**。請依上面完整的劇情對話產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}\n${tplBody}`;
+                const _W = window.parent || window;
+                _W.__AURELIA_SUMMARIZING = true;   // 標記「這次生成是總結」→ vector 注入器別摻記憶召回、也別把它當新劇情記憶
+                let generated = '';
+                try {
+                    generated = await TH.generateRaw({
+                        user_input: instruction,
+                        ordered_prompts: [
+                            { role: 'system', content: '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。' },
+                            'chat_history',
+                            'user_input',
+                        ],
+                        max_chat_history: 'all',
+                        should_stream: false,
+                    });
+                } finally { _W.__AURELIA_SUMMARIZING = false; }
+                finalContent = String(generated || '');
+                const _last = await _trueLastId();
+                const _lastTxt = (_last != null) ? `\nLast: ${_last}` : '';
+                if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);
+                else finalContent = `【大总结(第${summaryCount}次)】${_lastTxt}\n\n${finalContent}`;
             }
 
             async function _doSave() {
@@ -349,17 +359,35 @@
             const newEntry = { comment: `[大总结] - ${chatId} - 第${summaryCount}次 - ${now}`, keys: [`[SUMMARY_${chatId}_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
             await helper.createLorebookEntries(bookName, [newEntry]);
 
-            // 嘗試注入 KEY
+            await _ensureAllLoaded();   // 先展開全部 → 下面取真實樓號、隱藏範圍才正確（preview 期間可能又被自動收合）
+
+            // 注入觸發 KEY 到「最後一樓」(這一樓會保留可見、不被自動隱藏) → 關鍵字照常觸發世界書總結。
+            // 增量模式(沒合併)時把舊增量的 KEY 也補進這一樓，否則它們原本的觸發樓被隱藏後會失效。
             try {
-                const lastId = _trueLastId() ?? (await helper.getLastMessageId());
-                if (lastId >= 0) {
+                const lastId = await _trueLastId();
+                if (lastId != null && lastId >= 0) {
+                    const wantKeys = [newEntry.keys[0]];
+                    if (!mergePrev && oldSummaries && oldSummaries.length) {
+                        for (const e of oldSummaries) { const k = e.keys && e.keys[0]; if (k) wantKeys.push(k); }
+                    }
                     const lastMsg = (await helper.getChatMessages(-1))[0];
-                    if (lastMsg && !(lastMsg.mes || '').includes(newEntry.keys[0])) {
-                        const _cur = lastMsg.mes || lastMsg.message || '';
-                        await helper.setChatMessages([{ message_id: lastId, message: _cur + ' ' + newEntry.keys[0], mes: _cur + ' ' + newEntry.keys[0] }], { refresh: 'affected' });
+                    if (lastMsg) {
+                        let cur = lastMsg.mes || lastMsg.message || '';
+                        const add = wantKeys.filter(k => k && !cur.includes(k));
+                        if (add.length) {
+                            cur = (cur + ' ' + add.join(' ')).trim();
+                            await helper.setChatMessages([{ message_id: lastId, message: cur, mes: cur }], { refresh: 'affected' });
+                        }
                     }
                 }
-            } catch (e) { }
+            } catch (e) { console.warn('[大總結] 注入 KEY 失敗:', e); }
+
+            // 🔒 自動隱藏「已總結」的樓層，但保留最後一樓可見(它帶觸發 KEY)：
+            //    下次 generateRaw('all') / 一般生成都不再吃這些已濃縮進總結的原文，只剩最後一樓 + 之後的新樓。
+            try {
+                const _last = await _trueLastId();
+                if (_last != null && _last >= 1) await API._callSlashCommand(`/hide 0-${_last - 1}`);
+            } catch (e) { console.warn('[大總結] 自動隱藏失敗:', e); }
 
             // 🌟 parse【結語】+ 角色名單 → 寫 lobby_summary_index（給瀅瀅/柴郡注 sysPrompt）
             try {
@@ -552,7 +580,8 @@
     };
     API._slashShowAll = async function (btn) {
         await API._withBtnFeedback(btn, async () => {
-            const _tlu = _trueLastId();
+            await _ensureAllLoaded();
+            const _tlu = await _trueLastId();
             await API._callSlashCommand('/unhide 0-' + (_tlu != null ? _tlu : '{{lastMessageId}}'));
             API._updateHideStatus();
         });
@@ -580,22 +609,25 @@
         out.push(start === prev ? `${start}` : `${start}-${prev}`);
         return out.join(', ');
     };
-    API._updateHideStatus = function () {
+    API._updateHideStatus = async function () {
         const lastEl = document.getElementById('vrs-last-id');
         const hiddenEl = document.getElementById('vrs-hidden-list');
         if (!lastEl || !hiddenEl) return;
         try {
             const helper = win.TavernHelper;
-            const ctx = win.SillyTavern?.getContext?.();
-            const chat = ctx?.chat || [];
-            let lastId = -1;
-            if (chat.length) lastId = chat.length - 1;            // 真實最後樓號(含隱藏)優先，別用會被隱藏騙小的 getLastMessageId
-            else if (helper?.getLastMessageId) lastId = helper.getLastMessageId();
-            lastEl.textContent = lastId >= 0 ? `#${lastId}` : '—';
-            const hiddenIds = [];
-            chat.forEach((m, idx) => {
-                if (m && m.is_system === true) hiddenIds.push(idx);
-            });
+            const lastId = await _trueLastId();
+            lastEl.textContent = (lastId != null && lastId >= 0) ? `#${lastId}` : '—';
+            let hiddenIds = [];
+            try {
+                if (helper?.getChatMessages) {
+                    const hidden = await helper.getChatMessages('0-999999', { hide_state: 'hidden' });
+                    if (Array.isArray(hidden)) hiddenIds = hidden.map(m => m.message_id).filter(id => typeof id === 'number');
+                }
+            } catch (e) {}
+            if (!hiddenIds.length) {     // 後備：讀目前載入的聊天陣列
+                const chat = win.SillyTavern?.getContext?.()?.chat || [];
+                chat.forEach((m, idx) => { if (m && m.is_system === true) hiddenIds.push(idx); });
+            }
             hiddenEl.textContent = API._formatRanges(hiddenIds);
         } catch (e) {
             console.error('[OS_STORY_TOOLS] _updateHideStatus 失敗:', e);
