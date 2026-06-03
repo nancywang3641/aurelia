@@ -201,12 +201,17 @@
             const bookName = helper.getCurrentCharPrimaryLorebook?.();
             if (bookName) {
                 const entries = await helper.getLorebookEntries(bookName);
+                // 直接精準抓「當前 chatId」的大總結（不做模糊比對，避免撈到別的聊天）；
+                // 挑「第N次」最大的那份(=最新)，現讀它的 Last。每次都重抓世界書、不靠任何快取。
                 const prefix = `[大总结] - ${chatId}`;
-                const summaries = (entries || []).filter(e => e.comment && (e.comment.includes(prefix) || (e.comment.includes(chatId) && e.comment.includes('大总结'))));
+                const summaries = (entries || []).filter(e => e.comment && e.comment.includes(prefix));
                 if (summaries.length) {
-                    const latest = summaries.sort((a, b) => (b.uid || 0) - (a.uid || 0))[0];
-                    const mm = (latest.content || '').match(/Last:\s*(\d+)/i);
-                    if (mm && !isNaN(parseInt(mm[1]))) lastSummarized = parseInt(mm[1]);
+                    const _seq = e => { const m = (e.comment || '').match(/第\s*(\d+)\s*次/); return m ? parseInt(m[1]) : 0; };
+                    summaries.sort((a, b) => (_seq(b) - _seq(a)) || ((b.uid || 0) - (a.uid || 0)));
+                    for (const s of summaries) {
+                        const mm = (s.content || '').match(/Last:\s*(\d+)/i);
+                        if (mm && !isNaN(parseInt(mm[1]))) { lastSummarized = parseInt(mm[1]); break; }
+                    }
                 }
             }
             const uncounted = Math.max(0, currentLast - lastSummarized);
@@ -302,7 +307,10 @@
             }
 
             let prevSection = prevSummary ? (mergePrev ? `**合并所有之前的总结数据**\n${prevSummary}\n` : `**只总结新增剧情**\n${prevSummary}\n`) : `**首次总结**\n`;
-            let actualLastId = endId || await helper.getLastMessageId() || startId;
+            // 真實最後樓號 = 聊天陣列長度-1（含隱藏）；不用 getLastMessageId（隱藏一堆訊息後它會回偏小的數，存下去 Last 就錯）
+            let _trueLastId = null;
+            try { const _c = window.parent.SillyTavern?.getContext?.()?.chat; if (Array.isArray(_c) && _c.length) _trueLastId = _c.length - 1; } catch (e) {}
+            let actualLastId = endId || _trueLastId || (await helper.getLastMessageId()) || startId;
 
             const tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
             const prompt = `停止剧情输出，执行**新增大总结**\n\n${prevSection}\n${tplBody}\n=== ${sourceDesc} ===\n${contentToSummarize}`;
