@@ -96,6 +96,13 @@
                         <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-sync" ${cfg.syncKeyWithPrimary !== false ? 'checked' : ''}><span>跟主模型共用 Key（主模型也走 SiliconFlow 就勾，免再填）</span></label>
                         <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>
                         <label class="avs-mem-fld"><span>召回條數</span><input class="avs-input avs-mem-num" id="avs-mem-topk" type="number" min="1" max="20" value="${parseInt(cfg.topK) || 5}"></label>
+                        <label class="avs-mem-fld"><span>記憶來源</span>
+                            <select class="avs-input" id="avs-mem-src">
+                                <option value="content"${(cfg.extractSource || 'content') !== 'summary' ? ' selected' : ''}>全文（完整、較花）</option>
+                                <option value="summary"${cfg.extractSource === 'summary' ? ' selected' : ''}>摘要（省、但可能漏對話）</option>
+                            </select>
+                        </label>
+                        <div class="avs-mem-srchint">「摘要」是拿主模型每輪吐的 &lt;summary&gt; 去記，省 token；那則沒摘要時自動回退全文。</div>
                     </div>
                     <div class="avs-st-btn-grid">
                         <button class="avs-btn avs-btn-primary" id="avs-mem-save">💾 儲存設定</button>
@@ -143,6 +150,7 @@
             cfg.syncKeyWithPrimary = !!q('#avs-mem-sync')?.checked;
             cfg.embeddingKey = (q('#avs-mem-key')?.value || '').trim();
             cfg.topK = parseInt(q('#avs-mem-topk')?.value) || 5;
+            cfg.extractSource = q('#avs-mem-src')?.value || 'content';
             _saveCfg(cfg);
             const b = saveBtn; const o = b.textContent; b.textContent = '✓ 已儲存'; setTimeout(() => { b.textContent = o; }, 1200);
         };
