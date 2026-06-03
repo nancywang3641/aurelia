@@ -94,9 +94,12 @@
         // ST 模式優先：讀酒館原生 itemized 資料，準確且有細項拆解
         _readFromItemized: async function() {
             try {
+                // TauriTavern：import 模組會炸/不穩，且 live 索引會挑到高 mesId 的小幻影紀錄 →
+                //   一律改走存檔讀取（讀所有 record、挑總和最大的真上下文）。
+                if (this._isTauri()) return await this._readFromTauriStorage();
                 let mod;
                 try { mod = await this._getItemizedMod(); }
-                catch (e) { return await this._readFromTauriStorage(); }   // TauriTavern：import 會炸(window.SillyTavern 唯讀)→改讀存檔
+                catch (e) { return await this._readFromTauriStorage(); }   // 萬一非 Tauri 但 import 仍失敗，也退存檔
                 if (!mod || typeof mod.itemizedParams !== 'function') return await this._readFromTauriStorage();
                 // 取 live 陣列。原版酒館(非 bundle)＝同一實例，已有資料、直接用。
                 // TauriTavern：itemized 已改成「持久化」(tt_prompts_index / tt_prompts_record)，但這個 import
@@ -204,6 +207,46 @@
             }
             return await this._idbGet('SillyTavern_Prompts', 'keyvaluepairs', key);
         },
+        _isTauri: function() {
+            try {
+                if (win.__TAURI__ || window.__TAURI__ || win.__TAURI_INTERNALS__ || window.__TAURI_INTERNALS__) return true;
+                const h = (win.location && win.location.host) || (window.location && window.location.host) || '';
+                return /tauri/i.test(h);
+            } catch (e) { return false; }
+        },
+        // 把一筆 itemized record 換算成 { total, breakdown }（OAI 用存好的數字、字串分項用 len/4 估）
+        _recordToBreakdown: function(rec) {
+            if (!rec) return null;
+            const n = function(v){ const x = Number(v); return isNaN(x) ? 0 : x; };
+            const tok = function(s){ return (typeof s === 'string' && s.length) ? Math.ceil(s.length / 4) : 0; };
+            const isOai = rec.main_api === 'openai';
+            const world    = tok(rec.worldInfoString);
+            const examples = isOai ? n(rec.oaiExamplesTokens) : tok(rec.examplesString);
+            const inject   = tok(rec.chatInjects) + tok(rec.summarizeString) + tok(rec.smartContextString) + tok(rec.chatVectorsString) + tok(rec.dataBankVectorsString);
+            let system, character, persona, note, bias, chat, total;
+            if (isOai) {
+                chat      = n(rec.oaiConversationTokens);
+                system    = n(rec.oaiStartTokens) + n(rec.oaiNsfwTokens) + n(rec.oaiMainTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens) + n(rec.oaiNudgeTokens);
+                character = tok(rec.charDescription) + tok(rec.charPersonality) + tok(rec.scenarioText);
+                persona   = tok(rec.userPersona);
+                note      = tok(rec.authorsNoteString);
+                bias      = n(rec.oaiBiasTokens);
+                // 總和：itemizedParams 的 OAI 公式裡前後錨點相消，等同各 oai 數字 + examples + worldInfo
+                total = n(rec.oaiStartTokens) + n(rec.oaiPromptTokens) + n(rec.oaiExamplesTokens) + n(rec.oaiMainTokens)
+                      + n(rec.oaiNsfwTokens) + n(rec.oaiBiasTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens)
+                      + n(rec.oaiNudgeTokens) + n(rec.oaiConversationTokens) + world;
+            } else {
+                const story = Math.max(0, tok(rec.storyString) - world);
+                chat      = tok(rec.mesSendString);
+                system    = 0;
+                character = story;
+                persona   = 0;
+                note      = tok(rec.allAnchors);
+                bias      = tok(rec.promptBias);
+                total     = story + world + examples + chat + note + bias;
+            }
+            return { total: total, breakdown: { system: system||0, character: character||0, world: world||0, examples: examples||0, chat: chat||0, persona: persona||0, note: note||0, inject: inject||0, bias: bias||0, total: total } };
+        },
         _readFromTauriStorage: async function() {
             try {
                 const ctx = (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext())
@@ -212,43 +255,18 @@
                 if (!chatId) return false;
                 const index = await this._promptStoreGet('tt_prompts_index:' + chatId);
                 if (!Array.isArray(index) || !index.length) return false;
-                // 挑最新 mesId = 當前這輪生成的上下文
-                let pick = index[0];
-                for (let i = 1; i < index.length; i++) { if (Number(index[i].mesId) > Number(pick.mesId)) pick = index[i]; }
-                const rec = await this._promptStoreGet('tt_prompts_record:' + chatId + ':' + pick.recordId);
-                if (!rec) return false;
-                const n = function(v){ const x = Number(v); return isNaN(x) ? 0 : x; };
-                const tok = function(s){ return (typeof s === 'string' && s.length) ? Math.ceil(s.length / 4) : 0; }; // 字串部分用 len/4 估
-                const isOai = rec.main_api === 'openai';
-                const world    = tok(rec.worldInfoString);
-                const examples = isOai ? n(rec.oaiExamplesTokens) : tok(rec.examplesString);
-                const inject   = tok(rec.chatInjects) + tok(rec.summarizeString) + tok(rec.smartContextString) + tok(rec.chatVectorsString) + tok(rec.dataBankVectorsString);
-                let system, character, persona, note, bias, chat, total;
-                if (isOai) {
-                    chat      = n(rec.oaiConversationTokens);
-                    system    = n(rec.oaiStartTokens) + n(rec.oaiNsfwTokens) + n(rec.oaiMainTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens) + n(rec.oaiNudgeTokens);
-                    character = tok(rec.charDescription) + tok(rec.charPersonality) + tok(rec.scenarioText);
-                    persona   = tok(rec.userPersona);
-                    note      = tok(rec.authorsNoteString);
-                    bias      = n(rec.oaiBiasTokens);
-                    // 總和：itemizedParams 的 OAI 公式裡前後錨點相消，等同各 oai 數字 + examples + worldInfo
-                    total = n(rec.oaiStartTokens) + n(rec.oaiPromptTokens) + n(rec.oaiExamplesTokens) + n(rec.oaiMainTokens)
-                          + n(rec.oaiNsfwTokens) + n(rec.oaiBiasTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens)
-                          + n(rec.oaiNudgeTokens) + n(rec.oaiConversationTokens) + world;
-                } else {
-                    const story = Math.max(0, tok(rec.storyString) - world);
-                    chat      = tok(rec.mesSendString);
-                    system    = 0;
-                    character = story;
-                    persona   = 0;
-                    note      = tok(rec.allAnchors);
-                    bias      = tok(rec.promptBias);
-                    total     = story + world + examples + chat + note + bias;
+                // 讀所有 record、各自換算總和，挑「最大的」= 真正的主上下文
+                //   （不挑最新 mesId：那會挑到高 mesId 的小幻影紀錄，把真上下文蓋掉）。
+                let best = null;
+                for (let i = 0; i < index.length; i++) {
+                    const rec = await this._promptStoreGet('tt_prompts_record:' + chatId + ':' + index[i].recordId);
+                    const b = this._recordToBreakdown(rec);
+                    if (b && (!best || b.total > best.total)) best = b;
                 }
-                if (!total) return false;
-                this.sendTokens = total;
+                if (!best || !best.total) return false;
+                this.sendTokens = best.total;
                 this.sendChars  = null;
-                this.breakdown  = { system: system||0, character: character||0, world: world||0, examples: examples||0, chat: chat||0, persona: persona||0, note: note||0, inject: inject||0, bias: bias||0, total: total };
+                this.breakdown  = best.breakdown;
                 this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 return true;
             } catch (e) { return false; }
