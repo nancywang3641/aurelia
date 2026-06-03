@@ -276,17 +276,20 @@
             const osSet = window.parent.OS_SETTINGS;
             if (!osApi) throw new Error("找不到 OS_API");
 
-            let generated = "";
-            await new Promise((res, rej) => {
-                osApi.chat([{ role: 'system', content: '剧情总结助手' }, { role: 'user', content: prompt }], osSet.getConfig(),
-                    (chunk) => { generated = chunk; }, (final) => { generated = final; res(); }, (err) => rej(err), { disableTyping: true });
-            });
+            let finalContent = '';
+            async function _genOnce() {
+                let generated = "";
+                await new Promise((res, rej) => {
+                    osApi.chat([{ role: 'system', content: '剧情总结助手' }, { role: 'user', content: prompt }], osSet.getConfig(),
+                        (chunk) => { generated = chunk; }, (final) => { generated = final; res(); }, (err) => rej(err), { disableTyping: true });
+                });
+                finalContent = generated;
+                if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】\nFirst: ${startId || 1}\nLast: ${actualLastId}`);
+                else finalContent = `【大总结(第${summaryCount}次)】\nFirst: ${startId || 1}\nLast: ${actualLastId}\n\n${finalContent}`;
+            }
 
+            async function _doSave() {
             const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-            let finalContent = generated;
-            if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】\nFirst: ${startId || 1}\nLast: ${actualLastId}`);
-            else finalContent = `【大总结(第${summaryCount}次)】\nFirst: ${startId || 1}\nLast: ${actualLastId}\n\n${finalContent}`;
-
             const newEntry = { comment: `[大总结] - ${chatId} - 第${summaryCount}次 - ${now}`, keys: [`[SUMMARY_${chatId}_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
             await helper.createLorebookEntries(bookName, [newEntry]);
 
@@ -366,8 +369,48 @@
                     console.log('[lobby_summary_index]', { storyTitle, bgCacheId, allChars: characters.length, newChars: newCharacters.length });
                 }
             } catch (e) { console.warn('[os_story_tools] 寫 lobby_summary_index 失敗（不影響大總結）:', e); }
+            } // end _doSave
 
-            alert(`✅ 第 ${summaryCount} 次大總結已生成！`);
+            // 生成完先跳「預覽窗」給用戶檢查（可直接編輯）；滿意按儲存才寫世界書，不滿意可重新生成
+            function _showSummaryPreview() {
+                const oldM = document.getElementById('rpg-summary-preview-modal'); if (oldM) oldM.remove();
+                const modal = document.createElement('div');
+                modal.id = 'rpg-summary-preview-modal';
+                modal.className = 'ost-modal active';
+                modal.innerHTML = `
+                    <div class="ost-modal-card ost-modal-wide">
+                        <div class="ost-modal-title">📝 大總結預覽（第 ${summaryCount} 次）</div>
+                        <div class="ost-opt-desc">檢查內容、可直接編輯。滿意按「儲存」才會寫進世界書；不滿意可「重新生成」。</div>
+                        <textarea id="rpg-sum-preview-area" class="ost-textarea ost-sum-preview-area" spellcheck="false"></textarea>
+                        <div class="ost-sum-preview-status" id="rpg-sum-preview-status"></div>
+                        <div class="ost-modal-btns">
+                            <button class="ost-btn" id="rpg-sum-cancel">取消</button>
+                            <button class="ost-btn" id="rpg-sum-regen">🔄 重新生成</button>
+                            <button class="ost-btn ost-btn-primary" id="rpg-sum-save">💾 儲存</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+                const area = modal.querySelector('#rpg-sum-preview-area');
+                const status = modal.querySelector('#rpg-sum-preview-status');
+                area.value = finalContent;
+                modal.querySelector('#rpg-sum-cancel').onclick = () => modal.remove();
+                modal.querySelector('#rpg-sum-regen').onclick = async () => {
+                    const rb = modal.querySelector('#rpg-sum-regen'), sb = modal.querySelector('#rpg-sum-save');
+                    rb.disabled = true; sb.disabled = true; status.textContent = '重新生成中…';
+                    try { await _genOnce(); area.value = finalContent; status.textContent = '已重新生成 ✓'; }
+                    catch (e) { status.textContent = '重新生成失敗：' + (e.message || e); }
+                    rb.disabled = false; sb.disabled = false;
+                };
+                modal.querySelector('#rpg-sum-save').onclick = async () => {
+                    const sb = modal.querySelector('#rpg-sum-save');
+                    sb.disabled = true; status.textContent = '儲存中…';
+                    try { finalContent = area.value; await _doSave(); modal.remove(); }
+                    catch (e) { status.textContent = '儲存失敗：' + (e.message || e); sb.disabled = false; }
+                };
+            }
+
+            await _genOnce();
+            _showSummaryPreview();
         } catch (e) { alert("生成失敗: " + e.message); } finally {
             btn.innerText = "📝 生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning');
         }
