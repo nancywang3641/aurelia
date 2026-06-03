@@ -338,6 +338,12 @@
                 this.recallCount  = (lr && lr.count) || 0;
                 this.recallTokens = (lr && lr.text) ? await this._tokAsync(lr.text) : 0;
             } catch (e) { this.recallTokens = 0; this.recallCount = 0; }
+            // 未總結樓層（酒館）：目前最後樓 − 上次大總結記的 Last
+            try {
+                if (!(win.OS_API?.isStandalone?.() ?? false) && win.OS_STORY_TOOLS?.getUnsummarizedInfo) {
+                    this.unsum = await win.OS_STORY_TOOLS.getUnsummarizedInfo();
+                } else { this.unsum = null; }
+            } catch (e) { this.unsum = null; }
             // 同步 input 顯示值
             const limitInput = document.getElementById('ctx-limit-input');
             if (limitInput) limitInput.value = this.getLimit();
@@ -358,6 +364,12 @@
                 if (eRC) eRC.textContent = this.recvChars  != null ? this.recvChars.toLocaleString()  : '—';
                 if (eM)  eM.textContent  = this.msgs       != null ? this.msgs.toLocaleString()       : '—';
                 if (eTime) eTime.textContent = this.lastUpdate ? `更新 ${this.lastUpdate}` : '尚未偵測到數據';
+
+                // 未總結樓層（酒館）：直觀看到還有多少對話沒總結
+                const usRow = document.getElementById('ctx-unsum-row');
+                const usVal = document.getElementById('ctx-unsum');
+                if (usRow) usRow.style.display = this.unsum ? '' : 'none';
+                if (usVal && this.unsum) usVal.textContent = `${this.unsum.uncounted} 樓（第 ${this.unsum.start}–${this.unsum.end}）`;
 
                 // 細項拆解（來自酒館原生 itemizedPrompts；沒資料就隱藏）
                 const bd = this.breakdown;
