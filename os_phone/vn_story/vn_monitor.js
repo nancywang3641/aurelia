@@ -98,11 +98,19 @@
                 try { mod = await this._getItemizedMod(); }
                 catch (e) { return false; }
                 if (!mod || typeof mod.itemizedParams !== 'function') return false;
-                // 注意：TauriTavern 等「bundle 前端」環境下，import 到的會是獨立、陳舊的 itemized 實例
-                // （拿不到酒館本尊記憶體裡的最新資料，也沒持久化），CTX 在那種環境會顯示不準 —— 已知限制。
-                // 原版酒館(非 bundle)兩者同一實例，正確。不要在這裡呼叫 loadItemizedPrompts 刷新：
-                // 那會覆寫酒館本尊的 live 陣列（若剛生成未存檔，會把記憶體新資料蓋掉）。
-                const items = mod.itemizedPrompts;
+                // 取 live 陣列。原版酒館(非 bundle)＝同一實例，已有資料、直接用。
+                // TauriTavern：itemized 已改成「持久化」(tt_prompts_index / tt_prompts_record)，但這個 import
+                //   實例的陣列可能是空的（沒被載進來）。只有「空」時才呼叫 loadItemizedPrompts(chatId) 從存檔載出來
+                //   —— 空的不會蓋掉任何 live 資料；有資料時絕不呼叫（避免覆寫酒館剛生成未存檔的記憶體陣列）。
+                let items = mod.itemizedPrompts;
+                if ((!Array.isArray(items) || items.length === 0) && typeof mod.loadItemizedPrompts === 'function') {
+                    try {
+                        const ctx = (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext())
+                                 || (window.SillyTavern && window.SillyTavern.getContext && window.SillyTavern.getContext());
+                        const chatId = ctx && ctx.chatId;
+                        if (chatId) { await mod.loadItemizedPrompts(chatId); items = mod.itemizedPrompts; }
+                    } catch (e) {}
+                }
                 if (!Array.isArray(items) || items.length === 0) return false;
                 // 挑「最大的一筆」= 真正的主對話上下文。
                 // （不能只挑最新 mesId：TauriTavern 等環境會多出高 mesId 的小型/幻影紀錄，
@@ -122,6 +130,15 @@
                 for (let i = 0; i < items.length; i++) {
                     const sc = _score(items[i]);
                     if (sc > best) { best = sc; idx = i; }
+                }
+                // TauriTavern 的 itemizedPrompts 是精簡索引 {mesId, recordId}，沒有 inline token 欄位
+                //   → 上面 score 全 0。改挑「最新 mesId」(= 當前這輪生成的上下文)，token 交給 itemizedParams 從 record 現拉。
+                if (best <= 0) {
+                    let maxMes = -Infinity;
+                    for (let i = 0; i < items.length; i++) {
+                        const m = Number(items[i].mesId);
+                        if (!isNaN(m) && m > maxMes) { maxMes = m; idx = i; }
+                    }
                 }
                 if (idx < 0) return false;
                 const p = await mod.itemizedParams(items, idx, Number(items[idx].mesId));
