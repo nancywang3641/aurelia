@@ -143,7 +143,11 @@
         console.log('[VecEngine] 開始 ingest，章節:', chapterId);
         try {
             const entries = await _extractMemories(cleanContent);
-            if (!entries.length) { console.log('[VecEngine] 無重要記憶，跳過'); return; }
+            // 重 roll / 重生：先清掉「同一則(chapterId)」的舊記憶，再寫新的 → 自動替換，不殘留舊分支、不重複
+            if (chapterId != null && win.OS_DB?.deleteVnMemoriesByChapter) {
+                try { await win.OS_DB.deleteVnMemoriesByChapter(chapterId, storyId); } catch (e) {}
+            }
+            if (!entries.length) { console.log('[VecEngine] 無重要記憶，跳過（已清同則舊記憶）'); return; }
 
             for (const entry of entries) {
                 try {
