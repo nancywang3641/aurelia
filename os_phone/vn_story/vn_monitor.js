@@ -369,7 +369,12 @@
                 const usRow = document.getElementById('ctx-unsum-row');
                 const usVal = document.getElementById('ctx-unsum');
                 if (usRow) usRow.style.display = this.unsum ? '' : 'none';
-                if (usVal && this.unsum) usVal.textContent = `${this.unsum.uncounted} 樓（第 ${this.unsum.start}–${this.unsum.end}）`;
+                if (usVal && this.unsum) {
+                    const _u = this.unsum;
+                    if (_u.uncounted > 0 && _u.start <= _u.end) usVal.textContent = `${_u.uncounted} 樓（第 ${_u.start}–${_u.end}）`;
+                    else if (_u.lastSummarized > _u.currentLast) usVal.textContent = `⚠️ 已總結到 #${_u.lastSummarized}、目前剩 #${_u.currentLast}（刪過訊息）`;
+                    else usVal.textContent = `0（已最新）`;
+                }
 
                 // 細項拆解（來自酒館原生 itemizedPrompts；沒資料就隱藏）
                 const bd = this.breakdown;
