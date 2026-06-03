@@ -17,6 +17,7 @@
 
     const INJECT_ID = 'aurelia_vn_memory';
     let _lastUninject = null;
+    let _lastRecall = null;   // 給 CTX 面板「記憶召回」行讀：{ text, count }
 
     function _storyId() {
         return (win.VN_Core && win.VN_Core._currentStoryId)
@@ -39,6 +40,7 @@
             // 撤上次（避免疊加 / 切 chat 殘留）
             try { _lastUninject?.(); } catch (e) {}
             _lastUninject = null;
+            _lastRecall = null;   // 每輪先歸零；成功召回才填回（給 CTX 面板顯示）
 
             // 只在酒館跑；PWA 走 buildContext 已有召回
             if (win.OS_API?.isStandalone?.()) return;
@@ -69,6 +71,7 @@
                 role: 'system'
             }], { once: true });
             _lastUninject = result?.uninject || null;
+            _lastRecall = { text: block.trim(), count: mems.length };   // 給 CTX 面板「記憶召回」行
             console.log(`🧠 [Vector Memory Injector] 注入 ${mems.length} 條記憶`);
         } catch (e) {
             console.warn('[Vector Memory Injector] 失敗:', e?.message || e);
@@ -108,10 +111,10 @@
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, injectMemories);
         if (win.tavern_events.GENERATION_ENDED) win.eventOn(win.tavern_events.GENERATION_ENDED, ingestLatest);
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestId = null; });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestId = null; _lastRecall = null; });
         console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
     }
 
-    win.OS_VECTOR_INJECT = { injectMemories, ingestLatest };
+    win.OS_VECTOR_INJECT = { injectMemories, ingestLatest, get _lastRecall() { return _lastRecall; } };
     init();
 })();

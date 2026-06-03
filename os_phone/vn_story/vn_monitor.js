@@ -327,6 +327,12 @@
                     this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 }
             }
+            // 記憶召回（向量記憶）獨立計數：用我們實際注入的那段文字算 token（酒館把它併進「注入/擴充」桶，這裡單獨拆出來看）
+            try {
+                const lr = win.OS_VECTOR_INJECT?._lastRecall;
+                this.recallCount  = (lr && lr.count) || 0;
+                this.recallTokens = (lr && lr.text) ? await this._tokAsync(lr.text) : 0;
+            } catch (e) { this.recallTokens = 0; this.recallCount = 0; }
             // 同步 input 顯示值
             const limitInput = document.getElementById('ctx-limit-input');
             if (limitInput) limitInput.value = this.getLimit();
@@ -374,6 +380,15 @@
                         if (eVal) eVal.textContent = v.toLocaleString();
                         if (eBar) eBar.style.width = (total > 0 ? Math.min(100, Math.round(v / total * 100)) : 0) + '%';
                     });
+                    // 記憶召回獨立行（值來自 this.recallTokens，是「注入/擴充」的子項、不另計入合計）
+                    const recallV = Number(this.recallTokens) || 0;
+                    const rItem = document.getElementById('ctx-bd-i-recall');
+                    const rVal  = document.getElementById('ctx-bd-recall');
+                    const rBar  = document.getElementById('ctx-bd-bar-recall');
+                    if (rItem) rItem.style.display = recallV > 0 ? 'flex' : 'none';
+                    if (rVal)  rVal.textContent = recallV.toLocaleString() + (this.recallCount ? ` · ${this.recallCount}條` : '');
+                    if (rBar)  rBar.style.width = (total > 0 ? Math.min(100, Math.round(recallV / total * 100)) : 0) + '%';
+
                     const eTot = document.getElementById('ctx-bd-total-val');
                     if (eTot) eTot.textContent = total.toLocaleString();
                 }
