@@ -628,6 +628,7 @@
         if (!lastEl || !hiddenEl) return;
         try {
             const helper = win.TavernHelper;
+            await _ensureAllLoaded();          // 先展開全部，最後樓層 / 已隱藏範圍才不會被收合騙小
             const lastId = await _trueLastId();
             lastEl.textContent = (lastId != null && lastId >= 0) ? `#${lastId}` : '—';
             let hiddenIds = [];
