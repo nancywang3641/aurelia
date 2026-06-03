@@ -1202,10 +1202,7 @@ ${lines.join('\n')}
                 <div class="avs-btn avs-btn-primary" id="avs-btn-init-pack" style="padding:8px 14px;font-size:12px;white-space:nowrap;">套用</div>
             </div>
 
-            <div style="padding:16px;text-align:center;color:rgba(26,28,40,0.20);font-size:12px;border:1px dashed rgba(26,28,40,0.08);border-radius:6px;">
-                📊 當前數值與歷史紀錄<br>
-                <span style="font-size:11px;color:rgba(26,28,40,0.15);">請在 VN 資料中心的「狀態」tab 查看</span>
-            </div>
+            <div id="avs-state-detail" class="avs-state-detail"></div>
         `;
 
         // 還原快照
@@ -1286,6 +1283,10 @@ ${lines.join('\n')}
             eng.initFromPack(pack);
             renderStateView(container);
         };
+
+        // 完整 state 管理（schema 欄位 CRUD / 當前值 / 重生抽取 / 跨世界）由 os_avs_state.js 提供
+        try { win.OS_AVS_STATE?.renderInto?.(el.querySelector('#avs-state-detail')); }
+        catch (e) { console.warn('[AVS] OS_AVS_STATE.renderInto 失敗', e); }
     }
 
     // DEPRECATED：原獨立「展廳」tab 的渲染函數，現已內嵌到變數包卡片內。
