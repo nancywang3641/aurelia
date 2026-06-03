@@ -96,8 +96,8 @@
             try {
                 let mod;
                 try { mod = await this._getItemizedMod(); }
-                catch (e) { return false; }
-                if (!mod || typeof mod.itemizedParams !== 'function') return false;
+                catch (e) { return await this._readFromTauriStorage(); }   // TauriTavern：import 會炸(window.SillyTavern 唯讀)→改讀存檔
+                if (!mod || typeof mod.itemizedParams !== 'function') return await this._readFromTauriStorage();
                 // 取 live 陣列。原版酒館(非 bundle)＝同一實例，已有資料、直接用。
                 // TauriTavern：itemized 已改成「持久化」(tt_prompts_index / tt_prompts_record)，但這個 import
                 //   實例的陣列可能是空的（沒被載進來）。只有「空」時才呼叫 loadItemizedPrompts(chatId) 從存檔載出來
@@ -168,6 +168,87 @@
                 this.sendTokens = total;
                 this.sendChars  = null;
                 this.breakdown  = { system, character, world, examples, chat, persona, note, inject, bias, total };
+                this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return true;
+            } catch (e) { return false; }
+        },
+
+        // ── TauriTavern 專用：直接讀它持久化的 itemized 存檔（import 模組會因 window.SillyTavern 唯讀而炸）──
+        //   localForage db 'SillyTavern_Prompts' / store 'keyvaluepairs'
+        //   key: tt_prompts_index:<chatId>（[{mesId,recordId}]）、tt_prompts_record:<chatId>:<recordId>（完整 record）
+        _idbGet: function(dbName, storeName, key) {
+            return new Promise(function(res){
+                try {
+                    const req = indexedDB.open(dbName);
+                    req.onsuccess = function(){
+                        const db = req.result;
+                        try {
+                            if (!db.objectStoreNames.contains(storeName)) { db.close(); return res(undefined); }
+                            const g = db.transaction(storeName, 'readonly').objectStore(storeName).get(key);
+                            g.onsuccess = function(){ res(g.result); db.close(); };
+                            g.onerror = function(){ res(undefined); db.close(); };
+                        } catch(e){ res(undefined); try{ db.close(); }catch(_){} }
+                    };
+                    req.onerror = function(){ res(undefined); };
+                } catch(e){ res(undefined); }
+            });
+        },
+        _promptStoreGet: async function(key) {
+            const lf = (win.localforage || window.localforage);
+            if (lf && lf.createInstance) {
+                try {
+                    if (!this._lfInst) this._lfInst = lf.createInstance({ name: 'SillyTavern_Prompts' });
+                    const v = await this._lfInst.getItem(key);
+                    if (v !== undefined && v !== null) return v;
+                } catch (e) {}
+            }
+            return await this._idbGet('SillyTavern_Prompts', 'keyvaluepairs', key);
+        },
+        _readFromTauriStorage: async function() {
+            try {
+                const ctx = (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext())
+                         || (window.SillyTavern && window.SillyTavern.getContext && window.SillyTavern.getContext());
+                const chatId = ctx && ctx.chatId;
+                if (!chatId) return false;
+                const index = await this._promptStoreGet('tt_prompts_index:' + chatId);
+                if (!Array.isArray(index) || !index.length) return false;
+                // 挑最新 mesId = 當前這輪生成的上下文
+                let pick = index[0];
+                for (let i = 1; i < index.length; i++) { if (Number(index[i].mesId) > Number(pick.mesId)) pick = index[i]; }
+                const rec = await this._promptStoreGet('tt_prompts_record:' + chatId + ':' + pick.recordId);
+                if (!rec) return false;
+                const n = function(v){ const x = Number(v); return isNaN(x) ? 0 : x; };
+                const tok = function(s){ return (typeof s === 'string' && s.length) ? Math.ceil(s.length / 4) : 0; }; // 字串部分用 len/4 估
+                const isOai = rec.main_api === 'openai';
+                const world    = tok(rec.worldInfoString);
+                const examples = isOai ? n(rec.oaiExamplesTokens) : tok(rec.examplesString);
+                const inject   = tok(rec.chatInjects) + tok(rec.summarizeString) + tok(rec.smartContextString) + tok(rec.chatVectorsString) + tok(rec.dataBankVectorsString);
+                let system, character, persona, note, bias, chat, total;
+                if (isOai) {
+                    chat      = n(rec.oaiConversationTokens);
+                    system    = n(rec.oaiStartTokens) + n(rec.oaiNsfwTokens) + n(rec.oaiMainTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens) + n(rec.oaiNudgeTokens);
+                    character = tok(rec.charDescription) + tok(rec.charPersonality) + tok(rec.scenarioText);
+                    persona   = tok(rec.userPersona);
+                    note      = tok(rec.authorsNoteString);
+                    bias      = n(rec.oaiBiasTokens);
+                    // 總和：itemizedParams 的 OAI 公式裡前後錨點相消，等同各 oai 數字 + examples + worldInfo
+                    total = n(rec.oaiStartTokens) + n(rec.oaiPromptTokens) + n(rec.oaiExamplesTokens) + n(rec.oaiMainTokens)
+                          + n(rec.oaiNsfwTokens) + n(rec.oaiBiasTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens)
+                          + n(rec.oaiNudgeTokens) + n(rec.oaiConversationTokens) + world;
+                } else {
+                    const story = Math.max(0, tok(rec.storyString) - world);
+                    chat      = tok(rec.mesSendString);
+                    system    = 0;
+                    character = story;
+                    persona   = 0;
+                    note      = tok(rec.allAnchors);
+                    bias      = tok(rec.promptBias);
+                    total     = story + world + examples + chat + note + bias;
+                }
+                if (!total) return false;
+                this.sendTokens = total;
+                this.sendChars  = null;
+                this.breakdown  = { system: system||0, character: character||0, world: world||0, examples: examples||0, chat: chat||0, persona: persona||0, note: note||0, inject: inject||0, bias: bias||0, total: total };
                 this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 return true;
             } catch (e) { return false; }
