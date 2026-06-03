@@ -214,35 +214,56 @@
                 return /tauri/i.test(h);
             } catch (e) { return false; }
         },
-        // 把一筆 itemized record 換算成 { total, breakdown }（OAI 用存好的數字、字串分項用 len/4 估）
-        _recordToBreakdown: function(rec) {
+        // 真分詞器 token 計數（getContext().getTokenCountAsync，對齊原生面板）；拿不到才退 len/4 估
+        _tokAsync: async function(str) {
+            if (!str || typeof str !== 'string') return 0;
+            try {
+                if (this._ctxTok === undefined) {
+                    const ctx = (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext())
+                             || (window.SillyTavern && window.SillyTavern.getContext && window.SillyTavern.getContext());
+                    this._ctxTok = (ctx && typeof ctx.getTokenCountAsync === 'function') ? ctx.getTokenCountAsync : null;
+                }
+                if (this._ctxTok) { const t = await this._ctxTok(str); if (typeof t === 'number' && !isNaN(t)) return t; }
+            } catch (e) {}
+            return Math.ceil(str.length / 4);
+        },
+        // 快速排序分數（同步、不分詞）—— 只為從所有 record 挑出「最大那筆」真上下文，避免每筆都跑分詞器
+        _pickScore: function(rec) {
+            if (!rec) return -1;
+            const n = function(v){ const x = Number(v); return isNaN(x) ? 0 : x; };
+            const l4 = function(s){ return (typeof s === 'string') ? Math.ceil(s.length / 4) : 0; };
+            if (rec.main_api === 'openai') return n(rec.oaiConversationTokens) + n(rec.oaiMainTokens) + n(rec.oaiPromptTokens) + l4(rec.worldInfoString);
+            return l4(rec.mesSendString) + l4(rec.storyString);
+        },
+        // 把選中的 record 換算成 { total, breakdown }：OAI 數字用存好的（精確），字串分項用真分詞器（對齊原生）
+        _recordToBreakdown: async function(rec) {
             if (!rec) return null;
             const n = function(v){ const x = Number(v); return isNaN(x) ? 0 : x; };
-            const tok = function(s){ return (typeof s === 'string' && s.length) ? Math.ceil(s.length / 4) : 0; };
             const isOai = rec.main_api === 'openai';
-            const world    = tok(rec.worldInfoString);
-            const examples = isOai ? n(rec.oaiExamplesTokens) : tok(rec.examplesString);
-            const inject   = tok(rec.chatInjects) + tok(rec.summarizeString) + tok(rec.smartContextString) + tok(rec.chatVectorsString) + tok(rec.dataBankVectorsString);
-            let system, character, persona, note, bias, chat, total;
+            const world  = await this._tokAsync(rec.worldInfoString);
+            const inject = (await this._tokAsync(rec.chatInjects)) + (await this._tokAsync(rec.summarizeString)) + (await this._tokAsync(rec.smartContextString)) + (await this._tokAsync(rec.chatVectorsString)) + (await this._tokAsync(rec.dataBankVectorsString));
+            let system, character, persona, note, bias, chat, examples, total;
             if (isOai) {
                 chat      = n(rec.oaiConversationTokens);
                 system    = n(rec.oaiStartTokens) + n(rec.oaiNsfwTokens) + n(rec.oaiMainTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens) + n(rec.oaiNudgeTokens);
-                character = tok(rec.charDescription) + tok(rec.charPersonality) + tok(rec.scenarioText);
-                persona   = tok(rec.userPersona);
-                note      = tok(rec.authorsNoteString);
+                character = (await this._tokAsync(rec.charDescription)) + (await this._tokAsync(rec.charPersonality)) + (await this._tokAsync(rec.scenarioText));
+                persona   = await this._tokAsync(rec.userPersona);
+                note      = await this._tokAsync(rec.authorsNoteString);
                 bias      = n(rec.oaiBiasTokens);
-                // 總和：itemizedParams 的 OAI 公式裡前後錨點相消，等同各 oai 數字 + examples + worldInfo
+                examples  = n(rec.oaiExamplesTokens);
+                // 對齊 itemizedParams OAI 公式（前後錨點相消）：各 oai 數字加總 + 真實世界書 tokens
                 total = n(rec.oaiStartTokens) + n(rec.oaiPromptTokens) + n(rec.oaiExamplesTokens) + n(rec.oaiMainTokens)
                       + n(rec.oaiNsfwTokens) + n(rec.oaiBiasTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens)
                       + n(rec.oaiNudgeTokens) + n(rec.oaiConversationTokens) + world;
             } else {
-                const story = Math.max(0, tok(rec.storyString) - world);
-                chat      = tok(rec.mesSendString);
+                examples  = await this._tokAsync(rec.examplesString);
+                const story = Math.max(0, (await this._tokAsync(rec.storyString)) - world);
+                chat      = await this._tokAsync(rec.mesSendString);
                 system    = 0;
                 character = story;
                 persona   = 0;
-                note      = tok(rec.allAnchors);
-                bias      = tok(rec.promptBias);
+                note      = await this._tokAsync(rec.allAnchors);
+                bias      = await this._tokAsync(rec.promptBias);
                 total     = story + world + examples + chat + note + bias;
             }
             return { total: total, breakdown: { system: system||0, character: character||0, world: world||0, examples: examples||0, chat: chat||0, persona: persona||0, note: note||0, inject: inject||0, bias: bias||0, total: total } };
@@ -255,18 +276,20 @@
                 if (!chatId) return false;
                 const index = await this._promptStoreGet('tt_prompts_index:' + chatId);
                 if (!Array.isArray(index) || !index.length) return false;
-                // 讀所有 record、各自換算總和，挑「最大的」= 真正的主上下文
-                //   （不挑最新 mesId：那會挑到高 mesId 的小幻影紀錄，把真上下文蓋掉）。
-                let best = null;
+                // 讀全部 record、用快速分數挑「最大那筆」= 真主上下文（避開高 mesId 的小幻影紀錄）
+                let bestRec = null, bestScore = -1;
                 for (let i = 0; i < index.length; i++) {
                     const rec = await this._promptStoreGet('tt_prompts_record:' + chatId + ':' + index[i].recordId);
-                    const b = this._recordToBreakdown(rec);
-                    if (b && (!best || b.total > best.total)) best = b;
+                    if (!rec) continue;
+                    const sc = this._pickScore(rec);
+                    if (sc > bestScore) { bestScore = sc; bestRec = rec; }
                 }
-                if (!best || !best.total) return false;
-                this.sendTokens = best.total;
+                if (!bestRec) return false;
+                const b = await this._recordToBreakdown(bestRec);   // 只對選中那筆跑真分詞器
+                if (!b || !b.total) return false;
+                this.sendTokens = b.total;
                 this.sendChars  = null;
-                this.breakdown  = best.breakdown;
+                this.breakdown  = b.breakdown;
                 this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 return true;
             } catch (e) { return false; }
