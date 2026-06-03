@@ -180,6 +180,31 @@
         finally { if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); } }
     };
 
+    // CTX 面板用：算「還有多少樓沒總結」= 目前最後樓 − 上次大總結記的 Last
+    API.getUnsummarizedInfo = async function () {
+        try {
+            const helper = window.parent.TavernHelper;
+            if (!helper || typeof helper.getLastMessageId !== 'function') return null;
+            const currentLast = await helper.getLastMessageId();
+            if (currentLast == null || isNaN(currentLast)) return null;
+            const chatId = getChatIdentifier();
+            let lastSummarized = 0;
+            const bookName = helper.getCurrentCharPrimaryLorebook?.();
+            if (bookName) {
+                const entries = await helper.getLorebookEntries(bookName);
+                const prefix = `[大总结] - ${chatId}`;
+                const summaries = (entries || []).filter(e => e.comment && (e.comment.includes(prefix) || (e.comment.includes(chatId) && e.comment.includes('大总结'))));
+                if (summaries.length) {
+                    const latest = summaries.sort((a, b) => (b.uid || 0) - (a.uid || 0))[0];
+                    const mm = (latest.content || '').match(/Last:\s*(\d+)/i);
+                    if (mm && !isNaN(parseInt(mm[1]))) lastSummarized = parseInt(mm[1]);
+                }
+            }
+            const uncounted = Math.max(0, currentLast - lastSummarized);
+            return { lastSummarized, currentLast, uncounted, start: lastSummarized + 1, end: currentLast };
+        } catch (e) { return null; }
+    };
+
     API.showRangeModal = async function () {
         _ensureSubModals();   // 確保子 modal 已注入（從 CTX 快捷入口直接呼叫時，可能還沒開過故事管理面板）
         document.getElementById('rpg-range-modal').classList.add('active');
