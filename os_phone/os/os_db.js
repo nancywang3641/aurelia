@@ -894,6 +894,23 @@
                     tx.oncomplete = () => r(true);
                 } catch(e) { j(e); }
             });
+        },
+        // 刪除某一則訊息/章節(chapterId)的所有記憶 —— 重 roll / 重生 / 刪訊息時自動清，讓記憶跟著現存劇情走
+        deleteVnMemoriesByChapter: async function(chapterId, storyId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME_VN_MEMORIES);
+                    const req = store.getAll();
+                    req.onsuccess = () => {
+                        (req.result || []).filter(m =>
+                            String(m.chapterId) === String(chapterId) && (!storyId || m.storyId === storyId)
+                        ).forEach(m => store.delete(m.id));
+                    };
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
         }
     });
 
