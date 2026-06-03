@@ -95,8 +95,9 @@
             if (id && id === _lastIngestId) return;                    // 同一則別重複記（swipe/重生）
             const content = (m.message || m.mes || m.content || '').trim();
             if (!content) return;
-            // 只記「像 VN 劇情」的回覆（含 <content> / [Chapter| / [Story|），避免把一般聊天也記進去
-            if (!/<content>|\[Chapter\||\[Story\|/i.test(content)) return;
+            // 只記「VN 劇情」回覆 —— 認 <content> 標籤即可（它裡面就是全文）；
+            // 不依賴 [Chapter|/[Story| 等特定 tag（用戶 tag 很多又持續新增，照 tag 走會漏）。
+            if (!/<content>[\s\S]*?<\/content>/i.test(content)) return;
 
             _lastIngestId = id;
             win.OS_VECTOR_ENGINE.ingest(content, storyId, id || ('msg_' + Date.now()));
