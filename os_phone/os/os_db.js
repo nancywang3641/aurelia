@@ -911,6 +911,19 @@
                     tx.oncomplete = () => r(true);
                 } catch(e) { j(e); }
             });
+        },
+        // 把某世界的記憶「複製」到另一個世界 —— 換聊天 / 換備份檔(chatId 變了)後，把舊世界記憶搬過來。來源保留。
+        copyVnMemoriesToStory: async function(fromStoryId, toStoryId) {
+            if (!fromStoryId || !toStoryId || fromStoryId === toStoryId) return 0;
+            const all = await this.getAllVnMemories(fromStoryId);
+            let n = 0;
+            for (const m of all) {
+                const clone = Object.assign({}, m, { storyId: toStoryId });
+                delete clone.id;          // 讓 saveVnMemory 配新 id（不覆蓋來源）
+                delete clone.createdAt;
+                try { await this.saveVnMemory(clone); n++; } catch (e) {}
+            }
+            return n;
         }
     });
 

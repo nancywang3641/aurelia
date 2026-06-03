@@ -157,3 +157,6 @@
         .avs-mem-test-result.ok { color: #2e7d32; }
         .avs-mem-test-result.err { color: #c0392b; }
         .avs-mem-srchint { font-size: 11px; color: rgba(26,28,40,0.4); line-height: 1.5; }
+        .avs-mem-move { display: flex; gap: 8px; align-items: center; }
+        .avs-mem-move .avs-input { flex: 1; min-width: 0; }
+        .avs-mem-move .avs-btn { flex: 0 0 auto; padding: 8px 14px; font-size: 12px; white-space: nowrap; }
