@@ -323,33 +323,46 @@
             const prevSection = prevSummary ? (mergePrev ? `**合并所有之前的总结数据**\n${prevSummary}\n` : `**只总结新增剧情**\n${prevSummary}\n`) : `**首次总结**\n`;
             const tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
 
-            const TH = window.parent.TavernHelper;
-            if (!TH || typeof TH.generateRaw !== 'function') throw new Error("找不到 generateRaw（需要酒館助手在線）");
+            const osApi = win.OS_API;
+            const osSet = win.OS_SETTINGS;
+            if (!osApi || typeof osApi.chat !== 'function') throw new Error("找不到 OS_API（生成服務未就緒）");
 
             let finalContent = '';
+            let _summarizedEnd = null;   // 這次實際總結到的最後樓號（給存檔 Last: + 自動隱藏範圍）
             async function _genOnce() {
-                // 先自動展開全部訊息 → generateRaw 的 max_chat_history:'all' 才真的吃到完整聊天(不被懶載入窗口截斷)。
+                // 1) 先自動展開全部訊息（對抗 TauriTavern 懶載入）→ 之後抓 ID、抓內容才完整
                 await _ensureAllLoaded();
-                // 用 generateRaw + max_chat_history:'all'：酒館自己用「完整聊天」組 prompt 生成總結，不需要起始/結束 ID。
-                const instruction = `停止剧情输出，执行**新增大总结**。請依上面完整的劇情對話產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}\n${tplBody}`;
+                // 2) 樓層範圍：起始用 UI 給的(增量續總結用)，結束沒填就用真實最後樓
+                const _last = await _trueLastId();
+                const sId = (startId != null && !isNaN(startId)) ? Math.max(0, startId) : 0;
+                const eId = (endId != null && !isNaN(endId)) ? endId : (_last != null ? _last : 0);
+                _summarizedEnd = eId;
+                // 3) 直接用 ID 抓範圍內全部樓層原文（已展開 → 拿得到完整，不被懶載入截斷）
+                const msgs = (await helper.getChatMessages(`${sId}-${eId}`)) || [];
+                const transcript = msgs.map(m => {
+                    const who = m.is_user ? '用户' : (m.name || '角色');
+                    return `[#${m.message_id}] ${who}：${(m.message || m.mes || '').trim()}`;
+                }).join('\n\n');
+                // 4) 丟給生成服務(同合併總結走的 OS_API.chat)做總結
+                const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}\n${tplBody}`;
                 const _W = window.parent || window;
-                _W.__AURELIA_SUMMARIZING = true;   // 標記「這次生成是總結」→ vector 注入器別摻記憶召回、也別把它當新劇情記憶
+                _W.__AURELIA_SUMMARIZING = true;   // 保險：生成期間 vector 注入器別摻記憶召回 / 別把它當新劇情
                 let generated = '';
                 try {
-                    generated = await TH.generateRaw({
-                        user_input: instruction,
-                        ordered_prompts: [
-                            { role: 'system', content: '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。' },
-                            'chat_history',
-                            'user_input',
-                        ],
-                        max_chat_history: 'all',
-                        should_stream: false,
+                    await new Promise((res, rej) => {
+                        osApi.chat(
+                            [{ role: 'system', content: '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。' },
+                             { role: 'user', content: userMsg }],
+                            osSet.getConfig(),
+                            (chunk) => { generated = chunk; },
+                            (final) => { generated = final; res(); },
+                            (err) => rej(err),
+                            { disableTyping: true }
+                        );
                     });
                 } finally { _W.__AURELIA_SUMMARIZING = false; }
                 finalContent = String(generated || '');
-                const _last = await _trueLastId();
-                const _lastTxt = (_last != null) ? `\nLast: ${_last}` : '';
+                const _lastTxt = `\nLast: ${eId}`;   // Last: = 已總結到的最後樓號
                 if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);
                 else finalContent = `【大总结(第${summaryCount}次)】${_lastTxt}\n\n${finalContent}`;
             }
@@ -382,11 +395,11 @@
                 }
             } catch (e) { console.warn('[大總結] 注入 KEY 失敗:', e); }
 
-            // 🔒 自動隱藏「已總結」的樓層，但保留最後一樓可見(它帶觸發 KEY)：
-            //    下次 generateRaw('all') / 一般生成都不再吃這些已濃縮進總結的原文，只剩最後一樓 + 之後的新樓。
+            // 🔒 自動隱藏「已總結到的樓層」(0 ~ 總結末樓-1)，保留末樓及之後的樓可見(末樓帶觸發 KEY)：
+            //    下次抓內容 / 一般生成都不再吃這些已濃縮進總結的原文。
             try {
-                const _last = await _trueLastId();
-                if (_last != null && _last >= 1) await API._callSlashCommand(`/hide 0-${_last - 1}`);
+                const _end = (_summarizedEnd != null) ? _summarizedEnd : await _trueLastId();
+                if (_end != null && _end >= 1) await API._callSlashCommand(`/hide 0-${_end - 1}`);
             } catch (e) { console.warn('[大總結] 自動隱藏失敗:', e); }
 
             // 🌟 parse【結語】+ 角色名單 → 寫 lobby_summary_index（給瀅瀅/柴郡注 sysPrompt）
