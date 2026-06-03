@@ -132,9 +132,22 @@
     // Fuzzy 配對：大總結用「名_姓氏」格式存，VN avatar_cache key 是 [Char|...] 的原樣名
     //   策略：完全相等 → 變體拼法（姓名連寫 / 中間點） → substring 包含
     //   配 _hydrateVnImages 一次 getAll、各 character 在記憶體內比對，避免重複查 DB
-    function _matchAvatar(name, pool) {
-        if (!name || !pool.length) return '';
-        let hit = pool.find(e => e.key === name);
+    function _matchAvatar(name, pool, world) {
+        if (!name || !pool || !pool.length) return '';
+        const VC = win.VN_Cache;
+        // 只在「這個故事自己的世界(chatId)」裡找頭像，避免同名 MC 跨卡誤抓（宮廷劇撈到校園卡頭像那種）。
+        // world 有傳才過濾（含空字串=未分類）；沒傳則維持舊行為。配對一律用「去掉世界前綴的原始名」。
+        // 兩邊世界格式不同：日誌的 story.chatId 是正規化過的（basename、去 .jsonl、空白→底線），
+        // 但頭像存的 worldOf 是原始 ctx.chatId（含空白）。比對前都正規化成同一格式，否則永遠不相等→頭像全消失。
+        const _normW = w => !w ? '' : String(w).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
+        let p = pool;
+        if (VC && VC.worldOf && world !== undefined) {
+            const wn = _normW(world);
+            p = pool.filter(e => _normW(VC.worldOf(e)) === wn);
+        }
+        if (!p.length) return '';
+        const keyOf = e => ((VC && VC.bareKeyOf) ? VC.bareKeyOf(e) : e.key) || '';
+        let hit = p.find(e => keyOf(e) === name);
         if (hit) return hit.url || '';
         const parts = name.split('_').map(s => s.trim()).filter(s => s && s !== '無');
         if (!parts.length) return '';
@@ -145,15 +158,15 @@
         }
         variants.push(given);
         for (const v of variants) {
-            hit = pool.find(e => e.key === v);
+            hit = p.find(e => keyOf(e) === v);
             if (hit) return hit.url || '';
         }
-        // substring fallback
+        // substring fallback（已限定在同世界內，不會跨卡）
         if (family) {
-            hit = pool.find(e => (e.key || '').includes(given) && (e.key || '').includes(family));
+            hit = p.find(e => keyOf(e).includes(given) && keyOf(e).includes(family));
             if (hit) return hit.url || '';
         }
-        hit = pool.find(e => (e.key || '').includes(given));
+        hit = p.find(e => keyOf(e).includes(given));
         return hit?.url || '';
     }
 
@@ -224,7 +237,7 @@
             const tag = parsed.status || parsed.relate || '';
             return `
                 <div class="jrnl-char-card" data-char-idx="${i}" title="${_escape(parsed.row || c.row || '')}">
-                    <div class="jrnl-char-img" data-avatar-key="${_escape(name)}"><span class="jrnl-char-img-fallback">✿</span></div>
+                    <div class="jrnl-char-img" data-avatar-key="${_escape(name)}" data-world="${_escape(story.chatId || '')}"><span class="jrnl-char-img-fallback">✿</span></div>
                     <div class="jrnl-char-name">${_escape(_displayName(name))}</div>
                     ${role ? `<div class="jrnl-char-role">${_escape(role)}</div>` : ''}
                     ${trait ? `<div class="jrnl-char-trait">${_escape(trait)}</div>` : ''}
@@ -429,7 +442,7 @@
             container.querySelectorAll('[data-avatar-key]').forEach((el) => {
                 const name = el.dataset.avatarKey;
                 if (!name) return;
-                const url = _matchAvatar(name, avatarPool);
+                const url = _matchAvatar(name, avatarPool, el.dataset.world);
                 if (url) {
                     el.style.backgroundImage = `url("${url}")`;
                     el.style.backgroundSize = 'cover';
@@ -483,13 +496,13 @@
                 card.onclick = () => {
                     const idx = parseInt(card.dataset.charIdx, 10);
                     const c = (active && active.characters && !isNaN(idx)) ? active.characters[idx] : null;
-                    if (c) _openCharModal(c);
+                    if (c) _openCharModal(c, active && active.chatId);
                 };
             });
         }
 
         // 角色詳情 modal：沿用 .jrnl-modal 外殼，內容換成欄位列表 + 頭像
-        function _openCharModal(c) {
+        function _openCharModal(c, world) {
             if (!c) return;
             const old = container.querySelector('.jrnl-modal');
             if (old) old.remove();
@@ -517,7 +530,7 @@
             modal.innerHTML = `
                 <div class="jrnl-modal-card jrnl-modal-char">
                     <button class="jrnl-cm-close" title="關閉">✕</button>
-                    <div class="jrnl-cm-photo" data-avatar-key="${_escape(rawName)}"><span class="jrnl-char-img-fallback">✿</span></div>
+                    <div class="jrnl-cm-photo" data-avatar-key="${_escape(rawName)}" data-world="${_escape(world || '')}"><span class="jrnl-char-img-fallback">✿</span></div>
                     <div class="jrnl-cm-side">
                         <div class="jrnl-cm-name">${_escape(disp)}</div>
                         <div class="jrnl-cm-sub">👤 ${_escape(rawName)}</div>
@@ -529,7 +542,7 @@
 
             // 補頭像（用已抓好的 avatarPool 做 fuzzy 配對）
             const avEl = modal.querySelector('[data-avatar-key]');
-            const url = _matchAvatar(rawName, avatarPool);
+            const url = _matchAvatar(rawName, avatarPool, world);
             if (url && avEl) {
                 avEl.style.backgroundImage = `url("${url}")`;
                 avEl.style.backgroundSize = 'cover';
