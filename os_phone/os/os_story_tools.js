@@ -184,8 +184,17 @@
     API.getUnsummarizedInfo = async function () {
         try {
             const helper = window.parent.TavernHelper;
-            if (!helper || typeof helper.getLastMessageId !== 'function') return null;
-            const currentLast = await helper.getLastMessageId();
+            if (!helper) return null;
+            // 真實最後樓號 = 聊天陣列長度-1（含隱藏訊息）。
+            // 不要只靠 getLastMessageId —— 隱藏一堆訊息後它在某些環境會回傳偏小的數(約等於可見則數)，樓號會失真。
+            let currentLast = null;
+            try {
+                const c = window.parent.SillyTavern?.getContext?.()?.chat;
+                if (Array.isArray(c) && c.length) currentLast = c.length - 1;
+            } catch (e) {}
+            if (currentLast == null && typeof helper.getLastMessageId === 'function') {
+                try { currentLast = await helper.getLastMessageId(); } catch (e) {}
+            }
             if (currentLast == null || isNaN(currentLast)) return null;
             const chatId = getChatIdentifier();
             let lastSummarized = 0;
