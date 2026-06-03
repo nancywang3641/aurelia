@@ -42,6 +42,9 @@
             _lastUninject = null;
             _lastRecall = null;   // 每輪先歸零；成功召回才填回（給 CTX 面板顯示）
 
+            // 正在跑大總結（os_story_tools 的 generateRaw）→ 別把記憶召回摻進總結 prompt
+            if (win.__AURELIA_SUMMARIZING) return;
+
             // 只在酒館跑；PWA 走 buildContext 已有召回
             if (win.OS_API?.isStandalone?.()) return;
             if (!win.TavernHelper?.injectPrompts) return;
@@ -83,6 +86,7 @@
     let _lastIngestSig = null;
     async function ingestLatest() {
         try {
+            if (win.__AURELIA_SUMMARIZING) return;                     // 大總結生成不是劇情，別記成記憶
             if (win.OS_API?.isStandalone?.()) return;                 // 酒館 only（PWA 走 saveVnChapter→VN_CHAPTER_SAVED）
             if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return;
             if (typeof win.OS_VECTOR_ENGINE?.ingest !== 'function') return;
