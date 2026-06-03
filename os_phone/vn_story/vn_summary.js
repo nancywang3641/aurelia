@@ -126,6 +126,15 @@
             const btn = document.getElementById('ctx-summary-btn');
             if (btn && btn.disabled) return;
 
+            // 酒館版：大總結在「故事日誌 → 故事管理」(os_story_tools)，這顆 CTX 鈕當快捷入口 →
+            //   直接開「生成大總結設置」窗（不必先進日誌再點）。PWA/獨立版才走下面這套自帶大總結。
+            const _isStandalone = (win.OS_API?.isStandalone?.()) ?? false;
+            if (!_isStandalone && win.OS_STORY_TOOLS?.showRangeModal) {
+                try { const _p = document.getElementById('vn-ctx-popup'); if (_p) _p.classList.remove('show'); } catch (e) {}
+                win.OS_STORY_TOOLS.showRangeModal();
+                return;
+            }
+
             const storyId = localStorage.getItem('vn_current_story_id') || '';
 
             // 收集章節內容
