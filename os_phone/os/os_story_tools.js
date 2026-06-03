@@ -25,6 +25,17 @@
         return "Unsaved_Chat_" + new Date().toISOString().slice(0, 10);
     }
 
+    // === 真實最後樓號 = 聊天陣列長度-1（含隱藏訊息）===
+    // getLastMessageId / {{lastMessageId}} 在「隱藏大量訊息」後某些環境會回偏小的數(約等於可見則數)，
+    // 導致大總結窗口的 ID、隱藏面板樓層、抓取/取消隱藏的範圍全部失真。一律改用這個取真實樓號。
+    function _trueLastId() {
+        try {
+            const c = window.parent.SillyTavern?.getContext?.()?.chat;
+            if (Array.isArray(c) && c.length) return c.length - 1;
+        } catch (e) {}
+        return null;
+    }
+
     // ====================================================================
     // A. 大總結
     // ====================================================================
@@ -225,8 +236,9 @@
         try {
             const helper = window.parent.TavernHelper;
             if (!helper) return;
-            const msgs = await helper.getChatMessages('0-{{lastMessageId}}');
-            if (msgs.length > 0) document.getElementById('range-end-id').placeholder = `最後一條 ID: ${msgs[msgs.length - 1].message_id}`;
+            let _endShow = _trueLastId();
+            if (_endShow == null) { const msgs = await helper.getChatMessages('0-{{lastMessageId}}'); if (msgs.length) _endShow = msgs[msgs.length - 1].message_id; }
+            if (_endShow != null && _endShow !== '') document.getElementById('range-end-id').placeholder = `最後一條 ID: ${_endShow}`;
 
             const bookName = helper.getCurrentCharPrimaryLorebook();
             if (bookName) {
@@ -284,7 +296,8 @@
                 }).join('\n');
                 sourceDesc = "摘要日誌";
             } else {
-                const msgs = await helper.getChatMessages('0-{{lastMessageId}}');
+                const _tl = _trueLastId();
+                const msgs = await helper.getChatMessages(_tl != null ? `0-${_tl}` : '0-{{lastMessageId}}');
                 const filtered = msgs.filter(m => {
                     const id = parseInt(m.message_id);
                     return (!startId || id >= startId) && (!endId || id <= endId);
@@ -338,7 +351,7 @@
 
             // 嘗試注入 KEY
             try {
-                const lastId = await helper.getLastMessageId();
+                const lastId = _trueLastId() ?? (await helper.getLastMessageId());
                 if (lastId >= 0) {
                     const lastMsg = (await helper.getChatMessages(-1))[0];
                     if (lastMsg && !(lastMsg.mes || '').includes(newEntry.keys[0])) {
@@ -539,7 +552,8 @@
     };
     API._slashShowAll = async function (btn) {
         await API._withBtnFeedback(btn, async () => {
-            await API._callSlashCommand('/unhide 0-{{lastMessageId}}');
+            const _tlu = _trueLastId();
+            await API._callSlashCommand('/unhide 0-' + (_tlu != null ? _tlu : '{{lastMessageId}}'));
             API._updateHideStatus();
         });
     };
@@ -575,8 +589,8 @@
             const ctx = win.SillyTavern?.getContext?.();
             const chat = ctx?.chat || [];
             let lastId = -1;
-            if (helper?.getLastMessageId) lastId = helper.getLastMessageId();
-            else if (chat.length) lastId = chat.length - 1;
+            if (chat.length) lastId = chat.length - 1;            // 真實最後樓號(含隱藏)優先，別用會被隱藏騙小的 getLastMessageId
+            else if (helper?.getLastMessageId) lastId = helper.getLastMessageId();
             lastEl.textContent = lastId >= 0 ? `#${lastId}` : '—';
             const hiddenIds = [];
             chat.forEach((m, idx) => {
