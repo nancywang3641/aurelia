@@ -156,3 +156,4 @@
         .avs-mem-test-result { font-size: 12px; min-height: 16px; margin-top: 4px; color: rgba(26,28,40,0.5); }
         .avs-mem-test-result.ok { color: #2e7d32; }
         .avs-mem-test-result.err { color: #c0392b; }
+        .avs-mem-srchint { font-size: 11px; color: rgba(26,28,40,0.4); line-height: 1.5; }
