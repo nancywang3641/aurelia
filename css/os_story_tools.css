@@ -85,8 +85,10 @@
 .ost-hide-stat-sep { color: #d8c8b0; margin: 0 6px; }
 
 /* ───── 子 modal（生成設定 / 模板 / 合併）— 全螢幕，掛在 body ───── */
+/* z-index 必須高於主奧瑞亞視窗容器（aurelia_core 的 z-index:200），否則會被蓋住；
+   對齊專案其他頂層 modal（avs-sm 100002 / 圖庫 100001）的層級。 */
 .ost-modal {
-    position: fixed; inset: 0; z-index: 130;
+    position: fixed; inset: 0; z-index: 100000;
     background: rgba(60,45,30,0.5); backdrop-filter: blur(5px);
     display: none; align-items: center; justify-content: center;
     padding: 20px; box-sizing: border-box;
