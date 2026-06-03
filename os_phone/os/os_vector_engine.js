@@ -125,9 +125,19 @@
     async function ingest(chapterContent, storyId, chapterId) {
         if (!_isEnabled() || !win.OS_DB?.saveVnMemory) return;
 
-        // 從 <content> 提取劇情正文（去掉 summary/vars 等）
-        const contentMatch = chapterContent.match(/<content>([\s\S]*?)<\/content>/i);
-        const cleanContent = contentMatch ? contentMatch[1] : chapterContent;
+        // 記憶來源（可在 📝 記憶設定切換）：
+        //   'summary' = 讀 PRO 主模型的 <summary>（省 token，但可能漏對話細節）
+        //   其他/預設 = 讀 <content> 全文（完整，較花）
+        const src = _cfg().extractSource || 'content';
+        let cleanContent = '';
+        if (src === 'summary') {
+            const sm = chapterContent.match(/<summary>([\s\S]*?)<\/summary>/i);
+            cleanContent = sm ? sm[1] : '';
+        }
+        if (!cleanContent.trim()) {   // 全文模式，或摘要模式但這則沒 <summary> → 回退全文
+            const cm = chapterContent.match(/<content>([\s\S]*?)<\/content>/i);
+            cleanContent = cm ? cm[1] : chapterContent;
+        }
         if (!cleanContent.trim()) return;
 
         console.log('[VecEngine] 開始 ingest，章節:', chapterId);
