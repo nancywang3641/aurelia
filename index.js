@@ -128,9 +128,12 @@ const PHONE_FILES = [
     'os/os_avs_engine.js',
     'os/os_avs_rules.js',
     'os/os_avs_state.js',     // STATE 管理 UI（從 status_panel 搬入；必須在 os_avs.js 之前）
+    'os/os_avs_memory.js',    // 📝 記憶 分頁 UI（向量記憶；必須在 os_avs.js 之前）
     'os/os_avs.js',           // 變數工坊 UI（PWA / 酒館共用一套面板）
     'os/os_studio.js',        // 靈感創作室（VN UI 煉丹 + 世界書設計師，PWA / 酒館共用）
     'os/os_api_engine.js',
+    'os/os_vector_engine.js', // 向量記憶引擎（embed/ingest/search；酒館原本沒載入，補上）
+    'os/os_vector_inject.js', // 酒館版記憶召回注入器（GENERATION_STARTED → injectPrompts）
     'os/phone_system.js',
     'os/os_monitor.js',
     'os/os_minimax.js',
