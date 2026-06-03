@@ -276,16 +276,21 @@
                 if (!chatId) return false;
                 const index = await this._promptStoreGet('tt_prompts_index:' + chatId);
                 if (!Array.isArray(index) || !index.length) return false;
-                // 讀全部 record、用快速分數挑「最大那筆」= 真主上下文（避開高 mesId 的小幻影紀錄）
-                let bestRec = null, bestScore = -1;
+                // 讀全部 record，過濾掉「小幻影紀錄」(score 極小，如 64)，在真紀錄裡挑「最新 mesId」=
+                //   當前實際送出的上下文。這樣總結+隱藏正文後再生成一次，CTX 會反映縮小；
+                //   不像挑「最大那筆」會永遠卡在歷史峰值、降不下來。
+                const cands = [];
                 for (let i = 0; i < index.length; i++) {
                     const rec = await this._promptStoreGet('tt_prompts_record:' + chatId + ':' + index[i].recordId);
                     if (!rec) continue;
-                    const sc = this._pickScore(rec);
-                    if (sc > bestScore) { bestScore = sc; bestRec = rec; }
+                    cands.push({ mesId: Number(index[i].mesId), score: this._pickScore(rec), rec: rec });
                 }
-                if (!bestRec) return false;
-                const b = await this._recordToBreakdown(bestRec);   // 只對選中那筆跑真分詞器
+                if (!cands.length) return false;
+                const real = cands.filter(function(c){ return c.score > 500; }); // 幻影通常 <100；真紀錄遠大於此
+                const pool = real.length ? real : cands;
+                let pick = pool[0];
+                for (let i = 1; i < pool.length; i++) { if (pool[i].mesId > pick.mesId) pick = pool[i]; }
+                const b = await this._recordToBreakdown(pick.rec);   // 只對選中那筆跑真分詞器
                 if (!b || !b.total) return false;
                 this.sendTokens = b.total;
                 this.sendChars  = null;
