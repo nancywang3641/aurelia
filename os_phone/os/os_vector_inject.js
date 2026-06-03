@@ -75,13 +75,42 @@
         }
     }
 
+    // ── 酒館原生生成結束 → 直接 ingest（酒館不走 saveVnChapter，VN_CHAPTER_SAVED 不會發，
+    //    所以這裡補上：拿剛生成的 AI 劇情丟給引擎提取記憶）──
+    let _lastIngestId = null;
+    async function ingestLatest() {
+        try {
+            if (win.OS_API?.isStandalone?.()) return;                 // 酒館 only（PWA 走 saveVnChapter→VN_CHAPTER_SAVED）
+            if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return;
+            if (typeof win.OS_VECTOR_ENGINE?.ingest !== 'function') return;
+            const storyId = _storyId();
+            if (!storyId) return;
+            if (!win.TavernHelper?.getChatMessages) return;
+
+            const last = await win.TavernHelper.getChatMessages(-1);
+            if (!last || !last[0]) return;
+            const m = last[0];
+            if (m.is_user) return;                                     // 只記 AI 回覆
+            const id = String(m.message_id ?? m.id ?? '');
+            if (id && id === _lastIngestId) return;                    // 同一則別重複記（swipe/重生）
+            const content = (m.message || m.mes || m.content || '').trim();
+            if (!content) return;
+            // 只記「像 VN 劇情」的回覆（含 <content> / [Chapter| / [Story|），避免把一般聊天也記進去
+            if (!/<content>|\[Chapter\||\[Story\|/i.test(content)) return;
+
+            _lastIngestId = id;
+            win.OS_VECTOR_ENGINE.ingest(content, storyId, id || ('msg_' + Date.now()));
+        } catch (e) { console.warn('[Vector Memory Injector] ingestLatest 失敗:', e?.message || e); }
+    }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, injectMemories);
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} });
-        console.log('🧠 [Vector Memory Injector] Ready');
+        if (win.tavern_events.GENERATION_ENDED) win.eventOn(win.tavern_events.GENERATION_ENDED, ingestLatest);
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestId = null; });
+        console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
     }
 
-    win.OS_VECTOR_INJECT = { injectMemories };
+    win.OS_VECTOR_INJECT = { injectMemories, ingestLatest };
     init();
 })();
