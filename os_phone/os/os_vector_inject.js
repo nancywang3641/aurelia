@@ -80,7 +80,7 @@
 
     // ── 酒館原生生成結束 → 直接 ingest（酒館不走 saveVnChapter，VN_CHAPTER_SAVED 不會發，
     //    所以這裡補上：拿剛生成的 AI 劇情丟給引擎提取記憶）──
-    let _lastIngestId = null;
+    let _lastIngestSig = null;
     async function ingestLatest() {
         try {
             if (win.OS_API?.isStandalone?.()) return;                 // 酒館 only（PWA 走 saveVnChapter→VN_CHAPTER_SAVED）
@@ -95,14 +95,17 @@
             const m = last[0];
             if (m.is_user) return;                                     // 只記 AI 回覆
             const id = String(m.message_id ?? m.id ?? '');
-            if (id && id === _lastIngestId) return;                    // 同一則別重複記（swipe/重生）
             const content = (m.message || m.mes || m.content || '').trim();
             if (!content) return;
             // 只記「VN 劇情」回覆 —— 認 <content> 標籤即可（它裡面就是全文）；
             // 不依賴 [Chapter|/[Story| 等特定 tag（用戶 tag 很多又持續新增，照 tag 走會漏）。
             if (!/<content>[\s\S]*?<\/content>/i.test(content)) return;
 
-            _lastIngestId = id;
+            // 去重用「內容簽章」而非只看 id：同則同內容才跳過；重 roll/重生換了內容 → 重新記
+            // （ingest 端會先清掉同一則(id)的舊記憶再寫新的 → 自動替換、不殘留舊分支）
+            const sig = id + '#' + content.length + '#' + content.slice(0, 40);
+            if (sig === _lastIngestSig) return;
+            _lastIngestSig = sig;
             win.OS_VECTOR_ENGINE.ingest(content, storyId, id || ('msg_' + Date.now()));
         } catch (e) { console.warn('[Vector Memory Injector] ingestLatest 失敗:', e?.message || e); }
     }
@@ -111,7 +114,15 @@
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, injectMemories);
         if (win.tavern_events.GENERATION_ENDED) win.eventOn(win.tavern_events.GENERATION_ENDED, ingestLatest);
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestId = null; _lastRecall = null; });
+        // 刪訊息 → 自動清掉那一則的記憶（記憶跟著現存劇情走，不用手動管）
+        if (win.tavern_events.MESSAGE_DELETED) win.eventOn(win.tavern_events.MESSAGE_DELETED, (mesId) => {
+            try {
+                if (win.OS_API?.isStandalone?.()) return;
+                const id = (mesId !== undefined && mesId !== null) ? String(mesId) : '';
+                if (id && win.OS_DB?.deleteVnMemoriesByChapter) win.OS_DB.deleteVnMemoriesByChapter(id, _storyId());
+            } catch (e) {}
+        });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestSig = null; _lastRecall = null; });
         console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
     }
 
