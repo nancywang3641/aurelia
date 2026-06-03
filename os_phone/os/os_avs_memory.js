@@ -64,6 +64,17 @@
         let mems = [];
         try { if (win.OS_DB?.getAllVnMemories) mems = await win.OS_DB.getAllVnMemories(sid) || []; } catch (e) {}
 
+        // 其他「有記憶」的世界（給「轉入記憶」用）——換聊天/備份檔 chatId 變了，可把舊世界記憶搬過來
+        let _srcOptions = '';
+        try {
+            if (win.OS_DB?.getAllVnMemories) {
+                const all = await win.OS_DB.getAllVnMemories('') || [];
+                const grp = {};
+                for (const m of all) { const w = m.storyId || ''; if (w && w !== sid) grp[w] = (grp[w] || 0) + 1; }
+                _srcOptions = Object.keys(grp).map(w => `<option value="${esc(w)}">${esc(w)}（${grp[w]} 條）</option>`).join('');
+            }
+        } catch (e) {}
+
         const statusTxt = !engOk
             ? '⚠️ 記憶引擎未載入'
             : (!on
@@ -109,6 +120,16 @@
                         <button class="avs-btn avs-btn-outline" id="avs-mem-test">🔌 測試連線</button>
                     </div>
                     <div class="avs-mem-test-result" id="avs-mem-test-result"></div>
+                </div>
+                <div class="avs-st-adv-sec">
+                    <div class="avs-st-adv-hd">轉入記憶 <span class="avs-st-adv-hint">換聊天 / 換備份檔(chatId 變了)後，把舊世界的記憶搬過來</span></div>
+                    ${_srcOptions
+                        ? `<div class="avs-mem-move">
+                            <select class="avs-input" id="avs-mem-src-world"><option value="">選擇來源世界…</option>${_srcOptions}</select>
+                            <button class="avs-btn avs-btn-primary" id="avs-mem-move-btn">轉入到目前</button>
+                        </div>
+                        <div class="avs-mem-srchint">把選的世界記憶「複製」到目前世界（來源保留、不刪，確認沒問題再自己清）。</div>`
+                        : `<div class="avs-mem-srchint">目前沒有其他世界的記憶可轉。</div>`}
                 </div>
             </div>
         </div>`;
@@ -169,6 +190,23 @@
             } catch (e) {
                 if (res) { res.className = 'avs-mem-test-result err'; res.textContent = '❌ ' + (e?.message || e); }
             }
+        };
+
+        // 轉入記憶：把其他世界的記憶複製到目前世界（換聊天/備份檔後搬家用）
+        const moveBtn = q('#avs-mem-move-btn');
+        if (moveBtn) moveBtn.onclick = async () => {
+            const src = q('#avs-mem-src-world')?.value;
+            if (!src) { alert('先選來源世界'); return; }
+            const target = _storyId();
+            if (!target) { alert('目前沒有有效的世界（先開著要轉入的那個聊天）'); return; }
+            if (src === target) { alert('來源和目前是同一個世界'); return; }
+            if (!confirm(`把「${src}」的記憶複製到目前世界？\n（來源保留、不會刪）`)) return;
+            moveBtn.disabled = true; const _o = moveBtn.textContent; moveBtn.textContent = '轉入中…';
+            try {
+                const n = await win.OS_DB?.copyVnMemoriesToStory?.(src, target);
+                alert(`✅ 已轉入 ${n || 0} 條記憶到目前世界`);
+            } catch (e) { alert('轉入失敗：' + (e?.message || e)); moveBtn.textContent = _o; moveBtn.disabled = false; }
+            _build();
         };
     }
 
