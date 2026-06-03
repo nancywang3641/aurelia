@@ -181,6 +181,7 @@
     };
 
     API.showRangeModal = async function () {
+        _ensureSubModals();   // 確保子 modal 已注入（從 CTX 快捷入口直接呼叫時，可能還沒開過故事管理面板）
         document.getElementById('rpg-range-modal').classList.add('active');
         try {
             const helper = window.parent.TavernHelper;
