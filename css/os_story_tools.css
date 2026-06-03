@@ -94,6 +94,8 @@
     padding: 20px; box-sizing: border-box;
 }
 .ost-modal.active { display: flex; }
+.ost-sum-preview-area { height: 360px; font-family: monospace; white-space: pre-wrap; line-height: 1.5; }
+.ost-sum-preview-status { font-size: 11px; color: #9a8678; min-height: 14px; margin: 6px 0 2px; }
 .ost-modal-card {
     width: 100%; max-width: 440px; max-height: 88%; overflow-y: auto;
     background: linear-gradient(180deg, #fffaf3 0%, #fdf6e8 100%);
