@@ -883,6 +883,17 @@
                     };
                 } catch(e) { j(e); }
             });
+        },
+        // 刪除單筆記憶（給 AVS 📝 記憶分頁的「刪除這條」用）
+        deleteVnMemory: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_MEMORIES).delete(id);
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
         }
     });
 
