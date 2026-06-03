@@ -85,10 +85,12 @@
                     <div class="avs-tab active" data-tab="state">📊 目前狀態</div>
                     <div class="avs-tab" data-tab="packs">📦 變數包</div>
                     <div class="avs-tab" data-tab="modes">🎭 模式</div>
+                    <div class="avs-tab" data-tab="memory">📝 記憶</div>
                 </div>
                 <div class="avs-content">
                     <div id="avs-view-state" class="avs-view active"></div>
                     <div id="avs-view-modes" class="avs-view"></div>
+                    <div id="avs-view-memory" class="avs-view"></div>
                     <div id="avs-view-packs" class="avs-view">
                         <div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
                             <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack" style="flex:1; min-width:140px;">＋ 創建新變數包</div>
@@ -186,6 +188,7 @@
                 if (tab.dataset.tab === 'state') renderStateView(container);
                 // V3：條件規則 tab 砍掉，改在「📦 變數包」每張卡片內當「⚡ 條件規則」子按鈕
                 if (tab.dataset.tab === 'modes') win.OS_AVS_RULES?.renderModesTab?.(container);
+                if (tab.dataset.tab === 'memory') win.OS_AVS_MEMORY?.renderInto?.(container.querySelector('#avs-view-memory'));
             };
         });
 
