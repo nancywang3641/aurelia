@@ -631,17 +631,20 @@
             await _ensureAllLoaded();          // 先展開全部，最後樓層 / 已隱藏範圍才不會被收合騙小
             const lastId = await _trueLastId();
             lastEl.textContent = (lastId != null && lastId >= 0) ? `#${lastId}` : '—';
-            let hiddenIds = [];
+            // 已展開 → 取兩來源聯集，避免任一邊漏報：
+            //   (1) chat 陣列的 is_system(這正是 /hide 設的旗標)  (2) getChatMessages hide_state:'hidden'
+            const hiddenSet = new Set();
+            try {
+                const chat = win.SillyTavern?.getContext?.()?.chat || [];
+                chat.forEach((m, idx) => { if (m && m.is_system === true) hiddenSet.add(idx); });
+            } catch (e) {}
             try {
                 if (helper?.getChatMessages) {
                     const hidden = await helper.getChatMessages('0-999999', { hide_state: 'hidden' });
-                    if (Array.isArray(hidden)) hiddenIds = hidden.map(m => m.message_id).filter(id => typeof id === 'number');
+                    if (Array.isArray(hidden)) hidden.forEach(m => { if (typeof m.message_id === 'number') hiddenSet.add(m.message_id); });
                 }
             } catch (e) {}
-            if (!hiddenIds.length) {     // 後備：讀目前載入的聊天陣列
-                const chat = win.SillyTavern?.getContext?.()?.chat || [];
-                chat.forEach((m, idx) => { if (m && m.is_system === true) hiddenIds.push(idx); });
-            }
+            const hiddenIds = [...hiddenSet];
             hiddenEl.textContent = API._formatRanges(hiddenIds);
         } catch (e) {
             console.error('[OS_STORY_TOOLS] _updateHideStatus 失敗:', e);
