@@ -25,35 +25,56 @@
         return "Unsaved_Chat_" + new Date().toISOString().slice(0, 10);
     }
 
-    // === 取真實最後樓號 ===
-    // getChatMessages / getLastMessageId / chat.length 全部讀記憶體 chat 陣列；
-    // 原生酒館 getChat 會把整檔灌進陣列(chat_truncation 只截 DOM 渲染不截陣列)，
-    // 所以陣列完整時這裡就是真實樓號、不必展開。
-    // 若用戶關了酒館助手「# Messages to Render」優化、走原生截短陣列，這裡會偏小(best-effort)。
-    // 內容生成已改 generateRaw('all') 走後端完整檔，不靠此值；此值只用於 Last:/隱藏範圍/CTX 顯示。
+    // === 酒館原生 API：背景讀聊天檔（不靠記憶體 chat 陣列、不展開、不靠酒館助手）===
+    function _stCtx() { try { return win.SillyTavern?.getContext?.() || null; } catch (e) { return null; } }
+    async function _stPost(path, body) {
+        const ctx = _stCtx();
+        if (!ctx || typeof ctx.getRequestHeaders !== 'function') return null;
+        const f = (win.fetch || fetch);
+        const resp = await f(path, { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify(body) });
+        if (!resp.ok) return null;
+        return await resp.json();
+    }
+    function _curAvatar() { const ctx = _stCtx(); return (ctx && !ctx.groupId) ? (ctx.characters?.[ctx.characterId]?.avatar || null) : null; }
+    function _curChatFile() { const ctx = _stCtx(); return ctx?.chatId || null; }   // 聊天檔名(無副檔名)
+
+    // 真實對話數 = /api/chats/search 的 message_count(=檔案訊息數)；最後樓號 = -1。就是聊天列表那個「💬 數字」。
+    async function _apiLastId() {
+        try {
+            const avatar = _curAvatar(), chatFile = _curChatFile();
+            if (!avatar || !chatFile) return null;
+            const data = await _stPost('/api/chats/search', { query: '', avatar_url: avatar, group_id: null });
+            if (!Array.isArray(data)) return null;
+            const norm = s => String(s || '').replace(/\.jsonl?$/i, '').trim();
+            const target = norm(chatFile);
+            const hit = data.find(c => norm(c.file_name) === target);
+            if (hit && typeof hit.message_count === 'number' && hit.message_count > 0) return hit.message_count - 1;
+        } catch (e) { console.warn('[OS_STORY_TOOLS] /api/chats/search 失敗:', e); }
+        return null;
+    }
+
+    // 背景讀「整個聊天檔」的訊息陣列(已去掉開頭 metadata 行)；讀不到回 null
+    async function _apiFullChat() {
+        try {
+            const avatar = _curAvatar(), chatFile = _curChatFile();
+            if (!avatar || !chatFile) return null;
+            const arr = await _stPost('/api/chats/get', { avatar_url: avatar, file_name: chatFile });
+            if (Array.isArray(arr) && arr.length) return arr.slice(1);   // [0] 是 chat_metadata
+        } catch (e) { console.warn('[OS_STORY_TOOLS] /api/chats/get 失敗:', e); }
+        return null;
+    }
+
+    // === 取真實最後樓號：優先酒館原生 API(背景讀檔)，後備讀記憶體陣列 ===
     async function _trueLastId() {
+        const api = await _apiLastId();
+        if (api != null) return api;
         let best = -1;
-        try {
-            const c = win.SillyTavern?.getContext?.()?.chat;
-            if (Array.isArray(c) && c.length) best = Math.max(best, c.length - 1);
-        } catch (e) {}
-        try {
-            const TH = win.TavernHelper;
-            if (TH?.getChatMessages) {
-                const all = await TH.getChatMessages('0-999999');
-                if (Array.isArray(all) && all.length) {
-                    const mid = all[all.length - 1]?.message_id;
-                    if (typeof mid === 'number' && !isNaN(mid)) best = Math.max(best, mid);
-                    best = Math.max(best, all.length - 1);
-                }
-            }
-        } catch (e) {}
-        try {
-            const TH = win.TavernHelper;
-            if (TH?.getLastMessageId) { const lid = await TH.getLastMessageId(); if (typeof lid === 'number' && !isNaN(lid)) best = Math.max(best, lid); }
-        } catch (e) {}
+        try { const c = win.SillyTavern?.getContext?.()?.chat; if (Array.isArray(c) && c.length) best = Math.max(best, c.length - 1); } catch (e) {}
+        try { const TH = win.TavernHelper; if (TH?.getLastMessageId) { const lid = await TH.getLastMessageId(); if (typeof lid === 'number' && !isNaN(lid)) best = Math.max(best, lid); } } catch (e) {}
         return best >= 0 ? best : null;
     }
+    // 記憶體 chat 陣列的最後 index —— 給「對陣列操作」用(注入 KEY / /hide)；陣列被截短時即截短後的最後一格。
+    function _arrayLastId() { try { const c = win.SillyTavern?.getContext?.()?.chat; if (Array.isArray(c) && c.length) return c.length - 1; } catch (e) {} return null; }
 
     // ====================================================================
     // A. 大總結
@@ -322,28 +343,44 @@
             let finalContent = '';
             let _summarizedEnd = null;   // 這次總結到的最後樓號（給存檔 Last: + 自動隱藏範圍）
             async function _genOnce() {
-                // generateRaw + max_chat_history:'all'：酒館「後端」自己讀完整聊天檔組 prompt，
-                // 背景式、不必展開、200+ 樓也不卡（不依賴記憶體 chat 陣列有沒有被截短）。
-                const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}\n${tplBody}`;
                 const _W = window.parent || window;
                 _W.__AURELIA_SUMMARIZING = true;
                 let generated = '';
+                const _sys = '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。';
                 try {
-                    generated = await TH.generateRaw({
-                        user_input: instruction,
-                        ordered_prompts: [
-                            { role: 'system', content: '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。' },
-                            'chat_history',
-                            'user_input',
-                        ],
-                        max_chat_history: 'all',
-                        should_stream: false,
-                    });
+                    // 背景讀整個聊天檔(原生 /api/chats/get；不靠記憶體陣列、不展開、不卡)
+                    const fileMsgs = await _apiFullChat();
+                    if (fileMsgs && fileMsgs.length) {
+                        // 只取「上次總結之後的新樓」(startId 由彈窗帶入=舊總結 Last+1) → 不重讀舊樓、省 token
+                        const _lastIdx = fileMsgs.length - 1;
+                        const sId = (startId != null && !isNaN(startId)) ? Math.max(0, startId) : 0;
+                        const eId = (endId != null && !isNaN(endId)) ? Math.min(endId, _lastIdx) : _lastIdx;
+                        _summarizedEnd = eId;
+                        const transcript = fileMsgs.slice(sId, eId + 1).map((m, i) => {
+                            const who = m.is_user ? '用户' : (m.name || '角色');
+                            return `[#${sId + i}] ${who}：${String(m.mes || '').trim()}`;
+                        }).join('\n\n');
+                        const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}\n${tplBody}`;
+                        generated = await TH.generateRaw({
+                            user_input: userMsg,
+                            ordered_prompts: [{ role: 'system', content: _sys }, 'user_input'],   // 不讀 chat_history → 純送我給的全文
+                            max_chat_history: 0,
+                            should_stream: false,
+                        });
+                    } else {
+                        // 後備：讀不到檔 → generateRaw 讀記憶體 chat_history(all)
+                        _summarizedEnd = await _trueLastId();
+                        const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}\n${tplBody}`;
+                        generated = await TH.generateRaw({
+                            user_input: instruction,
+                            ordered_prompts: [{ role: 'system', content: _sys }, 'chat_history', 'user_input'],
+                            max_chat_history: 'all',
+                            should_stream: false,
+                        });
+                    }
                 } finally { _W.__AURELIA_SUMMARIZING = false; }
                 finalContent = String(generated || '');
-                const _last = await _trueLastId();   // 背景讀 chat 陣列(不展開)；陣列完整時即真實樓號
-                _summarizedEnd = _last;
-                const _lastTxt = (_last != null) ? `\nLast: ${_last}` : '';
+                const _lastTxt = (_summarizedEnd != null) ? `\nLast: ${_summarizedEnd}` : '';
                 if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);
                 else finalContent = `【大总结(第${summaryCount}次)】${_lastTxt}\n\n${finalContent}`;
             }
@@ -356,7 +393,7 @@
             // 注入觸發 KEY 到「最後一樓」(這一樓會保留可見、不被自動隱藏) → 關鍵字照常觸發世界書總結。
             // 增量模式(沒合併)時把舊增量的 KEY 也補進這一樓，否則它們原本的觸發樓被隱藏後會失效。
             try {
-                const lastId = await _trueLastId();
+                const lastId = _arrayLastId();   // 陣列索引(注入 KEY 是對記憶體陣列操作)
                 if (lastId != null && lastId >= 0) {
                     const wantKeys = [newEntry.keys[0]];
                     if (!mergePrev && oldSummaries && oldSummaries.length) {
@@ -380,7 +417,7 @@
                 const _autohide = localStorage.getItem('sp_summary_autohide') !== '0';
                 let _keep = parseInt(localStorage.getItem('sp_summary_keep_recent'));
                 if (isNaN(_keep) || _keep < 0) _keep = 5;
-                const _end = (_summarizedEnd != null) ? _summarizedEnd : await _trueLastId();
+                const _end = _arrayLastId();   // 陣列索引(/hide 是對記憶體陣列操作)
                 const _hideTo = (_end != null) ? (_end - _keep) : null;   // 藏到這樓為止，之後 _keep 樓保留可見
                 if (_autohide && _hideTo != null && _hideTo >= 0) await API._callSlashCommand(`/hide 0-${_hideTo}`);
             } catch (e) { console.warn('[大總結] 自動隱藏失敗:', e); }
