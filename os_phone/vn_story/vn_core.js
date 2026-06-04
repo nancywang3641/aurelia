@@ -1916,7 +1916,7 @@
                 return;
             }
             if (line.startsWith('[Nar|')) {
-                this._stageDimAll();   // 旁白：立繪全留、全部變暗（不再藏）
+                this._stageNarr();   // 旁白：算一場次(推進清滯留) + 立繪全留全部變暗
                 const p = line.slice(5, -1).split('|');
                 const ex = this._extractTextAndSFX(p);
                 this._currentChar = null; this.updateControlUI();
@@ -1962,7 +1962,7 @@
             }
             const _stripped = _trimmed.replace(/^\[?/, '').replace(/\]$/, '').trim();
             if (_stripped.length > 2 && !_trimmed.startsWith('[') && !_trimmed.startsWith('<') && !_trimmed.startsWith('//') && !_trimmed.startsWith('---')) {
-                this._stageDimAll();   // 純文字旁白：立繪保留、變暗
+                this._stageNarr();   // 純文字旁白：算一場次(推進清滯留) + 立繪保留變暗
                 this.renderVN('', _stripped);
                 this.addLog('旁白', _stripped);
                 return;
@@ -2309,6 +2309,8 @@
             }
         },
         _stageDimAll: function() { this._applyStageLighting(-1); },
+        // 旁白也算一個「場次」：推進 tick + 清滯留(連續在場 N 次沒說話就移除) + 全部變暗
+        _stageNarr: function() { this._stageInit(); this._stageTick++; this._staleSweep(); this._applyStageLighting(-1); },
         _clearSlot: function(i) {
             this._stageInit();
             this._stage[i] = null;
@@ -2327,7 +2329,7 @@
             if (isNaN(limit) || limit < 1) limit = 5;
             for (let i = 0; i < 2; i++) {
                 const s = this._stage[i];
-                if (s && (this._stageTick - s.lastTick) > limit) this._clearSlot(i);
+                if (s && (this._stageTick - s.lastTick) >= limit) this._clearSlot(i);
             }
         },
 
