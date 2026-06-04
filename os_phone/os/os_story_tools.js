@@ -142,6 +142,84 @@
         return localStorage.getItem('sp_summary_tpl') || SUMMARY_DEFAULT_TPL;
     }
 
+    // ===== 結構化合併：把「這次增量」疊到「上一份累積總結」，不重濾舊內容 =====
+    // 事件類(事件表/代辦/結算/性事紀)→ 新列接在後面；角色/物品類 → 同名(第一欄)更新、新名加後面；
+    // 結語/場景索引 → 取新；故事標題 → 保留最早。表頭沒有前導「|」也吃得到（用「含 |」判斷）。
+    function _splitSummarySections(text) {
+        const res = []; const re = /【([^】]+)】/g; let m, idx = 0, header = null;
+        while ((m = re.exec(text)) !== null) {
+            if (header !== null) res.push({ header: header.trim(), body: text.slice(idx, m.index).trim() });
+            header = m[1]; idx = re.lastIndex;
+        }
+        if (header !== null) res.push({ header: header.trim(), body: text.slice(idx).trim() });
+        return res;
+    }
+    function _parseMdTable(body) {
+        const out = { header: null, sep: null, rows: [], extra: [] };
+        for (const raw of String(body).split('\n')) {
+            const l = raw.trim();
+            if (!l) continue;
+            if (/-{2,}/.test(l) && /^[|\s:\-]+$/.test(l)) { if (out.sep === null) out.sep = l; continue; }  // :--- 分隔列
+            if (l.includes('|')) { if (out.header === null) out.header = l; else out.rows.push(l); }
+            else out.extra.push(l);
+        }
+        return out;
+    }
+    function _buildMdTable(t) {
+        const lines = [];
+        if (t.extra && t.extra.length) lines.push(t.extra.join('\n'));
+        if (t.header) lines.push(t.header);
+        if (t.sep) lines.push(t.sep);
+        lines.push(...t.rows);
+        return lines.join('\n');
+    }
+    function _firstCell(row) {
+        return (String(row).replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|')[0] || '').trim();
+    }
+    function _mergeSection(header, prevBody, incBody) {
+        const APPEND = ['事件表', '代辦清單', '代办清单', '結算清單', '结算清单', '性事紀', '性事记'];
+        const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範/記憶事項表', '注意规范/记忆事项表'];
+        if (APPEND.includes(header)) {
+            const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
+            return _buildMdTable({ header: tp.header || ti.header, sep: tp.sep || ti.sep, rows: [...tp.rows, ...ti.rows], extra: tp.extra.length ? tp.extra : ti.extra });
+        }
+        if (MERGEKEY.includes(header)) {
+            const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
+            const order = [], map = {};
+            tp.rows.forEach(r => { const k = _firstCell(r); if (!(k in map)) order.push(k); map[k] = r; });
+            ti.rows.forEach(r => { const k = _firstCell(r); if (!(k in map)) order.push(k); map[k] = r; });   // 同名更新、新名加後面
+            return _buildMdTable({ header: tp.header || ti.header, sep: tp.sep || ti.sep, rows: order.map(k => map[k]), extra: tp.extra.length ? tp.extra : ti.extra });
+        }
+        return incBody || prevBody;   // 結語/場景索引/其他純文字 → 取新
+    }
+    function _structuredMerge(incFull, oldSummaries, summaryCount, lastTxt) {
+        try {
+            const _seq = e => { const mm = (e.comment || '').match(/第\s*(\d+)\s*次/); return mm ? parseInt(mm[1]) : 0; };
+            const latest = [...oldSummaries].sort((a, b) => _seq(b) - _seq(a))[0];
+            const prevFull = latest && latest.content;
+            if (!prevFull) return incFull;
+            const stripHead = t => String(t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
+            const prevSecs = _splitSummarySections(stripHead(prevFull));
+            const incSecs = _splitSummarySections(stripHead(incFull));
+            const incMap = {}; incSecs.forEach(s => { incMap[s.header] = s; });
+            const used = new Set(); const out = [];
+            const KEEPOLD = ['故事標題', '故事标题'];
+            for (const p of prevSecs) {
+                const i = incMap[p.header];
+                if (!i) { out.push(p); continue; }
+                used.add(p.header);
+                if (KEEPOLD.includes(p.header)) { out.push(p); continue; }
+                out.push({ header: p.header, body: _mergeSection(p.header, p.body, i.body) });
+            }
+            for (const i of incSecs) { if (!used.has(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
+            const body = out.map(s => `【${s.header}】\n${s.body}`).join('\n\n');
+            return `【大总结(第${summaryCount}次)】${lastTxt}\n\n${body}`;
+        } catch (e) {
+            console.warn('[大總結] 結構化合併失敗，改用增量本身:', e);
+            return incFull;
+        }
+    }
+
     API.openSummaryTemplateModal = function () {
         document.getElementById('rpg-summary-tpl-modal').classList.add('active');
         document.getElementById('sp-summary-tpl-area').value = getSummaryTemplate();
@@ -326,15 +404,14 @@
             const chatId = getChatIdentifier();
             const entries = await helper.getLorebookEntries(bookName);
 
-            // 算第幾次 + 要不要合併舊總結（讀世界書，不受懶載入影響）
-            let prevSummary = "";
+            // 算第幾次。合併改走「結構化疊加」(_structuredMerge)：AI 只輸出這次新增的純增量，舊內容不重寫、由程式疊加，
+            // 避免「合併又濾一次、重點被濾光」。
             let summaryCount = 1;
             const oldSummaries = entries.filter(e => e.comment && e.comment.includes(`[大总结] - ${chatId}`));
-            if (oldSummaries.length > 0) {
-                summaryCount = oldSummaries.length + 1;
-                if (mergePrev) prevSummary = oldSummaries.map(e => `=== 舊總結 ===\n${e.content}`).join("\n\n");
-            }
-            const prevSection = prevSummary ? (mergePrev ? `**合并所有之前的总结数据**\n${prevSummary}\n` : `**只总结新增剧情**\n${prevSummary}\n`) : `**首次总结**\n`;
+            if (oldSummaries.length > 0) summaryCount = oldSummaries.length + 1;
+            const prevSection = oldSummaries.length
+                ? `**只总结「这次新增」的剧情即可；旧事件/角色不用重写（系统会自动叠加：事件接在后面、同名角色更新、新角色加后面）**\n`
+                : `**首次总结**\n`;
             const tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
 
             const TH = window.parent.TavernHelper;
@@ -383,6 +460,8 @@
                 const _lastTxt = (_summarizedEnd != null) ? `\nLast: ${_summarizedEnd}` : '';
                 if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);
                 else finalContent = `【大总结(第${summaryCount}次)】${_lastTxt}\n\n${finalContent}`;
+                // 合併模式：把這次增量「結構化疊加」到上一份累積總結（事件接後面、角色同名更新+新名加後面），不重濾舊內容
+                if (mergePrev && oldSummaries && oldSummaries.length) finalContent = _structuredMerge(finalContent, oldSummaries, summaryCount, _lastTxt);
             }
 
             async function _doSave() {
