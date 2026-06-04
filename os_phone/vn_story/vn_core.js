@@ -1433,6 +1433,15 @@
             VN_TTS.play(charName, text, emotion, typeHint);
         },
 
+        // 系統語音播放（[Sys|系統名|訊息]）— 透過 VN_TTS 系統音對應（不同 AI/系統各自的聲音）
+        _vnSysVoicePlay: function(sysName, rawText) {
+            const VN_TTS = (window.parent || window).VN_TTS;
+            if (!VN_TTS?.config?.enabled || typeof VN_TTS.playSystem !== 'function') return;
+            const text = this._cleanTextForSoVITS(rawText);
+            if (!text) return;
+            VN_TTS.playSystem(sysName || '', text);
+        },
+
         next: function () {
             this.clearTimers();
             if (this.skipTypewriter()) { this.checkAutoNext(); return; }
@@ -1788,6 +1797,8 @@
                 this.hideVNPanel();
                 this.typewriter(textEl, this.parseMarkdown(bodyText));
                 this.addLog("系統", bodyText);
+                // 🖥️ 系統語音：依系統名（parts[0]）抽對應的音；無系統名 → 預設系統音
+                this._vnSysVoicePlay(parts.length >= 2 ? parts[0] : '', bodyText);
                 return;
             }
 
