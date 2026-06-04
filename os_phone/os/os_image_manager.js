@@ -112,9 +112,11 @@
             }
 
             // 🔥 步驟 2: 路由判斷（char/item/scene 有 NAI token 走 NAI；背景底板走 generateBackgroundAsync）
+            // options.provider 可「單次」覆蓋全域 service（給 VN 面板各自選 NAI / POLL AI 用）；沒給就維持全域
             const isNaiType = (type === 'char' || type === 'item' || type === 'scene');
+            const service = (options.provider === 'novelai' || options.provider === 'pollinations') ? options.provider : this.config.service;
             let result;
-            if (isNaiType && this.config.service === 'novelai' && this.config.novelai.token) {
+            if (isNaiType && service === 'novelai' && this.config.novelai.token) {
                 // NAI 使用 Danbooru tag 格式，底詞/負詞在 _genNovelAI 內部處理
                 console.log(`[ImageManager] Final Prompt [${type}→NAI${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
                 result = await this._genNovelAI(englishPrompt, type, options);
