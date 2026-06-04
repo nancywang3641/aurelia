@@ -384,8 +384,8 @@ EXAMPLE "prompt" value:
 
         // ───── 角色立繪 UI：lazy 初始化 ─────
         if (!window._initSpriteUI) {
-            const DEF_PREFIX = '2D illustration, high-end CG illustration, thick impasto, full body, clothes and pants, ';
-            const DEF_SUFFIX = 'solid dark brown background, isolated character, dramatic lighting, unique artistic style, high-end aesthetic, aesthetic lighting,';
+            const DEF_PREFIX = 'centered composition, entire body visible, body in frame, straight angle, solid background, (cowboy shot), full body, clothes and pants, school, ((detailed rendering)), clean and fluid linework, delicate and refined, ';
+            const DEF_SUFFIX = '';
             const LS_PFX = 'os_sprite_tpl_prefix';
             const LS_SFX = 'os_sprite_tpl_suffix';
             const state = { inited: false, bgRemover: null, blob: null, blobUrl: null, isRemoved: false };
@@ -454,7 +454,7 @@ EXAMPLE "prompt" value:
                     // Pollinations（或 NAI 沒 token 退回）維持 raw（純模板，行為不變）。
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
-                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: 896, height: 896, raw: !_useNAI });
+                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: 512, height: 896, raw: !_useNAI });
                     if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
                     const res = await fetch(url);
                     if (!res.ok) throw new Error('抓圖失敗 HTTP ' + res.status);
