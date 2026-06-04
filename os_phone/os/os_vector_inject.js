@@ -95,6 +95,7 @@
     // ── 酒館原生生成結束 → 直接 ingest（酒館不走 saveVnChapter，VN_CHAPTER_SAVED 不會發，
     //    所以這裡補上：拿剛生成的 AI 劇情丟給引擎提取記憶）──
     let _lastIngestSig = null;
+    let _pendingMemory = null;   // 結合觸發：狀態系統開著時，待 state_runtime 那通副模型一起抽的記憶內容
     async function ingestLatest() {
         try {
             if (win.__AURELIA_SUMMARIZING) return;                     // 大總結生成不是劇情，別記成記憶
@@ -121,7 +122,14 @@
             const sig = id + '#' + content.length + '#' + content.slice(0, 40);
             if (sig === _lastIngestSig) return;
             _lastIngestSig = sig;
-            win.OS_VECTOR_ENGINE.ingest(content, storyId, id || ('msg_' + Date.now()));
+            const cid = id || ('msg_' + Date.now());
+            // 結合觸發：狀態系統開著 → 把該記的內容掛成 pending，交給 state_runtime 那一通副模型一起抽(每回合省一通)；
+            //           狀態系統沒開 → 照舊自己抽一通(降級不變)。
+            if (win.OS_STATE_RUNTIME?.isEnabled?.()) {
+                _pendingMemory = { content, storyId, chapterId: cid };
+            } else {
+                win.OS_VECTOR_ENGINE.ingest(content, storyId, cid);
+            }
         } catch (e) { console.warn('[Vector Memory Injector] ingestLatest 失敗:', e?.message || e); }
     }
 
@@ -141,6 +149,12 @@
         console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
     }
 
-    win.OS_VECTOR_INJECT = { injectMemories, ingestLatest, get _lastRecall() { return _lastRecall; } };
+    win.OS_VECTOR_INJECT = {
+        injectMemories, ingestLatest,
+        get _lastRecall() { return _lastRecall; },
+        // 結合觸發：state_runtime 取走待處理記憶內容(取走即清，避免重複)
+        consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; return p; },
+        hasPendingMemory() { return !!_pendingMemory; },
+    };
     init();
 })();
