@@ -2562,7 +2562,7 @@
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
                 const imCfg = win.OS_IMAGE_MANAGER.config;
                 const useNAI = !!(imCfg && imCfg.service === 'novelai' && imCfg.novelai && imCfg.novelai.token);
-                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: 512, height: 896, raw: !useNAI });
+                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: 704, height: 896, raw: !useNAI });
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
                 setT('🪄 去背中…');
