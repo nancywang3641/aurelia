@@ -1754,24 +1754,25 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
         #achievement-card:hover #achievement-dismiss { color: rgba(0,255,100,0.95); }
 
-        /* 🎵 BGM Toast (成就系統同款滑入，綠=找到 紅=找不到) */
+        /* 🎵 BGM Toast — 置中、短寬、圓角金邊的小卡(像手機推播)，不全寬、不遮左右按鈕 */
         #vn-bgm-toast {
-            position: absolute; top: 0; left: 0; width: 100%; z-index: 44;
+            position: absolute; top: 14px; left: 0; width: 100%; z-index: 44;
             display: flex; justify-content: center;
             opacity: 0; pointer-events: none;
-            transform: translateY(-110%);
+            transform: translateY(-130%);
             transition: opacity 0.3s ease, transform 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         #vn-bgm-toast.active { opacity: 1; transform: translateY(0); }
         #vn-bgm-card {
-            width: 100%; padding: 10px 18px 10px 16px;
-            display: flex; align-items: center; gap: 12px;
-            background: linear-gradient(135deg, #080808 0%, #0a0a0a 100%);
-            border-bottom: 1px solid rgba(212,175,55,0.3);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            width: auto; max-width: min(72%, 380px); padding: 8px 16px;
+            display: inline-flex; align-items: center; gap: 10px;
+            background: rgba(10,8,4,0.92);
+            border: 1px solid rgba(212,175,55,0.35); border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+            backdrop-filter: blur(4px);
         }
-        #vn-bgm-toast.found  #vn-bgm-card { border-bottom-color: rgba(80,220,120,0.5); background: linear-gradient(135deg, #020e04 0%, #010a02 100%); }
-        #vn-bgm-toast.notfound #vn-bgm-card { border-bottom-color: rgba(255,80,80,0.5); background: linear-gradient(135deg, #100202 0%, #0a0101 100%); }
+        #vn-bgm-toast.found  #vn-bgm-card { border-color: rgba(80,220,120,0.5); background: rgba(4,16,7,0.92); }
+        #vn-bgm-toast.notfound #vn-bgm-card { border-color: rgba(255,80,80,0.5); background: rgba(20,4,4,0.92); }
         #vn-bgm-icon { font-size: 1.1rem; flex-shrink: 0; }
         #vn-bgm-body { flex: 1; overflow: hidden; }
         #vn-bgm-label { font-size: 0.65rem; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 2px; font-family: var(--font-sans); }
