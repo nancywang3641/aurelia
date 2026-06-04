@@ -2094,6 +2094,7 @@
                 this._showStandaloneChoices(_firstChoiceLine);
             } else {
                 this.index = this.script.length - 1;
+                this.next();   // 直接觸發「到末尾」顯示資訊中心，不要留一個空對話框等用戶再點一下
             }
         },
         updateControlUI: function() {
