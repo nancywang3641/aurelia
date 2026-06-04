@@ -303,32 +303,35 @@
             const bodiesOf = (h) => allSecs.map(secs => { const s = secs.find(x => x.header === h); return s ? s.body : null; }).filter(b => b != null && b !== '');
             const aiChat = (pr) => new Promise((res, rej) => { let g = ''; osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: pr }], osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { disableTyping: true }); });
 
+            // PRESERVE：角色/關係 → 程式保留去重(一個都不少)；CONDENSE：事件/物品/記憶/性事/結算/代辦 → 丟 AI 濃縮整理
+            const PRESERVE = ['角色表', '關係圖譜', '关系图谱'];
+            const CONDENSE = ['事件表', '物品表', '注意規範/記憶事項表', '注意规范/记忆事项表', '性事紀', '性事记', '結算清單', '结算清单', '代辦清單', '代办清单'];
+            const condenseTable = async (h, bodies) => {
+                let hdr = null, sep = null; const allRows = [];
+                bodies.forEach(b => { const t = _parseMdTable(b); if (!hdr) hdr = t.header; if (!sep) sep = t.sep; allRows.push(...t.rows); });
+                let condRows = allRows;
+                if (allRows.length) {
+                    try {
+                        const p = `把下面這份「${h}」的資料列濃縮整理：合併重複或過時的項目、精簡冗長描述，但**保留所有重要/關鍵的項目，不要漏掉**。${userNote ? '\n額外要求：' + userNote : ''}\n只輸出 markdown 表格的「資料列」(每列以 | 分隔)，不要表頭、不要 :--- 分隔列、不要任何其它文字。\n\n${allRows.join('\n')}`;
+                        const g = await aiChat(p);
+                        const rows = String(g || '').split('\n').map(l => l.trim()).filter(l => l.includes('|') && !/^[|\s:\-]+$/.test(l));
+                        if (rows.length) condRows = rows;
+                    } catch (e) { console.warn(`[合併] 「${h}」濃縮失敗，保留全部:`, e); }
+                }
+                return _buildMdTable({ header: hdr, sep: sep, rows: condRows, extra: [] });
+            };
+
             const out = {};
             for (const h of headerOrder) {
-                if (h === '事件表') continue;
                 const bodies = bodiesOf(h);
                 if (!bodies.length) continue;
                 if (KEEPFIRST.includes(h)) { out[h] = bodies[0]; continue; }
                 if (TAKELAST.includes(h)) { out[h] = bodies[bodies.length - 1]; continue; }
+                if (CONDENSE.includes(h)) { out[h] = await condenseTable(h, bodies); continue; }   // 事件/物品/記憶/性事/結算/代辦 → AI 濃縮
+                // 角色表/關係圖譜/其它 → 程式疊加去重(同名更新、新名加後面；角色一個都不少)
                 let acc = bodies[0];
-                for (let i = 1; i < bodies.length; i++) acc = _mergeSection(h, acc, bodies[i]);   // 同名更新、新名加後面
+                for (let i = 1; i < bodies.length; i++) acc = _mergeSection(h, acc, bodies[i]);
                 out[h] = acc;
-            }
-            // 事件表：全部事件列丟 AI 濃縮整理（只動事件、碰不到角色）
-            if (headerOrder.includes('事件表')) {
-                const evBodies = bodiesOf('事件表');
-                let hdr = null, sep = null; const allRows = [];
-                evBodies.forEach(b => { const t = _parseMdTable(b); if (!hdr) hdr = t.header; if (!sep) sep = t.sep; allRows.push(...t.rows); });
-                let condRows = allRows;
-                if (allRows.length) {
-                    try {
-                        const p = `把下面的「事件表」資料列濃縮整理成精簡版：按時間順序、合併重複或相似事件、可精簡冗長描述，但**保留所有關鍵轉折與重要細節**。${userNote ? '\n額外要求：' + userNote : ''}\n只輸出 markdown 表格的「資料列」(每列以 | 分隔)，不要表頭、不要 :--- 分隔列、不要其它文字。\n\n${allRows.join('\n')}`;
-                        const g = await aiChat(p);
-                        const rows = String(g || '').split('\n').map(l => l.trim()).filter(l => l.includes('|') && !/^[|\s:\-]+$/.test(l));
-                        if (rows.length) condRows = rows;
-                    } catch (e) { console.warn('[合併] 事件濃縮失敗，保留全部事件:', e); }
-                }
-                out['事件表'] = _buildMdTable({ header: hdr, sep: sep, rows: condRows, extra: [] });
             }
             const body = headerOrder.filter(h => out[h] != null).map(h => `【${h}】\n${out[h]}`).join('\n\n');
             const finalContent = `【大总结(第${newCount}次·合并版)】\n\n${body}`;
@@ -336,7 +339,7 @@
             const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
             const newEntry = { comment: `[大总结] - ${chatId} - 第${newCount}次(合并) - ${now}`, keys: [`[SUMMARY_${chatId}_MERGE_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
             await helper.createLorebookEntries(bookName, [newEntry]);
-            alert(`✅ 合併完成！第 ${newCount} 次（合并版）——角色全保留、事件已濃縮。確認沒問題後可手動刪掉舊的 ${selected.length} 份。`);
+            alert(`✅ 合併完成！第 ${newCount} 次（合并版）——角色/關係全保留；事件/物品/記憶/性事/結算/代辦已濃縮整理。確認沒問題後可手動刪掉舊的 ${selected.length} 份。`);
         } catch (e) { alert('合併失敗: ' + e.message); }
         finally { if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); } }
     };
