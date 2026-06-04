@@ -28,6 +28,9 @@ const VN_TTS = {
         // 角色對應: charName → modelId
         charMappings: {},
 
+        // 系統語音對應: 系統名 → modelId（[Sys|系統名|訊息] 用；空字串 key = 預設系統音）
+        systemMappings: {},
+
         // 角色別名: 主名 → [別名1, 別名2, ...]（不分大小寫匹配，AI 用全名/小名都能對到同一個模型）
         charAliases: {},
 
@@ -56,6 +59,7 @@ const VN_TTS = {
                 Object.assign(this.config, saved);
                 if (!this.config.models)         this.config.models = {};
                 if (!this.config.charMappings)   this.config.charMappings = {};
+                if (!this.config.systemMappings) this.config.systemMappings = {};
                 if (!this.config.npcCategories)  this.config.npcCategories = [];
             }
         } catch (e) {}
@@ -337,6 +341,39 @@ const VN_TTS = {
         const model = this._resolveModel(charName, typeHint);
         if (!model) return;
 
+        return this._speakWithModel(model, text, emotion);
+    },
+
+    // ── 系統語音解析（[Sys|系統名|訊息]）────────────────────────────────
+    // 系統名 → modelId；指定系統找不到時退回預設系統音（systemMappings[''] / ['*']）
+    _resolveSystemModel(sysName) {
+        const sm = this.config.systemMappings || {};
+        let mid = sysName && sm[sysName];
+        if (!mid && sysName) {
+            const lc = String(sysName).toLowerCase();
+            for (const [k, v] of Object.entries(sm)) {
+                if (k && String(k).toLowerCase() === lc) { mid = v; break; }
+            }
+        }
+        if (!mid) mid = sm[''] || sm['*'];   // 預設系統音
+        if (mid && this.config.models[mid]) return { id: mid, ...this.config.models[mid] };
+        return null;
+    },
+
+    // ── 系統語音播放入口 ────────────────────────────────────────────────
+    async playSystem(sysName, rawText, emotion) {
+        if (!this.config.enabled) return;
+        const text = this.cleanText(rawText);
+        if (!text) return;
+
+        const model = this._resolveSystemModel(sysName);
+        if (!model) return;
+
+        return this._speakWithModel(model, text, emotion);
+    },
+
+    // ── 共用：拿到模型後的快取/切換/播放流程 ─────────────────────────────
+    async _speakWithModel(model, text, emotion) {
         const k = this._cacheKey(model.id, text);
         if (this._cache[k])    { this._playBlobUrl(this._cache[k]); return; }
         if (this._pending.has(k)) { this._waitAndPlay(k); return; }
