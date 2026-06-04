@@ -2519,6 +2519,107 @@
             void el.offsetWidth;
             if (_exp === 'Surprised') el.classList.add('sprite-shake');
             if (_exp === 'JumpScare') el.classList.add('sprite-jumpscare');
+        },
+
+        // ===== 雙擊立繪 → 角色卡（名 / 一鍵生立繪+去背 / 當前CV+保存 / 形象 / 身分 / 好感度）=====
+        _readCharState: function(name) {
+            try {
+                const cur = win._AVS_ENGINE?.read?.() || {};
+                const box = cur['角色狀態'] || cur['角色状态'] || {};
+                return box[name] || null;
+            } catch (e) { return null; }
+        },
+        _charCV: function(name) {
+            try {
+                const T = win.VN_TTS;
+                if (!T || !T.config) return null;
+                const id = (T.config.charMappings && T.config.charMappings[name]) || (T._npcSessionCache && T._npcSessionCache[name]) || null;
+                if (!id) return null;
+                const model = T.config.models && T.config.models[id];
+                const bound = !!(T.config.charMappings && T.config.charMappings[name]);
+                return { id, name: (model && model.name) || id, bound };
+            } catch (e) { return null; }
+        },
+        saveCharCV: function(name, btn) {
+            try {
+                const cv = this._charCV(name);
+                if (!cv) { alert('這個角色目前沒有語音可保存'); return; }
+                const T = win.VN_TTS;
+                T.config.charMappings = T.config.charMappings || {};
+                T.config.charMappings[name] = cv.id;
+                if (typeof T.save === 'function') T.save();
+                if (btn) { btn.textContent = '已保存 ✓'; btn.disabled = true; }
+            } catch (e) { alert('保存失敗：' + (e?.message || e)); }
+        },
+        // 真懶人：用角色頭像提示詞 → 生 512×896 立繪 → AI 模型去背 → 存 sprite_cache → 立繪即時換上
+        autoGenSprite: async function(name, btn) {
+            const orig = btn ? btn.textContent : '';
+            const setT = (t) => { if (btn) btn.textContent = t; };
+            try {
+                if (btn) btn.disabled = true;
+                setT('🎨 生成中…');
+                const prompt = this._resolveAvatarPrompt(name) || (name + ', portrait, full body');
+                if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
+                const imCfg = win.OS_IMAGE_MANAGER.config;
+                const useNAI = !!(imCfg && imCfg.service === 'novelai' && imCfg.novelai && imCfg.novelai.token);
+                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: 512, height: 896, raw: !useNAI });
+                if (!url) throw new Error('生圖回傳空');
+                const blob = await (await fetch(url)).blob();
+                setT('🪄 去背中…');
+                const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
+                const removed = await m.removeBackground(blob, { model: 'isnet_fp16', output: { format: 'image/png', quality: 1.0 } });
+                const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(removed); });
+                if (!win.VN_Cache) throw new Error('VN_Cache 未就緒');
+                await win.VN_Cache.set('sprite_cache', name, { url: dataUrl, isRemoved: true, createdAt: Date.now() });
+                // 立繪即時換上：該角色所在格重渲染
+                this._stageInit();
+                for (let i = 0; i < 2; i++) { if (this._stage[i] && this._stage[i].name === name) { const el = this._slotEl(i); if (el) el.classList.remove('vn-avatar'); this._renderSlot(i, name, this._stage[i].exp); } }
+                setT('✅ 完成');
+                setTimeout(() => { setT(orig); if (btn) btn.disabled = false; }, 1500);
+            } catch (e) {
+                console.error('[CharCard] 一鍵生立繪失敗:', e);
+                setT('❌ ' + (e && e.message ? e.message : '失敗'));
+                setTimeout(() => { setT(orig); if (btn) btn.disabled = false; }, 2600);
+            }
+        },
+        openCharCard: function(idx) {
+            this._stageInit();
+            const slot = this._stage[idx];
+            if (!slot || !slot.name) return;
+            const name = slot.name;
+            const st = this._readCharState(name) || {};
+            const cv = this._charCV(name);
+            const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+            const el = this._slotEl(idx);
+            if (el) el.classList.add(idx === 0 ? 'vn-cc-shift-l' : 'vn-cc-shift-r');
+
+            let card = document.getElementById('vn-char-card');
+            if (!card) { card = document.createElement('div'); card.id = 'vn-char-card'; (document.getElementById('page-game') || document.body).appendChild(card); }
+            card.className = 'vn-cc ' + (idx === 0 ? 'vn-cc-left' : 'vn-cc-right');
+            const affRaw = st['好感度'];
+            const aff = (affRaw === null || affRaw === undefined || affRaw === '') ? '—' : affRaw;
+            const cvText = cv ? (esc(cv.name) + (cv.bound ? '（已綁定）' : '')) : '—';
+            card.innerHTML =
+                '<div class="vn-cc-head"><span class="vn-cc-name"></span><button class="vn-cc-close">✕</button></div>' +
+                '<button class="vn-cc-btn" id="vn-cc-gen">🎨 一鍵生立繪（去背）</button>' +
+                '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + ((cv && !cv.bound) ? '<button class="vn-cc-mini" id="vn-cc-cv-save">💾 保存</button>' : '') + '</div>' +
+                '<div class="vn-cc-row"><span class="vn-cc-k">形象</span><span class="vn-cc-v">' + esc(st['形象'] || '—') + '</span></div>' +
+                '<div class="vn-cc-row"><span class="vn-cc-k">身分</span><span class="vn-cc-v">' + esc(st['身分'] || st['身份'] || '—') + '</span></div>' +
+                '<div class="vn-cc-row"><span class="vn-cc-k">好感度</span><span class="vn-cc-v">' + esc(aff) + '</span></div>';
+            card.querySelector('.vn-cc-name').textContent = name;
+            card.querySelector('.vn-cc-close').onclick = () => this.closeCharCard();
+            card.querySelector('#vn-cc-gen').onclick = (e) => this.autoGenSprite(name, e.currentTarget);
+            const cvSaveBtn = card.querySelector('#vn-cc-cv-save');
+            if (cvSaveBtn) cvSaveBtn.onclick = (e) => this.saveCharCV(name, e.currentTarget);
+            card.style.display = 'block';
+            this._ccIdx = idx;
+        },
+        closeCharCard: function() {
+            const card = document.getElementById('vn-char-card');
+            if (card) card.style.display = 'none';
+            for (let i = 0; i < 2; i++) { const el = this._slotEl ? this._slotEl(i) : null; if (el) el.classList.remove('vn-cc-shift-l', 'vn-cc-shift-r'); }
+            this._ccIdx = null;
         }
     };
     // === 4. 全域 UI 輔助函數 ===
