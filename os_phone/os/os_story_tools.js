@@ -280,8 +280,9 @@
             const helper = window.parent.TavernHelper;
             const bookName = checked[0].dataset.bookName;
             const allEntries = await helper.getLorebookEntries(bookName);
-            const selected = checked.map(cb => allEntries.find(e => String(e.uid) === cb.value)).filter(Boolean);
-            const combined = selected.map((e, i) => `=== 第 ${i + 1} 份總結 (${e.comment}) ===\n${e.content}`).join('\n\n');
+            const _seq = e => { const m = (e.comment || '').match(/第\s*(\d+)\s*次/); return m ? parseInt(m[1]) : 0; };
+            const selected = checked.map(cb => allEntries.find(e => String(e.uid) === cb.value)).filter(Boolean).sort((a, b) => _seq(a) - _seq(b));
+            const combined = '';   // (舊：把全文丟 AI 重濾，已棄用，改下面結構化合併)
             const chatId = getChatIdentifier();
             const existingCount = allEntries.filter(e => e.comment && e.comment.includes(`[大总结] - ${chatId}`)).length;
             const newCount = existingCount + 1;
@@ -293,18 +294,49 @@
             const osSet = window.parent.OS_SETTINGS;
             if (!osApi) throw new Error('找不到 OS_API');
 
-            let generated = '';
-            await new Promise((res, rej) => {
-                osApi.chat([{ role: 'system', content: '剧情总结合并助手' }, { role: 'user', content: prompt }], osSet.getConfig(),
-                    (chunk) => { generated = chunk; }, (final) => { generated = final; res(); }, (err) => rej(err), { disableTyping: true });
-            });
+            // === 混合合併：角色/物品/記憶/關係/代辦/結算/性事紀 → 程式保留去重(碰不到 AI→一個都不會少)；事件表 → 丟 AI 濃縮 ===
+            const stripHead = t => String(t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
+            const allSecs = selected.map(e => _splitSummarySections(stripHead(e.content)));
+            const headerOrder = [];
+            allSecs.forEach(secs => secs.forEach(s => { if (!headerOrder.includes(s.header)) headerOrder.push(s.header); }));
+            const KEEPFIRST = ['故事標題', '故事标题'], TAKELAST = ['結語', '结语', '場景索引', '场景索引'];
+            const bodiesOf = (h) => allSecs.map(secs => { const s = secs.find(x => x.header === h); return s ? s.body : null; }).filter(b => b != null && b !== '');
+            const aiChat = (pr) => new Promise((res, rej) => { let g = ''; osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: pr }], osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { disableTyping: true }); });
+
+            const out = {};
+            for (const h of headerOrder) {
+                if (h === '事件表') continue;
+                const bodies = bodiesOf(h);
+                if (!bodies.length) continue;
+                if (KEEPFIRST.includes(h)) { out[h] = bodies[0]; continue; }
+                if (TAKELAST.includes(h)) { out[h] = bodies[bodies.length - 1]; continue; }
+                let acc = bodies[0];
+                for (let i = 1; i < bodies.length; i++) acc = _mergeSection(h, acc, bodies[i]);   // 同名更新、新名加後面
+                out[h] = acc;
+            }
+            // 事件表：全部事件列丟 AI 濃縮整理（只動事件、碰不到角色）
+            if (headerOrder.includes('事件表')) {
+                const evBodies = bodiesOf('事件表');
+                let hdr = null, sep = null; const allRows = [];
+                evBodies.forEach(b => { const t = _parseMdTable(b); if (!hdr) hdr = t.header; if (!sep) sep = t.sep; allRows.push(...t.rows); });
+                let condRows = allRows;
+                if (allRows.length) {
+                    try {
+                        const p = `把下面的「事件表」資料列濃縮整理成精簡版：按時間順序、合併重複或相似事件、可精簡冗長描述，但**保留所有關鍵轉折與重要細節**。${userNote ? '\n額外要求：' + userNote : ''}\n只輸出 markdown 表格的「資料列」(每列以 | 分隔)，不要表頭、不要 :--- 分隔列、不要其它文字。\n\n${allRows.join('\n')}`;
+                        const g = await aiChat(p);
+                        const rows = String(g || '').split('\n').map(l => l.trim()).filter(l => l.includes('|') && !/^[|\s:\-]+$/.test(l));
+                        if (rows.length) condRows = rows;
+                    } catch (e) { console.warn('[合併] 事件濃縮失敗，保留全部事件:', e); }
+                }
+                out['事件表'] = _buildMdTable({ header: hdr, sep: sep, rows: condRows, extra: [] });
+            }
+            const body = headerOrder.filter(h => out[h] != null).map(h => `【${h}】\n${out[h]}`).join('\n\n');
+            const finalContent = `【大总结(第${newCount}次·合并版)】\n\n${body}`;
 
             const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-            let finalContent = generated;
-            if (!/【大总结/.test(finalContent)) finalContent = `【大总结(第${newCount}次·合并版)】\n\n${finalContent}`;
             const newEntry = { comment: `[大总结] - ${chatId} - 第${newCount}次(合并) - ${now}`, keys: [`[SUMMARY_${chatId}_MERGE_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
             await helper.createLorebookEntries(bookName, [newEntry]);
-            alert(`✅ 合併完成！已生成第 ${newCount} 次（合并版）大總結`);
+            alert(`✅ 合併完成！第 ${newCount} 次（合并版）——角色全保留、事件已濃縮。確認沒問題後可手動刪掉舊的 ${selected.length} 份。`);
         } catch (e) { alert('合併失敗: ' + e.message); }
         finally { if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); } }
     };
