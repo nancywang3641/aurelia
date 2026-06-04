@@ -160,8 +160,9 @@
             try {
                 const raw = await callSecondary(prompt);
                 const json = extractJSON(raw);
-                if (json && json.updates && typeof json.updates === 'object') return json;
-                lastErr = new Error(`第 ${i+1} 次：JSON 不含 updates`);
+                // 結合觸發後：updates(狀態) 或 memories(記憶) 任一存在即算成功
+                if (json && (typeof json.updates === 'object' || Array.isArray(json.memories))) return json;
+                lastErr = new Error(`第 ${i+1} 次：JSON 不含 updates/memories`);
                 console.warn('[State Runtime]', lastErr.message, 'raw head:', String(raw).slice(0, 300));
             } catch(e) {
                 lastErr = e;
@@ -256,66 +257,110 @@ ${modeRules}
         return Object.keys(schema).length ? schema : null;
     }
 
-    // --- 主流程：抽一次 ---
+    // --- 記憶抽取規則（結合觸發共用向量引擎的規則，沒有就退而求其次給簡述）---
+    function _memoryRulesText() {
+        return (win.OS_VECTOR_ENGINE?.EXTRACTION_PROMPT)
+            || '從劇情抽出值得長期記住的條目：關鍵事件、角色狀態變化、重要物品、世界規則、人物關係、以及每個重要角色最能代表性格的原句台詞與口癖(防 OOC)。跳過純過場與不帶資訊的閒聊。';
+    }
+    // 附加在「狀態 prompt」後面：要求同一個 JSON 多吐一個 memories 欄位（共用同一通副模型）
+    function _memoryAddendum() {
+        return `
+
+═══════════════════════════════════════
+【★ 同時抽取「長期記憶」→ 放進同一個 JSON 的 "memories" 欄位】
+除了上面的 "updates"，請在**同一個 JSON** 裡再加一個 "memories" 陣列，每筆 { "type", "text", "tags" }；沒有值得記的就給 []。
+抽取規則：
+${_memoryRulesText()}
+
+最終輸出格式：{ "updates": { ... }, "memories": [ { "type":"...", "text":"...", "tags":[...] } ] }`;
+    }
+    // 只有記憶要抽時的獨立 prompt（沒變數包 / 這則狀態已抽過）
+    function _memoryOnlyPrompt(text) {
+        return `你是長期記憶抽取器。從下面的劇情抽出值得長期記住的記憶條目。
+
+【劇情】
+${text || '（無）'}
+
+抽取規則：
+${_memoryRulesText()}
+
+請輸出嚴格 JSON（不包 markdown）：{ "memories": [ { "type":"...", "text":"...", "tags":[...] } ] }`;
+    }
+
+    // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
     async function extractOnce() {
         if (_running) return;
         _running = true;
+        let pendingMem = null, memIngested = false;
         try {
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
 
-            // 改：schema 來源從變數包讀（不再讀 state_data.schema）
             const schema = await getActiveSchema();
-            if (!schema || !Object.keys(schema).length) {
-                // 沒變數包不抽（要先按「🧬 AI 從世界生成」生變數包）
-                return;
-            }
+            const hasState = !!(schema && Object.keys(schema).length);
 
-            // current 從 AVS engine state 讀（透過 adapter 接到 state_data.current）
+            // 結合觸發：取走 vector_inject 掛的待處理記憶（狀態系統開著時它會交棒過來）
+            pendingMem = (win.OS_VECTOR_INJECT?.consumePendingMemory?.()) || null;
+            const wantMemory = !!(pendingMem && win.OS_VECTOR_ENGINE?.isEnabled?.() === true && typeof win.OS_VECTOR_ENGINE?.ingestEntries === 'function');
+
+            if (!hasState && !wantMemory) return;   // 兩邊都沒事做
+
             const currentState = win._AVS_ENGINE?.read?.() || {};
-
             const { text: recentText, lastId } = await gatherRecentMessages();
-            if (!recentText || lastId < 0) return;
 
-            // patches 仍由 state_data 維護（reroll/swipe 回退用）
             const data = (await win.OS_DB.getStateData(chatId)) || {};
-            if (data.patches && data.patches[lastId] !== undefined) return;
+            const stateAlreadyDone = hasState && data.patches && lastId >= 0 && data.patches[lastId] !== undefined;
+            const doState = hasState && !stateAlreadyDone && !!recentText && lastId >= 0;
 
-            // 判斷是不是首次抽取（current 為空）→ 走初始化模式，要副模型把所有欄位填齊
-            const isInitialFill = !currentState || Object.keys(currentState).length === 0;
-            const prompt = buildExtractPrompt(schema, currentState, recentText, isInitialFill);
+            if (!doState && !wantMemory) return;
+
+            // 組 prompt：狀態部分用原本 buildExtractPrompt(不動，保品質)；要記憶就附加 memories 區段共用同一通
+            let prompt;
+            if (doState) {
+                const isInitialFill = !currentState || Object.keys(currentState).length === 0;
+                prompt = buildExtractPrompt(schema, currentState, recentText, isInitialFill);
+                if (wantMemory) prompt += _memoryAddendum();
+            } else {
+                prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '');
+            }
+
             const json = await runWithRetry(prompt);
-            const updates = json.updates || {};
 
-            // 過濾：接受 schema 裡有的欄位；或「點記法 key 的根」在 schema 裡
-            // （動態實體用：schema 定義 object 欄位「角色」，副模型可寫 角色.路人甲.HP，含臨時 NPC）
-            const filtered = {};
-            for (const k of Object.keys(updates)) {
-                const root = k.split('.')[0];
-                if (schema[k] !== undefined || schema[root] !== undefined) filtered[k] = updates[k];
+            // --- 狀態 patch（邏輯與原本一致）---
+            if (doState && json.updates && typeof json.updates === 'object') {
+                const updates = json.updates;
+                const filtered = {};
+                for (const k of Object.keys(updates)) {
+                    const root = k.split('.')[0];
+                    if (schema[k] !== undefined || schema[root] !== undefined) filtered[k] = updates[k];
+                }
+                const newPatches = trimPatches({ ...(data.patches || {}), [lastId]: filtered });
+                const newCurrent = recomputeCurrent(newPatches);
+                try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
+                await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, current: newCurrent });
+                const changed = Object.keys(filtered).length;
+                if (changed > 0) console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);
+                try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: lastId, updates: filtered }); } catch(e) {}
             }
 
-            // 寫 patch（仍存 state_data，給 reroll 用）
-            const newPatches = trimPatches({ ...(data.patches || {}), [lastId]: filtered });
-            const newCurrent = recomputeCurrent(newPatches);
-
-            // current 透過 AVS engine 寫（engine 內部走 adapter → 酒館下實際寫 state_data.current）
-            try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
-
-            // patches 仍 partial 寫 state_data
-            await win.OS_DB.saveStateData(chatId, {
-                ...data,
-                patches: newPatches,
-                current: newCurrent
-            });
-
-            const changed = Object.keys(filtered).length;
-            if (changed > 0) {
-                console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);
+            // --- 記憶入庫（結合觸發）---
+            if (wantMemory) {
+                if (Array.isArray(json.memories)) {
+                    try {
+                        await win.OS_VECTOR_ENGINE.ingestEntries(json.memories, pendingMem.storyId, pendingMem.chapterId);
+                        memIngested = true;
+                        console.log(`🧠 [State Runtime] 結合抽取：記憶 ${json.memories.length} 條入庫`);
+                    } catch(e) { console.warn('[State Runtime] 記憶入庫失敗:', e?.message || e); }
+                }
+                // 副模型沒吐 memories → 降級：讓向量引擎自己抽一通，不漏記憶
+                if (!memIngested) { try { win.OS_VECTOR_ENGINE.ingest(pendingMem.content, pendingMem.storyId, pendingMem.chapterId); memIngested = true; } catch(e) {} }
             }
-            try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: lastId, updates: filtered }); } catch(e) {}
         } catch(e) {
             console.warn('[State Runtime] 抽取失敗:', e?.message || e);
+            // 整通失敗也別漏記憶：有 pending 就讓引擎自己補抽一通
+            if (pendingMem && !memIngested && win.OS_VECTOR_ENGINE?.isEnabled?.()) {
+                try { win.OS_VECTOR_ENGINE.ingest(pendingMem.content, pendingMem.storyId, pendingMem.chapterId); } catch(_) {}
+            }
         } finally {
             _running = false;
         }
