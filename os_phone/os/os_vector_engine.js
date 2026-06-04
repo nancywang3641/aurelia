@@ -83,14 +83,16 @@
     // 四、副模型記憶提取（Extraction Pass）
     // ================================================================
 
-    const EXTRACTION_PROMPT = `從以下視覺小說章節提取有長期重要性的記憶條目。
+    const EXTRACTION_PROMPT = `從以下視覺小說章節提取「有長期重要性」的記憶條目。
 輸出純 JSON 陣列，不要 markdown 包裹。每筆記錄包含：
-- type: "npc" | "event" | "item" | "location" | "rule" | "relationship"
-- text: 一句話描述（中文，20-60字）
-- tags: 關鍵詞陣列（角色名、地點、物品等）
+- type: "npc" | "event" | "item" | "location" | "rule" | "relationship" | "dialogue"
+- text: 一句話描述（中文）。但若 type 為 "dialogue"，請寫成「<角色名>的說話風格／口癖 ＋ 一句最能代表其性格的原句台詞」，盡量保留原話用詞，別改寫成轉述
+- tags: 關鍵詞陣列（務必包含相關角色名）
 
-只提取真正重要的資訊（關鍵事件、角色狀態變化、重要物品、世界規則）。
-日常對話、場景描述、情緒旁白不要提取。
+提取重點：
+- 關鍵事件、角色狀態變化、重要物品、世界規則、人物關係
+- ⭐ type:"dialogue"：每個重要出場角色，抓 1～2 句最能展現其「性格／語氣／口癖」的代表台詞（保留原話），這是用來防止之後 AI 把角色寫 OOC 的依據
+跳過：純過場、場景描述、不帶性格的閒聊水詞。
 若無重要內容輸出 []。`;
 
     async function _extractMemories(chapterContent) {

@@ -59,11 +59,22 @@
             const mems = await win.OS_VECTOR_ENGINE.search(query, storyId);
             if (!mems || !mems.length) return;
 
+            // 角色語氣/對話另外框起來 → 明確要求 AI 延續角色說話風格、別 OOC
+            const voice = mems.filter(m => m.type === 'dialogue');
+            const facts = mems.filter(m => m.type !== 'dialogue');
             let block = `[記憶召回]\n`;
-            for (const m of mems) {
+            for (const m of facts) {
                 block += `[${m.type || 'event'}] ${m.text}`;
                 if (m.tags && m.tags.length) block += `（${m.tags.join('、')}）`;
                 block += '\n';
+            }
+            if (voice.length) {
+                block += `\n【角色語氣參考｜延續下列角色的性格與說話風格，保持一致、勿 OOC】\n`;
+                for (const m of voice) {
+                    block += `・${m.text}`;
+                    if (m.tags && m.tags.length) block += `（${m.tags.join('、')}）`;
+                    block += '\n';
+                }
             }
 
             const result = win.TavernHelper.injectPrompts([{
