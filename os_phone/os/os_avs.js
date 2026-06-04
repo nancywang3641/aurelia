@@ -94,6 +94,7 @@
                     <div id="avs-view-packs" class="avs-view">
                         <div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
                             <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack" style="flex:1; min-width:140px;">＋ 創建新變數包</div>
+                            <div class="avs-btn avs-btn-outline" id="avs-btn-preset-pack" style="flex:1; min-width:140px;">🪶 簡易預設</div>
                             <div class="avs-btn avs-btn-outline" id="avs-btn-ai-gen-pack" style="flex:1; min-width:140px; display:none;">🧬 AI 從世界生成</div>
                         </div>
                         <div id="avs-pack-list" style="display:flex; flex-direction:column; gap:10px;"></div>
@@ -680,6 +681,43 @@ ${lines.join('\n')}
                 } finally {
                     btnAiGen.textContent = original;
                     btnAiGen.style.pointerEvents = '';
+                }
+            };
+        }
+
+        // 🪶 簡易預設：一鍵套「角色狀態(形象/身分/好感度)」，跳過 AI 生成。可選、不強制——朋友想簡單就點這個
+        const btnPreset = container.querySelector('#avs-btn-preset-pack');
+        if (btnPreset) {
+            btnPreset.onclick = async () => {
+                if (!confirm('套用「簡易預設」變數包？\n每個角色追蹤：形象(髮色/眼色/體型)、身分、好感度。\n適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。')) return;
+                const original = btnPreset.textContent;
+                btnPreset.textContent = '套用中...'; btnPreset.style.pointerEvents = 'none';
+                try {
+                    const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+                    const pack = {
+                        id: 'pack_' + Date.now(),
+                        name: '簡易預設（形象/身分/好感度）',
+                        notes: '輕量預設：每個角色追蹤 形象(髮色/眼色/體型)、身分、好感度。新角色登場自動套這組。適合只想簡單跑劇情。',
+                        variables: [{
+                            name: '角色狀態',
+                            type: 'object',
+                            defaultValue: '{}',
+                            desc: '每個角色的即時狀態。基礎屬性（每人都有、順序一致）：形象(髮色/眼色/體型)、身分、好感度(0-100)。新角色登場時自動套這組基礎屬性，照原樣往這個物件裡加新角色。'
+                        }],
+                        chatId: currentChatId
+                    };
+                    await win.OS_DB.saveVarPack(pack);
+                    await loadAllData(container);
+                    await syncVarPackToLorebook();
+                    if (win.toastr) win.toastr.success('✅ 已套用簡易預設變數包');
+                    if (win.OS_STATE_RUNTIME?.extractOnce) {
+                        setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce(); } catch (e) {} }, 500);
+                    }
+                } catch (e) {
+                    console.error('[AVS] 套用簡易預設失敗:', e);
+                    alert('套用失敗：' + (e?.message || e));
+                } finally {
+                    btnPreset.textContent = original; btnPreset.style.pointerEvents = '';
                 }
             };
         }
