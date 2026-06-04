@@ -145,31 +145,39 @@
         console.log('[VecEngine] 開始 ingest，章節:', chapterId);
         try {
             const entries = await _extractMemories(cleanContent);
-            // 重 roll / 重生：先清掉「同一則(chapterId)」的舊記憶，再寫新的 → 自動替換，不殘留舊分支、不重複
-            if (chapterId != null && win.OS_DB?.deleteVnMemoriesByChapter) {
-                try { await win.OS_DB.deleteVnMemoriesByChapter(chapterId, storyId); } catch (e) {}
-            }
-            if (!entries.length) { console.log('[VecEngine] 無重要記憶，跳過（已清同則舊記憶）'); return; }
-
-            for (const entry of entries) {
-                try {
-                    const vec = await embed(entry.text);
-                    await win.OS_DB.saveVnMemory({
-                        storyId, chapterId,
-                        type:      entry.type  || 'event',
-                        text:      entry.text  || '',
-                        tags:      entry.tags  || [],
-                        vector:    vec,
-                        createdAt: Date.now()
-                    });
-                } catch(vecErr) {
-                    console.warn('[VecEngine] 單條向量化失敗，跳過:', entry.text, vecErr);
-                }
-            }
-            console.log(`[VecEngine] ✅ ingest 完成：${entries.length} 條記憶`);
+            await ingestEntries(entries, storyId, chapterId);
         } catch(e) {
             console.error('[VecEngine] ingest 失敗:', e);
         }
+    }
+
+    // 入庫「已抽好的記憶條目」——給「結合觸發」用：state_runtime 一通副模型同時抽好 memories 後直接丟進來，
+    // 跳過這裡的副模型抽取(_extractMemories)，只做去重 + 向量化 + 存。
+    async function ingestEntries(entries, storyId, chapterId) {
+        if (!_isEnabled() || !win.OS_DB?.saveVnMemory) return;
+        if (!Array.isArray(entries)) return;
+        // 重 roll/重生：先清同章舊記憶再寫新的(自動替換)
+        if (chapterId != null && win.OS_DB?.deleteVnMemoriesByChapter) {
+            try { await win.OS_DB.deleteVnMemoriesByChapter(chapterId, storyId); } catch (e) {}
+        }
+        if (!entries.length) { console.log('[VecEngine] 無記憶條目，跳過（已清同章舊記憶）'); return; }
+        for (const entry of entries) {
+            if (!entry || !entry.text) continue;
+            try {
+                const vec = await embed(entry.text);
+                await win.OS_DB.saveVnMemory({
+                    storyId, chapterId,
+                    type: entry.type || 'event',
+                    text: entry.text || '',
+                    tags: entry.tags || [],
+                    vector: vec,
+                    createdAt: Date.now()
+                });
+            } catch (vecErr) {
+                console.warn('[VecEngine] 單條向量化失敗，跳過:', entry.text, vecErr);
+            }
+        }
+        console.log(`[VecEngine] ✅ 入庫完成：${entries.length} 條記憶`);
     }
 
     // ================================================================
@@ -210,7 +218,14 @@
     // 八、公開 API
     // ================================================================
 
-    win.OS_VECTOR_ENGINE = { embed, ingest, search, isEnabled: _isEnabled };
+    win.OS_VECTOR_ENGINE = { embed, ingest, ingestEntries, search, isEnabled: _isEnabled, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
+        // 把章節原文清成「要餵給抽取的內容」(跟 ingest 同邏輯：summary 或 <content>)，給結合觸發共用
+        const src = _cfg().extractSource || 'content';
+        let c = '';
+        if (src === 'summary') { const sm = String(raw||'').match(/<summary>([\s\S]*?)<\/summary>/i); c = sm ? sm[1] : ''; }
+        if (!c.trim()) { const cm = String(raw||'').match(/<content>([\s\S]*?)<\/content>/i); c = cm ? cm[1] : String(raw||''); }
+        return c.trim();
+    } };
 
     console.log('[VecEngine] ✅ os_vector_engine.js V1.0 就緒');
 })();
