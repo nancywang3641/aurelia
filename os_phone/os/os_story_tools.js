@@ -303,38 +303,41 @@
             const bodiesOf = (h) => allSecs.map(secs => { const s = secs.find(x => x.header === h); return s ? s.body : null; }).filter(b => b != null && b !== '');
             const aiChat = (pr) => new Promise((res, rej) => { let g = ''; osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: pr }], osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { disableTyping: true }); });
 
-            // PRESERVE：角色/關係 → 程式保留去重(一個都不少)；CONDENSE：事件/物品/記憶/性事/結算/代辦 → 丟 AI 濃縮整理
+            // 角色表/關係圖譜 → 程式先合出「完整版」(一個都不少)，等下強制蓋回 AI 輸出，保證不漏角色
             const PRESERVE = ['角色表', '關係圖譜', '关系图谱'];
-            const CONDENSE = ['事件表', '物品表', '注意規範/記憶事項表', '注意规范/记忆事项表', '性事紀', '性事记', '結算清單', '结算清单', '代辦清單', '代办清单'];
-            const condenseTable = async (h, bodies) => {
-                let hdr = null, sep = null; const allRows = [];
-                bodies.forEach(b => { const t = _parseMdTable(b); if (!hdr) hdr = t.header; if (!sep) sep = t.sep; allRows.push(...t.rows); });
-                let condRows = allRows;
-                if (allRows.length) {
-                    try {
-                        const p = `把下面這份「${h}」的資料列濃縮整理：合併重複或過時的項目、精簡冗長描述，但**保留所有重要/關鍵的項目，不要漏掉**。${userNote ? '\n額外要求：' + userNote : ''}\n只輸出 markdown 表格的「資料列」(每列以 | 分隔)，不要表頭、不要 :--- 分隔列、不要任何其它文字。\n\n${allRows.join('\n')}`;
-                        const g = await aiChat(p);
-                        const rows = String(g || '').split('\n').map(l => l.trim()).filter(l => l.includes('|') && !/^[|\s:\-]+$/.test(l));
-                        if (rows.length) condRows = rows;
-                    } catch (e) { console.warn(`[合併] 「${h}」濃縮失敗，保留全部:`, e); }
-                }
-                return _buildMdTable({ header: hdr, sep: sep, rows: condRows, extra: [] });
-            };
-
-            const out = {};
+            const preserved = {};
             for (const h of headerOrder) {
+                if (!PRESERVE.includes(h)) continue;
                 const bodies = bodiesOf(h);
                 if (!bodies.length) continue;
-                if (KEEPFIRST.includes(h)) { out[h] = bodies[0]; continue; }
-                if (TAKELAST.includes(h)) { out[h] = bodies[bodies.length - 1]; continue; }
-                if (CONDENSE.includes(h)) { out[h] = await condenseTable(h, bodies); continue; }   // 事件/物品/記憶/性事/結算/代辦 → AI 濃縮
-                // 角色表/關係圖譜/其它 → 程式疊加去重(同名更新、新名加後面；角色一個都不少)
                 let acc = bodies[0];
                 for (let i = 1; i < bodies.length; i++) acc = _mergeSection(h, acc, bodies[i]);
-                out[h] = acc;
+                preserved[h] = acc;
             }
-            const body = headerOrder.filter(h => out[h] != null).map(h => `【${h}】\n${out[h]}`).join('\n\n');
-            const finalContent = `【大总结(第${newCount}次·合并版)】\n\n${body}`;
+            const preservedBlock = Object.keys(preserved).map(h => `【${h}】\n${preserved[h]}`).join('\n\n');
+
+            // 「一通」主模型：把整份整理濃縮成一份；角色表/關係圖譜用我附的完整版照抄
+            const combinedAll = selected.map((e, i) => `=== 第${i + 1}份 ===\n${stripHead(e.content)}`).join('\n\n');
+            const mergePrompt = `下面有 ${selected.length} 份大總結，請合併整理成「一份」完整總結。\n` +
+                `【規則】\n` +
+                `- 事件表 / 物品表 / 注意規範記憶事項表 / 性事紀 / 結算清單 / 代辦清單 → 合併去重、精簡冗長描述、整理乾淨，但保留所有重要/關鍵項目。\n` +
+                `- 角色表、關係圖譜 → **直接用我下面附的「完整版」原樣放進去，一個角色都不准刪或漏**。\n` +
+                `- 用原本的【區塊】格式輸出一份，開頭寫【大总结(第${newCount}次·合并版)】，只輸出總結本身、不要解釋。\n` +
+                (userNote ? `- 額外要求：${userNote}\n` : '') +
+                `\n【附：完整角色表/關係圖譜（照抄、不准刪角色）】\n${preservedBlock || '（無）'}\n\n` +
+                `【要合併的 ${selected.length} 份】\n${combinedAll}`;
+            let finalContent = String((await aiChat(mergePrompt)) || '');
+            if (!/【大总结/.test(finalContent)) finalContent = `【大总结(第${newCount}次·合并版)】\n\n${finalContent}`;
+            // 保險：AI 輸出裡的 角色表/關係圖譜 強制換成程式保留的完整版（萬一 AI 漏角色也救回來）
+            try {
+                if (Object.keys(preserved).length) {
+                    const headLine = (finalContent.match(/^\s*(【大总结[^】]*】[^\n]*)/) || [])[1] || `【大总结(第${newCount}次·合并版)】`;
+                    const secs = _splitSummarySections(stripHead(finalContent));
+                    const rebuilt = secs.map(s => preserved[s.header] ? { header: s.header, body: preserved[s.header] } : s);
+                    for (const h of Object.keys(preserved)) { if (!rebuilt.find(s => s.header === h)) rebuilt.push({ header: h, body: preserved[h] }); }
+                    finalContent = headLine + '\n\n' + rebuilt.map(s => `【${s.header}】\n${s.body}`).join('\n\n');
+                }
+            } catch (e) { console.warn('[合併] 角色表回填失敗，用 AI 原輸出:', e); }
 
             const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
             const newEntry = { comment: `[大总结] - ${chatId} - 第${newCount}次(合并) - ${now}`, keys: [`[SUMMARY_${chatId}_MERGE_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
