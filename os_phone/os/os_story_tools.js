@@ -25,33 +25,12 @@
         return "Unsaved_Chat_" + new Date().toISOString().slice(0, 10);
     }
 
-    // === 取真實最後樓號（對抗 TauriTavern 懶載入）===
-    // 坑：TauriTavern 每約一百樓自動收合(show more)，getContext().chat 陣列、getLastMessageId、
-    //     getChatMessages 在收合時都只拿得到「已載入窗口」→ 樓號被騙小(179 樓卻回 99)。
-    //     懶載入只會「少報」，所以：(1) 先自動把全部展開，(2) 取各來源最大值還原真實樓號。
-
-    // 自動點「顯示更多訊息」直到全部載入（省得手動一直按）；沒有懶載入的環境(一般酒館)會直接 no-op
-    async function _ensureAllLoaded() {
-        try {
-            const pdoc = window.parent.document;
-            if (!pdoc) return;
-            const _len = () => { try { const c = win.SillyTavern?.getContext?.()?.chat; return Array.isArray(c) ? c.length : 0; } catch (e) { return 0; } };
-            let guard = 0;
-            while (guard++ < 80) {
-                const btn = pdoc.querySelector('#show_more_messages');
-                if (!btn || btn.offsetParent === null) break;   // 沒有「更多」可載入了
-                const before = _len();
-                btn.click();
-                await new Promise(r => setTimeout(r, 220));
-                if (_len() <= before) {                          // 沒長 → 再等一次渲染，仍沒長就停
-                    await new Promise(r => setTimeout(r, 350));
-                    if (_len() <= before) break;
-                }
-            }
-        } catch (e) { console.warn('[OS_STORY_TOOLS] 自動展開全部訊息失敗:', e); }
-    }
-
-    // 真實最後樓號 = 各來源最大值（懶載入只少報，取 max 還原）。要保證準確前先 await _ensureAllLoaded()
+    // === 取真實最後樓號 ===
+    // getChatMessages / getLastMessageId / chat.length 全部讀記憶體 chat 陣列；
+    // 原生酒館 getChat 會把整檔灌進陣列(chat_truncation 只截 DOM 渲染不截陣列)，
+    // 所以陣列完整時這裡就是真實樓號、不必展開。
+    // 若用戶關了酒館助手「# Messages to Render」優化、走原生截短陣列，這裡會偏小(best-effort)。
+    // 內容生成已改 generateRaw('all') 走後端完整檔，不靠此值；此值只用於 Last:/隱藏範圍/CTX 顯示。
     async function _trueLastId() {
         let best = -1;
         try {
@@ -268,8 +247,7 @@
         try {
             const helper = window.parent.TavernHelper;
             if (!helper) return;
-            await _ensureAllLoaded();                  // 先自動展開全部，結束 ID 才不會被懶載入騙小
-            const _endShow = await _trueLastId();
+            const _endShow = await _trueLastId();      // 背景讀真實樓號(不展開；chat 陣列完整時即正確)
             if (_endShow != null && _endShow !== '') document.getElementById('range-end-id').placeholder = `最後一條 ID: ${_endShow}`;
 
             // 還原「自動隱藏 / 預留樓層」設定
@@ -338,46 +316,34 @@
             const prevSection = prevSummary ? (mergePrev ? `**合并所有之前的总结数据**\n${prevSummary}\n` : `**只总结新增剧情**\n${prevSummary}\n`) : `**首次总结**\n`;
             const tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
 
-            const osApi = win.OS_API;
-            const osSet = win.OS_SETTINGS;
-            if (!osApi || typeof osApi.chat !== 'function') throw new Error("找不到 OS_API（生成服務未就緒）");
+            const TH = window.parent.TavernHelper;
+            if (!TH || typeof TH.generateRaw !== 'function') throw new Error("找不到 generateRaw（需要酒館助手在線）");
 
             let finalContent = '';
-            let _summarizedEnd = null;   // 這次實際總結到的最後樓號（給存檔 Last: + 自動隱藏範圍）
+            let _summarizedEnd = null;   // 這次總結到的最後樓號（給存檔 Last: + 自動隱藏範圍）
             async function _genOnce() {
-                // 1) 先自動展開全部訊息（對抗 TauriTavern 懶載入）→ 之後抓 ID、抓內容才完整
-                await _ensureAllLoaded();
-                // 2) 樓層範圍：起始用 UI 給的(增量續總結用)，結束沒填就用真實最後樓
-                const _last = await _trueLastId();
-                const sId = (startId != null && !isNaN(startId)) ? Math.max(0, startId) : 0;
-                const eId = (endId != null && !isNaN(endId)) ? endId : (_last != null ? _last : 0);
-                _summarizedEnd = eId;
-                // 3) 直接用 ID 抓範圍內全部樓層原文（已展開 → 拿得到完整，不被懶載入截斷）
-                const msgs = (await helper.getChatMessages(`${sId}-${eId}`)) || [];
-                const transcript = msgs.map(m => {
-                    const who = m.is_user ? '用户' : (m.name || '角色');
-                    return `[#${m.message_id}] ${who}：${(m.message || m.mes || '').trim()}`;
-                }).join('\n\n');
-                // 4) 丟給生成服務(同合併總結走的 OS_API.chat)做總結
-                const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}\n${tplBody}`;
+                // generateRaw + max_chat_history:'all'：酒館「後端」自己讀完整聊天檔組 prompt，
+                // 背景式、不必展開、200+ 樓也不卡（不依賴記憶體 chat 陣列有沒有被截短）。
+                const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}\n${tplBody}`;
                 const _W = window.parent || window;
-                _W.__AURELIA_SUMMARIZING = true;   // 保險：生成期間 vector 注入器別摻記憶召回 / 別把它當新劇情
+                _W.__AURELIA_SUMMARIZING = true;
                 let generated = '';
                 try {
-                    await new Promise((res, rej) => {
-                        osApi.chat(
-                            [{ role: 'system', content: '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。' },
-                             { role: 'user', content: userMsg }],
-                            osSet.getConfig(),
-                            (chunk) => { generated = chunk; },
-                            (final) => { generated = final; res(); },
-                            (err) => rej(err),
-                            { disableTyping: true }
-                        );
+                    generated = await TH.generateRaw({
+                        user_input: instruction,
+                        ordered_prompts: [
+                            { role: 'system', content: '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。' },
+                            'chat_history',
+                            'user_input',
+                        ],
+                        max_chat_history: 'all',
+                        should_stream: false,
                     });
                 } finally { _W.__AURELIA_SUMMARIZING = false; }
                 finalContent = String(generated || '');
-                const _lastTxt = `\nLast: ${eId}`;   // Last: = 已總結到的最後樓號
+                const _last = await _trueLastId();   // 背景讀 chat 陣列(不展開)；陣列完整時即真實樓號
+                _summarizedEnd = _last;
+                const _lastTxt = (_last != null) ? `\nLast: ${_last}` : '';
                 if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);
                 else finalContent = `【大总结(第${summaryCount}次)】${_lastTxt}\n\n${finalContent}`;
             }
@@ -386,8 +352,6 @@
             const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
             const newEntry = { comment: `[大总结] - ${chatId} - 第${summaryCount}次 - ${now}`, keys: [`[SUMMARY_${chatId}_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
             await helper.createLorebookEntries(bookName, [newEntry]);
-
-            await _ensureAllLoaded();   // 先展開全部 → 下面取真實樓號、隱藏範圍才正確（preview 期間可能又被自動收合）
 
             // 注入觸發 KEY 到「最後一樓」(這一樓會保留可見、不被自動隱藏) → 關鍵字照常觸發世界書總結。
             // 增量模式(沒合併)時把舊增量的 KEY 也補進這一樓，否則它們原本的觸發樓被隱藏後會失效。
@@ -612,7 +576,6 @@
     };
     API._slashShowAll = async function (btn) {
         await API._withBtnFeedback(btn, async () => {
-            await _ensureAllLoaded();
             const _tlu = await _trueLastId();
             await API._callSlashCommand('/unhide 0-' + (_tlu != null ? _tlu : '{{lastMessageId}}'));
             API._updateHideStatus();
@@ -647,8 +610,7 @@
         if (!lastEl || !hiddenEl) return;
         try {
             const helper = win.TavernHelper;
-            await _ensureAllLoaded();          // 先展開全部，最後樓層 / 已隱藏範圍才不會被收合騙小
-            const lastId = await _trueLastId();
+            const lastId = await _trueLastId();   // 背景讀(不展開)
             lastEl.textContent = (lastId != null && lastId >= 0) ? `#${lastId}` : '—';
             // 已展開 → 取兩來源聯集，避免任一邊漏報：
             //   (1) chat 陣列的 is_system(這正是 /hide 設的旗標)  (2) getChatMessages hide_state:'hidden'
