@@ -287,7 +287,36 @@ function renderChars(cfg) {
 </div>`;
     }).join('');
 
+    // 🖥️ 系統語音對應列（系統名 → 模型；空字串 key = 預設系統音）
+    const sysRows = Object.entries(cfg.systemMappings || {}).map(([sname, mid]) => {
+        const label = sname === '' ? '（預設系統音）' : esc(sname);
+        return `
+<div class="vtts-char-row" style="display:flex;align-items:center;gap:8px;">
+  <span class="vtts-char-name" style="flex:0 0 auto;">🖥️ ${label}</span>
+  <select class="vtts-input" onchange="VN_TTS_Panel.updateSystemMapping('${escJs(sname)}',this.value)" style="flex:1;">
+    <option value="">（未綁定）</option>
+    ${Object.entries(cfg.models).map(([id,m]) =>
+        `<option value="${esc(id)}" ${mid===id?'selected':''}>${esc(m.name||id)}</option>`
+    ).join('')}
+  </select>
+  <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteSystemMapping('${escJs(sname)}')">✕</button>
+</div>`;
+    }).join('');
+
     return `
+<div class="vtts-card">
+  <div class="vtts-card-title">🖥️ 系統語音（[Sys|系統名|訊息]）</div>
+  <div class="vtts-hint" style="margin-bottom:8px;">給「系統」訊息配音。不同 AI／系統名可各綁一個音；系統名留空 ＝ 所有 [Sys] 的預設音。</div>
+  <div class="vtts-row">
+    <input class="vtts-input" id="vtts-new-sys" type="text" placeholder="系統名（如 Claude、GPT；留空＝預設）">
+    <select class="vtts-input" id="vtts-new-sys-model">
+      <option value="">選擇模型</option>
+      ${modelOptions}
+    </select>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addSystemMapping()" style="flex-shrink:0">新增</button>
+  </div>
+  ${sysRows ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">${sysRows}</div>` : '<div class="vtts-empty" style="margin-top:10px;">尚無系統語音</div>'}
+</div>
 <div class="vtts-card">
   <div class="vtts-card-title">➕ 新增角色對應</div>
   <div class="vtts-row">
@@ -756,6 +785,12 @@ const VN_TTS_Panel = {
             if (!tts.config.charMappings[char]) tts.config.charMappings[char] = mid;
         }
 
+        // 合併 systemMappings（同樣不覆蓋；空字串 key = 預設系統音）
+        if (!tts.config.systemMappings) tts.config.systemMappings = {};
+        for (const [sname, mid] of Object.entries(data.systemMappings || {})) {
+            if (tts.config.systemMappings[sname] === undefined) tts.config.systemMappings[sname] = mid;
+        }
+
         // 合併 npcCategories（以 id 去重）
         const existingIds = new Set((tts.config.npcCategories || []).map(c => c.id));
         for (const cat of (data.npcCategories || [])) {
@@ -863,6 +898,37 @@ const VN_TTS_Panel = {
         });
         
         this._toast('✓ 所有模型已清空');
+    },
+
+    // ── 🖥️ 系統語音對應 ────────────────────────────────────────────────
+    addSystemMapping() {
+        const tts = this._tts();
+        if (!tts) return;
+        if (!tts.config.systemMappings) tts.config.systemMappings = {};
+        const name = document.getElementById('vtts-new-sys').value.trim();
+        const mid  = document.getElementById('vtts-new-sys-model').value;
+        if (!mid) { this._toast('✗ 請選擇模型'); return; }
+        tts.config.systemMappings[name] = mid;   // name 可為空 ＝ 預設系統音
+        tts.save();
+        this._toast(name ? `✓ 已新增系統音：${name}` : '✓ 已設定預設系統音');
+        this._renderBody('chars');
+    },
+
+    updateSystemMapping(sysName, modelId) {
+        const tts = this._tts();
+        if (!tts) return;
+        if (!tts.config.systemMappings) tts.config.systemMappings = {};
+        if (modelId) tts.config.systemMappings[sysName] = modelId;
+        else         delete tts.config.systemMappings[sysName];
+        tts.save();
+    },
+
+    deleteSystemMapping(sysName) {
+        const tts = this._tts();
+        if (!tts) return;
+        if (tts.config.systemMappings) delete tts.config.systemMappings[sysName];
+        tts.save();
+        this._renderBody('chars');
     },
 
     addCharMapping() {
