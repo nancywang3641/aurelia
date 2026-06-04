@@ -318,8 +318,8 @@
     };
 
     API._generateSummary = async function (startId, endId, sourceType, mergePrev) {
-        const btn = document.getElementById('btn-grand-summary');
-        btn.innerText = "生成中 (請勿關閉)..."; btn.classList.add('spinning');
+        const btn = document.getElementById('btn-grand-summary');   // 從 CTX 快捷入口開時不存在 → null-safe
+        if (btn) { btn.innerText = "生成中 (請勿關閉)..."; btn.classList.add('spinning'); }
         try {
             const helper = window.parent.TavernHelper;
             if (!helper) throw new Error("無 TavernHelper");
@@ -528,7 +528,7 @@
             await _genOnce();
             _showSummaryPreview();
         } catch (e) { alert("生成失敗: " + e.message); } finally {
-            btn.innerText = "📝 生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning');
+            if (btn) { btn.innerText = "📝 生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning'); }
         }
     };
 
