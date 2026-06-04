@@ -2591,9 +2591,6 @@
             const cv = this._charCV(name);
             const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-            const el = this._slotEl(idx);
-            if (el) el.classList.add(idx === 0 ? 'vn-cc-shift-l' : 'vn-cc-shift-r');
-
             let card = document.getElementById('vn-char-card');
             if (!card) { card = document.createElement('div'); card.id = 'vn-char-card'; (document.getElementById('page-game') || document.body).appendChild(card); }
             card.className = 'vn-cc ' + (idx === 0 ? 'vn-cc-left' : 'vn-cc-right');
