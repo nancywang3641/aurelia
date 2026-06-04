@@ -193,11 +193,12 @@
                 if(el) el.innerHTML = elsToClear[id];
             }
 
-            const hides = ['speaker-name', 'game-char', 'char-portrait', 'top-badge'];
+            const hides = ['speaker-name', 'game-char', 'game-char-2', 'char-portrait', 'top-badge'];
             hides.forEach(id => {
                 const el = document.getElementById(id);
-                if(el) el.style.display = 'none';
+                if(el) { el.style.display = 'none'; if (el.classList) el.classList.remove('vn-dim', 'vn-active'); }
             });
+            this._stage = [null, null]; this._stageTick = 0;   // 重置雙格舞台
 
             // 清除場景插圖 overlay（防止跨章節殘留）
             const sceneCgOverlay = document.getElementById('scene-cg-overlay');
@@ -1444,8 +1445,7 @@
                 this.isSkip = false; this.updateControlUI();
                 const panelWrapper = document.getElementById('text-panel-wrapper');
                 if (panelWrapper) panelWrapper.style.display = 'none';
-                const gc = document.getElementById('game-char'); if (gc) gc.style.display = 'none';
-                const cp = document.getElementById('char-portrait'); if (cp) cp.style.display = 'none';
+                this._stageClear();   // 章節結束 → 清空兩格立繪
                 const endOverlay = document.getElementById('vn-end-overlay');
                 if (endOverlay) {
                     endOverlay.classList.add('active');
@@ -1655,8 +1655,7 @@
             }
 
             if (line.startsWith('[Bg|')) {
-                document.getElementById('game-char').style.display = 'none';
-                document.getElementById('char-portrait').style.display = 'none';
+                this._stageClear();   // 換背景＝換場景 → 清空兩格立繪
                 const parts = line.slice(4, -1).split('|');
                 const sceneLabel = parts.length >= 2 ? parts[1] : parts[0];
                 const aiPrompt   = parts[2] || (parts.length === 1 ? parts[0] : null);
@@ -1793,6 +1792,7 @@
             }
 
             if (line.startsWith('[Trans|')) {
+                this._stageClear();   // 過場 → 清空兩格立繪
                 const _tParts = line.split('|');
                 const text = (_tParts[2]?.replace(']', '') || _tParts[1]?.replace(']', '') || '').trim();
                 document.getElementById('trans-text').innerText = text;
@@ -1909,9 +1909,14 @@
                 this.playSFX(ex.sfx);
                 return;
             }
+            if (line.startsWith('[Exit|')) {
+                const p = line.slice(6, -1).split('|');
+                if (p[0]) this._stageRemove(p[0].trim());   // 角色離場 → 移除該格立繪
+                this.next();
+                return;
+            }
             if (line.startsWith('[Nar|')) {
-                document.getElementById('game-char').style.display = 'none';
-                document.getElementById('char-portrait').style.display = 'none';
+                this._stageDimAll();   // 旁白：立繪全留、全部變暗（不再藏）
                 const p = line.slice(5, -1).split('|');
                 const ex = this._extractTextAndSFX(p);
                 this._currentChar = null; this.updateControlUI();
@@ -1957,8 +1962,7 @@
             }
             const _stripped = _trimmed.replace(/^\[?/, '').replace(/\]$/, '').trim();
             if (_stripped.length > 2 && !_trimmed.startsWith('[') && !_trimmed.startsWith('<') && !_trimmed.startsWith('//') && !_trimmed.startsWith('---')) {
-                document.getElementById('game-char').style.display = 'none';
-                document.getElementById('char-portrait').style.display = 'none';
+                this._stageDimAll();   // 純文字旁白：立繪保留、變暗
                 this.renderVN('', _stripped);
                 this.addLog('旁白', _stripped);
                 return;
@@ -2012,8 +2016,9 @@
         },
         hideVNPanel: function() {
             document.getElementById('text-panel-wrapper').style.display = 'none';
-            document.getElementById('game-char').style.display = 'none';
-            document.getElementById('char-portrait').style.display = 'none';
+            const g1 = document.getElementById('game-char'); if (g1) g1.style.display = 'none';
+            const g2 = document.getElementById('game-char-2'); if (g2) g2.style.display = 'none';
+            const cp = document.getElementById('char-portrait'); if (cp) cp.style.display = 'none';
         },
         toggleUI: function(target) {
             const po = document.getElementById('phone-overlay');
@@ -2258,76 +2263,109 @@
             });
         },
 
-        _tryLoad: function(targetImg, urls, fallback, onSuccess) {
-            const guardName = this.currentName; // 鎖定當下角色，非同步回來再確認
-            let idx = 0;
+        // ===== 雙格立繪舞台 =====
+        // _stage[0]=左格、_stage[1]=右格；各為 null 或 { name, exp, lastTick }
+        _slotEl: function(idx) { return document.getElementById(idx === 0 ? 'game-char' : 'game-char-2'); },
+        _stageInit: function() { if (!this._stage) { this._stage = [null, null]; this._stageTick = 0; } },
+        _stageIndexFor: function(name) {
+            this._stageInit();
+            for (let i = 0; i < 2; i++) if (this._stage[i] && this._stage[i].name === name) return i;   // 已在場 → 沿用原格
+            for (let i = 0; i < 2; i++) if (!this._stage[i]) return i;                                   // 有空格 → 先左後右
+            return (this._stage[0].lastTick <= this._stage[1].lastTick) ? 0 : 1;                         // 兩格滿 → 驅逐最久沒說話那格
+        },
+        // 燈光：speakerIdx 那格亮、其餘在場變暗；speakerIdx=-1（旁白）全暗
+        _applyStageLighting: function(speakerIdx) {
+            this._stageInit();
+            const occ = [0, 1].filter(i => this._stage[i]);
+            const solo = (occ.length === 1) ? occ[0] : -1;   // 只有一個角色在場 → 置中
+            for (let i = 0; i < 2; i++) {
+                const el = this._slotEl(i);
+                if (!el || !this._stage[i]) continue;
+                el.classList.toggle('vn-dim', i !== speakerIdx);
+                el.classList.toggle('vn-active', i === speakerIdx);
+                el.classList.toggle('vn-solo', i === solo);
+            }
+        },
+        _stageDimAll: function() { this._applyStageLighting(-1); },
+        _clearSlot: function(i) {
+            this._stageInit();
+            this._stage[i] = null;
+            const el = this._slotEl(i);
+            if (el) { this._hideEl(el); el.classList.remove('vn-dim', 'vn-active', 'vn-solo'); }
+        },
+        _stageRemove: function(name) {
+            this._stageInit();
+            for (let i = 0; i < 2; i++) if (this._stage[i] && this._stage[i].name === name) this._clearSlot(i);
+        },
+        _stageClear: function() { this._stageInit(); this._clearSlot(0); this._clearSlot(1); },
+        // 滯留清除：某格角色超過 N tick 沒當說話者 → 自動移除（防殘留），N 預設 5、可由 localStorage 覆寫
+        _staleSweep: function() {
+            this._stageInit();
+            let limit = parseInt(window.localStorage.getItem('vn_sprite_stale_limit'));
+            if (isNaN(limit) || limit < 1) limit = 5;
+            for (let i = 0; i < 2; i++) {
+                const s = this._stage[i];
+                if (s && (this._stageTick - s.lastTick) > limit) this._clearSlot(i);
+            }
+        },
+
+        // isStale：給雙格用的「這格還是不是同一角色」守衛；不給就退回舊的 currentName 守衛（通話模式用）
+        _tryLoad: function(targetImg, urls, fallback, onSuccess, isStale) {
+            const guardName0 = this.currentName;
+            const _stale = isStale || (() => this.currentName !== guardName0);
+            let i = 0;
             const tryNext = () => {
-                if (idx >= urls.length) { fallback(); return; }
-                const url = urls[idx++];
+                if (i >= urls.length) { fallback(); return; }
+                const url = urls[i++];
                 const tempImg = new Image();
                 tempImg.onload = () => {
-                    if (this.currentName !== guardName) return; // 已切換角色，丟棄
-                    if (targetImg.id !== 'call-avatar') {
-                        this._showEl(targetImg, url);
-                    } else {
-                        targetImg.src = url;
-                    }
+                    if (_stale()) return;
+                    if (targetImg.id !== 'call-avatar') this._showEl(targetImg, url); else targetImg.src = url;
                     if (onSuccess) onSuccess(targetImg);
                 };
-                tempImg.onerror = () => {
-                    if (this.currentName !== guardName) return; // 已切換角色，停止嘗試
-                    tryNext();
-                };
+                tempImg.onerror = () => { if (_stale()) return; tryNext(); };
                 tempImg.src = url;
             };
             tryNext();
         },
 
-        updateSprite: async function(name, exp) {
-            const prevName = this.currentName;
-            this.currentName = name; this.currentExp = exp;
-            const img = document.getElementById('game-char');
-            // 只有切換角色時才隱藏立繪，同角色連續說話不閃爍
-            if (prevName !== name) {
-                this._hideEl(document.getElementById('char-portrait'));
-                this._hideEl(img);
-                img.dataset.slideIn = '1';
-            }
+        // 公開入口（[Char]/[Inner] 呼叫）：把說話角色放上舞台、渲染、打燈、清滯留
+        updateSprite: function(name, exp) {
+            this._stageInit();
+            this._stageTick++;
+            const idx = this._stageIndexFor(name);
+            const prev = this._stage[idx];
+            const isNew = !prev || prev.name !== name;
+            this._stage[idx] = { name, exp, lastTick: this._stageTick };
+            this.currentName = name; this.currentExp = exp;   // 相容：通話/TTS/部分舊流程仍讀
+            const el = this._slotEl(idx);
+            if (el && isNew) { this._hideEl(el); el.dataset.slideIn = '1'; }
+            this._renderSlot(idx, name, exp);
+            this._applyStageLighting(idx);     // 說話者亮、另一格（若在場）變暗
+            this._staleSweep();
+        },
 
+        // 單格圖片解析鏈（sprite_cache → spriteBase → fallbackToAI），守衛改用「這格還是不是同角色」
+        _renderSlot: async function(idx, name, exp) {
+            const img = this._slotEl(idx);
+            if (!img) return;
+            const _stale = () => !this._stage[idx] || this._stage[idx].name !== name;
             const triggerAnim = (target) => {
-                const isPortrait = target.id === 'char-portrait';
-                const shakeClass = isPortrait ? 'portrait-shake' : 'sprite-shake';
-                const jumpClass  = isPortrait ? 'portrait-jumpscare' : 'sprite-jumpscare';
-
-                target.classList.remove(shakeClass, jumpClass, 'sprite-slide-in-right');
+                if (_stale()) return;
+                target.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right');
                 void target.offsetWidth;
-
-                const isNewChar = !isPortrait && target.dataset.slideIn === '1';
-                if (isNewChar) {
-                    target.classList.add('sprite-slide-in-right');
-                    delete target.dataset.slideIn;
-                } else {
-                    if (exp === 'Surprised') target.classList.add(shakeClass);
-                    if (exp === 'JumpScare') target.classList.add(jumpClass);
-                }
+                if (target.dataset.slideIn === '1') { target.classList.add('sprite-slide-in-right'); delete target.dataset.slideIn; }
+                else { if (exp === 'Surprised') target.classList.add('sprite-shake'); if (exp === 'JumpScare') target.classList.add('sprite-jumpscare'); }
             };
-
-            // 🆕 最優先：sprite_cache（用戶在設定 → 畫廊 → 頭像 → 角色立繪生成的透明 PNG）
-            // 真立繪、2:3 直立、套 #game-char（貼底容器），不用頭像框
+            // 最優先：sprite_cache（透明真立繪）
             for (const v of this._nameVariants(name)) {
                 const cached = await VN_Cache.get('sprite_cache', v);
-                if (cached?.url) {
-                    if (this.currentName !== name) return; // 防角色切換
-                    this._showEl(img, cached.url);
-                    triggerAnim(img);
-                    return;
-                }
+                if (cached?.url) { if (_stale()) return; img.classList.remove('no-frame'); this._showEl(img, cached.url); triggerAnim(img); return; }
             }
-
             if (VN_Config.data.spriteBase) {
                 const urls = this._nameVariants(name).map(v => `${VN_Config.data.spriteBase}${v}_${exp}.png`);
-                this._tryLoad(img, urls, () => this.handleImgError(img), triggerAnim);
-            } else this.fallbackToAI(img);
+                this._tryLoad(img, urls, () => this.handleImgError(img), triggerAnim, _stale);
+            } else this.fallbackToAI(idx, name, exp);
         },
         
         updateCallAvatar: function(name) {
@@ -2335,202 +2373,119 @@
             const img = document.getElementById('call-avatar');
             if (VN_Config.data.spriteBase) {
                 const urls = this._nameVariants(name).map(v => `${VN_Config.data.spriteBase}${v}_Neutral.png`);
-                this._tryLoad(img, urls, () => this.handleImgError(img), null); 
-            } else this.fallbackToAI(img);
+                this._tryLoad(img, urls, () => this.handleImgError(img), null);
+            } else this.fallbackToAI('call', name, 'Neutral');
         },
-        
+
         handleImgError: function(img) {
             img.onerror = null;
-            // 在 onerror 觸發時立即鎖定當前角色名，防止非同步回調時已切換到下一個角色
-            const lockedName = this.currentName;
+            const isCall = img.id === 'call-avatar';
+            const target = isCall ? 'call' : (img.id === 'game-char-2' ? 1 : 0);
+            this._stageInit();
+            const lockedName = isCall ? this.currentName : (this._stage[target] && this._stage[target].name);
+            const lockedExp  = isCall ? this.currentExp  : (this._stage[target] && this._stage[target].exp);
+            if (!lockedName) { this._hideEl(img); return; }
+            const _stale = isCall ? (() => this.currentName !== lockedName)
+                                  : (() => !this._stage[target] || this._stage[target].name !== lockedName);
             const base = VN_Config.data.charDefaultBase;
 
-            const triggerAnim = (target) => {
-                if (this.currentName !== lockedName) return; // 已切換角色，拋棄動畫
-                const isPortrait = target.id === 'char-portrait';
-                const shakeClass = isPortrait ? 'portrait-shake' : 'sprite-shake';
-                const jumpClass  = isPortrait ? 'portrait-jumpscare' : 'sprite-jumpscare';
-                target.classList.remove(shakeClass, jumpClass, 'sprite-slide-in-right');
-                void target.offsetWidth;
-                const isNewChar = !isPortrait && target.dataset.slideIn === '1';
-                if (isNewChar) {
-                    target.classList.add('sprite-slide-in-right');
-                    delete target.dataset.slideIn;
-                } else {
-                    if (this.currentExp === 'Surprised') target.classList.add(shakeClass);
-                    if (this.currentExp === 'JumpScare') target.classList.add(jumpClass);
-                }
+            const triggerAnim = (t) => {
+                if (_stale()) return;
+                t.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right');
+                void t.offsetWidth;
+                if (t.dataset.slideIn === '1') { t.classList.add('sprite-slide-in-right'); delete t.dataset.slideIn; }
+                else { if (lockedExp === 'Surprised') t.classList.add('sprite-shake'); if (lockedExp === 'JumpScare') t.classList.add('sprite-jumpscare'); }
             };
 
             if (base) {
                 const urls = this._nameVariants(lockedName).map(v => `${base}${v}_presets.png`);
-                this._tryLoad(img, urls, () => {
-                    if (this.currentName !== lockedName) return; // 已切換角色，拋棄 fallback
-                    this.fallbackToAI(img);
-                }, triggerAnim);
+                this._tryLoad(img, urls, () => { if (_stale()) return; this.fallbackToAI(target, lockedName, lockedExp); }, isCall ? null : triggerAnim, _stale);
             } else {
-                this.fallbackToAI(img);
+                this.fallbackToAI(target, lockedName, lockedExp);
             }
         },
         
-        fallbackToAI: async function(img) {
-            const name = this.currentName;
-            
-            // --- 世界書頭像 Fallback ---
-            if (!this._lorebookLoaded) {
-                await this._loadLorebookAvatars();
-                this._lorebookLoaded = true;
-                if (this.currentName !== name) return; // 角色已切換，放棄顯示
-            }
+        // target：0/1 = 舞台格子；'call' = 通話頭像。雙格一律貼底立繪樣式(no-frame)，通話用 img.src
+        fallbackToAI: async function(target, name, exp) {
+            const isCall = (target === 'call');
+            const img = isCall ? document.getElementById('call-avatar') : this._slotEl(target);
+            if (!img) return;
+            this._stageInit();
+            const _stale = isCall ? (() => this.currentName !== name)
+                                  : (() => !this._stage[target] || this._stage[target].name !== name);
+            const show = (url) => {
+                if (_stale()) return;
+                if (isCall) { img.src = url; }
+                else { img.classList.add('no-frame'); this._showEl(img, url); this._applyAvatarAnim(img, exp); }
+            };
 
+            // 世界書頭像
+            if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
             const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
-            if (lbUrl) {
-                if (this.currentName !== name) return;
-                let targetEl = img;
-                if (img.id === 'game-char') {
-                    const portrait = document.getElementById('char-portrait');
-                    this._showEl(portrait, lbUrl);
-                    targetEl = portrait;
-                } else {
-                    if (img.id !== 'call-avatar') this._showEl(img, lbUrl); else img.src = lbUrl;
-                }
-                return this._applyAvatarAnim(targetEl);
-            }
-            // --- END ---
+            if (lbUrl) { show(lbUrl); return; }
 
-            // 1. 先查記憶體快取
-            if (this._avatarMemCache[name]) {
-                if (this.currentName !== name) return;
-                const url = this._avatarMemCache[name];
-                let targetEl = img;
-                if (img.id === 'game-char') {
-                    const portrait = document.getElementById('char-portrait');
-                    this._showEl(portrait, url);
-                    targetEl = portrait;
-                } else {
-                    if (img.id !== 'call-avatar') this._showEl(img, url); else img.src = url;
-                }
-                return this._applyAvatarAnim(targetEl);
-            }
+            // 記憶體快取
+            if (this._avatarMemCache[name]) { show(this._avatarMemCache[name]); return; }
 
-            // 防止同一角色並發重複生成：等待已在進行中的生成
+            // 並發鎖：同角色生成中 → 等它
             if (this._pendingAvatars[name]) {
                 await this._pendingAvatars[name];
-                if (this.currentName !== name) return;
-                if (this._avatarMemCache[name]) {
-                    const url = this._avatarMemCache[name];
-                    let targetEl = img;
-                    if (img.id === 'game-char') {
-                        const portrait = document.getElementById('char-portrait');
-                        this._showEl(portrait, url);
-                        targetEl = portrait;
-                    } else {
-                        if (img.id !== 'call-avatar') this._showEl(img, url); else img.src = url;
-                    }
-                    this._applyAvatarAnim(targetEl);
-                }
+                if (_stale()) return;
+                if (this._avatarMemCache[name]) show(this._avatarMemCache[name]);
                 return;
             }
-
             let _resolvePending;
             this._pendingAvatars[name] = new Promise(r => { _resolvePending = r; });
-
             try {
-                // 2. 查 IndexedDB 資料庫
                 const cached = await VN_Cache.get('avatar_cache', name);
                 let url;
                 if (cached && cached.url && !cached.url.startsWith('blob:')) {
                     const objUrl = await this._toObjectUrl(cached.url);
-                    url = objUrl || cached.url;
-                    this._avatarMemCache[name] = url;
+                    url = objUrl || cached.url; this._avatarMemCache[name] = url;
                 } else {
-                    // 3. 記憶體跟資料庫都沒圖，這時候才檢查有沒有 prompt (d)
                     let d = this._resolveAvatarPrompt(name);
                     if (!d) {
-                        // 先嘗試 OS_PERSONA 橋接
                         const pf = this._getPersonaFallback(name);
-                        if (pf?.url) {
-                            url = pf.url;
-                            this._avatarMemCache[name] = url;
-                        } else if (pf?.prompt) {
-                            d = pf.prompt;
-                        } else {
-                            // 沒有提示詞也沒有任何快取 → 顯示最終 Fallback 剪影立繪（不套頭像框）
-                            const fallbackUrl = VN_Config.data.finalFallbackSprite;
-                            if (fallbackUrl && img.id !== 'call-avatar') {
-                                const portrait = document.getElementById('char-portrait');
-                                if (portrait) { portrait.classList.add('no-frame'); this._showEl(portrait, fallbackUrl); }
-                            } else if (img.id !== 'call-avatar') {
-                                img.style.display = 'none';
-                            }
+                        if (pf?.url) { url = pf.url; this._avatarMemCache[name] = url; }
+                        else if (pf?.prompt) { d = pf.prompt; }
+                        else {
+                            const fb = VN_Config.data.finalFallbackSprite;
+                            if (fb) show(fb); else if (!_stale()) this._hideEl(img);
                             return;
                         }
                     }
                     if (!url && !d) return;
-
-                    const raw = await VN_Image.getAvatar(d, this.currentExp);
-                    if (!raw) return;
-                    try {
-                        const fetchRes = await fetch(raw);
-                        const blob = await fetchRes.blob();
-                        const objUrl = URL.createObjectURL(blob);
-                        const dataUrl = await new Promise(r => {
-                            const reader = new FileReader();
-                            reader.onload = () => r(reader.result);
-                            reader.onerror = () => r('');
-                            reader.readAsDataURL(blob);
-                        });
-                        url = objUrl;
-                        this._avatarMemCache[name] = objUrl;
-                        if (dataUrl) await VN_Cache.set('avatar_cache', name, { prompt: d, url: dataUrl });
-                    } catch(e) {
-                        url = await this._toDataUrl(raw);
-                        if (url) {
-                            this._avatarMemCache[name] = url;
-                            await VN_Cache.set('avatar_cache', name, { prompt: d, url });
+                    if (!url) {   // 還沒拿到圖才生成（pf.url 直接用）
+                        const raw = await VN_Image.getAvatar(d, exp);
+                        if (!raw) return;
+                        try {
+                            const fetchRes = await fetch(raw);
+                            const blob = await fetchRes.blob();
+                            const objUrl = URL.createObjectURL(blob);
+                            const dataUrl = await new Promise(r => { const reader = new FileReader(); reader.onload = () => r(reader.result); reader.onerror = () => r(''); reader.readAsDataURL(blob); });
+                            url = objUrl; this._avatarMemCache[name] = objUrl;
+                            if (dataUrl) await VN_Cache.set('avatar_cache', name, { prompt: d, url: dataUrl });
+                        } catch(e) {
+                            url = await this._toDataUrl(raw);
+                            if (url) { this._avatarMemCache[name] = url; await VN_Cache.set('avatar_cache', name, { prompt: d, url }); }
                         }
                     }
                 }
-                
-                if (!url) {
-                    // AI 生成失敗 → 顯示最終 Fallback 剪影立繪（不套頭像框）
-                    const fallbackUrl = VN_Config.data.finalFallbackSprite;
-                    if (fallbackUrl && img.id !== 'call-avatar') {
-                        const portrait = document.getElementById('char-portrait');
-                        if (portrait) { portrait.classList.add('no-frame'); this._showEl(portrait, fallbackUrl); }
-                    } else {
-                        if (img.id !== 'call-avatar') this._hideEl(img);
-                        if (img.id === 'game-char') this._hideEl(document.getElementById('char-portrait'));
-                    }
-                    return;
-                }
-
-                if (this.currentName !== name) return; // 角色已切換，放棄顯示
-
-                let targetEl = img;
-                if (img.id === 'game-char') {
-                    const portrait = document.getElementById('char-portrait');
-                    this._showEl(portrait, url);
-                    targetEl = portrait;
-                } else {
-                    if (img.id !== 'call-avatar') this._showEl(img, url); else img.src = url;
-                }
-
-                this._applyAvatarAnim(targetEl);
+                if (!url) { const fb = VN_Config.data.finalFallbackSprite; if (fb) show(fb); else if (!_stale()) this._hideEl(img); return; }
+                show(url);
             } finally {
                 _resolvePending();
                 delete this._pendingAvatars[name];
             }
         },
 
-        _applyAvatarAnim: function(targetEl) {
-            const isPortrait = targetEl.id === 'char-portrait';
-            const shakeClass = isPortrait ? 'portrait-shake' : 'sprite-shake';
-            const jumpClass  = isPortrait ? 'portrait-jumpscare' : 'sprite-jumpscare';
-            targetEl.classList.remove(shakeClass, jumpClass);
-            void targetEl.offsetWidth;
-            if (this.currentExp === 'Surprised') targetEl.classList.add(shakeClass);
-            if (this.currentExp === 'JumpScare') targetEl.classList.add(jumpClass);
+        _applyAvatarAnim: function(el, exp) {
+            if (!el) return;
+            const _exp = (exp !== undefined) ? exp : this.currentExp;
+            el.classList.remove('sprite-shake', 'sprite-jumpscare');
+            void el.offsetWidth;
+            if (_exp === 'Surprised') el.classList.add('sprite-shake');
+            if (_exp === 'JumpScare') el.classList.add('sprite-jumpscare');
         }
     };
     // === 4. 全域 UI 輔助函數 ===
