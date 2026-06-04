@@ -196,7 +196,7 @@
             const hides = ['speaker-name', 'game-char', 'game-char-2', 'char-portrait', 'top-badge'];
             hides.forEach(id => {
                 const el = document.getElementById(id);
-                if(el) { el.style.display = 'none'; if (el.classList) el.classList.remove('vn-dim', 'vn-active'); }
+                if(el) { el.style.display = 'none'; if (el.classList) el.classList.remove('vn-dim', 'vn-active', 'vn-solo', 'vn-avatar'); }
             });
             this._stage = [null, null]; this._stageTick = 0;   // 重置雙格舞台
 
@@ -2291,7 +2291,7 @@
             this._stageInit();
             this._stage[i] = null;
             const el = this._slotEl(i);
-            if (el) { this._hideEl(el); el.classList.remove('vn-dim', 'vn-active', 'vn-solo'); }
+            if (el) { this._hideEl(el); el.classList.remove('vn-dim', 'vn-active', 'vn-solo', 'vn-avatar'); }
         },
         _stageRemove: function(name) {
             this._stageInit();
@@ -2352,6 +2352,7 @@
             const _stale = () => !this._stage[idx] || this._stage[idx].name !== name;
             const triggerAnim = (target) => {
                 if (_stale()) return;
+                target.classList.remove('vn-avatar');   // 真立繪 → 貼地（移除頭像浮起樣式）
                 target.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right');
                 void target.offsetWidth;
                 if (target.dataset.slideIn === '1') { target.classList.add('sprite-slide-in-right'); delete target.dataset.slideIn; }
@@ -2360,7 +2361,7 @@
             // 最優先：sprite_cache（透明真立繪）
             for (const v of this._nameVariants(name)) {
                 const cached = await VN_Cache.get('sprite_cache', v);
-                if (cached?.url) { if (_stale()) return; img.classList.remove('no-frame'); this._showEl(img, cached.url); triggerAnim(img); return; }
+                if (cached?.url) { if (_stale()) return; img.classList.remove('vn-avatar'); this._showEl(img, cached.url); triggerAnim(img); return; }
             }
             if (VN_Config.data.spriteBase) {
                 const urls = this._nameVariants(name).map(v => `${VN_Config.data.spriteBase}${v}_${exp}.png`);
@@ -2391,6 +2392,7 @@
 
             const triggerAnim = (t) => {
                 if (_stale()) return;
+                t.classList.remove('vn-avatar');   // 預設立繪(presets) → 貼地
                 t.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right');
                 void t.offsetWidth;
                 if (t.dataset.slideIn === '1') { t.classList.add('sprite-slide-in-right'); delete t.dataset.slideIn; }
@@ -2416,7 +2418,7 @@
             const show = (url) => {
                 if (_stale()) return;
                 if (isCall) { img.src = url; }
-                else { img.classList.add('no-frame'); this._showEl(img, url); this._applyAvatarAnim(img, exp); }
+                else { img.classList.add('vn-avatar'); this._showEl(img, url); this._applyAvatarAnim(img, exp); }
             };
 
             // 世界書頭像
