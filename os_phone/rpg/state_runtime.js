@@ -84,6 +84,18 @@
         cur[keys[keys.length - 1]] = val;
     }
 
+    // 深合併 src 進 dst：巢狀物件遞迴合併、純值取 src。給 object 型欄位 patch 用，
+    // 避免「AI 一次輸出整個物件就把整碗覆蓋掉、舊角色全消失」(時而一人時而三人的根因)。
+    function _deepMergeObj(dst, src) {
+        if (!src || typeof src !== 'object' || Array.isArray(src)) return src;
+        if (!dst || typeof dst !== 'object' || Array.isArray(dst)) dst = {};
+        for (const k of Object.keys(src)) {
+            const sv = src[k];
+            dst[k] = (sv && typeof sv === 'object' && !Array.isArray(sv)) ? _deepMergeObj(dst[k], sv) : sv;
+        }
+        return dst;
+    }
+
     function recomputeCurrent(patches) {
         const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
         const cur = {};
@@ -91,8 +103,9 @@
             const p = patches[id];
             if (!p || typeof p !== 'object') continue;
             for (const [k, v] of Object.entries(p)) {
-                if (k.includes('.')) _setDeep(cur, k, v);  // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
-                else cur[k] = v;                            // 一般扁平欄位
+                if (k.includes('.')) _setDeep(cur, k, v);                          // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
+                else if (v && typeof v === 'object' && !Array.isArray(v)) cur[k] = _deepMergeObj(cur[k], v);  // 物件欄位 → 深合併(別整碗覆蓋)
+                else cur[k] = v;                                                   // 數字/字串/陣列 → 取新值
             }
         }
         return cur;
