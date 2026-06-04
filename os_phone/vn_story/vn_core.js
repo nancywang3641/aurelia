@@ -2419,25 +2419,30 @@
             this._stageInit();
             const _stale = isCall ? (() => this.currentName !== name)
                                   : (() => !this._stage[target] || this._stage[target].name !== name);
-            const show = (url) => {
+            const showAvatar = (url) => {   // 頭像(世界書/AI生成/persona) → 浮起金框
                 if (_stale()) return;
                 if (isCall) { img.src = url; }
                 else { img.classList.add('vn-avatar'); this._showEl(img, url); this._applyAvatarAnim(img, exp); }
+            };
+            const showSprite = (url) => {   // 預設立繪(剪影) → 貼地、不套框
+                if (_stale()) return;
+                if (isCall) { img.src = url; }
+                else { img.classList.remove('vn-avatar'); this._showEl(img, url); this._applyAvatarAnim(img, exp); }
             };
 
             // 世界書頭像
             if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
             const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
-            if (lbUrl) { show(lbUrl); return; }
+            if (lbUrl) { showAvatar(lbUrl); return; }
 
             // 記憶體快取
-            if (this._avatarMemCache[name]) { show(this._avatarMemCache[name]); return; }
+            if (this._avatarMemCache[name]) { showAvatar(this._avatarMemCache[name]); return; }
 
             // 並發鎖：同角色生成中 → 等它
             if (this._pendingAvatars[name]) {
                 await this._pendingAvatars[name];
                 if (_stale()) return;
-                if (this._avatarMemCache[name]) show(this._avatarMemCache[name]);
+                if (this._avatarMemCache[name]) showAvatar(this._avatarMemCache[name]);
                 return;
             }
             let _resolvePending;
@@ -2456,7 +2461,7 @@
                         else if (pf?.prompt) { d = pf.prompt; }
                         else {
                             const fb = VN_Config.data.finalFallbackSprite;
-                            if (fb) show(fb); else if (!_stale()) this._hideEl(img);
+                            if (fb) showSprite(fb); else if (!_stale()) this._hideEl(img);
                             return;
                         }
                     }
@@ -2477,8 +2482,8 @@
                         }
                     }
                 }
-                if (!url) { const fb = VN_Config.data.finalFallbackSprite; if (fb) show(fb); else if (!_stale()) this._hideEl(img); return; }
-                show(url);
+                if (!url) { const fb = VN_Config.data.finalFallbackSprite; if (fb) showSprite(fb); else if (!_stale()) this._hideEl(img); return; }
+                showAvatar(url);
             } finally {
                 _resolvePending();
                 delete this._pendingAvatars[name];
