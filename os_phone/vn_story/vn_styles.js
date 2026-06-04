@@ -59,7 +59,7 @@
                     </div>
                 </div>
                 <div id="game-bg"></div>
-                <div id="game-char-container"><img id="game-char" src="" alt="character" onerror="window.VN_Core.handleImgError(this)"><img id="game-char-2" src="" alt="character" onerror="window.VN_Core.handleImgError(this)"></div>
+                <div id="game-char-container"><img id="game-char" src="" alt="character" onerror="window.VN_Core.handleImgError(this)" ondblclick="window.VN_Core.openCharCard(0)"><img id="game-char-2" src="" alt="character" onerror="window.VN_Core.handleImgError(this)" ondblclick="window.VN_Core.openCharCard(1)"></div>
                 <div id="scene-cg-overlay" onclick="window.VN_Core.next()"><img id="scene-cg-img" src="" alt="scene cg"></div>
 
                 <div id="top-badge"></div>
