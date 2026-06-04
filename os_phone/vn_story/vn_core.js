@@ -2558,11 +2558,18 @@
             try {
                 if (btn) btn.disabled = true;
                 setT('🎨 生成中…');
-                const prompt = this._resolveAvatarPrompt(name) || (name + ', portrait, full body');
+                // 跟頭像 tab 的🎨同一套：套「全身框」前後綴(full body…) + 剝掉頭像特寫詞，512×896 直立全身比例
+                const DEF_PREFIX = 'centered composition, entire body visible, body in frame, straight angle, solid background, (cowboy shot), full body, clothes and pants, school, ((detailed rendering)), clean and fluid linework, delicate and refined, ';
+                const DEF_SUFFIX = '';
+                const pfx = localStorage.getItem('os_sprite_tpl_prefix') || DEF_PREFIX;
+                const sfx = localStorage.getItem('os_sprite_tpl_suffix') || DEF_SUFFIX;
+                let rawP = String(this._resolveAvatarPrompt(name) || name);
+                rawP = rawP.replace(/\b(bust shot|upper body|portrait|close[\s-]?up|headshot|looking at viewer|soft background|face focus)\b/gi, '').replace(/\s*,\s*,+/g, ', ').trim();
+                const prompt = pfx + rawP + sfx;
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
                 const imCfg = win.OS_IMAGE_MANAGER.config;
                 const useNAI = !!(imCfg && imCfg.service === 'novelai' && imCfg.novelai && imCfg.novelai.token);
-                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: 896, height: 896, raw: !useNAI });
+                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: 512, height: 896, raw: !useNAI });
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
                 setT('🪄 去背中…');
