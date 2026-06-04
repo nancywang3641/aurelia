@@ -1234,8 +1234,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            頭像(vn-avatar)與單人(vn-solo)因 id+class 優先級較高，不受影響、維持原樣。 */
         @media (max-width: 768px) {
             #game-char, #game-char-2 { max-width: 100%; }
-            #game-char   { left:  -20%; right: auto; }
-            #game-char-2 { right: -20%; left:  auto; }
+            #game-char   { left:  -35%; right: auto; }
+            #game-char-2 { right: -35%; left:  auto; }
         }
         /* 雙擊立繪 → 角色卡 */
         #vn-char-card {
