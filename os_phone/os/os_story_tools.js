@@ -272,6 +272,14 @@
             const _endShow = await _trueLastId();
             if (_endShow != null && _endShow !== '') document.getElementById('range-end-id').placeholder = `最後一條 ID: ${_endShow}`;
 
+            // 還原「自動隱藏 / 預留樓層」設定
+            try {
+                const _kr = document.getElementById('range-keep-recent');
+                if (_kr) { const v = parseInt(localStorage.getItem('sp_summary_keep_recent')); _kr.value = isNaN(v) ? 5 : v; }
+                const _ah = document.getElementById('sum_autohide');
+                if (_ah) _ah.checked = localStorage.getItem('sp_summary_autohide') !== '0';
+            } catch (e) {}
+
             const bookName = helper.getCurrentCharPrimaryLorebook();
             if (bookName) {
                 const entries = await helper.getLorebookEntries(bookName);
@@ -298,6 +306,13 @@
         const end = endVal ? parseInt(endVal) : null;
         const sourceType = document.querySelector('input[name="sum_source"]:checked').value;
         const mergePrev = document.getElementById('sum_merge').checked;
+        // 存「自動隱藏 / 預留樓層」設定(給 _doSave 讀)
+        try {
+            const _ah = document.getElementById('sum_autohide');
+            localStorage.setItem('sp_summary_autohide', (_ah && _ah.checked) ? '1' : '0');
+            const _kr = parseInt(document.getElementById('range-keep-recent')?.value);
+            localStorage.setItem('sp_summary_keep_recent', isNaN(_kr) ? '5' : String(Math.max(0, _kr)));
+        } catch (e) {}
         document.getElementById('rpg-range-modal').classList.remove('active');
         API._generateSummary(start, end, sourceType, mergePrev);
     };
@@ -395,11 +410,15 @@
                 }
             } catch (e) { console.warn('[大總結] 注入 KEY 失敗:', e); }
 
-            // 🔒 自動隱藏「已總結到的樓層」(0 ~ 總結末樓-1)，保留末樓及之後的樓可見(末樓帶觸發 KEY)：
-            //    下次抓內容 / 一般生成都不再吃這些已濃縮進總結的原文。
+            // 🔒 自動隱藏已總結樓層，但預留最新 N 樓可見(近期上下文 + 末樓帶觸發 KEY)。
+            //    開關與 N 由彈窗設定(sp_summary_autohide / sp_summary_keep_recent)。
             try {
+                const _autohide = localStorage.getItem('sp_summary_autohide') !== '0';
+                let _keep = parseInt(localStorage.getItem('sp_summary_keep_recent'));
+                if (isNaN(_keep) || _keep < 0) _keep = 5;
                 const _end = (_summarizedEnd != null) ? _summarizedEnd : await _trueLastId();
-                if (_end != null && _end >= 1) await API._callSlashCommand(`/hide 0-${_end - 1}`);
+                const _hideTo = (_end != null) ? (_end - _keep) : null;   // 藏到這樓為止，之後 _keep 樓保留可見
+                if (_autohide && _hideTo != null && _hideTo >= 0) await API._callSlashCommand(`/hide 0-${_hideTo}`);
             } catch (e) { console.warn('[大總結] 自動隱藏失敗:', e); }
 
             // 🌟 parse【結語】+ 角色名單 → 寫 lobby_summary_index（給瀅瀅/柴郡注 sysPrompt）
@@ -677,6 +696,13 @@
                         <input type="number" id="range-start-id" class="ost-input" value="1" min="1">
                         <label class="ost-modal-lab">結束 ID (End)</label>
                         <input type="number" id="range-end-id" class="ost-input" placeholder="留空代表最後一條">
+                    </div>
+                    <div class="ost-modal-sec">
+                        <label class="ost-opt"><input type="checkbox" id="sum_autohide" checked><span>總結後自動隱藏舊樓層</span></label>
+                        <span class="ost-opt-desc">已總結的對話藏起來、AI 不再重複讀（只是隱藏，資料不會刪）</span>
+                        <label class="ost-modal-lab">預留最新樓層（不隱藏）</label>
+                        <input type="number" id="range-keep-recent" class="ost-input" value="5" min="0">
+                        <span class="ost-opt-desc">保留最近幾樓給 AI 看，維持劇情連貫</span>
                     </div>
                     <div class="ost-modal-btns">
                         <button class="ost-btn" onclick="document.getElementById('rpg-range-modal').classList.remove('active')">取消</button>
