@@ -2267,6 +2267,24 @@
             });
         },
 
+        // 換圖：先把新圖預載好，再「設版型 class + 換 src + 淡入」一起做 →
+        // 避免同一格從頭像換成立繪時，舊圖殘留在新版型位置一兩幀
+        _swapImage: function(img, url, isAvatar, isStale, onShown) {
+            if (!img || !url) return;
+            const apply = () => {
+                if (isStale && isStale()) return;
+                img.classList.toggle('vn-avatar', !!isAvatar);
+                this._showEl(img, url);
+                if (onShown) onShown();
+            };
+            const visible = img.style.display !== 'none' && img.style.display !== '' && img.style.opacity !== '0';
+            if (img.getAttribute('src') === url && visible) { apply(); return; }   // 已是同圖且顯示中 → 直接套用
+            const tmp = new Image();
+            tmp.onload = apply;
+            tmp.onerror = apply;
+            tmp.src = url;
+        },
+
         // ===== 雙格立繪舞台 =====
         // _stage[0]=左格、_stage[1]=右格；各為 null 或 { name, exp, lastTick }
         _slotEl: function(idx) { return document.getElementById(idx === 0 ? 'game-char' : 'game-char-2'); },
@@ -2366,7 +2384,7 @@
             // 最優先：sprite_cache（透明真立繪）
             for (const v of this._nameVariants(name)) {
                 const cached = await VN_Cache.get('sprite_cache', v);
-                if (cached?.url) { if (_stale()) return; img.classList.remove('vn-avatar'); this._showEl(img, cached.url); triggerAnim(img); return; }
+                if (cached?.url) { if (_stale()) return; this._swapImage(img, cached.url, false, _stale, () => triggerAnim(img)); return; }
             }
             if (VN_Config.data.spriteBase) {
                 const urls = this._nameVariants(name).map(v => `${VN_Config.data.spriteBase}${v}_${exp}.png`);
@@ -2423,12 +2441,12 @@
             const showAvatar = (url) => {   // 頭像(世界書/AI生成/persona) → 浮起金框
                 if (_stale()) return;
                 if (isCall) { img.src = url; }
-                else { img.classList.add('vn-avatar'); this._showEl(img, url); this._applyAvatarAnim(img, exp); }
+                else this._swapImage(img, url, true, _stale, () => this._applyAvatarAnim(img, exp));
             };
             const showSprite = (url) => {   // 預設立繪(剪影) → 貼地、不套框
                 if (_stale()) return;
                 if (isCall) { img.src = url; }
-                else { img.classList.remove('vn-avatar'); this._showEl(img, url); this._applyAvatarAnim(img, exp); }
+                else this._swapImage(img, url, false, _stale, () => this._applyAvatarAnim(img, exp));
             };
 
             // 世界書頭像
