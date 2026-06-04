@@ -733,13 +733,22 @@ const VN_TTS_Panel = {
             return;
         }
 
-        let newCount = 0, skipCount = 0;
+        let newCount = 0, updateCount = 0;
 
-        // 合併 models（不覆蓋已有的，讓使用者手動刪除再匯入才更新）
+        // 合併 models：新項目直接加入；已存在的更新 name 與路徑，但保留使用者自訂的 emotions
         for (const [id, model] of Object.entries(data.models)) {
-            if (tts.config.models[id]) { skipCount++; continue; }
-            tts.config.models[id] = model;
-            newCount++;
+            const existing = tts.config.models[id];
+            if (existing) {
+                const merged = { ...existing, ...model };
+                if (existing.emotions && Object.keys(existing.emotions).length) {
+                    merged.emotions = existing.emotions; // 保留使用者自訂情緒，不被 JSON 的空物件蓋掉
+                }
+                tts.config.models[id] = merged;
+                updateCount++;
+            } else {
+                tts.config.models[id] = model;
+                newCount++;
+            }
         }
 
         // 合併 charMappings（同樣不覆蓋）
@@ -757,12 +766,10 @@ const VN_TTS_Panel = {
         this._modelFormMode = null;
         this._renderBody('models');
 
-        if (newCount === 0 && skipCount === 0) {
+        if (newCount === 0 && updateCount === 0) {
             this._toast('⚠️ 配置檔內無模型資料');
-        } else if (newCount === 0) {
-            this._toast(`✓ 全部 ${skipCount} 個模型已存在，無新增`);
         } else {
-            this._toast(`✓ 已匯入 ${newCount} 個模型（跳過 ${skipCount} 個已存在的）`, 3000);
+            this._toast(`✓ 新增 ${newCount} 個、更新 ${updateCount} 個模型`, 3000);
         }
     },
 
