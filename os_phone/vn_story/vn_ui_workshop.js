@@ -39,6 +39,13 @@
                         <label>3. 外觀與動畫描述 (交給 AI 設計師)</label>
                         <textarea class="vn-ws-textarea" id="vn-ws-desc" placeholder="UI描述..." style="min-height: 100px;"></textarea>
                     </div>
+                    <div class="vn-ws-group">
+                        <label>4. 這個面板的配圖用哪個 AI 生</label>
+                        <select class="vn-ws-input" id="vn-ws-img-provider">
+                            <option value="pollinations">POLL AI — 快、省額度、不會亂長人臉（物品 / 廣告圖推薦）</option>
+                            <option value="novelai">NAI — 精緻二次元角色風（流媒體 / 立繪類）</option>
+                        </select>
+                    </div>
                     <button class="vn-ws-btn" id="vn-ws-btn-generate" style="background: rgba(26,28,40,0.06);">讓 AI 開始煉丹 (全新生成)</button>
                     <div id="vn-ws-loading">AI 正在撰寫特效代碼，請稍候...</div>
                     
@@ -110,6 +117,10 @@
 
     function bindEvents() {
         document.getElementById('vn-ws-btn-close').onclick = () => document.getElementById('vn_workshop_app').remove();
+
+        // 還原「配圖來源」選擇
+        const _ipSel = document.getElementById('vn-ws-img-provider');
+        if (_ipSel) _ipSel.value = (localStorage.getItem('vn_ws_img_provider') === 'novelai') ? 'novelai' : 'pollinations';
 
         const tabs = document.querySelectorAll('.vn-ws-tab');
         tabs.forEach(tab => {
@@ -580,7 +591,7 @@ ${refineMsg}
 - 只輸出新的 ${info.label} 內容，**完全不要輸出其他欄位、不要 JSON、不要解釋**
 - 必須用 <${info.tag}> 與 </${info.tag}> 標籤精準包裹
 ${scope === 'css' ? '- CSS 必須繼續使用 .vn-dynamic-panel-' + (generatedData.tagId || 'xxx') + ' 作為樣式前綴' : ''}
-${scope === 'js' ? '- JS 仍會被 new Function(container, lines, onComplete, js) 包裝；保持原本變數可用；圖片走 window.__IS_PREVIEW 隔離' : ''}
+${scope === 'js' ? '- JS 仍會被 new Function(container, lines, onComplete, js) 包裝；保持原本變數可用；圖片走 window.__IS_PREVIEW 隔離；OS_IMAGE_MANAGER.generate 的 { provider: "..." } 參數務必原樣保留、不要刪改' : ''}
 
 請輸出：
 <${info.tag}>
@@ -606,6 +617,9 @@ ${scope === 'js' ? '- JS 仍會被 new Function(container, lines, onComplete, js
         document.getElementById('vn-ws-code').innerText = isRefine ? `正在請 AI 進行修改 (範圍：${scope})...` : "開始呼叫底層 API (純淨模式)...";
         let messages = [];
         let mode = 'full'; // 'full' 全包 JSON ／ 'partial' 單欄位
+        // 配圖來源：用戶在煉丹爐選的 provider（沒選預設 POLL AI），baked 進 AI 寫的 generate() 呼叫
+        const _imgProvider = (document.getElementById('vn-ws-img-provider')?.value === 'novelai') ? 'novelai' : 'pollinations';
+        try { localStorage.setItem('vn_ws_img_provider', _imgProvider); } catch (e) {}
 
         if (isRefine && scope !== 'all' && generatedData && SCOPE_FIELD_INFO[scope]) {
             mode = 'partial';
@@ -630,6 +644,7 @@ ${desc}
 ### 🖼️ 圖片處理核心規範 (預覽隔離機制) ⚠️極度重要⚠️
 劇本 AI 只是「純文字模型」，無法生成圖片 URL。請在 \`demoFormat\` 中要求劇本 AI 提供「圖片提示詞 (Prompt)」。
 然後在你的 \`js\` 腳本中，調用全域圖片引擎生成圖片。
+**【配圖來源】** 用戶已選定 \`provider="${_imgProvider}"\`，請務必原封不動照抄下面範例的 \`{ provider: "${_imgProvider}" }\` 參數，不可更動或省略。
 **【重點防護】：** 為了避免在「展廳/創作室」預覽時觸發真實 API 導致浪費 Token，你必須在 \`js\` 中使用 \`window.__IS_PREVIEW\` 變數進行隔離！
 請**嚴格遵守**以下 JS 範例結構來實作圖片載入：
 
@@ -640,7 +655,7 @@ ${desc}
     // 🛡️ 防護機制：預覽環境給佔位圖；正式劇情才呼叫 API
     const imgUrl = window.__IS_PREVIEW
         ? ('https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(promptDesc))
-        : await window.OS_IMAGE_MANAGER.generate(promptDesc, "item");
+        : await window.OS_IMAGE_MANAGER.generate(promptDesc, "item", { provider: "${_imgProvider}" });
     container.querySelector('.my-image-element').src = imgUrl;
 })();
 \`\`\`
