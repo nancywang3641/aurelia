@@ -2343,7 +2343,8 @@
             this._stage[idx] = { name, exp, lastTick: this._stageTick };
             this.currentName = name; this.currentExp = exp;   // 相容：通話/TTS/部分舊流程仍讀
             const el = this._slotEl(idx);
-            if (el && isNew) { this._hideEl(el); el.dataset.slideIn = '1'; }
+            // 換角色：先清掉舊角色的版型 class(浮起金框/置中/明暗) 並隱藏，避免「舊圖用舊版型閃一下」才換新圖
+            if (el && isNew) { el.classList.remove('vn-avatar', 'vn-solo', 'vn-dim', 'vn-active'); this._hideEl(el); el.dataset.slideIn = '1'; }
             this._renderSlot(idx, name, exp);
             this._applyStageLighting(idx);     // 說話者亮、另一格（若在場）變暗
             this._staleSweep();
