@@ -2601,24 +2601,28 @@
             const aff = (affRaw === null || affRaw === undefined || affRaw === '') ? '—' : affRaw;
             const cvText = cv ? (esc(cv.name) + (cv.bound ? '（已綁定）' : '')) : '—';
             card.innerHTML =
-                '<div class="vn-cc-head"><span class="vn-cc-name"></span><button class="vn-cc-close">✕</button></div>' +
+                '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' +
                 '<button class="vn-cc-btn" id="vn-cc-gen">🎨 一鍵生立繪（去背）</button>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + ((cv && !cv.bound) ? '<button class="vn-cc-mini" id="vn-cc-cv-save">💾 保存</button>' : '') + '</div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">形象</span><span class="vn-cc-v">' + esc(st['形象'] || '—') + '</span></div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">身分</span><span class="vn-cc-v">' + esc(st['身分'] || st['身份'] || '—') + '</span></div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">好感度</span><span class="vn-cc-v">' + esc(aff) + '</span></div>';
             card.querySelector('.vn-cc-name').textContent = name;
-            card.querySelector('.vn-cc-close').onclick = () => this.closeCharCard();
             card.querySelector('#vn-cc-gen').onclick = (e) => this.autoGenSprite(name, e.currentTarget);
             const cvSaveBtn = card.querySelector('#vn-cc-cv-save');
             if (cvSaveBtn) cvSaveBtn.onclick = (e) => this.saveCharCV(name, e.currentTarget);
             card.style.display = 'block';
             this._ccIdx = idx;
+            // 點卡片外面自動關（延遲一拍掛載，避免開卡這次的點擊立刻把它關掉）
+            if (this._ccOutside) document.removeEventListener('pointerdown', this._ccOutside, true);
+            this._ccOutside = (ev) => { const c = document.getElementById('vn-char-card'); if (c && c.style.display !== 'none' && !c.contains(ev.target)) this.closeCharCard(); };
+            setTimeout(() => { document.addEventListener('pointerdown', this._ccOutside, true); }, 0);
         },
         closeCharCard: function() {
             const card = document.getElementById('vn-char-card');
             if (card) card.style.display = 'none';
             for (let i = 0; i < 2; i++) { const el = this._slotEl ? this._slotEl(i) : null; if (el) el.classList.remove('vn-cc-shift-l', 'vn-cc-shift-r'); }
+            if (this._ccOutside) { document.removeEventListener('pointerdown', this._ccOutside, true); this._ccOutside = null; }
             this._ccIdx = null;
         }
     };

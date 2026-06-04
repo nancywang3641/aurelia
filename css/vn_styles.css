@@ -1225,19 +1225,19 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 單人頭像置中 */
         #game-char.vn-avatar.vn-solo, #game-char-2.vn-avatar.vn-solo { left: 0; right: 0; margin-left: auto; margin-right: auto; }
         /* 雙擊立繪 → 立繪滑開讓位 */
-        #game-char.vn-cc-shift-l { left: -16%; }
-        #game-char-2.vn-cc-shift-r { right: -16%; }
+        #game-char.vn-cc-shift-l { left: -14%; right: auto; }
+        #game-char-2.vn-cc-shift-r { right: -14%; left: auto; }
         /* 雙擊立繪 → 角色卡 */
         #vn-char-card {
-            position: absolute; top: 16%; z-index: 46; display: none;
+            position: absolute; bottom: 22%; top: auto; z-index: 46; display: none;
             width: 260px; max-width: 56%; padding: 14px 16px;
             background: rgba(10,8,4,0.94); border: 1px solid rgba(212,175,55,0.4); border-radius: 14px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.6); backdrop-filter: blur(5px);
             color: #e8dfc8; font-family: var(--font-classic, serif);
             animation: vnCcIn 0.28s cubic-bezier(.22,1,.36,1) both;
         }
-        #vn-char-card.vn-cc-left  { left: 30%; }
-        #vn-char-card.vn-cc-right { right: 30%; }
+        #vn-char-card.vn-cc-left  { left: 4%; }
+        #vn-char-card.vn-cc-right { right: 4%; }
         @keyframes vnCcIn { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
         .vn-cc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid rgba(212,175,55,0.25); padding-bottom: 8px; }
         .vn-cc-name { font-size: 1.05rem; font-weight: 600; color: var(--gold, #d4af37); letter-spacing: 1px; }
