@@ -646,23 +646,26 @@
         const hiddenEl = document.getElementById('vrs-hidden-list');
         if (!lastEl || !hiddenEl) return;
         try {
-            const helper = win.TavernHelper;
-            const lastId = await _trueLastId();   // 背景讀(不展開)
+            const lastId = await _trueLastId();   // 真實最後樓號(/api/chats/search 的 message_count-1)
             lastEl.textContent = (lastId != null && lastId >= 0) ? `#${lastId}` : '—';
-            // 已展開 → 取兩來源聯集，避免任一邊漏報：
-            //   (1) chat 陣列的 is_system(這正是 /hide 設的旗標)  (2) getChatMessages hide_state:'hidden'
-            const hiddenSet = new Set();
+
+            // 隱藏狀態優先「讀檔」拿真實全量(/api/chats/get 的 is_system)——跟最後樓號同一把真實尺規，
+            // 不會因記憶體陣列截短/重編號而亂跳；讀不到檔才退回讀記憶體陣列(截短，可能偏少)。
+            let hiddenIds = null;
             try {
-                const chat = win.SillyTavern?.getContext?.()?.chat || [];
-                chat.forEach((m, idx) => { if (m && m.is_system === true) hiddenSet.add(idx); });
-            } catch (e) {}
-            try {
-                if (helper?.getChatMessages) {
-                    const hidden = await helper.getChatMessages('0-999999', { hide_state: 'hidden' });
-                    if (Array.isArray(hidden)) hidden.forEach(m => { if (typeof m.message_id === 'number') hiddenSet.add(m.message_id); });
+                const fileMsgs = await _apiFullChat();
+                if (Array.isArray(fileMsgs)) {
+                    hiddenIds = [];
+                    fileMsgs.forEach((m, i) => { if (m && m.is_system === true) hiddenIds.push(i); });
                 }
             } catch (e) {}
-            const hiddenIds = [...hiddenSet];
+            if (hiddenIds == null) {
+                const helper = win.TavernHelper;
+                const hiddenSet = new Set();
+                try { const chat = win.SillyTavern?.getContext?.()?.chat || []; chat.forEach((m, idx) => { if (m && m.is_system === true) hiddenSet.add(idx); }); } catch (e) {}
+                try { if (helper?.getChatMessages) { const hidden = await helper.getChatMessages('0-999999', { hide_state: 'hidden' }); if (Array.isArray(hidden)) hidden.forEach(m => { if (typeof m.message_id === 'number') hiddenSet.add(m.message_id); }); } } catch (e) {}
+                hiddenIds = [...hiddenSet];
+            }
             hiddenEl.textContent = API._formatRanges(hiddenIds);
         } catch (e) {
             console.error('[OS_STORY_TOOLS] _updateHideStatus 失敗:', e);
