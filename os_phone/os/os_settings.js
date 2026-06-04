@@ -454,7 +454,7 @@ EXAMPLE "prompt" value:
                     // Pollinations（或 NAI 沒 token 退回）維持 raw（純模板，行為不變）。
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
-                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: 704, height: 896, raw: !_useNAI });
+                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: 896, height: 896, raw: !_useNAI });
                     if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
                     const res = await fetch(url);
                     if (!res.ok) throw new Error('抓圖失敗 HTTP ' + res.status);
