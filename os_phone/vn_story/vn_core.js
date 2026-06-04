@@ -2600,6 +2600,20 @@
                 setTimeout(() => { setT(orig); if (btn) btn.disabled = false; }, 2600);
             }
         },
+        // 📱 觸控雙擊偵測 → 開角色卡（手機沒有 dblclick；桌機仍走 ondblclick）
+        // 單擊不攔截（保留點立繪推進劇情）；只有第二擊命中才 preventDefault 並開卡片
+        _spriteTap: function(idx, ev) {
+            const now = Date.now();
+            if (this._lastSpriteTapIdx === idx && (now - (this._lastSpriteTapT || 0)) < 350) {
+                this._lastSpriteTapIdx = -1; this._lastSpriteTapT = 0;
+                if (ev && ev.preventDefault)  ev.preventDefault();   // 第二擊不推進劇情
+                if (ev && ev.stopPropagation) ev.stopPropagation();
+                this.openCharCard(idx);
+            } else {
+                this._lastSpriteTapIdx = idx;
+                this._lastSpriteTapT   = now;
+            }
+        },
         openCharCard: function(idx) {
             this._stageInit();
             const slot = this._stage[idx];
