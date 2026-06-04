@@ -2253,7 +2253,11 @@
         // 淡入顯示（fade-in，避免閃爍）
         _showEl: function(el, src) {
             if (!el) return;
+            const sameSrc = (src === undefined) || (el.getAttribute('src') === src);
+            const visible = el.style.display !== 'none' && el.style.display !== '' && el.style.opacity !== '0';
             if (src !== undefined) el.src = src;
+            // 已經在顯示同一張圖 → 只確保亮著，不重跑淡入（避免同角色連說 / 旁白後再開口時閃爍）
+            if (sameSrc && visible) { el.style.display = 'block'; el.style.opacity = '1'; return; }
             el.style.transition = 'none';
             el.style.opacity = '0';
             el.style.display = 'block';
