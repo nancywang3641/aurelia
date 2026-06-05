@@ -85,6 +85,10 @@
 /* 手機內所有 app 的滾動條隱形(像手機、不像桌面那條粗的) */
 .aps-app-body, .aps-app-body * { scrollbar-width: none; -ms-overflow-style: none; }
 .aps-app-body::-webkit-scrollbar, .aps-app-body *::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }
+/* 手機殼內：app 自己的 header 已在手機殼狀態列下方，不該再加 device 安全區(env safe-area-inset-top)，
+   否則 header 上方會留一大塊白。歸零(高優先級蓋過 wx/wb theme 與 aurelia_core 的 env padding)。 */
+.aps-app-body .wx-header, .aps-app-body .wb-header { padding-top: 0 !important; height: 45px !important; }
+.aps-app-body .ps-header { padding-top: 0 !important; height: 56px !important; }
 .aps-mount { position: relative; width: 100%; height: 100%; }
 .aps-fail { padding: 30px; text-align: center; color: #999; font-size: 13px; }
 /* 借大廳/自建單例的 app(閱讀 #vn-reader-sa / 黑市 #store-panel-overlay)塞進手機時，強制填滿、不偏移 */
