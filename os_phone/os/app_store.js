@@ -175,50 +175,48 @@
         });
     }
 
-    // ── 工坊：用 OS_API.chat + PANEL_DEV_GUIDE 規範，一次性生成完整 HTML app ──
+    // ── 工坊：要 AI 分段輸出 css/html/js(各自獨立、js 不可漏)，再由 _assembleApp 組成完整 HTML ──
+    //    接線(callAI/genImg/root)寫死在組裝模板裡，模型只寫「邏輯本體」、不用碰接線 → 失敗面大幅縮小。
     function _wsPrompt(desc, provider) {
-        return '你是資深前端工程師。請依需求生成「一個完整、可獨立運作的 HTML 小 app」。\n\n'
-            + '⚠️⚠️ 最重要：這個 app 的靈魂是 <script> 裡的互動邏輯。沒有可運作的 <script> = 徹底失敗(廢品)。\n'
-            + 'CSS 簡潔好看就好、不要堆砌；把輸出預算重壓在 <script> 的功能邏輯、務必把功能寫完整。\n\n'
+        return '你是資深前端工程師。請依需求設計一個「功能型 HTML 小 app」，把它拆成 css / html / js 三段輸出。\n\n'
             + '【使用者需求】\n' + desc + '\n\n'
-            + '【硬性規範（每條必守）】\n'
-            + '1. 輸出一份完整 HTML：<!DOCTYPE html><html><head><style>…</style></head><body><div id="app-root">…</div><script>…</script></body></html>。<script> 一定要有、放在 </body> 之前、寫滿邏輯。\n'
-            + '2. 所有按鈕/互動一律用 addEventListener 綁定（嚴禁 inline onclick="fn()"——函式不在全域會失效、按了沒反應）。元素先給 id，再在 script 用 getElementById/querySelector 綁。\n'
-            + '3. CSS 選擇器全部以 #app-root 開頭；@keyframes 用獨特前綴；禁止 *{}、body{}、position:fixed、100vw、100vh。根容器 width:100%; max-width:480px; 適合手機直式。\n'
-            + '4. 【文字生成】呼叫 window.generateRaw（已注入，回 Promise<string>）。封裝 helper：\n'
-            + '   async function callAI(sys){ var r = await window.generateRaw({ user_input:" ", ordered_prompts:["world_info","chat_history",{role:"system",content:sys}], quiet:true }); return typeof r==="string"?r:(r&&r.message)||""; }\n'
-            + '5. 【生圖】用 window.OS_IMAGE_MANAGER.generate，並用 window.__IS_PREVIEW 隔離省額度。封裝：\n'
-            + '   async function genImg(p){ return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p,"item",{provider:"' + provider + '"}); }\n'
-            + '6. 每個 await 包 try/catch；點擊後要有 loading 狀態、完成後把結果 render 進畫面；失敗顯示友善訊息、不可整頁崩。\n\n'
-            + '【骨架——照這結構填滿，務必保留並寫滿 <script>】\n'
-            + '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>標題</title>\n'
-            + '<style>#app-root{ … } /* 其餘都加 #app-root 前綴、精簡 */</style></head>\n'
-            + '<body>\n'
-            + '<div id="app-root"><!-- UI：按鈕給 id --></div>\n'
-            + '<script>\n'
-            + '(function(){\n'
-            + '  var root = document.getElementById("app-root");\n'
-            + '  async function callAI(sys){ /* 見規範4 */ }\n'
-            + '  async function genImg(p){ /* 見規範5 */ }\n'
-            + '  // ⬇ 重點：綁按鈕、實作完整功能（讀輸入→顯示loading→await callAI/genImg→建卡片插列表→收loading）\n'
-            + '  root.querySelector("#你的按鈕id").addEventListener("click", async function(){ /* ... */ });\n'
-            + '})();\n'
-            + '</script>\n'
-            + '</body></html>\n\n'
-            + '【輸出格式（嚴格）】先 meta、再「含完整 <script> 的」HTML，兩段都要、其餘什麼都別寫：\n'
+            + '【執行環境已幫你準備好這些工具，直接用、不要自己重定義】\n'
+            + '- root：#app-root 容器元素（已 = document.getElementById("app-root")）\n'
+            + '- callAI(systemPrompt) → Promise<string>：呼叫 AI 生成文字、回純文字\n'
+            + '- genImg(prompt, type) → Promise<imageUrl>：生圖（已內建預覽省額度，預覽時自動給佔位圖）\n'
+            + '- document / window 照常用\n\n'
+            + '【各段要求】\n'
+            + '- css：每個選擇器都以 #app-root 開頭；禁止 *{}、body{}、position:fixed、100vw、100vh；@keyframes 用獨特前綴。簡潔好看即可、別堆砌。\n'
+            + '- html：放進 #app-root 內的「內層 HTML」（不要 <!DOCTYPE>/<html>/<head>/<body>，只要內容）。按鈕等互動元素一定要給 id。\n'
+            + '- js：⚠️ 這是 app 的靈魂、最重要：完整互動邏輯。用 addEventListener 綁按鈕（root.querySelector("#id")）、實作功能（讀輸入→顯示 loading→await callAI/genImg→把結果 render 進畫面→收 loading）、每個 await 包 try/catch。js 不可為空、要把功能寫完整。\n\n'
+            + '【輸出格式（嚴格，只輸出下面四個區塊、其餘一字都別寫；各段用純文字、不要包 ``` 代碼框）】\n'
             + '<app_meta>{"name":"app名稱(4字內最佳)","emoji":"最貼切的emoji"}</app_meta>\n'
-            + '<app_html>\n<!DOCTYPE html> …完整 HTML，必含寫滿邏輯的 <script>… </html>\n</app_html>';
+            + '<app_css>\n（這裡放 CSS）\n</app_css>\n'
+            + '<app_html>\n（這裡放 #app-root 內層 HTML）\n</app_html>\n'
+            + '<app_js>\n（這裡放完整互動邏輯 JS——最重要、務必寫滿）\n</app_js>';
+    }
+
+    // 把 AI 分段結果組成一份完整、可在 iframe 跑的 HTML；callAI/genImg/root 接線寫死(模型不用碰)
+    function _assembleApp(parsed, provider) {
+        var prov = (provider === 'novelai') ? 'novelai' : 'pollinations';
+        return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">\n'
+            + '<style>\n' + (parsed.css || '') + '\n</style></head>\n'
+            + '<body><div id="app-root">\n' + (parsed.html || '') + '\n</div>\n'
+            + '<scr' + 'ipt>(function(){\n'
+            + 'async function callAI(sys){ try { var r = await window.generateRaw({ user_input:" ", ordered_prompts:["world_info","chat_history",{role:"system",content:sys}], quiet:true }); return typeof r==="string"?r:(r&&r.message)||""; } catch(e){ console.error("[app callAI]",e); return ""; } }\n'
+            + 'async function genImg(p, type){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", {provider:"' + prov + '"}); } catch(e){ console.error("[app genImg]",e); return ""; } }\n'
+            + 'var root = document.getElementById("app-root");\n'
+            + '(async function(){ try {\n' + (parsed.js || '') + '\n} catch(e){ console.error("[app run]", e); } })();\n'
+            + '})();</scr' + 'ipt></body></html>';
     }
 
     function _parseGen(text) {
-        let html = '', meta = {};
-        const mh = text.match(/<app_html>([\s\S]*?)<\/app_html>/i);
-        if (mh) html = mh[1].trim();
-        else { const f = text.match(/```(?:html)?\s*([\s\S]*?)```/i); if (f) html = f[1].trim(); }
-        html = html.replace(/^```(?:html)?\s*/i, '').replace(/```$/, '').trim();
-        const mm = text.match(/<app_meta>([\s\S]*?)<\/app_meta>/i);
+        function pick(tag) { var m = text.match(new RegExp('<' + tag + '>([\\s\\S]*?)<\\/' + tag + '>', 'i')); return m ? m[1] : ''; }
+        function defence(s) { return String(s || '').replace(/^\s*```(?:\w+)?\s*/i, '').replace(/```\s*$/i, '').trim(); }
+        var meta = {};
+        var mm = text.match(/<app_meta>([\s\S]*?)<\/app_meta>/i);
         if (mm) { try { meta = JSON.parse(mm[1].trim()); } catch (e) {} }
-        return { html: html, meta: meta };
+        return { css: defence(pick('app_css')), html: defence(pick('app_html')), js: defence(pick('app_js')), meta: meta };
     }
 
     function _bindWorkshop(c) {
@@ -247,11 +245,11 @@
                 if (!resp) throw new Error('AI 回傳空白');
 
                 const parsed = _parseGen(resp);
-                if (!parsed.html || !/<body|<html|<div|<!doctype/i.test(parsed.html)) throw new Error('沒解析到完整 HTML');
-                if (!/<script[\s>][\s\S]{30,}<\/script>/i.test(parsed.html)) throw new Error('生成的 app 缺少互動邏輯(<script>)，請重試或把需求講更具體');
-                _genHtml = parsed.html;
+                if (!parsed.js || parsed.js.length < 20) throw new Error('生成的 app 缺少互動邏輯(js)，請重試或把需求講更具體');
+                if (!parsed.html && !parsed.css) throw new Error('沒解析到 app 內容，請重試');
+                _genHtml = _assembleApp(parsed, provider);
 
-                if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-ws-prev'), parsed.html, { preview: true });
+                if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-ws-prev'), _genHtml, { preview: true });
                 c.querySelector('#as-ws-name').value = (parsed.meta && parsed.meta.name) ? parsed.meta.name : '新 App';
                 c.querySelector('#as-ws-emoji').value = (parsed.meta && parsed.meta.emoji) ? String(parsed.meta.emoji).slice(0, 2) : '📦';
                 installRow.classList.remove('hidden');
