@@ -333,17 +333,23 @@ html:not(:has(.mode-404)) .write-tab-logout-btn:hover { background:rgba(248,200,
 .void-top-bar { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
 .void-bubble-layer { top: calc(56px + env(safe-area-inset-top, 0px)); }
 .void-panel-overlay { top: calc(90px + env(safe-area-inset-top, 0px)); }
-#achievement-panel-overlay { top: calc(10% + env(safe-area-inset-top, 0px)); }
-#store-panel-overlay { top: calc(8% + env(safe-area-inset-top, 0px)); }
-.void-login-overlay { padding-top: env(safe-area-inset-top, 0px); }
+/* ⚠️ 酒館內 ST 已處理 device 安全區(動態島/瀏海)，aurelia 面板/header 不該再加
+   env(safe-area-inset-top)，否則 header 上方留一大塊白。本檔=酒館專用 → 安全區歸零(env→0)。
+   PWA(走 aurelia_core.css)不受影響、照常套用 env。 */
+body { --safe-top: 0px; }   /* studio-header / vn-ws-header 走 var(--safe-top, env()) → 跟著歸零 */
+#achievement-panel-overlay { top: 10%; }
+#store-panel-overlay { top: 8%; }
+.void-login-overlay { padding-top: 0; }
 
-/* 各子面板 header — 避免被動態島/瀬海遮住返回鍵 */
-.set-header  { padding-top: calc(15px + env(safe-area-inset-top, 0px)) !important; }
-.wb-header   { padding-top: calc(12px + env(safe-area-inset-top, 0px)) !important; height: calc(44px + env(safe-area-inset-top, 0px)) !important; }
-.pm-header   { padding-top: calc(12px + env(safe-area-inset-top, 0px)) !important; height: calc(48px + env(safe-area-inset-top, 0px)) !important; }
-.avs-header  { padding-top: calc(15px + env(safe-area-inset-top, 0px)) !important; }
-.ps-header   { height: calc(56px + env(safe-area-inset-top, 0px)) !important; padding-top: env(safe-area-inset-top, 0px) !important; }
-.write-tab-content { padding-top: calc(20px + env(safe-area-inset-top, 0px)) !important; }
+/* 各子面板 header — 酒館不加安全區(ST 已處理) */
+.set-header  { padding-top: 15px !important; }
+.wb-header   { padding-top: 12px !important; height: 44px !important; }
+.pm-header   { padding-top: 12px !important; height: 48px !important; }
+.avs-header  { padding-top: 15px !important; }
+.ps-header   { height: 56px !important; padding-top: 0 !important; }
+.wb-form-header { padding-top: 12px !important; }
+.pm-bmodal-hd { padding-top: 0 !important; height: 48px !important; }
+.write-tab-content { padding-top: 20px !important; }
 
 /* 底部安全區域 — 消除 iPhone 底部黑條 */
 #aurelia-bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px) !important; box-sizing: content-box !important; }
