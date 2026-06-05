@@ -384,7 +384,7 @@ EXAMPLE "prompt" value:
 
         // ───── 角色立繪 UI：lazy 初始化 ─────
         if (!window._initSpriteUI) {
-            const DEF_PREFIX = 'centered composition, entire body visible, body in frame, straight angle, solid background, (cowboy shot), full body, clothes and pants, school, ((detailed rendering)), clean and fluid linework, delicate and refined, ';
+            const DEF_PREFIX = 'centered composition, entire body visible, body in frame, straight angle, solid background, (cowboy shot), full body, clothes and pants, school, ((detailed rendering)), clean and fluid linework, delicate and refined, entire body visible, both shoulders visible, ';
             const DEF_SUFFIX = '';
             const LS_PFX = 'os_sprite_tpl_prefix';
             const LS_SFX = 'os_sprite_tpl_suffix';
