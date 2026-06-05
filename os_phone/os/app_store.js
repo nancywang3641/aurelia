@@ -118,9 +118,19 @@
             row.innerHTML =
                 '<span class="as-mine-ic">' + _esc(a.emoji || '📦') + '</span>'
               + '<span class="as-mine-name">' + _esc(a.name || 'App') + '</span>'
+              + '<button class="as-mini" data-act="src" type="button">原始碼</button>'
               + '<button class="as-mini" data-act="rename" type="button">改名</button>'
               + '<button class="as-mini" data-act="emoji" type="button">換圖標</button>'
               + '<button class="as-mini danger" data-act="del" type="button">卸載</button>';
+            row.querySelector('[data-act="src"]').onclick = function () {
+                const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
+                const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
+                c.querySelectorAll('.as-tab').forEach(function (t) { t.classList.remove('active'); });
+                c.querySelectorAll('.as-view').forEach(function (v) { v.classList.remove('active'); });
+                const tb = c.querySelector('.as-tab[data-tab="import"]'); if (tb) tb.classList.add('active');
+                const vw = c.querySelector('.as-view[data-view="import"]'); if (vw) vw.classList.add('active');
+                _toast(c, '原始碼已載入「匯入」框，可全選複製給我');
+            };
             row.querySelector('[data-act="del"]').onclick = function () {
                 if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) _uninstall(a.id, c);
             };
