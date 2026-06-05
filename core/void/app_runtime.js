@@ -36,8 +36,11 @@
         const iframe = document.createElement('iframe');
         iframe.className = 'app-iframe';
         iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals');
-        iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#fff;';
-        iframe.srcdoc = _bridgeScript(!!opts.preview) + String(html == null ? '' : html);
+        // 橋接 bootstrap 要在 app 自身 script 前跑，且不能擠在 <!DOCTYPE> 之前(會觸發 quirks mode 壞版面)；
+        // 有 <head> 就插進 head 開頭、否則退回最前面。
+        const boot = _bridgeScript(!!opts.preview);
+        const src = String(html == null ? '' : html);
+        iframe.srcdoc = /<head[^>]*>/i.test(src) ? src.replace(/<head[^>]*>/i, function (m) { return m + boot; }) : (boot + src);
         container.appendChild(iframe);
         return function cleanup() { try { iframe.remove(); } catch (e) {} };
     }
