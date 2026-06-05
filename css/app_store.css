@@ -17,6 +17,7 @@
 .as-btn-main { background: #2b2d42; color: #fff; }
 .as-btn-ok { background: rgba(46,204,113,0.16); color: #1f9e5a; border: 1px solid #2ecc71; }
 .as-loading { display: none; padding: 8px; text-align: center; color: #888; font-size: 12px; font-style: italic; }
+.as-loading.show { display: block; }
 .as-prev-wrap { margin-top: 6px; }
 .as-prev-lab { font-size: 12px; color: #888; margin-bottom: 4px; }
 .as-prev { width: 100%; height: 360px; border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; overflow: hidden; background: #fff; }
