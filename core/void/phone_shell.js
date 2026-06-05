@@ -13,11 +13,27 @@
         { id: 'tarot',  name: '塔羅', emoji: '🔮',  mode: 'inside', go: function (c) { return win.OS_TAROT && win.OS_TAROT.launch && win.OS_TAROT.launch(c); } },
         { id: 'rpg',    name: 'RPG',  emoji: '🛡️', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },
         { id: 'reader', name: '閱讀', emoji: '📖',  mode: 'inside', go: function (c) { return win.VN_READER && win.VN_READER.show && win.VN_READER.show(c); } },
-        { id: 'store',  name: '黑市', emoji: '🏪',  mode: 'out',    go: function () { return win.VoidPanels && win.VoidPanels.openStore && win.VoidPanels.openStore(); } },
+        { id: 'store',  name: '黑市', emoji: '🏪',  mode: 'inside', go: function (c) {
+            // 黑市用大廳單例 #store-panel-overlay(position:absolute)。搬進手機 + 強制填滿；
+            // 回傳離開回呼：還原樣式 + 搬回大廳原位（不能讓手機清空時刪掉單例）。
+            const ov = document.getElementById('store-panel-overlay');
+            if (!ov || !c) return;
+            const origParent = ov.parentElement;
+            const force = { position: 'absolute', left: '0', top: '0', right: '0', bottom: '0', width: '100%', 'max-width': 'none', height: '100%', transform: 'none', 'border-radius': '0' };
+            Object.keys(force).forEach(function (k) { ov.style.setProperty(k, force[k], 'important'); });
+            c.appendChild(ov);
+            if (win.VoidPanels && win.VoidPanels.openStore) win.VoidPanels.openStore();   // 渲染內容 + display:flex
+            return function () {
+                ov.style.display = 'none';
+                Object.keys(force).forEach(function (k) { ov.style.removeProperty(k); });
+                if (origParent) origParent.appendChild(ov);
+            };
+        } },
     ];
 
     let _el = null;
     let _savedGoHome = null;   // app 內部「返回」會呼叫 PhoneSystem.goHome，開 app 時暫借、回主畫面/關閉時還原
+    let _leaveApp = null;      // 借用大廳單例面板的 app(如黑市)離開時要還原/搬回 → 存回呼，清空前先跑
 
     function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -25,6 +41,7 @@
         if (_savedGoHome !== null && win.PhoneSystem) { win.PhoneSystem.goHome = _savedGoHome; }
         _savedGoHome = null;
     }
+    function _runLeave() { if (_leaveApp) { try { _leaveApp(); } catch (e) {} _leaveApp = null; } }
 
     function _build() {
         const ov = document.createElement('div');
@@ -63,6 +80,7 @@
     // 回手機主畫面（清空目前 app）
     function _home() {
         if (!_el) return;
+        _runLeave();
         _restoreGoHome();
         const body = _el.querySelector('#aps-app-body');
         if (body) body.innerHTML = '';
@@ -80,6 +98,7 @@
             return;
         }
         // inside：渲染進手機螢幕
+        _runLeave();   // 防禦：清空前先還原上一個借單例的 app
         const body = _el.querySelector('#aps-app-body');
         body.innerHTML = '';
         const div = document.createElement('div');
@@ -89,7 +108,7 @@
         if (win.PhoneSystem) { _savedGoHome = win.PhoneSystem.goHome; win.PhoneSystem.goHome = _home; }
         _el.querySelector('#aps-home').style.display = 'none';
         _el.querySelector('#aps-app').style.display = 'flex';
-        try { app.go(div); }
+        try { const cleanup = app.go(div); if (typeof cleanup === 'function') _leaveApp = cleanup; }
         catch (e) { console.warn('[PhoneShell] 掛載失敗', id, e); body.innerHTML = '<div class="aps-fail">這個 app 載入失敗</div>'; }
     }
 
@@ -100,6 +119,7 @@
     }
     function close() {
         if (!_el) return;
+        _runLeave();
         _restoreGoHome();
         const body = _el.querySelector('#aps-app-body');
         if (body) body.innerHTML = '';
