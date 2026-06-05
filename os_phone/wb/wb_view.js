@@ -356,8 +356,8 @@
                     <div class="wb-content" id="wb-feed">${contentArea}</div>
                     <div class="wb-fab" onclick="${appRef}.triggerPost()" style="${fabStyle}">✨</div>
                     <div class="wb-tab-bar">
-                        <div class="wb-tab ${activeTab === 'home' ? 'active' : ''}" onclick="${appRef}.switchTab('home')"><div class="wb-tab-icon">🏠</div></div>
-                        <div class="wb-tab ${activeTab === 'me' ? 'active' : ''}" onclick="${appRef}.switchTab('me')"><div class="wb-tab-icon">👤</div></div>
+                        <div class="wb-tab ${activeTab === 'home' ? 'active' : ''}" onclick="${appRef}.switchTab('home')"><i class="wb-tab-icon fa-solid fa-house"></i><span class="wb-tab-label">首頁</span></div>
+                        <div class="wb-tab ${activeTab === 'me' ? 'active' : ''}" onclick="${appRef}.switchTab('me')"><i class="wb-tab-icon fa-solid fa-user"></i><span class="wb-tab-label">我</span></div>
                     </div>
                     <div id="wb-detail-container"></div>
                 </div>
