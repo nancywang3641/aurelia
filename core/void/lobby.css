@@ -201,7 +201,7 @@
    絕對定位夾在頂部列與底部列之間（沿用「各區塊獨立 absolute」的版型模型）
    ========================================================= */
 .lobby-body {
-    position:absolute; left:0; right:0; top:52px; bottom:92px;
+    position:absolute; left:0; right:0; top:52px; bottom:52px;   /* bottom 由 92→52：底部欄已刪 app 鈕排、只剩一排輸入框 */
     z-index:6; display:flex; gap:0;
     box-sizing:border-box; overflow:hidden;
 }
@@ -479,7 +479,7 @@
     flex: 0 0 auto !important;
     width: 38px !important; min-width: 38px !important; height: 38px !important;
     padding: 0 !important; margin: 0 !important;
-    display: flex !important; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: center;   /* 不可 !important：否則蓋掉 404 切換邏輯的 display:none → 兩顆都顯示 */
     border-radius: 4px !important; font-size: 15px;
 }
 .void-tab .void-chat-input-row .void-hist-inline > span { display: none; }
@@ -514,7 +514,7 @@
    窄螢幕：左右欄改上下堆疊（沿用既有斷點機制）
    ========================================================= */
 @media (max-width:560px) {
-    .lobby-body { flex-direction:column; top:46px; bottom:60px; }
+    .lobby-body { flex-direction:column; top:46px; bottom:52px; }
     /* 立繪螢幕佔大部分 */
     .lobby-left { flex:1 1 auto; border-right:none; border-bottom:1px solid var(--lb-line); min-height:0; }
     /* 大廳右欄 3 個 main menu 按鈕並排，緊湊小 */
