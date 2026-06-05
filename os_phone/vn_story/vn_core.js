@@ -903,6 +903,15 @@
             return url;
         },
 
+        // [Bg|季节|时间状态_设施名|描述...] → 生圖提示詞 = 第二格(设施名,底線換空格) + 第三格(描述)。
+        // 第二格身兼兩用：既當快取ID/場景標籤、也進提示詞（補上第三格沒有的具體设施名）。
+        // 舊的單格 [Bg|描述] 維持只用該格。live 與 prewarm 共用此函式，確保提示詞一致、快取不錯位。
+        _bgGenPrompt: function(parts) {
+            const label = (parts.length >= 3 && parts[1]) ? String(parts[1]).replace(/_/g, ' ') : '';
+            const desc  = parts[2] || (parts.length === 1 ? parts[0] : '');
+            return [label, desc].filter(Boolean).join(', ') || null;
+        },
+
         _safeFetchBg: async function(cacheId, prompt) {
             if (this._bgMemCache[cacheId]) return this._bgMemCache[cacheId];
             const cached = await VN_Cache.get('bg_cache', cacheId);
@@ -1041,7 +1050,7 @@
                 if (!line.startsWith('[Bg|')) continue;
                 const parts = line.slice(4, -1).split('|');
                 const cacheId = parts[1];
-                const prompt  = parts[2];
+                const prompt  = this._bgGenPrompt(parts);   // 與 live 同一組合：第二格 + 第三格
                 if (!cacheId || !prompt || seen.has(cacheId)) continue;
                 seen.add(cacheId);
                 tasks.push({ cacheId, prompt });
@@ -1667,7 +1676,7 @@
                 this._stageClear();   // 換背景＝換場景 → 清空兩格立繪
                 const parts = line.slice(4, -1).split('|');
                 const sceneLabel = parts.length >= 2 ? parts[1] : parts[0];
-                const aiPrompt   = parts[2] || (parts.length === 1 ? parts[0] : null);
+                const aiPrompt   = this._bgGenPrompt(parts);   // 第二格(设施名) + 第三格(描述)
                 const cacheId    = sceneLabel || ('bg_' + Date.now());
 
                 if (sceneLabel) {
