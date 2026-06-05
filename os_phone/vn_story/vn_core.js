@@ -2585,7 +2585,7 @@
                 if (btn) btn.disabled = true;
                 setT('🎨 生成中…');
                 // 跟頭像 tab 的🎨同一套：套「全身框」前後綴(full body…) + 剝掉頭像特寫詞，512×896 直立全身比例
-                const DEF_PREFIX = 'centered composition, entire body visible, body in frame, straight angle, solid background, (cowboy shot), full body, clothes and pants, school, ((detailed rendering)), clean and fluid linework, delicate and refined, ';
+                const DEF_PREFIX = 'centered composition, entire body visible, body in frame, straight angle, solid background, (cowboy shot), full body, clothes and pants, school, ((detailed rendering)), clean and fluid linework, delicate and refined, entire body visible, both shoulders visible, ';
                 const DEF_SUFFIX = '';
                 const pfx = localStorage.getItem('os_sprite_tpl_prefix') || DEF_PREFIX;
                 const sfx = localStorage.getItem('os_sprite_tpl_suffix') || DEF_SUFFIX;
