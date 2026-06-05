@@ -80,8 +80,10 @@
 
             /* 底部導航 & FAB */
             .wb-tab-bar { height: 50px; background: #fff; border-top: 1px solid #dcdcdc; display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; }
-            .wb-tab { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; color: #333; }
+            .wb-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: #999; transition: color 0.15s; }
             .wb-tab.active { color: #ff8200; }
+            .wb-tab-icon { font-size: 19px; line-height: 1; }
+            .wb-tab-label { font-size: 10px; letter-spacing: 0.5px; }
             .wb-fab { position: absolute; bottom: 70px; right: 20px; width: 50px; height: 50px; background: linear-gradient(135deg, #ffae00, #ff8200); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 28px; box-shadow: 0 4px 10px rgba(255, 130, 0, 0.4); cursor: pointer; z-index: 10; transition: transform 0.2s; }
             .wb-fab:active { transform: scale(0.9); }
             
