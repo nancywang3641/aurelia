@@ -173,16 +173,65 @@
         if (reset) reset.addEventListener('click', function () { try { win.localStorage.removeItem(THEME_KEY); } catch (e) {} _applyTheme(); _renderSettings(c); });
     }
 
+    // ── 已安裝 app（app 商店裝的功能型 HTML app）──
+    const INSTALLED_KEY = 'aurelia_phone_apps';   // 與 app_store.js 同 key：[{id,name,emoji,iconUrl}]
+    function _loadInstalled() { try { return JSON.parse(win.localStorage.getItem(INSTALLED_KEY)) || []; } catch (e) { return []; } }
+
+    // 使用者 app 啟動：點開才從 OS_DB 撈 HTML，丟給 AppRuntime 跑成 iframe
+    function _userAppGo(id) {
+        return function (container) {
+            if (!container) return;
+            container.innerHTML = '<div class="aps-loading">載入中…</div>';
+            const dbp = (win.OS_DB && win.OS_DB.getPhoneApp) ? win.OS_DB.getPhoneApp(id) : Promise.resolve(null);
+            Promise.resolve(dbp).then(function (rec) {
+                if (!rec || !rec.html) { container.innerHTML = '<div class="aps-fail">app 內容遺失，請到應用商店重裝</div>'; return; }
+                if (win.AppRuntime && win.AppRuntime.mountAppIframe) win.AppRuntime.mountAppIframe(container, rec.html, { preview: false });
+                else container.innerHTML = '<div class="aps-fail">app 執行器未載入</div>';
+            }).catch(function () { container.innerHTML = '<div class="aps-fail">app 載入失敗</div>'; });
+            // iframe 由 _home 清空容器時一併移除，無需回傳 cleanup
+        };
+    }
+    function _makeUserApp(meta) {
+        return { id: meta.id, name: meta.name || 'App', emoji: meta.emoji || '📦', iconUrl: meta.iconUrl || '', mode: 'inside', go: _userAppGo(meta.id) };
+    }
+    // 首次建殼/開機：從 localStorage 把已安裝 app 補回 APPS（去重）
+    function _restoreInstalledApps() {
+        _loadInstalled().forEach(function (meta) {
+            if (meta && meta.id && !APPS.find(function (a) { return a.id === meta.id; })) APPS.push(_makeUserApp(meta));
+        });
+    }
+    // 重畫主畫面圖標格（APPS 變動後呼叫）
+    function _renderGrid() {
+        if (!_el) return;
+        const gridEl = _el.querySelector('.aps-grid');
+        if (!gridEl) return;
+        gridEl.innerHTML = APPS.map(function (a) {
+            return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
+                 + '<span class="aps-icon-em" data-app-em="' + a.id + '">' + a.emoji + '</span>'
+                 + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
+        }).join('');
+        gridEl.querySelectorAll('.aps-icon').forEach(function (b) {
+            b.addEventListener('click', function () { _openApp(b.dataset.app); });
+        });
+        _applyIcons();
+    }
+    // 對外：app 商店安裝/卸載時呼叫（只動 runtime 與圖標；持久化是商店的事）
+    function addApp(meta) {
+        if (!meta || !meta.id) return;
+        if (!APPS.find(function (a) { return a.id === meta.id; })) APPS.push(_makeUserApp(meta));
+        _renderGrid();
+    }
+    function removeApp(id) {
+        const i = APPS.findIndex(function (a) { return a.id === id; });
+        if (i >= 0) APPS.splice(i, 1);
+        _renderGrid();
+    }
+
     function _build() {
         const ov = document.createElement('div');
         ov.id = 'aurelia-phone-shell';
         ov.className = 'aps-overlay';
         ov.style.display = 'none';
-        const grid = APPS.map(function (a) {
-            return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
-                 + '<span class="aps-icon-em" data-app-em="' + a.id + '">' + a.emoji + '</span>'
-                 + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
-        }).join('');
         // 手機殼不加自己的 header／返回 —— 用 app 原本的 header/返回（返回會呼叫 goHome→回主畫面）。
         // 只留底部 home bar + 右上 ✕ 當萬用退出。
         ov.innerHTML =
@@ -190,7 +239,7 @@
           +   '<div class="aps-notch"></div>'
           +   '<div class="aps-screen">'
           +     '<div class="aps-statusbar"><span class="aps-sb-time" id="aps-sb-time">--:--</span><span class="aps-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>'
-          +     '<div class="aps-home" id="aps-home"><div class="aps-grid">' + grid + '</div></div>'
+          +     '<div class="aps-home" id="aps-home"><div class="aps-grid"></div></div>'
           +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'
           +   '</div>'
           +   '<div class="aps-homebar"><button class="aps-home-btn" id="aps-home-btn" type="button" title="回主畫面"></button></div>'
@@ -201,10 +250,9 @@
         ov.addEventListener('click', function (e) { if (e.target === ov) close(); });   // 點背景關閉
         ov.querySelector('#aps-close').addEventListener('click', close);
         ov.querySelector('#aps-home-btn').addEventListener('click', _home);
-        ov.querySelectorAll('.aps-icon').forEach(function (b) {
-            b.addEventListener('click', function () { _openApp(b.dataset.app); });
-        });
         _el = ov;
+        _restoreInstalledApps();   // 從 localStorage 補回已安裝 app
+        _renderGrid();             // 統一畫圖標格 + 綁定 + 套圖庫圖標
         try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列時鐘
         return ov;
     }
@@ -262,6 +310,6 @@
     }
     function toggle() { if (_el && _el.style.display !== 'none') close(); else open(); }
 
-    win.VoidPhoneShell = { open: open, close: close, toggle: toggle };
+    win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp };
     console.log('✅ VoidPhoneShell（大廳手機殼浮窗）模組就緒');
 })();
