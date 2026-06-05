@@ -18,7 +18,6 @@
         clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 2400);
     }
 
-    let _root = null;        // 商店容器
     let _genHtml = null;     // 工坊最近一次生成的 HTML（待安裝）
 
     const STORE_HTML =
@@ -41,7 +40,7 @@
       +       '<button class="as-btn as-btn-main" id="as-ws-gen" type="button">✨ 生成 app</button>'
       +       '<div class="as-loading" id="as-ws-loading">AI 正在生成 app，請稍候…</div>'
       +       '<div class="as-prev-wrap"><div class="as-prev-lab">預覽（生圖走佔位、不燒額度）</div><div class="as-prev" id="as-ws-prev"></div></div>'
-      +       '<div class="as-install-row" id="as-ws-install-row" style="display:none;">'
+      +       '<div class="as-install-row hidden" id="as-ws-install-row">'
       +         '<input class="as-input" id="as-ws-name" type="text" placeholder="app 名稱">'
       +         '<input class="as-input as-emoji-in" id="as-ws-emoji" type="text" maxlength="2" placeholder="📦">'
       +         '<button class="as-btn as-btn-ok" id="as-ws-install" type="button">安裝到桌面</button>'
@@ -67,7 +66,6 @@
 
     function launch(c) {
         if (!c) return;
-        _root = c;
         c.innerHTML = STORE_HTML;
         _bindTabs(c);
         _bindImport(c);
@@ -89,21 +87,21 @@
     }
 
     // ── 安裝 / 卸載（共用）──
-    async function _install(rec) {
-        if (!win.OS_DB || !win.OS_DB.savePhoneApp) { _toast(_root, '❌ 儲存層未就緒'); return; }
+    async function _install(c, rec) {
+        if (!win.OS_DB || !win.OS_DB.savePhoneApp) { _toast(c, '❌ 儲存層未就緒'); return; }
         const id = await win.OS_DB.savePhoneApp(rec);
         rec.id = id;
         const list = _loadList().filter(function (m) { return m.id !== id; });
         list.push({ id: id, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
         _saveList(list);
         if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: id, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
-        _toast(_root, '🎉 已安裝到桌面：' + rec.name);
+        _toast(c, '🎉 已安裝到桌面：' + rec.name);
     }
-    async function _uninstall(id) {
+    async function _uninstall(id, c) {
         if (win.OS_DB && win.OS_DB.deletePhoneApp) await win.OS_DB.deletePhoneApp(id);
         _saveList(_loadList().filter(function (m) { return m.id !== id; }));
         if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(id);
-        renderMine(_root);
+        renderMine(c);
     }
 
     // ── 我的應用 ──
@@ -124,7 +122,7 @@
               + '<button class="as-mini" data-act="emoji" type="button">換圖標</button>'
               + '<button class="as-mini danger" data-act="del" type="button">卸載</button>';
             row.querySelector('[data-act="del"]').onclick = function () {
-                if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) _uninstall(a.id);
+                if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) _uninstall(a.id, c);
             };
             row.querySelector('[data-act="rename"]').onclick = async function () {
                 const nm = prompt('新名稱', a.name || ''); if (nm == null) return;
@@ -163,7 +161,7 @@
             const html = (c.querySelector('#as-im-html').value || '').trim();
             if (!name) { _toast(c, '請填 app 名稱'); return; }
             if (!/<body|<html|<div|<!doctype/i.test(html)) { _toast(c, '請貼上完整 HTML'); return; }
-            _install({ name: name, emoji: emoji, iconUrl: '', html: html, source: 'import' });
+            _install(c, { name: name, emoji: emoji, iconUrl: '', html: html, source: 'import' });
         });
     }
 
