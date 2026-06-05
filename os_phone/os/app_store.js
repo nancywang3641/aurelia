@@ -177,25 +177,37 @@
 
     // ── 工坊：用 OS_API.chat + PANEL_DEV_GUIDE 規範，一次性生成完整 HTML app ──
     function _wsPrompt(desc, provider) {
-        return '你是頂級前端工程師 + UI/UX 設計師。請依需求生成「一個完整、可獨立運作的 SillyTavern 同層 HTML app」。\n'
-            + '這個 app 是「功能型」的：它會主動呼叫 AI 介面生成內容（文字 / 圖片），不是靜態展示。\n\n'
+        return '你是資深前端工程師。請依需求生成「一個完整、可獨立運作的 HTML 小 app」。\n\n'
+            + '⚠️⚠️ 最重要：這個 app 的靈魂是 <script> 裡的互動邏輯。沒有可運作的 <script> = 徹底失敗(廢品)。\n'
+            + 'CSS 簡潔好看就好、不要堆砌；把輸出預算重壓在 <script> 的功能邏輯、務必把功能寫完整。\n\n'
             + '【使用者需求】\n' + desc + '\n\n'
-            + '【技術規範（必守）】\n'
-            + '1. 輸出「一份完整 HTML」：<!DOCTYPE html> … </html>，含 <style> 與 <script>。\n'
-            + '2. 所有 CSS 選擇器必須以 #app-root 開頭；禁止裸用 *{} 或 body{}；@keyframes 用獨特前綴命名（避免污染主頁）。\n'
-            + '3. 版面放在 <div id="app-root"> 內，根容器 width:100%; max-width:480px; 高度自適應，適合手機直式螢幕。\n'
-            + '4. 【呼叫文字 AI】用 window.generateRaw（已注入）：\n'
-            + '   const fn = window.generateRaw; const res = await fn({ user_input:" ", ordered_prompts:["world_info","chat_history",{role:"system",content:PROMPT}], quiet:true, stop:["User:","\\n\\n\\n"] });\n'
-            + '   回應是純文字，自行用 regex 解析你自訂的標籤。\n'
-            + '5. 【生圖】用 window.OS_IMAGE_MANAGER.generate(prompt, type, { provider: "' + provider + '" })（type 例："item"/"scene"）。\n'
-            + '   ⚠️ 預覽隔離（省額度）：必須判斷 window.__IS_PREVIEW —— 為 true 時改用佔位圖、不可呼叫真實 API：\n'
-            + '   const url = window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed=" + encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, "item", { provider:"' + provider + '" });\n'
-            + '6. 【注入酒館（可選）】若 app 要把內容發進劇情：window.TavernHelper.createChatMessages([{role:"user",name:"System",message:txt}], { refresh:"affected" })。\n'
-            + '7. 不可用 position:fixed / 100vw / 100vh。所有 API 呼叫包 try/catch，失敗給友善提示不可整頁崩。\n\n'
-            + '【輸出格式（嚴格）】先輸出 meta、再輸出 HTML，兩段都要：\n'
-            + '<app_meta>{"name":"app名稱(4字內最佳)","emoji":"一個最貼切的emoji"}</app_meta>\n'
-            + '<app_html>\n<!DOCTYPE html> …完整 HTML… </html>\n</app_html>\n'
-            + '禁止在 <app_html> 以外再輸出解釋文字。';
+            + '【硬性規範（每條必守）】\n'
+            + '1. 輸出一份完整 HTML：<!DOCTYPE html><html><head><style>…</style></head><body><div id="app-root">…</div><script>…</script></body></html>。<script> 一定要有、放在 </body> 之前、寫滿邏輯。\n'
+            + '2. 所有按鈕/互動一律用 addEventListener 綁定（嚴禁 inline onclick="fn()"——函式不在全域會失效、按了沒反應）。元素先給 id，再在 script 用 getElementById/querySelector 綁。\n'
+            + '3. CSS 選擇器全部以 #app-root 開頭；@keyframes 用獨特前綴；禁止 *{}、body{}、position:fixed、100vw、100vh。根容器 width:100%; max-width:480px; 適合手機直式。\n'
+            + '4. 【文字生成】呼叫 window.generateRaw（已注入，回 Promise<string>）。封裝 helper：\n'
+            + '   async function callAI(sys){ var r = await window.generateRaw({ user_input:" ", ordered_prompts:["world_info","chat_history",{role:"system",content:sys}], quiet:true }); return typeof r==="string"?r:(r&&r.message)||""; }\n'
+            + '5. 【生圖】用 window.OS_IMAGE_MANAGER.generate，並用 window.__IS_PREVIEW 隔離省額度。封裝：\n'
+            + '   async function genImg(p){ return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p,"item",{provider:"' + provider + '"}); }\n'
+            + '6. 每個 await 包 try/catch；點擊後要有 loading 狀態、完成後把結果 render 進畫面；失敗顯示友善訊息、不可整頁崩。\n\n'
+            + '【骨架——照這結構填滿，務必保留並寫滿 <script>】\n'
+            + '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>標題</title>\n'
+            + '<style>#app-root{ … } /* 其餘都加 #app-root 前綴、精簡 */</style></head>\n'
+            + '<body>\n'
+            + '<div id="app-root"><!-- UI：按鈕給 id --></div>\n'
+            + '<script>\n'
+            + '(function(){\n'
+            + '  var root = document.getElementById("app-root");\n'
+            + '  async function callAI(sys){ /* 見規範4 */ }\n'
+            + '  async function genImg(p){ /* 見規範5 */ }\n'
+            + '  // ⬇ 重點：綁按鈕、實作完整功能（讀輸入→顯示loading→await callAI/genImg→建卡片插列表→收loading）\n'
+            + '  root.querySelector("#你的按鈕id").addEventListener("click", async function(){ /* ... */ });\n'
+            + '})();\n'
+            + '</script>\n'
+            + '</body></html>\n\n'
+            + '【輸出格式（嚴格）】先 meta、再「含完整 <script> 的」HTML，兩段都要、其餘什麼都別寫：\n'
+            + '<app_meta>{"name":"app名稱(4字內最佳)","emoji":"最貼切的emoji"}</app_meta>\n'
+            + '<app_html>\n<!DOCTYPE html> …完整 HTML，必含寫滿邏輯的 <script>… </html>\n</app_html>';
     }
 
     function _parseGen(text) {
@@ -226,7 +238,7 @@
             try {
                 let baseConfig = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig && win.OS_SETTINGS.getConfig()) || {};
                 try { if (!baseConfig || !Object.keys(baseConfig).length) baseConfig = JSON.parse(win.localStorage.getItem('os_global_config') || '{}'); } catch (e) {}
-                const pureConfig = Object.assign({}, baseConfig, { usePresetPrompts: false, enableThinking: false, temperature: 0.5 });
+                const pureConfig = Object.assign({}, baseConfig, { usePresetPrompts: false, enableThinking: false, temperature: 0.5, maxTokens: Math.max(parseInt(baseConfig.maxTokens, 10) || 8192, 4096) });
                 const messages = [{ role: 'user', content: _wsPrompt(desc, provider) }];
 
                 const resp = await new Promise(function (resolve, reject) {
@@ -236,6 +248,7 @@
 
                 const parsed = _parseGen(resp);
                 if (!parsed.html || !/<body|<html|<div|<!doctype/i.test(parsed.html)) throw new Error('沒解析到完整 HTML');
+                if (!/<script[\s>][\s\S]{30,}<\/script>/i.test(parsed.html)) throw new Error('生成的 app 缺少互動邏輯(<script>)，請重試或把需求講更具體');
                 _genHtml = parsed.html;
 
                 if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-ws-prev'), parsed.html, { preview: true });
