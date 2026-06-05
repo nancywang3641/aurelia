@@ -1563,7 +1563,17 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* --- 細項拆解（上下文組成）--- */
         .ctx-breakdown { display: none; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; }
         .ctx-bd-head { color: var(--gold); font-size: 0.62rem; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.75; margin-bottom: 6px; font-family: var(--font-sans); }
-        .ctx-bd-item { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+        .ctx-bd-item { display: flex; align-items: center; gap: 8px; padding: 2px 4px; cursor: pointer; border-radius: 3px; transition: background 0.15s; }
+        .ctx-bd-item:hover { background: rgba(246,173,85,0.14); }
+        /* CTX 逐項內容檢視彈窗 */
+        .ctx-cv-overlay { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 4vh 4vw; }
+        .ctx-cv-box { width: min(720px, 94vw); max-height: 88vh; display: flex; flex-direction: column; background: #1b1b1f; border: 1px solid rgba(246,173,85,0.4); border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); overflow: hidden; }
+        .ctx-cv-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid rgba(246,173,85,0.2); background: rgba(246,173,85,0.06); }
+        .ctx-cv-title { font-size: 13px; font-weight: 700; color: #f6ad55; letter-spacing: 1px; }
+        .ctx-cv-meta { font-size: 11px; color: #888; margin-right: auto; }
+        .ctx-cv-close { background: transparent; border: none; color: #aaa; font-size: 16px; cursor: pointer; padding: 2px 6px; line-height: 1; }
+        .ctx-cv-close:hover { color: #fff; }
+        .ctx-cv-body { margin: 0; padding: 14px 16px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: 'Consolas','Menlo',monospace; font-size: 12px; line-height: 1.6; color: #ddd; }
         .ctx-bd-label { color: #999; font-size: 0.66rem; letter-spacing: 0.5px; white-space: nowrap; width: 72px; flex-shrink: 0; font-family: var(--font-sans); }
         .ctx-bd-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
         .ctx-bd-fill { display: block; height: 100%; width: 0%; border-radius: 2px; background: var(--gold); opacity: 0.6; transition: width 0.4s ease; }
