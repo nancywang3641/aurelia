@@ -34,6 +34,7 @@
             };
         } },
         { id: 'settings', name: '設置', emoji: '⚙️', mode: 'inside', go: function (c) { _renderSettings(c); } },
+        { id: 'appstore', name: '商店', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
     ];
 
     let _el = null;

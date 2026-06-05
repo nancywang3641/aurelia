@@ -1,0 +1,34 @@
+/* 🛒 應用商店（手機殼內 app） */
+.as-wrap { display: flex; flex-direction: column; height: 100%; background: #f4f5f8; color: #2b2d42; font-size: 14px; }
+.as-head { flex-shrink: 0; padding: 14px 16px 8px; }
+.as-title { font-size: 17px; font-weight: 700; }
+.as-tabs { flex-shrink: 0; display: flex; gap: 6px; padding: 0 12px 8px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+.as-tab { flex: 1; padding: 8px 4px; border: none; background: transparent; color: #888; font-size: 13px; cursor: pointer; border-radius: 8px 8px 0 0; }
+.as-tab.active { color: #2b2d42; font-weight: 700; background: rgba(0,0,0,0.04); }
+.as-body { flex: 1; overflow-y: auto; padding: 12px 14px 20px; }
+.as-view { display: none; flex-direction: column; gap: 8px; }
+.as-view.active { display: flex; }
+.as-lab { font-size: 12px; color: #666; margin-top: 4px; }
+.as-input { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none; background: #fff; box-sizing: border-box; width: 100%; }
+.as-emoji-in { width: 56px; flex-shrink: 0; text-align: center; }
+.as-ta { min-height: 90px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none; resize: vertical; box-sizing: border-box; width: 100%; }
+.as-ta-code { min-height: 130px; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4; }
+.as-btn { padding: 9px 12px; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.as-btn-main { background: #2b2d42; color: #fff; }
+.as-btn-ok { background: rgba(46,204,113,0.16); color: #1f9e5a; border: 1px solid #2ecc71; }
+.as-loading { display: none; padding: 8px; text-align: center; color: #888; font-size: 12px; font-style: italic; }
+.as-prev-wrap { margin-top: 6px; }
+.as-prev-lab { font-size: 12px; color: #888; margin-bottom: 4px; }
+.as-prev { width: 100%; height: 360px; border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; overflow: hidden; background: #fff; }
+.as-prev .app-iframe { width: 100%; height: 100%; border: 0; }
+.as-install-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+.as-install-row .as-input { flex: 1; }
+.as-mine-list { display: flex; flex-direction: column; gap: 8px; }
+.as-empty { color: #999; text-align: center; padding: 36px 8px; line-height: 1.6; }
+.as-mine-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; }
+.as-mine-ic { font-size: 20px; }
+.as-mine-name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-mini { padding: 4px 8px; border: 1px solid #ccc; background: #fff; border-radius: 5px; font-size: 11px; cursor: pointer; color: #555; }
+.as-mini.danger { border-color: #e74c3c; color: #e74c3c; }
+.as-toast { position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%) translateY(12px); background: rgba(0,0,0,0.85); color: #fff; padding: 7px 16px; border-radius: 18px; font-size: 12px; opacity: 0; pointer-events: none; transition: 0.25s; white-space: nowrap; z-index: 50; }
+.as-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
