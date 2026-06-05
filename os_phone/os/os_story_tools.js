@@ -357,6 +357,7 @@
             if (currentLast == null || isNaN(currentLast)) return null;
             const chatId = getChatIdentifier();
             let lastSummarized = 0;
+            let summaryCount = 0;
             const bookName = helper.getCurrentCharPrimaryLorebook?.();
             if (bookName) {
                 const entries = await helper.getLorebookEntries(bookName);
@@ -366,6 +367,7 @@
                 const summaries = (entries || []).filter(e => e.comment && e.comment.includes(prefix));
                 if (summaries.length) {
                     const _seq = e => { const m = (e.comment || '').match(/第\s*(\d+)\s*次/); return m ? parseInt(m[1]) : 0; };
+                    summaryCount = Math.max(0, ...summaries.map(_seq));   // 最新一份的「第N次」＝已總結次數
                     summaries.sort((a, b) => (_seq(b) - _seq(a)) || ((b.uid || 0) - (a.uid || 0)));
                     for (const s of summaries) {
                         const mm = (s.content || '').match(/Last:\s*(\d+)/i);
@@ -374,7 +376,7 @@
                 }
             }
             const uncounted = Math.max(0, currentLast - lastSummarized);
-            return { lastSummarized, currentLast, uncounted, start: lastSummarized + 1, end: currentLast };
+            return { lastSummarized, currentLast, uncounted, start: lastSummarized + 1, end: currentLast, summaryCount };
         } catch (e) { return null; }
     };
 

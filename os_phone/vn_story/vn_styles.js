@@ -83,6 +83,7 @@
                                 <div class="ctx-row"><span class="ctx-label">↓ 回應 Chars</span><span class="ctx-val" id="ctx-recv-chars">—</span></div>
                                 <div class="ctx-row"><span class="ctx-label">訊息數</span><span class="ctx-val" id="ctx-msgs">—</span></div>
                                 <div class="ctx-row" id="ctx-unsum-row"><span class="ctx-label">未總結樓層</span><span class="ctx-val" id="ctx-unsum">—</span></div>
+                                <div class="ctx-row" id="ctx-sumcount-row"><span class="ctx-label">總結次數</span><span class="ctx-val" id="ctx-sumcount">—</span></div>
                                 <div id="ctx-breakdown" class="ctx-breakdown">
                                     <div class="ctx-bd-head">上下文組成</div>
                                     <div class="ctx-bd-item" id="ctx-bd-i-system"><span class="ctx-bd-label">系統提示</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-system"></span></span><span class="ctx-bd-val" id="ctx-bd-system">—</span></div>
