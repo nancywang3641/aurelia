@@ -91,6 +91,7 @@
 .aps-app-body .ps-header { padding-top: 0 !important; height: 56px !important; }
 .aps-mount { position: relative; width: 100%; height: 100%; }
 .aps-fail { padding: 30px; text-align: center; color: #999; font-size: 13px; }
+.aps-loading { padding: 30px; text-align: center; color: #999; font-size: 13px; }
 /* app 商店裝的功能型 app（iframe 執行）—— 填滿容器、無邊框 */
 .app-iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
 /* 借大廳/自建單例的 app(閱讀 #vn-reader-sa / 黑市 #store-panel-overlay)塞進手機時，強制填滿、不偏移 */
