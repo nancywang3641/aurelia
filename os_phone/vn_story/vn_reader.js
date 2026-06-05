@@ -11,12 +11,17 @@
     let _activeStoryId = '';
 
     // ── 取得/建立 overlay DOM ─────────────────────────────────────
-    function _ensureDOM() {
-        if (_overlay && document.contains(_overlay)) return _overlay;
-
-        const container = document.getElementById('aurelia-phone-screen')
+    function _ensureDOM(mountInto) {
+        const container = mountInto
+            || document.getElementById('aurelia-phone-screen')
             || document.getElementById('aurelia-embedded-root')
             || document.body;
+
+        // 已建過：若指定了新容器(如手機殼)而目前不在裡面 → 搬過去
+        if (_overlay && document.contains(_overlay)) {
+            if (mountInto && _overlay.parentElement !== mountInto) mountInto.appendChild(_overlay);
+            return _overlay;
+        }
 
         _overlay = document.createElement('div');
         _overlay.id = 'vn-reader-sa';
@@ -235,8 +240,8 @@
     // ── 公開 API ──────────────────────────────────────────────────
     const VN_READER = {
 
-        async show() {
-            const overlay = _ensureDOM();
+        async show(mountInto) {
+            const overlay = _ensureDOM(mountInto);
             overlay.style.display = 'flex';
 
             const body   = overlay.querySelector('#vn-reader-sa-body');
