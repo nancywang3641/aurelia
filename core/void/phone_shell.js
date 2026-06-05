@@ -80,23 +80,35 @@
         _applyIcons();
     }
 
-    // icon pack：每個 app icon 套自訂圖（沒設就用 emoji）
+    // icon pack（VN 素材式）：給一個圖庫資料夾網址，每個 app 自動抓 <資料夾>/<代號>.png
+    // (試 .png/.webp/.jpg；<代號> 抓不到時也試中文名)。全抓不到 → 維持 emoji 預設。
+    const _ICON_EXTS = ['png', 'webp', 'jpg'];
     function _applyIcons() {
         if (!_el) return;
-        const icons = (_loadTheme().icons) || {};
+        const folder = (_loadTheme().iconFolder || '').trim();
+        const base = folder ? (folder.replace(/\/+$/, '') + '/') : '';
         _el.querySelectorAll('.aps-icon-em[data-app-em]').forEach(function (em) {
-            const url = icons[em.dataset.appEm];
-            if (url) { em.style.backgroundImage = 'url(' + url + ')'; em.classList.add('aps-icon-img'); }
-            else { em.style.backgroundImage = ''; em.classList.remove('aps-icon-img'); }
+            em.style.backgroundImage = ''; em.classList.remove('aps-icon-img');   // 先還原 emoji
+            if (!base) return;
+            const id = em.dataset.appEm;
+            const app = APPS.find(function (a) { return a.id === id; });
+            const names = app ? [id, app.name] : [id];
+            const cands = [];
+            names.forEach(function (n) { _ICON_EXTS.forEach(function (e) { cands.push(base + encodeURIComponent(n) + '.' + e); }); });
+            (function tryNext(i) {
+                if (i >= cands.length) return;   // 全失敗 → 維持 emoji
+                const img = new Image();
+                img.onload = function () { em.style.backgroundImage = 'url("' + cands[i] + '")'; em.classList.add('aps-icon-img'); };
+                img.onerror = function () { tryNext(i + 1); };
+                img.src = cands[i];
+            })(0);
         });
     }
-    function _saveIcons(c) {
-        const icons = {};
-        c.querySelectorAll('.aps-set-icinput').forEach(function (inp) { const u = (inp.value || '').trim(); if (u) icons[inp.dataset.app] = u; });
-        const t = _loadTheme(); t.icons = icons;
+    function _saveIconFolder(v) {
+        const t = _loadTheme();
+        if (v) t.iconFolder = v; else delete t.iconFolder;
         win.localStorage.setItem(THEME_KEY, JSON.stringify(t));
         _applyTheme();
-        _renderSettings(c);
     }
 
     // ── 狀態列時鐘 ──
@@ -127,15 +139,13 @@
     function _urlOf(v) { return (v && String(v).indexOf('url(') === 0) ? String(v).slice(4).split(')')[0] : ''; }
     function _renderSettings(c) {
         const t = _loadTheme();
-        const icons = t.icons || {};
         const sw = function (arr, key) { return arr.map(function (w) { return '<button class="aps-set-sw" data-k="' + key + '" data-css="' + _esc(w.css) + '" type="button" style="background:' + w.css + '"><span>' + _esc(w.name) + '</span></button>'; }).join(''); };
         const ftCh = FONTS.map(function (f) { return '<button class="aps-set-chip" data-k="font" data-css="' + _esc(f.css) + '" type="button" style="font-family:' + f.css + '">' + _esc(f.name) + '</button>'; }).join('');
-        const icRows = APPS.map(function (a) {
-            const cur = icons[a.id] || '';
+        const icHintRows = APPS.map(function (a) {
             return '<div class="aps-set-icrow">'
-                 + '<span class="aps-set-icprev"' + (cur ? ' style="background-image:url(' + _esc(cur) + ')"' : '') + '>' + (cur ? '' : a.emoji) + '</span>'
+                 + '<span class="aps-set-icprev">' + a.emoji + '</span>'
                  + '<span class="aps-set-icname">' + _esc(a.name) + '</span>'
-                 + '<input class="aps-set-input aps-set-icinput" data-app="' + a.id + '" type="text" placeholder="圖片網址 https://..." value="' + _esc(cur) + '">'
+                 + '<span class="aps-set-ichint">' + a.id + '.png</span>'
                  + '</div>';
         }).join('');
         c.innerHTML =
@@ -143,11 +153,13 @@
           +   '<div class="aps-set-top"><button class="aps-set-back" id="aps-set-back" type="button" title="返回">‹</button><span class="aps-set-h">手機設置</span></div>'
           +   '<div class="aps-set-sec">背景</div><div class="aps-set-swgrid">' + sw(WALLPAPERS, 'wallpaper') + '</div>'
           +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(_urlOf(t.wallpaper)) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
-          +   '<div class="aps-set-sec">APP 圖標（每個 app 各一張圖）</div><div class="aps-set-iclist">' + icRows + '</div>'
-          +   '<div class="aps-set-row"><button id="aps-set-ic-apply" class="aps-set-btn" type="button">套用圖標</button></div>'
+          +   '<div class="aps-set-sec">APP 圖標（一個圖庫資料夾、自動對名）</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-icfolder" class="aps-set-input" type="text" placeholder="圖庫資料夾網址 https://.../icons/" value="' + _esc(t.iconFolder || '') + '"><button id="aps-set-icf-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-subnote">把圖放進這資料夾、用下方代號當檔名(.png/.webp/.jpg 都行)；沒放的自動用預設符號：</div>'
+          +   '<div class="aps-set-iclist">' + icHintRows + '</div>'
           +   '<div class="aps-set-sec">字體（套用到所有 app）</div><div class="aps-set-chips">' + ftCh + '</div>'
           +   '<div class="aps-set-row"><button id="aps-set-reset" class="aps-set-btn ghost" type="button">還原全部預設</button></div>'
-          +   '<div class="aps-set-note">字體會「硬套用」蓋掉所有 app(連寫死字體的也蓋)，只放過 fa 圖標不破壞。圖片網址留空＝清掉那個 icon。</div>'
+          +   '<div class="aps-set-note">字體會「硬套用」蓋掉所有 app(連寫死字體的也蓋)，只放過 fa 圖標不破壞。</div>'
           + '</div>';
         const back = c.querySelector('#aps-set-back'); if (back) back.addEventListener('click', _home);
         c.querySelectorAll('[data-k]').forEach(function (b) {
@@ -155,8 +167,8 @@
         });
         const wpBtn = c.querySelector('#aps-set-wpurl-btn');
         if (wpBtn) wpBtn.addEventListener('click', function () { const u = (c.querySelector('#aps-set-wpurl').value || '').trim(); _saveTheme({ wallpaper: u ? ('url(' + u + ') center/cover no-repeat') : '' }); });
-        const icApply = c.querySelector('#aps-set-ic-apply');
-        if (icApply) icApply.addEventListener('click', function () { _saveIcons(c); });
+        const icfBtn = c.querySelector('#aps-set-icf-btn');
+        if (icfBtn) icfBtn.addEventListener('click', function () { _saveIconFolder((c.querySelector('#aps-set-icfolder').value || '').trim()); });
         const reset = c.querySelector('#aps-set-reset');
         if (reset) reset.addEventListener('click', function () { try { win.localStorage.removeItem(THEME_KEY); } catch (e) {} _applyTheme(); _renderSettings(c); });
     }
