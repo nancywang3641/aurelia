@@ -5,6 +5,14 @@
     background: rgba(0, 0, 0, 0.45);
 }
 .aps-frame {
+    /* 手機主題變數（設置 app 改這些值；app 完全不需知道、自動相容、不衝突） */
+    --aps-wallpaper: linear-gradient(160deg, #2b2d42, #4a4e69);
+    --aps-icon-bg: rgba(255, 255, 255, 0.94);
+    --aps-icon-radius: 16px;
+    --aps-label-color: #fff;
+    --aps-sb-color: #fff;
+    --aps-font: inherit;
+
     position: relative;
     width: 360px; height: 720px; max-height: 92vh;
     background: #0e0e12;
@@ -13,6 +21,15 @@
     display: flex; flex-direction: column;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
 }
+/* 狀態列（時間 + 訊號/wifi/電池）—— 永遠在最上層、繞過瀏海兩側 */
+.aps-statusbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 30px; z-index: 4;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 22px 0; font-size: 12px; font-weight: 600;
+    color: var(--aps-sb-color); font-family: var(--aps-font);
+    pointer-events: none; letter-spacing: 0.5px;
+}
+.aps-sb-icons { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 /* 小螢幕等比縮 */
 @media (max-height: 760px) { .aps-frame { transform: scale(0.9); } }
 @media (max-height: 680px) { .aps-frame { transform: scale(0.8); } }
@@ -33,7 +50,8 @@
     position: absolute; top: 30px; left: 0; right: 0; bottom: 0;
     display: flex; flex-direction: column;
     padding: 16px 18px 18px;
-    background: linear-gradient(160deg, #2b2d42, #4a4e69);
+    background: var(--aps-wallpaper);
+    font-family: var(--aps-font);
     overflow: auto;
 }
 .aps-grid {
@@ -47,13 +65,13 @@
 .aps-icon-em {
     width: 54px; height: 54px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 28px; border-radius: 16px;
-    background: rgba(255, 255, 255, 0.94);
+    font-size: 28px; border-radius: var(--aps-icon-radius);
+    background: var(--aps-icon-bg);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
     transition: transform 0.12s;
 }
 .aps-icon:active .aps-icon-em { transform: scale(0.9); }
-.aps-icon-name { font-size: 11px; color: #fff; letter-spacing: 0.5px; }
+.aps-icon-name { font-size: 11px; color: var(--aps-label-color); letter-spacing: 0.5px; }
 
 /* app 內頁（用 app 自己的 header/返回；手機殼不加自己的 chrome）—— top:30 留瀏海，內容撐滿 */
 .aps-app {
@@ -91,3 +109,20 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); z-index: 5;
 }
 .aps-close:hover { color: #fff; }
+
+/* 設置 app 面板（手機主題：背景…） */
+.aps-set { padding: 18px 16px; color: #2b2d42; font-family: var(--aps-font); }
+.aps-set-h { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+.aps-set-sec { font-size: 12px; color: #888; letter-spacing: 1px; margin: 10px 0 8px; }
+.aps-set-swgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.aps-set-sw {
+    height: 64px; border-radius: 12px; border: 2px solid rgba(0, 0, 0, 0.08);
+    cursor: pointer; position: relative; overflow: hidden;
+    display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px;
+}
+.aps-set-sw span { font-size: 11px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); font-weight: 600; }
+.aps-set-row { display: flex; gap: 8px; margin-top: 12px; }
+.aps-set-input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 12px; outline: none; }
+.aps-set-btn { padding: 8px 14px; border: none; border-radius: 6px; background: #2b2d42; color: #fff; font-size: 12px; cursor: pointer; flex-shrink: 0; }
+.aps-set-btn.ghost { background: transparent; color: #888; border: 1px solid #ccc; }
+.aps-set-note { font-size: 11px; color: #aaa; margin-top: 16px; line-height: 1.5; }
