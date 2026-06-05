@@ -278,12 +278,18 @@
             if (!rec) return {};
             const s = function(v){ return (typeof v === 'string') ? v : (v == null ? '' : String(v)); };
             const join = function(){ return Array.prototype.slice.call(arguments).map(s).filter(function(t){ return t && t.trim(); }).join('\n\n'); };
+            // OAI/chat completion：實際送出的是 rawPrompt(=[{role,content}] 訊息陣列)，沒有 mesSendString。
+            // 取 user/assistant 訊息 = 對話歷史；system 訊息 = 系統段；rpAll = 全部(備援)。
+            const rp = rec.rawPrompt;
+            const rpArr = Array.isArray(rp) ? rp : null;
+            const rpByRole = function(roles){ return rpArr ? rpArr.filter(function(m){ return m && roles.indexOf(m.role) >= 0; }).map(function(m){ return '['+(m.role||'?')+']\n'+s(m.content); }).join('\n\n') : ''; };
+            const rpAll = rpArr ? rpArr.map(function(m){ return '['+(m.role||'?')+']\n'+s(m.content); }).join('\n\n') : s(rp);
             return {
-                system:    join(rec.systemPromptString, rec.main, rec.oaiMainString),
+                system:    join(rec.systemPromptString, rec.main, rec.oaiMainString) || rpByRole(['system']),
                 character: join(rec.charDescription, rec.charPersonality, rec.scenarioText) || s(rec.storyString),
                 world:     s(rec.worldInfoString),
                 examples:  s(rec.examplesString) || s(rec.mesExamplesString),
-                chat:      s(rec.mesSendString) || s(rec.oaiConversation),
+                chat:      s(rec.mesSendString) || rpByRole(['user', 'assistant']) || rpAll,
                 persona:   s(rec.userPersona),
                 note:      s(rec.authorsNoteString) || s(rec.allAnchors),
                 inject:    join(rec.chatInjects, rec.summarizeString, rec.smartContextString, rec.chatVectorsString, rec.dataBankVectorsString),
@@ -305,7 +311,19 @@
         },
 
         showContent: function(key) {
-            const text  = (key === 'recall') ? (this.recallText || '') : ((this.breakdownContent && this.breakdownContent[key]) || '');
+            let text;
+            if (key === 'recall') {
+                text = this.recallText || '';
+            } else if ((key === 'chat' || key === 'system') && Array.isArray(this._liveChat) && this._liveChat.length) {
+                // 即時捕捉到的真實送出訊息優先（chat=對話、system=系統段）
+                const roles = (key === 'chat') ? ['user', 'assistant'] : ['system'];
+                text = this._liveChat.filter(function(m){ return m && roles.indexOf(m.role) >= 0; })
+                                     .map(function(m){ return '[' + (m.role || '?') + ']\n' + (m.content == null ? '' : m.content); })
+                                     .join('\n\n');
+                if (!text) text = (this.breakdownContent && this.breakdownContent[key]) || '';
+            } else {
+                text = (this.breakdownContent && this.breakdownContent[key]) || '';
+            }
             const label = this._KEY_LABELS[key] || key;
             const esc = function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
             const old = document.getElementById('ctx-cv-overlay');
@@ -535,6 +553,25 @@
     };
 
     window.VN_CtxMonitor = VN_CtxMonitor;
+
+    // 生成當下抓「實際要送出的訊息陣列」——OAI/chat completion 沒有 mesSendString，
+    // 對話歷史在 rawPrompt；這裡直接從 CHAT_COMPLETION_PROMPT_READY 事件拿，最可靠、不靠任何持久化。
+    (function bindPromptCapture(tries) {
+        try {
+            const te = win.tavern_events;
+            if (win.eventOn && te && te.CHAT_COMPLETION_PROMPT_READY) {
+                win.eventOn(te.CHAT_COMPLETION_PROMPT_READY, function(data) {
+                    try {
+                        if (!data || data.dryRun) return;   // dryRun = 純算 token、不是真送，跳過
+                        const msgs = data.chat || data.messages || data.prompt;
+                        if (Array.isArray(msgs)) VN_CtxMonitor._liveChat = msgs;
+                    } catch (e) {}
+                });
+                return;
+            }
+        } catch (e) {}
+        if (tries > 0) setTimeout(function(){ bindPromptCapture(tries - 1); }, 1500);
+    })(8);
 
     // console.log 攔截：備援（插件未安裝）+ 捕捉訊息數（插件不寫全域變數）
     (function() {
