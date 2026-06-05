@@ -78,7 +78,7 @@
     position: absolute; top: 30px; left: 0; right: 0; bottom: 0;
     display: none; background: #fff;
 }
-.aps-app-body { position: absolute; inset: 0; overflow: auto; }
+.aps-app-body { position: absolute; inset: 0; overflow: auto; font-family: var(--aps-font); }
 .aps-mount { position: relative; width: 100%; height: 100%; }
 .aps-fail { padding: 30px; text-align: center; color: #999; font-size: 13px; }
 /* 借大廳/自建單例的 app(閱讀 #vn-reader-sa / 黑市 #store-panel-overlay)塞進手機時，強制填滿、不偏移 */
@@ -112,7 +112,12 @@
 
 /* 設置 app 面板（手機主題：背景…） */
 .aps-set { padding: 18px 16px; color: #2b2d42; font-family: var(--aps-font); }
-.aps-set-h { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+.aps-set-top { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+.aps-set-back { background: transparent; border: none; font-size: 26px; line-height: 1; color: #2b2d42; cursor: pointer; padding: 0 4px; }
+.aps-set-h { font-size: 16px; font-weight: 700; }
+.aps-set-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.aps-set-chip { padding: 7px 13px; border: 1px solid #ccc; border-radius: 16px; background: #fff; font-size: 12px; cursor: pointer; color: #2b2d42; }
+.aps-set-chip:hover { border-color: #2b2d42; }
 .aps-set-sec { font-size: 12px; color: #888; letter-spacing: 1px; margin: 10px 0 8px; }
 .aps-set-swgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .aps-set-sw {
