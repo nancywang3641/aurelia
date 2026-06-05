@@ -99,6 +99,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_ambient', path: _AURELIA_EXT_BASE + '/core/void/ambient.js', key: 'voidAmbient' },
     { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
     { name: 'void_login', path: _AURELIA_EXT_BASE + '/core/void/login.js', key: 'voidLogin' },
+    { name: 'void_phone_shell', path: _AURELIA_EXT_BASE + '/core/void/phone_shell.js', key: 'voidPhoneShell' },
     { name: 'chat_window', path: _AURELIA_EXT_BASE + '/core/chat_window.js', key: 'chatWindow' },
     { name: 'chat_room', path: _AURELIA_EXT_BASE + '/core/chat_room.js', key: 'voidClaudeRoom' },
     { name: 'chat_group', path: _AURELIA_EXT_BASE + '/core/chat_group.js', key: 'chatGroup' },
@@ -191,7 +192,11 @@ const PHONE_FILES = [
     'wx/wx_user_profile.js', 'wx/wx_theme.js',
     'wx/wx_contacts.js', 'wx/wx_chat_settings.js', 'wx/wx_bubble_settings.js',
     'wx/wx_message_manager.js', 'wx/wx_view.js', 'wx/wx_core.js',
-    'wx/wx_tavern_api_bridge.js'
+    'wx/wx_tavern_api_bridge.js',
+
+    // === 🟣 微薄 (Weibo) — 搬回酒館（順序同 PWA index.html）===
+    'wb/wb_user_profile.js', 'wb/wb_account.js', 'wb/wb_theme.js',
+    'wb/wb_view.js', 'wb/wb_core.js'
 ];
 
 // 載入 CSS 工具 (🔥 修復酒館模式破圖的關鍵)
@@ -308,6 +313,7 @@ async function initializeExtension() {
         console.log('[System] 正在載入核心樣式 (CSS)...');
         await loadCSS(_AURELIA_EXT_BASE + '/aurelia_core_st.css');
         await loadCSS(_AURELIA_EXT_BASE + '/core/void/lobby.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/phone_shell.css');
 
         // core 模組 CSS（兩版共用，selector 已 scoped 不污染酒館）
         await loadCSS(_AURELIA_EXT_BASE + '/css/toast_manager.css');

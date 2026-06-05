@@ -701,6 +701,16 @@ const IRIS_IDLE = [
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
+                    <div class="void-btn" id="void-apps-btn" title="應用（手機殼：微信 / 微薄 / 塔羅 / RPG / 閱讀 / 黑市）">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-mobile-screen-button"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="終端機">應用</span>
+                                <span class="lb-menu-en" data-en-404="TERMINAL">APPS</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
                     <div class="lb-info-cards">
                         <div class="lb-info-card">
                             <span class="lb-info-card-k">TODAY'S SPECIAL</span>
@@ -806,18 +816,10 @@ const IRIS_IDLE = [
             </div>
 
             <div class="void-chat-bar">
-                <div class="void-chat-btns">
-                    <button class="void-hist-btn" id="iris-hist-btn" title="瀅瀅 素材歷史"><i class="fa-solid fa-clock-rotate-left"></i><span>瀅瀅</span></button>
-                    <button class="void-hist-btn" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i><span>柴郡</span></button>
-                    <button class="void-hist-btn" id="achievement-hist-btn" title="成就清單"><i class="fa-solid fa-trophy"></i><span>成就</span></button>
-                    <button class="void-hist-btn" id="store-shop-btn" title="柴郡黑市"><i class="fa-solid fa-store"></i><span>黑市</span></button>
-                    ${extraAppsHtml}
-                    <button class="void-hist-btn" id="vn-reader-lobby-btn" title="劇情閱讀器"><span class="vhb-em">📖</span><span>閱讀</span></button>
-                    <button class="void-hist-btn" data-app-launch="tarot" title="塔羅"><span class="vhb-em">🔮</span><span>塔羅</span></button>
-                    <button class="void-hist-btn" data-app-launch="rpg" title="RPG 狀態"><span class="vhb-em">🛡️</span><span>RPG</span></button>
-                    <button class="void-hist-btn" data-os-launch="微信" title="微信"><span class="vhb-em">💬</span><span>微信</span></button>
-                </div>
+                <!-- app 按鈕全部搬進「📱 應用」手機殼浮窗；這裡只留大廳對話歷史鈕（瀅瀅/柴郡），移到輸入框前面 -->
                 <div class="void-chat-input-row">
+                    <button class="void-hist-btn void-hist-inline" id="iris-hist-btn" title="瀅瀅 對話歷史"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                    <button class="void-hist-btn void-hist-inline" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i></button>
                     <textarea id="iris-input" class="void-input" placeholder="提供故事素材或與瀅瀅對話..." rows="1" autocomplete="off"></textarea>
                     <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
                     <button class="void-send-btn" id="iris-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
@@ -1031,6 +1033,12 @@ const IRIS_IDLE = [
             // 右側新增的「成就」橫幅卡 → 開同一個成就面板
             const achievementCardBtn = tab.querySelector('#void-achievement-btn');
             if (achievementCardBtn) achievementCardBtn.addEventListener('click', VoidPanels.openAchievement);
+
+            // 📱 應用（手機殼浮窗）—— 所有 app 從這開
+            const appsBtn = tab.querySelector('#void-apps-btn');
+            if (appsBtn) appsBtn.addEventListener('click', function () {
+                if (window.VoidPhoneShell && window.VoidPhoneShell.open) window.VoidPhoneShell.open();
+            });
 
             // ===== 右上角人設頭像 + 下拉（取代舊「我」TAB，內容＝ OS_PERSONA 人設管理）=====
             (function setupPersonaAvatar() {
