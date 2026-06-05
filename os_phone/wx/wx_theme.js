@@ -271,6 +271,40 @@
             .wx-page-room.multi-select-mode .wx-msg-row:active {
                 background: rgba(0, 0, 0, 0.05);
             }
+
+            /* ===== 夜間模式完整化（.wx-dark 在 shell 上；補齊所有「寫死淺底/深字、又沒 inline 夜間」的元素。
+               有 inline 夜間的(header/list底/me頁)inline 會贏、不受影響）===== */
+            .wx-dark .wx-shell { background: #000; }
+            .wx-dark .wx-page-list { background: #111; }
+            .wx-dark .wx-page-room { background: #0d0d0d; }
+            .wx-dark .wx-chat-item { background: #1c1c1e; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-name { color: #f0f0f0; }
+            .wx-dark .wx-system-notice { color: #888; }
+            .wx-dark .wx-msg-row.you .wx-bubble-content { background: #2a2a2c; border-color: #333; color: #f0f0f0; }
+            .wx-dark .wx-msg-row.you .wx-bubble-content::before { border-right-color: #2a2a2c; }
+            .wx-dark .wx-footer-wrapper { background: #1c1c1e; border-top-color: #2a2a2a; }
+            .wx-dark .wx-input-real { background: #2a2a2c !important; border-color: #3a3a3c; color: #f0f0f0 !important; -webkit-text-fill-color: #f0f0f0 !important; }
+            .wx-dark .wx-icon-btn { color: #f0f0f0; }
+            .wx-dark .wx-action-panel, .wx-dark .wx-sticker-panel { background: #1c1c1e; border-top-color: #2a2a2a; }
+            .wx-dark .wx-stk-panel-header, .wx-dark .wx-stk-item, .wx-dark .wx-stk-fallback-box, .wx-dark .wx-stk-manage-area { background: #1c1c1e; border-color: #2a2a2a; }
+            .wx-dark .wx-stk-lib-name, .wx-dark .wx-stk-fallback-box { color: #ccc; }
+            .wx-dark .wx-stk-url-input { background: #2a2a2c; border-color: #3a3a3c; color: #f0f0f0; }
+            .wx-dark .wx-bottom-nav { background: #1c1c1e; border-top-color: #2a2a2a; }
+            .wx-dark .wx-tab-txt { color: #888; }
+            .wx-dark .wx-grid-icon { background: #1c1c1e; border-color: #2a2a2a; color: #ccc; }
+            .wx-dark .wx-file-card, .wx-dark .wx-wb-share-card { background: #1c1c1e; border-color: #2a2a2a; }
+            .wx-dark .wx-file-name, .wx-dark .wx-wb-share-text { color: #ccc; }
+            .wx-dark .wx-img-placeholder { background: #2a2a2c; border-color: #3a3a3c; color: #aaa; }
+            .wx-dark .wx-settings-panel { background: #000; }
+            .wx-dark .wx-set-group { background: #1c1c1e; border-top-color: #2a2a2a; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-set-label { color: #f0f0f0; }
+            .wx-dark .wx-modal-box, .wx-dark .wx-context-menu { background: #1c1c1e; }
+            .wx-dark .wx-modal-title { color: #f0f0f0; }
+            .wx-dark .wx-modal-input { background: #2a2a2c; border-color: #3a3a3c; color: #f0f0f0; }
+            .wx-dark .wx-context-item { color: #f0f0f0; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-btn-cancel { background: #2a2a2c; color: #ccc; }
+            .wx-dark .wx-source-details { background: #1c1c1e; border-color: #3a3a3c; color: #aaa; }
+            .wx-dark .wx-code-content { background: #0d0d0d; border-color: #2a2a2a; color: #9acd9a; }
         `,
         inject: function(fallbackDoc) {
             const targetDoc = (window.parent && window.parent.document) ? window.parent.document : (fallbackDoc || document);
