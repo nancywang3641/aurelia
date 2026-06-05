@@ -95,31 +95,45 @@
         { name: '海藍', css: 'linear-gradient(160deg,#4facfe,#00f2fe)' },
         { name: '純白', css: '#eef0f6' },
     ];
+    const ICON_BGS = [
+        { name: '白',   css: 'rgba(255,255,255,0.94)' },
+        { name: '霧黑', css: 'rgba(18,18,26,0.55)' },
+        { name: '透玻', css: 'rgba(255,255,255,0.18)' },
+        { name: '焦糖', css: 'linear-gradient(145deg,#f5e6c8,#e8c98f)' },
+    ];
+    const FONTS = [
+        { name: '預設',  css: 'inherit' },
+        { name: '思源宋', css: "'Noto Serif TC',serif" },
+        { name: '優雅',  css: "'Playfair Display','Noto Serif TC',serif" },
+        { name: '黑體',  css: "system-ui,'PingFang TC','Microsoft JhengHei',sans-serif" },
+        { name: '等寬',  css: "'Courier New',monospace" },
+    ];
+    function _urlOf(v) { return (v && String(v).indexOf('url(') === 0) ? String(v).slice(4).split(')')[0] : ''; }
     function _renderSettings(c) {
         const t = _loadTheme();
-        const curUrl = (t.wallpaper && String(t.wallpaper).indexOf('url(') === 0) ? String(t.wallpaper).slice(4).split(')')[0] : '';
-        const swatches = WALLPAPERS.map(function (w) {
-            return '<button class="aps-set-sw" data-css="' + _esc(w.css) + '" type="button" style="background:' + w.css + '"><span>' + _esc(w.name) + '</span></button>';
-        }).join('');
+        const sw = function (arr, key) { return arr.map(function (w) { return '<button class="aps-set-sw" data-k="' + key + '" data-css="' + _esc(w.css) + '" type="button" style="background:' + w.css + '"><span>' + _esc(w.name) + '</span></button>'; }).join(''); };
+        const ftCh = FONTS.map(function (f) { return '<button class="aps-set-chip" data-k="font" data-css="' + _esc(f.css) + '" type="button" style="font-family:' + f.css + '">' + _esc(f.name) + '</button>'; }).join('');
         c.innerHTML =
             '<div class="aps-set">'
-          +   '<div class="aps-set-h">📱 手機設置</div>'
-          +   '<div class="aps-set-sec">背景</div>'
-          +   '<div class="aps-set-swgrid">' + swatches + '</div>'
-          +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(curUrl) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
-          +   '<div class="aps-set-row"><button id="aps-set-reset" class="aps-set-btn ghost" type="button">還原預設</button></div>'
-          +   '<div class="aps-set-note">之後可在這加：圖標樣式 / 圓角 / 字體 …（照同模式、不影響任何 app）</div>'
+          +   '<div class="aps-set-top"><button class="aps-set-back" id="aps-set-back" type="button" title="返回">‹</button><span class="aps-set-h">手機設置</span></div>'
+          +   '<div class="aps-set-sec">背景</div><div class="aps-set-swgrid">' + sw(WALLPAPERS, 'wallpaper') + '</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(_urlOf(t.wallpaper)) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-sec">圖標容器</div><div class="aps-set-swgrid">' + sw(ICON_BGS, 'iconBg') + '</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-icurl" class="aps-set-input" type="text" placeholder="或貼圖標底圖網址 https://..." value="' + _esc(_urlOf(t.iconBg)) + '"><button id="aps-set-icurl-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-sec">字體</div><div class="aps-set-chips">' + ftCh + '</div>'
+          +   '<div class="aps-set-row"><button id="aps-set-reset" class="aps-set-btn ghost" type="button">還原全部預設</button></div>'
+          +   '<div class="aps-set-note">字體是「軟套用」：app 沒寫死字體的會跟著變，有寫死的(如塔羅/黑市打字機體)保留自己的——你獨立做的 app 不用改也相容。</div>'
           + '</div>';
-        c.querySelectorAll('.aps-set-sw').forEach(function (b) {
-            b.addEventListener('click', function () { _saveTheme({ wallpaper: b.dataset.css }); });
+        const back = c.querySelector('#aps-set-back'); if (back) back.addEventListener('click', _home);
+        c.querySelectorAll('[data-k]').forEach(function (b) {
+            b.addEventListener('click', function () { const p = {}; p[b.dataset.k] = b.dataset.css; _saveTheme(p); });
         });
-        const urlBtn = c.querySelector('#aps-set-wpurl-btn');
-        if (urlBtn) urlBtn.addEventListener('click', function () {
-            const u = (c.querySelector('#aps-set-wpurl').value || '').trim();
-            _saveTheme({ wallpaper: u ? ('url(' + u + ') center/cover no-repeat') : '' });
-        });
+        const wpBtn = c.querySelector('#aps-set-wpurl-btn');
+        if (wpBtn) wpBtn.addEventListener('click', function () { const u = (c.querySelector('#aps-set-wpurl').value || '').trim(); _saveTheme({ wallpaper: u ? ('url(' + u + ') center/cover no-repeat') : '' }); });
+        const icBtn = c.querySelector('#aps-set-icurl-btn');
+        if (icBtn) icBtn.addEventListener('click', function () { const u = (c.querySelector('#aps-set-icurl').value || '').trim(); _saveTheme({ iconBg: u ? ('url(' + u + ') center/cover no-repeat') : '' }); });
         const reset = c.querySelector('#aps-set-reset');
-        if (reset) reset.addEventListener('click', function () { _saveTheme({ wallpaper: '' }); _renderSettings(c); });
+        if (reset) reset.addEventListener('click', function () { try { win.localStorage.removeItem(THEME_KEY); } catch (e) {} _applyTheme(); _renderSettings(c); });
     }
 
     function _build() {
