@@ -743,8 +743,8 @@
             const html = `
                 <div class="wx-shell${isDark ? ' wx-dark' : ''}" style="${darkShellStyle}">
                     <div class="wx-header" style="${darkHeaderStyle}">
-                        <div class="${backBtnClass}" onclick="${backAction}">${backBtnText}</div>
-                        <div class="wx-header-title">${headerTitle}</div>
+                        <div class="${backBtnClass}" onclick="${backAction}" style="color:${isDark ? '#f0f0f0' : '#000'}">${backBtnText}</div>
+                        <div class="wx-header-title" style="color:${isDark ? '#f0f0f0' : '#000'}">${headerTitle}</div>
                         ${headerRightBtn}
                     </div>
                     <div class="wx-page-container">
