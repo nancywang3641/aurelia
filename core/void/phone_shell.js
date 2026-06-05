@@ -155,7 +155,7 @@
           +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(_urlOf(t.wallpaper)) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
           +   '<div class="aps-set-sec">APP 圖標（一個圖庫資料夾、自動對名）</div>'
           +   '<div class="aps-set-row"><input id="aps-set-icfolder" class="aps-set-input" type="text" placeholder="圖庫資料夾網址 https://.../icons/" value="' + _esc(t.iconFolder || '') + '"><button id="aps-set-icf-btn" class="aps-set-btn" type="button">套用</button></div>'
-          +   '<div class="aps-set-subnote">把圖放進這資料夾、用下方代號當檔名(.png/.webp/.jpg 都行)；沒放的自動用預設符號：</div>'
+          +   '<div class="aps-set-subnote">把圖放進這資料夾、用下方代號當檔名(.png/.webp/.jpg 都行)。建議<b>正方形、120×120px 以上</b>(顯示成圓角方塊、會裁切，太小會糊)；沒放的自動用預設符號：</div>'
           +   '<div class="aps-set-iclist">' + icHintRows + '</div>'
           +   '<div class="aps-set-sec">字體（套用到所有 app）</div><div class="aps-set-chips">' + ftCh + '</div>'
           +   '<div class="aps-set-row"><button id="aps-set-reset" class="aps-set-btn ghost" type="button">還原全部預設</button></div>'
