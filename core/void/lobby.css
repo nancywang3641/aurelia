@@ -525,8 +525,7 @@
         grid-template-areas:
             "head head head"
             "b1 b2 b3"
-            "b4 b4 b4"
-            "b5 b5 b5"
+            "b4 b5 b6"
             "info info info";
         gap:6px;
         padding:8px 12px;
@@ -550,6 +549,7 @@
     .lobby-right #void-exit-btn { grid-area:b3; }
     .lobby-right #void-journal-btn { grid-area:b4; }
     .lobby-right #void-achievement-btn { grid-area:b5; }
+    .lobby-right #void-apps-btn { grid-area:b6; }
     .lobby-right .lb-info-cards { grid-area:info; }
     .lobby-right .void-btn { width:100%; min-height:84px; height:auto; border-radius:12px; }
     .lobby-right .void-btn:hover { transform:translateY(-2px); }
