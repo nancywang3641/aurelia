@@ -96,28 +96,35 @@
         return dst;
     }
 
-    function recomputeCurrent(patches) {
-        const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
-        const cur = {};
-        for (const id of ids) {
-            const p = patches[id];
-            if (!p || typeof p !== 'object') continue;
-            for (const [k, v] of Object.entries(p)) {
-                if (k.includes('.')) _setDeep(cur, k, v);                          // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
-                else if (v && typeof v === 'object' && !Array.isArray(v)) cur[k] = _deepMergeObj(cur[k], v);  // 物件欄位 → 深合併(別整碗覆蓋)
-                else cur[k] = v;                                                   // 數字/字串/陣列 → 取新值
-            }
+    // 把單筆 patch（key→value）套進 cur：點記法→巢狀；物件→深合併；純值→取新
+    function _applyPatchInto(cur, p) {
+        if (!p || typeof p !== 'object') return;
+        for (const [k, v] of Object.entries(p)) {
+            if (k.includes('.')) _setDeep(cur, k, v);                          // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
+            else if (v && typeof v === 'object' && !Array.isArray(v)) cur[k] = _deepMergeObj(cur[k], v);  // 物件欄位 → 深合併(別整碗覆蓋)
+            else cur[k] = v;                                                   // 數字/字串/陣列 → 取新值
         }
+    }
+
+    // 從 base 快照起算，依 msgId 順序重播 patches → current。
+    // base 是「被 trim 掉的舊 patch 收斂成的底」，確保穩定屬性(形象/身分等)不會因 patch 被砍而消失。
+    function recomputeCurrent(patches, base) {
+        const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
+        const cur = base ? JSON.parse(JSON.stringify(base)) : {};
+        for (const id of ids) _applyPatchInto(cur, patches[id]);
         return cur;
     }
 
-    function trimPatches(patches) {
+    // patches 超過上限時：把最舊的幾筆「疊進 base 快照」再刪除（資料不流失、只是收斂成底）。
+    // 回傳 { patches, base }。
+    function trimPatches(patches, base) {
         const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
-        if (ids.length <= CONFIG.maxPatches) return patches;
+        const newBase = base ? JSON.parse(JSON.stringify(base)) : {};
+        if (ids.length <= CONFIG.maxPatches) return { patches, base: newBase };
         const cut = ids.slice(0, ids.length - CONFIG.maxPatches);
         const out = { ...patches };
-        cut.forEach(id => delete out[id]);
-        return out;
+        cut.forEach(id => { _applyPatchInto(newBase, patches[id]); delete out[id]; });
+        return { patches: out, base: newBase };
     }
 
     // --- 蒐集最近幾條訊息給副模型 ---
@@ -195,6 +202,7 @@
 - 寧可用 schema.desc 裡的範圍初值，也不要留空`
             : `【更新模式 / DIFF】
 - 只輸出**這輪有變化**的欄位；沒變的不要寫進 updates
+- 補齊例外：若【當下狀態】裡某個已登場實體，缺少 schema 基礎屬性組裡的穩定欄位，這輪順手把缺的那幾個補上（從劇情或世界觀推合理值）；穩定屬性補一次即可、之後不必再動
 - 如果這輪劇情完全沒觸發任何欄位變化，輸出 { "updates": {} }`;
 
         return `你是劇情狀態追蹤抽取器。根據 schema 與最近的劇情，找出狀態欄位的變化。
@@ -347,10 +355,10 @@ ${_memoryRulesText()}
                     const root = k.split('.')[0];
                     if (schema[k] !== undefined || schema[root] !== undefined) filtered[k] = updates[k];
                 }
-                const newPatches = trimPatches({ ...(data.patches || {}), [lastId]: filtered });
-                const newCurrent = recomputeCurrent(newPatches);
+                const trimmed = trimPatches({ ...(data.patches || {}), [lastId]: filtered }, data.base);
+                const newCurrent = recomputeCurrent(trimmed.patches, trimmed.base);
                 try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
-                await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, current: newCurrent });
+                await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent });
                 const changed = Object.keys(filtered).length;
                 if (changed > 0) console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);
                 try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: lastId, updates: filtered }); } catch(e) {}
@@ -464,9 +472,9 @@ ${_memoryRulesText()}
             const newPatches = { ...data.patches };
             delete newPatches[msgId];
             await win.OS_DB.saveStateData(chatId, {
-                schema: data.schema,
+                ...data,
                 patches: newPatches,
-                current: recomputeCurrent(newPatches)
+                current: recomputeCurrent(newPatches, data.base)
             });
             console.log(`🛰️ [State Runtime] 砍 patch msg#${msgId}`);
         } catch(e) {
@@ -481,8 +489,9 @@ ${_memoryRulesText()}
         const data = await win.OS_DB.getStateData(chatId);
         if (!data) return;
         await win.OS_DB.saveStateData(chatId, {
-            schema: data.schema,
+            ...data,
             patches: {},
+            base: {},
             current: {}
         });
         showToast('🧹 已清空 patches，副模型即將重新初始化', 'info');
