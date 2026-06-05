@@ -12,7 +12,7 @@
         { id: 'wb',     name: '微薄', emoji: '👁️',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微博'] && win.__PHONE_APPS['微博'](c); } },
         { id: 'tarot',  name: '塔羅', emoji: '🔮',  mode: 'inside', go: function (c) { return win.OS_TAROT && win.OS_TAROT.launch && win.OS_TAROT.launch(c); } },
         { id: 'rpg',    name: 'RPG',  emoji: '🛡️', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },
-        { id: 'reader', name: '閱讀', emoji: '📖',  mode: 'out',    go: function () { return win.VN_READER && win.VN_READER.show && win.VN_READER.show(); } },
+        { id: 'reader', name: '閱讀', emoji: '📖',  mode: 'inside', go: function (c) { return win.VN_READER && win.VN_READER.show && win.VN_READER.show(c); } },
         { id: 'store',  name: '黑市', emoji: '🏪',  mode: 'out',    go: function () { return win.VoidPanels && win.VoidPanels.openStore && win.VoidPanels.openStore(); } },
     ];
 
