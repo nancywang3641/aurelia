@@ -376,6 +376,15 @@
                     else usVal.textContent = `0（已最新）`;
                 }
 
+                // 總結次數（已做過第幾次大總結，來自世界書總結 entry 的「第N次」最大值）
+                const scRow = document.getElementById('ctx-sumcount-row');
+                const scVal = document.getElementById('ctx-sumcount');
+                if (scRow) scRow.style.display = this.unsum ? '' : 'none';
+                if (scVal && this.unsum) {
+                    const _c = this.unsum.summaryCount || 0;
+                    scVal.textContent = _c > 0 ? `第 ${_c} 次` : '尚未總結';
+                }
+
                 // 細項拆解（來自酒館原生 itemizedPrompts；沒資料就隱藏）
                 const bd = this.breakdown;
                 const bdWrap = document.getElementById('ctx-breakdown');
