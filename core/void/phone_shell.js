@@ -36,17 +36,16 @@
                  + '<span class="aps-icon-em">' + a.emoji + '</span>'
                  + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
         }).join('');
+        // 手機殼不加自己的 header／返回 —— 用 app 原本的 header/返回（返回會呼叫 goHome→回主畫面）。
+        // 只留底部 home bar + 右上 ✕ 當萬用退出。
         ov.innerHTML =
             '<div class="aps-frame">'
           +   '<div class="aps-notch"></div>'
           +   '<div class="aps-screen">'
           +     '<div class="aps-home" id="aps-home"><div class="aps-grid">' + grid + '</div></div>'
-          +     '<div class="aps-app" id="aps-app">'
-          +       '<div class="aps-appbar"><button class="aps-back" id="aps-back" type="button" title="返回主畫面">‹</button><span class="aps-app-title" id="aps-app-title"></span></div>'
-          +       '<div class="aps-app-body" id="aps-app-body"></div>'
-          +     '</div>'
+          +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'
           +   '</div>'
-          +   '<div class="aps-homebar"><button class="aps-home-btn" id="aps-home-btn" type="button" title="主畫面"></button></div>'
+          +   '<div class="aps-homebar"><button class="aps-home-btn" id="aps-home-btn" type="button" title="回主畫面"></button></div>'
           +   '<button class="aps-close" id="aps-close" type="button" title="關閉">✕</button>'
           + '</div>';
         document.body.appendChild(ov);
@@ -54,7 +53,6 @@
         ov.addEventListener('click', function (e) { if (e.target === ov) close(); });   // 點背景關閉
         ov.querySelector('#aps-close').addEventListener('click', close);
         ov.querySelector('#aps-home-btn').addEventListener('click', _home);
-        ov.querySelector('#aps-back').addEventListener('click', _home);
         ov.querySelectorAll('.aps-icon').forEach(function (b) {
             b.addEventListener('click', function () { _openApp(b.dataset.app); });
         });
@@ -82,9 +80,7 @@
             return;
         }
         // inside：渲染進手機螢幕
-        const body  = _el.querySelector('#aps-app-body');
-        const title = _el.querySelector('#aps-app-title');
-        if (title) title.textContent = app.name;
+        const body = _el.querySelector('#aps-app-body');
         body.innerHTML = '';
         const div = document.createElement('div');
         div.className = 'aps-mount';
