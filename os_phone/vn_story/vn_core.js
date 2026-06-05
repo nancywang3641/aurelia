@@ -912,6 +912,11 @@
             return [label, desc].filter(Boolean).join(', ') || null;
         },
 
+        // [Item|名稱|描述] → 生圖提示詞 = 名稱 + 描述（描述沒有就只用名稱）。名稱仍兼任快取ID。
+        _itemGenPrompt: function(name, desc) {
+            return [name, desc].filter(Boolean).join(', ');
+        },
+
         _safeFetchBg: async function(cacheId, prompt) {
             if (this._bgMemCache[cacheId]) return this._bgMemCache[cacheId];
             const cached = await VN_Cache.get('bg_cache', cacheId);
@@ -1070,15 +1075,16 @@
             const seen = new Set();
             for (const line of this._linesOutsideDynBlocks()) {
                 if (!line.startsWith('[Item|')) continue;
-                const itemName = line.slice(6, -1).split('|')[0];
+                const _ip = line.slice(6, -1).split('|');
+                const itemName = _ip[0];
                 if (!itemName || seen.has(itemName)) continue;
                 seen.add(itemName);
-                tasks.push(itemName);
+                tasks.push({ name: itemName, desc: _ip[1] || '' });
             }
             if (!tasks.length) return;
             console.log(`[VN] 預熱道具圖：共 ${tasks.length} 張，依序生成中...`);
             (async () => {
-                for (const itemName of tasks) {
+                for (const { name: itemName, desc } of tasks) {
                     if (this._itemMemCache[itemName]) continue;
                     const cached = await VN_Cache.get('item_cache', itemName);
                     if (cached && cached.url && !cached.url.startsWith('blob:')) {
@@ -1089,8 +1095,8 @@
                     if (cached && cached.url && cached.url.startsWith('blob:')) {
                         await VN_Cache.delete('item_cache', itemName);
                     }
-                    if (!win.OS_IMAGE_MANAGER) continue; 
-                    const raw = await VN_Image.getItem(itemName);
+                    if (!win.OS_IMAGE_MANAGER) continue;
+                    const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, desc));
                     if (raw) {
                         try {
                             const fetchRes = await fetch(raw);
@@ -1838,7 +1844,7 @@
                             const objUrl = await this._toObjectUrl(cached.url);
                             this._itemMemCache[itemName] = objUrl || cached.url;
                         } else {
-                            const raw = await VN_Image.getItem(itemName);
+                            const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, parts[1] || ''));
                             if (raw) {
                                 try {
                                     const fetchRes = await fetch(raw);
