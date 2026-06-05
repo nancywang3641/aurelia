@@ -168,6 +168,10 @@
             .wx-contact-icon { width: 38px; height: 38px; border-radius: 4px; margin-right: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; flex-shrink: 0; background-size: cover; position: relative; }
             .wx-contact-name { font-size: 16px; color: #000; font-weight: 500; }
             .wx-contact-section { background: #ededed; color: #888; font-size: 11px; padding: 4px 16px; font-weight: bold; }
+            .wx-dark .wx-contact-item { background: #1c1c1e; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-contact-item:active { background: #2a2a2a; }
+            .wx-dark .wx-contact-name { color: #f0f0f0; }
+            .wx-dark .wx-contact-section { background: #111; color: #888; }
             .icon-new-friend { background: #fa9d3b; }
             .icon-group-chat { background: #07c160; }
             .icon-tags { background: #2782d7; }
