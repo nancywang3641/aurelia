@@ -1,0 +1,94 @@
+/* 大廳「📱 手機殼」浮窗 —— 置中、手機造型外框 + app 切換 */
+.aps-overlay {
+    position: fixed; inset: 0; z-index: 99990;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+}
+.aps-frame {
+    position: relative;
+    width: 360px; height: 720px; max-height: 92vh;
+    background: #0e0e12;
+    border-radius: 44px;
+    padding: 14px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+/* 小螢幕等比縮 */
+@media (max-height: 760px) { .aps-frame { transform: scale(0.9); } }
+@media (max-height: 680px) { .aps-frame { transform: scale(0.8); } }
+@media (max-height: 600px) { .aps-frame { transform: scale(0.7); } }
+
+.aps-notch {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 22px; background: #0e0e12;
+    border-radius: 0 0 14px 14px; z-index: 3;
+}
+.aps-screen {
+    position: relative; flex: 1;
+    border-radius: 32px; overflow: hidden; background: #f4f5f8;
+}
+
+/* 主畫面（app 圖標格） */
+.aps-home {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 54px 18px 18px;
+    background: linear-gradient(160deg, #2b2d42, #4a4e69);
+    overflow: auto;
+}
+.aps-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 18px 8px; align-content: start;
+}
+.aps-icon {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    background: transparent; border: none; cursor: pointer; padding: 4px 0;
+}
+.aps-icon-em {
+    width: 54px; height: 54px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; border-radius: 16px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    transition: transform 0.12s;
+}
+.aps-icon:active .aps-icon-em { transform: scale(0.9); }
+.aps-icon-name { font-size: 11px; color: #fff; letter-spacing: 0.5px; }
+
+/* app 內頁 */
+.aps-app {
+    position: absolute; inset: 0;
+    display: none; flex-direction: column; background: #fff;
+}
+.aps-appbar {
+    display: flex; align-items: center; gap: 4px;
+    height: 44px; padding: 28px 8px 0;
+    background: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    flex-shrink: 0; box-sizing: content-box;
+}
+.aps-back { background: transparent; border: none; font-size: 26px; line-height: 1; color: #333; cursor: pointer; padding: 0 6px; }
+.aps-app-title { font-size: 13px; font-weight: 600; color: #333; }
+.aps-app-body { flex: 1; overflow: auto; position: relative; }
+.aps-mount { width: 100%; min-height: 100%; }
+.aps-fail { padding: 30px; text-align: center; color: #999; font-size: 13px; }
+
+/* 底部 home bar */
+.aps-homebar { height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.aps-home-btn {
+    width: 110px; height: 5px; border-radius: 3px;
+    background: rgba(255, 255, 255, 0.5); border: none; cursor: pointer; padding: 0;
+    transition: background 0.15s;
+}
+.aps-home-btn:hover { background: rgba(255, 255, 255, 0.85); }
+
+/* 關閉鈕（手機右上外緣） */
+.aps-close {
+    position: absolute; top: -14px; right: -14px;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: #1b1b1f; color: #ccc;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 15px; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); z-index: 5;
+}
+.aps-close:hover { color: #fff; }
