@@ -17,10 +17,13 @@
     'use strict';
 
     // ===== 佈局管理器 (解決 iOS 動態島遮擋) =====
+    // ⚠️ 只在 PWA(獨立 index.html)版才套 iOS 安全區 padding；酒館裡 ST 已經處理過安全區，
+    //    再套會把面板重複往下推(躲避動態島)。所以酒館一律不加 layout-pad-ios。
     function applyLayoutMode() {
         const mode = localStorage.getItem('aurelia_layout_mode') || 'auto';
         document.body.classList.remove('layout-pad-ios');
-        if (mode === 'pad-ios') {
+        const isStandalone = !(window.parent || window).SillyTavern;
+        if (isStandalone && mode === 'pad-ios') {
             document.body.classList.add('layout-pad-ios');
         }
     }

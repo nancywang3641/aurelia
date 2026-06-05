@@ -2264,10 +2264,12 @@ EXAMPLE "prompt" value:
             try {
                 const layoutMode = container.querySelector('#os-layout-mode')?.value || 'auto';
                 localStorage.setItem('aurelia_layout_mode', layoutMode);
+                // ⚠️ 只在 PWA(獨立)版才套 iOS 安全區下移；酒館裡 ST 已處理過、再套會重複往下推 → 一律移除
+                const isStandalone = !(window.parent || window).SillyTavern;
                 const targetDocs = [document];
                 if (window.parent && window.parent.document) targetDocs.push(window.parent.document);
                 targetDocs.forEach(d => {
-                    if (layoutMode === 'pad-ios') {
+                    if (layoutMode === 'pad-ios' && isStandalone) {
                         d.body.classList.add('layout-pad-ios');
                     } else {
                         d.body.classList.remove('layout-pad-ios');
