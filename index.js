@@ -119,6 +119,7 @@ const PHONE_FILES = [
     // === 🟢 OS 層 (系統基礎) ===
     'os/os_settings.js',
     'os/os_db.js',
+    'os/app_store.js',
     'os/os_sync.js',
     'os/os_persona.js',
     'os/os_prompts.js', // 提示詞底層需要保留，但 UI 按鈕已透過 isStandalone 隱藏
@@ -315,6 +316,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/aurelia_core_st.css');
         await loadCSS(_AURELIA_EXT_BASE + '/core/void/lobby.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/phone_shell.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/app_store.css');
 
         // core 模組 CSS（兩版共用，selector 已 scoped 不污染酒館）
         await loadCSS(_AURELIA_EXT_BASE + '/css/toast_manager.css');
