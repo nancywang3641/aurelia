@@ -705,7 +705,7 @@
                     <div style="display:flex; align-items:center; gap:8px;">
                         <div id="wx-msg-delete-btn" style="display:block; font-size:16px; cursor:pointer; color:#ff453a; padding:4px 8px;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.enterMultiSelectMode();">🗑️</div>
-                        <div id="wx-msg-menu-btn" style="display:block; font-size:22px; cursor:pointer; font-weight:bold; margin-top:-8px;"
+                        <div id="wx-msg-menu-btn" style="display:block; font-size:22px; cursor:pointer; font-weight:bold; margin-top:-8px; color:${isDark ? '#f0f0f0' : '#000'};"
                              onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${activeId}');">...</div>
                         <div id="wx-msg-cancel-btn" style="display:none; font-size:14px; cursor:pointer; color:#999; padding:4px 8px;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.exitMultiSelectMode();">取消</div>
@@ -714,7 +714,7 @@
                     </div>
                 `;
             } else {
-                headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer;" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)">⊕</div>`;
+                headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer; color:${isDark ? '#f0f0f0' : '#000'};" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)">⊕</div>`;
             }
             
             const isInChat = !!activeId;

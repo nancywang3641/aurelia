@@ -21,12 +21,12 @@
     display: flex; flex-direction: column;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
 }
-/* 狀態列（時間 + 訊號/wifi/電池）—— 永遠在最上層、繞過瀏海兩側 */
+/* 狀態列（時間 + 訊號/wifi/電池）—— 黑底頂條、永遠在最上層、跟瀏海融成一條 */
 .aps-statusbar {
     position: absolute; top: 0; left: 0; right: 0; height: 30px; z-index: 4;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 9px 22px 0; font-size: 12px; font-weight: 600;
-    color: var(--aps-sb-color); font-family: var(--aps-font);
+    padding: 8px 22px 0; font-size: 12px; font-weight: 600;
+    background: #0e0e12; color: #fff; font-family: var(--aps-font);
     pointer-events: none; letter-spacing: 0.5px;
 }
 .aps-sb-icons { display: flex; align-items: center; gap: 6px; font-size: 11px; }

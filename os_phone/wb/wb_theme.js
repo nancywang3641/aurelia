@@ -8,8 +8,8 @@
             /* === 全局容器 === */
             .wb-shell { width: 100%; height: 100%; background: #f5f5f5; display: flex; flex-direction: column; font-family: sans-serif; overflow: hidden; position: relative; }
             .wb-header { background: #fff; height: calc(45px + env(safe-area-inset-top, 0px)); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #e6e6e6; flex-shrink: 0; position: relative; z-index: 10; padding-top: env(safe-area-inset-top, 0px); }
-            .wb-header-title { font-weight: bold; font-size: 17px; }
-            .wb-header-btn { position: absolute; left: 15px; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 100%; }
+            .wb-header-title { font-weight: bold; font-size: 17px; color: #1a1a1a; }
+            .wb-header-btn { position: absolute; left: 15px; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 100%; color: #333; }
             .wb-content { flex: 1; overflow-y: auto; padding: 0; -webkit-overflow-scrolling: touch; }
             
             /* === Loading 狀態條 (新增) === */
