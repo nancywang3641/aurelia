@@ -100,6 +100,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
     { name: 'void_login', path: _AURELIA_EXT_BASE + '/core/void/login.js', key: 'voidLogin' },
     { name: 'void_phone_shell', path: _AURELIA_EXT_BASE + '/core/void/phone_shell.js', key: 'voidPhoneShell' },
+    { name: 'app_runtime', path: _AURELIA_EXT_BASE + '/core/void/app_runtime.js', key: 'appRuntime' },
     { name: 'chat_window', path: _AURELIA_EXT_BASE + '/core/chat_window.js', key: 'chatWindow' },
     { name: 'chat_room', path: _AURELIA_EXT_BASE + '/core/chat_room.js', key: 'voidClaudeRoom' },
     { name: 'chat_group', path: _AURELIA_EXT_BASE + '/core/chat_group.js', key: 'chatGroup' },
