@@ -146,6 +146,7 @@
                 if (idx < 0) return false;
                 const p = await mod.itemizedParams(items, idx, Number(items[idx].mesId));
                 if (!p) return false;
+                try { this.breakdownContent = this._recordToContent(items[idx]); } catch(e) { this.breakdownContent = null; }
                 const n = (v) => { const x = Number(v); return isNaN(x) ? 0 : x; };
                 const isOai = p.this_main_api === 'openai';
                 const total = n(p.finalPromptTokens) || n(p.totalTokensInPrompt);
@@ -238,6 +239,7 @@
         // 把選中的 record 換算成 { total, breakdown }：OAI 數字用存好的（精確），字串分項用真分詞器（對齊原生）
         _recordToBreakdown: async function(rec) {
             if (!rec) return null;
+            try { this.breakdownContent = this._recordToContent(rec); } catch(e) { this.breakdownContent = null; }
             const n = function(v){ const x = Number(v); return isNaN(x) ? 0 : x; };
             const isOai = rec.main_api === 'openai';
             const world  = await this._tokAsync(rec.worldInfoString);
@@ -267,6 +269,60 @@
                 total     = story + world + examples + chat + note + bias;
             }
             return { total: total, breakdown: { system: system||0, character: character||0, world: world||0, examples: examples||0, chat: chat||0, persona: persona||0, note: note||0, inject: inject||0, bias: bias||0, total: total } };
+        },
+
+        // ── 逐項內容檢視：點 breakdown 列 → 看實際送出去的原文（OAI/文字補全共用，欄位缺就空）──
+        _KEY_LABELS: { system:'系統提示', character:'角色卡', world:'世界資訊', examples:'對話範例', chat:'聊天記錄', persona:'使用者角色', note:'作者備註', inject:'注入/擴充', recall:'記憶召回' },
+
+        _recordToContent: function(rec) {
+            if (!rec) return {};
+            const s = function(v){ return (typeof v === 'string') ? v : (v == null ? '' : String(v)); };
+            const join = function(){ return Array.prototype.slice.call(arguments).map(s).filter(function(t){ return t && t.trim(); }).join('\n\n'); };
+            return {
+                system:    join(rec.systemPromptString, rec.main, rec.oaiMainString),
+                character: join(rec.charDescription, rec.charPersonality, rec.scenarioText) || s(rec.storyString),
+                world:     s(rec.worldInfoString),
+                examples:  s(rec.examplesString) || s(rec.mesExamplesString),
+                chat:      s(rec.mesSendString) || s(rec.oaiConversation),
+                persona:   s(rec.userPersona),
+                note:      s(rec.authorsNoteString) || s(rec.allAnchors),
+                inject:    join(rec.chatInjects, rec.summarizeString, rec.smartContextString, rec.chatVectorsString, rec.dataBankVectorsString),
+            };
+        },
+
+        _bindContentClicks: function() {
+            if (this._contentBound) return;
+            const bd = document.getElementById('ctx-breakdown');
+            if (!bd) return;
+            const self = this;
+            bd.addEventListener('click', function(e){
+                const item = e.target.closest && e.target.closest('.ctx-bd-item');
+                if (!item || !item.id) return;
+                e.stopPropagation();
+                self.showContent(item.id.replace('ctx-bd-i-', ''));
+            });
+            this._contentBound = true;
+        },
+
+        showContent: function(key) {
+            const text  = (key === 'recall') ? (this.recallText || '') : ((this.breakdownContent && this.breakdownContent[key]) || '');
+            const label = this._KEY_LABELS[key] || key;
+            const esc = function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+            const old = document.getElementById('ctx-cv-overlay');
+            if (old) old.remove();
+            const ov = document.createElement('div');
+            ov.id = 'ctx-cv-overlay';
+            ov.className = 'ctx-cv-overlay';
+            const meta = text ? (text.length.toLocaleString() + ' 字') : '此項酒館未保留原文 / 本輪為空';
+            ov.innerHTML = '<div class="ctx-cv-box">'
+                + '<div class="ctx-cv-head"><span class="ctx-cv-title">' + esc(label) + '</span><span class="ctx-cv-meta">' + meta + '</span><button class="ctx-cv-close" type="button">✕</button></div>'
+                + '<pre class="ctx-cv-body">' + (text ? esc(text) : '（無內容）') + '</pre>'
+                + '</div>';
+            document.body.appendChild(ov);
+            const close = function(){ ov.remove(); };
+            ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+            const cb = ov.querySelector('.ctx-cv-close');
+            if (cb) cb.addEventListener('click', close);
         },
         _readFromTauriStorage: async function() {
             try {
@@ -318,6 +374,7 @@
         // 點開 Ctx 時呼叫（async：原生算 token 是非同步的）
         poll: async function() {
             this.breakdown = null;
+            this._bindContentClicks();
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
             if (isStandalone) {
                 this._readFromStandalone();
@@ -337,7 +394,8 @@
                 const lr = win.OS_VECTOR_INJECT?._lastRecall;
                 this.recallCount  = (lr && lr.count) || 0;
                 this.recallTokens = (lr && lr.text) ? await this._tokAsync(lr.text) : 0;
-            } catch (e) { this.recallTokens = 0; this.recallCount = 0; }
+                this.recallText   = (lr && lr.text) || '';
+            } catch (e) { this.recallTokens = 0; this.recallCount = 0; this.recallText = ''; }
             // 未總結樓層（酒館）：目前最後樓 − 上次大總結記的 Last
             try {
                 if (!(win.OS_API?.isStandalone?.() ?? false) && win.OS_STORY_TOOLS?.getUnsummarizedInfo) {
