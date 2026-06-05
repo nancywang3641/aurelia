@@ -12,20 +12,24 @@
         { id: 'wb',     name: '微薄', emoji: '👁️',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微博'] && win.__PHONE_APPS['微博'](c); } },
         { id: 'tarot',  name: '塔羅', emoji: '🔮',  mode: 'inside', go: function (c) { return win.OS_TAROT && win.OS_TAROT.launch && win.OS_TAROT.launch(c); } },
         { id: 'rpg',    name: 'RPG',  emoji: '🛡️', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },
-        { id: 'reader', name: '閱讀', emoji: '📖',  mode: 'inside', go: function (c) { return win.VN_READER && win.VN_READER.show && win.VN_READER.show(c); } },
+        { id: 'reader', name: '閱讀', emoji: '📖',  mode: 'inside', go: function (c) {
+            if (!win.VN_READER || !win.VN_READER.show) return;
+            win.VN_READER.show(c);
+            const x = document.getElementById('vn-reader-sa-close');
+            if (x) x.onclick = _home;   // 統一返回：閱讀 ✕ → 回手機主畫面
+        } },
         { id: 'store',  name: '黑市', emoji: '🏪',  mode: 'inside', go: function (c) {
-            // 黑市用大廳單例 #store-panel-overlay(position:absolute)。搬進手機 + 強制填滿；
-            // 回傳離開回呼：還原樣式 + 搬回大廳原位（不能讓手機清空時刪掉單例）。
+            // 黑市用大廳單例 #store-panel-overlay。搬進手機(填滿靠 CSS)；回傳離開回呼搬回大廳原位
+            // (不能讓手機清空時刪掉單例)。關閉鈕 rebind 成回主畫面、跟其他 app 統一。
             const ov = document.getElementById('store-panel-overlay');
             if (!ov || !c) return;
             const origParent = ov.parentElement;
-            const force = { position: 'absolute', left: '0', top: '0', right: '0', bottom: '0', width: '100%', 'max-width': 'none', height: '100%', transform: 'none', 'border-radius': '0' };
-            Object.keys(force).forEach(function (k) { ov.style.setProperty(k, force[k], 'important'); });
             c.appendChild(ov);
             if (win.VoidPanels && win.VoidPanels.openStore) win.VoidPanels.openStore();   // 渲染內容 + display:flex
+            const x = document.getElementById('store-close-btn');
+            if (x) x.onclick = _home;   // 統一返回：黑市 ✕ → 回手機主畫面
             return function () {
                 ov.style.display = 'none';
-                Object.keys(force).forEach(function (k) { ov.style.removeProperty(k); });
                 if (origParent) origParent.appendChild(ov);
             };
         } },
