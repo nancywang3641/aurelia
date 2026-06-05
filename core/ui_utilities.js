@@ -28,11 +28,26 @@
 
         init() {
             this.createIcon();
-            // 初始定位嘗試（一次性，建立後立即定位或隱藏）
-            if (window.innerWidth >= 768) this.moveToInputBox();
-            else this.moveToQRBar();
+            this.placeForViewport();   // 桌機→輸入列；手機→原生 QR 按鈕(持久)
             this.handleResize();
             this.watchChatChange();
+        },
+
+        // 依視窗寬度定位：桌機塞輸入列(本來就穩)、手機改用酒館原生 QR 按鈕
+        // (由 QR 擴展自己管，換聊天/角色卡 QR 欄重繪也不會被洗、零閃爍，不再靠脆弱的 DOM 重插)
+        placeForViewport() {
+            if (window.innerWidth >= 768) {
+                this.moveToInputBox();
+            } else {
+                this._hideDomIcons();
+                this.registerQrButtons();
+            }
+        },
+        _hideDomIcons() {
+            ['aurelia-floating-icon', 'aurelia-chat-launcher'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
         },
 
         createIcon() {
@@ -40,7 +55,7 @@
             if (!document.getElementById('aurelia-floating-icon')) {
                 const icon = document.createElement('div');
                 icon.id = 'aurelia-floating-icon';
-                // 預設隱藏，由 moveToInputBox / moveToQRBar 放定位後再顯示
+                // 預設隱藏；桌機由 moveToInputBox 定位後顯示，手機改用原生 QR 按鈕(不用這顆 DOM 圖標)
                 icon.style.display = 'none';
                 icon.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -123,67 +138,66 @@
             }
         },
 
-        // 移動端邏輯：嵌入 QR 欄 (#qr--bar) 的內層 .qr--buttons
-        // 找不到 QR bar（聊天清單頁等）→ 隱藏，避免浮球亂跑
-        moveToQRBar() {
-            const icon = document.getElementById('aurelia-floating-icon');
-            if (!icon) return;
-
-            const qrBar = document.getElementById('qr--bar');
-            if (!qrBar) {
-                icon.style.display = 'none';
-                const ci = document.getElementById('aurelia-chat-launcher');
-                if (ci) ci.style.display = 'none';
+        // 移動端：用酒館原生 QR 按鈕(quickReplyApi)取代「硬插 DOM + 監聽重插」。
+        // 由 QR 擴展自己管 → 換聊天/角色卡 QR 欄重繪也不會被洗、零閃爍、不會卡住。
+        // 動作走斜線命令 /aurelia、/aurelia-chat。建一次即持久存進 QR 設定。
+        registerQrButtons() {
+            if (this._qrDone) return;
+            const w = window.parent || window;
+            const qrApi = window.quickReplyApi || w.quickReplyApi;
+            if (!qrApi || typeof qrApi.getSetByName !== 'function') {
+                // QR 擴展還沒就緒 → 稍後重試(最多 ~15 秒)
+                this._qrTries = (this._qrTries || 0) + 1;
+                if (this._qrTries <= 30) setTimeout(() => this.registerQrButtons(), 500);
                 return;
             }
+            this._qrDone = true;
+            this._doRegisterQr(qrApi, w).catch((e) => console.warn('[AureliaUI] 註冊 QR 按鈕失敗', e));
+        },
 
-            // 塞進內層 .qr--buttons wrapper，與其他 QR 按鈕並排（避免成為獨立 flex 項目產生隔間）
-            const innerBtns = qrBar.querySelector(':scope > .qr--buttons');
-            const target = innerBtns || qrBar;
-
-            if (icon.parentElement === target) {
-                icon.style.display = '';   // 確保可見（從隱藏狀態復原）
-                return;
+        async _doRegisterQr(qrApi, w) {
+            const ctx = (window.SillyTavern?.getContext?.()) || (w.SillyTavern?.getContext?.()) || null;
+            // 1. 斜線命令(冪等)：QR 按鈕按下會跑這個
+            if (ctx?.SlashCommandParser?.addCommandObject && ctx.SlashCommand?.fromProps && !window.__AURELIA_QR_CMD__) {
+                ctx.SlashCommandParser.addCommandObject(ctx.SlashCommand.fromProps({
+                    name: 'aurelia',
+                    callback: () => { try { (window.AureliaControlCenter || w.AureliaControlCenter)?.toggle(); } catch (e) {} return ''; },
+                    helpString: '開啟奧瑞亞面板',
+                }));
+                ctx.SlashCommandParser.addCommandObject(ctx.SlashCommand.fromProps({
+                    name: 'aurelia-chat',
+                    callback: () => { try { (window.ChatWindow || w.ChatWindow)?.toggleLauncherMenu?.(document.getElementById('qr--bar') || document.body); } catch (e) {} return ''; },
+                    helpString: '開啟 Claude / Codex 浮窗選單',
+                }));
+                window.__AURELIA_QR_CMD__ = true;
             }
-
-            icon.style.cssText = 'cursor:pointer; flex-shrink:0;';
-            icon.className = 'qr--button menu_button interactable';
-            icon.innerHTML = '<div class="qr--button-label">🏰 奧瑞亞</div>';
-            icon.title = '奧瑞亞面板';
-            target.appendChild(icon);
-
-            // 💬 啟動鈕：跟 🏰 並排
-            const chatIcon = document.getElementById('aurelia-chat-launcher');
-            if (chatIcon) {
-                if (chatIcon.parentElement === target) {
-                    chatIcon.style.display = '';
-                } else {
-                    chatIcon.style.cssText = 'cursor:pointer; flex-shrink:0;';
-                    chatIcon.className = 'qr--button menu_button interactable';
-                    chatIcon.innerHTML = '<div class="qr--button-label">💬 助手</div>';
-                    chatIcon.title = 'Claude / Codex 浮窗';
-                    target.appendChild(chatIcon);
-                }
+            // 2. 全域 QR set + 按鈕(冪等：set 不存在才建，避免重複)
+            const SET = 'Aurelia';
+            let set = qrApi.getSetByName(SET);
+            if (!set) {
+                set = await qrApi.createSet(SET, {});
+                if (!set) set = qrApi.getSetByName(SET);
+                qrApi.createQuickReply(SET, '🏰', { message: '/aurelia', title: '奧瑞亞面板' });
+                qrApi.createQuickReply(SET, '💬', { message: '/aurelia-chat', title: 'Claude / Codex 浮窗' });
             }
+            // 3. 設為全域可見(冪等)
+            try { if (!qrApi.settings?.config?.hasSet?.(set)) qrApi.addGlobalSet(SET, true); }
+            catch (e) { try { qrApi.addGlobalSet(SET, true); } catch (_) {} }
+            console.log('[AureliaUI] ✅ 原生 QR 按鈕已註冊(手機端)，換聊天不再閃');
         },
 
         handleResize() {
-            window.addEventListener('resize', () => {
-                if (window.innerWidth >= 768) this.moveToInputBox();
-                else this.moveToQRBar();
-            });
+            window.addEventListener('resize', () => this.placeForViewport());
         },
 
-        // chatId 切換時立即重新注入（參考 index.js chat_id_changed 模式）
+        // chatId 切換時重新定位 —— 只桌機需要(手機改用原生 QR 按鈕、本身持久不被洗、不用重插)
         watchChatChange() {
             const reinit = () => {
-                // 等 ST 重建 DOM 完成後再定位（同 index.js 用 200ms 延遲）
+                if (window.innerWidth < 768) return;   // 手機：原生 QR 自己管，這裡不處理
+                // 桌機：等 ST 重建 DOM 完成後再定位
                 setTimeout(() => {
-                    if (!document.getElementById('aurelia-floating-icon')) {
-                        this.createIcon();
-                    }
-                    if (window.innerWidth >= 768) this.moveToInputBox();
-                    else this.moveToQRBar();
+                    if (!document.getElementById('aurelia-floating-icon')) this.createIcon();
+                    this.moveToInputBox();
                 }, 200);
             };
 
