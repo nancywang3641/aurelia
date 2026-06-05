@@ -8,7 +8,7 @@
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 24; // 🔥 V24：酒館大廳的跨卡總結索引 lobby_summary_index
+    const DB_VERSION = 25; // 🔥 V25：手機殼 app 商店 phone_apps
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -31,6 +31,7 @@
     const STORE_NAME_VN_SUMMARIES = 'vn_grand_summaries'; // V22：大總結儲存
     const STORE_NAME_STATE_DATA   = 'state_data';    // 🔥 V23：狀態資料庫（副模型抽劇情狀態，key = chatId）
     const STORE_NAME_LOBBY_SUM_IDX = 'lobby_summary_index'; // 🔥 V24：酒館大廳跨卡總結索引（結語 + 角色名單，給瀅瀅/柴郡注 sysPrompt）
+    const STORE_NAME_PHONE_APPS = 'phone_apps'; // 🔥 V25：手機殼下載的功能型 HTML app（id,name,emoji,iconUrl,html,source,createdAt）
 
     let dbInstance = null;
 
@@ -56,7 +57,8 @@
                         STORE_NAME_VN_MEMORIES,  // 🔥 V21：向量記憶庫
                         STORE_NAME_VN_SUMMARIES, // 🔥 V22：大總結儲存
                         STORE_NAME_STATE_DATA,   // 🔥 V23：狀態資料庫
-                        STORE_NAME_LOBBY_SUM_IDX // 🔥 V24：酒館大廳跨卡總結索引
+                        STORE_NAME_LOBBY_SUM_IDX,// 🔥 V24：酒館大廳跨卡總結索引
+                        STORE_NAME_PHONE_APPS    // 🔥 V25：手機殼 app 商店
                     ];
 
                     stores.forEach(name => {
@@ -1051,6 +1053,55 @@
                     req.onsuccess = () => resolve(req.result || []);
                     req.onerror = (e) => reject(e.target.error);
                 } catch(e) { reject(e); }
+            });
+        }
+    });
+
+    // === 🔥 V25：手機殼 app 商店——已安裝的功能型 HTML app ===
+    // rec: { id, name, emoji, iconUrl, html, source:'workshop'|'import', createdAt }
+    Object.assign(win.OS_DB, {
+        savePhoneApp: async function(rec) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!rec.id) rec.id = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                    if (!rec.createdAt) rec.createdAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_PHONE_APPS, 'readwrite');
+                    tx.objectStore(STORE_NAME_PHONE_APPS).put(rec);
+                    tx.oncomplete = () => r(rec.id);
+                    tx.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getPhoneApp: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_PHONE_APPS, 'readonly').objectStore(STORE_NAME_PHONE_APPS).get(id);
+                    req.onsuccess = () => r(req.result || null);
+                    req.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllPhoneApps: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_PHONE_APPS, 'readonly').objectStore(STORE_NAME_PHONE_APPS).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                    req.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deletePhoneApp: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_PHONE_APPS, 'readwrite');
+                    tx.objectStore(STORE_NAME_PHONE_APPS).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
             });
         }
     });
