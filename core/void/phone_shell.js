@@ -33,6 +33,7 @@
                 if (origParent) origParent.appendChild(ov);
             };
         } },
+        { id: 'settings', name: '設置', emoji: '⚙️', mode: 'inside', go: function (c) { _renderSettings(c); } },
     ];
 
     let _el = null;
@@ -46,6 +47,80 @@
         _savedGoHome = null;
     }
     function _runLeave() { if (_leaveApp) { try { _leaveApp(); } catch (e) {} _leaveApp = null; } }
+
+    // ── 手機主題（CSS 變數驅動，掛在 .aps-frame；app 不需知道主題的存在、自動相容）──
+    const THEME_KEY = 'aurelia_phone_theme';
+    // 可調項 → CSS 變數。加新可調項：這加一行 + 設置面板加個控制項，app 完全不用動。
+    const THEME_VARS = {
+        wallpaper:  '--aps-wallpaper',    // 主畫面背景（漸層 / 純色 / url(...)）
+        iconBg:     '--aps-icon-bg',      // app 圖標容器底色
+        iconRadius: '--aps-icon-radius',  // 圖標圓角
+        labelColor: '--aps-label-color',  // 圖標文字色
+        sbColor:    '--aps-sb-color',     // 狀態列文字色
+        font:       '--aps-font',         // 字體
+    };
+    function _loadTheme() { try { return JSON.parse(win.localStorage.getItem(THEME_KEY)) || {}; } catch (e) { return {}; } }
+    function _saveTheme(patch) {
+        const t = Object.assign(_loadTheme(), patch);
+        Object.keys(patch).forEach(function (k) { if (patch[k] === '' || patch[k] == null) delete t[k]; });   // 空 = 還原預設
+        win.localStorage.setItem(THEME_KEY, JSON.stringify(t));
+        _applyTheme();
+    }
+    function _applyTheme() {
+        if (!_el) return;
+        const frame = _el.querySelector('.aps-frame');
+        if (!frame) return;
+        const t = _loadTheme();
+        Object.keys(THEME_VARS).forEach(function (k) {
+            if (t[k]) frame.style.setProperty(THEME_VARS[k], t[k]);
+            else frame.style.removeProperty(THEME_VARS[k]);   // 沒設 = 用 CSS 預設
+        });
+    }
+
+    // ── 狀態列時鐘 ──
+    function _tickClock() {
+        if (!_el) return;
+        const el = _el.querySelector('#aps-sb-time');
+        if (!el) return;
+        const d = new Date();
+        el.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    }
+
+    // ── 設置 app：手機主題（先做背景；圖標/字體之後照同模式加，零衝突）──
+    const WALLPAPERS = [
+        { name: '夜墨', css: 'linear-gradient(160deg,#2b2d42,#4a4e69)' },
+        { name: '抹茶', css: 'linear-gradient(160deg,#a8c66c,#7d9a4f)' },
+        { name: '奶橘', css: 'linear-gradient(160deg,#f6d365,#fda085)' },
+        { name: '霧紫', css: 'linear-gradient(160deg,#a18cd1,#fbc2eb)' },
+        { name: '海藍', css: 'linear-gradient(160deg,#4facfe,#00f2fe)' },
+        { name: '純白', css: '#eef0f6' },
+    ];
+    function _renderSettings(c) {
+        const t = _loadTheme();
+        const curUrl = (t.wallpaper && String(t.wallpaper).indexOf('url(') === 0) ? String(t.wallpaper).slice(4).split(')')[0] : '';
+        const swatches = WALLPAPERS.map(function (w) {
+            return '<button class="aps-set-sw" data-css="' + _esc(w.css) + '" type="button" style="background:' + w.css + '"><span>' + _esc(w.name) + '</span></button>';
+        }).join('');
+        c.innerHTML =
+            '<div class="aps-set">'
+          +   '<div class="aps-set-h">📱 手機設置</div>'
+          +   '<div class="aps-set-sec">背景</div>'
+          +   '<div class="aps-set-swgrid">' + swatches + '</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(curUrl) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-row"><button id="aps-set-reset" class="aps-set-btn ghost" type="button">還原預設</button></div>'
+          +   '<div class="aps-set-note">之後可在這加：圖標樣式 / 圓角 / 字體 …（照同模式、不影響任何 app）</div>'
+          + '</div>';
+        c.querySelectorAll('.aps-set-sw').forEach(function (b) {
+            b.addEventListener('click', function () { _saveTheme({ wallpaper: b.dataset.css }); });
+        });
+        const urlBtn = c.querySelector('#aps-set-wpurl-btn');
+        if (urlBtn) urlBtn.addEventListener('click', function () {
+            const u = (c.querySelector('#aps-set-wpurl').value || '').trim();
+            _saveTheme({ wallpaper: u ? ('url(' + u + ') center/cover no-repeat') : '' });
+        });
+        const reset = c.querySelector('#aps-set-reset');
+        if (reset) reset.addEventListener('click', function () { _saveTheme({ wallpaper: '' }); _renderSettings(c); });
+    }
 
     function _build() {
         const ov = document.createElement('div');
@@ -63,6 +138,7 @@
             '<div class="aps-frame">'
           +   '<div class="aps-notch"></div>'
           +   '<div class="aps-screen">'
+          +     '<div class="aps-statusbar"><span class="aps-sb-time" id="aps-sb-time">--:--</span><span class="aps-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>'
           +     '<div class="aps-home" id="aps-home"><div class="aps-grid">' + grid + '</div></div>'
           +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'
           +   '</div>'
@@ -78,6 +154,7 @@
             b.addEventListener('click', function () { _openApp(b.dataset.app); });
         });
         _el = ov;
+        try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列時鐘
         return ov;
     }
 
@@ -119,6 +196,8 @@
     function open() {
         const ov = _el || _build();
         _home();
+        _applyTheme();
+        _tickClock();
         ov.style.display = 'flex';
     }
     function close() {
