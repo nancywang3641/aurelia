@@ -165,10 +165,87 @@
         });
     }
 
-    // ── 工坊（Task 5 實作）──
+    // ── 工坊：用 OS_API.chat + PANEL_DEV_GUIDE 規範，一次性生成完整 HTML app ──
+    function _wsPrompt(desc, provider) {
+        return '你是頂級前端工程師 + UI/UX 設計師。請依需求生成「一個完整、可獨立運作的 SillyTavern 同層 HTML app」。\n'
+            + '這個 app 是「功能型」的：它會主動呼叫 AI 介面生成內容（文字 / 圖片），不是靜態展示。\n\n'
+            + '【使用者需求】\n' + desc + '\n\n'
+            + '【技術規範（必守）】\n'
+            + '1. 輸出「一份完整 HTML」：<!DOCTYPE html> … </html>，含 <style> 與 <script>。\n'
+            + '2. 所有 CSS 選擇器必須以 #app-root 開頭；禁止裸用 *{} 或 body{}；@keyframes 用獨特前綴命名（避免污染主頁）。\n'
+            + '3. 版面放在 <div id="app-root"> 內，根容器 width:100%; max-width:480px; 高度自適應，適合手機直式螢幕。\n'
+            + '4. 【呼叫文字 AI】用 window.generateRaw（已注入）：\n'
+            + '   const fn = window.generateRaw; const res = await fn({ user_input:" ", ordered_prompts:["world_info","chat_history",{role:"system",content:PROMPT}], quiet:true, stop:["User:","\\n\\n\\n"] });\n'
+            + '   回應是純文字，自行用 regex 解析你自訂的標籤。\n'
+            + '5. 【生圖】用 window.OS_IMAGE_MANAGER.generate(prompt, type, { provider: "' + provider + '" })（type 例："item"/"scene"）。\n'
+            + '   ⚠️ 預覽隔離（省額度）：必須判斷 window.__IS_PREVIEW —— 為 true 時改用佔位圖、不可呼叫真實 API：\n'
+            + '   const url = window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed=" + encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, "item", { provider:"' + provider + '" });\n'
+            + '6. 【注入酒館（可選）】若 app 要把內容發進劇情：window.TavernHelper.createChatMessages([{role:"user",name:"System",message:txt}], { refresh:"affected" })。\n'
+            + '7. 不可用 position:fixed / 100vw / 100vh。所有 API 呼叫包 try/catch，失敗給友善提示不可整頁崩。\n\n'
+            + '【輸出格式（嚴格）】先輸出 meta、再輸出 HTML，兩段都要：\n'
+            + '<app_meta>{"name":"app名稱(4字內最佳)","emoji":"一個最貼切的emoji"}</app_meta>\n'
+            + '<app_html>\n<!DOCTYPE html> …完整 HTML… </html>\n</app_html>\n'
+            + '禁止在 <app_html> 以外再輸出解釋文字。';
+    }
+
+    function _parseGen(text) {
+        let html = '', meta = {};
+        const mh = text.match(/<app_html>([\s\S]*?)<\/app_html>/i);
+        if (mh) html = mh[1].trim();
+        else { const f = text.match(/```(?:html)?\s*([\s\S]*?)```/i); if (f) html = f[1].trim(); }
+        html = html.replace(/^```(?:html)?\s*/i, '').replace(/```$/, '').trim();
+        const mm = text.match(/<app_meta>([\s\S]*?)<\/app_meta>/i);
+        if (mm) { try { meta = JSON.parse(mm[1].trim()); } catch (e) {} }
+        return { html: html, meta: meta };
+    }
+
     function _bindWorkshop(c) {
         const gen = c.querySelector('#as-ws-gen');
-        if (gen) gen.addEventListener('click', function () { _toast(c, '工坊建置中…'); });
+        const installRow = c.querySelector('#as-ws-install-row');
+        const loading = c.querySelector('#as-ws-loading');
+        if (!gen) return;
+
+        gen.addEventListener('click', async function () {
+            const desc = (c.querySelector('#as-ws-desc').value || '').trim();
+            if (!desc) { _toast(c, '先描述你想要的 app'); return; }
+            const provider = c.querySelector('#as-ws-provider').value === 'novelai' ? 'novelai' : 'pollinations';
+            const api = _apiEngine();
+            if (!api || typeof api.chat !== 'function') { _toast(c, '❌ 找不到 AI 引擎(OS_API)'); return; }
+
+            gen.disabled = true; loading.classList.add('show'); installRow.classList.add('hidden'); _genHtml = null;
+            try {
+                let baseConfig = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig && win.OS_SETTINGS.getConfig()) || {};
+                try { if (!baseConfig || !Object.keys(baseConfig).length) baseConfig = JSON.parse(win.localStorage.getItem('os_global_config') || '{}'); } catch (e) {}
+                const pureConfig = Object.assign({}, baseConfig, { usePresetPrompts: false, enableThinking: false, temperature: 0.5 });
+                const messages = [{ role: 'user', content: _wsPrompt(desc, provider) }];
+
+                const resp = await new Promise(function (resolve, reject) {
+                    api.chat(messages, pureConfig, null, resolve, reject, { disableTyping: true });
+                });
+                if (!resp) throw new Error('AI 回傳空白');
+
+                const parsed = _parseGen(resp);
+                if (!parsed.html || !/<body|<html|<div|<!doctype/i.test(parsed.html)) throw new Error('沒解析到完整 HTML');
+                _genHtml = parsed.html;
+
+                if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-ws-prev'), parsed.html, { preview: true });
+                c.querySelector('#as-ws-name').value = (parsed.meta && parsed.meta.name) ? parsed.meta.name : '新 App';
+                c.querySelector('#as-ws-emoji').value = (parsed.meta && parsed.meta.emoji) ? String(parsed.meta.emoji).slice(0, 2) : '📦';
+                installRow.classList.remove('hidden');
+            } catch (e) {
+                _toast(c, '生成失敗：' + (e.message || e) + '，可改描述重試');
+            } finally {
+                gen.disabled = false; loading.classList.remove('show');
+            }
+        });
+
+        const installBtn = c.querySelector('#as-ws-install');
+        if (installBtn) installBtn.addEventListener('click', function () {
+            if (!_genHtml) { _toast(c, '請先生成'); return; }
+            const name = (c.querySelector('#as-ws-name').value || '').trim() || '新 App';
+            const emoji = (c.querySelector('#as-ws-emoji').value || '📦').trim().slice(0, 2) || '📦';
+            _install(c, { name: name, emoji: emoji, iconUrl: '', html: _genHtml, source: 'workshop' });
+        });
     }
 
     win.APP_STORE = { launch: launch };
