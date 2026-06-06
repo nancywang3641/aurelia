@@ -185,10 +185,11 @@
             + '- root：#app-root 容器元素（已 = document.getElementById("app-root")）\n'
             + '- callAI(systemPrompt) → Promise<string>：呼叫 AI 生成文字、回純文字。它「會」自動帶上當前角色卡(描述/個性/情境)、當前角色綁定的世界書、與最近劇情；但「不會」吃酒館預設與全域世界書(所以乖乖照你的 systemPrompt 走)。把這個 app 的具體要求與輸出格式寫進 systemPrompt 即可、不必重述角色設定。\n'
             + '- genImg(prompt, type) → Promise<imageUrl>：生圖（已內建預覽省額度，預覽時自動給佔位圖）\n'
+            + '- goBack()：回到手機主畫面（給 header 的返回鍵用）\n'
             + '- document / window 照常用\n\n'
             + '【各段要求】\n'
             + '- css：每個選擇器都以 #app-root 開頭；#app-root 要填滿螢幕(見上「版面與尺寸」)；禁止 *{}、body{}、position:fixed、100vw、100vh；@keyframes 用獨特前綴。簡潔好看即可、別堆砌。\n'
-            + '- html：放進 #app-root 內的「內層 HTML」（不要 <!DOCTYPE>/<html>/<head>/<body>，只要內容）。按鈕等互動元素一定要給 id。\n'
+            + '- html：放進 #app-root 內的「內層 HTML」（不要 <!DOCTYPE>/<html>/<head>/<body>，只要內容）。按鈕等互動元素一定要給 id。app 最上方要有一個 header，header「左側」固定放一個返回鍵(用 ‹ 或 ←)，js 裡綁定它呼叫 goBack() 回手機主畫面——這是所有 app 統一規範、務必加。\n'
             + '- js：⚠️ 這是 app 的靈魂、最重要：完整互動邏輯。用 addEventListener 綁按鈕（root.querySelector("#id")）、實作功能（讀輸入→顯示 loading→await callAI/genImg→把結果 render 進畫面→收 loading）、每個 await 包 try/catch。js 不可為空、要把功能寫完整。\n\n'
             + '【輸出格式（嚴格，只輸出下面四個區塊、其餘一字都別寫；各段用純文字、不要包 ``` 代碼框）】\n'
             + '<app_meta>{"name":"app名稱(4字內最佳)","emoji":"最貼切的emoji"}</app_meta>\n'
@@ -217,6 +218,7 @@
             + '} catch(e){ console.error("[app callAI]",e); return ""; } }\n'
             + 'async function genImg(p, type){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", {provider:"' + prov + '"}); } catch(e){ console.error("[app genImg]",e); return ""; } }\n'
             + 'var root = document.getElementById("app-root");\n'
+            + 'function goBack(){ try { var V = (window.parent && window.parent.VoidPhoneShell) || window.VoidPhoneShell; if (V && V.home) V.home(); } catch(e){} }\n'
             + '(async function(){ try {\n' + (parsed.js || '') + '\n} catch(e){ console.error("[app run]", e); } })();\n'
             + '})();</scr' + 'ipt></body></html>';
     }
