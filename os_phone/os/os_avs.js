@@ -701,11 +701,14 @@ ${lines.join('\n')}
                         variables: [{
                             name: '角色狀態',
                             type: 'object',
-                            defaultValue: '{}',
-                            desc: '每個「有意義的人物角色」的即時狀態。基礎屬性（順序一致）：形象(髮色/眼色/體型)、身分、好感度(0-100，指對主角MC的好感)。'
+                            // ⚠️ 物件型必須給「縮排結構範本」(parseTree 解析)，副模型才看得到固定子欄位、不會每輪亂編結構。
+                            //    用變數名當外層包裝(角色狀態:)，state_runtime/顯示都會把這層當範本剝掉。
+                            defaultValue: '角色狀態:\n  形象:\n    髮色: 待定\n    眼色: 待定\n    體型: 待定\n  身分: 待定\n  好感度: 0',
+                            desc: '每個「有意義的人物角色」的即時狀態。固定基礎屬性（每個角色都用同一組、順序一致）：形象(髮色/眼色/體型)、身分、好感度(0-100，指對主角MC的好感)。'
+                                + '【更新方式·重要】用點記法只更新有變化的欄位（例：角色狀態.愛麗絲.好感度），不要整包重寫、沒變的別動——避免洗掉其他角色與屬性。'
                                 + '【誰要記】只記有名字、對劇情有份量的人物角色；雜魚/怪獸/蟲子/野生動物/路過敵人這類「生物或敵人」不要當角色記進來（除非牠是有劇情份量的具名角色）。'
                                 + '【主角MC例外】主角 / MC / {{user}} 本人「不要好感度」（對自己沒意義）→ 該角色的好感度欄填 null（或寫 "—"），其餘欄照記。'
-                                + '新角色登場時自動套這組基礎屬性，往這個物件裡加。'
+                                + '新角色登場時，按固定基礎屬性組補齊每一欄初值（髮色/眼色/體型/身分/好感度）。'
                         }],
                         chatId: currentChatId
                     };
@@ -790,6 +793,7 @@ ${lines.join('\n')}
             if (!container || typeof container !== 'object') return '';
             let blocks = '';
             for (const [entityKey, entityVal] of Object.entries(container)) {
+                if (entityKey === containerPath) continue;   // 跳過「變數名同名」的結構範本鍵(物件型 defaultValue 的範本包裝)，不渲染成假實體
                 let block = innerTpl;
                 block = block.split('{{@key}}').join(entityKey);
                 if (entityVal && typeof entityVal === 'object') {
