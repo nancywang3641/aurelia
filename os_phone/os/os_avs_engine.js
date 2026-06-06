@@ -306,7 +306,7 @@
                 persisted: (win.OS_STATE_RUNTIME?.getStateDataDump) ? await win.OS_STATE_RUNTIME.getStateDataDump() : null
             };
             await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
-            if (btn) { const _o = btn.getAttribute('data-label') || btn.textContent; btn.textContent = '✅ 已複製，貼給工程師'; setTimeout(() => { btn.textContent = _o; }, 2000); }
+            if (btn) { const _o = btn.getAttribute('data-label') || btn.textContent; btn.textContent = '✅ 已複製'; setTimeout(() => { btn.textContent = _o; }, 2000); }
         } catch (e) { if (btn) btn.textContent = '❌ 複製失敗：' + (e && e.message ? e.message : e); }
     };
 

@@ -157,7 +157,7 @@
             ${storyHtml}
 
             <div class="avs-card">
-                <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-copy-diag">🔬 複製全部狀態數據（貼給工程師診斷）</button>
+                <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-copy-diag">🔬 複製狀態數據</button>
             </div>
 
             <div class="avs-card avs-st-toggle-row">
@@ -242,7 +242,7 @@
                     persisted: (win.OS_STATE_RUNTIME?.getStateDataDump) ? await win.OS_STATE_RUNTIME.getStateDataDump() : null
                 };
                 await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
-                if (b) { b.textContent = '✅ 已複製，直接貼給工程師'; setTimeout(() => { b.textContent = '🔬 複製全部狀態數據（貼給工程師診斷）'; }, 2200); }
+                if (b) { b.textContent = '✅ 已複製'; setTimeout(() => { b.textContent = '🔬 複製狀態數據'; }, 2200); }
             } catch (e) {
                 if (b) b.textContent = '❌ 複製失敗：' + (e?.message || e);
             }
