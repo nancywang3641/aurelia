@@ -283,7 +283,9 @@
                         console.warn(`[AVS] 物件型變數「${v.name}」結構解析失敗:`, e);
                     }
                     const keys = Object.keys(tree);
-                    state[v.name] = (keys.length === 1 && keys[0] === v.name) ? tree[v.name] : tree;
+                    // 自包裝(keys 只有變數名本身)= 這是「每實體範本」→ 容器從「空」開始，否則範本本身會變成一個鬼實體；
+                    // 沒自包裝才是「實際初值」直接用。
+                    state[v.name] = (keys.length === 1 && keys[0] === v.name) ? {} : tree;
                     return;
                 }
                 const n = parseFloat(v.defaultValue);
