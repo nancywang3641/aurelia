@@ -93,6 +93,8 @@
         /** sync 讀變數狀態（engine.read / rules.getActiveContext 用）*/
         readState() {
             if (isStandalone()) return _pwaReadState();
+            // 防串卡：cache 不是「當前這張卡」的(切卡後還沒刷新/正在 race) → 別回傳別張卡的資料，先回空 + 觸發刷新
+            if (_cache.chatId !== getCurrentChatId()) { try { _refreshTavernCache(); } catch (e) {} return {}; }
             return { ..._cache.vars };
         },
 
