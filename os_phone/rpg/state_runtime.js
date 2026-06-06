@@ -362,7 +362,11 @@ ${_memoryRulesText()}
                     if (schema[k] !== undefined || schema[root] !== undefined) filtered[k] = updates[k];
                 }
                 const trimmed = trimPatches({ ...(data.patches || {}), [lastId]: filtered }, data.base);
-                const newCurrent = recomputeCurrent(trimmed.patches, trimmed.base);
+                // 🔑 新 current 一律「以引擎現有狀態為底、只疊這輪 patch」——不要用 recomputeCurrent 從 base 空白重建。
+                //   因為 patches/base 可能是空的(先前狀態由主模型 <vars> 寫入、沒進 patch 系統)，從空重建會把累積的角色全洗光——這就是覆蓋根因。
+                //   點記法 _setDeep 只動有變化的葉節點、其餘角色與屬性原封保留。
+                const newCurrent = JSON.parse(JSON.stringify(currentState || {}));
+                _applyPatchInto(newCurrent, filtered);
                 if (_lastExtract) { _lastExtract.updates = filtered; _lastExtract.current = newCurrent; }   // 補上狀態給診斷面板
                 try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
                 await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent });
