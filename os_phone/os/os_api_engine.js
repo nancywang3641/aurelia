@@ -12,6 +12,27 @@
     const _avsRead  = () => win._AVS_ENGINE?.read?.()       ?? {};
     const _avsApply = (t) => win._AVS_ENGINE?.apply?.(t);
 
+    // ── 用量計數（CTX 面板用）：追蹤一輪劇情觸發幾次文字 API + 幾次生圖 ──
+    //   tText/tImg = 本輪(本次主模型生成 → 下次生成之間)；text/img = 本次開啟累計。
+    win.AURELIA_USAGE = win.AURELIA_USAGE || {
+        text: 0, img: 0, tText: 0, tImg: 0,
+        bumpText: function () { this.text++; this.tText++; },
+        bumpImg:  function () { this.img++;  this.tImg++; },
+        newTurn:  function () { this.tText = 0; this.tImg = 0; }
+    };
+    // 酒館主模型每次生成＝一輪起點：歸零本輪 + 主模型本身計一次。
+    //   (副模型走 OS_API.chat、生圖走 image_manager，各自計數；大總結 generateRaw 也會觸發此事件→只計次、不重置輪)
+    (function _hookUsageTurn() {
+        if (!win.eventOn || !win.tavern_events || !win.tavern_events.GENERATION_STARTED) { setTimeout(_hookUsageTurn, 1000); return; }
+        win.eventOn(win.tavern_events.GENERATION_STARTED, function () {
+            try {
+                if (win.__AURELIA_SUMMARIZING) { win.AURELIA_USAGE.bumpText(); return; }
+                win.AURELIA_USAGE.newTurn();
+                win.AURELIA_USAGE.bumpText();
+            } catch (e) {}
+        });
+    })();
+
     // --- 1. 核心清洗函數 ---
     function cleanRawOutput(text) {
         if (!text || typeof text !== 'string') return text;
@@ -318,6 +339,7 @@
         },
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpText(); } catch (e) {}   // 文字 API 計數（副模型/PWA主模型/總結都走這）
             const globalUserName = this.getGlobalUserName();
             // 兼容 multimodal：content 可能是字串或 [{type:'text',...},{type:'image_url',...}] 陣列
             messages.forEach(m => {
