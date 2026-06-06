@@ -62,8 +62,8 @@ select.ws-input { appearance: none; -webkit-appearance: none; -moz-appearance: n
 .ws-btn-line { background: #fff; color: #b06b9a; border: 1px solid #e0c4d6; }
 .ws-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* 生成中（不定式動畫，非假百分比）*/
-.ws-gen { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 0 8px; }
+/* 生成中（不定式動畫，非假百分比）— 覆蓋式置中面板，不內嵌在表單下方 */
+.ws-gen { position: absolute; inset: 0; z-index: 25; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(246,246,251,0.97); }
 .ws-gen-img { width: 100px; height: 100px; object-fit: contain; animation: wsBob 1.4s ease-in-out infinite; }
 .ws-gen-t { font-size: 14px; font-weight: 700; color: #6a5a75; }
 .ws-gen-bar { width: 70%; height: 6px; border-radius: 3px; background: rgba(0,0,0,0.07); overflow: hidden; position: relative; }
