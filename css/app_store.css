@@ -1,36 +1,115 @@
-/* 🛒 應用商店（手機殼內 app） */
-.as-wrap { display: flex; flex-direction: column; height: 100%; background: #f4f5f8; color: #2b2d42; font-size: 14px; }
-.as-head { flex-shrink: 0; padding: 14px 16px 8px; }
-.as-title { font-size: 17px; font-weight: 700; }
-.as-tabs { flex-shrink: 0; display: flex; gap: 6px; padding: 0 12px 8px; border-bottom: 1px solid rgba(0,0,0,0.08); }
-.as-tab { flex: 1; padding: 8px 4px; border: none; background: transparent; color: #888; font-size: 13px; cursor: pointer; border-radius: 8px 8px 0 0; }
-.as-tab.active { color: #2b2d42; font-weight: 700; background: rgba(0,0,0,0.04); }
-.as-body { flex: 1; overflow-y: auto; padding: 12px 14px 20px; }
-.as-view { display: none; flex-direction: column; gap: 8px; }
-.as-view.active { display: flex; }
-.as-lab { font-size: 12px; color: #666; margin-top: 4px; }
-.as-input { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none; background: #fff; box-sizing: border-box; width: 100%; }
-.as-emoji-in { width: 56px; flex-shrink: 0; text-align: center; }
-.as-ta { min-height: 90px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none; resize: vertical; box-sizing: border-box; width: 100%; }
-.as-ta-code { min-height: 130px; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4; }
-.as-btn { padding: 9px 12px; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
-.as-btn-main { background: #2b2d42; color: #fff; }
-.as-btn-ok { background: rgba(46,204,113,0.16); color: #1f9e5a; border: 1px solid #2ecc71; }
-.as-loading { display: none; padding: 8px; text-align: center; color: #888; font-size: 12px; font-style: italic; }
-.as-loading.show { display: block; }
-.as-prev-wrap { margin-top: 6px; }
-.as-prev-lab { font-size: 12px; color: #888; margin-bottom: 4px; }
-.as-prev { width: 100%; height: 360px; border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; overflow: hidden; background: #fff; }
-.as-prev .app-iframe { width: 100%; height: 100%; border: 0; }
-.as-install-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
-.as-install-row.hidden { display: none; }
-.as-install-row .as-input { flex: 1; }
-.as-mine-list { display: flex; flex-direction: column; gap: 8px; }
-.as-empty { color: #999; text-align: center; padding: 36px 8px; line-height: 1.6; }
-.as-mine-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; }
-.as-mine-ic { font-size: 20px; }
-.as-mine-name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.as-mini { padding: 4px 8px; border: 1px solid #ccc; background: #fff; border-radius: 5px; font-size: 11px; cursor: pointer; color: #555; }
-.as-mini.danger { border-color: #e74c3c; color: #e74c3c; }
-.as-toast { position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%) translateY(12px); background: rgba(0,0,0,0.85); color: #fff; padding: 7px 16px; border-radius: 18px; font-size: 12px; opacity: 0; pointer-events: none; transition: 0.25s; white-space: nowrap; z-index: 50; }
-.as-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* 🛒 應用工坊（手機殼內 app）—— 首頁總覽 + 工坊 + 匯入 + 我的應用 + 設定 + 底部 nav */
+.ws-app {
+    position: relative; height: 100%; display: flex; flex-direction: column;
+    background: #f6f6fb; color: #2b2d42; font-size: 14px;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+.ws-views { position: relative; flex: 1; overflow: hidden; }
+.ws-view { position: absolute; inset: 0; display: none; flex-direction: column; }
+.ws-view.active { display: flex; }
+.hidden { display: none !important; }
+
+/* 視圖標頭（工坊/匯入/我的/設定）*/
+.ws-vhd { flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 12px 12px 10px; background: #fff; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.ws-back { width: 30px; height: 30px; border: none; background: transparent; font-size: 24px; line-height: 1; color: #5c4b66; cursor: pointer; border-radius: 8px; }
+.ws-back:active { background: rgba(0,0,0,0.05); }
+.ws-vhd-t { font-size: 16px; font-weight: 700; flex: 1; text-align: center; margin-right: 30px; }
+.ws-vbody { flex: 1; overflow-y: auto; padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ── 首頁 ── */
+.ws-view[data-view="home"] { overflow-y: auto; padding: 20px 16px 18px; gap: 14px; }
+.ws-home-hd { margin-bottom: 2px; }
+.ws-home-title { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+.ws-spark { font-size: 18px; }
+.ws-home-sub { font-size: 13px; color: #8a8aa0; margin-top: 4px; }
+.ws-card {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 16px; border: none; border-radius: 18px; cursor: pointer; text-align: left;
+    box-shadow: 0 6px 18px rgba(120, 90, 140, 0.10);
+}
+.ws-card-ai { background: linear-gradient(135deg, #ffe3ec, #ffd0dd); }
+.ws-card-im { background: linear-gradient(135deg, #e9e3ff, #d9ccff); }
+.ws-card-ic { width: 56px; height: 56px; flex-shrink: 0; object-fit: contain; }
+.ws-card-tx { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.ws-card-t { font-size: 16px; font-weight: 800; color: #4a3a55; }
+.ws-card-d { font-size: 12px; color: #7a6a85; line-height: 1.4; }
+.ws-card-go { font-size: 26px; color: rgba(0,0,0,0.25); }
+.ws-sec-row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding: 0 2px; }
+.ws-sec-t { font-size: 15px; font-weight: 700; }
+.ws-sec-more { border: none; background: transparent; color: #b06b9a; font-size: 12px; cursor: pointer; }
+.ws-home-mine { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── 工坊 / 匯入 共用欄位 ── */
+.ws-hero { display: flex; justify-content: center; padding: 6px 0 4px; }
+.ws-hero-img { width: 110px; height: 110px; object-fit: contain; }
+.ws-hero-sm { width: 84px; height: 84px; }
+.ws-field-t { font-size: 17px; font-weight: 700; text-align: center; }
+.ws-field-d { font-size: 12px; color: #8a8aa0; text-align: center; margin-bottom: 4px; }
+.ws-field-lab { font-size: 12px; color: #777; margin-top: 4px; }
+.ws-input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #e2e2ee; border-radius: 10px; font-size: 13px; outline: none; background: #fff; }
+.ws-input:focus { border-color: #d39ac0; }
+.ws-emoji { width: 60px; flex-shrink: 0; text-align: center; }
+.ws-ta { width: 100%; box-sizing: border-box; min-height: 92px; padding: 10px 12px; border: 1px solid #e2e2ee; border-radius: 12px; font-size: 13px; outline: none; resize: vertical; background: #fff; }
+.ws-ta:focus { border-color: #d39ac0; }
+.ws-ta-code { min-height: 120px; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.4; }
+.ws-file { display: none; }
+.ws-file-btn { display: inline-block; padding: 8px 14px; border: 1px dashed #c8b6d6; border-radius: 10px; font-size: 12px; color: #8a6ba0; cursor: pointer; align-self: flex-start; }
+
+.ws-btn { padding: 12px; border: none; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.ws-btn-main { background: linear-gradient(135deg, #ff8fab, #e8728a); color: #fff; box-shadow: 0 5px 14px rgba(232,114,138,0.35); }
+.ws-btn-ok { background: linear-gradient(135deg, #ff8fab, #e8728a); color: #fff; }
+.ws-btn-line { background: #fff; color: #b06b9a; border: 1px solid #e0c4d6; }
+.ws-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 生成中（不定式動畫，非假百分比）*/
+.ws-gen { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 0 8px; }
+.ws-gen-img { width: 100px; height: 100px; object-fit: contain; animation: wsBob 1.4s ease-in-out infinite; }
+.ws-gen-t { font-size: 14px; font-weight: 700; color: #6a5a75; }
+.ws-gen-bar { width: 70%; height: 6px; border-radius: 3px; background: rgba(0,0,0,0.07); overflow: hidden; position: relative; }
+.ws-gen-bar span { position: absolute; left: -40%; width: 40%; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ff8fab, #c98ad0); animation: wsSlide 1.1s ease-in-out infinite; }
+@keyframes wsBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes wsSlide { 0% { left: -40%; } 100% { left: 100%; } }
+
+/* 預覽 */
+.ws-prev-wrap { margin-top: 6px; }
+.ws-prev-lab { font-size: 12px; color: #8a8aa0; margin-bottom: 4px; }
+.ws-prev { width: 100%; height: 360px; border: 1px solid rgba(0,0,0,0.10); border-radius: 14px; overflow: hidden; background: #fff; }
+.ws-prev .app-iframe { width: 100%; height: 100%; border: 0; }
+.ws-install { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.ws-install .ws-input { flex: 1; }
+
+/* ── 我的應用 列 ── */
+.ws-mine-list, .ws-home-mine { display: flex; flex-direction: column; gap: 8px; }
+.ws-empty { color: #9a9ab0; text-align: center; padding: 40px 10px; line-height: 1.7; }
+.ws-empty.sm { padding: 22px 10px; font-size: 13px; }
+.ws-mine-row { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #fff; border: 1px solid rgba(0,0,0,0.05); border-radius: 14px; box-shadow: 0 2px 8px rgba(120,90,140,0.05); }
+.ws-mine-ic { width: 42px; height: 42px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; background: linear-gradient(135deg,#fff0f5,#f3ecff); border-radius: 12px; }
+.ws-mine-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ws-mine-name { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-mine-sub { font-size: 11px; color: #a0a0b5; }
+.ws-mine-menu { width: 30px; height: 30px; border: none; background: transparent; font-size: 20px; color: #b0b0c0; cursor: pointer; border-radius: 8px; flex-shrink: 0; }
+.ws-mine-menu:active { background: rgba(0,0,0,0.05); }
+.ws-mine-acts { position: absolute; right: 10px; top: 48px; z-index: 5; display: flex; flex-direction: column; gap: 2px; background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; padding: 5px; box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+.ws-mini { padding: 7px 16px; border: none; background: transparent; border-radius: 7px; font-size: 13px; cursor: pointer; color: #444; text-align: left; white-space: nowrap; }
+.ws-mini:active { background: rgba(0,0,0,0.05); }
+.ws-mini.danger { color: #e74c3c; }
+.ws-set-note { font-size: 12px; color: #9a9ab0; margin-top: 4px; line-height: 1.5; }
+
+/* ── 底部 nav ── */
+.ws-nav { flex-shrink: 0; display: flex; background: #fff; border-top: 1px solid rgba(0,0,0,0.07); padding: 4px 0; }
+.ws-nav-b { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; border: none; background: transparent; padding: 6px 0; cursor: pointer; color: #a0a0b0; }
+.ws-nav-ic { font-size: 19px; filter: grayscale(0.5); opacity: 0.65; }
+.ws-nav-t { font-size: 10px; }
+.ws-nav-b.active { color: #e8728a; }
+.ws-nav-b.active .ws-nav-ic { filter: none; opacity: 1; }
+
+/* ── 安裝成功覆蓋 ── */
+.ws-success { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(255,255,255,0.97); animation: wsFade 0.25s ease; }
+.ws-suc-img { width: 130px; height: 130px; object-fit: contain; }
+.ws-suc-t { font-size: 20px; font-weight: 800; color: #4a3a55; }
+.ws-suc-name { font-size: 13px; color: #8a7a95; }
+@keyframes wsFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── toast ── */
+.ws-toast { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%) translateY(12px); background: rgba(0,0,0,0.85); color: #fff; padding: 8px 18px; border-radius: 20px; font-size: 12px; opacity: 0; pointer-events: none; transition: 0.25s; white-space: nowrap; z-index: 40; }
+.ws-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

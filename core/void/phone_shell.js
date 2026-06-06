@@ -182,6 +182,7 @@
     function _userAppGo(id) {
         return function (container) {
             if (!container) return;
+            try { var _o = JSON.parse(win.localStorage.getItem('aurelia_app_opened')) || {}; _o[id] = Date.now(); win.localStorage.setItem('aurelia_app_opened', JSON.stringify(_o)); } catch (e) {}   // 最近使用時間(給應用工坊顯示)
             container.innerHTML = '<div class="aps-loading">載入中…</div>';
             const dbp = (win.OS_DB && win.OS_DB.getPhoneApp) ? win.OS_DB.getPhoneApp(id) : Promise.resolve(null);
             Promise.resolve(dbp).then(function (rec) {
