@@ -261,78 +261,14 @@
             // 找此模板綁定的 pack（給第二層 fallback 用）
             const tplPack = myPacks.find(p => p.id === activeTpl.packId);
 
-            // === 三層 fallback 替換（仿展廳 renderTemplateList 邏輯）===
-            // 用 OS_AVS_ADAPTER.formatVarValue 共用 formatter（展廳跟資料中心一致）
-            const state = { ...(win._AVS_ENGINE?.read?.() || {}) };
-            let html = activeTpl.htmlContent || '';
+            // 用展廳/資訊中心那支「共用渲染引擎」(os_avs.renderTemplate) → 三處完全一致
+            // （剝掉自包裝範本=不會有鬼角色、攤平舊「形象」巢狀、逐實體補初值），不再各寫一份分岔
+            const state = win._AVS_ENGINE?.read?.() || {};
             const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
-
-            // object 型變數：pack 初值當底，state 的即時值「深合併」蓋上去
-            // → 副模型只抽到部分角色 / 部分屬性時，其餘仍顯示初值，不會整片空白
-            const _deepMerge = (base, over) => {
-                if (over == null) return base;
-                if (typeof base !== 'object' || typeof over !== 'object' || Array.isArray(base) || Array.isArray(over)) return over;
-                const out = { ...base };
-                for (const k of Object.keys(over)) out[k] = _deepMerge(base[k], over[k]);
-                return out;
-            };
-            if (tplPack && Array.isArray(tplPack.variables)) {
-                for (const v of tplPack.variables) {
-                    if (v.type !== 'object') continue;
-                    let initStruct = {};
-                    try { initStruct = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch(e) {}
-                    state[v.name] = _deepMerge(initStruct, state[v.name]);
-                }
-            }
-
-            // 第 0 層：{{#each 容器}}...{{/each}} 迴圈塊（object 型變數用，對每個實體重複渲染卡片）
-            const _getByPath = (obj, path) => {
-                let cur = obj;
-                for (const k of String(path).split('.')) {
-                    if (cur == null || typeof cur !== 'object') return undefined;
-                    cur = cur[k];
-                }
-                return cur;
-            };
-            html = html.replace(/\{\{#each\s+([^\s{}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (m, containerPath, innerTpl) => {
-                const container = _getByPath(state, containerPath);
-                if (!container || typeof container !== 'object') return '';
-                let blocks = '';
-                for (const [entityKey, entityVal] of Object.entries(container)) {
-                    let block = innerTpl;
-                    block = block.split('{{@key}}').join(entityKey);
-                    if (entityVal && typeof entityVal === 'object') {
-                        for (const [ak, av] of Object.entries(entityVal)) {
-                            const sv = (av && typeof av === 'object') ? JSON.stringify(av) : fmt(av);
-                            block = block.split(`{{${ak}}}`).join(sv);
-                        }
-                    }
-                    block = block.replace(/\{\{[^{}]+\}\}/g, '<span style="opacity:0.45; font-style:italic;">—</span>');
-                    blocks += block;
-                }
-                return blocks;
-            });
-            // 第 1 層：AVS engine state 真實值（扁平變數；object 型已由 each 處理，跳過）
-            for (const [k, v] of Object.entries(state)) {
-                if (v && typeof v === 'object') continue;
-                html = html.split(`{{${k}}}`).join(fmt(v));
-            }
-            // 第 2 層：pack.variables 的 defaultValue（變數還沒被副模型抽到時用）
-            if (tplPack && Array.isArray(tplPack.variables)) {
-                for (const v of tplPack.variables) {
-                    if (!v.name || v.type === 'object') continue;
-                    html = html.split(`{{${v.name}}}`).join(fmt(v.defaultValue ?? '0'));
-                }
-            }
-            // 第 3 層：殘留沒對應的 {{xxx}} 顯示「—」
-            const missing = [];
-            html = html.replace(/\{\{([^{}]+)\}\}/g, (_, name) => {
-                missing.push(name.trim());
-                return '<span style="opacity:0.45; font-style:italic;">—</span>';
-            });
-            if (missing.length) {
-                console.warn('[Extractor] 狀態面板殘缺（不在 state 也不在 pack）:', [...new Set(missing)]);
-            }
+            const _packVars = (tplPack && Array.isArray(tplPack.variables)) ? tplPack.variables : [];
+            let html = '';
+            try { html = (win.OS_AVS?.renderTemplate?.(activeTpl.htmlContent || '', state, _packVars, fmt)) || (activeTpl.htmlContent || ''); }
+            catch (e) { html = activeTpl.htmlContent || ''; console.warn('[Extractor] renderTemplate 失敗:', e); }
             if (activeTpl.cssContent) {
                 html = `<style>${activeTpl.cssContent}</style>${html}`;
             }
