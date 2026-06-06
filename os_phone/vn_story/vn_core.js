@@ -39,6 +39,7 @@
         script: [], index: -1, avatars: {}, currentName: '', currentExp: '', mode: 'vn',
         _lastBgCacheId: '', // 跨章節持久，存 cacheId 而非 URL（blob 會被 resetState 撤銷）
         _bgMemCache: {},
+        _bgInflight: {},   // 進行中的背景生成(cacheId→promise)：去重，避免預熱+現場對同一場景各生一張(競態→重開不同圖)
         _sceneMemCache: {},
         _itemMemCache: {},
         _avatarMemCache: {},
@@ -917,7 +918,18 @@
             return [name, desc].filter(Boolean).join(', ');
         },
 
-        _safeFetchBg: async function(cacheId, prompt) {
+        // 去重包裝：同一 cacheId 若已在生成中(預熱/現場)，共用同一個 promise，
+        // 避免兩邊各生一張(競態) → 顯示一張、快取被另一張覆蓋 → 重開變不同圖。
+        _safeFetchBg: function(cacheId, prompt) {
+            if (this._bgMemCache[cacheId]) return Promise.resolve(this._bgMemCache[cacheId]);
+            if (this._bgInflight[cacheId]) return this._bgInflight[cacheId];
+            const self = this;
+            const p = this._doFetchBg(cacheId, prompt);
+            this._bgInflight[cacheId] = p;
+            p.then(function () {}, function () {}).then(function () { delete self._bgInflight[cacheId]; });
+            return p;
+        },
+        _doFetchBg: async function(cacheId, prompt) {
             if (this._bgMemCache[cacheId]) return this._bgMemCache[cacheId];
             const cached = await VN_Cache.get('bg_cache', cacheId);
             if (cached && cached.url) {
