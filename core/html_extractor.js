@@ -274,18 +274,21 @@
             if (activeTpl.cssContent) {
                 html = `<style>${activeTpl.cssContent}</style>${html}`;
             }
-            // 🔬 本輪狀態：摺疊展示目前記錄的數據給用戶看（複製數據的鈕在 變數工坊→目前狀態）
-            const _stText = (obj, depth) => {
-                let s = ''; const pad = '　'.repeat(depth);
-                for (const [k, v] of Object.entries(obj || {})) {
-                    if (v && typeof v === 'object' && !Array.isArray(v)) s += pad + k + '\n' + _stText(v, depth + 1);
-                    else s += pad + k + '：' + (Array.isArray(v) ? v.join('、') : String(v)) + '\n';
-                }
-                return s;
-            };
+            // 🔬 本輪更新了什麼：只顯示這輪副模型「改動的欄位」(delta)，不是整碗當前狀態。摺疊、預設收起。
             const _stEsc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const _stBody = _stEsc(_stText(state, 0)) || '（尚無數據）';
-            html = html + '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#a99;padding:8px 0;">🔬 本輪狀態（點開看目前記錄的數據）</summary><pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.18);border-radius:8px;padding:10px;font-size:11px;line-height:1.6;color:#ccc;margin:6px 0 0;max-height:300px;overflow:auto;">' + _stBody + '</pre></details>';
+            const _le = win.OS_STATE_RUNTIME?.getLastExtract?.();
+            const _upd = (_le && _le.updates) ? _le.updates : null;
+            let _updBody;
+            if (_upd && Object.keys(_upd).length) {
+                _updBody = Object.entries(_upd).map(([k, v]) => {
+                    const kk = String(k).replace(/^[^.]+\./, '');   // 去掉容器前綴(角色狀態.)，只留 角色.屬性
+                    const vv = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
+                    return _stEsc(kk + ' → ' + vv);
+                }).join('\n');
+            } else {
+                _updBody = _le ? '本輪沒有更新任何欄位' : '本輪沒有抽取記錄（可能用 <vars> 或尚未生成）';
+            }
+            html = html + '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#a99;padding:8px 0;">🔬 本輪更新了什麼（點開看）</summary><pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.18);border-radius:8px;padding:10px;font-size:11px;line-height:1.7;color:#ccc;margin:6px 0 0;max-height:280px;overflow:auto;">' + _updBody + '</pre></details>';
 
             // 建 tab（重複建立會留下舊的，先清掉）
             const doc = win.document || document;
