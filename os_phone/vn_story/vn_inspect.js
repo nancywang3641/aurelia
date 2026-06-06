@@ -359,7 +359,7 @@
                     : (le ? '（這輪副模型沒回狀態更新）' : '（本輪尚無副模型抽取資料——若你是用 <vars> 主模型寫狀態，這格會空；或重載後先生成一輪再看）');
                 const rawStr = (le && le.raw) ? le.raw : '（無——代表這次狀態不是副模型抽取寫的）';
                 const memN = (le && le.memories) ? `・記憶 ${le.memories.length} 條` : '';
-                lastExtractHtml = `<details style="margin-top:16px;" open>
+                lastExtractHtml = `<details style="margin-top:16px;">
                     <summary style="cursor:pointer;font-size:11px;color:#888;letter-spacing:2px;list-style:none;display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid rgba(212,175,55,0.15);">
                         <span>▼</span><span>🔬 診斷：當前狀態 + 本次更新${le ? `（msg#${le.msgId ?? '—'}${memN}）` : ''}</span>
                     </summary>
