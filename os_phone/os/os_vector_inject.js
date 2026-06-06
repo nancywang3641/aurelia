@@ -25,7 +25,8 @@
             || localStorage.getItem('vn_current_story_id') || '';
     }
 
-    const SELECT_MAX = 8;   // 副模型每輪最多挑幾條相關記憶注入主模型
+    const SELECT_MAX = 8;        // 副模型每輪最多挑幾條相關記憶注入主模型
+    const SELECT_THRESHOLD = 14; // 記憶 ≤ 這數量時：全部注入、免副模型挑(省一通)；超過才啟用「索引+副模型挑」
 
     // 查詢線索：最近 3 則訊息（比只看最後一則更準）
     async function _recentText() {
@@ -90,12 +91,19 @@
             if (!all.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定編號
 
-            const recentText = await _recentText();
-            if (!recentText) return;
-
-            // 索引 + 副模型挑（取代向量 top-K）：副模型看得到全部索引→挑相關的(不漏)→只注入被挑中的全文(不爆)
-            let mems = await _selectByIndex(recentText, all);
-            if (!mems.length) mems = all.slice(-6);   // 副模型沒挑到 → 退而求其次給最近 6 條
+            // 記憶不多 → 全部注入、免副模型挑(每輪不多花一通)；多了才用「索引+副模型挑」(不漏/不爆)
+            let mems;
+            if (all.length <= SELECT_THRESHOLD) {
+                mems = all;
+            } else {
+                const recentText = await _recentText();
+                if (!recentText) {
+                    mems = all.slice(-SELECT_MAX);
+                } else {
+                    mems = await _selectByIndex(recentText, all);
+                    if (!mems.length) mems = all.slice(-SELECT_MAX);   // 副模型沒挑到 → 退最近幾條
+                }
+            }
 
             // 角色語氣/對話另外框起來 → 明確要求 AI 延續角色說話風格、別 OOC
             const voice = mems.filter(m => m.type === 'dialogue');
