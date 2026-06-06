@@ -159,6 +159,7 @@
 
         // --- Pollinations 生成邏輯 ---
         _genPollinations: function(basePrompt, type, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
             let optimizedPrompt = basePrompt;
 
             const seed = options.seed || Math.floor(Math.random() * 100000);
@@ -235,6 +236,7 @@
 
         // --- NovelAI 生成邏輯（char / item / pet / scene）---
         _genNovelAI: async function(prompt, type, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
             const cfg = this.config.novelai;
             if (!cfg.token) {
                 console.warn('[ImageManager] NAI token 未設定，回退 Pollinations');
@@ -420,6 +422,7 @@
 
         // 🔥 異步版本 (給 Host/OS/VN_Core 使用)
         generateBackgroundAsync: async function(rawPrompt, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數（背景）
             console.log(`[ImageManager] 🚀 OS 接收原始 prompt: ${rawPrompt.substring(0, 50)}...`);
 
             let translatedPrompt = rawPrompt;
