@@ -639,6 +639,7 @@ ${_memoryRulesText()}
         normalizeChatId,
         getActiveSchema,   // V2：schema 從 AVS 變數包合併（給 status_panel 等外部 UI 用）
         getLastExtract: () => _lastExtract,   // 最近一次抽取(原始輸出+updates+current) 給狀態面板診斷/複製
+        getStateDataDump: async () => { try { const cid = getChatId(); return (cid && win.OS_DB?.getStateData) ? await win.OS_DB.getStateData(cid) : null; } catch(e) { return null; } },  // 持久化的 patches/base/current 給診斷
         CONFIG
     };
 
