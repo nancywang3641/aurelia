@@ -1391,6 +1391,7 @@ ${lines.join('\n')}
 
     win.OS_AVS = {
         launch: launchApp,
+        renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
         syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發
         // V3：規則 modal helper（給 inline onclick 呼叫）
         _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,
