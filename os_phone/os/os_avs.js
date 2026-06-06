@@ -715,6 +715,19 @@ ${lines.join('\n')}
                         chatId: currentChatId
                     };
                     await win.OS_DB.saveVarPack(pack);
+                    // 把現有資料的舊「形象」巢狀一併攤平(形象.髮色 → 髮色)，跟新的平結構對齊、不丟角色
+                    try {
+                        const _eng = win._AVS_ENGINE; const _st = _eng?.read?.();
+                        if (_st && _st['角色狀態'] && typeof _st['角色狀態'] === 'object') {
+                            for (const _ent of Object.values(_st['角色狀態'])) {
+                                if (_ent && typeof _ent === 'object' && _ent['形象'] && typeof _ent['形象'] === 'object') {
+                                    for (const [_k, _v] of Object.entries(_ent['形象'])) if (_ent[_k] === undefined) _ent[_k] = _v;
+                                    delete _ent['形象'];
+                                }
+                            }
+                            _eng.write(_st);
+                        }
+                    } catch(e) {}
                     await loadAllData(container);
                     await syncVarPackToLorebook();
                     if (win.toastr) win.toastr.success('✅ 已套用簡易預設變數包');
