@@ -840,7 +840,13 @@ ${lines.join('\n')}
                     const sv = (av && typeof av === 'object') ? JSON.stringify(av) : f(av);
                     block = block.split(`{{${ak}}}`).join(sv);
                 }
-                block = block.replace(/\{\{[^{}]+\}\}/g, '—'); // 該實體沒有的屬性
+                // 剩餘 {{x}} / {{x.y}}：用點記法在「原始(未攤平)實體」上找 → 相容 AI 生的巢狀佔位符(如 {{形象.體型}})，找不到才 —
+                block = block.replace(/\{\{([^{}]+)\}\}/g, (mm, expr) => {
+                    const key = String(expr).trim();
+                    if (key === '@key') return entityKey;
+                    const val = _avsGetByPath(entityValRaw, key);
+                    return (val === undefined || val === null) ? '—' : (typeof val === 'object' ? JSON.stringify(val) : f(val));
+                });
                 blocks += block;
             }
             return blocks;
