@@ -1,89 +1,152 @@
 // os_phone/os/app_store.js
-// 🛒 應用商店：在手機殼裡 AI 生成 / 貼上匯入「完整 HTML 功能型 app」，安裝到桌面。
-// 工坊用 OS_API.chat + PANEL_DEV_GUIDE prompt 生成；安裝 = OS_DB.savePhoneApp + localStorage 清單 + VoidPhoneShell.addApp。
+// 🛒 應用工坊：手機殼裡 AI 生成 / 貼上匯入「完整 HTML 功能型 app」，安裝到桌面。
+// UI：首頁總覽 + 工坊(AI生成 step flow) + 匯入 + 我的應用 + 設定 + 底部 nav。
+// 生成 = OS_API.chat + 分段 prompt → _assembleApp 組裝；helper(callAI/genImg/saveData…)由橋接 app_runtime 提供。
 (function () {
     'use strict';
     const win = window;
-    const INSTALLED_KEY = 'aurelia_phone_apps';   // 與 phone_shell.js 同 key：[{id,name,emoji,iconUrl}]
-    const EMOJIS = ['📦','📕','📘','🛍️','🎬','🎵','📷','🗺️','🎮','💬','📰','🧭','🍔','🎲','⭐','🔔'];
+    const INSTALLED_KEY = 'aurelia_phone_apps';      // 與 phone_shell.js 同 key：[{id,name,emoji,iconUrl}]
+    const OPENED_KEY = 'aurelia_app_opened';         // {id: timestamp} —— 最近使用，phone_shell 開 app 時寫
+    const PROVIDER_KEY = 'aurelia_appstore_provider'; // 生圖預設來源
 
     function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function _loadList() { try { return JSON.parse(win.localStorage.getItem(INSTALLED_KEY)) || []; } catch (e) { return []; } }
     function _saveList(list) { try { win.localStorage.setItem(INSTALLED_KEY, JSON.stringify(list)); } catch (e) {} }
-    function _imgMgr() { return win.OS_IMAGE_MANAGER || (win.parent && win.parent.OS_IMAGE_MANAGER) || null; }
     function _apiEngine() { return win.OS_API || (win.parent && win.parent.OS_API) || null; }
+    function _loadOpened() { try { return JSON.parse(win.localStorage.getItem(OPENED_KEY)) || {}; } catch (e) { return {}; } }
+    function _markOpened(id) { try { var m = _loadOpened(); m[id] = Date.now(); win.localStorage.setItem(OPENED_KEY, JSON.stringify(m)); } catch (e) {} }
+    function _loadProvider() { try { return win.localStorage.getItem(PROVIDER_KEY) === 'novelai' ? 'novelai' : 'pollinations'; } catch (e) { return 'pollinations'; } }
+    function _saveProvider(v) { try { win.localStorage.setItem(PROVIDER_KEY, v); } catch (e) {} }
+    function _relTime(ts) {
+        if (!ts) return '尚未使用';
+        var d = Date.now() - ts, m = 60000, h = 3600000, day = 86400000;
+        if (d < m) return '剛剛使用';
+        if (d < h) return Math.floor(d / m) + ' 分鐘前';
+        if (d < day) return Math.floor(d / h) + ' 小時前';
+        return Math.floor(d / day) + ' 天前';
+    }
     function _toast(c, msg) {
         const t = c.querySelector('#as-toast'); if (!t) return;
         t.textContent = msg; t.classList.add('show');
         clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 2400);
     }
 
-    let _genHtml = null;     // 工坊最近一次生成的 HTML（待安裝）
+    // 素材圖：data-asset 屬性 → aseets 檔名（中文檔名要 encode）
+    const ASSET_MAP = {
+        'ai-icon': '應用_AI_ICON圖.png',
+        'im-icon': '應用_匯入_ICON圖.png',
+        'idea':    '應用_應用想法圖.png',
+        'ai':      '應用_AI圖.png',
+        'im':      '應用_匯入_ICON圖.png',
+        'success': '應用_成功圖.png'
+    };
+    function _applyAssets(c) {
+        var base = (win.AURELIA_EXT_BASE || (win.parent && win.parent.AURELIA_EXT_BASE) || '') + '/aseets/';
+        c.querySelectorAll('[data-asset]').forEach(function (img) {
+            var k = img.dataset.asset;
+            if (ASSET_MAP[k]) img.src = base + encodeURIComponent(ASSET_MAP[k]);
+        });
+    }
+
+    let _genHtml = null;   // 工坊最近一次生成的 HTML（待安裝）
 
     const STORE_HTML =
-        '<div class="as-wrap">'
-      +   '<div class="as-head"><span class="as-title">🛒 應用商店</span></div>'
-      +   '<div class="as-tabs">'
-      +     '<button class="as-tab active" data-tab="workshop" type="button">🛠️ 工坊</button>'
-      +     '<button class="as-tab" data-tab="import" type="button">📥 匯入</button>'
-      +     '<button class="as-tab" data-tab="mine" type="button">📱 我的應用</button>'
-      +   '</div>'
-      +   '<div class="as-body">'
-      +     '<div class="as-view active" data-view="workshop">'
-      +       '<label class="as-lab">想要什麼 app？(用途＋風格，越具體越好)</label>'
-      +       '<textarea class="as-ta" id="as-ws-desc" placeholder="例：一個小紅書 app，能生成貼文標題+內文+一張配圖，整體粉色少女風"></textarea>'
-      +       '<label class="as-lab">配圖用哪個 AI</label>'
-      +       '<select class="as-input" id="as-ws-provider">'
-      +         '<option value="pollinations">POLL AI — 快、省額度（一般配圖推薦）</option>'
-      +         '<option value="novelai">NAI — 精緻二次元角色風</option>'
-      +       '</select>'
-      +       '<button class="as-btn as-btn-main" id="as-ws-gen" type="button">✨ 生成 app</button>'
-      +       '<div class="as-loading" id="as-ws-loading">AI 正在生成 app，請稍候…</div>'
-      +       '<div class="as-prev-wrap"><div class="as-prev-lab">預覽（生圖走佔位、不燒額度）</div><div class="as-prev" id="as-ws-prev"></div></div>'
-      +       '<div class="as-install-row hidden" id="as-ws-install-row">'
-      +         '<input class="as-input" id="as-ws-name" type="text" placeholder="app 名稱">'
-      +         '<input class="as-input as-emoji-in" id="as-ws-emoji" type="text" maxlength="2" placeholder="📦">'
-      +         '<button class="as-btn as-btn-ok" id="as-ws-install" type="button">安裝到桌面</button>'
+        '<div class="ws-app">'
+      +   '<div class="ws-views">'
+      // ── 首頁 ──
+      +     '<div class="ws-view active" data-view="home">'
+      +       '<div class="ws-home-hd"><div class="ws-home-title">應用工坊 <span class="ws-spark">✨</span></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div>'
+      +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go">›</span></button>'
+      +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go">›</span></button>'
+      +       '<div class="ws-sec-row"><span class="ws-sec-t">我的應用</span><button class="ws-sec-more" data-go="mine" type="button">查看全部 ›</button></div>'
+      +       '<div class="ws-home-mine" id="ws-home-mine"></div>'
+      +     '</div>'
+      // ── 工坊 ──
+      +     '<div class="ws-view" data-view="workshop">'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">AI 生成應用</span></div>'
+      +       '<div class="ws-vbody">'
+      +         '<div class="ws-hero"><img class="ws-hero-img" data-asset="idea" alt=""></div>'
+      +         '<div class="ws-field-t">描述你的應用想法</div>'
+      +         '<div class="ws-field-d">越詳細越好，AI 會生成更貼合需求的應用</div>'
+      +         '<textarea class="ws-ta" id="as-ws-desc" placeholder="例：一個角色日記本，可輸入角色名稱新增日記，粉米色風格"></textarea>'
+      +         '<div class="ws-field-lab">配圖用哪個 AI</div>'
+      +         '<select class="ws-input" id="as-ws-provider"><option value="pollinations">Poll AI — 快、省額度（推薦）</option><option value="novelai">NAI — 精緻二次元角色風</option></select>'
+      +         '<button class="ws-btn ws-btn-main" id="as-ws-gen" type="button">✨ 開始生成</button>'
+      +         '<div class="ws-gen hidden" id="as-ws-loading"><img class="ws-gen-img" data-asset="ai" alt=""><div class="ws-gen-t">AI 正在為你生成應用…</div><div class="ws-gen-bar"><span></span></div></div>'
+      +         '<div class="ws-prev-wrap hidden" id="as-ws-prev-wrap"><div class="ws-prev-lab">預覽（生圖走佔位、不燒額度）</div><div class="ws-prev" id="as-ws-prev"></div></div>'
+      +         '<div class="ws-install hidden" id="as-ws-install-row"><input class="ws-input" id="as-ws-name" type="text" placeholder="應用名稱"><input class="ws-input ws-emoji" id="as-ws-emoji" type="text" maxlength="2" placeholder="📦"><button class="ws-btn ws-btn-ok" id="as-ws-install" type="button">安裝到桌面</button></div>'
       +       '</div>'
       +     '</div>'
-      +     '<div class="as-view" data-view="import">'
-      +       '<label class="as-lab">app 名稱</label>'
-      +       '<input class="as-input" id="as-im-name" type="text" placeholder="例：恐怖電台">'
-      +       '<label class="as-lab">圖標 emoji（單一符號）</label>'
-      +       '<input class="as-input as-emoji-in" id="as-im-emoji" type="text" maxlength="2" placeholder="📦">'
-      +       '<label class="as-lab">貼上完整 HTML（GPT 生成的面板）</label>'
-      +       '<textarea class="as-ta as-ta-code" id="as-im-html" placeholder="<!DOCTYPE html> ... </html>"></textarea>'
-      +       '<button class="as-btn as-btn-main" id="as-im-prev-btn" type="button">預覽</button>'
-      +       '<div class="as-prev-wrap"><div class="as-prev-lab">預覽</div><div class="as-prev" id="as-im-prev"></div></div>'
-      +       '<button class="as-btn as-btn-ok" id="as-im-install" type="button">安裝到桌面</button>'
+      // ── 匯入 ──
+      +     '<div class="ws-view" data-view="import">'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">匯入應用</span></div>'
+      +       '<div class="ws-vbody">'
+      +         '<div class="ws-hero"><img class="ws-hero-img ws-hero-sm" data-asset="im-icon" alt=""></div>'
+      +         '<div class="ws-field-lab">應用名稱</div>'
+      +         '<input class="ws-input" id="as-im-name" type="text" placeholder="例：恐怖電台">'
+      +         '<div class="ws-field-lab">圖標 emoji</div>'
+      +         '<input class="ws-input ws-emoji" id="as-im-emoji" type="text" maxlength="2" placeholder="📦">'
+      +         '<div class="ws-field-lab">貼上完整 HTML（或上傳 .html 檔）</div>'
+      +         '<label class="ws-file-btn" for="as-im-file">📂 選擇 .html 檔</label><input class="ws-file" id="as-im-file" type="file" accept=".html,.htm,text/html">'
+      +         '<textarea class="ws-ta ws-ta-code" id="as-im-html" placeholder="&lt;!DOCTYPE html&gt; ... &lt;/html&gt;"></textarea>'
+      +         '<button class="ws-btn ws-btn-line" id="as-im-prev-btn" type="button">預覽</button>'
+      +         '<div class="ws-prev-wrap hidden" id="as-im-prev-wrap"><div class="ws-prev-lab">預覽</div><div class="ws-prev" id="as-im-prev"></div></div>'
+      +         '<button class="ws-btn ws-btn-ok" id="as-im-install" type="button">安裝到桌面</button>'
+      +       '</div>'
       +     '</div>'
-      +     '<div class="as-view" data-view="mine">'
-      +       '<div class="as-mine-list" id="as-mine-list"></div>'
+      // ── 我的應用 ──
+      +     '<div class="ws-view" data-view="mine">'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">我的應用</span></div>'
+      +       '<div class="ws-vbody"><div class="ws-mine-list" id="as-mine-list"></div></div>'
+      +     '</div>'
+      // ── 設定 ──
+      +     '<div class="ws-view" data-view="settings">'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">設定</span></div>'
+      +       '<div class="ws-vbody">'
+      +         '<div class="ws-field-lab">生圖預設來源</div>'
+      +         '<select class="ws-input" id="as-set-provider"><option value="pollinations">Poll AI — 快、省額度（推薦）</option><option value="novelai">NAI — 精緻二次元角色風</option></select>'
+      +         '<div class="ws-set-note">工坊生成時的預設值，每次生成仍可臨時改。</div>'
+      +       '</div>'
       +     '</div>'
       +   '</div>'
-      +   '<div class="as-toast" id="as-toast"></div>'
+      // ── 底部 nav ──
+      +   '<div class="ws-nav">'
+      +     '<button class="ws-nav-b active" data-go="home" type="button"><span class="ws-nav-ic">🏠</span><span class="ws-nav-t">首頁</span></button>'
+      +     '<button class="ws-nav-b" data-go="workshop" type="button"><span class="ws-nav-ic">🛠️</span><span class="ws-nav-t">工坊</span></button>'
+      +     '<button class="ws-nav-b" data-go="mine" type="button"><span class="ws-nav-ic">📱</span><span class="ws-nav-t">我的</span></button>'
+      +     '<button class="ws-nav-b" data-go="settings" type="button"><span class="ws-nav-ic">⚙️</span><span class="ws-nav-t">設定</span></button>'
+      +   '</div>'
+      // ── 安裝成功覆蓋 + toast ──
+      +   '<div class="ws-success hidden" id="ws-success"><img class="ws-suc-img" data-asset="success" alt=""><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
+      +   '<div class="ws-toast" id="as-toast"></div>'
       + '</div>';
 
     function launch(c) {
         if (!c) return;
         c.innerHTML = STORE_HTML;
-        _bindTabs(c);
+        _applyAssets(c);
+        // provider 預設
+        var pv = _loadProvider();
+        var pSel = c.querySelector('#as-ws-provider'); if (pSel) pSel.value = pv;
+        var sSel = c.querySelector('#as-set-provider'); if (sSel) sSel.value = pv;
+        if (sSel) sSel.addEventListener('change', function () { _saveProvider(sSel.value); if (pSel) pSel.value = sSel.value; });
+        // 導覽：所有 data-go（卡片/返回/查看全部/底部 nav）
+        c.querySelectorAll('[data-go]').forEach(function (b) {
+            b.addEventListener('click', function () { _go(c, b.dataset.go); });
+        });
         _bindImport(c);
-        _bindWorkshop(c);   // Task 5 實作；此處為 stub
-        renderMine(c);
+        _bindWorkshop(c);
+        renderHomeMine(c);
     }
 
-    function _bindTabs(c) {
-        c.querySelectorAll('.as-tab').forEach(function (tab) {
-            tab.addEventListener('click', function () {
-                c.querySelectorAll('.as-tab').forEach(function (t) { t.classList.remove('active'); });
-                c.querySelectorAll('.as-view').forEach(function (v) { v.classList.remove('active'); });
-                tab.classList.add('active');
-                const v = c.querySelector('.as-view[data-view="' + tab.dataset.tab + '"]');
-                if (v) v.classList.add('active');
-                if (tab.dataset.tab === 'mine') renderMine(c);
-            });
-        });
+    // 切換視圖
+    function _go(c, view) {
+        c.querySelectorAll('.ws-view').forEach(function (v) { v.classList.toggle('active', v.dataset.view === view); });
+        c.querySelectorAll('.ws-nav-b').forEach(function (b) { b.classList.toggle('active', b.dataset.go === view); });
+        var body = c.querySelector('.ws-view[data-view="' + view + '"] .ws-vbody') || c.querySelector('.ws-view[data-view="' + view + '"]');
+        if (body) body.scrollTop = 0;
+        if (view === 'mine') renderMine(c);
+        else if (view === 'home') renderHomeMine(c);
     }
 
     // ── 安裝 / 卸載（共用）──
@@ -94,8 +157,9 @@
         const list = _loadList().filter(function (m) { return m.id !== id; });
         list.push({ id: id, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
         _saveList(list);
+        _markOpened(id);
         if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: id, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
-        _toast(c, '🎉 已安裝到桌面：' + rec.name);
+        _showSuccess(c, rec.name);
     }
     async function _uninstall(id, c) {
         if (win.OS_DB && win.OS_DB.deletePhoneApp) await win.OS_DB.deletePhoneApp(id);
@@ -103,52 +167,72 @@
         if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(id);
         renderMine(c);
     }
+    function _showSuccess(c, name) {
+        var ov = c.querySelector('#ws-success'); if (!ov) { _go(c, 'mine'); return; }
+        var nm = ov.querySelector('.ws-suc-name'); if (nm) nm.textContent = '「' + (name || 'App') + '」已安裝到你的桌面';
+        ov.classList.remove('hidden');
+        setTimeout(function () { ov.classList.add('hidden'); _go(c, 'mine'); }, 1600);
+    }
 
-    // ── 我的應用 ──
+    // ── 我的應用 列 (共用 row 產生器) ──
+    function _mineRow(c, a, opened) {
+        const row = document.createElement('div');
+        row.className = 'ws-mine-row';
+        row.innerHTML =
+            '<span class="ws-mine-ic">' + _esc(a.emoji || '📦') + '</span>'
+          + '<span class="ws-mine-info"><span class="ws-mine-name">' + _esc(a.name || 'App') + '</span><span class="ws-mine-sub">' + _esc(_relTime(opened[a.id])) + '</span></span>'
+          + '<button class="ws-mine-menu" data-act="menu" type="button">⋯</button>'
+          + '<div class="ws-mine-acts hidden">'
+          +   '<button class="ws-mini" data-act="src" type="button">原始碼</button>'
+          +   '<button class="ws-mini" data-act="rename" type="button">改名</button>'
+          +   '<button class="ws-mini" data-act="emoji" type="button">換圖標</button>'
+          +   '<button class="ws-mini danger" data-act="del" type="button">卸載</button>'
+          + '</div>';
+        row.querySelector('[data-act="menu"]').onclick = function () { row.querySelector('.ws-mine-acts').classList.toggle('hidden'); };
+        row.querySelector('[data-act="src"]').onclick = function () {
+            const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
+            const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
+            _go(c, 'import');
+            _toast(c, '原始碼已載入「匯入」框，可全選複製給我');
+        };
+        row.querySelector('[data-act="del"]').onclick = function () {
+            if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) _uninstall(a.id, c);
+        };
+        row.querySelector('[data-act="rename"]').onclick = async function () {
+            const nm = prompt('新名稱', a.name || ''); if (nm == null) return;
+            a.name = nm.trim() || a.name;
+            await win.OS_DB.savePhoneApp(a); _syncMeta(a); renderMine(c);
+        };
+        row.querySelector('[data-act="emoji"]').onclick = async function () {
+            const em = prompt('新圖標 emoji（單一符號）', a.emoji || '📦'); if (em == null) return;
+            a.emoji = (em.trim() || a.emoji).slice(0, 2);
+            await win.OS_DB.savePhoneApp(a); _syncMeta(a); renderMine(c);
+        };
+        return row;
+    }
+
     async function renderMine(c) {
         const list = c.querySelector('#as-mine-list'); if (!list) return;
-        list.innerHTML = '<div class="as-empty">載入中…</div>';
+        list.innerHTML = '<div class="ws-empty">載入中…</div>';
         let apps = [];
         try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; } catch (e) {}
-        if (!apps.length) { list.innerHTML = '<div class="as-empty">還沒安裝任何 app。去工坊生成、或從匯入貼一個吧。</div>'; return; }
+        if (!apps.length) { list.innerHTML = '<div class="ws-empty">還沒安裝任何應用。<br>去工坊生成、或從匯入貼一個吧。</div>'; return; }
+        const opened = _loadOpened();
         list.innerHTML = '';
-        apps.forEach(function (a) {
-            const row = document.createElement('div');
-            row.className = 'as-mine-row';
-            row.innerHTML =
-                '<span class="as-mine-ic">' + _esc(a.emoji || '📦') + '</span>'
-              + '<span class="as-mine-name">' + _esc(a.name || 'App') + '</span>'
-              + '<button class="as-mini" data-act="src" type="button">原始碼</button>'
-              + '<button class="as-mini" data-act="rename" type="button">改名</button>'
-              + '<button class="as-mini" data-act="emoji" type="button">換圖標</button>'
-              + '<button class="as-mini danger" data-act="del" type="button">卸載</button>';
-            row.querySelector('[data-act="src"]').onclick = function () {
-                const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
-                const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
-                c.querySelectorAll('.as-tab').forEach(function (t) { t.classList.remove('active'); });
-                c.querySelectorAll('.as-view').forEach(function (v) { v.classList.remove('active'); });
-                const tb = c.querySelector('.as-tab[data-tab="import"]'); if (tb) tb.classList.add('active');
-                const vw = c.querySelector('.as-view[data-view="import"]'); if (vw) vw.classList.add('active');
-                _toast(c, '原始碼已載入「匯入」框，可全選複製給我');
-            };
-            row.querySelector('[data-act="del"]').onclick = function () {
-                if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) _uninstall(a.id, c);
-            };
-            row.querySelector('[data-act="rename"]').onclick = async function () {
-                const nm = prompt('新名稱', a.name || ''); if (nm == null) return;
-                a.name = nm.trim() || a.name;
-                await win.OS_DB.savePhoneApp(a);
-                _syncMeta(a); renderMine(c);
-            };
-            row.querySelector('[data-act="emoji"]').onclick = async function () {
-                const em = prompt('新圖標 emoji（單一符號）', a.emoji || '📦'); if (em == null) return;
-                a.emoji = (em.trim() || a.emoji).slice(0, 2);
-                await win.OS_DB.savePhoneApp(a);
-                _syncMeta(a); renderMine(c);
-            };
-            list.appendChild(row);
-        });
+        apps.forEach(function (a) { list.appendChild(_mineRow(c, a, opened)); });
     }
+
+    // 首頁的「我的應用」預覽（最近 3 個 + 查看全部）
+    async function renderHomeMine(c) {
+        const box = c.querySelector('#ws-home-mine'); if (!box) return;
+        let apps = [];
+        try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; } catch (e) {}
+        if (!apps.length) { box.innerHTML = '<div class="ws-empty sm">還沒有應用，從上面開始創造吧 ✨</div>'; return; }
+        const opened = _loadOpened();
+        box.innerHTML = '';
+        apps.slice(0, 3).forEach(function (a) { box.appendChild(_mineRow(c, a, opened)); });
+    }
+
     // 改名/換圖標後同步 localStorage 清單 + 重註冊桌面 meta
     function _syncMeta(a) {
         const list = _loadList().map(function (m) { return m.id === a.id ? { id: a.id, name: a.name, emoji: a.emoji, iconUrl: a.iconUrl || '' } : m; });
@@ -160,23 +244,34 @@
     function _bindImport(c) {
         const prevBtn = c.querySelector('#as-im-prev-btn');
         const installBtn = c.querySelector('#as-im-install');
+        const fileInput = c.querySelector('#as-im-file');
+        if (fileInput) fileInput.addEventListener('change', function () {
+            var f = this.files && this.files[0]; if (!f) return;
+            var r = new FileReader();
+            r.onload = function () {
+                c.querySelector('#as-im-html').value = String(r.result || '');
+                var nmI = c.querySelector('#as-im-name'); if (nmI && !nmI.value) nmI.value = f.name.replace(/\.html?$/i, '');
+                _toast(c, '已讀入檔案，可按預覽');
+            };
+            r.readAsText(f);
+        });
         prevBtn.addEventListener('click', function () {
             const html = (c.querySelector('#as-im-html').value || '').trim();
             if (!/<body|<html|<div|<!doctype/i.test(html)) { _toast(c, '看起來不是完整 HTML 面板'); return; }
+            c.querySelector('#as-im-prev-wrap').classList.remove('hidden');
             if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-im-prev'), html, { preview: true });
         });
         installBtn.addEventListener('click', function () {
             const name = (c.querySelector('#as-im-name').value || '').trim();
             const emoji = (c.querySelector('#as-im-emoji').value || '📦').trim().slice(0, 2) || '📦';
             const html = (c.querySelector('#as-im-html').value || '').trim();
-            if (!name) { _toast(c, '請填 app 名稱'); return; }
+            if (!name) { _toast(c, '請填應用名稱'); return; }
             if (!/<body|<html|<div|<!doctype/i.test(html)) { _toast(c, '請貼上完整 HTML'); return; }
             _install(c, { name: name, emoji: emoji, iconUrl: '', html: html, source: 'import' });
         });
     }
 
-    // ── 工坊：要 AI 分段輸出 css/html/js(各自獨立、js 不可漏)，再由 _assembleApp 組成完整 HTML ──
-    //    接線(callAI/genImg/root)寫死在組裝模板裡，模型只寫「邏輯本體」、不用碰接線 → 失敗面大幅縮小。
+    // ── 工坊：AI 分段輸出 css/html/js（各自獨立、js 不可漏），由 _assembleApp 組成完整 HTML ──
     function _wsPrompt(desc, provider) {
         return '你是資深前端工程師。請依需求設計一個「功能型 HTML 小 app」，把它拆成 css / html / js 三段輸出。\n\n'
             + '【使用者需求】\n' + desc + '\n\n'
@@ -199,8 +294,7 @@
             + '<app_js>\n（這裡放完整互動邏輯 JS——最重要、務必寫滿）\n</app_js>';
     }
 
-    // 把 AI 分段結果組成完整、可在 iframe 跑的 HTML。
-    // helper(callAI/genImg/goBack/saveData/loadData/root)由橋接(app_runtime)提供，這裡只組版面 + 跑 js。
+    // 把 AI 分段結果組成完整、可在 iframe 跑的 HTML。helper 由橋接(app_runtime)提供，這裡只組版面 + 跑 js。
     function _assembleApp(parsed) {
         return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">\n'
             + '<style>\n'
@@ -227,16 +321,17 @@
         const gen = c.querySelector('#as-ws-gen');
         const installRow = c.querySelector('#as-ws-install-row');
         const loading = c.querySelector('#as-ws-loading');
+        const prevWrap = c.querySelector('#as-ws-prev-wrap');
         if (!gen) return;
 
         gen.addEventListener('click', async function () {
             const desc = (c.querySelector('#as-ws-desc').value || '').trim();
-            if (!desc) { _toast(c, '先描述你想要的 app'); return; }
+            if (!desc) { _toast(c, '先描述你想要的應用'); return; }
             const provider = c.querySelector('#as-ws-provider').value === 'novelai' ? 'novelai' : 'pollinations';
             const api = _apiEngine();
             if (!api || typeof api.chat !== 'function') { _toast(c, '❌ 找不到 AI 引擎(OS_API)'); return; }
 
-            gen.disabled = true; loading.classList.add('show'); installRow.classList.add('hidden'); _genHtml = null;
+            gen.disabled = true; loading.classList.remove('hidden'); installRow.classList.add('hidden'); prevWrap.classList.add('hidden'); _genHtml = null;
             try {
                 let baseConfig = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig && win.OS_SETTINGS.getConfig()) || {};
                 try { if (!baseConfig || !Object.keys(baseConfig).length) baseConfig = JSON.parse(win.localStorage.getItem('os_global_config') || '{}'); } catch (e) {}
@@ -249,25 +344,26 @@
                 if (!resp) throw new Error('AI 回傳空白');
 
                 const parsed = _parseGen(resp);
-                if (!parsed.js || parsed.js.length < 20) throw new Error('生成的 app 缺少互動邏輯(js)，請重試或把需求講更具體');
-                if (!parsed.html && !parsed.css) throw new Error('沒解析到 app 內容，請重試');
+                if (!parsed.js || parsed.js.length < 20) throw new Error('生成的應用缺少互動邏輯，請重試或把需求講更具體');
+                if (!parsed.html && !parsed.css) throw new Error('沒解析到應用內容，請重試');
                 _genHtml = _assembleApp(parsed);
 
+                prevWrap.classList.remove('hidden');
                 if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-ws-prev'), _genHtml, { preview: true, provider: provider });
-                c.querySelector('#as-ws-name').value = (parsed.meta && parsed.meta.name) ? parsed.meta.name : '新 App';
+                c.querySelector('#as-ws-name').value = (parsed.meta && parsed.meta.name) ? parsed.meta.name : '新應用';
                 c.querySelector('#as-ws-emoji').value = (parsed.meta && parsed.meta.emoji) ? String(parsed.meta.emoji).slice(0, 2) : '📦';
                 installRow.classList.remove('hidden');
             } catch (e) {
                 _toast(c, '生成失敗：' + (e.message || e) + '，可改描述重試');
             } finally {
-                gen.disabled = false; loading.classList.remove('show');
+                gen.disabled = false; loading.classList.add('hidden');
             }
         });
 
         const installBtn = c.querySelector('#as-ws-install');
         if (installBtn) installBtn.addEventListener('click', function () {
             if (!_genHtml) { _toast(c, '請先生成'); return; }
-            const name = (c.querySelector('#as-ws-name').value || '').trim() || '新 App';
+            const name = (c.querySelector('#as-ws-name').value || '').trim() || '新應用';
             const emoji = (c.querySelector('#as-ws-emoji').value || '📦').trim().slice(0, 2) || '📦';
             const provider = c.querySelector('#as-ws-provider').value === 'novelai' ? 'novelai' : 'pollinations';
             _install(c, { name: name, emoji: emoji, iconUrl: '', html: _genHtml, source: 'workshop', provider: provider });
@@ -275,5 +371,5 @@
     }
 
     win.APP_STORE = { launch: launch };
-    console.log('✅ APP_STORE（應用商店）模組就緒');
+    console.log('✅ APP_STORE（應用工坊）模組就緒');
 })();
