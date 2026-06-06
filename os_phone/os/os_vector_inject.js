@@ -25,48 +25,8 @@
             || localStorage.getItem('vn_current_story_id') || '';
     }
 
-    const SELECT_MAX = 8;        // 副模型每輪最多挑幾條相關記憶注入主模型
-    const SELECT_THRESHOLD = 14; // 記憶 ≤ 這數量時：全部注入、免副模型挑(省一通)；超過才啟用「索引+副模型挑」
-
-    // 查詢線索：最近 3 則訊息（比只看最後一則更準）
-    async function _recentText() {
-        try {
-            if (!win.TavernHelper?.getChatMessages) return '';
-            const last = await win.TavernHelper.getChatMessages(-1);
-            if (!last || !last[0]) return '';
-            const lastId = last[0].message_id ?? last[0].id ?? 0;
-            const start = Math.max(0, lastId - 2);
-            const msgs = await win.TavernHelper.getChatMessages(`${start}-${lastId}`);
-            const arr = (msgs && msgs.length) ? msgs : last;
-            return arr.map(m => (m.message || m.mes || m.content || '')).join('\n').trim();
-        } catch (e) { return ''; }
-    }
-
-    // 索引 + 副模型挑：把「全部記憶的精簡索引」給副模型 → 它挑出與當前劇情相關的編號 → 回傳那幾條完整記憶。
-    // 不漏(副模型看得到全部、不像向量只取前K)、不爆(主模型只吃被挑的全文)、不掉(記憶 append-only 全留)。
-    async function _selectByIndex(recentText, all) {
-        try {
-            if (!win.OS_API?.chat) return [];
-            const indexText = all.map((m, i) => {
-                const brief = String(m.text || '').replace(/\s+/g, ' ').slice(0, 50);
-                const tg = (m.tags && m.tags.length) ? '｜' + m.tags.slice(0, 4).join('、') : '';
-                return `${i + 1}. [${m.type || 'event'}] ${brief}${tg}`;
-            }).join('\n');
-            const prompt = '你是記憶調度器。下面是「歷史記憶索引」(每行：編號. [類型] 概要)，以及「當前最新劇情」。\n'
-                + '挑出與當前劇情最相關、接下來生成會用到的記憶（人物關係/前因後果/伏筆/承諾/性格語氣），最多 ' + SELECT_MAX + ' 條。\n'
-                + '只輸出 JSON：{"ids":[編號,...]}（編號取自下方索引的數字；沒有相關就 {"ids":[]}），不要其他文字。\n\n'
-                + '【歷史記憶索引】\n' + indexText + '\n\n【當前最新劇情】\n' + String(recentText).slice(0, 2000);
-            const secCfg = Object.assign({}, (win.OS_SETTINGS?.getSecondaryConfig?.()) || (win.OS_SETTINGS?.getConfig?.()) || {},
-                { _isSecondary: true, usePresetPrompts: false, enableThinking: false });
-            const raw = await new Promise((resolve) => {
-                win.OS_API.chat([{ role: 'system', content: '記憶調度器，只輸出 JSON' }, { role: 'user', content: prompt }],
-                    secCfg, null, (t) => resolve(t || ''), () => resolve(''), { disableTyping: true });
-            });
-            let ids = [];
-            try { const j = JSON.parse((String(raw).match(/\{[\s\S]*\}/) || ['{}'])[0]); if (Array.isArray(j.ids)) ids = j.ids; } catch (e) {}
-            return ids.map(n => all[(parseInt(n, 10) || 0) - 1]).filter(Boolean);
-        } catch (e) { console.warn('[Vector Memory Injector] 索引挑選失敗:', e?.message || e); return []; }
-    }
+    // 召回不再開副模型「挑」(省一通)：把「全部記憶的精簡索引」直接注入主模型，主模型邊寫邊參考(看得到全部→不漏)。
+    const MEM_LINE_MAX = 90;     // 每條記憶壓到幾字以內注入主模型(控制 prompt 肥度)
 
     async function injectMemories() {
         try {
@@ -85,42 +45,26 @@
 
             const storyId = _storyId();
             if (!storyId) return;                 // 沒有當前 VN 故事就不注入
-            if (!win.OS_API?.chat || !win.OS_DB?.getAllVnMemories) return;
+            if (!win.OS_DB?.getAllVnMemories) return;
 
             const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
             if (!all.length) return;
-            all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定編號
+            all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
 
-            // 記憶不多 → 全部注入、免副模型挑(每輪不多花一通)；多了才用「索引+副模型挑」(不漏/不爆)
-            let mems;
-            if (all.length <= SELECT_THRESHOLD) {
-                mems = all;
-            } else {
-                const recentText = await _recentText();
-                if (!recentText) {
-                    mems = all.slice(-SELECT_MAX);
-                } else {
-                    mems = await _selectByIndex(recentText, all);
-                    if (!mems.length) mems = all.slice(-SELECT_MAX);   // 副模型沒挑到 → 退最近幾條
-                }
-            }
-
-            // 角色語氣/對話另外框起來 → 明確要求 AI 延續角色說話風格、別 OOC
-            const voice = mems.filter(m => m.type === 'dialogue');
-            const facts = mems.filter(m => m.type !== 'dialogue');
-            let block = `[記憶召回]\n`;
-            for (const m of facts) {
-                block += `[${m.type || 'event'}] ${m.text}`;
-                if (m.tags && m.tags.length) block += `（${m.tags.join('、')}）`;
-                block += '\n';
-            }
+            // 直接把「全部記憶的精簡索引」注入主模型(不再開副模型挑、省一通)；主模型邊寫邊參考、看得到全部→不漏。
+            const _line = (m) => {
+                let t = String(m.text || '').replace(/\s+/g, ' ').trim();
+                if (t.length > MEM_LINE_MAX) t = t.slice(0, MEM_LINE_MAX) + '…';
+                const tg = (m.tags && m.tags.length) ? `（${m.tags.slice(0, 4).join('、')}）` : '';
+                return `・[${m.type || 'event'}] ${t}${tg}`;
+            };
+            const facts = all.filter(m => m.type !== 'dialogue');
+            const voice = all.filter(m => m.type === 'dialogue');
+            let block = `[記憶召回｜以下是過往已發生的事，寫作時務必參考、保持連貫，勿與之矛盾]\n`;
+            block += facts.map(_line).join('\n');
             if (voice.length) {
-                block += `\n【角色語氣參考｜延續下列角色的性格與說話風格，保持一致、勿 OOC】\n`;
-                for (const m of voice) {
-                    block += `・${m.text}`;
-                    if (m.tags && m.tags.length) block += `（${m.tags.join('、')}）`;
-                    block += '\n';
-                }
+                block += `\n\n【角色語氣參考｜延續下列角色的性格與說話風格，保持一致、勿 OOC】\n`;
+                block += voice.map(_line).join('\n');
             }
 
             const result = win.TavernHelper.injectPrompts([{
@@ -131,8 +75,8 @@
                 role: 'system'
             }], { once: true });
             _lastUninject = result?.uninject || null;
-            _lastRecall = { text: block.trim(), count: mems.length };   // 給 CTX 面板「記憶召回」行
-            console.log(`🧠 [Vector Memory Injector] 注入 ${mems.length} 條記憶`);
+            _lastRecall = { text: block.trim(), count: all.length };   // 給 CTX 面板「記憶召回」行
+            console.log(`🧠 [Vector Memory Injector] 注入記憶索引 ${all.length} 條（主模型自選、已省去挑選副模型）`);
         } catch (e) {
             console.warn('[Vector Memory Injector] 失敗:', e?.message || e);
         }
