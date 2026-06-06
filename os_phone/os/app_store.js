@@ -186,11 +186,12 @@
             + '- callAI(systemPrompt) → Promise<string>：呼叫 AI 生成文字、回純文字。它「會」自動帶上當前角色卡(描述/個性/情境)、當前角色綁定的世界書、與最近劇情；但「不會」吃酒館預設與全域世界書(所以乖乖照你的 systemPrompt 走)。把這個 app 的具體要求與輸出格式寫進 systemPrompt 即可、不必重述角色設定。\n'
             + '- genImg(prompt, type) → Promise<imageUrl>：生圖（已內建預覽省額度，預覽時自動給佔位圖）\n'
             + '- goBack()：回到手機主畫面（給 header 的返回鍵用）\n'
+            + '- saveData(key, value) / loadData(key)：把資料存進手機(JSON、跨「關閉再打開」保留)。凡是使用者建立/輸入要留住的東西(清單、紀錄…)都用它存、用它讀。\n'
             + '- document / window 照常用\n\n'
             + '【各段要求】\n'
             + '- css：每個選擇器都以 #app-root 開頭；#app-root 要填滿螢幕(見上「版面與尺寸」)；禁止 *{}、body{}、position:fixed、100vw、100vh；@keyframes 用獨特前綴。簡潔好看即可、別堆砌。\n'
             + '- html：放進 #app-root 內的「內層 HTML」（不要 <!DOCTYPE>/<html>/<head>/<body>，只要內容）。按鈕等互動元素一定要給 id。app 最上方要有一個 header，header「左側」固定放一個返回鍵(用 ‹ 或 ←)，js 裡綁定它呼叫 goBack() 回手機主畫面——這是所有 app 統一規範、務必加。\n'
-            + '- js：⚠️ 這是 app 的靈魂、最重要：完整互動邏輯。用 addEventListener 綁按鈕（root.querySelector("#id")）、實作功能（讀輸入→顯示 loading→await callAI/genImg→把結果 render 進畫面→收 loading）、每個 await 包 try/catch。js 不可為空、要把功能寫完整。\n\n'
+            + '- js：⚠️ 這是 app 的靈魂、最重要：完整互動邏輯。用 addEventListener 綁按鈕（root.querySelector("#id")）、實作功能（讀輸入→顯示 loading→await callAI/genImg→把結果 render 進畫面→收 loading）、每個 await 包 try/catch。js 不可為空、要把功能寫完整。⚠️ 凡是使用者建立的資料(日記/清單/紀錄…)務必用 saveData 存、app 一啟動就用 loadData 還原並畫出來——否則關掉重開會不見。\n\n'
             + '【輸出格式（嚴格，只輸出下面四個區塊、其餘一字都別寫；各段用純文字、不要包 ``` 代碼框）】\n'
             + '<app_meta>{"name":"app名稱(4字內最佳)","emoji":"最貼切的emoji"}</app_meta>\n'
             + '<app_css>\n（這裡放 CSS）\n</app_css>\n'
@@ -198,9 +199,9 @@
             + '<app_js>\n（這裡放完整互動邏輯 JS——最重要、務必寫滿）\n</app_js>';
     }
 
-    // 把 AI 分段結果組成一份完整、可在 iframe 跑的 HTML；callAI/genImg/root 接線寫死(模型不用碰)
-    function _assembleApp(parsed, provider) {
-        var prov = (provider === 'novelai') ? 'novelai' : 'pollinations';
+    // 把 AI 分段結果組成完整、可在 iframe 跑的 HTML。
+    // helper(callAI/genImg/goBack/saveData/loadData/root)由橋接(app_runtime)提供，這裡只組版面 + 跑 js。
+    function _assembleApp(parsed) {
         return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">\n'
             + '<style>\n'
             + 'html,body{margin:0;padding:0;height:100%;}\n'
@@ -208,17 +209,7 @@
             + (parsed.css || '') + '\n</style></head>\n'
             + '<body><div id="app-root">\n' + (parsed.html || '') + '\n</div>\n'
             + '<scr' + 'ipt>(function(){\n'
-            + 'async function callAI(sys){ try {\n'
-            + '  var P = window.parent, TH = (P && P.TavernHelper) || window.TavernHelper, lore = "";\n'
-            + '  try { if (TH && TH.getCharWorldbookNames && TH.getWorldbook) { var nm = TH.getCharWorldbookNames("current"); var books = []; if (nm) { if (nm.primary) books.push(nm.primary); if (Array.isArray(nm.additional)) books = books.concat(nm.additional); } for (var i=0;i<books.length;i++){ var es = await TH.getWorldbook(books[i]); (es||[]).forEach(function(e){ if (e && e.enabled !== false && e.content) lore += e.content + "\\n"; }); } } } catch(e){}\n'
-            + '  if (lore.length > 4000) lore = lore.slice(0, 4000);\n'
-            + '  var full = lore ? ("【當前角色相關設定（僅供參考，不要照抄、不要改變本指令要求的輸出格式）】\\n" + lore + "\\n\\n" + sys) : sys;\n'
-            + '  var r = await window.generateRaw({ ordered_prompts:["char_description","char_personality","scenario","chat_history",{role:"system",content:full}], max_chat_history:30 });\n'
-            + '  return typeof r==="string"?r:(r&&r.message)||"";\n'
-            + '} catch(e){ console.error("[app callAI]",e); return ""; } }\n'
-            + 'async function genImg(p, type){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", {provider:"' + prov + '"}); } catch(e){ console.error("[app genImg]",e); return ""; } }\n'
             + 'var root = document.getElementById("app-root");\n'
-            + 'function goBack(){ try { var V = (window.parent && window.parent.VoidPhoneShell) || window.VoidPhoneShell; if (V && V.home) V.home(); } catch(e){} }\n'
             + '(async function(){ try {\n' + (parsed.js || '') + '\n} catch(e){ console.error("[app run]", e); } })();\n'
             + '})();</scr' + 'ipt></body></html>';
     }
@@ -260,9 +251,9 @@
                 const parsed = _parseGen(resp);
                 if (!parsed.js || parsed.js.length < 20) throw new Error('生成的 app 缺少互動邏輯(js)，請重試或把需求講更具體');
                 if (!parsed.html && !parsed.css) throw new Error('沒解析到 app 內容，請重試');
-                _genHtml = _assembleApp(parsed, provider);
+                _genHtml = _assembleApp(parsed);
 
-                if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-ws-prev'), _genHtml, { preview: true });
+                if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-ws-prev'), _genHtml, { preview: true, provider: provider });
                 c.querySelector('#as-ws-name').value = (parsed.meta && parsed.meta.name) ? parsed.meta.name : '新 App';
                 c.querySelector('#as-ws-emoji').value = (parsed.meta && parsed.meta.emoji) ? String(parsed.meta.emoji).slice(0, 2) : '📦';
                 installRow.classList.remove('hidden');
@@ -278,7 +269,8 @@
             if (!_genHtml) { _toast(c, '請先生成'); return; }
             const name = (c.querySelector('#as-ws-name').value || '').trim() || '新 App';
             const emoji = (c.querySelector('#as-ws-emoji').value || '📦').trim().slice(0, 2) || '📦';
-            _install(c, { name: name, emoji: emoji, iconUrl: '', html: _genHtml, source: 'workshop' });
+            const provider = c.querySelector('#as-ws-provider').value === 'novelai' ? 'novelai' : 'pollinations';
+            _install(c, { name: name, emoji: emoji, iconUrl: '', html: _genHtml, source: 'workshop', provider: provider });
         });
     }
 
