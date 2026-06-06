@@ -3015,7 +3015,8 @@ EXAMPLE "prompt" value:
 
                 const [width, height] = elPolSize.value.split('x').map(Number);
                 
-                const imageUrl = await imageManager.generate(testPrompt, 'char', { width, height });
+                // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
+                const imageUrl = await imageManager.generate(testPrompt, 'char', { width, height, force: true });
 
                 imgTestImage.src = imageUrl;
                 imgTestUrl.textContent = `URL: ${imageUrl}`;
