@@ -728,6 +728,24 @@ ${lines.join('\n')}
                             _eng.write(_st);
                         }
                     } catch(e) {}
+                    // 附一個「內建簡單面板」：沒有美化面板時自動裝+啟用，朋友/測試期不用每次叫 AI 生（有 AI 面板就不搶）
+                    try {
+                        const _DEF_HTML = '<div class="avsdef-wrap"><div class="avsdef-title">📋 角色狀態</div><div class="avsdef-grid">{{#each 角色狀態}}<div class="avsdef-card"><div class="avsdef-name">{{@key}}</div><div class="avsdef-row"><span class="avsdef-k">身分</span><span class="avsdef-v">{{身分}}</span></div><div class="avsdef-row"><span class="avsdef-k">好感度</span><span class="avsdef-v avsdef-fav">{{好感度}}</span></div><div class="avsdef-sep"></div><div class="avsdef-row"><span class="avsdef-k">髮色</span><span class="avsdef-v">{{髮色}}</span></div><div class="avsdef-row"><span class="avsdef-k">眼色</span><span class="avsdef-v">{{眼色}}</span></div><div class="avsdef-row"><span class="avsdef-k">體型</span><span class="avsdef-v">{{體型}}</span></div></div>{{/each}}</div></div>';
+                        const _DEF_CSS = '.avsdef-wrap{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;padding:4px 0;}.avsdef-title{font-size:15px;font-weight:700;color:#7a5fb0;letter-spacing:1px;margin:0 0 10px 2px;}.avsdef-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}.avsdef-card{background:#fff;border:1px solid rgba(120,90,160,0.18);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px rgba(120,90,160,0.08);}.avsdef-name{font-size:15px;font-weight:800;color:#5a4a78;margin-bottom:8px;border-bottom:1px dashed rgba(120,90,160,0.25);padding-bottom:6px;}.avsdef-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12px;}.avsdef-k{color:#9a90b0;flex-shrink:0;}.avsdef-v{color:#3a3450;font-weight:600;text-align:right;word-break:break-word;}.avsdef-fav{color:#e0608a;}.avsdef-sep{height:1px;background:rgba(120,90,160,0.10);margin:5px 0;}';
+                        const _allTpls = (await win.OS_DB.getAllUITemplates?.()) || [];
+                        const _mine = _allTpls.filter(t => t.packId === pack.id);
+                        const _hasActive = _mine.some(t => t.isActive);
+                        const _defId = 'tpl_default_' + pack.id;
+                        if (!_mine.some(t => t.id === _defId)) {
+                            await win.OS_DB.saveUITemplate({
+                                id: _defId, packId: pack.id, packName: pack.name,
+                                cssContent: _DEF_CSS, htmlContent: _DEF_HTML,
+                                isActive: !_hasActive, isDefault: true, createdAt: Date.now()
+                            });
+                            const _all2 = (await win.OS_DB.getAllUITemplates?.()) || [];
+                            localStorage.setItem('avs_active_ui_templates', JSON.stringify(_all2.filter(t => t.isActive)));
+                        }
+                    } catch(e) { console.warn('[AVS] 內建簡單面板安裝失敗:', e); }
                     await loadAllData(container);
                     await syncVarPackToLorebook();
                     if (win.toastr) win.toastr.success('✅ 已套用簡易預設變數包');
