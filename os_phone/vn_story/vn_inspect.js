@@ -257,67 +257,18 @@
             let panelHtml = '';
             if (activeTpls.length > 0) {
                 let rendered = '';
-                const _getByPath = (obj, path) => {
-                    let cur = obj;
-                    for (const k of String(path).split('.')) {
-                        if (cur == null || typeof cur !== 'object') return undefined;
-                        cur = cur[k];
-                    }
-                    return cur;
-                };
-                // 載入變數包：給 object 型變數補初值（pack 初值當底，state 即時值深合併蓋上去）
                 let _allPacks = [];
                 try { _allPacks = await win.OS_DB?.getAllVarPacks?.() || []; } catch(e) {}
-                const _deepMerge = (base, over) => {
-                    if (over == null) return base;
-                    if (typeof base !== 'object' || typeof over !== 'object' || Array.isArray(base) || Array.isArray(over)) return over;
-                    const out = { ...base };
-                    for (const k of Object.keys(over)) out[k] = _deepMerge(base[k], over[k]);
-                    return out;
-                };
+                const _fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v == null ? '' : v));
                 for (const tpl of activeTpls) {
-                    let html = tpl.htmlContent || '';
-                    let css  = tpl.cssContent  || '';
-                    // object 型變數：取「每實體範本」(剝掉自包裝)，逐實體補初值 + 攤平舊「形象」巢狀；不灌整包(避免多出鬼實體)
-                    const tplState = state;
-                    const _flat = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) { if (v && typeof v === 'object' && !Array.isArray(v)) { for (const [k2, v2] of Object.entries(v)) r[k2] = v2; } else r[k] = v; } return r; };
-                    const _entTpls = {};   // 變數名 → 攤平後的每實體範本
-                    const tplPack = _allPacks.find(p => p.id === tpl.packId);
-                    if (tplPack && Array.isArray(tplPack.variables)) {
-                        for (const v of tplPack.variables) {
-                            if (v.type !== 'object') continue;
-                            let initStruct = {};
-                            try { initStruct = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch(e) {}
-                            const ik = Object.keys(initStruct);
-                            _entTpls[v.name] = _flat((ik.length === 1 && ik[0] === v.name) ? initStruct[v.name] : initStruct);
-                        }
-                    }
-                    // {{#each 容器}}...{{/each}} 迴圈塊（object 型變數，對每個實體重複渲染卡片）
-                    html = html.replace(/\{\{#each\s+([^\s{}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (m, cp, inner) => {
-                        const container = _getByPath(tplState, cp);
-                        if (!container || typeof container !== 'object') return '';
-                        const entTpl = _entTpls[cp] || {};
-                        let blocks = '';
-                        for (const [ek, ev] of Object.entries(container)) {
-                            if (ek === cp) continue;                          // 跳過自包裝範本鍵(鬼實體)
-                            if (!ev || typeof ev !== 'object') continue;      // 非實體跳過
-                            const flatEv = { ...entTpl, ..._flat(ev) };       // 範本當底 + 攤平實體(舊「形象」巢狀也攤平)
-                            let block = inner.split('{{@key}}').join(ek);
-                            for (const [ak, av] of Object.entries(flatEv)) {
-                                block = block.split(`{{${ak}}}`).join(typeof av === 'object' ? JSON.stringify(av) : String(av));
-                            }
-                            block = block.replace(/\{\{[^{}]+\}\}/g, '—');
-                            blocks += block;
-                        }
-                        return blocks;
-                    });
-                    // 扁平變數替換（object 型已由 each 處理，跳過）
-                    Object.entries(tplState).forEach(([k, v]) => {
-                        if (v && typeof v === 'object') return;
-                        const re = new RegExp(`\\{\\{${k}\\}\\}`, 'g');
-                        html = html.replace(re, String(v));
-                    });
-                    html = html.replace(/\{\{[^{}]+\}\}/g, '—');
+                    const css = tpl.cssContent || '';
+                    const _tplPack = _allPacks.find(p => p.id === tpl.packId);
+                    const _packVars = _tplPack ? (_tplPack.variables || []) : [];
+                    // 直接用展廳那支「共用渲染引擎」(os_avs.renderTemplate) → 跟展廳完全一致，不再各寫一份
+                    // （修「資訊中心怪、展廳正常」：兩邊本來是各自 inline 一份、會分岔）
+                    let html = '';
+                    try { html = (win.OS_AVS?.renderTemplate?.(tpl.htmlContent || '', state, _packVars, _fmt)) || ''; }
+                    catch (e) { html = ''; }
                     rendered += `<style>${css}</style>${html}`;
                 }
                 panelHtml = `<div class="native-render-wrapper">${rendered}</div>`;
