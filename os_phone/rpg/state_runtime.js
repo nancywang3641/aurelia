@@ -150,6 +150,9 @@
     }
 
     // --- 副模型呼叫 ---
+    let _lastRawText = '';      // 最近一次副模型原始輸出(診斷複製用，含解析失敗的也存)
+    let _lastExtract = null;    // 最近一次抽取結果(給資訊中心狀態面板顯示/複製)
+
     function callSecondary(prompt) {
         return new Promise((resolve, reject) => {
             if (!win.OS_API?.chatSecondary) return reject(new Error('OS_API.chatSecondary 不可用'));
@@ -179,6 +182,7 @@
         for (let i = 0; i < CONFIG.retryCount; i++) {
             try {
                 const raw = await callSecondary(prompt);
+                _lastRawText = raw;   // 存原始輸出(成功/失敗都存，給診斷看格式有沒有亂)
                 const json = extractJSON(raw);
                 // 結合觸發後：updates(狀態) 或 memories(記憶) 任一存在即算成功
                 if (json && (typeof json.updates === 'object' || Array.isArray(json.memories))) return json;
@@ -346,6 +350,8 @@ ${_memoryRulesText()}
             }
 
             const json = await runWithRetry(prompt);
+            // 存本輪抽取(原始輸出+memories)，狀態部分等下面算完 filtered/current 再補上 → 給狀態面板診斷/複製
+            _lastExtract = { at: Date.now(), msgId: lastId, raw: _lastRawText, updates: null, memories: Array.isArray(json.memories) ? json.memories : null, current: null };
 
             // --- 狀態 patch（邏輯與原本一致）---
             if (doState && json.updates && typeof json.updates === 'object') {
@@ -357,6 +363,7 @@ ${_memoryRulesText()}
                 }
                 const trimmed = trimPatches({ ...(data.patches || {}), [lastId]: filtered }, data.base);
                 const newCurrent = recomputeCurrent(trimmed.patches, trimmed.base);
+                if (_lastExtract) { _lastExtract.updates = filtered; _lastExtract.current = newCurrent; }   // 補上狀態給診斷面板
                 try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
                 await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent });
                 const changed = Object.keys(filtered).length;
@@ -631,6 +638,7 @@ ${_memoryRulesText()}
         listAllStateData, removeStateData,
         normalizeChatId,
         getActiveSchema,   // V2：schema 從 AVS 變數包合併（給 status_panel 等外部 UI 用）
+        getLastExtract: () => _lastExtract,   // 最近一次抽取(原始輸出+updates+current) 給狀態面板診斷/複製
         CONFIG
     };
 

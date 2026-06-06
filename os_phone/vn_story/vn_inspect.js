@@ -89,6 +89,16 @@
                     await this._avsReroll();
                     const pane = overlay.querySelector('#tab-pane-avs');
                     if (pane) pane.innerHTML = await this._avsHtml();
+                } else if (e.target && e.target.id === 'avs-copy-extract-btn') {
+                    // 複製本輪原始抽取數據(原始輸出+updates+current) → 貼給工程師診斷
+                    try {
+                        const le = win.OS_STATE_RUNTIME?.getLastExtract?.() || null;
+                        await navigator.clipboard.writeText(JSON.stringify(le, null, 2));
+                        e.target.textContent = '✅ 已複製';
+                    } catch (err) {
+                        e.target.textContent = '❌ 複製失敗（手動選取下方文字）';
+                    }
+                    setTimeout(() => { e.target.textContent = '📋 複製原始數據（貼給工程師看）'; }, 1800);
                 }
             };
             overlay.addEventListener('click', this._rerollHandler);
@@ -379,9 +389,33 @@
                 }
             }
 
+            // 🔬 本次更新（原始抽取）—— 診斷用：看副模型這輪實際吐了什麼、格式有沒有亂；附「複製」鈕貼給工程師
+            let lastExtractHtml = '';
+            try {
+                const le = win.OS_STATE_RUNTIME?.getLastExtract?.();
+                if (le) {
+                    const _esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    const updStr = le.updates ? JSON.stringify(le.updates, null, 2) : '（這輪無狀態更新）';
+                    const memN = le.memories ? `・記憶 ${le.memories.length} 條` : '';
+                    lastExtractHtml = `<details style="margin-top:16px;" open>
+                        <summary style="cursor:pointer;font-size:11px;color:#888;letter-spacing:2px;list-style:none;display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid rgba(212,175,55,0.15);">
+                            <span>▼</span><span>🔬 本次更新（msg#${le.msgId ?? '—'}${memN}）</span>
+                        </summary>
+                        <div style="padding-top:6px;">
+                            <button id="avs-copy-extract-btn" style="width:100%;padding:7px 0;margin-bottom:8px;border-radius:6px;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-size:12px;cursor:pointer;">📋 複製原始數據（貼給工程師看）</button>
+                            <div style="font-size:10px;color:#666;margin:6px 0 2px;">解析後 updates（套進狀態的）：</div>
+                            <pre style="white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,0.3);border-radius:6px;padding:8px;font-size:10px;color:#cbb;max-height:200px;overflow:auto;margin:0;">${_esc(updStr)}</pre>
+                            <div style="font-size:10px;color:#666;margin:8px 0 2px;">副模型原始輸出（看格式/結合記憶有沒有亂）：</div>
+                            <pre style="white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,0.3);border-radius:6px;padding:8px;font-size:10px;color:#9a9;max-height:220px;overflow:auto;margin:0;">${_esc(le.raw || '（無）')}</pre>
+                        </div>
+                    </details>`;
+                }
+            } catch(e) {}
+
             return `<div id="avs-tab-root" data-story="${storyId}" data-last-ch="${lastChapter?.id || ''}">
                 ${rerollBtn}
                 ${panelHtml}
+                ${lastExtractHtml}
                 ${historyHtml}
             </div>`;
         },
