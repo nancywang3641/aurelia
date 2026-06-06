@@ -5,34 +5,51 @@
     'use strict';
     const win = window;
 
-    // 注入到 app HTML 最前面的橋接 bootstrap：在 app 自身 script 之前跑，
-    // 從 window.parent 把酒館 API 補進 iframe 全域（srcdoc 同源、可讀 parent）。
-    // generateRaw 多來源容錯：主頁全域 → 酒館助手 → 原生 getContext()。
-    function _bridgeScript(preview) {
+    // 注入到 app HTML 最前面的橋接 bootstrap：在 app 自身 script 之前跑，從 window.parent 把酒館 API
+    // 與一組「給 app 用的 helper」補進 iframe 全域（srcdoc 同源、可讀 parent）。
+    // helper(callAI/genImg/goBack/saveData/loadData)集中在這裡 → 之後改 helper 不必重生 app。
+    // opts: { preview, appId, provider }
+    function _bridgeScript(opts) {
+        opts = opts || {};
+        var preview = opts.preview ? 'true' : 'false';
+        var appId = String(opts.appId || 'preview').replace(/[^a-zA-Z0-9_-]/g, '') || 'preview';
+        var provider = (opts.provider === 'novelai') ? 'novelai' : 'pollinations';
         return '<scr' + 'ipt>(function(){'
             + 'var P; try { P = window.parent; } catch(e){ return; }'
             + 'try {'
-            +   'window.__IS_PREVIEW = ' + (preview ? 'true' : 'false') + ';'
-            // generateRaw：呼叫當下即時解析(避時序)。優先序＝酒館助手(object-form，PANEL_DEV_GUIDE 用的就是它) →
-            // 原生 → getContext → 最後妥協才用奧瑞亞 OS_API.chat(把 ordered_prompts 的 content 串成 prompt)。
-            +   'if (!window.generateRaw) window.generateRaw = function(cfg){'
-            +     'var Q = window.parent;'
-            +     'if (Q && Q.TavernHelper && typeof Q.TavernHelper.generateRaw === "function") return Q.TavernHelper.generateRaw(cfg);'
-            +     'if (Q && typeof Q.generateRaw === "function") return Q.generateRaw(cfg);'
-            +     'try { var ctx = Q.SillyTavern.getContext(); if (ctx && typeof ctx.generateRaw === "function") return ctx.generateRaw(cfg); } catch(e){}'
-            +     'if (Q && Q.OS_API && typeof Q.OS_API.chat === "function") {'
-            +       'var t = "";'
-            +       'if (typeof cfg === "string") t = cfg;'
-            +       'else if (cfg) { if (Array.isArray(cfg.ordered_prompts)) cfg.ordered_prompts.forEach(function(p){ if (p && typeof p === "object" && p.content) t += p.content + "\\n"; }); if (cfg.user_input && String(cfg.user_input).trim()) t += "\\n" + cfg.user_input; }'
-            +       'var conf = (Q.OS_SETTINGS && Q.OS_SETTINGS.getConfig && Q.OS_SETTINGS.getConfig()) || {};'
-            +       'return new Promise(function(res, rej){ Q.OS_API.chat([{role:"user",content:t||" "}], conf, null, res, rej, {disableTyping:true}); });'
-            +     '}'
-            +     'return Promise.reject(new Error("找不到可用的 AI 後端(generateRaw/OS_API)"));'
-            +   '};'
+            +   'window.__IS_PREVIEW = ' + preview + ';'
+            +   'window.__APP_ID__ = "' + appId + '";'
+            +   'window.__APP_PROVIDER__ = "' + provider + '";'
+            // ── 原始全域橋接 ──
             +   'window.OS_IMAGE_MANAGER = window.OS_IMAGE_MANAGER || (P && P.OS_IMAGE_MANAGER) || null;'
             +   'window.OS_API           = window.OS_API           || (P && P.OS_API) || null;'
             +   'window.TavernHelper     = window.TavernHelper     || (P && P.TavernHelper) || null;'
             +   'window.SillyTavern      = window.SillyTavern      || (P && P.SillyTavern) || null;'
+            // ── 返回主畫面 ──
+            +   'window.goBack = function(){ try { var V = (P && P.VoidPhoneShell) || window.VoidPhoneShell; if (V && V.home) V.home(); } catch(e){} };'
+            // ── 持久化(存主頁 localStorage，用 app 專屬命名空間，跨關閉/重開保留) ──
+            +   'window.saveData = function(k, v){ try { P.localStorage.setItem("aurelia_appdata_"+window.__APP_ID__+"_"+k, JSON.stringify(v)); } catch(e){} };'
+            +   'window.loadData = function(k){ try { var s = P.localStorage.getItem("aurelia_appdata_"+window.__APP_ID__+"_"+k); return s==null?null:JSON.parse(s); } catch(e){ return null; } };'
+            // ── 生圖(預覽走佔位省額度) ──
+            +   'window.genImg = async function(p, type){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", {provider: window.__APP_PROVIDER__}); } catch(e){ console.error("[app genImg]",e); return ""; } };'
+            // ── 文字生成：走 OS_API.chat(直接打 API、不發酒館 GENERATION 事件→不觸發記憶/狀態抽取)。
+            //    上下文手動組：角色卡 + 當前角色綁定世界書 + 最近劇情；不吃 preset、不吃全域世界書。
+            +   'window.callAI = async function(sys){ try {'
+            +     'var TH = P.TavernHelper, ST = P.SillyTavern, ctx = "";'
+            +     'try { var c = ST && ST.getContext && ST.getContext(); if (c) {'
+            +       'var ch = (c.characters && c.characters[c.characterId]) || null;'
+            +       'if (ch) ctx += "【角色】" + (ch.name||"") + "\\n" + (ch.description||"") + "\\n" + (ch.personality||"") + "\\n" + (ch.scenario||"") + "\\n\\n";'
+            +       'if (Array.isArray(c.chat)) { var ms = c.chat.filter(function(m){return m && !m.is_system;}).slice(-20).map(function(m){ return (m.name||"") + ": " + (m.mes||""); }); if (ms.length) ctx += "【最近劇情】\\n" + ms.join("\\n") + "\\n\\n"; }'
+            +     '} } catch(e){}'
+            +     'try { if (TH && TH.getCharWorldbookNames && TH.getWorldbook) { var nm = TH.getCharWorldbookNames("current"); var bks = []; if (nm) { if (nm.primary) bks.push(nm.primary); if (Array.isArray(nm.additional)) bks = bks.concat(nm.additional); } var lore=""; for (var i=0;i<bks.length;i++){ var es = await TH.getWorldbook(bks[i]); (es||[]).forEach(function(e){ if (e && e.enabled !== false && e.content) lore += e.content + "\\n"; }); } if (lore) { if (lore.length>4000) lore=lore.slice(0,4000); ctx += "【角色設定書】\\n" + lore + "\\n\\n"; } } } catch(e){}'
+            +     'var full = (ctx ? (ctx + "----\\n以下是你這次的任務指令，請嚴格遵守(上面只是背景參考)：\\n") : "") + sys;'
+            +     'var OS = window.OS_API; if (!OS || !OS.chat) throw new Error("OS_API 不可用");'
+            +     'var cfg = (P.OS_SETTINGS && P.OS_SETTINGS.getConfig && P.OS_SETTINGS.getConfig()) || {};'
+            +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false, enableThinking:false });'
+            +     'return await new Promise(function(res, rej){ OS.chat([{role:"system",content:full}], cfg, null, function(t){ res(typeof t==="string"?t:(t&&t.message)||""); }, rej, {disableTyping:true}); });'
+            +   '} catch(e){ console.error("[app callAI]",e); return ""; } };'
+            // ── generateRaw 仍橋接(進階 app 指名要它才用；預設請用 callAI) ──
+            +   'if (!window.generateRaw) window.generateRaw = function(cfg){ var Q=window.parent; if (Q && Q.TavernHelper && Q.TavernHelper.generateRaw) return Q.TavernHelper.generateRaw(cfg); if (Q && Q.generateRaw) return Q.generateRaw(cfg); return Promise.reject(new Error("no generateRaw")); };'
             + '} catch(e) { console.warn("[app bridge]", e); }'
             + '})();</scr' + 'ipt>';
     }
@@ -48,7 +65,7 @@
         iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals');
         // 橋接 bootstrap 要在 app 自身 script 前跑，且不能擠在 <!DOCTYPE> 之前(會觸發 quirks mode 壞版面)；
         // 有 <head> 就插進 head 開頭、否則退回最前面。
-        const boot = _bridgeScript(!!opts.preview);
+        const boot = _bridgeScript(opts);
         const src = String(html == null ? '' : html);
         iframe.srcdoc = /<head[^>]*>/i.test(src) ? src.replace(/<head[^>]*>/i, function (m) { return m + boot; }) : (boot + src);
         container.appendChild(iframe);
