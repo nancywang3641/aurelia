@@ -186,7 +186,7 @@
             const dbp = (win.OS_DB && win.OS_DB.getPhoneApp) ? win.OS_DB.getPhoneApp(id) : Promise.resolve(null);
             Promise.resolve(dbp).then(function (rec) {
                 if (!rec || !rec.html) { container.innerHTML = '<div class="aps-fail">app 內容遺失，請到應用商店重裝</div>'; return; }
-                if (win.AppRuntime && win.AppRuntime.mountAppIframe) win.AppRuntime.mountAppIframe(container, rec.html, { preview: false });
+                if (win.AppRuntime && win.AppRuntime.mountAppIframe) win.AppRuntime.mountAppIframe(container, rec.html, { preview: false, appId: rec.id || id, provider: rec.provider });
                 else container.innerHTML = '<div class="aps-fail">app 執行器未載入</div>';
             }).catch(function () { container.innerHTML = '<div class="aps-fail">app 載入失敗</div>'; });
             // iframe 由 _home 清空容器時一併移除，無需回傳 cleanup
