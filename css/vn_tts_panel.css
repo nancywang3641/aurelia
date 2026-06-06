@@ -193,6 +193,28 @@ select.vtts-input { cursor: pointer; }
 }
 .vtts-model-chip-del { color: #888; cursor: pointer; }
 .vtts-model-chip-del:hover { color: #e55; }
+.vtts-model-chip-play { color: #d4af37; cursor: pointer; }
+.vtts-model-chip-play:hover { color: #ffe08a; }
+
+/* ── 模型池：搜尋 + 點卡片即加入（取代超長下拉，免滾、免一個個選）── */
+.vtts-pool-search { margin-top: 8px; }
+.vtts-model-pool {
+    display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px;
+    max-height: 170px; overflow-y: auto;
+    padding: 7px; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; background: rgba(0,0,0,0.18);
+}
+.vtts-pool-chip {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14);
+    color: #cfcfcf; padding: 3px 9px; border-radius: 12px; font-size: 11px;
+    display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.vtts-pool-chip:hover { background: rgba(0,210,211,0.14); border-color: rgba(0,210,211,0.45); color: #00d2d3; }
+.vtts-pool-play { color: #d4af37; cursor: pointer; font-size: 10px; }
+.vtts-pool-play:hover { color: #ffe08a; }
+.vtts-pool-hide { display: none !important; }
+.vtts-pool-empty { color: #555; font-size: 11px; }
 
 /* ── 空白提示 ── */
 .vtts-empty {

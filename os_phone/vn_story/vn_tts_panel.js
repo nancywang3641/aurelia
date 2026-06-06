@@ -354,14 +354,23 @@ function renderNpcCard(cat, models) {
 
     const chips = (cat.modelIds || []).map(mid => {
         const m = models[mid];
-        return `<span class="vtts-model-chip">${esc(m ? m.name||mid : mid)}
+        const nm = esc(m ? m.name || mid : mid);
+        return `<span class="vtts-model-chip" data-mid="${esc(mid)}">${nm}
+  <span class="vtts-model-chip-play" onclick="VN_TTS_Panel.playNpcModel('${escJs(mid)}')" title="試聽">▶</span>
   <span class="vtts-model-chip-del" onclick="VN_TTS_Panel.removeNpcModel('${escJs(cat.id)}','${escJs(mid)}')">✕</span>
 </span>`;
     }).join('');
 
-    const modelOpts = Object.entries(models)
-        .map(([id, m]) => `<option value="${esc(id)}">${esc(m.name||id)}</option>`)
-        .join('');
+    // 模型池：尚未加入此分類的模型，點一下即加入（搭配上方搜尋過濾，免滾長下拉、免一個個選）
+    const addedSet = new Set(cat.modelIds || []);
+    const pool = Object.entries(models)
+        .filter(([id]) => !addedSet.has(id))
+        .map(([id, m]) => {
+            const nm = esc(m.name || id);
+            const lname = esc(String(m.name || id).toLowerCase());
+            return `<span class="vtts-pool-chip" data-mid="${esc(id)}" data-name="${lname}" onclick="VN_TTS_Panel.addNpcModel('${escJs(cat.id)}','${escJs(id)}')" title="點一下加入">
+  <span class="vtts-pool-play" onclick="event.stopPropagation();VN_TTS_Panel.playNpcModel('${escJs(id)}')" title="試聽">▶</span>${nm}</span>`;
+        }).join('');
 
     return `
 <div class="vtts-npc-card" id="vtts-npc-${esc(cat.id)}">
@@ -381,18 +390,11 @@ function renderNpcCard(cat, models) {
   </div>
 
   <div>
-      <div class="vtts-label">套用模型（隨機抽選其中一個）</div>
-      <div class="vtts-model-chips" id="vtts-chips-${esc(cat.id)}">${chips || '<span style="color:#555;font-size:11px">尚未指定模型</span>'}</div>
-      <div class="vtts-row" style="margin-top:7px;">
-        <select class="vtts-input" id="vtts-chip-sel-${esc(cat.id)}" onchange="VN_TTS_Panel.playNpcSelectedModel('${escJs(cat.id)}')">
-          <option value="">選擇模型</option>
-          ${modelOpts}
-        </select>
-        
-        <button class="vtts-btn vtts-btn-ghost" style="padding: 6px 10px; border-color: rgba(212,175,55,0.4);" onclick="VN_TTS_Panel.playNpcSelectedModel('${escJs(cat.id)}')">▶ 重播</button>
-        <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.addNpcModel('${escJs(cat.id)}')">新增</button>
-      </div>
-    </div>
+      <div class="vtts-label">套用模型（隨機抽選其中一個）· 點下方卡片即加入、▶ 試聽</div>
+      <div class="vtts-model-chips" id="vtts-chips-${esc(cat.id)}">${chips || '<span class="vtts-pool-empty">尚未指定模型</span>'}</div>
+      <input class="vtts-input vtts-pool-search" id="vtts-pool-search-${esc(cat.id)}" type="text" placeholder="🔍 搜尋模型加入（如：青年、女、角色名）" oninput="VN_TTS_Panel.filterNpcPool('${escJs(cat.id)}')">
+      <div class="vtts-model-pool" id="vtts-pool-${esc(cat.id)}">${pool || '<span class="vtts-pool-empty">模型庫是空的，先到「模型庫」加語音</span>'}</div>
+  </div>
   </div>`;
 }
 
@@ -1056,16 +1058,24 @@ const VN_TTS_Panel = {
         this._renderBody('npc');
     },
 
-    addNpcModel(catId) {
+    addNpcModel(catId, mid) {
         const tts = this._tts();
-        if (!tts) return;
-        const sel = document.getElementById(`vtts-chip-sel-${catId}`);
-        const mid = sel?.value;
-        if (!mid) { this._toast('✗ 請選擇模型'); return; }
+        if (!tts || !mid) return;
         const cat = tts.config.npcCategories.find(c => c.id === catId);
         if (!cat) return;
-        if (!cat.modelIds.includes(mid)) { cat.modelIds.push(mid); tts.save(); }
-        this._renderBody('npc');
+        if (cat.modelIds.includes(mid)) return;   // 已加過
+        cat.modelIds.push(mid); tts.save();
+        // 就地更新：池子移除該卡、加進已選 chips（不整頁重繪→不跳頁、搜尋不重置，可連點多個）
+        const pool = document.getElementById(`vtts-pool-${catId}`);
+        if (pool) { const pc = Array.prototype.find.call(pool.querySelectorAll('.vtts-pool-chip'), c => c.getAttribute('data-mid') === mid); if (pc) pc.remove(); }
+        const box = document.getElementById(`vtts-chips-${catId}`);
+        if (box) {
+            if (!box.querySelector('.vtts-model-chip')) box.innerHTML = '';   // 清掉「尚未指定」placeholder
+            const m = tts.config.models[mid];
+            const nm = esc(m ? (m.name || mid) : mid);
+            box.insertAdjacentHTML('beforeend',
+                `<span class="vtts-model-chip" data-mid="${esc(mid)}">${nm}<span class="vtts-model-chip-play" onclick="VN_TTS_Panel.playNpcModel('${escJs(mid)}')" title="試聽">▶</span><span class="vtts-model-chip-del" onclick="VN_TTS_Panel.removeNpcModel('${escJs(catId)}','${escJs(mid)}')">✕</span></span>`);
+        }
     },
 
     removeNpcModel(catId, modelId) {
@@ -1075,7 +1085,38 @@ const VN_TTS_Panel = {
         if (!cat) return;
         cat.modelIds = cat.modelIds.filter(m => m !== modelId);
         tts.save();
-        this._renderBody('npc');
+        // 就地：移除已選 chip、把模型放回池子（套用目前搜尋）
+        const box = document.getElementById(`vtts-chips-${catId}`);
+        if (box) { const ch = Array.prototype.find.call(box.querySelectorAll('.vtts-model-chip'), c => c.getAttribute('data-mid') === modelId); if (ch) ch.remove(); }
+        const pool = document.getElementById(`vtts-pool-${catId}`);
+        if (pool) {
+            const m = tts.config.models[modelId];
+            const nm = esc(m ? (m.name || modelId) : modelId);
+            const lname = esc(String(m ? (m.name || modelId) : modelId).toLowerCase());
+            pool.insertAdjacentHTML('beforeend',
+                `<span class="vtts-pool-chip" data-mid="${esc(modelId)}" data-name="${lname}" onclick="VN_TTS_Panel.addNpcModel('${escJs(catId)}','${escJs(modelId)}')" title="點一下加入"><span class="vtts-pool-play" onclick="event.stopPropagation();VN_TTS_Panel.playNpcModel('${escJs(modelId)}')" title="試聽">▶</span>${nm}</span>`);
+            this.filterNpcPool(catId);
+        }
+    },
+
+    // 搜尋過濾模型池：依名稱即時 show/hide，免滾長清單
+    filterNpcPool(catId) {
+        const q = (document.getElementById(`vtts-pool-search-${catId}`)?.value || '').trim().toLowerCase();
+        const pool = document.getElementById(`vtts-pool-${catId}`);
+        if (!pool) return;
+        pool.querySelectorAll('.vtts-pool-chip').forEach(ch => {
+            const nm = ch.getAttribute('data-name') || '';
+            ch.classList.toggle('vtts-pool-hide', !!q && nm.indexOf(q) === -1);
+        });
+    },
+
+    // 試聽單一模型（給池子卡片 / 已選 chip 的 ▶ 用）
+    playNpcModel(modelId) {
+        const tts = this._tts();
+        if (!tts) return;
+        const m = tts.config.models[modelId];
+        if (!m || !m.refAudioPath) { this._toast('✗ 這聲音沒有參考音頻，沒得播'); return; }
+        this.playRefAudio(m.refAudioPath);
     },
 };
 
