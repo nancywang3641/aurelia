@@ -235,7 +235,8 @@
         document.body.appendChild(ov); setTimeout(() => ta.focus(), 50);
     }
     async function _vngRegen(cfg, fullKey, val, prompt) {
-        const raw = cfg.kind === 'bg' ? await VN_Image.getBg(prompt, {}) : await VN_Image.getAvatar(prompt, 'Neutral');
+        // force=true：頭像走 generate() 會查記憶體快取(_urlCache)，同 prompt 會吐舊圖 → 重生必須強制繞過
+        const raw = cfg.kind === 'bg' ? await VN_Image.getBg(prompt, {}) : await VN_Image.getAvatar(prompt, 'Neutral', true);
         if (!raw) return;
         const url = (await _imgToDataUrl(raw)) || raw;
         await VN_Cache.setRaw(cfg.store, fullKey, { ...val, prompt, url, rawUrl: raw });
