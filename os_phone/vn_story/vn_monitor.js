@@ -461,6 +461,13 @@
                     scVal.textContent = _c > 0 ? `第 ${_c} 次` : '尚未總結';
                 }
 
+                // 本輪用量：文字 API 次數 + 生圖次數（追蹤一輪劇情觸發幾次 API / 生圖）
+                const uVal = document.getElementById('ctx-usage-cnt');
+                if (uVal) {
+                    const u = win.AURELIA_USAGE;
+                    uVal.textContent = u ? `${u.tText} 次 · 生圖 ${u.tImg}　（累計 ${u.text} / ${u.img}）` : '—';
+                }
+
                 // 細項拆解（來自酒館原生 itemizedPrompts；沒資料就隱藏）
                 const bd = this.breakdown;
                 const bdWrap = document.getElementById('ctx-breakdown');
