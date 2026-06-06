@@ -99,22 +99,12 @@
       +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">我的應用</span></div>'
       +       '<div class="ws-vbody"><div class="ws-mine-list" id="as-mine-list"></div></div>'
       +     '</div>'
-      // ── 設定 ──
-      +     '<div class="ws-view" data-view="settings">'
-      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">設定</span></div>'
-      +       '<div class="ws-vbody">'
-      +         '<div class="ws-field-lab">生圖預設來源</div>'
-      +         '<select class="ws-input" id="as-set-provider"><option value="pollinations">Poll AI — 快、省額度（推薦）</option><option value="novelai">NAI — 精緻二次元角色風</option></select>'
-      +         '<div class="ws-set-note">工坊生成時的預設值，每次生成仍可臨時改。</div>'
-      +       '</div>'
-      +     '</div>'
       +   '</div>'
       // ── 底部 nav ──
       +   '<div class="ws-nav">'
       +     '<button class="ws-nav-b active" data-go="home" type="button"><span class="ws-nav-ic">🏠</span><span class="ws-nav-t">首頁</span></button>'
       +     '<button class="ws-nav-b" data-go="workshop" type="button"><span class="ws-nav-ic">🛠️</span><span class="ws-nav-t">工坊</span></button>'
       +     '<button class="ws-nav-b" data-go="mine" type="button"><span class="ws-nav-ic">📱</span><span class="ws-nav-t">我的</span></button>'
-      +     '<button class="ws-nav-b" data-go="settings" type="button"><span class="ws-nav-ic">⚙️</span><span class="ws-nav-t">設定</span></button>'
       +   '</div>'
       // ── 安裝成功覆蓋 + toast ──
       +   '<div class="ws-success hidden" id="ws-success"><img class="ws-suc-img" data-asset="success" alt=""><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
@@ -125,11 +115,9 @@
         if (!c) return;
         c.innerHTML = STORE_HTML;
         _applyAssets(c);
-        // provider 預設
-        var pv = _loadProvider();
-        var pSel = c.querySelector('#as-ws-provider'); if (pSel) pSel.value = pv;
-        var sSel = c.querySelector('#as-set-provider'); if (sSel) sSel.value = pv;
-        if (sSel) sSel.addEventListener('change', function () { _saveProvider(sSel.value); if (pSel) pSel.value = sSel.value; });
+        // provider：工坊下拉自動記住上次選擇（無聲、不需要設定頁）
+        var pSel = c.querySelector('#as-ws-provider');
+        if (pSel) { pSel.value = _loadProvider(); pSel.addEventListener('change', function () { _saveProvider(pSel.value); }); }
         // 導覽：所有 data-go（卡片/返回/查看全部/底部 nav）
         c.querySelectorAll('[data-go]').forEach(function (b) {
             b.addEventListener('click', function () { _go(c, b.dataset.go); });
