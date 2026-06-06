@@ -694,8 +694,11 @@ ${lines.join('\n')}
                 btnPreset.textContent = '套用中...'; btnPreset.style.pointerEvents = 'none';
                 try {
                     const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+                    // 已有「簡易預設」就沿用同 id 覆蓋(不另建重複包)；重套＝更新結構，不重置已記錄的角色資料
+                    let _existingId = '';
+                    try { const _all = await win.OS_DB.getAllVarPacks() || []; const _e = _all.find(p => (p.name || '').includes('簡易預設') && (!p.chatId || p.chatId === currentChatId)); if (_e) _existingId = _e.id; } catch(e) {}
                     const pack = {
-                        id: 'pack_' + Date.now(),
+                        id: _existingId || ('pack_' + Date.now()),
                         name: '簡易預設（形象/身分/好感度）',
                         notes: '輕量預設：每個角色追蹤 形象(髮色/眼色/體型)、身分、好感度。新角色登場自動套這組。適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。',
                         // 物件型必須給「縮排結構範本」(parseTree 解析)，副模型才看得到固定子欄位、不會每輪亂編結構而導致覆蓋。外層用變數名包裝當範本(會被剝掉)。
