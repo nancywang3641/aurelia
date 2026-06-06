@@ -2601,8 +2601,21 @@
                 const DEF_SUFFIX = '';
                 const pfx = localStorage.getItem('os_sprite_tpl_prefix') || DEF_PREFIX;
                 const sfx = localStorage.getItem('os_sprite_tpl_suffix') || DEF_SUFFIX;
-                let rawP = String(this._resolveAvatarPrompt(name) || name);
-                rawP = rawP.replace(/\b(bust shot|upper body|portrait|close[\s-]?up|headshot|looking at viewer|soft background|face focus)\b/gi, '').replace(/\s*,\s*,+/g, ', ').trim();
+                // 跟工作檯同邏輯：優先用「這張頭像當初存的 prompt」(avatar_cache)→立繪跟頭像同一個人；沒有才退回腳本描述
+                let rawP = '';
+                try { const _av = await win.VN_Cache?.get?.('avatar_cache', name); if (_av && _av.prompt) rawP = String(_av.prompt); } catch (e) {}
+                if (!rawP) rawP = String(this._resolveAvatarPrompt(name) || name);
+                // 完整清洗（同工作檯 stripPromptForSprite）：剝掉構圖/背景/燈光/視角詞(from behind/side/front…)→不再生出背面、側面、亂加背景
+                rawP = rawP
+                    .replace(/\bbust(\s+|-)?shot\b/gi, '').replace(/\bportrait\b/gi, '').replace(/\bheadshot\b/gi, '').replace(/\bhead\s+shot\b/gi, '')
+                    .replace(/\bclose[\s-]?up\b/gi, '').replace(/\bcowboy(\s+|-)?shot\b/gi, '')
+                    .replace(/\bupper(\s+|-)?body\b/gi, '').replace(/\bfull(\s+|-)?body\b/gi, '')
+                    .replace(/\bhead\s+and\s+shoulders\b/gi, '').replace(/\bwaist[\s-]?up\b/gi, '').replace(/\bchest[\s-]?up\b/gi, '')
+                    .replace(/\blooking\s+at\s+viewer\b/gi, '').replace(/\bface\s+focus\b/gi, '')
+                    .replace(/\b[a-z]*\s*background\b/gi, '').replace(/\bisolated\b/gi, '').replace(/\bno\s+bg\b/gi, '')
+                    .replace(/\bsoft\s+lighting\b/gi, '').replace(/\bstudio\s+lighting\b/gi, '').replace(/\bflat\s+lighting\b/gi, '')
+                    .replace(/\bfrom\s+(above|below|side|behind|front)\b/gi, '')
+                    .replace(/\s*,\s*,+/g, ', ').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
                 const prompt = pfx + rawP + sfx;
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
                 const imCfg = win.OS_IMAGE_MANAGER.config;
