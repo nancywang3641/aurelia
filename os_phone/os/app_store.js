@@ -180,13 +180,14 @@
     function _wsPrompt(desc, provider) {
         return '你是資深前端工程師。請依需求設計一個「功能型 HTML 小 app」，把它拆成 css / html / js 三段輸出。\n\n'
             + '【使用者需求】\n' + desc + '\n\n'
+            + '【版面與尺寸（重要）】這個 app 會「全螢幕」塞進一個直式手機螢幕(約 寬330×高640px)。#app-root 必須 width:100%; min-height:100%; box-sizing:border-box 填滿整個螢幕——不要 max-width 置中、不要假設桌面寬度、不要固定大像素寬。版面用直向 flex(column) 自適應，需要捲動的內容區用 overflow:auto。整體要像一個真的手機 app 全頁。\n\n'
             + '【執行環境已幫你準備好這些工具，直接用、不要自己重定義】\n'
             + '- root：#app-root 容器元素（已 = document.getElementById("app-root")）\n'
             + '- callAI(systemPrompt) → Promise<string>：呼叫 AI 生成文字、回純文字\n'
             + '- genImg(prompt, type) → Promise<imageUrl>：生圖（已內建預覽省額度，預覽時自動給佔位圖）\n'
             + '- document / window 照常用\n\n'
             + '【各段要求】\n'
-            + '- css：每個選擇器都以 #app-root 開頭；禁止 *{}、body{}、position:fixed、100vw、100vh；@keyframes 用獨特前綴。簡潔好看即可、別堆砌。\n'
+            + '- css：每個選擇器都以 #app-root 開頭；#app-root 要填滿螢幕(見上「版面與尺寸」)；禁止 *{}、body{}、position:fixed、100vw、100vh；@keyframes 用獨特前綴。簡潔好看即可、別堆砌。\n'
             + '- html：放進 #app-root 內的「內層 HTML」（不要 <!DOCTYPE>/<html>/<head>/<body>，只要內容）。按鈕等互動元素一定要給 id。\n'
             + '- js：⚠️ 這是 app 的靈魂、最重要：完整互動邏輯。用 addEventListener 綁按鈕（root.querySelector("#id")）、實作功能（讀輸入→顯示 loading→await callAI/genImg→把結果 render 進畫面→收 loading）、每個 await 包 try/catch。js 不可為空、要把功能寫完整。\n\n'
             + '【輸出格式（嚴格，只輸出下面四個區塊、其餘一字都別寫；各段用純文字、不要包 ``` 代碼框）】\n'
@@ -200,7 +201,10 @@
     function _assembleApp(parsed, provider) {
         var prov = (provider === 'novelai') ? 'novelai' : 'pollinations';
         return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">\n'
-            + '<style>\n' + (parsed.css || '') + '\n</style></head>\n'
+            + '<style>\n'
+            + 'html,body{margin:0;padding:0;height:100%;}\n'
+            + '#app-root{box-sizing:border-box;width:100%;min-height:100%;}\n'
+            + (parsed.css || '') + '\n</style></head>\n'
             + '<body><div id="app-root">\n' + (parsed.html || '') + '\n</div>\n'
             + '<scr' + 'ipt>(function(){\n'
             + 'async function callAI(sys){ try { var r = await window.generateRaw({ user_input:" ", ordered_prompts:["world_info","chat_history",{role:"system",content:sys}], quiet:true }); return typeof r==="string"?r:(r&&r.message)||""; } catch(e){ console.error("[app callAI]",e); return ""; } }\n'
