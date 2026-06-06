@@ -272,6 +272,8 @@
             if (activeTpl.cssContent) {
                 html = `<style>${activeTpl.cssContent}</style>${html}`;
             }
+            // 🔬 本輪狀態診斷：複製全部數據(引擎當前 + 本輪抽取 + 持久化)貼給工程師——測「有沒有準確更新」用
+            html = '<button data-label="🔬 複製本輪狀態數據（貼給工程師）" onclick="window.__avsCopyDiag&&window.__avsCopyDiag(this)" style="width:100%;padding:9px;margin-bottom:10px;border-radius:8px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.45);color:#d4af37;font-size:12px;cursor:pointer;">🔬 複製本輪狀態數據（貼給工程師）</button>' + html;
 
             // 建 tab（重複建立會留下舊的，先清掉）
             const doc = win.document || document;
