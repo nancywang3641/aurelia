@@ -25,14 +25,46 @@
             || localStorage.getItem('vn_current_story_id') || '';
     }
 
-    async function _query() {
+    const SELECT_MAX = 8;   // 副模型每輪最多挑幾條相關記憶注入主模型
+
+    // 查詢線索：最近 3 則訊息（比只看最後一則更準）
+    async function _recentText() {
         try {
             if (!win.TavernHelper?.getChatMessages) return '';
             const last = await win.TavernHelper.getChatMessages(-1);
             if (!last || !last[0]) return '';
-            const m = last[0];
-            return (m.message || m.mes || m.content || '').trim();
+            const lastId = last[0].message_id ?? last[0].id ?? 0;
+            const start = Math.max(0, lastId - 2);
+            const msgs = await win.TavernHelper.getChatMessages(`${start}-${lastId}`);
+            const arr = (msgs && msgs.length) ? msgs : last;
+            return arr.map(m => (m.message || m.mes || m.content || '')).join('\n').trim();
         } catch (e) { return ''; }
+    }
+
+    // 索引 + 副模型挑：把「全部記憶的精簡索引」給副模型 → 它挑出與當前劇情相關的編號 → 回傳那幾條完整記憶。
+    // 不漏(副模型看得到全部、不像向量只取前K)、不爆(主模型只吃被挑的全文)、不掉(記憶 append-only 全留)。
+    async function _selectByIndex(recentText, all) {
+        try {
+            if (!win.OS_API?.chat) return [];
+            const indexText = all.map((m, i) => {
+                const brief = String(m.text || '').replace(/\s+/g, ' ').slice(0, 50);
+                const tg = (m.tags && m.tags.length) ? '｜' + m.tags.slice(0, 4).join('、') : '';
+                return `${i + 1}. [${m.type || 'event'}] ${brief}${tg}`;
+            }).join('\n');
+            const prompt = '你是記憶調度器。下面是「歷史記憶索引」(每行：編號. [類型] 概要)，以及「當前最新劇情」。\n'
+                + '挑出與當前劇情最相關、接下來生成會用到的記憶（人物關係/前因後果/伏筆/承諾/性格語氣），最多 ' + SELECT_MAX + ' 條。\n'
+                + '只輸出 JSON：{"ids":[編號,...]}（編號取自下方索引的數字；沒有相關就 {"ids":[]}），不要其他文字。\n\n'
+                + '【歷史記憶索引】\n' + indexText + '\n\n【當前最新劇情】\n' + String(recentText).slice(0, 2000);
+            const secCfg = Object.assign({}, (win.OS_SETTINGS?.getSecondaryConfig?.()) || (win.OS_SETTINGS?.getConfig?.()) || {},
+                { _isSecondary: true, usePresetPrompts: false, enableThinking: false });
+            const raw = await new Promise((resolve) => {
+                win.OS_API.chat([{ role: 'system', content: '記憶調度器，只輸出 JSON' }, { role: 'user', content: prompt }],
+                    secCfg, null, (t) => resolve(t || ''), () => resolve(''), { disableTyping: true });
+            });
+            let ids = [];
+            try { const j = JSON.parse((String(raw).match(/\{[\s\S]*\}/) || ['{}'])[0]); if (Array.isArray(j.ids)) ids = j.ids; } catch (e) {}
+            return ids.map(n => all[(parseInt(n, 10) || 0) - 1]).filter(Boolean);
+        } catch (e) { console.warn('[Vector Memory Injector] 索引挑選失敗:', e?.message || e); return []; }
     }
 
     async function injectMemories() {
@@ -52,12 +84,18 @@
 
             const storyId = _storyId();
             if (!storyId) return;                 // 沒有當前 VN 故事就不注入
+            if (!win.OS_API?.chat || !win.OS_DB?.getAllVnMemories) return;
 
-            const query = await _query();
-            if (!query) return;
+            const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            if (!all.length) return;
+            all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定編號
 
-            const mems = await win.OS_VECTOR_ENGINE.search(query, storyId);
-            if (!mems || !mems.length) return;
+            const recentText = await _recentText();
+            if (!recentText) return;
+
+            // 索引 + 副模型挑（取代向量 top-K）：副模型看得到全部索引→挑相關的(不漏)→只注入被挑中的全文(不爆)
+            let mems = await _selectByIndex(recentText, all);
+            if (!mems.length) mems = all.slice(-6);   // 副模型沒挑到 → 退而求其次給最近 6 條
 
             // 角色語氣/對話另外框起來 → 明確要求 AI 延續角色說話風格、別 OOC
             const voice = mems.filter(m => m.type === 'dialogue');
