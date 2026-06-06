@@ -702,9 +702,9 @@ ${lines.join('\n')}
                         variables: [{
                             name: '角色狀態',
                             type: 'object',
-                            defaultValue: '角色狀態:\n  形象:\n    髮色: 待定\n    眼色: 待定\n    體型: 待定\n  身分: 待定\n  好感度: 0',
-                            desc: '每個「有意義的具名角色」的即時狀態。固定基礎屬性(每個角色同一組、順序一致)：形象(髮色/眼色/體型)、身分、好感度(0-100，對主角MC的好感)。'
-                                + '【更新方式】用點記法只更新有變化的欄位(例：角色狀態.愛麗絲.好感度)，不要整包重寫、沒變的別動，避免洗掉其他角色與屬性。'
+                            defaultValue: '角色狀態:\n  髮色: 待定\n  眼色: 待定\n  體型: 待定\n  身分: 待定\n  好感度: 0',
+                            desc: '每個「有意義的具名角色」的即時狀態。固定基礎屬性(每個角色同一組、全部平鋪不要再分層、順序一致)：髮色、眼色、體型、身分、好感度(0-100，對主角MC的好感，純數字不加符號)。'
+                                + '【更新方式】用點記法只更新有變化的「單一屬性」，固定三層「角色狀態.角色名.屬性」(例：角色狀態.愛麗絲.好感度、角色狀態.愛麗絲.髮色)，不要再多包一層、不要整包重寫、沒變的別動，避免洗掉其他角色與屬性。'
                                 + '【誰要記】只記有名字、對劇情有份量的人物角色；雜魚/怪獸/野生動物/路人敵兵這類不要當角色(除非是有劇情份量的具名角色)。'
                                 + '【主角MC例外】主角 / MC / {{user}} 本人「不要好感度」→ 好感度欄填 null，其餘欄照記。'
                                 + '新角色登場時按固定基礎屬性組補齊每一欄初值。'
@@ -780,26 +780,31 @@ ${lines.join('\n')}
             for (const k of Object.keys(over)) o[k] = _avsDeepMerge(base[k], over[k]);
             return o;
         };
+        // 把一層巢狀攤平：{形象:{髮色,眼色}} → {髮色,眼色}（相容舊的「形象」分層資料，讓 {{髮色}} 讀得到）
+        const _avsFlatObj = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) { if (v && typeof v === 'object' && !Array.isArray(v)) { for (const [k2, v2] of Object.entries(v)) r[k2] = v2; } else r[k] = v; } return r; };
         out = out.replace(/\{\{#each\s+([^\s{}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (m, containerPath, innerTpl) => {
-            let container = _avsGetByPath(state, containerPath);
-            // pack 初值當底，state 即時值深合併蓋上去（副模型只抽到部分時其餘仍顯示初值）
+            const container = _avsGetByPath(state, containerPath);
+            // 取「每實體範本」(剝掉自包裝)，逐實體補初值；不再把整個 {變數名:範本} 灌進容器(那正是多出鬼實體的原因)
+            let entTpl = {};
             const pv = (packVars || []).find(v => v.name === containerPath && v.type === 'object');
             if (pv) {
-                let initStruct = {};
-                try { initStruct = win._AVS_ENGINE?.parseTree?.(pv.defaultValue) || {}; } catch(e) {}
-                container = _avsDeepMerge(initStruct, container);
+                try {
+                    const tree = win._AVS_ENGINE?.parseTree?.(pv.defaultValue) || {};
+                    const tk = Object.keys(tree);
+                    entTpl = _avsFlatObj((tk.length === 1 && tk[0] === containerPath) ? tree[containerPath] : tree);
+                } catch(e) {}
             }
             if (!container || typeof container !== 'object') return '';
             let blocks = '';
-            for (const [entityKey, entityVal] of Object.entries(container)) {
-                if (entityKey === containerPath) continue;   // 跳過「變數名同名」的結構範本鍵(物件型 defaultValue 的範本包裝)，不渲染成假實體
+            for (const [entityKey, entityValRaw] of Object.entries(container)) {
+                if (entityKey === containerPath) continue;                       // 跳過自包裝範本鍵(鬼實體)
+                if (!entityValRaw || typeof entityValRaw !== 'object') continue; // 非實體(範本殘留純值)跳過
+                const entityVal = { ...entTpl, ..._avsFlatObj(entityValRaw) };   // 範本當底 + 攤平實體(舊「形象」巢狀也攤平)
                 let block = innerTpl;
                 block = block.split('{{@key}}').join(entityKey);
-                if (entityVal && typeof entityVal === 'object') {
-                    for (const [ak, av] of Object.entries(entityVal)) {
-                        const sv = (av && typeof av === 'object') ? JSON.stringify(av) : f(av);
-                        block = block.split(`{{${ak}}}`).join(sv);
-                    }
+                for (const [ak, av] of Object.entries(entityVal)) {
+                    const sv = (av && typeof av === 'object') ? JSON.stringify(av) : f(av);
+                    block = block.split(`{{${ak}}}`).join(sv);
                 }
                 block = block.replace(/\{\{[^{}]+\}\}/g, '—'); // 該實體沒有的屬性
                 blocks += block;
