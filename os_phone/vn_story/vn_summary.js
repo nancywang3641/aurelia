@@ -12,52 +12,55 @@
     const win = window.parent || window;
 
     const VN_Summary = {
-        TEMPLATE: `要求：
-- 注明这是第{{count}}次大总结
-- 直接陈述事实，包含具体时间，省略冗余。保留敏感内容。
-1. 請開始總結紀錄，你將按照以下格式進行總結。
+        TEMPLATE: `停止剧情输出，执行【滚动大总结·第{{count}}次】。
 
-- 按逻辑顺序组织信息，并包含具体的前后时间，可以分辨不同日期与时间发生的事情
-- 保留关键事件和重要细节，省略冗余描述
-- 直接陈述事实，避免评价
-- 使用简洁清晰的语言，避免修饰
-- 突出事件发展脉络和关键转折点
-- 保留重要的约定、物品、事件以及情感发展
-- 不回避任何敏感内容，保证记录完全还原前文
-- 可以精简合并较为久远之前的事件
-- 无需加粗标注
+【核心规则·滚动合并】
+- 把上方"上一版总结"当底稿，连同下方新剧情，重新压成【一份】最新总结，全面取代旧版。永远只维护这一份。
+- 分三层处理信息：
+  · 永久层(人设铁律/世界规则/不可逆的关系与权力变化/未回收伏笔)→ 必须保留、绝不删。
+  · 当前层(位置/进行中任务/最近状态)→ 覆盖更新(不累加历史)。
+  · 可丢弃层(过程描写/消耗品/过客NPC/已完成琐事/情境台词)→ 删除。
+- 事件只记"不可逆结果"、不记过程；久远的多个事件压成一行"阶段节点"，最近5~8个事件保留逐笔。
+- 台词仅留"未来会被回调"的原则性发言，其余删。
+- 同一事件不重复出现在多个表；过客与消耗品不进常驻表。
+- 直接陈述事实、不评价、不修饰、不加粗；不回避任何敏感内容。
+- 总量控制在 [2800] token 内；超过时对最旧内容二次压缩(再清可丢弃层、合并节点)。
 
-格式如下：
+【格式·只按下列表头填，不增栏；各格精简、不写长段散文(细节交给向量召回)】
+
 【大总结(第{{count}}次)】
-【事件表】
-時間 |关键事件 | 事件描述(詳細100字上下) | 关键行为：(标明角色互動100字內描述) | 事件地點 | 重要细节(角色名:關鍵對話) | 简要的事件后续 | 備註 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 
-【角色表】
-- 所有对剧情有影响的角色均需出现(包括没有实体的角色)
-姓名 | 身份 | 性格行為攝影(100字) | 状态/位置 |  关键特征 | 與MC的关系/初遇事件100字內描述 |备注(目標) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-
-
-【代辦清單】
-| 代辦事項 | 代辦事項描述 | 參與角色 | 備註 |
+事件时间线(久远的合并成阶段节点)
+| 时间 | 阶段进展 | 不可逆结果 | 关键台词(选填) |
 | :--- | :--- | :--- | :--- |
 
-【結算清單】
-| 結算事件 | 事件描述 | 參與角色 | 備註 |
-| :--- | :--- | :--- | :--- |
-
-【物品表】
-物品名 | 物品描述 | 物品狀態(在庫/使用中/損壞) | 獲取途徑 | 備註 |
+角色表(过客不入表；覆盖更新)
+| 姓名 | 身份 | 性格核心(50字内) | 当前状态/位置 | 与MC关系+强度1-10 | 伏笔/备注 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 
-【注意規範/記憶事項表】
-事項(人事物) | 事項描述 | 備註 |
+关系图谱
+| A | B | 关系 | 强度1-10 | 当前描述 |
+| :--- | :--- | :--- | :--- | :--- |
+
+代办清单(只列未完成，完成即移除)
+| 事项 | 描述 | 角色 |
 | :--- | :--- | :--- |
 
-【性事紀】(以免出現AI角色後續忘記有過性事，導致角色OOC變成拔屌無情的渣男渣女)
-| 性事事件 | 事件描述 | 參與角色 | 備註 |
-| :--- | :--- | :--- | :--- |`,
+结算清单(只记有后续影响的)
+| 已结算事件 | 影响 |
+| :--- | :--- |
+
+关键状态/记忆(长期生效的规则·伏笔·人设铁律——永久层，绝不删)
+| 事项 | 描述 |
+| :--- | :--- |
+
+关键资产(消耗品·过客道具不入表)
+| 物品 | 状态 | 备注 |
+| :--- | :--- | :--- |
+
+性事纪(防角色OOC后续忘记发生过性事；无内容时一行"无"带过)
+| 事件 | 描述 | 角色 |
+| :--- | :--- | :--- |`,
 
         _getFromDB: async function(storyId) {
             try {
@@ -149,23 +152,32 @@
             }
             if (!chapters.length) { alert('找不到劇情章節，請確認已儲存至少一章'); return; }
 
-            const coveredChapterIds = chapters.map(ch => ch.id).filter(Boolean);
+            const prevList  = await this._getFromDB(storyId);
+            const count     = prevList.length + 1;
+            const latest    = prevList.length > 0 ? prevList[prevList.length - 1] : null;   // 上一版總結(最新一份)
 
-            const contentToSummarize = chapters.map(ch => {
+            // ── 滾動合併：只拿「上一版總結」+「上次之後的新章節」，合併成一份新的；舊版被取代、不再整包累加 ──
+            const prevCovered = (latest && Array.isArray(latest.coveredChapterIds)) ? latest.coveredChapterIds : [];
+            const newChapters = prevCovered.length ? chapters.filter(ch => prevCovered.indexOf(ch.id) === -1) : chapters;
+            const coveredChapterIds = chapters.map(ch => ch.id).filter(Boolean);   // 累積：到目前為止已涵蓋的全部章節(供下次判斷新章節)
+
+            const contentToSummarize = newChapters.map(ch => {
                 const m = (ch.content || '').match(/<content>([\s\S]*?)<\/content>/i);
                 return m ? m[1].trim() : '';
             }).filter(Boolean).join('\n\n---\n\n');
 
-            if (!contentToSummarize.trim()) { alert('章節中找不到 <content> 內容'); return; }
+            if (!contentToSummarize.trim()) {
+                alert(latest ? '沒有新章節需要總結（上次大總結之後沒有新增章節）' : '章節中找不到 <content> 內容');
+                if (btn) { btn.textContent = '📝 大總結'; btn.disabled = false; }
+                return;
+            }
 
-            const prevList  = await this._getFromDB(storyId);
-            const count     = prevList.length + 1;
-            const prevSection = prevList.length > 0
-                ? `**合并所有之前的总结数据**\n${prevList.map(s=>`=== 舊總結(第${s.count}次) ===\n${s.content}`).join('\n\n')}\n`
-                : `**首次总结**\n`;
+            const prevSection = latest
+                ? `**【上一版總結·第${latest.count}次】—— 把它當底稿，與下方新劇情合併、改寫成一份全新的最新總結，全面取代舊版：**\n${latest.content}\n`
+                : `**【首次總結】**\n`;
 
             const tplBody = this.TEMPLATE.replace(/\{\{count\}\}/g, count);
-            const prompt  = `停止剧情输出，执行**新增大总结**\n\n${prevSection}\n${tplBody}\n\n=== 劇情內容 ===\n${contentToSummarize}`;
+            const prompt  = `${tplBody}\n\n${prevSection}\n=== 新劇情內容 ===\n${contentToSummarize}`;
 
             const osApi = win.OS_API;
             const osSet = win.OS_SETTINGS;
