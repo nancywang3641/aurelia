@@ -156,6 +156,10 @@
         _host.innerHTML = `<div class="avs-st">
             ${storyHtml}
 
+            <div class="avs-card">
+                <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-copy-diag">🔬 複製全部狀態數據（貼給工程師診斷）</button>
+            </div>
+
             <div class="avs-card avs-st-toggle-row">
                 <div class="avs-st-toggle-text">
                     <div class="avs-st-toggle-name">即時記錄狀態</div>
@@ -228,6 +232,21 @@
         };
 
         const bind = (sel, fn) => { const b = q(sel); if (b) b.onclick = fn; };
+        // 🔬 複製全部狀態診斷數據（引擎當前 + 本輪抽取 + 持久化 patches/base）→ 貼給工程師
+        bind('#avs-st-copy-diag', async () => {
+            const b = q('#avs-st-copy-diag');
+            try {
+                const dump = {
+                    engineState: win._AVS_ENGINE?.read?.() || null,
+                    lastExtract: win.OS_STATE_RUNTIME?.getLastExtract?.() || null,
+                    persisted: (win.OS_STATE_RUNTIME?.getStateDataDump) ? await win.OS_STATE_RUNTIME.getStateDataDump() : null
+                };
+                await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
+                if (b) { b.textContent = '✅ 已複製，直接貼給工程師'; setTimeout(() => { b.textContent = '🔬 複製全部狀態數據（貼給工程師診斷）'; }, 2200); }
+            } catch (e) {
+                if (b) b.textContent = '❌ 複製失敗：' + (e?.message || e);
+            }
+        });
         bind('#avs-st-extract', () => win.OS_STATE_RUNTIME?.forceExtract?.());
         bind('#avs-st-regen', () => { if (confirm('重新生成追蹤欄位？已記錄的內容會保留。')) win.OS_STATE_SCHEMA?.generate?.(); });
         bind('#avs-st-clearpatches', () => { if (confirm('清空抽取紀錄？追蹤欄位保留。')) win.OS_STATE_RUNTIME?.clearPatches?.(); });
