@@ -345,6 +345,7 @@ ${lines.join('\n')}
             card.innerHTML = `
                 <strong style="color:#1A1C28;">${pack.name}</strong>
                 <p style="font-size:12px; color:rgba(26,28,40,0.25);">${pack.variables.length} 個變數${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
+                <div style="font-size:11px; margin:1px 0 2px;">${pack.chatId ? `🔒 <span style="color:#2e9e6b;">綁定此卡</span> <span style="color:rgba(26,28,40,0.45);">${String(pack.chatId).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : `🌐 <span style="color:#c9920f;">全域 · 所有卡共用 ⚠️</span>`}</div>
                 <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
                     <div class="avs-btn avs-btn-outline btn-edit" style="flex:1; min-width:60px; padding:6px;">編輯</div>
                     <div class="avs-btn avs-btn-outline btn-rules" style="flex:1; min-width:90px; padding:6px;">⚡ 規則${rulesCount ? ` (${rulesCount})` : ''}</div>
