@@ -365,7 +365,8 @@ ${lines.join('\n')}
                 // 用當前狀態 + 預設值替換佔位符做預覽（支援 object 型 {{#each}} 迴圈）
                 const previewState = win._AVS_ENGINE?.read?.() || {};
                 const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
-                let previewHtml = _avsRenderTemplate(activeTpl.htmlContent || '', previewState, pack.variables || [], fmt);
+                const _avMem = (win.VN_PLAYER || win.VN_Core)?._avatarMemCache || {};   // 預覽用記憶體頭像(best-effort)
+                let previewHtml = _avsRenderTemplate(activeTpl.htmlContent || '', previewState, pack.variables || [], fmt, _avMem);
 
                 const scopeId = `pack-tpl-preview-${activeTpl.id}`;
                 let scopedCssText = '';
@@ -730,8 +731,8 @@ ${lines.join('\n')}
                     } catch(e) {}
                     // 附一個「內建簡單面板」：沒有美化面板時自動裝+啟用，朋友/測試期不用每次叫 AI 生（有 AI 面板就不搶）
                     try {
-                        const _DEF_HTML = '<div class="avsdef-wrap"><div class="avsdef-title">📋 角色狀態</div><div class="avsdef-grid">{{#each 角色狀態}}<div class="avsdef-card"><div class="avsdef-name">{{@key}}</div><div class="avsdef-row"><span class="avsdef-k">身分</span><span class="avsdef-v">{{身分}}</span></div><div class="avsdef-row"><span class="avsdef-k">好感度</span><span class="avsdef-v avsdef-fav">{{好感度}}</span></div><div class="avsdef-sep"></div><div class="avsdef-row"><span class="avsdef-k">髮色</span><span class="avsdef-v">{{髮色}}</span></div><div class="avsdef-row"><span class="avsdef-k">眼色</span><span class="avsdef-v">{{眼色}}</span></div><div class="avsdef-row"><span class="avsdef-k">體型</span><span class="avsdef-v">{{體型}}</span></div></div>{{/each}}</div></div>';
-                        const _DEF_CSS = '.avsdef-wrap{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;padding:4px 0;}.avsdef-title{font-size:15px;font-weight:700;color:#7a5fb0;letter-spacing:1px;margin:0 0 10px 2px;}.avsdef-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}.avsdef-card{background:#fff;border:1px solid rgba(120,90,160,0.18);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px rgba(120,90,160,0.08);}.avsdef-name{font-size:15px;font-weight:800;color:#5a4a78;margin-bottom:8px;border-bottom:1px dashed rgba(120,90,160,0.25);padding-bottom:6px;}.avsdef-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12px;}.avsdef-k{color:#9a90b0;flex-shrink:0;}.avsdef-v{color:#3a3450;font-weight:600;text-align:right;word-break:break-word;}.avsdef-fav{color:#e0608a;}.avsdef-sep{height:1px;background:rgba(120,90,160,0.10);margin:5px 0;}';
+                        const _DEF_HTML = '<div class="avsdef-wrap"><div class="avsdef-title">📋 角色狀態</div><div class="avsdef-grid">{{#each 角色狀態}}<div class="avsdef-card"><div class="avsdef-hd"><img class="avsdef-ava" src="{{@avatar}}"><div class="avsdef-name">{{@key}}</div></div><div class="avsdef-row"><span class="avsdef-k">身分</span><span class="avsdef-v">{{身分}}</span></div><div class="avsdef-row"><span class="avsdef-k">好感度</span><span class="avsdef-v avsdef-fav">{{好感度}}</span></div><div class="avsdef-sep"></div><div class="avsdef-row"><span class="avsdef-k">髮色</span><span class="avsdef-v">{{髮色}}</span></div><div class="avsdef-row"><span class="avsdef-k">眼色</span><span class="avsdef-v">{{眼色}}</span></div><div class="avsdef-row"><span class="avsdef-k">體型</span><span class="avsdef-v">{{體型}}</span></div></div>{{/each}}</div></div>';
+                        const _DEF_CSS = '.avsdef-wrap{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;padding:4px 0;}.avsdef-title{font-size:15px;font-weight:700;color:#7a5fb0;letter-spacing:1px;margin:0 0 10px 2px;}.avsdef-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}.avsdef-card{background:#fff;border:1px solid rgba(120,90,160,0.18);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px rgba(120,90,160,0.08);}.avsdef-hd{display:flex;align-items:center;gap:9px;margin-bottom:8px;border-bottom:1px dashed rgba(120,90,160,0.25);padding-bottom:8px;}.avsdef-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;background:rgba(120,90,160,0.08);border:1px solid rgba(120,90,160,0.2);}.avsdef-name{font-size:15px;font-weight:800;color:#5a4a78;}.avsdef-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12px;}.avsdef-k{color:#9a90b0;flex-shrink:0;}.avsdef-v{color:#3a3450;font-weight:600;text-align:right;word-break:break-word;}.avsdef-fav{color:#e0608a;}.avsdef-sep{height:1px;background:rgba(120,90,160,0.10);margin:5px 0;}';
                         const _allTpls = (await win.OS_DB.getAllUITemplates?.()) || [];
                         const _mine = _allTpls.filter(t => t.packId === pack.id);
                         const _hasActive = _mine.some(t => t.isActive);
@@ -803,8 +804,10 @@ ${lines.join('\n')}
         }
         return cur;
     }
-    function _avsRenderTemplate(html, state, packVars, fmt) {
+    function _avsRenderTemplate(html, state, packVars, fmt, avatarMap) {
         const f = fmt || (v => String(v == null ? '' : v));
+        const _AV = avatarMap || {};
+        const _TPX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';   // 透明 1px：沒頭像時用，避免破圖 icon
         let out = String(html || '');
         // 1. {{#each 容器}}...{{/each}} 迴圈塊（object 型變數用）
         const _avsDeepMerge = (base, over) => {
@@ -836,6 +839,7 @@ ${lines.join('\n')}
                 const entityVal = { ...entTpl, ..._avsFlatObj(entityValRaw) };   // 範本當底 + 攤平實體(舊「形象」巢狀也攤平)
                 let block = innerTpl;
                 block = block.split('{{@key}}').join(entityKey);
+                block = block.split('{{@avatar}}').join(_AV[entityKey] || _TPX);   // 角色頭像：用角色名去頭像庫撈，沒有就透明
                 for (const [ak, av] of Object.entries(entityVal)) {
                     const sv = (av && typeof av === 'object') ? JSON.stringify(av) : f(av);
                     block = block.split(`{{${ak}}}`).join(sv);
@@ -844,6 +848,7 @@ ${lines.join('\n')}
                 block = block.replace(/\{\{([^{}]+)\}\}/g, (mm, expr) => {
                     const key = String(expr).trim();
                     if (key === '@key') return entityKey;
+                    if (key === '@avatar') return _AV[entityKey] || _TPX;
                     const val = _avsGetByPath(entityValRaw, key);
                     return (val === undefined || val === null) ? '—' : (typeof val === 'object' ? JSON.stringify(val) : f(val));
                 });
@@ -863,6 +868,24 @@ ${lines.join('\n')}
         // 3. 殘留佔位符 → —
         out = out.replace(/\{\{[^{}]+\}\}/g, '—');
         return out;
+    }
+
+    // 預撈出場角色頭像：{角色名 → 頭像URL}，給模板的 {{@avatar}} 用。async(VN_Cache 是 IndexedDB)。
+    async function _avsBuildAvatarMap(state, packVars) {
+        const map = {};
+        try {
+            if (!win.VN_Cache?.get) return map;
+            const names = new Set();
+            (packVars || []).forEach(v => {
+                if (v.type !== 'object') return;
+                const c = state && state[v.name];
+                if (c && typeof c === 'object') Object.keys(c).forEach(k => { if (k !== v.name) names.add(k); });
+            });
+            for (const n of names) {
+                try { const av = await win.VN_Cache.get('avatar_cache', n); if (av && av.url) map[n] = av.url; } catch (e) {}
+            }
+        } catch (e) {}
+        return map;
     }
 
     // ================================================================
@@ -1188,11 +1211,12 @@ ${lines.join('\n')}
                         `\n\n【物件型變數】內含多個實體（如多個角色），**必須用迴圈渲染，禁止直接寫 {{變數名}}**：\n` +
                         objVarDesc + `\n` +
                         `迴圈語法：{{#each 變數名}} ...單一實體的卡片HTML... {{/each}}\n` +
-                        `迴圈內可用：{{@key}} = 實體名（如角色名）；{{屬性名}} = 該實體的屬性值\n` +
-                        `範例：\n` +
+                        `迴圈內可用：{{@key}} = 實體名（如角色名）；{{@avatar}} = 該角色頭像圖URL（放進 <img src="{{@avatar}}">，沒頭像時會自動帶透明圖、不破版）；{{屬性名}} = 該實體的屬性值\n` +
+                        `範例（含頭像）：\n` +
                         `{{#each ${objVars[0].name}}}\n` +
-                        `  <div class="char-card"><h4>{{@key}}</h4><span>HP：{{HP}}</span></div>\n` +
+                        `  <div class="char-card"><img class="ava" src="{{@avatar}}"><h4>{{@key}}</h4><span>HP：{{HP}}</span></div>\n` +
                         `{{/each}}\n` +
+                        `（建議放一張圓形小頭像，CSS 自行設計；沒頭像的角色不會破版）\n` +
                         `★ 迴圈會對每個實體自動重複，跑團新增的角色也會自動出現，**絕對不要寫死角色名**`;
                 }
 
@@ -1416,6 +1440,7 @@ ${lines.join('\n')}
     win.OS_AVS = {
         launch: launchApp,
         renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
+        buildAvatarMap: _avsBuildAvatarMap,   // 預撈角色頭像(async) 給 {{@avatar}} 用
         syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發
         // V3：規則 modal helper（給 inline onclick 呼叫）
         _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,
