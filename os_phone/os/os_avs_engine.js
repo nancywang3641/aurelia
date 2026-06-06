@@ -74,6 +74,21 @@
     // 四、<vars> 解析器（終極防呆升級版 + 註解過濾）
     // ================================================================
 
+    // 深合併 src 進 dst（巢狀物件遞迴合併；純值/陣列取 src）。給 <vars> JSON 用，
+    // 避免淺 Object.assign「整碗覆蓋」——主模型某輪只輸出當前場景角色時，會把沒出場的角色全洗掉。
+    function _avsDeepMerge(dst, src) {
+        if (!src || typeof src !== 'object' || Array.isArray(src)) return;
+        for (const k of Object.keys(src)) {
+            const sv = src[k];
+            if (sv && typeof sv === 'object' && !Array.isArray(sv)) {
+                if (!dst[k] || typeof dst[k] !== 'object' || Array.isArray(dst[k])) dst[k] = {};
+                _avsDeepMerge(dst[k], sv);
+            } else {
+                dst[k] = sv;
+            }
+        }
+    }
+
     function _avsApplyVars(inner) {
         let state = _avsRead();
         _avsSnapshot(state);
@@ -82,7 +97,7 @@
         if (inner.trim().startsWith('{')) {
             try {
                 const obj = JSON.parse(inner.trim());
-                Object.assign(state, obj);
+                _avsDeepMerge(state, obj);   // 深合併(不用淺 Object.assign)：沒出場的角色/屬性不會被整碗洗掉
                 _avsWrite(state);
                 return;
             } catch(e) {}
