@@ -100,21 +100,36 @@
         return !!win.TavernHelper;
     }
 
-    // ── 從酒館 TavernHelper 拉訊息，組成統一 chapter 格式 ─────────
-    function _fetchTavernChapters() {
+    // 完整讀取當前聊天訊息：優先 getChatHistoryDetail(直接讀聊天檔、繞過 lazy-load 窗口、不展開全樓→不卡死)，失敗退回 getChatMessages(窗口版)
+    async function _fetchFullMessages() {
         const helper = win.TavernHelper;
         if (!helper) return [];
-
-        const lastId = helper.getLastMessageId?.();
-        if (lastId == null || lastId < 0) return [];
-
-        let allMsgs = [];
         try {
-            allMsgs = helper.getChatMessages(`0-${lastId}`) || [];
-        } catch (e) {
-            console.error('[VN_READER] getChatMessages 失敗:', e);
-            return [];
-        }
+            if (helper.getChatHistoryBrief && helper.getChatHistoryDetail) {
+                const brief = await helper.getChatHistoryBrief('current');
+                const detail = await helper.getChatHistoryDetail(brief);
+                if (detail && typeof detail === 'object') {
+                    const cid = (win.OS_AVS_ADAPTER?.getCurrentChatId?.() || (helper.getCurrentChatId && helper.getCurrentChatId()) || '');
+                    const keys = Object.keys(detail);
+                    let key = keys.find(k => k === cid + '.jsonl' || k.replace(/\.jsonl?$/i, '') === cid);
+                    if (!key) key = keys.find(k => cid && k.indexOf(cid) === 0);   // 前綴匹配
+                    if (!key && keys.length === 1) key = keys[0];
+                    const arr = key ? detail[key] : null;
+                    if (Array.isArray(arr) && arr.length) return arr;
+                }
+            }
+        } catch (e) { console.warn('[VN_READER] 讀全歷史失敗，退回 getChatMessages:', e?.message || e); }
+        try {
+            const lastId = helper.getLastMessageId?.();
+            if (lastId != null && lastId >= 0) return helper.getChatMessages(`0-${lastId}`) || [];
+        } catch (e) { console.error('[VN_READER] getChatMessages 失敗:', e); }
+        return [];
+    }
+
+    // ── 從酒館 TavernHelper 拉訊息，組成統一 chapter 格式 ─────────
+    async function _fetchTavernChapters() {
+        const allMsgs = await _fetchFullMessages();
+        if (!allMsgs.length) return [];
 
         const chapters = [];
         let chapterIndex = 0;
@@ -241,6 +256,7 @@
     const VN_READER = {
 
         clean: _strip,   // VN 格式 → 純小說正文(抽 <content>、[Char]→「名：台詞」、去所有 VN 標籤)；給 app 上下文清洗共用
+        fetchFullChat: _fetchFullMessages,   // 完整讀當前聊天(讀檔繞 lazy-load、不展開不卡死)；給大總結等共用
 
         async show(mountInto) {
             const overlay = _ensureDOM(mountInto);
@@ -253,7 +269,7 @@
 
             // 🔥 酒館模式：從 TavernHelper 拿當前 chat 訊息
             if (_isTavernMode()) {
-                const chapters = _fetchTavernChapters();
+                const chapters = await _fetchTavernChapters();
                 if (!chapters.length) {
                     body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;line-height:1.6;">當前聊天無含 &lt;content&gt; 標籤的章節<br><span style="font-size:0.78rem;color:#444;">(需要 AI 用 VN 格式回覆才會被識別)</span></div>';
                     tabsEl.style.display = 'none';
