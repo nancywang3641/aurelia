@@ -115,14 +115,15 @@
                 return url;
             } return "";
         },
-        getAvatar: async function(prompt, exp) {
+        getAvatar: async function(prompt, exp, force) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
                 // type='char' → generate() 自動疊加 charBasePrompt + charNegPrompt，無需手動讀取
                 // 順序：VN追加詞 → 角色描述詞 → 表情，charBasePrompt 由 generate() 前置
                 const full = this._join(VN_Config.data.avatarBasePrompt, prompt, `${exp} expression`);
                 // VN 自訂負詞優先；若空則 generate() 自動補 charNegPrompt
                 const negPrompt = VN_Config.data.avatarNegPrompt || undefined;
-                return await win.OS_IMAGE_MANAGER.generate(full, 'char', { negativePrompt: negPrompt });
+                // force=true（畫廊「重生」用）→ 繞過 generate() 記憶體快取(_urlCache)，否則同 prompt 只會吐舊圖
+                return await win.OS_IMAGE_MANAGER.generate(full, 'char', { negativePrompt: negPrompt, force: !!force });
             } return "";
         },
         getItem: async function(prompt) {
