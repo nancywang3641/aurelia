@@ -240,6 +240,8 @@
     // ── 公開 API ──────────────────────────────────────────────────
     const VN_READER = {
 
+        clean: _strip,   // VN 格式 → 純小說正文(抽 <content>、[Char]→「名：台詞」、去所有 VN 標籤)；給 app 上下文清洗共用
+
         async show(mountInto) {
             const overlay = _ensureDOM(mountInto);
             overlay.style.display = 'flex';
