@@ -311,6 +311,6 @@
     }
     function toggle() { if (_el && _el.style.display !== 'none') close(); else open(); }
 
-    win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp };
+    win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home };
     console.log('✅ VoidPhoneShell（大廳手機殼浮窗）模組就緒');
 })();
