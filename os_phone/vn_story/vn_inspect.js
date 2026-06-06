@@ -264,10 +264,11 @@
                     const css = tpl.cssContent || '';
                     const _tplPack = _allPacks.find(p => p.id === tpl.packId);
                     const _packVars = _tplPack ? (_tplPack.variables || []) : [];
+                    let _avatarMap = {};
+                    try { _avatarMap = (await win.OS_AVS?.buildAvatarMap?.(state, _packVars)) || {}; } catch (e) {}
                     // 直接用展廳那支「共用渲染引擎」(os_avs.renderTemplate) → 跟展廳完全一致，不再各寫一份
-                    // （修「資訊中心怪、展廳正常」：兩邊本來是各自 inline 一份、會分岔）
                     let html = '';
-                    try { html = (win.OS_AVS?.renderTemplate?.(tpl.htmlContent || '', state, _packVars, _fmt)) || ''; }
+                    try { html = (win.OS_AVS?.renderTemplate?.(tpl.htmlContent || '', state, _packVars, _fmt, _avatarMap)) || ''; }
                     catch (e) { html = ''; }
                     rendered += `<style>${css}</style>${html}`;
                 }

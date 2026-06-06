@@ -266,8 +266,10 @@
             const state = win._AVS_ENGINE?.read?.() || {};
             const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
             const _packVars = (tplPack && Array.isArray(tplPack.variables)) ? tplPack.variables : [];
+            let _avatarMap = {};
+            try { _avatarMap = (await win.OS_AVS?.buildAvatarMap?.(state, _packVars)) || {}; } catch (e) {}
             let html = '';
-            try { html = (win.OS_AVS?.renderTemplate?.(activeTpl.htmlContent || '', state, _packVars, fmt)) || (activeTpl.htmlContent || ''); }
+            try { html = (win.OS_AVS?.renderTemplate?.(activeTpl.htmlContent || '', state, _packVars, fmt, _avatarMap)) || (activeTpl.htmlContent || ''); }
             catch (e) { html = activeTpl.htmlContent || ''; console.warn('[Extractor] renderTemplate 失敗:', e); }
             if (activeTpl.cssContent) {
                 html = `<style>${activeTpl.cssContent}</style>${html}`;
