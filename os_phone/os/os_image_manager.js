@@ -503,12 +503,7 @@
             // ✅ 優先使用外部傳入的 Negative Prompt，否則用預設防護詞
             const negativePrompt = options.negativePrompt || 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render';
 
-            // 🎨 酒館原生 /sd 背景：走使用者後端，失敗回 null（不偷偷換）
-            const _bgService = (options.provider === 'tavern_sd' || options.provider === 'novelai' || options.provider === 'pollinations') ? options.provider : this.config.service;
-            if (_bgService === 'tavern_sd') {
-                return await this._genTavernSd(optimizedPrompt, 'bg', { ...options, negativePrompt });
-            }
-
+            // 背景永遠走 Pollinations：ComfyUI(/sd) 是角色/頭像取向，畫背景不適合（會塞人物），故不論全域來源是否為 tavern_sd，背景都不走 /sd
             const seed = options.seed || Math.floor(Math.random() * 100000);
             const width = options.width || 1024;
             const height = options.height || 1024;
