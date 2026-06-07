@@ -25,8 +25,10 @@
             || localStorage.getItem('vn_current_story_id') || '';
     }
 
-    // 召回不再開副模型「挑」(省一通)：把「全部記憶的精簡索引」直接注入主模型，主模型邊寫邊參考(看得到全部→不漏)。
-    const MEM_LINE_MAX = 90;     // 每條記憶壓到幾字以內注入主模型(控制 prompt 肥度)
+    // 召回不開副模型「挑」(省一通)：只把「全部記憶的 tags 關鍵詞索引」注入主模型(不丟完整內文)，
+    // 主模型看得到全部記憶的存在與主題→不漏，但 prompt 大幅縮水(原本丟 90 字內文×全部 244 條 → 爆到 1.1 萬 token)。
+    const MEM_TAG_MAX = 6;       // 每條最多列幾個 tag
+    const MEM_FALLBACK_MAX = 30; // 無 tag 的記憶才退回極短內文，幾字以內
 
     async function injectMemories() {
         try {
@@ -51,20 +53,22 @@
             if (!all.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
 
-            // 直接把「全部記憶的精簡索引」注入主模型(不再開副模型挑、省一通)；主模型邊寫邊參考、看得到全部→不漏。
+            // 只丟 tags 關鍵詞當索引(不丟完整內文)；主模型看得到全部記憶的主題→不漏存在，prompt 大幅縮水。
+            // 無 tag 的記憶才退回極短內文，避免空行。
             const _line = (m) => {
+                const tags = (m.tags || []).filter(Boolean);
+                if (tags.length) return `・${tags.slice(0, MEM_TAG_MAX).join('、')}`;
                 let t = String(m.text || '').replace(/\s+/g, ' ').trim();
-                if (t.length > MEM_LINE_MAX) t = t.slice(0, MEM_LINE_MAX) + '…';
-                const tg = (m.tags && m.tags.length) ? `（${m.tags.slice(0, 4).join('、')}）` : '';
-                return `・[${m.type || 'event'}] ${t}${tg}`;
+                if (t.length > MEM_FALLBACK_MAX) t = t.slice(0, MEM_FALLBACK_MAX) + '…';
+                return t ? `・${t}` : '';
             };
             const facts = all.filter(m => m.type !== 'dialogue');
             const voice = all.filter(m => m.type === 'dialogue');
-            let block = `[記憶召回｜以下是過往已發生的事，寫作時務必參考、保持連貫，勿與之矛盾]\n`;
-            block += facts.map(_line).join('\n');
+            let block = `[記憶索引｜下列每行是一段「過往已發生記憶」的關鍵詞，提醒你這些事都發生過：寫作時保持連貫、勿與之矛盾，需要細節時依關鍵詞回想]\n`;
+            block += facts.map(_line).filter(Boolean).join('\n');
             if (voice.length) {
-                block += `\n\n【角色語氣參考｜延續下列角色的性格與說話風格，保持一致、勿 OOC】\n`;
-                block += voice.map(_line).join('\n');
+                block += `\n\n【角色語氣索引｜下列關鍵詞代表各角色的性格與說話風格，延續一致、勿 OOC】\n`;
+                block += voice.map(_line).filter(Boolean).join('\n');
             }
 
             const result = win.TavernHelper.injectPrompts([{
@@ -76,7 +80,7 @@
             }], { once: true });
             _lastUninject = result?.uninject || null;
             _lastRecall = { text: block.trim(), count: all.length };   // 給 CTX 面板「記憶召回」行
-            console.log(`🧠 [Vector Memory Injector] 注入記憶索引 ${all.length} 條（主模型自選、已省去挑選副模型）`);
+            console.log(`🧠 [Vector Memory Injector] 注入記憶 tags 索引 ${all.length} 條（只丟關鍵詞、不丟內文，prompt 大幅縮水）`);
         } catch (e) {
             console.warn('[Vector Memory Injector] 失敗:', e?.message || e);
         }
