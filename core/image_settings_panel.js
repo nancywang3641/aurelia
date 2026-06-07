@@ -181,9 +181,28 @@
                         <select id="avatar-image-service" style="width: 100%; padding: 12px 16px; border: 2px solid #444444; border-radius: 8px; font-size: 14px; box-sizing: border-box; background: #2d2d2d; color: #ffffff;">
                             <option value="pollinations">Pollinations (免費)</option>
                             <option value="novelai">NovelAI (付費)</option>
+                            <option value="tavern_sd">酒館接口 (ComfyUI/SD)</option>
                         </select>
                         <div class="image-settings-form-help" style="margin-top: 8px; color: rgba(255, 255, 255, 0.7);">
                             用於生成 [Avatar:角色名;ENG_PROMPT] 格式的角色頭像
+                        </div>
+                    </div>
+
+                    <!-- Avatar 頭像提示詞規則書（依產圖器自動注入主模型，取代手動開關世界書）-->
+                    <div class="image-settings-form-group avatar-rule-editor">
+                        <label>🪪 頭像提示詞規則書</label>
+                        <div class="image-settings-form-help">選哪個產圖器，主模型每輪就自動帶哪份規則，不必再去世界書手動開關。改完即時生效（下一輪起算）。⚠️ 啟用後請把世界書裡同樣的頭像規則條目關掉，避免雙重注入打架。</div>
+                        <div class="avatar-rule-item">
+                            <div class="avatar-rule-head"><span>Pollinations 規則</span><button type="button" class="avatar-rule-reset" data-rule-reset="pollinations">恢復預設</button></div>
+                            <textarea id="avatar-rule-pollinations" class="avatar-rule-textarea" spellcheck="false"></textarea>
+                        </div>
+                        <div class="avatar-rule-item">
+                            <div class="avatar-rule-head"><span>NovelAI 規則</span><button type="button" class="avatar-rule-reset" data-rule-reset="novelai">恢復預設</button></div>
+                            <textarea id="avatar-rule-novelai" class="avatar-rule-textarea" spellcheck="false"></textarea>
+                        </div>
+                        <div class="avatar-rule-item">
+                            <div class="avatar-rule-head"><span>酒館接口 (ComfyUI/SD) 規則</span><button type="button" class="avatar-rule-reset" data-rule-reset="tavern_sd">恢復預設</button></div>
+                            <textarea id="avatar-rule-tavern_sd" class="avatar-rule-textarea" spellcheck="false"></textarea>
                         </div>
                     </div>
 
@@ -403,6 +422,27 @@
                     imgManager.updatePanelSettings('avatar', true, this.value);
                 });
             }
+
+            // Avatar 頭像規則書：textarea 改動即存 localStorage；恢復預設鈕還原該份
+            const avatarRulesApi = (window.parent || window).OS_AVATAR_RULES_INJECTOR;
+            if (avatarRulesApi) {
+                ['pollinations', 'novelai', 'tavern_sd'].forEach(function(svc) {
+                    const ta = document.getElementById('avatar-rule-' + svc);
+                    if (ta) {
+                        ta.addEventListener('input', function() {
+                            avatarRulesApi.setRule(svc, this.value);
+                        });
+                    }
+                });
+                document.querySelectorAll('.avatar-rule-reset').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        const svc = this.getAttribute('data-rule-reset');
+                        avatarRulesApi.resetRule(svc);
+                        const ta = document.getElementById('avatar-rule-' + svc);
+                        if (ta) ta.value = avatarRulesApi.getDefault(svc);
+                    });
+                });
+            }
             
             // NovelAI 设置
             const novelaiTokenInput = document.getElementById('novelai-token');
@@ -606,6 +646,15 @@
                 if (avatarServiceSelect && avatarPanelSetting.service) {
                     avatarServiceSelect.value = avatarPanelSetting.service;
                 }
+            }
+
+            // 加载 Avatar 头像规则书 textarea（自訂優先、否則預設）
+            const avatarRulesApiLoad = (window.parent || window).OS_AVATAR_RULES_INJECTOR;
+            if (avatarRulesApiLoad) {
+                ['pollinations', 'novelai', 'tavern_sd'].forEach(function(svc) {
+                    const ta = document.getElementById('avatar-rule-' + svc);
+                    if (ta) ta.value = avatarRulesApiLoad.getEditable(svc);
+                });
             }
             
             // 加载 NovelAI 设置
