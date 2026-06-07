@@ -5,9 +5,10 @@
 //       tavern_sd)，把對應的「頭像提示詞規則書」用 injectPrompts({once:true})
 //       注入 system prompt。取代過去手動在世界書開關 3 條規則的做法。
 //
-// 規則書文字：預設值寫在本檔(DEFAULT_RULES)；使用者可在「圖片生成設定」面板
-//   的 3 個 textarea 改寫，存 localStorage['aurelia_avatar_rules']。
+// 規則書文字：預設值寫在本檔(DEFAULT_RULES)；使用者可在 手機設定→畫廊→生成服務
+//   各 service 子區的 textarea 改寫，按「保存」存進 localStorage['os_image_config'].avatarRules。
 //   某服務沒自訂(空字串)→ 自動退回預設。
+// 產圖器選擇也讀同一份 os_image_config.service（pollinations / novelai / tavern_sd）。
 // 只做酒館版(靠 TavernHelper.injectPrompts)；PWA 走 buildContext 不在此。
 // ----------------------------------------------------------------
 (function() {
@@ -15,8 +16,7 @@
     const win = window.parent || window;
 
     const INJECT_ID = 'aurelia_avatar_rules';
-    const STORE_KEY = 'aurelia_avatar_rules';
-    const CFG_KEY   = 'aurelia_image_generator_config';
+    const CFG_KEY   = 'os_image_config';   // os_settings 畫廊圖片設定（service + avatarRules 都存這）
     let _lastUninject = null;
 
     // ── 3 份規則書「預設值」（= 使用者原本放在世界書的版本）──
@@ -104,40 +104,22 @@ AVATAR_ID: 描述...
     const SERVICE_LABEL = { pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館接口 (ComfyUI/SD)' };
     const SERVICES = ['pollinations', 'novelai', 'tavern_sd'];
 
-    // ── 自訂規則的讀寫（localStorage）──
-    function _loadStore() {
-        try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}') || {}; }
+    // os_settings 畫廊圖片設定（service = 選的產圖器；avatarRules = 使用者自訂的 3 份規則）
+    function _imgCfg() {
+        try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {}; }
         catch (e) { return {}; }
-    }
-    function _saveStore(obj) {
-        try { localStorage.setItem(STORE_KEY, JSON.stringify(obj || {})); } catch (e) {}
     }
 
     function getDefault(service) { return DEFAULT_RULES[service] || ''; }
-    // 有效規則：自訂(非空)優先，否則退回預設
+    // 有效規則：使用者在設定面板自訂(非空)優先，否則退回預設
     function getRule(service) {
-        const custom = (_loadStore()[service] || '').trim();
+        const custom = ((_imgCfg().avatarRules || {})[service] || '').trim();
         return custom || getDefault(service);
-    }
-    // textarea 載入用：目前有效文字(沒自訂就給預設，讓使用者從預設改起)
-    function getEditable(service) { return getRule(service); }
-    function setRule(service, text) {
-        const s = _loadStore();
-        s[service] = String(text == null ? '' : text);
-        _saveStore(s);
-    }
-    function resetRule(service) {
-        const s = _loadStore();
-        delete s[service];
-        _saveStore(s);
     }
 
     // 目前選的頭像產圖器服務
     function _currentService() {
-        try {
-            const cfg = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
-            return cfg?.panelSettings?.avatar?.service || 'pollinations';
-        } catch (e) { return 'pollinations'; }
+        return _imgCfg().service || 'pollinations';
     }
 
     async function injectAvatarRules() {
@@ -184,7 +166,7 @@ AVATAR_ID: 描述...
     win.OS_AVATAR_RULES_INJECTOR = {
         injectAvatarRules,
         reinject: injectAvatarRules,
-        getDefault, getRule, getEditable, setRule, resetRule,
+        getDefault, getRule,
         SERVICE_LABEL, SERVICES,
     };
 
