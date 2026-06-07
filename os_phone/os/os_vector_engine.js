@@ -86,8 +86,11 @@
     const EXTRACTION_PROMPT = `從以下視覺小說章節提取「有長期重要性」的記憶條目。
 輸出純 JSON 陣列，不要 markdown 包裹。每筆記錄包含：
 - type: "npc" | "event" | "item" | "location" | "rule" | "relationship" | "dialogue"
-- text: 一句話描述（中文）。但若 type 為 "dialogue"，請寫成「<角色名>的說話風格／口癖 ＋ 一句最能代表其性格的原句台詞」，盡量保留原話用詞，別改寫成轉述
-- tags: 關鍵詞陣列（務必包含相關角色名）
+- summary:【索引用】一句話、≤20字，要能「跟其他記憶區分開」。寫出這條獨有的識別點（誰對誰做了什麼、發生什麼變化、得到/失去什麼）。
+    ⚠️ 主角是誰大家都知道——summary 不要每條都用主角名開頭、更別只寫一串角色名，把字數全留給「有區別性的內容」。
+    （示意「結構」非實際內容：「〈某角色〉在〈某處〉做了〈某具體事〉」「〈某規則〉被觸發」；實際請填劇情真正發生的事。）
+- text:【細節用】較完整的描述（1～3句），保留之後可能要回想的具體細節。若 type 為 "dialogue"，請寫「<角色名>的說話風格／口癖 ＋ 一句最能代表其性格的原句台詞」，盡量保留原話、別改寫成轉述。
+- tags: 關鍵詞陣列，供之後檢索比對用（角色名、地點、物品、事件詞皆可）。
 
 提取重點：
 - 關鍵事件、角色狀態變化、重要物品、世界規則、人物關係
@@ -168,6 +171,7 @@
                 await win.OS_DB.saveVnMemory({
                     storyId, chapterId,
                     type: entry.type || 'event',
+                    summary: String(entry.summary || '').trim(),   // 索引用一句話摘要(學星河目錄)；舊資料沒有→召回端退回 text
                     text: entry.text || '',
                     tags: entry.tags || [],
                     vector: vec,
