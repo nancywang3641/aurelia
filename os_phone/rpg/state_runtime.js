@@ -293,11 +293,11 @@ ${modeRules}
 
 ═══════════════════════════════════════
 【★ 同時抽取「長期記憶」→ 放進同一個 JSON 的 "memories" 欄位】
-除了上面的 "updates"，請在**同一個 JSON** 裡再加一個 "memories" 陣列，每筆 { "type", "text", "tags" }；沒有值得記的就給 []。
+除了上面的 "updates"，請在**同一個 JSON** 裡再加一個 "memories" 陣列，每筆 { "type", "summary", "text", "tags" }；沒有值得記的就給 []。
 抽取規則：
 ${_memoryRulesText()}
 
-最終輸出格式：{ "updates": { ... }, "memories": [ { "type":"...", "text":"...", "tags":[...] } ] }`;
+最終輸出格式：{ "updates": { ... }, "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
     }
     // 只有記憶要抽時的獨立 prompt（沒變數包 / 這則狀態已抽過）
     function _memoryOnlyPrompt(text) {
@@ -309,7 +309,7 @@ ${text || '（無）'}
 抽取規則：
 ${_memoryRulesText()}
 
-請輸出嚴格 JSON（不包 markdown）：{ "memories": [ { "type":"...", "text":"...", "tags":[...] } ] }`;
+請輸出嚴格 JSON（不包 markdown）：{ "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
     }
 
     // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
