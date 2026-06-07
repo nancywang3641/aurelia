@@ -45,7 +45,9 @@
                 charNegPrompt: 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry',
                 itemBasePrompt: 'masterpiece, best quality, white background, simple background, no background, product image, detailed',
                 itemNegPrompt: 'person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text',
-            }
+            },
+            // 酒館原生 /sd：走使用者在酒館 Image Generation 擴展設好的後端；以下全可空，空=用酒館自己的設定
+            tavernSd: { negative: '', width: '', height: '', steps: '', cfg: '' }
         },
 
         init: function() {
@@ -64,6 +66,10 @@
                         novelai: {
                             ...this.config.novelai,
                             ...savedConfig.novelai
+                        },
+                        tavernSd: {
+                            ...this.config.tavernSd,
+                            ...(savedConfig.tavernSd || {})
                         }
                     };
                     
@@ -114,9 +120,13 @@
             // 🔥 步驟 2: 路由判斷（char/item/scene 有 NAI token 走 NAI；背景底板走 generateBackgroundAsync）
             // options.provider 可「單次」覆蓋全域 service（給 VN 面板各自選 NAI / POLL AI 用）；沒給就維持全域
             const isNaiType = (type === 'char' || type === 'item' || type === 'scene');
-            const service = (options.provider === 'novelai' || options.provider === 'pollinations') ? options.provider : this.config.service;
+            const service = (options.provider === 'novelai' || options.provider === 'pollinations' || options.provider === 'tavern_sd') ? options.provider : this.config.service;
             let result;
-            if (isNaiType && service === 'novelai' && this.config.novelai.token) {
+            if (service === 'tavern_sd') {
+                // 酒館原生 /sd：raw prompt（不塞奧瑞亞底詞，尊重朋友的 SD 設定）；失敗回 null，不偷偷換來源
+                console.log(`[ImageManager] Final Prompt [${type}→TavernSD]: ${englishPrompt}`);
+                result = await this._genTavernSd(englishPrompt, type, options);
+            } else if (isNaiType && service === 'novelai' && this.config.novelai.token) {
                 // NAI 使用 Danbooru tag 格式，底詞/負詞在 _genNovelAI 內部處理
                 console.log(`[ImageManager] Final Prompt [${type}→NAI${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
                 result = await this._genNovelAI(englishPrompt, type, options);
@@ -183,6 +193,56 @@
 
             console.log('[ImageManager] 生成 URL:', url);
             return url;
+        },
+
+        // --- 酒館原生 /sd 生成：走使用者在酒館 Image Generation 擴展設好的後端 ---
+        // 不塞奧瑞亞底詞/負詞（尊重朋友的 SD 設定）；失敗回 null 並用 toastr 提示，不偷偷換來源。
+        _genTavernSd: async function(prompt, type, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+
+            const trigger = (win.TavernHelper && win.TavernHelper.triggerSlash) || win.triggerSlash;
+            if (typeof trigger !== 'function') {
+                console.warn('[ImageManager] 找不到 triggerSlash，無法走酒館原生生圖');
+                try { win.toastr && win.toastr.warning('找不到酒館助手，無法使用「酒館原生」生圖', '生圖'); } catch (e) {}
+                return null;
+            }
+
+            // 淨化 prompt：移除會破壞 STscript 解析的字元（| 管道、{{ }} 巨集、換行）
+            const clean = String(prompt || '')
+                .replace(/\|/g, ' ')
+                .replace(/\{\{|\}\}/g, '')
+                .replace(/[\r\n]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!clean) return null;
+
+            const t = this.config.tavernSd || {};
+            const args = ['quiet=true', 'gallery=false', 'extend=false'];
+            const neg = options.negativePrompt || t.negative;
+            if (neg) args.push('negative="' + String(neg).replace(/"/g, '') + '"');
+            if (options.seed) args.push('seed=' + options.seed);
+            const w = options.width || t.width;  if (w) args.push('width=' + w);
+            const h = options.height || t.height; if (h) args.push('height=' + h);
+            if (t.steps) args.push('steps=' + t.steps);
+            if (t.cfg)   args.push('cfg=' + t.cfg);
+
+            const cmd = '/sd ' + args.join(' ') + ' ' + clean;
+            console.log('[ImageManager] 酒館原生 /sd 指令:', cmd);
+
+            try {
+                const url = await trigger(cmd);
+                if (!url || typeof url !== 'string' || !url.trim()) {
+                    console.warn('[ImageManager] /sd 回傳空，可能未設定後端');
+                    try { win.toastr && win.toastr.warning('生圖失敗，請先在酒館「圖像生成」擴展設定好後端', '酒館原生生圖'); } catch (e) {}
+                    return null;
+                }
+                console.log('[ImageManager] ✅ 酒館原生生圖成功');
+                return url.trim();
+            } catch (error) {
+                console.error('[ImageManager] ❌ 酒館原生生圖失敗:', error);
+                try { win.toastr && win.toastr.error('生圖失敗：' + (error.message || error), '酒館原生生圖'); } catch (e) {}
+                return null;
+            }
         },
 
         // --- ZIP 解析：從中央目錄讀正確大小，避免 data descriptor 格式導致 size=0 ---
@@ -442,6 +502,12 @@
 
             // ✅ 優先使用外部傳入的 Negative Prompt，否則用預設防護詞
             const negativePrompt = options.negativePrompt || 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render';
+
+            // 🎨 酒館原生 /sd 背景：走使用者後端，失敗回 null（不偷偷換）
+            const _bgService = (options.provider === 'tavern_sd' || options.provider === 'novelai' || options.provider === 'pollinations') ? options.provider : this.config.service;
+            if (_bgService === 'tavern_sd') {
+                return await this._genTavernSd(optimizedPrompt, 'bg', { ...options, negativePrompt });
+            }
 
             const seed = options.seed || Math.floor(Math.random() * 100000);
             const width = options.width || 1024;
