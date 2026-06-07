@@ -1012,7 +1012,15 @@ EXAMPLE "prompt" value:
                             <select class="set-select" id="img-service">
                                 <option value="pollinations" ${imgConfig.service === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
                                 <option value="novelai" ${imgConfig.service === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
+                                <option value="tavern_sd" ${imgConfig.service === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
                             </select>
+
+                            <div id="img-group-tavernsd" class="${imgConfig.service === 'tavern_sd' ? '' : 'hidden'}">
+                                <div class="set-group">
+                                    <div class="set-desc">🎨 用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。</div>
+                                    <div class="set-desc">⚠️ 前提：先在酒館「圖像生成」擴展設好一個後端來源。沒設好會跳提示，不會偷偷換成別的來源。</div>
+                                </div>
+                            </div>
 
                             <div id="img-group-pollinations" class="${imgConfig.service === 'pollinations' ? '' : 'hidden'}">
                                 <div style="margin-top:15px;">
@@ -1965,11 +1973,16 @@ EXAMPLE "prompt" value:
         if (elNaiModel) elNaiModel.onchange = () => updateSmeaVisibility(elNaiModel.value);
 
         elImgService.onchange = () => {
-            const isNai = elImgService.value === 'novelai';
+            const _svc = elImgService.value;
+            const isNai = _svc === 'novelai';
+            const isPol = _svc === 'pollinations';
+            const isTav = _svc === 'tavern_sd';
             elNaiGroup.classList.toggle('hidden', !isNai);
-            elPolGroup.classList.toggle('hidden', isNai);
+            elPolGroup.classList.toggle('hidden', !isPol);
+            const elTavGroup = container.querySelector('#img-group-tavernsd');
+            if (elTavGroup) elTavGroup.classList.toggle('hidden', !isTav);
             const elPolPrompts = container.querySelector('#img-pol-prompts-group');
-            if (elPolPrompts) elPolPrompts.classList.toggle('hidden', isNai);
+            if (elPolPrompts) elPolPrompts.classList.toggle('hidden', !isPol);
         };
 
         // Fetch Logic (Primary)
