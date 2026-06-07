@@ -169,6 +169,40 @@
                     margin-top: 5px !important;
                     line-height: 1.4 !important;
                 }
+
+                .avatar-rule-editor .avatar-rule-item {
+                    margin-top: 16px !important;
+                }
+                .avatar-rule-editor .avatar-rule-head {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    margin-bottom: 6px !important;
+                    font-size: 13px !important;
+                    font-weight: 600 !important;
+                    color: #dddddd !important;
+                }
+                .avatar-rule-editor .avatar-rule-reset {
+                    background: #3a3a3a !important;
+                    color: #dddddd !important;
+                    border: 1px solid #555555 !important;
+                    border-radius: 6px !important;
+                    padding: 4px 10px !important;
+                    font-size: 12px !important;
+                    cursor: pointer !important;
+                    transition: background 0.2s ease !important;
+                }
+                .avatar-rule-editor .avatar-rule-reset:hover {
+                    background: #4a4a4a !important;
+                }
+                .avatar-rule-editor .avatar-rule-textarea {
+                    min-height: 200px !important;
+                    font-family: ui-monospace, Menlo, Consolas, monospace !important;
+                    font-size: 12px !important;
+                    line-height: 1.5 !important;
+                    white-space: pre-wrap !important;
+                    resize: vertical !important;
+                }
                 
                 .image-settings-status-display {
                     margin-top: 20px !important;
