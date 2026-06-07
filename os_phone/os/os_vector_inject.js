@@ -55,7 +55,8 @@
     }
 
     // 召回不開副模型「挑」(省一通)：只把「全部記憶的 tags 關鍵詞索引」注入主模型(不丟完整內文)，
-    // 主模型看得到全部記憶的存在與主題→不漏，但 prompt 大幅縮水(原本丟 90 字內文×全部 244 條 → 爆到 1.1 萬 token)。
+    // 且索引會過濾(剔泛用 tag、同主題去重)，主模型看得到全部主題→不漏，但 prompt 大幅縮水(原本丟 90 字內文×244 條 → 爆 1.1 萬 token)。
+    // 需要某條完整內容時主模型用 <recall>關鍵詞</recall> 點名，下一輪補上(見 _captureAndStripRecall)。
     const MEM_TAG_MAX = 6;       // 每條最多列幾個 tag
     const MEM_FALLBACK_MAX = 30; // 無 tag 的記憶才退回極短內文，幾字以內
 
@@ -82,22 +83,46 @@
             if (!all.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
 
-            // 只丟 tags 關鍵詞當索引(不丟完整內文)；主模型看得到全部記憶的主題→不漏存在，prompt 大幅縮水。
-            // 無 tag 的記憶才退回極短內文，避免空行。
-            const _line = (m) => {
-                const tags = (m.tags || []).filter(Boolean);
-                if (tags.length) return `・${tags.slice(0, MEM_TAG_MAX).join('、')}`;
-                let t = String(m.text || '').replace(/\s+/g, ' ').trim();
-                if (t.length > MEM_FALLBACK_MAX) t = t.slice(0, MEM_FALLBACK_MAX) + '…';
-                return t ? `・${t}` : '';
-            };
+            // 索引要「濾過」才有用：raw tags 大量重複(主角名幾乎每條都有=噪音、同主題的行一再出現)。
+            // 兩道過濾 → ①剔除「幾乎每條都出現」的泛用 tag(主角/常駐地點)，開頭只點一次
+            //           ②依剩餘 tag 集合去重(同主題多條塌成一行；該主題完整內容仍可 <recall> 撈回)
             const facts = all.filter(m => m.type !== 'dialogue');
             const voice = all.filter(m => m.type === 'dialogue');
-            let block = `[記憶索引｜下列每行是一段「過往已發生記憶」的關鍵詞，提醒你這些事都發生過：寫作時保持連貫、勿與之矛盾，需要細節時依關鍵詞回想]\n`;
-            block += facts.map(_line).filter(Boolean).join('\n');
-            if (voice.length) {
-                block += `\n\n【角色語氣索引｜下列關鍵詞代表各角色的性格與說話風格，延續一致、勿 OOC】\n`;
-                block += voice.map(_line).filter(Boolean).join('\n');
+
+            // 統計 fact tag 出現次數 → 找出泛用 tag(≥半數記憶都有)
+            const _freq = {};
+            facts.forEach(m => Array.from(new Set((m.tags || []).filter(Boolean))).forEach(t => { _freq[t] = (_freq[t] || 0) + 1; }));
+            const _ubiqMin = Math.max(4, Math.ceil(facts.length * 0.5));
+            const ubiq = Object.keys(_freq).filter(t => _freq[t] >= _ubiqMin);
+            const ubiqSet = new Set(ubiq);
+
+            // 逐條：剔泛用 tag → 取識別性 tag → 依「tag 集合」去重(同主題只留一行)
+            const _seen = new Set();
+            const factLines = [];
+            facts.forEach(m => {
+                let tags = (m.tags || []).filter(Boolean).filter(t => !ubiqSet.has(t)).slice(0, MEM_TAG_MAX);
+                if (tags.length) {
+                    const key = tags.slice().sort().join('|');
+                    if (_seen.has(key)) return; _seen.add(key);
+                    factLines.push('・' + tags.join('、'));
+                } else {                                   // 整條只剩泛用 tag → 退回極短內文當識別
+                    let t = String(m.text || '').replace(/\s+/g, ' ').trim();
+                    if (t.length > MEM_FALLBACK_MAX) t = t.slice(0, MEM_FALLBACK_MAX) + '…';
+                    if (!t) return;
+                    const key = 'T:' + t;
+                    if (_seen.has(key)) return; _seen.add(key);
+                    factLines.push('・' + t);
+                }
+            });
+
+            // 語氣記憶的 tag 幾乎只有角色名 → 收斂成「有語氣樣本的角色」一行(要範例就 <recall> 角色名)
+            const voiceNames = Array.from(new Set(voice.flatMap(m => (m.tags || []).filter(Boolean))));
+
+            let block = `[記憶索引｜下列每行是一段「過往已發生記憶」的關鍵詞(同主題已合併)，提醒你這些事都發生過：寫作時保持連貫、勿與之矛盾，需要細節時依關鍵詞 <recall> 回想]\n`;
+            if (ubiq.length) block += `（貫穿全篇、幾乎每條都有的主體，下面不再重複列出：${ubiq.join('、')}）\n`;
+            block += factLines.join('\n');
+            if (voiceNames.length) {
+                block += `\n\n【角色語氣索引｜下列角色有語氣/說話樣本，需要某角色的說話風格範例就 <recall> 其名】\n・${voiceNames.join('、')}`;
             }
 
             // ── 主模型上一輪 <recall> 點名的記憶 → 這一輪補完整內文（細節晚一輪到，不多通 API）──
