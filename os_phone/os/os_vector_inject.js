@@ -54,11 +54,10 @@
             || localStorage.getItem('vn_current_story_id') || '';
     }
 
-    // 召回不開副模型「挑」(省一通)：只把「全部記憶的 tags 關鍵詞索引」注入主模型(不丟完整內文)，
-    // 且索引會過濾(剔泛用 tag、同主題去重)，主模型看得到全部主題→不漏，但 prompt 大幅縮水(原本丟 90 字內文×244 條 → 爆 1.1 萬 token)。
-    // 需要某條完整內容時主模型用 <recall>關鍵詞</recall> 點名，下一輪補上(見 _captureAndStripRecall)。
-    const MEM_TAG_MAX = 6;       // 每條最多列幾個 tag
-    const MEM_FALLBACK_MAX = 30; // 無 tag 的記憶才退回極短內文，幾字以內
+    // 召回不開副模型「挑」(省一通)：把「全部記憶的一句話摘要(summary)目錄」注入主模型(學星河璀璨：目錄常駐、全文按需)。
+    // 目錄按時間遠近分早/中/近三段(免費時間召回，不花 LLM)；需要某條完整內容時主模型用 <recall>關鍵詞</recall> 點名，
+    // 下一輪補上(見 _captureAndStripRecall)。每行都是看得懂的摘要、不是噪音 tag，prompt 也大幅縮水。
+    const MEM_SUM_MAX = 28;      // 索引每條摘要最多幾字
 
     async function injectMemories() {
         try {
@@ -83,44 +82,34 @@
             if (!all.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
 
-            // 索引要「濾過」才有用：raw tags 大量重複(主角名幾乎每條都有=噪音、同主題的行一再出現)。
-            // 兩道過濾 → ①剔除「幾乎每條都出現」的泛用 tag(主角/常駐地點)，開頭只點一次
-            //           ②依剩餘 tag 集合去重(同主題多條塌成一行；該主題完整內容仍可 <recall> 撈回)
+            // 索引 = 每條的「一句話摘要」(summary，學星河璀璨的目錄)，不是 tags。
+            //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
+            //   再做「免費時間召回」：facts 已按 createdAt 舊→新排序，切三段標粗略時距(不花 LLM、不多通)，
+            //   讓主模型有「多久以前」的概念、時態不錯亂。
             const facts = all.filter(m => m.type !== 'dialogue');
             const voice = all.filter(m => m.type === 'dialogue');
 
-            // 統計 fact tag 出現次數 → 找出泛用 tag(≥半數記憶都有)
-            const _freq = {};
-            facts.forEach(m => Array.from(new Set((m.tags || []).filter(Boolean))).forEach(t => { _freq[t] = (_freq[t] || 0) + 1; }));
-            const _ubiqMin = Math.max(4, Math.ceil(facts.length * 0.5));
-            const ubiq = Object.keys(_freq).filter(t => _freq[t] >= _ubiqMin);
-            const ubiqSet = new Set(ubiq);
-
-            // 逐條：剔泛用 tag → 取識別性 tag → 依「tag 集合」去重(同主題只留一行)
             const _seen = new Set();
-            const factLines = [];
-            facts.forEach(m => {
-                let tags = (m.tags || []).filter(Boolean).filter(t => !ubiqSet.has(t)).slice(0, MEM_TAG_MAX);
-                if (tags.length) {
-                    const key = tags.slice().sort().join('|');
-                    if (_seen.has(key)) return; _seen.add(key);
-                    factLines.push('・' + tags.join('、'));
-                } else {                                   // 整條只剩泛用 tag → 退回極短內文當識別
-                    let t = String(m.text || '').replace(/\s+/g, ' ').trim();
-                    if (t.length > MEM_FALLBACK_MAX) t = t.slice(0, MEM_FALLBACK_MAX) + '…';
-                    if (!t) return;
-                    const key = 'T:' + t;
-                    if (_seen.has(key)) return; _seen.add(key);
-                    factLines.push('・' + t);
-                }
-            });
+            const _sumLine = (m) => {                       // 索引文字：summary 優先，沒有退回 text，截短去重
+                let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
+                if (!s) return '';
+                if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
+                if (_seen.has(s)) return '';
+                _seen.add(s);
+                return '・' + s;
+            };
+
+            let block = `[記憶索引｜下列是過往已發生記憶的摘要，按時間遠近分三段(早期/中段/近期)；寫作時保持連貫、勿與之矛盾，需要某條完整細節就用 <recall> 回想]\n`;
+            if (facts.length) {
+                const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
+                [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]].forEach((seg) => {
+                    const lines = seg[1].map(_sumLine).filter(Boolean);
+                    if (lines.length) block += `\n〔${seg[0]}〕\n` + lines.join('\n');
+                });
+            }
 
             // 語氣記憶的 tag 幾乎只有角色名 → 收斂成「有語氣樣本的角色」一行(要範例就 <recall> 角色名)
             const voiceNames = Array.from(new Set(voice.flatMap(m => (m.tags || []).filter(Boolean))));
-
-            let block = `[記憶索引｜下列每行是一段「過往已發生記憶」的關鍵詞(同主題已合併)，提醒你這些事都發生過：寫作時保持連貫、勿與之矛盾，需要細節時依關鍵詞 <recall> 回想]\n`;
-            if (ubiq.length) block += `（貫穿全篇、幾乎每條都有的主體，下面不再重複列出：${ubiq.join('、')}）\n`;
-            block += factLines.join('\n');
             if (voiceNames.length) {
                 block += `\n\n【角色語氣索引｜下列角色有語氣/說話樣本，需要某角色的說話風格範例就 <recall> 其名】\n・${voiceNames.join('、')}`;
             }
@@ -129,7 +118,7 @@
             if (_pendingRecallKeywords.length) {
                 const kws = _pendingRecallKeywords.map(k => k.toLowerCase());
                 const hit = all.filter(m => {
-                    const hay = ((m.tags || []).join(' ') + ' ' + (m.text || '')).toLowerCase();
+                    const hay = ((m.tags || []).join(' ') + ' ' + (m.summary || '') + ' ' + (m.text || '')).toLowerCase();
                     return kws.some(k => k && hay.includes(k));
                 }).slice(0, 8);
                 if (hit.length) {
@@ -143,8 +132,8 @@
                 _pendingRecallKeywords = [];   // 消費掉；要持續帶細節就靠主模型下一輪再 <recall>
             }
 
-            // ── 教主模型怎麼把「索引」變「細節」（細節晚一輪到）──
-            block += `\n\n[記憶用法｜上面只有關鍵詞、沒有細節。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>關鍵詞</recall>（多個關鍵詞用、或逗號隔開）。系統會在下一輪把那幾條的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]`;
+            // ── 教主模型怎麼把「摘要」變「細節」（細節晚一輪到）──
+            block += `\n\n[記憶用法｜上面只是摘要、沒有完整細節。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>關鍵詞</recall>（用該記憶裡的角色名/地點/事件當關鍵詞，可多個、逗號隔開）。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]`;
 
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
@@ -155,7 +144,7 @@
             }], { once: true });
             _lastUninject = result?.uninject || null;
             _lastRecall = { text: block.trim(), count: all.length };   // 給 CTX 面板「記憶召回」行
-            console.log(`🧠 [Vector Memory Injector] 注入記憶 tags 索引 ${all.length} 條（只丟關鍵詞、不丟內文，prompt 大幅縮水）`);
+            console.log(`🧠 [Vector Memory Injector] 注入記憶摘要索引 ${all.length} 條（summary 目錄+時間分段，全文按需 <recall>）`);
         } catch (e) {
             console.warn('[Vector Memory Injector] 失敗:', e?.message || e);
         }
