@@ -99,7 +99,7 @@
                 return '・' + s;
             };
 
-            let block = `[記憶索引｜下列是過往已發生記憶的摘要，按時間遠近分三段(早期/中段/近期)；寫作時保持連貫、勿與之矛盾，需要某條完整細節就用 <recall> 回想]\n`;
+            let block = `<劇情記憶 規則="既成事實·寫作前必讀·不得矛盾">\n下列是本劇過往「已經發生」的記憶摘要，按時間遠近分三段(早期/中段/近期)。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n`;
             if (facts.length) {
                 const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
                 [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]].forEach((seg) => {
@@ -133,13 +133,13 @@
             }
 
             // ── 教主模型怎麼把「摘要」變「細節」（細節晚一輪到）──
-            block += `\n\n[記憶用法｜上面只是摘要、沒有完整細節。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>關鍵詞</recall>（用該記憶裡的角色名/地點/事件當關鍵詞，可多個、逗號隔開）。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]`;
+            block += `\n\n[記憶用法｜上面只是摘要、沒有完整細節。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>關鍵詞</recall>（用該記憶裡的角色名/地點/事件當關鍵詞，可多個、逗號隔開）。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
 
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
                 content: block.trim(),
                 position: 'in_chat',
-                depth: 1,
+                depth: 0,
                 role: 'system'
             }], { once: true });
             _lastUninject = result?.uninject || null;
