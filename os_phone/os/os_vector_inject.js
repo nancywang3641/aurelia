@@ -18,6 +18,35 @@
     const INJECT_ID = 'aurelia_vn_memory';
     let _lastUninject = null;
     let _lastRecall = null;   // 給 CTX 面板「記憶召回」行讀：{ text, count }
+    let _pendingRecallKeywords = [];   // 主模型上一輪 <recall> 點名、待下一輪載入完整內文的關鍵詞
+    const _RECALL_RE = /<recall>([\s\S]*?)<\/recall>/gi;
+
+    // 抽出 AI 回覆裡的 <recall>關鍵詞</recall> → 存給下一輪 injectMemories 補完整內文；並把標籤從顯示訊息清掉。
+    // 回傳清過 <recall> 的內文(給後續 ingest，避免把標籤記成記憶)。
+    async function _captureAndStripRecall(content) {
+        try {
+            const kws = [];
+            let mt; _RECALL_RE.lastIndex = 0;
+            while ((mt = _RECALL_RE.exec(content)) !== null) {
+                String(mt[1] || '').split(/[,，、\s]+/).forEach((k) => { k = k.trim(); if (k) kws.push(k); });
+            }
+            if (!kws.length) return content;        // 沒有 <recall> → 原樣返回
+            _pendingRecallKeywords = Array.from(new Set(kws)).slice(0, 12);
+            console.log('🧠 [Recall] 主模型點名、下一輪載入細節:', _pendingRecallKeywords.join('、'));
+            // 從顯示訊息清掉 <recall>…</recall>（用陣列索引 chat.length-1 改，避開懶載入真樓號越界）
+            const cleaned = content.replace(/\s*<recall>[\s\S]*?<\/recall>\s*/gi, '\n').trim();
+            if (cleaned !== content) {
+                try {
+                    const ctx = win.SillyTavern?.getContext?.();
+                    const arrIdx = (ctx && Array.isArray(ctx.chat)) ? ctx.chat.length - 1 : -1;
+                    if (arrIdx >= 0 && win.TavernHelper?.setChatMessages) {
+                        await win.TavernHelper.setChatMessages([{ message_id: arrIdx, message: cleaned, mes: cleaned }], { refresh: 'affected' });
+                    }
+                } catch (e) {}
+            }
+            return cleaned;
+        } catch (e) { console.warn('[Recall] capture 失敗:', e?.message || e); return content; }
+    }
 
     function _storyId() {
         return (win.VN_Core && win.VN_Core._currentStoryId)
@@ -71,6 +100,27 @@
                 block += voice.map(_line).filter(Boolean).join('\n');
             }
 
+            // ── 主模型上一輪 <recall> 點名的記憶 → 這一輪補完整內文（細節晚一輪到，不多通 API）──
+            if (_pendingRecallKeywords.length) {
+                const kws = _pendingRecallKeywords.map(k => k.toLowerCase());
+                const hit = all.filter(m => {
+                    const hay = ((m.tags || []).join(' ') + ' ' + (m.text || '')).toLowerCase();
+                    return kws.some(k => k && hay.includes(k));
+                }).slice(0, 8);
+                if (hit.length) {
+                    block += `\n\n【點名記憶細節｜你上一輪用 <recall> 要求回想的記憶，完整內容如下，務必據此保持連貫】\n`;
+                    block += hit.map(m => {
+                        let t = String(m.text || '').replace(/\s+/g, ' ').trim();
+                        if (t.length > 300) t = t.slice(0, 300) + '…';
+                        return `・${t}`;
+                    }).join('\n');
+                }
+                _pendingRecallKeywords = [];   // 消費掉；要持續帶細節就靠主模型下一輪再 <recall>
+            }
+
+            // ── 教主模型怎麼把「索引」變「細節」（細節晚一輪到）──
+            block += `\n\n[記憶用法｜上面只有關鍵詞、沒有細節。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>關鍵詞</recall>（多個關鍵詞用、或逗號隔開）。系統會在下一輪把那幾條的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]`;
+
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
                 content: block.trim(),
@@ -105,8 +155,10 @@
             const m = last[0];
             if (m.is_user) return;                                     // 只記 AI 回覆
             const id = String(m.message_id ?? m.id ?? '');
-            const content = (m.message || m.mes || m.content || '').trim();
+            let content = (m.message || m.mes || m.content || '').trim();
             if (!content) return;
+            // 主模型若用 <recall> 點名要回想的記憶 → 記下關鍵詞(下一輪補完整內文)，並把標籤從訊息清掉(不顯示給讀者)
+            content = await _captureAndStripRecall(content);
             // 只記「VN 劇情」回覆 —— 認 <content> 標籤即可（它裡面就是全文）；
             // 不依賴 [Chapter|/[Story| 等特定 tag（用戶 tag 很多又持續新增，照 tag 走會漏）。
             if (!/<content>[\s\S]*?<\/content>/i.test(content)) return;
@@ -139,7 +191,7 @@
                 if (id && win.OS_DB?.deleteVnMemoriesByChapter) win.OS_DB.deleteVnMemoriesByChapter(id, _storyId());
             } catch (e) {}
         });
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestSig = null; _lastRecall = null; });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestSig = null; _lastRecall = null; _pendingRecallKeywords = []; });
         console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
     }
 
