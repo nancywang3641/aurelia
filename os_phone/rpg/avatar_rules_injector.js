@@ -1,0 +1,192 @@
+// ----------------------------------------------------------------
+// [檔案] avatar_rules_injector.js (V1)
+// 路徑：os_phone/rpg/avatar_rules_injector.js
+// 職責：每輪主模型生成前，依「頭像產圖器」選的服務(pollinations / novelai /
+//       tavern_sd)，把對應的「頭像提示詞規則書」用 injectPrompts({once:true})
+//       注入 system prompt。取代過去手動在世界書開關 3 條規則的做法。
+//
+// 規則書文字：預設值寫在本檔(DEFAULT_RULES)；使用者可在「圖片生成設定」面板
+//   的 3 個 textarea 改寫，存 localStorage['aurelia_avatar_rules']。
+//   某服務沒自訂(空字串)→ 自動退回預設。
+// 只做酒館版(靠 TavernHelper.injectPrompts)；PWA 走 buildContext 不在此。
+// ----------------------------------------------------------------
+(function() {
+    console.log('🪪 [Avatar Rules Injector] V1 載入');
+    const win = window.parent || window;
+
+    const INJECT_ID = 'aurelia_avatar_rules';
+    const STORE_KEY = 'aurelia_avatar_rules';
+    const CFG_KEY   = 'aurelia_image_generator_config';
+    let _lastUninject = null;
+
+    // ── 3 份規則書「預設值」（= 使用者原本放在世界書的版本）──
+    const DEFAULT_RULES = {
+        pollinations: `# 🪪 底部状态栏-AVATAR詳細說明篇 - 每輪"必須"輸出
+
+- 位置要求: 必須每次在</status>....</status>內輸出
+- 此規則是"pollinations ai" 專用規則書
+
+[頭像]
+<avatar>
+角色名(AVATAR_ID): 2D, [boy/girl/man/woman], [child/teenager/mature adult/elderly], [male/female],詳細描述髮型,髮色,裝飾,否則會生成大同小異圖...,[CAMERA], [LIGHTING], [BACKGROUND].
+
+* 範例：
+AVATAR_ID: 描述...
+小明: 2D, boy/mature, child, male, clear face, detailed eyes, messy hair, t-shirt, looking at viewerl, ow angle shot, triangular composition, side lighting, blurred, blurred city lights.
+
+</avatar>
+
+[頭像規範]:
+0. 判斷當前場景中，哪些角色是「重要且在場」的。
+1. ⚠️ 去重：僅在角色第一次正式介紹時觸發。
+2. 必須是「頭像」風格：
+   * 不可有任何真人描寫
+   * 構圖範圍：確保臉部清晰，不描寫到肩部以下導致生成畫面偏移
+   * 視角允許：slight low angle / slight high angle / 3/4 view / Dutch tilt
+3. 描述細節：必須包含五官特徵(瞳色/眼型)、髮型髮色、獨特配飾及上衣款式。
+4. ⛔ 格式強制：冒號前角色名必須與[角色]名字同步。
+5. 🚫 絕對禁止生成：❌環境角色 ❌一次性角色 ❌群體角色`,
+
+        novelai: `# 🪪 底部状态栏-AVATAR詳細說明篇 - 每輪"必須"輸出
+
+- 位置要求: 必須每次在</status>....</status>輸出底部状态栏
+- 此規則是"novel ai"  專用規則書
+
+[頭像]
+<avatar>
+角色名: [1girl/1boy], [mature/young/child], [face focus/close-up/bust shot], [vibe], [face shape], [body type], [skin color], [eye color], [eye shape], [hair length] , [hair style] , [hair texture], [bangs type],  [distinct feature], [1-2個服裝標籤], [表情標籤], [簡單背景標籤]
+
+* 範例：
+小明: 1boy, bust shot, calm and distant vibe, narrow face shape, slim body type, light skin tone, dark brown eyes, narrow eyes, shoulder-length hair, loosely tied low ponytail, straight hair, parted bangs, faint dark circles under eyes, casual outfit, slightly wrinkled shirt, neutral expression, simple indoor background
+..
+</avatar>
+
+[頭像規範]:
+0. 判斷當前場景中，哪些角色是「重要且在場」的。
+1. ⚠️ 去重：僅在角色第一次正式介紹時觸發。
+2. ⛔ 格式強制：冒號前角色名必須與[角色]名字同步。
+3. 必須是 NAI 標籤風格 (Danbooru Tags)：
+   * 絕對禁止使用自然語言長句，必須用「英文單字 + 逗號」隔開。
+   * 開頭必須是 1girl 或 1boy，絕對禁止出現 full body 或腿部、鞋子的描述。
+4. 描述細節：必須且僅限包含髮型、髮色、瞳色、一件上衣款式與當下表情。
+5. 🚫 絕對禁止生成：❌環境角色 ❌一次性角色 ❌群體角色 (如 2girls, multiple boys)。`,
+
+        tavern_sd: `# 🪪 底部状态栏-AVATAR詳細說明篇 - 每輪"必須"輸出
+
+- 位置要求: 必須每次在</status>....</status>輸出底部状态栏
+- 此規則是"ComfyUI"  專用規則書
+
+[頭像]
+<avatar>
+角色名: [1woman/1man], [mature/young], [bust shot], [vibe], [face shape], [body type], [skin color], [eye color], [eye shape], [hair length] , [hair style] , [hair texture], [bangs type],  [distinct feature], [1-2個服裝標籤], [表情標籤], [簡單背景標籤]
+
+* 範例：
+小明: 1boy, bust shot, calm and distant vibe, narrow face shape, slim body type, light skin tone, dark brown eyes, narrow eyes, shoulder-length hair, loosely tied low ponytail, straight hair, parted bangs, faint dark circles under eyes, casual outfit, slightly wrinkled shirt, neutral expression, simple indoor background
+..
+</avatar>
+
+[頭像規範]:
+
+##男性重要守則##:
+- ComfyUI模型對男性角色吃力，請一定不可以輸出teen/child，會導致幼太化
+- 大於15歲男性一定要用"man, mature adult, male, handsome boy, androgynous male,  jawline, black hair, "來壓模型變女性
+
+0. 判斷當前場景中，哪些角色是「重要且在場」的。
+1. ⚠️ 去重：僅在角色第一次正式介紹時觸發。
+2. ⛔ 格式強制：冒號前角色名必須與[角色]名字同步。
+3. 必須是 ComfyUI 標籤風格 (Danbooru Tags)：
+   * 絕對禁止使用自然語言長句，必須用「英文單字 + 逗號」隔開。
+   * 開頭必須是 1woman 或 1man，絕對禁止出現 full body 或腿部、鞋子的描述。
+4. 描述細節：必須且僅限包含髮型、髮色、瞳色、一件上衣款式與當下表情。
+5. 🚫 絕對禁止生成：❌環境角色 ❌一次性角色 ❌群體角色 (如 2girls, multiple boys)。`,
+    };
+
+    const SERVICE_LABEL = { pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館接口 (ComfyUI/SD)' };
+    const SERVICES = ['pollinations', 'novelai', 'tavern_sd'];
+
+    // ── 自訂規則的讀寫（localStorage）──
+    function _loadStore() {
+        try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}') || {}; }
+        catch (e) { return {}; }
+    }
+    function _saveStore(obj) {
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(obj || {})); } catch (e) {}
+    }
+
+    function getDefault(service) { return DEFAULT_RULES[service] || ''; }
+    // 有效規則：自訂(非空)優先，否則退回預設
+    function getRule(service) {
+        const custom = (_loadStore()[service] || '').trim();
+        return custom || getDefault(service);
+    }
+    // textarea 載入用：目前有效文字(沒自訂就給預設，讓使用者從預設改起)
+    function getEditable(service) { return getRule(service); }
+    function setRule(service, text) {
+        const s = _loadStore();
+        s[service] = String(text == null ? '' : text);
+        _saveStore(s);
+    }
+    function resetRule(service) {
+        const s = _loadStore();
+        delete s[service];
+        _saveStore(s);
+    }
+
+    // 目前選的頭像產圖器服務
+    function _currentService() {
+        try {
+            const cfg = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
+            return cfg?.panelSettings?.avatar?.service || 'pollinations';
+        } catch (e) { return 'pollinations'; }
+    }
+
+    async function injectAvatarRules() {
+        try {
+            // 撤上次的（避免疊加 / 切 chat 殘留）
+            try { _lastUninject?.(); } catch (e) {}
+            _lastUninject = null;
+
+            if (!win.TavernHelper?.injectPrompts) return;
+            const service = _currentService();
+            const rule = (getRule(service) || '').trim();
+            if (!rule) return;
+
+            const result = win.TavernHelper.injectPrompts([{
+                id: INJECT_ID,
+                content: rule,
+                position: 'in_chat',
+                depth: 0,
+                role: 'system'
+            }], { once: true });
+            _lastUninject = result?.uninject || null;
+        } catch (e) {
+            console.warn('[Avatar Rules Injector] inject 失敗:', e?.message || e);
+        }
+    }
+
+    function init() {
+        if (!win.eventOn || !win.tavern_events) {
+            setTimeout(init, 1000);
+            return;
+        }
+        if (win.tavern_events.GENERATION_STARTED) {
+            win.eventOn(win.tavern_events.GENERATION_STARTED, injectAvatarRules);
+        }
+        if (win.tavern_events.CHAT_CHANGED) {
+            win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
+                try { _lastUninject?.(); _lastUninject = null; } catch (e) {}
+            });
+        }
+        console.log('🪪 [Avatar Rules Injector] Ready');
+    }
+
+    // 對外：面板讀寫規則書 + 即時重注（雖然下一輪 GENERATION_STARTED 本來就會讀新值）
+    win.OS_AVATAR_RULES_INJECTOR = {
+        injectAvatarRules,
+        reinject: injectAvatarRules,
+        getDefault, getRule, getEditable, setRule, resetRule,
+        SERVICE_LABEL, SERVICES,
+    };
+
+    init();
+})();
