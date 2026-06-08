@@ -117,12 +117,16 @@
         },
         getAvatar: async function(prompt, exp, force) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
-                // type='char' → generate() 自動疊加 charBasePrompt + charNegPrompt，無需手動讀取
-                // 順序：VN追加詞 → 角色描述詞 → 表情，charBasePrompt 由 generate() 前置
-                const full = this._join(VN_Config.data.avatarBasePrompt, prompt, `${exp} expression`);
-                // VN 自訂負詞優先；若空則 generate() 自動補 charNegPrompt
-                const negPrompt = VN_Config.data.avatarNegPrompt || undefined;
-                // force=true（畫廊「重生」用）→ 繞過 generate() 記憶體快取(_urlCache)，否則同 prompt 只會吐舊圖
+                // 來源隔離：走「酒館原生(tavern_sd)」時改用「酒館原生專屬」頭像底詞/負詞（預設空＝乾淨），
+                // 避免給 poll ai 的 avatarBasePrompt/avatarNegPrompt 漏進 ComfyUI → 跟模型底詞打架爆光
+                const _svc = (win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '';
+                const _isTavern = (_svc === 'tavern_sd');
+                const _base = _isTavern ? VN_Config.data.avatarBasePromptTavern : VN_Config.data.avatarBasePrompt;
+                const _neg  = _isTavern ? VN_Config.data.avatarNegPromptTavern  : VN_Config.data.avatarNegPrompt;
+                // 順序：(來源對應)追加詞 → 角色描述詞 → 表情
+                const full = this._join(_base, prompt, `${exp} expression`);
+                const negPrompt = _neg || undefined;
+                // force=true（畫廊「重生」用）→ 繞過 generate() 記憶體快取
                 return await win.OS_IMAGE_MANAGER.generate(full, 'char', { negativePrompt: negPrompt, force: !!force });
             } return "";
         },
