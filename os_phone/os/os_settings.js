@@ -409,6 +409,7 @@ EXAMPLE "prompt" value:
             const DEF_SUFFIX = '';
             const LS_PFX = 'os_sprite_tpl_prefix';
             const LS_SFX = 'os_sprite_tpl_suffix';
+            const LS_RATIO = 'os_sprite_upscale_ratio';
             const state = { inited: false, bgRemover: null, blob: null, blobUrl: null, isRemoved: false };
 
             const setStatus = (msg, isErr) => {
@@ -469,13 +470,18 @@ EXAMPLE "prompt" value:
                 enableBtn('sprite-save-btn', false);
 
                 try {
-                    // 立繪固定 512×896 (約 4:7 直立，full body 站姿放得下腿)、跳過 cache。
+                    // 立繪基礎 512×896 (約 4:7 直立，full body 站姿放得下腿)、依「精緻度倍率」放大、跳過 cache。
                     // NAI 的提示詞格式跟 Pollinations 完全不同，純靠通用模板會很裸/畫質差 →
                     // 真的會走 NAI 時就「不 raw」，讓它套用「圖片設置」裡設好的 NAI 底詞/負詞（跟頭像同一套畫風）；
                     // Pollinations（或 NAI 沒 token 退回）維持 raw（純模板，行為不變）。
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
-                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: 512, height: 896, raw: !_useNAI });
+                    // 精緻度倍率：1x=512×896、1.5x=768×1344、2x=1024×1792（直接用大解析度生→治小模型的糊）
+                    const _ratioEl = document.getElementById('sprite-upscale-ratio');
+                    const _ratio = parseFloat((_ratioEl && _ratioEl.value) || localStorage.getItem(LS_RATIO) || '1.5') || 1.5;
+                    const _sw = Math.round(512 * _ratio / 8) * 8;
+                    const _sh = Math.round(896 * _ratio / 8) * 8;
+                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: _sw, height: _sh, raw: !_useNAI });
                     if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
                     const res = await fetch(url);
                     if (!res.ok) throw new Error('抓圖失敗 HTTP ' + res.status);
@@ -715,6 +721,11 @@ EXAMPLE "prompt" value:
                 suffixEl.value = localStorage.getItem(LS_SFX) || DEF_SUFFIX;
                 prefixEl.onchange = () => localStorage.setItem(LS_PFX, prefixEl.value);
                 suffixEl.onchange = () => localStorage.setItem(LS_SFX, suffixEl.value);
+                const ratioEl = document.getElementById('sprite-upscale-ratio');
+                if (ratioEl) {
+                    ratioEl.value = localStorage.getItem(LS_RATIO) || '1.5';
+                    ratioEl.onchange = () => localStorage.setItem(LS_RATIO, ratioEl.value);
+                }
                 document.getElementById('sprite-tpl-reset').onclick = () => {
                     prefixEl.value = DEF_PREFIX;
                     suffixEl.value = DEF_SUFFIX;
@@ -1521,6 +1532,11 @@ EXAMPLE "prompt" value:
                                         <div class="vng-studio-sel-name" id="sprite-selected-info">尚未選擇角色</div>
                                         <textarea id="sprite-sel-prompt" class="vng-studio-prompt" placeholder="立繪 prompt（已清洗，可微調）"></textarea>
                                         <div class="vng-studio-sel-row">
+                                            <select id="sprite-upscale-ratio" class="set-select" style="width:auto;flex:0 0 auto;min-width:0;" title="立繪精緻度：直接用大解析度生，治小模型的糊。立繪一次性存檔，不怕慢。">
+                                                <option value="1">標準 1x（512×896）</option>
+                                                <option value="1.5" selected>精緻 1.5x（768×1344）</option>
+                                                <option value="2">高清 2x（1024×1792）</option>
+                                            </select>
                                             <button class="vng-studio-gen" id="sprite-gen-btn">✨ 生立繪</button>
                                             <details class="vng-studio-tpl">
                                                 <summary>📜 Prompt 模板（前後綴）</summary>
