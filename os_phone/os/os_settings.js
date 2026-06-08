@@ -3272,7 +3272,7 @@ EXAMPLE "prompt" value:
                 const imageUrl = await imageManager.generate(testPrompt, 'char', { width, height, force: true });
 
                 imgTestImage.src = imageUrl;
-                imgTestUrl.textContent = `URL: ${imageUrl}`;
+                imgTestUrl.textContent = /^(data:|blob:)/.test(imageUrl) ? '✅ 圖片已生成（內嵌資料，省略顯示）' : `URL: ${imageUrl}`;
                 imgTestPreview.style.display = 'block';
 
                 imgTestImage.onload = () => { status.innerText = "✅ 圖片加載成功"; };
