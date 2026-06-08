@@ -1070,6 +1070,12 @@ EXAMPLE "prompt" value:
                             </select>
 
                             <div id="img-group-comfyui" class="${imgConfig.service === 'comfyui_direct' ? '' : 'hidden'}">
+                                <div class="set-group">
+                                    <div class="set-label">🪪 頭像提示詞規則（主模型每輪依此寫 &lt;avatar&gt;）</div>
+                                    <div class="set-desc">選此服務時自動注入主模型；改完按最下方「保存」生效。</div>
+                                    <textarea class="set-textarea" id="img-rule-comfyui_direct">${_avRule('comfyui_direct')}</textarea>
+                                    <span class="set-reset-link" onclick="document.getElementById('img-rule-comfyui_direct').value=(window.parent||window).OS_AVATAR_RULES_INJECTOR.getDefault('comfyui_direct')">[重置為預設]</span>
+                                </div>
                                 <div class="set-group" style="margin-top:12px;">
                                     <div class="set-desc">🧩 透過酒館伺服器代理連你的 ComfyUI（免 CORS、免改啟動參數）。在這手動加 LoRA、調參數，奧瑞亞自動組工作流，你不用碰 JSON。</div>
                                 </div>
@@ -2783,9 +2789,10 @@ EXAMPLE "prompt" value:
                     pixabayKey:    (container.querySelector('#img-pixabay-key')?.value || '').trim(),
                     fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false,
                     avatarRules: {
-                        pollinations: (container.querySelector('#img-rule-pollinations')?.value || '').trim(),
-                        novelai:      (container.querySelector('#img-rule-novelai')?.value      || '').trim(),
-                        tavern_sd:    (container.querySelector('#img-rule-tavern_sd')?.value    || '').trim(),
+                        pollinations:   (container.querySelector('#img-rule-pollinations')?.value   || '').trim(),
+                        novelai:        (container.querySelector('#img-rule-novelai')?.value        || '').trim(),
+                        tavern_sd:      (container.querySelector('#img-rule-tavern_sd')?.value      || '').trim(),
+                        comfyui_direct: (container.querySelector('#img-rule-comfyui_direct')?.value || '').trim(),
                     }
                 };
 
