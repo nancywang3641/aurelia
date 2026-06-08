@@ -1364,6 +1364,15 @@ EXAMPLE "prompt" value:
                                 <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:50px;">${vnD.avatarNegPrompt || ''}</textarea>
                             </div>
                             <div class="set-group">
+                                <div class="set-label">🎨 頭像追加詞（酒館原生 / ComfyUI 專用）</div>
+                                <div class="set-desc">來源選「酒館原生」時改用這份。留空＝乾淨，由你的 ComfyUI 模型/LoRA 決定風格（避免 poll ai 底詞漏進去爆光）。</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-prompt-tavern" style="min-height:70px;">${vnD.avatarBasePromptTavern || ''}</textarea>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label">🚫 頭像 Negative（酒館原生 / ComfyUI 專用）</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:50px;">${vnD.avatarNegPromptTavern || ''}</textarea>
+                            </div>
+                            <div class="set-group">
                                 <div class="set-label">🌄 背景生圖底詞</div>
                                 <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:70px;">${vnD.bgBasePrompt || ''}</textarea>
                             </div>
