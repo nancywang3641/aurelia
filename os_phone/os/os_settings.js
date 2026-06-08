@@ -136,7 +136,7 @@ EXAMPLE "prompt" value:
             comfyuiDirect: {
                 url: 'http://127.0.0.1:8188', modelType: 'checkpoint', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
                 steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
-                basePrompt: '', negPrompt: '', loras: [],
+                basePrompt: '', negPrompt: '', loras: [], presets: [],
                 fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5
             }
         };
@@ -167,7 +167,8 @@ EXAMPLE "prompt" value:
                     comfyuiDirect: {
                         ...config.comfyuiDirect,
                         ...(savedConfig.comfyuiDirect || {}),
-                        loras: (savedConfig.comfyuiDirect && Array.isArray(savedConfig.comfyuiDirect.loras)) ? savedConfig.comfyuiDirect.loras : config.comfyuiDirect.loras
+                        loras: (savedConfig.comfyuiDirect && Array.isArray(savedConfig.comfyuiDirect.loras)) ? savedConfig.comfyuiDirect.loras : config.comfyuiDirect.loras,
+                        presets: (savedConfig.comfyuiDirect && Array.isArray(savedConfig.comfyuiDirect.presets)) ? savedConfig.comfyuiDirect.presets : config.comfyuiDirect.presets
                     },
                     pixabayKey:    savedConfig.pixabayKey || '',
                     fallbackForce: savedConfig.fallbackForce === true
@@ -1047,6 +1048,26 @@ EXAMPLE "prompt" value:
                                         <button class="set-btn" id="img-cfd-test" type="button" style="white-space:nowrap;">🔌 測試 / 抓清單</button>
                                     </div>
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">📦 預設包 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">整組「模型＋LoRA＋參數」存起來，一鍵切換</span></div>
+                                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                                        <select id="img-cfd-preset-sel" class="set-select" style="flex:1; min-width:0;">
+                                            <option value="">-- 選擇預設包 --</option>
+                                            ${(imgConfig.comfyuiDirect?.presets || []).map((p, i) => `<option value="${i}">${p.name}</option>`).join('')}
+                                        </select>
+                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._cfdPreset.apply()">套用</span>
+                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._cfdPreset.save()">另存</span>
+                                        <span style="font-size:11px; color:#fc8181; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid #fc8181; border-radius:4px; background:rgba(252,129,129,0.1);" onclick="window._cfdPreset.del()">刪除</span>
+                                    </div>
+                                    <div id="img-cfd-preset-name-row" style="display:none; margin-top:8px;">
+                                        <div style="display:flex; gap:6px; align-items:center;">
+                                            <input id="img-cfd-preset-name-input" class="set-input" placeholder="預設包名稱（如：日常動漫 / BJD寫實）" style="flex:1;">
+                                            <span style="font-size:11px; color:#1A1C28; cursor:pointer; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; white-space:nowrap; background:rgba(26,28,40,0.06);" onclick="window._cfdPreset.confirmSave()">確認</span>
+                                            <span style="font-size:11px; color:rgba(26,28,40,0.72); cursor:pointer; padding:5px 10px; border:1px solid rgba(26,28,40,0.40); border-radius:4px;" onclick="window._cfdPreset.cancelSave()">取消</span>
+                                        </div>
+                                    </div>
+                                    <div class="set-desc" style="margin-top:4px;">「另存」把現在的全部設定打包；「套用」把選中的包填回下面所有欄位。切換後記得按底部保存才會用於正式生圖。</div>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">模型類型</div>
@@ -2103,6 +2124,7 @@ EXAMPLE "prompt" value:
         };
 
         // ===== ComfyUI 直連：LoRA 行 + 測試連線 =====
+        let cfdPresets = [...((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || [])];
         (function setupComfyDirect(){
             const cfd = (imgConfig && imgConfig.comfyuiDirect) || ((window.parent || window).OS_IMAGE_MANAGER && (window.parent || window).OS_IMAGE_MANAGER.config && (window.parent || window).OS_IMAGE_MANAGER.config.comfyuiDirect) || {};
             const lorasBox = container.querySelector('#img-cfd-loras');
@@ -2192,6 +2214,112 @@ EXAMPLE "prompt" value:
                 const lc = fillDatalist('img-cfd-lora-list', loras || [], false);
                 if (statusEl) statusEl.textContent = '✅ 連上！模型 ' + mc + ' 個' + (loras ? ('、LoRA ' + lc + ' 個可下拉') : '（LoRA 清單酒館未提供→手打檔名）');
             });
+
+            // ── 預設包：整組「模型+LoRA+參數」存取（鏡像 NAI _naiPreset） ──
+            function refreshCfdPresetDropdown(){
+                const sel = container.querySelector('#img-cfd-preset-sel');
+                if (!sel) return;
+                const cur = sel.value;
+                sel.innerHTML = '<option value="">-- 選擇預設包 --</option>' +
+                    cfdPresets.map(function(p, i){ return '<option value="' + i + '">' + escAttr(p.name) + '</option>'; }).join('');
+                if (cur !== '' && cfdPresets[parseInt(cur)]) sel.value = cur;
+            }
+            refreshCfdPresetDropdown();
+            const setVal = function(id, v){ const el = container.querySelector(id); if (el && v !== undefined) el.value = v; };
+            const setSelectVal = function(id, v){ // select：值不在選項就先補一個 option 再選
+                const sel = container.querySelector(id); if (!sel || v == null) return;
+                if (![].slice.call(sel.options).some(function(o){ return o.value === String(v); })) {
+                    const o = document.createElement('option'); o.value = v; o.textContent = (v === '' ? '（內建 VAE）' : v); sel.appendChild(o);
+                }
+                sel.value = v;
+            };
+            window._cfdPreset = {
+                apply: function(){
+                    const sel = container.querySelector('#img-cfd-preset-sel');
+                    if (!sel || sel.value === '') { alert('請先選擇預設包'); return; }
+                    const p = cfdPresets[parseInt(sel.value)];
+                    if (!p) return;
+                    const mt = p.modelType || 'checkpoint';
+                    setVal('#img-cfd-type', mt);
+                    const ff = container.querySelector('#img-cfd-flux-fields');
+                    if (ff) ff.classList.toggle('hidden', mt !== 'flux');
+                    refreshModels();
+                    setSelectVal('#img-cfd-model', p.model || '');
+                    setSelectVal('#img-cfd-vae', p.vae || '');
+                    setSelectVal('#img-cfd-sampler', p.sampler || 'euler');
+                    setSelectVal('#img-cfd-scheduler', p.scheduler || 'normal');
+                    setVal('#img-cfd-steps', p.steps != null ? p.steps : 28);
+                    setVal('#img-cfd-cfg', p.cfg != null ? p.cfg : 6.5);
+                    setVal('#img-cfd-width', p.width != null ? p.width : 1024);
+                    setVal('#img-cfd-height', p.height != null ? p.height : 1024);
+                    setVal('#img-cfd-clipskip', p.clipSkip != null ? p.clipSkip : 0);
+                    setVal('#img-cfd-base', p.basePrompt || '');
+                    setVal('#img-cfd-neg', p.negPrompt || '');
+                    setVal('#img-cfd-clipl', p.fluxClipL || 'clip_l.safetensors');
+                    setVal('#img-cfd-t5xxl', p.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors');
+                    setVal('#img-cfd-ae', p.fluxAe || 'ae.safetensors');
+                    setVal('#img-cfd-guidance', p.guidance != null ? p.guidance : 3.5);
+                    if (lorasBox) { lorasBox.innerHTML = ''; (Array.isArray(p.loras) ? p.loras : []).forEach(function(L){ lorasBox.appendChild(makeLoraRow(L)); }); }
+                    if (statusEl) statusEl.textContent = '✅ 已套用預設包「' + (p.name || '') + '」（要正式生圖記得按底部保存）';
+                },
+                save: function(){
+                    const row = container.querySelector('#img-cfd-preset-name-row');
+                    if (row) row.style.display = 'block';
+                    const ni = container.querySelector('#img-cfd-preset-name-input'); if (ni) ni.focus();
+                },
+                confirmSave: function(){
+                    const ni = container.querySelector('#img-cfd-preset-name-input');
+                    const name = ni && ni.value.trim();
+                    if (!name) { alert('請輸入預設包名稱'); return; }
+                    const g  = function(id){ return (container.querySelector(id)?.value || '').trim(); };
+                    const gi = function(id, d){ const v = parseInt(container.querySelector(id)?.value ?? d); return isNaN(v) ? d : v; };
+                    const gf = function(id, d){ const v = parseFloat(container.querySelector(id)?.value ?? d); return isNaN(v) ? d : v; };
+                    cfdPresets.push({
+                        name: name,
+                        modelType: g('#img-cfd-type') || 'checkpoint',
+                        model:     g('#img-cfd-model'),
+                        vae:       g('#img-cfd-vae'),
+                        sampler:   g('#img-cfd-sampler') || 'euler',
+                        scheduler: g('#img-cfd-scheduler') || 'normal',
+                        steps:     gi('#img-cfd-steps', 28),
+                        cfg:       gf('#img-cfd-cfg', 6.5),
+                        width:     gi('#img-cfd-width', 1024),
+                        height:    gi('#img-cfd-height', 1024),
+                        clipSkip:  gi('#img-cfd-clipskip', 0),
+                        basePrompt:g('#img-cfd-base'),
+                        negPrompt: g('#img-cfd-neg'),
+                        fluxClipL: g('#img-cfd-clipl') || 'clip_l.safetensors',
+                        fluxT5:    g('#img-cfd-t5xxl') || 't5xxl_fp8_e4m3fn.safetensors',
+                        fluxAe:    g('#img-cfd-ae') || 'ae.safetensors',
+                        guidance:  gf('#img-cfd-guidance', 3.5),
+                        loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(function(r){ return {
+                            on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
+                            name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
+                            strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
+                            strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
+                        }; }).filter(function(l){ return l.name; })
+                    });
+                    refreshCfdPresetDropdown();
+                    const sel = container.querySelector('#img-cfd-preset-sel'); if (sel) sel.value = String(cfdPresets.length - 1);
+                    const row = container.querySelector('#img-cfd-preset-name-row'); if (row) row.style.display = 'none';
+                    if (ni) ni.value = '';
+                    if (statusEl) statusEl.textContent = '✅ 已打包「' + name + '」（記得按底部保存才寫入硬碟）';
+                },
+                cancelSave: function(){
+                    const row = container.querySelector('#img-cfd-preset-name-row'); if (row) row.style.display = 'none';
+                    const ni = container.querySelector('#img-cfd-preset-name-input'); if (ni) ni.value = '';
+                },
+                del: function(){
+                    const sel = container.querySelector('#img-cfd-preset-sel');
+                    if (!sel || sel.value === '') { alert('請先選擇要刪除的預設包'); return; }
+                    const idx = parseInt(sel.value);
+                    const nm = (cfdPresets[idx] && cfdPresets[idx].name) || '';
+                    if (!confirm('刪除預設包「' + nm + '」？')) return;
+                    cfdPresets.splice(idx, 1);
+                    refreshCfdPresetDropdown();
+                    if (statusEl) statusEl.textContent = '🗑️ 已刪「' + nm + '」（記得按底部保存）';
+                }
+            };
         })();
 
         // Fetch Logic (Primary)
@@ -2600,7 +2728,8 @@ EXAMPLE "prompt" value:
                         fluxClipL: (container.querySelector('#img-cfd-clipl')?.value || 'clip_l.safetensors').trim(),
                         fluxT5:    (container.querySelector('#img-cfd-t5xxl')?.value || 't5xxl_fp8_e4m3fn.safetensors').trim(),
                         fluxAe:    (container.querySelector('#img-cfd-ae')?.value || 'ae.safetensors').trim(),
-                        guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5
+                        guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5,
+                        presets:   cfdPresets
                     },
                     sceneGen: {
                         enabled:          container.querySelector('#img-scene-enabled')?.checked ?? false,
