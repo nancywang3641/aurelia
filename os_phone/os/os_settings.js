@@ -1049,8 +1049,9 @@ EXAMPLE "prompt" value:
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">模型</div>
-                                    <input class="set-input" id="img-cfd-model" list="img-cfd-model-list" placeholder="先按上面測試抓清單，或手打 checkpoint 檔名" value="${imgConfig.comfyuiDirect?.model || ''}">
-                                    <datalist id="img-cfd-model-list"></datalist>
+                                    <select class="set-select" id="img-cfd-model">
+                                        <option value="${imgConfig.comfyuiDirect?.model || ''}" selected>${imgConfig.comfyuiDirect?.model || '（先按上面「測試 / 抓清單」）'}</option>
+                                    </select>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">LoRA（開關 ☑ + 名字 + 模型/CLIP 強度）</div>
@@ -1062,15 +1063,15 @@ EXAMPLE "prompt" value:
                                 <div class="set-group">
                                     <div class="set-label">基本參數</div>
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
-                                        <div><div class="set-label" style="font-size:11px;">採樣器</div><input class="set-input" id="img-cfd-sampler" list="img-cfd-sampler-list" value="${imgConfig.comfyuiDirect?.sampler || 'euler'}"><datalist id="img-cfd-sampler-list"></datalist></div>
-                                        <div><div class="set-label" style="font-size:11px;">排程器</div><input class="set-input" id="img-cfd-scheduler" list="img-cfd-scheduler-list" value="${imgConfig.comfyuiDirect?.scheduler || 'normal'}"><datalist id="img-cfd-scheduler-list"></datalist></div>
+                                        <div><div class="set-label" style="font-size:11px;">採樣器</div><select class="set-select" id="img-cfd-sampler">${['euler','euler_ancestral','euler_cfg_pp','dpmpp_2m','dpmpp_2m_sde','dpmpp_3m_sde','dpmpp_sde','dpmpp_2s_ancestral','heun','dpm_2','lms','ddim','uni_pc','uni_pc_bh2','lcm','res_multistep','er_sde'].map(s => `<option value="${s}"${(imgConfig.comfyuiDirect?.sampler||'euler')===s?' selected':''}>${s}</option>`).join('')}</select></div>
+                                        <div><div class="set-label" style="font-size:11px;">排程器</div><select class="set-select" id="img-cfd-scheduler">${['normal','karras','exponential','sgm_uniform','simple','ddim_uniform','beta','linear_quadratic','kl_optimal'].map(s => `<option value="${s}"${(imgConfig.comfyuiDirect?.scheduler||'normal')===s?' selected':''}>${s}</option>`).join('')}</select></div>
                                         <div><div class="set-label" style="font-size:11px;">步數</div><input class="set-input" id="img-cfd-steps" type="number" min="1" max="60" value="${imgConfig.comfyuiDirect?.steps ?? 28}"></div>
                                         <div><div class="set-label" style="font-size:11px;">CFG</div><input class="set-input" id="img-cfd-cfg" type="number" step="0.1" min="1" max="20" value="${imgConfig.comfyuiDirect?.cfg ?? 6.5}"></div>
                                         <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${imgConfig.comfyuiDirect?.width ?? 1024}"></div>
                                         <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${imgConfig.comfyuiDirect?.height ?? 1024}"></div>
                                         <div><div class="set-label" style="font-size:11px;">種子（-1 隨機）</div><input class="set-input" id="img-cfd-seed" type="number" value="${imgConfig.comfyuiDirect?.seed ?? -1}"></div>
                                         <div><div class="set-label" style="font-size:11px;">CLIP skip（0 關）</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${imgConfig.comfyuiDirect?.clipSkip ?? 0}"></div>
-                                        <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;">VAE（空＝模型內建）</div><input class="set-input" id="img-cfd-vae" list="img-cfd-vae-list" placeholder="留空用內建" value="${imgConfig.comfyuiDirect?.vae || ''}"><datalist id="img-cfd-vae-list"></datalist></div>
+                                        <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;">VAE（空＝模型內建）</div><select class="set-select" id="img-cfd-vae"><option value=""${!imgConfig.comfyuiDirect?.vae?' selected':''}>（內建 VAE）</option>${imgConfig.comfyuiDirect?.vae?`<option value="${imgConfig.comfyuiDirect.vae}" selected>${imgConfig.comfyuiDirect.vae}</option>`:''}</select></div>
                                     </div>
                                 </div>
                                 <div class="set-group">
@@ -2122,10 +2123,20 @@ EXAMPLE "prompt" value:
                     try { const r = await fetch(path, { method:'POST', headers: headers, body: JSON.stringify({ url: url }) }); if (!r.ok) return null; return await r.json(); }
                     catch(e){ return null; }
                 };
-                const fill = function(id, arr, useValue){
+                const fillDatalist = function(id, arr, useValue){
                     const dl = container.querySelector('#' + id);
                     if (!dl || !Array.isArray(arr)) return 0;
                     dl.innerHTML = arr.map(function(x){ const v = useValue ? (x && x.value != null ? x.value : x) : x; return '<option value="' + escAttr(v) + '">'; }).join('');
+                    return arr.length;
+                };
+                const fillSelect = function(id, arr, useValue, addEmpty){
+                    const sel = container.querySelector('#' + id);
+                    if (!sel || !Array.isArray(arr)) return 0;
+                    const cur = sel.value;
+                    let opts = arr.map(function(x){ return useValue ? (x && x.value != null ? x.value : x) : x; });
+                    if (addEmpty) opts.unshift('');
+                    if (cur && opts.indexOf(cur) === -1) opts.push(cur);
+                    sel.innerHTML = opts.map(function(v){ const lbl = (v === '' ? '（內建 VAE）' : v); return '<option value="' + escAttr(v) + '"' + (v === cur ? ' selected' : '') + '>' + escAttr(lbl) + '</option>'; }).join('');
                     return arr.length;
                 };
                 const models = await post('/api/sd/comfy/models');
@@ -2134,11 +2145,11 @@ EXAMPLE "prompt" value:
                 const vaes = await post('/api/sd/comfy/vaes');
                 const loras = await post('/api/sd/comfy/loras');
                 if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '❌ 連不上（檢查網址、ComfyUI 開著沒）'; return; }
-                const mc = fill('img-cfd-model-list', (models || []).filter(function(x){ return !/^(UNet|GGUF):/i.test((x && x.text) || ''); }), true);
-                fill('img-cfd-sampler-list', samplers || [], false);
-                fill('img-cfd-scheduler-list', schedulers || [], false);
-                fill('img-cfd-vae-list', vaes || [], false);
-                const lc = fill('img-cfd-lora-list', loras || [], false);
+                const mc = fillSelect('img-cfd-model', (models || []).filter(function(x){ return !/^(UNet|GGUF):/i.test((x && x.text) || ''); }), true, false);
+                if (samplers) fillSelect('img-cfd-sampler', samplers, false, false);
+                if (schedulers) fillSelect('img-cfd-scheduler', schedulers, false, false);
+                if (vaes) fillSelect('img-cfd-vae', vaes, false, true);
+                const lc = fillDatalist('img-cfd-lora-list', loras || [], false);
                 if (statusEl) statusEl.textContent = '✅ 連上！模型 ' + mc + ' 個' + (loras ? ('、LoRA ' + lc + ' 個可下拉') : '（LoRA 清單酒館未提供→手打檔名）');
             });
         })();
