@@ -3266,10 +3266,41 @@ EXAMPLE "prompt" value:
                 imageManager.config.novelai.charBasePrompt = (container.querySelector('#img-nai-char-base')?.value || '').trim();
                 imageManager.config.novelai.charNegPrompt = (container.querySelector('#img-nai-char-neg')?.value || '').trim();
 
+                // ComfyUI 直連：測試也套當前面板值（免先保存）
+                imageManager.config.comfyuiDirect = {
+                    ...imageManager.config.comfyuiDirect,
+                    url:       (container.querySelector('#img-cfd-url')?.value || '').trim(),
+                    modelType: (container.querySelector('#img-cfd-type')?.value || 'checkpoint'),
+                    model:     (container.querySelector('#img-cfd-model')?.value || '').trim(),
+                    vae:       (container.querySelector('#img-cfd-vae')?.value || '').trim(),
+                    sampler:   (container.querySelector('#img-cfd-sampler')?.value || 'euler').trim(),
+                    scheduler: (container.querySelector('#img-cfd-scheduler')?.value || 'normal').trim(),
+                    steps:     parseInt(container.querySelector('#img-cfd-steps')?.value ?? 28) || 28,
+                    cfg:       parseFloat(container.querySelector('#img-cfd-cfg')?.value ?? 6.5) || 6.5,
+                    width:     parseInt(container.querySelector('#img-cfd-width')?.value ?? 1024) || 1024,
+                    height:    parseInt(container.querySelector('#img-cfd-height')?.value ?? 1024) || 1024,
+                    seed:      (function(){ const v = parseInt(container.querySelector('#img-cfd-seed')?.value ?? -1); return isNaN(v) ? -1 : v; })(),
+                    clipSkip:  parseInt(container.querySelector('#img-cfd-clipskip')?.value ?? 0) || 0,
+                    basePrompt:(container.querySelector('#img-cfd-base')?.value || '').trim(),
+                    negPrompt: (container.querySelector('#img-cfd-neg')?.value || '').trim(),
+                    fluxClipL: (container.querySelector('#img-cfd-clipl')?.value || 'clip_l.safetensors').trim(),
+                    fluxT5:    (container.querySelector('#img-cfd-t5xxl')?.value || 't5xxl_fp8_e4m3fn.safetensors').trim(),
+                    fluxAe:    (container.querySelector('#img-cfd-ae')?.value || 'ae.safetensors').trim(),
+                    guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5,
+                    loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(function(r){ return {
+                        on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
+                        name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
+                        strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
+                        strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
+                    }; }).filter(function(l){ return l.name; })
+                };
+
                 const [width, height] = elPolSize.value.split('x').map(Number);
                 
                 // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
-                const imageUrl = await imageManager.generate(testPrompt, 'char', { width, height, force: true });
+                // ComfyUI 直連用面板自己的尺寸(cfg.width/height)，其他來源用上面的測試尺寸
+                const _testIsCfd = elImgService.value === 'comfyui_direct';
+                const imageUrl = await imageManager.generate(testPrompt, 'char', _testIsCfd ? { force: true } : { width, height, force: true });
 
                 imgTestImage.src = imageUrl;
                 imgTestUrl.textContent = /^(data:|blob:)/.test(imageUrl) ? '✅ 圖片已生成（內嵌資料，省略顯示）' : `URL: ${imageUrl}`;
