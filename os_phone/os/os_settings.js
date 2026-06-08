@@ -132,6 +132,11 @@ Intimate / NSFW : close-up, from_above or from_side — no spatial position tags
 EXAMPLE "prompt" value:
 "2girls, a pale-skinned girl on the left reaches toward a tanned girl on the right, [(adult:1.5), left_side, pale_skin, gentle_vibe, long_silver_hair, soft_bangs, white_dress, reaching_out, worried_expression] AND [(adult:1.5), right_side, tanned_skin, calm_vibe, short_dark_hair, no_bangs, casual_jacket, stepping_back, neutral_expression], tense_atmosphere, dramatic_moment, rainy_street, night, from_side, medium_shot, shallow_depth_of_field"`,
                 specTemplates: []
+            },
+            comfyuiDirect: {
+                url: 'http://127.0.0.1:8188', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
+                steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
+                basePrompt: '', negPrompt: '', loras: []
             }
         };
         if (saved) {
@@ -157,6 +162,11 @@ EXAMPLE "prompt" value:
                     sceneGen: {
                         ...config.sceneGen,
                         ...(savedConfig.sceneGen || {})
+                    },
+                    comfyuiDirect: {
+                        ...config.comfyuiDirect,
+                        ...(savedConfig.comfyuiDirect || {}),
+                        loras: (savedConfig.comfyuiDirect && Array.isArray(savedConfig.comfyuiDirect.loras)) ? savedConfig.comfyuiDirect.loras : config.comfyuiDirect.loras
                     },
                     pixabayKey:    savedConfig.pixabayKey || '',
                     fallbackForce: savedConfig.fallbackForce === true
@@ -295,6 +305,12 @@ EXAMPLE "prompt" value:
                 win.OS_IMAGE_MANAGER.config.novelai = {
                     ...win.OS_IMAGE_MANAGER.config.novelai,
                     ...imgData.novelai
+                };
+            }
+            if (imgData.comfyuiDirect) {
+                win.OS_IMAGE_MANAGER.config.comfyuiDirect = {
+                    ...win.OS_IMAGE_MANAGER.config.comfyuiDirect,
+                    ...imgData.comfyuiDirect
                 };
             }
             console.log('[OS設置] ✅ 圖片管理器配置已更新, service:', imgData.service);
@@ -1016,7 +1032,56 @@ EXAMPLE "prompt" value:
                                 <option value="pollinations" ${imgConfig.service === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
                                 <option value="novelai" ${imgConfig.service === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
                                 <option value="tavern_sd" ${imgConfig.service === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
+                                <option value="comfyui_direct" ${imgConfig.service === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
                             </select>
+
+                            <div id="img-group-comfyui" class="${imgConfig.service === 'comfyui_direct' ? '' : 'hidden'}">
+                                <div class="set-group" style="margin-top:12px;">
+                                    <div class="set-desc">🧩 透過酒館伺服器代理連你的 ComfyUI（免 CORS、免改啟動參數）。在這手動加 LoRA、調參數，奧瑞亞自動組工作流，你不用碰 JSON。</div>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">ComfyUI 網址</div>
+                                    <div style="display:flex; gap:8px;">
+                                        <input class="set-input" id="img-cfd-url" type="text" placeholder="http://127.0.0.1:8188" value="${imgConfig.comfyuiDirect?.url || 'http://127.0.0.1:8188'}" style="flex:1;">
+                                        <button class="set-btn" id="img-cfd-test" type="button" style="white-space:nowrap;">🔌 測試 / 抓清單</button>
+                                    </div>
+                                    <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">模型</div>
+                                    <input class="set-input" id="img-cfd-model" list="img-cfd-model-list" placeholder="先按上面測試抓清單，或手打 checkpoint 檔名" value="${imgConfig.comfyuiDirect?.model || ''}">
+                                    <datalist id="img-cfd-model-list"></datalist>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">LoRA（開關 ☑ + 名字 + 模型/CLIP 強度）</div>
+                                    <datalist id="img-cfd-lora-list"></datalist>
+                                    <div id="img-cfd-loras"></div>
+                                    <button class="set-btn" id="img-cfd-add-lora" type="button" style="margin-top:6px;">➕ 加 LoRA</button>
+                                    <div class="set-desc" style="margin-top:4px;">LoRA 要跟模型同架構（SDXL 配 SDXL）。名字可下拉選或手打檔名。</div>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">基本參數</div>
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
+                                        <div><div class="set-label" style="font-size:11px;">採樣器</div><input class="set-input" id="img-cfd-sampler" list="img-cfd-sampler-list" value="${imgConfig.comfyuiDirect?.sampler || 'euler'}"><datalist id="img-cfd-sampler-list"></datalist></div>
+                                        <div><div class="set-label" style="font-size:11px;">排程器</div><input class="set-input" id="img-cfd-scheduler" list="img-cfd-scheduler-list" value="${imgConfig.comfyuiDirect?.scheduler || 'normal'}"><datalist id="img-cfd-scheduler-list"></datalist></div>
+                                        <div><div class="set-label" style="font-size:11px;">步數</div><input class="set-input" id="img-cfd-steps" type="number" min="1" max="60" value="${imgConfig.comfyuiDirect?.steps ?? 28}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">CFG</div><input class="set-input" id="img-cfd-cfg" type="number" step="0.1" min="1" max="20" value="${imgConfig.comfyuiDirect?.cfg ?? 6.5}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${imgConfig.comfyuiDirect?.width ?? 1024}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${imgConfig.comfyuiDirect?.height ?? 1024}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">種子（-1 隨機）</div><input class="set-input" id="img-cfd-seed" type="number" value="${imgConfig.comfyuiDirect?.seed ?? -1}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">CLIP skip（0 關）</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${imgConfig.comfyuiDirect?.clipSkip ?? 0}"></div>
+                                        <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;">VAE（空＝模型內建）</div><input class="set-input" id="img-cfd-vae" list="img-cfd-vae-list" placeholder="留空用內建" value="${imgConfig.comfyuiDirect?.vae || ''}"><datalist id="img-cfd-vae-list"></datalist></div>
+                                    </div>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">底詞（選填，可空）</div>
+                                    <textarea class="set-textarea" id="img-cfd-base" style="min-height:46px;">${imgConfig.comfyuiDirect?.basePrompt || ''}</textarea>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">負面提示詞（選填）</div>
+                                    <textarea class="set-textarea" id="img-cfd-neg" style="min-height:46px;">${imgConfig.comfyuiDirect?.negPrompt || ''}</textarea>
+                                </div>
+                            </div>
 
                             <div id="img-group-tavernsd" class="${imgConfig.service === 'tavern_sd' ? '' : 'hidden'}">
                                 <div class="set-group">
@@ -2007,13 +2072,76 @@ EXAMPLE "prompt" value:
             const isNai = _svc === 'novelai';
             const isPol = _svc === 'pollinations';
             const isTav = _svc === 'tavern_sd';
+            const isCfd = _svc === 'comfyui_direct';
             elNaiGroup.classList.toggle('hidden', !isNai);
             elPolGroup.classList.toggle('hidden', !isPol);
             const elTavGroup = container.querySelector('#img-group-tavernsd');
             if (elTavGroup) elTavGroup.classList.toggle('hidden', !isTav);
+            const elCfdGroup = container.querySelector('#img-group-comfyui');
+            if (elCfdGroup) elCfdGroup.classList.toggle('hidden', !isCfd);
             const elPolPrompts = container.querySelector('#img-pol-prompts-group');
             if (elPolPrompts) elPolPrompts.classList.toggle('hidden', !isPol);
         };
+
+        // ===== ComfyUI 直連：LoRA 行 + 測試連線 =====
+        (function setupComfyDirect(){
+            const cfd = (imgConfig && imgConfig.comfyuiDirect) || ((window.parent || window).OS_IMAGE_MANAGER && (window.parent || window).OS_IMAGE_MANAGER.config && (window.parent || window).OS_IMAGE_MANAGER.config.comfyuiDirect) || {};
+            const lorasBox = container.querySelector('#img-cfd-loras');
+            function escAttr(s){ return String(s == null ? '' : s).replace(/"/g, '&quot;'); }
+            function makeLoraRow(L){
+                L = L || { on: true, name: '', strengthModel: 1, strengthClip: 1 };
+                const row = document.createElement('div');
+                row.className = 'cfd-lora-row';
+                row.style.cssText = 'display:flex; gap:4px; align-items:center; margin-bottom:5px;';
+                row.innerHTML =
+                    '<input type="checkbox" class="cfd-lora-on" ' + (L.on !== false ? 'checked' : '') + ' title="啟用" style="margin:0 2px;">' +
+                    '<input type="text" class="cfd-lora-name set-input" list="img-cfd-lora-list" placeholder="LoRA 檔名" value="' + escAttr(L.name) + '" style="flex:1; min-width:0;">' +
+                    '<input type="number" class="cfd-lora-sm set-input" step="0.1" min="0" max="2" value="' + (L.strengthModel != null ? L.strengthModel : 1) + '" title="模型強度" style="width:54px;">' +
+                    '<input type="number" class="cfd-lora-sc set-input" step="0.1" min="0" max="2" value="' + (L.strengthClip != null ? L.strengthClip : 1) + '" title="CLIP強度" style="width:54px;">' +
+                    '<button type="button" class="cfd-lora-del" title="刪除" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;padding:0 4px;">✕</button>';
+                row.querySelector('.cfd-lora-del').addEventListener('click', function(){ row.remove(); });
+                return row;
+            }
+            if (lorasBox) {
+                lorasBox.innerHTML = '';
+                (Array.isArray(cfd.loras) ? cfd.loras : []).forEach(function(L){ lorasBox.appendChild(makeLoraRow(L)); });
+            }
+            const addBtn = container.querySelector('#img-cfd-add-lora');
+            if (addBtn) addBtn.addEventListener('click', function(){ if (lorasBox) lorasBox.appendChild(makeLoraRow()); });
+
+            const testBtn = container.querySelector('#img-cfd-test');
+            const statusEl = container.querySelector('#img-cfd-status');
+            if (testBtn) testBtn.addEventListener('click', async function(){
+                const url = (container.querySelector('#img-cfd-url')?.value || '').trim();
+                if (!url) { if (statusEl) statusEl.textContent = '請先填網址'; return; }
+                if (statusEl) statusEl.textContent = '⏳ 連線中…';
+                const W = window.parent || window;
+                const ctx = (W.SillyTavern && W.SillyTavern.getContext) ? W.SillyTavern.getContext() : null;
+                const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+                const post = async function(path){
+                    try { const r = await fetch(path, { method:'POST', headers: headers, body: JSON.stringify({ url: url }) }); if (!r.ok) return null; return await r.json(); }
+                    catch(e){ return null; }
+                };
+                const fill = function(id, arr, useValue){
+                    const dl = container.querySelector('#' + id);
+                    if (!dl || !Array.isArray(arr)) return 0;
+                    dl.innerHTML = arr.map(function(x){ const v = useValue ? (x && x.value != null ? x.value : x) : x; return '<option value="' + escAttr(v) + '">'; }).join('');
+                    return arr.length;
+                };
+                const models = await post('/api/sd/comfy/models');
+                const samplers = await post('/api/sd/comfy/samplers');
+                const schedulers = await post('/api/sd/comfy/schedulers');
+                const vaes = await post('/api/sd/comfy/vaes');
+                const loras = await post('/api/sd/comfy/loras');
+                if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '❌ 連不上（檢查網址、ComfyUI 開著沒）'; return; }
+                const mc = fill('img-cfd-model-list', models || [], true);
+                fill('img-cfd-sampler-list', samplers || [], false);
+                fill('img-cfd-scheduler-list', schedulers || [], false);
+                fill('img-cfd-vae-list', vaes || [], false);
+                const lc = fill('img-cfd-lora-list', loras || [], false);
+                if (statusEl) statusEl.textContent = '✅ 連上！模型 ' + mc + ' 個' + (loras ? ('、LoRA ' + lc + ' 個可下拉') : '（LoRA 清單酒館未提供→手打檔名）');
+            });
+        })();
 
         // Fetch Logic (Primary)
         btnFetch.onclick = async () => {
@@ -2396,6 +2524,27 @@ EXAMPLE "prompt" value:
                         itemBasePrompt: (container.querySelector('#img-nai-item-base')?.value || '').trim(),
                         itemNegPrompt:  (container.querySelector('#img-nai-item-neg')?.value  || '').trim(),
                         naiPresets: naiPresets,
+                    },
+                    comfyuiDirect: {
+                        url:       (container.querySelector('#img-cfd-url')?.value || '').trim(),
+                        model:     (container.querySelector('#img-cfd-model')?.value || '').trim(),
+                        vae:       (container.querySelector('#img-cfd-vae')?.value || '').trim(),
+                        sampler:   (container.querySelector('#img-cfd-sampler')?.value || 'euler').trim(),
+                        scheduler: (container.querySelector('#img-cfd-scheduler')?.value || 'normal').trim(),
+                        steps:     parseInt(container.querySelector('#img-cfd-steps')?.value ?? 28) || 28,
+                        cfg:       parseFloat(container.querySelector('#img-cfd-cfg')?.value ?? 6.5) || 6.5,
+                        width:     parseInt(container.querySelector('#img-cfd-width')?.value ?? 1024) || 1024,
+                        height:    parseInt(container.querySelector('#img-cfd-height')?.value ?? 1024) || 1024,
+                        seed:      (function(){ const v = parseInt(container.querySelector('#img-cfd-seed')?.value ?? -1); return isNaN(v) ? -1 : v; })(),
+                        clipSkip:  parseInt(container.querySelector('#img-cfd-clipskip')?.value ?? 0) || 0,
+                        basePrompt:(container.querySelector('#img-cfd-base')?.value || '').trim(),
+                        negPrompt: (container.querySelector('#img-cfd-neg')?.value || '').trim(),
+                        loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(r => ({
+                            on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
+                            name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
+                            strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
+                            strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
+                        })).filter(l => l.name)
                     },
                     sceneGen: {
                         enabled:          container.querySelector('#img-scene-enabled')?.checked ?? false,
