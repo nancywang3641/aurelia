@@ -2134,7 +2134,7 @@ EXAMPLE "prompt" value:
                 const vaes = await post('/api/sd/comfy/vaes');
                 const loras = await post('/api/sd/comfy/loras');
                 if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '❌ 連不上（檢查網址、ComfyUI 開著沒）'; return; }
-                const mc = fill('img-cfd-model-list', models || [], true);
+                const mc = fill('img-cfd-model-list', (models || []).filter(function(x){ return !/^(UNet|GGUF):/i.test((x && x.text) || ''); }), true);
                 fill('img-cfd-sampler-list', samplers || [], false);
                 fill('img-cfd-scheduler-list', schedulers || [], false);
                 fill('img-cfd-vae-list', vaes || [], false);
