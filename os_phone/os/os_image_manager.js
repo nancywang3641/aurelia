@@ -50,9 +50,11 @@
             tavernSd: { negative: '', width: '', height: '', steps: '', cfg: '' },
             // ComfyUI 直連：奧瑞亞內部組 workflow，走酒館伺服器代理(/api/sd/comfy/generate)生圖
             comfyuiDirect: {
-                url: 'http://127.0.0.1:8188', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
+                url: 'http://127.0.0.1:8188', modelType: 'checkpoint', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
                 steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
-                basePrompt: '', negPrompt: '', loras: []
+                basePrompt: '', negPrompt: '', loras: [],
+                // Flux 模式專用
+                fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5
             }
         },
 
@@ -307,6 +309,7 @@
 
         // 內部組 ComfyUI API workflow（txt2img + LoRA 串接，全用 ComfyUI 內建節點，不依賴 rgthree）
         _buildComfyWorkflow: function(posText, negText, type, options, cfg) {
+            if (cfg.modelType === 'flux') return this._buildFluxWorkflow(posText, negText, type, options, cfg);
             const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
             const h = parseInt(options.height || cfg.height || 1024) || 1024;
             const steps = parseInt(cfg.steps) || 28;
@@ -372,6 +375,61 @@
             // 8) 存圖
             nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: ['8', 0] } };
 
+            return nodes;
+        },
+
+        // 內部組 Flux API workflow（UNETLoader + DualCLIPLoader + FluxGuidance + 16通道 latent）
+        _buildFluxWorkflow: function(posText, negText, type, options, cfg) {
+            const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
+            const h = parseInt(options.height || cfg.height || 1024) || 1024;
+            const steps = parseInt(cfg.steps) || 20;
+            const sampler = cfg.sampler || 'euler';
+            const scheduler = cfg.scheduler || 'simple';
+            const guidance = (cfg.guidance != null ? parseFloat(cfg.guidance) : 3.5) || 3.5;
+            let seed = (cfg.seed != null && Number(cfg.seed) >= 0) ? Number(cfg.seed) : Math.floor(Math.random() * 1e15);
+            if (options.seed) seed = options.seed;
+
+            const nodes = {};
+            let nid = 100;
+            // 載入：UNET(Flux 模型) + 雙 CLIP(clip_l + t5xxl, type=flux) + VAE(ae)
+            nodes['4']  = { class_type: 'UNETLoader',     inputs: { unet_name: cfg.model || '', weight_dtype: 'default' } };
+            nodes['11'] = { class_type: 'DualCLIPLoader', inputs: { clip_name1: cfg.fluxClipL || 'clip_l.safetensors', clip_name2: cfg.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors', type: 'flux' } };
+            nodes['10'] = { class_type: 'VAELoader',      inputs: { vae_name: cfg.fluxAe || 'ae.safetensors' } };
+            let modelRef = ['4', 0];
+            let clipRef  = ['11', 0];
+
+            // LoRA 串接（Flux LoRA 也走 LoraLoader）
+            (cfg.loras || []).forEach((L) => {
+                if (!L || !L.on || !L.name) return;
+                const id = String(nid++);
+                nodes[id] = {
+                    class_type: 'LoraLoader',
+                    inputs: {
+                        lora_name: L.name,
+                        strength_model: (L.strengthModel != null ? parseFloat(L.strengthModel) : 1) || 0,
+                        strength_clip:  (L.strengthClip  != null ? parseFloat(L.strengthClip)  : 1) || 0,
+                        model: modelRef, clip: clipRef
+                    }
+                };
+                modelRef = [id, 0]; clipRef = [id, 1];
+            });
+
+            // 正向 → FluxGuidance（取代 CFG）；負向（Flux 多半空，但節點要在）
+            nodes['6']  = { class_type: 'CLIPTextEncode', inputs: { text: posText || '', clip: clipRef } };
+            nodes['22'] = { class_type: 'FluxGuidance',   inputs: { conditioning: ['6', 0], guidance: guidance } };
+            nodes['7']  = { class_type: 'CLIPTextEncode', inputs: { text: negText || '', clip: clipRef } };
+
+            // Flux 用 16 通道 latent
+            nodes['5'] = { class_type: 'EmptySD3LatentImage', inputs: { width: w, height: h, batch_size: 1 } };
+
+            // KSampler：Flux 固定 cfg=1（引導靠 FluxGuidance）
+            nodes['3'] = { class_type: 'KSampler', inputs: {
+                seed: seed, steps: steps, cfg: 1.0, sampler_name: sampler, scheduler: scheduler, denoise: 1.0,
+                model: modelRef, positive: ['22', 0], negative: ['7', 0], latent_image: ['5', 0]
+            }};
+
+            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['10', 0] } };
+            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: ['8', 0] } };
             return nodes;
         },
 
