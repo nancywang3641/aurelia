@@ -54,10 +54,10 @@ AVATAR_ID: 描述...
 
 [頭像]
 <avatar>
-角色名: [1girl/1boy], [mature/young/child], [face focus/close-up/bust shot], [vibe], [face shape], [body type], [skin color], [eye color], [eye shape], [hair length] , [hair style] , [hair texture], [bangs type],  [distinct feature], [1-2個服裝標籤], [表情標籤], [簡單背景標籤]
+角色名: [1woman/1man], [mature/young], [bust shot], [face shape], [body type], [skin color], [eye color], [eye shape], [long/mediem/short hair] , [hair style] , [bangs type],  [distinct feature], [1-2個服裝標籤], [表情標籤], [簡單背景標籤]
 
 * 範例：
-小明: 1boy, bust shot, calm and distant vibe, narrow face shape, slim body type, light skin tone, dark brown eyes, narrow eyes, shoulder-length hair, loosely tied low ponytail, straight hair, parted bangs, faint dark circles under eyes, casual outfit, slightly wrinkled shirt, neutral expression, simple indoor background
+小明: 1boy, bust shot, narrow face shape, slim body type, light skin tone, dark brown eyes, narrow eyes, mediem-length hair, loosely tied low ponytail, straight hair, parted bangs, faint dark circles under eyes, casual outfit, slightly wrinkled shirt, neutral expression, simple indoor background
 ..
 </avatar>
 
@@ -78,10 +78,10 @@ AVATAR_ID: 描述...
 
 [頭像]
 <avatar>
-角色名: [1woman/1man], [mature/young], [bust shot], [vibe], [face shape], [body type], [skin color], [eye color], [eye shape], [hair length] , [hair style] , [hair texture], [bangs type],  [distinct feature], [1-2個服裝標籤], [表情標籤], [簡單背景標籤]
+角色名: [1woman/1man], [mature/young], [bust shot], [face shape], [body type], [skin color], [eye color], [eye shape], [long/mediem/short hair] , [hair style] , [bangs type],  [distinct feature], [1-2個服裝標籤], [表情標籤], [簡單背景標籤]
 
 * 範例：
-小明: 1boy, bust shot, calm and distant vibe, narrow face shape, slim body type, light skin tone, dark brown eyes, narrow eyes, shoulder-length hair, loosely tied low ponytail, straight hair, parted bangs, faint dark circles under eyes, casual outfit, slightly wrinkled shirt, neutral expression, simple indoor background
+小明: 1boy, bust shot, narrow face shape, slim body type, light skin tone, dark brown eyes, narrow eyes, mediem-length hair, loosely tied low ponytail, straight hair, parted bangs, faint dark circles under eyes, casual outfit, slightly wrinkled shirt, neutral expression, simple indoor background
 ..
 </avatar>
 
@@ -89,7 +89,6 @@ AVATAR_ID: 描述...
 
 ##男性重要守則##:
 - ComfyUI模型對男性角色吃力，請一定不可以輸出teen/child，會導致幼太化
-- 大於15歲男性一定要用"man, mature adult, male, handsome boy, androgynous male,  jawline, black hair, "來壓模型變女性
 
 0. 判斷當前場景中，哪些角色是「重要且在場」的。
 1. ⚠️ 去重：僅在角色第一次正式介紹時觸發。
@@ -136,9 +135,13 @@ AVATAR_ID: 描述...
             const rule = (getRule(service) || '').trim();
             if (!rule) return;
 
+            // 學 commit d043334（修「主模型完全無視記憶/AVS」）：硬約束必須「XML 標籤框 + 命令式語氣」，
+            // 記憶/AVS 就是靠這層框才被主模型吃進去。裸注入規則書原文會被當聊天雜訊忽略 → 每輪要人工提醒。
+            const content = `<頭像規則 規則="權威指令·每輪必須執行·不得省略或改格式">\n以下是「角色頭像」的強制輸出規範，由系統依當前產圖器自動載入。你每一輪回覆都必須嚴格遵守：在 </status> 區塊內、為「重要且首次正式登場」的角色，依下列格式輸出 <avatar> 標籤，不得省略、不得更改格式。\n${rule}\n</頭像規則>`;
+
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
-                content: rule,
+                content,
                 position: 'in_chat',
                 depth: 0,
                 role: 'system'
