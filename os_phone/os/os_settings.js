@@ -410,6 +410,7 @@ EXAMPLE "prompt" value:
             const LS_PFX = 'os_sprite_tpl_prefix';
             const LS_SFX = 'os_sprite_tpl_suffix';
             const LS_RATIO = 'os_sprite_upscale_ratio';
+            const LS_HIRES = 'os_sprite_hires';
             const state = { inited: false, bgRemover: null, blob: null, blobUrl: null, isRemoved: false };
 
             const setStatus = (msg, isErr) => {
@@ -476,12 +477,22 @@ EXAMPLE "prompt" value:
                     // Pollinations（或 NAI 沒 token 退回）維持 raw（純模板，行為不變）。
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
-                    // 精緻度倍率：1x=512×896、1.5x=768×1344、2x=1024×1792（直接用大解析度生→治小模型的糊）
+                    // 精緻度倍率：1x=512×896、1.5x=768×1344、2x=1024×1792
                     const _ratioEl = document.getElementById('sprite-upscale-ratio');
                     const _ratio = parseFloat((_ratioEl && _ratioEl.value) || localStorage.getItem(LS_RATIO) || '1.5') || 1.5;
-                    const _sw = Math.round(512 * _ratio / 8) * 8;
-                    const _sh = Math.round(896 * _ratio / 8) * 8;
-                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', { force: true, width: _sw, height: _sh, raw: !_useNAI });
+                    // 高清修復（ComfyUI 直連專屬）：base 512×896 → 二次採樣放大到倍率，真補細節（其他來源／關閉時直接用大解析度生）
+                    const _hiresEl = document.getElementById('sprite-hires');
+                    const _hiresOn = !!(_imCfg && _imCfg.service === 'comfyui_direct') && _hiresEl && _hiresEl.checked && _ratio > 1;
+                    let _opts;
+                    if (_hiresOn) {
+                        _opts = { force: true, width: 512, height: 896, raw: !_useNAI, comfyHires: { scale: _ratio, denoise: 0.45 } };
+                        setStatus('⏳ 為「' + name + '」生立繪中（高清修復，較久 15–60 秒）...');
+                    } else {
+                        const _sw = Math.round(512 * _ratio / 8) * 8;
+                        const _sh = Math.round(896 * _ratio / 8) * 8;
+                        _opts = { force: true, width: _sw, height: _sh, raw: !_useNAI };
+                    }
+                    const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', _opts);
                     if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
                     const res = await fetch(url);
                     if (!res.ok) throw new Error('抓圖失敗 HTTP ' + res.status);
@@ -725,6 +736,16 @@ EXAMPLE "prompt" value:
                 if (ratioEl) {
                     ratioEl.value = localStorage.getItem(LS_RATIO) || '1.5';
                     ratioEl.onchange = () => localStorage.setItem(LS_RATIO, ratioEl.value);
+                }
+                // 高清修復：ComfyUI 直連專屬，依當前來源顯示/隱藏
+                const _win2 = window.parent || window;
+                const _svc = (_win2.OS_IMAGE_MANAGER && _win2.OS_IMAGE_MANAGER.config && _win2.OS_IMAGE_MANAGER.config.service) || '';
+                const hiresRow = document.getElementById('sprite-hires-row');
+                const hiresEl = document.getElementById('sprite-hires');
+                if (hiresRow) hiresRow.style.display = (_svc === 'comfyui_direct') ? 'inline-flex' : 'none';
+                if (hiresEl) {
+                    hiresEl.checked = localStorage.getItem(LS_HIRES) === '1';
+                    hiresEl.onchange = () => localStorage.setItem(LS_HIRES, hiresEl.checked ? '1' : '0');
                 }
                 document.getElementById('sprite-tpl-reset').onclick = () => {
                     prefixEl.value = DEF_PREFIX;
@@ -1537,6 +1558,9 @@ EXAMPLE "prompt" value:
                                                 <option value="1.5" selected>精緻 1.5x（768×1344）</option>
                                                 <option value="2">高清 2x（1024×1792）</option>
                                             </select>
+                                            <label id="sprite-hires-row" style="display:none;align-items:center;gap:4px;font-size:11px;color:#1A1C28;white-space:nowrap;cursor:pointer;" title="ComfyUI 直連專屬：base 生完→潛空間放大→二次低重繪採樣，真的補出細節（比單純放大清晰）。較慢。">
+                                                <input type="checkbox" id="sprite-hires" style="margin:0;">🔬 高清修復
+                                            </label>
                                             <button class="vng-studio-gen" id="sprite-gen-btn">✨ 生立繪</button>
                                             <details class="vng-studio-tpl">
                                                 <summary>📜 Prompt 模板（前後綴）</summary>
