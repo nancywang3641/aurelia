@@ -47,7 +47,13 @@
                 itemNegPrompt: 'person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text',
             },
             // 酒館原生 /sd：走使用者在酒館 Image Generation 擴展設好的後端；以下全可空，空=用酒館自己的設定
-            tavernSd: { negative: '', width: '', height: '', steps: '', cfg: '' }
+            tavernSd: { negative: '', width: '', height: '', steps: '', cfg: '' },
+            // ComfyUI 直連：奧瑞亞內部組 workflow，走酒館伺服器代理(/api/sd/comfy/generate)生圖
+            comfyuiDirect: {
+                url: 'http://127.0.0.1:8188', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
+                steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
+                basePrompt: '', negPrompt: '', loras: []
+            }
         },
 
         init: function() {
@@ -70,6 +76,11 @@
                         tavernSd: {
                             ...this.config.tavernSd,
                             ...(savedConfig.tavernSd || {})
+                        },
+                        comfyuiDirect: {
+                            ...this.config.comfyuiDirect,
+                            ...(savedConfig.comfyuiDirect || {}),
+                            loras: (savedConfig.comfyuiDirect && Array.isArray(savedConfig.comfyuiDirect.loras)) ? savedConfig.comfyuiDirect.loras : this.config.comfyuiDirect.loras
                         }
                     };
                     
@@ -120,12 +131,16 @@
             // 🔥 步驟 2: 路由判斷（char/item/scene 有 NAI token 走 NAI；背景底板走 generateBackgroundAsync）
             // options.provider 可「單次」覆蓋全域 service（給 VN 面板各自選 NAI / POLL AI 用）；沒給就維持全域
             const isNaiType = (type === 'char' || type === 'item' || type === 'scene');
-            const service = (options.provider === 'novelai' || options.provider === 'pollinations' || options.provider === 'tavern_sd') ? options.provider : this.config.service;
+            const service = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct'].includes(options.provider)) ? options.provider : this.config.service;
             let result;
             if (service === 'tavern_sd') {
                 // 酒館原生 /sd：raw prompt（不塞奧瑞亞底詞，尊重朋友的 SD 設定）；失敗回 null，不偷偷換來源
                 console.log(`[ImageManager] Final Prompt [${type}→TavernSD]: ${englishPrompt}`);
                 result = await this._genTavernSd(englishPrompt, type, options);
+            } else if (service === 'comfyui_direct') {
+                // ComfyUI 直連：奧瑞亞內部組 workflow（底詞由 comfyuiDirect.basePrompt 控制，不套 poll ai 底詞）
+                console.log(`[ImageManager] Final Prompt [${type}→ComfyUIDirect]: ${englishPrompt}`);
+                result = await this._genComfyuiDirect(englishPrompt, type, options);
             } else if (isNaiType && service === 'novelai' && this.config.novelai.token) {
                 // NAI 使用 Danbooru tag 格式，底詞/負詞在 _genNovelAI 內部處理
                 console.log(`[ImageManager] Final Prompt [${type}→NAI${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
@@ -243,6 +258,121 @@
                 try { win.toastr && win.toastr.error('生圖失敗：' + (error.message || error), '酒館原生生圖'); } catch (e) {}
                 return null;
             }
+        },
+
+        // --- ComfyUI 直連：奧瑞亞內部自動組 workflow → 走酒館伺服器代理(/api/sd/comfy/generate) → 回 base64 ---
+        // 不依賴 ST 的 workflow 檔；LoRA/參數全由 config.comfyuiDirect（奧瑞亞 UI）控制。
+        _genComfyuiDirect: async function(prompt, type, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+            const cfg = this.config.comfyuiDirect || {};
+            const url = (cfg.url || '').trim();
+            if (!url) {
+                try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {}
+                return null;
+            }
+            if (!cfg.model) {
+                try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」選一個模型', 'ComfyUI 直連'); } catch (e) {}
+                return null;
+            }
+
+            // 酒館驗證 headers（含 CSRF），走伺服器代理免 CORS
+            const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+
+            const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
+            const negText = options.negativePrompt || cfg.negPrompt || '';
+            const wf = this._buildComfyWorkflow(posText, negText, type, options, cfg);
+            const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
+
+            try {
+                const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body) });
+                if (!res.ok) {
+                    const t = await res.text().catch(() => '');
+                    console.error('[ImageManager] ComfyUI 直連失敗:', res.status, t);
+                    try { win.toastr && win.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {}
+                    return null;
+                }
+                const j = await res.json();
+                if (j && j.data) {
+                    console.log('[ImageManager] ✅ ComfyUI 直連生圖成功');
+                    return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
+                }
+                return null;
+            } catch (error) {
+                console.error('[ImageManager] ComfyUI 直連錯誤:', error);
+                try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + (error.message || error), 'ComfyUI 直連'); } catch (e) {}
+                return null;
+            }
+        },
+
+        // 內部組 ComfyUI API workflow（txt2img + LoRA 串接，全用 ComfyUI 內建節點，不依賴 rgthree）
+        _buildComfyWorkflow: function(posText, negText, type, options, cfg) {
+            const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
+            const h = parseInt(options.height || cfg.height || 1024) || 1024;
+            const steps = parseInt(cfg.steps) || 28;
+            const cfgScale = parseFloat(cfg.cfg) || 6.5;
+            const sampler = cfg.sampler || 'euler';
+            const scheduler = cfg.scheduler || 'normal';
+            let seed = (cfg.seed != null && Number(cfg.seed) >= 0) ? Number(cfg.seed) : Math.floor(Math.random() * 1e15);
+            if (options.seed) seed = options.seed;
+
+            const nodes = {};
+            let nid = 100;
+
+            // 1) checkpoint
+            nodes['4'] = { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: cfg.model || '' } };
+            let modelRef = ['4', 0];
+            let clipRef  = ['4', 1];
+
+            // 2) LoRA 串接（內建 LoraLoader）
+            (cfg.loras || []).forEach((L) => {
+                if (!L || !L.on || !L.name) return;
+                const id = String(nid++);
+                nodes[id] = {
+                    class_type: 'LoraLoader',
+                    inputs: {
+                        lora_name: L.name,
+                        strength_model: (L.strengthModel != null ? parseFloat(L.strengthModel) : 1) || 0,
+                        strength_clip:  (L.strengthClip  != null ? parseFloat(L.strengthClip)  : 1) || 0,
+                        model: modelRef, clip: clipRef
+                    }
+                };
+                modelRef = [id, 0]; clipRef = [id, 1];
+            });
+
+            // 3) CLIP skip（可選）
+            if (cfg.clipSkip && parseInt(cfg.clipSkip) > 0) {
+                const id = String(nid++);
+                nodes[id] = { class_type: 'CLIPSetLastLayer', inputs: { clip: clipRef, stop_at_clip_layer: -Math.abs(parseInt(cfg.clipSkip)) } };
+                clipRef = [id, 0];
+            }
+
+            // 4) 提示詞編碼
+            nodes['6'] = { class_type: 'CLIPTextEncode', inputs: { text: posText || '', clip: clipRef } };
+            nodes['7'] = { class_type: 'CLIPTextEncode', inputs: { text: negText || '', clip: clipRef } };
+
+            // 5) 空 latent
+            nodes['5'] = { class_type: 'EmptyLatentImage', inputs: { width: w, height: h, batch_size: 1 } };
+
+            // 6) KSampler
+            nodes['3'] = { class_type: 'KSampler', inputs: {
+                seed: seed, steps: steps, cfg: cfgScale, sampler_name: sampler, scheduler: scheduler, denoise: 1.0,
+                model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0]
+            }};
+
+            // 7) VAE：空=用 checkpoint 內建；有填=VAELoader
+            let vaeRef = ['4', 2];
+            if (cfg.vae && String(cfg.vae).trim()) {
+                const id = String(nid++);
+                nodes[id] = { class_type: 'VAELoader', inputs: { vae_name: cfg.vae } };
+                vaeRef = [id, 0];
+            }
+            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: vaeRef } };
+
+            // 8) 存圖
+            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: ['8', 0] } };
+
+            return nodes;
         },
 
         // --- ZIP 解析：從中央目錄讀正確大小，避免 data descriptor 格式導致 size=0 ---
