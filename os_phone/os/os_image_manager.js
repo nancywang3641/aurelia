@@ -363,6 +363,21 @@
                 model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0]
             }};
 
+            // 6.5) 高清修復（ComfyUI 直連專屬）：base latent → 潛空間放大 → 二次低重繪採樣補細節
+            let latentRef = ['3', 0];
+            const _hr = options.comfyHires;
+            if (_hr && parseFloat(_hr.scale) > 1) {
+                const upId = String(nid++);
+                nodes[upId] = { class_type: 'LatentUpscaleBy', inputs: { samples: ['3', 0], upscale_method: 'nearest-exact', scale_by: parseFloat(_hr.scale) } };
+                const ks2 = String(nid++);
+                const hd = (_hr.denoise != null ? parseFloat(_hr.denoise) : 0.45);
+                nodes[ks2] = { class_type: 'KSampler', inputs: {
+                    seed: seed, steps: steps, cfg: cfgScale, sampler_name: sampler, scheduler: scheduler, denoise: hd,
+                    model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: [upId, 0]
+                }};
+                latentRef = [ks2, 0];
+            }
+
             // 7) VAE：空=用 checkpoint 內建；有填=VAELoader
             let vaeRef = ['4', 2];
             if (cfg.vae && String(cfg.vae).trim()) {
@@ -370,7 +385,7 @@
                 nodes[id] = { class_type: 'VAELoader', inputs: { vae_name: cfg.vae } };
                 vaeRef = [id, 0];
             }
-            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: vaeRef } };
+            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: vaeRef } };
 
             // 8) 存圖
             nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: ['8', 0] } };
@@ -428,7 +443,22 @@
                 model: modelRef, positive: ['22', 0], negative: ['7', 0], latent_image: ['5', 0]
             }};
 
-            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['10', 0] } };
+            // 高清修復（Flux）：潛空間放大 → 二次低重繪採樣（cfg 維持 1，引導靠 FluxGuidance）
+            let latentRef = ['3', 0];
+            const _hr = options.comfyHires;
+            if (_hr && parseFloat(_hr.scale) > 1) {
+                const upId = String(nid++);
+                nodes[upId] = { class_type: 'LatentUpscaleBy', inputs: { samples: ['3', 0], upscale_method: 'nearest-exact', scale_by: parseFloat(_hr.scale) } };
+                const ks2 = String(nid++);
+                const hd = (_hr.denoise != null ? parseFloat(_hr.denoise) : 0.45);
+                nodes[ks2] = { class_type: 'KSampler', inputs: {
+                    seed: seed, steps: steps, cfg: 1.0, sampler_name: sampler, scheduler: scheduler, denoise: hd,
+                    model: modelRef, positive: ['22', 0], negative: ['7', 0], latent_image: [upId, 0]
+                }};
+                latentRef = [ks2, 0];
+            }
+
+            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: ['10', 0] } };
             nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: ['8', 0] } };
             return nodes;
         },
