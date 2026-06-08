@@ -101,8 +101,11 @@ AVATAR_ID: 描述...
 5. 🚫 絕對禁止生成：❌環境角色 ❌一次性角色 ❌群體角色 (如 2girls, multiple boys)。`,
     };
 
-    const SERVICE_LABEL = { pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館接口 (ComfyUI/SD)' };
-    const SERVICES = ['pollinations', 'novelai', 'tavern_sd'];
+    // ComfyUI 直連與「酒館原生(ComfyUI/SD)」都是 ComfyUI/danbooru tag 後端，共用同一份規則預設
+    DEFAULT_RULES.comfyui_direct = DEFAULT_RULES.tavern_sd;
+
+    const SERVICE_LABEL = { pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館接口 (ComfyUI/SD)', comfyui_direct: 'ComfyUI 直連' };
+    const SERVICES = ['pollinations', 'novelai', 'tavern_sd', 'comfyui_direct'];
 
     // os_settings 畫廊圖片設定（service = 選的產圖器；avatarRules = 使用者自訂的 3 份規則）
     function _imgCfg() {
