@@ -134,9 +134,10 @@ EXAMPLE "prompt" value:
                 specTemplates: []
             },
             comfyuiDirect: {
-                url: 'http://127.0.0.1:8188', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
+                url: 'http://127.0.0.1:8188', modelType: 'checkpoint', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
                 steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
-                basePrompt: '', negPrompt: '', loras: []
+                basePrompt: '', negPrompt: '', loras: [],
+                fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5
             }
         };
         if (saved) {
@@ -1048,10 +1049,27 @@ EXAMPLE "prompt" value:
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
                                 </div>
                                 <div class="set-group">
+                                    <div class="set-label">模型類型</div>
+                                    <select class="set-select" id="img-cfd-type">
+                                        <option value="checkpoint" ${(imgConfig.comfyuiDirect?.modelType||'checkpoint')==='checkpoint'?'selected':''}>標準 Checkpoint（SDXL/Illustrious/Pony…）</option>
+                                        <option value="flux" ${imgConfig.comfyuiDirect?.modelType==='flux'?'selected':''}>Flux（單體，需 clip_l/t5xxl/ae）</option>
+                                    </select>
+                                </div>
+                                <div class="set-group">
                                     <div class="set-label">模型</div>
                                     <select class="set-select" id="img-cfd-model">
                                         <option value="${imgConfig.comfyuiDirect?.model || ''}" selected>${imgConfig.comfyuiDirect?.model || '（先按上面「測試 / 抓清單」）'}</option>
                                     </select>
+                                </div>
+                                <div class="set-group ${imgConfig.comfyuiDirect?.modelType==='flux'?'':'hidden'}" id="img-cfd-flux-fields">
+                                    <div class="set-desc">Flux 專用搭配檔（檔名一般跟你下載的一致，不用改）：</div>
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
+                                        <div><div class="set-label" style="font-size:11px;">clip_l</div><input class="set-input" id="img-cfd-clipl" value="${imgConfig.comfyuiDirect?.fluxClipL || 'clip_l.safetensors'}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">t5xxl</div><input class="set-input" id="img-cfd-t5xxl" value="${imgConfig.comfyuiDirect?.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors'}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">ae VAE</div><input class="set-input" id="img-cfd-ae" value="${imgConfig.comfyuiDirect?.fluxAe || 'ae.safetensors'}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">Guidance（建議 3.5）</div><input class="set-input" id="img-cfd-guidance" type="number" step="0.1" min="0" max="10" value="${imgConfig.comfyuiDirect?.guidance ?? 3.5}"></div>
+                                    </div>
+                                    <div class="set-desc" style="margin-top:4px;">Flux 模式：CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。</div>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">LoRA（開關 ☑ + 名字 + 模型/CLIP 強度）</div>
@@ -2089,6 +2107,26 @@ EXAMPLE "prompt" value:
             const cfd = (imgConfig && imgConfig.comfyuiDirect) || ((window.parent || window).OS_IMAGE_MANAGER && (window.parent || window).OS_IMAGE_MANAGER.config && (window.parent || window).OS_IMAGE_MANAGER.config.comfyuiDirect) || {};
             const lorasBox = container.querySelector('#img-cfd-loras');
             function escAttr(s){ return String(s == null ? '' : s).replace(/"/g, '&quot;'); }
+            // 模型類型（標準/Flux）：切換 Flux 欄位 + 依類型過濾模型下拉（checkpoint vs UNet）
+            let lastModels = null;
+            function curType(){ const t = container.querySelector('#img-cfd-type'); return (t && t.value) || 'checkpoint'; }
+            function refreshModels(){
+                if (!Array.isArray(lastModels)) return;
+                const isFlux = curType() === 'flux';
+                const arr = lastModels.filter(function(x){ const t = (x && x.text) || ''; return isFlux ? /^UNet:/i.test(t) : !/^(UNet|GGUF):/i.test(t); });
+                const sel = container.querySelector('#img-cfd-model');
+                if (!sel) return;
+                const cur = sel.value;
+                let opts = arr.map(function(x){ return (x && x.value != null) ? x.value : x; });
+                if (cur && opts.indexOf(cur) === -1) opts.push(cur);
+                sel.innerHTML = opts.map(function(v){ return '<option value="' + escAttr(v) + '"' + (v === cur ? ' selected' : '') + '>' + escAttr(v) + '</option>'; }).join('');
+            }
+            const typeSel = container.querySelector('#img-cfd-type');
+            if (typeSel) typeSel.addEventListener('change', function(){
+                const ff = container.querySelector('#img-cfd-flux-fields');
+                if (ff) ff.classList.toggle('hidden', typeSel.value !== 'flux');
+                refreshModels();
+            });
             function makeLoraRow(L){
                 L = L || { on: true, name: '', strengthModel: 1, strengthClip: 1 };
                 const row = document.createElement('div');
@@ -2145,7 +2183,9 @@ EXAMPLE "prompt" value:
                 const vaes = await post('/api/sd/comfy/vaes');
                 const loras = await post('/api/sd/comfy/loras');
                 if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '❌ 連不上（檢查網址、ComfyUI 開著沒）'; return; }
-                const mc = fillSelect('img-cfd-model', (models || []).filter(function(x){ return !/^(UNet|GGUF):/i.test((x && x.text) || ''); }), true, false);
+                lastModels = models || [];
+                refreshModels();
+                const mc = (Array.isArray(models) ? models.length : 0);
                 if (samplers) fillSelect('img-cfd-sampler', samplers, false, false);
                 if (schedulers) fillSelect('img-cfd-scheduler', schedulers, false, false);
                 if (vaes) fillSelect('img-cfd-vae', vaes, false, true);
@@ -2538,6 +2578,7 @@ EXAMPLE "prompt" value:
                     },
                     comfyuiDirect: {
                         url:       (container.querySelector('#img-cfd-url')?.value || '').trim(),
+                        modelType: (container.querySelector('#img-cfd-type')?.value || 'checkpoint'),
                         model:     (container.querySelector('#img-cfd-model')?.value || '').trim(),
                         vae:       (container.querySelector('#img-cfd-vae')?.value || '').trim(),
                         sampler:   (container.querySelector('#img-cfd-sampler')?.value || 'euler').trim(),
@@ -2555,7 +2596,11 @@ EXAMPLE "prompt" value:
                             name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
                             strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
                             strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
-                        })).filter(l => l.name)
+                        })).filter(l => l.name),
+                        fluxClipL: (container.querySelector('#img-cfd-clipl')?.value || 'clip_l.safetensors').trim(),
+                        fluxT5:    (container.querySelector('#img-cfd-t5xxl')?.value || 't5xxl_fp8_e4m3fn.safetensors').trim(),
+                        fluxAe:    (container.querySelector('#img-cfd-ae')?.value || 'ae.safetensors').trim(),
+                        guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5
                     },
                     sceneGen: {
                         enabled:          container.querySelector('#img-scene-enabled')?.checked ?? false,
