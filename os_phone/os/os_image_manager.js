@@ -281,11 +281,13 @@
             const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
             const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
 
-            const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
+            let posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
             let negText = options.negativePrompt || cfg.negPrompt || '';
-            // 場景防「男變女」：scene 的提示詞若沒有任何女性詞 → 自動在負面補強女性特徵負詞
-            // （此模型太顛，男角穿粉色等就變女；強負 girl/woman/breast 把它拉回男性）
+            // 場景防「男變女」：scene 的提示詞若沒有任何女性詞 → 雙重防護
+            // 正面加男性錨點(male focus, masculine)＋負面強負女性特徵
+            // （此模型太顛，男角穿粉色/瀏海等就變女；兩邊一起夾把它拉回男性）
             if (type === 'scene' && !/(\bgirl\b|\bgirls\b|\bwoman\b|\bwomen\b|\bfemale\b|1girl|2girls)/i.test(posText)) {
+                posText = [posText, 'male focus, masculine'].filter(Boolean).join(', ');
                 negText = [negText, '(breast:1.5), (girl:1.5), (woman:1.5)'].filter(Boolean).join(', ');
             }
             let wf;
