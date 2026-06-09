@@ -138,6 +138,7 @@ EXAMPLE "prompt" value:
                 steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
                 basePrompt: '', negPrompt: '', loras: [], presets: [], previewPrompt: '1 person, upper body portrait, looking at viewer, simple background',
                 sceneHires: true, sceneHiresScale: 1.5, sceneFaceDetailer: true,
+                workflowMode: 'auto', customWorkflow: '',
                 fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5
             }
         };
@@ -1087,6 +1088,21 @@ EXAMPLE "prompt" value:
                                         <button class="set-btn" id="img-cfd-test" type="button" style="white-space:nowrap;">🔌 測試 / 抓清單</button>
                                     </div>
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">⚙️ 工作流模式 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">進階：高手可帶自己的 ComfyUI 工作流</span></div>
+                                    <select class="set-select" id="img-cfd-wfmode">
+                                        <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動組（推薦｜小白：在下面設模型/LoRA/參數）</option>
+                                        <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼我自己的 ComfyUI 工作流）</option>
+                                    </select>
+                                    <div id="img-cfd-custom-wf" class="${imgConfig.comfyuiDirect?.workflowMode==='custom'?'':'hidden'}" style="margin-top:8px;">
+                                        <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${imgConfig.comfyuiDirect?.customWorkflow || ''}</textarea>
+                                        <div class="set-desc" style="margin-top:4px;">
+                                            貼 ComfyUI <b>API 格式</b>工作流（ComfyUI 設定開 Dev mode → 選單「Save (API Format)」匯出）。<br>
+                                            要奧瑞亞注入的地方用變數（含引號整個替換）：<code>"%prompt%"</code>　<code>"%negative%"</code>　<code>"%model%"</code>　<code>"%seed%"</code>　<code>"%width%"</code>　<code>"%height%"</code><br>
+                                            ⚠️ 只有上面這幾個變數會被注入；其餘（LoRA、採樣器、放大、修臉…）請直接寫死在你的工作流裡，奧瑞亞不會碰。下面的 LoRA/參數欄在自訂模式<b>不生效</b>。
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">📦 預設包 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">整組「模型＋LoRA＋參數」存起來，附風格縮圖一鍵切換</span></div>
@@ -2213,6 +2229,12 @@ EXAMPLE "prompt" value:
                 if (ff) ff.classList.toggle('hidden', typeSel.value !== 'flux');
                 refreshModels();
             });
+            // 工作流模式：自訂時顯示貼上框
+            const wfModeSel = container.querySelector('#img-cfd-wfmode');
+            if (wfModeSel) wfModeSel.addEventListener('change', function(){
+                const box = container.querySelector('#img-cfd-custom-wf');
+                if (box) box.classList.toggle('hidden', wfModeSel.value !== 'custom');
+            });
             function makeLoraRow(L){
                 L = L || { on: true, name: '', strengthModel: 1, strengthClip: 1 };
                 const row = document.createElement('div');
@@ -2851,7 +2873,9 @@ EXAMPLE "prompt" value:
                         previewPrompt: (container.querySelector('#img-cfd-preview-prompt')?.value || '').trim(),
                         sceneHires:        container.querySelector('#img-cfd-scene-hires')?.checked ?? true,
                         sceneHiresScale:   parseFloat(container.querySelector('#img-cfd-scene-hires-scale')?.value || 1.5) || 1.5,
-                        sceneFaceDetailer: container.querySelector('#img-cfd-scene-facedetailer')?.checked ?? true
+                        sceneFaceDetailer: container.querySelector('#img-cfd-scene-facedetailer')?.checked ?? true,
+                        workflowMode:  (container.querySelector('#img-cfd-wfmode')?.value || 'auto'),
+                        customWorkflow:(container.querySelector('#img-cfd-custom-wf-text')?.value || '')
                     },
                     sceneGen: {
                         enabled:          container.querySelector('#img-scene-enabled')?.checked ?? false,
@@ -3521,6 +3545,8 @@ EXAMPLE "prompt" value:
                 // ComfyUI 直連：測試也套當前面板值（免先保存）
                 imageManager.config.comfyuiDirect = {
                     ...imageManager.config.comfyuiDirect,
+                    workflowMode:  (container.querySelector('#img-cfd-wfmode')?.value || 'auto'),
+                    customWorkflow:(container.querySelector('#img-cfd-custom-wf-text')?.value || ''),
                     url:       (container.querySelector('#img-cfd-url')?.value || '').trim(),
                     modelType: (container.querySelector('#img-cfd-type')?.value || 'checkpoint'),
                     model:     (container.querySelector('#img-cfd-model')?.value || '').trim(),
