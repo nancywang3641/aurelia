@@ -343,9 +343,6 @@ EXAMPLE "prompt" value:
         const llmConfig = loadLlmConfig();
         const secLlmConfig = loadSecLlmConfig();
         const imgConfig = loadImageConfig();
-        // 頭像規則書（給主模型，依產圖器自動注入）：自訂(avatarRules)優先、否則用注入器內建預設
-        const _avInj = (window.parent || window).OS_AVATAR_RULES_INJECTOR;
-        const _avRule = (s) => ((imgConfig.avatarRules && imgConfig.avatarRules[s]) || (_avInj && _avInj.getDefault(s)) || '');
         // 圖片用量統計（給「會員方案划算度」估算）
         let imgUsage = {};
         try { imgUsage = JSON.parse(localStorage.getItem('os_image_usage') || '{}'); } catch(e) {}
@@ -1072,12 +1069,6 @@ EXAMPLE "prompt" value:
                             </select>
 
                             <div id="img-group-comfyui" class="${imgConfig.service === 'comfyui_direct' ? '' : 'hidden'}">
-                                <div class="set-group">
-                                    <div class="set-label">🪪 頭像提示詞規則（主模型每輪依此寫 &lt;avatar&gt;）</div>
-                                    <div class="set-desc">選此服務時自動注入主模型；改完按最下方「保存」生效。</div>
-                                    <textarea class="set-textarea" id="img-rule-comfyui_direct">${_avRule('comfyui_direct')}</textarea>
-                                    <span class="set-reset-link" onclick="document.getElementById('img-rule-comfyui_direct').value=(window.parent||window).OS_AVATAR_RULES_INJECTOR.getDefault('comfyui_direct')">[重置為預設]</span>
-                                </div>
                                 <div class="set-group" style="margin-top:12px;">
                                     <div class="set-desc">🧩 透過酒館伺服器代理連你的 ComfyUI（免 CORS、免改啟動參數）。在這手動加 LoRA、調參數，奧瑞亞自動組工作流，你不用碰 JSON。</div>
                                 </div>
@@ -1197,24 +1188,12 @@ EXAMPLE "prompt" value:
 
                             <div id="img-group-tavernsd" class="${imgConfig.service === 'tavern_sd' ? '' : 'hidden'}">
                                 <div class="set-group">
-                                    <div class="set-label">🪪 頭像提示詞規則（主模型每輪依此寫 &lt;avatar&gt;）</div>
-                                    <div class="set-desc">選此服務時自動注入主模型；改完按最下方「保存」生效。</div>
-                                    <textarea class="set-textarea" id="img-rule-tavern_sd">${_avRule('tavern_sd')}</textarea>
-                                    <span class="set-reset-link" onclick="document.getElementById('img-rule-tavern_sd').value=(window.parent||window).OS_AVATAR_RULES_INJECTOR.getDefault('tavern_sd')">[重置為預設]</span>
-                                </div>
-                                <div class="set-group">
                                     <div class="set-desc">🎨 用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。</div>
                                     <div class="set-desc">⚠️ 前提：先在酒館「圖像生成」擴展設好一個後端來源。沒設好會跳提示，不會偷偷換成別的來源。</div>
                                 </div>
                             </div>
 
                             <div id="img-group-pollinations" class="${imgConfig.service === 'pollinations' ? '' : 'hidden'}">
-                                <div class="set-group">
-                                    <div class="set-label">🪪 頭像提示詞規則（主模型每輪依此寫 &lt;avatar&gt;）</div>
-                                    <div class="set-desc">選此服務時自動注入主模型；改完按最下方「保存」生效。</div>
-                                    <textarea class="set-textarea" id="img-rule-pollinations">${_avRule('pollinations')}</textarea>
-                                    <span class="set-reset-link" onclick="document.getElementById('img-rule-pollinations').value=(window.parent||window).OS_AVATAR_RULES_INJECTOR.getDefault('pollinations')">[重置為預設]</span>
-                                </div>
                                 <div style="margin-top:15px;">
                                     <div class="set-label">API Key <span style="font-size:11px; color:#fc8181;">(必填 - 需儲值)</span></div>
                                     <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${imgConfig.pollinations.apiKey || ''}">
@@ -1244,12 +1223,6 @@ EXAMPLE "prompt" value:
                             </div>
 
                             <div id="img-group-nai" class="${imgConfig.service === 'novelai' ? '' : 'hidden'}">
-                                <div class="set-group">
-                                    <div class="set-label">🪪 頭像提示詞規則（主模型每輪依此寫 &lt;avatar&gt;）</div>
-                                    <div class="set-desc">選此服務時自動注入主模型；改完按最下方「保存」生效。</div>
-                                    <textarea class="set-textarea" id="img-rule-novelai">${_avRule('novelai')}</textarea>
-                                    <span class="set-reset-link" onclick="document.getElementById('img-rule-novelai').value=(window.parent||window).OS_AVATAR_RULES_INJECTOR.getDefault('novelai')">[重置為預設]</span>
-                                </div>
                                 <div style="margin-top:15px;">
                                     <div class="set-label">NovelAI Token <span style="font-size:11px; color:#fc8181;">(必填)</span></div>
                                     <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
@@ -2887,13 +2860,7 @@ EXAMPLE "prompt" value:
                         specTemplates:    sceneSpecTemplates,
                     },
                     pixabayKey:    (container.querySelector('#img-pixabay-key')?.value || '').trim(),
-                    fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false,
-                    avatarRules: {
-                        pollinations:   (container.querySelector('#img-rule-pollinations')?.value   || '').trim(),
-                        novelai:        (container.querySelector('#img-rule-novelai')?.value        || '').trim(),
-                        tavern_sd:      (container.querySelector('#img-rule-tavern_sd')?.value      || '').trim(),
-                        comfyui_direct: (container.querySelector('#img-rule-comfyui_direct')?.value || '').trim(),
-                    }
+                    fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false
                 };
 
                 const mmGroupId   = container.querySelector('#mm-group-id');
@@ -2926,6 +2893,9 @@ EXAMPLE "prompt" value:
                 } : null;
 
                 saveConfig(llmData, secLlmData, imgData, minimaxData);
+
+                // 換產圖器後：依新 service 自動翻「-VN小說家-」世界書三條目的開關（只翻 enabled，不寫內容）
+                try { (window.parent || window).OS_AVATAR_RULES_INJECTOR?.syncAvatarRuleEntries?.(); } catch (e) {}
 
                 // Claude 的房間設定（獨立儲存，跟主/副模型完全隔離）
                 const elClaudeRoomModel = container.querySelector('#claude-room-model');
