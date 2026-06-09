@@ -282,7 +282,12 @@
             const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
 
             const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
-            const negText = options.negativePrompt || cfg.negPrompt || '';
+            let negText = options.negativePrompt || cfg.negPrompt || '';
+            // 場景防「男變女」：scene 的提示詞若沒有任何女性詞 → 自動在負面補強女性特徵負詞
+            // （此模型太顛，男角穿粉色等就變女；強負 girl/woman/breast 把它拉回男性）
+            if (type === 'scene' && !/(\bgirl\b|\bgirls\b|\bwoman\b|\bwomen\b|\bfemale\b|1girl|2girls)/i.test(posText)) {
+                negText = [negText, '(breast:1.5), (girl:1.5), (woman:1.5)'].filter(Boolean).join(', ');
+            }
             let wf;
             if (cfg.workflowMode === 'custom' && (cfg.customWorkflow || '').trim()) {
                 // 自帶工作流模式（進階）：用使用者貼的 ComfyUI 工作流，只注入 %prompt%/%negative%/%seed%/%width%/%height%
