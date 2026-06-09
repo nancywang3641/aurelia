@@ -1096,6 +1096,7 @@ EXAMPLE "prompt" value:
                                         </select>
                                         <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._cfdPreset.apply()">套用</span>
                                         <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._cfdPreset.save()">另存</span>
+                                        <span style="font-size:11px; color:#2b6cb0; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid #2b6cb0; border-radius:4px; background:rgba(43,108,176,0.10);" onclick="window._cfdPreset.overwrite()">🔄 覆蓋</span>
                                         <span style="font-size:11px; color:#fc8181; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid #fc8181; border-radius:4px; background:rgba(252,129,129,0.1);" onclick="window._cfdPreset.del()">刪除</span>
                                     </div>
                                     <div id="img-cfd-preset-name-row" style="display:none; margin-top:8px;">
@@ -2279,6 +2280,37 @@ EXAMPLE "prompt" value:
                 }
                 sel.value = v;
             };
+            // 從面板目前欄位打包一個預設包物件（另存 / 覆蓋 共用）
+            function buildCfdPreset(name){
+                const g  = function(id){ return (container.querySelector(id)?.value || '').trim(); };
+                const gi = function(id, d){ const v = parseInt(container.querySelector(id)?.value ?? d); return isNaN(v) ? d : v; };
+                const gf = function(id, d){ const v = parseFloat(container.querySelector(id)?.value ?? d); return isNaN(v) ? d : v; };
+                return {
+                    name: name,
+                    modelType: g('#img-cfd-type') || 'checkpoint',
+                    model:     g('#img-cfd-model'),
+                    vae:       g('#img-cfd-vae'),
+                    sampler:   g('#img-cfd-sampler') || 'euler',
+                    scheduler: g('#img-cfd-scheduler') || 'normal',
+                    steps:     gi('#img-cfd-steps', 28),
+                    cfg:       gf('#img-cfd-cfg', 6.5),
+                    width:     gi('#img-cfd-width', 1024),
+                    height:    gi('#img-cfd-height', 1024),
+                    clipSkip:  gi('#img-cfd-clipskip', 0),
+                    basePrompt:g('#img-cfd-base'),
+                    negPrompt: g('#img-cfd-neg'),
+                    fluxClipL: g('#img-cfd-clipl') || 'clip_l.safetensors',
+                    fluxT5:    g('#img-cfd-t5xxl') || 't5xxl_fp8_e4m3fn.safetensors',
+                    fluxAe:    g('#img-cfd-ae') || 'ae.safetensors',
+                    guidance:  gf('#img-cfd-guidance', 3.5),
+                    loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(function(r){ return {
+                        on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
+                        name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
+                        strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
+                        strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
+                    }; }).filter(function(l){ return l.name; })
+                };
+            }
             window._cfdPreset = {
                 apply: function(){
                     const sel = container.querySelector('#img-cfd-preset-sel');
@@ -2317,34 +2349,7 @@ EXAMPLE "prompt" value:
                     const ni = container.querySelector('#img-cfd-preset-name-input');
                     const name = ni && ni.value.trim();
                     if (!name) { alert('請輸入預設包名稱'); return; }
-                    const g  = function(id){ return (container.querySelector(id)?.value || '').trim(); };
-                    const gi = function(id, d){ const v = parseInt(container.querySelector(id)?.value ?? d); return isNaN(v) ? d : v; };
-                    const gf = function(id, d){ const v = parseFloat(container.querySelector(id)?.value ?? d); return isNaN(v) ? d : v; };
-                    cfdPresets.push({
-                        name: name,
-                        modelType: g('#img-cfd-type') || 'checkpoint',
-                        model:     g('#img-cfd-model'),
-                        vae:       g('#img-cfd-vae'),
-                        sampler:   g('#img-cfd-sampler') || 'euler',
-                        scheduler: g('#img-cfd-scheduler') || 'normal',
-                        steps:     gi('#img-cfd-steps', 28),
-                        cfg:       gf('#img-cfd-cfg', 6.5),
-                        width:     gi('#img-cfd-width', 1024),
-                        height:    gi('#img-cfd-height', 1024),
-                        clipSkip:  gi('#img-cfd-clipskip', 0),
-                        basePrompt:g('#img-cfd-base'),
-                        negPrompt: g('#img-cfd-neg'),
-                        fluxClipL: g('#img-cfd-clipl') || 'clip_l.safetensors',
-                        fluxT5:    g('#img-cfd-t5xxl') || 't5xxl_fp8_e4m3fn.safetensors',
-                        fluxAe:    g('#img-cfd-ae') || 'ae.safetensors',
-                        guidance:  gf('#img-cfd-guidance', 3.5),
-                        loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(function(r){ return {
-                            on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
-                            name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
-                            strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
-                            strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
-                        }; }).filter(function(l){ return l.name; })
-                    });
+                    cfdPresets.push(buildCfdPreset(name));
                     refreshCfdPresetDropdown();
                     const sel = container.querySelector('#img-cfd-preset-sel'); if (sel) sel.value = String(cfdPresets.length - 1);
                     const row = container.querySelector('#img-cfd-preset-name-row'); if (row) row.style.display = 'none';
@@ -2364,6 +2369,18 @@ EXAMPLE "prompt" value:
                     cfdPresets.splice(idx, 1);
                     refreshCfdPresetDropdown();
                     if (statusEl) statusEl.textContent = '🗑️ 已刪「' + nm + '」（記得按底部保存）';
+                },
+                overwrite: function(){
+                    const sel = container.querySelector('#img-cfd-preset-sel');
+                    if (!sel || sel.value === '') { alert('請先在上方下拉選一個要覆蓋的預設包'); return; }
+                    const idx = parseInt(sel.value);
+                    const old = cfdPresets[idx];
+                    if (!old) return;
+                    if (!confirm('用目前面板的設定覆蓋預設包「' + old.name + '」？')) return;
+                    cfdPresets[idx] = buildCfdPreset(old.name);  // 沿用原本的名字
+                    refreshCfdPresetDropdown();
+                    if (sel) sel.value = String(idx);
+                    if (statusEl) statusEl.textContent = '🔄 已覆蓋「' + old.name + '」（記得按底部保存才寫入硬碟）';
                 }
             };
         })();
