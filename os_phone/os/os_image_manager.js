@@ -307,6 +307,29 @@
             }
         },
 
+        // 預設包風格預覽：用「指定預設包設定 + 測試詞」生一張小圖，不動到當前面板設定
+        // presetCfg：一個預設包物件（含 model/loras/params…，但通常沒有 url）→ 與當前 config 合併補 url
+        previewComfyPreset: async function(presetCfg, prompt) {
+            const live = this.config.comfyuiDirect || {};
+            const cfg = Object.assign({}, live, presetCfg || {});  // 預設包覆蓋模型/LoRA/參數；url 等沿用 live
+            const url = (cfg.url || '').trim();
+            if (!url || !cfg.model) return null;
+            const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+            const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
+            const negText = cfg.negPrompt || '';
+            // 預覽用小圖(512×768)＋固定種子→各預設包同構圖、只比風格；快
+            const wf = this._buildComfyWorkflow(posText, negText, 'char', { width: 512, height: 768, seed: 12345 }, cfg);
+            const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
+            try {
+                const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body) });
+                if (!res.ok) return null;
+                const j = await res.json();
+                if (j && j.data) return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
+                return null;
+            } catch (e) { console.error('[ImageManager] 預覽生成失敗:', e); return null; }
+        },
+
         // 內部組 ComfyUI API workflow（txt2img + LoRA 串接，全用 ComfyUI 內建節點，不依賴 rgthree）
         _buildComfyWorkflow: function(posText, negText, type, options, cfg) {
             if (cfg.modelType === 'flux') return this._buildFluxWorkflow(posText, negText, type, options, cfg);
