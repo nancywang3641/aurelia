@@ -313,7 +313,8 @@
             const live = this.config.comfyuiDirect || {};
             const cfg = Object.assign({}, live, presetCfg || {});  // 預設包覆蓋模型/LoRA/參數；url 等沿用 live
             const url = (cfg.url || '').trim();
-            if (!url || !cfg.model) return null;
+            if (!url) throw new Error('ComfyUI 網址空白（先在面板填網址＋測試）');
+            if (!cfg.model) throw new Error('這個包沒有模型(model 空白) — 另存時面板可能沒選到模型');
             const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
             const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
             const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
@@ -321,13 +322,15 @@
             // 預覽用小圖(512×768)＋固定種子→各預設包同構圖、只比風格；快
             const wf = this._buildComfyWorkflow(posText, negText, 'char', { width: 512, height: 768, seed: 12345 }, cfg);
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
-            try {
-                const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body) });
-                if (!res.ok) return null;
-                const j = await res.json();
-                if (j && j.data) return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
-                return null;
-            } catch (e) { console.error('[ImageManager] 預覽生成失敗:', e); return null; }
+            // 注意：不吞錯，把真正原因往上拋給卡片顯示
+            const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body) });
+            if (!res.ok) {
+                const t = await res.text().catch(function(){ return ''; });
+                throw new Error('伺服器 ' + res.status + (t ? ('：' + String(t).slice(0, 180)) : ''));
+            }
+            const j = await res.json();
+            if (j && j.data) return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
+            throw new Error('沒回傳圖片資料（檢查模型/LoRA 名稱是否正確）');
         },
 
         // 內部組 ComfyUI API workflow（txt2img + LoRA 串接，全用 ComfyUI 內建節點，不依賴 rgthree）
