@@ -283,7 +283,15 @@
 
             const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
             const negText = options.negativePrompt || cfg.negPrompt || '';
-            const wf = this._buildComfyWorkflow(posText, negText, type, options, cfg);
+            // 場景插圖(type==='scene')：依設定自動套高清修復 + FaceDetailer 修臉
+            // （頭像每輪生不套以免變慢；立繪走自己的開關，不經這裡）
+            let _opts = options;
+            if (type === 'scene') {
+                _opts = Object.assign({}, options);
+                if (cfg.sceneHires && !_opts.comfyHires) _opts.comfyHires = { scale: parseFloat(cfg.sceneHiresScale) || 1.5, denoise: 0.45 };
+                if (cfg.sceneFaceDetailer) _opts.comfyFaceDetailer = true;
+            }
+            const wf = this._buildComfyWorkflow(posText, negText, type, _opts, cfg);
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
 
             try {
@@ -332,6 +340,29 @@
             const j = await res.json();
             if (j && j.data) return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
             throw new Error('沒回傳圖片資料（檢查模型/LoRA 名稱是否正確）');
+        },
+
+        // 加 FaceDetailer 修臉節點（偵測臉→裁出放大重畫→貼回）；回傳修臉後的影像輸出 ref
+        // refs: { image, model, clip, vae, positive, negative }；isFlux 決定二次採樣的 cfg/sampler
+        _addFaceDetailerNodes: function(nodes, refs, nid, isFlux) {
+            const detId = String(nid);
+            const fdId  = String(nid + 1);
+            nodes[detId] = { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: 'bbox/face_yolov8m.pt' } };
+            nodes[fdId] = { class_type: 'FaceDetailer', inputs: {
+                image: refs.image, model: refs.model, clip: refs.clip, vae: refs.vae,
+                positive: refs.positive, negative: refs.negative, bbox_detector: [detId, 0],
+                guide_size: 512, guide_size_for: true, max_size: 1024,
+                seed: Math.floor(Math.random() * 1e15), steps: 20,
+                cfg: isFlux ? 1.0 : 7.0,
+                sampler_name: isFlux ? 'euler' : 'dpmpp_2m',
+                scheduler: isFlux ? 'simple' : 'karras',
+                denoise: 0.45, feather: 5, noise_mask: true, force_inpaint: true,
+                bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: 3.0,
+                sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
+                sam_bbox_expansion: 0, sam_mask_hint_threshold: 0.7, sam_mask_hint_use_negative: 'False',
+                drop_size: 10, wildcard: '', cycle: 1
+            }};
+            return [fdId, 0];
         },
 
         // 內部組 ComfyUI API workflow（txt2img + LoRA 串接，全用 ComfyUI 內建節點，不依賴 rgthree）
@@ -414,8 +445,14 @@
             }
             nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: vaeRef } };
 
-            // 8) 存圖
-            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: ['8', 0] } };
+            // 8.5) FaceDetailer 修臉（場景插圖用，options.comfyFaceDetailer）
+            let imageRef = ['8', 0];
+            if (options.comfyFaceDetailer) {
+                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: vaeRef, positive: ['6', 0], negative: ['7', 0] }, nid, false);
+            }
+
+            // 9) 存圖
+            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: imageRef } };
 
             return nodes;
         },
@@ -486,7 +523,11 @@
             }
 
             nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: ['10', 0] } };
-            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: ['8', 0] } };
+            let imageRef = ['8', 0];
+            if (options.comfyFaceDetailer) {
+                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: ['10', 0], positive: ['22', 0], negative: ['7', 0] }, nid, true);
+            }
+            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: imageRef } };
             return nodes;
         },
 
