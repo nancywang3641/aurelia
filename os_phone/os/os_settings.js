@@ -137,6 +137,7 @@ EXAMPLE "prompt" value:
                 url: 'http://127.0.0.1:8188', modelType: 'checkpoint', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
                 steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
                 basePrompt: '', negPrompt: '', loras: [], presets: [], previewPrompt: '1 person, upper body portrait, looking at viewer, simple background',
+                sceneHires: true, sceneHiresScale: 1.5, sceneFaceDetailer: true,
                 fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5
             }
         };
@@ -1159,6 +1160,22 @@ EXAMPLE "prompt" value:
                                 <div class="set-group">
                                     <div class="set-label">負面提示詞（選填）</div>
                                     <textarea class="set-textarea" id="img-cfd-neg" style="min-height:46px;">${imgConfig.comfyuiDirect?.negPrompt || ''}</textarea>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label">🖼️ 場景插圖品質 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">只在「場景插圖」自動套用（頭像不套；會變慢）</span></div>
+                                    <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+                                        <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:#1A1C28; cursor:pointer;">
+                                            <input type="checkbox" id="img-cfd-scene-hires" ${imgConfig.comfyuiDirect?.sceneHires !== false ? 'checked' : ''} style="margin:0;">🔬 高清修復
+                                        </label>
+                                        <select class="set-select" id="img-cfd-scene-hires-scale" style="width:auto;">
+                                            <option value="1.5" ${String(imgConfig.comfyuiDirect?.sceneHiresScale ?? 1.5)==='1.5'?'selected':''}>1.5x</option>
+                                            <option value="2" ${String(imgConfig.comfyuiDirect?.sceneHiresScale)==='2'?'selected':''}>2x</option>
+                                        </select>
+                                        <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:#1A1C28; cursor:pointer;">
+                                            <input type="checkbox" id="img-cfd-scene-facedetailer" ${imgConfig.comfyuiDirect?.sceneFaceDetailer !== false ? 'checked' : ''} style="margin:0;">🎯 FaceDetailer 修臉
+                                        </label>
+                                    </div>
+                                    <div class="set-desc" style="margin-top:4px;">需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。</div>
                                 </div>
                             </div>
 
@@ -2831,7 +2848,10 @@ EXAMPLE "prompt" value:
                         fluxAe:    (container.querySelector('#img-cfd-ae')?.value || 'ae.safetensors').trim(),
                         guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5,
                         presets:   cfdPresets,
-                        previewPrompt: (container.querySelector('#img-cfd-preview-prompt')?.value || '').trim()
+                        previewPrompt: (container.querySelector('#img-cfd-preview-prompt')?.value || '').trim(),
+                        sceneHires:        container.querySelector('#img-cfd-scene-hires')?.checked ?? true,
+                        sceneHiresScale:   parseFloat(container.querySelector('#img-cfd-scene-hires-scale')?.value || 1.5) || 1.5,
+                        sceneFaceDetailer: container.querySelector('#img-cfd-scene-facedetailer')?.checked ?? true
                     },
                     sceneGen: {
                         enabled:          container.querySelector('#img-scene-enabled')?.checked ?? false,
