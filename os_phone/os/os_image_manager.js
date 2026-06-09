@@ -288,8 +288,9 @@
             let _opts = options;
             if (type === 'scene') {
                 _opts = Object.assign({}, options);
-                if (cfg.sceneHires && !_opts.comfyHires) _opts.comfyHires = { scale: parseFloat(cfg.sceneHiresScale) || 1.5, denoise: 0.45 };
-                if (cfg.sceneFaceDetailer) _opts.comfyFaceDetailer = true;
+                // 預設開：config 沒這欄位(舊存檔/沒開過設定)也視為開，除非使用者明確存成 false
+                if (cfg.sceneHires !== false && !_opts.comfyHires) _opts.comfyHires = { scale: parseFloat(cfg.sceneHiresScale) || 1.5, denoise: 0.45 };
+                if (cfg.sceneFaceDetailer !== false) _opts.comfyFaceDetailer = true;
             }
             const wf = this._buildComfyWorkflow(posText, negText, type, _opts, cfg);
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
