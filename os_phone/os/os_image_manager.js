@@ -287,6 +287,9 @@
             // 正面加男性錨點(male focus, masculine)＋負面強負女性特徵
             // （此模型太顛，男角穿粉色/瀏海等就變女；兩邊一起夾把它拉回男性）
             if (type === 'scene' && !/(\bgirl\b|\bgirls\b|\bwoman\b|\bwomen\b|\bfemale\b|1girl|2girls)/i.test(posText)) {
+                // 中和會讓男角變女的女性偏向髮型詞（保留中分外觀、拔掉女性 trigger）
+                posText = posText.replace(/\bm[-\s]?shaped bangs\b/ig, 'center-parted hair')
+                                 .replace(/\bparted bangs\b/ig, 'parted hair');
                 posText = [posText, 'male focus, masculine'].filter(Boolean).join(', ');
                 negText = [negText, '(breast:1.5), (girl:1.5), (woman:1.5)'].filter(Boolean).join(', ');
             }
