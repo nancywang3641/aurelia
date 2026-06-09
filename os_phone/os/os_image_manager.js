@@ -319,8 +319,9 @@
             const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
             const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
             const negText = cfg.negPrompt || '';
-            // 預覽用小圖(512×768)＋固定種子→各預設包同構圖、只比風格；快
-            const wf = this._buildComfyWorkflow(posText, negText, 'char', { width: 512, height: 768, seed: 12345 }, cfg);
+            // 預覽用小圖(512×768)。每次給新隨機種子→避開 ComfyUI 對「相同工作流」的快取
+            // （完全命中快取時不產生新輸出→代理拿不到圖→伺服器 500），順便讓重新生成有變化
+            const wf = this._buildComfyWorkflow(posText, negText, 'char', { width: 512, height: 768, seed: Math.floor(Math.random() * 1e15) }, cfg);
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
             // 注意：不吞錯，把真正原因往上拋給卡片顯示
             const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body) });
