@@ -272,7 +272,7 @@
                 try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {}
                 return null;
             }
-            if (!cfg.model) {
+            if (!cfg.model && cfg.workflowMode !== 'custom') {
                 try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」選一個模型', 'ComfyUI 直連'); } catch (e) {}
                 return null;
             }
@@ -283,16 +283,24 @@
 
             const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
             const negText = options.negativePrompt || cfg.negPrompt || '';
-            // 場景插圖(type==='scene')：依設定自動套高清修復 + FaceDetailer 修臉
-            // （頭像每輪生不套以免變慢；立繪走自己的開關，不經這裡）
-            let _opts = options;
-            if (type === 'scene') {
-                _opts = Object.assign({}, options);
-                // 預設開：config 沒這欄位(舊存檔/沒開過設定)也視為開，除非使用者明確存成 false
-                if (cfg.sceneHires !== false && !_opts.comfyHires) _opts.comfyHires = { scale: parseFloat(cfg.sceneHiresScale) || 1.5, denoise: 0.45 };
-                if (cfg.sceneFaceDetailer !== false) _opts.comfyFaceDetailer = true;
+            let wf;
+            if (cfg.workflowMode === 'custom' && (cfg.customWorkflow || '').trim()) {
+                // 自帶工作流模式（進階）：用使用者貼的 ComfyUI 工作流，只注入 %prompt%/%negative%/%seed%/%width%/%height%
+                // 模型/LoRA/參數/放大/修臉全由他的工作流決定，奧瑞亞不自動組
+                wf = this._applyCustomWorkflow(cfg.customWorkflow, posText, negText, options, cfg);
+                if (!wf) return null;  // JSON 解析失敗（已 toastr 提示）
+            } else {
+                // 自動組：場景插圖(type==='scene')依設定自動套高清修復 + FaceDetailer 修臉
+                // （頭像每輪生不套以免變慢；立繪走自己的開關，不經這裡）
+                let _opts = options;
+                if (type === 'scene') {
+                    _opts = Object.assign({}, options);
+                    // 預設開：config 沒這欄位(舊存檔/沒開過設定)也視為開，除非使用者明確存成 false
+                    if (cfg.sceneHires !== false && !_opts.comfyHires) _opts.comfyHires = { scale: parseFloat(cfg.sceneHiresScale) || 1.5, denoise: 0.45 };
+                    if (cfg.sceneFaceDetailer !== false) _opts.comfyFaceDetailer = true;
+                }
+                wf = this._buildComfyWorkflow(posText, negText, type, _opts, cfg);
             }
-            const wf = this._buildComfyWorkflow(posText, negText, type, _opts, cfg);
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
 
             try {
@@ -341,6 +349,31 @@
             const j = await res.json();
             if (j && j.data) return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
             throw new Error('沒回傳圖片資料（檢查模型/LoRA 名稱是否正確）');
+        },
+
+        // 自帶工作流：把使用者貼的 ComfyUI 工作流(API 格式)注入變數後，回傳工作流節點物件
+        // 支援變數（含引號替換）：%prompt% %negative%（字串）/ %seed% %width% %height%（數字）
+        _applyCustomWorkflow: function(tpl, posText, negText, options, cfg) {
+            options = options || {}; cfg = cfg || {};
+            const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
+            const h = parseInt(options.height || cfg.height || 1024) || 1024;
+            const seed = (options.seed && Number(options.seed) >= 0) ? Number(options.seed) : Math.floor(Math.random() * 1e15);
+            let s = String(tpl);
+            s = s.split('"%prompt%"').join(JSON.stringify(posText || ''));
+            s = s.split('"%negative%"').join(JSON.stringify(negText || ''));
+            s = s.split('"%model%"').join(JSON.stringify(cfg.model || ''));
+            s = s.split('"%seed%"').join(String(seed));
+            s = s.split('"%width%"').join(String(w));
+            s = s.split('"%height%"').join(String(h));
+            let obj;
+            try { obj = JSON.parse(s); }
+            catch (e) {
+                try { win.toastr && win.toastr.error('自訂工作流 JSON 解析失敗：' + (e.message || e), 'ComfyUI 直連'); } catch (_) {}
+                return null;
+            }
+            // 解開 {"prompt": {...}} 外殼（有些匯出帶 prompt 鍵）
+            if (obj && obj.prompt && typeof obj.prompt === 'object' && !obj.prompt.class_type) obj = obj.prompt;
+            return obj;
         },
 
         // 加 FaceDetailer 修臉節點（偵測臉→裁出放大重畫→貼回）；回傳修臉後的影像輸出 ref
