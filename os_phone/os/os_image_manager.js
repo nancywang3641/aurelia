@@ -54,7 +54,9 @@
                 steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
                 basePrompt: '', negPrompt: '', loras: [],
                 // Flux 模式專用
-                fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5
+                fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5,
+                // Anima 模式專用（Qwen 文字編碼器 + Qwen VAE）
+                animaClip: 'qwen_3_06b_base.safetensors', animaVae: 'qwen_image_vae.safetensors'
             }
         },
 
@@ -394,8 +396,9 @@
         },
 
         // 加 FaceDetailer 修臉節點（偵測臉→裁出放大重畫→貼回）；回傳修臉後的影像輸出 ref
-        // refs: { image, model, clip, vae, positive, negative }；isFlux 決定二次採樣的 cfg/sampler
-        _addFaceDetailerNodes: function(nodes, refs, nid, isFlux) {
+        // refs: { image, model, clip, vae, positive, negative }；samp = { cfg, sampler_name, scheduler } 控制二次採樣
+        _addFaceDetailerNodes: function(nodes, refs, nid, samp) {
+            samp = samp || { cfg: 7.0, sampler_name: 'dpmpp_2m', scheduler: 'karras' };
             const detId = String(nid);
             const fdId  = String(nid + 1);
             nodes[detId] = { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: 'bbox/face_yolov8m.pt' } };
@@ -404,9 +407,9 @@
                 positive: refs.positive, negative: refs.negative, bbox_detector: [detId, 0],
                 guide_size: 512, guide_size_for: true, max_size: 1024,
                 seed: Math.floor(Math.random() * 1e15), steps: 20,
-                cfg: isFlux ? 1.0 : 7.0,
-                sampler_name: isFlux ? 'euler' : 'dpmpp_2m',
-                scheduler: isFlux ? 'simple' : 'karras',
+                cfg: samp.cfg,
+                sampler_name: samp.sampler_name,
+                scheduler: samp.scheduler,
                 denoise: 0.45, feather: 5, noise_mask: true, force_inpaint: true,
                 bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: 3.0,
                 sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
@@ -419,6 +422,7 @@
         // 內部組 ComfyUI API workflow（txt2img + LoRA 串接，全用 ComfyUI 內建節點，不依賴 rgthree）
         _buildComfyWorkflow: function(posText, negText, type, options, cfg) {
             if (cfg.modelType === 'flux') return this._buildFluxWorkflow(posText, negText, type, options, cfg);
+            if (cfg.modelType === 'anima') return this._buildAnimaWorkflow(posText, negText, type, options, cfg);
             const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
             const h = parseInt(options.height || cfg.height || 1024) || 1024;
             const steps = parseInt(cfg.steps) || 28;
@@ -499,7 +503,7 @@
             // 8.5) FaceDetailer 修臉（場景插圖用，options.comfyFaceDetailer）
             let imageRef = ['8', 0];
             if (options.comfyFaceDetailer) {
-                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: vaeRef, positive: ['6', 0], negative: ['7', 0] }, nid, false);
+                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: vaeRef, positive: ['6', 0], negative: ['7', 0] }, nid, { cfg: 7.0, sampler_name: 'dpmpp_2m', scheduler: 'karras' });
             }
 
             // 9) 存圖
@@ -576,7 +580,82 @@
             nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: ['10', 0] } };
             let imageRef = ['8', 0];
             if (options.comfyFaceDetailer) {
-                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: ['10', 0], positive: ['22', 0], negative: ['7', 0] }, nid, true);
+                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: ['10', 0], positive: ['22', 0], negative: ['7', 0] }, nid, { cfg: 1.0, sampler_name: 'euler', scheduler: 'simple' });
+            }
+            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: imageRef } };
+            return nodes;
+        },
+
+        // 內部組 Anima API workflow（UNETLoader + 單 CLIPLoader[qwen, type=stable_diffusion] + VAELoader[qwen]）
+        // 對位官方 image_anima_base_v1 範本：載入像 Flux（三檔分離），但採樣走標準正負向＋CFG（非 FluxGuidance）；
+        // latent 用標準 EmptyLatentImage（非 SD3 16 通道，範本如此）；自然語言提示詞。
+        _buildAnimaWorkflow: function(posText, negText, type, options, cfg) {
+            const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
+            const h = parseInt(options.height || cfg.height || 1024) || 1024;
+            const steps = parseInt(cfg.steps) || 30;
+            const cfgScale = 4.0; // Anima 建議低 CFG（≈4）；高 CFG 會過曝燒圖（如同 Flux 鎖 cfg=1）
+            // 採樣器/排程器：把預設 euler/normal 視為「未設定」→ 套 Anima 官方推薦 er_sde/simple；使用者明確改過則尊重
+            const sampler   = (cfg.sampler   && cfg.sampler   !== 'euler')  ? cfg.sampler   : 'er_sde';
+            const scheduler = (cfg.scheduler && cfg.scheduler !== 'normal') ? cfg.scheduler : 'simple';
+            let seed = (cfg.seed != null && Number(cfg.seed) >= 0) ? Number(cfg.seed) : Math.floor(Math.random() * 1e15);
+            if (options.seed) seed = options.seed;
+
+            const nodes = {};
+            let nid = 100;
+            // 載入：UNET(Anima 本體) + 單 CLIP(qwen 文字編碼器, type=stable_diffusion) + VAE(qwen)
+            nodes['4']  = { class_type: 'UNETLoader', inputs: { unet_name: cfg.model || '', weight_dtype: 'default' } };
+            nodes['11'] = { class_type: 'CLIPLoader', inputs: { clip_name: cfg.animaClip || 'qwen_3_06b_base.safetensors', type: 'stable_diffusion' } };
+            nodes['10'] = { class_type: 'VAELoader',  inputs: { vae_name: cfg.animaVae || 'qwen_image_vae.safetensors' } };
+            let modelRef = ['4', 0];
+            let clipRef  = ['11', 0];
+
+            // LoRA 串接（Anima LoRA 也走 LoraLoader）
+            (cfg.loras || []).forEach((L) => {
+                if (!L || !L.on || !L.name) return;
+                const id = String(nid++);
+                nodes[id] = {
+                    class_type: 'LoraLoader',
+                    inputs: {
+                        lora_name: L.name,
+                        strength_model: (L.strengthModel != null ? parseFloat(L.strengthModel) : 1) || 0,
+                        strength_clip:  (L.strengthClip  != null ? parseFloat(L.strengthClip)  : 1) || 0,
+                        model: modelRef, clip: clipRef
+                    }
+                };
+                modelRef = [id, 0]; clipRef = [id, 1];
+            });
+
+            // 提示詞編碼（標準正負向 + CFG，不走 FluxGuidance）
+            nodes['6'] = { class_type: 'CLIPTextEncode', inputs: { text: posText || '', clip: clipRef } };
+            nodes['7'] = { class_type: 'CLIPTextEncode', inputs: { text: negText || '', clip: clipRef } };
+
+            // 標準 4 通道 latent（對位官方範本，非 SD3）
+            nodes['5'] = { class_type: 'EmptyLatentImage', inputs: { width: w, height: h, batch_size: 1 } };
+
+            nodes['3'] = { class_type: 'KSampler', inputs: {
+                seed: seed, steps: steps, cfg: cfgScale, sampler_name: sampler, scheduler: scheduler, denoise: 1.0,
+                model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0]
+            }};
+
+            // 高清修復：潛空間放大 → 二次低重繪採樣（cfg/採樣器維持 Anima 設定）
+            let latentRef = ['3', 0];
+            const _hr = options.comfyHires;
+            if (_hr && parseFloat(_hr.scale) > 1) {
+                const upId = String(nid++);
+                nodes[upId] = { class_type: 'LatentUpscaleBy', inputs: { samples: ['3', 0], upscale_method: 'nearest-exact', scale_by: parseFloat(_hr.scale) } };
+                const ks2 = String(nid++);
+                const hd = (_hr.denoise != null ? parseFloat(_hr.denoise) : 0.45);
+                nodes[ks2] = { class_type: 'KSampler', inputs: {
+                    seed: seed, steps: steps, cfg: cfgScale, sampler_name: sampler, scheduler: scheduler, denoise: hd,
+                    model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: [upId, 0]
+                }};
+                latentRef = [ks2, 0];
+            }
+
+            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: ['10', 0] } };
+            let imageRef = ['8', 0];
+            if (options.comfyFaceDetailer) {
+                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: ['10', 0], positive: ['6', 0], negative: ['7', 0] }, nid, { cfg: cfgScale, sampler_name: sampler, scheduler: scheduler });
             }
             nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: imageRef } };
             return nodes;
