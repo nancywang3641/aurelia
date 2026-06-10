@@ -21,7 +21,7 @@
         state: {
             // 翻译服务配置
             services: {
-                // MyMemory Translation API（免费，每天1000次请求）
+                // MyMemory Translation API（免费，按字符数计：匿名每日约5000字符/IP、跨日重置，单次查询上限500字符）
                 mymemory: {
                     apiUrl: 'https://api.mymemory.translated.net/get',
                     enabled: true,
@@ -69,6 +69,11 @@
                     return this.state.cache.get(cacheKey);
                 }
 
+                // MyMemory 单次查询硬上限 500 字符，超过必回 403，直接跳过省一次白等
+                if (text.length > 500) {
+                    throw new Error(`文本 ${text.length} 字符超过 MyMemory 单次 500 上限`);
+                }
+
                 // 构建请求URL
                 const params = new URLSearchParams({
                     q: text,
@@ -78,25 +83,37 @@
 
                 // 发送请求
                 const response = await fetch(url);
+                if (response.status === 429) {
+                    this.state.services.mymemory.enabled = false;
+                    logger.warn('MyMemory 今日免费额度已用完（按字符数计、跨日重置），本次载入改走 Google');
+                    throw new Error('MyMemory 今日免费额度已用完');
+                }
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const data = await response.json();
-                
-                if (data.responseStatus === 200 && data.responseData && data.responseData.translatedText) {
-                    const translatedText = data.responseData.translatedText.trim();
-                    
+                const status = Number(data && data.responseStatus);
+                const rawResult = (data && data.responseData && data.responseData.translatedText) || '';
+
+                if (status === 200 && rawResult && !/MYMEMORY WARNING/i.test(rawResult)) {
+                    const translatedText = rawResult.trim();
+
                     // 保存到缓存
                     this.addToCache(cacheKey, translatedText);
-                    
+
                     logger.debug(`翻译成功: "${text.substring(0, 30)}..." -> "${translatedText.substring(0, 30)}..."`);
                     return translatedText;
-                } else {
-                    throw new Error('翻译API返回无效数据');
                 }
+
+                // 额度用尽时 API 回 429（或把 WARNING 塞在 translatedText 里）：本次载入内直接停用，别再每张图白等一趟
+                if (status === 429 || /MYMEMORY WARNING/i.test(rawResult)) {
+                    this.state.services.mymemory.enabled = false;
+                    logger.warn('MyMemory 今日免费额度已用完（按字符数计、跨日重置），本次载入改走 Google');
+                }
+                throw new Error(`MyMemory 返回 ${status}: ${String((data && data.responseDetails) || rawResult).substring(0, 120)}`);
             } catch (error) {
-                logger.warn('MyMemory翻译失败:', error);
+                logger.warn(`MyMemory翻译失败: ${error && error.message ? error.message : error}`);
                 throw error;
             }
         },
@@ -135,20 +152,24 @@
                 }
 
                 const data = await response.json();
-                
-                if (data && data[0] && data[0][0] && data[0][0][0]) {
-                    const translatedText = data[0][0][0].trim();
-                    
+
+                // gtx 按句子分段返回：data[0] = [[译文段, 原文段, ...], ...]，必须全段拼接（只取 [0][0][0] 会把第一段之后整串丢掉）
+                if (data && Array.isArray(data[0]) && data[0].length) {
+                    const translatedText = data[0].map(seg => (seg && seg[0]) || '').join('').trim();
+                    if (!translatedText) {
+                        throw new Error('Google翻译API返回空结果');
+                    }
+
                     // 保存到缓存
                     this.addToCache(cacheKey, translatedText);
-                    
+
                     logger.debug(`翻译成功（Google）: "${text.substring(0, 30)}..." -> "${translatedText.substring(0, 30)}..."`);
                     return translatedText;
                 } else {
                     throw new Error('Google翻译API返回无效数据');
                 }
             } catch (error) {
-                logger.warn('Google翻译失败:', error);
+                logger.warn(`Google翻译失败: ${error && error.message ? error.message : error}`);
                 throw error;
             }
         },
