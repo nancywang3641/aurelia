@@ -133,14 +133,14 @@ EXAMPLE "prompt" value:
 "2girls, a pale-skinned girl on the left reaches toward a tanned girl on the right, [(adult:1.5), left_side, pale_skin, gentle_vibe, long_silver_hair, soft_bangs, white_dress, reaching_out, worried_expression] AND [(adult:1.5), right_side, tanned_skin, calm_vibe, short_dark_hair, no_bangs, casual_jacket, stepping_back, neutral_expression], tense_atmosphere, dramatic_moment, rainy_street, night, from_side, medium_shot, shallow_depth_of_field"`,
                 specTemplates: [],
                 extractEnabled: false,
-                extractPrompt: `另外：請依「最新這段正文」額外輸出場景插圖。
-- 在你的 JSON 最外層多加一個欄位 "scenes"，值是長度最多 2 的陣列。
-- 每個元素格式：{"after":"正文裡的一句短語(5-15字、原樣複製、標示圖要插在這句之後)","prompt":"該畫面的 Danbooru 英文標籤,逗號分隔,單行"}。
-- 只照正文「實際發生、看得到的畫面」畫，不要推理後續劇情、不要腦補角色心理或感情。
-- 角色長相請用你已知的角色狀態/設定(髮色、衣著等)，不要亂編；正文沒寫的外觀就沿用設定。
+                extractPrompt: `請依「最新這段正文」實際發生、看得到的畫面，輸出最多 2 張場景插圖。
+- 只照正文「真的發生、畫得出來的畫面」畫，不要推理後續劇情、不要腦補角色心理或感情。
+- 角色長相用你已知的角色狀態/設定(髮色、衣著等)，不要亂編；正文沒寫的外觀沿用設定。
 - 純男場景(完全沒有女角)請在 prompt 內加上 male focus, masculine。
-- 多人場景：每個 prompt 只描述一個角色、各自的標籤分開寫，不要讓 A 的衣服長到 B 身上。
-- 找不到適合入畫的畫面就回 "scenes": []，不要硬湊。`
+- 多人場景：每個 prompt 只描述一個角色、各自標籤分開寫，不要讓 A 的衣服長到 B 身上。
+- 每張圖的 prompt 是該畫面的 Danbooru 英文標籤、逗號分隔、單行。
+- 找不到適合入畫的畫面就不要硬湊(回空)。
+（插圖的「擺放位置」與 scenes 格式由系統自動處理，你只要照下方規則給 after_paragraph 數字即可。）`
             },
             comfyuiDirect: {
                 url: 'http://127.0.0.1:8188', modelType: 'checkpoint', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
