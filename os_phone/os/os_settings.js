@@ -1124,6 +1124,12 @@ EXAMPLE "prompt" value:
                                             <input id="img-cfd-preset-newname" class="set-input" placeholder="新預設包名稱（如：日常動漫）" style="flex:1;">
                                             <button class="set-btn" type="button" onclick="window._cfdPreset.saveNew()" style="white-space:nowrap;">➕ 從目前設定另存</button>
                                         </div>
+                                        <div class="cfd-pack-io-row">
+                                            <button class="set-btn" type="button" onclick="window._cfdPreset.importPack()">📥 匯入預設包檔</button>
+                                            <button class="set-btn" type="button" onclick="window._cfdPreset.exportPack()">📤 匯出全部</button>
+                                            <input type="file" id="img-cfd-preset-file" accept=".json,application/json" class="cfd-pack-file-hidden">
+                                        </div>
+                                        <div class="cfd-pack-io-hint">拿到別人分享的畫風包檔，按「匯入」讀進來；「匯出」會把整面卡片牆存成一個檔，可以分享給朋友。同名的包匯入時會直接更新。</div>
                                     </div>
                                 </div>
                                 <div class="set-group">
@@ -2469,8 +2475,83 @@ EXAMPLE "prompt" value:
                         renderPresetGrid();
                         cardStatus(i, '✅ 完成（記得按底部保存）');
                     } catch(e){ cardStatus(i, '❌ ' + (e && e.message || e)); }
+                },
+                exportPack: function(){
+                    if (!cfdPresets.length) { alert('還沒有預設包可以匯出。'); return; }
+                    const data = { type: 'aurelia_image_presets', version: 1, presets: cfdPresets };
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    const d = new Date();
+                    a.download = '生圖預設包_' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '.json';
+                    a.click();
+                    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+                },
+                importPack: function(){
+                    const fi = container.querySelector('#img-cfd-preset-file');
+                    if (fi) { fi.value = ''; fi.click(); }
+                },
+                // 把外來 JSON 收斂成乾淨的預設包物件（只留認識的欄位，缺的補預設值）
+                _sanitizePreset: function(p){
+                    const num = function(v, d){ const n = parseFloat(v); return isNaN(n) ? d : n; };
+                    const int = function(v, d){ const n = parseInt(v); return isNaN(n) ? d : n; };
+                    const s = function(v){ return (v == null) ? '' : String(v).trim(); };
+                    return {
+                        name: s(p.name),
+                        modelType: ['checkpoint','flux','anima'].indexOf(p.modelType) >= 0 ? p.modelType : 'checkpoint',
+                        model: s(p.model), vae: s(p.vae),
+                        sampler: s(p.sampler) || 'euler', scheduler: s(p.scheduler) || 'normal',
+                        steps: int(p.steps, 28), cfg: num(p.cfg, 6.5),
+                        width: int(p.width, 1024), height: int(p.height, 1024),
+                        clipSkip: int(p.clipSkip, 0),
+                        basePrompt: s(p.basePrompt), negPrompt: s(p.negPrompt),
+                        fluxClipL: s(p.fluxClipL) || 'clip_l.safetensors',
+                        fluxT5: s(p.fluxT5) || 't5xxl_fp8_e4m3fn.safetensors',
+                        fluxAe: s(p.fluxAe) || 'ae.safetensors',
+                        guidance: num(p.guidance, 3.5),
+                        animaClip: s(p.animaClip) || 'qwen_3_06b_base.safetensors',
+                        animaVae: s(p.animaVae) || 'qwen_image_vae.safetensors',
+                        loras: (Array.isArray(p.loras) ? p.loras : []).map(function(L){
+                            return { on: !!(L && L.on !== false), name: s(L && L.name),
+                                     strengthModel: num(L && L.strengthModel, 1), strengthClip: num(L && L.strengthClip, 1) };
+                        }).filter(function(L){ return L.name; }),
+                        preview: (typeof p.preview === 'string' && p.preview.indexOf('data:image') === 0) ? p.preview : ''
+                    };
+                },
+                _importFile: function(file){
+                    const self = this;
+                    const reader = new FileReader();
+                    reader.onload = function(){
+                        try {
+                            const j = JSON.parse(String(reader.result));
+                            const arr = Array.isArray(j) ? j : (Array.isArray(j.presets) ? j.presets : null);
+                            if (!arr || !arr.length) { alert('❌ 這個檔案裡找不到預設包，確認拿到的是畫風包檔（.json）再試一次。'); return; }
+                            let added = 0, updated = 0;
+                            arr.forEach(function(p){
+                                if (!p || !String(p.name || '').trim()) return;
+                                const clean = self._sanitizePreset(p);
+                                const idx = cfdPresets.findIndex(function(x){ return x.name === clean.name; });
+                                if (idx >= 0) {
+                                    if (!clean.preview && cfdPresets[idx].preview) clean.preview = cfdPresets[idx].preview; // 沒帶縮圖就沿用舊的
+                                    cfdPresets[idx] = clean; updated++;
+                                } else { cfdPresets.push(clean); added++; }
+                            });
+                            if (!added && !updated) { alert('❌ 檔案裡的預設包都沒有名稱，讀不進來。'); return; }
+                            renderPresetGrid();
+                            alert('✅ 讀進來了：新增 ' + added + ' 個、更新 ' + updated + ' 個畫風包。\n記得按底部「保存」才會真的存住。');
+                        } catch(e) { alert('❌ 這個檔案讀不出來，確認是畫風包檔（.json）再試一次。'); }
+                    };
+                    reader.readAsText(file);
                 }
             };
+            // 匯入用的隱藏檔案選擇器
+            (function(){
+                const fi = container.querySelector('#img-cfd-preset-file');
+                if (fi) fi.addEventListener('change', function(){
+                    const f = fi.files && fi.files[0];
+                    if (f) window._cfdPreset._importFile(f);
+                });
+            })();
         })();
 
         // Fetch Logic (Primary)
