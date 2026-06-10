@@ -122,12 +122,19 @@
                 try {
                     if (win.TranslationManager.isChinese(prompt)) {
                         console.log('[ImageManager] 偵測到中文，正在翻譯...');
-                        englishPrompt = await win.TranslationManager.translate(prompt, 'zh', 'en');
+                        const _tr = await win.TranslationManager.translate(prompt, 'zh', 'en');
+                        englishPrompt = (_tr && String(_tr).trim()) ? _tr : prompt;  // 翻譯回空→用原文，絕不送空 prompt
                         console.log(`[ImageManager] 翻譯結果: ${englishPrompt}`);
                     }
                 } catch(e) {
                     console.warn('[ImageManager] 翻譯失敗，使用原文:', e);
                 }
+            }
+
+            // 🛡️ 空 prompt 防護：翻譯回空 / 來源本來就空 → 直接跳過，絕不用空 prompt 生圖（顛模型空 prompt 會吐裸圖）
+            if (!englishPrompt || !String(englishPrompt).trim()) {
+                console.warn('[ImageManager] 空 prompt，跳過生成');
+                return null;
             }
 
             // 🔥 步驟 2: 路由判斷（char/item/scene 有 NAI token 走 NAI；背景底板走 generateBackgroundAsync）
@@ -820,7 +827,8 @@
 
             if (isChinese && win.TranslationManager) {
                 try {
-                    translatedPrompt = await win.TranslationManager.translateForImageGeneration(rawPrompt, 'background');
+                    const _tr = await win.TranslationManager.translateForImageGeneration(rawPrompt, 'background');
+                    translatedPrompt = (_tr && String(_tr).trim()) ? _tr : rawPrompt;  // 翻譯回空→用原文，絕不送空 prompt
                 } catch (e) {}
             }
 
