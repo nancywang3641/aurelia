@@ -41,7 +41,9 @@
         _bgMemCache: {},
         _bgInflight: {},   // 進行中的背景生成(cacheId→promise)：去重，避免預熱+現場對同一場景各生一張(競態→重開不同圖)
         _sceneMemCache: {},
+        _sceneInflight: {}, // 進行中的場景CG生成(cacheId→promise)：同 _bgInflight，防預熱+現場重複生成
         _itemMemCache: {},
+        _itemInflight: {},  // 進行中的道具圖生成(itemName→promise)：同 _bgInflight
         _avatarMemCache: {},
         _pendingAvatars: {},
         _decodedImgs: {},
@@ -1097,42 +1099,57 @@
             console.log(`[VN] 預熱道具圖：共 ${tasks.length} 張，依序生成中...`);
             (async () => {
                 for (const { name: itemName, desc } of tasks) {
-                    if (this._itemMemCache[itemName]) continue;
-                    const cached = await VN_Cache.get('item_cache', itemName);
-                    if (cached && cached.url && !cached.url.startsWith('blob:')) {
-                        const objUrl = await this._toObjectUrl(cached.url);
-                        this._itemMemCache[itemName] = objUrl || cached.url;
-                        continue;
-                    }
-                    if (cached && cached.url && cached.url.startsWith('blob:')) {
-                        await VN_Cache.delete('item_cache', itemName);
-                    }
-                    if (!win.OS_IMAGE_MANAGER) continue;
-                    const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, desc));
-                    if (raw) {
-                        try {
-                            const fetchRes = await fetch(raw);
-                            const blob = await fetchRes.blob();
-                            const objUrl = URL.createObjectURL(blob);
-                            const dataUrl = await new Promise(r => {
-                                const reader = new FileReader();
-                                reader.onload = () => r(reader.result);
-                                reader.onerror = () => r('');
-                                reader.readAsDataURL(blob);
-                            });
-                            this._itemMemCache[itemName] = objUrl;
-                            if (dataUrl) await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: dataUrl });
-                        } catch(e) {
-                            const url = await this._toDataUrl(raw);
-                            if (url) {
-                                this._itemMemCache[itemName] = url;
-                                await VN_Cache.set('item_cache', itemName, { prompt: itemName, url });
-                            }
-                        }
-                    }
+                    // 走 _safeFetchItem：與現場 [Item|] 共用 in-flight promise，防重複生成
+                    await this._safeFetchItem(itemName, desc);
                 }
                 console.log('[VN] 所有道具圖預熱完成');
             })();
+        },
+
+        // 去重包裝：同一道具若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
+        _safeFetchItem: function(itemName, desc) {
+            if (this._itemMemCache[itemName]) return Promise.resolve(this._itemMemCache[itemName]);
+            if (this._itemInflight[itemName]) return this._itemInflight[itemName];
+            const self = this;
+            const p = this._doFetchItem(itemName, desc);
+            this._itemInflight[itemName] = p;
+            p.then(function () {}, function () {}).then(function () { delete self._itemInflight[itemName]; });
+            return p;
+        },
+        _doFetchItem: async function(itemName, desc) {
+            if (this._itemMemCache[itemName]) return this._itemMemCache[itemName];
+            const cached = await VN_Cache.get('item_cache', itemName);
+            if (cached && cached.url && !cached.url.startsWith('blob:')) {
+                const objUrl = await this._toObjectUrl(cached.url);
+                this._itemMemCache[itemName] = objUrl || cached.url;
+                return this._itemMemCache[itemName];
+            }
+            if (cached && cached.url && cached.url.startsWith('blob:')) {
+                await VN_Cache.delete('item_cache', itemName);
+            }
+            const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, desc));
+            if (!raw) return '';
+            try {
+                const fetchRes = await fetch(raw);
+                const blob = await fetchRes.blob();
+                const objUrl = URL.createObjectURL(blob);
+                const dataUrl = await new Promise(r => {
+                    const reader = new FileReader();
+                    reader.onload = () => r(reader.result);
+                    reader.onerror = () => r('');
+                    reader.readAsDataURL(blob);
+                });
+                this._itemMemCache[itemName] = objUrl;
+                if (dataUrl) await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: dataUrl });
+                return objUrl;
+            } catch(e) {
+                const url = await this._toDataUrl(raw);
+                if (url) {
+                    this._itemMemCache[itemName] = url;
+                    await VN_Cache.set('item_cache', itemName, { prompt: itemName, url });
+                }
+                return this._itemMemCache[itemName] || '';
+            }
         },
 
         _prewarmScenes: function() {
@@ -1166,43 +1183,9 @@
             console.log(`[VN] 預熱場景CG：共 ${tasks.length} 張，依序排隊生成（NAI 不支援並發）...`);
             (async () => {
                 for (const { cacheId, prompt } of tasks) {
-                    if (this._sceneMemCache[cacheId]) continue;
-                    const cached = await VN_Cache.get('scene_cache', cacheId);
-                    if (cached && cached.url && !cached.url.startsWith('blob:')) {
-                        const objUrl = await this._toObjectUrl(cached.url);
-                        this._sceneMemCache[cacheId] = objUrl || cached.url;
-                        this._preloadImg('scene_' + cacheId, this._sceneMemCache[cacheId]);
-                        continue;
-                    }
-                    if (cached?.url?.startsWith('blob:')) await VN_Cache.delete('scene_cache', cacheId);
-                    if (!win.OS_IMAGE_MANAGER) continue;
-                    const raw = await VN_Image.getScene(prompt);
-                    if (raw) {
-                        try {
-                            const fetchRes = await fetch(raw);
-                            const blob = await fetchRes.blob();
-                            const objUrl = URL.createObjectURL(blob);
-                            const dataUrl = await new Promise(r => {
-                                const reader = new FileReader();
-                                reader.onload = () => r(reader.result);
-                                reader.onerror = () => r('');
-                                reader.readAsDataURL(blob);
-                            });
-                            this._sceneMemCache[cacheId] = objUrl;
-                            this._preloadImg('scene_' + cacheId, objUrl);
-                            if (dataUrl) {
-                                await VN_Cache.set('scene_cache', cacheId, { prompt, rawUrl: raw, url: dataUrl });
-                                this._saveSceneToDisk(cacheId, dataUrl);
-                            }
-                        } catch(e) {
-                            const url = await this._toDataUrl(raw);
-                            if (url) {
-                                this._sceneMemCache[cacheId] = url;
-                                await VN_Cache.set('scene_cache', cacheId, { prompt, rawUrl: raw, url });
-                                this._saveSceneToDisk(cacheId, url);
-                            }
-                        }
-                    }
+                    // 走 _safeFetchScene：與現場 [Scene|] 共用 in-flight promise，
+                    // 防「預熱在生、正片又播到同場景」各生一張（同 prompt 重複扣錢）
+                    await this._safeFetchScene(cacheId, prompt);
                 }
                 console.log('[VN] 所有場景CG預熱完成');
             })();
@@ -1228,7 +1211,17 @@
             } catch(e) { console.warn('[VN] Scene disk save failed:', e); }
         },
 
-        _safeFetchScene: async function(cacheId, prompt) {
+        // 去重包裝：同一 cacheId 若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
+        _safeFetchScene: function(cacheId, prompt) {
+            if (this._sceneMemCache[cacheId]) return Promise.resolve(this._sceneMemCache[cacheId]);
+            if (this._sceneInflight[cacheId]) return this._sceneInflight[cacheId];
+            const self = this;
+            const p = this._doFetchScene(cacheId, prompt);
+            this._sceneInflight[cacheId] = p;
+            p.then(function () {}, function () {}).then(function () { delete self._sceneInflight[cacheId]; });
+            return p;
+        },
+        _doFetchScene: async function(cacheId, prompt) {
             if (this._sceneMemCache[cacheId]) return this._sceneMemCache[cacheId];
             const cached = await VN_Cache.get('scene_cache', cacheId);
             if (cached && cached.url) {
@@ -1851,32 +1844,9 @@
                     document.getElementById('item-img').src = memUrl;
                 } else {
                     (async () => {
-                        const cached = await VN_Cache.get('item_cache', itemName);
-                        if (cached && cached.url && !cached.url.startsWith('blob:')) {
-                            const objUrl = await this._toObjectUrl(cached.url);
-                            this._itemMemCache[itemName] = objUrl || cached.url;
-                        } else {
-                            const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, parts[1] || ''));
-                            if (raw) {
-                                try {
-                                    const fetchRes = await fetch(raw);
-                                    const blob = await fetchRes.blob();
-                                    const objUrl = URL.createObjectURL(blob);
-                                    const dataUrl = await new Promise(r => {
-                                        const reader = new FileReader();
-                                        reader.onload = () => r(reader.result);
-                                        reader.onerror = () => r('');
-                                        reader.readAsDataURL(blob);
-                                    });
-                                    this._itemMemCache[itemName] = objUrl;
-                                    if (dataUrl) await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: dataUrl });
-                                } catch(e) {
-                                    this._itemMemCache[itemName] = raw;
-                                    await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: raw });
-                                }
-                            }
-                        }
-                        if (this._itemMemCache[itemName]) document.getElementById('item-img').src = this._itemMemCache[itemName];
+                        // 走 _safeFetchItem：預熱還在生同一張時共用同一個 promise，不再重複生成
+                        const url = await this._safeFetchItem(itemName, parts[1] || '');
+                        if (url) document.getElementById('item-img').src = url;
                     })();
                 }
                 this.addLog("獲得物品", `${itemName} - ${parts[1]||''}`);
