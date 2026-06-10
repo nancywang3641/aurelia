@@ -41,17 +41,24 @@
             catch (e) { return String(s).toLowerCase().replace(/\s+/g, ''); }
         },
 
-        // 在 script 行裡找錨點：正規化 substring；找不到再用前 6 字找一次。回傳行索引或 -1
+        // 在 script 行裡找錨點。副模型常「改寫」after 沒逐字抄、且它看的是含標籤/截斷的原始訊息
+        // ≠ VN 清洗後的劇本行 → 精確比對對不上。故用「最長逐字片段」：正規化後，由長到短切
+        // after 的連續片段，只要某行含 5+ 字的逐字重疊就算命中該行。回傳行索引或 -1。
         _findAnchor: function (script, after) {
             const a = this._norm(after);
             if (!a) return -1;
-            for (let i = 0; i < script.length; i++) {
-                if (this._norm(script[i]).indexOf(a) >= 0) return i;
+            const lines = [];
+            for (let i = 0; i < script.length; i++) lines.push(this._norm(script[i]));
+            if (a.length < 5) {
+                for (let i = 0; i < lines.length; i++) if (lines[i].indexOf(a) >= 0) return i;
+                return -1;
             }
-            if (a.length >= 6) {
-                const c = a.slice(0, 6);
-                for (let i = 0; i < script.length; i++) {
-                    if (this._norm(script[i]).indexOf(c) >= 0) return i;
+            for (let len = a.length; len >= 5; len--) {
+                for (let start = 0; start + len <= a.length; start++) {
+                    const sub = a.slice(start, start + len);
+                    for (let i = 0; i < lines.length; i++) {
+                        if (lines[i].indexOf(sub) >= 0) return i;
+                    }
                 }
             }
             return -1;
