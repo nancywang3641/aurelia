@@ -1152,6 +1152,25 @@
             }
         },
 
+        // 解析 <scene> block 內容行 → { cacheId, prompt }。
+        // 可選首部「scene-id: Xxx」指定快取ID/存檔名（scene_Xxx.png），該行不進生圖 prompt；
+        // 沒給 id 就退回 prompt 雜湊。預熱預掃與正片播放必須共用此函式，
+        // 算出同一個 cacheId，in-flight 去重才接得上。
+        _parseSceneBlock: function(rawLines) {
+            let id = '';
+            const pLines = [];
+            for (const raw of rawLines) {
+                const l = String(raw).trim();
+                if (!l || l.startsWith('//')) continue;
+                const m = l.match(/^scene[-_ ]?id\s*[:：]\s*(.+)$/i);
+                if (m) { id = m[1].trim().replace(/\s+/g, '_'); continue; }
+                pLines.push(l);
+            }
+            const prompt = pLines.join('\n').trim();
+            const cacheId = id || (prompt ? 'sc_' + Math.abs(prompt.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) : '');
+            return { cacheId, prompt };
+        },
+
         _prewarmScenes: function() {
             const tasks = [];
             const seen = new Set();
@@ -1165,17 +1184,12 @@
                     if (!cacheId || !prompt || seen.has(cacheId)) continue;
                     seen.add(cacheId); tasks.push({ cacheId, prompt });
                 }
-                // 格式 B：<scene>...</scene> 多行 block
+                // 格式 B：<scene>...</scene> 多行 block（可選 scene-id: 首部）
                 if (line === '<scene>') {
-                    const _pLines = [];
+                    const _raw = [];
                     let j = i + 1;
-                    while (j < _lines.length && _lines[j] !== '</scene>') {
-                        const _l = _lines[j].trim();
-                        if (_l && !_l.startsWith('//')) _pLines.push(_l);
-                        j++;
-                    }
-                    const prompt  = _pLines.join('\n').trim();
-                    const cacheId = 'sc_' + Math.abs(prompt.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0));
+                    while (j < _lines.length && _lines[j] !== '</scene>') { _raw.push(_lines[j]); j++; }
+                    const { cacheId, prompt } = this._parseSceneBlock(_raw);
                     if (prompt && !seen.has(cacheId)) { seen.add(cacheId); tasks.push({ cacheId, prompt }); }
                 }
             }
@@ -1512,24 +1526,18 @@
                     while (_si < this.script.length && this.script[_si] !== '</scene>') _si++;
                     this.index = _si; this.next(); return;
                 }
-                // 收集 block 內所有行，去除 // 開頭的 AI 思維鏈注釋
-                const _promptLines = [];
+                // 收集 block 內所有行，交給 _parseSceneBlock（剔 // 注釋、抽可選 scene-id: 首部）
+                const _raw = [];
                 let _si = this.index + 1;
-                while (_si < this.script.length && this.script[_si] !== '</scene>') {
-                    const _l = this.script[_si].trim();
-                    if (_l && !_l.startsWith('//')) _promptLines.push(_l);
-                    _si++;
-                }
+                while (_si < this.script.length && this.script[_si] !== '</scene>') { _raw.push(this.script[_si]); _si++; }
                 this.index = _si; // 停在 </scene>
-                const _scenePrompt = _promptLines.join('\n').trim();
+                const { cacheId: _cacheId, prompt: _scenePrompt } = this._parseSceneBlock(_raw);
                 if (_scenePrompt) {
                     const _overlay = document.getElementById('scene-cg-overlay');
                     const _cgImg   = document.getElementById('scene-cg-img');
                     if (_overlay && _cgImg) {
                         _overlay.classList.add('active');
                         this.hideVNPanel();
-                        // cacheId = prompt hash
-                        const _cacheId = 'sc_' + Math.abs(_scenePrompt.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0));
                         const _memUrl  = this._sceneMemCache[_cacheId];
                         if (_memUrl) { _cgImg.src = _memUrl; }
                         else {
