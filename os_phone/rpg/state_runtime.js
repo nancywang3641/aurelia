@@ -134,15 +134,17 @@
             const last = await win.TavernHelper.getChatMessages(-1);
             if (!last || !last[0]) return { text: '', lastId: -1 };
             const lastId = last[0].message_id ?? last[0].id ?? 0;
+            // 最後一則完整原文（不切片）→ 給場景插圖切段編號用（程式自己對位，不靠 AI 逐字抄）
+            const lastContent = String(last[0].message || last[0].mes || '').slice(0, 4000);
             const start = Math.max(0, lastId - CONFIG.recentMsgs + 1);
             const msgs = await win.TavernHelper.getChatMessages(`${start}-${lastId}`);
-            if (!msgs || !msgs.length) return { text: '', lastId };
+            if (!msgs || !msgs.length) return { text: '', lastId, lastContent };
             const text = msgs.map(m => {
                 const role = m.is_user ? 'USER' : (m.name || 'AI');
                 const t = (m.message || m.mes || '').slice(0, 1500);
                 return `[${role}] ${t}`;
             }).join('\n\n');
-            return { text, lastId };
+            return { text, lastId, lastContent };
         } catch(e) {
             console.warn('[State Runtime] 撈訊息失敗:', e);
             return { text: '', lastId: -1 };
@@ -311,13 +313,45 @@ ${_memoryRulesText()}
 
 請輸出嚴格 JSON（不包 markdown）：{ "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
     }
-    // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖，內容由使用者在設定的輸入框微調）
-    function _sceneAddendum(userPrompt) {
+    // 把最後一則劇情「自己切段編號」→ 供副模型只挑數字、程式自己對位（不靠 AI 逐字抄原文）
+    // 回傳敘事行陣列（已濾掉結構標籤/註解/code block）；index+1 = 給 AI 看的 [P編號]
+    function _segmentStory(content) {
+        if (!content) return [];
+        let body = String(content);
+        const m = body.match(/<content>([\s\S]*?)<\/content>/i);
+        if (m) body = m[1];
+        body = body.replace(/<!--[\s\S]*?-->/g, '');   // HTML 註解
+        body = body.replace(/```[\s\S]*?```/g, '');     // code block
+        const out = [];
+        const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
+        for (const l of lines) {
+            if (/^[\[<【]/.test(l)) continue;                          // [Bg|]/[Scene|]/[Choice|]/<xxx>/【卡片】等結構行
+            if (/^(scene-id|status|summary|content)\s*[:：]/i.test(l)) continue;
+            if (l === '</content>' || l === '</scene>') continue;
+            out.push(l);
+            if (out.length >= 40) break;                              // 上限防爆
+        }
+        return out;
+    }
+
+    // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖）。
+    // ★ 定位用「編號段落 + after_paragraph 數字」——AI 只挑數字、絕不抄原文（避免簡繁/改寫/引舊訊息對不上）。
+    function _sceneAddendum(userPrompt, numberedText) {
         return `
 
 ═══════════════════════════════════════
 【★ 同時輸出「場景插圖」→ 放進同一個 JSON 的 "scenes" 欄位】
-${(userPrompt || '').trim()}`;
+${(userPrompt || '').trim()}
+
+【定位規則｜務必嚴格遵守】（若上方說明提到 after 引文或其他 scenes 格式，一律以這裡為準）
+- 下面【本輪最新劇情（編號段落）】是切好編號的段落，你只能從這些編號裡挑插圖位置。
+- 嚴禁為世界書設定/歷史對話/舊訊息生圖——只畫最新這一輪的劇情。
+- 每張插圖輸出 "after_paragraph"：一個數字，代表這張圖要出現在哪個編號段落「之後」。
+- 不要複製、不要引用原文文字，只給數字編號。
+- 格式範例：{ "scenes": [ { "after_paragraph": 3, "prompt": "..." }, { "after_paragraph": 7, "prompt": "..." } ] }
+
+【本輪最新劇情（編號段落）】
+${numberedText}`;
     }
 
     // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
@@ -342,7 +376,7 @@ ${(userPrompt || '').trim()}`;
             if (!hasState && !wantMemory) return;   // 兩邊都沒事做
 
             const currentState = win._AVS_ENGINE?.read?.() || {};
-            const { text: recentText, lastId } = await gatherRecentMessages();
+            const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
 
             const data = (await win.OS_DB.getStateData(chatId)) || {};
             const stateAlreadyDone = hasState && data.patches && lastId >= 0 && data.patches[lastId] !== undefined;
@@ -359,8 +393,15 @@ ${(userPrompt || '').trim()}`;
             } else {
                 prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '');
             }
-            // 場景插圖搭便車：有在抽狀態或記憶(=有新內容)時，順便要副模型多吐 scenes
-            if (wantScenes && (doState || wantMemory) && recentText) prompt += _sceneAddendum(_sceneCfg.extractPrompt);
+            // 場景插圖搭便車：把最後一則自己切段編號，要副模型只挑 after_paragraph 數字（程式自己對位）
+            let _sceneParas = [];
+            if (wantScenes && (doState || wantMemory) && recentText) {
+                _sceneParas = _segmentStory(lastContent || '');
+                if (_sceneParas.length) {
+                    const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
+                    prompt += _sceneAddendum(_sceneCfg.extractPrompt, numbered);
+                }
+            }
 
             const json = await runWithRetry(prompt);
             // 存本輪抽取(原始輸出+memories)，狀態部分等下面算完 filtered/current 再補上 → 給狀態面板診斷/複製
@@ -404,8 +445,16 @@ ${(userPrompt || '').trim()}`;
             // --- 場景插圖（副模型版）：把 scenes 交給渲染器（認 message_id 回填、防 desync）---
             if (wantScenes && Array.isArray(json.scenes) && json.scenes.length && win.VN_SceneInsert?.fromExtract) {
                 try {
-                    win.VN_SceneInsert.fromExtract(json.scenes, { chatId: chatId, msgId: lastId });
-                    console.log(`🖼️ [State Runtime] 場景插圖：派發 ${json.scenes.length} 張給渲染器 (msg#${lastId})`);
+                    // AI 只給段號 → 換成程式自己存的那段原文(逐字)當錨點；VN_SceneInsert 拿原文去 VN 劇本逐字對位
+                    const mapped = json.scenes.map(s => {
+                        let after = '';
+                        const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
+                        if (n >= 1 && _sceneParas[n - 1]) after = _sceneParas[n - 1];
+                        else if (s.after) after = String(s.after);  // 舊格式相容（AI 真給了引文）
+                        return { after: after, prompt: s.prompt };
+                    }).filter(s => s && s.prompt);
+                    win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId });
+                    console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
                 } catch(e) { console.warn('[State Runtime] 場景插圖派發失敗:', e?.message || e); }
             }
         } catch(e) {
