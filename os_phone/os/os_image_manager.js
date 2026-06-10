@@ -593,10 +593,12 @@
             const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
             const h = parseInt(options.height || cfg.height || 1024) || 1024;
             const steps = parseInt(cfg.steps) || 30;
-            const cfgScale = 4.0; // Anima 建議低 CFG（≈4）；高 CFG 會過曝燒圖（如同 Flux 鎖 cfg=1）
-            // 採樣器/排程器：把預設 euler/normal 視為「未設定」→ 套 Anima 官方推薦 er_sde/simple；使用者明確改過則尊重
-            const sampler   = (cfg.sampler   && cfg.sampler   !== 'euler')  ? cfg.sampler   : 'er_sde';
-            const scheduler = (cfg.scheduler && cfg.scheduler !== 'normal') ? cfg.scheduler : 'simple';
+            // CFG 直接吃面板，但夾在 Anima 安全區（1~6）；超出（例如 SDXL 殘留的 6.5/7）→ 自動回 4 防過曝燒圖
+            const _c = parseFloat(cfg.cfg);
+            const cfgScale = (_c >= 1 && _c <= 6) ? _c : 4.0;
+            // 採樣器/排程器：直接吃面板；留空才退 Anima 官方推薦 er_sde/simple
+            const sampler   = cfg.sampler   || 'er_sde';
+            const scheduler = cfg.scheduler || 'simple';
             let seed = (cfg.seed != null && Number(cfg.seed) >= 0) ? Number(cfg.seed) : Math.floor(Math.random() * 1e15);
             if (options.seed) seed = options.seed;
 
