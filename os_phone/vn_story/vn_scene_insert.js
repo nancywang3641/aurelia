@@ -35,6 +35,28 @@
             return Math.abs(h).toString(36);
         },
 
+        // 正規化：去掉空白(含全形)、標點、符號，小寫 → 讓錨點比對容忍標點/空白/全形差異
+        _norm: function (s) {
+            try { return String(s).toLowerCase().replace(/[\s　\p{P}\p{S}]+/gu, ''); }
+            catch (e) { return String(s).toLowerCase().replace(/\s+/g, ''); }
+        },
+
+        // 在 script 行裡找錨點：正規化 substring；找不到再用前 6 字找一次。回傳行索引或 -1
+        _findAnchor: function (script, after) {
+            const a = this._norm(after);
+            if (!a) return -1;
+            for (let i = 0; i < script.length; i++) {
+                if (this._norm(script[i]).indexOf(a) >= 0) return i;
+            }
+            if (a.length >= 6) {
+                const c = a.slice(0, 6);
+                for (let i = 0; i < script.length; i++) {
+                    if (this._norm(script[i]).indexOf(c) >= 0) return i;
+                }
+            }
+            return -1;
+        },
+
         // extractOnce 派發進來：建立排隊 + 預熱生圖；若 VN 此刻就停在該則就立刻插
         fromExtract: function (scenes, ctx) {
             try {
@@ -94,14 +116,19 @@
                     const idTag = 'scene-id: ' + e.cacheId;
                     if (VN.script.indexOf(idTag) >= 0) continue; // 這份劇本已含 → 冪等跳過
 
-                    // 找錨點：cursor 之後的行裡找含 after 的行（只插還沒播到的位置）
-                    let pos = -1;
-                    if (e.after) {
-                        for (let i = Math.max(cursor + 1, 0); i < VN.script.length; i++) {
-                            if (VN.script[i].indexOf(e.after) >= 0) { pos = i + 1; break; }
-                        }
+                    // 找錨點(正規化容錯)；找不到 or 已播過 → 平均分散，別全擠末尾
+                    const aIdx = e.after ? this._findAnchor(VN.script, e.after) : -1;
+                    let pos;
+                    if (aIdx >= 0 && aIdx + 1 > cursor) {
+                        pos = aIdx + 1; // 錨點行之後
+                    } else {
+                        const denom = pend.entries.length + 1;       // 2 張 → 1/3、2/3 處
+                        pos = Math.round(VN.script.length * (e.idx + 1) / denom);
+                        if (pos <= cursor) pos = cursor + 1;
+                        if (pos > VN.script.length) pos = VN.script.length;
                     }
-                    if (pos < 0) pos = VN.script.length; // 錨點沒命中 → 擺訊息末尾(讀完才跳)，不要插到開頭
+                    console.log('[VN_SceneInsert] 錨點 "' + (e.after || '(無)') + '" → ' +
+                        (aIdx >= 0 ? '命中 line ' + aIdx : '未命中→分散') + '，pos ' + pos + '/' + VN.script.length);
 
                     VN.script.splice(pos, 0, '<scene>', idTag, e.prompt, '</scene>');
                     if (pos <= VN.index) VN.index += 4;
