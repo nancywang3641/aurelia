@@ -148,7 +148,8 @@ EXAMPLE "prompt" value:
                 basePrompt: '', negPrompt: '', loras: [], presets: [], previewPrompt: '1 person, upper body portrait, looking at viewer, simple background',
                 sceneHires: true, sceneHiresScale: 1.5, sceneFaceDetailer: true,
                 workflowMode: 'auto', customWorkflow: '',
-                fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5
+                fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5,
+                animaClip: 'qwen_3_06b_base.safetensors', animaVae: 'qwen_image_vae.safetensors'
             }
         };
         if (saved) {
@@ -1130,6 +1131,7 @@ EXAMPLE "prompt" value:
                                     <select class="set-select" id="img-cfd-type">
                                         <option value="checkpoint" ${(imgConfig.comfyuiDirect?.modelType||'checkpoint')==='checkpoint'?'selected':''}>標準 Checkpoint（SDXL/Illustrious/Pony…）</option>
                                         <option value="flux" ${imgConfig.comfyuiDirect?.modelType==='flux'?'selected':''}>Flux（單體，需 clip_l/t5xxl/ae）</option>
+                                        <option value="anima" ${imgConfig.comfyuiDirect?.modelType==='anima'?'selected':''}>Anima（自然語言動漫，需 qwen 編碼器＋VAE）</option>
                                     </select>
                                 </div>
                                 <div class="set-group">
@@ -1147,6 +1149,14 @@ EXAMPLE "prompt" value:
                                         <div><div class="set-label" style="font-size:11px;">Guidance（建議 3.5）</div><input class="set-input" id="img-cfd-guidance" type="number" step="0.1" min="0" max="10" value="${imgConfig.comfyuiDirect?.guidance ?? 3.5}"></div>
                                     </div>
                                     <div class="set-desc" style="margin-top:4px;">Flux 模式：CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。</div>
+                                </div>
+                                <div class="set-group ${imgConfig.comfyuiDirect?.modelType==='anima'?'':'hidden'}" id="img-cfd-anima-fields">
+                                    <div class="set-desc">Anima 專用搭配檔（檔名跟你下載的一致，通常不用改）：</div>
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
+                                        <div><div class="set-label" style="font-size:11px;">文字編碼器（qwen）</div><input class="set-input" id="img-cfd-anima-clip" value="${imgConfig.comfyuiDirect?.animaClip || 'qwen_3_06b_base.safetensors'}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">VAE（qwen）</div><input class="set-input" id="img-cfd-anima-vae" value="${imgConfig.comfyuiDirect?.animaVae || 'qwen_image_vae.safetensors'}"></div>
+                                    </div>
+                                    <div class="set-desc" style="margin-top:4px;">Anima 模式：自然語言提示詞、CFG 自動≈4、採樣 er_sde/simple；上面「模型」要選 diffusion_models 裡的 anima-base（按測試會自動列出）。</div>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">LoRA（開關 ☑ + 名字 + 模型/CLIP 強度）</div>
@@ -2207,8 +2217,8 @@ EXAMPLE "prompt" value:
             function curType(){ const t = container.querySelector('#img-cfd-type'); return (t && t.value) || 'checkpoint'; }
             function refreshModels(){
                 if (!Array.isArray(lastModels)) return;
-                const isFlux = curType() === 'flux';
-                const arr = lastModels.filter(function(x){ const t = (x && x.text) || ''; return isFlux ? /^UNet:/i.test(t) : !/^(UNet|GGUF):/i.test(t); });
+                const isUnet = (curType() === 'flux' || curType() === 'anima');
+                const arr = lastModels.filter(function(x){ const t = (x && x.text) || ''; return isUnet ? /^UNet:/i.test(t) : !/^(UNet|GGUF):/i.test(t); });
                 const sel = container.querySelector('#img-cfd-model');
                 if (!sel) return;
                 const cur = sel.value;
@@ -2220,6 +2230,8 @@ EXAMPLE "prompt" value:
             if (typeSel) typeSel.addEventListener('change', function(){
                 const ff = container.querySelector('#img-cfd-flux-fields');
                 if (ff) ff.classList.toggle('hidden', typeSel.value !== 'flux');
+                const af = container.querySelector('#img-cfd-anima-fields');
+                if (af) af.classList.toggle('hidden', typeSel.value !== 'anima');
                 refreshModels();
             });
             // 工作流模式：自訂時顯示貼上框
@@ -2326,6 +2338,8 @@ EXAMPLE "prompt" value:
                     fluxT5:    g('#img-cfd-t5xxl') || 't5xxl_fp8_e4m3fn.safetensors',
                     fluxAe:    g('#img-cfd-ae') || 'ae.safetensors',
                     guidance:  gf('#img-cfd-guidance', 3.5),
+                    animaClip: g('#img-cfd-anima-clip') || 'qwen_3_06b_base.safetensors',
+                    animaVae:  g('#img-cfd-anima-vae') || 'qwen_image_vae.safetensors',
                     loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(function(r){ return {
                         on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
                         name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
@@ -2345,6 +2359,8 @@ EXAMPLE "prompt" value:
                 setVal('#img-cfd-type', mt);
                 const ff = container.querySelector('#img-cfd-flux-fields');
                 if (ff) ff.classList.toggle('hidden', mt !== 'flux');
+                const af = container.querySelector('#img-cfd-anima-fields');
+                if (af) af.classList.toggle('hidden', mt !== 'anima');
                 refreshModels();
                 setSelectVal('#img-cfd-model', p.model || '');
                 setSelectVal('#img-cfd-vae', p.vae || '');
@@ -2361,6 +2377,8 @@ EXAMPLE "prompt" value:
                 setVal('#img-cfd-t5xxl', p.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors');
                 setVal('#img-cfd-ae', p.fluxAe || 'ae.safetensors');
                 setVal('#img-cfd-guidance', p.guidance != null ? p.guidance : 3.5);
+                setVal('#img-cfd-anima-clip', p.animaClip || 'qwen_3_06b_base.safetensors');
+                setVal('#img-cfd-anima-vae', p.animaVae || 'qwen_image_vae.safetensors');
                 if (lorasBox) { lorasBox.innerHTML = ''; (Array.isArray(p.loras) ? p.loras : []).forEach(function(L){ lorasBox.appendChild(makeLoraRow(L)); }); }
             }
             // 把生成的圖縮成 ~256px JPEG 縮圖（避免 localStorage 爆肥）
@@ -2862,6 +2880,8 @@ EXAMPLE "prompt" value:
                         fluxT5:    (container.querySelector('#img-cfd-t5xxl')?.value || 't5xxl_fp8_e4m3fn.safetensors').trim(),
                         fluxAe:    (container.querySelector('#img-cfd-ae')?.value || 'ae.safetensors').trim(),
                         guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5,
+                        animaClip: (container.querySelector('#img-cfd-anima-clip')?.value || 'qwen_3_06b_base.safetensors').trim(),
+                        animaVae:  (container.querySelector('#img-cfd-anima-vae')?.value || 'qwen_image_vae.safetensors').trim(),
                         presets:   cfdPresets,
                         previewPrompt: (container.querySelector('#img-cfd-preview-prompt')?.value || '').trim(),
                         sceneHires:        container.querySelector('#img-cfd-scene-hires')?.checked ?? true,
@@ -3557,6 +3577,8 @@ EXAMPLE "prompt" value:
                     fluxT5:    (container.querySelector('#img-cfd-t5xxl')?.value || 't5xxl_fp8_e4m3fn.safetensors').trim(),
                     fluxAe:    (container.querySelector('#img-cfd-ae')?.value || 'ae.safetensors').trim(),
                     guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5,
+                    animaClip: (container.querySelector('#img-cfd-anima-clip')?.value || 'qwen_3_06b_base.safetensors').trim(),
+                    animaVae:  (container.querySelector('#img-cfd-anima-vae')?.value || 'qwen_image_vae.safetensors').trim(),
                     loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(function(r){ return {
                         on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
                         name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
