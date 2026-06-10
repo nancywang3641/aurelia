@@ -295,6 +295,15 @@
             // 移除 HTML 註解行（如作者思維鏈 <!-- 分析內容 --> 等），含跨行註解
             this.script = this.script.join('\n').replace(/<!--[\s\S]*?-->/g, '').split('\n').map(l=>l.trim()).filter(l=>l!=='');
             this.script = this.script.map(l => l.replace(/<\/?status>/g, '').replace(/<\/?content>/g, ''));
+            // 容錯：AI 被其他 TAG 格式污染時會把 <call> 寫成方括號版
+            // （[Call character="X"] / [/Call]，大小寫、單雙引號、無引號都見過）→ 正規化回標準標籤，
+            // 統一成雙引號讓 VN_Phone.initCall 的 character="..." 解析吃得到
+            this.script = this.script.map(l => {
+                const mOpen = l.match(/^\[call\s+character\s*=\s*["']?([^"'\]]+?)["']?\s*\]$/i);
+                if (mOpen) return `<call character="${mOpen[1]}">`;
+                if (/^\[\/call\s*\]$/i.test(l)) return '</call>';
+                return l;
+            });
 
             // 預處理：移除外部作者區塊標籤內的原始文字行
             // 這些行的內容由 DOM 渲染版本呈現（_showDomBlock），原文不需出現在對話框
