@@ -311,6 +311,14 @@ ${_memoryRulesText()}
 
 請輸出嚴格 JSON（不包 markdown）：{ "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
     }
+    // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖，內容由使用者在設定的輸入框微調）
+    function _sceneAddendum(userPrompt) {
+        return `
+
+═══════════════════════════════════════
+【★ 同時輸出「場景插圖」→ 放進同一個 JSON 的 "scenes" 欄位】
+${(userPrompt || '').trim()}`;
+    }
 
     // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
     async function extractOnce() {
@@ -327,6 +335,9 @@ ${_memoryRulesText()}
             // 結合觸發：取走 vector_inject 掛的待處理記憶（狀態系統開著時它會交棒過來）
             pendingMem = (win.OS_VECTOR_INJECT?.consumePendingMemory?.()) || null;
             const wantMemory = !!(pendingMem && win.OS_VECTOR_ENGINE?.isEnabled?.() === true && typeof win.OS_VECTOR_ENGINE?.ingestEntries === 'function');
+            // 場景插圖（副模型版）：搭便車在這通副模型多吐 scenes（不另開呼叫）
+            const _sceneCfg = (function(){ try { return (JSON.parse(localStorage.getItem('os_image_config')||'{}').sceneGen) || {}; } catch(e){ return {}; } })();
+            const wantScenes = !!(_sceneCfg.extractEnabled && (_sceneCfg.extractPrompt || '').trim());
 
             if (!hasState && !wantMemory) return;   // 兩邊都沒事做
 
@@ -348,6 +359,8 @@ ${_memoryRulesText()}
             } else {
                 prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '');
             }
+            // 場景插圖搭便車：有在抽狀態或記憶(=有新內容)時，順便要副模型多吐 scenes
+            if (wantScenes && (doState || wantMemory) && recentText) prompt += _sceneAddendum(_sceneCfg.extractPrompt);
 
             const json = await runWithRetry(prompt);
             // 存本輪抽取(原始輸出+memories)，狀態部分等下面算完 filtered/current 再補上 → 給狀態面板診斷/複製
@@ -386,6 +399,14 @@ ${_memoryRulesText()}
                 }
                 // 副模型沒吐 memories → 降級：讓向量引擎自己抽一通，不漏記憶
                 if (!memIngested) { try { win.OS_VECTOR_ENGINE.ingest(pendingMem.content, pendingMem.storyId, pendingMem.chapterId); memIngested = true; } catch(e) {} }
+            }
+
+            // --- 場景插圖（副模型版）：把 scenes 交給渲染器（認 message_id 回填、防 desync）---
+            if (wantScenes && Array.isArray(json.scenes) && json.scenes.length && win.VN_SceneInsert?.fromExtract) {
+                try {
+                    win.VN_SceneInsert.fromExtract(json.scenes, { chatId: chatId, msgId: lastId });
+                    console.log(`🖼️ [State Runtime] 場景插圖：派發 ${json.scenes.length} 張給渲染器 (msg#${lastId})`);
+                } catch(e) { console.warn('[State Runtime] 場景插圖派發失敗:', e?.message || e); }
             }
         } catch(e) {
             console.warn('[State Runtime] 抽取失敗:', e?.message || e);
