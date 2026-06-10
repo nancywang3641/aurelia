@@ -283,10 +283,10 @@
 
             let posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
             let negText = options.negativePrompt || cfg.negPrompt || '';
-            // 場景防「男變女」：scene 的提示詞若沒有任何女性詞 → 雙重防護
-            // 正面加男性錨點(male focus, masculine)＋負面強負女性特徵
-            // （此模型太顛，男角穿粉色/瀏海等就變女；兩邊一起夾把它拉回男性）
-            if (type === 'scene' && !/(\bgirl\b|\bgirls\b|\bwoman\b|\bwomen\b|\bfemale\b|1girl|2girls)/i.test(posText)) {
+            // 防「男變女」：場景(scene)＋角色頭像/立繪(char) 的提示詞若沒有任何女性詞 → 三重防護
+            // 中和女性化髮型詞 ＋ 正面加男性錨點(male focus, masculine) ＋ 負面強負女性特徵
+            // （此模型太顛，男角穿粉色/M字瀏海等就變女；夾擊把它拉回男性。有女角的不動）
+            if ((type === 'scene' || type === 'char') && !/(\bgirl\b|\bgirls\b|\bwoman\b|\bwomen\b|\bfemale\b|1girl|2girls)/i.test(posText)) {
                 // 中和會讓男角變女的女性偏向髮型詞（保留中分外觀、拔掉女性 trigger）
                 posText = posText.replace(/\bm[-\s]?shaped bangs\b/ig, 'center-parted hair')
                                  .replace(/\bparted bangs\b/ig, 'parted hair');
