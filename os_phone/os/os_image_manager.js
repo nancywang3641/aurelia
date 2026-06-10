@@ -827,7 +827,8 @@
 
             if (isChinese && win.TranslationManager) {
                 try {
-                    const _tr = await win.TranslationManager.translateForImageGeneration(rawPrompt, 'background');
+                    // 用纯 translate：translateForImageGeneration 会硬加 photorealistic 风格词，跟下方 negative prompt 打架
+                    const _tr = await win.TranslationManager.translate(rawPrompt, 'zh', 'en');
                     translatedPrompt = (_tr && String(_tr).trim()) ? _tr : rawPrompt;  // 翻譯回空→用原文，絕不送空 prompt
                 } catch (e) {}
             }
