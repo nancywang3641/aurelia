@@ -430,7 +430,10 @@ const VN_TTS = {
             if (this._cache[key]) { this._pending.delete(key); continue; }
             const _light = (window.parent || window).AURELIA_GPU_LIGHT;
             try {
-                _light && _light.voiceStart();   // 紅綠燈：語音生成中，本機生圖讓路
+                // 預熱是「未來台詞」最不急：本機圖片（頭像/插圖）生成中先讓路，
+                // 圖清空才出單（圖片端有 180 秒逾時保險，不會永遠等不到）。
+                // ⚠️ 預熱「不亮紅燈」——連發佇列亮紅燈會紅燈常駐，圖片永遠插不進來（2026-06-11 實測卡死）
+                if (_light && _light.waitImagesIdle) await _light.waitImagesIdle(180000);
                 await this._ensureModel(model);
                 const url  = this._buildUrl(model, text, emotion, false);
                 const resp = await fetch(url);
@@ -440,7 +443,6 @@ const VN_TTS = {
             } catch (e) {
                 console.warn('[VN_TTS] prewarm 失敗', key, e);
             } finally {
-                _light && _light.voiceEnd();
                 this._pending.delete(key);
             }
         }
