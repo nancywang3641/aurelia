@@ -142,6 +142,8 @@ const PHONE_FILES = [
     'os/os_minimax.js',
     'os/translation_manager.js',
     'os/os_image_manager.js',
+    'os/os_control_room.js',     // 🎛️ 控制室：監控/遙控桌面控制塔（SoVITS+ComfyUI）
+
     'os/os_achievement.js',
     'os/os_backup.js',
     'os/os_404_store.js',
@@ -330,6 +332,7 @@ async function initializeExtension() {
 
         // os_phone/os 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_control_room.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_studio.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_worldbook.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_persona.css');
