@@ -52,10 +52,12 @@
     if (!win.AURELIA_GPU_QUEUE) {
         win.AURELIA_GPU_QUEUE = {
             _q: [], _running: false, _seq: 0,
-            run: function(fn, prio) {
+            // maxMs：單項逾時保險（預設 240 秒）。一項卡死（SoVITS 沒開、連線懸掛…）不准堵死整條隊，
+            // 逾時就放行後面的單，孤兒請求留在背景自生自滅。
+            run: function(fn, prio, maxMs) {
                 const self = this;
                 return new Promise(function(resolve, reject) {
-                    self._q.push({ fn: fn, prio: (prio == null ? 1 : prio), seq: self._seq++, resolve: resolve, reject: reject });
+                    self._q.push({ fn: fn, prio: (prio == null ? 1 : prio), maxMs: (maxMs || 240000), seq: self._seq++, resolve: resolve, reject: reject });
                     self._q.sort(function(a, b) { return (a.prio - b.prio) || (a.seq - b.seq); });
                     self._pump();
                 });
@@ -66,9 +68,21 @@
                 const item = self._q.shift();
                 if (!item) return;
                 self._running = true;
+                let done = false;
+                const finish = function(cb, v) {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timer);
+                    cb(v);
+                    self._running = false;
+                    self._pump();
+                };
+                const timer = setTimeout(function() {
+                    console.warn('[GPU佇列] 一項工作逾時(' + item.maxMs + 'ms)，放行後面的單');
+                    finish(item.resolve, undefined);
+                }, item.maxMs);
                 Promise.resolve().then(function() { return item.fn(); })
-                    .then(function(v) { item.resolve(v); }, function(e) { item.reject(e); })
-                    .then(function() { self._running = false; self._pump(); });
+                    .then(function(v) { finish(item.resolve, v); }, function(e) { finish(item.reject, e); });
             }
         };
     }
