@@ -1105,7 +1105,16 @@
 
             const savedPrompt = meta.translatedPrompt || prompt;
             try {
-                const fetchRes = await fetch(raw);
+                // 下載逾時保險：Pollinations 是「下載那一刻才真正生圖」，雲端掛了這格會永遠 pending
+                // （黑窗 ComfyUI 閒著、進度卡 4/5 的那種）→ 90 秒放棄，改走備援
+                const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 90000) : null;
+                let fetchRes;
+                try {
+                    fetchRes = await fetch(raw, _ac ? { signal: _ac.signal } : undefined);
+                } finally {
+                    if (_timer) clearTimeout(_timer);
+                }
                 const blob = await fetchRes.blob();
                 const objUrl = URL.createObjectURL(blob);
                 const dataUrl = await new Promise(r => {
@@ -1120,6 +1129,23 @@
                 if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url: dataUrl, fallback: isFallback });
                 return tagged;
             } catch(e) {
+                const _aborted = e && e.name === 'AbortError';
+                if (_aborted) console.warn('[VN] 背景下載逾時(90秒)，改走備援:', cacheId);
+                // 主來源失敗且還沒用過備援 → 補一輪 Pixabay → LoremFlickr，別讓進度永遠缺一格
+                if (!isFallback) {
+                    try {
+                        let fb = await this._pixabayFallback(prompt, cacheId);
+                        if (!fb) fb = await this._loremFlickrFallback(prompt, cacheId);
+                        if (fb) {
+                            const tagged2 = fb.includes('#') ? fb : fb + '#fallback';
+                            this._bgMemCache[cacheId] = tagged2;
+                            this._preloadImg(cacheId, tagged2);
+                            console.log('[VN] 背景備援接手:', cacheId);
+                            return tagged2;
+                        }
+                    } catch (e2) {}
+                }
+                if (_aborted) return '';   // 雲端死透：放掉這張，別再沿同一條死路重試
                 const url = await this._toDataUrl(raw);
                 if (url) {
                     const tagged = isFallback ? url + '#fallback' : url;
