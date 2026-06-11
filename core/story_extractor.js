@@ -21,6 +21,81 @@
 
         init() {
             this.loadTheme();
+            this.initStoryFlow();
+        },
+
+        // ── 發消息 → 自動轉等待室 → 故事就緒自動讓路（2026-06-11）────────────
+        // 藏書開在 VN 面板內：訊息完成時 vn_core 的自動偵測本來就會套劇本＋切到劇情頁，
+        // 但藏書蓋在上面、生成期間也沒有任何狀態 → 這裡補一塊等待室 overlay：
+        //   發消息（生成開始）→「故事撰寫中…」＋圖片進度（早鳥已在背景生）
+        //   → 回覆落地且含 <content> →「進入劇情」並收起藏書讓路（劫持的輸入框同步還原）
+        //   → 劇情頁的開場閘門接手：圖沒好會自己擋 loading
+        _flowInited: false,
+        _genWatch: null,
+        initStoryFlow() {
+            if (this._flowInited) return;
+            const w = window;
+            if (!w.eventOn || !w.tavern_events) { setTimeout(() => this.initStoryFlow(), 1000); return; }
+            this._flowInited = true;
+            const ev = w.tavern_events;
+
+            if (ev.GENERATION_STARTED) w.eventOn(ev.GENERATION_STARTED, () => {
+                if (!this.isVisible) return;   // 只在藏書開著時接管
+                this._showFlowOverlay();
+            });
+
+            // 生成被手動停止 / 出錯沒有回覆 → 收起等待室別卡人
+            if (ev.GENERATION_STOPPED) w.eventOn(ev.GENERATION_STOPPED, () => this._hideFlowOverlay());
+            if (ev.GENERATION_ENDED) w.eventOn(ev.GENERATION_ENDED, () => {
+                setTimeout(() => { if (this._overlayShown()) this._hideFlowOverlay(); }, 4000);
+            });
+
+            if (ev.MESSAGE_RECEIVED) w.eventOn(ev.MESSAGE_RECEIVED, (mid) => {
+                if (!this._overlayShown()) return;
+                let txt = '';
+                try {
+                    const ctx = w.SillyTavern?.getContext?.();
+                    const m = ctx?.chat?.[mid];
+                    txt = (m && !m.is_user) ? (m.mes || m.message || '') : '';
+                } catch (e) {}
+                if (!txt.includes('<content>')) { this._hideFlowOverlay(); return; }   // 不是劇情回覆 → 靜默收起
+                const label = document.getElementById('se-flow-label');
+                if (label) label.textContent = '✓ 故事就緒，進入劇情…';
+                // 自動偵測那邊正在套劇本＋切頁；稍等再收起藏書讓路
+                setTimeout(() => { this._hideFlowOverlay(); this.hide(); }, 800);
+            });
+
+            console.log('[StoryExtractor] ✅ 發消息→等待室→進劇情 流程已掛載');
+        },
+
+        _overlayShown() { return !!document.getElementById('se-flow-overlay'); },
+
+        _showFlowOverlay() {
+            if (this._overlayShown()) return;
+            const host = document.getElementById('se-root-wrapper');
+            if (!host) return;
+            const o = document.createElement('div');
+            o.id = 'se-flow-overlay';
+            o.innerHTML = '<div id="se-flow-spin"></div><div id="se-flow-label">故事撰寫中…</div><div id="se-flow-sub"></div>';
+            host.appendChild(o);
+            const t0 = Date.now();
+            this._genWatch = setInterval(() => {
+                const label = document.getElementById('se-flow-label');
+                const sub   = document.getElementById('se-flow-sub');
+                if (!label) return;
+                const sec = Math.round((Date.now() - t0) / 1000);
+                if (!label.textContent.startsWith('✓')) label.textContent = `故事撰寫中… ${sec}s`;
+                try {
+                    const st = window.VN_Core?.imgPendingStatus?.();
+                    if (sub && st && (st.pending > 0 || st.total > 0)) sub.textContent = `圖片繪製中 ${st.done}/${st.total}`;
+                } catch (e) {}
+            }, 1000);
+        },
+
+        _hideFlowOverlay() {
+            if (this._genWatch) { clearInterval(this._genWatch); this._genWatch = null; }
+            const o = document.getElementById('se-flow-overlay');
+            if (o) o.remove();
         },
 
         loadTheme() {
