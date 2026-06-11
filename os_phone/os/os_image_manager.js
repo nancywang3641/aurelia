@@ -45,6 +45,34 @@
         };
     }
 
+    // ── 本機 GPU 單線佇列（2026-06-11 終極版：紅綠燈互讓有競態窗口，遲到的單照樣撞）──
+    // 同時只跑「一件」本機 GPU 工作，物理上不可能再撞顯卡。
+    // 優先序：0=即時語音（玩家正在聽，插隊）＞ 1=本機圖片 ＞ 2=預熱語音（未來台詞墊底）。
+    // 只有本機工作進佇列（SoVITS、ComfyUI 直連、酒館SD）；雲端（NAI/Pollinations）不進、照舊並行。
+    if (!win.AURELIA_GPU_QUEUE) {
+        win.AURELIA_GPU_QUEUE = {
+            _q: [], _running: false, _seq: 0,
+            run: function(fn, prio) {
+                const self = this;
+                return new Promise(function(resolve, reject) {
+                    self._q.push({ fn: fn, prio: (prio == null ? 1 : prio), seq: self._seq++, resolve: resolve, reject: reject });
+                    self._q.sort(function(a, b) { return (a.prio - b.prio) || (a.seq - b.seq); });
+                    self._pump();
+                });
+            },
+            _pump: function() {
+                const self = this;
+                if (self._running) return;
+                const item = self._q.shift();
+                if (!item) return;
+                self._running = true;
+                Promise.resolve().then(function() { return item.fn(); })
+                    .then(function(v) { item.resolve(v); }, function(e) { item.reject(e); })
+                    .then(function() { self._running = false; self._pump(); });
+            }
+        };
+    }
+
     const ImageManager = {
         config: {
             service: 'pollinations', // 預設
@@ -256,7 +284,6 @@
         // 不塞奧瑞亞底詞/負詞（尊重朋友的 SD 設定）；失敗回 null 並用 toastr 提示，不偷偷換來源。
         _genTavernSd: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
-            try { await win.AURELIA_GPU_LIGHT.waitVoiceIdle(8000); } catch (e) {}   // 本機路線：語音生成中先讓路
 
             const trigger = (win.TavernHelper && win.TavernHelper.triggerSlash) || win.triggerSlash;
             if (typeof trigger !== 'function') {
@@ -287,30 +314,32 @@
             const cmd = '/sd ' + args.join(' ') + ' ' + clean;
             console.log('[ImageManager] 酒館原生 /sd 指令:', cmd);
 
-            try {
-                try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
-                const url = await trigger(cmd);
-                if (!url || typeof url !== 'string' || !url.trim()) {
-                    console.warn('[ImageManager] /sd 回傳空，可能未設定後端');
-                    try { win.toastr && win.toastr.warning('生圖失敗，請先在酒館「圖像生成」擴展設定好後端', '酒館原生生圖'); } catch (e) {}
+            // 進本機 GPU 單線佇列（優先序 1）：跟語音絕不同時上顯卡
+            return await win.AURELIA_GPU_QUEUE.run(async () => {
+                try {
+                    try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
+                    const url = await trigger(cmd);
+                    if (!url || typeof url !== 'string' || !url.trim()) {
+                        console.warn('[ImageManager] /sd 回傳空，可能未設定後端');
+                        try { win.toastr && win.toastr.warning('生圖失敗，請先在酒館「圖像生成」擴展設定好後端', '酒館原生生圖'); } catch (e) {}
+                        return null;
+                    }
+                    console.log('[ImageManager] ✅ 酒館原生生圖成功');
+                    return url.trim();
+                } catch (error) {
+                    console.error('[ImageManager] ❌ 酒館原生生圖失敗:', error);
+                    try { win.toastr && win.toastr.error('生圖失敗：' + (error.message || error), '酒館原生生圖'); } catch (e) {}
                     return null;
+                } finally {
+                    try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
                 }
-                console.log('[ImageManager] ✅ 酒館原生生圖成功');
-                return url.trim();
-            } catch (error) {
-                console.error('[ImageManager] ❌ 酒館原生生圖失敗:', error);
-                try { win.toastr && win.toastr.error('生圖失敗：' + (error.message || error), '酒館原生生圖'); } catch (e) {}
-                return null;
-            } finally {
-                try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
-            }
+            }, 1);
         },
 
         // --- ComfyUI 直連：奧瑞亞內部自動組 workflow → 走酒館伺服器代理(/api/sd/comfy/generate) → 回 base64 ---
         // 不依賴 ST 的 workflow 檔；LoRA/參數全由 config.comfyuiDirect（奧瑞亞 UI）控制。
         _genComfyuiDirect: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
-            try { await win.AURELIA_GPU_LIGHT.waitVoiceIdle(8000); } catch (e) {}   // 本機路線：語音生成中先讓路
             const cfg = this.config.comfyuiDirect || {};
             const url = (cfg.url || '').trim();
             if (!url) {
@@ -358,33 +387,36 @@
             }
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
 
-            // 逾時保險：ComfyUI 卡死（OOM/排隊爆掉）時 180 秒放棄這張，別讓串行鏈整條凍住
-            const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-            const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 180000) : null;
-            try {
-                try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
-                const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body), signal: _ac ? _ac.signal : undefined });
-                if (!res.ok) {
-                    const t = await res.text().catch(() => '');
-                    console.error('[ImageManager] ComfyUI 直連失敗:', res.status, t);
-                    try { win.toastr && win.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {}
+            // 進本機 GPU 單線佇列（優先序 1）：跟語音絕不同時上顯卡
+            return await win.AURELIA_GPU_QUEUE.run(async () => {
+                // 逾時保險：ComfyUI 卡死（OOM/排隊爆掉）時 180 秒放棄這張，別讓佇列整條凍住
+                const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 180000) : null;
+                try {
+                    try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
+                    const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body), signal: _ac ? _ac.signal : undefined });
+                    if (!res.ok) {
+                        const t = await res.text().catch(() => '');
+                        console.error('[ImageManager] ComfyUI 直連失敗:', res.status, t);
+                        try { win.toastr && win.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {}
+                        return null;
+                    }
+                    const j = await res.json();
+                    if (j && j.data) {
+                        console.log('[ImageManager] ✅ ComfyUI 直連生圖成功');
+                        return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
+                    }
                     return null;
+                } catch (error) {
+                    const _msg = (error && error.name === 'AbortError') ? '生成逾時(180秒)，已放棄這張讓後面的繼續' : (error.message || error);
+                    console.error('[ImageManager] ComfyUI 直連錯誤:', _msg);
+                    try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {}
+                    return null;
+                } finally {
+                    if (_timer) clearTimeout(_timer);
+                    try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
                 }
-                const j = await res.json();
-                if (j && j.data) {
-                    console.log('[ImageManager] ✅ ComfyUI 直連生圖成功');
-                    return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
-                }
-                return null;
-            } catch (error) {
-                const _msg = (error && error.name === 'AbortError') ? '生成逾時(180秒)，已放棄這張讓後面的繼續' : (error.message || error);
-                console.error('[ImageManager] ComfyUI 直連錯誤:', _msg);
-                try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {}
-                return null;
-            } finally {
-                if (_timer) clearTimeout(_timer);
-                try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
-            }
+            }, 1);
         },
 
         // 預設包風格預覽：用「指定預設包設定 + 測試詞」生一張小圖，不動到當前面板設定
