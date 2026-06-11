@@ -206,6 +206,7 @@
                 else if (action === 'autoload' && window._lobbyPendingChapter && window.VN_Core) {
                     const p = window._lobbyPendingChapter;
                     window._lobbyPendingChapter = null;
+                    try { window.VN_Core.earlybirdFromText(p.content); } catch (e) {}  // 頭像早鳥：loader 開跑前先開生
                     window.VN_Core._showStartLoader(4000, () => window.VN_Core._loadWithSceneAnalysis(p.content, null));
                 }
             }, delay);

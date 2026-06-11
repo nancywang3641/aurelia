@@ -170,6 +170,7 @@ const PHONE_FILES = [
     'vn_story/vn_theme.js',            // VN 劇情面板主題（[World|] 驅動換樣式）— 須在 vn_core 前
     'vn_story/vn_core.js',
     'vn_story/vn_scene_insert.js',     // 副模型場景插圖渲染器（state_runtime.extractOnce → splice 進 VN 劇本）
+    'vn_story/vn_avatar_earlybird.js', // 頭像早鳥：串流/訊息落地搶先生成 ChapterCard 的 [Avatar|...]（須在 vn_core 後）
     'vn_story/vn_inspect.js',
     'vn_story/vn_phone.js',
     'vn_story/vn_reader.js',

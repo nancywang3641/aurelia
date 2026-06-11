@@ -288,7 +288,9 @@ const VN_TTS = {
                 this._pending.delete(cacheKey);
                 return;
             }
+            const _light = (window.parent || window).AURELIA_GPU_LIGHT;
             try {
+                _light && _light.voiceStart();   // 紅綠燈：語音生成中，本機生圖讓路
                 const resp = await fetch(url);
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const reader   = resp.body.getReader();
@@ -311,6 +313,7 @@ const VN_TTS = {
             } catch (e) {
                 console.error('[VN_TTS] streaming 錯誤', e);
             } finally {
+                _light && _light.voiceEnd();
                 this._pending.delete(cacheKey);
             }
         });
@@ -318,7 +321,9 @@ const VN_TTS = {
 
     // ── WAV 完整下載後播放（fallback）──────────────────────────────────
     async _playWavFetch(url, cacheKey) {
+        const _light = (window.parent || window).AURELIA_GPU_LIGHT;
         try {
+            _light && _light.voiceStart();   // 紅綠燈：語音生成中，本機生圖讓路
             const resp    = await fetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const blob    = await resp.blob();
@@ -328,6 +333,7 @@ const VN_TTS = {
         } catch (e) {
             console.error('[VN_TTS] WAV fetch 錯誤', e);
         } finally {
+            _light && _light.voiceEnd();
             this._pending.delete(cacheKey);
         }
     },
@@ -422,7 +428,9 @@ const VN_TTS = {
         while (this._prewarmQueue.length) {
             const { model, text, emotion, key } = this._prewarmQueue.shift();
             if (this._cache[key]) { this._pending.delete(key); continue; }
+            const _light = (window.parent || window).AURELIA_GPU_LIGHT;
             try {
+                _light && _light.voiceStart();   // 紅綠燈：語音生成中，本機生圖讓路
                 await this._ensureModel(model);
                 const url  = this._buildUrl(model, text, emotion, false);
                 const resp = await fetch(url);
@@ -432,6 +440,7 @@ const VN_TTS = {
             } catch (e) {
                 console.warn('[VN_TTS] prewarm 失敗', key, e);
             } finally {
+                _light && _light.voiceEnd();
                 this._pending.delete(key);
             }
         }

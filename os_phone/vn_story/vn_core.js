@@ -368,6 +368,15 @@
                 m[1].split('\n').forEach(l => { if(l.includes(':')) { const [n, d] = l.split(':'); this.avatars[n.trim()] = d.trim(); } });
             }
 
+            // 2. 新式 [Avatar|名|描述]（ChapterCard 內，與早鳥監聽同格式；描述內禁含 |）
+            const regAvNew = /^\s*\[Avatar\|([^|\]\n]+)\|([^\]\n]+)\]\s*$/gmi;
+            while ((m = regAvNew.exec(txtString)) !== null) {
+                const _an = m[1].trim(), _ad = m[2].trim();
+                if (_an && _ad) this.avatars[_an] = _ad;
+            }
+            // [Avatar|...] 是生成指令不是劇情行：從劇本剔除（卡片與對話框都不該顯示原始行）
+            this.script = this.script.filter(l => !/^\[Avatar\|/i.test(l));
+
             // 將 <branches> 選項附加到 script 末尾（由現有 [Choice|] 機制驅動顯示）
             if (_branchLines.length) {
                 this.script.push(..._branchLines);
@@ -439,9 +448,28 @@
             bar.style.transition = 'width ' + ms + 'ms linear';
             bar.style.width = '100%';
 
+            // 基本進度條跑完後：頭像還在生（早鳥已先起跑）→ 轉入等待階段
+            // 顯示真實進度、90 秒上限保險、點擊直接跳過；沒等到的頭像生完會自己浮現
+            const self = this;
+            const finish = function() { el.style.display = 'none'; el.onclick = null; if (onDone) onDone(); };
             setTimeout(function() {
-                el.style.display = 'none';
-                if (onDone) onDone();
+                const st = (typeof self.avatarPendingStatus === 'function') ? self.avatarPendingStatus() : { pending: 0 };
+                if (!st.pending) { finish(); return; }
+                const label = el.querySelector('#vn-start-loader-label');
+                const CAP = 90000, t0 = Date.now();
+                let closed = false;
+                const stop = function() {
+                    if (closed) return; closed = true;
+                    clearInterval(tick); finish();
+                };
+                el.onclick = stop;
+                const tick = setInterval(function() {
+                    const s2 = self.avatarPendingStatus();
+                    if (label) label.textContent = '頭像繪製中 ' + s2.done + '/' + s2.total + '（點此跳過）';
+                    bar.style.transition = 'none';
+                    bar.style.width = Math.min(100, Math.round(s2.done / Math.max(1, s2.total) * 100)) + '%';
+                    if (!s2.pending || (Date.now() - t0) > CAP) stop();
+                }, 500);
             }, ms);
         },
 
@@ -1327,33 +1355,100 @@
 
                 if (!needGen.length) { console.log('[VN] 所有頭像預熱完成（全部快取命中）'); return; }
 
-                // 第二輪：並行生成（NAI 多圖同時發請求，不再循序等待）
-                console.log(`[VN] 並行生成 ${needGen.length} 個頭像...`);
-                await Promise.all(needGen.map(async name => {
-                    try {
-                        const raw = await VN_Image.getAvatar(this._resolveAvatarPrompt(name), 'Neutral');
-                        if (!raw) { console.warn(`[VN] 頭像生成失敗：${name}`); return; }
-                        try {
-                            const fetchRes = await fetch(raw);
-                            const blob = await fetchRes.blob();
-                            const objUrl = URL.createObjectURL(blob);
-                            const dataUrl = await new Promise(r => {
-                                const reader = new FileReader();
-                                reader.onload = () => r(reader.result);
-                                reader.onerror = () => r('');
-                                reader.readAsDataURL(blob);
-                            });
-                            this._avatarMemCache[name] = objUrl;
-                            if (dataUrl) await VN_Cache.set('avatar_cache', name, { prompt: this._resolveAvatarPrompt(name), url: dataUrl });
-                        } catch(e) {
-                            const url = await this._toDataUrl(raw);
-                            if (url) { this._avatarMemCache[name] = url; await VN_Cache.set('avatar_cache', name, { prompt: this._resolveAvatarPrompt(name), url }); }
-                        }
-                        console.log(`[VN] 頭像預熱完成：${name}`);
-                    } catch(e) { console.warn(`[VN] 頭像預熱例外：${name}`, e); }
-                }));
+                // 第二輪：生成。雲端(NAI/Poll)維持並行；本機(ComfyUI直連/酒館SD)改串行——
+                // ComfyUI 端本來就一張一張跑，串行零損失，還讓「語音紅綠燈」插得進空檔
+                const _svc = win.OS_IMAGE_MANAGER?.config?.service || '';
+                const _localGpu = (_svc === 'comfyui_direct' || _svc === 'tavern_sd');
+                console.log(`[VN] ${_localGpu ? '串行' : '並行'}生成 ${needGen.length} 個頭像...`);
+                if (_localGpu) {
+                    for (const name of needGen) { await this._genAvatarToCache(name); }
+                } else {
+                    await Promise.all(needGen.map(name => this._genAvatarToCache(name)));
+                }
                 console.log('[VN] 所有頭像預熱完成');
             })();
+        },
+
+        // ── 頭像生成共用管線（loadScript 預熱 / 早鳥監聽 共用）──────────────
+        // in-flight 去重：同名頭像不論從哪條路觸發，同時只生一張
+        _avatarInflight: {},
+        _avatarPendingTotal: 0,   // 本輪累計（給開場 loading 顯示進度）
+        _avatarPendingDone: 0,
+        avatarPendingStatus: function() {
+            return { done: this._avatarPendingDone, total: this._avatarPendingTotal,
+                     pending: Object.keys(this._avatarInflight).length };
+        },
+        _genAvatarToCache: function(name) {
+            if (this._avatarMemCache[name]) return Promise.resolve(this._avatarMemCache[name]);
+            if (this._avatarInflight[name]) return this._avatarInflight[name];
+            const job = (async () => {
+                try {
+                    const raw = await VN_Image.getAvatar(this._resolveAvatarPrompt(name), 'Neutral');
+                    if (!raw) { console.warn(`[VN] 頭像生成失敗：${name}`); return ''; }
+                    try {
+                        const fetchRes = await fetch(raw);
+                        const blob = await fetchRes.blob();
+                        const objUrl = URL.createObjectURL(blob);
+                        const dataUrl = await new Promise(r => {
+                            const reader = new FileReader();
+                            reader.onload = () => r(reader.result);
+                            reader.onerror = () => r('');
+                            reader.readAsDataURL(blob);
+                        });
+                        this._avatarMemCache[name] = objUrl;
+                        if (dataUrl) await VN_Cache.set('avatar_cache', name, { prompt: this._resolveAvatarPrompt(name), url: dataUrl });
+                    } catch(e) {
+                        const url = await this._toDataUrl(raw);
+                        if (url) { this._avatarMemCache[name] = url; await VN_Cache.set('avatar_cache', name, { prompt: this._resolveAvatarPrompt(name), url }); }
+                    }
+                    console.log(`[VN] 頭像生成完成：${name}`);
+                    return this._avatarMemCache[name] || '';
+                } catch(e) { console.warn(`[VN] 頭像生成例外：${name}`, e); return ''; }
+            })();
+            this._avatarInflight[name] = job;
+            this._avatarPendingTotal++;
+            job.finally(() => { delete this._avatarInflight[name]; this._avatarPendingDone++; });
+            return job;
+        },
+
+        // ── 早鳥入口：搶在 VN 載入前提早登記＋生成頭像（vn_avatar_earlybird / 面板啟動路呼叫）──
+        // 從任意文本掃 [Avatar|名|描述]，fire-and-forget
+        earlybirdFromText: function(text) {
+            try {
+                if (!text) return;
+                const pairs = [];
+                const re = /^\s*\[Avatar\|([^|\]\n]+)\|([^\]\n]+)\]\s*$/gmi;
+                let m;
+                while ((m = re.exec(text)) !== null) {
+                    const n = m[1].trim(), d = m[2].trim();
+                    if (n && d && !pairs.some(p => p.name === n)) pairs.push({ name: n, desc: d });
+                }
+                if (pairs.length) {
+                    console.log(`[VN] 頭像早鳥：收到 ${pairs.length} 位（${pairs.map(p => p.name).join('、')}）`);
+                    this._earlybirdAvatars(pairs);
+                }
+            } catch(e) {}
+        },
+        _earlybirdAvatars: async function(pairs) {
+            if (!pairs || !pairs.length || !win.OS_IMAGE_MANAGER) return;
+            if (VN_Config.data.spriteBase) return;   // 固定立繪模式不生成
+            for (const p of pairs) {
+                const name = p.name, desc = p.desc;
+                if (!name || !desc) continue;
+                if (!this.avatars[name]) this.avatars[name] = desc;   // 先登記，loadScript 再解析到也只是覆寫同值
+                if (this._avatarMemCache[name] || this._avatarInflight[name]) continue;
+                try {
+                    // 與預熱第一輪同序的快速快取檢查：世界書素材 → IDB → persona URL，命中就不生
+                    if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
+                    const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
+                    if (lbUrl) continue;
+                    const cached = await VN_Cache.get('avatar_cache', name);
+                    if (cached?.url && !cached.url.startsWith('blob:')) continue;
+                    if (this._getPersonaFallback(name)?.url) continue;
+                } catch(e) {}
+                // 串行生成（≤10 張；本機讓路交給語音紅綠燈在生圖層處理）
+                await this._genAvatarToCache(name);
+            }
         },
 
         handlePanelClick: function() { if (this.isSkip) this.toggleSkip(); this.next(); },

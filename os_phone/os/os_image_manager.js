@@ -14,6 +14,26 @@
     // NAI 帳號同時只能一個生成請求，所有 _genNovelAI 呼叫透過此 Promise 鏈串行
     let _naiQueue = Promise.resolve();
 
+    // ── 語音紅綠燈：SoVITS 生成中＝紅燈，「本機」生圖路線讓路 ──
+    // 語音是當下要聽的（即時），圖片全是預載（可等），所以圖讓聲、聲不等圖。
+    // 只有本機路線（comfyui_direct / tavern_sd）看燈；雲端（NAI/Pollinations）不搶顯卡、照舊並行。
+    // vn_tts.js 在每次 SoVITS 請求前後呼叫 voiceStart()/voiceEnd()。
+    if (!win.AURELIA_GPU_LIGHT) {
+        win.AURELIA_GPU_LIGHT = {
+            _voiceBusy: 0,
+            voiceStart: function() { this._voiceBusy++; },
+            voiceEnd:   function() { this._voiceBusy = Math.max(0, this._voiceBusy - 1); },
+            // 等語音閒；上限 maxMs 防餓死（語音佇列很長時，圖片至少每隔一陣子能插一單）
+            waitVoiceIdle: async function(maxMs) {
+                const cap = maxMs || 8000;
+                const t0 = Date.now();
+                while (this._voiceBusy > 0 && (Date.now() - t0) < cap) {
+                    await new Promise(r => setTimeout(r, 250));
+                }
+            }
+        };
+    }
+
     const ImageManager = {
         config: {
             service: 'pollinations', // 預設
@@ -225,6 +245,7 @@
         // 不塞奧瑞亞底詞/負詞（尊重朋友的 SD 設定）；失敗回 null 並用 toastr 提示，不偷偷換來源。
         _genTavernSd: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+            try { await win.AURELIA_GPU_LIGHT.waitVoiceIdle(8000); } catch (e) {}   // 本機路線：語音生成中先讓路
 
             const trigger = (win.TavernHelper && win.TavernHelper.triggerSlash) || win.triggerSlash;
             if (typeof trigger !== 'function') {
@@ -275,6 +296,7 @@
         // 不依賴 ST 的 workflow 檔；LoRA/參數全由 config.comfyuiDirect（奧瑞亞 UI）控制。
         _genComfyuiDirect: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+            try { await win.AURELIA_GPU_LIGHT.waitVoiceIdle(8000); } catch (e) {}   // 本機路線：語音生成中先讓路
             const cfg = this.config.comfyuiDirect || {};
             const url = (cfg.url || '').trim();
             if (!url) {
