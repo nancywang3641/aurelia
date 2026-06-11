@@ -467,7 +467,9 @@
                 s.textContent = '#vn-start-loader{position:absolute;inset:0;z-index:900;background:#050402;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}' +
                     '#vn-start-loader-track{width:60%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}' +
                     '#vn-start-loader-bar{height:100%;width:0%;background:#d4af37;border-radius:2px;transition:width linear}' +
-                    '#vn-start-loader-label{font-size:10px;letter-spacing:3px;color:rgba(212,175,55,0.5);text-transform:uppercase}';
+                    '#vn-start-loader-label{font-size:10px;letter-spacing:3px;color:rgba(212,175,55,0.5);text-transform:uppercase}' +
+                    '#vn-start-loader-skip{display:none;margin-top:6px;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.35);border:1px solid rgba(255,255,255,0.18);border-radius:4px;padding:6px 18px;cursor:pointer;background:transparent}' +
+                    '#vn-start-loader-skip:hover{color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.4)}';
                 document.head.appendChild(s);
             }
 
@@ -475,7 +477,7 @@
             if (!el) {
                 el = document.createElement('div');
                 el.id = 'vn-start-loader';
-                el.innerHTML = '<div id="vn-start-loader-track"><div id="vn-start-loader-bar"></div></div><div id="vn-start-loader-label">Loading</div>';
+                el.innerHTML = '<div id="vn-start-loader-track"><div id="vn-start-loader-bar"></div></div><div id="vn-start-loader-label">Loading</div><button id="vn-start-loader-skip" type="button">跳過等待</button>';
                 gamePage.appendChild(el);
             }
 
@@ -490,7 +492,12 @@
             // 圖片預熱的快取檢查是非同步的，剛開始可能還沒排單 → 用 idle-streak（連續 ~1.5 秒沒單）判定清空，
             // 不能「當下沒單就放行」。顯示真實進度、5 分鐘上限保險、點擊直接跳過（沒好的生完自己浮現）。
             const self = this;
-            const finish = function() { el.style.display = 'none'; el.onclick = null; if (onDone) onDone(); };
+            const skipBtn = el.querySelector('#vn-start-loader-skip');
+            const finish = function() {
+                el.style.display = 'none';
+                if (skipBtn) { skipBtn.style.display = 'none'; skipBtn.onclick = null; }
+                if (onDone) onDone();
+            };
             setTimeout(function() {
                 if (ms === 0) { finish(); return; }   // ms=0 是「只建 DOM、立即隱藏」的舊契約（vn_inspect 用），不進等待階段
                 const label = el.querySelector('#vn-start-loader-label');
@@ -500,15 +507,19 @@
                     if (closed) return; closed = true;
                     clearInterval(tick); finish();
                 };
-                el.onclick = stop;
+                // 跳過＝明確按鈕。整面可點的舊設計會被「VN 玩家手不停點」誤觸秒跳（2026-06-11 實測）
+                if (skipBtn) {
+                    skipBtn.style.display = 'inline-block';
+                    skipBtn.onclick = function(ev) { ev.stopPropagation(); stop(); };
+                }
                 const tick = setInterval(function() {
                     const s2 = (typeof self.imgPendingStatus === 'function') ? self.imgPendingStatus() : { done: 0, total: 0, pending: 0 };
                     if (s2.total > 0) {
-                        if (label) label.textContent = '圖片繪製中 ' + s2.done + '/' + s2.total + '（點此跳過）';
+                        if (label) label.textContent = '圖片繪製中 ' + s2.done + '/' + s2.total;
                         bar.style.transition = 'none';
                         bar.style.width = Math.min(100, Math.round(s2.done / Math.max(1, s2.total) * 100)) + '%';
                     } else if (s2.pending > 0 && label) {
-                        label.textContent = '整理素材中…（點此跳過）';
+                        label.textContent = '整理素材中…';
                     }
                     if (s2.pending === 0) { if (++idle >= 3) stop(); }
                     else idle = 0;
