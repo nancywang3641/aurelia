@@ -1,0 +1,33 @@
+/* ===== 控制室（SoVITS + ComfyUI 監控遙控）===== */
+.cr-root { width: 100%; height: 100%; overflow-y: auto; box-sizing: border-box; padding: 18px 16px 24px; background: #0a0906; color: #e8dcc0; font-family: 'Noto Sans TC', sans-serif; }
+.cr-header { margin-bottom: 14px; }
+.cr-title { font-size: 18px; font-weight: 900; letter-spacing: 3px; color: #d4af37; }
+.cr-sub { font-size: 11px; color: rgba(232,220,192,0.45); margin-top: 4px; letter-spacing: 1px; }
+
+.cr-tower-down { border: 1px solid rgba(252,129,129,0.35); background: rgba(252,129,129,0.08); border-radius: 10px; padding: 16px; text-align: center; font-size: 14px; line-height: 2; margin-bottom: 14px; }
+.cr-tower-hint { font-size: 11px; color: rgba(232,220,192,0.55); }
+
+.cr-dim { opacity: 0.35; pointer-events: none; }
+
+.cr-card { border: 1px solid rgba(212,175,55,0.22); background: rgba(212,175,55,0.05); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.cr-card-head { display: flex; align-items: center; gap: 8px; }
+.cr-dot { font-size: 12px; }
+.cr-card-name { font-size: 14px; font-weight: 800; letter-spacing: 1px; }
+.cr-card-tag { margin-left: auto; font-size: 10px; color: rgba(232,220,192,0.4); letter-spacing: 1px; }
+.cr-card-body { font-size: 12px; color: rgba(232,220,192,0.75); margin: 8px 0 2px; min-height: 16px; }
+
+.cr-vram { margin-top: 8px; }
+.cr-vram-label { font-size: 10px; color: rgba(232,220,192,0.5); margin-bottom: 4px; letter-spacing: 1px; }
+.cr-vram-track { height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+.cr-vram-bar { height: 100%; width: 0%; background: #d4af37; border-radius: 3px; transition: width 0.6s ease; }
+.cr-vram-bar.cr-vram-hot { background: #fc8181; }
+
+.cr-card-btns { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.cr-btn { flex: 1; min-width: 56px; padding: 8px 10px; font-size: 12px; letter-spacing: 1px; cursor: pointer; border-radius: 6px; border: 1px solid rgba(212,175,55,0.35); background: rgba(212,175,55,0.1); color: #d4af37; transition: all 0.2s; }
+.cr-btn:hover { background: rgba(212,175,55,0.22); }
+.cr-btn-danger { border-color: rgba(252,129,129,0.4); background: rgba(252,129,129,0.08); color: #fc8181; }
+.cr-btn-danger:hover { background: rgba(252,129,129,0.18); }
+.cr-btn-big { padding: 12px; font-size: 13px; font-weight: 800; }
+.cr-all-btns { display: flex; gap: 8px; margin-top: 2px; }
+
+.cr-foot { margin-top: 14px; text-align: center; font-size: 10px; color: rgba(232,220,192,0.35); letter-spacing: 1px; }
