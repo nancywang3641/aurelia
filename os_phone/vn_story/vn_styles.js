@@ -117,7 +117,7 @@
                             <button class="vn-panel-btn" id="vn-btn-regen" style="display:none;color:#f6ad55;" onclick="window.VN_Core.regenCurrentTTS(); event.stopPropagation();" title="清除快取並重新生成當前語音">↺ TTS</button>
                         </div>
 
-                        <div id="dialogue-text">讀取中...</div>
+                        <div id="dialogue-text"></div>
                         <div class="hint-text">▼</div>
                     </div>
                 </div>
