@@ -1405,6 +1405,10 @@
                     return this._avatarMemCache[name] || '';
                 } catch(e) { console.warn(`[VN] 頭像生成例外：${name}`, e); return ''; }
             })();
+            // 批次歸零：上一批已全部完成 → 進度從頭起算（避免跨章累積出 9/15 這種怪數字）
+            if (!Object.keys(this._avatarInflight).length && this._avatarPendingDone >= this._avatarPendingTotal) {
+                this._avatarPendingTotal = 0; this._avatarPendingDone = 0;
+            }
             this._avatarInflight[name] = job;
             this._avatarPendingTotal++;
             job.finally(() => { delete this._avatarInflight[name]; this._avatarPendingDone++; });
@@ -3132,7 +3136,12 @@
                 const _pMsgId  = typeof _pending === 'object' ? _pending.messageId : null;
                 window.VN_Core.loadScript(_pScript, _pMsgId);
                 switchPage('page-game');
-                window.VN_Core.next();
+                // 頭像（早鳥）還在生 → 進 loading 等（有進度/上限/可跳過）；都好了就直接開播
+                if ((window.VN_Core.avatarPendingStatus?.().pending || 0) > 0) {
+                    window.VN_Core._showStartLoader(300, () => window.VN_Core.next());
+                } else {
+                    window.VN_Core.next();
+                }
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
         }
@@ -3224,7 +3233,12 @@
                     if (_vnVisible && document.getElementById('page-game')) {
                         switchPage('page-game');
                         window.VN_Core.loadScript(text, messageId);
-                        window.VN_Core.next();
+                        // 頭像（早鳥）還在生 → 進 loading 等（有進度/上限/可跳過）；都好了就直接開播
+                        if ((window.VN_Core.avatarPendingStatus?.().pending || 0) > 0) {
+                            window.VN_Core._showStartLoader(300, () => window.VN_Core.next());
+                        } else {
+                            window.VN_Core.next();
+                        }
                         console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
                     } else {
                         window._pendingAutoScript = { text: text, messageId: messageId };
