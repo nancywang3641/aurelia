@@ -522,6 +522,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                             if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
                             closeChapterPanel();
                             // 走 _loadWithSceneAnalysis：若場景插圖已啟用，先送副模型分析再播放
+                            try { window.VN_Core.earlybirdFromText(ch.content); } catch (e) {}  // 頭像早鳥：loader 開跑前先開生
                             window.VN_Core._showStartLoader(4000, () => window.VN_Core._loadWithSceneAnalysis(ch.content, null));
                         };
                         // 刪除單章

@@ -352,6 +352,7 @@
                 window.VN_Core._lastRawText = fullText;
                 if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
                 closeGeneratePanel();
+                try { window.VN_Core.earlybirdFromText(fullText); } catch (e) {}  // 頭像早鳥：loader 開跑前先開生
                 window.VN_Core._showStartLoader(4000, () => window.VN_Core._loadWithSceneAnalysis(fullText, null));
                 console.log('[VN_Gen] ✅ 角色卡開場白直通成功，變數已透過參數直接初始化');
             } catch(e) {
@@ -455,6 +456,7 @@
                         window.VN_Core._lastRawText = fullText;
                         if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
                         closeGeneratePanel();
+                        try { window.VN_Core.earlybirdFromText(fullText); } catch (e) {}  // 頭像早鳥：loader 開跑前先開生
                         window.VN_Core._showStartLoader(6000, () => window.VN_Core._loadWithSceneAnalysis(fullText, null));
                         resolve();
                     },
