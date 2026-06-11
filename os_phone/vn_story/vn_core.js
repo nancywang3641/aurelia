@@ -3342,6 +3342,8 @@
                     //    輪詢等收尾才套用，半截劇本開播會把圖片/語音調度全打亂（2026-06-11 實測）
                     if (!text.includes('</content>')) {
                         console.log('[PhoneOS] 自動偵測：<content> 未收尾，等待輸出完成…(訊息 ID:', messageId, ')');
+                        // 等待期間給劇情頁一個有意義的狀態字（取代出廠的「讀取中...」素臉）
+                        try { const _dt = document.getElementById('dialogue-text'); if (_dt && /讀取中/.test(_dt.textContent || '')) _dt.innerHTML = '✍️ 故事撰寫中，等待收尾…'; } catch (e) {}
                         if (_waitTimers[messageId]) return;
                         const t0 = Date.now();
                         _waitTimers[messageId] = setInterval(() => {
