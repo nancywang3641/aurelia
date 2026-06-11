@@ -14,21 +14,32 @@
     // NAI 帳號同時只能一個生成請求，所有 _genNovelAI 呼叫透過此 Promise 鏈串行
     let _naiQueue = Promise.resolve();
 
-    // ── 語音紅綠燈：SoVITS 生成中＝紅燈，「本機」生圖路線讓路 ──
-    // 語音是當下要聽的（即時），圖片全是預載（可等），所以圖讓聲、聲不等圖。
-    // 只有本機路線（comfyui_direct / tavern_sd）看燈；雲端（NAI/Pollinations）不搶顯卡、照舊並行。
-    // vn_tts.js 在每次 SoVITS 請求前後呼叫 voiceStart()/voiceEnd()。
-    if (!win.AURELIA_GPU_LIGHT) {
+    // ── 本機 GPU 雙向紅綠燈（2026-06-11 實測修正：單向紅燈會讓圖片永遠等不到空檔）──
+    // 優先序：即時語音（玩家正在聽）＞ 本機圖片（頭像/插圖預載）＞ 預熱語音（未來台詞）。
+    //   • 圖片發單前讓「即時語音」≤8 秒（即時語音是幾秒的短爆發）
+    //   • 「預熱語音」反過來讓圖片：vn_tts._runPrewarm 每句前先等本機圖片清空
+    //     （否則 15 句連發＝紅燈常駐，圖片白等之外還跟語音擠爆 12GB VRAM → ComfyUI 卡死）
+    // 只有本機路線（comfyui_direct / tavern_sd）參與；雲端（NAI/Pollinations）不搶顯卡、照舊並行。
+    if (!win.AURELIA_GPU_LIGHT || !win.AURELIA_GPU_LIGHT.imgStart) {
         win.AURELIA_GPU_LIGHT = {
-            _voiceBusy: 0,
+            _voiceBusy: 0,   // 即時語音（不含預熱）
+            _imgBusy: 0,     // 本機圖片生成中數量
             voiceStart: function() { this._voiceBusy++; },
             voiceEnd:   function() { this._voiceBusy = Math.max(0, this._voiceBusy - 1); },
-            // 等語音閒；上限 maxMs 防餓死（語音佇列很長時，圖片至少每隔一陣子能插一單）
+            imgStart:   function() { this._imgBusy++; },
+            imgEnd:     function() { this._imgBusy = Math.max(0, this._imgBusy - 1); },
             waitVoiceIdle: async function(maxMs) {
                 const cap = maxMs || 8000;
                 const t0 = Date.now();
                 while (this._voiceBusy > 0 && (Date.now() - t0) < cap) {
                     await new Promise(r => setTimeout(r, 250));
+                }
+            },
+            waitImagesIdle: async function(maxMs) {
+                const cap = maxMs || 120000;
+                const t0 = Date.now();
+                while (this._imgBusy > 0 && (Date.now() - t0) < cap) {
+                    await new Promise(r => setTimeout(r, 400));
                 }
             }
         };
@@ -277,6 +288,7 @@
             console.log('[ImageManager] 酒館原生 /sd 指令:', cmd);
 
             try {
+                try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
                 const url = await trigger(cmd);
                 if (!url || typeof url !== 'string' || !url.trim()) {
                     console.warn('[ImageManager] /sd 回傳空，可能未設定後端');
@@ -289,6 +301,8 @@
                 console.error('[ImageManager] ❌ 酒館原生生圖失敗:', error);
                 try { win.toastr && win.toastr.error('生圖失敗：' + (error.message || error), '酒館原生生圖'); } catch (e) {}
                 return null;
+            } finally {
+                try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
             }
         },
 
@@ -344,8 +358,12 @@
             }
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
 
+            // 逾時保險：ComfyUI 卡死（OOM/排隊爆掉）時 180 秒放棄這張，別讓串行鏈整條凍住
+            const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 180000) : null;
             try {
-                const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body) });
+                try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
+                const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body), signal: _ac ? _ac.signal : undefined });
                 if (!res.ok) {
                     const t = await res.text().catch(() => '');
                     console.error('[ImageManager] ComfyUI 直連失敗:', res.status, t);
@@ -359,9 +377,13 @@
                 }
                 return null;
             } catch (error) {
-                console.error('[ImageManager] ComfyUI 直連錯誤:', error);
-                try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + (error.message || error), 'ComfyUI 直連'); } catch (e) {}
+                const _msg = (error && error.name === 'AbortError') ? '生成逾時(180秒)，已放棄這張讓後面的繼續' : (error.message || error);
+                console.error('[ImageManager] ComfyUI 直連錯誤:', _msg);
+                try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {}
                 return null;
+            } finally {
+                if (_timer) clearTimeout(_timer);
+                try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
             }
         },
 
