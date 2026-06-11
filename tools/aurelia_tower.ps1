@@ -186,9 +186,32 @@ function Invoke-Tower($path) {
     try { Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$($CFG.TowerPort)$path" -TimeoutSec 30 | Out-Null } catch {}
 }
 
-# ── 托盤圖示 ──
+# ── 托盤圖示：黑底金圈金「亞」（奧瑞亞配色，跟 cc-bridge 的盾牌一眼區分）──
+function New-AureliaTrayIcon {
+    $bmp = New-Object System.Drawing.Bitmap 32, 32
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAlias
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $gold = [System.Drawing.Color]::FromArgb(255, 212, 175, 55)
+    $dark = [System.Drawing.Color]::FromArgb(255, 10, 9, 6)
+    $bgBrush = New-Object System.Drawing.SolidBrush $dark
+    $g.FillEllipse($bgBrush, 0, 0, 31, 31)
+    $pen = New-Object System.Drawing.Pen $gold, 2
+    $g.DrawEllipse($pen, 1, 1, 29, 29)
+    $font = New-Object System.Drawing.Font('Microsoft JhengHei', 13, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $goldBrush = New-Object System.Drawing.SolidBrush $gold
+    $sf = New-Object System.Drawing.StringFormat
+    $sf.Alignment = [System.Drawing.StringAlignment]::Center
+    $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
+    $rect = New-Object System.Drawing.RectangleF 0, 1, 32, 31
+    $g.DrawString('亞', $font, $goldBrush, $rect, $sf)
+    $g.Dispose()
+    return [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+}
+
 $tray = New-Object System.Windows.Forms.NotifyIcon
-$tray.Icon = [System.Drawing.SystemIcons]::Shield
+$tray.Icon = New-AureliaTrayIcon
 $tray.Text = '奧瑞亞控制塔 (SoVITS + ComfyUI)'
 $tray.Visible = $true
 
