@@ -507,6 +507,8 @@
                         if (label) label.textContent = '圖片繪製中 ' + s2.done + '/' + s2.total + '（點此跳過）';
                         bar.style.transition = 'none';
                         bar.style.width = Math.min(100, Math.round(s2.done / Math.max(1, s2.total) * 100)) + '%';
+                    } else if (s2.pending > 0 && label) {
+                        label.textContent = '整理素材中…（點此跳過）';
                     }
                     if (s2.pending === 0) { if (++idle >= 3) stop(); }
                     else idle = 0;
@@ -1158,10 +1160,13 @@
             if (!tasks.length) return;
             console.log(`[VN] 預熱背景：共 ${tasks.length} 張，依序生成中（含 fallback）...`);
             (async () => {
-                for (const { cacheId, prompt } of tasks) {
-                    this._imgJobStart();
-                    try { await this._safeFetchBg(cacheId, prompt); } finally { this._imgJobEnd(); }
-                }
+                this._imgScanStart();
+                try {
+                    for (const { cacheId, prompt } of tasks) {
+                        this._imgJobStart();
+                        try { await this._safeFetchBg(cacheId, prompt); } finally { this._imgJobEnd(); }
+                    }
+                } finally { this._imgScanEnd(); }
                 console.log('[VN] 所有背景預熱完成');
             })();
         },
@@ -1180,11 +1185,14 @@
             if (!tasks.length) return;
             console.log(`[VN] 預熱道具圖：共 ${tasks.length} 張，依序生成中...`);
             (async () => {
-                for (const { name: itemName, desc } of tasks) {
-                    // 走 _safeFetchItem：與現場 [Item|] 共用 in-flight promise，防重複生成
-                    this._imgJobStart();
-                    try { await this._safeFetchItem(itemName, desc); } finally { this._imgJobEnd(); }
-                }
+                this._imgScanStart();
+                try {
+                    for (const { name: itemName, desc } of tasks) {
+                        // 走 _safeFetchItem：與現場 [Item|] 共用 in-flight promise，防重複生成
+                        this._imgJobStart();
+                        try { await this._safeFetchItem(itemName, desc); } finally { this._imgJobEnd(); }
+                    }
+                } finally { this._imgScanEnd(); }
                 console.log('[VN] 所有道具圖預熱完成');
             })();
         },
@@ -1279,12 +1287,15 @@
             if (!tasks.length) return;
             console.log(`[VN] 預熱場景CG：共 ${tasks.length} 張，依序排隊生成（NAI 不支援並發）...`);
             (async () => {
-                for (const { cacheId, prompt } of tasks) {
-                    // 走 _safeFetchScene：與現場 [Scene|] 共用 in-flight promise，
-                    // 防「預熱在生、正片又播到同場景」各生一張（同 prompt 重複扣錢）
-                    this._imgJobStart();
-                    try { await this._safeFetchScene(cacheId, prompt); } finally { this._imgJobEnd(); }
-                }
+                this._imgScanStart();
+                try {
+                    for (const { cacheId, prompt } of tasks) {
+                        // 走 _safeFetchScene：與現場 [Scene|] 共用 in-flight promise，
+                        // 防「預熱在生、正片又播到同場景」各生一張（同 prompt 重複扣錢）
+                        this._imgJobStart();
+                        try { await this._safeFetchScene(cacheId, prompt); } finally { this._imgJobEnd(); }
+                    }
+                } finally { this._imgScanEnd(); }
                 console.log('[VN] 所有場景CG預熱完成');
             })();
         },
@@ -1373,6 +1384,8 @@
             if (!names.length) return;
 
             (async () => {
+                this._imgScanStart();   // 盤點階段也算忙碌：讀世界書/逐一查 IDB 期間沒有生成單，別讓 loading 誤判完成
+                try {
                 if (!this._lorebookLoaded) {
                     await this._loadLorebookAvatars();
                     this._lorebookLoaded = true;
@@ -1411,6 +1424,7 @@
                     await Promise.all(needGen.map(name => this._genAvatarToCache(name)));
                 }
                 console.log('[VN] 所有頭像預熱完成');
+                } finally { this._imgScanEnd(); }
             })();
         },
 
@@ -1418,14 +1432,21 @@
         // in-flight 去重：同名頭像不論從哪條路觸發，同時只生一張
         _avatarInflight: {},
         // ── 圖片預熱總進度（頭像＋背景＋場景CG＋道具全算；開場 loading 與語音延後都看這個）──
-        _imgJobs: { done: 0, total: 0, inflight: 0 },
+        // scanning＝「盤點中」：預熱在讀世界書/查快取、還沒把生成單排進來的階段。
+        // 沒有它會有盤點空窗（inflight=0 但工作沒做完）→ loading 誤判完成提早放行（2026-06-11 實測踩過）
+        _imgJobs: { done: 0, total: 0, inflight: 0, scanning: 0 },
         _imgJobStart: function() {
             const j = this._imgJobs;
             if (!j.inflight && j.done >= j.total) { j.done = 0; j.total = 0; }   // 上一批清空 → 進度歸零重計
             j.total++; j.inflight++;
         },
         _imgJobEnd: function() { const j = this._imgJobs; j.inflight = Math.max(0, j.inflight - 1); j.done++; },
-        imgPendingStatus: function() { const j = this._imgJobs; return { done: j.done, total: j.total, pending: j.inflight }; },
+        _imgScanStart: function() { this._imgJobs.scanning++; },
+        _imgScanEnd: function() { const j = this._imgJobs; j.scanning = Math.max(0, j.scanning - 1); },
+        imgPendingStatus: function() {
+            const j = this._imgJobs;
+            return { done: j.done, total: j.total, pending: j.inflight + j.scanning };
+        },
         avatarPendingStatus: function() { return this.imgPendingStatus(); },   // 舊名相容
         _genAvatarToCache: function(name) {
             if (this._avatarMemCache[name]) return Promise.resolve(this._avatarMemCache[name]);
@@ -1481,6 +1502,8 @@
         _earlybirdAvatars: async function(pairs) {
             if (!pairs || !pairs.length || !win.OS_IMAGE_MANAGER) return;
             if (VN_Config.data.spriteBase) return;   // 固定立繪模式不生成
+            this._imgScanStart();   // 整批處理期間舉「忙碌」牌：查快取的空檔不算完成
+            try {
             for (const p of pairs) {
                 const name = p.name, desc = p.desc;
                 if (!name || !desc) continue;
@@ -1498,6 +1521,7 @@
                 // 串行生成（≤10 張；本機讓路交給語音紅綠燈在生圖層處理）
                 await this._genAvatarToCache(name);
             }
+            } finally { this._imgScanEnd(); }
         },
 
         handlePanelClick: function() { if (this.isSkip) this.toggleSkip(); this.next(); },
