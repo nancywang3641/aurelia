@@ -186,7 +186,7 @@
             const elsToClear = {
                 'chat-body': '',
                 'vn-log-content': '',
-                'dialogue-text': '讀取中...',
+                'dialogue-text': '',   // 不放「讀取中...」裸字——等待狀態一律由全黑 loading 面板呈現
                 'call-sub-text': '',
                 'call-sub-name': '',
                 'top-badge': ''
@@ -458,9 +458,10 @@
          * 顯示 loading bar，滿後執行 onDone（預設啟動 VN）
          * 給外部插件預留注入時間（如圖片生成插件）
          */
-        _showStartLoader: function(ms, onDone) {
+        // 確保 loader 殼存在（樣式＋DOM），回傳元素；開場 loading 與「故事撰寫中」幕布共用
+        _ensureStartLoaderEl: function() {
             const gamePage = document.getElementById('page-game');
-            if (!gamePage) { if (onDone) onDone(); return; }
+            if (!gamePage) return null;
 
             if (!document.getElementById('vn-sl-style')) {
                 const s = document.createElement('style');
@@ -481,6 +482,36 @@
                 el.innerHTML = '<div id="vn-start-loader-track"><div id="vn-start-loader-bar"></div></div><div id="vn-start-loader-label">Loading</div><button id="vn-start-loader-skip" type="button">跳過等待</button>';
                 gamePage.appendChild(el);
             }
+            return el;
+        },
+
+        // 「故事撰寫中」幕布：等 AI 收尾期間蓋住劇情頁（重用 loader 殼；無進度、無跳過）。
+        // 劇本落地後開場閘門的 _showStartLoader 會無縫接手換成「圖片繪製中 N/M」。
+        _writerCurtain: false,
+        _showWriterCurtain: function() {
+            const el = this._ensureStartLoaderEl();
+            if (!el) return;
+            this._writerCurtain = true;
+            el.style.display = 'flex';
+            const label = el.querySelector('#vn-start-loader-label');
+            if (label) label.textContent = '故事撰寫中…';
+            const skip = el.querySelector('#vn-start-loader-skip');
+            if (skip) skip.style.display = 'none';
+            const bar = el.querySelector('#vn-start-loader-bar');
+            if (bar) { bar.style.transition = 'width 2000ms linear'; bar.style.width = '15%'; }
+        },
+        _hideWriterCurtain: function() {
+            if (!this._writerCurtain) return;
+            this._writerCurtain = false;
+            const el = document.getElementById('vn-start-loader');
+            if (el) el.style.display = 'none';
+        },
+
+        _showStartLoader: function(ms, onDone) {
+            const el = this._ensureStartLoaderEl();
+            if (!el) { if (onDone) onDone(); return; }
+            this._writerCurtain = false;        // 幕布交棒給正式 loading
+            el.style.display = 'flex';          // ⚠️ 重用必須重新打開（之前少這行→第二次起永遠隱形）
 
             const bar = el.querySelector('#vn-start-loader-bar');
             bar.style.transition = 'none';
@@ -1717,6 +1748,7 @@
                     return;
                 }
                 this._startImgGate = false;
+                this._hideWriterCurtain();   // 沒圖可等：把「故事撰寫中」幕布收掉直接開演
             }
 
             if (line.startsWith('<chat')) { if(win.VN_Phone) win.VN_Phone.initChat(this, line); return; }
@@ -3313,6 +3345,12 @@
                         if (msgs && msgs.length > 0) text = msgs[0].message || msgs[0].mes || msgs[0].content || '';
                     } catch (e) {}
                 }
+                // TauriTavern 懶載入會讓「樓號 ≠ 陣列索引」拿不到 → 退而求其次讀最後一條 AI 訊息
+                // （MESSAGE_RECEIVED 的當事訊息就是最後一條，串流半成品也持續寫在這）
+                if (!text && stCtx && Array.isArray(stCtx.chat) && stCtx.chat.length) {
+                    const last = stCtx.chat[stCtx.chat.length - 1];
+                    if (last && !last.is_user) text = last.mes || last.message || last.content || '';
+                }
                 return text;
             }
 
@@ -3342,18 +3380,20 @@
                     //    輪詢等收尾才套用，半截劇本開播會把圖片/語音調度全打亂（2026-06-11 實測）
                     if (!text.includes('</content>')) {
                         console.log('[PhoneOS] 自動偵測：<content> 未收尾，等待輸出完成…(訊息 ID:', messageId, ')');
-                        // 等待期間給劇情頁一個有意義的狀態字（取代出廠的「讀取中...」素臉）
-                        try { const _dt = document.getElementById('dialogue-text'); if (_dt && /讀取中/.test(_dt.textContent || '')) _dt.innerHTML = '✍️ 故事撰寫中，等待收尾…'; } catch (e) {}
+                        // 等待期間用全黑幕布蓋住劇情頁（「故事撰寫中…」），不放裸字在對話框
+                        try { window.VN_Core._showWriterCurtain(); } catch (e) {}
                         if (_waitTimers[messageId]) return;
                         const t0 = Date.now();
                         _waitTimers[messageId] = setInterval(() => {
                             const t = _readMsgText(messageId);
                             if (t.includes('</content>')) {
                                 clearInterval(_waitTimers[messageId]); delete _waitTimers[messageId];
+                                console.log('[PhoneOS] 自動偵測：</content> 收尾偵測到，套用完整劇本');
                                 try { _apply(t, messageId); } catch (e) { console.error('[PhoneOS] 自動偵測失敗:', e); _processedIds.delete(messageId); }
                             } else if ((Date.now() - t0) > 300000) {
                                 clearInterval(_waitTimers[messageId]); delete _waitTimers[messageId];
                                 _processedIds.delete(messageId);
+                                try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
                                 console.warn('[PhoneOS] 自動偵測：等 </content> 超時，放棄 (訊息 ID:', messageId, ')');
                             }
                         }, 1500);
