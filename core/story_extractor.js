@@ -47,22 +47,38 @@
             // 生成被手動停止 / 出錯沒有回覆 → 收起等待室別卡人
             if (ev.GENERATION_STOPPED) w.eventOn(ev.GENERATION_STOPPED, () => this._hideFlowOverlay());
             if (ev.GENERATION_ENDED) w.eventOn(ev.GENERATION_ENDED, () => {
-                setTimeout(() => { if (this._overlayShown()) this._hideFlowOverlay(); }, 4000);
+                setTimeout(() => { if (this._overlayShown() && !this._waitClose) this._hideFlowOverlay(); }, 4000);
             });
 
-            if (ev.MESSAGE_RECEIVED) w.eventOn(ev.MESSAGE_RECEIVED, (mid) => {
-                if (!this._overlayShown()) return;
-                let txt = '';
+            const _readReply = (mid) => {
                 try {
                     const ctx = w.SillyTavern?.getContext?.();
                     const m = ctx?.chat?.[mid];
-                    txt = (m && !m.is_user) ? (m.mes || m.message || '') : '';
-                } catch (e) {}
+                    return (m && !m.is_user) ? (m.mes || m.message || '') : '';
+                } catch (e) { return ''; }
+            };
+
+            if (ev.MESSAGE_RECEIVED) w.eventOn(ev.MESSAGE_RECEIVED, (mid) => {
+                if (!this._overlayShown()) return;
+                const txt = _readReply(mid);
                 if (!txt.includes('<content>')) { this._hideFlowOverlay(); return; }   // 不是劇情回覆 → 靜默收起
-                const label = document.getElementById('se-flow-label');
-                if (label) label.textContent = '✓ 故事就緒，進入劇情…';
-                // 自動偵測那邊正在套劇本＋切頁；稍等再收起藏書讓路
-                setTimeout(() => { this._hideFlowOverlay(); this.hide(); }, 800);
+                // 沒收尾＝AI 還在輸出（TauriTavern 事件來得早）→ 留在等待室輪詢等 </content>
+                if (!txt.includes('</content>')) {
+                    if (this._waitClose) return;
+                    const t0 = Date.now();
+                    this._waitClose = setInterval(() => {
+                        const t2 = _readReply(mid);
+                        if (t2.includes('</content>')) {
+                            clearInterval(this._waitClose); this._waitClose = null;
+                            this._enterStory();
+                        } else if ((Date.now() - t0) > 300000) {
+                            clearInterval(this._waitClose); this._waitClose = null;
+                            this._hideFlowOverlay();
+                        }
+                    }, 1500);
+                    return;
+                }
+                this._enterStory();
             });
 
             console.log('[StoryExtractor] ✅ 發消息→等待室→進劇情 流程已掛載');
@@ -92,8 +108,16 @@
             }, 1000);
         },
 
+        _enterStory() {
+            const label = document.getElementById('se-flow-label');
+            if (label) label.textContent = '✓ 故事就緒，進入劇情…';
+            // 自動偵測那邊正在套劇本＋切頁；稍等再收起藏書讓路
+            setTimeout(() => { this._hideFlowOverlay(); this.hide(); }, 800);
+        },
+
         _hideFlowOverlay() {
             if (this._genWatch) { clearInterval(this._genWatch); this._genWatch = null; }
+            if (this._waitClose) { clearInterval(this._waitClose); this._waitClose = null; }
             const o = document.getElementById('se-flow-overlay');
             if (o) o.remove();
         },
