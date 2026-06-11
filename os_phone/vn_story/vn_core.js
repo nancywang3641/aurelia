@@ -389,7 +389,25 @@
             this._prewarmScenes();
             this._prewarmItems();
             this._prewarmAvatars();
-            this._prewarmSoVITS();
+            this._deferVoicePrewarm();   // 語音延後：等圖片預熱清空才開跑（圖片優先進顯卡）
+        },
+
+        // 語音預熱延後啟動：圖片（頭像/背景/場景/道具）全部清空才放語音佇列進場。
+        // 「進劇情前圖片全到位」的另一半——loading 擋播放、這裡擋語音，兩邊都讓圖片先吃滿 GPU。
+        // 上限 5 分鐘保險：圖片端有 180 秒逾時，正常不會撞到這個底線。
+        _deferVoicePrewarm: function() {
+            const self = this;
+            (async () => {
+                await new Promise(r => setTimeout(r, 2000));   // 給各圖片預熱把生成單排進來的時間
+                const t0 = Date.now();
+                let idle = 0;
+                while (Date.now() - t0 < 300000) {
+                    if (self.imgPendingStatus().pending === 0) { if (++idle >= 3) break; }   // 連續 ~1.5 秒沒單＝清空
+                    else idle = 0;
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                self._prewarmSoVITS();
+            })();
         },
 
         /**
@@ -412,6 +430,26 @@
             } else {
                 this.loadScript(text, msgId);
                 this.next();
+            }
+        },
+
+        /**
+         * 統一啟動程序（2026-06-11）：先載入劇本（圖片預熱全開、語音延後）→
+         * loading 面板等「全部圖片」清空 → 才開播。
+         * 取代「loader 跑完才 loadScript」的舊順序——舊順序 loader 期間圖片根本還沒開生，等了個寂寞。
+         */
+        _startWithLoader: function(text, msgId) {
+            const self = this;
+            const go = function(finalText) {
+                self.loadScript(finalText, msgId);
+                self._showStartLoader(800, function() { self.next(); });
+            };
+            const _isStandalone = (win.OS_API?.isStandalone?.()) ?? false;
+            const _sceneCfg = (win.OS_SETTINGS?.getImageConfig?.())?.sceneGen || {};
+            if (_isStandalone && _sceneCfg.enabled && win.OS_API?.analyzeSceneInserts) {
+                win.OS_API.analyzeSceneInserts(text, (enhanced) => go(enhanced || text));
+            } else {
+                go(text);
             }
         },
 
@@ -448,27 +486,31 @@
             bar.style.transition = 'width ' + ms + 'ms linear';
             bar.style.width = '100%';
 
-            // 基本進度條跑完後：頭像還在生（早鳥已先起跑）→ 轉入等待階段
-            // 顯示真實進度、90 秒上限保險、點擊直接跳過；沒等到的頭像生完會自己浮現
+            // 基本進度條跑完後：轉入「等全部圖片」階段（頭像＋背景＋場景＋道具）。
+            // 圖片預熱的快取檢查是非同步的，剛開始可能還沒排單 → 用 idle-streak（連續 ~1.5 秒沒單）判定清空，
+            // 不能「當下沒單就放行」。顯示真實進度、5 分鐘上限保險、點擊直接跳過（沒好的生完自己浮現）。
             const self = this;
             const finish = function() { el.style.display = 'none'; el.onclick = null; if (onDone) onDone(); };
             setTimeout(function() {
-                const st = (typeof self.avatarPendingStatus === 'function') ? self.avatarPendingStatus() : { pending: 0 };
-                if (!st.pending) { finish(); return; }
+                if (ms === 0) { finish(); return; }   // ms=0 是「只建 DOM、立即隱藏」的舊契約（vn_inspect 用），不進等待階段
                 const label = el.querySelector('#vn-start-loader-label');
-                const CAP = 90000, t0 = Date.now();
-                let closed = false;
+                const CAP = 300000, t0 = Date.now();
+                let closed = false, idle = 0;
                 const stop = function() {
                     if (closed) return; closed = true;
                     clearInterval(tick); finish();
                 };
                 el.onclick = stop;
                 const tick = setInterval(function() {
-                    const s2 = self.avatarPendingStatus();
-                    if (label) label.textContent = '頭像繪製中 ' + s2.done + '/' + s2.total + '（點此跳過）';
-                    bar.style.transition = 'none';
-                    bar.style.width = Math.min(100, Math.round(s2.done / Math.max(1, s2.total) * 100)) + '%';
-                    if (!s2.pending || (Date.now() - t0) > CAP) stop();
+                    const s2 = (typeof self.imgPendingStatus === 'function') ? self.imgPendingStatus() : { done: 0, total: 0, pending: 0 };
+                    if (s2.total > 0) {
+                        if (label) label.textContent = '圖片繪製中 ' + s2.done + '/' + s2.total + '（點此跳過）';
+                        bar.style.transition = 'none';
+                        bar.style.width = Math.min(100, Math.round(s2.done / Math.max(1, s2.total) * 100)) + '%';
+                    }
+                    if (s2.pending === 0) { if (++idle >= 3) stop(); }
+                    else idle = 0;
+                    if ((Date.now() - t0) > CAP) stop();
                 }, 500);
             }, ms);
         },
@@ -1117,7 +1159,8 @@
             console.log(`[VN] 預熱背景：共 ${tasks.length} 張，依序生成中（含 fallback）...`);
             (async () => {
                 for (const { cacheId, prompt } of tasks) {
-                    await this._safeFetchBg(cacheId, prompt);
+                    this._imgJobStart();
+                    try { await this._safeFetchBg(cacheId, prompt); } finally { this._imgJobEnd(); }
                 }
                 console.log('[VN] 所有背景預熱完成');
             })();
@@ -1139,7 +1182,8 @@
             (async () => {
                 for (const { name: itemName, desc } of tasks) {
                     // 走 _safeFetchItem：與現場 [Item|] 共用 in-flight promise，防重複生成
-                    await this._safeFetchItem(itemName, desc);
+                    this._imgJobStart();
+                    try { await this._safeFetchItem(itemName, desc); } finally { this._imgJobEnd(); }
                 }
                 console.log('[VN] 所有道具圖預熱完成');
             })();
@@ -1238,7 +1282,8 @@
                 for (const { cacheId, prompt } of tasks) {
                     // 走 _safeFetchScene：與現場 [Scene|] 共用 in-flight promise，
                     // 防「預熱在生、正片又播到同場景」各生一張（同 prompt 重複扣錢）
-                    await this._safeFetchScene(cacheId, prompt);
+                    this._imgJobStart();
+                    try { await this._safeFetchScene(cacheId, prompt); } finally { this._imgJobEnd(); }
                 }
                 console.log('[VN] 所有場景CG預熱完成');
             })();
@@ -1372,12 +1417,16 @@
         // ── 頭像生成共用管線（loadScript 預熱 / 早鳥監聽 共用）──────────────
         // in-flight 去重：同名頭像不論從哪條路觸發，同時只生一張
         _avatarInflight: {},
-        _avatarPendingTotal: 0,   // 本輪累計（給開場 loading 顯示進度）
-        _avatarPendingDone: 0,
-        avatarPendingStatus: function() {
-            return { done: this._avatarPendingDone, total: this._avatarPendingTotal,
-                     pending: Object.keys(this._avatarInflight).length };
+        // ── 圖片預熱總進度（頭像＋背景＋場景CG＋道具全算；開場 loading 與語音延後都看這個）──
+        _imgJobs: { done: 0, total: 0, inflight: 0 },
+        _imgJobStart: function() {
+            const j = this._imgJobs;
+            if (!j.inflight && j.done >= j.total) { j.done = 0; j.total = 0; }   // 上一批清空 → 進度歸零重計
+            j.total++; j.inflight++;
         },
+        _imgJobEnd: function() { const j = this._imgJobs; j.inflight = Math.max(0, j.inflight - 1); j.done++; },
+        imgPendingStatus: function() { const j = this._imgJobs; return { done: j.done, total: j.total, pending: j.inflight }; },
+        avatarPendingStatus: function() { return this.imgPendingStatus(); },   // 舊名相容
         _genAvatarToCache: function(name) {
             if (this._avatarMemCache[name]) return Promise.resolve(this._avatarMemCache[name]);
             if (this._avatarInflight[name]) return this._avatarInflight[name];
@@ -1405,13 +1454,9 @@
                     return this._avatarMemCache[name] || '';
                 } catch(e) { console.warn(`[VN] 頭像生成例外：${name}`, e); return ''; }
             })();
-            // 批次歸零：上一批已全部完成 → 進度從頭起算（避免跨章累積出 9/15 這種怪數字）
-            if (!Object.keys(this._avatarInflight).length && this._avatarPendingDone >= this._avatarPendingTotal) {
-                this._avatarPendingTotal = 0; this._avatarPendingDone = 0;
-            }
             this._avatarInflight[name] = job;
-            this._avatarPendingTotal++;
-            job.finally(() => { delete this._avatarInflight[name]; this._avatarPendingDone++; });
+            this._imgJobStart();
+            job.finally(() => { delete this._avatarInflight[name]; this._imgJobEnd(); });
             return job;
         },
 
@@ -3136,12 +3181,8 @@
                 const _pMsgId  = typeof _pending === 'object' ? _pending.messageId : null;
                 window.VN_Core.loadScript(_pScript, _pMsgId);
                 switchPage('page-game');
-                // 頭像（早鳥）還在生 → 進 loading 等（有進度/上限/可跳過）；都好了就直接開播
-                if ((window.VN_Core.avatarPendingStatus?.().pending || 0) > 0) {
-                    window.VN_Core._showStartLoader(300, () => window.VN_Core.next());
-                } else {
-                    window.VN_Core.next();
-                }
+                // 圖片（早鳥＋四路預熱）全清空才開播；loading 有真實進度、可點跳過
+                window.VN_Core._showStartLoader(300, () => window.VN_Core.next());
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
         }
@@ -3233,12 +3274,8 @@
                     if (_vnVisible && document.getElementById('page-game')) {
                         switchPage('page-game');
                         window.VN_Core.loadScript(text, messageId);
-                        // 頭像（早鳥）還在生 → 進 loading 等（有進度/上限/可跳過）；都好了就直接開播
-                        if ((window.VN_Core.avatarPendingStatus?.().pending || 0) > 0) {
-                            window.VN_Core._showStartLoader(300, () => window.VN_Core.next());
-                        } else {
-                            window.VN_Core.next();
-                        }
+                        // 圖片（早鳥＋四路預熱）全清空才開播；loading 有真實進度、可點跳過
+                        window.VN_Core._showStartLoader(300, () => window.VN_Core.next());
                         console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
                     } else {
                         window._pendingAutoScript = { text: text, messageId: messageId };
