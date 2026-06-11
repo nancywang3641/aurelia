@@ -3298,38 +3298,67 @@
             if (!window.TavernHelper) { setTimeout(init, 1000); return; }
             if (!window.eventOn || !window.tavern_events) { setTimeout(init, 500); return; }
 
+            const _waitTimers = {};   // messageId → interval（等 </content> 收尾）
+
+            function _readMsgText(messageId) {
+                let text = '';
+                const stCtx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                if (stCtx && stCtx.chat && stCtx.chat[messageId]) {
+                    const m = stCtx.chat[messageId];
+                    text = m.mes || m.message || m.content || '';
+                }
+                if (!text) {
+                    try {
+                        const msgs = window.TavernHelper.getChatMessages(messageId);
+                        if (msgs && msgs.length > 0) text = msgs[0].message || msgs[0].mes || msgs[0].content || '';
+                    } catch (e) {}
+                }
+                return text;
+            }
+
+            function _apply(text, messageId) {
+                const _vnPanel = document.getElementById('aurelia-vn-panel');
+                const _vnVisible = _vnPanel && _vnPanel.style.display !== 'none';
+                if (_vnVisible && document.getElementById('page-game')) {
+                    switchPage('page-game');
+                    window.VN_Core.loadScript(text, messageId);
+                    window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
+                    console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
+                } else {
+                    window._pendingAutoScript = { text: text, messageId: messageId };
+                    console.log('[PhoneOS] 自動偵測：劇本已暫存，待開啟 VN app 後套用');
+                }
+            }
+
             window.eventOn(window.tavern_events.MESSAGE_RECEIVED, (messageId) => {
                 if (_processedIds.has(messageId)) return;
                 _processedIds.add(messageId);
 
                 try {
-                    // 快速確認：原始訊息是否含 <content>（決定要不要啟動）
-                    let text = '';
-                    const stCtx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
-                    if (stCtx && stCtx.chat && stCtx.chat[messageId]) {
-                        const m = stCtx.chat[messageId];
-                        text = m.mes || m.message || m.content || '';
-                    }
-                    if (!text) {
-                        const msgs = window.TavernHelper.getChatMessages(messageId);
-                        if (msgs && msgs.length > 0) {
-                            text = msgs[0].message || msgs[0].mes || msgs[0].content || '';
-                        }
-                    }
-
+                    const text = _readMsgText(messageId);
                     if (!text.includes('<content>')) { _processedIds.delete(messageId); return; }
 
-                    const _vnPanel = document.getElementById('aurelia-vn-panel');
-                    const _vnVisible = _vnPanel && _vnPanel.style.display !== 'none';
-                    if (_vnVisible && document.getElementById('page-game')) {
-                        switchPage('page-game');
-                        window.VN_Core.loadScript(text, messageId);
-                        window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
-                        console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
-                    } else {
-                        window._pendingAutoScript = { text: text, messageId: messageId };
-                        console.log('[PhoneOS] 自動偵測：劇本已暫存，待開啟 VN app 後套用');
+                    // ⛔ 鐵律：沒有 </content> 收尾＝AI 還在輸出（TauriTavern 事件來得早）→ 不放行。
+                    //    輪詢等收尾才套用，半截劇本開播會把圖片/語音調度全打亂（2026-06-11 實測）
+                    if (!text.includes('</content>')) {
+                        console.log('[PhoneOS] 自動偵測：<content> 未收尾，等待輸出完成…(訊息 ID:', messageId, ')');
+                        if (_waitTimers[messageId]) return;
+                        const t0 = Date.now();
+                        _waitTimers[messageId] = setInterval(() => {
+                            const t = _readMsgText(messageId);
+                            if (t.includes('</content>')) {
+                                clearInterval(_waitTimers[messageId]); delete _waitTimers[messageId];
+                                try { _apply(t, messageId); } catch (e) { console.error('[PhoneOS] 自動偵測失敗:', e); _processedIds.delete(messageId); }
+                            } else if ((Date.now() - t0) > 300000) {
+                                clearInterval(_waitTimers[messageId]); delete _waitTimers[messageId];
+                                _processedIds.delete(messageId);
+                                console.warn('[PhoneOS] 自動偵測：等 </content> 超時，放棄 (訊息 ID:', messageId, ')');
+                            }
+                        }, 1500);
+                        return;
                     }
+
+                    _apply(text, messageId);
                 } catch (e) {
                     console.error('[PhoneOS] 自動偵測失敗:', e);
                     _processedIds.delete(messageId);
@@ -3337,7 +3366,10 @@
             });
 
             if (window.tavern_events.CHAT_CHANGED) {
-                window.eventOn(window.tavern_events.CHAT_CHANGED, () => _processedIds.clear());
+                window.eventOn(window.tavern_events.CHAT_CHANGED, () => {
+                    _processedIds.clear();
+                    Object.keys(_waitTimers).forEach(k => { clearInterval(_waitTimers[k]); delete _waitTimers[k]; });
+                });
             }
 
             console.log('[PhoneOS] VN 自動劇本偵測已啟動');

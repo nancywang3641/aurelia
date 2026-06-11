@@ -290,7 +290,7 @@ const VN_TTS = {
             }
             const _W = (window.parent || window);
             const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
-                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0)   // 即時語音：GPU 佇列最高優先（插隊）
+                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0, 90000)   // 即時語音：最高優先（插隊），90 秒逾時防堵隊
                 : (fn) => fn();
             try {
                 await _runQ(async () => {
@@ -332,7 +332,7 @@ const VN_TTS = {
     async _playWavFetch(url, cacheKey) {
         const _W = (window.parent || window);
         const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
-            ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0)   // 即時語音：GPU 佇列最高優先（插隊）
+            ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0, 90000)   // 即時語音：最高優先（插隊），90 秒逾時防堵隊
             : (fn) => fn();
         try {
             await _runQ(async () => {
@@ -448,7 +448,7 @@ const VN_TTS = {
             if (this._cache[key]) { this._pending.delete(key); continue; }
             const _W = (window.parent || window);
             const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
-                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 2)   // 預熱語音：GPU 佇列最低優先（圖片和即時語音都先走）
+                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 2, 120000)   // 預熱語音：最低優先（圖片/即時語音都先走），120 秒逾時防堵隊
                 : (fn) => fn();
             try {
                 await _runQ(async () => {
