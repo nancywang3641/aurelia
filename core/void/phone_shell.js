@@ -35,6 +35,7 @@
         } },
         { id: 'settings', name: '設置', emoji: '⚙️', mode: 'inside', go: function (c) { _renderSettings(c); } },
         { id: 'appstore', name: '商店', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
+        { id: 'ctrlroom', name: '控制室', emoji: '🎛️', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
     ];
 
     let _el = null;
