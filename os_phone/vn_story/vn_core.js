@@ -1704,23 +1704,19 @@
             this.index++;
             const line = this.script[this.index];
 
-            // ── 開場圖片閘門 ──────────────────────────────────────────────
-            // 章節卡片/BGM/背景等指令照常流動（卡片是天然等待室，立刻顯示）；
-            // 「第一行真正的劇情文本」（旁白/對話）要渲染時，圖片還沒全好 → 才彈 loading 等。
-            // 圖好了或按「跳過等待」→ 解除閘門，整章不再檢查。
+            // ── 開場圖片閘門（loading 排最前面）──────────────────────────────
+            // loadScript 後的第一次 next() 就檢查：圖片（含盤點中）沒清空 → 先彈 loading 等，
+            // 什麼都不演（BGM/卡片都壓在後面）；圖全好才放劇本開跑 → 章節卡片出場時一切就緒，
+            // 「開始閱讀」一點即進劇情零等待。圖好了或按「跳過等待」→ 解除閘門，整章不再檢查。
             if (this._startImgGate) {
-                const _isStoryLine = line.startsWith('[Char|') || line.startsWith('[Inner|') || line.startsWith('[Sys|') ||
-                                     !(line.charAt(0) === '[' || line.charAt(0) === '<' || line.charAt(0) === '【');
-                if (_isStoryLine) {
-                    const _st = (typeof this.imgPendingStatus === 'function') ? this.imgPendingStatus() : { pending: 0 };
-                    if (_st.pending > 0) {
-                        this.index--;   // 退回這行，放行後重新走到
-                        const self = this;
-                        this._showStartLoader(300, function () { self._startImgGate = false; self.next(); });
-                        return;
-                    }
-                    this._startImgGate = false;
+                const _st = (typeof this.imgPendingStatus === 'function') ? this.imgPendingStatus() : { pending: 0 };
+                if (_st.pending > 0) {
+                    this.index--;   // 退回這行，放行後重新走到
+                    const self = this;
+                    this._showStartLoader(300, function () { self._startImgGate = false; self.next(); });
+                    return;
                 }
+                this._startImgGate = false;
             }
 
             if (line.startsWith('<chat')) { if(win.VN_Phone) win.VN_Phone.initChat(this, line); return; }
