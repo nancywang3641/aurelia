@@ -14,6 +14,7 @@
     'use strict';
 
     let _doneThisGen = false;   // 一輪生成只觸發一次（拿到完整 ChapterCard 就鎖）
+    let _pollTimer = null;      // 生成期間輪詢聊天文本（TauriTavern 不發串流事件也抓得到）
 
     function _scan(text) {
         if (_doneThisGen || !text) return;
@@ -25,21 +26,50 @@
         VN.earlybirdFromText(text);
     }
 
+    function _stopPoll() { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } }
+
+    // 串流時酒館會把半成品持續寫進 chat 末條 → 直接讀它，平台無關、不靠事件
+    function _readStreamingText() {
+        try {
+            const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            if (!ctx || !ctx.chat || !ctx.chat.length) return '';
+            const m = ctx.chat[ctx.chat.length - 1];
+            if (!m || m.is_user) return '';
+            return m.mes || m.message || '';
+        } catch (e) { return ''; }
+    }
+
+    function _startPoll() {
+        _stopPoll();
+        const t0 = Date.now();
+        _pollTimer = setInterval(function () {
+            if (_doneThisGen || (Date.now() - t0) > 300000) { _stopPoll(); return; }
+            const t = _readStreamingText();
+            if (t) _scan(t);
+            if (_doneThisGen) _stopPoll();
+        }, 1500);
+    }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         const ev = win.tavern_events;
 
-        // 每輪生成開始時解鎖（含 swipe / 重生）
-        if (ev.GENERATION_STARTED) win.eventOn(ev.GENERATION_STARTED, function () { _doneThisGen = false; });
+        // 每輪生成開始：解鎖（含 swipe / 重生）＋ 開始輪詢半成品文本
+        if (ev.GENERATION_STARTED) win.eventOn(ev.GENERATION_STARTED, function () {
+            _doneThisGen = false;
+            _startPoll();
+        });
+        if (ev.GENERATION_ENDED) win.eventOn(ev.GENERATION_ENDED, function () { _stopPoll(); });
 
-        // 串流路：事件帶「目前累積全文」，ChapterCard 一閉合立刻開生
+        // 串流事件路（有發就更即時；TauriTavern 沒發也無所謂，輪詢頂著）
         if (ev.STREAM_TOKEN_RECEIVED) win.eventOn(ev.STREAM_TOKEN_RECEIVED, function (text) {
             try { if (typeof text === 'string') _scan(text); } catch (e) {}
         });
 
-        // 保險路：沒開串流（或串流事件沒響）→ 訊息落地立刻掃，不必等 VN 載入
+        // 保險路：訊息落地立刻掃，不必等 VN 載入
         if (ev.MESSAGE_RECEIVED) win.eventOn(ev.MESSAGE_RECEIVED, async function (messageId) {
             try {
+                _stopPoll();
                 if (_doneThisGen) return;
                 const msgs = await win.TavernHelper?.getChatMessages?.(messageId);
                 const m = msgs && msgs[0];
@@ -49,7 +79,7 @@
             } catch (e) {}
         });
 
-        console.log('[VN_AvatarEarlybird] ✅ 頭像早鳥已掛載（串流＋訊息完成雙保險）');
+        console.log('[VN_AvatarEarlybird] ✅ 頭像早鳥已掛載（輪詢＋串流事件＋訊息完成三保險）');
     }
     init();
 
