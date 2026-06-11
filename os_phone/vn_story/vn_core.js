@@ -390,6 +390,7 @@
             this._prewarmItems();
             this._prewarmAvatars();
             this._deferVoicePrewarm();   // 語音延後：等圖片預熱清空才開跑（圖片優先進顯卡）
+            this._startImgGate = true;   // 開場閘門上膛：第一行劇情文本渲染前檢查圖片（卡片/指令不受影響）
         },
 
         // 語音預熱延後啟動：圖片（頭像/背景/場景/道具）全部清空才放語音佇列進場。
@@ -434,15 +435,15 @@
         },
 
         /**
-         * 統一啟動程序（2026-06-11）：先載入劇本（圖片預熱全開、語音延後）→
-         * loading 面板等「全部圖片」清空 → 才開播。
-         * 取代「loader 跑完才 loadScript」的舊順序——舊順序 loader 期間圖片根本還沒開生，等了個寂寞。
+         * 統一啟動程序（2026-06-11）：載入劇本（圖片預熱全開、語音延後）→ 立刻開播。
+         * 章節卡片/開場指令照常顯示（卡片就是天然等待室）；
+         * 「第一行劇情文本」要渲染時若圖片還沒全好，next() 內建的開場閘門才會彈 loading 攔住。
          */
         _startWithLoader: function(text, msgId) {
             const self = this;
             const go = function(finalText) {
                 self.loadScript(finalText, msgId);
-                self._showStartLoader(800, function() { self.next(); });
+                self.next();
             };
             const _isStandalone = (win.OS_API?.isStandalone?.()) ?? false;
             const _sceneCfg = (win.OS_SETTINGS?.getImageConfig?.())?.sceneGen || {};
@@ -1702,6 +1703,25 @@
 
             this.index++;
             const line = this.script[this.index];
+
+            // ── 開場圖片閘門 ──────────────────────────────────────────────
+            // 章節卡片/BGM/背景等指令照常流動（卡片是天然等待室，立刻顯示）；
+            // 「第一行真正的劇情文本」（旁白/對話）要渲染時，圖片還沒全好 → 才彈 loading 等。
+            // 圖好了或按「跳過等待」→ 解除閘門，整章不再檢查。
+            if (this._startImgGate) {
+                const _isStoryLine = line.startsWith('[Char|') || line.startsWith('[Inner|') || line.startsWith('[Sys|') ||
+                                     !(line.charAt(0) === '[' || line.charAt(0) === '<' || line.charAt(0) === '【');
+                if (_isStoryLine) {
+                    const _st = (typeof this.imgPendingStatus === 'function') ? this.imgPendingStatus() : { pending: 0 };
+                    if (_st.pending > 0) {
+                        this.index--;   // 退回這行，放行後重新走到
+                        const self = this;
+                        this._showStartLoader(300, function () { self._startImgGate = false; self.next(); });
+                        return;
+                    }
+                    this._startImgGate = false;
+                }
+            }
 
             if (line.startsWith('<chat')) { if(win.VN_Phone) win.VN_Phone.initChat(this, line); return; }
             if (line.startsWith('</chat>')) { if(win.VN_Phone) win.VN_Phone.exitChat(this); return; }
@@ -3216,8 +3236,7 @@
                 const _pMsgId  = typeof _pending === 'object' ? _pending.messageId : null;
                 window.VN_Core.loadScript(_pScript, _pMsgId);
                 switchPage('page-game');
-                // 圖片（早鳥＋四路預熱）全清空才開播；loading 有真實進度、可點跳過
-                window.VN_Core._showStartLoader(300, () => window.VN_Core.next());
+                window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
         }
@@ -3309,8 +3328,7 @@
                     if (_vnVisible && document.getElementById('page-game')) {
                         switchPage('page-game');
                         window.VN_Core.loadScript(text, messageId);
-                        // 圖片（早鳥＋四路預熱）全清空才開播；loading 有真實進度、可點跳過
-                        window.VN_Core._showStartLoader(300, () => window.VN_Core.next());
+                        window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
                         console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
                     } else {
                         window._pendingAutoScript = { text: text, messageId: messageId };
