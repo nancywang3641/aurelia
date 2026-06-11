@@ -29,6 +29,21 @@
         _pending: {},  // msgId(str) → { chatId, entries:[{cacheId,prompt,after,idx}] }
         _order: [],    // msgId 進場順序，給 cap 用
 
+        // 預熱場景CG並掛進 VN_Core 的圖片總進度（loading 面板/語音延後靠它判斷「圖都好了沒」）。
+        // 同 cacheId 與 vn_core._prewarmScenes 共用 in-flight promise，重複計數只多算進度分母、不會重複生圖。
+        _fetchSceneCounted: function (cacheId, prompt) {
+            const VN = win.VN_Core;
+            if (!VN || !VN._safeFetchScene) return;
+            if (typeof VN._imgJobStart === 'function') {
+                VN._imgJobStart();
+                Promise.resolve(VN._safeFetchScene(cacheId, prompt))
+                    .then(function () {}, function () {})
+                    .then(function () { VN._imgJobEnd(); });
+            } else {
+                VN._safeFetchScene(cacheId, prompt);
+            }
+        },
+
         _hash: function (str) {
             let h = 0;
             for (let i = 0; i < str.length; i++) { h = ((h << 5) - h + str.charCodeAt(i)) | 0; }
@@ -80,8 +95,8 @@
                     if (!prompt) return;
                     const cacheId = 'ext_' + this._hash(chatId + '_' + msgId + '_' + idx + '_' + prompt);
                     entries.push({ cacheId: cacheId, prompt: prompt, after: s.after ? String(s.after).trim() : '', idx: idx });
-                    // 立刻預熱生圖（in-flight dedup，等播到時秒出）
-                    try { if (win.VN_Core && win.VN_Core._safeFetchScene) win.VN_Core._safeFetchScene(cacheId, prompt); } catch (e) {}
+                    // 立刻預熱生圖（in-flight dedup，等播到時秒出）；掛進 VN 圖片總進度，loading/語音延後才看得到它
+                    try { this._fetchSceneCounted(cacheId, prompt); } catch (e) {}
                 });
                 if (!entries.length) return;
 
@@ -141,7 +156,7 @@
                     if (pos <= VN.index) VN.index += 4;
                     cursor = pos + 3;
                     inserted++;
-                    try { VN._safeFetchScene(e.cacheId, e.prompt); } catch (_) {}
+                    try { this._fetchSceneCounted(e.cacheId, e.prompt); } catch (_) {}
                     console.log('[VN_SceneInsert] 插入場景 #' + e.idx + ' @script[' + pos + '] cacheId=' + e.cacheId);
                 }
 
