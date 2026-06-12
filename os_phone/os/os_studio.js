@@ -447,6 +447,18 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         appDiv.innerHTML = studioHTML;
         root.appendChild(appDiv);
 
+        // 依「實際容器寬度」決定手機版佈局：手機殼是窄容器擺在寬視窗裡，viewport media query 失效，改量容器寬度掛 .studio-mobile。
+        try {
+            const _cont = appDiv.querySelector('.studio-container');
+            const _applyMobile = () => {
+                if (!_cont) return;
+                const w = appDiv.offsetWidth || _cont.offsetWidth || 0;
+                _cont.classList.toggle('studio-mobile', w > 0 && w <= 768);
+            };
+            _applyMobile();
+            if (window.ResizeObserver) { new ResizeObserver(_applyMobile).observe(appDiv); }
+        } catch (e) {}
+
         bindEvents();
         loadMode(currentMode);
     }
