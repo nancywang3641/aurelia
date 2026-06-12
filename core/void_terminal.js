@@ -466,11 +466,6 @@ const IRIS_IDLE = [
             if (iH) iH.style.display = 'none';
             if (cH) cH.style.display = '';
             if (clH) clH.style.display = 'none';
-            const nav = document.getElementById('aurelia-bottom-nav');
-            if (nav) {
-                nav.classList.add('mode-404');
-                nav.querySelectorAll('.nav-button').forEach(b => b.classList.remove('active-gold'));
-            }
             document.getElementById('aurelia-phone-screen')?.classList.add('mode-404');
             VoidAmbient.switchBgm('404');
         } else {
@@ -494,15 +489,6 @@ const IRIS_IDLE = [
             if (iH) iH.style.display = '';
             if (cH) cH.style.display = 'none';
             if (clH) clH.style.display = 'none';
-            const nav = document.getElementById('aurelia-bottom-nav');
-            if (nav) {
-                nav.classList.remove('mode-404');
-                nav.querySelectorAll('.nav-button').forEach(b => {
-                    const isHome = b.dataset.navId === 'nav-home';
-                    if (isHome) { b.classList.add('active-gold'); }
-                    else { b.classList.remove('active-gold'); }
-                });
-            }
             document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
             VoidAmbient.switchBgm('lobby');
         }
@@ -710,6 +696,26 @@ const IRIS_IDLE = [
                             <div class="lb-menu-txt">
                                 <span class="lb-menu-cn" data-cn-404="終端機">應用</span>
                                 <span class="lb-menu-en" data-en-404="TERMINAL">APPS</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-write-btn" title="寫作設置（API / 變數工坊 / 靈感創作室…）" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.switchPage('nav-write');">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-pen-nib"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="編譯室">寫作</span>
+                                <span class="lb-menu-en" data-en-404="COMPILE">WRITING</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-power-off"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="登出">關閉</span>
+                                <span class="lb-menu-en" data-en-404="DISCONNECT">CLOSE</span>
                             </div>
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
@@ -2103,11 +2109,6 @@ const IRIS_IDLE = [
             const layer = document.getElementById('void-bubble-layer');
             if (layer) { layer.innerHTML = ''; addFeedEntry('SYS', 'SYSTEM COMPROMISED'); }
 
-            const nav404 = document.getElementById('aurelia-bottom-nav');
-            if (nav404) {
-                nav404.classList.add('mode-404');
-                nav404.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active-gold'));
-            }
             document.getElementById('aurelia-phone-screen')?.classList.add('mode-404');
 
             playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個天然呆店長消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個假笑的寫作機器。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
@@ -2158,15 +2159,6 @@ const IRIS_IDLE = [
             const layer = document.getElementById('void-bubble-layer');
             if (layer) { layer.innerHTML = ''; layer.dataset.nextSlot = '2'; }
 
-            const navRestore = document.getElementById('aurelia-bottom-nav');
-            if (navRestore) {
-                navRestore.classList.remove('mode-404');
-                navRestore.querySelectorAll('.nav-button').forEach(btn => {
-                    const isHome = btn.dataset.navId === 'nav-home';
-                    if (isHome) { btn.classList.add('active-gold'); }
-                    else { btn.classList.remove('active-gold'); }
-                });
-            }
             document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
 
             playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
