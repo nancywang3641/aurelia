@@ -15,7 +15,6 @@
                     🎨 創作室
                     <select id="studio-mode-select" class="studio-mode-select">
                         <option value="vn_ui">✨ VN UI 煉丹</option>
-                        <option value="worldbook">📖 純淨草稿編撰</option>
                     </select>
                     <span id="studio-channel-badge" class="studio-channel-badge" style="display:none;"></span>
                     <button id="mobile-ch-btn" class="studio-mobile-ch-btn" style="display:none;">📁 頻道</button>
