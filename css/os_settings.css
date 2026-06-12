@@ -24,6 +24,11 @@
         .tab-view { display: none; animation: fadeIn 0.3s cubic-bezier(0.2,0.8,0.2,1); }
         .tab-view.active { display: block; }
         
+        /* 圖片設置：背景／角色 子分頁鈕 */
+        .img-srctab-row { display: flex; gap: 8px; padding: 0 0 12px; border-bottom: 1px solid rgba(26,28,40,0.08); margin-bottom: 16px; flex-wrap: wrap; }
+        .img-srctab { cursor: pointer; padding: 6px 14px; font-size: 14px; color: rgba(26,28,40,0.55); border-bottom: 2px solid transparent; font-weight: 600; user-select: none; }
+        .img-srctab.active { color: #1A1C28; border-bottom-color: rgba(26,28,40,0.45); font-weight: 800; }
+
         /* 組件 */
         .set-group { background: rgba(228,232,245,0.85); border-radius: 8px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px; border: 1px solid rgba(26,28,40,0.15); box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
         .set-label { font-size: 13px; color: #1A1C28; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-weight: 800; letter-spacing: 1px; }
