@@ -2234,7 +2234,9 @@
 
         /* --- UI 切換與渲染 --- */
         hideOverlays: function() {
-            ['sys-overlay', 'trans-overlay', 'item-overlay', 'achievement-overlay', 'quest-overlay', 'scene-cg-overlay'].forEach(id => document.getElementById(id).classList.remove('active'));
+            ['sys-overlay', 'trans-overlay', 'item-overlay', 'achievement-overlay', 'quest-overlay'].forEach(id => document.getElementById(id).classList.remove('active'));
+            // 🎬 scene-cg-overlay 走鋪底式：linger>0 期間留著（由 renderVN 計數淡出），不被每句 next 的 hideOverlays 秒關
+            if (this._sceneCgLinger <= 0) { const _sc = document.getElementById('scene-cg-overlay'); if (_sc) _sc.classList.remove('active'); }
             document.getElementById('text-panel-wrapper').style.display = 'block';
         },
         dismissAchievement: function() {
