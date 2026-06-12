@@ -122,6 +122,18 @@
         c.querySelectorAll('[data-go]').forEach(function (b) {
             b.addEventListener('click', function () { _go(c, b.dataset.go); });
         });
+        // 「AI 生成應用」入口改開創作室（取代一次性工坊）
+        (function () {
+            var openStudio = function (e) {
+                if (e) e.stopPropagation();
+                if (win.OS_STUDIO && win.OS_STUDIO.launch) win.OS_STUDIO.launch(c);
+                else _toast(c, '❌ 創作室未載入');
+            };
+            c.querySelectorAll('[data-go="workshop"]').forEach(function (el) {
+                el.setAttribute('data-go', '');            // 解除舊路由，避免 _go 切到死的 workshop view
+                el.addEventListener('click', openStudio);
+            });
+        })();
         _bindImport(c);
         _bindWorkshop(c);
         renderHomeMine(c);
