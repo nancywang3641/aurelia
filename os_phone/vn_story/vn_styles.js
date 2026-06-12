@@ -321,7 +321,7 @@
                             <div class="gs-row"><span class="gs-label">音效音量</span><input type="range" class="gs-slider" id="gs-sfx-vol" min="0" max="100" value="50" oninput="window.VN_Settings.applySfxVol(this.value)"><span class="gs-val" id="gs-sfx-vol-val">50%</span></div>
                             <div class="gs-row"><span class="gs-label">語音音量</span><input type="range" class="gs-slider" id="gs-tts-vol" min="0" max="100" value="80" oninput="window.VN_Settings.applyTtsVol(this.value)"><span class="gs-val" id="gs-tts-vol-val">80%</span></div>
                             <div class="gs-row" style="margin-top:4px;">
-                                <button class="gs-reset-btn" style="width:100%; text-align:center;" onclick="window.VN_PLAYER.closeGameSettings(); (window.AureliaLoader?.openPhoneApp?.('設置') || window.AureliaControlCenter?.showOsApp?.('設置'));">⚙ 開啟語音 / 圖片主設置</button>
+                                <button class="gs-reset-btn" style="width:100%; text-align:center;" onclick="window.VN_PLAYER.closeGameSettings(); (window.VoidPhoneShell && window.VoidPhoneShell.open());">⚙ 開啟應用（語音設置 / 相簿）</button>
                             </div>
                             <hr class="gs-divider">
                             <div class="gs-section-title">🎨 字體顏色設置</div>
