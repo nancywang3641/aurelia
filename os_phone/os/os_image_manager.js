@@ -121,6 +121,7 @@
                 charNegPrompt: 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry',
                 itemBasePrompt: 'masterpiece, best quality, white background, simple background, no background, product image, detailed',
                 itemNegPrompt: 'person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text',
+                capFreeSize: true,   // 🛡️ 防超免費尺寸：超過 1024×1024(約100萬px) 自動等比縮回，避免誤設大圖扣 Anlas
             },
             // 酒館原生 /sd：走使用者在酒館 Image Generation 擴展設好的後端；以下全可空，空=用酒館自己的設定
             tavernSd: { negative: '', width: '', height: '', steps: '', cfg: '' },
@@ -835,8 +836,20 @@
             // 尺寸：預設 1024x1024，但接受 options 傳入
             // scene / char 都是人物插圖類型；item / pet 是物品類型
             const isChar = (type === 'char' || type === 'scene');
-            const width  = options.width  || 1024;
-            const height = options.height || 1024;
+            let width  = options.width  || 1024;
+            let height = options.height || 1024;
+            // 🛡️ 防超免費尺寸：NAI Opus 免 Anlas 上限 ≈ 1024×1024(1,048,576px)。超過就等比縮回上限、避免誤設大圖扣點數。
+            //    config.novelai.capFreeSize === false 才放行大圖（想花 Anlas 出大圖的人自己關）。
+            if (cfg.capFreeSize !== false) {
+                const _freePx = 1024 * 1024;
+                if (width * height > _freePx) {
+                    const _s = Math.sqrt(_freePx / (width * height));
+                    const _w = Math.max(64, Math.round(width  * _s / 64) * 64);
+                    const _h = Math.max(64, Math.round(height * _s / 64) * 64);
+                    console.warn(`[ImageManager] 🛡️ NAI 尺寸 ${width}x${height} 超過免費上限 → 縮到 ${_w}x${_h}（防扣 Anlas；要出大圖請到 NAI 設定關「防超免費尺寸」）`);
+                    width = _w; height = _h;
+                }
+            }
 
             // 底詞：NAI Danbooru tag 格式（設定可自訂）
             // scene / char 已由呼叫方（getScene/getAvatar）預先 join avatarBasePrompt，
