@@ -163,38 +163,9 @@
 }
 
 /* =========================================================
-   區塊 1c：全域導覽列 → 桌面改「左側直立 rail」（手機維持底部，符合慣例）
-   底部 nav 的版型是 control_center.js 寫死 inline，這裡用媒體查詢 + !important 翻向；
-   並把 VN／App 全螢幕覆蓋層往右讓開 rail 寬度（rail 永遠可見）。
+   區塊 1c：（桌面「左側直立 rail」已移除 2026-06-12 —
+   大廳/寫作/關閉 併入大廳 MAIN MENU，全螢幕覆蓋層不再需要讓開 rail 寬度）
    ========================================================= */
-@media (min-width:561px) {
-    #aurelia-phone-screen { flex-direction: row !important; }
-    #aurelia-bottom-nav {
-        order: -1 !important;
-        width: 76px !important; height: 100% !important;
-        flex-direction: column !important;
-        justify-content: flex-start !important;
-        gap: 6px !important;
-        border-top: none !important;
-        border-right: 1px solid #e0e5ec !important;
-        box-shadow: 4px 0 15px rgba(0,0,0,0.03) !important;
-        padding: 14px 6px env(safe-area-inset-bottom, 0px) 6px !important;
-        box-sizing: border-box !important;
-    }
-    #aurelia-bottom-nav .nav-button {
-        flex: 1 1 0 !important;          /* 等高均分撐滿整條 rail */
-        flex-direction: column !important;
-        justify-content: center !important;
-        gap: 4px !important;
-        width: 100% !important;
-        padding: 10px 4px !important;
-        border-radius: 12px !important;
-    }
-    #aurelia-panel-container, #aurelia-vn-panel, #vn-reader-sa {
-        left: 76px !important;
-        bottom: 0 !important;
-    }
-}
 
 /* =========================================================
    區塊 2：主體  .lobby-body  →  左立繪 .lobby-left + 右選單 .lobby-right
