@@ -76,7 +76,22 @@
             if (freeBtn) freeBtn.onclick = async () => {
                 const foot = container.querySelector('#cr-foot');
                 if (foot) foot.textContent = '🧹 正在卸載模型、釋放顯存…';
-                await this._post('/free');
+                try {
+                    const r = await fetch(TOWER + '/free', { method: 'POST' });
+                    if (r.status === 404) {
+                        // 舊版控制塔沒有 /free 端點 → 明講，別裝死
+                        if (foot) foot.textContent = '⚠️ 控制塔是舊版（沒有釋放端點）— 托盤右鍵「結束控制塔(服務照跑)」再雙擊桌面捷徑重開';
+                        return;
+                    }
+                    const j = await r.json().catch(() => null);
+                    if (j && j.ok === false) {
+                        if (foot) foot.textContent = '⚠️ 釋放失敗：' + (j.error === 'comfy not running' ? 'ComfyUI 沒在跑' : (j.error || '未知原因'));
+                        return;
+                    }
+                    if (foot) foot.textContent = '✅ 已卸載模型；下次生圖會重載（多花十幾秒）';
+                } catch (e) {
+                    if (foot) foot.textContent = '⚠️ 連不到控制塔';
+                }
                 setTimeout(() => this._tick(container), 1200);   // 稍等再刷，VRAM 條會看到掉下來
             };
 
