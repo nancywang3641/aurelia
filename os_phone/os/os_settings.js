@@ -1534,7 +1534,7 @@ EXAMPLE "prompt" value:
                             </div>
                         </div>
 
-                        <div class="set-group" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
+                        <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
                             <div style="display:flex; align-items:center; justify-content:space-between;">
                                 <span>🖼️ 場景插圖（副模型版 · 接記憶）</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
@@ -1555,7 +1555,7 @@ EXAMPLE "prompt" value:
                             </div>
                         </div>
 
-                        <div class="set-group" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
+                        <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
                             <div class="set-label">🆘 退路圖庫（Pixabay）</div>
                             <div class="set-desc" style="margin-bottom:8px;">Pollinations 卡住或 12 秒 timeout 時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:#1A1C28;">pixabay.com/api/docs</a></div>
                             <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${imgConfig.pixabayKey || ''}">
@@ -1565,7 +1565,7 @@ EXAMPLE "prompt" value:
                             </div>
                         </div>
 
-                        <div class="set-group" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
+                        <div class="set-group" id="img-scene-usage-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
                             <div class="set-label">📊 場景插圖用量統計 <span style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;">算哪個會員方案划算</span></div>
                             <div class="set-desc" style="margin-bottom:8px;">只記「場景插圖」每次真實生成（cache 命中、角色/物品圖都不算）。填「每次消耗點數」後，自動算本月估算花費。</div>
                             <div class="set-label" style="font-size:12px; margin-top:6px;">每次場景插圖消耗點數</div>
@@ -2283,6 +2283,9 @@ EXAMPLE "prompt" value:
         const elImgTabChar    = container.querySelector('#img-tab-char');
         const elImgTabBg      = container.querySelector('#img-tab-bg');
         const elImgSceneBlock = container.querySelector('#img-scene-block');
+        const elImgSceneExtract = container.querySelector('#img-scene-extract-block'); // 副模型版（插圖→角色）
+        const elImgSceneUsage   = container.querySelector('#img-scene-usage-block');   // 用量統計（插圖→角色）
+        const elImgPixabay      = container.querySelector('#img-pixabay-block');        // 退路圖庫（背景）
         const elImgPolPrompts = container.querySelector('#img-pol-prompts-group');
         const elTavGroup      = container.querySelector('#img-group-tavernsd');
         const elCfdGroup      = container.querySelector('#img-group-comfyui');
@@ -2319,10 +2322,13 @@ EXAMPLE "prompt" value:
             if (elImgTabBg)   elImgTabBg.style.display   = (imgSrcTab === 'bg')   ? '' : 'none';
 
             if (imgSrcTab === 'char') {
-                // 角色分頁：顯示 living 接口設定 + 角色頭像底詞 + 場景插圖
+                // 角色分頁：顯示 living 接口設定 + 角色頭像底詞 + 場景插圖（獨立版/副模型版/用量）
                 showOnlyIfaceGroup(livingSvc);
                 if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc === 'novelai');
-                if (elImgSceneBlock) elImgSceneBlock.style.display = '';
+                if (elImgSceneBlock)   elImgSceneBlock.style.display = '';
+                if (elImgSceneExtract) elImgSceneExtract.style.display = '';
+                if (elImgSceneUsage)   elImgSceneUsage.style.display = '';
+                if (elImgPixabay)      elImgPixabay.style.display = 'none';   // 退路圖庫屬背景、角色分頁藏
             } else {
                 // 背景分頁
                 if (synced) {
@@ -2338,10 +2344,14 @@ EXAMPLE "prompt" value:
                     if (elImgBgNote)     elImgBgNote.style.display = 'none';
                     showOnlyIfaceGroup(bgSvc);
                 }
-                // 角色頭像底詞 + 場景插圖只屬角色分頁
+                // 角色頭像底詞 + 場景插圖（含副模型版/用量）只屬角色分頁；退路圖庫(背景)在背景分頁顯示
                 if (elImgPolPrompts) elImgPolPrompts.classList.add('hidden');
-                if (elImgSceneBlock) elImgSceneBlock.style.display = 'none';
+                if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
+                if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
+                if (elImgSceneUsage)   elImgSceneUsage.style.display = 'none';
+                if (elImgPixabay)      elImgPixabay.style.display = '';   // 退路圖庫（背景生不出抓照片）屬背景
             }
+            // 測試生成是通用工具 → 兩分頁都留
         };
 
         // 子分頁切換鈕
