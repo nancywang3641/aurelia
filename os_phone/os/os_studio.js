@@ -1381,10 +1381,10 @@ ${dialogueText}
 - #speaker-name：角色名牌（固定浮在對話框左上，旁白時自動隱藏）。只重新設計它的外觀（底色/邊框/圓角/字體/造型）配合對話框，「位置不要動」。
 - #top-badge：左上角的「場景牌」，顯示當前時間・地點（例如「黃昏 南城舊巷」，文字兩側有金色短線裝飾，那是 ::before / ::after）。可重新設計它的外觀（底色/漸隱/邊框/圓角/字體/裝飾線）配合主題，但「位置不要動」（固定左上）。註：直播模式時同樣內容會改顯示在 #stream-scene-row（內含 #stream-scene-label），請一併配合上色。
 - #vn-panel-controls 與 .vn-panel-btn：對話框上方的 SKIP / LOG / AUTO 控制按鈕（.vn-panel-btn.active 為啟用態）。「位置不要動」，只重新上色/造型配合主題。
-- #btn-home、#btn-settings、#btn-reader：畫面右上角的頂部按鈕（返回 / 設定 / 閱讀器）。「位置不要動」，只重新統一它們的外觀配合主題。
+- #btn-home、#btn-settings、#btn-phone：畫面右上角的頂部按鈕（返回 / 設定 / 應用）。「位置不要動」，只重新統一它們的外觀配合主題。
 
 【最重要的鐵則 — 配件一律不准移動】
-- 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-reader 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
+- 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
 
 【可讀性 — 最優先】
 - 對話框「文字所在那層」的底必須夠不透明：實心色，或 alpha ≥ 0.82。要玻璃感就把透明留外緣，文字正下方壓一層實底，確保字不被背景圖洗掉。
@@ -1421,8 +1421,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 #top-badge{position:absolute;top:14px;left:14px;z-index:10;border:none;box-shadow:none;border-radius:0;background:linear-gradient(to right,transparent 0%,rgba(0,0,0,0.55) 12%,rgba(0,0,0,0.55) 88%,transparent 100%);color:#f0e8d0;display:inline-block;padding:7px 28px;font-weight:700;font-size:0.88rem;letter-spacing:2.5px;line-height:1.5;text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,0.9);}
 #top-badge::before{content:'';display:inline-block;vertical-align:middle;width:16px;height:1px;background:linear-gradient(to right,transparent,#c8a96e);margin-right:10px;margin-bottom:2px;}
 #top-badge::after{content:'';display:inline-block;vertical-align:middle;width:16px;height:1px;background:linear-gradient(to left,transparent,#c8a96e);margin-left:10px;margin-bottom:2px;}
-#btn-home,#btn-settings,#btn-reader{position:absolute;z-index:15;background:rgba(10,10,12,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);border:1px solid rgba(212,175,55,0.3);color:var(--gold-dark);padding:6px 12px;cursor:pointer;font-size:0.7rem;font-family:var(--font-classic);letter-spacing:1px;border-radius:2px;text-transform:uppercase;}
-#btn-reader{top:12px;right:12px;padding:6px 10px;}
+#btn-home,#btn-settings,#btn-phone{position:absolute;z-index:15;background:rgba(10,10,12,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);border:1px solid rgba(212,175,55,0.3);color:var(--gold-dark);padding:6px 12px;cursor:pointer;font-size:0.7rem;font-family:var(--font-classic);letter-spacing:1px;border-radius:2px;text-transform:uppercase;}
+#btn-phone{top:12px;right:12px;padding:6px 10px;}
 #btn-settings{top:12px;right:70px;}
 #btn-home{top:12px;right:144px;}
 #text-panel-wrapper{position:relative;z-index:5;width:88%;max-width:560px;margin:0 auto;}
@@ -1446,13 +1446,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
     function _vthBuildSrcdoc(css, mode, thumb) {
         const m = mode || _vthMode;
-        const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-reader,#vn-panel-controls,#top-badge{display:none;}' : '';
+        const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-phone,#vn-panel-controls,#top-badge{display:none;}' : '';
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${css || ''}</style></head><body>
 <div id="game-bg"></div>
 <div id="top-badge">黃昏 南城舊巷</div>
 <button id="btn-home">⌂ 返回</button>
 <button id="btn-settings">設定</button>
-<button id="btn-reader">📖</button>
+<button id="btn-phone">📱</button>
 <div id="text-panel-wrapper">
 <div id="vn-panel-controls"><div class="vn-panel-btn">SKIP</div><div class="vn-panel-btn">LOG</div><div class="vn-panel-btn">AUTO</div></div>
 <div id="text-panel" class="${m}">
@@ -1474,7 +1474,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-reader（右上頂部鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
+        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
         host.innerHTML = `<div class="vth-wrap">
             <div class="vth-css-bar">
                 <span class="vth-css-world">🌍 ${esc(chatId || '(未知，先進 VN 一次)')}</span>
