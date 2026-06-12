@@ -223,15 +223,15 @@
                 rootWrapper.className = 'vn-tab-mode';
             }
             rootWrapper.innerHTML = `
-                <div id="se-toolbar" style="${isVnTabMode ? 'height: 35px; padding: 0 10px;' : ''}">
-                    <div class="se-title" style="${isVnTabMode ? 'font-size: 13px;' : ''}">📖 踏入故事</div>
+                <div id="se-toolbar">
+                    <button class="se-back-btn" title="返回" id="se-btn-close">‹</button>
+                    <div class="se-title">踏入故事</div>
                     <div class="se-controls">
                         <button class="se-icon-btn" title="切換主題" id="se-btn-theme">🌙</button>
-                        <button class="se-icon-btn" title="關閉" id="se-btn-close">✕</button>
                         <button class="se-icon-btn" title="刷新" id="se-btn-refresh">↻</button>
                     </div>
                 </div>
-                <div id="se-content-area" style="${isVnTabMode ? 'padding: 8px; font-size: 12px;' : ''}"></div>
+                <div id="se-content-area"></div>
                 <div id="se-input-area"></div>
             `;
 
