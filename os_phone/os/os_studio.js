@@ -1627,6 +1627,29 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         };
     }
 
+    // ── 展廳模板 → 手機 iframe HTML adapter ──────────────────────────
+    // 把展廳模板包成可在手機 iframe 跑的完整 HTML
+    // window.callAI / genImg / goBack 由手機 iframe 橋接（app_runtime.js mountAppIframe）注入
+    function _templateToPhoneHtml(tpl) {
+        var css  = String(tpl.css  || '');
+        var html = String(tpl.html || '');
+        var js   = String(tpl.js   || '');
+        return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">'
+            + '<style>html,body{margin:0;padding:0;height:100%;}#app-root{box-sizing:border-box;width:100%;min-height:100%;}'
+            + css + '</style></head><body><div id="app-root">' + html + '</div>'
+            + '<scr' + 'ipt>(function(){'
+            + 'var container=document.getElementById("app-root");var lines=[];'
+            + 'var st={'
+            +   'md:function(t){return t||"";},'
+            +   'parse:function(){return {};},'
+            +   'setImage:async function(el,p,type){try{if(el&&window.genImg){el.src=await window.genImg(p,type||"scene");}}catch(e){}},'
+            +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
+            + '};'
+            + 'var onComplete=function(){if(window.goBack)window.goBack();};'
+            + '(async function(){try{' + js + '}catch(e){console.error("[phone tpl]",e);}})();'
+            + '})();</' + 'scr' + 'ipt></body></html>';
+    }
+
     // ── VN 展廳 ──────────────────────────────────────────────────────
 
     async function syncActiveTagsToLocal() {
@@ -1961,6 +1984,10 @@ ${cleanFormat}
                 return;
             }
             listEl.innerHTML = '';
+            // 一次性抓所有手機 app（用 srcTplId 對照展廳模板）
+            const _allPhoneApps = (win.OS_DB && win.OS_DB.getAllPhoneApps)
+                ? ((await win.OS_DB.getAllPhoneApps()) || [])
+                : [];
             templates.forEach(tpl => {
                 const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
                 const safeFmt   = (tpl.demoFormat || '無結構定義').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -2086,6 +2113,37 @@ ${cleanFormat}
                     renderChatHistory();
                     renderPreviewPanel(); // 自動寫 cache + 同步 VN 工具列顯示
                 };
+
+                // 📱 裝到手機開關（opt-in，預設未裝）
+                var _phoneRec = _allPhoneApps.find(function(a) { return a && a.srcTplId === tpl.id; });
+                var phoneBtn = document.createElement('div');
+                phoneBtn.className = 'sgc-btn btn-phone';
+                phoneBtn.textContent = _phoneRec ? '📱 已裝手機' : '📱 裝到手機';
+                phoneBtn.onclick = async function() {
+                    try {
+                        if (_phoneRec) {
+                            await win.OS_DB.deletePhoneApp(_phoneRec.id);
+                            if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(_phoneRec.id);
+                        } else {
+                            var rec = {
+                                name: tpl.tagId || '面板',
+                                emoji: '🧩',
+                                iconUrl: '',
+                                html: _templateToPhoneHtml(tpl),
+                                source: 'studio',
+                                srcTplId: tpl.id
+                            };
+                            var newId = await win.OS_DB.savePhoneApp(rec);
+                            if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) {
+                                win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, iconUrl: '' });
+                            }
+                        }
+                        loadStudioGallery(); // 重畫展廳刷新開關狀態
+                    } catch(e) { console.error('[studio] 裝手機切換失敗', e); }
+                };
+                // 接到 .sgc-btns 容器末尾（與 btn-toggle / btn-del 同一列）
+                var sgcBtns = card.querySelector('.sgc-btns');
+                if (sgcBtns) sgcBtns.appendChild(phoneBtn);
 
                 listEl.appendChild(card);
 
