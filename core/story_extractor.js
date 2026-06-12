@@ -227,7 +227,7 @@
                     <div class="se-title" style="${isVnTabMode ? 'font-size: 13px;' : ''}">📖 踏入故事</div>
                     <div class="se-controls">
                         <button class="se-icon-btn" title="切換主題" id="se-btn-theme">🌙</button>
-                        <button class="se-icon-btn" title="關閉" id="se-btn-close" style="color: #ff4444;">✕</button>
+                        <button class="se-icon-btn" title="關閉" id="se-btn-close">✕</button>
                         <button class="se-icon-btn" title="刷新" id="se-btn-refresh">↻</button>
                     </div>
                 </div>
