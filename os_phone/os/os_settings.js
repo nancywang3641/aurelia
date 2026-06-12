@@ -349,7 +349,7 @@ EXAMPLE "prompt" value:
 
     const getSTContext = () => { try { return window.parent.SillyTavern ? window.parent.SillyTavern.getContext() : null; } catch (e) { return null; } };
 
-    function launchApp(container) {
+    function launchApp(container, mode) {
         const llmConfig = loadLlmConfig();
         const secLlmConfig = loadSecLlmConfig();
         const imgConfig = loadImageConfig();
@@ -1936,6 +1936,19 @@ EXAMPLE "prompt" value:
                 if (targetView) { targetView.classList.remove('hidden'); targetView.classList.add('active'); }
             };
         });
+
+        // 🎨 畫廊分頁已搬成獨立「相簿」app（2026-06-12）：view-img 永遠 render（接線都在、不動），只控制可見性 → 零風險。
+        //   album 模式 → 標題改「相簿」、藏分頁列、只顯示畫廊；系統設置模式 → 藏掉畫廊分頁鈕。
+        const _imgTabBtn = container.querySelector('.set-tab[data-tab="img"]');
+        if (mode === 'album') {
+            const _titleEl = container.querySelector('.set-title');
+            if (_titleEl) _titleEl.textContent = '相簿';
+            if (_imgTabBtn) _imgTabBtn.click();   // 切到畫廊分頁（觸發既有 onclick 顯示 view-img）
+            const _tabsBar = container.querySelector('.set-tabs');
+            if (_tabsBar) _tabsBar.style.display = 'none';
+        } else if (_imgTabBtn) {
+            _imgTabBtn.style.display = 'none';     // 系統設置不再顯示畫廊分頁
+        }
 
         // 備份分頁
         bindBackupTab(container);
@@ -3865,6 +3878,8 @@ EXAMPLE "prompt" value:
     }
 
     window.OS_SETTINGS.launchApp = launchApp;
+    // 相簿 app（大廳手機殼）：用同一引擎跑「只顯示畫廊」模式
+    window.OS_SETTINGS.launchAlbum = function (container) { return launchApp(container, 'album'); };
 
     function install() {
         const win = window.parent || window;
