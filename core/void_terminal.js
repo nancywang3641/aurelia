@@ -700,16 +700,6 @@ const IRIS_IDLE = [
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
-                    <div class="void-btn" id="void-write-btn" title="寫作設置（API / 變數工坊 / 靈感創作室…）" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.switchPage('nav-write');">
-                        <div class="void-btn-inner">
-                            <i class="lb-menu-icon fa-solid fa-pen-nib"></i>
-                            <div class="lb-menu-txt">
-                                <span class="lb-menu-cn" data-cn-404="編譯室">寫作</span>
-                                <span class="lb-menu-en" data-en-404="COMPILE">WRITING</span>
-                            </div>
-                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
-                        </div>
-                    </div>
                     <div class="void-btn" id="void-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">
                         <div class="void-btn-inner">
                             <i class="lb-menu-icon fa-solid fa-power-off"></i>
