@@ -1595,6 +1595,24 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 } catch(e) {
                     console.error('[preview] setImage 失敗:', e);
                 }
+            },
+            async callAI(systemPrompt) {
+                // 預覽不燒額度：給固定示範字串
+                if (window.__IS_PREVIEW) {
+                    return '（預覽模式示範回覆）這是 AI 生成的內容會出現的位置。';
+                }
+                try {
+                    const OS = window.OS_API || (window.parent && window.parent.OS_API);
+                    if (!OS || !OS.chat) throw new Error('OS_API 不可用');
+                    const S = window.OS_SETTINGS || (window.parent && window.parent.OS_SETTINGS);
+                    let cfg = (S && S.getConfig && S.getConfig()) || {};
+                    cfg = Object.assign({}, cfg, { usePresetPrompts: false, enableThinking: false });
+                    return await new Promise((res, rej) => {
+                        OS.chat([{ role: 'system', content: String(systemPrompt || '') }], cfg, null,
+                            t => res(typeof t === 'string' ? t : (t && t.message) || ''), rej,
+                            { disableTyping: true });
+                    });
+                } catch (e) { console.error('[st.callAI]', e); return ''; }
             }
         };
     }
