@@ -388,54 +388,9 @@ EXAMPLE "prompt" value:
                     window.VN_PLAYER.loadAvatarManager('vncfg-avatar-mgr-list');
                 } else if (tabId === 'bg' && window.VN_PLAYER?.loadBgManager) {
                     window.VN_PLAYER.loadBgManager('vncfg-bg-mgr-list');
-                } else if (tabId === 'scene' && window._loadSceneGallery) {
-                    window._loadSceneGallery('vncfg-scene-gallery');
+                } else if (tabId === 'scene' && window.VN_PLAYER?.loadSceneManager) {
+                    window.VN_PLAYER.loadSceneManager('vncfg-scene-mgr-list');
                 }
-            };
-        }
-
-        // ───── 🎬 場景插圖展廳：scene_cache 全列出（縮圖＋提示詞可複製＋刪除）─────
-        if (!window._loadSceneGallery) {
-            window._loadSceneGallery = async function(hostId) {
-                const host = document.getElementById(hostId);
-                if (!host) return;
-                const VC = (window.parent || window).VN_Cache || window.VN_Cache;
-                if (!VC || !VC.getAll) { host.innerHTML = '<div class="sgal-empty">快取模組未就緒</div>'; return; }
-                host.innerHTML = '<div class="sgal-empty">⏳ 讀取中…</div>';
-                let entries = await VC.getAll('scene_cache');
-                entries = (entries || []).filter(e => e && e.url).sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
-                if (!entries.length) { host.innerHTML = '<div class="sgal-empty">還沒有任何場景插圖<br><span class="sgal-empty-sub">開著「場景插圖」玩劇情，跳出來的 CG 會自動收進這裡</span></div>'; return; }
-                const curWorld = VC.getCurrentWorld ? VC.getCurrentWorld() : '';
-                host.innerHTML = entries.map((e, i) => {
-                    const world = VC.worldOf ? VC.worldOf(e) : '';
-                    const isCur = world && world === curWorld;
-                    const prompt = String(e.prompt || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                    return `<div class="sgal-card">
-                        <img class="sgal-thumb" src="${e.url}" loading="lazy" data-sgal-view="${i}">
-                        <div class="sgal-meta">
-                            <span class="sgal-world ${isCur ? 'sgal-world-cur' : ''}">${world ? (isCur ? '🌍 本世界' : '🌐 ' + world.slice(0, 18)) : '未分類'}</span>
-                            <span class="sgal-del" data-sgal-del="${i}" title="刪除這張（之後播到會重新生成）">🗑️</span>
-                        </div>
-                        <div class="sgal-prompt" data-sgal-copy="${i}" title="點一下複製提示詞">${prompt || '（無提示詞）'}</div>
-                    </div>`;
-                }).join('');
-                // 事件：點圖放大（新分頁）、點提示詞複製、刪除
-                host.querySelectorAll('[data-sgal-view]').forEach(img => {
-                    img.onclick = () => { try { const w = window.open(); w.document.write('<img src="' + entries[+img.dataset.sgalView].url + '" style="max-width:100%">'); } catch (e) {} };
-                });
-                host.querySelectorAll('[data-sgal-copy]').forEach(el => {
-                    el.onclick = async () => {
-                        try { await navigator.clipboard.writeText(entries[+el.dataset.sgalCopy].prompt || ''); el.classList.add('sgal-copied'); setTimeout(() => el.classList.remove('sgal-copied'), 800); } catch (e) {}
-                    };
-                });
-                host.querySelectorAll('[data-sgal-del]').forEach(el => {
-                    el.onclick = async () => {
-                        const ent = entries[+el.dataset.sgalDel];
-                        if (!confirm('刪除這張插圖快取？（之後播到該場景會重新生成）')) return;
-                        await VC.deleteRaw('scene_cache', ent.key);
-                        window._loadSceneGallery(hostId);
-                    };
-                });
             };
         }
 
@@ -1702,9 +1657,10 @@ EXAMPLE "prompt" value:
                         </div>
                         <div id="view-img-scene" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label">🎬 場景插圖展廳 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">劇情裡跳出的全螢幕 CG 都在這，點提示詞可複製</span></div>
-                                <div id="vncfg-scene-gallery" class="sgal-grid"></div>
+                                <div class="set-label">🎬 場景插圖快取 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">劇情全螢幕 CG；「⋯」可看大圖 / 編輯重生 / 刪除</span></div>
+                                <div id="vncfg-scene-mgr-list" style="margin-top:8px;"></div>
                             </div>
+                            <div class="set-desc" style="margin-top:4px;">* 包含 scene_cache（場景插圖）。提示詞在「⋯ → 編輯重生」裡查看與修改。</div>
                         </div>
                     </div>
 
