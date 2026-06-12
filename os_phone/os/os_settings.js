@@ -1440,15 +1440,12 @@ EXAMPLE "prompt" value:
 
                         </div>
 
-                        <!-- ── 🎬 場景插圖（獨立版）｜屬「角色」分頁 ── -->
+                        <!-- ── 🎬 場景插圖（共用設定）｜屬「角色」分頁 ── -->
                         <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
-                            <div class="set-label" style="font-size:13px; display:flex; align-items:center; justify-content:space-between;">
-                                <span>🖼️ 場景插圖（獨立版）</span>
-                                <label class="toggle-switch"><input type="checkbox" id="img-scene-enabled" ${imgConfig.sceneGen?.enabled ? 'checked' : ''}><span class="slider"></span></label>
-                            </div>
-                            <div class="set-desc" style="margin-top:6px;">開啟後，VN 播放前會呼叫 AI 分析劇情並自動插入場景插圖。僅獨立版有效；ST 模式請使用 SD 插件。</div>
+                            <div class="set-label" style="font-size:13px;">🎬 場景插圖</div>
+                            <div class="set-desc" style="margin-top:6px;">尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。</div>
 
-                            <div id="img-scene-body" style="${imgConfig.sceneGen?.enabled ? '' : 'opacity:0.5; pointer-events:none;'} margin-top:14px;">
+                            <div id="img-scene-body" style="margin-top:14px;">
 
                                 <!-- ── 場景插圖尺寸（獨立於主圖片尺寸）── -->
                                 <div style="margin-bottom:12px;">
@@ -1506,40 +1503,16 @@ EXAMPLE "prompt" value:
                                     <div class="set-label" style="font-size:11px;">🚫 場景負詞</div>
                                     <textarea class="set-textarea" id="img-scene-neg-prompt" style="min-height:50px;">${imgConfig.sceneGen?.sceneNegPrompt || ''}</textarea>
                                 </div>
-
-                                <!-- 規範提示詞 -->
-                                <div style="border:1px solid rgba(26,28,40,0.15); border-radius:4px; padding:12px; background:rgba(228,232,245,0.5); margin-top:4px;">
-                                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                                        <div class="set-label" style="margin:0; font-size:12px;">📋 規範提示詞 <span style="color:rgba(26,28,40,0.72); font-weight:normal; font-size:10px;">（注入給 AI，告訴它輸出格式）</span></div>
-                                    </div>
-                                    <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px;">
-                                        <select id="img-scene-spec-sel" class="set-select" style="flex:1; min-width:0; font-size:11px;">
-                                            <option value="">-- 選擇模板 --</option>
-                                            ${(imgConfig.sceneGen?.specTemplates || []).map((t, i) => `<option value="${i}">${t.name}</option>`).join('')}
-                                        </select>
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 8px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._sceneSpec.apply()">套用</span>
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 8px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._sceneSpec.save()">另存</span>
-                                        <span style="font-size:11px; color:#fc8181; cursor:pointer; white-space:nowrap; padding:5px 8px; border:1px solid #fc8181; border-radius:4px; background:rgba(252,129,129,0.1);" onclick="window._sceneSpec.del()">刪除</span>
-                                    </div>
-                                    <div id="img-scene-spec-name-row" style="display:none; margin-bottom:8px;">
-                                        <div style="display:flex; gap:8px;">
-                                            <input id="img-scene-spec-name-input" class="set-input" placeholder="模板名稱（如：NAI V4.5 標準）" style="flex:1; font-size:11px;">
-                                            <span style="font-size:11px; color:#1A1C28; cursor:pointer; padding:5px 8px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; white-space:nowrap; background:rgba(26,28,40,0.06);" onclick="window._sceneSpec.confirmSave()">確認</span>
-                                            <span style="font-size:11px; color:rgba(26,28,40,0.72); cursor:pointer; padding:5px 8px; border:1px solid rgba(26,28,40,0.40); border-radius:4px;" onclick="window._sceneSpec.cancelSave()">取消</span>
-                                        </div>
-                                    </div>
-                                    <textarea class="set-textarea" id="img-scene-spec-prompt" style="min-height:160px; font-size:11px;">${(imgConfig.sceneGen?.specPrompt || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                                    <div style="font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px;">↑ 用 {MAX_PER_CHAPTER} 代入最大插圖數，系統自動替換。</div>
-                                </div>
                             </div>
                         </div>
 
                         <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
                             <div style="display:flex; align-items:center; justify-content:space-between;">
-                                <span>🖼️ 場景插圖（副模型版 · 接記憶）</span>
+                                <span>🖼️ 自動插圖（副模型搭便車 · 接記憶）</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會<b>順便</b>依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。（酒館／獨立版皆可）</div>
+                            <div class="set-desc" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72);">其它觸發：① 主模型直接吐 [Scene|]（世界書開規則，最省、零額外 API）；② 此處副模型搭便車（免額外呼叫）。獨立版（PWA 專門呼叫）已退役。</div>
                             <div class="set-label" style="font-size:12px; margin-top:10px;">副模型插圖指令 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">可自由微調</span></div>
                             <textarea class="set-textarea" id="img-scene-extract-prompt" style="min-height:170px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPrompt || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                             <div style="font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px;">↑ 這段會附加到「記憶副模型」的指令裡，叫它額外輸出 scenes。改這裡就能調插圖的數量／風格／規則。</div>
@@ -3133,13 +3106,10 @@ EXAMPLE "prompt" value:
                         customWorkflow:(container.querySelector('#img-cfd-custom-wf-text')?.value || '')
                     },
                     sceneGen: {
-                        enabled:          container.querySelector('#img-scene-enabled')?.checked ?? false,
                         promptStyle:      container.querySelector('#img-scene-prompt-style')?.value || 'auto',
                         size:             container.querySelector('#img-scene-size')?.value || '1024x1024',
                         sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
                         sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
-                        specPrompt:      (container.querySelector('#img-scene-spec-prompt')?.value  || '').trim(),
-                        specTemplates:    sceneSpecTemplates,
                         extractEnabled:   container.querySelector('#img-scene-extract-enabled')?.checked ?? false,
                         extractPrompt:   (container.querySelector('#img-scene-extract-prompt')?.value || '').trim(),
                     },
@@ -3447,16 +3417,6 @@ EXAMPLE "prompt" value:
             sel.innerHTML = '<option value="">-- 從 NAI 預設包複製底詞 --</option>' +
                 naiPresets.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
             if (cur !== '' && naiPresets[parseInt(cur)]) sel.value = cur;
-        }
-
-        // 場景插圖啟用開關 → 控制操作區透明度
-        const elSceneEnabled = container.querySelector('#img-scene-enabled');
-        const elSceneBody    = container.querySelector('#img-scene-body');
-        if (elSceneEnabled && elSceneBody) {
-            elSceneEnabled.addEventListener('change', () => {
-                elSceneBody.style.opacity       = elSceneEnabled.checked ? '1'    : '0.5';
-                elSceneBody.style.pointerEvents = elSceneEnabled.checked ? 'auto' : 'none';
-            });
         }
 
         window._sceneSpec = {
