@@ -1484,7 +1484,7 @@
 
                 // 第二輪：生成。雲端(NAI/Poll)維持並行；本機(ComfyUI直連/酒館SD)改串行——
                 // ComfyUI 端本來就一張一張跑，串行零損失，還讓「語音紅綠燈」插得進空檔
-                const _svc = win.OS_IMAGE_MANAGER?.config?.service || '';
+                const _svc = (typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (win.OS_IMAGE_MANAGER?.config?.service || '');
                 const _localGpu = (_svc === 'comfyui_direct' || _svc === 'tavern_sd');
                 console.log(`[VN] ${_localGpu ? '串行' : '並行'}生成 ${needGen.length} 個頭像...`);
                 if (_localGpu) {
@@ -2861,7 +2861,8 @@
                 const prompt = pfx + rawP + sfx;
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
                 const imCfg = win.OS_IMAGE_MANAGER.config;
-                const useNAI = !!(imCfg && imCfg.service === 'novelai' && imCfg.novelai && imCfg.novelai.token);
+                const _spriteSvc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (imCfg && imCfg.service);
+                const useNAI = !!(_spriteSvc === 'novelai' && imCfg && imCfg.novelai && imCfg.novelai.token);
                 const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: 512, height: 896, raw: !useNAI });
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
