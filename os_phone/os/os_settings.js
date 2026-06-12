@@ -83,6 +83,7 @@
                 token: '',
                 url: 'https://image.novelai.net/ai/generate-image',
                 model: 'nai-diffusion-3',
+                capFreeSize: true,   // 🛡️ 防超免費尺寸（防誤扣 Anlas）
                 sampler: 'k_euler_ancestral',
                 scale: 5,
                 steps: 28,
@@ -1302,6 +1303,13 @@ EXAMPLE "prompt" value:
                                 <div style="margin-top:15px;">
                                     <div class="set-label">NovelAI Token <span style="font-size:11px; color:#fc8181;">(必填)</span></div>
                                     <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
+                                </div>
+                                <div class="set-group" style="margin-top:12px;">
+                                    <div class="set-label">
+                                        <span>🛡️ 防超免費尺寸（防誤扣 Anlas）</span>
+                                        <label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label>
+                                    </div>
+                                    <div class="set-desc">開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。</div>
                                 </div>
                                 <div style="margin-top:15px;">
                                     <div class="set-label">模型版本</div>
@@ -3059,6 +3067,7 @@ EXAMPLE "prompt" value:
                         token: elNaiToken.value.trim(),
                         url: 'https://image.novelai.net/ai/generate-image',
                         model: elNaiModel ? elNaiModel.value : 'nai-diffusion-3',
+                        capFreeSize:   container.querySelector('#img-nai-cap-free')?.checked ?? true,
                         sampler:       (container.querySelector('#img-nai-sampler')?.value        || 'k_euler_ancestral'),
                         scale:         parseFloat(container.querySelector('#img-nai-scale')?.value  ?? 5),
                         steps:         parseInt(container.querySelector('#img-nai-steps')?.value    ?? 28),
@@ -3751,6 +3760,7 @@ EXAMPLE "prompt" value:
                 
                 imageManager.config.novelai.token = elNaiToken.value.trim();
                 if (elNaiModel) imageManager.config.novelai.model = elNaiModel.value;
+                imageManager.config.novelai.capFreeSize = container.querySelector('#img-nai-cap-free')?.checked ?? true;
                 imageManager.config.novelai.sampler = container.querySelector('#img-nai-sampler')?.value || 'k_euler_ancestral';
                 imageManager.config.novelai.scale = getNum('#img-nai-scale', 5);
                 imageManager.config.novelai.steps = getInt('#img-nai-steps', 28);
