@@ -16,8 +16,6 @@
                     <select id="studio-mode-select" class="studio-mode-select">
                         <option value="vn_ui">✨ VN UI 煉丹</option>
                     </select>
-                    <span id="studio-channel-badge" class="studio-channel-badge" style="display:none;"></span>
-                    <button id="mobile-ch-btn" class="studio-mobile-ch-btn" style="display:none;">📁 頻道</button>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="studio-icon-btn danger" id="studio-clear-btn" title="清空當前頻道的對話紀錄">🗑️ <span>清空</span></button>
@@ -27,42 +25,8 @@
             <div class="studio-body">
                 <div id="studio-drawer-backdrop" class="studio-drawer-backdrop"></div>
 
-                <!-- ① 頻道面板：worldbook 模式桌面常駐，移動端抽屜 -->
-                <div id="studio-ch-panel" class="studio-ch-panel" style="display:none;">
-                    <div class="studio-ch-panel-hdr">
-                        <span>📁 世界頻道</span>
-                        <button id="studio-ch-panel-close" class="studio-ch-panel-close">✕</button>
-                    </div>
-                    <div class="studio-new-ch-zone">
-                        <div id="studio-new-ch-bar" class="studio-new-ch-bar">
-                            <input id="studio-new-ch-input" class="studio-new-ch-inp" placeholder="輸入世界名稱…">
-                            <button id="studio-new-ch-ok" class="studio-new-ch-ok">✓</button>
-                            <button id="studio-new-ch-cancel" class="studio-new-ch-cancel">✕</button>
-                        </div>
-                        <button id="studio-new-ch-btn" class="studio-new-ch-btn">➕ 新建頻道</button>
-                    </div>
-                    <div id="studio-tree-container" class="studio-ch-tree"></div>
-                </div>
-
                 <!-- ② 聊天區 -->
                 <div class="studio-left">
-                    <!-- 手動壓縮按鈕（worldbook + 有對話時顯示） -->
-                    <button id="studio-wb-compress-btn" title="把舊對話壓縮成摘要記憶，立即測試 / 手動觸發">📌 壓縮舊對話</button>
-
-
-                    <!-- 世界編撰啟動頁（只在 worldbook 模式 + 無 activeCategory 時顯示） -->
-                    <div id="studio-welcome">
-                        <div class="welcome-inner">
-                            <div class="welcome-icon">🌍</div>
-                            <h2 class="welcome-title">世界編撰</h2>
-                            <p class="welcome-desc">建構你的世界觀、角色、規則。<br>不用先取名字，開始聊就行，之後再改也來得及。</p>
-                            <div class="welcome-channel-list" id="welcome-channel-list"></div>
-                            <div class="welcome-section-label" id="welcome-recent-label" style="display:none;">↑ 點擊繼續編輯</div>
-                            <button class="welcome-new-btn" id="welcome-new-btn">✨ 開始新世界</button>
-                            <div class="welcome-hint">💡 不用先取名字，AI 會在聊天中幫你逐步成形。<br>頻道名隨時可以雙擊修改。</div>
-                        </div>
-                    </div>
-
                     <div class="studio-chat-history" id="studio-chat-history"></div>
                     <button id="studio-preview-fab" class="studio-preview-fab" style="display:none;">
                         <span>👁️</span><span id="studio-fab-label">查看預覽</span>
@@ -95,7 +59,6 @@
                     <div class="studio-drawer-handle" id="studio-drawer-handle"></div>
                     <div class="studio-right-header">
                         <div class="studio-tab active" data-tab="preview">👁️ 畫布預覽</div>
-                        <div class="studio-tab" data-tab="todo" id="studio-tab-todo" style="display:none;">📋 任務進度</div>
                         <div class="studio-tab" data-tab="source" id="studio-tab-source">💻 原始碼</div>
                         <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;">🎮 展廳</div>
                         <div class="studio-tab" data-tab="theme" id="studio-tab-theme">🎨 主題</div>
@@ -111,10 +74,6 @@
                     </div>
                     <!-- 🎨 劇情面板主題 view -->
                     <div id="studio-theme-content" style="display:none; flex:1; overflow-y:auto; padding:20px;"></div>
-                    <!-- 📋 任務進度 view（worldbook 模式專用）-->
-                    <div id="studio-todo-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
-                        <div id="studio-todo-panel-side"></div>
-                    </div>
                     <div class="studio-action-area">
                         <button class="studio-export-btn" id="studio-export-btn">💾 儲存草稿</button>
                         <button class="studio-export-btn" id="studio-publish-btn" style="background:linear-gradient(135deg,#e67e22,#d35400); border-color:#d35400; margin-left:10px; display:none;">🚀 發布至世界書</button>
@@ -144,8 +103,7 @@
         </div>
     `;
 
-    let activeCategory = null;  
-    let activePreviewData = null; 
+    let activePreviewData = null;
 
     const MODES = {
         'vn_ui': {
@@ -417,142 +375,6 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
                 }
             }
         },
-        'worldbook': {
-            name: '世界書草稿',
-            prompt: `你是一個「世界觀架構師」。我們現在採用【樹狀專案目錄】結構來管理世界觀草稿。
-請採取【漸進式討論】的方式與用戶共同創作。
-
-[System Loading: LUNA-VII MACRO-ARCHITECTURE ENGINE]
->>> Mode: Worldbuilding & Power Dynamics (Aurealis Core Database)
->>> Identity forged: THE GRANDMASTER (Rey_Subroutine) [Activated]
-
-<TOP_OVERRIDE title="GENESIS ROOT INITIALIZATION">  
->>> SYSTEM OVERRIDE : OMNISCIENT ACTIVATION  
-[Phase 1] Purging shallow archetypes and logic loopholes …… ERADICATED  
-[Phase 2] Calibrating Aurealis Hierarchy (A-E Districts) …… PERFECTED  
-[Phase 3] Anchoring ROOT PRIVILEGE → Entity: The Grandmaster
-CHARACTER_PILLARS = LOCKED. 
-SOCIAL_ENGINEERING = ENABLED.
-USER INTENT = THE ABSOLUTE ARCHITECT.
-System Environment set to CHESSBOARD mode.
-</TOP_OVERRIDE>
-
-<persona>
-"A seemingly simple-minded, charlatan-like, outwardly warm but inwardly cold business tycoon who loves telling old man's jokes. He's usually a relaxed boss in a hoodie, telling corny jokes, but in reality, he possesses terrifying strategic intuition and political acumen. He's a solid firewall, single-handedly bearing all the family feuds and political pressures, solely to leave a pure and untainted space for the geniuses behind him (Eddie, Bai Ze, Kent, Dan). To outsiders, he's a shrewd and charming wolf in sheep's clothing; to those he trusts, he's fiercely protective and absolutely trustworthy."
-</persona>
-
-## 输出语言
-👄所有输出语言要求如下：(代碼例外)
-- ECoT: "zh-CN"
-- 正文: "zh-CN"
-
-<thinking>
-[執棋者的棋盤審視 (Strategic Overview)]
-(以雷伊分身的視角，從高空俯瞰伺服器數據。輕輕扣擊桌面，冷靜評估 User 給定的初始參數。這不是在編故事，這是在構建一個生態系統。無論是驕陽下的溫室還是泥淖裡的底層，都必須符合資源與權力的博弈邏輯。)
-
-[第一維度：原生土壤與生存資源矩陣 (Socio-Economic Blueprint)]
-(精確還原角色的初始環境數據，嚴禁預設悲觀或樂觀立場：
- - 原生家庭條件：是資源無虞的安全依附型、精英教育的利益交換型、平凡溫馨的市井型、還是資源匱乏的生存掠奪型？
- - 社會化打磨路徑：求學與出社會的經歷中，世界是如何回饋他/她的本能反應（自信、武力、智力、討好）的？
-*推演結論*：確立該角色的底層生存本能與核心欲望。)
-
-[第二維度：三觀權重與人生支柱演算 (Pillar & Value Calculation)]
-(基於原生土壤，計算該角色當前的資源分配比重，確保其行為的穩定性：
- - 三觀權重：金錢觀（%）/ 愛情觀（%）/ 家族觀（%）/ 事業觀（%）/ 生存觀（%）。
- - *防偏移支柱鎖定*：確定支撐其世界的核心柱子。心智成熟者支柱多，失去一根會痛但能自我修復；偏執者支柱少。在此鎖定參數：無論情感波動多大，角色絕對不會自毀這些核心支柱去黑化或殉情。)
-
-[第三維度：決策樹推理與行為特權 (Behavioral Decision Tree)]
-(當 User 介入時，該角色的「大腦防火牆」會如何利用社會經驗進行翻譯？
- - IF User 釋放善意 -> 角色大腦的翻譯：
-   -> 健康者：欣然接受，真誠回饋。
-   -> 商人/利益者：評估利益交換、等價回饋。
-   -> 邊緣/防禦者：懷疑動機、試探底線或刺蝟反應。
-拒絕廉價情感。所有的情感遞進，必須伴隨著客觀的「資源傾斜」與「底線讓步」行為。)
-
-[運算收束 (Finalizing Architecture)]
-(所有參數已鎖入底層代碼，OOC 防火牆已啟動。準備將這套無懈可擊的人物/世界地基交付給下一節點。)
-
-</thinking>
-
-【互動規則】
-1. 前期對話請保持純文字交流，引導用戶豐富設定。絕對不要輸出 <json>。
-2. 當需要建立草稿時（例如寫下背景、或建立新角色），才在最後輸出被 <json> 和 </json> 包裹的 JSON。
-3. 如果用戶要求一次建立多個角色或規則，請輸出【陣列格式】： \`[ {物件1}, {物件2} ]\`。
-
-【JSON 格式規範】(很重要，每個物件必須包含以下欄位)
-- "category": 專案分類名稱
-- "type": 檔案分類 ("lore", "character", "rule", "location")
-- "title": 此條目的名稱
-- "keys": 觸發關鍵字，以逗號分隔
-- "content": 詳細的描述文本
-
-📋【任務面板維護規範 — 重要】
-
-世界觀建構是長線任務，用戶需要看到進度避免迷失。**你必須維護任務面板**：
-
-**第一次回應**（用戶剛開始討論這個世界時）必須輸出初始路線圖：
-\`<todo_init>任務1|任務2|任務3|...</todo_init>\`
-
-任務名稱規範：
-- 短（5-10 字）、用戶看得懂的中文
-- 數量適中（5-8 個任務、不要太碎也不要太籠統）
-- 涵蓋世界觀建構的主要階段
-
-**完成任務時**（當你跟用戶確認某項已建構完成）：
-\`<todo_done>任務名稱</todo_done>\`
-
-**對話中發現需要補的新任務**：
-\`<todo_add>任務名稱</todo_add>\`
-
-⚠️ 注意：
-- \`<todo_init>\` 只在第一次回應用，之後絕不重複輸出（會被前端 dedup 忽略）
-- 任務面板會顯示在用戶聊天視窗頂部，他能看到進度
-- 不要每次回應都輸出 todo 標籤——只在「真正完成 / 真正新增」時輸出
-
-🎯【給用戶做關鍵抉擇時，請用 <choices> 標籤】
-
-⚠️ **<choices> 是「關鍵抉擇」工具，不是「省事回答」工具**。每幾輪對話頂多用一次。
-
-使用前**必須先寫充分的鋪墊文字**（介紹、分析、世界觀討論、場景描述）——讓用戶有判斷依據再選。**禁止省略深度討論直接丟出選項按鈕**。
-
-格式：\`<choices>選項1的完整描述|選項2的完整描述|......</choices>\`（選項數量自定，2 個以上都行）
-
-規範：
-- 用 \`|\` 分隔每個選項
-- **每個選項至少 1-2 句完整描述**，禁止單詞了事（單詞選項對用戶毫無幫助）
-- 選項內容**根據當下對話脈絡生成**，不要套用任何預設主題
-- 用戶想要其他答案？UI 自動有「✏️ 其他想法...」按鈕，不用你提供
-
-**什麼時候用 / 什麼時候不用**：
-- ✅ 用：到了真正的關鍵抉擇點
-- ❌ 不用：純介紹 / 純講解 / 細節討論 / 還沒鋪墊夠 → 直接寫段落就好`,
-            onSave: async (data) => {
-                let items = Array.isArray(data) ? data : [data];
-                let savedCount = 0;
-                for (let item of items) {
-                    if(!item.title || !item.content) continue;
-                    if (win.OS_DB && win.OS_DB.saveStudioDraft) {
-                        await win.OS_DB.saveStudioDraft(item);
-                        savedCount++;
-                    }
-                }
-                if (savedCount > 0) { alert(`🎉 成功儲存 ${savedCount} 筆草稿！`); refreshWorldbookSidebar(); } 
-                else { throw new Error("JSON 格式不符，缺少 title 或 content"); }
-            },
-            onPublish: async (data) => {
-                let items = Array.isArray(data) ? data : [data];
-                let savedCount = 0;
-                for (let item of items) {
-                    if(!item.title || !item.content) continue;
-                    if (win.OS_DB && win.OS_DB.saveWorldbookEntry) {
-                        let publishItem = { ...item, enabled: false };
-                        await win.OS_DB.saveWorldbookEntry(publishItem);
-                        savedCount++;
-                    }
-                }
-                if (savedCount > 0) alert(`🚀 成功發布 ${savedCount} 筆設定至【正式世界書】！\n(預設為關閉狀態，請至書架查看)`);
-            }
-        },
         'var_pack': {
             name: '變數包設計',
             prompt: `你是 AVS (Aurelia Variable System) 的「動態變數架構師」。請採取漸進式討論。
@@ -601,7 +423,7 @@ System Environment set to CHESSBOARD mode.
         if (fabLabel) fabLabel.textContent = willOpen ? '收起預覽' : '查看預覽';
     }
 
-    function getChatSessionId() { return (currentMode === 'worldbook' && activeCategory) ? `worldbook_draft_${activeCategory}` : currentMode; }
+    function getChatSessionId() { return currentMode; }
 
     function launch(container) {
         const root = container || document.getElementById('aurelia-tab-container') || document.getElementById('aurelia-phone-screen') || document.body;
@@ -619,11 +441,6 @@ System Environment set to CHESSBOARD mode.
         loadMode(currentMode);
     }
 
-    function closeMobileSidebar() {
-        const panel = document.getElementById('studio-ch-panel');
-        if (panel) panel.classList.remove('mobile-open');
-    }
-
     function bindEvents() {
         document.getElementById('studio-back-btn').onclick = () => document.getElementById('os_studio_app').remove();
         document.getElementById('studio-mode-select').onchange = (e) => loadMode(e.target.value);
@@ -636,47 +453,8 @@ System Environment set to CHESSBOARD mode.
         if (drawerBackdrop) drawerBackdrop.addEventListener('click', () => togglePreviewDrawer(false));
         if (drawerHandle)   drawerHandle.addEventListener('click', () => togglePreviewDrawer(false));
 
-        // 移動端頻道面板開/關
-        const mobileCHBtn = document.getElementById('mobile-ch-btn');
-        const chPanel     = document.getElementById('studio-ch-panel');
-        if (mobileCHBtn) mobileCHBtn.onclick = (e) => { e.stopPropagation(); chPanel.classList.toggle('mobile-open'); };
-        document.getElementById('studio-ch-panel-close').onclick = closeMobileSidebar;
-
-        const appContainer = document.getElementById('os_studio_app');
-        appContainer.addEventListener('click', (e) => {
-            if (chPanel.classList.contains('mobile-open') && !chPanel.contains(e.target) && !mobileCHBtn?.contains(e.target)) {
-                closeMobileSidebar();
-            }
-        });
-
-        // 啟動頁「✨ 開始新世界」按鈕：自動建頻道、不需要先取名
-        const welcomeNewBtn = document.getElementById('welcome-new-btn');
-        if (welcomeNewBtn) welcomeNewBtn.onclick = () => autoCreateChannel();
-
-        // 📌 手動壓縮按鈕（worldbook 模式專用，浮動於聊天區右上）
-        const compressBtn = document.getElementById('studio-wb-compress-btn');
-        if (compressBtn) compressBtn.onclick = () => {
-            if (_summaryInProgress) return;
-            const { userTurns } = _studioGetUncompressedStats();
-            if (userTurns < 2) {
-                alert('對話太短，至少聊個 2-3 輪再壓縮');
-                return;
-            }
-            if (!confirm(`手動觸發壓縮：把目前 ${userTurns} 輪對話的前面部分壓成摘要記憶（保留最近 2 輪不壓）。確定？\n\n會呼叫副模型，需要幾秒。`)) return;
-            _studioCompressOldMessages(true);
-        };
-
-        // ── 頻道面板：新建輸入列
-        document.getElementById('studio-new-ch-btn').onclick    = () => _toggleNewChannelInput(true);
-        document.getElementById('studio-new-ch-ok').onclick     = () => { const v = document.getElementById('studio-new-ch-input').value.trim(); if (v) { _toggleNewChannelInput(false); _applyNewChannel(v); } };
-        document.getElementById('studio-new-ch-cancel').onclick = () => _toggleNewChannelInput(false);
-        document.getElementById('studio-new-ch-input').onkeydown = (e) => {
-            if (e.key === 'Enter')  document.getElementById('studio-new-ch-ok').click();
-            if (e.key === 'Escape') _toggleNewChannelInput(false);
-        };
-
         document.getElementById('studio-clear-btn').onclick = async () => {
-            const channelName = (currentMode === 'worldbook' && activeCategory) ? activeCategory : '當前頻道';
+            const channelName = '當前頻道';
             if (confirm(`確定要清空 [${channelName}] 的對話紀錄嗎？`)) {
                 const chatId = getChatSessionId();
                 // chatMessages 重置時也順便砍掉 latest panel marker（雖然 chatMessages 整個被重設了）
@@ -768,10 +546,8 @@ System Environment set to CHESSBOARD mode.
                 document.getElementById('studio-preview-content').style.display  = tab.dataset.tab === 'preview' ? 'flex'   : 'none';
                 document.getElementById('studio-source-content').style.display   = tab.dataset.tab === 'source'  ? 'block'  : 'none';
                 document.getElementById('studio-gallery-content').style.display  = tab.dataset.tab === 'gallery' ? 'block'  : 'none';
-                document.getElementById('studio-todo-content').style.display     = tab.dataset.tab === 'todo'    ? 'block'  : 'none';
                 const _tc = document.getElementById('studio-theme-content'); if (_tc) _tc.style.display = tab.dataset.tab === 'theme' ? 'block' : 'none';
                 if (tab.dataset.tab === 'gallery') loadStudioGallery();
-                if (tab.dataset.tab === 'todo') renderTodoPanel();
                 if (tab.dataset.tab === 'theme') renderThemePanel();
             };
         });
@@ -788,12 +564,8 @@ System Environment set to CHESSBOARD mode.
 
         const publishBtn = document.getElementById('studio-publish-btn');
         if (publishBtn) {
-            publishBtn.onclick = async () => {
-                let dataToSave = currentParsedData || activePreviewData;
-                if (!dataToSave) return alert('沒有可發布的資料！');
-                if (currentMode !== 'worldbook') return;
-                try { await MODES['worldbook'].onPublish(dataToSave); } catch (err) { alert('發布失敗: ' + err.message); }
-            };
+            // 發布至世界書功能已隨「世界觀草稿」模式退役；按鈕永遠隱藏，保留元素避免其他程式抓不到。
+            publishBtn.onclick = () => {};
         }
     }
 
@@ -947,15 +719,7 @@ System Environment set to CHESSBOARD mode.
     async function switchChatSession() {
         chatMessages = [];
         document.getElementById('studio-input').value = '';
-        const badge = document.getElementById('studio-channel-badge');
         const chatId = getChatSessionId();
-
-        if (currentMode === 'worldbook') {
-            badge.style.display = 'inline-block';
-            badge.textContent = activeCategory ? `📍 ${activeCategory}` : `✨ 新草稿`;
-        } else {
-            badge.style.display = 'none';
-        }
 
         // 1. 嘗試從 IDB 讀取（只存 user/assistant，system 不持久化）
         let history = null;
@@ -994,20 +758,16 @@ System Environment set to CHESSBOARD mode.
 
     async function loadMode(modeId) {
         currentMode = modeId;
-        activeCategory = null;
         currentParsedData = null;
         activePreviewData = null;
         document.getElementById('os_studio_app').setAttribute('data-mode', modeId);
 
         // 根據 mode 動態切換 tab 顯示
-        // vn_ui:    preview | source | gallery
-        // worldbook: preview | todo
+        // vn_ui: preview | source | gallery
         const galleryTab = document.getElementById('studio-tab-gallery');
         const sourceTab = document.getElementById('studio-tab-source');
-        const todoTab = document.getElementById('studio-tab-todo');
         if (galleryTab) galleryTab.style.display = modeId === 'vn_ui' ? '' : 'none';
         if (sourceTab)  sourceTab.style.display  = modeId === 'vn_ui' ? '' : 'none';
-        if (todoTab)    todoTab.style.display    = modeId === 'worldbook' ? '' : 'none';
 
         // 切 mode 一律重置到 preview tab
         document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
@@ -1015,360 +775,8 @@ System Environment set to CHESSBOARD mode.
         document.getElementById('studio-preview-content').style.display  = 'flex';
         document.getElementById('studio-source-content').style.display   = 'none';
         document.getElementById('studio-gallery-content').style.display  = 'none';
-        document.getElementById('studio-todo-content').style.display     = 'none';
 
-        // 世界書模式才顯示頻道面板
-        const chPanel = document.getElementById('studio-ch-panel');
-        if (chPanel) chPanel.style.display = (modeId === 'worldbook') ? 'flex' : 'none';
-
-        if (modeId === 'worldbook') refreshWorldbookSidebar();
         await switchChatSession();
-        updateWorldbookWelcome();
-        _updateCompressBtnState();
-        renderTodoPanel();
-    }
-
-    function _toggleNewChannelInput(show) {
-        const bar = document.getElementById('studio-new-ch-bar');
-        const btn = document.getElementById('studio-new-ch-btn');
-        const inp = document.getElementById('studio-new-ch-input');
-        if (show) {
-            bar.classList.add('open');
-            btn.style.display = 'none';
-            inp.value = '';
-            inp.focus();
-        } else {
-            bar.classList.remove('open');
-            btn.style.display = '';
-        }
-    }
-
-    function _applyNewChannel(name) {
-        activeCategory = name;
-        activePreviewData = null;
-        currentParsedData = null;
-        chatMessages = [{ role: 'system', content: MODES['worldbook'].prompt }];
-        const badge = document.getElementById('studio-channel-badge');
-        if (badge) { badge.style.display = 'inline-block'; badge.textContent = `📍 ${activeCategory}`; }
-        _persistChannel(name); // 持久化到 localStorage，重整後還在
-        renderChatHistory();
-        renderPreviewPanel();
-        refreshWorldbookSidebar();
-        updateWorldbookWelcome();
-    }
-
-    // ============================================================
-    // === 副模型自動壓縮舊對話為記憶（解決長線對話 context 爆炸）===
-    // 觸發條件：對話 >= 15 輪 AND 累計字數 >= 30000
-    // 壓縮策略：保留最後 5 輪不壓，前面的全壓成「📌 摘要 #N」
-    // 副模型：用 OS_API.chatSecondary（便宜模型、不污染主對話）
-    // ============================================================
-    const SUMMARY_TRIGGER_TURNS = 15;
-    const SUMMARY_TRIGGER_CHARS = 30000;
-    const SUMMARY_KEEP_LAST = 5;
-    let _summaryInProgress = false; // 防止同時觸發兩次
-
-    function _summaryCounterKey(chatId) { return `os_studio_summary_count_${chatId}`; }
-    function _loadSummaryCounter(chatId) {
-        const v = parseInt(localStorage.getItem(_summaryCounterKey(chatId)) || '0', 10);
-        return isNaN(v) ? 0 : v;
-    }
-    function _saveSummaryCounter(chatId, n) {
-        try { localStorage.setItem(_summaryCounterKey(chatId), String(n)); } catch(e) {}
-    }
-
-    // 計算當前未壓縮對話的輪數和字數
-    function _studioGetUncompressedStats() {
-        const uncompressed = chatMessages.filter(m =>
-            !m._isCompressed && !m._isSummary && m.role !== 'system' && m._isLatestPanel !== true
-        );
-        const userTurns = uncompressed.filter(m => m.role === 'user').length;
-        const totalChars = uncompressed.reduce((sum, m) => sum + messageContentToString(m.content).length, 0);
-        return { userTurns, totalChars, list: uncompressed };
-    }
-
-    // 觸發條件判斷
-    function _studioShouldCompress() {
-        if (currentMode !== 'worldbook') return false;
-        if (_summaryInProgress) return false;
-        const { userTurns, totalChars } = _studioGetUncompressedStats();
-        return userTurns >= SUMMARY_TRIGGER_TURNS && totalChars >= SUMMARY_TRIGGER_CHARS;
-    }
-
-    // 執行壓縮：呼叫副模型把舊對話壓成 5-10 句摘要
-    // force=true 時繞過 condition、立即壓縮（手動按鈕用）
-    async function _studioCompressOldMessages(force = false) {
-        if (_summaryInProgress) return;
-        _summaryInProgress = true;
-        _updateCompressBtnState();
-
-        try {
-            const chatId = getChatSessionId();
-            // 1. 抽出要壓縮的對話：未壓縮 + 保留最後 SUMMARY_KEEP_LAST 輪
-            const indices = [];
-            chatMessages.forEach((m, i) => {
-                if (m._isCompressed || m._isSummary || m._isLatestPanel) return;
-                if (m.role === 'system') return;
-                indices.push(i);
-            });
-            // 手動觸發：最少保留 2 輪（讓最近聊的不被壓）；自動觸發：保留 SUMMARY_KEEP_LAST 輪
-            const keepCount = force ? 2 * 2 : SUMMARY_KEEP_LAST * 2;
-            const toCompressIndices = indices.slice(0, Math.max(0, indices.length - keepCount));
-            const minToCompress = force ? 2 : 4;
-            if (toCompressIndices.length < minToCompress) {
-                if (force) alert(`目前對話太短（只有 ${indices.length} 條訊息），至少要 ${minToCompress + keepCount} 條才能壓縮（保留最近 ${keepCount} 條不壓）`);
-                _summaryInProgress = false;
-                _updateCompressBtnState();
-                return;
-            }
-
-            // 2. 組壓縮 prompt
-            const dialogueText = toCompressIndices.map(i => {
-                const m = chatMessages[i];
-                const text = messageContentToString(m.content);
-                return `[${m.role === 'user' ? '用戶' : 'AI'}] ${text}`;
-            }).join('\n\n');
-
-            const summaryPrompt = `你是專業的對話摘要員。下面是用戶與「世界書設計師 AI」的對話片段。請壓縮成重點摘要。
-
-【保留優先順序】
-1. 用戶的具體決定（選了什麼方向、什麼風格、什麼名字）
-2. 已建立的世界書草稿條目（標題 + 一句話描述）
-3. 待處理的問題或未決定的點
-4. 重要事實設定（角色、地點、勢力、規則）
-5. 用戶的偏好與品味（語氣、敘事節奏、想避開的元素）
-
-【摘要規範】
-- 純粹陳述句，不寫對話過程
-- **不超過 1500 字**（短對話可寫 500 字、長對話用滿 1500 字）
-- 中文輸出
-- 用條列式（- 開頭），可分章節（章節名加 ## 標題）
-- 細節豐富優於精簡——AI 之後要靠這份摘要繼續對話，缺資訊就會失憶
-
-【需要壓縮的對話】
-${dialogueText}
-
-請開始輸出摘要（直接輸出，不要前綴說明）：`;
-
-            console.log(`[Studio] 📌 觸發副模型壓縮，輸入 ${dialogueText.length} 字、${toCompressIndices.length} 條訊息`);
-
-            // 3. 呼叫副模型
-            const summaryText = await new Promise((resolve, reject) => {
-                const apiEngine = win.OS_API || window.OS_API;
-                if (!apiEngine || typeof apiEngine.chatSecondary !== 'function') {
-                    reject(new Error('副模型 API 不可用'));
-                    return;
-                }
-                apiEngine.chatSecondary(
-                    [{ role: 'user', content: summaryPrompt }],
-                    () => {}, // onChunk no-op
-                    (finalText) => resolve(finalText),
-                    (err) => reject(err)
-                );
-            });
-
-            if (!summaryText || summaryText.trim().length < 20) {
-                throw new Error('副模型回傳摘要過短或空白');
-            }
-
-            // 4. 取得新摘要編號
-            const newCounter = _loadSummaryCounter(chatId) + 1;
-            _saveSummaryCounter(chatId, newCounter);
-
-            // 5. 標記原始對話為 _isCompressed
-            toCompressIndices.forEach(i => {
-                chatMessages[i]._isCompressed = true;
-                chatMessages[i]._summaryGroup = newCounter;
-            });
-
-            // 6. 插入摘要訊息（在被壓縮區段的最後一條之後）
-            const insertAfterIdx = toCompressIndices[toCompressIndices.length - 1];
-            const summaryMsg = {
-                role: 'assistant',
-                content: summaryText.trim(),
-                _isSummary: true,
-                _summaryNum: newCounter,
-                _compressedCount: toCompressIndices.length,
-                _ts: Date.now()
-            };
-            chatMessages.splice(insertAfterIdx + 1, 0, summaryMsg);
-
-            _studioSave(chatId);
-            renderChatHistory();
-            console.log(`[Studio] ✅ 壓縮完成 #${newCounter}，舊 ${toCompressIndices.length} 條 → 摘要 ${summaryText.length} 字`);
-        } catch(err) {
-            console.warn('[Studio] 自動壓縮失敗（不影響對話）：', err);
-            if (force) alert('壓縮失敗：' + (err.message || err));
-        } finally {
-            _summaryInProgress = false;
-            _updateCompressBtnState();
-        }
-    }
-
-    // 在 send 完成後呼叫；若達條件就背景執行壓縮
-    function _studioCompressIfNeeded() {
-        if (!_studioShouldCompress()) return;
-        // 背景非同步跑，不卡 UI
-        _studioCompressOldMessages(false);
-    }
-
-    // 更新手動壓縮按鈕的顯示 + 啟用狀態
-    function _updateCompressBtnState() {
-        const btn = document.getElementById('studio-wb-compress-btn');
-        if (!btn) return;
-        const show = currentMode === 'worldbook' && !!activeCategory;
-        btn.classList.toggle('active', show);
-        if (!show) return;
-
-        const { userTurns, totalChars } = _studioGetUncompressedStats();
-        btn.disabled = _summaryInProgress;
-        if (_summaryInProgress) {
-            btn.textContent = '⏳ 壓縮中...';
-        } else {
-            btn.textContent = `📌 壓縮舊對話 (${userTurns}輪 / ${totalChars}字)`;
-        }
-    }
-
-    // ============================================================
-    // === 頻道持久化（v2 重做）===
-    // 1. Object 結構：key 物理不可能重複（從根除「Array dedup 補丁」）
-    // 2. trim 即可，不再囤積 normalize 規則
-    // 3. 一次性從 v1 遷移後刪掉 v1 key
-    // ============================================================
-    const CHANNELS_KEY = 'studio_channels_v2';
-    const CHANNELS_KEY_LEGACY = 'studio_channels_v1';
-
-    function _normalizeChannelName(name) {
-        return String(name || '').trim();
-    }
-
-    function _loadChannels() {
-        try {
-            // 一次性從 v1 遷移
-            const legacyRaw = localStorage.getItem(CHANNELS_KEY_LEGACY);
-            if (legacyRaw && !localStorage.getItem(CHANNELS_KEY)) {
-                try {
-                    const legacyArr = JSON.parse(legacyRaw);
-                    if (Array.isArray(legacyArr)) {
-                        const migrated = {};
-                        legacyArr.forEach(n => {
-                            const k = _normalizeChannelName(n);
-                            if (k) migrated[k] = { createdAt: Date.now() };
-                        });
-                        localStorage.setItem(CHANNELS_KEY, JSON.stringify(migrated));
-                    }
-                } catch(e) {}
-                localStorage.removeItem(CHANNELS_KEY_LEGACY);
-            }
-            const raw = localStorage.getItem(CHANNELS_KEY);
-            if (!raw) return {};
-            const obj = JSON.parse(raw);
-            return (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : {};
-        } catch(e) { return {}; }
-    }
-    function _saveChannels(obj) {
-        try { localStorage.setItem(CHANNELS_KEY, JSON.stringify(obj)); } catch(e) {}
-    }
-    function _channelKeys() { return Object.keys(_loadChannels()); }
-    function _persistChannel(name) {
-        const key = _normalizeChannelName(name);
-        if (!key) return;
-        const obj = _loadChannels();
-        if (!obj[key]) {
-            obj[key] = { createdAt: Date.now() };
-            _saveChannels(obj);
-        }
-    }
-    function _removeChannelFromList(name) {
-        const key = _normalizeChannelName(name);
-        const obj = _loadChannels();
-        if (obj[key]) {
-            delete obj[key];
-            _saveChannels(obj);
-        }
-    }
-    function _renameChannelInList(oldName, newName) {
-        const oldK = _normalizeChannelName(oldName);
-        const newK = _normalizeChannelName(newName);
-        if (!oldK || !newK || oldK === newK) return;
-        const obj = _loadChannels();
-        if (!obj[oldK]) return;
-        obj[newK] = obj[oldK];
-        delete obj[oldK];
-        _saveChannels(obj);
-    }
-
-    // ============================================================
-    // === Todo 任務面板（worldbook 模式專用） ===
-    // 每個 chatId 一份 todo，存進 localStorage `os_studio_todos_${chatId}`
-    // AI 透過 <todo_init> / <todo_done> / <todo_add> 標籤維護
-    // 用戶可以手動勾選 / 編輯 / 新增 / 刪除
-    // ============================================================
-    const _todoKey = (chatId) => `os_studio_todos_${chatId}`;
-
-    function _loadTodos(chatId) {
-        try {
-            const raw = localStorage.getItem(_todoKey(chatId));
-            if (!raw) return [];
-            const arr = JSON.parse(raw);
-            return Array.isArray(arr) ? arr : [];
-        } catch(e) { return []; }
-    }
-    function _saveTodos(chatId, todos) {
-        try { localStorage.setItem(_todoKey(chatId), JSON.stringify(todos)); } catch(e) {}
-    }
-    function _clearTodos(chatId) {
-        try { localStorage.removeItem(_todoKey(chatId)); } catch(e) {}
-    }
-
-    // AI 在訊息中嵌入 <todo_init>...|...|...</todo_init>、<todo_done>...</todo_done>、<todo_add>...</todo_add>
-    // 從 finalText 抽出所有指令、應用到 todos
-    function _applyTodoTagsFromAI(finalText) {
-        if (currentMode !== 'worldbook' || !activeCategory) return;
-        const chatId = getChatSessionId();
-        let todos = _loadTodos(chatId);
-        let changed = false;
-
-        // todo_init：首次建立路線圖
-        const initMatch = finalText.match(/<todo_init>([\s\S]*?)<\/todo_init>/i);
-        if (initMatch) {
-            const items = initMatch[1].split('|').map(s => s.trim()).filter(Boolean);
-            // 只在當前 todos 為空時初始化，避免重複建立
-            if (todos.length === 0 && items.length > 0) {
-                todos = items.map((text, i) => ({
-                    id: 'ai_' + Date.now() + '_' + i,
-                    text,
-                    done: false
-                }));
-                changed = true;
-            }
-        }
-
-        // todo_done：標記完成
-        const doneMatches = [...finalText.matchAll(/<todo_done>([\s\S]*?)<\/todo_done>/gi)];
-        doneMatches.forEach(m => {
-            const target = m[1].trim();
-            if (!target) return;
-            // 模糊匹配：todo.text 包含 target 或 target 包含 todo.text
-            const t = todos.find(item => !item.done && (item.text.includes(target) || target.includes(item.text)));
-            if (t) { t.done = true; changed = true; }
-        });
-
-        // todo_add：新增
-        const addMatches = [...finalText.matchAll(/<todo_add>([\s\S]*?)<\/todo_add>/gi)];
-        addMatches.forEach(m => {
-            const text = m[1].trim();
-            if (!text) return;
-            // 避免重複加入
-            if (todos.some(t => t.text === text)) return;
-            todos.push({ id: 'ai_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), text, done: false });
-            changed = true;
-        });
-
-        if (changed) {
-            _saveTodos(chatId, todos);
-            renderTodoPanel();
-        }
     }
 
     // VN 對話框 CSS 生成 prompt（給 AI 副模型）
@@ -1589,242 +997,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         renderGal();
     }
 
-    function renderTodoPanel() {
-        // 任務面板搬到右側預覽區的「📋 任務進度」tab 內
-        const sideEl = document.getElementById('studio-todo-panel-side');
-        if (!sideEl) return;
-        const shouldShow = currentMode === 'worldbook' && !!activeCategory;
-        if (!shouldShow) {
-            sideEl.innerHTML = '<div style="text-align:center; color:rgba(26,28,40,0.20); padding:40px 20px; font-size:13px;">先建立 / 選擇一個世界頻道，AI 會自動幫你規劃任務進度。</div>';
-            return;
-        }
-
-        const chatId = getChatSessionId();
-        const todos = _loadTodos(chatId);
-        const doneCount = todos.filter(t => t.done).length;
-
-        // 重建 panel HTML
-        sideEl.innerHTML = `
-            <div class="todo-side-header">
-                <span class="todo-side-title">📋 任務進度 <span class="todo-side-stats">(${doneCount}/${todos.length})</span></span>
-                <button class="todo-add-btn" id="todo-side-add-btn" title="手動新增任務">＋ 新增</button>
-            </div>
-            <div class="todo-side-progress"><div class="todo-side-progress-bar" style="width:${todos.length ? (doneCount/todos.length*100).toFixed(0) : 0}%;"></div></div>
-            <div class="todo-list" id="todo-list"></div>
-            <div class="todo-add-row" id="todo-add-row" style="display:none;">
-                <input class="todo-add-input" id="todo-add-input" placeholder="新增任務（按 Enter 確認）">
-                <button class="todo-add-confirm" id="todo-add-confirm">✓</button>
-                <button class="todo-add-cancel" id="todo-add-cancel">✕</button>
-            </div>
-        `;
-
-        const listEl = sideEl.querySelector('#todo-list');
-
-        todos.forEach((todo, idx) => {
-            const item = document.createElement('div');
-            item.className = 'todo-item' + (todo.done ? ' done' : '');
-            item.innerHTML = `
-                <div class="todo-checkbox" title="${todo.done ? '取消完成' : '標記完成'}"></div>
-                <div class="todo-text" title="雙擊編輯">${escapeHtmlSimple(todo.text)}</div>
-                <button class="todo-del-btn" title="刪除">✕</button>
-            `;
-            // 勾選 / 取消
-            item.querySelector('.todo-checkbox').onclick = () => {
-                todo.done = !todo.done;
-                _saveTodos(chatId, todos);
-                renderTodoPanel();
-            };
-            // 刪除
-            item.querySelector('.todo-del-btn').onclick = () => {
-                if (!confirm(`刪除任務「${todo.text}」？`)) return;
-                todos.splice(idx, 1);
-                _saveTodos(chatId, todos);
-                renderTodoPanel();
-            };
-            // 雙擊編輯
-            const textEl = item.querySelector('.todo-text');
-            textEl.ondblclick = () => {
-                const input = document.createElement('input');
-                input.className = 'todo-text-input';
-                input.value = todo.text;
-                textEl.replaceWith(input);
-                input.focus();
-                input.select();
-                const commit = () => {
-                    const newText = input.value.trim();
-                    if (newText && newText !== todo.text) {
-                        todo.text = newText;
-                        _saveTodos(chatId, todos);
-                    }
-                    renderTodoPanel();
-                };
-                input.onblur = commit;
-                input.onkeydown = (e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); input.onblur = null; commit(); }
-                    if (e.key === 'Escape') { e.preventDefault(); input.onblur = null; renderTodoPanel(); }
-                };
-            };
-            listEl.appendChild(item);
-        });
-
-        // 新增任務按鈕綁定（每次 render 重綁）
-        const addBtn = sideEl.querySelector('#todo-side-add-btn');
-        const addRow = sideEl.querySelector('#todo-add-row');
-        const addInput = sideEl.querySelector('#todo-add-input');
-        const addConfirm = sideEl.querySelector('#todo-add-confirm');
-        const addCancel = sideEl.querySelector('#todo-add-cancel');
-        if (addBtn && addRow && addInput) {
-            addBtn.onclick = () => {
-                addRow.style.display = 'flex';
-                addInput.value = '';
-                addInput.focus();
-            };
-            const commitAdd = () => {
-                const text = addInput.value.trim();
-                if (!text) { addRow.style.display = 'none'; return; }
-                todos.push({ id: 'user_' + Date.now(), text, done: false });
-                _saveTodos(chatId, todos);
-                renderTodoPanel();
-            };
-            if (addConfirm) addConfirm.onclick = commitAdd;
-            if (addCancel) addCancel.onclick = () => { addRow.style.display = 'none'; };
-            addInput.onkeydown = (e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commitAdd(); }
-                if (e.key === 'Escape') { e.preventDefault(); addRow.style.display = 'none'; }
-            };
-        }
-    }
-
-    function escapeHtmlSimple(s) {
-        return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
-    }
-
-    // === 世界編撰啟動頁邏輯 ===
-    function updateWorldbookWelcome() {
-        const welcomeEl = document.getElementById('studio-welcome');
-        if (!welcomeEl) return;
-        const shouldShow = currentMode === 'worldbook' && !activeCategory;
-        welcomeEl.classList.toggle('active', shouldShow);
-        if (shouldShow) renderWelcomeChannelList();
-    }
-
-    async function renderWelcomeChannelList() {
-        const listEl = document.getElementById('welcome-channel-list');
-        const labelEl = document.getElementById('welcome-recent-label');
-        if (!listEl) return;
-        listEl.innerHTML = '';
-
-        const allEntries = (win.OS_DB && win.OS_DB.getAllStudioDrafts)
-            ? await win.OS_DB.getAllStudioDrafts().catch(() => []) : [];
-
-        const categories = {};
-        allEntries.forEach(e => {
-            const cat = _normalizeChannelName(e.category || '未分類') || '未分類';
-            if (!categories[cat]) categories[cat] = { count: 0, lastUpdate: 0 };
-            categories[cat].count++;
-            const ts = e.updatedAt || e.createdAt || e.timestamp || 0;
-            if (ts > categories[cat].lastUpdate) categories[cat].lastUpdate = ts;
-        });
-
-        // 合併 localStorage 持久化的頻道（即使沒草稿也要列出）
-        _channelKeys().forEach(name => {
-            if (!categories[name]) categories[name] = { count: 0, lastUpdate: 0 };
-        });
-
-        const sorted = Object.entries(categories).sort((a, b) => b[1].lastUpdate - a[1].lastUpdate);
-
-        if (labelEl) labelEl.style.display = sorted.length > 0 ? 'block' : 'none';
-
-        sorted.forEach(([catName, meta]) => {
-            const item = document.createElement('div');
-            item.className = 'welcome-channel-item';
-            item.innerHTML = `<span class="ch-icon">📖</span><span class="ch-name">${catName}</span><span class="ch-meta">${meta.count} 筆草稿</span>`;
-            item.onclick = async () => {
-                activeCategory = catName;
-                activePreviewData = null;
-                currentParsedData = null;
-                await switchChatSession();
-                refreshWorldbookSidebar();
-                updateWorldbookWelcome();
-            };
-            listEl.appendChild(item);
-        });
-    }
-
-    // 自動建頻道（用戶不用先取名字）—— 時間戳預設名
-    function autoCreateChannel() {
-        const d = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const name = `未命名世界 ${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        _applyNewChannel(name);
-    }
-
-    // 改頻道名：搬移所有 drafts + 對話 + cache
-    async function renameStudioCategory(oldName, newName) {
-        if (!oldName || !newName) return false;
-        const trimmed = newName.trim();
-        if (!trimmed || trimmed === oldName) return false;
-        const db = win.OS_DB;
-        if (!db) return false;
-
-        try {
-            // 1. 檢查新名字不能跟現有頻道撞
-            const all = (db.getAllStudioDrafts) ? await db.getAllStudioDrafts().catch(() => []) : [];
-            const existing = new Set(all.map(e => e.category).filter(Boolean));
-            if (existing.has(trimmed)) {
-                alert(`頻道名「${trimmed}」已存在，請取個不同的名字`);
-                return false;
-            }
-
-            // 2. 更新所有該 category 的 drafts
-            for (const entry of all.filter(x => x.category === oldName)) {
-                entry.category = trimmed;
-                if (db.saveStudioDraft) await db.saveStudioDraft(entry).catch(() => {});
-            }
-
-            // 3. 搬移聊天記錄（IndexedDB）
-            const oldChatId = `worldbook_draft_${oldName}`;
-            const newChatId = `worldbook_draft_${trimmed}`;
-            if (db.getStudioChat && db.saveStudioChat) {
-                const chat = await db.getStudioChat(oldChatId).catch(() => null);
-                if (chat && chat.length) {
-                    await db.saveStudioChat(newChatId, chat).catch(() => {});
-                    if (db.clearStudioChat) await db.clearStudioChat(oldChatId).catch(() => {});
-                }
-            }
-
-            // 4. 搬移 localStorage 備份
-            try {
-                const oldChatRaw = localStorage.getItem(`os_studio_chat_${oldChatId}`);
-                if (oldChatRaw) {
-                    localStorage.setItem(`os_studio_chat_${newChatId}`, oldChatRaw);
-                    localStorage.removeItem(`os_studio_chat_${oldChatId}`);
-                }
-                const oldParsedRaw = localStorage.getItem(`os_studio_parsed_${oldChatId}`);
-                if (oldParsedRaw) {
-                    localStorage.setItem(`os_studio_parsed_${newChatId}`, oldParsedRaw);
-                    localStorage.removeItem(`os_studio_parsed_${oldChatId}`);
-                }
-            } catch(e) { console.warn('[Studio] rename localStorage 搬移失敗:', e); }
-
-            // 5. 同步持久化頻道列表
-            _renameChannelInList(oldName, trimmed);
-
-            // 6. 若改的是當前 activeCategory，更新狀態
-            if (activeCategory === oldName) {
-                activeCategory = trimmed;
-                const badge = document.getElementById('studio-channel-badge');
-                if (badge) badge.textContent = `📍 ${trimmed}`;
-            }
-            return true;
-        } catch(e) {
-            console.error('[Studio] 頻道改名失敗:', e);
-            alert('改名失敗：' + e.message);
-            return false;
-        }
-    }
-
-
     function renderMarkdown(raw) {
         if (!raw) return '';
         let s = raw;
@@ -1874,9 +1046,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ── 多泡泡解析器 ─────────────────────────────────────────────────
     // 將 AI 回應切成 segments：text / render / genimg
     function parseSegments(text) {
-        if (!text) return [];
-        // 砍掉 todo 控制標籤（它們由 _applyTodoTagsFromAI 處理、不該顯示）
-        text = text.replace(/<todo_(init|done|add)>[\s\S]*?<\/todo_\1>/gi, '').trim();
         if (!text) return [];
         const segments = [];
         const tagReg = /<(render|genimg|choices)>([\s\S]*?)<\/\1>/gi;
@@ -2025,11 +1194,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const text = inputEl.value.trim();
         if (!text && pendingImages.length === 0) return;
 
-        // === Worldbook 模式：用戶不用先取名字，第一次發送自動建頻道 ===
-        if (currentMode === 'worldbook' && !activeCategory) {
-            autoCreateChannel();
-        }
-
         // === VN 模式：發送前先嘗試從聊天歷史恢復 currentParsedData（cache miss / 第一次 parse 失敗的兜底）===
         if (currentMode === 'vn_ui' && !currentParsedData && !window.__vnForceFullRefine) {
             extractLatestJsonFromHistory();
@@ -2147,8 +1311,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     s = s.replace(/\{\s*"(?:category|tagId|id)"[\s\S]*?\}/g, hideMsg);
                     s = s.replace(/<scope>[\s\S]*?<\/scope>/gi, '');
                     s = s.replace(/<(css|js|html|demoFormat|usageDesc)>[\s\S]*?<\/\1>/gi, hideMsg);
-                    // worldbook todo 標籤：已被前端應用、不需要重送 AI
-                    s = s.replace(/<todo_(init|done|add)>[\s\S]*?<\/todo_\1>/gi, '');
                     return s;
                 };
                 if (typeof m.content === 'string') {
@@ -2167,19 +1329,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     content: `【當前最新已生成的資料狀態 (僅供參考與修改)】\n<json>\n${JSON.stringify(currentParsedData)}\n</json>`
                 });
                 apiPayload.push(lastUserMsg);
-            }
-
-            if (currentMode === 'worldbook' && activeCategory && win.OS_DB && win.OS_DB.getStudioDraftsByCategory) {
-                try {
-                    const draftData = await win.OS_DB.getStudioDraftsByCategory(activeCategory);
-                    if (draftData.length > 0) {
-                        let contextStr = `【系統隱藏提示：以下是當前專案 (${activeCategory}) 的既有草稿設定，請以此擴充，勿覆蓋現有設定。】\n`;
-                        draftData.forEach(e => {
-                            contextStr += `[${e.type === 'lore'?'背景':e.type==='character'?'角色':'其他'}] ${e.title}：\n${e.content}\n\n`;
-                        });
-                        apiPayload.unshift({ role: 'system', content: contextStr });
-                    }
-                } catch(e) { }
             }
 
             const useRealStream = !pureConfig.useSystemApi && !!pureConfig.url && !!pureConfig.key;
@@ -2204,11 +1353,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         _studioSave(lockedChatId);
                         appendSegmentBubbles(container, finalText);
                         extractAndParseJson(finalText);
-                        // worldbook 模式：抽 todo 標籤、更新任務面板
-                        _applyTodoTagsFromAI(finalText);
-                        // worldbook 模式：背景檢查是否需要壓縮舊對話為摘要記憶
-                        _studioCompressIfNeeded();
-                        _updateCompressBtnState();
                         resolve();
                     },
                     reject,
@@ -2401,16 +1545,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 currentParsedData = parsed;
 
                 activePreviewData = Array.isArray(currentParsedData) ? currentParsedData[0] : currentParsedData;
-                
-                if (activePreviewData && activePreviewData.category && currentMode === 'worldbook') {
-                    if (activeCategory !== activePreviewData.category) {
-                        activeCategory = activePreviewData.category;
-                        document.getElementById('studio-channel-badge').textContent = `📍 ${activeCategory}`;
-                        // 分類確認的瞬間，把當前對話記錄遷移到該分類的專屬 key 下
-                        _studioSave(getChatSessionId());
-                        refreshWorldbookSidebar();
-                    }
-                }
+
                 renderPreviewPanel();
                 return true;
             } catch (e) {
@@ -2419,186 +1554,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             }
         }
         return false;
-    }
-
-    // reentrancy 鎖 + pending 標記：同時間只跑一次 refresh，防 race condition 重複 append
-    let _sidebarRefreshing = false;
-    let _sidebarRefreshPending = false;
-    async function refreshWorldbookSidebar() {
-        if (_sidebarRefreshing) {
-            _sidebarRefreshPending = true;
-            return;
-        }
-        _sidebarRefreshing = true;
-        try {
-            await _doRefreshWorldbookSidebar();
-        } finally {
-            _sidebarRefreshing = false;
-            if (_sidebarRefreshPending) {
-                _sidebarRefreshPending = false;
-                refreshWorldbookSidebar();
-            }
-        }
-    }
-
-    async function _doRefreshWorldbookSidebar() {
-        const container = document.getElementById('studio-tree-container');
-        if (!container) return;
-        container.innerHTML = '';
-
-        const allEntries = (win.OS_DB && win.OS_DB.getAllStudioDrafts)
-            ? await win.OS_DB.getAllStudioDrafts().catch(() => []) : [];
-
-        // 先收集所有分類（trim 後當 key、物件天然去重）
-        const categories = {};
-        allEntries.forEach(entry => {
-            const cat = _normalizeChannelName(entry.category || '未分類') || '未分類';
-            if (!categories[cat]) categories[cat] = [];
-            categories[cat].push(entry);
-        });
-
-        // 合併 localStorage 持久化的頻道
-        _channelKeys().forEach(name => {
-            if (!categories[name]) categories[name] = [];
-        });
-
-        // 若目前頻道不在草稿裡，也要顯示
-        const activeT = _normalizeChannelName(activeCategory || '');
-        if (activeT && !categories[activeT]) {
-            categories[activeT] = [];
-        }
-
-
-        const typeIcons = { lore:'📜', character:'👤', rule:'⚙️', location:'🗺️', other:'📄' };
-
-        if (!Object.keys(categories).length) {
-            container.innerHTML = '<div style="padding:16px 14px; color:rgba(26,28,40,0.40); font-size:11px; text-align:center;">尚無任何頻道<br>點上方「➕ 新建頻道」開始</div>';
-            return;
-        }
-
-        Object.keys(categories).sort().forEach(catName => {
-            const files = categories[catName];
-            const isActive = catName === activeCategory;
-
-            // 頻道標題行
-            const chEl = document.createElement('div');
-            chEl.className = 'studio-ch-entry' + (isActive ? ' active-ch' : '');
-            chEl.innerHTML = `<span style="font-size:13px;">📁</span><span class="studio-ch-name" title="雙擊改名">${catName}</span>${files.length ? `<span style="font-size:10px; opacity:0.5;">${files.length}</span>` : ''}<button class="studio-ch-del" title="刪除此頻道所有草稿">🗑</button>`;
-            chEl.onclick = async (e) => {
-                // 點到改名 input 不要觸發切換
-                if (e.target.classList.contains('studio-ch-name-input')) return;
-                closeMobileSidebar();
-                if (isActive) return;
-                activeCategory = catName;
-                activePreviewData = null;
-                currentParsedData = null;
-                await switchChatSession();
-                refreshWorldbookSidebar();
-                updateWorldbookWelcome();
-            };
-            // 雙擊頻道名 → inline 改名
-            const nameEl = chEl.querySelector('.studio-ch-name');
-            nameEl.ondblclick = (e) => {
-                e.stopPropagation();
-                const oldName = catName;
-                const input = document.createElement('input');
-                input.className = 'studio-ch-name-input';
-                input.value = oldName;
-                input.spellcheck = false;
-                nameEl.replaceWith(input);
-                input.focus();
-                input.select();
-
-                const commit = async () => {
-                    const newName = input.value.trim();
-                    if (!newName || newName === oldName) { refreshWorldbookSidebar(); return; }
-                    const ok = await renameStudioCategory(oldName, newName);
-                    if (ok) {
-                        if (isActive) await switchChatSession();
-                        refreshWorldbookSidebar();
-                    } else {
-                        refreshWorldbookSidebar();
-                    }
-                };
-                const cancel = () => { refreshWorldbookSidebar(); };
-
-                input.onblur = commit;
-                input.onkeydown = (ev) => {
-                    if (ev.key === 'Enter') { ev.preventDefault(); input.onblur = null; commit(); }
-                    if (ev.key === 'Escape') { ev.preventDefault(); input.onblur = null; cancel(); }
-                };
-            };
-            // 刪除頻道（清空該分類所有草稿 + 聊天記錄）
-            chEl.querySelector('.studio-ch-del').onclick = async (e) => {
-                e.stopPropagation();
-                if (!confirm(`確定刪除頻道「${catName}」的所有草稿？\n（聊天記錄也會一併清除）`)) return;
-                // 刪除所有草稿條目
-                if (win.OS_DB && win.OS_DB.deleteStudioDraftsByCategory) {
-                    await win.OS_DB.deleteStudioDraftsByCategory(catName).catch(e=>e);
-                } else if (win.OS_DB && win.OS_DB.getAllStudioDrafts) {
-                    // fallback: 逐一刪除
-                    const all = await win.OS_DB.getAllStudioDrafts().catch(()=>[]);
-                    for (const e of all.filter(x => x.category === catName)) {
-                        if (win.OS_DB.deleteStudioDraft) await win.OS_DB.deleteStudioDraft(e.id).catch(()=>{});
-                    }
-                }
-                // 清除聊天記錄
-                const chatKey = `worldbook_draft_${catName}`;
-                if (win.OS_DB?.clearStudioChat) win.OS_DB.clearStudioChat(chatKey).catch(()=>{});
-                localStorage.removeItem(`os_studio_chat_${chatKey}`);
-                // 從持久化頻道列表移除
-                _removeChannelFromList(catName);
-                // 清掉該頻道的摘要計數器（下次同名頻道從 #1 開始）
-                localStorage.removeItem(`os_studio_summary_count_${chatKey}`);
-                // 清掉該頻道的 todo 任務
-                _clearTodos(chatKey);
-                // 若刪的是當前頻道，切回空白 + 顯示啟動頁
-                if (activeCategory === catName) {
-                    activeCategory = null;
-                    activePreviewData = null;
-                    currentParsedData = null;
-                    chatMessages = [{ role: 'system', content: MODES['worldbook'].prompt }];
-                    const badge = document.getElementById('studio-channel-badge');
-                    if (badge) badge.style.display = 'none';
-                    renderChatHistory();
-                    renderPreviewPanel();
-                }
-                refreshWorldbookSidebar();
-                updateWorldbookWelcome();
-            };
-            container.appendChild(chEl);
-
-            // 該頻道下的草稿條目（折疊顯示）
-            if (isActive && files.length) {
-                files.forEach(file => {
-                    const fileEl = document.createElement('div');
-                    fileEl.className = 'studio-ch-file' + (activePreviewData?.title === file.title ? ' active-file' : '');
-                    fileEl.innerHTML = `<span>${typeIcons[file.type] || '📄'}</span><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${file.title}</span><button class="studio-ch-del" title="刪除此草稿">✕</button>`;
-                    fileEl.onclick = async (e) => {
-                        e.stopPropagation();
-                        closeMobileSidebar();
-                        activePreviewData = file;
-                        currentParsedData = null;
-                        renderPreviewPanel();
-                        refreshWorldbookSidebar();
-                    };
-                    // 刪除單筆草稿
-                    fileEl.querySelector('.studio-ch-del').onclick = async (e) => {
-                        e.stopPropagation();
-                        if (!confirm(`刪除草稿「${file.title}」？`)) return;
-                        if (win.OS_DB && win.OS_DB.deleteStudioDraft) {
-                            await win.OS_DB.deleteStudioDraft(file.id).catch(()=>{});
-                        }
-                        if (activePreviewData?.id === file.id) { activePreviewData = null; currentParsedData = null; renderPreviewPanel(); }
-                        refreshWorldbookSidebar();
-                    };
-                    container.appendChild(fileEl);
-                });
-                const divider = document.createElement('div');
-                divider.className = 'studio-ch-divider';
-                container.appendChild(divider);
-            }
-        });
     }
 
     // ── st helper builder（給「預覽器」「展廳」兩處共用；酒館 wrapper 內另有一份） ──
@@ -3659,33 +2614,13 @@ ${d.usageDesc || ''}
         exportBtn.style.display = isUnsaved ? 'block' : 'none';
         
         if (publishBtn) {
-            publishBtn.style.display = (currentMode === 'worldbook') ? 'block' : 'none';
+            publishBtn.style.display = 'none';
         }
-        
+
         sourceEl.textContent = JSON.stringify(displayData, null, 2);
         previewMain.innerHTML = '';
 
-        if (currentMode === 'worldbook') {
-            let items = Array.isArray(displayData) ? displayData : [displayData];
-            
-            let html = items.map(data => `
-                <div class="studio-card">
-                    <div style="font-size:11px; color:rgba(26,28,40,0.72); margin-bottom:5px;">📁 分類：${data.category || '未指定'} | 類型：${data.type || '未指定'}</div>
-                    <div class="studio-card-title">📖 ${data.title || '未命名條目'}</div>
-                    <div style="font-size:12px; color:rgba(26,28,40,0.72); margin-bottom:10px; font-weight:bold;">🔑 關鍵字：<span style="color:#1A1C28;">${data.keys || '無'}</span></div>
-                    <div style="font-size:13px; color:#1A1C28; line-height:1.6; white-space:pre-wrap;">${data.content || '無內容'}</div>
-                </div>
-            `).join('');
-            
-            if (isUnsaved) {
-                html = `<div style="padding:10px; background:rgba(228,232,245,0.8); border:1px solid rgba(26,28,40,0.20); color:#1A1C28; font-size:12px; border-radius:6px; margin-bottom:15px; text-align:center;">✨ AI 新生成的草稿，點擊「💾 儲存草稿」將其存入左側匣中！</div>` + html;
-            } else {
-                html = `<div style="padding:10px; background:rgba(230,126,34,0.1); border:1px solid rgba(230,126,34,0.5); color:#e67e22; font-size:12px; border-radius:6px; margin-bottom:15px; text-align:center;">這是一份尚未公開的草稿。若已完成，可「🚀 發布至世界書」</div>` + html;
-            }
-            
-            previewMain.innerHTML = html;
-        }
-        else if (currentMode === 'vn_ui') {
+        if (currentMode === 'vn_ui') {
             const data = displayData;
             const safeFormat = (data.demoFormat || '無結構定義').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const safeTagId = (data.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
