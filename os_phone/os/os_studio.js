@@ -447,16 +447,19 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         appDiv.innerHTML = studioHTML;
         root.appendChild(appDiv);
 
-        // 依「實際容器寬度」決定手機版佈局：手機殼是窄容器擺在寬視窗裡，viewport media query 失效，改量容器寬度掛 .studio-mobile。
+        // 手機版佈局偵測：手機殼是「窄容器擺在寬視窗裡」，viewport media query 失效。
+        // 優先用 DOM 祖先判斷（在手機殼內＝必手機版），再用實際容器寬度當後備，掛 .studio-mobile。
         try {
             const _cont = appDiv.querySelector('.studio-container');
+            const _inPhone = !!(root && root.closest && root.closest('#aps-app-body, #aurelia-phone-screen, .aps-app'));
             const _applyMobile = () => {
                 if (!_cont) return;
-                const w = appDiv.offsetWidth || _cont.offsetWidth || 0;
-                _cont.classList.toggle('studio-mobile', w > 0 && w <= 768);
+                const w = (root && root.getBoundingClientRect ? root.getBoundingClientRect().width : 0) || appDiv.offsetWidth || 0;
+                _cont.classList.toggle('studio-mobile', _inPhone || (w > 0 && w <= 768));
             };
             _applyMobile();
-            if (window.ResizeObserver) { new ResizeObserver(_applyMobile).observe(appDiv); }
+            if (window.requestAnimationFrame) requestAnimationFrame(_applyMobile);
+            if (window.ResizeObserver) { try { new ResizeObserver(_applyMobile).observe(root || appDiv); } catch (e) {} }
         } catch (e) {}
 
         bindEvents();
@@ -2695,7 +2698,8 @@ ${d.usageDesc || ''}
         let displayData = currentParsedData || activePreviewData;
 
         const fabEl = document.getElementById('studio-preview-fab');
-        if (fabEl) fabEl.style.display = (displayData && window.innerWidth <= 768) ? 'flex' : 'none';
+        const _isMob = !!document.querySelector('#os_studio_app .studio-container.studio-mobile');
+        if (fabEl) fabEl.style.display = (displayData && _isMob) ? 'flex' : 'none';
 
         if (!displayData) {
             previewMain.innerHTML = `<div class="studio-empty">尚未生成任何內容。<br><br>請輸入點子讓 AI 創作。</div>`;
@@ -2706,25 +2710,20 @@ ${d.usageDesc || ''}
             return;
         }
 
-        if (window.innerWidth <= 768) togglePreviewDrawer(true);
+        // 不自動彈抽屜：改由下方 artifact 卡片 / FAB 手動開（artifact UX）
 
-        // artifact 卡片：手機殼內 FAB 靠 window.innerWidth 失效，改在最後一則 AI 氣泡掛一張卡，點了開預覽抽屜
+        // artifact 卡片：固定掛在創作室聊天底部（不綁特定 AI 氣泡，避免「載入既有面板無氣泡→無卡」），點了開預覽抽屜
         try {
-            const _isMobile = !!document.querySelector('#os_studio_app .studio-container.studio-mobile');
-            if (_isMobile && currentMode === 'vn_ui') {
-                const _hist = document.getElementById('studio-chat-history');
-                const _ais = _hist ? _hist.querySelectorAll('.studio-bubble.ai') : [];
-                const _lastAi = _ais.length ? _ais[_ais.length - 1] : null;
-                if (_lastAi) {
-                    let _card = _lastAi.querySelector('.studio-artifact-card');
-                    if (!_card) {
-                        _card = document.createElement('div');
-                        _card.className = 'studio-artifact-card';
-                        _card.addEventListener('click', () => togglePreviewDrawer(true));
-                        _lastAi.appendChild(_card);
-                    }
-                    _card.textContent = '🎴 ' + (displayData.tagId || '面板') + ' · 點開預覽';
+            const _hist = document.getElementById('studio-chat-history');
+            if (_isMob && currentMode === 'vn_ui' && _hist) {
+                let _card = _hist.querySelector('.studio-artifact-card');
+                if (!_card) {
+                    _card = document.createElement('div');
+                    _card.className = 'studio-artifact-card';
+                    _card.addEventListener('click', () => togglePreviewDrawer(true));
                 }
+                _card.textContent = '🎴 ' + (displayData.tagId || '面板') + ' · 點開預覽';
+                _hist.appendChild(_card);
             }
         } catch (e) {}
 
