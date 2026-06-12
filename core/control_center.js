@@ -69,9 +69,9 @@
     }
 
     // ── 舊「底部/左側導覽列」(大廳 / 寫作 / 關閉) 已移除（2026-06-12）──
-    //    三顆併入大廳 MAIN MENU（void_terminal.js）：寫作 → switchPage('nav-write')、
-    //    關閉 → AureliaControlCenter.requestClose()。寫作頁自帶「返回大廳」鈕。
-    //    遊戲/VN/OS app 本來就各自有返回鈕，不靠這條 rail。
+    //    關閉 → 大廳 MAIN MENU 一顆 void-btn 接 AureliaControlCenter.requestClose()。
+    //    寫作工具(系統設置/變數工坊/創作室/世界書/提示詞)改成大廳手機殼(VoidPhoneShell)的 app，
+    //    寫作頁(write-tab)已整個退役。遊戲/VN/OS app 本來就各自有返回鈕，不靠這條 rail。
 
     function switchPage(pageId) {
         const root = isEmbedded ? embeddedRoot : phoneModal;
@@ -120,9 +120,6 @@
                     userTab.innerHTML = '<div style=\"padding:20px; text-align:center; color:#e53e3e;\">人設模組 (OS_PERSONA) 未載入</div>';
                 }
             }
-        }
-        else if (pageId === 'nav-write') {
-            if (window.VoidTerminal && window.VoidTerminal.suspendIdle) window.VoidTerminal.suspendIdle();
         }
 
     }
@@ -220,66 +217,8 @@
         userTab.className = 'aurelia-tab';
         userTab.style.cssText = `width:100%; height:100%; display:none; background:#f8f9fa; position: relative; flex-direction:column; overflow:hidden;`;
 
-        // 🔥 動態判斷：只有獨立模式才渲染提示詞、世界書、變數工坊與創作室
-        const isStandalone = !!document.getElementById('aurelia-standalone-root');
-
-        // ── 寫作設置 TAB ──
-        const writeTab = parentDoc.createElement('div');
-        writeTab.id = 'aurelia-write-tab';
-        writeTab.className = 'aurelia-tab write-tab';
-        writeTab.style.cssText = `width:100%; height:100%; display:none; position:relative; flex-direction:column; overflow:hidden;`;
-        writeTab.innerHTML = `
-            <div class="write-tab-content">
-                <button class="write-tab-back" id="write-back-home" title="返回大廳"><i class="fa-solid fa-chevron-left"></i><span>返回大廳</span></button>
-                <div class="write-tab-title-block">
-                    <div class="write-tab-title">寫作設置</div>
-                    <div class="write-tab-subtitle">WRITING · SYSTEM</div>
-                </div>
-                <div class="write-tab-btns">
-                    <button class="write-tab-btn" data-app="設置"><i class="fa-solid fa-gear"></i><span>API 設置</span></button>
-                    <button class="write-tab-btn" data-app="avs"><i class="fa-solid fa-dice"></i><span>變數工坊</span></button>
-                    <button class="write-tab-btn" id="btn-launch-studio"><i class="fa-solid fa-palette"></i><span>靈感創作室</span></button>
-                    ${isStandalone ? `
-                    <button class="write-tab-btn" data-app="提示詞"><i class="fa-solid fa-sliders"></i><span>提示詞管理</span></button>
-                    <button class="write-tab-btn" data-app="worldbook"><i class="fa-solid fa-book-open"></i><span>世界書</span></button>
-                    ` : ''}
-                </div>
-                <button class="write-tab-logout-btn" id="write-logout-btn">
-                    <i class="fa-solid fa-power-off"></i><span>切換帳號 / 佈局</span>
-                </button>
-            </div>`;
-            
-        // 🔥 修改這裡：攔截創作室/煉丹爐的點擊事件，避免調用 showOsApp
-        writeTab.querySelectorAll('.write-tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (btn.id === 'btn-launch-studio') {
-                    if (window.OS_STUDIO) window.OS_STUDIO.launch();
-                    else alert('靈感創作室模組尚未載入，請確認 index.html 底部有引入 os_studio.js！');
-                } else if (btn.dataset.app) {
-                    if (window.AureliaControlCenter) window.AureliaControlCenter.showOsApp(btn.dataset.app);
-                }
-            });
-        });
-
-        const wLogoutBtn = writeTab.querySelector('#write-logout-btn');
-        if (wLogoutBtn) wLogoutBtn.addEventListener('click', () => {
-            if (window.VoidTerminal && window.VoidTerminal.logout) window.VoidTerminal.logout();
-        });
-
-        // 返回大廳（rail 已移除，寫作頁靠這顆回大廳）
-        const wBackBtn = writeTab.querySelector('#write-back-home');
-        if (wBackBtn) wBackBtn.addEventListener('click', () => switchPage('nav-home'));
-
-        // 🌟 雙層架構 1：寫作 TAB 專用的視窗 (只會覆蓋寫作頁面)
-        const writePanel = parentDoc.createElement('div');
-        writePanel.id = 'write-panel-container';
-        writePanel.style.cssText = `position: absolute; top:0; left:0; width:100%; height:100%; background: #EEF0F6; z-index: 50; display: none; flex-direction: column;`;
-        writePanel.innerHTML = `<div id="write-iframe-container" style="width:100%; height:100%; background:#EEF0F6; overflow:hidden; position:relative;"></div>`;
-        writeTab.appendChild(writePanel);
-
         container.appendChild(homeTab);
         container.appendChild(userTab);
-        container.appendChild(writeTab);
         return container;
     }
 
@@ -690,15 +629,10 @@
         const root = phoneFrame;
         if (!root) return;
 
-        // 🌟 雙視窗路由：判斷是否為「寫作專用 App」
-        const isWriteApp = ['設置', '世界書', 'worldbook', '提示詞', '思考記錄', 'think', 'avs', '變數工坊'].includes(appName);
-
-        // 🌟 寫作類 App 必須先切換到寫作 TAB，否則 write-panel-container 在其他 tab 下是 display:none
-        if (isWriteApp) switchPage('nav-write');
-
-        // 自動選擇要注入的視窗容器
-        const containerId = isWriteApp ? '#write-iframe-container' : '#aurelia-iframe-container';
-        const panelId = isWriteApp ? '#write-panel-container' : '#aurelia-panel-container';
+        // 寫作頁已退役（2026-06-12）：所有 App 統一走全域 overlay；寫作工具改從手機殼開。
+        // showOsApp 仍保留給 index.js / persona / phone_system shim 等外部呼叫者。
+        const containerId = '#aurelia-iframe-container';
+        const panelId = '#aurelia-panel-container';
 
         const container = root.querySelector(containerId);
         const panel = root.querySelector(panelId);

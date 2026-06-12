@@ -203,6 +203,38 @@
             if (meta && meta.id && !APPS.find(function (a) { return a.id === meta.id; })) APPS.push(_makeUserApp(meta));
         });
     }
+
+    // ── 寫作工具（從舊「寫作頁」搬來，直接在手機殼螢幕內開）──────────────
+    // launchFn(c) 把工具渲染進手機容器。返回鈕統一回手機主畫面：
+    //   多數工具的返回鈕呼叫 PhoneSystem.goHome（_openApp 已暫改寫為 _home）→ 自動 OK；
+    //   世界書(onclick="goHome()") / 創作室(自刪 os_studio_app) → 這裡補綁。
+    function _mountTool(launchFn, c) {
+        if (typeof launchFn !== 'function') { c.innerHTML = '<div class="aps-fail">工具尚未載入</div>'; return; }
+        c.style.position = 'relative';   // 給自帶 absolute 版面的工具(創作室)當定位基準
+        c.style.height = '100%';
+        try { launchFn(c); }
+        catch (e) { console.warn('[PhoneShell] 寫作工具掛載失敗', e); c.innerHTML = '<div class="aps-fail">這個工具載入失敗</div>'; return; }
+        win.setTimeout(function () {
+            c.querySelectorAll('.wb-back-btn,[onclick*="goHome"],#studio-back-btn').forEach(function (b) {
+                b.removeAttribute('onclick');
+                b.onclick = function (e) { if (e) { e.preventDefault(); e.stopPropagation(); } _home(); };
+            });
+        }, 250);
+    }
+    // 把寫作工具補進 APPS（世界書/提示詞原本就只有 standalone 版才有 → 只在 standalone 顯示）
+    function _addWritingTools() {
+        const standalone = !!document.getElementById('aurelia-standalone-root');
+        const tools = [
+            { id: 'sysset', name: '系統設置', emoji: '⚙️', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
+            { id: 'avsvar', name: '變數工坊', emoji: '🎲', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
+            { id: 'studio', name: '創作室',   emoji: '🎨', mode: 'inside', go: function (c) { _mountTool(win.OS_STUDIO && win.OS_STUDIO.launch, c); } },
+        ];
+        if (standalone) {
+            tools.push({ id: 'lorebook', name: '世界書', emoji: '📚', mode: 'inside', go: function (c) { _mountTool(win.OS_WORLDBOOK && (win.OS_WORLDBOOK.launchApp || win.OS_WORLDBOOK.launch), c); } });
+            tools.push({ id: 'prompts',  name: '提示詞', emoji: '🎚️', mode: 'inside', go: function (c) { _mountTool(win.OS_PROMPTS && (win.OS_PROMPTS.launchApp || win.OS_PROMPTS.launch), c); } });
+        }
+        tools.forEach(function (t) { if (!APPS.find(function (a) { return a.id === t.id; })) APPS.push(t); });
+    }
     // 重畫主畫面圖標格（APPS 變動後呼叫）
     function _renderGrid() {
         if (!_el) return;
@@ -254,6 +286,7 @@
         ov.querySelector('#aps-close').addEventListener('click', close);
         ov.querySelector('#aps-home-btn').addEventListener('click', _home);
         _el = ov;
+        _addWritingTools();        // 寫作工具（系統設置/變數工坊/創作室＋standalone:世界書/提示詞）
         _restoreInstalledApps();   // 從 localStorage 補回已安裝 app
         _renderGrid();             // 統一畫圖標格 + 綁定 + 套圖庫圖標
         try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列時鐘
