@@ -418,20 +418,9 @@
          * @param {string|null} msgId  訊息 ID（獨立版通常為 null）
          */
         _loadWithSceneAnalysis: function(text, msgId) {
-            const _isStandalone = (win.OS_API?.isStandalone?.()) ?? false;
-            const _sceneCfg = (win.OS_SETTINGS?.getImageConfig?.())?.sceneGen || {};
-            if (_isStandalone && _sceneCfg.enabled && win.OS_API?.analyzeSceneInserts) {
-                win.OS_API.analyzeSceneInserts(
-                    text,
-                    (enhanced) => {
-                        this.loadScript(enhanced || text, msgId);
-                        this.next();
-                    }
-                );
-            } else {
-                this.loadScript(text, msgId);
-                this.next();
-            }
+            // 獨立版場景分析已退役（2026-06-13）：直接載入；場景插圖改走 主模型 [Scene|] tag / 副模型版(接記憶)
+            this.loadScript(text, msgId);
+            this.next();
         },
 
         /**
@@ -440,18 +429,9 @@
          * 「第一行劇情文本」要渲染時若圖片還沒全好，next() 內建的開場閘門才會彈 loading 攔住。
          */
         _startWithLoader: function(text, msgId) {
-            const self = this;
-            const go = function(finalText) {
-                self.loadScript(finalText, msgId);
-                self.next();
-            };
-            const _isStandalone = (win.OS_API?.isStandalone?.()) ?? false;
-            const _sceneCfg = (win.OS_SETTINGS?.getImageConfig?.())?.sceneGen || {};
-            if (_isStandalone && _sceneCfg.enabled && win.OS_API?.analyzeSceneInserts) {
-                win.OS_API.analyzeSceneInserts(text, (enhanced) => go(enhanced || text));
-            } else {
-                go(text);
-            }
+            // 獨立版場景分析已退役（2026-06-13）：直接載入開播；場景插圖走 主模型 [Scene|] tag / 副模型版(接記憶)
+            this.loadScript(text, msgId);
+            this.next();
         },
 
         /**
