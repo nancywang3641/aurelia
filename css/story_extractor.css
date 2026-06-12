@@ -1,307 +1,331 @@
-                @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400;500;700&family=Cinzel:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Cormorant+Garamond:wght@500;600;700&display=swap');
 
-                /* === 發消息後的等待室（故事撰寫中 → 圖片繪製中 → 進入劇情）=== */
-                #se-flow-overlay {
-                    position: absolute; inset: 0; z-index: 60;
-                    background: rgba(238,240,246,0.96);
-                    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-                }
-                .theme-darkgold #se-flow-overlay { background: rgba(10,9,6,0.96); }
-                #se-flow-spin {
-                    width: 34px; height: 34px; border-radius: 50%;
-                    border: 3px solid rgba(26,28,40,0.15); border-top-color: #1A1C28;
-                    animation: se-flow-rot 1s linear infinite;
-                }
-                .theme-darkgold #se-flow-spin { border-color: rgba(212,175,55,0.2); border-top-color: #d4af37; }
-                #se-flow-label { font-size: 14px; font-weight: 700; letter-spacing: 2px; color: #1A1C28; }
-                .theme-darkgold #se-flow-label { color: #d4af37; }
-                #se-flow-sub { font-size: 12px; color: rgba(26,28,40,0.6); min-height: 16px; }
-                .theme-darkgold #se-flow-sub { color: rgba(212,175,55,0.6); }
-                @keyframes se-flow-rot { to { transform: rotate(360deg); } }
+/* ============================================================
+   藏書 Reader（踏入故事）
+   亮版 = 精緻電子書（暖白紙感 / 襯線）
+   暗版 = 黑金模式（深藍燙金 / 描邊框 / 金色標題）
+   參考 GPT 模板 #3（亮）與 #5（暗）；功能性結構不動，只重塑視覺。
+   ============================================================ */
 
-                /* === 亮版（默認）：視差書咖風，對齊主大廳 === */
-                #se-root-wrapper {
-                    width: 100%; height: 100%; display: flex; flex-direction: column;
-                    background: #EEF0F6; position: relative;
-                    overflow: hidden; box-sizing: border-box;
-                    font-family: 'Noto Sans TC', sans-serif;
-                    color: #1A1C28;
-                    background-image:
-                        linear-gradient(rgba(26,28,40,0.04) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(26,28,40,0.04) 1px, transparent 1px);
-                    background-size: 30px 30px;
-                }
+:root {
+    /* 亮版 — 暖白紙 */
+    --se-paper:        #f6f3ea;
+    --se-paper-card:   #fffdf7;
+    --se-ink:          #2c261d;
+    --se-ink-soft:     rgba(44,38,29,0.62);
+    --se-line:         rgba(44,38,29,0.12);
+    --se-accent:       #b08a3e;     /* 亮版點綴金（沉穩）*/
+    /* 暗版 — 深藍燙金 */
+    --se-navy-0:       #0a1024;
+    --se-navy-1:       #111a38;
+    --se-navy-card:    rgba(18,27,56,0.55);
+    --se-gold:         #d4af37;
+    --se-gold-soft:    #e8dcb5;
+    --se-gold-line:    rgba(212,175,55,0.32);
+    /* 共用襯線閱讀字（系統 Song/Ming 為主，免載重 CJK webfont）*/
+    --se-serif: 'Cormorant Garamond', 'Noto Serif TC', 'Source Han Serif TC',
+                'Songti TC', 'Songti SC', 'Source Han Serif SC', 'SimSun', serif;
+}
 
-                #se-toolbar {
-                    display: flex; justify-content: space-between; align-items: center;
-                    padding: 0 15px;
-                    background: rgba(228,232,245,0.92);
-                    border-bottom: 1px solid rgba(26,28,40,0.10);
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-                    flex-shrink: 0; height: 50px;
-                }
-                .se-title { font-weight: 700; font-size: 16px; color: #1A1C28; letter-spacing: 2px; font-family: 'Noto Sans TC', sans-serif; }
-                .se-controls { display: flex; gap: 8px; }
-                .se-icon-btn {
-                    border: none; background: transparent; cursor: pointer;
-                    font-size: 18px; color:rgba(26,28,40,0.72); transition: all 0.2s;
-                    width: 32px; height: 32px; border-radius: 50%;
-                }
-                .se-icon-btn:hover { color: #1A1C28; background: rgba(26,28,40,0.06); }
+/* === 發消息後的等待室（故事撰寫中 → 圖片繪製中 → 進入劇情）=== */
+#se-flow-overlay {
+    position: absolute; inset: 0; z-index: 60;
+    background: rgba(246,243,234,0.96);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+}
+.theme-darkgold #se-flow-overlay {
+    background: radial-gradient(circle at 50% 40%, rgba(17,26,56,0.97), rgba(7,10,24,0.98));
+}
+#se-flow-spin {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid rgba(44,38,29,0.15); border-top-color: var(--se-accent);
+    animation: se-flow-rot 1s linear infinite;
+}
+.theme-darkgold #se-flow-spin { border-color: rgba(212,175,55,0.2); border-top-color: var(--se-gold); }
+#se-flow-label { font-size: 14px; font-weight: 700; letter-spacing: 3px; color: var(--se-ink); font-family: var(--se-serif); }
+.theme-darkgold #se-flow-label { color: var(--se-gold); text-shadow: 0 0 12px rgba(212,175,55,0.35); }
+#se-flow-sub { font-size: 12px; color: var(--se-ink-soft); min-height: 16px; letter-spacing: 1px; }
+.theme-darkgold #se-flow-sub { color: rgba(232,220,181,0.7); }
+@keyframes se-flow-rot { to { transform: rotate(360deg); } }
 
-                #se-content-area {
-                    flex: 1; position: relative; width: 100%;
-                    overflow-y: auto; overflow-x: hidden;
-                    background: transparent; min-height: 150px;
-                    padding: 15px; box-sizing: border-box;
-                }
+/* ============================================================
+   亮版（默認）：精緻電子書
+   ============================================================ */
+#se-root-wrapper {
+    width: 100%; height: 100%; display: flex; flex-direction: column;
+    position: relative; overflow: hidden; box-sizing: border-box;
+    color: var(--se-ink);
+    background:
+        radial-gradient(circle at 50% -10%, #fbf9f2 0%, var(--se-paper) 55%, #efe9dc 100%);
+}
 
-                /* 純文字容器：套用書咖卡片裝飾 */
-                #se-root-wrapper .native-render-wrapper {
-                    color: #1A1C28; display: flow-root; width: 100%; margin-bottom: 15px;
-                    background: rgba(228,232,245,0.60);
-                    border: 1px solid rgba(26,28,40,0.09);
-                    border-left: 2px solid rgba(26,28,40,0.25);
-                    padding: 15px; border-radius: 4px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                    font-size: calc(var(--mainFontSize, 16px) + 2px);
-                    line-height: 1.7;
-                }
+#se-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 18px;
+    background: rgba(251,249,242,0.88);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--se-line);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.6), 0 6px 16px -10px rgba(44,38,29,0.35);
+    flex-shrink: 0; height: 52px;
+}
+.se-title {
+    font-weight: 700; font-size: 18px; color: var(--se-ink);
+    letter-spacing: 4px; font-family: var(--se-serif);
+}
+.se-controls { display: flex; gap: 6px; }
+.se-icon-btn {
+    border: none; background: transparent; cursor: pointer;
+    font-size: 17px; color: var(--se-ink-soft); transition: all 0.2s ease;
+    width: 34px; height: 34px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.se-icon-btn:hover { color: var(--se-ink); background: rgba(176,138,62,0.12); }
+#se-btn-close:hover { color: #b3402f; background: rgba(179,64,47,0.10); }
 
-                /* HTML 區塊容器：透明、只給間距，讓角色卡自帶樣式發光 */
-                #se-root-wrapper .story-html-block {
-                    width: 100%; margin-bottom: 15px;
-                    display: flow-root;
-                }
+#se-content-area {
+    flex: 1; position: relative; width: 100%;
+    overflow-y: auto; overflow-x: hidden;
+    background: transparent; min-height: 150px;
+    padding: 22px 20px 28px; box-sizing: border-box;
+}
 
-                /* 強制繼承：擋掉外部對 p/li/td 等的直接規則覆蓋（書咖預設或 ST 全域樣式） */
-                #se-root-wrapper .native-render-wrapper * {
-                    font-family: inherit !important;
-                    color: inherit !important;
-                }
+/* 純文字容器：精緻紙卡 */
+#se-root-wrapper .native-render-wrapper {
+    color: var(--se-ink); display: flow-root; width: 100%;
+    max-width: 720px; margin: 0 auto 18px;
+    background: var(--se-paper-card);
+    border: 1px solid var(--se-line);
+    border-radius: 10px;
+    padding: 26px 30px;
+    box-shadow: 0 1px 2px rgba(44,38,29,0.05), 0 10px 28px -18px rgba(44,38,29,0.45);
+    font-family: var(--se-serif);
+    font-size: calc(var(--mainFontSize, 16px) + 3px);
+    line-height: 1.9;
+    letter-spacing: 0.2px;
+    text-align: justify;
+}
+/* 段落首行縮排 + 段距，閱讀體 */
+#se-root-wrapper .native-render-wrapper p { margin: 0 0 0.85em; text-indent: 2em; }
+#se-root-wrapper .native-render-wrapper p:last-child { margin-bottom: 0; }
 
-                /* 吃掉瀏覽器對 <q> 標籤自動加的引號（避免跟原文裡的引號重複變成 ""…""） */
-                #se-root-wrapper .native-render-wrapper q::before,
-                #se-root-wrapper .native-render-wrapper q::after {
-                    content: none !important;
-                }
-                #se-root-wrapper .native-render-wrapper p, #se-root-wrapper .native-render-wrapper li, #se-root-wrapper .native-render-wrapper td { color: #1A1C28; }
-                #se-root-wrapper .native-render-wrapper h1, #se-root-wrapper .native-render-wrapper h2, #se-root-wrapper .native-render-wrapper h3 {
-                    color: #1A1C28; border-bottom: 1px solid rgba(26,28,40,0.15);
-                }
-                #se-root-wrapper .native-render-wrapper svg text, #se-root-wrapper .native-render-wrapper .nodeLabel, #se-root-wrapper .native-render-wrapper .edgeLabel {
-                    color: #1A1C28 !important; fill: #1A1C28 !important;
-                }
+/* HTML 區塊容器：透明、只給間距，讓角色卡自帶樣式發光 */
+#se-root-wrapper .story-html-block {
+    width: 100%; max-width: 760px; margin: 0 auto 18px;
+    display: flow-root;
+}
 
-                /* === 暗版：404 終端風（綠霓虹，對齊大廳 mode-404） === */
-                #se-root-wrapper.theme-darkgold {
-                    background: #000800;
-                    color: #b8ffcb;
-                    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-                    background-image:
-                        linear-gradient(rgba(0,255,65,0.08) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(0,255,65,0.08) 1px, transparent 1px);
-                    background-size: 30px 30px;
-                }
+/* 強制繼承：擋掉外部對 p/li/td 等的直接規則覆蓋 */
+#se-root-wrapper .native-render-wrapper * {
+    font-family: inherit !important;
+    color: inherit !important;
+}
+/* 吃掉 <q> 自動引號（避免跟原文引號重複）*/
+#se-root-wrapper .native-render-wrapper q::before,
+#se-root-wrapper .native-render-wrapper q::after { content: none !important; }
 
-                #se-root-wrapper.theme-darkgold #se-toolbar {
-                    background: rgba(0,15,0,0.9);
-                    border-bottom: 1px solid rgba(0,255,65,0.25);
-                    box-shadow: 0 2px 8px rgba(0,255,65,0.05);
-                }
+#se-root-wrapper .native-render-wrapper p,
+#se-root-wrapper .native-render-wrapper li,
+#se-root-wrapper .native-render-wrapper td { color: var(--se-ink); }
+#se-root-wrapper .native-render-wrapper h1,
+#se-root-wrapper .native-render-wrapper h2,
+#se-root-wrapper .native-render-wrapper h3 {
+    color: var(--se-ink); font-family: var(--se-serif); letter-spacing: 1px;
+    text-indent: 0; text-align: left;
+    border-bottom: 1px solid var(--se-line); padding-bottom: 0.3em;
+}
+#se-root-wrapper .native-render-wrapper svg text,
+#se-root-wrapper .native-render-wrapper .nodeLabel,
+#se-root-wrapper .native-render-wrapper .edgeLabel {
+    color: var(--se-ink) !important; fill: var(--se-ink) !important;
+}
 
-                #se-root-wrapper.theme-darkgold .se-title {
-                    color: #00ff41;
-                    font-family: 'Consolas', monospace;
-                    font-weight: 700;
-                    letter-spacing: 2px;
-                    text-shadow: 0 0 8px rgba(0,255,65,0.4);
-                }
+/* ============================================================
+   暗版：黑金模式（深藍燙金）
+   ============================================================ */
+#se-root-wrapper.theme-darkgold {
+    color: var(--se-gold-soft);
+    background:
+        radial-gradient(circle at 50% -15%, #1a274d 0%, var(--se-navy-1) 38%, var(--se-navy-0) 72%, #070a18 100%);
+}
+/* 燙金描邊框（包整本「書」）+ 極淡星塵 */
+#se-root-wrapper.theme-darkgold::before {
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+        radial-gradient(rgba(212,175,55,0.06) 1px, transparent 1px);
+    background-size: 26px 26px;
+}
+#se-root-wrapper.theme-darkgold::after {
+    content: ''; position: absolute; inset: 8px; z-index: 6; pointer-events: none;
+    border: 1px solid var(--se-gold-line);
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 3px rgba(212,175,55,0.06),
+                inset 0 0 30px rgba(212,175,55,0.04);
+}
+#se-root-wrapper.theme-darkgold #se-toolbar,
+#se-root-wrapper.theme-darkgold #se-content-area,
+#se-root-wrapper.theme-darkgold #se-input-area { position: relative; z-index: 7; }
 
-                #se-root-wrapper.theme-darkgold .se-icon-btn {
-                    color: #00cc33;
-                }
+#se-root-wrapper.theme-darkgold #se-toolbar {
+    background: transparent;
+    border-bottom: 1px solid var(--se-gold-line);
+    box-shadow: 0 8px 18px -14px rgba(0,0,0,0.8);
+}
+#se-root-wrapper.theme-darkgold .se-title {
+    color: var(--se-gold);
+    font-family: 'Cinzel', var(--se-serif);
+    font-weight: 700; letter-spacing: 5px;
+    text-shadow: 0 0 14px rgba(212,175,55,0.4);
+}
+#se-root-wrapper.theme-darkgold .se-icon-btn { color: rgba(212,175,55,0.78); }
+#se-root-wrapper.theme-darkgold .se-icon-btn:hover {
+    color: var(--se-gold); background: rgba(212,175,55,0.12);
+}
+#se-root-wrapper.theme-darkgold #se-btn-close:hover {
+    color: #e7b9a0; background: rgba(231,185,160,0.10);
+}
 
-                #se-root-wrapper.theme-darkgold .se-icon-btn:hover {
-                    color: #00ff41;
-                    background: rgba(0,255,65,0.1);
-                }
+#se-root-wrapper.theme-darkgold #se-content-area { background: transparent; color: var(--se-gold-soft); }
 
-                #se-root-wrapper.theme-darkgold #se-content-area {
-                    background: transparent;
-                    color: #b8ffcb;
-                }
+#se-root-wrapper.theme-darkgold .native-render-wrapper {
+    color: var(--se-gold-soft);
+    background: var(--se-navy-card);
+    border: 1px solid var(--se-gold-line);
+    border-radius: 10px;
+    padding: 26px 30px;
+    box-shadow: inset 0 0 24px rgba(212,175,55,0.05),
+                0 12px 30px -18px rgba(0,0,0,0.9);
+    backdrop-filter: blur(2px);
+}
+#se-root-wrapper.theme-darkgold .native-render-wrapper p,
+#se-root-wrapper.theme-darkgold .native-render-wrapper li,
+#se-root-wrapper.theme-darkgold .native-render-wrapper td { color: var(--se-gold-soft); }
+#se-root-wrapper.theme-darkgold .native-render-wrapper h1,
+#se-root-wrapper.theme-darkgold .native-render-wrapper h2,
+#se-root-wrapper.theme-darkgold .native-render-wrapper h3 {
+    color: var(--se-gold);
+    border-bottom: 1px solid var(--se-gold-line);
+    text-shadow: 0 0 10px rgba(212,175,55,0.25);
+}
 
-                #se-root-wrapper.theme-darkgold .native-render-wrapper {
-                    color: #b8ffcb;
-                    background: rgba(0,15,0,0.7);
-                    border: 1px solid rgba(0,255,65,0.2);
-                    border-left: 2px solid rgba(0,255,65,0.5);
-                    padding: 15px;
-                    margin-bottom: 15px;
-                    box-shadow: 0 2px 8px rgba(0,255,65,0.05);
-                    border-radius: 4px;
-                }
+/* ============================================================
+   VN TAB 模式（小窗口）— 收緊尺寸，沿用主題視覺
+   ============================================================ */
+#se-root-wrapper.vn-tab-mode { font-size: 12px; }
+#se-root-wrapper.vn-tab-mode #se-toolbar { height: 38px !important; padding: 0 12px !important; }
+#se-root-wrapper.vn-tab-mode .se-title { font-size: 14px !important; letter-spacing: 2px; }
+#se-root-wrapper.vn-tab-mode .se-icon-btn { width: 30px !important; height: 30px !important; font-size: 14px !important; }
+#se-root-wrapper.vn-tab-mode #se-content-area { padding: 12px 12px 16px !important; }
+#se-root-wrapper.vn-tab-mode .native-render-wrapper { padding: 16px 18px !important; margin-bottom: 12px !important; font-size: 13px !important; }
 
-                #se-root-wrapper.theme-darkgold .native-render-wrapper p,
-                #se-root-wrapper.theme-darkgold .native-render-wrapper li,
-                #se-root-wrapper.theme-darkgold .native-render-wrapper td {
-                    color: #b8ffcb;
-                }
+/* Story Extractor 容器 */
+#story-extractor-container-vn { display: none; }
+#story-extractor-container-vn.show { display: flex !important; }
 
-                #se-root-wrapper.theme-darkgold .native-render-wrapper h1,
-                #se-root-wrapper.theme-darkgold .native-render-wrapper h2,
-                #se-root-wrapper.theme-darkgold .native-render-wrapper h3 {
-                    color: #00ff41;
-                    border-bottom: 1px solid rgba(0,255,65,0.3);
-                }
+/* ============================================================
+   輸入區底座（劫持 #form_sheld 進來用）
+   ============================================================ */
+#se-root-wrapper #se-input-area {
+    flex-shrink: 0; width: 100%;
+    background: rgba(251,249,242,0.86);
+    border-top: 1px solid var(--se-line);
+    z-index: 10; min-height: 50px; box-sizing: border-box;
+}
+#se-root-wrapper #se-input-area #form_sheld {
+    position: relative !important;
+    bottom: auto !important; left: auto !important; right: auto !important;
+    width: 100% !important; max-width: 100% !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 10px !important; margin: 0 !important;
+}
+/* 把酒館原生輸入框洗成本主題（form_sheld 還回原位後 selector 不再匹配，ST 原樣式自動回來）*/
+#se-root-wrapper #se-input-area #send_textarea,
+#se-root-wrapper #se-input-area textarea {
+    background: rgba(255,255,255,0.94) !important;
+    color: var(--se-ink) !important;
+    border: 1px solid var(--se-line) !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    font-family: var(--se-serif) !important;
+}
+#se-root-wrapper #se-input-area #send_textarea::placeholder { color: var(--se-ink-soft) !important; }
+#se-root-wrapper #se-input-area #send_textarea:focus,
+#se-root-wrapper #se-input-area textarea:focus {
+    background: #fff !important;
+    border-color: var(--se-accent) !important;
+    box-shadow: 0 0 0 2px rgba(176,138,62,0.14) !important;
+    outline: none !important;
+}
+#se-root-wrapper #se-input-area #form_sheld > div,
+#se-root-wrapper #se-input-area #form_sheld > form,
+#se-root-wrapper #se-input-area #send_form,
+#se-root-wrapper #se-input-area #nonQRFormItems,
+#se-root-wrapper #se-input-area #leftSendForm,
+#se-root-wrapper #se-input-area #rightSendForm {
+    background: transparent !important; box-shadow: none !important; border: none !important;
+}
+#se-root-wrapper #se-input-area i,
+#se-root-wrapper #se-input-area svg,
+#se-root-wrapper #se-input-area .fa,
+#se-root-wrapper #se-input-area .fa-solid,
+#se-root-wrapper #se-input-area .fa-regular,
+#se-root-wrapper #se-input-area .fa-brands,
+#se-root-wrapper #se-input-area [class*="fa-"],
+#se-root-wrapper #se-input-area .menu_button,
+#se-root-wrapper #se-input-area #send_but,
+#se-root-wrapper #se-input-area .send_but,
+#se-root-wrapper #se-input-area #options_button,
+#se-root-wrapper #se-input-area label,
+#se-root-wrapper #se-input-area button {
+    color: var(--se-ink) !important; fill: var(--se-ink) !important;
+    opacity: 1 !important; text-shadow: none !important;
+}
+#se-root-wrapper #se-input-area #send_but,
+#se-root-wrapper #se-input-area .send_but {
+    background: rgba(176,138,62,0.12) !important;
+    border: 1px solid rgba(176,138,62,0.30) !important;
+    border-radius: 8px !important;
+}
+#se-root-wrapper #se-input-area #send_but:hover,
+#se-root-wrapper #se-input-area .send_but:hover {
+    background: var(--se-accent) !important; color: #fff !important;
+}
+#se-root-wrapper #se-input-area #send_but:hover i,
+#se-root-wrapper #se-input-area .send_but:hover i { color: #fff !important; fill: #fff !important; }
 
-                /* === VN TAB 模式樣式（小窗口） === */
-                #se-root-wrapper.vn-tab-mode {
-                    font-size: 12px;
-                }
-
-                #se-root-wrapper.vn-tab-mode #se-toolbar {
-                    height: 35px !important;
-                    padding: 0 10px !important;
-                    border-bottom: 1px solid #333;
-                }
-
-                #se-root-wrapper.vn-tab-mode .se-title {
-                    font-size: 12px !important;
-                }
-
-                #se-root-wrapper.vn-tab-mode .se-icon-btn {
-                    width: 28px !important;
-                    height: 28px !important;
-                    font-size: 14px !important;
-                }
-
-                #se-root-wrapper.vn-tab-mode #se-content-area {
-                    padding: 8px !important;
-                    font-size: 11px !important;
-                }
-
-                #se-root-wrapper.vn-tab-mode .native-render-wrapper {
-                    padding: 10px !important;
-                    margin-bottom: 10px !important;
-                    font-size: 11px !important;
-                }
-
-                /* Story Extractor 容器样式 */
-                #story-extractor-container-vn {
-                    display: none;
-                }
-
-                #story-extractor-container-vn.show {
-                    display: flex !important;
-                }
-
-                /* === 輸入區底座（劫持 #form_sheld 進來用） === */
-                #se-root-wrapper #se-input-area {
-                    flex-shrink: 0; width: 100%;
-                    background: rgba(228,232,245,0.85);
-                    border-top: 1px solid rgba(26,28,40,0.15);
-                    z-index: 10; min-height: 50px;
-                    box-sizing: border-box;
-                }
-                #se-root-wrapper #se-input-area #form_sheld {
-                    position: relative !important;
-                    bottom: auto !important; left: auto !important; right: auto !important;
-                    width: 100% !important; max-width: 100% !important;
-                    background: transparent !important;
-                    box-shadow: none !important;
-                    padding: 10px !important; margin: 0 !important;
-                }
-                /* ── 把酒館原生輸入框（form_sheld 內部）洗成大廳白主題 ──
-                   只在 #se-input-area 內生效；form_sheld 還回原位後 selector 不再匹配，ST 原樣式自動回來 */
-                #se-root-wrapper #se-input-area #send_textarea,
-                #se-root-wrapper #se-input-area textarea {
-                    background: rgba(255,255,255,0.92) !important;
-                    color: #1A1C28 !important;
-                    border: 1px solid rgba(26,28,40,0.15) !important;
-                    border-radius: 4px !important;
-                    box-shadow: none !important;
-                    font-family: 'Noto Sans TC', sans-serif !important;
-                }
-                #se-root-wrapper #se-input-area #send_textarea::placeholder {
-                    color: rgba(26,28,40,0.45) !important;
-                }
-                #se-root-wrapper #se-input-area #send_textarea:focus,
-                #se-root-wrapper #se-input-area textarea:focus {
-                    background: #fff !important;
-                    border-color: rgba(26,28,40,0.55) !important;
-                    box-shadow: 0 0 0 2px rgba(26,28,40,0.06) !important;
-                    outline: none !important;
-                }
-                /* ST 輸入區的所有 div / span 子層級背景洗掉，避免黑底外露 */
-                #se-root-wrapper #se-input-area #form_sheld > div,
-                #se-root-wrapper #se-input-area #form_sheld > form,
-                #se-root-wrapper #se-input-area #send_form,
-                #se-root-wrapper #se-input-area #nonQRFormItems,
-                #se-root-wrapper #se-input-area #leftSendForm,
-                #se-root-wrapper #se-input-area #rightSendForm {
-                    background: transparent !important;
-                    box-shadow: none !important;
-                    border: none !important;
-                }
-                /* 圖示與按鈕：只針對 ST 已知會出現的 icon / button 元件，
-                   避免用 * 萬用 selector（大量 style invalidation 會讓 form_sheld 進出時卡） */
-                #se-root-wrapper #se-input-area i,
-                #se-root-wrapper #se-input-area svg,
-                #se-root-wrapper #se-input-area .fa,
-                #se-root-wrapper #se-input-area .fa-solid,
-                #se-root-wrapper #se-input-area .fa-regular,
-                #se-root-wrapper #se-input-area .fa-brands,
-                #se-root-wrapper #se-input-area [class*="fa-"],
-                #se-root-wrapper #se-input-area .menu_button,
-                #se-root-wrapper #se-input-area #send_but,
-                #se-root-wrapper #se-input-area .send_but,
-                #se-root-wrapper #se-input-area #options_button,
-                #se-root-wrapper #se-input-area label,
-                #se-root-wrapper #se-input-area button {
-                    color: #1A1C28 !important;
-                    fill: #1A1C28 !important;
-                    opacity: 1 !important;
-                    text-shadow: none !important;
-                }
-                #se-root-wrapper #se-input-area #send_but,
-                #se-root-wrapper #se-input-area .send_but {
-                    background: rgba(228,232,245,0.85) !important;
-                    border: 1px solid rgba(26,28,40,0.12) !important;
-                    border-radius: 4px !important;
-                }
-                #se-root-wrapper #se-input-area #send_but:hover,
-                #se-root-wrapper #se-input-area .send_but:hover {
-                    background: #1A1C28 !important;
-                    color: #fff !important;
-                }
-                /* 暗版：404 終端風的輸入區 */
-                #se-root-wrapper.theme-darkgold #se-input-area {
-                    background: rgba(0, 15, 0, 0.85);
-                    border-top: 1px solid rgba(0, 255, 65, 0.25);
-                }
-                #se-root-wrapper.theme-darkgold #se-input-area #send_textarea,
-                #se-root-wrapper.theme-darkgold #se-input-area textarea {
-                    background: rgba(0,15,0,0.85) !important;
-                    color: #00ff41 !important;
-                    border-color: rgba(0,255,65,0.3) !important;
-                }
-                #se-root-wrapper.theme-darkgold #se-input-area #send_textarea::placeholder {
-                    color: rgba(0,255,65,0.35) !important;
-                }
-                #se-root-wrapper.theme-darkgold #se-input-area #send_but,
-                #se-root-wrapper.theme-darkgold #se-input-area .send_but {
-                    background: #001a00 !important;
-                    color: #00ff41 !important;
-                    border-color: rgba(0,255,65,0.4) !important;
-                }
-                /* 暗版圖示一律綠 */
-                #se-root-wrapper.theme-darkgold #se-input-area,
-                #se-root-wrapper.theme-darkgold #se-input-area *,
-                #se-root-wrapper.theme-darkgold #se-input-area *::before,
-                #se-root-wrapper.theme-darkgold #se-input-area *::after {
-                    color: #00ff41 !important;
-                    fill: #00ff41 !important;
-                    text-shadow: none !important;
-                }
+/* 暗版：黑金輸入區 */
+#se-root-wrapper.theme-darkgold #se-input-area {
+    background: rgba(10,16,36,0.82);
+    border-top: 1px solid var(--se-gold-line);
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_textarea,
+#se-root-wrapper.theme-darkgold #se-input-area textarea {
+    background: rgba(18,27,56,0.85) !important;
+    color: var(--se-gold-soft) !important;
+    border-color: var(--se-gold-line) !important;
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_textarea::placeholder { color: rgba(232,220,181,0.4) !important; }
+#se-root-wrapper.theme-darkgold #se-input-area #send_textarea:focus,
+#se-root-wrapper.theme-darkgold #se-input-area textarea:focus {
+    border-color: var(--se-gold) !important;
+    box-shadow: 0 0 0 2px rgba(212,175,55,0.18) !important;
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_but,
+#se-root-wrapper.theme-darkgold #se-input-area .send_but {
+    background: rgba(212,175,55,0.10) !important;
+    color: var(--se-gold) !important;
+    border-color: var(--se-gold-line) !important;
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_but:hover,
+#se-root-wrapper.theme-darkgold #se-input-area .send_but:hover {
+    background: var(--se-gold) !important; color: var(--se-navy-0) !important;
+}
+/* 暗版圖示一律金 */
+#se-root-wrapper.theme-darkgold #se-input-area,
+#se-root-wrapper.theme-darkgold #se-input-area *,
+#se-root-wrapper.theme-darkgold #se-input-area *::before,
+#se-root-wrapper.theme-darkgold #se-input-area *::after {
+    color: var(--se-gold) !important; fill: var(--se-gold) !important; text-shadow: none !important;
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_but:hover i,
+#se-root-wrapper.theme-darkgold #se-input-area .send_but:hover i { color: var(--se-navy-0) !important; fill: var(--se-navy-0) !important; }
