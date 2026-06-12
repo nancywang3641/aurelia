@@ -2708,6 +2708,26 @@ ${d.usageDesc || ''}
 
         if (window.innerWidth <= 768) togglePreviewDrawer(true);
 
+        // artifact 卡片：手機殼內 FAB 靠 window.innerWidth 失效，改在最後一則 AI 氣泡掛一張卡，點了開預覽抽屜
+        try {
+            const _isMobile = !!document.querySelector('#os_studio_app .studio-container.studio-mobile');
+            if (_isMobile && currentMode === 'vn_ui') {
+                const _hist = document.getElementById('studio-chat-history');
+                const _ais = _hist ? _hist.querySelectorAll('.studio-bubble.ai') : [];
+                const _lastAi = _ais.length ? _ais[_ais.length - 1] : null;
+                if (_lastAi) {
+                    let _card = _lastAi.querySelector('.studio-artifact-card');
+                    if (!_card) {
+                        _card = document.createElement('div');
+                        _card.className = 'studio-artifact-card';
+                        _card.addEventListener('click', () => togglePreviewDrawer(true));
+                        _lastAi.appendChild(_card);
+                    }
+                    _card.textContent = '🎴 ' + (displayData.tagId || '面板') + ' · 點開預覽';
+                }
+            }
+        } catch (e) {}
+
         const isUnsaved = !!currentParsedData;
         exportBtn.style.display = isUnsaved ? 'block' : 'none';
         
