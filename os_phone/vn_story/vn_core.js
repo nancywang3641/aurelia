@@ -2983,6 +2983,7 @@
         loadAvatarManager,   // 供 vn_settings.js 外接調用（接受自定義 listId）
         loadBgManager,       // 供 vn_settings.js 外接調用（BG 快取列表）
         loadSpriteManager,   // 立繪庫網格（sprite_cache，世界感知）
+        loadSceneManager: window.VN_Panels.loadSceneManager,   // 場景插圖展廳（scene_cache，與頭像同套卡片管理）
 
         // 💭 本章思考鏈小窗
         showThinkPopup() {
