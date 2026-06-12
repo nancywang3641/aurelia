@@ -336,9 +336,12 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
    - \x60st.parse()\x60 → 把 lines 解析成 \x60{ TagName: [[field1, field2, ...], ...] }\x60
    - \x60st.md(text)\x60 → 把 markdown 粗體/斜體/inline code 轉成 HTML（內建所有 regex，免疫 $1 雷區）
    - \x60st.setImage(el, prompt, type)\x60 → 給 \x60<img>\x60 設圖（內建預覽隔離 + try/catch；type: 'char' / 'item' / 'pet' / 'scene'）
+   - \x60st.callAI(systemPrompt)\x60 → Promise<string>：呼叫 AI 生成「文字」並回傳純文字。systemPrompt 寫清楚你要什麼內容與輸出格式即可（它會自動帶上角色卡/最近劇情/角色世界書當背景，不必重述設定）。適合「按鈕一點即時生成新內容」這種功能；每次 await 包 try/catch、生成中顯示 loading。
 5. 不可設計成幾秒把面板消失，要用按鈕/點擊觸發關閉（可以是按鈕也可以是「灰字點擊繼續」樣式）。
 6. ⚠️ 絕對禁止在 CSS 使用 \x60position: fixed\x60、\x60100vw\x60 或 \x60100vh\x60！
 7. ✅ 根元素**可以**用 \x60width: 100%\x60 填滿酒館聊天室容器；但**不要**用 \x60height: 100%\x60（容器高度未知會炸），高度跟內容走或設 \x60min-height\x60。
+
+【面板能力】你做的面板不限於展示劇情已寫好的內容，也可以是「功能型」：在 js 裡用 \x60st.callAI(systemPrompt)\x60 主動向 AI 要新內容、用 \x60st.setImage\x60 生圖，把結果 render 進 container。例如面板放一顆按鈕、點下去呼叫 \x60st.callAI\x60 生成一段內容再顯示——這完全允許且鼓勵。請依使用者需求判斷面板是「純展示 / 純功能 / 兩者兼具」，自由運用 \x60lines\x60（劇情已寫的資料）與 \x60st.callAI\x60（即時生成）兩種來源。
 
 【最終輸出 JSON 格式規範】(必須輸出此區塊)
 <json>
