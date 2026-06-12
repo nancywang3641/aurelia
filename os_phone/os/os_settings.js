@@ -60,6 +60,7 @@
             service: 'pollinations',
             serviceInanimate: 'pollinations', // 死物桶：背景/物品/寵物
             serviceLiving: 'pollinations',    // 活物桶：角色/插圖
+            imgSourceSynced: true,            // 背景來源是否同步角色（true＝沿用角色接口）
             pollinations: {
                 url: 'https://gen.pollinations.ai/image',
                 apiKey: '',
@@ -309,10 +310,11 @@ EXAMPLE "prompt" value:
         
         const win = window.parent || window;
         if (win.OS_IMAGE_MANAGER) {
-            // 兩桶 + legacy mirror（service = serviceLiving）
+            // 兩桶 + legacy mirror（service = serviceLiving）。同步 ON 時 serviceInanimate 已＝serviceLiving
             win.OS_IMAGE_MANAGER.config.serviceInanimate = imgData.serviceInanimate || imgData.service;
             win.OS_IMAGE_MANAGER.config.serviceLiving = imgData.serviceLiving || imgData.service;
             win.OS_IMAGE_MANAGER.config.service = imgData.serviceLiving || imgData.service;
+            if (typeof imgData.imgSourceSynced === 'boolean') win.OS_IMAGE_MANAGER.config.imgSourceSynced = imgData.imgSourceSynced;
             if (imgData.pollinations) {
                 win.OS_IMAGE_MANAGER.config.pollinations = {
                     ...win.OS_IMAGE_MANAGER.config.pollinations,
@@ -1080,22 +1082,52 @@ EXAMPLE "prompt" value:
                             <div class="gal-subtab" data-galtab="scene"  style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'scene')">🎬 插圖</div>
                         </div>
                         <div id="view-img-api" class="img-subtab-view">
-                        <div class="set-group">
-                            <div class="set-desc">背景/物品 和 角色/插圖 可各走各的接口（例如背景用 Pollinations、角色用 NAI）。</div>
-                            <div class="set-label">🌄 背景・📦 物品 來源</div>
-                            <select class="set-select" id="img-service-inanimate">
-                                <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
-                                <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
-                                <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
-                                <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
-                            </select>
-                            <div class="set-label" style="margin-top:12px;">🎭 角色・🎬 插圖 來源</div>
-                            <select class="set-select" id="img-service-living">
-                                <option value="pollinations" ${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
-                                <option value="novelai" ${(imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
-                                <option value="tavern_sd" ${(imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
-                                <option value="comfyui_direct" ${(imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
-                            </select>
+
+                        <!-- ── 子分頁鈕：背景 / 角色 ── -->
+                        <div class="img-srctab-row">
+                            <div class="img-srctab" id="img-srctab-char" data-imgsrctab="char" onclick="window._switchImgSrcTab && window._switchImgSrcTab('char')">🎭 角色</div>
+                            <div class="img-srctab" id="img-srctab-bg" data-imgsrctab="bg" onclick="window._switchImgSrcTab && window._switchImgSrcTab('bg')">🌄 背景</div>
+                        </div>
+
+                        <!-- ── 🎭 角色 分頁 body（活物：角色・頭像・插圖）── -->
+                        <div id="img-tab-char" class="img-srctab-body">
+                            <div class="set-group">
+                                <div class="set-label">🎭 角色・🎬 插圖 來源</div>
+                                <select class="set-select" id="img-service-living">
+                                    <option value="pollinations" ${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
+                                    <option value="novelai" ${(imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
+                                </select>
+                                <div class="set-desc" style="margin-top:6px;">角色／頭像／場景插圖都用這個來源。</div>
+                            </div>
+                        </div>
+
+                        <!-- ── 🌄 背景 分頁 body（死物：背景・物品）── -->
+                        <div id="img-tab-bg" class="img-srctab-body" style="display:none;">
+                            <div class="set-group">
+                                <div class="set-label">
+                                    <span>🔗 同步角色來源</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="img-sync-bg-to-char"><span class="slider"></span></label>
+                                </div>
+                                <div class="set-desc">開啟＝背景/物品用跟角色相同的接口，不用重貼 Key/Token。</div>
+                            </div>
+                            <div class="set-group" id="img-bg-source-group">
+                                <div class="set-label">🌄 背景・📦 物品 來源</div>
+                                <select class="set-select" id="img-service-inanimate">
+                                    <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
+                                    <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
+                                </select>
+                            </div>
+                            <div class="set-group" id="img-bg-synced-note" style="display:none;">
+                                <div class="set-desc" id="img-bg-synced-note-text">（與角色相同）</div>
+                            </div>
+                        </div>
+
+                        <!-- ── 共用接口設定區（一次只顯示一個，由 refreshImgPanel 控制）── -->
+                        <div id="img-iface-groups">
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
                                 <div class="set-group" style="margin-top:12px;">
@@ -1408,8 +1440,8 @@ EXAMPLE "prompt" value:
 
                         </div>
 
-                        <!-- ── 場景插圖（獨立版）── -->
-                        <div class="set-group" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
+                        <!-- ── 🎬 場景插圖（獨立版）｜屬「角色」分頁 ── -->
+                        <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
                             <div class="set-label" style="font-size:13px; display:flex; align-items:center; justify-content:space-between;">
                                 <span>🖼️ 場景插圖（獨立版）</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-enabled" ${imgConfig.sceneGen?.enabled ? 'checked' : ''}><span class="slider"></span></label>
@@ -2237,28 +2269,91 @@ EXAMPLE "prompt" value:
         }
         if (elNaiModel) elNaiModel.onchange = () => updateSmeaVisibility(elNaiModel.value);
 
-        // 兩桶聯集顯示：任一桶（死物/活物）選了某接口，該接口的設定區就 show
-        const updateImgGroups = () => {
-            const picked = new Set([
-                elImgServiceInanimate ? elImgServiceInanimate.value : '',
-                elImgServiceLiving ? elImgServiceLiving.value : ''
-            ]);
-            const isNai = picked.has('novelai');
-            const isPol = picked.has('pollinations');
-            const isTav = picked.has('tavern_sd');
-            const isCfd = picked.has('comfyui_direct');
-            elNaiGroup.classList.toggle('hidden', !isNai);
-            elPolGroup.classList.toggle('hidden', !isPol);
-            const elTavGroup = container.querySelector('#img-group-tavernsd');
-            if (elTavGroup) elTavGroup.classList.toggle('hidden', !isTav);
-            const elCfdGroup = container.querySelector('#img-group-comfyui');
-            if (elCfdGroup) elCfdGroup.classList.toggle('hidden', !isCfd);
-            const elPolPrompts = container.querySelector('#img-pol-prompts-group');
-            if (elPolPrompts) elPolPrompts.classList.toggle('hidden', !isPol);
+        // ── 圖片設置：背景／角色 兩個子分頁，一次只顯示一邊（取代舊「兩桶聯集」） ──
+        const SVC_DISP = {
+            pollinations: '✨ Pollinations',
+            novelai: '💎 NovelAI',
+            tavern_sd: '🎨 酒館原生',
+            comfyui_direct: '🧩 ComfyUI 直連'
         };
-        if (elImgServiceInanimate) elImgServiceInanimate.onchange = updateImgGroups;
-        if (elImgServiceLiving)    elImgServiceLiving.onchange = updateImgGroups;
-        updateImgGroups(); // 初始化同步一次
+        const elImgSyncBg     = container.querySelector('#img-sync-bg-to-char');
+        const elImgBgSrcGroup = container.querySelector('#img-bg-source-group');
+        const elImgBgNote     = container.querySelector('#img-bg-synced-note');
+        const elImgBgNoteText = container.querySelector('#img-bg-synced-note-text');
+        const elImgTabChar    = container.querySelector('#img-tab-char');
+        const elImgTabBg      = container.querySelector('#img-tab-bg');
+        const elImgSceneBlock = container.querySelector('#img-scene-block');
+        const elImgPolPrompts = container.querySelector('#img-pol-prompts-group');
+        const elTavGroup      = container.querySelector('#img-group-tavernsd');
+        const elCfdGroup      = container.querySelector('#img-group-comfyui');
+        const srcTabBtnChar   = container.querySelector('#img-srctab-char');
+        const srcTabBtnBg     = container.querySelector('#img-srctab-bg');
+
+        // 目前子分頁（預設「角色」）
+        let imgSrcTab = 'char';
+
+        // 同步開關初始狀態：有存就用存的，否則用「兩桶是否相等」推斷
+        if (elImgSyncBg) {
+            elImgSyncBg.checked = (typeof imgConfig.imgSourceSynced === 'boolean')
+                ? imgConfig.imgSourceSynced
+                : ((imgConfig.serviceInanimate || imgConfig.service) === (imgConfig.serviceLiving || imgConfig.service));
+        }
+
+        // 只顯示「要顯示的那一個接口」設定區，其餘三個藏起
+        function showOnlyIfaceGroup(svc) {
+            if (elNaiGroup) elNaiGroup.classList.toggle('hidden', svc !== 'novelai');
+            if (elPolGroup) elPolGroup.classList.toggle('hidden', svc !== 'pollinations');
+            if (elTavGroup) elTavGroup.classList.toggle('hidden', svc !== 'tavern_sd');
+            if (elCfdGroup) elCfdGroup.classList.toggle('hidden', svc !== 'comfyui_direct');
+        }
+
+        const refreshImgPanel = () => {
+            const livingSvc = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations';
+            const synced = elImgSyncBg ? elImgSyncBg.checked : true;
+
+            // 子分頁鈕 active 樣式
+            if (srcTabBtnChar) srcTabBtnChar.classList.toggle('active', imgSrcTab === 'char');
+            if (srcTabBtnBg)   srcTabBtnBg.classList.toggle('active', imgSrcTab === 'bg');
+            // 兩個 body 一次只出一邊
+            if (elImgTabChar) elImgTabChar.style.display = (imgSrcTab === 'char') ? '' : 'none';
+            if (elImgTabBg)   elImgTabBg.style.display   = (imgSrcTab === 'bg')   ? '' : 'none';
+
+            if (imgSrcTab === 'char') {
+                // 角色分頁：顯示 living 接口設定 + 角色頭像底詞 + 場景插圖
+                showOnlyIfaceGroup(livingSvc);
+                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc === 'novelai');
+                if (elImgSceneBlock) elImgSceneBlock.style.display = '';
+            } else {
+                // 背景分頁
+                if (synced) {
+                    // 同步：藏下拉、顯示「與角色相同」、接口設定本體留在角色分頁（這裡不重複出）
+                    if (elImgBgSrcGroup) elImgBgSrcGroup.style.display = 'none';
+                    if (elImgBgNote)     elImgBgNote.style.display = '';
+                    if (elImgBgNoteText) elImgBgNoteText.textContent = '（與角色相同：' + (SVC_DISP[livingSvc] || livingSvc) + '）';
+                    showOnlyIfaceGroup(null); // 四個接口區全藏（設定在角色分頁）
+                } else {
+                    // 不同步：顯示背景自己的下拉 + 它選的接口設定
+                    const bgSvc = elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations';
+                    if (elImgBgSrcGroup) elImgBgSrcGroup.style.display = '';
+                    if (elImgBgNote)     elImgBgNote.style.display = 'none';
+                    showOnlyIfaceGroup(bgSvc);
+                }
+                // 角色頭像底詞 + 場景插圖只屬角色分頁
+                if (elImgPolPrompts) elImgPolPrompts.classList.add('hidden');
+                if (elImgSceneBlock) elImgSceneBlock.style.display = 'none';
+            }
+        };
+
+        // 子分頁切換鈕
+        window._switchImgSrcTab = (tab) => {
+            imgSrcTab = (tab === 'bg') ? 'bg' : 'char';
+            refreshImgPanel();
+        };
+
+        if (elImgServiceInanimate) elImgServiceInanimate.onchange = refreshImgPanel;
+        if (elImgServiceLiving)    elImgServiceLiving.onchange = refreshImgPanel;
+        if (elImgSyncBg)           elImgSyncBg.addEventListener('change', refreshImgPanel);
+        refreshImgPanel(); // 初始化同步一次
 
         // ===== ComfyUI 直連：LoRA 行 + 測試連線 =====
         let cfdPresets = [...((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || [])];
@@ -2954,11 +3049,16 @@ EXAMPLE "prompt" value:
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
+                // 同步開關：ON＝背景沿用角色來源；OFF＝背景用自己選的
+                const _imgSyncBgEl = container.querySelector('#img-sync-bg-to-char');
+                const _imgSynced   = _imgSyncBgEl ? _imgSyncBgEl.checked : true;
+                const _imgLivingSvc = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations';
                 const imgData = {
                     // 兩桶各自存；service 保留＝活物桶當 legacy mirror（避免漏改的舊讀者爆掉）
-                    serviceInanimate: elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations',
-                    serviceLiving:    elImgServiceLiving ? elImgServiceLiving.value : 'pollinations',
-                    service:          elImgServiceLiving ? elImgServiceLiving.value : 'pollinations',
+                    serviceInanimate: _imgSynced ? _imgLivingSvc : (elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations'),
+                    serviceLiving:    _imgLivingSvc,
+                    service:          _imgLivingSvc,
+                    imgSourceSynced:  _imgSynced,
                     pollinations: {
                         url: 'https://gen.pollinations.ai/image',
                         apiKey: elPolApiKey.value.trim(),
