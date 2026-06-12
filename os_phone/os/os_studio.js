@@ -604,8 +604,8 @@ System Environment set to CHESSBOARD mode.
 
     function getChatSessionId() { return (currentMode === 'worldbook' && activeCategory) ? `worldbook_draft_${activeCategory}` : currentMode; }
 
-    function launch() {
-        const root = document.getElementById('aurelia-tab-container') || document.getElementById('aurelia-phone-screen') || document.body;
+    function launch(container) {
+        const root = container || document.getElementById('aurelia-tab-container') || document.getElementById('aurelia-phone-screen') || document.body;
         let existing = document.getElementById('os_studio_app');
         if (existing) existing.remove();
 
