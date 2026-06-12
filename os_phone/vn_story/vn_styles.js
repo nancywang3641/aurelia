@@ -15,7 +15,7 @@
             <div id="page-game" class="page hidden">
                 <button id="btn-home" onclick="window.VN_PLAYER.stopGame()" title="Home">退出</button>
                 <button id="btn-settings" onclick="window.VN_PLAYER.openGameSettings()" title="Config">設定</button>
-                <button id="btn-reader" onclick="window.VN_PLAYER.showReaderPanel()" title="劇情閱讀器">📖</button>
+                <button id="btn-phone" onclick="window.VoidPhoneShell && window.VoidPhoneShell.open()" title="應用面板（系統設置 / API 調整）">📱</button>
                 <div id="stream-header" class="hidden">
                     <div id="stream-live-badge"><div class="stream-live-dot"></div><span id="stream-live-text">LIVE</span></div>
                     <span id="stream-title-text"></span>
