@@ -1,7 +1,6 @@
         .studio-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; font-family: 'Noto Sans TC', sans-serif; position: relative; z-index: 9999; }
         .studio-header { padding: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 12px; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; box-sizing: border-box; }
         .studio-title { font-size: 16px; font-weight: bold; color: #1A1C28; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .studio-channel-badge { font-size: 11px; background: rgba(26,28,40,0.08); border: 1px solid rgba(26,28,40,0.30); color: rgba(26,28,40,0.72); padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: normal; }
         .studio-mode-select { background: #EEF0F6 !important; appearance: none; -webkit-appearance: none; border: 1px solid rgba(26,28,40,0.25); color: #1A1C28 !important; padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer; color-scheme: light; }
         .studio-mode-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
         .studio-icon-btn { background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
@@ -55,7 +54,6 @@
         .studio-tab.active { color: #1A1C28; }
         .studio-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; }
         .studio-preview-content { flex: 1; overflow: hidden; display: flex; flex-direction: row; position: relative; }
-        .studio-wb-sidebar { display: none; }
         .studio-preview-main { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
         .tree-project { color: #1A1C28; font-weight: bold; font-size: 13px; margin-bottom: 5px; cursor: pointer; padding: 8px; border-radius: 6px; background: rgba(26,28,40,0.06); transition: 0.2s; }
         .tree-project:hover { background: rgba(26,28,40,0.10); }
@@ -69,7 +67,6 @@
         .studio-card { background: rgba(228,232,245,0.5); border: 1px solid rgba(26,28,40,0.15); border-radius: 8px; padding: 16px; margin-bottom: 15px; }
         .studio-card-title { font-size: 15px; font-weight: bold; color: #1A1C28; margin-bottom: 10px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 8px; }
         .studio-empty { text-align: center; color: rgba(26,28,40,0.20); padding: 50px 20px; font-size: 13px; letter-spacing: 1px; }
-        #os_studio_app:not([data-mode="worldbook"]) .studio-ch-panel { display: none !important; }
         .studio-preview-fab { display: none; position: absolute; bottom: 80px; right: 16px; background: rgba(26,28,40,0.5); color: #EEF0F6; border: none; border-radius: 20px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; z-index: 48; box-shadow: 0 4px 14px rgba(0,0,0,0.5); align-items: center; gap: 6px; white-space: nowrap; }
         .studio-drawer-handle { display: none; }
         @media (max-width: 768px) {
@@ -82,7 +79,6 @@
             .studio-drawer-handle { display: block; text-align: center; padding: 10px 0 4px; cursor: pointer; flex-shrink: 0; }
             .studio-drawer-handle::after { content: ''; display: inline-block; width: 38px; height: 4px; background: rgba(26,28,40,0.18); border-radius: 2px; }
             .studio-preview-fab { display: flex; }
-            #os_studio_app[data-mode="worldbook"] #mobile-ch-btn { display: inline-block !important; }
             .studio-icon-btn span { display: none; }
         }
         .studio-bubble h1,.studio-bubble h2,.studio-bubble h3 { font-family: 'Noto Sans TC',sans-serif; font-weight: bold; margin: 10px 0 6px; line-height: 1.3; }
@@ -131,40 +127,6 @@
         .studio-error-msg { color: #fc8181; font-size: 13px; line-height: 1.5; margin-bottom: 10px; word-break: break-word; }
         .studio-retry-btn { background: rgba(252,129,129,0.15); border: 1px solid rgba(252,129,129,0.6); color: #fcc; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit; transition: 0.18s; }
         .studio-retry-btn:hover { background: rgba(252,129,129,0.3); border-color: #fc8181; color: #fff; }
-        /* ── Todo 任務面板（worldbook 模式專用，右側 tab 內） ── */
-        #studio-todo-content { background: rgba(228,232,245,0.15); }
-        .todo-side-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(26,28,40,0.10); }
-        .todo-side-title { flex: 1; font-size: 15px; color: #1A1C28; font-weight: bold; letter-spacing: 1px; }
-        .todo-side-stats { color: rgba(26,28,40,0.68); font-weight: normal; font-size: 13px; margin-left: 4px; }
-        .todo-side-progress { height: 4px; background: rgba(26,28,40,0.12); border-radius: 2px; margin-bottom: 14px; overflow: hidden; }
-        .todo-side-progress-bar { height: 100%; background: linear-gradient(90deg, #1A1C28, rgba(26,28,40,0.60)); border-radius: 2px; transition: width 0.4s ease; }
-        .todo-add-btn { background: rgba(26,28,40,0.08); border: 1px solid rgba(26,28,40,0.30); color: #1A1C28; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: inherit; transition: 0.18s; }
-        .todo-add-btn:hover { background: rgba(26,28,40,0.14); }
-        .todo-list { display: flex; flex-direction: column; gap: 6px; }
-        .todo-list:empty::before { content: '尚無任務。AI 會在第一次回應時自動建立路線圖（或點上方「＋ 新增」自己加）。'; font-size: 12px; color: rgba(26,28,40,0.25); padding: 16px 6px; display: block; text-align: center; line-height: 1.6; }
-        .todo-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; background: rgba(228,232,245,0.6); border: 1px solid rgba(26,28,40,0.08); transition: 0.15s; }
-        .todo-item:hover { background: rgba(210,215,235,0.85); border-color: rgba(26,28,40,0.15); }
-        .todo-item.done { opacity: 0.55; background: rgba(26,28,40,0.04); border-color: rgba(26,28,40,0.12); }
-        .todo-checkbox { width: 18px; height: 18px; border: 1.5px solid rgba(26,28,40,0.30); border-radius: 4px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: transparent; transition: 0.15s; background: rgba(228,232,245,0.8); }
-        .todo-item.done .todo-checkbox { background: #1A1C28; border-color: #1A1C28; color: #EEF0F6; }
-        .todo-checkbox::before { content: '✓'; }
-        .todo-text { flex: 1; font-size: 13px; color: #1A1C28; line-height: 1.5; cursor: text; padding: 2px 4px; border-radius: 3px; word-break: break-word; }
-        .todo-item.done .todo-text { text-decoration: line-through; color: rgba(26,28,40,0.35); }
-        .todo-text:hover { background: rgba(26,28,40,0.06); }
-        .todo-text-input { flex: 1; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; padding: 3px 6px; border-radius: 3px; font-size: 13px; outline: none; font-family: inherit; min-width: 0; }
-        .todo-del-btn { background: transparent; border: none; color: rgba(252,129,129,0); font-size: 12px; cursor: pointer; padding: 3px 6px; border-radius: 3px; flex-shrink: 0; transition: color 0.15s; }
-        .todo-item:hover .todo-del-btn { color: rgba(252,129,129,0.65); }
-        .todo-del-btn:hover { color: #fc8181 !important; background: rgba(252,129,129,0.12); }
-        .todo-add-row { display: flex; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(26,28,40,0.10); }
-        .todo-add-input { flex: 1; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; padding: 7px 10px; border-radius: 5px; font-size: 13px; outline: none; font-family: inherit; min-width: 0; }
-        .todo-add-confirm, .todo-add-cancel { background: rgba(26,28,40,0.08); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; width: 32px; border-radius: 5px; cursor: pointer; font-size: 14px; padding: 0; }
-        .todo-add-cancel { background: rgba(26,28,40,0.04); border-color: rgba(26,28,40,0.15); color: rgba(26,28,40,0.60); }
-
-        /* ── 手動壓縮按鈕（worldbook 模式專用，浮動於聊天區右上）── */
-        #studio-wb-compress-btn { display: none; position: absolute; top: 10px; right: 14px; background: rgba(155,89,182,0.15); border: 1px solid rgba(155,89,182,0.6); color: #c39bf2; border-radius: 14px; padding: 5px 11px; font-size: 11px; cursor: pointer; z-index: 4; transition: 0.2s; backdrop-filter: blur(8px); }
-        #studio-wb-compress-btn:hover { background: rgba(155,89,182,0.32); border-color: #c39bf2; }
-        #studio-wb-compress-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        #studio-wb-compress-btn.active { display: block; }
         /* ── 摘要泡泡（副模型壓縮舊對話為記憶）── */
         .studio-bubble.studio-summary-bubble { max-width: 100%; align-self: stretch; background: linear-gradient(135deg, rgba(155,89,182,0.12), rgba(155,89,182,0.05)); border: 1px dashed rgba(155,89,182,0.5); padding: 12px 14px; }
         .summary-header { font-size: 12px; color: #c39bf2; font-weight: bold; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(155,89,182,0.3); }
@@ -187,62 +149,6 @@
         /* ── genimg 泡泡 ── */
         .studio-bubble.genimg-bubble img { max-width: 100%; border-radius: 6px; display: block; }
         .studio-bubble.genimg-bubble { padding: 8px; }
-        /* ── 頻道面板 ── */
-        .studio-ch-panel { width:200px; flex-shrink:0; background:rgba(228,232,245,0.5); border-right:1px solid rgba(26,28,40,0.14); display:flex; flex-direction:column; overflow:hidden; }
-        .studio-ch-panel-hdr { padding:12px 14px 8px; font-size:10px; color:rgba(26,28,40,0.25); letter-spacing:1.5px; text-transform:uppercase; border-bottom:1px solid rgba(26,28,40,0.06); display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
-        .studio-ch-panel-close { display:none; background:none; border:none; color:rgba(26,28,40,0.72); font-size:14px; cursor:pointer; padding:0; }
-        .studio-new-ch-zone { padding:8px; border-bottom:1px solid rgba(26,28,40,0.08); flex-shrink:0; }
-        .studio-new-ch-btn { width:100%; background:rgba(26,28,40,0.05); border:1px dashed rgba(26,28,40,0.30); color:#1A1C28; border-radius:8px; padding:8px; font-size:12px; cursor:pointer; text-align:center; transition:0.2s; }
-        .studio-new-ch-btn:hover { background:rgba(26,28,40,0.10); }
-        .studio-new-ch-bar { display:none; gap:4px; margin-bottom:6px; }
-        .studio-new-ch-bar.open { display:flex; }
-        .studio-new-ch-inp { flex:1; background:rgba(228,232,245,0.8); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:5px 8px; border-radius:6px; font-size:12px; outline:none; min-width:0; }
-        .studio-new-ch-ok { background:#1A1C28; border:none; color:#EEF0F6; border-radius:6px; padding:5px 8px; font-size:12px; cursor:pointer; font-weight:bold; }
-        .studio-new-ch-cancel { background:rgba(26,28,40,0.05); border:1px solid rgba(26,28,40,0.20); color:rgba(26,28,40,0.60); border-radius:6px; padding:5px 7px; font-size:12px; cursor:pointer; }
-        .studio-ch-tree { flex:1; overflow-y:auto; padding:4px 0 12px; }
-        .studio-ch-entry { padding:9px 14px; font-size:12px; color:rgba(26,28,40,0.72); cursor:pointer; display:flex; align-items:center; gap:6px; transition:background 0.15s; }
-        .studio-ch-entry:hover { background:rgba(26,28,40,0.06); color:#1A1C28; }
-        .studio-ch-entry.active-ch { background:rgba(26,28,40,0.13); color:#1A1C28; font-weight:bold; border-left:2px solid rgba(26,28,40,0.25); }
-        .studio-ch-file { padding:5px 14px 5px 30px; font-size:11px; color:rgba(26,28,40,0.60); cursor:pointer; display:flex; align-items:center; gap:5px; transition:background 0.12s; }
-        .studio-ch-file:hover { background:rgba(26,28,40,0.06); color:rgba(26,28,40,0.90); }
-        .studio-ch-file.active-file { color:#1A1C28; }
-        .studio-ch-divider { height:1px; background:rgba(26,28,40,0.08); margin:4px 10px; }
-        .studio-ch-del { background:none; border:none; color:rgba(252,129,129,0); font-size:11px; cursor:pointer; padding:1px 4px; border-radius:4px; flex-shrink:0; transition:color 0.15s; line-height:1; }
-        .studio-ch-file:hover .studio-ch-del, .studio-ch-entry:hover .studio-ch-del { color:rgba(252,129,129,0.55); }
-        .studio-ch-del:hover { color:#fc8181 !important; background:rgba(252,129,129,0.1); }
-        @media (hover: none) {
-            .studio-ch-del { color:rgba(252,129,129,0.45); }
-        }
-        @media (max-width:768px) {
-            .studio-ch-panel { position:absolute; left:0; top:0; height:100%; z-index:100; width:80%; max-width:260px; background:#EEF0F6; transform:translateX(-100%); transition:transform 0.3s cubic-bezier(0.4,0,0.2,1); }
-            .studio-ch-panel.mobile-open { transform:translateX(0); box-shadow:6px 0 24px rgba(0,0,0,0.8); }
-            .studio-ch-panel-close { display:block; }
-        }
-
-        /* === 世界編撰啟動頁 === */
-        #studio-welcome { display: none; position: absolute; inset: 0; z-index: 5; background: #EEF0F6; flex-direction: column; align-items: center; justify-content: center; padding: 30px 20px; overflow-y: auto; }
-        #studio-welcome.active { display: flex; }
-        .welcome-inner { max-width: 480px; width: 100%; text-align: center; }
-        .welcome-icon { font-size: 56px; margin-bottom: 8px; }
-        .welcome-title { color: #1A1C28; font-size: 22px; margin: 0 0 6px; font-weight: bold; letter-spacing: 2px; }
-        .welcome-desc { color: rgba(26,28,40,0.72); font-size: 13px; margin: 0 0 28px; line-height: 1.5; }
-        .welcome-section-label { font-size: 11px; color: rgba(26,28,40,0.30); letter-spacing: 1.5px; margin: 16px 0 8px; text-align: left; text-transform: uppercase; }
-        .welcome-channel-list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; margin-bottom: 4px; }
-        .welcome-channel-list:empty + .welcome-section-label { display: none; }
-        .welcome-channel-item { background: rgba(228,232,245,0.6); border: 1px solid rgba(26,28,40,0.12); color: #1A1C28; padding: 12px 14px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 13px; transition: 0.18s; display: flex; align-items: center; gap: 10px; }
-        .welcome-channel-item:hover { background: rgba(26,28,40,0.06); border-color: #1A1C28; transform: translateX(3px); }
-        .welcome-channel-item .ch-icon { font-size: 18px; flex-shrink: 0; }
-        .welcome-channel-item .ch-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .welcome-channel-item .ch-meta { font-size: 10px; color: rgba(26,28,40,0.55); flex-shrink: 0; }
-        .welcome-new-btn { background: #1A1C28; color: #EEF0F6; border: none; padding: 14px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: bold; transition: 0.2s; box-shadow: 0 4px 12px rgba(26,28,40,0.15); margin-top: 8px; width: 100%; }
-        .welcome-new-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(26,28,40,0.25); }
-        .welcome-hint { font-size: 11px; color: rgba(26,28,40,0.60); margin-top: 14px; line-height: 1.5; }
-
-        /* === 頻道名 inline 編輯 === */
-        .studio-ch-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; padding: 2px 4px; border-radius: 3px; }
-        .studio-ch-name:hover { background: rgba(26,28,40,0.08); }
-        .studio-ch-name-input { flex: 1; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; padding: 2px 6px; border-radius: 3px; font-size: 12px; outline: none; font-family: inherit; min-width: 0; }
-
         /* === VN 煉丹工具列：歷史快照 + 整體重做按鈕 (只在 vn_ui 模式 + 有 currentParsedData 時顯示) === */
         #studio-vn-toolbar { display:none; padding:8px 15px 0; background:rgba(228,232,245,0.60); border-top:1px solid rgba(26,28,40,0.09); flex-direction:column; gap:6px; flex-shrink:0; }
         #studio-vn-toolbar.active { display:flex; }
@@ -267,8 +173,6 @@
         /* === 左邊返回鈕（跟 ps/avs/set/mon 同調 ‹）=== */
         .studio-back-btn { font-size: 22px; color: #1A1C28; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: 0.2s; user-select: none; flex-shrink: 0; }
         .studio-back-btn:hover { background: rgba(26,28,40,0.10); }
-        /* === 手機頻道鈕（從 inline 抽出）=== */
-        .studio-mobile-ch-btn { background: none; border: 1px solid rgba(26,28,40,0.15); color: #1A1C28; border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 
 /* ═══════════════════════════════════════════════════════════════
    404 模式：整套換綠終端機風
@@ -280,8 +184,6 @@ html:has(.mode-404) .studio-back-btn { color: #00ff41 !important; }
 html:has(.mode-404) .studio-back-btn:hover { background: rgba(0,255,65,0.15) !important; }
 html:has(.mode-404) .studio-mode-select { background: #001a00 !important; border-color: rgba(0,255,65,0.40) !important; color: #00ff41 !important; color-scheme: dark; font-family: 'Courier New', monospace !important; }
 html:has(.mode-404) .studio-mode-select option { background: #001a00 !important; color: #00ff41 !important; }
-html:has(.mode-404) .studio-channel-badge { background: rgba(0,255,65,0.10) !important; border-color: rgba(0,255,65,0.40) !important; color: rgba(0,255,65,0.80) !important; }
-html:has(.mode-404) .studio-mobile-ch-btn { background: rgba(0,15,5,0.80) !important; border-color: rgba(0,255,65,0.35) !important; color: #00ff41 !important; }
 
 html:has(.mode-404) .studio-icon-btn { background: rgba(0,15,5,0.80) !important; border-color: rgba(0,255,65,0.30) !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
 html:has(.mode-404) .studio-icon-btn:hover { background: rgba(0,255,65,0.15) !important; border-color: #00ff41 !important; }
@@ -291,17 +193,6 @@ html:has(.mode-404) .studio-icon-btn.danger:hover { background: rgba(255,128,128
 html:has(.mode-404) .studio-body { background: transparent !important; color: #b8ffcb !important; }
 html:has(.mode-404) .studio-left, html:has(.mode-404) .studio-right { background: transparent !important; }
 html:has(.mode-404) .studio-right-header { background: rgba(0,15,5,0.80) !important; border-bottom-color: rgba(0,255,65,0.20) !important; color: #00ff41 !important; }
-
-/* 歡迎頁 */
-html:has(.mode-404) .studio-welcome { background: transparent !important; color: #b8ffcb !important; }
-html:has(.mode-404) .welcome-inner { background: rgba(0,15,5,0.70) !important; border: 1px solid rgba(0,255,65,0.20) !important; }
-html:has(.mode-404) .welcome-title { color: #00ff41 !important; font-family: 'Courier New', monospace !important; text-shadow: 0 0 8px rgba(0,255,65,0.4) !important; }
-html:has(.mode-404) .welcome-desc, html:has(.mode-404) .welcome-hint { color: rgba(0,255,65,0.7) !important; }
-html:has(.mode-404) .welcome-section-label { color: rgba(0,255,65,0.6) !important; }
-html:has(.mode-404) .welcome-new-btn { background: #001a00 !important; border: 1px solid #00ff41 !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
-html:has(.mode-404) .welcome-new-btn:hover { background: #003300 !important; box-shadow: 0 0 12px rgba(0,255,65,0.3) !important; }
-html:has(.mode-404) .welcome-channel-item { background: rgba(0,15,5,0.78) !important; border: 1px solid rgba(0,255,65,0.25) !important; color: #b8ffcb !important; }
-html:has(.mode-404) .welcome-channel-item:hover { background: rgba(0,40,5,0.92) !important; border-color: #00ff41 !important; }
 
 /* 對話氣泡 */
 html:has(.mode-404) .studio-bubble { background: rgba(0,18,0,0.80) !important; border: 1px solid rgba(0,255,65,0.20) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
@@ -342,36 +233,16 @@ html:has(.mode-404) .studio-choice-btn { background: rgba(0,15,5,0.78) !importan
 html:has(.mode-404) .studio-choice-btn:hover, html:has(.mode-404) .studio-choice-selected { background: rgba(0,255,65,0.15) !important; border-color: #00ff41 !important; color: #00ff41 !important; }
 html:has(.mode-404) .studio-choices-hint { color: rgba(0,255,65,0.55) !important; }
 
-/* 頻道面板 / 抽屜 */
-html:has(.mode-404) .studio-ch-panel { background: rgba(0,12,3,0.95) !important; border-color: rgba(0,255,65,0.35) !important; }
-html:has(.mode-404) .studio-ch-panel-hdr { background: rgba(0,18,0,0.92) !important; color: #00ff41 !important; border-bottom-color: rgba(0,255,65,0.30) !important; font-family: 'Courier New', monospace !important; }
-html:has(.mode-404) .studio-ch-panel-close { color: #00ff41 !important; }
-html:has(.mode-404) .studio-ch-entry { background: rgba(0,15,5,0.78) !important; border-bottom: 1px solid rgba(0,255,65,0.15) !important; color: #b8ffcb !important; }
-html:has(.mode-404) .studio-ch-entry:hover, html:has(.mode-404) .studio-ch-entry.active-ch { background: rgba(0,40,5,0.92) !important; color: #00ff41 !important; }
-html:has(.mode-404) .studio-ch-name-input { background: rgba(0,18,0,0.90) !important; border-color: rgba(0,255,65,0.30) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
-html:has(.mode-404) .studio-new-ch-btn { background: #001a00 !important; border: 1px solid #00ff41 !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
+/* 抽屜 */
 html:has(.mode-404) .studio-drawer-backdrop { background: rgba(0,0,0,0.85) !important; }
 
 /* 工具列 / 空狀態 / 大動作鈕 */
-html:has(.mode-404) .studio-vn-toolbar, html:has(.mode-404) .studio-wb-sidebar { background: rgba(0,12,3,0.90) !important; border-color: rgba(0,255,65,0.25) !important; }
+html:has(.mode-404) .studio-vn-toolbar { background: rgba(0,12,3,0.90) !important; border-color: rgba(0,255,65,0.25) !important; }
 html:has(.mode-404) .studio-empty { color: rgba(0,255,65,0.50) !important; font-family: 'Courier New', monospace !important; }
-html:has(.mode-404) .studio-redesign-btn, html:has(.mode-404) .studio-retry-btn, html:has(.mode-404) .studio-history-btn, html:has(.mode-404) .studio-export-btn, html:has(.mode-404) .studio-wb-compress-btn { background: rgba(0,18,0,0.82) !important; border: 1px solid rgba(0,255,65,0.40) !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-redesign-btn, html:has(.mode-404) .studio-retry-btn, html:has(.mode-404) .studio-history-btn, html:has(.mode-404) .studio-export-btn { background: rgba(0,18,0,0.82) !important; border: 1px solid rgba(0,255,65,0.40) !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
 
-/* worldbook mode 內：todo / gallery / pending / vn-history 系列 */
-html:has(.mode-404) #studio-todo-content, html:has(.mode-404) #studio-gallery-content { background: transparent !important; color: #b8ffcb !important; }
-html:has(.mode-404) .todo-list, html:has(.mode-404) .todo-item { background: rgba(0,15,5,0.78) !important; border: 1px solid rgba(0,255,65,0.20) !important; color: #b8ffcb !important; }
-html:has(.mode-404) .todo-text, html:has(.mode-404) .todo-text-input { color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
-html:has(.mode-404) .todo-text-input { background: rgba(0,18,0,0.90) !important; border-color: rgba(0,255,65,0.30) !important; }
-html:has(.mode-404) .todo-side-header, html:has(.mode-404) .todo-side-title { color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
-html:has(.mode-404) .todo-side-stats { color: rgba(0,255,65,0.60) !important; }
-html:has(.mode-404) .todo-side-progress { background: rgba(0,255,65,0.10) !important; }
-html:has(.mode-404) .todo-side-progress-bar { background: #00ff41 !important; }
-html:has(.mode-404) .todo-add-btn, html:has(.mode-404) .todo-add-confirm { background: #001a00 !important; border: 1px solid #00ff41 !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
-html:has(.mode-404) .todo-add-input { background: rgba(0,18,0,0.90) !important; border-color: rgba(0,255,65,0.30) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
-html:has(.mode-404) .todo-add-row { background: rgba(0,15,5,0.85) !important; border-color: rgba(0,255,65,0.25) !important; }
-html:has(.mode-404) .todo-add-cancel { color: rgba(0,255,65,0.60) !important; }
-html:has(.mode-404) .todo-del-btn { color: #ff8080 !important; }
-html:has(.mode-404) .todo-checkbox { accent-color: #00ff41 !important; }
+/* gallery / pending / vn-history 系列 */
+html:has(.mode-404) #studio-gallery-content { background: transparent !important; color: #b8ffcb !important; }
 
 html:has(.mode-404) .studio-gallery-list { background: transparent !important; }
 html:has(.mode-404) .studio-gallery-card { background: rgba(0,15,5,0.82) !important; border: 1px solid rgba(0,255,65,0.30) !important; color: #b8ffcb !important; }
