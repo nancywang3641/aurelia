@@ -338,7 +338,10 @@
         let entries = (groups[st.world] || []).slice();
         if (st.filter === 'fav') entries = entries.filter(e => e.favorite);
         else if (st.filter === 'unused') entries = entries.filter(e => !e.favorite);
-        entries.sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0));
+        // 收藏置頂，其餘照時間新→舊（lastUsed 寫入時自動蓋章；舊資料沒章的沉底）
+        entries.sort((a, b) =>
+            ((b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)) ||
+            ((b.lastUsed || b.createdAt || 0) - (a.lastUsed || a.createdAt || 0)));
 
         if (!entries.length) {
             const em = document.createElement('div'); em.className = 'vng-empty';
