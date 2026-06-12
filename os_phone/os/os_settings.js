@@ -1450,7 +1450,7 @@ EXAMPLE "prompt" value:
                                 <!-- ── 場景插圖尺寸（獨立於主圖片尺寸）── -->
                                 <div style="margin-bottom:12px;">
                                     <div class="set-label" style="font-size:11px;">📐 場景插圖尺寸</div>
-                                    <select class="set-select" id="img-scene-size" style="font-size:12px;">
+                                    <select class="set-select" id="img-scene-size" style="font-size:12px;" onchange="document.getElementById('img-scene-size-custom').style.display=(this.value==='custom')?'':'none';">
                                         <option value="512x512"   ${(imgConfig.sceneGen?.size||'1024x1024')==='512x512'   ? 'selected':''}>512×512（最快最省，較糊）</option>
                                         <option value="768x768"   ${(imgConfig.sceneGen?.size||'1024x1024')==='768x768'   ? 'selected':''}>768×768（平衡）</option>
                                         <option value="1024x1024" ${(imgConfig.sceneGen?.size||'1024x1024')==='1024x1024' ? 'selected':''}>1024×1024（清晰，推薦）</option>
@@ -1458,8 +1458,10 @@ EXAMPLE "prompt" value:
                                         <option value="768x1024"  ${(imgConfig.sceneGen?.size||'1024x1024')==='768x1024'  ? 'selected':''}>768×1024（直幅）</option>
                                         <option value="1216x832"  ${(imgConfig.sceneGen?.size||'1024x1024')==='1216x832'  ? 'selected':''}>1216×832（NAI 橫幅）</option>
                                         <option value="832x1216"  ${(imgConfig.sceneGen?.size||'1024x1024')==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
+                                        <option value="custom"    ${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? 'selected':''}>✏️ 自訂…</option>
                                     </select>
-                                    <div style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:3px;">← 越大越清晰但越耗點數。獨立於主圖片尺寸設定。</div>
+                                    <input class="set-input" id="img-scene-size-custom" type="text" placeholder="寬x高，例如 1020x1020" value="${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? (imgConfig.sceneGen?.size||'') : ''}" style="font-size:12px; margin-top:6px; display:${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? '' : 'none'};">
+                                    <div style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:3px;">← 越大越清晰但越耗點數。自訂填「寬x高」(數字)；多數模型建議用 64 的倍數(如 1024)。</div>
                                 </div>
 
                                 <!-- ── Prompt 風格 ── -->
@@ -3107,7 +3109,7 @@ EXAMPLE "prompt" value:
                     },
                     sceneGen: {
                         promptStyle:      container.querySelector('#img-scene-prompt-style')?.value || 'auto',
-                        size:             container.querySelector('#img-scene-size')?.value || '1024x1024',
+                        size:             (() => { const _sz = container.querySelector('#img-scene-size'); if (_sz?.value === 'custom') { const _c = (container.querySelector('#img-scene-size-custom')?.value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x'); return /^\d{2,5}x\d{2,5}$/.test(_c) ? _c : '1024x1024'; } return _sz?.value || '1024x1024'; })(),
                         sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
                         sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
                         extractEnabled:   container.querySelector('#img-scene-extract-enabled')?.checked ?? false,
