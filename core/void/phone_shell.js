@@ -226,6 +226,7 @@
         const standalone = !!document.getElementById('aurelia-standalone-root');
         const tools = [
             { id: 'sysset', name: '系統設置', emoji: '⚙️', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
+            { id: 'album',  name: '相簿',   emoji: '📷', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
             { id: 'avsvar', name: '變數工坊', emoji: '🎲', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
             { id: 'studio', name: '創作室',   emoji: '🎨', mode: 'inside', go: function (c) { _mountTool(win.OS_STUDIO && win.OS_STUDIO.launch, c); } },
         ];
