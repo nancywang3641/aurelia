@@ -158,6 +158,14 @@ $serverScript = {
                         if ($svc -in @('comfy','all',''))  { Stop-Svc 'comfy'  $cfg.ComfyPort  | Out-Null; Start-Sleep -Seconds 1; $r.comfy  = Start-Comfy }
                         $body = ($r | ConvertTo-Json)
                     }
+                    '/free' {
+                        # ComfyUI 內建卸載：放掉快取的模型＋清空閒置顯存（不重啟；下次生圖會重載模型，多花 10~20 秒）
+                        try {
+                            Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$($cfg.ComfyPort)/free" `
+                                -ContentType 'application/json' -Body '{"unload_models":true,"free_memory":true}' -TimeoutSec 10 | Out-Null
+                            $body = '{"ok":true}'
+                        } catch { $body = '{"ok":false,"error":"comfy not running"}' }
+                    }
                     '/open' { Start-Process "http://127.0.0.1:$($cfg.ComfyPort)"; $body = '{"ok":true}' }
                     default { $res.StatusCode = 404; $body = '{"error":"not found"}' }
                 }
@@ -221,6 +229,7 @@ $null = $menu.Items.Add('■ 全部停止').add_Click({ Invoke-Tower '/stop?svc=
 $null = $menu.Items.Add('-')
 $null = $menu.Items.Add('🎙️ 重啟語音 (SoVITS)').add_Click({ Invoke-Tower '/restart?svc=sovits' })
 $null = $menu.Items.Add('🎨 重啟生圖 (ComfyUI)').add_Click({ Invoke-Tower '/restart?svc=comfy' })
+$null = $menu.Items.Add('🧹 釋放顯存 (卸載模型)').add_Click({ Invoke-Tower '/free'; $tray.ShowBalloonTip(2000, '奧瑞亞控制塔', '已要求 ComfyUI 卸載模型釋放顯存', 'Info') })
 $null = $menu.Items.Add('🌐 開 ComfyUI 網頁').add_Click({ Start-Process "http://127.0.0.1:$($CFG.ComfyPort)" })
 $null = $menu.Items.Add('-')
 $null = $menu.Items.Add('結束控制塔（服務照跑）').add_Click({
