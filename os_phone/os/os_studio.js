@@ -369,6 +369,13 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
                 if (win.OS_DB && win.OS_DB.saveVNTagTemplate) {
                     if (!data.id) data.id = 'tpl_' + Date.now();
                     data.isActive = true;
+                    // caps 自動標：js 有用 st.callAI/st.setImage = 能生成；有用 lines/container = 能展示
+                    (function () {
+                        var js = String(data.js || '');
+                        var canGen = /st\.callAI\s*\(|st\.setImage\s*\(/.test(js);
+                        var canShow = /\blines\b/.test(js) || /container/.test(js);
+                        data.caps = (canGen && canShow) ? 'both' : (canGen ? 'gen' : 'display');
+                    })();
                     await win.OS_DB.saveVNTagTemplate(data);
                     await syncActiveTagsToLocal();
                     if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
