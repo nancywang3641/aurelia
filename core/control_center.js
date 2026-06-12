@@ -68,48 +68,10 @@
         if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
     }
 
-    function createBottomNav(parentDoc) {
-        const nav = parentDoc.createElement('div');
-        nav.id = CONFIG.BOTTOM_NAV_ID; 
-        // 🌟 修復底部黑邊：加上 padding-bottom: env(safe-area-inset-bottom) 與 box-sizing 以適配 iPhone 底部小白條安全區域
-        nav.style.cssText = `height: 55px; background: #ffffff; border-top: 1px solid #e0e5ec; display: flex; justify-content: center; align-items: center; gap: 15px; box-shadow: 0 -5px 15px rgba(0,0,0,0.02); flex-shrink: 0; z-index: 200; position: relative; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box;`;
-
-        // 「我 / 角色」TAB 已移除：人設改由大廳右上角頭像下拉接管（OS_PERSONA.launch）。
-        // 這個位置刻意留空，保留給未來新功能。
-        const items = [
-            { id: 'nav-home',  icon: 'fa-solid fa-cube',     active: true,  title: '大廳' },
-            { id: 'nav-write', icon: 'fa-solid fa-pen-nib',  active: false, title: '寫作' },
-            { id: 'nav-close', icon: 'fa-solid fa-power-off', isClose: true, title: '關閉' }
-        ];
-
-        items.forEach(item => {
-            const btn = parentDoc.createElement('div');
-            btn.className = 'nav-button';
-            
-            // 🌟 修復初始高亮：為預設啟用的大廳加上 active 與 active-gold
-            if (item.active) {
-                btn.classList.add('active');
-                btn.classList.add('active-gold');
-            }
-
-            btn.dataset.navId = item.id;
-            btn.style.cssText = `padding: 8px 16px; cursor: pointer; border-radius: 12px; color: ${item.active ? '#2b6cb0' : '#a0aec0'}; display: flex; align-items: center; gap: 6px; font-family: sans-serif; transition: 0.2s; ${item.active ? 'background:#ebf8ff;' : ''}`;
-            btn.innerHTML = `<i class="${item.icon}" style="font-size: 16px;"></i><span style="font-size:12px; font-weight:bold;">${item.title}</span>`;
-            
-            btn.onclick = () => {
-                if (item.isClose) {
-                    if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) window.AureliaHtmlExtractor.hide();
-                    // 🛟 StoryExtractor 也劫持了 #form_sheld，沒先呼叫 hide 還原會讓酒館輸入框跟著消失
-                    if (window.StoryExtractor && window.StoryExtractor.isVisible) {
-                        try { window.StoryExtractor.hide(); } catch (_) {}
-                    }
-                    AureliaControlCenter.hide();
-                } else switchPage(item.id);
-            };
-            nav.appendChild(btn);
-        });
-        return nav;
-    }
+    // ── 舊「底部/左側導覽列」(大廳 / 寫作 / 關閉) 已移除（2026-06-12）──
+    //    三顆併入大廳 MAIN MENU（void_terminal.js）：寫作 → switchPage('nav-write')、
+    //    關閉 → AureliaControlCenter.requestClose()。寫作頁自帶「返回大廳」鈕。
+    //    遊戲/VN/OS app 本來就各自有返回鈕，不靠這條 rail。
 
     function switchPage(pageId) {
         const root = isEmbedded ? embeddedRoot : phoneModal;
@@ -139,27 +101,6 @@
                 vnReader.style.display = 'flex';
             }
         }
-
-        container.querySelectorAll('.nav-button').forEach(btn => {
-            if (btn.dataset.navId === 'nav-close') return;
-            const active = btn.dataset.navId === pageId;
-            
-            // 🌟 修復 TAB 狀態卡死：同步切換 active / active-gold 類名，突破 CSS 的 !important 限制
-            if (active) {
-                btn.classList.add('active');
-                btn.classList.add('active-gold');
-            } else {
-                btn.classList.remove('active');
-                btn.classList.remove('active-gold');
-            }
-
-            if (btn.style.background !== 'transparent' && btn.style.background.includes('rgba(0, 255, 65')) {
-                // 404 mode ignore
-            } else {
-                btn.style.color = active ? '#2b6cb0' : '#a0aec0';
-                btn.style.background = active ? '#ebf8ff' : 'transparent';
-            }
-        });
 
         container.querySelectorAll('.aurelia-tab').forEach(tab => tab.style.display = 'none');
         const target = container.querySelector('#' + pageId.replace('nav-', 'aurelia-') + '-tab');
@@ -255,13 +196,6 @@
         document.querySelectorAll('.aurelia-tab').forEach(t => { t.style.display = 'none'; });
         const homeTab = document.getElementById('aurelia-home-tab');
         if (homeTab) homeTab.style.display = 'flex';
-        document.querySelectorAll('.nav-button').forEach(btn => {
-            const isHome = btn.dataset.navId === 'nav-home';
-            btn.classList.toggle('active', isHome);
-            btn.classList.toggle('active-gold', isHome);
-            btn.style.color = isHome ? '#2b6cb0' : '#a0aec0';
-            btn.style.background = isHome ? '#ebf8ff' : 'transparent';
-        });
 
         if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
     }
@@ -296,6 +230,7 @@
         writeTab.style.cssText = `width:100%; height:100%; display:none; position:relative; flex-direction:column; overflow:hidden;`;
         writeTab.innerHTML = `
             <div class="write-tab-content">
+                <button class="write-tab-back" id="write-back-home" title="返回大廳"><i class="fa-solid fa-chevron-left"></i><span>返回大廳</span></button>
                 <div class="write-tab-title-block">
                     <div class="write-tab-title">寫作設置</div>
                     <div class="write-tab-subtitle">WRITING · SYSTEM</div>
@@ -331,6 +266,10 @@
             if (window.VoidTerminal && window.VoidTerminal.logout) window.VoidTerminal.logout();
         });
 
+        // 返回大廳（rail 已移除，寫作頁靠這顆回大廳）
+        const wBackBtn = writeTab.querySelector('#write-back-home');
+        if (wBackBtn) wBackBtn.addEventListener('click', () => switchPage('nav-home'));
+
         // 🌟 雙層架構 1：寫作 TAB 專用的視窗 (只會覆蓋寫作頁面)
         const writePanel = parentDoc.createElement('div');
         writePanel.id = 'write-panel-container';
@@ -349,19 +288,18 @@
         screen.id = CONFIG.PHONE_SCREEN_ID;
         screen.style.cssText = `width: 100%; height: 100%; background: #f8f9fa; overflow: hidden; display: flex; flex-direction: column; position: relative;`;
         screen.appendChild(createTabContainer(parentDoc));
-        screen.appendChild(createBottomNav(parentDoc));
 
         // 🌟 雙層架構 2：全螢幕全域視窗 (給遊戲 Apps 使用，避開底部導覽列)
         const slidePanel = parentDoc.createElement('div');
         slidePanel.id = 'aurelia-panel-container';
-        slidePanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom:calc(55px + env(safe-area-inset-bottom, 0px)); background: #EEF0F6; z-index: 50; display: none; flex-direction: column;`;
+        slidePanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom: env(safe-area-inset-bottom, 0px); background: #EEF0F6; z-index: 50; display: none; flex-direction: column;`;
         slidePanel.innerHTML = `<div id=\"aurelia-iframe-container\" style=\"width:100%; height:100%; background:#EEF0F6; overflow:hidden; position:relative;\"></div>`;
         screen.appendChild(slidePanel);
 
         // 🌟 VN 專用全螢幕 overlay（從大廳直接彈出，z-index 51 覆蓋其他 overlay）
         const vnPanel = parentDoc.createElement('div');
         vnPanel.id = 'aurelia-vn-panel';
-        vnPanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom:calc(55px + env(safe-area-inset-bottom, 0px)); background:#000; z-index: 51; display: none; flex-direction: column;`;
+        vnPanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom: env(safe-area-inset-bottom, 0px); background:#000; z-index: 51; display: none; flex-direction: column;`;
 
         const vnAppContainer = parentDoc.createElement('div');
         vnAppContainer.id = 'aurelia-vn-app-container';
@@ -489,16 +427,14 @@
         });
         embedObserver.observe(containerEl, { childList: true });
 
-        // ── 獨立模式：JS 強制把底部導覽列釘死到真實視口底部 ──
-        // 這是 CSS position:fixed 的保險層，確保即使 CSS 快取還是舊版也能正確定位
+        // ── 獨立模式：JS 強制把 tab 容器填滿整個視口（底部 rail 已移除）──
+        // CSS 快取保險層：即使舊版 CSS 還留著「讓 55px 給 rail」的 bottom，也用 inline !important 蓋掉。
         if (isStandalone) {
-            function applyNavFix() {
-                const nav = document.getElementById('aurelia-bottom-nav');
+            function applyTabFix() {
                 const tabCont = document.getElementById('aurelia-tab-container');
-                if (!nav) return false;
+                if (!tabCont) return false;
 
                 // 讀取真實 safe-area（iOS home indicator 區域）
-                // 建立臨時 DOM 元素量測 env(safe-area-inset-bottom) 的實際像素值
                 const safeAreaBottom = (() => {
                     const el = document.createElement('div');
                     el.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);width:0;pointer-events:none;visibility:hidden;';
@@ -508,45 +444,28 @@
                     return h;
                 })();
 
-                const NAV_H = 55; // nav 可見內容高度 px
-
-                // 強制 nav 貼底（inline !important 覆蓋所有 CSS）
-                nav.style.setProperty('position',       'fixed',             'important');
-                nav.style.setProperty('bottom',         '0px',               'important');
-                nav.style.setProperty('left',           '0px',               'important');
-                nav.style.setProperty('right',          '0px',               'important');
-                nav.style.setProperty('width',          '100%',              'important');
-                nav.style.setProperty('height',         NAV_H + 'px',        'important');
-                nav.style.setProperty('padding-bottom', safeAreaBottom + 'px','important');
-                nav.style.setProperty('box-sizing',     'content-box',       'important');
-                nav.style.setProperty('align-items',    'center',            'important');
-                nav.style.setProperty('z-index',        '9999',              'important');
-
-                // tab 容器：position:absolute 填滿 nav 上方空間
-                if (tabCont) {
-                    const totalNavH = NAV_H + safeAreaBottom;
-                    tabCont.style.setProperty('position', 'absolute', 'important');
-                    tabCont.style.setProperty('top',    '0px',             'important');
-                    tabCont.style.setProperty('left',   '0px',             'important');
-                    tabCont.style.setProperty('right',  '0px',             'important');
-                    tabCont.style.setProperty('bottom', totalNavH + 'px',  'important');
-                    tabCont.style.setProperty('flex',   'none',            'important');
-                    tabCont.style.setProperty('height', 'auto',            'important');
-                }
+                // tab 容器：position:absolute 填滿整個視口，只留 home indicator 安全區
+                tabCont.style.setProperty('position', 'absolute',          'important');
+                tabCont.style.setProperty('top',    '0px',                 'important');
+                tabCont.style.setProperty('left',   '0px',                 'important');
+                tabCont.style.setProperty('right',  '0px',                 'important');
+                tabCont.style.setProperty('bottom', safeAreaBottom + 'px', 'important');
+                tabCont.style.setProperty('flex',   'none',                'important');
+                tabCont.style.setProperty('height', 'auto',                'important');
                 return true;
             }
 
-            // 初始修正：nav 可能尚未掛載，持續重試直到成功
-            requestAnimationFrame(function _fixNav() {
-                if (!applyNavFix()) requestAnimationFrame(_fixNav);
+            // 初始修正：tab 容器可能尚未掛載，重試直到成功（找到即停，不會空轉）
+            requestAnimationFrame(function _fixTab() {
+                if (!applyTabFix()) requestAnimationFrame(_fixTab);
             });
 
-            // 螢幕旋轉時 safe-area-inset 會改變，重新套用修正
+            // 螢幕旋轉時 safe-area-inset 會改變，重新套用
             window.addEventListener('orientationchange', function() {
-                setTimeout(applyNavFix, 300); // 等待旋轉動畫完成再量測
+                setTimeout(applyTabFix, 300);
             });
             window.addEventListener('resize', function() {
-                applyNavFix();
+                applyTabFix();
             });
         }
 
@@ -702,6 +621,14 @@
     AureliaControlCenter.switchPage = switchPage;
     AureliaControlCenter.showVnPanel = showVnPanel;
     AureliaControlCenter.hideVnPanel = hideVnPanel;
+
+    // 收掉整個奧瑞亞（大廳 MAIN MENU 的「關閉」走這條）。
+    // 先還原 html_extractor / StoryExtractor 劫持的 #form_sheld，否則酒館輸入框會跟著消失。
+    AureliaControlCenter.requestClose = function() {
+        try { if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) window.AureliaHtmlExtractor.hide(); } catch (_) {}
+        try { if (window.StoryExtractor && window.StoryExtractor.isVisible) window.StoryExtractor.hide(); } catch (_) {}
+        AureliaControlCenter.hide();
+    };
 
     AureliaControlCenter.setChatTitle = function(title) {
         const el = document.getElementById('aurelia-current-chat-title');
