@@ -72,8 +72,8 @@
 }
 .aps-icon:active .aps-icon-em { transform: scale(0.9); }
 .aps-icon-em.aps-icon-img { font-size: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
-/* 標籤墊半透明深色膠囊 + 陰影：不靠桌布顏色，任何桌布(含亮米咖)都讀得清 */
-.aps-icon-name { font-size: 11px; color: var(--aps-label-color); letter-spacing: 0.5px; display: inline-block; padding: 1px 7px; border-radius: 9px; background: rgba(15,18,28,0.5); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+/* iOS 風：乾淨白字 + 柔和暗暈(無方塊)，靠高模糊的淡暗光在亮桌布上也讀得清 */
+.aps-icon-name { font-size: 11px; font-weight: 500; color: var(--aps-label-color); letter-spacing: 0.3px; text-shadow: 0 1px 2px rgba(0,0,0,0.55), 0 0 5px rgba(0,0,0,0.45), 0 0 9px rgba(0,0,0,0.28); }
 /* 字體「硬套用」：蓋掉所有 app(連寫死字體的)，只放過 fa 圖標/svg 不破壞 */
 .aps-frame.aps-font-on .aps-app-body *:not(i):not(svg):not([class*="fa-"]) { font-family: var(--aps-font) !important; }
 
