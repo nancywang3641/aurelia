@@ -236,7 +236,20 @@
     }
     async function _vngRegen(cfg, fullKey, val, prompt) {
         // force=true：頭像走 generate() 會查記憶體快取(_urlCache)，同 prompt 會吐舊圖 → 重生必須強制繞過
-        const raw = cfg.kind === 'bg' ? await VN_Image.getBg(prompt, {}) : await VN_Image.getAvatar(prompt, 'Neutral', true);
+        let raw;
+        if (cfg.kind === 'bg') raw = await VN_Image.getBg(prompt, {});
+        else if (cfg.kind === 'scene') {
+            // 場景插圖：同 getScene 的尺寸設定，但帶 force 繞過記憶體快取
+            const _W = window.parent || window;
+            let _sw = 1024, _sh = 1024;
+            try {
+                const _sz = (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen || {}).size || '1024x1024';
+                const _p = String(_sz).split('x').map(Number);
+                if (_p[0] && _p[1]) { _sw = _p[0]; _sh = _p[1]; }
+            } catch (e) {}
+            raw = _W.OS_IMAGE_MANAGER ? await _W.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: true }) : '';
+        }
+        else raw = await VN_Image.getAvatar(prompt, 'Neutral', true);
         if (!raw) return;
         const url = (await _imgToDataUrl(raw)) || raw;
         await VN_Cache.setRaw(cfg.store, fullKey, { ...val, prompt, url, rawUrl: raw });
@@ -263,7 +276,12 @@
         } else if (st.world !== curWorld) {
             add('⧉ 複製到當前世界', async () => { await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld }); alert('已複製到當前世界'); });
         }
-        add('🗑 刪除', async () => { await VN_Cache.deleteRaw(store, fullKey); if (cfg.kind === 'avatar' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; } catch (e) {} } rerender(); }, true);
+        add('🗑 刪除', async () => {
+            await VN_Cache.deleteRaw(store, fullKey);
+            if (cfg.kind === 'avatar' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; } catch (e) {} }
+            if (cfg.kind === 'scene' && window.VN_Core) { try { delete window.VN_Core._sceneMemCache[bare]; } catch (e) {} }
+            rerender();
+        }, true);
         document.body.appendChild(menu);
         const r = anchor.getBoundingClientRect();
         let left = r.right - menu.offsetWidth; if (left < 6) left = 6;
@@ -273,8 +291,8 @@
     }
     function _vngCard(cfg, entry, curWorld, st, rerender) {
         const bare = VN_Cache.bareKeyOf(entry);
-        const card = document.createElement('div'); card.className = 'vng-card' + (cfg.kind === 'bg' ? ' kind-bg' : '') + (cfg.kind === 'sprite' ? ' kind-sprite' : '');
-        const _ph = () => { const d = document.createElement('div'); d.className = 'vng-ph'; d.textContent = cfg.kind === 'bg' ? '🌄' : (cfg.kind === 'sprite' ? '🎭' : '👤'); return d; };
+        const card = document.createElement('div'); card.className = 'vng-card' + ((cfg.kind === 'bg' || cfg.kind === 'scene') ? ' kind-bg' : '') + (cfg.kind === 'sprite' ? ' kind-sprite' : '');
+        const _ph = () => { const d = document.createElement('div'); d.className = 'vng-ph'; d.textContent = cfg.kind === 'bg' ? '🌄' : (cfg.kind === 'scene' ? '🎬' : (cfg.kind === 'sprite' ? '🎭' : '👤')); return d; };
         if (entry.url && !entry.url.startsWith('blob:')) {
             const img = document.createElement('img'); img.src = entry.url; img.onerror = () => img.replaceWith(_ph()); card.appendChild(img);
         } else card.appendChild(_ph());
@@ -369,6 +387,7 @@
     }
 
     async function loadBgManager(listId) { return _renderImgMgr({ store: 'bg_cache', listId: listId || 'bg-mgr-list', kind: 'bg' }); }
+    async function loadSceneManager(listId) { return _renderImgMgr({ store: 'scene_cache', listId: listId || 'scene-mgr-list', kind: 'scene' }); }
     async function regenerateBgEntry(btn, key, textarea, previewImg) {
         const prompt = textarea.value.trim(); if (!prompt) return;
         const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
@@ -707,6 +726,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg,
         loadAvatarManager, regenerateAvatarEntry, deleteAvatarEntry,
         loadBgManager, regenerateBgEntry, deleteBgEntry, loadSpriteManager,
+        loadSceneManager,
         openChapterPanel, closeChapterPanel
     };
 })();

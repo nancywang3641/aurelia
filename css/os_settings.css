@@ -64,21 +64,6 @@
         input:checked + .slider:before { transform: translateX(20px); background-color: #1A1C28; box-shadow: 0 0 8px rgba(26,28,40,0.5); }
         .set-status { font-size: 11px; font-weight: bold; color: rgba(26,28,40,0.72); text-align: center; margin-top: 20px; min-height: 20px; padding-bottom: 20px; letter-spacing: 1px; }
 
-        /* 🎬 場景插圖展廳 */
-        .sgal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 8px; }
-        .sgal-card { border: 1px solid rgba(26,28,40,0.15); border-radius: 8px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
-        .sgal-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; cursor: zoom-in; background: rgba(26,28,40,0.06); }
-        .sgal-meta { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 0; }
-        .sgal-world { font-size: 9px; color: rgba(26,28,40,0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; }
-        .sgal-world-cur { color: #2b6cb0; font-weight: 700; }
-        .sgal-del { cursor: pointer; font-size: 11px; opacity: 0.55; }
-        .sgal-del:hover { opacity: 1; }
-        .sgal-prompt { font-size: 10px; color: rgba(26,28,40,0.65); line-height: 1.5; padding: 4px 6px 6px; cursor: copy; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; transition: background 0.3s; }
-        .sgal-prompt:hover { background: rgba(26,28,40,0.05); }
-        .sgal-copied { background: rgba(72,187,120,0.25) !important; }
-        .sgal-empty { grid-column: 1 / -1; text-align: center; color: rgba(26,28,40,0.5); font-size: 12px; padding: 28px 0; line-height: 2; }
-        .sgal-empty-sub { font-size: 10px; color: rgba(26,28,40,0.35); }
-
         /* 生圖預設包 匯入/匯出 */
         .cfd-pack-io-row { display: flex; gap: 6px; margin-top: 8px; }
         .cfd-pack-io-row .set-btn { flex: 1; white-space: nowrap; }
