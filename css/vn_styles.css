@@ -1263,9 +1263,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-cc-mini:disabled { opacity: 0.6; }
 
         /* 🎬 場景CG overlay（人物+場景合圖，z-index 5 = sprites之上、text-panel之下）*/
-        #scene-cg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; display: none; background: #000; align-items: center; justify-content: center; }
-        #scene-cg-overlay.active { display: flex; animation: sceneCgIn 0.5s ease both; }
-        #scene-cg-overlay img { width: 100%; height: 100%; object-fit: contain; }
+        /* 鋪底式場景插圖：z5 在背景/立繪之上、對話框(z10)之下；opacity 淡入淡出、不擋點擊(劇情在上面走) */
+        #scene-cg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; display: flex; background: transparent; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.5s ease; }
+        #scene-cg-overlay.active { opacity: 1; }
+        #scene-cg-overlay img { width: 100%; height: 100%; object-fit: cover; }
         @keyframes sceneCgIn { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
         
         #char-portrait {

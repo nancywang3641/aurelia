@@ -42,6 +42,7 @@
         _bgInflight: {},   // 進行中的背景生成(cacheId→promise)：去重，避免預熱+現場對同一場景各生一張(競態→重開不同圖)
         _sceneMemCache: {},
         _sceneInflight: {}, // 進行中的場景CG生成(cacheId→promise)：同 _bgInflight，防預熱+現場重複生成
+        _sceneCgLinger: 0,  // 鋪底式場景插圖剩餘停留句數（3→0 淡出）；0=沒在顯示
         _itemMemCache: {},
         _itemInflight: {},  // 進行中的道具圖生成(itemName→promise)：同 _bgInflight
         _avatarMemCache: {},
@@ -208,6 +209,7 @@
             if (sceneCgOverlay) sceneCgOverlay.classList.remove('active');
             const sceneCgImg = document.getElementById('scene-cg-img');
             if (sceneCgImg) sceneCgImg.src = '';
+            this._sceneCgLinger = 0;
 
             const bg = document.getElementById('game-bg');
             if (bg) {
@@ -1781,7 +1783,7 @@
                     const _cgImg   = document.getElementById('scene-cg-img');
                     if (_overlay && _cgImg) {
                         _overlay.classList.add('active');
-                        this.hideVNPanel();
+                        this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出（不藏對話框、不擋流程）
                         const _memUrl  = this._sceneMemCache[_cacheId];
                         if (_memUrl) { _cgImg.src = _memUrl; }
                         else {
@@ -1793,7 +1795,7 @@
                         }
                     }
                 }
-                return; // 等用戶點擊繼續（scene-cg-overlay 的關閉按鈕呼叫 next()）
+                this.next(); return; // 不擋流程：插圖鋪著、劇情繼續往下走
             }
             if (line === '</scene>') { this.next(); return; }
 
@@ -1920,7 +1922,7 @@
                 const cgImg   = document.getElementById('scene-cg-img');
                 if (overlay && cgImg) {
                     overlay.classList.add('active');
-                    this.hideVNPanel();
+                    this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出
                     const memUrl = this._sceneMemCache[cacheId];
                     if (memUrl) {
                         cgImg.src = memUrl;
@@ -1932,7 +1934,7 @@
                         })();
                     }
                 }
-                return;
+                this.next(); return;
             }
 
             if (line.startsWith('[Bg|')) {
@@ -2441,6 +2443,16 @@
         },
         parseMarkdown: function(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'<em>$1</em>'); },
         renderVN: function(n, t, mode) {
+            // 🎬 鋪底式場景插圖：每渲染一句對話 -1，停滿 3 句就淡出（CSS opacity transition）
+            if (this._sceneCgLinger > 0) {
+                this._sceneCgLinger--;
+                if (this._sceneCgLinger <= 0) {
+                    const _scOv = document.getElementById('scene-cg-overlay');
+                    if (_scOv) _scOv.classList.remove('active');
+                    const _scIm = document.getElementById('scene-cg-img');
+                    if (_scIm) setTimeout(() => { const o = document.getElementById('scene-cg-overlay'); if (o && !o.classList.contains('active')) _scIm.src = ''; }, 600);
+                }
+            }
             const nel = document.getElementById('speaker-name');
             const panel = document.getElementById('text-panel');
             const dtEl = document.getElementById('dialogue-text');
