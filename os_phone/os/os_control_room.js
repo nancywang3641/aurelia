@@ -55,6 +55,7 @@
                                 <button class="cr-btn" data-act="start" data-svc="comfy">啟動</button>
                                 <button class="cr-btn" data-act="restart" data-svc="comfy">重啟</button>
                                 <button class="cr-btn cr-btn-danger" data-act="stop" data-svc="comfy">停止</button>
+                                <button class="cr-btn" id="cr-free-vram" title="卸載快取的模型、清空顯存（不重啟；下次生圖會重載模型，多花十幾秒）">🧹 釋顯存</button>
                                 <button class="cr-btn" id="cr-open-web">開網頁</button>
                             </div>
                         </div>
@@ -71,6 +72,13 @@
             });
             const openBtn = container.querySelector('#cr-open-web');
             if (openBtn) openBtn.onclick = () => { this._post('/open'); };
+            const freeBtn = container.querySelector('#cr-free-vram');
+            if (freeBtn) freeBtn.onclick = async () => {
+                const foot = container.querySelector('#cr-foot');
+                if (foot) foot.textContent = '🧹 正在卸載模型、釋放顯存…';
+                await this._post('/free');
+                setTimeout(() => this._tick(container), 1200);   // 稍等再刷，VRAM 條會看到掉下來
+            };
 
             this._startPolling(container);
         },
