@@ -215,7 +215,7 @@
 
             // ── 依 promptStyle 決定 prompt 格式指令 ──────────────────────
             const _rawStyle  = sceneCfg.promptStyle || 'auto';
-            const _globalSvc = (win.OS_IMAGE_MANAGER?.config?.service) || 'pollinations';
+            const _globalSvc = ((typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('scene') : (win.OS_IMAGE_MANAGER?.config?.service)) || 'pollinations';
             const _useNatural = _rawStyle === 'natural' || (_rawStyle === 'auto' && _globalSvc !== 'novelai');
 
             const _taskInstruction = _useNatural ? [

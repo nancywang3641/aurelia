@@ -58,6 +58,8 @@
         let saved = localStorage.getItem(IMG_STORAGE_KEY);
         let config = {
             service: 'pollinations',
+            serviceInanimate: 'pollinations', // 死物桶：背景/物品/寵物
+            serviceLiving: 'pollinations',    // 活物桶：角色/插圖
             pollinations: {
                 url: 'https://gen.pollinations.ai/image',
                 apiKey: '',
@@ -307,7 +309,10 @@ EXAMPLE "prompt" value:
         
         const win = window.parent || window;
         if (win.OS_IMAGE_MANAGER) {
-            win.OS_IMAGE_MANAGER.config.service = imgData.service;
+            // 兩桶 + legacy mirror（service = serviceLiving）
+            win.OS_IMAGE_MANAGER.config.serviceInanimate = imgData.serviceInanimate || imgData.service;
+            win.OS_IMAGE_MANAGER.config.serviceLiving = imgData.serviceLiving || imgData.service;
+            win.OS_IMAGE_MANAGER.config.service = imgData.serviceLiving || imgData.service;
             if (imgData.pollinations) {
                 win.OS_IMAGE_MANAGER.config.pollinations = {
                     ...win.OS_IMAGE_MANAGER.config.pollinations,
@@ -327,7 +332,7 @@ EXAMPLE "prompt" value:
                     ...imgData.comfyuiDirect
                 };
             }
-            console.log('[OS設置] ✅ 圖片管理器配置已更新, service:', imgData.service);
+            console.log('[OS設置] ✅ 圖片管理器配置已更新, 死物桶:', win.OS_IMAGE_MANAGER.config.serviceInanimate, '活物桶:', win.OS_IMAGE_MANAGER.config.serviceLiving);
         }
     }
 
@@ -750,7 +755,10 @@ EXAMPLE "prompt" value:
                 }
                 // 高清修復：ComfyUI 直連專屬，依當前來源顯示/隱藏
                 const _win2 = window.parent || window;
-                const _svc = (_win2.OS_IMAGE_MANAGER && _win2.OS_IMAGE_MANAGER.config && _win2.OS_IMAGE_MANAGER.config.service) || '';
+                // 立繪是 char 型 → 走活物桶
+                const _svc = (_win2.OS_IMAGE_MANAGER && typeof _win2.OS_IMAGE_MANAGER.serviceFor === 'function')
+                    ? _win2.OS_IMAGE_MANAGER.serviceFor('char')
+                    : ((_win2.OS_IMAGE_MANAGER && _win2.OS_IMAGE_MANAGER.config && _win2.OS_IMAGE_MANAGER.config.service) || '');
                 const hiresRow = document.getElementById('sprite-hires-row');
                 const hiresEl = document.getElementById('sprite-hires');
                 if (hiresRow) hiresRow.style.display = (_svc === 'comfyui_direct') ? 'inline-flex' : 'none';
@@ -1073,15 +1081,23 @@ EXAMPLE "prompt" value:
                         </div>
                         <div id="view-img-api" class="img-subtab-view">
                         <div class="set-group">
-                            <div class="set-label">生成服務</div>
-                            <select class="set-select" id="img-service">
-                                <option value="pollinations" ${imgConfig.service === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
-                                <option value="novelai" ${imgConfig.service === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
-                                <option value="tavern_sd" ${imgConfig.service === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
-                                <option value="comfyui_direct" ${imgConfig.service === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
+                            <div class="set-desc">背景/物品 和 角色/插圖 可各走各的接口（例如背景用 Pollinations、角色用 NAI）。</div>
+                            <div class="set-label">🌄 背景・📦 物品 來源</div>
+                            <select class="set-select" id="img-service-inanimate">
+                                <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
+                                <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
+                                <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
+                                <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
+                            </select>
+                            <div class="set-label" style="margin-top:12px;">🎭 角色・🎬 插圖 來源</div>
+                            <select class="set-select" id="img-service-living">
+                                <option value="pollinations" ${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
+                                <option value="novelai" ${(imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
+                                <option value="tavern_sd" ${(imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
+                                <option value="comfyui_direct" ${(imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
                             </select>
 
-                            <div id="img-group-comfyui" class="${imgConfig.service === 'comfyui_direct' ? '' : 'hidden'}">
+                            <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
                                 <div class="set-group" style="margin-top:12px;">
                                     <div class="set-desc">🧩 透過酒館伺服器代理連你的 ComfyUI（免 CORS、免改啟動參數）。在這手動加 LoRA、調參數，奧瑞亞自動組工作流，你不用碰 JSON。</div>
                                 </div>
@@ -1214,14 +1230,14 @@ EXAMPLE "prompt" value:
                                 </div>
                             </div>
 
-                            <div id="img-group-tavernsd" class="${imgConfig.service === 'tavern_sd' ? '' : 'hidden'}">
+                            <div id="img-group-tavernsd" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd') ? '' : 'hidden'}">
                                 <div class="set-group">
                                     <div class="set-desc">🎨 用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。</div>
                                     <div class="set-desc">⚠️ 前提：先在酒館「圖像生成」擴展設好一個後端來源。沒設好會跳提示，不會偷偷換成別的來源。</div>
                                 </div>
                             </div>
 
-                            <div id="img-group-pollinations" class="${imgConfig.service === 'pollinations' ? '' : 'hidden'}">
+                            <div id="img-group-pollinations" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' || (imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
                                 <div style="margin-top:15px;">
                                     <div class="set-label">API Key <span style="font-size:11px; color:#fc8181;">(必填 - 需儲值)</span></div>
                                     <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${imgConfig.pollinations.apiKey || ''}">
@@ -1250,7 +1266,7 @@ EXAMPLE "prompt" value:
                                 </div>
                             </div>
 
-                            <div id="img-group-nai" class="${imgConfig.service === 'novelai' ? '' : 'hidden'}">
+                            <div id="img-group-nai" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'novelai' || (imgConfig.serviceLiving || imgConfig.service) === 'novelai') ? '' : 'hidden'}">
                                 <div style="margin-top:15px;">
                                     <div class="set-label">NovelAI Token <span style="font-size:11px; color:#fc8181;">(必填)</span></div>
                                     <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
@@ -1422,8 +1438,9 @@ EXAMPLE "prompt" value:
                                     <div class="set-label" style="font-size:11px;">🎛️ Prompt 風格</div>
                                     <select class="set-select" id="img-scene-prompt-style" style="font-size:12px;"
                                         onchange="(function(v){
-                                            const isNai  = v==='tags'    || (v==='auto' && window.OS_IMAGE_MANAGER?.config?.service==='novelai');
-                                            const isPoll = v==='natural' || (v==='auto' && window.OS_IMAGE_MANAGER?.config?.service!=='novelai');
+                                            const _sceneSvc = (typeof window.OS_IMAGE_MANAGER?.serviceFor==='function') ? window.OS_IMAGE_MANAGER.serviceFor('scene') : window.OS_IMAGE_MANAGER?.config?.service;
+                                            const isNai  = v==='tags'    || (v==='auto' && _sceneSvc==='novelai');
+                                            const isPoll = v==='natural' || (v==='auto' && _sceneSvc!=='novelai');
                                             document.getElementById('img-scene-base-row').style.display='';
                                             document.getElementById('img-scene-neg-row').style.display = isNai ? '' : 'none';
                                             document.getElementById('img-scene-base-label').textContent = isPoll
@@ -2040,7 +2057,8 @@ EXAMPLE "prompt" value:
         const secValPres = container.querySelector('#sec-val-pres');
 
         // 綁定元素 (圖片)
-        const elImgService = container.querySelector('#img-service');
+        const elImgServiceInanimate = container.querySelector('#img-service-inanimate'); // 死物桶：背景/物品/寵物
+        const elImgServiceLiving    = container.querySelector('#img-service-living');    // 活物桶：角色/插圖
         const elPolGroup = container.querySelector('#img-group-pollinations');
         const elPolApiKey = container.querySelector('#img-pol-apikey');
         const elPolModel = container.querySelector('#img-pol-model');
@@ -2219,12 +2237,16 @@ EXAMPLE "prompt" value:
         }
         if (elNaiModel) elNaiModel.onchange = () => updateSmeaVisibility(elNaiModel.value);
 
-        elImgService.onchange = () => {
-            const _svc = elImgService.value;
-            const isNai = _svc === 'novelai';
-            const isPol = _svc === 'pollinations';
-            const isTav = _svc === 'tavern_sd';
-            const isCfd = _svc === 'comfyui_direct';
+        // 兩桶聯集顯示：任一桶（死物/活物）選了某接口，該接口的設定區就 show
+        const updateImgGroups = () => {
+            const picked = new Set([
+                elImgServiceInanimate ? elImgServiceInanimate.value : '',
+                elImgServiceLiving ? elImgServiceLiving.value : ''
+            ]);
+            const isNai = picked.has('novelai');
+            const isPol = picked.has('pollinations');
+            const isTav = picked.has('tavern_sd');
+            const isCfd = picked.has('comfyui_direct');
             elNaiGroup.classList.toggle('hidden', !isNai);
             elPolGroup.classList.toggle('hidden', !isPol);
             const elTavGroup = container.querySelector('#img-group-tavernsd');
@@ -2234,6 +2256,9 @@ EXAMPLE "prompt" value:
             const elPolPrompts = container.querySelector('#img-pol-prompts-group');
             if (elPolPrompts) elPolPrompts.classList.toggle('hidden', !isPol);
         };
+        if (elImgServiceInanimate) elImgServiceInanimate.onchange = updateImgGroups;
+        if (elImgServiceLiving)    elImgServiceLiving.onchange = updateImgGroups;
+        updateImgGroups(); // 初始化同步一次
 
         // ===== ComfyUI 直連：LoRA 行 + 測試連線 =====
         let cfdPresets = [...((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || [])];
@@ -2930,7 +2955,10 @@ EXAMPLE "prompt" value:
                 };
 
                 const imgData = {
-                    service: elImgService.value,
+                    // 兩桶各自存；service 保留＝活物桶當 legacy mirror（避免漏改的舊讀者爆掉）
+                    serviceInanimate: elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations',
+                    serviceLiving:    elImgServiceLiving ? elImgServiceLiving.value : 'pollinations',
+                    service:          elImgServiceLiving ? elImgServiceLiving.value : 'pollinations',
                     pollinations: {
                         url: 'https://gen.pollinations.ai/image',
                         apiKey: elPolApiKey.value.trim(),
@@ -3636,8 +3664,11 @@ EXAMPLE "prompt" value:
                 const imageManager = win.OS_IMAGE_MANAGER;
                 if (!imageManager) throw new Error('ImageManager 未載入');
 
-                imageManager.config.service = elImgService.value;
-                
+                // 同步兩桶（測試用 char 型→走活物桶；legacy mirror = 活物桶）
+                imageManager.config.serviceInanimate = elImgServiceInanimate ? elImgServiceInanimate.value : imageManager.config.serviceInanimate;
+                imageManager.config.serviceLiving = elImgServiceLiving ? elImgServiceLiving.value : imageManager.config.serviceLiving;
+                imageManager.config.service = imageManager.config.serviceLiving;
+
                 imageManager.config.pollinations.apiKey = elPolApiKey.value.trim();
                 imageManager.config.pollinations.model = elPolModel.value;
                 imageManager.config.pollinations.charBasePrompt = elStylePrompt.value.trim();
@@ -3695,7 +3726,7 @@ EXAMPLE "prompt" value:
                 
                 // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
                 // ComfyUI 直連用面板自己的尺寸(cfg.width/height)，其他來源用上面的測試尺寸
-                const _testIsCfd = elImgService.value === 'comfyui_direct';
+                const _testIsCfd = (elImgServiceLiving ? elImgServiceLiving.value : '') === 'comfyui_direct';
                 const imageUrl = await imageManager.generate(testPrompt, 'char', _testIsCfd ? { force: true } : { width, height, force: true });
 
                 imgTestImage.src = imageUrl;

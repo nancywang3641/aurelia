@@ -89,7 +89,10 @@
 
     const ImageManager = {
         config: {
-            service: 'pollinations', // 預設
+            service: 'pollinations', // 預設（legacy：單一全域服務，保留供舊讀者；新路由走兩桶）
+            // 兩桶各自選接口：死物桶(bg/item/pet) vs 活物桶(char/scene)
+            serviceInanimate: 'pollinations', // 死物桶：bg / item / pet
+            serviceLiving: 'pollinations',    // 活物桶：char / scene
             pollinations: {
                 url: 'https://gen.pollinations.ai/image', // API 端點
                 apiKey: '', // Pollen API Key
@@ -141,6 +144,9 @@
                     this.config = {
                         ...this.config,
                         service: savedConfig.service || this.config.service,
+                        // 向後相容：舊用戶只有單一 service → 兩桶都繼承它，現狀不變
+                        serviceInanimate: savedConfig.serviceInanimate || savedConfig.service || this.config.service,
+                        serviceLiving: savedConfig.serviceLiving || savedConfig.service || this.config.service,
                         pollinations: {
                             ...this.config.pollinations,
                             ...savedConfig.pollinations,
@@ -180,6 +186,15 @@
         // options.force = true 可跳過 cache 強制重生。
         _urlCache: new Map(),
 
+        // --- 兩桶路由：依 type 取該桶選的接口 ---
+        // 活物桶(char/scene) = serviceLiving；其餘(bg/item/pet…) = serviceInanimate。
+        // 三重 fallback：桶值 → legacy 全域 service → 'pollinations'，保證永不回 undefined。
+        serviceFor: function(type) {
+            const living = (type === 'char' || type === 'scene');
+            const s = living ? this.config.serviceLiving : this.config.serviceInanimate;
+            return s || this.config.service || 'pollinations';
+        },
+
         // --- 核心生成函數 (整合翻譯 + cache) ---
         generate: async function(prompt, type = 'scene', options = {}) {
             // 🔥 步驟 0: cache 命中
@@ -212,10 +227,9 @@
                 return null;
             }
 
-            // 🔥 步驟 2: 路由判斷（char/item/scene 有 NAI token 走 NAI；背景底板走 generateBackgroundAsync）
-            // options.provider 可「單次」覆蓋全域 service（給 VN 面板各自選 NAI / POLL AI 用）；沒給就維持全域
-            const isNaiType = (type === 'char' || type === 'item' || type === 'scene');
-            const service = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct'].includes(options.provider)) ? options.provider : this.config.service;
+            // 🔥 步驟 2: 路由判斷（依 type 桶取接口：活物桶 char/scene、死物桶 bg/item/pet）
+            // options.provider 可「單次」覆蓋桶選擇（給 VN 面板各自選 NAI / POLL AI 用）；沒給就走該 type 的桶
+            const service = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct'].includes(options.provider)) ? options.provider : this.serviceFor(type);
             let result;
             if (service === 'tavern_sd') {
                 // 酒館原生 /sd：raw prompt（不塞奧瑞亞底詞，尊重朋友的 SD 設定）；失敗回 null，不偷偷換來源
@@ -225,7 +239,7 @@
                 // ComfyUI 直連：奧瑞亞內部組 workflow（底詞由 comfyuiDirect.basePrompt 控制，不套 poll ai 底詞）
                 console.log(`[ImageManager] Final Prompt [${type}→ComfyUIDirect]: ${englishPrompt}`);
                 result = await this._genComfyuiDirect(englishPrompt, type, options);
-            } else if (isNaiType && service === 'novelai' && this.config.novelai.token) {
+            } else if (service === 'novelai' && this.config.novelai.token) {
                 // NAI 使用 Danbooru tag 格式，底詞/負詞在 _genNovelAI 內部處理
                 console.log(`[ImageManager] Final Prompt [${type}→NAI${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
                 result = await this._genNovelAI(englishPrompt, type, options);
@@ -1013,7 +1027,24 @@
             // ✅ 優先使用外部傳入的 Negative Prompt，否則用預設防護詞
             const negativePrompt = options.negativePrompt || 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render';
 
-            // 背景永遠走 Pollinations：ComfyUI(/sd) 是角色/頭像取向，畫背景不適合（會塞人物），故不論全域來源是否為 tavern_sd，背景都不走 /sd
+            // 🌄 背景接口由「死物桶」(背景・物品 來源) 決定（2026-06-12）：預設 Pollinations；
+            //    選 NAI / ComfyUI直連 / 酒館原生 就走對應接口（給只有 NAI、沒 GitHub 被 poll 限流的人）。
+            //    bgBasePrompt/bgNegPrompt 已由呼叫方(getBg) 處理好，這裡照搬。
+            const _bgSvc = (typeof this.serviceFor === 'function') ? this.serviceFor('bg') : 'pollinations';
+            if (_bgSvc !== 'pollinations') {
+                const _bgOpts = { ...options, negativePrompt: negativePrompt, width: options.width || 1024, height: options.height || 1024 };
+                if (_bgSvc === 'novelai' && this.config.novelai && this.config.novelai.token) {
+                    // raw=true：跳過 NAI 物品底詞(white background/no background…會毀背景)，只用 bgBasePrompt + bgNegPrompt
+                    return await this._genNovelAI(optimizedPrompt, 'bg', { ..._bgOpts, raw: true });
+                } else if (_bgSvc === 'comfyui_direct') {
+                    return await this._genComfyuiDirect(optimizedPrompt, 'bg', _bgOpts);
+                } else if (_bgSvc === 'tavern_sd') {
+                    return await this._genTavernSd(optimizedPrompt, 'bg', _bgOpts);
+                }
+                // 接口未就緒(例如 NAI 沒填 token) → 往下 fall through 回 Pollinations，不讓背景生不出來
+            }
+
+            // 預設：Pollinations
             const seed = options.seed || Math.floor(Math.random() * 100000);
             const width = options.width || 1024;
             const height = options.height || 1024;
