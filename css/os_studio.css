@@ -103,6 +103,10 @@
         .studio-bubble code { background: rgba(26,28,40,0.08); color: #2d6a4f; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 0.88em; }
         .studio-bubble strong { color: #1A1C28; font-weight: bold; }
         .studio-bubble em { color: rgba(26,28,40,0.72); font-style: italic; }
+        /* artifact 卡片：AI 生成面板後掛在氣泡底下，點了開預覽抽屜（手機佈局用） */
+        .studio-artifact-card { margin-top: 10px; padding: 10px 12px; background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.20); border-left: 3px solid #1A1C28; border-radius: 8px; font-size: 13px; font-weight: bold; color: #1A1C28; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .studio-artifact-card:hover { background: rgba(26,28,40,0.12); border-color: #1A1C28; }
+        .studio-artifact-card:active { transform: scale(0.98); }
 
         /* ── 旋轉動畫 ── */
         @keyframes os-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
