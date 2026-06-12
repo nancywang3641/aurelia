@@ -121,6 +121,21 @@
                             : (imgManager ? await imgManager.generate(prompt, type) : '');
                         if (url) el.src = url;
                     } catch(e) { console.error('[VN Parser] setImage 失敗:', e); }
+                },
+                callAI: async function(systemPrompt) {
+                    if (window.__IS_PREVIEW) return '（預覽模式示範回覆）';
+                    try {
+                        const OS = window.OS_API || (window.parent && window.parent.OS_API);
+                        if (!OS || !OS.chat) throw new Error('OS_API 不可用');
+                        const S = window.OS_SETTINGS || (window.parent && window.parent.OS_SETTINGS);
+                        let cfg = (S && S.getConfig && S.getConfig()) || {};
+                        cfg = Object.assign({}, cfg, { usePresetPrompts: false, enableThinking: false });
+                        return await new Promise(function(res, rej) {
+                            OS.chat([{ role: 'system', content: String(systemPrompt || '') }], cfg, null,
+                                function(t) { res(typeof t === 'string' ? t : (t && t.message) || ''); }, rej,
+                                { disableTyping: true });
+                        });
+                    } catch (e) { console.error('[vn st.callAI]', e); return ''; }
                 }
             };
         },
