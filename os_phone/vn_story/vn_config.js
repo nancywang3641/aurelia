@@ -119,7 +119,7 @@
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
                 // 來源隔離：走「酒館原生(tavern_sd)」時改用「酒館原生專屬」頭像底詞/負詞（預設空＝乾淨），
                 // 避免給 poll ai 的 avatarBasePrompt/avatarNegPrompt 漏進 ComfyUI → 跟模型底詞打架爆光
-                const _svc = (win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '';
+                const _svc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : ((win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '');
                 // tavern_sd / comfyui_direct：底詞由各自來源控制，VN 層改用「乾淨」專屬底詞，避免 poll ai 底詞漏入
                 const _isTavern = (_svc === 'tavern_sd' || _svc === 'comfyui_direct');
                 const _base = _isTavern ? VN_Config.data.avatarBasePromptTavern : VN_Config.data.avatarBasePrompt;
