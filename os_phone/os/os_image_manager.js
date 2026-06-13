@@ -850,6 +850,10 @@
                     width = _w; height = _h;
                 }
             }
+            // 🔒 NAI 鐵規則：寬高必須是 64 的倍數，否則伺服器直接回 500 Internal Server Error。
+            //    （例：自訂 1020×1020 非 64 倍數 → NAI 500；這裡 round 到最近的 64 倍數 → 1024×1024，使用者無感）
+            width  = Math.max(64, Math.round(width  / 64) * 64);
+            height = Math.max(64, Math.round(height / 64) * 64);
 
             // 底詞：NAI Danbooru tag 格式（設定可自訂）
             // scene / char 已由呼叫方（getScene/getAvatar）預先 join avatarBasePrompt，
