@@ -129,15 +129,6 @@
 
             <div class="avs-mem-status">${statusTxt}</div>
 
-            <div class="avs-mem-list-hd-row">
-                <div class="avs-mem-list-hd">📝 記住的事</div>
-                <div class="avs-mem-filter">
-                    <select class="avs-input avs-mem-filter-sel" id="avs-mem-filter">${_memTypeOpts(mems)}</select>
-                    <input class="avs-input avs-mem-filter-search" id="avs-mem-search" placeholder="🔍 搜尋…" value="${esc(_memSearch)}">
-                </div>
-            </div>
-            <div class="avs-mem-list" id="avs-mem-list">${_renderList(_filterMems(mems))}</div>
-
             <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn">⚙️ 進階：記憶服務設定</button>
             <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
                 <div class="avs-st-adv-sec">
@@ -173,6 +164,15 @@
                         : `<div class="avs-mem-srchint">目前沒有其他世界的記憶可轉。</div>`}
                 </div>
             </div>
+
+            <div class="avs-mem-list-hd-row">
+                <div class="avs-mem-list-hd">📝 記住的事</div>
+                <div class="avs-mem-filter">
+                    <select class="avs-input avs-mem-filter-sel" id="avs-mem-filter">${_memTypeOpts(mems)}</select>
+                    <input class="avs-input avs-mem-filter-search" id="avs-mem-search" placeholder="🔍 搜尋…" value="${esc(_memSearch)}">
+                </div>
+            </div>
+            <div class="avs-mem-list" id="avs-mem-list">${_renderList(_filterMems(mems))}</div>
         </div>`;
 
         _bind();
