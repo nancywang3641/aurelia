@@ -2423,13 +2423,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 L = L || { on: true, name: '', strengthModel: 1, strengthClip: 1 };
                 const row = document.createElement('div');
                 row.className = 'cfd-lora-row';
-                row.style.cssText = 'display:flex; gap:4px; align-items:center; margin-bottom:5px;';
+                // 兩行式（手機窄屏友善）：第一行 勾選+名字(拉滿)+刪除；第二行 模型/CLIP 強度帶中文標籤。靠 row 的 flex-wrap + 第二行 100% 寬強制換行
+                row.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed rgba(26,28,40,0.12);';
                 row.innerHTML =
-                    '<input type="checkbox" class="cfd-lora-on" ' + (L.on !== false ? 'checked' : '') + ' title="啟用" style="margin:0 2px;">' +
-                    '<input type="text" class="cfd-lora-name set-input" list="img-cfd-lora-list" placeholder="LoRA 檔名" value="' + escAttr(L.name) + '" style="flex:1; min-width:0;">' +
-                    '<input type="number" class="cfd-lora-sm set-input" step="0.1" min="0" max="2" value="' + (L.strengthModel != null ? L.strengthModel : 1) + '" title="模型強度" style="width:54px;">' +
-                    '<input type="number" class="cfd-lora-sc set-input" step="0.1" min="0" max="2" value="' + (L.strengthClip != null ? L.strengthClip : 1) + '" title="CLIP強度" style="width:54px;">' +
-                    '<button type="button" class="cfd-lora-del" title="刪除" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;padding:0 4px;">✕</button>';
+                    '<input type="checkbox" class="cfd-lora-on" ' + (L.on !== false ? 'checked' : '') + ' title="啟用" style="margin:0 2px; flex:0 0 auto;">' +
+                    '<input type="text" class="cfd-lora-name set-input" list="img-cfd-lora-list" placeholder="LoRA 檔名" value="' + escAttr(L.name) + '" style="flex:1 1 0; min-width:0;">' +
+                    '<button type="button" class="cfd-lora-del" title="刪除" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:18px;padding:0 4px; flex:0 0 auto;">✕</button>' +
+                    '<div style="flex:1 1 100%; display:flex; gap:6px; align-items:center; padding-left:24px;">' +
+                        '<span style="font-size:11px; color:rgba(26,28,40,0.7); white-space:nowrap;">模型</span>' +
+                        '<input type="number" class="cfd-lora-sm set-input" step="0.1" min="0" max="2" value="' + (L.strengthModel != null ? L.strengthModel : 1) + '" title="模型強度" style="width:60px; flex:0 0 auto;">' +
+                        '<span style="font-size:11px; color:rgba(26,28,40,0.7); white-space:nowrap; margin-left:6px;">CLIP</span>' +
+                        '<input type="number" class="cfd-lora-sc set-input" step="0.1" min="0" max="2" value="' + (L.strengthClip != null ? L.strengthClip : 1) + '" title="CLIP強度" style="width:60px; flex:0 0 auto;">' +
+                    '</div>';
                 row.querySelector('.cfd-lora-del').addEventListener('click', function(){ row.remove(); });
                 return row;
             }
