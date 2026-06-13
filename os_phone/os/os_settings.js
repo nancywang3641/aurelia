@@ -156,6 +156,8 @@ EXAMPLE "prompt" value:
 
 人群控制(3＋角色)：只挑 1~2 個焦點角色用 AND 區塊，其餘降級成 crowd, blurry_background, depth_of_field；絕不寫 3 個以上 AND 區塊。
 鏡頭模式：平靜/SFW → standing/sitting, left_side/right_side, from_side, medium_shot/bust_shot；動作 → dynamic_pose, dynamic_angle, motion_blur；NSFW → nsfw 當第一個 tag，明確體位直接畫(missionary, mating_press, penetration…)，貼身零距離不放位置 tag。
+🚫 表達「不接觸／有距離」鐵則（最常出包！）：畫圖 AI 看不懂否定句——寫 they do not touch / no contact 反而會讓它看到 touch 就把兩人畫在一起(黏一起、躺懷裡)。所以：①絕不用 do not touch / not touching / no contact 這類否定句。②要有距離就用肯定詞：standing apart, space between them, an arm's length apart, facing each other across a gap, at a distance, keeping distance。③遠距離互動(施法/遞物/指引)動詞用 pointing/channeling/directing/aiming … toward，禁用 envelops/touches/rests on/cups/cradles/leaning into 這種貼身詞(會被讀成親密)。④只有真的要親密/NSFW 才寫接觸詞(hug/embrace/in arms…)。
+
 其它：純男場景(無女角)加 male focus, masculine；多人時每角色標籤分開寫、A 的衣服別長到 B 身上；角色長相用你已知的角色設定(髮色/衣著)，正文沒寫的沿用設定、不要亂編；找不到適合入畫的畫面就回空、不硬湊。
 
 格式範例（[方括號]是佔位，照正文實際內容填，不要照抄方括號裡的字）：
