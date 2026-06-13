@@ -149,7 +149,22 @@
                 </div>
             </div>`;
             const ib = _host.querySelector('#avs-st-init');
-            if (ib) ib.onclick = () => win.OS_STATE_SCHEMA?.generate?.();
+            if (ib) ib.onclick = async () => {
+                if (!win.OS_AVS?.generateAndSaveSchema) { alert('AVS 模組未就緒，請稍候再試'); return; }
+                const orig = ib.textContent;
+                ib.textContent = '🧬 AI 分析中…';
+                ib.style.pointerEvents = 'none';
+                try {
+                    const r = await win.OS_AVS.generateAndSaveSchema();   // 生成 schema + 存進變數包（修：原本只 call generate 沒接結果→存不進去→面板永遠空）
+                    if (r) _build();   // 重繪：此時變數包已有剛生成的 schema → 顯示追蹤狀態
+                } catch (e) {
+                    console.error('[AVS State] AI 生成失敗:', e);
+                    alert('生成失敗：' + (e?.message || e));
+                } finally {
+                    ib.textContent = orig;
+                    ib.style.pointerEvents = '';
+                }
+            };
             return;
         }
 
