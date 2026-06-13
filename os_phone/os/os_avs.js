@@ -82,8 +82,7 @@
                     </div>
                 </div>
                 <div class="avs-tabs">
-                    <div class="avs-tab active" data-tab="state">📊 目前狀態</div>
-                    <div class="avs-tab" data-tab="packs">📦 檔案</div>
+                    <div class="avs-tab active" data-tab="state">📊 狀態檔案</div>
                     <div class="avs-tab" data-tab="modes">🎭 模式</div>
                     <div class="avs-tab" data-tab="memory">📝 記憶</div>
                 </div>
@@ -92,6 +91,7 @@
                     <div id="avs-view-modes" class="avs-view"></div>
                     <div id="avs-view-memory" class="avs-view"></div>
                     <div id="avs-view-packs" class="avs-view">
+                        <div class="avs-label" style="font-size:13px; padding-top:14px; border-top:1px solid rgba(26,28,40,0.10);">📦 我的檔案</div>
                         <div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
                             <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack" style="flex:1; min-width:140px;">＋ 創建新檔案</div>
                             <div class="avs-btn avs-btn-outline" id="avs-btn-preset-pack" style="flex:1; min-width:140px;">🪶 簡易預設</div>
@@ -185,11 +185,18 @@
                 tabs.forEach(t => t.classList.remove('active'));
                 container.querySelectorAll('.avs-view').forEach(v => v.classList.remove('active'));
                 tab.classList.add('active');
-                container.querySelector(`#avs-view-${tab.dataset.tab}`).classList.add('active');
-                if (tab.dataset.tab === 'state') renderStateView(container);
-                // V3：條件規則 tab 砍掉，改在「📦 變數包」每張卡片內當「⚡ 條件規則」子按鈕
-                if (tab.dataset.tab === 'modes') win.OS_AVS_RULES?.renderModesTab?.(container);
-                if (tab.dataset.tab === 'memory') win.OS_AVS_MEMORY?.renderInto?.(container.querySelector('#avs-view-memory'));
+                const _t = tab.dataset.tab;
+                if (_t === 'state') {
+                    // 「狀態檔案」整合頁＝目前狀態(上) + 檔案(下) 同一頁
+                    container.querySelector('#avs-view-state').classList.add('active');
+                    container.querySelector('#avs-view-packs').classList.add('active');
+                    renderStateView(container);
+                    renderPackList(container);
+                } else {
+                    container.querySelector(`#avs-view-${_t}`).classList.add('active');
+                    if (_t === 'modes') win.OS_AVS_RULES?.renderModesTab?.(container);
+                    if (_t === 'memory') win.OS_AVS_MEMORY?.renderInto?.(container.querySelector('#avs-view-memory'));
+                }
             };
         });
 
@@ -205,7 +212,10 @@
         await loadAllData(container);
         bindPackEditorEvents(container);
         bindFurnaceEvents(container);
-        renderStateView(container); // 預設顯示目前狀態
+        // 「狀態檔案」整合頁：預設同時顯示 目前狀態(上) + 檔案(下)
+        container.querySelector('#avs-view-packs')?.classList.add('active');
+        renderStateView(container);
+        renderPackList(container);
 
         // 監聽 AVS 更新事件，自動刷新狀態頁
         win.addEventListener('AVS_VARS_UPDATED', () => {
