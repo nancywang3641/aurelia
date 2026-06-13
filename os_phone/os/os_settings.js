@@ -1494,19 +1494,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <select class="set-select" id="img-scene-prompt-style" style="font-size:12px;"
                                         onchange="(function(v){
                                             const _sceneSvc = (typeof window.OS_IMAGE_MANAGER?.serviceFor==='function') ? window.OS_IMAGE_MANAGER.serviceFor('scene') : window.OS_IMAGE_MANAGER?.config?.service;
-                                            const isNai  = v==='tags'    || (v==='auto' && _sceneSvc==='novelai');
                                             const isPoll = v==='natural' || (v==='auto' && _sceneSvc!=='novelai');
-                                            document.getElementById('img-scene-base-row').style.display='';
-                                            document.getElementById('img-scene-neg-row').style.display = isNai ? '' : 'none';
                                             const _exT = document.getElementById('img-scene-extract-tags-row'); if (_exT) _exT.style.display = isPoll ? 'none' : '';
                                             const _exN = document.getElementById('img-scene-extract-natural-row'); if (_exN) _exN.style.display = isPoll ? '' : 'none';
-                                            document.getElementById('img-scene-base-label').textContent = isPoll
-                                                ? '🎨 畫風描述（自然語言，加在 AI prompt 前）'
-                                                : '🎨 場景底詞（Danbooru tag，加在 AI prompt 前）';
-                                            document.getElementById('img-scene-base-hint').textContent = isPoll
-                                                ? '← 自然語言描述畫風，例如：cinematic lighting, anime style, detailed'
-                                                : '← 在此放畫風底詞。可點下方「套用預設包」從現有 NAI 預設包快速填入。';
-                                            document.getElementById('img-scene-preset-row').style.display = isNai ? '' : 'none';
                                         })(this.value)">
                                         <option value="auto" ${(imgConfig.sceneGen?.promptStyle||'auto')==='auto' ? 'selected':''}>🔀 自動（跟主服務）</option>
                                         <option value="tags" ${imgConfig.sceneGen?.promptStyle==='tags' ? 'selected':''}>🏷️ 標籤（NAI / Danbooru）</option>
@@ -1514,23 +1504,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </select>
                                 </div>
 
-                                <div id="img-scene-base-row" style="margin-bottom:12px;">
-                                    <div class="set-label" id="img-scene-base-label" style="font-size:11px;">${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? '🎨 畫風描述（自然語言，加在 AI prompt 前）' : '🎨 場景底詞（Danbooru tag，加在 AI prompt 前）';})()}</div>
-                                    <textarea class="set-textarea" id="img-scene-base-prompt" style="min-height:60px;">${imgConfig.sceneGen?.sceneBasePrompt || ''}</textarea>
-                                    <div id="img-scene-base-hint" style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:3px;">${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? '← 自然語言描述畫風，例如：cinematic lighting, anime style, detailed' : '← 在此放畫風底詞。可點下方「套用預設包」從現有 NAI 預設包快速填入。';})()}</div>
-                                    <div id="img-scene-preset-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? 'none' : 'flex';})()}; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
-                                        <select id="img-scene-preset-ref" class="set-select" style="flex:1; min-width:0; font-size:11px;">
-                                            <option value="">-- 從 NAI 預設包複製底詞 --</option>
-                                            ${(imgConfig.novelai.naiPresets || []).map((p, i) => `<option value="${i}">${p.name}</option>`).join('')}
-                                        </select>
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._sceneSpec.applyPreset()">套用</span>
-                                    </div>
-                                </div>
-
-                                <div id="img-scene-neg-row" style="margin-bottom:12px; display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? 'none' : '';})()};">
-                                    <div class="set-label" style="font-size:11px;">🚫 場景負詞</div>
-                                    <textarea class="set-textarea" id="img-scene-neg-prompt" style="min-height:50px;">${imgConfig.sceneGen?.sceneNegPrompt || ''}</textarea>
-                                </div>
+                                <div class="set-desc" style="margin-bottom:12px; font-size:11px;">🎨 場景插圖跟角色共用同一份底詞／負詞——在上方「接口設定」的角色底詞調整即可，這裡不另設場景底詞。</div>
                             </div>
                         </div>
 
