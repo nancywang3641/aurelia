@@ -97,7 +97,7 @@ html, body {
 .void-bg { position:absolute; inset:0; z-index:0; pointer-events:none; background-color:#EEF0F6; background-image:var(--void-bg-url,none); background-size:cover; background-position:center; opacity:0.8; }
 .void-grid { position:absolute; inset:0; z-index:1; pointer-events:none; background-image:linear-gradient(rgba(26,28,40,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(26,28,40,0.04) 1px,transparent 1px); background-size:30px 30px; opacity:0.8; }
 
-.void-top-bar { position:absolute; top:0; left:0; right:0; z-index:16; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; background:rgba(228,232,245,0.92); color:#1A1C28; border-bottom:1px solid rgba(26,28,40,0.10); }
+.void-top-bar { position:absolute; top:0; left:0; right:0; z-index:60; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; background:rgba(228,232,245,0.92); color:#1A1C28; border-bottom:1px solid rgba(26,28,40,0.10); }
 
 #lobby-sys-menu { position:relative; flex-shrink:0; }
 #lobby-prompts-btn { background:none; border:1px solid rgba(26,28,40,0.20); border-radius:7px; cursor:pointer; font-size:13px; padding:5px 8px; line-height:1; opacity:0.8; transition:all 0.2s; color:#1A1C28; display:flex; align-items:center; gap:5px; }

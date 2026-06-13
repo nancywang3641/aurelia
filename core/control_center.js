@@ -151,6 +151,8 @@
         }
 
         vnPanel.style.display = 'flex';
+        // 🎬 劇情全螢幕沉浸：隱藏全域 header（hideVnPanel 時還原）
+        { const _hdr = document.querySelector('.void-top-bar'); if (_hdr) _hdr.style.display = 'none'; }
 
         if (!vnContainer.dataset.vnInited) {
             const hasPendingScript = !!window._pendingAutoScript;
@@ -193,6 +195,8 @@
         document.querySelectorAll('.aurelia-tab').forEach(t => { t.style.display = 'none'; });
         const homeTab = document.getElementById('aurelia-home-tab');
         if (homeTab) homeTab.style.display = 'flex';
+        // 🎬 離開劇情：還原全域 header
+        { const _hdr = document.querySelector('.void-top-bar'); if (_hdr) _hdr.style.display = ''; }
 
         if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
     }
