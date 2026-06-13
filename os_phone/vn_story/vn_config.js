@@ -138,18 +138,24 @@
         },
         getScene: async function(prompt) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
-                // ★ 直接把 prompt 丟給 generate，type='scene'
-                //   OS_IMAGE_MANAGER._genNovelAI 會自動套用 os_settings.js 中的
-                //   charBasePrompt / charNegPrompt（避免用空的 VN_Config.data 設定）
-                // NAI 免費無限小圖：直式插圖 512×768（不耗 Anlas）
                 // 場景插圖尺寸：讀「圖片設置 → 場景插圖尺寸」下拉（獨立設定），預設 1024×1024
                 let _sw = 1024, _sh = 1024;
+                let _sceneBase = '', _sceneNeg = '';
                 try {
-                    const _sz = (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen || {}).size || '1024x1024';
+                    const _iCfg = JSON.parse(localStorage.getItem('os_image_config') || '{}');
+                    const _sg = _iCfg.sceneGen || {};
+                    const _sz = _sg.size || '1024x1024';
                     const _p = String(_sz).split('x').map(Number);
                     if (_p[0] && _p[1]) { _sw = _p[0]; _sh = _p[1]; }
+                    // 階段1：接通場景底詞
+                    _sceneBase = (_sg.sceneBasePrompt || '').trim();
+                    _sceneNeg  = (_sg.sceneNegPrompt  || '').trim();
                 } catch(e) {}
-                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh });
+                // 組完整 prompt：場景底詞 + AI給的描述
+                const _fullPrompt = [_sceneBase, prompt].filter(Boolean).join(', ');
+                const _opts = { width: _sw, height: _sh };
+                if (_sceneNeg) _opts.negativePrompt = _sceneNeg;
+                return await win.OS_IMAGE_MANAGER.generate(_fullPrompt, 'scene', _opts);
             } return "";
         }
     };
