@@ -295,7 +295,7 @@
         if (win.toastr) win.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 個項目 / ${savedRuleCount} 條規則），世界書已同步`);
         if (win.OS_STATE_RUNTIME?.extractOnce) {
             setTimeout(() => {
-                try { win.OS_STATE_RUNTIME.extractOnce(); } catch(e) {
+                try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch(e) {
                     console.warn('[AVS] 觸發副模型初始填充失敗:', e);
                 }
             }, 500);
@@ -767,7 +767,7 @@ ${lines.join('\n')}
                     await syncVarPackToLorebook();
                     if (win.toastr) win.toastr.success('✅ 已套用簡易預設檔案');
                     if (win.OS_STATE_RUNTIME?.extractOnce) {
-                        setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce(); } catch (e) {} }, 500);
+                        setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
                     }
                 } catch (e) {
                     console.error('[AVS] 套用簡易預設失敗:', e);
