@@ -978,7 +978,19 @@
 
             } catch (error) {
                 _release(); // 無論成功失敗都釋放
-                console.error('[ImageManager] ❌ NAI 失敗，回退 Pollinations:', error.message);
+                const _emsg = (error && error.message) || String(error);
+                console.error('[ImageManager] ❌ NAI 失敗，回退 Pollinations:', _emsg);
+                // 🔎 把 NAI 真實錯誤碼/內文彈到畫面（console 唯讀看不到）→ 撞錯誤立刻見真章：
+                //    併發限制是 429/"concurrent"；500=NAI 伺服器錯誤；400=prompt/參數問題；402=Anlas 不足。各自對策不同。
+                this._lastNaiError = { msg: _emsg, type: type, at: '' };
+                try {
+                    const _tr = (win.toastr || window.toastr || (window.parent && window.parent.toastr));
+                    if (_tr) {
+                        const _concur = /\b429\b|concurrent|conflict|too many|rate.?limit/i.test(_emsg);
+                        if (_concur) _tr.error('NAI 併發衝突（多半是拼車同時生圖）→ 錯開幾秒按 🔄 重試', 'NAI 429 併發', { timeOut: 8000 });
+                        else _tr.warning('NAI 生圖失敗（非併發）：' + _emsg, 'NAI 錯誤', { timeOut: 8000 });
+                    }
+                } catch (_) {}
                 // 回退時補上 Pollinations 底詞，確保風格一致
                 let fallbackPrompt = prompt;
                 if (type === 'char' && this.config.pollinations.charBasePrompt) {
