@@ -1120,6 +1120,24 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">角色／頭像／場景插圖都用這個來源。</div>
                             </div>
+                            <div class="set-group">
+                                <div class="set-label">📐 角色頭像尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">空＝各接口預設(Poll 512 / NAI 1024)</span></div>
+                                <select class="set-select" id="img-avatar-size" style="font-size:12px;">
+                                    <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設</option>
+                                    <option value="512x512"   ${imgConfig.avatarSize==='512x512'   ? 'selected':''}>512×512（方形）</option>
+                                    <option value="768x768"   ${imgConfig.avatarSize==='768x768'   ? 'selected':''}>768×768</option>
+                                    <option value="1024x1024" ${imgConfig.avatarSize==='1024x1024' ? 'selected':''}>1024×1024（清晰）</option>
+                                    <option value="832x1216"  ${imgConfig.avatarSize==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
+                                </select>
+                                <div class="set-label" style="margin-top:12px;">🧑‍🎨 頭像追加詞 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">插在通用底詞與角色描述之間</span></div>
+                                <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:55px;">${vnD.avatarBasePrompt || ''}</textarea>
+                                <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:45px;">${vnD.avatarNegPrompt || ''}</textarea>
+                                <div class="set-label" style="margin-top:8px;">🎨 頭像追加詞（酒館原生 / ComfyUI 專用）</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-prompt-tavern" style="min-height:55px;">${vnD.avatarBasePromptTavern || ''}</textarea>
+                                <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative（酒館原生 / ComfyUI）</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:45px;">${vnD.avatarNegPromptTavern || ''}</textarea>
+                            </div>
                         </div>
 
                         <!-- ── 🌄 背景 分頁 body（死物：背景・物品）── -->
@@ -1142,6 +1160,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                             <div class="set-group" id="img-bg-synced-note" style="display:none;">
                                 <div class="set-desc" id="img-bg-synced-note-text">（與角色相同）</div>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label">📐 背景尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">所有接口共用</span></div>
+                                <select class="set-select" id="img-bg-size" style="font-size:12px;">
+                                    <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅，預設）</option>
+                                    <option value="1024x1024" ${(imgConfig.bgSize||'1024x768')==='1024x1024' ? 'selected':''}>1024×1024（方形）</option>
+                                    <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅）</option>
+                                    <option value="1280x720"  ${(imgConfig.bgSize||'1024x768')==='1280x720'  ? 'selected':''}>1280×720（16:9）</option>
+                                </select>
+                                <div class="set-label" style="margin-top:12px;">🌄 背景生圖底詞</div>
+                                <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:55px;">${vnD.bgBasePrompt || ''}</textarea>
+                                <div class="set-label" style="margin-top:8px;">🚫 背景 Negative</div>
+                                <textarea class="set-textarea" id="vncfg-bg-neg" style="min-height:45px;">${vnD.bgNegPrompt || ''}</textarea>
                             </div>
                         </div>
 
@@ -1462,37 +1493,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <!-- ── 🎬 場景插圖（共用設定）｜屬「角色」分頁 ── -->
-                        <div class="set-group" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
-                            <div class="set-label">📐 角色頭像尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">空＝各接口預設(Poll 512 / NAI 1024)</span></div>
-                            <select class="set-select" id="img-avatar-size" style="font-size:12px;">
-                                <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設</option>
-                                <option value="512x512"   ${imgConfig.avatarSize==='512x512'   ? 'selected':''}>512×512（方形）</option>
-                                <option value="768x768"   ${imgConfig.avatarSize==='768x768'   ? 'selected':''}>768×768</option>
-                                <option value="1024x1024" ${imgConfig.avatarSize==='1024x1024' ? 'selected':''}>1024×1024（清晰）</option>
-                                <option value="832x1216"  ${imgConfig.avatarSize==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
-                            </select>
-                            <div class="set-label" style="margin-top:12px;">🧑‍🎨 頭像追加詞 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">插在通用底詞與角色描述之間</span></div>
-                            <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:55px;">${vnD.avatarBasePrompt || ''}</textarea>
-                            <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative</div>
-                            <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:45px;">${vnD.avatarNegPrompt || ''}</textarea>
-                            <div class="set-label" style="margin-top:8px;">🎨 頭像追加詞（酒館原生 / ComfyUI 專用）</div>
-                            <textarea class="set-textarea" id="vncfg-avatar-prompt-tavern" style="min-height:55px;">${vnD.avatarBasePromptTavern || ''}</textarea>
-                            <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative（酒館原生 / ComfyUI）</div>
-                            <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:45px;">${vnD.avatarNegPromptTavern || ''}</textarea>
-                        </div>
-                        <div class="set-group">
-                            <div class="set-label">📐 背景尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">所有接口共用</span></div>
-                            <select class="set-select" id="img-bg-size" style="font-size:12px;">
-                                <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅，預設）</option>
-                                <option value="1024x1024" ${(imgConfig.bgSize||'1024x768')==='1024x1024' ? 'selected':''}>1024×1024（方形）</option>
-                                <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅）</option>
-                                <option value="1280x720"  ${(imgConfig.bgSize||'1024x768')==='1280x720'  ? 'selected':''}>1280×720（16:9）</option>
-                            </select>
-                            <div class="set-label" style="margin-top:12px;">🌄 背景生圖底詞</div>
-                            <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:55px;">${vnD.bgBasePrompt || ''}</textarea>
-                            <div class="set-label" style="margin-top:8px;">🚫 背景 Negative</div>
-                            <textarea class="set-textarea" id="vncfg-bg-neg" style="min-height:45px;">${vnD.bgNegPrompt || ''}</textarea>
-                        </div>
                         <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
                             <div class="set-label" style="font-size:13px;">🎬 場景插圖</div>
                             <div class="set-desc" style="margin-top:6px;">尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。</div>
