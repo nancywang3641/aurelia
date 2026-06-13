@@ -898,12 +898,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 
                 <div class="set-tabs">
                     <div class="set-tab active" data-tab="api">API</div>
-                    <div class="set-tab" data-tab="img">畫廊</div>
+                    <div class="set-tab" data-tab="img">圖片設置</div>
                     <div class="set-tab" data-tab="voice">語音</div>
                     <div class="set-tab" data-tab="vn">VN</div>
                     <div class="set-tab" data-tab="vec"${!isStandalone ? ' style="display:none"' : ''}>記憶向量</div>
                     <div class="set-tab" data-tab="sys"${!isStandalone ? ' style="display:none"' : ''}>系統/備份</div>
-                    <div class="set-tab" data-tab="lobby-persona">大廳人設</div>
                 </div>
 
                 <div class="set-content">
@@ -1893,38 +1892,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="bk-status" style="font-size:12px; color:rgba(26,28,40,0.72); text-align:center; padding:10px 0; min-height:20px;"></div>
                     </div>
 
-                    <!-- 🎭 大廳人設：瀅瀅 / 柴郡 系統 Prompt 補充。從 os_prompts 的人設分頁搬過來、酒館 PWA 都能用 -->
-                    <div id="view-lobby-persona" class="tab-view hidden">
-                        <div style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.10); font-size:12px; color:#1A1C28;">
-                            🎭 這裡編輯的內容會 append 到大廳「瀅瀅」/「柴郡」的系統 Prompt 末段。<br>
-                            <b>跟酒館的角色卡 / 預設無關</b>—— 這是大廳這層獨有的人設補充，影響你在 NEXUS PARALLAX 大廳跟她們聊天時的人設細節。
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">🌐 世界觀補充（共用）</div>
-                            <div class="set-desc">大廳的世界觀、店裡規矩、特殊設定、隱藏 lore...瀅瀅跟柴郡都會看到。可以慢慢添加、累積成你的私人世界書。</div>
-                            <textarea class="set-input" id="lp-world-ta" rows="10" style="resize:vertical; min-height:150px; font-family:inherit;" placeholder="例：&#10;- 視差書咖位於 LUNA-VII 軌道站第 7 層、玻璃天頂下&#10;- 店裡禁止談論 [REDACTED] 事件&#10;- 雷伊投資人來訪日固定週四晚上..."></textarea>
-                            <div class="btn-save" id="lp-world-save-btn" style="margin-top:8px;">💾 保存世界觀</div>
-                            <div id="lp-world-status" style="font-size:11px; color:rgba(26,28,40,0.55); margin-top:4px; min-height:14px;"></div>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">🌸 瀅瀅 (Iris) 人設補充</div>
-                            <div class="set-desc">寫進你想讓瀅瀅額外記住的個性、口頭禪、與你之間的設定...留空就只用內建骨架。</div>
-                            <textarea class="set-input" id="lp-iris-ta" rows="8" style="resize:vertical; min-height:120px; font-family:inherit;" placeholder="例：瀅瀅特別喜歡桂花茶、講話偶爾混用日文片假名..."></textarea>
-                            <div class="btn-save" id="lp-iris-save-btn" style="margin-top:8px;">💾 保存瀅瀅人設</div>
-                            <div id="lp-iris-status" style="font-size:11px; color:rgba(26,28,40,0.55); margin-top:4px; min-height:14px;"></div>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">😸 柴郡 (Cheshire) 人設補充</div>
-                            <div class="set-desc">柴郡的個性補充：嗆人習慣、特殊指令、暗號回應方式...</div>
-                            <textarea class="set-input" id="lp-chess-ta" rows="8" style="resize:vertical; min-height:120px; font-family:inherit;" placeholder="例：柴郡看到 'ERR_777' 會打開隱藏選單..."></textarea>
-                            <div class="btn-save" id="lp-chess-save-btn" style="margin-top:8px;">💾 保存柴郡人設</div>
-                            <div id="lp-chess-status" style="font-size:11px; color:rgba(26,28,40,0.55); margin-top:4px; min-height:14px;"></div>
-                        </div>
-                    </div>
-
                 </div>
                 <div class="set-footer">
                     <div class="btn-save" id="os-save-btn">保存所有設定</div>
@@ -1950,55 +1917,35 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             };
         });
 
-        // 🎨 畫廊分頁已搬成獨立「相簿」app（2026-06-12）：view-img 永遠 render（接線都在、不動），只控制可見性 → 零風險。
-        //   album 模式 → 標題改「相簿」、藏分頁列、只顯示畫廊；系統設置模式 → 藏掉畫廊分頁鈕。
+        // 「圖片設置」(接口/底詞/尺寸) = 系統設置裡的 tab；圖庫快取圖(頭像/背景/插圖) = 獨立「相簿」app。
+        //   view-img 永遠 render，靠下面切可見性把「設定」與「圖庫」分到兩邊。
         const _imgTabBtn = container.querySelector('.set-tab[data-tab="img"]');
+        const _galRow    = container.querySelector('.gal-subtab-row');
+        const _galApiBtn = container.querySelector('.gal-subtab[data-galtab="api"]');
+        const _apiView   = container.querySelector('#view-img-api');
         if (mode === 'album') {
             const _titleEl = container.querySelector('.set-title');
             if (_titleEl) _titleEl.textContent = '相簿';
-            if (_imgTabBtn) _imgTabBtn.click();   // 切到畫廊分頁（觸發既有 onclick 顯示 view-img）
+            // 相簿只放圖庫：藏「圖片設置」子分頁與設定本體，預設顯示頭像快取
+            if (_galApiBtn) _galApiBtn.style.display = 'none';
+            if (_apiView)   _apiView.style.display = 'none';
+            if (_imgTabBtn) _imgTabBtn.click();   // 切到 view-img
+            const _avatarBtn = container.querySelector('.gal-subtab[data-galtab="avatar"]');
+            if (_avatarBtn) _avatarBtn.click();   // 預設顯示頭像圖庫
             const _tabsBar = container.querySelector('.set-tabs');
             if (_tabsBar) _tabsBar.style.display = 'none';
-        } else if (_imgTabBtn) {
-            _imgTabBtn.style.display = 'none';     // 系統設置不再顯示畫廊分頁
+        } else {
+            // 系統設置：「圖片設置」tab 只給設定，藏圖庫子分頁列與快取圖（那些留給相簿）
+            if (_galRow) _galRow.style.display = 'none';
+            ['avatar', 'bg', 'scene'].forEach(t => {
+                const v = container.querySelector(`#view-img-${t}`);
+                if (v) v.style.display = 'none';
+            });
+            if (_apiView) _apiView.style.display = '';
         }
 
         // 備份分頁
         bindBackupTab(container);
-
-        // 🎭 大廳人設分頁：textarea 預載 + 儲存
-        (() => {
-            const winP = window.parent || window;
-            const prompts = winP.OS_PROMPTS;
-            if (!prompts) return;
-            const worldTa = container.querySelector('#lp-world-ta');
-            const irisTa  = container.querySelector('#lp-iris-ta');
-            const chessTa = container.querySelector('#lp-chess-ta');
-            if (worldTa && prompts.loadWorld)    worldTa.value = prompts.loadWorld();
-            if (irisTa  && prompts.loadIris)     irisTa.value  = prompts.loadIris();
-            if (chessTa && prompts.loadCheshire) chessTa.value = prompts.loadCheshire();
-            const _flash = (statusEl, txt) => {
-                if (!statusEl) return;
-                statusEl.textContent = txt;
-                statusEl.style.color = '#6b8e23';
-                setTimeout(() => { statusEl.textContent = ''; }, 1500);
-            };
-            const worldSave = container.querySelector('#lp-world-save-btn');
-            if (worldSave) worldSave.onclick = () => {
-                prompts.saveWorld && prompts.saveWorld(worldTa.value);
-                _flash(container.querySelector('#lp-world-status'), '✅ 已保存');
-            };
-            const irisSave = container.querySelector('#lp-iris-save-btn');
-            if (irisSave) irisSave.onclick = () => {
-                prompts.saveIris && prompts.saveIris(irisTa.value);
-                _flash(container.querySelector('#lp-iris-status'), '✅ 已保存');
-            };
-            const chessSave = container.querySelector('#lp-chess-save-btn');
-            if (chessSave) chessSave.onclick = () => {
-                prompts.saveCheshire && prompts.saveCheshire(chessTa.value);
-                _flash(container.querySelector('#lp-chess-status'), '✅ 已保存');
-            };
-        })();
 
         // 綁定元素 (主模型)
         const elSystemApi = container.querySelector('#os-system-api');
