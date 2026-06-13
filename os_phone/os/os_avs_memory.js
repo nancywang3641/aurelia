@@ -37,6 +37,40 @@
 
     let _host = null;
     let _advOpen = false;
+    let _memCache = [];        // 目前世界全部記憶（篩選用，免重抓 DB）
+    let _memFilter = 'all';    // 分類篩選（type）
+    let _memSearch = '';       // 關鍵字搜尋
+
+    function _filterMems(list) {
+        let r = list || [];
+        if (_memFilter && _memFilter !== 'all') r = r.filter(m => m.type === _memFilter);
+        const kw = (_memSearch || '').trim().toLowerCase();
+        if (kw) r = r.filter(m => (m.text || '').toLowerCase().includes(kw) || (m.tags || []).some(t => String(t).toLowerCase().includes(kw)));
+        return r;
+    }
+
+    function _memTypeOpts(mems) {
+        const present = [...new Set((mems || []).map(m => m.type).filter(Boolean))];
+        if (_memFilter !== 'all' && !present.includes(_memFilter)) _memFilter = 'all';   // 篩選值已不存在(資料變了)退回全部
+        return `<option value="all"${_memFilter === 'all' ? ' selected' : ''}>全部分類</option>` +
+            present.map(t => `<option value="${esc(t)}"${_memFilter === t ? ' selected' : ''}>${esc(_typeLabel(t))}</option>`).join('');
+    }
+
+    function _bindMemDelete() {
+        if (!_host) return;
+        _host.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
+            const id = btn.getAttribute('data-del');
+            if (!confirm('刪掉這條記憶？AI 之後就不會再想起它。')) return;
+            try { await win.OS_DB?.deleteVnMemory?.(id); } catch (e) {}
+            _build();
+        });
+    }
+
+    function _updateMemList() {
+        const listEl = _host && _host.querySelector('#avs-mem-list');
+        if (listEl) listEl.innerHTML = _renderList(_filterMems(_memCache));
+        _bindMemDelete();
+    }
 
     function _renderList(mems) {
         if (!mems.length) {
@@ -63,6 +97,7 @@
 
         let mems = [];
         try { if (win.OS_DB?.getAllVnMemories) mems = await win.OS_DB.getAllVnMemories(sid) || []; } catch (e) {}
+        _memCache = mems;
 
         // 其他「有記憶」的世界（給「轉入記憶」用）——換聊天/備份檔 chatId 變了，可把舊世界記憶搬過來
         let _srcOptions = '';
@@ -94,8 +129,14 @@
 
             <div class="avs-mem-status">${statusTxt}</div>
 
-            <div class="avs-mem-list-hd">📝 記住的事</div>
-            <div class="avs-mem-list" id="avs-mem-list">${_renderList(mems)}</div>
+            <div class="avs-mem-list-hd-row">
+                <div class="avs-mem-list-hd">📝 記住的事</div>
+                <div class="avs-mem-filter">
+                    <select class="avs-input avs-mem-filter-sel" id="avs-mem-filter">${_memTypeOpts(mems)}</select>
+                    <input class="avs-input avs-mem-filter-search" id="avs-mem-search" placeholder="🔍 搜尋…" value="${esc(_memSearch)}">
+                </div>
+            </div>
+            <div class="avs-mem-list" id="avs-mem-list">${_renderList(_filterMems(mems))}</div>
 
             <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn">⚙️ 進階：記憶服務設定</button>
             <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
@@ -154,13 +195,14 @@
             _build();
         };
 
+        // 分類篩選 + 搜尋（只重渲染清單，不重抓 DB）
+        const filterSel = q('#avs-mem-filter');
+        if (filterSel) filterSel.onchange = () => { _memFilter = filterSel.value; _updateMemList(); };
+        const searchInp = q('#avs-mem-search');
+        if (searchInp) searchInp.oninput = () => { _memSearch = searchInp.value; _updateMemList(); };
+
         // 刪單條記憶
-        h.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
-            const id = btn.getAttribute('data-del');
-            if (!confirm('刪掉這條記憶？AI 之後就不會再想起它。')) return;
-            try { await win.OS_DB?.deleteVnMemory?.(id); } catch (e) {}
-            _build();
-        });
+        _bindMemDelete();
 
         // 儲存設定
         const saveBtn = q('#avs-mem-save');
