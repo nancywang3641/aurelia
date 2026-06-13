@@ -580,12 +580,6 @@ const IRIS_IDLE = [
                     <button class="void-mode-toggle-btn" id="room-portal-btn" title="傳送至 404 號房" style="display:none;">
                         <span class="void-mode-toggle-label">⬡ 404</span>
                     </button>
-                    <button class="void-mode-toggle-btn" id="claude-portal-btn" title="進入 Claude 的房間">
-                        <span class="void-mode-toggle-label">🦀 Claude</span>
-                    </button>
-                    <button class="void-mode-toggle-btn" id="codex-portal-btn" title="進入 Codex 的房間">
-                        <span class="void-mode-toggle-label">🔷 Codex</span>
-                    </button>
                     <button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏">⛶</button>
                     <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關">🔊</button>
                     <audio id="lobby-bgm-player" loop style="display:none;"></audio>
@@ -1105,50 +1099,21 @@ const IRIS_IDLE = [
                 else enter404Room();
             });
 
-            // 🦀 Claude 房間 / 🔷 Codex 房間 ↔ 視差書咖 切換
-            const claudePortalBtn = tab.querySelector('#claude-portal-btn');
-            const codexPortalBtn  = tab.querySelector('#codex-portal-btn');
-            VoidClaudeRoom.updatePortalBtn();
-            if (claudePortalBtn) {
-                claudePortalBtn.addEventListener('click', () => {
-                    if (is404Room) {
-                        playIrisSequence("[Char|柴郡|smirk|嘖，這裡可不通到那種乾淨地方。先回去找寫作機器吧。]");
-                    } else if (window.ChatWindow) {
-                        window.ChatWindow.open('claude');
-                    }
-                });
-            }
-            if (codexPortalBtn) {
-                codexPortalBtn.addEventListener('click', () => {
-                    if (is404Room) {
-                        playIrisSequence("[Char|柴郡|smirk|嘖，那種藍色乾淨地方？這裡不通。先回去吧。]");
-                    } else if (window.ChatWindow) {
-                        window.ChatWindow.open('codex');
-                    }
-                });
-            }
-
-            // 📱 手機把 portal 按鈕從頂部 .lb-top-ctrls 搬進 .lb-menu-head 右側（避免擠壓頂部）
+            // 📱 手機把 404 portal 按鈕從頂部 .lb-top-ctrls 搬進 .lb-menu-head 右側（避免擠壓頂部）
             // 注意：mode-claude 時 .lobby-body 是 display:none，head 也跟著消失，所以那時得把按鈕留在 top-ctrls
             const _relocatePortalBtns = () => {
                 const ctrls  = tab.querySelector('.lb-top-ctrls');
                 const head   = tab.querySelector('.lb-menu-head');
                 const portal = tab.querySelector('#room-portal-btn');
-                const claude = tab.querySelector('#claude-portal-btn');
-                const codex  = tab.querySelector('#codex-portal-btn');
-                if (!ctrls || !portal || !claude || !codex) return;
+                if (!ctrls || !portal) return;
                 const isMobile = window.matchMedia('(max-width: 560px)').matches;
                 const inClaude = tab.classList.contains('mode-claude');
                 const moveToHead = isMobile && !inClaude && head;
                 if (moveToHead) {
                     if (portal.parentElement !== head) head.appendChild(portal);
-                    if (claude.parentElement !== head) head.appendChild(claude);
-                    if (codex.parentElement !== head) head.appendChild(codex);
                 } else {
                     const fsBtn = ctrls.querySelector('#aurelia-fullscreen-btn');
                     if (portal.parentElement !== ctrls) ctrls.insertBefore(portal, fsBtn || null);
-                    if (claude.parentElement !== ctrls) ctrls.insertBefore(claude, fsBtn || null);
-                    if (codex.parentElement !== ctrls) ctrls.insertBefore(codex, fsBtn || null);
                 }
             };
             _relocatePortalBtns();
