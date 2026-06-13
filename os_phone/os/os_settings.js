@@ -1123,10 +1123,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-group">
                                 <div class="set-label">🎭 角色・🎬 插圖 來源</div>
                                 <select class="set-select" id="img-service-living">
-                                    <option value="pollinations" ${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
-                                    <option value="novelai" ${(imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
+                                    <option value="pollinations" ${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">角色／頭像／場景插圖都用這個來源。</div>
                             </div>
@@ -1139,15 +1139,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <span>🔗 同步角色來源</span>
                                     <label class="toggle-switch"><input type="checkbox" id="img-sync-bg-to-char"><span class="slider"></span></label>
                                 </div>
-                                <div class="set-desc">開啟＝背景/物品用跟角色相同的接口，不用重貼 Key/Token。</div>
+                                <div class="set-desc">開啟後，背景和角色用同一個來源，不用再貼一次帳號。</div>
                             </div>
                             <div class="set-group" id="img-bg-source-group">
                                 <div class="set-label">🌄 背景・📦 物品 來源</div>
                                 <select class="set-select" id="img-service-inanimate">
-                                    <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations (Pollen 積分制)</option>
-                                    <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI (訂閱制)</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生（你的 WebUI/ComfyUI/NAI）</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連（手動 LoRA / 參數）</option>
+                                    <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
                             </div>
                             <div class="set-group" id="img-bg-synced-note" style="display:none;">
@@ -1160,7 +1160,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
                                 <div class="set-group" style="margin-top:12px;">
-                                    <div class="set-desc">🧩 透過酒館伺服器代理連你的 ComfyUI（免 CORS、免改啟動參數）。在這手動加 LoRA、調參數，奧瑞亞自動組工作流，你不用碰 JSON。</div>
+                                    <div class="set-desc">🧩 連接你電腦上的 ComfyUI，在這裡加 LoRA、調參數就好，其餘都自動處理。</div>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">ComfyUI 網址</div>
@@ -1171,10 +1171,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label">⚙️ 工作流模式 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">進階：高手可帶自己的 ComfyUI 工作流</span></div>
+                                    <div class="set-label">⚙️ 進階設定 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">想用自己的工作流再開，否則不用碰</span></div>
                                     <select class="set-select" id="img-cfd-wfmode">
-                                        <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動組（推薦｜小白：在下面設模型/LoRA/參數）</option>
-                                        <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼我自己的 ComfyUI 工作流）</option>
+                                        <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動（推薦，在下面設定就好）</option>
+                                        <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼自己的工作流）</option>
                                     </select>
                                     <div id="img-cfd-custom-wf" class="${imgConfig.comfyuiDirect?.workflowMode==='custom'?'':'hidden'}" style="margin-top:8px;">
                                         <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${imgConfig.comfyuiDirect?.customWorkflow || ''}</textarea>
@@ -1186,9 +1186,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label">📦 預設包 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">整組「模型＋LoRA＋參數」存起來，附風格縮圖一鍵切換</span></div>
-                                    <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;">📦 打開預設包（${(imgConfig.comfyuiDirect?.presets || []).length} 個）</button>
-                                    <div class="set-desc" style="margin-top:4px;">點開可視化管理：每個包一張卡，可生成風格預覽縮圖、套用、覆蓋、刪除。改完記得按底部保存。</div>
+                                    <div class="set-label">📦 預設包 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">把整組設定存起來，一鍵切換</span></div>
+                                    <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;">📦 打開預設包 · ${(imgConfig.comfyuiDirect?.presets || []).length} 個</button>
+                                    <div class="set-desc" style="margin-top:4px;">每個包存一組設定，可存預覽圖、套用、刪除。改完記得到底部按儲存。</div>
                                 </div>
                                 <!-- 預設包 modal（可視化卡片牆） -->
                                 <div id="img-cfd-preset-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
