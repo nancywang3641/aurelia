@@ -405,7 +405,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     t.style.fontWeight = '400';
                 });
                 el.classList.add('active');
-                el.style.color = 'rgba(26,28,40,0.25)';
+                el.style.color = '#1A1C28';
                 el.style.borderBottomColor = 'rgba(26,28,40,0.25)';
                 el.style.fontWeight = '700';
                 document.querySelectorAll('.img-subtab-view').forEach(v => v.style.display = 'none');
@@ -439,7 +439,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     t.style.background = 'transparent';
                 });
                 el.classList.add('active');
-                el.style.color = 'rgba(26,28,40,0.25)';
+                el.style.color = '#1A1C28';
                 el.style.borderColor = 'rgba(26,28,40,0.25)';
                 el.style.background = 'rgba(26,28,40,0.06)';
                 document.querySelectorAll('.avatar-sub-view').forEach(v => v.style.display = 'none');
@@ -827,13 +827,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 el.parentElement.querySelectorAll('[data-ttsmode]').forEach(b => {
                     b.classList.remove('active');
                     b.style.background = 'transparent';
-                    b.style.color = '#888';
+                    b.style.color = 'rgba(26,28,40,0.55)';
                     b.style.fontWeight = '400';
                     b.style.boxShadow = 'none';
                 });
                 el.classList.add('active');
                 el.style.background = 'rgba(26,28,40,0.09)';
-                el.style.color = 'rgba(26,28,40,0.25)';
+                el.style.color = '#1A1C28';
                 el.style.fontWeight = '700';
                 el.style.boxShadow = '0 0 0 1px rgba(26,28,40,0.25) inset';
                 document.querySelectorAll('.voice-area').forEach(v => v.style.display = 'none');
@@ -905,21 +905,21 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 </div>
                 
                 <div class="set-tabs">
-                    <div class="set-tab active" data-tab="api">🔌 API</div>
-                    <div class="set-tab" data-tab="img">🎨 畫廊</div>
-                    <div class="set-tab" data-tab="voice">🎵 語音</div>
-                    <div class="set-tab" data-tab="vn">🎮 VN</div>
-                    <div class="set-tab" data-tab="vec"${!isStandalone ? ' style="display:none"' : ''}>🔮 記憶向量</div>
-                    <div class="set-tab" data-tab="sys"${!isStandalone ? ' style="display:none"' : ''}>⚙️ 系統/備份</div>
-                    <div class="set-tab" data-tab="lobby-persona">🎭 大廳人設</div>
+                    <div class="set-tab active" data-tab="api">API</div>
+                    <div class="set-tab" data-tab="img">畫廊</div>
+                    <div class="set-tab" data-tab="voice">語音</div>
+                    <div class="set-tab" data-tab="vn">VN</div>
+                    <div class="set-tab" data-tab="vec"${!isStandalone ? ' style="display:none"' : ''}>記憶向量</div>
+                    <div class="set-tab" data-tab="sys"${!isStandalone ? ' style="display:none"' : ''}>系統/備份</div>
+                    <div class="set-tab" data-tab="lobby-persona">大廳人設</div>
                 </div>
 
                 <div class="set-content">
 
                     <div id="view-api" class="tab-view active">
                         <div class="api-subtab-row">
-                            <div class="api-subtab active" data-apitab="llm" onclick="window._switchApiTab && window._switchApiTab('llm')">🧠 主模型</div>
-                            <div class="api-subtab" data-apitab="sec-llm" onclick="window._switchApiTab && window._switchApiTab('sec-llm')">⚡ 副模型</div>
+                            <div class="api-subtab active" data-apitab="llm" onclick="window._switchApiTab && window._switchApiTab('llm')">主模型</div>
+                            <div class="api-subtab" data-apitab="sec-llm" onclick="window._switchApiTab && window._switchApiTab('sec-llm')">副模型</div>
                         </div>
                     <div id="view-llm" class="api-subview">
                         <div class="set-group"${stHide}>
@@ -1686,10 +1686,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-voice" class="tab-view hidden">
 
                         <!-- 三選一 mode 切換 -->
-                        <div style="display:flex;gap:6px;margin-bottom:16px;padding:4px;background:rgba(0,0,0,0.25);border-radius:6px;">
-                            <div data-ttsmode="minimax" onclick="_switchTtsMode(this,'minimax')" style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='minimax' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:#888;'}">🎵 MINIMAX</div>
-                            <div data-ttsmode="sovits"  onclick="_switchTtsMode(this,'sovits')"  style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='sovits' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:#888;'}">🎙 SoVITS TTS</div>
-                            <div data-ttsmode="off"     onclick="_switchTtsMode(this,'off')"     style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='off' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:#888;'}">🔇 全關閉</div>
+                        <div style="display:flex;gap:6px;margin-bottom:16px;padding:4px;background:rgba(26,28,40,0.06);border-radius:6px;">
+                            <div data-ttsmode="minimax" onclick="_switchTtsMode(this,'minimax')" style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='minimax' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:rgba(26,28,40,0.55);'}">MINIMAX</div>
+                            <div data-ttsmode="sovits"  onclick="_switchTtsMode(this,'sovits')"  style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='sovits' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:rgba(26,28,40,0.55);'}">SoVITS TTS</div>
+                            <div data-ttsmode="off"     onclick="_switchTtsMode(this,'off')"     style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='off' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:rgba(26,28,40,0.55);'}">全關閉</div>
                         </div>
 
                         <!-- MINIMAX 設定區 -->

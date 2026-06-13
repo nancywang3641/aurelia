@@ -92,7 +92,7 @@ function renderBasic(cfg) {
   </div>
   <div class="vtts-field">
     <label class="vtts-label">Sample Steps <span id="vtts-steps-val">${cfg.sampleSteps ?? 32}</span>
-      <span style="color:#555;font-weight:normal;margin-left:6px;">（V3 / V4 專屬，V1/V2 忽略）</span>
+      <span style="color:rgba(26,28,40,0.55);font-weight:normal;margin-left:6px;">（V3 / V4 專屬，V1/V2 忽略）</span>
     </label>
     <input class="vtts-input" id="vtts-steps" type="range" min="4" max="100" step="4"
            value="${cfg.sampleSteps ?? 32}" oninput="document.getElementById('vtts-steps-val').textContent=this.value">
@@ -126,7 +126,7 @@ function renderModels(cfg) {
   <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.loadLocalConfig()" title="執行 scan_models.py 後點此，從 models/tts_models.json 批次匯入所有模型">📥 載入配置</button>
   <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteAllModels()">🗑 一鍵清空</button>
 </div>
-<div style="font-size:11px;color:#555;margin-bottom:10px;">💡 有多個模型？先執行擴展目錄裡的 <code style="color:#888">scan_models.bat</code>，再點「載入配置」一次匯入全部。</div>
+<div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:10px;">💡 有多個模型？先執行擴展目錄裡的 <code style="color:rgba(26,28,40,0.55)">scan_models.bat</code>，再點「載入配置」一次匯入全部。</div>
 ${cards}`;
 }
 
@@ -140,17 +140,17 @@ function renderModelCard(id, m) {
       <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
     </div>
   </div>
-  <div style="font-size:11px;color:#666;line-height:1.8;">
+  <div style="font-size:11px;color:rgba(26,28,40,0.55);line-height:1.8;">
     <div>GPT: ${esc(m.gptPath||'（未設定）')}</div>
     <div>SoVITS: ${esc(m.sovitsPath||'（未設定）')}</div>
     
     <div style="display:flex; align-items:center; gap: 8px;">
       預設音頻: ${esc(m.refAudioPath||'（未設定）')}
-      ${m.refAudioPath ? `<button class="vtts-btn vtts-btn-ghost" style="padding: 2px 8px; font-size: 10px; border-color: rgba(212,175,55,0.4);" onclick="VN_TTS_Panel.playRefAudio('${escJs(m.refAudioPath)}')">▶ 試聽</button>` : ''}
+      ${m.refAudioPath ? `<button class="vtts-btn vtts-btn-ghost" style="padding: 2px 8px; font-size: 10px; border-color: rgba(26,28,40,0.25);" onclick="VN_TTS_Panel.playRefAudio('${escJs(m.refAudioPath)}')">▶ 試聽</button>` : ''}
     </div>
     
     <div>預設文字: ${esc(m.refText||'')}</div>
-    <div style="color:#d4af37; margin-top: 4px;">自訂情緒數量: ${Object.keys(m.emotions || {}).length} 組</div>
+    <div style="color:#1A1C28; margin-top: 4px;">自訂情緒數量: ${Object.keys(m.emotions || {}).length} 組</div>
   </div>
 </div>`;
 }
@@ -159,9 +159,9 @@ function renderEmotionBlock(emoKey, emData) {
     emoKey = emoKey || '';
     emData = emData || {};
     return `
-    <div class="vtts-emo-block" style="border-left: 2px solid rgba(212,175,55,0.4); padding-left: 10px; margin-bottom: 12px; background: rgba(0,0,0,0.2); padding: 8px;">
+    <div class="vtts-emo-block" style="border-left: 2px solid rgba(26,28,40,0.25); padding-left: 10px; margin-bottom: 12px; background: rgba(26,28,40,0.04); padding: 8px;">
       <div class="vtts-row" style="margin-bottom: 8px;">
-        <span style="font-size: 12px; color: #f6ad55; white-space: nowrap;">🎭 觸發標籤：</span>
+        <span style="font-size: 12px; color: #1A1C28; white-space: nowrap;">🎭 觸發標籤：</span>
         <input class="vtts-input vtts-emo-key" type="text" value="${esc(emoKey)}" placeholder="例：Surprise, 哭腔, 撒嬌">
         <button class="vtts-btn vtts-btn-danger" onclick="this.closest('.vtts-emo-block').remove()" style="padding: 4px 8px;" title="刪除此情緒">✕</button>
       </div>
@@ -207,8 +207,8 @@ function renderModelForm(id, m) {
     <input class="vtts-input" id="vtts-mf-sovits" type="text" value="${esc(m.sovitsPath||'')}" placeholder="D:\\...\\model.pth">
   </div>
   
-  <div style="margin-top:20px; margin-bottom:8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">
-    <span style="font-size: 13px; color: #00d2d3; font-weight: 600;">🔈 預設參考音頻（必填）</span>
+  <div style="margin-top:20px; margin-bottom:8px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 4px;">
+    <span style="font-size: 13px; color: #1A1C28; font-weight: 600;">🔈 預設參考音頻（必填）</span>
   </div>
   <div class="vtts-field">
     <label class="vtts-label">預設參考音頻路徑（.wav）</label>
@@ -227,10 +227,10 @@ function renderModelForm(id, m) {
     </select>
   </div>
 
-  <div style="margin-top:24px; margin-bottom:12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-end;">
+  <div style="margin-top:24px; margin-bottom:12px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-end;">
     <div>
-        <span style="font-size: 13px; color: #00d2d3; font-weight: 600;">✨ 自訂多情緒語音（選填）</span>
-        <div style="font-size: 11px; color: #888; margin-top: 4px;">當腳本表情與「觸發標籤」一致時自動替換。<br>留空或無匹配時將使用上方預設音頻。</div>
+        <span style="font-size: 13px; color: #1A1C28; font-weight: 600;">✨ 自訂多情緒語音（選填）</span>
+        <div style="font-size: 11px; color: rgba(26,28,40,0.55); margin-top: 4px;">當腳本表情與「觸發標籤」一致時自動替換。<br>留空或無匹配時將使用上方預設音頻。</div>
     </div>
     <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addEmotionSlot()" style="padding: 5px 12px; font-size: 11px; flex-shrink: 0;">＋ 新增情緒</button>
   </div>
@@ -253,8 +253,8 @@ function renderChars(cfg) {
 
     const rows = Object.entries(cfg.charMappings).map(([char, mid]) => {
         const aliases = (cfg.charAliases && Array.isArray(cfg.charAliases[char])) ? cfg.charAliases[char] : [];
-        const chipStyle = 'display:inline-flex;align-items:center;gap:5px;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.35);color:#d4af37;padding:3px 9px;border-radius:11px;font-size:11px;line-height:1.2;';
-        const chipXStyle = 'cursor:pointer;color:#888;font-size:11px;line-height:1;padding:0 1px;';
+        const chipStyle = 'display:inline-flex;align-items:center;gap:5px;background:rgba(26,28,40,0.06);border:1px solid rgba(26,28,40,0.20);color:#1A1C28;padding:3px 9px;border-radius:11px;font-size:11px;line-height:1.2;';
+        const chipXStyle = 'cursor:pointer;color:rgba(26,28,40,0.55);font-size:11px;line-height:1;padding:0 1px;';
         const chips = aliases.map(a =>
             `<span style="${chipStyle}">${esc(a)}<span style="${chipXStyle}" onclick="VN_TTS_Panel.removeAlias('${escJs(char)}','${escJs(a)}')" title="移除別名">✕</span></span>`
         ).join('');
@@ -272,9 +272,9 @@ function renderChars(cfg) {
     <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteCharMapping('${escJs(char)}')">✕</button>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-left:8px;">
-    <span style="font-size:11px;color:#888;letter-spacing:1px;">別名</span>
-    ${chips || '<span style="font-size:11px;color:#555;">（無，AI 流口水時會對不上）</span>'}
-    <input id="vtts-alias-input-${esc(char)}" type="text" placeholder="+ 新增別名（按 Enter）" style="flex:1;min-width:140px;background:rgba(0,0,0,0.3);border:1px dashed rgba(212,175,55,0.3);color:#1A1C28;padding:4px 8px;border-radius:3px;font-size:11px;outline:none;" onkeypress="if(event.key==='Enter'){event.preventDefault();VN_TTS_Panel.addAlias('${escJs(char)}',this.value);this.value='';}">
+    <span style="font-size:11px;color:rgba(26,28,40,0.55);letter-spacing:1px;">別名</span>
+    ${chips || '<span style="font-size:11px;color:rgba(26,28,40,0.55);">（無，AI 流口水時會對不上）</span>'}
+    <input id="vtts-alias-input-${esc(char)}" type="text" placeholder="+ 新增別名（按 Enter）" style="flex:1;min-width:140px;background:#EEF0F6;border:1px dashed rgba(26,28,40,0.30);color:#1A1C28;padding:4px 8px;border-radius:3px;font-size:11px;outline:none;" onkeypress="if(event.key==='Enter'){event.preventDefault();VN_TTS_Panel.addAlias('${escJs(char)}',this.value);this.value='';}">
   </div>
 </div>`;
     }).join('');
@@ -387,7 +387,7 @@ function renderNpcCard(cat, models) {
 
   <div style="margin-bottom:10px;">
     <div class="vtts-label">模糊匹配別名（角色名稱含有以下標籤時隨機套用此分類）</div>
-    <div class="vtts-tag-list" id="vtts-tags-${esc(cat.id)}">${tags || '<span style="color:#555;font-size:11px">尚無標籤</span>'}</div>
+    <div class="vtts-tag-list" id="vtts-tags-${esc(cat.id)}">${tags || '<span style="color:rgba(26,28,40,0.55);font-size:11px">尚無標籤</span>'}</div>
     <div class="vtts-row" style="margin-top:7px;">
       <input class="vtts-input" id="vtts-tag-input-${esc(cat.id)}" type="text" placeholder="新標籤（如：大嬸、長髮女孩）"
              onkeydown="if(event.key==='Enter')VN_TTS_Panel.addNpcTag('${escJs(cat.id)}')">
@@ -448,7 +448,7 @@ const VN_TTS_Panel = {
         this._toastId = 'vtts-inline-toast';
         root.innerHTML = `
 <div style="position:relative;">
-  <div class="vtts-tabs" style="margin:0 -4px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">
+  <div class="vtts-tabs" style="margin:0 -4px 12px;border-bottom:1px solid rgba(26,28,40,0.08);">
     <button class="vtts-tab ${this._currentTab==='basic'  ?'active':''}" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">基礎配置</button>
     <button class="vtts-tab ${this._currentTab==='models' ?'active':''}" data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型庫</button>
     <button class="vtts-tab ${this._currentTab==='chars'  ?'active':''}" data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色對應</button>
