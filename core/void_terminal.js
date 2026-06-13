@@ -582,6 +582,7 @@ const IRIS_IDLE = [
                     </button>
                     <button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏">⛶</button>
                     <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關">🔊</button>
+                    <button class="lb-icon-btn" id="aurelia-global-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">⏻</button>
                     <audio id="lobby-bgm-player" loop style="display:none;"></audio>
                 </div>
                 <div class="lb-top-user" id="lb-top-user" title="我的人設">
