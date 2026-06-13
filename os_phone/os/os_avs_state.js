@@ -132,6 +132,9 @@
         const patchesCount = data?.patches ? Object.keys(data.patches).length : 0;
         const runtimeOn = localStorage.getItem('aurelia_state_runtime_enabled') === '1';
 
+        // 🔗 整合頁去重複：沒建檔時只顯示上方「開始追蹤」引導、藏掉下方「我的檔案」區（兩個建檔入口擇一）；建檔後才顯示檔案管理
+        try { const _pv = document.querySelector('#avs-view-packs'); if (_pv) _pv.classList.toggle('active', !!hasSchema); } catch (e) {}
+
         const storyHtml = `<div class="avs-card avs-st-story">
             <div class="avs-st-story-label">目前故事</div>
             <div class="avs-st-story-name">${storyTitle ? esc(storyTitle) : '<span class="avs-st-dim">（尚未開啟故事）</span>'}</div>
