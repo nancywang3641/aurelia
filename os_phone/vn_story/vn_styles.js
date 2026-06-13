@@ -60,7 +60,7 @@
                 </div>
                 <div id="game-bg"></div>
                 <div id="game-char-container"><img id="game-char" src="" alt="character" onerror="window.VN_Core.handleImgError(this)" ondblclick="window.VN_Core.openCharCard(0)" ontouchend="window.VN_Core._spriteTap(0,event)"><img id="game-char-2" src="" alt="character" onerror="window.VN_Core.handleImgError(this)" ondblclick="window.VN_Core.openCharCard(1)" ontouchend="window.VN_Core._spriteTap(1,event)"></div>
-                <div id="scene-cg-overlay" onclick="window.VN_Core.next()"><img id="scene-cg-img" src="" alt="scene cg"></div>
+                <div id="scene-cg-overlay" onclick="window.VN_Core.next()"><img id="scene-cg-img" src="" alt="scene cg"><button id="scene-cg-retry" onclick="event.stopPropagation(); window.VN_Core.retrySceneCg()" title="重新生成這張插圖（不重跑劇情 AI，只重生圖）">🔄</button></div>
 
                 <div id="top-badge"></div>
                 <div id="danmu-container"></div>
