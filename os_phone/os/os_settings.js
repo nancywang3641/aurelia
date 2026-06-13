@@ -1445,7 +1445,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
 
-                        <div id="img-pol-prompts-group" class="${imgConfig.service === 'novelai' ? 'hidden' : ''}">
+                        <div id="img-pol-prompts-group" class="${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? '' : 'hidden'}">
                         <div class="set-group">
                             <div class="set-label">🎨 角色頭像通用底詞 <span style="font-size:10px; color:rgba(26,28,40,0.72); font-weight:normal;">（全模組共用：夜店 / 偵探 / 寶寶 / VN頭像）</span></div>
                             <textarea class="set-textarea" id="img-style-prompt">${imgConfig.pollinations.charBasePrompt}</textarea>
@@ -2308,7 +2308,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (imgSrcTab === 'char') {
                 // 角色分頁：顯示 living 接口設定 + 角色頭像底詞 + 場景插圖（副模型版）
                 showOnlyIfaceGroup(livingSvc);
-                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc === 'novelai');
+                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc !== 'pollinations');
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = '';
                 if (elImgSceneExtract) elImgSceneExtract.style.display = '';
                 if (elImgPixabay)      elImgPixabay.style.display = 'none';   // 退路圖庫屬背景、角色分頁藏
