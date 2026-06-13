@@ -14,10 +14,10 @@ function buildPanelHTML() {
   </div>
 
   <div class="vtts-tabs">
-    <button class="vtts-tab active" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">基礎配置</button>
-    <button class="vtts-tab"        data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型庫</button>
-    <button class="vtts-tab"        data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色對應</button>
-    <button class="vtts-tab"        data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC 配音</button>
+    <button class="vtts-tab active" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">配置</button>
+    <button class="vtts-tab"        data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
+    <button class="vtts-tab"        data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
+    <button class="vtts-tab"        data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
   </div>
 
   <div class="vtts-body" id="vtts-body"></div>
@@ -330,12 +330,16 @@ function renderNpc(cfg) {
     // 選中的分類不存在時（初次進入／剛刪除）退回第一個
     if (!_npcSel || !cats.find(c => c.id === _npcSel)) _npcSel = cats[0].id;
     const sel  = cats.find(c => c.id === _npcSel);
-    const opts = cats.map(c => `<option value="${esc(c.id)}"${c.id === _npcSel ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+    // 自訂下拉（native select 在縮小視窗會爆出畫面外，改成限高捲動容器）
+    const ddOpts = cats.map(c => `<div class="vtts-dd-opt${c.id === _npcSel ? ' active' : ''}" onclick="VN_TTS_Panel.selectNpcCategory('${escJs(c.id)}')">${esc(c.name)}</div>`).join('');
     return `
 <div class="vtts-field">
   <label class="vtts-label">選擇 NPC 分類（只顯示選中的一張，新增的會出現在這裡）</label>
   <div class="vtts-row">
-    <select class="vtts-input" id="vtts-npc-sel" onchange="VN_TTS_Panel.selectNpcCategory(this.value)">${opts}</select>
+    <div class="vtts-dd" id="vtts-npc-dd">
+      <div class="vtts-dd-cur" onclick="VN_TTS_Panel.toggleNpcDropdown(event)">${esc(sel.name)}<span class="vtts-dd-arrow">▾</span></div>
+      <div class="vtts-dd-list" id="vtts-npc-dd-list">${ddOpts}</div>
+    </div>
     <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addNpcCategory()">＋ 新增</button>
   </div>
 </div>
@@ -439,10 +443,10 @@ const VN_TTS_Panel = {
         root.innerHTML = `
 <div style="position:relative;">
   <div class="vtts-tabs" style="margin:0 -4px 12px;border-bottom:1px solid rgba(26,28,40,0.08);">
-    <button class="vtts-tab ${this._currentTab==='basic'  ?'active':''}" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">基礎配置</button>
-    <button class="vtts-tab ${this._currentTab==='models' ?'active':''}" data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型庫</button>
-    <button class="vtts-tab ${this._currentTab==='chars'  ?'active':''}" data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色對應</button>
-    <button class="vtts-tab ${this._currentTab==='npc'    ?'active':''}" data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC 配音</button>
+    <button class="vtts-tab ${this._currentTab==='basic'  ?'active':''}" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">配置</button>
+    <button class="vtts-tab ${this._currentTab==='models' ?'active':''}" data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
+    <button class="vtts-tab ${this._currentTab==='chars'  ?'active':''}" data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
+    <button class="vtts-tab ${this._currentTab==='npc'    ?'active':''}" data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
   </div>
   <div id="vtts-inline-body"></div>
   <div class="vtts-toast" id="vtts-inline-toast"></div>
@@ -994,6 +998,24 @@ const VN_TTS_Panel = {
         if (!tts.config.charAliases[charName].length) delete tts.config.charAliases[charName];
         tts.save();
         this._renderBody('chars');
+    },
+
+    toggleNpcDropdown(e) {
+        if (e) e.stopPropagation();
+        const list = document.getElementById('vtts-npc-dd-list');
+        if (!list) return;
+        const willOpen = !list.classList.contains('open');
+        list.classList.toggle('open', willOpen);
+        if (willOpen) {
+            const close = (ev) => {
+                const dd = document.getElementById('vtts-npc-dd');
+                if (!dd || !dd.contains(ev.target)) {
+                    list.classList.remove('open');
+                    document.removeEventListener('click', close, true);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', close, true), 0);
+        }
     },
 
     selectNpcCategory(id) {
