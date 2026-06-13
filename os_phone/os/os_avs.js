@@ -214,6 +214,85 @@
         });
     }
 
+    // 🧬 共用：AI 生成 schema → 轉變數 → 存變數包 → 存規則 → 同步世界書 → 觸發初始填充。
+    // 兩個入口共用（變數包「AI 從世界生成」按鈕 + AVS 狀態「開始追蹤狀態」按鈕）；UI 更新由各呼叫端自己做。
+    // 回傳 { pack, ruleCount } 成功 / null 失敗（generate 內部已 toast 失敗訊息）。
+    async function _aiGenerateAndSavePack() {
+        if (!win.OS_STATE_SCHEMA?.generate) {
+            alert('OS_STATE_SCHEMA 不可用（請確認 state_schema.js 已載入）');
+            return null;
+        }
+        const result = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true });
+        const schema = result?.fields || result;   // 向前兼容舊版只返回 fields
+        const aiRules = Array.isArray(result?.rules) ? result.rules : [];
+        if (!schema || !Object.keys(schema).length) return null;
+        const variables = Object.entries(schema).map(([name, def]) => {
+            const init = def?.init;
+            const t = def?.type || 'string';
+            let defaultValue;
+            if (t === 'list') {
+                if (Array.isArray(init)) {
+                    defaultValue = JSON.stringify(init);
+                } else if (typeof init === 'string' && init.trim()) {
+                    try {
+                        const parsed = JSON.parse(init);
+                        defaultValue = Array.isArray(parsed) ? JSON.stringify(parsed) : '[]';
+                    } catch(e) {
+                        defaultValue = '[]';
+                    }
+                } else {
+                    defaultValue = '[]';
+                }
+            } else if (init === undefined || init === null || init === '') {
+                defaultValue = t === 'number' ? 0 : '';
+            } else if (typeof init === 'object') {
+                try { defaultValue = JSON.stringify(init); } catch(e) { defaultValue = ''; }
+            } else {
+                defaultValue = init;
+            }
+            return { name, defaultValue, desc: def?.desc || '', type: t };
+        });
+        const title = win.OS_AVS_ADAPTER?.getStoryTitle?.() || '新世界';
+        const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+        const pack = {
+            id: 'pack_' + Date.now(),
+            name: `${title} (AI 生成)`,
+            notes: '由主模型讀世界書 + 角色卡 + 開頭劇情自動生成。可手動編輯增/減/改變數。',
+            variables,
+            chatId: currentChatId
+        };
+        await win.OS_DB.saveVarPack(pack);
+        let savedRuleCount = 0;
+        if (aiRules.length && win.OS_AVS_RULES?.addRule) {
+            for (const r of aiRules) {
+                if (!r || !r.path || !r.op || !r.content) continue;
+                let val = r.value;
+                const n = parseFloat(val);
+                if (!isNaN(n) && String(n) === String(val)) val = n;
+                win.OS_AVS_RULES.addRule({
+                    name: r.name || `${r.path} ${r.op} ${r.value}`,
+                    path: String(r.path).trim(),
+                    op: String(r.op).trim(),
+                    value: val,
+                    content: String(r.content).trim(),
+                    enabled: true,
+                    packId: pack.id
+                });
+                savedRuleCount++;
+            }
+        }
+        await syncVarPackToLorebook();
+        if (win.toastr) win.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 變數 / ${savedRuleCount} 規則），世界書已同步`);
+        if (win.OS_STATE_RUNTIME?.extractOnce) {
+            setTimeout(() => {
+                try { win.OS_STATE_RUNTIME.extractOnce(); } catch(e) {
+                    console.warn('[AVS] 觸發副模型初始填充失敗:', e);
+                }
+            }, 500);
+        }
+        return { pack, ruleCount: savedRuleCount };
+    }
+
     async function loadAllData(container) {
         if (!win.OS_DB) return;
         currentPacks = await win.OS_DB.getAllVarPacks();
@@ -597,101 +676,12 @@ ${lines.join('\n')}
         if (btnAiGen && isTavern) {
             btnAiGen.style.display = 'inline-flex';
             btnAiGen.onclick = async () => {
-                if (!win.OS_STATE_SCHEMA?.generate) {
-                    alert('OS_STATE_SCHEMA 不可用（請確認 state_schema.js 已載入）');
-                    return;
-                }
                 const original = btnAiGen.textContent;
                 btnAiGen.textContent = '🧬 AI 分析中...';
                 btnAiGen.style.pointerEvents = 'none';
                 try {
-                    const result = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true });
-                    // V3：generate 現在返回 { fields, rules }（同步出規則）
-                    const schema = result?.fields || result;   // 向前兼容舊版只返回 fields
-                    const aiRules = Array.isArray(result?.rules) ? result.rules : [];
-                    if (!schema || !Object.keys(schema).length) {
-                        return;   // generate 內部已 showToast 失敗訊息
-                    }
-                    // 把 schema 完整融合進變數包（保留 desc / type / init 給 AI 跑團時看）
-                    const variables = Object.entries(schema).map(([name, def]) => {
-                        const init = def?.init;
-                        const t = def?.type || 'string';
-                        let defaultValue;
-
-                        if (t === 'list') {
-                            // list 型強制驗證為合法 JSON 陣列字串（防主模型亂吐 "["、單字串、null 等）
-                            if (Array.isArray(init)) {
-                                defaultValue = JSON.stringify(init);
-                            } else if (typeof init === 'string' && init.trim()) {
-                                try {
-                                    const parsed = JSON.parse(init);
-                                    defaultValue = Array.isArray(parsed) ? JSON.stringify(parsed) : '[]';
-                                } catch(e) {
-                                    defaultValue = '[]';
-                                }
-                            } else {
-                                defaultValue = '[]';
-                            }
-                        } else if (init === undefined || init === null || init === '') {
-                            defaultValue = t === 'number' ? 0 : '';
-                        } else if (typeof init === 'object') {
-                            try { defaultValue = JSON.stringify(init); } catch(e) { defaultValue = ''; }
-                        } else {
-                            defaultValue = init;
-                        }
-                        return {
-                            name,
-                            defaultValue,
-                            desc: def?.desc || '',   // ← 約束 AI 跑團不亂改的關鍵
-                            type: t                  // ← 型別暗示
-                        };
-                    });
-                    const title = win.OS_AVS_ADAPTER?.getStoryTitle?.() || '新世界';
-                    const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
-                    const pack = {
-                        id: 'pack_' + Date.now(),
-                        name: `${title} (AI 生成)`,
-                        notes: '由主模型讀世界書 + 角色卡 + 開頭劇情自動生成。可手動編輯增/減/改變數。',
-                        variables,
-                        chatId: currentChatId   // 綁 chatId / storyId，sync 跟 schema 抽取只用當前 chat 的 pack
-                    };
-                    await win.OS_DB.saveVarPack(pack);
-
-                    // V3：把 AI 同步生成的條件規則寫進 OS_AVS_RULES（每條綁此 pack.id）
-                    let savedRuleCount = 0;
-                    if (aiRules.length && win.OS_AVS_RULES?.addRule) {
-                        for (const r of aiRules) {
-                            if (!r || !r.path || !r.op || !r.content) continue;
-                            // 數值欄 → 轉 number
-                            let val = r.value;
-                            const n = parseFloat(val);
-                            if (!isNaN(n) && String(n) === String(val)) val = n;
-                            win.OS_AVS_RULES.addRule({
-                                name: r.name || `${r.path} ${r.op} ${r.value}`,
-                                path: String(r.path).trim(),
-                                op: String(r.op).trim(),
-                                value: val,
-                                content: String(r.content).trim(),
-                                enabled: true,
-                                packId: pack.id   // V3：規則綁變數包
-                            });
-                            savedRuleCount++;
-                        }
-                    }
-
-                    await loadAllData(container);
-                    // 寫完變數包後同步到酒館世界書（讓主模型寫劇情時看到變數說明）
-                    await syncVarPackToLorebook();
-                    if (win.toastr) win.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 變數 / ${savedRuleCount} 規則），世界書已同步`);
-
-                    // 寫完變數包後觸發副模型初始填充（current 為空 → initial 模式 → 填齊所有欄位）
-                    if (win.OS_STATE_RUNTIME?.extractOnce) {
-                        setTimeout(() => {
-                            try { win.OS_STATE_RUNTIME.extractOnce(); } catch(e) {
-                                console.warn('[AVS] 觸發副模型初始填充失敗:', e);
-                            }
-                        }, 500);
-                    }
+                    const r = await _aiGenerateAndSavePack();
+                    if (r) await loadAllData(container);
                 } catch(e) {
                     console.error('[AVS] AI 生成變數包失敗:', e);
                     alert('生成失敗：' + (e?.message || e));
@@ -1458,6 +1448,7 @@ ${lines.join('\n')}
         renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
         buildAvatarMap: _avsBuildAvatarMap,   // 預撈角色頭像(async) 給 {{@avatar}} 用
         syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發
+        generateAndSaveSchema: _aiGenerateAndSavePack,   // AVS 狀態面板「開始追蹤狀態」按鈕共用此核心（生成+存+同步）
         // V3：規則 modal helper（給 inline onclick 呼叫）
         _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,
         activateTemplateForPack,
