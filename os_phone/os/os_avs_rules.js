@@ -401,9 +401,9 @@
             packGroups[o.pack].push(o);
         });
         const hintHtml = varOptions.length > 0
-            ? `<div style="margin-top:6px;font-size:10px;color:#555;line-height:1.8;">
+            ? `<div style="margin-top:6px;font-size:10px;color:rgba(26,28,40,0.45);line-height:1.8;">
                 ${Object.entries(packGroups).map(([pack, vars]) =>
-                    `<span style="color:#888;">${_esc(pack)}：</span>${vars.map(v => `<span style="color:#d4af37;margin-right:8px;cursor:pointer;" data-pick="${_esc(v.path)}">${_esc(v.path)}</span>`).join('')}<br>`
+                    `<span style="color:rgba(26,28,40,0.55);">${_esc(pack)}：</span>${vars.map(v => `<span style="color:#1A1C28;margin-right:8px;cursor:pointer;" data-pick="${_esc(v.path)}">${_esc(v.path)}</span>`).join('')}<br>`
                 ).join('')}
                </div>`
             : `<div style="margin-top:6px;font-size:10px;color:#444;">尚無檔案，可手動輸入路徑</div>`;
@@ -556,7 +556,7 @@
             
             <div class="avs-mode-layout" style="display:flex; flex-direction:column; gap:15px; padding-bottom:100px;">
                 ${renderSection('模式放置區 (倉庫，不參與 AI 生成)', 'pool', poolModes)}
-                <div style="height:1px; background:rgba(212,175,55,0.2); margin:10px 0;"></div>
+                <div style="height:1px; background:rgba(26,28,40,0.12); margin:10px 0;"></div>
                 ${renderSection('全域 Mode (套用於所有劇情)', 'global', globalModes)}
         `;
 
@@ -566,8 +566,18 @@
             sectionsHtml += renderSection(`檔案：${p.name}`, p.id, packModes, true);
         });
 
-        sectionsHtml += `</div><div class="avsr-editor hidden" id="avsm-editor"></div>`;
+        sectionsHtml += `</div>`;
         el.innerHTML = sectionsHtml;
+
+        // 創建/編輯模式 浮窗掛在手機面板(.avs-container) 上，position:absolute 才會被框在手機內、不爆出整個視窗。
+        // 建一次重用（重渲染不重建，避免殘留多個）。
+        const _root = el.closest('.avs-container') || el;
+        if (_root && !_root.querySelector('#avsm-editor')) {
+            const _ed = document.createElement('div');
+            _ed.id = 'avsm-editor';
+            _ed.className = 'avsr-editor hidden';
+            _root.appendChild(_ed);
+        }
 
         _bindModeEvents(el);
     }
@@ -583,7 +593,7 @@
         let actionHtml = '';
         if (target === 'pool') {
             actionHtml = `
-                <select class="avs-select avsm-move-slot" data-id="${m.id}" style="font-size:11px; padding:3px; max-width:85px; background:rgba(0,0,0,0.5);">
+                <select class="avs-select avsm-move-slot" data-id="${m.id}" style="font-size:11px; padding:3px; max-width:85px;">
                     <option value="" disabled selected>裝備至...</option>
                     <option value="global">🌐 全域區</option>
                     ${(localStorage.getItem('avs_last_packs_cache') || '').split(',').map(p => {
@@ -595,7 +605,7 @@
             `;
         } else {
             actionHtml = `
-                <button class="avsr-btn-sm" data-unequip="${m.id}" style="color:#e0d0a0; border-color:#888;" title="退回放置區">↓ 卸載</button>
+                <button class="avsr-btn-sm" data-unequip="${m.id}" title="退回放置區">↓ 卸載</button>
             `;
         }
 
@@ -678,7 +688,7 @@
     }
 
     function _openModeEditor(el, existing) {
-        const editorEl = el.querySelector('#avsm-editor');
+        const editorEl = (el.closest('.avs-container') || el).querySelector('#avsm-editor');
         if (!editorEl) return;
         const isNew = !existing;
 
