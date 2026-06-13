@@ -1094,7 +1094,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-img" class="tab-view hidden">
                         <div style="display:flex;gap:8px;padding:0 0 12px;border-bottom:1px solid rgba(26,28,40,0.08);margin-bottom:12px;flex-wrap:wrap;">
                             <div class="gal-subtab active" data-galtab="api"    style="cursor:pointer;padding:6px 12px;font-size:13px;color:#1A1C28;border-bottom:2px solid rgba(26,28,40,0.25);font-weight:700;" onclick="_switchOsGalTab(this,'api')">🔑 圖片設置</div>
-                            <div class="gal-subtab" data-galtab="prompt" style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'prompt')">🖼️ Prompt</div>
                             <div class="gal-subtab" data-galtab="avatar" style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'avatar')">🎭 頭像</div>
                             <div class="gal-subtab" data-galtab="bg"     style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'bg')">🌄 背景</div>
                             <div class="gal-subtab" data-galtab="scene"  style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'scene')">🎬 插圖</div>
@@ -1576,7 +1575,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
 
                         </div><!-- /view-img-api -->
-                        <div id="view-img-prompt" class="img-subtab-view" style="display:none;">
+                        <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
                                 <div class="set-label">🧑‍🎨 頭像追加詞</div>
                                 <div class="set-desc">插在 OS 通用底詞 與 角色描述詞 之間。</div>
@@ -1595,24 +1594,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-label">🚫 頭像 Negative（酒館原生 / ComfyUI 專用）</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:50px;">${vnD.avatarNegPromptTavern || ''}</textarea>
                             </div>
-                            <div class="set-group">
-                                <div class="set-label">🌄 背景生圖底詞</div>
-                                <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:70px;">${vnD.bgBasePrompt || ''}</textarea>
-                            </div>
-                            <div class="set-group">
-                                <div class="set-label">🚫 背景 Negative Prompt</div>
-                                <textarea class="set-textarea" id="vncfg-bg-neg" style="min-height:50px;">${vnD.bgNegPrompt || ''}</textarea>
-                            </div>
-                            <div class="set-group">
-                                <div class="set-label">📦 物品底詞</div>
-                                <textarea class="set-textarea" id="vncfg-item-prompt" style="min-height:50px;">${vnD.itemBasePrompt || ''}</textarea>
-                            </div>
-                            <div class="set-group">
-                                <div class="set-label">🚫 物品 Negative Prompt</div>
-                                <textarea class="set-textarea" id="vncfg-item-neg" style="min-height:50px;">${vnD.itemNegPrompt || ''}</textarea>
-                            </div>
-                        </div>
-                        <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
                             <!-- 內層子 tab：頭像快取 vs 角色立繪 -->
                             <div style="display:flex;gap:6px;padding:0 0 10px;border-bottom:1px solid rgba(26,28,40,0.06);margin-bottom:10px;">
                                 <div class="av-sub active" data-avsub="cache"  style="cursor:pointer;padding:4px 10px;font-size:12px;color:#1A1C28;border:1px solid rgba(26,28,40,0.25);border-radius:4px;background:rgba(26,28,40,0.06);" onclick="_switchAvatarSub(this,'cache')">📦 頭像快取</div>
@@ -1683,6 +1664,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
                         <div id="view-img-bg" class="img-subtab-view" style="display:none;">
+                            <div class="set-group">
+                                <div class="set-label">🌄 背景生圖底詞</div>
+                                <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:70px;">${vnD.bgBasePrompt || ''}</textarea>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label">🚫 背景 Negative Prompt</div>
+                                <textarea class="set-textarea" id="vncfg-bg-neg" style="min-height:50px;">${vnD.bgNegPrompt || ''}</textarea>
+                            </div>
                             <div class="set-group">
                                 <div class="set-label">🌄 場景背景快取 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">防重複生圖</span></div>
                                 <div id="vncfg-bg-mgr-list" style="margin-top:8px;"></div>
