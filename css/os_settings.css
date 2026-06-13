@@ -29,8 +29,9 @@
         .tab-view { display: none; animation: fadeIn 0.3s cubic-bezier(0.2,0.8,0.2,1); }
         .tab-view.active { display: block; }
         
-        /* 畫廊（相簿）子分頁列：黏在內容頂部，切 tab 不用滾回去 */
-        .gal-subtab-row { display: flex; gap: 8px; padding: 10px 0 12px; border-bottom: 1px solid rgba(26,28,40,0.08); margin-bottom: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; background: #EEF0F6; }
+        /* 畫廊（相簿）子分頁列：黏在內容頂部，切 tab 不用滾回去
+           負邊距 -20px 吃掉 .set-content 的 padding(滿版)，不透明底蓋住上方縫隙，黏頂時不露捲動中的圖 */
+        .gal-subtab-row { display: flex; gap: 8px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; margin: -20px -20px 12px; padding: 14px 20px 12px; background: #EEF0F6; border-bottom: 1px solid rgba(26,28,40,0.08); }
 
         /* 圖片設置：背景／角色 子分頁鈕 */
         .img-srctab-row { display: flex; gap: 8px; padding: 0 0 12px; border-bottom: 1px solid rgba(26,28,40,0.08); margin-bottom: 16px; flex-wrap: wrap; }
