@@ -144,7 +144,30 @@ EXAMPLE "prompt" value:
 - 多人場景：每個 prompt 只描述一個角色、各自標籤分開寫，不要讓 A 的衣服長到 B 身上。
 - 每張圖的 prompt 是該畫面的 Danbooru 英文標籤、逗號分隔、單行。
 - 找不到適合入畫的畫面就不要硬湊(回空)。
-（插圖的「擺放位置」與 scenes 格式由系統自動處理，你只要照下方規則給 after_paragraph 數字即可。）`
+（插圖的「擺放位置」與 scenes 格式由系統自動處理，你只要照下方規則給 after_paragraph 數字即可。）`,
+                // 🏷️ 標籤版（NAI / Danbooru）：移植自 NAI Diffusion V4.5 五層系統範本（NSFW 全保留、具體範例已中性化成佔位防副模型照抄）
+                extractPromptTags: `每張插圖的 "prompt" 用 NAI Diffusion V4.5 的 Danbooru 標籤格式（英文、逗號分隔、單行）。嚴格照五層順序：
+
+第0層 人數＋防混淆鎖：prompt 最前面先放人數（1boy / 2boys / 1boy 1girl…）。2 人以上緊接一句英文短句，把各角色的關鍵特徵＋位置先鎖定，避免特徵互相污染。
+第1層 外觀（防同臉，放 AND 區塊內）：每個焦點角色都要完整寫，禁止偷懶只詳寫第一個、第二個留空。每個角色區塊開頭固定 3 鎖 → [1] 年齡體型 (adult:1.5)/adult_male/young_adult　[2] 位置 left_side/right_side（NSFW 貼身時「不要」放位置 tag）　[3] 對比 膚色/髮色；接著完整描述、不可省略：氣質, 臉型, 體型, 眼型, 髮長, 髮型, 髮質, 瀏海, 特徵, 服裝, 表情。
+第2層 動作/姿勢（放 AND 區塊內）。
+第3層 互動（放 AND 區塊外）：貼身接觸用 same_height, bodies_intertwined 防身形縮小。
+第4層 環境與鏡頭（放 AND 區塊外，鏡頭 tag「只能」放這層、絕不放進角色區塊）：場景, 時間, 光線, 鏡頭(from_side / bust_shot / medium_shot…)。
+
+人群控制(3＋角色)：只挑 1~2 個焦點角色用 AND 區塊，其餘降級成 crowd, blurry_background, depth_of_field；絕不寫 3 個以上 AND 區塊。
+鏡頭模式：平靜/SFW → standing/sitting, left_side/right_side, from_side, medium_shot/bust_shot；動作 → dynamic_pose, dynamic_angle, motion_blur；NSFW → nsfw 當第一個 tag，明確體位直接畫(missionary, mating_press, penetration…)，貼身零距離不放位置 tag。
+其它：純男場景(無女角)加 male focus, masculine；多人時每角色標籤分開寫、A 的衣服別長到 B 身上；角色長相用你已知的角色設定(髮色/衣著)，正文沒寫的沿用設定、不要亂編；找不到適合入畫的畫面就回空、不硬湊。
+
+格式範例（[方括號]是佔位，照正文實際內容填，不要照抄方括號裡的字）：
+SFW 2 人對話：2boys, a [膚色] adult on the left talks to a [膚色] adult on the right, [young_adult, left_side, [膚色], [氣質], [臉型], [體型], [眼型], [髮型], [瀏海], [服裝], standing, talking, looking_at_another] AND [adult_male, right_side, [膚色], [氣質], [臉型], [體型], [眼型], [髮型], [瀏海], [服裝], leaning_against_wall, listening], casual_conversation, eye_contact, [場景], [時間], from_side, bust_shot
+NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on top penetrating a [膚色] adult male underneath, [(adult:1.5), [膚色], [氣質], [臉型], [體型], [眼型], [髮型], [瀏海], naked_upper_body, kneeling, on_top, inserting, [表情]] AND [(adult:1.5), [膚色], [氣質], [臉型], [體型], [眼型], [髮型], naked, lying_on_back, legs_up, under_another, inserted, [表情]], same_height, bodies_intertwined, mating_press, penetration, [場景], from_side, medium_shot`,
+                // 💬 自然語言版（Pollinations / ComfyUI Anima：自然語言比標籤更好）
+                extractPromptNatural: `每張插圖的 "prompt" 用「自然語言英文句子」描述畫面（給 Pollinations / ComfyUI，自然語言比標籤更好）。
+- 只照「最新這段正文」真的發生、畫得出來的畫面，不要推理後續劇情、不腦補角色心理或感情。
+- 一句話交代：誰(用你已知的角色設定外觀：髮色、衣著等)、在做什麼、在哪裡、光線氣氛、鏡頭遠近。
+- 多人場景：清楚描述每個人各自的外觀，別讓 A 的特徵混到 B 身上。
+- 純男場景(完全沒有女角)寫明 male focus。
+- 找不到適合入畫的畫面就回空、不硬湊。`
             },
             comfyuiDirect: {
                 url: 'http://127.0.0.1:8188', modelType: 'checkpoint', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
@@ -176,10 +199,13 @@ EXAMPLE "prompt" value:
                         ...config.novelai,
                         ...(savedConfig.novelai || {})
                     },
-                    sceneGen: {
-                        ...config.sceneGen,
-                        ...(savedConfig.sceneGen || {})
-                    },
+                    sceneGen: (function () {
+                        const _sg = { ...config.sceneGen, ...(savedConfig.sceneGen || {}) };
+                        // 舊存檔只有單一 extractPrompt（多半是使用者調過的 ComfyUI/自然語言版）→ 沒有新「自然語言版」欄位時遷進去不丟；標籤版用新 V4.5 預設
+                        const _saved = savedConfig.sceneGen || {};
+                        if (_saved.extractPrompt && !_saved.extractPromptNatural) _sg.extractPromptNatural = _saved.extractPrompt;
+                        return _sg;
+                    })(),
                     comfyuiDirect: {
                         ...config.comfyuiDirect,
                         ...(savedConfig.comfyuiDirect || {}),
@@ -1482,6 +1508,8 @@ EXAMPLE "prompt" value:
                                             const isPoll = v==='natural' || (v==='auto' && _sceneSvc!=='novelai');
                                             document.getElementById('img-scene-base-row').style.display='';
                                             document.getElementById('img-scene-neg-row').style.display = isNai ? '' : 'none';
+                                            const _exT = document.getElementById('img-scene-extract-tags-row'); if (_exT) _exT.style.display = isPoll ? 'none' : '';
+                                            const _exN = document.getElementById('img-scene-extract-natural-row'); if (_exN) _exN.style.display = isPoll ? '' : 'none';
                                             document.getElementById('img-scene-base-label').textContent = isPoll
                                                 ? '🎨 畫風描述（自然語言，加在 AI prompt 前）'
                                                 : '🎨 場景底詞（Danbooru tag，加在 AI prompt 前）';
@@ -1523,9 +1551,16 @@ EXAMPLE "prompt" value:
                             </div>
                             <div class="set-desc" style="margin-top:6px;">開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會<b>順便</b>依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。（酒館／獨立版皆可）</div>
                             <div class="set-desc" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72);">其它觸發：① 主模型直接吐 [Scene|]（世界書開規則，最省、零額外 API）；② 此處副模型搭便車（免額外呼叫）。獨立版（PWA 專門呼叫）已退役。</div>
-                            <div class="set-label" style="font-size:12px; margin-top:10px;">副模型插圖指令 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">可自由微調</span></div>
-                            <textarea class="set-textarea" id="img-scene-extract-prompt" style="min-height:170px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPrompt || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                            <div style="font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px;">↑ 這段會附加到「記憶副模型」的指令裡，叫它額外輸出 scenes。改這裡就能調插圖的數量／風格／規則。</div>
+                            <div class="set-label" style="font-size:12px; margin-top:10px;">副模型插圖指令 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">隨上方「Prompt 風格」切換</span></div>
+                            <div id="img-scene-extract-tags-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? 'none' : '';})()};">
+                                <div style="font-size:10px; color:rgba(26,28,40,0.6); margin-bottom:3px;">🏷️ 標籤版（給 NAI / Danbooru · 五層系統）</div>
+                                <textarea class="set-textarea" id="img-scene-extract-tags" style="min-height:170px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPromptTags || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                            </div>
+                            <div id="img-scene-extract-natural-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? '' : 'none';})()};">
+                                <div style="font-size:10px; color:rgba(26,28,40,0.6); margin-bottom:3px;">💬 自然語言版（給 Pollinations / ComfyUI）</div>
+                                <textarea class="set-textarea" id="img-scene-extract-natural" style="min-height:120px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPromptNatural || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                            </div>
+                            <div style="font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px;">↑ 附加到「記憶副模型」指令叫它額外吐 scenes。選 🏷️標籤＝上面欄、💬自然語言＝下面欄；切到哪個接口就只顯示對應那欄。改這裡就能調插圖的數量／風格／規則。</div>
                         </div>
 
                         <div class="set-group">
@@ -3122,7 +3157,8 @@ EXAMPLE "prompt" value:
                         sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
                         sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
                         extractEnabled:   container.querySelector('#img-scene-extract-enabled')?.checked ?? false,
-                        extractPrompt:   (container.querySelector('#img-scene-extract-prompt')?.value || '').trim(),
+                        extractPromptTags:    (container.querySelector('#img-scene-extract-tags')?.value || '').trim(),
+                        extractPromptNatural: (container.querySelector('#img-scene-extract-natural')?.value || '').trim(),
                     },
                     pixabayKey:    (container.querySelector('#img-pixabay-key')?.value || '').trim(),
                     fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false
