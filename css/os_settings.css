@@ -29,6 +29,11 @@
         .tab-view { display: none; animation: fadeIn 0.3s cubic-bezier(0.2,0.8,0.2,1); }
         .tab-view.active { display: block; }
         
+        /* API tab 內子分頁列：主模型 / 副模型 切換 */
+        .api-subtab-row { display: flex; gap: 8px; border-bottom: 1px solid rgba(26,28,40,0.08); margin-bottom: 16px; flex-wrap: wrap; }
+        .api-subtab { cursor: pointer; padding: 8px 16px; font-size: 14px; color: rgba(26,28,40,0.55); border-bottom: 2px solid transparent; font-weight: 600; user-select: none; }
+        .api-subtab.active { color: #1A1C28; border-bottom-color: rgba(26,28,40,0.45); font-weight: 800; }
+
         /* 畫廊（相簿）子分頁列：黏在內容頂部，切 tab 不用滾回去
            負邊距 -20px 吃掉 .set-content 的 padding(滿版)，不透明底蓋住上方縫隙，黏頂時不露捲動中的圖 */
         .gal-subtab-row { display: flex; gap: 8px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; margin: -20px -20px 12px; padding: 14px 20px 12px; background: #EEF0F6; border-bottom: 1px solid rgba(26,28,40,0.08); }
