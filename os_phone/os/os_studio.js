@@ -18,6 +18,7 @@
                     </select>
                 </div>
                 <div style="display:flex; gap:8px;">
+                    <button class="studio-icon-btn studio-preview-toggle" id="studio-header-preview-btn" title="預覽面板">👁️ <span>預覽</span></button>
                     <button class="studio-icon-btn danger" id="studio-clear-btn" title="清空當前頻道的對話紀錄">🗑️ <span>清空</span></button>
                 </div>
             </div>
@@ -475,6 +476,8 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         const drawerBackdrop = document.getElementById('studio-drawer-backdrop');
         const drawerHandle   = document.getElementById('studio-drawer-handle');
         if (previewFab)     previewFab.addEventListener('click', () => togglePreviewDrawer());
+        const headerPreviewBtn = document.getElementById('studio-header-preview-btn');
+        if (headerPreviewBtn) headerPreviewBtn.addEventListener('click', () => togglePreviewDrawer());
         if (drawerBackdrop) drawerBackdrop.addEventListener('click', () => togglePreviewDrawer(false));
         if (drawerHandle)   drawerHandle.addEventListener('click', () => togglePreviewDrawer(false));
 
@@ -2698,9 +2701,7 @@ ${d.usageDesc || ''}
         let displayData = currentParsedData || activePreviewData;
 
         const fabEl = document.getElementById('studio-preview-fab');
-        // 抽屜佈局生效 = 窄視窗(舊 media query) OR 手機殼內(新 .studio-mobile class)，兩者聯集才不漏接
-        const _isMob = (window.innerWidth <= 768) || !!document.querySelector('#os_studio_app .studio-container.studio-mobile');
-        if (fabEl) fabEl.style.display = (displayData && _isMob) ? 'flex' : 'none';
+        if (fabEl) fabEl.style.display = 'none';   // 浮動 FAB 退役：改用 header 的 👁️ 預覽鈕
 
         if (!displayData) {
             previewMain.innerHTML = `<div class="studio-empty">尚未生成任何內容。<br><br>請輸入點子讓 AI 創作。</div>`;
@@ -2711,22 +2712,7 @@ ${d.usageDesc || ''}
             return;
         }
 
-        // 不自動彈抽屜：改由下方 artifact 卡片 / FAB 手動開（artifact UX）
-
-        // artifact 卡片：固定掛在創作室聊天底部（不綁特定 AI 氣泡，避免「載入既有面板無氣泡→無卡」），點了開預覽抽屜
-        try {
-            const _hist = document.getElementById('studio-chat-history');
-            if (_isMob && currentMode === 'vn_ui' && _hist) {
-                let _card = _hist.querySelector('.studio-artifact-card');
-                if (!_card) {
-                    _card = document.createElement('div');
-                    _card.className = 'studio-artifact-card';
-                    _card.addEventListener('click', () => togglePreviewDrawer(true));
-                }
-                _card.textContent = '🎴 ' + (displayData.tagId || '面板') + ' · 點開預覽';
-                _hist.appendChild(_card);
-            }
-        } catch (e) {}
+        // 預覽改由 header 👁️ 預覽鈕開（固定位置、不綁資料），不自動彈、不掛聊天卡片
 
         const isUnsaved = !!currentParsedData;
         exportBtn.style.display = isUnsaved ? 'block' : 'none';
