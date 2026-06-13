@@ -13,9 +13,10 @@
                 <div class="studio-title">
                     <div class="studio-back-btn" id="studio-back-btn" title="返回大廳">‹</div>
                     🎨 創作室
-                    <select id="studio-mode-select" class="studio-mode-select">
-                        <option value="vn_ui">✨ VN UI 煉丹</option>
-                    </select>
+                    <div class="studio-mode-tabs" id="studio-mode-tabs">
+                        <div class="studio-mode-tab active" data-mode="vn_ui">✨ VN UI 煉丹</div>
+                        <div class="studio-mode-tab" data-mode="theme">🎨 主題</div>
+                    </div>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="studio-icon-btn studio-preview-toggle" id="studio-header-preview-btn" title="預覽面板">👁️ <span>預覽</span></button>
@@ -62,7 +63,6 @@
                         <div class="studio-tab active" data-tab="preview">👁️ 畫布預覽</div>
                         <div class="studio-tab" data-tab="source" id="studio-tab-source">💻 原始碼</div>
                         <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;">🎮 展廳</div>
-                        <div class="studio-tab" data-tab="theme" id="studio-tab-theme">🎨 主題</div>
                     </div>
                     <div class="studio-preview-content" id="studio-preview-content">
                         <div id="studio-preview-main" class="studio-preview-main">
@@ -73,13 +73,13 @@
                     <div id="studio-gallery-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
                         <div class="studio-gallery-list" id="studio-gallery-list"></div>
                     </div>
-                    <!-- 🎨 劇情面板主題 view -->
-                    <div id="studio-theme-content" style="display:none; flex:1; overflow-y:auto; padding:20px;"></div>
                     <div class="studio-action-area">
                         <button class="studio-export-btn" id="studio-export-btn">💾 儲存草稿</button>
                         <button class="studio-export-btn" id="studio-publish-btn" style="background:linear-gradient(135deg,#e67e22,#d35400); border-color:#d35400; margin-left:10px; display:none;">🚀 發布至世界書</button>
                     </div>
                 </div>
+                <!-- 🎨 劇情面板主題 view（頂層 mode，獨立全區，由 .top-theme 控制顯示） -->
+                <div id="studio-theme-content" class="studio-theme-pane"></div>
             </div>
         </div>
 
@@ -469,7 +469,14 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
 
     function bindEvents() {
         document.getElementById('studio-back-btn').onclick = () => document.getElementById('os_studio_app').remove();
-        document.getElementById('studio-mode-select').onchange = (e) => loadMode(e.target.value);
+        document.querySelectorAll('.studio-mode-tab').forEach(mt => {
+            mt.onclick = () => {
+                if (mt.classList.contains('active')) return;
+                document.querySelectorAll('.studio-mode-tab').forEach(x => x.classList.remove('active'));
+                mt.classList.add('active');
+                switchTopMode(mt.dataset.mode);
+            };
+        });
         _setupRawEditModalEvents();
 
         const previewFab     = document.getElementById('studio-preview-fab');
@@ -574,9 +581,7 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
                 document.getElementById('studio-preview-content').style.display  = tab.dataset.tab === 'preview' ? 'flex'   : 'none';
                 document.getElementById('studio-source-content').style.display   = tab.dataset.tab === 'source'  ? 'block'  : 'none';
                 document.getElementById('studio-gallery-content').style.display  = tab.dataset.tab === 'gallery' ? 'block'  : 'none';
-                const _tc = document.getElementById('studio-theme-content'); if (_tc) _tc.style.display = tab.dataset.tab === 'theme' ? 'block' : 'none';
                 if (tab.dataset.tab === 'gallery') loadStudioGallery();
-                if (tab.dataset.tab === 'theme') renderThemePanel();
             };
         });
 
@@ -782,6 +787,18 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
             extractLatestJsonFromHistory();
         }
         renderPreviewPanel();
+    }
+
+    // 頂層 mode 切換：vn_ui=煉丹創作器、theme=主題編輯器（獨立全區，靠 .top-theme class 切顯示）
+    function switchTopMode(mode) {
+        const cont = document.querySelector('#os_studio_app .studio-container');
+        if (mode === 'theme') {
+            if (cont) cont.classList.add('top-theme');
+            renderThemePanel();
+        } else {
+            if (cont) cont.classList.remove('top-theme');
+            loadMode(mode);
+        }
     }
 
     async function loadMode(modeId) {
