@@ -260,6 +260,8 @@ body.mode-404 { background: #000000; }
 
 /* 歷史對話面板 */
 #iris-history-overlay { position:absolute; inset:0; z-index:20; background:rgba(228,232,245,0.97); display:flex; flex-direction:column; animation:histIn 0.22s ease; }
+/* 🔝 header 全域化(z60,52px)後，全螢幕工具窗口讓出頂部 header 高度，免返回鍵被遮（VN 劇情頁自己隱藏 header 不在此列）*/
+#iris-history-overlay, #aurelia-panel-container { top: 52px !important; }
 @keyframes histIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 .hist-header { display:flex; align-items:center; justify-content:space-between; padding:11px 14px 9px; border-bottom:1px solid rgba(26,28,40,0.15); flex-shrink:0; }
 .hist-title { font-size:12px; font-weight:700; color:#1A1C28; letter-spacing:1.5px; text-transform:uppercase; }
