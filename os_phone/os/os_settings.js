@@ -1094,7 +1094,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     </div>
 
                     <div id="view-img" class="tab-view hidden">
-                        <div style="display:flex;gap:8px;padding:0 0 12px;border-bottom:1px solid rgba(26,28,40,0.08);margin-bottom:12px;flex-wrap:wrap;">
+                        <div class="gal-subtab-row">
                             <div class="gal-subtab active" data-galtab="api"    style="cursor:pointer;padding:6px 12px;font-size:13px;color:#1A1C28;border-bottom:2px solid rgba(26,28,40,0.25);font-weight:700;" onclick="_switchOsGalTab(this,'api')">🔑 圖片設置</div>
                             <div class="gal-subtab" data-galtab="avatar" style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'avatar')">🎭 頭像</div>
                             <div class="gal-subtab" data-galtab="bg"     style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'bg')">🌄 背景</div>
@@ -1920,6 +1920,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
                     </div>
 
+                </div>
+                <div class="set-footer">
                     <div class="btn-save" id="os-save-btn">保存所有設定</div>
                     <div class="set-status" id="os-status"></div>
                 </div>
