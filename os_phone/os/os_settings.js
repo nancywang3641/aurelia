@@ -1934,6 +1934,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (_avatarBtn) _avatarBtn.click();   // 預設顯示頭像圖庫
             const _tabsBar = container.querySelector('.set-tabs');
             if (_tabsBar) _tabsBar.style.display = 'none';
+            // 相簿只看圖、沒設定可存 → 藏「保存所有設定」footer（那是圖片設置的）
+            const _footer = container.querySelector('.set-footer');
+            if (_footer) _footer.style.display = 'none';
         } else {
             // 系統設置：「圖片設置」tab 只給設定，藏圖庫子分頁列與快取圖（那些留給相簿）
             if (_galRow) _galRow.style.display = 'none';
