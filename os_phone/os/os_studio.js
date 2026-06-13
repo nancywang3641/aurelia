@@ -2698,7 +2698,8 @@ ${d.usageDesc || ''}
         let displayData = currentParsedData || activePreviewData;
 
         const fabEl = document.getElementById('studio-preview-fab');
-        const _isMob = !!document.querySelector('#os_studio_app .studio-container.studio-mobile');
+        // 抽屜佈局生效 = 窄視窗(舊 media query) OR 手機殼內(新 .studio-mobile class)，兩者聯集才不漏接
+        const _isMob = (window.innerWidth <= 768) || !!document.querySelector('#os_studio_app .studio-container.studio-mobile');
         if (fabEl) fabEl.style.display = (displayData && _isMob) ? 'flex' : 'none';
 
         if (!displayData) {
