@@ -21,7 +21,7 @@
             <div class="avs-container">
                 <div class="avs-header">
                     <div class="avs-back-btn" id="avs-nav-home">‹</div>
-                    <div class="avs-title">🎲 變數工坊 AVS</div>
+                    <div class="avs-title">🎲 狀態檔案</div>
                     <div class="avs-back-btn" id="avs-btn-help" style="font-size:16px;font-weight:bold;">?</div>
                 </div>
                 <!-- 使用說明遮罩 -->
@@ -32,13 +32,13 @@
                     </div>
                     <div style="font-size:13px;color:#ccc;line-height:1.9;">
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">🎲 變數工坊是什麼？</div>
+                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">🎲 狀態檔案是什麼？</div>
                         <p style="color:#aaa;margin:0 0 16px;">
-                            變數工坊讓你在跑團時，自動幫你記錄角色的各種數值，像是血量、金幣、好感度等等。<br>
+                            狀態檔案讓你在跑團時，自動幫你記錄角色的各種數值，像是血量、金幣、好感度等等。<br>
                             AI 每次回覆時，會一起更新這些數字，你不用自己手動記。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">📦 第一步：建立「變數包」</div>
+                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">📦 第一步：建立「檔案」</div>
                         <p style="color:#aaa;margin:0 0 6px;">先決定你的故事要追蹤哪些東西，給它們取個名字和初始值。</p>
                         <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;margin-bottom:16px;font-family:monospace;font-size:12px;color:#d4af37;">
                             hp = 100　　← 血量，從100開始<br>
@@ -48,7 +48,7 @@
 
                         <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">🔥 第二步：用「煉丹爐」做美化面板（可選）</div>
                         <p style="color:#aaa;margin:0 0 16px;">
-                            選好變數包後，描述你想要的風格（例如「暗黑奇幻、血紅色」），讓 AI 自動幫你做一個好看的狀態面板。做好後到「展廳」開啟它，跑團時就會顯示漂亮的面板而不是純數字。
+                            選好檔案後，描述你想要的風格（例如「暗黑奇幻、血紅色」），讓 AI 自動幫你做一個好看的狀態面板。做好後到「展廳」開啟它，跑團時就會顯示漂亮的面板而不是純數字。
                         </p>
 
                         <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">⚡ 第三步：設定「條件規則」（可選）</div>
@@ -83,7 +83,7 @@
                 </div>
                 <div class="avs-tabs">
                     <div class="avs-tab active" data-tab="state">📊 目前狀態</div>
-                    <div class="avs-tab" data-tab="packs">📦 變數包</div>
+                    <div class="avs-tab" data-tab="packs">📦 檔案</div>
                     <div class="avs-tab" data-tab="modes">🎭 模式</div>
                     <div class="avs-tab" data-tab="memory">📝 記憶</div>
                 </div>
@@ -93,18 +93,18 @@
                     <div id="avs-view-memory" class="avs-view"></div>
                     <div id="avs-view-packs" class="avs-view">
                         <div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-                            <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack" style="flex:1; min-width:140px;">＋ 創建新變數包</div>
+                            <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack" style="flex:1; min-width:140px;">＋ 創建新檔案</div>
                             <div class="avs-btn avs-btn-outline" id="avs-btn-preset-pack" style="flex:1; min-width:140px;">🪶 簡易預設</div>
                             <div class="avs-btn avs-btn-outline" id="avs-btn-ai-gen-pack" style="flex:1; min-width:140px; display:none;">🧬 AI 從世界生成</div>
                         </div>
                         <div id="avs-pack-list" style="display:flex; flex-direction:column; gap:10px;"></div>
                         <div id="avs-pack-editor" class="avs-card" style="display:none;">
-                            <div class="avs-label">變數包名稱</div>
+                            <div class="avs-label">檔案名稱</div>
                             <input class="avs-input" id="avs-pack-name" style="margin-bottom:15px;">
                             <div class="avs-label">說明</div>
                             <textarea class="avs-textarea" id="avs-pack-notes" style="margin-bottom:15px;"></textarea>
                             <div id="avs-var-rows-container" style="margin-bottom:15px;"></div>
-                            <div class="avs-btn avs-btn-outline" id="avs-btn-add-var" style="width:100%; margin-bottom:15px;">＋ 新增變數</div>
+                            <div class="avs-btn avs-btn-outline" id="avs-btn-add-var" style="width:100%; margin-bottom:15px;">＋ 新增項目</div>
                             <div style="display:flex; gap:10px;">
                                 <div class="avs-btn avs-btn-primary" id="avs-btn-save-pack" style="flex:1;">儲存</div>
                                 <div class="avs-btn avs-btn-outline" id="avs-btn-cancel-pack" style="flex:1;">取消</div>
@@ -117,7 +117,7 @@
                 <div id="avs-furnace-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
                     <div style="max-width:600px; width:100%; background:#EEF0F6; border:1px solid rgba(26,28,40,0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(26,28,40,0.10); margin:auto;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(26,28,40,0.15);">
-                            <strong style="font-size:16px; color:#1A1C28;">🔥 煉丹爐 · 為變數包煉個 UI 面板</strong>
+                            <strong style="font-size:16px; color:#1A1C28;">🔥 煉丹爐 · 為檔案煉個 UI 面板</strong>
                             <div style="color:#1A1C28; cursor:pointer; font-size:20px;" id="avs-furnace-close">✕</div>
                         </div>
                         <div class="avs-card" id="furnace-card" style="background:transparent; border:none; padding:0;">
@@ -146,7 +146,7 @@
                 <div id="avs-rules-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; overflow-y:auto;">
                     <div style="max-width:600px; margin:20px auto; background:#EEF0F6; border:1px solid rgba(26,28,40,0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(26,28,40,0.10);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(26,28,40,0.15);">
-                            <strong style="font-size:16px; color:#1A1C28;">⚡ <span id="avs-rules-modal-title">變數包</span> · 條件規則</strong>
+                            <strong style="font-size:16px; color:#1A1C28;">⚡ <span id="avs-rules-modal-title">檔案</span> · 條件規則</strong>
                             <div style="color:#1A1C28; cursor:pointer; font-size:20px;" id="avs-rules-modal-close">✕</div>
                         </div>
                         <div style="font-size:11px; color:rgba(26,28,40,0.30); margin-bottom:12px; line-height:1.6;">
@@ -282,7 +282,7 @@
             }
         }
         await syncVarPackToLorebook();
-        if (win.toastr) win.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 變數 / ${savedRuleCount} 規則），世界書已同步`);
+        if (win.toastr) win.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 個項目 / ${savedRuleCount} 條規則），世界書已同步`);
         if (win.OS_STATE_RUNTIME?.extractOnce) {
             setTimeout(() => {
                 try { win.OS_STATE_RUNTIME.extractOnce(); } catch(e) {
@@ -409,7 +409,7 @@ ${lines.join('\n')}
         const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
 
         if (currentPacks.length === 0) {
-            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">尚無變數包<br><br>點上方「＋ 創建新變數包」開始</div>';
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">尚無檔案<br><br>點上方「＋ 創建新檔案」開始</div>';
             return;
         }
 
@@ -429,7 +429,7 @@ ${lines.join('\n')}
             card.className = 'avs-card';
             card.innerHTML = `
                 <strong style="color:#1A1C28;">${pack.name}</strong>
-                <p style="font-size:12px; color:rgba(26,28,40,0.25);">${pack.variables.length} 個變數${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
+                <p style="font-size:12px; color:rgba(26,28,40,0.25);">${pack.variables.length} 個項目${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
                 <div style="font-size:11px; margin:1px 0 2px;">${pack.chatId ? `🔒 <span style="color:#2e9e6b;">綁定此卡</span> <span style="color:rgba(26,28,40,0.45);">${String(pack.chatId).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : `🌐 <span style="color:#c9920f;">全域 · 所有卡共用 ⚠️</span>`}</div>
                 <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
                     <div class="avs-btn avs-btn-outline btn-edit" style="flex:1; min-width:60px; padding:6px;">編輯</div>
@@ -444,7 +444,7 @@ ${lines.join('\n')}
             if (!activeTpl) {
                 uiArea.innerHTML = `
                     <div style="font-size:12px; color:rgba(26,28,40,0.25); margin-bottom:8px;">🖼️ UI 面板：<span style="color:#888;">無</span></div>
-                    <div class="avs-btn avs-btn-outline btn-go-furnace" style="width:100%; padding:8px; font-size:12px;">✨ 為這個變數包煉個 UI 面板</div>
+                    <div class="avs-btn avs-btn-outline btn-go-furnace" style="width:100%; padding:8px; font-size:12px;">✨ 為這個檔案煉個 UI 面板</div>
                 `;
                 uiArea.querySelector('.btn-go-furnace').onclick = () => openFurnaceModal(container, pack.id);
             } else {
@@ -495,7 +495,7 @@ ${lines.join('\n')}
                 };
                 uiArea.querySelector('.btn-refurnace').onclick = () => openFurnaceModal(container, pack.id);
                 uiArea.querySelector('.btn-del-tpl').onclick = async () => {
-                    if (!confirm(`刪除這個變數包對應的 UI 面板？變數包本身保留。`)) return;
+                    if (!confirm(`刪除這個檔案對應的 UI 面板？檔案本身保留。`)) return;
                     await win.OS_DB.deleteUITemplate(activeTpl.id);
                     currentTemplates = await win.OS_DB.getAllUITemplates();
                     updateActiveTemplatesCache();
@@ -514,8 +514,8 @@ ${lines.join('\n')}
                 const warn = [];
                 if (orphanedTpls.length)  warn.push(`${orphanedTpls.length} 個展廳 UI 模板`);
                 if (orphanedRules.length) warn.push(`${orphanedRules.length} 條條件規則`);
-                const tplWarning = warn.length ? `\n\n⚠️ 同時會刪除這個變數包對應的：\n  · ${warn.join('\n  · ')}` : '';
-                if (!confirm(`刪除變數包「${pack.name}」？${tplWarning}\n\n世界書內變數說明書條目會自動更新（沒其他變數時也會被刪）。`)) return;
+                const tplWarning = warn.length ? `\n\n⚠️ 同時會刪除這個檔案對應的：\n  · ${warn.join('\n  · ')}` : '';
+                if (!confirm(`刪除檔案「${pack.name}」？${tplWarning}\n\n世界書內狀態說明條目會自動更新（沒其他項目時也會被刪）。`)) return;
 
                 // 1. 刪變數包本體
                 await win.OS_DB.deleteVarPack(pack.id);
@@ -539,7 +539,7 @@ ${lines.join('\n')}
         if (_otherCount) {
             const det = document.createElement('details');
             det.style.marginTop = '6px';
-            det.innerHTML = `<summary style="cursor:pointer;color:rgba(26,28,40,0.45);font-size:12px;padding:10px 2px;list-style:none;">▸ 其他變數包（${_otherCount}）· 非當前卡 / 全域，僅供檢視</summary>`;
+            det.innerHTML = `<summary style="cursor:pointer;color:rgba(26,28,40,0.45);font-size:12px;padding:10px 2px;list-style:none;">▸ 其他檔案（${_otherCount}）· 非當前卡 / 全域，僅供檢視</summary>`;
             det.appendChild(_otherWrap);
             listEl.appendChild(det);
         }
@@ -584,10 +584,10 @@ ${lines.join('\n')}
                 <input class="avs-input" data-rule-key="name" value="${escapeAttr(curName)}" placeholder="例：高好感親密化 / 末日緊張感">
             </div>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
-                <div style="flex:2;"><span style="font-size:11px; color:rgba(26,28,40,0.35);">變數</span>
+                <div style="flex:2;"><span style="font-size:11px; color:rgba(26,28,40,0.35);">項目</span>
                     <select class="avs-select" data-rule-key="path">
                         ${fieldNames.length === 0
-                          ? '<option value="">（變數包無變數）</option>'
+                          ? '<option value="">（檔案無項目）</option>'
                           : fieldNames.map(n => `<option value="${escapeAttr(n)}" ${n === curPath ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
                     </select>
                 </div>
@@ -645,7 +645,7 @@ ${lines.join('\n')}
         }
         if (!packRules.length && _editingRuleIdInModal !== '__new__') {
             html = `<div style="text-align:center; padding:40px 20px; color:rgba(26,28,40,0.20); font-size:12px;">
-                這個變數包還沒設規則。點下方「＋ 添加規則」開始。
+                這個檔案還沒設規則。點下方「＋ 添加規則」開始。
             </div>` + html;
         }
         listEl.innerHTML = html;
@@ -696,7 +696,7 @@ ${lines.join('\n')}
         const btnPreset = container.querySelector('#avs-btn-preset-pack');
         if (btnPreset) {
             btnPreset.onclick = async () => {
-                if (!confirm('套用「簡易預設」變數包？\n每個角色追蹤：形象(髮色/眼色/體型)、身分、好感度。\n適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。')) return;
+                if (!confirm('套用「簡易預設」檔案？\n每個角色追蹤：形象(髮色/眼色/體型)、身分、好感度。\n適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。')) return;
                 const original = btnPreset.textContent;
                 btnPreset.textContent = '套用中...'; btnPreset.style.pointerEvents = 'none';
                 try {
@@ -755,7 +755,7 @@ ${lines.join('\n')}
                     } catch(e) { console.warn('[AVS] 內建簡單面板安裝失敗:', e); }
                     await loadAllData(container);
                     await syncVarPackToLorebook();
-                    if (win.toastr) win.toastr.success('✅ 已套用簡易預設變數包');
+                    if (win.toastr) win.toastr.success('✅ 已套用簡易預設檔案');
                     if (win.OS_STATE_RUNTIME?.extractOnce) {
                         setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce(); } catch (e) {} }, 500);
                     }
@@ -1022,7 +1022,7 @@ ${lines.join('\n')}
         row.style.cssText = 'flex-direction:column; align-items:stretch;';
         row.innerHTML = `
             <div style="display:flex; gap:10px; align-items:center; width:100%;">
-                <input class="avs-input var-name" placeholder="變數名" style="flex:2;">
+                <input class="avs-input var-name" placeholder="項目名" style="flex:2;">
                 <input class="avs-input var-default" placeholder="預設值" style="flex:1;">
                 <select class="avs-select var-type" style="flex:0 0 90px; font-size:12px;">
                     <option value="string">字串</option>
@@ -1040,7 +1040,7 @@ ${lines.join('\n')}
                 <summary style="cursor:pointer; color:rgba(26,28,40,0.72); font-size:11px;">▸ 進階：直接編 JSON（老手用，平常不用碰）</summary>
                 <textarea class="avs-textarea var-default-obj" placeholder="{}" style="font-size:11px; min-height:80px; font-family:monospace; white-space:pre; line-height:1.4; margin-top:4px;"></textarea>
             </details>
-            <textarea class="avs-textarea var-desc" placeholder="📝 說明（AI 跑團看這個約束變數，例：好感度 0-100，互動正面 +1~5）" style="font-size:12px; min-height:40px; opacity:0.7;" onfocus="this.style.opacity=1; this.style.minHeight='60px';" onblur="this.style.opacity=0.7;"></textarea>
+            <textarea class="avs-textarea var-desc" placeholder="📝 說明（AI 跑團看這個約束這個項目，例：好感度 0-100，互動正面 +1~5）" style="font-size:12px; min-height:40px; opacity:0.7;" onfocus="this.style.opacity=1; this.style.minHeight='60px';" onblur="this.style.opacity=0.7;"></textarea>
         `;
         const typeSel  = row.querySelector('.var-type');
         const defInput = row.querySelector('.var-default');
@@ -1256,7 +1256,7 @@ ${lines.join('\n')}
                     createdAt: Date.now(),
                 });
 
-                log.innerHTML = '🎉 煉丹完成！已嵌入到變數包卡片中。';
+                log.innerHTML = '🎉 煉丹完成！已嵌入到檔案卡片中。';
 
                 // 刷新變數包列表（卡片底部 UI 面板區會自動顯示新煉的）
                 win.OS_DB.getAllUITemplates().then(tpls => {
@@ -1327,7 +1327,7 @@ ${lines.join('\n')}
             card.innerHTML = `
                 ${scopedCss}
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <strong style="font-size:13px;color:#d4af37;">${pack ? pack.name : (tpl.packName || '已刪除的變數包')} - 面板</strong>
+                    <strong style="font-size:13px;color:#d4af37;">${pack ? pack.name : (tpl.packName || '已刪除的檔案')} - 面板</strong>
                     ${tpl.isActive ? '<span style="font-size:10px;color:#1A1C28;border:1px solid rgba(26,28,40,0.20);padding:2px 7px;border-radius:3px;">啟用中</span>' : ''}
                 </div>
                 <div id="${scopeId}" style="margin-bottom:12px;padding:10px;background:rgba(0,0,0,0.3);border-radius:6px;min-height:60px;overflow:hidden;">
@@ -1429,7 +1429,7 @@ ${lines.join('\n')}
         const op = (card.querySelector('[data-rule-key="op"]')?.value || '>=').trim();
         const rawVal = (card.querySelector('[data-rule-key="value"]')?.value || '').trim();
         const content = (card.querySelector('[data-rule-key="content"]')?.value || '').trim();
-        if (!path) { alert('請選擇變數'); return; }
+        if (!path) { alert('請選擇項目'); return; }
         if (!content) { alert('請填注入內容'); return; }
         const n = parseFloat(rawVal);
         const value = (!isNaN(n) && String(n) === rawVal) ? n : rawVal;

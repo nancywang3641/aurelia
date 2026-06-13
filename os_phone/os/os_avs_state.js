@@ -212,7 +212,7 @@
                     </div>
                     <div class="avs-st-initpack">
                         <select class="avs-select" id="avs-st-initpack-sel">
-                            <option value="">用變數包的預設值初始化…</option>
+                            <option value="">用檔案的預設值初始化…</option>
                             ${(_packs || []).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
                         </select>
                         <button class="avs-btn avs-btn-primary" id="avs-st-initpack-btn">套用</button>
