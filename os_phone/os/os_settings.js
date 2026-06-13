@@ -1172,7 +1172,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="img-iface-groups">
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
-                                <div class="set-group" style="margin-top:12px;">
+                                <div class="iface-section-title is-first">🔌 連線設定</div>
+                                <div class="set-group">
                                     <div class="set-desc">🧩 連接你電腦上的 ComfyUI，在這裡加 LoRA、調參數就好，其餘都自動處理。</div>
                                 </div>
                                 <div class="set-group">
@@ -1279,32 +1280,36 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label">底詞（選填，可空）</div>
-                                    <textarea class="set-textarea" id="img-cfd-base" style="min-height:46px;">${imgConfig.comfyuiDirect?.basePrompt || ''}</textarea>
-                                </div>
-                                <div class="set-group">
-                                    <div class="set-label">負面提示詞（選填）</div>
-                                    <textarea class="set-textarea" id="img-cfd-neg" style="min-height:46px;">${imgConfig.comfyuiDirect?.negPrompt || ''}</textarea>
-                                </div>
-                                <div class="set-group">
-                                    <div class="set-label">🖼️ 場景插圖品質 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">只在「場景插圖」自動套用（頭像不套；會變慢）</span></div>
-                                    <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:6px;">
-                                        <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:#1A1C28; cursor:pointer;">
-                                            <input type="checkbox" id="img-cfd-scene-hires" ${imgConfig.comfyuiDirect?.sceneHires !== false ? 'checked' : ''} style="margin:0;">🔬 高清修復
+                                    <div class="set-label">🖼️ 場景插圖品質 <span class="ist-hint">只在「場景插圖」自動套用（頭像不套；會變慢）</span></div>
+                                    <div class="cfd-scene-row">
+                                        <label class="cfd-scene-chk">
+                                            <input type="checkbox" id="img-cfd-scene-hires" ${imgConfig.comfyuiDirect?.sceneHires !== false ? 'checked' : ''}>🔬 高清修復
                                         </label>
-                                        <select class="set-select" id="img-cfd-scene-hires-scale" style="width:auto;">
+                                        <select class="set-select cfd-scene-scale" id="img-cfd-scene-hires-scale">
                                             <option value="1.5" ${String(imgConfig.comfyuiDirect?.sceneHiresScale ?? 1.5)==='1.5'?'selected':''}>1.5x</option>
                                             <option value="2" ${String(imgConfig.comfyuiDirect?.sceneHiresScale)==='2'?'selected':''}>2x</option>
                                         </select>
-                                        <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:#1A1C28; cursor:pointer;">
-                                            <input type="checkbox" id="img-cfd-scene-facedetailer" ${imgConfig.comfyuiDirect?.sceneFaceDetailer !== false ? 'checked' : ''} style="margin:0;">🎯 FaceDetailer 修臉
+                                        <label class="cfd-scene-chk">
+                                            <input type="checkbox" id="img-cfd-scene-facedetailer" ${imgConfig.comfyuiDirect?.sceneFaceDetailer !== false ? 'checked' : ''}>🎯 FaceDetailer 修臉
                                         </label>
                                     </div>
-                                    <div class="set-desc" style="margin-top:4px;">需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。</div>
+                                    <div class="set-desc">需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。</div>
+                                </div>
+                                <div class="iface-section-title">📝 提示詞（底詞）</div>
+                                <div class="set-group">
+                                    <div class="field-row">
+                                        <div class="set-label">底詞（選填，可空）</div>
+                                        <textarea class="set-textarea" id="img-cfd-base">${imgConfig.comfyuiDirect?.basePrompt || ''}</textarea>
+                                    </div>
+                                    <div class="field-row">
+                                        <div class="set-label">負面提示詞（選填）</div>
+                                        <textarea class="set-textarea" id="img-cfd-neg">${imgConfig.comfyuiDirect?.negPrompt || ''}</textarea>
+                                    </div>
                                 </div>
                             </div>
 
                             <div id="img-group-tavernsd" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd') ? '' : 'hidden'}">
+                                <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
                                     <div class="set-desc">🎨 用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。</div>
                                     <div class="set-desc">⚠️ 前提：先在酒館「圖像生成」擴展設好一個後端來源。沒設好會跳提示，不會偷偷換成別的來源。</div>
@@ -1312,181 +1317,170 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
 
                             <div id="img-group-pollinations" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' || (imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
-                                <div style="margin-top:15px;">
-                                    <div class="set-label">API Key <span style="font-size:11px; color:#fc8181;">(必填 - 需儲值)</span></div>
-                                    <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${imgConfig.pollinations.apiKey || ''}">
-                                    <div class="set-desc" style="color:#1A1C28; margin-top:4px;">* 現在已無免費方案，請至官網獲取 Key。</div>
-                                </div>
-                                <div style="margin-top:15px;">
-                                    <div class="set-label">模型 (按價格排序)</div>
-                                    <select class="set-select" id="img-pol-model">
-                                        <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>🟢 Flux Schnell (0.001p)</option>
-                                        <option value="zimage" ${imgConfig.pollinations.model === 'zimage' ? 'selected' : ''}>🟢 Z-Image Turbo (0.002p)</option>
-                                        <option value="flux-2-dev" ${imgConfig.pollinations.model === 'flux-2-dev' ? 'selected' : ''}>🔵 FLUX.2 Dev Alpha (0.001p)</option>
-                                        <option value="imagen-4" ${imgConfig.pollinations.model === 'imagen-4' ? 'selected' : ''}>🔵 Imagen 4 Alpha (0.0025p)</option>
-                                        <option value="grok-imagine" ${imgConfig.pollinations.model === 'grok-imagine' ? 'selected' : ''}>🔵 Grok Imagine Alpha (0.0025p)</option>
-                                        <option value="klein" ${imgConfig.pollinations.model === 'klein' ? 'selected' : ''}>🟠 FLUX.2 Klein 4B (0.01p)</option>
-                                        <option value="gptimage" ${imgConfig.pollinations.model === 'gptimage' ? 'selected' : ''}>🔴 GPT Image 1 Mini (高消耗)</option>
-                                        <option value="klein-large" ${imgConfig.pollinations.model === 'klein-large' ? 'selected' : ''}>🟠 FLUX.2 Klein 9B (0.015p)</option>
-                                    </select>
-                                </div>
-                                <div style="margin-top:15px;">
-                                    <div class="set-desc" style="font-size:11px;">📐 尺寸已改到各部位分頁各自調：角色頭像在「🎭 頭像」、背景在「🌄 背景」、場景在「🎬 插圖」。</div>
+                                <div class="iface-section-title is-first">🔌 連線設定</div>
+                                <div class="set-group">
+                                    <div class="field-row">
+                                        <div class="set-label">API Key <span class="lbl-req">(必填 - 需儲值)</span></div>
+                                        <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${imgConfig.pollinations.apiKey || ''}">
+                                        <div class="set-desc">* 現在已無免費方案，請至官網獲取 Key。</div>
+                                    </div>
+                                    <div class="field-row">
+                                        <div class="set-label">模型 (按價格排序)</div>
+                                        <select class="set-select" id="img-pol-model">
+                                            <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>🟢 Flux Schnell (0.001p)</option>
+                                            <option value="zimage" ${imgConfig.pollinations.model === 'zimage' ? 'selected' : ''}>🟢 Z-Image Turbo (0.002p)</option>
+                                            <option value="flux-2-dev" ${imgConfig.pollinations.model === 'flux-2-dev' ? 'selected' : ''}>🔵 FLUX.2 Dev Alpha (0.001p)</option>
+                                            <option value="imagen-4" ${imgConfig.pollinations.model === 'imagen-4' ? 'selected' : ''}>🔵 Imagen 4 Alpha (0.0025p)</option>
+                                            <option value="grok-imagine" ${imgConfig.pollinations.model === 'grok-imagine' ? 'selected' : ''}>🔵 Grok Imagine Alpha (0.0025p)</option>
+                                            <option value="klein" ${imgConfig.pollinations.model === 'klein' ? 'selected' : ''}>🟠 FLUX.2 Klein 4B (0.01p)</option>
+                                            <option value="gptimage" ${imgConfig.pollinations.model === 'gptimage' ? 'selected' : ''}>🔴 GPT Image 1 Mini (高消耗)</option>
+                                            <option value="klein-large" ${imgConfig.pollinations.model === 'klein-large' ? 'selected' : ''}>🟠 FLUX.2 Klein 9B (0.015p)</option>
+                                        </select>
+                                    </div>
+                                    <div class="set-desc">📐 尺寸已改到各部位分頁各自調：角色頭像在「🎭 頭像」、背景在「🌄 背景」、場景在「🎬 插圖」。</div>
                                 </div>
                             </div>
 
                             <div id="img-group-nai" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'novelai' || (imgConfig.serviceLiving || imgConfig.service) === 'novelai') ? '' : 'hidden'}">
-                                <div style="margin-top:15px;">
-                                    <div class="set-label">NovelAI Token <span style="font-size:11px; color:#fc8181;">(必填)</span></div>
-                                    <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
-                                </div>
-                                <div class="set-group" style="margin-top:12px;">
-                                    <div class="set-label">
-                                        <span>🛡️ 防超免費尺寸（防誤扣 Anlas）</span>
-                                        <label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label>
+                                <div class="iface-section-title is-first">🔌 連線設定</div>
+                                <div class="set-group">
+                                    <div class="field-row">
+                                        <div class="set-label">NovelAI Token <span class="lbl-req">(必填)</span></div>
+                                        <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
                                     </div>
-                                    <div class="set-desc">開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。</div>
-                                </div>
-                                <div style="margin-top:15px;">
-                                    <div class="set-label">模型版本</div>
-                                    <select class="set-select" id="img-nai-model">
-                                        <option value="nai-diffusion-3" ${imgConfig.novelai.model === 'nai-diffusion-3' ? 'selected' : ''}>V3 Anime（最省 Anlas）</option>
-                                        <option value="nai-diffusion-4-curated-preview" ${imgConfig.novelai.model === 'nai-diffusion-4-curated-preview' ? 'selected' : ''}>V4 Curated（動漫精選）</option>
-                                        <option value="nai-diffusion-4-full" ${imgConfig.novelai.model === 'nai-diffusion-4-full' ? 'selected' : ''}>V4 Full（開放風格）</option>
-                                        <option value="nai-diffusion-4-5-full" ${imgConfig.novelai.model === 'nai-diffusion-4-5-full' ? 'selected' : ''}>V4.5 Full（最新/寫實佳）</option>
-                                    </select>
-                                </div>
-                                <div style="margin-top:15px; border:1px solid rgba(26,28,40,0.15); border-radius:4px; overflow:hidden;">
-                                    <div class="set-label" style="padding:10px 12px; color:#1A1C28; cursor:pointer; user-select:none; display:flex; justify-content:space-between; align-items:center;"
-                                        onclick="(function(btn){const body=btn.nextElementSibling;const arrow=btn.querySelector('.nai-adv-arrow');const open=body.style.display!=='none';body.style.display=open?'none':'block';arrow.textContent=open?'▶':'▼';})(this)">
-                                        <span>⚙️ 進階參數 <span style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;">（不懂可不動，預設跟官方一致）</span></span>
-                                        <span class="nai-adv-arrow" style="font-size:11px; color:rgba(26,28,40,0.72);">▶</span>
+                                    <div class="field-row">
+                                        <div class="set-label"><span>🛡️ 防超免費尺寸（防誤扣 Anlas）</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
+                                        <div class="set-desc">開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。</div>
                                     </div>
-                                    <div style="display:none; padding:12px; border-top:1px solid rgba(26,28,40,0.10); background:rgba(228,232,245,0.4);">
-                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                                        <div>
-                                            <div class="set-label" style="font-size:11px;">Sampler</div>
-                                            <select class="set-select" id="img-nai-sampler">
-                                                <option value="k_euler_ancestral" ${(imgConfig.novelai.sampler||'k_euler_ancestral')==='k_euler_ancestral'?'selected':''}>k_euler_ancestral（預設）</option>
-                                                <option value="k_euler" ${imgConfig.novelai.sampler==='k_euler'?'selected':''}>k_euler</option>
-                                                <option value="k_dpmpp_2m" ${imgConfig.novelai.sampler==='k_dpmpp_2m'?'selected':''}>k_dpmpp_2m（V4.5 推薦）</option>
-                                                <option value="k_dpmpp_2s_ancestral" ${imgConfig.novelai.sampler==='k_dpmpp_2s_ancestral'?'selected':''}>k_dpmpp_2s_ancestral</option>
-                                                <option value="k_dpmpp_sde" ${imgConfig.novelai.sampler==='k_dpmpp_sde'?'selected':''}>k_dpmpp_sde</option>
-                                                <option value="k_dpmpp_2m_sde" ${imgConfig.novelai.sampler==='k_dpmpp_2m_sde'?'selected':''}>k_dpmpp_2m_sde（底板C）</option>
-                                                <option value="ddim_v3" ${imgConfig.novelai.sampler==='ddim_v3'?'selected':''}>ddim_v3（V4 限定）</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <div class="set-label" style="font-size:11px;">CFG Scale <span style="font-size:10px; color:rgba(26,28,40,0.72);">（建議 4~9）</span></div>
-                                            <input class="set-input" type="number" id="img-nai-scale" min="1" max="20" step="0.5" value="${imgConfig.novelai.scale ?? 5}">
-                                        </div>
-                                        <div>
-                                            <div class="set-label" style="font-size:11px;">Steps <span style="font-size:10px; color:rgba(26,28,40,0.72);">（建議 28~40）</span></div>
-                                            <input class="set-input" type="number" id="img-nai-steps" min="1" max="50" step="1" value="${imgConfig.novelai.steps ?? 28}">
-                                        </div>
-                                        <div>
-                                            <div class="set-label" style="font-size:11px;">UC Preset <span style="font-size:10px; color:rgba(26,28,40,0.72);">（負詞預設）</span></div>
-                                            <select class="set-select" id="img-nai-uc-preset">
-                                                <option value="0" ${(imgConfig.novelai.ucPreset??1)===0?'selected':''}>0 - 輕量</option>
-                                                <option value="1" ${(imgConfig.novelai.ucPreset??1)===1?'selected':''}>1 - 標準（推薦）</option>
-                                                <option value="2" ${(imgConfig.novelai.ucPreset??1)===2?'selected':''}>2 - 人形強化</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div style="display:flex; gap:20px; margin-top:10px; flex-wrap:wrap;">
-                                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                                            <input type="checkbox" id="img-nai-quality-toggle" ${imgConfig.novelai.qualityToggle!==false?'checked':''}>
-                                            <span class="set-label" style="margin:0; font-size:11px;">Quality Toggle</span>
-                                        </label>
-                                        <label id="img-nai-smea-group" style="display:flex; align-items:center; gap:6px; cursor:pointer; ${imgConfig.novelai.model==='nai-diffusion-3'?'':'opacity:0.35; pointer-events:none;'}">
-                                            <input type="checkbox" id="img-nai-smea" ${imgConfig.novelai.smea!==false?'checked':''}>
-                                            <span class="set-label" style="margin:0; font-size:11px;">SMEA <span style="font-size:10px; color:rgba(26,28,40,0.72);">（V3 專屬）</span></span>
-                                        </label>
-                                        <label id="img-nai-smea-dyn-group" style="display:flex; align-items:center; gap:6px; cursor:pointer; ${imgConfig.novelai.model==='nai-diffusion-3'?'':'opacity:0.35; pointer-events:none;'}">
-                                            <input type="checkbox" id="img-nai-smea-dyn" ${imgConfig.novelai.smeaDyn?'checked':''}>
-                                            <span class="set-label" style="margin:0; font-size:11px;">SMEA Dynamic</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                </div>
-
-                                <div style="margin-top:15px; border:1px solid rgba(26,28,40,0.15); border-radius:4px; padding:12px; background:rgba(228,232,245,0.60);">
-                                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                                        <div class="set-label" style="margin:0;">📋 提示詞預設</div>
-                                        <span style="font-size:11px; color:rgba(26,28,40,0.72);">含底詞、負詞、Sampler、Scale</span>
-                                    </div>
-                                    <div style="display:flex; gap:6px; align-items:center;">
-                                        <select id="img-nai-preset-sel" class="set-select" style="flex:1; min-width:0;">
-                                            <option value="">-- 選擇預設 --</option>
-                                            ${(imgConfig.novelai.naiPresets || []).map((p, i) => `<option value="${i}">${p.name}</option>`).join('')}
+                                    <div class="field-row">
+                                        <div class="set-label">模型版本</div>
+                                        <select class="set-select" id="img-nai-model">
+                                            <option value="nai-diffusion-3" ${imgConfig.novelai.model === 'nai-diffusion-3' ? 'selected' : ''}>V3 Anime（最省 Anlas）</option>
+                                            <option value="nai-diffusion-4-curated-preview" ${imgConfig.novelai.model === 'nai-diffusion-4-curated-preview' ? 'selected' : ''}>V4 Curated（動漫精選）</option>
+                                            <option value="nai-diffusion-4-full" ${imgConfig.novelai.model === 'nai-diffusion-4-full' ? 'selected' : ''}>V4 Full（開放風格）</option>
+                                            <option value="nai-diffusion-4-5-full" ${imgConfig.novelai.model === 'nai-diffusion-4-5-full' ? 'selected' : ''}>V4.5 Full（最新/寫實佳）</option>
                                         </select>
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._naiPreset.apply()">套用</span>
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; background:rgba(26,28,40,0.06);" onclick="window._naiPreset.save()">另存</span>
-                                        <span style="font-size:11px; color:#fc8181; cursor:pointer; white-space:nowrap; padding:5px 10px; border:1px solid #fc8181; border-radius:4px; background:rgba(252,129,129,0.1);" onclick="window._naiPreset.del()">刪除</span>
                                     </div>
-                                    <div id="img-nai-preset-name-row" style="display:none; margin-top:8px;">
-                                        <div style="display:flex; gap:8px;">
-                                            <input id="img-nai-preset-name-input" class="set-input" placeholder="輸入預設名稱（如：底板A - ge_tianzun）" style="flex:1;">
-                                            <span style="font-size:11px; color:#1A1C28; cursor:pointer; padding:5px 10px; border:1px solid rgba(26,28,40,0.25); border-radius:4px; white-space:nowrap; background:rgba(26,28,40,0.06);" onclick="window._naiPreset.confirmSave()">確認</span>
-                                            <span style="font-size:11px; color:rgba(26,28,40,0.72); cursor:pointer; padding:5px 10px; border:1px solid rgba(26,28,40,0.40); border-radius:4px;" onclick="window._naiPreset.cancelSave()">取消</span>
+                                    <div class="nai-adv">
+                                        <div class="nai-adv-head" onclick="this.closest('.nai-adv').classList.toggle('open')">
+                                            <span>⚙️ 進階參數 <span class="ist-hint">（不懂可不動，預設跟官方一致）</span></span>
+                                            <span class="nai-adv-arrow"></span>
+                                        </div>
+                                        <div class="nai-adv-body">
+                                            <div class="field-grid-2">
+                                                <div>
+                                                    <div class="set-label">Sampler</div>
+                                                    <select class="set-select" id="img-nai-sampler">
+                                                        <option value="k_euler_ancestral" ${(imgConfig.novelai.sampler||'k_euler_ancestral')==='k_euler_ancestral'?'selected':''}>k_euler_ancestral（預設）</option>
+                                                        <option value="k_euler" ${imgConfig.novelai.sampler==='k_euler'?'selected':''}>k_euler</option>
+                                                        <option value="k_dpmpp_2m" ${imgConfig.novelai.sampler==='k_dpmpp_2m'?'selected':''}>k_dpmpp_2m（V4.5 推薦）</option>
+                                                        <option value="k_dpmpp_2s_ancestral" ${imgConfig.novelai.sampler==='k_dpmpp_2s_ancestral'?'selected':''}>k_dpmpp_2s_ancestral</option>
+                                                        <option value="k_dpmpp_sde" ${imgConfig.novelai.sampler==='k_dpmpp_sde'?'selected':''}>k_dpmpp_sde</option>
+                                                        <option value="k_dpmpp_2m_sde" ${imgConfig.novelai.sampler==='k_dpmpp_2m_sde'?'selected':''}>k_dpmpp_2m_sde（底板C）</option>
+                                                        <option value="ddim_v3" ${imgConfig.novelai.sampler==='ddim_v3'?'selected':''}>ddim_v3（V4 限定）</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <div class="set-label">CFG Scale <span class="lbl-opt">（建議 4~9）</span></div>
+                                                    <input class="set-input" type="number" id="img-nai-scale" min="1" max="20" step="0.5" value="${imgConfig.novelai.scale ?? 5}">
+                                                </div>
+                                                <div>
+                                                    <div class="set-label">Steps <span class="lbl-opt">（建議 28~40）</span></div>
+                                                    <input class="set-input" type="number" id="img-nai-steps" min="1" max="50" step="1" value="${imgConfig.novelai.steps ?? 28}">
+                                                </div>
+                                                <div>
+                                                    <div class="set-label">UC Preset <span class="lbl-opt">（負詞預設）</span></div>
+                                                    <select class="set-select" id="img-nai-uc-preset">
+                                                        <option value="0" ${(imgConfig.novelai.ucPreset??1)===0?'selected':''}>0 - 輕量</option>
+                                                        <option value="1" ${(imgConfig.novelai.ucPreset??1)===1?'selected':''}>1 - 標準（推薦）</option>
+                                                        <option value="2" ${(imgConfig.novelai.ucPreset??1)===2?'selected':''}>2 - 人形強化</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="nai-adv-checks">
+                                                <label>
+                                                    <input type="checkbox" id="img-nai-quality-toggle" ${imgConfig.novelai.qualityToggle!==false?'checked':''}>
+                                                    <span class="chk-label">Quality Toggle</span>
+                                                </label>
+                                                <label id="img-nai-smea-group" class="nai-smea-toggle${imgConfig.novelai.model==='nai-diffusion-3'?'':' is-disabled'}">
+                                                    <input type="checkbox" id="img-nai-smea" ${imgConfig.novelai.smea!==false?'checked':''}>
+                                                    <span class="chk-label">SMEA <span class="lbl-opt">（V3 專屬）</span></span>
+                                                </label>
+                                                <label id="img-nai-smea-dyn-group" class="nai-smea-toggle${imgConfig.novelai.model==='nai-diffusion-3'?'':' is-disabled'}">
+                                                    <input type="checkbox" id="img-nai-smea-dyn" ${imgConfig.novelai.smeaDyn?'checked':''}>
+                                                    <span class="chk-label">SMEA Dynamic</span>
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div style="margin-top:18px; padding-top:12px; border-top:2px solid rgba(26,28,40,0.15);">
-                                    <div class="set-label" style="font-size:13px;">📝 提示詞（底詞）</div>
-                                </div>
-                                <div style="margin-top:12px;">
-                                    <div class="set-label">🎨 角色底詞 <span style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;">（Danbooru tag 格式，逗號分隔）</span></div>
-                                    <textarea class="set-textarea" id="img-nai-char-base">${imgConfig.novelai.charBasePrompt || ''}</textarea>
-                                    <div style="text-align:right; margin-top:4px;">
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer;" onclick="document.getElementById('img-nai-char-base').value='masterpiece, best quality, very aesthetic, absurdres, anime style, detailed face'">[重置]</span>
+                                <div class="iface-section-title">📝 提示詞（底詞）</div>
+                                <div class="set-group">
+                                    <div class="nai-preset-box">
+                                        <div class="nai-preset-head">
+                                            <div class="set-label">📋 提示詞預設</div>
+                                            <span class="ist-hint">含底詞、負詞、Sampler、Scale</span>
+                                        </div>
+                                        <div class="row-inline">
+                                            <select id="img-nai-preset-sel" class="set-select">
+                                                <option value="">-- 選擇預設 --</option>
+                                                ${(imgConfig.novelai.naiPresets || []).map((p, i) => `<option value="${i}">${p.name}</option>`).join('')}
+                                            </select>
+                                            <span class="nai-mini-btn" onclick="window._naiPreset.apply()">套用</span>
+                                            <span class="nai-mini-btn" onclick="window._naiPreset.save()">另存</span>
+                                            <span class="nai-mini-btn is-danger" onclick="window._naiPreset.del()">刪除</span>
+                                        </div>
+                                        <div id="img-nai-preset-name-row" class="nai-preset-name-row">
+                                            <div class="row-inline">
+                                                <input id="img-nai-preset-name-input" class="set-input" placeholder="輸入預設名稱（如：底板A - ge_tianzun）">
+                                                <span class="nai-mini-btn" onclick="window._naiPreset.confirmSave()">確認</span>
+                                                <span class="nai-mini-btn is-ghost" onclick="window._naiPreset.cancelSave()">取消</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div style="margin-top:15px;">
-                                    <div class="set-label">🚫 角色負詞</div>
-                                    <textarea class="set-textarea" id="img-nai-char-neg">${imgConfig.novelai.charNegPrompt || ''}</textarea>
-                                    <div style="text-align:right; margin-top:4px;">
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer;" onclick="document.getElementById('img-nai-char-neg').value='nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry'">[重置]</span>
+
+                                    <div class="field-row">
+                                        <div class="set-label">🎨 角色底詞 <span class="lbl-opt">（Danbooru tag 格式，逗號分隔）</span></div>
+                                        <textarea class="set-textarea" id="img-nai-char-base">${imgConfig.novelai.charBasePrompt || ''}</textarea>
+                                        <div class="field-reset"><span onclick="document.getElementById('img-nai-char-base').value='masterpiece, best quality, very aesthetic, absurdres, anime style, detailed face'">[重置]</span></div>
                                     </div>
-                                </div>
-                                <div id="img-nai-item-block">
-                                <div style="margin-top:15px;">
-                                    <div class="set-label">📦 物品底詞</div>
-                                    <textarea class="set-textarea" id="img-nai-item-base">${imgConfig.novelai.itemBasePrompt || ''}</textarea>
-                                    <div style="text-align:right; margin-top:4px;">
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer;" onclick="document.getElementById('img-nai-item-base').value='masterpiece, best quality, white background, simple background, no background, product image, detailed'">[重置]</span>
+                                    <div class="field-row">
+                                        <div class="set-label">🚫 角色負詞</div>
+                                        <textarea class="set-textarea" id="img-nai-char-neg">${imgConfig.novelai.charNegPrompt || ''}</textarea>
+                                        <div class="field-reset"><span onclick="document.getElementById('img-nai-char-neg').value='nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry'">[重置]</span></div>
                                     </div>
-                                </div>
-                                <div style="margin-top:15px;">
-                                    <div class="set-label">🚫 物品負詞</div>
-                                    <textarea class="set-textarea" id="img-nai-item-neg">${imgConfig.novelai.itemNegPrompt || ''}</textarea>
-                                    <div style="text-align:right; margin-top:4px;">
-                                        <span style="font-size:11px; color:#1A1C28; cursor:pointer;" onclick="document.getElementById('img-nai-item-neg').value='person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text'">[重置]</span>
+                                    <div id="img-nai-item-block" class="nai-item-stack">
+                                        <div class="field-row">
+                                            <div class="set-label">📦 物品底詞</div>
+                                            <textarea class="set-textarea" id="img-nai-item-base">${imgConfig.novelai.itemBasePrompt || ''}</textarea>
+                                            <div class="field-reset"><span onclick="document.getElementById('img-nai-item-base').value='masterpiece, best quality, white background, simple background, no background, product image, detailed'">[重置]</span></div>
+                                        </div>
+                                        <div class="field-row">
+                                            <div class="set-label">🚫 物品負詞</div>
+                                            <textarea class="set-textarea" id="img-nai-item-neg">${imgConfig.novelai.itemNegPrompt || ''}</textarea>
+                                            <div class="field-reset"><span onclick="document.getElementById('img-nai-item-neg').value='person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text'">[重置]</span></div>
+                                        </div>
                                     </div>
-                                </div>
                                 </div>
                             </div>
                         </div>
 
                         <div id="img-pol-prompts-group" class="${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? '' : 'hidden'}">
+                        <div class="iface-section-title">📝 提示詞（底詞）</div>
                         <div class="set-group">
-                            <div class="set-label">🎨 角色頭像通用底詞 <span style="font-size:10px; color:rgba(26,28,40,0.72); font-weight:normal;">（全模組共用：夜店 / 偵探 / 寶寶 / VN頭像）</span></div>
-                            <textarea class="set-textarea" id="img-style-prompt">${imgConfig.pollinations.charBasePrompt}</textarea>
-                            <div style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:6px; line-height:1.5;">↑ 這裡設定的詞會自動加在所有角色頭像生圖的最前面。VN背景不受影響。VN頭像可在 VN 設定裡追加額外詞。</div>
-                            <div style="text-align:right; margin-top:5px;">
-                                <span style="font-size:11px; color:#1A1C28; cursor:pointer;" onclick="document.getElementById('img-style-prompt').value='anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines'">[重置為預設]</span>
+                            <div class="field-row">
+                                <div class="set-label">🎨 角色頭像通用底詞 <span class="lbl-opt">（全模組共用：夜店 / 偵探 / 寶寶 / VN頭像）</span></div>
+                                <textarea class="set-textarea" id="img-style-prompt">${imgConfig.pollinations.charBasePrompt}</textarea>
+                                <div class="field-hint">↑ 這裡設定的詞會自動加在所有角色頭像生圖的最前面。VN背景不受影響。VN頭像可在 VN 設定裡追加額外詞。</div>
+                                <div class="field-reset"><span onclick="document.getElementById('img-style-prompt').value='anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines'">[重置為預設]</span></div>
+                            </div>
+                            <div class="field-row">
+                                <div class="set-label">🚫 角色負詞</div>
+                                <textarea class="set-textarea" id="img-char-neg-prompt">${imgConfig.pollinations.charNegPrompt}</textarea>
+                                <div class="field-reset"><span onclick="document.getElementById('img-char-neg-prompt').value='bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text'">[重置為預設]</span></div>
                             </div>
                         </div>
-
-                        <div class="set-group">
-                            <div class="set-label">🚫 角色負詞</div>
-                            <textarea class="set-textarea" id="img-char-neg-prompt">${imgConfig.pollinations.charNegPrompt}</textarea>
-                            <div style="text-align:right; margin-top:5px;">
-                                <span style="font-size:11px; color:#1A1C28; cursor:pointer;" onclick="document.getElementById('img-char-neg-prompt').value='bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text'">[重置為預設]</span>
-                            </div>
-                        </div>
-
                         </div>
 
                         <!-- ── 🧑‍🎨 頭像追加詞（按接口，屬「角色」分頁；放在底詞區下方，不再頂在連線設定上面）── -->
@@ -2227,8 +2221,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const isV3 = model === 'nai-diffusion-3';
             const smeaGrp    = container.querySelector('#img-nai-smea-group');
             const smeaDynGrp = container.querySelector('#img-nai-smea-dyn-group');
-            if (smeaGrp)    { smeaGrp.style.opacity    = isV3 ? '1' : '0.35'; smeaGrp.style.pointerEvents    = isV3 ? '' : 'none'; }
-            if (smeaDynGrp) { smeaDynGrp.style.opacity = isV3 ? '1' : '0.35'; smeaDynGrp.style.pointerEvents = isV3 ? '' : 'none'; }
+            // SMEA 僅 V3 可用：用 .is-disabled class 控制（CSS 內 opacity+pointer-events），別用 inline 避免殘留
+            if (smeaGrp)    smeaGrp.classList.toggle('is-disabled', !isV3);
+            if (smeaDynGrp) smeaDynGrp.classList.toggle('is-disabled', !isV3);
         }
         if (elNaiModel) elNaiModel.onchange = () => updateSmeaVisibility(elNaiModel.value);
 
