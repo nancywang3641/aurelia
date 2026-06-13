@@ -373,7 +373,7 @@ ${numberedText}`;
     }
 
     // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
-    async function extractOnce() {
+    async function extractOnce(opts) {
         if (_running) return;
         _running = true;
         let pendingMem = null, memIngested = false;
@@ -390,7 +390,8 @@ ${numberedText}`;
             // 場景插圖（副模型版）：搭便車在這通副模型多吐 scenes（不另開呼叫）
             const _sceneCfg = (function(){ try { return (JSON.parse(localStorage.getItem('os_image_config')||'{}').sceneGen) || {}; } catch(e){ return {}; } })();
             const _scenePromptText = _pickScenePrompt(_sceneCfg);
-            const wantScenes = !!(_sceneCfg.extractEnabled && _scenePromptText);
+            // 建檔/套預設的「初始填充」傳 skipScenes:true → 只填狀態、不搭便車生場景插圖（建檔不是劇情推進，不該生圖）
+            const wantScenes = !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText);
 
             if (!hasState && !wantMemory) return;   // 兩邊都沒事做
 
