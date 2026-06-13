@@ -1130,18 +1130,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="832x1216"  ${imgConfig.avatarSize==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
                                 </select>
                             </div>
-                            <div class="set-group" id="img-avatar-add-main">
-                                <div class="set-label">🧑‍🎨 頭像追加詞 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">插在通用底詞與角色描述之間</span></div>
-                                <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:55px;">${vnD.avatarBasePrompt || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative</div>
-                                <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:45px;">${vnD.avatarNegPrompt || ''}</textarea>
-                            </div>
-                            <div class="set-group" id="img-avatar-add-tav">
-                                <div class="set-label">🎨 頭像追加詞（酒館原生 / ComfyUI 專用）</div>
-                                <textarea class="set-textarea" id="vncfg-avatar-prompt-tavern" style="min-height:55px;">${vnD.avatarBasePromptTavern || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative（酒館原生 / ComfyUI）</div>
-                                <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:45px;">${vnD.avatarNegPromptTavern || ''}</textarea>
-                            </div>
                         </div>
 
                         <!-- ── 🌄 背景 分頁 body（死物：背景・物品）── -->
@@ -1499,6 +1487,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
 
+                        </div>
+
+                        <!-- ── 🧑‍🎨 頭像追加詞（按接口，屬「角色」分頁；放在底詞區下方，不再頂在連線設定上面）── -->
+                        <div id="img-avatar-add-zone">
+                            <div class="set-group" id="img-avatar-add-main">
+                                <div class="set-label">🧑‍🎨 頭像追加詞 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">插在通用底詞與角色描述之間</span></div>
+                                <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:55px;">${vnD.avatarBasePrompt || ''}</textarea>
+                                <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:45px;">${vnD.avatarNegPrompt || ''}</textarea>
+                            </div>
+                            <div class="set-group" id="img-avatar-add-tav">
+                                <div class="set-label">🎨 頭像追加詞（酒館原生 / ComfyUI 專用）</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-prompt-tavern" style="min-height:55px;">${vnD.avatarBasePromptTavern || ''}</textarea>
+                                <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative（酒館原生 / ComfyUI）</div>
+                                <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:45px;">${vnD.avatarNegPromptTavern || ''}</textarea>
+                            </div>
                         </div>
 
                         <!-- ── 🎬 場景插圖（共用設定）｜屬「角色」分頁 ── -->
@@ -2284,6 +2288,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 showOnlyIfaceGroup(livingSvc);
                 if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc !== 'pollinations');
                 // 頭像追加詞按接口：Pol/NAI 用主版、酒館原生/ComfyUI 用專用版（選 NAI 不再看到 ComfyUI 專用詞）
+                { const _avZone = container.querySelector('#img-avatar-add-zone'); if (_avZone) _avZone.style.display = ''; }   // 頭像追加詞區屬角色分頁，這裡顯示
                 const _isTavAv = (livingSvc === 'tavern_sd' || livingSvc === 'comfyui_direct');
                 const _avM = container.querySelector('#img-avatar-add-main'); if (_avM) _avM.classList.toggle('hidden', _isTavAv);
                 const _avT = container.querySelector('#img-avatar-add-tav'); if (_avT) _avT.classList.toggle('hidden', !_isTavAv);
@@ -2307,6 +2312,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     showOnlyIfaceGroup(bgSvc);
                 }
                 // 角色頭像底詞 + 場景插圖（含副模型版）只屬角色分頁；退路圖庫(背景)在背景分頁顯示
+                { const _avZone = container.querySelector('#img-avatar-add-zone'); if (_avZone) _avZone.style.display = 'none'; }   // 頭像追加詞區屬角色分頁，背景分頁藏
                 if (elImgPolPrompts) elImgPolPrompts.classList.add('hidden');
                 { const _itB = container.querySelector('#img-nai-item-block'); if (_itB) _itB.classList.remove('hidden'); }   // 物品底詞在背景分頁(死物桶)顯示
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
