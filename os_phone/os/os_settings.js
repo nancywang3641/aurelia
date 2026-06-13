@@ -215,7 +215,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         presets: (savedConfig.comfyuiDirect && Array.isArray(savedConfig.comfyuiDirect.presets)) ? savedConfig.comfyuiDirect.presets : config.comfyuiDirect.presets
                     },
                     pixabayKey:    savedConfig.pixabayKey || '',
-                    fallbackForce: savedConfig.fallbackForce === true
+                    fallbackForce: savedConfig.fallbackForce === true,
+                    avatarSize:    savedConfig.avatarSize || '',
+                    bgSize:        savedConfig.bgSize || '1024x768'
                 };
             } catch(e) {}
         }
@@ -1306,12 +1308,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </select>
                                 </div>
                                 <div style="margin-top:15px;">
-                                    <div class="set-label">圖片尺寸</div>
-                                    <select class="set-select" id="img-pol-size">
-                                        <option value="512x512" ${imgConfig.pollinations.size === '512x512' ? 'selected' : ''}>512x512 (方形)</option>
-                                        <option value="768x1024" ${imgConfig.pollinations.size === '768x1024' ? 'selected' : ''}>768x1024 (手機桌布)</option>
-                                        <option value="1024x1024" ${imgConfig.pollinations.size === '1024x1024' ? 'selected' : ''}>1024x1024 (高畫質)</option>
-                                    </select>
+                                    <div class="set-desc" style="font-size:11px;">📐 尺寸已改到各部位分頁各自調：角色頭像在「🎭 頭像」、背景在「🌄 背景」、場景在「🎬 插圖」。</div>
                                 </div>
                             </div>
 
@@ -1551,6 +1548,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div><!-- /view-img-api -->
                         <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
+                                <div class="set-label">📐 角色頭像尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">空＝各接口預設(Poll 512 / NAI 1024)</span></div>
+                                <select class="set-select" id="img-avatar-size">
+                                    <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設</option>
+                                    <option value="512x512"   ${imgConfig.avatarSize==='512x512'   ? 'selected':''}>512×512（方形）</option>
+                                    <option value="768x768"   ${imgConfig.avatarSize==='768x768'   ? 'selected':''}>768×768</option>
+                                    <option value="1024x1024" ${imgConfig.avatarSize==='1024x1024' ? 'selected':''}>1024×1024（清晰）</option>
+                                    <option value="832x1216"  ${imgConfig.avatarSize==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
+                                </select>
+                            </div>
+                            <div class="set-group">
                                 <div class="set-label">🧑‍🎨 頭像追加詞</div>
                                 <div class="set-desc">插在 OS 通用底詞 與 角色描述詞 之間。</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:70px;">${vnD.avatarBasePrompt || ''}</textarea>
@@ -1638,6 +1645,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
                         <div id="view-img-bg" class="img-subtab-view" style="display:none;">
+                            <div class="set-group">
+                                <div class="set-label">📐 背景尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">所有接口共用</span></div>
+                                <select class="set-select" id="img-bg-size">
+                                    <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅，預設）</option>
+                                    <option value="1024x1024" ${(imgConfig.bgSize||'1024x768')==='1024x1024' ? 'selected':''}>1024×1024（方形）</option>
+                                    <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅）</option>
+                                    <option value="1280x720"  ${(imgConfig.bgSize||'1024x768')==='1280x720'  ? 'selected':''}>1280×720（16:9）</option>
+                                </select>
+                            </div>
                             <div class="set-group">
                                 <div class="set-label">🌄 背景生圖底詞</div>
                                 <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:70px;">${vnD.bgBasePrompt || ''}</textarea>
@@ -3093,7 +3109,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         extractPromptNatural: (container.querySelector('#img-scene-extract-natural')?.value || '').trim(),
                     },
                     pixabayKey:    (container.querySelector('#img-pixabay-key')?.value || '').trim(),
-                    fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false
+                    fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false,
+                    avatarSize:    (container.querySelector('#img-avatar-size')?.value || ''),
+                    bgSize:        (container.querySelector('#img-bg-size')?.value || '1024x768')
                 };
 
                 const mmGroupId   = container.querySelector('#mm-group-id');

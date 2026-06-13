@@ -109,7 +109,10 @@
         getBg: async function(prompt, outMeta) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
                 const full = this._join(VN_Config.data.bgBasePrompt, prompt);
-                const opts = { width: 1024, height: 768, negativePrompt: VN_Config.data.bgNegPrompt || undefined };
+                // 背景尺寸：讀「🌄 背景 → 背景尺寸」設定（取代原本寫死 1024×768）
+                let _bw = 1024, _bh = 768;
+                try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').bgSize) || '1024x768').split('x').map(Number); if (_p[0]&&_p[1]) { _bw=_p[0]; _bh=_p[1]; } } catch(e) {}
+                const opts = { width: _bw, height: _bh, negativePrompt: VN_Config.data.bgNegPrompt || undefined };
                 const url = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(full, opts);
                 if (outMeta) outMeta.translatedPrompt = opts.translatedPrompt;
                 return url;
@@ -127,8 +130,11 @@
                 // 順序：(來源對應)追加詞 → 角色描述詞 → 表情
                 const full = this._join(_base, prompt, `${exp} expression`);
                 const negPrompt = _neg || undefined;
+                // 角色頭像尺寸：讀「🎭 頭像 → 角色頭像尺寸」設定（空＝用各接口預設 Poll512/NAI1024），設了就傳給 generate
+                const _avOpts = { negativePrompt: negPrompt, force: !!force };
+                try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').avatarSize) || '').split('x').map(Number); if (_p[0]&&_p[1]) { _avOpts.width=_p[0]; _avOpts.height=_p[1]; } } catch(e) {}
                 // force=true（畫廊「重生」用）→ 繞過 generate() 記憶體快取
-                return await win.OS_IMAGE_MANAGER.generate(full, 'char', { negativePrompt: negPrompt, force: !!force });
+                return await win.OS_IMAGE_MANAGER.generate(full, 'char', _avOpts);
             } return "";
         },
         getItem: async function(prompt) {
