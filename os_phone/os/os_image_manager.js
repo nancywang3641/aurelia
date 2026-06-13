@@ -262,23 +262,8 @@
 
             if (result) {
                 this._urlCache.set(cacheKey, result);
-                if (type === 'scene') this._recordUsage();  // 只統計場景插圖
             }
             return result;
-        },
-
-        // --- 用量統計：每次「場景插圖」真實生成記一筆，供「會員方案划算度」估算 ---
-        _recordUsage: function() {
-            try {
-                const KEY = 'os_image_usage';
-                let u = {};
-                try { u = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e) {}
-                u.total = (u.total || 0) + 1;
-                const ym = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
-                u.byMonth = u.byMonth || {};
-                u.byMonth[ym] = (u.byMonth[ym] || 0) + 1;
-                localStorage.setItem(KEY, JSON.stringify(u));
-            } catch(e) { /* 統計失敗不影響生成流程 */ }
         },
 
         // --- Pollinations 生成邏輯 ---
