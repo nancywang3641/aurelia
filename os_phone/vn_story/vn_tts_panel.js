@@ -326,16 +326,30 @@ function renderChars(cfg) {
 </div>`;
 }
 
+// NPC 分類用下拉選：只顯示選中的一張卡、其餘隱藏（分類一多就不會疊得很長）
+let _npcSel = null;
 function renderNpc(cfg) {
-    const cats = cfg.npcCategories;
-    const cards = cats.length ? cats.map(cat => renderNpcCard(cat, cfg.models)).join('') :
-        `<div class="vtts-empty">尚無 NPC 分類，點擊下方按鈕新增</div>`;
-
-    return `
-${cards}
+    const cats = cfg.npcCategories || [];
+    if (!cats.length) {
+        return `
+<div class="vtts-empty">尚無 NPC 分類，點擊下方按鈕新增</div>
 <div style="text-align:center;margin-top:8px;">
   <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addNpcCategory()">＋ 新增分類</button>
 </div>`;
+    }
+    // 選中的分類不存在時（初次進入／剛刪除）退回第一個
+    if (!_npcSel || !cats.find(c => c.id === _npcSel)) _npcSel = cats[0].id;
+    const sel  = cats.find(c => c.id === _npcSel);
+    const opts = cats.map(c => `<option value="${esc(c.id)}"${c.id === _npcSel ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+    return `
+<div class="vtts-field">
+  <label class="vtts-label">選擇 NPC 分類（只顯示選中的一張，新增的會出現在這裡）</label>
+  <div class="vtts-row">
+    <select class="vtts-input" id="vtts-npc-sel" onchange="VN_TTS_Panel.selectNpcCategory(this.value)">${opts}</select>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addNpcCategory()">＋ 新增</button>
+  </div>
+</div>
+${renderNpcCard(sel, cfg.models)}`;
 }
 
 function renderNpcCard(cat, models) {
@@ -992,6 +1006,11 @@ const VN_TTS_Panel = {
         this._renderBody('chars');
     },
 
+    selectNpcCategory(id) {
+        _npcSel = id;
+        this._renderBody('npc');
+    },
+
     addNpcCategory() {
         this._npcFormMode = true;
         this._renderBody('npc');
@@ -1013,6 +1032,7 @@ const VN_TTS_Panel = {
         }
         tts.config.npcCategories.push({ id, name, tags: [], modelIds: [] });
         tts.save();
+        _npcSel = id;   // 新建後自動選中、只顯示這張卡
         this._npcFormMode = false;
         this._toast(`✓ 已建立分類：${name}`);
         this._renderBody('npc');
