@@ -43,6 +43,7 @@
         _sceneMemCache: {},
         _sceneInflight: {}, // 進行中的場景CG生成(cacheId→promise)：同 _bgInflight，防預熱+現場重複生成
         _sceneCgLinger: 0,  // 鋪底式場景插圖剩餘停留句數（3→0 淡出）；0=沒在顯示
+        _sceneCgCur: null,  // 當前鋪底插圖的 {cacheId, prompt}，給「🔄 重生」鈕重打用（不碰 LLM）
         _itemMemCache: {},
         _itemInflight: {},  // 進行中的道具圖生成(itemName→promise)：同 _bgInflight
         _avatarMemCache: {},
@@ -1381,6 +1382,25 @@
             p.then(function () {}, function () {}).then(function () { delete self._sceneInflight[cacheId]; });
             return p;
         },
+        // 🔄 「重生」鈕：撞 NAI 500 後 fallback 出的 poll 圖會卡進 mem/IndexedDB 快取，
+        // 這裡清掉卡住的圖、用同個 prompt（沿用 cacheId，完全不碰 LLM）重打生圖。
+        retrySceneCg: async function() {
+            const cur = this._sceneCgCur;
+            if (!cur || !cur.cacheId) return;
+            const cacheId = cur.cacheId, prompt = cur.prompt;
+            const cgImg = document.getElementById('scene-cg-img');
+            const btn   = document.getElementById('scene-cg-retry');
+            if (btn) { btn.disabled = true; btn.classList.add('spinning'); }
+            try {
+                delete this._sceneMemCache[cacheId];
+                delete this._sceneInflight[cacheId];
+                try { await VN_Cache.delete('scene_cache', cacheId); } catch (e) {}
+                const url = await this._safeFetchScene(cacheId, prompt);
+                if (url && cgImg) cgImg.src = url;
+            } finally {
+                if (btn) { btn.disabled = false; btn.classList.remove('spinning'); }
+            }
+        },
         _doFetchScene: async function(cacheId, prompt) {
             if (this._sceneMemCache[cacheId]) return this._sceneMemCache[cacheId];
             const cached = await VN_Cache.get('scene_cache', cacheId);
@@ -1784,6 +1804,7 @@
                     if (_overlay && _cgImg) {
                         _overlay.classList.add('active');
                         this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出（不藏對話框、不擋流程）
+                        this._sceneCgCur = { cacheId: _cacheId, prompt: _scenePrompt };  // 給 🔄 重生鈕
                         const _memUrl  = this._sceneMemCache[_cacheId];
                         if (_memUrl) { _cgImg.src = _memUrl; }
                         else {
@@ -1923,6 +1944,7 @@
                 if (overlay && cgImg) {
                     overlay.classList.add('active');
                     this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出
+                    this._sceneCgCur = { cacheId, prompt };  // 給 🔄 重生鈕
                     const memUrl = this._sceneMemCache[cacheId];
                     if (memUrl) {
                         cgImg.src = memUrl;
