@@ -31,17 +31,21 @@
 
         // 預熱場景CG並掛進 VN_Core 的圖片總進度（loading 面板/語音延後靠它判斷「圖都好了沒」）。
         // 同 cacheId 與 vn_core._prewarmScenes 共用 in-flight promise，重複計數只多算進度分母、不會重複生圖。
+        _sceneFetchChain: Promise.resolve(),  // 預熱生圖序列鏈：一張完成才生下一張，源頭杜絕場景插圖併發（下游 _naiQueue mutex 是第二道閘）
         _fetchSceneCounted: function (cacheId, prompt) {
             const VN = win.VN_Core;
             if (!VN || !VN._safeFetchScene) return;
-            if (typeof VN._imgJobStart === 'function') {
-                VN._imgJobStart();
-                Promise.resolve(VN._safeFetchScene(cacheId, prompt))
-                    .then(function () {}, function () {})
-                    .then(function () { VN._imgJobEnd(); });
-            } else {
-                VN._safeFetchScene(cacheId, prompt);
-            }
+            const run = function () {
+                if (typeof VN._imgJobStart === 'function') {
+                    VN._imgJobStart();
+                    return Promise.resolve(VN._safeFetchScene(cacheId, prompt))
+                        .then(function () {}, function () {})
+                        .then(function () { VN._imgJobEnd(); });
+                }
+                return Promise.resolve(VN._safeFetchScene(cacheId, prompt)).then(function () {}, function () {});
+            };
+            // 串行：上一張預熱完才生下一張 → 場景插圖永遠不會兩張同時打生圖
+            this._sceneFetchChain = this._sceneFetchChain.then(run, run);
         },
 
         _hash: function (str) {
