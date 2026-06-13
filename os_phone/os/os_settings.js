@@ -3025,7 +3025,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         url: 'https://gen.pollinations.ai/image',
                         apiKey: elPolApiKey.value.trim(),
                         model: elPolModel.value,
-                        size: elPolSize.value,
+                        size: elPolSize?.value || imgConfig.pollinations?.size || '1024x1024',
                         models: imgConfig.pollinations.models || {},
                         charBasePrompt: elStylePrompt.value.trim(),
                         charNegPrompt: elCharNegPrompt.value.trim(),
@@ -3776,7 +3776,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     }; }).filter(function(l){ return l.name; })
                 };
 
-                const [width, height] = elPolSize.value.split('x').map(Number);
+                const [width, height] = (elPolSize?.value || '1024x1024').split('x').map(Number);
                 
                 // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
                 // ComfyUI 直連用面板自己的尺寸(cfg.width/height)，其他來源用上面的測試尺寸
