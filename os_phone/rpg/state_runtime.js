@@ -354,6 +354,24 @@ ${(userPrompt || '').trim()}
 ${numberedText}`;
     }
 
+    // 依「Prompt 風格」(promptStyle) + 主服務挑 標籤版/自然語言版 插圖指令；舊存檔 fallback 回單一 extractPrompt
+    function _pickScenePrompt(cfg) {
+        cfg = cfg || {};
+        const style = cfg.promptStyle || 'auto';
+        let isTag;
+        if (style === 'tags') isTag = true;
+        else if (style === 'natural') isTag = false;
+        else {
+            let svc = '';
+            try { svc = (win.OS_IMAGE_MANAGER?.serviceFor?.('scene')) || win.OS_IMAGE_MANAGER?.config?.service || ''; } catch (e) {}
+            isTag = (svc === 'novelai');
+        }
+        const tags = (cfg.extractPromptTags || '').trim();
+        const nat  = (cfg.extractPromptNatural || '').trim();
+        const legacy = (cfg.extractPrompt || '').trim();
+        return (isTag ? tags : nat) || legacy || tags || nat || '';
+    }
+
     // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
     async function extractOnce() {
         if (_running) return;
@@ -371,7 +389,8 @@ ${numberedText}`;
             const wantMemory = !!(pendingMem && win.OS_VECTOR_ENGINE?.isEnabled?.() === true && typeof win.OS_VECTOR_ENGINE?.ingestEntries === 'function');
             // 場景插圖（副模型版）：搭便車在這通副模型多吐 scenes（不另開呼叫）
             const _sceneCfg = (function(){ try { return (JSON.parse(localStorage.getItem('os_image_config')||'{}').sceneGen) || {}; } catch(e){ return {}; } })();
-            const wantScenes = !!(_sceneCfg.extractEnabled && (_sceneCfg.extractPrompt || '').trim());
+            const _scenePromptText = _pickScenePrompt(_sceneCfg);
+            const wantScenes = !!(_sceneCfg.extractEnabled && _scenePromptText);
 
             if (!hasState && !wantMemory) return;   // 兩邊都沒事做
 
@@ -399,7 +418,7 @@ ${numberedText}`;
                 _sceneParas = _segmentStory(lastContent || '');
                 if (_sceneParas.length) {
                     const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
-                    prompt += _sceneAddendum(_sceneCfg.extractPrompt, numbered);
+                    prompt += _sceneAddendum(_scenePromptText, numbered);
                 }
             }
 
