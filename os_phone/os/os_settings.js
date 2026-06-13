@@ -421,6 +421,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             };
         }
 
+        // API tab 內層子 tab：主模型 / 副模型 切換（就像語音面板的子 tab）
+        if (!window._switchApiTab) {
+            window._switchApiTab = function(which) {
+                document.querySelectorAll('.api-subview').forEach(v => { v.style.display = (v.id === 'view-' + which) ? '' : 'none'; });
+                document.querySelectorAll('.api-subtab').forEach(t => t.classList.toggle('active', t.dataset.apitab === which));
+            };
+        }
+
         // ───── 頭像 tab 內層子 tab：頭像快取 / 角色立繪 ─────
         if (!window._switchAvatarSub) {
             window._switchAvatarSub = function(el, subId) {
@@ -897,8 +905,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 </div>
                 
                 <div class="set-tabs">
-                    <div class="set-tab active" data-tab="llm">🧠 主模型</div>
-                    <div class="set-tab" data-tab="sec-llm">⚡ 副模型</div>
+                    <div class="set-tab active" data-tab="api">🔌 API</div>
                     <div class="set-tab" data-tab="img">🎨 畫廊</div>
                     <div class="set-tab" data-tab="voice">🎵 語音</div>
                     <div class="set-tab" data-tab="vn">🎮 VN</div>
@@ -908,8 +915,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 </div>
 
                 <div class="set-content">
-                    
-                    <div id="view-llm" class="tab-view active">
+
+                    <div id="view-api" class="tab-view active">
+                        <div class="api-subtab-row">
+                            <div class="api-subtab active" data-apitab="llm" onclick="window._switchApiTab && window._switchApiTab('llm')">🧠 主模型</div>
+                            <div class="api-subtab" data-apitab="sec-llm" onclick="window._switchApiTab && window._switchApiTab('sec-llm')">⚡ 副模型</div>
+                        </div>
+                    <div id="view-llm" class="api-subview">
                         <div class="set-group"${stHide}>
                             <div class="set-label">
                                 <span>🔗 跟隨酒館主系統 (推薦)</span>
@@ -1002,7 +1014,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
                     </div>
 
-                    <div id="view-sec-llm" class="tab-view hidden">
+                    <div id="view-sec-llm" class="api-subview" style="display:none;">
                         <div style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.15); font-size:12px; color:#1A1C28; line-height:1.6;">
                             ℹ️ <b>副模型</b> 用於寵物聊天、路人NPC對話等輕量任務。建議使用 Gemini Flash 或 GPT-4o-mini 等快速模型。
                         </div>
@@ -1092,6 +1104,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="sec-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#3A3F5C; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
                     </div>
+                    </div><!-- /view-api -->
 
                     <div id="view-img" class="tab-view hidden">
                         <div class="gal-subtab-row">
