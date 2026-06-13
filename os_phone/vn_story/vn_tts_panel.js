@@ -29,16 +29,8 @@ function buildPanelHTML() {
 
 function renderBasic(cfg) {
     return `
-<div class="vtts-card">
-  <div class="vtts-card-title">🔌 系統狀態</div>
-  <div class="vtts-switch-row">
-    <span class="vtts-switch-label">啟用 TTS 語音</span>
-    <label class="vtts-toggle-wrap">
-      <input type="checkbox" id="vtts-enabled" ${cfg.enabled ? 'checked' : ''}>
-      <span class="vtts-toggle-slider"></span>
-    </label>
-  </div>
-</div>
+<!-- 「啟用 TTS 語音」開關已由語音面板頂端三選一(MINIMAX/SoVITS/全關閉)取代，藏卡片但保留 #vtts-enabled 供 _switchTtsMode 同步與 saveBasic 存檔 -->
+<input type="checkbox" id="vtts-enabled" style="display:none" ${cfg.enabled ? 'checked' : ''}>
 
 <div class="vtts-card">
   <div class="vtts-card-title">📡 GPT-SoVITS 連線</div>
