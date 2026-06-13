@@ -1445,7 +1445,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                 </div>
 
-                                <div style="margin-top:15px;">
+                                <div style="margin-top:18px; padding-top:12px; border-top:2px solid rgba(26,28,40,0.15);">
+                                    <div class="set-label" style="font-size:13px;">📝 提示詞（底詞）</div>
+                                </div>
+                                <div style="margin-top:12px;">
                                     <div class="set-label">🎨 角色底詞 <span style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;">（Danbooru tag 格式，逗號分隔）</span></div>
                                     <textarea class="set-textarea" id="img-nai-char-base">${imgConfig.novelai.charBasePrompt || ''}</textarea>
                                     <div style="text-align:right; margin-top:4px;">
