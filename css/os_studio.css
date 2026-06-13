@@ -3,6 +3,16 @@
         .studio-title { font-size: 16px; font-weight: bold; color: #1A1C28; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .studio-mode-select { background: #EEF0F6 !important; appearance: none; -webkit-appearance: none; border: 1px solid rgba(26,28,40,0.25); color: #1A1C28 !important; padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer; color-scheme: light; }
         .studio-mode-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
+        /* 頂層 mode tab 列（取代下拉單）：✨煉丹 / 🎨主題 並列 */
+        .studio-mode-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+        .studio-mode-tab { padding: 6px 12px; border: 1px solid rgba(26,28,40,0.25); border-radius: 6px; font-size: 13px; cursor: pointer; color: rgba(26,28,40,0.72); background: #EEF0F6; transition: 0.2s; white-space: nowrap; }
+        .studio-mode-tab:hover { background: rgba(26,28,40,0.06); color: #1A1C28; }
+        .studio-mode-tab.active { background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: bold; }
+        /* 🎨 主題＝頂層 mode：top-theme 時隱藏 chat+preview、顯示主題全區 */
+        .studio-theme-pane { display: none; flex: 1; min-height: 0; overflow-y: auto; padding: 20px; }
+        .studio-container.top-theme .studio-left { display: none; }
+        .studio-container.top-theme .studio-right { display: none; }
+        .studio-container.top-theme .studio-theme-pane { display: block; }
         .studio-icon-btn { background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
         .studio-icon-btn:hover { background: rgba(26,28,40,0.10); border-color: #1A1C28; }
         .studio-icon-btn.danger { color: #fc8181; border-color: #fc8181; background: rgba(252,129,129,0.1); }
