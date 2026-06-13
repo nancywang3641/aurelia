@@ -21,7 +21,7 @@
             <div class="avs-container">
                 <div class="avs-header">
                     <div class="avs-back-btn" id="avs-nav-home">‹</div>
-                    <div class="avs-title">🎲 狀態檔案</div>
+                    <div class="avs-title">狀態檔案</div>
                     <div class="avs-back-btn" id="avs-btn-help" style="font-size:16px;font-weight:bold;">?</div>
                 </div>
                 <!-- 使用說明遮罩 -->
@@ -32,7 +32,7 @@
                     </div>
                     <div style="font-size:13px;color:#ccc;line-height:1.9;">
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">🎲 狀態檔案是什麼？</div>
+                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">狀態檔案是什麼？</div>
                         <p style="color:#aaa;margin:0 0 16px;">
                             狀態檔案讓你在跑團時，自動幫你記錄角色的各種數值，像是血量、金幣、好感度等等。<br>
                             AI 每次回覆時，會一起更新這些數字，你不用自己手動記。
