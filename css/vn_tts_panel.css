@@ -149,9 +149,15 @@ select.vtts-input option { background: #EEF0F6; color: #1A1C28; }
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 10px;
 }
-.vtts-model-name { font-size: 14px; color: #1A1C28; font-weight: 800; }
+.vtts-model-name { font-size: 14px; color: #1A1C28; font-weight: 800; display: flex; align-items: center; gap: 8px; }
 .vtts-model-actions { display: flex; gap: 6px; }
 .vtts-model-fields { display: grid; gap: 6px; }
+
+/* 模型庫：外層精簡卡（點整張進編輯內層） */
+.vtts-model-card-compact { cursor: pointer; transition: border-color .15s, background .15s; }
+.vtts-model-card-compact:hover { border-color: rgba(26,28,40,0.35); background: rgba(228,232,245,0.95); }
+.vtts-model-card-compact .vtts-model-card-head { margin-bottom: 0; }
+.vtts-model-emo-badge { font-size: 10px; font-weight: 600; color: rgba(26,28,40,0.55); background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.15); padding: 1px 7px; border-radius: 10px; }
 
 /* ── 角色對應 ── */
 .vtts-char-row {

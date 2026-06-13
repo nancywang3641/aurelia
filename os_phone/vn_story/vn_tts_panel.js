@@ -130,27 +130,17 @@ function renderModels(cfg) {
 ${cards}`;
 }
 
+// 外層只給精簡卡（名稱 + 編輯/刪除），細節 GPT/SoVITS/音頻/情緒都收進內層（編輯頁），免一攤平就很長
 function renderModelCard(id, m) {
+    const emoCount = Object.keys(m.emotions || {}).length;
     return `
-<div class="vtts-model-card" id="vtts-mc-${esc(id)}">
+<div class="vtts-model-card vtts-model-card-compact" id="vtts-mc-${esc(id)}" onclick="VN_TTS_Panel.editModel('${escJs(id)}')">
   <div class="vtts-model-card-head">
-    <span class="vtts-model-name">🔹 ${esc(m.name || id)}</span>
+    <span class="vtts-model-name">${esc(m.name || id)}${emoCount ? ` <span class="vtts-model-emo-badge">${emoCount} 情緒</span>` : ''}</span>
     <div class="vtts-model-actions">
-      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.editModel('${escJs(id)}')">編輯</button>
-      <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
+      <button class="vtts-btn vtts-btn-ghost" onclick="event.stopPropagation();VN_TTS_Panel.editModel('${escJs(id)}')">編輯</button>
+      <button class="vtts-btn vtts-btn-danger" onclick="event.stopPropagation();VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
     </div>
-  </div>
-  <div style="font-size:11px;color:rgba(26,28,40,0.55);line-height:1.8;">
-    <div>GPT: ${esc(m.gptPath||'（未設定）')}</div>
-    <div>SoVITS: ${esc(m.sovitsPath||'（未設定）')}</div>
-    
-    <div style="display:flex; align-items:center; gap: 8px;">
-      預設音頻: ${esc(m.refAudioPath||'（未設定）')}
-      ${m.refAudioPath ? `<button class="vtts-btn vtts-btn-ghost" style="padding: 2px 8px; font-size: 10px; border-color: rgba(26,28,40,0.25);" onclick="VN_TTS_Panel.playRefAudio('${escJs(m.refAudioPath)}')">▶ 試聽</button>` : ''}
-    </div>
-    
-    <div>預設文字: ${esc(m.refText||'')}</div>
-    <div style="color:#1A1C28; margin-top: 4px;">自訂情緒數量: ${Object.keys(m.emotions || {}).length} 組</div>
   </div>
 </div>`;
 }

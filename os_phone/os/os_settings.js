@@ -398,16 +398,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // 畫廊子 tab 切換 helper（含 avatar/bg 列表 lazy load）
         if (!window._switchOsGalTab) {
             window._switchOsGalTab = function(el, tabId) {
-                el.parentElement.querySelectorAll('[data-galtab]').forEach(t => {
-                    t.classList.remove('active');
-                    t.style.color = 'rgba(26,28,40,0.40)';
-                    t.style.borderBottomColor = 'transparent';
-                    t.style.fontWeight = '400';
-                });
+                el.parentElement.querySelectorAll('[data-galtab]').forEach(t => t.classList.remove('active'));
                 el.classList.add('active');
-                el.style.color = '#1A1C28';
-                el.style.borderBottomColor = 'rgba(26,28,40,0.25)';
-                el.style.fontWeight = '700';
                 document.querySelectorAll('.img-subtab-view').forEach(v => v.style.display = 'none');
                 const target = document.getElementById('view-img-' + tabId);
                 if (target) target.style.display = 'block';
@@ -1108,17 +1100,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                     <div id="view-img" class="tab-view hidden">
                         <div class="gal-subtab-row">
-                            <div class="gal-subtab active" data-galtab="api"    style="cursor:pointer;padding:6px 12px;font-size:13px;color:#1A1C28;border-bottom:2px solid rgba(26,28,40,0.25);font-weight:700;" onclick="_switchOsGalTab(this,'api')">🔑 圖片設置</div>
-                            <div class="gal-subtab" data-galtab="avatar" style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'avatar')">🎭 頭像</div>
-                            <div class="gal-subtab" data-galtab="bg"     style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'bg')">🌄 背景</div>
-                            <div class="gal-subtab" data-galtab="scene"  style="cursor:pointer;padding:6px 12px;font-size:13px;color:rgba(26,28,40,0.72);border-bottom:2px solid transparent;" onclick="_switchOsGalTab(this,'scene')">🎬 插圖</div>
+                            <div class="gal-subtab active" data-galtab="api"    onclick="_switchOsGalTab(this,'api')">圖片設置</div>
+                            <div class="gal-subtab" data-galtab="avatar" onclick="_switchOsGalTab(this,'avatar')">頭像</div>
+                            <div class="gal-subtab" data-galtab="bg"     onclick="_switchOsGalTab(this,'bg')">背景</div>
+                            <div class="gal-subtab" data-galtab="scene"  onclick="_switchOsGalTab(this,'scene')">插圖</div>
                         </div>
                         <div id="view-img-api" class="img-subtab-view">
 
                         <!-- ── 子分頁鈕：背景 / 角色 ── -->
                         <div class="img-srctab-row">
-                            <div class="img-srctab" id="img-srctab-char" data-imgsrctab="char" onclick="window._switchImgSrcTab && window._switchImgSrcTab('char')">🎭 角色</div>
-                            <div class="img-srctab" id="img-srctab-bg" data-imgsrctab="bg" onclick="window._switchImgSrcTab && window._switchImgSrcTab('bg')">🌄 背景</div>
+                            <div class="img-srctab" id="img-srctab-char" data-imgsrctab="char" onclick="window._switchImgSrcTab && window._switchImgSrcTab('char')">角色</div>
+                            <div class="img-srctab" id="img-srctab-bg" data-imgsrctab="bg" onclick="window._switchImgSrcTab && window._switchImgSrcTab('bg')">背景</div>
                         </div>
 
                         <!-- ── 🎭 角色 分頁 body（活物：角色・頭像・插圖）── -->
