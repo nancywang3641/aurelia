@@ -389,17 +389,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const llmConfig = loadLlmConfig();
         const secLlmConfig = loadSecLlmConfig();
         const imgConfig = loadImageConfig();
-        // 圖片用量統計（給「會員方案划算度」估算）
-        let imgUsage = {};
-        try { imgUsage = JSON.parse(localStorage.getItem('os_image_usage') || '{}'); } catch(e) {}
-        const _usageYM = new Date().toISOString().slice(0, 7);
-        const _usageMonthCount = (imgUsage.byMonth && imgUsage.byMonth[_usageYM]) || 0;
-        const _usagePerGen = imgUsage.perGen || 0;
-        const _usageMonthPts = (_usageMonthCount * _usagePerGen);
-        const _usageMonthList = Object.entries(imgUsage.byMonth || {})
-            .sort((a, b) => b[0].localeCompare(a[0]))
-            .slice(0, 6)
-            .map(([m, n]) => `${m} ${n}次`).join('　');
         const minimaxConfig = loadMinimaxConfig();
         const claudeRoomConfig = loadClaudeRoomConfig();
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
@@ -1585,30 +1574,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
 
-                        <div class="set-group" id="img-scene-usage-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
-                            <div class="set-label">📊 場景插圖用量統計 <span style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;">算哪個會員方案划算</span></div>
-                            <div class="set-desc" style="margin-bottom:8px;">只記「場景插圖」每次真實生成（cache 命中、角色/物品圖都不算）。填「每次消耗點數」後，自動算本月估算花費。</div>
-                            <div class="set-label" style="font-size:12px; margin-top:6px;">每次場景插圖消耗點數</div>
-                            <input class="set-input" id="img-usage-pergen" type="number" min="0" step="0.0001"
-                                placeholder="例：0.002（看你常用的模型）" value="${_usagePerGen || ''}"
-                                onchange="(function(el){let u={};try{u=JSON.parse(localStorage.getItem('os_image_usage')||'{}')}catch(e){}u.perGen=parseFloat(el.value)||0;localStorage.setItem('os_image_usage',JSON.stringify(u));})(this)">
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
-                                <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:10px; text-align:center;">
-                                    <div style="font-size:11px; color:rgba(26,28,40,0.72);">本月場景插圖次數</div>
-                                    <div style="font-size:22px; color:#1A1C28; font-weight:bold;">${_usageMonthCount}</div>
-                                </div>
-                                <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:10px; text-align:center;">
-                                    <div style="font-size:11px; color:rgba(26,28,40,0.72);">本月估算點數</div>
-                                    <div style="font-size:22px; color:#1A1C28; font-weight:bold;">${_usageMonthPts ? _usageMonthPts.toFixed(3) : '—'}</div>
-                                </div>
-                            </div>
-                            <div class="set-desc" style="margin-top:8px; line-height:1.6;">
-                                累計場景插圖：<b style="color:#1A1C28;">${imgUsage.total || 0}</b> 次<br>
-                                ${_usageMonthList ? '各月：' + _usageMonthList : '（尚無紀錄，生成幾張場景插圖後回來看）'}
-                            </div>
-                            <button class="set-btn" style="margin-top:10px; background:rgba(231,76,60,0.15); border:1px solid rgba(231,76,60,0.4); color:#e74c3c;"
-                                onclick="if(confirm('確定清空所有用量統計？此動作無法復原。')){localStorage.removeItem('os_image_usage');location.reload();}">🗑️ 重置統計</button>
-                        </div>
 
                         </div><!-- /view-img-api -->
                         <div id="view-img-prompt" class="img-subtab-view" style="display:none;">
@@ -2304,7 +2269,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elImgTabBg      = container.querySelector('#img-tab-bg');
         const elImgSceneBlock = container.querySelector('#img-scene-block');
         const elImgSceneExtract = container.querySelector('#img-scene-extract-block'); // 副模型版（插圖→角色）
-        const elImgSceneUsage   = container.querySelector('#img-scene-usage-block');   // 用量統計（插圖→角色）
         const elImgPixabay      = container.querySelector('#img-pixabay-block');        // 退路圖庫（背景）
         const elImgPolPrompts = container.querySelector('#img-pol-prompts-group');
         const elTavGroup      = container.querySelector('#img-group-tavernsd');
@@ -2342,12 +2306,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (elImgTabBg)   elImgTabBg.style.display   = (imgSrcTab === 'bg')   ? '' : 'none';
 
             if (imgSrcTab === 'char') {
-                // 角色分頁：顯示 living 接口設定 + 角色頭像底詞 + 場景插圖（獨立版/副模型版/用量）
+                // 角色分頁：顯示 living 接口設定 + 角色頭像底詞 + 場景插圖（副模型版）
                 showOnlyIfaceGroup(livingSvc);
                 if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc === 'novelai');
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = '';
                 if (elImgSceneExtract) elImgSceneExtract.style.display = '';
-                if (elImgSceneUsage)   elImgSceneUsage.style.display = '';
                 if (elImgPixabay)      elImgPixabay.style.display = 'none';   // 退路圖庫屬背景、角色分頁藏
             } else {
                 // 背景分頁
@@ -2364,11 +2327,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     if (elImgBgNote)     elImgBgNote.style.display = 'none';
                     showOnlyIfaceGroup(bgSvc);
                 }
-                // 角色頭像底詞 + 場景插圖（含副模型版/用量）只屬角色分頁；退路圖庫(背景)在背景分頁顯示
+                // 角色頭像底詞 + 場景插圖（含副模型版）只屬角色分頁；退路圖庫(背景)在背景分頁顯示
                 if (elImgPolPrompts) elImgPolPrompts.classList.add('hidden');
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
                 if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
-                if (elImgSceneUsage)   elImgSceneUsage.style.display = 'none';
                 if (elImgPixabay)      elImgPixabay.style.display = '';   // 退路圖庫（背景生不出抓照片）屬背景
             }
             // 測試生成是通用工具 → 兩分頁都留
