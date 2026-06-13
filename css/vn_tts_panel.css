@@ -73,6 +73,26 @@ select.vtts-input option { background: #EEF0F6; color: #1A1C28; }
 .vtts-row { display: flex; gap: 10px; align-items: center; }
 .vtts-row .vtts-input { flex: 1; }
 
+/* NPC 分類自訂下拉：native select 在縮小視窗會爆出畫面，改成限高捲動容器（留在面板內） */
+.vtts-dd { position: relative; flex: 1; min-width: 0; }
+.vtts-dd-cur {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: #EEF0F6; border: 1px solid rgba(26,28,40,0.20);
+    color: #1A1C28; padding: 8px 10px; font-size: 13px; border-radius: 4px;
+    cursor: pointer; user-select: none;
+}
+.vtts-dd-arrow { font-size: 10px; color: rgba(26,28,40,0.55); flex-shrink: 0; }
+.vtts-dd-list {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    max-height: 200px; overflow-y: auto; z-index: 60;
+    background: #EEF0F6; border: 1px solid rgba(26,28,40,0.20); border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+.vtts-dd-list.open { display: block; }
+.vtts-dd-opt { padding: 9px 11px; font-size: 13px; color: #1A1C28; cursor: pointer; }
+.vtts-dd-opt:hover { background: rgba(26,28,40,0.06); }
+.vtts-dd-opt.active { background: rgba(26,28,40,0.10); font-weight: 700; }
+
 /* ── Toggle ── */
 .vtts-switch-row {
     display: flex; justify-content: space-between; align-items: center;
