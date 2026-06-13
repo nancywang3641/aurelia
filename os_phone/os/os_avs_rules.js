@@ -274,7 +274,7 @@
         let listHtml = '';
         if (rules.length === 0) {
             listHtml = `<div class="avsr-empty">尚無條件規則<br>
-                <span style="font-size:11px;color:#444;">新增後，當 AVS 變數達到條件時自動注入對應文字給 AI</span></div>`;
+                <span style="font-size:11px;color:#444;">新增後，當項目達到條件時自動注入對應文字給 AI</span></div>`;
         } else {
             sortedKeys.forEach(key => {
                 const groupRules = groups[key];
@@ -406,7 +406,7 @@
                     `<span style="color:#888;">${_esc(pack)}：</span>${vars.map(v => `<span style="color:#d4af37;margin-right:8px;cursor:pointer;" data-pick="${_esc(v.path)}">${_esc(v.path)}</span>`).join('')}<br>`
                 ).join('')}
                </div>`
-            : `<div style="margin-top:6px;font-size:10px;color:#444;">尚無變數包，可手動輸入路徑</div>`;
+            : `<div style="margin-top:6px;font-size:10px;color:#444;">尚無檔案，可手動輸入路徑</div>`;
 
         editor.className = 'avsr-editor';
         editor.innerHTML = `
@@ -423,7 +423,7 @@
                     <label>觸發條件</label>
                     <div class="avsr-cond-row">
                         <input class="avs-input" id="avsr-f-path" list="${datalistId}"
-                            placeholder="點選或手動輸入變數路徑"
+                            placeholder="點選或手動輸入項目路徑"
                             value="${_esc(rule.path || '')}"
                             autocomplete="off">
                         <select class="avs-select" id="avsr-f-op" style="padding:10px;">
@@ -471,7 +471,7 @@
             const folder   = editor.querySelector('#avsr-f-folder').value.trim();
             const priority = parseInt(editor.querySelector('#avsr-f-priority').value) || 50;
 
-            if (!path) { alert('請填入變數路徑'); return; }
+            if (!path) { alert('請填入項目路徑'); return; }
             if (!content) { alert('請填入注入文字'); return; }
 
             const n = parseFloat(rawVal);
@@ -563,7 +563,7 @@
         // 為每個變數包生成專屬資料區
         packs.forEach(p => {
             const packModes = modes.filter(m => m.targetId === p.id);
-            sectionsHtml += renderSection(`變數包：${p.name}`, p.id, packModes, true);
+            sectionsHtml += renderSection(`檔案：${p.name}`, p.id, packModes, true);
         });
 
         sectionsHtml += `</div><div class="avsr-editor hidden" id="avsm-editor"></div>`;
@@ -696,7 +696,7 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;">
-                    <div class="avsr-field" style="flex:1;"><label>觸發變數</label>
+                    <div class="avsr-field" style="flex:1;"><label>觸發項目</label>
                         <input class="avs-input" id="avsm-f-path" value="${_esc(existing?.path || 'mode')}">
                     </div>
                     <div class="avsr-field" style="flex:1;"><label>觸發值</label>
