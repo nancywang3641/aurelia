@@ -69,6 +69,12 @@
         .studio-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; }
         .studio-preview-content { flex: 1; overflow: hidden; display: flex; flex-direction: row; position: relative; }
         .studio-preview-main { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
+        /* 展示區三尺寸（手機/中間/全屏）：用真實外框寬渲染卡片再等比縮放 */
+        .studio-pv-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+        .studio-pv { padding: 4px 11px; font-size: 11px; border-radius: 6px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; }
+        .studio-pv.active { background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: 700; }
+        .studio-pv-wrap { width: 100%; overflow: hidden; background: #000; border: 1px dashed rgba(26,28,40,0.25); border-radius: 6px; }
+        .studio-pv-box { background: #000; transform-origin: top left; min-height: 60px; }
         .tree-project { color: #1A1C28; font-weight: bold; font-size: 13px; margin-bottom: 5px; cursor: pointer; padding: 8px; border-radius: 6px; background: rgba(26,28,40,0.06); transition: 0.2s; }
         .tree-project:hover { background: rgba(26,28,40,0.10); }
         .tree-folder { color: rgba(26,28,40,0.72); font-size: 12px; margin-top: 8px; margin-left: 10px; padding-bottom: 2px; border-bottom: 1px solid rgba(210,215,235,0.3); }
