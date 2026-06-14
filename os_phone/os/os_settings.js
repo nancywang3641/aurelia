@@ -516,12 +516,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     // Pollinations（或 NAI 沒 token 退回）維持 raw（純模板，行為不變）。
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
-                    // 精緻度倍率：1x=512×896、1.5x=768×1344、2x=1024×1792
+                    const _isComfy = !!(_imCfg && _imCfg.service === 'comfyui_direct');
+                    // 精緻度倍率＋高清修復都是 ComfyUI 直連專屬；非 ComfyUI 一律小圖 base 512×896、不套倍率（避免取消精緻化後又大又糊）
                     const _ratioEl = document.getElementById('sprite-upscale-ratio');
-                    const _ratio = parseFloat((_ratioEl && _ratioEl.value) || localStorage.getItem(LS_RATIO) || '1.5') || 1.5;
-                    // 高清修復（ComfyUI 直連專屬）：base 512×896 → 二次採樣放大到倍率，真補細節（其他來源／關閉時直接用大解析度生）
+                    const _ratio = _isComfy ? (parseFloat((_ratioEl && _ratioEl.value) || localStorage.getItem(LS_RATIO) || '1.5') || 1.5) : 1;
                     const _hiresEl = document.getElementById('sprite-hires');
-                    const _hiresOn = !!(_imCfg && _imCfg.service === 'comfyui_direct') && _hiresEl && _hiresEl.checked && _ratio > 1;
+                    const _hiresOn = _isComfy && _hiresEl && _hiresEl.checked && _ratio > 1;
                     let _opts;
                     if (_hiresOn) {
                         _opts = { force: true, width: 512, height: 896, raw: !_useNAI, comfyHires: { scale: _ratio, denoise: 0.45 } };
@@ -785,6 +785,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const hiresRow = document.getElementById('sprite-hires-row');
                 const hiresEl = document.getElementById('sprite-hires');
                 if (hiresRow) hiresRow.style.display = (_svc === 'comfyui_direct') ? 'inline-flex' : 'none';
+                if (ratioEl) ratioEl.style.display = (_svc === 'comfyui_direct') ? '' : 'none';   // 精緻度倍率也 ComfyUI 專屬：非 ComfyUI 藏起來、固定小圖 512×896
                 if (hiresEl) {
                     hiresEl.checked = localStorage.getItem(LS_HIRES) === '1';
                     hiresEl.onchange = () => localStorage.setItem(LS_HIRES, hiresEl.checked ? '1' : '0');
