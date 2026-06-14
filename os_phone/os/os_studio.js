@@ -949,7 +949,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     <button class="vth-mode" data-mode="inner-mode">內心</button>
                 </div>
             </div>
-            <div class="vth-preview-wrap" id="vth-preview-wrap"><iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe></div>
+            <div class="vth-preview-wrap" id="vth-preview-wrap"><div class="vth-preview-box" id="vth-preview-box"><iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe></div></div>
             <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
             <div class="vth-css-hint">改框內 CSS，上方即時預覽。「套用到此世界」存進當前世界、VN 開播自動套；「收藏目前」存進下方主題庫可跨世界重用。AI 用「寫作→API 設置」的副模型。</div>
             <div class="vth-gal">
@@ -967,24 +967,27 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const area = host.querySelector('#vth-css-area');
         const frame = host.querySelector('#vth-preview');
         const previewWrap = host.querySelector('#vth-preview-wrap');
+        const previewBox  = host.querySelector('#vth-preview-box');
         let _curVp = 'phone';
-        // 桌面預覽：用桌面寬(1280×720)渲染再等比 scale 縮到面板寬、外層裁切 → 看到「縮小的桌面佈局」而非被壓窄
+        // 兩種預覽都「用真實解析度渲染 → transform:scale 等比縮小 → 外層裁切」，比例才正確：
+        //   桌面 1280×720(橫)；手機 390×844(直，iPhone 比例)。手機限高(別太長難檢視)、寬不足時置中。
         const applyVp = () => {
-            if (!previewWrap || !frame) return;
+            if (!previewBox || !frame || !previewWrap) return;
+            const avail = previewWrap.clientWidth || 320;
+            let RW, RH, s;
             if (_curVp === 'desktop') {
-                const DW = 1280, DH = 720;
-                const s = (previewWrap.clientWidth || 320) / DW;
-                frame.style.width = DW + 'px';
-                frame.style.height = DH + 'px';
-                frame.style.transformOrigin = 'top left';
-                frame.style.transform = 'scale(' + s + ')';
-                previewWrap.style.height = Math.round(DH * s) + 'px';
+                RW = 1280; RH = 720;
+                s = avail / RW;
             } else {
-                frame.style.width = '100%';
-                frame.style.height = '300px';
-                frame.style.transform = 'none';
-                previewWrap.style.height = '';
+                RW = 390; RH = 844;
+                s = Math.min(avail / RW, 430 / RH);   // 限高 430，避免直式手機太長
             }
+            frame.style.width = RW + 'px';
+            frame.style.height = RH + 'px';
+            frame.style.transformOrigin = 'top left';
+            frame.style.transform = 'scale(' + s + ')';
+            previewBox.style.width  = Math.round(RW * s) + 'px';
+            previewBox.style.height = Math.round(RH * s) + 'px';
         };
         let _t = null;
         const refreshPreview = () => { try { frame.srcdoc = _vthBuildSrcdoc(area.value); } catch (e) {} };
