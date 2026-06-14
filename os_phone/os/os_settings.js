@@ -1703,6 +1703,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div data-ttsmode="off"     onclick="_switchTtsMode(this,'off')"     style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='off' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:rgba(26,28,40,0.55);'}">全關閉</div>
                         </div>
 
+                        <!-- 旁白·系統（跨模式、永遠顯示；旁白與系統音默認都關閉） -->
+                        <div id="vn-narr-inline-root" style="margin-bottom:16px;"></div>
+
                         <!-- MINIMAX 設定區 -->
                         <div id="voice-area-minimax" class="voice-area" style="display:${currentTtsMode==='minimax' ? 'block' : 'none'};">
 
@@ -3292,6 +3295,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // 若預設 mode 是 sovits，render 後立刻注入 vn_tts_panel inline
         if (currentTtsMode === 'sovits' && window.VN_TTS_Panel?.initInline) {
             setTimeout(() => window.VN_TTS_Panel.initInline('vn-tts-inline-root'), 100);
+        }
+        // 旁白·系統選擇器：不分模式都掛（永遠顯示在模式切換下方；旁白/系統默認關閉）
+        if (window.VN_TTS_Panel?.mountNarration) {
+            setTimeout(() => window.VN_TTS_Panel.mountNarration('vn-narr-inline-root'), 100);
         }
 
         const mmSpeedSlider = container.querySelector('#mm-speed');
