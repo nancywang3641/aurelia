@@ -302,28 +302,23 @@ function renderChars(cfg) {
   ${sysRows ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">${sysRows}</div>` : '<div class="vtts-empty" style="margin-top:10px;">尚無系統語音</div>'}
 </div>
 <div class="vtts-card">
-  <div class="vtts-card-title">📜 旁白音色（旁白／敘述）</div>
-  <div class="vtts-hint" style="margin-bottom:8px;">給「旁白／敘述」配音。旁白通常又長又多——建議用下面的 Kokoro（快、免費、不碰顯卡）；不開 Kokoro 才退回用 SoVITS 角色音念。</div>
-  <div class="vtts-hint" style="margin-bottom:4px;">SoVITS 旁白音（不開 Kokoro 時才用）：</div>
+  <div class="vtts-card-title">📜 旁白音色</div>
   <select class="vtts-input" onchange="VN_TTS_Panel.updateNarratorModel(this.value)">
-    <option value="">（未綁定＝不念旁白）</option>
+    <option value="">不念旁白</option>
     ${Object.entries(cfg.models).map(([id,m]) =>
-        `<option value="${esc(id)}" ${cfg.narratorModel===id?'selected':''}>${esc(m.name||id)}</option>`
+        `<option value="${esc(id)}" ${cfg.narratorModel===id?'selected':''}>SoVITS：${esc(m.name||id)}</option>`
     ).join('')}
   </select>
-  <div style="margin-top:12px;padding-top:12px;border-top:1px dashed rgba(26,28,40,0.20);">
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#1A1C28;font-weight:700;">
-      <input type="checkbox" ${kcfg.enabled?'checked':''} onchange="VN_TTS_Panel.toggleNarratorKokoro(this.checked)">
-      🐦 用 Kokoro 念旁白（快、免費、不碰顯卡；開了優先）
-    </label>
-    <div style="${kcfg.enabled?'':'display:none;'}margin-top:8px;display:flex;flex-direction:column;gap:6px;">
-      <input class="vtts-input" type="text" placeholder="Kokoro 伺服器網址（如 http://127.0.0.1:8880）" value="${esc(kcfg.url||'')}" onchange="VN_TTS_Panel.updateKokoroUrl(this.value)">
-      <select class="vtts-input" onchange="VN_TTS_Panel.updateKokoroVoice(this.value)">
-        ${['zf_xiaoxiao','zf_xiaobei','zf_xiaoni','zf_xiaoyi','zm_yunxi','zm_yunjian','zm_yunxia','zm_yunyang'].map(v => `<option value="${v}" ${(kcfg.voice||'zf_xiaoxiao')===v?'selected':''}>${v}</option>`).join('')}
-      </select>
-      <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testKokoro()" style="align-self:flex-start;">🔊 試聽</button>
-      <div class="vtts-hint">先在本機把 Kokoro 服務跑起來（建議 Kokoro-FastAPI，OpenAI 相容）。zf_＝女聲、zm_＝男聲。</div>
-    </div>
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:12px;font-size:13px;color:#1A1C28;font-weight:700;">
+    <input type="checkbox" ${kcfg.enabled?'checked':''} onchange="VN_TTS_Panel.toggleNarratorKokoro(this.checked)">
+    🐦 用 Kokoro 念旁白
+  </label>
+  <div style="${kcfg.enabled?'':'display:none;'}margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+    <input class="vtts-input" type="text" placeholder="http://127.0.0.1:8880" value="${esc(kcfg.url||'')}" onchange="VN_TTS_Panel.updateKokoroUrl(this.value)">
+    <select class="vtts-input" onchange="VN_TTS_Panel.updateKokoroVoice(this.value)">
+      ${['zf_xiaoxiao','zf_xiaobei','zf_xiaoni','zf_xiaoyi','zm_yunxi','zm_yunjian','zm_yunxia','zm_yunyang'].map(v => `<option value="${v}" ${(kcfg.voice||'zf_xiaoxiao')===v?'selected':''}>${v}${v.indexOf('zf_')===0?'（女）':'（男）'}</option>`).join('')}
+    </select>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testKokoro()" style="align-self:flex-start;">🔊 試聽</button>
   </div>
 </div>
 <div class="vtts-card">
