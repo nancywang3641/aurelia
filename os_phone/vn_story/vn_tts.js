@@ -31,6 +31,9 @@ const VN_TTS = {
         // 系統語音對應: 系統名 → modelId（[Sys|系統名|訊息] 用；空字串 key = 預設系統音）
         systemMappings: {},
 
+        // 旁白音色: modelId（指派了才念旁白；空＝不念，維持只配對白/系統）
+        narratorModel: '',
+
         // 角色別名: 主名 → [別名1, 別名2, ...]（不分大小寫匹配，AI 用全名/小名都能對到同一個模型）
         charAliases: {},
 
@@ -394,6 +397,16 @@ const VN_TTS = {
         if (!model) return;
 
         return this._speakWithModel(model, text, emotion);
+    },
+
+    // ── 旁白語音播放入口（指派了 narratorModel 才念；不退預設系統音）──────
+    async playNarration(rawText, emotion) {
+        if (!this.config.enabled) return;
+        const mid = this.config.narratorModel;
+        if (!mid || !this.config.models[mid]) return;   // 沒指派旁白音色 → 靜默（不像系統音退預設）
+        const text = this.cleanText(rawText);
+        if (!text) return;
+        return this._speakWithModel({ id: mid, ...this.config.models[mid] }, text, emotion);
     },
 
     // ── 共用：拿到模型後的快取/切換/播放流程 ─────────────────────────────

@@ -300,6 +300,16 @@ function renderChars(cfg) {
   ${sysRows ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">${sysRows}</div>` : '<div class="vtts-empty" style="margin-top:10px;">尚無系統語音</div>'}
 </div>
 <div class="vtts-card">
+  <div class="vtts-card-title">📜 旁白音色（旁白／敘述）</div>
+  <div class="vtts-hint" style="margin-bottom:8px;">給「旁白／敘述」文字配音。指派了才會念旁白；留「未綁定」＝不念（只配對白／系統）。走 NAI 雲端生圖時本機顯卡是空的，念旁白不會搶資源。</div>
+  <select class="vtts-input" onchange="VN_TTS_Panel.updateNarratorModel(this.value)">
+    <option value="">（未綁定＝不念旁白）</option>
+    ${Object.entries(cfg.models).map(([id,m]) =>
+        `<option value="${esc(id)}" ${cfg.narratorModel===id?'selected':''}>${esc(m.name||id)}</option>`
+    ).join('')}
+  </select>
+</div>
+<div class="vtts-card">
   <div class="vtts-card-title">➕ 新增角色對應</div>
   <div class="vtts-row">
     <input class="vtts-input" id="vtts-new-char" type="text" placeholder="角色名稱（與腳本 [Char|名稱|...] 一致）">
@@ -923,6 +933,16 @@ const VN_TTS_Panel = {
         if (modelId) tts.config.systemMappings[sysName] = modelId;
         else         delete tts.config.systemMappings[sysName];
         tts.save();
+    },
+
+    // ── 📜 旁白音色 ────────────────────────────────────────────────────
+    updateNarratorModel(modelId) {
+        const tts = this._tts();
+        if (!tts) return;
+        tts.config.narratorModel = modelId || '';
+        tts.save();
+        this._toast(modelId ? '✓ 已設定旁白音色' : '✓ 已取消旁白音色（不念旁白）');
+        this._renderBody('chars');
     },
 
     deleteSystemMapping(sysName) {
