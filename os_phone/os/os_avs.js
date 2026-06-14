@@ -479,8 +479,15 @@ ${lines.join('\n')}
                         <span style="font-size:12px; color:rgba(26,28,40,0.68);">🖼️ UI 面板：<span style="color:#1A1C28;">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
                     </div>
                     ${scopedCssText ? `<style>${scopedCssText}</style>` : ''}
-                    <div id="${scopeId}" style="margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; min-height:60px; overflow:hidden;">
-                        ${previewHtml || '<span style="color:rgba(26,28,40,0.20);font-size:12px;">（無預覽內容）</span>'}
+                    <div class="avs-pv-tabs">
+                        <button class="avs-pv active" data-pv="phone" title="手機（外框約 390）">手機</button>
+                        <button class="avs-pv" data-pv="center" title="中間（外框約 1000）">中間</button>
+                        <button class="avs-pv" data-pv="full" title="全屏（螢幕寬）">全屏</button>
+                    </div>
+                    <div class="avs-pv-wrap">
+                        <div class="avs-pv-box" id="${scopeId}">
+                            ${previewHtml || '<span style="color:rgba(26,28,40,0.20);font-size:12px;">（無預覽內容）</span>'}
+                        </div>
                     </div>
                     <div style="display:flex; gap:8px;">
                         <div class="avs-btn avs-btn-outline btn-toggle-active" style="flex:1; padding:6px; font-size:12px;">${activeTpl.isActive ? '✓ 取消啟用' : '設為啟用'}</div>
@@ -488,6 +495,15 @@ ${lines.join('\n')}
                         <div class="avs-btn avs-btn-danger btn-del-tpl" style="padding:6px 12px; font-size:12px;">🗑</div>
                     </div>
                 `;
+
+                // 三尺寸預覽縮放器（手機/中間/全屏）— 行為共用創作室的 attachVpScaler，看面板在窄框是否溢出
+                try {
+                    win.OS_STUDIO?.attachVpScaler?.(
+                        uiArea.querySelector('.avs-pv-tabs'),
+                        uiArea.querySelector('.avs-pv-wrap'),
+                        uiArea.querySelector('.avs-pv-box')
+                    );
+                } catch (e) {}
 
                 uiArea.querySelector('.btn-toggle-active').onclick = async () => {
                     // 同一個 pack 只能有一個 active
@@ -1221,6 +1237,12 @@ ${lines.join('\n')}
                     `<!-- HTML 結構 -->\n` +
                     `</ui_template>\n\n` +
                     `風格要求：${stylePromptVal}\n\n` +
+                    `【手機相容鐵則｜最優先，違反即失敗】面板最窄會被塞進約 320–390px 的手機框，絕對不能溢出或被裁切：\n` +
+                    `- 寬度一律響應式：width:100% / max-width / 百分比 / flex / grid / clamp()；嚴禁寫死大於螢幕的固定像素寬（如 width:600px 或過大的 min-width）。\n` +
+                    `- 根容器 .custom-status-panel 必須 box-sizing:border-box、width:100%、max-width:100%，不可橫向外溢。\n` +
+                    `- 多欄排版用 grid-template-columns:repeat(auto-fill,minmax(min(100%,140px),1fr)) 之類，窄框自動收成單欄；橫向排列一律 flex-wrap:wrap。\n` +
+                    `- 文字與數值用 word-break:break-word，避免 white-space:nowrap 撐破；圖片一律 max-width:100%。\n` +
+                    `- 必須在 320 / 390 / 1000 三種寬度下都排版正常、不溢出、不擠壞。\n\n` +
                     `【一般變數】用 {{變數名}} 當佔位符：\n` +
                     (flatVars.map(v => `  - {{${v.name}}}`).join('\n') || '  （無）');
                 if (objVars.length) {
