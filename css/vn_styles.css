@@ -1227,6 +1227,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 雙擊立繪 → 立繪滑開讓位 */
         #game-char.vn-cc-shift-l { left: -14%; right: auto; }
         #game-char-2.vn-cc-shift-r { right: -14%; left: auto; }
+        /* 🖥 桌面：頭像別貼最左右邊(中間空一大片、離很遠)，改成在畫面中央兩側成對、留適中間距，跨寬度都一致 */
+        @media (min-width: 769px) {
+            #game-char.vn-avatar   { left: auto; right: calc(50% + 5%); }
+            #game-char-2.vn-avatar { right: auto; left:  calc(50% + 5%); }
+        }
         /* 📱 手機直立：單格立繪(vn-solo)是 max-width:100% 看著剛好，但只要第二格出現
            (不管全身或頭像)就進雙格、兩個全身立繪掉到 60% 被壓小。
            → 雙格維持滿尺寸不縮水；但滿高+兩張貼左右下臉都在中央，幾何上會重疊 ~2/3，
