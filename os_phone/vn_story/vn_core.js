@@ -2686,9 +2686,9 @@
             const triggerAnim = (target) => {
                 if (_stale()) return;
                 target.classList.remove('vn-avatar');   // 真立繪 → 貼地（移除頭像浮起樣式）
-                target.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right');
+                target.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right', 'sprite-slide-in-right-flip');
                 void target.offsetWidth;
-                if (target.dataset.slideIn === '1') { target.classList.add('sprite-slide-in-right'); delete target.dataset.slideIn; }
+                if (target.dataset.slideIn === '1') { target.classList.add(target.id === 'game-char-2' ? 'sprite-slide-in-right-flip' : 'sprite-slide-in-right'); delete target.dataset.slideIn; }
                 else { if (exp === 'Surprised') target.classList.add('sprite-shake'); if (exp === 'JumpScare') target.classList.add('sprite-jumpscare'); }
             };
             // 最優先：sprite_cache（透明真立繪）
@@ -2726,9 +2726,9 @@
             const triggerAnim = (t) => {
                 if (_stale()) return;
                 t.classList.remove('vn-avatar');   // 預設立繪(presets) → 貼地
-                t.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right');
+                t.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right', 'sprite-slide-in-right-flip');
                 void t.offsetWidth;
-                if (t.dataset.slideIn === '1') { t.classList.add('sprite-slide-in-right'); delete t.dataset.slideIn; }
+                if (t.dataset.slideIn === '1') { t.classList.add(t.id === 'game-char-2' ? 'sprite-slide-in-right-flip' : 'sprite-slide-in-right'); delete t.dataset.slideIn; }
                 else { if (lockedExp === 'Surprised') t.classList.add('sprite-shake'); if (lockedExp === 'JumpScare') t.classList.add('sprite-jumpscare'); }
             };
 
