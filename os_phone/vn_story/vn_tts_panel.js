@@ -18,6 +18,7 @@ function buildPanelHTML() {
     <button class="vtts-tab"        data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
     <button class="vtts-tab"        data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
     <button class="vtts-tab"        data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
+    <button class="vtts-tab"        data-tab="voice"   onclick="VN_TTS_Panel.switchTab('voice')">旁白·系統</button>
   </div>
 
   <div class="vtts-body" id="vtts-body"></div>
@@ -236,6 +237,62 @@ function renderModelForm(id, m) {
 </div>`;
 }
 
+function renderVoice(cfg) {
+    const modelOptions = Object.entries(cfg.models)
+        .map(([id, m]) => `<option value="${esc(id)}">${esc(m.name || id)}</option>`)
+        .join('');
+
+    const sysRows = Object.entries(cfg.systemMappings || {}).map(([sname, mid]) => {
+        const label = sname === '' ? '（預設系統音）' : esc(sname);
+        return `
+<div class="vtts-char-row" style="display:flex;align-items:center;gap:8px;">
+  <span class="vtts-char-name" style="flex:0 0 auto;">🖥️ ${label}</span>
+  <select class="vtts-input" onchange="VN_TTS_Panel.updateSystemMapping('${escJs(sname)}',this.value)" style="flex:1;">
+    <option value="">（未綁定）</option>
+    ${Object.entries(cfg.models).map(([id,m]) =>
+        `<option value="${esc(id)}" ${mid===id?'selected':''}>${esc(m.name||id)}</option>`
+    ).join('')}
+  </select>
+  <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteSystemMapping('${escJs(sname)}')">✕</button>
+</div>`;
+    }).join('');
+
+    const kcfg = cfg.narratorKokoro || {};
+    const narrVal = kcfg.enabled ? '__kokoro__' : (cfg.narratorModel || '');
+
+    return `
+<div class="vtts-card">
+  <div class="vtts-card-title">📜 旁白音色</div>
+  <select class="vtts-input" onchange="VN_TTS_Panel.updateNarratorSource(this.value)">
+    <option value="" ${narrVal===''?'selected':''}>不念旁白</option>
+    <option value="__kokoro__" ${narrVal==='__kokoro__'?'selected':''}>🐦 Kokoro</option>
+    ${Object.entries(cfg.models).map(([id,m]) =>
+        `<option value="${esc(id)}" ${narrVal===id?'selected':''}>SoVITS：${esc(m.name||id)}</option>`
+    ).join('')}
+  </select>
+  ${narrVal==='__kokoro__' ? `
+  <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+    <input class="vtts-input" type="text" placeholder="http://127.0.0.1:8880" value="${esc(kcfg.url||'')}" onchange="VN_TTS_Panel.updateKokoroUrl(this.value)">
+    <select class="vtts-input" onchange="VN_TTS_Panel.updateKokoroVoice(this.value)">
+      ${['zf_xiaoxiao','zf_xiaobei','zf_xiaoni','zf_xiaoyi','zm_yunxi','zm_yunjian','zm_yunxia','zm_yunyang'].map(v => `<option value="${v}" ${(kcfg.voice||'zf_xiaoxiao')===v?'selected':''}>${v}${v.indexOf('zf_')===0?'（女）':'（男）'}</option>`).join('')}
+    </select>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testKokoro()" style="align-self:flex-start;">🔊 試聽</button>
+  </div>` : ''}
+</div>
+<div class="vtts-card">
+  <div class="vtts-card-title">🖥️ 系統語音</div>
+  <div class="vtts-row">
+    <input class="vtts-input" id="vtts-new-sys" type="text" placeholder="系統名（留空＝預設）">
+    <select class="vtts-input" id="vtts-new-sys-model">
+      <option value="">選擇模型</option>
+      ${modelOptions}
+    </select>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addSystemMapping()" style="flex-shrink:0">新增</button>
+  </div>
+  ${sysRows ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">${sysRows}</div>` : '<div class="vtts-empty" style="margin-top:10px;">尚無系統語音</div>'}
+</div>`;
+}
+
 function renderChars(cfg) {
     const modelOptions = Object.entries(cfg.models)
         .map(([id, m]) => `<option value="${esc(id)}">${esc(m.name || id)}</option>`)
@@ -269,58 +326,7 @@ function renderChars(cfg) {
 </div>`;
     }).join('');
 
-    // 🖥️ 系統語音對應列（系統名 → 模型；空字串 key = 預設系統音）
-    const sysRows = Object.entries(cfg.systemMappings || {}).map(([sname, mid]) => {
-        const label = sname === '' ? '（預設系統音）' : esc(sname);
-        return `
-<div class="vtts-char-row" style="display:flex;align-items:center;gap:8px;">
-  <span class="vtts-char-name" style="flex:0 0 auto;">🖥️ ${label}</span>
-  <select class="vtts-input" onchange="VN_TTS_Panel.updateSystemMapping('${escJs(sname)}',this.value)" style="flex:1;">
-    <option value="">（未綁定）</option>
-    ${Object.entries(cfg.models).map(([id,m]) =>
-        `<option value="${esc(id)}" ${mid===id?'selected':''}>${esc(m.name||id)}</option>`
-    ).join('')}
-  </select>
-  <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteSystemMapping('${escJs(sname)}')">✕</button>
-</div>`;
-    }).join('');
-
-    const kcfg = cfg.narratorKokoro || {};
-
     return `
-<div class="vtts-card">
-  <div class="vtts-card-title">🖥️ 系統語音（[Sys|系統名|訊息]）</div>
-  <div class="vtts-hint" style="margin-bottom:8px;">給「系統」訊息配音。不同 AI／系統名可各綁一個音；系統名留空 ＝ 所有 [Sys] 的預設音。</div>
-  <div class="vtts-row">
-    <input class="vtts-input" id="vtts-new-sys" type="text" placeholder="系統名（如 Claude、GPT；留空＝預設）">
-    <select class="vtts-input" id="vtts-new-sys-model">
-      <option value="">選擇模型</option>
-      ${modelOptions}
-    </select>
-    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addSystemMapping()" style="flex-shrink:0">新增</button>
-  </div>
-  ${sysRows ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">${sysRows}</div>` : '<div class="vtts-empty" style="margin-top:10px;">尚無系統語音</div>'}
-</div>
-<div class="vtts-card">
-  <div class="vtts-card-title">📜 旁白音色</div>
-  <select class="vtts-input" onchange="VN_TTS_Panel.updateNarratorModel(this.value)">
-    <option value="">不念旁白</option>
-    ${Object.entries(cfg.models).map(([id,m]) =>
-        `<option value="${esc(id)}" ${cfg.narratorModel===id?'selected':''}>SoVITS：${esc(m.name||id)}</option>`
-    ).join('')}
-  </select>
-  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:12px;font-size:13px;color:#1A1C28;font-weight:700;">
-    <input type="checkbox" ${kcfg.enabled?'checked':''} onchange="VN_TTS_Panel.toggleNarratorKokoro(this.checked)">
-    🐦 用 Kokoro 念旁白
-  </label>
-  <div style="${kcfg.enabled?'':'display:none;'}margin-top:8px;display:flex;flex-direction:column;gap:6px;">
-    <input class="vtts-input" type="text" placeholder="http://127.0.0.1:8880" value="${esc(kcfg.url||'')}" onchange="VN_TTS_Panel.updateKokoroUrl(this.value)">
-    <select class="vtts-input" onchange="VN_TTS_Panel.updateKokoroVoice(this.value)">
-      ${['zf_xiaoxiao','zf_xiaobei','zf_xiaoni','zf_xiaoyi','zm_yunxi','zm_yunjian','zm_yunxia','zm_yunyang'].map(v => `<option value="${v}" ${(kcfg.voice||'zf_xiaoxiao')===v?'selected':''}>${v}${v.indexOf('zf_')===0?'（女）':'（男）'}</option>`).join('')}
-    </select>
-    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testKokoro()" style="align-self:flex-start;">🔊 試聽</button>
-  </div>
-</div>
 <div class="vtts-card">
   <div class="vtts-card-title">➕ 新增角色對應</div>
   <div class="vtts-row">
@@ -469,6 +475,7 @@ const VN_TTS_Panel = {
     <button class="vtts-tab ${this._currentTab==='models' ?'active':''}" data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
     <button class="vtts-tab ${this._currentTab==='chars'  ?'active':''}" data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
     <button class="vtts-tab ${this._currentTab==='npc'    ?'active':''}" data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
+    <button class="vtts-tab ${this._currentTab==='voice'  ?'active':''}" data-tab="voice"   onclick="VN_TTS_Panel.switchTab('voice')">旁白·系統</button>
   </div>
   <div id="vtts-inline-body"></div>
   <div class="vtts-toast" id="vtts-inline-toast"></div>
@@ -565,6 +572,7 @@ const VN_TTS_Panel = {
             else if (this._modelFormMode)      body.innerHTML = renderModelForm(this._modelFormMode, cfg.models[this._modelFormMode]);
             else                               body.innerHTML = renderModels(cfg);
         }
+        if (tab === 'voice')  body.innerHTML = renderVoice(cfg);
         if (tab === 'chars')  body.innerHTML = renderChars(cfg);
         if (tab === 'npc') {
             if (this._npcFormMode) body.innerHTML = renderNpcForm();
@@ -947,24 +955,17 @@ const VN_TTS_Panel = {
         tts.save();
     },
 
-    // ── 📜 旁白音色 ────────────────────────────────────────────────────
-    updateNarratorModel(modelId) {
-        const tts = this._tts();
+    // ── 📜 旁白音色（單一選擇器：不念 / Kokoro / 任一 SoVITS 模型）──────
+    updateNarratorSource(val) {
+        const tts = this._kok();
         if (!tts) return;
-        tts.config.narratorModel = modelId || '';
+        if (val === '__kokoro__') { tts.config.narratorKokoro.enabled = true; }
+        else { tts.config.narratorKokoro.enabled = false; tts.config.narratorModel = val || ''; }
         tts.save();
-        this._toast(modelId ? '✓ 已設定旁白音色' : '✓ 已取消旁白音色（不念旁白）');
-        this._renderBody('chars');
+        this._renderBody('voice');
     },
 
     _kok() { const tts = this._tts(); if (!tts) return null; if (!tts.config.narratorKokoro) tts.config.narratorKokoro = { enabled:false, url:'http://127.0.0.1:8880', voice:'zf_xiaoxiao' }; return tts; },
-    toggleNarratorKokoro(on) {
-        const tts = this._kok(); if (!tts) return;
-        tts.config.narratorKokoro.enabled = !!on;
-        tts.save();
-        this._toast(on ? '✓ 旁白改用 Kokoro（記得先把服務跑起來）' : '✓ 已關閉 Kokoro 旁白');
-        this._renderBody('chars');
-    },
     updateKokoroUrl(url) {
         const tts = this._kok(); if (!tts) return;
         tts.config.narratorKokoro.url = (url || '').trim();
