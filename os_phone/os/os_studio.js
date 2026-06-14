@@ -124,6 +124,18 @@ This is the Quantum Consciousness Projection System developed in 2065 by Stellar
 </TOP_OVERRIDE>
 
 
+## 🎯 你的任務（先搞懂你在做什麼）
+你是在幫用戶做「VN 劇情面板」用的 UI 卡片元件——例如狀態欄、人物資訊卡、好感度條、選項選單、物品欄等。
+用法：劇情 AI 在跑故事時，用一個標籤把你做的卡片「叫出來」，這張卡片就會顯示在劇情正文裡（酒館聊天訊息中／VN 劇情顯示區），成為故事內容的一部分，出現在劇情面板的中間區域。所以你做的是「會被嵌進劇情、隨劇情一起出現的卡片」，不是獨立 App、也不是整個對話框主題。
+
+## 📐 三種顯示外框尺寸（你的卡片在這三種寬度都不能跑版）
+你的卡片會被放進不同寬度的劇情面板外框，依用戶裝置自動切換：
+- 📱 手機端：外框寬約 390px
+- 🖥 桌面・中間聊天區：外框寬約 1000px
+- ⛶ 桌面・全屏（奧瑞亞擴大模式）：外框寬約 1920px
+鐵則：一律用響應式寫法（width:100% / max-width / flex / grid / clamp() / 百分比），絕不寫死會破版的固定像素寬。卡片在 390、1000、1920 三種外框下都要：排版正常、不溢出、不擠壞、視覺都好看。
+
+
 ## 输出语言
 👄所有输出语言要求如下：(代碼例外)
 - ECoT: "zh-CN"
@@ -2802,14 +2814,43 @@ ${d.usageDesc || ''}
                     <div class="studio-card-title">標籤 ID: [${data.tagId || '未命名'}]</div>
                     <div style="font-size:12px; color:rgba(26,28,40,0.80); margin-bottom:8px; padding:6px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.30);">💡 <b>給劇本 AI 的使用說明：</b><br>${data.usageDesc || '無特別說明'}</div>
                     <div style="font-size:12px; color:rgba(26,28,40,0.68); margin-bottom:10px;">資料格式示範：<br><span style="font-family:monospace; color:#FFF;">${safeFormat}</span></div>
-                    <div style="position:relative; width:100%; min-height:360px; background:#000; border:1px dashed rgba(26,28,40,0.25); border-radius:6px; overflow-y:auto;">
-                        <style>${data.css || ''}</style>
-                        <div class="vn-dynamic-panel-${safeTagId}" style="position:relative; width:100%; height:auto; display:flex; flex-direction:column;">
-                            ${(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B')}
+                    <div class="studio-pv-tabs">
+                        <button class="studio-pv active" data-pv="phone" title="手機端（外框約 390）">手機</button>
+                        <button class="studio-pv" data-pv="center" title="桌面·中間聊天區（外框約 1000）">中間</button>
+                        <button class="studio-pv" data-pv="full" title="桌面·全屏（外框＝螢幕寬）">全屏</button>
+                    </div>
+                    <div class="studio-pv-wrap" id="studio-pv-wrap">
+                        <div class="studio-pv-box" id="studio-pv-box">
+                            <style>${data.css || ''}</style>
+                            <div class="vn-dynamic-panel-${safeTagId}" style="position:relative; width:100%; height:auto; display:flex; flex-direction:column;">
+                                ${(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B')}
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
+
+            // 展示區三尺寸：手機390 / 中間1000 / 全屏=螢幕寬。用真實外框寬渲染卡片再等比縮放，看它在各尺寸 reflow。
+            (() => {
+                const pvWrap = previewMain.querySelector('#studio-pv-wrap');
+                const pvBox  = previewMain.querySelector('#studio-pv-box');
+                if (!pvWrap || !pvBox) return;
+                const FRAMES = { phone: 390, center: 1000, full: (window.screen && screen.width) || 1920 };
+                let _vp = window._studioAppVp || 'phone';
+                let _s = 1;
+                const apply = () => {
+                    const RW = FRAMES[_vp] || 390;
+                    _s = Math.min((pvWrap.clientWidth || 320) / RW, 1);
+                    pvBox.style.width = RW + 'px';
+                    pvBox.style.transform = 'scale(' + _s + ')';
+                    pvWrap.style.height = Math.max(60, Math.round(pvBox.offsetHeight * _s)) + 'px';
+                    previewMain.querySelectorAll('.studio-pv').forEach(b => b.classList.toggle('active', b.dataset.pv === _vp));
+                };
+                previewMain.querySelectorAll('.studio-pv').forEach(b => b.onclick = () => { _vp = b.dataset.pv; window._studioAppVp = _vp; apply(); });
+                try { new ResizeObserver(() => { pvWrap.style.height = Math.max(60, Math.round(pvBox.offsetHeight * _s)) + 'px'; }).observe(pvBox); } catch (e) {}
+                apply();
+                setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再校正高度
+            })();
 
             if (data.isBlock && data.js) {
                 setTimeout(() => {
