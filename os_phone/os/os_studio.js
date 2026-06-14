@@ -191,7 +191,23 @@ if (item) {
 }
 \`\`\`
 
-\`st.setImage\` 已內建：預覽時自動切 dicebear 佔位（省 token）、正式劇情才呼叫真實 API、找不到圖片引擎也不會炸。**不要自己寫預覽隔離邏輯，不要自己 call window.OS_IMAGE_MANAGER**。
+\`st.setImage\` 已內建：先放佔位圖（不破圖）、正式劇情才呼叫真實 API 換成生成圖、失敗自動保留佔位、找不到圖片引擎也不會炸。**不要自己寫預覽隔離邏輯，不要自己 call window.OS_IMAGE_MANAGER**。
+
+#### ⚠️ 生圖紀律（極重要，務必遵守，否則一堆圖排隊、用戶等到死）
+真實生圖很慢又排隊，**只給「FOCUS／重要對象」用**，絕不大材小用：
+- ✅ 該用 \`st.setImage\` 真生圖：**畫面主角、重要配角、當前 FOCUS 角色、重要物品、重要場景/主題插圖**——這種「數量少、是主角」的才生。
+- ❌ **絕不**對這些生圖（會造成大量排隊、又沒意義）：**路人 / NPC / 留言評論區頭像 / 列表縮圖 / 一次出現很多個的小頭像 / 純裝飾性圖**。
+- 這些非 FOCUS 的頭像，**改用「名字首字色塊頭像」**（純 CSS/HTML，不呼叫任何 API）：取名字第 1 個字放進一個圓形 div，背景色用名字 hash 出一個顏色即可。範例：
+\`\`\`javascript
+function initialAvatar(name){
+  var ch=(name||'?').trim().charAt(0)||'?';
+  var h=0; for(var i=0;i<(name||'').length;i++) h=(h*31+(name||'').charCodeAt(i))>>>0;
+  var bg='hsl('+(h%360)+',55%,45%)';
+  return '<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;background:'+bg+';color:#fff;font-weight:700;">'+ch+'</div>';
+}
+// 評論區每位觀眾 → el.innerHTML = initialAvatar(觀眾名)；不要 st.setImage
+\`\`\`
+- 任何真的要顯示外部圖的 \`<img>\`，都要保留佔位/fallback（用 st.setImage 就已內建；自己塞 url 的話加 \`onerror\` 退回首字頭像或佔位），**永遠不要讓畫面出現破圖**。
 
 ### 格式要求：
 - 必須將 JSON 物件包裹在 <json> 與 </json> 標籤內。
@@ -1772,7 +1788,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             + 'var st={'
             +   'md:function(t){return t||"";},'
             +   'parse:function(){return {};},'
-            +   'setImage:async function(el,p,type){try{if(el&&window.genImg){el.src=await window.genImg(p,type||"scene");}}catch(e){}},'
+            +   'setImage:async function(el,p,type){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene");if(u)el.src=u;}}catch(e){}},'
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
@@ -1865,13 +1881,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
       setImage: async function(el, prompt, type){
         if (!el || !prompt) return;
         type = type || 'scene';
+        var ph = 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt);
+        el.src = ph;   // 先放佔位（不破圖），成功再換真圖
+        if (window.__IS_PREVIEW) return;
         try {
-          var url = window.__IS_PREVIEW
-            ? ('https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt))
-            : (imgManager ? await imgManager.generate(prompt, type) : '');
+          var url = imgManager ? await imgManager.generate(prompt, type) : '';
           if (url) el.src = url;
         } catch(e) {
-          console.error('[${safeTagId}] setImage 失敗:', e);
+          console.error('[${safeTagId}] setImage 失敗(保留佔位):', e);
         }
       }
     };
