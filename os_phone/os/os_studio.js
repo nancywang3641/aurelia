@@ -444,6 +444,11 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         rightEl.classList.toggle('drawer-open', willOpen);
         if (backdropEl) backdropEl.classList.toggle('active', willOpen);
         if (fabLabel) fabLabel.textContent = willOpen ? '收起預覽' : '查看預覽';
+        // 手機模式：開預覽時連 header 一起蓋掉(真．填滿整個創作室)，關閉再還原；用頂部握把關
+        const contEl = appEl.querySelector('.studio-container');
+        const isMob = (contEl && contEl.classList.contains('studio-mobile')) || (window.innerWidth || 9999) <= 768;
+        const headerEl = appEl.querySelector('.studio-header');
+        if (headerEl) headerEl.style.display = (willOpen && isMob) ? 'none' : '';
     }
 
     function getChatSessionId() { return currentMode; }
@@ -2109,9 +2114,16 @@ ${cleanFormat}
                         </div>
                     </div>
                     ${tpl.css ? `<style>${tpl.css}</style>` : ''}
+                    <div class="studio-pv-tabs">
+                        <button class="studio-pv active" data-pv="phone">手機</button>
+                        <button class="studio-pv" data-pv="center">中間</button>
+                        <button class="studio-pv" data-pv="full">全屏</button>
+                    </div>
                     <div class="sgc-preview">
-                        <div class="vn-dynamic-panel-${safeTagId}" style="width:100%;height:auto;display:flex;flex-direction:column;">
-                            ${previewHtml}
+                        <div class="studio-pv-box">
+                            <div class="vn-dynamic-panel-${safeTagId}" style="width:100%;height:auto;display:flex;flex-direction:column;">
+                                ${previewHtml}
+                            </div>
                         </div>
                     </div>
                     <div class="sgc-btns">
@@ -2244,6 +2256,9 @@ ${cleanFormat}
                 if (sgcBtns) sgcBtns.appendChild(phoneBtn);
 
                 listEl.appendChild(card);
+
+                // 展廳卡三尺寸（手機/中間/全屏）— append 後才量得到寬
+                _attachVpScaler(card.querySelector('.studio-pv-tabs'), card.querySelector('.sgc-preview'), card.querySelector('.studio-pv-box'));
 
                 // JS 互動預覽
                 if (tpl.isBlock && tpl.js) {
@@ -2772,6 +2787,29 @@ ${d.usageDesc || ''}
         if (shouldShow) renderVNHistoryArea();
     }
 
+    // 展示尺寸縮放器（畫布預覽 / 展廳卡共用）：手機390 / 中間1000 / 全屏=螢幕寬。
+    //   用真實外框寬渲染卡片 → transform:scale 等比縮小 → 外層裁切；ResizeObserver 校正高度。看面板在各尺寸 reflow。
+    function _attachVpScaler(tabsEl, wrapEl, boxEl) {
+        if (!tabsEl || !wrapEl || !boxEl) return;
+        wrapEl.style.overflow = 'hidden';
+        wrapEl.style.minHeight = '0';
+        boxEl.style.transformOrigin = 'top left';
+        const FRAMES = { phone: 390, center: 1000, full: (window.screen && screen.width) || 1920 };
+        let vp = 'phone', s = 1;
+        const apply = () => {
+            const RW = FRAMES[vp] || 390;
+            s = Math.min((wrapEl.clientWidth || 320) / RW, 1);
+            boxEl.style.width = RW + 'px';
+            boxEl.style.transform = 'scale(' + s + ')';
+            wrapEl.style.height = Math.max(40, Math.round(boxEl.offsetHeight * s)) + 'px';
+            tabsEl.querySelectorAll('[data-pv]').forEach(b => b.classList.toggle('active', b.dataset.pv === vp));
+        };
+        tabsEl.querySelectorAll('[data-pv]').forEach(b => b.onclick = () => { vp = b.dataset.pv; apply(); });
+        try { new ResizeObserver(() => { wrapEl.style.height = Math.max(40, Math.round(boxEl.offsetHeight * s)) + 'px'; }).observe(boxEl); } catch (e) {}
+        apply();
+        setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再校正高度
+    }
+
     function renderPreviewPanel() {
         const previewMain = document.getElementById('studio-preview-main');
         const sourceEl = document.getElementById('studio-source-content');
@@ -2830,27 +2868,7 @@ ${d.usageDesc || ''}
                 </div>
             `;
 
-            // 展示區三尺寸：手機390 / 中間1000 / 全屏=螢幕寬。用真實外框寬渲染卡片再等比縮放，看它在各尺寸 reflow。
-            (() => {
-                const pvWrap = previewMain.querySelector('#studio-pv-wrap');
-                const pvBox  = previewMain.querySelector('#studio-pv-box');
-                if (!pvWrap || !pvBox) return;
-                const FRAMES = { phone: 390, center: 1000, full: (window.screen && screen.width) || 1920 };
-                let _vp = window._studioAppVp || 'phone';
-                let _s = 1;
-                const apply = () => {
-                    const RW = FRAMES[_vp] || 390;
-                    _s = Math.min((pvWrap.clientWidth || 320) / RW, 1);
-                    pvBox.style.width = RW + 'px';
-                    pvBox.style.transform = 'scale(' + _s + ')';
-                    pvWrap.style.height = Math.max(60, Math.round(pvBox.offsetHeight * _s)) + 'px';
-                    previewMain.querySelectorAll('.studio-pv').forEach(b => b.classList.toggle('active', b.dataset.pv === _vp));
-                };
-                previewMain.querySelectorAll('.studio-pv').forEach(b => b.onclick = () => { _vp = b.dataset.pv; window._studioAppVp = _vp; apply(); });
-                try { new ResizeObserver(() => { pvWrap.style.height = Math.max(60, Math.round(pvBox.offsetHeight * _s)) + 'px'; }).observe(pvBox); } catch (e) {}
-                apply();
-                setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再校正高度
-            })();
+            _attachVpScaler(previewMain.querySelector('.studio-pv-tabs'), previewMain.querySelector('#studio-pv-wrap'), previewMain.querySelector('#studio-pv-box'));
 
             if (data.isBlock && data.js) {
                 setTimeout(() => {
