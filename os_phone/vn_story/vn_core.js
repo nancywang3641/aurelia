@@ -1726,6 +1726,15 @@
             VN_TTS.playSystem(sysName || '', text);
         },
 
+        // 旁白語音播放 — 透過 VN_TTS 旁白音（指派了旁白音色才念；走 NAI 生圖時本機 GPU 空，不搶資源）
+        _vnNarrVoicePlay: function(rawText) {
+            const VN_TTS = (window.parent || window).VN_TTS;
+            if (!VN_TTS?.config?.enabled || typeof VN_TTS.playNarration !== 'function') return;
+            const text = this._cleanTextForSoVITS(rawText);
+            if (!text) return;
+            VN_TTS.playNarration(text);
+        },
+
         next: function () {
             this.clearTimers();
             if (this.skipTypewriter()) { this.checkAutoNext(); return; }
@@ -2206,6 +2215,7 @@
                 this._currentChar = null; this.updateControlUI();
                 this.renderVN('', ex.text);
                 this.addLog("旁白", ex.text);
+                this._vnNarrVoicePlay(ex.text);
                 this.playSFX(ex.sfx);
                 return;
             }
@@ -2249,6 +2259,7 @@
                 this._stageNarr();   // 純文字旁白：算一場次(推進清滯留) + 立繪保留變暗
                 this.renderVN('', _stripped);
                 this.addLog('旁白', _stripped);
+                this._vnNarrVoicePlay(_stripped);
                 return;
             }
             this.next();
