@@ -868,7 +868,9 @@
             // 從用戶設定讀取，fallback 到安全預設值
             const sampler       = cfg.sampler       || 'k_euler_ancestral';
             const scale         = cfg.scale         ?? 5;
-            const steps         = cfg.steps         ?? 28;
+            let   steps         = cfg.steps         ?? 28;
+            // 🛡️ 防超免費步數：跟尺寸保險同一個開關（capFreeSize）→ 步數夾在 28 內不扣 Anlas；想衝高步數就到 NAI 設定關掉那個開關
+            if (cfg.capFreeSize !== false) steps = Math.min(steps, 28);
             const ucPreset      = cfg.ucPreset      ?? 1;
             const qualityToggle = cfg.qualityToggle !== false;
             const smea          = cfg.smea          !== false;
