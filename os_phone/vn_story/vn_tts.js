@@ -31,8 +31,11 @@ const VN_TTS = {
         // 系統語音對應: 系統名 → modelId（[Sys|系統名|訊息] 用；空字串 key = 預設系統音）
         systemMappings: {},
 
-        // 旁白音色: modelId（指派了才念旁白；空＝不念，維持只配對白/系統）
+        // 旁白音色: modelId（SoVITS 旁白；指派了才念，空＝不念）
         narratorModel: '',
+
+        // 旁白用 Kokoro 引擎（獨立小服務、OpenAI 相容；不碰 SoVITS GPU 佇列；enabled 時優先於 narratorModel）
+        narratorKokoro: { enabled: false, url: 'http://127.0.0.1:8880', voice: 'zf_xiaoxiao' },
 
         // 角色別名: 主名 → [別名1, 別名2, ...]（不分大小寫匹配，AI 用全名/小名都能對到同一個模型）
         charAliases: {},
@@ -63,6 +66,7 @@ const VN_TTS = {
                 if (!this.config.models)         this.config.models = {};
                 if (!this.config.charMappings)   this.config.charMappings = {};
                 if (!this.config.systemMappings) this.config.systemMappings = {};
+                if (!this.config.narratorKokoro) this.config.narratorKokoro = { enabled:false, url:'http://127.0.0.1:8880', voice:'zf_xiaoxiao' };
                 if (!this.config.npcCategories)  this.config.npcCategories = [];
             }
         } catch (e) {}
@@ -399,14 +403,47 @@ const VN_TTS = {
         return this._speakWithModel(model, text, emotion);
     },
 
-    // ── 旁白語音播放入口（指派了 narratorModel 才念；不退預設系統音）──────
+    // ── 旁白語音播放入口 ─────────────────────────────────────────────────
+    //   Kokoro 開了優先（獨立小服務、不碰 SoVITS GPU 佇列）；否則退 SoVITS 旁白音色（指派了才念）
     async playNarration(rawText, emotion) {
+        const kc = this.config.narratorKokoro || {};
+        if (kc.enabled && kc.url) return this._speakKokoro(rawText);
         if (!this.config.enabled) return;
         const mid = this.config.narratorModel;
         if (!mid || !this.config.models[mid]) return;   // 沒指派旁白音色 → 靜默（不像系統音退預設）
         const text = this.cleanText(rawText);
         if (!text) return;
         return this._speakWithModel({ id: mid, ...this.config.models[mid] }, text, emotion);
+    },
+
+    // ── Kokoro 旁白合成（OpenAI 相容 /v1/audio/speech；獨立服務，不進 GPU 佇列）─
+    async _speakKokoro(rawText) {
+        const kc = this.config.narratorKokoro || {};
+        const base = String(kc.url || '').replace(/\/+$/, '');
+        if (!base) return;
+        const voice = kc.voice || 'zf_xiaoxiao';
+        const text = this.cleanText(rawText);
+        if (!text) return;
+        const k = this._cacheKey('kokoro:' + voice, text);
+        if (this._cache[k])       { this._playBlobUrl(this._cache[k]); return; }
+        if (this._pending.has(k)) { this._waitAndPlay(k); return; }
+        this._pending.add(k);
+        try {
+            const resp = await fetch(base + '/v1/audio/speech', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: 'kokoro', input: text, voice, response_format: 'mp3', speed: kc.speed || 1 })
+            });
+            if (!resp.ok) { console.warn('[VN_TTS] Kokoro 回應異常', resp.status); return; }
+            const blob = await resp.blob();
+            const u = URL.createObjectURL(blob);
+            this._cache[k] = u;
+            this._playBlobUrl(u);
+        } catch (e) {
+            console.warn('[VN_TTS] Kokoro 旁白失敗（服務沒開？）', e);
+        } finally {
+            this._pending.delete(k);
+        }
     },
 
     // ── 共用：拿到模型後的快取/切換/播放流程 ─────────────────────────────
