@@ -130,9 +130,9 @@
                 // 順序：(來源對應)追加詞 → 角色描述詞 → 表情
                 const full = this._join(_base, prompt, `${exp} expression`);
                 const negPrompt = _neg || undefined;
-                // 角色頭像尺寸：讀「🎭 頭像 → 角色頭像尺寸」設定（空＝用各接口預設 Poll512/NAI1024），設了就傳給 generate
+                // 角色頭像尺寸：讀「🎭 頭像 → 角色頭像尺寸」設定（空＝預設 512×768 小直式立繪，不再吃 NAI 1024 大正方；設了就用設的）
                 const _avOpts = { negativePrompt: negPrompt, force: !!force };
-                try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').avatarSize) || '').split('x').map(Number); if (_p[0]&&_p[1]) { _avOpts.width=_p[0]; _avOpts.height=_p[1]; } } catch(e) {}
+                try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').avatarSize) || '512x768').split('x').map(Number); if (_p[0]&&_p[1]) { _avOpts.width=_p[0]; _avOpts.height=_p[1]; } } catch(e) {}
                 // force=true（畫廊「重生」用）→ 繞過 generate() 記憶體快取
                 return await win.OS_IMAGE_MANAGER.generate(full, 'char', _avOpts);
             } return "";
