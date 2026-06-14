@@ -1727,12 +1727,12 @@
         },
 
         // 旁白語音播放 — Kokoro 開了走 Kokoro、否則 SoVITS 旁白音色；playNarration 自己把關，故不綁 SoVITS 開關
+        // ⚠️ 不在這裡套 _cleanTextForSoVITS（會拔逗號）；傳原文給引擎各自清 —— Kokoro 要保留標點才有停頓
         _vnNarrVoicePlay: function(rawText) {
             const VN_TTS = (window.parent || window).VN_TTS;
             if (typeof VN_TTS?.playNarration !== 'function') return;
-            const text = this._cleanTextForSoVITS(rawText);
-            if (!text) return;
-            VN_TTS.playNarration(text);
+            if (!rawText || !String(rawText).trim()) return;
+            VN_TTS.playNarration(rawText);
         },
 
         next: function () {
