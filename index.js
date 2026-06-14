@@ -151,6 +151,7 @@ const PHONE_FILES = [
     'os/os_spend_panel.js',
     'os/os_board.js',
     'os/os_card_import.js',
+    'os/nai_recipe.js',
     'os/os_journal.js',
     'os/os_story_tools.js',   // 故事管理（大總結 + 隱藏對話）— 從 RPG 面板 / VN 閱讀器搬來，掛進故事日誌
     'os/os_workbench.js',
