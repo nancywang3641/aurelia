@@ -27,6 +27,13 @@
         .furnace-active { animation: avsGlow 2s infinite; border-color: rgba(26,28,40,0.60) !important; }
         @keyframes avsGlow { 0% { box-shadow: 0 0 10px rgba(26,28,40,0.10); } 50% { box-shadow: 0 0 20px rgba(26,28,40,0.30); } 100% { box-shadow: 0 0 10px rgba(26,28,40,0.10); } }
 
+        /* ===== 煉丹爐面板預覽三尺寸切換（手機/中間/全屏）— 行為共用 os_studio.attachVpScaler ===== */
+        .avs-pv-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+        .avs-pv { padding: 4px 11px; font-size: 11px; border-radius: 6px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; }
+        .avs-pv.active { background: rgba(26,28,40,0.85); color: #EEF0F6; border-color: rgba(26,28,40,0.85); }
+        .avs-pv-wrap { margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; overflow: hidden; }
+        .avs-pv-box { min-height: 60px; }
+
         /* ===== 目前狀態分頁（os_avs_state.js）—— 亮色系，與變數工坊一致；人性化狀態 + 進階摺疊 ===== */
         .avs-st { display: flex; flex-direction: column; gap: 12px; }
         .avs-st-loading { padding: 30px; text-align: center; color: rgba(26,28,40,0.35); font-size: 13px; }
