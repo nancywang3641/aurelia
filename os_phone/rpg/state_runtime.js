@@ -334,15 +334,65 @@ ${_memoryRulesText()}
         return out;
     }
 
+    // 從 AVS 狀態抽「角色外觀錨點」：掃 object 容器(角色狀態)裡每個角色的外觀欄位，組成權威外觀清單。
+    // 用途：補漏——給沒有頭像快取、但 AVS 有記外觀的角色。skip：已被頭像快取覆蓋的角色名(不重複列)。
+    function _charLooksRef(state, skip) {
+        if (!state || typeof state !== 'object') return '';
+        const LOOK_KEYS = ['髮色','髮型','瀏海','眼色','瞳色','膚色','體型','身材','身高','服裝','衣著','外觀','形象','身分','身份','氣質','臉型'];
+        const lines = [];
+        for (const v of Object.values(state)) {
+            if (!v || typeof v !== 'object' || Array.isArray(v)) continue;   // 只看 object 容器
+            for (const [name, ent] of Object.entries(v)) {
+                if (!ent || typeof ent !== 'object' || Array.isArray(ent)) continue;   // 每個角色實體
+                if (skip && skip.has(name)) continue;                         // 頭像快取已覆蓋 → 不重複
+                const looks = LOOK_KEYS
+                    .filter(k => ent[k] != null && String(ent[k]).trim() && String(ent[k]).trim() !== '待定')
+                    .map(k => `${k}:${String(ent[k]).trim()}`);
+                if (looks.length) lines.push(`・${name}（${looks.join('、')}）`);
+            }
+        }
+        return lines.join('\n');
+    }
+
+    // 組「角色外觀錨點」：★主來源＝每個角色「頭像當初生成用的提示詞」(avatar_cache, ground truth)——
+    //   插圖照它畫就跟頭像/立繪同一個人。沒有頭像的角色才退回 AVS 狀態記的外觀(_charLooksRef)。
+    //   跟 vn_core 立繪同邏輯(優先 avatar_cache.prompt，沒有才退腳本描述)，徹底解決「久了被摘要、副模型查不到外觀」。
+    async function _buildLooksRef(state) {
+        const lines = [];
+        const seen = new Set();
+        try {
+            const C = win.VN_Cache;
+            if (C && C.getAll) {
+                const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
+                const all = await C.getAll('avatar_cache');
+                for (const e of (all || [])) {
+                    if (!e || !e.prompt) continue;
+                    if (world && C.worldOf && C.worldOf(e) !== world) continue;   // 只看當前世界
+                    const name = (C.bareKeyOf ? C.bareKeyOf(e) : e.key) || '';
+                    const p = String(e.prompt).trim();
+                    if (!name || !p || seen.has(name)) continue;
+                    seen.add(name);
+                    lines.push(`・${name}｜頭像生成詞：${p}`);
+                }
+            }
+        } catch (e) {}
+        const avs = _charLooksRef(state, seen);   // 補漏：沒頭像但 AVS 有外觀的角色
+        if (avs) lines.push(avs);
+        return lines.join('\n');
+    }
+
     // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖）。
     // ★ 定位用「編號段落 + after_paragraph 數字」——AI 只挑數字、絕不抄原文（避免簡繁/改寫/引舊訊息對不上）。
-    function _sceneAddendum(userPrompt, numberedText) {
+    function _sceneAddendum(userPrompt, numberedText, looksRef) {
+        const looksBlock = (looksRef && looksRef.trim())
+            ? `\n【角色外觀錨點（★最高權威）：以下是每個角色已確立的外觀——「頭像生成詞」即當初畫這張頭像用的提示詞。畫到哪個角色，就照他這串外觀畫：髮色／眼色／體型／髮型／服裝一律沿用(姿勢、表情、鏡頭可依本輪劇情調整)。劇情或摘要沒寫到外觀也要主動補上，嚴禁漏髮色/眼色/體型，更嚴禁自行另編一個長相】\n${looksRef.trim()}\n`
+            : '';
         return `
 
 ═══════════════════════════════════════
 【★ 同時輸出「場景插圖」→ 放進同一個 JSON 的 "scenes" 欄位】
 ${(userPrompt || '').trim()}
-
+${looksBlock}
 【定位規則｜務必嚴格遵守】（若上方說明提到 after 引文或其他 scenes 格式，一律以這裡為準）
 - 下面【本輪最新劇情（編號段落）】是切好編號的段落，你只能從這些編號裡挑插圖位置。
 - 嚴禁為世界書設定/歷史對話/舊訊息生圖——只畫最新這一輪的劇情。
@@ -419,7 +469,7 @@ ${numberedText}`;
                 _sceneParas = _segmentStory(lastContent || '');
                 if (_sceneParas.length) {
                     const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
-                    prompt += _sceneAddendum(_scenePromptText, numbered);
+                    prompt += _sceneAddendum(_scenePromptText, numbered, await _buildLooksRef(currentState));
                 }
             }
 
