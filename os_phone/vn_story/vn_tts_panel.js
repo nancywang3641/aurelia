@@ -279,6 +279,7 @@ function renderVoice(cfg) {
       ${mmVoices.map(([v,label]) => `<option value="${v}" ${(mcfg.voice||'audiobook_female_1')===v?'selected':''}>${v}（${label}）</option>`).join('')}
     </select>
     <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testMinimax()" style="align-self:flex-start;">🔊 試聽</button>
+    <div class="vtts-hint">SoVITS 對白＋MiniMax 旁白：先切 MiniMax 模式填好 key，再切回 SoVITS（key 會留著）。</div>
   </div>` : ''}
   ${narrVal==='__kokoro__' ? `
   <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
