@@ -18,7 +18,6 @@ function buildPanelHTML() {
     <button class="vtts-tab"        data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
     <button class="vtts-tab"        data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
     <button class="vtts-tab"        data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
-    <button class="vtts-tab"        data-tab="voice"   onclick="VN_TTS_Panel.switchTab('voice')">旁白·系統</button>
   </div>
 
   <div class="vtts-body" id="vtts-body"></div>
@@ -486,7 +485,6 @@ const VN_TTS_Panel = {
     <button class="vtts-tab ${this._currentTab==='models' ?'active':''}" data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
     <button class="vtts-tab ${this._currentTab==='chars'  ?'active':''}" data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
     <button class="vtts-tab ${this._currentTab==='npc'    ?'active':''}" data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
-    <button class="vtts-tab ${this._currentTab==='voice'  ?'active':''}" data-tab="voice"   onclick="VN_TTS_Panel.switchTab('voice')">旁白·系統</button>
   </div>
   <div id="vtts-inline-body"></div>
   <div class="vtts-toast" id="vtts-inline-toast"></div>
@@ -583,7 +581,6 @@ const VN_TTS_Panel = {
             else if (this._modelFormMode)      body.innerHTML = renderModelForm(this._modelFormMode, cfg.models[this._modelFormMode]);
             else                               body.innerHTML = renderModels(cfg);
         }
-        if (tab === 'voice')  body.innerHTML = renderVoice(cfg);
         if (tab === 'chars')  body.innerHTML = renderChars(cfg);
         if (tab === 'npc') {
             if (this._npcFormMode) body.innerHTML = renderNpcForm();
@@ -954,7 +951,7 @@ const VN_TTS_Panel = {
         tts.config.systemMappings[name] = mid;   // name 可為空 ＝ 預設系統音
         tts.save();
         this._toast(name ? `✓ 已新增系統音：${name}` : '✓ 已設定預設系統音');
-        this._renderBody('chars');
+        this._renderNarr();
     },
 
     updateSystemMapping(sysName, modelId) {
@@ -966,6 +963,10 @@ const VN_TTS_Panel = {
         tts.save();
     },
 
+    // 旁白·系統選擇器：掛到「模式切換下方」永遠顯示的容器（os_settings 的 vn-narr-inline-root），跨模式都看得到
+    mountNarration(id) { this._narrRootId = id || 'vn-narr-inline-root'; this._renderNarr(); },
+    _renderNarr() { const el = document.getElementById(this._narrRootId || 'vn-narr-inline-root'); if (el) el.innerHTML = renderVoice(this._cfg()); },
+
     // ── 📜 旁白音色（單一選擇器：不念 / Kokoro / 任一 SoVITS 模型）──────
     updateNarratorSource(val) {
         const tts = this._kok();
@@ -975,7 +976,7 @@ const VN_TTS_Panel = {
         tts.config.narratorMinimax.enabled = (val === '__minimax__');
         if (val !== '__kokoro__' && val !== '__minimax__') tts.config.narratorModel = val || '';
         tts.save();
-        this._renderBody('voice');
+        this._renderNarr();
     },
     updateMinimaxNarrVoice(voice) {
         const tts = this._tts(); if (!tts) return;
@@ -1011,7 +1012,7 @@ const VN_TTS_Panel = {
         if (!tts) return;
         if (tts.config.systemMappings) delete tts.config.systemMappings[sysName];
         tts.save();
-        this._renderBody('chars');
+        this._renderNarr();
     },
 
     addCharMapping() {
