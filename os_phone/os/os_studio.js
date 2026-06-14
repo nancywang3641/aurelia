@@ -940,9 +940,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <div class="vth-prev-head">
                 <span class="vth-prev-label">👁️ 即時預覽</span>
                 <div class="vth-vp-tabs">
-                    <button class="vth-vp active" data-vp="phone" title="手機預覽">📱</button>
-                    <button class="vth-vp" data-vp="desktop" title="桌面預覽（等比縮小）">🖥</button>
-                    <input id="vth-vp-w" class="vth-vp-w" type="number" min="600" max="2560" step="20" title="桌面預覽基準寬＝你嵌入奧瑞亞的實際寬度（嵌入中間欄約 900~1100、全屏約 1920）">
+                    <button class="vth-vp active" data-vp="phone" title="手機端">手機</button>
+                    <button class="vth-vp" data-vp="center" title="桌面·中間聊天區">中間</button>
+                    <button class="vth-vp" data-vp="full" title="桌面·全屏（奧瑞亞擴大模式）">全屏</button>
+                    <input id="vth-vp-w" class="vth-vp-w" type="number" min="600" max="2560" step="20" title="中間聊天區寬度＝你嵌入奧瑞亞的實際寬度（約 900~1100）">
                 </div>
                 <div class="vth-mode-tabs">
                     <button class="vth-mode active" data-mode="char-mode">角色對話</button>
@@ -971,17 +972,21 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const previewBox  = host.querySelector('#vth-preview-box');
         const wInput      = host.querySelector('#vth-vp-w');
         let _curVp = 'phone';
-        // 桌面基準寬可調（嵌入中間欄通常 <1280；全屏才接近）。預設 1000，存 localStorage。
+        // 對應奧瑞亞三種顯示情境：手機端 / 桌面·中間聊天區 / 桌面·全屏（奧瑞亞擴大模式）。
+        //   都「用真實解析度渲染 → transform:scale 等比縮小 → 外層裁切」比例才正確。
+        //   中間聊天區寬可調(嵌入欄通常 900~1100)，存 localStorage；全屏抓真實螢幕尺寸。
         let _deskW = Math.max(600, Math.min(2560, parseInt(localStorage.getItem('vth_desk_w')) || 1000));
         if (wInput) wInput.value = _deskW;
-        // 兩種預覽都「用真實解析度渲染 → transform:scale 等比縮小 → 外層裁切」，比例才正確：
-        //   桌面＝你設的基準寬×0.66(橫)；手機 390×844(直，iPhone 比例)。手機限高、寬不足時置中。
         const applyVp = () => {
             if (!previewBox || !frame || !previewWrap) return;
-            if (wInput) wInput.style.display = (_curVp === 'desktop') ? '' : 'none';
+            if (wInput) wInput.style.display = (_curVp === 'center') ? '' : 'none';
             const avail = previewWrap.clientWidth || 320;
             let RW, RH, s;
-            if (_curVp === 'desktop') {
+            if (_curVp === 'full') {
+                RW = (window.screen && screen.width)  || 1920;
+                RH = (window.screen && screen.height) || 1080;
+                s = avail / RW;
+            } else if (_curVp === 'center') {
                 RW = _deskW; RH = Math.round(_deskW * 0.66);
                 s = avail / RW;
             } else {
@@ -999,7 +1004,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             _deskW = Math.max(600, Math.min(2560, parseInt(wInput.value) || 1000));
             wInput.value = _deskW;
             try { localStorage.setItem('vth_desk_w', String(_deskW)); } catch (e) {}
-            if (_curVp === 'desktop') applyVp();
+            if (_curVp === 'center') applyVp();
         };
         let _t = null;
         const refreshPreview = () => { try { frame.srcdoc = _vthBuildSrcdoc(area.value); } catch (e) {} };
@@ -1094,7 +1099,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         s = s.replace(/<(script|iframe|object|embed|meta|link)[^>]*>[\s\S]*?<\/\1>/gi, '');
         s = s.replace(/<(script|iframe|object|embed|meta|link)[^>]*\/?>/gi, '');
         
-        const hiddenUI = '<div style="margin-top:10px; padding:10px 15px; background:rgba(228,232,245,0.8); border:1px solid rgba(26,28,40,0.20); border-radius:8px; color:#1A1C28; font-size:13px; font-weight:bold; display:inline-block;">✨ 設定已提取至右側草稿區</div>';
+        const hiddenUI = '<div style="margin-top:10px; padding:10px 15px; background:rgba(228,232,245,0.8); border:1px solid rgba(26,28,40,0.20); border-radius:8px; color:#1A1C28; font-size:13px; font-weight:bold; display:inline-block;">✨ 已生成，點上方 👁️ 預覽查看</div>';
         
         // 原本的 <json> 攔截
         s = s.replace(/<json>[\s\S]*?(<\/json>|$)/gi, hiddenUI);
