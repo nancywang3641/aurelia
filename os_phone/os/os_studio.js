@@ -942,6 +942,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 <div class="vth-vp-tabs">
                     <button class="vth-vp active" data-vp="phone" title="手機預覽">📱</button>
                     <button class="vth-vp" data-vp="desktop" title="桌面預覽（等比縮小）">🖥</button>
+                    <input id="vth-vp-w" class="vth-vp-w" type="number" min="600" max="2560" step="20" title="桌面預覽基準寬＝你嵌入奧瑞亞的實際寬度（嵌入中間欄約 900~1100、全屏約 1920）">
                 </div>
                 <div class="vth-mode-tabs">
                     <button class="vth-mode active" data-mode="char-mode">角色對話</button>
@@ -968,15 +969,20 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const frame = host.querySelector('#vth-preview');
         const previewWrap = host.querySelector('#vth-preview-wrap');
         const previewBox  = host.querySelector('#vth-preview-box');
+        const wInput      = host.querySelector('#vth-vp-w');
         let _curVp = 'phone';
+        // 桌面基準寬可調（嵌入中間欄通常 <1280；全屏才接近）。預設 1000，存 localStorage。
+        let _deskW = Math.max(600, Math.min(2560, parseInt(localStorage.getItem('vth_desk_w')) || 1000));
+        if (wInput) wInput.value = _deskW;
         // 兩種預覽都「用真實解析度渲染 → transform:scale 等比縮小 → 外層裁切」，比例才正確：
-        //   桌面 1280×720(橫)；手機 390×844(直，iPhone 比例)。手機限高(別太長難檢視)、寬不足時置中。
+        //   桌面＝你設的基準寬×0.66(橫)；手機 390×844(直，iPhone 比例)。手機限高、寬不足時置中。
         const applyVp = () => {
             if (!previewBox || !frame || !previewWrap) return;
+            if (wInput) wInput.style.display = (_curVp === 'desktop') ? '' : 'none';
             const avail = previewWrap.clientWidth || 320;
             let RW, RH, s;
             if (_curVp === 'desktop') {
-                RW = 1280; RH = 720;
+                RW = _deskW; RH = Math.round(_deskW * 0.66);
                 s = avail / RW;
             } else {
                 RW = 390; RH = 844;
@@ -988,6 +994,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             frame.style.transform = 'scale(' + s + ')';
             previewBox.style.width  = Math.round(RW * s) + 'px';
             previewBox.style.height = Math.round(RH * s) + 'px';
+        };
+        if (wInput) wInput.onchange = () => {
+            _deskW = Math.max(600, Math.min(2560, parseInt(wInput.value) || 1000));
+            wInput.value = _deskW;
+            try { localStorage.setItem('vth_desk_w', String(_deskW)); } catch (e) {}
+            if (_curVp === 'desktop') applyVp();
         };
         let _t = null;
         const refreshPreview = () => { try { frame.srcdoc = _vthBuildSrcdoc(area.value); } catch (e) {} };
