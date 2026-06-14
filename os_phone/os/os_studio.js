@@ -939,13 +939,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             </div>
             <div class="vth-prev-head">
                 <span class="vth-prev-label">👁️ 即時預覽</span>
+                <div class="vth-vp-tabs">
+                    <button class="vth-vp active" data-vp="phone" title="手機預覽">📱</button>
+                    <button class="vth-vp" data-vp="desktop" title="桌面預覽（等比縮小）">🖥</button>
+                </div>
                 <div class="vth-mode-tabs">
                     <button class="vth-mode active" data-mode="char-mode">角色對話</button>
                     <button class="vth-mode" data-mode="nar-mode">旁白</button>
                     <button class="vth-mode" data-mode="inner-mode">內心</button>
                 </div>
             </div>
-            <iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe>
+            <div class="vth-preview-wrap" id="vth-preview-wrap"><iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe></div>
             <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
             <div class="vth-css-hint">改框內 CSS，上方即時預覽。「套用到此世界」存進當前世界、VN 開播自動套；「收藏目前」存進下方主題庫可跨世界重用。AI 用「寫作→API 設置」的副模型。</div>
             <div class="vth-gal">
@@ -962,10 +966,37 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
         const area = host.querySelector('#vth-css-area');
         const frame = host.querySelector('#vth-preview');
+        const previewWrap = host.querySelector('#vth-preview-wrap');
+        let _curVp = 'phone';
+        // 桌面預覽：用桌面寬(1280×720)渲染再等比 scale 縮到面板寬、外層裁切 → 看到「縮小的桌面佈局」而非被壓窄
+        const applyVp = () => {
+            if (!previewWrap || !frame) return;
+            if (_curVp === 'desktop') {
+                const DW = 1280, DH = 720;
+                const s = (previewWrap.clientWidth || 320) / DW;
+                frame.style.width = DW + 'px';
+                frame.style.height = DH + 'px';
+                frame.style.transformOrigin = 'top left';
+                frame.style.transform = 'scale(' + s + ')';
+                previewWrap.style.height = Math.round(DH * s) + 'px';
+            } else {
+                frame.style.width = '100%';
+                frame.style.height = '300px';
+                frame.style.transform = 'none';
+                previewWrap.style.height = '';
+            }
+        };
         let _t = null;
         const refreshPreview = () => { try { frame.srcdoc = _vthBuildSrcdoc(area.value); } catch (e) {} };
         refreshPreview();
+        applyVp();
         area.oninput = () => { if (_t) clearTimeout(_t); _t = setTimeout(refreshPreview, 250); };
+
+        host.querySelectorAll('.vth-vp').forEach(b => b.onclick = () => {
+            _curVp = b.dataset.vp;
+            host.querySelectorAll('.vth-vp').forEach(x => x.classList.toggle('active', x === b));
+            applyVp();
+        });
 
         host.querySelectorAll('.vth-mode').forEach(b => b.onclick = () => {
             _vthMode = b.dataset.mode;
