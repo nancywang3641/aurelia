@@ -44,6 +44,14 @@
                     </div>
 
                     <div class="studio-input-wrap">
+                        <!-- 面板類型：開頭就選好，AI 第一輪就知道要做哪種（只在 VN UI 模式顯示）-->
+                        <div class="studio-type-row" id="studio-type-row">
+                            <span class="studio-type-label">面板類型</span>
+                            <button class="studio-type active" data-type="純展示" title="只把劇情資料漂亮顯示出來，不生成">純展示</button>
+                            <button class="studio-type" data-type="純應用" title="會用 AI 生成內容/圖的功能面板（按一下即生）">純應用</button>
+                            <button class="studio-type" data-type="共用" title="既展示資料、又能生成">共用</button>
+                        </div>
+
                         <!-- 待發送的圖片縮圖列（有圖才顯示） -->
                         <div class="studio-pending-images" id="studio-pending-images"></div>
 
@@ -134,6 +142,12 @@ This is the Quantum Consciousness Projection System developed in 2065 by Stellar
 - 🖥 桌面・中間聊天區：外框寬約 1000px
 - ⛶ 桌面・全屏（奧瑞亞擴大模式）：外框寬約 1920px
 鐵則：一律用響應式寫法（width:100% / max-width / flex / grid / clamp() / 百分比），絕不寫死會破版的固定像素寬。卡片在 390、1000、1920 三種外框下都要：排版正常、不溢出、不擠壞、視覺都好看。
+
+## 🧩 三種面板類型（用戶會在訊息開頭標【類型：X】，照做、別問）
+- 【類型：純展示】：只負責把劇情 AI 給的資料漂亮地顯示出來。**禁止**用 st.callAI / st.setImage 等生成功能；js 只做純前端互動（展開/切換/排序/動畫），不主動產生內容。
+- 【類型：純應用】：會「自己做事」的功能面板，**必須**用到 st.callAI（生文字）或 st.setImage（生圖）做出互動功能（按鈕一點即生成）；可不依賴劇情資料，由用戶在面板上操作。
+- 【類型：共用】：兩者兼具——既漂亮顯示劇情資料，也有生成功能（st.callAI / st.setImage）。
+看到哪種就照哪種設計；沒標時以「純展示」為預設。
 
 
 ## 输出语言
@@ -424,6 +438,7 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
 
     let currentMode = 'vn_ui';
     let chatMessages = [];
+    let _vnPanelType = '純展示';   // 面板類型：純展示 / 純應用 / 共用（開頭就選，注入生成訊息）
     let currentParsedData = null;
     let _studioAbortCtrl = null;
     let pendingImages = []; // [{ dataUrl, mime, sizeKB }] — 用戶選好還沒發送的圖
@@ -529,6 +544,12 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         sendBtn.onclick = handleSend;
         // Enter 發送、Shift+Enter 換行（恢復原邏輯）
         inputEl.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+
+        // 面板類型選擇器（純展示 / 純應用 / 共用）
+        document.querySelectorAll('#studio-type-row .studio-type').forEach(b => b.onclick = () => {
+            _vnPanelType = b.dataset.type;
+            document.querySelectorAll('#studio-type-row .studio-type').forEach(x => x.classList.toggle('active', x === b));
+        });
         // 自適應高度：先 reset height=auto 讓瀏覽器算對 scrollHeight，再 set 新高（min 50 / max 200，超出走內部 scroll）
         const autosizeTextarea = () => {
             inputEl.style.height = 'auto';
@@ -830,6 +851,8 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         const sourceTab = document.getElementById('studio-tab-source');
         if (galleryTab) galleryTab.style.display = modeId === 'vn_ui' ? '' : 'none';
         if (sourceTab)  sourceTab.style.display  = modeId === 'vn_ui' ? '' : 'none';
+        const typeRow = document.getElementById('studio-type-row');
+        if (typeRow) typeRow.style.display = modeId === 'vn_ui' ? 'flex' : 'none';
 
         // 切 mode 一律重置到 preview tab
         document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
@@ -1337,8 +1360,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         sendBtn.onclick = () => { if (_studioAbortCtrl) _studioAbortCtrl.abort(); };
         _studioAbortCtrl = new AbortController();
 
+        // VN UI 生成：在訊息開頭標【類型：X】，AI 第一輪就知道要做純展示/純應用/共用（不用每次費口舌）
+        const genText = (currentMode === 'vn_ui')
+            ? ('【類型：' + _vnPanelType + '】' + (text || '（依此類型先做一版）'))
+            : text;
         // 帶圖時 content 變陣列；不帶圖時還是字串（向後兼容既有清洗 / parse 邏輯）
-        const userContent = buildUserMessageContent(text, pendingImages);
+        const userContent = buildUserMessageContent(genText, pendingImages);
         const userMsg = { role: 'user', content: userContent };
         // 標記是否來自選項按鈕點擊（重整後可恢復「已選展示」狀態）
         if (window.__nextUserMsgFromChoice) {
@@ -2252,8 +2279,9 @@ ${cleanFormat}
                     } catch(e) { console.error('[studio] 裝手機切換失敗', e); }
                 };
                 // 接到 .sgc-btns 容器末尾（與 btn-toggle / btn-del 同一列）
+                // 裝到手機只給「會做事」的面板（純應用/共用）；純展示卡不需變成 App。caps 未標(舊資料)仍給。
                 var sgcBtns = card.querySelector('.sgc-btns');
-                if (sgcBtns) sgcBtns.appendChild(phoneBtn);
+                if (sgcBtns && tpl.caps !== 'display') sgcBtns.appendChild(phoneBtn);
 
                 listEl.appendChild(card);
 
