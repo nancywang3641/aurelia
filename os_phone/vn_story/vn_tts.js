@@ -97,6 +97,11 @@ const VN_TTS = {
             .trim();
     },
 
+    // Kokoro 用：保留逗號/句號（它靠標點抓停頓），只收斂空白 —— 不要拿 cleanText（那會把逗號拔掉給 SoVITS 不喘用）
+    _cleanForKokoro(t) {
+        return String(t || '').replace(/\s+/g, ' ').trim();
+    },
+
     _cacheKey(modelId, text) { return `${modelId}\x00${text}`; },
 
 
@@ -422,7 +427,7 @@ const VN_TTS = {
         const base = String(kc.url || '').replace(/\/+$/, '');
         if (!base) return;
         const voice = kc.voice || 'zf_xiaoxiao';
-        const text = this.cleanText(rawText);
+        const text = this._cleanForKokoro(rawText);
         if (!text) return;
         const k = this._cacheKey('kokoro:' + voice, text);
         if (this._cache[k])       { this._playBlobUrl(this._cache[k]); return; }
