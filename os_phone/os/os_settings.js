@@ -1436,12 +1436,31 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             <span class="nai-mini-btn" onclick="window._naiPreset.save()">另存</span>
                                             <span class="nai-mini-btn is-danger" onclick="window._naiPreset.del()">刪除</span>
                                         </div>
+                                        <div class="row-inline nai-pack-open-row">
+                                            <span class="nai-pack-open-btn" onclick="window._naiPreset.open()">📦 拖圖生預設・看預覽圖</span>
+                                        </div>
                                         <div id="img-nai-preset-name-row" class="nai-preset-name-row">
                                             <div class="row-inline">
                                                 <input id="img-nai-preset-name-input" class="set-input" placeholder="輸入預設名稱（如：底板A - ge_tianzun）">
                                                 <span class="nai-mini-btn" onclick="window._naiPreset.confirmSave()">確認</span>
                                                 <span class="nai-mini-btn is-ghost" onclick="window._naiPreset.cancelSave()">取消</span>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 📦 NAI 拖圖預設包 modal：拖圖→解析內嵌配方→存預設(縮圖進 IndexedDB) -->
+                                    <div id="img-nai-pack-modal" class="nai-pack-modal">
+                                        <div class="nai-pack-box">
+                                            <div class="nai-pack-head">
+                                                <div class="nai-pack-title">📦 NAI 預設包（拖圖生成・含預覽）</div>
+                                                <button type="button" class="nai-pack-close" onclick="window._naiPreset.close()">✕</button>
+                                            </div>
+                                            <div id="img-nai-pack-drop" class="nai-pack-drop">
+                                                <input type="file" id="img-nai-pack-file" accept="image/png,image/webp,image/*" multiple class="nai-pack-file-hidden">
+                                                <div class="nai-pack-drop-hint">把下載的 <b>NAI 原圖</b>拖進來（可一次多張），或 <span class="nai-pack-pick" onclick="document.getElementById('img-nai-pack-file').click()">點此選圖</span><br>自動讀出底詞 / 負詞 / sampler / CFG / steps，存成預設，並用這張圖當預覽。<br><span class="nai-pack-warn">⚠️ 要原圖，截圖或被轉成 JPG 的讀不到。</span></div>
+                                            </div>
+                                            <div id="img-nai-pack-status" class="nai-pack-status"></div>
+                                            <div id="img-nai-pack-grid" class="nai-pack-grid"></div>
                                         </div>
                                     </div>
 
@@ -3284,6 +3303,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
 
         let naiPresets = [...(imgConfig.novelai.naiPresets || [])];
+        // 拖圖預設用穩定 id 對應 IndexedDB 縮圖；舊預設（沒 id）補一個
+        naiPresets.forEach(p => { if (p && !p.id) p.id = 'np_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); });
 
         function refreshNaiPresetDropdown() {
             const sel = container.querySelector('#img-nai-preset-sel');
@@ -3293,6 +3314,31 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 naiPresets.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
             if (cur !== '' && naiPresets[parseInt(cur)]) sel.value = cur;
         }
+
+        // ── NAI 拖圖預設包：helpers ──
+        const naiEscAttr = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        function naiSuggestName(r, f) {
+            const pp = (r && r.prompt) || '';
+            const m = pp.match(/::\s*([^:,\n]+?)\s*::/);
+            let base = m ? m[1] : ((pp.split(/[,\n]/).map(s => s.trim()).filter(Boolean)[0]) || '');
+            base = base.replace(/^\d+(\.\d+)?::/, '').replace(/[{}\[\]]/g, '').trim();
+            if (!base && f && f.name) base = f.name.replace(/\.[^.]+$/, '');
+            return (base || 'NAI 預設').slice(0, 24);
+        }
+        function naiFileToThumb(file) {
+            return new Promise(resolve => {
+                createImageBitmap(file).then(bmp => {
+                    const max = 256; let w = bmp.width, h = bmp.height;
+                    if (w >= h) { if (w > max) { h = Math.round(h * max / w); w = max; } }
+                    else { if (h > max) { w = Math.round(w * max / h); h = max; } }
+                    const c = document.createElement('canvas'); c.width = w; c.height = h;
+                    c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+                    if (bmp.close) bmp.close();
+                    resolve(c.toDataURL('image/jpeg', 0.72));
+                }).catch(() => resolve(null));
+            });
+        }
+        function naiNewId() { return 'np_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
 
         window._naiPreset = {
             apply() {
@@ -3323,6 +3369,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const getNum = (id, def) => parseFloat(container.querySelector(id)?.value ?? def);
                 const getInt = (id, def) => parseInt(container.querySelector(id)?.value ?? def);
                 naiPresets.push({
+                    id: naiNewId(),
                     name,
                     charBasePrompt: get('#img-nai-char-base'),
                     charNegPrompt:  get('#img-nai-char-neg'),
@@ -3352,8 +3399,141 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const idx = parseInt(sel.value);
                 const name = naiPresets[idx]?.name || '';
                 if (!confirm(`刪除預設「${name}」？`)) return;
+                const tid = naiPresets[idx]?.thumbId;
+                if (tid) { try { (window.parent || window).OS_DB?.deleteNaiThumb(tid); } catch (e) {} }
                 naiPresets.splice(idx, 1);
                 refreshNaiPresetDropdown();
+                this.renderGrid();
+            },
+
+            // ── 拖圖預設包（卡片牆 + 縮圖預覽）──
+            open() {
+                const m = container.querySelector('#img-nai-pack-modal');
+                if (m) m.classList.add('is-open');
+                this._bindDrop();
+                this.renderGrid();
+            },
+            close() {
+                const m = container.querySelector('#img-nai-pack-modal');
+                if (m) m.classList.remove('is-open');
+            },
+            _bindDrop() {
+                if (this._dropBound) return;
+                const drop = container.querySelector('#img-nai-pack-drop');
+                const file = container.querySelector('#img-nai-pack-file');
+                if (!drop) return;
+                const self = this;
+                drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-drag'); });
+                drop.addEventListener('dragleave', () => drop.classList.remove('is-drag'));
+                drop.addEventListener('drop', e => {
+                    e.preventDefault(); drop.classList.remove('is-drag');
+                    if (e.dataTransfer && e.dataTransfer.files) self.handleFiles(e.dataTransfer.files);
+                });
+                if (file) file.addEventListener('change', e => { self.handleFiles(e.target.files); e.target.value = ''; });
+                this._dropBound = true;
+            },
+            async handleFiles(fileList) {
+                const W = window.parent || window;
+                const RECIPE = W.NAI_RECIPE, OSDB = W.OS_DB;
+                const statusEl = container.querySelector('#img-nai-pack-status');
+                const files = Array.from(fileList || []).filter(f => /image\//.test(f.type) || /\.(png|webp)$/i.test(f.name || ''));
+                if (!files.length) return;
+                if (!RECIPE || !RECIPE.parseFile) { if (statusEl) statusEl.textContent = '解析模組未就緒'; return; }
+                let ok = 0, fail = 0;
+                for (let fi = 0; fi < files.length; fi++) {
+                    const f = files[fi];
+                    if (statusEl) statusEl.textContent = `⏳ 解析中 ${fi + 1}/${files.length}…`;
+                    let res = null;
+                    try { res = await RECIPE.parseFile(f); } catch (e) { res = null; }
+                    if (!res || !res.ok) { fail++; continue; }
+                    const r = res.recipe;
+                    const id = naiNewId();
+                    let thumbId = '';
+                    try {
+                        const thumb = await naiFileToThumb(f);
+                        if (thumb && OSDB && OSDB.saveNaiThumb) { await OSDB.saveNaiThumb(id, thumb); thumbId = id; }
+                    } catch (e) {}
+                    naiPresets.push({
+                        id, name: naiSuggestName(r, f),
+                        charBasePrompt: r.prompt || '',
+                        charNegPrompt:  r.neg || '',
+                        itemBasePrompt: '', itemNegPrompt: '',
+                        sampler: r.sampler || 'k_euler',
+                        scale: (r.scale != null ? r.scale : 5),
+                        steps: (r.steps != null ? r.steps : 28),
+                        ucPreset: 1,
+                        thumbId, fromImage: true, model: r.model || ''
+                    });
+                    ok++;
+                }
+                refreshNaiPresetDropdown();
+                this.renderGrid();
+                if (statusEl) statusEl.textContent = `✅ 成功加入 ${ok} 個${fail ? `（${fail} 張讀不到資訊：截圖 / JPG / 被平台洗過）` : ''} · 記得按底部 💾 保存`;
+            },
+            async renderGrid() {
+                const grid = container.querySelector('#img-nai-pack-grid');
+                if (!grid) return;
+                if (!naiPresets.length) {
+                    grid.innerHTML = '<div class="nai-pack-empty">還沒有預設。把下載的 NAI 圖拖進上面區塊，就會自動變成帶預覽圖的預設。</div>';
+                    return;
+                }
+                grid.innerHTML = naiPresets.map((p, i) => {
+                    const meta = [p.sampler, (p.scale != null ? ('CFG ' + p.scale) : ''), (p.steps != null ? (p.steps + ' steps') : '')].filter(Boolean).join(' · ');
+                    return `<div class="nai-pack-card">
+                        <div class="nai-pack-thumb">
+                            <img class="nai-pack-thumb-img" data-thumb="${naiEscAttr(p.thumbId || '')}" alt="">
+                            <span class="nai-pack-nothumb">${p.thumbId ? '讀取中…' : '無預覽'}</span>
+                        </div>
+                        <div class="nai-pack-name" title="${naiEscAttr(p.name)}">${naiEscAttr(p.name)}</div>
+                        <div class="nai-pack-meta">${naiEscAttr(meta)}</div>
+                        <div class="nai-pack-actions">
+                            <span class="nai-pack-act" onclick="window._naiPreset.applyIdx(${i})">套用</span>
+                            <span class="nai-pack-act" onclick="window._naiPreset.renameIdx(${i})" title="改名">✏️</span>
+                            <span class="nai-pack-act is-danger" onclick="window._naiPreset.delIdx(${i})" title="刪除">🗑️</span>
+                        </div>
+                    </div>`;
+                }).join('');
+                const OSDB = (window.parent || window).OS_DB;
+                grid.querySelectorAll('.nai-pack-thumb-img[data-thumb]').forEach(async img => {
+                    const tid = img.getAttribute('data-thumb');
+                    if (!tid || !OSDB || !OSDB.getNaiThumb) return;
+                    try {
+                        const b64 = await OSDB.getNaiThumb(tid);
+                        if (b64) { img.src = b64; img.classList.add('is-loaded'); const sib = img.nextElementSibling; if (sib) sib.remove(); }
+                        else { const sib = img.nextElementSibling; if (sib) sib.textContent = '無預覽'; }
+                    } catch (e) {}
+                });
+            },
+            applyIdx(i) {
+                const p = naiPresets[i]; if (!p) return;
+                const set = (id, v) => { const el = container.querySelector(id); if (el && v != null) el.value = v; };
+                set('#img-nai-char-base', p.charBasePrompt || '');
+                set('#img-nai-char-neg',  p.charNegPrompt  || '');
+                set('#img-nai-item-base', p.itemBasePrompt || '');
+                set('#img-nai-item-neg',  p.itemNegPrompt  || '');
+                if (p.sampler  != null) set('#img-nai-sampler', p.sampler);
+                if (p.scale    != null) set('#img-nai-scale',   p.scale);
+                if (p.steps    != null) set('#img-nai-steps',   p.steps);
+                if (p.ucPreset != null) set('#img-nai-uc-preset', p.ucPreset);
+                this.close();
+                const W = window.parent || window;
+                if (W.toastr) W.toastr.success(`已套用「${p.name || ''}」，記得按底部 💾 保存`);
+            },
+            renameIdx(i) {
+                const p = naiPresets[i]; if (!p) return;
+                const nn = prompt('改名：', p.name || '');
+                if (nn == null) return;
+                p.name = nn.trim() || p.name;
+                refreshNaiPresetDropdown();
+                this.renderGrid();
+            },
+            async delIdx(i) {
+                const p = naiPresets[i]; if (!p) return;
+                if (!confirm(`刪除預設「${p.name || ''}」？`)) return;
+                if (p.thumbId) { try { await (window.parent || window).OS_DB?.deleteNaiThumb(p.thumbId); } catch (e) {} }
+                naiPresets.splice(i, 1);
+                refreshNaiPresetDropdown();
+                this.renderGrid();
             }
         };
 
