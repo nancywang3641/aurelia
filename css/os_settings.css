@@ -130,6 +130,38 @@
         .nai-mini-btn.is-ghost { color: rgba(26,28,40,0.72); border-color: rgba(26,28,40,0.40); background: transparent; }
         .nai-item-stack { display: flex; flex-direction: column; gap: 15px; }
 
+        /* 📦 NAI 拖圖預設包 */
+        .nai-pack-open-row { margin-top: 8px; }
+        .nai-pack-open-btn { font-size: 12px; font-weight: 600; color: #1A1C28; cursor: pointer; padding: 7px 12px; border: 1px solid rgba(26,28,40,0.25); border-radius: 6px; background: rgba(26,28,40,0.05); width: 100%; text-align: center; }
+        .nai-pack-open-btn:hover { background: rgba(26,28,40,0.10); }
+        .nai-pack-modal { display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.55); align-items: center; justify-content: center; padding: 16px; }
+        .nai-pack-modal.is-open { display: flex; }
+        .nai-pack-box { background: #EEF0F6; border-radius: 12px; width: 100%; max-width: 560px; max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+        .nai-pack-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(26,28,40,0.12); }
+        .nai-pack-title { font-size: 15px; font-weight: 700; color: #1A1C28; }
+        .nai-pack-close { background: none; border: none; font-size: 18px; line-height: 1; color: rgba(26,28,40,0.55); cursor: pointer; padding: 4px 8px; }
+        .nai-pack-close:hover { color: #1A1C28; }
+        .nai-pack-drop { margin: 14px 16px 0; border: 2px dashed rgba(26,28,40,0.28); border-radius: 10px; padding: 22px 14px; text-align: center; cursor: pointer; background: rgba(228,232,245,0.55); transition: border-color .15s, background .15s; }
+        .nai-pack-drop.is-drag { border-color: #5b7cfa; background: rgba(91,124,250,0.10); }
+        .nai-pack-file-hidden { display: none; }
+        .nai-pack-drop-hint { font-size: 12px; color: rgba(26,28,40,0.72); line-height: 1.7; }
+        .nai-pack-pick { color: #2b6cb0; font-weight: 600; cursor: pointer; text-decoration: underline; }
+        .nai-pack-warn { color: rgba(217,83,79,0.95); font-size: 11px; }
+        .nai-pack-status { font-size: 12px; color: rgba(26,28,40,0.72); padding: 8px 16px 0; min-height: 14px; }
+        .nai-pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 12px 16px 16px; overflow-y: auto; }
+        .nai-pack-empty { grid-column: 1 / -1; text-align: center; font-size: 12px; color: rgba(26,28,40,0.5); padding: 28px 10px; line-height: 1.6; }
+        .nai-pack-card { border: 1px solid rgba(26,28,40,0.15); border-radius: 8px; padding: 7px; background: #fff; display: flex; flex-direction: column; gap: 5px; }
+        .nai-pack-thumb { position: relative; width: 100%; aspect-ratio: 3 / 4; border-radius: 6px; overflow: hidden; background: rgba(26,28,40,0.06); display: flex; align-items: center; justify-content: center; }
+        .nai-pack-thumb-img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .nai-pack-thumb-img.is-loaded { display: block; }
+        .nai-pack-nothumb { position: absolute; font-size: 11px; color: rgba(26,28,40,0.4); }
+        .nai-pack-name { font-size: 12px; font-weight: 600; color: #1A1C28; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nai-pack-meta { font-size: 10px; color: rgba(26,28,40,0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 12px; }
+        .nai-pack-actions { display: flex; gap: 3px; margin-top: 2px; }
+        .nai-pack-act { flex: 1; text-align: center; font-size: 11px; cursor: pointer; padding: 4px 0; border: 1px solid rgba(26,28,40,0.2); border-radius: 4px; background: rgba(26,28,40,0.05); color: #1A1C28; }
+        .nai-pack-act:hover { background: rgba(26,28,40,0.10); }
+        .nai-pack-act.is-danger { color: #fc8181; border-color: rgba(252,129,129,0.6); background: rgba(252,129,129,0.10); flex: 0 0 auto; padding: 4px 7px; }
+
         /* ComfyUI 場景插圖品質列 */
         .cfd-scene-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
         .cfd-scene-chk { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #1A1C28; cursor: pointer; }

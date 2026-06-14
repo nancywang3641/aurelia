@@ -252,6 +252,40 @@
                 } catch(e) { j(e); }
             });
         },
+        // NAI 預設包縮圖：拖圖生預設時把那張圖縮成 ~256px 存這（base64 字串），
+        // naiPresets 只存引用 id → 設定檔(localStorage)不被一堆縮圖撐爆。
+        saveNaiThumb: async function(id, base64) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).put({ id: 'nai_thumb_' + id, data: base64 });
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getNaiThumb: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).get('nai_thumb_' + id);
+                    req.onsuccess = () => r(req.result ? req.result.data : null);
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteNaiThumb: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).delete('nai_thumb_' + id);
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
         saveApiChat: async function(id, d) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
