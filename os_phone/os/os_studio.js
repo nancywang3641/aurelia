@@ -2839,20 +2839,26 @@ ${d.usageDesc || ''}
         wrapEl.style.overflow = 'hidden';
         wrapEl.style.minHeight = '0';
         boxEl.style.transformOrigin = 'top left';
-        const FRAMES = { phone: 390, center: 1000, full: (window.screen && screen.width) || 1920 };
-        let vp = 'phone', s = 1;
+        boxEl.style.overflow = 'hidden';
+        // 用「固定螢幕框比例」當外框（跟主題預覽一致），卡片放進框裡——不再讓框去貼合卡片高度(比例會怪)
+        const FRAMES = {
+            phone:  { w: 390,  h: 844 },
+            center: { w: 1000, h: 660 },
+            full:   { w: (window.screen && screen.width) || 1920, h: (window.screen && screen.height) || 1080 }
+        };
+        let vp = 'phone';
         const apply = () => {
-            const RW = FRAMES[vp] || 390;
-            s = Math.min((wrapEl.clientWidth || 320) / RW, 1);
-            boxEl.style.width = RW + 'px';
+            const f = FRAMES[vp] || FRAMES.phone;
+            const s = Math.min((wrapEl.clientWidth || 320) / f.w, 1);
+            boxEl.style.width = f.w + 'px';
+            boxEl.style.height = f.h + 'px';
             boxEl.style.transform = 'scale(' + s + ')';
-            wrapEl.style.height = Math.max(40, Math.round(boxEl.offsetHeight * s)) + 'px';
+            wrapEl.style.height = Math.round(f.h * s) + 'px';
             tabsEl.querySelectorAll('[data-pv]').forEach(b => b.classList.toggle('active', b.dataset.pv === vp));
         };
         tabsEl.querySelectorAll('[data-pv]').forEach(b => b.onclick = () => { vp = b.dataset.pv; apply(); });
-        try { new ResizeObserver(() => { wrapEl.style.height = Math.max(40, Math.round(boxEl.offsetHeight * s)) + 'px'; }).observe(boxEl); } catch (e) {}
         apply();
-        setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再校正高度
+        setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再套一次
     }
 
     function renderPreviewPanel() {
