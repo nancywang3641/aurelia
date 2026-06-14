@@ -1208,8 +1208,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #game-char, #game-char-2 { position: absolute; bottom: 0; height: 92%; max-width: 60%; object-fit: contain; transition: opacity 0.4s ease, filter 0.35s ease, left 0.32s ease, right 0.32s ease; display: none; filter: drop-shadow(0 0 20px rgba(0,0,0,0.8)); pointer-events: auto; cursor: pointer; }
         #game-char   { left: 0;  object-position: left bottom; }
         #game-char-2 { right: 0; object-position: right bottom; }
-        /* 右格真立繪水平翻轉：立繪統一面向右→右格鏡像成面向左→左右兩側都朝中央（頭像 vn-avatar 不翻） */
-        #game-char-2:not(.vn-avatar) { transform: scaleX(-1); }
         /* 只有一個角色在場 → 置中（回到原本單格觀感） */
         #game-char.vn-solo, #game-char-2.vn-solo { left: 0; right: 0; max-width: 100%; object-position: center bottom; }
         /* 非說話者 / 旁白 → 變暗；說話者 → 全亮 */
@@ -1323,12 +1321,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             to   { opacity: 1; transform: translateX(0); }
         }
         .sprite-slide-in-right { animation: anim-sprite-slide-in-right 0.45s cubic-bezier(.22,1,.36,1) both; }
-        /* 右格翻轉版滑入：維持 scaleX(-1) 同時從右滑入，入場不會在結束時突然翻一下 */
-        @keyframes anim-sprite-slide-in-right-flip {
-            from { opacity: 0; transform: scaleX(-1) translateX(-40px); }
-            to   { opacity: 1; transform: scaleX(-1) translateX(0); }
-        }
-        .sprite-slide-in-right-flip { animation: anim-sprite-slide-in-right-flip 0.45s cubic-bezier(.22,1,.36,1) both; }
 
         @keyframes anim-sprite-jumpscare {
             0%   { transform: scale(1) translateY(0); filter: brightness(1); }
