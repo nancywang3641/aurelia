@@ -517,18 +517,21 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
                     const _isComfy = !!(_imCfg && _imCfg.service === 'comfyui_direct');
-                    // 精緻度倍率＋高清修復都是 ComfyUI 直連專屬；非 ComfyUI 一律小圖 base 512×896、不套倍率（避免取消精緻化後又大又糊）
+                    // 立繪 base 比例（可調，「立繪比例」下拉，預設 512×896；鎧甲/壯角色選寬一點）
+                    let _bw = 512, _bh = 896;
+                    try { const _bp = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_bp[0] && _bp[1]) { _bw = _bp[0]; _bh = _bp[1]; } } catch(e) {}
+                    // 精緻度倍率＋高清修復都是 ComfyUI 直連專屬；非 ComfyUI 不套倍率（base 比例就是最終尺寸）
                     const _ratioEl = document.getElementById('sprite-upscale-ratio');
                     const _ratio = _isComfy ? (parseFloat((_ratioEl && _ratioEl.value) || localStorage.getItem(LS_RATIO) || '1.5') || 1.5) : 1;
                     const _hiresEl = document.getElementById('sprite-hires');
                     const _hiresOn = _isComfy && _hiresEl && _hiresEl.checked && _ratio > 1;
                     let _opts;
                     if (_hiresOn) {
-                        _opts = { force: true, width: 512, height: 896, raw: !_useNAI, comfyHires: { scale: _ratio, denoise: 0.45 } };
+                        _opts = { force: true, width: _bw, height: _bh, raw: !_useNAI, comfyHires: { scale: _ratio, denoise: 0.45 } };
                         setStatus('⏳ 為「' + name + '」生立繪中（高清修復，較久 15–60 秒）...');
                     } else {
-                        const _sw = Math.round(512 * _ratio / 8) * 8;
-                        const _sh = Math.round(896 * _ratio / 8) * 8;
+                        const _sw = Math.round(_bw * _ratio / 8) * 8;
+                        const _sh = Math.round(_bh * _ratio / 8) * 8;
                         _opts = { force: true, width: _sw, height: _sh, raw: !_useNAI };
                     }
                     const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', _opts);
@@ -771,6 +774,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 suffixEl.value = localStorage.getItem(LS_SFX) || DEF_SUFFIX;
                 prefixEl.onchange = () => localStorage.setItem(LS_PFX, prefixEl.value);
                 suffixEl.onchange = () => localStorage.setItem(LS_SFX, suffixEl.value);
+                const sizeEl = document.getElementById('sprite-base-size');
+                if (sizeEl) {
+                    sizeEl.value = localStorage.getItem('os_sprite_size') || '512x896';
+                    sizeEl.onchange = () => localStorage.setItem('os_sprite_size', sizeEl.value);
+                }
                 const ratioEl = document.getElementById('sprite-upscale-ratio');
                 if (ratioEl) {
                     ratioEl.value = localStorage.getItem(LS_RATIO) || '1.5';
@@ -1636,6 +1644,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div class="vng-studio-sel-name" id="sprite-selected-info">尚未選擇角色</div>
                                         <textarea id="sprite-sel-prompt" class="vng-studio-prompt" placeholder="立繪 prompt（已清洗，可微調）"></textarea>
                                         <div class="vng-studio-sel-row">
+                                            <select id="sprite-base-size" class="set-select" style="width:auto;flex:0 0 auto;min-width:0;" title="立繪比例：鎧甲/壯角色選寬一點、瘦角色窄的就夠；都在 NAI 免費尺寸內">
+                                                <option value="512x896">512×896（窄·瘦）</option>
+                                                <option value="640x896">640×896（標準）</option>
+                                                <option value="704x896">704×896（寬·鎧甲）</option>
+                                                <option value="768x896">768×896（超寬·厚甲）</option>
+                                            </select>
                                             <select id="sprite-upscale-ratio" class="set-select" style="width:auto;flex:0 0 auto;min-width:0;" title="立繪精緻度：直接用大解析度生，治小模型的糊。立繪一次性存檔，不怕慢。">
                                                 <option value="1">標準 1x（512×896）</option>
                                                 <option value="1.5" selected>精緻 1.5x（768×1344）</option>
