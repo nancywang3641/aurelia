@@ -38,6 +38,11 @@
         .studio-pending-img .pi-size { position: absolute; bottom: 2px; left: 2px; right: 2px; background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.85); font-size: 9px; text-align: center; border-radius: 3px; padding: 1px 2px; }
 
         .studio-input-area { padding: 5px 0 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; flex-shrink: 0; align-items: flex-end; }
+        /* 面板類型選擇器（純展示/純應用/共用）：開頭選好，AI 第一輪即懂 */
+        .studio-type-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .studio-type-label { font-size: 11px; color: rgba(26,28,40,0.55); margin-right: 2px; }
+        .studio-type { padding: 3px 12px; font-size: 11px; border-radius: 12px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; }
+        .studio-type.active { background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: 700; }
         .studio-attach-btn { background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 8px; padding: 0 12px; height: 50px; cursor: pointer; font-size: 18px; transition: 0.2s; flex-shrink: 0; }
         .studio-attach-btn:hover { background: rgba(26,28,40,0.08); }
         .studio-attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -148,8 +153,8 @@
         .sgc-format-text { font-family:monospace; font-size:12px; color:#3A3F5C; white-space:pre-wrap; word-break:break-all; }
         .sgc-format-input { display:none; width:100%; min-height:80px; background:rgba(228,232,245,0.8); color:#1A1C28; border:1px solid rgba(26,28,40,0.25); font-family:monospace; font-size:12px; padding:8px; border-radius:4px; box-sizing:border-box; resize:vertical; }
         .sgc-preview { padding:0; background:rgba(228,232,245,0.3); border-radius:6px; min-height:200px; max-height:700px; margin-bottom:10px; overflow-y:auto; position:relative; }
-        .sgc-btns { display:flex; gap:8px; }
-        .sgc-btn { flex:1; padding:8px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; text-align:center; border:1px solid; transition:0.2s; }
+        .sgc-btns { display:flex; gap:8px; flex-wrap:wrap; }
+        .sgc-btn { flex:1 1 auto; min-width:76px; padding:8px 10px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; text-align:center; border:1px solid; transition:0.2s; white-space:nowrap; }
         /* ── render 泡泡 ── */
         .studio-bubble.render-bubble { padding: 0; overflow: hidden; background: rgba(228,232,245,0.5); border-color: rgba(26,28,40,0.12); }
         .studio-render-wrap { padding: 12px; }
