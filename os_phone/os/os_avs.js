@@ -898,6 +898,15 @@ ${lines.join('\n')}
             if (v.type === 'object') return;
             out = out.split(`{{${v.name}}}`).join(f(v.defaultValue == null ? '0' : v.defaultValue));
         });
+        // 2.5 頂層巢狀佔位符 {{群組.欄位}}（單一群組物件用，如 {{系統進度.當前時間}}）：
+        //     {{#each}} 已在步驟1消化；這裡把剩下含「.」的點記法直接打到 state 上取值，找不到才留給步驟3 變 —
+        out = out.replace(/\{\{\s*([^#\/@{}][^{}]*?)\s*\}\}/g, (mm, expr) => {
+            const key = String(expr).trim();
+            if (key.indexOf('.') < 0) return mm;          // 扁平的（前面已處理／留給步驟3）
+            const val = _avsGetByPath(state, key);
+            if (val === undefined || val === null) return mm;
+            return (typeof val === 'object') ? JSON.stringify(val) : f(val);
+        });
         // 3. 殘留佔位符 → —
         out = out.replace(/\{\{[^{}]+\}\}/g, '—');
         return out;
@@ -1220,14 +1229,29 @@ ${lines.join('\n')}
             try {
                 const flatVars = pack.variables.filter(v => v.type !== 'object');
                 const objVars  = pack.variables.filter(v => v.type === 'object');
-                // 解析 object 型變數的結構，列出實體屬性給 AI 看
-                const objVarDesc = objVars.map(v => {
-                    let struct = {};
-                    try { struct = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch(e) {}
-                    const firstEntity = Object.values(struct)[0];
-                    const attrs = (firstEntity && typeof firstEntity === 'object') ? Object.keys(firstEntity) : [];
-                    return `  - 「${v.name}」內含多個實體，每個實體屬性：${attrs.join('、') || '（動態）'}`;
-                }).join('\n');
+                // 分類 object 型變數（看「實際資料形狀」）：
+                //   值是物件 → 多實體（角色/NPC，用 {{#each}} 迴圈）
+                //   值是純量 → 單一群組（一組固定欄位，用 {{群組.欄位}} 點記法；用迴圈會整段空白）
+                let _curState = {};
+                try { _curState = win._AVS_ENGINE?.read?.() || {}; } catch(e) {}
+                const _classifyObj = (v) => {
+                    const cur = _curState[v.name];
+                    if (cur && typeof cur === 'object') {
+                        const firstObj = Object.values(cur).find(x => x && typeof x === 'object');
+                        if (firstObj) return { kind: 'multi',  fields: Object.keys(firstObj) };
+                        return { kind: 'single', fields: Object.keys(cur) };
+                    }
+                    // 沒 runtime 資料 → 看範本結構 + 名字傾向
+                    let tree = {};
+                    try { tree = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch(e) {}
+                    const inner = (Object.keys(tree).length === 1 && tree[v.name]) ? tree[v.name] : (Object.values(tree)[0] || tree);
+                    const fields = (inner && typeof inner === 'object') ? Object.keys(inner) : [];
+                    const kind = /狀態|角色|npc|成員|隊友|敵人|怪|實體/i.test(v.name) ? 'multi' : 'single';
+                    return { kind, fields };
+                };
+                const objInfo   = objVars.map(v => ({ v, ..._classifyObj(v) }));
+                const multiObj  = objInfo.filter(o => o.kind === 'multi');
+                const singleObj = objInfo.filter(o => o.kind === 'single');
 
                 let fullPrompt =
                     `你是一個頂級 UI 設計師。嚴格遵守以下規則，不得輸出任何解釋或說明文字，只輸出指定格式。\n\n` +
@@ -1245,18 +1269,19 @@ ${lines.join('\n')}
                     `- 必須在 320 / 390 / 1000 三種寬度下都排版正常、不溢出、不擠壞。\n\n` +
                     `【一般變數】用 {{變數名}} 當佔位符：\n` +
                     (flatVars.map(v => `  - {{${v.name}}}`).join('\n') || '  （無）');
-                if (objVars.length) {
+                if (multiObj.length) {
                     fullPrompt +=
-                        `\n\n【物件型變數】內含多個實體（如多個角色），**必須用迴圈渲染，禁止直接寫 {{變數名}}**：\n` +
-                        objVarDesc + `\n` +
+                        `\n\n【多實體變數】內含多個實體（如多個角色/NPC），**必須用迴圈渲染，禁止直接寫 {{變數名}}**：\n` +
+                        multiObj.map(o => `  - 「${o.v.name}」每個實體屬性：${o.fields.join('、') || '（動態）'}`).join('\n') + `\n` +
                         `迴圈語法：{{#each 變數名}} ...單一實體的卡片HTML... {{/each}}\n` +
-                        `迴圈內可用：{{@key}} = 實體名（如角色名）；{{@avatar}} = 該角色頭像圖URL（放進 <img src="{{@avatar}}">，沒頭像時會自動帶透明圖、不破版）；{{屬性名}} = 該實體的屬性值\n` +
-                        `範例（含頭像）：\n` +
-                        `{{#each ${objVars[0].name}}}\n` +
-                        `  <div class="char-card"><img class="ava" src="{{@avatar}}"><h4>{{@key}}</h4><span>HP：{{HP}}</span></div>\n` +
-                        `{{/each}}\n` +
-                        `（建議放一張圓形小頭像，CSS 自行設計；沒頭像的角色不會破版）\n` +
-                        `★ 迴圈會對每個實體自動重複，跑團新增的角色也會自動出現，**絕對不要寫死角色名**`;
+                        `迴圈內可用：{{@key}} = 實體名；{{@avatar}} = 該實體頭像URL（放進 <img src="{{@avatar}}">，無頭像自動帶透明圖、不破版）；{{屬性名}} = 該實體的屬性值\n` +
+                        `★ 迴圈會對每個實體自動重複，跑團新增的也會自動出現，**絕對不要寫死實體名**`;
+                }
+                if (singleObj.length) {
+                    fullPrompt +=
+                        `\n\n【單一群組變數】是「一組固定欄位」、不是多個實體 → **一律用點記法 {{群組名.欄位名}} 直接取值，禁止用迴圈**（用迴圈整段會空白）：\n` +
+                        singleObj.map(o => `  - 「${o.v.name}」欄位：${o.fields.join('、') || '（動態）'}　→ 寫成 {{${o.v.name}.欄位名}}`).join('\n') + `\n` +
+                        `把每個欄位逐一放進版面（一個欄位一個 {{${singleObj[0].v.name}.欄位名}} 佔位符），不要包迴圈、不要寫死數值。`;
                 }
 
                 // 使用與其他模組一致的 generateText 介面
