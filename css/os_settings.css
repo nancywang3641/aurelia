@@ -35,11 +35,13 @@
         .api-subtab.active { color: #1A1C28; border-bottom-color: rgba(26,28,40,0.45); font-weight: 800; }
 
         /* 畫廊（相簿）主分頁列：跟系統設置主 tab(.set-tab) 同款；黏在內容頂部、負邊距吃掉 .set-content padding 滿版、不透明底蓋住捲動縫隙 */
-        .gal-subtab-row { display: flex; position: sticky; top: 0; z-index: 5; margin: -20px -20px 16px; padding: 0 10px; background: #E4E8F5; border-bottom: 1px solid rgba(26,28,40,0.15); }
+        .gal-subtab-row { display: flex; position: sticky; top: 0; z-index: 5; margin: 0 -20px 16px; padding: 0 10px; background: #E4E8F5; border-bottom: 1px solid rgba(26,28,40,0.15); }
         .gal-subtab { flex: 1; min-width: 70px; text-align: center; padding: 12px 0; font-size: 13px; cursor: pointer; color: rgba(26,28,40,0.72); font-weight: 600; position: relative; transition: 0.3s; user-select: none; }
         .gal-subtab:hover { color: #1A1C28; }
         .gal-subtab.active { color: #1A1C28; font-weight: 800; }
         .gal-subtab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; border-radius: 3px 3px 0 0; box-shadow: 0 -2px 8px rgba(26,28,40,0.30); }
+        /* 相簿模式：內容區零上 padding，讓黏頂的畫廊主 tab 直接貼在 header 下、捲動時不露縫 */
+        .set-content.is-album { padding-top: 0; }
 
         /* 圖片設置：背景／角色 子分頁鈕 */
         .img-srctab-row { display: flex; gap: 8px; padding: 0 0 12px; border-bottom: 1px solid rgba(26,28,40,0.08); margin-bottom: 16px; flex-wrap: wrap; }
