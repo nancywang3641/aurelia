@@ -37,6 +37,9 @@ const VN_TTS = {
         // 旁白用 Kokoro 引擎（獨立小服務、OpenAI 相容；不碰 SoVITS GPU 佇列；enabled 時優先於 narratorModel）
         narratorKokoro: { enabled: false, url: 'http://127.0.0.1:8880', voice: 'zf_xiaoxiao' },
 
+        // 旁白用 MiniMax（雲端，只要 API key、免本地；給不會弄電腦的朋友。enabled 時優先於 SoVITS narratorModel）
+        narratorMinimax: { enabled: false, voice: 'audiobook_female_1' },
+
         // 角色別名: 主名 → [別名1, 別名2, ...]（不分大小寫匹配，AI 用全名/小名都能對到同一個模型）
         charAliases: {},
 
@@ -67,6 +70,7 @@ const VN_TTS = {
                 if (!this.config.charMappings)   this.config.charMappings = {};
                 if (!this.config.systemMappings) this.config.systemMappings = {};
                 if (!this.config.narratorKokoro) this.config.narratorKokoro = { enabled:false, url:'http://127.0.0.1:8880', voice:'zf_xiaoxiao' };
+                if (!this.config.narratorMinimax) this.config.narratorMinimax = { enabled:false, voice:'audiobook_female_1' };
                 if (!this.config.npcCategories)  this.config.npcCategories = [];
             }
         } catch (e) {}
@@ -413,6 +417,8 @@ const VN_TTS = {
     async playNarration(rawText, emotion) {
         const kc = this.config.narratorKokoro || {};
         if (kc.enabled && kc.url) return this._speakKokoro(rawText);
+        const nm = this.config.narratorMinimax || {};
+        if (nm.enabled) return this._speakMinimax(rawText);
         if (!this.config.enabled) return;
         const mid = this.config.narratorModel;
         if (!mid || !this.config.models[mid]) return;   // 沒指派旁白音色 → 靜默（不像系統音退預設）
@@ -449,6 +455,17 @@ const VN_TTS = {
         } finally {
             this._pending.delete(k);
         }
+    },
+
+    // ── MiniMax 旁白合成（雲端，走 OS_MINIMAX；不碰本機 GPU）─────────────
+    async _speakMinimax(rawText) {
+        const nm = this.config.narratorMinimax || {};
+        const voice = nm.voice || 'audiobook_female_1';
+        const text = this._cleanForKokoro(rawText);   // 保留標點（MiniMax 也靠標點抓語氣）
+        if (!text) return;
+        const W = (window.parent || window);
+        if (!W.OS_MINIMAX?.play) return;
+        try { await W.OS_MINIMAX.play(text, voice); } catch (e) { console.warn('[VN_TTS] MiniMax 旁白失敗（沒設 API key？）', e); }
     },
 
     // ── 共用：拿到模型後的快取/切換/播放流程 ─────────────────────────────
