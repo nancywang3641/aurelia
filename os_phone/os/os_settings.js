@@ -158,7 +158,7 @@ EXAMPLE "prompt" value:
 鏡頭模式：平靜/SFW → standing/sitting, left_side/right_side, from_side, medium_shot/bust_shot；動作 → dynamic_pose, dynamic_angle, motion_blur；NSFW → nsfw 當第一個 tag，明確體位直接畫(missionary, mating_press, penetration…)，貼身零距離不放位置 tag。
 🚫 表達「不接觸／有距離」鐵則（最常出包！）：畫圖 AI 看不懂否定句——寫 they do not touch / no contact 反而會讓它看到 touch 就把兩人畫在一起(黏一起、躺懷裡)。所以：①絕不用 do not touch / not touching / no contact 這類否定句。②要有距離就用肯定詞：standing apart, space between them, an arm's length apart, facing each other across a gap, at a distance, keeping distance。③遠距離互動(施法/遞物/指引)動詞用 pointing/channeling/directing/aiming … toward，禁用 envelops/touches/rests on/cups/cradles/leaning into 這種貼身詞(會被讀成親密)。④只有真的要親密/NSFW 才寫接觸詞(hug/embrace/in arms…)。
 
-其它：純男場景(無女角)加 male focus, masculine；多人時每角色標籤分開寫、A 的衣服別長到 B 身上；角色長相用你已知的角色設定(髮色/衣著)，正文沒寫的沿用設定、不要亂編；找不到適合入畫的畫面就回空、不硬湊。
+其它：純男場景(無女角)加 male focus, masculine；多人時每角色標籤分開寫、A 的衣服別長到 B 身上；★角色長相(髮色/瞳色/體型)一律以下方【角色外觀錨點】為權威，照填、不要漏、不要亂編，錨點沒列到的才沿用已知設定；找不到適合入畫的畫面就回空、不硬湊。
 
 格式範例（[方括號]是佔位，照正文實際內容填，不要照抄方括號裡的字）：
 SFW 2 人對話：2boys, a [膚色] adult on the left talks to a [膚色] adult on the right, [young_adult, left_side, [膚色], [氣質], [臉型], [體型], [眼型], [髮型], [瀏海], [服裝], standing, talking, looking_at_another] AND [adult_male, right_side, [膚色], [氣質], [臉型], [體型], [眼型], [髮型], [瀏海], [服裝], leaning_against_wall, listening], casual_conversation, eye_contact, [場景], [時間], from_side, bust_shot
@@ -166,8 +166,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 // 💬 自然語言版（Pollinations / ComfyUI Anima：自然語言比標籤更好）
                 extractPromptNatural: `每張插圖的 "prompt" 用「自然語言英文句子」描述畫面（給 Pollinations / ComfyUI，自然語言比標籤更好）。
 - 只照「最新這段正文」真的發生、畫得出來的畫面，不要推理後續劇情、不腦補角色心理或感情。
-- 一句話交代：誰(用你已知的角色設定外觀：髮色、衣著等)、在做什麼、在哪裡、光線氣氛、鏡頭遠近。
-- 多人場景：清楚描述每個人各自的外觀，別讓 A 的特徵混到 B 身上。
+- 一句話交代：誰、在做什麼、在哪裡、光線氣氛、鏡頭遠近。
+- ★角色外觀(髮色/眼色/體型/服裝)一律以下方【角色外觀錨點】為權威，照它寫、不要漏、不要自己編；錨點沒列到的角色才依劇情與已知設定。
+- 多人場景：每個人各自的外觀(尤其髮色/眼色)都要寫清楚，別讓 A 的特徵混到 B 身上。
 - 純男場景(完全沒有女角)寫明 male focus。
 - 找不到適合入畫的畫面就回空、不硬湊。`
             },
