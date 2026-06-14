@@ -76,8 +76,8 @@
         .avs-st-adv { display: none; flex-direction: column; gap: 14px; padding: 4px 2px 2px; }
         .avs-st-adv.open { display: flex; }
         .avs-st-adv-sec { display: flex; flex-direction: column; gap: 8px; }
-        .avs-st-adv-hd { font-size: 12px; font-weight: 700; color: rgba(26,28,40,0.5); }
-        .avs-st-adv-hint { font-weight: 400; color: rgba(26,28,40,0.3); margin-left: 6px; }
+        .avs-st-adv-hd { font-size: 12px; font-weight: 700; color: rgba(26,28,40,0.78); }
+        .avs-st-adv-hint { font-weight: 400; color: rgba(26,28,40,0.55); margin-left: 6px; }
         .avs-st-btn-grid { display: flex; gap: 8px; flex-wrap: wrap; }
         .avs-st-btn-grid .avs-btn { flex: 1; min-width: 110px; padding: 9px; font-size: 12px; }
         .avs-st-initpack { display: flex; gap: 8px; align-items: center; }
@@ -92,12 +92,12 @@
         .avs-st-field-row { display: flex; align-items: center; gap: 8px; }
         .avs-st-field-name { font-size: 13px; font-weight: 700; color: #1A1C28; }
         .avs-st-field-type { font-size: 10px; color: #7a5e10; background: rgba(200,160,48,0.14); border: 1px solid rgba(200,160,48,0.3); border-radius: 4px; padding: 1px 6px; }
-        .avs-st-field-desc { font-size: 11.5px; color: rgba(26,28,40,0.45); margin-top: 3px; line-height: 1.5; }
+        .avs-st-field-desc { font-size: 11.5px; color: rgba(26,28,40,0.7); margin-top: 3px; line-height: 1.5; }
         .avs-st-field-acts { display: flex; gap: 4px; flex-shrink: 0; }
         .avs-st-field-act { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(26,28,40,0.15); background: transparent; color: rgba(26,28,40,0.5); cursor: pointer; font-size: 13px; }
         .avs-st-field-act:hover { background: rgba(26,28,40,0.06); }
         .avs-st-field-act.danger { color: #e74c3c; border-color: rgba(231,76,60,0.3); }
-        .avs-st-field-add { text-align: center; padding: 9px; font-size: 12.5px; color: rgba(26,28,40,0.45); border: 1px dashed rgba(26,28,40,0.2); border-radius: 8px; cursor: pointer; }
+        .avs-st-field-add { text-align: center; padding: 9px; font-size: 12.5px; color: rgba(26,28,40,0.62); border: 1px dashed rgba(26,28,40,0.2); border-radius: 8px; cursor: pointer; }
         .avs-st-field-add:hover { color: #1A1C28; background: rgba(228,232,245,0.7); }
 
         .avs-st-field-edit { background: rgba(228,232,245,0.95); border: 1px solid rgba(200,160,48,0.4); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
