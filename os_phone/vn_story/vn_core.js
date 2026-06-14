@@ -1726,10 +1726,10 @@
             VN_TTS.playSystem(sysName || '', text);
         },
 
-        // 旁白語音播放 — 透過 VN_TTS 旁白音（指派了旁白音色才念；走 NAI 生圖時本機 GPU 空，不搶資源）
+        // 旁白語音播放 — Kokoro 開了走 Kokoro、否則 SoVITS 旁白音色；playNarration 自己把關，故不綁 SoVITS 開關
         _vnNarrVoicePlay: function(rawText) {
             const VN_TTS = (window.parent || window).VN_TTS;
-            if (!VN_TTS?.config?.enabled || typeof VN_TTS.playNarration !== 'function') return;
+            if (typeof VN_TTS?.playNarration !== 'function') return;
             const text = this._cleanTextForSoVITS(rawText);
             if (!text) return;
             VN_TTS.playNarration(text);
