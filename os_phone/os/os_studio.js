@@ -2989,5 +2989,5 @@ ${d.usageDesc || ''}
     }
 
     // ===== 預設模板安裝器 =====
-    win.OS_STUDIO = { launch };
+    win.OS_STUDIO = { launch, attachVpScaler: _attachVpScaler };
 })();
