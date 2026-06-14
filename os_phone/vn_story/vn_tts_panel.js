@@ -258,18 +258,28 @@ function renderVoice(cfg) {
     }).join('');
 
     const kcfg = cfg.narratorKokoro || {};
-    const narrVal = kcfg.enabled ? '__kokoro__' : (cfg.narratorModel || '');
+    const mcfg = cfg.narratorMinimax || {};
+    const narrVal = kcfg.enabled ? '__kokoro__' : (mcfg.enabled ? '__minimax__' : (cfg.narratorModel || ''));
+    const mmVoices = [['audiobook_female_1','旁白女'],['audiobook_male_1','旁白男'],['female-tianmei','甜美女'],['female-yujie','御姐女'],['female-shaonv','少女'],['male-qn-qingse','青年男'],['presenter_female','主持女']];
 
     return `
 <div class="vtts-card">
   <div class="vtts-card-title">📜 旁白音色</div>
   <select class="vtts-input" onchange="VN_TTS_Panel.updateNarratorSource(this.value)">
     <option value="" ${narrVal===''?'selected':''}>不念旁白</option>
+    <option value="__minimax__" ${narrVal==='__minimax__'?'selected':''}>🔊 MiniMax</option>
     <option value="__kokoro__" ${narrVal==='__kokoro__'?'selected':''}>🐦 Kokoro</option>
     ${Object.entries(cfg.models).map(([id,m]) =>
         `<option value="${esc(id)}" ${narrVal===id?'selected':''}>SoVITS：${esc(m.name||id)}</option>`
     ).join('')}
   </select>
+  ${narrVal==='__minimax__' ? `
+  <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+    <select class="vtts-input" onchange="VN_TTS_Panel.updateMinimaxNarrVoice(this.value)">
+      ${mmVoices.map(([v,label]) => `<option value="${v}" ${(mcfg.voice||'audiobook_female_1')===v?'selected':''}>${v}（${label}）</option>`).join('')}
+    </select>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testMinimax()" style="align-self:flex-start;">🔊 試聽</button>
+  </div>` : ''}
   ${narrVal==='__kokoro__' ? `
   <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
     <input class="vtts-input" type="text" placeholder="http://127.0.0.1:8880" value="${esc(kcfg.url||'')}" onchange="VN_TTS_Panel.updateKokoroUrl(this.value)">
@@ -959,10 +969,24 @@ const VN_TTS_Panel = {
     updateNarratorSource(val) {
         const tts = this._kok();
         if (!tts) return;
-        if (val === '__kokoro__') { tts.config.narratorKokoro.enabled = true; }
-        else { tts.config.narratorKokoro.enabled = false; tts.config.narratorModel = val || ''; }
+        if (!tts.config.narratorMinimax) tts.config.narratorMinimax = { enabled:false, voice:'audiobook_female_1' };
+        tts.config.narratorKokoro.enabled  = (val === '__kokoro__');
+        tts.config.narratorMinimax.enabled = (val === '__minimax__');
+        if (val !== '__kokoro__' && val !== '__minimax__') tts.config.narratorModel = val || '';
         tts.save();
         this._renderBody('voice');
+    },
+    updateMinimaxNarrVoice(voice) {
+        const tts = this._tts(); if (!tts) return;
+        if (!tts.config.narratorMinimax) tts.config.narratorMinimax = { enabled:false, voice:'audiobook_female_1' };
+        tts.config.narratorMinimax.voice = voice || 'audiobook_female_1';
+        tts.save();
+    },
+    testMinimax() {
+        const W = (window.parent || window);
+        const voice = (this._cfg().narratorMinimax || {}).voice || 'audiobook_female_1';
+        if (W.OS_MINIMAX && W.OS_MINIMAX.play) { W.OS_MINIMAX.play('這是旁白語音的試聽，聽聽聲音和速度。', voice); this._toast('🔊 試聽中…（需先設定 MiniMax API key）'); }
+        else this._toast('✗ MiniMax 未載入');
     },
 
     _kok() { const tts = this._tts(); if (!tts) return null; if (!tts.config.narratorKokoro) tts.config.narratorKokoro = { enabled:false, url:'http://127.0.0.1:8880', voice:'zf_xiaoxiao' }; return tts; },
