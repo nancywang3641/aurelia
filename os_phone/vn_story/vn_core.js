@@ -2674,8 +2674,8 @@
             // 換角色：先清掉舊角色的版型 class(浮起金框/置中/明暗) 並隱藏，避免「舊圖用舊版型閃一下」才換新圖
             if (el && isNew) { el.classList.remove('vn-avatar', 'vn-solo', 'vn-dim', 'vn-active'); this._hideEl(el); el.dataset.slideIn = '1'; }
             this._renderSlot(idx, name, exp);
-            this._applyStageLighting(idx);     // 說話者亮、另一格（若在場）變暗
-            this._staleSweep();
+            this._staleSweep();                // 先清過期(防殘留) → 若只剩說話者，下一步打燈即時把它置中(vn-solo)，不再慢半拍
+            this._applyStageLighting(idx);     // 說話者亮、另一格（若在場）變暗、獨角即時置中
         },
 
         // 單格圖片解析鏈（sprite_cache → spriteBase → fallbackToAI），守衛改用「這格還是不是同角色」
@@ -2686,9 +2686,9 @@
             const triggerAnim = (target) => {
                 if (_stale()) return;
                 target.classList.remove('vn-avatar');   // 真立繪 → 貼地（移除頭像浮起樣式）
-                target.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right', 'sprite-slide-in-right-flip');
+                target.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right');
                 void target.offsetWidth;
-                if (target.dataset.slideIn === '1') { target.classList.add(target.id === 'game-char-2' ? 'sprite-slide-in-right-flip' : 'sprite-slide-in-right'); delete target.dataset.slideIn; }
+                if (target.dataset.slideIn === '1') { target.classList.add('sprite-slide-in-right'); delete target.dataset.slideIn; }
                 else { if (exp === 'Surprised') target.classList.add('sprite-shake'); if (exp === 'JumpScare') target.classList.add('sprite-jumpscare'); }
             };
             // 最優先：sprite_cache（透明真立繪）
@@ -2726,9 +2726,9 @@
             const triggerAnim = (t) => {
                 if (_stale()) return;
                 t.classList.remove('vn-avatar');   // 預設立繪(presets) → 貼地
-                t.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right', 'sprite-slide-in-right-flip');
+                t.classList.remove('sprite-shake', 'sprite-jumpscare', 'sprite-slide-in-right');
                 void t.offsetWidth;
-                if (t.dataset.slideIn === '1') { t.classList.add(t.id === 'game-char-2' ? 'sprite-slide-in-right-flip' : 'sprite-slide-in-right'); delete t.dataset.slideIn; }
+                if (t.dataset.slideIn === '1') { t.classList.add('sprite-slide-in-right'); delete t.dataset.slideIn; }
                 else { if (lockedExp === 'Surprised') t.classList.add('sprite-shake'); if (lockedExp === 'JumpScare') t.classList.add('sprite-jumpscare'); }
             };
 
