@@ -25,52 +25,52 @@
                     <div class="avs-back-btn" id="avs-btn-help" style="font-size:16px;font-weight:bold;">?</div>
                 </div>
                 <!-- 使用說明遮罩 -->
-                <div id="avs-help-overlay" style="display:none;position:absolute;inset:0;background:rgba(26,13,10,0.97);z-index:200;overflow-y:auto;padding:20px 18px 80px;box-sizing:border-box;">
+                <div id="avs-help-overlay" style="display:none;position:absolute;inset:0;background:rgba(238,240,246,0.98);z-index:200;overflow-y:auto;padding:20px 18px 80px;box-sizing:border-box;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
                         <div style="font-size:16px;font-weight:bold;color:#1A1C28;">📖 使用說明</div>
                         <div id="avs-help-close" style="font-size:22px;color:rgba(26,28,40,0.25);cursor:pointer;padding:4px 8px;">✕</div>
                     </div>
-                    <div style="font-size:13px;color:#ccc;line-height:1.9;">
+                    <div style="font-size:13px;color:#3A3F5C;line-height:1.9;">
 
                         <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">狀態檔案是什麼？</div>
-                        <p style="color:#aaa;margin:0 0 16px;">
+                        <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;">
                             狀態檔案讓你在跑團時，自動幫你記錄角色的各種數值，像是血量、金幣、好感度等等。<br>
                             AI 每次回覆時，會一起更新這些數字，你不用自己手動記。
                         </p>
 
                         <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">📦 第一步：建立「檔案」</div>
-                        <p style="color:#aaa;margin:0 0 6px;">先決定你的故事要追蹤哪些東西，給它們取個名字和初始值。</p>
-                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;margin-bottom:16px;font-family:monospace;font-size:12px;color:#d4af37;">
+                        <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">先決定你的故事要追蹤哪些東西，給它們取個名字和初始值。</p>
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;margin-bottom:16px;font-family:monospace;font-size:12px;color:#1A1C28;">
                             hp = 100　　← 血量，從100開始<br>
                             gold = 0　　← 金幣，從0開始<br>
                             好感度 = 0　← 名字可以用中文
                         </div>
 
                         <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">🔥 第二步：用「煉丹爐」做美化面板（可選）</div>
-                        <p style="color:#aaa;margin:0 0 16px;">
+                        <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;">
                             選好檔案後，描述你想要的風格（例如「暗黑奇幻、血紅色」），讓 AI 自動幫你做一個好看的狀態面板。做好後到「展廳」開啟它，跑團時就會顯示漂亮的面板而不是純數字。
                         </p>
 
                         <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">⚡ 第三步：設定「條件規則」（可選）</div>
-                        <p style="color:#aaa;margin:0 0 6px;">
+                        <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">
                             你可以設定「當某個數值達到某個條件時，自動告訴 AI 要怎麼做」。
                         </p>
-                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;margin-bottom:6px;font-size:12px;color:#d4af37;">
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;margin-bottom:6px;font-size:12px;color:#1A1C28;">
                             好感度 ≥ 80 → 告訴 AI：「這個角色現在對你非常親密，說話語氣要溫柔」
                         </div>
-                        <p style="color:#aaa;margin:0 0 16px;font-size:12px;">
+                        <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;font-size:12px;">
                             這樣你就不用在每次對話裡重複解釋角色行為，系統會自動根據數值切換說明，省下很多字數。
                         </p>
 
                         <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">📊 跑團中：看目前狀態</div>
-                        <p style="color:#aaa;margin:0 0 16px;">
+                        <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;">
                             跑團時打開右側「資料中心」→「📊 狀態」，就可以看到目前所有數值，以及每一章改了什麼。<br>
                             如果 AI 這章亂改了數值，也可以點「↩ 回朔上一章節」撤銷。
                         </p>
 
                         <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">💡 提示：告訴 AI 怎麼更新數值</div>
-                        <p style="color:#aaa;margin:0 0 6px;">在你的 Prompt 裡加上這段說明，AI 就知道要輸出數值變化了：</p>
-                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;font-family:monospace;font-size:12px;color:#d4af37;">
+                        <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">在你的 Prompt 裡加上這段說明，AI 就知道要輸出數值變化了：</p>
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;font-family:monospace;font-size:12px;color:#1A1C28;">
                             每次回覆結束後，如果有數值改變，請在最後加上：<br>
                             &lt;vars&gt;<br>
                             hp -= 20<br>
@@ -123,7 +123,7 @@
                         <div class="avs-card" id="furnace-card" style="background:transparent; border:none; padding:0;">
                             <!-- 預選 pack 顯示（煉丹爐永遠從變數包卡片進入，所以一定知道是哪個 pack）-->
                             <div id="furnace-pack-display" style="margin-bottom:15px; padding:10px 12px; background:rgba(26,28,40,0.08); border:1px solid rgba(26,28,40,0.15); border-radius:6px; font-size:13px; color:#1A1C28;">
-                                正在為 <strong id="furnace-pack-display-name" style="color:#d4af37;">?</strong> 煉丹
+                                正在為 <strong id="furnace-pack-display-name" style="color:#1A1C28;">?</strong> 煉丹
                             </div>
                             <!-- 內部用的 hidden select，存當前 packId 供煉丹流程讀取 -->
                             <select id="furnace-pack-select" style="display:none;"></select>
@@ -476,7 +476,7 @@ ${lines.join('\n')}
 
                 uiArea.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <span style="font-size:12px; color:rgba(26,28,40,0.68);">🖼️ UI 面板：<span style="color:#d4af37;">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
+                        <span style="font-size:12px; color:rgba(26,28,40,0.68);">🖼️ UI 面板：<span style="color:#1A1C28;">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
                     </div>
                     ${scopedCssText ? `<style>${scopedCssText}</style>` : ''}
                     <div id="${scopeId}" style="margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; min-height:60px; overflow:hidden;">
@@ -648,7 +648,7 @@ ${lines.join('\n')}
                 <div style="font-size:12px; margin-top:6px; color:rgba(26,28,40,0.68); font-family:monospace;">
                     ${escapeHtml(r.path || '?')} <span style="color:#1A1C28; margin:0 4px;">${r.op}</span> <span style="color:#1A1C28;">${escapeHtml(String(r.value ?? ''))}</span>
                 </div>
-                <div style="font-size:12px; margin-top:6px; color:rgba(255,248,231,0.85); line-height:1.6;">${escapeHtml(r.content || '（無注入內容）')}</div>
+                <div style="font-size:12px; margin-top:6px; color:rgba(26,28,40,0.78); line-height:1.6;">${escapeHtml(r.content || '（無注入內容）')}</div>
             </div>`;
         }
         if (_editingRuleIdInModal === '__new__') {
@@ -1145,7 +1145,7 @@ ${lines.join('\n')}
                 background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.18);
                 border-radius:6px;padding:9px 10px;cursor:pointer;
                 transition:background 0.15s;" class="furnace-preset-card">
-                <div style="flex:1;font-size:12px;color:rgba(255,248,231,0.8);line-height:1.5;">
+                <div style="flex:1;font-size:12px;color:rgba(26,28,40,0.78);line-height:1.5;">
                     ${p.suggestion}
                 </div>
                 <button data-del-preset="${p.id}" style="
@@ -1338,7 +1338,7 @@ ${lines.join('\n')}
             card.innerHTML = `
                 ${scopedCss}
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <strong style="font-size:13px;color:#d4af37;">${pack ? pack.name : (tpl.packName || '已刪除的檔案')} - 面板</strong>
+                    <strong style="font-size:13px;color:#1A1C28;">${pack ? pack.name : (tpl.packName || '已刪除的檔案')} - 面板</strong>
                     ${tpl.isActive ? '<span style="font-size:10px;color:#1A1C28;border:1px solid rgba(26,28,40,0.20);padding:2px 7px;border-radius:3px;">啟用中</span>' : ''}
                 </div>
                 <div id="${scopeId}" style="margin-bottom:12px;padding:10px;background:rgba(0,0,0,0.3);border-radius:6px;min-height:60px;overflow:hidden;">
