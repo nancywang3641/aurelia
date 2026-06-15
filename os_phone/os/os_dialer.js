@@ -245,25 +245,25 @@
             if (_sayBusy) { const t2 = _root && _root.querySelector('#dlr-sub-text'); if (t2) t2.textContent = '…'.repeat(n); }
         }, 380);
 
-        // config（照 wx triggerReply：wx_phone_api_config，缺 url/key 就繼承 os_global_config）
-        let cfg = {};
-        try { const s = localStorage.getItem('wx_phone_api_config'); if (s) cfg = JSON.parse(s); } catch (e) {}
-        if (!cfg.url || !cfg.key) {
-            try {
-                const m = JSON.parse(localStorage.getItem('os_global_config') || '{}');
-                if (m.url) cfg.url = m.url;
-                if (m.key) cfg.key = m.key;
-                if (!cfg.model && m.model) cfg.model = m.model;
-                if (!cfg.maxTokens && m.maxTokens) cfg.maxTokens = m.maxTokens;
-            } catch (e) {}
-        }
+        // config：用主模型設定（跟 os_studio st.callAI 同源 → 能正確帶 useSystemApi 或 url/key）。
+        // 之前撈 wx_phone_api_config 是 directMode 體系、欄位跟 OS_API.chat 不相容 → 撥通沒反應的元兇。
+        const S = _w('OS_SETTINGS');
+        let cfg = (S && S.getConfig && S.getConfig()) || {};
+        cfg = Object.assign({}, cfg, { usePresetPrompts: false, enableThinking: false });
 
         // 暫把微信 active 指到這個聯絡人，buildContext 就會從 DB 抓他的整條歷史；結束還原
         const wxApp = _w('wxApp');
         const prevActive = wxApp ? wxApp.GLOBAL_ACTIVE_ID : undefined;
         if (wxApp) wxApp.GLOBAL_ACTIVE_ID = contact.id;
+        let _settled = false;
+        let watchdog = null;
         const restore = function () { if (wxApp) wxApp.GLOBAL_ACTIVE_ID = prevActive; };
-        const done = function () { clearInterval(think); _sayBusy = false; _enableSay(true); };
+        const done = function () { if (_settled) return; _settled = true; clearInterval(think); if (watchdog) clearTimeout(watchdog); _sayBusy = false; _enableSay(true); };
+        // 看門狗：40 秒沒回 → 別乾等，給提示
+        watchdog = setTimeout(function () {
+            _setSub(contact.name, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）');
+            restore(); done();
+        }, 40000);
 
         try {
             const messages = await OS_API.buildContext(userText || null, 'wx_chat_system');
