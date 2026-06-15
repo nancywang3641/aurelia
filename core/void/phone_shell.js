@@ -33,7 +33,7 @@
                 if (origParent) origParent.appendChild(ov);
             };
         } },
-        { id: 'settings', name: '設置', emoji: '⚙️', mode: 'inside', go: function (c) { _renderSettings(c); } },
+        { id: 'settings', name: '樣式', emoji: '🖌️', mode: 'inside', go: function (c) { _renderSettings(c); } },
         { id: 'appstore', name: '商店', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
         { id: 'ctrlroom', name: '控制室', emoji: '🎛️', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
         { id: 'aichat', name: 'AI 助手', emoji: '🤖', mode: 'inside', go: function (c) {
@@ -231,10 +231,11 @@
     function _addWritingTools() {
         const standalone = !!document.getElementById('aurelia-standalone-root');
         const tools = [
-            { id: 'sysset', name: '系統設置', emoji: '⚙️', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
+            { id: 'sysset', name: '設置', emoji: '⚙️', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
             { id: 'album',  name: '相簿',   emoji: '📷', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
             { id: 'avsvar', name: '狀態檔案', emoji: '🎲', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
             { id: 'studio', name: '創作室',   emoji: '🎨', mode: 'inside', go: function (c) { _mountTool(win.OS_STUDIO && win.OS_STUDIO.launch, c); } },
+            { id: 'phone',  name: '電話',   emoji: '📞', mode: 'inside', go: function (c) { c.innerHTML = '<div class="aps-fail" style="padding:48px 20px;text-align:center;line-height:1.9;">📞 電話<br><span style="font-size:12px;opacity:0.55;">聯絡簿 ＋ 電話面板<br>建置中…</span></div>'; } },
         ];
         if (standalone) {
             tools.push({ id: 'lorebook', name: '世界書', emoji: '📚', mode: 'inside', go: function (c) { _mountTool(win.OS_WORLDBOOK && (win.OS_WORLDBOOK.launchApp || win.OS_WORLDBOOK.launch), c); } });
@@ -242,12 +243,29 @@
         }
         tools.forEach(function (t) { if (!APPS.find(function (a) { return a.id === t.id; })) APPS.push(t); });
     }
+    // 底部 dock 固定 4 個：設置 / 樣式 / 相簿 / 電話（不重複進 grid）
+    const DOCK_IDS = ['sysset', 'settings', 'album', 'phone'];
+    function _renderDock() {
+        if (!_el) return;
+        const dockEl = _el.querySelector('.aps-dock');
+        if (!dockEl) return;
+        dockEl.innerHTML = DOCK_IDS.map(function (id) {
+            const a = APPS.find(function (x) { return x.id === id; });
+            if (!a) return '';
+            return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
+                 + '<span class="aps-icon-em" data-app-em="' + a.id + '">' + a.emoji + '</span>'
+                 + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
+        }).join('');
+        dockEl.querySelectorAll('.aps-icon').forEach(function (b) {
+            b.addEventListener('click', function () { _openApp(b.dataset.app); });
+        });
+    }
     // 重畫主畫面圖標格（APPS 變動後呼叫）
     function _renderGrid() {
         if (!_el) return;
         const gridEl = _el.querySelector('.aps-grid');
         if (!gridEl) return;
-        gridEl.innerHTML = APPS.map(function (a) {
+        gridEl.innerHTML = APPS.filter(function (a) { return DOCK_IDS.indexOf(a.id) < 0; }).map(function (a) {
             return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
                  + '<span class="aps-icon-em" data-app-em="' + a.id + '">' + a.emoji + '</span>'
                  + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
@@ -255,6 +273,7 @@
         gridEl.querySelectorAll('.aps-icon').forEach(function (b) {
             b.addEventListener('click', function () { _openApp(b.dataset.app); });
         });
+        _renderDock();
         _applyIcons();
     }
     // 對外：app 商店安裝/卸載時呼叫（只動 runtime 與圖標；持久化是商店的事）
@@ -281,7 +300,7 @@
           +   '<div class="aps-notch"></div>'
           +   '<div class="aps-screen">'
           +     '<div class="aps-statusbar"><span class="aps-sb-time" id="aps-sb-time">--:--</span><span class="aps-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>'
-          +     '<div class="aps-home" id="aps-home"><div class="aps-grid"></div></div>'
+          +     '<div class="aps-home" id="aps-home"><div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div></div>'
           +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'
           +   '</div>'
           +   '<div class="aps-homebar"><button class="aps-home-btn" id="aps-home-btn" type="button" title="回主畫面"></button></div>'
