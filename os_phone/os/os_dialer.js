@@ -43,6 +43,19 @@
     }
     function _clearTimer() { if (_timer) { clearInterval(_timer); _timer = null; } }
 
+    // 底部分頁列（iOS 風：通訊錄 / 鍵盤）
+    function _tabbar(active) {
+        return '<div class="dlr-tabbar">'
+          +   '<button class="dlr-tab' + (active === 'list' ? ' on' : '') + '" data-tab="list" type="button"><span class="dlr-tab-ic">👥</span><span class="dlr-tab-tx">通訊錄</span></button>'
+          +   '<button class="dlr-tab' + (active === 'pad' ? ' on' : '') + '" data-tab="pad" type="button"><span class="dlr-tab-ic">⌨️</span><span class="dlr-tab-tx">鍵盤</span></button>'
+          + '</div>';
+    }
+    function _bindTabs() {
+        _root.querySelectorAll('.dlr-tab').forEach(function (b) {
+            b.addEventListener('click', function () { if (b.dataset.tab === 'pad') _renderPad(''); else _renderList(); });
+        });
+    }
+
     // ── ① 聯絡列表 ──────────────────────────────────────────────
     function _renderList() {
         if (!_root) return;
@@ -59,13 +72,12 @@
             '<div class="dlr-wrap">'
           +   '<div class="dlr-head">電話</div>'
           +   '<div class="dlr-list">' + (rows || '<div class="dlr-empty">通訊錄是空的<br>到微信加聯絡人後這裡就有了</div>') + '</div>'
-          +   '<button class="dlr-pad-fab" id="dlr-pad-fab" type="button" title="撥號鍵盤">⌨️</button>'
+          +   _tabbar('list')
           + '</div>';
         _root.querySelectorAll('.dlr-row').forEach(function (b) {
             b.addEventListener('click', function () { const c = list.find(function (x) { return x.id === b.dataset.id; }); if (c) _dialing(c); });
         });
-        const fab = _root.querySelector('#dlr-pad-fab');
-        if (fab) fab.addEventListener('click', function () { _renderPad(''); });
+        _bindTabs();
     }
 
     // ── ② 撥號鍵盤 ──────────────────────────────────────────────
@@ -75,15 +87,17 @@
         const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
         _root.innerHTML =
             '<div class="dlr-wrap dlr-pad">'
-          +   '<button class="dlr-back" id="dlr-back" type="button">‹ 通訊錄</button>'
-          +   '<div class="dlr-num-disp" id="dlr-num-disp">' + _esc(typed || '') + '</div>'
-          +   '<div class="dlr-keys">'
-          +     keys.map(function (k) { return '<button class="dlr-key" data-k="' + k + '" type="button">' + k + '</button>'; }).join('')
+          +   '<div class="dlr-pad-inner">'
+          +     '<div class="dlr-num-disp" id="dlr-num-disp">' + _esc(typed || '') + '</div>'
+          +     '<div class="dlr-keys">'
+          +       keys.map(function (k) { return '<button class="dlr-key" data-k="' + k + '" type="button">' + k + '</button>'; }).join('')
+          +     '</div>'
+          +     '<div class="dlr-pad-actions">'
+          +       '<button class="dlr-call-btn" id="dlr-call-btn" type="button">📞 撥號</button>'
+          +       '<button class="dlr-del" id="dlr-del" type="button">⌫</button>'
+          +     '</div>'
           +   '</div>'
-          +   '<div class="dlr-pad-actions">'
-          +     '<button class="dlr-call-btn" id="dlr-call-btn" type="button">📞 撥號</button>'
-          +     '<button class="dlr-del" id="dlr-del" type="button">⌫</button>'
-          +   '</div>'
+          +   _tabbar('pad')
           + '</div>';
         let cur = String(typed || '');
         const disp = _root.querySelector('#dlr-num-disp');
@@ -92,7 +106,6 @@
             b.addEventListener('click', function () { cur += b.dataset.k; setDisp(); });
         });
         _root.querySelector('#dlr-del').addEventListener('click', function () { cur = cur.slice(0, -1); setDisp(); });
-        _root.querySelector('#dlr-back').addEventListener('click', _renderList);
         _root.querySelector('#dlr-call-btn').addEventListener('click', function () {
             const d = cur.replace(/\D/g, '');
             if (!d) return;
@@ -100,6 +113,7 @@
             if (c) _dialing(c);
             else _dialing({ id: '__unknown__', name: '未知號碼', _raw: cur });   // 查無此人彩蛋
         });
+        _bindTabs();
     }
 
     // ── 撥號中動畫 → 撥通 ────────────────────────────────────────
