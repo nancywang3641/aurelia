@@ -181,6 +181,12 @@
         if (btn) btn.disabled = !on;
         if (on && inp) { try { inp.focus(); } catch (e) {} }
     }
+    // 念出對方台詞 —— 跟 VN 一樣「當前開哪個引擎就念哪個」（SoVITS／MiniMax 各自看自己的開關）
+    function _speak(contact, text) {
+        if (!text) return;
+        try { const VNC = _w('VN_Core'); if (VNC && VNC._vnSoVITSPlay) VNC._vnSoVITSPlay(contact.name, text, '', ''); } catch (e) {}
+        try { const mm = _w('OS_MINIMAX'); if (mm && mm.playForChar) mm.playForChar(contact.name, text, { expression: '' }); } catch (e) {}
+    }
 
     function _inCall(contact) {
         if (!_root) return;
@@ -266,6 +272,7 @@
                 async function (finalText) {
                     const reply = _extractSpoken(finalText) || '……';
                     _setSub(contact.name, reply);
+                    _speak(contact, reply);   // 念出來（當前開哪個引擎就用哪個）
                     // 寫回「同一份」DB 記錄（微信那邊也讀得到 → 真共用記憶）
                     try {
                         const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
