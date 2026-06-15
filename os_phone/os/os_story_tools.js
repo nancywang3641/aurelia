@@ -457,6 +457,7 @@
             async function _genOnce() {
                 const _W = window.parent || window;
                 _W.__AURELIA_SUMMARIZING = true;
+                console.log('[大總結] 🚩 SUMMARIZING=true（generateRaw 開始）');   // 診斷：旗標窗起點
                 let generated = '';
                 const _sys = '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。';
                 try {
@@ -490,7 +491,7 @@
                             should_stream: false,
                         });
                     }
-                } finally { _W.__AURELIA_SUMMARIZING = false; }
+                } finally { _W.__AURELIA_SUMMARIZING = false; console.log('[大總結] 🏁 SUMMARIZING=false（generateRaw 結束）'); }
                 finalContent = String(generated || '');
                 const _lastTxt = (_summarizedEnd != null) ? `\nLast: ${_summarizedEnd}` : '';
                 if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);

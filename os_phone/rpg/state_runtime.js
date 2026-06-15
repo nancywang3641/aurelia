@@ -670,6 +670,7 @@ ${numberedText}`;
 
         // 主模型生成完 → 防抖後抽
         win.eventOn(win.tavern_events.GENERATION_ENDED, () => {
+            console.log('[State Runtime] 🔎 GENERATION_ENDED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷：抽取的事件是否落在旗標窗內
             if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結的 generateRaw 也會發 GENERATION_ENDED → 別抽，否則重複 AVS/記憶/場景生圖
             if (!isEnabled()) return;
             clearTimeout(_debounceTimer);
@@ -679,6 +680,7 @@ ${numberedText}`;
         // 主模型開始生成 → inject current 給它看（state 摘要）+ inject AVS rules（行為規範）
         if (win.tavern_events.GENERATION_STARTED) {
             win.eventOn(win.tavern_events.GENERATION_STARTED, () => {
+                console.log('[State Runtime] 🔎 GENERATION_STARTED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷
                 if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結生成不是劇情輪 → 別注入 state/rules
                 // state 摘要受「即時抽取總開關」控制
                 if (isEnabled()) injectCurrent();
