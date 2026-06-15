@@ -38,6 +38,8 @@
 
     let _root = null;
     let _timer = null;
+    let _hsel = { on: false, ids: new Set() };   // 通話紀錄多選狀態
+    let _hrecs = [];                              // 已載入的通話紀錄（給 transcript 查）
 
     function launch(container) {
         _root = container;
@@ -45,17 +47,24 @@
         _renderList();
     }
     function _clearTimer() { if (_timer) { clearInterval(_timer); _timer = null; } }
+    function _cut(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n) + '…' : s; }
 
-    // 底部分頁列（iOS 風：通訊錄 / 鍵盤）
+    // 底部分頁列（iOS 風：通話紀錄 / 通訊錄 / 鍵盤）
     function _tabbar(active) {
         return '<div class="dlr-tabbar">'
+          +   '<button class="dlr-tab' + (active === 'hist' ? ' on' : '') + '" data-tab="hist" type="button"><span class="dlr-tab-ic">🕐</span><span class="dlr-tab-tx">通話紀錄</span></button>'
           +   '<button class="dlr-tab' + (active === 'list' ? ' on' : '') + '" data-tab="list" type="button"><span class="dlr-tab-ic">👥</span><span class="dlr-tab-tx">通訊錄</span></button>'
           +   '<button class="dlr-tab' + (active === 'pad' ? ' on' : '') + '" data-tab="pad" type="button"><span class="dlr-tab-ic">⌨️</span><span class="dlr-tab-tx">鍵盤</span></button>'
           + '</div>';
     }
     function _bindTabs() {
         _root.querySelectorAll('.dlr-tab').forEach(function (b) {
-            b.addEventListener('click', function () { if (b.dataset.tab === 'pad') _renderPad(''); else _renderList(); });
+            b.addEventListener('click', function () {
+                const t = b.dataset.tab;
+                if (t === 'pad') _renderPad('');
+                else if (t === 'hist') _renderHistory();
+                else _renderList();
+            });
         });
     }
 
@@ -289,6 +298,159 @@
         } catch (e) {
             _setSub(contact.name, '（通話失敗）'); restore(); done();
         }
+    }
+
+    // ── ③ 通話紀錄（歷史對話）＝OS_DB api_chats（與微信同一份記憶）──────────
+    function _recPreview(rec) {
+        const ms = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
+        for (let i = ms.length - 1; i >= 0; i--) {
+            const m = ms[i];
+            if (m && (!m.type || m.type === 'msg') && m.content) return (m.isMe ? '我：' : '') + String(m.content);
+        }
+        return '（無對話內容）';
+    }
+    async function _loadRecords() {
+        const OS_DB = _w('OS_DB');
+        if (!OS_DB || !OS_DB.getAllApiChats) return [];
+        let map = {};
+        try { map = (await OS_DB.getAllApiChats()) || {}; } catch (e) { return []; }
+        const out = [];
+        Object.keys(map).forEach(function (id) {
+            const d = map[id] || {};
+            if (d.isGroup) return;
+            const ms = Array.isArray(d.messages) ? d.messages : [];
+            if (!ms.some(function (m) { return m && (!m.type || m.type === 'msg') && m.content; })) return;   // 沒實質對話的略過
+            out.push({ id: id, name: d.name || id, messages: ms, lastTime: d.lastTime || '' });
+        });
+        return out;
+    }
+
+    function _renderHistory() {
+        if (!_root) return;
+        _clearTimer();
+        _hsel = { on: false, ids: new Set() };
+        _root.innerHTML =
+            '<div class="dlr-wrap">'
+          +   '<div class="dlr-head"><span>通話紀錄</span>'
+          +     '<div class="dlr-sel-actions">'
+          +       '<button class="dlr-sel-toggle" id="dlr-sel-toggle" type="button">選取</button>'
+          +       '<div class="dlr-sel-bar">'
+          +         '<button class="dlr-sel-btn" id="dlr-sel-cancel" type="button">取消</button>'
+          +         '<button class="dlr-sel-btn" id="dlr-sel-all" type="button">全選</button>'
+          +         '<button class="dlr-sel-btn danger" id="dlr-sel-clear" type="button">清除</button>'
+          +       '</div>'
+          +     '</div>'
+          +   '</div>'
+          +   '<div class="dlr-list" id="dlr-hist-list"><div class="dlr-empty">載入中…</div></div>'
+          +   _tabbar('hist')
+          + '</div>';
+        _bindTabs();
+        _root.querySelector('#dlr-sel-toggle').addEventListener('click', _enterHsel);
+        _root.querySelector('#dlr-sel-cancel').addEventListener('click', _exitHsel);
+        _root.querySelector('#dlr-sel-all').addEventListener('click', _selectAll);
+        _root.querySelector('#dlr-sel-clear').addEventListener('click', _clearSelected);
+        _fillHistory();
+    }
+    async function _fillHistory() {
+        _hrecs = await _loadRecords();
+        const listEl = _root && _root.querySelector('#dlr-hist-list');
+        if (!listEl) return;
+        if (!_hrecs.length) {
+            listEl.innerHTML = '<div class="dlr-empty">還沒有通話紀錄<br>撥通一次電話、聊過之後這裡就會留下對話</div>';
+            return;
+        }
+        listEl.innerHTML = _hrecs.map(function (r) {
+            return '<button class="dlr-row dlr-hrow" data-id="' + _esc(r.id) + '" type="button">'
+                 + '<span class="dlr-check" aria-hidden="true"></span>'
+                 + '<span class="dlr-ava">' + _esc((r.name || '?').trim().slice(0, 1)) + '</span>'
+                 + '<span class="dlr-row-main"><span class="dlr-row-name">' + _esc(r.name) + '</span>'
+                 + '<span class="dlr-row-prev">' + _esc(_cut(_recPreview(r), 24)) + '</span></span>'
+                 + (r.lastTime ? '<span class="dlr-row-time">' + _esc(r.lastTime) + '</span>' : '')
+                 + '</button>';
+        }).join('');
+        listEl.querySelectorAll('.dlr-hrow').forEach(function (b) {
+            b.addEventListener('click', function () { _onHrow(b.dataset.id); });
+        });
+        _applyHsel();
+    }
+    function _onHrow(id) {
+        if (_hsel.on) {
+            if (_hsel.ids.has(id)) _hsel.ids.delete(id); else _hsel.ids.add(id);
+            _applyHsel();
+        } else {
+            const rec = (_hrecs || []).find(function (r) { return r.id === id; });
+            if (rec) _renderTranscript(rec);
+        }
+    }
+    function _enterHsel() { _hsel.on = true; _applyHsel(); }
+    function _exitHsel() { _hsel.on = false; _hsel.ids.clear(); _applyHsel(); }
+    function _selectAll() {
+        const rows = _root ? _root.querySelectorAll('.dlr-hrow') : [];
+        if (_hsel.ids.size === rows.length) _hsel.ids.clear();
+        else { _hsel.ids = new Set(); rows.forEach(function (b) { _hsel.ids.add(b.dataset.id); }); }
+        _applyHsel();
+    }
+    function _applyHsel() {
+        const wrap = _root && _root.querySelector('.dlr-wrap');
+        if (wrap) wrap.classList.toggle('selmode', !!_hsel.on);
+        const rows = _root ? _root.querySelectorAll('.dlr-hrow') : [];
+        rows.forEach(function (b) { b.classList.toggle('sel-on', _hsel.ids.has(b.dataset.id)); });
+        const allBtn = _root && _root.querySelector('#dlr-sel-all');
+        const clrBtn = _root && _root.querySelector('#dlr-sel-clear');
+        if (allBtn) allBtn.textContent = (rows.length > 0 && _hsel.ids.size === rows.length) ? '全不選' : '全選';
+        if (clrBtn) { clrBtn.textContent = _hsel.ids.size > 0 ? ('清除(' + _hsel.ids.size + ')') : '清除'; clrBtn.disabled = _hsel.ids.size === 0; }
+    }
+    async function _clearSelected() {
+        if (!_hsel.ids.size) return;
+        const n = _hsel.ids.size;
+        if (!win.confirm('確定清除選取的 ' + n + ' 筆通話紀錄嗎？\n（這份對話與微信共用，會一起清掉，無法復原）')) return;
+        const OS_DB = _w('OS_DB');
+        const ids = Array.from(_hsel.ids);
+        for (let i = 0; i < ids.length; i++) {
+            try { if (OS_DB && OS_DB.deleteApiChat) await OS_DB.deleteApiChat(ids[i]); } catch (e) {}
+        }
+        // 微信面板若開著，同步把這幾筆從它的記憶體移除並重繪
+        try {
+            const wxApp = _w('wxApp');
+            if (wxApp && wxApp.GLOBAL_CHATS) { ids.forEach(function (id) { delete wxApp.GLOBAL_CHATS[id]; }); if (typeof wxApp.render === 'function') wxApp.render(); }
+        } catch (e) {}
+        _renderHistory();
+    }
+
+    // ── 歷史對話 transcript（唯讀檢視）──
+    function _renderTranscript(rec) {
+        if (!_root) return;
+        _clearTimer();
+        const ms = Array.isArray(rec.messages) ? rec.messages : [];
+        const body = ms.map(function (m) {
+            if (!m) return '';
+            if (m.type && m.type !== 'msg') {
+                const tx = m.content || m.time || '';
+                return tx ? '<div class="dlr-tx-time">' + _esc(_cut(String(tx), 40)) + '</div>' : '';
+            }
+            if (!m.content) return '';
+            const me = !!m.isMe;
+            const who = me ? '' : _esc(m.senderName || m.sender || rec.name || '');
+            return '<div class="dlr-tx-msg' + (me ? ' me' : '') + '">'
+                 + (who ? '<div class="dlr-tx-who">' + who + '</div>' : '')
+                 + '<div class="dlr-tx-bubble">' + _esc(String(m.content)) + '</div>'
+                 + '</div>';
+        }).join('');
+        _root.innerHTML =
+            '<div class="dlr-wrap">'
+          +   '<div class="dlr-tx-head">'
+          +     '<button class="dlr-tx-back" id="dlr-tx-back" type="button">‹ 通話紀錄</button>'
+          +     '<span class="dlr-tx-title">' + _esc(rec.name) + '</span>'
+          +     '<button class="dlr-tx-call" id="dlr-tx-call" type="button">📞</button>'
+          +   '</div>'
+          +   '<div class="dlr-tx-wrap">' + (body || '<div class="dlr-empty">這通沒有對話內容</div>') + '</div>'
+          + '</div>';
+        _root.querySelector('#dlr-tx-back').addEventListener('click', _renderHistory);
+        const callBtn = _root.querySelector('#dlr-tx-call');
+        if (callBtn) callBtn.addEventListener('click', function () {
+            const c = _contacts().find(function (x) { return x.id === rec.id; }) || { id: rec.id, name: rec.name };
+            _dialing(c);
+        });
     }
 
     win.OS_DIALER = { launch: launch };
