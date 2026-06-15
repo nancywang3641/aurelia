@@ -1829,6 +1829,15 @@
             }
             if (line === '</scene>') { this.next(); return; }
 
+            // ── AI 偶爾把地圖引擎的 SceneMap 誤吐進 VN 正文（且常開閉標籤混用 [SceneMap]…</SceneMap>）──
+            //    它不是 VN 內容、也不該當卡片 → 整塊跳過(容忍兩種閉合)、繼續播，別卡死/提早結束劇情
+            if (line === '[SceneMap]' || line === '<SceneMap>') {
+                let _smi = this.index + 1;
+                while (_smi < this.script.length && this.script[_smi] !== '</SceneMap>' && this.script[_smi] !== '[/SceneMap]') _smi++;
+                if (_smi < this.script.length) this.index = _smi;   // 找到閉合→跳到閉合行整塊略過；找不到→只跳過 opener 這行，不吃光劇本
+                this.next(); return;
+            }
+
             // 🔥 【動態積木攔截 - 最優先，必須在 DOM block 過濾之前】
             if (window.VN_DynamicParser && window.VN_DynamicParser.processLine(line, this)) {
                 return;
@@ -1866,6 +1875,7 @@
                     let _ei = this.index + 1;
                     const _ct = `</${_fOpenA[1]}>`;
                     while (_ei < this.script.length && this.script[_ei] !== _ct) _ei++;
+                    if (_ei >= this.script.length) { this.next(); return; }   // 找不到閉合 → 別把 index 推到劇本末(會害劇情提早結束)，跳過 opener 這行繼續
                     this.index = _ei;
                     this._showDomBlock(_fOpenA[1]);
                     return;
@@ -1879,6 +1889,7 @@
                     let _ei = this.index + 1;
                     const _ct = `[/${_fOpenB[1]}]`;
                     while (_ei < this.script.length && this.script[_ei] !== _ct) _ei++;
+                    if (_ei >= this.script.length) { this.next(); return; }   // 找不到閉合 → 別把 index 推到劇本末(會害劇情提早結束)，跳過 opener 這行繼續
                     this.index = _ei;
                     this._showDomBlock(_fOpenB[1]);
                     return;
