@@ -379,11 +379,14 @@
                     document.getElementById('call-sub-text').innerHTML = core.parseMarkdown(ex.text);
                     core.addLog(parts[0], ex.text);
                     core.playSFX(ex.sfx);
-                    // 🔥 Minimax TTS（同 vn_core）
-                    (function(charName, text, expression) {
+                    // 🔊 跟正文一樣：當前開哪個引擎就念哪個（SoVITS／MiniMax 各自看自己的開關）
+                    (function(core2, charName, rawExp, text) {
+                        let typeHint = '';
+                        if (rawExp && rawExp.includes('_')) { const _p = rawExp.split('_'); typeHint = _p[0].trim(); rawExp = _p.slice(1).join('_').trim(); }
+                        if (core2._vnSoVITSPlay) core2._vnSoVITSPlay(charName, text, core2._mapExprToEmotion(rawExp), typeHint);
                         const _mm = (window.parent || window).OS_MINIMAX;
-                        if (_mm) _mm.playForChar(charName, text, { expression });
-                    })(parts[0], ex.text, parts[1]);
+                        if (_mm) _mm.playForChar(charName, text, { expression: rawExp });
+                    })(core, parts[0], parts[1] || '', ex.text);
                     // 🔮 預取下一句
                     (function prefetchNext(script, curIdx) {
                         const _mm = (window.parent || window).OS_MINIMAX;
@@ -401,11 +404,12 @@
                     })(core.script, core.index);
                 } else {
                     const ex = core._extractTextAndSFX(parts);
-                    box.classList.add('narration'); 
+                    box.classList.add('narration');
                     nameEl.style.display = 'none';
                     document.getElementById('call-sub-text').innerHTML = core.parseMarkdown(ex.text);
                     core.addLog("旁白", ex.text);
                     core.playSFX(ex.sfx);
+                    if (core._vnNarrVoicePlay) core._vnNarrVoicePlay(ex.text);   // 旁白語音（當前旁白引擎，自帶開關）
                 }
             }
             core.checkAutoNext();
