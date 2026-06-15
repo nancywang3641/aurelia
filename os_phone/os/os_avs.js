@@ -87,7 +87,6 @@
                     <div class="avs-tab" data-tab="memory">記憶</div>
                 </div>
                 <div class="avs-content">
-                    <div id="avs-view-state" class="avs-view active"></div>
                     <div id="avs-view-modes" class="avs-view"></div>
                     <div id="avs-view-memory" class="avs-view"></div>
                     <div id="avs-view-packs" class="avs-view">
@@ -111,6 +110,7 @@
                             </div>
                         </div>
                     </div>
+                    <div id="avs-view-state" class="avs-view active"></div>
                 </div>
 
                 <!-- 🔥 煉丹爐 modal（從變數包 tab 頂部按鈕 / 卡片按鈕觸發）-->
