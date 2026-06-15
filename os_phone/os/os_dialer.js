@@ -177,11 +177,39 @@
         const n = contact.name || '', id = contact.id || '';
         return '\n[Chat: ' + n + '|' + id + ']\n[With: ' + n + ']\n[' + n + '] ' + text;
     }
-    function _setSub(name, text) {
-        const nEl = _root && _root.querySelector('#dlr-sub-name');
-        const tEl = _root && _root.querySelector('#dlr-sub-text');
-        if (nEl) nEl.textContent = name || '';
-        if (tEl) tEl.textContent = text == null ? '' : text;
+    // 通話畫面用「泡泡」顯示（與通話紀錄/微信一致），不再用單行字幕
+    function _callLogEl() { return _root ? _root.querySelector('#dlr-call-log') : null; }
+    function _scrollCallLog() { const l = _callLogEl(); if (l) l.scrollTop = l.scrollHeight; }
+    function _bubbleHTML(m, name) {
+        if (!m) return '';
+        if (m.type && m.type !== 'msg') { const tx = m.content || m.time || ''; return tx ? '<div class="dlr-tx-time">' + _esc(_cut(String(tx), 40)) + '</div>' : ''; }
+        if (!m.content) return '';
+        const me = !!m.isMe;
+        const who = me ? '' : _esc(m.senderName || m.sender || name || '');
+        return '<div class="dlr-tx-msg' + (me ? ' me' : '') + '">'
+             + (who ? '<div class="dlr-tx-who">' + who + '</div>' : '')
+             + '<div class="dlr-tx-bubble">' + _esc(String(m.content)) + '</div></div>';
+    }
+    function _appendCallBubble(isMe, content, name) {
+        const l = _callLogEl(); if (!l) return;
+        l.insertAdjacentHTML('beforeend', _bubbleHTML({ type: 'msg', isMe: isMe, content: content, senderName: name }, name));
+        _scrollCallLog();
+    }
+    function _appendTyping() {
+        const l = _callLogEl(); if (!l) return null;
+        const d = (win.document || document).createElement('div');
+        d.className = 'dlr-tx-msg dlr-typing';
+        d.innerHTML = '<div class="dlr-tx-bubble dlr-typing-bubble"><span></span><span></span><span></span></div>';
+        l.appendChild(d); _scrollCallLog();
+        return d;
+    }
+    function _removeTyping(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
+    async function _renderCallLog(contact) {
+        const OS_DB = _w('OS_DB'); const l = _callLogEl(); if (!l) return;
+        let rec = null; try { if (OS_DB && OS_DB.getApiChat) rec = await OS_DB.getApiChat(contact.id); } catch (e) {}
+        const ms = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
+        l.innerHTML = ms.map(function (m) { return _bubbleHTML(m, contact.name); }).join('');
+        _scrollCallLog();
     }
     function _enableSay(on) {
         const inp = _root && _root.querySelector('#dlr-say');
@@ -202,15 +230,16 @@
         _clearTimer();
         _sayBusy = false;
         _root.innerHTML =
-            '<div class="dlr-call dlr-incall">'
-          +   '<div class="dlr-call-stage">'
-          +     '<div class="dlr-call-ava big">' + _esc(_avatarBg(contact)) + '</div>'
-          +     '<div class="dlr-call-name">' + _esc(contact.name) + '</div>'
-          +     '<div class="dlr-call-timer" id="dlr-call-timer">通話中 00:00</div>'
-          +     '<div class="dlr-call-sub"><div class="dlr-sub-name" id="dlr-sub-name"></div>'
-          +       '<div class="dlr-sub-text" id="dlr-sub-text">接通中…</div></div>'
+            '<div class="dlr-incall">'
+          +   '<div class="dlr-call-top">'
+          +     '<div class="dlr-call-top-ava">' + _esc(_avatarBg(contact)) + '</div>'
+          +     '<div class="dlr-call-top-info">'
+          +       '<div class="dlr-call-top-name">' + _esc(contact.name) + '</div>'
+          +       '<div class="dlr-call-top-timer" id="dlr-call-timer">通話中 00:00</div>'
+          +     '</div>'
           +   '</div>'
-          +   '<div class="dlr-call-foot">'
+          +   '<div class="dlr-call-log" id="dlr-call-log"></div>'
+          +   '<div class="dlr-call-foot light">'
           +     '<div class="dlr-say-bar">'
           +       '<input class="dlr-say" id="dlr-say" type="text" placeholder="說點什麼…" autocomplete="off" disabled>'
           +       '<button class="dlr-say-btn" id="dlr-say-btn" type="button" disabled>送</button>'
@@ -238,24 +267,21 @@
         _root.querySelector('#dlr-say-btn').addEventListener('click', fire);
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); fire(); } });
 
-        // 撥通＝對方接起來先說一句（讀 DB 歷史 → 有記憶）
-        _say(contact, null);
+        // 先把這個人之前的對話載成泡泡（有記憶），再讓對方接起來說第一句
+        _renderCallLog(contact).then(function () { _say(contact, null); });
     }
 
-    // 一輪對話：暫設 active=該聯絡人 → buildContext(同一份 DB 歷史) + OS_API.chat → 回覆寫回同一份 DB
+    // 一輪對話：使用者的話先冒泡 → 對方「輸入中…」泡泡 → buildContext + OS_API.chat → 回覆冒泡 + 念出 + 寫回同一份 DB
     async function _say(contact, userText) {
         if (!_root) return;
         const OS_API = _w('OS_API'), OS_DB = _w('OS_DB');
-        if (!OS_API || !OS_API.buildContext || !OS_API.chat || !OS_DB) { _setSub(contact.name, '（通話引擎未載入）'); return; }
+        if (!OS_API || !OS_API.buildContext || !OS_API.chat || !OS_DB) { _appendCallBubble(false, '（通話引擎未載入）', contact.name); return; }
+        if (_sayBusy) return;
         _sayBusy = true; _enableSay(false);
-        _setSub(contact.name, '…');
-        let n = 0; const think = setInterval(function () {
-            n = (n % 3) + 1;
-            if (_sayBusy) { const t2 = _root && _root.querySelector('#dlr-sub-text'); if (t2) t2.textContent = '…'.repeat(n); }
-        }, 380);
+        if (userText) _appendCallBubble(true, userText, _userName());
+        const typing = _appendTyping();
 
-        // config：用主模型設定（跟 os_studio st.callAI 同源 → 能正確帶 useSystemApi 或 url/key）。
-        // 之前撈 wx_phone_api_config 是 directMode 體系、欄位跟 OS_API.chat 不相容 → 撥通沒反應的元兇。
+        // config：用主模型設定（跟 os_studio st.callAI 同源 → 能正確帶 useSystemApi 或 url/key）
         const S = _w('OS_SETTINGS');
         let cfg = (S && S.getConfig && S.getConfig()) || {};
         cfg = Object.assign({}, cfg, { usePresetPrompts: false, enableThinking: false });
@@ -267,11 +293,12 @@
         let _settled = false;
         let watchdog = null;
         const restore = function () { if (wxApp) wxApp.GLOBAL_ACTIVE_ID = prevActive; };
-        const done = function () { if (_settled) return; _settled = true; clearInterval(think); if (watchdog) clearTimeout(watchdog); _sayBusy = false; _enableSay(true); };
+        const done = function () { if (_settled) return; _settled = true; if (watchdog) clearTimeout(watchdog); _removeTyping(typing); _sayBusy = false; _enableSay(true); };
         // 看門狗：40 秒沒回 → 別乾等，給提示
         watchdog = setTimeout(function () {
-            _setSub(contact.name, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）');
-            restore(); done();
+            done();
+            _appendCallBubble(false, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）', contact.name);
+            restore();
         }, 40000);
 
         try {
@@ -280,8 +307,9 @@
                 function () {},
                 async function (finalText) {
                     const reply = _extractSpoken(finalText) || '……';
-                    _setSub(contact.name, reply);
-                    _speak(contact, reply);   // 念出來（當前開哪個引擎就用哪個）
+                    done();                                   // 先收掉「輸入中…」泡泡
+                    _appendCallBubble(false, reply, contact.name);
+                    _speak(contact, reply);                   // 念出來（當前開哪個引擎就用哪個）
                     // 寫回「同一份」DB 記錄（微信那邊也讀得到 → 真共用記憶）
                     try {
                         const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
@@ -290,13 +318,13 @@
                         rec.messages.push({ type: 'msg', isMe: false, content: reply, sender: contact.name, senderName: contact.name, raw: _rawFor(contact, reply) });
                         await OS_DB.saveApiChat(contact.id, rec);
                     } catch (e) { console.warn('[dialer] 寫回 DB 失敗', e); }
-                    restore(); done();
+                    restore();
                 },
-                function (err) { _setSub(contact.name, '（接不通：' + ((err && err.message) || '錯誤') + '）'); restore(); done(); },
+                function (err) { done(); _appendCallBubble(false, '（接不通：' + ((err && err.message) || '錯誤') + '）', contact.name); restore(); },
                 { disableTyping: cfg.disableTyping !== false }
             );
         } catch (e) {
-            _setSub(contact.name, '（通話失敗）'); restore(); done();
+            done(); _appendCallBubble(false, '（通話失敗）', contact.name); restore();
         }
     }
 
@@ -422,20 +450,7 @@
         if (!_root) return;
         _clearTimer();
         const ms = Array.isArray(rec.messages) ? rec.messages : [];
-        const body = ms.map(function (m) {
-            if (!m) return '';
-            if (m.type && m.type !== 'msg') {
-                const tx = m.content || m.time || '';
-                return tx ? '<div class="dlr-tx-time">' + _esc(_cut(String(tx), 40)) + '</div>' : '';
-            }
-            if (!m.content) return '';
-            const me = !!m.isMe;
-            const who = me ? '' : _esc(m.senderName || m.sender || rec.name || '');
-            return '<div class="dlr-tx-msg' + (me ? ' me' : '') + '">'
-                 + (who ? '<div class="dlr-tx-who">' + who + '</div>' : '')
-                 + '<div class="dlr-tx-bubble">' + _esc(String(m.content)) + '</div>'
-                 + '</div>';
-        }).join('');
+        const body = ms.map(function (m) { return _bubbleHTML(m, rec.name); }).join('');
         _root.innerHTML =
             '<div class="dlr-wrap">'
           +   '<div class="dlr-tx-head">'
