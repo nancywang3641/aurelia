@@ -707,7 +707,7 @@
             let sysPrompt = "";
             let cotPrompt = "";
 
-            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];
+            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat', 'call_voice_system'];   // 📞 通話跳過 CoT，免 AI 吐一大段分析→通話乾等卡住
 
             if (win.OS_PROMPTS) {
                 if (promptKey) sysPrompt = win.OS_PROMPTS.get(promptKey);
@@ -736,7 +736,7 @@
                 apiMessages.push({ role: "system", content: contextBlock });
             }
             
-            if (promptKey === 'wx_chat_system' && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
+            if ((promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
                 try {
                     const currentChatId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
                     if (currentChatId) {
@@ -774,7 +774,7 @@
                             
                             if (groupNoteText) apiMessages.push({ role: "system", content: `[Group Note]:\n${groupNoteText}\n\n` });
                         }
-                        if (apiChat && apiChat.stickerLibId) {
+                        if (promptKey === 'wx_chat_system' && apiChat && apiChat.stickerLibId) {
                             try {
                                 const _stkLibs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]');
                                 const _stkLib = _stkLibs.find(l => l.id === apiChat.stickerLibId);
@@ -802,7 +802,7 @@
                 apiMessages.push({ role: "system", content: realityText });
             }
 
-            if (promptKey === 'wx_chat_system' && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
+            if ((promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
                  try {
                     const currentChatId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
                     if (currentChatId) {
@@ -810,7 +810,8 @@
                         if (apiChat && apiChat.messages) {
                             const rawPhoneMsgs = apiChat.messages.map(msg => ({
                                 role: msg.isMe ? 'user' : 'assistant',
-                                content: msg.raw || msg.content || "",
+                                // 📞 通話餵乾淨口語(content)，不帶 [Chat:|With:][名] 標頭的 raw → 免 AI 學歷史去用聊天格式
+                                content: (promptKey === 'call_voice_system') ? (msg.content || "") : (msg.raw || msg.content || ""),
                                 _source: 'phone'
                             }));
                             const mergedPhoneMsgs = smartMergeMessages(rawPhoneMsgs);
@@ -896,7 +897,7 @@
 
         // --- 5. 獨立模式 Context Builder (精準掃描引擎) ---
         _buildStandaloneContext: async function(userMessage, promptKey) {
-            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];
+            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat', 'call_voice_system'];   // 📞 通話跳過 CoT，免 AI 吐一大段分析→通話乾等卡住
 
             const apiMessages = [];
 
