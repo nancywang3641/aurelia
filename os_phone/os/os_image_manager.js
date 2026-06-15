@@ -982,6 +982,12 @@
                         else _tr.warning('NAI 生圖失敗（非併發）：' + _emsg, 'NAI 錯誤', { timeOut: 8000 });
                     }
                 } catch (_) {}
+                // 🎯 插圖(scene)：NAI 失敗「不」回退 Pollinations —— NAI 是 Danbooru tag、Pollinations 是自然語言，
+                //    格式不相容、硬退會生出垃圾圖。寧可這張略過（上游 _doFetchScene/顯示端都 if(url) 判空、不插破圖；可按 🔄 重生）。
+                if (type === 'scene') {
+                    console.warn('[ImageManager] scene 插圖 NAI 失敗 → 不回退 Pollinations（提示詞不相容），略過此張');
+                    return null;
+                }
                 // 回退時補上 Pollinations 底詞，確保風格一致
                 let fallbackPrompt = prompt;
                 if (type === 'char' && this.config.pollinations.charBasePrompt) {
