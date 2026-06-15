@@ -696,6 +696,7 @@
 
     win.wxApp = {
         get GLOBAL_ACTIVE_ID() { return GLOBAL_ACTIVE_ID; },
+        set GLOBAL_ACTIVE_ID(v) { GLOBAL_ACTIVE_ID = v; },   // 📞 電話 app 撥通時暫借 active id（buildContext 靠它抓該聯絡人 DB 歷史）；無 setter 會在 strict mode 拋 TypeError → 通話卡死不調 API
         get APP_CONTAINER() { return APP_CONTAINER; },
         get GLOBAL_CHATS() { return GLOBAL_CHATS; },
         
