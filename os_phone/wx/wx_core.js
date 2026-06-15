@@ -1398,7 +1398,10 @@
                             if (savedChats && Object.keys(savedChats).length > 0) { Object.assign(GLOBAL_CHATS, savedChats); }
                         }
                     } catch (e) { console.error(e); }
-                    if (win.WX_TAVERN_API_BRIDGE) { setTimeout(() => { win.WX_TAVERN_API_BRIDGE.poll(); }, 100); }
+                    // 🔧 橋接已退役（e57f923）：wx 一律 directMode、資料只走自己的 api_chats。
+                    //    這裡不再戳 WX_TAVERN_API_BRIDGE.poll() 去掃酒館正文 —— 它認的是早已淘汰的
+                    //    [wx_os] 格式（現在酒館手機聊天是 <chat chatroom>），掃不到只會印出騙人的
+                    //    「已清空面板」log（其實什麼都沒清）。橋接程式碼保留休眠、可逆。
                     win.wxApp.render();
                 });
             } else { setTimeout(win.wxApp.installToPhone, 500); }
