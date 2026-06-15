@@ -237,9 +237,11 @@
                 }
             } else if (vocM) {
                 const txt = vocM[2] || ''; const sec = Math.min(60, Math.max(2, Math.ceil(txt.length / 2)));
+                const escVS = String(sender).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
+                const escVT = String(txt).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
                 const transHTML = txt ? `<div class="wx-voice-trans">${txt}</div>` : '';
                 inner = `<div class="wx-voice-wrap">
-                    <div class="wx-voice-msg" onclick="event.stopPropagation(); var t=this.nextElementSibling; if(t) t.classList.toggle('open');">
+                    <div class="wx-voice-msg" data-vsender="${escVS}" data-vtext="${escVT}" onclick="event.stopPropagation(); window.VN_Phone._playVoice(this); var t=this.nextElementSibling; if(t) t.classList.toggle('open');">
                         <span class="wx-voice-wave">🔊 ≡≡≡</span><span class="wx-voice-dur">${sec}"</span>
                     </div>
                     ${transHTML}
@@ -288,6 +290,17 @@
             }
             const rowHTML = `<div class="chat-row ${isMe ? 'you' : 'other'}"><div class="chat-avatar" style="${avatarStyle}">${avatarHTML}</div><div class="chat-content">${inner}</div></div>`;
             return nameHTML ? `<div class="chat-outer">${nameHTML}${rowHTML}</div>` : rowHTML;
+        },
+
+        // 點語音訊息 → 念出來（跟通話/正文同款：當前開哪個引擎就念哪個；沒指派音色就無聲）
+        _playVoice: function(el) {
+            if (!el) return;
+            const sender = el.dataset.vsender || '';
+            const text = el.dataset.vtext || '';
+            if (!text) return;
+            const core = win.VN_Core || (win.parent && win.parent.VN_Core);
+            try { if (core && core._vnSoVITSPlay) core._vnSoVITSPlay(sender, text, '', ''); } catch (e) {}
+            try { const mm = win.OS_MINIMAX || (win.parent && win.parent.OS_MINIMAX); if (mm && mm.playForChar) mm.playForChar(sender, text, { expression: '' }); } catch (e) {}
         },
 
         // ==========================================
