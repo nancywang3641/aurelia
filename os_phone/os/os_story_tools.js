@@ -491,7 +491,13 @@
                             should_stream: false,
                         });
                     }
-                } finally { _W.__AURELIA_SUMMARIZING = false; console.log('[大總結] 🏁 SUMMARIZING=false（generateRaw 結束）'); }
+                } finally {
+                    // ⏱️ 真凶：TH.generateRaw 的 GENERATION_ENDED 在 await resolve「之後」才發；若此刻就清旗標，
+                    //    state_runtime 等抽取器在事件裡看到的是 false → 誤抽（重複 AVS/記憶/場景生圖）。
+                    //    → 延遲清除，讓旗標撐過 GENERATION_ENDED（事件就在同秒發）。下一輪真實劇情遠在 3s 後、不受影響。
+                    console.log('[大總結] 🏁 generateRaw 結束，旗標延遲 3s 清除（蓋過隨後才發的 GENERATION_ENDED）');
+                    setTimeout(function () { _W.__AURELIA_SUMMARIZING = false; console.log('[大總結] ✅ 旗標已清除'); }, 3000);
+                }
                 finalContent = String(generated || '');
                 const _lastTxt = (_summarizedEnd != null) ? `\nLast: ${_summarizedEnd}` : '';
                 if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);
