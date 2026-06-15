@@ -235,7 +235,7 @@
             { id: 'album',  name: '相簿',   emoji: '📷', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
             { id: 'avsvar', name: '狀態檔案', emoji: '🎲', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
             { id: 'studio', name: '創作室',   emoji: '🎨', mode: 'inside', go: function (c) { _mountTool(win.OS_STUDIO && win.OS_STUDIO.launch, c); } },
-            { id: 'phone',  name: '電話',   emoji: '📞', mode: 'inside', go: function (c) { c.innerHTML = '<div class="aps-fail" style="padding:48px 20px;text-align:center;line-height:1.9;">📞 電話<br><span style="font-size:12px;opacity:0.55;">聯絡簿 ＋ 電話面板<br>建置中…</span></div>'; } },
+            { id: 'phone',  name: '電話',   emoji: '📞', mode: 'inside', go: function (c) { if (win.OS_DIALER && win.OS_DIALER.launch) { win.OS_DIALER.launch(c); } else { c.innerHTML = '<div class="aps-fail">📞 電話模組未載入</div>'; } } },
         ];
         if (standalone) {
             tools.push({ id: 'lorebook', name: '世界書', emoji: '📚', mode: 'inside', go: function (c) { _mountTool(win.OS_WORLDBOOK && (win.OS_WORLDBOOK.launchApp || win.OS_WORLDBOOK.launch), c); } });

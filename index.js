@@ -202,6 +202,9 @@ const PHONE_FILES = [
     'wx/wx_message_manager.js', 'wx/wx_view.js', 'wx/wx_core.js',
     'wx/wx_tavern_api_bridge.js',
 
+    // === 📞 電話 (dialer) ===
+    'os/os_dialer.js',
+
     // === 🟣 微薄 (Weibo) — 搬回酒館（順序同 PWA index.html）===
     'wb/wb_user_profile.js', 'wb/wb_account.js', 'wb/wb_theme.js',
     'wb/wb_view.js', 'wb/wb_core.js'
