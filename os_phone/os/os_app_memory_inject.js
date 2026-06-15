@@ -9,7 +9,8 @@
 //         GENERATION_STARTED → 掃最近幾樓酒館對話找「在場角色」→ 抓他們 api_chats 對話 + wb_posts 動態
 //         → injectPrompts({once:true}) 塞進這一輪主模型 system prompt（用完即清、不寫進 chat）
 //       只在「酒館（非獨立）」跑；scope 到當前劇情提到的角色 + 每人最近 N 條，避免脹 token。
-//       插件 app（創造室）暫不納入（資料形狀未知；要納入須走標準 api_chats 儲存 + 展廳開關，之後做）。
+//       插件 app（創造室）：透過 st.remember 寫進統一桶 OS_DB.app_memory；每-app 開關
+//       (localStorage 'os_app_mem_plugin_<appId>'，預設關)開了才注入；展廳 UI 之後做。
 // 依賴：window.TavernHelper.injectPrompts/getChatMessages/getLastMessageId
 //       window.OS_DB.getAllApiChats / getAllWbPosts
 // 關閉：localStorage['os_app_mem_inject_enabled'] = '0'（預設開）
@@ -98,6 +99,35 @@
         return out;
     }
 
+    // 插件記憶桶(app_memory)：每-app 小開關(localStorage，預設關)，開了才注入
+    function _pluginEnabled(appId) { try { return localStorage.getItem('os_app_mem_plugin_' + appId) === '1'; } catch (e) { return false; } }
+    async function _pluginMemByChar() {
+        try {
+            if (!win.OS_DB || !win.OS_DB.getAllAppMemory) return {};
+            const recs = (await win.OS_DB.getAllAppMemory()) || [];
+            const by = {};
+            for (let i = 0; i < recs.length; i++) {
+                const r = recs[i];
+                if (!r || !r.charName || !Array.isArray(r.entries) || !r.entries.length) continue;
+                if (!_pluginEnabled(r.appId)) continue;       // 該 app 開關沒開 → 跳過
+                (by[r.charName] = by[r.charName] || []).push(r);
+            }
+            return by;
+        } catch (e) { return {}; }
+    }
+    function _pluginLines(recs) {
+        const out = [];
+        for (let i = 0; i < recs.length; i++) {
+            const es = recs[i].entries.slice(-PER_CHAR_MSGS);
+            for (let k = 0; k < es.length; k++) {
+                const t = _cut(es[k].text); if (!t) continue;
+                const who = es[k].speaker || '';
+                out.push(who ? `・${who}：${t}` : `・${t}`);
+            }
+        }
+        return out;
+    }
+
     async function injectAppMemory() {
         try {
             try { _lastUninject && _lastUninject(); } catch (e) {}
@@ -124,6 +154,11 @@
                 if (!name || name.length < 2) return;
                 (cand[name] = cand[name] || {}).posts = wbBy[name];
             });
+            const pluginBy = await _pluginMemByChar();
+            Object.keys(pluginBy).forEach(function (name) {
+                if (!name || name.length < 2) return;
+                (cand[name] = cand[name] || {}).plugins = pluginBy[name];
+            });
             const names = Object.keys(cand);
             if (!names.length) return;
 
@@ -138,7 +173,7 @@
             if (!present.length) return;
 
             const userName = _userName();
-            let block = `<手機記憶 規則="下列角色最近在手機 app（微信/微薄/電話）上跟${userName}的真實互動，都已經發生過。寫作時必須記得並延續，別當沒發生；這是記憶供你參考，不是要你照抄這個格式。">`;
+            let block = `<手機記憶 規則="下列角色最近在手機 app（微信/微薄/電話等）上跟${userName}的真實互動，都已經發生過。寫作時必須記得並延續，別當沒發生；這是記憶供你參考，不是要你照抄這個格式。">`;
             let any = false;
             for (let i = 0; i < present.length; i++) {
                 const name = present[i];
@@ -150,6 +185,7 @@
                     });
                 }
                 if (info.posts) _wbLines(info.posts).forEach(function (l) { lines.push(l); });
+                if (info.plugins) _pluginLines(info.plugins).forEach(function (l) { lines.push(l); });
                 if (!lines.length) continue;
                 block += `\n〔${name}〕\n` + lines.join('\n');
                 any = true;
@@ -181,7 +217,10 @@
     win.OS_APP_MEMORY_INJECT = {
         injectAppMemory: injectAppMemory,
         isEnabled: _enabled,
-        setEnabled: function (v) { try { localStorage.setItem(FLAG_KEY, v ? '1' : '0'); } catch (e) {} }
+        setEnabled: function (v) { try { localStorage.setItem(FLAG_KEY, v ? '1' : '0'); } catch (e) {} },
+        // 插件每-app 開關（展廳 UI 之後接這兩個）
+        isPluginEnabled: _pluginEnabled,
+        setPluginEnabled: function (appId, v) { try { localStorage.setItem('os_app_mem_plugin_' + appId, v ? '1' : '0'); } catch (e) {} }
     };
     init();
 })();

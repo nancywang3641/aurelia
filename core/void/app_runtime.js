@@ -23,6 +23,7 @@
             // ── 原始全域橋接 ──
             +   'window.OS_IMAGE_MANAGER = window.OS_IMAGE_MANAGER || (P && P.OS_IMAGE_MANAGER) || null;'
             +   'window.OS_API           = window.OS_API           || (P && P.OS_API) || null;'
+            +   'window.OS_DB            = window.OS_DB            || (P && P.OS_DB) || null;'
             +   'window.TavernHelper     = window.TavernHelper     || (P && P.TavernHelper) || null;'
             +   'window.SillyTavern      = window.SillyTavern      || (P && P.SillyTavern) || null;'
             // ── 返回主畫面 ──
@@ -30,6 +31,8 @@
             // ── 持久化(存主頁 localStorage，用 app 專屬命名空間，跨關閉/重開保留) ──
             +   'window.saveData = function(k, v){ try { P.localStorage.setItem("aurelia_appdata_"+window.__APP_ID__+"_"+k, JSON.stringify(v)); } catch(e){} };'
             +   'window.loadData = function(k){ try { var s = P.localStorage.getItem("aurelia_appdata_"+window.__APP_ID__+"_"+k); return s==null?null:JSON.parse(s); } catch(e){ return null; } };'
+            // ── 通用記憶：角色對話型 app 記一筆到統一桶(app_memory)，跟預設應用一起被注入酒館(該 app 開關開時) ──
+            +   'window.remember = async function(charName, speaker, text){ try { if(window.__IS_PREVIEW) return; if(!charName||!text) return; var DB = window.OS_DB || (P && P.OS_DB); if(!DB||!DB.saveAppMemory) return; await DB.saveAppMemory(window.__APP_ID__, String(charName), { speaker:String(speaker||""), text:String(text), time: Date.now() }); } catch(e){} };'
             // ── 生圖(預覽走佔位省額度) ──
             +   'window.genImg = async function(p, type){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", {provider: window.__APP_PROVIDER__}); } catch(e){ console.error("[app genImg]",e); return ""; } };'
             // ── 文字生成：走 OS_API.chat(直接打 API、不發酒館 GENERATION 事件→不觸發記憶/狀態抽取)。

@@ -8,7 +8,7 @@
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 25; // 🔥 V25：手機殼 app 商店 phone_apps
+    const DB_VERSION = 26; // 🔥 V26：插件通用記憶桶 app_memory
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -32,6 +32,7 @@
     const STORE_NAME_STATE_DATA   = 'state_data';    // 🔥 V23：狀態資料庫（副模型抽劇情狀態，key = chatId）
     const STORE_NAME_LOBBY_SUM_IDX = 'lobby_summary_index'; // 🔥 V24：酒館大廳跨卡總結索引（結語 + 角色名單，給瀅瀅/柴郡注 sysPrompt）
     const STORE_NAME_PHONE_APPS = 'phone_apps'; // 🔥 V25：手機殼下載的功能型 HTML app（id,name,emoji,iconUrl,html,source,createdAt）
+    const STORE_NAME_APP_MEM = 'app_memory'; // 🔥 V26：插件通用記憶桶（角色對話型插件 st.remember 寫入；key = appId::角色名）
 
     let dbInstance = null;
 
@@ -58,7 +59,8 @@
                         STORE_NAME_VN_SUMMARIES, // 🔥 V22：大總結儲存
                         STORE_NAME_STATE_DATA,   // 🔥 V23：狀態資料庫
                         STORE_NAME_LOBBY_SUM_IDX,// 🔥 V24：酒館大廳跨卡總結索引
-                        STORE_NAME_PHONE_APPS    // 🔥 V25：手機殼 app 商店
+                        STORE_NAME_PHONE_APPS,   // 🔥 V25：手機殼 app 商店
+                        STORE_NAME_APP_MEM       // 🔥 V26：插件通用記憶桶
                     ];
 
                     stores.forEach(name => {
@@ -305,8 +307,8 @@
                 } catch(e) { j(e); }
             });
         },
-        getAllApiChats: async function() { 
-            const db = await this.init(); 
+        getAllApiChats: async function() {
+            const db = await this.init();
             return new Promise((r, j) => {
                 try {
                     const req = db.transaction(STORE_NAME_CHATS, 'readonly').objectStore(STORE_NAME_CHATS).getAll();
@@ -315,6 +317,39 @@
                         if(req.result) req.result.forEach(i => { c[i.chatId] = i.data; });
                         r(c);
                     };
+                } catch(e) { j(e); }
+            });
+        },
+
+        // --- 🔥 V26：插件通用記憶桶 app_memory（角色對話型插件 st.remember 寫入；一筆=一個 appId×角色）---
+        saveAppMemory: async function(appId, charName, entry) {
+            const db = await this.init();
+            const id = String(appId || 'app') + '::' + String(charName || '');
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_MEM, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME_APP_MEM);
+                    const getReq = store.get(id);
+                    getReq.onsuccess = () => {
+                        const rec = getReq.result || { id: id, appId: String(appId || 'app'), charName: String(charName || ''), entries: [] };
+                        if (!Array.isArray(rec.entries)) rec.entries = [];
+                        rec.entries.push(entry);
+                        if (rec.entries.length > 50) rec.entries = rec.entries.slice(-50); // 每(app×角色)上限 50 條
+                        rec.timestamp = Date.now();
+                        store.put(rec);
+                    };
+                    tx.oncomplete = () => r(id);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllAppMemory: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_APP_MEM, 'readonly').objectStore(STORE_NAME_APP_MEM).getAll();
+                    req.onsuccess = () => r(req.result || []);
+                    req.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });
         },
