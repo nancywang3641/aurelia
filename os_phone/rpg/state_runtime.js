@@ -302,6 +302,20 @@ ${_memoryRulesText()}
 
 最終輸出格式：{ "updates": { ... }, "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
     }
+    // 🎬 記憶導演：把帶碼全記憶目錄附給副模型，讓它挑「下一輪主模型該被提醒哪幾條」(放進同一個 JSON 的 recall_next)
+    function _recallAddendum(catText) {
+        return `
+
+═══════════════════════════════════════
+【★ 兼任「記憶導演」→ 放進同一個 JSON 的 "recall_next" 欄位】
+下面是本劇全部過往記憶的「帶碼目錄」。請以導演視角判斷：根據剛發生的這一輪劇情走向，「下一輪」主模型最需要被提醒哪幾條過往記憶，才不會前後矛盾或失憶（主模型常常忘記自己回想，所以由你幫它挑）。
+規則：只挑代號(如 "A3"、"A58")，挑最相關的最多 6 條放進 "recall_next" 陣列(純代號字串、不要改寫內容)；沒有特別需要就給 []。
+
+【全記憶帶碼目錄】
+${catText}
+
+→ 最終 JSON 需含 "recall_next": ["A3","A58"]（沒有就 []）`;
+    }
     // 只有記憶要抽時的獨立 prompt（沒變數包 / 這則狀態已抽過）
     function _memoryOnlyPrompt(text) {
         return `你是長期記憶抽取器。從下面的劇情抽出值得長期記住的記憶條目。
@@ -474,9 +488,27 @@ ${numberedText}`;
                 }
             }
 
+            // 🎬 記憶導演：給副模型「全記憶帶碼目錄」，讓它挑下一輪主模型該被提醒哪幾條（搭這通、不多打 API）
+            let _recallCat = null;
+            try {
+                if ((doState || wantMemory) && win.OS_VECTOR_INJECT?.getCatalogForPicking) {
+                    _recallCat = await win.OS_VECTOR_INJECT.getCatalogForPicking();
+                    if (_recallCat && _recallCat.text) prompt += _recallAddendum(_recallCat.text);
+                }
+            } catch (e) {}
+
             const json = await runWithRetry(prompt);
             // 存本輪抽取(原始輸出+memories)，狀態部分等下面算完 filtered/current 再補上 → 給狀態面板診斷/複製
             _lastExtract = { at: Date.now(), msgId: lastId, raw: _lastRawText, updates: null, memories: Array.isArray(json.memories) ? json.memories : null, current: null };
+
+            // 🎬 記憶導演：副模型挑的代號 → 記憶物件 → 交棒 vector_inject，下一輪注入完整內文（取代主模型常忘記寫的 <recall>）
+            try {
+                if (_recallCat && _recallCat.map && win.OS_VECTOR_INJECT?.setPendingRecall) {
+                    const _codes = Array.isArray(json.recall_next) ? json.recall_next : [];
+                    const _picked = _codes.map(c => _recallCat.map[String(c).trim().toUpperCase()]).filter(Boolean);
+                    win.OS_VECTOR_INJECT.setPendingRecall(_picked);
+                }
+            } catch (e) {}
 
             // --- 狀態 patch（邏輯與原本一致）---
             if (doState && json.updates && typeof json.updates === 'object') {
