@@ -36,7 +36,19 @@
 
     let dbInstance = null;
 
+    // 取得當前 tavern 劇情存檔 id（與 state_runtime 同款正規化）→ 給 app 紀錄蓋章做 chatId 隔離
+    function _curTavernChatId() {
+        try {
+            const ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
+            let cid = ctx && ctx.chatId;
+            if (cid == null && win.SillyTavern && typeof win.SillyTavern.getCurrentChatId === 'function') cid = win.SillyTavern.getCurrentChatId();
+            if (cid == null) return null;
+            return String(cid).replace(/^.*[\\/]/, '').replace(/\.(jsonl|json)$/i, '');
+        } catch (e) { return null; }
+    }
+
     win.OS_DB = {
+        currentChatId: function() { return _curTavernChatId(); },
         init: function() {
             return new Promise((resolve, reject) => {
                 if (dbInstance) { resolve(dbInstance); return; }
@@ -288,8 +300,10 @@
                 } catch(e) { j(e); }
             });
         },
-        saveApiChat: async function(id, d) { 
-            const db = await this.init(); 
+        saveApiChat: async function(id, d) {
+            const db = await this.init();
+            // 🔒 chatId 隔離：第一次存檔時蓋上「當前劇情 id」（已有就不覆蓋）→ 注入器只注入當前劇情的對話，避免古代卡冒出現代手機數據
+            try { if (d && typeof d === 'object' && d.tavernChatId == null) { const _c = _curTavernChatId(); if (_c != null) d.tavernChatId = _c; } } catch (e) {}
             return new Promise((r, j) => {
                 try {
                     const tx = db.transaction(STORE_NAME_CHATS, 'readwrite');
@@ -324,6 +338,7 @@
         // --- 🔥 V26：插件通用記憶桶 app_memory（角色對話型插件 st.remember 寫入；一筆=一個 appId×角色）---
         saveAppMemory: async function(appId, charName, entry) {
             const db = await this.init();
+            try { if (entry && typeof entry === 'object' && entry.tavernChatId == null) { const _c = _curTavernChatId(); if (_c != null) entry.tavernChatId = _c; } } catch (e) {}
             const id = String(appId || 'app') + '::' + String(charName || '');
             return new Promise((r, j) => {
                 try {
@@ -363,8 +378,9 @@
                 } catch(e) { j(e); }
             });
         },
-        saveWbPost: async function(p) { 
-            const db = await this.init(); 
+        saveWbPost: async function(p) {
+            const db = await this.init();
+            try { if (p && typeof p === 'object' && p.tavernChatId == null) { const _c = _curTavernChatId(); if (_c != null) p.tavernChatId = _c; } } catch (e) {}
             return new Promise((r, j) => {
                 try {
                     const tx = db.transaction(STORE_NAME_WB, 'readwrite');
