@@ -631,17 +631,19 @@
     function handleNewMessages(chats, messageId) {
         const configStr = localStorage.getItem('wx_phone_api_config');
         if (configStr && JSON.parse(configStr).directMode) return;
-        const hasNewData = Object.keys(chats).length > 0;
-        
+        const ids = Object.keys(chats);
+        // 🔧 兼容：酒館沒有 [wx_os] 資料時，別清空 wx 自己 api_chats 的聊天（之前 GLOBAL_CHATS={} 會把面板清光）
+        if (!ids.length) return;
+
         const blockedStr = localStorage.getItem('wx_hidden_chat_ids');
         const blockedList = blockedStr ? JSON.parse(blockedStr) : [];
 
-        GLOBAL_CHATS = {};
-        for (let id in chats) { 
-            if (blockedList.includes(id)) continue; 
-            GLOBAL_CHATS[id] = { ...chats[id], unread: true, pushedCount: 0, renderedCount: 0 }; 
+        // 🔧 兼容：只「合併/更新」橋接帶來的聊天，不整盤覆蓋 → 保留 wx 自己的資料
+        for (let id of ids) {
+            if (blockedList.includes(id)) continue;
+            GLOBAL_CHATS[id] = { ...chats[id], unread: true, pushedCount: 0, renderedCount: 0 };
         }
-        if (hasNewData && APP_CONTAINER) { updateAppUI(); }
+        if (APP_CONTAINER) { updateAppUI(); }
     }
 
     function scanAndRender_DEPRECATED() {
@@ -1362,8 +1364,8 @@
                     APP_CONTAINER = container;
                     console.log('[Core] 微信面板已打開');
                     try {
-                        const config = localStorage.getItem('wx_phone_api_config');
-                        if (config && JSON.parse(config).directMode && win.WX_DB) {
+                        // 🔧 兼容：不分模式都先載入 wx 自己的 api_chats（橋接只會在上面合併 [wx_os]、不再清掉）
+                        if (win.WX_DB && win.WX_DB.getAllApiChats) {
                             const savedChats = await win.WX_DB.getAllApiChats();
                             if (savedChats && Object.keys(savedChats).length > 0) { Object.assign(GLOBAL_CHATS, savedChats); }
                         }
