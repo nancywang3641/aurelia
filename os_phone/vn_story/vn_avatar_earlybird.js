@@ -56,6 +56,7 @@
 
         // 每輪生成開始：解鎖（含 swipe / 重生）＋ 開始輪詢半成品文本
         if (ev.GENERATION_STARTED) win.eventOn(ev.GENERATION_STARTED, function () {
+            if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結的 generateRaw 也發此事件 → 別啟動頭像早鳥生圖
             _doneThisGen = false;
             _startPoll();
         });
@@ -70,6 +71,7 @@
         if (ev.MESSAGE_RECEIVED) win.eventOn(ev.MESSAGE_RECEIVED, async function (messageId) {
             try {
                 _stopPoll();
+                if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結期間別掃生頭像
                 if (_doneThisGen) return;
                 const msgs = await win.TavernHelper?.getChatMessages?.(messageId);
                 const m = msgs && msgs[0];
