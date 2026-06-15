@@ -266,7 +266,7 @@
         }, 40000);
 
         try {
-            const messages = await OS_API.buildContext(userText || null, 'wx_chat_system');
+            const messages = await OS_API.buildContext(userText || null, 'call_voice_system');
             await OS_API.chat(messages, cfg,
                 function () {},
                 async function (finalText) {
