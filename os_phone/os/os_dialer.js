@@ -250,16 +250,6 @@
         const S = _w('OS_SETTINGS');
         let cfg = (S && S.getConfig && S.getConfig()) || {};
         cfg = Object.assign({}, cfg, { usePresetPrompts: false, enableThinking: false });
-        // 保險：非 useSystemApi 且缺 url/key → 從 os_global_config 補（跟 wx triggerReply 同款後備）
-        if (!cfg.useSystemApi && (!cfg.url || !cfg.key)) {
-            try {
-                const mainCfg = JSON.parse(localStorage.getItem('os_global_config') || '{}');
-                if (mainCfg.url) cfg.url = mainCfg.url;
-                if (mainCfg.key) cfg.key = mainCfg.key;
-                if (!cfg.model && mainCfg.model) cfg.model = mainCfg.model;
-                if (!cfg.maxTokens && mainCfg.maxTokens) cfg.maxTokens = mainCfg.maxTokens;
-            } catch (e) {}
-        }
 
         // 暫把微信 active 指到這個聯絡人，buildContext 就會從 DB 抓他的整條歷史；結束還原
         const wxApp = _w('wxApp');
@@ -275,32 +265,8 @@
             restore(); done();
         }, 40000);
 
-        // 🐛 buildContext 防卡死：TauriTavern 懶載入下 OS_TAVERN_BRIDGE.getApiContext() 會卡死，
-        //    裸 await 會永不返回 → OS_API.chat 從沒被呼叫（debug 印不出「📊 發送檢查」）→ 字幕卡「……」。
-        //    跟 wx triggerReply(e94a0b3) 同款：12 秒逾時 + 失敗改用 DB 歷史精簡續跑。
-        let messages;
         try {
-            console.log('[dialer] buildContext 開始…');
-            messages = await Promise.race([
-                OS_API.buildContext(userText || null, 'wx_chat_system'),
-                new Promise(function (_, rej) { setTimeout(function () { rej(new Error('buildContext 逾時(12s)')); }, 12000); })
-            ]);
-            if (!Array.isArray(messages) || !messages.length) throw new Error('buildContext 回空');
-            console.log('[dialer] buildContext 完成, messages=' + messages.length);
-        } catch (be) {
-            console.warn('[dialer] buildContext 失敗/逾時 → 用 DB 歷史精簡續跑:', (be && be.message) || be);
-            messages = [{ role: 'system', content: 'You are ' + (contact.name || 'AI') + '，正在用電話跟對方語音通話，延續下面對話、用自然口語回覆（不要旁白、不要任何格式標籤）。' }];
-            try {
-                const _rec0 = await OS_DB.getApiChat(contact.id);
-                ((_rec0 && Array.isArray(_rec0.messages)) ? _rec0.messages : [])
-                    .filter(function (m) { return m && (!m.type || m.type === 'msg') && m.content; })
-                    .slice(-15)
-                    .forEach(function (m) { messages.push({ role: m.isMe ? 'user' : 'assistant', content: String(m.raw || m.content) }); });
-            } catch (e2) {}
-            if (userText) messages.push({ role: 'user', content: userText });
-        }
-        console.log('[dialer] 呼叫 OS_API.chat…');
-        try {
+            const messages = await OS_API.buildContext(userText || null, 'wx_chat_system');
             await OS_API.chat(messages, cfg,
                 function () {},
                 async function (finalText) {
