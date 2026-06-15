@@ -28,6 +28,7 @@
     let _packs = [];
     let _editingFieldName = null; // null / 欄位名 / '__new__'
     let _advOpen = false;
+    let _curOpen = false;   // 目前狀態(humanize)預設收起 → 點按鈕才展開，避免面板太長
 
     // ── 人話版狀態渲染 ───────────────────────────────────────────
     function _isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
@@ -186,8 +187,8 @@
                 <div class="avs-st-toggle${runtimeOn ? ' on' : ''}" id="avs-st-toggle" role="switch"></div>
             </div>
 
-            <div class="avs-st-current">
-                <div class="avs-st-current-hd">📊 目前狀態</div>
+            <button class="avs-st-adv-btn${_curOpen ? ' open' : ''}" id="avs-st-cur-btn">📊 目前狀態</button>
+            <div class="avs-st-adv${_curOpen ? ' open' : ''}" id="avs-st-cur">
                 <div class="avs-st-current-body">${_humanize(cur)}</div>
             </div>
 
@@ -240,6 +241,8 @@
         // 進階摺疊
         const advBtn = q('#avs-st-adv-btn'), adv = q('#avs-st-adv');
         if (advBtn && adv) advBtn.onclick = () => { _advOpen = !_advOpen; advBtn.classList.toggle('open', _advOpen); adv.classList.toggle('open', _advOpen); };
+        const curBtn = q('#avs-st-cur-btn'), curBody = q('#avs-st-cur');
+        if (curBtn && curBody) curBtn.onclick = () => { _curOpen = !_curOpen; curBtn.classList.toggle('open', _curOpen); curBody.classList.toggle('open', _curOpen); };
 
         // 即時記錄開關
         const toggle = q('#avs-st-toggle');
