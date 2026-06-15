@@ -1470,6 +1470,15 @@
     WX_STICKER.init();
     win.WX_STICKER = WX_STICKER;
 
+    // 🔧 退役酒館橋接：記憶已改走 prompt 注入(os_app_memory_inject，唯讀、不寫進酒館正文)，
+    //    不再用「把 [wx_os] 塞進酒館聊天」那套。→ wx 一律 directMode（自己 api_chats + OS_API），
+    //    啟動時強制設好，永不啟動橋接掃描、不再轉發酒館。(橋接程式碼保留休眠、可逆)
+    try {
+        const _wxk = 'wx_phone_api_config';
+        const _wxc = JSON.parse(localStorage.getItem(_wxk) || '{}');
+        if (_wxc.directMode !== true) { _wxc.directMode = true; localStorage.setItem(_wxk, JSON.stringify(_wxc)); }
+    } catch (e) {}
+
     win.wxApp.installToPhone();
 
     setTimeout(() => {
