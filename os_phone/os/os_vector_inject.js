@@ -18,7 +18,8 @@
     const INJECT_ID = 'aurelia_vn_memory';
     let _lastUninject = null;
     let _lastRecall = null;   // 給 CTX 面板「記憶召回」行讀：{ text, count }
-    let _pendingRecallKeywords = [];   // 主模型上一輪 <recall> 點名、待下一輪載入完整內文的關鍵詞
+    let _pendingRecallKeywords = [];   // 主模型上一輪 <recall> 點名、待下一輪載入完整內文的關鍵詞（備援）
+    let _pendingRecallEntries = [];    // 🎬 副模型(記憶導演)上一輪挑的記憶物件，待下一輪注入完整內文（主力，比主模型 <recall> 可靠）
     const _RECALL_RE = /<recall>([\s\S]*?)<\/recall>/gi;
 
     // 抽出 AI 回覆裡的 <recall>關鍵詞</recall> → 存給下一輪 injectMemories 補完整內文；並把標籤從顯示訊息清掉。
@@ -114,22 +115,34 @@
                 block += `\n\n【角色語氣索引｜下列角色有語氣/說話樣本，需要某角色的說話風格範例就 <recall> 其名】\n・${voiceNames.join('、')}`;
             }
 
-            // ── 主模型上一輪 <recall> 點名的記憶 → 這一輪補完整內文（細節晚一輪到，不多通 API）──
-            if (_pendingRecallKeywords.length) {
-                const kws = _pendingRecallKeywords.map(k => k.toLowerCase());
-                const hit = all.filter(m => {
-                    const hay = ((m.tags || []).join(' ') + ' ' + (m.summary || '') + ' ' + (m.text || '')).toLowerCase();
-                    return kws.some(k => k && hay.includes(k));
-                }).slice(0, 8);
-                if (hit.length) {
-                    block += `\n\n【點名記憶細節｜你上一輪用 <recall> 要求回想的記憶，完整內容如下，務必據此保持連貫】\n`;
-                    block += hit.map(m => {
+            // ── 細節注入：① 副模型(記憶導演)上一輪挑的記憶＝主力  ② 主模型 <recall> 點名＝備援 → 合併去重補完整內文 ──
+            {
+                let _cand = [];
+                if (_pendingRecallEntries.length) _cand = _cand.concat(_pendingRecallEntries);    // 副模型挑的(主)
+                if (_pendingRecallKeywords.length) {                                               // 主模型 <recall> 點名的(備援)
+                    const kws = _pendingRecallKeywords.map(k => k.toLowerCase());
+                    _cand = _cand.concat(all.filter(m => {
+                        const hay = ((m.tags || []).join(' ') + ' ' + (m.summary || '') + ' ' + (m.text || '')).toLowerCase();
+                        return kws.some(k => k && hay.includes(k));
+                    }));
+                }
+                const _ds = new Set(); const _hit = [];
+                for (const m of _cand) {
+                    const key = (m.summary || '') + '|' + String(m.text || '').slice(0, 40);
+                    if (!key.trim() || _ds.has(key)) continue;
+                    _ds.add(key); _hit.push(m);
+                    if (_hit.length >= 8) break;
+                }
+                if (_hit.length) {
+                    block += `\n\n【點名記憶細節｜下列是這段劇情需要記得的完整記憶內容，務必據此保持連貫】\n`;
+                    block += _hit.map(m => {
                         let t = String(m.text || '').replace(/\s+/g, ' ').trim();
                         if (t.length > 300) t = t.slice(0, 300) + '…';
                         return `・${t}`;
                     }).join('\n');
                 }
-                _pendingRecallKeywords = [];   // 消費掉；要持續帶細節就靠主模型下一輪再 <recall>
+                _pendingRecallEntries = [];      // 消費掉；副模型每輪會重新挑
+                _pendingRecallKeywords = [];      // 消費掉；要持續帶就靠下一輪再點名
             }
 
             // ── 教主模型怎麼把「摘要」變「細節」（細節晚一輪到）──
@@ -148,6 +161,49 @@
         } catch (e) {
             console.warn('[Vector Memory Injector] 失敗:', e?.message || e);
         }
+    }
+
+    // ── 🎬 記憶導演：給副模型(state_runtime extractOnce)挑「下一輪主模型該被提醒哪幾條」用 ──
+    //    回傳帶碼全記憶目錄(文字) + 碼→記憶物件對照(map)；副模型挑碼 → 解析成物件 → setPendingRecall。
+    //    用代號(A1…An)讓副模型挑，避免它逐字寫關鍵詞寫錯/對不上（同學生圖 [P1] 號碼制）。
+    async function getCatalogForPicking() {
+        try {
+            if (win.OS_API?.isStandalone?.()) return null;
+            if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return null;
+            const storyId = _storyId();
+            if (!storyId || !win.OS_DB?.getAllVnMemories) return null;
+            const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            const facts = all.filter(m => m && m.type !== 'dialogue');
+            if (!facts.length) return null;
+            facts.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            const map = {};
+            const _seen = new Set();
+            let text = '', idx = 0;
+            const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
+            [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]].forEach((seg) => {
+                const lines = [];
+                seg[1].forEach((m) => {
+                    let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
+                    if (!s) return;
+                    if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
+                    if (_seen.has(s)) return;
+                    _seen.add(s);
+                    idx++;
+                    const code = 'A' + idx;
+                    map[code] = m;
+                    lines.push(`${code}・${s}`);
+                });
+                if (lines.length) text += `\n〔${seg[0]}〕\n` + lines.join('\n');
+            });
+            if (!idx) return null;
+            return { text: text.trim(), map };
+        } catch (e) { return null; }
+    }
+    // 副模型挑完的記憶物件 → 存著，下一輪 injectMemories 注入完整內文（最多 8）
+    function setPendingRecall(entries) {
+        try { _pendingRecallEntries = (Array.isArray(entries) ? entries : []).filter(Boolean).slice(0, 8); }
+        catch (e) { _pendingRecallEntries = []; }
+        if (_pendingRecallEntries.length) console.log('🎬 [Recall導演] 副模型挑了下一輪要回想的記憶 ' + _pendingRecallEntries.length + ' 條');
     }
 
     // ── 酒館原生生成結束 → 直接 ingest（酒館不走 saveVnChapter，VN_CHAPTER_SAVED 不會發，
@@ -205,7 +261,7 @@
                 if (id && win.OS_DB?.deleteVnMemoriesByChapter) win.OS_DB.deleteVnMemoriesByChapter(id, _storyId());
             } catch (e) {}
         });
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestSig = null; _lastRecall = null; _pendingRecallKeywords = []; });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestSig = null; _lastRecall = null; _pendingRecallKeywords = []; _pendingRecallEntries = []; });
         console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
     }
 
@@ -215,6 +271,7 @@
         // 結合觸發：state_runtime 取走待處理記憶內容(取走即清，避免重複)
         consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; return p; },
         hasPendingMemory() { return !!_pendingMemory; },
+        getCatalogForPicking, setPendingRecall,    // 🎬 記憶導演：給 state_runtime 副模型挑用
     };
     init();
 })();
