@@ -707,7 +707,7 @@
             let sysPrompt = "";
             let cotPrompt = "";
 
-            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat', 'call_voice_system'];   // 📞 通話跳過 CoT，免 AI 吐一大段分析→通話乾等卡住
+            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];   // 📞 通話「保留」CoT：AI 靠它讀世界書情感/規範條目想怎麼回；思考關進 <thinking> 由字幕端剝掉
 
             if (win.OS_PROMPTS) {
                 if (promptKey) sysPrompt = win.OS_PROMPTS.get(promptKey);
@@ -897,7 +897,7 @@
 
         // --- 5. 獨立模式 Context Builder (精準掃描引擎) ---
         _buildStandaloneContext: async function(userMessage, promptKey) {
-            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat', 'call_voice_system'];   // 📞 通話跳過 CoT，免 AI 吐一大段分析→通話乾等卡住
+            const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];   // 📞 通話「保留」CoT：AI 靠它讀世界書情感/規範條目想怎麼回；思考關進 <thinking> 由字幕端剝掉
 
             const apiMessages = [];
 
