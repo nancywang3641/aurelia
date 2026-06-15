@@ -1243,9 +1243,12 @@
                 if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { await win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat); }
             };
 
+            console.log('[WX] triggerReply: isApiMode=' + isApiMode + ', WX_API=' + (!!win.WX_API));
             if (isApiMode && win.WX_API) {
-                // 如果 wx_phone_api_config 沒有 url/key，嘗試從主設定繼承
-                if (!apiConfig.url || !apiConfig.key) {
+                // 設定：以主模型完整設定當底（含 useSystemApi/stProfileId/url/key，跟創作室 callAI 同源），wx 自己的覆蓋其上
+                try { const _S = win.OS_SETTINGS; if (_S && _S.getConfig) { const _b = _S.getConfig(); if (_b) apiConfig = Object.assign({}, _b, apiConfig); } } catch (e) {}
+                // 保險：仍缺 url/key 且非 useSystemApi → 從 os_global_config 補
+                if (!apiConfig.useSystemApi && (!apiConfig.url || !apiConfig.key)) {
                     try {
                         const mainCfg = JSON.parse(localStorage.getItem('os_global_config') || '{}');
                         if (mainCfg.url) apiConfig.url = mainCfg.url;
@@ -1254,23 +1257,48 @@
                         if (!apiConfig.maxTokens && mainCfg.maxTokens) apiConfig.maxTokens = mainCfg.maxTokens;
                     } catch(e) {}
                 }
-                const messages = await win.WX_API.buildContext(null);
-                await win.WX_API.chat(messages, apiConfig,
-                    (chunk) => { /* 不做實時顯示，避免頻閃 */ },
-                    onFinishReply,
-                    (error) => {
-                        // 移除 loading 泡泡並顯示錯誤
-                        const idx = currentChat.messages.findIndex(m => m.isLoading);
-                        if (idx !== -1) currentChat.messages.splice(idx, 1);
-                        const errMsg = { type:'msg', isMe:false, content:`⚠️ AI 回應失敗：${error?.message || '未知錯誤'}`, sender: currentChat.name, senderName: currentChat.name };
-                        currentChat.messages.push(errMsg);
-                        IS_STREAMING_REPLY = false;
-                        _rebuildRoomContent(currentChat);
-                        console.error('[WX] API 錯誤:', error);
-                    },
-                    { disableTyping: apiConfig.disableTyping !== false }
-                );
+                // buildContext 加逾時 + 失敗用精簡上下文續跑（不讓它卡住/丟錯就整個不回又鎖死）
+                let messages;
+                try {
+                    console.log('[WX] buildContext 開始…');
+                    messages = await Promise.race([
+                        win.WX_API.buildContext(null),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('buildContext 逾時(12s)')), 12000))
+                    ]);
+                    if (!Array.isArray(messages) || !messages.length) throw new Error('buildContext 回空');
+                    console.log('[WX] buildContext 完成, messages=' + messages.length);
+                } catch (be) {
+                    console.warn('[WX] buildContext 失敗/逾時 → 用精簡上下文續跑:', (be && be.message) || be);
+                    messages = [{ role: 'system', content: 'You are ' + (currentChat.name || 'AI') + '，正在用微信跟對方聊天，延續下面對話、用聊天口語回覆。' }];
+                    (currentChat.messages || []).filter(m => m && (!m.type || m.type === 'msg') && !m.isLoading && m.content)
+                        .slice(-15).forEach(m => messages.push({ role: m.isMe ? 'user' : 'assistant', content: String(m.raw || m.content) }));
+                }
+                console.log('[WX] 呼叫 OS_API.chat…');
+                try {
+                    await win.WX_API.chat(messages, apiConfig,
+                        (chunk) => { /* 不做實時顯示，避免頻閃 */ },
+                        onFinishReply,
+                        (error) => {
+                            const idx = currentChat.messages.findIndex(m => m.isLoading);
+                            if (idx !== -1) currentChat.messages.splice(idx, 1);
+                            const errMsg = { type:'msg', isMe:false, content:`⚠️ AI 回應失敗：${error?.message || '未知錯誤'}`, sender: currentChat.name, senderName: currentChat.name };
+                            currentChat.messages.push(errMsg);
+                            IS_STREAMING_REPLY = false;
+                            _rebuildRoomContent(currentChat);
+                            console.error('[WX] API 錯誤:', error);
+                        },
+                        { disableTyping: apiConfig.disableTyping !== false }
+                    );
+                } catch (ce) {
+                    console.error('[WX] OS_API.chat 例外:', ce);
+                    const idx = currentChat.messages.findIndex(m => m.isLoading);
+                    if (idx !== -1) currentChat.messages.splice(idx, 1);
+                    currentChat.messages.push({ type:'msg', isMe:false, content:'⚠️ 引擎例外：' + ((ce && ce.message) || ce), sender: currentChat.name, senderName: currentChat.name });
+                    IS_STREAMING_REPLY = false;
+                    _rebuildRoomContent(currentChat);
+                }
             } else if (window.TavernHelper) {
+                console.warn('[WX] 走酒館轉發路徑（isApiMode=' + isApiMode + ' / WX_API=' + (!!win.WX_API) + '）→ 沒走 OS API');
                 const loadingMsgIndex = currentChat.messages.findIndex(m => !m.isMe && m.isLoading);
                 if (loadingMsgIndex !== -1) { currentChat.messages.splice(loadingMsgIndex, 1); }
                 this.render(); 
