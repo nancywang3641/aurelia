@@ -1776,7 +1776,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                             { disableTyping: true });
                     });
                 } catch (e) { console.error('[st.callAI]', e); return ''; }
-            }
+            },
+            remember() { /* 預覽不寫真實記憶 */ }
         };
     }
 
@@ -1797,6 +1798,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'parse:function(){return {};},'
             +   'setImage:async function(el,p,type){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene");if(u)el.src=u;}}catch(e){}},'
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
+            +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
             + '(async function(){try{' + js + '}catch(e){console.error("[phone tpl]",e);}})();'
