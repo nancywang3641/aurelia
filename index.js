@@ -137,6 +137,7 @@ const PHONE_FILES = [
     'os/os_api_engine.js',
     'os/os_vector_engine.js', // 向量記憶引擎（embed/ingest/search；酒館原本沒載入，補上）
     'os/os_vector_inject.js', // 酒館版記憶召回注入器（GENERATION_STARTED → injectPrompts）
+    'os/os_app_memory_inject.js', // app→酒館 記憶反向注入器（在場角色的手機近況，唯讀注入不貼回 chat）
     'os/phone_system.js',
     'os/os_monitor.js',
     'os/os_minimax.js',
