@@ -908,9 +908,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 
                 <div class="set-tabs">
                     <div class="set-tab active" data-tab="api">API</div>
-                    <div class="set-tab" data-tab="img">圖片設置</div>
+                    <div class="set-tab" data-tab="img">圖片</div>
                     <div class="set-tab" data-tab="voice">語音</div>
-                    <div class="set-tab" data-tab="vn">VN</div>
+                    <div class="set-tab" data-tab="vn">素材</div>
                     <div class="set-tab" data-tab="vec"${!isStandalone ? ' style="display:none"' : ''}>記憶向量</div>
                     <div class="set-tab" data-tab="sys"${!isStandalone ? ' style="display:none"' : ''}>系統/備份</div>
                 </div>
