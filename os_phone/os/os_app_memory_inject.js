@@ -64,7 +64,7 @@
     }
 
     // 微薄：依作者(角色)分組（只收別人發的，isMe 是你自己發的不算角色記憶）
-    async function _wbByAuthor() {
+    async function _wbByAuthor(curCid) {
         try {
             if (!win.OS_DB || !win.OS_DB.getAllWbPosts) return {};
             const posts = (await win.OS_DB.getAllWbPosts()) || [];
@@ -72,6 +72,7 @@
             for (let i = 0; i < posts.length; i++) {
                 const p = posts[i];
                 if (!p || p.isMe) continue;
+                if (p.tavernChatId !== curCid) continue;      // 🔒 只收當前劇情的微薄
                 const name = p.user;
                 if (!name) continue;
                 (by[name] = by[name] || []).push(p);
@@ -115,10 +116,10 @@
             return by;
         } catch (e) { return {}; }
     }
-    function _pluginLines(recs) {
+    function _pluginLines(recs, curCid) {
         const out = [];
         for (let i = 0; i < recs.length; i++) {
-            const es = recs[i].entries.slice(-PER_CHAR_MSGS);
+            const es = recs[i].entries.filter(function (e) { return e && e.tavernChatId === curCid; }).slice(-PER_CHAR_MSGS);
             for (let k = 0; k < es.length; k++) {
                 const t = _cut(es[k].text); if (!t) continue;
                 const who = es[k].speaker || '';
@@ -139,17 +140,22 @@
             if (!_enabled()) return;
             if (!win.OS_DB) return;
 
+            // 🔒 chatId 隔離：只注入「當前劇情」的 app 資料（跟 AVS 同款），避免換劇情/角色卡時冒出別劇情的手機數據
+            const curCid = (win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
+            if (curCid == null) { console.warn('📱 [App Memory Injector] 取不到當前 chatId → 為免跨卡污染，本輪不注入'); return; }
+
             // 候選角色：名字 → { chat, posts }（微信/電話來自 api_chats、微薄來自 wb_posts）
             const cand = {};
             const chats = (win.OS_DB.getAllApiChats ? (await win.OS_DB.getAllApiChats()) : {}) || {};
             Object.keys(chats).forEach(function (id) {
                 const c = chats[id];
                 if (!c || c.isGroup) return;                  // v1 先不處理群聊
+                if (c.tavernChatId !== curCid) return;        // 🔒 只收當前劇情建立的對話
                 const name = c.name || c.realName || '';
                 if (!name || name.length < 2) return;
                 (cand[name] = cand[name] || {}).chat = c;
             });
-            const wbBy = await _wbByAuthor();
+            const wbBy = await _wbByAuthor(curCid);
             Object.keys(wbBy).forEach(function (name) {
                 if (!name || name.length < 2) return;
                 (cand[name] = cand[name] || {}).posts = wbBy[name];
@@ -185,7 +191,7 @@
                     });
                 }
                 if (info.posts) _wbLines(info.posts).forEach(function (l) { lines.push(l); });
-                if (info.plugins) _pluginLines(info.plugins).forEach(function (l) { lines.push(l); });
+                if (info.plugins) _pluginLines(info.plugins, curCid).forEach(function (l) { lines.push(l); });
                 if (!lines.length) continue;
                 block += `\n〔${name}〕\n` + lines.join('\n');
                 any = true;
