@@ -1123,23 +1123,24 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
                         <div id="view-img-api" class="img-subtab-view">
 
-                        <!-- ── 子分頁鈕：背景 / 角色 ── -->
+                        <!-- ── 子分頁鈕：頭像 / 插圖 / 背景（各自獨立來源）── -->
                         <div class="img-srctab-row">
-                            <div class="img-srctab" id="img-srctab-char" data-imgsrctab="char" onclick="window._switchImgSrcTab && window._switchImgSrcTab('char')">角色</div>
+                            <div class="img-srctab" id="img-srctab-char" data-imgsrctab="char" onclick="window._switchImgSrcTab && window._switchImgSrcTab('char')">頭像</div>
+                            <div class="img-srctab" id="img-srctab-scene" data-imgsrctab="scene" onclick="window._switchImgSrcTab && window._switchImgSrcTab('scene')">插圖</div>
                             <div class="img-srctab" id="img-srctab-bg" data-imgsrctab="bg" onclick="window._switchImgSrcTab && window._switchImgSrcTab('bg')">背景</div>
                         </div>
 
-                        <!-- ── 🎭 角色 分頁 body（活物：角色・頭像・插圖）── -->
+                        <!-- ── 🎭 頭像 分頁 body（char：角色頭像／立繪）── -->
                         <div id="img-tab-char" class="img-srctab-body">
                             <div class="set-group">
-                                <div class="set-label">🎭 角色頭像 來源</div>
+                                <div class="set-label">🎭 頭像 來源</div>
                                 <select class="set-select" id="img-service-living">
                                     <option value="pollinations" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
                                     <option value="tavern_sd" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。場景插圖另在下方「🎬 場景插圖」選，可走不同渠道。</div>
+                                <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。插圖在「插圖」分頁另選，可走不同渠道。</div>
                             </div>
                             <div class="set-group">
                                 <div class="set-label">📐 角色頭像尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">空＝各接口預設(Poll 512 / NAI 1024)</span></div>
@@ -1150,6 +1151,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="1024x1024" ${imgConfig.avatarSize==='1024x1024' ? 'selected':''}>1024×1024（清晰）</option>
                                     <option value="832x1216"  ${imgConfig.avatarSize==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <!-- ── 🎬 插圖 分頁 body（scene：場景插圖／CG 來源，可與頭像不同渠道）── -->
+                        <div id="img-tab-scene" class="img-srctab-body" style="display:none;">
+                            <div class="set-group">
+                                <div class="set-label">🎬 插圖 來源</div>
+                                <select class="set-select" id="img-service-scene">
+                                    <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
+                                </select>
+                                <div class="set-desc" style="margin-top:6px;">場景插圖／CG 用這個來源，可跟頭像不同渠道（例如頭像走 Anima、插圖走 Pollinations）。</div>
                             </div>
                         </div>
 
@@ -1523,7 +1538,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
                         </div>
 
-                        <!-- ── 🧑‍🎨 頭像追加詞（按接口，屬「角色」分頁；放在底詞區下方，不再頂在連線設定上面）── -->
+                        <!-- ── 🧑‍🎨 頭像追加詞（按接口，屬「頭像」分頁；放在底詞區下方，不再頂在連線設定上面）── -->
                         <div id="img-avatar-add-zone">
                             <div class="set-group" id="img-avatar-add-main">
                                 <div class="set-label">🧑‍🎨 頭像追加詞 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">插在通用底詞與角色描述之間</span></div>
@@ -1539,23 +1554,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
 
-                        <!-- ── 🎬 場景插圖（共用設定）｜屬「角色」分頁 ── -->
+                        <!-- ── 🎬 場景插圖（共用設定）｜屬「插圖」分頁 ── -->
                         <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
                             <div class="set-label" style="font-size:13px;">🎬 場景插圖</div>
                             <div class="set-desc" style="margin-top:6px;">尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。</div>
 
                             <div id="img-scene-body" style="margin-top:14px;">
-
-                                <!-- ── 場景插圖來源（可與頭像走不同渠道）── -->
-                                <div style="margin-bottom:12px;">
-                                    <div class="set-label" style="font-size:11px;">🎬 插圖來源 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">可與頭像不同渠道</span></div>
-                                    <select class="set-select" id="img-service-scene" style="font-size:12px;">
-                                        <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
-                                        <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
-                                        <option value="tavern_sd" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
-                                        <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
-                                    </select>
-                                </div>
 
                                 <!-- ── 場景插圖尺寸（獨立於主圖片尺寸）── -->
                                 <div style="margin-bottom:12px;">
@@ -2257,6 +2261,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elImgBgNote     = container.querySelector('#img-bg-synced-note');
         const elImgBgNoteText = container.querySelector('#img-bg-synced-note-text');
         const elImgTabChar    = container.querySelector('#img-tab-char');
+        const elImgTabScene   = container.querySelector('#img-tab-scene');
         const elImgTabBg      = container.querySelector('#img-tab-bg');
         const elImgSceneBlock = container.querySelector('#img-scene-block');
         const elImgSceneExtract = container.querySelector('#img-scene-extract-block'); // 副模型版（插圖→角色）
@@ -2265,6 +2270,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elTavGroup      = container.querySelector('#img-group-tavernsd');
         const elCfdGroup      = container.querySelector('#img-group-comfyui');
         const srcTabBtnChar   = container.querySelector('#img-srctab-char');
+        const srcTabBtnScene  = container.querySelector('#img-srctab-scene');
         const srcTabBtnBg     = container.querySelector('#img-srctab-bg');
 
         // 目前子分頁（預設「角色」）
@@ -2287,38 +2293,54 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
 
         const refreshImgPanel = () => {
-            const livingSvc = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations'; // 頭像桶
-            const sceneSvc  = elImgServiceScene  ? elImgServiceScene.value  : livingSvc;       // 插圖桶
-            const synced = elImgSyncBg ? elImgSyncBg.checked : true;
+            const charSvc  = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations'; // 頭像桶
+            const sceneSvc = elImgServiceScene  ? elImgServiceScene.value  : charSvc;         // 插圖桶
+            const synced   = elImgSyncBg ? elImgSyncBg.checked : true;
 
-            // 子分頁鈕 active 樣式
-            if (srcTabBtnChar) srcTabBtnChar.classList.toggle('active', imgSrcTab === 'char');
-            if (srcTabBtnBg)   srcTabBtnBg.classList.toggle('active', imgSrcTab === 'bg');
-            // 兩個 body 一次只出一邊
-            if (elImgTabChar) elImgTabChar.style.display = (imgSrcTab === 'char') ? '' : 'none';
-            if (elImgTabBg)   elImgTabBg.style.display   = (imgSrcTab === 'bg')   ? '' : 'none';
+            const _avZone = container.querySelector('#img-avatar-add-zone');
+            const _avM    = container.querySelector('#img-avatar-add-main');
+            const _avT    = container.querySelector('#img-avatar-add-tav');
+            const _itB    = container.querySelector('#img-nai-item-block');
+
+            // 三個子分頁鈕 active 樣式
+            if (srcTabBtnChar)  srcTabBtnChar.classList.toggle('active', imgSrcTab === 'char');
+            if (srcTabBtnScene) srcTabBtnScene.classList.toggle('active', imgSrcTab === 'scene');
+            if (srcTabBtnBg)    srcTabBtnBg.classList.toggle('active', imgSrcTab === 'bg');
+            // 三個 body 一次只出一個
+            if (elImgTabChar)  elImgTabChar.style.display  = (imgSrcTab === 'char')  ? '' : 'none';
+            if (elImgTabScene) elImgTabScene.style.display = (imgSrcTab === 'scene') ? '' : 'none';
+            if (elImgTabBg)    elImgTabBg.style.display    = (imgSrcTab === 'bg')    ? '' : 'none';
 
             if (imgSrcTab === 'char') {
-                // 角色分頁：頭像桶＋插圖桶可走不同接口 → 兩個都顯示對應接口設定 + 角色頭像底詞 + 場景插圖（副模型版）
-                showOnlyIfaceGroup([livingSvc, sceneSvc]);
-                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc !== 'pollinations' && sceneSvc !== 'pollinations');
+                // 頭像分頁：頭像桶接口設定 + 頭像底詞 + 頭像追加詞（按接口）
+                showOnlyIfaceGroup(charSvc);
+                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', charSvc !== 'pollinations');
                 // 頭像追加詞按接口：Pol/NAI 用主版、酒館原生/ComfyUI 用專用版（選 NAI 不再看到 ComfyUI 專用詞）
-                { const _avZone = container.querySelector('#img-avatar-add-zone'); if (_avZone) _avZone.style.display = ''; }   // 頭像追加詞區屬角色分頁，這裡顯示
-                const _isTavAv = (livingSvc === 'tavern_sd' || livingSvc === 'comfyui_direct');
-                const _avM = container.querySelector('#img-avatar-add-main'); if (_avM) _avM.classList.toggle('hidden', _isTavAv);
-                const _avT = container.querySelector('#img-avatar-add-tav'); if (_avT) _avT.classList.toggle('hidden', !_isTavAv);
-                { const _itB = container.querySelector('#img-nai-item-block'); if (_itB) _itB.classList.add('hidden'); }   // 物品＝死物，角色分頁藏物品底詞
+                if (_avZone) _avZone.style.display = '';
+                const _isTavAv = (charSvc === 'tavern_sd' || charSvc === 'comfyui_direct');
+                if (_avM) _avM.classList.toggle('hidden', _isTavAv);
+                if (_avT) _avT.classList.toggle('hidden', !_isTavAv);
+                if (_itB) _itB.classList.add('hidden');   // 物品＝死物，頭像分頁藏
+                if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';   // 場景插圖設定屬插圖分頁
+                if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
+                if (elImgPixabay)      elImgPixabay.style.display = 'none';
+            } else if (imgSrcTab === 'scene') {
+                // 插圖分頁：插圖桶接口設定 + 場景插圖（尺寸/風格/底詞說明）+ 副模型插圖
+                showOnlyIfaceGroup(sceneSvc);
+                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', sceneSvc !== 'pollinations'); // pol 底詞全模組共用，插圖走 pol 時這裡也能調
+                if (_avZone) _avZone.style.display = 'none';   // 頭像追加詞屬頭像分頁
+                if (_itB) _itB.classList.add('hidden');
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = '';
                 if (elImgSceneExtract) elImgSceneExtract.style.display = '';
-                if (elImgPixabay)      elImgPixabay.style.display = 'none';   // 退路圖庫屬背景、角色分頁藏
+                if (elImgPixabay)      elImgPixabay.style.display = 'none';
             } else {
                 // 背景分頁
                 if (synced) {
-                    // 同步：藏下拉、顯示「與角色相同」、接口設定本體留在角色分頁（這裡不重複出）
+                    // 同步：藏下拉、顯示「與頭像相同」、接口設定本體留在頭像分頁（這裡不重複出）
                     if (elImgBgSrcGroup) elImgBgSrcGroup.style.display = 'none';
                     if (elImgBgNote)     elImgBgNote.style.display = '';
-                    if (elImgBgNoteText) elImgBgNoteText.textContent = '（與角色相同：' + (SVC_DISP[livingSvc] || livingSvc) + '）';
-                    showOnlyIfaceGroup(null); // 四個接口區全藏（設定在角色分頁）
+                    if (elImgBgNoteText) elImgBgNoteText.textContent = '（與頭像相同：' + (SVC_DISP[charSvc] || charSvc) + '）';
+                    showOnlyIfaceGroup(null); // 接口區全藏（設定在頭像分頁）
                 } else {
                     // 不同步：顯示背景自己的下拉 + 它選的接口設定
                     const bgSvc = elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations';
@@ -2326,20 +2348,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     if (elImgBgNote)     elImgBgNote.style.display = 'none';
                     showOnlyIfaceGroup(bgSvc);
                 }
-                // 角色頭像底詞 + 場景插圖（含副模型版）只屬角色分頁；退路圖庫(背景)在背景分頁顯示
-                { const _avZone = container.querySelector('#img-avatar-add-zone'); if (_avZone) _avZone.style.display = 'none'; }   // 頭像追加詞區屬角色分頁，背景分頁藏
+                if (_avZone) _avZone.style.display = 'none';
                 if (elImgPolPrompts) elImgPolPrompts.classList.add('hidden');
-                { const _itB = container.querySelector('#img-nai-item-block'); if (_itB) _itB.classList.remove('hidden'); }   // 物品底詞在背景分頁(死物桶)顯示
+                if (_itB) _itB.classList.remove('hidden');   // 物品底詞在背景分頁(死物桶)顯示
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
                 if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
                 if (elImgPixabay)      elImgPixabay.style.display = '';   // 退路圖庫（背景生不出抓照片）屬背景
             }
-            // 測試生成是通用工具 → 兩分頁都留
+            // 測試生成是通用工具 → 各分頁都留
         };
 
         // 子分頁切換鈕
         window._switchImgSrcTab = (tab) => {
-            imgSrcTab = (tab === 'bg') ? 'bg' : 'char';
+            imgSrcTab = (tab === 'bg' || tab === 'scene') ? tab : 'char';
             refreshImgPanel();
         };
 
