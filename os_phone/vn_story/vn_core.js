@@ -1570,14 +1570,21 @@
                 }
             } catch(e) {}
         },
-        // OS_IMAGE_MANAGER 走 win(=window.parent) 掛載，常比訊息晚就緒：早鳥在串流/訊息落地就跑，
-        // 那一刻生圖引擎可能還沒到 win 上。輪詢等它就緒；逾時才放棄（退回對話框惰性生成）。
+        // 生圖引擎就緒判定：vn_core 的 win=window.parent，但再注入時序下 OS_IMAGE_MANAGER 可能先掛在
+        // window 或 window.parent。任一個有就算就緒——實際生成走 VN_Image.getAvatar，會用對的那個 win。
+        _imgEngineReady: function() {
+            try { if (win && win.OS_IMAGE_MANAGER) return true; } catch(e) {}
+            try { if (window.OS_IMAGE_MANAGER) return true; } catch(e) {}
+            try { if (window.parent && window.parent.OS_IMAGE_MANAGER) return true; } catch(e) {}
+            return false;
+        },
         _waitForImageManager: function(timeoutMs) {
-            if (win.OS_IMAGE_MANAGER) return Promise.resolve(true);
+            const self = this;
+            if (self._imgEngineReady()) return Promise.resolve(true);
             return new Promise(function(resolve) {
                 const t0 = Date.now();
                 const iv = setInterval(function() {
-                    if (win.OS_IMAGE_MANAGER) { clearInterval(iv); resolve(true); }
+                    if (self._imgEngineReady()) { clearInterval(iv); resolve(true); }
                     else if (Date.now() - t0 > (timeoutMs || 180000)) { clearInterval(iv); resolve(false); }
                 }, 400);
             });
@@ -1585,10 +1592,14 @@
         _earlybirdAvatars: async function(pairs) {
             if (!pairs || !pairs.length) return;
             if (VN_Config.data.spriteBase) return;   // 固定立繪模式不生成
-            // ⭐ 真因修復：舊版此處為 `|| !win.OS_IMAGE_MANAGER) return` → 生圖引擎晚一步就緒時，
-            //    早鳥「收到 N 位」印完就把整批默默丟掉，頭像退回「對話框跳出來才生」。改成等引擎就緒再生。
-            if (!win.OS_IMAGE_MANAGER) {
+            // ⭐ 真因修復：舊版此處為 `|| !win.OS_IMAGE_MANAGER) return` → 生圖引擎晚一步就緒(或掛在別的 win)時，
+            //    早鳥「收到 N 位」印完就把整批默默丟掉，頭像退回「對話框跳出來才生」。改成多 win 判定＋等就緒。
+            const _t0 = Date.now();
+            const _p = (function(){ try { return !!(window.parent && window.parent.OS_IMAGE_MANAGER); } catch(e){ return 'err'; } })();
+            console.log(`[VN] 頭像早鳥診斷：進入 pairs=${pairs.length} | win.IM=${!!(win&&win.OS_IMAGE_MANAGER)} window.IM=${!!window.OS_IMAGE_MANAGER} parent.IM=${_p} | win===window:${win===window}`);
+            if (!this._imgEngineReady()) {
                 const _ok = await this._waitForImageManager(180000);
+                console.log(`[VN] 頭像早鳥診斷：等引擎 ${Date.now()-_t0}ms → ${_ok?'就緒':'逾時放棄'}`);
                 if (!_ok) { console.warn('[VN] 頭像早鳥：等 OS_IMAGE_MANAGER 逾時，放棄預生（退回對話時生成）'); return; }
             }
             this._imgScanStart();   // 整批處理期間舉「忙碌」牌：查快取的空檔不算完成
@@ -1608,6 +1619,7 @@
                     if (this._getPersonaFallback(name)?.url) continue;
                 } catch(e) {}
                 // 串行生成（≤10 張；本機讓路交給語音紅綠燈在生圖層處理）
+                console.log(`[VN] 頭像早鳥診斷：派發生成 ${name}（距進入 ${Date.now()-_t0}ms）`);
                 await this._genAvatarToCache(name);
             }
             } finally { this._imgScanEnd(); }
