@@ -59,8 +59,10 @@
         let config = {
             service: 'pollinations',
             serviceInanimate: 'pollinations', // 死物桶：背景/物品/寵物
-            serviceLiving: 'pollinations',    // 活物桶：角色/插圖
-            imgSourceSynced: true,            // 背景來源是否同步角色（true＝沿用角色接口）
+            serviceLiving: 'pollinations',    // legacy：舊「活物桶」(角色+插圖共用)，保留供遷移
+            serviceChar: 'pollinations',      // 頭像桶：char（角色頭像/立繪）
+            serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖/CG）
+            imgSourceSynced: true,            // 背景來源是否同步頭像（true＝沿用頭像接口）
             pollinations: {
                 url: 'https://gen.pollinations.ai/image',
                 apiKey: '',
@@ -193,6 +195,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 config = {
                     ...config,
                     ...savedConfig,
+                    // 頭像/插圖拆桶遷移：沒存過新桶 → 繼承舊「活物桶」serviceLiving，現狀不變
+                    serviceChar:  savedConfig.serviceChar  || savedConfig.serviceLiving || savedConfig.service || config.service,
+                    serviceScene: savedConfig.serviceScene || savedConfig.serviceLiving || savedConfig.service || config.service,
                     pollinations: {
                         ...config.pollinations,
                         ...pol,
@@ -342,10 +347,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         
         const win = window.parent || window;
         if (win.OS_IMAGE_MANAGER) {
-            // 兩桶 + legacy mirror（service = serviceLiving）。同步 ON 時 serviceInanimate 已＝serviceLiving
+            // 三桶 + legacy mirror（serviceLiving / service = 頭像桶 serviceChar）。同步 ON 時 serviceInanimate 已＝serviceChar
             win.OS_IMAGE_MANAGER.config.serviceInanimate = imgData.serviceInanimate || imgData.service;
-            win.OS_IMAGE_MANAGER.config.serviceLiving = imgData.serviceLiving || imgData.service;
-            win.OS_IMAGE_MANAGER.config.service = imgData.serviceLiving || imgData.service;
+            win.OS_IMAGE_MANAGER.config.serviceChar  = imgData.serviceChar  || imgData.serviceLiving || imgData.service;
+            win.OS_IMAGE_MANAGER.config.serviceScene = imgData.serviceScene || imgData.serviceLiving || imgData.service;
+            win.OS_IMAGE_MANAGER.config.serviceLiving = imgData.serviceLiving || imgData.serviceChar || imgData.service;
+            win.OS_IMAGE_MANAGER.config.service = imgData.serviceLiving || imgData.serviceChar || imgData.service;
             if (typeof imgData.imgSourceSynced === 'boolean') win.OS_IMAGE_MANAGER.config.imgSourceSynced = imgData.imgSourceSynced;
             if (imgData.pollinations) {
                 win.OS_IMAGE_MANAGER.config.pollinations = {
@@ -366,7 +373,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     ...imgData.comfyuiDirect
                 };
             }
-            console.log('[OS設置] ✅ 圖片管理器配置已更新, 死物桶:', win.OS_IMAGE_MANAGER.config.serviceInanimate, '活物桶:', win.OS_IMAGE_MANAGER.config.serviceLiving);
+            console.log('[OS設置] ✅ 圖片管理器配置已更新, 死物桶:', win.OS_IMAGE_MANAGER.config.serviceInanimate, '頭像桶:', win.OS_IMAGE_MANAGER.config.serviceChar, '插圖桶:', win.OS_IMAGE_MANAGER.config.serviceScene);
         }
     }
 
@@ -1125,14 +1132,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🎭 角色 分頁 body（活物：角色・頭像・插圖）── -->
                         <div id="img-tab-char" class="img-srctab-body">
                             <div class="set-group">
-                                <div class="set-label">🎭 角色・🎬 插圖 來源</div>
+                                <div class="set-label">🎭 角色頭像 來源</div>
                                 <select class="set-select" id="img-service-living">
-                                    <option value="pollinations" ${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
+                                    <option value="pollinations" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">角色／頭像／場景插圖都用這個來源。</div>
+                                <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。場景插圖另在下方「🎬 場景插圖」選，可走不同渠道。</div>
                             </div>
                             <div class="set-group">
                                 <div class="set-label">📐 角色頭像尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">空＝各接口預設(Poll 512 / NAI 1024)</span></div>
@@ -1185,7 +1192,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 共用接口設定區（一次只顯示一個，由 refreshImgPanel 控制）── -->
                         <div id="img-iface-groups">
 
-                            <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
+                            <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
                                     <div class="set-desc">🧩 連接你電腦上的 ComfyUI，在這裡加 LoRA、調參數就好，其餘都自動處理。</div>
@@ -1322,7 +1329,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </div>
                             </div>
 
-                            <div id="img-group-tavernsd" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd') ? '' : 'hidden'}">
+                            <div id="img-group-tavernsd" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd') ? '' : 'hidden'}">
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
                                     <div class="set-desc">🎨 用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。</div>
@@ -1330,7 +1337,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </div>
                             </div>
 
-                            <div id="img-group-pollinations" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' || (imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
+                            <div id="img-group-pollinations" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
                                     <div class="field-row">
@@ -1355,7 +1362,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </div>
                             </div>
 
-                            <div id="img-group-nai" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'novelai' || (imgConfig.serviceLiving || imgConfig.service) === 'novelai') ? '' : 'hidden'}">
+                            <div id="img-group-nai" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'novelai' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai') ? '' : 'hidden'}">
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
                                     <div class="field-row">
@@ -1499,7 +1506,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
 
-                        <div id="img-pol-prompts-group" class="${(imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? '' : 'hidden'}">
+                        <div id="img-pol-prompts-group" class="${((imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
                         <div class="iface-section-title">📝 提示詞（底詞）</div>
                         <div class="set-group">
                             <div class="field-row">
@@ -1539,6 +1546,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                             <div id="img-scene-body" style="margin-top:14px;">
 
+                                <!-- ── 場景插圖來源（可與頭像走不同渠道）── -->
+                                <div style="margin-bottom:12px;">
+                                    <div class="set-label" style="font-size:11px;">🎬 插圖來源 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">可與頭像不同渠道</span></div>
+                                    <select class="set-select" id="img-service-scene" style="font-size:12px;">
+                                        <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
+                                        <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
+                                        <option value="tavern_sd" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                        <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
+                                    </select>
+                                </div>
+
                                 <!-- ── 場景插圖尺寸（獨立於主圖片尺寸）── -->
                                 <div style="margin-bottom:12px;">
                                     <div class="set-label" style="font-size:11px;">📐 場景插圖尺寸</div>
@@ -1572,7 +1590,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </select>
                                 </div>
 
-                                <div class="set-desc" style="margin-bottom:12px; font-size:11px;">🎨 場景插圖跟角色共用同一份底詞／負詞——在上方「接口設定」的角色底詞調整即可，這裡不另設場景底詞。</div>
+                                <div class="set-desc" style="margin-bottom:12px; font-size:11px;">🎨 插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。</div>
                             </div>
                         </div>
 
@@ -1584,11 +1602,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-desc" style="margin-top:6px;">開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會<b>順便</b>依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。（酒館／獨立版皆可）</div>
                             <div class="set-desc" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72);">其它觸發：① 主模型直接吐 [Scene|]（世界書開規則，最省、零額外 API）；② 此處副模型搭便車（免額外呼叫）。獨立版（PWA 專門呼叫）已退役。</div>
                             <div class="set-label" style="font-size:12px; margin-top:10px;">副模型插圖指令 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">隨上方「Prompt 風格」切換</span></div>
-                            <div id="img-scene-extract-tags-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? 'none' : '';})()};">
+                            <div id="img-scene-extract-tags-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&(imgConfig.serviceScene||imgConfig.serviceLiving||imgConfig.service)!=='novelai')) ? 'none' : '';})()};">
                                 <div style="font-size:10px; color:rgba(26,28,40,0.6); margin-bottom:3px;">🏷️ 標籤版（給 NAI / Danbooru · 五層系統）</div>
                                 <textarea class="set-textarea" id="img-scene-extract-tags" style="min-height:170px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPromptTags || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                             </div>
-                            <div id="img-scene-extract-natural-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&imgConfig.service!=='novelai')) ? '' : 'none';})()};">
+                            <div id="img-scene-extract-natural-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&(imgConfig.serviceScene||imgConfig.serviceLiving||imgConfig.service)!=='novelai')) ? '' : 'none';})()};">
                                 <div style="font-size:10px; color:rgba(26,28,40,0.6); margin-bottom:3px;">💬 自然語言版（給 Pollinations / ComfyUI）</div>
                                 <textarea class="set-textarea" id="img-scene-extract-natural" style="min-height:120px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPromptNatural || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                             </div>
@@ -2046,7 +2064,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // 綁定元素 (圖片)
         const elImgServiceInanimate = container.querySelector('#img-service-inanimate'); // 死物桶：背景/物品/寵物
-        const elImgServiceLiving    = container.querySelector('#img-service-living');    // 活物桶：角色/插圖
+        const elImgServiceLiving    = container.querySelector('#img-service-living');    // 頭像桶：char（角色頭像/立繪）
+        const elImgServiceScene     = container.querySelector('#img-service-scene');     // 插圖桶：scene（場景插圖/CG）
         const elPolGroup = container.querySelector('#img-group-pollinations');
         const elPolApiKey = container.querySelector('#img-pol-apikey');
         const elPolModel = container.querySelector('#img-pol-model');
@@ -2258,16 +2277,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 : ((imgConfig.serviceInanimate || imgConfig.service) === (imgConfig.serviceLiving || imgConfig.service));
         }
 
-        // 只顯示「要顯示的那一個接口」設定區，其餘三個藏起
+        // 顯示「需要的接口設定區」：傳單一 svc 或 svc 陣列（頭像/插圖走不同渠道時要同時出現），其餘藏起
         function showOnlyIfaceGroup(svc) {
-            if (elNaiGroup) elNaiGroup.classList.toggle('hidden', svc !== 'novelai');
-            if (elPolGroup) elPolGroup.classList.toggle('hidden', svc !== 'pollinations');
-            if (elTavGroup) elTavGroup.classList.toggle('hidden', svc !== 'tavern_sd');
-            if (elCfdGroup) elCfdGroup.classList.toggle('hidden', svc !== 'comfyui_direct');
+            const set = new Set(Array.isArray(svc) ? svc : [svc]);
+            if (elNaiGroup) elNaiGroup.classList.toggle('hidden', !set.has('novelai'));
+            if (elPolGroup) elPolGroup.classList.toggle('hidden', !set.has('pollinations'));
+            if (elTavGroup) elTavGroup.classList.toggle('hidden', !set.has('tavern_sd'));
+            if (elCfdGroup) elCfdGroup.classList.toggle('hidden', !set.has('comfyui_direct'));
         }
 
         const refreshImgPanel = () => {
-            const livingSvc = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations';
+            const livingSvc = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations'; // 頭像桶
+            const sceneSvc  = elImgServiceScene  ? elImgServiceScene.value  : livingSvc;       // 插圖桶
             const synced = elImgSyncBg ? elImgSyncBg.checked : true;
 
             // 子分頁鈕 active 樣式
@@ -2278,9 +2299,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (elImgTabBg)   elImgTabBg.style.display   = (imgSrcTab === 'bg')   ? '' : 'none';
 
             if (imgSrcTab === 'char') {
-                // 角色分頁：顯示 living 接口設定 + 角色頭像底詞 + 場景插圖（副模型版）
-                showOnlyIfaceGroup(livingSvc);
-                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc !== 'pollinations');
+                // 角色分頁：頭像桶＋插圖桶可走不同接口 → 兩個都顯示對應接口設定 + 角色頭像底詞 + 場景插圖（副模型版）
+                showOnlyIfaceGroup([livingSvc, sceneSvc]);
+                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', livingSvc !== 'pollinations' && sceneSvc !== 'pollinations');
                 // 頭像追加詞按接口：Pol/NAI 用主版、酒館原生/ComfyUI 用專用版（選 NAI 不再看到 ComfyUI 專用詞）
                 { const _avZone = container.querySelector('#img-avatar-add-zone'); if (_avZone) _avZone.style.display = ''; }   // 頭像追加詞區屬角色分頁，這裡顯示
                 const _isTavAv = (livingSvc === 'tavern_sd' || livingSvc === 'comfyui_direct');
@@ -2324,6 +2345,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         if (elImgServiceInanimate) elImgServiceInanimate.onchange = refreshImgPanel;
         if (elImgServiceLiving)    elImgServiceLiving.onchange = refreshImgPanel;
+        if (elImgServiceScene)     elImgServiceScene.onchange = refreshImgPanel;
         if (elImgSyncBg)           elImgSyncBg.addEventListener('change', refreshImgPanel);
         refreshImgPanel(); // 初始化同步一次
 
@@ -3026,15 +3048,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
-                // 同步開關：ON＝背景沿用角色來源；OFF＝背景用自己選的
+                // 同步開關：ON＝背景沿用頭像來源；OFF＝背景用自己選的
                 const _imgSyncBgEl = container.querySelector('#img-sync-bg-to-char');
                 const _imgSynced   = _imgSyncBgEl ? _imgSyncBgEl.checked : true;
-                const _imgLivingSvc = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations';
+                const _imgCharSvc  = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations'; // 頭像桶
+                const _imgSceneSvc = elImgServiceScene  ? elImgServiceScene.value  : _imgCharSvc;     // 插圖桶
                 const imgData = {
-                    // 兩桶各自存；service 保留＝活物桶當 legacy mirror（避免漏改的舊讀者爆掉）
-                    serviceInanimate: _imgSynced ? _imgLivingSvc : (elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations'),
-                    serviceLiving:    _imgLivingSvc,
-                    service:          _imgLivingSvc,
+                    // 三桶各自存；serviceLiving/service 保留＝頭像桶當 legacy mirror（避免漏改的舊讀者爆掉）
+                    serviceInanimate: _imgSynced ? _imgCharSvc : (elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations'),
+                    serviceChar:      _imgCharSvc,
+                    serviceScene:     _imgSceneSvc,
+                    serviceLiving:    _imgCharSvc,
+                    service:          _imgCharSvc,
                     imgSourceSynced:  _imgSynced,
                     pollinations: {
                         url: 'https://gen.pollinations.ai/image',
@@ -3897,10 +3922,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const imageManager = win.OS_IMAGE_MANAGER;
                 if (!imageManager) throw new Error('ImageManager 未載入');
 
-                // 同步兩桶（測試用 char 型→走活物桶；legacy mirror = 活物桶）
+                // 同步三桶（測試用 char 型→走頭像桶；legacy mirror = 頭像桶）
                 imageManager.config.serviceInanimate = elImgServiceInanimate ? elImgServiceInanimate.value : imageManager.config.serviceInanimate;
-                imageManager.config.serviceLiving = elImgServiceLiving ? elImgServiceLiving.value : imageManager.config.serviceLiving;
-                imageManager.config.service = imageManager.config.serviceLiving;
+                imageManager.config.serviceChar  = elImgServiceLiving ? elImgServiceLiving.value : imageManager.config.serviceChar;
+                imageManager.config.serviceScene = elImgServiceScene  ? elImgServiceScene.value  : imageManager.config.serviceScene;
+                imageManager.config.serviceLiving = imageManager.config.serviceChar;
+                imageManager.config.service = imageManager.config.serviceChar;
 
                 imageManager.config.pollinations.apiKey = elPolApiKey.value.trim();
                 imageManager.config.pollinations.model = elPolModel.value;

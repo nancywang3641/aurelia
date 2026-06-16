@@ -89,10 +89,12 @@
 
     const ImageManager = {
         config: {
-            service: 'pollinations', // 預設（legacy：單一全域服務，保留供舊讀者；新路由走兩桶）
-            // 兩桶各自選接口：死物桶(bg/item/pet) vs 活物桶(char/scene)
+            service: 'pollinations', // 預設（legacy：單一全域服務，保留供舊讀者；新路由走三桶）
+            // 三桶各自選接口：死物桶(bg/item/pet) vs 頭像桶(char) vs 插圖桶(scene)
             serviceInanimate: 'pollinations', // 死物桶：bg / item / pet
-            serviceLiving: 'pollinations',    // 活物桶：char / scene
+            serviceLiving: 'pollinations',    // legacy：舊「活物桶」(char+scene 共用)，保留供遷移/舊讀者；新路由走 serviceChar/serviceScene
+            serviceChar: 'pollinations',      // 頭像桶：char（角色頭像／立繪）
+            serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖／CG）
             pollinations: {
                 url: 'https://gen.pollinations.ai/image', // API 端點
                 apiKey: '', // Pollen API Key
@@ -145,9 +147,12 @@
                     this.config = {
                         ...this.config,
                         service: savedConfig.service || this.config.service,
-                        // 向後相容：舊用戶只有單一 service → 兩桶都繼承它，現狀不變
+                        // 向後相容：舊用戶只有單一 service → 各桶都繼承它，現狀不變
                         serviceInanimate: savedConfig.serviceInanimate || savedConfig.service || this.config.service,
                         serviceLiving: savedConfig.serviceLiving || savedConfig.service || this.config.service,
+                        // 頭像/插圖拆桶：沒存過新桶 → 遷移自舊「活物桶」serviceLiving，現狀不變（要分才分）
+                        serviceChar:  savedConfig.serviceChar  || savedConfig.serviceLiving || savedConfig.service || this.config.service,
+                        serviceScene: savedConfig.serviceScene || savedConfig.serviceLiving || savedConfig.service || this.config.service,
                         pollinations: {
                             ...this.config.pollinations,
                             ...savedConfig.pollinations,
@@ -187,13 +192,13 @@
         // options.force = true 可跳過 cache 強制重生。
         _urlCache: new Map(),
 
-        // --- 兩桶路由：依 type 取該桶選的接口 ---
-        // 活物桶(char/scene) = serviceLiving；其餘(bg/item/pet…) = serviceInanimate。
-        // 三重 fallback：桶值 → legacy 全域 service → 'pollinations'，保證永不回 undefined。
+        // --- 三桶路由：依 type 取該桶選的接口 ---
+        // 頭像桶 char = serviceChar；插圖桶 scene = serviceScene；其餘(bg/item/pet…) = serviceInanimate。
+        // char/scene 多重 fallback：新桶 → 舊「活物桶」serviceLiving → legacy 全域 service → 'pollinations'，保證永不回 undefined。
         serviceFor: function(type) {
-            const living = (type === 'char' || type === 'scene');
-            const s = living ? this.config.serviceLiving : this.config.serviceInanimate;
-            return s || this.config.service || 'pollinations';
+            if (type === 'char')  return this.config.serviceChar  || this.config.serviceLiving || this.config.service || 'pollinations';
+            if (type === 'scene') return this.config.serviceScene || this.config.serviceLiving || this.config.service || 'pollinations';
+            return this.config.serviceInanimate || this.config.service || 'pollinations';
         },
 
         // --- 核心生成函數 (整合翻譯 + cache) ---
