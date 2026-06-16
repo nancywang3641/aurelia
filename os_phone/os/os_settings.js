@@ -1629,8 +1629,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-group">
                                     <div class="set-label">🎭 角色頭像快取 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">防重複生圖</span></div>
                                     <div id="vncfg-avatar-mgr-list" style="margin-top:8px;"></div>
+                                    <button class="set-btn" type="button" onclick="window.VN_PLAYER && window.VN_PLAYER.backupAvatarsToWorldbook && window.VN_PLAYER.backupAvatarsToWorldbook(this)">💾 備份頭像到角色世界書</button>
                                 </div>
-                                <div class="set-desc" style="margin-top:4px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。</div>
+                                <div class="set-desc" style="margin-top:4px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。</div>
                             </div>
 
                             <!-- 子: 角色立繪（去背工作室）-->
