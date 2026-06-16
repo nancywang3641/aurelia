@@ -122,6 +122,61 @@
             }
         },
 
+        // ── 備份頭像快取 → 角色卡主世界書（手動，圖片設置按鈕觸發）──────────────
+        // 目的：IDB 本地頭像快取萬一丟失，至少能從酒館「角色世界書」找回。
+        // 寫進當前角色卡主世界書 getCharLorebooks().primary（★非聊天世界書），
+        // 條目 comment 對齊 _loadLorebookAvatars 會讀的【素材-角色頭像素材】、格式「名字:圖」，
+        // 條目設 enabled:false + 不觸發 keys → 純倉庫、絕不注入 AI／不燒 token。
+        // 合併制：既有條目保留、當前世界頭像覆蓋同名 → 備份只增不減。
+        backupAvatarsToCharLorebook: async function() {
+            const TH = win.TavernHelper;
+            if (!TH || !TH.getCharLorebooks || !TH.getLorebookEntries) return { ok:false, msg:'TavernHelper 世界書 API 不可用' };
+            let lb = '';
+            try { const c = TH.getCharLorebooks(); lb = c && c.primary; } catch(e) {}
+            if (!lb) return { ok:false, msg:'當前角色卡沒有綁定「角色世界書」（主世界書），無法備份' };
+
+            // 收集當前世界的頭像（只取持久的 dataURL；blob 不可重用→跳過）
+            const all = await VN_Cache.getAll('avatar_cache');
+            const curWorld = VN_Cache.getCurrentWorld();
+            const cur = {};   // 名字 → dataURL
+            for (const e of (all || [])) {
+                if (!e || !e.url || e.url.indexOf('data:') !== 0) continue;
+                if (VN_Cache.worldOf(e) !== curWorld) continue;
+                const k = String(e.key || '');
+                const sep = k.indexOf('::');
+                const name = sep >= 0 ? k.slice(sep + 2) : k;
+                if (name) cur[name] = e.url;
+            }
+            if (!Object.keys(cur).length) return { ok:false, msg:'當前世界沒有可備份的頭像快取' };
+
+            // 讀既有條目→合併（保留舊備份與別名，當前世界覆蓋同名）
+            const COMMENT = '【素材-角色頭像素材】';
+            const entries = await TH.getLorebookEntries(lb);
+            const existing = (entries || []).find(en => en.comment === COMMENT);
+            const merged = {};
+            if (existing && existing.content) {
+                existing.content.split('\n').forEach(line => {
+                    const t = line.trim();
+                    if (!t || t.startsWith('//')) return;
+                    const i = t.indexOf(':');
+                    if (i > 0) merged[t.slice(0, i).trim()] = t.slice(i + 1);   // 保留 URL（含 |別名）
+                });
+            }
+            let added = 0;
+            for (const n of Object.keys(cur)) { if (!(n in merged)) added++; merged[n] = cur[n]; }
+            const content = Object.keys(merged).map(n => `${n}:${merged[n]}`).join('\n');
+
+            if (existing) {
+                await TH.setLorebookEntries(lb, [{ uid: existing.uid, content }]);
+            } else {
+                await TH.createLorebookEntries(lb, [{
+                    comment: COMMENT, content, enabled: false,
+                    keys: ['頭像素材_倉庫_請勿觸發_DO_NOT_TRIGGER'],
+                }]);
+            }
+            return { ok:true, msg:`已備份 ${Object.keys(cur).length} 個頭像到角色世界書「${lb}」（新增 ${added}）`, count: Object.keys(cur).length, lorebook: lb };
+        },
+
         resetState: function() {
             this.clearTimers();
             this._twTimer = null;
@@ -3048,6 +3103,20 @@
         openGeneratePanel, closeGeneratePanel, generateStory, diveSelectedCard,
         resetPromptOrder() { VN_PromptOrder.reset(); },
         loadAvatarManager,   // 供 vn_settings.js 外接調用（接受自定義 listId）
+        async backupAvatarsToWorldbook(btn) {
+            const tr = win.toastr || window.toastr;
+            const _orig = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ 備份中…'; }
+            try {
+                const r = await window.VN_Core.backupAvatarsToCharLorebook();
+                if (r && r.ok) { tr && tr.success(r.msg, '頭像備份'); }
+                else { tr && tr.warning((r && r.msg) || '備份未完成', '頭像備份'); }
+            } catch (e) {
+                tr && tr.error('備份失敗：' + ((e && e.message) || e), '頭像備份');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = _orig; }
+            }
+        },
         loadBgManager,       // 供 vn_settings.js 外接調用（BG 快取列表）
         loadSpriteManager,   // 立繪庫網格（sprite_cache，世界感知）
         loadSceneManager: window.VN_Panels.loadSceneManager,   // 場景插圖展廳（scene_cache，與頭像同套卡片管理）
