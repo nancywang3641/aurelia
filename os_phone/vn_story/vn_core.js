@@ -1577,6 +1577,7 @@
         _genAvatarToCache: function(name) {
             if (this._avatarMemCache[name]) return Promise.resolve(this._avatarMemCache[name]);
             if (this._avatarInflight[name]) return this._avatarInflight[name];
+            if (this._pendingAvatars[name]) return this._pendingAvatars[name];   // 晚路徑（開口時）正在生這張 → 等它、別重發（雙向去重，本機 GPU 不排兩次）
             const job = (async () => {
                 try {
                     const raw = await VN_Image.getAvatar(this._resolveAvatarPrompt(name), 'Neutral');
@@ -2858,6 +2859,15 @@
 
             // 記憶體快取
             if (this._avatarMemCache[name]) { showAvatar(this._avatarMemCache[name]); return; }
+
+            // 早鳥/預熱接力：早鳥走 _genAvatarToCache 登記在 _avatarInflight，這條晚路徑以前看不到它
+            // → 同角色會被重發第二張。ComfyUI/本機 GPU 是串行佇列，重複發單＝首次登場等雙倍、早鳥提前量白費。
+            // 改：發現早鳥正在生這張就「等它」、直接用結果，絕不再開第二張。
+            if (this._avatarInflight[name]) {
+                try { await this._avatarInflight[name]; } catch(e) {}
+                if (_stale()) return;
+                if (this._avatarMemCache[name]) { showAvatar(this._avatarMemCache[name]); return; }
+            }
 
             // 並發鎖：同角色生成中 → 等它
             if (this._pendingAvatars[name]) {
