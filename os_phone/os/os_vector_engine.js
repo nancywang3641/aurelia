@@ -177,7 +177,12 @@
         for (const entry of entries) {
             if (!entry || !entry.text) continue;
             try {
-                const vec = await embed(entry.text);
+                // 向量只給 PWA/獨立版的相似度搜尋(search)用；酒館走「目錄常駐+導演挑碼」不搜向量 →
+                //   酒館不算向量(省 SiliconFlow API)、且 best-effort：算向量失敗也不該害記憶存不進去。
+                let vec = null;
+                if (win.OS_API?.isStandalone?.()) {
+                    try { vec = await embed(entry.text); } catch (vErr) { console.warn('[VecEngine] 向量化失敗(不影響存):', vErr?.message || vErr); }
+                }
                 await win.OS_DB.saveVnMemory({
                     storyId, chapterId,
                     type: entry.type || 'event',
@@ -187,8 +192,8 @@
                     vector: vec,
                     createdAt: Date.now()
                 });
-            } catch (vecErr) {
-                console.warn('[VecEngine] 單條向量化失敗，跳過:', entry.text, vecErr);
+            } catch (saveErr) {
+                console.warn('[VecEngine] 存記憶失敗，跳過:', entry.text, saveErr);
             }
         }
         console.log(`[VecEngine] ✅ 入庫完成：${entries.length} 條記憶`);
