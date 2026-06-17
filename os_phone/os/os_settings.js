@@ -1152,6 +1152,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="832x1216"  ${imgConfig.avatarSize==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
                                 </select>
                             </div>
+                            <div class="set-group">
+                                <div class="set-label">🧍 立繪模式</div>
+                                <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${vnD.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
+                                <div class="set-desc">關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像；適合繪圖模型生全身穩定的情況。</div>
+                            </div>
                         </div>
 
                         <!-- ── 🎬 插圖 分頁 body（scene：場景插圖／CG 來源，可與頭像不同渠道）── -->
