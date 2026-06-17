@@ -1919,6 +1919,16 @@
                             }
                         };
                     }
+                    // CTX 彈窗（同 VN DOM 的記憶/用量面板，跟 in-play CTX 鈕同一個）
+                    const ctxBtn = document.getElementById('vn-end-btn-ctx');
+                    if (ctxBtn) ctxBtn.onclick = () => { this.toggleCtx(); };
+                    // 日誌：開「瀅瀅的故事日誌」手機 app（跟大廳 data-app-launch="journal" 同一條路）
+                    const jrnlBtn = document.getElementById('vn-end-btn-journal');
+                    if (jrnlBtn) jrnlBtn.onclick = () => {
+                        const cc = win.AureliaControlCenter || window.AureliaControlCenter;
+                        if (cc && typeof cc.launchGameApp === 'function') cc.launchGameApp('journal');
+                        else console.warn('[VN_Core] 找不到 AureliaControlCenter.launchGameApp（日誌）');
+                    };
                 }
                 return;
             }
