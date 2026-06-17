@@ -143,7 +143,7 @@
                         <label class="avs-mem-fld"><span>模型</span><input class="avs-input" id="avs-mem-model" placeholder="BAAI/bge-m3" value="${esc(cfg.embeddingModel || 'BAAI/bge-m3')}"></label>
                         <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-sync" ${cfg.syncKeyWithPrimary !== false ? 'checked' : ''}><span>跟主模型共用 Key（主模型也走 SiliconFlow 就勾，免再填）</span></label>
                         <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>
-                        <label class="avs-mem-fld"><span>召回條數</span><input class="avs-input avs-mem-num" id="avs-mem-topk" type="number" min="1" max="20" value="${parseInt(cfg.topK) || 5}"></label>
+                        ${(win.OS_API?.isStandalone?.()) ? `<label class="avs-mem-fld"><span>召回條數</span><input class="avs-input avs-mem-num" id="avs-mem-topk" type="number" min="1" max="20" value="${parseInt(cfg.topK) || 5}"></label>` : ''}
                         <label class="avs-mem-fld"><span>記憶來源</span>
                             <select class="avs-input" id="avs-mem-src">
                                 <option value="content"${(cfg.extractSource || 'content') !== 'summary' ? ' selected' : ''}>全文（完整、較花）</option>
@@ -217,7 +217,7 @@
             cfg.embeddingModel = (q('#avs-mem-model')?.value || '').trim() || 'BAAI/bge-m3';
             cfg.syncKeyWithPrimary = !!q('#avs-mem-sync')?.checked;
             cfg.embeddingKey = (q('#avs-mem-key')?.value || '').trim();
-            cfg.topK = parseInt(q('#avs-mem-topk')?.value) || 5;
+            const _tk = q('#avs-mem-topk'); if (_tk) cfg.topK = parseInt(_tk.value) || 5;   // 此欄只在 PWA 顯示；酒館隱藏時別覆蓋既有值
             cfg.extractSource = q('#avs-mem-src')?.value || 'content';
             _saveCfg(cfg);
             const b = saveBtn; const o = b.textContent; b.textContent = '✓ 已儲存'; setTimeout(() => { b.textContent = o; }, 1200);
