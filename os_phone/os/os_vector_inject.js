@@ -132,7 +132,35 @@
                 block += `\n\n【角色語氣索引｜下列角色有語氣/說話樣本，需要某角色的說話風格範例就 <recall> 其名】\n・${voiceNames.join('、')}`;
             }
 
+            // ── 🧷 核心角色釘選：npc/relationship 兩類「人」永遠注入完整內文，按角色名去重留最新一條 ──
+            //    防久未出場的夥伴只剩一句乾摘要、被主模型寫成陌生人或遺忘（type 本身就是重要度，不用 AI 另標）。
+            const CORE_PIN_MAX = 10, CORE_TEXT_MAX = 120;
+            const _coreKeys = new Set();
+            {
+                const coreByChar = new Map();   // 角色名 → 最新一條（all 已 createdAt 舊→新排序，後者覆蓋＝留最新）
+                for (const m of all) {
+                    if (m.type !== 'npc' && m.type !== 'relationship') continue;
+                    let name = (Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || String(m.summary || '').slice(0, 10);
+                    name = String(name).trim();
+                    if (name) coreByChar.set(name, m);
+                }
+                // 角色多到超過上限 → 留「最近還在活動」的；被擠掉的角色仍保有上面索引那句話，不會憑空消失
+                const core = Array.from(coreByChar.values())
+                    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+                    .slice(0, CORE_PIN_MAX);
+                if (core.length) {
+                    block += `\n\n【核心角色｜本劇重要登場角色，務必延續其設定與關係，別寫成陌生人或遺忘】\n`;
+                    block += core.map(m => {
+                        let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
+                        if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
+                        _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
+                        return `・${t}`;
+                    }).join('\n');
+                }
+            }
+
             // ── 細節注入：① 副模型(記憶導演)上一輪挑的記憶＝主力  ② 主模型 <recall> 點名＝備援 → 合併去重補完整內文 ──
+            //    去重種子帶入 _coreKeys：核心角色已釘在上面，動態細節區不重複佔格。
             let _detailHit = [];
             const _pendingSecCount = _pendingRecallEntries.length, _pendingKwCount = _pendingRecallKeywords.length;
             {
@@ -146,7 +174,7 @@
                         return kws.some(k => k && hay.includes(k));
                     }));
                 }
-                const _ds = new Set(); const _hit = _detailHit;
+                const _ds = new Set(_coreKeys); const _hit = _detailHit;
                 for (const m of _cand) {
                     const key = (m.summary || '') + '|' + String(m.text || '').slice(0, 40);
                     if (!key.trim() || _ds.has(key)) continue;
