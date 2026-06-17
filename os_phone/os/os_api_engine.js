@@ -361,11 +361,7 @@
                 secConfig = win.OS_SETTINGS.getConfig();
             }
             secConfig._isSecondary = true;
-            // ── 攔截輸出進 DEBUG「副模型」TAB 的緩衝（不影響原回呼）──
-            const _rec = _secLogStart(messages);
-            const _onFin = (text) => { try { _secLogEnd(_rec, true, text); } catch (e) {} if (onFinish) onFinish(text); };
-            const _onErr = (err)  => { try { _secLogEnd(_rec, false, err); } catch (e) {} if (onError) onError(err); };
-            this.chat(messages, secConfig, onChunk, _onFin, _onErr);
+            this.chat(messages, secConfig, onChunk, onFinish, onError);
         },
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
@@ -383,6 +379,15 @@
                     });
                 }
             });
+
+            // ── 副模型輸出記錄（DEBUG 面板「副模型」TAB 讀）：在 chat 層攔所有 _isSecondary 呼叫，
+            //    不論從哪個入口（chatSecondary 狀態抽取 / analyzeSceneInserts 場景插圖直呼 chat）都抓得到 ──
+            if (config && config._isSecondary) {
+                const _rec = _secLogStart(messages);
+                const _of = onFinish, _oe = onError;
+                onFinish = (text) => { try { _secLogEnd(_rec, true, text); } catch (e) {} if (_of) _of(text); };
+                onError  = (err)  => { try { _secLogEnd(_rec, false, err); } catch (e) {} if (_oe) _oe(err); };
+            }
 
             if (this.isStandalone() && config.useSystemApi) {
                 config = { ...config, useSystemApi: false };
