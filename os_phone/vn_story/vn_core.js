@@ -1607,7 +1607,12 @@
             try { blob = await (await fetch(raw)).blob(); }
             catch (e) { try { const du = await this._toDataUrl(raw); if (du) blob = await (await fetch(du)).blob(); } catch (e2) {} }
             if (!blob) { const du = await this._toDataUrl(raw); return du ? { objUrl: du, dataUrl: du } : null; }
-            if (sprite) { try { const s = await this._stripSpriteBg(blob); if (s) blob = s; } catch (e) {} }   // 立繪純色去背（失敗退原圖）
+            if (sprite) {   // 立繪去背：先純色 flood-fill(快)；背景非純色(油畫/氛圍)→ 退 AI 去背(isnet，吃任何背景)；都失敗退原圖
+                let cut = null;
+                try { cut = await this._stripSpriteBg(blob); } catch (e) {}
+                if (!cut) { try { cut = await this._stripSpriteBgAI(blob); } catch (e) {} }
+                if (cut) blob = cut;
+            }
             const objUrl = URL.createObjectURL(blob);
             let dataUrl = '';
             try { dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.onerror = () => r(''); rd.readAsDataURL(blob); }); } catch (e) {}
@@ -1662,6 +1667,19 @@
                 ctx.putImageData(imgData, 0, 0);
                 return await new Promise(res => cv.toBlob(res, 'image/png'));
             } catch (e) { console.warn('[VN] _stripSpriteBg 失敗:', e?.message || e); return null; }
+        },
+
+        // 🤖 AI 去背（@imgly isnet，靠 AI 認人形、吃任何背景）：純色 flood-fill 對不了的「油畫/氛圍背景」立繪用這個。
+        //   首次下載 ~40MB 模型(之後快取)、單張 ~10–30 秒(WASM 單執行緒)。模型函式快取在 _bgRemoverFn。失敗回 null。
+        _bgRemoverFn: null,
+        _stripSpriteBgAI: async function(blob) {
+            try {
+                if (!this._bgRemoverFn) {
+                    const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
+                    this._bgRemoverFn = m.removeBackground;
+                }
+                return await this._bgRemoverFn(blob, { model: 'isnet_fp16', output: { format: 'image/png', quality: 1.0 } });
+            } catch (e) { console.warn('[VN] AI 去背失敗:', e?.message || e); return null; }
         },
 
         // ── 早鳥入口：搶在 VN 載入前提早登記＋生成頭像（vn_avatar_earlybird / 面板啟動路呼叫）──
