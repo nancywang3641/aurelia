@@ -90,7 +90,7 @@
             if (!storyId) return;                 // 沒有當前 VN 故事就不注入
             if (!win.OS_DB?.getAllVnMemories) return;
 
-            const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            const all = ((await win.OS_DB.getAllVnMemories(storyId)) || []).filter(m => m && !m.merged);   // 過濾被壓縮隱藏的原始條目
             if (!all.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
 
@@ -222,7 +222,7 @@
             const storyId = _storyId();
             if (!storyId || !win.OS_DB?.getAllVnMemories) return null;
             const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
-            const facts = all.filter(m => m && m.type !== 'dialogue');
+            const facts = all.filter(m => m && m.type !== 'dialogue' && !m.merged);   // 過濾被壓縮隱藏的原始條目
             if (!facts.length) return null;
             facts.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
             const map = {};
