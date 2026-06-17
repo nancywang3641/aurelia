@@ -96,7 +96,7 @@
         const engOk = !!win.OS_VECTOR_ENGINE;
 
         let mems = [];
-        try { if (win.OS_DB?.getAllVnMemories) mems = await win.OS_DB.getAllVnMemories(sid) || []; } catch (e) {}
+        try { if (win.OS_DB?.getAllVnMemories) mems = (await win.OS_DB.getAllVnMemories(sid) || []).filter(m => m && !m.merged); } catch (e) {}   // 隱藏被壓縮的原始條目
         _memCache = mems;
 
         // 其他「有記憶」的世界（給「轉入記憶」用）——換聊天/備份檔 chatId 變了，可把舊世界記憶搬過來
@@ -128,6 +128,11 @@
             </div>
 
             <div class="avs-mem-status">${statusTxt}</div>
+
+            <div class="avs-st-btn-grid">
+                <button class="avs-btn avs-btn-outline" id="avs-mem-tidy">🗜️ 整理舊記憶</button>
+            </div>
+            <div class="avs-mem-srchint" id="avs-mem-tidy-result">把舊的零碎記憶併成精簡版，省效能；重要角色與關係不會動。</div>
 
             <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn">⚙️ 進階：記憶服務設定</button>
             <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
@@ -248,6 +253,25 @@
                 const n = await win.OS_DB?.copyVnMemoriesToStory?.(src, target);
                 alert(`✅ 已轉入 ${n || 0} 條記憶到目前世界`);
             } catch (e) { alert('轉入失敗：' + (e?.message || e)); moveBtn.textContent = _o; moveBtn.disabled = false; }
+            _build();
+        };
+
+        // 🗜️ 整理舊記憶（合併壓縮）：交副模型把舊的零碎記憶併成精簡版，治長線過載
+        const tidyBtn = q('#avs-mem-tidy');
+        if (tidyBtn) tidyBtn.onclick = async () => {
+            if (!win.OS_STATE_RUNTIME?.compressOldMemories) { alert('整理功能尚未載入，請重載擴展'); return; }
+            const sid = _storyId();
+            if (!sid) { alert('目前沒有有效的世界（先開著要整理的那個聊天）'); return; }
+            if (!confirm('把舊的零碎記憶交副模型併成精簡版？\n\n• 重要角色、關係、代表台詞不會動\n• 最近的記憶保留原樣\n• 原始資料只隱藏不刪、可還原')) return;
+            const res = q('#avs-mem-tidy-result');
+            tidyBtn.disabled = true; const _o = tidyBtn.textContent; tidyBtn.textContent = '整理中…';
+            try {
+                const r = await win.OS_STATE_RUNTIME.compressOldMemories({ storyId: sid, onProgress: (m) => { if (res) res.textContent = m; } });
+                alert(`✅ 整理完成\n把 ${r.mergedCount} 條舊記憶併成 ${r.madeCount} 條\n目前共 ${r.after} 條`);
+            } catch (e) {
+                alert('整理失敗：' + (e?.message || e));
+            }
+            tidyBtn.textContent = _o; tidyBtn.disabled = false;
             _build();
         };
     }
