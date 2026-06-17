@@ -198,6 +198,111 @@
         throw lastErr || new Error('副模型重試耗盡');
     }
 
+    // ── 🗜️ 記憶合併壓縮（治長線過載）：把舊的零碎記憶交副模型併成密度更高的少數摘要 ──
+    //    軟壓縮：新增 condensed 條目、原始標 merged:true 隱藏（不真刪、可還原）。
+    //    npc/relationship/dialogue 不碰（人/防 OOC）、最近窗保留原樣。
+    function _compressCall(prompt) {
+        return new Promise((resolve, reject) => {
+            if (!win.OS_API?.chatSecondary) return reject(new Error('副模型不可用'));
+            const messages = [
+                { role: 'system', content: '你是記憶歸檔員：把多條零碎的舊劇情記憶合併壓縮成數量更少、資訊密度更高的摘要，保留所有關鍵事實與因果，最後把結果放進一個 ```json 程式碼區塊。' },
+                { role: 'user', content: prompt }
+            ];
+            let done = false;
+            const timer = setTimeout(() => { if (done) return; done = true; reject(new Error('副模型超時')); }, CONFIG.timeoutMs);
+            win.OS_API.chatSecondary(messages, null,
+                (text) => { if (done) return; done = true; clearTimeout(timer); resolve(text); },
+                (err) => { if (done) return; done = true; clearTimeout(timer); reject(err); });
+        });
+    }
+    async function _compressRun(prompt) {
+        let lastErr;
+        for (let i = 0; i < CONFIG.retryCount; i++) {
+            try {
+                const raw = await _compressCall(prompt);
+                const json = extractJSON(raw);
+                if (json && Array.isArray(json.memories)) return json;
+                lastErr = new Error('輸出不含 memories 陣列');
+            } catch (e) { lastErr = e; console.warn('[記憶壓縮] 第', i + 1, '次失敗:', e?.message || e); }
+        }
+        throw lastErr || new Error('壓縮重試耗盡');
+    }
+    function _compressPrompt(chunk) {
+        const list = chunk.map((m, i) => `${i + 1}. [${m.type}] ${String(m.summary || '').trim()}${m.text ? ' — ' + String(m.text).trim() : ''}`).join('\n');
+        return `下面是同一個故事【較早期】的零碎劇情記憶，依時間排序。請把它們合併壓縮成數量更少、但資訊密度更高的摘要，方便長期保存。
+
+【合併原則】
+- 把同一條劇情線 / 同一地點 / 同一任務的多條，併成一條涵蓋整段的摘要。
+- 保留所有關鍵事實：角色名、因果關係、重大轉折、得到或失去的東西、尚未了結的伏筆。可捨棄重複、純過場、對後續無影響的瑣事。
+- 數量目標：壓到原本的三分之一上下；寧可資訊完整，也別併到失真。
+- 不要加入原文沒有的推測。
+
+【輸出格式】嚴格 JSON、放進一個 \`\`\`json 區塊：
+{ "memories": [ { "type": "event", "summary": "一句話索引、20字內", "text": "1～3句完整細節", "tags": ["關鍵詞"] } ] }
+
+【待合併記憶】
+${list}`;
+    }
+    // storyId 由呼叫端(os_avs_memory 面板)傳入；回 { mergedCount, madeCount, after, before }
+    async function compressOldMemories(opts) {
+        opts = opts || {};
+        const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : function () {};
+        if (win.__AURELIA_SUMMARIZING) throw new Error('正在大總結，請稍後再試');
+        if (!win.OS_DB?.getAllVnMemories || !win.OS_DB?.saveVnMemory) throw new Error('記憶資料庫不可用');
+        if (!win.OS_API?.chatSecondary) throw new Error('副模型未設定（去記憶服務設定）');
+        const storyId = opts.storyId;
+        if (!storyId) throw new Error('找不到當前世界');
+
+        const COMPRESS_TYPES = { event: 1, item: 1, location: 1, rule: 1 };   // npc/relationship/dialogue 不碰
+        const KEEP_RECENT = 40;   // 這些類型最近 N 條保留原始細節、不壓
+        const CHUNK = 35;
+
+        const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+        const live = all.filter(m => m && !m.merged);
+        const compressible = live
+            .filter(m => COMPRESS_TYPES[m.type] && !m.condensed)              // 已壓過的不再壓，避免反覆壓到失真
+            .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        if (compressible.length <= KEEP_RECENT) throw new Error('舊記憶還不夠多、暫時不需要整理');
+        const targets = compressible.slice(0, compressible.length - KEEP_RECENT);
+
+        let mergedCount = 0, madeCount = 0;
+        for (let i = 0; i < targets.length; i += CHUNK) {
+            const chunk = targets.slice(i, i + CHUNK);
+            onProgress(`整理中… ${Math.min(i + chunk.length, targets.length)}/${targets.length}`);
+            let json;
+            try { json = await _compressRun(_compressPrompt(chunk)); }
+            catch (e) { console.warn('[記憶壓縮] 這批失敗、保留原始跳過:', e?.message || e); continue; }
+            const out = (json.memories || []).filter(x => x && (x.summary || x.text));
+            // 安全閥：必須真的變少、且非空，否則不動原始（不讓壞輸出毀資料）
+            if (!out.length || out.length >= chunk.length) { console.warn('[記憶壓縮] 這批沒變少、跳過'); continue; }
+            const baseTs = chunk[0].createdAt || Date.now();
+            // 先存新條目，存成至少一條才標原始 merged（中途崩最壞只是重複、不是資料遺失）
+            let saved = 0;
+            for (let k = 0; k < out.length; k++) {
+                const e = out[k];
+                try {
+                    await win.OS_DB.saveVnMemory({
+                        storyId,
+                        type: e.type || 'event',
+                        summary: String(e.summary || '').trim().slice(0, 60),
+                        text: String(e.text || e.summary || '').trim(),
+                        tags: Array.isArray(e.tags) ? e.tags.filter(Boolean).slice(0, 4) : [],
+                        createdAt: baseTs + k,   // 排回原本時段
+                        condensed: true
+                    });
+                    saved++; madeCount++;
+                } catch (err) { console.warn('[記憶壓縮] 存新條目失敗:', err?.message || err); }
+            }
+            if (saved === 0) continue;   // 新的一條都沒存成 → 別動原始
+            for (const m of chunk) {
+                m.merged = true; m.mergedAt = Date.now();
+                try { await win.OS_DB.saveVnMemory(m); mergedCount++; } catch (err) {}
+            }
+        }
+        onProgress('完成');
+        return { mergedCount, madeCount, after: live.length - mergedCount + madeCount, before: live.length };
+    }
+
     // --- prompt：給 schema + current + 最近劇情 → 抽 diff（或初始 fill）---
     function buildExtractPrompt(schema, current, recentText, isInitialFill) {
         const modeRules = isInitialFill
@@ -816,6 +921,7 @@ ${numberedText}`;
         isEnabled, setEnabled,
         forceExtract, clearPatches,
         injectCurrent, injectRules, extractOnce,
+        compressOldMemories,   // 🗜️ 記憶合併壓縮（治長線過載），給 os_avs_memory 整理鈕呼叫
         listAllStateData, removeStateData,
         normalizeChatId,
         getActiveSchema,   // V2：schema 從 AVS 變數包合併（給 status_panel 等外部 UI 用）
