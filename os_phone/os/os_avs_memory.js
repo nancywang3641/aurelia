@@ -94,6 +94,7 @@
         const on = cfg.enabled === true;
         const sid = _storyId();
         const engOk = !!win.OS_VECTOR_ENGINE;
+        const _standalone = !!(win.OS_API?.isStandalone?.());   // PWA/獨立版＝true（用向量搜尋）；酒館(index.js載入)＝false（目錄挑碼、不需 embeddings）
 
         let mems = [];
         try { if (win.OS_DB?.getAllVnMemories) mems = (await win.OS_DB.getAllVnMemories(sid) || []).filter(m => m && !m.merged); } catch (e) {}   // 隱藏被壓縮的原始條目
@@ -114,7 +115,7 @@
             ? '⚠️ 記憶引擎未載入'
             : (!on
                 ? '目前關閉中 — 打開開關並設好服務才會開始記'
-                : (cfg.embeddingUrl
+                : ((!_standalone || cfg.embeddingUrl)
                     ? `已記 ${mems.length} 條　·　目前故事：${sid ? esc(sid) : '（未開故事）'}`
                     : '已開啟，但還沒設定記憶服務（去下面「⚙️ 進階」填）'));
 
@@ -137,12 +138,12 @@
             <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn">⚙️ 進階：記憶服務設定</button>
             <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
                 <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">記憶服務（embeddings）<span class="avs-st-adv-hint">SiliconFlow 等 OpenAI 相容服務</span></div>
+                    ${_standalone ? `<div class="avs-st-adv-hd">記憶服務（embeddings）<span class="avs-st-adv-hint">SiliconFlow 等 OpenAI 相容服務（僅 PWA/獨立版需要）</span></div>` : ''}
                     <div class="avs-mem-cfg">
-                        <label class="avs-mem-fld"><span>端點</span><input class="avs-input" id="avs-mem-url" placeholder="https://api.siliconflow.cn/v1" value="${esc(cfg.embeddingUrl || '')}"></label>
+                        ${_standalone ? `<label class="avs-mem-fld"><span>端點</span><input class="avs-input" id="avs-mem-url" placeholder="https://api.siliconflow.cn/v1" value="${esc(cfg.embeddingUrl || '')}"></label>
                         <label class="avs-mem-fld"><span>模型</span><input class="avs-input" id="avs-mem-model" placeholder="BAAI/bge-m3" value="${esc(cfg.embeddingModel || 'BAAI/bge-m3')}"></label>
                         <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-sync" ${cfg.syncKeyWithPrimary !== false ? 'checked' : ''}><span>跟主模型共用 Key（主模型也走 SiliconFlow 就勾，免再填）</span></label>
-                        <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>
+                        <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>` : ''}
                         ${(win.OS_API?.isStandalone?.()) ? `<label class="avs-mem-fld"><span>召回條數</span><input class="avs-input avs-mem-num" id="avs-mem-topk" type="number" min="1" max="20" value="${parseInt(cfg.topK) || 5}"></label>` : ''}
                         <label class="avs-mem-fld"><span>記憶來源</span>
                             <select class="avs-input" id="avs-mem-src">
@@ -154,7 +155,7 @@
                     </div>
                     <div class="avs-st-btn-grid">
                         <button class="avs-btn avs-btn-primary" id="avs-mem-save">💾 儲存設定</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-mem-test">🔌 測試連線</button>
+                        ${_standalone ? `<button class="avs-btn avs-btn-outline" id="avs-mem-test">🔌 測試連線</button>` : ''}
                     </div>
                     <div class="avs-mem-test-result" id="avs-mem-test-result"></div>
                 </div>
@@ -213,10 +214,11 @@
         const saveBtn = q('#avs-mem-save');
         if (saveBtn) saveBtn.onclick = () => {
             const cfg = _cfg();
-            cfg.embeddingUrl = (q('#avs-mem-url')?.value || '').trim();
-            cfg.embeddingModel = (q('#avs-mem-model')?.value || '').trim() || 'BAAI/bge-m3';
-            cfg.syncKeyWithPrimary = !!q('#avs-mem-sync')?.checked;
-            cfg.embeddingKey = (q('#avs-mem-key')?.value || '').trim();
+            // 這些 embeddings 欄位只在 PWA 顯示；酒館隱藏時欄位不存在 → 別覆蓋既有值(否則酒館存檔會把 PWA 設定清空)
+            const _u = q('#avs-mem-url'); if (_u) cfg.embeddingUrl = (_u.value || '').trim();
+            const _m = q('#avs-mem-model'); if (_m) cfg.embeddingModel = (_m.value || '').trim() || 'BAAI/bge-m3';
+            const _sy = q('#avs-mem-sync'); if (_sy) cfg.syncKeyWithPrimary = !!_sy.checked;
+            const _k = q('#avs-mem-key'); if (_k) cfg.embeddingKey = (_k.value || '').trim();
             const _tk = q('#avs-mem-topk'); if (_tk) cfg.topK = parseInt(_tk.value) || 5;   // 此欄只在 PWA 顯示；酒館隱藏時別覆蓋既有值
             cfg.extractSource = q('#avs-mem-src')?.value || 'content';
             _saveCfg(cfg);
