@@ -20,6 +20,32 @@
         bumpImg:  function () { this.img++;  this.tImg++; },
         newTurn:  function () { this.tText = 0; this.tImg = 0; }
     };
+
+    // ── 副模型輸出記錄環形緩衝（DEBUG 面板「副模型」TAB 讀；每次副模型呼叫存 prompt／原始輸出／狀態／耗時）──
+    win.AURELIA_SEC_LOG = win.AURELIA_SEC_LOG || [];
+    const SEC_LOG_MAX = 60;
+    let _secSeq = 0;
+    function _secLogStart(messages) {
+        let prompt = '';
+        try {
+            const u = (messages || []).filter(m => m && m.role === 'user').pop();
+            if (u) prompt = (typeof u.content === 'string') ? u.content : JSON.stringify(u.content);
+        } catch (e) {}
+        const rec = { id: (++_secSeq), t: Date.now(), ok: null, ms: 0, prompt: prompt, raw: '', err: '' };
+        try {
+            win.AURELIA_SEC_LOG.push(rec);
+            while (win.AURELIA_SEC_LOG.length > SEC_LOG_MAX) win.AURELIA_SEC_LOG.shift();
+        } catch (e) {}
+        return rec;
+    }
+    function _secLogEnd(rec, ok, payload) {
+        if (!rec) return;
+        rec.ok = !!ok;
+        rec.ms = Date.now() - rec.t;
+        if (ok) rec.raw = (typeof payload === 'string') ? payload : '';
+        else rec.err = (payload && payload.message) ? payload.message : String(payload);
+    }
+
     // 酒館主模型每次生成＝一輪起點：歸零本輪 + 主模型本身計一次。
     //   (副模型走 OS_API.chat、生圖走 image_manager，各自計數；大總結 generateRaw 也會觸發此事件→只計次、不重置輪)
     (function _hookUsageTurn() {
@@ -335,7 +361,11 @@
                 secConfig = win.OS_SETTINGS.getConfig();
             }
             secConfig._isSecondary = true;
-            this.chat(messages, secConfig, onChunk, onFinish, onError);
+            // ── 攔截輸出進 DEBUG「副模型」TAB 的緩衝（不影響原回呼）──
+            const _rec = _secLogStart(messages);
+            const _onFin = (text) => { try { _secLogEnd(_rec, true, text); } catch (e) {} if (onFinish) onFinish(text); };
+            const _onErr = (err)  => { try { _secLogEnd(_rec, false, err); } catch (e) {} if (onError) onError(err); };
+            this.chat(messages, secConfig, onChunk, _onFin, _onErr);
         },
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
