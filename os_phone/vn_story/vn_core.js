@@ -1919,15 +1919,28 @@
                             }
                         };
                     }
-                    // CTX 彈窗：popup 在 text-panel-wrapper 內，章節結束時面板被藏(display:none) → popup 祖先被藏顯示不出。
-                    //   開 CTX 先還原面板(popup 祖先)、關 CTX 再把面板收回，末尾畫面保持乾淨。
+                    // CTX 彈窗：原本嵌在對話面板(text-panel-wrapper)裡，章節結束面板被藏 → 顯示不出 / 還原面板又牽連對話框。
+                    //   改成把 popup 搬到末尾覆蓋層當「獨立浮窗」，完全不碰對話面板；關閉時搬回原位（in-play CTX 照常）。
                     const ctxBtn = document.getElementById('vn-end-btn-ctx');
                     if (ctxBtn) ctxBtn.onclick = () => {
-                        const pw = document.getElementById('text-panel-wrapper');
                         const popup = document.getElementById('vn-ctx-popup');
-                        const willOpen = !!(popup && !popup.classList.contains('show'));
-                        if (pw) pw.style.display = willOpen ? '' : 'none';
-                        this.toggleCtx();
+                        if (!popup) return;
+                        const overlay = document.getElementById('vn-end-overlay');
+                        const cbtn = document.getElementById('vn-btn-ctx');
+                        if (popup.classList.contains('show')) {
+                            popup.classList.remove('show', 'vn-ctx-endfloat');
+                            if (this._ctxEndHome && this._ctxEndHome.parent) this._ctxEndHome.parent.insertBefore(popup, this._ctxEndHome.next || null);
+                            this._ctxEndHome = null;
+                            if (cbtn) cbtn.classList.remove('active');
+                        } else {
+                            if (overlay && popup.parentNode !== overlay) {
+                                this._ctxEndHome = { parent: popup.parentNode, next: popup.nextSibling };
+                                overlay.appendChild(popup);
+                            }
+                            popup.classList.add('show', 'vn-ctx-endfloat');
+                            if (cbtn) cbtn.classList.add('active');
+                            try { if (typeof VN_CtxMonitor !== 'undefined' && VN_CtxMonitor && VN_CtxMonitor.poll) VN_CtxMonitor.poll(); } catch (e) {}
+                        }
                     };
                     // 日誌：開「瀅瀅的故事日誌」手機 app。手機殼 panel z-index:50 < VN 全螢幕層 51 →
                     //   直接開會被 VN 蓋在底下看不到，故把 panel 臨時頂到 VN 之上，關閉(goHome)時還原。
