@@ -1919,15 +1919,33 @@
                             }
                         };
                     }
-                    // CTX 彈窗（同 VN DOM 的記憶/用量面板，跟 in-play CTX 鈕同一個）
+                    // CTX 彈窗：popup 在 text-panel-wrapper 內，章節結束時面板被藏(display:none) → popup 祖先被藏顯示不出。
+                    //   開 CTX 先還原面板(popup 祖先)、關 CTX 再把面板收回，末尾畫面保持乾淨。
                     const ctxBtn = document.getElementById('vn-end-btn-ctx');
-                    if (ctxBtn) ctxBtn.onclick = () => { this.toggleCtx(); };
-                    // 日誌：開「瀅瀅的故事日誌」手機 app（跟大廳 data-app-launch="journal" 同一條路）
+                    if (ctxBtn) ctxBtn.onclick = () => {
+                        const pw = document.getElementById('text-panel-wrapper');
+                        const popup = document.getElementById('vn-ctx-popup');
+                        const willOpen = !!(popup && !popup.classList.contains('show'));
+                        if (pw) pw.style.display = willOpen ? '' : 'none';
+                        this.toggleCtx();
+                    };
+                    // 日誌：開「瀅瀅的故事日誌」手機 app。手機殼 panel z-index:50 < VN 全螢幕層 51 →
+                    //   直接開會被 VN 蓋在底下看不到，故把 panel 臨時頂到 VN 之上，關閉(goHome)時還原。
                     const jrnlBtn = document.getElementById('vn-end-btn-journal');
                     if (jrnlBtn) jrnlBtn.onclick = () => {
                         const cc = win.AureliaControlCenter || window.AureliaControlCenter;
-                        if (cc && typeof cc.launchGameApp === 'function') cc.launchGameApp('journal');
-                        else console.warn('[VN_Core] 找不到 AureliaControlCenter.launchGameApp（日誌）');
+                        if (!(cc && typeof cc.launchGameApp === 'function')) { console.warn('[VN_Core] 找不到 AureliaControlCenter.launchGameApp（日誌）'); return; }
+                        cc.launchGameApp('journal');
+                        const panel = document.getElementById('aurelia-panel-container');
+                        if (panel) {
+                            const prevZ = panel.style.zIndex;
+                            panel.style.zIndex = '1002';   // 蓋過 VN 全螢幕層(51)
+                            const ps = win.PhoneSystem || window.PhoneSystem;
+                            if (ps && typeof ps.goHome === 'function') {
+                                const orig = ps.goHome;
+                                ps.goHome = function () { panel.style.zIndex = prevZ || ''; ps.goHome = orig; if (orig) orig(); };
+                            }
+                        }
                     };
                 }
                 return;
