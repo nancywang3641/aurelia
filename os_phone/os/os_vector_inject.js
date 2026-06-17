@@ -18,22 +18,33 @@
     const INJECT_ID = 'aurelia_vn_memory';
     let _lastUninject = null;
     let _lastRecall = null;   // 給 CTX 面板「記憶召回」行讀：{ text, count }
-    let _pendingRecallKeywords = [];   // 主模型上一輪 <recall> 點名、待下一輪載入完整內文的關鍵詞（備援）
-    let _pendingRecallEntries = [];    // 🎬 副模型(記憶導演)上一輪挑的記憶物件，待下一輪注入完整內文（主力，比主模型 <recall> 可靠）
+    let _pendingRecallKeywords = [];   // 主模型 <recall> 寫的「非代號」關鍵詞（語氣角色名 / AI 不照碼亂寫時的末路備援）
+    let _pendingRecallEntries = [];    // 🎬 副模型(記憶導演)上一輪挑的記憶物件，待下一輪注入完整內文（主力）
+    let _pendingRecallMainEntries = []; // 主模型 <recall>A5</recall> 挑碼 → 解析出的記憶物件（備援，用碼比關鍵詞可靠）
+    let _lastCatalogMap = {};          // 上一輪注入主模型目錄的「碼→記憶物件」對照（給 _captureAndStripRecall 解析主模型挑的碼）
+    win.AURELIA_INJECT_LOG = win.AURELIA_INJECT_LOG || [];   // 每輪實際注入主模型的記憶塊（DEBUG 面板「注入」TAB 讀）
+    let _injSeq = 0;
     const _RECALL_RE = /<recall>([\s\S]*?)<\/recall>/gi;
 
     // 抽出 AI 回覆裡的 <recall>關鍵詞</recall> → 存給下一輪 injectMemories 補完整內文；並把標籤從顯示訊息清掉。
     // 回傳清過 <recall> 的內文(給後續 ingest，避免把標籤記成記憶)。
     async function _captureAndStripRecall(content) {
         try {
-            const kws = [];
+            const toks = [];
             let mt; _RECALL_RE.lastIndex = 0;
             while ((mt = _RECALL_RE.exec(content)) !== null) {
-                String(mt[1] || '').split(/[,，、\s]+/).forEach((k) => { k = k.trim(); if (k) kws.push(k); });
+                String(mt[1] || '').split(/[,，、\s]+/).forEach((k) => { k = k.trim(); if (k) toks.push(k); });
             }
-            if (!kws.length) return content;        // 沒有 <recall> → 原樣返回
-            _pendingRecallKeywords = Array.from(new Set(kws)).slice(0, 12);
-            console.log('🧠 [Recall] 主模型點名、下一輪載入細節:', _pendingRecallKeywords.join('、'));
+            if (!toks.length) return content;        // 沒有 <recall> → 原樣返回
+            // 代號(A+數字) → 對照上一輪注入目錄解析成記憶物件(可靠)；其餘 → 當關鍵詞末路備援(語氣角色名 / AI 不照碼)
+            const codeEntries = [], kws = [];
+            for (const t of Array.from(new Set(toks))) {
+                const hit = /^A\d+$/i.test(t) ? _lastCatalogMap[t.toUpperCase()] : null;
+                if (hit) codeEntries.push(hit); else kws.push(t);
+            }
+            _pendingRecallMainEntries = codeEntries.slice(0, 8);
+            _pendingRecallKeywords = kws.slice(0, 12);
+            console.log('🧠 [Recall] 主模型點名、下一輪載入細節:', `碼 ${codeEntries.length} 條` + (kws.length ? ` + 關鍵詞 ${kws.join('、')}` : ''));
             // 從顯示訊息清掉 <recall>…</recall>（用陣列索引 chat.length-1 改，避開懶載入真樓號越界）
             const cleaned = content.replace(/\s*<recall>[\s\S]*?<\/recall>\s*/gi, '\n').trim();
             if (cleaned !== content) {
@@ -90,14 +101,20 @@
             const facts = all.filter(m => m.type !== 'dialogue');
             const voice = all.filter(m => m.type === 'dialogue');
 
+            // 索引每行前綴穩定代號 A1…An（與 getCatalogForPicking 同序同碼），主模型要回想就 <recall>A5</recall>。
+            _lastCatalogMap = {};
             const _seen = new Set();
-            const _sumLine = (m) => {                       // 索引文字：summary 優先，沒有退回 text，截短去重
+            let _code = 0;
+            const _sumLine = (m) => {                       // 索引文字：summary 優先，沒有退回 text，截短去重；前綴代號
                 let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
                 if (!s) return '';
                 if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
                 if (_seen.has(s)) return '';
                 _seen.add(s);
-                return '・' + s;
+                _code++;
+                const code = 'A' + _code;
+                _lastCatalogMap[code] = m;
+                return `${code}・${s}`;
             };
 
             let block = `<劇情記憶 規則="既成事實·寫作前必讀·不得矛盾">\n下列是本劇過往「已經發生」的記憶摘要，按時間遠近分三段(早期/中段/近期)。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n`;
@@ -116,17 +133,20 @@
             }
 
             // ── 細節注入：① 副模型(記憶導演)上一輪挑的記憶＝主力  ② 主模型 <recall> 點名＝備援 → 合併去重補完整內文 ──
+            let _detailHit = [];
+            const _pendingSecCount = _pendingRecallEntries.length, _pendingKwCount = _pendingRecallKeywords.length;
             {
                 let _cand = [];
-                if (_pendingRecallEntries.length) _cand = _cand.concat(_pendingRecallEntries);    // 副模型挑的(主)
-                if (_pendingRecallKeywords.length) {                                               // 主模型 <recall> 點名的(備援)
+                if (_pendingRecallEntries.length) _cand = _cand.concat(_pendingRecallEntries);          // 副模型導演挑的(主力)
+                if (_pendingRecallMainEntries.length) _cand = _cand.concat(_pendingRecallMainEntries);  // 主模型挑碼解析的(備援，用碼可靠)
+                if (_pendingRecallKeywords.length) {                                                     // 主模型寫的非代號關鍵詞(末路備援)
                     const kws = _pendingRecallKeywords.map(k => k.toLowerCase());
                     _cand = _cand.concat(all.filter(m => {
                         const hay = ((m.tags || []).join(' ') + ' ' + (m.summary || '') + ' ' + (m.text || '')).toLowerCase();
                         return kws.some(k => k && hay.includes(k));
                     }));
                 }
-                const _ds = new Set(); const _hit = [];
+                const _ds = new Set(); const _hit = _detailHit;
                 for (const m of _cand) {
                     const key = (m.summary || '') + '|' + String(m.text || '').slice(0, 40);
                     if (!key.trim() || _ds.has(key)) continue;
@@ -141,12 +161,13 @@
                         return `・${t}`;
                     }).join('\n');
                 }
-                _pendingRecallEntries = [];      // 消費掉；副模型每輪會重新挑
+                _pendingRecallEntries = [];       // 消費掉；副模型每輪會重新挑
+                _pendingRecallMainEntries = [];   // 消費掉；主模型每輪會重新挑碼
                 _pendingRecallKeywords = [];      // 消費掉；要持續帶就靠下一輪再點名
             }
 
             // ── 教主模型怎麼把「摘要」變「細節」（細節晚一輪到）──
-            block += `\n\n[記憶用法｜上面只是摘要、沒有完整細節。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>關鍵詞</recall>（用該記憶裡的角色名/地點/事件當關鍵詞，可多個、逗號隔開）。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
+            block += `\n\n[記憶用法｜每條摘要行首都有一個代號（A 開頭的編號）。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>代號</recall>（直接抄行首那個編號，多條用逗號隔開）；若需要某角色的說話風格範例，改抄該角色名。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
 
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
