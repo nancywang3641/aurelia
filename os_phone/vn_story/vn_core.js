@@ -1649,7 +1649,7 @@
 
         // ── 立繪模式生成咽喉：直接生全身立繪、存 sprite_cache（_renderSlot 最優先讀它→貼地顯示）──
         // 同名只生一張（_spriteInflight 去重）；sprite_cache 命中(studio 做過/上輪生過)直接用、不重複扣錢。
-        _genSpriteToCache: function(name) {
+        _genSpriteToCache: function(name, promptOverride) {
             if (this._spriteMemCache[name]) return Promise.resolve(this._spriteMemCache[name]);
             if (this._spriteInflight[name]) return this._spriteInflight[name];
             const self = this;
@@ -1659,7 +1659,12 @@
                         const c = await VN_Cache.get('sprite_cache', v);
                         if (c && c.url) { self._spriteMemCache[name] = c.url; return c.url; }
                     }
-                    const raw = await VN_Image.getSprite(self._resolveAvatarPrompt(name));
+                    // 解析 prompt：傳入優先 → 角色描述 → persona 描述。沒描述＝次要角色（AI 沒出 [Avatar]）→ 不生，
+                    //   全身立繪 + 空 prompt = 全裸怪圖；同頭像規則「沒描述不生」。
+                    let _sp = (promptOverride && promptOverride.trim()) ? promptOverride.trim() : self._resolveAvatarPrompt(name);
+                    if ((!_sp || !_sp.trim()) && typeof self._getPersonaFallback === 'function') { const pf = self._getPersonaFallback(name); if (pf && pf.prompt) _sp = pf.prompt; }
+                    if (!_sp || !_sp.trim()) { console.log('[VN] 立繪跳過(無角色描述、次要角色)：' + name); return ''; }
+                    const raw = await VN_Image.getSprite(_sp);
                     if (!raw) { console.warn(`[VN] 立繪生成失敗：${name}`); return ''; }
                     // 取原圖 blob（fetch 失敗→改走 dataURL 再轉 blob，避 CORS）
                     let blob = null;
@@ -1673,7 +1678,7 @@
                     let dataUrl = '';
                     try { dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.onerror = () => r(''); rd.readAsDataURL(outBlob); }); } catch (e) {}
                     self._spriteMemCache[name] = finalUrl;
-                    if (dataUrl) { try { await VN_Cache.set('sprite_cache', name, { prompt: self._resolveAvatarPrompt(name), url: dataUrl }); } catch (e) {} }
+                    if (dataUrl) { try { await VN_Cache.set('sprite_cache', name, { prompt: _sp, url: dataUrl }); } catch (e) {} }
                     console.log(`[VN] 立繪生成完成（已去背）：${name}`);
                     return finalUrl;
                 } catch(e) { console.warn(`[VN] 立繪生成例外：${name}`, e); return ''; }
@@ -1703,6 +1708,11 @@
                 };
                 const cs = [sampleCorner(0, 0), sampleCorner(Math.max(0, W - 6), 0), sampleCorner(0, Math.max(0, H - 6)), sampleCorner(Math.max(0, W - 6), Math.max(0, H - 6))];
                 const bg = [0, 1, 2].map(k => cs.reduce((s, c) => s + c[k], 0) / cs.length);
+                // 防呆①：四角顏色差異大＝背景不是純色(模型沒出 solid background) → 別亂去背，回 null 用原圖
+                const _cd = (a, b) => { const dr = a[0]-b[0], dg = a[1]-b[1], db = a[2]-b[2]; return dr*dr + dg*dg + db*db; };
+                let _cornerVar = 0;
+                for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) _cornerVar = Math.max(_cornerVar, _cd(cs[i], cs[j]));
+                if (_cornerVar > 1600) { console.warn('[VN] 立繪背景非純色、跳過去背'); return null; }
                 const tol = 65, tol2 = tol * tol * 3;   // 對齊 studio 預設去背強度 50
                 const isBg = (p) => { const i = p * 4, dr = d[i] - bg[0], dg = d[i + 1] - bg[1], db = d[i + 2] - bg[2]; return (dr * dr + dg * dg + db * db) <= tol2; };
                 const visited = new Uint8Array(W * H), stack = [];
@@ -1720,6 +1730,10 @@
                     if (y > 0) stack.push(p - W);
                     if (y < H - 1) stack.push(p + W);
                 }
+                // 防呆②：去背吃掉太多像素＝漏進角色(淺色角色邊緣同色)把人挖花 → 放棄、用原圖
+                let _cleared = 0;
+                for (let p = 0; p < W * H; p++) if (d[p * 4 + 3] === 0) _cleared++;
+                if (_cleared / (W * H) > 0.85) { console.warn('[VN] 立繪去背吃掉過多(疑漏進角色)、放棄用原圖'); return null; }
                 ctx.putImageData(imgData, 0, 0);
                 return await new Promise(res => cv.toBlob(res, 'image/png'));
             } catch (e) { console.warn('[VN] _stripSpriteBg 失敗:', e?.message || e); return null; }
@@ -3011,10 +3025,26 @@
                 else this._swapImage(img, url, false, _stale, () => this._applyAvatarAnim(img, exp));
             };
 
-            // 立繪模式：跳過頭像（世界書/快取/persona 全不走），直接生全身立繪、貼地顯示、不套金框
+            // 立繪模式：鏡像頭像解析鏈，只把「生成」換成生全身立繪、貼地顯示；gate 規則一字不改。
+            //   世界書圖 → persona 圖（皆直接貼地用）→ 有描述(角色/persona)才生立繪 → 都沒有＝次要角色 → finalFallbackSprite 剪影/隱藏，絕不生。
             if (VN_Config.data.spriteDirect) {
-                const sUrl = await this._genSpriteToCache(name);
-                if (!_stale() && sUrl) showSprite(sUrl);
+                if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
+                const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
+                if (lbUrl) { showSprite(lbUrl); return; }
+                const pf = this._getPersonaFallback(name);
+                if (pf && pf.url) { showSprite(pf.url); return; }
+                let d = this._resolveAvatarPrompt(name);
+                if ((!d || !d.trim()) && pf && pf.prompt) d = pf.prompt;
+                if (!d || !d.trim()) {   // 次要角色（AI 沒出 [Avatar]）→ 同頭像規則：剪影/隱藏，不生
+                    const fb = VN_Config.data.finalFallbackSprite;
+                    if (fb) showSprite(fb); else if (!_stale()) this._hideEl(img);
+                    return;
+                }
+                const sUrl = await this._genSpriteToCache(name, d);
+                if (!_stale()) {
+                    if (sUrl) showSprite(sUrl);
+                    else { const fb = VN_Config.data.finalFallbackSprite; if (fb) showSprite(fb); else this._hideEl(img); }
+                }
                 return;
             }
 
