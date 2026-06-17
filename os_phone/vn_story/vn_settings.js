@@ -13,6 +13,7 @@
         bgm:                 '',
         sfx:                 '',
         spriteBase:          '',
+        spriteDirect:        false,
         stickerBase:         '',
         charDefaultBase:     '',
         finalFallbackSprite: 'https://files.catbox.moe/9je7j2.png',
@@ -46,6 +47,7 @@
                 bgm:                 g('bgm'),
                 sfx:                 g('sfx'),
                 spriteBase:          g('sprite'),
+                spriteDirect:        container.querySelector('#vncfg-sprite-direct')?.checked === true,
                 stickerBase:         g('sticker'),
                 charDefaultBase:     g('char-default-base'),
                 finalFallbackSprite: g('final-fallback') || DEFAULTS.finalFallbackSprite,
@@ -96,6 +98,12 @@
     <div class="set-group">
         <div class="set-label">🖼️ 立繪目錄</div>
         <input class="set-input" id="vncfg-sprite" placeholder="./sprites/" value="${d.spriteBase}">
+    </div>
+
+    <div class="set-group">
+        <div class="set-label">🧍 立繪模式</div>
+        <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${d.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
+        <div class="set-desc">關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像，適合繪圖模型生全身穩定的情況。</div>
     </div>
 
     <div class="set-group">

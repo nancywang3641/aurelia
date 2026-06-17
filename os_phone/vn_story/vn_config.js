@@ -137,6 +137,36 @@
                 return await win.OS_IMAGE_MANAGER.generate(full, 'char', _avOpts);
             } return "";
         },
+        // 立繪模式專用：直接從角色描述生「全身站姿立繪」(跟 studio 頭像轉立繪同套邏輯)。
+        // 清掉跟立繪衝突的構圖/背景/視角 tag → 套全身模板 → 512×896 直立 → 非 NAI 走 raw(純模板)，NAI 套頭像同畫風底詞避免太裸。
+        getSprite: async function(prompt, force) {
+            if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return "";
+            const _svc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : ((win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '');
+            const _useNAI = (_svc === 'novelai');
+            const SPRITE_TEMPLATE = 'centered composition, entire body visible, body in frame, (facing viewer:1.2), front view, looking at viewer, solid background, (cowboy shot), full body, ((detailed rendering)), clean and fluid linework, ';
+            const cleaned = this._stripForSprite(prompt);
+            const _base = _useNAI ? (VN_Config.data.avatarBasePrompt || '') : '';
+            const full = this._join(_base, SPRITE_TEMPLATE + cleaned);
+            // 立繪尺寸：跟 studio 共用「立繪比例」設定 os_sprite_size，預設 512×896
+            let _w = 512, _h = 896;
+            try { const _p = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_p[0] && _p[1]) { _w = _p[0]; _h = _p[1]; } } catch(e) {}
+            const _neg = (_useNAI ? VN_Config.data.avatarNegPrompt : '') || undefined;
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: !_useNAI, negativePrompt: _neg, force: !!force });
+        },
+        // 剝掉跟立繪衝突的構圖/背景/視角 tag（與 os_settings studio 的 stripPromptForSprite 同規則）
+        _stripForSprite: function(p) {
+            if (!p) return '';
+            const patterns = [
+                /\bbust(\s+|-)?shot\b/gi, /\bportrait\b/gi, /\bheadshot\b/gi, /\bhead\s+shot\b/gi,
+                /\bclose[\s-]?up\b/gi, /\bcowboy(\s+|-)?shot\b/gi, /\bupper(\s+|-)?body\b/gi, /\bfull(\s+|-)?body\b/gi,
+                /\bhead\s+and\s+shoulders\b/gi, /\bwaist[\s-]?up\b/gi, /\bchest[\s-]?up\b/gi,
+                /\b[a-z]*\s*background\b/gi, /\bisolated\b/gi, /\bno\s+bg\b/gi,
+                /\bfrom\s+(above|below|side|behind|front)\b/gi,
+            ];
+            let s = p;
+            patterns.forEach(rx => { s = s.replace(rx, ''); });
+            return s.replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
+        },
         getItem: async function(prompt) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateItem === 'function') {
                 return await win.OS_IMAGE_MANAGER.generateItem(prompt);
