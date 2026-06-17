@@ -1672,14 +1672,23 @@
         // 🤖 AI 去背（@imgly isnet，靠 AI 認人形、吃任何背景）：純色 flood-fill 對不了的「油畫/氛圍背景」立繪用這個。
         //   首次下載 ~40MB 模型(之後快取)、單張 ~10–30 秒(WASM 單執行緒)。模型函式快取在 _bgRemoverFn。失敗回 null。
         _bgRemoverFn: null,
-        _stripSpriteBgAI: async function(blob) {
-            try {
-                if (!this._bgRemoverFn) {
-                    const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
-                    this._bgRemoverFn = m.removeBackground;
-                }
-                return await this._bgRemoverFn(blob, { model: 'isnet_fp16', output: { format: 'image/png', quality: 1.0 } });
-            } catch (e) { console.warn('[VN] AI 去背失敗:', e?.message || e); return null; }
+        _bgRemoveChain: Promise.resolve(),   // 去背序列化鏈（同 NAI _naiQueue 思路）：WASM 單執行緒，全程一張一張跑
+        _stripSpriteBgAI: function(blob) {
+            // ⚠️ WASM 去背是單執行緒 / CPU-bound，並行只會互搶 CPU + 吃爆記憶體 → 用 promise 鏈強制串行：
+            //   不管上游生成是並行(Pollinations)還是串行，去背永遠一張跑完才下一張；模型只載一次。
+            const self = this;
+            const run = async () => {
+                try {
+                    if (!self._bgRemoverFn) {
+                        const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
+                        self._bgRemoverFn = m.removeBackground;
+                    }
+                    return await self._bgRemoverFn(blob, { model: 'isnet_fp16', output: { format: 'image/png', quality: 1.0 } });
+                } catch (e) { console.warn('[VN] AI 去背失敗:', e?.message || e); return null; }
+            };
+            const next = self._bgRemoveChain.then(run, run);   // 前一個成敗都接著跑
+            self._bgRemoveChain = next.catch(() => {});          // 鏈不因單張失敗而斷
+            return next;
         },
 
         // ── 早鳥入口：搶在 VN 載入前提早登記＋生成頭像（vn_avatar_earlybird / 面板啟動路呼叫）──
