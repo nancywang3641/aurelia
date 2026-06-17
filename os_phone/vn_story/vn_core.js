@@ -1501,6 +1501,7 @@
 
         _prewarmAvatars: function() {
             if (VN_Config.data.spriteBase) return;
+            if (VN_Config.data.spriteDirect) { this._prewarmSprites(); return; }   // 立繪模式：改預熱全身立繪
             const names = Object.keys(this.avatars);
             // 把 persona 名字也納入預熱
             try {
@@ -1554,9 +1555,46 @@
             })();
         },
 
+        // 立繪模式預熱：對白裡登場的角色，開播前先把全身立繪生好存進 sprite_cache（取代頭像預熱）
+        _prewarmSprites: function() {
+            const names = Object.keys(this.avatars);
+            try {
+                const uName = win.OS_PERSONA?.getName?.() || win.OS_API?.getGlobalUserName?.();
+                if (uName && !this.avatars[uName] && !names.includes(uName)) names.push(uName);
+            } catch(e) {}
+            if (!names.length) return;
+            const self = this;
+            (async () => {
+                self._imgScanStart();
+                try {
+                    const needGen = [];
+                    for (const name of names) {
+                        if (self._spriteMemCache[name]) continue;
+                        let hit = false;
+                        for (const v of self._nameVariants(name)) {
+                            const c = await VN_Cache.get('sprite_cache', v);
+                            if (c && c.url) { self._spriteMemCache[name] = c.url; hit = true; break; }
+                        }
+                        if (hit) { console.log(`[VN] 立繪快取命中：${name}`); continue; }
+                        if (win.OS_IMAGE_MANAGER) needGen.push(name);
+                    }
+                    if (!needGen.length) { console.log('[VN] 所有立繪預熱完成（全部快取命中）'); return; }
+                    const _svc = (typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (win.OS_IMAGE_MANAGER?.config?.service || '');
+                    const _localGpu = (_svc === 'comfyui_direct' || _svc === 'tavern_sd');
+                    console.log(`[VN] ${_localGpu ? '串行' : '並行'}生成 ${needGen.length} 個立繪...`);
+                    if (_localGpu) { for (const name of needGen) { await self._genSpriteToCache(name); } }
+                    else { await Promise.all(needGen.map(name => self._genSpriteToCache(name))); }
+                    console.log('[VN] 所有立繪預熱完成');
+                } finally { self._imgScanEnd(); }
+            })();
+        },
+
         // ── 頭像生成共用管線（loadScript 預熱 / 早鳥監聽 共用）──────────────
         // in-flight 去重：同名頭像不論從哪條路觸發，同時只生一張
         _avatarInflight: {},
+        // 立繪模式（spriteDirect）專用快取：跳過頭像、直接生全身立繪，存進 sprite_cache
+        _spriteMemCache: {},
+        _spriteInflight: {},
         // ── 圖片預熱總進度（頭像＋背景＋場景CG＋道具全算；開場 loading 與語音延後都看這個）──
         // scanning＝「盤點中」：預熱在讀世界書/查快取、還沒把生成單排進來的階段。
         // 沒有它會有盤點空窗（inflight=0 但工作沒做完）→ loading 誤判完成提早放行（2026-06-11 實測踩過）
@@ -1575,6 +1613,7 @@
         },
         avatarPendingStatus: function() { return this.imgPendingStatus(); },   // 舊名相容
         _genAvatarToCache: function(name) {
+            if (VN_Config.data.spriteDirect) return this._genSpriteToCache(name);   // 立繪模式：跳過頭像、改生全身立繪
             if (this._avatarMemCache[name]) return Promise.resolve(this._avatarMemCache[name]);
             if (this._avatarInflight[name]) return this._avatarInflight[name];
             if (this._pendingAvatars[name]) return this._pendingAvatars[name];   // 晚路徑（開口時）正在生這張 → 等它、別重發（雙向去重，本機 GPU 不排兩次）
@@ -1605,6 +1644,38 @@
             this._avatarInflight[name] = job;
             this._imgJobStart();
             job.finally(() => { delete this._avatarInflight[name]; this._imgJobEnd(); });
+            return job;
+        },
+
+        // ── 立繪模式生成咽喉：直接生全身立繪、存 sprite_cache（_renderSlot 最優先讀它→貼地顯示）──
+        // 同名只生一張（_spriteInflight 去重）；sprite_cache 命中(studio 做過/上輪生過)直接用、不重複扣錢。
+        _genSpriteToCache: function(name) {
+            if (this._spriteMemCache[name]) return Promise.resolve(this._spriteMemCache[name]);
+            if (this._spriteInflight[name]) return this._spriteInflight[name];
+            const self = this;
+            const job = (async () => {
+                try {
+                    for (const v of self._nameVariants(name)) {
+                        const c = await VN_Cache.get('sprite_cache', v);
+                        if (c && c.url) { self._spriteMemCache[name] = c.url; return c.url; }
+                    }
+                    const raw = await VN_Image.getSprite(self._resolveAvatarPrompt(name));
+                    if (!raw) { console.warn(`[VN] 立繪生成失敗：${name}`); return ''; }
+                    let finalUrl = raw, dataUrl = '';
+                    try {
+                        const blob = await (await fetch(raw)).blob();
+                        finalUrl = URL.createObjectURL(blob);
+                        dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.onerror = () => r(''); rd.readAsDataURL(blob); });
+                    } catch(e) { const u = await self._toDataUrl(raw); if (u) { finalUrl = u; dataUrl = u; } }
+                    self._spriteMemCache[name] = finalUrl;
+                    if (dataUrl) { try { await VN_Cache.set('sprite_cache', name, { prompt: self._resolveAvatarPrompt(name), url: dataUrl }); } catch(e) {} }
+                    console.log(`[VN] 立繪生成完成：${name}`);
+                    return finalUrl;
+                } catch(e) { console.warn(`[VN] 立繪生成例外：${name}`, e); return ''; }
+            })();
+            this._spriteInflight[name] = job;
+            this._imgJobStart();
+            job.finally(() => { delete self._spriteInflight[name]; self._imgJobEnd(); });
             return job;
         },
 
@@ -1648,6 +1719,7 @@
         _earlybirdAvatars: async function(pairs) {
             if (!pairs || !pairs.length) return;
             if (VN_Config.data.spriteBase) return;   // 固定立繪模式不生成
+            if (VN_Config.data.spriteDirect) return; // 立繪模式：改走 _prewarmSprites + 即時生成，不走頭像早鳥
             // ⭐ 真因修復：舊版此處為 `|| !win.OS_IMAGE_MANAGER) return` → iframe 模式下 win=window.parent，
             //    引擎卻掛在 window，早鳥的 win.OS_IMAGE_MANAGER 永遠 false → 整批默默丟掉，頭像退回
             //    「對話框跳出來才生」。改成 win/window/window.parent 任一個有就放行（生成走 VN_Image 用對的 win）。
@@ -2851,6 +2923,13 @@
                 if (isCall) { img.src = url; }
                 else this._swapImage(img, url, false, _stale, () => this._applyAvatarAnim(img, exp));
             };
+
+            // 立繪模式：跳過頭像（世界書/快取/persona 全不走），直接生全身立繪、貼地顯示、不套金框
+            if (VN_Config.data.spriteDirect) {
+                const sUrl = await this._genSpriteToCache(name);
+                if (!_stale() && sUrl) showSprite(sUrl);
+                return;
+            }
 
             // 世界書頭像
             if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
