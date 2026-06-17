@@ -1488,7 +1488,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #text-panel-wrapper { position: absolute; bottom: 35px; left: 50%; transform: translateX(-50%); width: 85%; z-index: 10; cursor: pointer; }
 
         /* === 劇情結束 - 資料中心按鈕覆蓋層 === */
-        #vn-end-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 15; pointer-events: none; }
+        #vn-end-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; z-index: 15; pointer-events: none; }
         #vn-end-overlay.active { display: flex; pointer-events: none; }
         #vn-end-btn-data {
             pointer-events: auto;
@@ -1500,6 +1500,16 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             text-shadow: 0 0 8px rgba(212,175,55,0.5);
         }
         #vn-end-btn-data:hover { background: rgba(20,15,5,0.95); box-shadow: 0 0 35px rgba(212,175,55,0.5), 0 8px 32px rgba(0,0,0,0.9); }
+        #vn-end-btn-ctx, #vn-end-btn-journal {
+            pointer-events: auto;
+            padding: 10px 28px; background: rgba(5,5,8,0.88);
+            border: 1px solid var(--gold); color: var(--gold);
+            font-family: var(--font-classic); font-size: 0.85rem; letter-spacing: 2px;
+            cursor: pointer; transition: all 0.3s ease;
+            box-shadow: 0 0 14px rgba(212,175,55,0.2), 0 6px 24px rgba(0,0,0,0.8);
+            text-shadow: 0 0 8px rgba(212,175,55,0.45);
+        }
+        #vn-end-btn-ctx:hover, #vn-end-btn-journal:hover { background: rgba(20,15,5,0.95); box-shadow: 0 0 26px rgba(212,175,55,0.45), 0 6px 24px rgba(0,0,0,0.9); }
 
         #text-panel {
             backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
