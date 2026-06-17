@@ -1661,15 +1661,20 @@
                     }
                     const raw = await VN_Image.getSprite(self._resolveAvatarPrompt(name));
                     if (!raw) { console.warn(`[VN] 立繪生成失敗：${name}`); return ''; }
-                    let finalUrl = raw, dataUrl = '';
-                    try {
-                        const blob = await (await fetch(raw)).blob();
-                        finalUrl = URL.createObjectURL(blob);
-                        dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.onerror = () => r(''); rd.readAsDataURL(blob); });
-                    } catch(e) { const u = await self._toDataUrl(raw); if (u) { finalUrl = u; dataUrl = u; } }
+                    // 取原圖 blob（fetch 失敗→改走 dataURL 再轉 blob，避 CORS）
+                    let blob = null;
+                    try { blob = await (await fetch(raw)).blob(); }
+                    catch (e) { try { const du = await self._toDataUrl(raw); if (du) blob = await (await fetch(du)).blob(); } catch (e2) {} }
+                    if (!blob) { console.warn(`[VN] 立繪抓圖失敗：${name}`); return ''; }
+                    // 🪄 去背：立繪模板帶 solid background → 純色 flood-fill 去背（同 studio「純色去背」；失敗退原圖）
+                    let outBlob = blob;
+                    try { const s = await self._stripSpriteBg(blob); if (s) outBlob = s; } catch (e) { console.warn('[VN] 立繪去背失敗、用原圖：' + name, e); }
+                    const finalUrl = URL.createObjectURL(outBlob);
+                    let dataUrl = '';
+                    try { dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.onerror = () => r(''); rd.readAsDataURL(outBlob); }); } catch (e) {}
                     self._spriteMemCache[name] = finalUrl;
-                    if (dataUrl) { try { await VN_Cache.set('sprite_cache', name, { prompt: self._resolveAvatarPrompt(name), url: dataUrl }); } catch(e) {} }
-                    console.log(`[VN] 立繪生成完成：${name}`);
+                    if (dataUrl) { try { await VN_Cache.set('sprite_cache', name, { prompt: self._resolveAvatarPrompt(name), url: dataUrl }); } catch (e) {} }
+                    console.log(`[VN] 立繪生成完成（已去背）：${name}`);
                     return finalUrl;
                 } catch(e) { console.warn(`[VN] 立繪生成例外：${name}`, e); return ''; }
             })();
@@ -1677,6 +1682,47 @@
             this._imgJobStart();
             job.finally(() => { delete self._spriteInflight[name]; self._imgJobEnd(); });
             return job;
+        },
+
+        // 🪄 純色去背（canvas flood-fill，複製 studio spriteRemoveBgCanvas）：抓四角背景色 → 從邊緣 flood-fill
+        //   把「接近背景色且與邊緣連通」的像素設透明。只去邊緣連通＝角色內部不打洞、二值 alpha＝不半透明。
+        //   立繪模板帶 solid background → 角落必為純色，效果好；不下載模型、瞬間完成。失敗回 null（呼叫端退原圖）。
+        _stripSpriteBg: async function(blob) {
+            try {
+                const bmp = await createImageBitmap(blob);
+                const W = bmp.width, H = bmp.height;
+                const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+                const ctx = cv.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(bmp, 0, 0); if (bmp.close) bmp.close();
+                const imgData = ctx.getImageData(0, 0, W, H), d = imgData.data;
+                const sampleCorner = (x0, y0) => {
+                    let r = 0, g = 0, b = 0, n = 0;
+                    for (let y = y0; y < Math.min(y0 + 6, H); y++)
+                        for (let x = x0; x < Math.min(x0 + 6, W); x++) { const i = (y * W + x) * 4; r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+                    return n ? [r / n, g / n, b / n] : [0, 0, 0];
+                };
+                const cs = [sampleCorner(0, 0), sampleCorner(Math.max(0, W - 6), 0), sampleCorner(0, Math.max(0, H - 6)), sampleCorner(Math.max(0, W - 6), Math.max(0, H - 6))];
+                const bg = [0, 1, 2].map(k => cs.reduce((s, c) => s + c[k], 0) / cs.length);
+                const tol = 65, tol2 = tol * tol * 3;   // 對齊 studio 預設去背強度 50
+                const isBg = (p) => { const i = p * 4, dr = d[i] - bg[0], dg = d[i + 1] - bg[1], db = d[i + 2] - bg[2]; return (dr * dr + dg * dg + db * db) <= tol2; };
+                const visited = new Uint8Array(W * H), stack = [];
+                for (let x = 0; x < W; x++) { stack.push(x); stack.push((H - 1) * W + x); }
+                for (let y = 0; y < H; y++) { stack.push(y * W); stack.push(y * W + W - 1); }
+                while (stack.length) {
+                    const p = stack.pop();
+                    if (visited[p]) continue;
+                    visited[p] = 1;
+                    if (!isBg(p)) continue;
+                    d[p * 4 + 3] = 0;
+                    const x = p % W, y = (p / W) | 0;
+                    if (x > 0) stack.push(p - 1);
+                    if (x < W - 1) stack.push(p + 1);
+                    if (y > 0) stack.push(p - W);
+                    if (y < H - 1) stack.push(p + W);
+                }
+                ctx.putImageData(imgData, 0, 0);
+                return await new Promise(res => cv.toBlob(res, 'image/png'));
+            } catch (e) { console.warn('[VN] _stripSpriteBg 失敗:', e?.message || e); return null; }
         },
 
         // ── 早鳥入口：搶在 VN 載入前提早登記＋生成頭像（vn_avatar_earlybird / 面板啟動路呼叫）──
