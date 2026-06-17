@@ -101,12 +101,6 @@
     </div>
 
     <div class="set-group">
-        <div class="set-label">🧍 立繪模式</div>
-        <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${d.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
-        <div class="set-desc">關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像，適合繪圖模型生全身穩定的情況。</div>
-    </div>
-
-    <div class="set-group">
         <div class="set-label">😄 表情包資料夾</div>
         <input class="set-input" id="vncfg-sticker" placeholder="https://cdn.com/stickers/ 或 ./stickers/" value="${d.stickerBase}">
     </div>
