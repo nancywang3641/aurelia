@@ -143,16 +143,21 @@
             if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return "";
             const _svc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : ((win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '');
             const _useNAI = (_svc === 'novelai');
-            // 對齊 studio DEF_PREFIX：保留 clothes and pants（衣著保險，少了動漫模型會裸出）；school 拿掉（會污染成校服、奇幻劇不對）
-            const SPRITE_TEMPLATE = 'centered composition, entire body visible, body in frame, (facing viewer:1.2), front view, looking at viewer, solid background, (cowboy shot), full body, clothes and pants, ((detailed rendering)), clean and fluid linework, delicate and refined, both shoulders visible, ';
-            const cleaned = this._stripForSprite(prompt);
-            const _base = _useNAI ? (VN_Config.data.avatarBasePrompt || '') : '';
-            const full = this._join(_base, SPRITE_TEMPLATE + cleaned);
+            // ⭐ 跟「角色立繪 studio / 一鍵生立繪」一字不差：用她在 studio 調好的前綴/後綴(localStorage os_sprite_tpl_prefix/suffix)，
+            //   別再自己硬編模板。沒設過才退預設(她的 cowboy shot + brown background 那組，避免 full body 打架被切、純色底好去背)。
+            //   prompt 是角色描述：清掉跟立繪衝突的構圖/背景/視角 tag(同 studio renderAvatarPicker 的 stripPromptForSprite)。
+            //   底詞/負詞/畫師串交給 generate(raw=!NAI 同 studio)：NAI 套 charBasePrompt、非 NAI raw 純模板，這裡不另塞。
+            const DEF_PFX = '(facing viewer:1.2), front view, looking at viewer, body in frame, (cowboy shot), clothes and pants, standing, ';
+            let pfx = null, sfx = null;
+            try { pfx = localStorage.getItem('os_sprite_tpl_prefix'); } catch (e) {}
+            try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
+            if (pfx == null) pfx = DEF_PFX;
+            if (sfx == null) sfx = '';
+            const full = pfx + this._stripForSprite(prompt) + sfx;   // = studio 的 prefix + finalPrompt + suffix
             // 立繪尺寸：跟 studio 共用「立繪比例」設定 os_sprite_size，預設 512×896
             let _w = 512, _h = 896;
             try { const _p = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_p[0] && _p[1]) { _w = _p[0]; _h = _p[1]; } } catch(e) {}
-            const _neg = (_useNAI ? VN_Config.data.avatarNegPrompt : '') || undefined;
-            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: !_useNAI, negativePrompt: _neg, force: !!force });
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: !_useNAI, force: !!force });
         },
         // 剝掉跟立繪衝突的構圖/背景/視角 tag（與 os_settings studio 的 stripPromptForSprite 同規則）
         _stripForSprite: function(p) {
