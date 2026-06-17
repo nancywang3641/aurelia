@@ -1568,6 +1568,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             pointer-events: auto; scrollbar-width: thin; scrollbar-color: #222 transparent;
         }
         #vn-ctx-popup.show { display: block; }
+        /* 劇情末尾「CTX」鈕：popup 搬到末尾覆蓋層當獨立浮窗（不牽連對話面板），固定右側、自身限高可捲動 */
+        #vn-ctx-popup.vn-ctx-endfloat { position: absolute; top: 24px; right: 28px; left: auto; bottom: auto; max-height: calc(100% - 48px); overflow-y: auto; z-index: 20; pointer-events: auto; }
         .ctx-title { color: var(--gold); font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid rgba(212,175,55,0.2); padding-bottom: 5px; font-family: var(--font-sans); }
         .ctx-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; gap: 16px; }
         .ctx-label { color: #777; font-size: 0.7rem; letter-spacing: 1px; font-family: var(--font-sans); }
