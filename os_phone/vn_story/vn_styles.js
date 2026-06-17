@@ -124,6 +124,8 @@
 
                 <div id="vn-end-overlay">
                     <button id="vn-end-btn-data">資料中心</button>
+                    <button id="vn-end-btn-ctx">CTX</button>
+                    <button id="vn-end-btn-journal">日誌</button>
                 </div>
 
                 <div id="vn-log-overlay">
