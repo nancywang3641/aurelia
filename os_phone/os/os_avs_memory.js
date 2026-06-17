@@ -31,7 +31,7 @@
             || localStorage.getItem('vn_current_story_id') || '';
     }
     function _typeLabel(t) {
-        const M = { npc: '👤 角色', event: '📅 事件', item: '🎒 物品', location: '🗺️ 地點', rule: '📜 規則', relationship: '💞 關係' };
+        const M = { npc: '👤 角色', event: '📅 事件', item: '🎒 物品', location: '🗺️ 地點', rule: '📜 規則', relationship: '💞 關係', sex: '🔞 性事', dialogue: '🗨️ 語氣' };
         return M[t] || ('• ' + (t || '記憶'));
     }
 
