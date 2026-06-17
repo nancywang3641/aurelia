@@ -143,7 +143,8 @@
             if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return "";
             const _svc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : ((win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '');
             const _useNAI = (_svc === 'novelai');
-            const SPRITE_TEMPLATE = 'centered composition, entire body visible, body in frame, (facing viewer:1.2), front view, looking at viewer, solid background, (cowboy shot), full body, ((detailed rendering)), clean and fluid linework, ';
+            // 對齊 studio DEF_PREFIX：保留 clothes and pants（衣著保險，少了動漫模型會裸出）；school 拿掉（會污染成校服、奇幻劇不對）
+            const SPRITE_TEMPLATE = 'centered composition, entire body visible, body in frame, (facing viewer:1.2), front view, looking at viewer, solid background, (cowboy shot), full body, clothes and pants, ((detailed rendering)), clean and fluid linework, delicate and refined, both shoulders visible, ';
             const cleaned = this._stripForSprite(prompt);
             const _base = _useNAI ? (VN_Config.data.avatarBasePrompt || '') : '';
             const full = this._join(_base, SPRITE_TEMPLATE + cleaned);
