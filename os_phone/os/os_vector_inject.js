@@ -159,6 +159,28 @@
                 }
             }
 
+            // ── 🔞 性事釘選：跟某 NPC 發生過性事(type:'sex')的記憶永遠在場，按對方角色去重留最新一條，
+            //    防 NPC 久未出場 / 久沒提就被主模型寫成初次見面、拔屌無情 OOC（同 type 本身即重要度）。
+            {
+                const sexByChar = new Map();
+                for (const m of all) {
+                    if (m.type !== 'sex') continue;
+                    let name = (Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || String(m.summary || '').slice(0, 10);
+                    name = String(name).trim();
+                    if (name) sexByChar.set(name, m);
+                }
+                const sx = Array.from(sexByChar.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 8);
+                if (sx.length) {
+                    block += `\n\n【性事紀錄｜主角與下列角色發生過性事，互動時務必記得這層關係、別寫成初次見面或冷淡無情】\n`;
+                    block += sx.map(m => {
+                        let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
+                        if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
+                        _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
+                        return `・${t}`;
+                    }).join('\n');
+                }
+            }
+
             // ── 細節注入：① 副模型(記憶導演)上一輪挑的記憶＝主力  ② 主模型 <recall> 點名＝備援 → 合併去重補完整內文 ──
             //    去重種子帶入 _coreKeys：核心角色已釘在上面，動態細節區不重複佔格。
             let _detailHit = [];
