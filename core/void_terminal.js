@@ -570,12 +570,6 @@ const IRIS_IDLE = [
                         <div id="home-chat-title">Parallax Archive & Cafe</div>
                     </div>
                 </div>
-                <div class="lb-top-sysinfo">
-                    <div class="lb-sys-cell"><span class="lb-sys-k">System Time</span><span class="lb-sys-v" id="lb-sys-time">--:--:--</span></div>
-                    <div class="lb-sys-cell lb-sys-opt"><span class="lb-sys-k">Current Date</span><span class="lb-sys-v" id="lb-sys-date">----/--/--</span></div>
-                    <div class="lb-sys-cell lb-sys-opt"><span class="lb-sys-k">Weather</span><span class="lb-sys-v" id="lb-sys-weather">--</span></div>
-                    <div class="lb-sys-cell lb-sys-opt"><span class="lb-sys-k">User</span><span class="lb-sys-v" id="lb-sys-user">GUEST</span></div>
-                </div>
                 <div class="lb-top-ctrls">
                     <button class="void-mode-toggle-btn" id="room-portal-btn" title="傳送至 404 號房" style="display:none;">
                         <span class="void-mode-toggle-label">⬡ 404</span>
@@ -1048,9 +1042,7 @@ const IRIS_IDLE = [
                     const name = (p && p.name) || IRIS_STATE.userName || 'USER';
                     const avatarEl = tab.querySelector('#lb-top-user-avatar');
                     const nameEl   = tab.querySelector('#lb-top-user-name');
-                    const sysUser  = tab.querySelector('#lb-sys-user');
                     if (nameEl)  nameEl.textContent = name;
-                    if (sysUser) sysUser.textContent = name;
                     if (avatarEl) avatarEl.src = (p && p.avatar) ? p.avatar : URLS.PERSONA_FALLBACK;
                 }
                 VoidTerminal._refreshPersonaAvatar = refreshAvatar;
