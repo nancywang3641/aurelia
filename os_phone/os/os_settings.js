@@ -30,6 +30,7 @@
             url: '', key: '', model: 'gemini-3.1-pro-preview', 
             useSystemApi: true, stProfileId: '', 
             directMode: false, enableStreaming: false, disableTyping: false,
+            useGenerateRaw: false,
             enableSummaryOnly: false,
             maxTokens: 2000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
             usePresetPrompts: false, presetName: ''
@@ -939,6 +940,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-label">選擇連接預設 (Profile)</div>
                                 <select class="set-select" id="os-st-profile">${primaryProfileOpts}</select>
                                 <div id="st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72); word-break:break-all; line-height:1.6;"></div>
+                                <div class="set-label" style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
+                                    <span>🍎 generateRaw 模式（iOS 相容）</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="os-use-generateraw" ${llmConfig.useGenerateRaw ? 'checked' : ''}><span class="slider"></span></label>
+                                </div>
+                                <div class="set-desc">iOS 直連被擋／gemini 404 時開。改用酒館 generateRaw 組請求（排除 preset、只送本系統訊息）。</div>
                             </div>
                         </div>
 
@@ -3051,6 +3057,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     presence_penalty: parseFloat(elPresPenalty.value),
                     enableThinking: elEnableThinking ? elEnableThinking.checked : false,
                     thinkingBudget: elThinkingBudget ? parseInt(elThinkingBudget.value) : 8000,
+                    useGenerateRaw: container.querySelector('#os-use-generateraw')?.checked || false,
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
