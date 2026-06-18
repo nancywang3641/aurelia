@@ -2160,28 +2160,33 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elModelNotice = container.querySelector('#model-system-notice');
         const secModelRow = container.querySelector('#sec-model-row');
         const secModelNotice = container.querySelector('#sec-model-system-notice');
+        const elGenRaw = container.querySelector('#os-use-generateraw');
+        const secGenRaw = container.querySelector('#sec-use-generateraw');
 
-        const toggleModelRow = (isSystem, row, notice) => {
-            if (isSystem) { row.classList.add('hidden'); notice.classList.remove('hidden'); }
+        // 🍎 generateRaw/原生模式：模型由奧瑞亞自己送(非酒館當前) → 顯示模型欄讓使用者自己選(副模型可設小模型)
+        const toggleModelRow = (isSystem, row, notice, genRawOn) => {
+            if (isSystem && !genRawOn) { row.classList.add('hidden'); notice.classList.remove('hidden'); }
             else { row.classList.remove('hidden'); notice.classList.add('hidden'); }
         };
 
         elSystemApi.onchange = () => {
             toggleInputs(elSystemApi, manualGroup, stProfileGroup);
-            toggleModelRow(elSystemApi.checked, elModelRow, elModelNotice);
+            toggleModelRow(elSystemApi.checked, elModelRow, elModelNotice, elGenRaw && elGenRaw.checked);
         };
+        if (elGenRaw) elGenRaw.onchange = () => toggleModelRow(elSystemApi.checked, elModelRow, elModelNotice, elGenRaw.checked);
         toggleInputs(elSystemApi, manualGroup, stProfileGroup);
-        toggleModelRow(elSystemApi.checked, elModelRow, elModelNotice);
+        toggleModelRow(elSystemApi.checked, elModelRow, elModelNotice, elGenRaw && elGenRaw.checked);
 
         // 🔥 副模型特有的 Toggle 邏輯
         secSystemApi.onchange = () => {
             toggleInputs(secSystemApi, secManualGroup, secProfileGroup);
-            toggleModelRow(secSystemApi.checked, secModelRow, secModelNotice);
+            toggleModelRow(secSystemApi.checked, secModelRow, secModelNotice, secGenRaw && secGenRaw.checked);
             if (secSyncGroup) secSyncGroup.style.display = secSystemApi.checked ? 'none' : 'flex';
             if (!secSystemApi.checked && secSyncPrimary && secSyncPrimary.checked) {
                 secManualGroup.style.display = 'none';
             }
         };
+        if (secGenRaw) secGenRaw.onchange = () => toggleModelRow(secSystemApi.checked, secModelRow, secModelNotice, secGenRaw.checked);
         
         if (secSyncPrimary) {
             secSyncPrimary.onchange = () => {
@@ -2197,7 +2202,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
         
         toggleInputs(secSystemApi, secManualGroup, secProfileGroup);
-        toggleModelRow(secSystemApi.checked, secModelRow, secModelNotice);
+        toggleModelRow(secSystemApi.checked, secModelRow, secModelNotice, secGenRaw && secGenRaw.checked);
         if (secSyncGroup) secSyncGroup.style.display = secSystemApi.checked ? 'none' : 'flex';
         if (!secSystemApi.checked && secSyncPrimary && secSyncPrimary.checked) secManualGroup.style.display = 'none';
 
