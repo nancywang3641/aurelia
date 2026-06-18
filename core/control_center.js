@@ -235,14 +235,14 @@
         // 🌟 雙層架構 2：全螢幕全域視窗 (給遊戲 Apps 使用，避開底部導覽列)
         const slidePanel = parentDoc.createElement('div');
         slidePanel.id = 'aurelia-panel-container';
-        slidePanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom: env(safe-area-inset-bottom, 0px); background: #EEF0F6; z-index: 50; display: none; flex-direction: column;`;
+        slidePanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom: 0; background: #EEF0F6; z-index: 50; display: none; flex-direction: column;`;
         slidePanel.innerHTML = `<div id=\"aurelia-iframe-container\" style=\"width:100%; height:100%; background:#EEF0F6; overflow:hidden; position:relative;\"></div>`;
         screen.appendChild(slidePanel);
 
         // 🌟 VN 專用全螢幕 overlay（從大廳直接彈出，z-index 51 覆蓋其他 overlay）
         const vnPanel = parentDoc.createElement('div');
         vnPanel.id = 'aurelia-vn-panel';
-        vnPanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom: env(safe-area-inset-bottom, 0px); background:#000; z-index: 51; display: none; flex-direction: column;`;
+        vnPanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom: 0; background:#000; z-index: 51; display: none; flex-direction: column;`;
 
         const vnAppContainer = parentDoc.createElement('div');
         vnAppContainer.id = 'aurelia-vn-app-container';
