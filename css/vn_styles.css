@@ -2237,6 +2237,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             /* 遊戲頂部按鈕 */
             #btn-home { top: calc(10px + env(safe-area-inset-top, 0px)); right: 8px; padding: 6px 12px; font-size: 0.78rem; }
             #btn-settings { top: calc(10px + env(safe-area-inset-top, 0px)); right: 80px; padding: 6px 12px; font-size: 0.78rem; }
+            #btn-phone { top: calc(10px + env(safe-area-inset-top, 0px)); right: 152px; padding: 6px 10px; font-size: 0.78rem; }
             body.layout-pad-ios #btn-home,
             body.layout-pad-ios #btn-settings,
             body.layout-pad-ios #btn-phone { top: 52px; }
