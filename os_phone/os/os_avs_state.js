@@ -149,7 +149,8 @@
                     <div class="avs-st-init-title">這個世界還沒開始追蹤狀態</div>
                     <div class="avs-st-init-desc">按下面的按鈕，AI 會讀你的世界設定，自動決定要幫你記哪些東西<br>（像是角色好感度、體力、任務、目前場景…）。之後跑團就會自動更新。</div>
                     <button class="avs-btn avs-btn-primary avs-st-init-btn" id="avs-st-init">開始追蹤狀態 ▸</button>
-                    <div class="avs-st-init-foot">第一次生成大約 5–30 秒</div>
+                    <div class="avs-st-init-foot">第一次生成大約 5–30 秒；想簡單跑、跳過 AI 就用下面這個</div>
+                    <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset">🪶 簡易預設（形象/身分/好感度）</button>
                 </div>
             </div>`;
             const ib = _host.querySelector('#avs-st-init');
@@ -168,6 +169,14 @@
                     ib.textContent = orig;
                     ib.style.pointerEvents = '';
                 }
+            };
+            // 🪶 簡易預設：跳過 AI 的快速建檔入口。觸發「我的檔案」那顆真按鈕(在 DOM 內、初始狀態只是被藏)，
+            //    它套用後會 call OS_AVS_STATE.refresh() 把這張 init 卡刷新成追蹤視圖。
+            const pb = _host.querySelector('#avs-st-preset');
+            if (pb) pb.onclick = () => {
+                const real = document.querySelector('#avs-btn-preset-pack');
+                if (real) real.click();
+                else alert('簡易預設未就緒，請切到上方「我的檔案」分頁套用');
             };
             return;
         }
