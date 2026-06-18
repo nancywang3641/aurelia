@@ -598,7 +598,8 @@
                     console.log(`💭 [OS_API] 思考鏈已啟用 (effort: ${effort})`);
                 } else {
                     commonBody.include_reasoning = false;
-                    commonBody.reasoning_effort = 'none'; 
+                    // ⚠️ 不送 reasoning_effort: 'none'：'none' 是非標準值，gemini(Pioneer/反代)路由會 404；
+                    // include_reasoning:false 已足以關閉推理輸出，GPT/Claude 也不受影響。
                 }
 
                 if (useSystemApi) {
