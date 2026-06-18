@@ -635,6 +635,12 @@
                                 stream: false
                             };
                             if (top_p !== undefined) _body.top_p = top_p;
+                            // 還原 CoT：思考開啟時帶 include_reasoning（讓模型推理情感/規範條目）；不送 'none'，避免 gemini 404
+                            if (config.enableThinking) {
+                                _body.include_reasoning = true;
+                                const _eff = config.reasoningEffort || 'auto';
+                                if (_eff !== 'auto') _body.reasoning_effort = _eff;
+                            }
                             const _resp = await fetch('/api/backends/chat-completions/generate', {
                                 method: 'POST',
                                 headers: { ..._ctx.getRequestHeaders(), 'Content-Type': 'application/json' },
