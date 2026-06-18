@@ -610,6 +610,10 @@
                     // 🍎 iOS 相容（原生、零插件依賴）：不讓 WebView 直連 Pioneer（會被 iOS CORS/Load failed 擋），
                     // 改 POST 到酒館「同源」後端 /api/backends/chat-completions/generate → 後端用原生 HTTP 代打外部 API
                     // （原生無 CORS）。body 只送精簡乾淨欄位（無 penalty / include_reasoning / reasoning_effort）→ gemini 不 404。
+                    // 自訂前置指令（破甲 COT）：有設就以 system 角色插在最前面，只影響 🍎 路徑（native /generate 與 generateRaw 退路皆吃到）
+                    if (config.customCot && String(config.customCot).trim()) {
+                        cleanMessages = [{ role: 'system', content: String(config.customCot) }, ...cleanMessages];
+                    }
                     let _ngOk = false;
                     try {
                         const _ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
