@@ -615,8 +615,17 @@
                         const _ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
                         const _src = _ctx && (_ctx.oai_settings && _ctx.oai_settings.chat_completion_source);
                         if (_ctx && _src) {
-                            const _model = config.model
-                                || (typeof _ctx.getChatCompletionModel === 'function' ? _ctx.getChatCompletionModel() : undefined);
+                            // 模型優先用「你選的 profile 的 model」(選 profile 就決定模型：主選大、副選小)；
+                            // 沒選 profile 才用奧瑞亞 config.model；都沒有才退回酒館當前 model。
+                            let _model = config.model;
+                            if (config.stProfileId) {
+                                try {
+                                    const _profs = (_ctx.extensionSettings && _ctx.extensionSettings.connectionManager && _ctx.extensionSettings.connectionManager.profiles) || [];
+                                    const _p = _profs.find(p => p && p.id === config.stProfileId);
+                                    if (_p && _p.model) _model = _p.model;
+                                } catch (e) {}
+                            }
+                            if (!_model && typeof _ctx.getChatCompletionModel === 'function') _model = _ctx.getChatCompletionModel();
                             const _body = {
                                 chat_completion_source: _src,
                                 model: _model,
