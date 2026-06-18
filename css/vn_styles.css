@@ -2235,19 +2235,22 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             .ch-name { font-size: 0.88rem; }
 
             /* 遊戲頂部按鈕 */
-            #btn-home { top: calc(10px + env(safe-area-inset-top, 0px)); right: 8px; padding: 6px 12px; font-size: 0.78rem; }
-            #btn-settings { top: calc(10px + env(safe-area-inset-top, 0px)); right: 80px; padding: 6px 12px; font-size: 0.78rem; }
-            #btn-phone { top: calc(10px + env(safe-area-inset-top, 0px)); right: 152px; padding: 6px 10px; font-size: 0.78rem; }
-            body.layout-pad-ios #btn-home,
-            body.layout-pad-ios #btn-settings,
-            body.layout-pad-ios #btn-phone { top: 52px; }
+            /* 頂部按鈕改直排靠右：橫排在窄螢幕會跟背景標籤搶位、擠在一起 */
+            #btn-home     { top: calc(10px + env(safe-area-inset-top, 0px)); right: 8px; padding: 6px 12px; font-size: 0.78rem; min-width: 56px; box-sizing: border-box; text-align: center; }
+            #btn-settings { top: calc(48px + env(safe-area-inset-top, 0px)); right: 8px; padding: 6px 12px; font-size: 0.78rem; min-width: 56px; box-sizing: border-box; text-align: center; }
+            #btn-phone    { top: calc(86px + env(safe-area-inset-top, 0px)); right: 8px; padding: 6px 10px; font-size: 0.78rem; min-width: 56px; box-sizing: border-box; text-align: center; }
+            body.layout-pad-ios #btn-home     { top: 52px; }
+            body.layout-pad-ios #btn-settings { top: 90px; }
+            body.layout-pad-ios #btn-phone    { top: 128px; }
             
 
             /* 背景標籤 */
             #top-badge { font-size: 0.82rem; letter-spacing: 1.5px; }
 
-            /* 對話框全面縮小 */
-            #text-panel-wrapper { width: 95%; bottom: 15px; }
+            /* 對話框全面縮小 + 整體上移，避開最底部拇指難按的死角 */
+            #text-panel-wrapper { width: 95%; bottom: 64px; }
+            /* 頭像（fallback 立繪框）跟著上移，維持與對話框的相對構圖 */
+            #game-char.vn-avatar, #game-char-2.vn-avatar { bottom: 46%; }
             #text-panel { padding: 22px 20px 20px; min-height: 100px; }
             #speaker-name { font-size: 0.95rem; padding: 5px 18px; top: -18px; left: 15px; letter-spacing: 1px; }
 
