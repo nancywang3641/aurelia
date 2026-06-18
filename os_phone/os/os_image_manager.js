@@ -413,6 +413,10 @@
                 const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 180000) : null;
                 try {
                     try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
+                    // PWA/手機沒有酒館後端代理 → 瀏覽器直接打 ComfyUI(需 --listen --enable-cors-header)；酒館內照舊走代理免 CORS
+                    if (this._comfyDirectBrowser()) {
+                        return await this._genComfyuiBrowserDirect(wf, url, _ac);
+                    }
                     const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body), signal: _ac ? _ac.signal : undefined });
                     if (!res.ok) {
                         const t = await res.text().catch(() => '');
@@ -438,6 +442,89 @@
             }, 1);
         },
 
+        // PWA/手機沒有酒館後端 → 瀏覽器直接打 ComfyUI；酒館內(有 SillyTavern.getContext)走代理免 CORS
+        _comfyDirectBrowser: function() {
+            try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); }
+            catch (e) { return false; }
+        },
+
+        // 瀏覽器直連 ComfyUI：POST /prompt → 輪詢 /history/{id} → /view 抓圖 → base64
+        // 需 ComfyUI 啟動帶 --listen 0.0.0.0 --enable-cors-header（否則跨來源被瀏覽器擋）
+        _genComfyuiBrowserDirect: async function(wf, url, ac) {
+            const base = String(url || '').replace(/\/+$/, '');
+            const sig = ac ? ac.signal : undefined;
+            const cid = this._comfyClientId || (this._comfyClientId = 'aurelia_' + Math.floor(Math.random() * 1e9).toString(36));
+            // 1) 送工作流
+            const qr = await fetch(base + '/prompt', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: wf, client_id: cid }), signal: sig,
+            });
+            if (!qr.ok) { const t = await qr.text().catch(function(){ return ''; }); throw new Error('送工作流被拒 ' + qr.status + (t ? '：' + t.slice(0, 160) : '')); }
+            const qj = await qr.json().catch(function(){ return {}; });
+            if (qj.node_errors && Object.keys(qj.node_errors).length) throw new Error('工作流節點錯誤：' + JSON.stringify(qj.node_errors).slice(0, 200));
+            const pid = qj.prompt_id;
+            if (!pid) throw new Error('ComfyUI 沒回 prompt_id（檢查工作流/模型名）');
+            // 2) 輪詢歷史（逾時靠外層 AbortController 180s）
+            let outputs = null;
+            while (true) {
+                if (sig && sig.aborted) { const e = new Error('AbortError'); e.name = 'AbortError'; throw e; }
+                await new Promise(function (r) { setTimeout(r, 1000); });
+                let hj = null;
+                try { const hr = await fetch(base + '/history/' + pid, { signal: sig }); if (hr.ok) hj = await hr.json(); }
+                catch (e) { if (e && e.name === 'AbortError') throw e; }
+                const entry = hj && hj[pid];
+                if (entry) {
+                    if (entry.status && entry.status.status_str === 'error') throw new Error('ComfyUI 執行失敗（看 ComfyUI 終端機錯誤）');
+                    if (entry.outputs) { outputs = entry.outputs; break; }
+                }
+            }
+            // 3) 找產出圖（優先 type=output 的 SaveImage 結果）
+            const imgs = [];
+            for (const nid in outputs) { const o = outputs[nid]; if (o && Array.isArray(o.images)) Array.prototype.push.apply(imgs, o.images); }
+            const img = imgs.filter(function (x) { return x && x.type === 'output'; })[0] || imgs[0];
+            if (!img) throw new Error('ComfyUI 沒產出圖片');
+            // 4) 抓圖 → base64（與代理回傳格式一致）
+            const vp = new URLSearchParams({ filename: img.filename || '', subfolder: img.subfolder || '', type: img.type || 'output' });
+            const ir = await fetch(base + '/view?' + vp.toString(), { signal: sig });
+            if (!ir.ok) throw new Error('抓圖失敗 ' + ir.status);
+            const blob = await ir.blob();
+            const dataUrl = await new Promise(function (resolve, reject) { const fr = new FileReader(); fr.onload = function () { resolve(fr.result); }; fr.onerror = reject; fr.readAsDataURL(blob); });
+            console.log('[ImageManager] ✅ ComfyUI 瀏覽器直連生圖成功');
+            return dataUrl;
+        },
+
+        // 抓 ComfyUI 清單（模型/採樣器/排程/VAE/LoRA）：直連時自己解析 /object_info，酒館內走代理。回 {models,samplers,schedulers,vaes,loras}
+        fetchComfyLists: async function(url) {
+            const base = String(url || '').replace(/\/+$/, '');
+            if (this._comfyDirectBrowser()) {
+                const r = await fetch(base + '/object_info');
+                if (!r.ok) throw new Error('object_info ' + r.status);
+                const oi = await r.json();
+                const pick = function (node, field) {
+                    try {
+                        const inp = oi[node] && oi[node].input;
+                        const a = inp && ((inp.required && inp.required[field]) || (inp.optional && inp.optional[field]));
+                        return (a && Array.isArray(a[0])) ? a[0] : [];
+                    } catch (e) { return []; }
+                };
+                const ckpts = pick('CheckpointLoaderSimple', 'ckpt_name');
+                const unets = pick('UNETLoader', 'unet_name');
+                const ggufs = pick('UnetLoaderGGUF', 'unet_name');
+                // 對齊代理格式：models 是 {value,text}，text 帶 UNet:/GGUF: 前綴供面板分類
+                const models = [].concat(
+                    ckpts.map(function (n) { return { value: n, text: n }; }),
+                    unets.map(function (n) { return { value: n, text: 'UNet: ' + n }; }),
+                    ggufs.map(function (n) { return { value: n, text: 'GGUF: ' + n }; })
+                );
+                return { models: models, samplers: pick('KSampler', 'sampler_name'), schedulers: pick('KSampler', 'scheduler'), vaes: pick('VAELoader', 'vae_name'), loras: pick('LoraLoader', 'lora_name') };
+            }
+            // 酒館代理
+            const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+            const post = async function (path) { try { const r = await fetch(path, { method: 'POST', headers: headers, body: JSON.stringify({ url: url }) }); return r.ok ? await r.json() : null; } catch (e) { return null; } };
+            return { models: await post('/api/sd/comfy/models'), samplers: await post('/api/sd/comfy/samplers'), schedulers: await post('/api/sd/comfy/schedulers'), vaes: await post('/api/sd/comfy/vaes'), loras: await post('/api/sd/comfy/loras') };
+        },
+
         // 預設包風格預覽：用「指定預設包設定 + 測試詞」生一張小圖，不動到當前面板設定
         // presetCfg：一個預設包物件（含 model/loras/params…，但通常沒有 url）→ 與當前 config 合併補 url
         previewComfyPreset: async function(presetCfg, prompt) {
@@ -453,6 +540,10 @@
             // 預覽用小圖(512×768)。每次給新隨機種子→避開 ComfyUI 對「相同工作流」的快取
             // （完全命中快取時不產生新輸出→代理拿不到圖→伺服器 500），順便讓重新生成有變化
             const wf = this._buildComfyWorkflow(posText, negText, 'char', { width: 512, height: 768, seed: Math.floor(Math.random() * 1e15) }, cfg);
+            // PWA/手機：瀏覽器直連 ComfyUI（不吞錯，讓真正原因往上拋給卡片顯示）
+            if (this._comfyDirectBrowser()) {
+                return await this._genComfyuiBrowserDirect(wf, url, null);
+            }
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
             // 注意：不吞錯，把真正原因往上拋給卡片顯示
             const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body) });
