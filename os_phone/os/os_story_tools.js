@@ -89,7 +89,7 @@
 - 事件只记"不可逆结果"、不记过程；久远的多个事件压成一行"阶段节点"，最近5~8个事件保留逐笔。
 - 台词仅留"未来会被回调"的原则性发言，其余删。
 
-格式如下（区块标题与"结语/故事标题/场景索引"务必原样保留）：
+格式如下（区块标题与"结语/故事标题"务必原样保留）：
 【大总结(第{{count}}次)】
 【事件表】（久远的合并成阶段节点，只记不可逆结果、不写过程）
 時間 | 关键事件 | 不可逆结果/影响 | 关键角色 | 关键台词(选填) |
@@ -111,23 +111,21 @@
 | 結算事件 | 影响/后续 | 參與角色 |
 | :--- | :--- | :--- |
 
-【物品表】（消耗品·过客道具不入表）
+【物品表】（只記關鍵/有後續影響的；消耗品·过客道具·已用完或損壞的不入表；每次總結把不重要的刪掉、別累積）
 物品名 | 物品狀態(在庫/使用中/損壞) | 備註 |
-| :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- |
 
-【注意規範/記憶事項表】（永久层：长期生效的规则·伏笔·人设铁律，绝不删）
-事項(人事物) | 事項描述 |
+【注意規範】（跑團中新確立的「世界/區域規則」：村莊規則、城市律法、組織禁忌、特殊機制等，常是 AI 自己補的設定；永久層、绝不删）
+規範(人事物/地點) | 規範描述 |
 | :--- | :--- |
 
 【性事紀】(以免出現AI角色後續忘記有過性事，導致角色OOC變成拔屌無情的渣男渣女)
 | 性事事件 | 事件描述 | 參與角色 |
 | :--- | :--- | :--- |
 
-【結語】(必填，100字以內純文字，用一段話描述本章核心走向與結束時的關鍵狀態，給其他系統做跨卡索引用，不要加任何標題、序號、表格或裝飾符號)
+【結語】(必填，100字以內純文字，只寫「這一段」的核心走向與結束時關鍵狀態；合併時會逐段累積成大廳快覽，所以別重述舊段；不要加任何標題、序號、表格或裝飾符號)
 
-【故事標題】(必填，30字以內，給這次跑團/這個聊天室的主題下一個標題，例如本次劇情的核心衝突或主線；純文字一行，不要加引號或裝飾符號)
-
-【場景索引】(選填，從本章原文裡找出最具代表性的一個 [Bg|...] 標籤、原封不動複製貼上一行；格式範例：[Bg|季節|時段_場景名|描述]。沒有合適的就留空、整段省略此欄)`;
+【故事標題】(只有「第一次」總結才填——給這個聊天室下一個總標題，30字以內純文字一行、不要引號或裝飾；第二次起系統會自動移除此區塊、不用再填)`;
 
     function getSummaryTemplate() {
         return localStorage.getItem('sp_summary_tpl') || SUMMARY_DEFAULT_TPL;
@@ -169,7 +167,7 @@
     }
     function _mergeSection(header, prevBody, incBody) {
         const APPEND = ['事件表', '結算清單', '结算清单', '性事紀', '性事记'];
-        const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範/記憶事項表', '注意规范/记忆事项表'];
+        const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意規範/記憶事項表', '注意规范/记忆事项表'];
         if (APPEND.includes(header)) {
             const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
             return _buildMdTable({ header: tp.header || ti.header, sep: tp.sep || ti.sep, rows: [...tp.rows, ...ti.rows], extra: tp.extra.length ? tp.extra : ti.extra });
@@ -181,7 +179,9 @@
             ti.rows.forEach(r => { const k = _firstCell(r); if (!(k in map)) order.push(k); map[k] = r; });   // 同名更新、新名加後面
             return _buildMdTable({ header: tp.header || ti.header, sep: tp.sep || ti.sep, rows: order.map(k => map[k]), extra: tp.extra.length ? tp.extra : ti.extra });
         }
-        return incBody || prevBody;   // 結語/場景索引/其他純文字 → 取新
+        if (['結語', '结语'].includes(header)) return [prevBody, incBody].map(s => String(s || '').trim()).filter(Boolean).join('\n');   // 結語：逐段累積(給大廳快覽)、不只取新
+        if (['故事標題', '故事标题'].includes(header)) return prevBody || incBody || '';   // 故事標題：保第一次
+        return incBody || prevBody;   // 其他純文字 → 取新
     }
     function _structuredMerge(incFull, oldSummaries, summaryCount, lastTxt) {
         try {
@@ -195,14 +195,16 @@
             const incMap = {}; incSecs.forEach(s => { incMap[s.header] = s; });
             const used = new Set(); const out = [];
             const KEEPOLD = ['故事標題', '故事标题'];
+            const DROP = ['場景索引', '场景索引', '代辦清單', '代办清单'];   // 已棄用區塊：合併時直接丟掉、不再輸出
             for (const p of prevSecs) {
+                if (DROP.includes(p.header)) { used.add(p.header); continue; }
                 const i = incMap[p.header];
                 if (!i) { out.push(p); continue; }
                 used.add(p.header);
                 if (KEEPOLD.includes(p.header)) { out.push(p); continue; }
                 out.push({ header: p.header, body: _mergeSection(p.header, p.body, i.body) });
             }
-            for (const i of incSecs) { if (!used.has(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
+            for (const i of incSecs) { if (!used.has(i.header) && !DROP.includes(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
             const body = out.map(s => `【${s.header}】\n${s.body}`).join('\n\n');
             return `【大总结(第${summaryCount}次)】${lastTxt}\n\n${body}`;
         } catch (e) {
@@ -312,7 +314,10 @@
             const mergePrompt = `下面有 ${selected.length} 份大總結，請合併整理成「一份」精簡完整總結。\n` +
                 `【規則】\n` +
                 `- 事件表 → 壓縮重點：久遠的多筆壓成「階段節點」(一行涵蓋一整段劇情、只記不可逆結果與關鍵轉折、不記過程)，最近 8 筆保留逐筆。\n` +
-                `- 物品表 / 注意規範記憶事項表 / 結算清單 → 合併去重、刪已完成的瑣事與消耗品，保留所有仍有後續影響的項目。\n` +
+                `- 物品表 → 只留關鍵/有後續影響的，消耗完或損壞的刪掉、別累積；注意規範 / 結算清單 → 去重、保留所有仍有後續影響的項目。\n` +
+                `- 結語 → 各份的結語**依序全部保留、疊加成一段時間線**(給大廳快覽用)，別只取最新、別重寫舊段。\n` +
+                `- 場景索引 → 整個刪除、不要輸出。\n` +
+                `- 故事標題 → 用第一份的、原樣保留，不要改寫或重下。\n` +
                 `- 代辦清單 → **整個刪除、不要輸出這個區塊**（待辦已改用 AVS 狀態系統管理）。\n` +
                 `- 性事紀 → 整併成「目的·手段·結果」一行(以何名義交合 / 獲得何增益 / 對方身心關係變化)，但**每個發生過性事的角色至少保留一條、絕不刪光**(防 NPC 後續見面忘記有過性事變 OOC)。\n` +
                 `- 角色表、關係圖譜 → **直接用我下面附的「完整版」原樣放進去，一個角色都不准刪或漏**。\n` +
@@ -446,7 +451,8 @@
             const prevSection = oldSummaries.length
                 ? `**只总结「这次新增」的剧情即可；旧事件/角色不用重写（系统会自动叠加：事件接在后面、同名角色更新、新角色加后面）**\n`
                 : `**首次总结**\n`;
-            const tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
+            let tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
+            if (summaryCount > 1) tplBody = tplBody.replace(/\n*【故事標題】[\s\S]*?(?=\n【|$)/g, '').trim();   // 故事標題只第一次生成、第二次起移除(日誌只要一個總篇名)
 
             const TH = window.parent.TavernHelper;
             if (!TH || typeof TH.generateRaw !== 'function') throw new Error("找不到 generateRaw（需要酒館助手在線）");
