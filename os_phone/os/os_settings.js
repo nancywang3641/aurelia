@@ -33,7 +33,7 @@
             useGenerateRaw: false,
             enableSummaryOnly: false,
             maxTokens: 2000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
-            usePresetPrompts: false, presetName: ''
+            usePresetPrompts: false, presetName: '', customCot: ''
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
         return config;
@@ -946,6 +946,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <label class="toggle-switch"><input type="checkbox" id="os-use-generateraw" ${llmConfig.useGenerateRaw ? 'checked' : ''}><span class="slider"></span></label>
                                 </div>
                                 <div class="set-desc">iOS 直連被擋／gemini 404 時開。改用酒館 generateRaw 組請求（排除 preset、只送本系統訊息）。</div>
+                                <details style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
+                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;">📝 自訂前置指令（只在 🍎 模式注入）</summary>
+                                    <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                                    <div class="set-desc">這段會以 system 角色插在所有訊息最前面，<b>只有開 🍎 generateRaw 模式時生效</b>，其他路徑（PWA／直連）不受影響。留空＝不注入。</div>
+                                </details>
                             </div>
                         </div>
 
@@ -3063,6 +3068,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     enableThinking: elEnableThinking ? elEnableThinking.checked : false,
                     thinkingBudget: elThinkingBudget ? parseInt(elThinkingBudget.value) : 8000,
                     useGenerateRaw: container.querySelector('#os-use-generateraw')?.checked || false,
+                    customCot: container.querySelector('#os-custom-cot')?.value || '',
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
