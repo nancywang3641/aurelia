@@ -71,7 +71,7 @@
 }
 
 /* 左：品牌區 */
-.lb-top-brand { display:flex; align-items:center; gap:9px; flex-shrink:0; min-width:0; max-width:25%; }
+.lb-top-brand { display:flex; align-items:center; gap:9px; flex:1; min-width:0; }
 .lb-logo {
     width:24px; height:32px; flex-shrink:0;
     background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/LOGO.png) center/contain no-repeat;
@@ -86,19 +86,6 @@
 #home-chat-title {
     font-size:12px; font-weight:800; color:var(--lb-ink);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:0.5px;
-}
-
-/* 中：系統資訊（時間 / 日期 / 天氣 / USER）*/
-.lb-top-sysinfo {
-    display:flex; align-items:center; gap:18px;
-    flex:1; justify-content:center; min-width:0; overflow:hidden;
-}
-.lb-sys-cell { display:flex; flex-direction:column; gap:1px; line-height:1.15; white-space:nowrap; }
-.lb-sys-k { font-size:7px; letter-spacing:1.5px; color:var(--lb-ink-dim); text-transform:uppercase; font-weight:800; }
-.lb-sys-v { font-size:11px; color:var(--lb-ink); font-weight:700; font-family:'Courier New',monospace; }
-@media (max-width:680px) {
-    .lb-top-sysinfo { gap:10px; }
-    .lb-sys-cell.lb-sys-opt { display:none; }   /* 窄螢幕收掉次要欄位 */
 }
 
 /* 右：3 控制（房間切換 / 全屏 / 喇叭）*/
