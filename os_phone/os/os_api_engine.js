@@ -622,10 +622,15 @@
                             // 🍎＋選了 profile：交給酒館 ConnectionManager 用「該 profile 的完整連線」
                             // （來源 api / secret / preset / exclude / region 全照 profile）→ 真的打到 profile 的來源
                             // （vertexai / custom / claude…），不再只偷 model 名、卻把請求送去 ST 當前激活來源（會誤送別的連線）。
+                            // ★ ST 坑：sendRequest 不帶 vertexai_auth_mode → vertex 服務帳號(full)被當 express、
+                            //   去 api_key_vertexai 桶找不到金鑰(Secret id not found)。從 oai_settings 補回 auth_mode/project
+                            //   塞進 overridePayload(會 spread 進請求送後端；非 vertex 來源後端自動忽略)。
+                            const _ov = { temperature, ...extraParams };
+                            const _oai = _ctx.oai_settings || {};
+                            if (_oai.vertexai_auth_mode) _ov.vertexai_auth_mode = _oai.vertexai_auth_mode;
+                            if (_oai.vertexai_express_project_id) _ov.vertexai_express_project_id = _oai.vertexai_express_project_id;
                             const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
-                                config.stProfileId, cleanMessages, maxTokens,
-                                undefined,
-                                { temperature, ...extraParams }
+                                config.stProfileId, cleanMessages, maxTokens, undefined, _ov
                             );
                             const _t = normalizeResponse(_response);
                             if (_t) { rawApiResponse = _response; fullText = _t; _ngOk = true; }
@@ -668,9 +673,13 @@
                             if (_resp.ok && _t) { rawApiResponse = _data; fullText = _t; _ngOk = true; }
                             else { console.warn('[OS_API] 原生 /generate 未成功，HTTP', _resp.status, _data && _data.error); }
                         }
-                    } catch (e) { console.warn('[OS_API] 原生 /generate 例外，退回 generateRaw', e); }
-                    // 保險：原生那條若失敗，退回 window.generateRaw（不影響「能跑」這件事）
-                    if (!_ngOk) {
+                    } catch (e) {
+                        // 選了 profile 卻失敗：別退 generateRaw（它用「當前激活連線」答、會拿錯模型掩蓋真錯誤）→ 把真錯誤拋出去顯示
+                        if (config.stProfileId) throw e;
+                        console.warn('[OS_API] 原生 /generate 例外，退回 generateRaw', e);
+                    }
+                    // 保險：原生那條若失敗，退回 window.generateRaw（僅「沒選 profile」時；選了 profile 不偷換連線）
+                    if (!_ngOk && !config.stProfileId) {
                         const _genRaw = win.generateRaw || (win.parent && win.parent.generateRaw)
                             || (win.TavernHelper && win.TavernHelper.generateRaw)
                             || (win.parent && win.parent.TavernHelper && win.parent.TavernHelper.generateRaw);
@@ -692,10 +701,13 @@
                         // 砍掉舊的 UI profile switching dance（之前會把 #connection_profiles select 切過去再切回來）
                         // 原因：並發呼叫會互相 abort 對方的 in-flight fetch，console 噴 "Canceled because main api changed"
                         // ST 的 sendRequest(profileId, ...) 本身就會用對應 profile 的 url/key/model，不需要 UI 同步切
+                        // ★ 同 🍎：補 vertex 認證模式(sendRequest 漏帶 → 服務帳號被當 express 找不到金鑰)
+                        const _ov = { temperature, ...extraParams };
+                        const _oai = context.oai_settings || {};
+                        if (_oai.vertexai_auth_mode) _ov.vertexai_auth_mode = _oai.vertexai_auth_mode;
+                        if (_oai.vertexai_express_project_id) _ov.vertexai_express_project_id = _oai.vertexai_express_project_id;
                         const response = await context.ConnectionManagerRequestService.sendRequest(
-                            stProfileId, cleanMessages, maxTokens,
-                            undefined,
-                            { temperature, ...extraParams }
+                            stProfileId, cleanMessages, maxTokens, undefined, _ov
                         );
                         rawApiResponse = response;
                         fullText = normalizeResponse(response);
