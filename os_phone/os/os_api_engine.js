@@ -602,7 +602,33 @@
                     // include_reasoning:false 已足以關閉推理輸出，GPT/Claude 也不受影響。
                 }
 
-                if (useSystemApi) {
+                if (config.useGenerateRaw) {
+                    // 🍎 generateRaw 模式（iOS 相容）：走酒館原生生成管線。
+                    // ordered_prompts 只送這些訊息 → 排除 preset/角色卡/世界書/歷史（文件：未列入的不會使用）。
+                    // 好處：①不直連外部 → 避開 iOS WebView 的 CORS/Load failed；
+                    //       ②由酒館前端管線送出 → 套用「排除請求主體參數」(penalty 被剝) → gemini 不 404。
+                    const _TH = win.TavernHelper || win.parent?.TavernHelper
+                        || win.SillyTavern?.getContext?.()?.TavernHelper;
+                    if (!_TH || typeof _TH.generateRaw !== 'function') {
+                        throw new Error('generateRaw 不可用（需要酒館助手 TavernHelper）');
+                    }
+                    const _ordered = cleanMessages.map(m => ({
+                        role: m.role || 'user',
+                        content: typeof m.content === 'string'
+                            ? m.content
+                            : (Array.isArray(m.content)
+                                ? m.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n')
+                                : String(m.content || ''))
+                    }));
+                    const _raw = await _TH.generateRaw({
+                        ordered_prompts: _ordered,   // 只送這些 → 排除 preset
+                        should_silence: true,        // 不污染 VN 正文
+                        max_chat_history: 0,
+                        generation_id: 'os_api_' + _dbgId
+                    });
+                    rawApiResponse = { via: 'generateRaw' };
+                    fullText = (typeof cleanRawOutput === 'function') ? cleanRawOutput(String(_raw || '')) : String(_raw || '');
+                } else if (useSystemApi) {
                     const context = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
                     if (!context) throw new Error("無 Context");
                     
