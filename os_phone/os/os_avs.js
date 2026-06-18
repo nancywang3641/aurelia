@@ -788,6 +788,7 @@ ${lines.join('\n')}
                     await loadAllData(container);
                     await syncVarPackToLorebook();
                     if (win.toastr) win.toastr.success('✅ 已套用簡易預設檔案');
+                    try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}   // 從狀態面板初始引導觸發時，套用後刷新該面板（init 卡 → 追蹤視圖）
                     if (win.OS_STATE_RUNTIME?.extractOnce) {
                         setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
                     }
