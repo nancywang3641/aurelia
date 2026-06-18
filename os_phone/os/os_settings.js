@@ -971,7 +971,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="只讀取訊息裡的 <summary> 標籤內容，大幅省 Token、避免讀到過舊歷史。">
+                            <div class="set-label" title="只讀取訊息裡的 summary 標籤內容，大幅省 Token、避免讀到過舊歷史。">
                                 <span>僅讀取摘要</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-summary-mode" ${llmConfig.enableSummaryOnly ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
@@ -1076,7 +1076,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="只讀取訊息裡的 <summary> 標籤內容，大幅省 Token、避免讀到過舊歷史。">
+                            <div class="set-label" title="只讀取訊息裡的 summary 標籤內容，大幅省 Token、避免讀到過舊歷史。">
                                 <span>僅讀取摘要</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-summary-mode" ${secLlmConfig.enableSummaryOnly ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
@@ -1145,17 +1145,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🎭 頭像 分頁 body（char：角色頭像／立繪）── -->
                         <div id="img-tab-char" class="img-srctab-body">
                             <div class="set-group">
-                                <div class="set-label">🎭 頭像 來源</div>
+                                <div class="set-label" title="角色頭像／立繪用這個來源。插圖在「插圖」分頁另選，可走不同渠道。">🎭 頭像 來源</div>
                                 <select class="set-select" id="img-service-living">
                                     <option value="pollinations" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
                                     <option value="tavern_sd" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。插圖在「插圖」分頁另選，可走不同渠道。</div>
+                                <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。</div>
                             </div>
                             <div class="set-group">
-                                <div class="set-label">📐 角色頭像尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">空＝各接口預設(Poll 512 / NAI 1024)</span></div>
+                                <div class="set-label" title="留空＝各接口預設：Pollinations 512、NovelAI 1024。">📐 角色頭像尺寸</div>
                                 <select class="set-select" id="img-avatar-size" style="font-size:12px;">
                                     <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設</option>
                                     <option value="512x512"   ${imgConfig.avatarSize==='512x512'   ? 'selected':''}>512×512（方形）</option>
@@ -1165,23 +1165,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </select>
                             </div>
                             <div class="set-group">
-                                <div class="set-label">🧍 立繪模式</div>
+                                <div class="set-label" title="關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像；適合繪圖模型生全身穩定的情況。">🧍 立繪模式</div>
                                 <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${vnD.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
-                                <div class="set-desc">關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像；適合繪圖模型生全身穩定的情況。</div>
+                                <div class="set-desc">開＝直接生全身立繪、不生頭像。</div>
                             </div>
                         </div>
 
                         <!-- ── 🎬 插圖 分頁 body（scene：場景插圖／CG 來源，可與頭像不同渠道）── -->
                         <div id="img-tab-scene" class="img-srctab-body" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label">🎬 插圖 來源</div>
+                                <div class="set-label" title="場景插圖／CG 用這個來源，可跟頭像不同渠道（例如頭像走 Anima、插圖走 Pollinations）。">🎬 插圖 來源</div>
                                 <select class="set-select" id="img-service-scene">
                                     <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
                                     <option value="tavern_sd" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">場景插圖／CG 用這個來源，可跟頭像不同渠道（例如頭像走 Anima、插圖走 Pollinations）。</div>
+                                <div class="set-desc" style="margin-top:6px;">場景插圖／CG 用這個來源。</div>
                             </div>
                         </div>
 
@@ -1207,7 +1207,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-desc" id="img-bg-synced-note-text">（與角色相同）</div>
                             </div>
                             <div class="set-group">
-                                <div class="set-label">📐 背景尺寸 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">所有接口共用</span></div>
+                                <div class="set-label" title="所有接口共用。">📐 背景尺寸</div>
                                 <select class="set-select" id="img-bg-size" style="font-size:12px;">
                                     <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅，預設）</option>
                                     <option value="1024x1024" ${(imgConfig.bgSize||'1024x768')==='1024x1024' ? 'selected':''}>1024×1024（方形）</option>
@@ -1227,7 +1227,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
-                                    <div class="set-desc">🧩 連接你電腦上的 ComfyUI，在這裡加 LoRA、調參數就好，其餘都自動處理。</div>
+                                    <div class="set-desc">連接你電腦上的 ComfyUI。</div>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">ComfyUI 網址</div>
@@ -1238,24 +1238,21 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label">⚙️ 進階設定 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">想用自己的工作流再開，否則不用碰</span></div>
+                                    <div class="set-label" title="想用自己的工作流再開，否則不用碰。">⚙️ 進階設定</div>
                                     <select class="set-select" id="img-cfd-wfmode">
                                         <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動（推薦，在下面設定就好）</option>
                                         <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼自己的工作流）</option>
                                     </select>
                                     <div id="img-cfd-custom-wf" class="${imgConfig.comfyuiDirect?.workflowMode==='custom'?'':'hidden'}" style="margin-top:8px;">
                                         <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${imgConfig.comfyuiDirect?.customWorkflow || ''}</textarea>
-                                        <div class="set-desc" style="margin-top:4px;">
-                                            貼 ComfyUI <b>API 格式</b>工作流（ComfyUI 設定開 Dev mode → 選單「Save (API Format)」匯出）。<br>
-                                            要奧瑞亞注入的地方用變數（含引號整個替換）：<code>"%prompt%"</code>　<code>"%negative%"</code>　<code>"%model%"</code>　<code>"%seed%"</code>　<code>"%width%"</code>　<code>"%height%"</code><br>
-                                            ⚠️ 只有上面這幾個變數會被注入；其餘（LoRA、採樣器、放大、修臉…）請直接寫死在你的工作流裡，奧瑞亞不會碰。下面的 LoRA/參數欄在自訂模式<b>不生效</b>。
+                                        <div class="set-desc" style="margin-top:4px;" title="貼 ComfyUI API 格式工作流（設定開 Dev mode → Save (API Format) 匯出）。只有這幾個變數會被注入，其餘（LoRA、採樣器、放大、修臉…）請寫死在工作流裡；下面的 LoRA/參數欄在自訂模式不生效。">
+                                            可用變數：<code>"%prompt%"</code>　<code>"%negative%"</code>　<code>"%model%"</code>　<code>"%seed%"</code>　<code>"%width%"</code>　<code>"%height%"</code>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label">📦 預設包 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">把整組設定存起來，一鍵切換</span></div>
+                                    <div class="set-label" title="把整組設定存起來，一鍵切換。每個包存一組設定，可存預覽圖、套用、刪除。改完記得到底部按儲存。">📦 預設包</div>
                                     <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;">📦 打開預設包 · ${(imgConfig.comfyuiDirect?.presets || []).length} 個</button>
-                                    <div class="set-desc" style="margin-top:4px;">每個包存一組設定，可存預覽圖、套用、刪除。改完記得到底部按儲存。</div>
                                 </div>
                                 <!-- 預設包 modal（可視化卡片牆） -->
                                 <div id="img-cfd-preset-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
@@ -1294,29 +1291,28 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </select>
                                 </div>
                                 <div class="set-group ${imgConfig.comfyuiDirect?.modelType==='flux'?'':'hidden'}" id="img-cfd-flux-fields">
-                                    <div class="set-desc">Flux 專用搭配檔（檔名一般跟你下載的一致，不用改）：</div>
+                                    <div class="set-desc" title="檔名一般跟你下載的一致，不用改。">Flux 專用搭配檔</div>
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
                                         <div><div class="set-label" style="font-size:11px;">clip_l</div><input class="set-input" id="img-cfd-clipl" value="${imgConfig.comfyuiDirect?.fluxClipL || 'clip_l.safetensors'}"></div>
                                         <div><div class="set-label" style="font-size:11px;">t5xxl</div><input class="set-input" id="img-cfd-t5xxl" value="${imgConfig.comfyuiDirect?.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors'}"></div>
                                         <div><div class="set-label" style="font-size:11px;">ae VAE</div><input class="set-input" id="img-cfd-ae" value="${imgConfig.comfyuiDirect?.fluxAe || 'ae.safetensors'}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">Guidance（建議 3.5）</div><input class="set-input" id="img-cfd-guidance" type="number" step="0.1" min="0" max="10" value="${imgConfig.comfyuiDirect?.guidance ?? 3.5}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="建議 3.5。">Guidance</div><input class="set-input" id="img-cfd-guidance" type="number" step="0.1" min="0" max="10" value="${imgConfig.comfyuiDirect?.guidance ?? 3.5}"></div>
                                     </div>
-                                    <div class="set-desc" style="margin-top:4px;">Flux 模式：CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。</div>
+                                    <div class="set-desc" style="margin-top:4px;" title="CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。">Flux 模式：CFG 自動、引導靠 Guidance。</div>
                                 </div>
                                 <div class="set-group ${imgConfig.comfyuiDirect?.modelType==='anima'?'':'hidden'}" id="img-cfd-anima-fields">
-                                    <div class="set-desc">Anima 專用搭配檔（檔名跟你下載的一致，通常不用改）：</div>
+                                    <div class="set-desc" title="檔名跟你下載的一致，通常不用改。">Anima 專用搭配檔</div>
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
-                                        <div><div class="set-label" style="font-size:11px;">文字編碼器（qwen）</div><input class="set-input" id="img-cfd-anima-clip" value="${imgConfig.comfyuiDirect?.animaClip || 'qwen_3_06b_base.safetensors'}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">VAE（qwen）</div><input class="set-input" id="img-cfd-anima-vae" value="${imgConfig.comfyuiDirect?.animaVae || 'qwen_image_vae.safetensors'}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="qwen 編碼器。">文字編碼器</div><input class="set-input" id="img-cfd-anima-clip" value="${imgConfig.comfyuiDirect?.animaClip || 'qwen_3_06b_base.safetensors'}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="qwen VAE。">VAE</div><input class="set-input" id="img-cfd-anima-vae" value="${imgConfig.comfyuiDirect?.animaVae || 'qwen_image_vae.safetensors'}"></div>
                                     </div>
-                                    <div class="set-desc" style="margin-top:4px;">Anima 模式：自然語言提示詞、CFG 自動≈4、採樣 er_sde/simple；上面「模型」要選 diffusion_models 裡的 anima-base（按測試會自動列出）。</div>
+                                    <div class="set-desc" style="margin-top:4px;" title="自然語言提示詞、CFG 自動≈4、採樣 er_sde/simple；上面「模型」要選 diffusion_models 裡的 anima-base（按測試會自動列出）。">Anima 模式：自然語言提示詞、CFG 自動。</div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label">LoRA（開關 ☑ + 名字 + 模型/CLIP 強度）</div>
+                                    <div class="set-label" title="開關 ☑ + 名字 + 模型/CLIP 強度。LoRA 要跟模型同架構（SDXL 配 SDXL）。名字可下拉選或手打檔名。">LoRA</div>
                                     <datalist id="img-cfd-lora-list"></datalist>
                                     <div id="img-cfd-loras"></div>
                                     <button class="set-btn" id="img-cfd-add-lora" type="button" style="margin-top:6px;">➕ 加 LoRA</button>
-                                    <div class="set-desc" style="margin-top:4px;">LoRA 要跟模型同架構（SDXL 配 SDXL）。名字可下拉選或手打檔名。</div>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">基本參數</div>
@@ -1327,13 +1323,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div><div class="set-label" style="font-size:11px;">CFG</div><input class="set-input" id="img-cfd-cfg" type="number" step="0.1" min="1" max="20" value="${imgConfig.comfyuiDirect?.cfg ?? 6.5}"></div>
                                         <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${imgConfig.comfyuiDirect?.width ?? 1024}"></div>
                                         <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${imgConfig.comfyuiDirect?.height ?? 1024}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">種子（-1 隨機）</div><input class="set-input" id="img-cfd-seed" type="number" value="${imgConfig.comfyuiDirect?.seed ?? -1}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">CLIP skip（0 關）</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${imgConfig.comfyuiDirect?.clipSkip ?? 0}"></div>
-                                        <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;">VAE（空＝模型內建）</div><select class="set-select" id="img-cfd-vae"><option value=""${!imgConfig.comfyuiDirect?.vae?' selected':''}>（內建 VAE）</option>${imgConfig.comfyuiDirect?.vae?`<option value="${imgConfig.comfyuiDirect.vae}" selected>${imgConfig.comfyuiDirect.vae}</option>`:''}</select></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="-1 為隨機。">種子</div><input class="set-input" id="img-cfd-seed" type="number" value="${imgConfig.comfyuiDirect?.seed ?? -1}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="0 為關閉。">CLIP skip</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${imgConfig.comfyuiDirect?.clipSkip ?? 0}"></div>
+                                        <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;" title="空＝模型內建。">VAE</div><select class="set-select" id="img-cfd-vae"><option value=""${!imgConfig.comfyuiDirect?.vae?' selected':''}>（內建 VAE）</option>${imgConfig.comfyuiDirect?.vae?`<option value="${imgConfig.comfyuiDirect.vae}" selected>${imgConfig.comfyuiDirect.vae}</option>`:''}</select></div>
                                     </div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label">🖼️ 場景插圖品質 <span class="ist-hint">只在「場景插圖」自動套用（頭像不套；會變慢）</span></div>
+                                    <div class="set-label" title="只在「場景插圖」自動套用，頭像不套；會變慢。">🖼️ 場景插圖品質</div>
                                     <div class="cfd-scene-row">
                                         <label class="cfd-scene-chk">
                                             <input type="checkbox" id="img-cfd-scene-hires" ${imgConfig.comfyuiDirect?.sceneHires !== false ? 'checked' : ''}>🔬 高清修復
@@ -1346,16 +1342,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             <input type="checkbox" id="img-cfd-scene-facedetailer" ${imgConfig.comfyuiDirect?.sceneFaceDetailer !== false ? 'checked' : ''}>🎯 FaceDetailer 修臉
                                         </label>
                                     </div>
-                                    <div class="set-desc">需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。</div>
+                                    <div class="set-desc" title="需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。">場景小臉/遠景眼睛會清楚很多，但較慢。</div>
                                 </div>
                                 <div class="iface-section-title">📝 提示詞（底詞）</div>
                                 <div class="set-group">
                                     <div class="field-row">
-                                        <div class="set-label">底詞（選填，可空）</div>
+                                        <div class="set-label" title="選填，可空。">底詞</div>
                                         <textarea class="set-textarea" id="img-cfd-base">${imgConfig.comfyuiDirect?.basePrompt || ''}</textarea>
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label">負面提示詞（選填）</div>
+                                        <div class="set-label" title="選填。">負面提示詞</div>
                                         <textarea class="set-textarea" id="img-cfd-neg">${imgConfig.comfyuiDirect?.negPrompt || ''}</textarea>
                                     </div>
                                 </div>
@@ -1364,8 +1360,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="img-group-tavernsd" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd') ? '' : 'hidden'}">
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
-                                    <div class="set-desc">🎨 用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。</div>
-                                    <div class="set-desc">⚠️ 前提：先在酒館「圖像生成」擴展設好一個後端來源。沒設好會跳提示，不會偷偷換成別的來源。</div>
+                                    <div class="set-desc" title="用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。前提：先在酒館「圖像生成」擴展設好一個後端來源；沒設好會跳提示，不會偷偷換成別的來源。">用酒館原生「圖像生成」擴展的後端生圖。</div>
                                 </div>
                             </div>
 
@@ -1373,12 +1368,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
                                     <div class="field-row">
-                                        <div class="set-label">API Key <span class="lbl-req">(必填 - 需儲值)</span></div>
+                                        <div class="set-label" title="現在已無免費方案，需儲值，請至官網獲取 Key。">API Key <span class="lbl-req">(必填)</span></div>
                                         <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${imgConfig.pollinations.apiKey || ''}">
-                                        <div class="set-desc">* 現在已無免費方案，請至官網獲取 Key。</div>
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label">模型 (按價格排序)</div>
+                                        <div class="set-label" title="按價格排序。">模型</div>
                                         <select class="set-select" id="img-pol-model">
                                             <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>🟢 Flux Schnell (0.001p)</option>
                                             <option value="zimage" ${imgConfig.pollinations.model === 'zimage' ? 'selected' : ''}>🟢 Z-Image Turbo (0.002p)</option>
@@ -1390,7 +1384,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             <option value="klein-large" ${imgConfig.pollinations.model === 'klein-large' ? 'selected' : ''}>🟠 FLUX.2 Klein 9B (0.015p)</option>
                                         </select>
                                     </div>
-                                    <div class="set-desc">📐 尺寸已改到各部位分頁各自調：角色頭像在「🎭 頭像」、背景在「🌄 背景」、場景在「🎬 插圖」。</div>
+                                    <div class="set-desc" title="角色頭像在「🎭 頭像」、背景在「🌄 背景」、場景在「🎬 插圖」分頁各自調。">📐 尺寸已改到各部位分頁各自調。</div>
                                 </div>
                             </div>
 
@@ -1402,8 +1396,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label"><span>🛡️ 防超免費尺寸（防誤扣 Anlas）</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
-                                        <div class="set-desc">開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。</div>
+                                        <div class="set-label" title="開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。"><span>🛡️ 防超免費尺寸</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
+                                        <div class="set-desc">超過免費上限自動縮回。</div>
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label">模型版本</div>
@@ -1416,7 +1410,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                     <div class="nai-adv">
                                         <div class="nai-adv-head" onclick="this.closest('.nai-adv').classList.toggle('open')">
-                                            <span>⚙️ 進階參數 <span class="ist-hint">（不懂可不動，預設跟官方一致）</span></span>
+                                            <span title="不懂可不動，預設跟官方一致。">⚙️ 進階參數</span>
                                             <span class="nai-adv-arrow"></span>
                                         </div>
                                         <div class="nai-adv-body">
@@ -1434,15 +1428,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <div class="set-label">CFG Scale <span class="lbl-opt">（建議 4~9）</span></div>
+                                                    <div class="set-label" title="建議 4~9。">CFG Scale</div>
                                                     <input class="set-input" type="number" id="img-nai-scale" min="1" max="20" step="0.5" value="${imgConfig.novelai.scale ?? 5}">
                                                 </div>
                                                 <div>
-                                                    <div class="set-label">Steps <span class="lbl-opt">（建議 28~40）</span></div>
+                                                    <div class="set-label" title="建議 28~40。">Steps</div>
                                                     <input class="set-input" type="number" id="img-nai-steps" min="1" max="50" step="1" value="${imgConfig.novelai.steps ?? 28}">
                                                 </div>
                                                 <div>
-                                                    <div class="set-label">UC Preset <span class="lbl-opt">（負詞預設）</span></div>
+                                                    <div class="set-label" title="負詞預設。">UC Preset</div>
                                                     <select class="set-select" id="img-nai-uc-preset">
                                                         <option value="0" ${(imgConfig.novelai.ucPreset??1)===0?'selected':''}>0 - 輕量</option>
                                                         <option value="1" ${(imgConfig.novelai.ucPreset??1)===1?'selected':''}>1 - 標準（推薦）</option>
@@ -1455,9 +1449,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                                     <input type="checkbox" id="img-nai-quality-toggle" ${imgConfig.novelai.qualityToggle!==false?'checked':''}>
                                                     <span class="chk-label">Quality Toggle</span>
                                                 </label>
-                                                <label id="img-nai-smea-group" class="nai-smea-toggle${imgConfig.novelai.model==='nai-diffusion-3'?'':' is-disabled'}">
+                                                <label id="img-nai-smea-group" class="nai-smea-toggle${imgConfig.novelai.model==='nai-diffusion-3'?'':' is-disabled'}" title="V3 專屬。">
                                                     <input type="checkbox" id="img-nai-smea" ${imgConfig.novelai.smea!==false?'checked':''}>
-                                                    <span class="chk-label">SMEA <span class="lbl-opt">（V3 專屬）</span></span>
+                                                    <span class="chk-label">SMEA</span>
                                                 </label>
                                                 <label id="img-nai-smea-dyn-group" class="nai-smea-toggle${imgConfig.novelai.model==='nai-diffusion-3'?'':' is-disabled'}">
                                                     <input type="checkbox" id="img-nai-smea-dyn" ${imgConfig.novelai.smeaDyn?'checked':''}>
@@ -1472,8 +1466,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-group">
                                     <div class="nai-preset-box">
                                         <div class="nai-preset-head">
-                                            <div class="set-label">📋 提示詞預設</div>
-                                            <span class="ist-hint">含底詞、負詞、Sampler、Scale</span>
+                                            <div class="set-label" title="含底詞、負詞、Sampler、Scale。">📋 提示詞預設</div>
                                         </div>
                                         <div class="row-inline">
                                             <select id="img-nai-preset-sel" class="set-select">
@@ -1513,7 +1506,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
 
                                     <div class="field-row">
-                                        <div class="set-label">🎨 角色底詞 <span class="lbl-opt">（Danbooru tag 格式，逗號分隔）</span></div>
+                                        <div class="set-label" title="Danbooru tag 格式，逗號分隔。">🎨 角色底詞</div>
                                         <textarea class="set-textarea" id="img-nai-char-base">${imgConfig.novelai.charBasePrompt || ''}</textarea>
                                         <div class="field-reset"><span onclick="document.getElementById('img-nai-char-base').value='masterpiece, best quality, very aesthetic, absurdres, anime style, detailed face'">[重置]</span></div>
                                     </div>
@@ -1542,7 +1535,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="iface-section-title">📝 提示詞（底詞）</div>
                         <div class="set-group">
                             <div class="field-row">
-                                <div class="set-label">🎨 角色頭像通用底詞 <span class="lbl-opt">（全模組共用：夜店 / 偵探 / 寶寶 / VN頭像）</span></div>
+                                <div class="set-label" title="全模組共用：夜店 / 偵探 / 寶寶 / VN頭像。這裡的詞會自動加在所有角色頭像生圖最前面，VN 背景不受影響。">🎨 角色頭像通用底詞</div>
                                 <textarea class="set-textarea" id="img-style-prompt">${imgConfig.pollinations.charBasePrompt}</textarea>
                                 <div class="field-hint">↑ 這裡設定的詞會自動加在所有角色頭像生圖的最前面。VN背景不受影響。VN頭像可在 VN 設定裡追加額外詞。</div>
                                 <div class="field-reset"><span onclick="document.getElementById('img-style-prompt').value='anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines'">[重置為預設]</span></div>
@@ -1558,23 +1551,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🧑‍🎨 頭像追加詞（按接口，屬「頭像」分頁；放在底詞區下方，不再頂在連線設定上面）── -->
                         <div id="img-avatar-add-zone">
                             <div class="set-group" id="img-avatar-add-main">
-                                <div class="set-label">🧑‍🎨 頭像追加詞 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">插在通用底詞與角色描述之間</span></div>
+                                <div class="set-label" title="插在通用底詞與角色描述之間。">🧑‍🎨 頭像追加詞</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:55px;">${vnD.avatarBasePrompt || ''}</textarea>
                                 <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:45px;">${vnD.avatarNegPrompt || ''}</textarea>
                             </div>
                             <div class="set-group" id="img-avatar-add-tav">
-                                <div class="set-label">🎨 頭像追加詞（酒館原生 / ComfyUI 專用）</div>
+                                <div class="set-label" title="酒館原生 / ComfyUI 專用。">🎨 頭像追加詞</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-prompt-tavern" style="min-height:55px;">${vnD.avatarBasePromptTavern || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative（酒館原生 / ComfyUI）</div>
+                                <div class="set-label" style="margin-top:8px;" title="酒館原生 / ComfyUI 專用。">🚫 頭像 Negative</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:45px;">${vnD.avatarNegPromptTavern || ''}</textarea>
                             </div>
                         </div>
 
                         <!-- ── 🎬 場景插圖（共用設定）｜屬「插圖」分頁 ── -->
                         <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
-                            <div class="set-label" style="font-size:13px;">🎬 場景插圖</div>
-                            <div class="set-desc" style="margin-top:6px;">尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。</div>
+                            <div class="set-label" style="font-size:13px;" title="尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。">🎬 場景插圖</div>
+                            <div class="set-desc" style="margin-top:6px;">設定套用於所有場景插圖。</div>
 
                             <div id="img-scene-body" style="margin-top:14px;">
 
@@ -1611,18 +1604,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </select>
                                 </div>
 
-                                <div class="set-desc" style="margin-bottom:12px; font-size:11px;">🎨 插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。</div>
+                                <div class="set-desc" style="margin-bottom:12px; font-size:11px;" title="插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。">🎨 插圖底詞／負詞在接口設定區調整。</div>
                             </div>
                         </div>
 
                         <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
-                            <div style="display:flex; align-items:center; justify-content:space-between;">
-                                <span>🖼️ 自動插圖（副模型搭便車 · 接記憶）</span>
+                            <div style="display:flex; align-items:center; justify-content:space-between;" title="開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會順便依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。其它觸發：主模型直接吐 [Scene|]（世界書開規則，最省）。">
+                                <span>🖼️ 自動插圖</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc" style="margin-top:6px;">開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會<b>順便</b>依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。（酒館／獨立版皆可）</div>
-                            <div class="set-desc" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72);">其它觸發：① 主模型直接吐 [Scene|]（世界書開規則，最省、零額外 API）；② 此處副模型搭便車（免額外呼叫）。獨立版（PWA 專門呼叫）已退役。</div>
-                            <div class="set-label" style="font-size:12px; margin-top:10px;">副模型插圖指令 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">隨上方「Prompt 風格」切換</span></div>
+                            <div class="set-desc" style="margin-top:6px;">每輪記憶抽取時順便吐插圖、自動生圖。</div>
+                            <div class="set-label" style="font-size:12px; margin-top:10px;" title="隨上方「Prompt 風格」切換。">副模型插圖指令</div>
                             <div id="img-scene-extract-tags-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&(imgConfig.serviceScene||imgConfig.serviceLiving||imgConfig.service)!=='novelai')) ? 'none' : '';})()};">
                                 <div style="font-size:10px; color:rgba(26,28,40,0.6); margin-bottom:3px;">🏷️ 標籤版（給 NAI / Danbooru · 五層系統）</div>
                                 <textarea class="set-textarea" id="img-scene-extract-tags" style="min-height:170px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPromptTags || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
@@ -1645,8 +1637,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
-                            <div class="set-label">🆘 退路圖庫（Pixabay）</div>
-                            <div class="set-desc" style="margin-bottom:8px;">Pollinations 卡住或 12 秒 timeout 時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:#1A1C28;">pixabay.com/api/docs</a></div>
+                            <div class="set-label" title="主來源卡住或逾時時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。">🆘 退路圖庫</div>
+                            <div class="set-desc" style="margin-bottom:8px;">免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:#1A1C28;">pixabay.com/api/docs</a></div>
                             <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${imgConfig.pixabayKey || ''}">
                             <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
                                 <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
@@ -1666,17 +1658,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <!-- 子: 頭像快取 -->
                             <div id="avatar-sub-cache" class="avatar-sub-view">
                                 <div class="set-group">
-                                    <div class="set-label">🎭 角色頭像快取 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">防重複生圖</span></div>
+                                    <div class="set-label" title="防重複生圖。">🎭 角色頭像快取</div>
                                     <div id="vncfg-avatar-mgr-list" style="margin-top:8px;"></div>
                                     <button class="set-btn" type="button" onclick="window.VN_PLAYER && window.VN_PLAYER.backupAvatarsToWorldbook && window.VN_PLAYER.backupAvatarsToWorldbook(this)">💾 備份頭像到角色世界書</button>
                                 </div>
-                                <div class="set-desc" style="margin-top:4px;">* 生圖已全數自動接管至 OS_IMAGE_MANAGER。備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。</div>
+                                <div class="set-desc" style="margin-top:4px;" title="備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。">備份後本地快取清空也能讀回。</div>
                             </div>
 
                             <!-- 子: 角色立繪（去背工作室）-->
                             <div id="avatar-sub-sprite" class="avatar-sub-view" style="display:none;">
                                 <div class="set-group">
-                                    <div class="set-label">🎨 從頭像快取轉立繪 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">點角色 → 生立繪 → 去背 → 存（只顯示當前世界）</span></div>
+                                    <div class="set-label" title="點角色 → 生立繪 → 去背 → 存。只顯示當前世界。">🎨 從頭像快取轉立繪</div>
 
                                     <div id="sprite-picker-list" style="margin-top:10px;max-height:300px;overflow-y:auto;">載入中...</div>
 
@@ -1700,7 +1692,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             </label>
                                             <button class="vng-studio-gen" id="sprite-gen-btn">✨ 生立繪</button>
                                             <details class="vng-studio-tpl">
-                                                <summary>📜 Prompt 模板（前後綴）</summary>
+                                                <summary title="立繪 prompt 的前綴與後綴。">📜 Prompt 模板</summary>
                                                 <div class="set-label" style="margin-top:8px;font-size:11px;">前綴</div>
                                                 <textarea class="set-input" id="sprite-tpl-prefix" style="margin-top:4px;min-height:48px;font-family:inherit;font-size:12px;"></textarea>
                                                 <div class="set-label" style="margin-top:8px;font-size:11px;">後綴</div>
@@ -1730,22 +1722,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div id="sprite-list" style="margin-top:8px;">載入中...</div>
                                 </div>
 
-                                <div class="set-desc" style="margin-top:6px;">* ✂️ 純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。🪄 AI 去背：首次下載模型(~40MB)，適合雜背景。立繪存進當前世界，VN 優先讀取。</div>
+                                <div class="set-desc" style="margin-top:6px;" title="✂️ 純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。🪄 AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。">✂️ 純色去背快、適合純色背景；🪄 AI 去背適合雜背景。</div>
                             </div>
                         </div>
                         <div id="view-img-bg" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label">🌄 場景背景快取 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">防重複生圖</span></div>
+                                <div class="set-label" title="防重複生圖。">🌄 場景背景快取</div>
                                 <div id="vncfg-bg-mgr-list" style="margin-top:8px;"></div>
                             </div>
-                            <div class="set-desc" style="margin-top:4px;">* 包含 bg_cache（場景背景）。</div>
                         </div>
                         <div id="view-img-scene" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label">🎬 場景插圖快取 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">劇情全螢幕 CG；「⋯」可看大圖 / 編輯重生 / 刪除</span></div>
+                                <div class="set-label" title="劇情全螢幕 CG；「⋯」可看大圖 / 編輯重生 / 刪除。提示詞在「⋯ → 編輯重生」裡查看與修改。">🎬 場景插圖快取</div>
                                 <div id="vncfg-scene-mgr-list" style="margin-top:8px;"></div>
                             </div>
-                            <div class="set-desc" style="margin-top:4px;">* 包含 scene_cache（場景插圖）。提示詞在「⋯ → 編輯重生」裡查看與修改。</div>
                         </div>
                     </div>
 
@@ -1822,8 +1812,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">🎭 音色設定檔 <span style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;">（VN / wx 面板通用）</span></div>
-                            <div class="set-desc">每個角色可設定「顯示名稱」、「Minimax 音色ID」與多個「別名」。VN 面板輸出的角色名會自動比對所有別名（大小寫不敏感），找到後播放對應音色。</div>
+                            <div class="set-label" title="VN / wx 面板通用。每個角色可設定顯示名稱、Minimax 音色ID 與多個別名；VN 輸出的角色名會自動比對別名（大小寫不敏感）後播放對應音色。">🎭 音色設定檔</div>
+                            <div class="set-desc">每個角色設定顯示名、音色ID 與別名。</div>
                             <div id="mm-profile-list" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
                             <div style="display:flex; gap:8px; margin-top:12px;">
                                 <div class="btn-test" id="mm-add-profile-btn" style="flex:1;">＋ 新增音色設定檔</div>
@@ -1883,15 +1873,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <span class="slider"></span>
                                 </label>
                             </div>
-                            <div class="set-desc">
-                                <b>關閉</b>：不啟用記憶召回（依靠章節原文 + 摘要）<br>
-                                <b>開啟</b>：副模型背景提取 → 向量搜尋按需召回（長劇/多NPC推薦）
-                            </div>
+                            <div class="set-desc" title="關閉：不啟用記憶召回，依靠章節原文 + 摘要。開啟：副模型背景提取 → 向量搜尋按需召回；長劇/多NPC 推薦。">開啟後副模型背景提取、按需召回記憶。</div>
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">Embedding 端點</div>
-                            <div class="set-desc">OpenAI 相容的 /v1/embeddings 端點，可與主模型同一個 API 服務</div>
+                            <div class="set-label" title="OpenAI 相容的 /v1/embeddings 端點，可與主模型同一個 API 服務。">Embedding 端點</div>
+                            <div class="set-desc">OpenAI 相容的 embeddings 端點。</div>
                             <input class="set-input" id="vec-url" type="text" placeholder="https://api.openai.com/v1（不需加 /embeddings）" />
                             <div class="set-label" style="margin-top:12px;">Embedding 模型</div>
                             <input class="set-input" id="vec-model" type="text" placeholder="text-embedding-3-small" style="margin-top:6px;" />
@@ -1905,8 +1892,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">召回條數 top-K <span class="set-slider-val" id="vec-topk-val">5</span></div>
-                            <div class="set-desc">每次 buildContext 從向量庫召回最相關的 N 條記憶注入</div>
+                            <div class="set-label" title="每次組建上下文時，從向量庫召回最相關的 N 條記憶注入。">召回條數 top-K <span class="set-slider-val" id="vec-topk-val">5</span></div>
+                            <div class="set-desc">每次召回最相關的 N 條記憶。</div>
                             <input class="set-slider" type="range" id="vec-topk" min="1" max="20" value="5" />
                         </div>
 
@@ -1920,8 +1907,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-sys" class="tab-view hidden">
 
                         <div class="set-group">
-                            <div class="set-label">🖥️ 介面佈局 (解決頂部遮擋)</div>
-                            <div class="set-desc">在 iOS 加到主畫面 (PWA) 時，若遇到動態島或瀏海遮擋頂部 UI，可開啟「強制下移」。</div>
+                            <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。">🖥️ 介面佈局</div>
+                            <div class="set-desc">頂部被遮擋時選「強制下移」。</div>
                             <select class="set-select" id="os-layout-mode">
                                 <option value="auto" ${localStorage.getItem('aurelia_layout_mode') !== 'pad-ios' ? 'selected' : ''}>📱 自動適配 (Auto/預設)</option>
                                 <option value="pad-ios" ${localStorage.getItem('aurelia_layout_mode') === 'pad-ios' ? 'selected' : ''}>🍎 強制下移 (iOS 動態島/瀏海)</option>
@@ -1934,8 +1921,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">🔑 GitHub Gist 設定</div>
-                            <div class="set-desc">申請 <b>gist</b> 權限的 Personal Access Token（Settings → Developer settings → Fine-grained tokens）。首次備份後 Gist ID 自動保存。</div>
+                            <div class="set-label" title="申請 gist 權限的 Personal Access Token（Settings → Developer settings → Fine-grained tokens）。首次備份後 Gist ID 自動保存。">🔑 GitHub Gist 設定</div>
+                            <div class="set-desc">填 gist 權限的 Token，首次備份後自動存 ID。</div>
                             <input class="set-input" id="bk-token" type="password" placeholder="ghp_xxxxxxxxxxxx（不會備份 Token 本身）" />
                             <input class="set-input" id="bk-gist-id" placeholder="Gist ID（首次留空，備份後自動填入）" style="margin-top:8px;" />
                             <div id="bk-gist-hint" style="font-size:11px; color:#1A1C28; margin-top:6px; word-break:break-all;"></div>
@@ -1954,8 +1941,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">💾 本地全量備份</div>
-                            <div class="set-desc">匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。</div>
+                            <div class="set-label" title="匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。">💾 本地全量備份</div>
+                            <div class="set-desc">匯出所有資料成 JSON 檔。</div>
                             <div class="btn-save" id="bk-export-btn" style="padding:12px; font-size:13px;">📤 匯出完整備份 JSON</div>
                             <div class="btn-test" id="bk-import-btn" style="margin-top:8px;">📥 從本地 JSON 還原</div>
                             <input type="file" id="bk-file-input" accept=".json" style="display:none;" />
