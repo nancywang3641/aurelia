@@ -656,9 +656,10 @@
                         const activeModel = (typeof context.getChatCompletionModel === 'function')
                             ? context.getChatCompletionModel()
                             : undefined;
-                        const { model: _ignored, ...activeBody } = commonBody;
-                        const requestBody = { ...activeBody, chat_completion_source: activeSource };
-                        if (activeModel) requestBody.model = activeModel;
+                        // 用奧瑞亞自己選的 model（主可 gemini、副可 claude，同一連線跑不同模型）；
+                        // 只有奧瑞亞沒設 model 時才退回酒館當前 model。commonBody 已是乾淨 body（penalty 不送）。
+                        const requestBody = { ...commonBody, chat_completion_source: activeSource };
+                        if (!requestBody.model && activeModel) requestBody.model = activeModel;
                         const response = await fetch('/api/backends/chat-completions/generate', {
                             method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody),
