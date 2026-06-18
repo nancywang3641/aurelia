@@ -934,22 +934,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-llm" class="api-subview">
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span>🔗 跟隨酒館主系統 (推薦)</span>
+                                <span>🔗 跟隨酒館主系統</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-system-api" ${llmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div id="st-profile-group" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
-                                <div class="set-label">選擇連接預設 (Profile)</div>
+                                <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="os-st-profile">${primaryProfileOpts}</select>
                                 <div id="st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72); word-break:break-all; line-height:1.6;"></div>
-                                <div class="set-label" style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
-                                    <span>🍎 generateRaw 模式（iOS 相容）</span>
+                                <div class="set-label" style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;" title="改用酒館 generateRaw 組請求：排除 preset、只送本系統訊息，避開 iOS WebView CORS 與 gemini penalty 404。選了 profile 會連該 profile 的來源。">
+                                    <span>🍎 generateRaw 模式</span>
                                     <label class="toggle-switch"><input type="checkbox" id="os-use-generateraw" ${llmConfig.useGenerateRaw ? 'checked' : ''}><span class="slider"></span></label>
                                 </div>
-                                <div class="set-desc">iOS 直連被擋／gemini 404 時開。改用酒館 generateRaw 組請求（排除 preset、只送本系統訊息）。</div>
+                                <div class="set-desc">iOS 直連失敗時開啟。</div>
                                 <details style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
-                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;">📝 自訂前置指令（只在 🍎 模式注入）</summary>
+                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在所有訊息最前面，只在 🍎 generateRaw 模式生效；PWA／直連／副模型不受影響。">📝 自訂前置指令</summary>
                                     <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                                    <div class="set-desc">這段會以 system 角色插在所有訊息最前面，<b>只有開 🍎 generateRaw 模式時生效</b>，其他路徑（PWA／直連）不受影響。留空＝不注入。</div>
+                                    <div class="set-desc">留空＝不注入。</div>
                                 </details>
                             </div>
                         </div>
@@ -962,7 +962,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label">選擇模型</div>
                             <div id="model-system-notice" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; font-size:12px; color:#1A1C28; border:1px solid rgba(26,28,40,0.15);">
-                                🔗 已跟隨酒館主系統，模型由酒館決定。<br>直接在酒館介面切換模型即可，無需在此設定。
+                                🔗 模型由酒館決定，在酒館切換即可。
                             </div>
                             <div class="model-row ${llmConfig.useSystemApi ? 'hidden' : ''}" id="model-row">
                                 <select class="set-select" id="os-api-model"><option value="${llmConfig.model}">${llmConfig.model} (當前)</option></select>
@@ -971,19 +971,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">
-                                <span>僅讀取摘要 (Save Tokens)</span>
+                            <div class="set-label" title="只讀取訊息裡的 <summary> 標籤內容，大幅省 Token、避免讀到過舊歷史。">
+                                <span>僅讀取摘要</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-summary-mode" ${llmConfig.enableSummaryOnly ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc">開啟後，手機系統只讀取 &lt;summary&gt; 標籤內容，節省大量 Token 並避免讀取過舊的歷史。</div>
+                            <div class="set-desc">只讀 summary 標籤、省 Token。</div>
                         </div>
 
                         <div class="set-group"${stHide}>
-                            <div class="set-label">
+                            <div class="set-label" title="把指定 Preset 的自訂條目當系統提示詞注入（排除佔位符）。需安裝 TavernHelper 插件。">
                                 <span>📋 注入 Preset 自訂條目</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-use-preset-prompts" ${llmConfig.usePresetPrompts ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc">開啟後，注入指定 Preset 的自訂條目為系統提示詞（排除佔位符）。需安裝 TavernHelper 插件。</div>
+                            <div class="set-desc">注入指定 Preset 的自訂條目。</div>
                             <div id="os-preset-name-group" style="margin-top:10px; display:${llmConfig.usePresetPrompts ? 'flex' : 'none'}; gap:8px; align-items:center;">
                                 <select class="set-select" id="os-preset-name" style="flex:1;">
                                     <option value="">（使用當前 in_use Preset）</option>
@@ -1016,13 +1016,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">
+                            <div class="set-label" title="讓模型回傳思考過程。需模型支援（Gemini 2.5 / Claude 3.5+）；開啟後 Temperature 自動設為 1。">
                                 <span>💭 請求模型思維鏈</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-enable-thinking" ${llmConfig.enableThinking ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:6px;">讓模型回傳思考過程（需模型支援，如 Gemini 2.5 / Claude 3.5+）。開啟後 Temperature 自動設為 1。</div>
                             <div style="margin-top:10px;" id="thinking-budget-group" class="${llmConfig.enableThinking ? '' : 'hidden'}">
-                                <div class="set-label"><span>思考預算 (tokens)</span><span class="set-slider-val" id="val-think-budget">${llmConfig.thinkingBudget || 8000}</span></div>
+                                <div class="set-label"><span>思考預算</span><span class="set-slider-val" id="val-think-budget">${llmConfig.thinkingBudget || 8000}</span></div>
                                 <input type="range" min="1000" max="32000" step="1000" value="${llmConfig.thinkingBudget || 8000}" class="set-slider" id="os-thinking-budget">
                             </div>
                         </div>
@@ -1035,33 +1034,29 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     </div>
 
                     <div id="view-sec-llm" class="api-subview" style="display:none;">
-                        <div style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.15); font-size:12px; color:#1A1C28; line-height:1.6;">
-                            ℹ️ <b>副模型</b> 用於寵物聊天、路人NPC對話等輕量任務。建議使用 Gemini Flash 或 GPT-4o-mini 等快速模型。
-                        </div>
-
                         <div class="set-group"${stHide}>
                             <div class="set-label">
                                 <span>🔗 跟隨酒館主系統</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-system-api" ${secLlmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div id="sec-st-profile-group" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
-                                <div class="set-label">選擇連接預設 (Profile)</div>
+                                <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="sec-st-profile">${secondaryProfileOpts}</select>
                                 <div id="sec-st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72); word-break:break-all; line-height:1.6;"></div>
-                                <div class="set-label" style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
-                                    <span>🍎 generateRaw 模式（iOS 相容）</span>
+                                <div class="set-label" style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;" title="改用酒館 generateRaw 組請求：排除 preset、只送本系統訊息，避開 iOS WebView CORS 與 gemini penalty 404。選了 profile 會連該 profile 的來源。">
+                                    <span>🍎 generateRaw 模式</span>
                                     <label class="toggle-switch"><input type="checkbox" id="sec-use-generateraw" ${secLlmConfig.useGenerateRaw ? 'checked' : ''}><span class="slider"></span></label>
                                 </div>
-                                <div class="set-desc">iOS 直連被擋／gemini 404 時開。改用酒館 generateRaw 組請求（排除 preset、只送本系統訊息）。</div>
+                                <div class="set-desc">iOS 直連失敗時開啟。</div>
                             </div>
                         </div>
 
                         <div class="set-group" id="sec-sync-primary-group" style="${secLlmConfig.useSystemApi ? 'display:none;' : ''}">
-                             <div class="set-label">
+                             <div class="set-label" title="自動共用主模型的 API 地址與密鑰，模型仍可獨立選擇。">
                                 <span>🔗 同步主模型 URL 與 Key</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-sync-primary" ${secLlmConfig.syncWithPrimary ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc">開啟後，自動共用主模型的 API 地址與密鑰，模型選項仍可獨立選擇。</div>
+                            <div class="set-desc">共用主模型的網址與密鑰。</div>
                         </div>
 
                         <div class="set-group" id="sec-manual-api-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : 'display:flex;'}">
@@ -1072,7 +1067,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label">選擇模型</div>
                             <div id="sec-model-system-notice" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; font-size:12px; color:#1A1C28; border:1px solid rgba(26,28,40,0.15);">
-                                🔗 已跟隨酒館主系統，模型由酒館決定。<br>直接在酒館介面切換模型即可，無需在此設定。
+                                🔗 模型由酒館決定，在酒館切換即可。
                             </div>
                             <div class="model-row ${secLlmConfig.useSystemApi ? 'hidden' : ''}" id="sec-model-row">
                                 <select class="set-select" id="sec-api-model"><option value="${secLlmConfig.model}">${secLlmConfig.model} (當前)</option></select>
@@ -1081,8 +1076,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">
-                                <span>僅讀取摘要 (Save Tokens)</span>
+                            <div class="set-label" title="只讀取訊息裡的 <summary> 標籤內容，大幅省 Token、避免讀到過舊歷史。">
+                                <span>僅讀取摘要</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-summary-mode" ${secLlmConfig.enableSummaryOnly ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                         </div>
