@@ -165,6 +165,27 @@
         return cleanRawOutput(rawContent);
     }
 
+    // 給 ConnectionManager.sendRequest 補 vertex 認證欄位：
+    // ST 的 sendRequest 漏帶 vertexai_auth_mode → 後端預設 'express' → 服務帳號(full)被當 API Key 找不到金鑰
+    // (Secret id not found for api_key_vertexai)。從 oai_settings 多來源讀回 auth_mode/project 塞進 overridePayload
+    // (createRequestData 用 ...props 保留 → 整包送後端 /generate；後端讀 request.body.vertexai_auth_mode)。
+    function _vertexOverride(ctx, profileId, base) {
+        const ov = Object.assign({}, base);
+        try {
+            const oai = (ctx && ctx.oai_settings) || win.oai_settings || (win.parent && win.parent.oai_settings) || {};
+            if (oai.vertexai_auth_mode) ov.vertexai_auth_mode = oai.vertexai_auth_mode;
+            if (oai.vertexai_express_project_id) ov.vertexai_express_project_id = oai.vertexai_express_project_id;
+            // 保底：全域讀不到、但這個 profile 是 vertexai → 預設服務帳號(full)。
+            // (express 用戶全域 auth_mode 會是 'express'、上面已讀到、不會誤觸這條)
+            if (!ov.vertexai_auth_mode) {
+                const profs = (ctx && ctx.extensionSettings && ctx.extensionSettings.connectionManager && ctx.extensionSettings.connectionManager.profiles) || [];
+                const p = profs.find(x => x && x.id === profileId);
+                if (p && /vertex/i.test(p.api || '')) ov.vertexai_auth_mode = 'full';
+            }
+        } catch (e) {}
+        return ov;
+    }
+
     function smartMergeMessages(msgList) {
         if (!msgList || msgList.length === 0) return [];
         const mergedList = [];
@@ -622,13 +643,7 @@
                             // 🍎＋選了 profile：交給酒館 ConnectionManager 用「該 profile 的完整連線」
                             // （來源 api / secret / preset / exclude / region 全照 profile）→ 真的打到 profile 的來源
                             // （vertexai / custom / claude…），不再只偷 model 名、卻把請求送去 ST 當前激活來源（會誤送別的連線）。
-                            // ★ ST 坑：sendRequest 不帶 vertexai_auth_mode → vertex 服務帳號(full)被當 express、
-                            //   去 api_key_vertexai 桶找不到金鑰(Secret id not found)。從 oai_settings 補回 auth_mode/project
-                            //   塞進 overridePayload(會 spread 進請求送後端；非 vertex 來源後端自動忽略)。
-                            const _ov = { temperature, ...extraParams };
-                            const _oai = _ctx.oai_settings || {};
-                            if (_oai.vertexai_auth_mode) _ov.vertexai_auth_mode = _oai.vertexai_auth_mode;
-                            if (_oai.vertexai_express_project_id) _ov.vertexai_express_project_id = _oai.vertexai_express_project_id;
+                            const _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, ...extraParams });
                             const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
                                 config.stProfileId, cleanMessages, maxTokens, undefined, _ov
                             );
@@ -701,11 +716,7 @@
                         // 砍掉舊的 UI profile switching dance（之前會把 #connection_profiles select 切過去再切回來）
                         // 原因：並發呼叫會互相 abort 對方的 in-flight fetch，console 噴 "Canceled because main api changed"
                         // ST 的 sendRequest(profileId, ...) 本身就會用對應 profile 的 url/key/model，不需要 UI 同步切
-                        // ★ 同 🍎：補 vertex 認證模式(sendRequest 漏帶 → 服務帳號被當 express 找不到金鑰)
-                        const _ov = { temperature, ...extraParams };
-                        const _oai = context.oai_settings || {};
-                        if (_oai.vertexai_auth_mode) _ov.vertexai_auth_mode = _oai.vertexai_auth_mode;
-                        if (_oai.vertexai_express_project_id) _ov.vertexai_express_project_id = _oai.vertexai_express_project_id;
+                        const _ov = _vertexOverride(context, stProfileId, { temperature, ...extraParams });
                         const response = await context.ConnectionManagerRequestService.sendRequest(
                             stProfileId, cleanMessages, maxTokens, undefined, _ov
                         );
