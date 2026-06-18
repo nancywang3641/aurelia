@@ -407,8 +407,13 @@
             if (isNaN(maxTokens) || maxTokens <= 0) maxTokens = 8192;
             const temperature = isFinite(parseFloat(config.temperature)) ? parseFloat(config.temperature) : 1.0;
             const top_p = isFinite(parseFloat(config.top_p)) ? parseFloat(config.top_p) : undefined;
-            const frequency_penalty = isFinite(parseFloat(config.frequency_penalty)) ? parseFloat(config.frequency_penalty) : undefined;
-            const presence_penalty = isFinite(parseFloat(config.presence_penalty)) ? parseFloat(config.presence_penalty) : undefined;
+            // ⚠️ penalty 為 0（預設值）時「不送」：gemini 原生 API 沒有 frequency/presence_penalty 這兩個欄位，
+            // 連送 0 都會被 Pioneer/反代的 gemini 路由 404（No endpoints found that can handle the requested parameters）。
+            // 非 0 才送（給 GPT/Claude 等支援的模型用），這樣 gemini/claude/gpt 同一套程式碼都能跑。
+            const _freqPen = parseFloat(config.frequency_penalty);
+            const frequency_penalty = (isFinite(_freqPen) && _freqPen !== 0) ? _freqPen : undefined;
+            const _presPen = parseFloat(config.presence_penalty);
+            const presence_penalty = (isFinite(_presPen) && _presPen !== 0) ? _presPen : undefined;
 
             if (!useSystemApi && (!config.url || !config.key)) {
                 if (onError) onError(new Error('API 配置不完整 (無 URL/Key)')); return;
