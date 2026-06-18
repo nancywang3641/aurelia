@@ -618,9 +618,21 @@
                     try {
                         const _ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
                         const _src = _ctx && (_ctx.oai_settings && _ctx.oai_settings.chat_completion_source);
-                        if (_ctx && _src) {
-                            // 模型優先用「你選的 profile 的 model」(選 profile 就決定模型：主選大、副選小)；
-                            // 沒選 profile 才用奧瑞亞 config.model；都沒有才退回酒館當前 model。
+                        if (_ctx && config.stProfileId && _ctx.ConnectionManagerRequestService) {
+                            // 🍎＋選了 profile：交給酒館 ConnectionManager 用「該 profile 的完整連線」
+                            // （來源 api / secret / preset / exclude / region 全照 profile）→ 真的打到 profile 的來源
+                            // （vertexai / custom / claude…），不再只偷 model 名、卻把請求送去 ST 當前激活來源（會誤送別的連線）。
+                            const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
+                                config.stProfileId, cleanMessages, maxTokens,
+                                undefined,
+                                { temperature, ...extraParams }
+                            );
+                            const _t = normalizeResponse(_response);
+                            if (_t) { rawApiResponse = _response; fullText = _t; _ngOk = true; }
+                            else { console.warn('[OS_API] 🍎 profile 路徑無內容回傳', _response); }
+                        } else if (_ctx && _src) {
+                            // 🍎＋沒選 profile（或 ConnectionManager 不可用）：精簡乾淨 body 打「ST 當前激活來源」
+                            // （避開 gemini penalty 404 / iOS CORS）。沒 profile 時 model 用奧瑞亞 config.model。
                             let _model = config.model;
                             if (config.stProfileId) {
                                 try {
