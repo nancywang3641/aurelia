@@ -2454,12 +2454,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!url) { if (statusEl) statusEl.textContent = '請先填網址'; return; }
                 if (statusEl) statusEl.textContent = '⏳ 連線中…';
                 const W = window.parent || window;
-                const ctx = (W.SillyTavern && W.SillyTavern.getContext) ? W.SillyTavern.getContext() : null;
-                const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
-                const post = async function(path){
-                    try { const r = await fetch(path, { method:'POST', headers: headers, body: JSON.stringify({ url: url }) }); if (!r.ok) return null; return await r.json(); }
-                    catch(e){ return null; }
-                };
+                const IM = W.OS_IMAGE_MANAGER;
+                if (!IM || !IM.fetchComfyLists) { if (statusEl) statusEl.textContent = '❌ 圖片引擎未載入'; return; }
                 const fillDatalist = function(id, arr, useValue){
                     const dl = container.querySelector('#' + id);
                     if (!dl || !Array.isArray(arr)) return 0;
@@ -2476,11 +2472,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     sel.innerHTML = opts.map(function(v){ const lbl = (v === '' ? '（內建 VAE）' : v); return '<option value="' + escAttr(v) + '"' + (v === cur ? ' selected' : '') + '>' + escAttr(lbl) + '</option>'; }).join('');
                     return arr.length;
                 };
-                const models = await post('/api/sd/comfy/models');
-                const samplers = await post('/api/sd/comfy/samplers');
-                const schedulers = await post('/api/sd/comfy/schedulers');
-                const vaes = await post('/api/sd/comfy/vaes');
-                const loras = await post('/api/sd/comfy/loras');
+                let models = null, samplers = null, schedulers = null, vaes = null, loras = null;
+                try {
+                    const lists = await IM.fetchComfyLists(url);
+                    models = lists.models; samplers = lists.samplers; schedulers = lists.schedulers; vaes = lists.vaes; loras = lists.loras;
+                } catch (e) {
+                    if (statusEl) statusEl.textContent = '❌ 連不上：' + (e.message || e) + '（瀏覽器直連需 ComfyUI 開 --enable-cors-header）';
+                    return;
+                }
                 if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '❌ 連不上（檢查網址、ComfyUI 開著沒）'; return; }
                 lastModels = models || [];
                 refreshModels();
