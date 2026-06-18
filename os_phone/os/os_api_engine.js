@@ -607,32 +607,52 @@
                     // ordered_prompts 只送這些訊息 → 排除 preset/角色卡/世界書/歷史（文件：未列入的不會使用）。
                     // 好處：①不直連外部 → 避開 iOS WebView 的 CORS/Load failed；
                     //       ②由酒館前端管線送出 → 套用「排除請求主體參數」(penalty 被剝) → gemini 不 404。
-                    // ⚠️ generateRaw 是酒館掛在 window 的「全域函式」(window.generateRaw)，不是 TavernHelper 的方法！
-                    // 對齊已驗證能觸發 Pioneer 的參考面板 horror-radio-preview.html：window.generateRaw || parent.generateRaw。
-                    const _genRaw = win.generateRaw
-                        || (win.parent && win.parent.generateRaw)
-                        || (win.TavernHelper && win.TavernHelper.generateRaw)
-                        || (win.parent && win.parent.TavernHelper && win.parent.TavernHelper.generateRaw);
-                    if (typeof _genRaw !== 'function') {
-                        throw new Error('generateRaw 不可用（需要酒館助手 TavernHelper）');
+                    // 🍎 iOS 相容（原生、零插件依賴）：不讓 WebView 直連 Pioneer（會被 iOS CORS/Load failed 擋），
+                    // 改 POST 到酒館「同源」後端 /api/backends/chat-completions/generate → 後端用原生 HTTP 代打外部 API
+                    // （原生無 CORS）。body 只送精簡乾淨欄位（無 penalty / include_reasoning / reasoning_effort）→ gemini 不 404。
+                    let _ngOk = false;
+                    try {
+                        const _ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
+                        const _src = _ctx && (_ctx.oai_settings && _ctx.oai_settings.chat_completion_source);
+                        if (_ctx && _src) {
+                            const _model = config.model
+                                || (typeof _ctx.getChatCompletionModel === 'function' ? _ctx.getChatCompletionModel() : undefined);
+                            const _body = {
+                                chat_completion_source: _src,
+                                model: _model,
+                                messages: cleanMessages,
+                                temperature: temperature,
+                                max_tokens: maxTokens,
+                                stream: false
+                            };
+                            if (top_p !== undefined) _body.top_p = top_p;
+                            const _resp = await fetch('/api/backends/chat-completions/generate', {
+                                method: 'POST',
+                                headers: { ..._ctx.getRequestHeaders(), 'Content-Type': 'application/json' },
+                                body: JSON.stringify(_body),
+                                signal: options.signal || undefined
+                            });
+                            const _data = await _resp.json();
+                            const _t = normalizeResponse(_data);
+                            if (_resp.ok && _t) { rawApiResponse = _data; fullText = _t; _ngOk = true; }
+                            else { console.warn('[OS_API] 原生 /generate 未成功，HTTP', _resp.status, _data && _data.error); }
+                        }
+                    } catch (e) { console.warn('[OS_API] 原生 /generate 例外，退回 generateRaw', e); }
+                    // 保險：原生那條若失敗，退回 window.generateRaw（不影響「能跑」這件事）
+                    if (!_ngOk) {
+                        const _genRaw = win.generateRaw || (win.parent && win.parent.generateRaw)
+                            || (win.TavernHelper && win.TavernHelper.generateRaw)
+                            || (win.parent && win.parent.TavernHelper && win.parent.TavernHelper.generateRaw);
+                        if (typeof _genRaw !== 'function') throw new Error('generateRaw 不可用');
+                        const _ordered = cleanMessages.map(m => ({
+                            role: m.role || 'user',
+                            content: typeof m.content === 'string' ? m.content
+                                : (Array.isArray(m.content) ? m.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n') : String(m.content || ''))
+                        }));
+                        const _raw = await _genRaw({ user_input: ' ', ordered_prompts: _ordered, should_silence: true, max_chat_history: 0, generation_id: 'os_api_' + _dbgId });
+                        rawApiResponse = { via: 'generateRaw' };
+                        fullText = (typeof cleanRawOutput === 'function') ? cleanRawOutput(String(_raw || '')) : String(_raw || '');
                     }
-                    const _ordered = cleanMessages.map(m => ({
-                        role: m.role || 'user',
-                        content: typeof m.content === 'string'
-                            ? m.content
-                            : (Array.isArray(m.content)
-                                ? m.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n')
-                                : String(m.content || ''))
-                    }));
-                    const _raw = await _genRaw({
-                        user_input: ' ',
-                        ordered_prompts: _ordered,   // 只送這些 → 排除 preset/世界書/歷史
-                        should_silence: true,        // 不污染 VN 正文
-                        max_chat_history: 0,
-                        generation_id: 'os_api_' + _dbgId
-                    });
-                    rawApiResponse = { via: 'generateRaw' };
-                    fullText = (typeof cleanRawOutput === 'function') ? cleanRawOutput(String(_raw || '')) : String(_raw || '');
                 } else if (useSystemApi) {
                     const context = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
                     if (!context) throw new Error("無 Context");
