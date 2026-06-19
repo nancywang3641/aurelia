@@ -109,16 +109,26 @@
                 while (this._order.length > 6) { const old = this._order.shift(); if (old !== msgId) delete this._pending[old]; }
                 console.log('[VN_SceneInsert] msg#' + msgId + ' 排隊 ' + entries.length + ' 張(已預熱)，等 VN 載入該則即插');
 
-                // scenes 比 loadScript 晚到、且 VN 已停在這則 → 立刻插
+                // scenes 比 loadScript 晚到 → 看 VN 現在停在哪則
                 const VN = win.VN_Core;
-                const _vnMid = VN ? (VN._currentMessageId != null ? String(VN._currentMessageId) : 'null') : 'noVN';
+                const _curMid = (VN && VN._currentMessageId != null) ? String(VN._currentMessageId) : null;
+                const _hasScript = !!(VN && Array.isArray(VN.script) && VN.script.length);
                 const _vnLen = (VN && Array.isArray(VN.script)) ? VN.script.length : -1;
-                if (VN && Array.isArray(VN.script) && VN.script.length &&
-                    VN._currentMessageId != null && String(VN._currentMessageId) === msgId) {
-                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 即時插：VN當前則=' + _vnMid + ' script長=' + _vnLen);
+                if (_hasScript && _curMid === msgId) {
+                    // 正常：VN 正停在該則 → 立刻插
+                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 即時插：VN當前則=' + _curMid + ' script長=' + _vnLen);
                     this.applyPending(msgId);
+                } else if (_hasScript && _curMid != null) {
+                    // 副模型抽取太慢、VN 已往前走到別則 → 場景會孤兒(loadScript 不會再為舊則跑)。
+                    // 改補插到「現在正播的這則」：晚幾秒順流補上、不讓它默默消失（圖同一個 cacheId、已生好）。
+                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 已過期(VN在#' + _curMid + ' script長=' + _vnLen + ')→補插到當前則');
+                    if (!this._pending[_curMid]) this._order.push(_curMid);
+                    this._pending[_curMid] = { chatId: chatId, entries: entries };
+                    while (this._order.length > 6) { const old = this._order.shift(); if (old !== _curMid && old !== msgId) delete this._pending[old]; }
+                    this.applyPending(_curMid);
                 } else {
-                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 不即插→等 loadScript：VN當前則=' + _vnMid + ' script長=' + _vnLen);
+                    // VN 還沒載入任何劇本 → 留佇列，等 loadScript 該則時補插
+                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 不即插→等 loadScript：VN當前則=' + (_curMid || 'null') + ' script長=' + _vnLen);
                 }
             } catch (e) {
                 console.warn('[VN_SceneInsert] fromExtract 失敗:', (e && e.message) || e);
