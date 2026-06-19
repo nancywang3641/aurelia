@@ -1419,7 +1419,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             if (!apiEngine || !apiEngine.chat) throw new Error("找不到 API 引擎");
 
             let baseConfig = win.OS_SETTINGS?.getConfig?.() || JSON.parse(localStorage.getItem('os_global_config') || '{}');
-            const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.7 };
+            // 創作室生應用不需要超大輸出；夾到 32768 以下避免 gemini/vertex「maxOutputTokens 超過上限」報錯（主模型那邊若也太大要另調）
+            const _capTok = Math.min(parseInt(baseConfig.maxTokens) || 8192, 32768);
+            const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.7, maxTokens: _capTok };
 
             // 過濾：content 是字串時要 trim、陣列時要有內容；跳過已壓縮的原始對話（_isCompressed）
             let apiPayload = JSON.parse(JSON.stringify(chatMessages.filter(m => {
@@ -1769,7 +1771,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     if (!OS || !OS.chat) throw new Error('OS_API 不可用');
                     const S = window.OS_SETTINGS || (window.parent && window.parent.OS_SETTINGS);
                     let cfg = (S && S.getConfig && S.getConfig()) || {};
-                    cfg = Object.assign({}, cfg, { usePresetPrompts: false, enableThinking: false });
+                    // 同創作室主對話：夾住 maxTokens，避免 gemini/vertex「maxOutputTokens 超過上限」
+                    cfg = Object.assign({}, cfg, { usePresetPrompts: false, enableThinking: false, maxTokens: Math.min(parseInt(cfg.maxTokens) || 8192, 32768) });
                     return await new Promise((res, rej) => {
                         OS.chat([{ role: 'system', content: String(systemPrompt || '') }], cfg, null,
                             t => res(typeof t === 'string' ? t : (t && t.message) || ''), rej,
