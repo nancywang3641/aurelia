@@ -13,6 +13,7 @@
 
     // NAI 帳號同時只能一個生成請求，所有 _genNovelAI 呼叫透過此 Promise 鏈串行
     let _naiQueue = Promise.resolve();
+    let _last429ToastAt = 0;   // 拼車撞 429 會一張一張連噴 → 節流：一段時間內只報一次，不洗版
 
     // ── 本機 GPU 雙向紅綠燈（2026-06-11 實測修正：單向紅燈會讓圖片永遠等不到空檔）──
     // 優先序：即時語音（玩家正在聽）＞ 本機圖片（頭像/插圖預載）＞ 預熱語音（未來台詞）。
@@ -1074,7 +1075,14 @@
                     const _tr = (win.toastr || window.toastr || (window.parent && window.parent.toastr));
                     if (_tr) {
                         const _concur = /\b429\b|concurrent|conflict|too many|rate.?limit/i.test(_emsg);
-                        if (_concur) _tr.error('NAI 併發衝突（多半是拼車同時生圖）→ 錯開幾秒按 🔄 重試', 'NAI 429 併發', { timeOut: 8000 });
+                        if (_concur) {
+                            // 拼車時一批圖會同時撞 429、一張一張連噴 → 30 秒內只報一次，避免洗版（仍每張都退/略過、只是不重複彈窗）
+                            const _now = Date.now();
+                            if (_now - _last429ToastAt > 30000) {
+                                _last429ToastAt = _now;
+                                _tr.error('NAI 併發衝突（多半是拼車同時生圖）→ 錯開幾秒按 🔄 重試', 'NAI 429 併發', { timeOut: 8000 });
+                            }
+                        }
                         else _tr.warning('NAI 生圖失敗（非併發）：' + _emsg, 'NAI 錯誤', { timeOut: 8000 });
                     }
                 } catch (_) {}
