@@ -676,6 +676,14 @@
                                 const _eff = config.reasoningEffort || 'auto';
                                 if (_eff !== 'auto') _body.reasoning_effort = _eff;
                             }
+                            // vertex 服務帳號：這條「🍎+沒選 profile」走直連 body、不經 ConnectionManager → 也要自己補 vertexai_auth_mode，
+                            // 否則後端預設 'express' → 服務帳號(full)被當 API Key 找不到金鑰（Secret id not found for api_key_vertexai）。
+                            // 同 _vertexOverride 的修；那邊修的是 sendRequest(選 profile) 兩條，這條無 profile 的直連當時漏補（創作室主模型開🍎+vertex 踩到）。
+                            if (/vertex/i.test(_src || '')) {
+                                const _oai = (_ctx && _ctx.oai_settings) || win.oai_settings || (win.parent && win.parent.oai_settings) || {};
+                                _body.vertexai_auth_mode = _oai.vertexai_auth_mode || 'full';   // 讀不到全域 → 保底服務帳號(full)；express 用戶全域是 'express' 會讀到、不誤觸
+                                if (_oai.vertexai_express_project_id) _body.vertexai_express_project_id = _oai.vertexai_express_project_id;
+                            }
                             const _resp = await fetch('/api/backends/chat-completions/generate', {
                                 method: 'POST',
                                 headers: { ..._ctx.getRequestHeaders(), 'Content-Type': 'application/json' },
