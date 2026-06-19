@@ -1930,29 +1930,9 @@
                             }
                         };
                     }
-                    // CTX 彈窗：原本嵌在對話面板(text-panel-wrapper)裡，章節結束面板被藏 → 顯示不出 / 還原面板又牽連對話框。
-                    //   改成把 popup 搬到末尾覆蓋層當「獨立浮窗」，完全不碰對話面板；關閉時搬回原位（in-play CTX 照常）。
+                    // CTX 彈窗現在是 #page-game 直屬置中 modal、對話/末尾共用 → 末尾直接 toggle，不再搬元素/浮右上
                     const ctxBtn = document.getElementById('vn-end-btn-ctx');
-                    if (ctxBtn) ctxBtn.onclick = () => {
-                        const popup = document.getElementById('vn-ctx-popup');
-                        if (!popup) return;
-                        const overlay = document.getElementById('vn-end-overlay');
-                        const cbtn = document.getElementById('vn-btn-ctx');
-                        if (popup.classList.contains('show')) {
-                            popup.classList.remove('show', 'vn-ctx-endfloat');
-                            if (this._ctxEndHome && this._ctxEndHome.parent) this._ctxEndHome.parent.insertBefore(popup, this._ctxEndHome.next || null);
-                            this._ctxEndHome = null;
-                            if (cbtn) cbtn.classList.remove('active');
-                        } else {
-                            if (overlay && popup.parentNode !== overlay) {
-                                this._ctxEndHome = { parent: popup.parentNode, next: popup.nextSibling };
-                                overlay.appendChild(popup);
-                            }
-                            popup.classList.add('show', 'vn-ctx-endfloat');
-                            if (cbtn) cbtn.classList.add('active');
-                            try { if (typeof VN_CtxMonitor !== 'undefined' && VN_CtxMonitor && VN_CtxMonitor.poll) VN_CtxMonitor.poll(); } catch (e) {}
-                        }
-                    };
+                    if (ctxBtn) ctxBtn.onclick = () => { window.VN_Core.toggleCtx(); };
                     // 日誌：開「瀅瀅的故事日誌」手機 app。手機殼 panel z-index:50 < VN 全螢幕層 51 →
                     //   直接開會被 VN 蓋在底下看不到，故把 panel 臨時頂到 VN 之上，關閉(goHome)時還原。
                     const jrnlBtn = document.getElementById('vn-end-btn-journal');
@@ -2559,6 +2539,20 @@
             const isOpen = popup.classList.toggle('show');
             if (btn) btn.classList.toggle('active', isOpen);
             if (isOpen) VN_CtxMonitor.poll();
+        },
+        closeCtx: function() {
+            const popup = document.getElementById('vn-ctx-popup');
+            if (popup) popup.classList.remove('show');
+            const btn = document.getElementById('vn-btn-ctx');
+            if (btn) btn.classList.remove('active');
+        },
+        // 🛠️ 故事管理：開 OS_STORY_TOOLS 完整面板（大總結 + 編輯模板 + 合併 + 隱藏對話）。取代原 CTX 的「📝 大總結」快捷鈕。
+        openStoryTools: function() {
+            this.closeCtx();
+            const st = window.OS_STORY_TOOLS || (window.parent && window.parent.OS_STORY_TOOLS);
+            const cont = document.getElementById('page-game') || document.body;
+            if (st && typeof st.openPanel === 'function') st.openPanel(cont);
+            else alert('故事管理工具尚未載入');
         },
         _saveCtxLimit: function(val) {
             VN_CtxMonitor.saveLimit(val);
