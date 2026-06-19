@@ -186,6 +186,20 @@
         return ov;
     }
 
+    // profile 沒設 model（靠激活時的當前 model/preset 決定）→ sendRequest 直接送 profile.model=''（shared.js line448）→
+    // vertex/gemini 報「Gemini request is missing model」(Model=? 就是這個)。補：profile 無 model 時把奧瑞亞 config.model
+    // 塞進 overridePayload（shared.js line460 ...overridePayload 在 model 之後 → 蓋過空的 profile.model）。有設 model 的 profile 不動。
+    function _ensureModelOverride(ctx, profileId, ov, cfgModel) {
+        try {
+            const profs = (ctx && ctx.extensionSettings && ctx.extensionSettings.connectionManager && ctx.extensionSettings.connectionManager.profiles) || [];
+            const p = profs.find(x => x && x.id === profileId);
+            if (p && p.model) return ov;   // profile 自帶 model → 交給 ST、不覆寫
+            const m = (cfgModel && String(cfgModel).trim()) || '';
+            if (m) ov.model = m;           // profile 沒 model → 用奧瑞亞 config.model 補上
+        } catch (e) {}
+        return ov;
+    }
+
     function smartMergeMessages(msgList) {
         if (!msgList || msgList.length === 0) return [];
         const mergedList = [];
@@ -642,7 +656,8 @@
                             // 🍎＋選了 profile：交給酒館 ConnectionManager 用「該 profile 的完整連線」
                             // （來源 api / secret / preset / exclude / region 全照 profile）→ 真的打到 profile 的來源
                             // （vertexai / custom / claude…），不再只偷 model 名、卻把請求送去 ST 當前激活來源（會誤送別的連線）。
-                            const _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, ...extraParams });
+                            let _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, ...extraParams });
+                            _ov = _ensureModelOverride(_ctx, config.stProfileId, _ov, config.model);
                             const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
                                 config.stProfileId, cleanMessages, maxTokens, undefined, _ov
                             );
@@ -723,7 +738,8 @@
                         // 砍掉舊的 UI profile switching dance（之前會把 #connection_profiles select 切過去再切回來）
                         // 原因：並發呼叫會互相 abort 對方的 in-flight fetch，console 噴 "Canceled because main api changed"
                         // ST 的 sendRequest(profileId, ...) 本身就會用對應 profile 的 url/key/model，不需要 UI 同步切
-                        const _ov = _vertexOverride(context, stProfileId, { temperature, ...extraParams });
+                        let _ov = _vertexOverride(context, stProfileId, { temperature, ...extraParams });
+                        _ov = _ensureModelOverride(context, stProfileId, _ov, config.model);
                         const response = await context.ConnectionManagerRequestService.sendRequest(
                             stProfileId, cleanMessages, maxTokens, undefined, _ov
                         );
