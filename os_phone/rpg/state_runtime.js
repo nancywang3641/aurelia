@@ -564,6 +564,15 @@ ${numberedText}`;
             try {
                 const _lastArr = await win.TavernHelper?.getChatMessages?.(-1);
                 const _lastRaw = String((_lastArr && _lastArr[0] && (_lastArr[0].message || _lastArr[0].mes)) || '');
+                // 🚫 API 報錯佔位訊息(主模型生成失敗、錯誤字串被當正文寫進聊天)→ 不是真劇情：
+                //    整通副模型跳過，別拿錯誤字串抽 AVS／記憶／場景、白燒額度，也別寫髒 patch 卡住 swipe 重生的正解。
+                //    主路靠 ST 標準前綴 [API Error]；輔以「短訊息含 API 憑證錯誤特徵」(這些字串幾乎不會出現在劇情正文)。
+                const _errRaw = _lastRaw.trim();
+                if (/^\[API Error\]/i.test(_errRaw)
+                    || (_errRaw.length < 200 && /(x-api-key|invalid_credentials|Authentication required|API 返回內容為空)/i.test(_errRaw))) {
+                    console.log('🛰️ [State Runtime] 偵測到 API 報錯訊息 → 跳過本通抽取/記憶/場景，等重生補齊');
+                    return;
+                }
                 const _hasOpen = _lastRaw.indexOf('<content>') !== -1;
                 const _hasClose = _lastRaw.indexOf('</content>') !== -1;
                 const _vnFg = (() => { try { const p = win.document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && win.document.getElementById('page-game')); } catch (e) { return false; } })();
