@@ -260,10 +260,9 @@
             const specPrompt = (sceneCfg.specPrompt || '').trim();
             if (!specPrompt) { onFinish(storyText); return; }
 
-            // ── 依 promptStyle 決定 prompt 格式指令 ──────────────────────
-            const _rawStyle  = sceneCfg.promptStyle || 'auto';
+            // ── 依「插圖來源」決定 prompt 格式指令：NAI → 標籤、其餘 → 自然語言 ──
             const _globalSvc = ((typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('scene') : (win.OS_IMAGE_MANAGER?.config?.service)) || 'pollinations';
-            const _useNatural = _rawStyle === 'natural' || (_rawStyle === 'auto' && _globalSvc !== 'novelai');
+            const _useNatural = _globalSvc !== 'novelai';
 
             const _taskInstruction = _useNatural ? [
                 'Analyze the story and output a JSON array of scene-insertion points.',
