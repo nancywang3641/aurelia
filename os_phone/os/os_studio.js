@@ -79,6 +79,10 @@
                     </div>
                     <div class="studio-source-content" id="studio-source-content"></div>
                     <div id="studio-gallery-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+                            <button id="studio-spec-copy-btn" style="flex:1; min-width:190px; background:rgba(46,204,113,0.12); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📋 複製創建說明書（給你的 Claude／GPT 生成）</button>
+                            <button id="studio-import-btn" style="flex:1; min-width:150px; background:rgba(155,89,182,0.12); border:1px solid #9b59b6; color:#7d3cae; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📥 匯入面板（貼 AI 的 &lt;json&gt;）</button>
+                        </div>
                         <div class="studio-gallery-list" id="studio-gallery-list"></div>
                     </div>
                     <div class="studio-action-area">
@@ -107,6 +111,25 @@
                     <button class="avs-btn" id="raw-edit-save" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#2ecc71; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">💾 儲存</button>
                     <button class="avs-btn" id="raw-edit-reset" style="flex:0 0 100px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">↺ 重置</button>
                     <button class="avs-btn" id="raw-edit-cancel" style="flex:0 0 100px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 📥 匯入面板 modal（貼朋友自己的 AI 照「創建說明書」產的 <json> → 載入預覽 → 上面按💾存進展廳）-->
+        <div id="studio-import-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(6px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
+            <div style="max-width:900px; width:100%; max-height:90vh; background:#EEF0F6; border:1px solid #9b59b6; border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:12px; margin:auto; box-shadow:0 0 50px rgba(155,89,182,0.25);">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid rgba(155,89,182,0.3);">
+                    <strong style="font-size:15px; color:#7d3cae;">📥 匯入面板</strong>
+                    <div style="color:#9b59b6; cursor:pointer; font-size:20px;" id="studio-import-close">✕</div>
+                </div>
+                <div style="font-size:11px; color:rgba(125,60,174,0.85); line-height:1.6;">
+                    把你的 AI（Claude／GPT）照「📋 創建說明書」產出的 <strong>&lt;json&gt;…&lt;/json&gt;</strong> 整段貼進來，按「載入預覽」檢查；OK 後到上方按「💾 儲存」存進展廳，就能在劇情裡用了。
+                </div>
+                <textarea id="studio-import-textarea" placeholder="&lt;json&gt;{ ... }&lt;/json&gt;" style="flex:1; min-height:46vh; max-height:62vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
+                <div id="studio-import-status" style="font-size:11px; color:rgba(26,28,40,0.6); min-height:14px;"></div>
+                <div style="display:flex; gap:10px;">
+                    <button class="avs-btn" id="studio-import-load" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">載入預覽</button>
+                    <button class="avs-btn" id="studio-import-cancel" style="flex:0 0 100px; background:rgba(26,28,40,0.05); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">取消</button>
                 </div>
             </div>
         </div>
@@ -536,6 +559,100 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         loadMode(currentMode);
     }
 
+    // ── 📋 創建說明書：給朋友自己的 Claude／GPT 看的「對外」規格書，照它產出 <json> 就能匯入回來 ──
+    const STUDIO_CREATION_SPEC =
+`你要幫我做一個「奧瑞亞」視覺小說(VN)系統用的 UI 面板。它會在劇情進行時被一個標籤叫出來、嵌進故事畫面裡，用來顯示資料（例如狀態欄、角色卡、好感度、物品欄、獎勵結算等）。
+
+【最終輸出格式｜務必照這個，否則匯入不進去】
+只輸出一個 <json>…</json> 區塊，裡面是一個 JSON 物件，含這幾個鍵：
+- tagId：面板的英文標籤名（英數底線、簡短，例如 status_panel、reward_box）
+- isBlock：true=多行區塊資料、false=單行
+- html：面板 HTML 結構（字串）
+- css：面板 CSS（字串；所有選擇器父層用 .custom-status-panel 包住，避免污染外部）
+- js：互動 JS（字串，沒有就空字串 ""）
+- usageDesc：給「劇本 AI」的一句極簡用途說明
+- demoFormat：給「劇本 AI」填資料的格式範本（用佔位符、不要寫死真實內容）
+⚠️ JSON 字串值內的換行寫成 \\n、雙引號轉義成 \\"，不要直接斷行。
+
+【資料怎麼進面板｜重要，別寫死數值】
+面板顯示動態資料，用 {{欄位名}} 當佔位符，奧瑞亞跑劇情時會把真實值填進去：
+- 單一欄位：{{血量}}、{{金幣}}
+- 多筆（多角色／多物品）用迴圈：{{#each 列表名}} …單筆HTML… {{/each}}；迴圈內 {{@key}}=名稱、{{@avatar}}=頭像URL、{{欄位名}}=該筆的值。
+demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明顯佔位符風格（例如 {名稱}／{數值}），★絕對不要塞真實內容範例（劇本 AI 會照抄）。
+
+【三種顯示寬度｜一定響應式、不破版】
+面板會被放進三種外框：手機約 390px／桌面中間約 1000px／桌面全屏約 1920px。
+一律 width:100% / max-width / flex / grid / clamp() / 百分比，絕不寫死會破版的大固定像素寬。三種寬度都要排版正常、不溢出、不擠壞。根容器給合理 min-height，別讓內容少時塌成一條。
+
+【🚫 別做無聊面板｜這條最重要】
+禁止普通網頁卡片式 UI：禁止卡片套卡片、禁止單純 header+content+footer 堆疊、禁止普通圓角矩形列表、禁止只靠漸層陰影假高級。
+必須做成「主題化遊戲組件」：
+- 外形跟「這個面板的用途／主題」綁定（例如寶箱、卷軸、通訊終端、檔案夾、契約書、塔羅牌…依實際用途挑、別每次同一個）。
+- 資訊區融入主體結構（鎖孔、紙頁、機械螢幕、銘牌…），不要另開一個方塊貼上去。
+- 至少一個 SVG / CSS 造型元素當「視覺主體」（不是只當小圖示）。
+- 按鈕要像拉桿／封印／鑰匙孔／啟動核心這種跟主體一體成形的互動件。
+- 桌面版橫向展開用足空間，手機版再收窄；不要一開始就做成窄卡片。
+
+【按鈕文字】純內容就好，不要加 [ ] < > >> 之類 ASCII 裝飾，裝飾效果用 CSS 做。
+
+【你要做的】
+1. 先跟我確認：這個面板要顯示什麼資料、什麼主題、純展示還是要有互動。
+2. 照上面規則設計，最後給我那個 <json>…</json> 區塊（只要這一段，別包 markdown 圍欄）。
+3. 我會把它複製、貼回奧瑞亞創作室的「📥 匯入面板」→ 載入 → 儲存，就能在劇情裡用了。
+
+現在開始：先問我這個面板要做什麼。`;
+
+    function _fallbackCopy(text, done) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.focus(); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+            done && done();
+        } catch (e) { alert('複製失敗，請手動全選複製。'); }
+    }
+    function _copyCreationSpec() {
+        const btn = document.getElementById('studio-spec-copy-btn');
+        const done = () => { if (btn) { const t = btn.dataset._t || btn.textContent; btn.dataset._t = t; btn.textContent = '✅ 已複製！貼進你的 Claude／GPT'; setTimeout(() => { btn.textContent = btn.dataset._t; }, 1900); } };
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(STUDIO_CREATION_SPEC).then(done, () => _fallbackCopy(STUDIO_CREATION_SPEC, done));
+            } else { _fallbackCopy(STUDIO_CREATION_SPEC, done); }
+        } catch (e) { _fallbackCopy(STUDIO_CREATION_SPEC, done); }
+    }
+    function _doImportLoad() {
+        const ta = document.getElementById('studio-import-textarea');
+        const status = document.getElementById('studio-import-status');
+        const raw = (ta && ta.value || '').trim();
+        if (!raw) { if (status) status.textContent = '⚠️ 先把 <json> 內容貼進來'; return; }
+        currentParsedData = null;   // 匯入是「新面板」，別繼承上一個的 history
+        const ok = extractAndParseJson(raw);   // 解析成功會 set currentParsedData + 跑 renderPreviewPanel
+        if (ok && currentParsedData && !Array.isArray(currentParsedData) && currentParsedData.tagId && currentParsedData.html) {
+            if (status) status.textContent = '✅ 已載入！這視窗會自動關 → 上方切「預覽」檢查 → 按「💾 儲存」存進展廳。';
+            try { document.querySelector('.studio-tab[data-tab="preview"]') && document.querySelector('.studio-tab[data-tab="preview"]').click(); } catch (e) {}
+            setTimeout(() => { const m = document.getElementById('studio-import-modal'); if (m) m.style.display = 'none'; }, 1000);
+        } else {
+            if (status) status.textContent = '❌ 解析失敗或缺 tagId／html。確認貼的是完整 <json>{…}</json>（含七個鍵），再試一次。';
+        }
+    }
+    function _setupImportEvents() {
+        const specBtn = document.getElementById('studio-spec-copy-btn');
+        if (specBtn) specBtn.onclick = _copyCreationSpec;
+        const impBtn = document.getElementById('studio-import-btn');
+        if (impBtn) impBtn.onclick = () => {
+            const m = document.getElementById('studio-import-modal');
+            const ta = document.getElementById('studio-import-textarea');
+            const st = document.getElementById('studio-import-status');
+            if (ta) ta.value = ''; if (st) st.textContent = '';
+            if (m) m.style.display = 'flex';
+        };
+        const closeImp = () => { const m = document.getElementById('studio-import-modal'); if (m) m.style.display = 'none'; };
+        const c1 = document.getElementById('studio-import-close'); if (c1) c1.onclick = closeImp;
+        const c2 = document.getElementById('studio-import-cancel'); if (c2) c2.onclick = closeImp;
+        const md = document.getElementById('studio-import-modal'); if (md) md.onclick = (e) => { if (e.target && e.target.id === 'studio-import-modal') closeImp(); };
+        const ld = document.getElementById('studio-import-load'); if (ld) ld.onclick = _doImportLoad;
+    }
+
     function bindEvents() {
         document.getElementById('studio-back-btn').onclick = () => document.getElementById('os_studio_app').remove();
         document.querySelectorAll('.studio-mode-tab').forEach(mt => {
@@ -547,6 +664,7 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
             };
         });
         _setupRawEditModalEvents();
+        _setupImportEvents();
 
         const previewFab     = document.getElementById('studio-preview-fab');
         const drawerBackdrop = document.getElementById('studio-drawer-backdrop');
