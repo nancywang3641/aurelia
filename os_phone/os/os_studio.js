@@ -422,7 +422,7 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
 4. \x60st\x60: helper 物件，三個核心 API（**寫面板優先用這些，免疫所有出錯雷區**）：
    - \x60st.parse()\x60 → 把 lines 解析成 \x60{ TagName: [[field1, field2, ...], ...] }\x60
    - \x60st.md(text)\x60 → 把 markdown 粗體/斜體/inline code 轉成 HTML（內建所有 regex，免疫 $1 雷區）
-   - \x60st.setImage(el, prompt, type)\x60 → 給 \x60<img>\x60 設圖（內建預覽隔離 + try/catch；type: 'char' / 'item' / 'pet' / 'scene'）
+   - \x60st.setImage(el, prompt, type, provider?)\x60 → 給 \x60<img>\x60 設圖（內建預覽隔離 + try/catch；type: 'char' / 'item' / 'pet' / 'scene'）。第 4 參 provider 可選＝指定生圖來源：\x60'pollinations'\x60 / \x60'novelai'\x60 / \x60'tavern_sd'\x60 / \x60'comfyui_direct'\x60；不傳就走用戶全域設定。★用戶指定這個面板要用哪個來源時（例如「用 poll ai」→\x60'pollinations'\x60、「用 NAI」→\x60'novelai'\x60）就把它填進第 4 參、寫死在面板裡。
    - \x60st.callAI(systemPrompt)\x60 → Promise<string>：呼叫 AI 生成「文字」並回傳純文字。systemPrompt 寫清楚你要什麼內容與輸出格式即可（它會自動帶上角色卡/最近劇情/角色世界書當背景，不必重述設定）。適合「按鈕一點即時生成新內容」這種功能；每次 await 包 try/catch、生成中顯示 loading。
 5. 不可設計成幾秒把面板消失，要用按鈕/點擊觸發關閉（可以是按鈕也可以是「灰字點擊繼續」樣式）。
 6. ⚠️ 絕對禁止在 CSS 使用 \x60position: fixed\x60、\x60100vw\x60 或 \x60100vh\x60！
@@ -1889,13 +1889,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 });
                 return result;
             },
-            async setImage(el, prompt, type) {
+            async setImage(el, prompt, type, provider) {
                 if (!el || !prompt) return;
                 type = type || 'scene';
                 try {
                     const url = window.__IS_PREVIEW
                         ? ('https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt))
-                        : (imgManager ? await imgManager.generate(prompt, type) : '');
+                        : (imgManager ? await imgManager.generate(prompt, type, { provider: provider }) : '');
                     if (url) el.src = url;
                 } catch(e) {
                     console.error('[preview] setImage 失敗:', e);
@@ -1939,7 +1939,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             + 'var st={'
             +   'md:function(t){return t||"";},'
             +   'parse:function(){return {};},'
-            +   'setImage:async function(el,p,type){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene");if(u)el.src=u;}}catch(e){}},'
+            +   'setImage:async function(el,p,type,provider){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene",provider);if(u)el.src=u;}}catch(e){}},'
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
             +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
             + '};'
@@ -2030,14 +2030,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         });
         return result;
       },
-      setImage: async function(el, prompt, type){
+      setImage: async function(el, prompt, type, provider){
         if (!el || !prompt) return;
         type = type || 'scene';
         var ph = 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt);
         el.src = ph;   // 先放佔位（不破圖），成功再換真圖
         if (window.__IS_PREVIEW) return;
         try {
-          var url = imgManager ? await imgManager.generate(prompt, type) : '';
+          var url = imgManager ? await imgManager.generate(prompt, type, { provider: provider }) : '';
           if (url) el.src = url;
         } catch(e) {
           console.error('[${safeTagId}] setImage 失敗(保留佔位):', e);

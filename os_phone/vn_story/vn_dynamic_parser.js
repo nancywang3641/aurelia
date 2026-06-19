@@ -112,14 +112,14 @@
                     });
                     return result;
                 },
-                setImage: async function(el, prompt, type) {
+                setImage: async function(el, prompt, type, provider) {
                     if (!el || !prompt) return;
                     type = type || 'scene';
                     const ph = 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt);
                     el.src = ph;   // 先放佔位（生成慢/失敗都不破圖），成功再換成真圖
                     if (window.__IS_PREVIEW) return;
                     try {
-                        const url = imgManager ? await imgManager.generate(prompt, type) : '';
+                        const url = imgManager ? await imgManager.generate(prompt, type, { provider: provider }) : '';
                         if (url) el.src = url;
                     } catch(e) { console.error('[VN Parser] setImage 失敗(保留佔位):', e); }
                 },
