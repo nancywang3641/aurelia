@@ -542,6 +542,12 @@
     };
 
     AureliaControlCenter.hide = function() {
+        // 🛟 任何關閉路徑（🏰 toggle / smartToggle / 切面板 / requestClose）都先把
+        // html_extractor / StoryExtractor 劫持的 #form_sheld 還回原位，否則 overlay 被藏起來時
+        // 酒館原生輸入框會跟著一起被孤兒化消失。放在唯一咽喉 hide()，避免個別呼叫點漏還原。
+        try { if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) window.AureliaHtmlExtractor.hide(); } catch (_) {}
+        try { if (window.StoryExtractor && window.StoryExtractor.isVisible) window.StoryExtractor.hide(); } catch (_) {}
+
         if (!isVisible) return;
         if (isFullscreen) AureliaControlCenter.exitFullscreen();
         if (isEmbedded) AureliaControlCenter.unmountEmbedded();
@@ -566,10 +572,8 @@
     AureliaControlCenter.hideVnPanel = hideVnPanel;
 
     // 收掉整個奧瑞亞（大廳 MAIN MENU 的「關閉」走這條）。
-    // 先還原 html_extractor / StoryExtractor 劫持的 #form_sheld，否則酒館輸入框會跟著消失。
+    // #form_sheld 的還原已統一收進 hide()，這裡直接委派即可。
     AureliaControlCenter.requestClose = function() {
-        try { if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) window.AureliaHtmlExtractor.hide(); } catch (_) {}
-        try { if (window.StoryExtractor && window.StoryExtractor.isVisible) window.StoryExtractor.hide(); } catch (_) {}
         AureliaControlCenter.hide();
     };
 
