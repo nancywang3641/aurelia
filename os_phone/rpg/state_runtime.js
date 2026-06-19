@@ -556,6 +556,18 @@ ${numberedText}`;
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
 
+            // ── 截斷守門：最新正文有 <content> 卻沒 </content> = 半截(破甲/中途停) → 整通副模型跳過：
+            //    別拿髒正文抽 AVS／記憶／場景，也別白燒一張圖。「繼續生成」補齊後 GENERATION_ENDED 會再觸發、收尾完整就正常抽。
+            //    讀「完整原文」判斷(不切片，避免長正文的結尾被截到誤判)；非 VN 格式(根本沒 <content>)不擋。
+            try {
+                const _lastArr = await win.TavernHelper?.getChatMessages?.(-1);
+                const _lastRaw = String((_lastArr && _lastArr[0] && (_lastArr[0].message || _lastArr[0].mes)) || '');
+                if (_lastRaw.indexOf('<content>') !== -1 && _lastRaw.indexOf('</content>') === -1) {
+                    console.log('🛰️ [State Runtime] 正文截斷(缺 </content>) → 跳過本通抽取，等「繼續生成」補齊再抽');
+                    return;
+                }
+            } catch (e) {}
+
             const schema = await getActiveSchema();
             const hasState = !!(schema && Object.keys(schema).length);
 
