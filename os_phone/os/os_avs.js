@@ -15,6 +15,7 @@
     let currentPacks = [];
     let currentTemplates = [];
     let activeEditingPack = null;
+    let _furnaceRefineTpl = null;   // 非 null = 煉丹爐開在「✏️ 微調(diff)」模式，值＝正在微調的面板 tpl
 
     async function launchApp(container) {
         container.innerHTML = `
@@ -117,7 +118,7 @@
                 <div id="avs-furnace-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
                     <div style="max-width:600px; width:100%; background:#EEF0F6; border:1px solid rgba(26,28,40,0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(26,28,40,0.10); margin:auto;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(26,28,40,0.15);">
-                            <strong style="font-size:16px; color:#1A1C28;">🔥 煉丹爐 · 為檔案煉個 UI 面板</strong>
+                            <strong id="furnace-modal-title" style="font-size:16px; color:#1A1C28;">🔥 煉丹爐 · 為檔案煉個 UI 面板</strong>
                             <div style="color:#1A1C28; cursor:pointer; font-size:20px;" id="avs-furnace-close">✕</div>
                         </div>
                         <div class="avs-card" id="furnace-card" style="background:transparent; border:none; padding:0;">
@@ -395,8 +396,9 @@ ${lines.join('\n')}
     }
 
     // 🔥 開煉丹爐 modal（永遠帶 packId，從變數包卡片內按鈕進入）
-    function openFurnaceModal(container, packId) {
+    function openFurnaceModal(container, packId, refineTpl) {
         if (!packId) { console.warn('[AVS] openFurnaceModal 需要 packId'); return; }
+        _furnaceRefineTpl = refineTpl || null;   // 有帶 tpl = 微調(diff)模式；沒帶 = 新建(全生成)
         const modal = container.querySelector('#avs-furnace-modal');
         const displayName = container.querySelector('#furnace-pack-display-name');
         const select = container.querySelector('#furnace-pack-select');
@@ -406,12 +408,119 @@ ${lines.join('\n')}
         const pack = currentPacks.find(p => p.id === packId);
         if (displayName) displayName.textContent = pack ? pack.name : '?';
         if (select) select.value = packId;
+
+        // 切換「新建 / 微調」兩種模式的文案（同一個彈窗共用）
+        const titleEl  = container.querySelector('#furnace-modal-title');
+        const styleEl  = container.querySelector('#furnace-style-prompt');
+        const startEl  = container.querySelector('#furnace-start-btn');
+        const presetEl = container.querySelector('#furnace-presets-wrap');
+        const logEl    = container.querySelector('#furnace-log-output');
+        if (_furnaceRefineTpl) {
+            if (titleEl)  titleEl.textContent = '✏️ 微調面板 · 只改你說的、其他不動';
+            if (styleEl)  { styleEl.value = ''; styleEl.placeholder = '說你要改哪裡，例如：標題字大一點、邊框改金色、血條改紅色（只動你說的，其他保留）'; }
+            if (startEl)  startEl.textContent = '✏️ 套用微調';
+            if (presetEl) presetEl.style.display = 'none';   // 微調不需要風格預設
+            if (logEl)    logEl.innerHTML = '說一句要改的地方，我只動那裡、不重做整份。';
+        } else {
+            if (titleEl)  titleEl.textContent = '🔥 煉丹爐 · 為檔案煉個 UI 面板';
+            if (styleEl)  styleEl.placeholder = '例如：賽博龐克風格、霓虹發光、半透明玻璃\n或點上方「載入風格建議」快速填入';
+            if (startEl)  startEl.textContent = '🔥 開始煉丹';
+            if (logEl)    logEl.innerHTML = '等待點火...';
+            try { _refreshFurnacePresets(container, packId); } catch (e) {}   // 重評風格建議顯示（剛從微調模式切回來時把它復原）
+        }
+
         if (modal) modal.style.display = 'flex';
     }
 
     function closeFurnaceModal(container) {
         const modal = container.querySelector('#avs-furnace-modal');
         if (modal) modal.style.display = 'none';
+        _furnaceRefineTpl = null;
+    }
+
+    // ── ✏️ 微調(diff)：只送差異、不整份重生（省 token、保留沒改的）。同創作室的 find/replace 概念，套在狀態面板的 CSS+HTML ──
+    function _buildFurnaceDiffPrompt(css, html, refineMsg) {
+        return `你是 UI 工程師。用戶已有一個狀態面板（CSS + HTML），給你一個修改要求。\n` +
+            `產生精準的「替換指令」(find / replace)，只改用戶要的、其他一字不動，不要重寫整份。\n\n` +
+            `【保守鐵則 — 絕對遵守】\n` +
+            `- 只動用戶明確要求的部分；沒被指名的（含結構、{{變數名}}、{{#each}}…{{/each}} 佔位符）一律不要碰，即使你覺得能更好。\n` +
+            `- {{...}} 佔位符是資料插槽，絕對不可改名、刪除、增減——動到面板就空白或報錯。\n\n` +
+            `### 當前面板\n` +
+            `[--- CSS BEGIN ---]\n${css}\n[--- CSS END ---]\n\n` +
+            `[--- HTML BEGIN ---]\n${html}\n[--- HTML END ---]\n\n` +
+            `### 用戶要改\n「${refineMsg}」\n\n` +
+            `### 輸出規範（只輸出 <patch> 區塊，其他什麼都別寫）\n` +
+            `對每個改動輸出一個 <patch>：\n` +
+            `<patch target="css">\n` +
+            `<find>原始片段（必須跟上面當前面板【完全一致、一字不差】，含空白與換行）</find>\n` +
+            `<replace>新片段</replace>\n` +
+            `</patch>\n\n` +
+            `規則：\n` +
+            `1. target 只能是 css 或 html。\n` +
+            `2. find 必須在該 target 的內容裡【唯一存在】：挑夠長夠特別的片段；找不到或出現多次都會被放棄、改不到。\n` +
+            `3. 可以一次輸出多個 <patch>（改多處都行）。\n` +
+            `4. 不要輸出 JSON、不要用 markdown 圍欄包住；<patch> 區塊內只能有 <find> 和 <replace>，不要夾對話。\n` +
+            `5. 若這次其實是「大改」（要動很多處才達得到），不要硬湊 → 只輸出單獨一行 <too_big/>，讓用戶改按「重新煉丹」整份重做。`;
+    }
+
+    // 解析 <patch> 並對 tpl 的 cssContent / htmlContent 做字串替換（find 須唯一，否則放棄該條保護面板）。回 { applied, msg? }
+    function _applyFurnaceDiffPatches(responseText, tpl) {
+        if (/<too_big\s*\/?\s*>/i.test(responseText)) {
+            return { applied: 0, msg: 'AI 認為這次要改的範圍太大、不適合微調，請按「🔄 重新煉丹」整份重做。' };
+        }
+        const FIELD = { css: 'cssContent', html: 'htmlContent' };
+        const patchRegex = /<patch\s+target=["']([^"']+)["']\s*>([\s\S]*?)<\/patch>/gi;
+        let applied = 0, m;
+        while ((m = patchRegex.exec(responseText)) !== null) {
+            const field = FIELD[m[1].trim().toLowerCase()];
+            if (!field) continue;
+            const findM = m[2].match(/<find>([\s\S]*?)<\/find>/i);
+            const repM  = m[2].match(/<replace>([\s\S]*?)<\/replace>/i);
+            if (!findM || !repM) continue;
+            const findStr = findM[1];
+            if (!findStr || findStr.trim() === '') continue;
+            const orig = tpl[field] || '';
+            const occ = orig.split(findStr).length - 1;
+            if (occ !== 1) continue;   // 0=找不到、>1=不唯一 → 放棄，別亂改毀面板
+            tpl[field] = orig.split(findStr).join(repM[1]);
+            applied++;
+        }
+        return { applied };
+    }
+
+    async function _runFurnaceRefine(container) {
+        const tpl = _furnaceRefineTpl;
+        const log = container.querySelector('#furnace-log-output');
+        const btn = container.querySelector('#furnace-start-btn');
+        const refineMsg = (container.querySelector('#furnace-style-prompt').value || '').trim();
+        if (!tpl) { if (log) log.innerHTML = '⚠️ 沒有可微調的面板'; return; }
+        if (!refineMsg) { if (log) log.innerHTML = '⚠️ 說一句你要改哪裡'; return; }
+        if (log) log.innerHTML = '✏️ 微調中…只動你說的地方';
+        if (btn) btn.disabled = true;
+        try {
+            const prompt = _buildFurnaceDiffPrompt(tpl.cssContent || '', tpl.htmlContent || '', refineMsg);
+            const full = await (
+                win.OS_API_ENGINE?.generateText?.('general_assistant', prompt) ||
+                Promise.reject(new Error('API 引擎未就緒'))
+            );
+            if (!full) throw new Error('AI 回傳空白');
+            const res = _applyFurnaceDiffPatches(full, tpl);
+            if (res.applied === 0) {
+                if (log) log.innerHTML = '⚠️ ' + (res.msg || '沒改到（AI 沒給有效修改、或定位不到原文）。換更具體的說法，或按「🔄 重新煉丹」整份重做。');
+                return;
+            }
+            await win.OS_DB.saveUITemplate(tpl);   // 同 id 覆寫、只改了 css/html
+            if (log) log.innerHTML = `🎉 已微調 ${res.applied} 處！`;
+            currentTemplates = await win.OS_DB.getAllUITemplates();
+            try { updateActiveTemplatesCache(); } catch (e) {}
+            renderPackList(container);
+            setTimeout(() => closeFurnaceModal(container), 1200);
+        } catch (e) {
+            console.error('[AVS Furnace Refine]', e);
+            if (log) log.innerHTML = `❌ 微調失敗：${e.message}`;
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 
     function renderPackList(container) {
@@ -489,9 +598,12 @@ ${lines.join('\n')}
                             ${previewHtml || '<span style="color:rgba(26,28,40,0.20);font-size:12px;">（無預覽內容）</span>'}
                         </div>
                     </div>
+                    <div style="display:flex; gap:8px; margin-bottom:6px;">
+                        <div class="avs-btn avs-btn-primary btn-refine-tpl" style="flex:1; padding:6px; font-size:12px;">✏️ 微調（只改你說的、省）</div>
+                        <div class="avs-btn avs-btn-outline btn-refurnace" style="flex:1; padding:6px; font-size:12px;">🔄 重新煉丹</div>
+                    </div>
                     <div style="display:flex; gap:8px;">
                         <div class="avs-btn avs-btn-outline btn-toggle-active" style="flex:1; padding:6px; font-size:12px;">${activeTpl.isActive ? '✓ 取消啟用' : '設為啟用'}</div>
-                        <div class="avs-btn avs-btn-outline btn-refurnace" style="flex:1; padding:6px; font-size:12px;">🔄 重新煉丹</div>
                         <div class="avs-btn avs-btn-danger btn-del-tpl" style="padding:6px 12px; font-size:12px;">🗑</div>
                     </div>
                 `;
@@ -520,6 +632,7 @@ ${lines.join('\n')}
                     updateActiveTemplatesCache();
                     renderPackList(container);
                 };
+                uiArea.querySelector('.btn-refine-tpl').onclick = () => openFurnaceModal(container, pack.id, activeTpl);
                 uiArea.querySelector('.btn-refurnace').onclick = () => openFurnaceModal(container, pack.id);
                 uiArea.querySelector('.btn-del-tpl').onclick = async () => {
                     if (!confirm(`刪除這個檔案對應的 UI 面板？檔案本身保留。`)) return;
@@ -1221,6 +1334,8 @@ ${lines.join('\n')}
         _refreshFurnacePresets(container, packSelect.value);
 
         container.querySelector('#furnace-start-btn').onclick = async () => {
+            // ✏️ 微調(diff)模式：走 find/replace、只改你說的；其他保留。跟「重新煉丹」全生成分流。
+            if (_furnaceRefineTpl) { await _runFurnaceRefine(container); return; }
             const packId = container.querySelector('#furnace-pack-select').value;
             const pack = currentPacks.find(p => p.id === packId);
             if (!pack) return;
