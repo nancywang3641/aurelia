@@ -1560,19 +1560,20 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-panel-btn.active { background: rgba(212,175,55,0.1); color: var(--gold); border-color: var(--gold); }
 
         /* --- 上下文監控浮窗 --- */
+        /* 📊 CTX 浮窗：#page-game 直屬置中 modal（對話/末尾共用、不再搬元素 / 不再浮右上）。z-index 80：高於 end-overlay(15)、低於故事管理 ost-overlay(120) */
         #vn-ctx-popup {
-            display: none; position: absolute; bottom: calc(100% + 8px); right: 0;
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: linear-gradient(135deg, #050505 0%, #0a0a0c 100%);
             border: 1px solid rgba(212,175,55,0.35); border-radius: 4px;
-            padding: 10px 14px; min-width: 280px; max-width: 360px; max-height: 70vh;
-            overflow-y: auto; z-index: 999;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.95), 0 0 12px rgba(212,175,55,0.08);
+            padding: 12px 16px; width: 340px; max-width: calc(100% - 32px); max-height: 82vh;
+            overflow-y: auto; z-index: 80;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.95), 0 0 16px rgba(212,175,55,0.1);
             pointer-events: auto; scrollbar-width: thin; scrollbar-color: #222 transparent;
         }
         #vn-ctx-popup.show { display: block; }
-        /* 劇情末尾「CTX」鈕：popup 搬到末尾覆蓋層當獨立浮窗（不牽連對話面板），固定右側、自身限高可捲動 */
-        #vn-ctx-popup.vn-ctx-endfloat { position: absolute; top: 24px; right: 28px; left: auto; bottom: auto; max-height: calc(100% - 48px); overflow-y: auto; z-index: 20; pointer-events: auto; }
-        .ctx-title { color: var(--gold); font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid rgba(212,175,55,0.2); padding-bottom: 5px; font-family: var(--font-sans); }
+        .ctx-title { display: flex; justify-content: space-between; align-items: center; color: var(--gold); font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid rgba(212,175,55,0.2); padding-bottom: 5px; font-family: var(--font-sans); }
+        .ctx-close { cursor: pointer; color: #888; font-size: 0.95rem; line-height: 1; padding: 0 2px; transition: color 0.2s; }
+        .ctx-close:hover { color: var(--gold); }
         .ctx-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; gap: 16px; }
         .ctx-label { color: #777; font-size: 0.7rem; letter-spacing: 1px; font-family: var(--font-sans); }
         .ctx-val { color: #ddd; font-size: 0.8rem; font-variant-numeric: tabular-nums; font-family: var(--font-sans); }
