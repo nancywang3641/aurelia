@@ -3670,7 +3670,8 @@
                             '<button class="vn-trunc-btn" id="vn-trunc-cont">繼續生成</button>' +
                             '<button class="vn-trunc-btn" id="vn-trunc-close">關閉</button>' +
                         '</div>';
-                    (document.getElementById('page-game') || document.body).appendChild(b);
+                    // 掛到頂層 body（不掛 page-game）→ 搭配 fixed + 高 z-index 浮在資訊中心 overlay(9999) 之上，不被擋住
+                    document.body.appendChild(b);
                     b.querySelector('#vn-trunc-regen').onclick = _rerollTrunc;
                     b.querySelector('#vn-trunc-cont').onclick = _continueTrunc;
                     b.querySelector('#vn-trunc-close').onclick = function () { _hideTruncBanner(); try { window.VN_Core._hideWriterCurtain(); } catch (e) {} };
