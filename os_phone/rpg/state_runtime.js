@@ -556,14 +556,20 @@ ${numberedText}`;
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
 
-            // ── 截斷守門：最新正文有 <content> 卻沒 </content> = 半截(破甲/中途停) → 整通副模型跳過：
-            //    別拿髒正文抽 AVS／記憶／場景，也別白燒一張圖。「繼續生成」補齊後 GENERATION_ENDED 會再觸發、收尾完整就正常抽。
-            //    讀「完整原文」判斷(不切片，避免長正文的結尾被截到誤判)；非 VN 格式(根本沒 <content>)不擋。
+            // ── 截斷守門：半截正文(破甲/中途停)→ 整通副模型跳過：別拿髒正文抽 AVS／記憶／場景，也別白燒一張圖。
+            //    「繼續生成／重新生成」補齊後 GENERATION_ENDED 會再觸發、收尾完整就正常抽（同一 msgId 重生，故這通若已寫髒 patch 會擋住重抽，所以這裡要擋乾淨）。
+            //    讀「完整原文」判斷(不切片，避免長正文結尾被截誤判)。兩種截斷：
+            //    ① 有 <content> 沒 </content> = 截在正文中（任何聊天都擋）
+            //    ② VN 前景但連 <content> 都沒有 = 思考期就截、正文還沒冒出來（只在 VN 模式擋，避免誤傷非 VN 訊息；建檔/套預設初始填充 skipScenes 不擋，怕卡片問候語沒 <content>）
             try {
                 const _lastArr = await win.TavernHelper?.getChatMessages?.(-1);
                 const _lastRaw = String((_lastArr && _lastArr[0] && (_lastArr[0].message || _lastArr[0].mes)) || '');
-                if (_lastRaw.indexOf('<content>') !== -1 && _lastRaw.indexOf('</content>') === -1) {
-                    console.log('🛰️ [State Runtime] 正文截斷(缺 </content>) → 跳過本通抽取，等「繼續生成」補齊再抽');
+                const _hasOpen = _lastRaw.indexOf('<content>') !== -1;
+                const _hasClose = _lastRaw.indexOf('</content>') !== -1;
+                const _vnFg = (() => { try { const p = win.document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && win.document.getElementById('page-game')); } catch (e) { return false; } })();
+                const _isInitFill = !!(opts && opts.skipScenes);
+                if ((_hasOpen && !_hasClose) || (_vnFg && !_hasOpen && !_isInitFill)) {
+                    console.log('🛰️ [State Runtime] 正文截斷 → 跳過本通抽取，等補齊/重生再抽');
                     return;
                 }
             } catch (e) {}
