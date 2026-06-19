@@ -3622,6 +3622,9 @@
             // 完整 = 同時有 </content>(正文收尾) 與 </summary>(摘要收尾、每輪最後必有)；缺任一 = 截斷（破甲偶爾會截）
             function _isComplete(t) { return t.indexOf('</content>') !== -1 && t.indexOf('</summary>') !== -1; }
             let _truncMsgId = null;
+            // VN 是否正在前景（玩家在看故事）→ 此時主模型這通理應產出 <content>…</content>，沒收尾＝截斷。
+            // 用來判斷「連 <content> 都還沒生出來就截斷(思考期截)」要不要當截斷，避免誤傷非 VN 的一般聊天訊息。
+            function _vnVisibleNow() { const p = document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && document.getElementById('page-game')); }
             function _hideTruncBanner() { const b = document.getElementById('vn-trunc-banner'); if (b) b.classList.remove('show'); }
             // 重試：/regenerate(整則重生，破甲截斷首選) 或 /continue(接著補寫，乾淨早停用)。
             // 兩者都先放行這則重新被偵測，補/重生完走原本的 MESSAGE_RECEIVED 輪詢→_apply（同一般訊息路徑，不額外跑 loadScript）。
@@ -3703,6 +3706,8 @@
 
                 try {
                     const text = _readMsgText(messageId);
+                    // 沒 <content> → 還在思考期或非 VN 訊息：這裡不啟動停止增長偵測（思考可能 >12s 卡住會誤判截斷）。
+                    // 「思考期就截斷」改由 GENERATION_ENDED（真結束才判）安全攔截，不在串流中亂猜。
                     if (!text.includes('<content>')) { _processedIds.delete(messageId); return; }
 
                     // ⛔ 鐵律：沒有 </content> 收尾＝AI 還在輸出（TauriTavern 事件來得早）→ 不放行。
@@ -3754,9 +3759,9 @@
                     setTimeout(() => {
                         try {
                             const text = _readMsgText(messageId);
-                            if (!text || text.indexOf('<content>') === -1) return;   // 非 VN 正文不管
-                            if (_isComplete(text)) _hideTruncBanner();   // 完整 → 收橫幅（套用由輪詢負責）
-                            else _showTruncBanner(messageId);            // 缺收尾 → 疊橫幅通知
+                            if (_isComplete(text)) { _hideTruncBanner(); return; }   // 完整(<content>+<summary> 都收尾) → 收橫幅
+                            // 不完整：①有 <content> = VN 正文截在中間 ②連 <content> 都沒有(思考期就截)→ 只在 VN 前景時當截斷(避免誤判非 VN 訊息)
+                            if (text.indexOf('<content>') !== -1 || _vnVisibleNow()) _showTruncBanner(messageId);
                         } catch (e) {}
                     }, 600);
                 });
