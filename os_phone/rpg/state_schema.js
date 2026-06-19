@@ -17,7 +17,7 @@
 
     const CONFIG = {
         headMessages: 6,    // 開頭幾條訊息餵給副模型參考
-        timeoutMs: 60000,
+        timeoutMs: 180000,  // schema 走「主模型」生成、量大(MaxTokens 上萬)；推理模型(gemini-3.x-pro/o系)常要 60~120s → 60s 太短會在它回來前就誤判超時、白等又重試。拉到 3 分鐘容納慢模型
         retryCount: 2,
         minFields: 4,
         maxFields: 15
