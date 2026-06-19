@@ -3618,6 +3618,43 @@
 
             const _waitTimers = {};   // messageId → interval（等 </content> 收尾）
 
+            // ── ⚠️ 正文截斷偵測（純通知器，★絕不呼叫 _apply：那會多跑 loadScript→吃掉場景插圖 splice，beac410 就是栽在這）──
+            // 完整 = 同時有 </content>(正文收尾) 與 </summary>(摘要收尾、每輪最後必有)；缺任一 = 截斷（破甲偶爾會截）
+            function _isComplete(t) { return t.indexOf('</content>') !== -1 && t.indexOf('</summary>') !== -1; }
+            let _truncMsgId = null;
+            function _hideTruncBanner() { const b = document.getElementById('vn-trunc-banner'); if (b) b.classList.remove('show'); }
+            function _continueTrunc() {
+                _hideTruncBanner();
+                const th = window.TavernHelper || (window.parent && window.parent.TavernHelper) || (window.top && window.top.TavernHelper);
+                if (!th || typeof th.triggerSlash !== 'function') { try { (window.toastr || (window.parent && window.parent.toastr)).warning('找不到酒館助手，請回酒館手動繼續'); } catch (e) {} return; }
+                // 讓這則能重新被偵測/套用（續寫補齊後走原本的 MESSAGE_RECEIVED 輪詢→_apply，跟一般訊息同路徑）
+                if (_truncMsgId != null) {
+                    _processedIds.delete(_truncMsgId);
+                    if (_waitTimers[_truncMsgId]) { clearInterval(_waitTimers[_truncMsgId]); delete _waitTimers[_truncMsgId]; }
+                }
+                try { window.VN_Core._showWriterCurtain(); } catch (e) {}
+                th.triggerSlash('/continue').catch(function () {});
+            }
+            function _showTruncBanner(messageId) {
+                _truncMsgId = messageId;
+                let b = document.getElementById('vn-trunc-banner');
+                if (!b) {
+                    b = document.createElement('div');
+                    b.id = 'vn-trunc-banner';
+                    b.innerHTML =
+                        '<div class="vn-trunc-msg">⚠️ 正文被截斷</div>' +
+                        '<div class="vn-trunc-sub">沒收到結尾（缺 &lt;/content&gt; 或 &lt;/summary&gt;）</div>' +
+                        '<div class="vn-trunc-btns">' +
+                            '<button class="vn-trunc-btn vn-trunc-primary" id="vn-trunc-cont">繼續生成</button>' +
+                            '<button class="vn-trunc-btn" id="vn-trunc-close">關閉</button>' +
+                        '</div>';
+                    (document.getElementById('page-game') || document.body).appendChild(b);
+                    b.querySelector('#vn-trunc-cont').onclick = _continueTrunc;
+                    b.querySelector('#vn-trunc-close').onclick = function () { _hideTruncBanner(); try { window.VN_Core._hideWriterCurtain(); } catch (e) {} };
+                }
+                b.classList.add('show');
+            }
+
             function _readMsgText(messageId) {
                 let text = '';
                 const stCtx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
@@ -3641,6 +3678,7 @@
             }
 
             function _apply(text, messageId) {
+                _hideTruncBanner();   // 真的套用到劇本了 → 收掉截斷橫幅（純 DOM，不影響套用流程）
                 const _vnPanel = document.getElementById('aurelia-vn-panel');
                 const _vnVisible = _vnPanel && _vnPanel.style.display !== 'none';
                 if (_vnVisible && document.getElementById('page-game')) {
@@ -3670,17 +3708,28 @@
                         try { window.VN_Core._showWriterCurtain(); } catch (e) {}
                         if (_waitTimers[messageId]) return;
                         const t0 = Date.now();
+                        let _lastLen = -1, _stall = 0;
                         _waitTimers[messageId] = setInterval(() => {
                             const t = _readMsgText(messageId);
                             if (t.includes('</content>')) {
                                 clearInterval(_waitTimers[messageId]); delete _waitTimers[messageId];
                                 console.log('[PhoneOS] 自動偵測：</content> 收尾偵測到，套用完整劇本');
                                 try { _apply(t, messageId); } catch (e) { console.error('[PhoneOS] 自動偵測失敗:', e); _processedIds.delete(messageId); }
-                            } else if ((Date.now() - t0) > 300000) {
+                                return;
+                            }
+                            // 停止增長偵測：串流中字數會長、截斷/卡住就凍住 → 約 12 秒沒長即疑似截斷，疊橫幅通知（仍續輪詢，真補上 </content> 照樣套用）
+                            if (t.length === _lastLen) _stall++; else { _stall = 0; _lastLen = t.length; }
+                            if (_stall === 8) {
+                                try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
+                                console.warn('[PhoneOS] 自動偵測：正文停止增長且無 </content> → 疑似截斷 (訊息 ID:', messageId, ')');
+                                _showTruncBanner(messageId);
+                            }
+                            if ((Date.now() - t0) > 300000) {
                                 clearInterval(_waitTimers[messageId]); delete _waitTimers[messageId];
                                 _processedIds.delete(messageId);
                                 try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
-                                console.warn('[PhoneOS] 自動偵測：等 </content> 超時，放棄 (訊息 ID:', messageId, ')');
+                                _showTruncBanner(messageId);
+                                console.warn('[PhoneOS] 自動偵測：等 </content> 超時 (訊息 ID:', messageId, ')');
                             }
                         }, 1500);
                         return;
@@ -3693,9 +3742,25 @@
                 }
             });
 
+            // 生成真正結束 → 只檢查收尾、純疊/收橫幅當保險（MESSAGE_RECEIVED 輪詢不一定可靠）。★絕不呼叫 _apply：套用一律交給上面的輪詢，這裡只通知，才不會多跑 loadScript 吃掉場景插圖。
+            if (window.tavern_events.GENERATION_ENDED) {
+                window.eventOn(window.tavern_events.GENERATION_ENDED, (messageId) => {
+                    if (window.__AURELIA_SUMMARIZING) return;   // 大總結/副模型 generateRaw 不是正文
+                    setTimeout(() => {
+                        try {
+                            const text = _readMsgText(messageId);
+                            if (!text || text.indexOf('<content>') === -1) return;   // 非 VN 正文不管
+                            if (_isComplete(text)) _hideTruncBanner();   // 完整 → 收橫幅（套用由輪詢負責）
+                            else _showTruncBanner(messageId);            // 缺收尾 → 疊橫幅通知
+                        } catch (e) {}
+                    }, 600);
+                });
+            }
+
             if (window.tavern_events.CHAT_CHANGED) {
                 window.eventOn(window.tavern_events.CHAT_CHANGED, () => {
                     _processedIds.clear();
+                    _hideTruncBanner();
                     Object.keys(_waitTimers).forEach(k => { clearInterval(_waitTimers[k]); delete _waitTimers[k]; });
                 });
             }
