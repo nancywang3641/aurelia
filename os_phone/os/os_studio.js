@@ -82,6 +82,9 @@
                         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
                             <button id="studio-spec-copy-btn" style="flex:1; min-width:190px; background:rgba(46,204,113,0.12); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📋 複製創建說明書（給你的 Claude／GPT 生成）</button>
                             <button id="studio-import-btn" style="flex:1; min-width:150px; background:rgba(155,89,182,0.12); border:1px solid #9b59b6; color:#7d3cae; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📥 匯入面板（貼 AI 的 &lt;json&gt;）</button>
+                            <button id="studio-export-pack-btn" class="studio-pack-btn export">📦 匯出包</button>
+                            <button id="studio-import-pack-btn" class="studio-pack-btn import">📦 匯入包</button>
+                            <input type="file" id="studio-import-pack-file" accept=".json" hidden>
                         </div>
                         <div class="studio-gallery-list" id="studio-gallery-list"></div>
                     </div>
@@ -2265,6 +2268,7 @@ ${cleanFormat}
     async function loadStudioGallery() {
         const listEl = document.getElementById('studio-gallery-list');
         if (!listEl) return;
+        _wireVnUiPackButtons();   // 綁定頂部「匯出包／匯入包」鈕（冪等，每次開展廳重綁無妨）
         listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">載入中...</div>';
         const db = win.OS_DB || window.OS_DB;
         if (!db || typeof db.getAllVNTagTemplates !== 'function') {
@@ -2327,6 +2331,7 @@ ${cleanFormat}
                         <div class="sgc-btn btn-lobby" style="background:${tpl.lobbyEnabled ? 'rgba(52,152,219,0.2)' : 'transparent'};border-color:${tpl.lobbyEnabled ? '#3498db' : '#555'};color:${tpl.lobbyEnabled ? '#3498db' : '#777'}">
                             🏠${tpl.lobbyEnabled ? '大廳已啟用' : '大廳'}
                         </div>
+                        <div class="sgc-btn btn-export-one" title="把這一個面板匯出成 .json，可單獨分享或搬去別台裝置">📦 匯出</div>
                         <div class="sgc-btn btn-del" style="background:rgba(231,76,60,0.7);border-color:#e74c3c;color:#fff;">刪除</div>
                     </div>
                 `;
@@ -2385,6 +2390,9 @@ ${cleanFormat}
 
                 // 📝 直接編輯原碼
                 card.querySelector('.btn-edit-raw').onclick = () => openRawEditModal(tpl);
+
+                // 📦 單獨匯出這一個面板成 .json
+                card.querySelector('.btn-export-one').onclick = () => exportOneVnUiTemplate(tpl);
 
                 // ✏️ 繼續編輯：把這個 tpl 載回煉丹爐，用對話繼續微調
                 card.querySelector('.btn-continue').onclick = () => {
@@ -2468,6 +2476,87 @@ ${cleanFormat}
                 }
             });
         } catch(err) { listEl.innerHTML = `<div style="color:#fc8181;padding:20px;">載入失敗: ${err.message}</div>`; }
+    }
+
+    // ============================================================
+    // === VN UI 展廳：匯出／匯入「包」（把模板搬到別台裝置的酒館，非奧瑞亞手機殼）===
+    //   匯出 = 打包成 .json 下載；匯入 = 讀檔逐筆寫回，同 tagId 覆蓋更新、新的就新增。
+    // ============================================================
+    function _downloadVnUiPack(templates, filename) {
+        const pack = {
+            type: 'aurelia-vn-ui-pack',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            count: templates.length,
+            templates: templates
+        };
+        const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} a.remove(); }, 0);
+    }
+
+    async function exportAllVnUiPack() {
+        const db = win.OS_DB || window.OS_DB;
+        if (!db || typeof db.getAllVNTagTemplates !== 'function') { alert('找不到資料庫，無法匯出。'); return; }
+        try {
+            const templates = await db.getAllVNTagTemplates();
+            if (!templates.length) { alert('展廳是空的，沒有可匯出的面板。'); return; }
+            const today = new Date().toISOString().slice(0, 10);
+            _downloadVnUiPack(templates, `aurelia-vn-ui-pack-${today}.json`);
+        } catch (e) { alert('匯出失敗：' + ((e && e.message) || e)); }
+    }
+
+    function exportOneVnUiTemplate(tpl) {
+        if (!tpl) return;
+        const safe = ((tpl.tagId || 'panel').replace(/[^a-zA-Z0-9_-]/g, '')) || 'panel';
+        _downloadVnUiPack([tpl], `aurelia-vn-ui-${safe}.json`);
+    }
+
+    async function importVnUiPack(file) {
+        const db = win.OS_DB || window.OS_DB;
+        if (!db || typeof db.saveVNTagTemplate !== 'function') { alert('找不到資料庫，無法匯入。'); return; }
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            const list = Array.isArray(data) ? data : (Array.isArray(data.templates) ? data.templates : null);
+            if (!list || !list.length) { alert('這個檔案裡找不到面板資料，不是有效的匯出包。'); return; }
+            // 以 tagId 去重：同 tagId 覆蓋更新、新的就新增
+            const existing = await db.getAllVNTagTemplates();
+            const byTag = {};
+            existing.forEach(t => { if (t && t.tagId) byTag[t.tagId] = t; });
+            let added = 0, updated = 0;
+            for (const raw of list) {
+                if (!raw || typeof raw !== 'object') continue;
+                const tpl = JSON.parse(JSON.stringify(raw));
+                const hit = tpl.tagId && byTag[tpl.tagId];
+                if (hit) { tpl.id = hit.id; updated++; }   // 蓋掉既有同名
+                else { delete tpl.id; added++; }           // 新增 → saveVNTagTemplate 自動產 id
+                await db.saveVNTagTemplate(tpl);
+            }
+            await syncActiveTagsToLocal();
+            if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
+            loadStudioGallery();
+            alert(`✅ 匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個。`);
+        } catch (e) { alert('匯入失敗：' + ((e && e.message) || e)); }
+    }
+
+    function _wireVnUiPackButtons() {
+        const expBtn = document.getElementById('studio-export-pack-btn');
+        if (expBtn) expBtn.onclick = exportAllVnUiPack;
+        const impBtn = document.getElementById('studio-import-pack-btn');
+        const fileInput = document.getElementById('studio-import-pack-file');
+        if (impBtn && fileInput) {
+            impBtn.onclick = () => fileInput.click();
+            fileInput.onchange = (e) => {
+                const f = e.target.files && e.target.files[0];
+                if (f) importVnUiPack(f);
+                e.target.value = '';   // 清掉，讓同一檔可重複選
+            };
+        }
     }
 
     // ============================================================
