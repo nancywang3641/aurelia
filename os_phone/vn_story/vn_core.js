@@ -42,6 +42,7 @@
         _bgInflight: {},   // 進行中的背景生成(cacheId→promise)：去重，避免預熱+現場對同一場景各生一張(競態→重開不同圖)
         _sceneMemCache: {},
         _sceneInflight: {}, // 進行中的場景CG生成(cacheId→promise)：同 _bgInflight，防預熱+現場重複生成
+        _sceneFailed: {},   // 生圖失敗過的 cacheId(→ts)：in-flight 解析後就清、防不住「預熱+插入+渲染序列重打」→ 記失敗、同 cacheId 不再自動重生(白燒額度/被風控)；按 🔄 重生會清掉
         _sceneCgLinger: 0,  // 鋪底式場景插圖剩餘停留句數（3→0 淡出）；0=沒在顯示
         _sceneCgCur: null,  // 當前鋪底插圖的 {cacheId, prompt}，給「🔄 重生」鈕重打用（不碰 LLM）
         _itemMemCache: {},
@@ -1432,10 +1433,17 @@
         _safeFetchScene: function(cacheId, prompt) {
             if (this._sceneMemCache[cacheId]) return Promise.resolve(this._sceneMemCache[cacheId]);
             if (this._sceneInflight[cacheId]) return this._sceneInflight[cacheId];
+            // 這個 cacheId 剛生圖失敗過(如拼車撞 NAI 429) → 不自動重打：否則「預熱→插入→渲染」序列會同一張各打一次、白燒額度又易被風控。
+            // 要重生按場景 CG 的 🔄（retrySceneCg 會清掉這個標記）；重整頁面也會重置（記憶體 map）。
+            if (this._sceneFailed[cacheId]) return Promise.resolve('');
             const self = this;
             const p = this._doFetchScene(cacheId, prompt);
             this._sceneInflight[cacheId] = p;
-            p.then(function () {}, function () {}).then(function () { delete self._sceneInflight[cacheId]; });
+            p.then(function (url) {
+                if (!url) self._sceneFailed[cacheId] = Date.now();   // 回空＝生失敗 → 記下，後續同 cacheId 不再自動觸發
+            }, function () {
+                self._sceneFailed[cacheId] = Date.now();             // 例外也算失敗
+            }).then(function () { delete self._sceneInflight[cacheId]; });
             return p;
         },
         // 🔄 「重生」鈕：撞 NAI 500 後 fallback 出的 poll 圖會卡進 mem/IndexedDB 快取，
@@ -1450,6 +1458,7 @@
             try {
                 delete this._sceneMemCache[cacheId];
                 delete this._sceneInflight[cacheId];
+                delete this._sceneFailed[cacheId];   // 清失敗標記，允許這次手動重生
                 try { await VN_Cache.delete('scene_cache', cacheId); } catch (e) {}
                 const url = await this._safeFetchScene(cacheId, prompt);
                 if (url && cgImg) cgImg.src = url;
