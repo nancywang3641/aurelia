@@ -103,7 +103,6 @@
             },
             sceneGen: {
                 enabled: false,
-                promptStyle: 'auto',
                 size: '1024x1024',
 
                 sceneBasePrompt: '',
@@ -186,6 +185,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 animaClip: 'qwen_3_06b_base.safetensors', animaVae: 'qwen_image_vae.safetensors'
             }
         };
+        // 場景插圖：每接口獨立的副模型插圖指令（預設＝沿用舊的 標籤/自然語言 範本，NAI 用標籤、其餘用自然語言）
+        config.sceneGen.extractPromptNovelai      = config.sceneGen.extractPromptTags;
+        config.sceneGen.extractPromptPollinations = config.sceneGen.extractPromptNatural;
+        config.sceneGen.extractPromptComfy        = config.sceneGen.extractPromptNatural;
+        config.sceneGen.extractPromptTavern       = config.sceneGen.extractPromptNatural;
         if (saved) {
             try {
                 const savedConfig = JSON.parse(saved);
@@ -211,9 +215,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     },
                     sceneGen: (function () {
                         const _sg = { ...config.sceneGen, ...(savedConfig.sceneGen || {}) };
-                        // 舊存檔只有單一 extractPrompt（多半是使用者調過的 ComfyUI/自然語言版）→ 沒有新「自然語言版」欄位時遷進去不丟；標籤版用新 V4.5 預設
                         const _saved = savedConfig.sceneGen || {};
+                        // 舊存檔只有單一 extractPrompt（多半是使用者調過的 ComfyUI/自然語言版）→ 沒有新「自然語言版」欄位時遷進去不丟
                         if (_saved.extractPrompt && !_saved.extractPromptNatural) _sg.extractPromptNatural = _saved.extractPrompt;
+                        // 拆每接口獨立欄：舊存檔沒存過新欄 → 從舊「標籤/自然語言」灌種（NAI←標籤，其餘←自然語言），各自獨立、不再共用
+                        const _oldTags = (_saved.extractPromptTags || _sg.extractPromptTags || '').trim();
+                        const _oldNat  = (_saved.extractPromptNatural || _sg.extractPromptNatural || _saved.extractPrompt || '').trim();
+                        if (_saved.extractPromptNovelai      === undefined && _oldTags) _sg.extractPromptNovelai      = _oldTags;
+                        if (_saved.extractPromptPollinations === undefined && _oldNat)  _sg.extractPromptPollinations = _oldNat;
+                        if (_saved.extractPromptComfy        === undefined && _oldNat)  _sg.extractPromptComfy        = _oldNat;
+                        if (_saved.extractPromptTavern       === undefined && _oldNat)  _sg.extractPromptTavern       = _oldNat;
                         return _sg;
                     })(),
                     comfyuiDirect: {
@@ -1588,22 +1599,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:3px;">← 越大越清晰但越耗點數。自訂填「寬x高」(數字)；多數模型建議用 64 的倍數(如 1024)。</div>
                                 </div>
 
-                                <!-- ── Prompt 風格 ── -->
-                                <div style="margin-bottom:12px;">
-                                    <div class="set-label" style="font-size:11px;">🎛️ Prompt 風格</div>
-                                    <select class="set-select" id="img-scene-prompt-style" style="font-size:12px;"
-                                        onchange="(function(v){
-                                            const _sceneSvc = (typeof window.OS_IMAGE_MANAGER?.serviceFor==='function') ? window.OS_IMAGE_MANAGER.serviceFor('scene') : window.OS_IMAGE_MANAGER?.config?.service;
-                                            const isPoll = v==='natural' || (v==='auto' && _sceneSvc!=='novelai');
-                                            const _exT = document.getElementById('img-scene-extract-tags-row'); if (_exT) _exT.style.display = isPoll ? 'none' : '';
-                                            const _exN = document.getElementById('img-scene-extract-natural-row'); if (_exN) _exN.style.display = isPoll ? '' : 'none';
-                                        })(this.value)">
-                                        <option value="auto" ${(imgConfig.sceneGen?.promptStyle||'auto')==='auto' ? 'selected':''}>🔀 自動（跟主服務）</option>
-                                        <option value="tags" ${imgConfig.sceneGen?.promptStyle==='tags' ? 'selected':''}>🏷️ 標籤（NAI / Danbooru）</option>
-                                        <option value="natural" ${imgConfig.sceneGen?.promptStyle==='natural' ? 'selected':''}>💬 自然語言（Pollinations）</option>
-                                    </select>
-                                </div>
-
                                 <div class="set-desc" style="margin-bottom:12px; font-size:11px;" title="插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。">🎨 插圖底詞／負詞在接口設定區調整。</div>
                             </div>
                         </div>
@@ -1614,16 +1609,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">每輪記憶抽取時順便吐插圖、自動生圖。</div>
-                            <div class="set-label" style="font-size:12px; margin-top:10px;" title="隨上方「Prompt 風格」切換。">副模型插圖指令</div>
-                            <div id="img-scene-extract-tags-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&(imgConfig.serviceScene||imgConfig.serviceLiving||imgConfig.service)!=='novelai')) ? 'none' : '';})()};">
-                                <div style="font-size:10px; color:rgba(26,28,40,0.6); margin-bottom:3px;">🏷️ 標籤版（給 NAI / Danbooru · 五層系統）</div>
-                                <textarea class="set-textarea" id="img-scene-extract-tags" style="min-height:170px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPromptTags || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                            </div>
-                            <div id="img-scene-extract-natural-row" style="display:${(()=>{const s=imgConfig.sceneGen?.promptStyle||'auto'; return (s==='natural'||(s==='auto'&&(imgConfig.serviceScene||imgConfig.serviceLiving||imgConfig.service)!=='novelai')) ? '' : 'none';})()};">
-                                <div style="font-size:10px; color:rgba(26,28,40,0.6); margin-bottom:3px;">💬 自然語言版（給 Pollinations / ComfyUI）</div>
-                                <textarea class="set-textarea" id="img-scene-extract-natural" style="min-height:120px; font-size:11px; font-family:monospace;">${(imgConfig.sceneGen?.extractPromptNatural || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                            </div>
-                            <div style="font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px;">↑ 附加到「記憶副模型」指令叫它額外吐 scenes。選 🏷️標籤＝上面欄、💬自然語言＝下面欄；切到哪個接口就只顯示對應那欄。改這裡就能調插圖的數量／風格／規則。</div>
+                            <div class="set-label" style="font-size:12px; margin-top:10px;" title="跟著上面選的「插圖來源」自動切換：選哪個接口就顯示哪個接口的指令，各自獨立、互不影響。">副模型插圖指令（跟著插圖來源）</div>
+                            ${(() => {
+                                const _ss = imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service;
+                                const _esc = t => (t || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                const _rows = [
+                                    { svc: 'novelai',        sfx: 'novelai',      hint: '💎 NovelAI（Danbooru 標籤・五層系統）',  val: imgConfig.sceneGen?.extractPromptNovelai },
+                                    { svc: 'pollinations',   sfx: 'pollinations', hint: '✨ Pollinations（自然語言英文句子）',     val: imgConfig.sceneGen?.extractPromptPollinations },
+                                    { svc: 'tavern_sd',      sfx: 'tavern',       hint: '🎨 酒館原生（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptTavern },
+                                    { svc: 'comfyui_direct', sfx: 'comfy',        hint: '🧩 ComfyUI 直連（自然語言英文句子）',    val: imgConfig.sceneGen?.extractPromptComfy },
+                                ];
+                                return _rows.map(r => `
+                            <div id="img-scene-extract-row-${r.sfx}" class="scene-extract-row${_ss === r.svc ? '' : ' hidden'}">
+                                <div class="scene-extract-hint">${r.hint}</div>
+                                <textarea class="set-textarea scene-extract-ta" id="img-scene-extract-${r.sfx}">${_esc(r.val)}</textarea>
+                            </div>`).join('');
+                            })()}
+                            <div style="font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px;">↑ 附加到「記憶副模型」指令叫它額外吐 scenes。每個接口一份、互不污染；切到哪個插圖來源就顯示那份。改這裡就能調該接口插圖的數量／風格／規則。</div>
                         </div>
 
                         <div class="set-group">
@@ -2337,6 +2339,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = '';
                 if (elImgSceneExtract) elImgSceneExtract.style.display = '';
                 if (elImgPixabay)      elImgPixabay.style.display = 'none';
+                // 副模型插圖指令：每接口一份，只顯示對應「插圖來源」那欄
+                const _exSfx = { novelai: 'novelai', pollinations: 'pollinations', tavern_sd: 'tavern', comfyui_direct: 'comfy' };
+                Object.keys(_exSfx).forEach(s => {
+                    const _row = container.querySelector('#img-scene-extract-row-' + _exSfx[s]);
+                    if (_row) _row.classList.toggle('hidden', s !== sceneSvc);
+                });
             } else {
                 // 背景分頁
                 if (synced) {
@@ -3153,13 +3161,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         customWorkflow:(container.querySelector('#img-cfd-custom-wf-text')?.value || '')
                     },
                     sceneGen: {
-                        promptStyle:      container.querySelector('#img-scene-prompt-style')?.value || 'auto',
                         size:             (() => { const _sz = container.querySelector('#img-scene-size'); if (_sz?.value === 'custom') { const _c = (container.querySelector('#img-scene-size-custom')?.value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x'); return /^\d{2,5}x\d{2,5}$/.test(_c) ? _c : '1024x1024'; } return _sz?.value || '1024x1024'; })(),
                         sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
                         sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
                         extractEnabled:   container.querySelector('#img-scene-extract-enabled')?.checked ?? false,
-                        extractPromptTags:    (container.querySelector('#img-scene-extract-tags')?.value || '').trim(),
-                        extractPromptNatural: (container.querySelector('#img-scene-extract-natural')?.value || '').trim(),
+                        // 每接口獨立的副模型插圖指令（不再共用標籤/自然語言兩格）
+                        extractPromptNovelai:      (container.querySelector('#img-scene-extract-novelai')?.value || '').trim(),
+                        extractPromptPollinations: (container.querySelector('#img-scene-extract-pollinations')?.value || '').trim(),
+                        extractPromptTavern:       (container.querySelector('#img-scene-extract-tavern')?.value || '').trim(),
+                        extractPromptComfy:        (container.querySelector('#img-scene-extract-comfy')?.value || '').trim(),
                     },
                     pixabayKey:    (container.querySelector('#img-pixabay-key')?.value || '').trim(),
                     fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false,

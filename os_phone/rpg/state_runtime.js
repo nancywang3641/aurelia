@@ -526,22 +526,25 @@ ${looksBlock}
 ${numberedText}`;
     }
 
-    // 依「Prompt 風格」(promptStyle) + 主服務挑 標籤版/自然語言版 插圖指令；舊存檔 fallback 回單一 extractPrompt
+    // 依「插圖來源」(scene service) 直接挑該接口的副模型插圖指令；每接口各自獨立，互不污染。
+    // 舊存檔 fallback：沒有 per-接口欄 → 退回舊的 標籤/自然語言/單一 extractPrompt
     function _pickScenePrompt(cfg) {
         cfg = cfg || {};
-        const style = cfg.promptStyle || 'auto';
-        let isTag;
-        if (style === 'tags') isTag = true;
-        else if (style === 'natural') isTag = false;
-        else {
-            let svc = '';
-            try { svc = (win.OS_IMAGE_MANAGER?.serviceFor?.('scene')) || win.OS_IMAGE_MANAGER?.config?.service || ''; } catch (e) {}
-            isTag = (svc === 'novelai');
-        }
+        let svc = '';
+        try { svc = (win.OS_IMAGE_MANAGER?.serviceFor?.('scene')) || win.OS_IMAGE_MANAGER?.config?.service || ''; } catch (e) {}
+        const perIface = ({
+            novelai:        cfg.extractPromptNovelai,
+            pollinations:   cfg.extractPromptPollinations,
+            tavern_sd:      cfg.extractPromptTavern,
+            comfyui_direct: cfg.extractPromptComfy,
+        })[svc];
+        const picked = (perIface || '').trim();
+        if (picked) return picked;
+        // 舊存檔退路
         const tags = (cfg.extractPromptTags || '').trim();
         const nat  = (cfg.extractPromptNatural || '').trim();
         const legacy = (cfg.extractPrompt || '').trim();
-        return (isTag ? tags : nat) || legacy || tags || nat || '';
+        return (svc === 'novelai' ? tags : nat) || legacy || nat || tags || '';
     }
 
     // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
