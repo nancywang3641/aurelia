@@ -442,6 +442,7 @@
 
             this._hoistSceneDirectivesFromDynBlocks();  // 卡片區塊內的 [BGM]/[Bg] 提副本到區塊前，讓引擎照常播
             // 副模型場景插圖：把先前排隊、屬於這則訊息的 scenes splice 進剛載入的劇本（在預熱前，讓它也被預熱）
+            console.log('[VN_Core🔎] loadScript 完成 msg#' + this._currentMessageId + ' script長=' + (Array.isArray(this.script) ? this.script.length : 'N/A') + ' → 試插場景');
             try { if (window.VN_SceneInsert) window.VN_SceneInsert.applyPending(this._currentMessageId); } catch (e) {}
             this._prewarmBgs();
             this._prewarmScenes();
