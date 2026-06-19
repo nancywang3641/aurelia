@@ -50,6 +50,7 @@
       +       '<div class="ws-home-hd"><div class="ws-home-title">應用工坊 <span class="ws-spark">✨</span></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div>'
       +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go">›</span></button>'
       +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go">›</span></button>'
+      +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板（匯入／自製）</span><span class="ws-card-d">給朋友的 Claude／GPT 照說明書做好，到創作室「展廳」貼回來用</span></span><span class="ws-card-go">›</span></button>'
       +       '<div class="ws-sec-row"><span class="ws-sec-t">我的應用</span><button class="ws-sec-more" data-go="mine" type="button">查看全部 ›</button></div>'
       +       '<div class="ws-home-mine" id="ws-home-mine"></div>'
       +     '</div>'
