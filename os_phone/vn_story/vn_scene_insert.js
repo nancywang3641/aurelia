@@ -111,9 +111,14 @@
 
                 // scenes 比 loadScript 晚到、且 VN 已停在這則 → 立刻插
                 const VN = win.VN_Core;
+                const _vnMid = VN ? (VN._currentMessageId != null ? String(VN._currentMessageId) : 'null') : 'noVN';
+                const _vnLen = (VN && Array.isArray(VN.script)) ? VN.script.length : -1;
                 if (VN && Array.isArray(VN.script) && VN.script.length &&
                     VN._currentMessageId != null && String(VN._currentMessageId) === msgId) {
+                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 即時插：VN當前則=' + _vnMid + ' script長=' + _vnLen);
                     this.applyPending(msgId);
+                } else {
+                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 不即插→等 loadScript：VN當前則=' + _vnMid + ' script長=' + _vnLen);
                 }
             } catch (e) {
                 console.warn('[VN_SceneInsert] fromExtract 失敗:', (e && e.message) || e);
@@ -126,13 +131,13 @@
                 if (msgIdRaw == null) return;
                 const msgId = String(msgIdRaw);
                 const pend = this._pending[msgId];
-                if (!pend || !pend.entries || !pend.entries.length) return;
-                if (localStorage.getItem('vn_scene_enabled') === '0') return;
+                if (!pend || !pend.entries || !pend.entries.length) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：佇列空（已被清/重載）'); return; }
+                if (localStorage.getItem('vn_scene_enabled') === '0') { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：場景顯示關(vn_scene_enabled=0)'); return; }
 
                 const VN = win.VN_Core;
-                if (!VN || !Array.isArray(VN.script) || !VN.script.length) return;
+                if (!VN || !Array.isArray(VN.script) || !VN.script.length) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：劇本未載入/空 script長=' + (VN && Array.isArray(VN.script) ? VN.script.length : 'N/A')); return; }
                 // 只插「VN 現在正停的那則」
-                if (VN._currentMessageId != null && String(VN._currentMessageId) !== msgId) return;
+                if (VN._currentMessageId != null && String(VN._currentMessageId) !== msgId) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：VN當前停在 ' + VN._currentMessageId + ' 非本則'); return; }
 
                 let cursor = (typeof VN.index === 'number') ? VN.index : -1;
                 let inserted = 0;
