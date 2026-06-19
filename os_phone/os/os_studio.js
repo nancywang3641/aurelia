@@ -683,9 +683,11 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         try {
             if (currentParsedData) {
                 localStorage.setItem(`os_studio_parsed_${chatId}`, JSON.stringify(currentParsedData));
-            } else {
-                localStorage.removeItem(`os_studio_parsed_${chatId}`);
             }
+            // ⚠️ currentParsedData 為 null（如存檔後 line654 會清空）時「不動快取」，保留「最後一版」當耐久底。
+            //   以前這裡 removeItem → 存檔後快取被砍 → 下次編輯撈不到 → 退聊天歷史 → [LATEST_PANEL_STATE] 是
+            //   system 訊息不持久化(line818) → 只撈到初版 → 把之前所有 diff 修改全還原（Rae 踩的「上次修改又彈回」bug）。
+            //   真要清空走「清空對話」鈕的 _clearParsedCache。
         } catch(e) { console.warn('[Studio] 預覽狀態存檔失敗:', e); }
     }
     function _clearParsedCache(chatId) {
@@ -1353,11 +1355,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const text = inputEl.value.trim();
         if (!text && pendingImages.length === 0) return;
 
-        // === VN 模式：發送前先嘗試從聊天歷史恢復 currentParsedData（cache miss / 第一次 parse 失敗的兜底）===
+        // === VN 模式：發送前 currentParsedData 空（存檔後 / 重整 / parse 失敗）→ 救回，才能走 diff 不還原 ===
+        // 先試「耐久快取」(存最新 diff 結果、跨存檔/重整都在)；撈不到才退聊天歷史(可能只剩初版→會還原 diff)。
         if (currentMode === 'vn_ui' && !currentParsedData && !window.__vnForceFullRefine) {
-            extractLatestJsonFromHistory();
-            if (currentParsedData) {
-                console.log('[Studio] 🛟 currentParsedData 是空的，從聊天歷史救回了一份面板資料，走 diff 路徑');
+            const _cached = _loadParsedCache(getChatSessionId());
+            if (_cached && !Array.isArray(_cached)) {
+                currentParsedData = _cached;
+                activePreviewData = _cached;
+                console.log('[Studio] 🛟 currentParsedData 空 → 從耐久快取救回「最新版」面板，走 diff 路徑');
+            } else {
+                extractLatestJsonFromHistory();
+                if (currentParsedData) console.log('[Studio] 🛟 currentParsedData 空 → 退聊天歷史救回（可能初版），走 diff 路徑');
             }
         }
 
