@@ -3623,18 +3623,21 @@
             function _isComplete(t) { return t.indexOf('</content>') !== -1 && t.indexOf('</summary>') !== -1; }
             let _truncMsgId = null;
             function _hideTruncBanner() { const b = document.getElementById('vn-trunc-banner'); if (b) b.classList.remove('show'); }
-            function _continueTrunc() {
+            // 重試：/regenerate(整則重生，破甲截斷首選) 或 /continue(接著補寫，乾淨早停用)。
+            // 兩者都先放行這則重新被偵測，補/重生完走原本的 MESSAGE_RECEIVED 輪詢→_apply（同一般訊息路徑，不額外跑 loadScript）。
+            function _retryTrunc(cmd) {
                 _hideTruncBanner();
                 const th = window.TavernHelper || (window.parent && window.parent.TavernHelper) || (window.top && window.top.TavernHelper);
-                if (!th || typeof th.triggerSlash !== 'function') { try { (window.toastr || (window.parent && window.parent.toastr)).warning('找不到酒館助手，請回酒館手動繼續'); } catch (e) {} return; }
-                // 讓這則能重新被偵測/套用（續寫補齊後走原本的 MESSAGE_RECEIVED 輪詢→_apply，跟一般訊息同路徑）
+                if (!th || typeof th.triggerSlash !== 'function') { try { (window.toastr || (window.parent && window.parent.toastr)).warning('找不到酒館助手，請回酒館手動操作'); } catch (e) {} return; }
                 if (_truncMsgId != null) {
                     _processedIds.delete(_truncMsgId);
                     if (_waitTimers[_truncMsgId]) { clearInterval(_waitTimers[_truncMsgId]); delete _waitTimers[_truncMsgId]; }
                 }
                 try { window.VN_Core._showWriterCurtain(); } catch (e) {}
-                th.triggerSlash('/continue').catch(function () {});
+                th.triggerSlash(cmd).catch(function () {});
             }
+            function _rerollTrunc() { _retryTrunc('/regenerate'); }
+            function _continueTrunc() { _retryTrunc('/continue'); }
             function _showTruncBanner(messageId) {
                 _truncMsgId = messageId;
                 let b = document.getElementById('vn-trunc-banner');
@@ -3645,10 +3648,12 @@
                         '<div class="vn-trunc-msg">⚠️ 正文被截斷</div>' +
                         '<div class="vn-trunc-sub">沒收到結尾（缺 &lt;/content&gt; 或 &lt;/summary&gt;）</div>' +
                         '<div class="vn-trunc-btns">' +
-                            '<button class="vn-trunc-btn vn-trunc-primary" id="vn-trunc-cont">繼續生成</button>' +
+                            '<button class="vn-trunc-btn vn-trunc-primary" id="vn-trunc-regen">重新生成</button>' +
+                            '<button class="vn-trunc-btn" id="vn-trunc-cont">繼續生成</button>' +
                             '<button class="vn-trunc-btn" id="vn-trunc-close">關閉</button>' +
                         '</div>';
                     (document.getElementById('page-game') || document.body).appendChild(b);
+                    b.querySelector('#vn-trunc-regen').onclick = _rerollTrunc;
                     b.querySelector('#vn-trunc-cont').onclick = _continueTrunc;
                     b.querySelector('#vn-trunc-close').onclick = function () { _hideTruncBanner(); try { window.VN_Core._hideWriterCurtain(); } catch (e) {} };
                 }
