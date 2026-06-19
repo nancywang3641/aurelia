@@ -40,6 +40,7 @@
         _lastBgCacheId: '', // 跨章節持久，存 cacheId 而非 URL（blob 會被 resetState 撤銷）
         _bgMemCache: {},
         _bgInflight: {},   // 進行中的背景生成(cacheId→promise)：去重，避免預熱+現場對同一場景各生一張(競態→重開不同圖)
+        _bgFailed: {},     // 同 _sceneFailed：背景生圖失敗的 cacheId → 不自動重打(治「背景重複生成兩次」白燒額度)；切新背景=新 cacheId 不受影響
         _sceneMemCache: {},
         _sceneInflight: {}, // 進行中的場景CG生成(cacheId→promise)：同 _bgInflight，防預熱+現場重複生成
         _sceneFailed: {},   // 生圖失敗過的 cacheId(→ts)：in-flight 解析後就清、防不住「預熱+插入+渲染序列重打」→ 記失敗、同 cacheId 不再自動重生(白燒額度/被風控)；按 🔄 重生會清掉
@@ -1091,10 +1092,15 @@
         _safeFetchBg: function(cacheId, prompt) {
             if (this._bgMemCache[cacheId]) return Promise.resolve(this._bgMemCache[cacheId]);
             if (this._bgInflight[cacheId]) return this._bgInflight[cacheId];
+            if (this._bgFailed[cacheId]) return Promise.resolve('');   // 這個背景剛生失敗過 → 不自動重打(同場景的預熱+現場序列各打一次=白燒)；切新背景是新 cacheId、重整重置
             const self = this;
             const p = this._doFetchBg(cacheId, prompt);
             this._bgInflight[cacheId] = p;
-            p.then(function () {}, function () {}).then(function () { delete self._bgInflight[cacheId]; });
+            p.then(function (url) {
+                if (!url) self._bgFailed[cacheId] = Date.now();   // 回空＝失敗 → 記下、同 cacheId 不再自動觸發
+            }, function () {
+                self._bgFailed[cacheId] = Date.now();
+            }).then(function () { delete self._bgInflight[cacheId]; });
             return p;
         },
         _doFetchBg: async function(cacheId, prompt) {
