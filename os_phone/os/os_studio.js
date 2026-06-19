@@ -2630,7 +2630,8 @@ ${d.usageDesc || ''}
             if (!apiEngine || !apiEngine.chat) throw new Error("找不到 API 引擎");
 
             let baseConfig = win.OS_SETTINGS?.getConfig?.() || JSON.parse(localStorage.getItem('os_global_config') || '{}');
-            const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.2 };
+            // diff 路徑也要夾 maxTokens（patch 輸出更短、本就用不到大值），避免 gemini/vertex「maxOutputTokens 超過上限」
+            const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.2, maxTokens: Math.min(parseInt(baseConfig.maxTokens) || 8192, 32768) };
 
             const diffPrompt = buildDiffRefinePrompt(refineMsg);
             // 如有附圖：把圖跟 prompt 一起送（diff 路徑 apiPayload 只有單條 user message）
