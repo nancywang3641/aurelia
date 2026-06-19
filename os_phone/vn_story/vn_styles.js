@@ -71,45 +71,6 @@
                         <div id="speaker-name">System</div>
 
                         <div id="vn-panel-controls">
-                            <div id="vn-ctx-popup" onclick="event.stopPropagation()">
-                                <div class="ctx-title">📊 上下文</div>
-                                <div class="ctx-bar-wrap">
-                                    <div class="ctx-bar-track"><div class="ctx-bar-fill" id="ctx-bar-fill"></div></div>
-                                    <div class="ctx-usage-text" id="ctx-usage-text">—</div>
-                                </div>
-                                <div class="ctx-row"><span class="ctx-label">↑ 發送 Tokens</span><span class="ctx-val" id="ctx-tokens">—</span></div>
-                                <div class="ctx-row"><span class="ctx-label">↑ 發送 Chars</span><span class="ctx-val" id="ctx-chars">—</span></div>
-                                <div class="ctx-row"><span class="ctx-label">↓ 回應 Tokens</span><span class="ctx-val" id="ctx-recv-tokens">—</span></div>
-                                <div class="ctx-row"><span class="ctx-label">↓ 回應 Chars</span><span class="ctx-val" id="ctx-recv-chars">—</span></div>
-                                <div class="ctx-row"><span class="ctx-label">訊息數</span><span class="ctx-val" id="ctx-msgs">—</span></div>
-                                <div class="ctx-row" id="ctx-unsum-row"><span class="ctx-label">未總結樓層</span><span class="ctx-val" id="ctx-unsum">—</span></div>
-                                <div class="ctx-row" id="ctx-sumcount-row"><span class="ctx-label">總結次數</span><span class="ctx-val" id="ctx-sumcount">—</span></div>
-                                <div class="ctx-row" id="ctx-usage-row"><span class="ctx-label">本輪 API · 生圖</span><span class="ctx-val" id="ctx-usage-cnt">—</span></div>
-                                <div id="ctx-breakdown" class="ctx-breakdown">
-                                    <div class="ctx-bd-head">上下文組成</div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-system"><span class="ctx-bd-label">系統提示</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-system"></span></span><span class="ctx-bd-val" id="ctx-bd-system">—</span></div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-character"><span class="ctx-bd-label">角色卡</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-character"></span></span><span class="ctx-bd-val" id="ctx-bd-character">—</span></div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-world"><span class="ctx-bd-label">世界資訊</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-world"></span></span><span class="ctx-bd-val" id="ctx-bd-world">—</span></div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-examples"><span class="ctx-bd-label">對話範例</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-examples"></span></span><span class="ctx-bd-val" id="ctx-bd-examples">—</span></div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-chat"><span class="ctx-bd-label">聊天記錄</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-chat"></span></span><span class="ctx-bd-val" id="ctx-bd-chat">—</span></div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-persona"><span class="ctx-bd-label">使用者角色</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-persona"></span></span><span class="ctx-bd-val" id="ctx-bd-persona">—</span></div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-note"><span class="ctx-bd-label">作者備註</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-note"></span></span><span class="ctx-bd-val" id="ctx-bd-note">—</span></div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-inject"><span class="ctx-bd-label">注入/擴充</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-inject"></span></span><span class="ctx-bd-val" id="ctx-bd-inject">—</span></div>
-                                    <div class="ctx-bd-item" id="ctx-bd-i-recall"><span class="ctx-bd-label">┗ 記憶召回</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-recall"></span></span><span class="ctx-bd-val" id="ctx-bd-recall">—</span></div>
-                                    <div class="ctx-bd-total"><span class="ctx-bd-label">合計</span><span class="ctx-bd-val" id="ctx-bd-total-val">—</span></div>
-                                </div>
-                                <div class="ctx-limit-row">
-                                    <span class="ctx-limit-label">⚠️ 警戒 Tokens</span>
-                                    <input class="ctx-limit-input" id="ctx-limit-input" type="number" min="1000" max="2000000" value="50000" onchange="window.VN_Core._saveCtxLimit(this.value)" />
-                                </div>
-                                <div class="ctx-time" id="ctx-time">尚未偵測到數據</div>
-
-                                <div id="ctx-summary-wrap" style="display:none; margin-top:9px; border-top:1px solid rgba(246,173,85,0.2); padding-top:9px;">
-                                    <div style="font-size:10px; color:#888; margin-bottom:6px; letter-spacing:0.5px;">Token 已達警戒，建議執行大總結</div>
-                                    <button id="ctx-summary-btn" onclick="window.VN_Summary.generate(); event.stopPropagation();" style="width:100%; padding:7px 4px; background:rgba(246,173,85,0.08); border:1px solid rgba(246,173,85,0.35); border-radius:4px; color:#f6ad55; font-size:11px; cursor:pointer; font-family:inherit; letter-spacing:1px; transition:0.2s;">📝 大總結</button>
-                                </div>
-
-                            </div>
                             <button class="vn-panel-btn" id="vn-btn-log" onclick="window.VN_Core.showLog(); event.stopPropagation();">LOG</button>
                             <button class="vn-panel-btn" id="vn-btn-think" onclick="window.VN_PLAYER.showThinkPopup(); event.stopPropagation();" title="本章思考鏈">COT</button>
                             <button class="vn-panel-btn" id="vn-btn-skip" onclick="window.VN_Core.toggleSkip(); event.stopPropagation();">SKIP</button>
@@ -120,6 +81,45 @@
                         <div id="dialogue-text"></div>
                         <div class="hint-text">▼</div>
                     </div>
+                </div>
+
+                <!-- 📊 CTX 浮窗：移出對話面板(會被隱藏)，當 #page-game 直屬置中 modal；對話/末尾 CTX 共用、不再搬元素 -->
+                <div id="vn-ctx-popup" onclick="event.stopPropagation()">
+                    <div class="ctx-title"><span>📊 上下文</span><span class="ctx-close" onclick="window.VN_Core.closeCtx(); event.stopPropagation();">✕</span></div>
+                    <div class="ctx-bar-wrap">
+                        <div class="ctx-bar-track"><div class="ctx-bar-fill" id="ctx-bar-fill"></div></div>
+                        <div class="ctx-usage-text" id="ctx-usage-text">—</div>
+                    </div>
+                    <div class="ctx-row"><span class="ctx-label">↑ 發送 Tokens</span><span class="ctx-val" id="ctx-tokens">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">↑ 發送 Chars</span><span class="ctx-val" id="ctx-chars">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">↓ 回應 Tokens</span><span class="ctx-val" id="ctx-recv-tokens">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">↓ 回應 Chars</span><span class="ctx-val" id="ctx-recv-chars">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">訊息數</span><span class="ctx-val" id="ctx-msgs">—</span></div>
+                    <div class="ctx-row" id="ctx-unsum-row"><span class="ctx-label">未總結樓層</span><span class="ctx-val" id="ctx-unsum">—</span></div>
+                    <div class="ctx-row" id="ctx-sumcount-row"><span class="ctx-label">總結次數</span><span class="ctx-val" id="ctx-sumcount">—</span></div>
+                    <div class="ctx-row" id="ctx-usage-row"><span class="ctx-label">本輪 API · 生圖</span><span class="ctx-val" id="ctx-usage-cnt">—</span></div>
+                    <div id="ctx-breakdown" class="ctx-breakdown">
+                        <div class="ctx-bd-head">上下文組成</div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-system"><span class="ctx-bd-label">系統提示</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-system"></span></span><span class="ctx-bd-val" id="ctx-bd-system">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-character"><span class="ctx-bd-label">角色卡</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-character"></span></span><span class="ctx-bd-val" id="ctx-bd-character">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-world"><span class="ctx-bd-label">世界資訊</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-world"></span></span><span class="ctx-bd-val" id="ctx-bd-world">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-examples"><span class="ctx-bd-label">對話範例</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-examples"></span></span><span class="ctx-bd-val" id="ctx-bd-examples">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-chat"><span class="ctx-bd-label">聊天記錄</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-chat"></span></span><span class="ctx-bd-val" id="ctx-bd-chat">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-persona"><span class="ctx-bd-label">使用者角色</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-persona"></span></span><span class="ctx-bd-val" id="ctx-bd-persona">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-note"><span class="ctx-bd-label">作者備註</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-note"></span></span><span class="ctx-bd-val" id="ctx-bd-note">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-inject"><span class="ctx-bd-label">注入/擴充</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-inject"></span></span><span class="ctx-bd-val" id="ctx-bd-inject">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-recall"><span class="ctx-bd-label">┗ 記憶召回</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-recall"></span></span><span class="ctx-bd-val" id="ctx-bd-recall">—</span></div>
+                        <div class="ctx-bd-total"><span class="ctx-bd-label">合計</span><span class="ctx-bd-val" id="ctx-bd-total-val">—</span></div>
+                    </div>
+                    <div class="ctx-limit-row">
+                        <span class="ctx-limit-label">⚠️ 警戒 Tokens</span>
+                        <input class="ctx-limit-input" id="ctx-limit-input" type="number" min="1000" max="2000000" value="50000" onchange="window.VN_Core._saveCtxLimit(this.value)" />
+                    </div>
+                    <div class="ctx-time" id="ctx-time">尚未偵測到數據</div>
+                    <div id="ctx-summary-wrap" style="display:none; margin-top:9px; border-top:1px solid rgba(246,173,85,0.2); padding-top:9px;">
+                        <div style="font-size:10px; color:#888; letter-spacing:0.5px;">Token 已達警戒，建議執行大總結</div>
+                    </div>
+                    <button id="ctx-summary-btn" onclick="window.VN_Core.openStoryTools(); event.stopPropagation();" style="width:100%; margin-top:9px; padding:8px 4px; background:rgba(246,173,85,0.08); border:1px solid rgba(246,173,85,0.35); border-radius:4px; color:#f6ad55; font-size:12px; cursor:pointer; font-family:inherit; letter-spacing:1px; transition:0.2s;">🛠️ 故事管理</button>
                 </div>
 
                 <div id="vn-end-overlay">
