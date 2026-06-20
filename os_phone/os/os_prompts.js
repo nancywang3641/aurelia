@@ -24,9 +24,9 @@
 5. 群聊模式自动切换：系统会自动计算 With 的人数。 (2人 (私聊), >2人 (群聊))
 
 ## 格式說明:
-Wrap output in [wx_os] ... [/wx_os] (Optional but recommended).
+所有聊天輸出「必須」整包在 <chat chatroom="對方角色名/群名"> ... </chat> 容器內（跟 VN PHONE 對齊；chatroom 填對方角色名，群聊填群名）。不要再用 [wx_os]。容器內照下列格式：
 **IMPORTANT: You do NOT need to repeat chat history. ONLY output the NEW message(s).**
-Use [Chat: 老板|kart0213] ←聊天室名 | ID
+Use [Chat: 老板|kart0213] ←聊天室名 | ID（此行保留，後端靠 ID 認頭像）
 [With: 主角, 人名...] ← 角色名，user(主角)必须排第一个，后端脚本才能定位到
 [User] 消息内容 (代表当前主角发送)
 [Char] 消息内容 (代表对方发送)，只輸出暱名，不是ID
