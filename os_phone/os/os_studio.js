@@ -80,8 +80,8 @@
                     <div class="studio-source-content" id="studio-source-content"></div>
                     <div id="studio-gallery-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
                         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
-                            <button id="studio-spec-copy-btn" style="flex:1; min-width:190px; background:rgba(46,204,113,0.12); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📋 複製創建說明書（給你的 Claude／GPT 生成）</button>
-                            <button id="studio-import-btn" style="flex:1; min-width:150px; background:rgba(155,89,182,0.12); border:1px solid #9b59b6; color:#7d3cae; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📥 匯入面板（貼 AI 的 &lt;json&gt;）</button>
+                            <button id="studio-spec-copy-btn" style="flex:1; min-width:190px; background:rgba(46,204,113,0.12); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📋 複製創建說明書</button>
+                            <button id="studio-import-btn" style="flex:1; min-width:150px; background:rgba(155,89,182,0.12); border:1px solid #9b59b6; color:#7d3cae; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📥 匯入面板</button>
                             <button id="studio-export-pack-btn" class="studio-pack-btn export">📦 匯出包</button>
                             <button id="studio-import-pack-btn" class="studio-pack-btn import">📦 匯入包</button>
                             <input type="file" id="studio-import-pack-file" accept=".json" hidden>
