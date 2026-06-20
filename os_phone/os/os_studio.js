@@ -2355,19 +2355,6 @@ ${cleanFormat}
                             <span class="sgc-btn btn-cancel-fmt" style="display:none;flex:none;padding:4px 10px;border-color:#e74c3c;color:#e74c3c;background:transparent;">✖ 取消</span>
                         </div>
                     </div>
-                    ${tpl.css ? `<style>${tpl.css}</style>` : ''}
-                    <div class="studio-pv-tabs">
-                        <button class="studio-pv active" data-pv="phone">手機</button>
-                        <button class="studio-pv" data-pv="center">中間</button>
-                        <button class="studio-pv" data-pv="full">全屏</button>
-                    </div>
-                    <div class="sgc-preview">
-                        <div class="studio-pv-box">
-                            <div class="vn-dynamic-panel-${safeTagId}" style="width:100%;height:auto;display:flex;flex-direction:column;">
-                                ${previewHtml}
-                            </div>
-                        </div>
-                    </div>
                     <div class="sgc-btns">
                         <div class="sgc-btn btn-continue" style="background:rgba(26,28,40,0.08);border-color:#1A1C28;color:#1A1C28;" title="把這個面板載回煉丹爐，用對話繼續微調樣式">✏️ 繼續編輯</div>
                         <div class="sgc-btn btn-edit-raw" style="background:rgba(155,89,182,0.12);border-color:#9b59b6;color:#c39bf2;" title="直接編輯原始 JSON（html/css/js/demoFormat）— 給進階用戶用">📝 編輯原碼</div>
@@ -2421,7 +2408,6 @@ ${cleanFormat}
         var sgcBtns = card.querySelector('.sgc-btns');
         if (sgcBtns && tpl.caps !== 'display') sgcBtns.appendChild(phoneBtn);
         container.appendChild(card);
-        _activatePreview(card, tpl, safeTagId);
     }
 
     // 換頁到第二層詳情（清空 → 返回鈕 → 詳情卡），不摺疊
