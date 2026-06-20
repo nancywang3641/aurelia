@@ -2379,10 +2379,10 @@ ${cleanFormat}
         const btnCancel = fmtBox.querySelector('.btn-cancel-fmt');
         btnEdit.onclick = () => { fmtText.style.display = 'none'; btnEdit.style.display = 'none'; fmtInput.style.display = 'block'; btnSave.style.display = 'inline-block'; btnCancel.style.display = 'inline-block'; };
         btnCancel.onclick = () => { fmtText.style.display = 'block'; btnEdit.style.display = 'inline-block'; fmtInput.style.display = 'none'; btnSave.style.display = 'none'; btnCancel.style.display = 'none'; fmtInput.value = tpl.demoFormat || ''; };
-        btnSave.onclick = async () => { tpl.demoFormat = fmtInput.value; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); _openComponentDetail(tpl, _allPhoneApps); };
-        card.querySelector('.btn-lobby').onclick = async () => { tpl.lobbyEnabled = !tpl.lobbyEnabled; await db.saveVNTagTemplate(tpl); _openComponentDetail(tpl, _allPhoneApps); };
-        card.querySelector('.btn-toggle').onclick = async () => { tpl.isActive = !tpl.isActive; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); if (win.VN_DynamicParser) await win.VN_DynamicParser.init(); _openComponentDetail(tpl, _allPhoneApps); };
-        card.querySelector('.btn-del').onclick = async () => { if (!confirm(`刪除 [${tpl.tagId}]？`)) return; await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal(); if (win.VN_DynamicParser) await win.VN_DynamicParser.init(); loadStudioGallery(); };
+        btnSave.onclick = async () => { tpl.demoFormat = fmtInput.value; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); _galleryNeedsReload = true; _openComponentDetail(tpl, _allPhoneApps); };
+        card.querySelector('.btn-lobby').onclick = async () => { tpl.lobbyEnabled = !tpl.lobbyEnabled; await db.saveVNTagTemplate(tpl); _galleryNeedsReload = true; _openComponentDetail(tpl, _allPhoneApps); };
+        card.querySelector('.btn-toggle').onclick = async () => { tpl.isActive = !tpl.isActive; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); if (win.VN_DynamicParser) await win.VN_DynamicParser.init(); _galleryNeedsReload = true; _openComponentDetail(tpl, _allPhoneApps); };
+        card.querySelector('.btn-del').onclick = async () => { if (!confirm(`刪除 [${tpl.tagId}]？`)) return; await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal(); if (win.VN_DynamicParser) await win.VN_DynamicParser.init(); _galleryNeedsReload = true; _closeComponentDetail(); };
         card.querySelector('.btn-import-st').onclick = () => importToSillyTavern(tpl);
         card.querySelector('.btn-edit-raw').onclick = () => openRawEditModal(tpl);
         card.querySelector('.btn-export-one').onclick = () => exportOneVnUiTemplate(tpl);
@@ -2404,6 +2404,7 @@ ${cleanFormat}
                     var newId = await win.OS_DB.savePhoneApp(rec);
                     if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, iconUrl: '' });
                 }
+                _galleryNeedsReload = true;
                 _openComponentDetail(tpl, (win.OS_DB.getAllPhoneApps ? (await win.OS_DB.getAllPhoneApps()) : _allPhoneApps) || []);
             } catch (e) { console.error('[studio] 裝手機切換失敗', e); }
         };
@@ -2412,23 +2413,54 @@ ${cleanFormat}
         container.appendChild(card);
     }
 
-    // 換頁到第二層詳情（清空 → 返回鈕 → 詳情卡），不摺疊
+    // 換頁到第二層詳情（不銷毀第一層瀏覽 DOM → 返回時不用重載、捲動位置保留）
+    let _savedGalleryScroll = 0;
+    let _galleryNeedsReload = false;
     function _openComponentDetail(tpl, _allPhoneApps) {
         const listEl = document.getElementById('studio-gallery-list');
+        const content = document.getElementById('studio-gallery-content');
         if (!listEl) return;
-        listEl.innerHTML = '';
+        const fromBrowse = (listEl.style.display !== 'none');
+        if (fromBrowse && content) _savedGalleryScroll = content.scrollTop;   // 只有「從瀏覽層」進來才記捲動位置
+        listEl.style.display = 'none';
+        let detail = document.getElementById('studio-gallery-detail');
+        if (!detail) {
+            detail = document.createElement('div');
+            detail.id = 'studio-gallery-detail';
+            listEl.parentNode.insertBefore(detail, listEl.nextSibling);
+        }
+        detail.style.display = 'block';
+        detail.innerHTML = '';
         const back = document.createElement('div');
         back.className = 'sgc-detail-back';
         back.textContent = '‹ 返回 VN組件';
-        back.onclick = () => loadStudioGallery();
-        listEl.appendChild(back);
-        _buildComponentCard(tpl, _allPhoneApps, listEl);
+        back.onclick = () => _closeComponentDetail();
+        detail.appendChild(back);
+        _buildComponentCard(tpl, _allPhoneApps, detail);
+        if (fromBrowse && content) content.scrollTop = 0;
+    }
+
+    // 從詳情回瀏覽：沒改動 → 只把保留的瀏覽 DOM 顯示回來 + 還原捲動（不重載、不跳頂）；有改動 → 才重載
+    function _closeComponentDetail() {
+        const listEl = document.getElementById('studio-gallery-list');
+        const detail = document.getElementById('studio-gallery-detail');
+        const content = document.getElementById('studio-gallery-content');
+        if (detail) { detail.style.display = 'none'; detail.innerHTML = ''; }
+        if (_galleryNeedsReload) {
+            _galleryNeedsReload = false;
+            loadStudioGallery();
+        } else {
+            if (listEl) listEl.style.display = '';
+            if (content) content.scrollTop = _savedGalleryScroll;
+        }
     }
 
     async function loadStudioGallery() {
         const listEl = document.getElementById('studio-gallery-list');
         if (!listEl) return;
         _wireVnUiPackButtons();   // 綁定頂部「匯出包／匯入包」鈕（冪等，每次開展廳重綁無妨）
+        listEl.style.display = '';   // 從詳情重載時要把瀏覽層顯示回來
+        const _dt = document.getElementById('studio-gallery-detail'); if (_dt) { _dt.style.display = 'none'; _dt.innerHTML = ''; }
         listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">載入中...</div>';
         const db = win.OS_DB || window.OS_DB;
         if (!db || typeof db.getAllVNTagTemplates !== 'function') {
