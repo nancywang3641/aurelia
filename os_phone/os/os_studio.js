@@ -70,7 +70,6 @@
                     <div class="studio-drawer-handle" id="studio-drawer-handle"></div>
                     <div class="studio-right-header">
                         <div class="studio-tab active" data-tab="preview">👁️ 畫布預覽</div>
-                        <div class="studio-tab" data-tab="source" id="studio-tab-source">💻 原始碼</div>
                         <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;">🎮 VN組件</div>
                     </div>
                     <div class="studio-preview-content" id="studio-preview-content">
