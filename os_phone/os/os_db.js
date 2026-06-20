@@ -334,6 +334,23 @@
                 } catch(e) { j(e); }
             });
         },
+        // 當前劇情卡 id（正規化）對外暴露 → 給 wx 清「別卡殘留」時跟下面的濾用同一把尺
+        getCurrentCardId: function () { return _curTavernChatId(); },
+        // 只取「當前劇情卡」自己的 api_chats：按 saveApiChat 蓋的 tavernChatId 章隔離（與注入器同款），
+        // 治「古代卡開 wx 卻列出現代卡聯絡清單」。沒蓋章的舊資料一律保留可見（不弄丟）；
+        // 取不到當前卡 id 時退回全部（避免清單整個空掉）。
+        getApiChatsForCurrentCard: async function () {
+            const all = await this.getAllApiChats();
+            const cid = _curTavernChatId();
+            if (cid == null) return all;
+            const out = {};
+            for (const k in all) {
+                const d = all[k];
+                const tag = (d && typeof d === 'object') ? d.tavernChatId : null;
+                if (tag == null || tag === cid) out[k] = d;   // 沒章=舊資料保留；同卡=保留；別卡=濾掉
+            }
+            return out;
+        },
 
         // --- 🔥 V26：插件通用記憶桶 app_memory（角色對話型插件 st.remember 寫入；一筆=一個 appId×角色）---
         saveAppMemory: async function(appId, charName, entry) {
