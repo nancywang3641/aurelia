@@ -65,12 +65,14 @@
         let cleaned = text;
 
         const thinkBlocks = [];
-        // 🔥 V3.24 升級：同時攔截 <think> 與 <vars_analyze>，並送入思考面板
-        cleaned = cleaned.replace(/<(think(?:ing)?|vars_analyze)>([\s\S]*?)<\/\1>/gi, (_, tag, inner) => {
+        // 🔥 思考鏈剝離：CoT 用哪種標籤包都收（<think>/<thinking>/<thought(s)>/<reasoning>/<thinking_process>/<vars_analyze>），送入思考面板、不顯示進聊天
+        cleaned = cleaned.replace(/<(think(?:ing)?|thoughts?|reasoning|thinking_process|vars_analyze)>([\s\S]*?)<\/\1>/gi, (_, tag, inner) => {
             const trimmed = inner.trim();
             if (trimmed) thinkBlocks.push(`[${tag.toUpperCase()}]\n${trimmed}`);
             return ''; // 從最終顯示文本中剔除
         });
+        // 原生推理模型/酒館常把思考包成 <details type="reasoning">…</details> → 一併剝掉，別漏進聊天
+        cleaned = cleaned.replace(/<details\b[^>]*reasoning[^>]*>[\s\S]*?<\/details>/gi, '');
         
         if (thinkBlocks.length > 0 && win.OS_THINK) {
             win.OS_THINK.push(thinkBlocks.join('\n\n──────\n\n'), text);
@@ -114,7 +116,8 @@
         // 🔥 AVS 擴充：將 status、vars、vars_analyze 一併從歷史記錄中隱藏，不浪費 Token
         s = s.replace(/<(session_settlement|status|vars|vars_analyze)>[\s\S]*?<\/\1>/gi, '');
         s = s.replace(/<\/?(content|summary)>/gi, '');
-        s = s.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '');
+        s = s.replace(/<(think(?:ing)?|thoughts?|reasoning|thinking_process)>([\s\S]*?)<\/\1>/gi, '');
+        s = s.replace(/<details\b[^>]*reasoning[^>]*>[\s\S]*?<\/details>/gi, '');
         s = s.replace(/\[Char\|([^|]+)\|[^|]*\|([^|\]]+)(?:\|[^\]]+)?\]/g,
             (_, name, dialogue) => `${name.trim()}: ${dialogue.trim()}`);
         s = s.replace(/\[Nar\|([^|\]]+)(?:\|[^\]]+)?\]/g,
