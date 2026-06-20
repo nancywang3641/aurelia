@@ -149,7 +149,7 @@
         .studio-gallery-card { background:rgba(228,232,245,0.5); border:1px solid rgba(26,28,40,0.15); border-radius:8px; padding:14px; }
         .studio-gallery-card.active-tag { border-color: #1A1C28; }
         .sgc-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-        .sgc-title { color:#1A1C28; font-size:15px; font-weight:bold; flex:1; min-width:0; }
+        .sgc-title { color:#1A1C28; font-size:15px; font-weight:bold; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .sgc-status { font-size:12px; flex-shrink:0; }
         /* 第一層瀏覽卡的「管理 ›」鈕（換頁進第二層操作）+ 第二層返回鈕 */
         .sgc-manage-btn { flex-shrink:0; padding:5px 12px; border-radius:6px; border:1px solid rgba(26,28,40,0.25); background:rgba(26,28,40,0.06); color:#1A1C28; font-size:12px; font-weight:bold; cursor:pointer; font-family:inherit; }
