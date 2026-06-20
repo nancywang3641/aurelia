@@ -2484,6 +2484,15 @@ ${cleanFormat}
     // === VN UI 展廳：匯出／匯入「包」（把模板搬到別台裝置的酒館，非奧瑞亞手機殼）===
     //   匯出 = 打包成 .json 下載；匯入 = 讀檔逐筆寫回，同 tagId 覆蓋更新、新的就新增。
     // ============================================================
+    // 視覺回饋：用酒館原生 toastr（win.toastr，全擴展通用）；沒有就退回 alert。
+    // TauriTavern 下載會直接存本機、但「不彈任何通知」→ 一定要自己給可見回饋。
+    function _studioToast(msg, type, title) {
+        const t = win.toastr || window.toastr;
+        const fn = t && typeof t[type] === 'function' ? t[type] : (t && t.info);
+        if (fn) { try { fn.call(t, msg, title || '創作室'); return; } catch (e) {} }
+        alert(msg);
+    }
+
     function _downloadVnUiPack(templates, filename) {
         const pack = {
             type: 'aurelia-vn-ui-pack',
@@ -2503,29 +2512,35 @@ ${cleanFormat}
 
     async function exportAllVnUiPack() {
         const db = win.OS_DB || window.OS_DB;
-        if (!db || typeof db.getAllVNTagTemplates !== 'function') { alert('找不到資料庫，無法匯出。'); return; }
+        if (!db || typeof db.getAllVNTagTemplates !== 'function') { _studioToast('找不到資料庫，無法匯出。', 'error', '匯出包'); return; }
         try {
             const templates = await db.getAllVNTagTemplates();
-            if (!templates.length) { alert('展廳是空的，沒有可匯出的面板。'); return; }
+            if (!templates.length) { _studioToast('展廳是空的，沒有可匯出的面板。', 'warning', '匯出包'); return; }
             const today = new Date().toISOString().slice(0, 10);
-            _downloadVnUiPack(templates, `aurelia-vn-ui-pack-${today}.json`);
-        } catch (e) { alert('匯出失敗：' + ((e && e.message) || e)); }
+            const fname = `aurelia-vn-ui-pack-${today}.json`;
+            _downloadVnUiPack(templates, fname);
+            _studioToast(`✅ 已匯出 ${templates.length} 個面板，已下載到本機：${fname}`, 'success', '匯出包');
+        } catch (e) { _studioToast('匯出失敗：' + ((e && e.message) || e), 'error', '匯出包'); }
     }
 
     function exportOneVnUiTemplate(tpl) {
         if (!tpl) return;
-        const safe = ((tpl.tagId || 'panel').replace(/[^a-zA-Z0-9_-]/g, '')) || 'panel';
-        _downloadVnUiPack([tpl], `aurelia-vn-ui-${safe}.json`);
+        try {
+            const safe = ((tpl.tagId || 'panel').replace(/[^a-zA-Z0-9_-]/g, '')) || 'panel';
+            const fname = `aurelia-vn-ui-${safe}.json`;
+            _downloadVnUiPack([tpl], fname);
+            _studioToast(`✅ 已匯出面板「${tpl.tagId || safe}」，已下載到本機：${fname}`, 'success', '匯出');
+        } catch (e) { _studioToast('匯出失敗：' + ((e && e.message) || e), 'error', '匯出'); }
     }
 
     async function importVnUiPack(file) {
         const db = win.OS_DB || window.OS_DB;
-        if (!db || typeof db.saveVNTagTemplate !== 'function') { alert('找不到資料庫，無法匯入。'); return; }
+        if (!db || typeof db.saveVNTagTemplate !== 'function') { _studioToast('找不到資料庫，無法匯入。', 'error', '匯入包'); return; }
         try {
             const text = await file.text();
             const data = JSON.parse(text);
             const list = Array.isArray(data) ? data : (Array.isArray(data.templates) ? data.templates : null);
-            if (!list || !list.length) { alert('這個檔案裡找不到面板資料，不是有效的匯出包。'); return; }
+            if (!list || !list.length) { _studioToast('這個檔案裡找不到面板資料，不是有效的匯出包。', 'warning', '匯入包'); return; }
             // 以 tagId 去重：同 tagId 覆蓋更新、新的就新增
             const existing = await db.getAllVNTagTemplates();
             const byTag = {};
@@ -2542,8 +2557,8 @@ ${cleanFormat}
             await syncActiveTagsToLocal();
             if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
             loadStudioGallery();
-            alert(`✅ 匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個。`);
-        } catch (e) { alert('匯入失敗：' + ((e && e.message) || e)); }
+            _studioToast(`✅ 匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個。`, 'success', '匯入包');
+        } catch (e) { _studioToast('匯入失敗：' + ((e && e.message) || e), 'error', '匯入包'); }
     }
 
     function _wireVnUiPackButtons() {
