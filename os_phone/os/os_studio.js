@@ -40,7 +40,6 @@
                     <div id="studio-vn-toolbar">
                         <div class="vn-toolbar-row">
                             <button class="studio-history-btn" id="vn-studio-history-btn" title="每次修改前會自動存一份舊版；點開可看歷次版本、一鍵還原到任一個">⏪ 還原舊版 (<span id="vn-studio-history-count">0</span>)</button>
-                            <button class="studio-redesign-btn" id="vn-studio-redesign-btn" title="不滿意整體風格時用：強制 AI 重新設計整個面板">🔄 重新設計</button>
                         </div>
                         <div id="vn-studio-history-area"></div>
                     </div>
@@ -742,7 +741,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             };
         }
 
-        // === VN 工具列：歷史快照按鈕 + 重新設計按鈕 ===
+        // === VN 工具列：還原舊版按鈕（重新設計按鈕已移除：大改現在直接打字發送、diff 路徑會自動整包重做、不用重發）===
         const vnHistBtn = document.getElementById('vn-studio-history-btn');
         if (vnHistBtn) {
             vnHistBtn.onclick = () => {
@@ -750,19 +749,6 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 const isOpen = area.style.display === 'block';
                 area.style.display = isOpen ? 'none' : 'block';
                 if (!isOpen) renderVNHistoryArea();
-            };
-        }
-        const vnRedesignBtn = document.getElementById('vn-studio-redesign-btn');
-        if (vnRedesignBtn) {
-            vnRedesignBtn.onclick = () => {
-                const inputEl = document.getElementById('studio-input');
-                if (!inputEl.value.trim()) {
-                    return alert('請先在下方輸入框告訴 AI「想要什麼樣的新風格」，再按重新設計。');
-                }
-                if (!confirm('🔄 重新設計會讓 AI 把整個面板（HTML/CSS/JS 全部）依你的描述重做一次，當前版本會先進快照可以還原。確定？')) return;
-                // 設旗標，handleSend 看到後走完整 JSON 重出路徑、不走 partial
-                window.__vnForceFullRefine = true;
-                handleSend();
             };
         }
 
@@ -1489,7 +1475,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
         // === VN 模式：發送前 currentParsedData 空（存檔後 / 重整 / parse 失敗）→ 救回，才能走 diff 不還原 ===
         // 先試「耐久快取」(存最新 diff 結果、跨存檔/重整都在)；撈不到才退聊天歷史(可能只剩初版→會還原 diff)。
-        if (currentMode === 'vn_ui' && !currentParsedData && !window.__vnForceFullRefine) {
+        if (currentMode === 'vn_ui' && !currentParsedData) {
             const _cached = _loadParsedCache(getChatSessionId());
             if (_cached && !Array.isArray(_cached)) {
                 currentParsedData = _cached;
@@ -1503,16 +1489,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
         // === VN 模式：已有面板時，走 diff-based refine（AI 給 find/replace pair，前端套用） ===
         // 用戶完全不接觸技術術語；AI 沒指定的原文物理上動不到 → 真正做到「只改改的、保留沒改的」
-        if (currentMode === 'vn_ui' && currentParsedData && !Array.isArray(currentParsedData) && !window.__vnForceFullRefine) {
+        if (currentMode === 'vn_ui' && currentParsedData && !Array.isArray(currentParsedData)) {
             return handleDiffVNRefine(text);
         }
 
-        // 強制 full refine 路徑（🔄 重新設計按鈕、或還沒有 currentParsedData 的首次生成）
+        // full 生成路徑（只剩「還沒有 currentParsedData 的首次生成」會到這；大改已由 diff 路徑的整包 <json> 處理）
         if (currentMode === 'vn_ui' && currentParsedData) {
             snapshotCurrentVNState(text, 'all');
             renderVNHistoryArea();
         }
-        window.__vnForceFullRefine = false;
 
         const sendBtn = document.getElementById('studio-send-btn');
         inputEl.value = '';
@@ -2673,7 +2658,7 @@ ${d.usageDesc || ''}
 {"tagId":"沿用原面板的 tagId","isBlock":維持原面板的 true/false,"html":"...","css":"...","js":"...","usageDesc":"...","demoFormat":"..."}
 </json>
 
-規則：① JSON 字串值內換行寫成 \\n、雙引號轉義成 \\"，整個 JSON 不可有真實換行。② 用戶沒提到、原本就有的部分要完整保留，只把該大改的依用戶要求重做。③ 一旦輸出 <json> 就不要再輸出任何 <patch>。前端收到整包會直接換上新面板、舊版自動進「歷史快照」可一鍵還原——**用戶完全不用重發**。
+規則：① JSON 字串值內換行寫成 \\n、雙引號轉義成 \\"，整個 JSON 不可有真實換行。② 用戶沒提到、原本就有的部分要完整保留，只把該大改的依用戶要求重做。③ 一旦輸出 <json> 就不要再輸出任何 <patch>。④ 整包重做時設計品質要在線：避免卡片套卡片、配合面板主題與世界觀、響應式照舊，別因為是重做就變陽春。前端收到整包會直接換上新面板、舊版自動進「歷史快照」可一鍵還原——**用戶完全不用重發**。
 
 ### 【範例】
 
