@@ -74,22 +74,31 @@
         ).join('');
     }
 
-    // ── 「✏️ 改數值」可編輯渲染：每個葉值一個小格子（非 JSON），純量陣列用一行頓號分隔，物件清單暫不可編 ──
-    function _editFields(obj, prefix, out) {
+    // ── 「✏️ 改數值」可編輯渲染：葉值→小格子；實體（如 NPC，多實體容器下的物件）→名稱可改 + 可標記刪除 ──
+    function _editFields(obj, prefix, out, entityLevel) {
         Object.keys(obj || {}).forEach(k => {
             const path = prefix ? prefix + '.' + k : k;
             const v = obj[k];
             if (Array.isArray(v)) {
                 const allScalar = v.every(x => !_isObj(x) && !Array.isArray(x));
-                if (allScalar) {
-                    out.push(`<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><input class="avs-st-edit-input" data-path="${esc(path)}" data-arr="1" value="${esc(v.join('、'))}"></div>`);
-                } else {
-                    out.push(`<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><span class="avs-st-dim">（清單較複雜，暫不可手改）</span></div>`);
-                }
+                out.push(allScalar
+                    ? `<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><input class="avs-st-edit-input" data-path="${esc(path)}" data-arr="1" value="${esc(v.join('、'))}"></div>`
+                    : `<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><span class="avs-st-dim">（清單較複雜，暫不可手改）</span></div>`);
             } else if (_isObj(v)) {
-                out.push(`<div class="avs-st-edit-group"><div class="avs-st-edit-grouphd">${esc(k)}</div>`);
-                _editFields(v, path, out);
-                out.push(`</div>`);
+                if (entityLevel) {
+                    // k = 一個實體（例如某個 NPC 名）→ 名稱可改、整個可刪
+                    out.push(`<div class="avs-st-edit-entity"><div class="avs-st-edit-entityhd">`
+                        + `<input class="avs-st-edit-name" data-rename-path="${esc(path)}" value="${esc(k)}" title="改名（例如 冒險者 → 加侖）">`
+                        + `<button class="avs-st-edit-del" data-del-path="${esc(path)}" type="button" title="標記刪除這個">×</button>`
+                        + `</div>`);
+                    _editFields(v, path, out, false);
+                    out.push(`</div>`);
+                } else {
+                    const childMulti = Object.values(v).length > 0 && Object.values(v).every(x => _isObj(x));
+                    out.push(`<div class="avs-st-edit-group"><div class="avs-st-edit-grouphd">${esc(k)}</div>`);
+                    _editFields(v, path, out, childMulti);
+                    out.push(`</div>`);
+                }
             } else {
                 out.push(`<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><input class="avs-st-edit-input" data-path="${esc(path)}" value="${esc(_scalar(v) === '—' ? '' : String(v))}"></div>`);
             }
@@ -98,7 +107,11 @@
     }
     function _humanizeEditable(cur) {
         if (!Object.keys(cur || {}).length) return `<div class="avs-st-empty">還沒有狀態可編輯。</div>`;
-        return _editFields(cur, '', []).join('');
+        return _editFields(cur, '', [], false).join('');
+    }
+    function _getByPath(obj, path) {
+        if (!path) return obj;
+        return String(path).split('.').reduce((o, k) => (o && typeof o === 'object') ? o[k] : undefined, obj);
     }
     function _setByPath(obj, path, val) {
         const parts = String(path).split('.');
@@ -113,16 +126,42 @@
         const eng = win._AVS_ENGINE;
         let cur = {};
         try { cur = JSON.parse(JSON.stringify((eng && eng.read && eng.read()) || {})); } catch (e) {}
-        (_host ? _host.querySelectorAll('.avs-st-edit-input[data-path]') : []).forEach(inp => {
+        const h = _host;
+        // 1) 葉值編輯（用舊路徑）
+        (h ? h.querySelectorAll('.avs-st-edit-input[data-path]') : []).forEach(inp => {
             const path = inp.getAttribute('data-path');
             let val = inp.value;
             if (inp.getAttribute('data-arr')) {
                 val = String(val).split(/[、,，\n]/).map(s => s.trim()).filter(Boolean);
             } else {
                 const t = String(val).trim();
-                if (t !== '' && /^-?\d+(\.\d+)?$/.test(t)) val = Number(t);   // 純數字 → 存成數字
+                if (t !== '' && /^-?\d+(\.\d+)?$/.test(t)) val = Number(t);
             }
             _setByPath(cur, path, val);
+        });
+        // 2) 刪除被標記的實體（路人大媽、重複項…）
+        (h ? h.querySelectorAll('.avs-st-edit-entity.deleting [data-del-path]') : []).forEach(b => {
+            const dp = b.getAttribute('data-del-path');
+            const parts = String(dp).split('.');
+            const parent = _getByPath(cur, parts.slice(0, -1).join('.'));
+            if (parent && typeof parent === 'object') delete parent[parts[parts.length - 1]];
+        });
+        // 3) 實體改名（新名≠舊名）；改進已存在的同名實體＝合併（舊資料併進去），治「冒險者後來叫加侖」的重複
+        (h ? h.querySelectorAll('.avs-st-edit-name[data-rename-path]') : []).forEach(inp => {
+            const ent = inp.closest('.avs-st-edit-entity');
+            if (ent && ent.classList.contains('deleting')) return;   // 已刪的不改名
+            const oldPath = inp.getAttribute('data-rename-path');
+            const parts = String(oldPath).split('.');
+            const oldKey = parts[parts.length - 1];
+            const newName = String(inp.value || '').trim();
+            if (!newName || newName === oldKey) return;
+            const parent = _getByPath(cur, parts.slice(0, -1).join('.'));
+            if (parent && typeof parent === 'object' && parent[oldKey] !== undefined) {
+                parent[newName] = (parent[newName] && typeof parent[newName] === 'object')
+                    ? Object.assign({}, parent[newName], parent[oldKey])
+                    : parent[oldKey];
+                delete parent[oldKey];
+            }
         });
         try { if (eng && eng.write) eng.write(cur); } catch (e) { console.warn('[AVS State] 手動存值失敗', e); }
         _editingValues = false;
@@ -317,6 +356,8 @@
         { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _curOpen = true; _build(); }; }
         { const sb = q('#avs-st-val-save'); if (sb) sb.onclick = () => { _saveStateValues(); }; }
         { const cb = q('#avs-st-val-cancel'); if (cb) cb.onclick = () => { _editingValues = false; _build(); }; }
+        // 實體 × 鈕：切換「標記刪除」(再點一次取消)，儲存時才真的刪
+        h.querySelectorAll('.avs-st-edit-del').forEach(b => b.onclick = () => { const e = b.closest('.avs-st-edit-entity'); if (e) e.classList.toggle('deleting'); });
 
         // 即時記錄開關
         const toggle = q('#avs-st-toggle');
