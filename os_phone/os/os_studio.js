@@ -2282,6 +2282,35 @@ ${cleanFormat}
         } catch (e) { console.warn('[studio] 裝成手機 app 失敗', e); return null; }
     }
 
+    // 把一個模板載回創作室「編輯模式」（VN組件「繼續編輯」 + 我的應用「✏️編輯」共用）
+    function _enterEditMode(tpl) {
+        try { currentMode = 'vn_ui'; } catch (e) {}
+        currentParsedData = JSON.parse(JSON.stringify(tpl));
+        activePreviewData = currentParsedData;
+        const chatId = getChatSessionId();
+        chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
+        chatMessages.push({
+            role: 'assistant',
+            content: `📋 已載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n要整個換風格也行——直接描述新風格、發送就會自動整包重做，不用按任何按鈕、不用重發。`
+        });
+        _studioSave(chatId);
+        document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.studio-tab[data-tab="preview"]')?.classList.add('active');
+        const _pc = document.getElementById('studio-preview-content'); if (_pc) _pc.style.display = 'flex';
+        const _sc = document.getElementById('studio-source-content'); if (_sc) _sc.style.display = 'none';
+        const _gc = document.getElementById('studio-gallery-content'); if (_gc) _gc.style.display = 'none';
+        renderChatHistory();
+        renderPreviewPanel();
+    }
+
+    // 依 id 撈回模板（給 OS_STUDIO 對外方法用：我的應用的按鈕靠 srcTplId 找底稿）
+    async function _getTplById(id) {
+        try {
+            const tpls = (win.OS_DB && win.OS_DB.getAllVNTagTemplates) ? (await win.OS_DB.getAllVNTagTemplates()) : [];
+            return (tpls || []).find(t => t && t.id === id) || null;
+        } catch (e) { return null; }
+    }
+
     async function loadStudioGallery() {
         const listEl = document.getElementById('studio-gallery-list');
         if (!listEl) return;
@@ -2428,30 +2457,7 @@ ${cleanFormat}
                 // ✏️ 繼續編輯：把這個 tpl 載回煉丹爐，用對話繼續微調
                 card.querySelector('.btn-continue').onclick = () => {
                     if (!confirm(`✏️ 把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議（例如「字改大一點」），AI 只會微調、不會重做整個面板\n• 改完按「✅ 確定創建」會覆蓋這個面板（不是新增）\n\n確定嗎？`)) return;
-
-                    // 1. 載入 tpl 到 currentParsedData（深拷貝，避免 diff 修改污染展廳資料）
-                    currentParsedData = JSON.parse(JSON.stringify(tpl));
-                    activePreviewData = currentParsedData;
-
-                    // 2. 清空當前對話（除 system prompt）
-                    const chatId = getChatSessionId();
-                    chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
-                    // 注入一條 assistant 引導訊息，用戶看到「已載入」
-                    chatMessages.push({
-                        role: 'assistant',
-                        content: `📋 已載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n要整個換風格也行——直接描述新風格、發送就會自動整包重做，不用按任何按鈕、不用重發。`
-                    });
-                    _studioSave(chatId);
-
-                    // 3. 切換到「畫布預覽」tab、離開展廳
-                    document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
-                    document.querySelector('.studio-tab[data-tab="preview"]')?.classList.add('active');
-                    document.getElementById('studio-preview-content').style.display = 'flex';
-                    document.getElementById('studio-source-content').style.display = 'none';
-                    document.getElementById('studio-gallery-content').style.display = 'none';
-
-                    renderChatHistory();
-                    renderPreviewPanel(); // 自動寫 cache + 同步 VN 工具列顯示
+                    _enterEditMode(tpl);
                 };
 
                 // 📱 裝到手機開關（opt-in，預設未裝）
@@ -3296,5 +3302,31 @@ ${d.usageDesc || ''}
     }
 
     // ===== 預設模板安裝器 =====
-    win.OS_STUDIO = { launch, attachVpScaler: _attachVpScaler };
+    win.OS_STUDIO = {
+        launch, attachVpScaler: _attachVpScaler,
+        // 給「應用工坊 · 我的應用」的管理按鈕用：靠 srcTplId 操作該 app 的可編輯底稿
+        openEditApp: async function (tplId, c) {
+            try { if (c) launch(c); } catch (e) {}
+            const tpl = await _getTplById(tplId);
+            if (!tpl) { alert('找不到這個應用的可編輯底稿（可能是舊資料，重新生成一次即可）'); return; }
+            setTimeout(function () { try { _enterEditMode(tpl); } catch (e) { console.warn('[OS_STUDIO] openEditApp', e); } }, 60);
+        },
+        injectAppToTavern: async function (tplId) {
+            const tpl = await _getTplById(tplId);
+            if (!tpl) { alert('找不到底稿'); return; }
+            try { importToSillyTavern(tpl); } catch (e) { alert('載入酒館失敗：' + ((e && e.message) || e)); }
+        },
+        exportApp: async function (tplId) {
+            const tpl = await _getTplById(tplId);
+            if (!tpl) { alert('找不到底稿'); return; }
+            try { exportOneVnUiTemplate(tpl); } catch (e) {}
+        },
+        toggleAppLobby: async function (tplId) {
+            const tpl = await _getTplById(tplId);
+            if (!tpl) return null;
+            tpl.lobbyEnabled = !tpl.lobbyEnabled;
+            try { await win.OS_DB.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); } catch (e) {}
+            return !!tpl.lobbyEnabled;
+        }
+    };
 })();
