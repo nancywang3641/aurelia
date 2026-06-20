@@ -13,15 +13,17 @@
                 <div class="studio-title">
                     <div class="studio-back-btn" id="studio-back-btn" title="返回大廳">‹</div>
                     🎨 創作室
-                    <div class="studio-mode-tabs" id="studio-mode-tabs">
-                        <div class="studio-mode-tab active" data-mode="vn_ui">✨ VN UI 煉丹</div>
-                        <div class="studio-mode-tab" data-mode="theme">🎨 主題</div>
-                    </div>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="studio-icon-btn studio-preview-toggle" id="studio-header-preview-btn" title="預覽面板">👁️ <span>預覽</span></button>
                     <button class="studio-icon-btn danger" id="studio-clear-btn" title="清空當前頻道的對話紀錄">🗑️ <span>清空</span></button>
                 </div>
+            </div>
+
+            <!-- mode 分頁：自己一整列、橫向分段，不再跟標題擠到換行 -->
+            <div class="studio-mode-tabs" id="studio-mode-tabs">
+                <div class="studio-mode-tab active" data-mode="vn_ui">✨ VN UI 煉丹</div>
+                <div class="studio-mode-tab" data-mode="theme">🎨 主題</div>
             </div>
 
             <div class="studio-body">
@@ -37,7 +39,7 @@
                     <!-- VN 煉丹專用工具列：歷史快照 + 整體重做 -->
                     <div id="studio-vn-toolbar">
                         <div class="vn-toolbar-row">
-                            <button class="studio-history-btn" id="vn-studio-history-btn">⏪ 歷史快照 (<span id="vn-studio-history-count">0</span>)</button>
+                            <button class="studio-history-btn" id="vn-studio-history-btn" title="每次修改前會自動存一份舊版；點開可看歷次版本、一鍵還原到任一個">⏪ 還原舊版 (<span id="vn-studio-history-count">0</span>)</button>
                             <button class="studio-redesign-btn" id="vn-studio-redesign-btn" title="不滿意整體風格時用：強制 AI 重新設計整個面板">🔄 重新設計</button>
                         </div>
                         <div id="vn-studio-history-area"></div>
@@ -2663,15 +2665,15 @@ ${d.usageDesc || ''}
    - 對話放在所有 patches 之前或之後（最外層），不要塞在 patch 之間（patch 之間有對話會干擾解析）
    - 範例：「字改紅了。順便提醒這暗背景配紅字對比可能不夠，要不要加個陰影？」
 
-### 【🆘 大改逃生機制】
+### 【🆘 大改＝直接給整包新面板，禁止喊「太大」、禁止叫用戶重做】
 
-如果用戶的修改建議**無法用幾條精準小 patch 表達**（例如「整個換成藍色科技風」「改成英文版」「重新設計成 X 風格」這類涉及全面替換），**不要硬塞一個超大 patch 進來**。
+如果用戶的修改建議**無法用幾條精準小 patch 表達**（例如「整個換藍色科技風」「改成英文版」「重新設計成 X 風格」，或一次「同時加 A、改 B、換 C」這種多項大改）——**絕對不要喊太大、不要叫用戶重發、也不要硬塞超大 patch**。請直接在這「同一次回覆」裡輸出整包全新面板的 JSON，用 <json> 包住，含七個鍵：
 
-請只輸出一個標籤、不要輸出任何 <patch>：
+<json>
+{"tagId":"沿用原面板的 tagId","isBlock":維持原面板的 true/false,"html":"...","css":"...","js":"...","usageDesc":"...","demoFormat":"..."}
+</json>
 
-<too_big_for_diff/>
-
-前端看到這個標籤會提示用戶改按「🔄 重新設計」按鈕走整包重做路徑。
+規則：① JSON 字串值內換行寫成 \\n、雙引號轉義成 \\"，整個 JSON 不可有真實換行。② 用戶沒提到、原本就有的部分要完整保留，只把該大改的依用戶要求重做。③ 一旦輸出 <json> 就不要再輸出任何 <patch>。前端收到整包會直接換上新面板、舊版自動進「歷史快照」可一鍵還原——**用戶完全不用重發**。
 
 ### 【範例】
 
@@ -2688,10 +2690,12 @@ ${d.usageDesc || ''}
 <div class="close-btn">關閉</div></replace>
 </patch>
 
-範例 C（用戶說「整個換成藍色科技風 / 改成英文版」）：
-<too_big_for_diff/>
+範例 C（用戶說「整個換成藍色科技風 / 改成英文版 / 一次加好幾項」＝大改 → 直接給整包，不要喊太大）：
+<json>
+{"tagId":"原本的","isBlock":true,"html":"…全新…","css":"…全新…","js":"…","usageDesc":"…","demoFormat":"…"}
+</json>
 
-開始輸出（只輸出 <patch> 區塊 或 <too_big_for_diff/>，其他都不要寫）：`;
+開始輸出（小修 → 只輸出 <patch> 區塊；大改 → 只輸出 <json>…</json> 整包；兩者擇一，其他都不要寫）：`;
     }
 
     // 抽取 AI 在 patches 之外講的對話（吐槽 / 建議 / 確認）
@@ -2700,7 +2704,8 @@ ${d.usageDesc || ''}
         let text = responseText;
         // 去掉所有 <patch>...</patch> 區塊
         text = text.replace(/<patch\s+target=["'][^"']+["']\s*>[\s\S]*?<\/patch>/gi, '');
-        // 去掉逃生標籤
+        // 去掉整包 <json>（大改路徑）與舊逃生標籤，避免被當成對話文字
+        text = text.replace(/<json>[\s\S]*?<\/json>/gi, '');
         text = text.replace(/<too_big_for_diff\s*\/?\s*>/gi, '');
         // 去掉常見的 markdown 包裹
         text = text.replace(/```[\s\S]*?```/g, '');
@@ -2899,6 +2904,34 @@ ${d.usageDesc || ''}
                     (finalText) => {
                         const lockedChatId = getChatSessionId();
                         aiBubble.remove();
+
+                        // 🆘 大改：AI 直接在這同一通給整包新面板 <json>（取代舊的「喊太大→叫你按重新設計重發」）
+                        //    → 直接換上新面板，舊版進入前已拍進歷史快照可還原，用戶不用重發、不浪費第二次調用。
+                        if (/<json>[\s\S]*?<\/json>/i.test(finalText)) {
+                            const _oldTag = (currentParsedData && currentParsedData.tagId) || '';
+                            const _oldBlock = currentParsedData ? currentParsedData.isBlock : undefined;
+                            if (extractAndParseJson(finalText) && currentParsedData && !Array.isArray(currentParsedData)) {
+                                // AI 偶爾漏 tagId/isBlock → 用舊面板的補回，避免面板認不出來
+                                if (!currentParsedData.tagId && _oldTag) currentParsedData.tagId = _oldTag;
+                                if (currentParsedData.isBlock === undefined && _oldBlock !== undefined) currentParsedData.isBlock = _oldBlock;
+                                activePreviewData = currentParsedData;
+                                renderPreviewPanel();
+                                renderVNHistoryArea();
+                                const conv = extractConversationalText(finalText);
+                                const msg = '🔄 這次改動較大，已直接幫你整個重做（沒用小修補）。舊版已存進「⏪ 還原舊版」，不滿意可一鍵還原——你不用重發。' + (conv ? '\n\n' + conv : '');
+                                chatMessages.push({ role: 'assistant', content: msg });
+                                _studioSave(lockedChatId);
+                                const fb = document.createElement('div');
+                                fb.className = 'studio-bubble ai studio-bubble-enter';
+                                fb.style.cssText = 'background:rgba(52,152,219,0.08); border-color:rgba(52,152,219,0.4); color:#1A1C28;';
+                                fb.textContent = msg;
+                                container.appendChild(fb);
+                                container.scrollTop = container.scrollHeight;
+                                resolve();
+                                return;
+                            }
+                            // 整包解析失敗 → 落回下面的 diff 流程當保底
+                        }
 
                         // 套用 diff patches（AI 沒指定的內容物理上動不到）
                         // applyDiffPatches 回傳：陣列（每條 patch 結果）/ {status:'too_big'}（AI 主動逃生 or 前端全局長度檢查 abort）
