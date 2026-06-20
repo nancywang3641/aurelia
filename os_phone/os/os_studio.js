@@ -461,6 +461,8 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
                         var canShow = /\blines\b/.test(js) || /container/.test(js);
                         data.caps = (canGen && canShow) ? 'both' : (canGen ? 'gen' : 'display');
                     })();
+                    // 記下「你開頭明確選的型別」——VN組件 vs 我的應用 的歸屬以這個為準，不靠 caps 亂猜
+                    data.panelType = _vnPanelType;
                     // 一律存一份可編輯底稿(模板)；應用/共用 之後靠 srcTplId 找回它編輯
                     await win.OS_DB.saveVNTagTemplate(data);
                     await syncActiveTagsToLocal();
@@ -2435,23 +2437,12 @@ ${cleanFormat}
         }
         try {
             const _allTpls = await db.getAllVNTagTemplates();
-            const templates = _allTpls.filter(t => (t.caps || 'display') === 'display');   // VN組件 只放「純展示」面板
-            const _appTpls = _allTpls.filter(t => t.caps && t.caps !== 'display');           // 應用/共用 的家是「我的應用」→ 這裡只給搬遷提示
+            // VN組件 = 「不是你明確選為 應用/共用 的」全部組件（純展示 + 舊的未標型別都算組件）；
+            // 明確標為 應用/共用 的(panelType) 家在「我的應用」，不在這。不再靠 caps 亂猜、不再彈誤導的搬遷提示。
+            const templates = _allTpls.filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用');
             listEl.innerHTML = '';
-            // 舊的「應用/共用」還留在這 → 頂部給遷移提示（不自動塞桌面圖標，由你決定搬）
-            if (_appTpls.length) {
-                const mig = document.createElement('div');
-                mig.className = 'vn-migrate-notice';
-                mig.innerHTML = `這裡有 ${_appTpls.length} 個「應用/共用」面板，它們的家現在是「應用工坊 · 我的應用」。<button class="vn-migrate-btn" type="button">📲 全部搬到我的應用</button>`;
-                listEl.appendChild(mig);
-                mig.querySelector('.vn-migrate-btn').onclick = async () => {
-                    for (const t of _appTpls) { try { await _installTemplateAsPhoneApp(t); } catch (e) {} }
-                    alert(`已把 ${_appTpls.length} 個應用裝進「應用工坊 · 我的應用」。`);
-                    loadStudioGallery();
-                };
-            }
             if (!templates.length) {
-                if (!_appTpls.length) listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">VN組件 空空如也，去煉丹做純展示面板吧！</div>';
+                listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">VN組件 空空如也，去煉丹做純展示面板吧！</div>';
                 return;
             }
             // 一次性抓所有手機 app（用 srcTplId 對照展廳模板）
