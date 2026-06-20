@@ -50,7 +50,7 @@
       +       '<div class="ws-home-hd"><div class="ws-home-title">應用工坊 <span class="ws-spark">✨</span></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div>'
       +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go">›</span></button>'
       +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go">›</span></button>'
-      +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板（匯入／自製）</span><span class="ws-card-d">給朋友的 Claude／GPT 照說明書做好，到創作室「展廳」貼回來用</span></span><span class="ws-card-go">›</span></button>'
+      +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板</span><span class="ws-card-d">給朋友的 Claude／GPT 照說明書做好，到創作室「展廳」貼回來用</span></span><span class="ws-card-go">›</span></button>'
       +       '<div class="ws-sec-row"><span class="ws-sec-t">我的應用</span><button class="ws-sec-more" data-go="mine" type="button">查看全部 ›</button></div>'
       +       '<div class="ws-home-mine" id="ws-home-mine"></div>'
       +     '</div>'
@@ -192,7 +192,7 @@
         };
 
         mkGroup([
-            isStudio ? mkRow('✏️ 編輯（載回創作室微調）', function () { if (S.openEditApp) S.openEditApp(a.srcTplId, c); else _toast(c, '創作室未就緒'); }) : null,
+            isStudio ? mkRow('✏️ 編輯', function () { if (S.openEditApp) S.openEditApp(a.srcTplId, c); else _toast(c, '創作室未就緒'); }) : null,
             mkRow('📝 原始碼', function () {
                 const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
                 const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
@@ -220,7 +220,7 @@
                     _openAppDetail(c, a);
                     _toast(c, '🧠 這個 app 的記憶' + (!cur ? '會' : '不會') + '回傳酒館');
                 }, { toggle: true, on: memOn }),
-                mkRow('📥 載入酒館（純文字也能跑）', function () { if (S.injectAppToTavern) { S.injectAppToTavern(a.srcTplId); _toast(c, '📥 已寫入酒館正則'); } }),
+                mkRow('📥 載入酒館', function () { if (S.injectAppToTavern) { S.injectAppToTavern(a.srcTplId); _toast(c, '📥 已寫入酒館正則，純文字也能跑'); } }),
                 mkRow('🏠 放進大廳', async function () { if (S.toggleAppLobby) { const on = await S.toggleAppLobby(a.srcTplId); _toast(c, '🏠 大廳：' + (on ? '已啟用' : '已關閉')); } }),
                 mkRow('📦 匯出 .json', function () { if (S.exportApp) S.exportApp(a.srcTplId); })
             ]);
