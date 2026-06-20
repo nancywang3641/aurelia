@@ -872,7 +872,16 @@
                 const uInfo = userModule.getInfo();
                 if (uInfo.desc) userDesc = uInfo.desc;
             }
-            const charName = ctx.char.name || "AI";
+            let charName = ctx.char.name || "AI";
+            // directMode：{{char}} 要用「實際在聊的那個聯絡人」名字，不是酒館主角色卡（常常不是同一個人 → AI 演錯人）
+            let _usingContactName = false;
+            try {
+                const _activeId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
+                if (_activeId && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
+                    const _ac = await win.WX_DB.getApiChat(_activeId);
+                    if (_ac && !_ac.isGroup && _ac.name && _ac.name !== charName) { charName = _ac.name; _usingContactName = true; }
+                }
+            } catch (e) {}
 
             let sysPrompt = "";
             let cotPrompt = "";
@@ -884,6 +893,12 @@
                 if (!NO_COT_ROUTES.includes(promptKey)) cotPrompt = win.OS_PROMPTS.get('universal_cot');
             }
 
+            // 🔑 解析巨集：模板裡的 {{char}}/{{user}} 走直連 API「不會」被酒館替換 → 自己換成真名。
+            //    否則 AI 拿到字面「{{user}}」只能亂猜，加上劇情歷史滿是 MC（${userName}）→ 把使用者當成別的角色。
+            const _resolveMacros = (s) => String(s == null ? '' : s).split('{{char}}').join(charName).split('{{user}}').join(userName);
+            sysPrompt = _resolveMacros(sysPrompt);
+            cotPrompt = _resolveMacros(cotPrompt);
+
             if (!sysPrompt && promptKey === 'wx_chat_system') {
                 sysPrompt = `You are ${charName}. Chat with ${userName}.`;
             }
@@ -894,11 +909,14 @@
             if (sysPrompt) apiMessages.push({ role: "system", content: `### Instruction\n${sysPrompt}` });
 
             let contextBlock = "";
-            if (userDesc || userName !== "User") contextBlock += `[User Persona (${userName})]:\n${userDesc || '(玩家本人)'}\n\n`;
-            
-            if (ctx.char.description) contextBlock += `[Character Description]:\n${ctx.char.description}\n\n`;
-            if (ctx.char.personality) contextBlock += `[Personality]:\n${ctx.char.personality}\n\n`;
-            if (ctx.char.scenario) contextBlock += `[Scenario]:\n${ctx.char.scenario}\n\n`;
+            if (userDesc || userName !== "User") contextBlock += `[User Persona — ${userName}]:\n${userDesc || '(玩家本人)'}\n⚠️ ${userName} 就是正在跟你聊天的真實使用者本人；你回覆與稱呼的對象永遠是 ${userName}，絕對不要把他當成劇情裡的其他角色或 NPC。\n\n`;
+
+            // 聊的不是酒館主角色卡本人時，別灌主角色卡的描述（那是別人 → 害 AI 演成主角色）；改靠下方該聯絡人自己的 persona
+            if (!_usingContactName) {
+                if (ctx.char.description) contextBlock += `[Character Description]:\n${ctx.char.description}\n\n`;
+                if (ctx.char.personality) contextBlock += `[Personality]:\n${ctx.char.personality}\n\n`;
+                if (ctx.char.scenario) contextBlock += `[Scenario]:\n${ctx.char.scenario}\n\n`;
+            }
             const NO_LORE_ROUTES = ['iris_chat', 'cheshire_chat'];
             if (ctx.lore && !NO_LORE_ROUTES.includes(promptKey)) contextBlock += `[World Info]:\n${ctx.lore}\n\n`;
             
