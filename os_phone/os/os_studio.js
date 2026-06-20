@@ -766,6 +766,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 document.getElementById('studio-preview-content').style.display  = tab.dataset.tab === 'preview' ? 'flex'   : 'none';
                 document.getElementById('studio-source-content').style.display   = tab.dataset.tab === 'source'  ? 'block'  : 'none';
                 document.getElementById('studio-gallery-content').style.display  = tab.dataset.tab === 'gallery' ? 'block'  : 'none';
+                // 「✅ 確定創建」footer 只在「預覽」分頁顯示（原碼/VN組件 不該看到）
+                { const _aa = document.querySelector('.studio-action-area'); if (_aa) _aa.style.display = tab.dataset.tab === 'preview' ? 'flex' : 'none'; }
                 if (tab.dataset.tab === 'gallery') loadStudioGallery();
             };
         });
@@ -1009,6 +1011,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         document.getElementById('studio-preview-content').style.display  = 'flex';
         document.getElementById('studio-source-content').style.display   = 'none';
         document.getElementById('studio-gallery-content').style.display  = 'none';
+        { const _aa = document.querySelector('.studio-action-area'); if (_aa) _aa.style.display = 'flex'; }   // 預覽 tab → 顯示確定創建 footer
 
         await switchChatSession();
     }
@@ -2299,6 +2302,7 @@ ${cleanFormat}
         const _pc = document.getElementById('studio-preview-content'); if (_pc) _pc.style.display = 'flex';
         const _sc = document.getElementById('studio-source-content'); if (_sc) _sc.style.display = 'none';
         const _gc = document.getElementById('studio-gallery-content'); if (_gc) _gc.style.display = 'none';
+        const _aa = document.querySelector('.studio-action-area'); if (_aa) _aa.style.display = 'flex';   // 編輯模式進預覽 → 顯示確定創建 footer
         renderChatHistory();
         renderPreviewPanel();
     }
