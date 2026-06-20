@@ -988,10 +988,24 @@ ${lines.join('\n')}
             for (const [entityKey, entityValRaw] of Object.entries(container)) {
                 if (entityKey === containerPath) continue;                       // 跳過自包裝範本鍵(鬼實體)
                 if (!entityValRaw || typeof entityValRaw !== 'object') continue; // 非實體(範本殘留純值)跳過
-                const entityVal = { ...entTpl, ..._avsFlatObj(entityValRaw) };   // 範本當底 + 攤平實體(舊「形象」巢狀也攤平)
+                const flatReal = _avsFlatObj(entityValRaw);                       // 這個實體「實際擁有」的欄位(攤平)
+                const entityVal = { ...entTpl, ...flatReal };                     // 範本當底 + 實體(舊「形象」巢狀也攤平)
                 let block = innerTpl;
                 block = block.split('{{@key}}').join(entityKey);
                 block = block.split('{{@avatar}}').join(_AV[entityKey] || _TPX);   // 角色頭像：用角色名去頭像庫撈，沒有就透明
+                // {{#fields}}…{{/fields}}：逐欄位自動展開「這個實體實際有的欄位」→ 異質角色各畫各的、跑團新增欄位也自動出現、永不漏
+                //   列裡用 {{@label}}=欄位名、{{@value}}=欄位值。模板不必寫死欄位名（治「卡片只剩固定幾列、多的角色被切」）
+                block = block.replace(/\{\{#fields\}\}([\s\S]*?)\{\{\/fields\}\}/g, (mm, rowTpl) => {
+                    let rows = '';
+                    for (const [fk, fv] of Object.entries(flatReal)) {
+                        if (fv && typeof fv === 'object' && !Array.isArray(fv)) continue;   // 巢狀物件不適合當單列(略過)
+                        const val = (fv === null || fv === undefined || fv === '') ? '—'
+                            : Array.isArray(fv) ? fv.map(x => (x && typeof x === 'object') ? Object.values(x).join('·') : f(x)).join('、')
+                            : f(fv);
+                        rows += rowTpl.split('{{@label}}').join(fk).split('{{@value}}').join(val);
+                    }
+                    return rows;
+                });
                 for (const [ak, av] of Object.entries(entityVal)) {
                     const sv = (av && typeof av === 'object') ? JSON.stringify(av) : f(av);
                     block = block.split(`{{${ak}}}`).join(sv);
@@ -1393,10 +1407,15 @@ ${lines.join('\n')}
                 if (multiObj.length) {
                     fullPrompt +=
                         `\n\n【多實體變數】內含多個實體（如多個角色/NPC），**必須用迴圈渲染，禁止直接寫 {{變數名}}**：\n` +
-                        multiObj.map(o => `  - 「${o.v.name}」每個實體屬性：${o.fields.join('、') || '（動態）'}`).join('\n') + `\n` +
+                        multiObj.map(o => `  - 「${o.v.name}」（多個實體；每個實體的欄位數量與名稱都不盡相同）`).join('\n') + `\n` +
                         `迴圈語法：{{#each 變數名}} ...單一實體的卡片HTML... {{/each}}\n` +
-                        `迴圈內可用：{{@key}} = 實體名；{{@avatar}} = 該實體頭像URL（放進 <img src="{{@avatar}}">，無頭像自動帶透明圖、不破版）；{{屬性名}} = 該實體的屬性值\n` +
-                        `★ 迴圈會對每個實體自動重複，跑團新增的也會自動出現，**絕對不要寫死實體名**`;
+                        `迴圈內可用：\n` +
+                        `  • {{@key}} ＝ 實體名\n` +
+                        `  • {{@avatar}} ＝ 該實體頭像URL（放進 <img src="{{@avatar}}">，無頭像自動帶透明圖、不破版）\n` +
+                        `  • {{#fields}} ...單一欄位的「列」HTML... {{/fields}} ＝ 系統會對「這個實體實際擁有的每個欄位」自動重複；列裡用 {{@label}} ＝ 欄位名、{{@value}} ＝ 欄位值\n` +
+                        `★【鐵則·防漏欄】每個實體的欄位都不一樣（有的多、有的少）。**嚴禁自己寫死任何欄位名當固定列**——所有資料列一律放進 {{#fields}}…{{/fields}} 交給系統逐欄位展開，這樣每張卡都會完整顯示「該實體自己的全部欄位」，跑團中途新增的欄位也會自動出現、絕不漏。\n` +
+                        `★ 你只負責設計「卡片外框」和「一個欄位列長怎樣」（用 {{@label}}/{{@value}}）；欄位有幾個、叫什麼，全交給 {{#fields}} 自動處理。\n` +
+                        `★ 迴圈會對每個實體自動重複，**絕對不要寫死實體名**`;
                 }
                 if (singleObj.length) {
                     fullPrompt +=
