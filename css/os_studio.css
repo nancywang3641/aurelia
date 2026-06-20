@@ -141,8 +141,11 @@
         /* ── 多泡泡入場動畫 ── */
         @keyframes studio-bubble-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
         .studio-bubble-enter { animation: studio-bubble-in 0.22s ease-out forwards; }
-        /* ── 展廳 ── */
+        /* ── VN組件（原展廳：只放純展示面板）── */
         .studio-gallery-list { display:flex; flex-direction:column; gap:15px; }
+        /* 應用/共用 舊模板的「搬到我的應用」提示 */
+        .vn-migrate-notice { font-size:12px; color:rgba(26,28,40,0.72); background:rgba(230,126,34,0.10); border:1px solid rgba(230,126,34,0.40); border-radius:8px; padding:10px 12px; line-height:1.5; }
+        .vn-migrate-btn { display:block; margin-top:8px; padding:7px 12px; border-radius:6px; border:1px solid #e67e22; background:rgba(230,126,34,0.14); color:#b5651d; font-size:12px; font-weight:bold; cursor:pointer; font-family:inherit; }
         .studio-gallery-card { background:rgba(228,232,245,0.5); border:1px solid rgba(26,28,40,0.15); border-radius:8px; padding:14px; }
         .studio-gallery-card.active-tag { border-color: #1A1C28; }
         .sgc-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }

@@ -71,7 +71,7 @@
                     <div class="studio-right-header">
                         <div class="studio-tab active" data-tab="preview">👁️ 畫布預覽</div>
                         <div class="studio-tab" data-tab="source" id="studio-tab-source">💻 原始碼</div>
-                        <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;">🎮 展廳</div>
+                        <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;">🎮 VN組件</div>
                     </div>
                     <div class="studio-preview-content" id="studio-preview-content">
                         <div id="studio-preview-main" class="studio-preview-main">
@@ -90,7 +90,7 @@
                         <div class="studio-gallery-list" id="studio-gallery-list"></div>
                     </div>
                     <div class="studio-action-area">
-                        <button class="studio-export-btn" id="studio-export-btn">💾 儲存草稿</button>
+                        <button class="studio-export-btn" id="studio-export-btn">✅ 確定創建</button>
                         <button class="studio-export-btn" id="studio-publish-btn" style="background:linear-gradient(135deg,#e67e22,#d35400); border-color:#d35400; margin-left:10px; display:none;">🚀 發布至世界書</button>
                     </div>
                 </div>
@@ -107,7 +107,7 @@
                     <div style="color:#c39bf2; cursor:pointer; font-size:20px;" id="raw-edit-close">✕</div>
                 </div>
                 <div style="font-size:11px; color:rgba(195,155,242,0.6); line-height:1.5;">
-                    完整 JSON 結構（含 tagId / html / css / js / usageDesc / demoFormat 等）。直接編輯後按「💾 儲存」會覆寫展廳這個面板。改壞了可以按「↺ 重置」拿回原本內容。
+                    完整 JSON 結構（含 tagId / html / css / js / usageDesc / demoFormat 等）。直接編輯後按「💾 儲存」會覆寫這個面板。改壞了可以按「↺ 重置」拿回原本內容。
                 </div>
                 <textarea id="raw-edit-textarea" style="flex:1; min-height:50vh; max-height:65vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
                 <div id="raw-edit-status" style="font-size:11px; color:rgba(255,255,255,0.5); min-height:14px;"></div>
@@ -127,7 +127,7 @@
                     <div style="color:#9b59b6; cursor:pointer; font-size:20px;" id="studio-import-close">✕</div>
                 </div>
                 <div style="font-size:11px; color:rgba(125,60,174,0.85); line-height:1.6;">
-                    把你的 AI（Claude／GPT）照「📋 創建說明書」產出的 <strong>&lt;json&gt;…&lt;/json&gt;</strong> 整段貼進來，按「載入預覽」檢查；OK 後到上方按「💾 儲存」存進展廳，就能在劇情裡用了。
+                    把你的 AI（Claude／GPT）照「📋 創建說明書」產出的 <strong>&lt;json&gt;…&lt;/json&gt;</strong> 整段貼進來，按「載入預覽」檢查；OK 後到上方按「✅ 確定創建」存起來（純展示→VN組件、應用/共用→我的應用），就能用了。
                 </div>
                 <textarea id="studio-import-textarea" placeholder="&lt;json&gt;{ ... }&lt;/json&gt;" style="flex:1; min-height:46vh; max-height:62vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
                 <div id="studio-import-status" style="font-size:11px; color:rgba(26,28,40,0.6); min-height:14px;"></div>
@@ -462,12 +462,18 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
                         var canShow = /\blines\b/.test(js) || /container/.test(js);
                         data.caps = (canGen && canShow) ? 'both' : (canGen ? 'gen' : 'display');
                     })();
+                    // 一律存一份可編輯底稿(模板)；應用/共用 之後靠 srcTplId 找回它編輯
                     await win.OS_DB.saveVNTagTemplate(data);
                     await syncActiveTagsToLocal();
                     if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
-                    alert(`🎉 [${data.tagId}] 煉丹完成！已自動儲存並同步至系統。`);
-                    // 自動切換到展廳
-                    document.getElementById('studio-tab-gallery')?.click();
+                    // 🔀 按開頭選的型別分流：純展示→VN組件；應用/共用→裝成手機 app、進「我的應用」（不繞 VN組件）
+                    if (_vnPanelType !== '純展示') {
+                        const _aid = await _installTemplateAsPhoneApp(data);
+                        alert(`🎉 [${data.tagId}] 已建立，並裝進手機 →「應用工坊 · 我的應用」！` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
+                    } else {
+                        alert(`🎉 [${data.tagId}] 已建立！已存進「VN組件」。`);
+                        document.getElementById('studio-tab-gallery')?.click();
+                    }
                 }
             }
         },
@@ -627,7 +633,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         currentParsedData = null;   // 匯入是「新面板」，別繼承上一個的 history
         const ok = extractAndParseJson(raw);   // 解析成功會 set currentParsedData + 跑 renderPreviewPanel
         if (ok && currentParsedData && !Array.isArray(currentParsedData) && currentParsedData.tagId && currentParsedData.html) {
-            if (status) status.textContent = '✅ 已載入！這視窗會自動關 → 上方切「預覽」檢查 → 按「💾 儲存」存進展廳。';
+            if (status) status.textContent = '✅ 已載入！這視窗會自動關 → 上方切「預覽」檢查 → 按「✅ 確定創建」存起來。';
             try { document.querySelector('.studio-tab[data-tab="preview"]') && document.querySelector('.studio-tab[data-tab="preview"]').click(); } catch (e) {}
             setTimeout(() => { const m = document.getElementById('studio-import-modal'); if (m) m.style.display = 'none'; }, 1000);
         } else {
@@ -2254,6 +2260,28 @@ ${cleanFormat}
         };
     }
 
+    // 把一個「應用/共用」模板裝成手機 app（進「應用工坊·我的應用」+ 桌面圖標）。
+    // 以 srcTplId 去重：已裝過就更新內容(編輯後重存會更新)，沒裝過才新增。回傳 app id。
+    async function _installTemplateAsPhoneApp(tpl) {
+        if (!tpl || !(win.OS_DB && win.OS_DB.savePhoneApp)) return null;
+        try {
+            let apps = [];
+            try { apps = (win.OS_DB.getAllPhoneApps ? (await win.OS_DB.getAllPhoneApps()) : []) || []; } catch (e) {}
+            const existing = apps.find(a => a && a.srcTplId === tpl.id);
+            const rec = existing
+                ? { ...existing }
+                : { name: tpl.tagId || '面板', emoji: '🧩', iconUrl: '', source: 'studio', srcTplId: tpl.id };
+            rec.html = _templateToPhoneHtml(tpl);   // 內容一律更新（編輯後重存即同步）
+            const newId = await win.OS_DB.savePhoneApp(rec);
+            try {
+                if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) {
+                    win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
+                }
+            } catch (e) {}
+            return newId;
+        } catch (e) { console.warn('[studio] 裝成手機 app 失敗', e); return null; }
+    }
+
     async function loadStudioGallery() {
         const listEl = document.getElementById('studio-gallery-list');
         if (!listEl) return;
@@ -2265,12 +2293,26 @@ ${cleanFormat}
             return;
         }
         try {
-            const templates = await db.getAllVNTagTemplates();
+            const _allTpls = await db.getAllVNTagTemplates();
+            const templates = _allTpls.filter(t => (t.caps || 'display') === 'display');   // VN組件 只放「純展示」面板
+            const _appTpls = _allTpls.filter(t => t.caps && t.caps !== 'display');           // 應用/共用 的家是「我的應用」→ 這裡只給搬遷提示
+            listEl.innerHTML = '';
+            // 舊的「應用/共用」還留在這 → 頂部給遷移提示（不自動塞桌面圖標，由你決定搬）
+            if (_appTpls.length) {
+                const mig = document.createElement('div');
+                mig.className = 'vn-migrate-notice';
+                mig.innerHTML = `這裡有 ${_appTpls.length} 個「應用/共用」面板，它們的家現在是「應用工坊 · 我的應用」。<button class="vn-migrate-btn" type="button">📲 全部搬到我的應用</button>`;
+                listEl.appendChild(mig);
+                mig.querySelector('.vn-migrate-btn').onclick = async () => {
+                    for (const t of _appTpls) { try { await _installTemplateAsPhoneApp(t); } catch (e) {} }
+                    alert(`已把 ${_appTpls.length} 個應用裝進「應用工坊 · 我的應用」。`);
+                    loadStudioGallery();
+                };
+            }
             if (!templates.length) {
-                listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">展廳空空如也，去煉丹吧！</div>';
+                if (!_appTpls.length) listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">VN組件 空空如也，去煉丹做純展示面板吧！</div>';
                 return;
             }
-            listEl.innerHTML = '';
             // 一次性抓所有手機 app（用 srcTplId 對照展廳模板）
             const _allPhoneApps = (win.OS_DB && win.OS_DB.getAllPhoneApps)
                 ? ((await win.OS_DB.getAllPhoneApps()) || [])
@@ -2385,7 +2427,7 @@ ${cleanFormat}
 
                 // ✏️ 繼續編輯：把這個 tpl 載回煉丹爐，用對話繼續微調
                 card.querySelector('.btn-continue').onclick = () => {
-                    if (!confirm(`✏️ 把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議（例如「字改大一點」），AI 只會微調、不會重做整個面板\n• 改完按「💾 儲存草稿」會覆蓋這個展廳條目（不是新增）\n\n確定嗎？`)) return;
+                    if (!confirm(`✏️ 把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議（例如「字改大一點」），AI 只會微調、不會重做整個面板\n• 改完按「✅ 確定創建」會覆蓋這個面板（不是新增）\n\n確定嗎？`)) return;
 
                     // 1. 載入 tpl 到 currentParsedData（深拷貝，避免 diff 修改污染展廳資料）
                     currentParsedData = JSON.parse(JSON.stringify(tpl));
@@ -2397,7 +2439,7 @@ ${cleanFormat}
                     // 注入一條 assistant 引導訊息，用戶看到「已載入」
                     chatMessages.push({
                         role: 'assistant',
-                        content: `📋 已從展廳載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n要整個換風格也行——直接描述新風格、發送就會自動整包重做，不用按任何按鈕、不用重發。`
+                        content: `📋 已載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n要整個換風格也行——直接描述新風格、發送就會自動整包重做，不用按任何按鈕、不用重發。`
                     });
                     _studioSave(chatId);
 
