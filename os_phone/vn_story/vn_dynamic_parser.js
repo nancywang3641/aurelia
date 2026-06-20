@@ -35,9 +35,10 @@
             if (this._inBlockId) {
                 // 防呆：去除空白比較，避免結尾多了空格導致無法閉合
                 const cleanLine = safeLine.toLowerCase().replace(/\s+/g, '');
-                const targetClose = `</${this._inBlockId.toLowerCase()}>`;
+                // 向下兼容：合標籤角括號 </XXX> 或方括號 [/XXX] 都收（AI 常被其他 tag 帶歪吐方括號）
+                const idLower = this._inBlockId.toLowerCase();
 
-                if (cleanLine === targetClose) {
+                if (cleanLine === `</${idLower}>` || cleanLine === `[/${idLower}]`) {
                     // 區塊結束，啟動沙盒執行
                     const targetTag = this._inBlockId;
                     const lines = [...this._blockLines];
@@ -56,8 +57,8 @@
             // 非區塊模式下，空行直接放行給 VN 引擎
             if (!safeLine) return false;
 
-            // 狀態 2：偵測是否為區塊開頭 (例如 <weibo>)
-            const blockStartMatch = safeLine.match(/^<([a-zA-Z0-9_-]+)>\s*$/i);
+            // 狀態 2：偵測是否為區塊開頭 (例如 <weibo>)；向下兼容角括號 <XXX> 與方括號 [XXX]
+            const blockStartMatch = safeLine.match(/^[<\[]([a-zA-Z0-9_-]+)[>\]]\s*$/i);
             if (blockStartMatch) {
                 const tag = blockStartMatch[1];
                 const tpl = this.activeTemplates.find(t => t.tagId.toLowerCase() === tag.toLowerCase() && t.isBlock);
