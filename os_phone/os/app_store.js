@@ -150,12 +150,20 @@
     function _mineRow(c, a, opened) {
         const row = document.createElement('div');
         row.className = 'ws-mine-row';
+        // 創作室做的「應用/共用」(有 srcTplId) → 多給：編輯/載入酒館/大廳/匯出/記憶回傳
+        const _isStudio = !!a.srcTplId;
+        const _memOn = !!(win.OS_APP_MEMORY_INJECT && win.OS_APP_MEMORY_INJECT.isPluginEnabled && win.OS_APP_MEMORY_INJECT.isPluginEnabled(a.id));
         row.innerHTML =
             '<span class="ws-mine-ic">' + _esc(a.emoji || '📦') + '</span>'
           + '<span class="ws-mine-info"><span class="ws-mine-name">' + _esc(a.name || 'App') + '</span><span class="ws-mine-sub">' + _esc(_relTime(opened[a.id])) + '</span></span>'
           + '<button class="ws-mine-menu" data-act="menu" type="button">⋯</button>'
           + '<div class="ws-mine-acts hidden">'
+          +   (_isStudio ? '<button class="ws-mini" data-act="edit" type="button">✏️ 編輯</button>' : '')
           +   '<button class="ws-mini" data-act="src" type="button">原始碼</button>'
+          +   (_isStudio ? '<button class="ws-mini" data-act="totavern" type="button">📥 載入酒館</button>' : '')
+          +   (_isStudio ? '<button class="ws-mini" data-act="lobby" type="button">🏠 大廳</button>' : '')
+          +   (_isStudio ? '<button class="ws-mini" data-act="mem" type="button">🧠 記憶回傳：' + (_memOn ? '開' : '關') + '</button>' : '')
+          +   (_isStudio ? '<button class="ws-mini" data-act="exp" type="button">📦 匯出</button>' : '')
           +   '<button class="ws-mini" data-act="rename" type="button">改名</button>'
           +   '<button class="ws-mini" data-act="emoji" type="button">換圖標</button>'
           +   '<button class="ws-mini danger" data-act="del" type="button">卸載</button>'
@@ -180,6 +188,22 @@
             a.emoji = (em.trim() || a.emoji).slice(0, 2);
             await win.OS_DB.savePhoneApp(a); _syncMeta(a); renderMine(c);
         };
+        // 創作室來源 app 的進階管理：靠 srcTplId 操作底稿（創作室對外暴露的方法）+ 記憶回傳開關（靠 app id）
+        if (_isStudio) {
+            const _S = win.OS_STUDIO || {};
+            const _qq = function (act) { return row.querySelector('[data-act="' + act + '"]'); };
+            if (_qq('edit')) _qq('edit').onclick = function () { if (_S.openEditApp) _S.openEditApp(a.srcTplId, c); else _toast(c, '創作室未就緒'); };
+            if (_qq('totavern')) _qq('totavern').onclick = function () { if (_S.injectAppToTavern) { _S.injectAppToTavern(a.srcTplId); _toast(c, '📥 已寫入酒館正則，純文字 RP 也能跑這面板'); } };
+            if (_qq('exp')) _qq('exp').onclick = function () { if (_S.exportApp) _S.exportApp(a.srcTplId); };
+            if (_qq('lobby')) _qq('lobby').onclick = async function () { if (_S.toggleAppLobby) { const on = await _S.toggleAppLobby(a.srcTplId); _toast(c, '🏠 大廳：' + (on ? '已啟用' : '已關閉')); } };
+            if (_qq('mem')) _qq('mem').onclick = function () {
+                const M = win.OS_APP_MEMORY_INJECT; if (!M || !M.setPluginEnabled) { _toast(c, '記憶模組未就緒'); return; }
+                const cur = M.isPluginEnabled ? M.isPluginEnabled(a.id) : false;
+                M.setPluginEnabled(a.id, !cur);
+                _qq('mem').textContent = '🧠 記憶回傳：' + (!cur ? '開' : '關');
+                _toast(c, '🧠 這個 app 的角色記憶' + (!cur ? '會' : '不會') + '回傳給酒館主模型');
+            };
+        }
         return row;
     }
 
