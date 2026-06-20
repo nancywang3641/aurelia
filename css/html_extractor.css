@@ -92,9 +92,7 @@
                 .native-render-wrapper td { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 6px 8px; font-size: 12px; }
                 .native-render-wrapper * { border-left: none !important; }
                 .native-render-wrapper *[style] { border-left: none !important; }
-                /* 正則/圍欄路徑：完整 HTML 文件卡片包成 iframe 渲染（內嵌 script/style 正常跑、等同酒館） */
-                .native-render-frame { width: 100%; border: none; display: block; min-height: 120px; background: transparent; margin-bottom: 16px; }
-
+                
                 .ue-md-table { width:100%; border-collapse:collapse; font-size:12px; margin:8px 0; }
                 .ue-md-table th { background:rgba(212,175,55,0.12); color:#d4af37; padding:7px 10px; text-align:left; border-bottom:1px solid rgba(212,175,55,0.3); font-family:'Cinzel',serif; letter-spacing:1px; font-size:11px; }
                 .ue-md-table td { padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.06); color:#e8dfc8; vertical-align:top; }
