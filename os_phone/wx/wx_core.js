@@ -1397,9 +1397,22 @@
                     APP_CONTAINER = container;
                     console.log('[Core] 微信面板已打開');
                     try {
-                        // 🔧 兼容：不分模式都先載入 wx 自己的 api_chats（橋接只會在上面合併 [wx_os]、不再清掉）
-                        if (win.WX_DB && win.WX_DB.getAllApiChats) {
-                            const savedChats = await win.WX_DB.getAllApiChats();
+                        // 🔒 chatId 隔離：只載入「當前劇情卡」自己的聯絡人（按 tavernChatId 章濾，與注入器同款）→
+                        //    治「古代卡開 wx 卻列出現代卡聯絡清單」。沒這方法的舊版退回全載。
+                        if (win.WX_DB && (win.WX_DB.getApiChatsForCurrentCard || win.WX_DB.getAllApiChats)) {
+                            const savedChats = win.WX_DB.getApiChatsForCurrentCard
+                                ? await win.WX_DB.getApiChatsForCurrentCard()
+                                : await win.WX_DB.getAllApiChats();
+                            // GLOBAL_CHATS 整頁只宣告一次、切卡不重設 → 先清掉「明確屬於別張卡」的殘留，再併入當前卡的
+                            //（沒蓋章的＝本卡新建/橋接遺留，保留）
+                            const cid = win.WX_DB.getCurrentCardId ? win.WX_DB.getCurrentCardId() : null;
+                            if (cid != null) {
+                                for (const k in GLOBAL_CHATS) {
+                                    const tag = GLOBAL_CHATS[k] ? GLOBAL_CHATS[k].tavernChatId : null;
+                                    if (tag != null && tag !== cid) delete GLOBAL_CHATS[k];
+                                }
+                                if (GLOBAL_ACTIVE_ID && !GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) GLOBAL_ACTIVE_ID = null; // 修正懸空 active id
+                            }
                             if (savedChats && Object.keys(savedChats).length > 0) { Object.assign(GLOBAL_CHATS, savedChats); }
                         }
                     } catch (e) { console.error(e); }
