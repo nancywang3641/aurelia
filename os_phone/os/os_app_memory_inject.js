@@ -213,11 +213,40 @@
         }
     }
 
+    // 🎴 VN組件說明注入：把「啟用中的 VN組件」使用說明(os_vn_extra_tags_prompt，由 syncActiveTagsToLocal
+    //    在 啟用/停用 時即時組好)注入酒館原生生成 → 啟用/停用 = 馬上換注入層，取代手動貼世界書。
+    var VN_TAGS_INJECT_ID = 'aurelia_vn_tags';
+    var _lastVnTagsUninject = null;
+    function injectVnTags() {
+        try {
+            try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {}
+            _lastVnTagsUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var spec = '';
+            try { spec = localStorage.getItem('os_vn_extra_tags_prompt') || ''; } catch (e) {}
+            if (!spec.trim()) return;
+            var result = win.TavernHelper.injectPrompts([{
+                id: VN_TAGS_INJECT_ID,
+                content: spec.trim(),
+                position: 'in_chat',
+                depth: 0,
+                role: 'system'
+            }], { once: true });
+            _lastVnTagsUninject = (result && result.uninject) || null;
+            console.log('🎴 [VN Tags Injector] 注入啟用中的 VN組件說明');
+        } catch (e) { console.warn('[VN Tags Injector] 失敗:', (e && e.message) || e); }
+    }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
-        if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, injectAppMemory);
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} _lastUninject = null; });
-        console.log('📱 [App Memory Injector] Ready（微信/微薄/電話）');
+        if (win.tavern_events.GENERATION_STARTED) {
+            win.eventOn(win.tavern_events.GENERATION_STARTED, injectAppMemory);
+            win.eventOn(win.tavern_events.GENERATION_STARTED, injectVnTags);
+        }
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; });
+        console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件）');
     }
 
     win.OS_APP_MEMORY_INJECT = {
