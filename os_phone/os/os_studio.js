@@ -1088,6 +1088,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 .inner-mode #dialogue-text{color:var(--em-color);font-style:italic;letter-spacing:1px;}
 #dialogue-text em{font-style:italic;color:var(--em-color);}
 #dialogue-text strong{font-weight:bold;color:#fff;}
+/* 📱 手機尺寸(預覽 phone vp = 390px 寬)：頂部鈕改直排靠右，對齊真實 VN css/vn_styles.css 的 @media(max-width:480px) 版型；中間/全屏(≥600px)不受影響、維持橫排 */
+@media(max-width:480px){
+#btn-home{top:10px;right:8px;padding:6px 12px;font-size:0.78rem;min-width:56px;box-sizing:border-box;text-align:center;}
+#btn-settings{top:48px;right:8px;padding:6px 12px;font-size:0.78rem;min-width:56px;box-sizing:border-box;text-align:center;}
+#btn-phone{top:86px;right:8px;padding:6px 10px;font-size:0.78rem;min-width:56px;box-sizing:border-box;text-align:center;}
+}
 `;
     let _vthMode = 'char-mode';
 
