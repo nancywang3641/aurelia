@@ -29,6 +29,7 @@
     let _editingFieldName = null; // null / 欄位名 / '__new__'
     let _advOpen = false;
     let _curOpen = false;   // 目前狀態(humanize)預設收起 → 點按鈕才展開，避免面板太長
+    let _editingValues = false;   // 「✏️ 改數值」模式：把目前狀態的每個值變成可填的小格子（非 JSON），手動修正 AI 填錯
 
     // ── 人話版狀態渲染 ───────────────────────────────────────────
     function _isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
@@ -71,6 +72,61 @@
         return keys.map(k =>
             `<div class="avs-st-section"><div class="avs-st-section-hd">${_icon(k)} ${esc(k)}</div><div class="avs-st-section-body">${_renderValue(cur[k])}</div></div>`
         ).join('');
+    }
+
+    // ── 「✏️ 改數值」可編輯渲染：每個葉值一個小格子（非 JSON），純量陣列用一行頓號分隔，物件清單暫不可編 ──
+    function _editFields(obj, prefix, out) {
+        Object.keys(obj || {}).forEach(k => {
+            const path = prefix ? prefix + '.' + k : k;
+            const v = obj[k];
+            if (Array.isArray(v)) {
+                const allScalar = v.every(x => !_isObj(x) && !Array.isArray(x));
+                if (allScalar) {
+                    out.push(`<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><input class="avs-st-edit-input" data-path="${esc(path)}" data-arr="1" value="${esc(v.join('、'))}"></div>`);
+                } else {
+                    out.push(`<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><span class="avs-st-dim">（清單較複雜，暫不可手改）</span></div>`);
+                }
+            } else if (_isObj(v)) {
+                out.push(`<div class="avs-st-edit-group"><div class="avs-st-edit-grouphd">${esc(k)}</div>`);
+                _editFields(v, path, out);
+                out.push(`</div>`);
+            } else {
+                out.push(`<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><input class="avs-st-edit-input" data-path="${esc(path)}" value="${esc(_scalar(v) === '—' ? '' : String(v))}"></div>`);
+            }
+        });
+        return out;
+    }
+    function _humanizeEditable(cur) {
+        if (!Object.keys(cur || {}).length) return `<div class="avs-st-empty">還沒有狀態可編輯。</div>`;
+        return _editFields(cur, '', []).join('');
+    }
+    function _setByPath(obj, path, val) {
+        const parts = String(path).split('.');
+        let o = obj;
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (!o[parts[i]] || typeof o[parts[i]] !== 'object') o[parts[i]] = {};
+            o = o[parts[i]];
+        }
+        o[parts[parts.length - 1]] = val;
+    }
+    async function _saveStateValues() {
+        const eng = win._AVS_ENGINE;
+        let cur = {};
+        try { cur = JSON.parse(JSON.stringify((eng && eng.read && eng.read()) || {})); } catch (e) {}
+        (_host ? _host.querySelectorAll('.avs-st-edit-input[data-path]') : []).forEach(inp => {
+            const path = inp.getAttribute('data-path');
+            let val = inp.value;
+            if (inp.getAttribute('data-arr')) {
+                val = String(val).split(/[、,，\n]/).map(s => s.trim()).filter(Boolean);
+            } else {
+                const t = String(val).trim();
+                if (t !== '' && /^-?\d+(\.\d+)?$/.test(t)) val = Number(t);   // 純數字 → 存成數字
+            }
+            _setByPath(cur, path, val);
+        });
+        try { if (eng && eng.write) eng.write(cur); } catch (e) { console.warn('[AVS State] 手動存值失敗', e); }
+        _editingValues = false;
+        _build();
     }
 
     // ── schema 欄位編輯表單（進階區內）────────────────────────────
@@ -198,7 +254,12 @@
 
             <button class="avs-st-adv-btn${_curOpen ? ' open' : ''}" id="avs-st-cur-btn">📊 目前狀態</button>
             <div class="avs-st-adv${_curOpen ? ' open' : ''}" id="avs-st-cur">
-                <div class="avs-st-current-body">${_humanize(cur)}</div>
+                <div class="avs-st-cur-editbar">
+                    ${_editingValues
+                        ? `<button class="avs-btn avs-btn-primary avs-st-fe-btn" id="avs-st-val-save">💾 儲存</button><button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-cancel">取消</button>`
+                        : `<button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-edit">✏️ 改數值</button><span class="avs-st-editbar-hint">AI 偶爾填錯？點這手動改</span>`}
+                </div>
+                <div class="avs-st-current-body">${_editingValues ? _humanizeEditable(cur) : _humanize(cur)}</div>
             </div>
 
             <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-st-adv-btn">⚙️ 進階：追蹤設定與資料管理</button>
@@ -252,6 +313,10 @@
         if (advBtn && adv) advBtn.onclick = () => { _advOpen = !_advOpen; advBtn.classList.toggle('open', _advOpen); adv.classList.toggle('open', _advOpen); };
         const curBtn = q('#avs-st-cur-btn'), curBody = q('#avs-st-cur');
         if (curBtn && curBody) curBtn.onclick = () => { _curOpen = !_curOpen; curBtn.classList.toggle('open', _curOpen); curBody.classList.toggle('open', _curOpen); };
+        // ✏️ 改數值 / 💾 儲存 / 取消（手動修正 AI 填錯的狀態值）
+        { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _curOpen = true; _build(); }; }
+        { const sb = q('#avs-st-val-save'); if (sb) sb.onclick = () => { _saveStateValues(); }; }
+        { const cb = q('#avs-st-val-cancel'); if (cb) cb.onclick = () => { _editingValues = false; _build(); }; }
 
         // 即時記錄開關
         const toggle = q('#avs-st-toggle');

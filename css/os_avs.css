@@ -62,6 +62,15 @@
 
         .avs-st-current-hd { font-size: 14px; font-weight: 800; color: #1A1C28; margin: 4px 2px 2px; }
         .avs-st-current-body { display: flex; flex-direction: column; gap: 10px; }
+        /* 「✏️ 改數值」編輯模式：每個值一個小格子（非 JSON） */
+        .avs-st-cur-editbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        .avs-st-editbar-hint { font-size: 12px; color: rgba(26,28,40,0.5); }
+        .avs-st-edit-group { margin: 4px 0 8px; padding-left: 10px; border-left: 2px solid rgba(26,28,40,0.12); }
+        .avs-st-edit-grouphd { font-size: 13px; font-weight: bold; color: #1A1C28; margin: 6px 0 4px; }
+        .avs-st-edit-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+        .avs-st-edit-k { font-size: 12.5px; color: rgba(26,28,40,0.6); flex: 0 0 33%; min-width: 0; word-break: break-word; }
+        .avs-st-edit-input { flex: 1; min-width: 0; background: rgba(228,232,245,0.9); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
+        .avs-st-edit-input:focus { border-color: #1A1C28; background: #EEF0F6; }
         .avs-st-empty { padding: 24px 16px; text-align: center; color: rgba(26,28,40,0.4); font-size: 12.5px; line-height: 1.9; background: rgba(228,232,245,0.6); border: 1px dashed rgba(26,28,40,0.15); border-radius: 10px; }
         .avs-st-section { background: rgba(228,232,245,0.85); border: 1px solid rgba(26,28,40,0.12); border-radius: 10px; overflow: hidden; }
         .avs-st-section-hd { font-size: 13px; font-weight: 800; color: #1A1C28; padding: 10px 14px; background: rgba(26,28,40,0.05); border-bottom: 1px solid rgba(26,28,40,0.08); }
