@@ -76,6 +76,11 @@
       +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">我的應用</span></div>'
       +       '<div class="ws-vbody"><div class="ws-mine-list" id="as-mine-list"></div></div>'
       +     '</div>'
+      // ── app 操作詳情（第二層：從我的應用點一條進來，換頁、不摺疊）──
+      +     '<div class="ws-view" data-view="appdetail">'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="mine" type="button">‹</button><span class="ws-vhd-t" id="as-detail-title">應用</span></div>'
+      +       '<div class="ws-vbody"><div id="as-detail-body"></div></div>'
+      +     '</div>'
       +   '</div>'
       // ── 底部 nav ──
       +   '<div class="ws-nav">'
@@ -146,65 +151,86 @@
         setTimeout(function () { ov.classList.add('hidden'); _go(c, 'mine'); }, 1600);
     }
 
-    // ── 我的應用 列 (共用 row 產生器) ──
+    // ── 我的應用 列：第一層只乾淨一條（圖示＋名稱＋›），點整列換頁進操作頁，不摺疊 ──
     function _mineRow(c, a, opened) {
         const row = document.createElement('div');
-        row.className = 'ws-mine-row';
-        // 創作室做的「應用/共用」(有 srcTplId) → 多給：編輯/載入酒館/大廳/匯出/記憶回傳
-        const _isStudio = !!a.srcTplId;
-        const _memOn = !!(win.OS_APP_MEMORY_INJECT && win.OS_APP_MEMORY_INJECT.isPluginEnabled && win.OS_APP_MEMORY_INJECT.isPluginEnabled(a.id));
+        row.className = 'ws-mine-row ws-mine-row-clean';
         row.innerHTML =
             '<span class="ws-mine-ic">' + _esc(a.emoji || '📦') + '</span>'
           + '<span class="ws-mine-info"><span class="ws-mine-name">' + _esc(a.name || 'App') + '</span><span class="ws-mine-sub">' + _esc(_relTime(opened[a.id])) + '</span></span>'
-          + '<button class="ws-mine-menu" data-act="menu" type="button">⋯</button>'
-          + '<div class="ws-mine-acts hidden">'
-          +   (_isStudio ? '<button class="ws-mini" data-act="edit" type="button">✏️ 編輯</button>' : '')
-          +   '<button class="ws-mini" data-act="src" type="button">原始碼</button>'
-          +   (_isStudio ? '<button class="ws-mini" data-act="totavern" type="button">📥 載入酒館</button>' : '')
-          +   (_isStudio ? '<button class="ws-mini" data-act="lobby" type="button">🏠 大廳</button>' : '')
-          +   (_isStudio ? '<button class="ws-mini" data-act="mem" type="button">🧠 記憶回傳：' + (_memOn ? '開' : '關') + '</button>' : '')
-          +   (_isStudio ? '<button class="ws-mini" data-act="exp" type="button">📦 匯出</button>' : '')
-          +   '<button class="ws-mini" data-act="rename" type="button">改名</button>'
-          +   '<button class="ws-mini" data-act="emoji" type="button">換圖標</button>'
-          +   '<button class="ws-mini danger" data-act="del" type="button">卸載</button>'
-          + '</div>';
-        row.querySelector('[data-act="menu"]').onclick = function () { row.querySelector('.ws-mine-acts').classList.toggle('hidden'); };
-        row.querySelector('[data-act="src"]').onclick = function () {
-            const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
-            const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
-            _go(c, 'import');
-            _toast(c, '原始碼已載入「匯入」框，可全選複製給我');
-        };
-        row.querySelector('[data-act="del"]').onclick = function () {
-            if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) _uninstall(a.id, c);
-        };
-        row.querySelector('[data-act="rename"]').onclick = async function () {
-            const nm = prompt('新名稱', a.name || ''); if (nm == null) return;
-            a.name = nm.trim() || a.name;
-            await win.OS_DB.savePhoneApp(a); _syncMeta(a); renderMine(c);
-        };
-        row.querySelector('[data-act="emoji"]').onclick = async function () {
-            const em = prompt('新圖標 emoji（單一符號）', a.emoji || '📦'); if (em == null) return;
-            a.emoji = (em.trim() || a.emoji).slice(0, 2);
-            await win.OS_DB.savePhoneApp(a); _syncMeta(a); renderMine(c);
-        };
-        // 創作室來源 app 的進階管理：靠 srcTplId 操作底稿（創作室對外暴露的方法）+ 記憶回傳開關（靠 app id）
-        if (_isStudio) {
-            const _S = win.OS_STUDIO || {};
-            const _qq = function (act) { return row.querySelector('[data-act="' + act + '"]'); };
-            if (_qq('edit')) _qq('edit').onclick = function () { if (_S.openEditApp) _S.openEditApp(a.srcTplId, c); else _toast(c, '創作室未就緒'); };
-            if (_qq('totavern')) _qq('totavern').onclick = function () { if (_S.injectAppToTavern) { _S.injectAppToTavern(a.srcTplId); _toast(c, '📥 已寫入酒館正則，純文字 RP 也能跑這面板'); } };
-            if (_qq('exp')) _qq('exp').onclick = function () { if (_S.exportApp) _S.exportApp(a.srcTplId); };
-            if (_qq('lobby')) _qq('lobby').onclick = async function () { if (_S.toggleAppLobby) { const on = await _S.toggleAppLobby(a.srcTplId); _toast(c, '🏠 大廳：' + (on ? '已啟用' : '已關閉')); } };
-            if (_qq('mem')) _qq('mem').onclick = function () {
-                const M = win.OS_APP_MEMORY_INJECT; if (!M || !M.setPluginEnabled) { _toast(c, '記憶模組未就緒'); return; }
-                const cur = M.isPluginEnabled ? M.isPluginEnabled(a.id) : false;
-                M.setPluginEnabled(a.id, !cur);
-                _qq('mem').textContent = '🧠 記憶回傳：' + (!cur ? '開' : '關');
-                _toast(c, '🧠 這個 app 的角色記憶' + (!cur ? '會' : '不會') + '回傳給酒館主模型');
-            };
-        }
+          + '<span class="ws-mine-go">›</span>';
+        row.addEventListener('click', function () { _openAppDetail(c, a); });
         return row;
+    }
+
+    // ── 第二層：單一 app 操作頁（換頁到 appdetail），操作分組成乾淨的列，記憶用 toggle ──
+    function _openAppDetail(c, a) {
+        const body = c.querySelector('#as-detail-body');
+        const titleEl = c.querySelector('#as-detail-title');
+        if (!body) return;
+        if (titleEl) titleEl.textContent = (a.emoji ? a.emoji + ' ' : '') + (a.name || '應用');
+        body.innerHTML = '';
+        const isStudio = !!a.srcTplId;
+        const S = win.OS_STUDIO || {};
+
+        const mkRow = function (label, onclick, opts) {
+            opts = opts || {};
+            const r = document.createElement('div');
+            r.className = 'ws-act-row' + (opts.danger ? ' danger' : '');
+            const right = opts.toggle
+                ? '<span class="ws-act-tog' + (opts.on ? ' on' : '') + '"><span class="ws-act-knob"></span></span>'
+                : '<span class="ws-act-go">' + (opts.noChev ? '' : '›') + '</span>';
+            r.innerHTML = '<span class="ws-act-label">' + _esc(label) + '</span>' + right;
+            if (onclick) r.addEventListener('click', onclick);
+            return r;
+        };
+        const mkGroup = function (rows) {
+            const g = document.createElement('div');
+            g.className = 'ws-act-group';
+            rows.filter(Boolean).forEach(function (r) { g.appendChild(r); });
+            if (g.children.length) body.appendChild(g);
+        };
+
+        mkGroup([
+            isStudio ? mkRow('✏️ 編輯（載回創作室微調）', function () { if (S.openEditApp) S.openEditApp(a.srcTplId, c); else _toast(c, '創作室未就緒'); }) : null,
+            mkRow('📝 原始碼', function () {
+                const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
+                const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
+                _go(c, 'import'); _toast(c, '原始碼已載入「匯入」框，可全選複製');
+            }),
+            mkRow('✏️ 改名', async function () {
+                const nm = prompt('新名稱', a.name || ''); if (nm == null) return;
+                a.name = nm.trim() || a.name; await win.OS_DB.savePhoneApp(a); _syncMeta(a);
+                if (titleEl) titleEl.textContent = (a.emoji ? a.emoji + ' ' : '') + a.name;
+            }),
+            mkRow('😀 換圖標', async function () {
+                const em = prompt('新圖標 emoji（單一符號）', a.emoji || '📦'); if (em == null) return;
+                a.emoji = (em.trim() || a.emoji).slice(0, 2); await win.OS_DB.savePhoneApp(a); _syncMeta(a);
+                if (titleEl) titleEl.textContent = a.emoji + ' ' + (a.name || '應用');
+            })
+        ]);
+
+        if (isStudio) {
+            const memOn = !!(win.OS_APP_MEMORY_INJECT && win.OS_APP_MEMORY_INJECT.isPluginEnabled && win.OS_APP_MEMORY_INJECT.isPluginEnabled(a.id));
+            mkGroup([
+                mkRow('🧠 記憶回傳酒館', function () {
+                    const M = win.OS_APP_MEMORY_INJECT; if (!M || !M.setPluginEnabled) { _toast(c, '記憶模組未就緒'); return; }
+                    const cur = M.isPluginEnabled ? M.isPluginEnabled(a.id) : false;
+                    M.setPluginEnabled(a.id, !cur);
+                    _openAppDetail(c, a);
+                    _toast(c, '🧠 這個 app 的記憶' + (!cur ? '會' : '不會') + '回傳酒館');
+                }, { toggle: true, on: memOn }),
+                mkRow('📥 載入酒館（純文字也能跑）', function () { if (S.injectAppToTavern) { S.injectAppToTavern(a.srcTplId); _toast(c, '📥 已寫入酒館正則'); } }),
+                mkRow('🏠 放進大廳', async function () { if (S.toggleAppLobby) { const on = await S.toggleAppLobby(a.srcTplId); _toast(c, '🏠 大廳：' + (on ? '已啟用' : '已關閉')); } }),
+                mkRow('📦 匯出 .json', function () { if (S.exportApp) S.exportApp(a.srcTplId); })
+            ]);
+        }
+
+        mkGroup([
+            mkRow('🗑️ 卸載', function () { if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) { _uninstall(a.id, c); _go(c, 'mine'); } }, { danger: true, noChev: true })
+        ]);
+
+        _go(c, 'appdetail');
     }
 
     async function renderMine(c) {
