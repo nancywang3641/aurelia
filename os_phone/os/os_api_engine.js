@@ -79,7 +79,7 @@
         }
 
         if (thinkBlocks.length === 0) {
-            const wxStart = cleaned.search(/\[wx_os\]|\[Chat:/i);
+            const wxStart = cleaned.search(/<chat\b|\[wx_os\]|\[Chat:/i);
             if (wxStart > 20) {
                 const preamble = cleaned.substring(0, wxStart).trim();
                 if (preamble.length > 10 && win.OS_THINK) {

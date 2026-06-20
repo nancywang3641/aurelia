@@ -432,7 +432,11 @@
     // --- 解析邏輯 (將長文本切成陣列) ---
     function parseAndProcess(fullText) {
         let cleanText = fullText.trim();
-        cleanText = cleanText.replace(/\[\s*wx_os\s*\]/gi, '').replace(/\[\s*\/wx_os\s*\]/gi, '').trim();
+        // 對齊 VN PHONE：只提取 <chat chatroom="...">…</chat> 容器「內部」的內容（容器外的思考/旁白一律丟掉）
+        const _chatM = cleanText.match(/<chat\b[^>]*>([\s\S]*?)<\/chat>/i);
+        if (_chatM) cleanText = _chatM[1].trim();
+        // 殘留 <chat> 標籤 + 相容舊 [wx_os] 包裹一併清掉
+        cleanText = cleanText.replace(/<\/?chat\b[^>]*>/gi, '').replace(/\[\s*wx_os\s*\]/gi, '').replace(/\[\s*\/wx_os\s*\]/gi, '').trim();
         cleanText = cleanText.replace(/\[\s*(?:紅包|RedPacket)\s*[:：]\s*(\d+(?:\.\d+)?)\s*[\(（]\s*(?:備註|备注|Note)?\s*[:：]?\s*(.*?)\s*[\)）]/gi, '[RedPacket: $1 | $2]');
 
         // 🔥 關鍵：這裡會依照換行符號切割成多個泡泡
