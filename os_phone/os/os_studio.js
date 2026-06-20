@@ -2397,7 +2397,7 @@ ${cleanFormat}
                     // 注入一條 assistant 引導訊息，用戶看到「已載入」
                     chatMessages.push({
                         role: 'assistant',
-                        content: `📋 已從展廳載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n如果要整個換風格，按上方「🔄 重新設計」按鈕。`
+                        content: `📋 已從展廳載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n要整個換風格也行——直接描述新風格、發送就會自動整包重做，不用按任何按鈕、不用重發。`
                     });
                     _studioSave(chatId);
 
@@ -2640,7 +2640,7 @@ ${d.usageDesc || ''}
 4. **🚨 find 越短越好（省 token）**：選最精簡的片段，不要為了保險整段當 find
    - 正例：只放需要被替換的那幾個 token / 那一行 / 那個 CSS rule 的核心宣告
    - 反例：把整段 5KB CSS 或整段 HTML 當 find（雖然不會被擋，但浪費 token，diff 的初衷就是省）
-   - 如果你發現自己需要長 find 才能精準定位（找不到夠特別的短片段），那這次改動其實是「大改」，請改用 <too_big_for_diff/> 標籤讓用戶按「🔄 重新設計」
+   - 如果你發現自己需要長 find 才能精準定位（找不到夠特別的短片段），那這次改動其實是「大改」，請改走整包重做：直接輸出全新面板的 <json>（見下方【🆘 大改】），不要硬塞超長 find / 超大 patch
 5. **可以一次輸出多個 <patch>**（改多處、改多個 target 都行）
 6. **新增內容**：把 find 設為「新內容應該插入點的前一段現有內容」，replace 設為「該段現有內容 + 你的新內容」
 7. **刪除內容**：把 find 設為要刪的片段，replace 設為空字串
@@ -2706,7 +2706,7 @@ ${d.usageDesc || ''}
 
         // === 🆘 AI 主動逃生：用戶要求超出 diff 能處理的範圍 ===
         if (/<too_big_for_diff\s*\/?\s*>/i.test(responseText)) {
-            return { status: 'too_big', message: 'AI 認為這次修改範圍太大、不適合微調，請按右上角「🔄 重新設計」按鈕重新生成整個面板', conversationalText };
+            return { status: 'too_big', message: '這次改動較大、AI 沒給出可套用的結果，請把想要的樣子描述清楚一點再發一次（系統會自動整包重做、不用任何按鈕）', conversationalText };
         }
 
         const patchRegex = /<patch\s+target=["']([^"']+)["']\s*>([\s\S]*?)<\/patch>/gi;
@@ -2789,7 +2789,7 @@ ${d.usageDesc || ''}
             if (conv) {
                 return { text: conv, failed: false, conversational: true };
             }
-            return { text: '⚠️ AI 沒給出任何 <patch> 指令，預覽未更新。請重新描述需求（越具體越好），或按「🔄 重新設計」整包重做', failed: true };
+            return { text: '⚠️ AI 沒給出可套用的修改，預覽未更新。請把需求描述清楚一點再發一次（大改會自動整包重做）', failed: true };
         }
         const applied = results.filter(r => r.status === 'applied');
         const failed = results.filter(r => r.status !== 'applied');
@@ -2803,7 +2803,7 @@ ${d.usageDesc || ''}
                 if (r.status === 'empty_find') return 'find 是空的';
                 return r.status;
             });
-            return { text: appendConv(`⚠️ AI 給了 ${results.length} 條修改指令但全部失敗：${reasons.join('；')}。建議重新描述更具體的需求，或按「🔄 重新設計」整包重做`), failed: true };
+            return { text: appendConv(`⚠️ AI 給了 ${results.length} 條修改指令但全部失敗：${reasons.join('；')}。請把需求描述清楚一點再發一次（大改會自動整包重做）`), failed: true };
         }
 
         const appliedTargets = applied.map(r => r.target);
