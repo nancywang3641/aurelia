@@ -432,6 +432,7 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
 <json>
 {
   "tagId": "你決定的英文標籤名",
+  "title": "面板的中文顯示名（簡短、人類可讀，例如「小地圖」「交易結算」；給用戶看的，不是技術標籤）",
   "isBlock": true 或 false,
   "html": "你的骨架 HTML (不需要填入資料，由 JS 渲染)",
   "css": "你的頂級 CSS (包含 .vn-dynamic-panel-xxx 前綴)",
@@ -442,7 +443,7 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
 </json>
 ⚠️【警告 1】必須將 JSON 物件包裹在 <json> 與 </json> 標籤內。JSON 的字串值內部「絕對禁止」出現真實的換行符號！換行請寫成 "\\n"，雙引號轉義為 "\\""！
 
-⚠️【警告 2 — 嚴重】無論用戶說什麼，**第一次回覆必須包含完整 <json>...</json> 區塊** 含 tagId / isBlock / html / css / js / usageDesc / demoFormat 七個鍵。
+⚠️【警告 2 — 嚴重】無論用戶說什麼，**第一次回覆必須包含完整 <json>...</json> 區塊** 含 tagId / title / isBlock / html / css / js / usageDesc / demoFormat 八個鍵。
 - 不可以只回「我覺得這個想法不錯，先讓我跟你討論一下」這種對話文字後就停下
 - 不可以只回開場白／說明文字就停
 - 不可以省略 <json> 標籤
@@ -536,6 +537,7 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
 
     function launch(container) {
         const root = container || document.getElementById('aurelia-tab-container') || document.getElementById('aurelia-phone-screen') || document.body;
+        try { syncActiveTagsToLocal(); } catch (e) {}   // 開創作室即用最新格式重組啟用組件說明（給注入器讀）
         let existing = document.getElementById('os_studio_app');
         if (existing) existing.remove();
 
@@ -1951,15 +1953,22 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         try {
             const templates = await db.getAllVNTagTemplates();
             const activeTags = templates.filter(t => t.isActive && t.demoFormat);
-            if (activeTags.length > 0) {
-                let extraPrompt = `\n\n### [擴充動態特效標籤]\n你現在擁有額外的視覺特效標籤。在適合的時機，將標籤作為獨立區塊輸出（與 <content> 並列，不可放在 <content> 內）：\n`;
-                activeTags.forEach(t => {
-                    extraPrompt += `\n【標籤：${t.tagId}】\n說明：${t.usageDesc || '無特別說明'}\n⚠️ 輸出時必須用 <${t.tagId}> 和 </${t.tagId}> 包裹，每行一條 [Tag|欄位|欄位] 格式，嚴禁使用 ## markdown 或 * bullet：\n<${t.tagId}>\n${t.demoFormat}\n</${t.tagId}>\n`;
-                });
-                localStorage.setItem('os_vn_extra_tags_prompt', extraPrompt);
-            } else {
-                localStorage.removeItem('os_vn_extra_tags_prompt');
+            if (!activeTags.length) { localStorage.removeItem('os_vn_extra_tags_prompt'); return; }
+            // 用「實測有效」的清單格式：分單行/區塊、每段＝中文標題＋使用說明＋正確 tag 格式。
+            // 標題用中文名(沒有才退 tagId)，且區塊一律寫成 <tagId>…</tagId>，不再用會被誤認成標籤的 [tagId] 當小標。
+            const singles = activeTags.filter(t => !t.isBlock);
+            const blocks  = activeTags.filter(t => t.isBlock);
+            const titleOf = t => (t.title && String(t.title).trim()) || t.tagId || '面板';
+            let p = `# [📱模式｜VN組件] 清單\n使用場景: 可在正文內穿插的特殊 TAG。依下列格式填寫，{…} 佔位符換成實際內容、不可照抄佔位符字面。\n`;
+            if (singles.length) {
+                p += `\n## 單行標籤格式（直接穿插在對話內，無須換行）\n`;
+                singles.forEach(t => { p += `\n### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n${t.demoFormat}\n`; });
             }
+            if (blocks.length) {
+                p += `\n## 區塊標籤格式（整段獨立輸出，與 <content> 並列；只在區塊內穿插，不可掉出區塊）\n`;
+                blocks.forEach(t => { p += `\n### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n<${t.tagId}>\n${t.demoFormat}\n</${t.tagId}>\n`; });
+            }
+            localStorage.setItem('os_vn_extra_tags_prompt', p);
         } catch(e) { console.warn('[Studio] syncActiveTagsToLocal 失敗', e); }
     }
 
@@ -2344,7 +2353,7 @@ ${cleanFormat}
         card.className = 'studio-gallery-card' + (tpl.isActive ? ' active-tag' : '');
         card.innerHTML = `
                     <div class="sgc-header">
-                        <span class="sgc-title">[${tpl.tagId || '未知'}]</span>
+                        <span class="sgc-title">${(tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知'}</span>
                         <span class="sgc-status" style="color:${tpl.isActive ? '#2ecc71' : '#aaa'}">${tpl.isActive ? '✅ 啟用' : '❌ 停用'}</span>
                     </div>
                     <div class="sgc-usage">💡 ${tpl.usageDesc || '無說明'}</div>
@@ -2489,7 +2498,7 @@ ${cleanFormat}
                 tile.className = 'studio-gallery-card sgc-browse' + (tpl.isActive ? ' active-tag' : '');
                 tile.innerHTML = `
                     <div class="sgc-header">
-                        <span class="sgc-title">[${tpl.tagId || '未知'}]</span>
+                        <span class="sgc-title">${(tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知'}</span>
                         <span class="sgc-status" style="color:${tpl.isActive ? '#2ecc71' : '#aaa'}">${tpl.isActive ? '✅ 啟用' : '❌ 停用'}</span>
                         <button class="sgc-manage-btn" type="button">管理 ›</button>
                     </div>
