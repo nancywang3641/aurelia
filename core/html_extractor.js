@@ -138,91 +138,6 @@
             }
         },
 
-        // 最後一則訊息「原文」（讀資料、不碰 live DOM）→ 治 TauriTavern 懶渲染「沒滾到就抓不到」。
-        //   最新一則永遠在載入窗內，不吃懶載入那套（見 vn_core 同款做法）。
-        _getLastMessageRaw() {
-            const win = window.parent || window;
-            try {
-                const ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
-                if (ctx && Array.isArray(ctx.chat) && ctx.chat.length) {
-                    const m = ctx.chat[ctx.chat.length - 1];
-                    return (m && (m.mes || m.message)) || '';
-                }
-            } catch (e) {}
-            try {
-                const th = win.TavernHelper || window.TavernHelper;
-                if (th && typeof th.getChatMessages === 'function') {
-                    const r = th.getChatMessages(-1);
-                    if (r && r[0]) return r[0].message || r[0].mes || '';
-                }
-            } catch (e) {}
-            return '';
-        },
-
-        // 從最後一則訊息原文抽「卡片」，不靠 DOM。來源：① 訊息裡的 ```html 圍欄 ② 酒館顯示型正則(find→replace 產 HTML)。
-        //   回 [{ name, html, isDoc }]；拿不到原文 → null（呼叫端退回舊 DOM 路徑）。同 VN 的 _grabRegexCardHtml 思路。
-        _getMessagePanels() {
-            const win = window.parent || window;
-            const raw = this._getLastMessageRaw();
-            if (!raw) return null;
-
-            const units = [];
-            const _seen = new Set();
-            const _push = (h, nameHint) => {
-                let card = String(h || '').replace(/^\s*```html\s*/i, '').replace(/```\s*$/i, '').trim();
-                if (!card || !/<[a-z!\/]/i.test(card)) return;          // 取代結果不含 HTML 標籤 → 不是卡片
-                const key = card.replace(/\s+/g, '');
-                if (_seen.has(key)) return;                              // 兩來源可能撞同一張 → 去重
-                _seen.add(key);
-                const titleM = card.match(/<title>([\s\S]*?)<\/title>/i);
-                const name = (titleM && titleM[1].trim()) || nameHint || '面板';
-                const isDoc = /<!DOCTYPE|<html[\s>]|<body[\s>]/i.test(card);
-                units.push({ name, html: card, isDoc });
-            };
-
-            // ① ```html 圍欄區塊（你的狀態卡多半直接寫在訊息裡這種）
-            try {
-                const fence = /```(?:html)?[ \t]*\n?([\s\S]*?)```/gi;
-                let fm, guard = 0;
-                while ((fm = fence.exec(raw)) !== null && guard++ < 60) {
-                    const code = (fm[1] || '').trim();
-                    if (/<[a-z!\/]/i.test(code)) _push(code);
-                }
-            } catch (e) {}
-
-            // ② 酒館顯示型正則：trigger tag → HTML 卡片（朋友用正則型卡也吃得到）
-            try {
-                const th = win.TavernHelper || window.TavernHelper;
-                if (th && typeof th.getTavernRegexes === 'function') {
-                    const parseRegex = (str) => {
-                        if (!str) return null;
-                        try { const m = String(str).match(/^\/([\s\S]*)\/([a-z]*)$/i); return m ? new RegExp(m[1], m[2] || '') : new RegExp(str, 'i'); }
-                        catch (e) { return null; }
-                    };
-                    let regexes = [];
-                    try { regexes = regexes.concat(th.getTavernRegexes({ type: 'global' }) || []); } catch (e) {}
-                    try { regexes = regexes.concat(th.getTavernRegexes({ type: 'character', name: 'current' }) || []); } catch (e) {}
-                    try { regexes = regexes.concat(th.getTavernRegexes({ type: 'preset', name: 'in_use' }) || []); } catch (e) {}
-                    for (const r of regexes) {
-                        if (!r || r.enabled === false || !r.find_regex) continue;
-                        if (r.destination && r.destination.display === false) continue;   // 只認「顯示型」(promptOnly 不算)
-                        const rs = r.replace_string || '';
-                        if (!/<[a-z!\/]/i.test(rs)) continue;                              // 取代結果不含標籤 → 純文字替換，跳過
-                        const base = parseRegex(r.find_regex);
-                        if (!base) continue;
-                        const g = new RegExp(base.source, base.flags.includes('g') ? base.flags : base.flags + 'g');
-                        let m, guard = 0;
-                        while ((m = g.exec(raw)) !== null && guard++ < 60) {
-                            _push(m[0].replace(base, rs), r.script_name || r.scriptName);
-                            if (m.index === g.lastIndex) g.lastIndex++;                    // 防零寬無限迴圈
-                        }
-                    }
-                }
-            } catch (e) {}
-
-            return units;
-        },
-
         scanAndRender() {
             const win = window.parent || window;
             const doc = win.document || document;
@@ -236,83 +151,78 @@
             contentArea.innerHTML = '';
             tabBar.innerHTML = '';
             
-            const extractedData = {};
-            let tabOrder = [];
+            const extractedData = {}; 
+            let tabOrder = []; 
 
-            const ALLOWED_TAGS = ['DIV', 'TABLE', 'IFRAME', 'SCRIPT', 'STYLE', 'CANVAS', 'SVG', 'SECTION', 'ASIDE', 'NAV', 'HEADER', 'FOOTER', 'UL', 'OL', 'DL', 'FORM', 'DETAILS'];
-
-            // 🔥 主路徑：抓正則（讀「最後一則訊息原文」+ ```html 圍欄 / 酒館顯示型正則自渲染）→ 不靠 live DOM，
-            //    根治 TauriTavern 懶渲染「沒滾到正確區域就抓不到」。完整 HTML 文件包 iframe、片段直接塞。
-            const msgPanels = this._getMessagePanels();
-            const haveMsg = !!(msgPanels && msgPanels.length);
-            if (haveMsg) {
-                msgPanels.forEach((c, i) => {
-                    const id = 'msg_panel_' + i;
-                    const inner = c.isDoc
-                        ? `<iframe class="native-render-frame" scrolling="no" srcdoc="${c.html.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></iframe>`
-                        : `<div class="native-render-wrapper">${c.html}</div>`;
-                    extractedData[id] = { name: c.name, html: [inner] };
-                    tabOrder.push(id);
-                });
+            const lastMes = doc.querySelector('#chat .mes.last_mes .mes_text');
+            
+            if (!lastMes) {
+                contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
+                    <div style="font-size:40px; margin-bottom:10px;">📭</div>無對話數據。
+                </div>`;
+                return;
             }
 
-            // 「其他擴展與物件」：別的擴展「直接注入 DOM」的東西（本質只能靠 DOM）→ 有渲染才撈、沒渲染就略過。
-            //   正則路徑有抓到時：把 .TH-render 拿掉（卡片已由正則覆蓋）只補「其他」；沒抓到時：保留舊 DOM 全行為當 fallback。
-            const lastMes = doc.querySelector('#chat .mes.last_mes .mes_text');
-            if (lastMes) {
-                const tempMesDiv = doc.createElement('div');
-                tempMesDiv.innerHTML = lastMes.innerHTML;
+            const tempMesDiv = doc.createElement('div');
+            tempMesDiv.innerHTML = lastMes.innerHTML;
+            
+            const ALLOWED_TAGS = ['DIV', 'TABLE', 'IFRAME', 'SCRIPT', 'STYLE', 'CANVAS', 'SVG', 'SECTION', 'ASIDE', 'NAV', 'HEADER', 'FOOTER', 'UL', 'OL', 'DL', 'FORM', 'DETAILS'];
 
-                const pTags = Array.from(tempMesDiv.querySelectorAll('p'));
-                pTags.forEach(p => {
-                    Array.from(p.children).forEach(child => {
-                        if (ALLOWED_TAGS.includes(child.tagName.toUpperCase())) {
-                            p.parentNode.insertBefore(child, p);
-                        }
-                    });
-                    if (p.textContent.trim() === '' && p.children.length === 0) p.remove();
-                });
-
-                if (haveMsg) {
-                    // 卡片已由正則路徑提供 → 移除 TH-render，避免同一張卡重複出現
-                    tempMesDiv.querySelectorAll('.TH-render').forEach(n => n.remove());
-                } else {
-                    // fallback：正則沒結果（TavernHelper 未就緒等）→ 維持舊行為，把 .TH-render 當面板抽出
-                    const thRenders = Array.from(tempMesDiv.querySelectorAll('.TH-render'));
-                    thRenders.forEach((thNode, index) => {
-                        let panelName = '自定義面板';
-                        const codeBlock = thNode.querySelector('code.custom-language-html');
-                        if (codeBlock) {
-                            const rawHtml = codeBlock.innerText || codeBlock.textContent;
-                            const titleMatch = rawHtml.match(/<title>(.*?)<\/title>/i);
-                            if (titleMatch && titleMatch[1]) panelName = titleMatch[1].trim();
-                        }
-                        const panelId = 'th_panel_' + index;
-                        if (!extractedData[panelId]) { extractedData[panelId] = { name: panelName, html: [] }; tabOrder.push(panelId); }
-                        extractedData[panelId].html.push(`<div class="native-render-wrapper">${thNode.outerHTML}</div>`);
-                        thNode.remove();
-                    });
-                }
-
-                const othersHtml = [];
-                Array.from(tempMesDiv.children).forEach(el => {
-                    if (ALLOWED_TAGS.includes(el.tagName.toUpperCase())) {
-                        othersHtml.push(`<div class="native-render-wrapper">${el.outerHTML}</div>`);
+            const pTags = Array.from(tempMesDiv.querySelectorAll('p'));
+            pTags.forEach(p => {
+                Array.from(p.children).forEach(child => {
+                    if (ALLOWED_TAGS.includes(child.tagName.toUpperCase())) {
+                        p.parentNode.insertBefore(child, p);
                     }
                 });
-                if (othersHtml.length > 0) {
-                    extractedData['others'] = { name: '其他擴展與物件', html: othersHtml };
-                    tabOrder.push('others');
+                if (p.textContent.trim() === '' && p.children.length === 0) {
+                    p.remove();
                 }
+            });
+
+            const thRenders = Array.from(tempMesDiv.querySelectorAll('.TH-render'));
+            thRenders.forEach((thNode, index) => {
+                let panelName = '自定義面板';
+                const codeBlock = thNode.querySelector('code.custom-language-html');
+                if (codeBlock) {
+                    const rawHtml = codeBlock.innerText || codeBlock.textContent;
+                    const titleMatch = rawHtml.match(/<title>(.*?)<\/title>/i);
+                    if (titleMatch && titleMatch[1]) {
+                        panelName = titleMatch[1].trim();
+                    }
+                }
+
+                const panelId = 'th_panel_' + index;
+
+                if (!extractedData[panelId]) {
+                    extractedData[panelId] = { name: panelName, html: [] };
+                    tabOrder.push(panelId);
+                }
+
+                extractedData[panelId].html.push(`<div class="native-render-wrapper">${thNode.outerHTML}</div>`);
+                thNode.remove();
+            });
+
+            const othersHtml = [];
+            Array.from(tempMesDiv.children).forEach(el => {
+                if (ALLOWED_TAGS.includes(el.tagName.toUpperCase())) {
+                    othersHtml.push(`<div class="native-render-wrapper">${el.outerHTML}</div>`);
+                }
+            });
+
+            if (othersHtml.length > 0) {
+                if (!extractedData['others']) { 
+                    extractedData['others'] = { name: '其他擴展與物件', html: [] }; 
+                    tabOrder.push('others'); 
+                }
+                extractedData['others'].html = othersHtml;
             }
 
             if (tabOrder.length === 0) {
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
                     <div style="font-size:40px; margin-bottom:10px;">🔍</div>
-                    未提取到面板（訊息無狀態卡，或 TavernHelper 未就緒）。
+                    未提取到符合規格的內容或面板。
                 </div>`;
-                // 狀態面板(煉丹)讀 OS_DB、不靠 DOM/正則 → 仍嘗試注入
-                this._injectStatePanelTab().catch(e => console.warn('[Extractor] 狀態面板注入失敗:', e));
                 return;
             }
 
