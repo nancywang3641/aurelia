@@ -3,9 +3,9 @@
         .studio-title { font-size: 16px; font-weight: bold; color: #1A1C28; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .studio-mode-select { background: #EEF0F6 !important; appearance: none; -webkit-appearance: none; border: 1px solid rgba(26,28,40,0.25); color: #1A1C28 !important; padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer; color-scheme: light; }
         .studio-mode-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
-        /* 頂層 mode tab 列（取代下拉單）：✨煉丹 / 🎨主題 並列 */
-        .studio-mode-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-        .studio-mode-tab { padding: 6px 12px; border: 1px solid rgba(26,28,40,0.25); border-radius: 6px; font-size: 13px; cursor: pointer; color: rgba(26,28,40,0.72); background: #EEF0F6; transition: 0.2s; white-space: nowrap; }
+        /* 頂層 mode tab 列：自己一整列、橫向分段控制（不再塞標題裡擠到換行）✨煉丹 / 🎨主題 */
+        .studio-mode-tabs { display: flex; gap: 6px; padding: 8px 20px 10px; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.10); flex-shrink: 0; box-sizing: border-box; }
+        .studio-mode-tab { flex: 1 1 0; text-align: center; padding: 8px 12px; border: 1px solid rgba(26,28,40,0.25); border-radius: 8px; font-size: 13px; cursor: pointer; color: rgba(26,28,40,0.72); background: #EEF0F6; transition: 0.2s; white-space: nowrap; }
         .studio-mode-tab:hover { background: rgba(26,28,40,0.06); color: #1A1C28; }
         .studio-mode-tab.active { background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: bold; }
         /* 🎨 主題＝頂層 mode：top-theme 時隱藏 chat+preview、顯示主題全區 */
