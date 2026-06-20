@@ -2143,7 +2143,9 @@ ${cleanFormat}
         if (!data || !data.tagId) return;
 
         const safeTagId = data.tagId.replace(/[^a-zA-Z0-9_-]/g, '');
-        const searchRegex = `/<${safeTagId}>([\\s\\S]*?)<\\/${safeTagId}>/gi`;
+        // 向下兼容：開合標籤角括號 <XXX></XXX> 或方括號 [XXX][/XXX] 都收（AI 常被其他 tag 帶歪吐方括號）。
+        // 用字元類 [<\[] / [>\]] 保持單一 capture group（$1=內容），渲染替換邏輯零影響。
+        const searchRegex = `/[<\\[]${safeTagId}[>\\]]([\\s\\S]*?)[<\\[]\\/${safeTagId}[>\\]]/gi`;
         const replacement = generateRegexReplacement(data);
 
         const regexObj = {
