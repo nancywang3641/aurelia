@@ -2314,49 +2314,33 @@ ${cleanFormat}
         } catch (e) { return null; }
     }
 
-    async function loadStudioGallery() {
-        const listEl = document.getElementById('studio-gallery-list');
-        if (!listEl) return;
-        _wireVnUiPackButtons();   // 綁定頂部「匯出包／匯入包」鈕（冪等，每次開展廳重綁無妨）
-        listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">載入中...</div>';
-        const db = win.OS_DB || window.OS_DB;
-        if (!db || typeof db.getAllVNTagTemplates !== 'function') {
-            listEl.innerHTML = '<div style="color:#fc8181;text-align:center;padding:20px;">找不到 OS_DB</div>';
-            return;
+    // 預覽啟動（第一層瀏覽縮圖 + 第二層詳情卡共用）：三尺寸縮放器 + 跑面板 JS
+    function _activatePreview(card, tpl, safeTagId) {
+        _attachVpScaler(card.querySelector('.studio-pv-tabs'), card.querySelector('.sgc-preview'), card.querySelector('.studio-pv-box'));
+        if (tpl.isBlock && tpl.js) {
+            setTimeout(() => {
+                try {
+                    const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<'));
+                    const container = card.querySelector(`.vn-dynamic-panel-${safeTagId}`);
+                    if (!container) return;
+                    let safeJs = tpl.js.replace(/```(?:javascript|js|html|css)?/gi, '').replace(/```/g, '').trim();
+                    window.__IS_PREVIEW = true;
+                    const st = _buildPreviewSt(lines);
+                    new Function('container', 'lines', 'onComplete', 'st', safeJs)(container, lines, () => {}, st);
+                } catch (e) { console.warn(`[展廳 JS] ${tpl.tagId}`, e); }
+            }, 80);
         }
-        try {
-            const _allTpls = await db.getAllVNTagTemplates();
-            const templates = _allTpls.filter(t => (t.caps || 'display') === 'display');   // VN組件 只放「純展示」面板
-            const _appTpls = _allTpls.filter(t => t.caps && t.caps !== 'display');           // 應用/共用 的家是「我的應用」→ 這裡只給搬遷提示
-            listEl.innerHTML = '';
-            // 舊的「應用/共用」還留在這 → 頂部給遷移提示（不自動塞桌面圖標，由你決定搬）
-            if (_appTpls.length) {
-                const mig = document.createElement('div');
-                mig.className = 'vn-migrate-notice';
-                mig.innerHTML = `這裡有 ${_appTpls.length} 個「應用/共用」面板，它們的家現在是「應用工坊 · 我的應用」。<button class="vn-migrate-btn" type="button">📲 全部搬到我的應用</button>`;
-                listEl.appendChild(mig);
-                mig.querySelector('.vn-migrate-btn').onclick = async () => {
-                    for (const t of _appTpls) { try { await _installTemplateAsPhoneApp(t); } catch (e) {} }
-                    alert(`已把 ${_appTpls.length} 個應用裝進「應用工坊 · 我的應用」。`);
-                    loadStudioGallery();
-                };
-            }
-            if (!templates.length) {
-                if (!_appTpls.length) listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">VN組件 空空如也，去煉丹做純展示面板吧！</div>';
-                return;
-            }
-            // 一次性抓所有手機 app（用 srcTplId 對照展廳模板）
-            const _allPhoneApps = (win.OS_DB && win.OS_DB.getAllPhoneApps)
-                ? ((await win.OS_DB.getAllPhoneApps()) || [])
-                : [];
-            templates.forEach(tpl => {
-                const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
-                const safeFmt   = (tpl.demoFormat || '無結構定義').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                const previewHtml = (tpl.html || '').replace(/\{\{1\}\}/g,'參數A').replace(/\{\{2\}\}/g,'參數B');
+    }
 
-                const card = document.createElement('div');
-                card.className = 'studio-gallery-card' + (tpl.isActive ? ' active-tag' : '');
-                card.innerHTML = `
+    // 第二層：單一 VN 組件的「操作詳情卡」（預覽 + 全部按鈕）。從第一層乾淨預覽點「管理」才換頁過來。
+    function _buildComponentCard(tpl, _allPhoneApps, container) {
+        const db = win.OS_DB;
+        const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+        const safeFmt   = (tpl.demoFormat || '無結構定義').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const previewHtml = (tpl.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B');
+        const card = document.createElement('div');
+        card.className = 'studio-gallery-card' + (tpl.isActive ? ' active-tag' : '');
+        card.innerHTML = `
                     <div class="sgc-header">
                         <span class="sgc-title">[${tpl.tagId || '未知'}]</span>
                         <span class="sgc-status" style="color:${tpl.isActive ? '#2ecc71' : '#aaa'}">${tpl.isActive ? '✅ 啟用' : '❌ 停用'}</span>
@@ -2398,122 +2382,125 @@ ${cleanFormat}
                         <div class="sgc-btn btn-del" style="background:rgba(231,76,60,0.7);border-color:#e74c3c;color:#fff;">刪除</div>
                     </div>
                 `;
-
-                // 格式編輯
-                const fmtBox    = card.querySelector('.sgc-format-box');
-                const fmtText   = fmtBox.querySelector('.sgc-format-text');
-                const fmtInput  = fmtBox.querySelector('.sgc-format-input');
-                const btnEdit   = fmtBox.querySelector('.btn-edit-fmt');
-                const btnSave   = fmtBox.querySelector('.btn-save-fmt');
-                const btnCancel = fmtBox.querySelector('.btn-cancel-fmt');
-
-                btnEdit.onclick = () => {
-                    fmtText.style.display = 'none'; btnEdit.style.display = 'none';
-                    fmtInput.style.display = 'block'; btnSave.style.display = 'inline-block'; btnCancel.style.display = 'inline-block';
-                };
-                btnCancel.onclick = () => {
-                    fmtText.style.display = 'block'; btnEdit.style.display = 'inline-block';
-                    fmtInput.style.display = 'none'; btnSave.style.display = 'none'; btnCancel.style.display = 'none';
-                    fmtInput.value = tpl.demoFormat || '';
-                };
-                btnSave.onclick = async () => {
-                    tpl.demoFormat = fmtInput.value;
-                    await db.saveVNTagTemplate(tpl);
-                    await syncActiveTagsToLocal();
-                    loadStudioGallery();
-                };
-
-                // 大廳啟用/停用
-                card.querySelector('.btn-lobby').onclick = async () => {
-                    tpl.lobbyEnabled = !tpl.lobbyEnabled;
-                    await db.saveVNTagTemplate(tpl);
-                    loadStudioGallery();
-                };
-
-                // 啟用/停用
-                card.querySelector('.btn-toggle').onclick = async () => {
-                    tpl.isActive = !tpl.isActive;
-                    await db.saveVNTagTemplate(tpl);
-                    await syncActiveTagsToLocal();
-                    if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
-                    loadStudioGallery();
-                };
-
-                // 刪除
-                card.querySelector('.btn-del').onclick = async () => {
-                    if (!confirm(`刪除 [${tpl.tagId}]？`)) return;
-                    await db.deleteUITemplate(tpl.id);
-                    await syncActiveTagsToLocal();
-                    if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
-                    loadStudioGallery();
-                };
-
-                // 📥 注入酒館正則：寫進酒館全局正則 + 折疊進主世界書
-                card.querySelector('.btn-import-st').onclick = () => importToSillyTavern(tpl);
-
-                // 📝 直接編輯原碼
-                card.querySelector('.btn-edit-raw').onclick = () => openRawEditModal(tpl);
-
-                // 📦 單獨匯出這一個面板成 .json
-                card.querySelector('.btn-export-one').onclick = () => exportOneVnUiTemplate(tpl);
-
-                // ✏️ 繼續編輯：把這個 tpl 載回煉丹爐，用對話繼續微調
-                card.querySelector('.btn-continue').onclick = () => {
-                    if (!confirm(`✏️ 把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議（例如「字改大一點」），AI 只會微調、不會重做整個面板\n• 改完按「✅ 確定創建」會覆蓋這個面板（不是新增）\n\n確定嗎？`)) return;
-                    _enterEditMode(tpl);
-                };
-
-                // 📱 裝到手機開關（opt-in，預設未裝）
-                var _phoneRec = _allPhoneApps.find(function(a) { return a && a.srcTplId === tpl.id; });
-                var phoneBtn = document.createElement('div');
-                phoneBtn.className = 'sgc-btn btn-phone';
-                phoneBtn.textContent = _phoneRec ? '📱 已裝手機' : '📱 裝到手機';
-                phoneBtn.onclick = async function() {
-                    try {
-                        if (_phoneRec) {
-                            await win.OS_DB.deletePhoneApp(_phoneRec.id);
-                            if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(_phoneRec.id);
-                        } else {
-                            var rec = {
-                                name: tpl.tagId || '面板',
-                                emoji: '🧩',
-                                iconUrl: '',
-                                html: _templateToPhoneHtml(tpl),
-                                source: 'studio',
-                                srcTplId: tpl.id
-                            };
-                            var newId = await win.OS_DB.savePhoneApp(rec);
-                            if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) {
-                                win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, iconUrl: '' });
-                            }
-                        }
-                        loadStudioGallery(); // 重畫展廳刷新開關狀態
-                    } catch(e) { console.error('[studio] 裝手機切換失敗', e); }
-                };
-                // 接到 .sgc-btns 容器末尾（與 btn-toggle / btn-del 同一列）
-                // 裝到手機只給「會做事」的面板（純應用/共用）；純展示卡不需變成 App。caps 未標(舊資料)仍給。
-                var sgcBtns = card.querySelector('.sgc-btns');
-                if (sgcBtns && tpl.caps !== 'display') sgcBtns.appendChild(phoneBtn);
-
-                listEl.appendChild(card);
-
-                // 展廳卡三尺寸（手機/中間/全屏）— append 後才量得到寬
-                _attachVpScaler(card.querySelector('.studio-pv-tabs'), card.querySelector('.sgc-preview'), card.querySelector('.studio-pv-box'));
-
-                // JS 互動預覽
-                if (tpl.isBlock && tpl.js) {
-                    setTimeout(() => {
-                        try {
-                            const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<'));
-                            const container = card.querySelector(`.vn-dynamic-panel-${safeTagId}`);
-                            if (!container) return;
-                            let safeJs = tpl.js.replace(/```(?:javascript|js|html|css)?/gi,'').replace(/```/g,'').trim();
-                            window.__IS_PREVIEW = true;
-                            const st = _buildPreviewSt(lines);
-                            new Function('container','lines','onComplete','st', safeJs)(container, lines, () => {}, st);
-                        } catch(e) { console.warn(`[展廳 JS] ${tpl.tagId}`, e); }
-                    }, 80);
+        const fmtBox    = card.querySelector('.sgc-format-box');
+        const fmtText   = fmtBox.querySelector('.sgc-format-text');
+        const fmtInput  = fmtBox.querySelector('.sgc-format-input');
+        const btnEdit   = fmtBox.querySelector('.btn-edit-fmt');
+        const btnSave   = fmtBox.querySelector('.btn-save-fmt');
+        const btnCancel = fmtBox.querySelector('.btn-cancel-fmt');
+        btnEdit.onclick = () => { fmtText.style.display = 'none'; btnEdit.style.display = 'none'; fmtInput.style.display = 'block'; btnSave.style.display = 'inline-block'; btnCancel.style.display = 'inline-block'; };
+        btnCancel.onclick = () => { fmtText.style.display = 'block'; btnEdit.style.display = 'inline-block'; fmtInput.style.display = 'none'; btnSave.style.display = 'none'; btnCancel.style.display = 'none'; fmtInput.value = tpl.demoFormat || ''; };
+        btnSave.onclick = async () => { tpl.demoFormat = fmtInput.value; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); _openComponentDetail(tpl, _allPhoneApps); };
+        card.querySelector('.btn-lobby').onclick = async () => { tpl.lobbyEnabled = !tpl.lobbyEnabled; await db.saveVNTagTemplate(tpl); _openComponentDetail(tpl, _allPhoneApps); };
+        card.querySelector('.btn-toggle').onclick = async () => { tpl.isActive = !tpl.isActive; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); if (win.VN_DynamicParser) await win.VN_DynamicParser.init(); _openComponentDetail(tpl, _allPhoneApps); };
+        card.querySelector('.btn-del').onclick = async () => { if (!confirm(`刪除 [${tpl.tagId}]？`)) return; await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal(); if (win.VN_DynamicParser) await win.VN_DynamicParser.init(); loadStudioGallery(); };
+        card.querySelector('.btn-import-st').onclick = () => importToSillyTavern(tpl);
+        card.querySelector('.btn-edit-raw').onclick = () => openRawEditModal(tpl);
+        card.querySelector('.btn-export-one').onclick = () => exportOneVnUiTemplate(tpl);
+        card.querySelector('.btn-continue').onclick = () => {
+            if (!confirm(`✏️ 把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議，AI 只會微調\n• 改完按「✅ 確定創建」會覆蓋這個面板\n\n確定嗎？`)) return;
+            _enterEditMode(tpl);
+        };
+        var _phoneRec = (_allPhoneApps || []).find(function (a) { return a && a.srcTplId === tpl.id; });
+        var phoneBtn = document.createElement('div');
+        phoneBtn.className = 'sgc-btn btn-phone';
+        phoneBtn.textContent = _phoneRec ? '📱 已裝手機' : '📱 裝到手機';
+        phoneBtn.onclick = async function () {
+            try {
+                if (_phoneRec) {
+                    await win.OS_DB.deletePhoneApp(_phoneRec.id);
+                    if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(_phoneRec.id);
+                } else {
+                    var rec = { name: tpl.tagId || '面板', emoji: '🧩', iconUrl: '', html: _templateToPhoneHtml(tpl), source: 'studio', srcTplId: tpl.id };
+                    var newId = await win.OS_DB.savePhoneApp(rec);
+                    if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, iconUrl: '' });
                 }
+                _openComponentDetail(tpl, (win.OS_DB.getAllPhoneApps ? (await win.OS_DB.getAllPhoneApps()) : _allPhoneApps) || []);
+            } catch (e) { console.error('[studio] 裝手機切換失敗', e); }
+        };
+        var sgcBtns = card.querySelector('.sgc-btns');
+        if (sgcBtns && tpl.caps !== 'display') sgcBtns.appendChild(phoneBtn);
+        container.appendChild(card);
+        _activatePreview(card, tpl, safeTagId);
+    }
+
+    // 換頁到第二層詳情（清空 → 返回鈕 → 詳情卡），不摺疊
+    function _openComponentDetail(tpl, _allPhoneApps) {
+        const listEl = document.getElementById('studio-gallery-list');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        const back = document.createElement('div');
+        back.className = 'sgc-detail-back';
+        back.textContent = '‹ 返回 VN組件';
+        back.onclick = () => loadStudioGallery();
+        listEl.appendChild(back);
+        _buildComponentCard(tpl, _allPhoneApps, listEl);
+    }
+
+    async function loadStudioGallery() {
+        const listEl = document.getElementById('studio-gallery-list');
+        if (!listEl) return;
+        _wireVnUiPackButtons();   // 綁定頂部「匯出包／匯入包」鈕（冪等，每次開展廳重綁無妨）
+        listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">載入中...</div>';
+        const db = win.OS_DB || window.OS_DB;
+        if (!db || typeof db.getAllVNTagTemplates !== 'function') {
+            listEl.innerHTML = '<div style="color:#fc8181;text-align:center;padding:20px;">找不到 OS_DB</div>';
+            return;
+        }
+        try {
+            const _allTpls = await db.getAllVNTagTemplates();
+            const templates = _allTpls.filter(t => (t.caps || 'display') === 'display');   // VN組件 只放「純展示」面板
+            const _appTpls = _allTpls.filter(t => t.caps && t.caps !== 'display');           // 應用/共用 的家是「我的應用」→ 這裡只給搬遷提示
+            listEl.innerHTML = '';
+            // 舊的「應用/共用」還留在這 → 頂部給遷移提示（不自動塞桌面圖標，由你決定搬）
+            if (_appTpls.length) {
+                const mig = document.createElement('div');
+                mig.className = 'vn-migrate-notice';
+                mig.innerHTML = `這裡有 ${_appTpls.length} 個「應用/共用」面板，它們的家現在是「應用工坊 · 我的應用」。<button class="vn-migrate-btn" type="button">📲 全部搬到我的應用</button>`;
+                listEl.appendChild(mig);
+                mig.querySelector('.vn-migrate-btn').onclick = async () => {
+                    for (const t of _appTpls) { try { await _installTemplateAsPhoneApp(t); } catch (e) {} }
+                    alert(`已把 ${_appTpls.length} 個應用裝進「應用工坊 · 我的應用」。`);
+                    loadStudioGallery();
+                };
+            }
+            if (!templates.length) {
+                if (!_appTpls.length) listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">VN組件 空空如也，去煉丹做純展示面板吧！</div>';
+                return;
+            }
+            // 一次性抓所有手機 app（用 srcTplId 對照展廳模板）
+            const _allPhoneApps = (win.OS_DB && win.OS_DB.getAllPhoneApps)
+                ? ((await win.OS_DB.getAllPhoneApps()) || [])
+                : [];
+            templates.forEach(tpl => {
+                const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+                const previewHtml = (tpl.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B');
+                // 第一層：乾淨預覽卡（只有標題＋狀態＋預覽＋「管理 ›」）；所有操作按鈕都在第二層（點管理換頁）
+                const tile = document.createElement('div');
+                tile.className = 'studio-gallery-card sgc-browse' + (tpl.isActive ? ' active-tag' : '');
+                tile.innerHTML = `
+                    <div class="sgc-header">
+                        <span class="sgc-title">[${tpl.tagId || '未知'}]</span>
+                        <span class="sgc-status" style="color:${tpl.isActive ? '#2ecc71' : '#aaa'}">${tpl.isActive ? '✅ 啟用' : '❌ 停用'}</span>
+                        <button class="sgc-manage-btn" type="button">管理 ›</button>
+                    </div>
+                    ${tpl.css ? `<style>${tpl.css}</style>` : ''}
+                    <div class="studio-pv-tabs">
+                        <button class="studio-pv active" data-pv="phone">手機</button>
+                        <button class="studio-pv" data-pv="center">中間</button>
+                        <button class="studio-pv" data-pv="full">全屏</button>
+                    </div>
+                    <div class="sgc-preview">
+                        <div class="studio-pv-box">
+                            <div class="vn-dynamic-panel-${safeTagId}" style="width:100%;height:auto;display:flex;flex-direction:column;">
+                                ${previewHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                tile.querySelector('.sgc-manage-btn').onclick = () => _openComponentDetail(tpl, _allPhoneApps);
+                listEl.appendChild(tile);
+                _activatePreview(tile, tpl, safeTagId);
             });
         } catch(err) { listEl.innerHTML = `<div style="color:#fc8181;padding:20px;">載入失敗: ${err.message}</div>`; }
     }
