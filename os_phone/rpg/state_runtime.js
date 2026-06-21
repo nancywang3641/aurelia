@@ -569,13 +569,19 @@ ${_memoryRulesText()}
             }
         } catch (e) {}
         try {
-            const LOOK_KEYS = ['髮色','髮型','瀏海','眼色','瞳色','膚色','體型','身材','身高','服裝','衣著','外觀','形象','身分','身份','氣質','臉型'];
+            const LOOK_KEYS = ['髮色','髮型','瀏海','眼色','瞳色','膚色','體型','身材','身高','服裝','衣著','外觀','形象','外貌','長相','身分','身份','氣質','臉型','種族','物種','性別'];
             if (state && typeof state === 'object') {
                 for (const v of Object.values(state)) {
                     if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
                     for (const [name, ent] of Object.entries(v)) {
                         if (!ent || typeof ent !== 'object' || Array.isArray(ent) || map[name]) continue;   // 已有頭像詞就不蓋
-                        const looks = LOOK_KEYS.filter(k => ent[k] != null && String(ent[k]).trim() && String(ent[k]).trim() !== '待定').map(k => String(ent[k]).trim());
+                        // 攤平一層(形象:{髮色,眼色}→髮色,眼色，相容巢狀外觀)再抽外觀欄
+                        const flat = {};
+                        for (const [k, vv] of Object.entries(ent)) {
+                            if (vv && typeof vv === 'object' && !Array.isArray(vv)) { for (const [k2, v2] of Object.entries(vv)) { if (!(k2 in flat)) flat[k2] = v2; } }
+                            else if (!(k in flat)) flat[k] = vv;
+                        }
+                        const looks = LOOK_KEYS.filter(k => flat[k] != null && typeof flat[k] !== 'object' && String(flat[k]).trim() && String(flat[k]).trim() !== '待定').map(k => String(flat[k]).trim());
                         if (looks.length) map[name] = looks.join(', ');
                     }
                 }
@@ -727,9 +733,9 @@ ${numberedText}`;
                     const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
                     if (_useNamePH) {
                         const _nameMap = await _buildLooksMap(currentState);
-                        const _recent = await _recentCharNames();
-                        let _names = Object.keys(_nameMap).filter(n => _recent.size === 0 || _recent.has(n));   // 給 AI 的名單優先近期出現
-                        if (!_names.length) _names = Object.keys(_nameMap);                                      // 近期都沒登記表 → 全列
+                        // 列「所有有外觀資料的角色」(頭像 + AVS-only NPC)；佔位模式名單只是名字+代號、很短不臃腫，
+                        // 不再濾近期(濾近期會把沒頭像、只有 AVS 的 NPC 漏掉→副模型不知有這角色→畫崩)
+                        const _names = Object.keys(_nameMap);
                         // 配代號 Cn（只在這通 prompt 內有效；AI 用 {{Cn}} 最準、免簡繁/暱稱對錯，也可用 {{角色名}}）
                         const _entries = _names.map((n, i) => ({ code: 'C' + (i + 1), name: n }));
                         _looksMap = { ..._nameMap };                                       // 名字鍵 → 外觀
