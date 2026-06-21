@@ -1609,6 +1609,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">每輪記憶抽取時順便吐插圖、自動生圖。</div>
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;" title="開啟：副模型寫插圖 prompt 時只用 {{角色名}} 代表角色，外觀由系統用該角色頭像生成詞自動填入（沒頭像退 AVS 簡易形象、再沒有留原名）。副模型 prompt 不用塞整塊外觀、不會越積越肥，外觀又跟頭像一致。關閉＝改回把近期角色外觀整塊塞給副模型。">
+                                <span>🏷️ 角色名佔位</span>
+                                <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
+                            </div>
+                            <div class="set-desc" style="margin-top:6px;">副模型只寫 {{角色名}}＋動作場景，外觀由系統用頭像自動填。</div>
                             <div class="set-label" style="font-size:12px; margin-top:10px;" title="跟著上面選的「插圖來源」自動切換：選哪個接口就顯示哪個接口的指令，各自獨立、互不影響。">副模型插圖指令（跟著插圖來源）</div>
                             ${(() => {
                                 const _ss = imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service;
@@ -3165,6 +3170,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
                         sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
                         extractEnabled:   container.querySelector('#img-scene-extract-enabled')?.checked ?? false,
+                        useNamePlaceholder: container.querySelector('#img-scene-name-placeholder')?.checked ?? true,   // 🏷️ 角色名佔位（預設開）
                         // 每接口獨立的副模型插圖指令（不再共用標籤/自然語言兩格）
                         extractPromptNovelai:      (container.querySelector('#img-scene-extract-novelai')?.value || '').trim(),
                         extractPromptPollinations: (container.querySelector('#img-scene-extract-pollinations')?.value || '').trim(),

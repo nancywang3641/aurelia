@@ -535,18 +535,69 @@ ${_memoryRulesText()}
         return lines.join('\n');
     }
 
+    // {角色名 → 外觀字串}登記表：avatar_cache 頭像生成詞(主) + AVS 簡易形象(補漏)。給「{{角色名}} 佔位模式」展開用。
+    //   全角色、不濾近期(展開是 lookup、不進 prompt，不怕多)；同名優先頭像詞。
+    async function _buildLooksMap(state) {
+        const map = {};
+        try {
+            const C = win.VN_Cache;
+            if (C && C.getAll) {
+                const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
+                const all = await C.getAll('avatar_cache');
+                for (const e of (all || [])) {
+                    if (!e || !e.prompt) continue;
+                    if (world && C.worldOf && C.worldOf(e) !== world) continue;
+                    const name = (C.bareKeyOf ? C.bareKeyOf(e) : e.key) || '';
+                    const p = String(e.prompt).trim();
+                    if (name && p && !map[name]) map[name] = p;
+                }
+            }
+        } catch (e) {}
+        try {
+            const LOOK_KEYS = ['髮色','髮型','瀏海','眼色','瞳色','膚色','體型','身材','身高','服裝','衣著','外觀','形象','身分','身份','氣質','臉型'];
+            if (state && typeof state === 'object') {
+                for (const v of Object.values(state)) {
+                    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+                    for (const [name, ent] of Object.entries(v)) {
+                        if (!ent || typeof ent !== 'object' || Array.isArray(ent) || map[name]) continue;   // 已有頭像詞就不蓋
+                        const looks = LOOK_KEYS.filter(k => ent[k] != null && String(ent[k]).trim() && String(ent[k]).trim() !== '待定').map(k => String(ent[k]).trim());
+                        if (looks.length) map[name] = looks.join(', ');
+                    }
+                }
+            }
+        } catch (e) {}
+        return map;
+    }
+
+    // 把 scene prompt 裡的 {{角色名}} 換成登記表外觀；對不到(簡繁/暱稱)走小寫正規化，再對不到留原名(去花括號、別讓 {{}} 進生圖)。
+    function _expandSceneNames(str, map) {
+        if (!str || String(str).indexOf('{{') < 0) return str;
+        const lowerMap = {};
+        for (const k of Object.keys(map || {})) lowerMap[k.toLowerCase()] = map[k];
+        return String(str).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (m, raw) => {
+            const name = String(raw).trim();
+            if (map && map[name]) return map[name];
+            const lk = name.toLowerCase();
+            if (lowerMap[lk]) return lowerMap[lk];
+            return name;
+        });
+    }
+
     // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖）。
     // ★ 定位用「編號段落 + after_paragraph 數字」——AI 只挑數字、絕不抄原文（避免簡繁/改寫/引舊訊息對不上）。
-    function _sceneAddendum(userPrompt, numberedText, looksRef) {
-        const looksBlock = (looksRef && looksRef.trim())
-            ? `\n【角色外觀錨點（★最高權威）：以下是每個角色已確立的外觀——「頭像生成詞」即當初畫這張頭像用的提示詞。畫到哪個角色，就照他這串外觀畫：髮色／眼色／體型／髮型／服裝一律沿用(姿勢、表情、鏡頭可依本輪劇情調整)。劇情或摘要沒寫到外觀也要主動補上，嚴禁漏髮色/眼色/體型，更嚴禁自行另編一個長相】\n${looksRef.trim()}\n`
-            : '';
+    function _sceneAddendum(userPrompt, numberedText, looksRef, nameList) {
+        // nameList 非空 = {{角色名}}佔位模式（不塞外觀大塊、AI 只寫動作場景、系統事後展開）；否則 = 外觀錨點模式（整塊塞）
+        const charBlock = (nameList && nameList.length)
+            ? `\n【角色外觀＝用佔位符，禁止自己寫長相】畫到角色時，一律用 {{角色名}} 代表那個角色（系統會自動換成他已確立的外觀，跟頭像同一個人）。你只負責寫動作／姿勢／表情／場景／環境／鏡頭／光線，絕對不要自己描述髮色／眼色／體型／髮型／服裝。\n可用角色名（要畫誰就用 {{}} 包他的名字、照原樣別展開）：${nameList.map(n => '{{' + n + '}}').join('、')}\n格式：{{角色名}} 後接動作與場景，例如 {{角色名}}＋＜動作/姿勢＞＋＜場景/環境＞＋＜鏡頭/光線＞。\n`
+            : ((looksRef && looksRef.trim())
+                ? `\n【角色外觀錨點（★最高權威）：以下是每個角色已確立的外觀——「頭像生成詞」即當初畫這張頭像用的提示詞。畫到哪個角色，就照他這串外觀畫：髮色／眼色／體型／髮型／服裝一律沿用(姿勢、表情、鏡頭可依本輪劇情調整)。劇情或摘要沒寫到外觀也要主動補上，嚴禁漏髮色/眼色/體型，更嚴禁自行另編一個長相】\n${looksRef.trim()}\n`
+                : '');
         return `
 
 ═══════════════════════════════════════
 【★ 同時輸出「場景插圖」→ 放進同一個 JSON 的 "scenes" 欄位】
 ${(userPrompt || '').trim()}
-${looksBlock}
+${charBlock}
 【定位規則｜務必嚴格遵守】（若上方說明提到 after 引文或其他 scenes 格式，一律以這裡為準）
 - 下面【本輪最新劇情（編號段落）】是切好編號的段落，你只能從這些編號裡挑插圖位置。
 - 嚴禁為世界書設定/歷史對話/舊訊息生圖——只畫最新這一輪的劇情。
@@ -649,11 +700,21 @@ ${numberedText}`;
             }
             // 場景插圖搭便車：把最後一則自己切段編號，要副模型只挑 after_paragraph 數字（程式自己對位）
             let _sceneParas = [];
+            let _looksMap = null;   // {{角色名}}佔位模式才建；null = 用外觀錨點舊模式、派發時不展開
+            const _useNamePH = wantScenes && _sceneCfg.useNamePlaceholder !== false;   // 預設開
             if (wantScenes && (doState || wantMemory) && recentText) {
                 _sceneParas = _segmentStory(lastContent || '');
                 if (_sceneParas.length) {
                     const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
-                    prompt += _sceneAddendum(_scenePromptText, numbered, await _buildLooksRef(currentState));
+                    if (_useNamePH) {
+                        _looksMap = await _buildLooksMap(currentState);
+                        const _recent = await _recentCharNames();
+                        let _names = Object.keys(_looksMap).filter(n => _recent.size === 0 || _recent.has(n));   // 給 AI 的名單優先近期出現
+                        if (!_names.length) _names = Object.keys(_looksMap);                                     // 近期都沒登記表 → 全列
+                        prompt += _sceneAddendum(_scenePromptText, numbered, '', _names);
+                    } else {
+                        prompt += _sceneAddendum(_scenePromptText, numbered, await _buildLooksRef(currentState));
+                    }
                 }
             }
 
@@ -723,7 +784,8 @@ ${numberedText}`;
                         const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
                         if (n >= 1 && _sceneParas[n - 1]) after = _sceneParas[n - 1];
                         else if (s.after) after = String(s.after);  // 舊格式相容（AI 真給了引文）
-                        return { after: after, prompt: s.prompt };
+                        // 佔位模式：把 {{角色名}} 換成登記表外觀（頭像詞→AVS→留原名）；非佔位模式 _looksMap=null 不動
+                        return { after: after, prompt: (_looksMap ? _expandSceneNames(s.prompt, _looksMap) : s.prompt) };
                     }).filter(s => s && s.prompt);
                     win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId });
                     console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
