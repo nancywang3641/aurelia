@@ -390,6 +390,66 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
     }
 
+    // 🏷️ 角色外觀登記表編輯器：列出當前世界 avatar_cache 每個角色的「頭像生成詞」(={{角色名}}佔位展開來源)，
+    //   可直接改/刪/新增。給 Rae 修現有資料。直接讀寫 VN_Cache.avatar_cache(依世界隔離)。
+    async function _openCharLooksEditor() {
+        const W = window.parent || window;
+        const C = W.VN_Cache || window.VN_Cache;
+        const doc = W.document || document;
+        if (!C || !C.getAll) { alert('VN_Cache 未就緒（先進一次 VN）'); return; }
+        const _e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
+        let all = [];
+        try { all = (await C.getAll('avatar_cache')) || []; } catch (e) {}
+        const rows = all
+            .filter(e => !world || (C.worldOf ? C.worldOf(e) === world : true))
+            .map(e => ({ name: (C.bareKeyOf ? C.bareKeyOf(e) : e.key), prompt: e.prompt || '' }))
+            .filter(r => r.name);
+        const oldM = doc.getElementById('avl-modal'); if (oldM) oldM.remove();
+        const modal = doc.createElement('div');
+        modal.id = 'avl-modal'; modal.className = 'avl-modal';
+        modal.innerHTML = `<div class="avl-card">
+            <div class="avl-title">🏷️ 角色外觀登記表<span class="avl-sub">（{{角色名}} 佔位展開用的頭像生成詞；改這裡＝改插圖會套的外觀）</span></div>
+            <div class="avl-list" id="avl-list"></div>
+            <div class="avl-addrow"><input class="avl-name-input" id="avl-new-name" placeholder="新角色名…"><button class="avl-btn" id="avl-add">＋ 新增</button></div>
+            <div class="avl-actions"><span class="avl-tip" id="avl-tip"></span><button class="avl-btn primary" id="avl-close">完成</button></div>
+        </div>`;
+        (doc.body || doc.documentElement).appendChild(modal);
+        const listEl = modal.querySelector('#avl-list');
+        const tip = (t) => { const el = modal.querySelector('#avl-tip'); if (el) { el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 2000); } };
+        function render() {
+            if (!rows.length) { listEl.innerHTML = '<div class="avl-empty">這個世界還沒有角色外觀資料。下面可手動新增。</div>'; return; }
+            listEl.innerHTML = rows.map((r, i) => `<div class="avl-row">
+                <div class="avl-name" title="${_e(r.name)}">${_e(r.name)}</div>
+                <textarea class="avl-prompt" data-i="${i}" rows="2" placeholder="這個角色的外觀描述（頭像生成詞）…">${_e(r.prompt)}</textarea>
+                <button class="avl-del" data-i="${i}" type="button">刪除</button>
+            </div>`).join('');
+            listEl.querySelectorAll('.avl-prompt').forEach(ta => ta.onblur = async () => {
+                const i = +ta.getAttribute('data-i'); const r = rows[i]; const v = ta.value.trim();
+                if (v === r.prompt) return;
+                try { const cur = (await C.get('avatar_cache', r.name)) || {}; await C.set('avatar_cache', r.name, { ...cur, prompt: v }); r.prompt = v; tip('已存「' + r.name + '」'); }
+                catch (e) { alert('存失敗：' + (e && e.message || e)); }
+            });
+            listEl.querySelectorAll('.avl-del').forEach(b => b.onclick = async () => {
+                const i = +b.getAttribute('data-i'); const r = rows[i];
+                if (!confirm('刪除「' + r.name + '」的外觀資料？（不影響已生成的頭像圖，只刪外觀詞）')) return;
+                try { await C.delete('avatar_cache', r.name); rows.splice(i, 1); render(); tip('已刪「' + r.name + '」'); }
+                catch (e) { alert('刪失敗：' + (e && e.message || e)); }
+            });
+        }
+        modal.querySelector('#avl-add').onclick = async () => {
+            const ni = modal.querySelector('#avl-new-name'); const name = (ni.value || '').trim();
+            if (!name) { alert('先輸入角色名'); return; }
+            if (rows.some(r => r.name === name)) { alert('已有同名角色'); return; }
+            try { await C.set('avatar_cache', name, { prompt: '' }); rows.push({ name, prompt: '' }); ni.value = ''; render(); tip('已新增「' + name + '」，填上外觀詞'); }
+            catch (e) { alert('新增失敗：' + (e && e.message || e)); }
+        };
+        modal.querySelector('#avl-close').onclick = () => modal.remove();
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+        render();
+    }
+    window.OS_AVATAR_LOOKS_OPEN = _openCharLooksEditor;
+
     window.OS_SETTINGS = {
         getConfig: loadLlmConfig,
         getSecondaryConfig: loadSecLlmConfig,
@@ -1614,6 +1674,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">副模型只寫 {{角色名}}＋動作場景，外觀由系統用頭像自動填。</div>
+                            <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()">✏️ 編輯角色外觀登記表</button>
+                            <div class="set-desc" style="margin-top:4px;">列出每個角色的外觀（頭像生成詞），可直接改／刪／新增——修你之前的資料。</div>
                             <div class="set-label" style="font-size:12px; margin-top:10px;" title="跟著上面選的「插圖來源」自動切換：選哪個接口就顯示哪個接口的指令，各自獨立、互不影響。">副模型插圖指令（跟著插圖來源）</div>
                             ${(() => {
                                 const _ss = imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service;
