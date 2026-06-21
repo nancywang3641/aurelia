@@ -2160,7 +2160,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             }
             if (blocks.length) {
                 p += `\n## 區塊標籤格式（整段獨立輸出，與 <content> 並列；只在區塊內穿插，不可掉出區塊）\n`;
-                blocks.forEach(t => { p += `\n### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n<${t.tagId}>\n${t.demoFormat}\n</${t.tagId}>\n`; });
+                blocks.forEach(t => {
+                    // demoFormat 可能自帶 <tagId>…</tagId> 外殼 → 先剝掉再統一補一層，永遠剛好一層
+                    //   (原本固定外加一層、沒先剝 → demoFormat 自帶外殼時就 <Bestiary> 開兩次、</Bestiary> 關兩次)。跟 vn_ui_workshop 同款。
+                    const df = String(t.demoFormat || '').trim()
+                        .replace(new RegExp('^<' + t.tagId + '>\\s*', 'i'), '')
+                        .replace(new RegExp('\\s*</' + t.tagId + '>$', 'i'), '').trim();
+                    p += `\n### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n<${t.tagId}>\n${df}\n</${t.tagId}>\n`;
+                });
             }
             localStorage.setItem('os_vn_extra_tags_prompt', p);
         } catch(e) { console.warn('[Studio] syncActiveTagsToLocal 失敗', e); }
