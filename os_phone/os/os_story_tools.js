@@ -596,7 +596,7 @@
         API._generateSummary(start, end, sourceType, mergePrev);
     };
 
-    API._generateSummary = async function (startId, endId, sourceType, mergePrev) {
+    API._generateSummary = async function (startId, endId, sourceType, mergePrev, auto) {
         const btn = document.getElementById('btn-grand-summary');   // 從 CTX 快捷入口開時不存在 → null-safe
         if (btn) { btn.innerText = "生成中 (請勿關閉)..."; btn.classList.add('spinning'); }
         try {
@@ -854,8 +854,9 @@
             }
 
             await _genOnce();
-            _showSummaryPreview();
-        } catch (e) { alert("生成失敗: " + e.message); } finally {
+            if (auto) { await _doSave(); console.log('[自動總結] ✅ 背景總結完成並存檔'); }   // 背景模式：直接存、不跳預覽
+            else _showSummaryPreview();
+        } catch (e) { if (auto) console.warn('[自動總結] 失敗:', e); else alert("生成失敗: " + e.message); } finally {
             if (btn) { btn.innerText = "📝 生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning'); }
         }
     };
@@ -1116,6 +1117,45 @@
         const ov = document.getElementById('ost-panel');
         if (ov) ov.remove();
     };
+
+    // ====================================================================
+    // D. 自動總結（背景）：每輪生成後檢查未總結樓層，達門檻就背景總結一次、不用手動按
+    // ====================================================================
+    let _autoSumming = false;
+    let _genInProgress = false;   // 使用者/任何生成進行中 → 別插隊背景總結，免跟使用者的回合撞主模型
+    API.autoSummarizeCheck = async function () {
+        try {
+            if (_autoSumming) return;                                  // 正在背景總結
+            if (_genInProgress) return;                                // 有生成在跑(使用者回合)→ 等它結束再說
+            if (win.__AURELIA_SUMMARIZING) return;                     // 正在跑總結(含手動)
+            if (win.OS_API?.isStandalone?.()) return;                  // 酒館 only(PWA 有自己的總結)
+            if (localStorage.getItem('sp_autosum_on') !== '1') return; // 開關關
+            let every = parseInt(localStorage.getItem('sp_autosum_every'));
+            if (isNaN(every) || every < 2) every = 20;
+            const info = await API.getUnsummarizedInfo();
+            if (!info || info.uncounted < every || info.start > info.end) return;
+            _autoSumming = true;
+            try {
+                console.log(`[自動總結] 未總結 ${info.uncounted} ≥ ${every} → 背景總結 #${info.start}~${info.end}`);
+                await API._generateSummary(info.start, info.end, 'content', true, true);   // auto=true → 直接存、不跳預覽
+                try { const t = win.toastr; if (t) t.success(`已自動總結（到 #${info.end}）`, '🔁 自動總結', { timeOut: 2500 }); } catch (e) {}
+            } finally { _autoSumming = false; }
+        } catch (e) { _autoSumming = false; console.warn('[自動總結] check 失敗:', e); }
+    };
+    // 每輪生成結束 → 延遲檢查(讓 __AURELIA_SUMMARIZING 旗標窗過完、避免總結自己的 GENERATION_ENDED 觸發再總結)
+    (function _initAutoSum(tries) {
+        try {
+            if (win.eventOn && win.tavern_events && win.tavern_events.GENERATION_ENDED) {
+                if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function () { _genInProgress = true; });
+                win.eventOn(win.tavern_events.GENERATION_ENDED, function () {
+                    _genInProgress = false;
+                    try { setTimeout(function () { API.autoSummarizeCheck(); }, 4000); } catch (e) {}
+                });
+                return;
+            }
+        } catch (e) {}
+        if (tries > 0) setTimeout(function () { _initAutoSum(tries - 1); }, 1500);
+    })(8);
 
     window.OS_STORY_TOOLS = API;
     console.log('✅ 故事管理工具 (OS_STORY_TOOLS) 模組就緒');

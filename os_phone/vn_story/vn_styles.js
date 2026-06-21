@@ -97,6 +97,13 @@
                     <div class="ctx-row"><span class="ctx-label">訊息數</span><span class="ctx-val" id="ctx-msgs">—</span></div>
                     <div class="ctx-row" id="ctx-unsum-row"><span class="ctx-label">未總結樓層</span><span class="ctx-val" id="ctx-unsum">—</span></div>
                     <div class="ctx-row" id="ctx-sumcount-row"><span class="ctx-label">總結次數</span><span class="ctx-val" id="ctx-sumcount">—</span></div>
+                    <div class="ctx-autosum-row off" id="ctx-autosum-row">
+                        <span class="ctx-limit-label">🔁 自動總結</span>
+                        <input type="checkbox" class="ctx-autosum-on" id="ctx-autosum-on" onchange="window.VN_CtxMonitor._setAutoSum('on', this.checked)" />
+                        <span class="ctx-autosum-unit">每</span>
+                        <input class="ctx-limit-input ctx-autosum-every" id="ctx-autosum-every" type="number" min="2" max="200" value="20" onchange="window.VN_CtxMonitor._setAutoSum('every', this.value)" />
+                        <span class="ctx-autosum-unit">樓</span>
+                    </div>
                     <div class="ctx-row" id="ctx-usage-row"><span class="ctx-label">本輪 API · 生圖</span><span class="ctx-val" id="ctx-usage-cnt">—</span></div>
                     <div id="ctx-breakdown" class="ctx-breakdown">
                         <div class="ctx-bd-head">上下文組成</div>
