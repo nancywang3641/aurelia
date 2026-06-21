@@ -569,16 +569,19 @@ ${_memoryRulesText()}
         return map;
     }
 
-    // 把 scene prompt 裡的 {{角色名}} 換成登記表外觀；對不到(簡繁/暱稱)走小寫正規化，再對不到留原名(去花括號、別讓 {{}} 進生圖)。
+    // 把 scene prompt 裡的 {{角色名}} / {{C2}} / {{C2. 名}} 換成登記表外觀；
+    //   對不到走小寫正規化、再拆「代號+名」各試一次，都不到才留原名(別讓 {{}} 進生圖)。
     function _expandSceneNames(str, map) {
         if (!str || String(str).indexOf('{{') < 0) return str;
         const lowerMap = {};
         for (const k of Object.keys(map || {})) lowerMap[k.toLowerCase()] = map[k];
+        const _look = (k) => { if (!k) return null; const kk = String(k).trim(); return (map && (map[kk] || map[kk.toUpperCase()])) || lowerMap[kk.toLowerCase()] || null; };
         return String(str).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (m, raw) => {
             const name = String(raw).trim();
-            if (map && map[name]) return map[name];
-            const lk = name.toLowerCase();
-            if (lowerMap[lk]) return lowerMap[lk];
+            let hit = _look(name);
+            if (hit) return hit;
+            const mm = name.match(/^(C\d+)[\s.．:：、,，_-]+(.+)$/i);   // {{C2. 名}} → 拆代號與名各試
+            if (mm) { hit = _look(mm[1]) || _look(mm[2]); if (hit) return hit; }
             return name;
         });
     }
