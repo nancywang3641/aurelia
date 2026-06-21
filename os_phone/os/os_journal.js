@@ -10,22 +10,30 @@
     'use strict';
     const win = window.parent || window;
 
-    // 「主角本尊 / 初見 / 追求中…」這類視覺標籤從 character row 第 4 欄（狀態）抽
-    //   row 格式：姓名 | 身份 | 性格 | 狀態 | 特徵 | 與MC關係 | 備註
-    function _parseCharRow(row) {
-        const cols = (row || '').split('|').map(s => s.trim());
-        // markdown 表格行常有前導/結尾 |，切完首尾會多出空欄 → 去掉，否則欄位整體位移一格（身份顯示成姓名）
+    // 角色表欄位 = 動態對位：用大總結存下來的「表頭(charHeader)」貼標籤，不硬寫欄序——
+    //   模板可變、新版角色表有 髮色/髮型/眼色，硬寫欄序會從第 4 欄起全錯位(身份對、之後全偏)。
+    //   沒存到表頭的舊資料 → 按欄數套預設(≥8欄=新版9欄／否則舊版7欄)。
+    const _CH_DEF_9 = ['姓名', '身份', '性格', '狀態 / 位置', '與主角關係', '髮色', '髮型', '眼色', '伏筆 / 備註'];
+    const _CH_DEF_7 = ['姓名', '身份', '性格', '狀態 / 位置', '特徵', '與主角關係', '備註'];
+    function _cellsOf(row) {
+        const cols = String(row || '').split('|').map(s => s.trim());
+        // markdown 表格行常有前導/結尾 |，切完首尾會多出空欄 → 去掉，否則欄位整體位移一格
         if (cols.length && cols[0] === '') cols.shift();
         if (cols.length && cols[cols.length - 1] === '') cols.pop();
-        return {
-            name:    cols[0] || '',
-            role:    cols[1] || '',
-            person:  cols[2] || '',
-            status:  cols[3] || '',
-            feature: cols[4] || '',
-            relate:  cols[5] || '',
-            note:    cols[6] || '',
-        };
+        return cols;
+    }
+    function _labelsOf(charHeader, cellCount) {
+        if (charHeader) {
+            const hs = _cellsOf(charHeader);
+            if (hs.length >= 2) return hs;
+        }
+        return cellCount >= 8 ? _CH_DEF_9 : _CH_DEF_7;
+    }
+    // 回傳 [{label, value}]（含 name 在 index 0）；label 來自表頭，對不到就用「欄N」
+    function _charFields(row, charHeader) {
+        const cells = _cellsOf(row);
+        const labels = _labelsOf(charHeader, cells.length);
+        return cells.map((v, i) => ({ label: String(labels[i] || `欄${i + 1}`).trim(), value: v }));
     }
 
     // 「名_姓」總結標籤 → 顯示用「姓名」（姓在前）。只在顯示層轉，配頭像仍用原始字串。
@@ -230,13 +238,13 @@
         `).join('');
 
         const charsHtml = story.characters.map((c, i) => {
-            const parsed = _parseCharRow(c.row);
-            const name = c.name || parsed.name;          // 原始「名_姓」：配頭像 / 查詳情用
-            const role = parsed.role;
-            const trait = (parsed.person || parsed.feature || '').slice(0, 30);
-            const tag = parsed.status || parsed.relate || '';
+            const fields = _charFields(c.row, story.charHeader);
+            const name = c.name || (fields[0] && fields[0].value) || '';    // 原始「名_姓」：配頭像 / 查詳情用
+            const role = (fields[1] && fields[1].value) || '';              // 身份
+            const trait = ((fields[2] && fields[2].value) || '').slice(0, 30);   // 性格
+            const tag = (fields[3] && fields[3].value) || '';               // 狀態 / 位置
             return `
-                <div class="jrnl-char-card" data-char-idx="${i}" title="${_escape(parsed.row || c.row || '')}">
+                <div class="jrnl-char-card" data-char-idx="${i}" title="${_escape(c.row || '')}">
                     <div class="jrnl-char-img" data-avatar-key="${_escape(name)}" data-world="${_escape(story.chatId || '')}"><span class="jrnl-char-img-fallback">✿</span></div>
                     <div class="jrnl-char-name">${_escape(_displayName(name))}</div>
                     ${role ? `<div class="jrnl-char-role">${_escape(role)}</div>` : ''}
@@ -489,28 +497,25 @@
                 card.onclick = () => {
                     const idx = parseInt(card.dataset.charIdx, 10);
                     const c = (active && active.characters && !isNaN(idx)) ? active.characters[idx] : null;
-                    if (c) _openCharModal(c, active && active.chatId);
+                    if (c) _openCharModal(c, active);
                 };
             });
         }
 
         // 角色詳情 modal：沿用 .jrnl-modal 外殼，內容換成欄位列表 + 頭像
-        function _openCharModal(c, world) {
+        function _openCharModal(c, story) {
             if (!c) return;
+            const world = (story && story.chatId) || '';
+            const charHeader = (story && story.charHeader) || '';
             const old = container.querySelector('.jrnl-modal');
             if (old) old.remove();
 
-            const parsed = _parseCharRow(c.row);
-            const rawName = c.name || parsed.name;       // 配頭像用原始「名_姓」
-            const disp = _displayName(rawName);          // 顯示用「姓名」
-            const fields = [
-                ['身份', parsed.role],
-                ['性格概述', parsed.person],
-                ['狀態 / 位置', parsed.status],
-                ['特徵', parsed.feature],
-                ['與主角關係', parsed.relate],
-                ['備註', parsed.note],
-            ].filter(([, v]) => v && String(v).trim());
+            const allFields = _charFields(c.row, charHeader);   // 含 name 在 index 0；按表頭動態貼標籤
+            const rawName = c.name || (allFields[0] && allFields[0].value) || '';   // 配頭像用原始「名_姓」
+            const disp = _displayName(rawName);                  // 顯示用「姓名」
+            const fields = allFields.slice(1)                    // 跳過姓名欄；其餘全列(身份/性格/狀態/與MC關係/髮色/髮型/眼色/伏筆…)
+                .filter(f => f.value && String(f.value).trim())
+                .map(f => [f.label, f.value]);
             const fieldsHtml = fields.length
                 ? fields.map(([k, v]) =>
                     `<div class="jrnl-cm-row"><span class="jrnl-cm-k">${_escape(k)}</span><span class="jrnl-cm-v">${_escape(v)}</span></div>`

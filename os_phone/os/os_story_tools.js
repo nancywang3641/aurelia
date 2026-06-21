@@ -684,6 +684,7 @@
 
                     const characters = [];
                     const charNameSet = new Set();
+                    let charHeader = '';   // 角色表表頭那行 → 存著給日誌動態對位欄位(別硬寫欄序，模板可變)
                     const charSectionMatch = finalContent.match(/【角色表】[\s\S]*?(?=\n【|$)/);
                     if (charSectionMatch) {
                         const lines = charSectionMatch[0].split('\n');
@@ -695,7 +696,7 @@
                             if (!cols.length) continue;
                             const name = cols[0];
                             if (!name) continue;
-                            if (name === '姓名') continue;
+                            if (/^姓名|^name$/i.test(name)) { if (!charHeader) charHeader = trimmed; continue; }   // 表頭行：抓起來、不入角色
                             if (/^[-:\s]+$/.test(name)) continue;
                             if (name.length > 40) continue;
                             if (charNameSet.has(name)) continue;
@@ -731,6 +732,7 @@
                         await osDb.saveLobbySummaryIndex({
                             cardName, chatId, storyTitle, bgCacheId, summaryCount, brief,
                             characters: newCharacters,
+                            charHeader,
                             lorebookBook: bookName,
                             lorebookKey: `tavern_summary::${chatId}`,   // 已搬 OS_DB，非世界書 key（保留欄位相容）
                         });
