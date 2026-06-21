@@ -117,10 +117,16 @@
                 return `${code}・${s}`;
             };
 
-            let block = `<劇情記憶 規則="既成事實·寫作前必讀·不得矛盾">\n下列是本劇過往「已經發生」的記憶摘要，按時間遠近分三段(早期/中段/近期)。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n`;
+            // 主模型常駐目錄：預設全目錄(早期/中段/近期)；開「只近期」開關 → 只留近期段當 fallback，精準召回交副模型(getCatalogForPicking 不受影響、照拿全部)，省 token。
+            //   給沒跑副模型導演的朋友：保持預設(全目錄)才不會砍掉他們的召回來源。
+            const _mainRecentOnly = (function(){ try { return JSON.parse(localStorage.getItem('os_vector_config') || '{}').mainRecentOnly === true; } catch (e) { return false; } })();
+            let block = `<劇情記憶 規則="既成事實·寫作前必讀·不得矛盾">\n下列是本劇過往「已經發生」的記憶摘要${_mainRecentOnly ? '（近期段）' : '，按時間遠近分三段(早期/中段/近期)'}。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n`;
             if (facts.length) {
                 const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
-                [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]].forEach((seg) => {
+                const _segs = _mainRecentOnly
+                    ? [['近期', facts.slice(c2)]]
+                    : [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]];
+                _segs.forEach((seg) => {
                     const lines = seg[1].map(_sumLine).filter(Boolean);
                     if (lines.length) block += `\n〔${seg[0]}〕\n` + lines.join('\n');
                 });

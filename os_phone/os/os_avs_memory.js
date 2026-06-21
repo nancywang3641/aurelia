@@ -152,6 +152,7 @@
                             </select>
                         </label>
                         <div class="avs-mem-srchint">「摘要」是拿主模型每輪吐的 &lt;summary&gt; 去記，省 token；那則沒摘要時自動回退全文。</div>
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-main-recent" ${cfg.mainRecentOnly ? 'checked' : ''}><span>主模型只注入「近期＋角色」記憶（省 token；舊記憶的精準召回交副模型導演。沒跑副模型導演的別勾）</span></label>
                     </div>
                     <div class="avs-st-btn-grid">
                         <button class="avs-btn avs-btn-primary" id="avs-mem-save">💾 儲存設定</button>
@@ -221,6 +222,7 @@
             const _k = q('#avs-mem-key'); if (_k) cfg.embeddingKey = (_k.value || '').trim();
             const _tk = q('#avs-mem-topk'); if (_tk) cfg.topK = parseInt(_tk.value) || 5;   // 此欄只在 PWA 顯示；酒館隱藏時別覆蓋既有值
             cfg.extractSource = q('#avs-mem-src')?.value || 'content';
+            const _mr = q('#avs-mem-main-recent'); if (_mr) cfg.mainRecentOnly = !!_mr.checked;   // 主模型只注入近期+角色記憶
             _saveCfg(cfg);
             const b = saveBtn; const o = b.textContent; b.textContent = '✓ 已儲存'; setTimeout(() => { b.textContent = o; }, 1200);
         };
