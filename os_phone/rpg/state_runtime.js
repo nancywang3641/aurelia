@@ -535,7 +535,22 @@ ${_memoryRulesText()}
         return lines.join('\n');
     }
 
-    // {角色名 → 外觀字串}登記表：avatar_cache 頭像生成詞(主) + AVS 簡易形象(補漏)。給「{{角色名}} 佔位模式」展開用。
+    // 頭像詞→插圖用：剝掉「肖像框架詞」(數量1boy/solo/portrait/bust/簡單背景/looking at viewer)。
+    //   頭像是單人肖像、那些詞對；但 {{C代號}} 是塞進「已經數過人(2boys)的多角色場景」→ 數量/solo 會打架害 NAI 多生人。
+    //   性別不會丟(還有 adult male/young man+種族)。頭像本身那串不動，只動插圖展開的副本。
+    function _stripAvatarFraming(p) {
+        const DROP = [
+            /^\d+\s*(boys?|girls?|others?)$/i,
+            /^solo(\s+focus)?$/i,
+            /^(portrait|bust[\s_-]?shot|upper[\s_-]?body|cowboy[\s_-]?shot|head\s?shot|close[\s_-]?up|closeup|face\s+focus)$/i,
+            /^(simple|white|plain|gradient|grey|gray|dark|light|blurry)[\s_].*background$/i,
+            /^(simple\s+)?background$/i,
+            /^looking[\s_]at[\s_]viewer$/i,
+        ];
+        return String(p || '').split(',').map(t => t.trim()).filter(t => t && !DROP.some(re => re.test(t))).join(', ');
+    }
+
+    // {角色名 → 外觀字串}登記表：avatar_cache 頭像生成詞(主，剝肖像框架) + AVS 簡易形象(補漏)。給「{{角色名}} 佔位模式」展開用。
     //   全角色、不濾近期(展開是 lookup、不進 prompt，不怕多)；同名優先頭像詞。
     async function _buildLooksMap(state) {
         const map = {};
@@ -548,7 +563,7 @@ ${_memoryRulesText()}
                     if (!e || !e.prompt) continue;
                     if (world && C.worldOf && C.worldOf(e) !== world) continue;
                     const name = (C.bareKeyOf ? C.bareKeyOf(e) : e.key) || '';
-                    const p = String(e.prompt).trim();
+                    const p = _stripAvatarFraming(String(e.prompt).trim());   // 剝肖像框架詞(1boy/solo/portrait/bust/簡單背景)防場景數量打架
                     if (name && p && !map[name]) map[name] = p;
                 }
             }
