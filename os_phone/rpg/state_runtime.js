@@ -586,9 +586,10 @@ ${_memoryRulesText()}
     // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖）。
     // ★ 定位用「編號段落 + after_paragraph 數字」——AI 只挑數字、絕不抄原文（避免簡繁/改寫/引舊訊息對不上）。
     function _sceneAddendum(userPrompt, numberedText, looksRef, nameList) {
-        // nameList 非空 = {{角色名}}佔位模式（不塞外觀大塊、AI 只寫動作場景、系統事後展開）；否則 = 外觀錨點模式（整塊塞）
+        // nameList 非空 = {{代號/角色名}}佔位模式（不塞外觀大塊、AI 只寫動作場景、系統事後展開）；否則 = 外觀錨點模式（整塊塞）
+        //   nameList = [{code:'C1', name:'小米'}, ...]；代號只在這通 prompt 內有效，AI 用代號最準(簡繁/暱稱免對錯)
         const charBlock = (nameList && nameList.length)
-            ? `\n【角色外觀＝用佔位符，禁止自己寫長相】畫到角色時，一律用 {{角色名}} 代表那個角色（系統會自動換成他已確立的外觀，跟頭像同一個人）。你只負責寫動作／姿勢／表情／場景／環境／鏡頭／光線，絕對不要自己描述髮色／眼色／體型／髮型／服裝。\n可用角色名（要畫誰就用 {{}} 包他的名字、照原樣別展開）：${nameList.map(n => '{{' + n + '}}').join('、')}\n格式：{{角色名}} 後接動作與場景，例如 {{角色名}}＋＜動作/姿勢＞＋＜場景/環境＞＋＜鏡頭/光線＞。\n`
+            ? `\n【角色外觀＝用佔位符，禁止自己寫長相】畫到角色時，用 {{代號}} 或 {{角色名}} 代表那個角色（系統會自動換成他已確立的外觀，跟頭像同一個人）；**用代號最準**，簡繁/暱稱都不會對錯。你只負責寫動作／姿勢／表情／場景／環境／鏡頭／光線，絕對不要自己描述髮色／眼色／體型／髮型／服裝。\n可用角色（要畫誰就用 {{}} 包他的代號或名字）：${nameList.map(e => e.code + '. ' + e.name).join('｜')}\n格式：{{代號}} 後接動作與場景，例如 {{C1}}＋＜動作/姿勢＞＋＜場景/環境＞＋＜鏡頭/光線＞。\n`
             : ((looksRef && looksRef.trim())
                 ? `\n【角色外觀錨點（★最高權威）：以下是每個角色已確立的外觀——「頭像生成詞」即當初畫這張頭像用的提示詞。畫到哪個角色，就照他這串外觀畫：髮色／眼色／體型／髮型／服裝一律沿用(姿勢、表情、鏡頭可依本輪劇情調整)。劇情或摘要沒寫到外觀也要主動補上，嚴禁漏髮色/眼色/體型，更嚴禁自行另編一個長相】\n${looksRef.trim()}\n`
                 : '');
@@ -707,11 +708,15 @@ ${numberedText}`;
                 if (_sceneParas.length) {
                     const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
                     if (_useNamePH) {
-                        _looksMap = await _buildLooksMap(currentState);
+                        const _nameMap = await _buildLooksMap(currentState);
                         const _recent = await _recentCharNames();
-                        let _names = Object.keys(_looksMap).filter(n => _recent.size === 0 || _recent.has(n));   // 給 AI 的名單優先近期出現
-                        if (!_names.length) _names = Object.keys(_looksMap);                                     // 近期都沒登記表 → 全列
-                        prompt += _sceneAddendum(_scenePromptText, numbered, '', _names);
+                        let _names = Object.keys(_nameMap).filter(n => _recent.size === 0 || _recent.has(n));   // 給 AI 的名單優先近期出現
+                        if (!_names.length) _names = Object.keys(_nameMap);                                      // 近期都沒登記表 → 全列
+                        // 配代號 Cn（只在這通 prompt 內有效；AI 用 {{Cn}} 最準、免簡繁/暱稱對錯，也可用 {{角色名}}）
+                        const _entries = _names.map((n, i) => ({ code: 'C' + (i + 1), name: n }));
+                        _looksMap = { ..._nameMap };                                       // 名字鍵 → 外觀
+                        _entries.forEach(e => { _looksMap[e.code] = _nameMap[e.name]; });   // 代號鍵 → 同一外觀(展開時兩種都認)
+                        prompt += _sceneAddendum(_scenePromptText, numbered, '', _entries);
                     } else {
                         prompt += _sceneAddendum(_scenePromptText, numbered, await _buildLooksRef(currentState));
                     }
