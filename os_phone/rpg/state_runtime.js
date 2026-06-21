@@ -530,7 +530,7 @@ ${_memoryRulesText()}
                 }
             }
         } catch (e) {}
-        const avs = _charLooksRef(state, seen, filterOn ? (n => recentNames.has(n)) : null);   // 補漏：沒頭像但 AVS 有外觀的角色(同樣濾近期)
+        const avs = _charLooksRef(state, seen);   // 補漏：沒頭像但 AVS 有外觀的角色 → 保持全列、不吃近期濾鏡(AVS 是全開的底，近期濾鏡只砍重的頭像生成詞)
         if (avs) lines.push(avs);
         return lines.join('\n');
     }
