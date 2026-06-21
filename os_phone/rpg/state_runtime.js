@@ -568,26 +568,8 @@ ${_memoryRulesText()}
                 }
             }
         } catch (e) {}
-        try {
-            const LOOK_KEYS = ['髮色','髮型','瀏海','眼色','瞳色','膚色','體型','身材','身高','服裝','衣著','外觀','形象','外貌','長相','身分','身份','氣質','臉型','種族','物種','性別'];
-            if (state && typeof state === 'object') {
-                for (const v of Object.values(state)) {
-                    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
-                    for (const [name, ent] of Object.entries(v)) {
-                        if (!ent || typeof ent !== 'object' || Array.isArray(ent) || map[name]) continue;   // 已有頭像詞就不蓋
-                        // 攤平一層(形象:{髮色,眼色}→髮色,眼色，相容巢狀外觀)再抽外觀欄
-                        const flat = {};
-                        for (const [k, vv] of Object.entries(ent)) {
-                            if (vv && typeof vv === 'object' && !Array.isArray(vv)) { for (const [k2, v2] of Object.entries(vv)) { if (!(k2 in flat)) flat[k2] = v2; } }
-                            else if (!(k in flat)) flat[k] = vv;
-                        }
-                        const HINT = { '眼色': ' eyes', '瞳色': ' eyes', '膚色': ' skin' };   // 只有顏色的欄位補語意(琥珀色→琥珀色 eyes)，NAI 才知是眼/膚
-                        const looks = LOOK_KEYS.filter(k => flat[k] != null && typeof flat[k] !== 'object' && String(flat[k]).trim() && String(flat[k]).trim() !== '待定').map(k => String(flat[k]).trim() + (HINT[k] || ''));
-                        if (looks.length) map[name] = looks.join(', ');
-                    }
-                }
-            }
-        } catch (e) {}
+        // ★ 不再灌 AVS 中文外觀：NAI 不吃中文，塞進 prompt＝廢字。沒英文頭像詞的角色一律不進登記表，
+        //   交給副模型「自己用英文 NAI tag 寫外觀」(見 _sceneAddendum 佔位指示)。state 參數保留(相容呼叫端)。
         return map;
     }
 
@@ -614,7 +596,7 @@ ${_memoryRulesText()}
         // nameList 非空 = {{代號/角色名}}佔位模式（不塞外觀大塊、AI 只寫動作場景、系統事後展開）；否則 = 外觀錨點模式（整塊塞）
         //   nameList = [{code:'C1', name:'小米'}, ...]；代號只在這通 prompt 內有效，AI 用代號最準(簡繁/暱稱免對錯)
         const charBlock = (nameList && nameList.length)
-            ? `\n【角色外觀＝用佔位符，禁止自己寫長相】畫到角色時，用 {{代號}} 或 {{角色名}} 代表那個角色（系統會自動換成他已確立的外觀，跟頭像同一個人）；**用代號最準**，簡繁/暱稱都不會對錯。你只負責寫動作／姿勢／表情／場景／環境／鏡頭／光線，絕對不要自己描述髮色／眼色／體型／髮型／服裝。\n可用角色（要畫誰就用 {{}} 包他的代號或名字）：${nameList.map(e => e.code + '. ' + e.name).join('｜')}\n格式：{{代號}} 後接動作與場景，例如 {{C1}}＋＜動作/姿勢＞＋＜場景/環境＞＋＜鏡頭/光線＞。\n`
+            ? `\n【角色外觀】下面這些角色「已登記外觀」——畫到他們時用 {{代號}} 或 {{角色名}} 代表（系統會自動填入他已確立的外觀、跟頭像同一個人），**用代號最準**(簡繁/暱稱不會對錯)，且**不要自己描述這些人的長相**。\n已登記角色（要畫就用 {{}} 包代號或名字）：${nameList.map(e => e.code + '. ' + e.name).join('｜')}\n⚠️ 若畫到**不在上面名單**的角色（沒登記外觀的 NPC）→ **你自己用英文 NAI 標籤寫他的外觀**（種族/年齡/髮色/眼色/體型/服裝等，依正文與設定），這種**不要**用 {{}}。\n你負責：動作／姿勢／表情／站位／互動／場景／環境／鏡頭／光線；已登記角色的外觀交給 {{代號}}。\n`
             : ((looksRef && looksRef.trim())
                 ? `\n【角色外觀錨點（★最高權威）：以下是每個角色已確立的外觀——「頭像生成詞」即當初畫這張頭像用的提示詞。畫到哪個角色，就照他這串外觀畫：髮色／眼色／體型／髮型／服裝一律沿用(姿勢、表情、鏡頭可依本輪劇情調整)。劇情或摘要沒寫到外觀也要主動補上，嚴禁漏髮色/眼色/體型，更嚴禁自行另編一個長相】\n${looksRef.trim()}\n`
                 : '');
