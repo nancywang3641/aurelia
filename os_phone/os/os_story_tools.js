@@ -227,11 +227,8 @@
         if (['故事標題', '故事标题'].includes(header)) return (_textOnly(prevBody)[0] || _textOnly(incBody)[0] || '');   // 故事標題：只取標題那行、丟尾端殘留
         return incBody || prevBody;   // 其他純文字 → 取新
     }
-    function _structuredMerge(incFull, oldSummaries, summaryCount, lastTxt) {
+    function _structuredMerge(incFull, prevFull, summaryCount, lastTxt) {
         try {
-            const _seq = e => { const mm = (e.comment || '').match(/第\s*(\d+)\s*次/); return mm ? parseInt(mm[1]) : 0; };
-            const latest = [...oldSummaries].sort((a, b) => _seq(b) - _seq(a))[0];
-            const prevFull = latest && latest.content;
             if (!prevFull) return incFull;
             const stripHead = t => String(t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
             const prevSecs = _splitSummarySections(stripHead(prevFull));
@@ -256,6 +253,100 @@
             return incFull;
         }
     }
+
+    // ── 注入壓縮：把「全文存檔」壓成「每輪實際送主模型」的精簡版（存檔保留全部、注入只送活著的狀態）──
+    //   事件表→只留最近 N 筆；物品表→只留 在庫/使用中(已交付/已消耗/損壞 不送)；結算清單→丟(跟事件/結語重複)；
+    //   性事紀→只留最近數筆；結語(總記憶)/角色表/關係圖譜/注意規範→全送。供 os_summary_inject 每輪呼叫。
+    function _stripSummaryHead(t) { return String(t == null ? '' : t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, ''); }
+    const _ITEM_DEAD = /已交付|已消耗|已用完|消耗完|損壞|损坏|損毀|损毁|報廢|报废/;
+    API.buildInjectionPayload = function (fullContent, opts) {
+        const o = opts || {};
+        const eventsKeep = (o.eventsKeep != null) ? o.eventsKeep : 10;
+        const sexKeep = (o.sexKeep != null) ? o.sexKeep : 5;
+        try {
+            const secs = _splitSummarySections(_stripSummaryHead(fullContent));
+            const DROP = new Set(['結算清單', '结算清单', '場景索引', '场景索引', '代辦清單', '代办清单', '故事標題', '故事标题']);
+            const out = [];
+            for (const s of secs) {
+                const h = s.header;
+                if (DROP.has(h)) continue;
+                let body = s.body;
+                if (h === '事件表') {
+                    const t = _parseMdTable(body);
+                    if (t.rows.length > eventsKeep) t.rows = t.rows.slice(-eventsKeep);   // 只留最近 N 筆事件(舊的靠結語涵蓋)
+                    body = _buildMdTable(t);
+                } else if (h === '物品表') {
+                    const t = _parseMdTable(body);
+                    t.rows = t.rows.filter(r => !_ITEM_DEAD.test(r));   // 已交付/已消耗/損壞 不注入(存檔仍保留)
+                    if (!t.rows.length) continue;                       // 全沒活物品 → 整塊省略
+                    body = _buildMdTable(t);
+                } else if (h === '性事紀' || h === '性事记') {
+                    const t = _parseMdTable(body);
+                    if (t.rows.length > sexKeep) t.rows = t.rows.slice(-sexKeep);
+                    body = _buildMdTable(t);
+                }
+                if (String(body || '').trim()) out.push(`【${h}】\n${String(body).trim()}`);
+            }
+            return out.join('\n\n').trim();
+        } catch (e) {
+            console.warn('[大總結] buildInjectionPayload 失敗，退回全文:', e);
+            return _stripSummaryHead(fullContent).trim();
+        }
+    };
+
+    // ── 讀「目前 chatId 的大總結」：OS_DB 為主；OS_DB 沒有但世界書有舊版 → 一次性遷移進 OS_DB(舊聊天無痛接軌) ──
+    async function _migrateSummaryFromLorebook(chatId) {
+        try {
+            const helper = window.parent.TavernHelper;
+            const bookName = helper?.getCurrentCharPrimaryLorebook?.();
+            if (!bookName || !helper?.getLorebookEntries) return null;
+            const entries = await helper.getLorebookEntries(bookName);
+            const olds = (entries || []).filter(e => e.comment && e.comment.includes(`[大总结] - ${chatId}`));
+            if (!olds.length) return null;
+            const _seq = e => { const m = (e.comment || '').match(/第\s*(\d+)\s*次/); return m ? parseInt(m[1]) : 0; };
+            olds.sort((a, b) => _seq(b) - _seq(a));
+            const latest = olds[0];
+            const content = latest.content || '';
+            if (!content) return null;
+            const lm = content.match(/Last:\s*(\d+)/i);
+            // 搬出世界書：把舊大總結條目停用（資料已遷進 OS_DB，避免和新的程式注入雙重觸發）。
+            //   fire-and-forget：不 await，免得在 GENERATION_STARTED 當下卡住生成；只是停用 dormant 條目、晚一拍也無妨。
+            try {
+                if (helper.setLorebookEntries) {
+                    const ups = olds.filter(e => e.uid != null && e.enabled !== false).map(e => ({ uid: e.uid, enabled: false }));
+                    if (ups.length) helper.setLorebookEntries(bookName, ups)
+                        .then(() => console.log('[大總結] 已停用世界書舊條目 ' + ups.length + ' 筆'))
+                        .catch(e => console.warn('[大總結] 停用舊世界書條目失敗（不影響遷移）:', e));
+                }
+            } catch (e) { console.warn('[大總結] 停用舊世界書條目失敗（不影響遷移）:', e); }
+            return { content, summaryCount: _seq(latest) || olds.length, lastId: lm ? parseInt(lm[1]) : null, title: '', bgCacheId: '' };
+        } catch (e) { return null; }
+    }
+    async function _loadTavernSummary(chatId) {
+        try {
+            const osDb = window.parent.OS_DB;
+            if (osDb?.getTavernSummary) {
+                const rec = await osDb.getTavernSummary(chatId);
+                if (rec && rec.content) return rec;
+            }
+            const migrated = await _migrateSummaryFromLorebook(chatId);
+            if (migrated && osDb?.saveTavernSummary) { try { await osDb.saveTavernSummary(chatId, migrated); console.log('[大總結] 已把世界書舊版遷移進 OS_DB'); } catch (e) {} }
+            return migrated;
+        } catch (e) { return null; }
+    }
+    API._loadTavernSummary = _loadTavernSummary;
+    API.getChatId = getChatIdentifier;   // 注入器/外部要用「跟存檔 key 同款」的 chatId，從這拿(別用 OS_DB.currentChatId，空白正規化不同)
+
+    // 給 os_summary_inject 每輪呼叫：讀目前 chatId 的大總結 → 回壓縮後注入字串(沒有就回 '')
+    API.getCurrentInjectionPayload = async function (opts) {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return '';
+            const rec = await _loadTavernSummary(chatId);
+            if (!rec || !rec.content) return '';
+            return API.buildInjectionPayload(rec.content, opts);
+        } catch (e) { console.warn('[大總結] getCurrentInjectionPayload 失敗:', e); return ''; }
+    };
 
     API.openSummaryTemplateModal = function () {
         document.getElementById('rpg-summary-tpl-modal').classList.add('active');
@@ -390,6 +481,53 @@
         finally { if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); } }
     };
 
+    // 故事管理：查看 / 編輯「目前聊天室的大總結」（直接讀寫 OS_DB tavern_summary，不必重生成）
+    API.openEditCurrentSummary = async function () {
+        const chatId = getChatIdentifier();
+        let rec = null;
+        try { rec = await _loadTavernSummary(chatId); } catch (e) {}
+        const oldM = document.getElementById('rpg-summary-edit-modal'); if (oldM) oldM.remove();
+        const modal = document.createElement('div');
+        modal.id = 'rpg-summary-edit-modal';
+        modal.className = 'ost-modal active';
+        modal.innerHTML = `
+            <div class="ost-modal-card ost-modal-wide">
+                <div class="ost-modal-title">📖 目前大總結（這個聊天室）</div>
+                <div class="ost-opt-desc">這是注入給 AI 的劇情總記憶，綁定這個聊天室、不影響別張卡。可直接修改，按「儲存」覆蓋。</div>
+                <textarea id="rpg-sum-edit-area" class="ost-textarea ost-sum-preview-area" spellcheck="false"></textarea>
+                <div class="ost-sum-preview-status" id="rpg-sum-edit-status"></div>
+                <div class="ost-modal-btns">
+                    <button class="ost-btn" id="rpg-sum-edit-close">關閉</button>
+                    <button class="ost-btn ost-btn-primary" id="rpg-sum-edit-save">💾 儲存</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        const area = modal.querySelector('#rpg-sum-edit-area');
+        const status = modal.querySelector('#rpg-sum-edit-status');
+        const saveBtn = modal.querySelector('#rpg-sum-edit-save');
+        const hasRec = !!(rec && rec.content);
+        area.value = hasRec ? rec.content : '（這個聊天室還沒有大總結。先按「📝 生成 / 更新大總結」產生一份。）';
+        if (!hasRec) { area.setAttribute('readonly', 'readonly'); saveBtn.disabled = true; }
+        modal.querySelector('#rpg-sum-edit-close').onclick = () => modal.remove();
+        saveBtn.onclick = async () => {
+            saveBtn.disabled = true; status.textContent = '儲存中…';
+            try {
+                const osDb = window.parent.OS_DB;
+                if (!osDb?.saveTavernSummary) throw new Error('OS_DB 不可用');
+                await osDb.saveTavernSummary(chatId, {
+                    content: area.value,
+                    summaryCount: (rec && rec.summaryCount) ? rec.summaryCount : 1,
+                    lastId: (rec && rec.lastId != null) ? rec.lastId : null,
+                    title: (rec && rec.title) || '',
+                    bgCacheId: (rec && rec.bgCacheId) || '',
+                });
+                try { window.parent.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}   // 編輯完讓注入器重抓
+                status.textContent = '已儲存 ✓（下一輪生成就會用新版注入）';
+                setTimeout(() => modal.remove(), 800);
+            } catch (e) { status.textContent = '儲存失敗：' + (e.message || e); saveBtn.disabled = false; }
+        };
+    };
+
     // CTX 面板用：算「還有多少樓沒總結」= 目前最後樓 − 上次大總結記的 Last
     API.getUnsummarizedInfo = async function () {
         try {
@@ -401,23 +539,14 @@
             const chatId = getChatIdentifier();
             let lastSummarized = 0;
             let summaryCount = 0;
-            const bookName = helper.getCurrentCharPrimaryLorebook?.();
-            if (bookName) {
-                const entries = await helper.getLorebookEntries(bookName);
-                // 直接精準抓「當前 chatId」的大總結（不做模糊比對，避免撈到別的聊天）；
-                // 挑「第N次」最大的那份(=最新)，現讀它的 Last。每次都重抓世界書、不靠任何快取。
-                const prefix = `[大总结] - ${chatId}`;
-                const summaries = (entries || []).filter(e => e.comment && e.comment.includes(prefix));
-                if (summaries.length) {
-                    const _seq = e => { const m = (e.comment || '').match(/第\s*(\d+)\s*次/); return m ? parseInt(m[1]) : 0; };
-                    summaryCount = Math.max(0, ...summaries.map(_seq));   // 最新一份的「第N次」＝已總結次數
-                    summaries.sort((a, b) => (_seq(b) - _seq(a)) || ((b.uid || 0) - (a.uid || 0)));
-                    for (const s of summaries) {
-                        const mm = (s.content || '').match(/Last:\s*(\d+)/i);
-                        if (mm && !isNaN(parseInt(mm[1]))) { lastSummarized = parseInt(mm[1]); break; }
-                    }
+            // 大總結已搬 OS_DB（key=chatId）；讀那筆的 summaryCount + lastId。舊聊天會在 _loadTavernSummary 自動遷移。
+            try {
+                const rec = await _loadTavernSummary(chatId);
+                if (rec) {
+                    summaryCount = rec.summaryCount || 0;
+                    if (rec.lastId != null && !isNaN(parseInt(rec.lastId))) lastSummarized = parseInt(rec.lastId);
                 }
-            }
+            } catch (e) {}
             const uncounted = Math.max(0, currentLast - lastSummarized);
             return { lastSummarized, currentLast, uncounted, start: lastSummarized + 1, end: currentLast, summaryCount };
         } catch (e) { return null; }
@@ -440,23 +569,14 @@
                 if (_ah) _ah.checked = localStorage.getItem('sp_summary_autohide') !== '0';
             } catch (e) {}
 
-            const bookName = helper.getCurrentCharPrimaryLorebook();
-            if (bookName) {
-                const entries = await helper.getLorebookEntries(bookName);
+            // 起始 ID 自動帶「上次總結到的下一樓」——從 OS_DB 那筆讀 lastId（舊聊天自動遷移進 OS_DB）
+            try {
                 const chatId = getChatIdentifier();
-                const prefix = `[大总结] - ${chatId}`;
-                const summaries = entries.filter(e => e.comment && (e.comment.includes(prefix) || e.comment.includes(chatId) && e.comment.includes('大总结')));
-
-                if (summaries.length > 0) {
-                    const latest = summaries.sort((a, b) => (b.uid || 0) - (a.uid || 0))[0];
-                    if (latest && latest.content) {
-                        const match = latest.content.match(/Last:\s*(\d+)/i);
-                        if (match && !isNaN(parseInt(match[1]))) {
-                            document.getElementById('range-start-id').value = parseInt(match[1]) + 1;
-                        }
-                    }
+                const rec = await _loadTavernSummary(chatId);
+                if (rec && rec.lastId != null && !isNaN(parseInt(rec.lastId))) {
+                    document.getElementById('range-start-id').value = parseInt(rec.lastId) + 1;
                 }
-            }
+            } catch (e) {}
         } catch (e) { console.error('[大總結] 初始化失敗:', e); }
     };
 
@@ -481,28 +601,26 @@
         const btn = document.getElementById('btn-grand-summary');   // 從 CTX 快捷入口開時不存在 → null-safe
         if (btn) { btn.innerText = "生成中 (請勿關閉)..."; btn.classList.add('spinning'); }
         try {
-            const helper = window.parent.TavernHelper;
-            if (!helper) throw new Error("無 TavernHelper");
-            const bookName = helper.getCurrentCharPrimaryLorebook();
+            const TH = window.parent.TavernHelper;
+            if (!TH || typeof TH.generateRaw !== 'function') throw new Error("找不到 generateRaw（需要酒館助手在線）");
+            const helper = TH;
             const chatId = getChatIdentifier();
-            const entries = await helper.getLorebookEntries(bookName);
+            let bookName = ''; try { bookName = helper.getCurrentCharPrimaryLorebook?.() || ''; } catch (e) {}   // 只給 lobby 索引/卡名用，可空
 
-            // 算第幾次。合併改走「結構化疊加」(_structuredMerge)：AI 只輸出這次新增的純增量，舊內容不重寫、由程式疊加，
-            // 避免「合併又濾一次、重點被濾光」。
-            let summaryCount = 1;
-            const oldSummaries = entries.filter(e => e.comment && e.comment.includes(`[大总结] - ${chatId}`));
-            if (oldSummaries.length > 0) summaryCount = oldSummaries.length + 1;
-            const prevSection = oldSummaries.length
+            // 大總結改存 OS_DB（key=chatId、一卡一筆全文），不再寫世界書。讀「上一版」：OS_DB 為主；
+            // 舊聊天只有世界書版 → _loadTavernSummary 一次性遷移進 OS_DB、無痛接軌。合併走結構化疊加(AI 只輸出增量)。
+            const prevRec = await _loadTavernSummary(chatId);
+            const prevFull = (prevRec && prevRec.content) ? prevRec.content : '';
+            let summaryCount = ((prevRec && prevRec.summaryCount) ? prevRec.summaryCount : 0) + 1;
+            const prevSection = prevFull
                 ? `**只总结「这次新增」的剧情即可；旧事件/角色不用重写（系统会自动叠加：事件接在后面、同名角色更新、新角色加后面）**\n`
                 : `**首次总结**\n`;
             // 滾動結語：抽出「上一版結語」當底稿丟給副模型，要它改寫成涵蓋到最新的一段(取代、不累積)。
             //   只送這一小段結語(≤200字)、不送整份舊總結 → 省 token 又能讓結語當完整長期記憶。
             let prevEpilogue = '';
-            if (oldSummaries.length) {
+            if (prevFull) {
                 try {
-                    const _seq = e => { const m = (e.comment || '').match(/第\s*(\d+)\s*次/); return m ? parseInt(m[1]) : 0; };
-                    const latest = [...oldSummaries].sort((a, b) => _seq(b) - _seq(a))[0];
-                    const mm = latest && (latest.content || '').match(/【結語】[^\n]*\n+([\s\S]*?)(?:\n【|$)/);
+                    const mm = prevFull.match(/【結語】[^\n]*\n+([\s\S]*?)(?:\n【|$)/);
                     if (mm) prevEpilogue = mm[1].replace(/^[-*\s]+/, '').replace(/\s+$/, '').trim();
                 } catch (e) {}
             }
@@ -511,9 +629,6 @@
                 : '';
             let tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
             if (summaryCount > 1) tplBody = tplBody.replace(/\n*【故事標題】[\s\S]*?(?=\n【|$)/g, '').trim();   // 故事標題只第一次生成、第二次起移除(日誌只要一個總篇名)
-
-            const TH = window.parent.TavernHelper;
-            if (!TH || typeof TH.generateRaw !== 'function') throw new Error("找不到 generateRaw（需要酒館助手在線）");
 
             let finalContent = '';
             let _summarizedEnd = null;   // 這次總結到的最後樓號（給存檔 Last: + 自動隱藏範圍）
@@ -566,34 +681,29 @@
                 if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);
                 else finalContent = `【大总结(第${summaryCount}次)】${_lastTxt}\n\n${finalContent}`;
                 // 合併模式：把這次增量「結構化疊加」到上一份累積總結（事件接後面、角色同名更新+新名加後面），不重濾舊內容
-                if (mergePrev && oldSummaries && oldSummaries.length) finalContent = _structuredMerge(finalContent, oldSummaries, summaryCount, _lastTxt);
+                if (mergePrev && prevFull) finalContent = _structuredMerge(finalContent, prevFull, summaryCount, _lastTxt);
             }
 
             async function _doSave() {
-            const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-            const newEntry = { comment: `[大总结] - ${chatId} - 第${summaryCount}次 - ${now}`, keys: [`[SUMMARY_${chatId}_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
-            await helper.createLorebookEntries(bookName, [newEntry]);
-
-            // 注入觸發 KEY 到「最後一樓」(這一樓會保留可見、不被自動隱藏) → 關鍵字照常觸發世界書總結。
-            // 增量模式(沒合併)時把舊增量的 KEY 也補進這一樓，否則它們原本的觸發樓被隱藏後會失效。
+            // 大總結搬出世界書：全文存 OS_DB(key=chatId、一卡一筆覆蓋更新)。注入改走程式壓縮(os_summary_inject)，
+            // 不再寫 lorebook、不再塞觸發 KEY；故事管理直接編這筆 OS_DB 記錄。
             try {
-                const lastId = _arrayLastId();   // 陣列索引(注入 KEY 是對記憶體陣列操作)
-                if (lastId != null && lastId >= 0) {
-                    const wantKeys = [newEntry.keys[0]];
-                    if (!mergePrev && oldSummaries && oldSummaries.length) {
-                        for (const e of oldSummaries) { const k = e.keys && e.keys[0]; if (k) wantKeys.push(k); }
-                    }
-                    const lastMsg = (await helper.getChatMessages(-1))[0];
-                    if (lastMsg) {
-                        let cur = lastMsg.mes || lastMsg.message || '';
-                        const add = wantKeys.filter(k => k && !cur.includes(k));
-                        if (add.length) {
-                            cur = (cur + ' ' + add.join(' ')).trim();
-                            await helper.setChatMessages([{ message_id: lastId, message: cur, mes: cur }], { refresh: 'affected' });
-                        }
-                    }
-                }
-            } catch (e) { console.warn('[大總結] 注入 KEY 失敗:', e); }
+                const osDb = window.parent.OS_DB;
+                if (!osDb?.saveTavernSummary) throw new Error('OS_DB.saveTavernSummary 不存在');
+                const _tm = finalContent.match(/【故事標題】[^\n]*\n+([^\n【]+)/);
+                const _title = (_tm ? _tm[1] : (prevRec?.title || '')).replace(/[「」"']/g, '').trim().slice(0, 50);
+                const _bm = finalContent.match(/\[Bg\|[^|]*\|([^|]+)\|/);
+                const _bg = _bm ? _bm[1].trim() : (prevRec?.bgCacheId || '');
+                await osDb.saveTavernSummary(chatId, {
+                    content: finalContent,
+                    summaryCount,
+                    lastId: (_summarizedEnd != null ? _summarizedEnd : (prevRec?.lastId ?? null)),
+                    title: _title,
+                    bgCacheId: _bg,
+                });
+                console.log('[大總結] ✅ 已存 OS_DB tavern_summary（chatId=' + chatId + '、第' + summaryCount + '次）');
+                try { window.parent.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}   // 讓注入器丟掉快取、下輪重抓壓縮版
+            } catch (e) { console.error('[大總結] 存 OS_DB 失敗:', e); throw e; }
 
             // 🔒 自動隱藏已總結樓層，但預留最新 N 樓可見(近期上下文 + 末樓帶觸發 KEY)。
             //    開關與 N 由彈窗設定(sp_summary_autohide / sp_summary_keep_recent)。
@@ -664,7 +774,7 @@
                             cardName, chatId, storyTitle, bgCacheId, summaryCount, brief,
                             characters: newCharacters,
                             lorebookBook: bookName,
-                            lorebookKey: newEntry.keys[0],
+                            lorebookKey: `tavern_summary::${chatId}`,   // 已搬 OS_DB，非世界書 key（保留欄位相容）
                         });
                     }
                     console.log('[lobby_summary_index]', { storyTitle, bgCacheId, allChars: characters.length, newChars: newCharacters.length });
@@ -681,7 +791,7 @@
                 modal.innerHTML = `
                     <div class="ost-modal-card ost-modal-wide">
                         <div class="ost-modal-title">📝 大總結預覽（第 ${summaryCount} 次）</div>
-                        <div class="ost-opt-desc">檢查內容、可直接編輯。滿意按「儲存」才會寫進世界書；不滿意可「重新生成」。</div>
+                        <div class="ost-opt-desc">檢查內容、可直接編輯。滿意按「儲存」才會存進故事日誌（本機、綁這個聊天室）；不滿意可「重新生成」。</div>
                         <textarea id="rpg-sum-preview-area" class="ost-textarea ost-sum-preview-area" spellcheck="false"></textarea>
                         <div class="ost-sum-preview-status" id="rpg-sum-preview-status"></div>
                         <div class="ost-modal-btns">
@@ -938,8 +1048,8 @@
                         <div class="ost-section-title">📝 大總結</div>
                         <button class="ost-btn ost-btn-primary" id="btn-grand-summary" onclick="window.OS_STORY_TOOLS.showRangeModal()">📝 生成 / 更新大總結 (Grand Summary)</button>
                         <div class="ost-hint">將最近的劇情壓縮成永久記憶</div>
+                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openEditCurrentSummary()">📖 查看 / 編輯目前大總結</button>
                         <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()">✏️ 編輯大總結生成模板</button>
-                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openMergeSummaryModal()">🔀 合併多個大總結</button>
                     </div>
                     <div class="ost-section">
                         <div class="ost-section-title">🙈 隱藏對話</div>
