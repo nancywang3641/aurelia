@@ -120,16 +120,18 @@
         scopedKey(world, bareKey) { return world ? (world + SEP + bareKey) : bareKey; },
 
         // 🗑️ 清掉某個世界(chatId)的所有圖片快取（背景/頭像/立繪/場景/物品）→ 給「刪聊天室一鍵清資料」用。
-        //    world = raw ctx.chatId（跟存進去時的 v.chatId / key 前綴同款）。回傳清掉的筆數。
+        //    world 可傳 raw ctx.chatId 或正規化後的 chatId 都行——兩邊都正規化(basename/去.jsonl/trim/空白→_)再比，
+        //    所以日誌(正規化chatId)跟 block#3(raw world)都對得上。回傳清掉的筆數。
         async deleteByWorld(world) {
-            const w = String(world || '');
-            if (!w) return 0;
+            const _norm = w => !w ? '' : String(w).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
+            const wn = _norm(world);
+            if (!wn) return 0;
             let n = 0;
             for (const store of Object.keys(IMAGE_STORES)) {
                 try {
                     const all = await this.getAll(store);
                     for (const entry of all) {
-                        if (this.worldOf(entry) === w) { if (await this.deleteRaw(store, entry.key)) n++; }
+                        if (_norm(this.worldOf(entry)) === wn) { if (await this.deleteRaw(store, entry.key)) n++; }
                     }
                 } catch (e) {}
             }

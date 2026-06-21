@@ -265,6 +265,10 @@
                 <button class="jrnl-view-full">📖 查看完整總結內容
                     <span class="jrnl-view-full-sub">回顧更多細節，重溫完整故事</span>
                 </button>
+                <div class="jrnl-foot-acts">
+                    <button class="jrnl-act-btn jrnl-edit-full">✏️ 編輯總結</button>
+                    <button class="jrnl-act-btn jrnl-act-danger jrnl-wipe-story">🗑️ 清空這段劇情</button>
+                </div>
             </div>
 
             <div class="jrnl-d-section">
@@ -457,28 +461,28 @@
                 container.querySelector('.jrnl-root')?.classList.remove('show-detail-mobile');
             };
 
+            // 查看：大總結已搬 OS_DB tavern_summary（不再讀世界書）；舊版未遷移的退回讀世界書
             const viewBtn = rightEl.querySelector('.jrnl-view-full');
             if (viewBtn && active) {
                 viewBtn.onclick = async () => {
                     try {
-                        const helper = win.TavernHelper;
-                        if (!helper) return _openFullModal('（無 TavernHelper，無法讀世界書）', active);
-                        const all = await osDb.getAllLobbySummaryIndex();
-                        const recs = all.filter(r =>
-                            (r.cardName || '') === active.cardName &&
-                            (r.chatId || '')   === active.chatId
-                        ).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                        const latest = recs[0];
-                        if (!latest || !latest.lorebookBook) return _openFullModal('找不到對應的世界書條目', active);
-                        const entries = await helper.getLorebookEntries(latest.lorebookBook);
-                        const target = entries.find(e => (e.keys || []).includes(latest.lorebookKey));
-                        if (!target) return _openFullModal('世界書內找不到該條目（可能已被刪除）', active);
-                        _openFullModal(target.content || '(空)', active);
-                    } catch (e) {
-                        _openFullModal('讀取失敗：' + (e.message || e), active);
-                    }
+                        const rec = await _readStorySummary(active);
+                        if (!rec || !rec.content) return _openFullModal('這段劇情還沒有大總結（或已清空）。', active);
+                        _openSummaryFull(rec.content, active, rec, false);
+                    } catch (e) { _openFullModal('讀取失敗：' + (e.message || e), active); }
                 };
             }
+            const editBtn = rightEl.querySelector('.jrnl-edit-full');
+            if (editBtn && active) {
+                editBtn.onclick = async () => {
+                    try {
+                        const rec = (await _readStorySummary(active)) || { content: '' };
+                        _openSummaryFull(rec.content || '', active, rec, true);
+                    } catch (e) { _openFullModal('讀取失敗：' + (e.message || e), active); }
+                };
+            }
+            const wipeBtn = rightEl.querySelector('.jrnl-wipe-story');
+            if (wipeBtn && active) wipeBtn.onclick = () => _openWipeConfirm(active);
 
             // 角色卡片點擊 → 跳 modal 看完整內容（卡片塞不下全部）
             rightEl.querySelectorAll('.jrnl-char-card').forEach(card => {
@@ -572,6 +576,157 @@
             modal.querySelector('.jrnl-modal-close').onclick = close;
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
             // ESC 關閉
+            const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+            document.addEventListener('keydown', onKey);
+        }
+
+        // 讀某段故事的大總結全文：OS_DB tavern_summary 為主；舊版未遷移的退回世界書
+        async function _readStorySummary(story) {
+            if (!story) return null;
+            try {
+                if (osDb.getTavernSummary) {
+                    const rec = await osDb.getTavernSummary(story.chatId);
+                    if (rec && rec.content) return rec;
+                }
+            } catch (e) {}
+            try {
+                const helper = win.TavernHelper;
+                if (!helper) return null;
+                const all = await osDb.getAllLobbySummaryIndex();
+                const recs = all.filter(r => (r.cardName || '') === story.cardName && (r.chatId || '') === story.chatId)
+                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                const latest = recs[0];
+                if (!latest || !latest.lorebookBook) return null;
+                const entries = await helper.getLorebookEntries(latest.lorebookBook);
+                const target = entries.find(e => (e.keys || []).includes(latest.lorebookKey))
+                    || entries.find(e => e.comment && e.comment.includes(`[大总结] - ${story.chatId}`));
+                if (!target || !target.content) return null;
+                return { content: target.content, summaryCount: latest.summaryCount || 0, _legacy: true };
+            } catch (e) { return null; }
+        }
+
+        // 查看 / 編輯 大總結全文 modal（editMode=true 顯示 textarea + 儲存回 OS_DB）
+        function _openSummaryFull(content, story, rec, editMode) {
+            const old = container.querySelector('.jrnl-modal'); if (old) old.remove();
+            const title = story?.storyTitle || story?.cardName || '完整總結';
+            const modal = document.createElement('div');
+            modal.className = 'jrnl-modal';
+            const close = () => modal.remove();
+            if (editMode) {
+                modal.innerHTML = `
+                    <div class="jrnl-modal-card">
+                        <div class="jrnl-modal-head">
+                            <span class="jrnl-modal-title">✏️ 編輯總結 — ${_escape(title)}</span>
+                            <button class="jrnl-modal-close" title="關閉">✕</button>
+                        </div>
+                        <div class="jrnl-modal-body">
+                            <textarea class="jrnl-edit-area" spellcheck="false"></textarea>
+                            <div class="jrnl-modal-foot">
+                                <span class="jrnl-modal-status"></span>
+                                <button class="jrnl-mbtn jrnl-edit-cancel">取消</button>
+                                <button class="jrnl-mbtn jrnl-mbtn-primary jrnl-edit-save">💾 儲存</button>
+                            </div>
+                        </div>
+                    </div>`;
+                container.appendChild(modal);
+                const area = modal.querySelector('.jrnl-edit-area');
+                const status = modal.querySelector('.jrnl-modal-status');
+                const saveB = modal.querySelector('.jrnl-edit-save');
+                area.value = content || '';
+                modal.querySelector('.jrnl-modal-close').onclick = close;
+                modal.querySelector('.jrnl-edit-cancel').onclick = close;
+                saveB.onclick = async () => {
+                    saveB.disabled = true; status.textContent = '儲存中…';
+                    try {
+                        if (!osDb.saveTavernSummary) throw new Error('OS_DB 不可用');
+                        await osDb.saveTavernSummary(story.chatId, {
+                            content: area.value,
+                            summaryCount: (rec && rec.summaryCount) ? rec.summaryCount : 1,
+                            lastId: (rec && rec.lastId != null) ? rec.lastId : null,
+                            title: (rec && rec.title) || '',
+                            bgCacheId: (rec && rec.bgCacheId) || '',
+                            storyId: (rec && rec.storyId) || '',
+                            rawChatId: (rec && rec.rawChatId) || '',
+                        });
+                        try { win.OS_SUMMARY_INJECT?.invalidate?.(story.chatId); } catch (e) {}
+                        status.textContent = '已儲存 ✓';
+                        setTimeout(close, 700);
+                    } catch (e) { status.textContent = '儲存失敗：' + (e.message || e); saveB.disabled = false; }
+                };
+            } else {
+                modal.innerHTML = `
+                    <div class="jrnl-modal-card">
+                        <div class="jrnl-modal-head">
+                            <span class="jrnl-modal-title">${_escape(title)}</span>
+                            <button class="jrnl-modal-close" title="關閉">✕</button>
+                        </div>
+                        <div class="jrnl-modal-body"></div>
+                    </div>`;
+                container.appendChild(modal);
+                modal.querySelector('.jrnl-modal-body').innerHTML = _renderMd(content);
+                modal.querySelector('.jrnl-modal-close').onclick = close;
+            }
+            modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+            const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+            document.addEventListener('keydown', onKey);
+        }
+
+        // 🗑️ 清空這段劇情的所有綁定資料（雙重確認；走 OS_DB.deleteAllByChatId，storyId/rawChatId 從大總結那筆拿）
+        function _openWipeConfirm(story) {
+            if (!story) return;
+            const old = container.querySelector('.jrnl-modal'); if (old) old.remove();
+            const title = story.storyTitle || story.cardName || '這段劇情';
+            const modal = document.createElement('div');
+            modal.className = 'jrnl-modal';
+            const close = () => modal.remove();
+            modal.innerHTML = `
+                <div class="jrnl-modal-card">
+                    <div class="jrnl-modal-head">
+                        <span class="jrnl-modal-title">🗑️ 清空「${_escape(title)}」</span>
+                        <button class="jrnl-modal-close" title="關閉">✕</button>
+                    </div>
+                    <div class="jrnl-modal-body">
+                        <div class="jrnl-wipe-note">不玩這段劇情了？這會把它綁定的資料全部刪掉，<b>無法復原</b>。別段劇情 / 別張卡不受影響。</div>
+                        <div class="jrnl-wipe-list">將清除：大總結、AVS 狀態、向量記憶、頭像 / 立繪 / 場景插圖 / 背景圖、微信 / 電話 / 微博、各 app 記憶、調查進度、成就、大廳記錄。<br>聊天室 ID：<b>${_escape(story.chatId || '')}</b></div>
+                        <div class="jrnl-wipe-note">※ 酒館聊天本身請自己在酒館刪；這裡只清奧瑞亞附加的資料。</div>
+                        <label class="jrnl-wipe-confirm"><input type="checkbox" class="jrnl-wipe-ack"><span>我了解這會永久刪除、無法復原</span></label>
+                        <div class="jrnl-modal-foot">
+                            <span class="jrnl-modal-status"></span>
+                            <button class="jrnl-mbtn jrnl-wipe-cancel">取消</button>
+                            <button class="jrnl-mbtn jrnl-mbtn-danger jrnl-wipe-go" disabled>🗑️ 永久清除</button>
+                        </div>
+                    </div>
+                </div>`;
+            container.appendChild(modal);
+            const ack = modal.querySelector('.jrnl-wipe-ack');
+            const go = modal.querySelector('.jrnl-wipe-go');
+            const status = modal.querySelector('.jrnl-modal-status');
+            ack.onchange = () => { go.disabled = !ack.checked; };
+            modal.querySelector('.jrnl-modal-close').onclick = close;
+            modal.querySelector('.jrnl-wipe-cancel').onclick = close;
+            go.onclick = async () => {
+                if (!ack.checked) return;
+                go.disabled = true; status.textContent = '清除中…';
+                try {
+                    if (!osDb.deleteAllByChatId) throw new Error('OS_DB.deleteAllByChatId 不存在');
+                    let rec = {};
+                    try { rec = (await osDb.getTavernSummary(story.chatId)) || {}; } catch (e) {}
+                    let storyId = rec.storyId || '', rawChatId = rec.rawChatId || '';
+                    const curNorm = win.OS_STORY_TOOLS?.getChatId?.() || '';
+                    if (story.chatId === curNorm) {   // 正在開著的這段 → 補 context 的 storyId/raw
+                        if (!rawChatId) { try { rawChatId = String(win.SillyTavern?.getContext?.()?.chatId || ''); } catch (e) {} }
+                        if (!storyId) { try { storyId = (win.VN_Core && win.VN_Core._currentStoryId) || win.OS_AVS_ADAPTER?.getStoryId?.() || localStorage.getItem('vn_current_story_id') || ''; } catch (e) {} }
+                    }
+                    const report = await osDb.deleteAllByChatId(story.chatId, { storyId, vnWorld: rawChatId || story.chatId, rawChatId: rawChatId || story.chatId });
+                    try { win.OS_SUMMARY_INJECT?.invalidate?.(story.chatId); } catch (e) {}
+                    console.log('[OS_JOURNAL] 🗑️ 清空', story.chatId, report);
+                    allStories = allStories.filter(s => !((s.cardName || '') === (story.cardName || '') && (s.chatId || '') === (story.chatId || '')));
+                    activeKey = allStories[0] ? `${allStories[0].cardName}|||${allStories[0].chatId}` : null;
+                    status.textContent = '✅ 已清空';
+                    setTimeout(() => { close(); _renderList(); }, 600);
+                } catch (e) { status.textContent = '清除失敗：' + (e.message || e); go.disabled = false; }
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
             const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
             document.addEventListener('keydown', onKey);
         }

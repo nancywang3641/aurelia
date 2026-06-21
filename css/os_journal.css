@@ -312,6 +312,36 @@
     display: block; font-size: 10px; color: #9a8678;
     font-weight: 400; letter-spacing: 0; margin-top: 4px;
 }
+/* 詳情底部次要操作：編輯 / 清空 */
+.jrnl-foot-acts { display: flex; gap: 10px; width: 100%; }
+.jrnl-act-btn {
+    flex: 1; border-radius: 12px; cursor: pointer; font-family: inherit;
+    font-size: 12px; font-weight: 700; letter-spacing: 1px; padding: 11px 14px;
+    background: #fff8f0; border: 1px solid #e8d8c0; color: #9a7a6a;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s, background 0.15s;
+}
+.jrnl-act-btn:hover { transform: translateY(-1px); border-color: #e0a0b0; color: #c97a8e; background: #fff0f2; }
+.jrnl-act-danger { color: #d05a5a; border-color: #e8b0b0; background: #fff5f5; }
+.jrnl-act-danger:hover { color: #fff; background: #d96a6a; border-color: #d05a5a; box-shadow: 0 4px 14px rgba(208,90,90,0.2); }
+/* 編輯總結 */
+.jrnl-edit-area {
+    width: 100%; box-sizing: border-box; min-height: 320px; resize: vertical;
+    border: 1px solid #e8d8c0; border-radius: 10px; padding: 12px;
+    font-family: 'Songti TC','Microsoft JhengHei',serif; font-size: 13px; line-height: 1.7;
+    color: #5a4836; background: #fffdf8;
+}
+.jrnl-modal-foot { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 12px; }
+.jrnl-modal-status { font-size: 12px; color: #9a8678; flex: 1; min-height: 16px; }
+.jrnl-mbtn { border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 1px; padding: 9px 16px; background: #fff8f0; border: 1px solid #e8d8c0; color: #9a7a6a; }
+.jrnl-mbtn:hover { border-color: #e0a0b0; color: #c97a8e; }
+.jrnl-mbtn-primary { background: linear-gradient(90deg,#fce4e7,#fff0e8); border-color: #f0c8d2; color: #c97a8e; }
+.jrnl-mbtn-danger { color: #d05a5a; border-color: #e8b0b0; background: #fff5f5; }
+.jrnl-mbtn-danger:hover { color: #fff; background: #d96a6a; border-color: #d05a5a; }
+/* 清空確認 */
+.jrnl-wipe-list { font-size: 12px; color: #7a6452; line-height: 1.7; background: #fff8f0; border: 1px solid #e8d8c0; border-radius: 10px; padding: 11px 13px; margin: 10px 0; }
+.jrnl-wipe-note { font-size: 11.5px; color: #b06a6a; line-height: 1.6; margin: 6px 0; }
+.jrnl-wipe-confirm { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #b06a6a; margin: 12px 0; cursor: pointer; }
+.jrnl-wipe-confirm input { accent-color: #d05a5a; }
 
 /* 關閉鈕 */
 .jrnl-close {
