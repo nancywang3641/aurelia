@@ -2425,6 +2425,8 @@ ${cleanFormat}
         };
         var sgcBtns = card.querySelector('.sgc-btns');
         if (sgcBtns && tpl.caps !== 'display') sgcBtns.appendChild(phoneBtn);
+        // 歸到群組（多選；寫 tpl.groupIds）— 放在按鈕列前面
+        if (sgcBtns && sgcBtns.parentNode) sgcBtns.parentNode.insertBefore(_buildGroupAssignRow(tpl), sgcBtns);
         container.appendChild(card);
     }
 
@@ -2470,6 +2472,219 @@ ${cleanFormat}
         }
     }
 
+    // ════════════════════════════════════════════════════════════════
+    // VN 組件「群組」：群組定義存 localStorage；成員關係掛在組件 tpl.groupIds[]（可掛多組）。
+    //   群組拉桿＝批次把成員 isActive 開/關（重用 syncActiveTagsToLocal 管線、AI 仍只讀各組件 isActive）。
+    //   不綁世界觀自動套，全手動（Rae 拍板）。spec: docs/superpowers/specs/2026-06-21-vn-component-groups-design.md
+    // ════════════════════════════════════════════════════════════════
+    const VN_GROUPS_KEY = 'vn_component_groups';
+    const VN_FOLD_KEY = 'vn_gallery_fold_state';
+    function _sgcEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function _loadGroups() { try { return JSON.parse(localStorage.getItem(VN_GROUPS_KEY) || '[]') || []; } catch (e) { return []; } }
+    function _saveGroups(arr) { try { localStorage.setItem(VN_GROUPS_KEY, JSON.stringify(arr || [])); } catch (e) {} }
+    function _newGroupId() { return 'g_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3); }
+    function _loadFold() { try { return JSON.parse(localStorage.getItem(VN_FOLD_KEY) || '{}') || {}; } catch (e) { return {}; } }
+    function _isFold(key) { return !!_loadFold()[key]; }
+    function _setFold(key, folded) { const s = _loadFold(); if (folded) s[key] = 1; else delete s[key]; try { localStorage.setItem(VN_FOLD_KEY, JSON.stringify(s)); } catch (e) {} }
+    function _tplGroupIds(tpl) { return Array.isArray(tpl.groupIds) ? tpl.groupIds : []; }
+
+    async function _setComponentActive(tpl, active) {
+        const db = win.OS_DB; if (!db) return;
+        tpl.isActive = !!active;
+        await db.saveVNTagTemplate(tpl);
+        await syncActiveTagsToLocal();
+        if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
+    }
+    async function _setGroupActive(members, active) {
+        const db = win.OS_DB; if (!db) return;
+        for (const t of members) { if (t.isActive !== active) { t.isActive = active; await db.saveVNTagTemplate(t); } }
+        await syncActiveTagsToLocal();
+        if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
+    }
+    function _groupState(members) {
+        if (!members.length) return 'empty';
+        const on = members.filter(t => t.isActive).length;
+        return on === 0 ? 'off' : (on === members.length ? 'on' : 'partial');
+    }
+
+    // 單一可折疊組件卡（header=標題/啟用拉桿/管理；收合只藏預覽）。預覽 JS 折疊時不跑、展開才 lazy 跑。
+    function _renderComponentCard(tpl, _allPhoneApps) {
+        const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+        const previewHtml = (tpl.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B');
+        const foldKey = 'c:' + (tpl.id || tpl.tagId || safeTagId);
+        const folded = _isFold(foldKey);
+        const card = document.createElement('div');
+        card.className = 'studio-gallery-card sgc-browse' + (tpl.isActive ? ' active-tag' : '') + (folded ? ' folded' : '');
+        card.innerHTML = `
+            <div class="sgc-header">
+                <button class="sgc-fold" type="button" title="收合/展開">${folded ? '▸' : '▾'}</button>
+                <span class="sgc-title">${_sgcEsc((tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知')}</span>
+                <label class="sgc-switch" title="啟用/停用">
+                    <input type="checkbox" class="sgc-switch-input"${tpl.isActive ? ' checked' : ''}>
+                    <span class="sgc-switch-slider"></span>
+                </label>
+                <button class="sgc-manage-btn" type="button">管理 ›</button>
+            </div>
+            <div class="sgc-body">
+                ${tpl.css ? `<style>${tpl.css}</style>` : ''}
+                <div class="studio-pv-tabs">
+                    <button class="studio-pv active" data-pv="phone">手機</button>
+                    <button class="studio-pv" data-pv="center">中間</button>
+                    <button class="studio-pv" data-pv="full">全屏</button>
+                </div>
+                <div class="sgc-preview">
+                    <div class="studio-pv-box">
+                        <div class="vn-dynamic-panel-${safeTagId}" style="width:100%;height:auto;display:flex;flex-direction:column;">
+                            ${previewHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        const foldBtn = card.querySelector('.sgc-fold');
+        const runPreview = () => { if (!card._pvRan) { card._pvRan = true; _activatePreview(card, tpl, safeTagId); } };
+        foldBtn.onclick = () => {
+            const nf = !card.classList.contains('folded');
+            card.classList.toggle('folded', nf);
+            foldBtn.textContent = nf ? '▸' : '▾';
+            _setFold(foldKey, nf);
+            if (!nf) runPreview();
+        };
+        const sw = card.querySelector('.sgc-switch-input');
+        sw.onchange = async () => { await _setComponentActive(tpl, sw.checked); card.classList.toggle('active-tag', tpl.isActive); };
+        card.querySelector('.sgc-manage-btn').onclick = () => _openComponentDetail(tpl, _allPhoneApps);
+        if (!folded) runPreview();   // 展開的才跑預覽；折疊的等點開再 lazy 跑
+        return card;
+    }
+
+    // 群組資料夾（可折疊；header=名/群組拉桿/⚙️管理）。group=null → 未分組區（無拉桿無管理）。
+    function _renderGroupFolder(group, members, _allPhoneApps) {
+        const isUngrouped = !group;
+        const foldKey = 'g:' + (isUngrouped ? '__ungrouped__' : group.id);
+        const folded = _isFold(foldKey);
+        const state = _groupState(members);
+        const folder = document.createElement('div');
+        folder.className = 'sgc-folder' + (folded ? ' folded' : '') + (isUngrouped ? ' sgc-folder-ungrouped' : '');
+        folder.innerHTML = `
+            <div class="sgc-folder-header">
+                <button class="sgc-fold" type="button" title="收合/展開">${folded ? '▸' : '▾'}</button>
+                <span class="sgc-folder-name">${_sgcEsc(isUngrouped ? '未分組' : group.name)} <span class="sgc-folder-count">${members.length}</span></span>
+                ${isUngrouped ? '' : `<label class="sgc-switch sgc-group-switch" title="整組啟用/停用">
+                    <input type="checkbox" class="sgc-switch-input"${state === 'on' ? ' checked' : ''}>
+                    <span class="sgc-switch-slider"></span>
+                </label>
+                <button class="sgc-folder-manage" type="button" title="群組管理">⚙️</button>`}
+            </div>
+            <div class="sgc-folder-body"></div>`;
+        const foldBtn = folder.querySelector('.sgc-fold');
+        const body = folder.querySelector('.sgc-folder-body');
+        foldBtn.onclick = () => {
+            const nf = !folder.classList.contains('folded');
+            folder.classList.toggle('folded', nf);
+            foldBtn.textContent = nf ? '▸' : '▾';
+            _setFold(foldKey, nf);
+        };
+        if (!isUngrouped) {
+            const sw = folder.querySelector('.sgc-group-switch .sgc-switch-input');
+            if (sw) {
+                if (state === 'partial') sw.indeterminate = true;
+                sw.onchange = async () => { await _setGroupActive(members, state !== 'on'); loadStudioGallery(); };
+            }
+            folder.querySelector('.sgc-folder-manage').onclick = (e) => { e.stopPropagation(); _openGroupManage(group); };
+        }
+        if (members.length) members.forEach(tpl => body.appendChild(_renderComponentCard(tpl, _allPhoneApps)));
+        else body.innerHTML = '<div class="sgc-folder-empty">（空）</div>';
+        return folder;
+    }
+
+    function _createGroup() {
+        const name = (prompt('新群組名稱（例：古代 / 現代 / 賽博龐克）') || '').trim();
+        if (!name) return;
+        const groups = _loadGroups();
+        groups.push({ id: _newGroupId(), name });
+        _saveGroups(groups);
+        loadStudioGallery();
+    }
+
+    // 群組管理 modal：改名 / 指派成員（勾選哪些組件屬於本組）/ 刪除（退回未分組、不刪組件）
+    async function _openGroupManage(group) {
+        const doc = win.document || document;
+        const old = doc.getElementById('sgc-group-modal'); if (old) old.remove();
+        const db = win.OS_DB;
+        let tpls = [];
+        try { tpls = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用'); } catch (e) {}
+        const rows = tpls.map(t => {
+            const inG = _tplGroupIds(t).includes(group.id);
+            const nm = (t.title && String(t.title).trim()) || t.tagId || '未知';
+            return `<label class="sgc-assign-row"><input type="checkbox" data-tpl-id="${_sgcEsc(t.id)}"${inG ? ' checked' : ''}><span>${_sgcEsc(nm)}</span></label>`;
+        }).join('') || '<div class="sgc-folder-empty">沒有組件</div>';
+        const modal = doc.createElement('div');
+        modal.id = 'sgc-group-modal';
+        modal.className = 'sgc-modal';
+        modal.innerHTML = `
+            <div class="sgc-modal-card">
+                <div class="sgc-modal-title">🗂️ 群組管理</div>
+                <div class="sgc-modal-row">
+                    <input class="sgc-modal-name" type="text" value="${_sgcEsc(group.name)}" placeholder="群組名稱">
+                    <button class="sgc-mini-btn" id="sgc-grp-rename" type="button">改名</button>
+                </div>
+                <div class="sgc-modal-sub">指派成員（勾選＝屬於這組；組件可同時屬於多組）</div>
+                <div class="sgc-assign-list">${rows}</div>
+                <div class="sgc-modal-actions">
+                    <button class="sgc-mini-btn danger" id="sgc-grp-del" type="button">🗑️ 刪除群組</button>
+                    <button class="sgc-mini-btn" id="sgc-grp-close" type="button">關閉</button>
+                </div>
+            </div>`;
+        (doc.body || doc.documentElement).appendChild(modal);
+        const close = () => { modal.remove(); loadStudioGallery(); };
+        modal.addEventListener('click', e => { if (e.target === modal) close(); });
+        modal.querySelector('#sgc-grp-close').onclick = close;
+        modal.querySelector('#sgc-grp-rename').onclick = () => {
+            const nn = (modal.querySelector('.sgc-modal-name').value || '').trim();
+            if (!nn) return;
+            const groups = _loadGroups(); const g = groups.find(x => x.id === group.id); if (g) { g.name = nn; _saveGroups(groups); }
+            close();
+        };
+        modal.querySelector('#sgc-grp-del').onclick = async () => {
+            if (!confirm(`刪除群組「${group.name}」？\n組件不會被刪，只會退回未分組。`)) return;
+            _saveGroups(_loadGroups().filter(x => x.id !== group.id));
+            for (const t of tpls) { const gids = _tplGroupIds(t); if (gids.includes(group.id)) { t.groupIds = gids.filter(id => id !== group.id); await db.saveVNTagTemplate(t); } }
+            close();
+        };
+        modal.querySelectorAll('.sgc-assign-row input').forEach(cb => cb.onchange = async () => {
+            const tpl = tpls.find(t => t.id === cb.getAttribute('data-tpl-id')); if (!tpl) return;
+            let gids = _tplGroupIds(tpl);
+            if (cb.checked) { if (!gids.includes(group.id)) gids = gids.concat(group.id); }
+            else gids = gids.filter(x => x !== group.id);
+            tpl.groupIds = gids;
+            await db.saveVNTagTemplate(tpl);
+        });
+    }
+
+    // 第二層詳情卡用：這個組件「歸到哪些群組」的多選列（寫 tpl.groupIds）
+    function _buildGroupAssignRow(tpl) {
+        const wrap = document.createElement('div');
+        wrap.className = 'sgc-grouprow';
+        const groups = _loadGroups();
+        if (!groups.length) {
+            wrap.innerHTML = '<span class="sgc-grouprow-label">群組</span><span class="sgc-grouprow-empty">還沒有群組，回清單按「＋ 新群組」</span>';
+            return wrap;
+        }
+        const gids = _tplGroupIds(tpl);
+        wrap.innerHTML = '<span class="sgc-grouprow-label">群組</span>' + groups.map(g =>
+            `<label class="sgc-grouptag"><input type="checkbox" data-gid="${_sgcEsc(g.id)}"${gids.includes(g.id) ? ' checked' : ''}><span>${_sgcEsc(g.name)}</span></label>`
+        ).join('');
+        wrap.querySelectorAll('input').forEach(cb => cb.onchange = async () => {
+            const gid = cb.getAttribute('data-gid');
+            let cur = _tplGroupIds(tpl);
+            if (cb.checked) { if (!cur.includes(gid)) cur = cur.concat(gid); }
+            else cur = cur.filter(x => x !== gid);
+            tpl.groupIds = cur;
+            await win.OS_DB.saveVNTagTemplate(tpl);
+            _galleryNeedsReload = true;
+        });
+        return wrap;
+    }
+
     async function loadStudioGallery() {
         const listEl = document.getElementById('studio-gallery-list');
         if (!listEl) return;
@@ -2484,48 +2699,39 @@ ${cleanFormat}
         }
         try {
             const _allTpls = await db.getAllVNTagTemplates();
-            // VN組件 = 「不是你明確選為 應用/共用 的」全部組件（純展示 + 舊的未標型別都算組件）；
-            // 明確標為 應用/共用 的(panelType) 家在「我的應用」，不在這。不再靠 caps 亂猜、不再彈誤導的搬遷提示。
+            // VN組件 = 「不是你明確選為 應用/共用 的」全部組件（純展示 + 舊的未標型別都算組件）
             const templates = _allTpls.filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用');
+            const _allPhoneApps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? ((await win.OS_DB.getAllPhoneApps()) || []) : [];
             listEl.innerHTML = '';
+
+            // 頂部：＋ 新群組
+            const bar = document.createElement('div');
+            bar.className = 'sgc-groupbar';
+            bar.innerHTML = `<button class="sgc-newgroup-btn" type="button">＋ 新群組</button>`;
+            bar.querySelector('.sgc-newgroup-btn').onclick = () => _createGroup();
+            listEl.appendChild(bar);
+
             if (!templates.length) {
-                listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">VN組件 空空如也，去煉丹做純展示面板吧！</div>';
+                const empty = document.createElement('div');
+                empty.className = 'sgc-empty-hint';
+                empty.textContent = 'VN組件 空空如也，去煉丹做純展示面板吧！';
+                listEl.appendChild(empty);
                 return;
             }
-            // 一次性抓所有手機 app（用 srcTplId 對照展廳模板）
-            const _allPhoneApps = (win.OS_DB && win.OS_DB.getAllPhoneApps)
-                ? ((await win.OS_DB.getAllPhoneApps()) || [])
-                : [];
+
+            // 群組 → 成員（清掉已刪群組的殘留 id；組件可同屬多組 → 多個 folder 各出現一次）
+            const groups = _loadGroups();
+            const validIds = new Set(groups.map(g => g.id));
+            const memberMap = {}; groups.forEach(g => memberMap[g.id] = []);
+            const ungrouped = [];
             templates.forEach(tpl => {
-                const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
-                const previewHtml = (tpl.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B');
-                // 第一層：乾淨預覽卡（只有標題＋狀態＋預覽＋「管理 ›」）；所有操作按鈕都在第二層（點管理換頁）
-                const tile = document.createElement('div');
-                tile.className = 'studio-gallery-card sgc-browse' + (tpl.isActive ? ' active-tag' : '');
-                tile.innerHTML = `
-                    <div class="sgc-header">
-                        <span class="sgc-title">${(tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知'}</span>
-                        <span class="sgc-status" style="color:${tpl.isActive ? '#2ecc71' : '#aaa'}">${tpl.isActive ? '✅ 啟用' : '❌ 停用'}</span>
-                        <button class="sgc-manage-btn" type="button">管理 ›</button>
-                    </div>
-                    ${tpl.css ? `<style>${tpl.css}</style>` : ''}
-                    <div class="studio-pv-tabs">
-                        <button class="studio-pv active" data-pv="phone">手機</button>
-                        <button class="studio-pv" data-pv="center">中間</button>
-                        <button class="studio-pv" data-pv="full">全屏</button>
-                    </div>
-                    <div class="sgc-preview">
-                        <div class="studio-pv-box">
-                            <div class="vn-dynamic-panel-${safeTagId}" style="width:100%;height:auto;display:flex;flex-direction:column;">
-                                ${previewHtml}
-                            </div>
-                        </div>
-                    </div>
-                `;
-                tile.querySelector('.sgc-manage-btn').onclick = () => _openComponentDetail(tpl, _allPhoneApps);
-                listEl.appendChild(tile);
-                _activatePreview(tile, tpl, safeTagId);
+                const gids = _tplGroupIds(tpl).filter(id => validIds.has(id));
+                if (!gids.length) ungrouped.push(tpl);
+                else gids.forEach(id => memberMap[id].push(tpl));
             });
+
+            groups.forEach(g => listEl.appendChild(_renderGroupFolder(g, memberMap[g.id], _allPhoneApps)));
+            listEl.appendChild(_renderGroupFolder(null, ungrouped, _allPhoneApps));   // 未分組區
         } catch(err) { listEl.innerHTML = `<div style="color:#fc8181;padding:20px;">載入失敗: ${err.message}</div>`; }
     }
 
