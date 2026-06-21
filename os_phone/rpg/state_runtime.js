@@ -581,7 +581,8 @@ ${_memoryRulesText()}
                             if (vv && typeof vv === 'object' && !Array.isArray(vv)) { for (const [k2, v2] of Object.entries(vv)) { if (!(k2 in flat)) flat[k2] = v2; } }
                             else if (!(k in flat)) flat[k] = vv;
                         }
-                        const looks = LOOK_KEYS.filter(k => flat[k] != null && typeof flat[k] !== 'object' && String(flat[k]).trim() && String(flat[k]).trim() !== '待定').map(k => String(flat[k]).trim());
+                        const HINT = { '眼色': ' eyes', '瞳色': ' eyes', '膚色': ' skin' };   // 只有顏色的欄位補語意(琥珀色→琥珀色 eyes)，NAI 才知是眼/膚
+                        const looks = LOOK_KEYS.filter(k => flat[k] != null && typeof flat[k] !== 'object' && String(flat[k]).trim() && String(flat[k]).trim() !== '待定').map(k => String(flat[k]).trim() + (HINT[k] || ''));
                         if (looks.length) map[name] = looks.join(', ');
                     }
                 }
