@@ -1,7 +1,7 @@
 # VN 組件 群組 + 折疊清單 — 設計
 
 - 日期：2026-06-21
-- 狀態：設計已與 Rae 對齊，待實作
+- 狀態：✅ 已實作（commit b562e99，2026-06-21）；待 Rae 酒館實機驗收
 - 範圍檔案：`os_phone/os/os_db.js`、`os_phone/os/os_studio.js`、`css/os_studio.css`
 
 ## 問題
