@@ -993,6 +993,106 @@
             });
         },
 
+        // ── 🗑️ 一鍵清空「某 chatId」的所有綁定資料（刪聊天室不玩了用）。回報每類清了幾筆／不可清原因 ──
+        //    chatId：正規化 id（跟 tavern_summary / state_data 同款，建議用 OS_STORY_TOOLS.getChatId()）。
+        //    opts.storyId：清向量記憶 / PWA大總結(它們按 storyId 存)；沒給就跳過(回 skip)。
+        //    opts.vnWorld：VN 圖片快取的 world(=raw ctx.chatId)；交給 VN_Cache.deleteByWorld。
+        //    全域共用的世界書/地圖/變數包無 chatId、無法反查 → 不在此清（本來就不該綁單一聊天）。
+        deleteAllByChatId: async function (chatId, opts) {
+            const cid = String(chatId || '').trim();
+            const o = opts || {};
+            const report = {};
+            if (!cid) { report.error = '缺 chatId'; return report; }
+            const db = await this.init();
+            const self = this;
+            // chatId 在各 store 正規化不一致（getChatIdentifier 空白→_、normalizeChatId 不換、_curTavernChatId 不 trim）
+            //   → 收齊所有變體；key-delete 每個都刪、cursor 用集合比對，避免「含空白的 chatId」漏刪。
+            const _raw = String(o.rawChatId || chatId || '');
+            const _base = _raw.split(/[\\/]/).pop() || '';
+            const idSet = new Set([cid,
+                _base.replace(/\.jsonl?$/i, '').trim(),
+                _base.replace(/\.(jsonl|json)$/i, ''),
+                _base.replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_')
+            ].filter(Boolean));
+            const ids = Array.from(idSet);
+            const _inSet = x => x != null && idSet.has(String(x));
+            const _delEach = async (fn) => { for (const id of ids) { try { await fn(id); } catch (_) {} } return 'ok'; };
+            const _safe = async (label, fn) => { try { report[label] = await fn(); } catch (e) { report[label] = 'err:' + (e && e.message || e); } };
+            const _purge = (store, matchFn) => new Promise((res, rej) => {
+                try {
+                    let n = 0;
+                    const tx = db.transaction(store, 'readwrite');
+                    const req = tx.objectStore(store).openCursor();
+                    req.onsuccess = e => {
+                        const c = e.target.result;
+                        if (!c) return;
+                        try { if (matchFn(c.value)) { c.delete(); n++; } } catch (_) {}
+                        c.continue();
+                    };
+                    tx.oncomplete = () => res(n);
+                    tx.onerror = e => rej(e.target.error);
+                } catch (e) { rej(e); }
+            });
+
+            // 一、key 就是 chatId 的 store → 每個 id 變體都刪（清了就回 ok）
+            await _safe('大總結', () => _delEach(id => self.deleteTavernSummary(id)));
+            await _safe('狀態(AVS)', () => _delEach(id => self.deleteStateData ? self.deleteStateData(id) : null));
+            await _safe('調查進度', () => _delEach(id => self.clearInvestigationState ? self.clearInvestigationState(id) : null));
+            await _safe('大廳歷史', () => _delEach(id => self.deleteLobbyHistory ? self.deleteLobbyHistory(id) : null));
+            await _safe('成就', () => _delEach(id => self.clearAchievements ? self.clearAchievements(id) : null));
+
+            // 二、有 chatId 欄位 → cursor 批量刪（用 id 變體集合比對）
+            await _safe('微信/電話', () => _purge(STORE_NAME_CHATS, v => v && v.data && _inSet(v.data.tavernChatId)));
+            await _safe('微博', () => _purge(STORE_NAME_WB, v => v && _inSet(v.tavernChatId)));
+            await _safe('大廳總結索引', () => _purge(STORE_NAME_LOBBY_SUM_IDX, v => v && _inSet(v.chatId)));
+
+            // 三、app_memory：entries 內逐條過濾(留別卡的)；整筆空了才刪
+            await _safe('app記憶', () => new Promise((res, rej) => {
+                try {
+                    let n = 0;
+                    const tx = db.transaction(STORE_NAME_APP_MEM, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_APP_MEM).openCursor();
+                    req.onsuccess = e => {
+                        const c = e.target.result;
+                        if (!c) return;
+                        const rec = c.value;
+                        if (rec && Array.isArray(rec.entries)) {
+                            const before = rec.entries.length;
+                            const kept = rec.entries.filter(en => en && !_inSet(en.tavernChatId));
+                            if (kept.length !== before) {
+                                n += (before - kept.length);
+                                if (kept.length === 0) c.delete();
+                                else { rec.entries = kept; c.update(rec); }
+                            }
+                        }
+                        c.continue();
+                    };
+                    tx.oncomplete = () => res(n);
+                    tx.onerror = e => rej(e.target.error);
+                } catch (e) { rej(e); }
+            }));
+
+            // 四、按 storyId 的（向量記憶 / PWA 大總結）→ 只在有給 storyId 時清
+            if (o.storyId) {
+                const sid = String(o.storyId);
+                await _safe('向量記憶', async () => { if (self.deleteVnMemoriesByStoryId) await self.deleteVnMemoriesByStoryId(sid); return 'ok'; });
+                await _safe('PWA大總結', () => _purge(STORE_NAME_VN_SUMMARIES, v => v && (v.storyId || '') === sid));
+            } else {
+                report['向量記憶'] = 'skip(無storyId)';
+                report['PWA大總結'] = 'skip(無storyId)';
+            }
+
+            // 五、VN 圖片快取（背景/頭像/立繪/場景/物品）走 VN_Cache（獨立 DB、world=raw chatId）
+            await _safe('圖片快取', async () => {
+                const VC = (typeof window !== 'undefined' && window.VN_Cache) || win.VN_Cache;
+                if (!VC || !VC.deleteByWorld) return 'skip(無VN_Cache)';
+                return await VC.deleteByWorld(o.vnWorld || cid);
+            });
+
+            console.log('[OS_DB] 🗑️ deleteAllByChatId(' + cid + ') 完成:', report);
+            return report;
+        },
+
         // ── vn_memories：向量記憶條目 CRUD ──────────────────────────
         saveVnMemory: async function(entry) {
             const db = await this.init();
