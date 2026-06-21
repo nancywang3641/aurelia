@@ -94,7 +94,14 @@
                     _editFields(v, path, out, false);
                     out.push(`</div>`);
                 } else {
-                    const childMulti = Object.values(v).length > 0 && Object.values(v).every(x => _isObj(x));
+                    // 「多實體容器」判定（容器內每個子物件 = 可改名/刪除的實體，如 NPC）。
+                    //   舊版用 every(全部都是物件) 太脆：NPC 容器只要被副模型多塞「一個」純量(數量/旗標/備註)，
+                    //   every 立刻 false → 整組 NPC 的改名/刪除 × 全消失（這就是「乎有乎沒」的真因）。
+                    //   放寬成：全是物件(原行為，覆蓋單一/多個乾淨 NPC) 或「≥2 個物件子節點」(容忍夾雜純量) → 仍算多實體。
+                    //   單一物件夾純量(1 obj + 純量)維持不算實體，避免「主角.外觀」這種單一子物件被誤判成可刪實體。
+                    const _vals = Object.values(v);
+                    const _objN = _vals.filter(x => _isObj(x)).length;
+                    const childMulti = _vals.length > 0 && (_objN === _vals.length || _objN >= 2);
                     out.push(`<div class="avs-st-edit-group"><div class="avs-st-edit-grouphd">${esc(k)}</div>`);
                     _editFields(v, path, out, childMulti);
                     out.push(`</div>`);
