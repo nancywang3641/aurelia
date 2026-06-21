@@ -151,6 +151,11 @@
         } catch (e) {}
         return s;
     }
+    // 第二道保險：把「內容裡」的物品/技能名 【X】 正規化成「X」(只用在已切好的 body、標題不動)，
+    //   存進去就乾淨、跟區塊分隔符 【】 徹底不撞、顯示也更清爽。
+    function _normContentBrackets(body) {
+        return String(body == null ? '' : body).replace(/【([^】]+)】/g, '「$1」');
+    }
     function _splitSummarySections(text) {
         const known = _knownSectionHeaders();
         const res = []; const re = /【([^】]+)】/g; let m, idx = 0, header = null;
@@ -226,7 +231,7 @@
                 out.push({ header: p.header, body: _mergeSection(p.header, p.body, i.body) });
             }
             for (const i of incSecs) { if (!used.has(i.header) && !DROP.includes(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
-            const body = out.map(s => `【${s.header}】\n${s.body}`).join('\n\n');
+            const body = out.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');   // 內容【】→「」，存進去乾淨不再撞
             return `【大总结(第${summaryCount}次)】${lastTxt}\n\n${body}`;
         } catch (e) {
             console.warn('[大總結] 結構化合併失敗，改用增量本身:', e);
