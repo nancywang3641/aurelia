@@ -928,6 +928,8 @@
                 bundle.storyTitle = bundle._recs.find(r => r.storyTitle)?.storyTitle || '';
                 // bgCacheId 取最新一筆有值的，給封面圖去 VN bg_cache 撈用
                 bundle.bgCacheId  = bundle._recs.find(r => r.bgCacheId)?.bgCacheId || '';
+                // charHeader：角色表表頭，給日誌動態對位欄位(取最新一筆有值的)
+                bundle.charHeader = bundle._recs.find(r => r.charHeader)?.charHeader || '';
                 bundle.briefs = bundle._recs.slice(0, briefsLimit).map(r => ({
                     count: r.summaryCount || 0,
                     brief: r.brief || '',
