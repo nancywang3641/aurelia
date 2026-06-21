@@ -250,9 +250,16 @@
             raw = _W.OS_IMAGE_MANAGER ? await _W.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: true }) : '';
         }
         else raw = await VN_Image.getAvatar(prompt, 'Neutral', true);
-        if (!raw) return;
+        if (!raw) return '';
         const url = (await _imgToDataUrl(raw)) || raw;
-        await VN_Cache.setRaw(cfg.store, fullKey, { ...val, prompt, url, rawUrl: raw });
+        await VN_Cache.setRaw(cfg.store, fullKey, { ...val, prompt, url });   // 不再存 rawUrl(只寫不讀的死資料、徒增 DB+記憶體)
+        // 已轉成持久 dataURL → 釋放暫時的 blob 與 OS_IMAGE_MANAGER 快取，免 NAI blob 永久洩漏
+        try {
+            if (typeof raw === 'string' && raw.startsWith('blob:') && raw !== url) URL.revokeObjectURL(raw);
+            const _W = window.parent || window;
+            if (cfg.kind === 'scene' && _W.OS_IMAGE_MANAGER && _W.OS_IMAGE_MANAGER.evict) _W.OS_IMAGE_MANAGER.evict('scene', prompt);
+        } catch (e) {}
+        return url;
     }
     function _vngCardMenu(anchor, cfg, entry, curWorld, st, rerender) {
         _closeCardMenus();
@@ -262,8 +269,18 @@
         const add = (txt, fn, danger) => { const b = document.createElement('button'); if (danger) b.className = 'danger'; b.textContent = txt; b.onclick = (e) => { e.stopPropagation(); _closeCardMenus(); fn(); }; menu.appendChild(b); };
         if (entry.url) add('🔍 查看大圖', () => _vngLightbox(entry.url));
         if (!cfg.noRegen) {
-            add('✏️ 編輯重生', () => _vngEditModal(entry.prompt, async (p) => { await _vngRegen(cfg, fullKey, val, p); rerender(); }));
-            add('↻ 直接重生', async () => { if (entry.prompt) { await _vngRegen(cfg, fullKey, val, entry.prompt); rerender(); } });
+            // 重生只換這一張卡的圖(_vngSetCardImg)，不呼叫 rerender() 整庫重渲染 → 不再把整庫大圖重 decode 害 OOM
+            add('✏️ 編輯重生', () => _vngEditModal(entry.prompt, async (p) => {
+                const card = anchor.closest('.vng-card');
+                const newUrl = await _vngRegen(cfg, fullKey, val, p);
+                if (newUrl) { entry.url = newUrl; entry.prompt = p; val.prompt = p; _vngSetCardImg(card, newUrl, cfg.kind); }
+            }));
+            add('↻ 直接重生', async () => {
+                if (!entry.prompt) return;
+                const card = anchor.closest('.vng-card');
+                const newUrl = await _vngRegen(cfg, fullKey, val, entry.prompt);
+                if (newUrl) { entry.url = newUrl; _vngSetCardImg(card, newUrl, cfg.kind); }
+            });
             // 從頭像快取轉立繪：把這張頭像設成同名同世界的立繪（VN 顯示時最優先用立繪）
             if (cfg.kind === 'avatar' && entry.url) add('🎭 設為立繪', async () => {
                 await VN_Cache.setRaw('sprite_cache', fullKey, { url: entry.url, prompt: entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
@@ -289,13 +306,29 @@
         menu.style.left = left + 'px'; menu.style.top = top + 'px';
         setTimeout(() => document.addEventListener('click', _closeCardMenus, { once: true }), 0);
     }
+    function _vngPh(kind) {
+        const d = document.createElement('div'); d.className = 'vng-ph';
+        d.textContent = kind === 'bg' ? '🌄' : (kind === 'scene' ? '🎬' : (kind === 'sprite' ? '🎭' : '👤'));
+        return d;
+    }
+    function _vngImg(url, kind) {
+        const img = document.createElement('img');
+        img.loading = 'lazy'; img.decoding = 'async';   // 延後/非同步 decode → 降低同時解碼一堆大圖的記憶體尖峰
+        img.src = url; img.onerror = () => img.replaceWith(_vngPh(kind));
+        return img;
+    }
+    // 只換「這一張卡」的圖（重生用）→ 不整庫 rerender，避免整庫大圖重 decode 害 TauriTavern OOM
+    function _vngSetCardImg(card, url, kind) {
+        if (!card) return;
+        const old = card.querySelector(':scope > img, :scope > .vng-ph');
+        const node = (url && !String(url).startsWith('blob:')) ? _vngImg(url, kind) : _vngPh(kind);
+        if (old) old.replaceWith(node); else card.insertBefore(node, card.firstChild);
+    }
     function _vngCard(cfg, entry, curWorld, st, rerender) {
         const bare = VN_Cache.bareKeyOf(entry);
         const card = document.createElement('div'); card.className = 'vng-card' + ((cfg.kind === 'bg' || cfg.kind === 'scene') ? ' kind-bg' : '') + (cfg.kind === 'sprite' ? ' kind-sprite' : '');
-        const _ph = () => { const d = document.createElement('div'); d.className = 'vng-ph'; d.textContent = cfg.kind === 'bg' ? '🌄' : (cfg.kind === 'scene' ? '🎬' : (cfg.kind === 'sprite' ? '🎭' : '👤')); return d; };
-        if (entry.url && !entry.url.startsWith('blob:')) {
-            const img = document.createElement('img'); img.src = entry.url; img.onerror = () => img.replaceWith(_ph()); card.appendChild(img);
-        } else card.appendChild(_ph());
+        if (entry.url && !entry.url.startsWith('blob:')) card.appendChild(_vngImg(entry.url, cfg.kind));
+        else card.appendChild(_vngPh(cfg.kind));
         if (entry.favorite) { const b = document.createElement('div'); b.className = 'vng-badge fav'; b.textContent = '★ 收藏'; card.appendChild(b); }
         else if (st.world === '') { const b = document.createElement('div'); b.className = 'vng-badge unclassed'; b.textContent = '未分類'; card.appendChild(b); }
         const foot = document.createElement('div'); foot.className = 'vng-foot'; foot.textContent = bare; card.appendChild(foot);
