@@ -1630,6 +1630,13 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .ctx-limit-label { color: #555; font-size: 0.65rem; white-space: nowrap; }
         .ctx-limit-input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 3px; color: #aaa; font-size: 0.7rem; padding: 2px 5px; text-align: right; width: 60px; outline: none; }
         .ctx-limit-input:focus { border-color: rgba(212,175,55,0.4); color: #ddd; }
+        /* 🔁 自動總結：開關 + 門檻輸入；關閉(.off)時藏輸入框與單位 */
+        .ctx-autosum-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); }
+        .ctx-autosum-row .ctx-limit-label { flex: 1; }
+        .ctx-autosum-on { accent-color: var(--gold, #d4af37); cursor: pointer; flex: 0 0 auto; }
+        .ctx-autosum-every { flex: 0 0 auto; width: 46px; }
+        .ctx-autosum-unit { color: #555; font-size: 0.65rem; white-space: nowrap; }
+        .ctx-autosum-row.off .ctx-autosum-every, .ctx-autosum-row.off .ctx-autosum-unit { display: none; }
 
         /* 對話內文也是優雅字體 */
         #dialogue-text { font-family: var(--font-classic); font-size: 1.3rem; line-height: 1.9; letter-spacing: 1px; color: var(--text-color, #dcd8d0); font-weight: 300; }

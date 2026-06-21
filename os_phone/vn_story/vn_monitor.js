@@ -409,10 +409,35 @@
             this._refreshDisplay();
         },
 
+        // 🔁 自動總結 UI：開關存 sp_autosum_on、門檻存 sp_autosum_every（背景觸發在 os_story_tools.autoSummarizeCheck）
+        _setAutoSum: function(key, val) {
+            try {
+                if (key === 'on') {
+                    localStorage.setItem('sp_autosum_on', val ? '1' : '0');
+                    const row = document.getElementById('ctx-autosum-row');
+                    if (row) row.classList.toggle('off', !val);
+                } else if (key === 'every') {
+                    let n = parseInt(val); if (isNaN(n) || n < 2) n = 20; if (n > 200) n = 200;
+                    localStorage.setItem('sp_autosum_every', String(n));
+                    const inp = document.getElementById('ctx-autosum-every'); if (inp) inp.value = n;
+                }
+            } catch (e) {}
+        },
+        _initAutoSumUI: function() {
+            try {
+                const on = localStorage.getItem('sp_autosum_on') === '1';
+                let every = parseInt(localStorage.getItem('sp_autosum_every')); if (isNaN(every) || every < 2) every = 20;
+                const cb = document.getElementById('ctx-autosum-on'); if (cb) cb.checked = on;
+                const inp = document.getElementById('ctx-autosum-every'); if (inp && document.activeElement !== inp) inp.value = every;
+                const row = document.getElementById('ctx-autosum-row'); if (row) row.classList.toggle('off', !on);
+            } catch (e) {}
+        },
+
         // 點開 Ctx 時呼叫（async：原生算 token 是非同步的）
         poll: async function() {
             this.breakdown = null;
             this._bindContentClicks();
+            this._initAutoSumUI();
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
             if (isStandalone) {
                 this._readFromStandalone();
