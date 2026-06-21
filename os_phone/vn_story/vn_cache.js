@@ -117,7 +117,24 @@
             if (typeof k === 'string' && k.indexOf(SEP) > 0) return k.slice(k.indexOf(SEP) + SEP.length);
             return k;
         },
-        scopedKey(world, bareKey) { return world ? (world + SEP + bareKey) : bareKey; }
+        scopedKey(world, bareKey) { return world ? (world + SEP + bareKey) : bareKey; },
+
+        // 🗑️ 清掉某個世界(chatId)的所有圖片快取（背景/頭像/立繪/場景/物品）→ 給「刪聊天室一鍵清資料」用。
+        //    world = raw ctx.chatId（跟存進去時的 v.chatId / key 前綴同款）。回傳清掉的筆數。
+        async deleteByWorld(world) {
+            const w = String(world || '');
+            if (!w) return 0;
+            let n = 0;
+            for (const store of Object.keys(IMAGE_STORES)) {
+                try {
+                    const all = await this.getAll(store);
+                    for (const entry of all) {
+                        if (this.worldOf(entry) === w) { if (await this.deleteRaw(store, entry.key)) n++; }
+                    }
+                } catch (e) {}
+            }
+            return n;
+        }
     };
 
     // 暴露給其他擴展腳本（os_settings 角色立繪面板、wx_view 等）

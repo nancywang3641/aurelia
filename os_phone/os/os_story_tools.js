@@ -528,6 +528,56 @@
         };
     };
 
+    // 🗑️ 刪聊天室不玩了：一鍵清空這個聊天室綁定的所有附加資料（頭像/插圖/背景/大總結/AVS/記憶/WX/app…）
+    API.openWipeChatData = function () {
+        const chatId = getChatIdentifier();
+        let rawChatId = '';
+        try { rawChatId = String(win.SillyTavern?.getContext?.()?.chatId || ''); } catch (e) {}
+        let storyId = '';
+        try { storyId = (win.VN_Core && win.VN_Core._currentStoryId) || win.OS_AVS_ADAPTER?.getStoryId?.() || localStorage.getItem('vn_current_story_id') || ''; } catch (e) {}
+        let vnWorld = '';
+        try { vnWorld = win.VN_Cache?.getCurrentWorld?.() || rawChatId || ''; } catch (e) {}
+        const oldM = document.getElementById('rpg-wipe-modal'); if (oldM) oldM.remove();
+        const modal = document.createElement('div');
+        modal.id = 'rpg-wipe-modal';
+        modal.className = 'ost-modal active';
+        modal.innerHTML = `
+            <div class="ost-modal-card ost-modal-wide">
+                <div class="ost-modal-title">🗑️ 清空這個聊天室的所有資料</div>
+                <div class="ost-danger-note">不玩這個聊天室了？這會把下面這些「綁定到目前聊天室」的資料全部刪掉，<b>無法復原</b>。別張卡 / 別的聊天室不受影響。</div>
+                <div class="ost-wipe-list">將清除：大總結、AVS 狀態、向量記憶、頭像 / 立繪 / 場景插圖 / 背景圖、微信 / 電話 / 微博、各 app 記憶、調查進度、成就、大廳記錄。<br>聊天室 ID：<b>${chatId || '(讀不到)'}</b></div>
+                <div class="ost-danger-note">※ 酒館聊天本身請自己在酒館刪；這裡只清奧瑞亞附加的資料。${storyId ? '' : '<br>※ 讀不到故事 ID → 向量記憶 / PWA 大總結這次會跳過。'}</div>
+                <label class="ost-wipe-confirm"><input type="checkbox" id="rpg-wipe-ack"><span>我了解這會永久刪除、無法復原</span></label>
+                <div class="ost-sum-preview-status" id="rpg-wipe-status"></div>
+                <div class="ost-modal-btns">
+                    <button class="ost-btn" id="rpg-wipe-cancel">取消</button>
+                    <button class="ost-btn ost-btn-danger" id="rpg-wipe-go" disabled>🗑️ 永久清除</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        const ack = modal.querySelector('#rpg-wipe-ack');
+        const go = modal.querySelector('#rpg-wipe-go');
+        const status = modal.querySelector('#rpg-wipe-status');
+        ack.onchange = () => { go.disabled = !ack.checked; };
+        modal.querySelector('#rpg-wipe-cancel').onclick = () => modal.remove();
+        go.onclick = async () => {
+            if (!ack.checked) return;
+            go.disabled = true; status.textContent = '清除中…';
+            try {
+                const osDb = window.parent.OS_DB;
+                if (!osDb?.deleteAllByChatId) throw new Error('OS_DB.deleteAllByChatId 不存在');
+                const report = await osDb.deleteAllByChatId(chatId, { storyId, vnWorld, rawChatId });
+                // 順手把注入器快取清掉（這個 chat 已無資料）
+                try { window.parent.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}
+                const lines = Object.keys(report).map(k => `${k}：${report[k]}`).join('\n');
+                status.textContent = '✅ 清除完成';
+                try { if (win.toastr) win.toastr.success('已清空這個聊天室的附加資料'); } catch (e) {}
+                alert('🗑️ 已清除「' + (chatId || '') + '」的綁定資料：\n\n' + lines + '\n\n（酒館聊天本身請自己刪）');
+                modal.remove();
+            } catch (e) { status.textContent = '清除失敗：' + (e.message || e); go.disabled = false; }
+        };
+    };
+
     // CTX 面板用：算「還有多少樓沒總結」= 目前最後樓 − 上次大總結記的 Last
     API.getUnsummarizedInfo = async function () {
         try {
@@ -1070,6 +1120,11 @@
                                 <span class="ost-hide-stat-lab">已隱藏</span><span class="ost-hide-stat-val" id="vrs-hidden-list">—</span>
                             </div>
                         </div>
+                    </div>
+                    <div class="ost-section">
+                        <div class="ost-section-title">🗑️ 不玩了 / 清空資料</div>
+                        <button class="ost-btn ost-btn-danger" onclick="window.OS_STORY_TOOLS.openWipeChatData()">🗑️ 清空這個聊天室的所有資料</button>
+                        <div class="ost-hint">頭像 / 插圖 / 大總結 / AVS / 記憶 / WX / app 一次清乾淨</div>
                     </div>
                 </div>
             </div>`;
