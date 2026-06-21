@@ -134,11 +134,32 @@
     // ===== 結構化合併：把「這次增量」疊到「上一份累積總結」，不重濾舊內容 =====
     // 事件類(事件表/代辦/結算/性事紀)→ 新列接在後面；角色/物品類 → 同名(第一欄)更新、新名加後面；
     // 結語/場景索引 → 取新；故事標題 → 保留最早。表頭沒有前導「|」也吃得到（用「含 |」判斷）。
+    // 合法區塊名白名單：固定繁簡/舊區塊 + 從當前模板動態抽（支援自訂模板）。
+    //   ★ 內容裡的物品/技能名也常寫成 【坐骑缰绳】【熔炉之韧】，若把每個 【】 都當區塊標題 → 表格被從中間切碎、合併後亂飛。
+    //   只認白名單內的才算區塊標題，其餘 【...】 一律當內容留在 body。
+    function _knownSectionHeaders() {
+        const s = new Set([
+            '事件表','角色表','關係圖譜','关系图谱','結算清單','结算清单','物品表',
+            '注意規範','注意规范','注意規範/記憶事項表','注意规范/记忆事项表','關鍵狀態/記憶','关键状态/记忆','關鍵狀態','关键状态',
+            '性事紀','性事记','結語','结语','故事標題','故事标题',
+            '代辦清單','代办清单','場景索引','场景索引'
+        ]);
+        try {
+            const tpl = getSummaryTemplate();   // 自訂模板的區塊名也抽進來
+            const re = /【([^】]+)】/g; let mm;
+            while ((mm = re.exec(tpl)) !== null) { const n = mm[1].trim(); if (n && !/大总结|大總結/.test(n)) s.add(n); }
+        } catch (e) {}
+        return s;
+    }
     function _splitSummarySections(text) {
+        const known = _knownSectionHeaders();
         const res = []; const re = /【([^】]+)】/g; let m, idx = 0, header = null;
         while ((m = re.exec(text)) !== null) {
+            const name = m[1].trim();
+            const isSection = /^大总结|^大總結/.test(name) || known.has(name);   // 標題行(保險) 或 白名單區塊
+            if (!isSection) continue;                                              // 內容的物品/技能名 → 不切、留在當前 body
             if (header !== null) res.push({ header: header.trim(), body: text.slice(idx, m.index).trim() });
-            header = m[1]; idx = re.lastIndex;
+            header = name; idx = re.lastIndex;
         }
         if (header !== null) res.push({ header: header.trim(), body: text.slice(idx).trim() });
         return res;
