@@ -200,6 +200,10 @@
                  .replace(/[x×]\s*\d+\s*$/i, '')          // 去尾綴 x2
                  .replace(/[「」『』“”"'·,，。、\s]/g, '')   // 去標點/空白
                  .replace(/[極极]品|[頂顶]級|[稀]有/g, ''); // 去品階形容(极品毒腺 = 毒腺)
+        } else if (header === '角色表') {
+            k = k.replace(/[（(][^（()]*[)）]/g, '')        // 去括號(種族/別名)：红石(深毒蛛人)→红石
+                 .replace(/^(成年|幼年|年幼|年輕|年轻|青年|中年|老年|未成年)/, '')   // 去年齡/狀態前綴：成年深毒蛛人→深毒蛛人
+                 .replace(/[「」『』“”"'·・,，。、\s]/g, '');
         }
         return k || String(raw == null ? '' : raw).trim();
     }
@@ -227,6 +231,46 @@
         if (['故事標題', '故事标题'].includes(header)) return (_textOnly(prevBody)[0] || _textOnly(incBody)[0] || '');   // 故事標題：只取標題那行、丟尾端殘留
         return incBody || prevBody;   // 其他純文字 → 取新
     }
+    // 從 AVS 狀態(current) 抓「中文外觀」餵總結補角色表外觀（結構無關：走外觀關鍵字、掃 1~2 層；NAI 不吃中文但總結是中文沒問題）
+    function _avsLooksText(cur) {
+        if (!cur || typeof cur !== 'object') return '';
+        const APP = /(髮色|发色|髮型|发型|頭髮|头发|髮|发|眼色|瞳色|瞳孔|眼睛|眼|膚色|肤色|膚|肤|外觀|外观|外貌|長相|长相|形象|容貌|相貌|身高|體型|体型|身材|衣著|衣着|服裝|服装|裝扮|装扮|穿著|穿着|特徵|特征)/;
+        const lines = [];
+        const grab = (name, obj) => {
+            const parts = [];
+            for (const k of Object.keys(obj || {})) {
+                const v = obj[k];
+                if (v && typeof v === 'object' && !Array.isArray(v)) {
+                    if (APP.test(k)) for (const kk of Object.keys(v)) { const vv = v[kk]; if (vv != null && typeof vv !== 'object' && String(vv).trim() && String(vv) !== '—') parts.push(`${kk}=${vv}`); }
+                } else if (APP.test(k) && v != null && String(v).trim() && String(v) !== '—') {
+                    parts.push(`${k}=${v}`);
+                }
+            }
+            if (parts.length) lines.push(`${String(name).trim()}：${parts.join('、')}`);
+        };
+        try {
+            for (const name of Object.keys(cur)) {
+                const v = cur[name];
+                if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+                grab(name, v);
+                for (const sub of Object.keys(v)) {   // 巢狀實體(如 NPC 容器下每個角色)
+                    const sv = v[sub];
+                    if (sv && typeof sv === 'object' && !Array.isArray(sv)) grab(sub, sv);
+                }
+            }
+        } catch (e) {}
+        return lines.slice(0, 40).join('\n');   // 上限 40 行免爆 token
+    }
+    // 角色表合併：AI 已拿到完整累積角色表+去重指示 → 它的輸出是「完整去重版」，直接取代(不疊加免重複)。
+    //   安全網：角色列掉太兇(疑似 AI 沒照「完整重出」或誤刪角色)→ 退回程式 MERGEKEY 疊加(含正規化去重)、保住不漏角色。
+    function _mergeCharTable(prevBody, incBody) {
+        const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
+        const prevN = tp.rows.length, incN = ti.rows.length;
+        if (incN >= 1 && (prevN < 4 || incN >= Math.ceil(prevN * 0.5))) {
+            return _buildMdTable({ header: ti.header || tp.header, sep: ti.sep || tp.sep, rows: ti.rows, extra: ti.extra.length ? ti.extra : tp.extra });
+        }
+        return _mergeSection('角色表', prevBody, incBody);
+    }
     function _structuredMerge(incFull, prevFull, summaryCount, lastTxt) {
         try {
             if (!prevFull) return incFull;
@@ -243,7 +287,9 @@
                 if (!i) { out.push(p); continue; }
                 used.add(p.header);
                 if (KEEPOLD.includes(p.header)) { out.push(p); continue; }
-                out.push({ header: p.header, body: _mergeSection(p.header, p.body, i.body) });
+                // 角色表＝AI 拿到累積表+去重指示後輸出的「完整去重版」→ 取代(不疊加)；其餘區塊照舊結構化疊加
+                const _mb = (p.header === '角色表') ? _mergeCharTable(p.body, i.body) : _mergeSection(p.header, p.body, i.body);
+                out.push({ header: p.header, body: _mb });
             }
             for (const i of incSecs) { if (!used.has(i.header) && !DROP.includes(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
             const body = out.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');   // 內容【】→「」，存進去乾淨不再撞
@@ -566,9 +612,9 @@
             const prevFull = (prevRec && prevRec.content) ? prevRec.content : '';
             let summaryCount = ((prevRec && prevRec.summaryCount) ? prevRec.summaryCount : 0) + 1;
             const prevSection = prevFull
-                ? `**只总结「这次新增」的剧情即可；旧事件/角色不用重写（系统会自动叠加：事件接在后面、同名角色更新、新角色加后面）**\n`
+                ? `**除了【角色表】要按下方「角色表規則」完整重出(去重+補外觀)，其餘區塊只总结「这次新增」即可、旧内容不用重写（系统会自动叠加：事件接在后面、同名更新、新项加后面）**\n`
                 : `**首次总结**\n`;
-            // 滾動結語：抽出「上一版結語」當底稿丟給副模型，要它改寫成涵蓋到最新的一段(取代、不累積)。
+            // 滾動結語：抽出「上一版結語」當底稿餵主模型(大總結走 TH.generateRaw＝主模型、非副模型)，要它改寫成涵蓋到最新的一段(取代、不累積)。
             //   只送這一小段結語(≤200字)、不送整份舊總結 → 省 token 又能讓結語當完整長期記憶。
             let prevEpilogue = '';
             if (prevFull) {
@@ -579,6 +625,33 @@
             }
             const epilogueHint = prevEpilogue
                 ? `\n【上一版結語（請當底稿，融入這次新劇情後改寫成「一段」涵蓋全程的滾動總述，全面取代、不要分段堆疊）】\n${prevEpilogue}\n`
+                : '';
+
+            // 角色表去重 + 補外觀：把「累積角色表」+「AVS 中文外觀」一起餵主模型，要它輸出「完整去重、外觀補齊」的角色表。
+            //   去重靠 AI 看得懂語意(红石=红石(深毒蛛人)=成年深毒蛛人=深毒蛛人 同一隻)；補外觀靠 AVS 外觀(總結是中文、能吃中文外觀)。
+            let prevCharTable = '';
+            if (prevFull) { try { const cm = prevFull.match(/【角色表】[^\n]*\n([\s\S]*?)(?:\n【|$)/); if (cm) prevCharTable = cm[1].trim(); } catch (e) {} }
+            let avsLooks = '';
+            if (prevCharTable) {
+                try {
+                    const osdb = window.parent.OS_DB;
+                    const _ctx = String(win.SillyTavern?.getContext?.()?.chatId || '');
+                    const _norm = _ctx.split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim();   // state_data 用的 normalizeChatId 形式(可能與 chatId 空白正規化不同)
+                    for (const _id of [chatId, _norm, (osdb && osdb.currentChatId ? osdb.currentChatId() : '')]) {
+                        if (!_id) continue;
+                        const _sd = await (osdb && osdb.getStateData ? osdb.getStateData(_id) : null);
+                        if (_sd && _sd.current) { avsLooks = _avsLooksText(_sd.current); if (avsLooks) break; }
+                    }
+                } catch (e) {}
+            }
+            const charHint = prevCharTable
+                ? (`\n【目前累積的角色表——只有「角色表」這個區塊要完整重出(去重+補外觀)，其餘區塊照舊只寫這次新增】\n${prevCharTable}\n`
+                    + (avsLooks ? `\n【AVS 角色外觀資料（補髮色/髮型/眼色用；正文沒寫就照這裡）】\n${avsLooks}\n` : '')
+                    + `\n【角色表規則】\n`
+                    + `- 把這次新出場/有變化的角色併進上面累積角色表，輸出「完整的角色表」(不是只列新增)。\n`
+                    + `- 合併重複：同一角色用過不同稱呼(本名/別名/帶種族或狀態，如「红石」「红石(深毒蛛人)」「成年深毒蛛人」「深毒蛛人」其實是同一隻)→ 併成「一列」、用最完整稱呼當名字。\n`
+                    + `- **絕不刪掉任何「不同」的角色**(只併重複、不減少真實角色數)。\n`
+                    + `- 每個角色的髮色/髮型/眼色盡量填齊：正文有寫照寫；沒寫就用上面 AVS 外觀；再沒有就依角色設定合理補(別留空)，方便之後生頭像。\n`)
                 : '';
             let tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
             if (summaryCount > 1) tplBody = tplBody.replace(/\n*【故事標題】[\s\S]*?(?=\n【|$)/g, '').trim();   // 故事標題只第一次生成、第二次起移除(日誌只要一個總篇名)
@@ -604,7 +677,7 @@
                             const who = m.is_user ? '用户' : (m.name || '角色');
                             return `[#${sId + i}] ${who}：${String(m.mes || '').trim()}`;
                         }).join('\n\n');
-                        const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}${epilogueHint}\n${tplBody}`;
+                        const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}${epilogueHint}${charHint}\n${tplBody}`;
                         generated = await TH.generateRaw({
                             user_input: userMsg,
                             ordered_prompts: [{ role: 'system', content: _sys }, 'user_input'],   // 不讀 chat_history → 純送我給的全文
@@ -614,7 +687,7 @@
                     } else {
                         // 後備：讀不到檔 → generateRaw 讀記憶體 chat_history(all)
                         _summarizedEnd = await _trueLastId();
-                        const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}${epilogueHint}\n${tplBody}`;
+                        const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}${epilogueHint}${charHint}\n${tplBody}`;
                         generated = await TH.generateRaw({
                             user_input: instruction,
                             ordered_prompts: [{ role: 'system', content: _sys }, 'chat_history', 'user_input'],
