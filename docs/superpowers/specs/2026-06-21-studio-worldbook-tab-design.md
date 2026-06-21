@@ -1,7 +1,7 @@
 # 創作室「🌍 世界書」tab — 設計
 
 - 日期：2026-06-21
-- 狀態：設計已與 Rae 對齊，待實作
+- 狀態：✅ 已實作（commit b9b277e，2026-06-21）；待 Rae 酒館實機驗收
 - 範圍：`os_phone/os/os_studio.js`（加 tab + 接線）、新檔 `os_phone/os/os_studio_worldbook.js`（主邏輯）、`css/os_studio.css`
 
 ## 問題 / 目標
