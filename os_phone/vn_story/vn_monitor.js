@@ -271,6 +271,26 @@
             return { total: total, breakdown: { system: system||0, character: character||0, world: world||0, examples: examples||0, chat: chat||0, persona: persona||0, note: note||0, inject: inject||0, bias: bias||0, total: total } };
         },
 
+        // 🔧 用「真送出訊息」重算 breakdown（_liveChat = CHAT_COMPLETION_PROMPT_READY 抓的，=模型真收到的、對齊平台）。
+        //   itemized 帳本在自訂連線(如 Gemini)常算少/把重預設拆走→系統提示變 260、合計對不上平台；這條治本。
+        //   世界書/角色卡無法從「一大包 system」裡乾淨拆出(本來就一起當 system 送)→ 併進「系統提示」如實顯示。
+        _breakdownFromLive: async function() {
+            const lc = this._liveChat;
+            if (!Array.isArray(lc) || !lc.length) return null;
+            const s = function(m){ return (m && m.content != null) ? String(m.content) : ''; };
+            const sysText  = lc.filter(function(m){ return m && m.role === 'system'; }).map(s).join('\n\n');
+            const chatText = lc.filter(function(m){ return m && m.role !== 'system'; }).map(s).join('\n\n');
+            const sysTok  = await this._tokAsync(sysText);
+            const chatTok = await this._tokAsync(chatText);
+            const total = sysTok + chatTok;
+            this.breakdownContent = { system: sysText, chat: chatText };
+            return {
+                total: total,
+                chars: (sysText.length + chatText.length),
+                breakdown: { system: sysTok, character: 0, world: 0, examples: 0, chat: chatTok, persona: 0, note: 0, inject: 0, bias: 0, total: total }
+            };
+        },
+
         // ── 逐項內容檢視：點 breakdown 列 → 看實際送出去的原文（OAI/文字補全共用，欄位缺就空）──
         _KEY_LABELS: { system:'系統提示', character:'角色卡', world:'世界資訊', examples:'對話範例', chat:'聊天記錄', persona:'使用者角色', note:'作者備註', inject:'注入/擴充', recall:'記憶召回' },
 
@@ -331,7 +351,7 @@
             const ov = document.createElement('div');
             ov.id = 'ctx-cv-overlay';
             ov.className = 'ctx-cv-overlay';
-            const meta = text ? (text.length.toLocaleString() + ' 字') : '此項酒館未保留原文 / 本輪為空';
+            const meta = text ? (text.length.toLocaleString() + ' 字元（非 token，上方數字才是 token）') : '此項酒館未保留原文 / 本輪為空';
             ov.innerHTML = '<div class="ctx-cv-box">'
                 + '<div class="ctx-cv-head"><span class="ctx-cv-title">' + esc(label) + '</span><span class="ctx-cv-meta">' + meta + '</span><button class="ctx-cv-close" type="button">✕</button></div>'
                 + '<pre class="ctx-cv-body">' + (text ? esc(text) : '（無內容）') + '</pre>'
@@ -420,6 +440,18 @@
                     this.unsum = await win.OS_STORY_TOOLS.getUnsummarizedInfo();
                 } else { this.unsum = null; }
             } catch (e) { this.unsum = null; }
+            // 🔧 有「真送出訊息」就用它重算 breakdown＋合計（蓋掉 itemized 帳本——自訂連線常算少/把重預設拆成 260）。
+            //   _liveChat = 模型真收到的那包 → 合計貼近平台、系統提示顯示真實重預設。記憶召回(下面)仍照原本算當 system 子項。
+            try {
+                const live = await this._breakdownFromLive();
+                if (live) {
+                    this.breakdown  = live.breakdown;
+                    this.sendTokens = live.total;
+                    this.sendChars  = live.chars;
+                    if (!this.lastUpdate) this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+            } catch (e) {}
+
             // 同步 input 顯示值
             const limitInput = document.getElementById('ctx-limit-input');
             if (limitInput) limitInput.value = this.getLimit();
