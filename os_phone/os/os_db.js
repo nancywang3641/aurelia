@@ -8,7 +8,7 @@
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 26; // 🔥 V26：插件通用記憶桶 app_memory
+    const DB_VERSION = 27; // 🔥 V27：酒館大總結搬出世界書 → tavern_summary（key = chatId、一卡一筆、程式注入）
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -33,6 +33,7 @@
     const STORE_NAME_LOBBY_SUM_IDX = 'lobby_summary_index'; // 🔥 V24：酒館大廳跨卡總結索引（結語 + 角色名單，給瀅瀅/柴郡注 sysPrompt）
     const STORE_NAME_PHONE_APPS = 'phone_apps'; // 🔥 V25：手機殼下載的功能型 HTML app（id,name,emoji,iconUrl,html,source,createdAt）
     const STORE_NAME_APP_MEM = 'app_memory'; // 🔥 V26：插件通用記憶桶（角色對話型插件 st.remember 寫入；key = appId::角色名）
+    const STORE_NAME_TAVERN_SUMMARY = 'tavern_summary'; // 🔥 V27：酒館大總結（key = chatId，一卡一筆全文存檔；程式壓縮注入、不再放世界書）
 
     let dbInstance = null;
 
@@ -72,7 +73,8 @@
                         STORE_NAME_STATE_DATA,   // 🔥 V23：狀態資料庫
                         STORE_NAME_LOBBY_SUM_IDX,// 🔥 V24：酒館大廳跨卡總結索引
                         STORE_NAME_PHONE_APPS,   // 🔥 V25：手機殼 app 商店
-                        STORE_NAME_APP_MEM       // 🔥 V26：插件通用記憶桶
+                        STORE_NAME_APP_MEM,      // 🔥 V26：插件通用記憶桶
+                        STORE_NAME_TAVERN_SUMMARY // 🔥 V27：酒館大總結（key=chatId）
                     ];
 
                     stores.forEach(name => {
@@ -947,6 +949,48 @@
             // 按最新一筆 brief 時間排序整個 stories 列表
             result.sort((a, b) => (b.briefs[0]?.ts || 0) - (a.briefs[0]?.ts || 0));
             return result;
+        },
+
+        // ── tavern_summary：酒館大總結（key=chatId，一卡一筆全文存檔；程式壓縮注入、不放世界書）─────
+        //   record: { id(=chatId), content(全文), summaryCount, lastId, title, bgCacheId, updatedAt }
+        saveTavernSummary: async function(chatId, rec) {
+            const db = await this.init();
+            const cid = String(chatId || '').trim();
+            if (!cid) throw new Error('saveTavernSummary 缺 chatId');
+            return new Promise((r, j) => {
+                try {
+                    const entry = Object.assign({}, rec, { id: cid, updatedAt: Date.now() });
+                    const tx = db.transaction(STORE_NAME_TAVERN_SUMMARY, 'readwrite');
+                    tx.objectStore(STORE_NAME_TAVERN_SUMMARY).put(entry);
+                    tx.oncomplete = () => r(cid);
+                    tx.onerror = (e) => j(e.target.error);
+                } catch (e) { j(e); }
+            });
+        },
+        getTavernSummary: async function(chatId) {
+            const db = await this.init();
+            const cid = String(chatId || '').trim();
+            if (!cid) return null;
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_TAVERN_SUMMARY, 'readonly').objectStore(STORE_NAME_TAVERN_SUMMARY).get(cid);
+                    req.onsuccess = () => r(req.result || null);
+                    req.onerror = (e) => j(e.target.error);
+                } catch (e) { j(e); }
+            });
+        },
+        deleteTavernSummary: async function(chatId) {
+            const db = await this.init();
+            const cid = String(chatId || '').trim();
+            if (!cid) return true;
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_TAVERN_SUMMARY, 'readwrite');
+                    tx.objectStore(STORE_NAME_TAVERN_SUMMARY).delete(cid);
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = (e) => j(e.target.error);
+                } catch (e) { j(e); }
+            });
         },
 
         // ── vn_memories：向量記憶條目 CRUD ──────────────────────────
