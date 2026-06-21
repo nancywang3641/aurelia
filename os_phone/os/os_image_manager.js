@@ -193,6 +193,16 @@
         // options.force = true 可跳過 cache 強制重生。
         _urlCache: new Map(),
 
+        // 釋放某個 cache 項（blob 順手 revoke）→ 圖庫重生轉成持久 dataURL 後呼叫，免暫時 blob URL 永久佔記憶體
+        evict: function(type, prompt) {
+            try {
+                const k = (type || 'scene') + '|' + (prompt || '');
+                const v = this._urlCache.get(k);
+                if (v && typeof v === 'string' && v.startsWith('blob:')) { try { URL.revokeObjectURL(v); } catch (e) {} }
+                this._urlCache.delete(k);
+            } catch (e) {}
+        },
+
         // --- 三桶路由：依 type 取該桶選的接口 ---
         // 頭像桶 char = serviceChar；插圖桶 scene = serviceScene；其餘(bg/item/pet…) = serviceInanimate。
         // char/scene 多重 fallback：新桶 → 舊「活物桶」serviceLiving → legacy 全域 service → 'pollinations'，保證永不回 undefined。
@@ -267,7 +277,17 @@
             }
 
             if (result) {
+                // 覆蓋同 key 舊值前，若舊值是 blob URL 先 revoke（force 重生會留死 blob → 累積 OOM）
+                const _old = this._urlCache.get(cacheKey);
+                if (_old && _old !== result && typeof _old === 'string' && _old.startsWith('blob:')) { try { URL.revokeObjectURL(_old); } catch (e) {} }
                 this._urlCache.set(cacheKey, result);
+                // 上限保護：超過 60 條淘汰最舊的（blob 順手 revoke），避免 Map 無限長累積大字串 / 死 blob
+                if (this._urlCache.size > 60) {
+                    const _fk = this._urlCache.keys().next().value;
+                    const _fv = this._urlCache.get(_fk);
+                    if (_fv && typeof _fv === 'string' && _fv.startsWith('blob:')) { try { URL.revokeObjectURL(_fv); } catch (e) {} }
+                    this._urlCache.delete(_fk);
+                }
             }
             return result;
         },
