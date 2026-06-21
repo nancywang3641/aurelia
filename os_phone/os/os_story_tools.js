@@ -176,7 +176,7 @@
             if (!l) continue;
             if (/-{2,}/.test(l) && /^[|\s:\-]+$/.test(l)) { if (out.sep === null) out.sep = l; continue; }  // :--- 分隔列
             if (l.includes('|')) { if (out.header === null) out.header = l; else out.rows.push(l); }
-            else out.extra.push(l);
+            else if (!/^「[^」]*」$/.test(l) && l !== '与' && l !== '與') out.extra.push(l);   // 丟掉舊版亂掉折進來的單名碎片(「魔力共振网络」/与…)
         }
         return out;
     }
@@ -205,8 +205,11 @@
             ti.rows.forEach(r => { const k = _firstCell(r); if (!(k in map)) order.push(k); map[k] = r; });   // 同名更新、新名加後面
             return _buildMdTable({ header: tp.header || ti.header, sep: tp.sep || ti.sep, rows: order.map(k => map[k]), extra: tp.extra.length ? tp.extra : ti.extra });
         }
-        if (['結語', '结语'].includes(header)) return [prevBody, incBody].map(s => String(s || '').trim()).filter(Boolean).join('\n');   // 結語：逐段累積(給大廳快覽)、不只取新
-        if (['故事標題', '故事标题'].includes(header)) return prevBody || incBody || '';   // 故事標題：保第一次
+        // 純文字區塊：濾掉混進來的「表格列 / 單名碎片」(舊版亂掉的殘留會折進這些尾端文字區 → 你看到的「下面多餘東西」)
+        const _textOnly = s => String(s || '').split('\n').map(x => x.trim()).filter(Boolean)
+            .filter(x => !x.startsWith('|') && !/^「[^」]*」$/.test(x) && x !== '与' && x !== '與');
+        if (['結語', '结语'].includes(header)) return [prevBody, incBody].flatMap(_textOnly).join('\n');   // 結語：逐段累積(給大廳快覽)、濾掉碎片
+        if (['故事標題', '故事标题'].includes(header)) return (_textOnly(prevBody)[0] || _textOnly(incBody)[0] || '');   // 故事標題：只取標題那行、丟尾端殘留
         return incBody || prevBody;   // 其他純文字 → 取新
     }
     function _structuredMerge(incFull, oldSummaries, summaryCount, lastTxt) {
