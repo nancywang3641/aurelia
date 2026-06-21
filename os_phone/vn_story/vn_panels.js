@@ -214,6 +214,47 @@
             return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
         } catch (e) { return ''; }
     }
+    // 把一張 dataURL 重編成 WebP（保留透明、~80%+ 縮小；瀏覽器不支援 WebP 就放棄、不轉 JPEG 免毀透明）
+    function _imgCompressDataUrl(dataUrl, quality) {
+        if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return Promise.resolve('');
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    const cv = document.createElement('canvas');
+                    cv.width = img.naturalWidth || 512; cv.height = img.naturalHeight || 512;
+                    cv.getContext('2d').drawImage(img, 0, 0);
+                    let out = '';
+                    try { out = cv.toDataURL('image/webp', quality); } catch (e) {}
+                    resolve((out && out.indexOf('image/webp') !== -1) ? out : '');
+                } catch (e) { resolve(''); }
+            };
+            img.onerror = () => resolve('');
+            img.src = dataUrl;
+        });
+    }
+    // 批次壓縮一組圖片（序列、一張一張來→峰值記憶體只有一張，不會 OOM）；已壓過/太小的略過。回 {done,saved,skipped}
+    async function _vngCompressEntries(cfg, entries, btn) {
+        const orig = btn ? btn.textContent : '';
+        let done = 0, saved = 0, skipped = 0;
+        for (const entry of entries) {
+            const url = entry.url;
+            done++;
+            if (!url || typeof url !== 'string' || !url.startsWith('data:')) { skipped++; continue; }
+            if (entry.compressed || url.indexOf('image/webp') !== -1) { skipped++; continue; }   // 已是 WebP/壓過 → 跳過(免越壓越糊)
+            if (btn) btn.textContent = `壓縮中 ${done}/${entries.length}…`;
+            const out = await _imgCompressDataUrl(url, 0.85);
+            if (out && out.length < url.length * 0.92) {   // 至少省 8% 才換，免反而變大
+                saved += (url.length - out.length);
+                const { key, ...val } = entry;
+                await VN_Cache.setRaw(cfg.store, key, { ...val, url: out, compressed: 1 });
+                entry.url = out; entry.compressed = 1;
+            } else { skipped++; }
+            await new Promise(r => setTimeout(r, 0));   // 讓出主執行緒 + 讓上一張的 canvas/img 被 GC
+        }
+        if (btn) btn.textContent = orig;
+        return { done, saved, skipped };
+    }
     function _closeCardMenus() { document.querySelectorAll('.vng-menu').forEach(m => m.remove()); }
     function _vngLightbox(url) {
         const ov = document.createElement('div'); ov.className = 'vng-lightbox';
@@ -381,6 +422,26 @@
             em.textContent = st.world === '' ? '未分類沒有圖片' : (st.filter !== 'all' ? '沒有符合的圖片' : '這個世界還沒有圖片（劇情出現時自動生成）');
             list.appendChild(em); return;
         }
+        // 🗜️ 壓縮鈕：把目前這個世界的圖批次轉成更小的 WebP（省空間/記憶體；輕微失真、畫質幾乎不變）
+        const compressBtn = document.createElement('button');
+        compressBtn.className = 'vng-chip'; compressBtn.textContent = '🗜️ 壓縮';
+        compressBtn.title = '把這個世界的圖片壓成更小的 WebP，省空間與記憶體（畫質幾乎看不出差別、輕微失真）';
+        compressBtn.onclick = async () => {
+            if (compressBtn.dataset.busy) return;
+            if (!confirm('把目前這個世界的圖片壓成更小的 WebP？\n畫質幾乎看不出差別，但能省下不少空間與記憶體、也比較不會卡。\n（輕微失真壓縮，已壓過的會自動略過）')) return;
+            compressBtn.dataset.busy = '1';
+            try {
+                const r = await _vngCompressEntries(cfg, entries, compressBtn);
+                const mb = (r.saved * 0.75 / 1048576);
+                const win = window.parent || window;
+                const msg = `🗜️ 壓縮完成：${r.done - r.skipped} 張壓縮、${r.skipped} 張略過，約省 ${mb.toFixed(1)} MB`;
+                try { if (win.toastr) win.toastr.success(msg); else alert(msg); } catch (e) { alert(msg); }
+            } catch (e) { alert('壓縮失敗：' + (e.message || e)); }
+            delete compressBtn.dataset.busy;
+            rerender();
+        };
+        chips.appendChild(compressBtn);
+
         const grid = document.createElement('div'); grid.className = 'vng-grid';
         entries.forEach(entry => grid.appendChild(_vngCard(cfg, entry, curWorld, st, rerender)));
         list.appendChild(grid);
