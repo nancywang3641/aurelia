@@ -111,9 +111,9 @@
 | 結算事件 | 影响/后续 | 參與角色 |
 | :--- | :--- | :--- |
 
-【物品表】（只記關鍵/有後續影響的；消耗品·过客道具·已用完或損壞的不入表；每次總結把不重要的刪掉、別累積）
-物品名 | 物品狀態(在庫/使用中/損壞) | 備註 |
-| :--- | :--- | :--- | :--- |
+【物品表】（只記關鍵/有後續影響的物品；過客雜物不入表。狀態必為下列五種之一；已交付/已消耗/損壞的「保留並改狀態」別刪掉，好讓劇情記得這件事發生過；同一物品只一列、別因數量不同或叫法不同重複入表；不要寫備註）
+物品名 | 狀態(在庫/使用中/已交付/已消耗/損壞) |
+| :--- | :--- |
 
 【注意規範】（跑團中新確立的「世界/區域規則」：村莊規則、城市律法、組織禁忌、特殊機制等，常是 AI 自己補的設定；永久層、绝不删）
 規範(人事物/地點) | 規範描述 |
@@ -123,7 +123,7 @@
 | 性事事件 | 事件描述 | 參與角色 |
 | :--- | :--- | :--- |
 
-【結語】(必填，100字以內純文字，只寫「這一段」的核心走向與結束時關鍵狀態；合併時會逐段累積成大廳快覽，所以別重述舊段；不要加任何標題、序號、表格或裝飾符號)
+【結語】(必填，200字以內純文字。這是「整個故事至今」的滾動總述，當作長期總記憶用：把上方給你的「上一版結語」當底稿，融入這次新劇情後重新改寫成一段，全面取代舊版——不是只寫這一段、也不要分段累積堆疊。需涵蓋主線走向、當前處境、尚未了結的承諾/伏筆；不要加任何標題、序號、表格或裝飾符號)
 
 【故事標題】(只有「第一次」總結才填——給這個聊天室下一個總標題，30字以內純文字一行、不要引號或裝飾；第二次起系統會自動移除此區塊、不用再填)`;
 
@@ -191,6 +191,18 @@
     function _firstCell(row) {
         return (String(row).replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|')[0] || '').trim();
     }
+    // 去重正規化：物品表常因「數量括號(2颗)/叫法不同/簡繁」生分身(毒腺/极品毒腺/毒腺(2颗)各一列)→ 膨脹。
+    //   合併比對前把這些雜訊抹平，讓同一物品落同一格、只留最新一列。角色表不正規化(怕把不同角色併掉)。
+    function _normMergeKey(header, raw) {
+        let k = String(raw == null ? '' : raw).trim();
+        if (header === '物品表') {
+            k = k.replace(/[（(][^（()]*[)）]/g, '')       // 去括號內容(數量/說明)
+                 .replace(/[x×]\s*\d+\s*$/i, '')          // 去尾綴 x2
+                 .replace(/[「」『』“”"'·,，。、\s]/g, '')   // 去標點/空白
+                 .replace(/[極极]品|[頂顶]級|[稀]有/g, ''); // 去品階形容(极品毒腺 = 毒腺)
+        }
+        return k || String(raw == null ? '' : raw).trim();
+    }
     function _mergeSection(header, prevBody, incBody) {
         const APPEND = ['事件表', '結算清單', '结算清单', '性事紀', '性事记'];
         const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意規範/記憶事項表', '注意规范/记忆事项表'];
@@ -201,14 +213,17 @@
         if (MERGEKEY.includes(header)) {
             const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
             const order = [], map = {};
-            tp.rows.forEach(r => { const k = _firstCell(r); if (!(k in map)) order.push(k); map[k] = r; });
-            ti.rows.forEach(r => { const k = _firstCell(r); if (!(k in map)) order.push(k); map[k] = r; });   // 同名更新、新名加後面
-            return _buildMdTable({ header: tp.header || ti.header, sep: tp.sep || ti.sep, rows: order.map(k => map[k]), extra: tp.extra.length ? tp.extra : ti.extra });
+            const add = r => { const k = _normMergeKey(header, _firstCell(r)); if (!(k in map)) order.push(k); map[k] = r; };   // 同(正規化)名更新、新名加後面
+            tp.rows.forEach(add); ti.rows.forEach(add);
+            // 物品表偏好「新版表頭」(2 欄、無備註)，讓舊 3 欄資料隨新生成收斂；其餘區塊沿用既有表頭
+            const head = (header === '物品表') ? (ti.header || tp.header) : (tp.header || ti.header);
+            const sep  = (header === '物品表') ? (ti.sep || tp.sep) : (tp.sep || ti.sep);
+            return _buildMdTable({ header: head, sep, rows: order.map(k => map[k]), extra: tp.extra.length ? tp.extra : ti.extra });
         }
         // 純文字區塊：濾掉混進來的「表格列 / 單名碎片」(舊版亂掉的殘留會折進這些尾端文字區 → 你看到的「下面多餘東西」)
         const _textOnly = s => String(s || '').split('\n').map(x => x.trim()).filter(Boolean)
             .filter(x => !x.startsWith('|') && !/^「[^」]*」$/.test(x) && x !== '与' && x !== '與');
-        if (['結語', '结语'].includes(header)) return [prevBody, incBody].flatMap(_textOnly).join('\n');   // 結語：逐段累積(給大廳快覽)、濾掉碎片
+        if (['結語', '结语'].includes(header)) { const t = _textOnly(incBody); return (t.length ? t : _textOnly(prevBody)).join('\n'); }   // 結語：滾動總述，取最新一版(AI 已把舊段融進來)；這次沒寫才退回舊的
         if (['故事標題', '故事标题'].includes(header)) return (_textOnly(prevBody)[0] || _textOnly(incBody)[0] || '');   // 故事標題：只取標題那行、丟尾端殘留
         return incBody || prevBody;   // 其他純文字 → 取新
     }
@@ -343,8 +358,8 @@
             const mergePrompt = `下面有 ${selected.length} 份大總結，請合併整理成「一份」精簡完整總結。\n` +
                 `【規則】\n` +
                 `- 事件表 → 壓縮重點：久遠的多筆壓成「階段節點」(一行涵蓋一整段劇情、只記不可逆結果與關鍵轉折、不記過程)，最近 8 筆保留逐筆。\n` +
-                `- 物品表 → 只留關鍵/有後續影響的，消耗完或損壞的刪掉、別累積；注意規範 / 結算清單 → 去重、保留所有仍有後續影響的項目。\n` +
-                `- 結語 → 各份的結語**依序全部保留、疊加成一段時間線**(給大廳快覽用)，別只取最新、別重寫舊段。\n` +
+                `- 物品表 → 只留關鍵物品，狀態用 在庫/使用中/已交付/已消耗/損壞 五選一、不寫備註欄；同物品別因數量不同或叫法不同重複列(如「毒腺」「极品毒腺」「毒腺(2颗)」算同一格)。注意規範 / 結算清單 → 去重、保留所有仍有後續影響的項目。\n` +
+                `- 結語 → 直接用「最新一份」的結語(它已是涵蓋全程的滾動總述)；若最新那份不夠完整，再融合補成「一段」，別把每份結語分段堆疊。\n` +
                 `- 場景索引 → 整個刪除、不要輸出。\n` +
                 `- 故事標題 → 用第一份的、原樣保留，不要改寫或重下。\n` +
                 `- 代辦清單 → **整個刪除、不要輸出這個區塊**（待辦已改用 AVS 狀態系統管理）。\n` +
@@ -480,6 +495,20 @@
             const prevSection = oldSummaries.length
                 ? `**只总结「这次新增」的剧情即可；旧事件/角色不用重写（系统会自动叠加：事件接在后面、同名角色更新、新角色加后面）**\n`
                 : `**首次总结**\n`;
+            // 滾動結語：抽出「上一版結語」當底稿丟給副模型，要它改寫成涵蓋到最新的一段(取代、不累積)。
+            //   只送這一小段結語(≤200字)、不送整份舊總結 → 省 token 又能讓結語當完整長期記憶。
+            let prevEpilogue = '';
+            if (oldSummaries.length) {
+                try {
+                    const _seq = e => { const m = (e.comment || '').match(/第\s*(\d+)\s*次/); return m ? parseInt(m[1]) : 0; };
+                    const latest = [...oldSummaries].sort((a, b) => _seq(b) - _seq(a))[0];
+                    const mm = latest && (latest.content || '').match(/【結語】[^\n]*\n+([\s\S]*?)(?:\n【|$)/);
+                    if (mm) prevEpilogue = mm[1].replace(/^[-*\s]+/, '').replace(/\s+$/, '').trim();
+                } catch (e) {}
+            }
+            const epilogueHint = prevEpilogue
+                ? `\n【上一版結語（請當底稿，融入這次新劇情後改寫成「一段」涵蓋全程的滾動總述，全面取代、不要分段堆疊）】\n${prevEpilogue}\n`
+                : '';
             let tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
             if (summaryCount > 1) tplBody = tplBody.replace(/\n*【故事標題】[\s\S]*?(?=\n【|$)/g, '').trim();   // 故事標題只第一次生成、第二次起移除(日誌只要一個總篇名)
 
@@ -507,7 +536,7 @@
                             const who = m.is_user ? '用户' : (m.name || '角色');
                             return `[#${sId + i}] ${who}：${String(m.mes || '').trim()}`;
                         }).join('\n\n');
-                        const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}\n${tplBody}`;
+                        const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}${epilogueHint}\n${tplBody}`;
                         generated = await TH.generateRaw({
                             user_input: userMsg,
                             ordered_prompts: [{ role: 'system', content: _sys }, 'user_input'],   // 不讀 chat_history → 純送我給的全文
@@ -517,7 +546,7 @@
                     } else {
                         // 後備：讀不到檔 → generateRaw 讀記憶體 chat_history(all)
                         _summarizedEnd = await _trueLastId();
-                        const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}\n${tplBody}`;
+                        const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}${epilogueHint}\n${tplBody}`;
                         generated = await TH.generateRaw({
                             user_input: instruction,
                             ordered_prompts: [{ role: 'system', content: _sys }, 'chat_history', 'user_input'],
