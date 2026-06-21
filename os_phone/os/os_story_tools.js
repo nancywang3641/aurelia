@@ -449,7 +449,7 @@
         const start = parseInt(document.getElementById('range-start-id').value) || 1;
         const endVal = document.getElementById('range-end-id').value;
         const end = endVal ? parseInt(endVal) : null;
-        const sourceType = document.querySelector('input[name="sum_source"]:checked').value;
+        const sourceType = 'content';   // 一律用全文當源（大總結本來就在濃縮，再拿摘要當源＝本末倒置）；摘要選項已移除
         const mergePrev = document.getElementById('sum_merge').checked;
         // 存「自動隱藏 / 預留樓層」設定(給 _doSave 讀)
         try {
@@ -840,12 +840,7 @@
                 <div class="ost-modal-card">
                     <div class="ost-modal-title">生成大總結設置</div>
                     <div class="ost-modal-sec">
-                        <div class="ost-modal-lab">數據來源 (Source)</div>
-                        <label class="ost-opt"><input type="radio" name="sum_source" value="summary" checked><span>📋 使用摘要 (summary)</span></label>
-                        <span class="ost-opt-desc">推薦: 讀取已同步的精簡摘要</span>
-                        <label class="ost-opt"><input type="radio" name="sum_source" value="content"><span>📄 使用全文 (content)</span></label>
-                        <span class="ost-opt-desc">直接讀取對話內容 (較耗時)</span>
-                        <label class="ost-opt ost-opt-div"><input type="checkbox" id="sum_merge" checked><span>合併之前的總結</span></label>
+                        <label class="ost-opt"><input type="checkbox" id="sum_merge" checked><span>合併之前的總結</span></label>
                         <span class="ost-opt-desc">將舊的 [大總結] 一併發送給 AI 重整</span>
                     </div>
                     <div class="ost-modal-sec">
