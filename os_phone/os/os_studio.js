@@ -211,6 +211,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.md(text) → markdown 轉 HTML（內建，免疫 $1）
 - st.setImage(el, prompt, type, provider?) → 給 img 設圖（內建佔位／隔離／try-catch；type: 'char'／'item'／'pet'／'scene'）。第 4 參 provider 可選指定來源 'pollinations'／'novelai'／'tavern_sd'／'comfyui_direct'；用戶指定（「用 poll」「用 NAI」）就寫進去，否則不傳走全域設定。
 - st.callAI(systemPrompt) → Promise，呼叫 AI 生文字（自動帶角色卡／最近劇情／世界書當背景，不必重述）。await 包 try/catch、生成中顯示 loading。
+- st.getCurrentChars() → Promise，回傳當前聊天室出現過的角色 [{name,count}]（依出現次數排序）。做「角色選單／搜尋」用——例如日記/檔案類面板讓用戶從清單挑角色，免手打名字。空陣列＝還沒角色。
 
 ## 🖼️ 生圖紀律（重要，否則一堆圖排隊）
 st.setImage 只給「FOCUS／重要對象」：主角、當前焦點角色、重要物品／場景。路人／NPC／評論頭像／列表縮圖／大量小頭像「禁用」生圖，改用「名字首字色塊頭像」（純 CSS、不呼叫 API）：取名字首字放圓形 div、背景色用名字 hash 出 hsl。自己塞 url 的 img 一律加 onerror 退回佔位／首字頭像，永遠不要出現破圖。
@@ -2161,7 +2162,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     });
                 } catch (e) { console.error('[st.callAI]', e); return ''; }
             },
-            remember() { /* 預覽不寫真實記憶 */ }
+            remember() { /* 預覽不寫真實記憶 */ },
+            getCurrentChars() {   // 當前聊天室出現過的角色 [{name,count}]，做角色選單用
+                const R = window.VN_READER || (window.parent && window.parent.VN_READER);
+                return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
+            }
         };
     }
 
@@ -2183,6 +2188,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'setImage:async function(el,p,type,provider){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene",provider);if(u)el.src=u;}}catch(e){}},'
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
             +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
+            +   'getCurrentChars:async function(){try{return window.getCurrentChars?await window.getCurrentChars():[];}catch(e){return [];}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
             + '(async function(){try{' + js + '}catch(e){console.error("[phone tpl]",e);}})();'
@@ -2297,6 +2303,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         } catch(e) {
           console.error('[${safeTagId}] setImage 失敗(保留佔位):', e);
         }
+      },
+      getCurrentChars: function(){
+        var R = window.VN_READER || (window.parent && window.parent.VN_READER);
+        return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
       }
     };
     // ============================================================

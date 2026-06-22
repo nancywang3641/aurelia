@@ -113,6 +113,10 @@
                     });
                     return result;
                 },
+                getCurrentChars: function() {   // 當前聊天室出現過的角色 [{name,count}]，做角色選單用
+                    var R = window.VN_READER || (window.parent && window.parent.VN_READER);
+                    return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
+                },
                 setImage: async function(el, prompt, type, provider) {
                     if (!el || !prompt) return;
                     type = type || 'scene';
