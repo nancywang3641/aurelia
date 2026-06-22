@@ -258,32 +258,15 @@
         @keyframes studio-bubble-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
         .studio-bubble-enter { animation: studio-bubble-in 0.22s ease-out forwards; }
         /* ── VN組件（原展廳：只放純展示面板）── */
-        .studio-gallery-list { display:flex; flex-direction:column; gap:15px; }
+        .studio-gallery-list { display:flex; flex-direction:column; gap:10px; }
         /* 應用/共用 舊模板的「搬到我的應用」提示 */
         .vn-migrate-notice { font-size:12px; color:rgba(26,28,40,0.72); background:rgba(230,126,34,0.10); border:1px solid rgba(230,126,34,0.40); border-radius:8px; padding:10px 12px; line-height:1.5; }
         .vn-migrate-btn { display:block; margin-top:8px; padding:7px 12px; border-radius:6px; border:1px solid #e67e22; background:rgba(230,126,34,0.14); color:#b5651d; font-size:12px; font-weight:bold; cursor:pointer; font-family:inherit; }
-        .studio-gallery-card { background:rgba(228,232,245,0.5); border:1px solid rgba(26,28,40,0.15); border-radius:8px; padding:14px; }
-        .studio-gallery-card.active-tag { border-color: #1A1C28; }
-        .sgc-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-        .sgc-title { color:#1A1C28; font-size:15px; font-weight:bold; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .sgc-status { font-size:12px; flex-shrink:0; }
-        /* 第一層瀏覽卡的「管理 ›」鈕（換頁進第二層操作）+ 第二層返回鈕 */
-        .sgc-manage-btn { flex-shrink:0; padding:5px 12px; border-radius:6px; border:1px solid rgba(26,28,40,0.25); background:rgba(26,28,40,0.06); color:#1A1C28; font-size:12px; font-weight:bold; cursor:pointer; font-family:inherit; }
-        .sgc-manage-btn:hover { background:rgba(26,28,40,0.12); }
-        .sgc-detail-back { padding:6px 4px 12px; color:#1A1C28; font-size:14px; font-weight:bold; cursor:pointer; }
-        .sgc-detail-back:hover { color:#3498db; }
-        .sgc-usage { font-size:12px; color:rgba(26,28,40,0.72); padding:6px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.35); border-radius:0 4px 4px 0; margin-bottom:8px; }
         .sgc-format-box { padding:10px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.40); border-radius:4px; margin-bottom:10px; position:relative; }
         .sgc-format-text { font-family:monospace; font-size:12px; color:#3A3F5C; white-space:pre-wrap; word-break:break-all; }
-        .sgc-format-input { display:none; width:100%; min-height:80px; background:rgba(228,232,245,0.8); color:#1A1C28; border:1px solid rgba(26,28,40,0.25); font-family:monospace; font-size:12px; padding:8px; border-radius:4px; box-sizing:border-box; resize:vertical; }
+        .sgc-format-input { display:block; width:100%; min-height:80px; background:rgba(228,232,245,0.8); color:#1A1C28; border:1px solid rgba(26,28,40,0.25); font-family:monospace; font-size:12px; padding:8px; border-radius:4px; box-sizing:border-box; resize:vertical; }
         .sgc-preview { padding:0; background:rgba(228,232,245,0.3); border-radius:6px; min-height:200px; max-height:700px; margin-bottom:10px; overflow-y:auto; position:relative; }
-        .sgc-btns { display:flex; gap:8px; flex-wrap:wrap; }
-        .sgc-btn { flex:1 1 auto; min-width:76px; padding:8px 10px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; text-align:center; border:1px solid; transition:0.2s; white-space:nowrap; }
-        .sgc-btn.btn-export-one { background:rgba(52,152,219,0.10); border-color:#3498db; color:#2475a8; }
 
-        /* ── VN 組件群組 + 折疊清單 ── */
-        /* 折疊鈕 */
-        .sgc-fold { flex-shrink:0; width:22px; height:22px; border:none; background:transparent; color:#1A1C28; font-size:13px; cursor:pointer; padding:0; line-height:1; }
         /* 拉桿開關（啟用/停用、整組）：綠=開、橙=半開(indeterminate) */
         .sgc-switch { position:relative; display:inline-block; width:38px; height:22px; flex-shrink:0; cursor:pointer; }
         .sgc-switch .sgc-switch-input { position:absolute; opacity:0; width:0; height:0; }
@@ -293,23 +276,6 @@
         .sgc-switch-input:checked + .sgc-switch-slider::before { transform:translateX(16px); }
         .sgc-switch-input:indeterminate + .sgc-switch-slider { background:#e6a23c; }
         .sgc-switch-input:indeterminate + .sgc-switch-slider::before { transform:translateX(8px); }
-        /* 組件卡折疊：收合只藏預覽（header 的拉桿/管理永遠在） */
-        .studio-gallery-card.sgc-browse { padding:10px 12px; }
-        .studio-gallery-card.folded .sgc-body { display:none; }
-        .studio-gallery-card.folded .sgc-header { margin-bottom:0; }
-        /* 群組資料夾 */
-        .sgc-groupbar { margin-bottom:12px; }
-        .sgc-newgroup-btn { padding:8px 14px; border-radius:6px; border:1px dashed rgba(26,28,40,0.4); background:rgba(26,28,40,0.04); color:#1A1C28; font-size:13px; font-weight:bold; cursor:pointer; font-family:inherit; }
-        .sgc-newgroup-btn:hover { background:rgba(26,28,40,0.1); }
-        .sgc-empty-hint { color:#aaa; text-align:center; padding:20px; }
-        .sgc-folder { border:1px solid rgba(26,28,40,0.18); border-radius:8px; margin-bottom:12px; background:rgba(228,232,245,0.3); overflow:hidden; }
-        .sgc-folder-ungrouped { background:transparent; border-style:dashed; }
-        .sgc-folder-header { display:flex; align-items:center; gap:8px; padding:10px 12px; background:rgba(26,28,40,0.05); }
-        .sgc-folder-name { flex:1; min-width:0; font-weight:bold; color:#1A1C28; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .sgc-folder-count { display:inline-block; font-size:11px; font-weight:normal; color:#fff; background:rgba(26,28,40,0.45); border-radius:10px; padding:1px 7px; margin-left:4px; }
-        .sgc-folder-manage { flex-shrink:0; border:none; background:transparent; font-size:15px; cursor:pointer; padding:2px 4px; line-height:1; }
-        .sgc-folder-body { padding:10px 12px; display:flex; flex-direction:column; gap:10px; }
-        .sgc-folder.folded .sgc-folder-body { display:none; }
         .sgc-folder-empty { color:#999; font-size:12px; text-align:center; padding:8px; }
         /* 第二層詳情卡：歸到群組多選列 */
         .sgc-grouprow { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:10px; padding:8px 10px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.35); border-radius:0 4px 4px 0; }
@@ -389,6 +355,71 @@
         /* === 左邊返回鈕（跟 ps/avs/set/mon 同調 ‹）=== */
         .studio-back-btn { font-size: 22px; color: #1A1C28; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: 0.2s; user-select: none; flex-shrink: 0; }
         .studio-back-btn:hover { background: rgba(26,28,40,0.10); }
+
+        /* ════ VN 組件 v2：兩層換頁（瀏覽/詳情/設置/打包）· 吃 --jrpg 暖色，與世界書 swb-* 同源 ════ */
+        .vc-hide { display:none !important; }
+        /* 標籤 chip 列 */
+        .vc-tagbar { display:flex; gap:7px; flex-wrap:wrap; }
+        .vc-chip { font-size:12px; padding:5px 13px; border-radius:20px; border:1px solid var(--jrpg-line); background:var(--jrpg-paper-light); color:var(--jrpg-wine-dark); cursor:pointer; font-family:inherit; }
+        .vc-chip.on { background:var(--jrpg-wine); color:var(--jrpg-paper-light); border-color:var(--jrpg-wine); }
+        .vc-chip-add { border-style:dashed; color:var(--jrpg-muted); }
+        /* 搜尋框 */
+        .vc-search { display:flex; align-items:center; gap:7px; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:11px; padding:8px 12px; }
+        .vc-search-ico { font-size:14px; opacity:0.6; }
+        .vc-search-input { flex:1; min-width:0; border:0; background:transparent; outline:none; font-size:14px; color:var(--jrpg-ink); font-family:inherit; }
+        /* 批次開關條 */
+        .vc-batchbar { display:flex; align-items:center; gap:9px; background:rgba(182,138,69,0.12); border:1px solid rgba(182,138,69,0.4); border-radius:11px; padding:9px 12px; }
+        .vc-batchbar-name { flex:1; min-width:0; font-size:13px; font-weight:700; color:var(--jrpg-wine-dark); }
+        .vc-batchbar-mng { border:0; background:transparent; font-size:16px; cursor:pointer; padding:2px 4px; line-height:1; }
+        /* 輕卡列表 */
+        .vc-list { display:flex; flex-direction:column; gap:9px; }
+        .vc-card { display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:13px; padding:10px; cursor:pointer; box-shadow:0 1px 3px rgba(83,49,20,0.06); font-family:inherit; }
+        .vc-card:hover { border-color:var(--jrpg-gold); }
+        .vc-thumb { width:54px; height:54px; flex-shrink:0; border-radius:9px; overflow:hidden; background:var(--jrpg-paper-deep); display:grid; place-items:center; position:relative; }
+        .vc-thumb-ph { font-size:22px; }
+        .vc-thumb-render { position:absolute; top:0; left:0; width:320px; transform:scale(0.17); transform-origin:top left; pointer-events:none; }
+        .vc-card-main { flex:1; min-width:0; }
+        .vc-card-title { font-size:14px; font-weight:700; color:var(--jrpg-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .vc-card-tags { display:flex; gap:5px; margin-top:4px; flex-wrap:wrap; }
+        .vc-tag { font-size:11px; padding:2px 8px; border-radius:7px; background:var(--jrpg-paper-deep); color:var(--jrpg-wine-dark); }
+        .vc-tag.muted { background:transparent; border:1px dashed var(--jrpg-line); color:var(--jrpg-muted); }
+        .vc-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; background:#c9bda6; }
+        .vc-dot.on { background:#639922; }
+        .vc-chev { flex-shrink:0; color:var(--jrpg-gold); font-size:20px; }
+        .vc-empty { color:var(--jrpg-muted); text-align:center; padding:24px 12px; font-size:13px; line-height:1.7; }
+        /* 瀏覽層底部「選擇並打包」 */
+        .vc-browse-foot { padding-top:4px; }
+        .vc-pack-cta { width:100%; min-height:46px; border:1px solid rgba(110,34,48,0.45); border-radius:12px; background:transparent; color:var(--jrpg-wine); font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .vc-pack-cta:disabled { opacity:0.45; cursor:default; }
+        /* 子頁內容容器 */
+        .vc-page { display:flex; flex-direction:column; gap:12px; padding:4px 2px 16px; }
+        .vc-pv-panel { width:100%; height:auto; display:flex; flex-direction:column; }
+        .vc-full { width:100%; }
+        .vc-row2 { display:flex; gap:8px; }
+        .vc-row2 .swb-secondary { flex:1; }
+        /* 第二層導覽列（使用與設置 / 編輯原碼 等換頁入口） */
+        .vc-navrow { display:flex; align-items:center; gap:9px; width:100%; text-align:left; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:11px; padding:12px; cursor:pointer; font-family:inherit; }
+        .vc-navrow:hover { border-color:var(--jrpg-gold); }
+        .vc-navrow-ico { font-size:17px; flex-shrink:0; }
+        .vc-navrow-label { flex:1; min-width:0; font-size:14px; color:var(--jrpg-ink); }
+        /* 底部獨立紅色刪除 */
+        .vc-delzone { border-top:1px dashed var(--jrpg-line); margin-top:4px; padding-top:12px; }
+        .vc-delbtn { width:100%; min-height:46px; border:0; border-radius:12px; background:#a32d2d; color:#fff; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .vc-delbtn:hover { background:#8a2424; }
+        /* 設置頁 */
+        .vc-set-row { display:flex; align-items:center; gap:10px; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:11px; padding:12px; }
+        .vc-set-label { flex:1; min-width:0; font-size:14px; color:var(--jrpg-ink); }
+        .vc-set-block { display:flex; flex-direction:column; gap:8px; }
+        .vc-set-blabel { font-size:13px; font-weight:700; color:var(--jrpg-wine-dark); }
+        .vc-fmt-actions { display:flex; gap:6px; justify-content:flex-end; margin-top:6px; }
+        .vc-fmt-actions .swb-secondary { min-height:34px; padding:0 12px; font-size:13px; }
+        /* 打包頁 */
+        .vc-pack-row { cursor:pointer; }
+        .vc-pack-row.on { border-color:var(--jrpg-wine); }
+        .vc-pack-check { font-size:19px; color:var(--jrpg-wine); flex-shrink:0; }
+        .vc-pack-foot { display:flex; align-items:center; gap:10px; padding:10px 2px 4px; border-top:1px solid var(--jrpg-line); }
+        .vc-pack-count { flex:1; min-width:0; font-size:13px; color:var(--jrpg-muted); }
+        .vc-pack-foot .swb-primary { flex:0 0 auto; }
 
 /* ═══════════════════════════════════════════════════════════════
    404 模式：整套換綠終端機風

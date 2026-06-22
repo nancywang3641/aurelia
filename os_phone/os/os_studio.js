@@ -95,10 +95,9 @@
                     </div>
                     <div class="studio-source-content" id="studio-source-content"></div>
                     <div id="studio-gallery-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+                        <div id="studio-gallery-toolbar" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
                             <button id="studio-spec-copy-btn" style="flex:1; min-width:190px; background:rgba(46,204,113,0.12); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📋 複製創建說明書</button>
                             <button id="studio-import-btn" style="flex:1; min-width:150px; background:rgba(155,89,182,0.12); border:1px solid #9b59b6; color:#7d3cae; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📥 匯入面板</button>
-                            <button id="studio-export-pack-btn" class="studio-pack-btn export">📦 匯出包</button>
                             <button id="studio-import-pack-btn" class="studio-pack-btn import">📦 匯入包</button>
                             <input type="file" id="studio-import-pack-file" accept=".json" hidden>
                         </div>
@@ -2832,143 +2831,379 @@ ${cleanFormat}
         }
     }
 
-    // 第二層：單一 VN 組件的「操作詳情卡」（預覽 + 全部按鈕）。從第一層乾淨預覽點「管理」才換頁過來。
-    function _buildComponentCard(tpl, _allPhoneApps, container) {
+    // ════════════════════════════════════════════════════════════════
+    // VN 組件：四頁換頁路由（browse / detail / settings / package）
+    //   照世界書 _wbView 模式：單一 renderVnComponents() 依 _vcView 分派；
+    //   子頁頂部用世界書同款 .swb-bar + #vc-back 返回列。
+    //   群組資料模型沿用 vn_component_groups + tpl.groupIds[]，只換成標籤 chip 篩選。
+    //   spec: docs/superpowers/specs/2026-06-23-vn-components-redesign-design.md
+    // ════════════════════════════════════════════════════════════════
+    let _vcView = 'browse';        // browse | detail | settings | package
+    let _vcTpl = null;             // 詳情/設置頁正在看的組件
+    let _vcFilterGid = 'all';      // 標籤篩選的群組 id（'all'=全部）
+    let _vcSearch = '';            // 搜尋字串
+    let _vcBrowseScroll = 0;       // 進子頁前的瀏覽捲動位置
+    let _vcAllPhoneApps = [];      // 裝手機狀態快取
+    const _vcPackSel = new Set();  // 打包頁勾選的 tplId
+
+    function loadStudioGallery() { _vcView = 'browse'; return renderVnComponents(); }
+
+    function renderVnComponents() {
+        const listEl = document.getElementById('studio-gallery-list');
+        if (!listEl) return;
+        const toolbar = document.getElementById('studio-gallery-toolbar');
+        if (toolbar) toolbar.classList.toggle('vc-hide', _vcView !== 'browse');   // 頂部工具列只在瀏覽層顯示
+        if (_vcView === 'detail')   return _vcRenderDetail(listEl);
+        if (_vcView === 'settings') return _vcRenderSettings(listEl);
+        if (_vcView === 'package')  return _vcRenderPackage(listEl);
+        return _vcRenderBrowse(listEl);
+    }
+
+    // ── lazy 縮圖：捲到才渲染一個縮小版預覽（含面板 JS），渲不出退回 icon ──
+    function _vcThumbBox(tpl, safeTagId) {
+        const box = document.createElement('div');
+        box.className = 'vc-thumb';
+        box.setAttribute('data-thumb', '1');
+        box.innerHTML = '<span class="vc-thumb-ph">🧩</span>';
+        box._tpl = tpl; box._safeTagId = safeTagId;
+        return box;
+    }
+    function _vcObserveThumbs(root) {
+        const cards = root.querySelectorAll('[data-thumb]');
+        if (!('IntersectionObserver' in window)) { cards.forEach(_vcRenderThumb); return; }
+        const io = new IntersectionObserver((ents) => {
+            ents.forEach(en => { if (en.isIntersecting) { _vcRenderThumb(en.target); io.unobserve(en.target); } });
+        }, { rootMargin: '160px' });
+        cards.forEach(c => io.observe(c));
+    }
+    function _vcRenderThumb(box) {
+        if (box._thumbDone) return; box._thumbDone = true;
+        const tpl = box._tpl, safeTagId = box._safeTagId;
+        if (!tpl || !tpl.html) return;
+        const inner = document.createElement('div');
+        inner.className = 'vc-thumb-render';
+        inner.innerHTML = (tpl.css ? `<style>${tpl.css}</style>` : '')
+            + `<div class="vn-dynamic-panel-${safeTagId}">${(tpl.html || '').replace(/\{\{1\}\}/g, 'A').replace(/\{\{2\}\}/g, 'B')}</div>`;
+        box.innerHTML = ''; box.appendChild(inner);
+        if (tpl.isBlock && tpl.js) {
+            setTimeout(() => {
+                try {
+                    const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<'));
+                    const cont = inner.querySelector(`.vn-dynamic-panel-${safeTagId}`); if (!cont) return;
+                    let safeJs = tpl.js.replace(/```(?:javascript|js|html|css)?/gi, '').replace(/```/g, '').trim();
+                    window.__IS_PREVIEW = true;
+                    new Function('container', 'lines', 'onComplete', 'st', safeJs)(cont, lines, () => {}, _buildPreviewSt(lines));
+                } catch (e) {}
+            }, 30);
+        }
+    }
+
+    // ── ① 瀏覽層：標籤篩選 + 批次開關 + 平鋪輕卡（不折疊）+ 選擇並打包 ──
+    async function _vcRenderBrowse(listEl) {
+        const db = win.OS_DB || window.OS_DB;
+        if (!db || typeof db.getAllVNTagTemplates !== 'function') { listEl.innerHTML = '<div class="vc-empty">找不到 OS_DB</div>'; return; }
+        _wireVnUiPackButtons();
+        listEl.innerHTML = '<div class="vc-empty">載入中…</div>';
+        let templates = [];
+        try { templates = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用'); }
+        catch (e) { listEl.innerHTML = `<div class="vc-empty">載入失敗：${_sgcEsc(e.message)}</div>`; return; }
+        _vcAllPhoneApps = db.getAllPhoneApps ? ((await db.getAllPhoneApps()) || []) : [];
+        const groups = _loadGroups();
+        const validIds = new Set(groups.map(g => g.id));
+        const nameMap = {}; groups.forEach(g => nameMap[g.id] = g.name);
+        if (_vcFilterGid !== 'all' && !validIds.has(_vcFilterGid)) _vcFilterGid = 'all';   // 篩選的群組被刪了→退回全部
+
+        listEl.innerHTML = '';
+
+        // 標籤 chip 列（全部 + 各群組 + ＋群組）
+        const tagbar = document.createElement('div');
+        tagbar.className = 'vc-tagbar';
+        const chip = (label, gid, on) => `<button class="vc-chip${on ? ' on' : ''}" type="button" data-gid="${_sgcEsc(gid)}">${_sgcEsc(label)}</button>`;
+        tagbar.innerHTML = chip('全部', 'all', _vcFilterGid === 'all')
+            + groups.map(g => chip(g.name, g.id, _vcFilterGid === g.id)).join('')
+            + '<button class="vc-chip vc-chip-add" type="button" data-newgroup="1">＋ 群組</button>';
+        tagbar.querySelectorAll('[data-gid]').forEach(b => b.onclick = () => { _vcFilterGid = b.getAttribute('data-gid'); _vcBrowseScroll = 0; renderVnComponents(); });
+        tagbar.querySelector('[data-newgroup]').onclick = () => _createGroup();
+        listEl.appendChild(tagbar);
+
+        // 搜尋框
+        const search = document.createElement('div');
+        search.className = 'vc-search';
+        search.innerHTML = '<span class="vc-search-ico">🔍</span><input class="vc-search-input" type="text" placeholder="搜尋組件…">';
+        const si = search.querySelector('.vc-search-input'); si.value = _vcSearch;
+        si.oninput = () => { _vcSearch = si.value; _vcApplyBrowseFilter(listEl); };
+        listEl.appendChild(search);
+
+        // 批次開關條（選了某群組才出現）
+        if (_vcFilterGid !== 'all') {
+            const grp = groups.find(g => g.id === _vcFilterGid);
+            if (grp) {
+                const members = templates.filter(t => _tplGroupIds(t).includes(grp.id));
+                const st = _groupState(members);
+                const bar = document.createElement('div');
+                bar.className = 'vc-batchbar';
+                bar.innerHTML = `<span class="vc-batchbar-name">「${_sgcEsc(grp.name)}」整組一鍵開關</span>
+                    <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input"${st === 'on' ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
+                    <button class="vc-batchbar-mng" type="button" title="群組管理">⚙️</button>`;
+                const sw = bar.querySelector('.sgc-switch-input');
+                if (st === 'partial') sw.indeterminate = true;
+                sw.onchange = async () => { await _setGroupActive(members, st !== 'on'); renderVnComponents(); };
+                bar.querySelector('.vc-batchbar-mng').onclick = () => _openGroupManage(grp);
+                listEl.appendChild(bar);
+            }
+        }
+
+        // 篩選後清單
+        const shown = (_vcFilterGid === 'all') ? templates
+            : templates.filter(t => _tplGroupIds(t).filter(id => validIds.has(id)).includes(_vcFilterGid));
+        if (!shown.length) {
+            const e = document.createElement('div'); e.className = 'vc-empty';
+            e.textContent = templates.length ? '這個標籤下還沒有組件。' : 'VN 組件空空如也，去煉丹做純展示面板吧！';
+            listEl.appendChild(e);
+        } else {
+            const wrap = document.createElement('div'); wrap.className = 'vc-list';
+            shown.forEach(tpl => wrap.appendChild(_vcCard(tpl, nameMap, validIds)));
+            listEl.appendChild(wrap);
+            _vcApplyBrowseFilter(listEl);
+            _vcObserveThumbs(wrap);
+        }
+
+        // 底部：選擇並打包
+        const foot = document.createElement('div'); foot.className = 'vc-browse-foot';
+        foot.innerHTML = `<button class="vc-pack-cta" type="button"${templates.length ? '' : ' disabled'}>📦 選擇並打包</button>`;
+        foot.querySelector('.vc-pack-cta').onclick = () => { if (!templates.length) return; _vcPackSel.clear(); _vcView = 'package'; renderVnComponents(); };
+        listEl.appendChild(foot);
+
+        const content = document.getElementById('studio-gallery-content');
+        if (content) content.scrollTop = _vcBrowseScroll;   // 從子頁返回時還原捲動
+    }
+    function _vcApplyBrowseFilter(listEl) {
+        const q = _vcSearch.trim().toLowerCase();
+        listEl.querySelectorAll('.vc-card').forEach(c => {
+            const ok = !q || (c.getAttribute('data-name') || '').toLowerCase().includes(q);
+            c.classList.toggle('vc-hide', !ok);
+        });
+    }
+    function _vcCard(tpl, nameMap, validIds) {
+        const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+        const gids = _tplGroupIds(tpl).filter(id => validIds.has(id));
+        const tags = gids.length
+            ? gids.map(id => `<span class="vc-tag">${_sgcEsc(nameMap[id])}</span>`).join('')
+            : '<span class="vc-tag muted">未分組</span>';
+        const card = document.createElement('div');
+        card.className = 'vc-card';
+        card.setAttribute('data-name', `${tpl.title || ''} ${tpl.tagId || ''}`);
+        card.innerHTML = `<div class="vc-card-main">
+                <div class="vc-card-title">${_sgcEsc((tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知')}</div>
+                <div class="vc-card-tags">${tags}</div>
+            </div>
+            <span class="vc-dot${tpl.isActive ? ' on' : ''}" title="${tpl.isActive ? '啟用中' : '停用'}"></span>
+            <span class="vc-chev">›</span>`;
+        card.insertBefore(_vcThumbBox(tpl, safeTagId), card.firstChild);
+        card.onclick = () => {
+            const content = document.getElementById('studio-gallery-content');
+            _vcBrowseScroll = content ? content.scrollTop : 0;
+            _vcTpl = tpl; _vcView = 'detail'; renderVnComponents();
+        };
+        return card;
+    }
+
+    // ── ② 詳情：預覽 + 繼續編輯 + 複製/匯出 + 使用與設置 + 底部紅色刪除 ──
+    function _vcRenderDetail(listEl) {
+        const tpl = _vcTpl; if (!tpl) { _vcView = 'browse'; return renderVnComponents(); }
         const db = win.OS_DB;
         const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
-        const safeFmt   = (tpl.demoFormat || '無結構定義').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const previewHtml = (tpl.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B');
-        const card = document.createElement('div');
-        card.className = 'studio-gallery-card' + (tpl.isActive ? ' active-tag' : '');
-        card.innerHTML = `
-                    <div class="sgc-header">
-                        <span class="sgc-title">${(tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知'}</span>
-                        <span class="sgc-status" style="color:${tpl.isActive ? '#2ecc71' : '#aaa'}">${tpl.isActive ? '✅ 啟用' : '❌ 停用'}</span>
-                    </div>
-                    <div class="sgc-usage">💡 ${tpl.usageDesc || '無說明'}</div>
-                    <div class="sgc-format-box">
-                        <div class="sgc-format-text">${safeFmt}</div>
-                        <textarea class="sgc-format-input">${tpl.demoFormat || ''}</textarea>
-                        <div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end;">
-                            <span class="sgc-btn btn-edit-fmt" style="flex:none;padding:4px 10px;border-color:#3498db;color:#3498db;background:transparent;">✏️ 編輯</span>
-                            <span class="sgc-btn btn-save-fmt" style="display:none;flex:none;padding:4px 10px;border-color:rgba(26,28,40,0.30);color:#1A1C28;background:rgba(26,28,40,0.08);">💾 儲存</span>
-                            <span class="sgc-btn btn-cancel-fmt" style="display:none;flex:none;padding:4px 10px;border-color:#e74c3c;color:#e74c3c;background:transparent;">✖ 取消</span>
-                        </div>
-                    </div>
-                    <div class="sgc-btns">
-                        <div class="sgc-btn btn-continue" style="background:rgba(26,28,40,0.08);border-color:#1A1C28;color:#1A1C28;" title="把這個面板載回煉丹爐，用對話繼續微調樣式">✏️ 繼續編輯</div>
-                        <div class="sgc-btn btn-edit-raw" style="background:rgba(155,89,182,0.12);border-color:#9b59b6;color:#c39bf2;" title="直接編輯原始 JSON（html/css/js/demoFormat）— 給進階用戶用">📝 編輯原碼</div>
-                        <div class="sgc-btn btn-import-st" style="background:rgba(26,28,40,0.08);border-color:rgba(26,28,40,0.30);color:#1A1C28;" title="一鍵寫入酒館全局正則 + 折疊進主世界書">📥 注入酒館正則</div>
-                        <div class="sgc-btn btn-toggle" style="background:${tpl.isActive ? 'rgba(231,76,60,0.15)' : 'rgba(46,204,113,0.15)'};border-color:${tpl.isActive ? '#e74c3c' : '#2ecc71'};color:${tpl.isActive ? '#e74c3c' : '#2ecc71'}">
-                            ${tpl.isActive ? '停用' : '啟用'}
-                        </div>
-                        <div class="sgc-btn btn-lobby" style="background:${tpl.lobbyEnabled ? 'rgba(52,152,219,0.2)' : 'transparent'};border-color:${tpl.lobbyEnabled ? '#3498db' : '#555'};color:${tpl.lobbyEnabled ? '#3498db' : '#777'}">
-                            🏠${tpl.lobbyEnabled ? '大廳已啟用' : '大廳'}
-                        </div>
-                        <div class="sgc-btn btn-export-one" title="把這一個面板匯出成 .json，可單獨分享或搬去別台裝置">📦 匯出</div>
-                        <div class="sgc-btn btn-del" style="background:rgba(231,76,60,0.7);border-color:#e74c3c;color:#fff;">刪除</div>
-                    </div>
-                `;
-        const fmtBox    = card.querySelector('.sgc-format-box');
-        const fmtText   = fmtBox.querySelector('.sgc-format-text');
-        const fmtInput  = fmtBox.querySelector('.sgc-format-input');
-        const btnEdit   = fmtBox.querySelector('.btn-edit-fmt');
-        const btnSave   = fmtBox.querySelector('.btn-save-fmt');
-        const btnCancel = fmtBox.querySelector('.btn-cancel-fmt');
-        btnEdit.onclick = () => { fmtText.style.display = 'none'; btnEdit.style.display = 'none'; fmtInput.style.display = 'block'; btnSave.style.display = 'inline-block'; btnCancel.style.display = 'inline-block'; };
-        btnCancel.onclick = () => { fmtText.style.display = 'block'; btnEdit.style.display = 'inline-block'; fmtInput.style.display = 'none'; btnSave.style.display = 'none'; btnCancel.style.display = 'none'; fmtInput.value = tpl.demoFormat || ''; };
-        btnSave.onclick = async () => { tpl.demoFormat = fmtInput.value; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); _galleryNeedsReload = true; _openComponentDetail(tpl, _allPhoneApps); };
-        card.querySelector('.btn-lobby').onclick = async () => { tpl.lobbyEnabled = !tpl.lobbyEnabled; await db.saveVNTagTemplate(tpl); _galleryNeedsReload = true; _openComponentDetail(tpl, _allPhoneApps); };
-        card.querySelector('.btn-toggle').onclick = async () => { tpl.isActive = !tpl.isActive; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); if (win.VN_DynamicParser) await win.VN_DynamicParser.init(); _galleryNeedsReload = true; _openComponentDetail(tpl, _allPhoneApps); };
-        card.querySelector('.btn-del').onclick = async () => { if (!confirm(`刪除 [${tpl.tagId}]？`)) return; await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal(); if (win.VN_DynamicParser) await win.VN_DynamicParser.init(); _galleryNeedsReload = true; _closeComponentDetail(); };
-        card.querySelector('.btn-import-st').onclick = () => importToSillyTavern(tpl);
-        card.querySelector('.btn-edit-raw').onclick = () => openRawEditModal(tpl);
-        card.querySelector('.btn-export-one').onclick = () => exportOneVnUiTemplate(tpl);
-        card.querySelector('.btn-continue').onclick = () => {
+        listEl.innerHTML = `
+            <div class="swb-bar">
+                <button class="swb-iconbtn" id="vc-back" type="button">‹</button>
+                <div class="swb-bar-title">${_sgcEsc((tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知')}</div>
+            </div>
+            <div class="vc-page">
+                <div class="studio-pv-tabs">
+                    <button class="studio-pv active" data-pv="phone">手機</button>
+                    <button class="studio-pv" data-pv="center">中間</button>
+                    <button class="studio-pv" data-pv="full">全屏</button>
+                </div>
+                <div class="sgc-preview"><div class="studio-pv-box">
+                    ${tpl.css ? `<style>${tpl.css}</style>` : ''}
+                    <div class="vn-dynamic-panel-${safeTagId} vc-pv-panel">${previewHtml}</div>
+                </div></div>
+                <button class="swb-primary vc-full" id="vc-continue" type="button">✏️ 繼續編輯</button>
+                <div class="vc-row2">
+                    <button class="swb-secondary" id="vc-dup" type="button">📄 複製組件</button>
+                    <button class="swb-secondary" id="vc-export" type="button">📦 匯出</button>
+                </div>
+                <button class="vc-navrow" id="vc-settings" type="button"><span class="vc-navrow-ico">⚙️</span><span class="vc-navrow-label">使用與設置</span><span class="swb-chev">›</span></button>
+                <div class="vc-delzone"><button class="vc-delbtn" id="vc-del" type="button">🗑 刪除組件</button></div>
+            </div>`;
+        listEl.querySelector('#vc-back').onclick = () => { _vcView = 'browse'; renderVnComponents(); };
+        listEl.querySelector('#vc-continue').onclick = () => {
             if (!confirm(`✏️ 把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議，AI 只會微調\n• 改完按「✅ 確定創建」會覆蓋這個面板\n\n確定嗎？`)) return;
             _enterEditMode(tpl);
         };
-        var _phoneRec = (_allPhoneApps || []).find(function (a) { return a && a.srcTplId === tpl.id; });
-        var phoneBtn = document.createElement('div');
-        phoneBtn.className = 'sgc-btn btn-phone';
-        phoneBtn.textContent = _phoneRec ? '📱 已裝手機' : '📱 裝到手機';
-        phoneBtn.onclick = async function () {
-            try {
-                if (_phoneRec) {
-                    await win.OS_DB.deletePhoneApp(_phoneRec.id);
-                    if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(_phoneRec.id);
-                } else {
-                    var rec = { name: tpl.tagId || '面板', emoji: '🧩', iconUrl: '', html: _templateToPhoneHtml(tpl), source: 'studio', srcTplId: tpl.id };
-                    var newId = await win.OS_DB.savePhoneApp(rec);
-                    if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, iconUrl: '' });
-                }
-                _galleryNeedsReload = true;
-                _openComponentDetail(tpl, (win.OS_DB.getAllPhoneApps ? (await win.OS_DB.getAllPhoneApps()) : _allPhoneApps) || []);
-            } catch (e) { console.error('[studio] 裝手機切換失敗', e); }
+        listEl.querySelector('#vc-dup').onclick = () => _vcDuplicate(tpl);
+        listEl.querySelector('#vc-export').onclick = () => exportOneVnUiTemplate(tpl);
+        listEl.querySelector('#vc-settings').onclick = () => { _vcView = 'settings'; renderVnComponents(); };
+        listEl.querySelector('#vc-del').onclick = async () => {
+            if (!confirm(`刪除組件 [${tpl.tagId}]？此操作無法復原。`)) return;
+            await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal();
+            if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
+            _vcTpl = null; _vcView = 'browse'; renderVnComponents();
         };
-        var sgcBtns = card.querySelector('.sgc-btns');
-        if (sgcBtns && tpl.caps !== 'display') sgcBtns.appendChild(phoneBtn);
-        // 歸到群組（多選；寫 tpl.groupIds）— 放在按鈕列前面
-        if (sgcBtns && sgcBtns.parentNode) sgcBtns.parentNode.insertBefore(_buildGroupAssignRow(tpl), sgcBtns);
-        container.appendChild(card);
+        _activatePreview(listEl, tpl, safeTagId);
     }
 
-    // 換頁到第二層詳情（不銷毀第一層瀏覽 DOM → 返回時不用重載、捲動位置保留）
-    let _savedGalleryScroll = 0;
-    let _galleryNeedsReload = false;
-    function _openComponentDetail(tpl, _allPhoneApps) {
-        const listEl = document.getElementById('studio-gallery-list');
-        const content = document.getElementById('studio-gallery-content');
-        if (!listEl) return;
-        const fromBrowse = (listEl.style.display !== 'none');
-        if (fromBrowse && content) _savedGalleryScroll = content.scrollTop;   // 只有「從瀏覽層」進來才記捲動位置
-        listEl.style.display = 'none';
-        let detail = document.getElementById('studio-gallery-detail');
-        if (!detail) {
-            detail = document.createElement('div');
-            detail.id = 'studio-gallery-detail';
-            listEl.parentNode.insertBefore(detail, listEl.nextSibling);
-        }
-        detail.style.display = 'block';
-        detail.innerHTML = '';
-        const back = document.createElement('div');
-        back.className = 'sgc-detail-back';
-        back.textContent = '‹ 返回 VN組件';
-        back.onclick = () => _closeComponentDetail();
-        detail.appendChild(back);
-        _buildComponentCard(tpl, _allPhoneApps, detail);
-        if (fromBrowse && content) content.scrollTop = 0;
+    async function _vcDuplicate(tpl) {
+        const db = win.OS_DB;
+        const copy = JSON.parse(JSON.stringify(tpl));
+        delete copy.id;
+        copy.isActive = false;   // 複本預設停用，避免兩個同 tag 撞在一起
+        copy.title = `${(tpl.title && String(tpl.title).trim()) || tpl.tagId || '組件'} 複本`;
+        const base = (tpl.tagId || 'tag');
+        let nt = `${base}_copy`;
+        try {
+            const used = new Set((await db.getAllVNTagTemplates()).map(t => t.tagId));
+            let i = 1; while (used.has(nt)) { i++; nt = `${base}_copy${i}`; }
+        } catch (e) {}
+        copy.tagId = nt;
+        await db.saveVNTagTemplate(copy);
+        _studioToast(`✅ 已複製成「${copy.title}」（預設停用，到設置開啟）`, 'success', '複製組件');
+        _vcTpl = null; _vcView = 'browse'; renderVnComponents();
     }
 
-    // 從詳情回瀏覽：沒改動 → 只把保留的瀏覽 DOM 顯示回來 + 還原捲動（不重載、不跳頂）；有改動 → 才重載
-    function _closeComponentDetail() {
-        const listEl = document.getElementById('studio-gallery-list');
-        const detail = document.getElementById('studio-gallery-detail');
-        const content = document.getElementById('studio-gallery-content');
-        if (detail) { detail.style.display = 'none'; detail.innerHTML = ''; }
-        if (_galleryNeedsReload) {
-            _galleryNeedsReload = false;
-            loadStudioGallery();
+    // ── ③ 使用與設置：把詳情頁的按鈕牆拆過來，分組整齊 ──
+    function _vcRenderSettings(listEl) {
+        const tpl = _vcTpl; if (!tpl) { _vcView = 'browse'; return renderVnComponents(); }
+        const db = win.OS_DB;
+        const safeFmt = (tpl.demoFormat || '無結構定義').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const phoneRec = (_vcAllPhoneApps || []).find(a => a && a.srcTplId === tpl.id);
+        const phoneRow = (tpl.caps === 'display') ? '' : `
+                    <div class="vc-set-row"><span class="vc-set-label">📱 裝到手機</span>
+                        <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-phone"${phoneRec ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
+                    </div>`;
+        listEl.innerHTML = `
+            <div class="swb-bar">
+                <button class="swb-iconbtn" id="vc-back" type="button">‹</button>
+                <div class="swb-bar-title">使用與設置</div>
+            </div>
+            <div class="vc-page">
+                <div class="vc-set-row"><span class="vc-set-label">啟用這個組件</span>
+                    <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-active"${tpl.isActive ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
+                </div>
+                <div class="vc-set-block"><div class="vc-set-blabel">歸到群組</div><div id="vc-set-groups"></div></div>
+                <div class="vc-set-block"><div class="vc-set-blabel">觸發格式</div>
+                    <div class="sgc-format-box">
+                        <div class="sgc-format-text">${safeFmt}</div>
+                        <textarea class="sgc-format-input vc-hide" id="vc-fmt-input">${_sgcEsc(tpl.demoFormat || '')}</textarea>
+                        <div class="vc-fmt-actions">
+                            <button class="swb-secondary btn-edit-fmt" type="button">✏️ 編輯</button>
+                            <button class="swb-secondary btn-save-fmt vc-hide" type="button">💾 儲存</button>
+                            <button class="swb-secondary btn-cancel-fmt vc-hide" type="button">✖ 取消</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="vc-set-block"><div class="vc-set-blabel">整合</div>
+                    <button class="vc-navrow" id="vc-import-st" type="button"><span class="vc-navrow-ico">📥</span><span class="vc-navrow-label">注入酒館正則</span><span class="swb-chev">›</span></button>
+                    ${phoneRow}
+                    <div class="vc-set-row"><span class="vc-set-label">🏠 大廳顯示</span>
+                        <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-lobby"${tpl.lobbyEnabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
+                    </div>
+                </div>
+                <div class="vc-set-block"><div class="vc-set-blabel">進階</div>
+                    <button class="vc-navrow" id="vc-raw" type="button"><span class="vc-navrow-ico">📝</span><span class="vc-navrow-label">編輯原碼</span><span class="swb-chev">›</span></button>
+                </div>
+            </div>`;
+        listEl.querySelector('#vc-back').onclick = () => { _vcView = 'detail'; renderVnComponents(); };
+        listEl.querySelector('#vc-set-groups').appendChild(_buildGroupAssignRow(tpl));
+        listEl.querySelector('#vc-set-active').onchange = async (e) => { await _setComponentActive(tpl, e.target.checked); };
+        const fmtBox = listEl.querySelector('.sgc-format-box');
+        const fmtText = fmtBox.querySelector('.sgc-format-text'), fmtInput = fmtBox.querySelector('.sgc-format-input');
+        const bE = fmtBox.querySelector('.btn-edit-fmt'), bS = fmtBox.querySelector('.btn-save-fmt'), bC = fmtBox.querySelector('.btn-cancel-fmt');
+        const setEditing = (on) => { fmtText.classList.toggle('vc-hide', on); bE.classList.toggle('vc-hide', on); fmtInput.classList.toggle('vc-hide', !on); bS.classList.toggle('vc-hide', !on); bC.classList.toggle('vc-hide', !on); };
+        bE.onclick = () => setEditing(true);
+        bC.onclick = () => { fmtInput.value = tpl.demoFormat || ''; setEditing(false); };
+        bS.onclick = async () => { tpl.demoFormat = fmtInput.value; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); _studioToast('✅ 已儲存觸發格式', 'success', '設置'); _vcRenderSettings(listEl); };
+        listEl.querySelector('#vc-import-st').onclick = () => importToSillyTavern(tpl);
+        const phoneInput = listEl.querySelector('#vc-set-phone');
+        if (phoneInput) phoneInput.onchange = async (e) => { await _vcTogglePhone(tpl, e.target.checked); };
+        listEl.querySelector('#vc-set-lobby').onchange = async (e) => { tpl.lobbyEnabled = e.target.checked; await db.saveVNTagTemplate(tpl); };
+        listEl.querySelector('#vc-raw').onclick = () => openRawEditModal(tpl);
+    }
+    async function _vcTogglePhone(tpl, want) {
+        const db = win.OS_DB;
+        const rec = (_vcAllPhoneApps || []).find(a => a && a.srcTplId === tpl.id);
+        try {
+            if (rec && !want) {
+                await db.deletePhoneApp(rec.id);
+                if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(rec.id);
+            } else if (!rec && want) {
+                const r = { name: tpl.tagId || '面板', emoji: '🧩', iconUrl: '', html: _templateToPhoneHtml(tpl), source: 'studio', srcTplId: tpl.id };
+                const nid = await db.savePhoneApp(r);
+                if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: nid, name: r.name, emoji: r.emoji, iconUrl: '' });
+            }
+            _vcAllPhoneApps = db.getAllPhoneApps ? ((await db.getAllPhoneApps()) || []) : _vcAllPhoneApps;
+        } catch (e) { console.error('[studio] 裝手機切換失敗', e); }
+    }
+
+    // ── ④ 選擇並打包：多選 + 全選 + 驗證並打包（重用 _downloadVnUiPack）──
+    async function _vcRenderPackage(listEl) {
+        const db = win.OS_DB;
+        let templates = [];
+        try { templates = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用'); } catch (e) {}
+        const allSel = templates.length > 0 && templates.every(t => _vcPackSel.has(t.id));
+        listEl.innerHTML = `
+            <div class="swb-bar">
+                <button class="swb-iconbtn" id="vc-back" type="button">‹</button>
+                <div class="swb-bar-title">選擇並打包</div>
+                <button class="swb-iconbtn" id="vc-selall" type="button" title="全選/全不選">${allSel ? '☑' : '☐'}</button>
+            </div>
+            <div class="vc-page"><div class="vc-list" id="vc-pack-list"></div></div>
+            <div class="vc-pack-foot">
+                <span class="vc-pack-count" id="vc-pack-count"></span>
+                <button class="swb-primary" id="vc-pack-go" type="button">✅ 驗證並打包</button>
+            </div>`;
+        const list = listEl.querySelector('#vc-pack-list');
+        if (!templates.length) {
+            list.innerHTML = '<div class="vc-empty">沒有可打包的組件。</div>';
         } else {
-            if (listEl) listEl.style.display = '';
-            if (content) content.scrollTop = _savedGalleryScroll;
+            templates.forEach(tpl => {
+                const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+                const on = _vcPackSel.has(tpl.id);
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'vc-card vc-pack-row' + (on ? ' on' : '');
+                row.innerHTML = `<span class="vc-pack-check">${on ? '☑' : '☐'}</span>
+                    <div class="vc-card-main"><div class="vc-card-title">${_sgcEsc((tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知')}</div></div>`;
+                row.insertBefore(_vcThumbBox(tpl, safeTagId), row.children[1]);
+                row.onclick = () => { if (_vcPackSel.has(tpl.id)) _vcPackSel.delete(tpl.id); else _vcPackSel.add(tpl.id); _vcRenderPackage(listEl); };
+                list.appendChild(row);
+            });
+            _vcObserveThumbs(list);
         }
+        listEl.querySelector('#vc-pack-count').textContent = `已選擇 ${_vcPackSel.size} 個組件`;
+        const go = listEl.querySelector('#vc-pack-go'); go.disabled = _vcPackSel.size === 0;
+        listEl.querySelector('#vc-back').onclick = () => { _vcView = 'browse'; renderVnComponents(); };
+        listEl.querySelector('#vc-selall').onclick = () => { if (allSel) _vcPackSel.clear(); else templates.forEach(t => _vcPackSel.add(t.id)); _vcRenderPackage(listEl); };
+        go.onclick = () => {
+            if (!_vcPackSel.size) return;
+            const sel = templates.filter(t => _vcPackSel.has(t.id));
+            const today = new Date().toISOString().slice(0, 10);
+            _downloadVnUiPack(sel, `aurelia-vn-ui-pack-${today}.json`);
+            _studioToast(`✅ 已打包 ${sel.length} 個組件，已下載到本機。`, 'success', '打包');
+        };
     }
 
     // ════════════════════════════════════════════════════════════════
     // VN 組件「群組」：群組定義存 localStorage；成員關係掛在組件 tpl.groupIds[]（可掛多組）。
-    //   群組拉桿＝批次把成員 isActive 開/關（重用 syncActiveTagsToLocal 管線、AI 仍只讀各組件 isActive）。
-    //   不綁世界觀自動套，全手動（Rae 拍板）。spec: docs/superpowers/specs/2026-06-21-vn-component-groups-design.md
+    //   群組＝標籤；批次開關＝把成員 isActive 一起開/關（重用 syncActiveTagsToLocal 管線）。
+    //   不綁世界觀自動套，全手動（Rae 拍板）。
     // ════════════════════════════════════════════════════════════════
     const VN_GROUPS_KEY = 'vn_component_groups';
-    const VN_FOLD_KEY = 'vn_gallery_fold_state';
     function _sgcEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function _loadGroups() { try { return JSON.parse(localStorage.getItem(VN_GROUPS_KEY) || '[]') || []; } catch (e) { return []; } }
     function _saveGroups(arr) { try { localStorage.setItem(VN_GROUPS_KEY, JSON.stringify(arr || [])); } catch (e) {} }
     function _newGroupId() { return 'g_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3); }
-    function _loadFold() { try { return JSON.parse(localStorage.getItem(VN_FOLD_KEY) || '{}') || {}; } catch (e) { return {}; } }
-    function _isFold(key) { return !!_loadFold()[key]; }
-    function _setFold(key, folded) { const s = _loadFold(); if (folded) s[key] = 1; else delete s[key]; try { localStorage.setItem(VN_FOLD_KEY, JSON.stringify(s)); } catch (e) {} }
     function _tplGroupIds(tpl) { return Array.isArray(tpl.groupIds) ? tpl.groupIds : []; }
 
     async function _setComponentActive(tpl, active) {
@@ -2988,95 +3223,6 @@ ${cleanFormat}
         if (!members.length) return 'empty';
         const on = members.filter(t => t.isActive).length;
         return on === 0 ? 'off' : (on === members.length ? 'on' : 'partial');
-    }
-
-    // 單一可折疊組件卡（header=標題/啟用拉桿/管理；收合只藏預覽）。預覽 JS 折疊時不跑、展開才 lazy 跑。
-    function _renderComponentCard(tpl, _allPhoneApps) {
-        const safeTagId = (tpl.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
-        const previewHtml = (tpl.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B');
-        const foldKey = 'c:' + (tpl.id || tpl.tagId || safeTagId);
-        const folded = _isFold(foldKey);
-        const card = document.createElement('div');
-        card.className = 'studio-gallery-card sgc-browse' + (tpl.isActive ? ' active-tag' : '') + (folded ? ' folded' : '');
-        card.innerHTML = `
-            <div class="sgc-header">
-                <button class="sgc-fold" type="button" title="收合/展開">${folded ? '▸' : '▾'}</button>
-                <span class="sgc-title">${_sgcEsc((tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知')}</span>
-                <label class="sgc-switch" title="啟用/停用">
-                    <input type="checkbox" class="sgc-switch-input"${tpl.isActive ? ' checked' : ''}>
-                    <span class="sgc-switch-slider"></span>
-                </label>
-                <button class="sgc-manage-btn" type="button">管理 ›</button>
-            </div>
-            <div class="sgc-body">
-                ${tpl.css ? `<style>${tpl.css}</style>` : ''}
-                <div class="studio-pv-tabs">
-                    <button class="studio-pv active" data-pv="phone">手機</button>
-                    <button class="studio-pv" data-pv="center">中間</button>
-                    <button class="studio-pv" data-pv="full">全屏</button>
-                </div>
-                <div class="sgc-preview">
-                    <div class="studio-pv-box">
-                        <div class="vn-dynamic-panel-${safeTagId}" style="width:100%;height:auto;display:flex;flex-direction:column;">
-                            ${previewHtml}
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        const foldBtn = card.querySelector('.sgc-fold');
-        const runPreview = () => { if (!card._pvRan) { card._pvRan = true; _activatePreview(card, tpl, safeTagId); } };
-        foldBtn.onclick = () => {
-            const nf = !card.classList.contains('folded');
-            card.classList.toggle('folded', nf);
-            foldBtn.textContent = nf ? '▸' : '▾';
-            _setFold(foldKey, nf);
-            if (!nf) runPreview();
-        };
-        const sw = card.querySelector('.sgc-switch-input');
-        sw.onchange = async () => { await _setComponentActive(tpl, sw.checked); card.classList.toggle('active-tag', tpl.isActive); };
-        card.querySelector('.sgc-manage-btn').onclick = () => _openComponentDetail(tpl, _allPhoneApps);
-        if (!folded) runPreview();   // 展開的才跑預覽；折疊的等點開再 lazy 跑
-        return card;
-    }
-
-    // 群組資料夾（可折疊；header=名/群組拉桿/⚙️管理）。group=null → 未分組區（無拉桿無管理）。
-    function _renderGroupFolder(group, members, _allPhoneApps) {
-        const isUngrouped = !group;
-        const foldKey = 'g:' + (isUngrouped ? '__ungrouped__' : group.id);
-        const folded = _isFold(foldKey);
-        const state = _groupState(members);
-        const folder = document.createElement('div');
-        folder.className = 'sgc-folder' + (folded ? ' folded' : '') + (isUngrouped ? ' sgc-folder-ungrouped' : '');
-        folder.innerHTML = `
-            <div class="sgc-folder-header">
-                <button class="sgc-fold" type="button" title="收合/展開">${folded ? '▸' : '▾'}</button>
-                <span class="sgc-folder-name">${_sgcEsc(isUngrouped ? '未分組' : group.name)} <span class="sgc-folder-count">${members.length}</span></span>
-                ${isUngrouped ? '' : `<label class="sgc-switch sgc-group-switch" title="整組啟用/停用">
-                    <input type="checkbox" class="sgc-switch-input"${state === 'on' ? ' checked' : ''}>
-                    <span class="sgc-switch-slider"></span>
-                </label>
-                <button class="sgc-folder-manage" type="button" title="群組管理">⚙️</button>`}
-            </div>
-            <div class="sgc-folder-body"></div>`;
-        const foldBtn = folder.querySelector('.sgc-fold');
-        const body = folder.querySelector('.sgc-folder-body');
-        foldBtn.onclick = () => {
-            const nf = !folder.classList.contains('folded');
-            folder.classList.toggle('folded', nf);
-            foldBtn.textContent = nf ? '▸' : '▾';
-            _setFold(foldKey, nf);
-        };
-        if (!isUngrouped) {
-            const sw = folder.querySelector('.sgc-group-switch .sgc-switch-input');
-            if (sw) {
-                if (state === 'partial') sw.indeterminate = true;
-                sw.onchange = async () => { await _setGroupActive(members, state !== 'on'); loadStudioGallery(); };
-            }
-            folder.querySelector('.sgc-folder-manage').onclick = (e) => { e.stopPropagation(); _openGroupManage(group); };
-        }
-        if (members.length) members.forEach(tpl => body.appendChild(_renderComponentCard(tpl, _allPhoneApps)));
-        else body.innerHTML = '<div class="sgc-folder-empty">（空）</div>';
-        return folder;
     }
 
     function _createGroup() {
@@ -3131,6 +3277,7 @@ ${cleanFormat}
             if (!confirm(`刪除群組「${group.name}」？\n組件不會被刪，只會退回未分組。`)) return;
             _saveGroups(_loadGroups().filter(x => x.id !== group.id));
             for (const t of tpls) { const gids = _tplGroupIds(t); if (gids.includes(group.id)) { t.groupIds = gids.filter(id => id !== group.id); await db.saveVNTagTemplate(t); } }
+            _vcFilterGid = 'all';
             close();
         };
         modal.querySelectorAll('.sgc-assign-row input').forEach(cb => cb.onchange = async () => {
@@ -3143,17 +3290,17 @@ ${cleanFormat}
         });
     }
 
-    // 第二層詳情卡用：這個組件「歸到哪些群組」的多選列（寫 tpl.groupIds）
+    // 設置頁用：這個組件「歸到哪些群組」的多選 chip 列（寫 tpl.groupIds）
     function _buildGroupAssignRow(tpl) {
         const wrap = document.createElement('div');
         wrap.className = 'sgc-grouprow';
         const groups = _loadGroups();
         if (!groups.length) {
-            wrap.innerHTML = '<span class="sgc-grouprow-label">群組</span><span class="sgc-grouprow-empty">還沒有群組，回清單按「＋ 新群組」</span>';
+            wrap.innerHTML = '<span class="sgc-grouprow-empty">還沒有群組，回瀏覽層用標籤列的「＋ 群組」新增</span>';
             return wrap;
         }
         const gids = _tplGroupIds(tpl);
-        wrap.innerHTML = '<span class="sgc-grouprow-label">群組</span>' + groups.map(g =>
+        wrap.innerHTML = groups.map(g =>
             `<label class="sgc-grouptag"><input type="checkbox" data-gid="${_sgcEsc(g.id)}"${gids.includes(g.id) ? ' checked' : ''}><span>${_sgcEsc(g.name)}</span></label>`
         ).join('');
         wrap.querySelectorAll('input').forEach(cb => cb.onchange = async () => {
@@ -3163,59 +3310,8 @@ ${cleanFormat}
             else cur = cur.filter(x => x !== gid);
             tpl.groupIds = cur;
             await win.OS_DB.saveVNTagTemplate(tpl);
-            _galleryNeedsReload = true;
         });
         return wrap;
-    }
-
-    async function loadStudioGallery() {
-        const listEl = document.getElementById('studio-gallery-list');
-        if (!listEl) return;
-        _wireVnUiPackButtons();   // 綁定頂部「匯出包／匯入包」鈕（冪等，每次開展廳重綁無妨）
-        listEl.style.display = '';   // 從詳情重載時要把瀏覽層顯示回來
-        const _dt = document.getElementById('studio-gallery-detail'); if (_dt) { _dt.style.display = 'none'; _dt.innerHTML = ''; }
-        listEl.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">載入中...</div>';
-        const db = win.OS_DB || window.OS_DB;
-        if (!db || typeof db.getAllVNTagTemplates !== 'function') {
-            listEl.innerHTML = '<div style="color:#fc8181;text-align:center;padding:20px;">找不到 OS_DB</div>';
-            return;
-        }
-        try {
-            const _allTpls = await db.getAllVNTagTemplates();
-            // VN組件 = 「不是你明確選為 應用/共用 的」全部組件（純展示 + 舊的未標型別都算組件）
-            const templates = _allTpls.filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用');
-            const _allPhoneApps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? ((await win.OS_DB.getAllPhoneApps()) || []) : [];
-            listEl.innerHTML = '';
-
-            // 頂部：＋ 新群組
-            const bar = document.createElement('div');
-            bar.className = 'sgc-groupbar';
-            bar.innerHTML = `<button class="sgc-newgroup-btn" type="button">＋ 新群組</button>`;
-            bar.querySelector('.sgc-newgroup-btn').onclick = () => _createGroup();
-            listEl.appendChild(bar);
-
-            if (!templates.length) {
-                const empty = document.createElement('div');
-                empty.className = 'sgc-empty-hint';
-                empty.textContent = 'VN組件 空空如也，去煉丹做純展示面板吧！';
-                listEl.appendChild(empty);
-                return;
-            }
-
-            // 群組 → 成員（清掉已刪群組的殘留 id；組件可同屬多組 → 多個 folder 各出現一次）
-            const groups = _loadGroups();
-            const validIds = new Set(groups.map(g => g.id));
-            const memberMap = {}; groups.forEach(g => memberMap[g.id] = []);
-            const ungrouped = [];
-            templates.forEach(tpl => {
-                const gids = _tplGroupIds(tpl).filter(id => validIds.has(id));
-                if (!gids.length) ungrouped.push(tpl);
-                else gids.forEach(id => memberMap[id].push(tpl));
-            });
-
-            groups.forEach(g => listEl.appendChild(_renderGroupFolder(g, memberMap[g.id], _allPhoneApps)));
-            listEl.appendChild(_renderGroupFolder(null, ungrouped, _allPhoneApps));   // 未分組區
-        } catch(err) { listEl.innerHTML = `<div style="color:#fc8181;padding:20px;">載入失敗: ${err.message}</div>`; }
     }
 
     // ============================================================
@@ -3248,18 +3344,7 @@ ${cleanFormat}
         setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} a.remove(); }, 0);
     }
 
-    async function exportAllVnUiPack() {
-        const db = win.OS_DB || window.OS_DB;
-        if (!db || typeof db.getAllVNTagTemplates !== 'function') { _studioToast('找不到資料庫，無法匯出。', 'error', '匯出包'); return; }
-        try {
-            const templates = await db.getAllVNTagTemplates();
-            if (!templates.length) { _studioToast('展廳是空的，沒有可匯出的面板。', 'warning', '匯出包'); return; }
-            const today = new Date().toISOString().slice(0, 10);
-            const fname = `aurelia-vn-ui-pack-${today}.json`;
-            _downloadVnUiPack(templates, fname);
-            _studioToast(`✅ 已匯出 ${templates.length} 個面板，已下載到本機：${fname}`, 'success', '匯出包');
-        } catch (e) { _studioToast('匯出失敗：' + ((e && e.message) || e), 'error', '匯出包'); }
-    }
+    // exportAllVnUiPack 已移除：整包匯出改走打包頁「全選 → 驗證並打包」（_vcRenderPackage）
 
     function exportOneVnUiTemplate(tpl) {
         if (!tpl) return;
@@ -3300,8 +3385,6 @@ ${cleanFormat}
     }
 
     function _wireVnUiPackButtons() {
-        const expBtn = document.getElementById('studio-export-pack-btn');
-        if (expBtn) expBtn.onclick = exportAllVnUiPack;
         const impBtn = document.getElementById('studio-import-pack-btn');
         const fileInput = document.getElementById('studio-import-pack-file');
         if (impBtn && fileInput) {
