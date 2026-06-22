@@ -47,15 +47,16 @@
         .swb-bubble { max-width:88%; padding:8px 11px; border-radius:10px; font-size:13px; white-space:pre-wrap; word-break:break-word; }
         .swb-user { align-self:flex-end; background:#1A1C28; color:#EEF0F6; }
         .swb-assistant { align-self:flex-start; background:rgba(228,232,245,0.85); color:#1A1C28; }
-        .swb-pending { display:flex; flex-direction:column; gap:6px; }
+        .swb-pending { display:flex; flex-direction:column; gap:6px; flex:1.5 1 0; min-height:0; }
         .swb-pending:empty { display:none; }
-        .swb-pending-hd { font-size:12px; font-weight:bold; color:#b5651d; }
+        .swb-pending-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+        .swb-pending-hd { font-size:12px; font-weight:bold; color:#b5651d; flex-shrink:0; }
         .swb-op { font-size:12px; padding:7px 10px; border-radius:6px; border-left:3px solid; }
         .swb-op.add { background:rgba(46,204,113,0.1); border-color:#2ecc71; }
         .swb-op.upd { background:rgba(52,152,219,0.1); border-color:#3498db; }
         .swb-op.del { background:rgba(231,76,60,0.1); border-color:#e74c3c; }
         .swb-op-content { font-size:11px; color:rgba(26,28,40,0.7); margin-top:4px; white-space:pre-wrap; word-break:break-word; }
-        .swb-pending-acts { display:flex; gap:8px; }
+        .swb-pending-acts { display:flex; gap:8px; flex-shrink:0; padding-top:2px; }
         .swb-inputrow { display:flex; gap:8px; align-items:flex-end; }
         .swb-msg { flex:1; min-width:0; min-height:48px; max-height:120px; resize:vertical; padding:8px 10px; border-radius:8px; border:1px solid rgba(26,28,40,0.25); background:#fff; color:#1A1C28; font-size:13px; font-family:inherit; box-sizing:border-box; }
         .studio-icon-btn { background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
