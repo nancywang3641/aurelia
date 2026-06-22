@@ -20,15 +20,30 @@
                 </div>
             </div>
 
-            <!-- mode 分頁：自己一整列、橫向分段，不再跟標題擠到換行 -->
-            <div class="studio-mode-tabs" id="studio-mode-tabs">
-                <div class="studio-mode-tab active" data-mode="vn_ui">✨ VN UI 煉丹</div>
-                <div class="studio-mode-tab" data-mode="theme">🎨 主題</div>
-                <div class="studio-mode-tab" data-mode="worldbook">🌍 世界書</div>
-            </div>
-
             <div class="studio-body">
                 <div id="studio-drawer-backdrop" class="studio-drawer-backdrop"></div>
+
+                <!-- 🏠 創作室首頁：三張任務卡（取代頂部 tab，點一張進對應工作；GPT 分層 IA） -->
+                <div id="studio-home-pane" class="studio-home-pane">
+                    <div class="sh-title">今天要做什麼？</div>
+                    <div class="sh-cards">
+                        <div class="studio-task-card" data-go="vn_ui" role="button" tabindex="0">
+                            <div class="stc-art">🎴</div>
+                            <div class="stc-main"><div class="stc-title">製作互動面板</div><div class="stc-desc">狀態欄、角色卡、好感度…這類劇情面板</div></div>
+                            <span class="stc-chev">›</span>
+                        </div>
+                        <div class="studio-task-card" data-go="theme" role="button" tabindex="0">
+                            <div class="stc-art">🎨</div>
+                            <div class="stc-main"><div class="stc-title">設計劇情主題</div><div class="stc-desc">對話框、名牌、頂部牌的外觀風格</div></div>
+                            <span class="stc-chev">›</span>
+                        </div>
+                        <div class="studio-task-card" data-go="worldbook" role="button" tabindex="0">
+                            <div class="stc-art">🌍</div>
+                            <div class="stc-main"><div class="stc-title">整理世界書</div><div class="stc-desc">建／改世界書條目，AI 幫你寫規則</div></div>
+                            <span class="stc-chev">›</span>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- ② 聊天區 -->
                 <div class="studio-left">
@@ -506,6 +521,7 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
     };
 
     let currentMode = 'vn_ui';
+    let _studioTop = 'home';   // 頂層導覽：home(首頁三卡) | vn_ui | theme | worldbook（取代頂部 tab）
     let chatMessages = [];
     let _vnPanelType = '純展示';   // 面板類型：純展示 / 純應用 / 共用（開頭就選，注入生成訊息）
     let currentParsedData = null;
@@ -566,7 +582,8 @@ container.querySelector('.close-btn').addEventListener('click', onComplete);
         } catch (e) {}
 
         bindEvents();
-        loadMode(currentMode);
+        loadMode(currentMode);     // 先把 vn_ui 工作區建好（先藏在首頁下）
+        switchTopMode('home');     // 開創作室一律先落在首頁三張卡（GPT 分層 IA，取代頂部 tab）
     }
 
     // ── 📋 創建說明書：給朋友自己的 Claude／GPT 看的「對外」規格書，照它產出 <json> 就能匯入回來 ──
@@ -664,14 +681,14 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     }
 
     function bindEvents() {
-        document.getElementById('studio-back-btn').onclick = () => document.getElementById('os_studio_app').remove();
-        document.querySelectorAll('.studio-mode-tab').forEach(mt => {
-            mt.onclick = () => {
-                if (mt.classList.contains('active')) return;
-                document.querySelectorAll('.studio-mode-tab').forEach(x => x.classList.remove('active'));
-                mt.classList.add('active');
-                switchTopMode(mt.dataset.mode);
-            };
+        document.getElementById('studio-back-btn').onclick = () => {
+            if (_studioTop !== 'home') switchTopMode('home');           // 在某個工作裡 → 返回創作室首頁
+            else document.getElementById('os_studio_app').remove();      // 已在首頁 → 返回大廳
+        };
+        document.querySelectorAll('.studio-task-card').forEach(card => {
+            const go = () => switchTopMode(card.getAttribute('data-go'));
+            card.onclick = go;
+            card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
         });
         _setupRawEditModalEvents();
         _setupImportEvents();
@@ -986,8 +1003,11 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     // 頂層 mode 切換：vn_ui=煉丹創作器、theme=主題編輯器（獨立全區，靠 .top-theme class 切顯示）
     function switchTopMode(mode) {
         const cont = document.querySelector('#os_studio_app .studio-container');
-        if (cont) cont.classList.remove('top-theme', 'top-worldbook');
-        if (mode === 'theme') {
+        if (cont) cont.classList.remove('top-theme', 'top-worldbook', 'top-home');
+        _studioTop = mode;
+        if (mode === 'home') {
+            if (cont) cont.classList.add('top-home');
+        } else if (mode === 'theme') {
             if (cont) cont.classList.add('top-theme');
             renderThemePanel();
         } else if (mode === 'worldbook') {
@@ -996,6 +1016,15 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         } else {
             loadMode(mode);
         }
+        _updateStudioHeader();
+    }
+    // header 的 👁️預覽／🗑清空 只在「製作互動面板」(vn_ui) 有意義；首頁/主題/世界書藏起來別佔空間
+    function _updateStudioHeader() {
+        const vnui = _studioTop === 'vn_ui';
+        const clearBtn = document.getElementById('studio-clear-btn');
+        const prevBtn = document.getElementById('studio-header-preview-btn');
+        if (clearBtn) clearBtn.style.display = vnui ? '' : 'none';
+        if (prevBtn) prevBtn.style.display = vnui ? '' : 'none';   // '' = 交回 CSS（手機才顯示）
     }
 
     async function loadMode(modeId) {
