@@ -70,22 +70,3 @@
         background:none; color:rgba(26,28,40,0.55); font-size:12px; border-radius:6px; cursor:pointer;
         margin-bottom:12px; }
     .avsr-add-btn:hover { color:#1A1C28; border-color:#1A1C28; }
-
-    /* ── 模式插槽管理 專屬樣式 ── */
-    .avsm-status { display:flex; align-items:center; gap:8px; padding:10px 14px;
-        background:rgba(26,28,40,0.05); border-radius:8px; margin-bottom:10px;
-        border:1px solid rgba(26,28,40,0.15); }
-    .avsm-status-label { font-size:11px; color:rgba(26,28,40,0.55); letter-spacing:1px; }
-    .avsm-status-value { font-size:14px; font-weight:800; color:#1A1C28; }
-    .avsm-card { background:rgba(228,232,245,0.85); border:1px solid rgba(26,28,40,0.15);
-        border-radius:8px; padding:12px 14px; display:flex; align-items:flex-start; gap:10px; }
-    .avsm-card.active-mode { border-color:rgba(26,28,40,0.50);
-        background:rgba(26,28,40,0.06); box-shadow:0 0 10px rgba(26,28,40,0.08); }
-    .avsm-card.disabled { opacity:0.45; }
-    .avsm-icon { font-size:24px; flex-shrink:0; line-height:1; padding-top:2px; }
-    .avsm-info { flex:1; min-width:0; }
-    .avsm-name { font-size:13px; font-weight:800; color:#1A1C28; margin-bottom:3px;
-        display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
-    .avsm-cond { font-size:11px; color:rgba(26,28,40,0.55); font-family:monospace; margin-bottom:3px; }
-    .avsm-tag-on { font-size:9px; color:#2e7d32; background:rgba(76,175,80,0.15);
-        border:1px solid rgba(76,175,80,0.4); padding:1px 6px; border-radius:3px; }

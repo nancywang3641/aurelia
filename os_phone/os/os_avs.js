@@ -84,11 +84,9 @@
                 </div>
                 <div class="avs-tabs">
                     <div class="avs-tab active" data-tab="state">狀態檔案</div>
-                    <div class="avs-tab" data-tab="modes">模式</div>
                     <div class="avs-tab" data-tab="memory">記憶</div>
                 </div>
                 <div class="avs-content">
-                    <div id="avs-view-modes" class="avs-view"></div>
                     <div id="avs-view-memory" class="avs-view"></div>
                     <div id="avs-view-packs" class="avs-view">
                         <div class="avs-label" style="font-size:13px; padding-top:14px; border-top:1px solid rgba(26,28,40,0.10);">📦 我的檔案</div>
@@ -183,7 +181,6 @@
         const tabs = container.querySelectorAll('.avs-tab');
         tabs.forEach(tab => {
             tab.onclick = () => {
-                container.querySelector('#avsm-editor')?.classList.add('hidden');   // 切 tab 收起創建/編輯模式浮窗
                 tabs.forEach(t => t.classList.remove('active'));
                 container.querySelectorAll('.avs-view').forEach(v => v.classList.remove('active'));
                 tab.classList.add('active');
@@ -196,7 +193,6 @@
                     renderPackList(container);
                 } else {
                     container.querySelector(`#avs-view-${_t}`).classList.add('active');
-                    if (_t === 'modes') win.OS_AVS_RULES?.renderModesTab?.(container);
                     if (_t === 'memory') win.OS_AVS_MEMORY?.renderInto?.(container.querySelector('#avs-view-memory'));
                 }
             };
