@@ -409,6 +409,8 @@
         /* 設置頁 */
         .vc-set-row { display:flex; align-items:center; gap:10px; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:11px; padding:12px; }
         .vc-set-label { flex:1; min-width:0; font-size:14px; color:var(--jrpg-ink); }
+        .vc-enable-row { background:rgba(182,138,69,0.12); border-color:rgba(182,138,69,0.45); }
+        .vc-enable-row .vc-set-label { font-weight:700; color:var(--jrpg-wine-dark); }
         .vc-set-block { display:flex; flex-direction:column; gap:8px; }
         .vc-set-blabel { font-size:13px; font-weight:700; color:var(--jrpg-wine-dark); }
         .vc-fmt-actions { display:flex; gap:6px; justify-content:flex-end; margin-top:6px; }
