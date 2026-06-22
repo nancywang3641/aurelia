@@ -46,7 +46,7 @@
       +   '<div class="ws-views">'
       // ── 首頁 ──
       +     '<div class="ws-view active" data-view="home">'
-      +       '<div class="ws-home-hd"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div>'
+      +       '<div class="ws-home-hd"><button class="ws-back ws-home-back" type="button" title="返回桌面"><i class="fa-solid fa-chevron-left"></i></button><div class="ws-home-hd-tx"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div></div>'
       +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="vn-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板</span><span class="ws-card-d">用 AI 打造專屬劇情面板，存進創作室展廳隨時取用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
@@ -95,6 +95,12 @@
         if (!c) return;
         c.innerHTML = STORE_HTML;
         _applyAssets(c);
+        // 首頁返回鈕：退出工坊 app 回手機桌面（phone_shell 已把 PhoneSystem.goHome 接成回桌面）
+        var _homeBack = c.querySelector('.ws-home-back');
+        if (_homeBack) _homeBack.addEventListener('click', function () {
+            if (win.PhoneSystem && win.PhoneSystem.goHome) win.PhoneSystem.goHome();
+            else if (win.VoidPhoneShell && win.VoidPhoneShell.home) win.VoidPhoneShell.home();
+        });
         // 導覽：所有 data-go（卡片/返回/查看全部/底部 nav）
         c.querySelectorAll('[data-go]').forEach(function (b) {
             b.addEventListener('click', function () { _go(c, b.dataset.go); });
