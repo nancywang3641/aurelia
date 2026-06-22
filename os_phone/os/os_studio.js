@@ -28,19 +28,19 @@
                     <div class="sh-title">今天要做什麼？</div>
                     <div class="sh-cards">
                         <div class="studio-task-card" data-go="vn_ui" role="button" tabindex="0">
-                            <div class="stc-art">🎴</div>
+                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/studio-panel.png" alt="" onerror="this.remove()">
                             <div class="stc-main"><div class="stc-title">製作互動面板</div><div class="stc-desc">狀態欄、角色卡、好感度…這類劇情面板</div></div>
-                            <span class="stc-chev">›</span>
+                            <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
                         </div>
                         <div class="studio-task-card" data-go="theme" role="button" tabindex="0">
-                            <div class="stc-art">🎨</div>
+                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/studio-theme.png" alt="" onerror="this.remove()">
                             <div class="stc-main"><div class="stc-title">設計劇情主題</div><div class="stc-desc">對話框、名牌、頂部牌的外觀風格</div></div>
-                            <span class="stc-chev">›</span>
+                            <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
                         </div>
                         <div class="studio-task-card" data-go="worldbook" role="button" tabindex="0">
-                            <div class="stc-art">🌍</div>
+                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/studio-worldbook.png" alt="" onerror="this.remove()">
                             <div class="stc-main"><div class="stc-title">整理世界書</div><div class="stc-desc">建／改世界書條目，AI 幫你寫規則</div></div>
-                            <span class="stc-chev">›</span>
+                            <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
                         </div>
                     </div>
                 </div>
