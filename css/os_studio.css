@@ -56,7 +56,7 @@
         .swb-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
         /* 卡片（書/條目/op 共用底） */
         .swb-card { display:flex; align-items:center; gap:10px; padding:13px 14px; border:1px solid var(--jrpg-line); border-radius:14px; background:var(--jrpg-paper-light); box-shadow:0 1px 3px rgba(83,49,20,0.06); text-align:left; cursor:pointer; }
-        .swb-card.swb-op { cursor:default; align-items:flex-start; }
+        .swb-card.swb-op { align-items:center; }
         .swb-card-main { flex:1; min-width:0; }
         .swb-card-title { font-size:15px; font-weight:700; color:var(--jrpg-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .swb-card-meta { font-size:12px; color:var(--jrpg-muted); margin-top:3px; }
@@ -94,15 +94,15 @@
         .swb-msg { flex:1; min-width:0; min-height:48px; max-height:120px; resize:vertical; }
         .swb-send { flex-shrink:0; min-height:48px; }
         /* op 卡顏色 */
-        .swb-op-chip { flex-shrink:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:9px; color:#fff; }
+        .swb-op-chip { flex-shrink:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:9px; color:#fff; background:var(--jrpg-muted); }
+        .swb-op-chip.c-add { background:var(--swb-add); }
+        .swb-op-chip.c-upd { background:var(--swb-amber); }
+        .swb-op-chip.c-del { background:var(--swb-danger); }
         .swb-op.add { border-left:4px solid var(--swb-add); }
-        .swb-op.add .swb-op-chip { background:var(--swb-add); }
         .swb-op.upd { border-left:4px solid var(--swb-amber); }
-        .swb-op.upd .swb-op-chip { background:var(--swb-amber); }
         .swb-op.del { border-left:4px solid var(--swb-danger); }
-        .swb-op.del .swb-op-chip { background:var(--swb-danger); }
-        /* 確認頁：完整內容攤開給用戶過目（不夾行、不藏展開鈕），長的靠頁面捲動 */
-        .swb-op-body { margin-top:7px; padding:9px 11px; border-radius:9px; background:var(--jrpg-paper); border:1px solid var(--jrpg-line); font-size:13px; line-height:1.55; color:var(--jrpg-ink); white-space:pre-wrap; word-break:break-word; }
+        /* 確認頁第二層：點一項才進來、完整內容攤開過目（不夾行、不摺疊；長的靠表單區捲動） */
+        .swb-op-body { margin-top:6px; padding:11px 13px; border-radius:10px; background:var(--jrpg-paper); border:1px solid var(--jrpg-line); font-size:14px; line-height:1.6; color:var(--jrpg-ink); white-space:pre-wrap; word-break:break-word; }
         /* 空狀態 */
         .swb-empty { margin:auto; text-align:center; color:var(--jrpg-muted); font-size:14px; line-height:1.7; padding:24px; }
         .swb-empty-art { font-size:40px; margin-bottom:8px; opacity:0.7; }
