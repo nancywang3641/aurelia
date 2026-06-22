@@ -1282,10 +1282,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const e = _wbEntries.find(x => x.uid === o.uid);
             const title = _sgcEsc((o.comment != null ? o.comment : (e && e.comment)) || '(無標題)');
             const keyStr = o.keys ? `｜🔑 ${_sgcEsc(o.keys.join('、'))}` : '';
-            const cont = o.content != null ? `<div class="swb-op-content">${_sgcEsc(String(o.content).slice(0, 220))}</div>` : '';
+            const cont = o.content != null ? `<div class="swb-op-content">${_sgcEsc(String(o.content))}</div>` : '';
             return `<div class="swb-op ${o.op === 'add' ? 'add' : 'upd'}">${o.op === 'add' ? '➕ 新增' : '✏️ 改 #' + o.uid}｜${title}${keyStr}${cont}</div>`;
         }).join('');
-        el.innerHTML = `<div class="swb-pending-hd">AI 想做這些改動（${_wbPending.length}）— 你確認才寫入：</div>${rows}<div class="swb-pending-acts"><button class="swb-btn primary" id="swb-apply">✅ 套用</button><button class="swb-btn" id="swb-cancel">取消</button></div>`;
+        el.innerHTML = `<div class="swb-pending-hd">AI 想做這些改動（${_wbPending.length}）— 你確認才寫入：</div><div class="swb-pending-list">${rows}</div><div class="swb-pending-acts"><button class="swb-btn primary" id="swb-apply">✅ 套用</button><button class="swb-btn" id="swb-cancel">取消</button></div>`;
         host.querySelector('#swb-apply').onclick = () => _wbApply(host);
         host.querySelector('#swb-cancel').onclick = () => { _wbPending = null; _wbRenderPending(host); };
     }
