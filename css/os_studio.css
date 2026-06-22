@@ -419,6 +419,7 @@
         .vc-pack-row { cursor:pointer; }
         .vc-pack-row.on { border-color:var(--jrpg-wine); }
         .vc-pack-check { font-size:19px; color:var(--jrpg-wine); flex-shrink:0; }
+        .vc-uncheck { color:rgba(110,80,40,0.32); }
         .vc-pack-foot { display:flex; align-items:center; gap:10px; padding:10px 2px 4px; border-top:1px solid var(--jrpg-line); }
         .vc-pack-count { flex:1; min-width:0; font-size:13px; color:var(--jrpg-muted); }
         .vc-pack-foot .swb-primary { flex:0 0 auto; }
