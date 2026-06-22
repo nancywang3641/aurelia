@@ -1138,6 +1138,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     let _wbEntryEditing = null; // 條目詳情頁：null=新增，否則=正在編的 uid
     let _wbSearch = '';      // 條目搜尋字
     let _wbFilter = 'all';   // all|on|off 篩選
+    let _wbConfirmIdx = null; // 確認頁第二層：null=改動總覽，數字=看第 N 項完整內容
     let _wbModel = localStorage.getItem('swb_model') === 'sec' ? 'sec' : 'main';   // 世界書二改用主/副模型（預設主：低頻重品質）
     const _wbTH = () => (window.parent || window).TavernHelper || window.TavernHelper;
     const _WB_SYS = `你是世界書編輯助手。下面會給你目前世界書的條目清單，使用者跟你討論要怎麼改或新增條目（可能含成人/NSFW 規則設定，照常專業協助、不要拒絕、不要說教）。\n- 先用一兩句白話回覆討論。\n- 要實際改動世界書時，把每個改動用 <wb> 區塊輸出（沒要改的條目一律別碰、別重列）：\n  新增：<wb op="add"><comment>標題</comment><keys>關鍵字1,關鍵字2</keys><content>條目內容</content></wb>\n  修改：<wb op="update" uid="條目編號"><comment>…</comment><keys>…</keys><content>…</content></wb>（只放要改的欄位，沒放的保留原值）\n  刪除：<wb op="del" uid="條目編號"/>\n- keys 用逗號分隔；常駐條目可留空 keys。只輸出 <wb> 區塊與你的對話，不要解釋格式本身。`;
@@ -1425,7 +1426,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const el = host.querySelector('#swb-pendbar'); if (!el) return;
         if (!_wbPending || !_wbPending.length) { el.innerHTML = ''; return; }
         el.innerHTML = `<button class="swb-pendbtn" id="swb-viewpend">查看 ${_wbPending.length} 項建議 ›</button>`;
-        const b = host.querySelector('#swb-viewpend'); if (b) b.onclick = () => { _wbView = 'confirm'; renderWorldbookPanel(); };
+        const b = host.querySelector('#swb-viewpend'); if (b) b.onclick = () => { _wbConfirmIdx = null; _wbView = 'confirm'; renderWorldbookPanel(); };
     }
     function _wbAdvSheet() {
         _wbSheet('進階設定 · AI 用哪個模型寫', [
@@ -1471,9 +1472,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         }
         return ops;
     }
-    // ⑤ 確認改動（獨立頁；新增綠／修改琥珀／刪除紅；確認才寫）
+    // ⑤ 確認改動（兩層：總覽列每項摘要 → 點一項看完整內容；確認才寫。手機尺寸下長內容用換頁、不摺疊也不一地倒）
+    const _wbOpClass = (op) => op === 'add' ? 'add' : op === 'del' ? 'del' : 'upd';
+    const _wbOpLabel = (op) => op === 'add' ? '新增' : op === 'del' ? '刪除' : '修改';
     function _wbRenderConfirm(host) {
         const ops = _wbPending || [];
+        if (_wbConfirmIdx != null && ops[_wbConfirmIdx]) return _wbRenderConfirmDetail(host, ops[_wbConfirmIdx]);
+        _wbConfirmIdx = null;
         host.innerHTML = `<div class="swb-page">
             <div class="swb-bar">
                 <button class="swb-iconbtn" id="swb-back">‹</button>
@@ -1486,20 +1491,48 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             </div>
         </div>`;
         const listEl = host.querySelector('#swb-conflist');
-        listEl.innerHTML = ops.map(o => {
-            if (o.op === 'del') {
-                const e = _wbEntries.find(x => x.uid === o.uid);
-                return `<div class="swb-card swb-op del"><span class="swb-op-chip">刪除</span><div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(e ? (e.comment || '(無標題)') : '(條目)')}</div></div></div>`;
-            }
+        listEl.innerHTML = ops.map((o, i) => {
             const e = _wbEntries.find(x => x.uid === o.uid);
             const title = _sgcEsc((o.comment != null ? o.comment : (e && e.comment)) || '(無標題)');
-            const cont = o.content != null ? `<div class="swb-op-body">${_sgcEsc(String(o.content))}</div>` : '';
-            const tags = o.keys ? `<div class="swb-tags">${o.keys.length ? o.keys.map(k => `<span class="swb-tag">${_sgcEsc(k)}</span>`).join('') : '<span class="swb-tag muted">常駐</span>'}</div>` : '';
-            return `<div class="swb-card swb-op ${o.op === 'add' ? 'add' : 'upd'}"><span class="swb-op-chip">${o.op === 'add' ? '新增' : '修改'}</span><div class="swb-card-main"><div class="swb-card-title">${title}</div>${cont}${tags}</div></div>`;
+            const src = o.op === 'del' ? (e ? e.content : '') : o.content;
+            const preview = (src != null && src !== '') ? `<div class="swb-card-sum">${_sgcEsc(String(src).replace(/\s+/g, ' ').trim().slice(0, 70))}</div>` : '';
+            return `<div class="swb-card swb-op ${_wbOpClass(o.op)}" data-i="${i}">
+                <span class="swb-op-chip c-${_wbOpClass(o.op)}">${_wbOpLabel(o.op)}</span>
+                <div class="swb-card-main"><div class="swb-card-title">${title}</div>${preview}</div>
+                <span class="swb-chev">›</span>
+            </div>`;
         }).join('');
+        listEl.querySelectorAll('[data-i]').forEach(card => card.onclick = () => { _wbConfirmIdx = parseInt(card.getAttribute('data-i'), 10); renderWorldbookPanel(); });
         host.querySelector('#swb-back').onclick = () => { _wbView = 'chat'; renderWorldbookPanel(); };
         host.querySelector('#swb-backedit').onclick = () => { _wbView = 'chat'; renderWorldbookPanel(); };
         host.querySelector('#swb-apply').onclick = () => _wbApply(host);
+    }
+    function _wbRenderConfirmDetail(host, o) {
+        const e = _wbEntries.find(x => x.uid === o.uid);
+        const title = _sgcEsc((o.comment != null ? o.comment : (e && e.comment)) || '(無標題)');
+        const keysArr = (o.op === 'del' ? (e && e.keys) : (o.keys != null ? o.keys : (e && e.keys))) || [];
+        const keys = keysArr.length ? keysArr.map(k => `<span class="swb-tag">${_sgcEsc(k)}</span>`).join('') : '<span class="swb-tag muted">常駐</span>';
+        const content = o.op === 'del' ? (e ? e.content : '') : o.content;
+        const note = o.op === 'del' ? '<div class="swb-fhint">⚠️ 套用後這條會被刪除。下面是它目前的內容：</div>' : '';
+        host.innerHTML = `<div class="swb-page">
+            <div class="swb-bar">
+                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <span class="swb-op-chip c-${_wbOpClass(o.op)}">${_wbOpLabel(o.op)}</span>
+                <div class="swb-bar-title">${title}</div>
+            </div>
+            <div class="swb-form">
+                ${note}
+                <label class="swb-flabel">關鍵字</label>
+                <div class="swb-tags">${keys}</div>
+                <label class="swb-flabel">內容</label>
+                <div class="swb-op-body">${(content != null && content !== '') ? _sgcEsc(String(content)) : '（無內容）'}</div>
+            </div>
+            <div class="swb-footbar">
+                <button class="swb-primary swb-block" id="swb-back2">‹ 回改動清單</button>
+            </div>
+        </div>`;
+        host.querySelector('#swb-back').onclick = () => { _wbConfirmIdx = null; renderWorldbookPanel(); };
+        host.querySelector('#swb-back2').onclick = () => { _wbConfirmIdx = null; renderWorldbookPanel(); };
     }
     async function _wbApply(host) {
         const TH = _wbTH(); if (!TH || !_wbPending) return;
