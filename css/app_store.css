@@ -14,7 +14,7 @@
 .ws-vhd { flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 12px 12px 10px; background: #fffdf7; border-bottom: 1px solid rgba(110,80,40,0.12); }
 .ws-back { width: 32px; height: 32px; border: none; background: transparent; font-size: 24px; line-height: 1; color: #7a2432; cursor: pointer; border-radius: 9px; }
 .ws-back:active { background: rgba(122,36,50,0.08); }
-.ws-vhd-t { font-size: 16px; font-weight: 700; flex: 1; text-align: center; margin-right: 32px; color: #5e1d25; }
+.ws-vhd-t { font-size: 17px; font-weight: 800; flex: 1; text-align: center; margin-right: 32px; color: #5e1d25; }
 .ws-vbody { flex: 1; overflow-y: auto; padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 10px; }
 
 /* ── 首頁 ── */
@@ -36,7 +36,7 @@
 .ws-card-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ws-card-t { font-size: 16px; font-weight: 800; color: #4a2a24; }
 .ws-card-d { font-size: 12px; color: #8a6a5a; line-height: 1.45; }
-.ws-card-go { font-size: 26px; color: rgba(122,36,50,0.30); flex-shrink: 0; }
+.ws-card-go { font-size: 18px; color: rgba(122,36,50,0.45); flex-shrink: 0; }
 .ws-sec-row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding: 0 2px; }
 .ws-sec-t { font-size: 15px; font-weight: 700; color: #5e1d25; }
 .ws-sec-more { border: none; background: transparent; color: #7a2432; font-size: 12px; cursor: pointer; }
@@ -49,10 +49,10 @@
 .ws-field-t { font-size: 17px; font-weight: 700; text-align: center; color: #5e1d25; }
 .ws-field-d { font-size: 12px; color: #8c7a66; text-align: center; margin-bottom: 4px; }
 .ws-field-lab { font-size: 12px; color: #8c7a66; margin-top: 4px; }
-.ws-input { width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid rgba(110,80,40,0.20); border-radius: 11px; font-size: 13px; outline: none; background: #fffdf7; color: #3a2a1a; }
+.ws-input { width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid rgba(110,80,40,0.20); border-radius: 11px; font-size: 13px; outline: none; background: #fffdf7; color: #3a2a1a; text-align: left; }
 .ws-input:focus { border-color: #b68a45; }
 select.ws-input { appearance: none; -webkit-appearance: none; -moz-appearance: none; padding-right: 34px; cursor: pointer; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%237a2432" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; }
-.ws-emoji { width: 60px; flex-shrink: 0; text-align: center; }
+.ws-emoji { width: 64px; flex-shrink: 0; align-self: flex-start; text-align: center; }
 .ws-ta { width: 100%; box-sizing: border-box; min-height: 92px; padding: 11px 13px; border: 1px solid rgba(110,80,40,0.20); border-radius: 12px; font-size: 13px; outline: none; resize: vertical; background: #fffdf7; color: #3a2a1a; }
 .ws-ta:focus { border-color: #b68a45; }
 .ws-ta-code { min-height: 120px; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.4; }
@@ -102,15 +102,17 @@ select.ws-input { appearance: none; -webkit-appearance: none; -moz-appearance: n
 /* 我的應用：第一層乾淨列（整列可點 → 換頁進操作頁） */
 .ws-mine-row-clean { cursor: pointer; }
 .ws-mine-row-clean:active { background: #faf3e6; }
-.ws-mine-go { margin-left: auto; color: #b68a45; font-size: 22px; line-height: 1; flex-shrink: 0; }
+.ws-mine-go { margin-left: auto; color: #b68a45; font-size: 15px; line-height: 1; flex-shrink: 0; }
 /* 第二層 app 操作頁：分組乾淨列 + toggle */
 .ws-act-group { background: #fffdf7; border: 1px solid rgba(110,80,40,0.12); border-radius: 14px; box-shadow: 0 2px 8px rgba(83,49,20,0.05); overflow: hidden; margin-bottom: 12px; }
 .ws-act-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; font-size: 15px; color: #3a2a1a; cursor: pointer; border-top: 1px solid rgba(110,80,40,0.10); }
 .ws-act-group .ws-act-row:first-child { border-top: none; }
 .ws-act-row:active { background: #faf3e6; }
 .ws-act-row.danger .ws-act-label { color: #a32d2d; }
+.ws-act-ico { width: 22px; flex-shrink: 0; text-align: center; font-size: 16px; color: #7a2432; }
+.ws-act-row.danger .ws-act-ico { color: #a32d2d; }
 .ws-act-label { flex: 1; min-width: 0; }
-.ws-act-go { color: #b68a45; font-size: 20px; flex-shrink: 0; }
+.ws-act-go { color: #b68a45; font-size: 14px; flex-shrink: 0; }
 .ws-act-tog { width: 44px; height: 26px; border-radius: 13px; background: rgba(110,80,40,0.25); position: relative; flex-shrink: 0; transition: 0.2s; }
 .ws-act-tog.on { background: #639922; }
 .ws-act-knob { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: 0.2s; }
