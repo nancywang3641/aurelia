@@ -1207,14 +1207,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         ov.addEventListener('click', (e) => { if (e.target === ov || e.target.hasAttribute('data-cancel')) close(); });
         ov.querySelectorAll('[data-i]').forEach(btn => btn.onclick = () => { close(); const a = actions[parseInt(btn.getAttribute('data-i'), 10)]; a && a.onClick && a.onClick(); });
     }
-    function _wbOpenBook(name) {   // 點書卡：已是副本→直接進；否則問副本/直接
-        if (String(name).startsWith('[VN副本]')) { _wbEnter(name); return; }
-        _wbSheet(`要怎麼編輯「${name}」？`, [
-            { label: '<i class="fa-solid fa-copy"></i> 建立安全副本後編輯（推薦）', cls: 'safe', onClick: () => _wbCopyBook(name) },
-            { label: '<i class="fa-solid fa-pen"></i> 直接改原檔', cls: 'danger', onClick: () => { if (confirm(`⚠️ 直接編輯原檔「${name}」？會動到原始世界書、不是副本。確定？`)) _wbEnter(name); } },
-        ]);
-    }
-    function _wbBookMenu(name) {   // 三點選單
+    function _wbBookMenu(name) {   // 點書卡＝唯一路口，統一選單（複製/編輯/刪除）
         const isCopy = String(name).startsWith('[VN副本]');
         const acts = [];
         if (!isCopy) acts.push({ label: '<i class="fa-solid fa-copy"></i> 建立安全副本後編輯', cls: 'safe', onClick: () => _wbCopyBook(name) });
@@ -1248,8 +1241,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         if (!books.length) { listEl.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-globe"></i></div><div>酒館裡還沒有世界書<br>按上面「新增世界書」開一本吧</div></div>`; return; }
         const _isCopy = (b) => String(b).startsWith('[VN副本]');
         const _bookCard = (b, i) => `<div class="swb-card swb-bookcard${_isCopy(b) ? ' swb-copycard' : ''}" data-book="${_sgcEsc(b)}">
-            <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(_isCopy(b) ? String(b).replace(/^\[VN副本\]-?/, '') : b)}</div><div class="swb-card-meta" data-cnt="${i}">… 條目</div></div>
-            <button class="swb-iconbtn swb-more" data-more="${_sgcEsc(b)}" title="更多"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(b)}</div><div class="swb-card-meta" data-cnt="${i}">… 條目</div></div>
             <span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span>
         </div>`;
         const _copies = [], _origs = [];
@@ -1258,11 +1250,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             ? '<div class="swb-seclabel"><i class="fa-solid fa-copy"></i> 我的副本（改這些，原檔不動）</div>' + _copies.join('')
               + '<div class="swb-seclabel swb-seclabel-div"><i class="fa-solid fa-landmark"></i> 酒館世界書</div>'
             : '') + _origs.join('');
-        listEl.querySelectorAll('.swb-bookcard').forEach(card => card.onclick = (ev) => {
-            if (ev.target.closest('[data-more]')) return;
-            _wbOpenBook(card.getAttribute('data-book'));
-        });
-        listEl.querySelectorAll('[data-more]').forEach(btn => btn.onclick = (ev) => { ev.stopPropagation(); _wbBookMenu(btn.getAttribute('data-more')); });
+        listEl.querySelectorAll('.swb-bookcard').forEach(card => card.onclick = () => _wbBookMenu(card.getAttribute('data-book')));
         books.forEach(async (b, i) => {   // 條目數逐本補（getLorebooks 不給數量）
             let txt = '—';
             try { txt = ((await TH.getLorebookEntries(b)) || []).length + ' 條目'; } catch (e) {}
