@@ -49,7 +49,7 @@
       +       '<div class="ws-home-hd"><button class="ws-back ws-home-back" type="button" title="返回桌面"><i class="fa-solid fa-chevron-left"></i></button><div class="ws-home-hd-tx"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div></div>'
       +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
-      +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="vn-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板</span><span class="ws-card-d">用 AI 打造專屬劇情面板，存進創作室展廳隨時取用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +       '<button class="ws-card ws-card-vn" data-go="vncomp" type="button"><img class="ws-card-ic" data-asset="vn-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 組件清單</span><span class="ws-card-d">瀏覽、整理、打包你做好的 VN 組件</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<div class="ws-sec-row"><span class="ws-sec-t">我的應用</span><button class="ws-sec-more" data-go="mine" type="button">查看全部 <i class="fa-solid fa-chevron-right"></i></button></div>'
       +       '<div class="ws-home-mine" id="ws-home-mine"></div>'
       +     '</div>'
@@ -115,6 +115,17 @@
             c.querySelectorAll('[data-go="workshop"]').forEach(function (el) {
                 el.setAttribute('data-go', '');            // 解除舊路由，避免 _go 切到死的 workshop view
                 el.addEventListener('click', openStudio);
+            });
+        })();
+        // 「VN 組件清單」入口：開獨立 VN 組件區（乾淨四頁，不進創作室的聊天/預覽窗；繼續編輯才橋接創作室）
+        (function () {
+            c.querySelectorAll('[data-go="vncomp"]').forEach(function (el) {
+                el.setAttribute('data-go', '');            // 解除路由，避免 _go 切到不存在的 view
+                el.addEventListener('click', function (e) {
+                    if (e) e.stopPropagation();
+                    if (win.OS_STUDIO && win.OS_STUDIO.openVnComponents) win.OS_STUDIO.openVnComponents(c);
+                    else _toast(c, '❌ 創作室未載入');
+                });
             });
         })();
         _bindImport(c);
