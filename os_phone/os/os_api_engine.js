@@ -401,6 +401,16 @@
             this.chat(messages, secConfig, onChunk, onFinish, onError);
         },
 
+        // 主模型入口（對稱 chatSecondary）：低頻重品質任務用（如世界書二改，大世界觀給 Flash 寫品質會掉）
+        chatMain: async function(messages, onChunk, onFinish, onError) {
+            let mainConfig = {};
+            if (win.OS_SETTINGS && typeof win.OS_SETTINGS.getConfig === 'function') {
+                mainConfig = Object.assign({}, win.OS_SETTINGS.getConfig());
+            }
+            mainConfig._isSecondary = false;   // 明確走主模型連線（防 getConfig 回傳被副模型標過的共用物件）
+            this.chat(messages, mainConfig, onChunk, onFinish, onError);
+        },
+
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpText(); } catch (e) {}   // 文字 API 計數（副模型/PWA主模型/總結都走這）
             const globalUserName = this.getGlobalUserName();
