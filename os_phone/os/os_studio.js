@@ -1133,6 +1133,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     let _wbChat = [];        // [{role,content}]
     let _wbEntries = [];     // 目前條目快取
     let _wbPending = null;   // 待套用 ops
+    let _wbModel = localStorage.getItem('swb_model') === 'sec' ? 'sec' : 'main';   // 世界書二改用主/副模型（預設主：低頻重品質）
     const _wbTH = () => (window.parent || window).TavernHelper || window.TavernHelper;
     const _WB_SYS = `你是世界書編輯助手。下面會給你目前世界書的條目清單，使用者跟你討論要怎麼改或新增條目（可能含成人/NSFW 規則設定，照常專業協助、不要拒絕、不要說教）。\n- 先用一兩句白話回覆討論。\n- 要實際改動世界書時，把每個改動用 <wb> 區塊輸出（沒要改的條目一律別碰、別重列）：\n  新增：<wb op="add"><comment>標題</comment><keys>關鍵字1,關鍵字2</keys><content>條目內容</content></wb>\n  修改：<wb op="update" uid="條目編號"><comment>…</comment><keys>…</keys><content>…</content></wb>（只放要改的欄位，沒放的保留原值）\n  刪除：<wb op="del" uid="條目編號"/>\n- keys 用逗號分隔；常駐條目可留空 keys。只輸出 <wb> 區塊與你的對話，不要解釋格式本身。`;
 
@@ -1207,6 +1208,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 <button class="swb-btn" id="swb-back">‹ 返回</button>
                 <span class="swb-working" title="${_sgcEsc(_wbWorking)}">${isCopy ? '📋' : '✏️'} ${_sgcEsc(_wbWorking)}</span>
                 ${isCopy ? '<span class="swb-safe">副本·原檔安全</span>' : '<span class="swb-warn">⚠️ 直接改原檔</span>'}
+                <div class="swb-model-seg" id="swb-model-seg">
+                    <button class="swb-seg-btn${_wbModel === 'main' ? ' on' : ''}" data-m="main">主模型</button>
+                    <button class="swb-seg-btn${_wbModel === 'sec' ? ' on' : ''}" data-m="sec">副模型</button>
+                </div>
             </div>
             <div class="swb-entries" id="swb-entries"></div>
             <div class="swb-chat" id="swb-chat"></div>
@@ -1219,6 +1224,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         _wbRenderEntries(host); _wbRenderChat(host); _wbRenderPending(host);
         host.querySelector('#swb-back').onclick = () => { _wbWorking = null; _wbPending = null; renderWorldbookPanel(); };
         host.querySelector('#swb-send').onclick = () => _wbSend(host);
+        host.querySelectorAll('#swb-model-seg .swb-seg-btn').forEach(b => b.onclick = () => {
+            _wbModel = b.getAttribute('data-m') === 'sec' ? 'sec' : 'main';
+            localStorage.setItem('swb_model', _wbModel);
+            host.querySelectorAll('#swb-model-seg .swb-seg-btn').forEach(x => x.classList.toggle('on', x.getAttribute('data-m') === _wbModel));
+        });
     }
     function _wbRenderEntries(host) {
         const el = host.querySelector('#swb-entries'); if (!el) return;
@@ -1247,7 +1257,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const ta = host.querySelector('#swb-msg'); const msg = (ta.value || '').trim();
         if (!msg) return;
         const api = (window.parent || window).OS_API || window.OS_API;
-        if (!api || typeof api.chatSecondary !== 'function') { alert('AI（副模型）不可用，請先到「寫作 → API 設置」設好副模型'); return; }
+        if (!api || (typeof api.chatSecondary !== 'function' && typeof api.chatMain !== 'function')) { alert('AI 不可用，請先到「寫作 → API 設置」設好模型'); return; }
         _wbChat.push({ role: 'user', content: msg }); ta.value = '';
         _wbRenderChat(host);
         const sendBtn = host.querySelector('#swb-send'); if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '生成中…'; }
@@ -1260,8 +1270,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             if (!_wbPending.length) _wbPending = null;
             _wbRenderChat(host); _wbRenderPending(host);
         };
-        try { api.chatSecondary(messages, () => {}, done, (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } alert('AI 失敗：' + (err && err.message || err)); }); }
-        catch (e) { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } alert('AI 失敗：' + (e && e.message || e)); }
+        const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } alert('AI 失敗：' + (err && err.message || err)); };
+        // 主模型＝chatMain（品質好、世界書二改首選）；副模型＝chatSecondary。選的入口若不存在則退另一個。
+        const useMain = _wbModel === 'main' && typeof api.chatMain === 'function';
+        const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
+        try { callFn.call(api, messages, () => {}, done, errCb); }
+        catch (e) { errCb(e); }
     }
     function _wbParseOps(text) {
         const ops = []; const re = /<wb\s+op="(add|update|del)"(?:\s+uid="(\d+)")?\s*(?:\/>|>([\s\S]*?)<\/wb>)/gi; let m;
