@@ -2864,7 +2864,7 @@ ${cleanFormat}
         const box = document.createElement('div');
         box.className = 'vc-thumb';
         box.setAttribute('data-thumb', '1');
-        box.innerHTML = '<span class="vc-thumb-ph">🧩</span>';
+        box.innerHTML = '<span class="vc-thumb-ph"><i class="fa-solid fa-puzzle-piece"></i></span>';
         box._tpl = tpl; box._safeTagId = safeTagId;
         return box;
     }
@@ -2921,7 +2921,7 @@ ${cleanFormat}
         const chip = (label, gid, on) => `<button class="vc-chip${on ? ' on' : ''}" type="button" data-gid="${_sgcEsc(gid)}">${_sgcEsc(label)}</button>`;
         tagbar.innerHTML = chip('全部', 'all', _vcFilterGid === 'all')
             + groups.map(g => chip(g.name, g.id, _vcFilterGid === g.id)).join('')
-            + '<button class="vc-chip vc-chip-add" type="button" data-newgroup="1">＋ 群組</button>';
+            + '<button class="vc-chip vc-chip-add" type="button" data-newgroup="1"><i class="fa-solid fa-plus"></i> 群組</button>';
         tagbar.querySelectorAll('[data-gid]').forEach(b => b.onclick = () => { _vcFilterGid = b.getAttribute('data-gid'); _vcBrowseScroll = 0; renderVnComponents(); });
         tagbar.querySelector('[data-newgroup]').onclick = () => _createGroup();
         listEl.appendChild(tagbar);
@@ -2929,7 +2929,7 @@ ${cleanFormat}
         // 搜尋框
         const search = document.createElement('div');
         search.className = 'vc-search';
-        search.innerHTML = '<span class="vc-search-ico">🔍</span><input class="vc-search-input" type="text" placeholder="搜尋組件…">';
+        search.innerHTML = '<span class="vc-search-ico"><i class="fa-solid fa-magnifying-glass"></i></span><input class="vc-search-input" type="text" placeholder="搜尋組件…">';
         const si = search.querySelector('.vc-search-input'); si.value = _vcSearch;
         si.oninput = () => { _vcSearch = si.value; _vcApplyBrowseFilter(listEl); };
         listEl.appendChild(search);
@@ -2944,7 +2944,7 @@ ${cleanFormat}
                 bar.className = 'vc-batchbar';
                 bar.innerHTML = `<span class="vc-batchbar-name">「${_sgcEsc(grp.name)}」整組一鍵開關</span>
                     <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input"${st === 'on' ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
-                    <button class="vc-batchbar-mng" type="button" title="群組管理">⚙️</button>`;
+                    <button class="vc-batchbar-mng" type="button" title="群組管理"><i class="fa-solid fa-gear"></i></button>`;
                 const sw = bar.querySelector('.sgc-switch-input');
                 if (st === 'partial') sw.indeterminate = true;
                 sw.onchange = async () => { await _setGroupActive(members, st !== 'on'); renderVnComponents(); };
@@ -2970,7 +2970,7 @@ ${cleanFormat}
 
         // 底部：選擇並打包
         const foot = document.createElement('div'); foot.className = 'vc-browse-foot';
-        foot.innerHTML = `<button class="vc-pack-cta" type="button"${templates.length ? '' : ' disabled'}>📦 選擇並打包</button>`;
+        foot.innerHTML = `<button class="vc-pack-cta" type="button"${templates.length ? '' : ' disabled'}><i class="fa-solid fa-box-archive"></i> 選擇並打包</button>`;
         foot.querySelector('.vc-pack-cta').onclick = () => { if (!templates.length) return; _vcPackSel.clear(); _vcView = 'package'; renderVnComponents(); };
         listEl.appendChild(foot);
 
@@ -2998,7 +2998,7 @@ ${cleanFormat}
                 <div class="vc-card-tags">${tags}</div>
             </div>
             <span class="vc-dot${tpl.isActive ? ' on' : ''}" title="${tpl.isActive ? '啟用中' : '停用'}"></span>
-            <span class="vc-chev">›</span>`;
+            <span class="vc-chev"><i class="fa-solid fa-chevron-right"></i></span>`;
         card.insertBefore(_vcThumbBox(tpl, safeTagId), card.firstChild);
         card.onclick = () => {
             const content = document.getElementById('studio-gallery-content');
@@ -3016,7 +3016,7 @@ ${cleanFormat}
         const previewHtml = (tpl.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B');
         listEl.innerHTML = `
             <div class="swb-bar">
-                <button class="swb-iconbtn" id="vc-back" type="button">‹</button>
+                <button class="swb-iconbtn" id="vc-back" type="button"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="swb-bar-title">${_sgcEsc((tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知')}</div>
             </div>
             <div class="vc-page">
@@ -3032,13 +3032,13 @@ ${cleanFormat}
                     ${tpl.css ? `<style>${tpl.css}</style>` : ''}
                     <div class="vn-dynamic-panel-${safeTagId} vc-pv-panel">${previewHtml}</div>
                 </div></div>
-                <button class="swb-primary vc-full" id="vc-continue" type="button">✏️ 繼續編輯</button>
+                <button class="swb-primary vc-full" id="vc-continue" type="button"><i class="fa-solid fa-pen-to-square"></i> 繼續編輯</button>
                 <div class="vc-row2">
-                    <button class="swb-secondary" id="vc-dup" type="button">📄 複製組件</button>
-                    <button class="swb-secondary" id="vc-export" type="button">📦 匯出</button>
+                    <button class="swb-secondary" id="vc-dup" type="button"><i class="fa-solid fa-copy"></i> 複製組件</button>
+                    <button class="swb-secondary" id="vc-export" type="button"><i class="fa-solid fa-file-export"></i> 匯出</button>
                 </div>
-                <button class="vc-navrow" id="vc-settings" type="button"><span class="vc-navrow-ico">⚙️</span><span class="vc-navrow-label">使用與設置</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
-                <div class="vc-delzone"><button class="vc-delbtn" id="vc-del" type="button">🗑 刪除組件</button></div>
+                <button class="vc-navrow" id="vc-settings" type="button"><span class="vc-navrow-ico"><i class="fa-solid fa-gear"></i></span><span class="vc-navrow-label">使用與設置</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
+                <div class="vc-delzone"><button class="vc-delbtn" id="vc-del" type="button"><i class="fa-solid fa-trash"></i> 刪除組件</button></div>
             </div>`;
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'browse'; renderVnComponents(); };
         listEl.querySelector('#vc-d-active').onchange = async (e) => { await _setComponentActive(tpl, e.target.checked); };
@@ -3072,7 +3072,7 @@ ${cleanFormat}
         } catch (e) {}
         copy.tagId = nt;
         await db.saveVNTagTemplate(copy);
-        _studioToast(`✅ 已複製成「${copy.title}」（預設停用，到設置開啟）`, 'success', '複製組件');
+        _studioToast(`已複製成「${copy.title}」（預設停用，到設置開啟）`, 'success', '複製組件');
         _vcTpl = null; _vcView = 'browse'; renderVnComponents();
     }
 
@@ -3083,12 +3083,12 @@ ${cleanFormat}
         const safeFmt = (tpl.demoFormat || '無結構定義').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const phoneRec = (_vcAllPhoneApps || []).find(a => a && a.srcTplId === tpl.id);
         const phoneRow = (tpl.caps === 'display') ? '' : `
-                    <div class="vc-set-row"><span class="vc-set-label">📱 裝到手機</span>
+                    <div class="vc-set-row"><span class="vc-set-label"><i class="fa-solid fa-mobile-screen"></i> 裝到手機</span>
                         <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-phone"${phoneRec ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
                     </div>`;
         listEl.innerHTML = `
             <div class="swb-bar">
-                <button class="swb-iconbtn" id="vc-back" type="button">‹</button>
+                <button class="swb-iconbtn" id="vc-back" type="button"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="swb-bar-title">使用與設置</div>
             </div>
             <div class="vc-page">
@@ -3098,21 +3098,21 @@ ${cleanFormat}
                         <div class="sgc-format-text">${safeFmt}</div>
                         <textarea class="sgc-format-input vc-hide" id="vc-fmt-input">${_sgcEsc(tpl.demoFormat || '')}</textarea>
                         <div class="vc-fmt-actions">
-                            <button class="swb-secondary btn-edit-fmt" type="button">✏️ 編輯</button>
-                            <button class="swb-secondary btn-save-fmt vc-hide" type="button">💾 儲存</button>
-                            <button class="swb-secondary btn-cancel-fmt vc-hide" type="button">✖ 取消</button>
+                            <button class="swb-secondary btn-edit-fmt" type="button"><i class="fa-solid fa-pen"></i> 編輯</button>
+                            <button class="swb-secondary btn-save-fmt vc-hide" type="button"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+                            <button class="swb-secondary btn-cancel-fmt vc-hide" type="button"><i class="fa-solid fa-xmark"></i> 取消</button>
                         </div>
                     </div>
                 </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">整合</div>
-                    <button class="vc-navrow" id="vc-import-st" type="button"><span class="vc-navrow-ico">📥</span><span class="vc-navrow-label">注入酒館正則</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
+                    <button class="vc-navrow" id="vc-import-st" type="button"><span class="vc-navrow-ico"><i class="fa-solid fa-file-import"></i></span><span class="vc-navrow-label">注入酒館正則</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
                     ${phoneRow}
-                    <div class="vc-set-row"><span class="vc-set-label">🏠 大廳顯示</span>
+                    <div class="vc-set-row"><span class="vc-set-label"><i class="fa-solid fa-house"></i> 大廳顯示</span>
                         <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-lobby"${tpl.lobbyEnabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
                     </div>
                 </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">進階</div>
-                    <button class="vc-navrow" id="vc-raw" type="button"><span class="vc-navrow-ico">📝</span><span class="vc-navrow-label">編輯原碼</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
+                    <button class="vc-navrow" id="vc-raw" type="button"><span class="vc-navrow-ico"><i class="fa-solid fa-code"></i></span><span class="vc-navrow-label">編輯原碼</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
                 </div>
             </div>`;
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'detail'; renderVnComponents(); };
@@ -3123,7 +3123,7 @@ ${cleanFormat}
         const setEditing = (on) => { fmtText.classList.toggle('vc-hide', on); bE.classList.toggle('vc-hide', on); fmtInput.classList.toggle('vc-hide', !on); bS.classList.toggle('vc-hide', !on); bC.classList.toggle('vc-hide', !on); };
         bE.onclick = () => setEditing(true);
         bC.onclick = () => { fmtInput.value = tpl.demoFormat || ''; setEditing(false); };
-        bS.onclick = async () => { tpl.demoFormat = fmtInput.value; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); _studioToast('✅ 已儲存觸發格式', 'success', '設置'); _vcRenderSettings(listEl); };
+        bS.onclick = async () => { tpl.demoFormat = fmtInput.value; await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); _studioToast('已儲存觸發格式', 'success', '設置'); _vcRenderSettings(listEl); };
         listEl.querySelector('#vc-import-st').onclick = () => importToSillyTavern(tpl);
         const phoneInput = listEl.querySelector('#vc-set-phone');
         if (phoneInput) phoneInput.onchange = async (e) => { await _vcTogglePhone(tpl, e.target.checked); };
@@ -3154,14 +3154,14 @@ ${cleanFormat}
         const allSel = templates.length > 0 && templates.every(t => _vcPackSel.has(t.id));
         listEl.innerHTML = `
             <div class="swb-bar">
-                <button class="swb-iconbtn" id="vc-back" type="button">‹</button>
+                <button class="swb-iconbtn" id="vc-back" type="button"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="swb-bar-title">選擇並打包</div>
-                <button class="swb-iconbtn" id="vc-selall" type="button" title="全選/全不選">${allSel ? '☑' : '☐'}</button>
+                <button class="swb-iconbtn" id="vc-selall" type="button" title="全選/全不選">${allSel ? '<i class="fa-solid fa-square-check"></i>' : '<i class="fa-solid fa-square vc-uncheck"></i>'}</button>
             </div>
             <div class="vc-page"><div class="vc-list" id="vc-pack-list"></div></div>
             <div class="vc-pack-foot">
                 <span class="vc-pack-count" id="vc-pack-count"></span>
-                <button class="swb-primary" id="vc-pack-go" type="button">✅ 驗證並打包</button>
+                <button class="swb-primary" id="vc-pack-go" type="button"><i class="fa-solid fa-circle-check"></i> 驗證並打包</button>
             </div>`;
         const list = listEl.querySelector('#vc-pack-list');
         if (!templates.length) {
@@ -3173,7 +3173,7 @@ ${cleanFormat}
                 const row = document.createElement('button');
                 row.type = 'button';
                 row.className = 'vc-card vc-pack-row' + (on ? ' on' : '');
-                row.innerHTML = `<span class="vc-pack-check">${on ? '☑' : '☐'}</span>
+                row.innerHTML = `<span class="vc-pack-check">${on ? '<i class="fa-solid fa-square-check"></i>' : '<i class="fa-solid fa-square vc-uncheck"></i>'}</span>
                     <div class="vc-card-main"><div class="vc-card-title">${_sgcEsc((tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知')}</div></div>`;
                 row.insertBefore(_vcThumbBox(tpl, safeTagId), row.children[1]);
                 row.onclick = () => { if (_vcPackSel.has(tpl.id)) _vcPackSel.delete(tpl.id); else _vcPackSel.add(tpl.id); _vcRenderPackage(listEl); };
@@ -3190,7 +3190,7 @@ ${cleanFormat}
             const sel = templates.filter(t => _vcPackSel.has(t.id));
             const today = new Date().toISOString().slice(0, 10);
             _downloadVnUiPack(sel, `aurelia-vn-ui-pack-${today}.json`);
-            _studioToast(`✅ 已打包 ${sel.length} 個組件，已下載到本機。`, 'success', '打包');
+            _studioToast(`已打包 ${sel.length} 個組件，已下載到本機。`, 'success', '打包');
         };
     }
 
@@ -3251,7 +3251,7 @@ ${cleanFormat}
         modal.className = 'sgc-modal';
         modal.innerHTML = `
             <div class="sgc-modal-card">
-                <div class="sgc-modal-title">🗂️ 群組管理</div>
+                <div class="sgc-modal-title"><i class="fa-solid fa-layer-group"></i> 群組管理</div>
                 <div class="sgc-modal-row">
                     <input class="sgc-modal-name" type="text" value="${_sgcEsc(group.name)}" placeholder="群組名稱">
                     <button class="sgc-mini-btn" id="sgc-grp-rename" type="button">改名</button>
@@ -3259,7 +3259,7 @@ ${cleanFormat}
                 <div class="sgc-modal-sub">指派成員（勾選＝屬於這組；組件可同時屬於多組）</div>
                 <div class="sgc-assign-list">${rows}</div>
                 <div class="sgc-modal-actions">
-                    <button class="sgc-mini-btn danger" id="sgc-grp-del" type="button">🗑️ 刪除群組</button>
+                    <button class="sgc-mini-btn danger" id="sgc-grp-del" type="button"><i class="fa-solid fa-trash"></i> 刪除群組</button>
                     <button class="sgc-mini-btn" id="sgc-grp-close" type="button">關閉</button>
                 </div>
             </div>`;
