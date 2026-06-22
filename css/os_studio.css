@@ -101,6 +101,8 @@
         .swb-op.upd .swb-op-chip { background:var(--swb-amber); }
         .swb-op.del { border-left:4px solid var(--swb-danger); }
         .swb-op.del .swb-op-chip { background:var(--swb-danger); }
+        /* 確認頁：完整內容攤開給用戶過目（不夾行、不藏展開鈕），長的靠頁面捲動 */
+        .swb-op-body { margin-top:7px; padding:9px 11px; border-radius:9px; background:var(--jrpg-paper); border:1px solid var(--jrpg-line); font-size:13px; line-height:1.55; color:var(--jrpg-ink); white-space:pre-wrap; word-break:break-word; }
         /* 空狀態 */
         .swb-empty { margin:auto; text-align:center; color:var(--jrpg-muted); font-size:14px; line-height:1.7; padding:24px; }
         .swb-empty-art { font-size:40px; margin-bottom:8px; opacity:0.7; }
