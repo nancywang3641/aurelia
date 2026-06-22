@@ -59,16 +59,21 @@
                 payload +
                 `\n</劇情總結>`;
 
+            // 注入深度：injectPrompts 只支援 in_chat/none（不支援 before_char_defs），故「最深」＝ in_chat 大 depth
+            //   ＝聊天歷史最頂（人設/世界書之後、所有對話訊息之前）。預設 999 讓 ST 夾到聊天頂；可用 localStorage
+            //   sp_summary_inject_depth 自調(數字越小越貼最新訊息、越大越深/越上面)。
+            let _depth = parseInt(localStorage.getItem('sp_summary_inject_depth'));
+            if (isNaN(_depth) || _depth < 0) _depth = 999;
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
                 content: block.trim(),
                 position: 'in_chat',
-                depth: 1,
+                depth: _depth,
                 role: 'system'
             }], { once: true });
             _lastUninject = result?.uninject || null;
             _lastInjected = { chatId, text: block.trim(), len: block.length };
-            console.log(`📜 [Grand Summary Injector] 注入大總結壓縮版（chatId=${chatId}、${payload.length} 字）`);
+            console.log(`📜 [Grand Summary Injector] 注入大總結壓縮版（chatId=${chatId}、${payload.length} 字、depth=${_depth}）`);
         } catch (e) {
             console.warn('[Grand Summary Injector] 失敗:', e?.message || e);
         }
