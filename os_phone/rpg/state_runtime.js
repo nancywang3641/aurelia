@@ -688,7 +688,8 @@ ${numberedText}`;
             const _sceneCfg = (function(){ try { return (JSON.parse(localStorage.getItem('os_image_config')||'{}').sceneGen) || {}; } catch(e){ return {}; } })();
             const _scenePromptText = _pickScenePrompt(_sceneCfg);
             // 建檔/套預設的「初始填充」傳 skipScenes:true → 只填狀態、不搭便車生場景插圖（建檔不是劇情推進，不該生圖）
-            const wantScenes = !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText);
+            // 開了「獨立插圖副模型」→ 搭便車插圖停（改走 extractScenesStandalone 那條獨立通）；沒開＝照舊搭便車
+            const wantScenes = !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText) && !_sceneCfg.standaloneEnabled;
 
             if (!hasState && !wantMemory) return;   // 兩邊都沒事做
 
@@ -816,6 +817,72 @@ ${numberedText}`;
         } finally {
             _running = false;
         }
+    }
+
+    // 🎯 獨立插圖副模型：scenes 拆成「單獨一通 chatSecondary」，只吃 standaloneSpec、不背 AVS/記憶。
+    //    開關在 圖片設定→插圖→「獨立插圖副模型」。沒開＝走 extractOnce 搭便車路（上面，原碼保留），互不影響。
+    let _sceneRunning = false;
+    let _sceneDebounce = null;
+    async function extractScenesStandalone() {
+        if (_sceneRunning) return;
+        _sceneRunning = true;
+        try {
+            if (win.__AURELIA_SUMMARIZING) return;
+            const sg = (function () { try { return (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen) || {}; } catch (e) { return {}; } })();
+            if (!sg.standaloneEnabled) return;
+            const spec = String(sg.standaloneSpec || '').trim();
+            if (!spec) return;
+            if (!win.OS_API?.chatSecondary || !win.VN_SceneInsert?.fromExtract) return;
+            const chatId = getChatId();
+            if (!chatId) return;
+            // 截斷守門（簡版）：API 報錯 / 半截正文 → 別生圖
+            try {
+                const _arr = await win.TavernHelper?.getChatMessages?.(-1);
+                const _raw = String((_arr && _arr[0] && (_arr[0].message || _arr[0].mes)) || '');
+                const _t = _raw.trim();
+                if (/^\[API Error\]/i.test(_t) || (_t.length < 200 && /(x-api-key|invalid_credentials|Authentication required|API 返回內容為空)/i.test(_t))) return;
+                if (_raw.indexOf('<content>') !== -1 && _raw.indexOf('</content>') === -1) return;
+            } catch (e) {}
+            const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
+            if (!recentText || lastId < 0) return;
+            const paras = _segmentStory(lastContent || '');
+            if (!paras.length) return;
+            const numbered = paras.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
+            // {{角色}} 登記表（同搭便車：頭像詞 + 代號 Cn）
+            const currentState = win._AVS_ENGINE?.read?.() || {};
+            const nameMap = await _buildLooksMap(currentState);
+            const names = Object.keys(nameMap);
+            const entries = names.map((n, i) => ({ code: 'C' + (i + 1), name: n }));
+            const looksMap = { ...nameMap };
+            entries.forEach(e => { looksMap[e.code] = nameMap[e.name]; });
+            const charList = entries.length ? entries.map(e => e.code + '. ' + e.name).join('｜') : '（無已登記角色，路人 NPC 自己寫外觀）';
+            const userMsg = `${spec}\n\n【已登記角色（畫到就用 {{代號}} 或 {{角色名}}，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
+            const messages = [
+                { role: 'system', content: '你是場景插圖提示詞生成器，只輸出 scenes JSON、絕不寫劇情。' },
+                { role: 'user', content: userMsg }
+            ];
+            const raw = await new Promise((res, rej) => {
+                let done = false;
+                const timer = setTimeout(() => { if (done) return; done = true; rej(new Error('獨立插圖副模型超時')); }, CONFIG.timeoutMs);
+                win.OS_API.chatSecondary(messages, null,
+                    (text) => { if (done) return; done = true; clearTimeout(timer); res(text); },
+                    (err) => { if (done) return; done = true; clearTimeout(timer); rej(err); });
+            });
+            const json = extractJSON(raw);
+            if (!json || !Array.isArray(json.scenes) || !json.scenes.length) { console.warn('[獨立插圖] 輸出不含 scenes'); return; }
+            const mapped = json.scenes.map(s => {
+                let after = '';
+                const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
+                if (n >= 1 && paras[n - 1]) after = paras[n - 1];
+                else if (s.after) after = String(s.after);
+                return { after, prompt: _expandSceneNames(s.prompt, looksMap) };
+            }).filter(s => s && s.prompt);
+            if (mapped.length) {
+                win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: lastId });
+                console.log(`🖼️ [獨立插圖] 派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? '?').join(',')}]/共${paras.length}段 (msg#${lastId})`);
+            }
+        } catch (e) { console.warn('[獨立插圖] 失敗:', e?.message || e); }
+        finally { _sceneRunning = false; }
     }
 
     // --- inject AVS rules：把當前生效規則的 <behavior_rules> 塞主模型 system prompt ---
@@ -951,6 +1018,9 @@ ${numberedText}`;
         win.eventOn(win.tavern_events.GENERATION_ENDED, () => {
             console.log('[State Runtime] 🔎 GENERATION_ENDED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷：抽取的事件是否落在旗標窗內
             if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結的 generateRaw 也會發 GENERATION_ENDED → 別抽，否則重複 AVS/記憶/場景生圖
+            // 🎯 獨立插圖副模型：獨立於狀態系統(AVS)，狀態關著也能跑 → 在 isEnabled 檢查前排程；函式自己看開關
+            clearTimeout(_sceneDebounce);
+            _sceneDebounce = setTimeout(extractScenesStandalone, CONFIG.debounceMs + 600);
             if (!isEnabled()) return;
             clearTimeout(_debounceTimer);
             _debounceTimer = setTimeout(extractOnce, CONFIG.debounceMs);
