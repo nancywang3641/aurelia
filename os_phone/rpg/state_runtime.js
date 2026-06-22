@@ -986,7 +986,7 @@ ${numberedText}`;
                 id: CONFIG.avatarInjectId,
                 content,
                 position: 'in_chat',
-                depth: 4,
+                depth: 0,           // 越小越深、最貼生成點(最後一個讀到→最難被忽略)
                 role: 'system'
             }], { once: true });
             _lastAvatarUninject = result?.uninject || null;
