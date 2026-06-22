@@ -3020,6 +3020,9 @@ ${cleanFormat}
                 <div class="swb-bar-title">${_sgcEsc((tpl.title && String(tpl.title).trim()) || tpl.tagId || '未知')}</div>
             </div>
             <div class="vc-page">
+                <div class="vc-set-row vc-enable-row"><span class="vc-set-label">啟用這個組件</span>
+                    <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-d-active"${tpl.isActive ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
+                </div>
                 <div class="studio-pv-tabs">
                     <button class="studio-pv active" data-pv="phone">手機</button>
                     <button class="studio-pv" data-pv="center">中間</button>
@@ -3038,6 +3041,7 @@ ${cleanFormat}
                 <div class="vc-delzone"><button class="vc-delbtn" id="vc-del" type="button">🗑 刪除組件</button></div>
             </div>`;
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'browse'; renderVnComponents(); };
+        listEl.querySelector('#vc-d-active').onchange = async (e) => { await _setComponentActive(tpl, e.target.checked); };
         listEl.querySelector('#vc-continue').onclick = () => {
             if (!confirm(`✏️ 把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議，AI 只會微調\n• 改完按「✅ 確定創建」會覆蓋這個面板\n\n確定嗎？`)) return;
             _enterEditMode(tpl);
@@ -3088,9 +3092,6 @@ ${cleanFormat}
                 <div class="swb-bar-title">使用與設置</div>
             </div>
             <div class="vc-page">
-                <div class="vc-set-row"><span class="vc-set-label">啟用這個組件</span>
-                    <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-active"${tpl.isActive ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
-                </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">歸到群組</div><div id="vc-set-groups"></div></div>
                 <div class="vc-set-block"><div class="vc-set-blabel">觸發格式</div>
                     <div class="sgc-format-box">
@@ -3116,7 +3117,6 @@ ${cleanFormat}
             </div>`;
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'detail'; renderVnComponents(); };
         listEl.querySelector('#vc-set-groups').appendChild(_buildGroupAssignRow(tpl));
-        listEl.querySelector('#vc-set-active').onchange = async (e) => { await _setComponentActive(tpl, e.target.checked); };
         const fmtBox = listEl.querySelector('.sgc-format-box');
         const fmtText = fmtBox.querySelector('.sgc-format-text'), fmtInput = fmtBox.querySelector('.sgc-format-input');
         const bE = fmtBox.querySelector('.btn-edit-fmt'), bS = fmtBox.querySelector('.btn-save-fmt'), bC = fmtBox.querySelector('.btn-cancel-fmt');
