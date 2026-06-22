@@ -117,6 +117,9 @@
 
     // 切換視圖
     function _go(c, view) {
+        // 空字串／不存在的目標（例：AI生成卡 data-go 被 openStudio 解除成 ''，但通用監聽仍會帶 '' 進來）
+        // 不可硬切——否則所有 .ws-view 都被關掉，開完創作室返回工坊就整片空白（nav 還在、內容沒了）。
+        if (!view || !c.querySelector('.ws-view[data-view="' + view + '"]')) return;
         c.querySelectorAll('.ws-view').forEach(function (v) { v.classList.toggle('active', v.dataset.view === view); });
         c.querySelectorAll('.ws-nav-b').forEach(function (b) { b.classList.toggle('active', b.dataset.go === view); });
         var body = c.querySelector('.ws-view[data-view="' + view + '"] .ws-vbody') || c.querySelector('.ws-view[data-view="' + view + '"]');
