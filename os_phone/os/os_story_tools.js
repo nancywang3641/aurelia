@@ -787,30 +787,26 @@
                     const bgMatch = finalContent.match(/\[Bg\|[^|]*\|([^|]+)\|/);
                     const bgCacheId = bgMatch ? bgMatch[1].trim() : '';
 
-                    let newCharacters = characters;
+                    // 只沿用第一次的故事標題（不再做角色去重累積——改存「完整去重角色表」）
                     try {
                         const existing = await osDb.getAllLobbySummaryIndex();
-                        const seen = new Set();
                         for (const r of existing) {
                             if ((r.cardName || '') !== cardName) continue;
                             if ((r.chatId || '') !== chatId) continue;
-                            for (const c of (r.characters || [])) seen.add(c.name || c);
-                            if (r.storyTitle && !storyTitle) storyTitle = r.storyTitle;
-                            if (r.storyTitle) storyTitle = r.storyTitle;  // 強制沿用第一次
+                            if (r.storyTitle) storyTitle = r.storyTitle;   // 沿用第一次的標題
                         }
-                        newCharacters = characters.filter(c => !seen.has(c.name));
-                    } catch (_) { /* dedup 失敗就照寫 */ }
+                    } catch (_) {}
 
-                    if (brief || newCharacters.length) {
+                    if (brief || characters.length) {
                         await osDb.saveLobbySummaryIndex({
                             cardName, chatId, storyTitle, bgCacheId, summaryCount, brief,
-                            characters: newCharacters,
+                            characters,   // 存「這次大總結的完整去重角色表」(不再只存新增)→ 日誌用最新一筆即反映去重結果、不再賴舊重複卡
                             charHeader,
                             lorebookBook: bookName,
                             lorebookKey: `tavern_summary::${chatId}`,   // 已搬 OS_DB，非世界書 key（保留欄位相容）
                         });
                     }
-                    console.log('[lobby_summary_index]', { storyTitle, bgCacheId, allChars: characters.length, newChars: newCharacters.length });
+                    console.log('[lobby_summary_index]', { storyTitle, bgCacheId, chars: characters.length });
                 }
             } catch (e) { console.warn('[os_story_tools] 寫 lobby_summary_index 失敗（不影響大總結）:', e); }
             } // end _doSave
