@@ -25,20 +25,19 @@
         clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 2400);
     }
 
-    // 素材圖：data-asset 屬性 → aseets 檔名（中文檔名要 encode）
+    // 素材圖：GPT 工坊插畫，host 在獨立 sound-files 素材庫（code repo 有 jsdelivr 50MB 上限、aseets 不追蹤）
+    const ASSET_BASE = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/';
     const ASSET_MAP = {
-        'ai-icon': '應用_AI_ICON圖.png',
-        'im-icon': '應用_匯入_ICON圖.png',
-        'idea':    '應用_應用想法圖.png',
-        'ai':      '應用_AI圖.png',
-        'im':      '應用_匯入_ICON圖.png',
-        'success': '應用_成功圖.png'
+        'ai-icon': 'workshop-ai.png',       // AI 生成應用（機器人寫字）
+        'im-icon': 'workshop-import.png',   // 匯入應用（資料箱）
+        'vn-icon': 'studio-panel.png'       // VN 劇情面板（卷軸面板）
     };
     function _applyAssets(c) {
-        var base = (win.AURELIA_EXT_BASE || (win.parent && win.parent.AURELIA_EXT_BASE) || '') + '/aseets/';
         c.querySelectorAll('[data-asset]').forEach(function (img) {
             var k = img.dataset.asset;
-            if (ASSET_MAP[k]) img.src = base + encodeURIComponent(ASSET_MAP[k]);
+            if (!ASSET_MAP[k]) { img.remove(); return; }            // 沒對應素材 → 拿掉，不留破圖
+            img.onerror = function () { img.classList.add('ws-img-broken'); };   // 載入失敗也隱藏（卡片文字照常可用）
+            img.src = ASSET_BASE + ASSET_MAP[k];
         });
     }
 
@@ -50,7 +49,7 @@
       +       '<div class="ws-home-hd"><div class="ws-home-title">應用工坊 <span class="ws-spark">✨</span></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div>'
       +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go">›</span></button>'
       +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go">›</span></button>'
-      +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板</span><span class="ws-card-d">給朋友的 Claude／GPT 照說明書做好，到創作室「展廳」貼回來用</span></span><span class="ws-card-go">›</span></button>'
+      +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="vn-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板</span><span class="ws-card-d">給朋友的 Claude／GPT 照說明書做好，到創作室「展廳」貼回來用</span></span><span class="ws-card-go">›</span></button>'
       +       '<div class="ws-sec-row"><span class="ws-sec-t">我的應用</span><button class="ws-sec-more" data-go="mine" type="button">查看全部 ›</button></div>'
       +       '<div class="ws-home-mine" id="ws-home-mine"></div>'
       +     '</div>'
@@ -88,7 +87,7 @@
       +     '<button class="ws-nav-b" data-go="mine" type="button"><span class="ws-nav-ic">📱</span><span class="ws-nav-t">我的</span></button>'
       +   '</div>'
       // ── 安裝成功覆蓋 + toast ──
-      +   '<div class="ws-success hidden" id="ws-success"><img class="ws-suc-img" data-asset="success" alt=""><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
+      +   '<div class="ws-success hidden" id="ws-success"><div class="ws-suc-check">✓</div><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
       +   '<div class="ws-toast" id="as-toast"></div>'
       + '</div>';
 
