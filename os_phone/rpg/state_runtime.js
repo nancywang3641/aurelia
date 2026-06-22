@@ -969,13 +969,15 @@ ${numberedText}`;
             while ((mt = reAv.exec(text))) { const n = (mt[1] || '').trim(); if (n) declared.add(n); }
             if (!cast.size) return;
 
-            const missing = [];
-            for (const name of cast) {
-                if (declared.has(name)) continue;                 // 近期已宣告頭像
+            // ⚠️時序：injectRules 只 await 一次就搶在 prompt 組裝前落地；這裡也必須併發查完(別逐個 await)
+            // 否則角色一多、序列 await 拖太久 → injectPrompts 比 prompt 組裝晚 → 這輪 prompt 沒被塞進去(看起來像 AI 無視)
+            const candidates = [...cast].filter(n => !declared.has(n));   // 扣掉近期已宣告頭像的
+            const checks = await Promise.all(candidates.map(async name => {
                 let has = false;
                 try { has = !!(await VC.get('avatar_cache', name)); } catch(e) {}
-                if (!has) missing.push(name);                     // 快取也沒 → 缺頭像
-            }
+                return has ? null : name;                          // 有快取→不缺；沒有→缺頭像
+            }));
+            const missing = checks.filter(Boolean);
             console.log('[頭像提醒] 近期出場=[' + [...cast].join('、') + '] / 缺頭像=[' + (missing.join('、') || '無') + ']' + (missing.length ? ' → 注入提醒' : ' → 不注入'));
             if (!missing.length) return;                          // 都有了 → 不注入
 
