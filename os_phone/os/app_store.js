@@ -46,16 +46,16 @@
       +   '<div class="ws-views">'
       // ── 首頁 ──
       +     '<div class="ws-view active" data-view="home">'
-      +       '<div class="ws-home-hd"><div class="ws-home-title">應用工坊 <span class="ws-spark">✨</span></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div>'
-      +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go">›</span></button>'
-      +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go">›</span></button>'
-      +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="vn-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板</span><span class="ws-card-d">給朋友的 Claude／GPT 照說明書做好，到創作室「展廳」貼回來用</span></span><span class="ws-card-go">›</span></button>'
-      +       '<div class="ws-sec-row"><span class="ws-sec-t">我的應用</span><button class="ws-sec-more" data-go="mine" type="button">查看全部 ›</button></div>'
+      +       '<div class="ws-home-hd"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div>'
+      +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +       '<button class="ws-card ws-card-vn" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="vn-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 劇情面板</span><span class="ws-card-d">用 AI 打造專屬劇情面板，存進創作室展廳隨時取用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +       '<div class="ws-sec-row"><span class="ws-sec-t">我的應用</span><button class="ws-sec-more" data-go="mine" type="button">查看全部 <i class="fa-solid fa-chevron-right"></i></button></div>'
       +       '<div class="ws-home-mine" id="ws-home-mine"></div>'
       +     '</div>'
       // ── 匯入 ──
       +     '<div class="ws-view" data-view="import">'
-      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">匯入應用</span></div>'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button"><i class="fa-solid fa-chevron-left"></i></button><span class="ws-vhd-t">匯入應用</span></div>'
       +       '<div class="ws-vbody">'
       +         '<div class="ws-hero"><img class="ws-hero-img ws-hero-sm" data-asset="im-icon" alt=""></div>'
       +         '<div class="ws-field-lab">應用名稱</div>'
@@ -63,7 +63,7 @@
       +         '<div class="ws-field-lab">圖標 emoji</div>'
       +         '<input class="ws-input ws-emoji" id="as-im-emoji" type="text" maxlength="2" placeholder="📦">'
       +         '<div class="ws-field-lab">貼上完整 HTML（或上傳 .html 檔）</div>'
-      +         '<label class="ws-file-btn" for="as-im-file">📂 選擇 .html 檔</label><input class="ws-file" id="as-im-file" type="file" accept=".html,.htm,text/html">'
+      +         '<label class="ws-file-btn" for="as-im-file"><i class="fa-solid fa-folder-open"></i> 選擇 .html 檔</label><input class="ws-file" id="as-im-file" type="file" accept=".html,.htm,text/html">'
       +         '<textarea class="ws-ta ws-ta-code" id="as-im-html" placeholder="&lt;!DOCTYPE html&gt; ... &lt;/html&gt;"></textarea>'
       +         '<button class="ws-btn ws-btn-line" id="as-im-prev-btn" type="button">預覽</button>'
       +         '<div class="ws-prev-wrap hidden" id="as-im-prev-wrap"><div class="ws-prev-lab">預覽</div><div class="ws-prev" id="as-im-prev"></div></div>'
@@ -72,22 +72,22 @@
       +     '</div>'
       // ── 我的應用 ──
       +     '<div class="ws-view" data-view="mine">'
-      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button">‹</button><span class="ws-vhd-t">我的應用</span></div>'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button"><i class="fa-solid fa-chevron-left"></i></button><span class="ws-vhd-t">我的應用</span></div>'
       +       '<div class="ws-vbody"><div class="ws-mine-list" id="as-mine-list"></div></div>'
       +     '</div>'
       // ── app 操作詳情（第二層：從我的應用點一條進來，換頁、不摺疊）──
       +     '<div class="ws-view" data-view="appdetail">'
-      +       '<div class="ws-vhd"><button class="ws-back" data-go="mine" type="button">‹</button><span class="ws-vhd-t" id="as-detail-title">應用</span></div>'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="mine" type="button"><i class="fa-solid fa-chevron-left"></i></button><span class="ws-vhd-t" id="as-detail-title">應用</span></div>'
       +       '<div class="ws-vbody"><div id="as-detail-body"></div></div>'
       +     '</div>'
       +   '</div>'
       // ── 底部 nav ──
       +   '<div class="ws-nav">'
-      +     '<button class="ws-nav-b active" data-go="home" type="button"><span class="ws-nav-ic">🏠</span><span class="ws-nav-t">首頁</span></button>'
-      +     '<button class="ws-nav-b" data-go="mine" type="button"><span class="ws-nav-ic">📱</span><span class="ws-nav-t">我的</span></button>'
+      +     '<button class="ws-nav-b active" data-go="home" type="button"><span class="ws-nav-ic"><i class="fa-solid fa-house"></i></span><span class="ws-nav-t">首頁</span></button>'
+      +     '<button class="ws-nav-b" data-go="mine" type="button"><span class="ws-nav-ic"><i class="fa-solid fa-table-cells-large"></i></span><span class="ws-nav-t">我的</span></button>'
       +   '</div>'
       // ── 安裝成功覆蓋 + toast ──
-      +   '<div class="ws-success hidden" id="ws-success"><div class="ws-suc-check">✓</div><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
+      +   '<div class="ws-success hidden" id="ws-success"><div class="ws-suc-check"><i class="fa-solid fa-check"></i></div><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
       +   '<div class="ws-toast" id="as-toast"></div>'
       + '</div>';
 
@@ -160,7 +160,7 @@
         row.innerHTML =
             '<span class="ws-mine-ic">' + _esc(a.emoji || '📦') + '</span>'
           + '<span class="ws-mine-info"><span class="ws-mine-name">' + _esc(a.name || 'App') + '</span><span class="ws-mine-sub">' + _esc(_relTime(opened[a.id])) + '</span></span>'
-          + '<span class="ws-mine-go">›</span>';
+          + '<span class="ws-mine-go"><i class="fa-solid fa-chevron-right"></i></span>';
         row.addEventListener('click', function () { _openAppDetail(c, a); });
         return row;
     }
@@ -175,14 +175,14 @@
         const isStudio = !!a.srcTplId;
         const S = win.OS_STUDIO || {};
 
-        const mkRow = function (label, onclick, opts) {
+        const mkRow = function (icon, label, onclick, opts) {
             opts = opts || {};
             const r = document.createElement('div');
             r.className = 'ws-act-row' + (opts.danger ? ' danger' : '');
             const right = opts.toggle
                 ? '<span class="ws-act-tog' + (opts.on ? ' on' : '') + '"><span class="ws-act-knob"></span></span>'
-                : '<span class="ws-act-go">' + (opts.noChev ? '' : '›') + '</span>';
-            r.innerHTML = '<span class="ws-act-label">' + _esc(label) + '</span>' + right;
+                : '<span class="ws-act-go">' + (opts.noChev ? '' : '<i class="fa-solid fa-chevron-right"></i>') + '</span>';
+            r.innerHTML = '<i class="fa-solid ' + icon + ' ws-act-ico"></i><span class="ws-act-label">' + _esc(label) + '</span>' + right;
             if (onclick) r.addEventListener('click', onclick);
             return r;
         };
@@ -194,18 +194,18 @@
         };
 
         mkGroup([
-            isStudio ? mkRow('✏️ 編輯', function () { if (S.openEditApp) S.openEditApp(a.srcTplId, c); else _toast(c, '創作室未就緒'); }) : null,
-            mkRow('📝 原始碼', function () {
+            isStudio ? mkRow('fa-pen-to-square', '編輯', function () { if (S.openEditApp) S.openEditApp(a.srcTplId, c); else _toast(c, '創作室未就緒'); }) : null,
+            mkRow('fa-code', '原始碼', function () {
                 const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
                 const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
                 _go(c, 'import'); _toast(c, '原始碼已載入「匯入」框，可全選複製');
             }),
-            mkRow('✏️ 改名', async function () {
+            mkRow('fa-pen', '改名', async function () {
                 const nm = prompt('新名稱', a.name || ''); if (nm == null) return;
                 a.name = nm.trim() || a.name; await win.OS_DB.savePhoneApp(a); _syncMeta(a);
                 if (titleEl) titleEl.textContent = (a.emoji ? a.emoji + ' ' : '') + a.name;
             }),
-            mkRow('😀 換圖標', async function () {
+            mkRow('fa-face-smile', '換圖標', async function () {
                 const em = prompt('新圖標 emoji（單一符號）', a.emoji || '📦'); if (em == null) return;
                 a.emoji = (em.trim() || a.emoji).slice(0, 2); await win.OS_DB.savePhoneApp(a); _syncMeta(a);
                 if (titleEl) titleEl.textContent = a.emoji + ' ' + (a.name || '應用');
@@ -215,21 +215,21 @@
         if (isStudio) {
             const memOn = !!(win.OS_APP_MEMORY_INJECT && win.OS_APP_MEMORY_INJECT.isPluginEnabled && win.OS_APP_MEMORY_INJECT.isPluginEnabled(a.id));
             mkGroup([
-                mkRow('🧠 記憶回傳酒館', function () {
+                mkRow('fa-brain', '記憶回傳酒館', function () {
                     const M = win.OS_APP_MEMORY_INJECT; if (!M || !M.setPluginEnabled) { _toast(c, '記憶模組未就緒'); return; }
                     const cur = M.isPluginEnabled ? M.isPluginEnabled(a.id) : false;
                     M.setPluginEnabled(a.id, !cur);
                     _openAppDetail(c, a);
-                    _toast(c, '🧠 這個 app 的記憶' + (!cur ? '會' : '不會') + '回傳酒館');
+                    _toast(c, '這個 app 的記憶' + (!cur ? '會' : '不會') + '回傳酒館');
                 }, { toggle: true, on: memOn }),
-                mkRow('📥 載入酒館', function () { if (S.injectAppToTavern) { S.injectAppToTavern(a.srcTplId); _toast(c, '📥 已寫入酒館正則，純文字也能跑'); } }),
-                mkRow('🏠 放進大廳', async function () { if (S.toggleAppLobby) { const on = await S.toggleAppLobby(a.srcTplId); _toast(c, '🏠 大廳：' + (on ? '已啟用' : '已關閉')); } }),
-                mkRow('📦 匯出 .json', function () { if (S.exportApp) S.exportApp(a.srcTplId); })
+                mkRow('fa-file-import', '載入酒館', function () { if (S.injectAppToTavern) { S.injectAppToTavern(a.srcTplId); _toast(c, '已寫入酒館正則，純文字也能跑'); } }),
+                mkRow('fa-house', '放進大廳', async function () { if (S.toggleAppLobby) { const on = await S.toggleAppLobby(a.srcTplId); _toast(c, '大廳：' + (on ? '已啟用' : '已關閉')); } }),
+                mkRow('fa-box-archive', '匯出 .json', function () { if (S.exportApp) S.exportApp(a.srcTplId); })
             ]);
         }
 
         mkGroup([
-            mkRow('🗑️ 卸載', function () { if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) { _uninstall(a.id, c); _go(c, 'mine'); } }, { danger: true, noChev: true })
+            mkRow('fa-trash', '卸載', function () { if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) { _uninstall(a.id, c); _go(c, 'mine'); } }, { danger: true, noChev: true })
         ]);
 
         _go(c, 'appdetail');
@@ -251,7 +251,7 @@
         const box = c.querySelector('#ws-home-mine'); if (!box) return;
         let apps = [];
         try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; } catch (e) {}
-        if (!apps.length) { box.innerHTML = '<div class="ws-empty sm">還沒有應用，從上面開始創造吧 ✨</div>'; return; }
+        if (!apps.length) { box.innerHTML = '<div class="ws-empty sm">還沒有應用，從上面開始創造吧</div>'; return; }
         const opened = _loadOpened();
         box.innerHTML = '';
         apps.slice(0, 3).forEach(function (a) { box.appendChild(_mineRow(c, a, opened)); });
