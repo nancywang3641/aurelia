@@ -19,6 +19,7 @@
         maxPatches: 80,             // patches 上限，超過砍最舊
         injectId: 'aurelia_state_brief',
         rulesInjectId: 'aurelia_avs_rules',
+        avatarInjectId: 'aurelia_avatar_reminder',
         storageKey: 'aurelia_state_runtime_enabled'
     };
 
@@ -26,6 +27,7 @@
     let _running = false;           // 防止並發抽取
     let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
     let _lastRulesUninject = null;  // 上次 rules inject 的 uninject 函式
+    let _lastAvatarUninject = null; // 上次「缺頭像提醒」inject 的 uninject 函式
 
     // --- 工具 ---
     // 把 ctx.chatId 或 chat_file_name 清乾淨：剝路徑、砍 .jsonl/.json
@@ -939,6 +941,57 @@ ${numberedText}`;
         }
     }
 
+    // --- inject 缺頭像提醒：主模型有時投入劇情忘了給角色頭像 → 善意提醒補上 ---
+    // 只列「近期出場但還沒頭像」的；已宣告/已快取的去掉；一個都不缺就不注入。代號角色交給提醒文字讓模型自己略過。
+    async function injectAvatarReminder() {
+        try {
+            try { _lastAvatarUninject?.(); } catch(e) {}
+            _lastAvatarUninject = null;
+            if (!win.TavernHelper?.injectPrompts) return;
+            const VC = win.VN_Cache || (win.parent && win.parent.VN_Cache);
+            if (!VC || !VC.get) return;   // 查不了快取就別亂提醒(免誤報)
+
+            // 近期場景文字（in-memory chat 末段，繞檔讀；含本輪剛落地的）
+            let text = '';
+            try {
+                const ctx = win.SillyTavern?.getContext?.();
+                if (ctx && Array.isArray(ctx.chat)) {
+                    text = ctx.chat.slice(-8).filter(m => m && !m.is_system).map(m => m.mes || m.message || '').join('\n');
+                }
+            } catch(e) {}
+            if (!text) return;
+
+            const cast = new Set(), declared = new Set();
+            let mt;
+            const reChar = /\[Char\|([^|\]]+)/g;
+            while ((mt = reChar.exec(text))) { const n = (mt[1] || '').trim(); if (n && n.charAt(0) !== '{') cast.add(n); }
+            const reAv = /\[Avatar\|([^|\]]+)/g;
+            while ((mt = reAv.exec(text))) { const n = (mt[1] || '').trim(); if (n) declared.add(n); }
+            if (!cast.size) return;
+
+            const missing = [];
+            for (const name of cast) {
+                if (declared.has(name)) continue;                 // 近期已宣告頭像
+                let has = false;
+                try { has = !!(await VC.get('avatar_cache', name)); } catch(e) {}
+                if (!has) missing.push(name);                     // 快取也沒 → 缺頭像
+            }
+            if (!missing.length) return;                          // 都有了 → 不注入
+
+            const content = `<頭像補充提醒 規則="善意提醒·非強制">\n下列角色目前還沒有頭像：${missing.join('、')}。\n若他們是有正式人名的角色，請在這次回覆順手補上頭像宣告（[Avatar|角色名|外觀特徵]）；若是代號／未具名／路人角色，請直接忽略、不用補。沒有要補的就略過這條，別為此打斷劇情。\n</頭像補充提醒>`;
+            const result = win.TavernHelper.injectPrompts([{
+                id: CONFIG.avatarInjectId,
+                content,
+                position: 'in_chat',
+                depth: 1,
+                role: 'system'
+            }], { once: true });
+            _lastAvatarUninject = result?.uninject || null;
+        } catch(e) {
+            console.warn('[State Runtime] avatar reminder inject 失敗:', e?.message || e);
+        }
+    }
+
     // --- inject：把 current 塞進下一輪主模型 system prompt ---
     async function injectCurrent() {
         try {
@@ -1047,6 +1100,8 @@ ${numberedText}`;
                 if (isEnabled()) injectCurrent();
                 // AVS rules 永遠評估（不受抽取開關影響；沒命中規則就不 inject）
                 injectRules();
+                // 缺頭像提醒（永遠評估；一個都不缺就不 inject）
+                injectAvatarReminder();
             });
         }
 
@@ -1064,6 +1119,7 @@ ${numberedText}`;
             win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
                 try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
                 try { _lastRulesUninject?.(); _lastRulesUninject = null; } catch(e) {}
+                try { _lastAvatarUninject?.(); _lastAvatarUninject = null; } catch(e) {}
             });
         }
 
