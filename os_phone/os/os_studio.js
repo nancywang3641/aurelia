@@ -2867,7 +2867,11 @@ ${cleanFormat}
         const oldOv = root.querySelector(':scope > .vncomp-app'); if (oldOv) oldOv.remove();
         const ov = document.createElement('div');
         ov.className = 'vncomp-app';
-        ov.innerHTML = '<div class="vncomp-scroll"><div class="vncomp-toolbar vc-hide"><input type="file" class="vncomp-pack-file" accept=".json" hidden></div><div class="vncomp-list"></div></div>';
+        // 定位＋暖色變數寫進元素本身(跟 #os_studio_app 同作法)：保證蓋滿覆蓋層、不靠 os_studio.css 是否載到新版
+        // (曾踩坑：jsdelivr 對 js/css 分開快取→js 新但 css 舊時 .vncomp-app 規則缺失→變流式區塊接在 VN組件 tab 下面)
+        ov.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:9000;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;background:#f5ead3;color:#3c2922;'
+            + '--jrpg-paper:#f5ead3;--jrpg-paper-light:#fff9eb;--jrpg-paper-deep:#e7d1a9;--jrpg-ink:#3c2922;--jrpg-muted:#7b6654;--jrpg-wine:#681f25;--jrpg-wine-dark:#461319;--jrpg-gold:#b68a45;--jrpg-gold-light:#ddbd78;--jrpg-line:rgba(132,91,45,0.34);';
+        ov.innerHTML = '<div class="vncomp-scroll" style="flex:1;min-height:0;overflow-y:auto;padding:14px 14px 24px;box-sizing:border-box;"><div class="vncomp-toolbar vc-hide"><input type="file" class="vncomp-pack-file" accept=".json" hidden></div><div class="vncomp-list" style="display:flex;flex-direction:column;gap:10px;"></div></div>';
         root.appendChild(ov);
         _vcStandalone = true;
         _vcStandaloneRoot = root;
