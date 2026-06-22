@@ -18,50 +18,101 @@
         .studio-container.top-worldbook .studio-left { display: none; }
         .studio-container.top-worldbook .studio-right { display: none; }
         .studio-container.top-worldbook .studio-worldbook-pane { display: flex; flex-direction: column; }
-        .swb-wrap { display:flex; flex-direction:column; min-height:0; flex:1; padding:16px; gap:10px; color:#1A1C28; box-sizing:border-box; }
-        .swb-head { font-size:16px; font-weight:bold; }
-        .swb-desc { font-size:12px; color:rgba(26,28,40,0.7); }
-        .swb-newrow { display:flex; gap:8px; }
-        .swb-input { flex:1; min-width:0; padding:8px 10px; border-radius:6px; border:1px solid rgba(26,28,40,0.25); background:#fff; color:#1A1C28; font-size:13px; font-family:inherit; box-sizing:border-box; }
-        .swb-btn { padding:7px 12px; border-radius:6px; border:1px solid rgba(26,28,40,0.3); background:rgba(26,28,40,0.06); color:#1A1C28; font-size:12px; font-weight:bold; cursor:pointer; font-family:inherit; white-space:nowrap; }
-        .swb-btn.primary { background:#1A1C28; color:#EEF0F6; border-color:#1A1C28; }
-        .swb-btn.danger-outline { border-color:#e74c3c; color:#e74c3c; background:rgba(231,76,60,0.08); }
-        .swb-list-head { font-size:12px; font-weight:bold; color:rgba(26,28,40,0.6); margin-top:4px; }
-        .swb-list { overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
-        .swb-bookrow { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid rgba(26,28,40,0.15); border-radius:8px; background:rgba(228,232,245,0.4); }
-        .swb-bookname { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:bold; }
-        .swb-empty { color:#999; font-size:13px; text-align:center; padding:16px; }
-        .swb-editor { gap:8px; }
-        .swb-editor-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-        .swb-model-seg { display:flex; border:1px solid rgba(26,28,40,0.25); border-radius:8px; overflow:hidden; flex-shrink:0; }
-        .swb-seg-btn { padding:5px 11px; font-size:11px; font-weight:bold; border:none; background:transparent; color:rgba(26,28,40,0.55); cursor:pointer; font-family:inherit; white-space:nowrap; }
-        .swb-seg-btn.on { background:#1A1C28; color:#EEF0F6; }
-        .swb-working { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:bold; }
-        .swb-safe { font-size:11px; color:#1a8f4f; background:rgba(46,204,113,0.15); border-radius:10px; padding:2px 8px; flex-shrink:0; }
-        .swb-warn { font-size:11px; color:#e74c3c; background:rgba(231,76,60,0.12); border-radius:10px; padding:2px 8px; flex-shrink:0; }
-        .swb-entries { max-height:34%; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
-        .swb-entry { border:1px solid rgba(26,28,40,0.14); border-radius:8px; padding:8px 10px; background:rgba(228,232,245,0.35); }
-        .swb-entry-hd { display:flex; align-items:center; gap:8px; }
-        .swb-entry-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:bold; font-size:13px; }
-        .swb-entry-uid { font-size:11px; color:#999; flex-shrink:0; }
-        .swb-entry-keys { font-size:11px; color:rgba(26,28,40,0.6); margin-top:3px; }
-        .swb-entry-content { font-size:12px; color:rgba(26,28,40,0.85); margin-top:3px; white-space:pre-wrap; word-break:break-word; max-height:60px; overflow:hidden; }
-        .swb-chat { flex:1; min-height:60px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:4px 0; }
-        .swb-bubble { max-width:88%; padding:8px 11px; border-radius:10px; font-size:13px; white-space:pre-wrap; word-break:break-word; }
-        .swb-user { align-self:flex-end; background:#1A1C28; color:#EEF0F6; }
-        .swb-assistant { align-self:flex-start; background:rgba(228,232,245,0.85); color:#1A1C28; }
-        .swb-pending { display:flex; flex-direction:column; gap:6px; flex:1.5 1 0; min-height:0; }
-        .swb-pending:empty { display:none; }
-        .swb-pending-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
-        .swb-pending-hd { font-size:12px; font-weight:bold; color:#b5651d; flex-shrink:0; }
-        .swb-op { font-size:12px; padding:7px 10px; border-radius:6px; border-left:3px solid; }
-        .swb-op.add { background:rgba(46,204,113,0.1); border-color:#2ecc71; }
-        .swb-op.upd { background:rgba(52,152,219,0.1); border-color:#3498db; }
-        .swb-op.del { background:rgba(231,76,60,0.1); border-color:#e74c3c; }
-        .swb-op-content { font-size:11px; color:rgba(26,28,40,0.7); margin-top:4px; white-space:pre-wrap; word-break:break-word; }
-        .swb-pending-acts { display:flex; gap:8px; flex-shrink:0; padding-top:2px; }
-        .swb-inputrow { display:flex; gap:8px; align-items:flex-end; }
-        .swb-msg { flex:1; min-width:0; min-height:48px; max-height:120px; resize:vertical; padding:8px 10px; border-radius:8px; border:1px solid rgba(26,28,40,0.25); background:#fff; color:#1A1C28; font-size:13px; font-family:inherit; box-sizing:border-box; }
+        /* ═══ 世界書 5 換頁（吃創作室 --jrpg-* 暖色羊皮紙變數；不寫死顏色） ═══ */
+        .studio-worldbook-pane.swb-host { position: relative; --swb-add:#78966F; --swb-amber:#B47A33; --swb-danger:#B54848; }
+        .swb-page { display:flex; flex-direction:column; min-height:0; flex:1; padding:16px; gap:14px; box-sizing:border-box; color:var(--jrpg-ink); }
+        /* 頂列：返回 + 標題 + 安全章 */
+        .swb-bar { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+        .swb-bar-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:18px; font-weight:700; color:var(--jrpg-wine-dark); }
+        .swb-bar-sub { font-size:12px; font-weight:400; color:var(--jrpg-muted); margin-left:8px; }
+        .swb-iconbtn { width:38px; height:38px; flex-shrink:0; display:grid; place-items:center; border:1px solid var(--jrpg-line); border-radius:10px; background:rgba(255,250,239,0.6); color:var(--jrpg-wine-dark); font-size:20px; line-height:1; cursor:pointer; font-family:inherit; padding:0; }
+        .swb-iconbtn:hover { background:rgba(232,211,174,0.55); border-color:var(--jrpg-gold); }
+        /* 選書頁標題區 */
+        .swb-phead { flex-shrink:0; }
+        .swb-ptitle { font-size:23px; font-weight:700; color:var(--jrpg-wine-dark); }
+        .swb-psub { font-size:13px; color:var(--jrpg-muted); margin-top:4px; line-height:1.5; }
+        /* 主/次按鈕 */
+        .swb-primary { min-height:46px; padding:0 18px; border:0; border-radius:13px; background:var(--jrpg-wine); color:var(--jrpg-paper-light); font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .swb-primary:hover { background:var(--jrpg-wine-dark); }
+        .swb-primary:disabled { opacity:0.55; cursor:default; }
+        .swb-primary.swb-sm { min-height:0; height:40px; padding:0 14px; font-size:14px; flex-shrink:0; }
+        .swb-secondary { min-height:46px; padding:0 16px; border:1px solid rgba(104,31,37,0.4); border-radius:13px; background:transparent; color:var(--jrpg-wine); font-size:14px; font-weight:650; cursor:pointer; font-family:inherit; white-space:nowrap; }
+        .swb-secondary:hover { background:rgba(104,31,37,0.06); }
+        .swb-block { width:100%; flex-shrink:0; }
+        .swb-textdanger { align-self:flex-start; margin-top:14px; background:none; border:0; color:var(--swb-danger); font-size:14px; font-weight:650; cursor:pointer; font-family:inherit; padding:8px 2px; }
+        /* 命名輸入列 */
+        .swb-newrow { display:flex; gap:8px; flex-shrink:0; }
+        .swb-newrow[hidden] { display:none; }
+        /* 通用欄位 */
+        .swb-field { width:100%; box-sizing:border-box; padding:11px 13px; border-radius:11px; border:1px solid var(--jrpg-line); background:var(--jrpg-paper-light); color:var(--jrpg-ink); font-size:15px; font-family:inherit; outline:none; }
+        .swb-field:focus { border-color:var(--jrpg-gold); }
+        .swb-newrow .swb-field { flex:1; min-width:0; }
+        /* 搜尋＋篩選 */
+        .swb-tools { display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
+        .swb-seg { display:flex; border:1px solid var(--jrpg-line); border-radius:11px; overflow:hidden; }
+        .swb-seg-btn { flex:1; padding:8px 6px; font-size:13px; font-weight:650; border:0; background:transparent; color:var(--jrpg-muted); cursor:pointer; font-family:inherit; }
+        .swb-seg-btn.on { background:var(--jrpg-wine); color:var(--jrpg-paper-light); }
+        /* 列表（可捲） */
+        .swb-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+        /* 卡片（書/條目/op 共用底） */
+        .swb-card { display:flex; align-items:center; gap:10px; padding:13px 14px; border:1px solid var(--jrpg-line); border-radius:14px; background:var(--jrpg-paper-light); box-shadow:0 1px 3px rgba(83,49,20,0.06); text-align:left; cursor:pointer; }
+        .swb-card.swb-op { cursor:default; align-items:flex-start; }
+        .swb-card-main { flex:1; min-width:0; }
+        .swb-card-title { font-size:15px; font-weight:700; color:var(--jrpg-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .swb-card-meta { font-size:12px; color:var(--jrpg-muted); margin-top:3px; }
+        .swb-card-sum { font-size:13px; color:var(--jrpg-muted); margin-top:4px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .swb-chev { flex-shrink:0; color:var(--jrpg-gold); font-size:20px; }
+        .swb-more { font-size:18px; }
+        .swb-card-tog { flex-shrink:0; }
+        /* 關鍵字標籤 */
+        .swb-tags { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+        .swb-tag { font-size:11px; font-weight:600; padding:2px 9px; border-radius:9px; background:var(--jrpg-paper-deep); color:var(--jrpg-ink); }
+        .swb-tag.muted { background:transparent; border:1px dashed var(--jrpg-line); color:var(--jrpg-muted); }
+        /* 安全/警告章 */
+        .swb-chip { flex-shrink:0; font-size:11px; font-weight:650; padding:3px 10px; border-radius:11px; white-space:nowrap; }
+        .swb-chip.safe { color:#46663d; background:rgba(120,150,111,0.18); }
+        .swb-chip.warn { color:#8a4d12; background:rgba(180,122,51,0.18); }
+        /* 詳情表單 */
+        .swb-form { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:7px; }
+        .swb-flabel { font-size:13px; font-weight:700; color:var(--jrpg-wine-dark); margin-top:8px; }
+        .swb-fhint { font-size:12px; color:var(--jrpg-muted); }
+        .swb-ftext { min-height:180px; resize:vertical; line-height:1.55; white-space:pre-wrap; }
+        .swb-frow { display:flex; align-items:center; justify-content:space-between; margin-top:14px; font-size:15px; font-weight:650; color:var(--jrpg-ink); }
+        /* 底部固定動作列 */
+        .swb-footbar { display:flex; gap:10px; flex-shrink:0; padding-top:2px; }
+        .swb-footbar .swb-primary { flex:1; }
+        .swb-footbar .swb-secondary { flex:0 0 auto; }
+        /* AI 對話 */
+        .swb-chatlog { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:9px; padding:2px 0; }
+        .swb-bubble { max-width:88%; padding:9px 12px; border-radius:13px; font-size:14px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+        .swb-user { align-self:flex-end; background:var(--jrpg-wine); color:var(--jrpg-paper-light); border-bottom-right-radius:3px; }
+        .swb-assistant { align-self:flex-start; background:var(--jrpg-paper-deep); color:var(--jrpg-ink); border-bottom-left-radius:3px; }
+        .swb-pendbar { flex-shrink:0; }
+        .swb-pendbar:empty { display:none; }
+        .swb-pendbtn { width:100%; padding:11px; border:1px solid var(--jrpg-gold); border-radius:12px; background:rgba(182,138,69,0.14); color:var(--jrpg-wine-dark); font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .swb-inputrow { display:flex; gap:8px; align-items:flex-end; flex-shrink:0; }
+        .swb-msg { flex:1; min-width:0; min-height:48px; max-height:120px; resize:vertical; }
+        .swb-send { flex-shrink:0; min-height:48px; }
+        /* op 卡顏色 */
+        .swb-op-chip { flex-shrink:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:9px; color:#fff; }
+        .swb-op.add { border-left:4px solid var(--swb-add); }
+        .swb-op.add .swb-op-chip { background:var(--swb-add); }
+        .swb-op.upd { border-left:4px solid var(--swb-amber); }
+        .swb-op.upd .swb-op-chip { background:var(--swb-amber); }
+        .swb-op.del { border-left:4px solid var(--swb-danger); }
+        .swb-op.del .swb-op-chip { background:var(--swb-danger); }
+        /* 空狀態 */
+        .swb-empty { margin:auto; text-align:center; color:var(--jrpg-muted); font-size:14px; line-height:1.7; padding:24px; }
+        .swb-empty-art { font-size:40px; margin-bottom:8px; opacity:0.7; }
+        /* 底部動作面板（sheet）：取代「卡上堆按鈕」與摺疊 */
+        .swb-sheet-ov { position:absolute; inset:0; background:rgba(40,25,15,0.34); display:flex; align-items:flex-end; z-index:30; }
+        .swb-sheet { width:100%; background:var(--jrpg-paper); border-top-left-radius:18px; border-top-right-radius:18px; padding:10px 14px calc(16px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:8px; box-shadow:0 -6px 24px rgba(60,30,10,0.25); }
+        .swb-sheet-title { font-size:14px; font-weight:700; color:var(--jrpg-wine-dark); padding:8px 4px 4px; }
+        .swb-sheet-btn { width:100%; min-height:48px; border:1px solid var(--jrpg-line); border-radius:13px; background:var(--jrpg-paper-light); color:var(--jrpg-ink); font-size:15px; font-weight:650; cursor:pointer; font-family:inherit; text-align:left; padding:0 16px; }
+        .swb-sheet-btn:hover { background:rgba(232,211,174,0.5); }
+        .swb-sheet-btn.safe { color:#46663d; border-color:rgba(120,150,111,0.5); }
+        .swb-sheet-btn.danger { color:var(--swb-danger); border-color:rgba(181,72,72,0.45); }
+        .swb-sheet-btn.cancel { background:transparent; color:var(--jrpg-muted); font-weight:600; text-align:center; }
         .studio-icon-btn { background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
         .studio-icon-btn:hover { background: rgba(26,28,40,0.10); border-color: #1A1C28; }
         .studio-icon-btn.danger { color: #fc8181; border-color: #fc8181; background: rgba(252,129,129,0.1); }

@@ -1127,46 +1127,106 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ══════════════════════════════════════════════════════════════
     // 🌍 世界書 tab：建/複製/編輯酒館 lorebook，跟副模型聊規則→AI 改/加條目，套用前 diff 預覽。
     //   複製模式做成 [VN副本]-名、只動副本→原檔不碰(二改別人卡安全)。走酒館助手 lorebook API。
-    //   spec: docs/superpowers/specs/2026-06-21-studio-worldbook-tab-design.md
+    //   UI＝5 換頁(選書→瀏覽條目→條目詳情→AI討論→確認改動)，任何時刻只顯示一頁；吃創作室 --jrpg-* 暖色變數。
+    //   spec: docs/superpowers/specs/2026-06-22-studio-worldbook-redesign-design.md（前身 2026-06-21-studio-worldbook-tab）
     // ══════════════════════════════════════════════════════════════
     let _wbWorking = null;   // 工作世界書名(null=在選擇層)
+    let _wbView = 'picker';  // picker|entries|detail|chat|confirm（5 換頁，任何時刻只顯示一頁）
     let _wbChat = [];        // [{role,content}]
     let _wbEntries = [];     // 目前條目快取
     let _wbPending = null;   // 待套用 ops
+    let _wbEntryEditing = null; // 條目詳情頁：null=新增，否則=正在編的 uid
+    let _wbSearch = '';      // 條目搜尋字
+    let _wbFilter = 'all';   // all|on|off 篩選
     let _wbModel = localStorage.getItem('swb_model') === 'sec' ? 'sec' : 'main';   // 世界書二改用主/副模型（預設主：低頻重品質）
     const _wbTH = () => (window.parent || window).TavernHelper || window.TavernHelper;
     const _WB_SYS = `你是世界書編輯助手。下面會給你目前世界書的條目清單，使用者跟你討論要怎麼改或新增條目（可能含成人/NSFW 規則設定，照常專業協助、不要拒絕、不要說教）。\n- 先用一兩句白話回覆討論。\n- 要實際改動世界書時，把每個改動用 <wb> 區塊輸出（沒要改的條目一律別碰、別重列）：\n  新增：<wb op="add"><comment>標題</comment><keys>關鍵字1,關鍵字2</keys><content>條目內容</content></wb>\n  修改：<wb op="update" uid="條目編號"><comment>…</comment><keys>…</keys><content>…</content></wb>（只放要改的欄位，沒放的保留原值）\n  刪除：<wb op="del" uid="條目編號"/>\n- keys 用逗號分隔；常駐條目可留空 keys。只輸出 <wb> 區塊與你的對話，不要解釋格式本身。`;
 
-    async function renderWorldbookPanel() {
+    // ── 換頁路由：依 _wbView 分派到 5 頁，返回鈕各自硬接上一層 ──
+    function renderWorldbookPanel() {
         const host = document.getElementById('studio-worldbook-content');
         if (!host) return;
-        if (!_wbWorking) await _wbRenderPicker(host);
-        else await _wbRenderEditor(host);
+        if (host.classList) host.classList.add('swb-host');
+        if (!_wbWorking && _wbView !== 'picker') _wbView = 'picker';   // 沒選書卻殘留子頁(切走又回來)→退回選書頁
+        if (_wbView === 'entries') return _wbRenderEntries(host);
+        if (_wbView === 'detail')  return _wbRenderDetail(host);
+        if (_wbView === 'chat')    return _wbRenderChat(host);
+        if (_wbView === 'confirm') return _wbRenderConfirm(host);
+        return _wbRenderPicker(host);
     }
+    function _wbEnter(name) {   // 進入某本書 → 條目瀏覽頁
+        _wbWorking = name; _wbChat = []; _wbPending = null; _wbEntries = [];
+        _wbSearch = ''; _wbFilter = 'all'; _wbView = 'entries';
+        renderWorldbookPanel();
+    }
+    function _wbToast(msg) { try { const w = (window.parent || window); w.toastr && w.toastr.success(msg); } catch (e) {} }
+    // 通用底部動作面板（取代「一張卡塞滿按鈕」；三點選單／副本-or-直接 都走這個）
+    function _wbSheet(title, actions) {
+        const host = document.getElementById('studio-worldbook-content');
+        if (!host) return;
+        const ov = document.createElement('div');
+        ov.className = 'swb-sheet-ov';
+        ov.innerHTML = `<div class="swb-sheet"><div class="swb-sheet-title">${_sgcEsc(title)}</div>`
+            + actions.map((a, i) => `<button class="swb-sheet-btn ${a.cls || ''}" data-i="${i}">${a.label}</button>`).join('')
+            + `<button class="swb-sheet-btn cancel" data-cancel>取消</button></div>`;
+        host.appendChild(ov);
+        const close = () => ov.remove();
+        ov.addEventListener('click', (e) => { if (e.target === ov || e.target.hasAttribute('data-cancel')) close(); });
+        ov.querySelectorAll('[data-i]').forEach(btn => btn.onclick = () => { close(); const a = actions[parseInt(btn.getAttribute('data-i'), 10)]; a && a.onClick && a.onClick(); });
+    }
+    function _wbOpenBook(name) {   // 點書卡：已是副本→直接進；否則問副本/直接
+        if (String(name).startsWith('[VN副本]')) { _wbEnter(name); return; }
+        _wbSheet(`要怎麼編輯「${name}」？`, [
+            { label: '📋 建立安全副本後編輯（推薦）', cls: 'safe', onClick: () => _wbCopyBook(name) },
+            { label: '✏️ 直接改原檔', cls: 'danger', onClick: () => { if (confirm(`⚠️ 直接編輯原檔「${name}」？會動到原始世界書、不是副本。確定？`)) _wbEnter(name); } },
+        ]);
+    }
+    function _wbBookMenu(name) {   // 三點選單
+        const isCopy = String(name).startsWith('[VN副本]');
+        const acts = [];
+        if (!isCopy) acts.push({ label: '📋 建立安全副本後編輯', cls: 'safe', onClick: () => _wbCopyBook(name) });
+        acts.push({ label: isCopy ? '✏️ 編輯這份副本' : '✏️ 直接改原檔', cls: isCopy ? '' : 'danger', onClick: () => { if (isCopy || confirm(`⚠️ 直接改原檔「${name}」？確定？`)) _wbEnter(name); } });
+        acts.push({ label: '🗑 刪除世界書', cls: 'danger', onClick: () => _wbDeleteBook(name) });
+        _wbSheet(`「${name}」`, acts);
+    }
+    async function _wbDeleteBook(name) {
+        if (!confirm(`⚠️ 刪除世界書「${name}」？此動作無法復原。`)) return;
+        const TH = _wbTH();
+        if (!TH || !TH.deleteLorebook) { alert('酒館助手未就緒'); return; }
+        try { await TH.deleteLorebook(name); _wbToast('已刪除「' + name + '」'); renderWorldbookPanel(); }
+        catch (e) { alert('刪除失敗：' + (e && e.message || e)); }
+    }
+    // ① 選世界書（乾淨瀏覽：書名＋條目數＋›＋⋮）
     async function _wbRenderPicker(host) {
         const TH = _wbTH();
         let books = [];
         try { books = (TH && TH.getLorebooks && TH.getLorebooks()) || []; } catch (e) {}
-        host.innerHTML = `<div class="swb-wrap">
-            <div class="swb-head">🌍 世界書編輯</div>
-            <div class="swb-desc">跟 AI 聊規則，幫你改／新增條目。二改別人卡建議用「複製改」，原檔不會被動到。</div>
-            <div class="swb-newrow"><input id="swb-new-name" class="swb-input" placeholder="新世界書名稱…"><button class="swb-btn primary" id="swb-new-btn">➕ 新建空白</button></div>
-            <div class="swb-list-head">現有世界書（${books.length}）</div>
+        host.innerHTML = `<div class="swb-page">
+            <div class="swb-phead"><div class="swb-ptitle">整理世界書</div><div class="swb-psub">挑一本世界書，AI 幫你改規則、加條目。二改別人的卡建議用「複製」，原檔不會被動到。</div></div>
+            <button class="swb-primary swb-block" id="swb-new-toggle">＋ 新增世界書</button>
+            <div class="swb-newrow" id="swb-newrow" hidden><input id="swb-new-name" class="swb-field" placeholder="新世界書名稱…"><button class="swb-primary swb-sm" id="swb-new-go">建立</button></div>
             <div class="swb-list" id="swb-list"></div>
         </div>`;
+        const toggle = host.querySelector('#swb-new-toggle');
+        const newrow = host.querySelector('#swb-newrow');
+        toggle.onclick = () => { newrow.hidden = !newrow.hidden; if (!newrow.hidden) { const i = host.querySelector('#swb-new-name'); i && i.focus(); } };
+        host.querySelector('#swb-new-go').onclick = () => _wbCreateNew(host.querySelector('#swb-new-name').value);
         const listEl = host.querySelector('#swb-list');
-        if (!books.length) listEl.innerHTML = '<div class="swb-empty">酒館裡還沒有世界書</div>';
-        else listEl.innerHTML = books.map(b => `<div class="swb-bookrow">
-            <span class="swb-bookname" title="${_sgcEsc(b)}">${_sgcEsc(b)}</span>
-            <button class="swb-btn" data-copy="${_sgcEsc(b)}" title="複製成 [VN副本]-${_sgcEsc(b)} 再改，原檔不動">📋 複製改</button>
-            <button class="swb-btn danger-outline" data-edit="${_sgcEsc(b)}" title="⚠️ 直接改這個原檔">✏️ 直接改</button>
+        if (!books.length) { listEl.innerHTML = `<div class="swb-empty"><div class="swb-empty-art">🌍</div><div>酒館裡還沒有世界書<br>按上面「新增世界書」開一本吧</div></div>`; return; }
+        listEl.innerHTML = books.map((b, i) => `<div class="swb-card swb-bookcard" data-book="${_sgcEsc(b)}">
+            <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(b)}</div><div class="swb-card-meta" data-cnt="${i}">… 條目</div></div>
+            <button class="swb-iconbtn swb-more" data-more="${_sgcEsc(b)}" title="更多">⋮</button>
+            <span class="swb-chev">›</span>
         </div>`).join('');
-        host.querySelector('#swb-new-btn').onclick = () => _wbCreateNew(host.querySelector('#swb-new-name').value);
-        listEl.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => _wbCopyBook(b.getAttribute('data-copy')));
-        listEl.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => {
-            const name = b.getAttribute('data-edit');
-            if (!confirm(`⚠️ 直接編輯原檔「${name}」？\n會動到原始世界書（不是副本）。要不動到原檔請改用「📋 複製改」。\n確定直接改？`)) return;
-            _wbWorking = name; _wbChat = []; _wbPending = null; renderWorldbookPanel();
+        listEl.querySelectorAll('.swb-bookcard').forEach(card => card.onclick = (ev) => {
+            if (ev.target.closest('[data-more]')) return;
+            _wbOpenBook(card.getAttribute('data-book'));
+        });
+        listEl.querySelectorAll('[data-more]').forEach(btn => btn.onclick = (ev) => { ev.stopPropagation(); _wbBookMenu(btn.getAttribute('data-more')); });
+        books.forEach(async (b, i) => {   // 條目數逐本補（getLorebooks 不給數量）
+            let txt = '—';
+            try { txt = ((await TH.getLorebookEntries(b)) || []).length + ' 條目'; } catch (e) {}
+            const el = listEl.querySelector(`[data-cnt="${i}"]`); if (el) el.textContent = txt;
         });
     }
     async function _wbCreateNew(name) {
@@ -1177,7 +1237,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         try {
             const ok = await TH.createLorebook(name);
             if (ok === false) { if (!confirm(`「${name}」可能已存在，要直接打開它編輯嗎？`)) return; }
-            _wbWorking = name; _wbChat = []; _wbPending = null; renderWorldbookPanel();
+            _wbEnter(name);
         } catch (e) { alert('建立失敗：' + (e && e.message || e)); }
     }
     async function _wbCopyBook(src) {
@@ -1196,59 +1256,170 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             } else {
                 if (!confirm(`「${copyName}」已存在，直接打開上次那份副本繼續編輯嗎？`)) return;
             }
-            _wbWorking = copyName; _wbChat = []; _wbPending = null; renderWorldbookPanel();
+            _wbEnter(copyName);
         } catch (e) { alert('複製失敗：' + (e && e.message || e)); }
     }
-    async function _wbRenderEditor(host) {
+    // ② 瀏覽條目（搜尋＋篩選＋條目卡；底部 AI整理／新增條目）
+    async function _wbRenderEntries(host) {
         const TH = _wbTH();
         try { _wbEntries = (await TH.getLorebookEntries(_wbWorking)) || []; } catch (e) { _wbEntries = []; }
         const isCopy = String(_wbWorking).startsWith('[VN副本]');
-        host.innerHTML = `<div class="swb-wrap swb-editor">
-            <div class="swb-editor-head">
-                <button class="swb-btn" id="swb-back">‹ 返回</button>
-                <span class="swb-working" title="${_sgcEsc(_wbWorking)}">${isCopy ? '📋' : '✏️'} ${_sgcEsc(_wbWorking)}</span>
-                ${isCopy ? '<span class="swb-safe">副本·原檔安全</span>' : '<span class="swb-warn">⚠️ 直接改原檔</span>'}
-                <div class="swb-model-seg" id="swb-model-seg">
-                    <button class="swb-seg-btn${_wbModel === 'main' ? ' on' : ''}" data-m="main">主模型</button>
-                    <button class="swb-seg-btn${_wbModel === 'sec' ? ' on' : ''}" data-m="sec">副模型</button>
+        host.innerHTML = `<div class="swb-page">
+            <div class="swb-bar">
+                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <div class="swb-bar-title" title="${_sgcEsc(_wbWorking)}">${_sgcEsc(_wbWorking)}</div>
+                ${isCopy ? '<span class="swb-chip safe">副本·原檔安全</span>' : '<span class="swb-chip warn">直接改原檔</span>'}
+            </div>
+            <div class="swb-tools">
+                <input id="swb-search" class="swb-field" placeholder="🔍 搜尋條目…" value="${_sgcEsc(_wbSearch)}">
+                <div class="swb-seg" id="swb-filter">
+                    <button class="swb-seg-btn${_wbFilter === 'all' ? ' on' : ''}" data-f="all">全部</button>
+                    <button class="swb-seg-btn${_wbFilter === 'on' ? ' on' : ''}" data-f="on">已啟用</button>
+                    <button class="swb-seg-btn${_wbFilter === 'off' ? ' on' : ''}" data-f="off">已停用</button>
                 </div>
             </div>
-            <div class="swb-entries" id="swb-entries"></div>
-            <div class="swb-chat" id="swb-chat"></div>
-            <div class="swb-pending" id="swb-pending"></div>
-            <div class="swb-inputrow">
-                <textarea id="swb-msg" class="swb-msg" placeholder="跟 AI 說要怎麼改／加哪些條目（例：加一條關於○○規則的條目；把 #3 改得更詳細）…"></textarea>
-                <button class="swb-btn primary" id="swb-send">送出</button>
+            <div class="swb-list" id="swb-entry-list"></div>
+            <div class="swb-footbar">
+                <button class="swb-primary" id="swb-ai">🤖 請 AI 幫我整理</button>
+                <button class="swb-secondary" id="swb-add">＋ 新增條目</button>
             </div>
         </div>`;
-        _wbRenderEntries(host); _wbRenderChat(host); _wbRenderPending(host);
-        host.querySelector('#swb-back').onclick = () => { _wbWorking = null; _wbPending = null; renderWorldbookPanel(); };
-        host.querySelector('#swb-send').onclick = () => _wbSend(host);
-        host.querySelectorAll('#swb-model-seg .swb-seg-btn').forEach(b => b.onclick = () => {
-            _wbModel = b.getAttribute('data-m') === 'sec' ? 'sec' : 'main';
-            localStorage.setItem('swb_model', _wbModel);
-            host.querySelectorAll('#swb-model-seg .swb-seg-btn').forEach(x => x.classList.toggle('on', x.getAttribute('data-m') === _wbModel));
+        host.querySelector('#swb-back').onclick = () => { _wbWorking = null; _wbView = 'picker'; renderWorldbookPanel(); };
+        host.querySelector('#swb-ai').onclick = () => { _wbView = 'chat'; renderWorldbookPanel(); };
+        host.querySelector('#swb-add').onclick = () => { _wbEntryEditing = null; _wbView = 'detail'; renderWorldbookPanel(); };
+        const search = host.querySelector('#swb-search');
+        search.oninput = () => { _wbSearch = search.value; _wbPaintEntryList(host); };
+        host.querySelectorAll('#swb-filter .swb-seg-btn').forEach(b => b.onclick = () => {
+            _wbFilter = b.getAttribute('data-f');
+            host.querySelectorAll('#swb-filter .swb-seg-btn').forEach(x => x.classList.toggle('on', x.getAttribute('data-f') === _wbFilter));
+            _wbPaintEntryList(host);
+        });
+        _wbPaintEntryList(host);
+    }
+    function _wbPaintEntryList(host) {
+        const el = host.querySelector('#swb-entry-list'); if (!el) return;
+        if (!_wbEntries.length) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art">📖</div><div>這本世界書還沒有條目<br>用下面「新增條目」或「請 AI 幫我整理」開始</div></div>`; return; }
+        const q = _wbSearch.trim().toLowerCase();
+        const list = _wbEntries.filter(e => {
+            if (_wbFilter === 'on' && !e.enabled) return false;
+            if (_wbFilter === 'off' && e.enabled) return false;
+            if (q) { const hay = (String(e.comment || '') + ' ' + (e.keys || []).join(' ') + ' ' + String(e.content || '')).toLowerCase(); if (!hay.includes(q)) return false; }
+            return true;
+        });
+        if (!list.length) { el.innerHTML = '<div class="swb-empty">沒有符合的條目</div>'; return; }
+        el.innerHTML = list.map(e => {
+            const keys = (e.keys || []).filter(Boolean);
+            const tags = keys.length ? keys.map(k => `<span class="swb-tag">${_sgcEsc(k)}</span>`).join('') : '<span class="swb-tag muted">常駐</span>';
+            const sum = _sgcEsc(String(e.content || '').replace(/\s+/g, ' ').trim().slice(0, 80)) || '（無內容）';
+            return `<div class="swb-card swb-entrycard" data-uid="${e.uid}">
+                <div class="swb-card-main">
+                    <div class="swb-card-title">${_sgcEsc(e.comment || '(無標題)')}</div>
+                    <div class="swb-card-sum">${sum}</div>
+                    <div class="swb-tags">${tags}</div>
+                </div>
+                <label class="sgc-switch swb-card-tog" title="啟用／停用"><input type="checkbox" class="sgc-switch-input" data-en="${e.uid}"${e.enabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
+                <span class="swb-chev">›</span>
+            </div>`;
+        }).join('');
+        el.querySelectorAll('.swb-entrycard').forEach(card => card.onclick = (ev) => {
+            if (ev.target.closest('.swb-card-tog')) return;
+            _wbEntryEditing = parseInt(card.getAttribute('data-uid'), 10); _wbView = 'detail'; renderWorldbookPanel();
+        });
+        el.querySelectorAll('[data-en]').forEach(cb => cb.onchange = async (ev) => {
+            ev.stopPropagation();
+            const uid = parseInt(cb.getAttribute('data-en'), 10);
+            try { await _wbTH().setLorebookEntries(_wbWorking, [{ uid, enabled: cb.checked }]); const e = _wbEntries.find(x => x.uid === uid); if (e) e.enabled = cb.checked; }
+            catch (err) { alert('改啟用失敗：' + (err && err.message || err)); cb.checked = !cb.checked; }
         });
     }
-    function _wbRenderEntries(host) {
-        const el = host.querySelector('#swb-entries'); if (!el) return;
-        if (!_wbEntries.length) { el.innerHTML = '<div class="swb-empty">這個世界書還沒有條目。跟 AI 說要加什麼吧。</div>'; return; }
-        el.innerHTML = _wbEntries.map(e => `<div class="swb-entry">
-            <div class="swb-entry-hd"><span class="swb-entry-title">${_sgcEsc(e.comment || '(無標題)')}</span><span class="swb-entry-uid">#${e.uid}</span>
-                <label class="sgc-switch" title="啟用/停用"><input type="checkbox" class="sgc-switch-input" data-en-uid="${e.uid}"${e.enabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label></div>
-            <div class="swb-entry-keys">🔑 ${_sgcEsc((e.keys || []).join('、')) || '（常駐／無關鍵字）'}</div>
-            <div class="swb-entry-content">${_sgcEsc(String(e.content || '').slice(0, 200))}${String(e.content || '').length > 200 ? '…' : ''}</div>
-        </div>`).join('');
-        el.querySelectorAll('[data-en-uid]').forEach(cb => cb.onchange = async () => {
-            const uid = parseInt(cb.getAttribute('data-en-uid'), 10);
-            try { await _wbTH().setLorebookEntries(_wbWorking, [{ uid, enabled: cb.checked }]); }
-            catch (e) { alert('改啟用失敗：' + (e && e.message || e)); cb.checked = !cb.checked; }
-        });
+    // ③ 條目詳情／編輯（手動完整編輯；新增也走這頁）
+    function _wbRenderDetail(host) {
+        const isNew = _wbEntryEditing == null;
+        const e = isNew ? { comment: '', keys: [], content: '', enabled: true }
+                        : (_wbEntries.find(x => x.uid === _wbEntryEditing) || { comment: '', keys: [], content: '', enabled: true });
+        host.innerHTML = `<div class="swb-page">
+            <div class="swb-bar">
+                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <div class="swb-bar-title">${isNew ? '新增條目' : '編輯條目'}</div>
+            </div>
+            <div class="swb-form">
+                <label class="swb-flabel">標題</label>
+                <input id="swb-f-title" class="swb-field" value="${_sgcEsc(e.comment || '')}" placeholder="這條規則叫什麼…">
+                <label class="swb-flabel">關鍵字</label>
+                <input id="swb-f-keys" class="swb-field" value="${_sgcEsc((e.keys || []).join('、'))}" placeholder="用、分隔；留空＝一直生效">
+                <div class="swb-fhint">提到這些字時 AI 才會讀這條；留空＝常駐、永遠生效。</div>
+                <label class="swb-flabel">內容</label>
+                <textarea id="swb-f-content" class="swb-field swb-ftext" placeholder="這條世界書要寫的設定／規則…">${_sgcEsc(e.content || '')}</textarea>
+                <label class="swb-frow"><span>啟用這條</span><span class="sgc-switch"><input type="checkbox" id="swb-f-en" class="sgc-switch-input"${e.enabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></span></label>
+                ${isNew ? '' : '<button class="swb-textdanger" id="swb-del">🗑 刪除這條</button>'}
+            </div>
+            <div class="swb-footbar">
+                <button class="swb-primary swb-block" id="swb-save">${isNew ? '建立條目' : '儲存'}</button>
+            </div>
+        </div>`;
+        host.querySelector('#swb-back').onclick = () => { _wbView = 'entries'; renderWorldbookPanel(); };
+        host.querySelector('#swb-save').onclick = () => _wbSaveDetail(host, isNew);
+        const del = host.querySelector('#swb-del'); if (del) del.onclick = () => _wbDeleteEntry();
     }
+    async function _wbSaveDetail(host, isNew) {
+        const TH = _wbTH();
+        if (!TH) { alert('酒館助手未就緒'); return; }
+        const comment = host.querySelector('#swb-f-title').value.trim();
+        const keys = host.querySelector('#swb-f-keys').value.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean);
+        const content = host.querySelector('#swb-f-content').value;
+        const enabled = host.querySelector('#swb-f-en').checked;
+        const btn = host.querySelector('#swb-save'); if (btn) { btn.disabled = true; btn.textContent = '儲存中…'; }
+        try {
+            if (isNew) await TH.createLorebookEntries(_wbWorking, [{ comment, keys, content, enabled }]);
+            else await TH.setLorebookEntries(_wbWorking, [{ uid: _wbEntryEditing, comment, keys, content, enabled }]);
+            _wbToast(isNew ? '已新增條目 ✓' : '已儲存 ✓');
+            _wbView = 'entries'; renderWorldbookPanel();
+        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = isNew ? '建立條目' : '儲存'; } alert('儲存失敗：' + (e && e.message || e)); }
+    }
+    async function _wbDeleteEntry() {
+        if (_wbEntryEditing == null) return;
+        const e = _wbEntries.find(x => x.uid === _wbEntryEditing);
+        if (!confirm(`刪除條目「${e ? (e.comment || '(無標題)') : ''}」？`)) return;
+        try { await _wbTH().deleteLorebookEntries(_wbWorking, [_wbEntryEditing]); _wbToast('已刪除條目'); _wbView = 'entries'; renderWorldbookPanel(); }
+        catch (err) { alert('刪除失敗：' + (err && err.message || err)); }
+    }
+    // ④ 和 AI 討論（只剩對話＋輸入；模型切換收進右上⚙️；有建議冒「查看 N 項」）
     function _wbRenderChat(host) {
-        const el = host.querySelector('#swb-chat'); if (!el) return;
+        host.innerHTML = `<div class="swb-page">
+            <div class="swb-bar">
+                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <div class="swb-bar-title" title="${_sgcEsc(_wbWorking)}">${_sgcEsc(_wbWorking)}<span class="swb-bar-sub">${_wbEntries.length} 條目</span></div>
+                <button class="swb-iconbtn" id="swb-adv" title="進階設定">⚙️</button>
+            </div>
+            <div class="swb-chatlog" id="swb-chatlog"></div>
+            <div class="swb-pendbar" id="swb-pendbar"></div>
+            <div class="swb-inputrow">
+                <textarea id="swb-msg" class="swb-field swb-msg" placeholder="跟 AI 說要怎麼改／加哪些條目（例：加一條關於○○規則的條目；把某條改得更詳細）…"></textarea>
+                <button class="swb-primary swb-send" id="swb-send">送出</button>
+            </div>
+        </div>`;
+        host.querySelector('#swb-back').onclick = () => { _wbView = 'entries'; renderWorldbookPanel(); };
+        host.querySelector('#swb-adv').onclick = () => _wbAdvSheet();
+        host.querySelector('#swb-send').onclick = () => _wbSend(host);
+        _wbPaintChat(host); _wbPaintPendBar(host);
+    }
+    function _wbPaintChat(host) {
+        const el = host.querySelector('#swb-chatlog'); if (!el) return;
+        if (!_wbChat.length) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art">💬</div><div>跟 AI 說你想怎麼整理這本世界書<br>它幫你改／加條目，你確認後才寫入</div></div>`; return; }
         el.innerHTML = _wbChat.map(m => `<div class="swb-bubble swb-${m.role}">${_sgcEsc(m.content)}</div>`).join('');
         el.scrollTop = el.scrollHeight;
+    }
+    function _wbPaintPendBar(host) {
+        const el = host.querySelector('#swb-pendbar'); if (!el) return;
+        if (!_wbPending || !_wbPending.length) { el.innerHTML = ''; return; }
+        el.innerHTML = `<button class="swb-pendbtn" id="swb-viewpend">查看 ${_wbPending.length} 項建議 ›</button>`;
+        const b = host.querySelector('#swb-viewpend'); if (b) b.onclick = () => { _wbView = 'confirm'; renderWorldbookPanel(); };
+    }
+    function _wbAdvSheet() {
+        _wbSheet('進階設定 · AI 用哪個模型寫', [
+            { label: '主模型寫（品質好，預設）' + (_wbModel === 'main' ? ' ✓' : ''), cls: _wbModel === 'main' ? 'safe' : '', onClick: () => { _wbModel = 'main'; localStorage.setItem('swb_model', 'main'); } },
+            { label: '副模型寫（快、省）' + (_wbModel === 'sec' ? ' ✓' : ''), cls: _wbModel === 'sec' ? 'safe' : '', onClick: () => { _wbModel = 'sec'; localStorage.setItem('swb_model', 'sec'); } },
+        ]);
     }
     function _wbEntriesForPrompt() {
         return _wbEntries.map(e => `#${e.uid}｜標題：${e.comment || '(無)'}｜關鍵字：${(e.keys || []).join(',')}｜內容：${String(e.content || '').slice(0, 400)}`).join('\n');
@@ -1259,7 +1430,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const api = (window.parent || window).OS_API || window.OS_API;
         if (!api || (typeof api.chatSecondary !== 'function' && typeof api.chatMain !== 'function')) { alert('AI 不可用，請先到「寫作 → API 設置」設好模型'); return; }
         _wbChat.push({ role: 'user', content: msg }); ta.value = '';
-        _wbRenderChat(host);
+        _wbPaintChat(host);
         const sendBtn = host.querySelector('#swb-send'); if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '生成中…'; }
         const messages = [{ role: 'system', content: _WB_SYS + '\n\n【目前條目】\n' + (_wbEntriesForPrompt() || '（空，還沒有條目）') }].concat(_wbChat.slice(-8));
         const done = (full) => {
@@ -1268,7 +1439,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             _wbChat.push({ role: 'assistant', content: reply });
             _wbPending = _wbParseOps(reply);
             if (!_wbPending.length) _wbPending = null;
-            _wbRenderChat(host); _wbRenderPending(host);
+            _wbPaintChat(host); _wbPaintPendBar(host);
         };
         const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } alert('AI 失敗：' + (err && err.message || err)); };
         // 主模型＝chatMain（品質好、世界書二改首選）；副模型＝chatSecondary。選的入口若不存在則退另一個。
@@ -1288,37 +1459,55 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         }
         return ops;
     }
-    function _wbRenderPending(host) {
-        const el = host.querySelector('#swb-pending'); if (!el) return;
-        if (!_wbPending || !_wbPending.length) { el.innerHTML = ''; return; }
-        const rows = _wbPending.map(o => {
-            if (o.op === 'del') { const e = _wbEntries.find(x => x.uid === o.uid); return `<div class="swb-op del">🗑 刪除 #${o.uid}｜${_sgcEsc(e ? e.comment : '?')}</div>`; }
+    // ⑤ 確認改動（獨立頁；新增綠／修改琥珀／刪除紅；確認才寫）
+    function _wbRenderConfirm(host) {
+        const ops = _wbPending || [];
+        host.innerHTML = `<div class="swb-page">
+            <div class="swb-bar">
+                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <div class="swb-bar-title">確認改動<span class="swb-bar-sub">${ops.length} 項</span></div>
+            </div>
+            <div class="swb-list" id="swb-conflist"></div>
+            <div class="swb-footbar">
+                <button class="swb-secondary" id="swb-backedit">‹ 返回修改</button>
+                <button class="swb-primary" id="swb-apply">✅ 套用 ${ops.length} 項</button>
+            </div>
+        </div>`;
+        const listEl = host.querySelector('#swb-conflist');
+        listEl.innerHTML = ops.map(o => {
+            if (o.op === 'del') {
+                const e = _wbEntries.find(x => x.uid === o.uid);
+                return `<div class="swb-card swb-op del"><span class="swb-op-chip">刪除</span><div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(e ? (e.comment || '(無標題)') : '(條目)')}</div></div></div>`;
+            }
             const e = _wbEntries.find(x => x.uid === o.uid);
             const title = _sgcEsc((o.comment != null ? o.comment : (e && e.comment)) || '(無標題)');
-            const keyStr = o.keys ? `｜🔑 ${_sgcEsc(o.keys.join('、'))}` : '';
-            const cont = o.content != null ? `<div class="swb-op-content">${_sgcEsc(String(o.content))}</div>` : '';
-            return `<div class="swb-op ${o.op === 'add' ? 'add' : 'upd'}">${o.op === 'add' ? '➕ 新增' : '✏️ 改 #' + o.uid}｜${title}${keyStr}${cont}</div>`;
+            const cont = o.content != null ? `<div class="swb-card-sum">${_sgcEsc(String(o.content).replace(/\s+/g, ' ').trim().slice(0, 160))}${String(o.content).length > 160 ? '…' : ''}</div>` : '';
+            const tags = o.keys ? `<div class="swb-tags">${o.keys.length ? o.keys.map(k => `<span class="swb-tag">${_sgcEsc(k)}</span>`).join('') : '<span class="swb-tag muted">常駐</span>'}</div>` : '';
+            return `<div class="swb-card swb-op ${o.op === 'add' ? 'add' : 'upd'}"><span class="swb-op-chip">${o.op === 'add' ? '新增' : '修改'}</span><div class="swb-card-main"><div class="swb-card-title">${title}</div>${cont}${tags}</div></div>`;
         }).join('');
-        el.innerHTML = `<div class="swb-pending-hd">AI 想做這些改動（${_wbPending.length}）— 你確認才寫入：</div><div class="swb-pending-list">${rows}</div><div class="swb-pending-acts"><button class="swb-btn primary" id="swb-apply">✅ 套用</button><button class="swb-btn" id="swb-cancel">取消</button></div>`;
+        host.querySelector('#swb-back').onclick = () => { _wbView = 'chat'; renderWorldbookPanel(); };
+        host.querySelector('#swb-backedit').onclick = () => { _wbView = 'chat'; renderWorldbookPanel(); };
         host.querySelector('#swb-apply').onclick = () => _wbApply(host);
-        host.querySelector('#swb-cancel').onclick = () => { _wbPending = null; _wbRenderPending(host); };
     }
     async function _wbApply(host) {
         const TH = _wbTH(); if (!TH || !_wbPending) return;
+        const n = _wbPending.length;
         const adds = [], updates = [], dels = [];
         for (const o of _wbPending) {
             if (o.op === 'del') { if (o.uid != null) dels.push(o.uid); }
             else if (o.op === 'add') { adds.push({ comment: o.comment || '', keys: o.keys || [], content: o.content || '', enabled: true }); }
             else if (o.op === 'update' && o.uid != null) { const u = { uid: o.uid }; if (o.comment != null) u.comment = o.comment; if (o.keys != null) u.keys = o.keys; if (o.content != null) u.content = o.content; updates.push(u); }
         }
+        const btn = host.querySelector('#swb-apply'); if (btn) { btn.disabled = true; btn.textContent = '套用中…'; }
         try {
             if (adds.length) await TH.createLorebookEntries(_wbWorking, adds);
             if (updates.length) await TH.setLorebookEntries(_wbWorking, updates);
             if (dels.length) await TH.deleteLorebookEntries(_wbWorking, dels);
             _wbPending = null;
-            await _wbRenderEditor(host);
-            try { (window.parent || window).toastr && (window.parent || window).toastr.success('已套用到世界書 ✓'); } catch (e) {}
-        } catch (e) { alert('套用失敗：' + (e && e.message || e)); }
+            try { _wbEntries = (await TH.getLorebookEntries(_wbWorking)) || []; } catch (e) {}
+            _wbToast('已套用 ' + n + ' 項 ✓');
+            _wbView = 'chat'; renderWorldbookPanel();
+        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '✅ 套用 ' + n + ' 項'; } alert('套用失敗：' + (e && e.message || e)); }
     }
 
     function renderThemePanel() {
