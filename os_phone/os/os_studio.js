@@ -1210,16 +1210,16 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     function _wbOpenBook(name) {   // 點書卡：已是副本→直接進；否則問副本/直接
         if (String(name).startsWith('[VN副本]')) { _wbEnter(name); return; }
         _wbSheet(`要怎麼編輯「${name}」？`, [
-            { label: '📋 建立安全副本後編輯（推薦）', cls: 'safe', onClick: () => _wbCopyBook(name) },
-            { label: '✏️ 直接改原檔', cls: 'danger', onClick: () => { if (confirm(`⚠️ 直接編輯原檔「${name}」？會動到原始世界書、不是副本。確定？`)) _wbEnter(name); } },
+            { label: '<i class="fa-solid fa-copy"></i> 建立安全副本後編輯（推薦）', cls: 'safe', onClick: () => _wbCopyBook(name) },
+            { label: '<i class="fa-solid fa-pen"></i> 直接改原檔', cls: 'danger', onClick: () => { if (confirm(`⚠️ 直接編輯原檔「${name}」？會動到原始世界書、不是副本。確定？`)) _wbEnter(name); } },
         ]);
     }
     function _wbBookMenu(name) {   // 三點選單
         const isCopy = String(name).startsWith('[VN副本]');
         const acts = [];
-        if (!isCopy) acts.push({ label: '📋 建立安全副本後編輯', cls: 'safe', onClick: () => _wbCopyBook(name) });
-        acts.push({ label: isCopy ? '✏️ 編輯這份副本' : '✏️ 直接改原檔', cls: isCopy ? '' : 'danger', onClick: () => { if (isCopy || confirm(`⚠️ 直接改原檔「${name}」？確定？`)) _wbEnter(name); } });
-        acts.push({ label: '🗑 刪除世界書', cls: 'danger', onClick: () => _wbDeleteBook(name) });
+        if (!isCopy) acts.push({ label: '<i class="fa-solid fa-copy"></i> 建立安全副本後編輯', cls: 'safe', onClick: () => _wbCopyBook(name) });
+        acts.push({ label: isCopy ? '<i class="fa-solid fa-pen"></i> 編輯這份副本' : '<i class="fa-solid fa-pen"></i> 直接改原檔', cls: isCopy ? '' : 'danger', onClick: () => { if (isCopy || confirm(`⚠️ 直接改原檔「${name}」？確定？`)) _wbEnter(name); } });
+        acts.push({ label: '<i class="fa-solid fa-trash"></i> 刪除世界書', cls: 'danger', onClick: () => _wbDeleteBook(name) });
         _wbSheet(`「${name}」`, acts);
     }
     async function _wbDeleteBook(name) {
@@ -1236,7 +1236,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         try { books = (TH && TH.getLorebooks && TH.getLorebooks()) || []; } catch (e) {}
         host.innerHTML = `<div class="swb-page">
             <div class="swb-phead"><div class="swb-ptitle">整理世界書</div><div class="swb-psub">挑一本世界書，AI 幫你改規則、加條目。二改別人的卡建議用「複製」，原檔不會被動到。</div></div>
-            <button class="swb-primary swb-block" id="swb-new-toggle">＋ 新增世界書</button>
+            <button class="swb-primary swb-block" id="swb-new-toggle"><i class="fa-solid fa-plus"></i> 新增世界書</button>
             <div class="swb-newrow" id="swb-newrow" hidden><input id="swb-new-name" class="swb-field" placeholder="新世界書名稱…"><button class="swb-primary swb-sm" id="swb-new-go">建立</button></div>
             <div class="swb-list" id="swb-list"></div>
         </div>`;
@@ -1245,11 +1245,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         toggle.onclick = () => { newrow.hidden = !newrow.hidden; if (!newrow.hidden) { const i = host.querySelector('#swb-new-name'); i && i.focus(); } };
         host.querySelector('#swb-new-go').onclick = () => _wbCreateNew(host.querySelector('#swb-new-name').value);
         const listEl = host.querySelector('#swb-list');
-        if (!books.length) { listEl.innerHTML = `<div class="swb-empty"><div class="swb-empty-art">🌍</div><div>酒館裡還沒有世界書<br>按上面「新增世界書」開一本吧</div></div>`; return; }
+        if (!books.length) { listEl.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-globe"></i></div><div>酒館裡還沒有世界書<br>按上面「新增世界書」開一本吧</div></div>`; return; }
         listEl.innerHTML = books.map((b, i) => `<div class="swb-card swb-bookcard" data-book="${_sgcEsc(b)}">
             <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(b)}</div><div class="swb-card-meta" data-cnt="${i}">… 條目</div></div>
-            <button class="swb-iconbtn swb-more" data-more="${_sgcEsc(b)}" title="更多">⋮</button>
-            <span class="swb-chev">›</span>
+            <button class="swb-iconbtn swb-more" data-more="${_sgcEsc(b)}" title="更多"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span>
         </div>`).join('');
         listEl.querySelectorAll('.swb-bookcard').forEach(card => card.onclick = (ev) => {
             if (ev.target.closest('[data-more]')) return;
@@ -1299,12 +1299,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const isCopy = String(_wbWorking).startsWith('[VN副本]');
         host.innerHTML = `<div class="swb-page">
             <div class="swb-bar">
-                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <button class="swb-iconbtn" id="swb-back"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="swb-bar-title" title="${_sgcEsc(_wbWorking)}">${_sgcEsc(_wbWorking)}</div>
                 ${isCopy ? '<span class="swb-chip safe">副本·原檔安全</span>' : '<span class="swb-chip warn">直接改原檔</span>'}
             </div>
             <div class="swb-tools">
-                <input id="swb-search" class="swb-field" placeholder="🔍 搜尋條目…" value="${_sgcEsc(_wbSearch)}">
+                <input id="swb-search" class="swb-field" placeholder="搜尋條目…" value="${_sgcEsc(_wbSearch)}">
                 <div class="swb-seg" id="swb-filter">
                     <button class="swb-seg-btn${_wbFilter === 'all' ? ' on' : ''}" data-f="all">全部</button>
                     <button class="swb-seg-btn${_wbFilter === 'on' ? ' on' : ''}" data-f="on">已啟用</button>
@@ -1313,8 +1313,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             </div>
             <div class="swb-list" id="swb-entry-list"></div>
             <div class="swb-footbar">
-                <button class="swb-primary" id="swb-ai">🤖 請 AI 幫我整理</button>
-                <button class="swb-secondary" id="swb-add">＋ 新增條目</button>
+                <button class="swb-primary" id="swb-ai"><i class="fa-solid fa-robot"></i> 請 AI 幫我整理</button>
+                <button class="swb-secondary" id="swb-add"><i class="fa-solid fa-plus"></i> 新增條目</button>
             </div>
         </div>`;
         host.querySelector('#swb-back').onclick = () => { _wbWorking = null; _wbView = 'picker'; renderWorldbookPanel(); };
@@ -1331,7 +1331,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     }
     function _wbPaintEntryList(host) {
         const el = host.querySelector('#swb-entry-list'); if (!el) return;
-        if (!_wbEntries.length) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art">📖</div><div>這本世界書還沒有條目<br>用下面「新增條目」或「請 AI 幫我整理」開始</div></div>`; return; }
+        if (!_wbEntries.length) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-book"></i></div><div>這本世界書還沒有條目<br>用下面「新增條目」或「請 AI 幫我整理」開始</div></div>`; return; }
         const q = _wbSearch.trim().toLowerCase();
         const list = _wbEntries.filter(e => {
             if (_wbFilter === 'on' && !e.enabled) return false;
@@ -1351,7 +1351,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     <div class="swb-tags">${tags}</div>
                 </div>
                 <label class="sgc-switch swb-card-tog" title="啟用／停用"><input type="checkbox" class="sgc-switch-input" data-en="${e.uid}"${e.enabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
-                <span class="swb-chev">›</span>
+                <span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span>
             </div>`;
         }).join('');
         el.querySelectorAll('.swb-entrycard').forEach(card => card.onclick = (ev) => {
@@ -1372,7 +1372,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         : (_wbEntries.find(x => x.uid === _wbEntryEditing) || { comment: '', keys: [], content: '', enabled: true });
         host.innerHTML = `<div class="swb-page">
             <div class="swb-bar">
-                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <button class="swb-iconbtn" id="swb-back"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="swb-bar-title">${isNew ? '新增條目' : '編輯條目'}</div>
             </div>
             <div class="swb-form">
@@ -1384,7 +1384,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 <label class="swb-flabel">內容</label>
                 <textarea id="swb-f-content" class="swb-field swb-ftext" placeholder="這條世界書要寫的設定／規則…">${_sgcEsc(e.content || '')}</textarea>
                 <label class="swb-frow"><span>啟用這條</span><span class="sgc-switch"><input type="checkbox" id="swb-f-en" class="sgc-switch-input"${e.enabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></span></label>
-                ${isNew ? '' : '<button class="swb-textdanger" id="swb-del">🗑 刪除這條</button>'}
+                ${isNew ? '' : '<button class="swb-textdanger" id="swb-del"><i class="fa-solid fa-trash"></i> 刪除這條</button>'}
             </div>
             <div class="swb-footbar">
                 <button class="swb-primary swb-block" id="swb-save">${isNew ? '建立條目' : '儲存'}</button>
@@ -1421,9 +1421,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     function _wbRenderChat(host) {
         host.innerHTML = `<div class="swb-page">
             <div class="swb-bar">
-                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <button class="swb-iconbtn" id="swb-back"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="swb-bar-title" title="${_sgcEsc(_wbWorking)}">${_sgcEsc(_wbWorking)}<span class="swb-bar-sub">${_wbEntries.length} 條目</span></div>
-                <button class="swb-iconbtn" id="swb-adv" title="進階設定">⚙️</button>
+                <button class="swb-iconbtn" id="swb-adv" title="進階設定"><i class="fa-solid fa-gear"></i></button>
             </div>
             <div class="swb-chatlog" id="swb-chatlog"></div>
             <div class="swb-pendbar" id="swb-pendbar"></div>
@@ -1447,7 +1447,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     }
     function _wbPaintChat(host) {
         const el = host.querySelector('#swb-chatlog'); if (!el) return;
-        if (!_wbChat.length) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art">💬</div><div>跟 AI 說你想怎麼整理這本世界書<br>它幫你改／加條目，你確認後才寫入</div></div>`; return; }
+        if (!_wbChat.length) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-comment-dots"></i></div><div>跟 AI 說你想怎麼整理這本世界書<br>它幫你改／加條目，你確認後才寫入</div></div>`; return; }
         el.innerHTML = _wbChat.map(m => {
             let body = m.content;
             if (m.role === 'assistant') { body = _wbStripOps(m.content); if (!body) body = '✏️ 我擬好了改動，點下方「查看建議」確認。'; }
@@ -1458,13 +1458,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     function _wbPaintPendBar(host) {
         const el = host.querySelector('#swb-pendbar'); if (!el) return;
         if (!_wbPending || !_wbPending.length) { el.innerHTML = ''; return; }
-        el.innerHTML = `<button class="swb-pendbtn" id="swb-viewpend">查看 ${_wbPending.length} 項建議 ›</button>`;
+        el.innerHTML = `<button class="swb-pendbtn" id="swb-viewpend">查看 ${_wbPending.length} 項建議 <i class="fa-solid fa-chevron-right"></i></button>`;
         const b = host.querySelector('#swb-viewpend'); if (b) b.onclick = () => { _wbConfirmIdx = null; _wbView = 'confirm'; renderWorldbookPanel(); };
     }
     function _wbAdvSheet() {
         _wbSheet('進階設定 · AI 用哪個模型寫', [
-            { label: '主模型寫（品質好，預設）' + (_wbModel === 'main' ? ' ✓' : ''), cls: _wbModel === 'main' ? 'safe' : '', onClick: () => { _wbModel = 'main'; localStorage.setItem('swb_model', 'main'); } },
-            { label: '副模型寫（快、省）' + (_wbModel === 'sec' ? ' ✓' : ''), cls: _wbModel === 'sec' ? 'safe' : '', onClick: () => { _wbModel = 'sec'; localStorage.setItem('swb_model', 'sec'); } },
+            { label: '主模型寫（品質好，預設）' + (_wbModel === 'main' ? ' <i class="fa-solid fa-check"></i>' : ''), cls: _wbModel === 'main' ? 'safe' : '', onClick: () => { _wbModel = 'main'; localStorage.setItem('swb_model', 'main'); } },
+            { label: '副模型寫（快、省）' + (_wbModel === 'sec' ? ' <i class="fa-solid fa-check"></i>' : ''), cls: _wbModel === 'sec' ? 'safe' : '', onClick: () => { _wbModel = 'sec'; localStorage.setItem('swb_model', 'sec'); } },
         ]);
     }
     function _wbEntriesForPrompt() {
@@ -1520,13 +1520,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         _wbConfirmIdx = null;
         host.innerHTML = `<div class="swb-page">
             <div class="swb-bar">
-                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <button class="swb-iconbtn" id="swb-back"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="swb-bar-title">確認改動<span class="swb-bar-sub">${ops.length} 項</span></div>
             </div>
             <div class="swb-list" id="swb-conflist"></div>
             <div class="swb-footbar">
-                <button class="swb-secondary" id="swb-backedit">‹ 返回修改</button>
-                <button class="swb-primary" id="swb-apply">✅ 套用 ${ops.length} 項</button>
+                <button class="swb-secondary" id="swb-backedit"><i class="fa-solid fa-chevron-left"></i> 返回修改</button>
+                <button class="swb-primary" id="swb-apply"><i class="fa-solid fa-check"></i> 套用 ${ops.length} 項</button>
             </div>
         </div>`;
         const listEl = host.querySelector('#swb-conflist');
@@ -1538,7 +1538,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             return `<div class="swb-card swb-op ${_wbOpClass(o.op)}" data-i="${i}">
                 <span class="swb-op-chip c-${_wbOpClass(o.op)}">${_wbOpLabel(o.op)}</span>
                 <div class="swb-card-main"><div class="swb-card-title">${title}</div>${preview}</div>
-                <span class="swb-chev">›</span>
+                <span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span>
             </div>`;
         }).join('');
         listEl.querySelectorAll('[data-i]').forEach(card => card.onclick = () => { _wbConfirmIdx = parseInt(card.getAttribute('data-i'), 10); renderWorldbookPanel(); });
@@ -1552,10 +1552,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const keysArr = (o.op === 'del' ? (e && e.keys) : (o.keys != null ? o.keys : (e && e.keys))) || [];
         const keys = keysArr.length ? keysArr.map(k => `<span class="swb-tag">${_sgcEsc(k)}</span>`).join('') : '<span class="swb-tag muted">常駐</span>';
         const content = o.op === 'del' ? (e ? e.content : '') : o.content;
-        const note = o.op === 'del' ? '<div class="swb-fhint">⚠️ 套用後這條會被刪除。下面是它目前的內容：</div>' : '';
+        const note = o.op === 'del' ? '<div class="swb-fhint"><i class="fa-solid fa-triangle-exclamation"></i> 套用後這條會被刪除。下面是它目前的內容：</div>' : '';
         host.innerHTML = `<div class="swb-page">
             <div class="swb-bar">
-                <button class="swb-iconbtn" id="swb-back">‹</button>
+                <button class="swb-iconbtn" id="swb-back"><i class="fa-solid fa-chevron-left"></i></button>
                 <span class="swb-op-chip c-${_wbOpClass(o.op)}">${_wbOpLabel(o.op)}</span>
                 <div class="swb-bar-title">${title}</div>
             </div>
@@ -1567,7 +1567,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 <div class="swb-op-body">${(content != null && content !== '') ? _sgcEsc(String(content)) : '（無內容）'}</div>
             </div>
             <div class="swb-footbar">
-                <button class="swb-primary swb-block" id="swb-back2">‹ 回改動清單</button>
+                <button class="swb-primary swb-block" id="swb-back2"><i class="fa-solid fa-chevron-left"></i> 回改動清單</button>
             </div>
         </div>`;
         host.querySelector('#swb-back').onclick = () => { _wbConfirmIdx = null; renderWorldbookPanel(); };
@@ -1591,7 +1591,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             try { _wbEntries = (await TH.getLorebookEntries(_wbWorking)) || []; } catch (e) {}
             _wbToast('已套用 ' + n + ' 項 ✓');
             _wbView = 'chat'; renderWorldbookPanel();
-        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '✅ 套用 ' + n + ' 項'; } alert('套用失敗：' + (e && e.message || e)); }
+        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '套用 ' + n + ' 項'; } alert('套用失敗：' + (e && e.message || e)); }
     }
 
     function renderThemePanel() {
@@ -1602,19 +1602,19 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const ph = '手寫 / 貼上，或用上面的「🤖 AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
+        const ph = '手寫 / 貼上，或用上面的「AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
         host.innerHTML = `<div class="vth-wrap">
             <div class="vth-css-bar">
-                <span class="vth-css-world">🌍 ${esc(chatId || '(未知，先進 VN 一次)')}</span>
-                <button class="vth-mini primary" id="vth-css-apply">💾 套用到此世界</button>
+                <span class="vth-css-world"><i class="fa-solid fa-globe"></i> ${esc(chatId || '(未知，先進 VN 一次)')}</span>
+                <button class="vth-mini primary" id="vth-css-apply"><i class="fa-solid fa-floppy-disk"></i> 套用到此世界</button>
                 <button class="vth-mini" id="vth-css-clear">清空</button>
             </div>
             <div class="vth-ai-row">
                 <input id="vth-ai-desc" class="vth-ai-desc" placeholder="描述風格讓 AI 生成（例：賽博夜雨霓虹 / 古典宮廷燙金 / 陰森廢墟舊紙）">
-                <button class="vth-mini primary" id="vth-ai-gen">🤖 AI 生成</button>
+                <button class="vth-mini primary" id="vth-ai-gen"><i class="fa-solid fa-robot"></i> AI 生成</button>
             </div>
             <div class="vth-prev-head">
-                <span class="vth-prev-label">👁️ 即時預覽</span>
+                <span class="vth-prev-label"><i class="fa-solid fa-eye"></i> 即時預覽</span>
                 <div class="vth-vp-tabs">
                     <button class="vth-vp active" data-vp="phone" title="手機端">手機</button>
                     <button class="vth-vp" data-vp="center" title="桌面·中間聊天區">中間</button>
@@ -1632,10 +1632,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <div class="vth-css-hint">改框內 CSS，上方即時預覽。「套用到此世界」存進當前世界、VN 開播自動套；「收藏目前」存進下方主題庫可跨世界重用。AI 用「寫作→API 設置」的副模型。</div>
             <div class="vth-gal">
                 <div class="vth-gal-head">
-                    <span class="vth-gal-label">📚 我的主題庫</span>
+                    <span class="vth-gal-label"><i class="fa-solid fa-swatchbook"></i> 我的主題庫</span>
                     <div class="vth-gal-save">
                         <input id="vth-gal-name" class="vth-gal-name" placeholder="主題命名…">
-                        <button class="vth-mini primary" id="vth-gal-add">💾 收藏目前</button>
+                        <button class="vth-mini primary" id="vth-gal-add"><i class="fa-solid fa-bookmark"></i> 收藏目前</button>
                     </div>
                 </div>
                 <div class="vth-gal-list" id="vth-gal-list"></div>
@@ -3037,7 +3037,7 @@ ${cleanFormat}
                     <button class="swb-secondary" id="vc-dup" type="button">📄 複製組件</button>
                     <button class="swb-secondary" id="vc-export" type="button">📦 匯出</button>
                 </div>
-                <button class="vc-navrow" id="vc-settings" type="button"><span class="vc-navrow-ico">⚙️</span><span class="vc-navrow-label">使用與設置</span><span class="swb-chev">›</span></button>
+                <button class="vc-navrow" id="vc-settings" type="button"><span class="vc-navrow-ico">⚙️</span><span class="vc-navrow-label">使用與設置</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
                 <div class="vc-delzone"><button class="vc-delbtn" id="vc-del" type="button">🗑 刪除組件</button></div>
             </div>`;
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'browse'; renderVnComponents(); };
@@ -3105,14 +3105,14 @@ ${cleanFormat}
                     </div>
                 </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">整合</div>
-                    <button class="vc-navrow" id="vc-import-st" type="button"><span class="vc-navrow-ico">📥</span><span class="vc-navrow-label">注入酒館正則</span><span class="swb-chev">›</span></button>
+                    <button class="vc-navrow" id="vc-import-st" type="button"><span class="vc-navrow-ico">📥</span><span class="vc-navrow-label">注入酒館正則</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
                     ${phoneRow}
                     <div class="vc-set-row"><span class="vc-set-label">🏠 大廳顯示</span>
                         <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-lobby"${tpl.lobbyEnabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
                     </div>
                 </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">進階</div>
-                    <button class="vc-navrow" id="vc-raw" type="button"><span class="vc-navrow-ico">📝</span><span class="vc-navrow-label">編輯原碼</span><span class="swb-chev">›</span></button>
+                    <button class="vc-navrow" id="vc-raw" type="button"><span class="vc-navrow-ico">📝</span><span class="vc-navrow-label">編輯原碼</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
                 </div>
             </div>`;
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'detail'; renderVnComponents(); };
