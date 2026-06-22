@@ -249,15 +249,34 @@ function loadPhoneScript(path) {
 }
 
 // CDN 並行載入器：一次插入全部 <script>，async=false → 平行下載、依插入順序執行(保留依賴順序)
-function _loadBatchOrdered(list) {
-    return Promise.all(list.map(item => new Promise((resolve) => {
+//   ⚠️ jsdelivr 對「剛 push 的新 commit」冷啟動抓檔時，並行請求會隨機 403/限流掉幾個檔
+//      → 那個模組整個沒了→大廳死。故失敗要自動重試(退避 + cache-bust 繞開 jsdelivr 負快取)，
+//        而非一次 onerror 就放掉。重試是自我註冊型 IIFE、依賴在 runtime 才解，遲到幾百ms無妨。
+function _loadOne(item, attempt) {
+    return new Promise((resolve) => {
         const s = document.createElement('script');
-        s.src = item.src;
+        // 重試時加 cache-bust 參數，避免 jsdelivr/瀏覽器把上次的 403 當負快取回放
+        let src = item.src;
+        if (attempt > 0) src += (src.indexOf('?') >= 0 ? '&' : '?') + 'rt=' + attempt;
+        s.src = src;
         s.async = false;
-        s.onload = () => { if (item.key) window.PANEL_COMMUNICATION.modulesLoaded[item.key] = true; resolve(); };
-        s.onerror = () => { console.error('[Aurelia] 並行載入失敗:', item.src); resolve(); };
+        s.onload = () => { if (item.key) window.PANEL_COMMUNICATION.modulesLoaded[item.key] = true; resolve(true); };
+        s.onerror = () => {
+            try { s.remove(); } catch (e) {}
+            if (attempt < 3) {
+                const wait = 400 * (attempt + 1);   // 400 / 800 / 1200 ms 退避
+                console.warn(`[Aurelia] 載入失敗(第${attempt + 1}次)，${wait}ms 後重試:`, item.src);
+                setTimeout(() => { _loadOne(item, attempt + 1).then(resolve); }, wait);
+            } else {
+                console.error('[Aurelia] 並行載入失敗(重試3次仍失敗):', item.src);
+                resolve(false);
+            }
+        };
         document.head.appendChild(s);
-    })));
+    });
+}
+function _loadBatchOrdered(list) {
+    return Promise.all(list.map(item => _loadOne(item, 0)));
 }
 
 // 讀取設置
