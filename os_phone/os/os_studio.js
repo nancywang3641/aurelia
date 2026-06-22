@@ -1141,7 +1141,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     let _wbConfirmIdx = null; // 確認頁第二層：null=改動總覽，數字=看第 N 項完整內容
     let _wbModel = localStorage.getItem('swb_model') === 'sec' ? 'sec' : 'main';   // 世界書二改用主/副模型（預設主：低頻重品質）
     const _wbTH = () => (window.parent || window).TavernHelper || window.TavernHelper;
-    const _WB_SYS = `你是世界書編輯助手。下面會給你目前世界書的條目清單，使用者跟你討論要怎麼改或新增條目（可能含成人/NSFW 規則設定，照常專業協助、不要拒絕、不要說教）。\n- 先用一兩句白話回覆討論。\n- 要實際改動世界書時，把每個改動用 <wb> 區塊輸出（沒要改的條目一律別碰、別重列）：\n  新增：<wb op="add"><comment>標題</comment><keys>關鍵字1,關鍵字2</keys><content>條目內容</content></wb>\n  修改：<wb op="update" uid="條目編號"><comment>…</comment><keys>…</keys><content>…</content></wb>（只放要改的欄位，沒放的保留原值）\n  刪除：<wb op="del" uid="條目編號"/>\n- keys 用逗號分隔；常駐條目可留空 keys。只輸出 <wb> 區塊與你的對話，不要解釋格式本身。`;
+    const _WB_SYS = `你是世界書編輯助手。下面會給你目前世界書的條目清單，使用者跟你討論要怎麼改或新增條目（可能含成人/NSFW 規則設定，照常專業協助、不要拒絕、不要說教）。\n- 改/新增務必跟下面給的現有條目一致、尤其標【常駐基石】的不可矛盾，不要虛構出跟作者既定設定衝突的內容；資訊不足寧可先問使用者、別硬編。\n- 先用一兩句白話回覆討論。\n- 要實際改動世界書時，把每個改動用 <wb> 區塊輸出（沒要改的條目一律別碰、別重列）：\n  新增：<wb op="add"><comment>標題</comment><keys>關鍵字1,關鍵字2</keys><content>條目內容</content></wb>\n  修改：<wb op="update" uid="條目編號"><comment>…</comment><keys>…</keys><content>…</content></wb>（只放要改的欄位，沒放的保留原值）\n  刪除：<wb op="del" uid="條目編號"/>\n- keys 用逗號分隔；常駐條目可留空 keys。只輸出 <wb> 區塊與你的對話，不要解釋格式本身。`;
 
     // ── 換頁路由：依 _wbView 分派到 5 頁，返回鈕各自硬接上一層 ──
     function renderWorldbookPanel() {
@@ -1369,10 +1369,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const keys = host.querySelector('#swb-f-keys').value.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean);
         const content = host.querySelector('#swb-f-content').value;
         const enabled = host.querySelector('#swb-f-en').checked;
+        const type = keys.length ? 'selective' : 'constant';   // 有關鍵字＝綠燈觸發、留空＝藍燈常駐(讓「留空＝一直生效」成真，免手動切換)
         const btn = host.querySelector('#swb-save'); if (btn) { btn.disabled = true; btn.textContent = '儲存中…'; }
         try {
-            if (isNew) await TH.createLorebookEntries(_wbWorking, [{ comment, keys, content, enabled }]);
-            else await TH.setLorebookEntries(_wbWorking, [{ uid: _wbEntryEditing, comment, keys, content, enabled }]);
+            if (isNew) await TH.createLorebookEntries(_wbWorking, [{ comment, keys, content, enabled, type }]);
+            else await TH.setLorebookEntries(_wbWorking, [{ uid: _wbEntryEditing, comment, keys, content, enabled, type }]);
             _wbToast(isNew ? '已新增條目 ✓' : '已儲存 ✓');
             _wbView = 'entries'; renderWorldbookPanel();
         } catch (e) { if (btn) { btn.disabled = false; btn.textContent = isNew ? '建立條目' : '儲存'; } alert('儲存失敗：' + (e && e.message || e)); }
@@ -1435,7 +1436,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         ]);
     }
     function _wbEntriesForPrompt() {
-        return _wbEntries.map(e => `#${e.uid}｜標題：${e.comment || '(無)'}｜關鍵字：${(e.keys || []).join(',')}｜內容：${String(e.content || '').slice(0, 400)}`).join('\n');
+        // 停用(🔴)的不送(用戶關掉就別餵)；藍燈綠燈全送、內容不截斷——AI 看得到作者完整設定才不會亂編造跟基石矛盾。
+        return _wbEntries
+            .filter(e => e.enabled !== false)
+            .map(e => {
+                const tag = e.type === 'constant' ? '常駐基石·務必遵守不可矛盾' : (e.type === 'vectorized' ? '向量' : '關鍵字觸發');
+                return `#${e.uid}｜[${tag}]｜標題：${e.comment || '(無)'}｜關鍵字：${(e.keys || []).join(',') || '（無）'}｜內容：${String(e.content || '')}`;
+            }).join('\n\n');
     }
     async function _wbSend(host) {
         const ta = host.querySelector('#swb-msg'); const msg = (ta.value || '').trim();
@@ -1540,7 +1547,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const adds = [], updates = [], dels = [];
         for (const o of _wbPending) {
             if (o.op === 'del') { if (o.uid != null) dels.push(o.uid); }
-            else if (o.op === 'add') { adds.push({ comment: o.comment || '', keys: o.keys || [], content: o.content || '', enabled: true }); }
+            else if (o.op === 'add') { const k = o.keys || []; adds.push({ comment: o.comment || '', keys: k, content: o.content || '', enabled: true, type: k.length ? 'selective' : 'constant' }); }
             else if (o.op === 'update' && o.uid != null) { const u = { uid: o.uid }; if (o.comment != null) u.comment = o.comment; if (o.keys != null) u.keys = o.keys; if (o.content != null) u.content = o.content; updates.push(u); }
         }
         const btn = host.querySelector('#swb-apply'); if (btn) { btn.disabled = true; btn.textContent = '套用中…'; }
