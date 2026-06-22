@@ -821,6 +821,16 @@ ${numberedText}`;
 
     // 🎯 獨立插圖副模型：scenes 拆成「單獨一通 chatSecondary」，只吃 standaloneSpec、不背 AVS/記憶。
     //    開關在 圖片設定→插圖→「獨立插圖副模型」。沒開＝走 extractOnce 搭便車路（上面，原碼保留），互不影響。
+    // 獨立插圖佔位展開：把 <角色名>/<代號> 換成登記表外觀；NAI 的 {{}}/[]/() 權重一概不碰（只動角括號 <>）。
+    function _expandAngleNames(str, map) {
+        if (!str || String(str).indexOf('<') < 0) return str;
+        const lower = {}; for (const k of Object.keys(map || {})) lower[k.toLowerCase()] = map[k];
+        return String(str).replace(/<\s*([^<>]+?)\s*>/g, (m, raw) => {
+            const name = String(raw).trim();
+            const hit = (map && (map[name] || map[name.toUpperCase()])) || lower[name.toLowerCase()];
+            return hit || name;   // 登記到→外觀；沒登記→拿掉角括號留原文（別讓 <> 進 NAI）
+        });
+    }
     let _sceneRunning = false;
     let _sceneDebounce = null;
     async function extractScenesStandalone() {
@@ -855,10 +865,12 @@ ${numberedText}`;
             const entries = names.map((n, i) => ({ code: 'C' + (i + 1), name: n }));
             const looksMap = { ...nameMap };
             entries.forEach(e => { looksMap[e.code] = nameMap[e.name]; });
-            const charList = entries.length ? entries.map(e => e.code + '. ' + e.name).join('｜') : '（無已登記角色，路人 NPC 自己寫外觀）';
-            const userMsg = `${spec}\n\n【已登記角色（畫到就用 {{代號}} 或 {{角色名}}，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
+            const charList = entries.length ? entries.map(e => `<${e.code}> ${e.name}`).join('｜') : '（無已登記角色，全部 NPC 自己寫外觀）';
+            // 系統訊息 = 你貼的完整規範 + 對接層（只動我這邊：佔位用 <名>、輸出 scenes JSON）；大佬規範的 {{}} 權重一概不碰
+            const _override = `\n\n────────\n【本系統對接（最高優先，覆蓋上面規範裡衝突的部分）】\n- 你只生成插圖提示詞、不寫劇情正文、不續寫、不解釋。\n- 「已登記角色」一律用 <角色名> 或 <代號> 代表（系統會自動填入其外觀、跟頭像一致）；你不要自己寫這些角色的固定長相/DNA，只寫他們的動作/姿勢/表情/服裝/裸露/站位/互動。沒登記的 NPC 才照規範自己寫完整外觀。\n- <名> 是角色佔位，跟規範裡的 {{}} 權重各自獨立、互不衝突，照常使用。\n- 只輸出一個 JSON、前後不要任何文字：{ "scenes": [ { "after_paragraph": 數字, "prompt": "..." } ] }。after_paragraph 從用戶給的編號段落挑數字、不要抄原文。`;
+            const userMsg = `【已登記角色（畫到就用 <代號> 或 <角色名>，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
             const messages = [
-                { role: 'system', content: '你是場景插圖提示詞生成器，只輸出 scenes JSON、絕不寫劇情。' },
+                { role: 'system', content: spec + _override },
                 { role: 'user', content: userMsg }
             ];
             const raw = await new Promise((res, rej) => {
@@ -875,7 +887,7 @@ ${numberedText}`;
                 const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
                 if (n >= 1 && paras[n - 1]) after = paras[n - 1];
                 else if (s.after) after = String(s.after);
-                return { after, prompt: _expandSceneNames(s.prompt, looksMap) };
+                return { after, prompt: _expandAngleNames(s.prompt, looksMap) };
             }).filter(s => s && s.prompt);
             if (mapped.length) {
                 win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: lastId });
