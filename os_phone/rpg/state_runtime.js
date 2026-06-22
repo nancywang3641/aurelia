@@ -976,6 +976,7 @@ ${numberedText}`;
                 try { has = !!(await VC.get('avatar_cache', name)); } catch(e) {}
                 if (!has) missing.push(name);                     // 快取也沒 → 缺頭像
             }
+            console.log('[頭像提醒] 近期出場=[' + [...cast].join('、') + '] / 缺頭像=[' + (missing.join('、') || '無') + ']' + (missing.length ? ' → 注入提醒' : ' → 不注入'));
             if (!missing.length) return;                          // 都有了 → 不注入
 
             const content = `<頭像補充提醒 規則="善意提醒·非強制">\n下列角色目前還沒有頭像：${missing.join('、')}。\n若他們是有正式人名的角色，請在這次回覆順手補上頭像宣告（[Avatar|角色名|外觀特徵]）；若是代號／未具名／路人角色，請直接忽略、不用補。沒有要補的就略過這條，別為此打斷劇情。\n</頭像補充提醒>`;
