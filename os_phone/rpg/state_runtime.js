@@ -981,12 +981,12 @@ ${numberedText}`;
             console.log('[頭像提醒] 近期出場=[' + [...cast].join('、') + '] / 缺頭像=[' + (missing.join('、') || '無') + ']' + (missing.length ? ' → 注入提醒' : ' → 不注入'));
             if (!missing.length) return;                          // 都有了 → 不注入
 
-            const content = `<頭像補充提醒 規則="善意提醒·非強制">\n下列角色目前還沒有頭像：${missing.join('、')}。\n若他們是有正式人名的角色，請在這次回覆順手補上頭像宣告（[Avatar|角色名|外觀特徵]）；若是代號／未具名／路人角色，請直接忽略、不用補。沒有要補的就略過這條，別為此打斷劇情。\n</頭像補充提醒>`;
+            const content = `<頭像宣告·硬性必填 規則="本輪必須執行·不得略過">\n下列出場角色目前沒有頭像：${missing.join('、')}。\n你【必須】在這次回覆開頭的角色卡（ChapterCard）區，為其中「有正式人名」的角色補上頭像宣告：[Avatar|角色名|外觀特徵]。這是必填項，不准漏、不准拖到下一輪、不准用「之後再補」帶過。\n唯一例外：純代號／未具名／純路人角色可以不補；除此之外一律補齊。\n</頭像宣告·硬性必填>`;
             const result = win.TavernHelper.injectPrompts([{
                 id: CONFIG.avatarInjectId,
                 content,
                 position: 'in_chat',
-                depth: 1,
+                depth: 4,
                 role: 'system'
             }], { once: true });
             _lastAvatarUninject = result?.uninject || null;
