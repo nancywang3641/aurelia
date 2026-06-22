@@ -1403,10 +1403,22 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         host.querySelector('#swb-send').onclick = () => _wbSend(host);
         _wbPaintChat(host); _wbPaintPendBar(host);
     }
+    // 泡泡只顯示白話：把給程式解析的 <wb> 機器標記濾掉（原文留在 _wbChat 當 AI 上下文，結構化內容只在確認頁顯示）
+    function _wbStripOps(text) {
+        return String(text || '')
+            .replace(/<wb\b[^>]*\/>/gi, '')              // 自閉合(刪除)
+            .replace(/<wb\b[^>]*>[\s\S]*?<\/wb>/gi, '')  // 區塊
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
     function _wbPaintChat(host) {
         const el = host.querySelector('#swb-chatlog'); if (!el) return;
         if (!_wbChat.length) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art">💬</div><div>跟 AI 說你想怎麼整理這本世界書<br>它幫你改／加條目，你確認後才寫入</div></div>`; return; }
-        el.innerHTML = _wbChat.map(m => `<div class="swb-bubble swb-${m.role}">${_sgcEsc(m.content)}</div>`).join('');
+        el.innerHTML = _wbChat.map(m => {
+            let body = m.content;
+            if (m.role === 'assistant') { body = _wbStripOps(m.content); if (!body) body = '✏️ 我擬好了改動，點下方「查看建議」確認。'; }
+            return `<div class="swb-bubble swb-${m.role}">${_sgcEsc(body)}</div>`;
+        }).join('');
         el.scrollTop = el.scrollHeight;
     }
     function _wbPaintPendBar(host) {
@@ -1481,7 +1493,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             }
             const e = _wbEntries.find(x => x.uid === o.uid);
             const title = _sgcEsc((o.comment != null ? o.comment : (e && e.comment)) || '(無標題)');
-            const cont = o.content != null ? `<div class="swb-card-sum">${_sgcEsc(String(o.content).replace(/\s+/g, ' ').trim().slice(0, 160))}${String(o.content).length > 160 ? '…' : ''}</div>` : '';
+            const cont = o.content != null ? `<div class="swb-op-body">${_sgcEsc(String(o.content))}</div>` : '';
             const tags = o.keys ? `<div class="swb-tags">${o.keys.length ? o.keys.map(k => `<span class="swb-tag">${_sgcEsc(k)}</span>`).join('') : '<span class="swb-tag muted">常駐</span>'}</div>` : '';
             return `<div class="swb-card swb-op ${o.op === 'add' ? 'add' : 'upd'}"><span class="swb-op-chip">${o.op === 'add' ? '新增' : '修改'}</span><div class="swb-card-main"><div class="swb-card-title">${title}</div>${cont}${tags}</div></div>`;
         }).join('');
