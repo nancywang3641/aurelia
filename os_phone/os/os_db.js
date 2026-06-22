@@ -935,16 +935,11 @@
                     brief: r.brief || '',
                     ts:    r.timestamp || 0,
                 }));
-                const seen = new Set();
-                // 由舊到新走，早出場的角色排前面
-                for (let i = bundle._recs.length - 1; i >= 0; i--) {
-                    for (const c of (bundle._recs[i].characters || [])) {
-                        const name = c.name || c;
-                        if (!name || seen.has(name)) continue;
-                        seen.add(name);
-                        bundle.characters.push(typeof c === 'string' ? { name: c, row: c } : c);
-                    }
-                }
+                // 角色卡：用「最新一筆有角色的紀錄」的完整角色表（跟著大總結去重後的結果）；不再跨筆 union，
+                //   否則大總結已合併掉的舊重複角色(如蜘蛛精各別名)會永遠賴在索引、日誌一直顯示重複卡片。
+                //   (_recs 已 newest-first 排序，find = 最新那筆)
+                const _latest = bundle._recs.find(r => Array.isArray(r.characters) && r.characters.length);
+                bundle.characters = (_latest ? _latest.characters : []).map(c => (typeof c === 'string' ? { name: c, row: c } : c));
                 delete bundle._recs;
                 result.push(bundle);
             }
