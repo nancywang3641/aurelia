@@ -215,13 +215,28 @@ const PHONE_FILES = [
 // 載入 CSS 工具 (🔥 修復酒館模式破圖的關鍵)
 function loadCSS(path) {
     return new Promise((resolve) => {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = path + _AURELIA_CACHE_BUST;
-        link.onload = () => resolve();
-        link.onerror = () => { console.error(`[Aurelia] 核心樣式載入失敗: ${path}`); resolve(); };
-        document.head.appendChild(link);
-        if (!_AURELIA_EXT_NAME) resolve(); // CDN 模式：append 後立即放行，讓 CSS 平行下載(本機維持等 onload，不變)
+        const MAX = 3;
+        let attempt = 0;
+        const tryLoad = () => {
+            attempt++;
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            // 重試時加唯一參數：繞過瀏覽器對「上次失敗」的快取，也給 jsdelivr 新 commit 冷快取暖機時間
+            link.href = path + _AURELIA_CACHE_BUST + (attempt > 1 ? ('&_retry=' + attempt) : '');
+            link.onload = () => resolve();
+            link.onerror = () => {
+                try { link.remove(); } catch (e) {}
+                if (attempt < MAX) {
+                    setTimeout(tryLoad, 600 * attempt);   // 退避重試(jsdelivr 新 commit 並行冷載常少數檔噴錯，稍等就好)
+                } else {
+                    console.error(`[Aurelia] 核心樣式載入失敗(已重試 ${MAX} 次): ${path}`);
+                    resolve();
+                }
+            };
+            document.head.appendChild(link);
+        };
+        tryLoad();
+        if (!_AURELIA_EXT_NAME) resolve(); // CDN 模式：立即放行讓 CSS 平行下載(失敗的會在背景自動重試、自癒，不阻塞初始化)
     });
 }
 
