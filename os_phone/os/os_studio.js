@@ -682,8 +682,10 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 
     function bindEvents() {
         document.getElementById('studio-back-btn').onclick = () => {
-            if (_studioTop !== 'home') switchTopMode('home');           // 在某個工作裡 → 返回創作室首頁
-            else document.getElementById('os_studio_app').remove();      // 已在首頁 → 返回大廳
+            // 讀 DOM 實際狀態當真相（別靠 _studioTop 變數：載入器可能跑兩份模組→變數會跟畫面不同步）
+            const cont = document.querySelector('#os_studio_app .studio-container');
+            if (cont && !cont.classList.contains('top-home')) switchTopMode('home'); // 不在首頁(主題/世界書/煉丹)→ 返回首頁
+            else { const app = document.getElementById('os_studio_app'); if (app) app.remove(); } // 已在首頁 → 返回大廳
         };
         document.querySelectorAll('.studio-task-card').forEach(card => {
             const go = () => switchTopMode(card.getAttribute('data-go'));
@@ -1020,7 +1022,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     }
     // header 的 👁️預覽／🗑清空 只在「製作互動面板」(vn_ui) 有意義；首頁/主題/世界書藏起來別佔空間
     function _updateStudioHeader() {
-        const vnui = _studioTop === 'vn_ui';
+        const cont = document.querySelector('#os_studio_app .studio-container');
+        // vn_ui＝沒有任何 top-* class（首頁/主題/世界書各有 top-home/theme/worldbook）。讀 DOM 不靠變數，防 desync。
+        const vnui = !!cont && !cont.classList.contains('top-home') && !cont.classList.contains('top-theme') && !cont.classList.contains('top-worldbook');
         const clearBtn = document.getElementById('studio-clear-btn');
         const prevBtn = document.getElementById('studio-header-preview-btn');
         if (clearBtn) clearBtn.style.display = vnui ? '' : 'none';
