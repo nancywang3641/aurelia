@@ -51,6 +51,8 @@
             +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false, enableThinking:false });'
             +     'return await new Promise(function(res, rej){ OS.chat([{role:"system",content:full}], cfg, null, function(t){ res(typeof t==="string"?t:(t&&t.message)||""); }, rej, {disableTyping:true}); });'
             +   '} catch(e){ console.error("[app callAI]",e); return ""; } };'
+            // ── 當前聊天室角色清單：[{name,count}]，做角色選單/搜尋用(繞懶載、不等大總結) ──
+            +   'window.getCurrentChars = async function(){ try { var R = P && P.VN_READER; return (R && R.getCurrentChars) ? await R.getCurrentChars() : []; } catch(e){ console.error("[app getCurrentChars]",e); return []; } };'
             // ── generateRaw 仍橋接(進階 app 指名要它才用；預設請用 callAI) ──
             +   'if (!window.generateRaw) window.generateRaw = function(cfg){ var Q=window.parent; if (Q && Q.TavernHelper && Q.TavernHelper.generateRaw) return Q.TavernHelper.generateRaw(cfg); if (Q && Q.generateRaw) return Q.generateRaw(cfg); return Promise.reject(new Error("no generateRaw")); };'
             + '} catch(e) { console.warn("[app bridge]", e); }'

@@ -126,6 +126,26 @@
         return [];
     }
 
+    // 拿當前聊天室「出現過的角色」清單(名字+出現次數)：讀全檔(繞 lazy-load)+ parse [Char|名]/[Avatar|名]。
+    // 給應用/面板做角色選單用——不靠會延遲的大總結、不靠被懶載窗口的 DOM。
+    async function _getCurrentChars() {
+        let msgs = [];
+        try { msgs = await _fetchFullMessages(); } catch (e) {}
+        const count = new Map();
+        const re = /\[(?:Char|Avatar)\|([^|\]]+)/g;
+        (msgs || []).forEach(function (m) {
+            const t = (m && (m.message || m.mes)) || '';
+            if (!t) return;
+            let mt;
+            while ((mt = re.exec(t))) {
+                const n = (mt[1] || '').trim();
+                if (n && n.charAt(0) !== '{') count.set(n, (count.get(n) || 0) + 1);   // 濾掉 {佔位}
+            }
+        });
+        return Array.from(count, function (kv) { return { name: kv[0], count: kv[1] }; })
+            .sort(function (a, b) { return b.count - a.count; });
+    }
+
     // ── 從酒館 TavernHelper 拉訊息，組成統一 chapter 格式 ─────────
     async function _fetchTavernChapters() {
         const allMsgs = await _fetchFullMessages();
@@ -257,6 +277,7 @@
 
         clean: _strip,   // VN 格式 → 純小說正文(抽 <content>、[Char]→「名：台詞」、去所有 VN 標籤)；給 app 上下文清洗共用
         fetchFullChat: _fetchFullMessages,   // 完整讀當前聊天(讀檔繞 lazy-load、不展開不卡死)；給大總結等共用
+        getCurrentChars: _getCurrentChars,   // 當前聊天室出現過的角色 [{name,count}]；給 app/面板做角色選單(繞懶載、不等總結)
 
         async show(mountInto) {
             const overlay = _ensureDOM(mountInto);
