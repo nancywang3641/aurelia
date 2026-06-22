@@ -2845,14 +2845,46 @@ ${cleanFormat}
     let _vcBrowseScroll = 0;       // 進子頁前的瀏覽捲動位置
     let _vcAllPhoneApps = [];      // 裝手機狀態快取
     const _vcPackSel = new Set();  // 打包頁勾選的 tplId
+    // 容器解耦：同一套四頁 UI 可掛在「創作室 VN組件 tab」或「獨立 VN組件區」(工坊進來的浮層)
+    let _vcCtx = null;             // { list, content, toolbar } 三個容器元素
+    let _vcStandalone = false;     // true=獨立區(瀏覽層自帶返回列；只有「繼續編輯」才橋接創作室)
+    let _vcExit = null;            // 獨立區瀏覽層返回 → 關掉浮層
+    let _vcStandaloneRoot = null;  // 獨立浮層掛載的根容器（繼續編輯時拿來開創作室）
 
-    function loadStudioGallery() { _vcView = 'browse'; return renderVnComponents(); }
+    function loadStudioGallery() {
+        _vcStandalone = false; _vcExit = null; _vcStandaloneRoot = null;
+        _vcCtx = {
+            list: document.getElementById('studio-gallery-list'),
+            content: document.getElementById('studio-gallery-content'),
+            toolbar: document.getElementById('studio-gallery-toolbar'),
+        };
+        _vcView = 'browse'; return renderVnComponents();
+    }
+
+    // 獨立 VN組件區：工坊「VN組件清單」卡進來，掛成覆蓋層；除了「繼續編輯」其餘全留在這、不碰創作室
+    function openVnComponents(rootContainer) {
+        const root = rootContainer || document.getElementById('aps-app-body') || document.body;
+        const oldOv = root.querySelector(':scope > .vncomp-app'); if (oldOv) oldOv.remove();
+        const ov = document.createElement('div');
+        ov.className = 'vncomp-app';
+        ov.innerHTML = '<div class="vncomp-scroll"><div class="vncomp-toolbar vc-hide"><input type="file" class="vncomp-pack-file" accept=".json" hidden></div><div class="vncomp-list"></div></div>';
+        root.appendChild(ov);
+        _vcStandalone = true;
+        _vcStandaloneRoot = root;
+        _vcExit = () => { try { ov.remove(); } catch (e) {} };
+        _vcCtx = {
+            list: ov.querySelector('.vncomp-list'),
+            content: ov.querySelector('.vncomp-scroll'),
+            toolbar: ov.querySelector('.vncomp-toolbar'),
+        };
+        _vcView = 'browse'; _vcBrowseScroll = 0;
+        renderVnComponents();
+    }
 
     function renderVnComponents() {
-        const listEl = document.getElementById('studio-gallery-list');
+        const listEl = _vcCtx && _vcCtx.list;
         if (!listEl) return;
-        const toolbar = document.getElementById('studio-gallery-toolbar');
-        if (toolbar) toolbar.classList.toggle('vc-hide', _vcView !== 'browse');   // 頂部工具列只在瀏覽層顯示
+        if (_vcCtx.toolbar) _vcCtx.toolbar.classList.toggle('vc-hide', _vcView !== 'browse');   // 頂部工具列只在瀏覽層顯示
         if (_vcView === 'detail')   return _vcRenderDetail(listEl);
         if (_vcView === 'settings') return _vcRenderSettings(listEl);
         if (_vcView === 'package')  return _vcRenderPackage(listEl);
@@ -2915,6 +2947,18 @@ ${cleanFormat}
 
         listEl.innerHTML = '';
 
+        // 獨立區：瀏覽層自帶返回列（創作室 tab 模式不需要、靠 tab 切換）
+        if (_vcStandalone) {
+            const bar = document.createElement('div');
+            bar.className = 'swb-bar';
+            bar.innerHTML = '<button class="swb-iconbtn" id="vc-exit" type="button"><i class="fa-solid fa-chevron-left"></i></button><div class="swb-bar-title">VN 組件</div><button class="swb-iconbtn" id="vc-import" type="button" title="匯入包"><i class="fa-solid fa-file-import"></i></button>';
+            bar.querySelector('#vc-exit').onclick = () => { if (_vcExit) _vcExit(); };
+            const _fi = _vcCtx.toolbar && _vcCtx.toolbar.querySelector('.vncomp-pack-file');
+            bar.querySelector('#vc-import').onclick = () => { if (_fi) _fi.click(); };
+            if (_fi && !_fi._wired) { _fi._wired = 1; _fi.onchange = (e) => { const f = e.target.files && e.target.files[0]; if (f) importVnUiPack(f); e.target.value = ''; }; }
+            listEl.appendChild(bar);
+        }
+
         // 標籤 chip 列（全部 + 各群組 + ＋群組）
         const tagbar = document.createElement('div');
         tagbar.className = 'vc-tagbar';
@@ -2974,7 +3018,7 @@ ${cleanFormat}
         foot.querySelector('.vc-pack-cta').onclick = () => { if (!templates.length) return; _vcPackSel.clear(); _vcView = 'package'; renderVnComponents(); };
         listEl.appendChild(foot);
 
-        const content = document.getElementById('studio-gallery-content');
+        const content = _vcCtx.content;
         if (content) content.scrollTop = _vcBrowseScroll;   // 從子頁返回時還原捲動
     }
     function _vcApplyBrowseFilter(listEl) {
@@ -3001,7 +3045,7 @@ ${cleanFormat}
             <span class="vc-chev"><i class="fa-solid fa-chevron-right"></i></span>`;
         card.insertBefore(_vcThumbBox(tpl, safeTagId), card.firstChild);
         card.onclick = () => {
-            const content = document.getElementById('studio-gallery-content');
+            const content = _vcCtx.content;
             _vcBrowseScroll = content ? content.scrollTop : 0;
             _vcTpl = tpl; _vcView = 'detail'; renderVnComponents();
         };
@@ -3043,8 +3087,15 @@ ${cleanFormat}
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'browse'; renderVnComponents(); };
         listEl.querySelector('#vc-d-active').onchange = async (e) => { await _setComponentActive(tpl, e.target.checked); };
         listEl.querySelector('#vc-continue').onclick = () => {
-            if (!confirm(`✏️ 把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議，AI 只會微調\n• 改完按「✅ 確定創建」會覆蓋這個面板\n\n確定嗎？`)) return;
-            _enterEditMode(tpl);
+            if (!confirm(`把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議，AI 只會微調\n• 改完按「確定創建」會覆蓋這個面板\n\n確定嗎？`)) return;
+            if (_vcStandalone) {   // 獨立區：編輯需要創作室編輯器→關浮層、開創作室、進編輯（沿用 openEditApp 模式）
+                const root = _vcStandaloneRoot;
+                if (_vcExit) _vcExit();
+                try { launch(root); } catch (e) {}
+                setTimeout(() => { try { _enterEditMode(tpl); } catch (e) { console.warn('[OS_STUDIO] 繼續編輯', e); } }, 60);
+            } else {
+                _enterEditMode(tpl);
+            }
         };
         listEl.querySelector('#vc-dup').onclick = () => _vcDuplicate(tpl);
         listEl.querySelector('#vc-export').onclick = () => exportOneVnUiTemplate(tpl);
@@ -3231,7 +3282,7 @@ ${cleanFormat}
         const groups = _loadGroups();
         groups.push({ id: _newGroupId(), name });
         _saveGroups(groups);
-        loadStudioGallery();
+        _vcView = 'browse'; renderVnComponents();
     }
 
     // 群組管理 modal：改名 / 指派成員（勾選哪些組件屬於本組）/ 刪除（退回未分組、不刪組件）
@@ -3264,7 +3315,7 @@ ${cleanFormat}
                 </div>
             </div>`;
         (doc.body || doc.documentElement).appendChild(modal);
-        const close = () => { modal.remove(); loadStudioGallery(); };
+        const close = () => { modal.remove(); renderVnComponents(); };
         modal.addEventListener('click', e => { if (e.target === modal) close(); });
         modal.querySelector('#sgc-grp-close').onclick = close;
         modal.querySelector('#sgc-grp-rename').onclick = () => {
@@ -3379,7 +3430,7 @@ ${cleanFormat}
             }
             await syncActiveTagsToLocal();
             if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
-            loadStudioGallery();
+            _vcView = 'browse'; renderVnComponents();
             _studioToast(`✅ 匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個。`, 'success', '匯入包');
         } catch (e) { _studioToast('匯入失敗：' + ((e && e.message) || e), 'error', '匯入包'); }
     }
@@ -4089,7 +4140,7 @@ ${d.usageDesc || ''}
 
     // ===== 預設模板安裝器 =====
     win.OS_STUDIO = {
-        launch, attachVpScaler: _attachVpScaler,
+        launch, openVnComponents, attachVpScaler: _attachVpScaler,
         // 給「應用工坊 · 我的應用」的管理按鈕用：靠 srcTplId 操作該 app 的可編輯底稿
         openEditApp: async function (tplId, c) {
             try { if (c) launch(c); } catch (e) {}
