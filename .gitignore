@@ -66,8 +66,10 @@ core/assets/claude/
 aseets/
 
 # === 本地工具/實驗/開發文檔（僅本機，絕不上 GitHub）===
-docs/                      # superpowers spec/plan 開發文檔
-aurelia_lab/               # achievement/canvas/feather/pixel 等實驗頁(沒被擴展執行時載入)
-tools/                     # aurelia_tower.ps1/.vbs 控制塔托盤桌面程式
-奧瑞亞_酒館助手匯入.json   # 酒館助手匯入用的本地檔(分發時自己給朋友、不放 repo)
-參考資料/                  # 個人開發參考
+# docs/=superpowers spec/plan；aurelia_lab/=實驗頁；tools/=控制塔ps1/vbs；奧瑞亞_酒館助手匯入.json=酒館助手匯入；參考資料/=個人參考
+# (gitignore 不支援行內 # 註解，路徑要獨立成行)
+docs/
+aurelia_lab/
+tools/
+奧瑞亞_酒館助手匯入.json
+參考資料/
