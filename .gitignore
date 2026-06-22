@@ -60,3 +60,7 @@ sync_*
 
 # === Clawd 桌寵立繪素材（Anthropic 版權，僅本機使用，朋友 fallback DiceBear）===
 core/assets/claude/
+.gstack/
+
+# === aseets 大圖庫：素材實際走獨立 sound-files repo，本 repo 不追蹤(超 jsdelivr 50MB 上限)===
+aseets/
