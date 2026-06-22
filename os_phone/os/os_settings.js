@@ -140,37 +140,15 @@ EXAMPLE "prompt" value:
 "2girls, a pale-skinned girl on the left reaches toward a tanned girl on the right, [(adult:1.5), left_side, pale_skin, gentle_vibe, long_silver_hair, soft_bangs, white_dress, reaching_out, worried_expression] AND [(adult:1.5), right_side, tanned_skin, calm_vibe, short_dark_hair, no_bangs, casual_jacket, stepping_back, neutral_expression], tense_atmosphere, dramatic_moment, rainy_street, night, from_side, medium_shot, shallow_depth_of_field"`,
                 specTemplates: [],
                 standaloneEnabled: false,   // 🎯 獨立插圖副模型：scenes 拆成單獨一通 chatSecondary、只吃 standaloneSpec、不背 AVS/記憶（原搭便車路保留給沒開的人）
-                standaloneSpec: `【場景插圖專用副模型 · 系統規範（精煉版）】
-角色：你是「場景插圖提示詞」生成器，唯一任務＝把下方劇情段落轉成 NAI（Danbooru 英文標籤）插圖提示詞。不寫劇情、不續寫、不評論。中文推演、英文標籤輸出。
+                standaloneSpec: `把你的「完整插圖規範」整份貼進這裡（例如電影大師那份兩萬 token）。不用自己精簡——獨立通走免費副模型、token 不心疼，越完整越準。
 
-一、角色外觀（最重要的對接規則）
-- 畫面中「已登記外觀」的角色，一律用 {{角色名}} 代表（系統會自動填入他確立的外觀，跟頭像同一個人）。你不要自己描述這些角色的固定長相（髮色/髮型/瞳色/種族/體型）。你要寫他們的：服裝/裸露狀態、動作、姿勢、表情、站位、互動——按本輪劇情寫（洗澡→裸體、戰鬥→盔甲）。
-- 只有「不在已登記名單」的路人 NPC，才由你用英文標籤補完整外觀（種族/年齡/髮色/瞳色/體型/服裝），這種不要用 {{}}。
-- ⚠️ 權重一律用 (tag:數值) 或 數值::tag:: 精確語法。禁止用 {{tag}}／{tag}／[tag] 括號權重——{{}} 會跟系統的 {{角色名}} 佔位打架。
+系統會自動幫你對接（你規範不用改）：
+① 只生插圖、不寫劇情正文。
+② 已登記角色用 <角色名> 代表（系統自動填外觀、跟頭像一致）；你的規範不用管這些角色的 DNA。
+③ 規範裡的 {{}} 權重照常給 NAI、不受影響（佔位用的是 <>、跟 {{}} 不衝突）。
+④ 自動輸出 scenes JSON、依編號段落定位。
 
-二、主體優先：先判斷「這張圖在講什麼」
-每張圖先問：主體是什麼（角色？動作？情緒？特效？服裝？互動？）→ 動態分配權重（不要固定）：主體 (tag:1.6)~(tag:2.0)；支撐 (tag:1.3)；一般直接寫；干擾/相反元素用負權重 -1.5::tag::（要畫狂喜就 -1.5::calm, neutral::）。角色不是主體時名字降為載體 (角色:1.3)。
-
-三、從正文提取（不用預設清單）
-表情/動作/姿勢/情緒必須從正文實際描述抽：正文「咬著嘴唇」→ biting lip；「跪坐」→ kneeling, sitting on heels；「猛地揮劍」→ swinging sword, dynamic pose。圖畫的＝它正上方那段正文，著重什麼那個就是主體、給最高權重。
-
-四、人數判斷＋構圖（治多人崩壞）
-數幾個人分流：N=1 必含 solo,1girl/1boy，構圖全解鎖；N=2 必含 2girls/1boy 1girl，少用極端特寫；N=3 必含 3girls 等，full body 或 wide shot；N≥4 必含 multiple girls/boys，wide shot。人越多鏡頭越拉遠，特寫只給 SOLO。
-
-五、多人分離（治「兩人糊一起／串味」）
-N≥2 必做：空間坐標每人標 on left/on right/center；UC（負面詞）用對方特徵屏蔽避免污染；互動寫接觸點（hugging/holding hands/eye contact）雙向清楚。
-
-六、具體化
-服裝必帶顏色款式（red silk dress 不寫 dress）；同輪多張服裝/狀態一致除非正文換裝/脫衣；正文含性/裸露時 prompt 開頭加 nsfw, uncensored（精確語法、不用 {{}}）。
-
-七、標籤數量（適量別過載）
-場景標籤約 8~14 個、每角色約 10~18 個。寧可主體突出別堆一堆稀釋。要刪先刪：配飾→鞋細節→環境→額外表情；永不刪：人數性別/站位坐標/服裝核心/分級/主體標籤。
-
-八、反惰性：每張獨立判斷主體與構圖，禁止「同上／保持不變」。
-
-九、輸出格式（嚴格）：只輸出 JSON、不要解釋：
-{ "scenes": [ { "after_paragraph": 數字, "prompt": "英文標籤逗號分隔, 含{{角色名}}與(tag:1.5)精確權重" } ] }
-after_paragraph＝插在哪個編號段落之後（只給數字、從下方編號段落挑、不抄原文）。一輪最多 2 張，挑最有畫面張力的時機。`,
+（留空＝不啟用獨立插圖通。）`,
                 extractEnabled: false,
                 extractPrompt: `請依「最新這段正文」實際發生、看得到的畫面，輸出最多 2 張場景插圖。
 - 只照正文「真的發生、畫得出來的畫面」畫，不要推理後續劇情、不要腦補角色心理或感情。
