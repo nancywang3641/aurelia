@@ -1246,11 +1246,18 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         host.querySelector('#swb-new-go').onclick = () => _wbCreateNew(host.querySelector('#swb-new-name').value);
         const listEl = host.querySelector('#swb-list');
         if (!books.length) { listEl.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-globe"></i></div><div>酒館裡還沒有世界書<br>按上面「新增世界書」開一本吧</div></div>`; return; }
-        listEl.innerHTML = books.map((b, i) => `<div class="swb-card swb-bookcard" data-book="${_sgcEsc(b)}">
-            <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(b)}</div><div class="swb-card-meta" data-cnt="${i}">… 條目</div></div>
+        const _isCopy = (b) => String(b).startsWith('[VN副本]');
+        const _bookCard = (b, i) => `<div class="swb-card swb-bookcard${_isCopy(b) ? ' swb-copycard' : ''}" data-book="${_sgcEsc(b)}">
+            <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(_isCopy(b) ? String(b).replace(/^\[VN副本\]-?/, '') : b)}</div><div class="swb-card-meta" data-cnt="${i}">… 條目</div></div>
             <button class="swb-iconbtn swb-more" data-more="${_sgcEsc(b)}" title="更多"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             <span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span>
-        </div>`).join('');
+        </div>`;
+        const _copies = [], _origs = [];
+        books.forEach((b, i) => (_isCopy(b) ? _copies : _origs).push(_bookCard(b, i)));   // 副本(我複製的)跟酒館原檔分區，免選錯
+        listEl.innerHTML = (_copies.length
+            ? '<div class="swb-seclabel"><i class="fa-solid fa-copy"></i> 我的副本（改這些，原檔不動）</div>' + _copies.join('')
+              + '<div class="swb-seclabel swb-seclabel-div"><i class="fa-solid fa-landmark"></i> 酒館世界書</div>'
+            : '') + _origs.join('');
         listEl.querySelectorAll('.swb-bookcard').forEach(card => card.onclick = (ev) => {
             if (ev.target.closest('[data-more]')) return;
             _wbOpenBook(card.getAttribute('data-book'));
