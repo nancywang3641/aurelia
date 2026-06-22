@@ -11,12 +11,12 @@
         <div class="studio-container">
             <div class="studio-header">
                 <div class="studio-title">
-                    <div class="studio-back-btn" id="studio-back-btn" title="返回大廳">‹</div>
-                    🎨 創作室
+                    <div class="studio-back-btn" id="studio-back-btn" title="返回大廳"><i class="fa-solid fa-chevron-left"></i></div>
+                    <i class="fa-solid fa-palette"></i> 創作室
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button class="studio-icon-btn studio-preview-toggle" id="studio-header-preview-btn" title="預覽面板">👁️ <span>預覽</span></button>
-                    <button class="studio-icon-btn danger" id="studio-clear-btn" title="清空當前頻道的對話紀錄">🗑️ <span>清空</span></button>
+                    <button class="studio-icon-btn studio-preview-toggle" id="studio-header-preview-btn" title="預覽面板"><i class="fa-solid fa-eye"></i> <span>預覽</span></button>
+                    <button class="studio-icon-btn danger" id="studio-clear-btn" title="清空當前頻道的對話紀錄"><i class="fa-solid fa-trash"></i> <span>清空</span></button>
                 </div>
             </div>
 
@@ -49,13 +49,13 @@
                 <div class="studio-left">
                     <div class="studio-chat-history" id="studio-chat-history"></div>
                     <button id="studio-preview-fab" class="studio-preview-fab" style="display:none;">
-                        <span>👁️</span><span id="studio-fab-label">查看預覽</span>
+                        <span><i class="fa-solid fa-eye"></i></span><span id="studio-fab-label">查看預覽</span>
                     </button>
 
                     <!-- VN 煉丹專用工具列：歷史快照 + 整體重做 -->
                     <div id="studio-vn-toolbar">
                         <div class="vn-toolbar-row">
-                            <button class="studio-history-btn" id="vn-studio-history-btn" title="每次修改前會自動存一份舊版；點開可看歷次版本、一鍵還原到任一個">⏪ 還原舊版 (<span id="vn-studio-history-count">0</span>)</button>
+                            <button class="studio-history-btn" id="vn-studio-history-btn" title="每次修改前會自動存一份舊版；點開可看歷次版本、一鍵還原到任一個"><i class="fa-solid fa-clock-rotate-left"></i> 還原舊版 (<span id="vn-studio-history-count">0</span>)</button>
                         </div>
                         <div id="vn-studio-history-area"></div>
                     </div>
@@ -74,7 +74,7 @@
 
                         <div class="studio-input-area">
                             <input type="file" id="studio-image-input" accept="image/*" multiple style="display:none;">
-                            <button class="studio-attach-btn" id="studio-attach-btn" title="附加參考圖（最多保留最近 2 張在上下文中）">📎</button>
+                            <button class="studio-attach-btn" id="studio-attach-btn" title="附加參考圖（最多保留最近 2 張在上下文中）"><i class="fa-solid fa-paperclip"></i></button>
                             <textarea class="studio-textarea" id="studio-input" placeholder="告訴 AI 你的點子...（Shift+Enter 換行 / Enter 發送）"></textarea>
                             <button class="studio-send-btn" id="studio-send-btn">發送</button>
                         </div>
@@ -85,8 +85,8 @@
                 <div class="studio-right">
                     <div class="studio-drawer-handle" id="studio-drawer-handle"></div>
                     <div class="studio-right-header">
-                        <div class="studio-tab active" data-tab="preview">👁️ 畫布預覽</div>
-                        <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;">🎮 VN組件</div>
+                        <div class="studio-tab active" data-tab="preview"><i class="fa-solid fa-eye"></i> 畫布預覽</div>
+                        <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;"><i class="fa-solid fa-puzzle-piece"></i> VN組件</div>
                     </div>
                     <div class="studio-preview-content" id="studio-preview-content">
                         <div id="studio-preview-main" class="studio-preview-main">
@@ -96,16 +96,16 @@
                     <div class="studio-source-content" id="studio-source-content"></div>
                     <div id="studio-gallery-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
                         <div id="studio-gallery-toolbar" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
-                            <button id="studio-spec-copy-btn" style="flex:1; min-width:190px; background:rgba(46,204,113,0.12); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📋 複製創建說明書</button>
-                            <button id="studio-import-btn" style="flex:1; min-width:150px; background:rgba(155,89,182,0.12); border:1px solid #9b59b6; color:#7d3cae; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📥 匯入面板</button>
-                            <button id="studio-import-pack-btn" class="studio-pack-btn import">📦 匯入包</button>
+                            <button id="studio-spec-copy-btn" style="flex:1; min-width:190px; background:rgba(46,204,113,0.12); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-clipboard"></i> 複製創建說明書</button>
+                            <button id="studio-import-btn" style="flex:1; min-width:150px; background:rgba(155,89,182,0.12); border:1px solid #9b59b6; color:#7d3cae; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-file-import"></i> 匯入面板</button>
+                            <button id="studio-import-pack-btn" class="studio-pack-btn import"><i class="fa-solid fa-box-archive"></i> 匯入包</button>
                             <input type="file" id="studio-import-pack-file" accept=".json" hidden>
                         </div>
                         <div class="studio-gallery-list" id="studio-gallery-list"></div>
                     </div>
                     <div class="studio-action-area">
-                        <button class="studio-export-btn" id="studio-export-btn">✅ 確定創建</button>
-                        <button class="studio-export-btn" id="studio-publish-btn" style="background:linear-gradient(135deg,#e67e22,#d35400); border-color:#d35400; margin-left:10px; display:none;">🚀 發布至世界書</button>
+                        <button class="studio-export-btn" id="studio-export-btn"><i class="fa-solid fa-check"></i> 確定創建</button>
+                        <button class="studio-export-btn" id="studio-publish-btn" style="background:linear-gradient(135deg,#e67e22,#d35400); border-color:#d35400; margin-left:10px; display:none;"><i class="fa-solid fa-rocket"></i> 發布至世界書</button>
                     </div>
                 </div>
                 <!-- 🎨 劇情面板主題 view（頂層 mode，獨立全區，由 .top-theme 控制顯示） -->
@@ -118,17 +118,17 @@
         <div id="studio-raw-edit-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(6px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
             <div style="max-width:900px; width:100%; max-height:90vh; background:#EEF0F6; border:1px solid #9b59b6; border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:12px; margin:auto; box-shadow:0 0 50px rgba(155,89,182,0.25);">
                 <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid rgba(155,89,182,0.3);">
-                    <strong style="font-size:15px; color:#c39bf2;">📝 直接編輯原碼 · <span id="raw-edit-tagid" style="color:#1A1C28;">?</span></strong>
-                    <div style="color:#c39bf2; cursor:pointer; font-size:20px;" id="raw-edit-close">✕</div>
+                    <strong style="font-size:15px; color:#c39bf2;"><i class="fa-solid fa-code"></i> 直接編輯原碼 · <span id="raw-edit-tagid" style="color:#1A1C28;">?</span></strong>
+                    <div style="color:#c39bf2; cursor:pointer; font-size:20px;" id="raw-edit-close"><i class="fa-solid fa-xmark"></i></div>
                 </div>
                 <div style="font-size:11px; color:rgba(195,155,242,0.6); line-height:1.5;">
-                    完整 JSON 結構（含 tagId / html / css / js / usageDesc / demoFormat 等）。直接編輯後按「💾 儲存」會覆寫這個面板。改壞了可以按「↺ 重置」拿回原本內容。
+                    完整 JSON 結構（含 tagId / html / css / js / usageDesc / demoFormat 等）。直接編輯後按「儲存」會覆寫這個面板。改壞了可以按「重置」拿回原本內容。
                 </div>
                 <textarea id="raw-edit-textarea" style="flex:1; min-height:50vh; max-height:65vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
                 <div id="raw-edit-status" style="font-size:11px; color:rgba(255,255,255,0.5); min-height:14px;"></div>
                 <div style="display:flex; gap:10px;">
-                    <button class="avs-btn" id="raw-edit-save" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#2ecc71; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">💾 儲存</button>
-                    <button class="avs-btn" id="raw-edit-reset" style="flex:0 0 100px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">↺ 重置</button>
+                    <button class="avs-btn" id="raw-edit-save" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#2ecc71; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+                    <button class="avs-btn" id="raw-edit-reset" style="flex:0 0 100px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-arrow-rotate-left"></i> 重置</button>
                     <button class="avs-btn" id="raw-edit-cancel" style="flex:0 0 100px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">取消</button>
                 </div>
             </div>
@@ -138,11 +138,11 @@
         <div id="studio-import-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(6px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
             <div style="max-width:900px; width:100%; max-height:90vh; background:#EEF0F6; border:1px solid #9b59b6; border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:12px; margin:auto; box-shadow:0 0 50px rgba(155,89,182,0.25);">
                 <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid rgba(155,89,182,0.3);">
-                    <strong style="font-size:15px; color:#7d3cae;">📥 匯入面板</strong>
-                    <div style="color:#9b59b6; cursor:pointer; font-size:20px;" id="studio-import-close">✕</div>
+                    <strong style="font-size:15px; color:#7d3cae;"><i class="fa-solid fa-file-import"></i> 匯入面板</strong>
+                    <div style="color:#9b59b6; cursor:pointer; font-size:20px;" id="studio-import-close"><i class="fa-solid fa-xmark"></i></div>
                 </div>
                 <div style="font-size:11px; color:rgba(125,60,174,0.85); line-height:1.6;">
-                    把你的 AI（Claude／GPT）照「📋 創建說明書」產出的 <strong>&lt;json&gt;…&lt;/json&gt;</strong> 整段貼進來，按「載入預覽」檢查；OK 後到上方按「✅ 確定創建」存起來（純展示→VN組件、應用/共用→我的應用），就能用了。
+                    把你的 AI 照「創建說明書」產出的 <strong>&lt;json&gt;…&lt;/json&gt;</strong> 整段貼進來，按「載入預覽」檢查；OK 後到上方按「確定創建」存起來（純展示→VN組件、應用/共用→我的應用），就能用了。
                 </div>
                 <textarea id="studio-import-textarea" placeholder="&lt;json&gt;{ ... }&lt;/json&gt;" style="flex:1; min-height:46vh; max-height:62vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
                 <div id="studio-import-status" style="font-size:11px; color:rgba(26,28,40,0.6); min-height:14px;"></div>
