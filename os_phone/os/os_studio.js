@@ -1600,7 +1600,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <div class="mc-chat" id="mc-chat"></div>
             <div class="mc-pendbar" id="mc-pendbar"></div>
             <div class="mc-inputrow">
-                <textarea class="swb-field mc-input" id="mc-msg" rows="2" placeholder="跟 AI 說你的主角是什麼樣的人…"></textarea>
+                <textarea class="swb-field mc-input" id="mc-msg" rows="2" placeholder="${_mcWorking.blocks.length ? '想再加或修改哪裡，直接跟 AI 說…' : '跟 AI 說你的主角是什麼樣的人…'}"></textarea>
                 <button class="swb-primary" id="mc-send">送出</button>
             </div>
         </div>`;
