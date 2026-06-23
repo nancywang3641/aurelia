@@ -429,7 +429,36 @@
         },
         getInfo: function() { return this.getCurrent(); },
         getName: function() { return this.getCurrent().name || 'User'; },
-        getDesc: function() { return this.getCurrent().desc || ''; }
+        getDesc: function() { return this.getCurrent().desc || ''; },
+
+        // 對外開放整份人設清單（給「我的角色」匯入用）：回 [{id,name,desc,avatar}]
+        getList: function() {
+            if (isStandalone()) {
+                return loadLocalPersonas().map(p => ({ id: p.id, name: p.name, desc: p.desc || '', avatar: p.avatar || '' }));
+            }
+            try { win.postMessage({ type: 'REQUEST_USER_PERSONA_LIST', source: 'PHONE_OS' }, '*'); } catch(e) {}
+            let out = [];
+            if (ST_PERSONAS_LIST.length > 0) {
+                out = ST_PERSONAS_LIST.map(p => ({ id: p.id || p.avatar || p.name, name: p.name, desc: p.description || p.desc || '', avatar: p.avatar_url || p.avatar || '' }));
+            }
+            if (!out.length) {
+                const pu = win.power_user || (win.parent && win.parent.power_user);
+                if (pu && pu.personas) {
+                    out = Object.keys(pu.personas).map(key => {
+                        const v = pu.personas[key];
+                        const nm = (typeof v === 'string') ? v : (v && v.name) || key;
+                        let desc = '';
+                        try { desc = (pu.persona_descriptions && pu.persona_descriptions[key] && pu.persona_descriptions[key].description) || (v && v.description) || ''; } catch(e) {}
+                        return { id: key, name: nm, desc: String(desc).replace(/<[^>]+>/g, '').trim(), avatar: '/thumbnail?type=persona&file=' + encodeURIComponent(key) };
+                    });
+                }
+            }
+            if (!out.length) {
+                const select = doc.getElementById('user_persona');
+                if (select) out = Array.from(select.options).map(opt => ({ id: opt.value, name: opt.text, desc: '', avatar: '' }));
+            }
+            return out;
+        }
     };
 
     win.OS_PERSONA = API;

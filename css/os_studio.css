@@ -28,6 +28,9 @@
         .mc-active-tag { display:inline-block; margin-left:8px; font-size:11px; font-weight:700; color:var(--jrpg-paper-light); background:var(--jrpg-wine); padding:1px 7px; border-radius:8px; vertical-align:middle; }
         .mc-usebtn { flex-shrink:0; padding:6px 10px; font-size:12px; font-weight:650; border:1px solid var(--jrpg-line); border-radius:10px; background:transparent; color:var(--jrpg-muted); cursor:pointer; font-family:inherit; }
         .mc-usebtn.on { background:var(--jrpg-wine); color:var(--jrpg-paper-light); border-color:var(--jrpg-wine); }
+        .mc-impavatar { width:40px; height:40px; border-radius:50%; object-fit:cover; flex-shrink:0; border:1px solid var(--jrpg-line); }
+        .mc-impavatar-broke { display:none; }
+        .mc-impavatar-ph { display:flex; align-items:center; justify-content:center; color:var(--jrpg-muted); background:var(--jrpg-paper-light); font-size:18px; }
         /* 🧑 我的角色 — 編輯頁聊天 */
         .mc-chat { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:4px 2px; }
         .mc-msg { max-width:88%; padding:9px 12px; border-radius:13px; font-size:14px; line-height:1.5; white-space:normal; }
