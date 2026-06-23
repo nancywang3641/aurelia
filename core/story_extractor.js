@@ -39,7 +39,8 @@
             this._flowInited = true;
             const ev = w.tavern_events;
 
-            if (ev.GENERATION_STARTED) w.eventOn(ev.GENERATION_STARTED, () => {
+            if (ev.GENERATION_STARTED) w.eventOn(ev.GENERATION_STARTED, (type, opts, dryRun) => {
+                if (dryRun) return;            // dryRun 試算空跑 → 別彈等待室
                 if (!this.isVisible) return;   // 只在藏書開著時接管
                 this._showFlowOverlay();
             });
