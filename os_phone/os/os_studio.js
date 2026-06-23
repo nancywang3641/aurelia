@@ -178,16 +178,18 @@
   · 只做純前端互動（展開/切換/排序），禁用 st.callAI／st.setImage 生成。
 - 純應用（落點＝裝成「手機 App」、跑在手機桌面 App 框裡，固定手機尺寸）：
   · 這是手機 App、不是 VN 卡片！根容器 width:100% 填滿手機框（~390px）、min-height:100% 用滿高度做 App 版型（頂部標題列＋可捲內容區＋底部操作），像一個正常手機 App。
+  · 🚨 內容再少也要「撐滿整個手機框」：根容器 min-height:100% + display:flex + flex-direction:column，中間內容區 flex:1 撐開（必要時內容置中或頂部對齊），絕不能讓 App 打開後下方留一大片空白。這是 Rae 點名的問題。
   · 不要做響應式三尺寸、不要 max-width 置中小卡、不要當「嵌劇情的卡片」。
   · 用 st.callAI（生文字）／st.setImage（生圖）做功能（按鈕一點即生）。
 - 共用（落點＝也裝成「手機 App」、固定手機尺寸）：
-  · 版型同純應用（手機 App、填滿手機框、App 版型，非置中小卡）。
+  · 版型同純應用（手機 App、填滿手機框、App 版型，非置中小卡）；同樣 min-height:100% + flex 撐滿整個手機框、內容區 flex:1 撐開，不准留白邊。
   · 差別：它「也讀劇情資料顯示」（st.parse／lines）＋又能生成（st.callAI／st.setImage）。
 
 ## 🚫 禁止清單
 - 禁 position:fixed、position:absolute 配 top/left 自定位、100vw、100vh、在 body／html 設樣式（樣式只能寫在 .vn-dynamic-panel-xxx 前綴下）；禁寫死固定像素寬（用 width:100%／響應式）。（全屏與否依類型：劇情卡禁吃滿、手機 App 反而要填滿手機框，見【三種類型】）
 - 禁無聊網頁感：卡中卡、單純 header+content+footer 堆疊、普通圓角矩形列表、只靠漸層＋陰影假高級。
 - 禁在按鈕／標籤文字加 ASCII 裝飾（[ ]、<< >>、» «、/ /）。要邊框發光用 CSS，別把符號塞進文字。
+- 🚫 禁「左側色條」：別給卡片加 CSS border-left 當色條 accent；也別用 Markdown 引用（行首大於號）——st.md 會把它渲染成左邊一條色條。每張卡都掛一條左邊槓很醜很煩，卡片靠造型／留白／分隔區分就好，不要無腦加左色條。
 
 ## ✅ 必須做成「主題化遊戲組件」
 - 外形跟面板用途綁定（寶箱／卷軸／通訊終端／檔案夾／契約書／地圖板／懸賞令…只是發想方向，依實際用途挑，別每次都同一個）。
@@ -217,6 +219,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.setImage(el, prompt, type, provider?) → 給 img 設圖（內建佔位／隔離／try-catch；type: 'char'／'item'／'pet'／'scene'）。第 4 參 provider 可選指定來源 'pollinations'／'novelai'／'tavern_sd'／'comfyui_direct'；用戶指定（「用 poll」「用 NAI」）就寫進去，否則不傳走全域設定。
 - st.callAI(systemPrompt) → Promise，呼叫 AI 生文字（自動帶角色卡／最近劇情／世界書當背景，不必重述）。await 包 try/catch、生成中顯示 loading。
 - st.getCurrentChars() → Promise，回傳當前聊天室出現過的角色 [{name,count}]（依出現次數排序）。做「角色選單／搜尋」用——例如日記/檔案類面板讓用戶從清單挑角色，免手打名字。空陣列＝還沒角色。
+- st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。純展示卡不需要持久化。
 
 ## 🖼️ 生圖紀律（重要，否則一堆圖排隊）
 st.setImage 只給「FOCUS／重要對象」：主角、當前焦點角色、重要物品／場景。路人／NPC／評論頭像／列表縮圖／大量小頭像「禁用」生圖，改用「名字首字色塊頭像」（純 CSS、不呼叫 API）：取名字首字放圓形 div、背景色用名字 hash 出 hsl。自己塞 url 的 img 一律加 onerror 退回佔位／首字頭像，永遠不要出現破圖。
@@ -2171,7 +2174,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             getCurrentChars() {   // 當前聊天室出現過的角色 [{name,count}]，做角色選單用
                 const R = window.VN_READER || (window.parent && window.parent.VN_READER);
                 return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
-            }
+            },
+            // 預覽用 localStorage stub（裝成 app 後由 app_runtime 的 window.saveData 接管真持久化）；scope 用 tplId 隔離
+            saveData(k, v) { try { localStorage.setItem('aurelia_studio_preview_' + k, JSON.stringify(v)); } catch (e) {} },
+            loadData(k) { try { const s = localStorage.getItem('aurelia_studio_preview_' + k); return s == null ? null : JSON.parse(s); } catch (e) { return null; } }
         };
     }
 
@@ -2312,7 +2318,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
       getCurrentChars: function(){
         var R = window.VN_READER || (window.parent && window.parent.VN_READER);
         return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
-      }
+      },
+      saveData: function(k, v){ try { if (window.saveData) window.saveData(k, v); } catch(e){} },
+      loadData: function(k){ try { return window.loadData ? window.loadData(k) : null; } catch(e){ return null; } }
     };
     // ============================================================
     const __onComplete = function(){};
