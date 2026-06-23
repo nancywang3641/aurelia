@@ -1119,6 +1119,7 @@
     // ====================================================================
     let _autoSumming = false;
     let _genInProgress = false;   // 使用者/任何生成進行中 → 別插隊背景總結，免跟使用者的回合撞主模型
+    let _autoSumTimer = null;     // GENERATION_ENDED 後排的延遲檢查 timer；截斷(GENERATION_STOPPED)要取消掉
     API.autoSummarizeCheck = async function () {
         try {
             if (_autoSumming) return;                                  // 正在背景總結
@@ -1146,7 +1147,13 @@
                 if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; _genInProgress = true; });
                 win.eventOn(win.tavern_events.GENERATION_ENDED, function () {
                     _genInProgress = false;
-                    try { setTimeout(function () { API.autoSummarizeCheck(); }, 4000); } catch (e) {}
+                    try { clearTimeout(_autoSumTimer); _autoSumTimer = setTimeout(function () { API.autoSummarizeCheck(); }, 4000); } catch (e) {}
+                });
+                // 截斷/手動停：stopGeneration 會先發 ENDED(剛排了檢查)再發 STOPPED → 這裡把那輪剛排的檢查取消掉。
+                // 截斷代表這輪要重開、不是完整內容，不能拿去總結；重開那輪正常 ENDED 才會重新排檢查。
+                if (win.tavern_events.GENERATION_STOPPED) win.eventOn(win.tavern_events.GENERATION_STOPPED, function () {
+                    _genInProgress = false;
+                    try { clearTimeout(_autoSumTimer); _autoSumTimer = null; } catch (e) {}
                 });
                 return;
             }
