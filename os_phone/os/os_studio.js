@@ -2667,13 +2667,18 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return {
             md(text) {
                 if (!text) return '';
-                const rxBold = new RegExp('[*][*](.+?)[*][*]', 'g');
-                const rxItalic = new RegExp('[*](.+?)[*]', 'g');
-                const rxCode = new RegExp('[`](.+?)[`]', 'g');
+                try {
+                    const P = window.parent, S = (P && P.showdown) || window.showdown;
+                    if (S) {
+                        const h = new S.Converter({ simpleLineBreaks: true, tables: true, strikethrough: true }).makeHtml(String(text));
+                        const D = (P && P.DOMPurify) || window.DOMPurify;
+                        return D ? D.sanitize(h) : h;
+                    }
+                } catch (e) {}
                 return String(text)
-                    .replace(rxBold, (_, p1) => '<b>' + p1 + '</b>')
-                    .replace(rxItalic, (_, p1) => '<i>' + p1 + '</i>')
-                    .replace(rxCode, (_, p1) => '<code>' + p1 + '</code>');
+                    .replace(new RegExp('[*][*](.+?)[*][*]', 'g'), (_, p1) => '<b>' + p1 + '</b>')
+                    .replace(new RegExp('[*](.+?)[*]', 'g'), (_, p1) => '<i>' + p1 + '</i>')
+                    .replace(new RegExp('[`](.+?)[`]', 'g'), (_, p1) => '<code>' + p1 + '</code>');
             },
             parse() {
                 const result = {};
@@ -2745,7 +2750,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             + '<scr' + 'ipt>(function(){'
             + 'var container=document.getElementById("app-root");var lines=[];'
             + 'var st={'
-            +   'md:function(t){if(!t)return "";return String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";});},'
+            +   'md:function(t){if(!t)return "";try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return D?D.sanitize(h):h;}}catch(e){}return String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";});},'
             +   'parse:function(){return {};},'
             +   'setImage:async function(el,p,type,provider){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene",provider);if(u)el.src=u;}}catch(e){}},'
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
