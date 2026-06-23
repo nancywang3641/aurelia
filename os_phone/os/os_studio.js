@@ -1384,6 +1384,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     let _mcChat = [];            // [{role,content}]
     let _mcPendCount = 0;        // 自上次開預覽以來 AI 動到的區塊數
     let _mcModel = localStorage.getItem('mc_model') === 'sec' ? 'sec' : 'main';
+    let _mcImportPick = null;     // 匯入時選中的那個酒館人設
 
     // 純函式：<seg> 解析 / 區塊組裝成條目內容 / 反解析回區塊（組裝⇄反解析互為逆運算）
     function _mcParseSegs(text) {
@@ -1408,8 +1409,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const host = document.getElementById('studio-persona-content');
         if (!host) return;
         host.classList.add('swb-host');
-        if (!_mcWorking && _mcView !== 'list' && _mcView !== 'import') _mcView = 'list';
+        if (!_mcWorking && _mcView !== 'list' && _mcView !== 'import' && _mcView !== 'importopts') _mcView = 'list';
         if (_mcView === 'import') return _mcRenderImport(host);
+        if (_mcView === 'importopts') return _mcRenderImportOpts(host);
         if (_mcView === 'editor') return _mcPane === 'preview' ? _mcRenderPreview(host) : _mcRenderEditorChat(host);
         return _mcRenderList(host);
     }
@@ -1500,26 +1502,33 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(p.name)}</div><div class="swb-card-sum">${_sgcEsc(String(p.desc || '').replace(/\s+/g, ' ').slice(0, 40)) || 'ST 原生人設'}</div></div>
                 <span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span>
             </div>`).join('');
-            listEl.querySelectorAll('.mc-charcard').forEach(card => card.onclick = () => { const p = arr[parseInt(card.getAttribute('data-i'), 10)]; if (p) _mcImportPersona(p); });
+            listEl.querySelectorAll('.mc-charcard').forEach(card => card.onclick = () => { const p = arr[parseInt(card.getAttribute('data-i'), 10)]; if (p) { _mcImportPick = p; _mcView = 'importopts'; renderPersonaPanel(); } });
         };
         let list = [];
         try { list = (OP && OP.getList && OP.getList()) || []; } catch (e) {}
         paint(list);
         if (!list.length) setTimeout(() => { let l2 = []; try { l2 = (OP && OP.getList && OP.getList()) || []; } catch (e) {} if (_mcView === 'import') paint(l2); }, 450);
     }
-    // 選了現有人設 → 問要怎麼用：對標當前世界(一步出古代版) / 原樣搬進來(只整理)。兩者都存成新的一份(uid:null)
-    function _mcImportPersona(p) {
-        _mcSheet(((p && p.name) || '這個人設') + ' → 要怎麼用？', [
-            { label: '<i class="fa-solid fa-earth-asia"></i> 對標當前世界（一步變這張卡的世界版）', onClick: () => _mcImportToWorld(p) },
-            { label: '<i class="fa-solid fa-copy"></i> 原樣搬進來（不改世界，只整理成區塊）', onClick: () => _mcImportPlain(p) }
-        ]);
+    // 選了現有人設 → 面板內小表單：對標當前世界 / 或自己打要求讓 AI 改＋整理(留空=只整理)。都存成新一份(uid:null)
+    function _mcRenderImportOpts(host) {
+        const p = _mcImportPick || {};
+        host.innerHTML = `<div class="swb-page">
+            <div class="swb-bar"><button class="swb-iconbtn" id="mc-oback"><i class="fa-solid fa-chevron-left"></i></button><div class="swb-bar-title">${_sgcEsc(p.name || '人設')}</div></div>
+            <button class="mc-optbtn" id="mc-opt-world"><i class="fa-solid fa-earth-asia"></i> 對標當前世界（變這張卡的世界版）</button>
+            <div class="mc-opt-or">或，照你的要求改</div>
+            <textarea class="swb-field mc-optreq" id="mc-optreq" rows="3" placeholder="想怎麼改這份人設？（例：更陰沉一點、加一段職業背景）留空＝只整理分類"></textarea>
+            <button class="mc-optbtn primary" id="mc-opt-refine"><i class="fa-solid fa-wand-magic-sparkles"></i> 改＋整理</button>
+        </div>`;
+        host.querySelector('#mc-oback').onclick = () => { _mcView = 'import'; renderPersonaPanel(); };
+        host.querySelector('#mc-opt-world').onclick = () => _mcImportToWorld(p);
+        host.querySelector('#mc-opt-refine').onclick = () => { const req = (host.querySelector('#mc-optreq').value || '').trim(); _mcImportRefine(p, req); };
     }
     function _mcImportEnter(p, blocks, pane, nameOverride) {
         _mcWorking = { uid: null, name: nameOverride != null ? nameOverride : ((p && p.name) || ''), blocks };
         _mcChat = []; _mcPendCount = blocks.length; _mcView = 'editor'; _mcPane = pane; renderPersonaPanel();
     }
-    // 原樣搬進來：AI 只把散文人設拆成區塊（不改世界），落進編輯器
-    async function _mcImportPlain(p) {
+    // 照使用者要求改寫＋整理成區塊（req 留空＝只整理）。落進編輯器預覽
+    async function _mcImportRefine(p, req) {
         const desc = String((p && p.desc) || '').trim();
         if (!desc) { _mcImportEnter(p, [], 'chat'); return; }
         const api = (window.parent || window).OS_API || window.OS_API;
@@ -1527,15 +1536,18 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             _wbToast('沒有可用 AI，先整段放著、可手動拆塊');
             _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); return;
         }
-        _wbToast('AI 整理中…');
-        const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設描述（一整段散文）。請把它拆成多個區塊（外觀／個性／背景／喜好…），用 <persona><seg> 輸出，內容忠於原文、不要自己加設定。\n\n【現有人設描述】\n' + desc;
-        const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把這段人設拆成區塊。' }];
+        _wbToast(req ? 'AI 改寫＋整理中…' : 'AI 整理中…');
+        const task = req
+            ? ('請依使用者要求改寫這份人設，並整理成區塊。沒被要求動到的部分保留原樣，別自己亂加設定。\n【使用者要求】' + req)
+            : '請把這份人設整理成區塊，內容忠於原文、別自己加設定。';
+        const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設（一整段散文）。' + task + ' 結果用 <persona><seg> 輸出。\n\n【現有人設】\n' + desc;
+        const messages = [{ role: 'system', content: sys }, { role: 'user', content: req || '整理成區塊。' }];
         const done = (full) => {
             const segs = _mcParseSegs(String(full || ''));
             if (segs.length) _mcImportEnter(p, segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })), 'preview');
-            else { _wbToast('AI 沒拆成功，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); }
+            else { _wbToast('AI 沒整理成功，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); }
         };
-        const errCb = () => { _wbToast('AI 整理失敗，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); };
+        const errCb = () => { _wbToast('AI 失敗，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); };
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
         try { callFn.call(api, messages, () => {}, done, errCb); } catch (e) { errCb(e); }
@@ -1543,7 +1555,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // 對標當前世界：一個 AI call 直接把現有人設改寫成這張卡世界的版本(現代→古代)，存成新變體
     async function _mcImportToWorld(p) {
         const desc = String((p && p.desc) || '').trim();
-        if (!desc) { _wbToast('這個人設沒有描述內容，改用「原樣搬進來」'); _mcImportPlain(p); return; }
+        if (!desc) { _wbToast('這個人設沒有描述內容，先整理一下'); _mcImportRefine(p, ''); return; }
         let ctx = await _mcWorldContext('card');
         let tag = '對標版';
         if (!ctx) {
