@@ -246,7 +246,7 @@
                         bgColor = "#f6e3c8";
                         textColor = "#b8702b";
                         borderColor = "#d99a5e";
-                        icon = "✔";
+                        icon = '<i class="fa-solid fa-check"></i>';
                         title = "已收款";
                         sub = `對方已收款`;
                         clickAction = "";
@@ -254,7 +254,7 @@
                         bgColor = "#e6e6e6";
                         textColor = "#666";
                         borderColor = "#999";
-                        icon = "↩";
+                        icon = '<i class="fa-solid fa-reply"></i>';
                         title = status === 'expired' ? "已過期" : "已退還";
                         sub = status === 'expired' ? "轉帳已過期（10分鐘）" : "對方已退回";
                         clickAction = "";
@@ -264,7 +264,7 @@
                         bgColor = "#f6e3c8";
                         textColor = "#b8702b";
                         borderColor = "#d99a5e";
-                        icon = "✔";
+                        icon = '<i class="fa-solid fa-check"></i>';
                         title = "已收款";
                         sub = `已存入餘額`;
                         clickAction = "";
@@ -272,7 +272,7 @@
                         bgColor = "#e6e6e6";
                         textColor = "#666";
                         borderColor = "#999";
-                        icon = "↩";
+                        icon = '<i class="fa-solid fa-reply"></i>';
                         title = "已退還";
                         sub = "轉帳已退回";
                         clickAction = "";
@@ -356,7 +356,7 @@
                 }
                 return `<div class="wx-gift-card-blue ${extraClass}" style="opacity:${opacity}" ${clickAction}><div class="wx-gift-top"><div class="wx-gift-icon-gold">${icon}</div><div class="wx-gift-title-text">${memo || '送你一份心意'}</div></div><div class="wx-gift-footer">${statusLabel}</div></div>`;
             });
-            html = html.replace(/\[\s*(图片|圖片|Img)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => { content = content.trim(); if (content.match(/^(https?:\/\/|data:|blob:)/i)) { return `<img src="${content}" class="wx-img-block" onclick="${app}.bigImg(this.src)">`; } return `<div class="wx-img-placeholder"><span style="font-size:24px; display:block; margin-bottom:5px;">🖼️</span><span style="font-size:13px; line-height:1.4;">${content}</span></div>`; });
+            html = html.replace(/\[\s*(图片|圖片|Img)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => { content = content.trim(); if (content.match(/^(https?:\/\/|data:|blob:)/i)) { return `<img src="${content}" class="wx-img-block" onclick="${app}.bigImg(this.src)">`; } return `<div class="wx-img-placeholder"><span style="font-size:24px; display:block; margin-bottom:5px;"><i class="fa-solid fa-image"></i></span><span style="font-size:13px; line-height:1.4;">${content}</span></div>`; });
             html = html.replace(/\[\s*(语音|語音|Voice)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, txt) => { const cleanTxt = txt.replace(/['"]/g, ''); const sec = Math.min(60, Math.max(2, Math.ceil(cleanTxt.length/2))); return `<div class="wx-voice-wrapper" onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"><div class="wx-voice-box" style="width:${60+sec*2}px"><span style="margin:0 5px">((</span><span>${sec}"</span></div><div class="wx-trans-box"></div></div>`; });
             html = html.replace(/\[\s*(红包|RedPacket)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => {
                 // 解析內容：支持 [金額|備註|紅包ID] 或舊格式
@@ -422,8 +422,8 @@
                 
                 return `<div style="width: 220px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; font-family: sans-serif;" onclick="${app}.openRedPacketById('${packetId}')"><div style="background: #fa9d3b; padding: 15px; display: flex; align-items: center;"><div style="width: 32px; height: 42px; background: #e64340; border-radius: 4px; position: relative; margin-right: 12px; flex-shrink: 0; display:flex; justify-content:center; align-items:center; border:1px solid #f8b97a;"><div style="width:18px; height:18px; background:#f6d147; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#e64340; font-weight:bold; font-size:11px;">¥</div></div><div style="color: white; flex: 1; overflow:hidden;"><div style="font-size: 15px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${memo}</div><div style="font-size: 12px; opacity: 0.8;">領取紅包</div></div></div><div style="background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display:flex; justify-content:space-between; align-items:center;"><span>微信紅包</span></div></div>`;
             });
-            html = html.replace(/\[\s*(位置|Location|定位)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; return `<div style="width:230px; border-radius:6px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.1); background:#fff; cursor:default; font-family: sans-serif;"><div style="height:120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; position:relative; background-color:#e6e6e6;"><div style="width:100%; height:100%; background:rgba(0,0,0,0.05);"></div><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -80%); font-size:32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));">📍</div></div><div style="background:#55d967; padding:10px 12px; color:white; display:flex; flex-direction:column; justify-content:center;"><div style="font-size:15px; font-weight:bold; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div><div style="font-size:11px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${address}</div></div></div>`; });
-            html = html.replace(/\[\s*(视频|Video)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${content}')"` : ''; return `<div ${vidClick} style="margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: ${isUrl ? 'pointer' : 'default'}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><div style="position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8;"></div><div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2;"><div style="width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px;"></div></div><div style="position: absolute; bottom: 10px; left: 12px; color: #fff; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;">📹 ${videoTitle}</div><div style="position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2;">00:15</div></div>`; });
+            html = html.replace(/\[\s*(位置|Location|定位)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; return `<div style="width:230px; border-radius:6px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.1); background:#fff; cursor:default; font-family: sans-serif;"><div style="height:120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; position:relative; background-color:#e6e6e6;"><div style="width:100%; height:100%; background:rgba(0,0,0,0.05);"></div><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -80%); font-size:32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color:#e64340;"><i class="fa-solid fa-location-dot"></i></div></div><div style="background:#55d967; padding:10px 12px; color:white; display:flex; flex-direction:column; justify-content:center;"><div style="font-size:15px; font-weight:bold; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div><div style="font-size:11px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${address}</div></div></div>`; });
+            html = html.replace(/\[\s*(视频|Video)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${content}')"` : ''; return `<div ${vidClick} style="margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: ${isUrl ? 'pointer' : 'default'}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><div style="position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8;"></div><div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2;"><div style="width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px;"></div></div><div style="position: absolute; bottom: 10px; left: 12px; color: #fff; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div style="position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2;">00:15</div></div>`; });
             html = html.replace(/\[\s*(文件|File)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, filename) => { filename = filename.trim(); let ext = filename.split('.').pop().toLowerCase(); let iconColor = '#999'; let iconText = '?'; if (ext.match(/ppt|pptx/)) { iconColor = '#f4511e'; iconText = 'P'; } else if (ext.match(/doc|docx/)) { iconColor = '#4b89dc'; iconText = 'W'; } else if (ext.match(/xls|xlsx/)) { iconColor = '#2e7d32'; iconText = 'X'; } else if (ext.match(/pdf/)) { iconColor = '#e53935'; iconText = '<span style="font-size:10px">PDF</span>'; } else if (ext.match(/txt/)) { iconColor = '#999'; iconText = 'T'; } let size = (Math.random() * 5 + 1).toFixed(1) + " MB"; return `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${filename}</div><div class="wx-file-size">${size}</div></div><div class="wx-file-icon" style="background:${iconColor}">${iconText}</div></div>`; });
             html = html.replace(/\[\s*(表情包|Sticker)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => {
                 content = content.trim();
@@ -606,7 +606,7 @@
                     <div class="wx-cell"><div class="wx-cell-icon">${iconFace}</div><div class="wx-cell-text">表情</div><div class="wx-cell-arrow">›</div></div>
                 </div>
                 <div class="wx-cell-group">
-                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;">🌙</span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
+                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-moon"></i></span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
                     <div class="wx-cell" onclick="(window.parent.PhoneSystem || window.PhoneSystem).install('設置', '⚙️', '#4c4c4c', null); alert('請前往桌面點擊 [設置] App');"><div class="wx-cell-icon">${iconSet}</div><div class="wx-cell-text">設置</div><div class="wx-cell-arrow">›</div></div>
                 </div>
                 <div class="wx-cell-group" style="margin-top:10px;">
@@ -704,9 +704,9 @@
                 headerRightBtn = `
                     <div style="display:flex; align-items:center; gap:8px;">
                         <div id="wx-msg-delete-btn" style="display:block; font-size:16px; cursor:pointer; color:#ff453a; padding:4px 8px;"
-                             onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.enterMultiSelectMode();">🗑️</div>
+                             onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.enterMultiSelectMode();"><i class="fa-solid fa-trash"></i></div>
                         <div id="wx-msg-menu-btn" style="display:block; font-size:22px; cursor:pointer; font-weight:bold; margin-top:-8px; color:${isDark ? '#f0f0f0' : '#000'};"
-                             onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${activeId}');">...</div>
+                             onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${activeId}');"><i class="fa-solid fa-ellipsis"></i></div>
                         <div id="wx-msg-cancel-btn" style="display:none; font-size:14px; cursor:pointer; color:#999; padding:4px 8px;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.exitMultiSelectMode();">取消</div>
                         <div id="wx-msg-confirm-btn" style="display:none; font-size:14px; cursor:pointer; color:#999; padding:4px 8px; font-weight:bold;"
@@ -714,7 +714,7 @@
                     </div>
                 `;
             } else {
-                headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer; color:${isDark ? '#f0f0f0' : '#000'};" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)">⊕</div>`;
+                headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer; color:${isDark ? '#f0f0f0' : '#000'};" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)"><i class="fa-solid fa-circle-plus"></i></div>`;
             }
             
             const isInChat = !!activeId;
@@ -727,7 +727,7 @@
             const chatBadgeHTML = totalUnread > 0 ? `<div class="wx-tab-badge">${totalUnread}</div>` : '';
 
             // 觸發按鈕
-            const triggerBtn = `<span class="wx-icon-btn" id="wx-trigger-btn" onclick="${app}.triggerReply()" style="font-size:24px; color:#07c160; margin-right:5px;" title="點擊召喚 AI 回覆">✨</span>`;
+            const triggerBtn = `<span class="wx-icon-btn" id="wx-trigger-btn" onclick="${app}.triggerReply()" style="font-size:24px; color:#07c160; margin-right:5px;" title="點擊召喚 AI 回覆"><i class="fa-solid fa-wand-magic-sparkles"></i></span>`;
 
             const iconChat = `<svg viewBox="0 0 24 24"><path d="M18 13.5c0-2.2-2.3-4-5-4-2.8 0-5 1.8-5 4s2.2 4 5 4c.6 0 1.1-.1 1.6-.2l.1-.1 1.7.5-.4-1.6.1-.1c1.2-1 1.9-1.9 1.9-2.5zm-5 4.5c-3.1 0-5.5-2.1-5.5-4.5S9.9 9 13 9s5.5 2.1 5.5 4.5-2.4 4.5-5.5 4.5zM7.5 7.5h.1c3.1 0 5.8 1.8 6.4 4.3.4-.2.8-.2 1.2-.2 3.6 0 6.5 2.5 6.5 5.5 0 .8-.2 1.6-.6 2.3l.5 2.1-2.2-.6c-1.1.7-2.5 1.2-3.8 1.2-3.6 0-6.5-2.5-6.5-5.5 0-.4 0-.8.1-1.2C5.9 14.8 4 12.9 4 10.5c0-2.8 2.8-5 6.2-5h-2.7z"/></svg>`;
             const iconContact = `<svg viewBox="0 0 24 24"><path d="M4 19h16v-1c0-2.2-1.8-4-4-4h-8c-2.2 0-4 1.8-4 4v1z" opacity=".3"/><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>`;
@@ -764,21 +764,21 @@
                     
                     <div class="wx-modal-overlay" id="wxActionModal"><div class="wx-modal-box"><div class="wx-modal-title" id="wxModalTitle">輸入內容</div><input type="text" class="wx-modal-input" id="wxModalInput" autocomplete="off"><input type="text" class="wx-modal-input hidden" id="wxModalInput2" autocomplete="off" style="margin-top:5px;"><select class="wx-modal-input hidden" id="wxModalSelect" style="margin-top:5px;"></select><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" onclick="${app}.closeModal()">取消</button><button class="wx-btn wx-btn-confirm" onclick="${app}.confirmModal()">發送</button></div></div></div>
                     <div class="wx-gift-overlay" id="wxGiftOverlay" onclick="this.classList.remove('show')"><div class="wx-receipt-box" onclick="event.stopPropagation()"><div class="wx-receipt-header"></div><div class="wx-receipt-content"><div class="wx-receipt-icon" id="wxGiftIcon">🎁</div><div class="wx-receipt-name" id="wxGiftName">禮物名稱</div><div class="wx-receipt-divider"></div><div class="wx-receipt-price-label">價值</div><div class="wx-receipt-price" id="wxGiftPrice">¥0</div><div class="wx-receipt-btn-group" id="wxGiftBtnGroup" style="display:none;"><div class="wx-receipt-btn-accept" id="wxGiftAccept">收下禮物</div><div class="wx-receipt-btn-refuse" id="wxGiftRefuse">殘忍拒絕</div></div><div class="wx-receipt-close" id="wxGiftClose" onclick="document.getElementById('wxGiftOverlay').classList.remove('show')">關閉</div></div></div></div>
-                    <div class="wx-transfer-overlay" id="wxTransferOverlay" onclick="${app}.closeTransfer()"><div class="wx-transfer-box" onclick="event.stopPropagation()"><div class="wx-transfer-header"><div class="wx-transfer-icon">✔</div><div style="font-size:14px;">待收款金額</div><div class="wx-transfer-amount" id="wxTransferAmount">¥0.00</div></div><div class="wx-transfer-actions"><button class="wx-btn-receive" id="wxBtnReceive" onclick="">確認收款</button><button class="wx-btn-return" id="wxBtnReturn" onclick="">退回轉帳</button><div style="font-size:12px; color:#999; margin-top:5px;">收款後將存入餘額</div></div></div></div>
+                    <div class="wx-transfer-overlay" id="wxTransferOverlay" onclick="${app}.closeTransfer()"><div class="wx-transfer-box" onclick="event.stopPropagation()"><div class="wx-transfer-header"><div class="wx-transfer-icon"><i class="fa-solid fa-check"></i></div><div style="font-size:14px;">待收款金額</div><div class="wx-transfer-amount" id="wxTransferAmount">¥0.00</div></div><div class="wx-transfer-actions"><button class="wx-btn-receive" id="wxBtnReceive" onclick="">確認收款</button><button class="wx-btn-return" id="wxBtnReturn" onclick="">退回轉帳</button><div style="font-size:12px; color:#999; margin-top:5px;">收款後將存入餘額</div></div></div></div>
                     <div class="wx-rp-overlay" id="wxRedPacketOverlay" onclick="this.classList.remove('show')"><div class="wx-rp-box" onclick="event.stopPropagation()"><div class="wx-rp-header"><div class="wx-rp-avatar" id="wxRpAvatar"></div><div class="wx-rp-sender" id="wxRpSender">的紅包</div><div class="wx-rp-memo" id="wxRpMemo">恭喜發財，大吉大利</div></div><div class="wx-rp-divider"></div><div class="wx-rp-info" id="wxRpInfoBar">暫無人領取</div><div class="wx-rp-list" id="wxRpList"></div><div class="wx-rp-close" onclick="document.getElementById('wxRedPacketOverlay').classList.remove('show')">關閉</div></div></div>
 
                     <div class="wx-footer-wrapper" style="display:${inputDisplay}">
                         <div class="wx-input-bar">
                             ${triggerBtn}
                             <input class="wx-input-real" placeholder="" oninput="${app}.onInputCheck(this)" onkeydown="${app}.onInputKey(event, this)">
-                            <span class="wx-icon-btn" onclick="${app}.toggleStickerPanel()">☺</span>
-                            <span class="wx-icon-btn" onclick="${app}.togglePanel()">⊕</span>
+                            <span class="wx-icon-btn" onclick="${app}.toggleStickerPanel()"><i class="fa-solid fa-face-smile"></i></span>
+                            <span class="wx-icon-btn" onclick="${app}.togglePanel()"><i class="fa-solid fa-circle-plus"></i></span>
                             <div class="wx-send-btn" onclick="${app}.sendMsg(this)">发送</div>
                         </div>
                         <div class="wx-sticker-panel">
                             <div class="wx-stk-panel-header">
                                 <div class="wx-stk-tabs-wrap" id="wxStickerTabs"></div>
-                                <span class="wx-stk-manage-toggle" title="管理庫" onclick="(function(t){var a=t.closest('.wx-sticker-panel').querySelector('.wx-stk-manage-area');a.classList.toggle('open');var w=window.parent||window;if(w.WX_STICKER)w.WX_STICKER.renderManage();})(this)">⚙</span>
+                                <span class="wx-stk-manage-toggle" title="管理庫" onclick="(function(t){var a=t.closest('.wx-sticker-panel').querySelector('.wx-stk-manage-area');a.classList.toggle('open');var w=window.parent||window;if(w.WX_STICKER)w.WX_STICKER.renderManage();})(this)"><i class="fa-solid fa-gear"></i></span>
                             </div>
                             <div class="wx-sticker-grid" id="wxStickerGrid"></div>
                             <div class="wx-stk-manage-area">
@@ -786,10 +786,10 @@
                                     <div id="wxStickerManage"></div>
                                     <div class="wx-stk-import-row">
                                         <input class="wx-stk-url-input" id="wxStickerBaseUrl" placeholder="資料夾 URL（選填）如：https://cdn.com/stickers/">
-                                        <label class="wx-stk-file-btn">📂 上傳 TXT<input type="file" accept=".txt" style="display:none" onchange="var w=window.parent||window;if(w.WX_STICKER)w.WX_STICKER.importFromFile(this)"></label>
+                                        <label class="wx-stk-file-btn"><i class="fa-solid fa-upload"></i> 上傳 TXT<input type="file" accept=".txt" style="display:none" onchange="var w=window.parent||window;if(w.WX_STICKER)w.WX_STICKER.importFromFile(this)"></label>
                                     </div>
                                     <details style="margin-top:4px;">
-                                        <summary style="font-size:11px; color:#aaa; cursor:pointer; user-select:none;">📄 TXT 格式說明</summary>
+                                        <summary style="font-size:11px; color:#aaa; cursor:pointer; user-select:none;"><i class="fa-solid fa-file-lines"></i> TXT 格式說明</summary>
                                         <div style="font-size:11px; color:#999; line-height:1.7; margin-top:4px; padding:6px 8px; background:#f9f9f9; border-radius:4px; border:1px solid #eee;">
                                             第一行：<code>library:庫名稱</code><br>
                                             之後每行：<code>顯示名稱:檔名.gif</code>（有資料夾 URL 時只填檔名）<br>
@@ -803,17 +803,17 @@
                         <div class="wx-action-panel">
                             <div class="wx-scroll-view" onscroll="${app}.onScrollDot(this)">
                                 <div class="wx-grid-page">
-                                    <div class="wx-grid-item" onclick="${app}.action('photo')"><div class="wx-grid-icon">🖼️</div><div class="wx-grid-label">照片</div></div>
-                                    <div class="wx-grid-item" onclick="${app}.action('video_file')"><div class="wx-grid-icon">📹</div><div class="wx-grid-label">視頻</div></div>
-                                    <div class="wx-grid-item" onclick="${app}.action('voice_msg')"><div class="wx-grid-icon">🎙️</div><div class="wx-grid-label">語音</div></div>
-                                    <div class="wx-grid-item" onclick="${app}.action('call')"><div class="wx-grid-icon">📞</div><div class="wx-grid-label">通話</div></div>
-                                    <div class="wx-grid-item" onclick="${app}.action('location')"><div class="wx-grid-icon">📍</div><div class="wx-grid-label">定位</div></div>
-                                    <div class="wx-grid-item" onclick="${app}.action('redpacket')"><div class="wx-grid-icon">🧧</div><div class="wx-grid-label">紅包</div></div>
-                                    <div class="wx-grid-item" onclick="${app}.action('transfer')"><div class="wx-grid-icon">💸</div><div class="wx-grid-label">轉帳</div></div>
-                                    <div class="wx-grid-item" onclick="${app}.action('file_card')"><div class="wx-grid-icon">📂</div><div class="wx-grid-label">文件</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('photo')"><div class="wx-grid-icon"><i class="fa-solid fa-image"></i></div><div class="wx-grid-label">照片</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('video_file')"><div class="wx-grid-icon"><i class="fa-solid fa-video"></i></div><div class="wx-grid-label">視頻</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('voice_msg')"><div class="wx-grid-icon"><i class="fa-solid fa-microphone"></i></div><div class="wx-grid-label">語音</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('call')"><div class="wx-grid-icon"><i class="fa-solid fa-phone"></i></div><div class="wx-grid-label">通話</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('location')"><div class="wx-grid-icon"><i class="fa-solid fa-location-dot"></i></div><div class="wx-grid-label">定位</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('redpacket')"><div class="wx-grid-icon"><i class="fa-solid fa-money-bill-wave"></i></div><div class="wx-grid-label">紅包</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('transfer')"><div class="wx-grid-icon"><i class="fa-solid fa-money-bill-transfer"></i></div><div class="wx-grid-label">轉帳</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('file_card')"><div class="wx-grid-icon"><i class="fa-solid fa-folder-open"></i></div><div class="wx-grid-label">文件</div></div>
                                 </div>
                                 <div class="wx-grid-page">
-                                    <div class="wx-grid-item" onclick="${app}.action('gift')"><div class="wx-grid-icon">🎁</div><div class="wx-grid-label">禮物</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('gift')"><div class="wx-grid-icon"><i class="fa-solid fa-gift"></i></div><div class="wx-grid-label">禮物</div></div>
                                 </div>
                             </div>
                             <div class="wx-dots" id="wxPanelDots"><div class="wx-dot active"></div><div class="wx-dot"></div></div>
