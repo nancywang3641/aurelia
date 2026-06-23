@@ -1507,24 +1507,62 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         paint(list);
         if (!list.length) setTimeout(() => { let l2 = []; try { l2 = (OP && OP.getList && OP.getList()) || []; } catch (e) {} if (_mcView === 'import') paint(l2); }, 450);
     }
-    async function _mcImportPersona(p) {
+    // 選了現有人設 → 問要怎麼用：對標當前世界(一步出古代版) / 原樣搬進來(只整理)。兩者都存成新的一份(uid:null)
+    function _mcImportPersona(p) {
+        _mcSheet(((p && p.name) || '這個人設') + ' → 要怎麼用？', [
+            { label: '<i class="fa-solid fa-earth-asia"></i> 對標當前世界（一步變這張卡的世界版）', onClick: () => _mcImportToWorld(p) },
+            { label: '<i class="fa-solid fa-copy"></i> 原樣搬進來（不改世界，只整理成區塊）', onClick: () => _mcImportPlain(p) }
+        ]);
+    }
+    function _mcImportEnter(p, blocks, pane, nameOverride) {
+        _mcWorking = { uid: null, name: nameOverride != null ? nameOverride : ((p && p.name) || ''), blocks };
+        _mcChat = []; _mcPendCount = blocks.length; _mcView = 'editor'; _mcPane = pane; renderPersonaPanel();
+    }
+    // 原樣搬進來：AI 只把散文人設拆成區塊（不改世界），落進編輯器
+    async function _mcImportPlain(p) {
         const desc = String((p && p.desc) || '').trim();
-        const enter = (blocks, pane) => { _mcWorking = { uid: null, name: (p && p.name) || '', blocks }; _mcChat = []; _mcPendCount = blocks.length; _mcView = 'editor'; _mcPane = pane; renderPersonaPanel(); };
-        if (!desc) { enter([], 'chat'); return; }
+        if (!desc) { _mcImportEnter(p, [], 'chat'); return; }
         const api = (window.parent || window).OS_API || window.OS_API;
         if (!api || (typeof api.chatMain !== 'function' && typeof api.chatSecondary !== 'function')) {
             _wbToast('沒有可用 AI，先整段放著、可手動拆塊');
-            enter([{ label: '人設', content: desc, userEdited: true }], 'preview'); return;
+            _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); return;
         }
         _wbToast('AI 整理中…');
         const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設描述（一整段散文）。請把它拆成多個區塊（外觀／個性／背景／喜好…），用 <persona><seg> 輸出，內容忠於原文、不要自己加設定。\n\n【現有人設描述】\n' + desc;
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把這段人設拆成區塊。' }];
         const done = (full) => {
             const segs = _mcParseSegs(String(full || ''));
-            if (segs.length) enter(segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })), 'preview');
-            else { _wbToast('AI 沒拆成功，先整段放著'); enter([{ label: '人設', content: desc, userEdited: true }], 'preview'); }
+            if (segs.length) _mcImportEnter(p, segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })), 'preview');
+            else { _wbToast('AI 沒拆成功，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); }
         };
-        const errCb = () => { _wbToast('AI 整理失敗，先整段放著'); enter([{ label: '人設', content: desc, userEdited: true }], 'preview'); };
+        const errCb = () => { _wbToast('AI 整理失敗，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); };
+        const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
+        const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
+        try { callFn.call(api, messages, () => {}, done, errCb); } catch (e) { errCb(e); }
+    }
+    // 對標當前世界：一個 AI call 直接把現有人設改寫成這張卡世界的版本(現代→古代)，存成新變體
+    async function _mcImportToWorld(p) {
+        const desc = String((p && p.desc) || '').trim();
+        if (!desc) { _wbToast('這個人設沒有描述內容，改用「原樣搬進來」'); _mcImportPlain(p); return; }
+        let ctx = await _mcWorldContext('card');
+        let tag = '對標版';
+        if (!ctx) {
+            const d = prompt('這張卡沒抓到綁定的世界書。\n用一句話描述要對標的世界（例：古風武俠）：');
+            if (!d || !d.trim()) return;
+            ctx = '世界觀：' + d.trim(); tag = d.trim().slice(0, 8);
+        }
+        const api = (window.parent || window).OS_API || window.OS_API;
+        if (!api || (typeof api.chatMain !== 'function' && typeof api.chatSecondary !== 'function')) { alert('AI 不可用'); return; }
+        _wbToast('AI 對標世界中…');
+        const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設（一整段散文）。請把它改寫成「貼合下面這個世界」的版本：保留核心個性／這個人是誰，只把外觀、說話習慣、背景這類世界皮層改寫成貼合該世界（例如現代身分改成古代身分）；不要改掉性格本質。把結果拆成區塊用 <persona><seg> 輸出。\n\n【現有人設】\n' + desc + '\n\n' + ctx;
+        const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把我的人設改寫成這個世界的版本。' }];
+        const done = (full) => {
+            const segs = _mcParseSegs(String(full || ''));
+            if (!segs.length) { alert('AI 沒吐出區塊，再試一次'); return; }
+            _mcImportEnter(p, segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })), 'preview', ((p && p.name) || '我') + '（' + tag + '）');
+            _wbToast('已生成世界版，按確定會存成「新的一份」、不動你原本的');
+        };
+        const errCb = (err) => alert('AI 失敗：' + (err && err.message || err));
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
         try { callFn.call(api, messages, () => {}, done, errCb); } catch (e) { errCb(e); }
