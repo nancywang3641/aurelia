@@ -47,6 +47,52 @@
 
     window.WX_VIEW = {
         
+        // 「發現」tab：跑團手機記錄入口（唯讀檢視 VN 劇情裡手機上發生過的對話）。內容由 wxApp._fillVnLog() 非同步填入。
+        getDiscoverHTML: function() {
+            const app = '(window.parent.wxApp || window.wxApp)';
+            return ''
+              + '<div class="wx-cell-group" style="margin-top:8px;">'
+              +   '<div class="wx-cell" onclick="' + app + '.vnLogRefresh && ' + app + '.vnLogRefresh()">'
+              +     '<div class="wx-cell-icon"><i class="fa-solid fa-comments"></i></div>'
+              +     '<div class="wx-cell-text">跑團手機記錄</div>'
+              +     '<div class="wx-cell-arrow"><i class="fa-solid fa-rotate-right"></i></div>'
+              +   '</div>'
+              + '</div>'
+              + '<div class="wx-vnlog" id="wx-vnlog-mount"><div class="wx-vnlog-empty">載入跑團手機記錄…</div></div>';
+        },
+        // 房間列表（第一層）
+        vnLogListHTML: function(rooms) {
+            const app = '(window.parent.wxApp || window.wxApp)';
+            const names = Object.keys(rooms || {});
+            if (!names.length) return '<div class="wx-vnlog-empty">這個跑團還沒有手機對話記錄。<br>（劇情裡出現 &lt;chat chatroom=&quot;…&quot;&gt; 的對話才會收進來）</div>';
+            const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; };
+            return names.map(function(n) {
+                const r = rooms[n];
+                const last = (r.msgs && r.msgs.length) ? r.msgs[r.msgs.length - 1] : null;
+                let preview = last ? (last.type === 'system' ? last.content : ((last.sender ? last.sender + '：' : '') + last.content)) : '';
+                preview = preview.replace(/\[[^\]]*\]/g, '[訊息]');
+                return ''
+                  + '<div class="wx-vnlog-room" onclick="' + app + '.openVnLogRoom(\'' + encodeURIComponent(n) + '\')">'
+                  +   '<div class="wx-vnlog-room-ic">' + esc((n || '?').charAt(0)) + '</div>'
+                  +   '<div class="wx-vnlog-room-body"><div class="wx-vnlog-room-name">' + esc(n) + '</div><div class="wx-vnlog-room-prev">' + esc(preview).slice(0, 40) + '</div></div>'
+                  +   '<div class="wx-vnlog-room-cnt">' + (r.msgs ? r.msgs.length : 0) + '</div>'
+                  + '</div>';
+            }).join('');
+        },
+        // 房間泡泡（第二層）：重用 renderBubble
+        vnLogRoomHTML: function(room, isDark) {
+            const app = '(window.parent.wxApp || window.wxApp)';
+            const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; };
+            const chatObj = { name: room.name, id: room.name, isGroup: !!(room.members && room.members.length > 2), members: room.members || [] };
+            const self = this;
+            const bubbles = (room.msgs || []).map(function(m, i) {
+                return self.renderBubble({ content: m.content, sender: m.sender, senderName: m.sender, isMe: m.isMe, type: m.type === 'system' ? 'system' : 'msg' }, chatObj, false, i);
+            }).join('');
+            return ''
+              + '<div class="wx-vnlog-bar"><button class="wx-vnlog-back" onclick="' + app + '.vnLogBack()"><i class="fa-solid fa-chevron-left"></i> 返回</button><span class="wx-vnlog-bar-t">' + esc(room.name) + '</span></div>'
+              + '<div class="wx-room-scroll wx-vnlog-scroll"><div id="wxVnLogContent">' + (bubbles || '<div class="wx-vnlog-empty">（無訊息）</div>') + '</div></div>';
+        },
+
         // 假收款碼：程式畫「QR 樣式」SVG（三角定位框 + 依 seed 隨機黑塊），跑團用、不可掃也不用生圖
         _fakeQrSvg: function(seed) {
             let h = 0; const s = String(seed || 'qr'); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
@@ -702,6 +748,7 @@
             let listContent = '';
             if (activeTab === 'contacts') listContent = this.getContactListHTML(chats);
             else if (activeTab === 'me') listContent = this.getMePageHTML(isDark);
+            else if (activeTab === 'discover') listContent = this.getDiscoverHTML();
             else listContent = this.getListHTML(chats, activeId);
             
             let roomContent = '';
