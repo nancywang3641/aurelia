@@ -809,6 +809,9 @@
                     console.log('[lobby_summary_index]', { storyTitle, bgCacheId, chars: characters.length });
                 }
             } catch (e) { console.warn('[os_story_tools] 寫 lobby_summary_index 失敗（不影響大總結）:', e); }
+
+            // 大總結存檔後 → 自動補齊缺的頭像(中文角色表→副模型轉英文tag→生圖、每次最多N張)。fire-and-forget、不擋存檔；sp_autoavatar_on='0' 可關。
+            try { if (localStorage.getItem('sp_autoavatar_on') !== '0') API.fillMissingAvatars(finalContent); } catch (e) {}
             } // end _doSave
 
             // 生成完先跳「預覽窗」給用戶檢查（可直接編輯）；滿意按儲存才寫世界書，不滿意可重新生成
@@ -1160,6 +1163,114 @@
         } catch (e) {}
         if (tries > 0) setTimeout(function () { _initAutoSum(tries - 1); }, 1500);
     })(8);
+
+    // ====================================================================
+    // E. 大總結 → 補齊缺的頭像（中文角色表 → 副模型轉英文 Danbooru tag → 生圖）
+    //    大總結存檔後自動觸發；只補「有正式人名、avatar_cache 還沒」的；每次最多 N 張(預設5、成本控管)。
+    //    語言橋：角色表是中文、生圖只吃英文 booru tag → 中間用副模型轉成 [Avatar|名|英文tags] 再餵現有生圖管線。
+    // ====================================================================
+    let _fillingAvatars = false;
+    API.fillMissingAvatars = async function (summaryContent) {
+        try {
+            if (_fillingAvatars) return;
+            if (win.OS_API?.isStandalone?.()) return;                 // 酒館 only
+            const VC = win.VN_Cache || window.VN_Cache, VCore = win.VN_Core || window.VN_Core;
+            if (!VC?.get || !VCore?._genAvatarToCache) return;        // 沒生圖管線就算了
+            const osApi = window.parent.OS_API, osSet = window.parent.OS_SETTINGS;
+            if (!osApi?.chat || !osSet?.getConfig) return;
+
+            let content = summaryContent;
+            if (!content) { try { const rec = await _loadTavernSummary(getChatIdentifier()); content = rec?.content || ''; } catch (e) {} }
+            if (!content) return;
+
+            // 解析【角色表】→ [{name,row}]（跟 _doSave 寫大廳索引同邏輯）
+            const rows = []; const seen = new Set(); let header = '';
+            const sec = content.match(/【角色表】[\s\S]*?(?=\n【|$)/);
+            if (sec) {
+                for (const line of sec[0].split('\n')) {
+                    const t = line.trim();
+                    if (!t.includes('|') || /^[|\s:\-]+$/.test(t)) continue;
+                    const cols = t.split('|').map(s => s.trim()).filter(Boolean);
+                    if (!cols.length) continue;
+                    const name = cols[0];
+                    if (!name || name.length > 40) continue;
+                    if (/^姓名|^name$/i.test(name)) { if (!header) header = t; continue; }
+                    if (/^[-:\s]+$/.test(name) || seen.has(name)) continue;
+                    seen.add(name); rows.push({ name, row: t });
+                }
+            }
+            if (!rows.length) return;
+
+            // 篩出還沒頭像的
+            const missing = [];
+            for (const r of rows) {
+                let has = false; try { has = !!(await VC.get('avatar_cache', r.name)); } catch (e) {}
+                if (!has) missing.push(r);
+            }
+            if (!missing.length) return;
+
+            // 成本控管：每次最多 N 張
+            let maxN = parseInt(localStorage.getItem('sp_autoavatar_max'));
+            if (isNaN(maxN) || maxN < 1) maxN = 5;
+            const batch = missing.slice(0, maxN);
+
+            _fillingAvatars = true;
+            console.log(`[補頭像] 缺 ${missing.length} 張，這次補 ${batch.length} 張：${batch.map(r => r.name).join('、')}`);
+
+            // 副模型：中文角色表 → 英文 [Avatar|名|tags]（翻譯+轉 booru 一步到位）
+            const tableText = (header ? header + '\n' : '') + batch.map(r => r.row).join('\n');
+            const sys = '你是頭像提示詞轉換助手。只輸出要求的 [Avatar|...] 行，不要任何解釋、前言或多餘文字。';
+            const usr = '下面是一份中文角色表，請為其中「有正式人名」的角色，各輸出一行頭像生成提示詞，格式嚴格為：\n'
+                + '[Avatar|角色名|英文Danbooru標籤]\n\n'
+                + '規則：\n'
+                + '- 角色名用我下面給的「完全相同」的名字、不要改寫或翻譯。\n'
+                + '- 標籤用英文、小寫、逗號分隔、單行；描述「單人肖像」：髮色、髮型/長度、瞳色、年齡層(如 mature male / young woman)、體型、明顯特徵(疤/角/種族特徵等)、代表性服裝。不要寫背景、不要寫動作。\n'
+                + '- 只憑表裡的中文外觀(髮色/髮型/眼色等)與身份合理轉成標籤；表裡沒寫的就依角色身份合理補、別留空。\n'
+                + '- 純代號／未具名／路人角色(沒有正式人名的)請「不要」輸出那一行。\n'
+                + '- 除了 [Avatar|...] 行以外，什麼都別輸出。\n\n'
+                + '角色表：\n' + tableText;
+
+            let out = '';
+            try {
+                out = await new Promise((res, rej) => {
+                    let g = '';
+                    osApi.chat([{ role: 'system', content: sys }, { role: 'user', content: usr }], osSet.getConfig(),
+                        (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { disableTyping: true });
+                });
+            } catch (e) { console.warn('[補頭像] 副模型轉 tag 失敗:', e?.message || e); _fillingAvatars = false; return; }
+
+            // 解析 [Avatar|名|tags]、只生這次 batch 內的
+            const re = /\[Avatar\|([^|\]]+)\|([^\]]+)\]/g;
+            const jobs = []; let m;
+            while ((m = re.exec(out))) {
+                const nm = (m[1] || '').trim(), tags = (m[2] || '').trim();
+                if (!nm || !tags || !batch.some(r => r.name === nm)) continue;
+                jobs.push({ nm, tags });
+            }
+            if (!jobs.length) { console.log('[補頭像] 副模型沒回可用的 tag（可能批內全是代號角色）'); _fillingAvatars = false; return; }
+
+            let done = 0;
+            for (const j of jobs) {
+                try {
+                    let has = false; try { has = !!(await VC.get('avatar_cache', j.nm)); } catch (e) {}
+                    if (has) continue;                                  // 生之前再確認一次
+                    if (!VCore.avatars) VCore.avatars = {};
+                    if (!VCore.avatars[j.nm]) VCore.avatars[j.nm] = j.tags;   // 沒現成宣告才用我們轉的英文 tag
+                    const r = await VCore._genAvatarToCache(j.nm);      // 走現有管線：底詞自動加、存 avatar_cache、有去重+GPU佇列
+                    if (r) done++;                                      // 成功才計(失敗回 '')
+                } catch (e) { console.warn('[補頭像] 生成失敗:', j.nm, e?.message || e); }
+            }
+            console.log(`[補頭像] ✅ 完成 ${done} 張`);
+            try {
+                const t = win.toastr;
+                if (t && done) t.success(`已自動補 ${done} 張頭像` + (missing.length > done ? `（還缺 ${missing.length - done} 個、下次大總結再補）` : ''), '🪪 補頭像', { timeOut: 3000 });
+            } catch (e) {}
+        } catch (e) {
+            console.warn('[補頭像] 失敗:', e?.message || e);
+        } finally {
+            _fillingAvatars = false;
+        }
+    };
 
     window.OS_STORY_TOOLS = API;
     console.log('✅ 故事管理工具 (OS_STORY_TOOLS) 模組就緒');
