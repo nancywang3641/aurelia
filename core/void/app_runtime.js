@@ -29,8 +29,9 @@
             // ── 返回主畫面 ──
             +   'window.goBack = function(){ try { var V = (P && P.VoidPhoneShell) || window.VoidPhoneShell; if (V && V.home) V.home(); } catch(e){} };'
             // ── 持久化(存主頁 localStorage，用 app 專屬命名空間，跨關閉/重開保留) ──
-            +   'window.saveData = function(k, v){ try { P.localStorage.setItem("aurelia_appdata_"+window.__APP_ID__+"_"+k, JSON.stringify(v)); } catch(e){} };'
-            +   'window.loadData = function(k){ try { var s = P.localStorage.getItem("aurelia_appdata_"+window.__APP_ID__+"_"+k); return s==null?null:JSON.parse(s); } catch(e){ return null; } };'
+            +   'window.getChatId = function(){ try { var ST=P.SillyTavern; if(ST&&typeof ST.getCurrentChatId==="function"){ var id=ST.getCurrentChatId(); if(id!=null&&id!=="") return String(id); } var c=ST&&ST.getContext&&ST.getContext(); if(c&&c.chatId!=null&&c.chatId!=="") return String(c.chatId); if(ST&&ST.chatId!=null) return String(ST.chatId); }catch(e){} return "_nochat"; };'
+            +   'window.saveData = function(k, v, scope){ try { var pre="aurelia_appdata_"+window.__APP_ID__+"_"+(scope==="chat"?("chat_"+window.getChatId()+"_"):""); P.localStorage.setItem(pre+k, JSON.stringify(v)); } catch(e){} };'
+            +   'window.loadData = function(k, scope){ try { var pre="aurelia_appdata_"+window.__APP_ID__+"_"+(scope==="chat"?("chat_"+window.getChatId()+"_"):""); var s=P.localStorage.getItem(pre+k); return s==null?null:JSON.parse(s); } catch(e){ return null; } };'
             // ── 通用記憶：角色對話型 app 記一筆到統一桶(app_memory)，跟預設應用一起被注入酒館(該 app 開關開時) ──
             +   'window.remember = async function(charName, speaker, text){ try { if(window.__IS_PREVIEW) return; if(!charName||!text) return; var DB = window.OS_DB || (P && P.OS_DB); if(!DB||!DB.saveAppMemory) return; await DB.saveAppMemory(window.__APP_ID__, String(charName), { speaker:String(speaker||""), text:String(text), time: Date.now() }); } catch(e){} };'
             // ── 生圖(預覽走佔位省額度) ──
