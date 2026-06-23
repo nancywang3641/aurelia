@@ -241,6 +241,10 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.callAI(systemPrompt) → Promise，呼叫 AI 生文字（自動帶角色卡／最近劇情／世界書當背景，不必重述）。await 包 try/catch、生成中顯示 loading。
 - st.getCurrentChars() → Promise，回傳當前聊天室出現過的角色 [{name,count}]（依出現次數排序）。做「角色選單／搜尋」用——例如日記/檔案類面板讓用戶從清單挑角色，免手打名字。空陣列＝還沒角色。
 - st.getStory(n) → 回最近 n 條劇情 [{name, text}]（預設 30，已洗成乾淨文字）。**共用面板「讀當前劇情顯示」就用這個**（不經 AI、直接拿正文）。純展示卡別用它（那走 lines/st.parse）。
+- st.toast(訊息[, {type:'error' 或 color:'#xxx'}]) → 跳出一下就消失的提示（已儲存／失敗／完成）。**別自己做 toast**，用這個。
+- st.confirm(訊息[, {danger:true, okText, cancelText}]) → 回 Promise<布林>，統一樣式的確認框。刪除等危險動作寫 if(await st.confirm('確定刪除？',{danger:true})){…}；別用 window.confirm。
+- st.loading(目標元素或CSS選擇器, true/false[, '生成中…']) → 在目標上蓋轉圈遮罩。呼叫 callAI／setImage 前 st.loading(el,true,'生成中…')、完了 st.loading(el,false)。
+- st.esc(文字) → 把文字轉成安全 HTML。**用 innerHTML 塞用戶或 AI 產的文字前先 st.esc()**，防內容夾壞版面或 XSS。
 - st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。純展示卡不需要持久化。
 
 ## 🖼️ 生圖紀律（重要，否則一堆圖排隊）
@@ -2731,6 +2735,55 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
             },
             getStory(n) { try { const R = window.VN_READER || (window.parent && window.parent.VN_READER); return (R && R.getStory) ? R.getStory(n) : []; } catch (e) { return []; } },
+            esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
+            toast(msg, opts) {
+                try {
+                    opts = opts || {};
+                    const d = document.createElement('div');
+                    const bg = opts.color || (opts.type === 'error' ? 'rgba(180,60,60,0.95)' : 'rgba(28,28,38,0.92)');
+                    d.textContent = String(msg == null ? '' : msg);
+                    d.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);max-width:80%;background:' + bg + ';color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;line-height:1.4;z-index:2147483647;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transition:opacity .2s;pointer-events:none;text-align:center;';
+                    document.body.appendChild(d);
+                    requestAnimationFrame(() => { d.style.opacity = '1'; });
+                    setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 250); }, opts.duration || 2000);
+                } catch (e) {}
+            },
+            confirm(msg, opts) {
+                return new Promise((res) => {
+                    try {
+                        opts = opts || {};
+                        const ov = document.createElement('div');
+                        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+                        const box = document.createElement('div');
+                        box.style.cssText = 'background:#fff;color:#222;border-radius:14px;padding:18px;max-width:300px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.3);font-size:14px;line-height:1.5;';
+                        const m = document.createElement('div'); m.textContent = String(msg == null ? '' : msg); m.style.cssText = 'margin-bottom:14px;white-space:pre-wrap;';
+                        const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+                        const no = document.createElement('button'); no.textContent = opts.cancelText || '取消'; no.style.cssText = 'padding:8px 14px;border:1px solid rgba(0,0,0,0.2);background:#fff;color:#333;border-radius:8px;font-size:13px;cursor:pointer;';
+                        const yes = document.createElement('button'); yes.textContent = opts.okText || '確定'; yes.style.cssText = 'padding:8px 14px;border:0;background:' + (opts.danger ? '#c0392b' : '#1A1C28') + ';color:#fff;border-radius:8px;font-size:13px;cursor:pointer;';
+                        no.onclick = () => { ov.remove(); res(false); };
+                        yes.onclick = () => { ov.remove(); res(true); };
+                        ov.onclick = (e) => { if (e.target === ov) { ov.remove(); res(false); } };
+                        row.appendChild(no); row.appendChild(yes); box.appendChild(m); box.appendChild(row); ov.appendChild(box); document.body.appendChild(ov);
+                    } catch (e) { res(false); }
+                });
+            },
+            loading(target, on, text) {
+                try {
+                    const host = (typeof target === 'string') ? document.querySelector(target) : (target || document.body);
+                    if (!host) return;
+                    if (on === false) { if (host.__stLoad) { host.__stLoad.remove(); host.__stLoad = null; } return; }
+                    if (host.__stLoad) return;
+                    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+                    const ov = document.createElement('div');
+                    ov.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(0,0,0,0.25);z-index:50;';
+                    const sp = document.createElement('div');
+                    sp.style.cssText = 'width:28px;height:28px;border:3px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:__stspin .8s linear infinite;';
+                    ov.appendChild(sp);
+                    if (text) { const t = document.createElement('div'); t.textContent = text; t.style.cssText = 'color:#fff;font-size:12px;'; ov.appendChild(t); }
+                    if (!document.getElementById('__stspin_kf')) { const k = document.createElement('style'); k.id = '__stspin_kf'; k.textContent = '@keyframes __stspin{to{transform:rotate(360deg)}}'; document.head.appendChild(k); }
+                    host.__stLoad = ov; host.appendChild(ov);
+                } catch (e) {}
+            },
             // 預覽用 localStorage stub（裝成 app 後由 app_runtime 的 window.saveData 接管真持久化）；scope 用 tplId 隔離
             saveData(k, v) { try { localStorage.setItem('aurelia_studio_preview_' + k, JSON.stringify(v)); } catch (e) {} },
             loadData(k) { try { const s = localStorage.getItem('aurelia_studio_preview_' + k); return s == null ? null : JSON.parse(s); } catch (e) { return null; } }
@@ -2757,6 +2810,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
             +   'getCurrentChars:async function(){try{return window.getCurrentChars?await window.getCurrentChars():[];}catch(e){return [];}},'
             +   'getStory:function(n){try{return window.getStory?window.getStory(n):[];}catch(e){return [];}},'
+            +   'esc:function(s){try{return window.stEsc?window.stEsc(s):String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}catch(e){return "";}},'
+            +   'toast:function(m,o){try{if(window.stToast)window.stToast(m,o);}catch(e){}},'
+            +   'confirm:function(m,o){try{return window.stConfirm?window.stConfirm(m,o):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'loading:function(t,on,x){try{if(window.stLoading)window.stLoading(t,on,x);}catch(e){}},'
             +   'saveData:function(k,v){try{if(window.saveData)window.saveData(k,v);}catch(e){}},'
             +   'loadData:function(k){try{return window.loadData?window.loadData(k):null;}catch(e){return null;}},'
             + '};'
