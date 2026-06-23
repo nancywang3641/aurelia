@@ -216,7 +216,7 @@
                         <div class="ws-label">群頭像</div>
                         <div class="ws-right">
                             <div class="ws-avatar-circle" id="preview-avatar">
-                                <div class="ws-avatar-icon">📷</div>
+                                <div class="ws-avatar-icon"><i class="fa-solid fa-camera"></i></div>
                             </div>
                             <input type="file" id="file-avatar" class="ws-file-input-hidden" accept="image/*">
                         </div>
@@ -243,7 +243,7 @@
                         <div class="ws-label">對方頭像</div>
                         <div class="ws-right">
                             <div class="ws-avatar-circle" id="preview-avatar">
-                                <div class="ws-avatar-icon">📷</div>
+                                <div class="ws-avatar-icon"><i class="fa-solid fa-camera"></i></div>
                             </div>
                             <input type="file" id="file-avatar" class="ws-file-input-hidden" accept="image/*">
                         </div>
@@ -308,7 +308,7 @@
                         <div class="ws-label">我的頭像</div>
                         <div class="ws-right">
                             <div class="ws-avatar-circle" id="preview-my-avatar">
-                                <div class="ws-avatar-icon">📷</div>
+                                <div class="ws-avatar-icon"><i class="fa-solid fa-camera"></i></div>
                             </div>
                             <input type="file" id="file-my-avatar" class="ws-file-input-hidden" accept="image/*">
                         </div>

@@ -380,7 +380,7 @@
         showMenu: function(btn) {
             const existing = targetDoc.getElementById('wx-plus-menu'); if (existing) { existing.remove(); return; }
             const menu = targetDoc.createElement('div'); menu.id = 'wx-plus-menu'; menu.className = 'wx-plus-menu-pop';
-            menu.innerHTML = `<div class="wx-menu-item" id="wx-menu-create-group"><span class="icon">💬</span> 發起群聊</div><div class="wx-menu-item" id="wx-menu-add"><span class="icon">➕</span> 添加朋友</div><div class="wx-menu-item" id="wx-menu-search"><span class="icon">🔍</span> AI 搜尋</div>`;
+            menu.innerHTML = `<div class="wx-menu-item" id="wx-menu-create-group"><span class="icon"><i class="fa-solid fa-comments"></i></span> 發起群聊</div><div class="wx-menu-item" id="wx-menu-add"><span class="icon"><i class="fa-solid fa-user-plus"></i></span> 添加朋友</div><div class="wx-menu-item" id="wx-menu-search"><span class="icon"><i class="fa-solid fa-magnifying-glass"></i></span> AI 搜尋</div>`;
             const rect = btn.getBoundingClientRect(); menu.style.top = (rect.bottom + 5) + 'px'; menu.style.right = (win.innerWidth - rect.right) + 'px'; targetDoc.body.appendChild(menu);
             menu.querySelector('#wx-menu-create-group').onclick = () => this.openCreateGroupWindow();
             menu.querySelector('#wx-menu-add').onclick = () => this.openAddWindow();
@@ -407,12 +407,12 @@
             const html = `
 <div class="wx-modal-title">手動添加好友</div>
 <div style="display:flex;flex-direction:column;gap:10px;align-items:center;width:100%;">
-  <label for="wx-upload-avatar" class="wx-avatar-upload" id="wx-avatar-preview" title="點擊上傳頭像"><span>📷</span></label>
+  <label for="wx-upload-avatar" class="wx-avatar-upload" id="wx-avatar-preview" title="點擊上傳頭像"><span><i class="fa-solid fa-camera"></i></span></label>
   <input type="file" id="wx-upload-avatar" accept="image/*" style="display:none;">
   <input type="text" id="wx-add-name" class="wx-modal-input" placeholder="輸入名稱 (例: 林黛玉)">
   <input type="text" id="wx-add-desc" class="wx-modal-input" placeholder="個性簽名 (選填)">
   <textarea id="wx-add-persona" class="wx-modal-input" placeholder="角色設定 (選填，AI 會帶入 System Prompt)" style="resize:vertical;min-height:80px;width:100%;font-family:inherit;font-size:13px;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;box-sizing:border-box;"></textarea>
-  <button id="wx-load-worldbook-btn" style="width:100%;padding:8px;background:#f0f9f0;border:1px solid #07c160;border-radius:6px;color:#07c160;font-size:13px;cursor:pointer;font-weight:600;">📖 從世界書載入角色設定</button>
+  <button id="wx-load-worldbook-btn" style="width:100%;padding:8px;background:#f0f9f0;border:1px solid #07c160;border-radius:6px;color:#07c160;font-size:13px;cursor:pointer;font-weight:600;"><i class="fa-solid fa-book"></i> 從世界書載入角色設定</button>
   <div id="wx-worldbook-list" style="display:none;width:100%;max-height:180px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:6px;background:#fff;"></div>
 </div>
 <div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-cancel">取消</button><button class="wx-btn wx-btn-confirm" id="wx-btn-add-confirm">添加</button></div>`;
