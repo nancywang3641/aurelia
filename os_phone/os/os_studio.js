@@ -1702,13 +1702,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const sheet = ov.querySelector('.swb-sheet');
         actions.forEach(a => {
             const b = document.createElement('button');
-            b.className = 'swb-sheet-act' + (a.danger ? ' danger' : '');
+            b.className = 'swb-sheet-btn' + (a.danger ? ' danger' : '');
             b.innerHTML = a.label;
             b.onclick = () => { ov.remove(); a.onClick && a.onClick(); };
             sheet.appendChild(b);
         });
         const cancel = document.createElement('button');
-        cancel.className = 'swb-sheet-act cancel'; cancel.textContent = '取消';
+        cancel.className = 'swb-sheet-btn cancel'; cancel.textContent = '取消';
         cancel.onclick = () => ov.remove();
         sheet.appendChild(cancel);
         ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
