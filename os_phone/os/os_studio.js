@@ -74,6 +74,9 @@
                             <button class="studio-type" data-type="共用" title="既展示資料、又能生成">共用</button>
                         </div>
 
+                        <!-- ⚡ 組件快捷：常用 UI 話術 chip，點一下塞進輸入框可改再送（只 vn_ui 顯示）-->
+                        <div class="studio-chips-row" id="studio-chips-row"></div>
+
                         <!-- 待發送的圖片縮圖列（有圖才顯示） -->
                         <div class="studio-pending-images" id="studio-pending-images"></div>
 
@@ -156,6 +159,17 @@
                     <button class="avs-btn" id="studio-import-load" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">載入預覽</button>
                     <button class="avs-btn" id="studio-import-cancel" style="flex:0 0 100px; background:rgba(26,28,40,0.05); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">取消</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- ⚡ 組件快捷管理 modal（新增/刪除自訂快捷話術）-->
+        <div class="studio-chip-modal" id="studio-chip-modal">
+            <div class="studio-chip-box">
+                <div class="studio-chip-mhead"><span><i class="fa-solid fa-bolt"></i> 快捷話術</span><button class="studio-chip-x" id="studio-chip-close"><i class="fa-solid fa-xmark"></i></button></div>
+                <input class="studio-chip-input" id="studio-chip-label" placeholder="標籤（例：兩層結構）" maxlength="12">
+                <textarea class="studio-chip-ta" id="studio-chip-text" placeholder="這個快捷要送給 AI 的話術…"></textarea>
+                <button class="studio-chip-savebtn" id="studio-chip-save"><i class="fa-solid fa-plus"></i> 新增這個快捷</button>
+                <div class="studio-chip-mlist" id="studio-chip-list"></div>
             </div>
         </div>
     `;
@@ -462,6 +476,64 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         const ld = document.getElementById('studio-import-load'); if (ld) ld.onclick = _doImportLoad;
     }
 
+    // ⚡ 組件快捷：常用 UI 話術 chip，點一下塞進輸入框（可改再送）。內建幾個 + 使用者自存(localStorage)
+    const STUDIO_CHIP_BUILTIN = [
+        { label: '兩層結構', text: '做成兩層結構：第一層列表瀏覽，點項目進第二層看詳情，有返回鈕。' },
+        { label: 'TAB 分頁', text: '頂部加一排 TAB 分頁，點不同 TAB 切換下面的內容區。' },
+        { label: '固定標題', text: '頂部標題列固定不動，只有下面的內容區可以捲動。' },
+        { label: '卡片列表', text: '內容用一張張卡片直列呈現，每張資訊清楚、可點。' },
+        { label: '深色主題', text: '用深色背景配色、字體清楚，沉穩不刺眼。' }
+    ];
+    function _studioLoadChips() { try { return JSON.parse(localStorage.getItem('studio_quick_chips') || '[]') || []; } catch (e) { return []; } }
+    function _studioSaveChips(list) { try { localStorage.setItem('studio_quick_chips', JSON.stringify(list)); } catch (e) {} }
+    function _studioInsertChip(text) {
+        const ta = document.getElementById('studio-input');
+        if (!ta) return;
+        const cur = (ta.value || '').replace(/\s+$/, '');
+        ta.value = cur ? (cur + '\n' + text) : text;
+        try { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px'; } catch (e) {}
+        ta.focus();
+    }
+    function renderStudioChips() {
+        const row = document.getElementById('studio-chips-row');
+        if (!row) return;
+        const all = STUDIO_CHIP_BUILTIN.concat(_studioLoadChips());
+        row.innerHTML = all.map((c, i) => `<button class="studio-chip" data-ci="${i}">${_sgcEsc(c.label)}</button>`).join('')
+            + '<button class="studio-chip studio-chip-manage" id="studio-chip-manage"><i class="fa-solid fa-sliders"></i> 管理</button>';
+        row.querySelectorAll('[data-ci]').forEach(b => b.onclick = () => { const c = all[parseInt(b.getAttribute('data-ci'), 10)]; if (c) _studioInsertChip(c.text); });
+        const mg = row.querySelector('#studio-chip-manage');
+        if (mg) mg.onclick = _studioOpenChipModal;
+    }
+    function _studioOpenChipModal() {
+        const m = document.getElementById('studio-chip-modal'); if (!m) return;
+        m.classList.add('show');
+        const lab = document.getElementById('studio-chip-label'); if (lab) lab.value = '';
+        const txt = document.getElementById('studio-chip-text'); if (txt) txt.value = '';
+        _studioRenderChipList();
+    }
+    function _studioRenderChipList() {
+        const list = document.getElementById('studio-chip-list'); if (!list) return;
+        const user = _studioLoadChips();
+        if (!user.length) { list.innerHTML = '<div class="studio-chip-empty">還沒有自訂快捷。上面填一個存起來，就會出現在輸入框上方。</div>'; return; }
+        list.innerHTML = user.map((c, i) => `<div class="studio-chip-litem">
+            <span class="studio-chip-litem-label">${_sgcEsc(c.label)}</span>
+            <span class="studio-chip-litem-text">${_sgcEsc(c.text)}</span>
+            <button class="studio-chip-del" data-di="${i}" aria-label="刪除"><i class="fa-solid fa-trash"></i></button>
+        </div>`).join('');
+        list.querySelectorAll('[data-di]').forEach(b => b.onclick = () => {
+            const u = _studioLoadChips(); u.splice(parseInt(b.getAttribute('data-di'), 10), 1); _studioSaveChips(u);
+            _studioRenderChipList(); renderStudioChips();
+        });
+    }
+    function _studioSaveNewChip() {
+        const labEl = document.getElementById('studio-chip-label'), txtEl = document.getElementById('studio-chip-text');
+        const lab = ((labEl && labEl.value) || '').trim(), txt = ((txtEl && txtEl.value) || '').trim();
+        if (!lab || !txt) { alert('標籤跟話術都要填'); return; }
+        const u = _studioLoadChips(); u.push({ label: lab.slice(0, 12), text: txt }); _studioSaveChips(u);
+        if (labEl) labEl.value = ''; if (txtEl) txtEl.value = '';
+        _studioRenderChipList(); renderStudioChips();
+    }
+
     function bindEvents() {
         document.getElementById('studio-back-btn').onclick = () => {
             // 讀 DOM 實際狀態當真相（別靠 _studioTop 變數：載入器可能跑兩份模組→變數會跟畫面不同步）
@@ -476,6 +548,10 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         });
         _setupRawEditModalEvents();
         _setupImportEvents();
+        renderStudioChips();
+        { const cc = document.getElementById('studio-chip-close'); if (cc) cc.onclick = () => { const m = document.getElementById('studio-chip-modal'); if (m) m.classList.remove('show'); }; }
+        { const cs = document.getElementById('studio-chip-save'); if (cs) cs.onclick = _studioSaveNewChip; }
+        { const cm = document.getElementById('studio-chip-modal'); if (cm) cm.onclick = (e) => { if (e.target === cm) cm.classList.remove('show'); }; }
 
         const previewFab     = document.getElementById('studio-preview-fab');
         const drawerBackdrop = document.getElementById('studio-drawer-backdrop');
@@ -830,6 +906,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         if (sourceTab)  sourceTab.style.display  = modeId === 'vn_ui' ? '' : 'none';
         const typeRow = document.getElementById('studio-type-row');
         if (typeRow) typeRow.style.display = modeId === 'vn_ui' ? 'flex' : 'none';
+        const chipsRow = document.getElementById('studio-chips-row');
+        if (chipsRow) chipsRow.style.display = modeId === 'vn_ui' ? 'flex' : 'none';
 
         // 切 mode 一律重置到 preview tab
         document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
