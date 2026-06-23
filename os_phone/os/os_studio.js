@@ -2351,6 +2351,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     },
                     (finalText) => {
                         const lockedChatId = getChatSessionId();
+                        const _bad = _studioBadReply(finalText);
+                        if (_bad.bad) {
+                            // API 表面成功、實則錯誤/空/截斷 → 轉重試泡泡，別把垃圾 push 進歷史（保住重試能找到上次 user 訊息）
+                            _renderErrorBubble(aiBubble, { message: _bad.reason }, () => _retryLastSend(aiBubble));
+                            resolve();
+                            return;
+                        }
                         aiBubble.remove();
                         chatMessages.push({ role: 'assistant', content: finalText });
                         _studioSave(lockedChatId);
@@ -2388,6 +2395,19 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <button class="studio-retry-btn">🔄 重試</button>
         `;
         bubble.querySelector('.studio-retry-btn').onclick = onRetry;
+    }
+
+    // 判斷 API「表面成功、實則錯誤/空/截斷」的回應：OS_API 只在「完全空」才 throw，
+    // 上游回非空錯誤頁(如 504 gateway / Custom OpenAI endpoint failed with status 5xx)會被當正常文字 → 這裡攔下來給重試
+    function _studioBadReply(t) {
+        const s = (t == null) ? '' : String(t);
+        if (!s.trim()) return { bad: true, reason: '回應是空的（可能逾時或被中斷）' };
+        const head = s.slice(0, 400);
+        if (/^\s*\[\s*API\s*錯誤\s*\]/.test(s)) return { bad: true, reason: s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) };
+        if (/(endpoint|request)\s+failed\s+with\s+status\s+\d{3}/i.test(head)) return { bad: true, reason: head.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) };
+        if (s.length < 1500 && /gateway timeout|bad gateway|service unavailable|the request could not be satisfied|we can'?t connect to the server/i.test(s)) return { bad: true, reason: 'API 回了錯誤頁（如 504 逾時），不是正常內容' };
+        if (/<json>/i.test(s) && !/<\/json>/i.test(s)) return { bad: true, reason: '回應好像被截斷了（內容沒收尾）' };
+        return { bad: false };
     }
 
     // 重試 handleSend：抽出最後一條 user 訊息、清掉錯誤泡泡、重新呼叫
@@ -4011,6 +4031,13 @@ ${d.usageDesc || ''}
                     },
                     (finalText) => {
                         const lockedChatId = getChatSessionId();
+                        const _bad = _studioBadReply(finalText);
+                        if (_bad.bad) {
+                            // 編輯路徑同樣攔截錯誤頁/空/截斷 → 重試（面板沒被動到、snapshot 已拍可還原）
+                            _renderErrorBubble(aiBubble, { message: _bad.reason }, () => _retryLastDiffRefine(aiBubble));
+                            resolve();
+                            return;
+                        }
                         aiBubble.remove();
 
                         // 🆘 大改：AI 直接在這同一通給整包新面板 <json>（取代舊的「喊太大→叫你按重新設計重發」）
