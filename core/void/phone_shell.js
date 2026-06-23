@@ -184,6 +184,8 @@
     // ── 已安裝 app（app 商店裝的功能型 HTML app）──
     const INSTALLED_KEY = 'aurelia_phone_apps';   // 與 app_store.js 同 key：[{id,name,emoji,iconUrl}]
     function _loadInstalled() { try { return JSON.parse(win.localStorage.getItem(INSTALLED_KEY)) || []; } catch (e) { return []; } }
+    function _saveInstalled(list) { try { win.localStorage.setItem(INSTALLED_KEY, JSON.stringify(list || [])); } catch (e) {} }
+    function _cacheInstalled(meta) { try { var l = _loadInstalled().filter(function (m) { return m && m.id !== meta.id; }); l.push({ id: meta.id, name: meta.name || 'App', emoji: meta.emoji || '📦', iconUrl: meta.iconUrl || '' }); _saveInstalled(l); } catch (e) {} }
 
     // 使用者 app 啟動：點開才從 OS_DB 撈 HTML，丟給 AppRuntime 跑成 iframe
     function _userAppGo(id) {
@@ -205,9 +207,27 @@
     }
     // 首次建殼/開機：從 localStorage 把已安裝 app 補回 APPS（去重）
     function _restoreInstalledApps() {
+        // ① localStorage 快取（快、可能空）
         _loadInstalled().forEach(function (meta) {
             if (meta && meta.id && !APPS.find(function (a) { return a.id === meta.id; })) APPS.push(_makeUserApp(meta));
         });
+        // ② 真來源 OS_DB（跟「我的應用」同源）：補回所有已建手機 app。
+        //    修「重開後桌面圖標消失」根因——INSTALLED_KEY 之前從沒被 setItem 過、localStorage 永遠空，
+        //    桌面圖標只靠 addApp 的 in-memory push（重開即丟）。改從 OS_DB 補回並回填快取。
+        try {
+            var dbp = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? win.OS_DB.getAllPhoneApps() : null;
+            if (dbp && dbp.then) {
+                dbp.then(function (apps) {
+                    var added = false;
+                    (apps || []).forEach(function (rec) {
+                        if (rec && rec.id && !APPS.find(function (a) { return a.id === rec.id; })) {
+                            APPS.push(_makeUserApp(rec)); _cacheInstalled(rec); added = true;
+                        }
+                    });
+                    if (added && _el) _renderGrid();
+                }).catch(function () {});
+            }
+        } catch (e) {}
     }
 
     // ── 寫作工具（從舊「寫作頁」搬來，直接在手機殼螢幕內開）──────────────
@@ -280,11 +300,13 @@
     function addApp(meta) {
         if (!meta || !meta.id) return;
         if (!APPS.find(function (a) { return a.id === meta.id; })) APPS.push(_makeUserApp(meta));
+        _cacheInstalled(meta);   // 持久化 meta（之前漏寫→重開桌面圖標消失）
         _renderGrid();
     }
     function removeApp(id) {
         const i = APPS.findIndex(function (a) { return a.id === id; });
         if (i >= 0) APPS.splice(i, 1);
+        try { _saveInstalled(_loadInstalled().filter(function (m) { return m && m.id !== id; })); } catch (e) {}
         _renderGrid();
     }
 
