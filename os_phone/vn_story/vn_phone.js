@@ -138,6 +138,7 @@
         _IMAGE_ALIAS: ['圖片','图片','圖像','图像','圖檔','图档','圖示','图示','插圖','插图','照片','畫面','画面','截圖','截图','圖','图','Image','Img','Photo','Pic','Picture','Screen','Snapshot','Screenshot','Screencap','Snap','Capture','Capt'],
         _VOICE_ALIAS: ['語音','语音','錄音','录音','Voice','Audio','Recording'],
         _STICKER_ALIAS: ['表情包','貼紙','贴纸','表情','Sticker','Emote'],
+        _LINK_ALIAS: ['鏈接','链接','連結','连结','鏈結','网址','網址','網頁','网页','Link','URL','Url'],
         _isAliasTag: function(content, aliases) {
             const m = content.match(/^\[([^\]\[:：]+)[：:]/);
             if (!m) return false;
@@ -173,7 +174,8 @@
                 const isStk  = this._isAliasTag(tag, this._STICKER_ALIAS);
                 const isMedia = isFile || isStk ||
                     this._isAliasTag(tag, this._IMAGE_ALIAS) ||
-                    this._isAliasTag(tag, this._VOICE_ALIAS);
+                    this._isAliasTag(tag, this._VOICE_ALIAS) ||
+                    this._isAliasTag(tag, this._LINK_ALIAS);
                 if (!isMedia) continue;   // 非媒體 tag（[文件:…]/[22:35]…）→ 不拆、留在文字裡
 
                 const before = content.slice(last, m.index).trim();
@@ -233,6 +235,7 @@
             const vidM  = content.match(/^\[(視頻|视频|Video)[：:]\s*(.*?)\]$/i);
             const locM  = content.match(/^\[(位置|Location|定位)[：:]\s*(.*?)\]$/i);
             const fileM = content.match(/^\[(文件|File)[：:]\s*(.*?)\]$/i);
+            const linkM = content.match(/^\[(鏈接|链接|連結|连结|鏈結|网址|網址|網頁|网页|Link|URL|Url)[：:]\s*([\s\S]*?)\]$/i);
 
             let inner = '';
             if (imgM) {
@@ -304,6 +307,14 @@
                 const fLabels = { ppt:'P', pptx:'P', doc:'W', docx:'W', xls:'X', xlsx:'X', pdf:'PDF', zip:'Z', rar:'Z', '7z':'Z' };
                 const fColor = fColors[fExt] || '#999'; const fLabel = fLabels[fExt] || fExt.slice(0,3).toUpperCase() || '?'; const fSize = (Math.random() * 4 + 0.5).toFixed(1) + ' MB';
                 inner = `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${fName}</div><div class="wx-file-size">${fSize}</div></div><div class="wx-file-icon" style="background:${fColor}">${fLabel}</div></div>`;
+            } else if (linkM) {
+                const lParts = (linkM[2] || '').split('|');
+                const lTitle = (lParts[0] || '網頁連結').trim();
+                const lUrl = lParts[1] ? lParts[1].trim() : '';
+                const safeTitle = lTitle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+                const isUrl = /^(https?:\/\/|www\.)/i.test(lUrl);
+                const click = isUrl ? ` onclick="window.open('${encodeURI(lUrl).replace(/'/g,'%27')}')"` : '';
+                inner = `<div class="wx-link-msg${isUrl ? ' clickable' : ''}"${click}><div class="wx-link-body"><div class="wx-link-title">${safeTitle}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
             } else {
                 inner = `<div class="chat-bubble">${content}</div>`;
             }
