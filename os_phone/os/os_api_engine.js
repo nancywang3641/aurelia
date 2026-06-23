@@ -50,8 +50,9 @@
     //   (副模型走 OS_API.chat、生圖走 image_manager，各自計數；大總結 generateRaw 也會觸發此事件→只計次、不重置輪)
     (function _hookUsageTurn() {
         if (!win.eventOn || !win.tavern_events || !win.tavern_events.GENERATION_STARTED) { setTimeout(_hookUsageTurn, 1000); return; }
-        win.eventOn(win.tavern_events.GENERATION_STARTED, function () {
+        win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) {
             try {
+                if (dryRun) return;   // 🚫 dryRun 空跑非真 API 呼叫 → 別計次(免 API 次數算錯)
                 if (win.__AURELIA_SUMMARIZING) { win.AURELIA_USAGE.bumpText(); return; }
                 win.AURELIA_USAGE.newTurn();
                 win.AURELIA_USAGE.bumpText();

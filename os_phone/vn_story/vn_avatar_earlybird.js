@@ -55,7 +55,8 @@
         const ev = win.tavern_events;
 
         // 每輪生成開始：解鎖（含 swipe / 重生）＋ 開始輪詢半成品文本
-        if (ev.GENERATION_STARTED) win.eventOn(ev.GENERATION_STARTED, function () {
+        if (ev.GENERATION_STARTED) win.eventOn(ev.GENERATION_STARTED, function (type, opts, dryRun) {
+            if (dryRun) return;   // 🚫 dryRun 試算空跑 → 別啟動早鳥生圖(免空跑燒 GPU/API)
             if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結的 generateRaw 也發此事件 → 別啟動頭像早鳥生圖
             _doneThisGen = false;
             _startPoll();

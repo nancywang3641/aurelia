@@ -1096,7 +1096,8 @@ ${numberedText}`;
 
         // 主模型開始生成 → inject current 給它看（state 摘要）+ inject AVS rules（行為規範）
         if (win.tavern_events.GENERATION_STARTED) {
-            win.eventOn(win.tavern_events.GENERATION_STARTED, () => {
+            win.eventOn(win.tavern_events.GENERATION_STARTED, (type, opts, dryRun) => {
+                if (dryRun) return;   // 🚫 dryRun=酒館試算prompt/數token的空跑、非真生成 → 別注入(once 會被空跑那趟吃掉、真生成反而沒有)
                 console.log('[State Runtime] 🔎 GENERATION_STARTED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷
                 if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結生成不是劇情輪 → 別注入 state/rules
                 // state 摘要受「即時抽取總開關」控制

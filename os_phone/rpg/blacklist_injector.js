@@ -86,7 +86,7 @@
             return;
         }
         if (win.tavern_events.GENERATION_STARTED) {
-            win.eventOn(win.tavern_events.GENERATION_STARTED, injectBlacklist);
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectBlacklist(); });   // dryRun 空跑不注入
         }
         if (win.tavern_events.CHAT_CHANGED) {
             win.eventOn(win.tavern_events.CHAT_CHANGED, () => {

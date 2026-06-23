@@ -328,7 +328,7 @@
 
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
-        if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, injectMemories);
+        if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMemories(); });   // dryRun 空跑不注入
         if (win.tavern_events.GENERATION_ENDED) win.eventOn(win.tavern_events.GENERATION_ENDED, ingestLatest);
         // 刪訊息 → 自動清掉那一則的記憶（記憶跟著現存劇情走，不用手動管）
         if (win.tavern_events.MESSAGE_DELETED) win.eventOn(win.tavern_events.MESSAGE_DELETED, (mesId) => {

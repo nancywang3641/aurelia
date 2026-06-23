@@ -1142,7 +1142,8 @@
     (function _initAutoSum(tries) {
         try {
             if (win.eventOn && win.tavern_events && win.tavern_events.GENERATION_ENDED) {
-                if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function () { _genInProgress = true; });
+                // 🔑 dryRun(酒館試算prompt/數token的空跑)只發 STARTED、不發 ENDED → 若也設 _genInProgress=true 就永遠復位不了、自動總結永遠被擋。故空跑直接略過。
+                if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; _genInProgress = true; });
                 win.eventOn(win.tavern_events.GENERATION_ENDED, function () {
                     _genInProgress = false;
                     try { setTimeout(function () { API.autoSummarizeCheck(); }, 4000); } catch (e) {}

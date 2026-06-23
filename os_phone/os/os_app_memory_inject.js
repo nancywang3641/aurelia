@@ -242,8 +242,8 @@
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) {
-            win.eventOn(win.tavern_events.GENERATION_STARTED, injectAppMemory);
-            win.eventOn(win.tavern_events.GENERATION_STARTED, injectVnTags);
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppMemory(); });   // dryRun 空跑不注入
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectVnTags(); });
         }
         if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; });
         console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件）');
