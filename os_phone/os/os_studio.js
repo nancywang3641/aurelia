@@ -203,7 +203,7 @@
   · 用 st.callAI（生文字）／st.setImage（生圖）做功能（按鈕一點即生）。
 - 共用（落點＝也裝成「手機 App」、固定手機尺寸）：
   · 版型同純應用（手機 App、填滿手機框、App 版型，非置中小卡）；同樣 min-height:100% + flex 撐滿整個手機框、內容區 flex:1 撐開，不准留白邊。
-  · 差別：它「也讀劇情資料顯示」（st.parse／lines）＋又能生成（st.callAI／st.setImage）。
+  · 差別：它「也讀『當前劇情』顯示」——一進面板就用 st.getStory() 拿最近劇情（回 [{name,text}] 陣列），把劇情內容呈現出來（例如最近事件 / 對話摘要 / 名單），不要等按鈕；＋又能 st.callAI／st.setImage 生成。**不需要 demoFormat**（那是純展示卡讀 lines 才用的，App 不靠它）。共用＝「讀現在劇情顯示 + 按鈕叫 AI 生成」兩件事都做。
 
 ## 🚫 禁止清單
 - 禁 position:fixed、position:absolute 配 top/left 自定位、100vw、100vh、在 body／html 設樣式（樣式只能寫在 .vn-dynamic-panel-xxx 前綴下）；禁寫死固定像素寬（用 width:100%／響應式）。（全屏與否依類型：劇情卡禁吃滿、手機 App 反而要填滿手機框，見【三種類型】）
@@ -239,6 +239,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.setImage(el, prompt, type, provider?) → 給 img 設圖（內建佔位／隔離／try-catch；type: 'char'／'item'／'pet'／'scene'）。第 4 參 provider 可選指定來源 'pollinations'／'novelai'／'tavern_sd'／'comfyui_direct'；用戶指定（「用 poll」「用 NAI」）就寫進去，否則不傳走全域設定。
 - st.callAI(systemPrompt) → Promise，呼叫 AI 生文字（自動帶角色卡／最近劇情／世界書當背景，不必重述）。await 包 try/catch、生成中顯示 loading。
 - st.getCurrentChars() → Promise，回傳當前聊天室出現過的角色 [{name,count}]（依出現次數排序）。做「角色選單／搜尋」用——例如日記/檔案類面板讓用戶從清單挑角色，免手打名字。空陣列＝還沒角色。
+- st.getStory(n) → 回最近 n 條劇情 [{name, text}]（預設 30，已洗成乾淨文字）。**共用面板「讀當前劇情顯示」就用這個**（不經 AI、直接拿正文）。純展示卡別用它（那走 lines/st.parse）。
 - st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。純展示卡不需要持久化。
 
 ## 🖼️ 生圖紀律（重要，否則一堆圖排隊）
@@ -2723,6 +2724,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 const R = window.VN_READER || (window.parent && window.parent.VN_READER);
                 return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
             },
+            getStory(n) { try { const R = window.VN_READER || (window.parent && window.parent.VN_READER); return (R && R.getStory) ? R.getStory(n) : []; } catch (e) { return []; } },
             // 預覽用 localStorage stub（裝成 app 後由 app_runtime 的 window.saveData 接管真持久化）；scope 用 tplId 隔離
             saveData(k, v) { try { localStorage.setItem('aurelia_studio_preview_' + k, JSON.stringify(v)); } catch (e) {} },
             loadData(k) { try { const s = localStorage.getItem('aurelia_studio_preview_' + k); return s == null ? null : JSON.parse(s); } catch (e) { return null; } }
@@ -2748,6 +2750,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
             +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
             +   'getCurrentChars:async function(){try{return window.getCurrentChars?await window.getCurrentChars():[];}catch(e){return [];}},'
+            +   'getStory:function(n){try{return window.getStory?window.getStory(n):[];}catch(e){return [];}},'
             +   'saveData:function(k,v){try{if(window.saveData)window.saveData(k,v);}catch(e){}},'
             +   'loadData:function(k){try{return window.loadData?window.loadData(k):null;}catch(e){return null;}},'
             + '};'
