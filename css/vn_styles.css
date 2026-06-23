@@ -1958,7 +1958,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            ========================================= */
         #phone-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); z-index: 30; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.35s; overflow: hidden; }
         #phone-overlay.active { opacity: 1; pointer-events: auto; }
-        #phone-device { width: 380px; height: 580px; max-height: calc(100% - 20px); background: #000; border-radius: 45px; border: 10px solid #1a1a1c; box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 0 10px rgba(0,0,0,0.5); position: relative; overflow: hidden; display: flex; flex-direction: column; transform: translateY(110%); transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); font-family: var(--font-sans); }
+        #phone-device { aspect-ratio: 1 / 2; height: 720px; max-height: calc(100% - 16px); max-width: calc(100% - 16px); background: #000; border-radius: 45px; border: 10px solid #1a1a1c; box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 0 10px rgba(0,0,0,0.5); position: relative; overflow: hidden; display: flex; flex-direction: column; transform: translateY(110%); transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); font-family: var(--font-sans); }
         #phone-overlay.active #phone-device { transform: translateY(0); }
         #phone-device::before { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 30px; background: #1a1a1c; border-bottom-left-radius: 18px; border-bottom-right-radius: 18px; z-index: 20; }
 
@@ -2240,8 +2240,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             /* 物品彈窗 */
             #item-card { width: 85vw; }
 
-            /* 手機裝置框：高度不超過 VN 容器（用 % 而非 vh，避免超出 phone-overlay） */
-            #phone-device { width: min(380px, 90vw); height: min(700px, calc(100% - 30px)); }
+            /* 手機裝置框：高度不超過 VN 容器；寬度由 aspect-ratio(1:2) 自動推、維持手機比例不矮胖 */
+            #phone-device { height: min(720px, calc(100% - 16px)); }
         }
 
         /* =========================================
@@ -2314,12 +2314,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             .gs-section-title { letter-spacing: 1px; font-size: 0.85rem; }
             .gs-label { font-size: 0.82rem; min-width: 65px; }
 
-            /* 手機裝置框：置中顯示，中等尺寸 */
+            /* 手機裝置框：置中顯示；寬度由 aspect-ratio(1:2) 自動推、維持手機比例 */
             #phone-overlay { align-items: center; padding: 0; }
             #phone-device {
-                width: min(310px, 82vw);
-                height: min(560px, 74vh);
-                border-radius: 30px;
+                height: min(680px, 84vh);
+                max-width: 88vw;
+                border-radius: 32px;
                 border-width: 7px;
                 transform: translateY(110%);
             }
