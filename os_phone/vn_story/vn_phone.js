@@ -153,17 +153,17 @@
             return content;
         },
 
-        // 自動分割混合文字+表情包的訊息
-        // 例: "哈哈哈[笑死我了.gif]" → ["哈哈哈", "[表情包:URL]"]
+        // 自動分割混合文字+表情包的訊息（檔案式 [x.gif] 或描述式 [表情包: 描述] 都拆成單獨一條）
+        // 例: "哈哈哈[笑死.gif]" → ["哈哈哈","[表情包:URL]"]；"加油！[表情包: 小猫打滚]" → ["加油！","[表情包: 小猫打滚]"]
         _splitStickerContent: function(content) {
-            // 已是特殊格式，不處理（含 AI 自創的圖片變體）
+            // 整串就是其他特殊類型 → 不拆（表情包「不」在此列：要能從混合文字裡拆出來單獨成條）
             if (this._isAliasTag(content, this._IMAGE_ALIAS) ||
                 this._isAliasTag(content, this._VOICE_ALIAS) ||
-                this._isAliasTag(content, this._STICKER_ALIAS) ||
                 /^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|文件|File)[：:]/i.test(content)) return [content];
             if (content.startsWith('[撤回]')) return [content];
 
-            const re = /\[([^\]]+\.(?:gif|jpg|jpeg|png))\]/gi;
+            // ①描述式 [表情包/貼紙/表情/Sticker/Emote: 描述]  ②檔案式 [xxx.gif/jpg/png]
+            const re = /\[(?:表情包|貼紙|贴纸|表情|Sticker|Emote)[：:][^\]]*\]|\[[^\]]+\.(?:gif|jpg|jpeg|png)\]/gi;
             if (!re.test(content)) return [content];
             re.lastIndex = 0;
 
@@ -172,9 +172,15 @@
             while ((m = re.exec(content)) !== null) {
                 const before = content.slice(last, m.index).trim();
                 if (before) parts.push(before);
-                const base = (window.VN_Config?.data?.stickerBase || '').replace(/\/?$/, '/');
-                const url = base ? base + m[1] : m[1];
-                parts.push(`[表情包:${url}]`);
+                const tag = m[0];
+                const aliasM = tag.match(/^\[(?:表情包|貼紙|贴纸|表情|Sticker|Emote)[：:]\s*([\s\S]*?)\]$/i);
+                if (aliasM) {
+                    parts.push(`[表情包: ${aliasM[1].trim()}]`);   // 描述式 → 正規化成 stkM 認得的形式
+                } else {
+                    const fname = tag.slice(1, -1);                // [x.gif] → x.gif
+                    const base = (window.VN_Config?.data?.stickerBase || '').replace(/\/?$/, '/');
+                    parts.push(`[表情包:${base ? base + fname : fname}]`);
+                }
                 last = m.index + m[0].length;
             }
             const rest = content.slice(last).trim();
@@ -257,8 +263,14 @@
                     // 完整 URL：encode 路徑中的非 ASCII（解決中文檔名）
                     src = desc.replace(/[^\x00-\x7F]/g, c => encodeURIComponent(c));
                 } else {
-                    const base = (window.VN_Config?.data?.stickerBase || '').replace(/\/?$/, '/');
-                    src = base ? base + encodeURIComponent(desc) : desc;
+                    // 先查貼圖庫（名稱→URL，含中文名如「小猫打滚」）；查不到才退 stickerBase 拼、再不行 onerror 顯示標籤
+                    let libUrl = null;
+                    try { libUrl = window.VN_Sticker?.lookup?.(desc) || null; } catch (e) {}
+                    if (libUrl) { src = libUrl; }
+                    else {
+                        const base = (window.VN_Config?.data?.stickerBase || '').replace(/\/?$/, '/');
+                        src = base ? base + encodeURIComponent(desc) : desc;
+                    }
                 }
                 inner = `<div class="sticker-wrap" data-label="${safeLabel}"><img src="${src}" style="max-width:120px; border-radius:4px; display:block;" onerror="${onerror}"></div>`;
             } else if (trM) {
