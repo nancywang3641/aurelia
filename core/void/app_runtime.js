@@ -53,6 +53,8 @@
             +   '} catch(e){ console.error("[app callAI]",e); return ""; } };'
             // ── 當前聊天室角色清單：[{name,count}]，做角色選單/搜尋用(繞懶載、不等大總結) ──
             +   'window.getCurrentChars = async function(){ try { var R = P && P.VN_READER; return (R && R.getCurrentChars) ? await R.getCurrentChars() : []; } catch(e){ console.error("[app getCurrentChars]",e); return []; } };'
+            // ── 讀當前劇情：回最近 n 條 [{name,text}]（共用面板「讀劇情顯示」用，不經 AI）──
+            +   'window.getStory = function(n){ try { var ST=P.SillyTavern, c=ST&&ST.getContext&&ST.getContext(); if(!c||!Array.isArray(c.chat)) return []; var CL=(P.VN_READER&&P.VN_READER.clean)?P.VN_READER.clean:function(x){return x||"";}; return c.chat.filter(function(m){return m&&!m.is_system;}).slice(-(n||30)).map(function(m){return {name:String(m.name||(m.is_user?"我":"")), text:CL(m.mes||"")};}).filter(function(o){return o.text&&o.text.trim();}); } catch(e){ console.error("[app getStory]",e); return []; } };'
             // ── generateRaw 仍橋接(進階 app 指名要它才用；預設請用 callAI) ──
             +   'if (!window.generateRaw) window.generateRaw = function(cfg){ var Q=window.parent; if (Q && Q.TavernHelper && Q.TavernHelper.generateRaw) return Q.TavernHelper.generateRaw(cfg); if (Q && Q.generateRaw) return Q.generateRaw(cfg); return Promise.reject(new Error("no generateRaw")); };'
             // ── 版面：強制 app 撐滿手機螢幕。修「面板用 min-height:100% 但 #app-root 無確定高度→百分比解析不到→底下露白」。
