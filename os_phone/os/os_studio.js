@@ -2670,6 +2670,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
             +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
             +   'getCurrentChars:async function(){try{return window.getCurrentChars?await window.getCurrentChars():[];}catch(e){return [];}},'
+            +   'saveData:function(k,v){try{if(window.saveData)window.saveData(k,v);}catch(e){}},'
+            +   'loadData:function(k){try{return window.loadData?window.loadData(k):null;}catch(e){return null;}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
             + '(async function(){try{' + js + '}catch(e){console.error("[phone tpl]",e);}})();'
