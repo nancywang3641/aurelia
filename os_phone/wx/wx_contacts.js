@@ -434,20 +434,33 @@
                 listEl.innerHTML = '<div style="padding:8px 12px;color:#999;font-size:12px;">載入中...</div>';
                 listEl.style.display = 'block';
                 try {
-                    const entries = win.OS_WORLDBOOK
-                        ? await win.OS_WORLDBOOK.getEnabledEntries()
-                        : (win.OS_DB ? await win.OS_DB.getAllWorldbookEntries() : []);
+                    // 跟聊天設置「人設·從世界書選擇」同邏輯：酒館模式走 TavernHelper lorebook(真世界書)；
+                    // 只有 PWA 獨立模式才用 OS_WORLDBOOK(那是退役的 localStorage 世界書，酒館裡是空的→之前載不到的真因)。
+                    let entries = [];
+                    const isStandalone = win.OS_WORLDBOOK && typeof win.OS_WORLDBOOK.getEnabledEntries === 'function' && !win.TavernHelper;
+                    if (isStandalone) {
+                        const raw = await win.OS_WORLDBOOK.getEnabledEntries();
+                        entries = (raw || []).map(e => ({ uid: e.id, comment: e.title, content: e.content, keys: [e.category || ''] }));
+                    } else if (win.TavernHelper && typeof win.TavernHelper.getCurrentCharPrimaryLorebook === 'function' && win.TavernHelper.getLorebookEntries) {
+                        const lb = win.TavernHelper.getCurrentCharPrimaryLorebook();
+                        if (lb) entries = (await win.TavernHelper.getLorebookEntries(lb)) || [];
+                    }
                     if (!entries || entries.length === 0) {
-                        listEl.innerHTML = '<div style="padding:8px 12px;color:#999;font-size:12px;">世界書裡沒有啟用的條目</div>';
+                        listEl.innerHTML = '<div style="padding:8px 12px;color:#999;font-size:12px;">當前角色沒有綁定世界書，或世界書沒有條目</div>';
                         return;
                     }
-                    listEl.innerHTML = entries.map(e => `
-                        <div data-id="${e.id}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-content="${(e.content||'').replace(/"/g,'&quot;')}"
+                    const esc = (t) => String(t || '').replace(/"/g, '&quot;');
+                    listEl.innerHTML = entries.map(e => {
+                        const title = e.comment || ('條目 #' + e.uid);
+                        const keys = (e.keys && e.keys.length) ? e.keys.filter(Boolean).join(', ') : '';
+                        return `
+                        <div data-uid="${e.uid}" data-title="${esc(title)}" data-content="${esc(e.content || '')}"
                              style="padding:10px 14px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:13px;">
-                            <div style="font-weight:600;color:#1a1a1a;">${e.title || '(無標題)'}</div>
-                            <div style="color:#999;font-size:11px;margin-top:2px;">${e.category || ''} · ${(e.content||'').length} 字</div>
-                        </div>`).join('');
-                    listEl.querySelectorAll('[data-id]').forEach(item => {
+                            <div style="font-weight:600;color:#1a1a1a;">${title || '(無標題)'}</div>
+                            <div style="color:#999;font-size:11px;margin-top:2px;">${keys ? keys + ' · ' : ''}${(e.content || '').length} 字</div>
+                        </div>`;
+                    }).join('');
+                    listEl.querySelectorAll('[data-uid]').forEach(item => {
                         item.onmouseenter = () => item.style.background = '#f5fff5';
                         item.onmouseleave = () => item.style.background = '';
                         item.onclick = () => {
