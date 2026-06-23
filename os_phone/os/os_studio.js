@@ -1408,7 +1408,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const host = document.getElementById('studio-persona-content');
         if (!host) return;
         host.classList.add('swb-host');
-        if (!_mcWorking && _mcView !== 'list') _mcView = 'list';
+        if (!_mcWorking && _mcView !== 'list' && _mcView !== 'import') _mcView = 'list';
+        if (_mcView === 'import') return _mcRenderImport(host);
         if (_mcView === 'editor') return _mcPane === 'preview' ? _mcRenderPreview(host) : _mcRenderEditorChat(host);
         return _mcRenderList(host);
     }
@@ -1454,7 +1455,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <div class="swb-list mc-list" id="mc-list"><div class="swb-psub">載入中…</div></div>
             <div class="swb-footbar"><button class="swb-primary" id="mc-new"><i class="fa-solid fa-plus"></i> 新增角色</button></div>
         </div>`;
-        host.querySelector('#mc-new').onclick = () => _mcOpenChar(null);
+        host.querySelector('#mc-new').onclick = () => _mcNewChooser();
         const ok = await _mcEnsureBook();
         const listEl = host.querySelector('#mc-list'); if (!listEl) return;
         if (!ok) { listEl.innerHTML = '<div class="swb-psub">酒館助手未就緒（需在酒館內 + 已裝酒館助手）。</div>'; return; }
@@ -1474,6 +1475,59 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             if (main) main.onclick = () => { const c = _mcChars.find(x => x.uid === parseInt(card.getAttribute('data-uid'), 10)); if (c) _mcOpenChar(c); };
         });
         listEl.querySelectorAll('[data-use]').forEach(btn => btn.onclick = (ev) => { ev.stopPropagation(); _mcSetActive(parseInt(btn.getAttribute('data-use'), 10)); });
+    }
+
+    // 新增角色 → 兩條路：創建新的 / 修改我現有的（酒館）人設
+    function _mcNewChooser() {
+        _mcSheet('新增角色 — 從哪開始？', [
+            { label: '<i class="fa-solid fa-plus"></i> 創建新的（從零跟 AI 寫）', onClick: () => _mcOpenChar(null) },
+            { label: '<i class="fa-solid fa-address-card"></i> 修改我現有的人設（選一個酒館人設）', onClick: () => { _mcView = 'import'; renderPersonaPanel(); } }
+        ]);
+    }
+    // 匯入頁：列出 ST 酒館人設，選一個 → AI 拆塊落進編輯器（之後可直接「對標當前世界」）
+    function _mcRenderImport(host) {
+        const OP = (window.parent || window).OS_PERSONA || window.OS_PERSONA;
+        host.innerHTML = `<div class="swb-page">
+            <div class="swb-bar"><button class="swb-iconbtn" id="mc-iback"><i class="fa-solid fa-chevron-left"></i></button><div class="swb-bar-title">修改我現有的人設</div></div>
+            <div class="swb-list mc-list" id="mc-implist"><div class="swb-psub">讀取中…</div></div>
+        </div>`;
+        host.querySelector('#mc-iback').onclick = () => { _mcView = 'list'; renderPersonaPanel(); };
+        const listEl = host.querySelector('#mc-implist');
+        const paint = (arr) => {
+            if (!arr || !arr.length) { listEl.innerHTML = '<div class="swb-psub">讀不到酒館人設（可先到大廳「使用者」開一次，或這環境沒有人設）。</div>'; return; }
+            listEl.innerHTML = arr.map((p, i) => `<div class="swb-card mc-charcard" data-i="${i}">
+                ${p.avatar ? `<img class="mc-impavatar" src="${_sgcEsc(p.avatar)}" onerror="this.classList.add('mc-impavatar-broke')">` : '<div class="mc-impavatar mc-impavatar-ph"><i class="fa-solid fa-user"></i></div>'}
+                <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(p.name)}</div><div class="swb-card-sum">${_sgcEsc(String(p.desc || '').replace(/\s+/g, ' ').slice(0, 40)) || 'ST 原生人設'}</div></div>
+                <span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span>
+            </div>`).join('');
+            listEl.querySelectorAll('.mc-charcard').forEach(card => card.onclick = () => { const p = arr[parseInt(card.getAttribute('data-i'), 10)]; if (p) _mcImportPersona(p); });
+        };
+        let list = [];
+        try { list = (OP && OP.getList && OP.getList()) || []; } catch (e) {}
+        paint(list);
+        if (!list.length) setTimeout(() => { let l2 = []; try { l2 = (OP && OP.getList && OP.getList()) || []; } catch (e) {} if (_mcView === 'import') paint(l2); }, 450);
+    }
+    async function _mcImportPersona(p) {
+        const desc = String((p && p.desc) || '').trim();
+        const enter = (blocks, pane) => { _mcWorking = { uid: null, name: (p && p.name) || '', blocks }; _mcChat = []; _mcPendCount = blocks.length; _mcView = 'editor'; _mcPane = pane; renderPersonaPanel(); };
+        if (!desc) { enter([], 'chat'); return; }
+        const api = (window.parent || window).OS_API || window.OS_API;
+        if (!api || (typeof api.chatMain !== 'function' && typeof api.chatSecondary !== 'function')) {
+            _wbToast('沒有可用 AI，先整段放著、可手動拆塊');
+            enter([{ label: '人設', content: desc, userEdited: true }], 'preview'); return;
+        }
+        _wbToast('AI 整理中…');
+        const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設描述（一整段散文）。請把它拆成多個區塊（外觀／個性／背景／喜好…），用 <persona><seg> 輸出，內容忠於原文、不要自己加設定。\n\n【現有人設描述】\n' + desc;
+        const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把這段人設拆成區塊。' }];
+        const done = (full) => {
+            const segs = _mcParseSegs(String(full || ''));
+            if (segs.length) enter(segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })), 'preview');
+            else { _wbToast('AI 沒拆成功，先整段放著'); enter([{ label: '人設', content: desc, userEdited: true }], 'preview'); }
+        };
+        const errCb = () => { _wbToast('AI 整理失敗，先整段放著'); enter([{ label: '人設', content: desc, userEdited: true }], 'preview'); };
+        const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
+        const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
+        try { callFn.call(api, messages, () => {}, done, errCb); } catch (e) { errCb(e); }
     }
 
     const _MC_SYS = `你是「我的角色」人設寫作助手，幫使用者寫他自己在故事裡扮演的主角（MC/OC）。可能含成人/NSFW 設定，照常專業協助、不要拒絕、不要說教。
