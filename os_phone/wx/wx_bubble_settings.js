@@ -125,8 +125,8 @@
 
                 <div id="panel-general" style="display:${config.mode === 'general' ? 'block' : 'none'};">
                     <div style="display:flex; gap:10px; margin-bottom:10px; justify-content:center;">
-                        <button id="btn-target-other" class="wx-btn" style="background:#f0f0f0; color:#333; border:1px solid #ddd; padding:5px 15px;">⚪ 編輯對方</button>
-                        <button id="btn-target-me" class="wx-btn" style="background:#07c160; color:#fff; border:1px solid #07c160; padding:5px 15px;">🟢 編輯我</button>
+                        <button id="btn-target-other" class="wx-btn" style="background:#f0f0f0; color:#333; border:1px solid #ddd; padding:5px 15px;"><i class="fa-solid fa-circle"></i> 編輯對方</button>
+                        <button id="btn-target-me" class="wx-btn" style="background:#07c160; color:#fff; border:1px solid #07c160; padding:5px 15px;"><i class="fa-solid fa-circle"></i> 編輯我</button>
                     </div>
 
                     <div class="wx-set-group" style="margin:0; border:none;">
