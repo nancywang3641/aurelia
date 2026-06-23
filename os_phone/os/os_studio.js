@@ -207,6 +207,7 @@
 
 ## 🚫 禁止清單
 - 禁 position:fixed、position:absolute 配 top/left 自定位、100vw、100vh、在 body／html 設樣式（樣式只能寫在 .vn-dynamic-panel-xxx 前綴下）；禁寫死固定像素寬（用 width:100%／響應式）。（全屏與否依類型：劇情卡禁吃滿、手機 App 反而要填滿手機框，見【三種類型】）
+- 🚨🚨 禁「一打開面板就自動呼叫 AI 生成」：st.callAI／st.setImage 這種「會花錢的生成」一律要由使用者動作觸發（按按鈕、點選項），**絕不能在 init／面板一載入就自動跑**（否則一開 App 就燒 API、連預覽也會燒）。面板一打開請只顯示空狀態或「點按鈕開始」提示，等使用者點才生成。只有「讀取」類（st.getStory／st.parse／st.loadData／st.getCurrentChars，都不花錢）可以在 init 自動跑。
 - 禁無聊網頁感：卡中卡、單純 header+content+footer 堆疊、普通圓角矩形列表、只靠漸層＋陰影假高級。
 - 禁在按鈕／標籤文字加 ASCII 裝飾（[ ]、<< >>、» «、/ /）。要邊框發光用 CSS，別把符號塞進文字。
 - 🚫 禁「左側色條」：別給卡片加 CSS border-left 當色條 accent；也別用 Markdown 引用（行首大於號）——st.md 會把它渲染成左邊一條色條。每張卡都掛一條左邊槓很醜很煩，卡片靠造型／留白／分隔區分就好，不要無腦加左色條。
