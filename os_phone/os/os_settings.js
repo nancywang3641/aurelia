@@ -144,8 +144,8 @@ EXAMPLE "prompt" value:
 
 系統會自動幫你對接（你規範不用改）：
 ① 只生插圖、不寫劇情正文。
-② 已登記角色用 <角色名> 代表（系統自動填外觀、跟頭像一致）；你的規範不用管這些角色的 DNA。
-③ 規範裡的 {{}} 權重照常給 NAI、不受影響（佔位用的是 <>、跟 {{}} 不衝突）。
+② 已登記角色用 ##角色名## 或 ##代號##（如 ##C1##）代表（系統自動填外觀、跟頭像一致）；你的規範不用管這些角色的 DNA。
+③ 規範裡的 {{}} 權重照常給 NAI、不受影響（佔位用的是井號 ##、跟 {{}} 不衝突）。
 ④ 自動輸出 scenes JSON、依編號段落定位。
 
 （留空＝不啟用獨立插圖通。）`,
@@ -400,7 +400,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
     }
 
-    // 🏷️ 角色外觀登記表編輯器：列出當前世界 avatar_cache 每個角色的「頭像生成詞」(={{角色名}}佔位展開來源)，
+    // 🏷️ 角色外觀登記表編輯器：列出當前世界 avatar_cache 每個角色的「頭像生成詞」(=##角色名##佔位展開來源)，
     //   可直接改/刪/新增。給 Rae 修現有資料。直接讀寫 VN_Cache.avatar_cache(依世界隔離)。
     async function _openCharLooksEditor() {
         const W = window.parent || window;
@@ -419,7 +419,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const modal = doc.createElement('div');
         modal.id = 'avl-modal'; modal.className = 'avl-modal';
         modal.innerHTML = `<div class="avl-card">
-            <div class="avl-title">🏷️ 角色外觀登記表<span class="avl-sub">（{{角色名}} 佔位展開用的頭像生成詞；改這裡＝改插圖會套的外觀）</span></div>
+            <div class="avl-title">🏷️ 角色外觀登記表<span class="avl-sub">（##角色名## 佔位展開用的頭像生成詞；改這裡＝改插圖會套的外觀）</span></div>
             <div class="avl-list" id="avl-list"></div>
             <div class="avl-addrow"><input class="avl-name-input" id="avl-new-name" placeholder="新角色名…"><button class="avl-btn" id="avl-add">＋ 新增</button></div>
             <div class="avl-actions"><span class="avl-tip" id="avl-tip"></span><button class="avl-btn primary" id="avl-close">完成</button></div>
@@ -1679,11 +1679,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">每輪記憶抽取時順便吐插圖、自動生圖。</div>
-                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;" title="開啟：副模型寫插圖 prompt 時只用 {{角色名}} 代表角色，外觀由系統用該角色頭像生成詞自動填入（沒頭像退 AVS 簡易形象、再沒有留原名）。副模型 prompt 不用塞整塊外觀、不會越積越肥，外觀又跟頭像一致。關閉＝改回把近期角色外觀整塊塞給副模型。">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;" title="開啟：副模型寫插圖 prompt 時只用 ##角色名##（或 ##代號##）代表角色，外觀由系統用該角色頭像生成詞自動填入（沒頭像退 AVS 簡易形象、再沒有留原名）。副模型 prompt 不用塞整塊外觀、不會越積越肥，外觀又跟頭像一致。關閉＝改回把近期角色外觀整塊塞給副模型。">
                                 <span>🏷️ 角色名佔位</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc" style="margin-top:6px;">副模型只寫 {{角色名}}＋動作場景，外觀由系統用頭像自動填。</div>
+                            <div class="set-desc" style="margin-top:6px;">副模型只寫 ##角色名##＋動作場景，外觀由系統用頭像自動填。</div>
                             <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()">✏️ 編輯角色外觀登記表</button>
                             <div class="set-desc" style="margin-top:4px;">列出每個角色的外觀（頭像生成詞），可直接改／刪／新增——修你之前的資料。</div>
                             <div class="set-label" style="font-size:12px; margin-top:10px;" title="跟著上面選的「插圖來源」自動切換：選哪個接口就顯示哪個接口的指令，各自獨立、互不影響。">副模型插圖指令（跟著插圖來源）</div>

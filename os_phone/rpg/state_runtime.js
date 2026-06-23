@@ -538,7 +538,7 @@ ${_memoryRulesText()}
     }
 
     // 頭像詞→插圖用：剝掉「肖像框架詞」(數量1boy/solo/portrait/bust/簡單背景/looking at viewer)。
-    //   頭像是單人肖像、那些詞對；但 {{C代號}} 是塞進「已經數過人(2boys)的多角色場景」→ 數量/solo 會打架害 NAI 多生人。
+    //   頭像是單人肖像、那些詞對；但 ##C代號## 是塞進「已經數過人(2boys)的多角色場景」→ 數量/solo 會打架害 NAI 多生人。
     //   性別不會丟(還有 adult male/young man+種族)。頭像本身那串不動，只動插圖展開的副本。
     function _stripAvatarFraming(p) {
         const DROP = [
@@ -556,7 +556,7 @@ ${_memoryRulesText()}
         return s.split(',').map(t => t.trim()).filter(t => t && !DROP.some(re => re.test(t))).join(', ');
     }
 
-    // {角色名 → 外觀字串}登記表：avatar_cache 頭像生成詞(主，剝肖像框架) + AVS 簡易形象(補漏)。給「{{角色名}} 佔位模式」展開用。
+    // {角色名 → 外觀字串}登記表：avatar_cache 頭像生成詞(主，剝肖像框架) + AVS 簡易形象(補漏)。給「##角色名## 佔位模式」展開用。
     //   全角色、不濾近期(展開是 lookup、不進 prompt，不怕多)；同名優先頭像詞。
     async function _buildLooksMap(state) {
         const map = {};
@@ -579,18 +579,19 @@ ${_memoryRulesText()}
         return map;
     }
 
-    // 把 scene prompt 裡的 {{角色名}} / {{C2}} / {{C2. 名}} 換成登記表外觀；
-    //   對不到走小寫正規化、再拆「代號+名」各試一次，都不到才留原名(別讓 {{}} 進生圖)。
+    // 把 scene prompt 裡的 ##角色名## / ##C2## / ##C2. 名## 換成登記表外觀；
+    //   對不到走小寫正規化、再拆「代號+名」各試一次，都不到才留原名(別讓 ## 進生圖)。
+    //   用 ## 不用 {{}}：NAI 的 {{}}/[]/() 是權重語法，佔位改 ## 才不會跟底詞/預設包的權重撞(Rae 2026-06-23)。
     function _expandSceneNames(str, map) {
-        if (!str || String(str).indexOf('{{') < 0) return str;
+        if (!str || String(str).indexOf('##') < 0) return str;
         const lowerMap = {};
         for (const k of Object.keys(map || {})) lowerMap[k.toLowerCase()] = map[k];
         const _look = (k) => { if (!k) return null; const kk = String(k).trim(); return (map && (map[kk] || map[kk.toUpperCase()])) || lowerMap[kk.toLowerCase()] || null; };
-        return String(str).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (m, raw) => {
+        return String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
             const name = String(raw).trim();
             let hit = _look(name);
             if (hit) return hit;
-            const mm = name.match(/^(C\d+)[\s.．:：、,，_-]+(.+)$/i);   // {{C2. 名}} → 拆代號與名各試
+            const mm = name.match(/^(C\d+)[\s.．:：、,，_-]+(.+)$/i);   // ##C2. 名## → 拆代號與名各試
             if (mm) { hit = _look(mm[1]) || _look(mm[2]); if (hit) return hit; }
             return name;
         });
@@ -599,10 +600,11 @@ ${_memoryRulesText()}
     // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖）。
     // ★ 定位用「編號段落 + after_paragraph 數字」——AI 只挑數字、絕不抄原文（避免簡繁/改寫/引舊訊息對不上）。
     function _sceneAddendum(userPrompt, numberedText, looksRef, nameList) {
-        // nameList 非空 = {{代號/角色名}}佔位模式（不塞外觀大塊、AI 只寫動作場景、系統事後展開）；否則 = 外觀錨點模式（整塊塞）
+        // nameList 非空 = ##代號/角色名##佔位模式（不塞外觀大塊、AI 只寫動作場景、系統事後展開）；否則 = 外觀錨點模式（整塊塞）
         //   nameList = [{code:'C1', name:'小米'}, ...]；代號只在這通 prompt 內有效，AI 用代號最準(簡繁/暱稱免對錯)
+        //   佔位用 ## ## 不用 {{}}：NAI 的 {{}} 是權重語法、會跟底詞/預設包撞，## 才安全
         const charBlock = (nameList && nameList.length)
-            ? `\n【角色外觀】下面這些角色「已登記外觀」——畫到他們時用 {{代號}} 或 {{角色名}} 代表（系統會自動填入他已確立的外觀、跟頭像同一個人），**用代號最準**(簡繁/暱稱不會對錯)，且這些人的**固定外觀(髮型/瞳色/種族/體型)交給 {{}}、你不要自己重寫**；但**服裝穿脫/裸露狀態由你按本輪劇情寫**({{}}只給固定外觀、不含服裝，否則洗澡會穿著衣服)。\n已登記角色（要畫就用 {{}} 包代號或名字）：${nameList.map(e => e.code + '. ' + e.name).join('｜')}\n⚠️ 若畫到**不在上面名單**的角色（沒登記外觀的 NPC）→ **你自己用英文 NAI 標籤寫他的外觀**（種族/年齡/髮色/眼色/體型/服裝等，依正文與設定），這種**不要**用 {{}}。\n你負責：動作／姿勢／表情／站位／互動／場景／環境／鏡頭／光線**＋服裝/裸露狀態**(依本輪劇情：洗澡→裸體、戰鬥→盔甲、睡覺→睡衣…)；已登記角色的**固定外觀(髮/瞳/種族/體型)**交給 {{代號}}。\n`
+            ? `\n【角色外觀】下面這些角色「已登記外觀」——畫到他們時用 ##代號## 或 ##角色名## 代表（例 ##C1##；系統會自動填入他已確立的外觀、跟頭像同一個人），**用代號最準**(簡繁/暱稱不會對錯)，且這些人的**固定外觀(髮型/瞳色/種族/體型)交給 ## ##、你不要自己重寫**；但**服裝穿脫/裸露狀態由你按本輪劇情寫**(## ##只給固定外觀、不含服裝，否則洗澡會穿著衣服)。\n⚠️ 佔位一律用井號 ## ## 包住（如 ##C1##），**不要用 {{ }}**——{{ }} 是 NAI 權重語法、會壞掉。\n已登記角色（要畫就用 ## ## 包代號或名字）：${nameList.map(e => e.code + '. ' + e.name).join('｜')}\n⚠️ 若畫到**不在上面名單**的角色（沒登記外觀的 NPC）→ **你自己用英文 NAI 標籤寫他的外觀**（種族/年齡/髮色/眼色/體型/服裝等，依正文與設定），這種**不要**用 ## ##。\n你負責：動作／姿勢／表情／站位／互動／場景／環境／鏡頭／光線**＋服裝/裸露狀態**(依本輪劇情：洗澡→裸體、戰鬥→盔甲、睡覺→睡衣…)；已登記角色的**固定外觀(髮/瞳/種族/體型)**交給 ##代號##。\n`
             : ((looksRef && looksRef.trim())
                 ? `\n【角色外觀錨點（★最高權威）：以下是每個角色已確立的外觀——「頭像生成詞」即當初畫這張頭像用的提示詞。畫到哪個角色，就照他這串外觀畫：髮色／眼色／體型／髮型／服裝一律沿用(姿勢、表情、鏡頭可依本輪劇情調整)。劇情或摘要沒寫到外觀也要主動補上，嚴禁漏髮色/眼色/體型，更嚴禁自行另編一個長相】\n${looksRef.trim()}\n`
                 : '');
@@ -715,7 +717,7 @@ ${numberedText}`;
             }
             // 場景插圖搭便車：把最後一則自己切段編號，要副模型只挑 after_paragraph 數字（程式自己對位）
             let _sceneParas = [];
-            let _looksMap = null;   // {{角色名}}佔位模式才建；null = 用外觀錨點舊模式、派發時不展開
+            let _looksMap = null;   // ##角色名##佔位模式才建；null = 用外觀錨點舊模式、派發時不展開
             const _useNamePH = wantScenes && _sceneCfg.useNamePlaceholder !== false;   // 預設開
             if (wantScenes && (doState || wantMemory) && recentText) {
                 _sceneParas = _segmentStory(lastContent || '');
@@ -726,7 +728,7 @@ ${numberedText}`;
                         // 列「所有有外觀資料的角色」(頭像 + AVS-only NPC)；佔位模式名單只是名字+代號、很短不臃腫，
                         // 不再濾近期(濾近期會把沒頭像、只有 AVS 的 NPC 漏掉→副模型不知有這角色→畫崩)
                         const _names = Object.keys(_nameMap);
-                        // 配代號 Cn（只在這通 prompt 內有效；AI 用 {{Cn}} 最準、免簡繁/暱稱對錯，也可用 {{角色名}}）
+                        // 配代號 Cn（只在這通 prompt 內有效；AI 用 ##Cn## 最準、免簡繁/暱稱對錯，也可用 ##角色名##）
                         const _entries = _names.map((n, i) => ({ code: 'C' + (i + 1), name: n }));
                         _looksMap = { ..._nameMap };                                       // 名字鍵 → 外觀
                         _entries.forEach(e => { _looksMap[e.code] = _nameMap[e.name]; });   // 代號鍵 → 同一外觀(展開時兩種都認)
@@ -803,7 +805,7 @@ ${numberedText}`;
                         const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
                         if (n >= 1 && _sceneParas[n - 1]) after = _sceneParas[n - 1];
                         else if (s.after) after = String(s.after);  // 舊格式相容（AI 真給了引文）
-                        // 佔位模式：把 {{角色名}} 換成登記表外觀（頭像詞→AVS→留原名）；非佔位模式 _looksMap=null 不動
+                        // 佔位模式：把 ##角色名## 換成登記表外觀（頭像詞→AVS→留原名）；非佔位模式 _looksMap=null 不動
                         return { after: after, prompt: (_looksMap ? _expandSceneNames(s.prompt, _looksMap) : s.prompt) };
                     }).filter(s => s && s.prompt);
                     win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId });
@@ -823,14 +825,14 @@ ${numberedText}`;
 
     // 🎯 獨立插圖副模型：scenes 拆成「單獨一通 chatSecondary」，只吃 standaloneSpec、不背 AVS/記憶。
     //    開關在 圖片設定→插圖→「獨立插圖副模型」。沒開＝走 extractOnce 搭便車路（上面，原碼保留），互不影響。
-    // 獨立插圖佔位展開：把 <角色名>/<代號> 換成登記表外觀；NAI 的 {{}}/[]/() 權重一概不碰（只動角括號 <>）。
-    function _expandAngleNames(str, map) {
-        if (!str || String(str).indexOf('<') < 0) return str;
+    // 獨立插圖佔位展開：把 ##角色名##/##代號## 換成登記表外觀；NAI 的 {{}}/[]/() 權重一概不碰（只動井號 ##）。
+    function _expandHashNames(str, map) {
+        if (!str || String(str).indexOf('##') < 0) return str;
         const lower = {}; for (const k of Object.keys(map || {})) lower[k.toLowerCase()] = map[k];
-        return String(str).replace(/<\s*([^<>]+?)\s*>/g, (m, raw) => {
+        return String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
             const name = String(raw).trim();
             const hit = (map && (map[name] || map[name.toUpperCase()])) || lower[name.toLowerCase()];
-            return hit || name;   // 登記到→外觀；沒登記→拿掉角括號留原文（別讓 <> 進 NAI）
+            return hit || name;   // 登記到→外觀；沒登記→拿掉井號留原文（別讓 ## 進 NAI）
         });
     }
     let _sceneRunning = false;
@@ -867,10 +869,10 @@ ${numberedText}`;
             const entries = names.map((n, i) => ({ code: 'C' + (i + 1), name: n }));
             const looksMap = { ...nameMap };
             entries.forEach(e => { looksMap[e.code] = nameMap[e.name]; });
-            const charList = entries.length ? entries.map(e => `<${e.code}> ${e.name}`).join('｜') : '（無已登記角色，全部 NPC 自己寫外觀）';
-            // 系統訊息 = 你貼的完整規範 + 對接層（只動我這邊：佔位用 <名>、輸出 scenes JSON）；大佬規範的 {{}} 權重一概不碰
-            const _override = `\n\n────────\n【本系統對接（最高優先，覆蓋上面規範裡衝突的部分）】\n- 你只生成插圖提示詞、不寫劇情正文、不續寫、不解釋。\n- 「已登記角色」一律用 <角色名> 或 <代號> 代表（系統會自動填入其外觀、跟頭像一致）；你不要自己寫這些角色的固定長相/DNA，只寫他們的動作/姿勢/表情/服裝/裸露/站位/互動。沒登記的 NPC 才照規範自己寫完整外觀。\n- <名> 是角色佔位，跟規範裡的 {{}} 權重各自獨立、互不衝突，照常使用。\n- 只輸出一個 JSON、前後不要任何文字：{ "scenes": [ { "after_paragraph": 數字, "prompt": "..." } ] }。after_paragraph 從用戶給的編號段落挑數字、不要抄原文。`;
-            const userMsg = `【已登記角色（畫到就用 <代號> 或 <角色名>，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
+            const charList = entries.length ? entries.map(e => `##${e.code}## ${e.name}`).join('｜') : '（無已登記角色，全部 NPC 自己寫外觀）';
+            // 系統訊息 = 你貼的完整規範 + 對接層（只動我這邊：佔位用 ##名##、輸出 scenes JSON）；大佬規範的 {{}} 權重一概不碰
+            const _override = `\n\n────────\n【本系統對接（最高優先，覆蓋上面規範裡衝突的部分）】\n- 你只生成插圖提示詞、不寫劇情正文、不續寫、不解釋。\n- 「已登記角色」一律用 ##角色名## 或 ##代號## 代表（例 ##C1##；系統會自動填入其外觀、跟頭像一致）；你不要自己寫這些角色的固定長相/DNA，只寫他們的動作/姿勢/表情/服裝/裸露/站位/互動。沒登記的 NPC 才照規範自己寫完整外觀。\n- 佔位一律用井號 ##名## 包住（如 ##C1##），**不要用 {{ }}**——{{ }} 是 NAI 權重語法、會壞掉；##名## 跟規範裡的 {{}} 權重各自獨立、互不衝突。\n- 只輸出一個 JSON、前後不要任何文字：{ "scenes": [ { "after_paragraph": 數字, "prompt": "..." } ] }。after_paragraph 從用戶給的編號段落挑數字、不要抄原文。`;
+            const userMsg = `【已登記角色（畫到就用 ##代號## 或 ##角色名##，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
             const messages = [
                 { role: 'system', content: spec + _override },
                 { role: 'user', content: userMsg }
@@ -889,7 +891,7 @@ ${numberedText}`;
                 const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
                 if (n >= 1 && paras[n - 1]) after = paras[n - 1];
                 else if (s.after) after = String(s.after);
-                return { after, prompt: _expandAngleNames(s.prompt, looksMap) };
+                return { after, prompt: _expandHashNames(s.prompt, looksMap) };
             }).filter(s => s && s.prompt);
             if (mapped.length) {
                 win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: lastId });
