@@ -57,7 +57,7 @@
             +   'if (!window.generateRaw) window.generateRaw = function(cfg){ var Q=window.parent; if (Q && Q.TavernHelper && Q.TavernHelper.generateRaw) return Q.TavernHelper.generateRaw(cfg); if (Q && Q.generateRaw) return Q.generateRaw(cfg); return Promise.reject(new Error("no generateRaw")); };'
             // ── 版面：強制 app 撐滿手機螢幕。修「面板用 min-height:100% 但 #app-root 無確定高度→百分比解析不到→底下露白」。
             //    DOMContentLoaded 後補(排在 app 自己 style 之後→同 specificity 後者贏)，所有現有 app 自動套、免重存。
-            +   'document.addEventListener("DOMContentLoaded", function(){ try { var _s=document.createElement("style"); _s.textContent="#app-root{display:flex;flex-direction:column;min-height:100%;box-sizing:border-box;}#app-root>*{flex:1 0 auto;}"; document.head.appendChild(_s); } catch(e){} });'
+            +   'document.addEventListener("DOMContentLoaded", function(){ try { var _s=document.createElement("style"); _s.textContent="html,body{height:100%;}#app-root{display:flex;flex-direction:column;height:100%;box-sizing:border-box;}#app-root>*{flex:1 1 auto;min-height:0;}"; document.head.appendChild(_s); } catch(e){} });'
             + '} catch(e) { console.warn("[app bridge]", e); }'
             + '})();</scr' + 'ipt>';
     }
