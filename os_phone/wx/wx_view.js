@@ -49,7 +49,7 @@
         
         // --- 1. 氣泡渲染 (保持 V108.5 邏輯) ---
         renderBubble: function(msg, chatObj, withAnim, msgIndex) {
-            const blockRegex = /(\[\s*(?:表情包|Sticker|图片|圖片|Img|视频|視頻|Video|文件|File|位置|Location|定位|转账|轉帳|Transfer|红包|RedPacket|礼品|礼物|Gift|语音|語音|Voice|WbShare).*?\])/gi;
+            const blockRegex = /(\[\s*(?:表情包|Sticker|图片|圖片|Img|视频|視頻|Video|文件|File|位置|Location|定位|转账|轉帳|Transfer|红包|RedPacket|礼品|礼物|Gift|语音|語音|Voice|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|WbShare).*?\])/gi;
             if (msg.content && typeof msg.content === 'string' && blockRegex.test(msg.content)) {
                 const pureContent = msg.content.replace(blockRegex, '').trim();
                 if (pureContent.length > 0 || msg.content.match(blockRegex).length > 1) {
@@ -163,7 +163,7 @@
             }
             
             const side = msg.isMe ? 'me' : 'you';
-            const isSpecial = msg.content.match(/^\[\s*(转账|轉帳|Transfer|位置|Location|定位|视频|Video|红包|RedPacket|文件|File|礼品|Gift|礼物|WbShare)/i);
+            const isSpecial = msg.content.match(/^\[\s*(转账|轉帳|Transfer|位置|Location|定位|视频|Video|红包|RedPacket|文件|File|礼品|Gift|礼物|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|WbShare)/i);
             const isImageTag = msg.content.match(/^\[\s*(图片|Img).*?\]$/i); 
             const isSticker = msg.content.match(/^\[\s*(表情包|Sticker).*?\]$/i);
             const bubbleStyle = (isSpecial || isImageTag || isSticker) ? 'padding:0; border:none; background:transparent; box-shadow:none;' : '';
@@ -447,6 +447,11 @@
                 const text   = (parts[1] || '').trim();
                 const short  = text.length > 60 ? text.substring(0, 60) + '…' : text;
                 return `<div class="wx-wb-share-card"><div class="wx-wb-share-top"><span class="wx-wb-share-logo">微博</span><span style="font-size:11px; opacity:0.8; margin-left:4px;">分享</span></div><div class="wx-wb-share-body"><div class="wx-wb-share-author">@${author}</div><div class="wx-wb-share-text">${short || '（查看原貼）'}</div></div></div>`;
+            });
+            // 鏈接/網頁分享卡（跑團用、不帶網址；重用 vn_styles.css 的 .wx-link-msg）
+            html = html.replace(/\[\s*(?:链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|Url)\s*[:：]?\s*(.*?)\s*\]/gi, (m, title) => {
+                const safe = (String(title || '').trim() || '網頁連結').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+                return `<div class="wx-link-msg"><div class="wx-link-body"><div class="wx-link-title">${safe}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
             });
             html = html.replace(/\n/g, '<br>');
             return html;
