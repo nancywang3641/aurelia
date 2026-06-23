@@ -19,6 +19,10 @@
     let GLOBAL_CHATS = {};
     let GLOBAL_ACTIVE_ID = null;
     let GLOBAL_TAB = 'chat';
+    // 「發現」tab 的跑團手機記錄檢視器狀態（唯讀，讀酒館正文 <chat> 區塊）
+    let _vnLogRooms = null;      // 解析快取：{房名: {name, members[], msgs:[{sender,content,isMe,type}]}}
+    let _vnLogView = 'list';     // list | room
+    let _vnLogRoom = null;       // 當前看的房名
     let RENDER_QUEUE = [];
     let APP_CONTAINER = null;
     let PENDING_ACTION_TYPE = null;
@@ -632,6 +636,37 @@
     }
     setInterval(processRenderQueue, 30);
 
+    // 解析酒館正文裡的 <chat chatroom="名">…</chat> 區塊 → {房名:{name,members,msgs}}（給「發現」tab 的跑團手機記錄唯讀檢視）
+    function _parseVnChatBlocks(fullText) {
+        const rooms = {};
+        if (!fullText) return rooms;
+        const blockRe = /<chat\s+chatroom\s*=\s*["']?([^"'>]*)["']?\s*>([\s\S]*?)<\/chat>/gi;
+        let bm;
+        while ((bm = blockRe.exec(fullText))) {
+            const room = ((bm[1] || '').trim()) || '對話';
+            const body = bm[2] || '';
+            if (!rooms[room]) rooms[room] = { name: room, members: [], msgs: [] };
+            let me = rooms[room].members[0] || '';
+            body.split('\n').forEach(function (line) {
+                line = line.trim();
+                if (!line) return;
+                const withM = line.match(/^\[\s*With\s*[:：]\s*(.*?)\s*\]/i);
+                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean); if (ppl.length) { rooms[room].members = ppl; me = ppl[0]; } return; }
+                const nameM = line.match(/^\[([^\]]+?)\]\s*([\s\S]*)$/);   // [名] 內容
+                if (!nameM) return;
+                let rawName = nameM[1].trim();
+                if (/[:：]/.test(rawName)) return;                         // [图片:…]/[Chat:…]/[Time…] 等不是發話人 → 略過
+                if (rawName.indexOf('|') >= 0) rawName = rawName.split('|').pop().trim() || rawName;   // [Char|红石]→红石
+                const content = (nameM[2] || '').trim();
+                if (!content) return;
+                if (/^(系統|系统|System|Notice)$/i.test(rawName)) { rooms[room].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
+                const isMe = (me && rawName === me) || /^(User|我|主角|You|Self|Me)$/i.test(rawName);
+                rooms[room].msgs.push({ type: 'msg', sender: rawName, content: content, isMe: isMe });
+            });
+        }
+        return rooms;
+    }
+
     function handleNewMessages(chats, messageId) {
         const configStr = localStorage.getItem('wx_phone_api_config');
         if (configStr && JSON.parse(configStr).directMode) return;
@@ -847,7 +882,36 @@
             this.render();
         },
         
-        switchTab: function(tabName) { GLOBAL_TAB = tabName; this.render(); },
+        switchTab: function(tabName) { if (tabName === 'discover' && GLOBAL_TAB !== 'discover') { _vnLogView = 'list'; _vnLogRoom = null; } GLOBAL_TAB = tabName; this.render(); },
+
+        // ── 發現 tab：跑團手機記錄（唯讀，讀酒館正文 <chat chatroom> 區塊，重用 renderBubble 顯示）──
+        vnLogRefresh: function() { _vnLogRooms = null; _vnLogView = 'list'; _vnLogRoom = null; this._fillVnLog(); },
+        openVnLogRoom: function(encName) { try { _vnLogRoom = decodeURIComponent(encName); } catch (e) { _vnLogRoom = encName; } _vnLogView = 'room'; this._fillVnLog(); },
+        vnLogBack: function() { _vnLogView = 'list'; _vnLogRoom = null; this._fillVnLog(); },
+        _fillVnLog: async function() {
+            if (!(APP_CONTAINER && APP_CONTAINER.querySelector('#wx-vnlog-mount'))) return;
+            try {
+                if (!_vnLogRooms) {
+                    let text = '';
+                    try {
+                        const msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null;
+                        if (Array.isArray(msgs)) text = msgs.map(function (m) { return (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || ''); }).join('\n');
+                    } catch (e) {}
+                    _vnLogRooms = _parseVnChatBlocks(text);
+                }
+                const mount = APP_CONTAINER && APP_CONTAINER.querySelector('#wx-vnlog-mount');   // 重抓(可能已被 render 換掉)
+                if (!mount) return;
+                if (_vnLogView === 'room' && _vnLogRoom && _vnLogRooms[_vnLogRoom]) {
+                    mount.innerHTML = window.WX_VIEW.vnLogRoomHTML(_vnLogRooms[_vnLogRoom], DARK_MODE);
+                    const sc = mount.querySelector('.wx-vnlog-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
+                } else {
+                    _vnLogView = 'list';
+                    mount.innerHTML = window.WX_VIEW.vnLogListHTML(_vnLogRooms);
+                }
+            } catch (e) {
+                try { var mt = APP_CONTAINER.querySelector('#wx-vnlog-mount'); if (mt) mt.innerHTML = '<div class="wx-vnlog-empty">載入失敗：' + (e.message || e) + '</div>'; } catch (e2) {}
+            }
+        },
 
         toggleDarkMode: function() {
             DARK_MODE = !DARK_MODE;
@@ -868,6 +932,9 @@
 
             const html = window.WX_VIEW.renderShell(GLOBAL_ACTIVE_ID, GLOBAL_CHATS, GLOBAL_TAB, DARK_MODE);
             APP_CONTAINER.innerHTML = html;
+
+            // 「發現」tab：非同步填入跑團手機記錄(讀酒館正文 <chat> 區塊)
+            if (GLOBAL_TAB === 'discover') { try { this._fillVnLog(); } catch (e) {} }
 
             const room = APP_CONTAINER.querySelector('.wx-room-scroll');
             if (room && GLOBAL_ACTIVE_ID) {
