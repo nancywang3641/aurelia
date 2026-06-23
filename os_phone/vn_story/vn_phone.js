@@ -159,7 +159,7 @@
         // 通用：抓任何 [別名: 描述]，用 _isAliasTag 判類型，只拆三類媒體；[文件:]/[22:35] 等非媒體不動。
         _splitStickerContent: function(content) {
             // 其他特殊類型(轉賬/紅包/視頻/位置/文件…)維持整條、不拆
-            if (/^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|文件|File)[：:]/i.test(content)) return [content];
+            if (/^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|文件|File|收款码|收款碼|收款|付款码|付款碼)[：:]/i.test(content)) return [content];
             if (content.startsWith('[撤回]')) return [content];
 
             const re = /\[[^\]\[：:]+[：:][^\]]*\]|\[[^\]]+\.(?:gif|jpg|jpeg|png)\]/gi;
@@ -195,6 +195,22 @@
             const rest = content.slice(last).trim();
             if (rest) parts.push(rest);
             return parts.length > 0 ? parts : [content];
+        },
+
+        // 假收款碼：程式畫一個「QR 樣式」SVG（三角定位框 + 依 seed 的隨機黑塊），跑團用、不可掃也不用生圖
+        _fakeQrSvg: function(seed) {
+            let h = 0; const s = String(seed || 'qr'); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
+            const N = 25; let cells = '';
+            const fp = (r, c, br, bc) => { const rr = r - br, cc = c - bc; return rr === 0 || rr === 6 || cc === 0 || cc === 6 || (rr >= 2 && rr <= 4 && cc >= 2 && cc <= 4); };
+            for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+                let on;
+                if (r < 7 && c < 7) on = fp(r, c, 0, 0);
+                else if (r < 7 && c >= N - 7) on = fp(r, c, 0, N - 7);
+                else if (r >= N - 7 && c < 7) on = fp(r, c, N - 7, 0);
+                else { h = (h * 1103515245 + 12345) & 0x7fffffff; on = (h % 100) > 52; }
+                if (on) cells += '<rect x="' + c + '" y="' + r + '" width="1" height="1"/>';
+            }
+            return '<svg viewBox="0 0 ' + N + ' ' + N + '" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect width="' + N + '" height="' + N + '" fill="#fff"/><g fill="#1a1a1a">' + cells + '</g></svg>';
         },
 
         _avatarColor: function(name) {
@@ -236,6 +252,7 @@
             const locM  = content.match(/^\[(位置|Location|定位)[：:]\s*(.*?)\]$/i);
             const fileM = content.match(/^\[(文件|File)[：:]\s*(.*?)\]$/i);
             const linkM = content.match(/^\[(鏈接|链接|連結|连结|鏈結|网址|網址|網頁|网页|Link|URL|Url)[：:]\s*([\s\S]*?)\]$/i);
+            const recvM = content.match(/^\[(收款码|收款碼|收款|付款码|付款碼)[：:]\s*([\s\S]*?)\]$/i);
 
             let inner = '';
             if (imgM) {
@@ -315,6 +332,13 @@
                 const isUrl = /^(https?:\/\/|www\.)/i.test(lUrl);
                 const click = isUrl ? ` onclick="window.open('${encodeURI(lUrl).replace(/'/g,'%27')}')"` : '';
                 inner = `<div class="wx-link-msg${isUrl ? ' clickable' : ''}"${click}><div class="wx-link-body"><div class="wx-link-title">${safeTitle}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
+            } else if (recvM) {
+                const rParts = (recvM[2] || '').split('|');
+                const amt = (rParts[0] || '').trim(); const memo = (rParts[1] || '').trim();
+                const isNum = /^\d+(\.\d+)?$/.test(amt);
+                const amtDisp = (isNum ? '¥' + amt : (amt || '金額任意')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+                const memoDisp = (memo || '掃碼支付給對方').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+                inner = `<div class="wx-receive-msg"><div class="wx-receive-head"><i class="fa-solid fa-wallet"></i> 微信收款</div><div class="wx-receive-qr">${this._fakeQrSvg(recvM[2] || 'qr')}</div><div class="wx-receive-amt">${amtDisp}</div><div class="wx-receive-foot">${memoDisp}</div></div>`;
             } else {
                 inner = `<div class="chat-bubble">${content}</div>`;
             }

@@ -47,9 +47,25 @@
 
     window.WX_VIEW = {
         
+        // 假收款碼：程式畫「QR 樣式」SVG（三角定位框 + 依 seed 隨機黑塊），跑團用、不可掃也不用生圖
+        _fakeQrSvg: function(seed) {
+            let h = 0; const s = String(seed || 'qr'); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
+            const N = 25; let cells = '';
+            const fp = (r, c, br, bc) => { const rr = r - br, cc = c - bc; return rr === 0 || rr === 6 || cc === 0 || cc === 6 || (rr >= 2 && rr <= 4 && cc >= 2 && cc <= 4); };
+            for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+                let on;
+                if (r < 7 && c < 7) on = fp(r, c, 0, 0);
+                else if (r < 7 && c >= N - 7) on = fp(r, c, 0, N - 7);
+                else if (r >= N - 7 && c < 7) on = fp(r, c, N - 7, 0);
+                else { h = (h * 1103515245 + 12345) & 0x7fffffff; on = (h % 100) > 52; }
+                if (on) cells += '<rect x="' + c + '" y="' + r + '" width="1" height="1"/>';
+            }
+            return '<svg viewBox="0 0 ' + N + ' ' + N + '" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect width="' + N + '" height="' + N + '" fill="#fff"/><g fill="#1a1a1a">' + cells + '</g></svg>';
+        },
+
         // --- 1. 氣泡渲染 (保持 V108.5 邏輯) ---
         renderBubble: function(msg, chatObj, withAnim, msgIndex) {
-            const blockRegex = /(\[\s*(?:表情包|Sticker|图片|圖片|Img|视频|視頻|Video|文件|File|位置|Location|定位|转账|轉帳|Transfer|红包|RedPacket|礼品|礼物|Gift|语音|語音|Voice|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|WbShare).*?\])/gi;
+            const blockRegex = /(\[\s*(?:表情包|Sticker|图片|圖片|Img|视频|視頻|Video|文件|File|位置|Location|定位|转账|轉帳|Transfer|红包|RedPacket|礼品|礼物|Gift|语音|語音|Voice|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|收款码|收款碼|收款|付款码|付款碼|WbShare).*?\])/gi;
             if (msg.content && typeof msg.content === 'string' && blockRegex.test(msg.content)) {
                 const pureContent = msg.content.replace(blockRegex, '').trim();
                 if (pureContent.length > 0 || msg.content.match(blockRegex).length > 1) {
@@ -163,7 +179,7 @@
             }
             
             const side = msg.isMe ? 'me' : 'you';
-            const isSpecial = msg.content.match(/^\[\s*(转账|轉帳|Transfer|位置|Location|定位|视频|Video|红包|RedPacket|文件|File|礼品|Gift|礼物|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|WbShare)/i);
+            const isSpecial = msg.content.match(/^\[\s*(转账|轉帳|Transfer|位置|Location|定位|视频|Video|红包|RedPacket|文件|File|礼品|Gift|礼物|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|收款码|收款碼|收款|付款码|付款碼|WbShare)/i);
             const isImageTag = msg.content.match(/^\[\s*(图片|Img).*?\]$/i); 
             const isSticker = msg.content.match(/^\[\s*(表情包|Sticker).*?\]$/i);
             const bubbleStyle = (isSpecial || isImageTag || isSticker) ? 'padding:0; border:none; background:transparent; box-shadow:none;' : '';
@@ -452,6 +468,14 @@
             html = html.replace(/\[\s*(?:链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|Url)\s*[:：]?\s*(.*?)\s*\]/gi, (m, title) => {
                 const safe = (String(title || '').trim() || '網頁連結').replace(/&/g,'&amp;').replace(/</g,'&lt;');
                 return `<div class="wx-link-msg"><div class="wx-link-body"><div class="wx-link-title">${safe}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
+            });
+            // 收款碼（假容器：程式畫 QR 樣式 SVG，跑團用、不用生圖；重用 vn_styles.css 的 .wx-receive-msg）
+            html = html.replace(/\[\s*(?:收款码|收款碼|收款|付款码|付款碼)\s*[:：]?\s*(.*?)\s*\]/gi, (m, body) => {
+                const parts = String(body || '').split('|'); const amt = (parts[0] || '').trim(); const memo = (parts[1] || '').trim();
+                const isNum = /^\d+(\.\d+)?$/.test(amt);
+                const amtDisp = (isNum ? '¥' + amt : (amt || '金額任意')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+                const memoDisp = (memo || '掃碼支付給對方').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+                return `<div class="wx-receive-msg"><div class="wx-receive-head"><i class="fa-solid fa-wallet"></i> 微信收款</div><div class="wx-receive-qr">${this._fakeQrSvg(body || 'qr')}</div><div class="wx-receive-amt">${amtDisp}</div><div class="wx-receive-foot">${memoDisp}</div></div>`;
             });
             html = html.replace(/\n/g, '<br>');
             return html;
