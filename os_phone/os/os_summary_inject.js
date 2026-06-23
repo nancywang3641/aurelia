@@ -81,7 +81,7 @@
 
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
-        if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, injectSummary);
+        if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectSummary(); });   // dryRun 空跑不注入(once 會被空跑吃掉)
         if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
             try { _lastUninject?.(); } catch (e) {}
             _lastUninject = null; _cache.clear(); _lastInjected = null;
