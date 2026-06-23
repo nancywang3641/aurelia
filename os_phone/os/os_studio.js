@@ -1440,13 +1440,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         _mcChars = entries.map(e => ({
             uid: e.uid,
             name: e.comment || '(未命名)',
-            summary: String(e.content || '').replace(/【[^】]*】/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40),
+            summary: String(e.content || '').replace(/^【用戶人設】[^\n]*\n+/, '').replace(/【[^】]*】/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40),
             enabled: e.enabled !== false,
             content: e.content || ''
         }));
     }
     function _mcOpenChar(entry) {
-        if (entry) _mcWorking = { uid: entry.uid, name: entry.name, blocks: _mcParseEntryContent(entry.content).map(b => ({ label: b.label, content: b.content, userEdited: false })) };
+        if (entry) _mcWorking = { uid: entry.uid, name: entry.name, blocks: _mcParseEntryContent(String(entry.content || '').replace(/^【用戶人設】[^\n]*\n+/, '')).map(b => ({ label: b.label, content: b.content, userEdited: false })) };
         else _mcWorking = { uid: null, name: '', blocks: [] };
         _mcChat = []; _mcPendCount = 0; _mcView = 'editor'; _mcPane = 'chat';
         renderPersonaPanel();
@@ -1722,8 +1722,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const TH = _wbTH();
         if (!TH) { alert('酒館助手未就緒'); return; }
         await _mcEnsureBook();
-        const content = _mcAssembleContent(_mcWorking.blocks);
-        const entry = { comment: _mcWorking.name.trim(), keys: [], content, type: 'constant' };
+        const _nm = _mcWorking.name.trim();
+        // 主模型只讀條目「內容」、讀不到標題 → 內容開頭標【用戶人設】+角色名，讓它知道這是玩家扮演的主角、別當 NPC/世界設定
+        const content = '【用戶人設】這是玩家本人在故事中扮演的主角「' + _nm + '」的設定，請以此理解並扮演使用者角色：\n\n' + _mcAssembleContent(_mcWorking.blocks);
+        const entry = { comment: _nm, keys: [], content, type: 'constant' };
         try {
             if (_mcWorking.uid != null) await TH.setLorebookEntries(MC_BOOK, [{ uid: _mcWorking.uid, ...entry }]);
             else await TH.createLorebookEntries(MC_BOOK, [{ ...entry, enabled: false }]);
