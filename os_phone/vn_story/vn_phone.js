@@ -153,33 +153,40 @@
             return content;
         },
 
-        // 自動分割混合文字+表情包的訊息（檔案式 [x.gif] 或描述式 [表情包: 描述] 都拆成單獨一條）
-        // 例: "哈哈哈[笑死.gif]" → ["哈哈哈","[表情包:URL]"]；"加油！[表情包: 小猫打滚]" → ["加油！","[表情包: 小猫打滚]"]
+        // 把混在文字裡的「圖片/語音/表情包」tag 拆成單獨一條（描述式 [X: 描述] 或檔案式 [x.gif] 都拆）
+        // 例: "加油！[表情包: 小猫打滚]" → ["加油！","[表情包: 小猫打滚]"]；"我到了[图片: 街道照]" → ["我到了","[图片: 街道照]"]
+        // 通用：抓任何 [別名: 描述]，用 _isAliasTag 判類型，只拆三類媒體；[文件:]/[22:35] 等非媒體不動。
         _splitStickerContent: function(content) {
-            // 整串就是其他特殊類型 → 不拆（表情包「不」在此列：要能從混合文字裡拆出來單獨成條）
-            if (this._isAliasTag(content, this._IMAGE_ALIAS) ||
-                this._isAliasTag(content, this._VOICE_ALIAS) ||
-                /^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|文件|File)[：:]/i.test(content)) return [content];
+            // 其他特殊類型(轉賬/紅包/視頻/位置/文件…)維持整條、不拆
+            if (/^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|文件|File)[：:]/i.test(content)) return [content];
             if (content.startsWith('[撤回]')) return [content];
 
-            // ①描述式 [表情包/貼紙/表情/Sticker/Emote: 描述]  ②檔案式 [xxx.gif/jpg/png]
-            const re = /\[(?:表情包|貼紙|贴纸|表情|Sticker|Emote)[：:][^\]]*\]|\[[^\]]+\.(?:gif|jpg|jpeg|png)\]/gi;
+            const re = /\[[^\]\[：:]+[：:][^\]]*\]|\[[^\]]+\.(?:gif|jpg|jpeg|png)\]/gi;
             if (!re.test(content)) return [content];
             re.lastIndex = 0;
 
             const parts = [];
             let last = 0, m;
             while ((m = re.exec(content)) !== null) {
+                const tag = m[0];
+                const isFile = /\.(?:gif|jpg|jpeg|png)\]$/i.test(tag) && !/[：:]/.test(tag);
+                const isStk  = this._isAliasTag(tag, this._STICKER_ALIAS);
+                const isMedia = isFile || isStk ||
+                    this._isAliasTag(tag, this._IMAGE_ALIAS) ||
+                    this._isAliasTag(tag, this._VOICE_ALIAS);
+                if (!isMedia) continue;   // 非媒體 tag（[文件:…]/[22:35]…）→ 不拆、留在文字裡
+
                 const before = content.slice(last, m.index).trim();
                 if (before) parts.push(before);
-                const tag = m[0];
-                const aliasM = tag.match(/^\[(?:表情包|貼紙|贴纸|表情|Sticker|Emote)[：:]\s*([\s\S]*?)\]$/i);
-                if (aliasM) {
-                    parts.push(`[表情包: ${aliasM[1].trim()}]`);   // 描述式 → 正規化成 stkM 認得的形式
-                } else {
-                    const fname = tag.slice(1, -1);                // [x.gif] → x.gif
+                if (isFile) {
+                    const fname = tag.slice(1, -1);
                     const base = (window.VN_Config?.data?.stickerBase || '').replace(/\/?$/, '/');
                     parts.push(`[表情包:${base ? base + fname : fname}]`);
+                } else if (isStk) {
+                    const aliasM = tag.match(/^\[[^\]\[：:]+[：:]\s*([\s\S]*?)\]$/);
+                    parts.push(`[表情包: ${aliasM ? aliasM[1].trim() : tag}]`);   // 表情包正規化成 stkM 認得的形式
+                } else {
+                    parts.push(tag);   // 圖片/語音 描述式 → 原樣（buildBubble 會 normalize + 渲染）
                 }
                 last = m.index + m[0].length;
             }
