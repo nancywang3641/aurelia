@@ -9,11 +9,20 @@
         _inBlockId: null,      // 記錄當前正在收集哪個區塊
         _blockLines: [],       // 收集區塊內的資料行
         
+        _tplAppMap: {},        // 模板 id → 已安裝手機 app id（共用面板兩邊讀同一份 DB 資料用）
+
         init: async function() {
             const win = window.parent || window;
             if (win.OS_DB?.getAllVNTagTemplates) {
                 const tpls = await win.OS_DB.getAllVNTagTemplates();
                 this.activeTemplates = tpls.filter(t => t.isActive);
+                // 建「模板 → 手機 app id」對照：共用面板在劇情裡(VN)與桌面(app)要存進「同一個 appId 的桶」才共用得到。
+                // app 端用自己的 app id 當 appId，所以 VN 端 dbSave 也要對到「該模板對應的那個 app id」(靠 srcTplId 反查)。
+                this._tplAppMap = {};
+                try {
+                    const apps = win.OS_DB.getAllPhoneApps ? (await win.OS_DB.getAllPhoneApps()) : [];
+                    (apps || []).forEach(a => { if (a && a.srcTplId) this._tplAppMap[a.srcTplId] = a.id; });
+                } catch (e) {}
                 this._injectCSS();
             }
         },
@@ -91,8 +100,11 @@
         // st helper：與創作室預覽 _buildPreviewSt 同一套 API（md / parse / setImage）。
         // 模板 JS 是針對 (container, lines, onComplete, st) 四參數寫的；不給 st 會「st is not defined」。
         // 跟 PWA/酒館共用同一支引擎，創作室建的 tag 兩邊一致。
-        _buildSt: function(lines) {
+        _buildSt: function(lines, tpl) {
             const imgManager = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
+            // 共用面板：dbSave/dbLoad 要對到「該模板對應的手機 app id」，跟桌面 app 端存進同一個桶 → 兩邊讀同一份。
+            // 沒對應 app（未裝成 app／純展示）就退回 'pwa_panel' 通用桶。
+            const shareAppId = (tpl && tpl.id && this._tplAppMap && this._tplAppMap[tpl.id]) || 'pwa_panel';
             return {
                 md: function(text) {
                     if (!text) return '';
@@ -166,8 +178,8 @@
                         host.__stLoad = ov; host.appendChild(ov);
                     } catch (e) {}
                 },
-                dbSave: async function(k, v, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.saveAppData('pwa_panel', k, v, cid); } catch (e) { return false; } },
-                dbLoad: async function(k, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.getAppData('pwa_panel', k, cid); } catch (e) { return null; } },
+                dbSave: async function(k, v, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.saveAppData(shareAppId, k, v, cid); } catch (e) { return false; } },
+                dbLoad: async function(k, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.getAppData(shareAppId, k, cid); } catch (e) { return null; } },
                 setImage: async function(el, prompt, type, provider) {
                     if (!el || !prompt) return;
                     type = type || 'scene';
@@ -251,7 +263,7 @@
 
                 // 真正播放（非預覽）→ 走真實圖片 API；並注入 st helper（與創作室同一套 API）
                 window.__IS_PREVIEW = false;
-                const st = this._buildSt(lines);
+                const st = this._buildSt(lines, tpl);
                 const runMicroApp = new Function('container', 'lines', 'onComplete', 'st', safeJs);
                 runMicroApp(panel, lines, onComplete, st);
             } catch(e) {
