@@ -2662,6 +2662,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             try {
                 // 清除可能導致解析失敗的隱藏控制字符 (保留你原本的邏輯)
                 cleanStr = cleanStr.replace(/[\u0000-\u0009\u000B-\u001F]+/g, "");
+                // 修復 AI 常見的非法跳脫：JSON 不允許 \`(反斜線+反引號)，但模型在面板 js 的模板字面裡塞「字面三反引號」時，
+                // 為逸出反引號會寫 \`，轉成外層 JSON 卻忘了把反斜線再跳脫成 \\` → 整份 JSON.parse 直接 Bad escaped character。
+                // 反引號在 JSON 本就不用跳脫；奇數個反斜線+反引號＝最後那個是誤escape→補一個反斜線(parse 後得到合法 JS 逸出反引號 \`)。
+                cleanStr = cleanStr.replace(/(\\+)`/g, (m, s) => (s.length % 2 ? s + '\\' + '`' : m));
                 const parsed = JSON.parse(cleanStr);
 
                 // 🔪 VN 模式：保留 history（本地 metadata，AI 不該動到）
