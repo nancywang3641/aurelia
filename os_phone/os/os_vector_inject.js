@@ -95,9 +95,10 @@
             if (!all.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
 
-            // 🔎 向量召回是否就緒：開了向量 + 庫裡確實有向量(回填過) → 主模型不再背 2000 行全目錄，只給釘選＋導演挑的細節。
-            //    開了但還沒回填(向量全 null) → 視為未就緒，仍走全目錄(回填空窗期不開天窗)。
-            const _vecActive = (win.OS_VECTOR_ENGINE?.isEnabled?.() === true) && all.some(m => Array.isArray(m.vector) && m.vector.length);
+            // 🔎 向量召回是否就緒：開了向量 + 庫裡確實有「當前模型算的」向量(回填過) → 主模型不再背 2000 行全目錄，只給釘選＋導演挑的細節。
+            //    開了但還沒回填 / 換了模型舊向量不認 → 視為未就緒，仍走全目錄(回填空窗期不開天窗)。
+            const _curVecModel = win.OS_VECTOR_ENGINE?.curModelId?.();
+            const _vecActive = (win.OS_VECTOR_ENGINE?.isEnabled?.() === true) && !!_curVecModel && all.some(m => Array.isArray(m.vector) && m.vector.length && m.vecModel === _curVecModel);
 
             // 索引 = 每條的「一句話摘要」(summary，學星河璀璨的目錄)，不是 tags。
             //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
