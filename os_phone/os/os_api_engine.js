@@ -670,7 +670,10 @@
                             // 🍎＋選了 profile：交給酒館 ConnectionManager 用「該 profile 的完整連線」
                             // （來源 api / secret / preset / exclude / region 全照 profile）→ 真的打到 profile 的來源
                             // （vertexai / custom / claude…），不再只偷 model 名、卻把請求送去 ST 當前激活來源（會誤送別的連線）。
-                            let _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, ...extraParams });
+                            // stream:false 隔離酒館串流開關：奧瑞亞不需要串流，一律強制關。
+                            // overridePayload 在 ST 合併序最後(presetToGeneratePayload 末 {...payload,...overridePayload})
+                            // 蓋過 oai_settings.stream_openai → 酒館串流開著也不影響奧瑞亞，免撞「便宜端點(如 Pioneer gemini)不支援串流」的 404。
+                            let _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, stream: false, ...extraParams });
                             _ov = _ensureModelOverride(_ctx, config.stProfileId, _ov, config.model);
                             const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
                                 config.stProfileId, cleanMessages, maxTokens, undefined, _ov
@@ -755,7 +758,9 @@
                         // 砍掉舊的 UI profile switching dance（之前會把 #connection_profiles select 切過去再切回來）
                         // 原因：並發呼叫會互相 abort 對方的 in-flight fetch，console 噴 "Canceled because main api changed"
                         // ST 的 sendRequest(profileId, ...) 本身就會用對應 profile 的 url/key/model，不需要 UI 同步切
-                        let _ov = _vertexOverride(context, stProfileId, { temperature, ...extraParams });
+                        // stream:false 隔離酒館串流開關：奧瑞亞不需要串流、一律強制關（overridePayload 蓋過 oai_settings.stream_openai）
+                        // → 酒館串流開著也不影響奧瑞亞，免撞「便宜端點(如 Pioneer gemini)不支援串流」的 404。
+                        let _ov = _vertexOverride(context, stProfileId, { temperature, stream: false, ...extraParams });
                         _ov = _ensureModelOverride(context, stProfileId, _ov, config.model);
                         const response = await context.ConnectionManagerRequestService.sendRequest(
                             stProfileId, cleanMessages, maxTokens, undefined, _ov
