@@ -166,6 +166,8 @@
                         host.__stLoad = ov; host.appendChild(ov);
                     } catch (e) {}
                 },
+                dbSave: async function(k, v, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.saveAppData('pwa_panel', k, v, cid); } catch (e) { return false; } },
+                dbLoad: async function(k, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.getAppData('pwa_panel', k, cid); } catch (e) { return null; } },
                 setImage: async function(el, prompt, type, provider) {
                     if (!el || !prompt) return;
                     type = type || 'scene';

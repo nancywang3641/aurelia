@@ -247,6 +247,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.esc(文字) → 把文字轉成安全 HTML。**用 innerHTML 塞用戶或 AI 產的文字前先 st.esc()**，防內容夾壞版面或 XSS。
 - st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。**第三參 scope**：不填＝全域（整個 app 一份）；填 'chat'＝綁當前聊天室（每個故事/聊天室各自一份，像 AVS）→ st.saveData(k,v,'chat')、st.loadData(k,'chat')。**跟劇情走的 app（論壇、日記、跟當前故事有關的資料）一律用 'chat'**；個人工具（記事本、計算機、設定）用全域不填。（要拿聊天室 id 自己分流也可 st.getChatId()）純展示卡不需要持久化。
 - 📚 **記錄／檔案型 app（論壇、日記、動態、事件記錄…使用者會「之後回來翻看過去」的）＝資料一律「累積」、絕不覆蓋**：生成新內容時，先 st.loadData 讀回舊清單 → 把新的 append 上去（別直接「整個變數＝新資料」蓋掉）→ st.saveData(…, 'chat') 存回。這樣使用者打開 app 就能看到「從第一章到現在的全部歷史」，不必回劇情裡翻到準確那一樓。每筆可附時間／章節標記方便瀏覽，舊的可往下滑。**這類 app 的本質＝內容的永久家，不是每次洗掉重生。**（除非使用者明說「只看最新」才覆蓋。）
+- st.dbSave(key, value[, 'chat']) / st.dbLoad(key[, 'chat']) → **存進 DB（async、要 await）**，scope 同 saveData。**資料量大／會一直累積的（論壇歷史、日記、長清單）一律用這個**（localStorage 有上限、塞多會爆，DB 不會）；小設定／少量資料用 st.saveData 即可。用法：init 時 const data = await st.dbLoad('forum','chat') 取回（沒有就給預設）、存時 await st.dbSave('forum', data, 'chat')。
 
 ## 🖼️ 生圖紀律（重要，否則一堆圖排隊）
 st.setImage 只給「FOCUS／重要對象」：主角、當前焦點角色、重要物品／場景。路人／NPC／評論頭像／列表縮圖／大量小頭像「禁用」生圖，改用「名字首字色塊頭像」（純 CSS、不呼叫 API）：取名字首字放圓形 div、背景色用名字 hash 出 hsl。自己塞 url 的 img 一律加 onerror 退回佔位／首字頭像，永遠不要出現破圖。
@@ -2788,6 +2789,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             // 預覽用 localStorage stub（裝成 app 後由 app_runtime 的 window.saveData 接管真持久化）；scope 用 tplId 隔離
             saveData(k, v, scope) { try { localStorage.setItem('aurelia_studio_preview_' + (scope === 'chat' ? 'chat_' : '') + k, JSON.stringify(v)); } catch (e) {} },
             loadData(k, scope) { try { const s = localStorage.getItem('aurelia_studio_preview_' + (scope === 'chat' ? 'chat_' : '') + k); return s == null ? null : JSON.parse(s); } catch (e) { return null; } },
+            async dbSave(k, v, scope) { try { const DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; return await DB.saveAppData('studio_preview', k, v, scope === 'chat' ? this.getChatId() : null); } catch (e) { return false; } },
+            async dbLoad(k, scope) { try { const DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; return await DB.getAppData('studio_preview', k, scope === 'chat' ? this.getChatId() : null); } catch (e) { return null; } },
             getChatId() { try { const ST = window.parent && window.parent.SillyTavern; if (ST && ST.getCurrentChatId) { const id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } } catch (e) {} return ''; }
         };
     }
@@ -2818,6 +2821,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'loading:function(t,on,x){try{if(window.stLoading)window.stLoading(t,on,x);}catch(e){}},'
             +   'saveData:function(k,v,s){try{if(window.saveData)window.saveData(k,v,s);}catch(e){}},'
             +   'loadData:function(k,s){try{return window.loadData?window.loadData(k,s):null;}catch(e){return null;}},'
+            +   'dbSave:function(k,v,s){try{return window.dbSave?window.dbSave(k,v,s):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'dbLoad:function(k,s){try{return window.dbLoad?window.dbLoad(k,s):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
             +   'getChatId:function(){try{return window.getChatId?window.getChatId():"";}catch(e){return "";}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
