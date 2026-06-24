@@ -46,7 +46,11 @@
 
     function _getEmbedModel() { return _cfg().embeddingModel || 'text-embedding-3-small'; }
     function _getTopK()       { return parseInt(_cfg().topK) || 5; }
-    function _hasEmbedConfig(){ return !!(_getEmbedUrl() && _getEmbedKey()); }   // 有設端點+Key 才算得了向量（沒設就 best-effort 退 null，不報錯洗版）
+    const LOCAL_MODEL_DEFAULT = 'Xenova/bge-small-zh-v1.5';
+    function _isLocal()       { return _cfg().embeddingLocal === true; }                      // 本地模型(transformers.js 在瀏覽器內算)：文字不外流、最安心、零封號風險
+    function _localModel()    { return _cfg().localModel || LOCAL_MODEL_DEFAULT; }
+    function _curModelId()    { return _isLocal() ? _localModel() : _getEmbedModel(); }        // 目前算向量用哪個模型 → 存進記憶當 vecModel，防換模型後新舊向量維度不一致被混算(餘弦垃圾)
+    function _hasEmbedConfig(){ return _isLocal() || !!(_getEmbedUrl() && _getEmbedKey()); }   // 本地模式免端點/Key；雲端要有端點+Key 才算得了（沒設就 best-effort 退 null，不報錯洗版）
 
     // ================================================================
     // 二、Embedding API
@@ -54,6 +58,7 @@
 
     // text 可傳「字串」(單筆→回 Float 陣列) 或「字串陣列」(批次→回 Float 陣列的陣列、照 index 排好)。批次給回填用、省往返。
     async function embed(text) {
+        if (_isLocal()) return _embedLocal(text);   // 🔒 本地模型：transformers.js 在瀏覽器內算，文字零外流
         const url = _getEmbedUrl();
         const key = _getEmbedKey();
         if (!url || !key) throw new Error('[VecEngine] Embedding 端點或 Key 未設定');
@@ -75,6 +80,81 @@
         const vec = data?.data?.[0]?.embedding;
         if (!Array.isArray(vec)) throw new Error('[VecEngine] Embedding 回應格式異常');
         return vec; // Float array
+    }
+
+    // ================================================================
+    // 二之二、本地 Embedding（transformers.js / WASM，文字零外流）
+    //   懶載：第一次用到才從 CDN import transformers.js + 從 HF 下載模型(快取在瀏覽器，之後免重下)。
+    //   單執行緒 WASM：避開 Worker/SharedArrayBuffer 的 CSP 雷，最大化在 TauriTavern webview 跑得動的機率。
+    // ================================================================
+    const _TF_URLS = [
+        'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm',   // jsdelivr 保證轉 ESM
+        'https://esm.sh/@xenova/transformers@2.17.2',                       // esm.sh 一定是 ESM
+        'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2'          // 官方文件用的裸 URL（多數情況也行）
+    ];
+    let _tfModP = null, _localPipeP = null, _localPipeModel = '';
+
+    async function _loadTF() {
+        if (_tfModP) return _tfModP;
+        _tfModP = (async () => {
+            let lastErr = null;
+            for (const u of _TF_URLS) {
+                try {
+                    const mod = await import(/* webpackIgnore: true */ u);
+                    const T = (mod && mod.pipeline) ? mod : ((mod && mod.default && mod.default.pipeline) ? mod.default : null);   // 認 pipeline 匯出(CJS interop 退 default)
+                    if (T && T.pipeline) return T;
+                    lastErr = new Error('模組沒有 pipeline 匯出');
+                } catch (e) { lastErr = e; console.warn('[VecEngine] transformers.js 載入失敗，換下一個 CDN:', u, e?.message || e); }
+            }
+            throw new Error('transformers.js 載入失敗（CDN 都連不上 / 被 CSP 擋 / 格式不對）：' + (lastErr?.message || lastErr));
+        })();
+        return _tfModP;
+    }
+
+    async function _getLocalPipe() {
+        const model = _localModel();
+        if (_localPipeP && _localPipeModel === model) return _localPipeP;
+        _localPipeModel = model;
+        _localPipeP = (async () => {
+            const T = await _loadTF();
+            try {
+                T.env.allowLocalModels = false;   // 不找本機檔，只從 HF 下載一次後快取
+                if (T.env.backends?.onnx?.wasm) T.env.backends.onnx.wasm.numThreads = 1;   // 單執行緒，避開 Worker/SAB 的 CSP 限制
+            } catch (e) {}
+            return await T.pipeline('feature-extraction', model, { quantized: true });
+        })();
+        return _localPipeP;
+    }
+
+    async function _embedLocal(text) {
+        const pipe = await _getLocalPipe();
+        const input = Array.isArray(text) ? text.map(t => String(t || '')) : String(text || '');
+        const out = await pipe(input, { pooling: 'mean', normalize: true });   // mean-pool + L2 normalize → 餘弦可直接比
+        const dims = out.dims || [];
+        const dim = dims[dims.length - 1] || out.data.length;
+        if (Array.isArray(text)) {
+            const n = dims[0] || 1, flat = Array.from(out.data), vecs = [];
+            for (let i = 0; i < n; i++) vecs.push(flat.slice(i * dim, (i + 1) * dim));
+            return vecs;
+        }
+        return Array.from(out.data);
+    }
+
+    // 可行性測試（spike）：分階段試「載函式庫 → 下模型 → 算一條」，哪一關掛了回報哪一關 + 錯誤訊息（無 F12 環境靠這個診斷）。
+    async function testLocal() {
+        let stage = '初始化';
+        try {
+            stage = '載入函式庫(transformers.js)';
+            await _loadTF();
+            stage = '下載/載入模型(首次需下 30–60MB)';
+            const t0 = Date.now();
+            const v = await _embedLocal('測試文字 hello world');
+            const ms = Date.now() - t0;
+            if (!Array.isArray(v) || !v.length) throw new Error('回傳向量為空');
+            return { ok: true, dim: v.length, ms, model: _localModel() };
+        } catch (e) {
+            return { ok: false, stage, error: (e?.message || String(e)) };
+        }
     }
 
     // ================================================================
@@ -199,6 +279,7 @@
                     text: entry.text || '',
                     tags: entry.tags || [],
                     vector: vec,
+                    vecModel: vec ? _curModelId() : null,           // 算這條向量用的模型 → search 只認同模型的(換模型後新舊維度不混算)
                     createdAt: Date.now()
                 });
             } catch (saveErr) {
@@ -215,7 +296,9 @@
         if (!win.OS_DB?.getAllVnMemories || !win.OS_DB?.saveVnMemory) return { done: 0, ok: 0, total: 0 };
         if (!_hasEmbedConfig()) throw new Error('尚未設定記憶服務（端點／Key）');
         const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
-        const todo = all.filter(m => m && m.text && !m.merged && !(Array.isArray(m.vector) && m.vector.length));
+        const cur = _curModelId();
+        // 沒向量、或向量是「別的模型」算的(換過模型) → 都要(重)建
+        const todo = all.filter(m => m && m.text && !m.merged && !(Array.isArray(m.vector) && m.vector.length && m.vecModel === cur));
         const total = todo.length;
         if (!total) return { done: 0, ok: 0, total: 0 };
         const BATCH = 32, DELAY = 350;
@@ -228,6 +311,7 @@
                     const v = vecs[j];
                     if (Array.isArray(v) && v.length) {
                         chunk[j].vector = v;
+                        chunk[j].vecModel = cur;
                         try { await win.OS_DB.saveVnMemory(chunk[j]); ok++; } catch (e) {}
                     }
                 }
@@ -250,11 +334,12 @@
         if (!_isEnabled() || !win.OS_DB?.getAllVnMemories) return [];
         try {
             const queryVec = await embed(queryText);
+            const cur = _curModelId();
             const all = await win.OS_DB.getAllVnMemories(storyId);
             if (!all.length) return [];
 
             return all
-                .filter(m => Array.isArray(m.vector) && m.vector.length)
+                .filter(m => Array.isArray(m.vector) && m.vector.length && m.vecModel === cur)   // 只比同模型算的向量(維度一致、餘弦才有意義)
                 .map(m => ({ ...m, _score: cosineSim(queryVec, m.vector) }))
                 .sort((a, b) => b._score - a._score)
                 .slice(0, topK || _getTopK());
@@ -280,7 +365,7 @@
     // 八、公開 API
     // ================================================================
 
-    win.OS_VECTOR_ENGINE = { embed, ingest, ingestEntries, backfillVectors, search, isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
+    win.OS_VECTOR_ENGINE = { embed, ingest, ingestEntries, backfillVectors, search, isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
         // 把章節原文清成「要餵給抽取的內容」(跟 ingest 同邏輯：summary 或 <content>)，給結合觸發共用
         const src = _cfg().extractSource || 'content';
         let c = '';
