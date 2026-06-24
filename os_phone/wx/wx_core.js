@@ -643,15 +643,25 @@
         const blockRe = /<chat\s+chatroom\s*=\s*["']?([^"'>]*)["']?\s*>([\s\S]*?)<\/chat>/gi;
         let bm;
         while ((bm = blockRe.exec(fullText))) {
-            const room = ((bm[1] || '').trim()) || '對話';
+            const roomName = ((bm[1] || '').trim()) || '對話';
             const body = bm[2] || '';
-            if (!rooms[room]) rooms[room] = { name: room, members: [], msgs: [] };
-            let me = rooms[room].members[0] || '';
-            body.split('\n').forEach(function (line) {
+            // 🔑 先掃 [Chat: 名|ID] 取「穩定 ID」當分群 key（AI 改群名但 ID 不變→合回同一間）；沒 ID 才退回房名
+            let roomId = '', nameFromHdr = '';
+            const rawLines = body.split('\n');
+            for (let li = 0; li < rawLines.length; li++) {
+                const ch = rawLines[li].trim().match(/^\[\s*Chat\s*[:：]\s*([^\]]*)\]/i);
+                if (ch) { const ps = ch[1].split('|'); nameFromHdr = (ps[0] || '').trim(); if (ps[1]) roomId = ps[1].trim(); break; }
+            }
+            const key = roomId || roomName;
+            const dispName = nameFromHdr || roomName;
+            if (!rooms[key]) rooms[key] = { id: key, name: dispName, members: [], msgs: [] };
+            else if (dispName) rooms[key].name = dispName;   // 名字以最新一次為準
+            let me = rooms[key].members[0] || '';
+            rawLines.forEach(function (line) {
                 line = line.trim();
                 if (!line) return;
                 const withM = line.match(/^\[\s*With\s*[:：]\s*(.*?)\s*\]/i);
-                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean); if (ppl.length) { rooms[room].members = ppl; me = ppl[0]; } return; }
+                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean); if (ppl.length) { rooms[key].members = ppl; me = ppl[0]; } return; }
                 const nameM = line.match(/^\[([^\]]+?)\]\s*([\s\S]*)$/);   // [名] 內容
                 if (!nameM) return;
                 let rawName = nameM[1].trim();
@@ -659,9 +669,9 @@
                 if (rawName.indexOf('|') >= 0) rawName = rawName.split('|').pop().trim() || rawName;   // [Char|红石]→红石
                 const content = (nameM[2] || '').trim();
                 if (!content) return;
-                if (/^(系統|系统|System|Notice)$/i.test(rawName)) { rooms[room].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
+                if (/^(系統|系统|System|Notice)$/i.test(rawName)) { rooms[key].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
                 const isMe = (me && rawName === me) || /^(User|我|主角|You|Self|Me)$/i.test(rawName);
-                rooms[room].msgs.push({ type: 'msg', sender: rawName, content: content, isMe: isMe });
+                rooms[key].msgs.push({ type: 'msg', sender: rawName, content: content, isMe: isMe });
             });
         }
         return rooms;
