@@ -239,13 +239,49 @@
         } catch (e) { console.warn('[VN Tags Injector] 失敗:', (e && e.message) || e); }
     }
 
+    // ── 💬 手機聊天室 ID 對照表：掃最近劇情的 [Chat: 名|ID]，每輪提醒 AI「沿用既有 ID、別因改群名而亂編」──
+    //    （配合 wx 發現 tab 改成按 ID 分群：AI 改名沒關係，ID 不變就合回同一間）
+    var WX_CHATROOM_INJECT_ID = 'aurelia_wx_chatroom_ids';
+    var _lastWxRoomUninject = null;
+    async function injectWxChatrooms() {
+        try {
+            try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {}
+            _lastWxRoomUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
+            var th = win.TavernHelper;
+            if (!th || !th.injectPrompts || !th.getChatMessages) return;
+            var lastId = 0;
+            try { lastId = await th.getLastMessageId(); } catch (e) {}
+            var start = Math.max(0, (lastId || 0) - 30);
+            var msgs = [];
+            try { msgs = (await th.getChatMessages(start + '-' + lastId)) || []; } catch (e) {}
+            var text = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
+            var map = {}, order = [];
+            var re = /\[Chat[:：]\s*([^|\]]+)\|([^\]]+)\]/g, m2;
+            while ((m2 = re.exec(text)) !== null) { var nm = (m2[1] || '').trim(), id = (m2[2] || '').trim(); if (id) { if (!(id in map)) order.push(id); map[id] = nm; } }
+            if (!order.length) return;
+            var table = order.map(function (id) { return map[id] + '｜' + id; }).join('、');
+            var result = th.injectPrompts([{
+                id: WX_CHATROOM_INJECT_ID,
+                content: '【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器內的 [Chat: 名|ID] 那行時用對 ID）；就算你改了群名也「絕不可」改 ID，只有全新房間才給新 ID：\n' + table,
+                position: 'in_chat',
+                depth: 0,
+                role: 'system'
+            }], { once: true });
+            _lastWxRoomUninject = (result && result.uninject) || null;
+            console.log('💬 [WX Chatroom ID Injector] 注入 ' + order.length + ' 間聊天室 ID 對照');
+        } catch (e) { console.warn('[WX Chatroom ID Injector] 失敗:', (e && e.message) || e); }
+    }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) {
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppMemory(); });   // dryRun 空跑不注入
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectVnTags(); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectWxChatrooms(); });
         }
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastWxRoomUninject = null; });
         console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件）');
     }
 
