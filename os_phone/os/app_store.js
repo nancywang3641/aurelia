@@ -196,8 +196,14 @@
         _showSuccess(c, rec.name);
     }
     async function _uninstall(id, c) {
+        // 先抓安裝記錄：創作室生成的 app 帶 srcTplId，卸載要連它的 VN 組件模板一起清（共用＝一個東西、整個移除、不留 VN組件孤兒）
+        let _rec = null;
+        try { _rec = (win.OS_DB && win.OS_DB.getPhoneApp) ? await win.OS_DB.getPhoneApp(id) : null; } catch (e) {}
         if (win.OS_DB && win.OS_DB.deletePhoneApp) await win.OS_DB.deletePhoneApp(id);
         await _purgeAppData(id);   // 連同 app 自己存的資料（面板/記憶/旗標）一起刪，兌現對話框承諾的「內容刪除」、不留孤兒
+        if (_rec && _rec.srcTplId && win.OS_STUDIO && win.OS_STUDIO.purgeTemplateFully) {
+            try { await win.OS_STUDIO.purgeTemplateFully(_rec.srcTplId); } catch (e) {}   // 連 VN 組件模板＋酒館殘留一起清
+        }
         _saveList(_loadList().filter(function (m) { return m.id !== id; }));
         if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(id);
         renderMine(c);
@@ -285,7 +291,7 @@
         }
 
         mkGroup([
-            mkRow('fa-trash', '卸載', function () { if (confirm('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)')) { _uninstall(a.id, c); _go(c, 'mine'); } }, { danger: true, noChev: true })
+            mkRow('fa-trash', '卸載', function () { var _msg = a.srcTplId ? ('卸載「' + (a.name || 'App') + '」？\n這是創作室面板：桌面圖標、資料、以及它在 VN 組件/劇情裡的版本會一起移除。') : ('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)'); if (confirm(_msg)) { _uninstall(a.id, c); _go(c, 'mine'); } }, { danger: true, noChev: true })
         ]);
 
         _go(c, 'appdetail');

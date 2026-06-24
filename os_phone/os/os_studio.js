@@ -3138,6 +3138,30 @@ ${cleanFormat}
         } catch (e) { console.warn('[Studio] 清主世界書條目殘留失敗', e); }
     }
 
+    // 刪除 VN 組件時，連它對應的手機 app（srcTplId 反查）＋ app 的四桶資料一起清。
+    // 共用＝一個東西：從展廳刪＝整個面板移除（app 那側也清乾淨，不留我的應用孤兒）。
+    async function _purgeLinkedPhoneApp(tplId) {
+        try {
+            const apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? (await win.OS_DB.getAllPhoneApps()) : [];
+            const rec = (apps || []).find(a => a && a.srcTplId === tplId);
+            if (!rec) return;
+            const aid = rec.id;
+            try { if (win.OS_DB.deletePhoneApp) await win.OS_DB.deletePhoneApp(aid); } catch (e) {}
+            try { if (win.OS_DB.deleteAppDataByApp) await win.OS_DB.deleteAppDataByApp(aid); } catch (e) {}
+            try { if (win.OS_DB.deleteAppMemoryByApp) await win.OS_DB.deleteAppMemoryByApp(aid); } catch (e) {}
+            try { if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(aid); } catch (e) {}
+            try {
+                const pre = 'aurelia_appdata_' + aid + '_';
+                const kill = [];
+                for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf(pre) === 0) kill.push(k); }
+                kill.forEach(k => localStorage.removeItem(k));
+                localStorage.removeItem('os_app_mem_plugin_' + aid);
+                const L = JSON.parse(localStorage.getItem('aurelia_phone_apps') || '[]') || [];
+                localStorage.setItem('aurelia_phone_apps', JSON.stringify(L.filter(m => m && m.id !== aid)));
+            } catch (e) {}
+        } catch (e) { console.warn('[Studio] 清連結手機 app 失敗', e); }
+    }
+
     // ============================================================
     // === 📝 直接編輯原碼 modal（給進階用戶繞過 AI 對話改 tpl JSON）===
     // ============================================================
@@ -3484,6 +3508,7 @@ ${cleanFormat}
                     try { await syncActiveTagsToLocal(); } catch (e) {}
                     if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
                     try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {}   // 連酒館正則+主世界書殘留一起清
+                    try { await _purgeLinkedPhoneApp(tpl.id); } catch (e) {}            // 連對應的手機 app + 資料一起清（共用＝整個移除）
                     renderVnComponents();
                 };
                 ob.appendChild(row);
@@ -3584,6 +3609,7 @@ ${cleanFormat}
             await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal();
             if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
             try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {}   // 連酒館正則+主世界書殘留一起清，不留孤兒
+            try { await _purgeLinkedPhoneApp(tpl.id); } catch (e) {}            // 連對應的手機 app + 資料一起清（共用＝整個移除）
             _vcTpl = null; _vcView = 'browse'; renderVnComponents();
         };
         _activatePreview(listEl, tpl, safeTagId);
@@ -4651,6 +4677,18 @@ ${d.usageDesc || ''}
             tpl.lobbyEnabled = !tpl.lobbyEnabled;
             try { await win.OS_DB.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); } catch (e) {}
             return !!tpl.lobbyEnabled;
+        },
+        // 給「我的應用」卸載用：共用＝一個東西（VN組件＋app），卸載 app 時連它的 VN 組件模板＋酒館殘留一起清。
+        // 只清模板側（app 那側由 app_store 自己刪）→ 卸載＝整個面板消失，不留 VN 組件孤兒。
+        purgeTemplateFully: async function (tplId) {
+            if (!tplId) return;
+            try {
+                const tpl = await _getTplById(tplId);
+                try { await win.OS_DB.deleteUITemplate(tplId); } catch (e) {}
+                try { await syncActiveTagsToLocal(); } catch (e) {}
+                if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
+                if (tpl && tpl.tagId) { try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {} }
+            } catch (e) { console.warn('[OS_STUDIO] purgeTemplateFully', e); }
         }
     };
 })();
