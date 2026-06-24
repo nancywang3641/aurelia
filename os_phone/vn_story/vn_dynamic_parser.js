@@ -242,8 +242,14 @@
             
             const panel = document.createElement('div');
             panel.className = `vn-dynamic-panel-${tpl.tagId}`;
-            panel.style.cssText = 'position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;';
-            panel.innerHTML = tpl.html || ''; 
+            // 「共用」面板 app 端設計成吃滿(width/min-height:100%)，但劇情這層 overlay 是全螢幕→會吃滿整個劇情畫面(VN 組件不建議全屏)。
+            // 故劇情裡把共用面板收成「手機 app 卡片」：限寬+限高+圓角陰影、置中浮在暗背景上(app 端不經這裡、照樣全展開)。
+            // 用「定高」而非 max-height，讓面板內 min-height:100%/flex:1 的內部捲動結構正常(標題固定、內容區自己捲)。純 VN 區塊卡維持原樣由內容自己決定尺寸。
+            const _shared = tpl.panelType === '共用';
+            panel.style.cssText = _shared
+                ? 'position:relative; width:100%; max-width:440px; height:82vh; max-height:760px; display:flex; flex-direction:column; overflow:auto; box-sizing:border-box; border-radius:16px; box-shadow:0 16px 50px rgba(0,0,0,0.55);'
+                : 'position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;';
+            panel.innerHTML = tpl.html || '';
             
             overlay.appendChild(panel);
             layer.appendChild(overlay);
