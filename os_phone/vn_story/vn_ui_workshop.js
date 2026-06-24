@@ -233,7 +233,7 @@
         fullHtml += `<div class="vn-dynamic-panel-${safeTagId}" id="${safeTagId}-container">\n${htmlContent}\n</div>\n`;
         
         if (data.js) {
-            let safeJs = data.js.replace(/\x60\x60\x60(?:javascript|js|html|css)?/gi, '').replace(/\x60\x60\x60/g, '').trim();
+            let safeJs = data.js.trim().replace(/^\x60\x60\x60(?:javascript|js|html|css)?\s*/i, '').replace(/\s*\x60\x60\x60\s*$/, '').trim();
             fullHtml += `\n<script>\n(async function(){\n  try {\n    const ctx = window.parent || window;\n    const imgManager = ctx.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;\n    const container = document.getElementById('${safeTagId}-container');\n    const rawText = \`$1\`;\n    const lines = rawText.split('\\n').map(l=>l.trim()).filter(Boolean);\n    window.__IS_PREVIEW = false;\n    ${safeJs}\n  } catch(e) {\n    console.error('${safeTagId} 腳本執行錯誤:', e);\n  }\n})();\n</script>\n`;
         }
         fullHtml += `</body>`;
@@ -470,7 +470,7 @@ ${cleanFormat}
                             if (!container) return;
                             
                             let safeJs = tpl.js || '';
-                            safeJs = safeJs.replace(new RegExp('\\x60\\x60\\x60(?:javascript|js|html|css)?', 'gi'), '').replace(new RegExp('\\x60\\x60\\x60', 'g'), '').trim();
+                            safeJs = safeJs.trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js|html|css)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '').trim();
                             
                             window.__IS_PREVIEW = true;
                             const runMicroApp = new Function('container', 'lines', 'onComplete', safeJs);
@@ -894,7 +894,7 @@ ${desc}
                 };
 
                 let safeJs = data.js || '';
-                safeJs = safeJs.replace(new RegExp('\\x60\\x60\\x60(?:javascript|js|html|css)?', 'gi'), '').replace(new RegExp('\\x60\\x60\\x60', 'g'), '').trim();
+                safeJs = safeJs.trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js|html|css)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '').trim();
 
                 window.__IS_PREVIEW = true;
                 const runMicroApp = new Function('container', 'lines', 'onComplete', safeJs);
