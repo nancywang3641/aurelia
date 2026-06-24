@@ -157,6 +157,46 @@
                 } catch (e) { reject(e); }
             });
         },
+        // 刪掉某 app 的所有 app_data（id = appId::scope::key，前綴 appId:: 全清；卸載 app 用，避免孤兒數據）。
+        // 用 '::' 當邊界 → 不會誤刪 appId 前綴相同的別的 app（app_12 不會吃到 app_123）。
+        deleteAppDataByApp: async function(appId) {
+            const db = await this.init();
+            const pre = String(appId || '') + '::';
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_APP_DATA).openCursor();
+                    req.onsuccess = (e) => { const cur = e.target.result; if (cur) { if (String(cur.key).indexOf(pre) === 0) cur.delete(); cur.continue(); } };
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 列出 app_data 裡所有出現過的 appId（id 取 '::' 前段），給孤兒掃描用。
+        listAppDataAppIds: async function() {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_APP_DATA, 'readonly').objectStore(STORE_NAME_APP_DATA).getAllKeys();
+                    req.onsuccess = () => { const set = {}; (req.result || []).forEach(k => { const s = String(k); const i = s.indexOf('::'); if (i > 0) set[s.slice(0, i)] = 1; }); resolve(Object.keys(set)); };
+                    req.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 刪掉某 app 的所有 app_memory（id = appId::角色名，前綴 appId:: 全清）。
+        deleteAppMemoryByApp: async function(appId) {
+            const db = await this.init();
+            const pre = String(appId || '') + '::';
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_MEM, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_APP_MEM).openCursor();
+                    req.onsuccess = (e) => { const cur = e.target.result; if (cur) { if (String(cur.key).indexOf(pre) === 0) cur.delete(); cur.continue(); } };
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
 
         // --- 寵物、圖片、聊天歷史 (維持原樣) ---
         savePet: async function(petData) {

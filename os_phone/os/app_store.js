@@ -25,6 +25,44 @@
         clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 2400);
     }
 
+    // ── 孤兒數據清理：app 自己存的資料散在四處（localStorage aurelia_appdata_<id>_*、
+    //    OS_DB app_data 的 <id>::、OS_DB app_memory 的 <id>::、記憶開關旗標 os_app_mem_plugin_<id>）。
+    //    卸載只刪安裝記錄、這些資料桶全留下 → 孤兒。卸載與「清理殘留資料」都靠這組按 appId 全清。──
+    function _purgeLocalAppData(id) {
+        try {
+            const pre = 'aurelia_appdata_' + id + '_';
+            const kill = [];
+            for (let i = 0; i < win.localStorage.length; i++) { const k = win.localStorage.key(i); if (k && k.indexOf(pre) === 0) kill.push(k); }
+            kill.forEach(function (k) { win.localStorage.removeItem(k); });
+        } catch (e) {}
+    }
+    async function _purgeAppData(id) {
+        try { if (win.OS_DB && win.OS_DB.deleteAppDataByApp) await win.OS_DB.deleteAppDataByApp(id); } catch (e) {}
+        try { if (win.OS_DB && win.OS_DB.deleteAppMemoryByApp) await win.OS_DB.deleteAppMemoryByApp(id); } catch (e) {}
+        _purgeLocalAppData(id);
+        try { win.localStorage.removeItem('os_app_mem_plugin_' + id); } catch (e) {}
+    }
+    // localStorage 裡有資料的 appId（id 格式固定 app_<時間>_<亂碼> 或 preview 預覽）
+    function _lsAppIds() {
+        const out = {};
+        try {
+            for (let i = 0; i < win.localStorage.length; i++) {
+                const k = win.localStorage.key(i);
+                const m = k && k.match(/^aurelia_appdata_(app_\d+_[a-z0-9]+|preview)_/);
+                if (m) out[m[1]] = 1;
+            }
+        } catch (e) {}
+        return Object.keys(out);
+    }
+    // 掃出「孤兒」：三個資料桶裡出現過、但已不在已安裝清單的 appId（排除 preview 預覽暫存）
+    async function _scanOrphans(installedSet) {
+        const ids = {};
+        try { if (win.OS_DB && win.OS_DB.listAppDataAppIds) (await win.OS_DB.listAppDataAppIds()).forEach(function (x) { ids[String(x)] = 1; }); } catch (e) {}
+        try { if (win.OS_DB && win.OS_DB.getAllAppMemory) (await win.OS_DB.getAllAppMemory()).forEach(function (r) { if (r && r.appId) ids[String(r.appId)] = 1; }); } catch (e) {}
+        _lsAppIds().forEach(function (x) { ids[x] = 1; });
+        return Object.keys(ids).filter(function (id) { return id && id !== 'preview' && !installedSet.has(id); });
+    }
+
     // 素材圖：GPT 工坊插畫，host 在獨立 sound-files 素材庫（code repo 有 jsdelivr 50MB 上限、aseets 不追蹤）
     const ASSET_BASE = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/';
     const ASSET_MAP = {
@@ -159,6 +197,7 @@
     }
     async function _uninstall(id, c) {
         if (win.OS_DB && win.OS_DB.deletePhoneApp) await win.OS_DB.deletePhoneApp(id);
+        await _purgeAppData(id);   // 連同 app 自己存的資料（面板/記憶/旗標）一起刪，兌現對話框承諾的「內容刪除」、不留孤兒
         _saveList(_loadList().filter(function (m) { return m.id !== id; }));
         if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(id);
         renderMine(c);
@@ -255,12 +294,44 @@
     async function renderMine(c) {
         const list = c.querySelector('#as-mine-list'); if (!list) return;
         list.innerHTML = '<div class="ws-empty">載入中…</div>';
-        let apps = [];
-        try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; } catch (e) {}
-        if (!apps.length) { list.innerHTML = '<div class="ws-empty">還沒安裝任何應用。<br>去工坊生成、或從匯入貼一個吧。</div>'; return; }
+        let apps = [], appsOk = false;
+        try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; appsOk = true; } catch (e) { appsOk = false; }
         const opened = _loadOpened();
         list.innerHTML = '';
-        apps.forEach(function (a) { list.appendChild(_mineRow(c, a, opened)); });
+        if (!apps.length) {
+            list.innerHTML = '<div class="ws-empty">還沒安裝任何應用。<br>去工坊生成、或從匯入貼一個吧。</div>';
+        } else {
+            apps.forEach(function (a) { list.appendChild(_mineRow(c, a, opened)); });
+        }
+        _appendMaintenance(c, list, apps, appsOk);   // 殘留資料清理入口（有孤兒才顯示）；即使一個 app 都沒裝也能清
+    }
+
+    // ── 殘留資料清理入口：掃到「已卸載卻留著資料」的孤兒就在底部顯示一條，點了確認後全清 ──
+    async function _appendMaintenance(c, list, apps, appsOk) {
+        // 🛡️ 安裝清單沒讀成功就別掃：否則 installedSet 為空 → 把在裝的 app 全誤判成孤兒、一鍵刪光（資料災難）
+        if (!appsOk) return;
+        // 已安裝＝OS_DB ∪ localStorage 雙來源聯集（兩邊可能漂移，取聯集才不會誤刪在裝的）
+        const installed = new Set();
+        (apps || []).forEach(function (a) { installed.add(String(a.id)); });
+        try { _loadList().forEach(function (m) { installed.add(String(m.id)); }); } catch (e) {}
+        let orphans = [];
+        try { orphans = await _scanOrphans(installed); } catch (e) { return; }
+        if (!orphans.length) return;   // 沒孤兒就不顯示、不打擾
+        const g = document.createElement('div');
+        g.className = 'ws-act-group';
+        const r = document.createElement('div');
+        r.className = 'ws-act-row danger';
+        r.innerHTML = '<i class="fa-solid fa-broom ws-act-ico"></i><span class="ws-act-label">清理殘留資料（' + orphans.length + '）</span><span class="ws-act-go"></span>';
+        r.addEventListener('click', function () { _confirmPurgeOrphans(c, orphans); });
+        g.appendChild(r);
+        list.appendChild(g);
+    }
+    async function _confirmPurgeOrphans(c, orphans) {
+        if (!orphans || !orphans.length) { _toast(c, '沒有殘留資料'); return; }
+        if (!confirm('發現 ' + orphans.length + ' 個已卸載應用留下的資料，全部清除？\n此動作無法復原。')) return;
+        for (var i = 0; i < orphans.length; i++) { await _purgeAppData(orphans[i]); }
+        _toast(c, '已清除 ' + orphans.length + ' 筆殘留資料');
+        renderMine(c);
     }
 
     // 首頁的「我的應用」預覽（最近 3 個 + 查看全部）
