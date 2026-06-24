@@ -680,8 +680,10 @@
                             else { console.warn('[OS_API] 🍎 profile 路徑無內容回傳', _response); }
                         } else if (_ctx && _src) {
                             // 🍎＋沒選 profile（或 ConnectionManager 不可用）：精簡乾淨 body 打「ST 當前激活來源」
-                            // （避開 gemini penalty 404 / iOS CORS）。沒 profile 時 model 用奧瑞亞 config.model。
-                            let _model = config.model;
+                            // （避開 gemini penalty 404 / iOS CORS）。跟隨酒館＝型號以酒館當前為準（同跟隨路徑），
+                            // 不卡奧瑞亞凍結的 config.model（型號名對不上會 404 No endpoints found）。
+                            // 優先序：profile 自帶型號 > 酒館當前型號 > config.model 保底。
+                            let _model = '';
                             if (config.stProfileId) {
                                 try {
                                     const _profs = (_ctx.extensionSettings && _ctx.extensionSettings.connectionManager && _ctx.extensionSettings.connectionManager.profiles) || [];
@@ -690,6 +692,7 @@
                                 } catch (e) {}
                             }
                             if (!_model && typeof _ctx.getChatCompletionModel === 'function') _model = _ctx.getChatCompletionModel();
+                            if (!_model) _model = config.model;
                             const _body = {
                                 chat_completion_source: _src,
                                 model: _model,
@@ -767,10 +770,13 @@
                         const activeModel = (typeof context.getChatCompletionModel === 'function')
                             ? context.getChatCompletionModel()
                             : undefined;
-                        // 用奧瑞亞自己選的 model（主可 gemini、副可 claude，同一連線跑不同模型）；
-                        // 只有奧瑞亞沒設 model 時才退回酒館當前 model。commonBody 已是乾淨 body（penalty 不送）。
+                        // 跟隨酒館（無 profile）：模型一律以酒館當前選擇為準。UI 寫「模型由酒館決定」、
+                        // 奧瑞亞型號欄在跟隨模式下是隱藏凍結的，不能拿來覆蓋——第三方端點型號名各異
+                        // （gemini-3.1-pro-preview vs gemini-3.1-pro），凍結舊值會跟酒館實選的對不上 → 供應商 404
+                        // No endpoints found。要主/副跑不同型號請改用 profile 或關閉跟隨。
+                        // 酒館真的讀不到型號時才退回 config.model 保底。commonBody 已是乾淨 body（penalty 不送）。
                         const requestBody = { ...commonBody, chat_completion_source: activeSource };
-                        if (!requestBody.model && activeModel) requestBody.model = activeModel;
+                        if (activeModel) requestBody.model = activeModel;
                         const response = await fetch('/api/backends/chat-completions/generate', {
                             method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody),
