@@ -2317,7 +2317,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             }
             const p = stProfiles.find(x => x.id === selectedId);
             if (!p) { infoEl.textContent = '(找不到 Profile)'; return; }
-            const url = p['api-url'] || '(URL 未記錄)';
+            // URL：api-url 有就用（custom/openai 直連）；空的多半是反向代理(claude 等)→ 從 profile 的 proxy 預設名解析真 URL
+            let url = p['api-url'] || '';
+            if (!url && p.proxy) {
+                try {
+                    const proxies = getSTContext()?.chatCompletionSettings?.proxies || [];
+                    const pr = proxies.find(x => x && x.name === p.proxy);
+                    url = (pr && pr.url) ? (pr.url + ' (代理:' + p.proxy + ')') : ('代理預設「' + p.proxy + '」未設 URL');
+                } catch (_) { url = '代理預設:' + p.proxy; }
+            }
+            if (!url) url = '(URL 未記錄；可能走官方端點)';
             const liveModel = (() => { try { return getSTContext()?.getChatCompletionModel?.() || ''; } catch(_) { return ''; } })();
             const model = liveModel || p.model || '(模型未記錄)';
             const api = p.api ? ` <span>[${p.api}]</span>` : '';
