@@ -3390,7 +3390,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             response = await context.ConnectionManagerRequestService.sendRequest(
                                 cfg.stProfileId,
                                 [{ role: 'user', content: 'Hi' }],
-                                50
+                                50,
+                                undefined,
+                                { stream: false }   // 跟生成路徑一致：強制不串流，測試才反映真實（免酒館串流開著時測試誤判失敗）
                             );
                         } finally {
                             if (needSwitch) {
