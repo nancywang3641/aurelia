@@ -743,7 +743,8 @@ ${numberedText}`;
             let _recallCat = null;
             try {
                 if ((doState || wantMemory) && win.OS_VECTOR_INJECT?.getCatalogForPicking) {
-                    _recallCat = await win.OS_VECTOR_INJECT.getCatalogForPicking();
+                    // 把「當下劇情」當 query 傳進去 → 召回端用向量粗篩出相關候選給導演挑（取代全目錄常駐）；沒向量就退回全目錄。
+                    _recallCat = await win.OS_VECTOR_INJECT.getCatalogForPicking(lastContent || recentText || '');
                     if (_recallCat && _recallCat.text) prompt += _recallAddendum(_recallCat.text);
                 }
             } catch (e) {}
