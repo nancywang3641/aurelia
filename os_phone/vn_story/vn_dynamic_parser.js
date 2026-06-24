@@ -205,6 +205,23 @@
                                 { disableTyping: true });
                         });
                     } catch (e) { console.error('[vn st.callAI]', e); return ''; }
+                },
+                // 讀當前劇情最近 n 條 [{name,text}]（共用面板「掃描動態／讀劇情」用，不經 AI）。
+                // 劇情版 st 原本漏了這個→共用面板的 AI 鈕在劇情裡會噴 getStory is not a function（顯示「掃描失敗」）。
+                // 與 app_runtime.js / 創作室預覽同實作，補齊「共用」兩邊兼容。
+                getStory: function(n) {
+                    try {
+                        var P = window.parent || window;
+                        var ST = (P && P.SillyTavern) || window.SillyTavern;
+                        var c = ST && ST.getContext && ST.getContext();
+                        if (!c || !Array.isArray(c.chat)) return [];
+                        var R = (P && P.VN_READER) || window.VN_READER;
+                        var CL = (R && R.clean) ? R.clean : function(x){ return x || ''; };
+                        return c.chat.filter(function(m){ return m && !m.is_system; })
+                            .slice(-(n || 30))
+                            .map(function(m){ return { name: String(m.name || (m.is_user ? '我' : '')), text: CL(m.mes || '') }; })
+                            .filter(function(o){ return o.text && o.text.trim(); });
+                    } catch (e) { console.error('[vn st.getStory]', e); return []; }
                 }
             };
         },
