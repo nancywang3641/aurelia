@@ -8,7 +8,7 @@
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 27; // 🔥 V27：酒館大總結搬出世界書 → tavern_summary（key = chatId、一卡一筆、程式注入）
+    const DB_VERSION = 28; // 🔥 V28：通用 app 資料庫 app_data（創作室生的 app 用 st.dbSave/dbLoad；id=appId::scope::key）
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -34,6 +34,7 @@
     const STORE_NAME_PHONE_APPS = 'phone_apps'; // 🔥 V25：手機殼下載的功能型 HTML app（id,name,emoji,iconUrl,html,source,createdAt）
     const STORE_NAME_APP_MEM = 'app_memory'; // 🔥 V26：插件通用記憶桶（角色對話型插件 st.remember 寫入；key = appId::角色名）
     const STORE_NAME_TAVERN_SUMMARY = 'tavern_summary'; // 🔥 V27：酒館大總結（key = chatId，一卡一筆全文存檔；程式壓縮注入、不再放世界書）
+    const STORE_NAME_APP_DATA = 'app_data'; // 🔥 V28：通用 app 資料庫（創作室生的 app 用 st.dbSave/dbLoad；id = appId::scope::key）
 
     let dbInstance = null;
 
@@ -74,7 +75,8 @@
                         STORE_NAME_LOBBY_SUM_IDX,// 🔥 V24：酒館大廳跨卡總結索引
                         STORE_NAME_PHONE_APPS,   // 🔥 V25：手機殼 app 商店
                         STORE_NAME_APP_MEM,      // 🔥 V26：插件通用記憶桶
-                        STORE_NAME_TAVERN_SUMMARY // 🔥 V27：酒館大總結（key=chatId）
+                        STORE_NAME_TAVERN_SUMMARY, // 🔥 V27：酒館大總結（key=chatId）
+                        STORE_NAME_APP_DATA // 🔥 V28：通用 app 資料庫
                     ];
 
                     stores.forEach(name => {
@@ -128,6 +130,31 @@
                     tx.oncomplete = () => resolve(true);
                     tx.onerror = (e) => reject(e.target.error);
                 } catch(e) { reject(e); }
+            });
+        },
+
+        // --- 📦 通用 App 資料庫（創作室生的 app 用 st.dbSave/dbLoad；id = appId::scope::key）---
+        saveAppData: async function(appId, key, value, chatId) {
+            const db = await this.init();
+            const id = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(key || '');
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_APP_DATA).put({ id: id, value: value, ts: Date.now() });
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        getAppData: async function(appId, key, chatId) {
+            const db = await this.init();
+            const id = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(key || '');
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_APP_DATA, 'readonly').objectStore(STORE_NAME_APP_DATA).get(id);
+                    req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                    req.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
             });
         },
 
