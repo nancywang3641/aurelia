@@ -52,6 +52,19 @@
     function _curModelId()    { return _isLocal() ? _localModel() : _getEmbedModel(); }        // 目前算向量用哪個模型 → 存進記憶當 vecModel，防換模型後新舊向量維度不一致被混算(餘弦垃圾)
     function _hasEmbedConfig(){ return _isLocal() || !!(_getEmbedUrl() && _getEmbedKey()); }   // 本地模式免端點/Key；雲端要有端點+Key 才算得了（沒設就 best-effort 退 null，不報錯洗版）
 
+    // 向量召回是否「就緒」= 開了向量 + 大多數記憶(≥90%)都已是「當前模型」算的向量(回填到位)。
+    //   ⚠️ 不能「有一條向量就算就緒」：那會在回填還沒跑完時就把全目錄撤掉、但舊記憶還搜不到 → 召回開天窗。
+    //   半吊子(回填中 / 剛換模型)→ 回 false，召回端乖乖維持全目錄(安全)；回填到位才切向量。傳入 getAllVnMemories 的結果(免重抓 DB)。
+    function vectorReady(mems) {
+        if (!_isEnabled()) return false;
+        const cur = _curModelId();
+        if (!cur) return false;
+        const arr = (mems || []).filter(m => m && !m.merged);
+        if (!arr.length) return false;
+        const v = arr.filter(m => Array.isArray(m.vector) && m.vector.length && m.vecModel === cur).length;
+        return v > 0 && v >= arr.length * 0.9;
+    }
+
     // ================================================================
     // 二、Embedding API
     // ================================================================
@@ -365,7 +378,7 @@
     // 八、公開 API
     // ================================================================
 
-    win.OS_VECTOR_ENGINE = { embed, ingest, ingestEntries, backfillVectors, search, isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
+    win.OS_VECTOR_ENGINE = { embed, ingest, ingestEntries, backfillVectors, search, vectorReady, isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
         // 把章節原文清成「要餵給抽取的內容」(跟 ingest 同邏輯：summary 或 <content>)，給結合觸發共用
         const src = _cfg().extractSource || 'content';
         let c = '';

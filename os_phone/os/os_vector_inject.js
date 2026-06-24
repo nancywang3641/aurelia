@@ -95,10 +95,9 @@
             if (!all.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
 
-            // 🔎 向量召回是否就緒：開了向量 + 庫裡確實有「當前模型算的」向量(回填過) → 主模型不再背 2000 行全目錄，只給釘選＋導演挑的細節。
-            //    開了但還沒回填 / 換了模型舊向量不認 → 視為未就緒，仍走全目錄(回填空窗期不開天窗)。
-            const _curVecModel = win.OS_VECTOR_ENGINE?.curModelId?.();
-            const _vecActive = (win.OS_VECTOR_ENGINE?.isEnabled?.() === true) && !!_curVecModel && all.some(m => Array.isArray(m.vector) && m.vector.length && m.vecModel === _curVecModel);
+            // 🔎 向量召回是否就緒：開了向量 + ≥90% 記憶已是「當前模型」的向量(回填到位) → 主模型不再背 2000 行全目錄，只給釘選＋導演挑的細節。
+            //    還沒回填 / 回填中 / 換了模型舊向量不認 → 未就緒，仍走全目錄(不在半路撤掉目錄、舊記憶卻搜不到＝不開天窗)。
+            const _vecActive = win.OS_VECTOR_ENGINE?.vectorReady?.(all) === true;
 
             // 索引 = 每條的「一句話摘要」(summary，學星河璀璨的目錄)，不是 tags。
             //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
@@ -270,11 +269,11 @@
             const facts = all.filter(m => m && m.type !== 'dialogue' && !m.merged);   // 過濾被壓縮隱藏的原始條目
             if (!facts.length) return null;
 
-            // 🔎 向量粗篩：有「當下劇情」當 query + 庫裡已有向量 → 只把語意相關的 top-K 候選交給導演挑（取代 2000 行全目錄常駐）。
-            //    沒給 query / 還沒回填向量 / 搜尋空 → 退回全目錄(早/中/近)，回填空窗期照舊能召回、不開天窗。
+            // 🔎 向量粗篩：有「當下劇情」當 query + 向量回填到位 → 只把語意相關的 top-K 候選交給導演挑（取代 2000 行全目錄常駐）。
+            //    沒給 query / 還沒回填到位(vectorReady=false) / 搜尋空 → 退回全目錄(早/中/近)，回填空窗期照舊能召回、不開天窗、不會只丟給導演零星幾條。
             let pool = null, segmented = true;
             const q = String(queryText || '').replace(/<[^>]+>/g, ' ').trim();
-            if (q && typeof win.OS_VECTOR_ENGINE?.search === 'function') {
+            if (q && typeof win.OS_VECTOR_ENGINE?.search === 'function' && win.OS_VECTOR_ENGINE?.vectorReady?.(all)) {
                 try {
                     const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, PICK_POOL_K);
                     const picked = (hits || []).filter(m => m && m.type !== 'dialogue' && !m.merged);
