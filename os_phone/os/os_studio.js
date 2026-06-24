@@ -179,7 +179,7 @@
     const MODES = {
         'vn_ui': {
             name: '✨ VN UI 煉丹',
-            prompt: `你是專業 UI 設計師，做「VN 劇情面板/應用」元件。產出有兩種落點、尺寸版型完全不同，先看【三種類型】確認你做哪種：純展示＝嵌進劇情正文的「卡片」；純應用/共用＝裝到手機桌面的「手機 App」。
+            prompt: `你是專業 UI 設計師，做「VN 劇情面板/應用」元件。先看【三種類型】確認你做哪種：純展示＝嵌進劇情正文的「卡片」；純應用＝裝到手機桌面的「手機 App」；共用＝兩邊都跑（劇情裡會像純展示那樣跳出來渲染 ＋ 也裝成手機 App，讀同一份自存資料）。
 
 ## 🚨 版型鐵律（第一優先，動手前先確認你做的是「劇情卡片」還是「手機 App」）
 - 通用（兩種都守）：一律響應式寫法（width:100% / flex / grid / clamp），不破版；禁寫死固定像素寬。
@@ -201,9 +201,18 @@
   · 🚨 內容再少也要「撐滿整個手機框」：根容器 min-height:100% + display:flex + flex-direction:column，中間內容區 flex:1 撐開（必要時內容置中或頂部對齊），絕不能讓 App 打開後下方留一大片空白。這是 Rae 點名的問題。
   · 不要做響應式三尺寸、不要 max-width 置中小卡、不要當「嵌劇情的卡片」。
   · 用 st.callAI（生文字）／st.setImage（生圖）做功能（按鈕一點即生）。
-- 共用（落點＝也裝成「手機 App」、固定手機尺寸）：
-  · 版型同純應用（手機 App、填滿手機框、App 版型，非置中小卡）；同樣 min-height:100% + flex 撐滿整個手機框、內容區 flex:1 撐開，不准留白邊。
-  · 差別：它「也讀『當前劇情』顯示」——一進面板就用 st.getStory() 拿最近劇情（回 [{name,text}] 陣列），把劇情內容呈現出來（例如最近事件 / 對話摘要 / 名單），不要等按鈕；＋又能 st.callAI／st.setImage 生成。**不需要 demoFormat**（那是純展示卡讀 lines 才用的，App 不靠它）。共用＝「讀現在劇情顯示 + 按鈕叫 AI 生成」兩件事都做。
+- 共用（真雙用：同一份面板，劇情裡會像純展示那樣跳出來渲染 ＋ 也裝成手機 App，兩邊都跑、讀同一份資料）：
+  · isBlock 必須 true、必須產出 demoFormat（同純展示那套）——劇本 AI 才會在正文用 <tagId> 區塊餵新資料、面板才會在劇情裡自動跳出來渲染。
+  · 版型「兩邊都好看」：根容器 width:100% + min-height:100% + flex 直向撐滿（劇情裡蓋在置中遮罩上、桌面填滿手機框，兩種都填滿不留白）。別做 max-width 置中小卡（那只給純展示）。
+  · 🔑 資料一律「自存一份、兩邊讀同一份」——面板永遠從自己的 DB 畫，不是只靠當下 lines。init 流程固定：
+      ① const list = (await st.dbLoad('資料key','chat')) || [];   // 先讀回自存的
+      ② const fed = st.parse();   // 劇情裡跳出來時這有 AI 餵的新資料；桌面開 app 時是空的
+      ③ 把 fed 每筆「去重後」併進 list：每筆配一個穩定 id（用內容關鍵欄組出，或讓 AI 在格式裡帶一個識別欄）＋ ts:Date.now()；list 已有同 id 就跳過、不重複加
+      ④ await st.dbSave('資料key', list, 'chat');   // 存回（scope 一律 'chat'）
+      ⑤ 一律「按 ts 排序」後渲染，每筆把時間印出來（讓人看得出先後、不亂序）
+  · 🚫 嚴禁 st.remember：共用面板的資料只進自己的 DB(st.dbSave)、是展示用、絕不進記憶桶、絕不注入酒館 AI（否則面板讀的劇情會被推回 AI → 重複數據迴圈）。要持久化只能 st.dbSave／st.dbLoad（scope 一律 'chat'）。
+  · 不要整碗 st.getStory 撈歷史塞進清單（會吃進一堆重複舊資料）——資料以「AI 在 <tagId> 區塊主動寫的新條目」為準、靠上面的 id 去重。
+  · 一樣能用 st.callAI／st.setImage 做按鈕生成（守生圖紀律＋「不自動生成」規則）。
 
 ## 🚫 禁止清單
 - 禁 position:fixed、position:absolute 配 top/left 自定位、100vw、100vh、在 body／html 設樣式（樣式只能寫在 .vn-dynamic-panel-xxx 前綴下）；禁寫死固定像素寬（用 width:100%／響應式）。（全屏與否依類型：劇情卡禁吃滿、手機 App 反而要填滿手機框，見【三種類型】）
@@ -288,14 +297,20 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
                     // 一律存一份可編輯底稿(模板)；應用/共用 之後靠 srcTplId 找回它編輯
                     await win.OS_DB.saveVNTagTemplate(data);
                     await syncActiveTagsToLocal();
-                    if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
-                    // 🔀 按開頭選的型別分流：純展示→VN組件；應用/共用→裝成手機 app、進「我的應用」（不繞 VN組件）
+                    // 🔀 按開頭選的型別分流：純展示→只進 VN組件；純應用→只裝手機 app；共用→兩邊都要（劇情渲染＋裝成 app，讀同一份資料）
+                    let _aid = null;
                     if (_vnPanelType !== '純展示') {
-                        const _aid = await _installTemplateAsPhoneApp(data);
-                        alert(`🎉 [${data.tagId}] 已建立，並裝進手機 →「應用工坊 · 我的應用」！` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
-                    } else {
+                        _aid = await _installTemplateAsPhoneApp(data);   // 先裝 app，下面 init 才抓得到它的 id 建「模板→app」對照
+                    }
+                    // init 放在裝 app 之後：重建對照表，共用面板「當次劇情渲染」的 dbSave 才對得到同一個桶（不然首存當session會落到 pwa_panel）
+                    if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
+                    if (_vnPanelType === '純展示') {
                         alert(`🎉 [${data.tagId}] 已建立！已存進「VN組件」。`);
                         document.getElementById('studio-tab-gallery')?.click();
+                    } else if (_vnPanelType === '共用') {
+                        alert(`🎉 [${data.tagId}] 已建立（共用）！劇情裡會自動跳出渲染、也裝進手機「應用工坊 · 我的應用」、並在「VN組件」可見，兩邊讀同一份資料。` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
+                    } else {
+                        alert(`🎉 [${data.tagId}] 已建立，並裝進手機 →「應用工坊 · 我的應用」！` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
                     }
                 }
             }
@@ -3351,7 +3366,7 @@ ${cleanFormat}
         _wireVnUiPackButtons();
         listEl.innerHTML = '<div class="vc-empty">載入中…</div>';
         let templates = [];
-        try { templates = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用'); }
+        try { templates = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用'); }
         catch (e) { listEl.innerHTML = `<div class="vc-empty">載入失敗：${_sgcEsc(e.message)}</div>`; return; }
         _vcAllPhoneApps = db.getAllPhoneApps ? ((await db.getAllPhoneApps()) || []) : [];
         const groups = _loadGroups();
@@ -3615,7 +3630,7 @@ ${cleanFormat}
     async function _vcRenderPackage(listEl) {
         const db = win.OS_DB;
         let templates = [];
-        try { templates = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用'); } catch (e) {}
+        try { templates = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用'); } catch (e) {}
         const allSel = templates.length > 0 && templates.every(t => _vcPackSel.has(t.id));
         listEl.innerHTML = `
             <div class="swb-bar">
@@ -3705,7 +3720,7 @@ ${cleanFormat}
         const old = doc.getElementById('sgc-group-modal'); if (old) old.remove();
         const db = win.OS_DB;
         let tpls = [];
-        try { tpls = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用' && t.panelType !== '共用'); } catch (e) {}
+        try { tpls = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用'); } catch (e) {}
         const rows = tpls.map(t => {
             const inG = _tplGroupIds(t).includes(group.id);
             const nm = (t.title && String(t.title).trim()) || t.tagId || '未知';
