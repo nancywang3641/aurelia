@@ -258,8 +258,8 @@
             // 沙盒執行 AI 生成的 JS
             try {
                 let safeJs = tpl.js || '';
-                // 清洗干擾標籤
-                safeJs = safeJs.replace(new RegExp('\\x60\\x60\\x60(?:javascript|js|html|css)?', 'gi'), '').replace(new RegExp('\\x60\\x60\\x60', 'g'), '').trim();
+                // 只刪「整段最外層」的 markdown 圍欄（AI 偶爾把整份 js 包進 ```js…```），不碰程式碼內部正當的三反引號（如 /```/g 正則），否則會把 /```/g 削成 //g=註解整段壞。
+                safeJs = safeJs.trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js|html|css)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '').trim();
 
                 // 真正播放（非預覽）→ 走真實圖片 API；並注入 st helper（與創作室同一套 API）
                 window.__IS_PREVIEW = false;

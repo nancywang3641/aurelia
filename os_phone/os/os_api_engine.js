@@ -61,7 +61,10 @@
     })();
 
     // --- 1. 核心清洗函數 ---
-    function cleanRawOutput(text) {
+    // keepFences=true：跳過「吃 markdown 三反引號圍欄」那步。
+    //   劇情顯示要砍圍欄（不想 ``` 字面跑進對話框），但創作室生成 JSON 程式碼時，
+    //   AI 寫的 /```/g 之類三反引號是「資料」不是「顯示圍欄」，砍掉會把 /```/g 削成 //g（=註解）整段壞掉。
+    function cleanRawOutput(text, keepFences) {
         if (!text || typeof text !== 'string') return text;
         let cleaned = text;
 
@@ -105,7 +108,9 @@
         cleaned = cleaned.replace(/<(iframe|script|meta|link|object|embed)[^>]*>[\s\S]*?<\/\1>/gi, '');
         cleaned = cleaned.replace(/<(iframe|script|meta|link|object|embed)[^>]*\/?>/gi, '');
 
-        cleaned = cleaned.replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, "$1");
+        if (!keepFences) {
+            cleaned = cleaned.replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, "$1");
+        }
         cleaned = cleaned.trim();
         return cleaned;
     }
@@ -142,7 +147,7 @@
         return content;
     }
 
-    function normalizeResponse(data) {
+    function normalizeResponse(data, keepFences) {
         if (!data) return "";
         let rawContent = "";
 
@@ -166,7 +171,7 @@
         else if (data.content) rawContent = data.content;
         else rawContent = JSON.stringify(data);
 
-        return cleanRawOutput(rawContent);
+        return cleanRawOutput(rawContent, keepFences);
     }
 
     // 給 ConnectionManager.sendRequest 補 vertex 認證欄位：
@@ -414,6 +419,8 @@
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpText(); } catch (e) {}   // 文字 API 計數（副模型/PWA主模型/總結都走這）
+            // 呼叫方要「保留三反引號」（創作室生成 JSON 程式碼）→ 跳過 cleanRawOutput 吃圍欄那步，避免 /```/g 被削成 //g。
+            const _keepFences = !!options.keepCodeFences;
             const globalUserName = this.getGlobalUserName();
             // 兼容 multimodal：content 可能是字串或 [{type:'text',...},{type:'image_url',...}] 陣列
             messages.forEach(m => {
@@ -678,7 +685,7 @@
                             const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
                                 config.stProfileId, cleanMessages, maxTokens, undefined, _ov
                             );
-                            const _t = normalizeResponse(_response);
+                            const _t = normalizeResponse(_response, _keepFences);
                             if (_t) { rawApiResponse = _response; fullText = _t; _ngOk = true; }
                             else { console.warn('[OS_API] 🍎 profile 路徑無內容回傳', _response); }
                         } else if (_ctx && _src) {
@@ -726,7 +733,7 @@
                                 signal: options.signal || undefined
                             });
                             const _data = await _resp.json();
-                            const _t = normalizeResponse(_data);
+                            const _t = normalizeResponse(_data, _keepFences);
                             if (_resp.ok && _t) { rawApiResponse = _data; fullText = _t; _ngOk = true; }
                             else { console.warn('[OS_API] 原生 /generate 未成功，HTTP', _resp.status, _data && _data.error); }
                         }
@@ -748,7 +755,7 @@
                         }));
                         const _raw = await _genRaw({ user_input: ' ', ordered_prompts: _ordered, should_silence: true, max_chat_history: 0, generation_id: 'os_api_' + _dbgId });
                         rawApiResponse = { via: 'generateRaw' };
-                        fullText = (typeof cleanRawOutput === 'function') ? cleanRawOutput(String(_raw || '')) : String(_raw || '');
+                        fullText = (typeof cleanRawOutput === 'function') ? cleanRawOutput(String(_raw || ''), _keepFences) : String(_raw || '');
                     }
                 } else if (useSystemApi) {
                     const context = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
@@ -766,7 +773,7 @@
                             stProfileId, cleanMessages, maxTokens, undefined, _ov
                         );
                         rawApiResponse = response;
-                        fullText = normalizeResponse(response);
+                        fullText = normalizeResponse(response, _keepFences);
                     } else {
                         const headers = context.getRequestHeaders();
                         const activeSource = context.oai_settings?.chat_completion_source
@@ -789,7 +796,7 @@
                         });
                         const data = await response.json();
                         rawApiResponse = data; 
-                        fullText = normalizeResponse(data);
+                        fullText = normalizeResponse(data, _keepFences);
                     }
                 } else {
                     let targetUrl = config.url.replace(/\/$/, '');
@@ -831,7 +838,7 @@
                             }
                         }
 
-                        fullText = cleanRawOutput(acc);
+                        fullText = cleanRawOutput(acc, _keepFences);
                         win.OS_API._lastCtx = {
                             sendTokens: totalTokens, sendChars: totalChars,
                             recvChars: acc.length, recvTokens: Math.ceil(acc.length * 0.5),
@@ -849,7 +856,7 @@
                     });
                     const data = await response.json();
                     rawApiResponse = data;
-                    fullText = normalizeResponse(data);
+                    fullText = normalizeResponse(data, _keepFences);
                 }
 
                 if (!fullText) throw new Error("API 返回內容為空 (可能被過濾或生成失敗)");
