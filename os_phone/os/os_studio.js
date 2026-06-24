@@ -2469,7 +2469,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         resolve();
                     },
                     reject,
-                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal }
+                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true }
                 );
             });
 
@@ -2894,7 +2894,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         fullHtml += `<div class="vn-dynamic-panel-${safeTagId}">\n${htmlContent}\n</div>\n`;
 
         if (data.js) {
-            let safeJs = data.js.replace(/\x60\x60\x60(?:javascript|js|html|css)?/gi, '').replace(/\x60\x60\x60/g, '').trim();
+            let safeJs = data.js.trim().replace(/^\x60\x60\x60(?:javascript|js|html|css)?\s*/i, '').replace(/\s*\x60\x60\x60\s*$/, '').trim();
             const safeJsForPlainScript = safeJs.replace(/<\/script>/gi, '<\\/script>');
             // 兄弟節點順序：<div>(container) ← <textarea>(rawtext) ← <script type=text/plain>(userJs) ← <script>(執行端)
             // 執行端用 document.currentScript.previousElementSibling 鏈式找上層 — 完全廢棄 id 機制
@@ -3295,7 +3295,7 @@ ${cleanFormat}
                     const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<'));
                     const container = card.querySelector(`.vn-dynamic-panel-${safeTagId}`);
                     if (!container) return;
-                    let safeJs = tpl.js.replace(/```(?:javascript|js|html|css)?/gi, '').replace(/```/g, '').trim();
+                    let safeJs = tpl.js.trim().replace(/^```(?:javascript|js|html|css)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
                     window.__IS_PREVIEW = true;
                     const st = _buildPreviewSt(lines);
                     new Function('container', 'lines', 'onComplete', 'st', safeJs)(container, lines, () => {}, st);
@@ -3399,7 +3399,7 @@ ${cleanFormat}
                 try {
                     const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<'));
                     const cont = inner.querySelector(`.vn-dynamic-panel-${safeTagId}`); if (!cont) return;
-                    let safeJs = tpl.js.replace(/```(?:javascript|js|html|css)?/gi, '').replace(/```/g, '').trim();
+                    let safeJs = tpl.js.trim().replace(/^```(?:javascript|js|html|css)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
                     window.__IS_PREVIEW = true;
                     new Function('container', 'lines', 'onComplete', 'st', safeJs)(cont, lines, () => {}, _buildPreviewSt(lines));
                 } catch (e) {}
@@ -4344,7 +4344,7 @@ ${d.usageDesc || ''}
                         resolve();
                     },
                     reject,
-                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal }
+                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true }
                 );
             });
         } catch (err) {
@@ -4600,7 +4600,7 @@ ${d.usageDesc || ''}
                         if (!container) return;
                         
                         let safeJs = data.js || '';
-                        safeJs = safeJs.replace(new RegExp('\\x60\\x60\\x60(?:javascript|js|html|css)?', 'gi'), '').replace(new RegExp('\\x60\\x60\\x60', 'g'), '').trim();
+                        safeJs = safeJs.trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js|html|css)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '').trim();
                         
                         const onComplete = () => { 
                             const msg = document.createElement('div');
