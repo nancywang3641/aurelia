@@ -99,8 +99,10 @@
         let mems = [];
         try { if (win.OS_DB?.getAllVnMemories) mems = (await win.OS_DB.getAllVnMemories(sid) || []).filter(m => m && !m.merged); } catch (e) {}   // 隱藏被壓縮的原始條目
         _memCache = mems;
-        // 還沒建向量的條數（回填鈕用）：開了記憶 + 設好服務 + 有沒向量的舊記憶 才提示回填
-        const _noVec = (on && engOk && cfg.embeddingUrl) ? mems.filter(m => !(Array.isArray(m.vector) && m.vector.length)).length : 0;
+        // 還沒建向量的條數（回填鈕用）：開了記憶 + 設好服務(雲端有端點 or 本地) + 有「當前模型沒算過」的記憶 才提示回填
+        const _curModel = win.OS_VECTOR_ENGINE?.curModelId?.();
+        const _svcReady = cfg.embeddingLocal === true || !!cfg.embeddingUrl;
+        const _noVec = (on && engOk && _svcReady && _curModel) ? mems.filter(m => !(Array.isArray(m.vector) && m.vector.length && m.vecModel === _curModel)).length : 0;
 
         // 其他「有記憶」的世界（給「轉入記憶」用）——換聊天/備份檔 chatId 變了，可把舊世界記憶搬過來
         let _srcOptions = '';
@@ -141,12 +143,21 @@
             <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn">⚙️ 進階：記憶服務設定</button>
             <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
                 <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">記憶服務（embeddings）<span class="avs-st-adv-hint">SiliconFlow 等 OpenAI 相容服務；免費 BAAI/bge-m3 即可</span></div>
+                    <div class="avs-st-adv-hd">記憶服務（embeddings）<span class="avs-st-adv-hint">${cfg.embeddingLocal ? '本地模型在你電腦裡算、文字不外流' : 'SiliconFlow 等 OpenAI 相容服務；免費 BAAI/bge-m3 即可'}</span></div>
                     <div class="avs-mem-cfg">
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-local" ${cfg.embeddingLocal ? 'checked' : ''}><span>🔒 用本地模型（在你電腦裡算，文字不外流、最安心、零封號風險；首次要下載 30–60MB）</span></label>
+                        ${cfg.embeddingLocal ? `<label class="avs-mem-fld"><span>本地模型</span>
+                            <select class="avs-input" id="avs-mem-localmodel">
+                                <option value="Xenova/bge-small-zh-v1.5"${(cfg.localModel || 'Xenova/bge-small-zh-v1.5') === 'Xenova/bge-small-zh-v1.5' ? ' selected' : ''}>中文小模型（快、約 30MB）</option>
+                                <option value="Xenova/multilingual-e5-small"${cfg.localModel === 'Xenova/multilingual-e5-small' ? ' selected' : ''}>多語小模型（約 60MB）</option>
+                                <option value="Xenova/bge-m3"${cfg.localModel === 'Xenova/bge-m3' ? ' selected' : ''}>多語大模型（較準、較大較慢）</option>
+                            </select>
+                        </label>
+                        <div class="avs-mem-srchint">第一次按「測試本地模型」會從網路下載模型、之後存在瀏覽器免重下；換模型要重新「建立記憶向量」。</div>` : `
                         <label class="avs-mem-fld"><span>端點</span><input class="avs-input" id="avs-mem-url" placeholder="https://api.siliconflow.cn/v1" value="${esc(cfg.embeddingUrl || '')}"></label>
                         <label class="avs-mem-fld"><span>模型</span><input class="avs-input" id="avs-mem-model" placeholder="BAAI/bge-m3" value="${esc(cfg.embeddingModel || 'BAAI/bge-m3')}"></label>
                         <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-sync" ${cfg.syncKeyWithPrimary !== false ? 'checked' : ''}><span>跟主模型共用 Key（主模型也走 SiliconFlow 就勾，免再填）</span></label>
-                        <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>
+                        <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>`}
                         ${(win.OS_API?.isStandalone?.()) ? `<label class="avs-mem-fld"><span>召回條數</span><input class="avs-input avs-mem-num" id="avs-mem-topk" type="number" min="1" max="20" value="${parseInt(cfg.topK) || 5}"></label>` : ''}
                         <label class="avs-mem-fld"><span>記憶來源</span>
                             <select class="avs-input" id="avs-mem-src">
@@ -159,7 +170,7 @@
                     </div>
                     <div class="avs-st-btn-grid">
                         <button class="avs-btn avs-btn-primary" id="avs-mem-save">💾 儲存設定</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-mem-test">🔌 測試連線</button>
+                        ${cfg.embeddingLocal ? `<button class="avs-btn avs-btn-outline" id="avs-mem-local-test">🔒 測試本地模型</button>` : `<button class="avs-btn avs-btn-outline" id="avs-mem-test">🔌 測試連線</button>`}
                     </div>
                     <div class="avs-mem-test-result" id="avs-mem-test-result"></div>
                 </div>
@@ -224,10 +235,34 @@
             const _sy = q('#avs-mem-sync'); if (_sy) cfg.syncKeyWithPrimary = !!_sy.checked;
             const _k = q('#avs-mem-key'); if (_k) cfg.embeddingKey = (_k.value || '').trim();
             const _tk = q('#avs-mem-topk'); if (_tk) cfg.topK = parseInt(_tk.value) || 5;   // 此欄只在 PWA 顯示；酒館隱藏時別覆蓋既有值
+            const _lc = q('#avs-mem-local'); if (_lc) cfg.embeddingLocal = !!_lc.checked;   // 本地模型開關
+            const _lm = q('#avs-mem-localmodel'); if (_lm) cfg.localModel = _lm.value || 'Xenova/bge-small-zh-v1.5';   // 本地模型只在開本地時顯示
             cfg.extractSource = q('#avs-mem-src')?.value || 'content';
             const _mr = q('#avs-mem-main-recent'); if (_mr) cfg.mainRecentOnly = !!_mr.checked;   // 主模型只注入近期+角色記憶
             _saveCfg(cfg);
             const b = saveBtn; const o = b.textContent; b.textContent = '✓ 已儲存'; setTimeout(() => { b.textContent = o; }, 1200);
+        };
+
+        // 本地模型開關：切換要重畫面板（換顯示雲端欄位 ↔ 本地模型選單）
+        const localChk = q('#avs-mem-local');
+        if (localChk) localChk.onchange = () => { const c = _cfg(); c.embeddingLocal = !!localChk.checked; _saveCfg(c); _build(); };
+
+        // 🔒 測試本地模型（spike）：第一次會下載模型，回報哪一階段掛掉 + 錯誤（無 F12 靠這診斷）
+        const localTestBtn = q('#avs-mem-local-test');
+        if (localTestBtn) localTestBtn.onclick = async () => {
+            const res = q('#avs-mem-test-result');
+            if (!win.OS_VECTOR_ENGINE?.testLocal) { if (res) { res.className = 'avs-mem-test-result err'; res.textContent = '記憶引擎未載入'; } return; }
+            if (saveBtn) saveBtn.onclick();   // 先存目前選的本地模型
+            localTestBtn.disabled = true; const _o = localTestBtn.textContent; localTestBtn.textContent = '測試中…';
+            if (res) { res.className = 'avs-mem-test-result'; res.textContent = '測試中…首次要下載模型(30–60MB)，可能 1–2 分鐘，請別關面板'; }
+            try {
+                const r = await win.OS_VECTOR_ENGINE.testLocal();
+                if (r.ok) { if (res) { res.className = 'avs-mem-test-result ok'; res.textContent = `✅ 本地模型可用！向量維度 ${r.dim}、耗時 ${r.ms}ms　→ 現在可以「建立記憶向量」`; } }
+                else { if (res) { res.className = 'avs-mem-test-result err'; res.textContent = `❌ 卡在「${r.stage}」：${r.error}`; } }
+            } catch (e) {
+                if (res) { res.className = 'avs-mem-test-result err'; res.textContent = '❌ ' + (e?.message || e); }
+            }
+            localTestBtn.textContent = _o; localTestBtn.disabled = false;
         };
 
         // 測試連線
