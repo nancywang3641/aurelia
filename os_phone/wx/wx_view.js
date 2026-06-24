@@ -73,8 +73,8 @@
                 preview = preview.replace(/\[[^\]]*\]/g, '[訊息]');
                 return ''
                   + '<div class="wx-vnlog-room" onclick="' + app + '.openVnLogRoom(\'' + encodeURIComponent(n) + '\')">'
-                  +   '<div class="wx-vnlog-room-ic">' + esc((n || '?').charAt(0)) + '</div>'
-                  +   '<div class="wx-vnlog-room-body"><div class="wx-vnlog-room-name">' + esc(n) + '</div><div class="wx-vnlog-room-prev">' + esc(preview).slice(0, 40) + '</div></div>'
+                  +   '<div class="wx-vnlog-room-ic">' + esc(((r.name || n) || '?').charAt(0)) + '</div>'
+                  +   '<div class="wx-vnlog-room-body"><div class="wx-vnlog-room-name">' + esc(r.name || n) + '</div><div class="wx-vnlog-room-prev">' + esc(preview).slice(0, 40) + '</div></div>'
                   +   '<div class="wx-vnlog-room-cnt">' + (r.msgs ? r.msgs.length : 0) + '</div>'
                   + '</div>';
             }).join('');
@@ -83,7 +83,7 @@
         vnLogRoomHTML: function(room, isDark) {
             const app = '(window.parent.wxApp || window.wxApp)';
             const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; };
-            const chatObj = { name: room.name, id: room.name, isGroup: !!(room.members && room.members.length > 2), members: room.members || [] };
+            const chatObj = { name: room.name, id: room.id || room.name, isGroup: !!(room.members && room.members.length > 2), members: room.members || [] };
             const self = this;
             const bubbles = (room.msgs || []).map(function(m, i) {
                 return self.renderBubble({ content: m.content, sender: m.sender, senderName: m.sender, isMe: m.isMe, type: m.type === 'system' ? 'system' : 'msg' }, chatObj, false, i);
