@@ -99,6 +99,8 @@
         let mems = [];
         try { if (win.OS_DB?.getAllVnMemories) mems = (await win.OS_DB.getAllVnMemories(sid) || []).filter(m => m && !m.merged); } catch (e) {}   // 隱藏被壓縮的原始條目
         _memCache = mems;
+        // 還沒建向量的條數（回填鈕用）：開了記憶 + 設好服務 + 有沒向量的舊記憶 才提示回填
+        const _noVec = (on && engOk && cfg.embeddingUrl) ? mems.filter(m => !(Array.isArray(m.vector) && m.vector.length)).length : 0;
 
         // 其他「有記憶」的世界（給「轉入記憶」用）——換聊天/備份檔 chatId 變了，可把舊世界記憶搬過來
         let _srcOptions = '';
@@ -132,18 +134,19 @@
 
             <div class="avs-st-btn-grid">
                 <button class="avs-btn avs-btn-outline" id="avs-mem-tidy">🗜️ 整理舊記憶</button>
+                ${_noVec > 0 ? `<button class="avs-btn avs-btn-outline" id="avs-mem-backfill">🔢 建立記憶向量（${_noVec} 待補）</button>` : ''}
             </div>
             <div class="avs-mem-srchint" id="avs-mem-tidy-result">把舊的零碎記憶併成精簡版，省效能；重要角色與關係不會動。</div>
 
             <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn">⚙️ 進階：記憶服務設定</button>
             <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
                 <div class="avs-st-adv-sec">
-                    ${_standalone ? `<div class="avs-st-adv-hd">記憶服務（embeddings）<span class="avs-st-adv-hint">SiliconFlow 等 OpenAI 相容服務（僅 PWA/獨立版需要）</span></div>` : ''}
+                    <div class="avs-st-adv-hd">記憶服務（embeddings）<span class="avs-st-adv-hint">SiliconFlow 等 OpenAI 相容服務；免費 BAAI/bge-m3 即可</span></div>
                     <div class="avs-mem-cfg">
-                        ${_standalone ? `<label class="avs-mem-fld"><span>端點</span><input class="avs-input" id="avs-mem-url" placeholder="https://api.siliconflow.cn/v1" value="${esc(cfg.embeddingUrl || '')}"></label>
+                        <label class="avs-mem-fld"><span>端點</span><input class="avs-input" id="avs-mem-url" placeholder="https://api.siliconflow.cn/v1" value="${esc(cfg.embeddingUrl || '')}"></label>
                         <label class="avs-mem-fld"><span>模型</span><input class="avs-input" id="avs-mem-model" placeholder="BAAI/bge-m3" value="${esc(cfg.embeddingModel || 'BAAI/bge-m3')}"></label>
                         <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-sync" ${cfg.syncKeyWithPrimary !== false ? 'checked' : ''}><span>跟主模型共用 Key（主模型也走 SiliconFlow 就勾，免再填）</span></label>
-                        <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>` : ''}
+                        <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>
                         ${(win.OS_API?.isStandalone?.()) ? `<label class="avs-mem-fld"><span>召回條數</span><input class="avs-input avs-mem-num" id="avs-mem-topk" type="number" min="1" max="20" value="${parseInt(cfg.topK) || 5}"></label>` : ''}
                         <label class="avs-mem-fld"><span>記憶來源</span>
                             <select class="avs-input" id="avs-mem-src">
@@ -156,7 +159,7 @@
                     </div>
                     <div class="avs-st-btn-grid">
                         <button class="avs-btn avs-btn-primary" id="avs-mem-save">💾 儲存設定</button>
-                        ${_standalone ? `<button class="avs-btn avs-btn-outline" id="avs-mem-test">🔌 測試連線</button>` : ''}
+                        <button class="avs-btn avs-btn-outline" id="avs-mem-test">🔌 測試連線</button>
                     </div>
                     <div class="avs-mem-test-result" id="avs-mem-test-result"></div>
                 </div>
@@ -276,6 +279,28 @@
                 alert('整理失敗：' + (e?.message || e));
             }
             tidyBtn.textContent = _o; tidyBtn.disabled = false;
+            _build();
+        };
+
+        // 🔢 建立記憶向量（回填）：把已存但沒向量的舊記憶批次補上 embedding —— 啟用向量召回的一次性遷移
+        const bfBtn = q('#avs-mem-backfill');
+        if (bfBtn) bfBtn.onclick = async () => {
+            if (!win.OS_VECTOR_ENGINE?.backfillVectors) { alert('記憶引擎未載入，請重載擴展'); return; }
+            const sid2 = _storyId();
+            if (!sid2) { alert('目前沒有有效的世界（先開著要建立向量的那個聊天）'); return; }
+            const res = q('#avs-mem-tidy-result');
+            if (!confirm('把目前世界還沒建立向量的記憶批次補上？\n\n• 會分批呼叫記憶服務（免費 BGE 友善、有節流）\n• 一次性：完成後召回才改用向量、不再每輪背整份目錄\n• 條數多時需要一點時間，跑完前別關面板')) return;
+            bfBtn.disabled = true; const _o = bfBtn.textContent; bfBtn.textContent = '建立中…';
+            try {
+                const r = await win.OS_VECTOR_ENGINE.backfillVectors(sid2, (done, total) => {
+                    if (res) res.textContent = `建立記憶向量中… ${done}/${total}`;
+                    bfBtn.textContent = `建立中… ${done}/${total}`;
+                });
+                alert(`✅ 完成\n已建立 ${r.ok}/${r.total} 條記憶向量` + (r.ok < r.total ? '\n（部分沒成功，可再按一次補剩下的）' : ''));
+            } catch (e) {
+                alert('建立失敗：' + (e?.message || e));
+            }
+            bfBtn.textContent = _o; bfBtn.disabled = false;
             _build();
         };
     }

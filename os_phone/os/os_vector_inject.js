@@ -70,6 +70,7 @@
     // 目錄按時間遠近分早/中/近三段(免費時間召回，不花 LLM)；需要某條完整內容時主模型用 <recall>關鍵詞</recall> 點名，
     // 下一輪補上(見 _captureAndStripRecall)。每行都是看得懂的摘要、不是噪音 tag，prompt 也大幅縮水。
     const MEM_SUM_MAX = 28;      // 索引每條摘要最多幾字
+    const PICK_POOL_K = 40;      // 🔎 向量粗篩給導演的候選池大小（取代 2000 行全目錄常駐：只把語意相關的這幾條交給副模型挑）
 
     async function injectMemories() {
         try {
@@ -93,6 +94,10 @@
             const all = ((await win.OS_DB.getAllVnMemories(storyId)) || []).filter(m => m && !m.merged);   // 過濾被壓縮隱藏的原始條目
             if (!all.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
+
+            // 🔎 向量召回是否就緒：開了向量 + 庫裡確實有向量(回填過) → 主模型不再背 2000 行全目錄，只給釘選＋導演挑的細節。
+            //    開了但還沒回填(向量全 null) → 視為未就緒，仍走全目錄(回填空窗期不開天窗)。
+            const _vecActive = (win.OS_VECTOR_ENGINE?.isEnabled?.() === true) && all.some(m => Array.isArray(m.vector) && m.vector.length);
 
             // 索引 = 每條的「一句話摘要」(summary，學星河璀璨的目錄)，不是 tags。
             //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
@@ -120,16 +125,22 @@
             // 主模型常駐目錄：預設全目錄(早期/中段/近期)；開「只近期」開關 → 只留近期段當 fallback，精準召回交副模型(getCatalogForPicking 不受影響、照拿全部)，省 token。
             //   給沒跑副模型導演的朋友：保持預設(全目錄)才不會砍掉他們的召回來源。
             const _mainRecentOnly = (function(){ try { return JSON.parse(localStorage.getItem('os_vector_config') || '{}').mainRecentOnly === true; } catch (e) { return false; } })();
-            let block = `<劇情記憶 規則="既成事實·寫作前必讀·不得矛盾">\n下列是本劇過往「已經發生」的記憶摘要${_mainRecentOnly ? '（近期段）' : '，按時間遠近分三段(早期/中段/近期)'}。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n`;
-            if (facts.length) {
-                const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
-                const _segs = _mainRecentOnly
-                    ? [['近期', facts.slice(c2)]]
-                    : [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]];
-                _segs.forEach((seg) => {
-                    const lines = seg[1].map(_sumLine).filter(Boolean);
-                    if (lines.length) block += `\n〔${seg[0]}〕\n` + lines.join('\n');
-                });
+            let block = `<劇情記憶 規則="既成事實·寫作前必讀·不得矛盾">\n`;
+            if (_vecActive) {
+                // 向量召回就緒：主模型不背全目錄，只給下面的釘選＋導演挑的細節；要更多細節用關鍵詞 <recall> 兜底。
+                block += `下列是本劇過往「已經發生」的重要記憶與當前需要的細節。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾。\n`;
+            } else {
+                block += `下列是本劇過往「已經發生」的記憶摘要${_mainRecentOnly ? '（近期段）' : '，按時間遠近分三段(早期/中段/近期)'}。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n`;
+                if (facts.length) {
+                    const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
+                    const _segs = _mainRecentOnly
+                        ? [['近期', facts.slice(c2)]]
+                        : [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]];
+                    _segs.forEach((seg) => {
+                        const lines = seg[1].map(_sumLine).filter(Boolean);
+                        if (lines.length) block += `\n〔${seg[0]}〕\n` + lines.join('\n');
+                    });
+                }
             }
 
             // 語氣記憶的 tag 幾乎只有角色名 → 收斂成「有語氣樣本的角色」一行(要範例就 <recall> 角色名)
@@ -223,7 +234,12 @@
             }
 
             // ── 教主模型怎麼把「摘要」變「細節」（細節晚一輪到）──
-            block += `\n\n[記憶用法｜每條摘要行首都有一個代號（A 開頭的編號）。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>代號</recall>（直接抄行首那個編號，多條用逗號隔開）；若需要某角色的說話風格範例，改抄該角色名。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
+            if (_vecActive) {
+                // 向量模式：沒有目錄代號可抄 → 改用關鍵詞回想（系統會向量撈相關記憶補上）。
+                block += `\n\n[記憶用法｜若這段劇情需要回想某件過往的事、或某角色的說話風格，請在回覆最後、</content> 之外，加一行 <recall>關鍵詞</recall>（例如人名、地點、事件名，多個用逗號隔開）。系統會在下一輪把相關記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
+            } else {
+                block += `\n\n[記憶用法｜每條摘要行首都有一個代號（A 開頭的編號）。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>代號</recall>（直接抄行首那個編號，多條用逗號隔開）；若需要某角色的說話風格範例，改抄該角色名。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
+            }
 
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
@@ -243,7 +259,7 @@
     // ── 🎬 記憶導演：給副模型(state_runtime extractOnce)挑「下一輪主模型該被提醒哪幾條」用 ──
     //    回傳帶碼全記憶目錄(文字) + 碼→記憶物件對照(map)；副模型挑碼 → 解析成物件 → setPendingRecall。
     //    用代號(A1…An)讓副模型挑，避免它逐字寫關鍵詞寫錯/對不上（同學生圖 [P1] 號碼制）。
-    async function getCatalogForPicking() {
+    async function getCatalogForPicking(queryText) {
         try {
             if (win.OS_API?.isStandalone?.()) return null;
             if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return null;
@@ -252,26 +268,47 @@
             const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
             const facts = all.filter(m => m && m.type !== 'dialogue' && !m.merged);   // 過濾被壓縮隱藏的原始條目
             if (!facts.length) return null;
-            facts.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+            // 🔎 向量粗篩：有「當下劇情」當 query + 庫裡已有向量 → 只把語意相關的 top-K 候選交給導演挑（取代 2000 行全目錄常駐）。
+            //    沒給 query / 還沒回填向量 / 搜尋空 → 退回全目錄(早/中/近)，回填空窗期照舊能召回、不開天窗。
+            let pool = null, segmented = true;
+            const q = String(queryText || '').replace(/<[^>]+>/g, ' ').trim();
+            if (q && typeof win.OS_VECTOR_ENGINE?.search === 'function') {
+                try {
+                    const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, PICK_POOL_K);
+                    const picked = (hits || []).filter(m => m && m.type !== 'dialogue' && !m.merged);
+                    if (picked.length) { pool = picked; segmented = false; }   // 候選池＝相關片段，不再分三段
+                } catch (e) {}
+            }
+            if (!pool) pool = facts.slice();
+            pool.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
             const map = {};
             const _seen = new Set();
             let text = '', idx = 0;
-            const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
-            [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]].forEach((seg) => {
-                const lines = [];
-                seg[1].forEach((m) => {
-                    let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
-                    if (!s) return;
-                    if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
-                    if (_seen.has(s)) return;
-                    _seen.add(s);
-                    idx++;
-                    const code = 'A' + idx;
-                    map[code] = m;
-                    lines.push(`${code}・${s}`);
+            const _emit = (m, lines) => {
+                let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
+                if (!s) return;
+                if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
+                if (_seen.has(s)) return;
+                _seen.add(s);
+                idx++;
+                const code = 'A' + idx;
+                map[code] = m;
+                lines.push(`${code}・${s}`);
+            };
+            if (segmented) {
+                const n = pool.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
+                [['早期', pool.slice(0, c1)], ['中段', pool.slice(c1, c2)], ['近期', pool.slice(c2)]].forEach((seg) => {
+                    const lines = [];
+                    seg[1].forEach(m => _emit(m, lines));
+                    if (lines.length) text += `\n〔${seg[0]}〕\n` + lines.join('\n');
                 });
-                if (lines.length) text += `\n〔${seg[0]}〕\n` + lines.join('\n');
-            });
+            } else {
+                const lines = [];
+                pool.forEach(m => _emit(m, lines));
+                if (lines.length) text += `\n〔與當前劇情相關的記憶〕\n` + lines.join('\n');
+            }
             if (!idx) return null;
             return { text: text.trim(), map };
         } catch (e) { return null; }
@@ -322,8 +359,23 @@
                 _pendingMemory = { content, storyId, chapterId: cid };
             } else {
                 win.OS_VECTOR_ENGINE.ingest(content, storyId, cid);
+                _selfRecall(content, storyId);   // 沒跑副模型導演 → 自己用本則劇情向量撈相關記憶，存給下一輪注入
             }
         } catch (e) { console.warn('[Vector Memory Injector] ingestLatest 失敗:', e?.message || e); }
+    }
+
+    // 導演沒跑(state_runtime 關)時的自助召回：拿本則劇情向量搜相關記憶 → 存 pending，下一輪 injectMemories 直接注入細節
+    //   （同副模型導演的交棒路徑：setPendingRecall → _pendingRecallEntries → 下一輪【點名記憶細節】）。向量沒就緒就靜默跳過。
+    async function _selfRecall(queryText, storyId) {
+        try {
+            if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return;
+            if (typeof win.OS_VECTOR_ENGINE?.search !== 'function') return;
+            const q = String(queryText || '').replace(/<[^>]+>/g, ' ').trim();
+            if (!q) return;
+            const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, 8);
+            const picked = (hits || []).filter(m => m && m.type !== 'dialogue' && !m.merged);
+            if (picked.length) setPendingRecall(picked);
+        } catch (e) {}
     }
 
     function init() {

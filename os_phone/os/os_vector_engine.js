@@ -46,15 +46,18 @@
 
     function _getEmbedModel() { return _cfg().embeddingModel || 'text-embedding-3-small'; }
     function _getTopK()       { return parseInt(_cfg().topK) || 5; }
+    function _hasEmbedConfig(){ return !!(_getEmbedUrl() && _getEmbedKey()); }   // 有設端點+Key 才算得了向量（沒設就 best-effort 退 null，不報錯洗版）
 
     // ================================================================
     // 二、Embedding API
     // ================================================================
 
+    // text 可傳「字串」(單筆→回 Float 陣列) 或「字串陣列」(批次→回 Float 陣列的陣列、照 index 排好)。批次給回填用、省往返。
     async function embed(text) {
         const url = _getEmbedUrl();
         const key = _getEmbedKey();
         if (!url || !key) throw new Error('[VecEngine] Embedding 端點或 Key 未設定');
+        const isBatch = Array.isArray(text);
 
         const resp = await fetch(url, {
             method: 'POST',
@@ -63,6 +66,12 @@
         });
         if (!resp.ok) throw new Error(`[VecEngine] Embedding API 錯誤 HTTP ${resp.status}`);
         const data = await resp.json();
+        if (isBatch) {
+            const rows = Array.isArray(data?.data) ? data.data.slice().sort((a, b) => (a.index || 0) - (b.index || 0)) : [];
+            const vecs = rows.map(r => r?.embedding);
+            if (!vecs.length || !Array.isArray(vecs[0])) throw new Error('[VecEngine] Embedding 批次回應格式異常');
+            return vecs; // Array<Float array>
+        }
         const vec = data?.data?.[0]?.embedding;
         if (!Array.isArray(vec)) throw new Error('[VecEngine] Embedding 回應格式異常');
         return vec; // Float array
@@ -177,10 +186,10 @@
         for (const entry of entries) {
             if (!entry || !entry.text) continue;
             try {
-                // 向量只給 PWA/獨立版的相似度搜尋(search)用；酒館走「目錄常駐+導演挑碼」不搜向量 →
-                //   酒館不算向量(省 SiliconFlow API)、且 best-effort：算向量失敗也不該害記憶存不進去。
+                // 向量供相似度搜尋(search)用——酒館也算（召回改「向量粗篩→導演精排」、取代 2000 行全目錄常駐）。
+                //   best-effort：沒設 BGE / 額度滿 / 算失敗都退 vector=null，召回端自動退回全目錄、絕不害記憶存不進去。
                 let vec = null;
-                if (win.OS_API?.isStandalone?.()) {
+                if (_hasEmbedConfig()) {
                     try { vec = await embed(entry.text); } catch (vErr) { console.warn('[VecEngine] 向量化失敗(不影響存):', vErr?.message || vErr); }
                 }
                 await win.OS_DB.saveVnMemory({
@@ -199,11 +208,45 @@
         console.log(`[VecEngine] ✅ 入庫完成：${entries.length} 條記憶`);
     }
 
+    // 回填：把「已存但沒向量」的舊記憶批次補上 embedding（啟用向量後一次性遷移，例如把 2000 條舊記憶補齊）。
+    //   分批打 BGE（免費 tier 友善：每批 BATCH 條 + 批間 DELAY 節流）；saveVnMemory 同 id 覆寫＝原地更新；
+    //   被壓縮隱藏(merged)的原始條目不搜尋→不浪費額度回填；單批失敗跳過續跑、可重按補剩下的。
+    async function backfillVectors(storyId, onProgress) {
+        if (!win.OS_DB?.getAllVnMemories || !win.OS_DB?.saveVnMemory) return { done: 0, ok: 0, total: 0 };
+        if (!_hasEmbedConfig()) throw new Error('尚未設定記憶服務（端點／Key）');
+        const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+        const todo = all.filter(m => m && m.text && !m.merged && !(Array.isArray(m.vector) && m.vector.length));
+        const total = todo.length;
+        if (!total) return { done: 0, ok: 0, total: 0 };
+        const BATCH = 32, DELAY = 350;
+        let done = 0, ok = 0;
+        for (let i = 0; i < todo.length; i += BATCH) {
+            const chunk = todo.slice(i, i + BATCH);
+            try {
+                const vecs = await embed(chunk.map(m => String(m.text || '').slice(0, 2000)));
+                for (let j = 0; j < chunk.length; j++) {
+                    const v = vecs[j];
+                    if (Array.isArray(v) && v.length) {
+                        chunk[j].vector = v;
+                        try { await win.OS_DB.saveVnMemory(chunk[j]); ok++; } catch (e) {}
+                    }
+                }
+            } catch (e) {
+                console.warn('[VecEngine] 回填批次失敗(跳過、可重按補):', e?.message || e);
+            }
+            done += chunk.length;
+            try { onProgress && onProgress(done, total); } catch (e) {}
+            if (i + BATCH < todo.length) await new Promise(r => setTimeout(r, DELAY));
+        }
+        console.log(`[VecEngine] 🔢 回填完成：${ok}/${total} 條建立向量`);
+        return { done, ok, total };
+    }
+
     // ================================================================
     // 六、Search：向量搜尋 → top-K
     // ================================================================
 
-    async function search(queryText, storyId) {
+    async function search(queryText, storyId, topK) {
         if (!_isEnabled() || !win.OS_DB?.getAllVnMemories) return [];
         try {
             const queryVec = await embed(queryText);
@@ -214,7 +257,7 @@
                 .filter(m => Array.isArray(m.vector) && m.vector.length)
                 .map(m => ({ ...m, _score: cosineSim(queryVec, m.vector) }))
                 .sort((a, b) => b._score - a._score)
-                .slice(0, _getTopK());
+                .slice(0, topK || _getTopK());
         } catch(e) {
             console.warn('[VecEngine] search 失敗:', e);
             return [];
@@ -237,7 +280,7 @@
     // 八、公開 API
     // ================================================================
 
-    win.OS_VECTOR_ENGINE = { embed, ingest, ingestEntries, search, isEnabled: _isEnabled, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
+    win.OS_VECTOR_ENGINE = { embed, ingest, ingestEntries, backfillVectors, search, isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
         // 把章節原文清成「要餵給抽取的內容」(跟 ingest 同邏輯：summary 或 <content>)，給結合觸發共用
         const src = _cfg().extractSource || 'content';
         let c = '';
