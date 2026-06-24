@@ -459,6 +459,16 @@
         .vc-dot.on { background:#639922; }
         .vc-chev { flex-shrink:0; color:var(--jrpg-gold); font-size:20px; }
         .vc-empty { color:var(--jrpg-muted); text-align:center; padding:24px 12px; font-size:13px; line-height:1.7; }
+        /* 隱藏／孤兒組件清理區 */
+        .vc-orphan-box { margin-top:14px; border:1px solid rgba(110,34,48,0.4); border-radius:13px; background:rgba(110,34,48,0.05); padding:10px; display:flex; flex-direction:column; gap:7px; }
+        .vc-orphan-hd { font-size:13px; font-weight:700; color:var(--jrpg-wine); display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+        .vc-orphan-sub { flex-basis:100%; font-size:11px; font-weight:400; color:var(--jrpg-muted); line-height:1.5; }
+        .vc-orphan-row { display:flex; align-items:center; gap:10px; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:10px; padding:8px 10px; }
+        .vc-orphan-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+        .vc-orphan-tag { font-size:13px; font-weight:700; color:var(--jrpg-ink); font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .vc-orphan-meta { font-size:11px; color:var(--jrpg-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .vc-orphan-del { flex-shrink:0; border:0; background:transparent; color:var(--jrpg-wine); font-size:16px; cursor:pointer; padding:4px 8px; line-height:1; }
+        .vc-orphan-del:hover { color:var(--jrpg-wine-dark); }
         /* 瀏覽層底部「選擇並打包」 */
         .vc-browse-foot { padding-top:4px; }
         .vc-pack-cta { width:100%; min-height:46px; border:1px solid rgba(110,34,48,0.45); border-radius:12px; background:transparent; color:var(--jrpg-wine); font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }

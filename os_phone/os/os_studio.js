@@ -3114,6 +3114,30 @@ ${cleanFormat}
         }
     }
 
+    // 刪除 VN 組件時，連「注入酒館」留下的殘留一起清：全域正則 [VN面板]<tagId> + 角色主世界書同名條目。
+    // （沒注入過酒館就無事；沒 TavernHelper／PWA 也安靜跳過。）解「刪了組件、酒館裡舊面板還在」的孤兒。
+    async function _removeTavernPanelArtifacts(tagId) {
+        const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
+        if (!th) return;
+        const safeTagId = String(tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeTagId) return;
+        const sn = `[VN面板] ${safeTagId}`;
+        try {
+            if (th.updateTavernRegexesWith) {
+                await th.updateTavernRegexesWith(rx => (rx || []).filter(r => r && r.script_name !== sn), { type: 'global' });
+            }
+        } catch (e) { console.warn('[Studio] 清酒館正則殘留失敗', e); }
+        try {
+            const wbInfo = th.getCharWorldbookNames ? th.getCharWorldbookNames('current') : null;
+            const wb = wbInfo && wbInfo.primary;
+            if (wb && th.getWorldbook && th.deleteLorebookEntries) {
+                const ents = await th.getWorldbook(wb);
+                const hit = (ents || []).filter(e => e && e.name === sn);
+                if (hit.length) await th.deleteLorebookEntries(wb, hit.map(e => e.uid));
+            }
+        } catch (e) { console.warn('[Studio] 清主世界書條目殘留失敗', e); }
+    }
+
     // ============================================================
     // === 📝 直接編輯原碼 modal（給進階用戶繞過 AI 對話改 tpl JSON）===
     // ============================================================
@@ -3365,8 +3389,8 @@ ${cleanFormat}
         if (!db || typeof db.getAllVNTagTemplates !== 'function') { listEl.innerHTML = '<div class="vc-empty">找不到 OS_DB</div>'; return; }
         _wireVnUiPackButtons();
         listEl.innerHTML = '<div class="vc-empty">載入中…</div>';
-        let templates = [];
-        try { templates = (await db.getAllVNTagTemplates()).filter(t => t && t.panelType !== '純應用'); }
+        let templates = [], _allVn = [];
+        try { _allVn = await db.getAllVNTagTemplates(); templates = _allVn.filter(t => t && t.panelType !== '純應用'); }
         catch (e) { listEl.innerHTML = `<div class="vc-empty">載入失敗：${_sgcEsc(e.message)}</div>`; return; }
         _vcAllPhoneApps = db.getAllPhoneApps ? ((await db.getAllPhoneApps()) || []) : [];
         const groups = _loadGroups();
@@ -3439,6 +3463,32 @@ ${cleanFormat}
             listEl.appendChild(wrap);
             _vcApplyBrowseFilter(listEl);
             _vcObserveThumbs(wrap);
+        }
+
+        // ── 隱藏／孤兒組件：isActive（還在劇情裡作用）但沒出現在上面清單（被 panelType 等藏起）→ 無處可管。
+        //    硬列出來給看+刪：解「莫名其妙冒出舊面板、卻在展廳/我的應用都找不到」的孤兒。不管什麼 panelType/版本都抓得到。──
+        const _shownIds = new Set(templates.map(t => t.id));
+        const _orphans = _allVn.filter(t => t && t.isActive && !_shownIds.has(t.id));
+        if (_orphans.length) {
+            const ob = document.createElement('div'); ob.className = 'vc-orphan-box';
+            const hd = document.createElement('div'); hd.className = 'vc-orphan-hd';
+            hd.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 隱藏／孤兒組件（${_orphans.length}）<span class="vc-orphan-sub">這些不在上面清單、但還在劇情裡作用（AI 會被教著寫、劇情會渲染）。認不得就刪掉。</span>`;
+            ob.appendChild(hd);
+            _orphans.forEach(tpl => {
+                const row = document.createElement('div'); row.className = 'vc-orphan-row';
+                const meta = `${(tpl.title && String(tpl.title).trim()) || '(無標題)'} · ${tpl.panelType || '未標類型'}${tpl.isBlock ? ' · 區塊' : ''}`;
+                row.innerHTML = `<span class="vc-orphan-info"><span class="vc-orphan-tag">${_sgcEsc(tpl.tagId || '?')}</span><span class="vc-orphan-meta">${_sgcEsc(meta)}</span></span><button class="vc-orphan-del" type="button" title="刪除"><i class="fa-solid fa-trash"></i></button>`;
+                row.querySelector('.vc-orphan-del').onclick = async () => {
+                    if (!confirm(`刪除隱藏組件 [${tpl.tagId}]？\n刪掉後它會從劇情裡消失、AI 也不再被教著寫它。此動作無法復原。`)) return;
+                    try { await db.deleteUITemplate(tpl.id); } catch (e) {}
+                    try { await syncActiveTagsToLocal(); } catch (e) {}
+                    if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
+                    try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {}   // 連酒館正則+主世界書殘留一起清
+                    renderVnComponents();
+                };
+                ob.appendChild(row);
+            });
+            listEl.appendChild(ob);
         }
 
         // 底部：選擇並打包
@@ -3533,6 +3583,7 @@ ${cleanFormat}
             if (!confirm(`刪除組件 [${tpl.tagId}]？此操作無法復原。`)) return;
             await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal();
             if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
+            try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {}   // 連酒館正則+主世界書殘留一起清，不留孤兒
             _vcTpl = null; _vcView = 'browse'; renderVnComponents();
         };
         _activatePreview(listEl, tpl, safeTagId);
