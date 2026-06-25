@@ -60,11 +60,11 @@
                 `\n</劇情總結>`;
 
             // 注入深度(in_chat)：數字越小越貼最新訊息＝模型注意力越高；越大越往聊天頂＝注意力越低。
-            //   🐛 遷移 bug 修正：大總結本來在世界書條目是「order:999 + depth:0」(order=同層排序、depth=位置，兩回事)。
-            //      舊 session 轉成 injectPrompts 時把 order 的 999 誤當 depth 填 → depth:999(聊天最頂=注意力最低)=天天失憶
-            //      (Rae 實測手帕事件明明在角色表卻被忘)。原本就是 depth:0(緊貼生成點)，改回 0。localStorage sp_summary_inject_depth 自調。
+            //   🐛 修正史：舊 session 把世界書條目的 order:999 誤當 depth 填→depth:999(聊天最頂=注意力最低)=天天失憶。
+            //      ⚠️ 但 injectPrompts depth:0 實測會讓大總結「整個不注入」(跟世界書 @depth:0 不同；疑與向量記憶那條 depth:0 撞掉)。
+            //      → 用 2：仍緊貼生成點=高注意力，但 >0 才穩定注入、且避開向量記憶(0)/條件規則(1)佔用的層。localStorage sp_summary_inject_depth 自調(別設 0)。
             let _depth = parseInt(localStorage.getItem('sp_summary_inject_depth'));
-            if (isNaN(_depth) || _depth < 0) _depth = 0;
+            if (isNaN(_depth) || _depth < 1) _depth = 2;
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
                 content: block.trim(),
