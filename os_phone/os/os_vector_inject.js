@@ -165,16 +165,16 @@
                     if (name) coreByChar.set(name, m);
                 }
                 // 角色多到超過上限 → 留「最近還在活動」的；被擠掉的角色仍保有上面索引那句話，不會憑空消失
-                const core = Array.from(coreByChar.values())
-                    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+                const core = Array.from(coreByChar.entries())   // [角色名, m]：保留角色名好標在每條前面，內文沒寫主詞也看得出在講誰
+                    .sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0))
                     .slice(0, CORE_PIN_MAX);
                 if (core.length) {
                     block += `\n\n【核心角色｜本劇重要登場角色，務必延續其設定與關係，別寫成陌生人或遺忘】\n`;
-                    block += core.map(m => {
+                    block += core.map(([name, m]) => {
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
                         _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・${t}`;
+                        return `・【${name}】${t}`;
                     }).join('\n');
                 }
             }
@@ -189,14 +189,14 @@
                     name = String(name).trim();
                     if (name) sexByChar.set(name, m);
                 }
-                const sx = Array.from(sexByChar.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 8);
+                const sx = Array.from(sexByChar.entries()).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0)).slice(0, 8);
                 if (sx.length) {
                     block += `\n\n【性事紀錄｜主角與下列角色發生過性事，互動時務必記得這層關係、別寫成初次見面或冷淡無情】\n`;
-                    block += sx.map(m => {
+                    block += sx.map(([name, m]) => {
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
                         _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・${t}`;
+                        return `・【${name}】${t}`;
                     }).join('\n');
                 }
             }
