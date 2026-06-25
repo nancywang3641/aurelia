@@ -211,9 +211,14 @@
         bindPackEditorEvents(container);
         bindFurnaceEvents(container);
         // 「狀態檔案」整合頁：預設同時顯示 目前狀態(上) + 檔案(下)
-        container.querySelector('#avs-view-packs')?.classList.add('active');
-        renderStateView(container);
-        renderPackList(container);
+        // 🛡️ await loadAllData 期間使用者可能已切到「記憶」tab；若已切走就別硬補 active，
+        //    否則檔案 view 會跟記憶 view 同時 active（兩者都 display:flex）→ 我的檔案 UI 疊進記憶 tab
+        if (container.querySelector('.avs-tab[data-tab="state"]')?.classList.contains('active')) {
+            container.querySelector('#avs-view-state')?.classList.add('active');
+            container.querySelector('#avs-view-packs')?.classList.add('active');
+            renderStateView(container);
+            renderPackList(container);
+        }
 
         // 監聽 AVS 更新事件，自動刷新狀態頁
         win.addEventListener('AVS_VARS_UPDATED', () => {
