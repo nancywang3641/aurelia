@@ -88,6 +88,7 @@
                 </div>
                 <div class="avs-content">
                     <div id="avs-view-memory" class="avs-view"></div>
+                    <div id="avs-view-state" class="avs-view active"></div>
                     <div id="avs-view-packs" class="avs-view">
                         <div class="avs-label" style="font-size:13px; padding-top:14px; border-top:1px solid rgba(26,28,40,0.10);">📦 我的檔案</div>
                         <div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
@@ -109,7 +110,6 @@
                             </div>
                         </div>
                     </div>
-                    <div id="avs-view-state" class="avs-view active"></div>
                 </div>
 
                 <!-- 🔥 煉丹爐 modal（從變數包 tab 頂部按鈕 / 卡片按鈕觸發）-->
