@@ -301,13 +301,16 @@
     }
 
     // ── 注入壓縮：把「全文存檔」壓成「每輪實際送主模型」的精簡版（存檔保留全部、注入只送活著的狀態）──
-    //   事件表→只留最近 N 筆；物品表→只留 在庫/使用中(已交付/已消耗/損壞 不送)；結算清單→丟(跟事件/結語重複)；
+    //   事件表→預設全送(久遠已壓階段節點＝完整劇情線、防失憶；可設 sp_summary_events_keep 上限)；物品表→只留 在庫/使用中(已交付/已消耗/損壞 不送)；結算清單→丟(跟事件/結語重複)；
     //   性事紀→只留最近數筆；結語(總記憶)/角色表/關係圖譜/注意規範→全送。供 os_summary_inject 每輪呼叫。
     function _stripSummaryHead(t) { return String(t == null ? '' : t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, ''); }
     const _ITEM_DEAD = /已交付|已消耗|已用完|消耗完|損壞|损坏|損毀|损毁|報廢|报废/;
     API.buildInjectionPayload = function (fullContent, opts) {
         const o = opts || {};
-        const eventsKeep = (o.eventsKeep != null) ? o.eventsKeep : 10;
+        // 事件表預設「全開」——大總結生成時久遠事件已壓成「階段節點」，這份本來就是壓縮過的完整劇情線，
+        //   砍最近10會害主模型失去大局意識(失憶/循環)。要設上限可填 localStorage.sp_summary_events_keep(>0)。
+        const eventsKeep = (o.eventsKeep != null) ? o.eventsKeep
+            : (function () { const v = parseInt(localStorage.getItem('sp_summary_events_keep')); return (!isNaN(v) && v > 0) ? v : Infinity; })();
         const sexKeep = (o.sexKeep != null) ? o.sexKeep : 5;
         try {
             const secs = _splitSummarySections(_stripSummaryHead(fullContent));
