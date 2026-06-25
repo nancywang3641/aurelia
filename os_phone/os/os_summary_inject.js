@@ -28,7 +28,11 @@
         if (_cache.has(chatId)) return _cache.get(chatId);
         let payload = '';
         try { payload = (await win.OS_STORY_TOOLS?.getCurrentInjectionPayload?.()) || ''; } catch (e) { payload = ''; }
-        _cache.set(chatId, payload);   // 連 '' 也快取：summary-less 的聊天不會每輪重打世界書
+        // 🔑 只快取「非空」payload：偶發空(OS_DB 還沒 ready / chatId 當下不一致 / 時序)若被釘進快取，
+        //    之後每輪都命中空、永遠不注入＝整個 session 失憶，要換 chat 才解。這正是「時有時無→這次又沒了」的元兇。
+        //    對照 VN 組件每輪重讀 localStorage 永遠有值、屹立不倒；大總結這層空快取才是病灶。
+        //    代價：還沒生成大總結的聊天每輪會重讀一次 OS_DB（getTavernSummary 很快），可接受。
+        if (payload) _cache.set(chatId, payload);
         return payload;
     }
 
