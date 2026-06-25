@@ -268,11 +268,13 @@
                 block += `\n\n[記憶用法｜每條摘要行首都有一個代號（A 開頭的編號）。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>代號</recall>（直接抄行首那個編號，多條用逗號隔開）；若需要某角色的說話風格範例，改抄該角色名。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
             }
 
+            // depth(in_chat)：越小越貼近生成點/注意力越高。向量召回從 0 挪到 2，
+            //   讓出底部給大總結(depth:1) → 兩條記憶錯開、不再都擠 depth:0。
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
                 content: block.trim(),
                 position: 'in_chat',
-                depth: 0,
+                depth: 2,
                 role: 'system'
             }], { once: true });
             _lastUninject = result?.uninject || null;
