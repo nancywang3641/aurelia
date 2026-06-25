@@ -19,7 +19,6 @@
     let _lastUninject = null;
     const _cache = new Map();   // chatId → 壓縮注入字串（避免每輪重讀+重壓；存檔/編輯後由 invalidate 清掉）
     let _lastInjected = null;   // 給 debug/CTX 面板看：{ chatId, text, len }
-    const _dbg = (m) => { try { console.log('📜[大總結診斷] ' + m); } catch (e) {} };   // 🔧 臨時診斷（確診後移除）；輸出進螢幕 console 🐛
 
     function _chatId() {
         try { return win.OS_STORY_TOOLS?.getChatId?.() || ''; } catch (e) { return ''; }
@@ -45,17 +44,17 @@
             _lastInjected = null;
 
             // 正在跑大總結（os_story_tools 的 generateRaw）→ 別把大總結摻進總結 prompt
-            if (win.__AURELIA_SUMMARIZING) { _dbg('跳過：正在跑大總結(__AURELIA_SUMMARIZING=true)'); return; }
+            if (win.__AURELIA_SUMMARIZING) return;
             // 只在酒館跑；PWA 走 buildContext，不重複
-            if (win.OS_API?.isStandalone?.()) { _dbg('跳過：判定為 PWA(isStandalone=true)'); return; }
-            if (!win.TavernHelper?.injectPrompts) { _dbg('跳過：無 TavernHelper.injectPrompts'); return; }
-            if (!win.OS_STORY_TOOLS?.getCurrentInjectionPayload) { _dbg('跳過：無 OS_STORY_TOOLS.getCurrentInjectionPayload'); return; }
+            if (win.OS_API?.isStandalone?.()) return;
+            if (!win.TavernHelper?.injectPrompts) return;
+            if (!win.OS_STORY_TOOLS?.getCurrentInjectionPayload) return;
 
             const chatId = _chatId();
-            if (!chatId) { _dbg('跳過：chatId 空（getChatId 取不到）'); return; }
+            if (!chatId) return;
 
             const payload = await _payloadFor(chatId);
-            if (!payload) { _dbg('跳過：payload 空 → chatId=' + JSON.stringify(chatId) + (_cache.has(chatId) ? '(命中cache、被快取成空)' : '(現抓即空、OS_DB無此chatId大總結或壓縮成空)')); return; }   // 這個聊天室還沒大總結
+            if (!payload) return;   // 這個聊天室還沒大總結
 
             const block =
                 `<劇情總結 規則="既成事實·寫作前必讀·不得矛盾">\n` +
@@ -65,9 +64,10 @@
                 `\n</劇情總結>`;
 
             // 注入深度(in_chat)：數字越小越貼最新訊息＝模型注意力越高；越大越往聊天頂＝注意力越低。
-            //   🐛 修正史：舊 session 把世界書條目的 order:999 誤當 depth 填→depth:999(聊天最頂=注意力最低)=天天失憶。
-            //      ⚠️ 但 injectPrompts depth:0 實測會讓大總結「整個不注入」(跟世界書 @depth:0 不同；疑與向量記憶那條 depth:0 撞掉)。
-            //      → depth:1（緊貼生成點=高注意力、>0 才穩定注入）。localStorage sp_summary_inject_depth 自調(別設 0；太大坨被切就往上調 2/4)。
+            //   🐛 修正史：舊 session 把世界書條目的 order:999 誤當 depth 填→depth:999(聊天最頂)=天天失憶。
+            //      之後一度傳「depth:0 會整個不注入、疑與向量撞」→ 已證實誤判：真凶是上面 _payloadFor 的「空快取卡死」
+            //      (偶發空被釘進 cache→整 session 不注入)，與 depth 無關(同 depth 多條不同 id 本就可共存)。
+            //   用 depth:1：刻意排在 VN組件規範(depth:0)之後——VN 規範本來就該最前。localStorage sp_summary_inject_depth 自調(最小 1)。
             let _depth = parseInt(localStorage.getItem('sp_summary_inject_depth'));
             if (isNaN(_depth) || _depth < 1) _depth = 1;
             const result = win.TavernHelper.injectPrompts([{
