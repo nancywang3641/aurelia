@@ -228,7 +228,8 @@
                     block += _hit.map(m => {
                         let t = String(m.text || '').replace(/\s+/g, ' ').trim();
                         if (t.length > 300) t = t.slice(0, 300) + '…';
-                        return `・${t}`;
+                        const tag = ((Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || '').trim();   // 角色名/事件名當標頭
+                        return tag ? `・【${tag}】${t}` : `・${t}`;
                     }).join('\n');
                 }
                 _pendingRecallEntries = [];       // 消費掉；副模型每輪會重新挑
