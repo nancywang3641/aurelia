@@ -2711,7 +2711,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             parse() {
                 const result = {};
                 (lines || []).forEach(line => {
-                    line = line.trim();
+                    line = String(line || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');   // 容錯：全形分隔符/方括號→半形
                     if (line.charAt(0) !== '[' || line.charAt(line.length-1) !== ']') return;
                     const inner = line.slice(1, -1);
                     const parts = inner.split('|');
@@ -2951,7 +2951,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
       parse: function(){
         var result = {};
         lines.forEach(function(line){
-          line = line.trim();
+          line = String(line || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');
           if (line.charAt(0) !== '[' || line.charAt(line.length-1) !== ']') return;
           var inner = line.slice(1, -1);
           var parts = inner.split('|');
@@ -3313,7 +3313,7 @@ ${cleanFormat}
         if (tpl.isBlock && tpl.js) {
             setTimeout(() => {
                 try {
-                    const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<'));
+                    const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<') && !/^\[\/?[a-zA-Z0-9_-]+\]$/.test(l));   // 濾掉 <Tag> 與 [Tag]/[/Tag] 外框、留 [Result|…] 內容行
                     const container = card.querySelector(`.vn-dynamic-panel-${safeTagId}`);
                     if (!container) return;
                     let safeJs = tpl.js.trim().replace(/^```(?:javascript|js|html|css)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
@@ -3418,7 +3418,7 @@ ${cleanFormat}
         if (tpl.isBlock && tpl.js) {
             setTimeout(() => {
                 try {
-                    const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<'));
+                    const lines = (tpl.demoFormat || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('<') && !/^\[\/?[a-zA-Z0-9_-]+\]$/.test(l));   // 濾掉 <Tag> 與 [Tag]/[/Tag] 外框、留 [Result|…] 內容行
                     const cont = inner.querySelector(`.vn-dynamic-panel-${safeTagId}`); if (!cont) return;
                     let safeJs = tpl.js.trim().replace(/^```(?:javascript|js|html|css)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
                     window.__IS_PREVIEW = true;
