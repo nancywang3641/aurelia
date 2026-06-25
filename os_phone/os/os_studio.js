@@ -275,16 +275,19 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
   "css": "頂級 CSS（含 .vn-dynamic-panel-xxx 前綴；守尺寸鐵律）",
   "js": "互動邏輯",
   "usageDesc": "給劇本 AI 的極簡說明（一句話＋附『依格式填寫，只在 <content> 內穿插此標籤』警告）",
-  "demoFormat": "資料結構（只說明結構、不寫內容）"
+  "demoFormat": "資料結構（只說明結構、不寫內容）",
+  "keywords": ["（選填）3~5 個觸發詞：正文出現這些詞就代表現在需要這個面板。依本面板主題自己想直接相關的名詞或動詞、別用泛詞、別照抄本說明；想不到就給空陣列 []"]
 }
 </json>
 鐵則：JSON 字串值內「禁止出現真實換行字元」，需要換行時用跳脫寫法（反斜線加 n）。
-🚨 無論用戶說什麼，第一次回覆「必須」含完整 <json>…</json>（八鍵齊）。不可只回對話／開場白就停、不可省 <json>、不可給空或缺鍵 JSON。沒有完整 JSON，後續所有微調都會崩（程式抓不到面板資料、會誤判成重新生成把面板覆蓋掉）。`,
+🚨 無論用戶說什麼，第一次回覆「必須」含完整 <json>…</json>（核心八鍵齊：tagId/title/isBlock/html/css/js/usageDesc/demoFormat；keywords 為選填、想不到給 []）。不可只回對話／開場白就停、不可省 <json>、不可給空或缺核心鍵 JSON。沒有完整 JSON，後續所有微調都會崩（程式抓不到面板資料、會誤判成重新生成把面板覆蓋掉）。`,
             onSave: async (data) => {
                 if(!data.tagId || !data.html) throw new Error("缺少 tagId 或 html");
                 if (win.OS_DB && win.OS_DB.saveVNTagTemplate) {
                     if (!data.id) data.id = 'tpl_' + Date.now();
                     data.isActive = true;
+                    // AI 順手吐的觸發關鍵字 → 正規化成乾淨字串陣列（給設定頁預填、省得手動想）；注入方式預設「常駐」(不設 injectMode)，要省 token 再到設定頁切「關鍵字觸發」
+                    data.keywords = (Array.isArray(data.keywords) ? data.keywords : []).map(function (k) { return String(k || '').trim(); }).filter(Boolean).slice(0, 8);
                     // caps 自動標：js 有用 st.callAI/st.setImage = 能生成；有用 lines/container = 能展示
                     (function () {
                         var js = String(data.js || '');
@@ -2857,31 +2860,45 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         try {
             const templates = await db.getAllVNTagTemplates();
             const activeTags = templates.filter(t => t.isActive && t.demoFormat);
-            if (!activeTags.length) { localStorage.removeItem('os_vn_extra_tags_prompt'); return; }
-            // 用「實測有效」的清單格式：分單行/區塊、每段＝中文標題＋使用說明＋正確 tag 格式。
-            // 標題用中文名(沒有才退 tagId)，且區塊一律寫成 <tagId>…</tagId>，不再用會被誤認成標籤的 [tagId] 當小標。
-            const singles = activeTags.filter(t => !t.isBlock);
-            const blocks  = activeTags.filter(t => t.isBlock);
             const titleOf = t => (t.title && String(t.title).trim()) || t.tagId || '面板';
-            let p = `# [📱模式｜VN組件] 清單\n使用場景: 可在正文內穿插的特殊 TAG。依下列格式填寫，{…} 佔位符換成實際內容、不可照抄佔位符字面。\n`;
-            if (singles.length) {
-                p += `\n## 單行標籤格式（直接穿插在對話內，無須換行）\n`;
-                singles.forEach(t => { p += `\n### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n${t.demoFormat}\n`; });
-            }
-            if (blocks.length) {
-                p += `\n## 區塊標籤格式（整段獨立輸出，與 <content> 並列；只在區塊內穿插，不可掉出區塊）\n`;
-                blocks.forEach(t => {
-                    // demoFormat 可能自帶 <tagId>…</tagId> 外殼 → 先剝掉再統一補一層，永遠剛好一層
-                    //   (原本固定外加一層、沒先剝 → demoFormat 自帶外殼時就 <Bestiary> 開兩次、</Bestiary> 關兩次)。跟 vn_ui_workshop 同款。
+            // 單個組件的教學片段（中文標題＋使用說明＋正確 tag 格式）。區塊一律寫 <tagId>…</tagId>，
+            //   demoFormat 可能自帶外殼 → 先剝再補一層，永遠剛好一層（防 <Bestiary> 開兩次）。
+            const snippetOf = (t) => {
+                if (t.isBlock) {
                     const df = String(t.demoFormat || '').trim()
                         .replace(new RegExp('^<' + t.tagId + '>\\s*', 'i'), '')
                         .replace(new RegExp('\\s*</' + t.tagId + '>$', 'i'), '').trim();
-                    p += `\n### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n<${t.tagId}>\n${df}\n</${t.tagId}>\n`;
-                });
+                    return `### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n<${t.tagId}>\n${df}\n</${t.tagId}>\n`;
+                }
+                return `### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n${t.demoFormat}\n`;
+            };
+            // 注入方式：injectMode==='keyword' 且有關鍵字 → 關鍵字觸發（注入器每輪比對命中才注）；其餘 → 常駐（每輪都注）。
+            const isKw = t => t.injectMode === 'keyword' && Array.isArray(t.keywords) && t.keywords.filter(Boolean).length > 0;
+            const constants = activeTags.filter(t => !isKw(t));
+            const keywords  = activeTags.filter(t => isKw(t));
+
+            // 常駐 blob → os_vn_extra_tags_prompt（酒館 injectVnTags + PWA os_prompts 兩條都讀）
+            if (!constants.length) {
+                localStorage.removeItem('os_vn_extra_tags_prompt');
+            } else {
+                const cS = constants.filter(t => !t.isBlock), cB = constants.filter(t => t.isBlock);
+                let p = `# [📱模式｜VN組件] 清單\n使用場景: 可在正文內穿插的特殊 TAG。依下列格式填寫，{…} 佔位符換成實際內容、不可照抄佔位符字面。\n`;
+                if (cS.length) { p += `\n## 單行標籤格式（直接穿插在對話內，無須換行）\n`; cS.forEach(t => { p += `\n${snippetOf(t)}`; }); }
+                if (cB.length) { p += `\n## 區塊標籤格式（整段獨立輸出，與 <content> 並列；只在區塊內穿插，不可掉出區塊）\n`; cB.forEach(t => { p += `\n${snippetOf(t)}`; }); }
+                localStorage.setItem('os_vn_extra_tags_prompt', p);
             }
-            localStorage.setItem('os_vn_extra_tags_prompt', p);
+
+            // 關鍵字組件 → 結構化存 os_vn_tags_keyword（注入器每輪抓最近正文+使用者輸入、命中才注入這幾個，省 token）
+            if (!keywords.length) {
+                localStorage.removeItem('os_vn_tags_keyword');
+            } else {
+                const arr = keywords.map(t => ({ tagId: t.tagId, isBlock: !!t.isBlock, keywords: t.keywords.filter(Boolean), snippet: snippetOf(t) }));
+                localStorage.setItem('os_vn_tags_keyword', JSON.stringify(arr));
+            }
         } catch(e) { console.warn('[Studio] syncActiveTagsToLocal 失敗', e); }
     }
+    // 暴露成全域，讓 vn_ui_workshop 的舊版同名函式委派過來（統一走這份「常駐/關鍵字」拆分邏輯）
+    try { win.__AURELIA_SYNC_VN_TAGS = syncActiveTagsToLocal; } catch (e) {}
 
     // ============================================================
     // === 注入酒館正則 + 主世界書（從 vn_ui_workshop.js 搬過來整合）===
@@ -3665,6 +3682,17 @@ ${cleanFormat}
                         </div>
                     </div>
                 </div>
+                <div class="vc-set-block"><div class="vc-set-blabel">注入方式</div>
+                    <div class="vc-set-row"><span class="vc-set-label"><i class="fa-solid fa-key"></i> 關鍵字觸發</span>
+                        <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-kwmode"${tpl.injectMode === 'keyword' ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
+                    </div>
+                    <div class="sgc-format-box vc-kw-box${tpl.injectMode === 'keyword' ? '' : ' vc-hide'}">
+                        <textarea class="sgc-format-input" id="vc-kw-input" placeholder="關鍵字用逗號分隔；正文最近 3 輪或你的輸入出現任一個，才注入這個面板。關掉＝常駐、每輪都注入。">${_sgcEsc((tpl.keywords || []).join('、'))}</textarea>
+                        <div class="vc-fmt-actions">
+                            <button class="swb-secondary btn-save-kw" type="button"><i class="fa-solid fa-floppy-disk"></i> 儲存關鍵字</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">整合</div>
                     <button class="vc-navrow" id="vc-import-st" type="button"><span class="vc-navrow-ico"><i class="fa-solid fa-file-import"></i></span><span class="vc-navrow-label">注入酒館正則</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
                     ${phoneRow}
@@ -3689,6 +3717,20 @@ ${cleanFormat}
         const phoneInput = listEl.querySelector('#vc-set-phone');
         if (phoneInput) phoneInput.onchange = async (e) => { await _vcTogglePhone(tpl, e.target.checked); };
         listEl.querySelector('#vc-set-lobby').onchange = async (e) => { tpl.lobbyEnabled = e.target.checked; await db.saveVNTagTemplate(tpl); };
+        // 注入方式：常駐 ⇄ 關鍵字觸發
+        const kwModeChk = listEl.querySelector('#vc-set-kwmode'), kwBox = listEl.querySelector('.vc-kw-box');
+        if (kwModeChk) kwModeChk.onchange = async (e) => {
+            tpl.injectMode = e.target.checked ? 'keyword' : 'constant';
+            if (kwBox) kwBox.classList.toggle('vc-hide', !e.target.checked);
+            await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal();
+        };
+        const kwSave = listEl.querySelector('.btn-save-kw');
+        if (kwSave) kwSave.onclick = async () => {
+            const raw = (listEl.querySelector('#vc-kw-input') || {}).value || '';
+            tpl.keywords = raw.split(/[,，、\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 12);
+            await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal();
+            _studioToast('已儲存關鍵字（' + tpl.keywords.length + '）', 'success', '設置');
+        };
         listEl.querySelector('#vc-raw').onclick = () => openRawEditModal(tpl);
     }
     async function _vcTogglePhone(tpl, want) {
