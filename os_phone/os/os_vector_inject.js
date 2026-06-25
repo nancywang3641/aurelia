@@ -111,6 +111,19 @@
             //    還沒回填 / 回填中 / 換了模型舊向量不認 → 未就緒，仍走全目錄(不在半路撤掉目錄、舊記憶卻搜不到＝不開天窗)。
             const _vecActive = win.OS_VECTOR_ENGINE?.vectorReady?.(all) === true;
 
+            // 主角名沒快取(本 session 還沒 ingest 過) → 直接掃最近訊息抓 [Protagonist|名]，免得開頭幾輪性事標不到主角。
+            //   [Protagonist|名] 是劇情 ground truth，比 OS_PERSONA / 酒館 name1 可靠——有人主角放世界書、根本沒設酒館用戶名。
+            if (!_protagonistName && win.TavernHelper?.getChatMessages) {
+                try {
+                    const _lid = await win.TavernHelper.getLastMessageId?.();
+                    const _ms = (await win.TavernHelper.getChatMessages(Math.max(0, (_lid || 0) - 4) + '-' + _lid)) || [];
+                    for (let i = _ms.length - 1; i >= 0; i--) {
+                        const _pm = String((_ms[i] && (_ms[i].message || _ms[i].mes)) || '').match(/\[Protagonist\|([^\]]+)\]/i);
+                        if (_pm && _pm[1] && _pm[1].trim().toLowerCase() !== 'user') { _protagonistName = _pm[1].trim(); break; }
+                    }
+                } catch (e) {}
+            }
+
             // 索引 = 每條的「一句話摘要」(summary，學星河璀璨的目錄)，不是 tags。
             //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
             //   再做「免費時間召回」：facts 已按 createdAt 舊→新排序，切三段標粗略時距(不花 LLM、不多通)，
