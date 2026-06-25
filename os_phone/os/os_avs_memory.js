@@ -136,6 +136,7 @@
 
             <div class="avs-st-btn-grid">
                 <button class="avs-btn avs-btn-outline" id="avs-mem-tidy">🗜️ 整理舊記憶</button>
+                <button class="avs-btn avs-btn-outline" id="avs-mem-reconcile">🧹 對齊劇情</button>
                 ${_noVec > 0 ? `<button class="avs-btn avs-btn-outline" id="avs-mem-backfill">🔢 建立記憶向量（${_noVec} 待補）</button>` : ''}
             </div>
             <div class="avs-mem-srchint" id="avs-mem-tidy-result">把舊的零碎記憶併成精簡版，省效能；重要角色與關係不會動。</div>
@@ -314,6 +315,21 @@
                 alert('整理失敗：' + (e?.message || e));
             }
             tidyBtn.textContent = _o; tidyBtn.disabled = false;
+            _build();
+        };
+
+        // 🧹 對齊劇情：清掉「來源訊息已被刪掉」的孤兒記憶（刪劇情後 AI 還一直想起被刪內容時用）
+        const recBtn = q('#avs-mem-reconcile');
+        if (recBtn) recBtn.onclick = async () => {
+            if (!win.OS_VECTOR_INJECT?.reconcileToStory) { alert('記憶引擎未載入，請重載擴展'); return; }
+            if (!confirm('清掉「已經不在目前劇情裡」的記憶？\n\n• 用在：刪掉劇情後，AI 還一直想起被刪內容\n• 只清「來源訊息已被刪除」的那幾條，現存劇情的記憶不動\n• 讀不到完整劇情會自動中止、不誤刪')) return;
+            recBtn.disabled = true; const _o = recBtn.textContent; recBtn.textContent = '對齊中…';
+            try {
+                const r = await win.OS_VECTOR_INJECT.reconcileToStory();
+                if (r.ok) alert(`✅ 對齊完成\n清掉 ${r.removed} 條已刪內容的記憶（目前劇情 ${r.total} 樓、共掃 ${r.scanned} 條）`);
+                else alert('未執行：' + (r.msg || '未知原因'));
+            } catch (e) { alert('對齊失敗：' + (e?.message || e)); }
+            recBtn.textContent = _o; recBtn.disabled = false;
             _build();
         };
 
