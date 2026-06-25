@@ -26,9 +26,11 @@
     function _cfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { return {}; } }
     function _saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} }
     function _storyId() {
-        return (win.VN_Core && win.VN_Core._currentStoryId)
-            || win.OS_AVS_ADAPTER?.getStoryId?.()
-            || localStorage.getItem('vn_current_story_id') || '';
+        // 隔離鍵：OS_AVS_ADAPTER.getStoryId 在「酒館回 chatId、PWA 回 vn_current_story_id」——一律以它為準。
+        //   ❌ 別優先 VN_Core._currentStoryId(全域 storyTitle_timestamp、不隨換聊天室變)→ 會害酒館跨聊天室記憶混同桶。
+        const sid = win.OS_AVS_ADAPTER?.getStoryId?.();
+        if (sid) return sid;
+        return (win.VN_Core && win.VN_Core._currentStoryId) || localStorage.getItem('vn_current_story_id') || '';
     }
     function _typeLabel(t) {
         const M = { npc: '👤 角色', event: '📅 事件', item: '🎒 物品', location: '🗺️ 地點', rule: '📜 規則', relationship: '💞 關係', sex: '🔞 性事', dialogue: '🗨️ 語氣' };
@@ -106,14 +108,19 @@
 
         // 其他「有記憶」的世界（給「轉入記憶」用）——換聊天/備份檔 chatId 變了，可把舊世界記憶搬過來
         let _srcOptions = '';
+        let _otherTotal = 0;
         try {
             if (win.OS_DB?.getAllVnMemories) {
                 const all = await win.OS_DB.getAllVnMemories('') || [];
                 const grp = {};
-                for (const m of all) { const w = m.storyId || ''; if (w && w !== sid) grp[w] = (grp[w] || 0) + 1; }
+                for (const m of all) { const w = m.storyId || ''; if (w && w !== sid) { grp[w] = (grp[w] || 0) + 1; _otherTotal++; } }
                 _srcOptions = Object.keys(grp).map(w => `<option value="${esc(w)}">${esc(w)}（${grp[w]} 條）</option>`).join('');
             }
         } catch (e) {}
+        // 記憶改用 chatId 隔離後，舊的 storyId 桶記憶不會自動出現在這 → 提示去「轉入記憶」搬過來（保留向量、不丟）
+        const _migrateHint = (mems.length === 0 && _otherTotal > 0)
+            ? `<div class="avs-mem-srchint avs-mem-migrate">⚠️ 這個聊天目前 0 條，但偵測到 ${_otherTotal} 條記憶在「別的識別碼」下（可能是改用聊天室隔離前存的）。到下面「⚙️ 進階 → 轉入記憶」把它搬到目前聊天就回來了，向量會一起保留。</div>`
+            : '';
 
         const statusTxt = !engOk
             ? '⚠️ 記憶引擎未載入'
@@ -133,6 +140,7 @@
             </div>
 
             <div class="avs-mem-status">${statusTxt}</div>
+            ${_migrateHint}
 
             <div class="avs-st-btn-grid">
                 <button class="avs-btn avs-btn-outline" id="avs-mem-tidy">🗜️ 整理舊記憶</button>

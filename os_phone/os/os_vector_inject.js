@@ -61,9 +61,12 @@
     }
 
     function _storyId() {
-        return (win.VN_Core && win.VN_Core._currentStoryId)
-            || win.OS_AVS_ADAPTER?.getStoryId?.()
-            || localStorage.getItem('vn_current_story_id') || '';
+        // 隔離鍵：OS_AVS_ADAPTER.getStoryId 在「酒館回 chatId、PWA 回 vn_current_story_id」——一律以它為準。
+        //   ❌ 別優先 VN_Core._currentStoryId：它是全域 storyTitle_timestamp、不隨換聊天室變 → 會害所有酒館聊天室
+        //      的記憶擠進同一桶(一直累積/跨聊天室混)。chatId 才跟大總結/頭像快取的隔離一致。
+        const sid = win.OS_AVS_ADAPTER?.getStoryId?.();
+        if (sid) return sid;
+        return (win.VN_Core && win.VN_Core._currentStoryId) || localStorage.getItem('vn_current_story_id') || '';
     }
 
     // 召回不開副模型「挑」(省一通)：把「全部記憶的一句話摘要(summary)目錄」注入主模型(學星河璀璨：目錄常駐、全文按需)。
