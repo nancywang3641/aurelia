@@ -908,6 +908,8 @@ ${desc}
 
     // 🔪 將標籤狀態同步給獨立版使用 (自動去除多餘外套)
     async function syncActiveTagsToLocal() {
+        // 委派給創作室(os_studio)的同名函式——它支援「常駐/關鍵字觸發」拆分；這份是舊格式備援，只在 os_studio 未載入時才跑
+        try { if (typeof win.__AURELIA_SYNC_VN_TAGS === 'function' && win.__AURELIA_SYNC_VN_TAGS !== syncActiveTagsToLocal) return await win.__AURELIA_SYNC_VN_TAGS(); } catch (e) {}
         const db = win.OS_DB || window.OS_DB;
         if (!db || typeof db.getAllVNTagTemplates !== 'function') return;
         try {

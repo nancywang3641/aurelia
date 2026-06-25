@@ -217,25 +217,53 @@
     //    在 啟用/停用 時即時組好)注入酒館原生生成 → 啟用/停用 = 馬上換注入層，取代手動貼世界書。
     var VN_TAGS_INJECT_ID = 'aurelia_vn_tags';
     var _lastVnTagsUninject = null;
-    function injectVnTags() {
+    async function injectVnTags() {
         try {
             try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {}
             _lastVnTagsUninject = null;
             if (win.__AURELIA_SUMMARIZING) return;
             if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
             if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
-            var spec = '';
-            try { spec = localStorage.getItem('os_vn_extra_tags_prompt') || ''; } catch (e) {}
-            if (!spec.trim()) return;
+            // 常駐組件：每輪都注（syncActiveTagsToLocal 已只放常駐的進這份）
+            var constBlob = '';
+            try { constBlob = localStorage.getItem('os_vn_extra_tags_prompt') || ''; } catch (e) {}
+            // 關鍵字組件：抓最近約 3 輪正文＋這次使用者輸入，命中關鍵字才注入（省 token）
+            var kwBlock = '';
+            try {
+                var raw = localStorage.getItem('os_vn_tags_keyword') || '';
+                var kwList = raw ? JSON.parse(raw) : [];
+                if (Array.isArray(kwList) && kwList.length && win.TavernHelper.getChatMessages) {
+                    var lastId = 0;
+                    try { lastId = await win.TavernHelper.getLastMessageId(); } catch (e) {}
+                    var start = Math.max(0, (lastId || 0) - 5);   // 最近約 3 輪（user/AI 交錯，抓 6 則）
+                    var msgs = [];
+                    try { msgs = (await win.TavernHelper.getChatMessages(start + '-' + lastId)) || []; } catch (e) {}
+                    var recent = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n').toLowerCase();
+                    if (recent.trim()) {
+                        var hit = kwList.filter(function (k) {
+                            return k && Array.isArray(k.keywords) && k.keywords.some(function (w) {
+                                w = String(w || '').trim().toLowerCase();
+                                return w && recent.indexOf(w) !== -1;
+                            });
+                        });
+                        if (hit.length) {
+                            kwBlock = '# [📱模式｜VN組件·情境觸發] 下列面板因最近劇情提到相關內容而啟用，依格式在正文/區塊內使用：\n'
+                                + hit.map(function (k) { return k.snippet; }).join('\n');
+                        }
+                    }
+                }
+            } catch (e) {}
+            var spec = [String(constBlob).trim(), String(kwBlock).trim()].filter(Boolean).join('\n\n');
+            if (!spec) return;
             var result = win.TavernHelper.injectPrompts([{
                 id: VN_TAGS_INJECT_ID,
-                content: spec.trim(),
+                content: spec,
                 position: 'in_chat',
                 depth: 0,
                 role: 'system'
             }], { once: true });
             _lastVnTagsUninject = (result && result.uninject) || null;
-            console.log('🎴 [VN Tags Injector] 注入啟用中的 VN組件說明');
+            console.log('🎴 [VN Tags Injector] 注入 VN組件說明（常駐' + (kwBlock ? ' + 觸發命中' : '') + '）');
         } catch (e) { console.warn('[VN Tags Injector] 失敗:', (e && e.message) || e); }
     }
 
