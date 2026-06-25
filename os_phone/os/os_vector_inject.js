@@ -394,8 +394,40 @@
         console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
     }
 
+    // 🧹 對齊劇情：清掉「來源訊息已被刪掉」的孤兒記憶（刪訊息事件沒觸發 / 位置漂移時的補救）。
+    //   讀真實全檔(VN_READER.fetchFullChat 繞懶載)拿真樓數 → chapterId(位置) ≥ 樓數 = 那則已不在劇情 = 孤兒 → 刪。
+    //   保險：① 讀不到全檔(total<0)就不動，寧可不清也別誤刪 ② 只動「數字 chapterId 且超出範圍」(msg_xxx 後備 id / 範圍內的不碰)
+    //         ③ 若要清的超過一半記憶 → 視為「沒讀到完整劇情」的異常，中止（防 fetchFullChat 回殘缺數量把好記憶全誤殺）。
+    async function reconcileToStory() {
+        try {
+            const storyId = _storyId();
+            if (!storyId || !win.OS_DB?.getAllVnMemories) return { ok: false, msg: '沒有有效世界' };
+            let total = -1;
+            try {
+                const msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? (await win.VN_READER.fetchFullChat()) : null;
+                if (Array.isArray(msgs)) total = msgs.length;
+            } catch (e) {}
+            if (total < 0) return { ok: false, msg: '讀不到目前完整劇情（保險起見沒清，請重試）' };
+            const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            const orphans = all.filter(m => {
+                if (!m || m.chapterId == null) return false;
+                const s = String(m.chapterId);
+                if (!/^\d+$/.test(s)) return false;       // 非數字位置 id(msg_xxx) → 不碰
+                return Number(s) >= total;                 // 位置 ≥ 目前樓數 → 來源訊息已不在 → 孤兒
+            });
+            if (orphans.length > all.length * 0.5) {
+                return { ok: false, msg: '偵測到異常（要清掉超過一半記憶），可能沒讀到完整劇情，已中止；請確認劇情正常載入後再試' };
+            }
+            let removed = 0;
+            for (const m of orphans) {
+                try { if (win.OS_DB?.deleteVnMemory) { await win.OS_DB.deleteVnMemory(m.id); removed++; } } catch (e) {}
+            }
+            return { ok: true, removed, total, scanned: all.length };
+        } catch (e) { return { ok: false, msg: (e?.message || String(e)) }; }
+    }
+
     win.OS_VECTOR_INJECT = {
-        injectMemories, ingestLatest,
+        injectMemories, ingestLatest, reconcileToStory,
         get _lastRecall() { return _lastRecall; },
         // 結合觸發：state_runtime 取走待處理記憶內容(取走即清，避免重複)
         consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; return p; },
