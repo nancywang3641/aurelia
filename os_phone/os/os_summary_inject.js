@@ -59,11 +59,11 @@
                 payload +
                 `\n</劇情總結>`;
 
-            // 注入深度：injectPrompts 只支援 in_chat/none（不支援 before_char_defs），故「最深」＝ in_chat 大 depth
-            //   ＝聊天歷史最頂（人設/世界書之後、所有對話訊息之前）。預設 999 讓 ST 夾到聊天頂；可用 localStorage
-            //   sp_summary_inject_depth 自調(數字越小越貼最新訊息、越大越深/越上面)。
+            // 注入深度(in_chat)：數字越小越貼最新訊息＝模型注意力越高；越大越往聊天頂＝注意力越低。
+            //   ⚠️ 原本預設 999(聊天最頂)＝模型最不看的位置 → 大總結再完整也被忽略 = 天天失憶(Rae 實測手帕事件就在角色表卻被忘)。
+            //   改預設 2(高注意力區、緊貼生成點，只讓最新一兩則訊息更貼)；要更近設 0/1、嫌擠掉近期對話可調高。localStorage sp_summary_inject_depth 自調。
             let _depth = parseInt(localStorage.getItem('sp_summary_inject_depth'));
-            if (isNaN(_depth) || _depth < 0) _depth = 999;
+            if (isNaN(_depth) || _depth < 0) _depth = 2;
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
                 content: block.trim(),
