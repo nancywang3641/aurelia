@@ -19,6 +19,7 @@
     let _lastUninject = null;
     const _cache = new Map();   // chatId → 壓縮注入字串（避免每輪重讀+重壓；存檔/編輯後由 invalidate 清掉）
     let _lastInjected = null;   // 給 debug/CTX 面板看：{ chatId, text, len }
+    const _dbg = (m) => { try { console.log('📜[大總結診斷] ' + m); } catch (e) {} };   // 🔧 臨時診斷（確診後移除）；輸出進螢幕 console 🐛
 
     function _chatId() {
         try { return win.OS_STORY_TOOLS?.getChatId?.() || ''; } catch (e) { return ''; }
@@ -44,17 +45,17 @@
             _lastInjected = null;
 
             // 正在跑大總結（os_story_tools 的 generateRaw）→ 別把大總結摻進總結 prompt
-            if (win.__AURELIA_SUMMARIZING) return;
+            if (win.__AURELIA_SUMMARIZING) { _dbg('跳過：正在跑大總結(__AURELIA_SUMMARIZING=true)'); return; }
             // 只在酒館跑；PWA 走 buildContext，不重複
-            if (win.OS_API?.isStandalone?.()) return;
-            if (!win.TavernHelper?.injectPrompts) return;
-            if (!win.OS_STORY_TOOLS?.getCurrentInjectionPayload) return;
+            if (win.OS_API?.isStandalone?.()) { _dbg('跳過：判定為 PWA(isStandalone=true)'); return; }
+            if (!win.TavernHelper?.injectPrompts) { _dbg('跳過：無 TavernHelper.injectPrompts'); return; }
+            if (!win.OS_STORY_TOOLS?.getCurrentInjectionPayload) { _dbg('跳過：無 OS_STORY_TOOLS.getCurrentInjectionPayload'); return; }
 
             const chatId = _chatId();
-            if (!chatId) return;
+            if (!chatId) { _dbg('跳過：chatId 空（getChatId 取不到）'); return; }
 
             const payload = await _payloadFor(chatId);
-            if (!payload) return;   // 這個聊天室還沒大總結
+            if (!payload) { _dbg('跳過：payload 空 → chatId=' + JSON.stringify(chatId) + (_cache.has(chatId) ? '(命中cache、被快取成空)' : '(現抓即空、OS_DB無此chatId大總結或壓縮成空)')); return; }   // 這個聊天室還沒大總結
 
             const block =
                 `<劇情總結 規則="既成事實·寫作前必讀·不得矛盾">\n` +
