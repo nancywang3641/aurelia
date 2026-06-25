@@ -69,6 +69,15 @@
         return (win.VN_Core && win.VN_Core._currentStoryId) || localStorage.getItem('vn_current_story_id') || '';
     }
 
+    // 當前主角名：優先用最近一則 [Protagonist|名]（ingestLatest 順手解析快取、每章 header 都有），退 OS_PERSONA(大廳那個)，再退酒館 name1。
+    let _protagonistName = '';
+    function _getProtagonist() {
+        if (_protagonistName) return _protagonistName;
+        try { const n = win.OS_PERSONA?.getName?.(); if (n && n !== 'User') return String(n).trim(); } catch (e) {}
+        try { const n = win.SillyTavern?.getContext?.()?.name1; if (n) return String(n).trim(); } catch (e) {}
+        return '';
+    }
+
     // 召回不開副模型「挑」(省一通)：把「全部記憶的一句話摘要(summary)目錄」注入主模型(學星河璀璨：目錄常駐、全文按需)。
     // 目錄按時間遠近分早/中/近三段(免費時間召回，不花 LLM)；需要某條完整內容時主模型用 <recall>關鍵詞</recall> 點名，
     // 下一輪補上(見 _captureAndStripRecall)。每行都是看得懂的摘要、不是噪音 tag，prompt 也大幅縮水。
@@ -191,12 +200,13 @@
                 }
                 const sx = Array.from(sexByChar.entries()).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0)).slice(0, 8);
                 if (sx.length) {
+                    const _mc = _getProtagonist();   // 主角名（性事是角色×角色，標頭綁兩個人名才清楚）
                     block += `\n\n【性事紀錄｜主角與下列角色發生過性事，互動時務必記得這層關係、別寫成初次見面或冷淡無情】\n`;
                     block += sx.map(([name, m]) => {
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
                         _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・【${name}】${t}`;
+                        return `・【${_mc ? _mc + '×' + name : name}】${t}`;
                     }).join('\n');
                 }
             }
@@ -345,6 +355,8 @@
             const id = String(m.message_id ?? m.id ?? '');
             let content = (m.message || m.mes || m.content || '').trim();
             if (!content) return;
+            // 順手快取當前主角名（每章 header 的 [Protagonist|名]）→ 給性事標頭「主角×對方」用
+            try { const _pm = content.match(/\[Protagonist\|([^\]]+)\]/i); if (_pm && _pm[1] && _pm[1].trim().toLowerCase() !== 'user') _protagonistName = _pm[1].trim(); } catch (e) {}
             // 主模型若用 <recall> 點名要回想的記憶 → 記下關鍵詞(下一輪補完整內文)，並把標籤從訊息清掉(不顯示給讀者)
             content = await _captureAndStripRecall(content);
             // 只記「VN 劇情」回覆 —— 認 <content> 標籤即可（它裡面就是全文）；
