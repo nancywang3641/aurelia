@@ -127,7 +127,7 @@
     // --- prompt ---
     function buildPrompt(materials, userPrompt) {
         const _userReq = (userPrompt && String(userPrompt).trim())
-            ? `\n⭐【使用者的額外追蹤要求 · 最高優先，務必納入這個 schema】\n${String(userPrompt).trim()}\n`
+            ? `\n⭐【使用者的追蹤取捨 · 最高優先】\n${String(userPrompt).trim()}\n（注意：下面詳細規範是預設模板；若上面有「只要追蹤這些維度」清單，就以清單為準——沒列到的維度別硬塞進 schema，列到的務必涵蓋。）\n`
             : '';
         return `你是劇情狀態追蹤系統的 schema 設計師。
 看下面這個跑團世界的世界書、角色設定、開頭劇情，決定接下來的劇情中**值得每輪追蹤**的狀態欄位。
