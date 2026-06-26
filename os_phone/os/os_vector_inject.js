@@ -128,7 +128,7 @@
             //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
             //   再做「免費時間召回」：facts 已按 createdAt 舊→新排序，切三段標粗略時距(不花 LLM、不多通)，
             //   讓主模型有「多久以前」的概念、時態不錯亂。
-            const facts = all.filter(m => m.type !== 'dialogue' && m.type !== 'item');   // item 改走下面「物品狀態」收斂釘選，不進零散目錄(治並存矛盾)
+            const facts = all.filter(m => !['dialogue', 'item', 'npc', 'relationship'].includes(m.type));   // 狀態型(物品/角色/關係)走收斂釘選只留最新、不進零散目錄(治物品矛盾+態度忽冷忽熱)；目錄只放事件/地點/規則等流水
             const voice = all.filter(m => m.type === 'dialogue');
 
             // 索引每行前綴穩定代號 A1…An（與 getCatalogForPicking 同序同碼），主模型要回想就 <recall>A5</recall>。
@@ -186,17 +186,29 @@
                     name = String(name).trim();
                     if (name) coreByChar.set(name, m);
                 }
-                // 角色多到超過上限 → 留「最近還在活動」的；被擠掉的角色仍保有上面索引那句話，不會憑空消失
-                const core = Array.from(coreByChar.entries())   // [角色名, m]：保留角色名好標在每條前面，內文沒寫主詞也看得出在講誰
-                    .sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0))
-                    .slice(0, CORE_PIN_MAX);
+                // 按角色去重留最新一條(收斂)：前 N 個給完整內文、其餘給「最新一句摘要」索引。
+                //   角色/關係改走這裡收斂、不再進零散目錄(facts 已排除)→ 治「舊態度+新態度並存→主模型忽冷忽熱」；
+                //   被擠出前 N 的角色仍有最新摘要一句(不消失、也只給最新不並存舊態度)。
+                const _coreAll = Array.from(coreByChar.entries())   // [角色名, 最新一條 m]
+                    .sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+                const core = _coreAll.slice(0, CORE_PIN_MAX);
+                const coreRest = _coreAll.slice(CORE_PIN_MAX);
                 if (core.length) {
-                    block += `\n\n【核心角色｜本劇重要登場角色，務必延續其設定與關係，別寫成陌生人或遺忘】\n`;
+                    block += `\n\n【核心角色｜以下為其「最新」狀態與關係，務必延續、別寫成陌生人、別拿更早的舊態度】\n`;
                     block += core.map(([name, m]) => {
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
                         _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
                         return `・【${name}】${t}`;
+                    }).join('\n');
+                }
+                if (coreRest.length) {
+                    block += `\n【其他角色（最新狀態摘要，要細節 <recall> 其名）】\n`;
+                    block += coreRest.map(([name, m]) => {
+                        let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
+                        if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
+                        _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
+                        return `・【${name}】${s}`;
                     }).join('\n');
                 }
             }
@@ -264,6 +276,23 @@
                         return kws.some(k => k && hay.includes(k));
                     }));
                 }
+                // 🗣️ 語氣樣本(dialogue)會隨關係過時(陌生→親密語氣不同)、又易累積十幾條 → 同角色只留最近 N 條，
+                //    淘汰過時舊語氣(免拿陌生時期語氣套現在關係)、也省 token。事件/角色等非 dialogue 不受影響。
+                {
+                    const VOICE_KEEP_PER_CHAR = 3;
+                    const _vByChar = new Map(), _rest = [];
+                    for (const m of _cand) {
+                        const nm = (m && m.type === 'dialogue') ? (((Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || '').trim()) : '';
+                        if (nm) { if (!_vByChar.has(nm)) _vByChar.set(nm, []); _vByChar.get(nm).push(m); }
+                        else _rest.push(m);
+                    }
+                    const _vKept = [];
+                    for (const arr of _vByChar.values()) {
+                        arr.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));   // 新→舊
+                        _vKept.push(...arr.slice(0, VOICE_KEEP_PER_CHAR));
+                    }
+                    _cand = _rest.concat(_vKept);
+                }
                 const _ds = new Set(_coreKeys); const _hit = _detailHit;
                 for (const m of _cand) {
                     const key = (m.summary || '') + '|' + String(m.text || '').slice(0, 40);
@@ -320,7 +349,7 @@
             const storyId = _storyId();
             if (!storyId || !win.OS_DB?.getAllVnMemories) return null;
             const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
-            const facts = all.filter(m => m && m.type !== 'dialogue' && m.type !== 'item' && !m.merged);   // item 走收斂釘選、不交副模型挑(免挑到舊狀態)；過濾被壓縮隱藏的原始條目
+            const facts = all.filter(m => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged);   // 狀態型(物品/角色/關係)走收斂釘選、不交副模型挑(免挑到舊狀態/舊態度)；過濾被壓縮隱藏的原始條目
             if (!facts.length) return null;
 
             // 🔎 向量粗篩：有「當下劇情」當 query + 向量回填到位 → 只把語意相關的 top-K 候選交給導演挑（取代 2000 行全目錄常駐）。
@@ -330,7 +359,7 @@
             if (q && typeof win.OS_VECTOR_ENGINE?.search === 'function' && win.OS_VECTOR_ENGINE?.vectorReady?.(all)) {
                 try {
                     const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, PICK_POOL_K);
-                    const picked = (hits || []).filter(m => m && m.type !== 'dialogue' && m.type !== 'item' && !m.merged);
+                    const picked = (hits || []).filter(m => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged);
                     if (picked.length) { pool = picked; segmented = false; }   // 候選池＝相關片段，不再分三段
                 } catch (e) {}
             }
