@@ -276,7 +276,7 @@
             const incMap = {}; incSecs.forEach(s => { incMap[s.header] = s; });
             const used = new Set(); const out = [];
             const KEEPOLD = ['故事標題', '故事标题'];
-            const DROP = ['場景索引', '场景索引', '代辦清單', '代办清单'];   // 已棄用區塊：合併時直接丟掉、不再輸出
+            const DROP = ['場景索引', '场景索引', '代辦清單', '代办清单', '物品表'];   // 已棄用區塊：合併時直接丟掉、不再輸出（物品表改走向量收斂釘選、不再進大總結，舊卡殘留的也在這裡停止往後搬）
             for (const p of prevSecs) {
                 if (DROP.includes(p.header)) { used.add(p.header); continue; }
                 const i = incMap[p.header];
@@ -295,6 +295,77 @@
             return incFull;
         }
     }
+
+    // ===== 重壓目前大總結：把「累積很長的單卡」重新濃縮(久遠壓階段節點、最近逐筆)，存回 OS_DB =====
+    //   大總結是一張卡、每次把新數據結構化疊到後面(合併模式)→事件表會越疊越長(注入字數爆)。
+    //   這個按鈕不新增劇情、只把現有那張卡重壓：角色表/關係圖譜程式原樣保留(一個不漏)、事件表丟 AI 濃縮、物品/結算/代辦等廢區塊移除。
+    API.recompressSummary = async function () {
+        const chatId = getChatIdentifier();
+        const rec = await _loadTavernSummary(chatId);
+        if (!rec || !rec.content) { alert('目前這個對話還沒有大總結，沒得壓縮。'); return; }
+        const osApi = win.OS_API, osSet = win.OS_SETTINGS, osDb = win.OS_DB;
+        if (!osApi?.chat || !osSet?.getConfig || !osDb?.saveTavernSummary) { alert('找不到 OS_API / OS_SETTINGS / OS_DB'); return; }
+        const beforeFull = rec.content.length;
+        const beforeInject = (API.buildInjectionPayload ? API.buildInjectionPayload(rec.content) : rec.content).length;
+        if (!confirm(`重壓目前大總結？\n\n存檔全文 ${beforeFull} 字、每輪實際注入約 ${beforeInject} 字。\n會把久遠事件壓成階段節點、最近逐筆保留；角色 / 關係全保留、物品表移除。劇情不會新增。`)) return;
+
+        const btn = document.getElementById('btn-recompress-summary');
+        const origText = btn ? btn.innerText : '';
+        if (btn) { btn.innerText = '壓縮中 (請勿關閉)...'; btn.classList.add('spinning'); }
+        win.__AURELIA_SUMMARIZING = true;   // 擋住「重壓期間自己把舊總結注入進這次 prompt」+ 別讓 AVS/場景抽取器誤觸(同生成路徑契約)
+        try {
+            const stripHead = t => String(t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
+            const secs = _splitSummarySections(stripHead(rec.content));
+            // 角色表/關係圖譜 → 程式原樣保留，等下強制蓋回 AI 輸出，保證一個角色都不漏
+            const PRESERVE = ['角色表', '關係圖譜', '关系图谱'];
+            const preserved = {};
+            for (const s of secs) { if (PRESERVE.includes(s.header) && String(s.body || '').trim()) preserved[s.header] = s.body; }
+            const preservedBlock = Object.keys(preserved).map(h => `【${h}】\n${preserved[h]}`).join('\n\n');
+
+            const target = (function () { const v = parseInt(localStorage.getItem('sp_summary_recompress_target')); return (!isNaN(v) && v > 500) ? v : 2000; })();
+            const prompt = `下面是一份已經累積很長的大總結，請把它「重新壓縮」成精簡完整的一份。只濃縮、不要新增劇情、不要評論。\n` +
+                `【規則】\n` +
+                `- 事件表 → 維持成一條「時間線」：按時序排、相鄰事件有因果承接連成連貫劇情線(別變零散片段)；久遠多筆壓成「階段節點」(一行涵蓋一段劇情的起因→轉折→結果)，最近 8 筆逐筆保留；以不可逆結果為主、不記過程。\n` +
+                `- 結語 → 沿用原本那段滾動總述、必要時再精煉成「一段」，別刪光、也別分段堆疊。\n` +
+                `- 注意規範 → 去重、保留所有仍有後續影響的項目。\n` +
+                `- 性事紀 → 整併成「目的·手段·結果」一行(以何名義交合 / 獲得何增益 / 關係變化)，但每個發生過性事的角色至少保留一條、絕不刪光。\n` +
+                `- 物品表、結算清單、代辦清單、場景索引 → 整個刪除、不要輸出這些區塊。\n` +
+                `- 故事標題 → 原樣保留、不要改寫。\n` +
+                `- 角色表、關係圖譜 → 直接用我下面附的「完整版」原樣放進去，一個角色都不准刪或漏。\n` +
+                `- 目標：整份壓到 ${target} 字以內(角色表 / 關係圖譜不計)；用原本的【區塊】格式輸出一份，只輸出總結本身、不要解釋。\n` +
+                `\n【附：完整角色表 / 關係圖譜（照抄、不准刪角色）】\n${preservedBlock || '（無）'}\n\n` +
+                `【要壓縮的大總結】\n${stripHead(rec.content)}`;
+
+            const aiOut = await new Promise((res, rej) => {
+                let g = '';
+                osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: prompt }],
+                    osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(String(g || '')); }, (err) => rej(err), { disableTyping: true });
+            });
+            if (!String(aiOut || '').trim()) throw new Error('AI 沒有回傳內容');
+
+            // 重建：砍掉廢區塊 + 角色表/關係圖譜強制換回程式保留版(救 AI 漏角色)
+            const DROP = new Set(['物品表', '結算清單', '结算清单', '代辦清單', '代办清单', '場景索引', '场景索引']);
+            let rebuilt = _splitSummarySections(stripHead(aiOut)).filter(s => !DROP.has(s.header));
+            rebuilt = rebuilt.map(s => preserved[s.header] ? { header: s.header, body: preserved[s.header] } : s);
+            for (const h of Object.keys(preserved)) { if (!rebuilt.find(s => s.header === h)) rebuilt.push({ header: h, body: preserved[h] }); }
+            const headLine = `【大总结(第${rec.summaryCount || 1}次)】` + (rec.lastId != null ? `\nLast: ${rec.lastId}` : '');
+            const finalContent = headLine + '\n\n' + rebuilt.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');
+
+            await osDb.saveTavernSummary(chatId, Object.assign({}, rec, { content: finalContent }));
+            try { win.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}
+            const afterFull = finalContent.length;
+            const afterInject = (API.buildInjectionPayload ? API.buildInjectionPayload(finalContent) : finalContent).length;
+            console.log(`[大總結] ✅ 重壓完成 全文 ${beforeFull}→${afterFull}、注入 ${beforeInject}→${afterInject}`);
+            alert(`✅ 重壓完成！\n存檔全文：${beforeFull} → ${afterFull} 字\n每輪實際注入：${beforeInject} → ${afterInject} 字\n角色 / 關係全保留、物品表已移除。`);
+            try { const sb = document.querySelector('#ost-panel .ost-hide-btn[title="重新整理"]'); if (sb) API._refreshStatus(sb); } catch (e) {}
+        } catch (e) {
+            console.error('[大總結] 重壓失敗:', e);
+            alert('重壓失敗：' + (e?.message || e));
+        } finally {
+            if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); }
+            setTimeout(function () { win.__AURELIA_SUMMARIZING = false; }, 3000);
+        }
+    };
 
     // ── 注入壓縮：把「全文存檔」壓成「每輪實際送主模型」的精簡版（存檔保留全部、注入只送活著的狀態）──
     //   事件表→預設全送(久遠已壓階段節點＝完整劇情線、防失憶；可設 sp_summary_events_keep 上限)；物品表→整塊 DROP 不注入(Rae 拍板：20輪一次對物品太慢沒意義；物品改走向量收斂釘選 os_vector_inject)；結算清單→丟(跟事件/結語重複)；
@@ -1074,6 +1145,8 @@
                         <div class="ost-section-title">📝 大總結</div>
                         <button class="ost-btn ost-btn-primary" id="btn-grand-summary" onclick="window.OS_STORY_TOOLS.showRangeModal()">📝 生成 / 更新大總結 (Grand Summary)</button>
                         <div class="ost-hint">將最近的劇情壓縮成永久記憶</div>
+                        <button class="ost-btn" id="btn-recompress-summary" onclick="window.OS_STORY_TOOLS.recompressSummary()">🔀 重壓目前大總結</button>
+                        <div class="ost-hint">把目前累積的總結再濃縮一次（不新增劇情）</div>
                         <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()">✏️ 編輯大總結生成模板</button>
                         <div class="ost-hint">查看 / 編輯 / 清空各段劇情 → 大廳「瀅瀅的故事日誌」</div>
                     </div>
