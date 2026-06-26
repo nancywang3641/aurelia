@@ -128,7 +128,7 @@
             //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
             //   再做「免費時間召回」：facts 已按 createdAt 舊→新排序，切三段標粗略時距(不花 LLM、不多通)，
             //   讓主模型有「多久以前」的概念、時態不錯亂。
-            const facts = all.filter(m => m.type !== 'dialogue');
+            const facts = all.filter(m => m.type !== 'dialogue' && m.type !== 'item');   // item 改走下面「物品狀態」收斂釘選，不進零散目錄(治並存矛盾)
             const voice = all.filter(m => m.type === 'dialogue');
 
             // 索引每行前綴穩定代號 A1…An（與 getCatalogForPicking 同序同碼），主模型要回想就 <recall>A5</recall>。
@@ -224,6 +224,31 @@
                 }
             }
 
+            // ── 📦 物品狀態釘選：item 記憶按物品名(tags[0])去重、只留最新一條 → 同一物品只認最新狀態(手帕現在在誰那)。
+            //    治「每筆物品流轉各記一條→借走/拿回/還我並存→主模型亂寫」：all 已 createdAt 舊→新，後寫覆蓋＝最新狀態(時間線)、每輪抽取刷新＝即時動態(比 20 輪大總結快太多)。
+            {
+                const ITEM_PIN_MAX = 15;
+                const itemByName = new Map();
+                for (const m of all) {
+                    if (m.type !== 'item') continue;
+                    let name = (Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || String(m.summary || '').slice(0, 10);
+                    name = String(name).trim();
+                    if (name) itemByName.set(name, m);   // 後者覆蓋＝留最新一條
+                }
+                const items = Array.from(itemByName.entries())
+                    .sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0))
+                    .slice(0, ITEM_PIN_MAX);
+                if (items.length) {
+                    block += `\n\n【物品狀態｜下列物品的「目前狀態／持有者」以此為唯一最新依據，不得拿更早的舊狀態、也不得寫成自相矛盾】\n`;
+                    block += items.map(([name, m]) => {
+                        let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
+                        if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
+                        _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
+                        return `・【${name}】${t}`;
+                    }).join('\n');
+                }
+            }
+
             // ── 細節注入：① 副模型(記憶導演)上一輪挑的記憶＝主力  ② 主模型 <recall> 點名＝備援 → 合併去重補完整內文 ──
             //    去重種子帶入 _coreKeys：核心角色已釘在上面，動態細節區不重複佔格。
             let _detailHit = [];
@@ -295,7 +320,7 @@
             const storyId = _storyId();
             if (!storyId || !win.OS_DB?.getAllVnMemories) return null;
             const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
-            const facts = all.filter(m => m && m.type !== 'dialogue' && !m.merged);   // 過濾被壓縮隱藏的原始條目
+            const facts = all.filter(m => m && m.type !== 'dialogue' && m.type !== 'item' && !m.merged);   // item 走收斂釘選、不交副模型挑(免挑到舊狀態)；過濾被壓縮隱藏的原始條目
             if (!facts.length) return null;
 
             // 🔎 向量粗篩：有「當下劇情」當 query + 向量回填到位 → 只把語意相關的 top-K 候選交給導演挑（取代 2000 行全目錄常駐）。
@@ -305,7 +330,7 @@
             if (q && typeof win.OS_VECTOR_ENGINE?.search === 'function' && win.OS_VECTOR_ENGINE?.vectorReady?.(all)) {
                 try {
                     const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, PICK_POOL_K);
-                    const picked = (hits || []).filter(m => m && m.type !== 'dialogue' && !m.merged);
+                    const picked = (hits || []).filter(m => m && m.type !== 'dialogue' && m.type !== 'item' && !m.merged);
                     if (picked.length) { pool = picked; segmented = false; }   // 候選池＝相關片段，不再分三段
                 } catch (e) {}
             }
