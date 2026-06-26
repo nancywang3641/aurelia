@@ -1123,16 +1123,24 @@
             let forceFallback = false;
             try { forceFallback = JSON.parse(localStorage.getItem('os_image_config') || '{}').fallbackForce === true; } catch(e) {}
 
-            // Pollinations 生圖 + 12 秒 timeout
+            // 背景主來源 + timeout。⚠️ timeout 語義隨來源天差地遠：
+            //   Pollinations：generateBackgroundAsync 只「組 URL」瞬間回(下載那刻才生圖)→ 12 秒夠且必要(擋組 URL 卡住)。
+            //   comfyui_direct/novelai/tavern_sd：是「await 等本機/直連真生完才回」→ 本機生 1024×768 背景常 >12 秒，
+            //     套 12 秒會把還在生的圖砍掉、誤掉進 Pixabay 真實圖 fallback(+#fallback 玻璃磨砂)＝「comfyui 背景被套玻璃遮罩」真凶。
+            //   → 非 Pollinations 來源放寬到 150 秒(跟頭像/場景逾時同量級)，別再誤砍本機生圖。
+            const _IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER || (window.parent && window.parent.OS_IMAGE_MANAGER);
+            let _bgSvc = 'pollinations';
+            try { if (_IM && typeof _IM.serviceFor === 'function') _bgSvc = _IM.serviceFor('bg') || 'pollinations'; } catch (e) {}
+            const _bgTimeoutMs = (_bgSvc === 'pollinations') ? 12000 : 150000;
             let raw = '';
             if (!forceFallback) {
                 try {
                     raw = await Promise.race([
                         VN_Image.getBg(prompt, meta),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('Pollinations timeout 12s')), 12000))
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('bg timeout ' + _bgTimeoutMs + 'ms / ' + _bgSvc)), _bgTimeoutMs))
                     ]);
                 } catch (e) {
-                    console.warn('[VN] Pollinations 失敗，啟用 Pixabay fallback:', e.message);
+                    console.warn('[VN] 背景主來源逾時/失敗，啟用 Pixabay fallback:', e.message);
                     raw = '';
                 }
             }
