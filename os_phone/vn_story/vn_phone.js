@@ -139,6 +139,7 @@
         _VOICE_ALIAS: ['語音','语音','錄音','录音','Voice','Audio','Recording'],
         _STICKER_ALIAS: ['表情包','貼紙','贴纸','表情','Sticker','Emote'],
         _LINK_ALIAS: ['鏈接','链接','連結','连结','鏈結','网址','網址','網頁','网页','Link','URL','Url'],
+        _FILE_ALIAS: ['文件','檔案','档案','附件','File','Document','Attachment'],
         _isAliasTag: function(content, aliases) {
             const m = content.match(/^\[([^\]\[:：]+)[：:]/);
             if (!m) return false;
@@ -159,7 +160,7 @@
         // 通用：抓任何 [別名: 描述]，用 _isAliasTag 判類型，只拆三類媒體；[文件:]/[22:35] 等非媒體不動。
         _splitStickerContent: function(content) {
             // 其他特殊類型(轉賬/紅包/視頻/位置/文件…)維持整條、不拆
-            if (/^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|文件|File|收款码|收款碼|收款|付款码|付款碼)[：:]/i.test(content)) return [content];
+            if (/^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|收款码|收款碼|收款|付款码|付款碼)[：:]/i.test(content)) return [content];   // 文件移出名單→改走下面拆分(獨立文件卡、跟內容分開)
             if (content.startsWith('[撤回]')) return [content];
 
             const re = /\[[^\]\[：:]+[：:][^\]]*\]|\[[^\]]+\.(?:gif|jpg|jpeg|png)\]/gi;
@@ -175,8 +176,9 @@
                 const isMedia = isFile || isStk ||
                     this._isAliasTag(tag, this._IMAGE_ALIAS) ||
                     this._isAliasTag(tag, this._VOICE_ALIAS) ||
-                    this._isAliasTag(tag, this._LINK_ALIAS);
-                if (!isMedia) continue;   // 非媒體 tag（[文件:…]/[22:35]…）→ 不拆、留在文字裡
+                    this._isAliasTag(tag, this._LINK_ALIAS) ||
+                    this._isAliasTag(tag, this._FILE_ALIAS);   // [文件:xxx] 也拆成獨立卡(buildBubble fileM 渲染文件卡)
+                if (!isMedia) continue;   // 非媒體 tag（[22:35] 時間戳等）→ 不拆、留在文字裡
 
                 const before = content.slice(last, m.index).trim();
                 if (before) parts.push(before);
@@ -250,7 +252,7 @@
             const rpM   = content.match(/^\[(紅包|红包|RedPacket)[：:]\s*(.*?)\]$/i);
             const vidM  = content.match(/^\[(視頻|视频|Video)[：:]\s*(.*?)\]$/i);
             const locM  = content.match(/^\[(位置|Location|定位)[：:]\s*(.*?)\]$/i);
-            const fileM = content.match(/^\[(文件|File)[：:]\s*(.*?)\]$/i);
+            const fileM = content.match(/^\[(文件|檔案|档案|附件|File|Document|Attachment)[：:]\s*(.*?)\]$/i);
             const linkM = content.match(/^\[(鏈接|链接|連結|连结|鏈結|网址|網址|網頁|网页|Link|URL|Url)[：:]\s*([\s\S]*?)\]$/i);
             const recvM = content.match(/^\[(收款码|收款碼|收款|付款码|付款碼)[：:]\s*([\s\S]*?)\]$/i);
 
