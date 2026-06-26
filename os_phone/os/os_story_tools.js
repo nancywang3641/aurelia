@@ -297,10 +297,9 @@
     }
 
     // ── 注入壓縮：把「全文存檔」壓成「每輪實際送主模型」的精簡版（存檔保留全部、注入只送活著的狀態）──
-    //   事件表→預設全送(久遠已壓階段節點＝完整劇情線、防失憶；可設 sp_summary_events_keep 上限)；物品表→只留 在庫/使用中(已交付/已消耗/損壞 不送)；結算清單→丟(跟事件/結語重複)；
+    //   事件表→預設全送(久遠已壓階段節點＝完整劇情線、防失憶；可設 sp_summary_events_keep 上限)；物品表→整塊 DROP 不注入(Rae 拍板：20輪一次對物品太慢沒意義；物品改走向量收斂釘選 os_vector_inject)；結算清單→丟(跟事件/結語重複)；
     //   性事紀→只留最近數筆；結語(總記憶)/角色表/關係圖譜/注意規範→全送。供 os_summary_inject 每輪呼叫。
     function _stripSummaryHead(t) { return String(t == null ? '' : t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, ''); }
-    const _ITEM_DEAD = /已交付|已消耗|已用完|消耗完|損壞|损坏|損毀|损毁|報廢|报废/;
     API.buildInjectionPayload = function (fullContent, opts) {
         const o = opts || {};
         // 事件表預設「全開」——大總結生成時久遠事件已壓成「階段節點」，這份本來就是壓縮過的完整劇情線，
@@ -310,7 +309,7 @@
         const sexKeep = (o.sexKeep != null) ? o.sexKeep : 5;
         try {
             const secs = _splitSummarySections(_stripSummaryHead(fullContent));
-            const DROP = new Set(['結算清單', '结算清单', '場景索引', '场景索引', '代辦清單', '代办清单', '故事標題', '故事标题', '物品表', '物品表']);
+            const DROP = new Set(['結算清單', '结算清单', '場景索引', '场景索引', '代辦清單', '代办清单', '故事標題', '故事标题', '物品表']);   // 物品表整塊不注入(Rae 拍板)，物品狀態走向量收斂釘選
             const out = [];
             for (const s of secs) {
                 const h = s.header;
@@ -319,11 +318,6 @@
                 if (h === '事件表') {
                     const t = _parseMdTable(body);
                     if (t.rows.length > eventsKeep) t.rows = t.rows.slice(-eventsKeep);   // 只留最近 N 筆事件(舊的靠結語涵蓋)
-                    body = _buildMdTable(t);
-                } else if (h === '物品表') {
-                    const t = _parseMdTable(body);
-                    t.rows = t.rows.filter(r => !_ITEM_DEAD.test(r));   // 已交付/已消耗/損壞 不注入(存檔仍保留)
-                    if (!t.rows.length) continue;                       // 全沒活物品 → 整塊省略
                     body = _buildMdTable(t);
                 } else if (h === '性事紀' || h === '性事记') {
                     const t = _parseMdTable(body);
