@@ -250,6 +250,7 @@
                     <div class="avs-st-init-icon">🛰️</div>
                     <div class="avs-st-init-title">這個世界還沒開始追蹤狀態</div>
                     <div class="avs-st-init-desc">按下面的按鈕，AI 會讀你的世界設定，自動決定要幫你記哪些東西<br>（像是角色好感度、體力、任務、目前場景…）。之後跑團就會自動更新。</div>
+                    <textarea class="avs-textarea avs-st-init-prompt" id="avs-st-init-prompt" placeholder="（選填）想特別追蹤什麼？例如：重點記陣營鬥爭、幫每個角色記當前目標。留空＝AI 自動判斷"></textarea>
                     <button class="avs-btn avs-btn-primary avs-st-init-btn" id="avs-st-init">開始追蹤狀態 ▸</button>
                     <div class="avs-st-init-foot">第一次生成大約 5–30 秒；想簡單跑、跳過 AI 就用下面這個</div>
                     <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset">🪶 簡易預設（形象/身分/好感度）</button>
@@ -258,11 +259,12 @@
             const ib = _host.querySelector('#avs-st-init');
             if (ib) ib.onclick = async () => {
                 if (!win.OS_AVS?.generateAndSaveSchema) { alert('AVS 模組未就緒，請稍候再試'); return; }
+                const _up = (_host.querySelector('#avs-st-init-prompt')?.value || '').trim();   // 選填追蹤要求，空＝AI 自動判斷
                 const orig = ib.textContent;
                 ib.textContent = '🧬 AI 分析中…';
                 ib.style.pointerEvents = 'none';
                 try {
-                    const r = await win.OS_AVS.generateAndSaveSchema();   // 生成 schema + 存進變數包（修：原本只 call generate 沒接結果→存不進去→面板永遠空）
+                    const r = await win.OS_AVS.generateAndSaveSchema(_up);   // 生成 schema + 存進變數包（帶選填追蹤要求）
                     if (r) _build();   // 重繪：此時變數包已有剛生成的 schema → 顯示追蹤狀態
                 } catch (e) {
                     console.error('[AVS State] AI 生成失敗:', e);
