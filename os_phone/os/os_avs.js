@@ -230,12 +230,12 @@
     // 🧬 共用：AI 生成 schema → 轉變數 → 存變數包 → 存規則 → 同步世界書 → 觸發初始填充。
     // 兩個入口共用（變數包「AI 從世界生成」按鈕 + AVS 狀態「開始追蹤狀態」按鈕）；UI 更新由各呼叫端自己做。
     // 回傳 { pack, ruleCount } 成功 / null 失敗（generate 內部已 toast 失敗訊息）。
-    async function _aiGenerateAndSavePack() {
+    async function _aiGenerateAndSavePack(userPrompt) {
         if (!win.OS_STATE_SCHEMA?.generate) {
             alert('OS_STATE_SCHEMA 不可用（請確認 state_schema.js 已載入）');
             return null;
         }
-        const result = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true });
+        const result = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true, userPrompt });
         const schema = result?.fields || result;   // 向前兼容舊版只返回 fields
         const aiRules = Array.isArray(result?.rules) ? result.rules : [];
         if (!schema || !Object.keys(schema).length) return null;
