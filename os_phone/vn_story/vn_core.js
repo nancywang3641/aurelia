@@ -1104,16 +1104,18 @@
             return p;
         },
         _doFetchBg: async function(cacheId, prompt) {
-            if (this._bgMemCache[cacheId]) return this._bgMemCache[cacheId];
+            // 🆘 fallback(退路真實圖+磨砂)是「主來源掛掉時的應急」、不是正式背景：記憶體/IDB 都不吃它的快取，
+            //    一律往下重新走主來源 → Pollinations 恢復 / 切 comfyui 後就能拿正式清晰圖(治「切了來源還是糊、舊糊圖卡快取」)。
+            if (this._bgMemCache[cacheId] && !String(this._bgMemCache[cacheId]).includes('#fallback')) return this._bgMemCache[cacheId];
             const cached = await VN_Cache.get('bg_cache', cacheId);
-            if (cached && cached.url) {
+            if (cached && cached.fallback) {
+                try { await VN_Cache.delete('bg_cache', cacheId); } catch (e) {}   // 清掉殘留的應急糊圖快取，下面重生
+            } else if (cached && cached.url) {
                 if (cached.url.startsWith('blob:')) {
                     await VN_Cache.delete('bg_cache', cacheId);
                 } else {
-                    let displayUrl = cached.url;
-                    if (cached.fallback) displayUrl = displayUrl.includes('#') ? displayUrl : displayUrl + '#fallback';
                     const objUrl = await this._toObjectUrl(cached.url);
-                    this._bgMemCache[cacheId] = (objUrl || cached.url) + (cached.fallback ? '#fallback' : '');
+                    this._bgMemCache[cacheId] = objUrl || cached.url;   // 正式圖，無 #fallback 磨砂
                     this._preloadImg(cacheId, this._bgMemCache[cacheId]);
                     return this._bgMemCache[cacheId];
                 }
