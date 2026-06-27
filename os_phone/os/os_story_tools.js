@@ -806,9 +806,18 @@
                 const _autohide = localStorage.getItem('sp_summary_autohide') !== '0';
                 let _keep = parseInt(localStorage.getItem('sp_summary_keep_recent'));
                 if (isNaN(_keep) || _keep < 0) _keep = 5;
-                const _end = _arrayLastId();   // 陣列索引(/hide 是對記憶體陣列操作)
+                let _end = _arrayLastId();   // 陣列索引(/hide 對記憶體陣列操作、不能用真樓號會超出截短陣列)；懶載入時偶爾回 null/只到窗口末
+                // 🩹 懶載入下 _arrayLastId 偶爾讀不到 → autohide 原本靜默跳過、舊樓沒藏→token 不知不覺爆。讀不到先等一拍重試。
+                if (_end == null) { await new Promise(r => setTimeout(r, 400)); _end = _arrayLastId(); }
                 const _hideTo = (_end != null) ? (_end - _keep) : null;   // 藏到這樓為止，之後 _keep 樓保留可見
-                if (_autohide && _hideTo != null && _hideTo >= 0) await API._callSlashCommand(`/hide 0-${_hideTo}`);
+                if (_autohide && _hideTo != null && _hideTo >= 0) {
+                    await API._callSlashCommand(`/hide 0-${_hideTo}`);
+                    console.log(`[大總結] 🔒 自動隱藏 /hide 0-${_hideTo}（陣列末 index=${_end}、預留最新 ${_keep} 樓）`);
+                } else if (_autohide) {
+                    // 不再靜默：明確提醒+log，免得舊樓沒藏、token 默默飆高(4萬→8萬那種)
+                    console.warn(`[大總結] ⚠️ 自動隱藏沒執行：陣列末=${_end}（懶載入截短/讀不到）→ 舊樓沒藏、下輪 token 可能偏高`);
+                    try { win.toastr?.warning('舊樓自動隱藏這次沒跑成功，token 可能偏高——可到故事日誌手動隱藏舊樓'); } catch (e) {}
+                }
             } catch (e) { console.warn('[大總結] 自動隱藏失敗:', e); }
 
             // 🌟 parse【結語】+ 角色名單 → 寫 lobby_summary_index（給瀅瀅/柴郡注 sysPrompt）
