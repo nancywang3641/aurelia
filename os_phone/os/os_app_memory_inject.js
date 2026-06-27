@@ -203,7 +203,7 @@
                 id: INJECT_ID,
                 content: block.trim(),
                 position: 'in_chat',
-                depth: 0,
+                depth: 2,   // 手機/工坊 app 記憶＝背景事實，放深一點(2)不搶戲；VN組件說明是格式規則維持 0 高注意
                 role: 'system'
             }], { once: true });
             _lastUninject = (result && result.uninject) || null;
