@@ -1024,7 +1024,7 @@
                 } catch (e) { console.warn('讀取聊天設置失敗:', e); }
             }
 
-            const NO_HISTORY_ROUTES = ['iris_chat', 'cheshire_chat'];
+            const NO_HISTORY_ROUTES = ['iris_chat', 'cheshire_chat', 'general_assistant'];   // general_assistant=煉丹/規則/卡片匯入/qb 等工具型生成→不需劇情歷史(角色卡+世界書仍保留給主題化)
             if (!NO_HISTORY_ROUTES.includes(promptKey) && ctx.history && ctx.history.length > 0) {
                 let realityText = "### Reality Context (Story History)\nThis is the background story. Use this ONLY for context. DO NOT reply to the story directly. Stick to the APP FORMAT.\n\n";
                 ctx.history.forEach(m => {
@@ -1426,6 +1426,8 @@
                         const rawCfg = localStorage.getItem('os_global_config');
                         if (rawCfg) config = JSON.parse(rawCfg);
                     }
+                    // 工具型路由(煉丹等 general_assistant)不背 preset 自訂條目——只要乾淨指令+角色卡/世界書(歷史由 NO_HISTORY_ROUTES 擋)
+                    if (promptKey === 'general_assistant') config = Object.assign({}, config, { usePresetPrompts: false });
 
                     const messages = await win.OS_API.buildContext(userMessage, promptKey);
 
