@@ -33,7 +33,7 @@
             useGenerateRaw: false,
             enableSummaryOnly: false,
             maxTokens: 2000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
-            usePresetPrompts: false, presetName: '', customCot: ''
+            usePresetPrompts: false, presetName: '', customCot: '', customCotMap: {}
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
         return config;
@@ -2340,6 +2340,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         elStProfile.addEventListener('change', () => showProfileInfo(elStProfile, profileInfoEl));
         secStProfile.addEventListener('change', () => showProfileInfo(secStProfile, secProfileInfoEl));
 
+        // 📝 自訂前置指令(破甲)：每個連接預設各記各的，切預設→存舊的、載新的(避免把 A 模型的破甲送給 B 模型而被拒)
+        const elCustomCot = container.querySelector('#os-custom-cot');
+        const _cotKeyOf = v => (v && String(v).trim()) ? String(v) : '__none__';
+        let _cotMap = Object.assign({}, llmConfig.customCotMap || {});
+        let _curCotKey = _cotKeyOf(elStProfile.value);
+        if (Object.keys(_cotMap).length === 0 && (llmConfig.customCot || '').trim()) _cotMap[_curCotKey] = llmConfig.customCot;   // 舊版單格一次性遷移到當前預設名下
+        if (elCustomCot) elCustomCot.value = (_curCotKey in _cotMap) ? (_cotMap[_curCotKey] || '') : '';
+        elStProfile.addEventListener('change', () => {
+            if (!elCustomCot) return;
+            _cotMap[_curCotKey] = elCustomCot.value;            // 存目前預設的破甲
+            _curCotKey = _cotKeyOf(elStProfile.value);          // 切到新預設
+            elCustomCot.value = (_curCotKey in _cotMap) ? (_cotMap[_curCotKey] || '') : '';   // 載新預設自己的(沒設過就空白)
+        });
+
         function updateSmeaVisibility(model) {
             const isV3 = model === 'nai-diffusion-3';
             const smeaGrp    = container.querySelector('#img-nai-smea-group');
@@ -3153,7 +3167,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     enableThinking: elEnableThinking ? elEnableThinking.checked : false,
                     thinkingBudget: elThinkingBudget ? parseInt(elThinkingBudget.value) : 8000,
                     useGenerateRaw: container.querySelector('#os-use-generateraw')?.checked || false,
-                    customCot: container.querySelector('#os-custom-cot')?.value || '',
+                    customCot: (elCustomCot ? elCustomCot.value : ''),
+                    customCotMap: (function () { if (elCustomCot) _cotMap[_curCotKey] = elCustomCot.value; return _cotMap; })(),
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
