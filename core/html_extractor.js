@@ -274,7 +274,7 @@
             // 🔧 修「狀態面板被壓扁/切出窗外」：vn_core.css 把 .ue-tab-pane.active 設成 flex:1 的 flex 直欄
             //    → 面板(十幾個 NPC)被當 flex 子項擠壓分攤固定高、不長高也不捲。用 id 選擇器(權重高過 .ue-tab-pane.active)
             //    把這一頁改回 block+自然高，#ue-content-area 本身就會捲；並擋掉面板根的固定高/max-height(讓內容完整長出來)。
-            const _panelFix = `#tab-pane-aurelia_state_panel{display:block;flex:0 0 auto;height:auto;min-height:100%;}`
+            const _panelFix = `#tab-pane-aurelia_state_panel.active{display:block;flex:0 0 auto;height:auto;min-height:100%;}`
                 + `#tab-pane-aurelia_state_panel>.custom-status-panel,#tab-pane-aurelia_state_panel .custom-status-panel{height:auto;max-height:none;}`;
             html = `<style>${_panelFix}\n${activeTpl.cssContent || ''}</style>${html}`;
             // 🔬 本輪更新了什麼：只顯示這輪副模型「改動的欄位」(delta)，不是整碗當前狀態。摺疊、預設收起。
