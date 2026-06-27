@@ -3635,32 +3635,31 @@
         if (window._VN_AUTO_DETECT_REGISTERED) return;
         window._VN_AUTO_DETECT_REGISTERED = true;
 
-        const _processedIds = new Set();
-
         function init() {
             if (!window.TavernHelper) { setTimeout(init, 1000); return; }
             if (!window.eventOn || !window.tavern_events) { setTimeout(init, 500); return; }
 
-            const _waitTimers = {};   // messageId → interval（等 </content> 收尾）
-
-            // ── ⚠️ 正文截斷偵測（純通知器，★絕不呼叫 _apply：那會多跑 loadScript→吃掉場景插圖 splice，beac410 就是栽在這）──
-            // 完整 = 同時有 </content>(正文收尾) 與 </summary>(摘要收尾、每輪最後必有)；缺任一 = 截斷（破甲偶爾會截）
-            function _isComplete(t) { return t.indexOf('</content>') !== -1 && t.indexOf('</summary>') !== -1; }
+            // ── ⭐ END-driven：跟副模型(state_runtime)同一套——純 GENERATION_ENDED 驅動，生成「真的結束」才讀正文判完整。
+            //    取代舊「MESSAGE_RECEIVED(事件來得早、半截)+每1.5秒輪詢等收尾+_processedIds鎖樓號」：鎖會讓刪樓/重生落同樓號永不再套用。
+            //    完整正文＝同時有 <content> 與 </content>(正文收尾)。重複套用守門靠 _lastApplied 特徵比對(見 _onGenEnded)。
+            function _hasOpen(t)  { return String(t).indexOf('<content>')  !== -1; }
+            function _hasClose(t) { return String(t).indexOf('</content>') !== -1; }
+            // 已套用特徵：擋掉「副模型在 🍎/generateRaw 模式也會發 GENERATION_ENDED 但沒設 __AURELIA_SUMMARIZING」「事件偶爾連發」
+            //   造成的重複 loadScript（會洗掉剛 splice 進去的場景插圖）。比對「同樓號＋同 <content> 內容」才算已套用。
+            let _lastApplied = null;   // { mid, sig }
+            function _sig(text) { const m = String(text).match(/<content>([\s\S]*?)<\/content>/i); const b = m ? m[1] : String(text); return b.length + '|' + b.slice(0, 40) + '|' + b.slice(-40); }
             let _truncMsgId = null;
             // VN 是否正在前景（玩家在看故事）→ 此時主模型這通理應產出 <content>…</content>，沒收尾＝截斷。
             // 用來判斷「連 <content> 都還沒生出來就截斷(思考期截)」要不要當截斷，避免誤傷非 VN 的一般聊天訊息。
             function _vnVisibleNow() { const p = document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && document.getElementById('page-game')); }
             function _hideTruncBanner() { const b = document.getElementById('vn-trunc-banner'); if (b) b.classList.remove('show'); }
             // 重試：/regenerate(整則重生，破甲截斷首選) 或 /continue(接著補寫，乾淨早停用)。
-            // 兩者都先放行這則重新被偵測，補/重生完走原本的 MESSAGE_RECEIVED 輪詢→_apply（同一般訊息路徑，不額外跑 loadScript）。
+            // 補/重生完會再發 GENERATION_ENDED → 收尾完整就自動套用；先清 _lastApplied，確保即使內容雷同也照樣重套。
             function _retryTrunc(cmd) {
                 _hideTruncBanner();
                 const th = window.TavernHelper || (window.parent && window.parent.TavernHelper) || (window.top && window.top.TavernHelper);
                 if (!th || typeof th.triggerSlash !== 'function') { try { (window.toastr || (window.parent && window.parent.toastr)).warning('找不到酒館助手，請回酒館手動操作'); } catch (e) {} return; }
-                if (_truncMsgId != null) {
-                    _processedIds.delete(_truncMsgId);
-                    if (_waitTimers[_truncMsgId]) { clearInterval(_waitTimers[_truncMsgId]); delete _waitTimers[_truncMsgId]; }
-                }
+                _lastApplied = null;
                 try { window.VN_Core._showWriterCurtain(); } catch (e) {}
                 th.triggerSlash(cmd).catch(function () {});
             }
@@ -3703,7 +3702,7 @@
                     } catch (e) {}
                 }
                 // TauriTavern 懶載入會讓「樓號 ≠ 陣列索引」拿不到 → 退而求其次讀最後一條 AI 訊息
-                // （MESSAGE_RECEIVED 的當事訊息就是最後一條，串流半成品也持續寫在這）
+                // （GENERATION_ENDED 當下，最新一則 AI 正文就是最後一條）
                 if (!text && stCtx && Array.isArray(stCtx.chat) && stCtx.chat.length) {
                     const last = stCtx.chat[stCtx.chat.length - 1];
                     if (last && !last.is_user) text = last.mes || last.message || last.content || '';
@@ -3726,115 +3725,60 @@
                 }
             }
 
-            window.eventOn(window.tavern_events.MESSAGE_RECEIVED, (messageId) => {
-                if (_processedIds.has(messageId)) return;
-                _processedIds.add(messageId);
+            // ── ⭐ 套用入口：生成真正結束 → 讀完整正文 → 完整就套用、截斷就疊橫幅。debounce 收斂連發事件 + 等 TauriTavern 正文寫定。──
+            let _endTimer = null, _curtainSafety = null;
+            function _onGenEnded(messageId) {
+                if (window.__AURELIA_SUMMARIZING) return;   // 大總結 generateRaw 發的 END 不是正文
+                clearTimeout(_curtainSafety);
+                clearTimeout(_endTimer);
+                _endTimer = setTimeout(() => {
+                    try {
+                        const text = _readMsgText(messageId);
+                        if (_hasOpen(text) && _hasClose(text)) {
+                            const sig = _sig(text);
+                            // 同一則、同內容已套用過 → 這通多半是副模型(🍎/generateRaw 也發 END)或事件連發 → 跳過，免得重跑 loadScript 洗掉場景插圖
+                            if (_lastApplied && _lastApplied.mid === messageId && _lastApplied.sig === sig) return;
+                            _apply(text, messageId);
+                            _lastApplied = { mid: messageId, sig: sig };
+                        } else {
+                            try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
+                            // 截斷：①有 <content> 沒收尾＝正文截在中間 ②連 <content> 都沒(思考期就截) → 只在 VN 前景時當截斷，避免誤判非 VN 訊息
+                            if (_hasOpen(text) || _vnVisibleNow()) _showTruncBanner(messageId);
+                        }
+                    } catch (e) { console.error('[PhoneOS] 自動偵測失敗:', e); }
+                }, 600);
+            }
+            if (window.tavern_events.GENERATION_ENDED) window.eventOn(window.tavern_events.GENERATION_ENDED, _onGenEnded);
 
-                try {
-                    const text = _readMsgText(messageId);
-                    // 沒 <content> → 還在思考期或非 VN 訊息：這裡不啟動停止增長偵測（思考可能 >12s 卡住會誤判截斷）。
-                    // 「思考期就截斷」改由 GENERATION_ENDED（真結束才判）安全攔截，不在串流中亂猜。
-                    if (!text.includes('<content>')) { _processedIds.delete(messageId); return; }
-
-                    // ⛔ 鐵律：沒有 </content> 收尾＝AI 還在輸出（TauriTavern 事件來得早）→ 不放行。
-                    //    輪詢等收尾才套用，半截劇本開播會把圖片/語音調度全打亂（2026-06-11 實測）
-                    if (!text.includes('</content>')) {
-                        console.log('[PhoneOS] 自動偵測：<content> 未收尾，等待輸出完成…(訊息 ID:', messageId, ')');
-                        // 等待期間用全黑幕布蓋住劇情頁（「故事撰寫中…」），不放裸字在對話框
-                        try { window.VN_Core._showWriterCurtain(); } catch (e) {}
-                        if (_waitTimers[messageId]) return;
-                        const t0 = Date.now();
-                        let _lastLen = -1, _stall = 0;
-                        _waitTimers[messageId] = setInterval(() => {
-                            const t = _readMsgText(messageId);
-                            if (t.includes('</content>')) {
-                                clearInterval(_waitTimers[messageId]); delete _waitTimers[messageId];
-                                console.log('[PhoneOS] 自動偵測：</content> 收尾偵測到，套用完整劇本');
-                                try { _apply(t, messageId); } catch (e) { console.error('[PhoneOS] 自動偵測失敗:', e); _processedIds.delete(messageId); }
-                                return;
-                            }
-                            // 停止增長偵測：串流中字數會長、截斷/卡住就凍住 → 約 12 秒沒長即疑似截斷，疊橫幅通知（仍續輪詢，真補上 </content> 照樣套用）
-                            if (t.length === _lastLen) _stall++; else { _stall = 0; _lastLen = t.length; }
-                            if (_stall === 8) {
-                                try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
-                                console.warn('[PhoneOS] 自動偵測：正文停止增長且無 </content> → 疑似截斷 (訊息 ID:', messageId, ')');
-                                _showTruncBanner(messageId);
-                            }
-                            if ((Date.now() - t0) > 300000) {
-                                clearInterval(_waitTimers[messageId]); delete _waitTimers[messageId];
-                                _processedIds.delete(messageId);
-                                try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
-                                _showTruncBanner(messageId);
-                                console.warn('[PhoneOS] 自動偵測：等 </content> 超時 (訊息 ID:', messageId, ')');
-                            }
-                        }, 1500);
-                        return;
-                    }
-
-                    _apply(text, messageId);
-                } catch (e) {
-                    console.error('[PhoneOS] 自動偵測失敗:', e);
-                    _processedIds.delete(messageId);
-                }
-            });
-
-            // 生成真正結束 → 只檢查收尾、純疊/收橫幅當保險（MESSAGE_RECEIVED 輪詢不一定可靠）。★絕不呼叫 _apply：套用一律交給上面的輪詢，這裡只通知，才不會多跑 loadScript 吃掉場景插圖。
-            if (window.tavern_events.GENERATION_ENDED) {
-                window.eventOn(window.tavern_events.GENERATION_ENDED, (messageId) => {
-                    if (window.__AURELIA_SUMMARIZING) return;   // 大總結/副模型 generateRaw 不是正文
-                    setTimeout(() => {
-                        try {
-                            const text = _readMsgText(messageId);
-                            if (_isComplete(text)) { _hideTruncBanner(); return; }   // 完整(<content>+<summary> 都收尾) → 收橫幅
-                            // 不完整：①有 <content> = VN 正文截在中間 ②連 <content> 都沒有(思考期就截)→ 只在 VN 前景時當截斷(避免誤判非 VN 訊息)
-                            if (text.indexOf('<content>') !== -1 || _vnVisibleNow()) _showTruncBanner(messageId);
-                        } catch (e) {}
-                    }, 600);
+            // 生成開始（VN 前景、非空跑/非總結）→ 立刻蓋「故事撰寫中」黑幕，避免玩家看到主模型逐字裸寫；套用或截斷時自然收掉。
+            //    安全閥：5 分鐘內沒等到 GENERATION_ENDED（生成卡死）→ 收幕並提示重生，避免黑幕卡死。
+            if (window.tavern_events.GENERATION_STARTED) {
+                window.eventOn(window.tavern_events.GENERATION_STARTED, (type, opts, dryRun) => {
+                    if (dryRun || window.__AURELIA_SUMMARIZING) return;
+                    if (!_vnVisibleNow()) return;
+                    try { window.VN_Core._showWriterCurtain(); } catch (e) {}
+                    clearTimeout(_curtainSafety);
+                    _curtainSafety = setTimeout(() => { try { window.VN_Core._hideWriterCurtain(); } catch (e) {} _showTruncBanner(null); }, 300000);
                 });
             }
 
-            // ── 樓號失效 → 踢出 _processedIds，讓刪除/swipe/重生後同樓號能「重新被偵測套用」──
-            //    舊版只在 CHAT_CHANGED 清整個 Set，使用者手動刪樓/重生時樓號卡在 Set 裡 → MESSAGE_RECEIVED（type='regenerate'/'swipe'，
-            //    見 @types）被 `if(_processedIds.has(id)) return` 短路，劇情永遠不再套用（跟 AVS state_runtime 對齊：它也訂這些失效事件）。
-            // hardReset：刪除/swipe＝新一輪生成必至或訊息已不在 → 連殘留輪詢一起清。
-            //            編輯/更新＝可能是場景插圖 splice／AVS 程式寫入同樓（MESSAGE_UPDATED 也會發）→ 只踢 set，
-            //            「絕不」碰正在跑的 _waitTimers，否則會打斷正常串流播放（半截 </content> 等不到就誤判截斷）。
-            function _evictMsg(messageId, hardReset) {
-                if (messageId == null) return;
-                // 事件參數可能是 number 或 string → 兩種都刪，避免型別不一致漏刪
-                _processedIds.delete(messageId);
-                _processedIds.delete(Number(messageId));
-                _processedIds.delete(String(messageId));
-                if (hardReset) {
-                    [messageId, Number(messageId), String(messageId)].forEach(k => {
-                        if (_waitTimers[k]) { clearInterval(_waitTimers[k]); delete _waitTimers[k]; }
-                    });
-                    if (_truncMsgId != null && String(_truncMsgId) === String(messageId)) _hideTruncBanner();
-                }
-            }
-            // 硬重置：刪樓 / swipe（換變體必觸發新一輪或內容已換）
-            ['MESSAGE_DELETED', 'MESSAGE_SWIPED'].forEach(name => {
+            // 使用者改動樓層 → 清「已套用」記號，讓下次 GENERATION_ENDED 必定重套（刪樓/swipe/手動編輯後重生能重新套用）。
+            //    ★只收使用者動作；不收 MESSAGE_UPDATED（那是場景插圖 splice／AVS 程式寫入，清了會讓下一通副模型 END 重套→洗掉插圖）。
+            ['MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_EDITED'].forEach(name => {
                 const ev = window.tavern_events[name];
-                if (ev) window.eventOn(ev, (messageId) => {
-                    _evictMsg(messageId, true);
-                    console.log('[PhoneOS] 自動偵測：' + name + ' → 樓號 ' + messageId + ' 硬解鎖，重生可重新套用');
-                });
-            });
-            // 軟失效：手動編輯 / 程式更新（不動正在跑的輪詢，避免打斷串流）
-            ['MESSAGE_EDITED', 'MESSAGE_UPDATED'].forEach(name => {
-                const ev = window.tavern_events[name];
-                if (ev) window.eventOn(ev, (messageId) => { _evictMsg(messageId, false); });
+                if (ev) window.eventOn(ev, () => { _lastApplied = null; });
             });
 
             if (window.tavern_events.CHAT_CHANGED) {
                 window.eventOn(window.tavern_events.CHAT_CHANGED, () => {
-                    _processedIds.clear();
+                    clearTimeout(_endTimer); clearTimeout(_curtainSafety);
+                    _lastApplied = null;
                     _hideTruncBanner();
-                    Object.keys(_waitTimers).forEach(k => { clearInterval(_waitTimers[k]); delete _waitTimers[k]; });
+                    try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
                 });
             }
 
-            console.log('[PhoneOS] VN 自動劇本偵測已啟動');
+            console.log('[PhoneOS] VN 自動劇本偵測已啟動（END-driven）');
         }
         init();
     }());
