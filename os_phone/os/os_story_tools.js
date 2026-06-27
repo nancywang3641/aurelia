@@ -717,6 +717,17 @@
                 console.log('[大總結] 🚩 SUMMARIZING=true（generateRaw 開始）');   // 診斷：旗標窗起點
                 let generated = '';
                 const _sys = '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。';
+                // 破甲(自訂前置指令)：generateRaw 本身不帶 preset/破甲 → Claude 會自我消音省略 NSFW。
+                //   依酒館「當前激活的連接預設」取對應破甲(customCotMap，跟設定面板同一套 key)，沒設過退回主模型單格 customCot。在哪條線就帶哪條的破甲。
+                let _cotPrefix = [];
+                try {
+                    const _cfg = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig) ? win.OS_SETTINGS.getConfig() : {};
+                    const _map = _cfg.customCotMap || {};
+                    const _cm = win.SillyTavern?.getContext?.()?.extensionSettings?.connectionManager;
+                    const _key = (_cm && _cm.selectedProfile) ? String(_cm.selectedProfile) : '__none__';
+                    const _cot = (_key in _map) ? (_map[_key] || '') : (_cfg.customCot || '');
+                    if (_cot && String(_cot).trim()) _cotPrefix = [{ role: 'system', content: String(_cot) }];
+                } catch (e) {}
                 try {
                     // 背景讀整個聊天檔(原生 /api/chats/get；不靠記憶體陣列、不展開、不卡)
                     const fileMsgs = await _apiFullChat();
@@ -733,7 +744,7 @@
                         const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}${charHint}\n${tplBody}`;
                         generated = await TH.generateRaw({
                             user_input: userMsg,
-                            ordered_prompts: [{ role: 'system', content: _sys }, 'user_input'],   // 不讀 chat_history → 純送我給的全文
+                            ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'user_input'],   // 破甲(若有)→總結系統提示→正文；不讀 chat_history → 純送我給的全文
                             max_chat_history: 0,
                             should_stream: false,
                         });
@@ -743,7 +754,7 @@
                         const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}${charHint}\n${tplBody}`;
                         generated = await TH.generateRaw({
                             user_input: instruction,
-                            ordered_prompts: [{ role: 'system', content: _sys }, 'chat_history', 'user_input'],
+                            ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'chat_history', 'user_input'],
                             max_chat_history: 'all',
                             should_stream: false,
                         });
