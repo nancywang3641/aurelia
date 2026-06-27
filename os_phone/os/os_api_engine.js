@@ -958,9 +958,10 @@
             // 劇情長期記憶：APP 走 OS_API.chat、不發 GENERATION_STARTED → 吃不到 os_summary_inject 的自動注入；
             //   總結後舊樓又被自動隱藏(橋接 getApiContext 濾掉隱藏)→ 對被總結的舊劇情整段失憶。
             //   這裡補上酒館大總結壓縮版(getCurrentInjectionPayload，與正文同一份輕量版)，讓 APP 也共享長期記憶。
-            //   關閉：localStorage sp_app_inject_summary='0'。
+            //   ⚠️ 只給「劇情類 APP」路由：工具型呼叫(煉丹 general_assistant、UI 生成…)不該背劇情總結。關閉：localStorage sp_app_inject_summary='0'。
+            const _SUMMARY_ROUTES = new Set(['wx_chat_system', 'call_voice_system', 'iris_chat', 'cheshire_chat', 'wb_world_gen', 'wb_world_continue']);
             try {
-                if (localStorage.getItem('sp_app_inject_summary') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
+                if (_SUMMARY_ROUTES.has(promptKey) && localStorage.getItem('sp_app_inject_summary') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
                     const _sum = await win.OS_STORY_TOOLS.getCurrentInjectionPayload();
                     if (_sum && _sum.trim()) {
                         apiMessages.push({ role: "system", content: `[劇情總結 — 至今為止的劇情長期記憶，延續勿矛盾]\n${_sum}` });
