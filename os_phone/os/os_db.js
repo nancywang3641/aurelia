@@ -172,6 +172,34 @@
                 } catch (e) { reject(e); }
             });
         },
+        // 整批讀某 app 的 app_data（給「記憶回傳酒館」統一注入用）：回 [{key,scope,value}]，只收 global + 指定 chat。
+        getAppDataByApp: async function(appId, chatId) {
+            const db = await this.init();
+            const pre = String(appId || '') + '::';
+            const wantChat = chatId ? ('chat:' + chatId) : null;
+            return new Promise((resolve, reject) => {
+                try {
+                    const out = [];
+                    const req = db.transaction(STORE_NAME_APP_DATA, 'readonly').objectStore(STORE_NAME_APP_DATA).openCursor();
+                    req.onsuccess = (e) => {
+                        const cur = e.target.result;
+                        if (!cur) { resolve(out); return; }
+                        const id = String(cur.key);
+                        if (id.indexOf(pre) === 0) {
+                            const rest = id.slice(pre.length);              // scope::key
+                            const sep = rest.indexOf('::');
+                            const scope = sep > 0 ? rest.slice(0, sep) : '';
+                            const key = sep > 0 ? rest.slice(sep + 2) : rest;
+                            if (scope === 'global' || (wantChat && scope === wantChat)) {
+                                out.push({ key: key, scope: scope, value: (cur.value && cur.value.value) });
+                            }
+                        }
+                        cur.continue();
+                    };
+                    req.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
         // 列出 app_data 裡所有出現過的 appId（id 取 '::' 前段），給孤兒掃描用。
         listAppDataAppIds: async function() {
             const db = await this.init();

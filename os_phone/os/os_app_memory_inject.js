@@ -30,6 +30,13 @@
     const LINE_MAX = 80;        // 單行截斷字數
     let _lastUninject = null;
 
+    // 📲 統一「app 資料回傳酒館」：開關開的「純應用」app → 程式自動把它存的資料(saveData/dbSave)注入酒館，
+    //    不靠 app 自己呼叫 remember、不用教生成 AI。共用/展示型(isBlock)會在劇情渲染→跳過防迴圈。
+    const APPDATA_INJECT_ID = 'aurelia_app_data';
+    const MAX_APPS = 6;          // 最多回傳幾個 app（防爆 token）
+    const PER_APP_MAX = 1500;    // 每個 app 回傳字數上限
+    let _lastAppDataUninject = null;
+
     function _enabled() { try { return localStorage.getItem(FLAG_KEY) !== '0'; } catch (e) { return true; } }
     function _clean(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
     function _cut(s) { s = _clean(s); return s.length > LINE_MAX ? s.slice(0, LINE_MAX) + '…' : s; }
@@ -302,19 +309,91 @@
         } catch (e) { console.warn('[WX Chatroom ID Injector] 失敗:', (e && e.message) || e); }
     }
 
+    function _safeParse(s) { try { return JSON.parse(s); } catch (e) { return s; } }
+    function _flatten(v) { if (v == null) return ''; if (typeof v === 'string') return v.trim(); try { return JSON.stringify(v); } catch (e) { return String(v); } }
+
+    // 📲 統一注入：把「開了記憶回傳酒館」的純應用 app 自己存的資料抓出來注入主模型
+    async function injectAppData() {
+        try {
+            try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {}
+            _lastAppDataUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;   // 酒館 only
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            if (!_enabled()) return;
+            if (!win.OS_DB || !win.OS_DB.getAllPhoneApps) return;
+
+            const curCid = (win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
+            const apps = (await win.OS_DB.getAllPhoneApps()) || [];
+            if (!apps.length) return;
+
+            // 模板表查 isBlock：共用/展示(isBlock=true)會在劇情渲染→回傳會迴圈，跳過；只回純應用(isBlock=false)
+            let tplById = {};
+            try {
+                const tpls = (win.OS_DB.getAllUITemplates ? (await win.OS_DB.getAllUITemplates()) : []) || [];
+                tpls.forEach(function (t) { if (t && t.id != null) tplById[t.id] = t; });
+            } catch (e) {}
+
+            const blocks = [];
+            for (let i = 0; i < apps.length && blocks.length < MAX_APPS; i++) {
+                const app = apps[i];
+                if (!app || app.id == null) continue;
+                if (!_pluginEnabled(app.id)) continue;                      // 該 app「記憶回傳酒館」開關沒開
+                const tpl = (app.srcTplId != null) ? tplById[app.srcTplId] : null;
+                if (tpl && tpl.isBlock) continue;                           // 共用/展示型→跳(防迴圈)
+
+                const parts = [];
+                // dbSave（OS_DB app_data：global + 當前 chat）
+                try {
+                    if (win.OS_DB.getAppDataByApp) {
+                        const rows = (await win.OS_DB.getAppDataByApp(app.id, curCid)) || [];
+                        rows.forEach(function (r) { const t = _flatten(r.value); if (t) parts.push(t); });
+                    }
+                } catch (e) {}
+                // saveData（localStorage：aurelia_appdata_<appId>_*；只收 global + 當前 chat）
+                try {
+                    const preG = 'aurelia_appdata_' + app.id + '_';
+                    const preChatAny = preG + 'chat_';
+                    const preChatCur = preG + 'chat_' + (curCid || '') + '_';
+                    for (let k = 0; k < localStorage.length; k++) {
+                        const key = localStorage.key(k);
+                        if (!key || key.indexOf(preG) !== 0) continue;
+                        if (key.indexOf(preChatAny) === 0 && key.indexOf(preChatCur) !== 0) continue;   // 別的 chat 的→跳
+                        const t = _flatten(_safeParse(localStorage.getItem(key)));
+                        if (t) parts.push(t);
+                    }
+                } catch (e) {}
+
+                if (!parts.length) continue;
+                let body = parts.join('\n').trim();
+                if (body.length > PER_APP_MAX) body = body.slice(0, PER_APP_MAX) + '…';
+                blocks.push('〔' + (app.name || 'App') + '〕\n' + body);
+            }
+            if (!blocks.length) return;
+
+            const block = '<手機app資料 規則="下列是使用者手機 app 裡的資料（行程／清單／設定等），已開啟「回傳酒館」。當作既成事實、劇情需與之一致，別矛盾或遺忘。">\n'
+                + blocks.join('\n\n') + '\n</手機app資料>';
+            const result = win.TavernHelper.injectPrompts([{ id: APPDATA_INJECT_ID, content: block, position: 'in_chat', depth: 2, role: 'system' }], { once: true });
+            _lastAppDataUninject = (result && result.uninject) || null;
+            console.log('📲 [App Data Injector] 注入 ' + blocks.length + ' 個 app 的回傳資料');
+        } catch (e) { console.warn('[App Data Injector] 失敗:', (e && e.message) || e); }
+    }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) {
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppMemory(); });   // dryRun 空跑不注入
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectVnTags(); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectWxChatrooms(); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppData(); });
         }
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastWxRoomUninject = null; });
-        console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件）');
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; });
+        console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件 + app資料回傳）');
     }
 
     win.OS_APP_MEMORY_INJECT = {
         injectAppMemory: injectAppMemory,
+        injectAppData: injectAppData,
         isEnabled: _enabled,
         setEnabled: function (v) { try { localStorage.setItem(FLAG_KEY, v ? '1' : '0'); } catch (e) {} },
         // 插件每-app 開關（展廳 UI 之後接這兩個）
