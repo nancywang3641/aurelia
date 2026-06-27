@@ -3793,6 +3793,39 @@
                 });
             }
 
+            // ── 樓號失效 → 踢出 _processedIds，讓刪除/swipe/重生後同樓號能「重新被偵測套用」──
+            //    舊版只在 CHAT_CHANGED 清整個 Set，使用者手動刪樓/重生時樓號卡在 Set 裡 → MESSAGE_RECEIVED（type='regenerate'/'swipe'，
+            //    見 @types）被 `if(_processedIds.has(id)) return` 短路，劇情永遠不再套用（跟 AVS state_runtime 對齊：它也訂這些失效事件）。
+            // hardReset：刪除/swipe＝新一輪生成必至或訊息已不在 → 連殘留輪詢一起清。
+            //            編輯/更新＝可能是場景插圖 splice／AVS 程式寫入同樓（MESSAGE_UPDATED 也會發）→ 只踢 set，
+            //            「絕不」碰正在跑的 _waitTimers，否則會打斷正常串流播放（半截 </content> 等不到就誤判截斷）。
+            function _evictMsg(messageId, hardReset) {
+                if (messageId == null) return;
+                // 事件參數可能是 number 或 string → 兩種都刪，避免型別不一致漏刪
+                _processedIds.delete(messageId);
+                _processedIds.delete(Number(messageId));
+                _processedIds.delete(String(messageId));
+                if (hardReset) {
+                    [messageId, Number(messageId), String(messageId)].forEach(k => {
+                        if (_waitTimers[k]) { clearInterval(_waitTimers[k]); delete _waitTimers[k]; }
+                    });
+                    if (_truncMsgId != null && String(_truncMsgId) === String(messageId)) _hideTruncBanner();
+                }
+            }
+            // 硬重置：刪樓 / swipe（換變體必觸發新一輪或內容已換）
+            ['MESSAGE_DELETED', 'MESSAGE_SWIPED'].forEach(name => {
+                const ev = window.tavern_events[name];
+                if (ev) window.eventOn(ev, (messageId) => {
+                    _evictMsg(messageId, true);
+                    console.log('[PhoneOS] 自動偵測：' + name + ' → 樓號 ' + messageId + ' 硬解鎖，重生可重新套用');
+                });
+            });
+            // 軟失效：手動編輯 / 程式更新（不動正在跑的輪詢，避免打斷串流）
+            ['MESSAGE_EDITED', 'MESSAGE_UPDATED'].forEach(name => {
+                const ev = window.tavern_events[name];
+                if (ev) window.eventOn(ev, (messageId) => { _evictMsg(messageId, false); });
+            });
+
             if (window.tavern_events.CHAT_CHANGED) {
                 window.eventOn(window.tavern_events.CHAT_CHANGED, () => {
                     _processedIds.clear();
