@@ -954,7 +954,21 @@
             if (contextBlock) {
                 apiMessages.push({ role: "system", content: contextBlock });
             }
-            
+
+            // 劇情長期記憶：APP 走 OS_API.chat、不發 GENERATION_STARTED → 吃不到 os_summary_inject 的自動注入；
+            //   總結後舊樓又被自動隱藏(橋接 getApiContext 濾掉隱藏)→ 對被總結的舊劇情整段失憶。
+            //   這裡補上酒館大總結壓縮版(getCurrentInjectionPayload，與正文同一份輕量版)，讓 APP 也共享長期記憶。
+            //   關閉：localStorage sp_app_inject_summary='0'。
+            try {
+                if (localStorage.getItem('sp_app_inject_summary') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
+                    const _sum = await win.OS_STORY_TOOLS.getCurrentInjectionPayload();
+                    if (_sum && _sum.trim()) {
+                        apiMessages.push({ role: "system", content: `[劇情總結 — 至今為止的劇情長期記憶，延續勿矛盾]\n${_sum}` });
+                        console.log(`[OS_API.buildContext] 注入大總結壓縮版 ${_sum.length} 字 (route: ${promptKey})`);
+                    }
+                }
+            } catch (e) { console.warn('[OS_API.buildContext] 大總結注入失敗:', e); }
+
             if ((promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
                 try {
                     const currentChatId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
