@@ -25,6 +25,7 @@
 
     let _debounceTimer = null;
     let _running = false;           // 防止並發抽取
+    let _genStopped = false;        // 本通生成是否被「手動停止」(GENERATION_STOPPED)→ 全副模型跳過，別拿半截正文白燒
     let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
     let _lastRulesUninject = null;  // 上次 rules inject 的 uninject 函式
     let _lastAvatarUninject = null; // 上次「缺頭像提醒」inject 的 uninject 函式
@@ -747,6 +748,7 @@ ${numberedText}`;
         _running = true;
         let pendingMem = null, memIngested = false;
         try {
+            if (_genStopped) { console.log('🛰️ [State Runtime] 本通生成被手動停止 → 跳過抽取(AVS/記憶)'); return; }
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
 
@@ -944,6 +946,7 @@ ${numberedText}`;
         if (_sceneRunning) return;
         _sceneRunning = true;
         try {
+            if (_genStopped) { console.log('🛰️ [State Runtime] 本通生成被手動停止 → 跳過場景插圖'); return; }
             if (win.__AURELIA_SUMMARIZING) return;
             const sg = (function () { try { return (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen) || {}; } catch (e) { return {}; } })();
             if (!sg.standaloneEnabled) return;
@@ -1203,6 +1206,7 @@ ${numberedText}`;
         if (win.tavern_events.GENERATION_STARTED) {
             win.eventOn(win.tavern_events.GENERATION_STARTED, (type, opts, dryRun) => {
                 if (dryRun) return;   // 🚫 dryRun=酒館試算prompt/數token的空跑、非真生成 → 別注入(once 會被空跑那趟吃掉、真生成反而沒有)
+                _genStopped = false;  // 新一輪真生成開始 → 清掉上輪的「手動停止」旗標
                 console.log('[State Runtime] 🔎 GENERATION_STARTED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷
                 if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結生成不是劇情輪 → 別注入 state/rules
                 // state 摘要受「即時抽取總開關」控制
@@ -1211,6 +1215,15 @@ ${numberedText}`;
                 injectRules();
                 // 缺頭像提醒（永遠評估；一個都不缺就不 inject）
                 injectAvatarReminder();
+            });
+        }
+
+        // 手動停止生成（按下停止鈕）→ 標記本通被截：GENERATION_ENDED 仍會發、debounce 後 extractOnce/場景照排，
+        //    但兩者入口會看這旗標 return，不拿半截/思考期正文白燒副模型。下一輪 GENERATION_STARTED 自動清旗標。
+        if (win.tavern_events.GENERATION_STOPPED) {
+            win.eventOn(win.tavern_events.GENERATION_STOPPED, () => {
+                _genStopped = true;
+                console.log('🛰️ [State Runtime] 偵測到手動停止生成 → 本通副模型(AVS/記憶/場景)全部跳過');
             });
         }
 
