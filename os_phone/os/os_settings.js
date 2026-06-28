@@ -4169,7 +4169,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
                 // ComfyUI 直連用面板自己的尺寸(cfg.width/height)，其他來源用上面的測試尺寸
                 const _testIsCfd = (_tabCfg.svcEl ? _tabCfg.svcEl.value : '') === 'comfyui_direct';
-                const imageUrl = await imageManager.generate(testPrompt, _tabCfg.type, _testIsCfd ? { force: true } : { ..._sizeOpts, force: true });
+
+                // 畫風底詞/負詞：頭像桶由 generate() 內部自動套(charBasePrompt/charNegPrompt)；
+                // 背景桶的底詞/負詞存在 VN_Config、平常由 getBg 套、測試直連 generate 會繞過 → 這裡自己帶進去才測得到畫風。
+                // ComfyUI 直連有自己的 basePrompt/negPrompt，不重複疊。
+                let _testPrompt = testPrompt;
+                const _genOpts = _testIsCfd ? { force: true } : { ..._sizeOpts, force: true };
+                if (_activeTab === 'bg' && !_testIsCfd) {
+                    const _bgBase = (container.querySelector('#vncfg-bg-prompt')?.value || '').trim();
+                    const _bgNeg  = (container.querySelector('#vncfg-bg-neg')?.value || '').trim();
+                    if (_bgBase) _testPrompt = _bgBase + ', ' + _testPrompt;
+                    if (_bgNeg)  _genOpts.negativePrompt = _bgNeg;
+                }
+                const imageUrl = await imageManager.generate(_testPrompt, _tabCfg.type, _genOpts);
 
                 imgTestImage.src = imageUrl;
                 imgTestUrl.textContent = /^(data:|blob:)/.test(imageUrl) ? '✅ 圖片已生成（內嵌資料，省略顯示）' : `URL: ${imageUrl}`;
