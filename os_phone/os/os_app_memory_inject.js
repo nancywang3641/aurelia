@@ -292,16 +292,20 @@
             var msgs = [];
             try { msgs = (await th.getChatMessages('0-' + lastId)) || []; } catch (e) {}
             var text = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
+            // AI 整理產出的「舊亂id→統一id」對應表（發現 tab 的「AI 整理聊天室」存的，按 tavern chatId 隔離）；套上去同房只剩一筆
+            var remap = {};
+            try { var _allRemap = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_id_remap')) || '{}'); remap = _allRemap[_appChatId()] || {}; } catch (e) {}
             var map = {}, order = [];
             // ① WX 內文行格式 [Chat: 名|ID]
             var re = /\[Chat[:：]\s*([^|\]]+)\|([^\]]+)\]/g, m2;
-            while ((m2 = re.exec(text)) !== null) { var nm = (m2[1] || '').trim(), id = (m2[2] || '').trim(); if (id) { if (!(id in map)) order.push(id); map[id] = nm; } }
+            while ((m2 = re.exec(text)) !== null) { var nm = (m2[1] || '').trim(), id = (m2[2] || '').trim(); if (id) { id = remap[id] || id; if (!(id in map)) order.push(id); map[id] = nm; } }
             // ② VN PHONE 容器屬性格式 <chat chatroom="名" id="穩定id">（與 ① 同併一張表）
             var re2 = /<chat\s+([^>]*?)>/gi, m3;
             while ((m3 = re2.exec(text)) !== null) {
                 var a = m3[1] || '';
                 var id3 = ((a.match(/(?:^|\s)id\s*=\s*["']?([^"'>]*)["']?/i) || [])[1] || '').trim();
                 if (!id3) continue;
+                id3 = remap[id3] || id3;
                 var nm3 = ((a.match(/chatroom\s*=\s*["']?([^"'>]*)["']?/i) || [])[1] || '').trim();
                 if (!(id3 in map)) order.push(id3);
                 if (nm3 || !(id3 in map)) map[id3] = nm3 || map[id3] || '';
