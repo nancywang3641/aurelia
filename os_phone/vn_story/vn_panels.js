@@ -745,6 +745,8 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                         </div>`;
                     card.onclick = () => {
                         window.VN_Core.loadScript(ch.content, ch.message_id);
+                        // 回放也把這章存檔的插圖插回（生成當時已寫進 ch.scenes）；圖檔在硬碟、不重生
+                        try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
                         if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
                         closeChapterPanel();
                         window.VN_Core.next();
