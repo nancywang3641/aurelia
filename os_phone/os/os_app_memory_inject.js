@@ -311,6 +311,8 @@
 
     function _safeParse(s) { try { return JSON.parse(s); } catch (e) { return s; } }
     function _flatten(v) { if (v == null) return ''; if (typeof v === 'string') return v.trim(); try { return JSON.stringify(v); } catch (e) { return String(v); } }
+    // ⚠️ chatId 要跟 app 端 window.getChatId()(=ST.getCurrentChatId) 同源，否則 chat-scope 的 saveData/dbSave 對不上抓不到
+    function _appChatId() { try { var ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { var id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } var c = ST && ST.getContext && ST.getContext(); if (c && c.chatId != null && c.chatId !== '') return String(c.chatId); } catch (e) {} return ''; }
 
     // 📲 統一注入：把「開了記憶回傳酒館」的純應用 app 自己存的資料抓出來注入主模型
     async function injectAppData() {
@@ -323,7 +325,7 @@
             if (!_enabled()) return;
             if (!win.OS_DB || !win.OS_DB.getAllPhoneApps) return;
 
-            const curCid = (win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
+            const curCid = _appChatId();   // 與 app 端 window.getChatId() 同源，chat-scope 才對得上
             const apps = (await win.OS_DB.getAllPhoneApps()) || [];
             if (!apps.length) return;
 
