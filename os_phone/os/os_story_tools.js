@@ -187,6 +187,20 @@
     function _firstCell(row) {
         return (String(row).replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|')[0] || '').trim();
     }
+    // 表格列拆/合與欄數對齊：治「舊4欄 + 新5欄黏一起」害事件表整張錯位。
+    function _rowCells(line) { return String(line == null ? '' : line).replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim()); }
+    function _rowJoin(cells) { return '| ' + cells.join(' | ') + ' |'; }
+    function _colCount(line) { return line ? _rowCells(line).length : 0; }
+    function _alignTable(t) {   // 把表頭/分隔列/每一列都對齊到「表頭欄數」(欄數由上游挑較豐富的表頭決定)
+        if (!t || !t.header) return t;
+        const n = _colCount(t.header);
+        if (n <= 0) return t;
+        const fix = line => { const c = _rowCells(line); while (c.length < n) c.push(''); if (c.length > n) c.splice(n); return _rowJoin(c); };
+        t.header = fix(t.header);
+        if (t.sep) t.sep = _rowJoin(Array.from({ length: n }, () => ':---'));
+        t.rows = (t.rows || []).map(fix);
+        return t;
+    }
     // 去重正規化：物品表常因「數量括號(2颗)/叫法不同/簡繁」生分身(毒腺/极品毒腺/毒腺(2颗)各一列)→ 膨脹。
     //   合併比對前把這些雜訊抹平，讓同一物品落同一格、只留最新一列。角色表不正規化(怕把不同角色併掉)。
     function _normMergeKey(header, raw) {
@@ -208,17 +222,19 @@
         const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意規範/記憶事項表', '注意规范/记忆事项表'];
         if (APPEND.includes(header)) {
             const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
-            return _buildMdTable({ header: tp.header || ti.header, sep: tp.sep || ti.sep, rows: [...tp.rows, ...ti.rows], extra: tp.extra.length ? tp.extra : ti.extra });
+            const head = (_colCount(ti.header) > _colCount(tp.header)) ? ti.header : (tp.header || ti.header);   // 挑欄數較多的表頭，避免新增欄(如關鍵台詞)被截
+            return _buildMdTable(_alignTable({ header: head, sep: tp.sep || ti.sep, rows: [...tp.rows, ...ti.rows], extra: tp.extra.length ? tp.extra : ti.extra }));
         }
         if (MERGEKEY.includes(header)) {
             const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
             const order = [], map = {};
             const add = r => { const k = _normMergeKey(header, _firstCell(r)); if (!(k in map)) order.push(k); map[k] = r; };   // 同(正規化)名更新、新名加後面
             tp.rows.forEach(add); ti.rows.forEach(add);
-            // 物品表偏好「新版表頭」(2 欄、無備註)，讓舊 3 欄資料隨新生成收斂；其餘區塊沿用既有表頭
-            const head = (header === '物品表') ? (ti.header || tp.header) : (tp.header || ti.header);
+            // 物品表偏好「新版表頭」(2 欄、無備註)，讓舊 3 欄資料隨新生成收斂；其餘區塊挑欄數較多的表頭(免截掉新增欄)
+            const head = (header === '物品表') ? (ti.header || tp.header)
+                       : ((_colCount(ti.header) > _colCount(tp.header)) ? ti.header : (tp.header || ti.header));
             const sep  = (header === '物品表') ? (ti.sep || tp.sep) : (tp.sep || ti.sep);
-            return _buildMdTable({ header: head, sep, rows: order.map(k => map[k]), extra: tp.extra.length ? tp.extra : ti.extra });
+            return _buildMdTable(_alignTable({ header: head, sep, rows: order.map(k => map[k]), extra: tp.extra.length ? tp.extra : ti.extra }));
         }
         // 純文字區塊：濾掉混進來的「表格列 / 單名碎片」(舊版亂掉的殘留會折進這些尾端文字區 → 你看到的「下面多餘東西」)
         const _textOnly = s => String(s || '').split('\n').map(x => x.trim()).filter(Boolean)
@@ -263,14 +279,15 @@
         const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
         const prevN = tp.rows.length, incN = ti.rows.length;
         if (incN >= 1 && (prevN < 4 || incN >= Math.ceil(prevN * 0.5))) {
-            return _buildMdTable({ header: ti.header || tp.header, sep: ti.sep || tp.sep, rows: ti.rows, extra: ti.extra.length ? ti.extra : tp.extra });
+            return _buildMdTable(_alignTable({ header: ti.header || tp.header, sep: ti.sep || tp.sep, rows: ti.rows, extra: ti.extra.length ? ti.extra : tp.extra }));
         }
         return _mergeSection('角色表', prevBody, incBody);
     }
     function _structuredMerge(incFull, prevFull, summaryCount, lastTxt) {
         try {
             if (!prevFull) return incFull;
-            const stripHead = t => String(t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
+            // 清掉「所有」夾帶的大總結標題(不只開頭)：一旦舊總結被黏進內文，下一輪會被當成假區塊一直滾下去(就是尾巴那塊【大总结(第27次)】的來源)
+            const stripHead = t => String(t).replace(/【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/gi, '');
             const prevSecs = _splitSummarySections(stripHead(prevFull));
             const incSecs = _splitSummarySections(stripHead(incFull));
             const incMap = {}; incSecs.forEach(s => { incMap[s.header] = s; });
@@ -288,12 +305,28 @@
                 out.push({ header: p.header, body: _mb });
             }
             for (const i of incSecs) { if (!used.has(i.header) && !DROP.includes(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
+            // 依模板正規化區塊順序：治「結算清單漂到結語後面」這種錯序(增量才有的區塊原本一律被丟到最後)
+            const RANK = { '事件表': 0, '角色表': 1, '關係圖譜': 2, '关系图谱': 2, '結算清單': 3, '结算清单': 3, '注意規範': 4, '注意规范': 4, '注意規範/記憶事項表': 4, '注意规范/记忆事项表': 4, '關鍵狀態/記憶': 4, '关键状态/记忆': 4, '性事紀': 5, '性事记': 5, '結語': 6, '结语': 6, '故事標題': 7, '故事标题': 7 };
+            out.sort((a, b) => ((a.header in RANK ? RANK[a.header] : 90) - (b.header in RANK ? RANK[b.header] : 90)));   // Array.sort 穩定排序：同序保留原順序
             const body = out.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');   // 內容【】→「」，存進去乾淨不再撞
             return `【大总结(第${summaryCount}次)】${lastTxt}\n\n${body}`;
         } catch (e) {
             console.warn('[大總結] 結構化合併失敗，改用增量本身:', e);
             return incFull;
         }
+    }
+
+    // 自動總結存檔前的「品質閘門」：壞生成(空/截斷/錯誤頁/夾帶舊總結/缺核心區塊)→不存、保留舊的，
+    //   根治「自動時報錯卻還是被套用、覆蓋掉好資料」。手動模式有預覽窗把關，這裡只補背景模式的缺口。
+    function _validateSummary(content) {
+        const txt = String(content == null ? '' : content).trim();
+        if (txt.length < 80) return { ok: false, reason: '內容過短或空（疑似生成失敗 / 被截斷）' };
+        if (/^\s*(<!doctype|<html|<head|\{?\s*"error"|error code|rate.?limit|too many requests|quota exceeded|bad gateway|gateway time-?out|service unavailable|cloudflare)/i.test(txt))
+            return { ok: false, reason: '回傳像錯誤頁 / 錯誤訊息，不是總結內容' };
+        const afterHead = txt.replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
+        if (/【大总结[^】]*】/.test(afterHead)) return { ok: false, reason: '內文夾帶了第二個「大总结」標題（疑似舊總結被黏進來）' };
+        if (!/【事件表】/.test(txt) || !/【角色表】/.test(txt)) return { ok: false, reason: '缺少核心區塊（事件表 / 角色表）' };
+        return { ok: true };
     }
 
     // ===== 重壓目前大總結：把「累積很長的單卡」重新濃縮(久遠壓階段節點、最近逐筆)，存回 OS_DB =====
@@ -928,7 +961,15 @@
             }
 
             await _genOnce();
-            if (auto) { await _doSave(); console.log('[自動總結] ✅ 背景總結完成並存檔'); }   // 背景模式：直接存、不跳預覽
+            if (auto) {   // 背景模式：先過品質閘門，壞生成不准覆蓋好總結(根治「報錯還是被套用」)；通過才存、不跳預覽
+                const _v = _validateSummary(finalContent);
+                if (!_v.ok) {
+                    console.warn('[自動總結] ⚠️ 生成結果未通過驗證，放棄存檔、保留舊總結：' + _v.reason);
+                    try { win.toastr?.error('這次自動總結格式異常（' + _v.reason + '），已保留舊總結、沒有覆蓋。請到故事管理手動「生成 / 更新大總結」檢查。', '🛑 自動總結已攔截', { timeOut: 9000 }); } catch (e) {}
+                    return;
+                }
+                await _doSave(); console.log('[自動總結] ✅ 背景總結完成並存檔');
+            }
             else _showSummaryPreview();
         } catch (e) { if (auto) console.warn('[自動總結] 失敗:', e); else alert("生成失敗: " + e.message); } finally {
             if (btn) { btn.innerText = "📝 生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning'); }
