@@ -1349,6 +1349,9 @@
         }
     };
 
+    // 對外暴露「真實最後樓號」(/api/chats/search message_count-1，繞開懶載少報)——給場景插圖等對位用，跟大總結同一套權威來源
+    API._trueLastId = _trueLastId;
+
     window.OS_STORY_TOOLS = API;
     console.log('✅ 故事管理工具 (OS_STORY_TOOLS) 模組就緒');
 })();

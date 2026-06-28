@@ -942,7 +942,6 @@ ${numberedText}`;
     }
     let _sceneRunning = false;
     let _sceneDebounce = null;
-    let _lastEndedMsgId = -1;   // 最近一次 GENERATION_ENDED 事件帶的 msgId；場景插圖派發用它對位(跟 VN 同源)
     async function extractScenesStandalone() {
         if (_sceneRunning) return;
         _sceneRunning = true;
@@ -1001,10 +1000,12 @@ ${numberedText}`;
                 return { after, prompt: _expandHashNames(s.prompt, looksMap) };
             }).filter(s => s && s.prompt);
             if (mapped.length) {
-                // 派發對位用 GENERATION_ENDED 事件帶的 msgId（跟 VN applyPending 同源）；事件沒給才退回 gatherRecentMessages 的 lastId
-                const dispatchMsgId = (_lastEndedMsgId >= 0) ? _lastEndedMsgId : lastId;
+                // 派發對位 msgId 用「真實最後樓號」(_trueLastId＝/api/chats/search message_count-1，跟大總結同一套權威來源)，
+                // 繞開 getChatMessages(-1).message_id 在 TauriTavern 懶載下「少報差1」→插圖排錯號對不上 VN 的老坑。讀不到才退回 lastId。
+                let dispatchMsgId = lastId;
+                try { const _tl = await win.OS_STORY_TOOLS?._trueLastId?.(); if (typeof _tl === 'number' && _tl >= 0) dispatchMsgId = _tl; } catch (e) {}
                 win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: dispatchMsgId });
-                console.log(`🖼️ [獨立插圖] 派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? '?').join(',')}]/共${paras.length}段 (派發msg#${dispatchMsgId}${dispatchMsgId !== lastId ? ` / 內容讀自#${lastId}` : ''})`);
+                console.log(`🖼️ [獨立插圖] 派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? '?').join(',')}]/共${paras.length}段 (派發msg#${dispatchMsgId}${dispatchMsgId !== lastId ? `／getChatMessages回#${lastId}` : ''})`);
             }
         } catch (e) { console.warn('[獨立插圖] 失敗:', e?.message || e); }
         finally { _sceneRunning = false; }
@@ -1194,15 +1195,9 @@ ${numberedText}`;
         }
 
         // 主模型生成完 → 防抖後抽
-        win.eventOn(win.tavern_events.GENERATION_ENDED, (endedMsgId) => {
+        win.eventOn(win.tavern_events.GENERATION_ENDED, () => {
             console.log('[State Runtime] 🔎 GENERATION_ENDED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷：抽取的事件是否落在旗標窗內
             if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結的 generateRaw 也會發 GENERATION_ENDED → 別抽，否則重複 AVS/記憶/場景生圖
-            // 🔑 記下事件帶的 msgId：VN(_onGenEnded)用「事件 msgId」做 applyPending，場景插圖派發要用同一個對位
-            //    （別自己 getChatMessages(-1).message_id 取——TauriTavern 懶載「樓號≠索引」會差 1→插圖排錯佇列永遠插不進）
-            //    守衛：副模型(extractOnce/extractScenes)在 🍎/generateRaw 也會發 END、msgId 不可信 → 只在「沒有抽取在跑」(=主生成那通)時才更新
-            if (!_running && !_sceneRunning) {
-                _lastEndedMsgId = (typeof endedMsgId === 'number' && endedMsgId >= 0) ? endedMsgId : -1;
-            }
             // 🎯 獨立插圖副模型：獨立於狀態系統(AVS)，狀態關著也能跑 → 在 isEnabled 檢查前排程；函式自己看開關
             clearTimeout(_sceneDebounce);
             _sceneDebounce = setTimeout(extractScenesStandalone, CONFIG.debounceMs + 600);
