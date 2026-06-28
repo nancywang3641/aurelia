@@ -9,26 +9,26 @@
 // 插在當前 index 之後／錨點之後 → 玩家往下點就順流跳出全螢幕 CG
 // （重用 vn_core 既有 <scene> handler + _safeFetchScene + #scene-cg-overlay）。
 //
-// ★ 時機（實測修正 2026-06-11）：extractOnce(副模型)常「比 VN loadScript 先跑完」
-//   → 派發時 VN.script 還空的。所以改「排隊制」：
-//     fromExtract → 把 scenes 排隊(_pending[msgId]) + 立刻預熱生圖；
-//     vn_core.loadScript 載入該則時 → 呼叫 applyPending(msgId) 才 splice 進劇本。
-//     兩個方向都接：若 scenes 反而比 loadScript 晚到、且 VN 已停在該則 → 立刻插。
+// ★ 時機：extractOnce(副模型)常「比 VN loadScript 先跑完」→ 派發時 VN.script 還空的。
+//   所以 fromExtract 只「記下最新這輪的圖(_latest)」+ 立刻預熱生圖；真正 splice 在 VN 載 script 時。
 //
-// 防 desync / 冪等：
-//   • 排隊認 msgId；applyPending 只插「VN 現在正停的那則」(_currentMessageId)。
-//   • loadScript 每次會重建 this.script → 同一份劇本用「scene-id 是否已存在」做冪等，
-//     避免重複插；重載/捲回重播時(新 this.script)會重新插 → 場景不會只出現一次。
-//   • _pending 不消費(留著供重播)，只 cap 最近 6 則防累積。
+// ★ 對位（2026-06-29 重構 7cf5731/8b96593/此次）：★不靠 msgId 數字★——TauriTavern 懶載「窗口號」
+//   每輪都撞同一個 key、跟 VN/磁碟號還會漂移，靠 ID 對位時好時壞、回放還會誤撈最新圖。改用「語意」：
+//     ① 最新這輪：vn_core.loadScript 尾端呼叫 applyLatestFresh() → 插 _latest(用完即清)。
+//        VN 因「生成結束自動偵測」載的就是最新這輪；回放舊章節時 _latest 已是 null → 不會誤插。
+//     ② 回放舊章節：圖在生成時就由 _persistToLatestChapter 寫回該章存檔的 scenes 欄；
+//        vn_panels 章節卡 loadScript 後呼叫 applyChapterScenes(ch.scenes) → 用同套錨點插回。
+//
+// 冪等 / 防呆：
+//   • 同一份 script 用「scene-id 是否已存在」做冪等，避免重複插。
+//   • _latest 用完即清 → 下一個「沒出圖的輪」載 script 時是 null、不會把舊圖誤插進新劇本。
 //   • VN 場景顯示關閉(vn_scene_enabled==='0')/劇本未載入 → 跳過。
 // ============================================================================
 (function (win) {
     'use strict';
 
     const VN_SceneInsert = {
-        _pending: {},  // msgId(str) → { chatId, entries:[{cacheId,prompt,after,idx}] }（精確 ID 比對路：重播舊則用）
-        _order: [],    // msgId 進場順序，給 cap 用
-        _latest: null, // 最新一次 fromExtract 的 { chatId, entries }（「最新這輪」直插用，不靠 ID）
+        _latest: null, // 最新一次 fromExtract 的 { chatId, entries }（「最新這輪」直插用，不靠 ID；用完即清）
 
         // 預熱場景CG並掛進 VN_Core 的圖片總進度（loading 面板/語音延後靠它判斷「圖都好了沒」）。
         // 同 cacheId 與 vn_core._prewarmScenes 共用 in-flight promise，重複計數只多算進度分母、不會重複生圖。
@@ -105,24 +105,18 @@
                 });
                 if (!entries.length) return;
 
-                // 「最新這輪」直插用：記下這次的圖；VN 因「生成結束」載最新 script 時，applyLatestFresh 直接插它、不靠 ID 數字
+                // 「最新這輪」直插用：記下這次的圖。VN 因「生成結束」載最新 script 時(loadScript 尾端 applyLatestFresh)直接插、不靠 ID 數字。
                 this._latest = { chatId: chatId, entries: entries };
+                console.log('[VN_SceneInsert] 已記最新這輪 ' + entries.length + ' 張(已預熱) msg#' + msgId);
 
-                if (!this._pending[msgId]) this._order.push(msgId);
-                this._pending[msgId] = { chatId: chatId, entries: entries };
-                while (this._order.length > 6) { const old = this._order.shift(); if (old !== msgId) delete this._pending[old]; }
-                console.log('[VN_SceneInsert] msg#' + msgId + ' 排隊 ' + entries.length + ' 張(已預熱)，等 VN 載入該則即插');
-
-                // scenes 比 loadScript 晚到、且 VN 已停在這則 → 立刻插
+                // ordering B：圖比 loadScript 晚到、VN 已有載著的劇本 → 直接插「最新這輪」；VN 還沒載 → 等 loadScript 尾端的 applyLatestFresh
                 const VN = win.VN_Core;
-                const _vnMid = VN ? (VN._currentMessageId != null ? String(VN._currentMessageId) : 'null') : 'noVN';
                 const _vnLen = (VN && Array.isArray(VN.script)) ? VN.script.length : -1;
-                if (VN && Array.isArray(VN.script) && VN.script.length &&
-                    VN._currentMessageId != null && String(VN._currentMessageId) === msgId) {
-                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 即時插：VN當前則=' + _vnMid + ' script長=' + _vnLen);
-                    this.applyPending(msgId);
+                if (VN && Array.isArray(VN.script) && VN.script.length) {
+                    console.log('[VN_SceneInsert🔎] 圖晚到→直插最新這輪(script長=' + _vnLen + ')');
+                    this.applyLatestFresh();
                 } else {
-                    console.log('[VN_SceneInsert🔎] msg#' + msgId + ' 不即插→等 loadScript：VN當前則=' + _vnMid + ' script長=' + _vnLen);
+                    console.log('[VN_SceneInsert🔎] 排隊等 loadScript(VN script長=' + _vnLen + ')');
                 }
             } catch (e) {
                 console.warn('[VN_SceneInsert] fromExtract 失敗:', (e && e.message) || e);
@@ -216,24 +210,9 @@
                 const n = this._spliceInto(entries);
                 if (n) console.log('[VN_SceneInsert] 回放章節：splice ' + n + ' 張存檔插圖');
             } catch (e) { console.warn('[VN_SceneInsert] applyChapterScenes 失敗:', (e && e.message) || e); }
-        },
-
-        // 精確 ID 比對路（loadScript 尾端 / fromExtract 在 VN 已停該則時呼叫）：重播舊則、或圖比 VN 晚到時用。
-        applyPending: function (msgIdRaw) {
-            try {
-                if (msgIdRaw == null) return;
-                const msgId = String(msgIdRaw);
-                const pend = this._pending[msgId];
-                if (!pend || !pend.entries || !pend.entries.length) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：佇列空（已被清/重載）'); return; }
-                const VN = win.VN_Core;
-                // 只插「VN 現在正停的那則」
-                if (VN && VN._currentMessageId != null && String(VN._currentMessageId) !== msgId) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：VN當前停在 ' + VN._currentMessageId + ' 非本則'); return; }
-                const n = this._spliceInto(pend.entries);
-                if (n) console.log('[VN_SceneInsert] msg#' + msgId + '：splice ' + n + ' 張進劇本，往下點即播');
-            } catch (e) {
-                console.warn('[VN_SceneInsert] applyPending 失敗:', (e && e.message) || e);
-            }
         }
+        // (已移除 applyPending / _pending：舊「靠 msgId 精確比對」路——窗口號每輪撞 key、回放會誤撈最新圖。
+        //  現由 _latest+applyLatestFresh(最新這輪) 與 ch.scenes+applyChapterScenes(回放) 兩條不靠 ID 的路取代。)
     };
 
     win.VN_SceneInsert = VN_SceneInsert;
