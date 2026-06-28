@@ -506,9 +506,20 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         { label: '固定標題', text: '頂部標題列固定不動，只有下面的內容區可以捲動。' },
         { label: '卡片列表', text: '內容用一張張卡片直列呈現，每張資訊清楚、可點。' },
         { label: '深色主題', text: '用深色背景配色、字體清楚，沉穩不刺眼。' },
-        { label: '🖼️ 生圖', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct，用戶有指定才填、否則不傳）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
-        { label: '📤 回傳對話框', text: '【回傳對話框功能】用 st.toChat(文字, opts) 把文字貼回酒館對話框（送出框）：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「app 生內容→使用者挑一條→送進劇情當輸入／指令」（例：隨機事件 app 生 5 條、選 1 條 toChat 進劇情）。' }
+        { label: '🖼️ 生圖', feature: true, key: 'img', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct，用戶有指定才填、否則不傳）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
+        { label: '📤 回傳對話框', feature: true, key: 'tochat', text: '【回傳對話框功能】用 st.toChat(文字, opts) 把文字貼回酒館對話框（送出框）：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「app 生內容→使用者挑一條→送進劇情當輸入／指令」（例：隨機事件 app 生 5 條、選 1 條 toChat 進劇情）。' }
     ];
+    // 功能 chip（feature:true）＝toggle 啟用：用法在送出時併進請求(apiPayload 的 system)、不貼輸入框；話術 chip 照舊貼輸入框
+    const _studioActiveFeatures = new Set();
+    function _studioLoadActiveFeatures() { try { (JSON.parse(localStorage.getItem('studio_active_features') || '[]') || []).forEach(k => _studioActiveFeatures.add(k)); } catch (e) {} }
+    function _studioSaveActiveFeatures() { try { localStorage.setItem('studio_active_features', JSON.stringify([..._studioActiveFeatures])); } catch (e) {} }
+    _studioLoadActiveFeatures();
+    function _studioInjectActiveFeatures(apiPayload) {
+        try {
+            const txt = STUDIO_CHIP_BUILTIN.filter(c => c.feature && _studioActiveFeatures.has(c.key)).map(c => c.text).join('\n\n');
+            if (txt) apiPayload.unshift({ role: 'system', content: '【使用者已啟用的進階功能：照下列用法使用；沒列在這裡的進階功能（生圖／回傳對話框等）一律不要用、也別自己瞎掰 API】\n' + txt });
+        } catch (e) {}
+    }
     function _studioLoadChips() { try { return JSON.parse(localStorage.getItem('studio_quick_chips') || '[]') || []; } catch (e) { return []; } }
     function _studioSaveChips(list) { try { localStorage.setItem('studio_quick_chips', JSON.stringify(list)); } catch (e) {} }
     function _studioInsertChip(text) {
@@ -523,9 +534,24 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         const row = document.getElementById('studio-chips-row');
         if (!row) return;
         const all = STUDIO_CHIP_BUILTIN.concat(_studioLoadChips());
-        row.innerHTML = all.map((c, i) => `<button class="studio-chip" data-ci="${i}">${_sgcEsc(c.label)}</button>`).join('')
+        row.innerHTML = all.map((c, i) => {
+            const feat = !!c.feature;
+            const on = feat && _studioActiveFeatures.has(c.key);
+            return `<button class="studio-chip${feat ? ' studio-chip-feature' : ''}${on ? ' active' : ''}" data-ci="${i}">${_sgcEsc(c.label)}</button>`;
+        }).join('')
             + '<button class="studio-chip studio-chip-manage" id="studio-chip-manage"><i class="fa-solid fa-sliders"></i> 管理</button>';
-        row.querySelectorAll('[data-ci]').forEach(b => b.onclick = () => { const c = all[parseInt(b.getAttribute('data-ci'), 10)]; if (c) _studioInsertChip(c.text); });
+        row.querySelectorAll('[data-ci]').forEach(b => b.onclick = () => {
+            const c = all[parseInt(b.getAttribute('data-ci'), 10)];
+            if (!c) return;
+            if (c.feature) {
+                // 功能 chip：toggle 啟用，用法送出時才併進請求、不貼進輸入框（不再擠爆輸入框）
+                if (_studioActiveFeatures.has(c.key)) _studioActiveFeatures.delete(c.key); else _studioActiveFeatures.add(c.key);
+                _studioSaveActiveFeatures();
+                b.classList.toggle('active', _studioActiveFeatures.has(c.key));
+            } else {
+                _studioInsertChip(c.text);   // 話術 chip：照舊貼進輸入框可改再送
+            }
+        });
         const mg = row.querySelector('#studio-chip-manage');
         if (mg) mg.onclick = _studioOpenChipModal;
     }
@@ -2392,6 +2418,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     });
                 } catch(e) { console.warn('[Studio] 注入當前面板狀態失敗:', e); }
             }
+
+            // 啟用的「功能 chip」用法 → 併進請求(system)，不貼輸入框
+            _studioInjectActiveFeatures(apiPayload);
 
             // 圖片修剪：只保留最近 N 張圖在 context 中，其他帶圖訊息圖被剝掉只留文字 + 占位
             pruneImagesFromHistory(apiPayload);
@@ -4307,6 +4336,8 @@ ${d.usageDesc || ''}
                 ? buildUserMessageContent(diffPrompt, imagesForAI)
                 : diffPrompt;
             const apiPayload = [{ role: 'user', content: promptContent }];
+            // 啟用的「功能 chip」用法 → 併進請求(system)，不貼輸入框（diff 修改路徑同樣帶上）
+            _studioInjectActiveFeatures(apiPayload);
 
             const useRealStream = !pureConfig.useSystemApi && !!pureConfig.url && !!pureConfig.key;
 
