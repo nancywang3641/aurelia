@@ -2285,13 +2285,9 @@
                     desc = parts[1] || '';
                 }
                 this.addLog("成就解鎖", `${name}${desc ? ' — ' + desc : ''}`);
-                document.getElementById('achievement-name').innerText = name;
-                document.getElementById('achievement-desc').innerText = desc;
-                document.getElementById('achievement-overlay').classList.add('active');
                 if (win.OS_ACHIEVEMENT?.unlock) win.OS_ACHIEVEMENT.unlock(emotion, name, desc);
-                clearTimeout(this._achTimer);
-                this._achTimer = setTimeout(() => { this.dismissAchievement(); }, 3500);
-                return;
+                // VN 內舊的成就 overlay 貼紙已移除（展示改由 VN 組件卡片負責）；這裡只記錄+繼續，不顯示、不卡劇情。
+                this.next(); return;
             }
 
             // 📋 委託面板
@@ -2490,14 +2486,10 @@
 
         /* --- UI 切換與渲染 --- */
         hideOverlays: function() {
-            ['sys-overlay', 'trans-overlay', 'item-overlay', 'achievement-overlay', 'quest-overlay'].forEach(id => document.getElementById(id).classList.remove('active'));
+            ['sys-overlay', 'trans-overlay', 'item-overlay', 'quest-overlay'].forEach(id => { const _el = document.getElementById(id); if (_el) _el.classList.remove('active'); });
             // 🎬 scene-cg-overlay 走鋪底式：linger>0 期間留著（由 renderVN 計數淡出），不被每句 next 的 hideOverlays 秒關
             if (this._sceneCgLinger <= 0) { const _sc = document.getElementById('scene-cg-overlay'); if (_sc) _sc.classList.remove('active'); }
             document.getElementById('text-panel-wrapper').style.display = 'block';
-        },
-        dismissAchievement: function() {
-            clearTimeout(this._achTimer);
-            document.getElementById('achievement-overlay').classList.remove('active');
         },
         _showBgmToast: function(name, found) {
             const toast = document.getElementById('vn-bgm-toast');

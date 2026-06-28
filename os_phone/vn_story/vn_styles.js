@@ -209,18 +209,6 @@
                     </div>
                 </div>
 
-                <div id="achievement-overlay" onclick="window.VN_Core.dismissAchievement()">
-                    <div id="achievement-card">
-                        <div id="achievement-icon">🏆</div>
-                        <div id="achievement-body">
-                            <div id="achievement-label">ACHIEVEMENT UNLOCKED</div>
-                            <div id="achievement-name"></div>
-                            <div id="achievement-desc"></div>
-                        </div>
-                        <div id="achievement-dismiss">✕</div>
-                    </div>
-                </div>
-
                 <div id="vn-bgm-toast">
                     <div id="vn-bgm-card">
                         <div id="vn-bgm-icon">🎵</div>
