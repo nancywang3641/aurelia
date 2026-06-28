@@ -288,9 +288,9 @@
             if (!th || !th.injectPrompts || !th.getChatMessages) return;
             var lastId = 0;
             try { lastId = await th.getLastMessageId(); } catch (e) {}
-            var start = Math.max(0, (lastId || 0) - 30);
+            // 掃全樓（去重靠 id）：跑團動輒上百樓、舊房間 id 也要記得；只掃最近 N 樓→久沒出現的房間 id 會掉、改群名就裂
             var msgs = [];
-            try { msgs = (await th.getChatMessages(start + '-' + lastId)) || []; } catch (e) {}
+            try { msgs = (await th.getChatMessages('0-' + lastId)) || []; } catch (e) {}
             var text = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
             var map = {}, order = [];
             // ① WX 內文行格式 [Chat: 名|ID]
