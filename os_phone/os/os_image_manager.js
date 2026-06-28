@@ -101,14 +101,21 @@
                 apiKey: '', // Pollen API Key
                 model: 'zimage', // 預設模型
                 models: {
-                    'flux': 'Flux Schnell (0.001p)',
                     'zimage': 'Z-Image Turbo (0.002p)',
-                    'flux-2-dev': 'FLUX.2 Dev [Alpha] (0.001p)',
-                    'imagen-4': 'Imagen 4 [Alpha] (0.0025p)',
-                    'grok-imagine': 'Grok Imagine [Alpha] (0.0025p)',
+                    'flux': 'Flux Schnell (0.00175p)',
+                    'p-image': 'Pruna p-image (0.005p)',
                     'klein': 'FLUX.2 Klein 4B (0.01p)',
-                    'gptimage': 'GPT Image 1 Mini (高消耗)',
-                    'klein-large': 'FLUX.2 Klein 9B (0.015p)'
+                    'grok-imagine': 'Grok Imagine (0.02p)',
+                    'qwen-image': 'Qwen Image Plus (0.03p)',
+                    'seedream': 'Seedream 4.0 (0.03p)',
+                    'seedream5': 'Seedream 5.0 Lite (0.035p)',
+                    'seedream-pro': 'Seedream 4.5 Pro (0.04p)',
+                    'ideogram-v4-turbo': 'Ideogram 4 Turbo (0.03p)',
+                    'nanobanana': 'NanoBanana',
+                    'nanobanana-pro': 'NanoBanana Pro',
+                    'gptimage': 'GPT Image 1 Mini',
+                    'gpt-image-2': 'GPT Image 2',
+                    'kontext': 'FLUX.1 Kontext (0.04p)'
                 },
                 charBasePrompt: 'anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines',
                 charNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text',

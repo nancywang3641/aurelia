@@ -71,14 +71,21 @@
                 model: 'zimage',
                 size: '512x512',
                 models: {
-                    'flux': 'Flux Schnell (0.001p)',
                     'zimage': 'Z-Image Turbo (0.002p)',
-                    'flux-2-dev': 'FLUX.2 Dev [Alpha] (0.001p)',
-                    'imagen-4': 'Imagen 4 [Alpha] (0.0025p)',
-                    'grok-imagine': 'Grok Imagine [Alpha] (0.0025p)',
+                    'flux': 'Flux Schnell (0.00175p)',
+                    'p-image': 'Pruna p-image (0.005p)',
                     'klein': 'FLUX.2 Klein 4B (0.01p)',
-                    'gptimage': 'GPT Image 1 Mini (高消耗)',
-                    'klein-large': 'FLUX.2 Klein 9B (0.015p)'
+                    'grok-imagine': 'Grok Imagine (0.02p)',
+                    'qwen-image': 'Qwen Image Plus (0.03p)',
+                    'seedream': 'Seedream 4.0 (0.03p)',
+                    'seedream5': 'Seedream 5.0 Lite (0.035p)',
+                    'seedream-pro': 'Seedream 4.5 Pro (0.04p)',
+                    'ideogram-v4-turbo': 'Ideogram 4 Turbo (0.03p)',
+                    'nanobanana': 'NanoBanana',
+                    'nanobanana-pro': 'NanoBanana Pro',
+                    'gptimage': 'GPT Image 1 Mini',
+                    'gpt-image-2': 'GPT Image 2',
+                    'kontext': 'FLUX.1 Kontext (0.04p)'
                 },
                 charBasePrompt: 'anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines',
                 charNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text',
@@ -1455,14 +1462,21 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="field-row">
                                         <div class="set-label" title="按價格排序。">模型</div>
                                         <select class="set-select" id="img-pol-model">
-                                            <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>🟢 Flux Schnell (0.001p)</option>
                                             <option value="zimage" ${imgConfig.pollinations.model === 'zimage' ? 'selected' : ''}>🟢 Z-Image Turbo (0.002p)</option>
-                                            <option value="flux-2-dev" ${imgConfig.pollinations.model === 'flux-2-dev' ? 'selected' : ''}>🔵 FLUX.2 Dev Alpha (0.001p)</option>
-                                            <option value="imagen-4" ${imgConfig.pollinations.model === 'imagen-4' ? 'selected' : ''}>🔵 Imagen 4 Alpha (0.0025p)</option>
-                                            <option value="grok-imagine" ${imgConfig.pollinations.model === 'grok-imagine' ? 'selected' : ''}>🔵 Grok Imagine Alpha (0.0025p)</option>
-                                            <option value="klein" ${imgConfig.pollinations.model === 'klein' ? 'selected' : ''}>🟠 FLUX.2 Klein 4B (0.01p)</option>
-                                            <option value="gptimage" ${imgConfig.pollinations.model === 'gptimage' ? 'selected' : ''}>🔴 GPT Image 1 Mini (高消耗)</option>
-                                            <option value="klein-large" ${imgConfig.pollinations.model === 'klein-large' ? 'selected' : ''}>🟠 FLUX.2 Klein 9B (0.015p)</option>
+                                            <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>🟢 Flux Schnell (0.00175p)</option>
+                                            <option value="p-image" ${imgConfig.pollinations.model === 'p-image' ? 'selected' : ''}>🟢 Pruna p-image (0.005p)</option>
+                                            <option value="klein" ${imgConfig.pollinations.model === 'klein' ? 'selected' : ''}>🟡 FLUX.2 Klein 4B (0.01p)</option>
+                                            <option value="grok-imagine" ${imgConfig.pollinations.model === 'grok-imagine' ? 'selected' : ''}>🟡 Grok Imagine (0.02p)</option>
+                                            <option value="qwen-image" ${imgConfig.pollinations.model === 'qwen-image' ? 'selected' : ''}>🟠 Qwen Image Plus (0.03p)</option>
+                                            <option value="seedream" ${imgConfig.pollinations.model === 'seedream' ? 'selected' : ''}>🟠 Seedream 4.0 (0.03p)</option>
+                                            <option value="seedream5" ${imgConfig.pollinations.model === 'seedream5' ? 'selected' : ''}>🟠 Seedream 5.0 Lite (0.035p)</option>
+                                            <option value="seedream-pro" ${imgConfig.pollinations.model === 'seedream-pro' ? 'selected' : ''}>🟠 Seedream 4.5 Pro (0.04p)</option>
+                                            <option value="ideogram-v4-turbo" ${imgConfig.pollinations.model === 'ideogram-v4-turbo' ? 'selected' : ''}>🟠 Ideogram 4 Turbo (0.03p)</option>
+                                            <option value="nanobanana" ${imgConfig.pollinations.model === 'nanobanana' ? 'selected' : ''}>🔵 NanoBanana</option>
+                                            <option value="nanobanana-pro" ${imgConfig.pollinations.model === 'nanobanana-pro' ? 'selected' : ''}>🔵 NanoBanana Pro</option>
+                                            <option value="gptimage" ${imgConfig.pollinations.model === 'gptimage' ? 'selected' : ''}>🔴 GPT Image 1 Mini</option>
+                                            <option value="gpt-image-2" ${imgConfig.pollinations.model === 'gpt-image-2' ? 'selected' : ''}>🔴 GPT Image 2</option>
+                                            <option value="kontext" ${imgConfig.pollinations.model === 'kontext' ? 'selected' : ''}>🔴 FLUX.1 Kontext (0.04p)</option>
                                         </select>
                                     </div>
                                     <div class="set-desc" title="角色頭像在「🎭 頭像」、背景在「🌄 背景」、場景在「🎬 插圖」分頁各自調。">📐 尺寸已改到各部位分頁各自調。</div>
