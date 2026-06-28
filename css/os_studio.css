@@ -233,8 +233,7 @@
         .studio-textarea::-webkit-scrollbar-thumb:hover { background: rgba(26,28,40,0.5); }
         .studio-send-btn { background: #1A1C28; color: #EEF0F6; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; transition: 0.2s; height: 50px; flex-shrink: 0; }
         /* ⚡ 組件快捷 chip 列 + 管理 modal */
-        .studio-chips-row { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-        .studio-chips-row::-webkit-scrollbar { display: none; }
+        .studio-chips-row { display: flex; gap: 6px; flex-wrap: wrap; }
         .studio-chip { flex-shrink: 0; padding: 3px 12px; font-size: 11px; border-radius: 12px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; font-family: inherit; white-space: nowrap; }
         .studio-chip:hover { background: rgba(26,28,40,0.06); }
         .studio-chip:active { transform: scale(0.96); }
