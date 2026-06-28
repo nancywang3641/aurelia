@@ -99,7 +99,7 @@
             pollinations: {
                 url: 'https://gen.pollinations.ai/image', // API 端點
                 apiKey: '', // Pollen API Key
-                model: 'zimage', // 預設模型
+                model: 'flux', // 預設模型（zimage 2026-06-28 起在 gen 端點卡死/逾時，改用 flux：3 秒秒出、最便宜）
                 models: {
                     'zimage': 'Z-Image Turbo (0.002p)',
                     'flux': 'Flux Schnell (0.00175p)',
@@ -182,8 +182,8 @@
                     };
                     
                     if (!this.config.pollinations.models[this.config.pollinations.model]) {
-                        console.warn(`[ImageManager] 舊模型 ${this.config.pollinations.model} 已失效，重置為 zimage`);
-                        this.config.pollinations.model = 'zimage';
+                        console.warn(`[ImageManager] 舊模型 ${this.config.pollinations.model} 已失效，重置為 flux`);
+                        this.config.pollinations.model = 'flux';
                     }
 
                     console.log('[ImageManager] ✅ 配置已載入，當前模型:', this.config.pollinations.model);
