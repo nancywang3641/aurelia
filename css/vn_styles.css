@@ -2089,6 +2089,15 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .wx-receive-amt { font-size: 17px; font-weight: 700; color: #222; }
         .wx-receive-foot { font-size: 11px; color: #999; text-align: center; line-height: 1.4; }
 
+        /* 發現 tab：入口列(跑團手機記錄 / AI 整理 / 還原)——白卡橫排，配 .wx-vnlog-room 同質感 */
+        .wx-cell-group { background: #fff; border-radius: 8px; overflow: hidden; margin: 8px 12px 0; }
+        .wx-cell { display: flex; align-items: center; gap: 12px; padding: 13px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+        .wx-cell:last-child { border-bottom: none; }
+        .wx-cell:active { background: #f5f5f5; }
+        .wx-cell-icon { width: 26px; text-align: center; color: #07c160; font-size: 17px; flex-shrink: 0; }
+        .wx-cell-text { flex: 1; min-width: 0; font-size: 15px; color: #1a1a1a; }
+        .wx-cell-arrow { color: #c8c8c8; font-size: 13px; flex-shrink: 0; }
+
         /* 發現 tab：跑團手機記錄檢視器（唯讀） */
         .wx-vnlog { background: #ededed; min-height: 200px; }
         .wx-vnlog-empty { padding: 30px 20px; text-align: center; color: #999; font-size: 13px; line-height: 1.7; }
