@@ -68,7 +68,7 @@
             pollinations: {
                 url: 'https://gen.pollinations.ai/image',
                 apiKey: '',
-                model: 'zimage',
+                model: 'flux',
                 size: '512x512',
                 models: {
                     'zimage': 'Z-Image Turbo (0.002p)',
@@ -2179,7 +2179,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elPolGroup = container.querySelector('#img-group-pollinations');
         const elPolApiKey = container.querySelector('#img-pol-apikey');
         const elPolModel = container.querySelector('#img-pol-model');
-        const elPolSize = container.querySelector('#img-pol-size');
+        const elPolSize = container.querySelector('#img-avatar-size');   // 頭像尺寸下拉（舊 #img-pol-size 已移除；測試/儲存都讀這個）
         const elNaiGroup = container.querySelector('#img-group-nai');
         const elNaiToken = container.querySelector('#img-nai-token');
         const elNaiModel = container.querySelector('#img-nai-model');
@@ -4149,12 +4149,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     }; }).filter(function(l){ return l.name; })
                 };
 
-                const [width, height] = (elPolSize?.value || '1024x1024').split('x').map(Number);
-                
+                // 頭像尺寸下拉：選了具體尺寸(如 512x512)就用它；選「跟各接口預設」(空值)就不塞 width/height，讓接口用自己的預設
+                const _avSize = elPolSize?.value || '';
+                const _sizeOpts = /^\d+x\d+$/.test(_avSize)
+                    ? { width: Number(_avSize.split('x')[0]), height: Number(_avSize.split('x')[1]) }
+                    : {};
+
                 // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
                 // ComfyUI 直連用面板自己的尺寸(cfg.width/height)，其他來源用上面的測試尺寸
                 const _testIsCfd = (elImgServiceLiving ? elImgServiceLiving.value : '') === 'comfyui_direct';
-                const imageUrl = await imageManager.generate(testPrompt, 'char', _testIsCfd ? { force: true } : { width, height, force: true });
+                const imageUrl = await imageManager.generate(testPrompt, 'char', _testIsCfd ? { force: true } : { ..._sizeOpts, force: true });
 
                 imgTestImage.src = imageUrl;
                 imgTestUrl.textContent = /^(data:|blob:)/.test(imageUrl) ? '✅ 圖片已生成（內嵌資料，省略顯示）' : `URL: ${imageUrl}`;
