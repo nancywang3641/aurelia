@@ -1000,12 +1000,10 @@ ${numberedText}`;
                 return { after, prompt: _expandHashNames(s.prompt, looksMap) };
             }).filter(s => s && s.prompt);
             if (mapped.length) {
-                // 派發對位 msgId 用「真實最後樓號」(_trueLastId＝/api/chats/search message_count-1，跟大總結同一套權威來源)，
-                // 繞開 getChatMessages(-1).message_id 在 TauriTavern 懶載下「少報差1」→插圖排錯號對不上 VN 的老坑。讀不到才退回 lastId。
-                let dispatchMsgId = lastId;
-                try { const _tl = await win.OS_STORY_TOOLS?._trueLastId?.(); if (typeof _tl === 'number' && _tl >= 0) dispatchMsgId = _tl; } catch (e) {}
-                win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: dispatchMsgId });
-                console.log(`🖼️ [獨立插圖] 派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? '?').join(',')}]/共${paras.length}段 (派發msg#${dispatchMsgId}${dispatchMsgId !== lastId ? `／getChatMessages回#${lastId}` : ''})`);
+                // 派發對位 msgId 用 getChatMessages(-1) 的「窗口號」lastId——跟 VN(_currentMessageId/loadScript)同一個 id 空間。
+                // ⚠️別用 _trueLastId(/api/chats/search 的磁碟真號)：懶載大聊天(如 493 樓只載入窗口顯示 101)時，真號(493)≠VN 窗口號(101)、差 392 插不進。
+                win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: lastId });
+                console.log(`🖼️ [獨立插圖] 派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? '?').join(',')}]/共${paras.length}段 (msg#${lastId})`);
             }
         } catch (e) { console.warn('[獨立插圖] 失敗:', e?.message || e); }
         finally { _sceneRunning = false; }
