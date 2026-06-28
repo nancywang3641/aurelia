@@ -26,8 +26,9 @@
     'use strict';
 
     const VN_SceneInsert = {
-        _pending: {},  // msgId(str) → { chatId, entries:[{cacheId,prompt,after,idx}] }
+        _pending: {},  // msgId(str) → { chatId, entries:[{cacheId,prompt,after,idx}] }（精確 ID 比對路：重播舊則用）
         _order: [],    // msgId 進場順序，給 cap 用
+        _latest: null, // 最新一次 fromExtract 的 { chatId, entries }（「最新這輪」直插用，不靠 ID）
 
         // 預熱場景CG並掛進 VN_Core 的圖片總進度（loading 面板/語音延後靠它判斷「圖都好了沒」）。
         // 同 cacheId 與 vn_core._prewarmScenes 共用 in-flight promise，重複計數只多算進度分母、不會重複生圖。
@@ -104,6 +105,9 @@
                 });
                 if (!entries.length) return;
 
+                // 「最新這輪」直插用：記下這次的圖；VN 因「生成結束」載最新 script 時，applyLatestFresh 直接插它、不靠 ID 數字
+                this._latest = { chatId: chatId, entries: entries };
+
                 if (!this._pending[msgId]) this._order.push(msgId);
                 this._pending[msgId] = { chatId: chatId, entries: entries };
                 while (this._order.length > 6) { const old = this._order.shift(); if (old !== msgId) delete this._pending[old]; }
@@ -125,51 +129,70 @@
             }
         },
 
-        // 由 vn_core.loadScript 尾端呼叫（也被 fromExtract 在 VN 已停在該則時呼叫）
+        // 把一組 entries splice 進「VN 現在載著的那份 script」（冪等靠 scene-id）。
+        //   ★呼叫端負責保證「現在這份 script 就是該插的那則」——本函式不管 ID，只管插。回傳插入張數。
+        _spliceInto: function (entries) {
+            const VN = win.VN_Core;
+            if (!VN || !Array.isArray(VN.script) || !VN.script.length) { console.log('[VN_SceneInsert🔎] _spliceInto 跳過：劇本未載入/空'); return 0; }
+            if (localStorage.getItem('vn_scene_enabled') === '0') { console.log('[VN_SceneInsert🔎] _spliceInto 跳過：場景顯示關(vn_scene_enabled=0)'); return 0; }
+            let cursor = (typeof VN.index === 'number') ? VN.index : -1;
+            let inserted = 0;
+            for (let k = 0; k < entries.length; k++) {
+                const e = entries[k];
+                const idTag = 'scene-id: ' + e.cacheId;
+                if (VN.script.indexOf(idTag) >= 0) continue; // 這份劇本已含 → 冪等跳過
+
+                // 找錨點(正規化容錯)；找不到 or 已播過 → 平均分散，別全擠末尾
+                const aIdx = e.after ? this._findAnchor(VN.script, e.after) : -1;
+                let pos;
+                if (aIdx >= 0 && aIdx + 1 > cursor) {
+                    pos = aIdx + 1; // 錨點行之後
+                } else {
+                    const denom = entries.length + 1;       // 2 張 → 1/3、2/3 處
+                    pos = Math.round(VN.script.length * (e.idx + 1) / denom);
+                    if (pos <= cursor) pos = cursor + 1;
+                    if (pos > VN.script.length) pos = VN.script.length;
+                }
+                console.log('[VN_SceneInsert] 錨點 "' + (e.after || '(無)') + '" → ' +
+                    (aIdx >= 0 ? '命中 line ' + aIdx : '未命中→分散') + '，pos ' + pos + '/' + VN.script.length);
+
+                VN.script.splice(pos, 0, '<scene>', idTag, e.prompt, '</scene>');
+                if (pos <= VN.index) VN.index += 4;
+                cursor = pos + 3;
+                inserted++;
+                try { this._fetchSceneCounted(e.cacheId, e.prompt); } catch (_) {}
+                console.log('[VN_SceneInsert] 插入場景 #' + e.idx + ' @script[' + pos + '] cacheId=' + e.cacheId);
+            }
+            return inserted;
+        },
+
+        // 🎯 最新這輪：由 vn_core 的「生成結束自動偵測」載完最新 script 後呼叫——直接插剛排隊的最新插圖，★不靠 ID 數字。
+        //   為什麼安全：只有「生成結束」那條路會載最新這輪的 script；重播舊章節/捲回走別的路、不呼叫本函式 → 新圖不會污染舊則。
+        applyLatestFresh: function () {
+            try {
+                const L = this._latest;
+                if (!L || !L.entries || !L.entries.length) { return; }   // 圖還沒生好(VN 先載)→不動，等晚到那條(fromExtract 即時插)補
+                const n = this._spliceInto(L.entries);
+                if (n) console.log('[VN_SceneInsert] 最新這輪：直接 splice ' + n + ' 張(不靠ID)，往下點即播');
+                // ★用完即清：下一個「沒出插圖的輪」載 script 時 _latest 會是 null → 不會把這張舊圖誤插進新劇本
+                this._latest = null;
+            } catch (e) {
+                console.warn('[VN_SceneInsert] applyLatestFresh 失敗:', (e && e.message) || e);
+            }
+        },
+
+        // 精確 ID 比對路（loadScript 尾端 / fromExtract 在 VN 已停該則時呼叫）：重播舊則、或圖比 VN 晚到時用。
         applyPending: function (msgIdRaw) {
             try {
                 if (msgIdRaw == null) return;
                 const msgId = String(msgIdRaw);
                 const pend = this._pending[msgId];
                 if (!pend || !pend.entries || !pend.entries.length) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：佇列空（已被清/重載）'); return; }
-                if (localStorage.getItem('vn_scene_enabled') === '0') { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：場景顯示關(vn_scene_enabled=0)'); return; }
-
                 const VN = win.VN_Core;
-                if (!VN || !Array.isArray(VN.script) || !VN.script.length) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：劇本未載入/空 script長=' + (VN && Array.isArray(VN.script) ? VN.script.length : 'N/A')); return; }
                 // 只插「VN 現在正停的那則」
-                if (VN._currentMessageId != null && String(VN._currentMessageId) !== msgId) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：VN當前停在 ' + VN._currentMessageId + ' 非本則'); return; }
-
-                let cursor = (typeof VN.index === 'number') ? VN.index : -1;
-                let inserted = 0;
-
-                for (let k = 0; k < pend.entries.length; k++) {
-                    const e = pend.entries[k];
-                    const idTag = 'scene-id: ' + e.cacheId;
-                    if (VN.script.indexOf(idTag) >= 0) continue; // 這份劇本已含 → 冪等跳過
-
-                    // 找錨點(正規化容錯)；找不到 or 已播過 → 平均分散，別全擠末尾
-                    const aIdx = e.after ? this._findAnchor(VN.script, e.after) : -1;
-                    let pos;
-                    if (aIdx >= 0 && aIdx + 1 > cursor) {
-                        pos = aIdx + 1; // 錨點行之後
-                    } else {
-                        const denom = pend.entries.length + 1;       // 2 張 → 1/3、2/3 處
-                        pos = Math.round(VN.script.length * (e.idx + 1) / denom);
-                        if (pos <= cursor) pos = cursor + 1;
-                        if (pos > VN.script.length) pos = VN.script.length;
-                    }
-                    console.log('[VN_SceneInsert] 錨點 "' + (e.after || '(無)') + '" → ' +
-                        (aIdx >= 0 ? '命中 line ' + aIdx : '未命中→分散') + '，pos ' + pos + '/' + VN.script.length);
-
-                    VN.script.splice(pos, 0, '<scene>', idTag, e.prompt, '</scene>');
-                    if (pos <= VN.index) VN.index += 4;
-                    cursor = pos + 3;
-                    inserted++;
-                    try { this._fetchSceneCounted(e.cacheId, e.prompt); } catch (_) {}
-                    console.log('[VN_SceneInsert] 插入場景 #' + e.idx + ' @script[' + pos + '] cacheId=' + e.cacheId);
-                }
-
-                if (inserted) console.log('[VN_SceneInsert] msg#' + msgId + '：splice ' + inserted + ' 張進劇本，往下點即播');
+                if (VN && VN._currentMessageId != null && String(VN._currentMessageId) !== msgId) { console.log('[VN_SceneInsert🔎] applyPending msg#' + msgId + ' 跳過：VN當前停在 ' + VN._currentMessageId + ' 非本則'); return; }
+                const n = this._spliceInto(pend.entries);
+                if (n) console.log('[VN_SceneInsert] msg#' + msgId + '：splice ' + n + ' 張進劇本，往下點即播');
             } catch (e) {
                 console.warn('[VN_SceneInsert] applyPending 失敗:', (e && e.message) || e);
             }
