@@ -3567,6 +3567,8 @@
                 const _pMsgId  = typeof _pending === 'object' ? _pending.messageId : null;
                 window.VN_Core.loadScript(_pScript, _pMsgId);
                 switchPage('page-game');
+                // 🎯 最新這輪：暫存路套的也是最新生成的 script → 直接插剛排隊的插圖、不靠 ID
+                try { window.VN_SceneInsert && window.VN_SceneInsert.applyLatestFresh(); } catch (e) {}
                 window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
@@ -3709,6 +3711,8 @@
                 if (_vnVisible && document.getElementById('page-game')) {
                     switchPage('page-game');
                     window.VN_Core.loadScript(text, messageId);
+                    // 🎯 最新這輪：剛生成完載的就是最新 script → 直接插剛排隊的插圖、不靠 ID（根治窗口號/暫存號漂移對不上）
+                    try { window.VN_SceneInsert && window.VN_SceneInsert.applyLatestFresh(); } catch (e) {}
                     window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
                     console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
                 } else {
