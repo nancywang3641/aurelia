@@ -174,11 +174,48 @@
                 if (!L || !L.entries || !L.entries.length) { return; }   // 圖還沒生好(VN 先載)→不動，等晚到那條(fromExtract 即時插)補
                 const n = this._spliceInto(L.entries);
                 if (n) console.log('[VN_SceneInsert] 最新這輪：直接 splice ' + n + ' 張(不靠ID)，往下點即播');
+                // 寫回「最新這章」存檔（章節選擇/重整後回放也看得到，不丟）；圖檔本就在硬碟，只補「插哪一段」的資訊
+                this._persistToLatestChapter(L.entries);
                 // ★用完即清：下一個「沒出插圖的輪」載 script 時 _latest 會是 null → 不會把這張舊圖誤插進新劇本
                 this._latest = null;
             } catch (e) {
                 console.warn('[VN_SceneInsert] applyLatestFresh 失敗:', (e && e.message) || e);
             }
+        },
+
+        // 把插圖 entries 寫回「最新一章」存檔的 scenes 欄（不動原始正文）；回放時 applyChapterScenes 用同一套錨點插回。
+        _persistToLatestChapter: async function (entries) {
+            try {
+                if (!Array.isArray(entries) || !entries.length) return;
+                if (!win.OS_DB || !win.OS_DB.getAllVnChapters || !win.OS_DB.saveVnChapter) return;
+                const all = await win.OS_DB.getAllVnChapters();
+                if (!Array.isArray(all) || !all.length) return;
+                let latest = all[0];
+                for (let i = 1; i < all.length; i++) if ((all[i].createdAt || 0) > (latest.createdAt || 0)) latest = all[i];
+                if (!latest) return;
+                // 守衛：最新章節必須是「剛存的」(2分鐘內)——否則多半是本輪章節還沒存好，別把新圖誤掛到上一章
+                if (Date.now() - (latest.createdAt || 0) > 120000) { console.log('[VN_SceneInsert🔎] 寫回章節跳過：最新章節非近期(本輪可能還沒存)'); return; }
+                const saved = Array.isArray(latest.scenes) ? latest.scenes.slice() : [];
+                const have = {}; saved.forEach(s => { if (s && s.cacheId) have[s.cacheId] = 1; });
+                let added = 0;
+                entries.forEach(e => { if (e && e.cacheId && !have[e.cacheId]) { saved.push({ cacheId: e.cacheId, prompt: e.prompt, after: e.after || '', idx: e.idx }); added++; } });
+                if (!added) return;
+                latest.scenes = saved;
+                await win.OS_DB.saveVnChapter(latest);   // put = upsert，同 id 覆寫
+                console.log('[VN_SceneInsert] 插圖寫回章節存檔 #' + latest.id + '(+' + added + '張)，回放/重整後可見');
+            } catch (e) { console.warn('[VN_SceneInsert] 寫回章節失敗:', (e && e.message) || e); }
+        },
+
+        // 回放(章節選擇)用：把該章存檔的 scenes splice 進剛載的 script（同一套錨點邏輯）。圖檔在硬碟、不重生。
+        applyChapterScenes: function (scenes) {
+            try {
+                if (!Array.isArray(scenes) || !scenes.length) return;
+                const entries = scenes.filter(s => s && s.cacheId && s.prompt)
+                    .map((s, i) => ({ cacheId: s.cacheId, prompt: s.prompt, after: s.after || '', idx: (typeof s.idx === 'number' ? s.idx : i) }));
+                if (!entries.length) return;
+                const n = this._spliceInto(entries);
+                if (n) console.log('[VN_SceneInsert] 回放章節：splice ' + n + ' 張存檔插圖');
+            } catch (e) { console.warn('[VN_SceneInsert] applyChapterScenes 失敗:', (e && e.message) || e); }
         },
 
         // 精確 ID 比對路（loadScript 尾端 / fromExtract 在 VN 已停該則時呼叫）：重播舊則、或圖比 VN 晚到時用。
