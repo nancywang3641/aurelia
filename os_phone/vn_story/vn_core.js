@@ -443,9 +443,11 @@
             }
 
             this._hoistSceneDirectivesFromDynBlocks();  // 卡片區塊內的 [BGM]/[Bg] 提副本到區塊前，讓引擎照常播
-            // 副模型場景插圖：把先前排隊、屬於這則訊息的 scenes splice 進剛載入的劇本（在預熱前，讓它也被預熱）
-            console.log('[VN_Core🔎] loadScript 完成 msg#' + this._currentMessageId + ' script長=' + (Array.isArray(this.script) ? this.script.length : 'N/A') + ' → 試插場景');
-            try { if (window.VN_SceneInsert) window.VN_SceneInsert.applyPending(this._currentMessageId); } catch (e) {}
+            // 副模型場景插圖：把「最新這輪」剛排隊的 scenes splice 進剛載入的劇本（在預熱前，讓它也被預熱）。
+            //   ★不靠 ID 撈 _pending(窗口號每輪都撞 key→回放舊章節會誤撈最新圖)，改用 _latest(最新這輪、用完即清)。
+            //   回放舊章節時 _latest 是 null → 不會誤插；舊章節的圖由 vn_panels 的 applyChapterScenes(存檔 scenes) 負責。
+            console.log('[VN_Core🔎] loadScript 完成 msg#' + this._currentMessageId + ' script長=' + (Array.isArray(this.script) ? this.script.length : 'N/A') + ' → 試插最新這輪場景');
+            try { if (window.VN_SceneInsert) window.VN_SceneInsert.applyLatestFresh(); } catch (e) {}
             this._prewarmBgs();
             this._prewarmScenes();
             this._prewarmItems();
@@ -3565,10 +3567,8 @@
             setTimeout(() => {
                 const _pScript = typeof _pending === 'object' ? _pending.text : _pending;
                 const _pMsgId  = typeof _pending === 'object' ? _pending.messageId : null;
-                window.VN_Core.loadScript(_pScript, _pMsgId);
+                window.VN_Core.loadScript(_pScript, _pMsgId);   // loadScript 尾端已 applyLatestFresh()，最新這輪插圖在此插入
                 switchPage('page-game');
-                // 🎯 最新這輪：暫存路套的也是最新生成的 script → 直接插剛排隊的插圖、不靠 ID
-                try { window.VN_SceneInsert && window.VN_SceneInsert.applyLatestFresh(); } catch (e) {}
                 window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
@@ -3710,9 +3710,7 @@
                 const _vnVisible = _vnPanel && _vnPanel.style.display !== 'none';
                 if (_vnVisible && document.getElementById('page-game')) {
                     switchPage('page-game');
-                    window.VN_Core.loadScript(text, messageId);
-                    // 🎯 最新這輪：剛生成完載的就是最新 script → 直接插剛排隊的插圖、不靠 ID（根治窗口號/暫存號漂移對不上）
-                    try { window.VN_SceneInsert && window.VN_SceneInsert.applyLatestFresh(); } catch (e) {}
+                    window.VN_Core.loadScript(text, messageId);   // loadScript 尾端已 applyLatestFresh()，最新這輪插圖在此插入
                     window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
                     console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
                 } else {
