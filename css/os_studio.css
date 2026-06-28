@@ -238,6 +238,9 @@
         .studio-chip:hover { background: rgba(26,28,40,0.06); }
         .studio-chip:active { transform: scale(0.96); }
         .studio-chip-manage { border-style: dashed; color: rgba(26,28,40,0.55); }
+        /* 功能 chip 啟用＝實心高亮，跟「點了會貼字的話術 chip」區分；點一下 toggle，用法送出時才併進請求 */
+        .studio-chip-feature.active { background: #1A1C28; border-color: #1A1C28; color: #EEF0F6; }
+        .studio-chip-feature.active:hover { background: #1A1C28; }
         .studio-chip-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 99999; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
         .studio-chip-modal.show { display: flex; }
         .studio-chip-box { width: 100%; max-width: 460px; max-height: 86vh; overflow-y: auto; background: #EEF0F6; border: 1px solid rgba(26,28,40,0.2); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; }
