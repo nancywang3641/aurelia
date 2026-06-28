@@ -293,13 +293,24 @@
             try { msgs = (await th.getChatMessages(start + '-' + lastId)) || []; } catch (e) {}
             var text = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
             var map = {}, order = [];
+            // ① WX 內文行格式 [Chat: 名|ID]
             var re = /\[Chat[:：]\s*([^|\]]+)\|([^\]]+)\]/g, m2;
             while ((m2 = re.exec(text)) !== null) { var nm = (m2[1] || '').trim(), id = (m2[2] || '').trim(); if (id) { if (!(id in map)) order.push(id); map[id] = nm; } }
+            // ② VN PHONE 容器屬性格式 <chat chatroom="名" id="穩定id">（與 ① 同併一張表）
+            var re2 = /<chat\s+([^>]*?)>/gi, m3;
+            while ((m3 = re2.exec(text)) !== null) {
+                var a = m3[1] || '';
+                var id3 = ((a.match(/(?:^|\s)id\s*=\s*["']?([^"'>]*)["']?/i) || [])[1] || '').trim();
+                if (!id3) continue;
+                var nm3 = ((a.match(/chatroom\s*=\s*["']?([^"'>]*)["']?/i) || [])[1] || '').trim();
+                if (!(id3 in map)) order.push(id3);
+                if (nm3 || !(id3 in map)) map[id3] = nm3 || map[id3] || '';
+            }
             if (!order.length) return;
             var table = order.map(function (id) { return map[id] + '｜' + id; }).join('、');
             var result = th.injectPrompts([{
                 id: WX_CHATROOM_INJECT_ID,
-                content: '【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器內的 [Chat: 名|ID] 那行時用對 ID）；就算你改了群名也「絕不可」改 ID，只有全新房間才給新 ID：\n' + table,
+                content: '【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器時用對 ID：可放 chatroom 旁的 id="…" 屬性，或容器內的 [Chat: 名|ID] 那行）；就算你改了群名也「絕不可」改 ID，只有全新房間才給新 ID：\n' + table,
                 position: 'in_chat',
                 depth: 0,
                 role: 'system'

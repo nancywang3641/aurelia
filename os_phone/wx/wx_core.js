@@ -640,17 +640,20 @@
     function _parseVnChatBlocks(fullText) {
         const rooms = {};
         if (!fullText) return rooms;
-        const blockRe = /<chat\s+chatroom\s*=\s*["']?([^"'>]*)["']?\s*>([\s\S]*?)<\/chat>/gi;
+        // 容器開頭可帶任意順序屬性：chatroom="名" 與（可選）id="穩定id"
+        const blockRe = /<chat\s+([^>]*?)>([\s\S]*?)<\/chat>/gi;
         let bm;
         while ((bm = blockRe.exec(fullText))) {
-            const roomName = ((bm[1] || '').trim()) || '對話';
+            const attrs = bm[1] || '';
+            const roomName = ((attrs.match(/chatroom\s*=\s*["']?([^"'>]*)["']?/i)?.[1] || '').trim()) || '對話';
+            const attrId = (attrs.match(/(?:^|\s)id\s*=\s*["']?([^"'>]*)["']?/i)?.[1] || '').trim();
             const body = bm[2] || '';
-            // 🔑 先掃 [Chat: 名|ID] 取「穩定 ID」當分群 key（AI 改群名但 ID 不變→合回同一間）；沒 ID 才退回房名
-            let roomId = '', nameFromHdr = '';
+            // 🔑 穩定 ID 分群 key 優先序：<chat> 的 id 屬性 > 內文 [Chat: 名|ID] > 退回房名（AI 改群名但 ID 不變→合回同一間）
+            let roomId = attrId, nameFromHdr = '';
             const rawLines = body.split('\n');
             for (let li = 0; li < rawLines.length; li++) {
                 const ch = rawLines[li].trim().match(/^\[\s*Chat\s*[:：]\s*([^\]]*)\]/i);
-                if (ch) { const ps = ch[1].split('|'); nameFromHdr = (ps[0] || '').trim(); if (ps[1]) roomId = ps[1].trim(); break; }
+                if (ch) { const ps = ch[1].split('|'); nameFromHdr = (ps[0] || '').trim(); if (!roomId && ps[1]) roomId = ps[1].trim(); break; }
             }
             const key = roomId || roomName;
             const dispName = nameFromHdr || roomName;
