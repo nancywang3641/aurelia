@@ -91,7 +91,10 @@
         .btn-save:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(26,28,40,0.20); }
         .btn-test { padding: 12px; border-radius: 4px; text-align: center; font-weight: 800; cursor: pointer; margin-top: 10px; background: rgba(26,28,40,0.06); color: #1A1C28; border: 1px solid rgba(26,28,40,0.20); transition: all 0.2s; }
         .btn-test:hover { background: rgba(26,28,40,0.10); border-color: #1A1C28; }
-        
+        /* .set-btn 是原生 <button>（如 ComfyUI「測試/抓清單」#img-cfd-test）—原本沒設文字色會吃到白字看不見，補成跟 .btn-test 同主題 */
+        .set-btn { font: inherit; padding: 10px 14px; border-radius: 4px; text-align: center; font-weight: 800; cursor: pointer; background: rgba(26,28,40,0.06); color: #1A1C28; border: 1px solid rgba(26,28,40,0.20); transition: all 0.2s; }
+        .set-btn:hover { background: rgba(26,28,40,0.10); border-color: #1A1C28; }
+
         /* 🔥 新增：危險區域與格式化按鈕 */
         .danger-zone { margin-top: 30px; border: 1px solid rgba(252, 129, 129, 0.3); background: rgba(252, 129, 129, 0.05); padding: 15px; border-radius: 12px; }
         .danger-zone h3 { color: #fc8181; font-size: 15px; margin-bottom: 8px; font-weight: bold; }
