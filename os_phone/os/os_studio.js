@@ -246,7 +246,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - onComplete：結束 callback，綁關閉按鈕（用按鈕或「灰字點擊繼續」，別幾秒自動消失）。
 - st.parse() → { 標籤名: [[欄1,欄2,…], …] }
 - st.md(text) → markdown 轉 HTML（內建，免疫 $1）
-- st.setImage(el, prompt, type, provider?) → 給 img 設圖（內建佔位／隔離／try-catch；type: 'char'／'item'／'pet'／'scene'）。第 4 參 provider 可選指定來源 'pollinations'／'novelai'／'tavern_sd'／'comfyui_direct'；用戶指定（「用 poll」「用 NAI」）就寫進去，否則不傳走全域設定。
+- 🧩 進階功能（用法不常駐、省 token）：🖼️ 生圖(st.setImage)、📤 回傳對話框(st.toChat) 等——**要用就點對應的「功能 chip」**把完整用法帶進這次請求；使用者沒帶進來就別用該功能、也別自己瞎掰 API。
 - st.callAI(systemPrompt) → Promise，呼叫 AI 生文字（自動帶角色卡／最近劇情／世界書當背景，不必重述）。await 包 try/catch、生成中顯示 loading。
 - st.getCurrentChars() → Promise，回傳當前聊天室出現過的角色 [{name,count}]（依出現次數排序）。做「角色選單／搜尋」用——例如日記/檔案類面板讓用戶從清單挑角色，免手打名字。空陣列＝還沒角色。
 - st.getStory(n) → 回最近 n 條劇情 [{name, text}]（預設 30，已洗成乾淨文字）。**共用面板「讀當前劇情顯示」就用這個**（不經 AI、直接拿正文）。純展示卡別用它（那走 lines/st.parse）。
@@ -257,10 +257,6 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。**第三參 scope**：不填＝全域（整個 app 一份）；填 'chat'＝綁當前聊天室（每個故事/聊天室各自一份，像 AVS）→ st.saveData(k,v,'chat')、st.loadData(k,'chat')。**跟劇情走的 app（論壇、日記、跟當前故事有關的資料）一律用 'chat'**；個人工具（記事本、計算機、設定）用全域不填。（要拿聊天室 id 自己分流也可 st.getChatId()）純展示卡不需要持久化。
 - 📚 **記錄／檔案型 app（論壇、日記、動態、事件記錄…使用者會「之後回來翻看過去」的）＝資料一律「累積」、絕不覆蓋**：生成新內容時，先 st.loadData 讀回舊清單 → 把新的 append 上去（別直接「整個變數＝新資料」蓋掉）→ st.saveData(…, 'chat') 存回。這樣使用者打開 app 就能看到「從第一章到現在的全部歷史」，不必回劇情裡翻到準確那一樓。每筆可附時間／章節標記方便瀏覽，舊的可往下滑。**這類 app 的本質＝內容的永久家，不是每次洗掉重生。**（除非使用者明說「只看最新」才覆蓋。）
 - st.dbSave(key, value[, 'chat']) / st.dbLoad(key[, 'chat']) → **存進 DB（async、要 await）**，scope 同 saveData。**資料量大／會一直累積的（論壇歷史、日記、長清單）一律用這個**（localStorage 有上限、塞多會爆，DB 不會）；小設定／少量資料用 st.saveData 即可。用法：init 時 const data = await st.dbLoad('forum','chat') 取回（沒有就給預設）、存時 await st.dbSave('forum', data, 'chat')。
-- ⭐ st.toChat(文字[, {send:true}]) → 把文字「貼回酒館對話框」（送出框）。預設只貼進去、使用者自己按送出；傳 {send:true} 就直接幫忙送出。用在「app 產生內容→使用者挑一條→送進劇情當輸入／指令」這種主動回傳（例：隨機事件 app 生 5 條、使用者選 1 條 st.toChat 進劇情）。這跟「記憶回傳酒館」開關（被動背景注入）不同：toChat 是使用者主動送一句進對話框。
-
-## 🖼️ 生圖紀律（重要，否則一堆圖排隊）
-st.setImage 只給「FOCUS／重要對象」：主角、當前焦點角色、重要物品／場景。路人／NPC／評論頭像／列表縮圖／大量小頭像「禁用」生圖，改用「名字首字色塊頭像」（純 CSS、不呼叫 API）：取名字首字放圓形 div、背景色用名字 hash 出 hsl。自己塞 url 的 img 一律加 onerror 退回佔位／首字頭像，永遠不要出現破圖。
 
 ## 語言
 ECoT 與正文輸出用 zh-CN（代碼例外）。
@@ -509,7 +505,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         { label: 'TAB 分頁', text: '頂部加一排 TAB 分頁，點不同 TAB 切換下面的內容區。' },
         { label: '固定標題', text: '頂部標題列固定不動，只有下面的內容區可以捲動。' },
         { label: '卡片列表', text: '內容用一張張卡片直列呈現，每張資訊清楚、可點。' },
-        { label: '深色主題', text: '用深色背景配色、字體清楚，沉穩不刺眼。' }
+        { label: '深色主題', text: '用深色背景配色、字體清楚，沉穩不刺眼。' },
+        { label: '🖼️ 生圖', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct，用戶有指定才填、否則不傳）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
+        { label: '📤 回傳對話框', text: '【回傳對話框功能】用 st.toChat(文字, opts) 把文字貼回酒館對話框（送出框）：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「app 生內容→使用者挑一條→送進劇情當輸入／指令」（例：隨機事件 app 生 5 條、選 1 條 toChat 進劇情）。' }
     ];
     function _studioLoadChips() { try { return JSON.parse(localStorage.getItem('studio_quick_chips') || '[]') || []; } catch (e) { return []; } }
     function _studioSaveChips(list) { try { localStorage.setItem('studio_quick_chips', JSON.stringify(list)); } catch (e) {} }
