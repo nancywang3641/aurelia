@@ -4149,16 +4149,27 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     }; }).filter(function(l){ return l.name; })
                 };
 
-                // 頭像尺寸下拉：選了具體尺寸(如 512x512)就用它；選「跟各接口預設」(空值)就不塞 width/height，讓接口用自己的預設
-                const _avSize = elPolSize?.value || '';
-                const _sizeOpts = /^\d+x\d+$/.test(_avSize)
-                    ? { width: Number(_avSize.split('x')[0]), height: Number(_avSize.split('x')[1]) }
+                // 測試跟著「當前子分頁」走：🎭頭像→char桶、🎬插圖→scene桶、🌄背景→bg桶；
+                // 各讀自己的來源(service)+尺寸下拉，不再全部寫死走頭像桶（修共域）。
+                const _activeTab = (typeof imgSrcTab !== 'undefined' && imgSrcTab) ? imgSrcTab : 'char';
+                const _tabMap = {
+                    char:  { type: 'char',  svcEl: elImgServiceLiving,   sizeSel: '#img-avatar-size' },
+                    scene: { type: 'scene', svcEl: elImgServiceScene,     sizeSel: '#img-scene-size'  },
+                    bg:    { type: 'bg',    svcEl: elImgServiceInanimate, sizeSel: '#img-bg-size'     },
+                };
+                const _tabCfg = _tabMap[_activeTab] || _tabMap.char;
+
+                // 該桶自己的尺寸：插圖可能選 custom；頭像空值(跟接口預設)就不塞尺寸、讓接口用自己的預設
+                let _szRaw = container.querySelector(_tabCfg.sizeSel)?.value || '';
+                if (_szRaw === 'custom') _szRaw = (container.querySelector('#img-scene-size-custom')?.value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x');
+                const _sizeOpts = /^\d{2,5}x\d{2,5}$/.test(_szRaw)
+                    ? { width: Number(_szRaw.split('x')[0]), height: Number(_szRaw.split('x')[1]) }
                     : {};
 
                 // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
                 // ComfyUI 直連用面板自己的尺寸(cfg.width/height)，其他來源用上面的測試尺寸
-                const _testIsCfd = (elImgServiceLiving ? elImgServiceLiving.value : '') === 'comfyui_direct';
-                const imageUrl = await imageManager.generate(testPrompt, 'char', _testIsCfd ? { force: true } : { ..._sizeOpts, force: true });
+                const _testIsCfd = (_tabCfg.svcEl ? _tabCfg.svcEl.value : '') === 'comfyui_direct';
+                const imageUrl = await imageManager.generate(testPrompt, _tabCfg.type, _testIsCfd ? { force: true } : { ..._sizeOpts, force: true });
 
                 imgTestImage.src = imageUrl;
                 imgTestUrl.textContent = /^(data:|blob:)/.test(imageUrl) ? '✅ 圖片已生成（內嵌資料，省略顯示）' : `URL: ${imageUrl}`;
