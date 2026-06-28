@@ -57,6 +57,16 @@
               +     '<div class="wx-cell-text">跑團手機記錄</div>'
               +     '<div class="wx-cell-arrow"><i class="fa-solid fa-rotate-right"></i></div>'
               +   '</div>'
+              +   '<div class="wx-cell" onclick="' + app + '.vnLogTidyAi && ' + app + '.vnLogTidyAi()">'
+              +     '<div class="wx-cell-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>'
+              +     '<div class="wx-cell-text">AI 整理聊天室</div>'
+              +     '<div class="wx-cell-arrow"><i class="fa-solid fa-chevron-right"></i></div>'
+              +   '</div>'
+              +   '<div class="wx-cell" onclick="' + app + '.vnLogTidyReset && ' + app + '.vnLogTidyReset()">'
+              +     '<div class="wx-cell-icon"><i class="fa-solid fa-arrow-rotate-left"></i></div>'
+              +     '<div class="wx-cell-text">還原整理</div>'
+              +     '<div class="wx-cell-arrow"><i class="fa-solid fa-chevron-right"></i></div>'
+              +   '</div>'
               + '</div>'
               + '<div class="wx-vnlog" id="wx-vnlog-mount"><div class="wx-vnlog-empty">載入跑團手機記錄…</div></div>';
         },

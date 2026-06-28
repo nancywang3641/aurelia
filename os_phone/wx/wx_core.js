@@ -636,10 +636,24 @@
     }
     setInterval(processRenderQueue, 30);
 
+    // ── 聊天室 id 對應表（AI 整理產出：舊亂 id → 統一 id）。不動歷史、解析/注入時套用、按 tavern chatId 隔離 ──
+    //    跨 IIFE 共用：os_app_memory_inject 的 injectWxChatrooms 也讀同一把 key 套用。
+    function _wxRemapChatId() {
+        try { var ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { var id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } } catch (e) {}
+        return '_global';
+    }
+    function _loadRoomRemap() {
+        try { var all = JSON.parse(localStorage.getItem('wx_room_id_remap') || '{}'); return all[_wxRemapChatId()] || {}; } catch (e) { return {}; }
+    }
+    function _saveRoomRemap(map) {
+        try { var all = JSON.parse(localStorage.getItem('wx_room_id_remap') || '{}'); all[_wxRemapChatId()] = map || {}; localStorage.setItem('wx_room_id_remap', JSON.stringify(all)); } catch (e) {}
+    }
+
     // 解析酒館正文裡的 <chat chatroom="名">…</chat> 區塊 → {房名:{name,members,msgs}}（給「發現」tab 的跑團手機記錄唯讀檢視）
     function _parseVnChatBlocks(fullText) {
         const rooms = {};
         if (!fullText) return rooms;
+        const _remap = _loadRoomRemap();   // AI 整理產出的「舊id→統一id」對應表（沒整理過就空）
         // 容器開頭可帶任意順序屬性：chatroom="名" 與（可選）id="穩定id"
         const blockRe = /<chat\s+([^>]*?)>([\s\S]*?)<\/chat>/gi;
         let bm;
@@ -655,7 +669,8 @@
                 const ch = rawLines[li].trim().match(/^\[\s*Chat\s*[:：]\s*([^\]]*)\]/i);
                 if (ch) { const ps = ch[1].split('|'); nameFromHdr = (ps[0] || '').trim(); if (!roomId && ps[1]) roomId = ps[1].trim(); break; }
             }
-            const key = roomId || roomName;
+            let key = roomId || roomName;
+            key = _remap[key] || key;   // AI 整理過：舊亂 id（或名）→ 統一 id，同一間合回一張卡
             const dispName = nameFromHdr || roomName;
             if (!rooms[key]) rooms[key] = { id: key, name: dispName, members: [], msgs: [] };
             else if (dispName) rooms[key].name = dispName;   // 名字以最新一次為準
@@ -901,6 +916,60 @@
         vnLogRefresh: function() { _vnLogRooms = null; _vnLogView = 'list'; _vnLogRoom = null; this._fillVnLog(); },
         openVnLogRoom: function(encName) { try { _vnLogRoom = decodeURIComponent(encName); } catch (e) { _vnLogRoom = encName; } _vnLogView = 'room'; this._fillVnLog(); },
         vnLogBack: function() { _vnLogView = 'list'; _vnLogRoom = null; this._fillVnLog(); },
+
+        // 🧹 AI 整理：叫副模型判斷「哪些房間其實是同一間」(先前上下文壓縮→同房被編多個亂 id)，
+        //    產出「舊id→統一id」對應表存起來；不動歷史正文，解析/注入時自動套用。
+        vnLogTidyAi: async function() {
+            const tr = win.toastr;
+            if (!win.OS_API || typeof win.OS_API.chatSecondary !== 'function') { try { tr && tr.warning('副模型未就緒，無法整理', '發現'); } catch (e) {} return; }
+            // 確保已解析房間
+            if (!_vnLogRooms) {
+                let text = '';
+                try { const msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null; if (Array.isArray(msgs)) text = msgs.map(function (m) { return (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || ''); }).join('\n'); } catch (e) {}
+                _vnLogRooms = _parseVnChatBlocks(text);
+            }
+            const rooms = _vnLogRooms || {};
+            const keys = Object.keys(rooms);
+            if (keys.length < 2) { try { tr && tr.info('房間太少，不需整理', '發現'); } catch (e) {} return; }
+            // 給副模型的精簡清單：id / 名 / 成員 / 訊息數 / 最後兩句樣本（夠它判斷同不同間）
+            const payload = keys.map(function (k) {
+                const r = rooms[k];
+                const last = (r.msgs || []).slice(-2).map(function (m) { return (m.sender ? '[' + m.sender + '] ' : '') + String(m.content || '').slice(0, 40); }).join(' / ');
+                return { id: r.id, name: r.name, members: (r.members || []).join('、'), count: (r.msgs || []).length, sample: last };
+            });
+            const sys = '你是資料整理工具。下面 JSON 是從一段跑團劇情解析出的「手機聊天室」清單；因為先前模型在不同段落為同一間聊天室編了不同的 id（上下文壓縮導致遺忘），同一間房可能裂成多筆。請判斷哪些筆其實是同一間聊天室、歸為一組。\n判斷依據（綜合多項、別只看單一條）：房名相同或明顯同義、成員相同或高度重疊、對話內容是同一串的延續。只要不確定是不是同一間就「不要合併」、各自獨立。\n每組的「統一 id」固定取該組裡 count 最大的那筆的 id。\n只輸出 JSON、不要任何解說或標記，格式：\n{"groups":[{"canonicalId":"統一id","name":"顯示名","ids":["這組所有原id"]}]}\n只列「需要合併」（ids 長度>1）的組；單獨一間不需合併的不要列。';
+            const messages = [{ role: 'system', content: sys }, { role: 'user', content: JSON.stringify(payload) }];
+            try { tr && tr.info('副模型整理中…', '發現'); } catch (e) {}
+            const self = this;
+            try {
+                win.OS_API.chatSecondary(messages, null, async function (resp) {
+                    try {
+                        let s = String(resp || '').trim();
+                        const mm = s.match(/\{[\s\S]*\}/); if (mm) s = mm[0];
+                        const obj = JSON.parse(s);
+                        const groups = (obj && obj.groups) || [];
+                        const remap = _loadRoomRemap();   // 併入既有對應表（可多次整理累加）
+                        let merged = 0;
+                        groups.forEach(function (g) {
+                            const cid = String((g && g.canonicalId) || '').trim(); if (!cid) return;
+                            ((g && g.ids) || []).forEach(function (oid) { oid = String(oid || '').trim(); if (oid && oid !== cid) { remap[oid] = cid; merged++; } });
+                        });
+                        if (!merged) { try { tr && tr.info('沒有偵測到需要合併的重複房間', '發現'); } catch (e) {} return; }
+                        _saveRoomRemap(remap);
+                        _vnLogRooms = null;
+                        await self._fillVnLog();
+                        try { tr && tr.success('整理完成：把 ' + merged + ' 個重複 id 收斂進 ' + groups.length + ' 間', '發現'); } catch (e) {}
+                    } catch (e) { try { tr && tr.error('整理失敗：AI 回傳格式不對', '發現'); } catch (e2) {} console.warn('[發現整理] 解析失敗:', e, resp); }
+                }, function (err) { try { tr && tr.error('整理失敗：' + ((err && err.message) || err), '發現'); } catch (e) {} });
+            } catch (e) { try { tr && tr.error('整理失敗：' + ((e && e.message) || e), '發現'); } catch (e2) {} }
+        },
+
+        // 清掉本聊天的 AI 整理對應表（還原成原始亂 id 分群）
+        vnLogTidyReset: function() {
+            try { _saveRoomRemap({}); } catch (e) {}
+            _vnLogRooms = null; this._fillVnLog();
+            try { win.toastr && win.toastr.info('已清除整理結果、還原原始分群', '發現'); } catch (e) {}
+        },
         _fillVnLog: async function() {
             if (!(APP_CONTAINER && APP_CONTAINER.querySelector('#wx-vnlog-mount'))) return;
             try {
