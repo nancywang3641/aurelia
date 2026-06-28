@@ -257,7 +257,6 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。**第三參 scope**：不填＝全域（整個 app 一份）；填 'chat'＝綁當前聊天室（每個故事/聊天室各自一份，像 AVS）→ st.saveData(k,v,'chat')、st.loadData(k,'chat')。**跟劇情走的 app（論壇、日記、跟當前故事有關的資料）一律用 'chat'**；個人工具（記事本、計算機、設定）用全域不填。（要拿聊天室 id 自己分流也可 st.getChatId()）純展示卡不需要持久化。
 - 📚 **記錄／檔案型 app（論壇、日記、動態、事件記錄…使用者會「之後回來翻看過去」的）＝資料一律「累積」、絕不覆蓋**：生成新內容時，先 st.loadData 讀回舊清單 → 把新的 append 上去（別直接「整個變數＝新資料」蓋掉）→ st.saveData(…, 'chat') 存回。這樣使用者打開 app 就能看到「從第一章到現在的全部歷史」，不必回劇情裡翻到準確那一樓。每筆可附時間／章節標記方便瀏覽，舊的可往下滑。**這類 app 的本質＝內容的永久家，不是每次洗掉重生。**（除非使用者明說「只看最新」才覆蓋。）
 - st.dbSave(key, value[, 'chat']) / st.dbLoad(key[, 'chat']) → **存進 DB（async、要 await）**，scope 同 saveData。**資料量大／會一直累積的（論壇歷史、日記、長清單）一律用這個**（localStorage 有上限、塞多會爆，DB 不會）；小設定／少量資料用 st.saveData 即可。用法：init 時 const data = await st.dbLoad('forum','chat') 取回（沒有就給預設）、存時 await st.dbSave('forum', data, 'chat')。
-- ⭐ st.roomReply(角色名, 使用者輸入[, {extra:'額外設定'}]) / st.roomHistory(角色名) / st.roomClear(角色名) → **現成「聊天室」引擎**：做「在 app 裡跟某角色私訊聊天」型 app 直接用，不用自己拼 callAI＋存檔迴圈。await st.roomReply(角色名, 使用者這句) ＝送出使用者輸入→AI 以該角色口吻＋當前劇情人設回一句→自動存對話(chat scope)→回傳 物件 {reply, history}（history 是完整對話陣列，每筆 {me, text, name, t}）。init 時用 await st.roomHistory(角色名) 讀回整段重畫氣泡。roomClear＝清空。⭐ 這些對話**會被「記憶回傳酒館」開關自動帶回劇情**（此類 app 設 isBlock=false／純應用），劇情就知道你在 app 裡跟誰聊了什麼、能延續。app 只負責 UI（訊息氣泡、輸入框、送出鈕、loading）。角色名可讓使用者從 st.getCurrentChars() 挑。
 - ⭐ st.toChat(文字[, {send:true}]) → 把文字「貼回酒館對話框」（送出框）。預設只貼進去、使用者自己按送出；傳 {send:true} 就直接幫忙送出。用在「app 產生內容→使用者挑一條→送進劇情當輸入／指令」這種主動回傳（例：隨機事件 app 生 5 條、使用者選 1 條 st.toChat 進劇情）。這跟「記憶回傳酒館」開關（被動背景注入）不同：toChat 是使用者主動送一句進對話框。
 
 ## 🖼️ 生圖紀律（重要，否則一堆圖排隊）
@@ -2848,9 +2847,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'dbSave:function(k,v,s){try{return window.dbSave?window.dbSave(k,v,s):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
             +   'dbLoad:function(k,s){try{return window.dbLoad?window.dbLoad(k,s):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
             +   'getChatId:function(){try{return window.getChatId?window.getChatId():"";}catch(e){return "";}},'
-            +   'roomReply:async function(c,t,o){try{return window.roomReply?await window.roomReply(c,t,o):{reply:"",history:[]};}catch(e){return {reply:"",history:[]};}},'
-            +   'roomHistory:async function(c){try{return window.roomHistory?await window.roomHistory(c):[];}catch(e){return [];}},'
-            +   'roomClear:async function(c){try{return window.roomClear?await window.roomClear(c):false;}catch(e){return false;}},'
             +   'toChat:function(t,o){try{return window.toChat?window.toChat(t,o):false;}catch(e){return false;}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
