@@ -127,6 +127,8 @@
 /* ── 📞 電話 dialer ── */
 .dlr-wrap { position: relative; display: flex; flex-direction: column; height: 100%; background: #f4f5f8; color: #1a1c28; }
 .dlr-head { padding: 16px 18px 8px; font-size: 22px; font-weight: 800; letter-spacing: 1px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dlr-back { background: transparent; border: none; color: #2a6ad0; font-size: 26px; line-height: 1; font-weight: 400; cursor: pointer; padding: 0 4px 0 0; flex-shrink: 0; }
+.dlr-head-title { flex: 1; }
 .dlr-list { flex: 1; overflow-y: auto; padding: 0 10px 70px; }
 .dlr-empty { text-align: center; color: rgba(26,28,40,0.4); font-size: 13px; padding: 60px 20px; line-height: 1.9; }
 .dlr-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 10px; background: transparent; border: none; border-bottom: 0.5px solid rgba(26,28,40,0.08); cursor: pointer; text-align: left; color: #1a1c28; }
