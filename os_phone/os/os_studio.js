@@ -1082,7 +1082,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     let _wbView = 'picker';  // picker|entries|detail|chat|confirm（5 換頁，任何時刻只顯示一頁）
     let _wbChat = [];        // [{role,content}]
     let _wbEntries = [];     // 目前條目快取
-    let _wbPending = null;   // 待套用 ops
+    let _wbPending = null;   // 待套用 ops（跨輪累積的 diff；每輪 AI 只吐新改動、程式自己 merge）
+    let _wbTempUid = -1;     // 待新增條目的臨時 uid（負數，跟酒館真 uid≥0 不撞）→ 讓「還沒寫入的新條目」也能被再次改/刪
     let _wbEntryEditing = null; // 條目詳情頁：null=新增，否則=正在編的 uid
     let _wbSearch = '';      // 條目搜尋字
     let _wbFilter = 'all';   // all|on|off 篩選
@@ -1104,7 +1105,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return _wbRenderPicker(host);
     }
     function _wbEnter(name) {   // 進入某本書 → 條目瀏覽頁
-        _wbWorking = name; _wbChat = []; _wbPending = null; _wbEntries = [];
+        _wbWorking = name; _wbChat = []; _wbPending = null; _wbTempUid = -1; _wbEntries = [];
         _wbSearch = ''; _wbFilter = 'all'; _wbView = 'entries';
         renderWorldbookPanel();
     }
@@ -1391,8 +1392,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     function _wbPendingForPrompt() {
         if (!_wbPending || !_wbPending.length) return '';
         return _wbPending.map(o => {
-            if (o.op === 'del') return '【刪除】uid=' + o.uid;
-            const head = (o.op === 'update' && o.uid != null) ? ('【修改】uid=' + o.uid) : '【新增】';
+            if (o.op === 'del') return '【刪除真條目】uid=' + o.uid;
+            const head = o.op === 'add' ? ('【新增·待寫入】uid=' + o.uid + '(負數=尚未寫入)') : ('【修改真條目】uid=' + o.uid);
             const parts = [];
             if (o.comment != null) parts.push('標題：' + o.comment);
             if (o.keys && o.keys.length) parts.push('關鍵字：' + o.keys.join(','));
@@ -1410,14 +1411,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const sendBtn = host.querySelector('#swb-send'); if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '生成中…'; }
         let _wbSysFull = _WB_SYS + '\n\n【目前條目】\n' + (_wbEntriesForPrompt() || '（空，還沒有條目）');
         const _pend = _wbPendingForPrompt();
-        if (_pend) _wbSysFull += '\n\n【尚未套用的待改動（你上一輪提的、使用者還沒按套用）】\n' + _pend + '\n→ 使用者這輪是在「這些待改動的基礎上」繼續調整。請把「上面這些待改動連同你這輪的新改動，整套重新輸出 <wb> 區塊」（含原本的刪除／新增，一個都別漏；要改某條待改動就改它、別另開重複的）。只有使用者明確要撤銷某項待改動時，才不輸出那一項。';
+        if (_pend) _wbSysFull += '\n\n【尚未套用的待改動（系統已自動累積保留，你「不用」也「不要」重複輸出這些）】\n' + _pend + '\n→ 你這輪「只輸出這次使用者要動的那一項 <wb>」即可（真 diff），系統會自動把它併進上面的待改動、沒提到的一個都不會弄丟、也絕不碰沒提到的條目。要「改某項待改動本身」就用它的 uid 下 op="update"／要撤銷就 op="del"（待新增條目的 uid 是負數，照樣能改/刪）。';
         const messages = [{ role: 'system', content: _wbSysFull }].concat(_wbChat.slice(-8));
         const done = (full) => {
             if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; }
             const reply = String(full || '');
             _wbChat.push({ role: 'assistant', content: reply });
-            _wbPending = _wbParseOps(reply);
-            if (!_wbPending.length) _wbPending = null;
+            // 真 diff：AI 只吐這輪的改動 → merge 進已累積的待改動（不替換、不丟、沒提到的不碰）
+            _wbPending = _wbMergeOps(_wbPending, _wbParseOps(reply));
+            if (!_wbPending || !_wbPending.length) _wbPending = null;
             _wbPaintChat(host); _wbPaintPendBar(host);
         };
         const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } alert('AI 失敗：' + (err && err.message || err)); };
@@ -1428,7 +1430,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         catch (e) { errCb(e); }
     }
     function _wbParseOps(text) {
-        const ops = []; const re = /<wb\s+op="(add|update|del)"(?:\s+uid="(\d+)")?\s*(?:\/>|>([\s\S]*?)<\/wb>)/gi; let m;
+        const ops = []; const re = /<wb\s+op="(add|update|del)"(?:\s+uid="(-?\d+)")?\s*(?:\/>|>([\s\S]*?)<\/wb>)/gi; let m;   // uid 容許負數＝待新增條目的臨時 uid
         while ((m = re.exec(text)) !== null) {
             const op = m[1].toLowerCase(); const uid = m[2] ? parseInt(m[2], 10) : null; const inner = m[3] || '';
             if (op === 'del') { if (uid != null) ops.push({ op: 'del', uid }); continue; }
@@ -1437,6 +1439,39 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             ops.push({ op, uid, comment: pick('comment'), keys: keysRaw != null ? keysRaw.split(/[,，、]/).map(s => s.trim()).filter(Boolean) : null, content: pick('content') });
         }
         return ops;
+    }
+    // 真 diff 累積：把 AI 這輪吐的 ops 併進「已累積的待改動」。沒提到的待改動原封不動、絕不碰沒提到的條目。
+    //   - add：給臨時負 uid，登記為待新增（之後可被 update/del 用該 uid 再動）。
+    //   - update uid=X：X 命中既有待新增/待修改 → 把欄位併進它（改的是「待改動」本身）；否則登記為對真條目 X 的待修改。
+    //   - del uid=X：X 命中待新增 → 直接撤掉那筆待新增；命中待修改 → 取消修改；否則登記為對真條目 X 的待刪除。
+    function _wbMergeOps(existing, incoming) {
+        const out = (existing || []).slice();
+        const idx = (uid) => out.findIndex(x => x.uid === uid);
+        for (const op of (incoming || [])) {
+            if (op.op === 'add') {
+                // 防呆：AI 若沒用 uid、又重吐同標題的待新增 → 當「改那筆」而非開重複
+                const j = out.findIndex(x => x.op === 'add' && x.comment && op.comment && x.comment === op.comment);
+                if (j >= 0) { if (op.keys != null) out[j].keys = op.keys; if (op.content != null) out[j].content = op.content; }
+                else out.push({ op: 'add', uid: _wbTempUid--, comment: op.comment, keys: op.keys, content: op.content });
+            } else if (op.op === 'del') {
+                if (op.uid == null) continue;
+                const i = idx(op.uid);
+                if (i >= 0 && out[i].op === 'add') { out.splice(i, 1); continue; }        // 撤銷一筆還沒寫入的待新增
+                if (i >= 0 && out[i].op === 'update') out.splice(i, 1);                    // 取消對該真條目的待修改
+                if (!out.some(x => x.op === 'del' && x.uid === op.uid)) out.push({ op: 'del', uid: op.uid });
+            } else if (op.op === 'update') {
+                if (op.uid == null) continue;
+                const i = idx(op.uid);
+                if (i >= 0 && (out[i].op === 'add' || out[i].op === 'update')) {
+                    if (op.comment != null) out[i].comment = op.comment;
+                    if (op.keys != null) out[i].keys = op.keys;
+                    if (op.content != null) out[i].content = op.content;
+                } else {
+                    out.push({ op: 'update', uid: op.uid, comment: op.comment, keys: op.keys, content: op.content });
+                }
+            }
+        }
+        return out;
     }
     // ⑤ 確認改動（兩層：總覽列每項摘要 → 點一項看完整內容；確認才寫。手機尺寸下長內容用換頁、不摺疊也不一地倒）
     const _wbOpClass = (op) => op === 'add' ? 'add' : op === 'del' ? 'del' : 'upd';
@@ -1505,16 +1540,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const n = _wbPending.length;
         const adds = [], updates = [], dels = [];
         for (const o of _wbPending) {
-            if (o.op === 'del') { if (o.uid != null) dels.push(o.uid); }
+            // 真 uid≥0 才送酒館；負數＝待新增的臨時 uid（merge 後只會出現在 op='add'，del/update 不該帶負 uid，防呆擋掉）
+            if (o.op === 'del') { if (o.uid != null && o.uid >= 0) dels.push(o.uid); }
             else if (o.op === 'add') { const k = o.keys || []; adds.push({ comment: o.comment || '', keys: k, content: o.content || '', enabled: true, type: k.length ? 'selective' : 'constant' }); }
-            else if (o.op === 'update' && o.uid != null) { const u = { uid: o.uid }; if (o.comment != null) u.comment = o.comment; if (o.keys != null) u.keys = o.keys; if (o.content != null) u.content = o.content; updates.push(u); }
+            else if (o.op === 'update' && o.uid != null && o.uid >= 0) { const u = { uid: o.uid }; if (o.comment != null) u.comment = o.comment; if (o.keys != null) u.keys = o.keys; if (o.content != null) u.content = o.content; updates.push(u); }
         }
         const btn = host.querySelector('#swb-apply'); if (btn) { btn.disabled = true; btn.textContent = '套用中…'; }
         try {
             if (adds.length) await TH.createLorebookEntries(_wbWorking, adds);
             if (updates.length) await TH.setLorebookEntries(_wbWorking, updates);
             if (dels.length) await TH.deleteLorebookEntries(_wbWorking, dels);
-            _wbPending = null;
+            _wbPending = null; _wbTempUid = -1;
             try { _wbEntries = (await TH.getLorebookEntries(_wbWorking)) || []; } catch (e) {}
             _wbToast('已套用 ' + n + ' 項 ✓');
             _wbView = 'chat'; renderWorldbookPanel();
