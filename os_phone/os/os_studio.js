@@ -247,6 +247,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.parse() → { 標籤名: [[欄1,欄2,…], …] }
 - st.md(text) → markdown 轉 HTML（內建，免疫 $1）
 - 🧩 進階功能（用法不常駐、省 token）：🖼️ 生圖(st.setImage)、📤 回傳對話框(st.toChat) 等——**要用就點對應的「功能 chip」**把完整用法帶進這次請求；使用者沒帶進來就別用該功能、也別自己瞎掰 API。
+- 🚫【鐵則】要把面板生的內容「送進劇情／對話」一律用 st.toChat（回傳對話框 chip）＝貼進送出框讓使用者自己送。**絕對禁止**用 createChatMessages／TavernHelper／generateRaw／直接操作 #send_textarea 等酒館原生 API 自己建訊息或硬送——那會在聊天串多出標 System 或用戶名的「幽靈訊息」，很怪。沒帶 st.toChat 用法就「不要做送進對話這件事」，別用原生 API 替代。
 - st.callAI(systemPrompt) → Promise，呼叫 AI 生文字（自動帶角色卡／最近劇情／世界書當背景，不必重述）。await 包 try/catch、生成中顯示 loading。
 - st.getCurrentChars() → Promise，回傳當前聊天室出現過的角色 [{name,count}]（依出現次數排序）。做「角色選單／搜尋」用——例如日記/檔案類面板讓用戶從清單挑角色，免手打名字。空陣列＝還沒角色。
 - st.getStory(n) → 回最近 n 條劇情 [{name, text}]（預設 30，已洗成乾淨文字）。**共用面板「讀當前劇情顯示」就用這個**（不經 AI、直接拿正文）。純展示卡別用它（那走 lines/st.parse）。
