@@ -329,25 +329,34 @@ ${list}`;
         }
         return true;   // 同長度、差異全漢字 = 繁簡候選(由副模型最終確認)
     }
-    function _dedupeCall(names) {
-        return new Promise((resolve, reject) => {
-            if (!win.OS_API?.chatSecondary) return reject(new Error('副模型不可用'));
-            const sys = '你是角色名去重助手：判斷清單裡哪些名字其實是「同一個角色」被寫成繁體/簡體或別名，分組並指定保留名，結果只放進一個 ```json 區塊。';
-            const usr =
-                `下面是同一個狀態容器裡的角色名清單。請找出「其實是同一個角色」的重複(最常見：同一名字一個繁體、一個簡體；或同人別名)。\n` +
-                `規則：\n` +
-                `- 只把「確定是同一角色」的名字分到同一組；不同角色「絕對不要」併在一起，寧可不併。\n` +
-                `- 不確定 → 各自獨立、不要放進任何組。\n` +
-                `- 每組指定一個 keep(保留名)：優先用「繁體＋最完整」的那個寫法。\n` +
-                `- 只輸出「至少 2 個名字」的重複組；沒有任何重複就回空陣列。\n\n` +
-                `名字清單：\n${names.map(n => '- ' + n).join('\n')}\n\n` +
-                "輸出格式：\n```json\n{ \"groups\": [ { \"keep\": \"保留名\", \"dup\": [\"要被併掉的名1\"] } ] }\n```";
-            let done = false;
-            const timer = setTimeout(() => { if (done) return; done = true; reject(new Error('去重副模型超時')); }, CONFIG.timeoutMs);
-            win.OS_API.chatSecondary([{ role: 'system', content: sys }, { role: 'user', content: usr }], null,
-                (text) => { if (done) return; done = true; clearTimeout(timer); resolve(text); },
-                (err) => { if (done) return; done = true; clearTimeout(timer); reject(err); });
-        });
+    // 角色名去重「搭便車」：掃 currentState 找繁簡/別名候選容器 → 回 { block, pending }（沒候選回 null）。
+    //   block 附進主副模型 prompt，要它在「同一個 json」多吐 "dupes"；★不再另開一通 chatSecondary（治「一輪三次 API」）。
+    function _buildDedupeBlock(state) {
+        if (!state || typeof state !== 'object') return null;
+        const conts = [];
+        for (const contKey of Object.keys(state)) {
+            const cont = state[contKey];
+            if (!cont || typeof cont !== 'object' || Array.isArray(cont)) continue;
+            const names = Object.keys(cont).filter(n => cont[n] && typeof cont[n] === 'object' && !Array.isArray(cont[n]));
+            if (names.length < 2 || names.length > 60) continue;
+            let hasCand = false;
+            outer: for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++)
+                if (_looksLikeVariant(names[i], names[j])) { hasCand = true; break outer; }
+            if (!hasCand) continue;
+            const sig = names.slice().sort().join('|');
+            if (_dedupeSeen.get(contKey) === sig) continue;   // 上次已判「沒得併」的同一組 → 不再問
+            conts.push({ contKey: contKey, names: names, sig: sig });
+        }
+        if (!conts.length) return null;
+        const listText = conts.map(c => '· 容器「' + c.contKey + '」：' + c.names.join('、')).join('\n');
+        const block = '\n\n【附帶任務 · 角色名去重 — 在同一個 json 區塊一起輸出，不要另外回覆】\n' +
+            '下列容器裡可能有「其實是同一角色」被寫成繁體/簡體或別名的重複：\n' + listText + '\n' +
+            '請判斷並在輸出的 json 裡多加一個 "dupes" 欄位：\n' +
+            '- 只把「確定是同一角色」的名字分到同一組；不同角色絕對不要併，寧可不併；不確定→不要放進組。\n' +
+            '- 每組指定 keep(保留名)：優先「繁體＋最完整」的寫法。\n' +
+            '- 只列「至少 2 個名字」的組；沒有任何重複就給空陣列。\n' +
+            '格式： "dupes": [ { "container": "容器名", "keep": "保留名", "dup": ["被併掉的名1"] } ]';
+        return { block: block, pending: conts };
     }
     // 深合併：把 src 欄位補進 dst(保留角色)，dst 既有非空值優先、只填 dst 缺的(空/待定/—)
     function _mergeEntity(dst, src) {
@@ -360,44 +369,36 @@ ${list}`;
         }
         return dst;
     }
-    // 掃 state 每個 object 容器、找繁簡候選 → 副模型確認 → 合併刪除。回合併筆數。就地改 state。
-    async function _dedupeEntities(state) {
+    // 套用主副模型「搭便車」回的 dupes → 就地合併 state、記 _dedupeSeen。回合併筆數。
+    //   pending = _buildDedupeBlock 這輪問過的候選容器；即使這輪沒併也記 _dedupeSeen（同組別再問，防燒 prompt）。
+    function _applyDupes(state, dupes, pending) {
         if (!state || typeof state !== 'object') return 0;
+        const byCont = {};
+        (Array.isArray(dupes) ? dupes : []).forEach(g => {
+            if (!g) return;
+            const ck = String(g.container || '').trim();
+            if (ck) { (byCont[ck] = byCont[ck] || []).push(g); }
+        });
         let total = 0;
-        for (const contKey of Object.keys(state)) {
-            const cont = state[contKey];
-            if (!cont || typeof cont !== 'object' || Array.isArray(cont)) continue;
-            const names = Object.keys(cont).filter(n => cont[n] && typeof cont[n] === 'object' && !Array.isArray(cont[n]));
-            if (names.length < 2 || names.length > 60) continue;
-            let hasCand = false;
-            outer: for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++)
-                if (_looksLikeVariant(names[i], names[j])) { hasCand = true; break outer; }
-            if (!hasCand) continue;
-            const sig = names.slice().sort().join('|');
-            if (_dedupeSeen.get(contKey) === sig) continue;   // 同名單上次已判「沒得併」→ 不再問
-            let raw;
-            try { raw = await _dedupeCall(names); } catch (e) { console.warn('[State Runtime] 去重呼叫失敗:', e?.message || e); continue; }
-            const json = extractJSON(raw);
-            const groups = (json && Array.isArray(json.groups)) ? json.groups : [];
+        (pending || []).forEach(p => {
+            const cont = state[p.contKey];
+            if (!cont || typeof cont !== 'object') return;
             let mergedHere = 0;
-            for (const g of groups) {
-                if (!g) continue;
+            (byCont[p.contKey] || []).forEach(g => {
                 let keep = String(g.keep || '').trim();
                 const dups = (Array.isArray(g.dup) ? g.dup : []).map(x => String(x || '').trim()).filter(Boolean);
-                const groupAll = [keep, ...dups].filter(n => names.includes(n) && cont[n]);
-                if (groupAll.length < 2) continue;
+                const groupAll = [keep, ...dups].filter(n => cont[n]);
+                if (groupAll.length < 2) return;
                 if (!groupAll.includes(keep)) keep = groupAll.slice().sort((a, b) => Object.keys(cont[b] || {}).length - Object.keys(cont[a] || {}).length)[0];
                 for (const d of groupAll) {
                     if (d === keep || !cont[d]) continue;
-                    _mergeEntity(cont[keep], cont[d]);
-                    delete cont[d];
-                    mergedHere++; total++;
-                    console.log(`🔁 [State Runtime] 角色去重：「${d}」併入「${keep}」(${contKey})`);
+                    _mergeEntity(cont[keep], cont[d]); delete cont[d]; mergedHere++; total++;
+                    console.log('🔁 [State Runtime] 角色去重(搭便車)：「' + d + '」併入「' + keep + '」(' + p.contKey + ')');
                 }
-            }
-            if (mergedHere === 0) _dedupeSeen.set(contKey, sig);   // 沒併 → 記住別再問同一組
-            else _dedupeSeen.delete(contKey);                      // 併過 → 名單會變、清掉重評
-        }
+            });
+            if (mergedHere === 0) _dedupeSeen.set(p.contKey, p.sig);   // 沒併 → 記住別再問同一組
+            else _dedupeSeen.delete(p.contKey);                        // 併過 → 名單變了、清掉重評
+        });
         return total;
     }
 
@@ -765,7 +766,7 @@ ${numberedText}`;
     async function extractOnce(opts) {
         if (_running) return;
         _running = true;
-        let pendingMem = null, memIngested = false;
+        let pendingMem = null, memIngested = false, _dedupe = null;
         try {
             if (_genStopped) { console.log('🛰️ [State Runtime] 本通生成被手動停止 → 跳過抽取(AVS/記憶)'); return; }
             const chatId = getChatId();
@@ -828,6 +829,8 @@ ${numberedText}`;
                 const isInitialFill = !currentState || Object.keys(currentState).length === 0;
                 prompt = buildExtractPrompt(schema, currentState, recentText, isInitialFill);
                 if (wantMemory) prompt += _memoryAddendum();
+                // 角色去重搭便車：有繁簡/別名候選才把名單塞進這通 prompt（不另開 API）
+                if (localStorage.getItem('sp_avs_dedupe') !== '0') { _dedupe = _buildDedupeBlock(currentState); if (_dedupe) prompt += _dedupe.block; }
             } else {
                 prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '');
             }
@@ -894,9 +897,9 @@ ${numberedText}`;
                 _applyPatchInto(newCurrent, filtered);
                 // 🔁 寫入前先去重：同一角色繁簡/別名重複 → 副模型確認後合併刪除（有候選才花呼叫、無候選 0 成本；sp_avs_dedupe=0 可關）
                 try {
-                    if (localStorage.getItem('sp_avs_dedupe') !== '0') {
-                        const _m = await _dedupeEntities(newCurrent);
-                        if (_m > 0) { if (_lastExtract) _lastExtract.dedupedCount = _m; console.log(`🔁 [State Runtime] 本輪去重合併 ${_m} 個重複角色`); }
+                    if (_dedupe) {   // 這輪有塞去重候選 → 套用主副模型同一通回的 json.dupes（沒併也會記 _dedupeSeen 別再問）
+                        const _m = _applyDupes(newCurrent, json.dupes, _dedupe.pending);
+                        if (_m > 0) { if (_lastExtract) _lastExtract.dedupedCount = _m; console.log(`🔁 [State Runtime] 本輪去重合併 ${_m} 個重複角色(搭便車)`); }
                     }
                 } catch (e) { console.warn('[State Runtime] 角色去重略過:', e?.message || e); }
                 if (_lastExtract) { _lastExtract.updates = filtered; _lastExtract.current = newCurrent; }   // 補上狀態給診斷面板
