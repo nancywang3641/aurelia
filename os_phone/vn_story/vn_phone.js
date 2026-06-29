@@ -11,8 +11,8 @@
     const VN_Phone = {
         chatParticipants: [], 
         isGroupChat: false, 
-        currentChatroom: '', 
-        chatroomCache: {}, 
+        currentChatroom: '',   // 當前聊天室「接續 key」= id 優先、退回房名（非顯示名；標題另顯示房名）
+        chatroomCache: {},     // key(id優先/房名) → chat-body innerHTML，斷開後同 key 接回（續接）
         isCallActive: false,
 
         resetState: function() {
@@ -28,16 +28,18 @@
         // ==========================================
         initChat: function(core, line) {
             core.mode = 'chat';
-            const newRoom = line.match(/chatroom="([^"]+)"/)?.[1] || 'Chat';
-            document.getElementById('chat-title').innerText = newRoom;
-            
-            if (newRoom !== this.currentChatroom) {
+            const newName = line.match(/chatroom="([^"]+)"/)?.[1] || 'Chat';
+            const newId   = line.match(/\bid\s*=\s*"([^"]+)"/)?.[1] || '';   // VN PHONE <chat ... id="穩定id"> 的接續 id
+            const newKey  = newId || newName;   // 接續 key：ID 優先（AI 改群名也接得回同一間），沒 id 才退回房名
+            document.getElementById('chat-title').innerText = newName;       // 標題永遠顯示房名（給玩家看）
+
+            if (newKey !== this.currentChatroom) {
                 if (this.currentChatroom) {
                     this.chatroomCache[this.currentChatroom] = document.getElementById('chat-body').innerHTML;
                 }
                 const chatBody = document.getElementById('chat-body');
-                chatBody.innerHTML = this.chatroomCache[newRoom] || '';
-                this.currentChatroom = newRoom;
+                chatBody.innerHTML = this.chatroomCache[newKey] || '';
+                this.currentChatroom = newKey;
             }
             core.toggleUI('phone-chat');
             core.next();
