@@ -25,6 +25,7 @@
 
     let _debounceTimer = null;
     let _repairDebounce = null;     // 開頭設置(Bg/BGM)補救的 debounce
+    let _selfEditing = false;       // 開頭補救正在改寫訊息 → 擋 onMessageInvalidated 誤砍本則剛存的 patch
     let _running = false;           // 防止並發抽取
     let _genStopped = false;        // 本通生成是否被「手動停止」(GENERATION_STOPPED)→ 全副模型跳過，別拿半截正文白燒
     let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
@@ -1149,6 +1150,7 @@ ${numberedText}`;
     // --- patch 維護：訊息變動時砍對應 patch ---
     async function onMessageInvalidated(msgId) {
         try {
+            if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過 patch 失效'); return; }
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
             const data = await win.OS_DB.getStateData(chatId);
@@ -1238,7 +1240,12 @@ ${numberedText}`;
                 : cur.replace(/(<content>[^\n]*\n?)/i, `$1${block}\n`);
             if (next === cur) return;
 
-            await win.TavernHelper.setChatMessages([{ message_id: arrIdx, message: next, mes: next }], { refresh: 'affected' });
+            _selfEditing = true;   // 擋自身改寫觸發 MESSAGE_UPDATED → onMessageInvalidated 誤砍本則剛存的 patch
+            try {
+                await win.TavernHelper.setChatMessages([{ message_id: arrIdx, message: next, mes: next }], { refresh: 'affected' });
+            } finally {
+                setTimeout(() => { _selfEditing = false; }, 2500);   // 事件可能 async → 留窗口再解旗標
+            }
             console.log('🛰️ [State Runtime] 開頭設置補救：補回 ' + inject.join(' '));
         } catch (e) { console.warn('[State Runtime] 開頭設置補救失敗:', e?.message || e); }
     }
