@@ -1895,7 +1895,10 @@
         // 送 GPT-SoVITS 前清理文字：去掉開頭與結尾標點，避免後端切句異常與靜音
         _cleanTextForSoVITS: function(text) {
             if (!text) return '';
-            let cleaned = text.replace(/^[。，、…‥「」『』【】〔〕！？!?,\s]+/, '');
+            // 先剝掉 ()（）內的動作/語氣描述（如「(輕笑)」）——那是舞台指示，不該被念出來。
+            //   MiniMax 端 cleanTextForTts 已有剝；SoVITS 這條原本漏了 → 跟 VN-phone 語音對齊。
+            let cleaned = String(text).replace(/[（(][^（()]*[)）]/g, ' ');
+            cleaned = cleaned.replace(/^[。，、…‥「」『』【】〔〕！？!?,\s]+/, '');
             // 🌟 結尾過濾：拿掉了 ！？!? 和 … ‥ ，讓語氣保留！
             cleaned = cleaned.replace(/[。，、「」『』【】〔〕,\s]+$/, '');
             cleaned = cleaned.replace(/[,，]/g, ' ');
