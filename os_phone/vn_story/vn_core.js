@@ -277,6 +277,7 @@
                     const _cid = this._lastBgCacheId;
                     (async () => {
                         const cached = await VN_Cache.get('bg_cache', _cid);
+                        console.log('[VN_Core🔎] 背景持久還原 cid=' + _cid + ' → IDB ' + (cached && cached.url ? '命中' : '撈空(上輪生成沒寫進IDB)'));
                         if (cached && cached.url && bg) {
                             const objUrl = await this._toObjectUrl(cached.url).catch(() => null);
                             let finalUrl = objUrl || cached.url;
@@ -285,6 +286,7 @@
                         }
                     })();
                 } else {
+                    console.log('[VN_Core🔎] 背景持久：_lastBgCacheId 為空 → 不還原(上輪沒成功背景，或 VN_Core 被重建)');
                     this._setBgImage(bg, '');
                 }
             }
@@ -2214,15 +2216,17 @@
                     }
                 }
                 if (aiPrompt) {
-                    this._lastBgCacheId = cacheId;
                     const memUrl = this._bgMemCache[cacheId];
                     const _gameBg = document.getElementById('game-bg');
                     if (memUrl) {
+                        this._lastBgCacheId = cacheId;   // 有現成圖 → 更新「最後可用背景」
                         this._setBgImage(_gameBg, memUrl);
                     } else {
                         (async () => {
                             const url = await this._safeFetchBg(cacheId, aiPrompt);
-                            if (url) this._setBgImage(_gameBg, url);
+                            // ★只有真的拿到圖才更新 _lastBgCacheId；生成失敗/逾時(url='')→保留上一個可用背景，
+                            //   下次 resetState 還原它（治「漏Bg時背景變空」：失敗的 cacheId 指向空 IDB 槽 → 撈空變黑）
+                            if (url) { this._lastBgCacheId = cacheId; this._setBgImage(_gameBg, url); }
                         })();
                     }
                 }
