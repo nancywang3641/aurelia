@@ -24,6 +24,7 @@
     };
 
     let _debounceTimer = null;
+    let _repairDebounce = null;     // 開頭設置(Bg/BGM)補救的 debounce
     let _running = false;           // 防止並發抽取
     let _genStopped = false;        // 本通生成是否被「手動停止」(GENERATION_STOPPED)→ 全副模型跳過，別拿半截正文白燒
     let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
@@ -1193,6 +1194,55 @@ ${numberedText}`;
         showToast('✅ 抽取完成', 'success');
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // 開頭設置補救：主模型偶爾漏掉開場 ChapterCard 的 [Bg]/[BGM]（換背景/音樂的關鍵）
+    //   → 腳本每輪重抓、漏一次就掉場景：章節卡空、回放/背景音樂失準。
+    //   搭「生成結束」這趟，自動 carry-forward 最近一筆補回、改寫最新這則酒館訊息。
+    //   • 只在「整則完全沒有該 tag」時補（這輪 AI 有給=可能換了場景，不去蓋）。
+    //   • 歷史也找不到可 carry → 放棄（不亂編場景）。
+    //   • 改寫用 setChatMessages({refresh:'affected'})，與 _captureAndStripRecall 同款（程式化刷新、不觸發 MESSAGE_EDITED）。
+    //   • 隱藏開關 localStorage vn_fix_opening=0 可關，預設開。
+    // ─────────────────────────────────────────────────────────────────────
+    async function _repairOpeningSettings() {
+        try {
+            if (localStorage.getItem('vn_fix_opening') === '0') return;
+            if (!win.TavernHelper?.setChatMessages) return;
+            const ctx = win.SillyTavern?.getContext?.();
+            if (!ctx || !Array.isArray(ctx.chat) || !ctx.chat.length) return;
+            const arrIdx = ctx.chat.length - 1;                 // 用陣列索引改最新則（避開懶載真樓號越界，同 _captureAndStripRecall）
+            const msg = ctx.chat[arrIdx] || {};
+            if (msg.is_user || msg.is_system) return;           // 只修主模型回覆
+            const cur = String(msg.mes || msg.message || '');
+            if (cur.indexOf('<content>') === -1 || cur.indexOf('</content>') === -1) return;  // 只動完整 VN 正文，避開半截/思考期/錯誤訊息
+
+            const hasBg  = /\[Bg\|/i.test(cur);
+            const hasBgm = /\[BGM\|/i.test(cur);
+            if (hasBg && hasBgm) return;                        // 兩個都在 → 沒漏
+
+            // carry-forward：往回找最近一則含該 tag 的訊息，撈「最後一個」(=當前場景/音樂)整行原樣（'_' = 本輪已有、不用找）
+            let bgLine = hasBg ? '_' : null, bgmLine = hasBgm ? '_' : null;
+            for (let i = arrIdx - 1; i >= 0 && (bgLine === null || bgmLine === null); i--) {
+                const t = String(ctx.chat[i]?.mes || ctx.chat[i]?.message || '');
+                if (bgLine === null)  { const ms = t.match(/^[ \t]*\[Bg\|[^\]\n]*\]/gim);  if (ms) bgLine  = ms[ms.length - 1].trim(); }
+                if (bgmLine === null) { const ms = t.match(/^[ \t]*\[BGM\|[^\]\n]*\]/gim); if (ms) bgmLine = ms[ms.length - 1].trim(); }
+            }
+            const inject = [];
+            if (bgmLine && bgmLine !== '_') inject.push(bgmLine);   // 音樂在前
+            if (bgLine  && bgLine  !== '_') inject.push(bgLine);
+            if (!inject.length) return;                          // 歷史也沒得 carry → 不補
+
+            // 插進開場：有 <ChapterCard> 就插它後面（Bg/BGM 本就屬卡內）、否則插 <content> 後面；各自獨立一行
+            const block = inject.join('\n');
+            const next = /<ChapterCard>/i.test(cur)
+                ? cur.replace(/(<ChapterCard>[^\n]*\n?)/i, `$1${block}\n`)
+                : cur.replace(/(<content>[^\n]*\n?)/i, `$1${block}\n`);
+            if (next === cur) return;
+
+            await win.TavernHelper.setChatMessages([{ message_id: arrIdx, message: next, mes: next }], { refresh: 'affected' });
+            console.log('🛰️ [State Runtime] 開頭設置補救：補回 ' + inject.join(' '));
+        } catch (e) { console.warn('[State Runtime] 開頭設置補救失敗:', e?.message || e); }
+    }
+
     // --- 事件監聽 ---
     function init() {
         if (!win.eventOn || !win.tavern_events) {
@@ -1207,6 +1257,9 @@ ${numberedText}`;
             // 🎯 獨立插圖副模型：獨立於狀態系統(AVS)，狀態關著也能跑 → 在 isEnabled 檢查前排程；函式自己看開關
             clearTimeout(_sceneDebounce);
             _sceneDebounce = setTimeout(extractScenesStandalone, CONFIG.debounceMs + 600);
+            // 開頭設置補救(Bg/BGM)：獨立於狀態系統，狀態關著也修 → 排在 isEnabled gate 前；自己看 vn_fix_opening 開關
+            clearTimeout(_repairDebounce);
+            _repairDebounce = setTimeout(() => { if (!_genStopped && !win.__AURELIA_SUMMARIZING) _repairOpeningSettings(); }, CONFIG.debounceMs + 900);
             if (!isEnabled()) return;
             clearTimeout(_debounceTimer);
             _debounceTimer = setTimeout(extractOnce, CONFIG.debounceMs);
@@ -1333,6 +1386,7 @@ ${numberedText}`;
         isEnabled, setEnabled,
         forceExtract, clearPatches,
         injectCurrent, injectRules, extractOnce,
+        repairOpeningSettings: _repairOpeningSettings,   // 手動補一次開頭 Bg/BGM（測試/救援用）
         compressOldMemories,   // 🗜️ 記憶合併壓縮（治長線過載），給 os_avs_memory 整理鈕呼叫
         listAllStateData, removeStateData,
         normalizeChatId,
