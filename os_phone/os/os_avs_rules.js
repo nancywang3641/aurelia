@@ -100,8 +100,8 @@
         return `<behavior_rules>\n以下行為規範當前生效，請在回應中嚴格遵循，不要在 <content> 中提及規則本身：\n\n${body}\n</behavior_rules>`;
     }
 
-    async function generateRulesForWorld({ worldId, worldTitle, worldDesc, variables, callApi }) {
-        if (!callApi || !worldId || !variables?.length) return 0;
+    async function generateRulesForWorld({ worldId, packId, worldTitle, worldDesc, variables, callApi }) {
+        if (!callApi || (!worldId && !packId) || !variables?.length) return 0;
         try {
             const varList = variables.map(v => `${v.name} (預設:${v.defaultValue})`).join('、');
             const prompt = `世界觀：「${worldDesc}」
@@ -131,7 +131,8 @@
                 const n = parseFloat(rawVal);
                 newRules.push({
                     id:      _newId(),
-                    worldId,
+                    worldId: worldId || '',
+                    packId:  packId || '',   // 綁變數包（規則窗口按 packId 過濾顯示）
                     name:    _stripMd(name || path),
                     enabled: true,
                     path:    _stripMd(path).trim(),
