@@ -2732,6 +2732,8 @@
         },
         parseMarkdown: function(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'<em>$1</em>'); },
         renderVN: function(n, t, mode) {
+            // 劇情正常演出(非通話) → 清掉通話接續 key：之後同人來電會正常響鈴（VN_Phone.initCall 靠它判斷「是續接還是新來電」）
+            try { if (win.VN_Phone && this.mode !== 'call' && win.VN_Phone.currentCallKey) win.VN_Phone.currentCallKey = ''; } catch (e) {}
             // 🎬 鋪底式場景插圖：每渲染一句對話 -1，停滿 3 句就淡出（CSS opacity transition）
             if (this._sceneCgLinger > 0 && !this._sceneCgHold) {   // hold(失敗佔位)期間不遞減、不淡出，停著讓玩家手動重生
                 this._sceneCgLinger--;
