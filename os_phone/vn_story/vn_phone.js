@@ -18,6 +18,8 @@
         _callBuffer: null,     // 本段通話累積的 [Char] 台詞，離開通話時 flush 進統一記憶(OS_DB)
         _callMsgId: null,      // 本段通話來源訊息 id，去重防回放/重整重複寫
         _callName: '',         // 通話對方顯示名(寫記憶 rec.name 用)
+        _callTimer: null,      // 通話計時 setInterval handle
+        _callSec: 0,           // 通話已計秒數
 
         resetState: function() {
             this.chatParticipants = [];
@@ -25,6 +27,7 @@
             this.currentChatroom = '';
             this.chatroomCache = {};
             this.isCallActive = false;
+            this._stopCallTimer(); this._callSec = 0;
         },
 
         // ==========================================
@@ -436,6 +439,7 @@
 
             // 新來電：顯示來電 + 接聽/掛斷，等使用者接
             this.isCallActive = false;
+            this._callSec = 0;   // 新來電從 00:00 起算(續接不重置→沿用上段秒數)
             const st = document.getElementById('call-status');
             st.innerText = '來電';
             st.className = '';
@@ -458,11 +462,32 @@
         },
 
         exitCall: function(core) {
+            this._stopCallTimer();     // 離開通話→停計時(續接時 _callSec 仍保留，下段沿用)
             this._flushCallMemory();   // 離開通話(含掛斷/拒接都會走到這)→把台詞寫進統一記憶
             document.getElementById('phone-call').classList.remove('call-active');
             core.mode = 'vn';
             core.toggleUI('vn');
             core.next();
+        },
+
+        // ── 通話計時 ──────────────────────────────────────────────
+        _fmtCallTime: function() {
+            const s = this._callSec || 0;
+            return '通話中 ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+        },
+        _startCallTimer: function() {
+            const self = this;
+            if (this._callTimer) { clearInterval(this._callTimer); }
+            const st = document.getElementById('call-status');
+            if (st) st.innerText = this._fmtCallTime();   // 立刻顯示當前秒數(續接沿用)
+            this._callTimer = setInterval(function () {
+                self._callSec = (self._callSec || 0) + 1;
+                const e = document.getElementById('call-status');
+                if (e) e.innerText = self._fmtCallTime();
+            }, 1000);
+        },
+        _stopCallTimer: function() {
+            if (this._callTimer) { clearInterval(this._callTimer); this._callTimer = null; }
         },
 
         // 把本段通話的 [Char] 台詞寫進「統一記憶」OS_DB.getApiChat(callId)，電話app/微信看得到（與 dialer 同一份）。
@@ -559,8 +584,8 @@
         answerCall: function(core) {
             this.isCallActive = true;
             const st = document.getElementById('call-status');
-            st.innerText = '通話中 00:00';
             st.classList.add('connected');
+            this._startCallTimer();   // 接聽→計時開始跳秒
             document.getElementById('phone-call').classList.add('call-active');
 
             document.getElementById('call-incoming-btns').classList.add('hidden');
