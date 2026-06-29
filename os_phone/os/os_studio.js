@@ -1387,6 +1387,19 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 return `#${e.uid}｜[${tag}]｜標題：${e.comment || '(無)'}｜關鍵字：${(e.keys || []).join(',') || '（無）'}｜內容：${String(e.content || '')}`;
             }).join('\n\n');
     }
+    // 把目前「尚未套用的待改動」(_wbPending) 序列化餵回 AI，讓它整套保留重輸出，避免下一輪只回新 op→把上一輪的刪除/新增覆蓋掉
+    function _wbPendingForPrompt() {
+        if (!_wbPending || !_wbPending.length) return '';
+        return _wbPending.map(o => {
+            if (o.op === 'del') return '【刪除】uid=' + o.uid;
+            const head = (o.op === 'update' && o.uid != null) ? ('【修改】uid=' + o.uid) : '【新增】';
+            const parts = [];
+            if (o.comment != null) parts.push('標題：' + o.comment);
+            if (o.keys && o.keys.length) parts.push('關鍵字：' + o.keys.join(','));
+            if (o.content != null) parts.push('內容：' + o.content);
+            return head + (parts.length ? ' ' + parts.join('｜') : '');
+        }).join('\n');
+    }
     async function _wbSend(host) {
         const ta = host.querySelector('#swb-msg'); const msg = (ta.value || '').trim();
         if (!msg) return;
@@ -1395,7 +1408,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         _wbChat.push({ role: 'user', content: msg }); ta.value = '';
         _wbPaintChat(host);
         const sendBtn = host.querySelector('#swb-send'); if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '生成中…'; }
-        const messages = [{ role: 'system', content: _WB_SYS + '\n\n【目前條目】\n' + (_wbEntriesForPrompt() || '（空，還沒有條目）') }].concat(_wbChat.slice(-8));
+        let _wbSysFull = _WB_SYS + '\n\n【目前條目】\n' + (_wbEntriesForPrompt() || '（空，還沒有條目）');
+        const _pend = _wbPendingForPrompt();
+        if (_pend) _wbSysFull += '\n\n【尚未套用的待改動（你上一輪提的、使用者還沒按套用）】\n' + _pend + '\n→ 使用者這輪是在「這些待改動的基礎上」繼續調整。請把「上面這些待改動連同你這輪的新改動，整套重新輸出 <wb> 區塊」（含原本的刪除／新增，一個都別漏；要改某條待改動就改它、別另開重複的）。只有使用者明確要撤銷某項待改動時，才不輸出那一項。';
+        const messages = [{ role: 'system', content: _wbSysFull }].concat(_wbChat.slice(-8));
         const done = (full) => {
             if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; }
             const reply = String(full || '');
