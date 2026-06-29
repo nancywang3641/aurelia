@@ -2216,6 +2216,7 @@
 
             if (line.startsWith('[Bg|')) {
                 this._stageClear();   // 換背景＝換場景 → 清空兩格立繪
+                try { if (win.VN_Phone && win.VN_Phone.currentCallKey) win.VN_Phone.currentCallKey = ''; } catch (e) {}   // 換場景＝通話脈絡結束 → 之後同人來電正常響鈴(非續接)
                 const parts = line.slice(4, -1).split('|');
                 const sceneLabel = parts.length >= 2 ? parts[1] : parts[0];
                 const aiPrompt   = this._bgGenPrompt(parts);   // 第二格(设施名) + 第三格(描述)
@@ -2353,6 +2354,7 @@
 
             if (line.startsWith('[Trans|')) {
                 this._stageClear();   // 過場 → 清空兩格立繪
+                try { if (win.VN_Phone && win.VN_Phone.currentCallKey) win.VN_Phone.currentCallKey = ''; } catch (e) {}   // 過場(時間/場景/視角轉換)＝通話脈絡結束 → 之後同人來電正常響鈴
                 const _tParts = line.split('|');
                 const text = (_tParts[2]?.replace(']', '') || _tParts[1]?.replace(']', '') || '').trim();
                 document.getElementById('trans-text').innerText = text;
@@ -2732,8 +2734,6 @@
         },
         parseMarkdown: function(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'<em>$1</em>'); },
         renderVN: function(n, t, mode) {
-            // 劇情正常演出(非通話) → 清掉通話接續 key：之後同人來電會正常響鈴（VN_Phone.initCall 靠它判斷「是續接還是新來電」）
-            try { if (win.VN_Phone && this.mode !== 'call' && win.VN_Phone.currentCallKey) win.VN_Phone.currentCallKey = ''; } catch (e) {}
             // 🎬 鋪底式場景插圖：每渲染一句對話 -1，停滿 3 句就淡出（CSS opacity transition）
             if (this._sceneCgLinger > 0 && !this._sceneCgHold) {   // hold(失敗佔位)期間不遞減、不淡出，停著讓玩家手動重生
                 this._sceneCgLinger--;
