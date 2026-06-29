@@ -470,10 +470,19 @@
             }, 1);
         },
 
-        // PWA/手機沒有酒館後端 → 瀏覽器直接打 ComfyUI；酒館內(有 SillyTavern.getContext)走代理免 CORS
+        // 何時瀏覽器直接打 ComfyUI（不走酒館後端代理）：
+        //  ① PWA：根本沒有酒館後端
+        //  ② iOS/iPadOS 上的 app（含 TestFlight 酒館版）：app 後端在手機裡、搆不到電腦上的 ComfyUI
+        //     → 跟語音(SoVITS)一樣 webview 直接打你填的電腦 IP（需 ComfyUI --listen 0.0.0.0 --enable-cors-header）
+        // 桌面（Mac/Windows 酒館、Node 酒館）後端與 ComfyUI 同機 → 維持走代理免 CORS
         _comfyDirectBrowser: function() {
-            try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); }
-            catch (e) { return false; }
+            try {
+                if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return true;
+                var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+                var iOS = /iPhone|iPad|iPod/.test(ua) ||
+                          (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                return !!iOS;
+            } catch (e) { return false; }
         },
 
         // 瀏覽器直連 ComfyUI：POST /prompt → 輪詢 /history/{id} → /view 抓圖 → base64
