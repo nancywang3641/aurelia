@@ -449,7 +449,7 @@
                     if (!res.ok) {
                         const t = await res.text().catch(() => '');
                         console.error('[ImageManager] ComfyUI 直連失敗:', res.status, t);
-                        try { win.toastr && win.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {}
+                        try { win.toastr && win.toastr.error('ComfyUI 生圖失敗：' + (t || res.status) + ' ｜ ' + (this._comfyRouteDiag || ''), 'ComfyUI'); } catch (e) {}
                         return null;
                     }
                     const j = await res.json();
@@ -461,7 +461,7 @@
                 } catch (error) {
                     const _msg = (error && error.name === 'AbortError') ? '生成逾時(180秒)，已放棄這張讓後面的繼續' : (error.message || error);
                     console.error('[ImageManager] ComfyUI 直連錯誤:', _msg);
-                    try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {}
+                    try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + _msg + ' ｜ ' + (this._comfyRouteDiag || ''), 'ComfyUI'); } catch (e) {}
                     return null;
                 } finally {
                     if (_timer) clearTimeout(_timer);
@@ -477,11 +477,21 @@
         // 桌面（Mac/Windows 酒館、Node 酒館）後端與 ComfyUI 同機 → 維持走代理免 CORS
         _comfyDirectBrowser: function() {
             try {
-                if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return true;
-                var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-                var iOS = /iPhone|iPad|iPod/.test(ua) ||
-                          (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-                return !!iOS;
+                var nav = (typeof navigator !== 'undefined') ? navigator : {};
+                var ua = nav.userAgent || '';
+                var plat = nav.platform || '';
+                var touch = nav.maxTouchPoints || 0;
+                var direct = false, why = '';
+                if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) { direct = true; why = 'PWA'; }
+                else if (/iPhone|iPad|iPod/i.test(ua)) { direct = true; why = 'iOS-UA'; }
+                else if (plat === 'MacIntel' && touch > 1) { direct = true; why = 'iPadOS'; }
+                else {
+                    // 殼可能改寫 UA(Tauri 行動版)→ 無桌面 OS 標記 + 有觸控 = 當行動端直連
+                    var desktopOS = /Windows|Macintosh|Mac OS X 10|Linux x86|X11|CrOS/i.test(ua);
+                    if (!desktopOS && touch > 0) { direct = true; why = 'mobile-noDesktopOS'; }
+                }
+                this._comfyRouteDiag = (direct ? '直連' : '走代理') + '[' + why + '] touch:' + touch + ' UA:' + ua.slice(0, 50);
+                return direct;
             } catch (e) { return false; }
         },
 
