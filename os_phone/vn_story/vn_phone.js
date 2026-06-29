@@ -15,6 +15,9 @@
         chatroomCache: {},     // key(id優先/房名) → chat-body innerHTML，斷開後同 key 接回（續接）
         isCallActive: false,
         currentCallKey: '',    // 當前通話「接續 key」= id優先/名轉id/名；★不在 resetState 清(跨輪續接)，演劇情(renderVN)/進chat 才清
+        _callBuffer: null,     // 本段通話累積的 [Char] 台詞，離開通話時 flush 進統一記憶(OS_DB)
+        _callMsgId: null,      // 本段通話來源訊息 id，去重防回放/重整重複寫
+        _callName: '',         // 通話對方顯示名(寫記憶 rec.name 用)
 
         resetState: function() {
             this.chatParticipants = [];
@@ -419,6 +422,7 @@
             const newKey = idAttr || this._resolveContactId(caller) || caller;   // 接續 key：id 優先 → 名轉聯絡人id → 名
             document.getElementById('call-name').innerText = caller;
             core.updateCallAvatar(caller);
+            this._callBuffer = []; this._callMsgId = (core && core._currentMessageId) || null; this._callName = caller;   // 本段通話台詞緩衝(離開時寫統一記憶)
 
             // 🔗 接續：同一通電話被 AI 拆成兩段輸出（id/名 同、中間沒劇情/聊天打斷）→ 不重新「來電」，直接續接通話畫面。
             //    治「一鏡到底沒做到→每段都跳接聽介面、要反覆接通」。currentCallKey 由 renderVN 演劇情 / initChat 進聊天時清掉，
@@ -454,10 +458,49 @@
         },
 
         exitCall: function(core) {
+            this._flushCallMemory();   // 離開通話(含掛斷/拒接都會走到這)→把台詞寫進統一記憶
             document.getElementById('phone-call').classList.remove('call-active');
             core.mode = 'vn';
             core.toggleUI('vn');
             core.next();
+        },
+
+        // 把本段通話的 [Char] 台詞寫進「統一記憶」OS_DB.getApiChat(callId)，電話app/微信看得到（與 dialer 同一份）。
+        //   去重：同一來源訊息(msgId)的通話已寫過就跳過（防回放/重整重複堆）。
+        _flushCallMemory: function() {
+            try {
+                const lines = this._callBuffer;
+                this._callBuffer = null;
+                if (!Array.isArray(lines) || !lines.length) return;
+                const callId = this.currentCallKey;
+                if (!callId) return;
+                const callName = this._callName || callId;
+                const msgId = this._callMsgId;
+                const OS_DB = (window.parent || window).OS_DB;
+                if (!OS_DB || !OS_DB.getApiChat || !OS_DB.saveApiChat) return;
+                (async () => {
+                    try {
+                        const rec = (await OS_DB.getApiChat(callId)) || { id: callId, name: callName, members: [callName], isGroup: false, messages: [] };
+                        if (!Array.isArray(rec.messages)) rec.messages = [];
+                        if (msgId != null && rec.messages.some(function (m) { return m && m._vnCallMsgId === msgId; })) return;   // 這通已寫過 → 跳過(去重)
+                        lines.forEach(function (l) {
+                            rec.messages.push({ type: 'msg', isMe: !!l.isMe, content: l.text, sender: l.sender, senderName: l.sender, _vnCallMsgId: msgId, _viaCall: true });
+                        });
+                        if (!rec.name) rec.name = callName;
+                        await OS_DB.saveApiChat(callId, rec);
+                        console.log('📞 [VN Call] 通話台詞寫進統一記憶 ' + callId + '（+' + lines.length + ' 句）');
+                    } catch (e) { console.warn('[VN Call] 寫統一記憶失敗', (e && e.message) || e); }
+                })();
+            } catch (e) {}
+        },
+        // 判斷通話台詞的發話人是不是主角(寫記憶時 isMe)
+        _isMeName: function(name) {
+            try {
+                const W = (window.parent || window);
+                const mc = (W.OS_PERSONA && W.OS_PERSONA.getName && W.OS_PERSONA.getName()) || (W.OS_API && W.OS_API.getGlobalUserName && W.OS_API.getGlobalUserName()) || '';
+                if (mc && name === mc) return true;
+            } catch (e) {}
+            return name === '主角' || name === '我' || name === 'You' || name === '{{user}}';
         },
 
         handleCallLine: function(line, core) {
@@ -475,6 +518,7 @@
                     nameEl.innerText = parts[0];
                     document.getElementById('call-sub-text').innerHTML = core.parseMarkdown(ex.text);
                     core.addLog(parts[0], ex.text);
+                    if (this._callBuffer) this._callBuffer.push({ sender: parts[0], text: ex.text, isMe: this._isMeName(parts[0]) });   // 收進統一記憶緩衝
                     core.playSFX(ex.sfx);
                     // 🔊 跟正文一樣：當前開哪個引擎就念哪個（SoVITS／MiniMax 各自看自己的開關）
                     (function(core2, charName, rawExp, text) {
