@@ -2960,6 +2960,8 @@
         
         updateCallAvatar: function(name) {
             this.currentName = name; this.currentExp = 'Neutral';
+            const _init = document.getElementById('call-avatar-initial');
+            if (_init) _init.textContent = (name || '?').trim().slice(0, 1);   // 佔位底座：沒頭像圖時顯示名字首字（有圖會蓋上去）
             const img = document.getElementById('call-avatar');
             if (VN_Config.data.spriteBase) {
                 const urls = this._nameVariants(name).map(v => `${VN_Config.data.spriteBase}${v}_Neutral.png`);

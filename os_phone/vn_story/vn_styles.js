@@ -267,7 +267,7 @@
                         </div>
                         <div id="phone-call" class="hidden">
                             <div id="call-status">來電</div>
-                            <img id="call-avatar" src="" onerror="window.VN_Core.handleImgError(this)">
+                            <div id="call-avatar-wrap"><span id="call-avatar-initial"></span><img id="call-avatar" src="" onerror="window.VN_Core.handleImgError(this)"></div>
                             <div id="call-name">Name</div>
 
                             <div id="call-subtitle-box" class="hidden" onclick="window.VN_Core.next()">
