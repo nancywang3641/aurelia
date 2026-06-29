@@ -152,8 +152,11 @@
                             條件滿足時注入主模型 system prompt，引導劇情走向。<br>例：「好感度 ≥ 80 時對主角親暱稱呼」
                         </div>
                         <div id="avs-rules-modal-list" style="display:flex; flex-direction:column; gap:10px; max-height:60vh; overflow-y:auto; padding:4px;"></div>
-                        <div style="display:flex; gap:10px; margin-top:15px;">
-                            <div class="avs-btn avs-btn-primary" id="avs-rules-modal-add" style="flex:1;">＋ 添加規則</div>
+                        <div style="display:flex; margin-top:14px;">
+                            <div class="avs-btn avs-btn-primary" id="avs-rules-modal-aigen" style="flex:1;">AI 生成條件規則</div>
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <div class="avs-btn avs-btn-outline" id="avs-rules-modal-add" style="flex:1;">＋ 手動添加</div>
                             <div class="avs-btn avs-btn-outline" id="avs-rules-modal-close-btn" style="flex:0 0 100px;">關閉</div>
                         </div>
                     </div>
@@ -177,6 +180,8 @@
             _editingRuleIdInModal = '__new__';
             renderRulesModalList(container);
         };
+        const rulesModalAiBtn = container.querySelector('#avs-rules-modal-aigen');
+        if (rulesModalAiBtn) rulesModalAiBtn.onclick = () => aiGenRulesForCurrentPack(container);
 
         const tabs = container.querySelectorAll('.avs-tab');
         tabs.forEach(tab => {
@@ -672,6 +677,45 @@
         container.querySelector('#avs-rules-modal').style.display = 'none';
         // 規則數可能變了，刷新 pack 列表（重新計算 N 條規則徽章）
         loadAllData(container);
+    }
+
+    // 規則窗口的「AI 生成條件規則」：★只生規則、不碰狀態/變數——餵當前 pack 的變數，用主模型
+    //   (general_assistant → OS_API_ENGINE.generateText = 主模型 generateRaw，不帶 preset/歷史)。生出的規則綁 packId、顯示在本窗口。
+    async function aiGenRulesForCurrentPack(container) {
+        const pack = _currentRulesPack;
+        if (!pack) return;
+        if (!Array.isArray(pack.variables) || !pack.variables.length) {
+            alert('這個檔案還沒有任何項目，先加變數再生成規則');
+            return;
+        }
+        if (!win.OS_AVS_RULES?.generateRulesForWorld) { alert('規則引擎未載入'); return; }
+        if (!win.OS_API_ENGINE?.generateText) { alert('主模型 API 引擎未就緒'); return; }
+        const btn = container.querySelector('#avs-rules-modal-aigen');
+        const orig = btn ? btn.textContent : '';
+        if (btn) { btn.textContent = '主模型生成中…'; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.6'; }
+        try {
+            const callApi = (t, p) => win.OS_API_ENGINE.generateText(t, p);   // 主模型路由
+            const n = await win.OS_AVS_RULES.generateRulesForWorld({
+                packId: pack.id,
+                worldId: '',
+                worldTitle: pack.name || '',
+                worldDesc: pack.notes || pack.name || '',
+                variables: pack.variables,
+                callApi
+            });
+            if (n > 0) {
+                if (win.toastr) win.toastr.success('✅ AI 生成 ' + n + ' 條條件規則');
+                _editingRuleIdInModal = null;
+                renderRulesModalList(container);
+            } else if (win.toastr) {
+                win.toastr.warning('這次沒生出規則，再試一次或檢查主模型連線');
+            } else { alert('這次沒生出規則'); }
+        } catch (e) {
+            console.warn('[AVS] AI 生成條件規則失敗', e);
+            if (win.toastr) win.toastr.error('生成失敗：' + ((e && e.message) || e)); else alert('生成失敗');
+        } finally {
+            if (btn) { btn.textContent = orig; btn.style.pointerEvents = ''; btn.style.opacity = ''; }
+        }
     }
 
     const RULE_OPS = ['>=', '<=', '>', '<', '=', '!='];
