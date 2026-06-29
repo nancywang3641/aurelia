@@ -46,6 +46,8 @@
         _sceneFailed: {},   // 生圖失敗過的 cacheId(→ts)：in-flight 解析後就清、防不住「預熱+插入+渲染序列重打」→ 記失敗、同 cacheId 不再自動重生(白燒額度/被風控)；按 🔄 重生會清掉
         _sceneCgLinger: 0,  // 鋪底式場景插圖剩餘停留句數（3→0 淡出）；0=沒在顯示
         _sceneCgCur: null,  // 當前鋪底插圖的 {cacheId, prompt}，給「🔄 重生」鈕重打用（不碰 LLM）
+        _sceneCgHold: false,    // 失敗佔位 hold：true=不淡出(停在佔位卡讓玩家手動重生)；成功才解除
+        _sceneGenBackoff: 0,    // 本輪插圖退避：撞失敗(拼車 NAI 429)後設時戳→後續插圖不再自動猛打；手動重生/新一輪清
         _itemMemCache: {},
         _itemInflight: {},  // 進行中的道具圖生成(itemName→promise)：同 _bgInflight
         _avatarMemCache: {},
@@ -264,10 +266,12 @@
 
             // 清除場景插圖 overlay（防止跨章節殘留）
             const sceneCgOverlay = document.getElementById('scene-cg-overlay');
-            if (sceneCgOverlay) sceneCgOverlay.classList.remove('active');
+            if (sceneCgOverlay) sceneCgOverlay.classList.remove('active', 'scene-cg-failed');
             const sceneCgImg = document.getElementById('scene-cg-img');
             if (sceneCgImg) sceneCgImg.src = '';
             this._sceneCgLinger = 0;
+            this._sceneCgHold = false;
+            this._sceneGenBackoff = 0;   // 新章節/新一輪：解除插圖退避，重新嘗試生圖
 
             const bg = document.getElementById('game-bg');
             if (bg) {
@@ -1456,13 +1460,15 @@
             // 這個 cacheId 剛生圖失敗過(如拼車撞 NAI 429) → 不自動重打：否則「預熱→插入→渲染」序列會同一張各打一次、白燒額度又易被風控。
             // 要重生按場景 CG 的 🔄（retrySceneCg 會清掉這個標記）；重整頁面也會重置（記憶體 map）。
             if (this._sceneFailed[cacheId]) return Promise.resolve('');
+            // 本輪已撞失敗(拼車 NAI 429) → 不再自動猛打後續插圖：標記失敗、回空(顯示佔位卡＋重生鈕)。手動重生/新一輪解除。
+            if (this._sceneGenBackoff) { this._sceneFailed[cacheId] = Date.now(); return Promise.resolve(''); }
             const self = this;
             const p = this._doFetchScene(cacheId, prompt);
             this._sceneInflight[cacheId] = p;
             p.then(function (url) {
-                if (!url) self._sceneFailed[cacheId] = Date.now();   // 回空＝生失敗 → 記下，後續同 cacheId 不再自動觸發
+                if (!url) { self._sceneFailed[cacheId] = Date.now(); self._sceneGenBackoff = Date.now(); }   // 回空＝生失敗 → 記下＋本輪起退避，後續不再猛打
             }, function () {
-                self._sceneFailed[cacheId] = Date.now();             // 例外也算失敗
+                self._sceneFailed[cacheId] = Date.now(); self._sceneGenBackoff = Date.now();                // 例外也算失敗
             }).then(function () { delete self._sceneInflight[cacheId]; });
             return p;
         },
@@ -1479,12 +1485,20 @@
                 delete this._sceneMemCache[cacheId];
                 delete this._sceneInflight[cacheId];
                 delete this._sceneFailed[cacheId];   // 清失敗標記，允許這次手動重生
+                this._sceneGenBackoff = 0;           // 手動重生：解除本輪退避，這張一定要重打
                 try { await VN_Cache.delete('scene_cache', cacheId); } catch (e) {}
                 const url = await this._safeFetchScene(cacheId, prompt);
-                if (url && cgImg) cgImg.src = url;
+                if (url && cgImg) { cgImg.src = url; this._setSceneCgFailed(false); }
+                else { this._setSceneCgFailed(true); }   // 還是失敗(朋友還在生) → 維持佔位卡，可再按
             } finally {
                 if (btn) { btn.disabled = false; btn.classList.remove('spinning'); }
             }
+        },
+        // 插圖失敗(拼車撞 429 等) → 加佔位狀態：顯示佔位底＋置中重生鈕、且 hold 住不淡出；成功則清掉恢復正常淡出
+        _setSceneCgFailed: function(on) {
+            const ov = document.getElementById('scene-cg-overlay');
+            if (ov) ov.classList.toggle('scene-cg-failed', !!on);
+            this._sceneCgHold = !!on;   // 失敗→hold(renderVN 不遞減 linger、hideOverlays 不關)；成功→解除照常淡出
         },
         _doFetchScene: async function(cacheId, prompt) {
             if (this._sceneMemCache[cacheId]) return this._sceneMemCache[cacheId];
@@ -2034,12 +2048,13 @@
                         this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出（不藏對話框、不擋流程）
                         this._sceneCgCur = { cacheId: _cacheId, prompt: _scenePrompt };  // 給 🔄 重生鈕
                         const _memUrl  = this._sceneMemCache[_cacheId];
-                        if (_memUrl) { _cgImg.src = _memUrl; }
+                        if (_memUrl) { _cgImg.src = _memUrl; this._setSceneCgFailed(false); }
                         else {
                             _cgImg.src = '';
                             (async () => {
                                 const url = await this._safeFetchScene(_cacheId, _scenePrompt);
-                                if (url && _cgImg) _cgImg.src = url;
+                                if (url && _cgImg) { _cgImg.src = url; this._setSceneCgFailed(false); }
+                                else { this._setSceneCgFailed(true); }   // 429/失敗 → 留佔位卡＋重生鈕、不淡出
                             })();
                         }
                     }
@@ -2186,12 +2201,13 @@
                     this._sceneCgCur = { cacheId, prompt };  // 給 🔄 重生鈕
                     const memUrl = this._sceneMemCache[cacheId];
                     if (memUrl) {
-                        cgImg.src = memUrl;
+                        cgImg.src = memUrl; this._setSceneCgFailed(false);
                     } else if (cacheId && prompt) {
                         cgImg.src = '';
                         (async () => {
                             const url = await this._safeFetchScene(cacheId, prompt);
-                            if (url && cgImg) cgImg.src = url;
+                            if (url && cgImg) { cgImg.src = url; this._setSceneCgFailed(false); }
+                            else { this._setSceneCgFailed(true); }   // 429/失敗 → 留佔位卡＋重生鈕、不淡出
                         })();
                     }
                 }
@@ -2497,7 +2513,7 @@
         hideOverlays: function() {
             ['sys-overlay', 'trans-overlay', 'item-overlay', 'quest-overlay'].forEach(id => { const _el = document.getElementById(id); if (_el) _el.classList.remove('active'); });
             // 🎬 scene-cg-overlay 走鋪底式：linger>0 期間留著（由 renderVN 計數淡出），不被每句 next 的 hideOverlays 秒關
-            if (this._sceneCgLinger <= 0) { const _sc = document.getElementById('scene-cg-overlay'); if (_sc) _sc.classList.remove('active'); }
+            if (this._sceneCgLinger <= 0 && !this._sceneCgHold) { const _sc = document.getElementById('scene-cg-overlay'); if (_sc) _sc.classList.remove('active'); }
             document.getElementById('text-panel-wrapper').style.display = 'block';
         },
         _showBgmToast: function(name, found) {
@@ -2717,7 +2733,7 @@
         parseMarkdown: function(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'<em>$1</em>'); },
         renderVN: function(n, t, mode) {
             // 🎬 鋪底式場景插圖：每渲染一句對話 -1，停滿 3 句就淡出（CSS opacity transition）
-            if (this._sceneCgLinger > 0) {
+            if (this._sceneCgLinger > 0 && !this._sceneCgHold) {   // hold(失敗佔位)期間不遞減、不淡出，停著讓玩家手動重生
                 this._sceneCgLinger--;
                 if (this._sceneCgLinger <= 0) {
                     const _scOv = document.getElementById('scene-cg-overlay');
