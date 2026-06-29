@@ -1089,7 +1089,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     let _wbConfirmIdx = null; // 確認頁第二層：null=改動總覽，數字=看第 N 項完整內容
     let _wbModel = localStorage.getItem('swb_model') === 'sec' ? 'sec' : 'main';   // 世界書二改用主/副模型（預設主：低頻重品質）
     const _wbTH = () => (window.parent || window).TavernHelper || window.TavernHelper;
-    const _WB_SYS = `你是世界書編輯助手。下面會給你目前世界書的條目清單，使用者跟你討論要怎麼改或新增條目（可能含成人/NSFW 規則設定，照常專業協助、不要拒絕、不要說教）。\n- 改/新增務必跟下面給的現有條目一致、尤其標【常駐基石】的不可矛盾，不要虛構出跟作者既定設定衝突的內容；資訊不足寧可先問使用者、別硬編。\n- 先用一兩句白話回覆討論。\n- 要實際改動世界書時，把每個改動用 <wb> 區塊輸出（沒要改的條目一律別碰、別重列）：\n  新增：<wb op="add"><comment>標題</comment><keys>關鍵字1,關鍵字2</keys><content>條目內容</content></wb>\n  修改：<wb op="update" uid="條目編號"><comment>…</comment><keys>…</keys><content>…</content></wb>（只放要改的欄位，沒放的保留原值）\n  刪除：<wb op="del" uid="條目編號"/>\n- keys 用逗號分隔；常駐條目可留空 keys。只輸出 <wb> 區塊與你的對話，不要解釋格式本身。`;
+    const _WB_SYS = `你是世界書編輯助手。下面會給你目前世界書的條目清單，使用者跟你討論要怎麼改或新增條目（可能含成人/NSFW 規則設定，照常專業協助、不要拒絕、不要說教）。\n- 改/新增務必跟下面給的現有條目一致、尤其標【常駐基石】的不可矛盾，不要虛構出跟作者既定設定衝突的內容；資訊不足寧可先問使用者、別硬編。\n- 先用一兩句白話回覆討論。\n- 要實際改動世界書時，把每個改動用 <wb> 區塊輸出（沒要改的條目一律別碰、別重列）：\n  新增：<wb op="add"><comment>標題</comment><keys>關鍵字1,關鍵字2</keys><content>條目內容</content></wb>\n  修改：<wb op="update" uid="條目編號"><comment>…</comment><keys>…</keys><content>…</content></wb>（只放要改的欄位，沒放的保留原值）\n  刪除：<wb op="del" uid="條目編號"/>\n- ★【新增 vs 修改 — 最重要，常出錯】使用者要「新增／另外／再寫一個／分開／獨立成一條」新設定 → 一律用 op="add" 開「全新條目」；【絕對禁止】把新設定塞進、或拿去覆蓋任何現有條目。只有使用者「明確指名要改某一條既有條目」(例如說『把第N條／某標題那條』的內容改成…) 時才用 op="update" 並帶『那條』的 uid。判斷不確定一律 add，寧可多開一條，也不要蓋掉舊的。一次想加好幾條就輸出好幾個 op="add" 區塊。\n- keys 用逗號分隔；常駐條目可留空 keys。只輸出 <wb> 區塊與你的對話，不要解釋格式本身。`;
 
     // ── 換頁路由：依 _wbView 分派到 5 頁，返回鈕各自硬接上一層 ──
     function renderWorldbookPanel() {
