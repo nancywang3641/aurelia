@@ -1116,13 +1116,21 @@ ${numberedText}`;
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
 
-            const data = await win.OS_DB.getStateData(chatId);
-            if (!data || !data.current || !Object.keys(data.current).length) return;
+            // 變數定義說明書（2026-06-29 改：跟「當前值」一起即時注入，取代「每個 chatId 寫一條世界書」→不再堆條目）
+            let defsBlock = '';
+            try { if (win.OS_AVS?.buildVarDefsContent) defsBlock = (await win.OS_AVS.buildVarDefsContent(chatId)) || ''; } catch (e) {}
 
-            const lines = Object.entries(data.current)
-                .map(([k, v]) => `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-                .join('\n');
-            const content = `<世界狀態 規則="權威資料·寫作前必讀·不得矛盾">\n以下是當前劇情的權威狀態，由系統自動追蹤。你接下來的寫作必須與這些數值、身分、關係完全一致，嚴禁與之矛盾或擅自更改。\n${lines}\n</世界狀態>`;
+            const data = await win.OS_DB.getStateData(chatId);
+            let stateBlock = '';
+            if (data && data.current && Object.keys(data.current).length) {
+                const lines = Object.entries(data.current)
+                    .map(([k, v]) => `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+                    .join('\n');
+                stateBlock = `<世界狀態 規則="權威資料·寫作前必讀·不得矛盾">\n以下是當前劇情的權威狀態，由系統自動追蹤。你接下來的寫作必須與這些數值、身分、關係完全一致，嚴禁與之矛盾或擅自更改。\n${lines}\n</世界狀態>`;
+            }
+
+            const content = [defsBlock, stateBlock].filter(Boolean).join('\n');
+            if (!content) return;   // 定義 + 當前值都空 → 不注入
 
             const result = win.TavernHelper.injectPrompts([{
                 id: CONFIG.injectId,

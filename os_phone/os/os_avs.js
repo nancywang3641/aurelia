@@ -330,70 +330,36 @@
             return;
         }
 
-        const targetComment = `[本世界狀態變數說明書] - ${chatId}`;
-
+        // 🔄 改版(2026-06-29)：變數說明書改成「跟著當前值一起即時注入主提示詞」(state_runtime.injectCurrent→buildVarDefsContent)、
+        //   不再寫世界書——舊作法每個 chatId 建一條 [本世界狀態變數說明書]-chatId，同角色卡重玩不同聊天室會疊一堆。
+        //   這裡保留為「清理殘留」：把過去寫進世界書的 [本世界狀態變數說明書]* 條目全刪掉（不分 chatId）。
         try {
-            const allPacks = await win.OS_DB.getAllVarPacks();
-            // 只用「沒綁 chatId（全域 pack）」或「綁定當前 chatId」的 pack
-            // 跨角色卡 / 跨 chat 的 pack 不應該混進當前 chat 的世界書
-            const packs = (allPacks || []).filter(p => !p.chatId || p.chatId === chatId);
-            const allVars = [];
-            for (const pack of packs) {
-                if (!Array.isArray(pack.variables)) continue;
-                for (const v of pack.variables) {
-                    if (v.name) allVars.push(v);
-                }
-            }
-
+            if (!win.TavernHelper.updateLorebookEntriesWith) return;
             const entries = await win.TavernHelper.getLorebookEntries(bookName);
-            const existing = entries.find(e => e.comment === targetComment);
-
-            // 沒任何變數 → 刪掉舊條目（避免殘留誤導 AI）
-            if (allVars.length === 0) {
-                if (existing) {
-                    await win.TavernHelper.updateLorebookEntriesWith(bookName, list =>
-                        list.filter(e => e.comment !== targetComment)
-                    );
-                    console.log('[AVS Sync] 變數包已清空，刪除世界書條目');
-                }
-                return;
-            }
-
-            // 組變數說明書內容
-            const lines = allVars.map(v => {
-                const typeStr = v.type ? ` (${v.type})` : '';
-                const descStr = v.desc ? `：${v.desc}` : '';
-                return `- ${v.name}${typeStr}${descStr}`;
-            });
-            const content = `[本世界狀態變數說明書]
-本世界劇情中追蹤的狀態變數定義。劇情演進時請依各變數的描述與範圍合理推進，不要違反枚舉值範圍或數值上下限。
-
-${lines.join('\n')}
-
-註：變數的「當前值」會由系統另行注入，本條目僅是變數定義說明書。`;
-
-            const entryData = {
-                comment: targetComment,
-                keys: [],
-                content,
-                constant: true,
-                enabled: true,
-                position: 'at_depth_as_system',
-                depth: 1,
-                order: 9990
-            };
-
-            if (existing) {
-                await win.TavernHelper.updateLorebookEntriesWith(bookName, list =>
-                    list.map(e => e.comment === targetComment ? { ...e, ...entryData } : e)
-                );
-            } else {
-                await win.TavernHelper.createLorebookEntries(bookName, [entryData]);
-            }
-            console.log(`📖 [AVS Sync] 變數說明書已同步到世界書: ${targetComment} (${allVars.length} 變數)`);
+            const _isOld = (e) => e && e.comment && e.comment.indexOf('[本世界狀態變數說明書]') === 0;
+            if (!(entries || []).some(_isOld)) return;
+            await win.TavernHelper.updateLorebookEntriesWith(bookName, list => list.filter(e => !_isOld(e)));
+            console.log('[AVS Sync] 已清掉舊的世界書變數說明書條目（改走即時注入主提示詞，不再堆世界書）');
         } catch(e) {
-            console.warn('[AVS Sync] 同步世界書失敗:', e);
+            console.warn('[AVS Sync] 清理舊變數說明書條目失敗:', e);
         }
+    }
+
+    // 變數定義說明書內容（給 state_runtime.injectCurrent 跟「當前值」一起即時注入主提示詞）。無變數回 ''。
+    let _oldDefsCleaned = false;   // 一次性：清掉舊世界書殘留 [本世界狀態變數說明書]* 條目（同卡重玩堆的那堆）
+    async function buildVarDefsContent(chatId) {
+        try {
+            // 第一次被叫到就順手清一次舊殘留（fire-and-forget，不擋生成；自帶 chatId/bookName 守衛）
+            if (!_oldDefsCleaned) { _oldDefsCleaned = true; try { syncVarPackToLorebook(); } catch (e) {} }
+            if (!chatId || !win.OS_DB?.getAllVarPacks) return '';
+            const allPacks = await win.OS_DB.getAllVarPacks();
+            const packs = (allPacks || []).filter(p => !p.chatId || p.chatId === chatId);   // 全域 pack + 綁當前 chat 的
+            const allVars = [];
+            for (const pack of packs) { if (Array.isArray(pack.variables)) for (const v of pack.variables) if (v.name) allVars.push(v); }
+            if (!allVars.length) return '';
+            const lines = allVars.map(v => `- ${v.name}${v.type ? ` (${v.type})` : ''}${v.desc ? `：${v.desc}` : ''}`);
+            return `<世界狀態變數說明書 規則="變數定義·寫作前必讀">\n本世界劇情追蹤的狀態變數定義。劇情演進時依各變數的描述與範圍合理推進，不要違反枚舉值範圍或數值上下限。當前值由系統另行注入。\n${lines.join('\n')}\n</世界狀態變數說明書>`;
+        } catch (e) { return ''; }
     }
 
     // 🔥 開煉丹爐 modal（永遠帶 packId，從變數包卡片內按鈕進入）
@@ -1662,7 +1628,8 @@ ${lines.join('\n')}
         launch: launchApp,
         renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
         buildAvatarMap: _avsBuildAvatarMap,   // 預撈角色頭像(async) 給 {{@avatar}} 用
-        syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發
+        syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發（現為「清理舊世界書條目」）
+        buildVarDefsContent,     // 變數定義說明書內容→給 state_runtime.injectCurrent 即時注入主提示詞（取代寫世界書）
         generateAndSaveSchema: _aiGenerateAndSavePack,   // AVS 狀態面板「開始追蹤狀態」按鈕共用此核心（生成+存+同步）
         // V3：規則 modal helper（給 inline onclick 呼叫）
         _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,
