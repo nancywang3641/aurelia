@@ -2122,12 +2122,15 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* --- Call 模式 (暗黑現代) --- */
         /* 按鈕改為 flex 排版（不再 absolute），高度自適應，不靠 padding-bottom 撐空間 */
         #phone-call { display: flex; flex-direction: column; height: 100%; background: linear-gradient(180deg, #161b2e 0%, #080a12 100%); color: white; align-items: center; padding-top: 55px; padding-bottom: 0; box-sizing: border-box; position: relative; overflow: hidden; transition: padding-top 0.3s ease; }
-        #call-avatar { width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 4px solid rgba(255,255,255,0.1); box-shadow: 0 0 30px rgba(255,255,255,0.1); margin-bottom: 14px; transition: width 0.3s ease, height 0.3s ease, margin-bottom 0.3s ease; }
+        #call-avatar-wrap { position: relative; width: 130px; height: 130px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.12); box-shadow: 0 0 30px rgba(255,255,255,0.1); margin-bottom: 14px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; background: linear-gradient(135deg, #3a4a6a, #232c45); transition: width 0.3s ease, height 0.3s ease, margin-bottom 0.3s ease; }
+        #call-avatar { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+        #call-avatar-initial { font-size: 3rem; font-weight: 700; color: rgba(255,255,255,0.9); user-select: none; }
         #call-name { font-size: 2.2rem; font-weight: bold; letter-spacing: 1px; transition: font-size 0.3s ease; }
         #call-status { font-size: 1rem; color: #aaa; margin-top: 8px; margin-bottom: 16px; letter-spacing: 2px; transition: margin 0.3s ease; }
         /* 接聽後縮小頭像與名字，騰出對話框空間 */
         #phone-call.call-active { padding-top: 28px; justify-content: space-between; padding-bottom: 18px; }
-        #phone-call.call-active #call-avatar { width: 96px; height: 96px; margin-bottom: 4px; }
+        #phone-call.call-active #call-avatar-wrap { width: 96px; height: 96px; margin-bottom: 4px; }
+        #phone-call.call-active #call-avatar-initial { font-size: 2.2rem; }
         #phone-call.call-active #call-name { font-size: 1.3rem; line-height: 1.2; }
         #phone-call.call-active #call-status { margin-top: 2px; margin-bottom: 0; font-size: 0.85rem; }
         #phone-call.call-active .call-btn-group { margin-top: 0; padding-bottom: 0; }
@@ -2293,12 +2296,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
             /* Call 模式 */
             #phone-call { padding-top: 42px; }
-            #call-avatar { width: 100px; height: 100px; margin-bottom: 10px; }
+            #call-avatar-wrap { width: 100px; height: 100px; margin-bottom: 10px; }
             #call-name { font-size: 1.7rem; }
             #call-status { font-size: 0.9rem; margin-top: 6px; margin-bottom: 12px; }
             #call-subtitle-box { margin-top: 12px; width: 88%; padding: 10px 14px; max-height: 32%; }
             #phone-call.call-active { padding-top: 22px; justify-content: space-between; padding-bottom: 14px; }
-            #phone-call.call-active #call-avatar { width: 62px; height: 62px; margin-bottom: 5px; }
+            #phone-call.call-active #call-avatar-wrap { width: 62px; height: 62px; margin-bottom: 5px; }
             #phone-call.call-active #call-name { font-size: 1.2rem; }
             #phone-call.call-active #call-status { margin-top: 2px; margin-bottom: 0; }
             #phone-call.call-active #call-subtitle-box { margin-top: 0; max-height: 50%; }
@@ -2324,9 +2327,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #dialogue-text { font-size: 0.92rem; }
             #char-portrait { width: 140px; height: 140px; }
             .c-btn { width: 54px; height: 54px; font-size: 1.1rem; }
-            #call-avatar { width: 90px; height: 90px; }
+            #call-avatar-wrap { width: 90px; height: 90px; }
             #call-name { font-size: 1.4rem; }
-            #phone-call.call-active #call-avatar { width: 56px; height: 56px; }
+            #phone-call.call-active #call-avatar-wrap { width: 56px; height: 56px; }
             #phone-call.call-active #call-name { font-size: 1.1rem; }
         }
 
