@@ -699,7 +699,7 @@
                     <div class="wx-cell" onclick="(function(){
                         const w = window.parent || window;
                         if (!confirm('確定清空全部通訊錄？\\n（聊天記錄保留，但聯繫人及隱形成員全部刪除）')) return;
-                        localStorage.removeItem('wx_custom_contacts_v1');
+                        localStorage.removeItem((w.WX_CONTACTS && w.WX_CONTACTS._key && w.WX_CONTACTS._key()) || 'wx_custom_contacts_v1');
                         if (w.OS_CONTACTS && w.OS_CONTACTS.getAllContacts) {
                             const all = w.OS_CONTACTS.getAllContacts();
                             all.forEach(c => { if (w.OS_CONTACTS.deleteContact) w.OS_CONTACTS.deleteContact(c.id); });
@@ -717,7 +717,7 @@
                     <div class="wx-cell" onclick="(function(){
                         const w = window.parent || window;
                         if (!confirm('⚠️ 確定清空所有微信數據？\\n（通訊錄 + 全部聊天記錄將永久刪除）')) return;
-                        localStorage.removeItem('wx_custom_contacts_v1');
+                        localStorage.removeItem((w.WX_CONTACTS && w.WX_CONTACTS._key && w.WX_CONTACTS._key()) || 'wx_custom_contacts_v1');
                         if (w.OS_CONTACTS && w.OS_CONTACTS.getAllContacts) {
                             const all = w.OS_CONTACTS.getAllContacts();
                             all.forEach(c => { if (w.OS_CONTACTS.deleteContact) w.OS_CONTACTS.deleteContact(c.id); });

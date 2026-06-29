@@ -10,11 +10,35 @@
     console.log('[WeChat] 載入通訊錄模塊 V3.8 (Global Delete Sync)...');
     const win = window.parent || window;
     const targetDoc = win.document;
-    const CONTACTS_STORAGE_KEY = 'wx_custom_contacts_v1';
+    // 通訊錄按「當前卡(storyId)」隔離——別張角色卡的聯絡人不再混進來(跟 AVS/大總結同一把 getStoryId 鑰匙)。
+    const CONTACTS_BASE_KEY = 'wx_custom_contacts_v1';
+    function _storyId() {
+        try { const s = win.OS_AVS_ADAPTER && win.OS_AVS_ADAPTER.getStoryId && win.OS_AVS_ADAPTER.getStoryId(); if (s) return String(s); } catch (e) {}
+        try { return localStorage.getItem('vn_current_story_id') || ''; } catch (e) { return ''; }
+    }
+    // 一次性遷移(Rae 選「遷移到當前卡」)：把舊全域聯絡人歸到「第一次帶 storyId 開啟」的那張卡；
+    //   其他卡空白開始；舊全域 key 保留當備份(不刪)，os_sync/os_contacts 仍讀得到。
+    function _migrateGlobalOnce(sid) {
+        try {
+            if (localStorage.getItem('wx_custom_contacts_migrated_v1') === '1') return;
+            const globalRaw = localStorage.getItem(CONTACTS_BASE_KEY);
+            const scopedKey = CONTACTS_BASE_KEY + '__' + sid;
+            if (globalRaw && !localStorage.getItem(scopedKey)) localStorage.setItem(scopedKey, globalRaw);
+            localStorage.setItem('wx_custom_contacts_migrated_v1', '1');
+            console.log('[WX_CONTACTS] 通訊錄一次性遷移到當前卡 ' + sid + '（舊全域保留備份）');
+        } catch (e) {}
+    }
+    function _contactsKey() {
+        const sid = _storyId();
+        if (!sid) return CONTACTS_BASE_KEY;   // 拿不到 storyId → 退回全域(安全:不隔離也不壞)
+        _migrateGlobalOnce(sid);
+        return CONTACTS_BASE_KEY + '__' + sid;
+    }
 
     win.WX_CONTACTS = {
+        _key: function() { return _contactsKey(); },   // 當前卡的通訊錄 storage key（給 wx_view 清空鈕用）
         init: function(globalChats) {
-            const saved = localStorage.getItem(CONTACTS_STORAGE_KEY);
+            const saved = localStorage.getItem(_contactsKey());
             if (saved) {
                 try {
                     const customs = JSON.parse(saved);
@@ -57,7 +81,7 @@
                 avatarId: null, aiKeyword: avatarKeyword || 'user', isGroup: false
             };
             list.push(newContact);
-            localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(list));
+            localStorage.setItem(_contactsKey(), JSON.stringify(list));
             console.log(`[WX_CONTACTS] 自動註冊新成員: ${input} (ID: ${newId})`);
             return newId;
         },
@@ -248,15 +272,15 @@
         },
 
         addContactToStorage: function(contactObj) {
-            let saved = localStorage.getItem(CONTACTS_STORAGE_KEY); let list = saved ? JSON.parse(saved) : [];
+            let saved = localStorage.getItem(_contactsKey()); let list = saved ? JSON.parse(saved) : [];
             const idx = list.findIndex(c => c.id === contactObj.id);
             if (idx >= 0) { list[idx] = { ...list[idx], ...contactObj }; } else { list.push(contactObj); }
-            localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(list));
+            localStorage.setItem(_contactsKey(), JSON.stringify(list));
         },
-        getAllCustomContacts: function() { const saved = localStorage.getItem(CONTACTS_STORAGE_KEY); return saved ? JSON.parse(saved) : []; },
+        getAllCustomContacts: function() { const saved = localStorage.getItem(_contactsKey()); return saved ? JSON.parse(saved) : []; },
         updateContactInfo: function(id, data) {
             let list = this.getAllCustomContacts(); const idx = list.findIndex(c => c.id === id);
-            if (idx >= 0) { Object.assign(list[idx], data); localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(list)); }
+            if (idx >= 0) { Object.assign(list[idx], data); localStorage.setItem(_contactsKey(), JSON.stringify(list)); }
         },
         openInviteWindow: function(chatId, currentMemberIds, callback) {
             const allContacts = this.getAllCustomContacts().filter(c => !c.isGroup);
@@ -351,11 +375,11 @@
         // 🔥 核心修復點：刪除聯絡人時，同步清空全局的 OS_CONTACTS 數據
         deleteContact: async function(id) {
             // 1. 刪除微信本地儲存的聯絡人
-            let saved = localStorage.getItem(CONTACTS_STORAGE_KEY);
+            let saved = localStorage.getItem(_contactsKey());
             if (saved) { 
                 let list = JSON.parse(saved); 
                 const newList = list.filter(c => c.id !== id); 
-                localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(newList)); 
+                localStorage.setItem(_contactsKey(), JSON.stringify(newList)); 
             }
             
             // 2. 刪除資料庫中的聊天歷史紀錄
