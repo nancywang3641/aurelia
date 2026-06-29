@@ -314,7 +314,7 @@
             var table = order.map(function (id) { return map[id] + '｜' + id; }).join('、');
             var result = th.injectPrompts([{
                 id: WX_CHATROOM_INJECT_ID,
-                content: '【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器時用對 ID：可放 chatroom 旁的 id="…" 屬性，或容器內的 [Chat: 名|ID] 那行）；就算你改了群名也「絕不可」改 ID，只有全新房間才給新 ID：\n' + table,
+                content: '\n\n【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器時用對 ID：可放 chatroom 旁的 id="…" 屬性，或容器內的 [Chat: 名|ID] 那行）；就算你改了群名也「絕不可」改 ID，只有全新房間才給新 ID：\n' + table + '\n\n',
                 position: 'in_chat',
                 depth: 0,
                 role: 'system'
