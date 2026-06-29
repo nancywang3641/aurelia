@@ -97,8 +97,13 @@
                 chatBody.innerHTML += `<div class="chat-sys">${t}</div>`;
                 this.scrollChat(); core.checkAutoNext(); return;
             }
-            if (line.match(/^\[(系統|System)[：:\]]/i) || line.match(/^\[(旁白|Narrator)[：:\]]/i)) {
-                const t = line.replace(/^\[[^\]]+\]\s*/,'').trim();
+            // 系統/旁白訊息：容忍 AI 常見變體 ——
+            //   1) 整行開頭即標籤：[系统] 描述 / [系統：描述]
+            //   2) 被多包一層說話人名：[丹尼尔] [系统] 描述（AI 把「媒體前奏帶人名」規則誤用到系統訊息上）
+            //   3) 繁簡混用（系統/系统）、全半形冒號、描述在括號內外都吃
+            const _sysWrap = line.match(/^(?:\[[^\]]+\]\s*)?\[(?:系統|系统|System|旁白|Narrator)([：:\]])([\s\S]*)$/i);
+            if (_sysWrap) {
+                const t = (_sysWrap[1] === ']' ? _sysWrap[2] : _sysWrap[2].replace(/\]\s*$/, '')).trim();
                 chatBody.innerHTML += `<div class="chat-sys">${t}</div>`;
                 this.scrollChat(); core.checkAutoNext(); return;
             }
