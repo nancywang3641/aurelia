@@ -14,6 +14,7 @@
         currentChatroom: '',   // 當前聊天室「接續 key」= id 優先、退回房名（非顯示名；標題另顯示房名）
         chatroomCache: {},     // key(id優先/房名) → chat-body innerHTML，斷開後同 key 接回（續接）
         isCallActive: false,
+        currentCallKey: '',    // 當前通話「接續 key」= id優先/名轉id/名；★不在 resetState 清(跨輪續接)，演劇情(renderVN)/進chat 才清
 
         resetState: function() {
             this.chatParticipants = [];
@@ -28,6 +29,7 @@
         // ==========================================
         initChat: function(core, line) {
             core.mode = 'chat';
+            this.currentCallKey = '';   // 進聊天室＝劇情離開通話 → 之後同人來電要正常響鈴(不誤判續接)
             const newName = line.match(/chatroom="([^"]+)"/)?.[1] || 'Chat';
             const newId   = line.match(/\bid\s*=\s*"([^"]+)"/)?.[1] || '';   // VN PHONE <chat ... id="穩定id"> 的接續 id
             const newKey  = newId || newName;   // 接續 key：ID 優先（AI 改群名也接得回同一間），沒 id 才退回房名
@@ -411,25 +413,44 @@
         //  📞 Call 模式邏輯
         // ==========================================
         initCall: function(core, line) {
-            core.mode = 'call'; 
-            this.isCallActive = false;
+            core.mode = 'call';
             const caller = line.match(/character="([^"]+)"/)?.[1] || 'Unknown';
+            const idAttr = line.match(/\bid\s*=\s*"([^"]+)"/)?.[1] || '';
+            const newKey = idAttr || this._resolveContactId(caller) || caller;   // 接續 key：id 優先 → 名轉聯絡人id → 名
             document.getElementById('call-name').innerText = caller;
-            
+            core.updateCallAvatar(caller);
+
+            // 🔗 接續：同一通電話被 AI 拆成兩段輸出（id/名 同、中間沒劇情/聊天打斷）→ 不重新「來電」，直接續接通話畫面。
+            //    治「一鏡到底沒做到→每段都跳接聽介面、要反覆接通」。currentCallKey 由 renderVN 演劇情 / initChat 進聊天時清掉，
+            //    所以「劇情過後的另一通同人電話」仍會正常響鈴。
+            if (newKey && newKey === this.currentCallKey) {
+                this.currentCallKey = newKey;
+                this.answerCall(core);   // 直接進通話中、往下播，不等使用者按接聽
+                return;
+            }
+            this.currentCallKey = newKey;
+
+            // 新來電：顯示來電 + 接聽/掛斷，等使用者接
+            this.isCallActive = false;
             const st = document.getElementById('call-status');
-            st.innerText = '來電'; 
+            st.innerText = '來電';
             st.className = '';
-            
             document.getElementById('call-incoming-btns').classList.remove('hidden');
             document.getElementById('call-active-btns').classList.add('hidden');
-            
             const subBox = document.getElementById('call-subtitle-box');
             subBox.classList.add('hidden');
             document.getElementById('call-sub-text').innerHTML = '';
             document.getElementById('call-sub-name').innerHTML = '';
-            
-            core.updateCallAvatar(caller);
             core.toggleUI('phone-call');
+        },
+        // 把通話對方角色名解析成聯絡人 id（讀-only，跟電話app/微信同一個 id 空間；查不到回空→退回用名當 key）
+        _resolveContactId: function(name) {
+            try {
+                const C = (window.parent || window).WX_CONTACTS;
+                const list = (C && C.getAllCustomContacts) ? C.getAllCustomContacts() : [];
+                const hit = (list || []).find(function (c) { return c && c.name === name; });
+                return (hit && hit.id) || '';
+            } catch (e) { return ''; }
         },
 
         exitCall: function(core) {
