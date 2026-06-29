@@ -48,6 +48,10 @@
     }
     function _clearTimer() { if (_timer) { clearInterval(_timer); _timer = null; } }
     function _cut(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n) + '…' : s; }
+    // 返回手機主畫面（手機殼開 app 時把 PhoneSystem.goHome 暫接成「回主畫面」）
+    function _goHome() { try { const PS = _w('PhoneSystem'); if (PS && typeof PS.goHome === 'function') PS.goHome(); } catch (e) {} }
+    function _bindHome() { const b = _root && _root.querySelector('#dlr-home'); if (b) b.addEventListener('click', _goHome); }
+    function _headHTML(title) { return '<button class="dlr-back" id="dlr-home" type="button" title="返回主畫面">‹</button><span class="dlr-head-title">' + _esc(title) + '</span>'; }
 
     // 底部分頁列（iOS 風：通話紀錄 / 通訊錄 / 鍵盤）
     function _tabbar(active) {
@@ -82,14 +86,14 @@
         }).join('');
         _root.innerHTML =
             '<div class="dlr-wrap">'
-          +   '<div class="dlr-head">電話</div>'
+          +   '<div class="dlr-head">' + _headHTML('電話') + '</div>'
           +   '<div class="dlr-list">' + (rows || '<div class="dlr-empty">通訊錄是空的<br>到微信加聯絡人後這裡就有了</div>') + '</div>'
           +   _tabbar('list')
           + '</div>';
         _root.querySelectorAll('.dlr-row').forEach(function (b) {
             b.addEventListener('click', function () { const c = list.find(function (x) { return x.id === b.dataset.id; }); if (c) _dialing(c); });
         });
-        _bindTabs();
+        _bindTabs(); _bindHome();
     }
 
     // ── ② 撥號鍵盤 ──────────────────────────────────────────────
@@ -99,6 +103,7 @@
         const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
         _root.innerHTML =
             '<div class="dlr-wrap dlr-pad">'
+          +   '<div class="dlr-head">' + _headHTML('鍵盤') + '</div>'
           +   '<div class="dlr-pad-inner">'
           +     '<div class="dlr-num-disp" id="dlr-num-disp">' + _esc(typed || '') + '</div>'
           +     '<div class="dlr-keys">'
@@ -125,7 +130,7 @@
             if (c) _dialing(c);
             else _dialing({ id: '__unknown__', name: '未知號碼', _raw: cur });   // 查無此人彩蛋
         });
-        _bindTabs();
+        _bindTabs(); _bindHome();
     }
 
     // ── 撥號中動畫 → 撥通 ────────────────────────────────────────
@@ -359,7 +364,7 @@
         _hsel = { on: false, ids: new Set() };
         _root.innerHTML =
             '<div class="dlr-wrap">'
-          +   '<div class="dlr-head"><span>通話紀錄</span>'
+          +   '<div class="dlr-head">' + _headHTML('通話紀錄')
           +     '<div class="dlr-sel-actions">'
           +       '<button class="dlr-sel-toggle" id="dlr-sel-toggle" type="button">選取</button>'
           +       '<div class="dlr-sel-bar">'
@@ -372,7 +377,7 @@
           +   '<div class="dlr-list" id="dlr-hist-list"><div class="dlr-empty">載入中…</div></div>'
           +   _tabbar('hist')
           + '</div>';
-        _bindTabs();
+        _bindTabs(); _bindHome();
         _root.querySelector('#dlr-sel-toggle').addEventListener('click', _enterHsel);
         _root.querySelector('#dlr-sel-cancel').addEventListener('click', _exitHsel);
         _root.querySelector('#dlr-sel-all').addEventListener('click', _selectAll);
