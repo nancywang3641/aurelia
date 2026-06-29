@@ -695,6 +695,23 @@ ${_memoryRulesText()}
         });
     }
 
+    // 場景插圖最終清洗：剝掉「角色 [...] 區塊內」的人數/獨照框架詞(1boy/1girl/solo/portrait...)。
+    //   登記表展開那條已由 _stripAvatarFraming 剝過；但「沒頭像的角色」是副模型自己 inline 寫外觀、會自帶 1boy →
+    //   多角色場景每個 block 各帶 1boy 會跟場景級 2boys 數量打架 → NAI 吐多人/亂框。這裡兜底剝乾淨。
+    //   ★只動 [...] 內：場景級總人數(括號外，如開頭 2boys)保留——那是對的，告訴 NAI 總共幾人。
+    function _scrubSceneCounts(str) {
+        if (!str || String(str).indexOf('[') < 0) return str;
+        const DROP = [
+            /^\d+\s*(boys?|girls?|others?)$/i,        // 1boy / 1 boy / 2boys / 1girl
+            /^solo(\s+focus)?$/i,
+            /^(portrait|bust[\s_-]?shot|upper[\s_-]?body|head\s?shot|close[\s_-]?up|closeup)$/i,
+        ];
+        return String(str).replace(/\[([^\[\]]*)\]/g, (m, inner) => {
+            const kept = inner.split(',').map(t => t.trim()).filter(t => t && !DROP.some(re => re.test(t)));
+            return '[' + kept.join(', ') + ']';
+        });
+    }
+
     // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖）。
     // ★ 定位用「編號段落 + after_paragraph 數字」——AI 只挑數字、絕不抄原文（避免簡繁/改寫/引舊訊息對不上）。
     function _sceneAddendum(userPrompt, numberedText, looksRef, nameList) {
@@ -913,7 +930,7 @@ ${numberedText}`;
                         if (n >= 1 && _sceneParas[n - 1]) after = _sceneParas[n - 1];
                         else if (s.after) after = String(s.after);  // 舊格式相容（AI 真給了引文）
                         // 佔位模式：把 ##角色名## 換成登記表外觀（頭像詞→AVS→留原名）；非佔位模式 _looksMap=null 不動
-                        return { after: after, prompt: (_looksMap ? _expandSceneNames(s.prompt, _looksMap) : s.prompt) };
+                        return { after: after, prompt: _scrubSceneCounts(_looksMap ? _expandSceneNames(s.prompt, _looksMap) : s.prompt) };
                     }).filter(s => s && s.prompt);
                     win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId });
                     console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
@@ -999,7 +1016,7 @@ ${numberedText}`;
                 const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
                 if (n >= 1 && paras[n - 1]) after = paras[n - 1];
                 else if (s.after) after = String(s.after);
-                return { after, prompt: _expandHashNames(s.prompt, looksMap) };
+                return { after, prompt: _scrubSceneCounts(_expandHashNames(s.prompt, looksMap)) };
             }).filter(s => s && s.prompt);
             if (mapped.length) {
                 // 派發對位 msgId 用 getChatMessages(-1) 的「窗口號」lastId——跟 VN(_currentMessageId/loadScript)同一個 id 空間。
