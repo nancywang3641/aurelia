@@ -8,10 +8,10 @@
     function _bridge() { return window.VoidTerminal && window.VoidTerminal._bridge; }
 
     const BGM_URLS = {
-        lobby: 'https://nancywang3641.github.io/sound-files/home-page/home_yingcafe.mp3',
-        '404': 'https://nancywang3641.github.io/sound-files/home-page/home_room404.mp3',
+        lobby: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/bgm/home_yingcafe.mp3',
+        '404': 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/bgm/home_room404.mp3',
     };
-    const BASE_BG = 'https://nancywang3641.github.io/sound-files/home-page/';
+    const BASE_BG = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/home-page/';
 
     // ===== 大廳 BG 依本地時段切換：day(6-18) / evening(18-21) / night(21-6) =====
     function _getCafeBgPeriod() {

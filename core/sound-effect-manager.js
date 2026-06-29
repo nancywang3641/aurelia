@@ -9,26 +9,26 @@
  */
 const SOUND_URLS = {
     // UI交互音效
-    pageFlipSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/scene.wav', 
-    clickSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/click.wav',
-    hoverSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/hover.wav', 
-    choiceSelectSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/select.mp3',
+    pageFlipSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/scene.wav', 
+    clickSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/click.wav',
+    hoverSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/hover.wav', 
+    choiceSelectSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/select.mp3',
     
     // 消息和通知音效
-    messageSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/popup.mp3', 
-    popupSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/popup.mp3',
-    notificationSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/popup.mp3',
+    messageSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/popup.mp3', 
+    popupSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/popup.mp3',
+    notificationSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/popup.mp3',
     
     // 通話音效
-    callSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/call.mp3',
-    callEndSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/callEnd.mp3', 
+    callSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/call.mp3',
+    callEndSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/callEnd.mp3', 
     
     // 聊天音效
-    chatSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/popup.mp3',
+    chatSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/popup.mp3',
     
     // 系統音效
-    successSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/popup.mp3',
-    errorSound: 'https://nancywang3641.github.io/aurelia/UI_SFX/popup.mp3'
+    successSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/popup.mp3',
+    errorSound: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/ui_sfx/popup.mp3'
 };
 
 /**

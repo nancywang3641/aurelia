@@ -42,15 +42,15 @@
 .relic-card {
     position: relative;
     aspect-ratio: 1.9 / 1;                                  /* 票根寬比 */
-    background-image: url('../aseets/achievements/ticket.png');
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/achievements/ticket.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
-    -webkit-mask-image: url('../aseets/achievements/ticket.png');
+    -webkit-mask-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/achievements/ticket.png');
     -webkit-mask-size: contain;
     -webkit-mask-position: center;
     -webkit-mask-repeat: no-repeat;
-    mask-image: url('../aseets/achievements/ticket.png');
+    mask-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/achievements/ticket.png');
     mask-size: contain;
     mask-position: center;
     mask-repeat: no-repeat;
@@ -58,9 +58,9 @@
 }
 .void-tab.mode-404 .relic-card {
     aspect-ratio: 1 / 1;                                    /* 卡帶方形 */
-    background-image: url('../aseets/achievements/R-001.png');
-    -webkit-mask-image: url('../aseets/achievements/R-001.png');
-    mask-image: url('../aseets/achievements/R-001.png');
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/achievements/R-001.png');
+    -webkit-mask-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/achievements/R-001.png');
+    mask-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/achievements/R-001.png');
 }
 
 .relic-card-wrap:hover .relic-card {
@@ -155,7 +155,7 @@
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
-    background-image: url('../aseets/achievements/achievements_default.png');
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/achievements/achievements_default.png');
     transform: rotate(-5deg);
     filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.55));
     z-index: 3;
@@ -165,7 +165,7 @@
 /* 立繪 emotion 對應的貼紙 PNG
  * Rae 把舊版 Mock_xxx 等改名為立繪 emotion 後，在這裡加一行：
  *   .void-tab.mode-404 .relic-card-sticker[data-sticker="Smirk_001"] {
- *       background-image: url('../aseets/achievements/Smirk_001.png');
+ *       background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/achievements/Smirk_001.png');
  *   }
  * 同時把 panels.js 的 STICKER_MANIFEST 對應 emotion +1
  */
