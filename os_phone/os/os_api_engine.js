@@ -686,7 +686,7 @@
                             let _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, stream: false, ...extraParams });
                             _ov = _ensureModelOverride(_ctx, config.stProfileId, _ov, config.model);
                             const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
-                                config.stProfileId, cleanMessages, maxTokens, undefined, _ov
+                                config.stProfileId, cleanMessages, maxTokens, { signal: options.signal }, _ov   // 帶 abort signal→停止鈕(創作室等)才停得了；undefined 時 signal=undefined 不影響
                             );
                             const _t = normalizeResponse(_response, _keepFences);
                             if (_t) { rawApiResponse = _response; fullText = _t; _ngOk = true; }
@@ -773,7 +773,7 @@
                         let _ov = _vertexOverride(context, stProfileId, { temperature, stream: false, ...extraParams });
                         _ov = _ensureModelOverride(context, stProfileId, _ov, config.model);
                         const response = await context.ConnectionManagerRequestService.sendRequest(
-                            stProfileId, cleanMessages, maxTokens, undefined, _ov
+                            stProfileId, cleanMessages, maxTokens, { signal: options.signal }, _ov   // 帶 abort signal→停止鈕才停得了
                         );
                         rawApiResponse = response;
                         fullText = normalizeResponse(response, _keepFences);
