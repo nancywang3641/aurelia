@@ -24,6 +24,7 @@
     let embeddedRoot = null;
     let syncInterval = null;
     let embedObserver = null;
+    let _hiddenChatEl = null;   // 「只在訊息區」模式下被收起的 #chat，卸載時還原
     let syncTargetSelector = '#sheld';
     let _vnWasOpenBeforeTabSwitch = false;
     let _readerWasOpenBeforeTabSwitch = false;
@@ -315,40 +316,55 @@
         const isMobile = isMobileDevice();
         // 🌟 判斷當前是否處於獨立全螢幕模式 (index.html)
         const isStandalone = containerEl && containerEl.id === 'aurelia-standalone-root';
+        // 「只在訊息區」模式：選到 #chat。#chat 是會捲動 + 酒館不斷塞訊息的容器，
+        //   不能鑽進去（會跟著捲走、被清空）。改當 #sheld 的 flex 兄弟、佔訊息區的位置、
+        //   把 #chat 收起，輸入框 #form_sheld 留在底部照常可用。
+        const messagesOnly = !isStandalone && containerEl && containerEl.id === 'chat';
+        const sheld = messagesOnly ? (containerEl.closest('#sheld') || containerEl.parentElement) : null;
 
         if (!embeddedRoot) {
             embeddedRoot = document.createElement('div');
             embeddedRoot.id = 'aurelia-embedded-root';
-            
+        }
+        // 每次掛載依模式重設樣式，避免切換模式殘留舊定位
+        if (isStandalone) {
             // 獨立全螢幕模式：height: 100% 繼承父元素
-            if (isStandalone) {
-                embeddedRoot.style.cssText = `
-                    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-                    width: 100%; z-index: 100; overflow: hidden;
-                `;
-            } else if (isMobile) {
-                // 用 absolute 占滿 #sheld 整個區域，z-index 蓋過 form_sheld (z-index:30)
-                embeddedRoot.style.cssText = `
-                    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-                    width: 100%;
-                    z-index: 999;
-                    background: #fff;
-                    box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
-                    border-radius: 12px;
-                    overflow: hidden;
-                `;
-            } else {
-                // desktop：跟 mobile 一樣 absolute 占滿 #sheld，z-index 蓋過 form_sheld
-                embeddedRoot.style.cssText = `
-                    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-                    width: 100%;
-                    z-index: 999;
-                    background: #fff;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-                    border-radius: 8px;
-                    overflow: hidden;
-                `;
-            }
+            embeddedRoot.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%; z-index: 100; overflow: hidden;
+            `;
+        } else if (messagesOnly) {
+            // flex 兄弟：撐滿訊息區空間，輸入框留在下方
+            embeddedRoot.style.cssText = `
+                position: relative; flex: 1 1 auto; min-height: 0; width: 100%;
+                z-index: 999;
+                background: #fff;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+                border-radius: 8px;
+                overflow: hidden;
+            `;
+        } else if (isMobile) {
+            // 用 absolute 占滿 #sheld 整個區域，z-index 蓋過 form_sheld (z-index:30)
+            embeddedRoot.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%;
+                z-index: 999;
+                background: #fff;
+                box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
+                border-radius: 12px;
+                overflow: hidden;
+            `;
+        } else {
+            // desktop：跟 mobile 一樣 absolute 占滿 #sheld，z-index 蓋過 form_sheld
+            embeddedRoot.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%;
+                z-index: 999;
+                background: #fff;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+                border-radius: 8px;
+                overflow: hidden;
+            `;
         }
 
         phoneFrame.style.cssText = `
@@ -358,28 +374,52 @@
         `;
         embeddedRoot.appendChild(phoneFrame);
 
-        // 用 absolute 必須有定位錨點：containerEl 若是 static 就強制改 relative
-        if (!isStandalone && containerEl && getComputedStyle(containerEl).position === 'static') {
-            containerEl.style.position = 'relative';
-            containerEl.dataset.aureliaPosForced = '1';
-        }
-
-        if (placement === 'top') {
-            containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
-        } else {
-            containerEl.appendChild(embeddedRoot);
-        }
-        if (embedObserver) embedObserver.disconnect();
-        embedObserver = new MutationObserver(() => {
-            if (!isEmbedded || !embeddedRoot || !embeddedRoot.parentNode) return;
-            if (placement === 'bottom' && containerEl.lastElementChild !== embeddedRoot) {
-                containerEl.appendChild(embeddedRoot);
-                containerEl.scrollTop = containerEl.scrollHeight;
-            } else if (placement === 'top' && containerEl.firstElementChild !== embeddedRoot) {
-                containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+        if (messagesOnly) {
+            // 收起 #chat（記住原 display 以便還原），把奧瑞亞插在輸入框前面
+            _hiddenChatEl = containerEl;
+            if (containerEl.style.display !== 'none') {
+                containerEl.dataset.aureliaPrevDisplay = containerEl.style.display || '';
+                containerEl.style.display = 'none';
             }
-        });
-        embedObserver.observe(containerEl, { childList: true });
+            const form = sheld.querySelector('#form_sheld');
+            if (form) sheld.insertBefore(embeddedRoot, form);
+            else sheld.appendChild(embeddedRoot);
+
+            if (embedObserver) embedObserver.disconnect();
+            embedObserver = new MutationObserver(() => {
+                if (!isEmbedded || !embeddedRoot) return;
+                // 酒館重繪時保證 #chat 維持收起、奧瑞亞還在 #sheld 內
+                if (_hiddenChatEl && _hiddenChatEl.style.display !== 'none') _hiddenChatEl.style.display = 'none';
+                if (embeddedRoot.parentNode !== sheld) {
+                    const f = sheld.querySelector('#form_sheld');
+                    if (f) sheld.insertBefore(embeddedRoot, f); else sheld.appendChild(embeddedRoot);
+                }
+            });
+            embedObserver.observe(sheld, { childList: true });
+        } else {
+            // 用 absolute 必須有定位錨點：containerEl 若是 static 就強制改 relative
+            if (!isStandalone && containerEl && getComputedStyle(containerEl).position === 'static') {
+                containerEl.style.position = 'relative';
+                containerEl.dataset.aureliaPosForced = '1';
+            }
+
+            if (placement === 'top') {
+                containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+            } else {
+                containerEl.appendChild(embeddedRoot);
+            }
+            if (embedObserver) embedObserver.disconnect();
+            embedObserver = new MutationObserver(() => {
+                if (!isEmbedded || !embeddedRoot || !embeddedRoot.parentNode) return;
+                if (placement === 'bottom' && containerEl.lastElementChild !== embeddedRoot) {
+                    containerEl.appendChild(embeddedRoot);
+                    containerEl.scrollTop = containerEl.scrollHeight;
+                } else if (placement === 'top' && containerEl.firstElementChild !== embeddedRoot) {
+                    containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+                }
+            });
+            embedObserver.observe(containerEl, { childList: true });
+        }
 
         // ── 獨立模式：JS 強制把 tab 容器填滿整個視口（底部 rail 已移除）──
         // CSS 快取保險層：即使舊版 CSS 還留著「讓 55px 給 rail」的 bottom，也用 inline !important 蓋掉。
@@ -437,6 +477,13 @@
         });
 
         if (embedObserver) { embedObserver.disconnect(); embedObserver = null; }
+
+        // 還原「只在訊息區」模式收起的 #chat
+        if (_hiddenChatEl) {
+            _hiddenChatEl.style.display = _hiddenChatEl.dataset.aureliaPrevDisplay || '';
+            delete _hiddenChatEl.dataset.aureliaPrevDisplay;
+            _hiddenChatEl = null;
+        }
 
         if (phoneModal) {
             phoneModal.appendChild(phoneFrame);
