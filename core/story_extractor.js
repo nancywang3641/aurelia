@@ -302,6 +302,10 @@
 
         // 把開場白整段渲染進單一區域：純文字 + HTML 區塊依原本順序堆疊
         scanAndRender() {
+            this._stopPanelMedia();   // 重渲染前先停舊媒體(detached <audio> 不會自己停)，換卡不疊加 BGM
+            // 渲染後卡片自帶 BGM 會自動播 → 延遲幾拍靜掉(藏書是預覽、不該被卡片 BGM 洗版；含 iframe 晚載)
+            setTimeout(() => this._stopPanelMedia(), 300);
+            setTimeout(() => this._stopPanelMedia(), 1200);
             const contentArea = document.getElementById('se-content-area');
             contentArea.innerHTML = '';
 
@@ -545,6 +549,27 @@
             });
         },
 
+        // 停掉藏書面板裡「卡片自帶的 BGM/音訊」——角色卡開場白常含 <audio autoplay>，
+        //   渲染進預覽就自動播；★移除播放中的 <audio> 不一定會停(detached 仍續播)，必須先 pause()。
+        //   同源 iframe 內的也順手停。關閉/換卡/渲染後都呼叫 → 不殘留、不疊加、預覽不被洗版。
+        _stopPanelMedia() {
+            try {
+                const docs = [document];
+                try { const pd = window.parent && window.parent.document; if (pd && pd !== document) docs.push(pd); } catch (e) {}
+                const stop = (m) => { try { m.pause(); m.currentTime = 0; m.muted = true; m.removeAttribute('autoplay'); } catch (e) {} };
+                docs.forEach(d => {
+                    ['se-content-area', 'story-extractor-container-vn', 'story-panel-container'].forEach(id => {
+                        const root = d.getElementById && d.getElementById(id);
+                        if (!root) return;
+                        root.querySelectorAll('audio, video').forEach(stop);
+                        root.querySelectorAll('iframe').forEach(f => {
+                            try { const idoc = f.contentWindow && f.contentWindow.document; if (idoc) idoc.querySelectorAll('audio, video').forEach(stop); } catch (e) {}
+                        });
+                    });
+                });
+            } catch (e) { console.warn('[StoryExtractor] 停止面板媒體失敗', e); }
+        },
+
         hide() {
             // reentry guard：hideVnPanel 內呼叫 StoryExtractor.hide()，而 hide() 內又會
             // 經 _maybeHideVnPanel → hideVnPanel 回呼 → 無限遞迴卡頓
@@ -555,6 +580,14 @@
 
         _doHide() {
             console.log('[StoryExtractor] 🔍 hide() 被調用');
+
+            // 先停掉卡片自帶 BGM，再清空內容(移除 <audio>/iframe＝斷源停音)，避免關閉後 BGM 殘留/疊加
+            this._stopPanelMedia();
+            try {
+                [document, (window.parent && window.parent.document)].forEach(d => {
+                    try { const ca = d && d.getElementById && d.getElementById('se-content-area'); if (ca) ca.innerHTML = ''; } catch (e) {}
+                });
+            } catch (e) {}
 
             // 還原 #form_sheld 回原本的家（最先做，避免後續 DOM 操作把它連帶清掉）
             try {
