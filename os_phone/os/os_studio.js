@@ -1748,7 +1748,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const api = (window.parent || window).OS_API || window.OS_API;
         if (!api || (typeof api.chatMain !== 'function' && typeof api.chatSecondary !== 'function')) { alert('AI 不可用'); return; }
         _wbToast('AI 對標世界中…');
-        const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設（一整段散文）。請把它改寫成「貼合下面這個世界」的版本：保留核心個性／這個人是誰，只把外觀、說話習慣、背景這類世界皮層改寫成貼合該世界（例如現代身分改成古代身分）；不要改掉性格本質。把結果拆成區塊用 <persona><seg> 輸出。\n\n【現有人設】\n' + desc + '\n\n' + ctx;
+        const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設（一整段散文）。請把它改寫成「貼合下面這個世界」的版本。原則：\n1. 保留核心個性／這個人是誰／與人相處的方式——性格本質不變。\n2. 外觀、說話習慣、出身背景這類「世界皮層」改寫成貼合該世界（例如現代身分改成古代身分）。\n3. ★取捨優先於硬凹：原設定裡若有「在新世界根本不存在或不合理」的東西（某些職業、物品、習慣、背景細節），就「直接捨棄那一項」，不要硬找個對應物去套。寧可這個人在新世界少幾條設定，也不要為了照搬而生出彆扭的拼湊對應。\n4. 只留／改「換了世界仍然成立」的部分；不合的就讓它消失、別硬交代它的去向。\n把結果拆成區塊用 <persona><seg> 輸出。\n\n【現有人設】\n' + desc + '\n\n' + ctx;
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把我的人設改寫成這個世界的版本。' }];
         const done = (full) => {
             const segs = _mcParseSegs(String(full || ''));
@@ -1920,9 +1920,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const TH = _wbTH();
         if (!TH || !TH.setLorebookEntries) { alert('酒館助手未就緒'); return; }
         try {
-            const updates = _mcChars.map(c => ({ uid: c.uid, enabled: c.uid === uid }));
+            const cur = _mcChars.find(c => c.uid === uid);
+            const turnOff = !!(cur && cur.enabled);   // 已是使用中 → 再點＝取消使用（全部關掉、允許一個都不開）
+            const updates = _mcChars.map(c => ({ uid: c.uid, enabled: turnOff ? false : (c.uid === uid) }));
             await TH.setLorebookEntries(MC_BOOK, updates);
-            _wbToast('已設為使用中 ✓');
+            _wbToast(turnOff ? '已取消使用 ✓' : '已設為使用中 ✓');
             renderPersonaPanel();
         } catch (e) { alert('切換失敗：' + (e && e.message || e)); }
     }
