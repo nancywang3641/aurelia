@@ -35,6 +35,7 @@ let _AURELIA_SKIP = false;
             if (!pwin.__AURELIA_BOOTSTRAPPED__) {
                 pwin.__AURELIA_BOOTSTRAPPED__ = true;
                 pwin.__AURELIA_REF__ = _AURELIA_REF; // 把 ref 傳進主頁面，讓重注入的 index.js + 模組都鎖同一 commit
+                pwin.__AURELIA_FROM_CDN__ = true;    // 標記主頁面這份＝從 CDN 重注入 → 強制 CDN 模式，別誤抓同頁其他擴展(如 claude-codex-room)的 index.js 標籤當成自己的資料夾
                 const s = pdoc.createElement('script');
                 s.src = _AURELIA_CDN_BASE + '/index.js?boot=' + Date.now();
                 pdoc.head.appendChild(s);
@@ -50,14 +51,25 @@ let _AURELIA_SKIP = false;
     } catch (e) { console.warn('[Aurelia] 沙盒偵測失敗，照原樣在當前環境執行', e); }
 })();
 
+// ⚠️ 同頁可能有別的 third-party 擴展(如「Claude/Codex 房間」claude-codex-room)也掛 index.js 標籤。
+//    舊版只取「最後一個」會誤抓到它 → 把奧瑞亞檔案往別人資料夾撈 → 整盤 404。
+//    改：① 經酒館助手 CDN 重注入(__AURELIA_FROM_CDN__) → 直接走 CDN，根本不掃本地標籤。
+//        ② 原生安裝 → 認自己的資料夾(優先 my-tavern-extension；排掉已知兄弟擴展)，都沒有就退 CDN。
+const _AURELIA_OTHER_EXTS = ['claude-codex-room'];   // Rae 自己其他獨立擴展，別被當成奧瑞亞
 const _AURELIA_EXT_NAME = (() => {
     try {
+        const fromCdn = window.__AURELIA_FROM_CDN__
+            || (() => { try { return !!(window.parent && window.parent !== window && window.parent.__AURELIA_FROM_CDN__); } catch (e) { return false; } })();
+        if (fromCdn) return null;
+        const names = [];
         const scripts = document.getElementsByTagName('script');
-        for (let i = scripts.length - 1; i >= 0; i--) {
-            const src = scripts[i].src || '';
-            const m = src.match(/scripts\/extensions\/third-party\/([^\/]+)\/index\.js/);
-            if (m) return m[1];
+        for (let i = 0; i < scripts.length; i++) {
+            const m = (scripts[i].src || '').match(/scripts\/extensions\/third-party\/([^\/]+)\/index\.js/);
+            if (m) names.push(m[1]);
         }
+        if (names.includes('my-tavern-extension')) return 'my-tavern-extension';   // 原生奧瑞亞資料夾
+        const own = names.filter(n => _AURELIA_OTHER_EXTS.indexOf(n) === -1);
+        return own.length ? own[own.length - 1] : null;   // 沒有自己的標籤 → null 退 CDN(總比往別人資料夾撈 404 好)
     } catch (e) {}
     return null; // 偵測不到 = 不是原生安裝（多半是酒館助手從 CDN 匯入）
 })();
@@ -370,6 +382,10 @@ function setupMessageListener() {
 
 // 核心初始化
 async function initializeExtension() {
+    // 單實例守衛：原生安裝(my-tavern-extension/index.js) 與酒館助手 CDN 重注入那份可能同時在主頁面 →
+    //   只讓先到的一份跑(兩份都是完整奧瑞亞、誰贏都行)，避免雙載重複注入 UI。
+    if (window.__AURELIA_INITIALIZED__) { console.warn('[Aurelia] 已有一份在執行 → 這份跳過(避免 native+助手雙載)'); return; }
+    window.__AURELIA_INITIALIZED__ = true;
     try {
         setupEventBridge();
 
