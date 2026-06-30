@@ -19,7 +19,14 @@ const _AURELIA_REF = (function () {
     } catch (e) {}
     return 'main';
 })();
-const _AURELIA_CDN_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia@' + _AURELIA_REF;
+// CDN base 可被 window.__AURELIA_CDN_BASE__ 覆寫：jsdelivr 限流/壞掉時改走 statically.io 等其他 CDN
+//   (statically 用 /ref/path、jsdelivr 用 @ref/path，覆寫值自帶完整前綴，下游一律 base + '/path' 接得上)
+const _AURELIA_CDN_OVERRIDE = (function () {
+    try { if (window.__AURELIA_CDN_BASE__) return String(window.__AURELIA_CDN_BASE__); } catch (e) {}
+    try { if (window.parent && window.parent !== window && window.parent.__AURELIA_CDN_BASE__) return String(window.parent.__AURELIA_CDN_BASE__); } catch (e) {}
+    return null;
+})();
+const _AURELIA_CDN_BASE = _AURELIA_CDN_OVERRIDE || ('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia@' + _AURELIA_REF);
 
 // 🔥 0a. 酒館助手把匯入的腳本丟進「沙盒 <iframe>」跑：裸 document 指向 iframe 自己，UI 注入不到主頁面（按鈕出不來）。
 //    對策：偵測到「自己不在主頁面、但 parent 才是主頁面」→ 把 index.js 重新注入主頁面以 classic script 執行，
@@ -36,6 +43,7 @@ let _AURELIA_SKIP = false;
                 pwin.__AURELIA_BOOTSTRAPPED__ = true;
                 pwin.__AURELIA_REF__ = _AURELIA_REF; // 把 ref 傳進主頁面，讓重注入的 index.js + 模組都鎖同一 commit
                 pwin.__AURELIA_FROM_CDN__ = true;    // 標記主頁面這份＝從 CDN 重注入 → 強制 CDN 模式，別誤抓同頁其他擴展(如 claude-codex-room)的 index.js 標籤當成自己的資料夾
+                if (_AURELIA_CDN_OVERRIDE) pwin.__AURELIA_CDN_BASE__ = _AURELIA_CDN_BASE; // 把 CDN 覆寫(statically.io 等)傳進主頁面，讓重注入的 index.js + 全部模組都走同一條 CDN
                 const s = pdoc.createElement('script');
                 s.src = _AURELIA_CDN_BASE + '/index.js?boot=' + Date.now();
                 // 🩹 注入腳本若載入失敗(jsdelivr 對剛 push 的新 commit 冷快取會 503/timeout) → 解鎖，
