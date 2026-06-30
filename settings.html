@@ -28,14 +28,6 @@
                 </select>
             </div>
 
-            <div class="flex-container">
-                <label for="mp_mount_placement">顯示在：</label>
-                <select id="mp_mount_placement">
-                    <option value="bottom">下方</option>
-                    <option value="top">上方</option>
-                </select>
-            </div>
-            
             <hr>
             
             <div class="flex-container">
@@ -148,7 +140,6 @@
         document.getElementById('mp_enabled').checked = !!finalSettings.enabled;
         document.getElementById('mp_message_collapse').checked = finalSettings.messageCollapse !== false;
         document.getElementById('mp_mount_selector').value = finalSettings.mount?.selector || '#sheld';
-        document.getElementById('mp_mount_placement').value = finalSettings.mount?.placement || 'bottom';
 
         // 插入模式只剩內嵌：把舊用戶存的浮窗(modal)遷移成 embedded
         if (finalSettings.mount?.mode && finalSettings.mount.mode !== 'embedded') {
@@ -226,14 +217,6 @@
         console.log('插入位置容器設置:', this.value);
     });
 
-    document.getElementById('mp_mount_placement').addEventListener('change', function() {
-        const settings = getExtensionSettings();
-        if (!settings.mount) settings.mount = {};
-        settings.mount.placement = this.value;
-        window.saveExtensionSettings(settings);
-        console.log('插入順序設置:', this.value);
-    });
-    
     // 消息折叠功能開關事件監聽器
     document.getElementById('mp_message_collapse').addEventListener('change', function() {
         const settings = getExtensionSettings();
