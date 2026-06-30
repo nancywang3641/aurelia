@@ -361,6 +361,21 @@
             // 移除 HTML 註解行（如作者思維鏈 <!-- 分析內容 --> 等），含跨行註解
             this.script = this.script.join('\n').replace(/<!--[\s\S]*?-->/g, '').split('\n').map(l=>l.trim()).filter(l=>l!=='');
             this.script = this.script.map(l => l.replace(/<\/?status>/g, '').replace(/<\/?content>/g, ''));
+            // 切割：AI 常把旁白和 [Char|...] 擠在同一行（旁白混進對話泡）→ 拆成獨立行，
+            //   每個 [Char|...] 自成一行、中間/前後的旁白各自一行，下游照常渲染對話泡/旁白。
+            //   不靠 AI 守排版規範，腳本端硬切（同 WX 拆 [图片:] 的思路）。
+            this.script = this.script.flatMap(l => {
+                if (l.indexOf('[Char|') === -1) return [l];
+                const re = /\[Char\|[^\]]*\]/g;
+                const out = []; let last = 0, m;
+                while ((m = re.exec(l)) !== null) {
+                    if (m.index > last) { const before = l.slice(last, m.index).trim(); if (before) out.push(before); }
+                    out.push(m[0]);
+                    last = re.lastIndex;
+                }
+                const tail = l.slice(last).trim(); if (tail) out.push(tail);
+                return out.length ? out : [l];
+            });
             // 容錯：AI 被其他 TAG 格式污染時會把 <call> 寫成方括號版
             // （[Call character="X"] / [/Call]，大小寫、單雙引號、無引號都見過）→ 正規化回標準標籤，
             // 統一成雙引號讓 VN_Phone.initCall 的 character="..." 解析吃得到
