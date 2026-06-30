@@ -327,6 +327,22 @@
             this.stopSFX();
         },
 
+        // ── [Avatar] 宣告的固定聲線：按 chatId 持久化（localStorage 同步、loadScript 能直接讀）──
+        //   不存就只在「有 [Avatar] 那則」有效，之後的回合/大總結壓掉舊訊息/重載 → 聲線丟失。
+        _charVoicesKey: function() {
+            let cid = '';
+            try { const w = window.parent || window; const ctx = w.SillyTavern && w.SillyTavern.getContext && w.SillyTavern.getContext(); if (ctx && ctx.chatId) cid = String(ctx.chatId); } catch(e){}
+            if (!cid) { try { const w = window.parent || window; if (w.VoidTerminal && w.VoidTerminal.getChatId) cid = String(w.VoidTerminal.getChatId() || ''); } catch(e){} }
+            return 'vn_charvoices::' + (cid || 'lobby_default');
+        },
+        _loadCharVoices: function() {
+            try { const raw = localStorage.getItem(this._charVoicesKey()); if (raw) { const o = JSON.parse(raw); if (o && typeof o === 'object') return o; } } catch(e){}
+            return {};
+        },
+        _saveCharVoices: function() {
+            try { localStorage.setItem(this._charVoicesKey(), JSON.stringify(this.charVoices || {})); } catch(e){}
+        },
+
         loadScript: function (txt, messageId) {
             // 新一輪劇本載入時，自動關閉檔案庫面板
             if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) {
@@ -334,6 +350,7 @@
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
+            this.charVoices = this._loadCharVoices();   // 先載入本卡持久化的固定聲線（跨訊息/大總結/重載留存），下面解析 [Avatar] 再合併
             // 🔄 學 PWA：重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 生效。
             //    ⚠️ 不可 await（呼叫端是 loadScript()→next() 同步契約，await 會讓 next() 在空腳本上跑→劇情跳過）。
             //    fire-and-forget：本次載入吃現有快取，刷新供後續播放/下次開播用。
@@ -461,6 +478,7 @@
                 if (_an && _ad) this.avatars[_an] = _ad;
                 if (_an && _voice) this.charVoices[_an] = _voice;
             }
+            this._saveCharVoices();   // 本則新宣告的聲線寫回持久化（合併制，只增不洗）
             // [Avatar|...] 是生成指令不是劇情行：從劇本剔除（卡片與對話框都不該顯示原始行）
             this.script = this.script.filter(l => !/^\[Avatar\|/i.test(l));
 
