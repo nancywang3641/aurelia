@@ -36,7 +36,7 @@
 
     // === 3. 核心腳本邏輯 ===
     const VN_Core = {
-        script: [], index: -1, avatars: {}, currentName: '', currentExp: '', mode: 'vn',
+        script: [], index: -1, avatars: {}, charVoices: {}, currentName: '', currentExp: '', mode: 'vn',
         _lastBgCacheId: '', // 跨章節持久，存 cacheId 而非 URL（blob 會被 resetState 撤銷）
         _bgMemCache: {},
         _bgInflight: {},   // 進行中的背景生成(cacheId→promise)：去重，避免預熱+現場對同一場景各生一張(競態→重開不同圖)
@@ -190,6 +190,7 @@
             this.script = [];
             this.index = -1;
             this.avatars = {};
+            this.charVoices = {};   // [Avatar|名|聲線|外觀] 宣告的固定聲線（名→聲線）；[Char] 不再每行帶
             // 清除殘留彈幕 DOM 並重置跑道
             const dc = document.getElementById('danmu-container');
             if (dc) dc.innerHTML = '';
@@ -449,11 +450,16 @@
                 m[1].split('\n').forEach(l => { if(l.includes(':')) { const [n, d] = l.split(':'); this.avatars[n.trim()] = d.trim(); } });
             }
 
-            // 2. 新式 [Avatar|名|描述]（ChapterCard 內，與早鳥監聽同格式；描述內禁含 |）
+            // 2. 新式 [Avatar|名|外觀] 或 [Avatar|名|聲線|外觀]（聲線宣告一次、跟著角色走；描述/外觀內禁含 |）
             const regAvNew = /^\s*\[Avatar\|([^|\]\n]+)\|([^\]\n]+)\]\s*$/gmi;
             while ((m = regAvNew.exec(txtString)) !== null) {
-                const _an = m[1].trim(), _ad = m[2].trim();
+                const _an = m[1].trim();
+                const _rest = m[2].split('|').map(s => s.trim());
+                let _voice = '', _ad = '';
+                if (_rest.length >= 2) { _voice = _rest[0]; _ad = _rest.slice(1).join(' '); }  // 名|聲線|外觀
+                else { _ad = _rest[0]; }                                                          // 名|外觀（舊式，無聲線）
                 if (_an && _ad) this.avatars[_an] = _ad;
+                if (_an && _voice) this.charVoices[_an] = _voice;
             }
             // [Avatar|...] 是生成指令不是劇情行：從劇本剔除（卡片與對話框都不該顯示原始行）
             this.script = this.script.filter(l => !/^\[Avatar\|/i.test(l));
@@ -1758,12 +1764,16 @@
         earlybirdFromText: async function(text) {
             try {
                 if (!text) return;
-                // 1) 頭像
+                // 1) 頭像（[Avatar|名|外觀] 或 [Avatar|名|聲線|外觀]；外觀取最後段，聲線存 charVoices）
                 const pairs = [];
                 const reAv = /^\s*\[Avatar\|([^|\]\n]+)\|([^\]\n]+)\]\s*$/gmi;
                 let m;
                 while ((m = reAv.exec(text)) !== null) {
-                    const n = m[1].trim(), d = m[2].trim();
+                    const n = m[1].trim();
+                    const rest = m[2].split('|').map(s => s.trim());
+                    let d = '';
+                    if (rest.length >= 2) { if (rest[0]) this.charVoices[n] = rest[0]; d = rest.slice(1).join(' '); }
+                    else { d = rest[0]; }
                     if (n && d && !pairs.some(p => p.name === n)) pairs.push({ name: n, desc: d });
                 }
                 if (pairs.length) {
@@ -1971,6 +1981,8 @@
                     typeHint = _pts[0].trim();
                     rawExp = _pts.slice(1).join('_').trim();
                 }
+                // 聲線已搬到 [Avatar]：[Char] 沒帶就用 Avatar 宣告的固定聲線（隨機 NPC 才在 [Char] 自帶）
+                if (!typeHint) typeHint = this.charVoices[charName] || '';
 
                 if (!text || (VN_TTS._resolveModel && !VN_TTS._resolveModel(charName, typeHint))) continue;
                 lines.push({ charName, text, emotion: this._mapExprToEmotion(rawExp), typeHint });
@@ -2472,6 +2484,8 @@
                     typeHint = _pts[0].trim();
                     rawExp = _pts.slice(1).join('_').trim();
                 }
+                // 聲線已搬到 [Avatar]：[Char] 沒帶就用 Avatar 宣告的固定聲線（隨機 NPC 才在 [Char] 自帶）
+                if (!typeHint) typeHint = this.charVoices[p[0]] || '';
 
                 this.updateSprite(p[0], rawExp);
                 this.renderVN(p[0], ex.text);
