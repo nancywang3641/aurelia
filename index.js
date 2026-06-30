@@ -212,28 +212,45 @@ const PHONE_FILES = [
     'wb/wb_view.js', 'wb/wb_core.js'
 ];
 
+// CSS 內相對 url() 改寫成絕對(相對 CSS 檔自己的目錄)。
+//   inline <style> 的相對 url 會相對「文件根」而非 CSS 檔→打斷資產路徑，故改絕對。
+function _absolutizeCssUrls(css, cssPath) {
+    const dir = cssPath.replace(/[?#].*$/, '').replace(/[^/]*$/, '');   // 去 query/hash 後留到最後一個 /
+    return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, q, u) => {
+        const t = u.trim();
+        if (/^(https?:|data:|blob:|#|\/)/i.test(t)) return m;   // 絕對 / data / blob / 錨點不動
+        try { return 'url(' + q + new URL(dir + t, document.baseURI).href + q + ')'; }
+        catch (e) { return m; }
+    });
+}
+
 // 載入 CSS 工具 (🔥 修復酒館模式破圖的關鍵)
+//   改 fetch→inline <style> 而非 <link rel=stylesheet>：酒館某些版本把 .css 回成 text/plain，
+//   瀏覽器開 strict MIME(nosniff) 後 <link> 會被拒套("Refused to apply style")；純文字注入 <style>
+//   不做 MIME 檢查，繞過。同時相容本地/CDN(jsdelivr 帶 CORS)。
 function loadCSS(path) {
     return new Promise((resolve) => {
         const MAX = 3;
         let attempt = 0;
+        // 先同步插空 <style> 佔位 → 保 cascade 順序＝呼叫順序(平行 fetch 完成順序不定)
+        const style = document.createElement('style');
+        style.setAttribute('data-aurelia-css', path);
+        document.head.appendChild(style);
         const tryLoad = () => {
             attempt++;
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
             // 重試時加唯一參數：繞過瀏覽器對「上次失敗」的快取，也給 jsdelivr 新 commit 冷快取暖機時間
-            link.href = path + _AURELIA_CACHE_BUST + (attempt > 1 ? ('&_retry=' + attempt) : '');
-            link.onload = () => resolve();
-            link.onerror = () => {
-                try { link.remove(); } catch (e) {}
-                if (attempt < MAX) {
-                    setTimeout(tryLoad, 600 * attempt);   // 退避重試(jsdelivr 新 commit 並行冷載常少數檔噴錯，稍等就好)
-                } else {
-                    console.error(`[Aurelia] 核心樣式載入失敗(已重試 ${MAX} 次): ${path}`);
-                    resolve();
-                }
-            };
-            document.head.appendChild(link);
+            const url = path + _AURELIA_CACHE_BUST + (attempt > 1 ? ('&_retry=' + attempt) : '');
+            fetch(url)
+                .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+                .then(css => { style.textContent = _absolutizeCssUrls(css, path); resolve(); })
+                .catch(() => {
+                    if (attempt < MAX) {
+                        setTimeout(tryLoad, 600 * attempt);   // 退避重試(jsdelivr 新 commit 並行冷載常少數檔噴錯，稍等就好)
+                    } else {
+                        console.error(`[Aurelia] 核心樣式載入失敗(已重試 ${MAX} 次): ${path}`);
+                        resolve();
+                    }
+                });
         };
         tryLoad();
         if (!_AURELIA_EXT_NAME) resolve(); // CDN 模式：立即放行讓 CSS 平行下載(失敗的會在背景自動重試、自癒，不阻塞初始化)
