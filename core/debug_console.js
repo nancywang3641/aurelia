@@ -25,9 +25,13 @@
         try { return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
         catch (e) { return ''; }
     }
+    // 無害洗版訊息：不存不渲染，免得淹掉真正要看的 log
+    var NOISE = /ResizeObserver loop (completed with undelivered notifications|limit exceeded)/i;
     function push(type, args) {
         try {
-            LOG.push({ type: type, t: nowStr(), msg: Array.prototype.map.call(args, fmt).join(' ') });
+            var msg = Array.prototype.map.call(args, fmt).join(' ');
+            if (NOISE.test(msg)) return;
+            LOG.push({ type: type, t: nowStr(), msg: msg });
             if (LOG.length > MAX) LOG.shift();
             render();
         } catch (e) {}
