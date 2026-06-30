@@ -1773,8 +1773,9 @@
             });
         },
         _earlybirdAvatars: async function(pairs) {
-            if (!pairs || !pairs.length) return;
-            if (VN_Config.data.spriteBase) return;   // 固定立繪模式（靜態檔）不生成
+            console.log(`[早鳥診斷vF2] _earlybirdAvatars 進入：${pairs && pairs.length} 位 | spriteBase=${VN_Config.data.spriteBase} spriteDirect=${VN_Config.data.spriteDirect}`);
+            if (!pairs || !pairs.length) { console.log('[早鳥診斷vF2] 跳過：pairs 空'); return; }
+            if (VN_Config.data.spriteBase) { console.log('[早鳥診斷vF2] 跳過：spriteBase 立繪模式'); return; }   // 固定立繪模式（靜態檔）不生成
             // ⭐ 真因修復：舊版此處為 `|| !win.OS_IMAGE_MANAGER) return` → iframe 模式下 win=window.parent，
             //    引擎卻掛在 window，早鳥的 win.OS_IMAGE_MANAGER 永遠 false → 整批默默丟掉，頭像退回
             //    「對話框跳出來才生」。改成 win/window/window.parent 任一個有就放行（生成走 VN_Image 用對的 win）。
