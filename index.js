@@ -38,6 +38,15 @@ let _AURELIA_SKIP = false;
                 pwin.__AURELIA_FROM_CDN__ = true;    // 標記主頁面這份＝從 CDN 重注入 → 強制 CDN 模式，別誤抓同頁其他擴展(如 claude-codex-room)的 index.js 標籤當成自己的資料夾
                 const s = pdoc.createElement('script');
                 s.src = _AURELIA_CDN_BASE + '/index.js?boot=' + Date.now();
+                // 🩹 注入腳本若載入失敗(jsdelivr 對剛 push 的新 commit 冷快取會 503/timeout) → 解鎖，
+                //    否則 __AURELIA_BOOTSTRAPPED__ 凍在 true，重跑同一個 ref 會「完全沒反應」(兩個分支都不走)。
+                //    解鎖後使用者重跑 import 即可重試(TauriTavern webview 不銷毀、不會自己歸零)。
+                s.onerror = function () {
+                    pwin.__AURELIA_BOOTSTRAPPED__ = false;
+                    pwin.__AURELIA_REF__ = undefined;
+                    pwin.__AURELIA_FROM_CDN__ = undefined;
+                    console.warn('[Aurelia] 重注入腳本載入失敗(多半 jsdelivr 冷快取 503) → 已解鎖，重跑 import 即可重試');
+                };
                 pdoc.head.appendChild(s);
                 console.log('[Aurelia] 偵測到酒館助手沙盒 → 已將擴展重新注入主頁面執行');
             } else if (pwin.__AURELIA_REF__ !== _AURELIA_REF) {
