@@ -1232,15 +1232,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #game-char.vn-avatar   { left: auto; right: calc(50% + 5%); }
             #game-char-2.vn-avatar { right: auto; left:  calc(50% + 5%); }
         }
-        /* 📱 手機直立：單格立繪(vn-solo)是 max-width:100% 看著剛好，但只要第二格出現
-           (不管全身或頭像)就進雙格、兩個全身立繪掉到 60% 被壓小。
-           → 雙格維持滿尺寸不縮水；但滿高+兩張貼左右下臉都在中央，幾何上會重疊 ~2/3，
-           所以把兩張往外推(left/right 負位移)、外側出框，兩張臉拉到左右側、中間只留少量重疊。
-           頭像(vn-avatar)與單人(vn-solo)因 id+class 優先級較高，不受影響、維持原樣。 */
+        /* 📱 手機直立：雙格在窄螢幕太擠 → 改單格置中。JS(_singleSlot) 強制說話者一律進左格，
+           右格永不出現；這裡把右格藏掉、左格不論全身/頭像都置中滿尺寸。電腦端維持雙格不變。 */
         @media (max-width: 768px) {
-            #game-char, #game-char-2 { max-width: 100%; }
-            #game-char   { left:  -35%; right: auto; }
-            #game-char-2 { right: -35%; left:  auto; }
+            #game-char-2 { display: none !important; }
+            #game-char { left: 0; right: 0; max-width: 100%; object-position: center bottom; }
+            #game-char.vn-avatar { left: 0; right: 0; margin-left: auto; margin-right: auto; }
         }
         /* 雙擊立繪 → 角色卡 */
         #vn-char-card {

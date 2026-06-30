@@ -2853,8 +2853,11 @@
         // _stage[0]=左格、_stage[1]=右格；各為 null 或 { name, exp, lastTick }
         _slotEl: function(idx) { return document.getElementById(idx === 0 ? 'game-char' : 'game-char-2'); },
         _stageInit: function() { if (!this._stage) { this._stage = [null, null]; this._stageTick = 0; } },
+        // 📱 手機直立：窄螢幕雙格太擠 → 只用左格、置中（右格永不出現）。電腦端維持雙格
+        _singleSlot: function() { try { return window.matchMedia('(max-width: 768px)').matches; } catch (_) { return false; } },
         _stageIndexFor: function(name) {
             this._stageInit();
+            if (this._singleSlot()) return 0;   // 手機單格：說話者一律進左格(置中)
             for (let i = 0; i < 2; i++) if (this._stage[i] && this._stage[i].name === name) return i;   // 已在場 → 沿用原格
             for (let i = 0; i < 2; i++) if (!this._stage[i]) return i;                                   // 有空格 → 先左後右
             return (this._stage[0].lastTick <= this._stage[1].lastTick) ? 0 : 1;                         // 兩格滿 → 驅逐最久沒說話那格
@@ -2921,6 +2924,7 @@
         updateSprite: function(name, exp) {
             this._stageInit();
             this._stageTick++;
+            if (this._singleSlot() && this._stage[1]) this._clearSlot(1);   // 📱 手機單格：清掉右格殘留(防桌面→手機切換留圖)
             const idx = this._stageIndexFor(name);
             const prev = this._stage[idx];
             const isNew = !prev || prev.name !== name;
