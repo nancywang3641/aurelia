@@ -1778,8 +1778,10 @@
             // ⭐ 真因修復：舊版此處為 `|| !win.OS_IMAGE_MANAGER) return` → iframe 模式下 win=window.parent，
             //    引擎卻掛在 window，早鳥的 win.OS_IMAGE_MANAGER 永遠 false → 整批默默丟掉，頭像退回
             //    「對話框跳出來才生」。改成 win/window/window.parent 任一個有就放行（生成走 VN_Image 用對的 win）。
+            console.log(`[早鳥診斷] _earlybirdAvatars 進入：${pairs.length} 位，引擎ready=${this._imgEngineReady()}`);
             if (!this._imgEngineReady()) {
                 const _ok = await this._waitForImageManager(180000);
+                console.log(`[早鳥診斷] 等引擎結果=${_ok}`);
                 if (!_ok) { console.warn('[VN] 頭像早鳥：等 OS_IMAGE_MANAGER 逾時，放棄預生（退回對話時生成）'); return; }
             }
             this._imgScanStart();   // 整批處理期間舉「忙碌」牌：查快取的空檔不算完成
@@ -1788,18 +1790,20 @@
                 const name = p.name, desc = p.desc;
                 if (!name || !desc) continue;
                 if (!this.avatars[name]) this.avatars[name] = desc;   // 先登記，loadScript 再解析到也只是覆寫同值
-                if (this._avatarMemCache[name] || this._avatarInflight[name]) continue;
+                if (this._avatarMemCache[name] || this._avatarInflight[name]) { console.log(`[早鳥診斷] ${name} 跳過：mem=${!!this._avatarMemCache[name]} inflight=${!!this._avatarInflight[name]}`); continue; }
                 try {
                     // 與預熱第一輪同序的快速快取檢查：世界書素材 → IDB → persona URL，命中就不生
                     if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
                     const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
-                    if (lbUrl) continue;
+                    if (lbUrl) { console.log(`[早鳥診斷] ${name} 跳過：世界書頭像命中`); continue; }
                     const cached = await VN_Cache.get('avatar_cache', name);
-                    if (cached?.url && !cached.url.startsWith('blob:')) continue;
-                    if (this._getPersonaFallback(name)?.url) continue;
-                } catch(e) {}
+                    if (cached?.url && !cached.url.startsWith('blob:')) { console.log(`[早鳥診斷] ${name} 跳過：IDB快取命中`); continue; }
+                    if (this._getPersonaFallback(name)?.url) { console.log(`[早鳥診斷] ${name} 跳過：persona URL`); continue; }
+                } catch(e) { console.log(`[早鳥診斷] ${name} 快取檢查例外`, e); }
                 // 串行生成（≤10 張；本機讓路交給語音紅綠燈在生圖層處理）
+                console.log(`[早鳥診斷] ${name} → 派發 _genAvatarToCache`);
                 await this._genAvatarToCache(name);
+                console.log(`[早鳥診斷] ${name} ← _genAvatarToCache 完成`);
             }
             } finally { this._imgScanEnd(); }
         },
