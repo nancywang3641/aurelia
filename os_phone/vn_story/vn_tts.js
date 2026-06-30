@@ -44,7 +44,12 @@ const VN_TTS = {
         charAliases: {},
 
         // NPC 分類: [{ id, name, tags:[], modelIds:[] }]
-        npcCategories: []
+        npcCategories: [],
+
+        // 🔒 本卡 NPC 聲線鎖: cardId → { charName: modelId }
+        //   來源＝立繪雙擊「💾 保存 CV」（隨手鎖住某張卡裡某個 NPC 的音）。與「charMappings(使用者手填、全域、面板顯示)」分流：
+        //   不進面板、按角色卡 id 收著、換卡自動回歸抽池、同卡重玩還在。
+        npcLocks: {}
     },
 
     // 執行期狀態（不持久化）
@@ -72,6 +77,7 @@ const VN_TTS = {
                 if (!this.config.narratorKokoro) this.config.narratorKokoro = { enabled:false, url:'http://127.0.0.1:8880', voice:'zf_xiaoxiao' };
                 if (!this.config.narratorMinimax) this.config.narratorMinimax = { enabled:false, voice:'audiobook_female_1' };
                 if (!this.config.npcCategories)  this.config.npcCategories = [];
+                if (!this.config.npcLocks)       this.config.npcLocks = {};
             }
         } catch (e) {}
         console.log('[VN_TTS] 初始化, 啟用:', this.config.enabled);
@@ -79,6 +85,41 @@ const VN_TTS = {
 
     save() {
         localStorage.setItem(this.CONFIG_KEY, JSON.stringify(this.config));
+    },
+
+    // ── 本卡 NPC 聲線鎖（按穩定角色卡 id；與全域 charMappings 分流）──────────
+    // 穩定卡 id：優先角色卡檔名(avatar)＞群組 id＞聊天名去掉「 - 時間戳」。同卡重玩=同 id。
+    _cardId() {
+        try {
+            const w = window.parent || window;
+            const ctx = w.SillyTavern && w.SillyTavern.getContext && w.SillyTavern.getContext();
+            if (ctx) {
+                const chid = ctx.characterId;
+                if (chid != null && ctx.characters && ctx.characters[chid] && ctx.characters[chid].avatar) return 'char::' + String(ctx.characters[chid].avatar);
+                if (ctx.groupId) return 'group::' + String(ctx.groupId);
+                if (ctx.chatId) return 'chat::' + String(ctx.chatId).replace(/\s*-\s*\d{4}-\d{2}-\d{2}@.*$/, '').trim();
+            }
+        } catch(e){}
+        return 'card_default';
+    },
+    _cardLocks() {
+        const id = this._cardId();
+        if (!this.config.npcLocks) this.config.npcLocks = {};
+        if (!this.config.npcLocks[id]) this.config.npcLocks[id] = {};
+        return this.config.npcLocks[id];
+    },
+    lockNpcVoice(charName, modelId) {
+        if (!charName || !modelId) return;
+        this._cardLocks()[charName] = modelId;
+        this.save();
+    },
+    unlockNpcVoice(charName) {
+        const locks = this._cardLocks();
+        if (locks[charName]) { delete locks[charName]; this.save(); }
+    },
+    clearCardLocks() {
+        const id = this._cardId();
+        if (this.config.npcLocks && this.config.npcLocks[id]) { this.config.npcLocks[id] = {}; this.save(); }
     },
 
     // ── 能力偵測 ────────────────────────────────────────────────────────
@@ -114,8 +155,24 @@ const VN_TTS = {
     //  - _npcSessionCache：本局其他 NPC 已抽到的音 → 避免兩個 NPC 撞同一個、同時同音
     _collectUsedModelIds(exceptChar) {
         const used = new Set();
+        // 🔑 A 方案：避撞只看「當前卡在場角色」，不把全宇宙綁定都算進來（換卡舊綁定回歸抽池、不累積）。
+        //   在場名冊＝VN_Core 記憶體（[Avatar]聲線表 charVoices + 頭像表 avatars + 當前說話者）∪ 本局NPC ∪ 本卡鎖。
+        const roster = new Set();
+        try {
+            const VN = (window.parent || window).VN_Core;
+            if (VN) {
+                Object.keys(VN.charVoices || {}).forEach(n => roster.add(n));
+                Object.keys(VN.avatars || {}).forEach(n => roster.add(n));
+                if (VN.currentName) roster.add(VN.currentName);
+            }
+        } catch (e) {}
         const cm = this.config.charMappings || {};
-        Object.keys(cm).forEach(name => { if (cm[name]) used.add(cm[name]); });
+        // 手動綁定：只排除「在場」那幾個（其他卡綁的不占當前卡的池）
+        roster.forEach(name => { if (name !== exceptChar && cm[name]) used.add(cm[name]); });
+        // 本卡 NPC 鎖
+        const locks = this._cardLocks();
+        Object.keys(locks).forEach(name => { if (name !== exceptChar && locks[name]) used.add(locks[name]); });
+        // 本局已抽到的 NPC
         const cache = this._npcSessionCache || {};
         Object.keys(cache).forEach(name => { if (name !== exceptChar && cache[name]) used.add(cache[name]); });
         return used;
@@ -144,10 +201,16 @@ const VN_TTS = {
             }
         }
 
-        // 1. 直接對應 (最優先：你手動綁死的角色)
+        // 1. 直接對應 (最優先：你手動綁死的角色，全域、面板顯示)
         const mid = this.config.charMappings[lookupName];
         if (mid && this.config.models[mid]) {
             return { id: mid, ...this.config.models[mid] };
+        }
+
+        // 1.5 本卡 NPC 聲線鎖（立繪 save CV，按角色卡 id；換卡不算）
+        const lid = this._cardLocks()[charName] || this._cardLocks()[lookupName];
+        if (lid && this.config.models[lid]) {
+            return { id: lid, ...this.config.models[lid] };
         }
 
         // 2. 檢查記憶體：這個 NPC 剛剛是不是已經抽過聲音了？

@@ -351,7 +351,27 @@ function renderChars(cfg) {
 <div class="vtts-card">
   <div class="vtts-card-title">📋 角色對應列表</div>
   ${rows || '<div class="vtts-empty">尚無角色對應</div>'}
+</div>
+${(() => {
+    const T = (window.parent || window).VN_TTS;
+    const locks = (T && typeof T._cardLocks === 'function') ? T._cardLocks() : {};
+    const keys = Object.keys(locks);
+    const lockRows = keys.map(char => {
+        const mid = locks[char];
+        const mname = (cfg.models[mid] && cfg.models[mid].name) || mid;
+        return `<div style="display:flex;align-items:center;gap:8px;">
+      <span class="vtts-char-name" style="flex:1;">${esc(char)}</span>
+      <span style="flex:0 0 auto;font-size:11px;color:rgba(26,28,40,0.6);">${esc(mname)}</span>
+      <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.unlockNpc('${escJs(char)}')">🔓 解除</button>
+    </div>`;
+    }).join('');
+    return `
+<div class="vtts-card">
+  <div class="vtts-card-title">🔒 本卡 NPC 聲線鎖${keys.length ? ` <button class="vtts-btn vtts-btn-danger" style="float:right;" onclick="VN_TTS_Panel.clearCardLocks()">清空本卡</button>` : ''}</div>
+  <div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:8px;">立繪雙擊「💾 保存 CV」鎖住的 NPC 音；只在這張卡有效、換卡自動回歸抽池、同卡重玩還在。與上面的手動對應分開、互不干擾。</div>
+  ${lockRows || '<div class="vtts-empty">本卡尚無 NPC 聲線鎖</div>'}
 </div>`;
+})()}`;
 }
 
 // NPC 分類用下拉選：只顯示選中的一張卡、其餘隱藏（分類一多就不會疊得很長）
@@ -1042,6 +1062,21 @@ const VN_TTS_Panel = {
         delete tts.config.charMappings[charName];
         if (tts.config.charAliases) delete tts.config.charAliases[charName];
         tts.save();
+        this._renderBody('chars');
+    },
+
+    // 本卡 NPC 聲線鎖（立繪 save CV）：解除單個 / 清空本卡
+    unlockNpc(charName) {
+        const tts = this._tts();
+        if (!tts || typeof tts.unlockNpcVoice !== 'function') return;
+        tts.unlockNpcVoice(charName);
+        this._renderBody('chars');
+    },
+    clearCardLocks() {
+        const tts = this._tts();
+        if (!tts || typeof tts.clearCardLocks !== 'function') return;
+        tts.clearCardLocks();
+        this._toast('✓ 已清空本卡 NPC 聲線鎖');
         this._renderBody('chars');
     },
 
