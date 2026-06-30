@@ -305,6 +305,24 @@
             .wx-dark .wx-btn-cancel { background: #2a2a2c; color: #ccc; }
             .wx-dark .wx-source-details { background: #1c1c1e; border-color: #3a3a3c; color: #aaa; }
             .wx-dark .wx-code-content { background: #0d0d0d; border-color: #2a2a2a; color: #9acd9a; }
+
+            /* ── 「發現」tab（跑團手機記錄）：.wx-cell* / .wx-vnlog* 在 vn_styles.css 是寫死白底、
+               發現頁又沒走 isDark 內聯 → 黑夜模式漏成白卡。這裡補齊暗色一套（.wx-dark 特異度蓋過全域白底）。 ── */
+            .wx-dark .wx-cell-group { background: #1c1c1e; }
+            .wx-dark .wx-cell { background: #1c1c1e; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-cell:active { background: #2a2a2a; }
+            .wx-dark .wx-cell-text { color: #f0f0f0; }
+            .wx-dark .wx-cell-arrow { color: #555; }
+            .wx-dark .wx-vnlog { background: #000; }
+            .wx-dark .wx-vnlog-empty { color: #888; }
+            .wx-dark .wx-vnlog-room { background: #1c1c1e; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-vnlog-room:active { background: #2a2a2a; }
+            .wx-dark .wx-vnlog-room-name { color: #f0f0f0; }
+            .wx-dark .wx-vnlog-room-prev { color: #888; }
+            .wx-dark .wx-vnlog-room-cnt { color: #777; }
+            .wx-dark .wx-vnlog-bar { background: #111; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-vnlog-bar-t { color: #f0f0f0; }
+            .wx-dark .wx-vnlog-scroll { background: #000; }
         `,
         inject: function(fallbackDoc) {
             const targetDoc = (window.parent && window.parent.document) ? window.parent.document : (fallbackDoc || document);
