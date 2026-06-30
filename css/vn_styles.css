@@ -2130,7 +2130,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #call-status { font-size: 1rem; color: #aaa; margin-top: 8px; margin-bottom: 16px; letter-spacing: 2px; transition: margin 0.3s ease; }
         /* 接聽後縮小頭像與名字，騰出對話框空間 */
         #phone-call.call-active { padding-top: 28px; justify-content: space-between; padding-bottom: 18px; }
-        #phone-call.call-active #call-avatar-wrap { width: 96px; height: 96px; margin-bottom: 4px; }
+        #phone-call.call-active #call-avatar-wrap { width: 96px; height: 96px; margin-bottom: 14px; }
         #phone-call.call-active #call-avatar-initial { font-size: 2.2rem; }
         #phone-call.call-active #call-name { font-size: 1.3rem; line-height: 1.2; }
         #phone-call.call-active #call-status { margin-top: 2px; margin-bottom: 0; font-size: 0.85rem; }
@@ -2302,7 +2302,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #call-status { font-size: 0.9rem; margin-top: 6px; margin-bottom: 12px; }
             #call-subtitle-box { margin-top: 12px; width: 88%; padding: 10px 14px; max-height: 32%; }
             #phone-call.call-active { padding-top: 22px; justify-content: space-between; padding-bottom: 14px; }
-            #phone-call.call-active #call-avatar-wrap { width: 62px; height: 62px; margin-bottom: 5px; }
+            #phone-call.call-active #call-avatar-wrap { width: 62px; height: 62px; margin-bottom: 12px; }
             #phone-call.call-active #call-name { font-size: 1.2rem; }
             #phone-call.call-active #call-status { margin-top: 2px; margin-bottom: 0; }
             #phone-call.call-active #call-subtitle-box { margin-top: 0; max-height: 50%; }
