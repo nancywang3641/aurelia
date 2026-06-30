@@ -21,14 +21,6 @@
             <hr>
             
             <div class="flex-container">
-                <label for="mp_mount_mode">插入模式：</label>
-                <select id="mp_mount_mode">
-                    <option value="modal">浮窗模式</option>
-                    <option value="embedded">內嵌模式</option>
-                </select>
-            </div>
-            
-            <div class="flex-container">
                 <label for="mp_mount_selector">插入位置容器：</label>
                 <select id="mp_mount_selector">
                     <option value="#sheld">#sheld（整個對話框，推薦）</option>
@@ -139,7 +131,7 @@
             enabled: true,
             messageCollapse: true,
             mount: {
-                mode: 'modal',
+                mode: 'embedded',
                 selector: '#sheld',
                 placement: 'bottom'
             }
@@ -155,27 +147,16 @@
         // 應用設置到 UI
         document.getElementById('mp_enabled').checked = !!finalSettings.enabled;
         document.getElementById('mp_message_collapse').checked = finalSettings.messageCollapse !== false;
-        document.getElementById('mp_mount_mode').value = finalSettings.mount?.mode || 'modal';
         document.getElementById('mp_mount_selector').value = finalSettings.mount?.selector || '#sheld';
         document.getElementById('mp_mount_placement').value = finalSettings.mount?.placement || 'bottom';
 
-        // mobile 強制嵌入模式並隱藏模式選單（mobile 不支援浮窗模式）
-        (function hideMobileFloatingOption() {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-                || window.innerWidth < 768;
-            if (!isMobile) return;
-
-            const modeSelect = document.getElementById('mp_mount_mode');
-            if (!modeSelect) return;
-
-            // 強制設為嵌入模式並儲存
-            modeSelect.value = 'embedded';
-            modeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
-            // 隱藏整個下拉單的容器（連同 label 一起隱藏）
-            const wrapper = modeSelect.closest('.flex-container');
-            if (wrapper) wrapper.style.display = 'none';
-        })();
+        // 插入模式只剩內嵌：把舊用戶存的浮窗(modal)遷移成 embedded
+        if (finalSettings.mount?.mode && finalSettings.mount.mode !== 'embedded') {
+            const settings = getExtensionSettings();
+            if (!settings.mount) settings.mount = {};
+            settings.mount.mode = 'embedded';
+            window.saveExtensionSettings(settings);
+        }
 
         // 更新狀態
         updateStatus();
@@ -235,15 +216,6 @@
             
             toastr.success('多功能面板系統已禁用');
         }
-    });
-    
-    // 插入模式設置事件監聽器
-    document.getElementById('mp_mount_mode').addEventListener('change', function() {
-        const settings = getExtensionSettings();
-        if (!settings.mount) settings.mount = {};
-        settings.mount.mode = this.value;
-        window.saveExtensionSettings(settings);
-        console.log('插入模式設置:', this.value);
     });
     
     document.getElementById('mp_mount_selector').addEventListener('change', function() {
