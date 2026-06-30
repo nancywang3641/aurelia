@@ -1544,7 +1544,7 @@
         },
 
         _prewarmAvatars: function() {
-            if (VN_Config.data.spriteBase) return;
+            // ⭐ 不再因 spriteBase 整批跳過（靜態立繪只是 fallback 第一層）；改為下方逐角色探靜態圖、缺的才生。
             const names = Object.keys(this.avatars);
             // 把 persona 名字也納入預熱
             try {
@@ -1578,6 +1578,8 @@
                     const pf = this._getPersonaFallback(name);
                     if (pf?.url) { this._avatarMemCache[name] = pf.url; console.log(`[VN] 頭像使用 Persona URL：${name}`); continue; }
                     if (pf?.prompt && !this.avatars[name]) this.avatars[name] = pf.prompt;
+                    // 自備靜態立繪/預設圖存在 → 播放時直接讀，不必生
+                    if (await this._staticAvatarExists(name)) { console.log(`[VN] 頭像使用自備靜態圖：${name}`); continue; }
                     if (win.OS_IMAGE_MANAGER) needGen.push(name);
                 }
 
@@ -1772,17 +1774,34 @@
                 }, 400);
             });
         },
+        // 探「使用者自備的靜態立繪/預設圖」在不在（對齊 _renderSlot/handleImgError 的 fallback 鏈：spriteBase→charDefaultBase）。
+        // 在＝播放時直接讀靜態檔、不用生；不在（AI 臨時編的 NPC）＝該角色 fallback 會走到「生成」，早鳥/預熱要提前生。
+        _staticAvatarExists: function(name) {
+            const urls = [];
+            if (VN_Config.data.spriteBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.spriteBase}${v}_Neutral.png`));
+            if (VN_Config.data.charDefaultBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.charDefaultBase}${v}_presets.png`));
+            if (!urls.length) return Promise.resolve(false);
+            return new Promise(resolve => {
+                let i = 0;
+                (function probe() {
+                    if (i >= urls.length) return resolve(false);
+                    const url = urls[i++];
+                    const im = new Image();
+                    let settled = false;
+                    const to = setTimeout(() => { if (!settled) { settled = true; probe(); } }, 5000);
+                    im.onload  = () => { if (!settled) { settled = true; clearTimeout(to); resolve(true); } };
+                    im.onerror = () => { if (!settled) { settled = true; clearTimeout(to); probe(); } };
+                    im.src = url;
+                })();
+            });
+        },
         _earlybirdAvatars: async function(pairs) {
-            console.log(`[早鳥診斷vF2] _earlybirdAvatars 進入：${pairs && pairs.length} 位 | spriteBase=${VN_Config.data.spriteBase} spriteDirect=${VN_Config.data.spriteDirect}`);
-            if (!pairs || !pairs.length) { console.log('[早鳥診斷vF2] 跳過：pairs 空'); return; }
-            if (VN_Config.data.spriteBase) { console.log('[早鳥診斷vF2] 跳過：spriteBase 立繪模式'); return; }   // 固定立繪模式（靜態檔）不生成
-            // ⭐ 真因修復：舊版此處為 `|| !win.OS_IMAGE_MANAGER) return` → iframe 模式下 win=window.parent，
-            //    引擎卻掛在 window，早鳥的 win.OS_IMAGE_MANAGER 永遠 false → 整批默默丟掉，頭像退回
-            //    「對話框跳出來才生」。改成 win/window/window.parent 任一個有就放行（生成走 VN_Image 用對的 win）。
-            console.log(`[早鳥診斷] _earlybirdAvatars 進入：${pairs.length} 位，引擎ready=${this._imgEngineReady()}`);
+            if (!pairs || !pairs.length) return;
+            // ⭐ 不再因 spriteBase 就整批跳過：靜態立繪只是 fallback 第一層，沒自備圖的角色（AI 臨時 NPC）
+            //    最終會走到「生成」那層 → 必須提前生，否則登場才生＝卡 3-4 秒。改為逐角色探靜態圖在不在。
+            // ⭐ 引擎就緒走 _imgEngineReady（win/window/window.parent 任一），避免 iframe 跨-win 落差整批丟。
             if (!this._imgEngineReady()) {
                 const _ok = await this._waitForImageManager(180000);
-                console.log(`[早鳥診斷] 等引擎結果=${_ok}`);
                 if (!_ok) { console.warn('[VN] 頭像早鳥：等 OS_IMAGE_MANAGER 逾時，放棄預生（退回對話時生成）'); return; }
             }
             this._imgScanStart();   // 整批處理期間舉「忙碌」牌：查快取的空檔不算完成
@@ -1791,20 +1810,21 @@
                 const name = p.name, desc = p.desc;
                 if (!name || !desc) continue;
                 if (!this.avatars[name]) this.avatars[name] = desc;   // 先登記，loadScript 再解析到也只是覆寫同值
-                if (this._avatarMemCache[name] || this._avatarInflight[name]) { console.log(`[早鳥診斷] ${name} 跳過：mem=${!!this._avatarMemCache[name]} inflight=${!!this._avatarInflight[name]}`); continue; }
+                if (this._avatarMemCache[name] || this._avatarInflight[name]) continue;
                 try {
                     // 與預熱第一輪同序的快速快取檢查：世界書素材 → IDB → persona URL，命中就不生
                     if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
                     const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
-                    if (lbUrl) { console.log(`[早鳥診斷] ${name} 跳過：世界書頭像命中`); continue; }
+                    if (lbUrl) continue;
                     const cached = await VN_Cache.get('avatar_cache', name);
-                    if (cached?.url && !cached.url.startsWith('blob:')) { console.log(`[早鳥診斷] ${name} 跳過：IDB快取命中`); continue; }
-                    if (this._getPersonaFallback(name)?.url) { console.log(`[早鳥診斷] ${name} 跳過：persona URL`); continue; }
-                } catch(e) { console.log(`[早鳥診斷] ${name} 快取檢查例外`, e); }
+                    if (cached?.url && !cached.url.startsWith('blob:')) continue;
+                    if (this._getPersonaFallback(name)?.url) continue;
+                    // 自備靜態立繪/預設圖存在 → 播放時直接讀靜態檔，不用生
+                    if (await this._staticAvatarExists(name)) { console.log(`[VN] 頭像早鳥：${name} 有自備靜態圖，跳過生成`); continue; }
+                } catch(e) {}
                 // 串行生成（≤10 張；本機讓路交給語音紅綠燈在生圖層處理）
-                console.log(`[早鳥診斷] ${name} → 派發 _genAvatarToCache`);
+                console.log(`[VN] 頭像早鳥：${name} 無現成來源 → 提前生成`);
                 await this._genAvatarToCache(name);
-                console.log(`[早鳥診斷] ${name} ← _genAvatarToCache 完成`);
             }
             } finally { this._imgScanEnd(); }
         },

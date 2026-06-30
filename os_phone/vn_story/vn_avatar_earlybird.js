@@ -55,23 +55,11 @@
         return _readModelText() || _readDomText();
     }
 
-    // ── 一次性診斷（確認串流半成品到底讀不讀得到、躲在哪）：每輪各只印一次 ──
-    let _diagPollLogged = false;
-    let _diagStreamLogged = false;
-    function _diagOnce() {
-        if (_diagPollLogged) return;
-        const md = _readModelText(), dom = _readDomText();
-        if (!md && !dom) return;   // 還沒有任何半成品 → 等下一格
-        _diagPollLogged = true;
-        console.log(`[早鳥診斷] 輪詢讀到半成品 | 資料模型 len=${md.length} 含</ChapterCard>=${md.includes('</ChapterCard>')} | DOM len=${dom.length} 含</ChapterCard>=${dom.includes('</ChapterCard>')}`);
-    }
-
     function _startPoll() {
         _stopPoll();
         const t0 = Date.now();
         _pollTimer = setInterval(function () {
             if (_doneThisGen || (Date.now() - t0) > 300000) { _stopPoll(); return; }
-            _diagOnce('poll');
             const t = _readStreamingText();
             if (t) _scan(t);
             if (_doneThisGen) _stopPoll();
@@ -87,22 +75,13 @@
             if (dryRun) return;   // 🚫 dryRun 試算空跑 → 別啟動早鳥生圖(免空跑燒 GPU/API)
             if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結的 generateRaw 也發此事件 → 別啟動頭像早鳥生圖
             _doneThisGen = false;
-            _diagPollLogged = false;
-            _diagStreamLogged = false;
-            console.log('[早鳥診斷] GENERATION_STARTED → 開始輪詢半成品');
             _startPoll();
         });
         if (ev.GENERATION_ENDED) win.eventOn(ev.GENERATION_ENDED, function () { _stopPoll(); });
 
         // 串流事件路（有發就更即時；TauriTavern 沒發也無所謂，輪詢頂著）
         if (ev.STREAM_TOKEN_RECEIVED) win.eventOn(ev.STREAM_TOKEN_RECEIVED, function (text) {
-            try {
-                if (!_diagStreamLogged && typeof text === 'string') {
-                    _diagStreamLogged = true;
-                    console.log(`[早鳥診斷] STREAM_TOKEN_RECEIVED 有發！len=${text.length} 含</ChapterCard>=${text.includes('</ChapterCard>')}`);
-                }
-                if (typeof text === 'string') _scan(text);
-            } catch (e) {}
+            try { if (typeof text === 'string') _scan(text); } catch (e) {}
         });
 
         // 保險路：訊息落地立刻掃，不必等 VN 載入
