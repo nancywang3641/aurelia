@@ -41,10 +41,21 @@
 
     function syncModalToChat() {
         if (!phoneFrame || !isVisible || isEmbedded || isFullscreen) return;
+        phoneFrame.style.position = 'fixed';
+        // 📱 手機瀏覽器：#sheld 的 rect 含動態網址列後面那塊(100vh 老問題)，比可見視窗大/偏移
+        //    → 浮窗被頂到瀏覽器外面。改釘在真實可見視窗(visualViewport 優先，跟著網址列/鍵盤縮；
+        //    退 innerWidth/innerHeight)。Tauri 無動態網址列 rect 本來就準、不受影響。
+        if (isMobileDevice()) {
+            const vv = window.visualViewport;
+            phoneFrame.style.left   = (vv ? vv.offsetLeft : 0) + 'px';
+            phoneFrame.style.top    = (vv ? vv.offsetTop  : 0) + 'px';
+            phoneFrame.style.width  = (vv ? vv.width  : window.innerWidth)  + 'px';
+            phoneFrame.style.height = (vv ? vv.height : window.innerHeight) + 'px';
+            return;
+        }
         const chatEl = document.querySelector(syncTargetSelector) || document.querySelector('#sheld') || document.querySelector('#chat');
         if (!chatEl) return;
         const rect = chatEl.getBoundingClientRect();
-        phoneFrame.style.position = 'fixed';
         phoneFrame.style.top    = rect.top    + 'px';
         phoneFrame.style.left   = rect.left   + 'px';
         phoneFrame.style.width  = rect.width  + 'px';
