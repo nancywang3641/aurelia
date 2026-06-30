@@ -43,7 +43,7 @@
                             <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
                         </div>
                         <div class="studio-task-card" data-go="persona" role="button" tabindex="0">
-                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/studio-persona.png" alt="" onerror="this.remove()">
+                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/我的角色_ying.png" alt="" onerror="this.remove()">
                             <div class="stc-main"><div class="stc-title">我的角色</div><div class="stc-desc">寫／改你扮演的主角人設，對標不同世界</div></div>
                             <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
                         </div>

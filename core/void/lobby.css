@@ -349,6 +349,8 @@
 #void-exit-btn        { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/出門_ying.png); }
 #void-journal-btn     { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/日誌_ying.png); }
 #void-achievement-btn { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/成就_ying.png); }
+#void-apps-btn        { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/應用_ying.png); }
+#void-close-btn       { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/關閉_ying.png); }
 /* 選單背景圖 — 柴郡皮膚 */
 .void-tab.mode-404 #void-quest-btn   { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/禁庫_cheshire.png); }
 .void-tab.mode-404 #void-chapter-btn { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/異常紀錄_cheshire.png); }
