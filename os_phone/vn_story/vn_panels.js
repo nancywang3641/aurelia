@@ -797,9 +797,9 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             }
 
             // 手機（≤768px）CSS 把左右翻頁箭頭與圓點藏了、卡片容器改垂直滾動，
-            // 所以手機一頁塞全部章節靠滾動看；桌機維持每頁 5 張的卡片輪播。
+            // 所以手機一頁塞全部章節靠滾動看；桌機維持每頁 4 張的卡片輪播。
             const isMobile = window.matchMedia('(max-width: 768px)').matches;
-            const PER = isMobile ? chapters.length : 5;
+            const PER = isMobile ? chapters.length : 4;
             _pages = [];
             for (let i = 0; i < chapters.length; i += PER) _pages.push(chapters.slice(i, i + PER));
             _renderPage(0);
