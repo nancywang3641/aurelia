@@ -3212,23 +3212,32 @@
             try {
                 const T = win.VN_TTS;
                 if (!T || !T.config) return null;
-                const id = (T.config.charMappings && T.config.charMappings[name]) || (T._npcSessionCache && T._npcSessionCache[name]) || null;
+                const manual = T.config.charMappings && T.config.charMappings[name];
+                const locked = (typeof T._cardLocks === 'function') ? T._cardLocks()[name] : null;
+                const id = manual || locked || (T._npcSessionCache && T._npcSessionCache[name]) || null;
                 if (!id) return null;
                 const model = T.config.models && T.config.models[id];
-                const bound = !!(T.config.charMappings && T.config.charMappings[name]);
-                return { id, name: (model && model.name) || id, bound };
+                // source：manual=面板手動綁(全域) / cardlock=本卡NPC鎖(立繪save) / session=本局抽到還沒鎖
+                const source = manual ? 'manual' : (locked ? 'cardlock' : 'session');
+                return { id, name: (model && model.name) || id, source, bound: !!manual };
             } catch (e) { return null; }
         },
+        // 立繪 save CV → 寫「本卡 NPC 聲線鎖」(per-卡，與面板手動綁定分流)，不污染全域 charMappings
         saveCharCV: function(name, btn) {
             try {
                 const cv = this._charCV(name);
                 if (!cv) { alert('這個角色目前沒有語音可保存'); return; }
                 const T = win.VN_TTS;
-                T.config.charMappings = T.config.charMappings || {};
-                T.config.charMappings[name] = cv.id;
-                if (typeof T.save === 'function') T.save();
-                if (btn) { btn.textContent = '已保存 ✓'; btn.disabled = true; }
+                if (typeof T.lockNpcVoice === 'function') T.lockNpcVoice(name, cv.id);
+                if (btn) { btn.textContent = '已鎖定 ✓'; btn.disabled = true; }
             } catch (e) { alert('保存失敗：' + (e?.message || e)); }
+        },
+        unlockCharCV: function(name, btn) {
+            try {
+                const T = win.VN_TTS;
+                if (typeof T.unlockNpcVoice === 'function') T.unlockNpcVoice(name);
+                if (btn) { btn.textContent = '已解除 ✓'; btn.disabled = true; }
+            } catch (e) { alert('解除失敗：' + (e?.message || e)); }
         },
         // 真懶人：用角色頭像提示詞 → 生 512×896 立繪 → AI 模型去背 → 存 sprite_cache → 立繪即時換上
         autoGenSprite: async function(name, btn) {
@@ -3312,11 +3321,16 @@
             card.className = 'vn-cc ' + (idx === 0 ? 'vn-cc-left' : 'vn-cc-right');
             const affRaw = st['好感度'];
             const aff = (affRaw === null || affRaw === undefined || affRaw === '') ? '—' : affRaw;
-            const cvText = cv ? (esc(cv.name) + (cv.bound ? '（已綁定）' : '')) : '—';
+            const _cvTag = cv ? (cv.source === 'manual' ? '（已綁定·全域）' : (cv.source === 'cardlock' ? '（本卡已鎖）' : '')) : '';
+            const cvText = cv ? (esc(cv.name) + _cvTag) : '—';
+            // session=還沒鎖→「💾保存(本卡)」；cardlock=已鎖→「🔓解除」；manual=全域綁定→面板管、這裡不出按鈕
+            let _cvBtn = '';
+            if (cv && cv.source === 'session') _cvBtn = '<button class="vn-cc-mini" id="vn-cc-cv-save">💾 保存</button>';
+            else if (cv && cv.source === 'cardlock') _cvBtn = '<button class="vn-cc-mini" id="vn-cc-cv-unlock">🔓 解除</button>';
             card.innerHTML =
                 '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' +
                 '<button class="vn-cc-btn" id="vn-cc-gen">🎨 一鍵生立繪（去背）</button>' +
-                '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + ((cv && !cv.bound) ? '<button class="vn-cc-mini" id="vn-cc-cv-save">💾 保存</button>' : '') + '</div>' +
+                '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + _cvBtn + '</div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">形象</span><span class="vn-cc-v">' + esc(st['形象'] || '—') + '</span></div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">身分</span><span class="vn-cc-v">' + esc(st['身分'] || st['身份'] || '—') + '</span></div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">好感度</span><span class="vn-cc-v">' + esc(aff) + '</span></div>';
@@ -3324,6 +3338,8 @@
             card.querySelector('#vn-cc-gen').onclick = (e) => this.autoGenSprite(name, e.currentTarget);
             const cvSaveBtn = card.querySelector('#vn-cc-cv-save');
             if (cvSaveBtn) cvSaveBtn.onclick = (e) => this.saveCharCV(name, e.currentTarget);
+            const cvUnlockBtn = card.querySelector('#vn-cc-cv-unlock');
+            if (cvUnlockBtn) cvUnlockBtn.onclick = (e) => this.unlockCharCV(name, e.currentTarget);
             card.style.display = 'block';
             this._ccIdx = idx;
             // 點卡片外面自動關（延遲一拍掛載，避免開卡這次的點擊立刻把它關掉）
