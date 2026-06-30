@@ -1737,23 +1737,58 @@
             return next;
         },
 
-        // ── 早鳥入口：搶在 VN 載入前提早登記＋生成頭像（vn_avatar_earlybird / 面板啟動路呼叫）──
-        // 從任意文本掃 [Avatar|名|描述]，fire-and-forget
-        earlybirdFromText: function(text) {
+        // ── 早鳥入口：搶在 VN 載入前提早登記＋生成頭像＋背景（vn_avatar_earlybird / 面板啟動路呼叫）──
+        // 從任意文本掃 [Avatar|名|描述] 與 [Bg|...]。★序列化、不併發：先頭像(逐位)、再背景(逐張)，全程 await 串接。
+        //   順序「頭像先」是不回退頭像時序；背景之後接上，仍比純惰性早、且 loadScript 預熱仍墊底。
+        earlybirdFromText: async function(text) {
             try {
                 if (!text) return;
+                // 1) 頭像
                 const pairs = [];
-                const re = /^\s*\[Avatar\|([^|\]\n]+)\|([^\]\n]+)\]\s*$/gmi;
+                const reAv = /^\s*\[Avatar\|([^|\]\n]+)\|([^\]\n]+)\]\s*$/gmi;
                 let m;
-                while ((m = re.exec(text)) !== null) {
+                while ((m = reAv.exec(text)) !== null) {
                     const n = m[1].trim(), d = m[2].trim();
                     if (n && d && !pairs.some(p => p.name === n)) pairs.push({ name: n, desc: d });
                 }
                 if (pairs.length) {
                     console.log(`[VN] 頭像早鳥：收到 ${pairs.length} 位（${pairs.map(p => p.name).join('、')}）`);
-                    this._earlybirdAvatars(pairs);
+                    await this._earlybirdAvatars(pairs);
+                }
+                // 2) 背景（接在頭像後，逐張序列，與頭像不併發）— 解析對齊 _prewarmBgs：cacheId=parts[1]、_bgGenPrompt
+                const bgs = [];
+                const seen = new Set();
+                const reBg = /\[Bg\|([^\]\n]*)\]/g;
+                while ((m = reBg.exec(text)) !== null) {
+                    const parts = m[1].split('|');
+                    const cacheId = parts[1];
+                    const prompt = this._bgGenPrompt(parts);
+                    if (!cacheId || !prompt || seen.has(cacheId)) continue;
+                    seen.add(cacheId);
+                    bgs.push({ cacheId, prompt });
+                }
+                if (bgs.length) {
+                    console.log(`[VN] 背景早鳥：收到 ${bgs.length} 張（${bgs.map(b => b.cacheId).join('、')}）`);
+                    await this._earlybirdBgs(bgs);
                 }
             } catch(e) {}
+        },
+        // 背景早鳥：逐張序列生成（不併發），走 _safeFetchBg 與現場/預熱共用 _bgInflight 去重，登場直接讀
+        _earlybirdBgs: async function(tasks) {
+            if (!tasks || !tasks.length) return;
+            if (!this._imgEngineReady()) {
+                const _ok = await this._waitForImageManager(180000);
+                if (!_ok) return;
+            }
+            this._imgScanStart();
+            try {
+                for (const { cacheId, prompt } of tasks) {
+                    if (this._bgMemCache[cacheId] || this._bgInflight[cacheId] || this._bgFailed[cacheId]) continue;
+                    console.log(`[VN] 背景早鳥：${cacheId} → 提前生成`);
+                    this._imgJobStart();
+                    try { await this._safeFetchBg(cacheId, prompt); } finally { this._imgJobEnd(); }
+                }
+            } finally { this._imgScanEnd(); }
         },
         // 生圖引擎就緒判定：vn_core 的 win=window.parent，但再注入時序下 OS_IMAGE_MANAGER 可能先掛在
         // window 或 window.parent。任一個有就算就緒——實際生成走 VN_Image.getAvatar，會用對的那個 win。
