@@ -1,38 +1,38 @@
 <div id="multi_panel_settings">
     <div class="inline-drawer">
         <div class="inline-drawer-toggle inline-drawer-header">
-            <b>多功能面板系統設置</b>
+            <b>奧瑞亞</b>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         
         <div class="inline-drawer-content">
-            <label class="flex-container" title="啟用多功能面板系統">
+            <label class="flex-container" title="開啟後，奧瑞亞會出現在對話框裡">
                 <input type="checkbox" id="mp_enabled">
-                <span>啟用多功能面板系統</span>
-                <span class="fa-solid fa-circle-question note-link-span"></span>
+                <span>啟用奧瑞亞</span>
+                <span class="fa-solid fa-circle-question note-link-span" title="開啟後，奧瑞亞會出現在對話框裡"></span>
             </label>
-            
-            <label class="flex-container" title="為聊天消息添加折叠功能">
+
+            <label class="flex-container" title="為每則訊息加上收合按鈕，太長的訊息可以收起來">
                 <input type="checkbox" id="mp_message_collapse">
-                <span>啟用消息折叠功能</span>
-                <span class="fa-solid fa-circle-question note-link-span" title="為每條消息添加折叠/展開按鈕"></span>
+                <span>訊息可收合</span>
+                <span class="fa-solid fa-circle-question note-link-span" title="為每則訊息加上收合按鈕，太長的訊息可以收起來"></span>
             </label>
             
             <hr>
             
             <div class="flex-container">
-                <label for="mp_mount_selector">插入位置容器：</label>
+                <label for="mp_mount_selector">顯示位置：</label>
                 <select id="mp_mount_selector">
-                    <option value="#sheld">#sheld（整個對話框，推薦）</option>
-                    <option value="#chat">#chat（僅訊息區）</option>
+                    <option value="#sheld">整個對話框（推薦）</option>
+                    <option value="#chat">只在訊息區</option>
                 </select>
             </div>
 
             <div class="flex-container">
-                <label for="mp_mount_placement">插入順序：</label>
+                <label for="mp_mount_placement">顯示在：</label>
                 <select id="mp_mount_placement">
-                    <option value="bottom">底部（append）</option>
-                    <option value="top">頂部（prepend）</option>
+                    <option value="bottom">下方</option>
+                    <option value="top">上方</option>
                 </select>
             </div>
             
@@ -169,10 +169,10 @@
         
         if (window.MultiPanelExtensionAPI) {
             const status = window.MultiPanelExtensionAPI.getStatus();
-            statusText.textContent = `狀態：已載入 (v${status.version})`;
+            statusText.textContent = `狀態：運作中 (v${status.version})`;
             statusElement.className = 'status-indicator success';
         } else {
-            statusText.textContent = '狀態：未載入';
+            statusText.textContent = '狀態：尚未啟動';
             statusElement.className = 'status-indicator error';
         }
     }
@@ -198,7 +198,7 @@
                 window.PANEL_COMMUNICATION.ready = true;
             }
             
-            toastr.success('多功能面板系統已啟用');
+            toastr.success('奧瑞亞已啟用');
         } else {
             // 禁用擴展功能
             console.log('⏸️ 禁用多功能面板系統...');
@@ -214,7 +214,7 @@
                 window.PANEL_COMMUNICATION.ready = false;
             }
             
-            toastr.success('多功能面板系統已禁用');
+            toastr.success('奧瑞亞已關閉');
         }
     });
     
@@ -246,7 +246,7 @@
             if (this.checked) {
                 // 啟用折叠功能
                 window.AureliaUIUtils.reinitializeCollapse();
-                toastr.success('消息折叠功能已啟用');
+                toastr.success('已開啟訊息收合');
             } else {
                 // 禁用折叠功能：移除所有折叠按鈕
                 const buttons = document.querySelectorAll('.mes-collapse-btn'); // 🔥 更新了 Class 選擇器
@@ -276,7 +276,7 @@
                         if (avatar) avatar.style.display = '';
                     });
                 }
-                toastr.success('消息折叠功能已禁用');
+                toastr.success('已關閉訊息收合');
             }
         } else {
             // 如果函數還未載入，提示需要刷新頁面
