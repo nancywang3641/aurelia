@@ -47,6 +47,7 @@
         _sceneCgLinger: 0,  // 鋪底式場景插圖剩餘停留句數（3→0 淡出）；0=沒在顯示
         _sceneCgCur: null,  // 當前鋪底插圖的 {cacheId, prompt}，給「🔄 重生」鈕重打用（不碰 LLM）
         _sceneCgHold: false,    // 失敗佔位 hold：true=不淡出(停在佔位卡讓玩家手動重生)；成功才解除
+        _sceneCgFailLinger: 0,  // 失敗佔位寬限句數(3→0)：玩家沒手動重生也會自己淡掉、不永遠卡著
         _sceneGenBackoff: 0,    // 本輪插圖退避：撞失敗(拼車 NAI 429)後設時戳→後續插圖不再自動猛打；手動重生/新一輪清
         _itemMemCache: {},
         _itemInflight: {},  // 進行中的道具圖生成(itemName→promise)：同 _bgInflight
@@ -272,6 +273,7 @@
             if (sceneCgImg) sceneCgImg.src = '';
             this._sceneCgLinger = 0;
             this._sceneCgHold = false;
+            this._sceneCgFailLinger = 0;
             this._sceneGenBackoff = 0;   // 新章節/新一輪：解除插圖退避，重新嘗試生圖
 
             const bg = document.getElementById('game-bg');
@@ -1538,6 +1540,7 @@
             const ov = document.getElementById('scene-cg-overlay');
             if (ov) ov.classList.toggle('scene-cg-failed', !!on);
             this._sceneCgHold = !!on;   // 失敗→hold(renderVN 不遞減 linger、hideOverlays 不關)；成功→解除照常淡出
+            this._sceneCgFailLinger = on ? 3 : 0;   // 失敗佔位也給 3 則寬限：沒手動重生就自己淡出、不永遠卡著
         },
         _doFetchScene: async function(cacheId, prompt) {
             if (this._sceneMemCache[cacheId]) return this._sceneMemCache[cacheId];
@@ -2842,11 +2845,20 @@
         parseMarkdown: function(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'<em>$1</em>'); },
         renderVN: function(n, t, mode) {
             // 🎬 鋪底式場景插圖：每渲染一句對話 -1，停滿 3 句就淡出（CSS opacity transition）
-            if (this._sceneCgLinger > 0 && !this._sceneCgHold) {   // hold(失敗佔位)期間不遞減、不淡出，停著讓玩家手動重生
+            if (this._sceneCgLinger > 0 && !this._sceneCgHold) {   // 正常插圖：每句 -1，停滿 3 句淡出
                 this._sceneCgLinger--;
                 if (this._sceneCgLinger <= 0) {
                     const _scOv = document.getElementById('scene-cg-overlay');
                     if (_scOv) _scOv.classList.remove('active');
+                    const _scIm = document.getElementById('scene-cg-img');
+                    if (_scIm) setTimeout(() => { const o = document.getElementById('scene-cg-overlay'); if (o && !o.classList.contains('active')) _scIm.src = ''; }, 600);
+                }
+            } else if (this._sceneCgHold && this._sceneCgFailLinger > 0) {   // 失敗佔位：玩家沒手動重生 → 也倒數 3 則後自己淡掉、不永遠卡著
+                this._sceneCgFailLinger--;
+                if (this._sceneCgFailLinger <= 0) {
+                    this._sceneCgHold = false;
+                    const _scOv = document.getElementById('scene-cg-overlay');
+                    if (_scOv) _scOv.classList.remove('active', 'scene-cg-failed');
                     const _scIm = document.getElementById('scene-cg-img');
                     if (_scIm) setTimeout(() => { const o = document.getElementById('scene-cg-overlay'); if (o && !o.classList.contains('active')) _scIm.src = ''; }, 600);
                 }
