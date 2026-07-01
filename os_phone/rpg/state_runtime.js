@@ -1127,6 +1127,40 @@ ${numberedText}`;
         }
     }
 
+    // 好感度數字 → preset 的 5 階（每 20 一階；階段詞跟 preset 一字不差）
+    function _affinityStage(n) {
+        const v = parseFloat(n);
+        if (isNaN(v)) return null;
+        if (v <= 20) return '陌生';
+        if (v <= 40) return '相识';
+        if (v <= 60) return '友好';
+        if (v <= 80) return '信任';
+        return '亲密';
+    }
+    // 在場角色：掃最近幾則的 [Char|名]（跟缺頭像提醒同招），跳過 {代號} / *心聲*
+    function _activeCastNames() {
+        try {
+            const ctx = win.SillyTavern?.getContext?.();
+            if (!ctx || !Array.isArray(ctx.chat)) return [];
+            const text = ctx.chat.slice(-6).filter(m => m && !m.is_system).map(m => m.mes || m.message || '').join('\n');
+            const set = new Set(); let m;
+            const re = /\[Char\|([^|\]]+)/g;
+            while ((m = re.exec(text))) { const n = (m[1] || '').trim(); if (n && n.charAt(0) !== '{' && n.charAt(0) !== '*') set.add(n); }
+            return [...set];
+        } catch (e) { return []; }
+    }
+    // 遞迴掃 state 找每個角色的好感度：容器內某物件有「好感度」→ 該物件的 key 即角色名（角色狀態.名.好感度）
+    function _collectAffinity(obj, keyName, out) {
+        if (!obj || typeof obj !== 'object') return;
+        if (obj['好感度'] !== undefined && keyName) {
+            const n = parseFloat(obj['好感度']);
+            if (!isNaN(n)) out[keyName] = n;
+        }
+        for (const [k, v] of Object.entries(obj)) {
+            if (v && typeof v === 'object') _collectAffinity(v, k, out);
+        }
+    }
+
     // --- inject：把 current 塞進下一輪主模型 system prompt ---
     async function injectCurrent() {
         try {
@@ -1151,8 +1185,25 @@ ${numberedText}`;
                 stateBlock = `<世界狀態 規則="權威資料·寫作前必讀·不得矛盾">\n以下是當前劇情的權威狀態，由系統自動追蹤。你接下來的寫作必須與這些數值、身分、關係完全一致，嚴禁與之矛盾或擅自更改。\n${lines}\n</世界狀態>`;
             }
 
-            const content = [defsBlock, stateBlock].filter(Boolean).join('\n');
-            if (!content) return;   // 定義 + 當前值都空 → 不注入
+            // 關係階段：在場角色的好感度數字 → preset 5 階（權威階段，演法交給 preset 的情感发展逻辑）
+            let affinityBlock = '';
+            try {
+                if (data && data.current) {
+                    const all = {};
+                    _collectAffinity(data.current, null, all);
+                    const active = new Set(_activeCastNames());
+                    const lines = Object.keys(all)
+                        .filter(name => active.has(name))
+                        .map(name => { const st = _affinityStage(all[name]); return st ? `- ${name}：好感度 ${all[name]} → ${st} 阶段` : null; })
+                        .filter(Boolean);
+                    if (lines.length) {
+                        affinityBlock = `<关系阶段 规则="权威·依此演·严禁跳阶；每一阶怎么演交给情感发展逻辑按角色性格处理，不要套公式">\n${lines.join('\n')}\n</关系阶段>`;
+                    }
+                }
+            } catch (e) {}
+
+            const content = [defsBlock, stateBlock, affinityBlock].filter(Boolean).join('\n');
+            if (!content) return;   // 定義 + 當前值 + 關係階段都空 → 不注入
 
             const result = win.TavernHelper.injectPrompts([{
                 id: CONFIG.injectId,
