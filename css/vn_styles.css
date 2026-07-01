@@ -1282,6 +1282,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #scene-cg-overlay.scene-cg-failed::before { content: '插圖暫時生不出來，可手動重生'; position: absolute; left: 0; right: 0; top: 50%; margin-top: -46px; text-align: center; color: rgba(255,255,255,0.72); font-size: 13px; letter-spacing: 1px; pointer-events: none; }
         #scene-cg-overlay.scene-cg-failed #scene-cg-retry { top: 50%; left: 50%; right: auto; transform: translate(-50%,-50%); width: auto; height: auto; padding: 10px 22px; border-radius: 22px; font-size: 14px; gap: 8px; opacity: 1; background: rgba(0,0,0,0.72); }
         #scene-cg-overlay.scene-cg-failed #scene-cg-retry::after { content: '重新生成'; font-size: 14px; }
+        /* 失敗置中膠囊按下重生：別套整顆旋轉(rotate 會蓋掉 translate 造成左右跳位、文字也轉歪) → 維持置中、只微暗 */
+        #scene-cg-overlay.scene-cg-failed #scene-cg-retry.spinning { animation: none; transform: translate(-50%,-50%); opacity: 0.55; }
         @keyframes sceneCgIn { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
         
         #char-portrait {
