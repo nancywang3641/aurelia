@@ -1297,11 +1297,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-group">
                                 <div class="set-label" title="所有接口共用。">📐 背景尺寸</div>
                                 <select class="set-select" id="img-bg-size" style="font-size:12px;">
-                                    <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅，預設）</option>
+                                    <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅 4:3，預設）</option>
+                                    <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅 3:2）</option>
+                                    <option value="1344x768"  ${(imgConfig.bgSize||'1024x768')==='1344x768'  ? 'selected':''}>1344×768（寬螢幕 16:9）</option>
                                     <option value="1024x1024" ${(imgConfig.bgSize||'1024x768')==='1024x1024' ? 'selected':''}>1024×1024（方形）</option>
-                                    <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅）</option>
-                                    <option value="1280x720"  ${(imgConfig.bgSize||'1024x768')==='1280x720'  ? 'selected':''}>1280×720（16:9）</option>
                                 </select>
+                                <div class="set-desc">全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。</div>
                                 <div class="set-label" style="margin-top:12px;">🌄 背景生圖底詞</div>
                                 <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:55px;">${vnD.bgBasePrompt || ''}</textarea>
                                 <div class="set-label" style="margin-top:8px;">🚫 背景 Negative</div>
