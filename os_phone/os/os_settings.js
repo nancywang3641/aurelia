@@ -1301,6 +1301,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅 3:2）</option>
                                     <option value="1344x768"  ${(imgConfig.bgSize||'1024x768')==='1344x768'  ? 'selected':''}>1344×768（寬螢幕 16:9）</option>
                                     <option value="1024x1024" ${(imgConfig.bgSize||'1024x768')==='1024x1024' ? 'selected':''}>1024×1024（方形）</option>
+                                    <option value="832x1216"  ${(imgConfig.bgSize||'1024x768')==='832x1216'  ? 'selected':''}>832×1216（豎版 2:3）</option>
+                                    <option value="768x1344"  ${(imgConfig.bgSize||'1024x768')==='768x1344'  ? 'selected':''}>768×1344（直立，手機全螢幕）</option>
                                 </select>
                                 <div class="set-desc">全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。</div>
                                 <div class="set-label" style="margin-top:12px;">🌄 背景生圖底詞</div>
