@@ -264,13 +264,23 @@
    被頂歪夾在頂部(看起來像「出窗」)。改讓 app 視窗用 100dvh 直接填滿可見螢幕，像原生全螢幕 app。
    電腦端(>768px)維持手機造型浮窗不變。 */
 @media (max-width: 768px) {
-    .aps-overlay { align-items: stretch; justify-content: stretch; padding: 0; background: #0e0e12; }
+    /* 內縮在 overlay 上加 safe-area padding：整個 app 框(含狀態列)一起往內縮，
+       避開 iOS 動態島(上)、home 指示條(下)、圓角螢幕(左右)；沒 safe-area 的裝置只留基本 8px 邊。 */
+    .aps-overlay {
+        align-items: stretch; justify-content: stretch; background: #000;
+        padding: calc(env(safe-area-inset-top, 0px) + 8px)
+                 calc(env(safe-area-inset-right, 0px) + 8px)
+                 calc(env(safe-area-inset-bottom, 0px) + 8px)
+                 calc(env(safe-area-inset-left, 0px) + 8px);
+        box-sizing: border-box;
+    }
     .aps-frame {
         width: 100%; max-width: none;
-        height: 100dvh; max-height: none;
-        border-radius: 0; padding: 0;
+        height: 100%; max-height: none;      /* 填滿內縮後的 overlay，不再吃滿整個 100dvh */
+        border-radius: 22px; padding: 0;     /* 內縮成卡片 → 給圓角更像獨立 app */
         transform: none !important;          /* 蓋掉 max-height 那三條 scale */
-        box-shadow: none;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        overflow: hidden;
     }
     .aps-screen { border-radius: 0; }
     .aps-notch { display: none; }            /* 全螢幕不需要假瀏海 */
