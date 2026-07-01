@@ -1218,31 +1218,18 @@
         // 🔥 物品生成專用接口（獨立底詞，不混用角色詞）
         generateItem: function(prompt, options = {}) {
             console.log(`[ImageManager] 生成物品: ${prompt.substring(0, 50)}...`);
-
-            // 物品專用底詞（與角色完全分離）
+            // 物品專用底詞/負詞（與角色分離），整條走統一 generate 路由：serviceFor('item')=死物桶，
+            //   pollinations / comfyui_direct / novelai / tavern_sd 全由 generate 內部分派 → 換哪條線路物品都跟著走。
             const itemBase = this.config.pollinations.itemBasePrompt;
             const finalPrompt = itemBase ? itemBase + ', ' + prompt : prompt;
-
-            // 物品專用負詞（含排除人物）
             const negPrompt = options.negativePrompt || this.config.pollinations.itemNegPrompt || undefined;
-
-            const seed = options.seed || Math.floor(Math.random() * 100000);
-            const width = options.width || 512;
-            const height = options.height || 512;
-            const model = options.model || this.config.pollinations.model || 'flux';
-            const encoded = encodeURIComponent(finalPrompt);
-
-            let url = `${this.config.pollinations.url}/${encoded}?width=${width}&height=${height}&model=${model}&seed=${seed}&nologo=true`;
-
-            if (negPrompt) {
-                url += `&negative_prompt=${encodeURIComponent(negPrompt)}`;
-            }
-
-            if (this.config.pollinations.apiKey && this.config.pollinations.apiKey.trim() !== '') {
-                url += `&private=true&key=${this.config.pollinations.apiKey.trim()}`;
-            }
-
-            return url;
+            return this.generate(finalPrompt, 'item', {
+                ...options,
+                width: options.width || 512,
+                height: options.height || 512,
+                negativePrompt: negPrompt,
+                raw: true
+            });
         },
 
         setApiKey: function(apiKey) {
