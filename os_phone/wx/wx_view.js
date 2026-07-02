@@ -560,7 +560,7 @@
                     dataAttr = `class="wx-avatar"`;
                 }
                 
-                return `<div class="wx-chat-item" id="chat-item-${id}" onclick="(window.parent.wxApp || window.wxApp).openChat('${id}')"><div style="${avatarStyle}" ${dataAttr}>${badgeHTML}</div><div class="wx-info"><div style="display:flex; justify-content:space-between;"><span class="wx-name">${displayName}</span><span class="wx-meta">${c.lastTime}</span></div><div class="wx-last-msg">${c.lastPreview || ''}</div></div></div>`;
+                return `<div class="wx-chat-item" id="chat-item-${id}" onclick="(window.parent.wxApp || window.wxApp).openChat('${id}')"><div style="${avatarStyle}" ${dataAttr}>${badgeHTML}</div><div class="wx-info"><div style="display:flex; justify-content:space-between;"><span class="wx-name">${displayName}</span><span class="wx-meta">${c.lastTime || ''}</span></div><div class="wx-last-msg">${c.lastPreview || ''}</div></div></div>`;
             }).join('');
         },
 
