@@ -361,6 +361,9 @@
             try { if (window.VN_Theme) window.VN_Theme.apply(); } catch (e) {}
             const contentMatch = txt.match(/<content>([\s\S]*?)<\/content>/i);
             let storyText = contentMatch ? contentMatch[1] : txt;
+            // 卡自帶「AI 直出裸 HTML 美化卡」(無正則參與、無自訂 tag 包裹)：先整塊收走，
+            // 免得下面按行切割把 <div style=…> 拆成碎旁白（美化卡整個散架）
+            storyText = this._extractRawHtmlCards(storyText);
 
             // 解析 <branches> 區塊（位於 <content> 外，作為一次性選擇，不進入 AI 上下文）
             const branchesMatch = txt.match(/<branches>([\s\S]*?)<\/branches>/i);
@@ -659,6 +662,43 @@
         // 拿一段文字（整顆區塊）去酒館正則對照表找「卡片型」規則，命中就用 replace_string 渲染成卡片 HTML。
         // 支援任意格式的區塊（<tag>…</tag>、【…|…】 等），因為是拿整段去比對 find_regex，不靠 tag 名。
         // 回傳：完整 HTML 文件→包成 iframe；一般 HTML→直接回傳；沒命中→ ''。
+        // ── 裸 HTML 美化卡兼容 ─────────────────────────────────────────
+        // 有些卡讓 AI 直接在正文吐 <div style=…> 小型展示卡（沒有酒館正則、也不是自訂 tag 區塊）。
+        // loadScript 按行切割會把它拆成碎旁白 → 這裡在切割前先掃出「行首起頭、同名標籤配對閉合」的
+        // 整塊 HTML，收進 _rawHtmlCards、原位換成一行 [HtmlCard|i]；播放到該行用彈窗展示
+        // （顯示時過 DOMPurify 消毒＝純展示不跑 script，AI 直出的卡幾乎都是純樣式）。
+        _rawHtmlCards: [],
+        _extractRawHtmlCards: function(text) {
+            try {
+                this._rawHtmlCards = [];
+                if (!text || text.indexOf('<') < 0) return text;
+                const ROOT = /^<(div|table|section|aside|center|figure|details|blockquote|article)\b[^>]*>/i;
+                const lines = String(text).split('\n');
+                const out = [];
+                for (let i = 0; i < lines.length; i++) {
+                    const t = lines[i].trim();
+                    const m = t.match(ROOT);
+                    if (!m) { out.push(lines[i]); continue; }
+                    const tag = m[1].toLowerCase();
+                    const openRe = new RegExp('<' + tag + '\\b', 'gi');
+                    const closeRe = new RegExp('</' + tag + '\\s*>', 'gi');
+                    let depth = 0, j = i;
+                    const chunk = [];
+                    for (; j < lines.length && j - i < 200; j++) {   // 200 行保險：不平衡就放棄別掃到天邊
+                        chunk.push(lines[j]);
+                        depth += (lines[j].match(openRe) || []).length;
+                        depth -= (lines[j].match(closeRe) || []).length;
+                        if (depth <= 0) break;
+                    }
+                    if (depth > 0) { out.push(lines[i]); continue; }   // 沒配對閉合 → 不當卡、原樣照舊
+                    this._rawHtmlCards.push(chunk.join('\n'));
+                    out.push('[HtmlCard|' + (this._rawHtmlCards.length - 1) + ']');
+                    i = j;
+                }
+                return out.join('\n');
+            } catch (e) { return text; }
+        },
+
         _grabRegexCardHtml: function(blockText) {
             if (!blockText) return '';
             // 🔥 學 PWA：先吃創作室（展廳）已啟用模板，沒命中才去酒館正則。
@@ -2198,6 +2238,21 @@
 
             // 🔥 【動態積木攔截 - 最優先，必須在 DOM block 過濾之前】
             if (window.VN_DynamicParser && window.VN_DynamicParser.processLine(line, this)) {
+                return;
+            }
+
+            // 裸 HTML 美化卡（loadScript 前置掃描收走的整塊）→ 消毒後彈窗展示
+            if (line.startsWith('[HtmlCard|')) {
+                const _ci = parseInt(line.slice(10), 10);
+                const _rawCard = (this._rawHtmlCards || [])[_ci] || '';
+                if (!_rawCard) { this.next(); return; }
+                let _cleanCard = _rawCard;
+                try {
+                    const _DP = (win && win.DOMPurify) || window.DOMPurify;
+                    if (_DP && _DP.sanitize) _cleanCard = _DP.sanitize(_rawCard);
+                    else _cleanCard = _rawCard.replace(/<script[\s\S]*?<\/script\s*>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');   // 沒 DOMPurify 的保底消毒
+                } catch (e) {}
+                this._showDomBlock(null, null, _cleanCard);
                 return;
             }
 
