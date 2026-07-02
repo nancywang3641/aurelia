@@ -342,6 +342,7 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
 
     let currentMode = 'vn_ui';
     let _studioTop = 'home';   // 頂層導覽：home(首頁三卡) | vn_ui | theme | worldbook（取代頂部 tab）
+    let _landedDirect = false; // true=從工坊四鈕直接落到某工作(帶 landMode)；創作室首頁已搬到工坊成孤兒，返回一步直接退出、不落首頁
     let chatMessages = [];
     let _vnPanelType = '純展示';   // 面板類型：純展示 / 純應用 / 共用（開頭就選，注入生成訊息）
     let currentParsedData = null;
@@ -374,6 +375,7 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
     function getChatSessionId() { return currentMode; }
 
     function launch(container, landMode) {
+        _landedDirect = !!landMode;   // 帶 landMode＝工坊直接入場，返回要一步退回工坊（別再落到孤兒首頁）
         const root = container || document.getElementById('aurelia-tab-container') || document.getElementById('aurelia-phone-screen') || document.body;
         try { syncActiveTagsToLocal(); } catch (e) {}   // 開創作室即用最新格式重組啟用組件說明（給注入器讀）
         let existing = document.getElementById('os_studio_app');
@@ -590,7 +592,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         document.getElementById('studio-back-btn').onclick = () => {
             // 讀 DOM 實際狀態當真相（別靠 _studioTop 變數：載入器可能跑兩份模組→變數會跟畫面不同步）
             const cont = document.querySelector('#os_studio_app .studio-container');
-            if (cont && !cont.classList.contains('top-home')) switchTopMode('home'); // 不在首頁(主題/世界書/煉丹)→ 返回首頁
+            // 工坊四鈕直接入場：創作室首頁已搬到工坊、成孤兒，返回一步直接退出創作室回工坊，不再落到「今天要做什麼」
+            if (_landedDirect) { const app = document.getElementById('os_studio_app'); if (app) app.remove(); return; }
+            if (cont && !cont.classList.contains('top-home')) switchTopMode('home'); // 舊路徑(編輯模式等)不在首頁→ 返回首頁
             else { const app = document.getElementById('os_studio_app'); if (app) app.remove(); } // 已在首頁 → 返回大廳
         };
         document.querySelectorAll('.studio-task-card').forEach(card => {
