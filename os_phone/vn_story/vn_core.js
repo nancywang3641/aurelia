@@ -2972,8 +2972,8 @@
         // _stage[0]=左格、_stage[1]=右格；各為 null 或 { name, exp, lastTick }
         _slotEl: function(idx) { return document.getElementById(idx === 0 ? 'game-char' : 'game-char-2'); },
         _stageInit: function() { if (!this._stage) { this._stage = [null, null]; this._stageTick = 0; } },
-        // 📱 手機直立：窄螢幕雙格太擠 → 只用左格、置中（右格永不出現）。電腦端維持雙格
-        _singleSlot: function() { try { return window.matchMedia('(max-width: 768px)').matches; } catch (_) { return false; } },
+        // 📱 手機也用雙格（2026-07-02 改回）：左右各一格、中間稍微重疊，版位由 CSS 控制。永遠回 false=不強制單格。
+        _singleSlot: function() { return false; },
         _stageIndexFor: function(name) {
             this._stageInit();
             if (this._singleSlot()) return 0;   // 手機單格：說話者一律進左格(置中)

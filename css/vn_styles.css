@@ -1232,12 +1232,13 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #game-char.vn-avatar   { left: auto; right: calc(50% + 5%); }
             #game-char-2.vn-avatar { right: auto; left:  calc(50% + 5%); }
         }
-        /* 📱 手機直立：雙格在窄螢幕太擠 → 改單格置中。JS(_singleSlot) 強制說話者一律進左格，
-           右格永不出現；這裡把右格藏掉、左格不論全身/頭像都置中滿尺寸。電腦端維持雙格不變。 */
+        /* 📱 手機直立：改回雙格（2026-07-02）。左格貼左下、右格貼右下，各稍微加寬→中間重疊一點
+           （左角右緣 × 右角左緣）；object-position 讓各自貼外側，重疊自然。單人在場仍置中滿版。 */
         @media (max-width: 768px) {
-            #game-char-2 { display: none !important; }
-            #game-char { left: 0; right: 0; max-width: 100%; object-position: center bottom; }
-            #game-char.vn-avatar { left: 0; right: 0; margin-left: auto; margin-right: auto; }
+            #game-char, #game-char-2 { max-width: 64%; }
+            #game-char   { left: -3%; right: auto; object-position: left bottom; }
+            #game-char-2 { right: -3%; left: auto; object-position: right bottom; }
+            #game-char.vn-solo, #game-char-2.vn-solo { left: 0; right: 0; max-width: 100%; object-position: center bottom; }
         }
         /* 雙擊立繪 → 角色卡 */
         #vn-char-card {
