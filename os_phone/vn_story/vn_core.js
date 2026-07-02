@@ -3259,8 +3259,8 @@
                 if (btn) btn.disabled = true;
                 setT('🎨 生成中…');
                 // 跟頭像 tab 的🎨同一套：套「全身框」前後綴(full body…) + 剝掉頭像特寫詞，512×896 直立全身比例
-                const DEF_PREFIX = 'centered composition, entire body visible, body in frame, (facing viewer:1.2), front view, looking at viewer, solid background, (cowboy shot), full body, clothes and pants, school, ((detailed rendering)), clean and fluid linework, delicate and refined, entire body visible, both shoulders visible, ';
-                const DEF_SUFFIX = '';
+                const DEF_PREFIX = 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ';
+                const DEF_SUFFIX = 'simple bright background, stright view, no shading';
                 const pfx = localStorage.getItem('os_sprite_tpl_prefix') || DEF_PREFIX;
                 const sfx = localStorage.getItem('os_sprite_tpl_suffix') || DEF_SUFFIX;
                 // 跟工作檯同邏輯：優先用「這張頭像當初存的 prompt」(avatar_cache)→立繪跟頭像同一個人；沒有才退回腳本描述
