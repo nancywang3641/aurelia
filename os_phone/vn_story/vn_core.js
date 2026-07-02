@@ -2512,6 +2512,7 @@
                 const p = line.slice(6, -1).split('|');
                 const ex = this._extractTextAndSFX(p.slice(2));
                 const _cx = this._extractInlineSFX(ex.text);   // 正文內 #SFXID# → 抽音效 + 剝標記
+                if (!_cx.text) { this.playSFX(_cx.sfx !== 'NA' ? _cx.sfx : ex.sfx); return this.next(); }   // 只剩音效→跳過空對話泡
 
                 // 拆解 Type 與 Expression
                 let rawExp = p[1] || '';
@@ -2569,6 +2570,7 @@
                 const ex = this._extractTextAndSFX(p.slice(1));
                 const _ix = this._extractInlineSFX(ex.text);   // 正文內 #SFXID#
                 const _innerClean = _ix.text.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
+                if (!_innerClean) { this.playSFX(_ix.sfx !== 'NA' ? _ix.sfx : ex.sfx); return this.next(); }   // 只剩音效→跳過空框
                 this.updateSprite(p[0], 'Think');
                 this.renderVN(p[0], _innerClean, 'inner');
                 this.addLog(p[0], _innerClean);
@@ -2582,10 +2584,12 @@
                 return;
             }
             if (line.startsWith('[Nar|')) {
-                this._stageNarr();   // 旁白：算一場次(推進清滯留) + 立繪全留全部變暗
                 const p = line.slice(5, -1).split('|');
                 const ex = this._extractTextAndSFX(p);
                 const _nx = this._extractInlineSFX(ex.text);   // 正文內 #SFXID#
+                // 整則只剩音效(剝標記後空) → 只播音效、跳過、不渲染空對話框
+                if (!_nx.text) { this.playSFX(_nx.sfx !== 'NA' ? _nx.sfx : ex.sfx); return this.next(); }
+                this._stageNarr();   // 旁白：算一場次(推進清滯留) + 立繪全留全部變暗
                 this._currentChar = null; this.updateControlUI();
                 this.renderVN('', _nx.text);
                 this.addLog("旁白", _nx.text);
@@ -2624,6 +2628,7 @@
             const _trimmed = line.trim();
             if (/^\*{1,2}[^*].+\*{1,2}$/.test(_trimmed)) {
                 const _ix = this._extractInlineSFX(_trimmed.replace(/^\*{1,2}|\*{1,2}$/g, '').trim());   // 正文內 #SFXID#
+                if (!_ix.text) { this.playSFX(_ix.sfx); return this.next(); }
                 this.renderVN('', _ix.text, 'inner');
                 this.addLog('内心', _ix.text);
                 this.playSFX(_ix.sfx);
@@ -2631,8 +2636,10 @@
             }
             const _stripped = _trimmed.replace(/^\[?/, '').replace(/\]$/, '').trim();
             if (_stripped.length > 2 && !_trimmed.startsWith('[') && !_trimmed.startsWith('<') && !_trimmed.startsWith('//') && !_trimmed.startsWith('---')) {
-                this._stageNarr();   // 純文字旁白：算一場次(推進清滯留) + 立繪保留變暗
                 const _nx = this._extractInlineSFX(_stripped);   // 正文內 #SFXID# → 抽音效 + 剝標記
+                // 整行只剩音效(剝標記後空，如單獨一行 #fastrunning#) → 只播音效、跳過、不渲染空對話框
+                if (!_nx.text) { this.playSFX(_nx.sfx); return this.next(); }
+                this._stageNarr();   // 純文字旁白：算一場次(推進清滯留) + 立繪保留變暗
                 this.renderVN('', _nx.text);
                 this.addLog('旁白', _nx.text);
                 this._vnNarrVoicePlay(_nx.text);
