@@ -99,6 +99,11 @@
                 if (status === 200 && rawResult && !/MYMEMORY WARNING/i.test(rawResult)) {
                     const translatedText = rawResult.trim();
 
+                    // 退化防呆：中文进去、译文却没吐出任何英字（整段被吃成逗号/符号）＝坏结果，抛出去改走 Google，且不污染缓存
+                    if (this._isDegenerate(text, translatedText)) {
+                        throw new Error('MyMemory 结果退化：中文被吃成空/符号');
+                    }
+
                     // 保存到缓存
                     this.addToCache(cacheKey, translatedText);
 
@@ -159,6 +164,9 @@
                     if (!translatedText) {
                         throw new Error('Google翻译API返回空结果');
                     }
+                    if (this._isDegenerate(text, translatedText)) {
+                        throw new Error('Google 结果退化：中文被吃成空/符号');
+                    }
 
                     // 保存到缓存
                     this.addToCache(cacheKey, translatedText);
@@ -201,45 +209,67 @@
                 return text;
             }
 
+            // 如果源语言和目标语言相同，直接返回
+            if (from === to) {
+                return text;
+            }
+
             // 如果目标语言已经是英文，且文本不是中文，直接返回
             if (to === 'en' && !this.isChinese(text)) {
                 logger.debug('文本不是中文，直接返回');
                 return text;
             }
 
-            // 如果源语言和目标语言相同，直接返回
-            if (from === to) {
-                return text;
+            // 🏷️ 图片 prompt 是 booru 式标签串（英文标签 + 中文标签混排）。整串当中文丢给句子翻译器，中文段会被
+            //    吃成空、只剩一排逗号（no characters, no people,,,,,,）——且英文前缀还活着，空值防呆抓不到。
+            //    改逐段翻：英文标签原样留、只把含中文的段送去翻、翻不动就留中文（绝不留空）。
+            if (to === 'en' && /[,，]/.test(text)) {
+                const out = [];
+                for (const seg of text.split(/[,，]/)) {
+                    const s = seg.trim();
+                    if (!s) continue;                                     // 空段丢掉（顺手清掉 ,, 这种连逗号）
+                    if (!this.isChinese(s)) { out.push(s); continue; }    // 纯英文标签原样保留
+                    let t = s;
+                    try { t = await this._translateOne(s, from, to); } catch (e) { t = s; }
+                    out.push((t && String(t).trim()) || s);               // 退化/空 → 留中文原段
+                }
+                return out.join(', ');
             }
 
+            // 单段（无逗号）：直接翻，失败留原文，避免阻塞流程
             try {
-                // 优先使用 MyMemory
-                if (this.state.services.mymemory.enabled) {
-                    try {
-                        return await this.translateWithMyMemory(text, from, to);
-                    } catch (error) {
-                        logger.warn('MyMemory翻译失败，尝试Google翻译');
-                    }
-                }
-
-                // 备用：使用 Google Translate
-                if (this.state.services.google.enabled) {
-                    try {
-                        return await this.translateWithGoogle(text, from, to);
-                    } catch (error) {
-                        logger.error('所有翻译服务都失败');
-                        throw error;
-                    }
-                }
-
-                // 如果所有服务都不可用，返回原文
-                logger.warn('没有可用的翻译服务，返回原文');
-                return text;
+                return await this._translateOne(text, from, to);
             } catch (error) {
                 logger.error('翻译失败:', error);
-                // 翻译失败时返回原文，避免阻塞流程
                 return text;
             }
+        },
+
+        /**
+         * 单段翻译：MyMemory 优先，坏了/退化就落 Google（服务层已做退化防呆，坏结果会 throw）
+         */
+        async _translateOne(text, from, to) {
+            if (this.state.services.mymemory.enabled) {
+                try {
+                    return await this.translateWithMyMemory(text, from, to);
+                } catch (error) {
+                    logger.warn('MyMemory翻译失败，尝试Google翻译');
+                }
+            }
+            if (this.state.services.google.enabled) {
+                return await this.translateWithGoogle(text, from, to);   // 失败向上抛，由调用端决定留原文
+            }
+            logger.warn('没有可用的翻译服务，返回原文');
+            return text;
+        },
+
+        /**
+         * 退化判定：中文进去、译文却没吐出任何拉丁字母（整段被吃成逗号/符号），或整段为空 ＝ 坏结果
+         */
+        _isDegenerate(input, output) {
+            if (!output || !String(output).trim()) return true;
+            if (this.isChinese(input) && !/[a-zA-Z]/.test(output)) return true;
+            return false;
         },
 
         /**
