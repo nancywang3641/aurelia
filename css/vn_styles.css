@@ -2095,7 +2095,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .wx-receive-amt { font-size: 17px; font-weight: 700; color: #222; }
         .wx-receive-foot { font-size: 11px; color: #999; text-align: center; line-height: 1.4; }
 
-        /* 發現 tab：入口列(跑團手機記錄 / AI 整理 / 還原)——白卡橫排，配 .wx-vnlog-room 同質感 */
+        /* 發現 tab：「我」頁沿用的白卡 cell（發現 tab 已改細工具列、不再用這組） */
         .wx-cell-group { background: #fff; border-radius: 8px; overflow: hidden; margin: 8px 12px 0; }
         .wx-cell { display: flex; align-items: center; gap: 12px; padding: 13px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
         .wx-cell:last-child { border-bottom: none; }
@@ -2104,8 +2104,20 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .wx-cell-text { flex: 1; min-width: 0; font-size: 15px; color: #1a1a1a; }
         .wx-cell-arrow { color: #c8c8c8; font-size: 13px; flex-shrink: 0; }
 
-        /* 發現 tab：跑團手機記錄檢視器（唯讀） */
-        .wx-vnlog { background: #ededed; min-height: 200px; }
+        /* 發現 tab：跑團手機記錄檢視器（唯讀）
+           版型＝整頁 flex 直欄：細工具列(標題+動作) + 列表吃滿自己捲；
+           點進聊天室(is-room)＝第二層整頁：工具列藏、header 釘死、只有訊息區捲——
+           外層 .wx-page-list 永遠不溢出 → 不再出現「外層滾動條拖走 header」 */
+        .wx-discover { height: 100%; display: flex; flex-direction: column; min-height: 0; background: #ededed; }
+        .wx-vnlog-toolbar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; background: #fff; border-bottom: 1px solid #eee; }
+        .wx-vnlog-toolbar-t { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #1a1a1a; min-width: 0; }
+        .wx-vnlog-toolbar-t i { color: #07c160; }
+        .wx-vnlog-tools { display: flex; gap: 8px; flex-shrink: 0; }
+        .wx-vnlog-tool { display: flex; align-items: center; gap: 5px; border: 1px solid #e2e2e2; background: #f7f7f7; color: #444; font-size: 12px; border-radius: 14px; padding: 4px 10px; cursor: pointer; }
+        .wx-vnlog-tool:active { background: #ececec; }
+        .wx-discover.is-room .wx-vnlog-toolbar { display: none; }
+        .wx-vnlog { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: #ededed; }
+        .wx-discover.is-room .wx-vnlog { display: flex; flex-direction: column; overflow: hidden; }
         .wx-vnlog-empty { padding: 30px 20px; text-align: center; color: #999; font-size: 13px; line-height: 1.7; }
         .wx-vnlog-room { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
         .wx-vnlog-room:active { background: #f5f5f5; }
@@ -2114,10 +2126,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .wx-vnlog-room-name { font-size: 15px; color: #1a1a1a; font-weight: 500; }
         .wx-vnlog-room-prev { font-size: 12px; color: #999; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .wx-vnlog-room-cnt { font-size: 11px; color: #bbb; flex-shrink: 0; }
-        .wx-vnlog-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #ededed; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 2; }
+        .wx-vnlog-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #ededed; border-bottom: 1px solid #ddd; }
         .wx-vnlog-back { border: none; background: none; color: #576b95; font-size: 14px; cursor: pointer; padding: 2px 4px; display: flex; align-items: center; gap: 4px; }
-        .wx-vnlog-bar-t { font-size: 15px; font-weight: 600; color: #1a1a1a; }
-        .wx-vnlog-scroll { max-height: 70vh; overflow-y: auto; padding: 12px 10px; background: #ededed; }
+        .wx-vnlog-bar-t { font-size: 15px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wx-vnlog-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 10px; background: #ededed; }
 
         /* --- Call 模式 (暗黑現代) --- */
         /* 按鈕改為 flex 排版（不再 absolute），高度自適應，不靠 padding-bottom 撐空間 */

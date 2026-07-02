@@ -313,6 +313,11 @@
             .wx-dark .wx-cell:active { background: #2a2a2a; }
             .wx-dark .wx-cell-text { color: #f0f0f0; }
             .wx-dark .wx-cell-arrow { color: #555; }
+            .wx-dark .wx-discover { background: #000; }
+            .wx-dark .wx-vnlog-toolbar { background: #1c1c1e; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-vnlog-toolbar-t { color: #f0f0f0; }
+            .wx-dark .wx-vnlog-tool { background: #2a2a2c; border-color: #3a3a3c; color: #ddd; }
+            .wx-dark .wx-vnlog-tool:active { background: #333; }
             .wx-dark .wx-vnlog { background: #000; }
             .wx-dark .wx-vnlog-empty { color: #888; }
             .wx-dark .wx-vnlog-room { background: #1c1c1e; border-bottom-color: #2a2a2a; }
