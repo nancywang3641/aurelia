@@ -542,7 +542,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // ───── 角色立繪 UI：lazy 初始化 ─────
         if (!window._initSpriteUI) {
             const DEF_PREFIX = 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ';
-            const DEF_SUFFIX = 'simple bright background, stright view, no shading';
+            const DEF_SUFFIX = 'simple bright background, straight view, no shading';
             const LS_PFX = 'os_sprite_tpl_prefix';
             const LS_SFX = 'os_sprite_tpl_suffix';
             const LS_RATIO = 'os_sprite_upscale_ratio';
