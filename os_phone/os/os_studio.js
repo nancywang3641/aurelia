@@ -373,7 +373,7 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
 
     function getChatSessionId() { return currentMode; }
 
-    function launch(container) {
+    function launch(container, landMode) {
         const root = container || document.getElementById('aurelia-tab-container') || document.getElementById('aurelia-phone-screen') || document.body;
         try { syncActiveTagsToLocal(); } catch (e) {}   // 開創作室即用最新格式重組啟用組件說明（給注入器讀）
         let existing = document.getElementById('os_studio_app');
@@ -403,7 +403,7 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
 
         bindEvents();
         loadMode(currentMode);     // 先把 vn_ui 工作區建好（先藏在首頁下）
-        switchTopMode('home');     // 開創作室一律先落在首頁三張卡（GPT 分層 IA，取代頂部 tab）
+        switchTopMode(landMode || 'home');     // 有指定就直接落到該工作（工坊四鈕直接進 vn_ui/theme/worldbook/persona）；否則落首頁四張卡
     }
 
     // ── 📋 創建說明書：給朋友自己的 Claude／GPT 看的「對外」規格書，照它產出 <json> 就能匯入回來 ──

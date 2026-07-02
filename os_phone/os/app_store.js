@@ -66,16 +66,20 @@
     // 素材圖：GPT 工坊插畫，host 在獨立 sound-files 素材庫（code repo 有 jsdelivr 50MB 上限、aseets 不追蹤）
     const ASSET_BASE = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/';
     const ASSET_MAP = {
-        'ai-icon': 'workshop-ai.png',       // AI 生成應用（機器人寫字）
         'im-icon': 'workshop-import.png',   // 匯入應用（資料箱）
-        'vn-icon': 'studio-panel.png'       // VN 劇情面板（卷軸面板）
+        'vn-icon': 'studio-panel.png',      // VN 組件清單（卷軸面板）
+        // 創作室四鈕素材（沿用創作室首頁四張卡的插畫）
+        'panel-icon': 'studio-panel.png',       // 製作互動面板
+        'theme-icon': 'studio-theme.png',       // 設計劇情主題
+        'wb-icon': 'studio-worldbook.png',      // 整理世界書
+        'persona-icon': 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/我的角色_ying.png'   // 我的角色（在 aseets 根，非 studio-ui）
     };
     function _applyAssets(c) {
         c.querySelectorAll('[data-asset]').forEach(function (img) {
-            var k = img.dataset.asset;
-            if (!ASSET_MAP[k]) { img.remove(); return; }            // 沒對應素材 → 拿掉，不留破圖
+            var k = img.dataset.asset, v = ASSET_MAP[k];
+            if (!v) { img.remove(); return; }                       // 沒對應素材 → 拿掉，不留破圖
             img.onerror = function () { img.classList.add('ws-img-broken'); };   // 載入失敗也隱藏（卡片文字照常可用）
-            img.src = ASSET_BASE + ASSET_MAP[k];
+            img.src = /^https?:/i.test(v) ? v : ASSET_BASE + v;     // 完整網址直接用，否則接 studio-ui base
         });
     }
 
@@ -85,11 +89,14 @@
       // ── 首頁 ──
       +     '<div class="ws-view active" data-view="home">'
       +       '<div class="ws-home-hd"><button class="ws-back ws-home-back" type="button" title="返回桌面"><i class="fa-solid fa-chevron-left"></i></button><div class="ws-home-hd-tx"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div></div>'
-      +       '<button class="ws-card ws-card-ai" data-go="workshop" type="button"><img class="ws-card-ic" data-asset="ai-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">AI 生成應用</span><span class="ws-card-d">描述想法，AI 幫你生成專屬應用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
-      +       '<button class="ws-card ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上現成 HTML，快速安裝使用</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
-      +       '<button class="ws-card ws-card-vn" data-go="vncomp" type="button"><img class="ws-card-ic" data-asset="vn-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">VN 組件清單</span><span class="ws-card-d">瀏覽、整理、打包你做好的 VN 組件</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
-      +       '<div class="ws-sec-row"><span class="ws-sec-t">我的應用</span><button class="ws-sec-more" data-go="mine" type="button">查看全部 <i class="fa-solid fa-chevron-right"></i></button></div>'
-      +       '<div class="ws-home-mine" id="ws-home-mine"></div>'
+      +       '<div class="ws-top-row">'
+      +         '<button class="ws-mini ws-mini-im" data-go="import" type="button"><img class="ws-mini-ic" data-asset="im-icon" alt=""><span class="ws-mini-t">匯入應用</span><span class="ws-mini-d">貼上現成 HTML</span></button>'
+      +         '<button class="ws-mini ws-mini-vn" data-go="vncomp" type="button"><img class="ws-mini-ic" data-asset="vn-icon" alt=""><span class="ws-mini-t">VN 組件清單</span><span class="ws-mini-d">整理、打包組件</span></button>'
+      +       '</div>'
+      +       '<button class="ws-card ws-card-sm ws-card-panel" data-studio="vn_ui" type="button"><img class="ws-card-ic" data-asset="panel-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">製作互動面板</span><span class="ws-card-d">狀態欄、角色卡、好感度…這類劇情面板</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +       '<button class="ws-card ws-card-sm ws-card-theme" data-studio="theme" type="button"><img class="ws-card-ic" data-asset="theme-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">設計劇情主題</span><span class="ws-card-d">對話框、名牌、頂部牌的外觀風格</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +       '<button class="ws-card ws-card-sm ws-card-wb" data-studio="worldbook" type="button"><img class="ws-card-ic" data-asset="wb-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">整理世界書</span><span class="ws-card-d">建／改世界書條目，AI 幫你寫規則</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +       '<button class="ws-card ws-card-sm ws-card-persona" data-studio="persona" type="button"><img class="ws-card-ic" data-asset="persona-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">我的角色</span><span class="ws-card-d">寫／改你扮演的主角人設，對標不同世界</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +     '</div>'
       // ── 匯入 ──
       +     '<div class="ws-view" data-view="import">'
@@ -143,18 +150,14 @@
         c.querySelectorAll('[data-go]').forEach(function (b) {
             b.addEventListener('click', function () { _go(c, b.dataset.go); });
         });
-        // 「AI 生成應用」入口改開創作室（取代一次性工坊）
-        (function () {
-            var openStudio = function (e) {
+        // 創作室四鈕：直接開創作室並落到對應工作（vn_ui/theme/worldbook/persona），跳過創作室首頁
+        c.querySelectorAll('[data-studio]').forEach(function (el) {
+            el.addEventListener('click', function (e) {
                 if (e) e.stopPropagation();
-                if (win.OS_STUDIO && win.OS_STUDIO.launch) win.OS_STUDIO.launch(c);
+                if (win.OS_STUDIO && win.OS_STUDIO.launch) win.OS_STUDIO.launch(c, el.dataset.studio);
                 else _toast(c, '❌ 創作室未載入');
-            };
-            c.querySelectorAll('[data-go="workshop"]').forEach(function (el) {
-                el.setAttribute('data-go', '');            // 解除舊路由，避免 _go 切到死的 workshop view
-                el.addEventListener('click', openStudio);
             });
-        })();
+        });
         // 「VN 組件清單」入口：開獨立 VN 組件區（乾淨四頁，不進創作室的聊天/預覽窗；繼續編輯才橋接創作室）
         (function () {
             c.querySelectorAll('[data-go="vncomp"]').forEach(function (el) {
@@ -167,12 +170,11 @@
             });
         })();
         _bindImport(c);
-        renderHomeMine(c);
     }
 
     // 切換視圖
     function _go(c, view) {
-        // 空字串／不存在的目標（例：AI生成卡 data-go 被 openStudio 解除成 ''，但通用監聽仍會帶 '' 進來）
+        // 空字串／不存在的目標（例：VN組件卡 data-go 被解除成 ''，但通用監聽仍會帶 '' 進來）
         // 不可硬切——否則所有 .ws-view 都被關掉，開完創作室返回工坊就整片空白（nav 還在、內容沒了）。
         if (!view || !c.querySelector('.ws-view[data-view="' + view + '"]')) return;
         c.querySelectorAll('.ws-view').forEach(function (v) { v.classList.toggle('active', v.dataset.view === view); });
@@ -180,7 +182,6 @@
         var body = c.querySelector('.ws-view[data-view="' + view + '"] .ws-vbody') || c.querySelector('.ws-view[data-view="' + view + '"]');
         if (body) body.scrollTop = 0;
         if (view === 'mine') renderMine(c);
-        else if (view === 'home') renderHomeMine(c);
     }
 
     // ── 安裝 / 卸載（共用）──
@@ -341,16 +342,6 @@
     }
 
     // 首頁的「我的應用」預覽（最近 3 個 + 查看全部）
-    async function renderHomeMine(c) {
-        const box = c.querySelector('#ws-home-mine'); if (!box) return;
-        let apps = [];
-        try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; } catch (e) {}
-        if (!apps.length) { box.innerHTML = '<div class="ws-empty sm">還沒有應用，從上面開始創造吧</div>'; return; }
-        const opened = _loadOpened();
-        box.innerHTML = '';
-        apps.slice(0, 3).forEach(function (a) { box.appendChild(_mineRow(c, a, opened)); });
-    }
-
     // 改名/換圖標後同步 localStorage 清單 + 重註冊桌面 meta
     function _syncMeta(a) {
         const list = _loadList().map(function (m) { return m.id === a.id ? { id: a.id, name: a.name, emoji: a.emoji, iconUrl: a.iconUrl || '' } : m; });
