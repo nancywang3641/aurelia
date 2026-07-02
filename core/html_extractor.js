@@ -138,25 +138,83 @@
             }
         },
 
-        scanAndRender() {
+        // ── TauriTavern 懶渲染對策 ─────────────────────────────────────────
+        // TauriTavern 只渲染「捲進視口」的樓層：最後一樓沒捲到就沒 DOM、或 ```html
+        // 還沒被 TavernHelper 煮成 .TH-render → 資料中心抓空。含插件卡需要 live JS
+        // runtime、正則重建早試過只出空殼(6dcfb1a 已退回)，所以正解＝抓之前先把聊天
+        // 捲到底逼它渲染、等內容煮熟，克隆完再還原捲動位置。瀏覽器版本來就有 DOM → 首拍直接命中、零等待。
+        _ensureLastMesRendered: async function(doc) {
+            const chat = doc.getElementById('chat');
+            const getLast = () => doc.querySelector('#chat .mes.last_mes .mes_text');
+            const hasContent = el => !!(el && el.innerHTML && el.innerHTML.trim());
+            // ```html 代碼塊已出現、但 TavernHelper 還沒煮成 .TH-render → 還要再等
+            const rawStillCooking = el => !!(el && el.querySelector('pre code.language-html') && !el.querySelector('.TH-render'));
+            let el = getLast();
+            if (hasContent(el) && !rawStillCooking(el)) return el;   // 已渲染好（瀏覽器版走這）
+
+            if (!chat) return el;
+            this._prevChatScroll = chat.scrollTop;   // 記住使用者原本捲到哪，克隆完還原
+            const push = () => {
+                chat.scrollTop = chat.scrollHeight;
+                const mes = doc.querySelector('#chat .mes.last_mes');
+                if (mes && mes.scrollIntoView) { try { mes.scrollIntoView({ block: 'end' }); } catch (e) {} }
+            };
+            push();
+            // 第一階段：等最後一樓的 DOM 長出來（懶渲染觸發）
+            const t0 = Date.now();
+            while (Date.now() - t0 < 5000) {
+                await new Promise(r => setTimeout(r, 150));
+                el = getLast();
+                if (hasContent(el) && !rawStillCooking(el)) break;
+                push();   // 有些實作要捲動事件才醒，再推一把
+            }
+            // 第二階段：等重內容穩定（iframe/插件卡陸續長高）——內容長度連續兩拍不變才收工
+            if (hasContent(el)) {
+                let prev = -1, stable = 0;
+                const t1 = Date.now();
+                while (Date.now() - t1 < 2500 && stable < 2) {
+                    await new Promise(r => setTimeout(r, 200));
+                    const len = (getLast() || {}).innerHTML ? getLast().innerHTML.length : 0;
+                    if (len === prev) stable++; else { stable = 0; prev = len; }
+                }
+                el = getLast();
+            }
+            if (!hasContent(el)) console.warn('[Extractor] 捲到底仍等不到最後一樓渲染（懶載）——#chat 可能被藏或樓層被收合');
+            return el;
+        },
+        _restoreChatScroll: function(doc) {
+            if (this._prevChatScroll == null) return;
+            const chat = doc.getElementById('chat');
+            if (chat) chat.scrollTop = this._prevChatScroll;
+            this._prevChatScroll = null;
+        },
+
+        async scanAndRender() {
             const win = window.parent || window;
             const doc = win.document || document;
-            
+
             const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
             if(!overlay) return;
 
             const contentArea = overlay.querySelector('#ue-content-area');
             const tabBar = overlay.querySelector('#ue-tab-bar');
-            
-            contentArea.innerHTML = '';
-            tabBar.innerHTML = '';
-            
-            const extractedData = {}; 
-            let tabOrder = []; 
 
-            const lastMes = doc.querySelector('#chat .mes.last_mes .mes_text');
-            
+            if (this._scanning) return;   // 防連點刷新疊兩條等待迴圈
+            this._scanning = true;
+            contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
+                <div style="font-size:40px; margin-bottom:10px;">⏳</div>讀取劇情數據中...
+            </div>`;
+            tabBar.innerHTML = '';
+
+            const extractedData = {};
+            let tabOrder = [];
+
+            let lastMes = null;
+            try { lastMes = await this._ensureLastMesRendered(doc); } finally { this._scanning = false; }
+            contentArea.innerHTML = '';
+
             if (!lastMes) {
+                this._restoreChatScroll(doc);
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
                     <div style="font-size:40px; margin-bottom:10px;">📭</div>無對話數據。
                 </div>`;
@@ -165,7 +223,8 @@
 
             const tempMesDiv = doc.createElement('div');
             tempMesDiv.innerHTML = lastMes.innerHTML;
-            
+            this._restoreChatScroll(doc);   // 內容已克隆到手 → 把聊天捲回使用者原位（晚了會被懶載收回去）
+
             const ALLOWED_TAGS = ['DIV', 'TABLE', 'IFRAME', 'SCRIPT', 'STYLE', 'CANVAS', 'SVG', 'SECTION', 'ASIDE', 'NAV', 'HEADER', 'FOOTER', 'UL', 'OL', 'DL', 'FORM', 'DETAILS'];
 
             const pTags = Array.from(tempMesDiv.querySelectorAll('p'));
