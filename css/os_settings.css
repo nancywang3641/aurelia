@@ -195,6 +195,20 @@
         .scene-extract-hint { font-size: 10px; color: rgba(26,28,40,0.6); margin-bottom: 3px; }
         .scene-extract-ta { min-height: 150px; font-size: 11px; font-family: monospace; }
 
+        /* 🎨 立繪 studio：vng-studio-* 是從 vn_gallery 深色主題借來的(淺色字配深底)，
+           放進這個淺色(拿鐵)設定面板會變成「淺字配白底看瞎」。這裡 scope 在 #avatar-sub-sprite
+           改回深字白底(對齊 .set-* 基準 #1A1C28/#EEF0F6)。去背預覽區維持深色棋盤(看透明用)不動。 */
+        #avatar-sub-sprite .vng-studio-sel { background: rgba(26,28,40,0.04); border-color: rgba(26,28,40,0.18); }
+        #avatar-sub-sprite .vng-studio-sel-name { color: #1A1C28; }
+        #avatar-sub-sprite .vng-studio-prompt { background: #fff; border: 1px solid rgba(26,28,40,0.22); color: #1A1C28; }
+        #avatar-sub-sprite .vng-studio-prompt::placeholder { color: rgba(26,28,40,0.45); }
+        #avatar-sub-sprite .vng-studio-tpl summary { color: #3a3a48; }
+        #avatar-sub-sprite .vng-studio-act { color: #1A1C28; background: rgba(26,28,40,0.05); border: 1px solid rgba(26,28,40,0.20); }
+        #avatar-sub-sprite .vng-studio-act.primary { color: #1a1a1a; background: #d4af37; border-color: #d4af37; }
+        #avatar-sub-sprite .vng-studio-strength,
+        #avatar-sub-sprite .vng-studio-hint,
+        #avatar-sub-sprite .vng-studio-status { color: #5a5a68; }
+
         .hidden { display: none !important; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
