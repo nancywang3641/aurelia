@@ -678,7 +678,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                             closeChapterPanel();
                             try { window.VN_Core.earlybirdFromText(ch.content); } catch (e) {}  // 頭像早鳥：先開生
                             window.VN_Core._startWithLoader(ch.content, null);   // 載入→loading 等全部圖片→開播
-                            // 舊存檔相容：sig map 出現前的插圖存在 ch.scenes → 插回（新資料 loadScript 內 applyBySig 已插、冪等跳過）
+                            // 獨立版章節的插圖存在 ch.scenes（生成時 _persistToLatestChapter 寫的）→ 載入後插回
                             try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
                         };
                         // 刪除單章
