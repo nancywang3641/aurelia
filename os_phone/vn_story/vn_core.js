@@ -3095,8 +3095,13 @@
                 el.classList.toggle('vn-dim', i !== speakerIdx);
                 el.classList.toggle('vn-active', i === speakerIdx);
                 el.classList.toggle('vn-solo', i === solo);
-                // 景深：雙人在場且有人說話 → 非說話者退遠(手機縮小)。旁白全暗時兩個都不縮、維持原位。
-                el.classList.toggle('vn-far', both && speakerIdx >= 0 && i !== speakerIdx);
+                // 景深（黏住制）：雙人在場、有人說話時才重新分「近(說話者)/遠(對方)」；
+                // 旁白(-1)不動近遠只變暗 → 尺寸不會每句彈跳，換人說話才平滑互換；獨角清掉交給 vn-solo。
+                if (!both) el.classList.remove('vn-near', 'vn-far');
+                else if (speakerIdx >= 0) {
+                    el.classList.toggle('vn-near', i === speakerIdx);
+                    el.classList.toggle('vn-far', i !== speakerIdx);
+                }
             }
         },
         _stageDimAll: function() { this._applyStageLighting(-1); },
@@ -3106,7 +3111,7 @@
             this._stageInit();
             this._stage[i] = null;
             const el = this._slotEl(i);
-            if (el) { this._hideEl(el); el.classList.remove('vn-dim', 'vn-active', 'vn-solo', 'vn-avatar', 'vn-far'); }
+            if (el) { this._hideEl(el); el.classList.remove('vn-dim', 'vn-active', 'vn-solo', 'vn-avatar', 'vn-far', 'vn-near'); }
         },
         _stageRemove: function(name) {
             this._stageInit();
@@ -3156,7 +3161,7 @@
             this.currentName = name; this.currentExp = exp;   // 相容：通話/TTS/部分舊流程仍讀
             const el = this._slotEl(idx);
             // 換角色：先清掉舊角色的版型 class(浮起金框/置中/明暗) 並隱藏，避免「舊圖用舊版型閃一下」才換新圖
-            if (el && isNew) { el.classList.remove('vn-avatar', 'vn-solo', 'vn-dim', 'vn-active', 'vn-far'); this._hideEl(el); el.dataset.slideIn = '1'; }
+            if (el && isNew) { el.classList.remove('vn-avatar', 'vn-solo', 'vn-dim', 'vn-active', 'vn-far', 'vn-near'); this._hideEl(el); el.dataset.slideIn = '1'; }
             this._renderSlot(idx, name, exp);
             this._staleSweep();                // 先清過期(防殘留) → 若只剩說話者，下一步打燈即時把它置中(vn-solo)，不再慢半拍
             this._applyStageLighting(idx);     // 說話者亮、另一格（若在場）變暗、獨角即時置中
