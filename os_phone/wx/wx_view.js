@@ -47,28 +47,22 @@
 
     window.WX_VIEW = {
         
-        // 「發現」tab：跑團手機記錄入口（唯讀檢視 VN 劇情裡手機上發生過的對話）。內容由 wxApp._fillVnLog() 非同步填入。
+        // 「發現」tab：跑團手機記錄（唯讀檢視 VN 劇情裡手機上發生過的對話）。內容由 wxApp._fillVnLog() 非同步填入。
+        // 版型＝細工具列(標題+動作鈕一排) + 聊天室列表吃滿剩餘高；不再用三張大 cell 疊著擠壓列表。
         getDiscoverHTML: function() {
             const app = '(window.parent.wxApp || window.wxApp)';
             return ''
-              + '<div class="wx-cell-group" style="margin-top:8px;">'
-              +   '<div class="wx-cell" onclick="' + app + '.vnLogRefresh && ' + app + '.vnLogRefresh()">'
-              +     '<div class="wx-cell-icon"><i class="fa-solid fa-comments"></i></div>'
-              +     '<div class="wx-cell-text">跑團手機記錄</div>'
-              +     '<div class="wx-cell-arrow"><i class="fa-solid fa-rotate-right"></i></div>'
+              + '<div class="wx-discover" id="wx-discover-page">'
+              +   '<div class="wx-vnlog-toolbar">'
+              +     '<div class="wx-vnlog-toolbar-t"><i class="fa-solid fa-comments"></i>跑團手機記錄</div>'
+              +     '<div class="wx-vnlog-tools">'
+              +       '<button class="wx-vnlog-tool" onclick="' + app + '.vnLogTidyAi && ' + app + '.vnLogTidyAi()"><i class="fa-solid fa-wand-magic-sparkles"></i>AI 整理</button>'
+              +       '<button class="wx-vnlog-tool" onclick="' + app + '.vnLogTidyReset && ' + app + '.vnLogTidyReset()"><i class="fa-solid fa-arrow-rotate-left"></i>還原</button>'
+              +       '<button class="wx-vnlog-tool" title="重新讀取" onclick="' + app + '.vnLogRefresh && ' + app + '.vnLogRefresh()"><i class="fa-solid fa-rotate-right"></i></button>'
+              +     '</div>'
               +   '</div>'
-              +   '<div class="wx-cell" onclick="' + app + '.vnLogTidyAi && ' + app + '.vnLogTidyAi()">'
-              +     '<div class="wx-cell-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>'
-              +     '<div class="wx-cell-text">AI 整理聊天室</div>'
-              +     '<div class="wx-cell-arrow"><i class="fa-solid fa-chevron-right"></i></div>'
-              +   '</div>'
-              +   '<div class="wx-cell" onclick="' + app + '.vnLogTidyReset && ' + app + '.vnLogTidyReset()">'
-              +     '<div class="wx-cell-icon"><i class="fa-solid fa-arrow-rotate-left"></i></div>'
-              +     '<div class="wx-cell-text">還原整理</div>'
-              +     '<div class="wx-cell-arrow"><i class="fa-solid fa-chevron-right"></i></div>'
-              +   '</div>'
-              + '</div>'
-              + '<div class="wx-vnlog" id="wx-vnlog-mount"><div class="wx-vnlog-empty">載入跑團手機記錄…</div></div>';
+              +   '<div class="wx-vnlog" id="wx-vnlog-mount"><div class="wx-vnlog-empty">載入跑團手機記錄…</div></div>'
+              + '</div>';
         },
         // 房間列表（第一層）
         vnLogListHTML: function(rooms) {
