@@ -25,8 +25,29 @@
             return (list || []).filter(function (c) { return c && c.id && c.id !== 'User' && !c.isGroup; });
         } catch (e) { return []; }
     }
+    // 通訊錄＝微信通訊錄 ∪ 通話過的人（api_chats 非群組）：VN 劇情來電（沒加過微信的人）也要能在這裡回撥
+    let _mergedContacts = [];
+    async function _loadContacts() {
+        const out = _contacts().slice();
+        const seen = {}; out.forEach(function (c) { seen[c.id] = 1; });
+        try {
+            const WXDB = _w('WX_DB'), OS_DB = _w('OS_DB');
+            const map = (WXDB && WXDB.getApiChatsForCurrentCard) ? ((await WXDB.getApiChatsForCurrentCard()) || {})
+                      : ((OS_DB && OS_DB.getAllApiChats) ? ((await OS_DB.getAllApiChats()) || {}) : {});
+            Object.keys(map).forEach(function (id) {
+                const d = map[id] || {};
+                if (seen[id] || d.isGroup || id === 'User') return;
+                const ms = Array.isArray(d.messages) ? d.messages : [];
+                if (!ms.some(function (m) { return m && (!m.type || m.type === 'msg') && m.content; })) return;   // 沒實質對話的空殼不列
+                out.push({ id: id, name: d.name || id });
+                seen[id] = 1;
+            });
+        } catch (e) {}
+        _mergedContacts = out;
+        return out;
+    }
     function _findByDigits(d) {
-        const all = _contacts();
+        const all = _mergedContacts.length ? _mergedContacts : _contacts();
         for (let i = 0; i < all.length; i++) { if (_digits(all[i].id) === d) return all[i]; }
         return null;
     }
@@ -73,10 +94,11 @@
     }
 
     // ── ① 聯絡列表 ──────────────────────────────────────────────
-    function _renderList() {
+    async function _renderList() {
         if (!_root) return;
         _clearTimer();
-        const list = _contacts();
+        const list = await _loadContacts();
+        if (!_root) return;   // 載入期間 app 可能被關掉
         const rows = list.map(function (c) {
             return '<button class="dlr-row" data-id="' + _esc(c.id) + '" type="button">'
                  + '<span class="dlr-ava">' + _esc(_avatarBg(c)) + '</span>'
@@ -87,7 +109,7 @@
         _root.innerHTML =
             '<div class="dlr-wrap">'
           +   '<div class="dlr-head">' + _headHTML('電話') + '</div>'
-          +   '<div class="dlr-list">' + (rows || '<div class="dlr-empty">通訊錄是空的<br>到微信加聯絡人後這裡就有了</div>') + '</div>'
+          +   '<div class="dlr-list">' + (rows || '<div class="dlr-empty">通訊錄是空的<br>到微信加聯絡人、或跟人通過電話後這裡就有了</div>') + '</div>'
           +   _tabbar('list')
           + '</div>';
         _root.querySelectorAll('.dlr-row').forEach(function (b) {
