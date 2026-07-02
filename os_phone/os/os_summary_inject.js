@@ -63,23 +63,39 @@
                 payload +
                 `\n</劇情總結>`;
 
-            // 注入深度(in_chat)：數字越小越貼最新訊息＝模型注意力越高；越大越往聊天頂＝注意力越低。
-            //   🐛 修正史：舊 session 把世界書條目的 order:999 誤當 depth 填→depth:999(聊天最頂)=天天失憶。
-            //      之後一度傳「depth:0 會整個不注入、疑與向量撞」→ 已證實誤判：真凶是上面 _payloadFor 的「空快取卡死」
-            //      (偶發空被釘進 cache→整 session 不注入)，與 depth 無關(同 depth 多條不同 id 本就可共存)。
-            //   用 depth:1：刻意排在 VN組件規範(depth:0)之後——VN 規範本來就該最前。localStorage sp_summary_inject_depth 自調(最小 1)。
-            let _depth = parseInt(localStorage.getItem('sp_summary_inject_depth'));
-            if (isNaN(_depth) || _depth < 1) _depth = 1;
-            const result = win.TavernHelper.injectPrompts([{
-                id: INJECT_ID,
-                content: block.trim(),
-                position: 'in_chat',
-                depth: _depth,
-                role: 'system'
-            }], { once: true });
-            _lastUninject = result?.uninject || null;
-            _lastInjected = { chatId, text: block.trim(), len: block.length };
-            console.log(`📜 [Grand Summary Injector] 注入大總結壓縮版（chatId=${chatId}、${payload.length} 字、depth=${_depth}）`);
+            // ── 注入位置（2026-07-03 改制）─────────────────────────────────────
+            // 舊制 in_chat depth:1 排在 VN 規範牆(depth:0)後面 → 大總結被壓在牆後、模型總是不讀。
+            // 新制預設「跟 preset 並排」：走 ST 原生 setExtensionPrompt(IN_PROMPT)。
+            //   已對過本機酒館原始碼：openai.js populateChatCompletion 對第三方擴展 prompt
+            //   (position=IN_PROMPT) 走 injectToMain → 直接插在 preset『主提示(main)』正後方
+            //   ＝頂部系統區、與 preset 條目並排，和破甲/寫作規則同一塊被讀。
+            //   role=system；每輪 GENERATION_STARTED 重設、GENERATION_ENDED 清掉(仿 once，
+            //   免殘值漏進大總結自己的 generateRaw)。
+            // 逃生口：localStorage sp_summary_inject_pos='chat' 回舊制 in_chat(depth 用 sp_summary_inject_depth)。
+            const _mode = localStorage.getItem('sp_summary_inject_pos') || 'preset';
+            const _ctx = (() => { try { return win.SillyTavern?.getContext?.() || null; } catch (e) { return null; } })();
+            if (_mode !== 'chat' && _ctx?.setExtensionPrompt) {
+                _ctx.setExtensionPrompt(INJECT_ID, block.trim(), 0 /*IN_PROMPT(對過script.js:484)*/, 0, false, 0 /*system*/);
+                _lastUninject = () => { try { _ctx.setExtensionPrompt(INJECT_ID, '', 0, 0, false, 0); } catch (e) {} };
+                _lastInjected = { chatId, text: block.trim(), len: block.length, pos: 'preset並排(IN_PROMPT·主提示後)' };
+                console.log(`📜 [Grand Summary Injector] 注入大總結壓縮版（chatId=${chatId}、${payload.length} 字、位置=preset並排·主提示後）`);
+            } else {
+                // 舊制 in_chat：數字越小越貼最新訊息。depth:1=排在 VN組件規範(depth:0)之後。
+                //   🐛 修正史：舊 session 把 order:999 誤當 depth 填→depth:999=天天失憶；
+                //      「depth:0 不注入」傳言已證偽，真凶是 _payloadFor 空快取卡死(2487ba6)。
+                let _depth = parseInt(localStorage.getItem('sp_summary_inject_depth'));
+                if (isNaN(_depth) || _depth < 1) _depth = 1;
+                const result = win.TavernHelper.injectPrompts([{
+                    id: INJECT_ID,
+                    content: block.trim(),
+                    position: 'in_chat',
+                    depth: _depth,
+                    role: 'system'
+                }], { once: true });
+                _lastUninject = result?.uninject || null;
+                _lastInjected = { chatId, text: block.trim(), len: block.length, pos: 'in_chat depth=' + _depth };
+                console.log(`📜 [Grand Summary Injector] 注入大總結壓縮版（chatId=${chatId}、${payload.length} 字、depth=${_depth}）`);
+            }
         } catch (e) {
             console.warn('[Grand Summary Injector] 失敗:', e?.message || e);
         }
@@ -88,6 +104,11 @@
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectSummary(); });   // dryRun 空跑不注入(once 會被空跑吃掉)
+        // preset 並排制的 setExtensionPrompt 是持久值 → 生成一結束就清(仿 once)，
+        // 免得殘值被後續的大總結 generateRaw / 其他工具生成一起吃進去
+        const _clearAfterGen = () => { try { _lastUninject?.(); } catch (e) {} _lastUninject = null; };
+        if (win.tavern_events.GENERATION_ENDED) win.eventOn(win.tavern_events.GENERATION_ENDED, _clearAfterGen);
+        if (win.tavern_events.GENERATION_STOPPED) win.eventOn(win.tavern_events.GENERATION_STOPPED, _clearAfterGen);
         if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
             try { _lastUninject?.(); } catch (e) {}
             _lastUninject = null; _cache.clear(); _lastInjected = null;
