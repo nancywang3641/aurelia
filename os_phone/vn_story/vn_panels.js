@@ -238,17 +238,17 @@
         const orig = btn ? btn.textContent : '';
         let done = 0, saved = 0, skipped = 0;
         for (const entry of entries) {
-            const url = entry.url;
             done++;
-            if (!url || typeof url !== 'string' || !url.startsWith('data:')) { skipped++; continue; }
-            if (entry.compressed || url.indexOf('image/webp') !== -1) { skipped++; continue; }   // 已是 WebP/壓過 → 跳過(免越壓越糊)
+            if (entry.compressed || !_vngHasImg(entry)) { skipped++; continue; }   // 壓過/沒圖 → 跳過(免越壓越糊)
+            const full = await VN_Cache.getRaw(cfg.store, entry.key);   // 列表只有中繼資料 → 壓的時候才撈這一張的圖
+            const url = full && full.url;
+            if (!url || typeof url !== 'string' || !url.startsWith('data:') || url.indexOf('image/webp') !== -1) { skipped++; continue; }
             if (btn) btn.textContent = `壓縮中 ${done}/${entries.length}…`;
             const out = await _imgCompressDataUrl(url, 0.85);
             if (out && out.length < url.length * 0.92) {   // 至少省 8% 才換，免反而變大
                 saved += (url.length - out.length);
-                const { key, ...val } = entry;
-                await VN_Cache.setRaw(cfg.store, key, { ...val, url: out, compressed: 1 });
-                entry.url = out; entry.compressed = 1;
+                await VN_Cache.setRaw(cfg.store, entry.key, { ...full, url: out, compressed: 1 });
+                entry.compressed = 1;
             } else { skipped++; }
             await new Promise(r => setTimeout(r, 0));   // 讓出主執行緒 + 讓上一張的 canvas/img 被 GC
         }
@@ -305,34 +305,38 @@
     function _vngCardMenu(anchor, cfg, entry, curWorld, st, rerender) {
         _closeCardMenus();
         const store = cfg.store, fullKey = entry.key, bare = VN_Cache.bareKeyOf(entry);
-        const { key: _o, ...val } = entry;
+        // 畫廊列表只帶中繼資料（大圖不進記憶體）→ 動作當下才回 IDB 撈完整值。
+        // ⚠️ 寫回絕不能用列表的 entry 展開（沒有 url，會把圖洗掉），一律以 _fullVal() 為底。
+        const _fullVal = async () => { const v = await VN_Cache.getRaw(store, fullKey); return (v && typeof v === 'object') ? v : {}; };
+        const hasImg = _vngHasImg(entry);
         const menu = document.createElement('div'); menu.className = 'vng-menu';
         const add = (txt, fn, danger) => { const b = document.createElement('button'); if (danger) b.className = 'danger'; b.textContent = txt; b.onclick = (e) => { e.stopPropagation(); _closeCardMenus(); fn(); }; menu.appendChild(b); };
-        if (entry.url) add('🔍 查看大圖', () => _vngLightbox(entry.url));
+        if (hasImg) add('🔍 查看大圖', async () => { const v = await _fullVal(); if (v.url) _vngLightbox(v.url); });
         if (!cfg.noRegen) {
             // 重生只換這一張卡的圖(_vngSetCardImg)，不呼叫 rerender() 整庫重渲染 → 不再把整庫大圖重 decode 害 OOM
             add('✏️ 編輯重生', () => _vngEditModal(entry.prompt, async (p) => {
                 const card = anchor.closest('.vng-card');
-                const newUrl = await _vngRegen(cfg, fullKey, val, p);
-                if (newUrl) { entry.url = newUrl; entry.prompt = p; val.prompt = p; _vngSetCardImg(card, newUrl, cfg.kind); }
+                const newUrl = await _vngRegen(cfg, fullKey, await _fullVal(), p);
+                if (newUrl) { entry.prompt = p; _vngSetCardImg(card, newUrl, cfg.kind); }
             }));
             add('↻ 直接重生', async () => {
                 if (!entry.prompt) return;
                 const card = anchor.closest('.vng-card');
-                const newUrl = await _vngRegen(cfg, fullKey, val, entry.prompt);
-                if (newUrl) { entry.url = newUrl; _vngSetCardImg(card, newUrl, cfg.kind); }
+                const newUrl = await _vngRegen(cfg, fullKey, await _fullVal(), entry.prompt);
+                if (newUrl) _vngSetCardImg(card, newUrl, cfg.kind);
             });
             // 從頭像快取轉立繪：把這張頭像設成同名同世界的立繪（VN 顯示時最優先用立繪）
-            if (cfg.kind === 'avatar' && entry.url) add('🎭 設為立繪', async () => {
-                await VN_Cache.setRaw('sprite_cache', fullKey, { url: entry.url, prompt: entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
+            if (cfg.kind === 'avatar' && hasImg) add('🎭 設為立繪', async () => {
+                const v = await _fullVal(); if (!v.url) return;
+                await VN_Cache.setRaw('sprite_cache', fullKey, { url: v.url, prompt: v.prompt || entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
                 alert('已把「' + bare + '」設為立繪（限此世界）。\nVN 會優先用立繪顯示；要透明去背可到「立繪面板」處理。');
             });
         }
-        add(entry.favorite ? '★ 取消收藏' : '☆ 加入收藏', async () => { await VN_Cache.setRaw(store, fullKey, { ...val, favorite: !entry.favorite }); rerender(); });
+        add(entry.favorite ? '★ 取消收藏' : '☆ 加入收藏', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, fullKey, { ...v, favorite: !entry.favorite }); rerender(); });
         if (st.world === '') {
-            add('→ 移到當前世界', async () => { await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld }); await VN_Cache.deleteRaw(store, fullKey); rerender(); });
+            add('→ 移到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); await VN_Cache.deleteRaw(store, fullKey); rerender(); });
         } else if (st.world !== curWorld) {
-            add('⧉ 複製到當前世界', async () => { await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...val, chatId: curWorld }); alert('已複製到當前世界'); });
+            add('⧉ 複製到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); alert('已複製到當前世界'); });
         }
         add('🗑 刪除', async () => {
             await VN_Cache.deleteRaw(store, fullKey);
@@ -362,32 +366,67 @@
     function _vngSetCardImg(card, url, kind) {
         if (!card) return;
         const old = card.querySelector(':scope > img, :scope > .vng-ph');
-        const node = (url && !String(url).startsWith('blob:')) ? _vngImg(url, kind) : _vngPh(kind);
+        const ok = !!(url && !String(url).startsWith('blob:'));
+        const node = ok ? _vngImg(url, kind) : _vngPh(kind);
+        card._vngLoaded = ok ? 1 : 0;   // 給視口觀察器判斷「有圖可釋放」
         if (old) old.replaceWith(node); else card.insertBefore(node, card.firstChild);
     }
+    // 圖片虛擬化：卡片捲進視口才從 IDB 撈「這一張」的圖、滑遠了換回佔位符釋放
+    // → 整庫幾百張 base64 大圖不再同時常駐記憶體（插圖庫一開就 OOM 的真凶）
+    function _vngMakeLazyIO(store, kind) {
+        if (!('IntersectionObserver' in window)) return null;
+        return new IntersectionObserver((recs) => {
+            recs.forEach(async (rec) => {
+                const card = rec.target;
+                card._vngVisible = rec.isIntersecting ? 1 : 0;
+                if (rec.isIntersecting) {
+                    if (card._vngLoaded || card._vngLoading) return;
+                    card._vngLoading = 1;
+                    const v = await VN_Cache.getRaw(store, card._vngKey);
+                    delete card._vngLoading;
+                    if (!card.isConnected || !card._vngVisible) return;   // 撈回來時已滑走/已重渲染 → 不塞
+                    if (v && v.url) _vngSetCardImg(card, v.url, kind);
+                } else if (card._vngLoaded) {
+                    _vngSetCardImg(card, '', kind);
+                }
+            });
+        }, { rootMargin: '500px 0px 500px 0px' });
+    }
+    function _vngHasImg(entry) { return entry.hasUrl !== undefined ? !!entry.hasUrl : !!(entry.url && !String(entry.url).startsWith('blob:')); }
     function _vngCard(cfg, entry, curWorld, st, rerender) {
         const bare = VN_Cache.bareKeyOf(entry);
         const card = document.createElement('div'); card.className = 'vng-card' + ((cfg.kind === 'bg' || cfg.kind === 'scene') ? ' kind-bg' : '') + (cfg.kind === 'sprite' ? ' kind-sprite' : '');
-        if (entry.url && !entry.url.startsWith('blob:')) card.appendChild(_vngImg(entry.url, cfg.kind));
-        else card.appendChild(_vngPh(cfg.kind));
+        card.appendChild(_vngPh(cfg.kind));
+        card._vngKey = entry.key;
+        const hasImg = _vngHasImg(entry);
+        if (hasImg) {
+            if (st.io) st.io.observe(card);
+            else VN_Cache.getRaw(cfg.store, entry.key).then(v => { if (v && v.url && card.isConnected) _vngSetCardImg(card, v.url, cfg.kind); });   // 沒有 IntersectionObserver 的舊環境退回逐張直載
+        }
         if (entry.favorite) { const b = document.createElement('div'); b.className = 'vng-badge fav'; b.textContent = '★ 收藏'; card.appendChild(b); }
         else if (st.world === '') { const b = document.createElement('div'); b.className = 'vng-badge unclassed'; b.textContent = '未分類'; card.appendChild(b); }
         const foot = document.createElement('div'); foot.className = 'vng-foot'; foot.textContent = bare; card.appendChild(foot);
         const more = document.createElement('button'); more.className = 'vng-more'; more.textContent = '⋯';
         more.onclick = (e) => { e.stopPropagation(); _vngCardMenu(more, cfg, entry, curWorld, st, rerender); };
         card.appendChild(more);
-        card.onclick = (e) => { if (e.target.closest('.vng-more')) return; if (entry.url) _vngLightbox(entry.url); };
+        card.onclick = async (e) => {
+            if (e.target.closest('.vng-more') || !hasImg) return;
+            const v = await VN_Cache.getRaw(cfg.store, entry.key);   // 大圖看的時候才撈
+            if (v && v.url) _vngLightbox(v.url);
+        };
         return card;
     }
     async function _renderImgMgr(cfg) {
         const list = document.getElementById(cfg.listId); if (!list) return;
         const store = cfg.store, curWorld = VN_Cache.getCurrentWorld();
-        const all = await VN_Cache.getAll(store);
+        const all = await VN_Cache.getAllMeta(store);   // 只撈中繼資料，大圖等卡片進視口才逐張載（整庫一次全載會 OOM）
         const groups = {};
         all.forEach(e => { const w = VN_Cache.worldOf(e); (groups[w] = groups[w] || []).push(e); });
         const st = _mgrState[cfg.listId] || (_mgrState[cfg.listId] = { world: curWorld, filter: 'all' });
         if (groups[st.world] === undefined && st.world !== curWorld) st.world = curWorld;
         const rerender = () => _renderImgMgr(cfg);
+        if (st.io) { try { st.io.disconnect(); } catch (e) {} }
+        st.io = _vngMakeLazyIO(store, cfg.kind);
         list.innerHTML = '';
 
         // 工具列：世界選擇 + 篩選
