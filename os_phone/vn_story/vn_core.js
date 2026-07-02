@@ -352,8 +352,6 @@
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
-            // 這份正文的內容簽名：場景插圖持久化的 key（不靠 msgId——TauriTavern 懶載窗口號會漂）
-            try { this._scriptSig = window.VN_SceneInsert ? window.VN_SceneInsert.sigOf(txt) : ''; } catch (e) { this._scriptSig = ''; }
             this.charVoices = this._loadCharVoices();   // 先載入本卡持久化的固定聲線（跨訊息/大總結/重載留存），下面解析 [Avatar] 再合併
             // 🔄 學 PWA：重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 生效。
             //    ⚠️ 不可 await（呼叫端是 loadScript()→next() 同步契約，await 會讓 next() 在空腳本上跑→劇情跳過）。
@@ -497,9 +495,6 @@
             //   回放舊章節時 _latest 是 null → 不會誤插；舊章節的圖由 vn_panels 的 applyChapterScenes(存檔 scenes) 負責。
             console.log('[VN_Core🔎] loadScript 完成 msg#' + this._currentMessageId + ' script長=' + (Array.isArray(this.script) ? this.script.length : 'N/A') + ' → 試插最新這輪場景');
             try { if (window.VN_SceneInsert) window.VN_SceneInsert.applyLatestFresh(); } catch (e) {}
-            // 這份正文以前出過插圖（重啟後回放/章節卡/任何載入路徑）→ 依內容簽名撈回插回；
-            //   剛由 applyLatestFresh 插過的靠 scene-id 冪等自動跳過。放在預熱前，讓撈回的圖也被預熱。
-            try { if (window.VN_SceneInsert) window.VN_SceneInsert.applyBySig(this._scriptSig); } catch (e) {}
             this._prewarmBgs();
             this._prewarmScenes();
             this._prewarmItems();
@@ -1560,6 +1555,7 @@
                     return this._sceneMemCache[cacheId];
                 }
             }
+            if (!prompt) return '';   // 沒 prompt 沒得生（ID-only 標籤走相簿路，正常不會到這；防空 prompt 白燒生圖）
             const raw = await VN_Image.getScene(prompt);
             if (!raw) return '';
             try {
@@ -2324,18 +2320,36 @@
                 const overlay = document.getElementById('scene-cg-overlay');
                 const cgImg   = document.getElementById('scene-cg-img');
                 if (overlay && cgImg) {
-                    overlay.classList.add('active');
-                    this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出
-                    this._sceneCgCur = { cacheId, prompt };  // 給 🔄 重生鈕
                     const memUrl = this._sceneMemCache[cacheId];
                     if (memUrl) {
+                        overlay.classList.add('active');
+                        this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出
+                        this._sceneCgCur = { cacheId, prompt };  // 給 🔄 重生鈕
                         cgImg.src = memUrl; this._setSceneCgFailed(false);
                     } else if (cacheId && prompt) {
+                        overlay.classList.add('active');
+                        this._sceneCgLinger = 3;
+                        this._sceneCgCur = { cacheId, prompt };
                         cgImg.src = '';
                         (async () => {
                             const url = await this._safeFetchScene(cacheId, prompt);
                             if (url && cgImg) { cgImg.src = url; this._setSceneCgFailed(false); }
                             else { this._setSceneCgFailed(true); }   // 429/失敗 → 留佔位卡＋重生鈕、不淡出
+                        })();
+                    } else if (cacheId) {
+                        // ID-only [Scene|cacheId]（寫回正文的持久化標籤）：只對相簿(scene_cache)撈圖。
+                        // 相簿沒有（被刪/AI 幻造假 ID）→ 靜默跳過：不開 overlay、不佔位、
+                        // 也不走 _safeFetchScene 失敗路（那會觸發全域生圖退避，冤枉擋掉本輪真生圖）。
+                        (async () => {
+                            const cached = await VN_Cache.get('scene_cache', cacheId);
+                            if (!cached || !cached.url) { console.log('[VN] [Scene|' + cacheId + '] 相簿沒有這張 → 跳過'); return; }
+                            const url = await this._safeFetchScene(cacheId, cached.prompt || '');   // 相簿有圖=必命中，只做 objUrl 轉換
+                            if (url && cgImg) {
+                                overlay.classList.add('active');
+                                this._sceneCgLinger = 3;
+                                this._sceneCgCur = { cacheId, prompt: cached.prompt || '' };   // 重生鈕用相簿存的 prompt
+                                cgImg.src = url; this._setSceneCgFailed(false);
+                            }
                         })();
                     }
                 }

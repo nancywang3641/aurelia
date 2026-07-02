@@ -55,57 +55,56 @@
             return Math.abs(h).toString(36);
         },
 
-        // ══ 內容簽名持久化（治「重啟 TauriTavern 插圖就不見」）═══════════════════
-        // 為什麼不靠章節存檔/msgId：酒館模式 GENERATION_ENDED 那條路根本不寫 VnChapter
-        // （_persistToLatestChapter 常因「沒有 2 分鐘內的新章」整個跳過）；msgId 在
-        // TauriTavern 懶載下是窗口號、每輪撞 key 還會漂。改用「劇本正文簽名」當 key：
-        // 同一則正文不管從哪條路重新載入（重啟後章節卡回放/生成結束/獨立版），
-        // loadScript 尾端 applyBySig 都撈得回插圖。圖檔本就在 scene_cache(IDB) 不重生，
-        // 這裡只存「插哪、用哪個 cacheId」的小中繼資料（localStorage，LRU 上限 300 則）。
-        _MAP_KEY: 'vn_scene_sig_map',
-        _MAP_CAP: 300,
-        sigOf: function (text) {
+        // ══ ID 標籤寫回正文（治「重啟 TauriTavern 插圖就不見」）═══════════════════
+        // Rae 的架構：正文在酒館、奧瑞亞只是展示層 → 插圖資訊就該住在正文裡。
+        // 生成後把 ID-only 標籤「[Scene|cacheId]」寫進最新樓正文的錨點位置：
+        //   • 不帶 prompt/數據 → 不污染 AI 上下文、幾乎不吃 token；
+        //   • 圖已存相簿(scene_cache 按 cacheId)，播放時 ID 直接對相簿撈圖（vn_core [Scene| handler）；
+        //   • 位置釘死在正文行裡 → 重啟/回放/章節卡永遠原位，不再掉位置。
+        // 樓層守衛：TauriTavern 懶載樓號會漂，不信 ctx.msgId——取 -1(最新樓)＋必須是
+        // assistant 樓＋含 <content>＋（有錨點時）至少一個錨點在正文命中，才動筆；否則放棄不寫。
+        _writeBackToMessage: async function (entries) {
             try {
-                const t = String(text || '').replace(/\s+/g, '');
-                return t ? (t.length.toString(36) + '_' + this._hash(t)) : '';
-            } catch (e) { return ''; }
-        },
-        _loadSigMap: function () {
-            try { const m = JSON.parse(localStorage.getItem(this._MAP_KEY) || '{}'); return (m && typeof m === 'object') ? m : {}; }
-            catch (e) { return {}; }
-        },
-        _persistBySig: function (sig, entries) {
-            try {
-                if (!sig || !Array.isArray(entries) || !entries.length) return;
-                const map = this._loadSigMap();
-                const cur = (map[sig] && Array.isArray(map[sig].entries)) ? map[sig].entries : [];
-                const have = {}; cur.forEach(s => { if (s && s.cacheId) have[s.cacheId] = 1; });
-                let added = 0;
-                entries.forEach(e => { if (e && e.cacheId && !have[e.cacheId]) { cur.push({ cacheId: e.cacheId, prompt: e.prompt, after: e.after || '', idx: e.idx }); added++; } });
-                if (!added) return;
-                map[sig] = { entries: cur, ts: Date.now() };
-                const keys = Object.keys(map);
-                if (keys.length > this._MAP_CAP) {   // LRU：最舊的先丟（正文都翻篇很久了）
-                    keys.sort((a, b) => ((map[a] && map[a].ts) || 0) - ((map[b] && map[b].ts) || 0));
-                    for (let i = 0; i < keys.length - this._MAP_CAP; i++) delete map[keys[i]];
+                if (!Array.isArray(entries) || !entries.length) return;
+                const TH = win.TavernHelper;
+                if (!TH || !TH.getChatMessages || !TH.setChatMessages) return;   // 獨立版沒有酒館樓層 → 走既有 ch.scenes 路
+                const msgs = TH.getChatMessages(-1);
+                const m = Array.isArray(msgs) ? msgs[0] : null;
+                if (!m || m.role !== 'assistant' || typeof m.message !== 'string') { console.log('[VN_SceneInsert🔎] 寫回正文跳過：最新樓非 assistant 劇情樓'); return; }
+                const text = m.message;
+                if (text.indexOf('<content>') < 0) { console.log('[VN_SceneInsert🔎] 寫回正文跳過：最新樓沒有 <content>'); return; }
+
+                const lines = text.split('\n');
+                // <content> 區塊邊界（標籤可能跟正文擠同行，只求行號範圍）
+                let cStart = -1, cEnd = lines.length;
+                for (let i = 0; i < lines.length; i++) {
+                    if (cStart < 0 && lines[i].indexOf('<content>') >= 0) cStart = i;
+                    if (lines[i].indexOf('</content>') >= 0) { cEnd = i; break; }
                 }
-                localStorage.setItem(this._MAP_KEY, JSON.stringify(map));
-                console.log('[VN_SceneInsert] 插圖依內容簽名持久化 sig=' + sig + '(+' + added + '張)，重啟/回放可撈回');
-            } catch (e) { console.warn('[VN_SceneInsert] _persistBySig 失敗:', (e && e.message) || e); }
-        },
-        // loadScript 尾端呼叫：這份正文以前出過插圖 → 用同套錨點插回（冪等靠 scene-id，剛插過的會自動跳過）
-        applyBySig: function (sig) {
-            try {
-                if (!sig) return;
-                const rec = this._loadSigMap()[sig];
-                if (!rec || !Array.isArray(rec.entries) || !rec.entries.length) return;
-                const n = this._spliceInto(rec.entries);
-                if (n) {
-                    console.log('[VN_SceneInsert] 依內容簽名撈回 ' + n + ' 張存檔插圖 sig=' + sig);
-                    rec.ts = Date.now();   // 有用到 → 續命，別被 LRU 淘汰
-                    try { const map = this._loadSigMap(); map[sig] = rec; localStorage.setItem(this._MAP_KEY, JSON.stringify(map)); } catch (e) {}
-                }
-            } catch (e) { console.warn('[VN_SceneInsert] applyBySig 失敗:', (e && e.message) || e); }
+                if (cStart < 0) return;
+
+                const todo = entries.filter(e => e && e.cacheId && text.indexOf(e.cacheId) < 0);   // 冪等：正文已有這 ID 就不重寫
+                if (!todo.length) return;
+                // 錨點守衛：這批插圖若帶錨點，至少要有一個能在這樓正文命中——命不中代表 -1 樓不是本輪那樓（樓號漂/使用者又發話了）
+                const withAnchor = todo.filter(e => e.after);
+                const hits = {};
+                withAnchor.forEach(e => { hits[e.cacheId] = this._findAnchor(lines, e.after); });
+                if (withAnchor.length && !withAnchor.some(e => hits[e.cacheId] >= 0)) { console.log('[VN_SceneInsert🔎] 寫回正文放棄：錨點全都對不上最新樓（不是本輪那樓，絕不改錯樓）'); return; }
+
+                let written = 0;
+                todo.forEach(e => {
+                    const aIdx = (e.after && hits[e.cacheId] !== undefined) ? hits[e.cacheId] : (e.after ? this._findAnchor(lines, e.after) : -1);
+                    let pos;
+                    if (aIdx > cStart && aIdx < cEnd) pos = aIdx + 1;                     // 錨點行之後
+                    else pos = Math.min(cEnd, cStart + 1 + Math.round((cEnd - cStart - 1) * ((e.idx || 0) + 1) / (todo.length + 1)));   // 沒錨點/命中在區塊外 → 區塊內平均分散
+                    lines.splice(pos, 0, '[Scene|' + e.cacheId + ']');
+                    if (pos <= cEnd) cEnd++;
+                    written++;
+                });
+                if (!written) return;
+                await TH.setChatMessages([{ message_id: m.message_id, message: lines.join('\n') }], { refresh: 'none' });   // 不重渲染，避免觸發別的 handler 連鎖
+                console.log('[VN_SceneInsert] ID 標籤寫回正文 ✅ 樓#' + m.message_id + ' +' + written + ' 張 → 重啟/回放直接對相簿撈圖');
+            } catch (e) { console.warn('[VN_SceneInsert] 寫回正文失敗:', (e && e.message) || e); }
         },
 
         // 正規化：去掉空白(含全形)、標點、符號，小寫 → 讓錨點比對容忍標點/空白/全形差異
@@ -162,6 +161,10 @@
                 this._latest = { chatId: chatId, entries: entries };
                 console.log('[VN_SceneInsert] 已記最新這輪 ' + entries.length + ' 張(已預熱) msg#' + msgId);
 
+                // ★持久化主力：把 ID-only [Scene|cacheId] 標籤寫回酒館正文錨點位置（fire-and-forget）。
+                //   正文=唯一資料源 → 重啟/回放/章節卡載到同一則正文就原位播、ID 直接對相簿撈圖。
+                try { this._writeBackToMessage(entries); } catch (e) {}
+
                 // ordering B：圖比 loadScript 晚到、VN 已有載著的劇本 → 直接插「最新這輪」；VN 還沒載 → 等 loadScript 尾端的 applyLatestFresh
                 const VN = win.VN_Core;
                 const _vnLen = (VN && Array.isArray(VN.script)) ? VN.script.length : -1;
@@ -188,6 +191,8 @@
                 const e = entries[k];
                 const idTag = 'scene-id: ' + e.cacheId;
                 if (VN.script.indexOf(idTag) >= 0) continue; // 這份劇本已含 → 冪等跳過
+                // 正文已寫回 [Scene|cacheId] 標籤（寫回比 loadScript 先完成的順序）→ 劇本自帶、不再疊插
+                if (VN.script.some(l => typeof l === 'string' && l.indexOf('[Scene|' + e.cacheId) === 0)) continue;
 
                 // 找錨點(正規化容錯)；找不到 or 已播過 → 平均分散，別全擠末尾
                 const aIdx = e.after ? this._findAnchor(VN.script, e.after) : -1;
@@ -223,9 +228,6 @@
                 if (n) console.log('[VN_SceneInsert] 最新這輪：直接 splice ' + n + ' 張(不靠ID)，往下點即播');
                 // 寫回「最新這章」存檔（章節選擇/重整後回放也看得到，不丟）；圖檔本就在硬碟，只補「插哪一段」的資訊
                 this._persistToLatestChapter(L.entries);
-                // ★主力持久化：依「當前劇本正文簽名」存（酒館模式沒有章節存檔可寫，上面那條常跳過；
-                //   這條不管哪種模式都寫得進、重啟後 loadScript 同一則正文就撈得回）
-                this._persistBySig(win.VN_Core && win.VN_Core._scriptSig, L.entries);
                 // ★用完即清：下一個「沒出插圖的輪」載 script 時 _latest 會是 null → 不會把這張舊圖誤插進新劇本
                 this._latest = null;
             } catch (e) {
