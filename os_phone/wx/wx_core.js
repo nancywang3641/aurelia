@@ -983,11 +983,14 @@
                 }
                 const mount = APP_CONTAINER && APP_CONTAINER.querySelector('#wx-vnlog-mount');   // 重抓(可能已被 render 換掉)
                 if (!mount) return;
+                const page = APP_CONTAINER.querySelector('#wx-discover-page');   // is-room=第二層整頁(藏工具列、header 釘死、只捲訊息)
                 if (_vnLogView === 'room' && _vnLogRoom && _vnLogRooms[_vnLogRoom]) {
+                    if (page) page.classList.add('is-room');
                     mount.innerHTML = window.WX_VIEW.vnLogRoomHTML(_vnLogRooms[_vnLogRoom], DARK_MODE);
                     const sc = mount.querySelector('.wx-vnlog-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
                 } else {
                     _vnLogView = 'list';
+                    if (page) page.classList.remove('is-room');
                     mount.innerHTML = window.WX_VIEW.vnLogListHTML(_vnLogRooms);
                 }
             } catch (e) {
