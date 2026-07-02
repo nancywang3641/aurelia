@@ -352,6 +352,8 @@
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
+            // 這份正文的內容簽名：場景插圖持久化的 key（不靠 msgId——TauriTavern 懶載窗口號會漂）
+            try { this._scriptSig = window.VN_SceneInsert ? window.VN_SceneInsert.sigOf(txt) : ''; } catch (e) { this._scriptSig = ''; }
             this.charVoices = this._loadCharVoices();   // 先載入本卡持久化的固定聲線（跨訊息/大總結/重載留存），下面解析 [Avatar] 再合併
             // 🔄 學 PWA：重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 生效。
             //    ⚠️ 不可 await（呼叫端是 loadScript()→next() 同步契約，await 會讓 next() 在空腳本上跑→劇情跳過）。
@@ -495,6 +497,9 @@
             //   回放舊章節時 _latest 是 null → 不會誤插；舊章節的圖由 vn_panels 的 applyChapterScenes(存檔 scenes) 負責。
             console.log('[VN_Core🔎] loadScript 完成 msg#' + this._currentMessageId + ' script長=' + (Array.isArray(this.script) ? this.script.length : 'N/A') + ' → 試插最新這輪場景');
             try { if (window.VN_SceneInsert) window.VN_SceneInsert.applyLatestFresh(); } catch (e) {}
+            // 這份正文以前出過插圖（重啟後回放/章節卡/任何載入路徑）→ 依內容簽名撈回插回；
+            //   剛由 applyLatestFresh 插過的靠 scene-id 冪等自動跳過。放在預熱前，讓撈回的圖也被預熱。
+            try { if (window.VN_SceneInsert) window.VN_SceneInsert.applyBySig(this._scriptSig); } catch (e) {}
             this._prewarmBgs();
             this._prewarmScenes();
             this._prewarmItems();
