@@ -1243,10 +1243,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             }
             #game-char   { left: -3%; right: auto; object-position: left bottom; }
             #game-char-2 { right: -3%; left: auto; object-position: right bottom; }
-            /* 近（說話者）：放大、壓在前面 */
-            #game-char.vn-active:not(.vn-avatar), #game-char-2.vn-active:not(.vn-avatar) { max-width: 76%; height: 92%; z-index: 3; }
-            /* 遠（非說話者且對面有人在說）：縮小退後——貼地縮，看起來站得遠 */
-            #game-char.vn-far:not(.vn-avatar), #game-char-2.vn-far:not(.vn-avatar) { max-width: 46%; height: 72%; z-index: 2; }
+            /* 近/遠（黏住制：跟最後說話者走、旁白不重置）→ 全程只有兩種尺寸，不會每句彈跳。
+               幅度刻意小：近微放大、遠微縮退後，靠明暗+前後疊加出景深，不搞誇張比例。 */
+            #game-char.vn-near:not(.vn-avatar), #game-char-2.vn-near:not(.vn-avatar) { max-width: 70%; height: 92%; z-index: 3; }
+            #game-char.vn-far:not(.vn-avatar), #game-char-2.vn-far:not(.vn-avatar) { max-width: 56%; height: 82%; z-index: 2; }
             /* 獨角置中：永遠蓋回滿版大尺寸（放最後，蓋過上面兩條）；margin auto=瘦圖也真置中(不靠 max-width 撐滿) */
             #game-char.vn-solo, #game-char-2.vn-solo { left: 0; right: 0; max-width: 100%; height: 92%; object-position: center bottom; z-index: 3; margin-left: auto; margin-right: auto; }
         }
