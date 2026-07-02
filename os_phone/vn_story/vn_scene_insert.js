@@ -55,6 +55,59 @@
             return Math.abs(h).toString(36);
         },
 
+        // ══ 內容簽名持久化（治「重啟 TauriTavern 插圖就不見」）═══════════════════
+        // 為什麼不靠章節存檔/msgId：酒館模式 GENERATION_ENDED 那條路根本不寫 VnChapter
+        // （_persistToLatestChapter 常因「沒有 2 分鐘內的新章」整個跳過）；msgId 在
+        // TauriTavern 懶載下是窗口號、每輪撞 key 還會漂。改用「劇本正文簽名」當 key：
+        // 同一則正文不管從哪條路重新載入（重啟後章節卡回放/生成結束/獨立版），
+        // loadScript 尾端 applyBySig 都撈得回插圖。圖檔本就在 scene_cache(IDB) 不重生，
+        // 這裡只存「插哪、用哪個 cacheId」的小中繼資料（localStorage，LRU 上限 300 則）。
+        _MAP_KEY: 'vn_scene_sig_map',
+        _MAP_CAP: 300,
+        sigOf: function (text) {
+            try {
+                const t = String(text || '').replace(/\s+/g, '');
+                return t ? (t.length.toString(36) + '_' + this._hash(t)) : '';
+            } catch (e) { return ''; }
+        },
+        _loadSigMap: function () {
+            try { const m = JSON.parse(localStorage.getItem(this._MAP_KEY) || '{}'); return (m && typeof m === 'object') ? m : {}; }
+            catch (e) { return {}; }
+        },
+        _persistBySig: function (sig, entries) {
+            try {
+                if (!sig || !Array.isArray(entries) || !entries.length) return;
+                const map = this._loadSigMap();
+                const cur = (map[sig] && Array.isArray(map[sig].entries)) ? map[sig].entries : [];
+                const have = {}; cur.forEach(s => { if (s && s.cacheId) have[s.cacheId] = 1; });
+                let added = 0;
+                entries.forEach(e => { if (e && e.cacheId && !have[e.cacheId]) { cur.push({ cacheId: e.cacheId, prompt: e.prompt, after: e.after || '', idx: e.idx }); added++; } });
+                if (!added) return;
+                map[sig] = { entries: cur, ts: Date.now() };
+                const keys = Object.keys(map);
+                if (keys.length > this._MAP_CAP) {   // LRU：最舊的先丟（正文都翻篇很久了）
+                    keys.sort((a, b) => ((map[a] && map[a].ts) || 0) - ((map[b] && map[b].ts) || 0));
+                    for (let i = 0; i < keys.length - this._MAP_CAP; i++) delete map[keys[i]];
+                }
+                localStorage.setItem(this._MAP_KEY, JSON.stringify(map));
+                console.log('[VN_SceneInsert] 插圖依內容簽名持久化 sig=' + sig + '(+' + added + '張)，重啟/回放可撈回');
+            } catch (e) { console.warn('[VN_SceneInsert] _persistBySig 失敗:', (e && e.message) || e); }
+        },
+        // loadScript 尾端呼叫：這份正文以前出過插圖 → 用同套錨點插回（冪等靠 scene-id，剛插過的會自動跳過）
+        applyBySig: function (sig) {
+            try {
+                if (!sig) return;
+                const rec = this._loadSigMap()[sig];
+                if (!rec || !Array.isArray(rec.entries) || !rec.entries.length) return;
+                const n = this._spliceInto(rec.entries);
+                if (n) {
+                    console.log('[VN_SceneInsert] 依內容簽名撈回 ' + n + ' 張存檔插圖 sig=' + sig);
+                    rec.ts = Date.now();   // 有用到 → 續命，別被 LRU 淘汰
+                    try { const map = this._loadSigMap(); map[sig] = rec; localStorage.setItem(this._MAP_KEY, JSON.stringify(map)); } catch (e) {}
+                }
+            } catch (e) { console.warn('[VN_SceneInsert] applyBySig 失敗:', (e && e.message) || e); }
+        },
+
         // 正規化：去掉空白(含全形)、標點、符號，小寫 → 讓錨點比對容忍標點/空白/全形差異
         _norm: function (s) {
             try { return String(s).toLowerCase().replace(/[\s　\p{P}\p{S}]+/gu, ''); }
@@ -170,6 +223,9 @@
                 if (n) console.log('[VN_SceneInsert] 最新這輪：直接 splice ' + n + ' 張(不靠ID)，往下點即播');
                 // 寫回「最新這章」存檔（章節選擇/重整後回放也看得到，不丟）；圖檔本就在硬碟，只補「插哪一段」的資訊
                 this._persistToLatestChapter(L.entries);
+                // ★主力持久化：依「當前劇本正文簽名」存（酒館模式沒有章節存檔可寫，上面那條常跳過；
+                //   這條不管哪種模式都寫得進、重啟後 loadScript 同一則正文就撈得回）
+                this._persistBySig(win.VN_Core && win.VN_Core._scriptSig, L.entries);
                 // ★用完即清：下一個「沒出插圖的輪」載 script 時 _latest 會是 null → 不會把這張舊圖誤插進新劇本
                 this._latest = null;
             } catch (e) {
