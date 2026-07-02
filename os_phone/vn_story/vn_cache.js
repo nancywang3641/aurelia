@@ -101,6 +101,28 @@
             } catch(e) { return []; }
         },
 
+        // 同 getAll 但剝掉 url（base64 大圖字串），只回中繼資料 + hasUrl 旗標。
+        // 畫廊列表/整庫掃描用：cursor 逐筆過、大圖字串不留在結果陣列 → 峰值記憶體只有一張，
+        // 不再因為整庫幾百張插圖一次全進記憶體把 TauriTavern 撐到 OOM。
+        async getAllMeta(store) {
+            try {
+                const db = await _openIDB();
+                return new Promise(res => {
+                    const results = [];
+                    const req = db.transaction(store, 'readonly').objectStore(store).openCursor();
+                    req.onsuccess = e => {
+                        const c = e.target.result;
+                        if (c) {
+                            const { url, ...rest } = (c.value && typeof c.value === 'object') ? c.value : {};
+                            results.push({ key: c.key, ...rest, hasUrl: !!url });
+                            c.continue();
+                        } else res(results);
+                    };
+                    req.onerror = () => res([]);
+                });
+            } catch(e) { return []; }
+        },
+
         // ── 世界工具（給畫廊）──
         getCurrentWorld: _curWorld,
         // 從一筆 getAll 結果推出它屬於哪個世界：新資料看 value.chatId；舊資料看 key 前綴；都沒有 → ''（未分類）
@@ -129,7 +151,7 @@
             let n = 0;
             for (const store of Object.keys(IMAGE_STORES)) {
                 try {
-                    const all = await this.getAll(store);
+                    const all = await this.getAllMeta(store);   // 只要 key/world，別把整庫大圖撈進記憶體
                     for (const entry of all) {
                         if (_norm(this.worldOf(entry)) === wn) { if (await this.deleteRaw(store, entry.key)) n++; }
                     }
