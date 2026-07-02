@@ -1565,7 +1565,16 @@
                                 }
                                 if (GLOBAL_ACTIVE_ID && !GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) GLOBAL_ACTIVE_ID = null; // 修正懸空 active id
                             }
-                            if (savedChats && Object.keys(savedChats).length > 0) { Object.assign(GLOBAL_CHATS, savedChats); }
+                            if (savedChats && Object.keys(savedChats).length > 0) {
+                                // 📞 純通話記錄(每句都帶 _viaCall＝VN 劇情來電寫的統一記憶)是電話 app 的資料，
+                                //    不進微信聊天列表；之後真的用微信聊過(出現非通話訊息)才會浮上來。
+                                //    電話 app / 微信真聊天的寫回不帶 _viaCall → 照常顯示，共用記憶不受影響。
+                                for (const k in savedChats) {
+                                    const _ms = (savedChats[k] && Array.isArray(savedChats[k].messages)) ? savedChats[k].messages : [];
+                                    const _callOnly = _ms.length > 0 && _ms.every(function (m) { return m && m._viaCall; });
+                                    if (!_callOnly) GLOBAL_CHATS[k] = savedChats[k];
+                                }
+                            }
                         }
                     } catch (e) { console.error(e); }
                     // 🔧 橋接已退役（e57f923）：wx 一律 directMode、資料只走自己的 api_chats。
