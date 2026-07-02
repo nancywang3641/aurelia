@@ -1961,6 +1961,21 @@
             }
             return { text: parts.join('|'), sfx: sfx };
         },
+        // 正文內穿插的 #SFXID# 音效標記（旁白不帶 Nar 後的新格式）：抽出第一個當音效、其餘標記一律從顯示文字剝掉。
+        //   回 { text: 去標記後的文字, sfx: 第一個ID或'NA' }。與 tag 尾格 SFX 並存(呼叫端 inline 優先、沒有才用尾格)。
+        _extractInlineSFX: function(text) {
+            if (!text || text.indexOf('#') === -1) return { text: text || '', sfx: 'NA' };
+            let sfx = 'NA';
+            const cleaned = String(text).replace(/#([A-Za-z0-9_\-&]+)#/g, (_m, id) => {
+                if (sfx === 'NA') sfx = id.trim();   // 一行取第一個(playSFX 一次一個、後者會蓋前者)
+                return '';
+            }).replace(/[ \t]{2,}/g, ' ').replace(/\s+([，。、！？,.!?])/g, '$1').trim();
+            return { text: cleaned, sfx: sfx };
+        },
+        // 純剝除 #SFXID# 標記（給歷史/日誌/酒館顯示用，不觸發音效）
+        _stripInlineSFX: function(text) {
+            return String(text || '').replace(/#[A-Za-z0-9_\-&]+#/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+        },
 
         // Expression → GPT-SoVITS emotion 映射（支援自訂無限標籤）
         _mapExprToEmotion: function(expr) {
@@ -2496,7 +2511,8 @@
             if (line.startsWith('[Char|')) {
                 const p = line.slice(6, -1).split('|');
                 const ex = this._extractTextAndSFX(p.slice(2));
-                
+                const _cx = this._extractInlineSFX(ex.text);   // 正文內 #SFXID# → 抽音效 + 剝標記
+
                 // 拆解 Type 與 Expression
                 let rawExp = p[1] || '';
                 let typeHint = '';
@@ -2509,20 +2525,20 @@
                 if (!typeHint) typeHint = this.charVoices[p[0]] || '';
 
                 this.updateSprite(p[0], rawExp);
-                this.renderVN(p[0], ex.text);
-                this.addLog(p[0], ex.text);
-                this.playSFX(ex.sfx);
+                this.renderVN(p[0], _cx.text);
+                this.addLog(p[0], _cx.text);
+                this.playSFX(_cx.sfx !== 'NA' ? _cx.sfx : ex.sfx);
                 this._lastChar = p[0];
-                this._currentChar = { charName: p[0], text: ex.text, emotion: this._mapExprToEmotion(rawExp), expression: rawExp };
+                this._currentChar = { charName: p[0], text: _cx.text, emotion: this._mapExprToEmotion(rawExp), expression: rawExp };
                 this.updateControlUI();
                 
-                // 把 typeHint 傳給 TTS
-                this._vnSoVITSPlay(p[0], ex.text, this._mapExprToEmotion(rawExp), typeHint);
-                
+                // 把 typeHint 傳給 TTS（用去 #SFX# 標記的文字，免得念出來）
+                this._vnSoVITSPlay(p[0], _cx.text, this._mapExprToEmotion(rawExp), typeHint);
+
                 (function(charName, text, expression) {
                     const _mm = (window.parent || window).OS_MINIMAX;
                     if (_mm) _mm.playForChar(charName, text, { expression });
-                })(p[0], ex.text, rawExp);
+                })(p[0], _cx.text, rawExp);
                 
                 (function prefetchNext(script, curIdx) {
                     const _mm = (window.parent || window).OS_MINIMAX;
@@ -2551,11 +2567,12 @@
             if (line.startsWith('[Inner|')) {
                 const p = line.slice(7, -1).split('|');
                 const ex = this._extractTextAndSFX(p.slice(1));
-                const _innerClean = ex.text.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
+                const _ix = this._extractInlineSFX(ex.text);   // 正文內 #SFXID#
+                const _innerClean = _ix.text.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
                 this.updateSprite(p[0], 'Think');
                 this.renderVN(p[0], _innerClean, 'inner');
                 this.addLog(p[0], _innerClean);
-                this.playSFX(ex.sfx);
+                this.playSFX(_ix.sfx !== 'NA' ? _ix.sfx : ex.sfx);
                 return;
             }
             if (line.startsWith('[Exit|')) {
@@ -2568,11 +2585,12 @@
                 this._stageNarr();   // 旁白：算一場次(推進清滯留) + 立繪全留全部變暗
                 const p = line.slice(5, -1).split('|');
                 const ex = this._extractTextAndSFX(p);
+                const _nx = this._extractInlineSFX(ex.text);   // 正文內 #SFXID#
                 this._currentChar = null; this.updateControlUI();
-                this.renderVN('', ex.text);
-                this.addLog("旁白", ex.text);
-                this._vnNarrVoicePlay(ex.text);
-                this.playSFX(ex.sfx);
+                this.renderVN('', _nx.text);
+                this.addLog("旁白", _nx.text);
+                this._vnNarrVoicePlay(_nx.text);
+                this.playSFX(_nx.sfx !== 'NA' ? _nx.sfx : ex.sfx);
                 return;
             }
 
@@ -2605,17 +2623,20 @@
             // Fallback
             const _trimmed = line.trim();
             if (/^\*{1,2}[^*].+\*{1,2}$/.test(_trimmed)) {
-                const _innerText = _trimmed.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
-                this.renderVN('', _innerText, 'inner');
-                this.addLog('内心', _innerText);
+                const _ix = this._extractInlineSFX(_trimmed.replace(/^\*{1,2}|\*{1,2}$/g, '').trim());   // 正文內 #SFXID#
+                this.renderVN('', _ix.text, 'inner');
+                this.addLog('内心', _ix.text);
+                this.playSFX(_ix.sfx);
                 return;
             }
             const _stripped = _trimmed.replace(/^\[?/, '').replace(/\]$/, '').trim();
             if (_stripped.length > 2 && !_trimmed.startsWith('[') && !_trimmed.startsWith('<') && !_trimmed.startsWith('//') && !_trimmed.startsWith('---')) {
                 this._stageNarr();   // 純文字旁白：算一場次(推進清滯留) + 立繪保留變暗
-                this.renderVN('', _stripped);
-                this.addLog('旁白', _stripped);
-                this._vnNarrVoicePlay(_stripped);
+                const _nx = this._extractInlineSFX(_stripped);   // 正文內 #SFXID# → 抽音效 + 剝標記
+                this.renderVN('', _nx.text);
+                this.addLog('旁白', _nx.text);
+                this._vnNarrVoicePlay(_nx.text);
+                this.playSFX(_nx.sfx);
                 return;
             }
             this.next();
@@ -2729,9 +2750,9 @@
                 if (scanMode === 'chat' || scanMode === 'call') {
                     if (win.VN_Phone) win.VN_Phone.scanLog(line, scanMode, this);
                 } else {
-                    if (line.startsWith('[Char|'))  { const p = line.slice(6,-1).split('|'); const ex=this._extractTextAndSFX(p.slice(2)); this.addLog(p[0], ex.text); }
-                    else if (line.startsWith('[Inner|')) { const p = line.slice(7,-1).split('|'); const ex=this._extractTextAndSFX(p.slice(1)); this.addLog(p[0], `*${ex.text}*`); }
-                    else if (line.startsWith('[Nar|'))  { const p = line.slice(5,-1).split('|'); const ex=this._extractTextAndSFX(p); this.addLog("旁白", ex.text); }
+                    if (line.startsWith('[Char|'))  { const p = line.slice(6,-1).split('|'); const ex=this._extractTextAndSFX(p.slice(2)); this.addLog(p[0], this._stripInlineSFX(ex.text)); }
+                    else if (line.startsWith('[Inner|')) { const p = line.slice(7,-1).split('|'); const ex=this._extractTextAndSFX(p.slice(1)); this.addLog(p[0], `*${this._stripInlineSFX(ex.text)}*`); }
+                    else if (line.startsWith('[Nar|'))  { const p = line.slice(5,-1).split('|'); const ex=this._extractTextAndSFX(p); this.addLog("旁白", this._stripInlineSFX(ex.text)); }
                     else if (line.startsWith('[Sys|'))  { const p = line.slice(5,-1).split('|'); this.addLog("系統", p.length >= 2 ? p.slice(1).join('|') : p[0]); }
                     else if (line.startsWith('[Item|')) { const p = line.slice(6,-1).split('|'); this.addLog("獲得物品", `${p[0]} - ${p[1]||''}`); }
                 }
@@ -3531,6 +3552,7 @@
                 s = s.replace(/\[Nar\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, t) => `　　${t.trim()}`);
                 s = s.replace(/\[Inner\|[^|]+\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, t) => `（${t.trim()}）`);
                 s = s.replace(/\[(Story|Chapter|Protagonist|Area|BGM|Bg|Trans|Item|SessionEnd|Achievement|Choice|Quest)[^\]]*\]/gi, '');
+                s = s.replace(/#[A-Za-z0-9_\-&]+#/g, '');   // 剝掉正文內 #SFXID# 音效標記
                 s = s.replace(/\[[^\[\]\n]{1,80}\]/g, '');
                 // 4. 清除剩餘 HTML tag
                 s = s.replace(/<[^>]+>/g, '');
