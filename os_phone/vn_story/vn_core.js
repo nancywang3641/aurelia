@@ -3086,8 +3086,9 @@
         _stageInit: function() { if (!this._stage) { this._stage = [null, null]; this._stageTick = 0; } },
         // 📱 手機也用雙格（2026-07-02 改回）：左右各一格、中間稍微重疊，版位由 CSS 控制。永遠回 false=不強制單格。
         _singleSlot: function() { return false; },
-        // 站位記憶：角色名 → 上次站的格子(0左/1右)。換景/被清掃都不忘 → 重進場回老位置，
-        // 治「AI 忘出 [Exit]、五層清掃掃掉後再開口被『先左後右』塞去對面，一下左一下右」
+        // 站位記憶：角色名 → 這場戲裡站的格子(0左/1右)。被五層清掃掃掉後再開口回老位置，
+        // 治「AI 忘出 [Exit]、清掃後被『先左後右』塞去對面，一下左一下右」。
+        // ⚠️ 只限同場景：換景(_stageClear)歸零——跨場景留著會兩人記到同一格、輪流搶位(更亂)。
         _slotMemory: {},
         _stageIndexFor: function(name) {
             this._stageInit();
@@ -3141,7 +3142,7 @@
             this._stageInit();
             for (let i = 0; i < 2; i++) if (this._stage[i] && this._stage[i].name === name) this._clearSlot(i);
         },
-        _stageClear: function() { this._stageInit(); this._clearSlot(0); this._clearSlot(1); },
+        _stageClear: function() { this._stageInit(); this._clearSlot(0); this._clearSlot(1); this._slotMemory = {}; },   // 換景=站位記憶歸零(跨場景的陳舊記憶會害兩人搶同一格)
         // 滯留清除：某格角色超過 N tick 沒當說話者 → 自動移除（防殘留），N 預設 5、可由 localStorage 覆寫
         _staleSweep: function() {
             this._stageInit();
