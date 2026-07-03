@@ -1247,8 +1247,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                幅度刻意小：近微放大、遠微縮退後，靠明暗+前後疊加出景深，不搞誇張比例。 */
             #game-char.vn-near:not(.vn-avatar), #game-char-2.vn-near:not(.vn-avatar) { max-width: 82%; height: 97%; z-index: 3; }
             #game-char.vn-far:not(.vn-avatar), #game-char-2.vn-far:not(.vn-avatar) { max-width: 72%; height: 91%; z-index: 2; }
-            /* 獨角置中：永遠蓋回滿版大尺寸（放最後，蓋過上面兩條）；margin auto=瘦圖也真置中(不靠 max-width 撐滿) */
-            #game-char.vn-solo, #game-char-2.vn-solo { left: 0; right: 0; max-width: 100%; height: 92%; object-position: center bottom; z-index: 3; margin-left: auto; margin-right: auto; }
+            /* 獨角置中：永遠蓋回滿版（放最後，蓋過上面兩條）；margin auto=瘦圖也真置中(不靠 max-width 撐滿) */
+            #game-char.vn-solo, #game-char-2.vn-solo { left: 0; right: 0; max-width: 100%; object-position: center bottom; z-index: 3; margin-left: auto; margin-right: auto; }
+            /* 拉滿高只給「真立繪」：頭像盒是 height:auto + 1:1 正方形，強設高度會拉成長條 */
+            #game-char.vn-solo:not(.vn-avatar), #game-char-2.vn-solo:not(.vn-avatar) { height: 92%; }
         }
         /* 雙擊立繪 → 角色卡 */
         #vn-char-card {
