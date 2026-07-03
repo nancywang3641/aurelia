@@ -292,7 +292,7 @@
         },
 
         // ── 逐項內容檢視：點 breakdown 列 → 看實際送出去的原文（OAI/文字補全共用，欄位缺就空）──
-        _KEY_LABELS: { system:'系統提示', character:'角色卡', world:'世界資訊', examples:'對話範例', chat:'聊天記錄', persona:'使用者角色', note:'作者備註', inject:'注入/擴充', recall:'記憶召回' },
+        _KEY_LABELS: { system:'系統提示', character:'角色卡', world:'世界資訊', examples:'對話範例', chat:'聊天記錄', persona:'使用者角色', note:'作者備註', inject:'注入/擴充', recall:'記憶召回', gsummary:'大總結注入' },
 
         _recordToContent: function(rec) {
             if (!rec) return {};
@@ -334,6 +334,8 @@
             let text;
             if (key === 'recall') {
                 text = this.recallText || '';
+            } else if (key === 'gsummary') {
+                text = (win.OS_SUMMARY_INJECT && win.OS_SUMMARY_INJECT._lastInjected && win.OS_SUMMARY_INJECT._lastInjected.text) || '';
             } else if ((key === 'chat' || key === 'system') && Array.isArray(this._liveChat) && this._liveChat.length) {
                 // 即時捕捉到的真實送出訊息優先（chat=對話、system=系統段）
                 const roles = (key === 'chat') ? ['user', 'assistant'] : ['system'];
@@ -559,6 +561,24 @@
                     if (rItem) rItem.style.display = recallV > 0 ? 'flex' : 'none';
                     if (rVal)  rVal.textContent = recallV.toLocaleString() + (this.recallCount ? ` · ${this.recallCount}條` : '');
                     if (rBar)  rBar.style.width = (total > 0 ? Math.min(100, Math.round(recallV / total * 100)) : 0) + '%';
+                    // 大總結注入獨立行（來自 os_summary_inject 本輪實際注入的字元數；點行可看全文）——
+                    // 直接在 CTX 看注入多肥、到重壓門檻變色，不用開 debug 面板。bar=對 4000 字門檻的比例(滿格=該重壓)。
+                    try {
+                        const gi = (win.OS_SUMMARY_INJECT && win.OS_SUMMARY_INJECT._lastInjected) || null;
+                        const gLen = gi ? (Number(gi.len) || (gi.text ? gi.text.length : 0)) : 0;
+                        const gItem = document.getElementById('ctx-bd-i-gsummary');
+                        const gVal  = document.getElementById('ctx-bd-gsummary');
+                        const gBar  = document.getElementById('ctx-bd-bar-gsummary');
+                        if (gItem) {
+                            gItem.style.display = gLen > 0 ? 'flex' : 'none';
+                            gItem.title = gLen >= 2500 ? '大總結注入偏肥了——到「故事管理」按「重壓目前大總結」濃縮' : '';
+                        }
+                        if (gVal && gLen > 0) {
+                            gVal.textContent = gLen.toLocaleString() + ' 字';
+                            gVal.style.color = gLen >= 4000 ? '#ff6b6b' : gLen >= 2500 ? '#f6ad55' : '';
+                        }
+                        if (gBar) gBar.style.width = (gLen > 0 ? Math.min(100, Math.round(gLen / 4000 * 100)) : 0) + '%';
+                    } catch (e) {}
 
                     const eTot = document.getElementById('ctx-bd-total-val');
                     if (eTot) eTot.textContent = total.toLocaleString();
