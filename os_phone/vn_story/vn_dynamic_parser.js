@@ -12,6 +12,10 @@
         _tplAppMap: {},        // 模板 id → 已安裝手機 app id（共用面板兩邊讀同一份 DB 資料用）
 
         init: async function() {
+            // 收集狀態歸零：上一輪若 AI 忘了閉合標籤，_inBlockId 會殘留、把下一份劇本的行也吞進區塊
+            //（面板不出來+劇情被跳掉還連坐下一輪）。loadScript 每次都呼叫 init → 這裡強制斷開。
+            this._inBlockId = null;
+            this._blockLines = [];
             const win = window.parent || window;
             if (win.OS_DB?.getAllVNTagTemplates) {
                 const tpls = await win.OS_DB.getAllVNTagTemplates();
