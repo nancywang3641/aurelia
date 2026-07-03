@@ -348,6 +348,7 @@
                     <div class="avs-st-adv-hd">抽取${patchesCount ? `（已記 ${patchesCount} 筆）` : ''}</div>
                     <div class="avs-st-btn-grid">
                         <button class="avs-btn avs-btn-outline" id="avs-st-extract">🛰️ 立即抽一次</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-deep" title="用主模型把整份狀態清一輪：合併重複角色、移除純路人、按大總結修正過期欄位。整理前自動快照，可還原上一步。">♻️ 深度整理</button>
                         <button class="avs-btn avs-btn-outline" id="avs-st-regen">🧬 重新生成欄位</button>
                         <button class="avs-btn avs-btn-danger" id="avs-st-clearpatches">🧹 清空抽取紀錄</button>
                     </div>
@@ -420,6 +421,16 @@
             }
         });
         bind('#avs-st-extract', () => win.OS_STATE_RUNTIME?.forceExtract?.());
+        bind('#avs-st-deep', async () => {
+            if (!confirm('用主模型深度整理目前狀態？\n・合併重複角色（繁簡／別名）\n・移除無關係、無物品、任務無牽扯的純路人\n・按大總結修正過期欄位（如任務其實已完成）\n\n整理前會自動快照，事後可按「還原上一步」撤銷。')) return;
+            const b = q('#avs-st-deep'); if (b) { b.textContent = '♻️ 整理中…'; b.classList.add('disabled'); }
+            try {
+                const r = await win.OS_STATE_RUNTIME?.deepConsolidate?.();
+                if (r && r.ok) alert(`✅ 整理完成：合併 ${r.merged}、移除 ${r.removed}、修正 ${r.fixed}`);
+                else alert('❌ 整理失敗：' + ((r && r.msg) || '未知錯誤') + '\n（狀態未被更動）');
+            } catch (e) { alert('❌ 整理失敗：' + (e?.message || e) + '\n（狀態未被更動）'); }
+            _build();
+        });
         bind('#avs-st-regen', () => { if (confirm('重新生成追蹤欄位？已記錄的內容會保留。')) win.OS_STATE_SCHEMA?.generate?.(); });
         bind('#avs-st-clearpatches', () => { if (confirm('清空抽取紀錄？追蹤欄位保留。')) win.OS_STATE_RUNTIME?.clearPatches?.(); });
         bind('#avs-st-cross', () => openStateManagerModal());

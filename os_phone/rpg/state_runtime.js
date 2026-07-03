@@ -1284,6 +1284,74 @@ ${numberedText}`;
         showToast('✅ 抽取完成', 'success');
     }
 
+    // ♻️ 深度整理（狀態面板手動、低頻）：用「主模型」把整份狀態清一輪——合併重複角色(繁簡/別名)、
+    //   移除純路人、按大總結對帳修正過期欄位。日常副模型增量抽取的互補：玩個五十/百輪狀態髒了手動壓一次
+    //   （狀態系統版的「重壓大總結」）。安全網：整理前快照(可還原上一步)、AI 回傳解析不過就整單放棄絕不寫半套、
+    //   清理後重打底(base=cleaned、patches 歸零——舊補丁跟新基準已不對齊)。
+    async function deepConsolidate() {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return { ok: false, msg: '沒有進行中的故事' };
+        if (!win.OS_API || typeof win.OS_API.chatMain !== 'function') return { ok: false, msg: '主模型不可用（先到系統設置設定）' };
+        const currentState = win._AVS_ENGINE?.read?.() || {};
+        if (!Object.keys(currentState).length) return { ok: false, msg: '目前沒有狀態可整理' };
+        let summary = '';
+        try { if (win.OS_STORY_TOOLS?.getCurrentInjectionPayload) summary = (await win.OS_STORY_TOOLS.getCurrentInjectionPayload()) || ''; } catch (e) {}
+
+        const sys = '你是資料整理工具。只輸出 JSON，不要任何解說、標記或程式碼圍欄。';
+        const prompt = [
+            '下面是一份跑團劇情的「狀態資料」JSON。它由小模型逐輪累積，可能有：同一角色的繁簡/別名重複條目、早該更新的過期欄位、無足輕重的路人條目。請整理成乾淨版本。',
+            '',
+            '規則：',
+            '1. 合併重複：同一角色的繁簡體/別名/暱稱條目合併成一條（名字保留資訊較完整的那個），數值取最新合理值。',
+            '2. 移除純路人：只有「沒有好感度/關係數值、沒有物品往來、與任務無牽扯、劇情總結也沒提到」的條目才可移除；不確定就保留。',
+            '3. 對帳修正：對照【劇情總結】的既成事實，修正過期欄位（例如任務其實已完成/酬勞已領、關係已變化）。',
+            '4. 結構不變：保持原本的巢狀結構與欄位名，不發明新欄位、不改欄位型別、不改頂層分類。',
+            '5. 只輸出 JSON，格式：{"current":{整理後完整狀態},"merged":["被合併掉的名字"],"removed":["被移除的名字"],"fixed":["修正了什麼(短句)"]}',
+            '',
+            '【當前狀態】',
+            JSON.stringify(currentState),
+            summary ? '\n【劇情總結（唯讀參照）】\n' + summary : '',
+        ].join('\n');
+
+        const _W = window.parent || window;
+        _W.__AURELIA_SUMMARIZING = true;   // 同大總結：整理這通別觸發抽取/生圖等 GENERATION_* 掛勾
+        let text = '';
+        try {
+            text = await new Promise((resolve, reject) => {
+                try { win.OS_API.chatMain([{ role: 'system', content: sys }, { role: 'user', content: prompt }], null, resolve, reject); }
+                catch (e) { reject(e); }
+            });
+        } catch (e) {
+            return { ok: false, msg: (e && e.message) || String(e) };
+        } finally {
+            setTimeout(function () { _W.__AURELIA_SUMMARIZING = false; }, 3000);   // 撐過事後才發的 GENERATION_ENDED
+        }
+
+        let obj = null;
+        try { const m = String(text || '').match(/\{[\s\S]*\}/); obj = JSON.parse(m ? m[0] : ''); } catch (e) {}
+        const cleaned = obj && obj.current;
+        if (!cleaned || typeof cleaned !== 'object' || Array.isArray(cleaned) || !Object.keys(cleaned).length) {
+            console.warn('[State Runtime] ♻️ 深度整理：AI 回傳解析失敗，放棄不寫入。回傳開頭：', String(text || '').slice(0, 300));
+            return { ok: false, msg: 'AI 回傳格式不對（已放棄，狀態未動）' };
+        }
+        // 防呆：整理後的頂層分類必須是原有分類的子集（模型亂發明/砍掉整個分類 → 可疑，放棄）
+        const curRoots = Object.keys(currentState);
+        if (!Object.keys(cleaned).every(k => curRoots.includes(k))) {
+            console.warn('[State Runtime] ♻️ 深度整理：頂層分類對不上原狀態，放棄不寫入', Object.keys(cleaned), curRoots);
+            return { ok: false, msg: 'AI 動了頂層分類（已放棄，狀態未動）' };
+        }
+
+        try { win._AVS_ENGINE?.snapshot?.(currentState); } catch (e) {}   // 整理前快照 → 還原上一步可撤
+        try { win._AVS_ENGINE?.write?.(cleaned); } catch (e) { return { ok: false, msg: '寫入失敗：' + (e?.message || e) }; }
+        try {
+            const data = (await win.OS_DB.getStateData(chatId)) || {};
+            await win.OS_DB.saveStateData(chatId, { ...data, base: cleaned, patches: {}, current: cleaned });
+        } catch (e) {}
+        const n = a => Array.isArray(a) ? a.length : 0;
+        console.log('♻️ [State Runtime] 深度整理完成', { merged: obj.merged, removed: obj.removed, fixed: obj.fixed });
+        return { ok: true, merged: n(obj.merged), removed: n(obj.removed), fixed: n(obj.fixed) };
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // 開頭設置補救：主模型偶爾漏掉開場 ChapterCard 的 [Bg]/[BGM]（換背景/音樂的關鍵）
     //   → 腳本每輪重抓、漏一次就掉場景：章節卡空、回放/背景音樂失準。
@@ -1486,7 +1554,7 @@ ${numberedText}`;
 
     win.OS_STATE_RUNTIME = {
         isEnabled, setEnabled,
-        forceExtract, clearPatches,
+        forceExtract, clearPatches, deepConsolidate,
         injectCurrent, injectRules, extractOnce,
         repairOpeningSettings: _repairOpeningSettings,   // 手動補一次開頭 Bg/BGM（測試/救援用）
         compressOldMemories,   // 🗜️ 記憶合併壓縮（治長線過載），給 os_avs_memory 整理鈕呼叫
