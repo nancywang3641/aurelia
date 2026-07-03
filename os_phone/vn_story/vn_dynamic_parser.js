@@ -115,8 +115,24 @@
                 },
                 parse: function() {
                     const result = {};
-                    (lines || []).forEach(function(line){
-                        line = (line || '').trim();
+                    // 先把「跨多行的記錄」縫回一行：AI 寫長信/長描述常把 [Tag|…] 的正文拆成多個段落
+                    // （行首開了 [Tag| 但同行沒收 ]）→ 一路收到出現「行尾 ]」為止；
+                    // 段落間的空行在收集階段已被丟，改用 \n\n 重建（st.md 會渲染回段落）。
+                    const stitched = [];
+                    let buf = null;
+                    (lines || []).forEach(function(raw){
+                        const line = (raw || '').trim();
+                        if (!line) return;
+                        if (buf !== null) {
+                            buf += '\n\n' + line;
+                            if (line.charAt(line.length - 1) === ']') { stitched.push(buf); buf = null; }
+                            return;
+                        }
+                        if (/^\[[A-Za-z0-9_一-鿿-]+\|/.test(line) && line.charAt(line.length - 1) !== ']') { buf = line; return; }
+                        stitched.push(line);
+                    });
+                    if (buf !== null) stitched.push(buf + ']');   // AI 忘了收尾 ] → 區塊結束時幫它補上
+                    stitched.forEach(function(line){
                         if (line.charAt(0) !== '[' || line.charAt(line.length-1) !== ']') return;
                         const parts = line.slice(1, -1).split('|');
                         const tag = parts[0];
