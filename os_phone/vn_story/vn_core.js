@@ -3086,11 +3086,16 @@
         _stageInit: function() { if (!this._stage) { this._stage = [null, null]; this._stageTick = 0; } },
         // 📱 手機也用雙格（2026-07-02 改回）：左右各一格、中間稍微重疊，版位由 CSS 控制。永遠回 false=不強制單格。
         _singleSlot: function() { return false; },
+        // 站位記憶：角色名 → 上次站的格子(0左/1右)。換景/被清掃都不忘 → 重進場回老位置，
+        // 治「AI 忘出 [Exit]、五層清掃掃掉後再開口被『先左後右』塞去對面，一下左一下右」
+        _slotMemory: {},
         _stageIndexFor: function(name) {
             this._stageInit();
             if (this._singleSlot()) return 0;   // 手機單格：說話者一律進左格(置中)
             for (let i = 0; i < 2; i++) if (this._stage[i] && this._stage[i].name === name) return i;   // 已在場 → 沿用原格
-            for (let i = 0; i < 2; i++) if (!this._stage[i]) return i;                                   // 有空格 → 先左後右
+            const mem = this._slotMemory[name];
+            if ((mem === 0 || mem === 1) && !this._stage[mem]) return mem;                               // 記得上次站哪邊且那格空 → 回老位置
+            for (let i = 0; i < 2; i++) if (!this._stage[i]) return i;                                   // 沒站過 → 先左後右
             return (this._stage[0].lastTick <= this._stage[1].lastTick) ? 0 : 1;                         // 兩格滿 → 驅逐最久沒說話那格
         },
         // 這格的立繪目前「看得到」嗎（_showEl 顯示中）：隱形佔位（圖還在生/生失敗被藏）不算
@@ -3177,6 +3182,7 @@
             const prev = this._stage[idx];
             const isNew = !prev || prev.name !== name;
             this._stage[idx] = { name, exp, lastTick: this._stageTick };
+            this._slotMemory[name] = idx;   // 記住這個角色站哪邊，重進場回老位置
             this.currentName = name; this.currentExp = exp;   // 相容：通話/TTS/部分舊流程仍讀
             const el = this._slotEl(idx);
             // 換角色：先清掉舊角色的版型 class(浮起金框/置中/明暗) 並隱藏，避免「舊圖用舊版型閃一下」才換新圖
