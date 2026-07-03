@@ -1267,6 +1267,7 @@
                         _stCh.reverse().forEach((ch, idx, arr) => {
                             let _c = ch.content || '';
                             if (!_c) return;
+                            _c = _c.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
                             const _isRecent = _ctxN === 0 || idx >= arr.length - _ctxN;
                             if (!_isRecent) {
                                 const _sm = _c.match(/<summary>([\s\S]*?)<\/summary>/i);
@@ -1381,6 +1382,7 @@
                         apiChat.messages.forEach(msg => {
                             let content = msg.raw || msg.content || '';
                             if (!content) return;
+                            content = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
 
                             if (useSummary) {
                                 const match = content.match(/<summary>([\s\S]*?)<\/summary>/i);

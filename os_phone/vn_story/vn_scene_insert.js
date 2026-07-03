@@ -75,11 +75,14 @@
                 if (text.indexOf('<content>') < 0) { console.log('[VN_SceneInsert🔎] 寫回正文跳過：最新樓沒有 <content>'); return; }
 
                 const lines = text.split('\n');
-                // <content> 區塊邊界（標籤可能跟正文擠同行，只求行號範圍）
+                // <content> 區塊邊界（標籤可能跟正文擠同行，只求行號範圍）。
+                // 從最後一個 </thinking> 之後開始找：CoT 裡「提到」<content> 字樣不算正文開始，免得 ID 標籤插進思考區被剝掉
+                let scanFrom = 0;
+                for (let i = 0; i < lines.length; i++) if (/<\/think(?:ing)?>/i.test(lines[i])) scanFrom = i + 1;
                 let cStart = -1, cEnd = lines.length;
-                for (let i = 0; i < lines.length; i++) {
+                for (let i = scanFrom; i < lines.length; i++) {
                     if (cStart < 0 && lines[i].indexOf('<content>') >= 0) cStart = i;
-                    if (lines[i].indexOf('</content>') >= 0) { cEnd = i; break; }
+                    if (cStart >= 0 && lines[i].indexOf('</content>') >= 0) { cEnd = i; break; }
                 }
                 if (cStart < 0) return;
 
