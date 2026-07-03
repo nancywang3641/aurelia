@@ -1208,8 +1208,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #game-char, #game-char-2 { position: absolute; bottom: 0; height: 92%; max-width: 60%; object-fit: contain; transition: opacity 0.4s ease, filter 0.35s ease, left 0.32s ease, right 0.32s ease; display: none; filter: drop-shadow(0 0 20px rgba(0,0,0,0.8)); pointer-events: auto; cursor: pointer; }
         #game-char   { left: 0;  object-position: left bottom; }
         #game-char-2 { right: 0; object-position: right bottom; }
-        /* 只有一個角色在場 → 置中（回到原本單格觀感） */
-        #game-char.vn-solo, #game-char-2.vn-solo { left: 0; right: 0; max-width: 100%; object-position: center bottom; }
+        /* 只有一個角色在場 → 置中（回到原本單格觀感）。
+           ⚠️ margin auto 必帶：絕對定位同給 left/right 時瀏覽器「左邊優先、右邊作廢」，
+           沒 margin auto 的「置中」在寬舞台(桌面)上其實是貼左——「右立繪滑去左側」的真兇 */
+        #game-char.vn-solo, #game-char-2.vn-solo { left: 0; right: 0; max-width: 100%; object-position: center bottom; margin-left: auto; margin-right: auto; }
         /* 非說話者 / 旁白 → 變暗；說話者 → 全亮 */
         #game-char.vn-dim, #game-char-2.vn-dim { filter: brightness(0.45) saturate(0.78) drop-shadow(0 0 14px rgba(0,0,0,0.85)); }
         #game-char.vn-active, #game-char-2.vn-active { filter: drop-shadow(0 0 22px rgba(0,0,0,0.9)); }
