@@ -359,14 +359,16 @@
             try { if (window.VN_DynamicParser && window.VN_DynamicParser.init) window.VN_DynamicParser.init(); } catch (e) {}
             // 🎨 套用此世界(chatId)的自訂 VN 面板 CSS
             try { if (window.VN_Theme) window.VN_Theme.apply(); } catch (e) {}
-            const contentMatch = txt.match(/<content>([\s\S]*?)<\/content>/i);
-            let storyText = contentMatch ? contentMatch[1] : txt;
+            // ⚠️ 先剝 CoT 再取正文：<thinking> 裡常「提到」<content>（格式自檢清單），直接抓會從思考區開抓、把 CoT 包進正文
+            const _txtNoCot = String(txt).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+            const contentMatch = _txtNoCot.match(/<content>([\s\S]*?)<\/content>/i);
+            let storyText = contentMatch ? contentMatch[1] : _txtNoCot;
             // 卡自帶「AI 直出裸 HTML 美化卡」(無正則參與、無自訂 tag 包裹)：先整塊收走，
             // 免得下面按行切割把 <div style=…> 拆成碎旁白（美化卡整個散架）
             storyText = this._extractRawHtmlCards(storyText);
 
-            // 解析 <branches> 區塊（位於 <content> 外，作為一次性選擇，不進入 AI 上下文）
-            const branchesMatch = txt.match(/<branches>([\s\S]*?)<\/branches>/i);
+            // 解析 <branches> 區塊（位於 <content> 外，作為一次性選擇，不進入 AI 上下文）；同樣避開 CoT 裡的假 branches
+            const branchesMatch = _txtNoCot.match(/<branches>([\s\S]*?)<\/branches>/i);
             const _branchLines = branchesMatch
                 ? branchesMatch[1].split('\n')
                     .map(l => l.trim())
@@ -3930,12 +3932,14 @@
             // ── ⭐ END-driven：跟副模型(state_runtime)同一套——純 GENERATION_ENDED 驅動，生成「真的結束」才讀正文判完整。
             //    取代舊「MESSAGE_RECEIVED(事件來得早、半截)+每1.5秒輪詢等收尾+_processedIds鎖樓號」：鎖會讓刪樓/重生落同樓號永不再套用。
             //    完整正文＝同時有 <content> 與 </content>(正文收尾)。重複套用守門靠 _lastApplied 特徵比對(見 _onGenEnded)。
-            function _hasOpen(t)  { return String(t).indexOf('<content>')  !== -1; }
-            function _hasClose(t) { return String(t).indexOf('</content>') !== -1; }
+            // 先剝 CoT 再判/取正文：<thinking> 裡提到 <content> 字樣不能當「正文開始」，否則會把 CoT 包進正文
+            function _noCot(t) { return String(t).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, ''); }
+            function _hasOpen(t)  { return _noCot(t).indexOf('<content>')  !== -1; }
+            function _hasClose(t) { return _noCot(t).indexOf('</content>') !== -1; }
             // 已套用特徵：擋掉「副模型在 🍎/generateRaw 模式也會發 GENERATION_ENDED 但沒設 __AURELIA_SUMMARIZING」「事件偶爾連發」
             //   造成的重複 loadScript（會洗掉剛 splice 進去的場景插圖）。比對「同樓號＋同 <content> 內容」才算已套用。
             let _lastApplied = null;   // { mid, sig }
-            function _sig(text) { const m = String(text).match(/<content>([\s\S]*?)<\/content>/i); const b = m ? m[1] : String(text); return b.length + '|' + b.slice(0, 40) + '|' + b.slice(-40); }
+            function _sig(text) { const s = _noCot(text); const m = s.match(/<content>([\s\S]*?)<\/content>/i); const b = m ? m[1] : s; return b.length + '|' + b.slice(0, 40) + '|' + b.slice(-40); }
             let _truncMsgId = null;
             // VN 是否正在前景（玩家在看故事）→ 此時主模型這通理應產出 <content>…</content>，沒收尾＝截斷。
             // 用來判斷「連 <content> 都還沒生出來就截斷(思考期截)」要不要當截斷，避免誤傷非 VN 的一般聊天訊息。

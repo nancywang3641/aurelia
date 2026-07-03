@@ -252,8 +252,9 @@
             cleanContent = sm ? sm[1] : '';
         }
         if (!cleanContent.trim()) {   // 全文模式，或摘要模式但這則沒 <summary> → 回退全文
-            const cm = chapterContent.match(/<content>([\s\S]*?)<\/content>/i);
-            cleanContent = cm ? cm[1] : chapterContent;
+            const _noCot = String(chapterContent).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT 再取正文
+            const cm = _noCot.match(/<content>([\s\S]*?)<\/content>/i);
+            cleanContent = cm ? cm[1] : _noCot;
         }
         if (!cleanContent.trim()) return;
 
@@ -383,7 +384,7 @@
         const src = _cfg().extractSource || 'content';
         let c = '';
         if (src === 'summary') { const sm = String(raw||'').match(/<summary>([\s\S]*?)<\/summary>/i); c = sm ? sm[1] : ''; }
-        if (!c.trim()) { const cm = String(raw||'').match(/<content>([\s\S]*?)<\/content>/i); c = cm ? cm[1] : String(raw||''); }
+        if (!c.trim()) { const _noCot = String(raw||'').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, ''); const cm = _noCot.match(/<content>([\s\S]*?)<\/content>/i); c = cm ? cm[1] : _noCot; }
         return c.trim();
     } };
 
