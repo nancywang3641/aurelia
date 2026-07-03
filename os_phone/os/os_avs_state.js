@@ -432,6 +432,7 @@
         // 清空目前狀態
         bind('#avs-st-clearstate', () => {
             if (!confirm('確定清空這個故事目前的所有狀態數值？')) return;
+            try { eng?.write?.({}); } catch (e) {}   // 酒館模式權威庫在 OS_DB(經 adapter 寫回)——只清 localStorage 清不掉、重開又冒回來
             try { localStorage.removeItem(stateKey); localStorage.removeItem(`avs_snap_${stateKey}`); } catch (e) {}
             _build();
         });
