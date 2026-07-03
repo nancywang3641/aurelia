@@ -3121,22 +3121,27 @@
             const el = this._slotEl(i);
             return !!(el && el.style.display === 'block' && el.style.opacity !== '0');
         },
-        // 燈光：speakerIdx 那格亮、其餘在場變暗；speakerIdx=-1（旁白）全暗
-        _applyStageLighting: function(speakerIdx) {
+        // 燈光：speakerIdx 那格亮、其餘在場變暗；speakerIdx=-1（旁白）全暗。
+        // opts.grantSolo=idx：這格是「進場當下就是獨角」→ 授予置中。
+        _applyStageLighting: function(speakerIdx, opts) {
             this._stageInit();
             this._lastLightIdx = speakerIdx;   // 給 _showEl 的「顯示即重打燈」沿用當下說話者
             // 置中/近遠判定看「看得到的格子」（說話者自己視同即將顯示）：另一格只剩隱形佔位
             //（圖還在生成/生成失敗）就不霸位——否則單人會先卡左位、等 5 輪過期清掉殘留才滑去中間。
             // 晚到的圖顯示那一刻 _showEl 重打燈，版位立即補正回雙格。
             const occ = [0, 1].filter(i => this._stage[i] && (i === speakerIdx || this._slotShowing(i)));
-            const solo = (occ.length === 1) ? occ[0] : -1;   // 只有一個「看得到」的角色 → 置中
+            const solo = (occ.length === 1) ? occ[0] : -1;   // 只有一個「看得到」的角色
             const both = occ.length === 2;
+            const grant = (opts && typeof opts.grantSolo === 'number') ? opts.grantSolo : -1;
             for (let i = 0; i < 2; i++) {
                 const el = this._slotEl(i);
                 if (!el || !this._stage[i]) continue;
                 el.classList.toggle('vn-dim', i !== speakerIdx);
                 el.classList.toggle('vn-active', i === speakerIdx);
-                el.classList.toggle('vn-solo', i === solo);
+                // vn-solo（置中）：只在「進場當下就是獨角」授予（grant）；已置中的維持（旁白/晚到重打燈不摘）。
+                // 中途變獨角（同伴離場/被清掃）不重新置中 → 倖存者釘在原側，不會滑來滑去（Rae：離場時別動）。
+                if (i !== solo) el.classList.remove('vn-solo');
+                else if (i === grant) el.classList.add('vn-solo');
                 // 景深（黏住制）：雙人在場、有人說話時才重新分「近(說話者)/遠(對方)」；
                 // 旁白(-1)不動近遠只變暗 → 尺寸不會每句彈跳，換人說話才平滑互換；獨角清掉交給 vn-solo。
                 if (!both) el.classList.remove('vn-near', 'vn-far');
@@ -3205,9 +3210,21 @@
             const el = this._slotEl(idx);
             // 換角色：先清掉舊角色的版型 class(浮起金框/置中/明暗) 並隱藏，避免「舊圖用舊版型閃一下」才換新圖
             if (el && isNew) { el.classList.remove('vn-avatar', 'vn-solo', 'vn-dim', 'vn-active', 'vn-far', 'vn-near'); this._hideEl(el); el.dataset.slideIn = '1'; }
-            this._renderSlot(idx, name, exp);
-            this._staleSweep();                // 先清過期(防殘留) → 若只剩說話者，下一步打燈即時把它置中(vn-solo)，不再慢半拍
-            this._applyStageLighting(idx);     // 說話者亮、另一格（若在場）變暗、獨角即時置中
+            // 🎬 讓位過渡：對面正「獨角置中」、新角色要進場 → 先摘掉它的 vn-solo（0.32s 滑回自己那側），
+            //   新立繪延遲到它走完位才現身——不是同時動（同時動看起來像被硬推開）
+            let _madeWay = false;
+            if (isNew && !this._singleSlot()) {
+                const _oEl = this._slotEl(1 - idx);
+                if (_oEl && this._stage[1 - idx] && _oEl.classList.contains('vn-solo')) { _oEl.classList.remove('vn-solo'); _madeWay = true; }
+            }
+            if (_madeWay) {
+                const self = this;
+                setTimeout(() => { if (self._stage[idx] && self._stage[idx].name === name) self._renderSlot(idx, name, exp); }, 380);
+            } else {
+                this._renderSlot(idx, name, exp);
+            }
+            this._staleSweep();                // 先清過期(防殘留) → 新進場獨角下一步打燈即時置中，不慢半拍
+            this._applyStageLighting(idx, { grantSolo: isNew ? idx : -1 });   // 說話者亮、另一格變暗；置中只授予「進場當下就是獨角」的
         },
 
         // 單格圖片解析鏈（sprite_cache → spriteBase → fallbackToAI），守衛改用「這格還是不是同角色」
