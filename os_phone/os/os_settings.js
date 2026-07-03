@@ -49,7 +49,7 @@
             useGenerateRaw: false,
             enableSummaryOnly: false,
             maxTokens: 1000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
-            usePresetPrompts: false, presetName: ''
+            usePresetPrompts: false, presetName: '', customCot: ''
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
         return config;
@@ -1168,6 +1168,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <span>僅讀取摘要</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-summary-mode" ${secLlmConfig.enableSummaryOnly ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
+                        </div>
+
+                        <div class="set-group">
+                            <details>
+                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／🍎）都生效。">📝 自訂前置指令</summary>
+                                <textarea class="set-input" id="sec-custom-cot" rows="7" placeholder="貼上要放在副模型訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(secLlmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                                <div class="set-desc">留空＝不注入。</div>
+                            </details>
                         </div>
 
                         <div class="set-group"${stHide}>
@@ -3207,6 +3215,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     frequency_penalty: parseFloat(secFreqPenalty.value),
                     presence_penalty: parseFloat(secPresPenalty.value),
                     useGenerateRaw: container.querySelector('#sec-use-generateraw')?.checked || false,
+                    customCot: container.querySelector('#sec-custom-cot')?.value || '',
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 

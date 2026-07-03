@@ -404,6 +404,15 @@
                 secConfig = win.OS_SETTINGS.getConfig();
             }
             secConfig._isSecondary = true;
+            // 副模型自訂前置指令（破甲）：在入口統一以 system 插最前 → 不分派發路徑（直連/跟隨/🍎）都生效。
+            // 插完就把欄位拿掉，免得 🍎 generateRaw 路徑照 config.customCot 再插一次（雙重注入）。
+            try {
+                const _secCot = secConfig.customCot;
+                if (_secCot && String(_secCot).trim()) {
+                    messages = [{ role: 'system', content: String(_secCot) }, ...(messages || [])];
+                }
+                delete secConfig.customCot;
+            } catch (e) {}
             this.chat(messages, secConfig, onChunk, onFinish, onError);
         },
 
