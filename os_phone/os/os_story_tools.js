@@ -372,7 +372,8 @@
             const aiOut = await new Promise((res, rej) => {
                 let g = '';
                 osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: prompt }],
-                    osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(String(g || '')); }, (err) => rej(err), { disableTyping: true });
+                    osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(String(g || '')); }, (err) => rej(err),
+                    { disableTyping: true, stream: true });   // 🌊 重壓輸出很長：非串流等整篇會撞閘道逾時 504（同大總結）
             });
             if (!String(aiOut || '').trim()) throw new Error('AI 沒有回傳內容');
 

@@ -416,14 +416,15 @@
             this.chat(messages, secConfig, onChunk, onFinish, onError);
         },
 
-        // 主模型入口（對稱 chatSecondary）：低頻重品質任務用（如世界書二改，大世界觀給 Flash 寫品質會掉）
-        chatMain: async function(messages, onChunk, onFinish, onError) {
+        // 主模型入口（對稱 chatSecondary）：低頻重品質任務用（如世界書二改，大總結重壓、深度整理）。
+        // 這類任務輸出都很長 → 預設開串流（見 chat 的 options.stream；非串流等整篇會撞閘道 ~100s 逾時 504）。
+        chatMain: async function(messages, onChunk, onFinish, onError, options) {
             let mainConfig = {};
             if (win.OS_SETTINGS && typeof win.OS_SETTINGS.getConfig === 'function') {
                 mainConfig = Object.assign({}, win.OS_SETTINGS.getConfig());
             }
             mainConfig._isSecondary = false;   // 明確走主模型連線（防 getConfig 回傳被副模型標過的共用物件）
-            this.chat(messages, mainConfig, onChunk, onFinish, onError);
+            this.chat(messages, mainConfig, onChunk, onFinish, onError, Object.assign({ stream: true }, options || {}));
         },
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
@@ -687,19 +688,31 @@
                         const _src = _ctx && (_ctx.oai_settings && _ctx.oai_settings.chat_completion_source);
                         if (_ctx && config.stProfileId && _ctx.ConnectionManagerRequestService) {
                             // 🍎＋選了 profile：交給酒館 ConnectionManager 用「該 profile 的完整連線」
-                            // （來源 api / secret / preset / exclude / region 全照 profile）→ 真的打到 profile 的來源
-                            // （vertexai / custom / claude…），不再只偷 model 名、卻把請求送去 ST 當前激活來源（會誤送別的連線）。
-                            // stream:false 隔離酒館串流開關：奧瑞亞不需要串流，一律強制關。
-                            // overridePayload 在 ST 合併序最後(presetToGeneratePayload 末 {...payload,...overridePayload})
-                            // 蓋過 oai_settings.stream_openai → 酒館串流開著也不影響奧瑞亞，免撞「便宜端點(如 Pioneer gemini)不支援串流」的 404。
-                            let _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, stream: false, ...extraParams });
+                            // （來源 api / secret / exclude / region 全照 profile）→ 真的打到 profile 的來源。
+                            // 串流＝呼叫端決定（options.stream）：預設關（隔離酒館串流開關，免撞「便宜端點
+                            // (如 Pioneer gemini)不支援串流」的 404）；長輸出任務（重壓/深度整理走 chatMain）
+                            // 開 true——非串流要等整篇生完才回首位元組，Opus 長輸出會撞閘道 ~100s 逾時 504。
+                            // overridePayload 在 ST 合併序最後，蓋過 oai_settings.stream_openai。
+                            const _streamOn = options.stream === true;
+                            let _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, stream: _streamOn, ...extraParams });
                             _ov = _ensureModelOverride(_ctx, config.stProfileId, _ov, config.model);
                             const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
-                                config.stProfileId, cleanMessages, maxTokens, { signal: options.signal }, _ov   // 帶 abort signal→停止鈕(創作室等)才停得了；undefined 時 signal=undefined 不影響
+                                config.stProfileId, cleanMessages, maxTokens, { signal: options.signal, stream: _streamOn }, _ov   // 帶 abort signal→停止鈕(創作室等)才停得了；undefined 時 signal=undefined 不影響
                             );
-                            const _t = normalizeResponse(_response, _keepFences);
-                            if (_t) { rawApiResponse = _response; fullText = _t; _ngOk = true; }
-                            else { console.warn('[OS_API] 🍎 profile 路徑無內容回傳', _response); }
+                            if (_streamOn && typeof _response === 'function') {
+                                // 串流：generator 每次 yield {text: 累積全文} → 收到最後一筆＝完整輸出
+                                let _acc = '';
+                                for await (const _chunk of _response()) {
+                                    if (_chunk && typeof _chunk.text === 'string') { _acc = _chunk.text; if (onChunk) { try { onChunk(_acc); } catch (e) {} } }
+                                }
+                                const _t2 = normalizeResponse({ content: _acc }, _keepFences);   // 同非串流路：keepFences 交給它自己判斷
+                                if (_t2) { rawApiResponse = { content: _acc }; fullText = _t2; _ngOk = true; }
+                                else { console.warn('[OS_API] 🍎 profile 串流無內容回傳'); }
+                            } else {
+                                const _t = normalizeResponse(_response, _keepFences);
+                                if (_t) { rawApiResponse = _response; fullText = _t; _ngOk = true; }
+                                else { console.warn('[OS_API] 🍎 profile 路徑無內容回傳', _response); }
+                            }
                         } else if (_ctx && _src) {
                             // 🍎＋沒選 profile（或 ConnectionManager 不可用）：精簡乾淨 body 打「ST 當前激活來源」
                             // （避開 gemini penalty 404 / iOS CORS）。跟隨酒館＝型號以酒館當前為準（同跟隨路徑），
