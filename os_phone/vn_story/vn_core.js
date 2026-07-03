@@ -190,6 +190,7 @@
             this._twFull = '';
             this.script = [];
             this.index = -1;
+            this._pendingLeave = [];   // 清掉上一份劇本殘留的 |Leave 待離場
             this.avatars = {};
             this.charVoices = {};   // [Avatar|名|聲線|外觀] 宣告的固定聲線（名→聲線）；[Char] 不再每行帶
             // 清除殘留彈幕 DOM 並重置跑道
@@ -1995,6 +1996,13 @@
         },
 
         _extractTextAndSFX: function(parts) {
+            // 第五欄「站位狀態」Stay/Leave（強制欄、schema 恆定）：最先抽走——所有 [Char] 消費端
+            //（顯示/TTS/日誌/通話字幕）都經過這裡，集中剝除就全鏈乾淨；四欄舊行沒這欄=stage:''，完全相容。
+            let stage = '';
+            if (parts.length > 1) {
+                const lp = parts[parts.length - 1].trim().toLowerCase();
+                if (lp === 'stay' || lp === 'leave') { stage = lp; parts.pop(); }
+            }
             let sfx = 'NA';
             if (parts.length > 1) {
                 let lastPart = parts[parts.length - 1].trim();
@@ -2002,7 +2010,7 @@
                     sfx = parts.pop().trim();
                 }
             }
-            return { text: parts.join('|'), sfx: sfx };
+            return { text: parts.join('|'), sfx: sfx, stage: stage };
         },
         // 正文內穿插的 #SFXID# 音效標記（旁白不帶 Nar 後的新格式）：抽出第一個當音效、其餘標記一律從顯示文字剝掉。
         //   回 { text: 去標記後的文字, sfx: 第一個ID或'NA' }。與 tag 尾格 SFX 並存(呼叫端 inline 優先、沒有才用尾格)。
@@ -2170,6 +2178,13 @@
 
             this.index++;
             const line = this.script[this.index];
+
+            // 站位狀態 |Leave 的延後離場：上一句標了 Leave 的角色，玩家點過那句後(=走到這行時)才移除立繪
+            //（跟 [Exit] 分開行的節奏一致——告別台詞顯示期間人還在，推進才走）
+            if (this._pendingLeave && this._pendingLeave.length) {
+                const _pl = this._pendingLeave; this._pendingLeave = [];
+                _pl.forEach(n => { try { this._stageRemove(n); } catch (e) {} });
+            }
 
             // ── 開場圖片閘門（loading 排最前面）──────────────────────────────
             // loadScript 後的第一次 next() 就檢查：圖片（含盤點中）沒清空 → 先彈 loading 等，
@@ -2605,6 +2620,8 @@
                 this.renderVN(p[0], _cx.text);
                 this.addLog(p[0], _cx.text);
                 this.playSFX(_cx.sfx !== 'NA' ? _cx.sfx : ex.sfx);
+                // 第五欄 |Leave：這句演完(下一次 next)把該角色立繪撤下——強制狀態欄取代 AI 老忘記的 [Exit] 行
+                if (ex.stage === 'leave') (this._pendingLeave = this._pendingLeave || []).push(p[0]);
                 this._lastChar = p[0];
                 this._currentChar = { charName: p[0], text: _cx.text, emotion: this._mapExprToEmotion(rawExp), expression: rawExp };
                 this.updateControlUI();
@@ -3142,7 +3159,7 @@
             this._stageInit();
             for (let i = 0; i < 2; i++) if (this._stage[i] && this._stage[i].name === name) this._clearSlot(i);
         },
-        _stageClear: function() { this._stageInit(); this._clearSlot(0); this._clearSlot(1); this._slotMemory = {}; },   // 換景=站位記憶歸零(跨場景的陳舊記憶會害兩人搶同一格)
+        _stageClear: function() { this._stageInit(); this._clearSlot(0); this._clearSlot(1); this._slotMemory = {}; this._pendingLeave = []; },   // 換景=站位記憶歸零(跨場景的陳舊記憶會害兩人搶同一格)+清待離場
         // 滯留清除：某格角色超過 N tick 沒當說話者 → 自動移除（防殘留），N 預設 5、可由 localStorage 覆寫
         _staleSweep: function() {
             this._stageInit();
