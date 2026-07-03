@@ -3040,15 +3040,23 @@
             if (!el) return;
             const sameSrc = (src === undefined) || (el.getAttribute('src') === src);
             const visible = el.style.display !== 'none' && el.style.display !== '' && el.style.opacity !== '0';
+            const isSlot = el.id === 'game-char' || el.id === 'game-char-2';
+            // 圖真正冒出來的那一刻重打一次燈：晚到的圖立即拿到正確版位（獨角置中/雙格近遠），
+            // 不用等下一句對話才補正（治「單人先卡左位、隔幾句才滑去中間」）
+            const relight = () => { if (isSlot) { try { this._applyStageLighting(this._lastLightIdx != null ? this._lastLightIdx : -1); } catch (e) {} } };
             if (src !== undefined) el.src = src;
             // 已經在顯示同一張圖 → 只確保亮著，不重跑淡入（避免同角色連說 / 旁白後再開口時閃爍）
-            if (sameSrc && visible) { el.style.display = 'block'; el.style.opacity = '1'; return; }
+            if (sameSrc && visible) { el.style.display = 'block'; el.style.opacity = '1'; relight(); return; }
             el.style.transition = 'none';
             el.style.opacity = '0';
             el.style.display = 'block';
             requestAnimationFrame(() => {
                 el.style.transition = 'opacity 0.18s ease';
                 el.style.opacity = '1';
+                relight();
+                // 淡入完把行內 transition 清掉 → 還給樣式表的 left/height/max-width transition
+                //（行內只剩 opacity 會把版位/尺寸的過渡蓋死，近遠互換就不平滑）
+                if (isSlot) setTimeout(() => { if (el.style.opacity === '1') el.style.transition = ''; }, 260);
             });
         },
 
@@ -3083,11 +3091,20 @@
             for (let i = 0; i < 2; i++) if (!this._stage[i]) return i;                                   // 有空格 → 先左後右
             return (this._stage[0].lastTick <= this._stage[1].lastTick) ? 0 : 1;                         // 兩格滿 → 驅逐最久沒說話那格
         },
+        // 這格的立繪目前「看得到」嗎（_showEl 顯示中）：隱形佔位（圖還在生/生失敗被藏）不算
+        _slotShowing: function(i) {
+            const el = this._slotEl(i);
+            return !!(el && el.style.display === 'block' && el.style.opacity !== '0');
+        },
         // 燈光：speakerIdx 那格亮、其餘在場變暗；speakerIdx=-1（旁白）全暗
         _applyStageLighting: function(speakerIdx) {
             this._stageInit();
-            const occ = [0, 1].filter(i => this._stage[i]);
-            const solo = (occ.length === 1) ? occ[0] : -1;   // 只有一個角色在場 → 置中
+            this._lastLightIdx = speakerIdx;   // 給 _showEl 的「顯示即重打燈」沿用當下說話者
+            // 置中/近遠判定看「看得到的格子」（說話者自己視同即將顯示）：另一格只剩隱形佔位
+            //（圖還在生成/生成失敗）就不霸位——否則單人會先卡左位、等 5 輪過期清掉殘留才滑去中間。
+            // 晚到的圖顯示那一刻 _showEl 重打燈，版位立即補正回雙格。
+            const occ = [0, 1].filter(i => this._stage[i] && (i === speakerIdx || this._slotShowing(i)));
+            const solo = (occ.length === 1) ? occ[0] : -1;   // 只有一個「看得到」的角色 → 置中
             const both = occ.length === 2;
             for (let i = 0; i < 2; i++) {
                 const el = this._slotEl(i);
