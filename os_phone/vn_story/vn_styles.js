@@ -116,6 +116,7 @@
                         <div class="ctx-bd-item" id="ctx-bd-i-note"><span class="ctx-bd-label">作者備註</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-note"></span></span><span class="ctx-bd-val" id="ctx-bd-note">—</span></div>
                         <div class="ctx-bd-item" id="ctx-bd-i-inject"><span class="ctx-bd-label">注入/擴充</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-inject"></span></span><span class="ctx-bd-val" id="ctx-bd-inject">—</span></div>
                         <div class="ctx-bd-item" id="ctx-bd-i-recall"><span class="ctx-bd-label">┗ 記憶召回</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-recall"></span></span><span class="ctx-bd-val" id="ctx-bd-recall">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-gsummary"><span class="ctx-bd-label">┗ 大總結注入</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-gsummary"></span></span><span class="ctx-bd-val" id="ctx-bd-gsummary">—</span></div>
                         <div class="ctx-bd-total"><span class="ctx-bd-label">合計</span><span class="ctx-bd-val" id="ctx-bd-total-val">—</span></div>
                     </div>
                     <div class="ctx-limit-row">
