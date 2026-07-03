@@ -819,7 +819,10 @@ ${numberedText}`;
             const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
 
             const data = (await win.OS_DB.getStateData(chatId)) || {};
-            const stateAlreadyDone = hasState && data.patches && lastId >= 0 && data.patches[lastId] !== undefined;
+            // force（狀態面板「立即抽一次」）＝無視「這樓已抽過」守門重抽——按鈕的意義就是換好模型重來一次，
+            // 原本 patches[lastId] 已存在就靜默跳過，按了等於沒按
+            const _force = !!(opts && opts.force);
+            const stateAlreadyDone = !_force && hasState && data.patches && lastId >= 0 && data.patches[lastId] !== undefined;
             const doState = hasState && !stateAlreadyDone && !!recentText && lastId >= 0;
 
             if (!doState && !wantMemory) return;
@@ -829,6 +832,15 @@ ${numberedText}`;
             if (doState) {
                 const isInitialFill = !currentState || Object.keys(currentState).length === 0;
                 prompt = buildExtractPrompt(schema, currentState, recentText, isInitialFill);
+                // 📜 大總結參照（唯讀）：早期劇情被總結收走後最近樓層看不到 → 副模型對不到帳，
+                //   任務早完成了狀態還掛「進行中」。附壓縮版總結讓它比對「當前狀態 vs 既成事實」修正。
+                //   sp_avs_summary_ref=0 可關（省 token）。
+                try {
+                    if (localStorage.getItem('sp_avs_summary_ref') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
+                        const _sum = await win.OS_STORY_TOOLS.getCurrentInjectionPayload();
+                        if (_sum) prompt += '\n\n【劇情大總結（唯讀參照，嚴禁複述進輸出）】\n若「當前狀態」的欄位與下列既成事實不符（例如任務其實已完成、酬勞已領、關係已變化），請在 updates 修正該欄位：\n' + _sum;
+                    }
+                } catch (e) {}
                 if (wantMemory) prompt += _memoryAddendum();
                 // 角色去重搭便車：有繁簡/別名候選才把名單塞進這通 prompt（不另開 API）
                 if (localStorage.getItem('sp_avs_dedupe') !== '0') { _dedupe = _buildDedupeBlock(currentState); if (_dedupe) prompt += _dedupe.block; }
@@ -1268,7 +1280,7 @@ ${numberedText}`;
             return;
         }
         showToast('🛰️ 立即抽取一次...', 'info');
-        await extractOnce();
+        await extractOnce({ force: true });   // 面板手動重抽＝無視「這樓已抽過」守門，用當下副模型重來
         showToast('✅ 抽取完成', 'success');
     }
 
