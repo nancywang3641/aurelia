@@ -162,7 +162,8 @@
             const coveredChapterIds = chapters.map(ch => ch.id).filter(Boolean);   // 累積：到目前為止已涵蓋的全部章節(供下次判斷新章節)
 
             const contentToSummarize = newChapters.map(ch => {
-                const m = (ch.content || '').match(/<content>([\s\S]*?)<\/content>/i);
+                const _noCot = String(ch.content || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
+                const m = _noCot.match(/<content>([\s\S]*?)<\/content>/i);
                 return m ? m[1].trim() : '';
             }).filter(Boolean).join('\n\n---\n\n');
 

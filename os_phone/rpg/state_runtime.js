@@ -540,7 +540,7 @@ ${_memoryRulesText()}
     // 回傳敘事行陣列（已濾掉結構標籤/註解/code block）；index+1 = 給 AI 看的 [P編號]
     function _segmentStory(content) {
         if (!content) return [];
-        let body = String(content);
+        let body = String(content).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會害正則從 CoT 開抓
         const m = body.match(/<content>([\s\S]*?)<\/content>/i);
         if (m) body = m[1];
         body = body.replace(/<!--[\s\S]*?-->/g, '');   // HTML 註解
@@ -789,8 +789,9 @@ ${numberedText}`;
                     console.log('🛰️ [State Runtime] 偵測到 API 報錯訊息 → 跳過本通抽取/記憶/場景，等重生補齊');
                     return;
                 }
-                const _hasOpen = _lastRaw.indexOf('<content>') !== -1;
-                const _hasClose = _lastRaw.indexOf('</content>') !== -1;
+                const _rawNoCot = _lastRaw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // CoT 提到 <content> 字樣不算正文
+                const _hasOpen = _rawNoCot.indexOf('<content>') !== -1;
+                const _hasClose = _rawNoCot.indexOf('</content>') !== -1;
                 const _vnFg = (() => { try { const p = win.document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && win.document.getElementById('page-game')); } catch (e) { return false; } })();
                 const _isInitFill = !!(opts && opts.skipScenes);
                 if ((_hasOpen && !_hasClose) || (_vnFg && !_hasOpen && !_isInitFill)) {
@@ -983,7 +984,8 @@ ${numberedText}`;
                 const _raw = String((_arr && _arr[0] && (_arr[0].message || _arr[0].mes)) || '');
                 const _t = _raw.trim();
                 if (/^\[API Error\]/i.test(_t) || (_t.length < 200 && /(x-api-key|invalid_credentials|Authentication required|API 返回內容為空)/i.test(_t))) return;
-                if (_raw.indexOf('<content>') !== -1 && _raw.indexOf('</content>') === -1) return;
+                const _rawNC = _raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // CoT 提到 tag 字樣不算
+                if (_rawNC.indexOf('<content>') !== -1 && _rawNC.indexOf('</content>') === -1) return;
             } catch (e) {}
             const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
             if (!recentText || lastId < 0) return;
@@ -1286,10 +1288,15 @@ ${numberedText}`;
             const msg = ctx.chat[arrIdx] || {};
             if (msg.is_user || msg.is_system) return;           // 只修主模型回覆
             const cur = String(msg.mes || msg.message || '');
-            if (cur.indexOf('<content>') === -1 || cur.indexOf('</content>') === -1) return;  // 只動完整 VN 正文，避開半截/思考期/錯誤訊息
+            // 只看最後一個 </thinking> 之後的正文段：CoT 常提到 <content>/<ChapterCard>/[Bg| 範例字樣，
+            // 閘門會被騙、補回的行還會插進思考區被剝掉 → 檢測與插入都在 tail 上做、頭尾重組寫回
+            let _tailStart = 0;
+            { const _re = /<\/think(?:ing)?>/gi; let _tm; while ((_tm = _re.exec(cur)) !== null) _tailStart = _tm.index + _tm[0].length; }
+            const _head = cur.slice(0, _tailStart), _tail = cur.slice(_tailStart);
+            if (_tail.indexOf('<content>') === -1 || _tail.indexOf('</content>') === -1) return;  // 只動完整 VN 正文，避開半截/思考期/錯誤訊息
 
-            const hasBg  = /\[Bg\|/i.test(cur);
-            const hasBgm = /\[BGM\|/i.test(cur);
+            const hasBg  = /\[Bg\|/i.test(_tail);
+            const hasBgm = /\[BGM\|/i.test(_tail);
             if (hasBg && hasBgm) return;                        // 兩個都在 → 沒漏
 
             // carry-forward：往回找最近一則含該 tag 的訊息，撈「最後一個」(=當前場景/音樂)整行原樣（'_' = 本輪已有、不用找）
@@ -1305,11 +1312,13 @@ ${numberedText}`;
             if (!inject.length) return;                          // 歷史也沒得 carry → 不補
 
             // 插進開場：有 <ChapterCard> 就插它後面（Bg/BGM 本就屬卡內）、否則插 <content> 後面；各自獨立一行
+            // （在 _tail 上替換再與 _head 重組 → 絕不會插進 CoT 裡被剝掉）
             const block = inject.join('\n');
-            const next = /<ChapterCard>/i.test(cur)
-                ? cur.replace(/(<ChapterCard>[^\n]*\n?)/i, `$1${block}\n`)
-                : cur.replace(/(<content>[^\n]*\n?)/i, `$1${block}\n`);
-            if (next === cur) return;
+            const _nextTail = /<ChapterCard>/i.test(_tail)
+                ? _tail.replace(/(<ChapterCard>[^\n]*\n?)/i, `$1${block}\n`)
+                : _tail.replace(/(<content>[^\n]*\n?)/i, `$1${block}\n`);
+            if (_nextTail === _tail) return;
+            const next = _head + _nextTail;
 
             _selfEditing = true;   // 擋自身改寫觸發 MESSAGE_UPDATED → onMessageInvalidated 誤砍本則剛存的 patch
             try {
