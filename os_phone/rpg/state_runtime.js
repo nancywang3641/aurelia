@@ -904,6 +904,9 @@ ${numberedText}`;
                     }
                 } catch (e) { console.warn('[State Runtime] 角色去重略過:', e?.message || e); }
                 if (_lastExtract) { _lastExtract.updates = filtered; _lastExtract.current = newCurrent; }   // 補上狀態給診斷面板
+                // 📸 寫入前快照「抽取前狀態」→ 狀態面板「還原上一步」能撤掉這輪亂抽（小模型掉鏈子的保險）。
+                //   舊快照只掛在主模型 <vars> 退役路徑上，副模型抽取從沒寫過 → 按鈕永遠是暗的。
+                try { win._AVS_ENGINE?.snapshot?.(currentState || {}); } catch (e) {}
                 try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
                 await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent });
                 const changed = Object.keys(filtered).length;
