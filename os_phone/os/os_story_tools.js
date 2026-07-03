@@ -749,6 +749,10 @@
                 _W.__AURELIA_SUMMARIZING = true;
                 console.log('[大總結] 🚩 SUMMARIZING=true（generateRaw 開始）');   // 診斷：旗標窗起點
                 let generated = '';
+                // 🌊 串流開關（預設開）：generateRaw 預設非串流=要等整篇生完才回首位元組，Opus 長總結
+                //    會撞代理/閘道逾時(Pioneer 等平台 ~100s)直接 504；開串流連線一直有 chunk 在流就不會斷。
+                //    回傳值不變（promise 等收完才 resolve 完整文字）。出問題 localStorage sp_summary_stream='0' 關回。
+                const _stream = localStorage.getItem('sp_summary_stream') !== '0';
                 const _sys = '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。';
                 // 破甲(自訂前置指令)：generateRaw 本身不帶 preset/破甲 → Claude 會自我消音省略 NSFW。
                 //   依酒館「當前激活的連接預設」取對應破甲(customCotMap，跟設定面板同一套 key)，沒設過退回主模型單格 customCot。在哪條線就帶哪條的破甲。
@@ -779,7 +783,7 @@
                             user_input: userMsg,
                             ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'user_input'],   // 破甲(若有)→總結系統提示→正文；不讀 chat_history → 純送我給的全文
                             max_chat_history: 0,
-                            should_stream: false,
+                            should_stream: _stream,
                         });
                     } else {
                         // 後備：讀不到檔 → generateRaw 讀記憶體 chat_history(all)
@@ -789,7 +793,7 @@
                             user_input: instruction,
                             ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'chat_history', 'user_input'],
                             max_chat_history: 'all',
-                            should_stream: false,
+                            should_stream: _stream,
                         });
                     }
                 } finally {
