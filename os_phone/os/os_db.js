@@ -1353,6 +1353,8 @@
                         schema: data.schema || null,       // Stage 1 生成的欄位定義
                         patches: data.patches || {},       // 每 msgId 一筆 patch
                         current: data.current || {},       // patches 累積後的當下狀態
+                        npcLedger: data.npcLedger || null,     // 📇 NPC 登場記帳（npc_dossier.js）
+                        npcDossiers: data.npcDossiers || null, // 📇 NPC 長期人物檔案（npc_dossier.js）
                         timestamp: Date.now()
                     };
                     const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');
