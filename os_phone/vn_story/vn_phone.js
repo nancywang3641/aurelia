@@ -549,9 +549,9 @@
                     (function(core2, charName, rawExp, text) {
                         let typeHint = '';
                         if (rawExp && rawExp.includes('_')) { const _p = rawExp.split('_'); typeHint = _p[0].trim(); rawExp = _p.slice(1).join('_').trim(); }
-                        if (core2._vnSoVITSPlay) core2._vnSoVITSPlay(charName, text, core2._mapExprToEmotion(rawExp), typeHint);
+                        if (core2._vnSoVITSPlay) core2._vnSoVITSPlay(charName, text, core2._mapExprToEmotion(rawExp), typeHint);   // SoVITS 端在 _cleanTextForSoVITS 內已壓「」
                         const _mm = (window.parent || window).OS_MINIMAX;
-                        if (_mm) _mm.playForChar(charName, text, { expression: rawExp });
+                        if (_mm) _mm.playForChar(charName, (core2._speechOnly ? core2._speechOnly(text) : text), { expression: rawExp });   // 語音壓到「」內：混寫旁白不進 TTS
                     })(core, parts[0], parts[1] || '', ex.text);
                     // 🔮 預取下一句
                     (function prefetchNext(script, curIdx) {
@@ -562,7 +562,7 @@
                             if (nl.startsWith('[Char|')) {
                                 const np = nl.slice(6, -1).split('|');
                                 const nex = core._extractTextAndSFX(np.slice(2));
-                                if (nex.text) _mm.prefetchForChar(np[0], nex.text, { expression: np[1] });
+                                if (nex.text) _mm.prefetchForChar(np[0], (core._speechOnly ? core._speechOnly(nex.text) : nex.text), { expression: np[1] });   // 預取跟播放同文字，快取才對得上
                                 break;
                             }
                             if (nl.startsWith('</call>') || nl.startsWith('[Choice|')) break;

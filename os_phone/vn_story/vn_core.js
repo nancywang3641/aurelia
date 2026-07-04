@@ -2080,12 +2080,24 @@
             }
         },
 
+        // 台詞欄被 AI 混進旁白（「話」他動了動「話」）→ 語音只念「」內的內容，旁白描述不出聲（防出戲）。
+        // 沒有「」的整句照舊（內心話 *…*、純口語、旁白走自己的路都不受影響）；多段引號用空格串接（TTS 自然停頓）。
+        _speechOnly: function(text) {
+            const s = String(text || '');
+            const m = s.match(/「[^「」]*」/g);
+            if (!m || !m.length) return s;
+            const joined = m.map(seg => seg.slice(1, -1).trim()).filter(Boolean).join(' ');
+            return joined || s;
+        },
+
         // 送 GPT-SoVITS 前清理文字：去掉開頭與結尾標點，避免後端切句異常與靜音
         _cleanTextForSoVITS: function(text) {
             if (!text) return '';
-            // 先剝掉 ()（）內的動作/語氣描述（如「(輕笑)」）——那是舞台指示，不該被念出來。
+            // 語音壓到「」內（有引號才作用）——播放/系統音/預熱全走這裡 → 快取 key 自動對齊
+            let cleaned = this._speechOnly(text);
+            // 再剝掉 ()（）內的動作/語氣描述（如「(輕笑)」）——那是舞台指示，不該被念出來。
             //   MiniMax 端 cleanTextForTts 已有剝；SoVITS 這條原本漏了 → 跟 VN-phone 語音對齊。
-            let cleaned = String(text).replace(/[（(][^（()]*[)）]/g, ' ');
+            cleaned = String(cleaned).replace(/[（(][^（()]*[)）]/g, ' ');
             cleaned = cleaned.replace(/^[。，、…‥「」『』【】〔〕！？!?,\s]+/, '');
             // 🌟 結尾過濾：拿掉了 ！？!? 和 … ‥ ，讓語氣保留！
             cleaned = cleaned.replace(/[。，、「」『』【】〔〕,\s]+$/, '');
@@ -2632,7 +2644,7 @@
                 (function(charName, text, expression) {
                     const _mm = (window.parent || window).OS_MINIMAX;
                     if (_mm) _mm.playForChar(charName, text, { expression });
-                })(p[0], _cx.text, rawExp);
+                })(p[0], this._speechOnly(_cx.text), rawExp);   // 語音壓到「」內：混寫的旁白不進 TTS
                 
                 (function prefetchNext(script, curIdx) {
                     const _mm = (window.parent || window).OS_MINIMAX;
@@ -2649,7 +2661,7 @@
                                 nRawExp = nPts.slice(1).join('_').trim();
                             }
                             
-                            if (nex.text) _mm.prefetchForChar(np[0], nex.text, { expression: nRawExp });
+                            if (nex.text) _mm.prefetchForChar(np[0], VN_Core._speechOnly(nex.text), { expression: nRawExp });   // 預取跟播放同文字，快取才對得上
                             break;
                         }
                         if (nl.startsWith('[Choice|') || nl.startsWith('[End]') || nl.startsWith('</')) break;
