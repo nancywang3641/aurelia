@@ -1430,7 +1430,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         // 主模型＝chatMain（品質好、世界書二改首選）；副模型＝chatSecondary。選的入口若不存在則退另一個。
         const useMain = _wbModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb); }
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); }   // 長輸出開串流防閘道504
         catch (e) { errCb(e); }
     }
     function _wbParseOps(text) {
@@ -1736,7 +1736,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const errCb = () => { _wbToast('AI 失敗，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); };
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb); } catch (e) { errCb(e); }
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
     }
     // 對標當前世界：一個 AI call 直接把現有人設改寫成這張卡世界的版本(現代→古代)，存成新變體
     async function _mcImportToWorld(p) {
@@ -1763,7 +1763,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const errCb = (err) => alert('AI 失敗：' + (err && err.message || err));
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb); } catch (e) { errCb(e); }
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
     }
 
     const _MC_SYS = `你是「我的角色」人設寫作助手，幫使用者寫他自己在故事裡扮演的主角（MC/OC）。可能含成人/NSFW 設定，照常專業協助、不要拒絕、不要說教。
@@ -1845,7 +1845,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } alert('AI 失敗：' + (err && err.message || err)); };
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb); } catch (e) { errCb(e); }
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
     }
 
     function _mcRenderPreview(host) {
@@ -2001,7 +2001,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const errCb = (err) => alert('AI 失敗：' + (err && err.message || err));
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb); } catch (e) { errCb(e); }
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
     }
 
     function renderThemePanel() {
@@ -2559,7 +2559,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         resolve();
                     },
                     reject,
-                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true }
+                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
                 );
             });
 
@@ -4480,7 +4480,7 @@ ${d.usageDesc || ''}
                         resolve();
                     },
                     reject,
-                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true }
+                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
                 );
             });
         } catch (err) {

@@ -396,7 +396,7 @@
             );
         },
 
-        chatSecondary: async function(messages, onChunk, onFinish, onError) {
+        chatSecondary: async function(messages, onChunk, onFinish, onError, options) {
             let secConfig = {};
             if (win.OS_SETTINGS && typeof win.OS_SETTINGS.getSecondaryConfig === 'function') {
                 secConfig = win.OS_SETTINGS.getSecondaryConfig();
@@ -413,7 +413,7 @@
                 }
                 delete secConfig.customCot;
             } catch (e) {}
-            this.chat(messages, secConfig, onChunk, onFinish, onError);
+            this.chat(messages, secConfig, onChunk, onFinish, onError, options || {});
         },
 
         // 主模型入口（對稱 chatSecondary）：低頻重品質任務用（如世界書二改，大總結重壓、深度整理）。
