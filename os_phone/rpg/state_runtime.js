@@ -847,6 +847,14 @@ ${numberedText}`;
             } else {
                 prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '');
             }
+            // 📇 NPC 檔案搭便車：登場記帳(0 API) + 回頭客建檔候選附進同一通（sp_npc_dossier=0 可關）
+            let _npc = null;
+            try {
+                if (win.OS_NPC_DOSSIER?.prepare) {
+                    _npc = await win.OS_NPC_DOSSIER.prepare(chatId, lastContent, lastId);
+                    if (_npc && _npc.block) prompt += _npc.block;
+                }
+            } catch (e) {}
             // 場景插圖搭便車：把最後一則自己切段編號，要副模型只挑 after_paragraph 數字（程式自己對位）
             let _sceneParas = [];
             let _looksMap = null;   // ##角色名##佔位模式才建；null = 用外觀錨點舊模式、派發時不展開
@@ -925,6 +933,10 @@ ${numberedText}`;
                 if (changed > 0) console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);
                 try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: lastId, updates: filtered }); } catch(e) {}
             }
+
+            // 📇 NPC 檔案落地：必須在上面狀態 saveStateData「之後」寫（否則會被舊 data spread 蓋掉）；
+            //    副模型沒吐 npc_files 也要 commit（登場記帳不能丟）
+            try { if (_npc && win.OS_NPC_DOSSIER?.commit) await win.OS_NPC_DOSSIER.commit(_npc, json.npc_files); } catch (e) {}
 
             // --- 記憶入庫（結合觸發）---
             if (wantMemory) {

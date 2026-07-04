@@ -212,6 +212,7 @@ const PHONE_FILES = [
 
     // === 🛡️ RPG 狀態系統 ===
     'rpg/state_schema.js',         // Stage 1：主模型生 schema
+    'rpg/npc_dossier.js',          // 📇 NPC 長期人物檔案（群像卡防失憶；state_runtime 搭便車建檔＋名冊/名字觸發注入）
     'rpg/state_runtime.js',        // Stage 2：副模型抽 + patch + injectPrompts
     'rpg/blacklist_injector.js',   // 每輪 inject 黑名單條目（避免世界書 keys 觸發漏掉）
     'rpg/avatar_rules_injector.js', // 依選的頭像產圖器，自動翻「-VN小說家-」世界書三條目(依名字)的開關
