@@ -815,6 +815,17 @@
                 if (!chatNode) { this.next(); return; }
             }
 
+            // 🔊 組件登場音效：卡片確定要彈出了 → 查該 tag 的模板 appearSfx（沒設就不播）。
+            // 音效來源＝素材設定的「音效目錄」(playSFX 走 VN_Config.data.sfx 基底)；留空＝無聲、不預設。
+            try {
+                if (tagHint) {
+                    const _dp = win.VN_DynamicParser;
+                    const _tpl = _dp && Array.isArray(_dp.activeTemplates)
+                        && _dp.activeTemplates.find(t => t.tagId && t.tagId.toLowerCase() === String(tagHint).toLowerCase());
+                    if (_tpl && _tpl.appearSfx) this.playSFX(_tpl.appearSfx);
+                }
+            } catch (e) {}
+
             const tmpDiv = _doc.createElement('div');
             tmpDiv.innerHTML = _regexCardHtml || chatNode.innerHTML;
 

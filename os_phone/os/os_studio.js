@@ -3781,6 +3781,15 @@ ${cleanFormat}
                         </div>
                     </div>
                 </div>
+                <div class="vc-set-block"><div class="vc-set-blabel">登場音效</div>
+                    <div class="sgc-format-box">
+                        <input class="sgc-format-input" id="vc-appear-sfx" placeholder="音效名稱，留空＝無聲" value="${_sgcEsc(tpl.appearSfx || '')}">
+                        <div class="vc-fmt-actions">
+                            <button class="swb-secondary btn-appear-try" type="button"><i class="fa-solid fa-play"></i> 試聽</button>
+                            <button class="swb-secondary btn-appear-save" type="button"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">整合</div>
                     <button class="vc-navrow" id="vc-import-st" type="button"><span class="vc-navrow-ico"><i class="fa-solid fa-file-import"></i></span><span class="vc-navrow-label">注入酒館正則</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
                     ${phoneRow}
@@ -3818,6 +3827,25 @@ ${cleanFormat}
             tpl.keywords = raw.split(/[,，、\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 12);
             await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal();
             _studioToast('已儲存關鍵字（' + tpl.keywords.length + '）', 'success', '設置');
+        };
+        // 登場音效：卡片彈出時播的音效 ID（來源＝素材設定的音效目錄）。留空＝無聲、不預設。
+        const appIn = listEl.querySelector('#vc-appear-sfx');
+        const appSave = listEl.querySelector('.btn-appear-save');
+        if (appSave) appSave.onclick = async () => {
+            tpl.appearSfx = ((appIn && appIn.value) || '').trim();
+            await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal();
+            _studioToast(tpl.appearSfx ? '已設定登場音效' : '已清除登場音效', 'success', '設置');
+        };
+        const appTry = listEl.querySelector('.btn-appear-try');
+        if (appTry) appTry.onclick = () => {
+            const id = ((appIn && appIn.value) || '').trim();
+            if (!id) { _studioToast('先填音效名稱', 'info', '試聽'); return; }
+            const base = (win.VN_Config && win.VN_Config.data && win.VN_Config.data.sfx) || '';
+            if (!base) { _studioToast('素材設定還沒填「音效目錄」', 'warning', '試聽'); return; }
+            try {
+                const a = new Audio(base + id + '.mp3');
+                a.play().catch(() => _studioToast('播放失敗，確認音效名稱與音效目錄', 'warning', '試聽'));
+            } catch (e) {}
         };
         listEl.querySelector('#vc-raw').onclick = () => openRawEditModal(tpl);
     }
