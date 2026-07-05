@@ -1729,7 +1729,7 @@
         },
 
         // ── 生成「一張角色圖」的共用咽喉（頭像 or 立繪，看 spriteDirect）──
-        //   立繪模式＝唯二差別：① getSprite 模板取代 getAvatar ② 純色去背。整條 gate/解析/快取/去重由呼叫端
+        //   立繪模式＝唯二差別：① getSprite 模板取代 getAvatar ② AI 去背。整條 gate/解析/快取/去重由呼叫端
         //   (頭像管線：_genAvatarToCache / fallbackToAI) 共用，這裡只負責「生成那一步」。回 { objUrl, dataUrl }，失敗回 null。
         _makeCharImage: async function(prompt, exp) {
             const sprite = (VN_Config.data.spriteDirect === true);
@@ -1739,10 +1739,10 @@
             try { blob = await (await fetch(raw)).blob(); }
             catch (e) { try { const du = await this._toDataUrl(raw); if (du) blob = await (await fetch(du)).blob(); } catch (e2) {} }
             if (!blob) { const du = await this._toDataUrl(raw); return du ? { objUrl: du, dataUrl: du } : null; }
-            if (sprite) {   // 立繪去背：先純色 flood-fill(快)；背景非純色(油畫/氛圍)→ 退 AI 去背(isnet，吃任何背景)；都失敗退原圖
+            if (sprite) {   // 立繪去背：跟典籍「一鍵生立繪」同款，直接 AI 去背(isnet，吃任何背景)；失敗退原圖
+                // （舊版先跑純色 flood-fill 求快，但容差會滲進淺色角色把中心挖破 → 已砍，全走 AI）
                 let cut = null;
-                try { cut = await this._stripSpriteBg(blob); } catch (e) {}
-                if (!cut) { try { cut = await this._stripSpriteBgAI(blob); } catch (e) {} }
+                try { cut = await this._stripSpriteBgAI(blob); } catch (e) {}
                 if (cut) blob = cut;
             }
             const objUrl = URL.createObjectURL(blob);
@@ -1751,57 +1751,7 @@
             return { objUrl, dataUrl };
         },
 
-        // 🪄 純色去背（canvas flood-fill，複製 studio spriteRemoveBgCanvas）：抓四角背景色 → 從邊緣 flood-fill
-        //   把「接近背景色且與邊緣連通」的像素設透明。只去邊緣連通＝角色內部不打洞、二值 alpha＝不半透明。
-        //   立繪模板帶 solid background → 角落必為純色，效果好；不下載模型、瞬間完成。失敗回 null（呼叫端退原圖）。
-        _stripSpriteBg: async function(blob) {
-            try {
-                const bmp = await createImageBitmap(blob);
-                const W = bmp.width, H = bmp.height;
-                const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-                const ctx = cv.getContext('2d', { willReadFrequently: true });
-                ctx.drawImage(bmp, 0, 0); if (bmp.close) bmp.close();
-                const imgData = ctx.getImageData(0, 0, W, H), d = imgData.data;
-                const sampleCorner = (x0, y0) => {
-                    let r = 0, g = 0, b = 0, n = 0;
-                    for (let y = y0; y < Math.min(y0 + 6, H); y++)
-                        for (let x = x0; x < Math.min(x0 + 6, W); x++) { const i = (y * W + x) * 4; r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
-                    return n ? [r / n, g / n, b / n] : [0, 0, 0];
-                };
-                const cs = [sampleCorner(0, 0), sampleCorner(Math.max(0, W - 6), 0), sampleCorner(0, Math.max(0, H - 6)), sampleCorner(Math.max(0, W - 6), Math.max(0, H - 6))];
-                const bg = [0, 1, 2].map(k => cs.reduce((s, c) => s + c[k], 0) / cs.length);
-                // 防呆①：四角顏色差異大＝背景不是純色(模型沒出 solid background) → 別亂去背，回 null 用原圖
-                const _cd = (a, b) => { const dr = a[0]-b[0], dg = a[1]-b[1], db = a[2]-b[2]; return dr*dr + dg*dg + db*db; };
-                let _cornerVar = 0;
-                for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) _cornerVar = Math.max(_cornerVar, _cd(cs[i], cs[j]));
-                if (_cornerVar > 1600) { console.warn('[VN] 立繪背景非純色、跳過去背'); return null; }
-                const tol = 65, tol2 = tol * tol * 3;   // 對齊 studio 預設去背強度 50
-                const isBg = (p) => { const i = p * 4, dr = d[i] - bg[0], dg = d[i + 1] - bg[1], db = d[i + 2] - bg[2]; return (dr * dr + dg * dg + db * db) <= tol2; };
-                const visited = new Uint8Array(W * H), stack = [];
-                for (let x = 0; x < W; x++) { stack.push(x); stack.push((H - 1) * W + x); }
-                for (let y = 0; y < H; y++) { stack.push(y * W); stack.push(y * W + W - 1); }
-                while (stack.length) {
-                    const p = stack.pop();
-                    if (visited[p]) continue;
-                    visited[p] = 1;
-                    if (!isBg(p)) continue;
-                    d[p * 4 + 3] = 0;
-                    const x = p % W, y = (p / W) | 0;
-                    if (x > 0) stack.push(p - 1);
-                    if (x < W - 1) stack.push(p + 1);
-                    if (y > 0) stack.push(p - W);
-                    if (y < H - 1) stack.push(p + W);
-                }
-                // 防呆②：去背吃掉太多像素＝漏進角色(淺色角色邊緣同色)把人挖花 → 放棄、用原圖
-                let _cleared = 0;
-                for (let p = 0; p < W * H; p++) if (d[p * 4 + 3] === 0) _cleared++;
-                if (_cleared / (W * H) > 0.85) { console.warn('[VN] 立繪去背吃掉過多(疑漏進角色)、放棄用原圖'); return null; }
-                ctx.putImageData(imgData, 0, 0);
-                return await new Promise(res => cv.toBlob(res, 'image/png'));
-            } catch (e) { console.warn('[VN] _stripSpriteBg 失敗:', e?.message || e); return null; }
-        },
-
-        // 🤖 AI 去背（@imgly isnet，靠 AI 認人形、吃任何背景）：純色 flood-fill 對不了的「油畫/氛圍背景」立繪用這個。
+        // 🤖 AI 去背（@imgly isnet，靠 AI 認人形、吃任何背景）：立繪模式唯一去背路徑（同典籍「一鍵生立繪」）。
         //   首次下載 ~40MB 模型(之後快取)、單張 ~10–30 秒(WASM 單執行緒)。模型函式快取在 _bgRemoverFn。失敗回 null。
         _bgRemoverFn: null,
         _bgRemoveChain: Promise.resolve(),   // 去背序列化鏈（同 NAI _naiQueue 思路）：WASM 單執行緒，全程一張一張跑
