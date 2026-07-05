@@ -1299,8 +1299,8 @@
             if (win.OS_API?.isStandalone?.()) return;                 // 酒館 only
             const VC = win.VN_Cache || window.VN_Cache, VCore = win.VN_Core || window.VN_Core;
             if (!VC?.get || !VCore?._genAvatarToCache) return;        // 沒生圖管線就算了
-            const osApi = window.parent.OS_API, osSet = window.parent.OS_SETTINGS;
-            if (!osApi?.chat || !osSet?.getConfig) return;
+            const osApi = window.parent.OS_API;
+            if (!osApi?.chatSecondary) return;
 
             let content = summaryContent;
             if (!content) { try { const rec = await _loadTavernSummary(getChatIdentifier()); content = rec?.content || ''; } catch (e) {} }
@@ -1357,7 +1357,7 @@
             try {
                 out = await new Promise((res, rej) => {
                     let g = '';
-                    osApi.chat([{ role: 'system', content: sys }, { role: 'user', content: usr }], osSet.getConfig(),
+                    osApi.chatSecondary([{ role: 'system', content: sys }, { role: 'user', content: usr }],
                         (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { disableTyping: true });
                 });
             } catch (e) { console.warn('[補頭像] 副模型轉 tag 失敗:', e?.message || e); _fillingAvatars = false; return; }
