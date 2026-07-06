@@ -842,6 +842,11 @@ html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { co
         0 4px 14px rgba(80, 38, 18, 0.11);
 }
 
+/* 「已生成，點預覽」卡：蠟印圖 + 羊皮框（取代舊 emoji 純色框；對齊設計圖、免用 emoji 當圖標）*/
+.studio-hidden-ui { margin-top: 10px; padding: 12px 15px; display: flex; align-items: center; gap: 11px; background: rgba(255, 247, 226, 0.94); border: 1px solid rgba(132, 31, 37, 0.30); border-radius: 10px; color: #4a2a24; font-size: 13px; font-weight: 700; }
+.studio-hidden-ui img { width: 38px; height: 38px; flex-shrink: 0; object-fit: contain; }
+.studio-hidden-ui i { color: var(--jrpg-wine); }
+
 .studio-container .summary-header {
     color: var(--jrpg-wine);
     border-color: rgba(132, 31, 37, 0.25);

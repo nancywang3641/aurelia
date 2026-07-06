@@ -2157,7 +2157,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         s = s.replace(/<(script|iframe|object|embed|meta|link)[^>]*>[\s\S]*?<\/\1>/gi, '');
         s = s.replace(/<(script|iframe|object|embed|meta|link)[^>]*\/?>/gi, '');
         
-        const hiddenUI = '<div style="margin-top:10px; padding:10px 15px; background:rgba(228,232,245,0.8); border:1px solid rgba(26,28,40,0.20); border-radius:8px; color:#1A1C28; font-size:13px; font-weight:bold; display:inline-block;">✨ 已生成，點上方 👁️ 預覽查看</div>';
+        const hiddenUI = '<div class="studio-hidden-ui"><img src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/wax-seal.png" alt=""><span>已生成，點上方 <i class="fa-solid fa-eye"></i> 預覽查看</span></div>';
         
         // 原本的 <json> 攔截
         s = s.replace(/<json>[\s\S]*?(<\/json>|$)/gi, hiddenUI);
