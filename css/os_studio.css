@@ -612,10 +612,11 @@ html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { co
     --jrpg-gold: #b68a45;
     --jrpg-gold-light: #ddbd78;
     --jrpg-line: rgba(132, 91, 45, 0.34);
-    --jrpg-paper-texture: url('../aseets/studio_jrpg/parchment-texture.webp');
-    --jrpg-seal: url('../aseets/studio_jrpg/wax-seal.png');
-    --jrpg-quill: url('../aseets/studio_jrpg/quill-ink.png');
-    --jrpg-corner: url('../aseets/studio_jrpg/corner-ornament.png');
+    /* 絕對 CDN URL：os_studio.css 是 fetch 注入成 inline <style>(酒館回 text/plain)→相對 ../aseets 會相對酒館頁404，必須用絕對網址 */
+    --jrpg-paper-texture: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/parchment-texture.webp');
+    --jrpg-seal: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/wax-seal.png');
+    --jrpg-quill: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/quill-ink.png');
+    --jrpg-corner: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/corner-ornament.png');
     color: var(--jrpg-ink);
     background-color: var(--jrpg-paper);
     background-image:
