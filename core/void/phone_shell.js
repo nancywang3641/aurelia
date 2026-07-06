@@ -34,7 +34,7 @@
             };
         } },
         { id: 'settings', name: '樣式', emoji: '🖌️', mode: 'inside', go: function (c) { _renderSettings(c); } },
-        { id: 'appstore', name: '商店', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
+        { id: 'appstore', name: '應用商城', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
         { id: 'ctrlroom', name: '控制室', emoji: '🎛️', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
         { id: 'aichat', name: 'AI 助手', emoji: '🤖', mode: 'inside', go: function (c) {
             if (!win.ChatWindow || !win.ChatWindow.mountInside) { if (c) c.innerHTML = '<div class="aps-fail">AI 助手未載入</div>'; return; }
@@ -254,7 +254,7 @@
             { id: 'sysset', name: '設置', emoji: '⚙️', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
             { id: 'album',  name: '相簿',   emoji: '📷', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
             { id: 'avsvar', name: '狀態檔案', emoji: '🎲', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
-            { id: 'studio', name: '創作室',   emoji: '🎨', mode: 'inside', go: function (c) { _mountTool(win.OS_STUDIO && win.OS_STUDIO.launch, c); } },
+            // 創作室獨立 app 已移除：所有創作功能都從「應用商城」進(工坊首頁已內含 製作面板/主題/世界書/我的角色 等入口)
             { id: 'phone',  name: '電話',   emoji: '📞', mode: 'inside', go: function (c) { if (win.OS_DIALER && win.OS_DIALER.launch) { win.OS_DIALER.launch(c); } else { c.innerHTML = '<div class="aps-fail">📞 電話模組未載入</div>'; } } },
         ];
         if (standalone) {
