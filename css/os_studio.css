@@ -71,6 +71,8 @@
         .swb-page { display:flex; flex-direction:column; min-height:0; flex:1; padding:16px; gap:14px; box-sizing:border-box; color:var(--jrpg-ink); }
         /* 頂列：返回 + 標題 + 安全章 */
         .swb-bar { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+        /* 獨立 VN組件區：頂列(返回+標題)固定不隨內容捲；滿版蓋住捲動內容(容器已無 top padding，不留縫) */
+        .vncomp-app .swb-bar { position:sticky; top:0; z-index:5; background:var(--jrpg-paper); margin:0 -14px; padding:14px 14px 8px; }
         .swb-bar-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:18px; font-weight:700; color:var(--jrpg-wine-dark); }
         .swb-bar-sub { font-size:12px; font-weight:400; color:var(--jrpg-muted); margin-left:8px; }
         .swb-iconbtn { width:38px; height:38px; flex-shrink:0; display:grid; place-items:center; border:1px solid var(--jrpg-line); border-radius:10px; background:rgba(255,250,239,0.6); color:var(--jrpg-wine-dark); font-size:20px; line-height:1; cursor:pointer; font-family:inherit; padding:0; }

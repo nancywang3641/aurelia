@@ -7,6 +7,26 @@
     console.log('[PhoneOS] 啟動通用靈感創作室 (Creator Studio V2.5)...');
 
 
+    // 直接編輯原碼 modal（抽成常數：完整創作室 studioHTML 與獨立 VN組件區都用同一份，免得獨立區沒這 modal→編輯原碼按鈕死掉）
+    const RAW_EDIT_MODAL_HTML = `
+        <div id="studio-raw-edit-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(6px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
+            <div style="max-width:900px; width:100%; max-height:90vh; background:#EEF0F6; border:1px solid #9b59b6; border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:12px; margin:auto; box-shadow:0 0 50px rgba(155,89,182,0.25);">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid rgba(155,89,182,0.3);">
+                    <strong style="font-size:15px; color:#c39bf2;"><i class="fa-solid fa-code"></i> 直接編輯原碼 · <span id="raw-edit-tagid" style="color:#1A1C28;">?</span></strong>
+                    <div style="color:#c39bf2; cursor:pointer; font-size:20px;" id="raw-edit-close"><i class="fa-solid fa-xmark"></i></div>
+                </div>
+                <div style="font-size:11px; color:rgba(195,155,242,0.6); line-height:1.5;">
+                    完整 JSON 結構（含 tagId / html / css / js / usageDesc / demoFormat 等）。直接編輯後按「儲存」會覆寫這個面板。改壞了可以按「重置」拿回原本內容。
+                </div>
+                <textarea id="raw-edit-textarea" style="flex:1; min-height:50vh; max-height:65vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
+                <div id="raw-edit-status" style="font-size:11px; color:rgba(255,255,255,0.5); min-height:14px;"></div>
+                <div style="display:flex; gap:10px;">
+                    <button class="avs-btn" id="raw-edit-save" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#2ecc71; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+                    <button class="avs-btn" id="raw-edit-reset" style="flex:0 0 100px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-arrow-rotate-left"></i> 重置</button>
+                    <button class="avs-btn" id="raw-edit-cancel" style="flex:0 0 100px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">取消</button>
+                </div>
+            </div>
+        </div>`;
     const studioHTML = `
         <div class="studio-container">
             <div class="studio-header">
@@ -99,24 +119,7 @@
         </div>
 
         <!-- 📝 直接編輯原碼 modal（進階用戶繞過 AI 對話改 tpl JSON）-->
-        <div id="studio-raw-edit-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(6px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
-            <div style="max-width:900px; width:100%; max-height:90vh; background:#EEF0F6; border:1px solid #9b59b6; border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:12px; margin:auto; box-shadow:0 0 50px rgba(155,89,182,0.25);">
-                <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid rgba(155,89,182,0.3);">
-                    <strong style="font-size:15px; color:#c39bf2;"><i class="fa-solid fa-code"></i> 直接編輯原碼 · <span id="raw-edit-tagid" style="color:#1A1C28;">?</span></strong>
-                    <div style="color:#c39bf2; cursor:pointer; font-size:20px;" id="raw-edit-close"><i class="fa-solid fa-xmark"></i></div>
-                </div>
-                <div style="font-size:11px; color:rgba(195,155,242,0.6); line-height:1.5;">
-                    完整 JSON 結構（含 tagId / html / css / js / usageDesc / demoFormat 等）。直接編輯後按「儲存」會覆寫這個面板。改壞了可以按「重置」拿回原本內容。
-                </div>
-                <textarea id="raw-edit-textarea" style="flex:1; min-height:50vh; max-height:65vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
-                <div id="raw-edit-status" style="font-size:11px; color:rgba(255,255,255,0.5); min-height:14px;"></div>
-                <div style="display:flex; gap:10px;">
-                    <button class="avs-btn" id="raw-edit-save" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#2ecc71; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
-                    <button class="avs-btn" id="raw-edit-reset" style="flex:0 0 100px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-arrow-rotate-left"></i> 重置</button>
-                    <button class="avs-btn" id="raw-edit-cancel" style="flex:0 0 100px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">取消</button>
-                </div>
-            </div>
-        </div>
+        ${RAW_EDIT_MODAL_HTML}
 
         <!-- 📥 匯入面板 modal（貼朋友自己的 AI 照「創建說明書」產的 <json> → 載入預覽 → 上面按💾存進展廳）-->
         <div id="studio-import-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(6px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
@@ -3243,7 +3246,16 @@ ${cleanFormat}
     let _rawEditingTplId = null;
     let _rawEditingOriginal = null;
 
+    // 缺 modal 就補建(獨立 VN組件區沒掛完整 studioHTML)：注入 body + wire 事件，讓「編輯原碼」任何情境都能用
+    function _ensureRawEditModal() {
+        if (document.getElementById('studio-raw-edit-modal')) return;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = RAW_EDIT_MODAL_HTML;
+        const el = tmp.firstElementChild;
+        if (el) { document.body.appendChild(el); _setupRawEditModalEvents(); }
+    }
     function openRawEditModal(tpl) {
+        _ensureRawEditModal();
         const modal = document.getElementById('studio-raw-edit-modal');
         const textarea = document.getElementById('raw-edit-textarea');
         const tagIdEl = document.getElementById('raw-edit-tagid');
@@ -3419,7 +3431,7 @@ ${cleanFormat}
         // (曾踩坑：jsdelivr 對 js/css 分開快取→js 新但 css 舊時 .vncomp-app 規則缺失→變流式區塊接在 VN組件 tab 下面)
         ov.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:9000;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;background:#f5ead3;color:#3c2922;'
             + '--jrpg-paper:#f5ead3;--jrpg-paper-light:#fff9eb;--jrpg-paper-deep:#e7d1a9;--jrpg-ink:#3c2922;--jrpg-muted:#7b6654;--jrpg-wine:#681f25;--jrpg-wine-dark:#461319;--jrpg-gold:#b68a45;--jrpg-gold-light:#ddbd78;--jrpg-line:rgba(132,91,45,0.34);';
-        ov.innerHTML = '<div class="vncomp-scroll" style="flex:1;min-height:0;overflow-y:auto;padding:14px 14px 24px;box-sizing:border-box;"><div class="vncomp-toolbar vc-hide"><input type="file" class="vncomp-pack-file" accept=".json" hidden></div><div class="vncomp-list" style="display:flex;flex-direction:column;gap:10px;"></div></div>';
+        ov.innerHTML = '<div class="vncomp-scroll" style="flex:1;min-height:0;overflow-y:auto;padding:0 14px 24px;box-sizing:border-box;"><div class="vncomp-toolbar vc-hide"><input type="file" class="vncomp-pack-file" accept=".json" hidden></div><div class="vncomp-list" style="display:flex;flex-direction:column;gap:10px;"></div></div>';
         root.appendChild(ov);
         _vcStandalone = true;
         _vcStandaloneRoot = root;
