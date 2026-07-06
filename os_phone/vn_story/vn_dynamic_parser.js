@@ -249,7 +249,9 @@
         // --- 執行區塊微型 App (核心魔法) ---
         _renderBlock: function(tagId, lines, vnCore) {
             const tpl = this.activeTemplates.find(t => t.tagId.toLowerCase() === tagId.toLowerCase());
-            
+            // 🔊 組件登場音效：block 組件走這條(非 _showDomBlock)，彈出即播(來源=素材音效目錄，留空不播)
+            if (tpl && tpl.appearSfx && vnCore && vnCore.playSFX) { try { vnCore.playSFX(tpl.appearSfx); } catch (e) {} }
+
             // 隱藏原生 VN 面板
             if (vnCore.hideVNPanel) vnCore.hideVNPanel();
             else if (vnCore.toggleUI) vnCore.toggleUI('none'); 
@@ -292,11 +294,12 @@
             // 跳過/繼續：點擊卡片外的暗背景或空白處 → 收掉繼續。
             // 純顯示卡（如 ChapterCard）沒自帶按鈕時的退路，對齊舊 _showDomBlock 的「點擊背景關閉」。
             // 只認 overlay/panel 本身（暗區、空白 padding），點到卡片內容（子元素）不關 → 不影響互動卡。
-            overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target === panel) onComplete(); });
-            const _hint = document.createElement('div');
-            _hint.textContent = '點擊空白處繼續';
-            _hint.style.cssText = 'position:absolute;left:0;right:0;bottom:10px;text-align:center;color:rgba(255,255,255,0.45);font-size:11px;letter-spacing:1px;pointer-events:none;z-index:1;';
-            overlay.appendChild(_hint);
+            // 防手殘誤觸：這裡都是註冊的創作室 block 組件(多半自帶關閉鈕)→不再「點背景關閉」，改右上✕當保底逃生(某些組件沒做真正關閉鈕時的退路)
+            const _cx = document.createElement('div');
+            _cx.textContent = '✕'; _cx.title = '關閉';
+            _cx.style.cssText = 'position:absolute;top:14px;right:16px;z-index:2;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.82);font-size:20px;line-height:1;cursor:pointer;border-radius:50%;background:rgba(0,0,0,0.4);';
+            _cx.addEventListener('click', (e) => { e.stopPropagation(); onComplete(); });
+            overlay.appendChild(_cx);
 
             // 沙盒執行 AI 生成的 JS
             try {
