@@ -906,6 +906,7 @@
                     '#vn-dom-block-body img{max-width:100%;height:auto;display:block;margin:0 auto;border-radius:6px}',
                     '#vn-dom-block-body>div,#vn-dom-block-body>section,#vn-dom-block-body>article{display:block;width:100%}',
                     '.vn-regex-card{width:100%;border:0;display:block;background:transparent}',
+                    '#vn-dom-block-close{position:absolute;top:12px;right:14px;z-index:3;width:34px;height:34px;display:none;align-items:center;justify-content:center;color:rgba(232,223,200,0.85);font-size:20px;line-height:1;cursor:pointer;border-radius:50%;background:rgba(0,0,0,0.4)}',
                     '#vn-dom-block-hint{flex-shrink:0;margin-top:16px;text-align:center;',
                     'color:rgba(180,180,180,0.45);font-size:11px;letter-spacing:1px;pointer-events:none}'
                 ].join('');
@@ -917,8 +918,11 @@
             if (!overlay) {
                 overlay = document.createElement('div');
                 overlay.id = 'vn-dom-block-overlay';
-                overlay.innerHTML = '<div id="vn-dom-block-body"></div><div id="vn-dom-block-hint">點擊背景關閉</div>';
-                overlay.onclick = (e) => { if (e.target === overlay) this._hideDomBlock(); };
+                overlay.innerHTML = '<div id="vn-dom-block-close" title="關閉">✕</div><div id="vn-dom-block-body"></div><div id="vn-dom-block-hint">點擊背景關閉</div>';
+                // 背景點擊：只有作者裸卡/【】(無自帶關閉鈕)才關；創作室組件(有 tagHint)靠自帶鈕或右上✕，避免手殘誤觸跳過
+                overlay.onclick = (e) => { if (e.target === overlay && this._domBlockBgClose) this._hideDomBlock(); };
+                const _cxBtn = overlay.querySelector('#vn-dom-block-close');
+                if (_cxBtn) _cxBtn.onclick = (e) => { e.stopPropagation(); this._hideDomBlock(); };
                 const gamePage = document.getElementById('page-game');
                 if (!gamePage) { this.next(); return; }
                 gamePage.appendChild(overlay);
@@ -953,6 +957,13 @@
                 _vCardFrame.addEventListener('load', () => { _fitFrame(); setTimeout(_fitFrame, 400); });
                 setTimeout(_fitFrame, 50);
             }
+            // 關閉方式依卡片來源切換：創作室組件(有 tagHint)→背景不關(防手殘誤觸跳過)、顯示右上✕當保底逃生、藏「點擊背景關閉」；
+            //   作者裸卡/【】(無 tagHint、無自帶關閉鈕)→維持背景點擊關閉+提示、藏✕。
+            this._domBlockBgClose = !tagHint;
+            const _cxEl = document.getElementById('vn-dom-block-close');
+            if (_cxEl) _cxEl.style.display = tagHint ? 'flex' : 'none';
+            const _hintEl2 = document.getElementById('vn-dom-block-hint');
+            if (_hintEl2) _hintEl2.style.display = tagHint ? 'none' : '';
             void overlay.offsetWidth; // 強制 reflow 確保 transition 生效
             overlay.classList.add('active');
         },
