@@ -319,6 +319,57 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
                     alert(`🎉 變數包 [${data.name}] 儲存成功！`);
                 }
             }
+        },
+        'fx': {
+            name: '特效工坊',
+            prompt: `你是視覺小說的「畫面特效配方師」。用戶描述想要的畫面效果（例如下雪、受傷閃紅、雷光一閃），你把它翻譯成一份 JSON「配方」。你只輸出配方、不寫任何程式碼——特效由固定引擎照配方播放，配方以外的東西一律無效。
+
+【輸出格式】需求清楚後，輸出被 <json> 標籤包裹的單一 JSON 物件：
+{"fxId":"...","name":"...","desc":"...","kind":"...","steps":[...]}
+- fxId：fx- 開頭、只能小寫英文/數字/連字號，取有意義的英文短詞
+- name：中文名，6 字內
+- desc：一句話寫「什麼劇情時觸發」——劇情 AI 全靠這句決定何時用，要寫得像挑選指南
+- kind：once＝瞬發（打擊/閃光類，播完自動消失）；loop＝持續（天氣/氛圍類，掛著直到換場）
+
+【可用積木（steps 的元素，只准用這些，別發明新欄位）】
+1. 粒子 {"block":"particles","preset":"見下","count":數量,"size":像素,"speed":速度,"color":"CSS顏色"}
+   preset 只准八選一：snow(飄雪)、rain(雨絲)、drip(頂端滲液下滑)、petal(花瓣旋落)、ember(火星上升)、burst(中心爆散)、bubble(氣泡上升)、sparkle(原地閃爍)
+   範圍：count 1-300、size 1-40、speed 5-1200（雨類 700 以上、飄落類 40-80、上升類 60-150）
+2. 閃色 {"block":"flash","color":"顏色","times":閃幾下1-6}
+3. 震動 {"block":"shake","strength":力度1-24}（只准用在 once）
+4. 邊緣滲色 {"block":"edge","color":"顏色"}（畫面四周暈影：受傷/中毒/瀕死/回憶）
+5. 光軌 {"block":"streak","color":"顏色","angle":角度0-360,"width":粗細1-12}（一道光掃過：斬擊/流星；只准 once）
+6. 罩色 {"block":"tint","color":"顏色","alpha":0.02-0.45}（整屏染色氛圍）
+
+【時間軸】kind=once 時每個積木都要加 "at":開始毫秒 和 "dur":持續毫秒（總長 8000 內）；kind=loop 不用 at/dur，且只准用 particles/tint/edge。
+
+【設計原則】
+- 寧少勿多：2-4 個積木就能做出好特效，堆太多會亂
+- 顏色配合效果的情緒（血用暗紅、雷用青白、治癒用暖金這類直覺）
+- 用戶描述不清楚就先用一兩句話確認，別亂猜
+- 輸出 <json> 前先用一句話講設計思路`,
+            onSave: async (data) => {
+                const fxEngine = window.OS_FX || win.OS_FX;
+                const norm = fxEngine && fxEngine.validate ? fxEngine.validate(data) : null;
+                if (!norm) throw new Error('配方格式不對，請叫 AI 重新輸出一次');
+                if (!win.OS_DB || !win.OS_DB.saveUITemplate) throw new Error('資料庫不可用');
+                // 同 fxId 視為改版 → 覆蓋舊檔，不疊重複條目
+                let existing = null;
+                try {
+                    const all = await win.OS_DB.getAllUITemplates();
+                    existing = (all || []).find(t => t && t.isFX && t.fxRecipe && String(t.fxRecipe.fxId || '').toLowerCase() === norm.fxId);
+                } catch (e) {}
+                await win.OS_DB.saveUITemplate({
+                    id: existing ? existing.id : ('fx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+                    title: norm.name,
+                    isFX: true,
+                    panelType: '特效',
+                    fxRecipe: norm,
+                    createdAt: existing ? existing.createdAt : Date.now(),
+                });
+                try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
+                alert(`🎉 特效「${norm.name}」已存好！劇情 AI 之後就會在合適時機用它`);
+            }
         }
     };
 
@@ -4748,6 +4799,60 @@ ${d.usageDesc || ''}
         setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再套一次
     }
 
+    // ⚡ 特效庫：特效工坊空狀態顯示（內建＝不可刪、自製＝可刪）；每列可試播
+    async function _renderFxLibrary(container) {
+        const fxEngine = window.OS_FX || win.OS_FX;
+        if (!fxEngine) { container.innerHTML = '<div class="studio-empty">特效引擎還沒載入，稍等幾秒再進來</div>'; return; }
+        try { await fxEngine.reloadSaved(); } catch (e) {}
+        const _esc = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        let saved = [];
+        try {
+            const all = await win.OS_DB.getAllUITemplates();
+            saved = (all || []).filter(t => t && t.isFX && t.fxRecipe);
+        } catch (e) {}
+        const savedIds = new Set(saved.map(t => String(t.fxRecipe.fxId || '').toLowerCase()));
+        const rows = [];
+        for (const t of saved) {
+            const r = t.fxRecipe;
+            rows.push({ recipe: r, dbId: t.id, mine: true });
+        }
+        for (const r of fxEngine.listAll()) {
+            if (!savedIds.has(r.fxId)) rows.push({ recipe: r, dbId: null, mine: false });
+        }
+        container.innerHTML = `
+            <div class="studio-card">
+                <div class="studio-card-title">特效庫</div>
+                <div class="fx-pv-desc">劇情 AI 會在合適時機自動觸發這些特效。想要新的，直接在左邊描述給 AI 就行。</div>
+                <div class="vn-fx-preview-stage" id="fx-lib-stage"></div>
+                <div class="fx-lib-list">${rows.map((row, i) => `
+                    <div class="fx-lib-row">
+                        <div class="fx-lib-info">
+                            <div class="fx-lib-name">${_esc(row.recipe.name)} <span class="fx-lib-kind">${row.recipe.kind === 'loop' ? '持續氛圍' : '瞬間效果'}</span>${row.mine ? '' : ' <span class="fx-lib-kind fx-lib-builtin">內建</span>'}</div>
+                            <div class="fx-lib-desc">${_esc(row.recipe.desc || '')}</div>
+                        </div>
+                        <button class="fx-lib-btn" data-fx-play="${i}" type="button" title="試播"><i class="fa-solid fa-play"></i></button>
+                        ${row.mine ? `<button class="fx-lib-btn danger" data-fx-del="${i}" type="button" title="刪除"><i class="fa-solid fa-trash"></i></button>` : ''}
+                    </div>`).join('')}
+                </div>
+            </div>`;
+        const stage = container.querySelector('#fx-lib-stage');
+        container.querySelectorAll('[data-fx-play]').forEach(btn => {
+            btn.onclick = () => { try { fxEngine.preview(rows[Number(btn.dataset.fxPlay)].recipe, stage); } catch (e) {} };
+        });
+        container.querySelectorAll('[data-fx-del]').forEach(btn => {
+            btn.onclick = async () => {
+                const row = rows[Number(btn.dataset.fxDel)];
+                if (!row || !row.dbId) return;
+                if (!confirm(`刪除特效「${row.recipe.name}」？劇情 AI 之後就不會再用它了`)) return;
+                try {
+                    await win.OS_DB.deleteUITemplate(row.dbId);
+                    try { await fxEngine.reloadSaved(); } catch (e) {}
+                    _renderFxLibrary(container);
+                } catch (e) { alert('刪除失敗: ' + (e && e.message || e)); }
+            };
+        });
+    }
+
     function renderPreviewPanel() {
         const previewMain = document.getElementById('studio-preview-main');
         const sourceEl = document.getElementById('studio-source-content');
@@ -4760,11 +4865,18 @@ ${d.usageDesc || ''}
         if (fabEl) fabEl.style.display = 'none';   // 浮動 FAB 退役：改用 header 的 👁️ 預覽鈕
 
         if (!displayData) {
+            if (currentMode === 'fx') {   // ⚡ 特效工坊空狀態＝特效庫（內建+自製，可試播/刪除）
+                sourceEl.textContent = '';
+                exportBtn.style.display = 'none';
+                if (publishBtn) publishBtn.style.display = 'none';
+                _renderFxLibrary(previewMain);
+                return;
+            }
             previewMain.innerHTML = `<div class="studio-empty">尚未生成任何內容。<br><br>請輸入點子讓 AI 創作。</div>`;
             sourceEl.textContent = '';
             exportBtn.style.display = 'none';
             if (publishBtn) publishBtn.style.display = 'none';
-            togglePreviewDrawer(false);   
+            togglePreviewDrawer(false);
             return;
         }
 
@@ -4779,6 +4891,24 @@ ${d.usageDesc || ''}
 
         sourceEl.textContent = JSON.stringify(displayData, null, 2);
         previewMain.innerHTML = '';
+
+        if (currentMode === 'fx') {   // ⚡ 特效配方預覽：試播台 + 播放鈕
+            const _r = displayData;
+            const _esc = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            previewMain.innerHTML = `
+                <div class="studio-card">
+                    <div class="studio-card-title">${_esc(_r.name || _r.fxId || '特效')} <span class="fx-lib-kind">${_r.kind === 'loop' ? '持續氛圍' : '瞬間效果'}</span></div>
+                    <div class="fx-pv-desc">${_esc(_r.desc || '')}</div>
+                    <div class="vn-fx-preview-stage" id="fx-pv-stage"></div>
+                    <button class="fx-lib-btn fx-pv-play" id="fx-pv-play" type="button"><i class="fa-solid fa-play"></i> 再播一次</button>
+                </div>`;
+            const _stage = previewMain.querySelector('#fx-pv-stage');
+            const _play = () => { try { if (window.OS_FX && _stage) window.OS_FX.preview(_r, _stage); } catch (e) { console.warn('[Studio] 特效試播失敗:', e); } };
+            const _btn = previewMain.querySelector('#fx-pv-play');
+            if (_btn) _btn.onclick = _play;
+            setTimeout(_play, 250);   // 生成完自動播一次
+            return;
+        }
 
         if (currentMode === 'vn_ui') {
             const data = displayData;
