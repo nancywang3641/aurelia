@@ -3748,24 +3748,39 @@ ${cleanFormat}
         try { return (win.VN_Config && win.VN_Config.data && win.VN_Config.data.sfx) || ''; } catch (e) {}
         return '';
     }
-    // 音效清單 manifest：先試音效目錄的 sfx_manifest.json，失敗退回 CDN raw（Pages 可能還沒重建）
-    let _sfxManifestCache = null;
-    async function _loadSfxManifest() {
-        if (_sfxManifestCache) return _sfxManifestCache;
-        const urls = [];
-        const base = _sfxBase();
-        if (base) urls.push(base + 'sfx_manifest.json');
-        urls.push('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/sfx_manifest.json');
-        for (const u of urls) {
-            try {
-                const r = await fetch(u, { cache: 'no-cache' });
-                if (r.ok) { const j = await r.json(); if (j && Array.isArray(j.groups)) { _sfxManifestCache = j; return j; } }
-            } catch (e) {}
+    // 音效清單：直接讀「全域世界書」的「SFX音效清單」條目當唯一來源（VN 世界書掛全域、不掛當前聊天）。
+    // 逐本找 comment 帶「SFX音效清單」或內容含 <音效_ID> 的條目，解析成分組。單一來源＝朋友只維護世界書一處。
+    let _sfxListCache = null;
+    function _parseSfxListContent(text) {
+        const groups = []; let cur = null;
+        String(text || '').split(/\r?\n/).forEach(raw => {
+            const l = raw.trim();
+            if (!l || l === '### SFX清单' || l === '<音效_ID>' || l === '</音效_ID>') return;
+            if (l[0] === '#') { cur = { name: l.replace(/^#+\s*/, ''), ids: [] }; groups.push(cur); return; }
+            if (!cur) { cur = { name: '音效', ids: [] }; groups.push(cur); }
+            cur.ids.push(l);
+        });
+        return groups.length ? { groups } : null;
+    }
+    async function _loadSfxList() {
+        if (_sfxListCache) return _sfxListCache;
+        const TH = (window.parent || window).TavernHelper || window.TavernHelper;
+        if (!TH || !TH.getLorebookEntries) return null;
+        let books = [];
+        try { if (TH.getGlobalWorldbookNames) books = TH.getGlobalWorldbookNames() || []; } catch (e) {}
+        if (!books.length) { try { const s = TH.getLorebookSettings && TH.getLorebookSettings(); books = (s && s.selected_global_lorebooks) || []; } catch (e) {} }
+        if (!books.length) { try { books = (TH.getLorebooks && TH.getLorebooks()) || []; } catch (e) {} }   // 保底：掃全部（仍靠條目名比對，找得到全域那本）
+        for (const b of books) {
+            let entries = [];
+            try { entries = (await TH.getLorebookEntries(b)) || []; } catch (e) { continue; }
+            const hit = entries.find(e => /SFX音效清單|SFX清单|音效_ID/.test(String(e.comment || '')))
+                     || entries.find(e => String(e.content || '').includes('<音效_ID>'));
+            if (hit) { const g = _parseSfxListContent(hit.content); if (g) { _sfxListCache = g; return g; } }
         }
         return null;
     }
     async function _populateAppearSfxSelect(sel, current) {
-        const m = await _loadSfxManifest();
+        const m = await _loadSfxList();
         sel.innerHTML = '<option value="">（無 — 不播）</option>';
         let found = false;
         if (m && Array.isArray(m.groups)) {
@@ -3784,7 +3799,7 @@ ${cleanFormat}
             sel.appendChild(o);
         }
         if (!m) {
-            const o = document.createElement('option'); o.textContent = '（清單載入失敗，確認音效目錄）'; o.disabled = true;
+            const o = document.createElement('option'); o.textContent = '（讀不到世界書「SFX音效清單」條目）'; o.disabled = true;
             sel.appendChild(o);
         }
     }
