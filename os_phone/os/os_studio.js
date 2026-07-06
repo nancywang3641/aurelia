@@ -2889,7 +2889,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             + '<scr' + 'ipt>(function(){'
             + 'var container=document.getElementById("app-root");var lines=[];'
             + 'var st={'
-            +   'md:function(t){if(!t)return "";try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return D?D.sanitize(h):h;}}catch(e){}return String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";});},'
+            +   'md:function(t){if(!t)return "";t=String(t).replace(/\\\\n/g,"\\n");try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return D?D.sanitize(h):h;}}catch(e){}return String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";});},'
             +   'parse:function(){return {};},'
             +   'setImage:async function(el,p,type,provider){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene",provider);if(u)el.src=u;}}catch(e){}},'
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
@@ -3005,9 +3005,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         var rxItalic = new RegExp('[*](.+?)[*]', 'g');
         var rxCode = new RegExp('[\`](.+?)[\`]', 'g');
         return String(text)
+          .replace(/\\n/g, '\n')   // 字面 \n → 真換行（對齊 story st.md）
           .replace(rxBold, function(_, p1){ return '<b>' + p1 + '</b>'; })
           .replace(rxItalic, function(_, p1){ return '<i>' + p1 + '</i>'; })
-          .replace(rxCode, function(_, p1){ return '<code>' + p1 + '</code>'; });
+          .replace(rxCode, function(_, p1){ return '<code>' + p1 + '</code>'; })
+          .replace(/\n/g, '<br>')
+          .replace(/(<br>\s*){3,}/g, '<br><br>');
       },
       parse: function(){
         var result = {};

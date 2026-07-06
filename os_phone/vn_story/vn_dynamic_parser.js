@@ -113,9 +113,12 @@
                 md: function(text) {
                     if (!text) return '';
                     return String(text)
+                        .replace(/\\n/g, '\n')   // AI 常寫「字面 \n」(反斜線n)當換行 → 先轉成真換行
                         .replace(new RegExp('[*][*](.+?)[*][*]', 'g'), function(_, p1){ return '<b>' + p1 + '</b>'; })
                         .replace(new RegExp('[*](.+?)[*]', 'g'),       function(_, p1){ return '<i>' + p1 + '</i>'; })
-                        .replace(new RegExp('[`](.+?)[`]', 'g'),       function(_, p1){ return '<code>' + p1 + '</code>'; });
+                        .replace(new RegExp('[`](.+?)[`]', 'g'),       function(_, p1){ return '<code>' + p1 + '</code>'; })
+                        .replace(/\n/g, '<br>')                 // 換行→<br>(原本完全沒做→長信/多段內容全擠一起)
+                        .replace(/(<br>\s*){3,}/g, '<br><br>'); // 收斂過多空行
                 },
                 parse: function() {
                     const result = {};
