@@ -173,6 +173,10 @@
 - 純展示（落點＝嵌進劇情正文當「卡片」顯示）：
   · 響應式「劇情卡」，三種外框寬都不破版：手機~390 / 桌面中間~1000 / 桌面全屏~1920。
   · 必加 max-width（約 520~760）和 max-height、絕不吃滿外框（除非用戶說全屏）——1920 鋪滿會變大空洞。是「畫面置中、有份量的一張卡」。min-height 撐份量、長內容 max-height+overflow:auto 內捲。
+  · 🚨🚨 捲動與溢出鐵律（最常踩、反覆改不好就是漏了這條）：
+    ① 只有「會變長的那一個內容區」(清單/日誌/訊息串) 給 flex:1;min-height:0;overflow-y:auto；標題/圖示/裝飾/關閉鈕一律 flex-shrink:0。否則內容一多，固定元素會被擠出卡片外（用戶最常抱怨「圖示/印章被推出去」就是這個）。父容器要 display:flex;flex-direction:column 且卡本體 overflow:hidden。
+    ② 同一個盒子「不能」又要內部捲動裁切(overflow:hidden) 又要讓某元素溢出邊緣(如封蠟/緞帶壓在卡緣外)——矛盾無解、怎麼調都失敗。真要溢出裝飾就拆兩層：外層 wrapper overflow:visible 放 position:absolute 的溢出裝飾、內層卡 overflow:hidden 負責捲動。
+    ③ 劇情裡卡片外層 .vn-dynamic-panel-<tagId> 的位置/寬/高/置中是「引擎寫死的 inline style」控制的，改它的 margin/width 想重新定位「沒用」(會被覆蓋)。只調卡片「內部」樣式，別靠改外層 wrapper 來搬位置。
   · 只做純前端互動（展開/切換/排序），禁用 st.callAI／st.setImage 生成。
 - 純應用（落點＝裝成「手機 App」、跑在手機桌面 App 框裡，固定手機尺寸）：
   · 這是手機 App、不是 VN 卡片！根容器 width:100% 填滿手機框（~390px）、min-height:100% 用滿高度做 App 版型（頂部標題列＋可捲內容區＋底部操作），像一個正常手機 App。
