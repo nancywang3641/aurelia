@@ -65,20 +65,7 @@
         .mc-movebtn { border:1px solid var(--jrpg-line); background:transparent; color:var(--jrpg-muted); border-radius:8px; padding:3px 9px; font-size:12px; cursor:pointer; font-family:inherit; }
         .mc-movebtn:disabled { opacity:0.35; cursor:default; }
         .mc-addblock { flex-shrink:0; width:100%; padding:9px; border:1px dashed var(--jrpg-line); border-radius:11px; background:transparent; color:var(--jrpg-muted); font-size:13px; cursor:pointer; font-family:inherit; }
-        /* 🏠 創作室首頁三張任務卡（取代頂部 tab；top-home 時只顯示這頁、藏掉聊天/預覽） */
-        .studio-home-pane { display: none; flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; flex-direction: column; gap: 14px; box-sizing: border-box; }
-        .studio-container.top-home .studio-left { display: none; }
-        .studio-container.top-home .studio-right { display: none; }
-        .studio-container.top-home .studio-home-pane { display: flex; }
-        .sh-title { font-size: 14px; font-weight: 700; color: var(--jrpg-muted); padding: 2px 2px 0; width: 100%; max-width: 560px; margin: 0 auto; box-sizing: border-box; }
-        .sh-cards { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 560px; margin: 0 auto; }
-        .studio-task-card { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--jrpg-line); border-radius: 16px; background: var(--jrpg-paper-light); box-shadow: 0 1px 3px rgba(83,49,20,0.07); cursor: pointer; text-align: left; transition: 0.15s; }
-        .studio-task-card:hover { background: rgba(255,250,239,0.95); border-color: var(--jrpg-gold); transform: translateY(-1px); }
-        .stc-art { width: clamp(92px, 28vw, 116px); height: auto; max-height: 96px; object-fit: contain; flex-shrink: 0; pointer-events: none; user-select: none; }
-        .stc-main { flex: 1; min-width: 0; }
-        .stc-title { font-size: 17px; font-weight: 700; color: var(--jrpg-wine-dark); }
-        .stc-desc { font-size: 13px; color: var(--jrpg-muted); margin-top: 4px; line-height: 1.45; }
-        .stc-chev { flex-shrink: 0; color: var(--jrpg-gold); font-size: 22px; }
+        /* 創作室首頁三張任務卡 CSS 已移除：首頁整併進應用商城工坊、不再有落地首頁 */
         /* ═══ 世界書 5 換頁（吃創作室 --jrpg-* 暖色羊皮紙變數；不寫死顏色） ═══ */
         .studio-worldbook-pane.swb-host { position: relative; --swb-add:#78966F; --swb-amber:#B47A33; --swb-danger:#B54848; }
         .swb-page { display:flex; flex-direction:column; min-height:0; flex:1; padding:16px; gap:14px; box-sizing:border-box; color:var(--jrpg-ink); }
