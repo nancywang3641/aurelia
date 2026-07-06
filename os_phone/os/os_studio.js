@@ -3574,7 +3574,7 @@ ${cleanFormat}
                 bar.className = 'vc-batchbar';
                 bar.innerHTML = `<span class="vc-batchbar-name">「${_sgcEsc(grp.name)}」整組一鍵開關</span>
                     <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input"${st === 'on' ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
-                    <button class="vc-batchbar-mng" type="button" title="群組管理"><i class="fa-solid fa-gear"></i></button>`;
+                    <button class="vc-batchbar-mng" type="button" title="管理這組成員"><i class="fa-solid fa-gear"></i> 管理成員</button>`;
                 const sw = bar.querySelector('.sgc-switch-input');
                 if (st === 'partial') sw.indeterminate = true;
                 sw.onchange = async () => { await _setGroupActive(members, st !== 'on'); renderVnComponents(); };
