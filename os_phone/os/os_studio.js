@@ -340,6 +340,7 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
 4. 邊緣滲色 {"block":"edge","color":"顏色"}（畫面四周暈影：受傷/中毒/瀕死/回憶）
 5. 光軌 {"block":"streak","color":"顏色","angle":角度0-360,"width":粗細1-12}（一道光掃過：斬擊/流星；只准 once）
 6. 罩色 {"block":"tint","color":"顏色","alpha":0.02-0.45}（整屏染色氛圍）
+7. 閃電 {"block":"bolt","color":"顏色","width":粗細1-12}（鋸齒閃電劈下、帶分枝與頻閃：雷擊/魔法/衝擊；只准 once，常配 flash+shake）
 
 【時間軸】kind=once 時每個積木都要加 "at":開始毫秒 和 "dur":持續毫秒（總長 8000 內）；kind=loop 不用 at/dur，且只准用 particles/tint/edge。
 

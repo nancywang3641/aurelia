@@ -34,6 +34,11 @@
             { block: 'particles', preset: 'drip', count: 12, size: 5, speed: 60, color: 'rgba(150,0,0,0.85)', at: 150, dur: 2200 },
             { block: 'shake', strength: 6, at: 0, dur: 420 },
         ]},
+        { fxId: 'fx-thunder', name: '雷擊', desc: '鋸齒閃電劈下＋白閃＋震動（雷劈/驚嚇/衝擊性轉折）', kind: 'once', steps: [
+            { block: 'bolt', color: '#bfe3ff', width: 3, at: 0, dur: 620 },
+            { block: 'flash', color: '#eaf6ff', times: 2, at: 0, dur: 480 },
+            { block: 'shake', strength: 5, at: 100, dur: 380 },
+        ]},
         { fxId: 'fx-slash', name: '劍光', desc: '一道斜切光軌劃過畫面＋震動（斬擊/攻擊）', kind: 'once', steps: [
             { block: 'streak', color: '#e8f4ff', angle: 115, width: 3, at: 0, dur: 320 },
             { block: 'flash', color: '#ffffff', times: 1, at: 60, dur: 200 },
@@ -47,7 +52,7 @@
         ]},
     ];
 
-    const VALID_BLOCKS = ['particles', 'flash', 'shake', 'edge', 'streak', 'tint'];
+    const VALID_BLOCKS = ['particles', 'flash', 'shake', 'edge', 'streak', 'tint', 'bolt'];
     const VALID_PRESETS = ['snow', 'rain', 'drip', 'petal', 'ember', 'burst', 'bubble', 'sparkle'];
 
     function clamp(v, lo, hi) { const n = Number(v); return isNaN(n) ? lo : Math.min(hi, Math.max(lo, n)); }
@@ -73,6 +78,7 @@
             } else if (s.block === 'flash') { st.times = clamp(s.times || 1, 1, 6); }
             else if (s.block === 'shake')   { st.strength = clamp(s.strength || 6, 1, 24); if (kind === 'loop') continue; }
             else if (s.block === 'streak')  { st.angle = clamp(s.angle === undefined ? 115 : s.angle, 0, 360); st.width = clamp(s.width || 3, 1, 12); if (kind === 'loop') continue; }
+            else if (s.block === 'bolt')    { st.width = clamp(s.width || 3, 1, 12); if (kind === 'loop') continue; }
             else if (s.block === 'tint')    { st.alpha = clamp(s.alpha || 0.18, 0.02, 0.45); }
             steps.push(st);
         }
@@ -101,7 +107,7 @@
                 if (!host || !host.isConnected) return false;
                 this._mount(host);
                 if (recipe.kind === 'loop') this._stopLoops(true);   // 同時只掛一個持續型（新天氣頂掉舊天氣）
-                const inst = { recipe: recipe, t0: performance.now(), loop: recipe.kind === 'loop', ending: false, endAt: 0 };
+                const inst = { recipe: recipe, t0: performance.now(), loop: recipe.kind === 'loop', ending: false, endAt: 0, state: {} };
                 if (!inst.loop) {
                     let total = 0;
                     for (const s of recipe.steps) total = Math.max(total, s.at + s.dur);
@@ -243,7 +249,8 @@
             let shakeAmp = 0;
             for (const inst of this._fx) {
                 const el = ts - inst.t0;
-                for (const s of inst.recipe.steps) {
+                for (let _si = 0; _si < inst.recipe.steps.length; _si++) {
+                    const s = inst.recipe.steps[_si];
                     if (s.block === 'particles') continue;
                     let p;   // 0~1 進度；loop 罩色恆定、ending 時淡出
                     if (inst.loop) {
@@ -258,6 +265,7 @@
                     else if (s.block === 'edge')   this._drawEdge(ctx, s, this._envelope(p), w, h);
                     else if (s.block === 'tint')   this._drawTint(ctx, s, this._envelope(p), w, h);
                     else if (s.block === 'streak') this._drawStreak(ctx, s, p, w, h);
+                    else if (s.block === 'bolt')   this._drawBolt(ctx, s, p, w, h, inst, _si, el - s.at);
                     else if (s.block === 'shake')  shakeAmp = Math.max(shakeAmp, s.strength * (1 - p));
                 }
             }
@@ -393,6 +401,63 @@
                 ctx.lineTo(cx + dx * diag * 0.7 - nx * trail, cy + dy * diag * 0.7 - ny * trail);
                 ctx.stroke();
             }
+            ctx.restore();
+        },
+
+        // 鋸齒閃電：折線主幹＋1-2 條分枝，每 ~130ms 重生路徑（多次落雷感）、每幀隨機頻閃
+        _genBoltPath: function (w, h) {
+            const segs = 12 + Math.floor(Math.random() * 4);
+            const pts = [];
+            let x = w * (0.25 + Math.random() * 0.5);
+            const drift = (Math.random() - 0.5) * w * 0.25;   // 整體斜向
+            const endY = h * (0.65 + Math.random() * 0.25);
+            for (let i = 0; i <= segs; i++) {
+                const t = i / segs;
+                pts.push([x + drift * t + (i === 0 ? 0 : (Math.random() - 0.5) * w * 0.09), -8 + endY * t]);
+            }
+            // 分枝：從主幹中段抽 1-2 條短折線
+            const branches = [];
+            const nBr = 1 + Math.floor(Math.random() * 2);
+            for (let b = 0; b < nBr; b++) {
+                const start = pts[3 + Math.floor(Math.random() * (segs - 6))];
+                const dir = Math.random() < 0.5 ? -1 : 1;
+                const bp = [start];
+                let bx = start[0], by = start[1];
+                for (let i = 0; i < 4; i++) {
+                    bx += dir * (6 + Math.random() * w * 0.05);
+                    by += 10 + Math.random() * h * 0.06;
+                    bp.push([bx, by]);
+                }
+                branches.push(bp);
+            }
+            return { pts: pts, branches: branches };
+        },
+        _strokePath: function (ctx, pts) {
+            ctx.beginPath();
+            ctx.moveTo(pts[0][0], pts[0][1]);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+            ctx.stroke();
+        },
+        _drawBolt: function (ctx, s, p, w, h, inst, si, elapsed) {
+            const key = 'bolt' + si;
+            let st = inst.state[key];
+            if (!st || elapsed >= st.regenAt) {
+                st = { path: this._genBoltPath(w, h), regenAt: elapsed + 130 };
+                inst.state[key] = st;
+            }
+            const flicker = 0.65 + Math.random() * 0.35;                  // 每幀頻閃
+            const a = (p > 0.75 ? (1 - p) / 0.25 : 1) * flicker;          // 尾段淡出
+            const col = s.color || '#bfe3ff';
+            ctx.save();
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.shadowColor = col; ctx.shadowBlur = 18;
+            // 外圈色光 → 白色芯，分枝細一號
+            ctx.globalAlpha = a * 0.55; ctx.strokeStyle = col; ctx.lineWidth = (s.width || 3) * 2.2;
+            this._strokePath(ctx, st.path.pts);
+            for (const bp of st.path.branches) { ctx.lineWidth = (s.width || 3) * 1.1; this._strokePath(ctx, bp); }
+            ctx.globalAlpha = a; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = (s.width || 3) * 0.8;
+            this._strokePath(ctx, st.path.pts);
+            for (const bp of st.path.branches) { ctx.lineWidth = (s.width || 3) * 0.4; this._strokePath(ctx, bp); }
             ctx.restore();
         },
 
