@@ -2947,7 +2947,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         if (!db || typeof db.getAllVNTagTemplates !== 'function') return;
         try {
             const templates = await db.getAllVNTagTemplates();
-            const activeTags = templates.filter(t => t.isActive && t.demoFormat);
+            // 純應用只是手機 app、不是 VN 組件 → 絕不注入給劇情 AI（否則 AI 會被教著在正文寫 app-only 標籤）
+            const activeTags = templates.filter(t => t.isActive && t.demoFormat && t.panelType !== '純應用');
             const titleOf = t => (t.title && String(t.title).trim()) || t.tagId || '面板';
             // 單個組件的教學片段（中文標題＋使用說明＋正確 tag 格式）。區塊一律寫 <tagId>…</tagId>，
             //   demoFormat 可能自帶外殼 → 先剝再補一層，永遠剛好一層（防 <Bestiary> 開兩次）。
@@ -3601,7 +3602,8 @@ ${cleanFormat}
         // ── 隱藏／孤兒組件：isActive（還在劇情裡作用）但沒出現在上面清單（被 panelType 等藏起）→ 無處可管。
         //    硬列出來給看+刪：解「莫名其妙冒出舊面板、卻在展廳/我的應用都找不到」的孤兒。不管什麼 panelType/版本都抓得到。──
         const _shownIds = new Set(templates.map(t => t.id));
-        const _orphans = _allVn.filter(t => t && t.isActive && !_shownIds.has(t.id));
+        // 純應用只是手機 app、不屬於 VN 組件 → 不列孤兒（否則刪它會連手機 app 一起清，那是「共用」型才該有的邏輯）
+        const _orphans = _allVn.filter(t => t && t.isActive && !_shownIds.has(t.id) && t.panelType !== '純應用');
         if (_orphans.length) {
             const ob = document.createElement('div'); ob.className = 'vc-orphan-box';
             const hd = document.createElement('div'); hd.className = 'vc-orphan-hd';
