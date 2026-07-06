@@ -1,0 +1,22 @@
+/* ⚡ VN 畫面特效引擎（vn_fx.js）— 覆蓋層 */
+.vn-fx-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 9500;          /* 蓋過背景/立繪/插圖，不擋互動 */
+    pointer-events: none;
+    overflow: hidden;
+}
+.vn-fx-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+/* 創作室特效工坊試播台 */
+.vn-fx-preview-stage {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    border-radius: 12px;
+    background: linear-gradient(160deg, #1c2333 0%, #2a3247 55%, #1a1f2e 100%);
+    overflow: hidden;
+}

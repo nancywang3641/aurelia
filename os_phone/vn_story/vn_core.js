@@ -1929,6 +1929,11 @@
         handlePanelClick: function() { if (this.isSkip) this.toggleSkip(); this.next(); },
 
         playSFX: function(sfxId) {
+            // ⚡ fx- 開頭 = 畫面特效（AI 偶爾會塞進尾格 SFX 欄）→ 轉交 OS_FX，別當音效檔去 404
+            if (sfxId && /^fx-/i.test(String(sfxId).trim())) {
+                try { if (window.OS_FX) window.OS_FX.play(String(sfxId).trim()); } catch (e) {}
+                return;
+            }
             // 切換新音效前，確保先停止上一個音效避免重疊
             this.stopSFX();
 
@@ -1990,7 +1995,12 @@
             if (!text || text.indexOf('#') === -1) return { text: text || '', sfx: 'NA' };
             let sfx = 'NA';
             const cleaned = String(text).replace(/#([A-Za-z0-9_\-&]+)#/g, (_m, id) => {
-                if (sfx === 'NA') sfx = id.trim();   // 一行取第一個(playSFX 一次一個、後者會蓋前者)
+                const _id = id.trim();
+                if (/^fx-/i.test(_id)) {   // ⚡ fx- 開頭 = 畫面特效標記 → 交 OS_FX 播，不當音效
+                    try { if (window.OS_FX) window.OS_FX.play(_id); } catch (e) {}
+                    return '';
+                }
+                if (sfx === 'NA') sfx = _id;   // 一行取第一個(playSFX 一次一個、後者會蓋前者)
                 return '';
             }).replace(/[ \t]{2,}/g, ' ').replace(/\s+([，。、！？,.!?])/g, '$1').trim();
             return { text: cleaned, sfx: sfx };
@@ -2414,6 +2424,8 @@
 
             if (line.startsWith('[Bg|')) {
                 this._stageClear();   // 換背景＝換場景 → 清空兩格立繪
+                try { if (window.OS_FX) window.OS_FX.sceneChange(); } catch (e) {}   // ⚡ 換場 → 持續型天氣特效跟著停
+
                 try { if (win.VN_Phone && win.VN_Phone.currentCallKey) win.VN_Phone.currentCallKey = ''; } catch (e) {}   // 換場景＝通話脈絡結束 → 之後同人來電正常響鈴(非續接)
                 const parts = line.slice(4, -1).split('|');
                 const sceneLabel = parts.length >= 2 ? parts[1] : parts[0];

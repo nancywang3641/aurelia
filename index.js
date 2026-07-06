@@ -202,6 +202,7 @@ const PHONE_FILES = [
     'vn_story/vn_generator.js',
     'vn_story/vn_dynamic_parser.js',   // 創作室（展廳）動態標籤引擎 — 原本只有 PWA(index.html) 載，酒館漏載害自建 tag 摸不到 → 補上
     'vn_story/vn_theme.js',            // VN 劇情面板主題（[World|] 驅動換樣式）— 須在 vn_core 前
+    'vn_story/vn_fx.js',               // ⚡ 畫面特效引擎（#fx-id# 標記由 vn_core 抽取路由過來）
     'vn_story/vn_core.js',
     'vn_story/vn_scene_insert.js',     // 副模型場景插圖渲染器（state_runtime.extractOnce → splice 進 VN 劇本）
     'vn_story/vn_avatar_earlybird.js', // 頭像早鳥：串流/訊息落地搶先生成 ChapterCard 的 [Avatar|...]（須在 vn_core 後）
@@ -443,6 +444,7 @@ async function initializeExtension() {
         // vn_story / qb / wx / map / rpg 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_styles.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_core.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_fx.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_gallery.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_tts_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_ui_workshop.css');

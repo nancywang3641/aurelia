@@ -1372,3 +1372,80 @@ html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { co
     color: var(--jrpg-wine-dark);
     font-family: inherit;
 }
+
+/* ═══ ⚡ 特效工坊（fx 模式：特效庫清單 + 試播台） ═══ */
+.studio-container .fx-pv-desc {
+    font-size: 12px;
+    color: #806b58;
+    margin: 4px 0 10px;
+    line-height: 1.5;
+}
+.studio-container .vn-fx-preview-stage {
+    margin-bottom: 10px;
+    border: 1px solid rgba(151, 108, 55, 0.30);
+}
+.studio-container .fx-lib-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.studio-container .fx-lib-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(151, 108, 55, 0.30);
+    background-color: rgba(255, 249, 235, 0.88);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 430px 430px;
+}
+.studio-container .fx-lib-info {
+    flex: 1;
+    min-width: 0;
+}
+.studio-container .fx-lib-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--jrpg-ink);
+}
+.studio-container .fx-lib-desc {
+    font-size: 11px;
+    color: #806b58;
+    margin-top: 2px;
+    line-height: 1.4;
+}
+.studio-container .fx-lib-kind {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 8px;
+    color: var(--jrpg-wine-dark);
+    border: 1px solid rgba(142, 101, 51, 0.35);
+    background: rgba(142, 101, 51, 0.10);
+    vertical-align: 1px;
+}
+.studio-container .fx-lib-builtin {
+    opacity: 0.75;
+}
+.studio-container .fx-lib-btn {
+    flex-shrink: 0;
+    border: 1px solid rgba(151, 108, 55, 0.35);
+    background: rgba(255, 252, 244, 0.9);
+    color: var(--jrpg-ink);
+    border-radius: 9px;
+    padding: 7px 11px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.studio-container .fx-lib-btn:active {
+    transform: scale(0.96);
+}
+.studio-container .fx-lib-btn.danger {
+    color: #9c2f2f;
+    border-color: rgba(156, 47, 47, 0.35);
+}
+.studio-container .fx-pv-play {
+    width: 100%;
+}
