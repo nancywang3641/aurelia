@@ -475,7 +475,8 @@
                 if (id && win.OS_DB?.deleteVnMemoriesByChapter) win.OS_DB.deleteVnMemoriesByChapter(id, _storyId());
             } catch (e) {}
         });
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestSig = null; _lastRecall = null; _pendingRecallKeywords = []; _pendingRecallEntries = []; });
+        // 🚨切聊天室必須清「跨聊天室記憶體暫存」：漏清 _pendingMemory / _pendingRecallMainEntries → 舊聊天結尾掛的待處理記憶(含舊角色)會被新聊天第一輪 consumePendingMemory 吃進去 → 新局莫名遺留舊 chatId 數據。
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestSig = null; _lastRecall = null; _pendingRecallKeywords = []; _pendingRecallEntries = []; _pendingRecallMainEntries = []; _pendingMemory = null; });
         console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
     }
 
@@ -515,7 +516,7 @@
         injectMemories, ingestLatest, reconcileToStory,
         get _lastRecall() { return _lastRecall; },
         // 結合觸發：state_runtime 取走待處理記憶內容(取走即清，避免重複)
-        consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; return p; },
+        consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; if (p && p.storyId && p.storyId !== _storyId()) return null; return p; },   // 守衛：不同 chatId 的殘留待處理記憶不給吃(防跨聊天室洩漏)
         hasPendingMemory() { return !!_pendingMemory; },
         getCatalogForPicking, setPendingRecall,    // 🎬 記憶導演：給 state_runtime 副模型挑用
     };
