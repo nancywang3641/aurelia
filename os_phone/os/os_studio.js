@@ -3742,6 +3742,53 @@ ${cleanFormat}
         _vcTpl = null; _vcView = 'browse'; renderVnComponents();
     }
 
+    // 登場音效：讀素材設定的「音效目錄」base（優先 localStorage，studio 視窗的 VN_Config 未必載到值）
+    function _sfxBase() {
+        try { const c = JSON.parse(localStorage.getItem('vn_cfg_v4') || '{}'); if (c && c.sfx) return c.sfx; } catch (e) {}
+        try { return (win.VN_Config && win.VN_Config.data && win.VN_Config.data.sfx) || ''; } catch (e) {}
+        return '';
+    }
+    // 音效清單 manifest：先試音效目錄的 sfx_manifest.json，失敗退回 CDN raw（Pages 可能還沒重建）
+    let _sfxManifestCache = null;
+    async function _loadSfxManifest() {
+        if (_sfxManifestCache) return _sfxManifestCache;
+        const urls = [];
+        const base = _sfxBase();
+        if (base) urls.push(base + 'sfx_manifest.json');
+        urls.push('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/sfx_manifest.json');
+        for (const u of urls) {
+            try {
+                const r = await fetch(u, { cache: 'no-cache' });
+                if (r.ok) { const j = await r.json(); if (j && Array.isArray(j.groups)) { _sfxManifestCache = j; return j; } }
+            } catch (e) {}
+        }
+        return null;
+    }
+    async function _populateAppearSfxSelect(sel, current) {
+        const m = await _loadSfxManifest();
+        sel.innerHTML = '<option value="">（無 — 不播）</option>';
+        let found = false;
+        if (m && Array.isArray(m.groups)) {
+            m.groups.forEach(g => {
+                const og = document.createElement('optgroup'); og.label = g.name || '';
+                (g.ids || []).forEach(id => {
+                    const o = document.createElement('option'); o.value = id; o.textContent = id;
+                    if (id === current) { o.selected = true; found = true; }
+                    og.appendChild(o);
+                });
+                sel.appendChild(og);
+            });
+        }
+        if (current && !found) {   // 目前值不在清單（自訂/舊值）→ 補一個保留，不洗掉
+            const o = document.createElement('option'); o.value = current; o.textContent = current + '（自訂）'; o.selected = true;
+            sel.appendChild(o);
+        }
+        if (!m) {
+            const o = document.createElement('option'); o.textContent = '（清單載入失敗，確認音效目錄）'; o.disabled = true;
+            sel.appendChild(o);
+        }
+    }
+
     // ── ③ 使用與設置：把詳情頁的按鈕牆拆過來，分組整齊 ──
     function _vcRenderSettings(listEl) {
         const tpl = _vcTpl; if (!tpl) { _vcView = 'browse'; return renderVnComponents(); }
@@ -3783,10 +3830,9 @@ ${cleanFormat}
                 </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">登場音效</div>
                     <div class="sgc-format-box">
-                        <input class="sgc-format-input" id="vc-appear-sfx" placeholder="音效名稱，留空＝無聲" value="${_sgcEsc(tpl.appearSfx || '')}">
+                        <select class="set-select" id="vc-appear-sfx"><option value="">（載入中…）</option></select>
                         <div class="vc-fmt-actions">
                             <button class="swb-secondary btn-appear-try" type="button"><i class="fa-solid fa-play"></i> 試聽</button>
-                            <button class="swb-secondary btn-appear-save" type="button"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
                         </div>
                     </div>
                 </div>
@@ -3828,23 +3874,25 @@ ${cleanFormat}
             await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal();
             _studioToast('已儲存關鍵字（' + tpl.keywords.length + '）', 'success', '設置');
         };
-        // 登場音效：卡片彈出時播的音效 ID（來源＝素材設定的音效目錄）。留空＝無聲、不預設。
-        const appIn = listEl.querySelector('#vc-appear-sfx');
-        const appSave = listEl.querySelector('.btn-appear-save');
-        if (appSave) appSave.onclick = async () => {
-            tpl.appearSfx = ((appIn && appIn.value) || '').trim();
-            await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal();
-            _studioToast(tpl.appearSfx ? '已設定登場音效' : '已清除登場音效', 'success', '設置');
-        };
+        // 登場音效：分組下拉單（清單從音效目錄的 sfx_manifest.json 載入）。選空＝無聲、不預設。
+        const appSel = listEl.querySelector('#vc-appear-sfx');
+        if (appSel) {
+            _populateAppearSfxSelect(appSel, tpl.appearSfx || '');
+            appSel.onchange = async () => {
+                tpl.appearSfx = appSel.value || '';
+                await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal();
+                _studioToast(tpl.appearSfx ? ('登場音效：' + tpl.appearSfx) : '已清除登場音效', 'success', '設置');
+            };
+        }
         const appTry = listEl.querySelector('.btn-appear-try');
         if (appTry) appTry.onclick = () => {
-            const id = ((appIn && appIn.value) || '').trim();
-            if (!id) { _studioToast('先填音效名稱', 'info', '試聽'); return; }
-            const base = (win.VN_Config && win.VN_Config.data && win.VN_Config.data.sfx) || '';
+            const id = appSel ? appSel.value : '';
+            if (!id) { _studioToast('先選一個音效', 'info', '試聽'); return; }
+            const base = _sfxBase();
             if (!base) { _studioToast('素材設定還沒填「音效目錄」', 'warning', '試聽'); return; }
             try {
-                const a = new Audio(base + id + '.mp3');
-                a.play().catch(() => _studioToast('播放失敗，確認音效名稱與音效目錄', 'warning', '試聽'));
+                const a = new Audio(base + id + '.mp3');   // 與 playSFX 同：base 已含尾斜線
+                a.play().catch(() => _studioToast('播放失敗，確認音效目錄', 'warning', '試聽'));
             } catch (e) {}
         };
         listEl.querySelector('#vc-raw').onclick = () => openRawEditModal(tpl);
