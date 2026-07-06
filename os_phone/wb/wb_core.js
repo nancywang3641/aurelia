@@ -456,8 +456,11 @@
                         }
                     });
                 }
-                const configStr = localStorage.getItem('wx_phone_api_config');
-                const config = configStr ? JSON.parse(configStr) : { maxTokens: 1000 };
+                // 設定：直接用主模型完整設定（含 useSystemApi/useGenerateRaw/stProfileId/url/key）跟創作室同源。
+                // 🚨別再用 wx_phone_api_config 覆蓋——舊 wx 設定會把「跟隨酒館/generateRaw」旗標蓋成直連→報「無 URL/Key」。
+                let config = {};
+                try { const _S = win.OS_SETTINGS; if (_S && _S.getConfig) { const _b = _S.getConfig(); if (_b) config = Object.assign({}, _b); } } catch (e) {}
+                if (!config.maxTokens) config.maxTokens = 1000;
                 await win.OS_API.chat(messages, config, null, async (finalText) => {
                      await this.processWorldResponse(finalText);
                 }, (err) => {
@@ -482,8 +485,11 @@
                         m.content += `\n\n[SYSTEM IMPORTANT INSTRUCTION]\nUser is focusing on Post ID: ${postId}.\n1. DO NOT generate new [wb_post].\n2. ONLY generate [wb_reply] for [Target: ${postId}].\n3. Generate 2-3 interesting replies from different NPCs.`;
                     }
                 });
-                const configStr = localStorage.getItem('wx_phone_api_config');
-                const config = configStr ? JSON.parse(configStr) : { maxTokens: 1000 };
+                // 設定：直接用主模型完整設定（含 useSystemApi/useGenerateRaw/stProfileId/url/key）跟創作室同源。
+                // 🚨別再用 wx_phone_api_config 覆蓋——舊 wx 設定會把「跟隨酒館/generateRaw」旗標蓋成直連→報「無 URL/Key」。
+                let config = {};
+                try { const _S = win.OS_SETTINGS; if (_S && _S.getConfig) { const _b = _S.getConfig(); if (_b) config = Object.assign({}, _b); } } catch (e) {}
+                if (!config.maxTokens) config.maxTokens = 1000;
                 await win.OS_API.chat(messages, config, null, async (finalText) => {
                      await this.processWorldResponse(finalText);
                 }, (err) => {
