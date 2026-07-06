@@ -2883,9 +2883,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         var css  = String(tpl.css  || '');
         var html = String(tpl.html || '');
         var js   = String(tpl.js   || '');
+        // 🚨組件 CSS 全是 .vn-dynamic-panel-<tagId> 前綴：App 這層必須也帶這個 class 當作用域根，否則選擇器全不命中→掉樣式(VN 預覽/劇情都有包這層才有樣式)
+        var safeTagId = String(tpl.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
         return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">'
             + '<style>html,body{margin:0;padding:0;height:100%;}#app-root{box-sizing:border-box;width:100%;min-height:100%;}'
-            + css + '</style></head><body><div id="app-root">' + html + '</div>'
+            + css + '</style></head><body><div id="app-root" class="vn-dynamic-panel-' + safeTagId + '">' + html + '</div>'
             + '<scr' + 'ipt>(function(){'
             + 'var container=document.getElementById("app-root");var lines=[];'
             + 'var st={'
