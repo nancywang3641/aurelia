@@ -274,6 +274,48 @@
         } catch (e) { console.warn('[VN Tags Injector] 失敗:', (e && e.message) || e); }
     }
 
+    // ⚡ 畫面特效清單注入：內建+創作室已存特效彙成白名單（#fx-id# 用法同 SFX），只在「最近劇情
+    //    是 VN 格式」的聊天注入（掃到 [Char| / <ChapterCard 才注），非 VN 卡不吃這份 token。os_fx_inject=0 可關。
+    var FX_LIST_INJECT_ID = 'aurelia_fx_list';
+    var _lastFxUninject = null;
+    async function injectFxList() {
+        try {
+            try { _lastFxUninject && _lastFxUninject(); } catch (e) {}
+            _lastFxUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            try { if (localStorage.getItem('os_fx_inject') === '0') return; } catch (e) {}
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var fx = win.OS_FX || window.OS_FX;
+            if (!fx || !fx.listForPrompt) return;
+            // 只在 VN 格式聊天注入：掃最近幾則正文有沒有 VN 標記
+            var isVn = false;
+            try {
+                var lastId = 0;
+                try { lastId = await win.TavernHelper.getLastMessageId(); } catch (e) {}
+                var start = Math.max(0, (lastId || 0) - 5);
+                var msgs = (await win.TavernHelper.getChatMessages(start + '-' + lastId)) || [];
+                var recent = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
+                isVn = recent.indexOf('[Char|') !== -1 || recent.indexOf('<ChapterCard') !== -1;
+            } catch (e) {}
+            if (!isVn) return;
+            var list = fx.listForPrompt();
+            if (!list) return;
+            var content = '# [📱模式｜畫面特效] 可在正文句子後穿插 #fx-id# 觸發畫面特效（用法同 #SFXID#、不可單獨一行）。'
+                + '只准用下列 ID、禁止自創、沒有合適的就不用：\n' + list
+                + '\n規則：瞬發型緊跟對應劇情句；持續型是天氣/氛圍、換 [Bg] 自動停止，一章最多 1-2 次、平常大多數輪次都不需要特效。';
+            var result = win.TavernHelper.injectPrompts([{
+                id: FX_LIST_INJECT_ID,
+                content: content,
+                position: 'in_chat',
+                depth: 0,
+                role: 'system'
+            }], { once: true });
+            _lastFxUninject = (result && result.uninject) || null;
+            console.log('⚡ [FX List Injector] 注入畫面特效清單');
+        } catch (e) { console.warn('[FX List Injector] 失敗:', (e && e.message) || e); }
+    }
+
     // ── 💬 手機聊天室 ID 對照表：掃最近劇情的 [Chat: 名|ID]，每輪提醒 AI「沿用既有 ID、別因改群名而亂編」──
     //    （配合 wx 發現 tab 改成按 ID 分群：AI 改名沒關係，ID 不變就合回同一間）
     var WX_CHATROOM_INJECT_ID = 'aurelia_wx_chatroom_ids';
@@ -401,10 +443,11 @@
         if (win.tavern_events.GENERATION_STARTED) {
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppMemory(); });   // dryRun 空跑不注入
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectVnTags(); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectFxList(); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectWxChatrooms(); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppData(); });
         }
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; });
         console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件 + app資料回傳）');
     }
 

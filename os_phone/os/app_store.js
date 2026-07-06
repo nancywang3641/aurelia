@@ -72,6 +72,7 @@
         'panel-icon': 'studio-panel.png',       // 製作互動面板
         'theme-icon': 'studio-theme.png',       // 設計劇情主題
         'wb-icon': 'studio-worldbook.png',      // 整理世界書
+        'fx-icon': 'studio-fx.png',             // 特效工坊（素材未上傳前自動隱藏、卡片文字照常）
         'persona-icon': 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/我的角色_ying.png'   // 我的角色（在 aseets 根，非 studio-ui）
     };
     function _applyAssets(c) {
@@ -94,6 +95,7 @@
       +         '<button class="ws-mini ws-mini-vn" data-go="vncomp" type="button"><img class="ws-mini-ic" data-asset="vn-icon" alt=""><span class="ws-mini-t">VN 組件清單</span><span class="ws-mini-d">整理、打包組件</span></button>'
       +       '</div>'
       +       '<button class="ws-card ws-card-sm ws-card-panel" data-studio="vn_ui" type="button"><img class="ws-card-ic" data-asset="panel-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">製作互動面板</span><span class="ws-card-d">狀態欄、角色卡、好感度…這類劇情面板</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +       '<button class="ws-card ws-card-sm ws-card-fx" data-studio="fx" type="button"><img class="ws-card-ic" data-asset="fx-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">特效工坊</span><span class="ws-card-d">下雪、滴血、劍光…劇情畫面特效</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-sm ws-card-theme" data-studio="theme" type="button"><img class="ws-card-ic" data-asset="theme-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">設計劇情主題</span><span class="ws-card-d">對話框、名牌、頂部牌的外觀風格</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-sm ws-card-wb" data-studio="worldbook" type="button"><img class="ws-card-ic" data-asset="wb-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">整理世界書</span><span class="ws-card-d">建／改世界書條目，AI 幫你寫規則</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-sm ws-card-persona" data-studio="persona" type="button"><img class="ws-card-ic" data-asset="persona-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">我的角色</span><span class="ws-card-d">寫／改你扮演的主角人設，對標不同世界</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
