@@ -101,11 +101,27 @@
         return dst;
     }
 
-    // 把單筆 patch（key→value）套進 cur：點記法→巢狀；物件→深合併；純值→取新
+    // 刪除哨兵：patch 值等於它 = 把這個 key 整個刪掉（死亡/永久退場實體用）。
+    // 刪除走 patch 而非直接改 current，重播/swipe 回滾/trim 收斂的語義才跟 updates 一致。
+    const DEL_SENTINEL = '__AVS_DEL__';
+
+    // 按點記法路徑刪除節點；路徑不存在就靜默跳過（重播舊 patch 時目標可能早已不在）
+    function _deleteDeep(obj, path) {
+        const keys = path.split('.');
+        let cur = obj;
+        for (let i = 0; i < keys.length - 1; i++) {
+            cur = cur[keys[i]];
+            if (!cur || typeof cur !== 'object') return;
+        }
+        if (cur && typeof cur === 'object') delete cur[keys[keys.length - 1]];
+    }
+
+    // 把單筆 patch（key→value）套進 cur：點記法→巢狀；物件→深合併；純值→取新；刪除哨兵→整節點移除
     function _applyPatchInto(cur, p) {
         if (!p || typeof p !== 'object') return;
         for (const [k, v] of Object.entries(p)) {
-            if (k.includes('.')) _setDeep(cur, k, v);                          // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
+            if (v === DEL_SENTINEL) _deleteDeep(cur, k);                       // 退場刪除 → 節點整個移除
+            else if (k.includes('.')) _setDeep(cur, k, v);                     // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
             else if (v && typeof v === 'object' && !Array.isArray(v)) cur[k] = _deepMergeObj(cur[k], v);  // 物件欄位 → 深合併(別整碗覆蓋)
             else cur[k] = v;                                                   // 數字/字串/陣列 → 取新值
         }
@@ -435,12 +451,14 @@ ${modeRules}
 3. 新角色：有沒有第一次登場的角色？要按該欄位 desc 的「基礎屬性組」補哪幾個初值？
 4. 主角檢查：出場的有沒有主角／MC／{{user}} 本人？（主角好感度填 null，其餘欄照記）
 5. 初遇檢查：這輪見過 MC 的角色，每個都記了「初遇」嗎？（短暫出場、戲份少的也要；【當下狀態】裡缺初遇的見過 MC 的角色也要回補）
-6. 校對：有沒有漏掉出場角色、有沒有編造、數值有沒有超出 desc 範圍、是否用點記法、沒變的有沒有誤寫進去
+6. 退場檢查：有沒有角色這輪**確定死亡或永久退場**？符合下方 removes 的刪除條件嗎？（通常答「無」）
+7. 校對：有沒有漏掉出場角色、有沒有編造、數值有沒有超出 desc 範圍、是否用點記法、沒變的有沒有誤寫進去
 
 【第二步 · 輸出】把上面分析的結論整理成 JSON，放進一個 \`\`\`json 區塊（區塊外才是分析文字）：
 \`\`\`json
-{ "updates": { "<欄位名 或 容器.實體.屬性>": <新值> } }
+{ "updates": { "<欄位名 或 容器.實體.屬性>": <新值> }, "removes": ["<容器.實體名>"] }
 \`\`\`
+（removes 平常沒有就整個省略）
 
 【通用規則】
 - 數字欄位：給新數值（例：當下好感 12 + 升 3 → 15）
@@ -456,7 +474,8 @@ ${modeRules}
 - 對劇情中所有「具名有份量」的出場角色都要抽（是否含路人/臨時 NPC，以該欄位 desc 為準）
 - 新角色首次登場：按 desc 的「基礎屬性組」補齊每一個基礎屬性初值，之後才依劇情加特有屬性
 - 「初遇」錨點（防 NPC 失憶）：只要某角色**與 MC 當面見過 / 互動過**，首次登場時就給它一個「初遇」屬性，記「第一次與 MC 相遇的時序＋地點＋怎麼遇上的」（例：{ "角色狀態.某人.初遇": "第4輪・城門口・替MC指路認識" }）。**即使該角色只是短暫出場、戲份很少，只要見過 MC 就一定要記**——這是為了讓他很久以後再登場時，不會被當成第一次見 MC。
-- 「初遇」一旦寫入＝**永久錨點**：之後視為固定、不要再寫進 updates、不可改寫或刪除（角色消失幾百輪後再出現，初遇仍在）。若【當下狀態】裡某個見過 MC 的角色「缺」初遇，這輪順手回補（從劇情回推第一次相遇）。`;
+- 「初遇」一旦寫入＝**永久錨點**：之後視為固定、不要再寫進 updates、不可改寫或刪除（角色消失幾百輪後再出現，初遇仍在）。若【當下狀態】裡某個見過 MC 的角色「缺」初遇，這輪順手回補（從劇情回推第一次相遇）。
+- 「退場刪除」removes（嚴格、寧缺勿濫）：只有**劇情明確寫死了或永久退場**（死亡且無復活可能／徹底離開故事不會再出現）**且沒有未了牽扯**（沒有進行中任務、債務、物品往來或懸念掛在他身上）的實體，才把「容器.實體名」整條列進 removes。主角／MC／{{user}} **絕不可列**；只能刪整個實體、不能刪單一屬性；**不確定就保留**（頂多在 updates 把他的狀態改成死亡）；沒有要刪就省略 removes。`;
     }
 
     // --- 從 AVS 變數包合併出 schema（融合：schema 來源從 OS_DB.state_data.schema → AVS 變數包）---
@@ -910,6 +929,22 @@ ${numberedText}`;
                     const root = k.split('.')[0];
                     if (schema[k] !== undefined || schema[root] !== undefined) filtered[k] = updates[k];
                 }
+                // 🗑️ 退場刪除：removes=["容器.實體"] → 以刪除哨兵寫進同一筆 patch
+                //    （重播/swipe 回滾/trim 收斂全走既有 patch 機制、砍樓自動復原）。sp_avs_removes=0 可關。
+                let removedN = 0;
+                if (Array.isArray(json.removes) && localStorage.getItem('sp_avs_removes') !== '0') {
+                    for (const r of json.removes) {
+                        const path = String(r || '').trim();
+                        if (!path.includes('.')) continue;                             // 只准刪「容器.實體」，頂層欄位不准
+                        if (schema[path.split('.')[0]] === undefined) continue;
+                        let node = currentState || {};
+                        for (const seg of path.split('.')) { node = node?.[seg]; if (node === undefined) break; }
+                        if (node === undefined) continue;                              // 不存在的別寫進 patch
+                        filtered[path] = DEL_SENTINEL;                                 // 同 key 的 update 被蓋掉：退場優先
+                        removedN++;
+                    }
+                    if (removedN > 0) console.log(`🗑️ [State Runtime] 本輪退場刪除 ${removedN} 個實體:`, json.removes);
+                }
                 const trimmed = trimPatches({ ...(data.patches || {}), [lastId]: filtered }, data.base);
                 // 🔑 新 current 一律「以引擎現有狀態為底、只疊這輪 patch」——不要用 recomputeCurrent 從 base 空白重建。
                 //   因為 patches/base 可能是空的(先前狀態由主模型 <vars> 寫入、沒進 patch 系統)，從空重建會把累積的角色全洗光——這就是覆蓋根因。
@@ -1317,9 +1352,10 @@ ${numberedText}`;
             '1. 合併重複：同一角色的繁簡體/別名/暱稱條目合併成一條（名字保留資訊較完整的那個），數值取最新合理值。',
             '2. 移除純路人：只有「沒有好感度/關係數值、沒有物品往來、與任務無牽扯、劇情總結也沒提到」的條目才可移除；不確定就保留。',
             '3. 清舊任務：狀態為「已完成/已失敗/已結束」且沒有後續掛鉤的任務條目整條移除（它們已是既成事實、由劇情總結記載，不需留在狀態裡）；「進行中/可交付/未領酬勞/有未了後果」的保留。移除的任務名列進 removed。',
-            '4. 對帳修正：對照【劇情總結】的既成事實，修正過期欄位（例如任務其實已完成/酬勞已領、關係已變化）。',
-            '5. 結構不變：保持原本的巢狀結構與欄位名，不發明新欄位、不改欄位型別、不改頂層分類。',
-            '6. 只輸出 JSON，格式：{"current":{整理後完整狀態},"merged":["被合併掉的名字"],"removed":["被移除的名字"],"fixed":["修正了什麼(短句)"]}',
+            '4. 清亡者：明確已死亡或永久退場、且沒有未了牽扯（無進行中任務/債務/懸念掛在他身上）的角色條目整條移除，名字列進 removed；主角絕不移除；不確定就保留。',
+            '5. 對帳修正：對照【劇情總結】的既成事實，修正過期欄位（例如任務其實已完成/酬勞已領、關係已變化）。',
+            '6. 結構不變：保持原本的巢狀結構與欄位名，不發明新欄位、不改欄位型別、不改頂層分類。',
+            '7. 只輸出 JSON，格式：{"current":{整理後完整狀態},"merged":["被合併掉的名字"],"removed":["被移除的名字"],"fixed":["修正了什麼(短句)"]}',
             '',
             '【當前狀態】',
             JSON.stringify(currentState),
