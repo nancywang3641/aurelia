@@ -1367,7 +1367,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         el.innerHTML = _wbChat.map(m => {
             let body = m.content;
             if (m.role === 'assistant') { body = _wbStripOps(m.content); if (!body) body = '✏️ 我擬好了改動，點下方「查看建議」確認。'; }
-            return `<div class="swb-bubble swb-${m.role}">${_sgcEsc(body)}</div>`;
+            return `<div class="swb-bubble swb-${m.role}">${renderMarkdown(body)}</div>`;
         }).join('');
         el.scrollTop = el.scrollHeight;
     }
@@ -1810,9 +1810,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     }
     function _mcPaintChat(host) {
         const box = host.querySelector('#mc-chat'); if (!box) return;
-        box.innerHTML = _mcChat.map(m =>
-            `<div class="mc-msg ${m.role === 'user' ? 'me' : 'ai'}">${_sgcEsc(m.content).replace(/&lt;persona&gt;[\s\S]*?&lt;\/persona&gt;/gi, '').replace(/\n/g, '<br>').trim() || '…'}</div>`
-        ).join('');
+        box.innerHTML = _mcChat.map(m => {
+            const body = String(m.content || '').replace(/<persona>[\s\S]*?<\/persona>/gi, '').trim();   // 先剝人設機器標記，再渲染 markdown
+            return `<div class="mc-msg ${m.role === 'user' ? 'me' : 'ai'}">${renderMarkdown(body) || '…'}</div>`;
+        }).join('');
         box.scrollTop = box.scrollHeight;
     }
     function _mcPaintPendBar(host) {
