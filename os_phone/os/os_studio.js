@@ -23,32 +23,7 @@
             <div class="studio-body">
                 <div id="studio-drawer-backdrop" class="studio-drawer-backdrop"></div>
 
-                <!-- 🏠 創作室首頁：三張任務卡（取代頂部 tab，點一張進對應工作；GPT 分層 IA） -->
-                <div id="studio-home-pane" class="studio-home-pane">
-                    <div class="sh-title">今天要做什麼？</div>
-                    <div class="sh-cards">
-                        <div class="studio-task-card" data-go="vn_ui" role="button" tabindex="0">
-                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/studio-panel.png" alt="" onerror="this.remove()">
-                            <div class="stc-main"><div class="stc-title">製作互動面板</div><div class="stc-desc">狀態欄、角色卡、好感度…這類劇情面板</div></div>
-                            <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
-                        </div>
-                        <div class="studio-task-card" data-go="theme" role="button" tabindex="0">
-                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/studio-theme.png" alt="" onerror="this.remove()">
-                            <div class="stc-main"><div class="stc-title">設計劇情主題</div><div class="stc-desc">對話框、名牌、頂部牌的外觀風格</div></div>
-                            <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
-                        </div>
-                        <div class="studio-task-card" data-go="worldbook" role="button" tabindex="0">
-                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/studio-worldbook.png" alt="" onerror="this.remove()">
-                            <div class="stc-main"><div class="stc-title">整理世界書</div><div class="stc-desc">建／改世界書條目，AI 幫你寫規則</div></div>
-                            <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
-                        </div>
-                        <div class="studio-task-card" data-go="persona" role="button" tabindex="0">
-                            <img class="stc-art" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/我的角色_ying.png" alt="" onerror="this.remove()">
-                            <div class="stc-main"><div class="stc-title">我的角色</div><div class="stc-desc">寫／改你扮演的主角人設，對標不同世界</div></div>
-                            <span class="stc-chev"><i class="fa-solid fa-chevron-right"></i></span>
-                        </div>
-                    </div>
-                </div>
+                <!-- 創作室首頁(今天要做什麼)已移除：功能全整併進「應用商城」工坊首頁，這裡不再有落地首頁 -->
 
                 <!-- ② 聊天區 -->
                 <div class="studio-left">
@@ -341,8 +316,8 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
     };
 
     let currentMode = 'vn_ui';
-    let _studioTop = 'home';   // 頂層導覽：home(首頁三卡) | vn_ui | theme | worldbook（取代頂部 tab）
-    let _landedDirect = false; // true=從工坊四鈕直接落到某工作(帶 landMode)；創作室首頁已搬到工坊成孤兒，返回一步直接退出、不落首頁
+    let _studioTop = 'vn_ui';  // 頂層導覽：vn_ui | theme | worldbook | persona（創作室首頁已移除，全從工坊帶 landMode 進）
+    let _landedDirect = false; // (保留兼容) launch 仍會設；返回鈕已統一直接退出，不再讀它
     let chatMessages = [];
     let _vnPanelType = '純展示';   // 面板類型：純展示 / 純應用 / 共用（開頭就選，注入生成訊息）
     let currentParsedData = null;
@@ -405,7 +380,7 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
 
         bindEvents();
         loadMode(currentMode);     // 先把 vn_ui 工作區建好（先藏在首頁下）
-        switchTopMode(landMode || 'home');     // 有指定就直接落到該工作（工坊四鈕直接進 vn_ui/theme/worldbook/persona）；否則落首頁四張卡
+        switchTopMode(landMode || 'vn_ui');     // 有指定就落該工作；沒帶就落製作面板(vn_ui)——不再有「今天要做什麼」死首頁
     }
 
     // ── 📋 創建說明書：給朋友自己的 Claude／GPT 看的「對外」規格書，照它產出 <json> 就能匯入回來 ──
@@ -590,18 +565,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 
     function bindEvents() {
         document.getElementById('studio-back-btn').onclick = () => {
-            // 讀 DOM 實際狀態當真相（別靠 _studioTop 變數：載入器可能跑兩份模組→變數會跟畫面不同步）
-            const cont = document.querySelector('#os_studio_app .studio-container');
-            // 工坊四鈕直接入場：創作室首頁已搬到工坊、成孤兒，返回一步直接退出創作室回工坊，不再落到「今天要做什麼」
-            if (_landedDirect) { const app = document.getElementById('os_studio_app'); if (app) app.remove(); return; }
-            if (cont && !cont.classList.contains('top-home')) switchTopMode('home'); // 舊路徑(編輯模式等)不在首頁→ 返回首頁
-            else { const app = document.getElementById('os_studio_app'); if (app) app.remove(); } // 已在首頁 → 返回大廳
+            // 已無創作室首頁：頂層返回一律直接退出創作室、回到應用商城工坊（各模式的內部返回由該模式自己處理）
+            const app = document.getElementById('os_studio_app'); if (app) app.remove();
         };
-        document.querySelectorAll('.studio-task-card').forEach(card => {
-            const go = () => switchTopMode(card.getAttribute('data-go'));
-            card.onclick = go;
-            card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
-        });
         _setupRawEditModalEvents();
         _setupImportEvents();
         renderStudioChips();
@@ -921,9 +887,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         const cont = document.querySelector('#os_studio_app .studio-container');
         if (cont) cont.classList.remove('top-theme', 'top-worldbook', 'top-persona', 'top-home');
         _studioTop = mode;
-        if (mode === 'home') {
-            if (cont) cont.classList.add('top-home');
-        } else if (mode === 'theme') {
+        if (mode === 'theme') {
             if (cont) cont.classList.add('top-theme');
             renderThemePanel();
         } else if (mode === 'worldbook') {
@@ -3707,7 +3671,7 @@ ${cleanFormat}
             if (_vcStandalone) {   // 獨立區：編輯需要創作室編輯器→關浮層、開創作室、進編輯（沿用 openEditApp 模式）
                 const root = _vcStandaloneRoot;
                 if (_vcExit) _vcExit();
-                try { launch(root); } catch (e) {}
+                try { launch(root, 'vn_ui'); } catch (e) {}   // 直接落製作面板編輯器，不經死首頁
                 setTimeout(() => { try { _enterEditMode(tpl); } catch (e) { console.warn('[OS_STUDIO] 繼續編輯', e); } }, 60);
             } else {
                 _enterEditMode(tpl);
@@ -4888,7 +4852,7 @@ ${d.usageDesc || ''}
         launch, openVnComponents, attachVpScaler: _attachVpScaler,
         // 給「應用工坊 · 我的應用」的管理按鈕用：靠 srcTplId 操作該 app 的可編輯底稿
         openEditApp: async function (tplId, c) {
-            try { if (c) launch(c); } catch (e) {}
+            try { if (c) launch(c, 'vn_ui'); } catch (e) {}   // 直接落製作面板編輯器，不經死首頁
             const tpl = await _getTplById(tplId);
             if (!tpl) { alert('找不到這個應用的可編輯底稿（可能是舊資料，重新生成一次即可）'); return; }
             setTimeout(function () { try { _enterEditMode(tpl); } catch (e) { console.warn('[OS_STUDIO] openEditApp', e); } }, 60);
