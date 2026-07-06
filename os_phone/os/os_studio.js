@@ -4011,9 +4011,11 @@ ${cleanFormat}
         const name = (prompt('新群組名稱（例：古代 / 現代 / 賽博龐克）') || '').trim();
         if (!name) return;
         const groups = _loadGroups();
-        groups.push({ id: _newGroupId(), name });
+        const g = { id: _newGroupId(), name };
+        groups.push(g);
         _saveGroups(groups);
-        _vcView = 'browse'; renderVnComponents();
+        _vcView = 'browse';
+        _openGroupManage(g);   // 建完直接開「指派成員」勾選面板，一次把組件打勾歸組，免得一個個進組件設置頁
     }
 
     // 群組管理 modal：改名 / 指派成員（勾選哪些組件屬於本組）/ 刪除（退回未分組、不刪組件）
