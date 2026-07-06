@@ -1602,6 +1602,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                                 <div class="nai-pack-title">📦 NAI 預設包（拖圖生成・含預覽）</div>
                                                 <button type="button" class="nai-pack-close" onclick="window._naiPreset.close()">✕</button>
                                             </div>
+                                            <div class="nai-pack-io">
+                                                <div class="cfd-pack-io-row">
+                                                    <button type="button" class="set-btn" onclick="window._naiPreset.importPack()">📥 匯入預設包檔</button>
+                                                    <button type="button" class="set-btn" onclick="window._naiPreset.exportPack()">📤 匯出全部</button>
+                                                    <input type="file" id="img-nai-pack-import-file" accept="application/json,.json" class="nai-pack-file-hidden">
+                                                </div>
+                                                <div class="cfd-pack-io-hint">匯出會把整牆預設（含預覽圖）存成一個檔分享；匯入同名會更新。</div>
+                                            </div>
                                             <div id="img-nai-pack-drop" class="nai-pack-drop">
                                                 <input type="file" id="img-nai-pack-file" accept="image/png,image/webp,image/*" multiple class="nai-pack-file-hidden">
                                                 <div class="nai-pack-drop-hint">把下載的 <b>NAI 原圖</b>拖進來（可一次多張），或 <span class="nai-pack-pick" onclick="document.getElementById('img-nai-pack-file').click()">點此選圖</span><br>自動讀出底詞 / 負詞 / sampler / CFG / steps，存成預設，並用這張圖當預覽。<br><span class="nai-pack-warn">⚠️ 要原圖，截圖或被轉成 JPG 的讀不到。</span></div>
@@ -3632,6 +3640,90 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 this.renderGrid();
             },
 
+            // ── 匯出／匯入整包（含預覽圖）──縮圖存 IndexedDB，匯出時撈出來 inline 進 JSON，匯入時再寫回 DB。
+            _sanitizeNaiPreset(p) {
+                const s = v => (v == null) ? '' : String(v).trim();
+                const num = (v, d) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
+                const int = (v, d) => { const n = parseInt(v); return isNaN(n) ? d : n; };
+                return {
+                    name: s(p.name),
+                    charBasePrompt: s(p.charBasePrompt), charNegPrompt: s(p.charNegPrompt),
+                    itemBasePrompt: s(p.itemBasePrompt), itemNegPrompt: s(p.itemNegPrompt),
+                    sampler: s(p.sampler) || 'k_euler_ancestral',
+                    scale: num(p.scale, 5), steps: int(p.steps, 28), ucPreset: int(p.ucPreset, 1),
+                    model: s(p.model),
+                    preview: (typeof p.preview === 'string' && p.preview.indexOf('data:image') === 0) ? p.preview : ''
+                };
+            },
+            async exportPack() {
+                if (!naiPresets.length) { alert('還沒有預設可以匯出。'); return; }
+                const OSDB = (window.parent || window).OS_DB;
+                const out = [];
+                for (const p of naiPresets) {
+                    const o = {
+                        name: p.name, charBasePrompt: p.charBasePrompt || '', charNegPrompt: p.charNegPrompt || '',
+                        itemBasePrompt: p.itemBasePrompt || '', itemNegPrompt: p.itemNegPrompt || '',
+                        sampler: p.sampler, scale: p.scale, steps: p.steps, ucPreset: p.ucPreset, model: p.model || '', preview: ''
+                    };
+                    if (p.thumbId && OSDB && OSDB.getNaiThumb) {
+                        try { const b64 = await OSDB.getNaiThumb(p.thumbId); if (b64) o.preview = b64; } catch (e) {}
+                    }
+                    out.push(o);
+                }
+                const data = { type: 'aurelia_nai_presets', version: 1, presets: out };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                const d = new Date();
+                a.download = 'NAI提示詞預設_' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.json';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            },
+            importPack() {
+                const fi = container.querySelector('#img-nai-pack-import-file');
+                if (fi) { fi.value = ''; fi.click(); }
+            },
+            _importFile(file) {
+                const self = this;
+                const OSDB = (window.parent || window).OS_DB;
+                const reader = new FileReader();
+                reader.onload = async function () {
+                    try {
+                        const j = JSON.parse(String(reader.result));
+                        const arr = Array.isArray(j) ? j : (Array.isArray(j.presets) ? j.presets : null);
+                        if (!arr || !arr.length) { alert('❌ 這個檔案裡找不到 NAI 預設，確認拿到的是 NAI 預設包檔（.json）。'); return; }
+                        let added = 0, updated = 0;
+                        for (const raw of arr) {
+                            if (!raw || !String(raw.name || '').trim()) continue;
+                            const clean = self._sanitizeNaiPreset(raw);
+                            const id = naiNewId();
+                            let thumbId = '';
+                            if (clean.preview && OSDB && OSDB.saveNaiThumb) {
+                                try { await OSDB.saveNaiThumb(id, clean.preview); thumbId = id; } catch (e) {}
+                            }
+                            const entry = {
+                                id, name: clean.name,
+                                charBasePrompt: clean.charBasePrompt, charNegPrompt: clean.charNegPrompt,
+                                itemBasePrompt: clean.itemBasePrompt, itemNegPrompt: clean.itemNegPrompt,
+                                sampler: clean.sampler, scale: clean.scale, steps: clean.steps, ucPreset: clean.ucPreset,
+                                model: clean.model, thumbId, fromImage: !!thumbId
+                            };
+                            const idx = naiPresets.findIndex(x => x.name === clean.name);
+                            if (idx >= 0) {
+                                const oldTid = naiPresets[idx].thumbId;
+                                if (oldTid && oldTid !== thumbId && OSDB && OSDB.deleteNaiThumb) { try { await OSDB.deleteNaiThumb(oldTid); } catch (e) {} }
+                                naiPresets[idx] = entry; updated++;
+                            } else { naiPresets.push(entry); added++; }
+                        }
+                        if (!added && !updated) { alert('❌ 檔案裡的預設都沒有名稱，讀不進來。'); return; }
+                        refreshNaiPresetDropdown();
+                        self.renderGrid();
+                        alert('✅ 讀進來了：新增 ' + added + ' 個、更新 ' + updated + ' 個。\n記得按底部 💾 保存才會存住。');
+                    } catch (e) { alert('❌ 這個檔案讀不出來，確認是 NAI 預設包檔（.json）。'); }
+                };
+                reader.readAsText(file);
+            },
+
             // ── 拖圖預設包（卡片牆 + 縮圖預覽）──
             open() {
                 const m = container.querySelector('#img-nai-pack-modal');
@@ -3656,6 +3748,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     if (e.dataTransfer && e.dataTransfer.files) self.handleFiles(e.dataTransfer.files);
                 });
                 if (file) file.addEventListener('change', e => { self.handleFiles(e.target.files); e.target.value = ''; });
+                const impFile = container.querySelector('#img-nai-pack-import-file');
+                if (impFile) impFile.addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) self._importFile(f); e.target.value = ''; });
                 this._dropBound = true;
             },
             async handleFiles(fileList) {
