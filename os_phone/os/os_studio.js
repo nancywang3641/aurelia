@@ -745,7 +745,10 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 document.getElementById('studio-gallery-content').style.display  = tab.dataset.tab === 'gallery' ? 'block'  : 'none';
                 // 「✅ 確定創建」footer 只在「預覽」分頁顯示（原碼/VN組件 不該看到）
                 { const _aa = document.querySelector('.studio-action-area'); if (_aa) _aa.style.display = tab.dataset.tab === 'preview' ? 'flex' : 'none'; }
-                if (tab.dataset.tab === 'gallery') loadStudioGallery();
+                if (tab.dataset.tab === 'gallery') {
+                    if (currentMode === 'fx') _renderFxLibrary(document.getElementById('studio-gallery-content'));
+                    else loadStudioGallery();
+                }
             };
         });
 
@@ -995,7 +998,13 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         // vn_ui: preview | source | gallery
         const galleryTab = document.getElementById('studio-tab-gallery');
         const sourceTab = document.getElementById('studio-tab-source');
-        if (galleryTab) galleryTab.style.display = modeId === 'vn_ui' ? '' : 'none';
+        if (galleryTab) {
+            // 同一個第二 tab 兩用：vn_ui=VN組件展廳、fx=特效庫（照 Rae 指定的雙 tab 版型）
+            galleryTab.style.display = (modeId === 'vn_ui' || modeId === 'fx') ? '' : 'none';
+            galleryTab.innerHTML = modeId === 'fx'
+                ? '<i class="fa-solid fa-wand-magic-sparkles"></i> 特效庫'
+                : '<i class="fa-solid fa-puzzle-piece"></i> VN組件';
+        }
         if (sourceTab)  sourceTab.style.display  = modeId === 'vn_ui' ? '' : 'none';
         const typeRow = document.getElementById('studio-type-row');
         if (typeRow) typeRow.style.display = modeId === 'vn_ui' ? 'flex' : 'none';
@@ -4880,11 +4889,11 @@ ${d.usageDesc || ''}
         if (fabEl) fabEl.style.display = 'none';   // 浮動 FAB 退役：改用 header 的 👁️ 預覽鈕
 
         if (!displayData) {
-            if (currentMode === 'fx') {   // ⚡ 特效工坊空狀態＝特效庫（內建+自製，可試播/刪除）
+            if (currentMode === 'fx') {   // ⚡ 特效工坊空狀態：導去特效庫 tab
                 sourceEl.textContent = '';
                 exportBtn.style.display = 'none';
                 if (publishBtn) publishBtn.style.display = 'none';
-                _renderFxLibrary(previewMain);
+                previewMain.innerHTML = `<div class="studio-empty">描述你想要的畫面特效，讓 AI 做給你。<br><br>已有的特效在上方「特效庫」分頁。</div>`;
                 return;
             }
             previewMain.innerHTML = `<div class="studio-empty">尚未生成任何內容。<br><br>請輸入點子讓 AI 創作。</div>`;
@@ -4922,10 +4931,6 @@ ${d.usageDesc || ''}
             const _btn = previewMain.querySelector('#fx-pv-play');
             if (_btn) _btn.onclick = _play;
             setTimeout(_play, 250);   // 生成完自動播一次
-            // 草稿卡下面永遠跟著特效庫清單（不用清空對話才看得到）
-            const _libHost = document.createElement('div');
-            previewMain.appendChild(_libHost);
-            _renderFxLibrary(_libHost);
             return;
         }
 
