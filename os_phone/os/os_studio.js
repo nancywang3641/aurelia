@@ -1631,6 +1631,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     let _mcChars = [];           // 清單快取 [{uid,name,summary,enabled,content}]
     let _mcWorking = null;       // {uid|null, name, blocks:[{label,content,userEdited,aiNew,editing}]}
     let _mcChat = [];            // [{role,content}]
+    let _mcLastError = null;     // 人設聊天的錯誤狀態（畫在聊天尾巴、帶重試鈕，同世界書聊天）
     let _mcPendCount = 0;        // 自上次開預覽以來 AI 動到的區塊數
     let _mcModel = localStorage.getItem('mc_model') === 'sec' ? 'sec' : 'main';
     let _mcImportPick = null;     // 匯入時選中的那個酒館人設
@@ -1791,12 +1792,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             : '請把這份人設整理成區塊，內容忠於原文、別自己加設定。';
         const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設（一整段散文）。' + task + ' 結果用 <persona><seg> 輸出。\n\n【現有人設】\n' + desc;
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: req || '整理成區塊。' }];
+        const fallback = () => { _wbToast('先整段放著，可手動拆塊'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); };
         const done = (full) => {
+            const _bad = _studioBadReply(String(full || ''));   // 錯誤頁/空/截斷 → 問重試（同創作室其他路徑）
+            if (_bad.bad) { _studioConfirmRetry(_bad.reason, () => _mcImportRefine(p, req), fallback); return; }
             const segs = _mcParseSegs(String(full || ''));
             if (segs.length) _mcImportEnter(p, segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })), 'preview');
             else { _wbToast('AI 沒整理成功，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); }
         };
-        const errCb = () => { _wbToast('AI 失敗，先整段放著'); _mcImportEnter(p, [{ label: '人設', content: desc, userEdited: true }], 'preview'); };
+        const errCb = (err) => _studioConfirmRetry((err && err.message) || err, () => _mcImportRefine(p, req), fallback);
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
         try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
@@ -1818,12 +1822,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設（一整段散文）。請把它改寫成「貼合下面這個世界」的版本。原則：\n1. 保留核心個性／這個人是誰／與人相處的方式——性格本質不變。\n2. 外觀、說話習慣、出身背景這類「世界皮層」改寫成貼合該世界（例如現代身分改成古代身分）。\n3. ★取捨優先於硬凹：原設定裡若有「在新世界根本不存在或不合理」的東西（某些職業、物品、習慣、背景細節），就「直接捨棄那一項」，不要硬找個對應物去套。寧可這個人在新世界少幾條設定，也不要為了照搬而生出彆扭的拼湊對應。\n4. 只留／改「換了世界仍然成立」的部分；不合的就讓它消失、別硬交代它的去向。\n把結果拆成區塊用 <persona><seg> 輸出。\n\n【現有人設】\n' + desc + '\n\n' + ctx;
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把我的人設改寫成這個世界的版本。' }];
         const done = (full) => {
+            const _bad = _studioBadReply(String(full || ''));   // 錯誤頁/空/截斷 → 問重試
+            if (_bad.bad) { _studioConfirmRetry(_bad.reason, () => _mcImportToWorld(p)); return; }
             const segs = _mcParseSegs(String(full || ''));
             if (!segs.length) { alert('AI 沒吐出區塊，再試一次'); return; }
             _mcImportEnter(p, segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })), 'preview', ((p && p.name) || '我') + '（' + tag + '）');
             _wbToast('已生成世界版，按確定會存成「新的一份」、不動你原本的');
         };
-        const errCb = (err) => alert('AI 失敗：' + (err && err.message || err));
+        const errCb = (err) => _studioConfirmRetry((err && err.message) || err, () => _mcImportToWorld(p));
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
         try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
@@ -1873,10 +1879,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     }
     function _mcPaintChat(host) {
         const box = host.querySelector('#mc-chat'); if (!box) return;
-        box.innerHTML = _mcChat.map(m => {
+        let html = _mcChat.map(m => {
             const body = String(m.content || '').replace(/<persona>[\s\S]*?<\/persona>/gi, '').trim();   // 先剝人設機器標記，再渲染 markdown
             return `<div class="mc-msg ${m.role === 'user' ? 'me' : 'ai'}">${renderMarkdown(body) || '…'}</div>`;
         }).join('');
+        // 錯誤泡泡＋重試（API錯誤頁/空回應/截斷不進歷史，同世界書聊天）
+        if (_mcLastError) html += `<div class="mc-msg ai studio-error-bubble"><div class="studio-error-msg">❌ 錯誤：${String(_mcLastError).replace(/</g, '&lt;').slice(0, 200)}</div><button class="studio-retry-btn">🔄 重試</button></div>`;
+        box.innerHTML = html;
+        const rb = box.querySelector('.studio-retry-btn');
+        if (rb) rb.onclick = () => { _mcLastError = null; _mcPaintChat(host); _mcCall(host); };
         box.scrollTop = box.scrollHeight;
     }
     function _mcPaintPendBar(host) {
@@ -1895,18 +1906,29 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const api = (window.parent || window).OS_API || window.OS_API;
         if (!api || (typeof api.chatSecondary !== 'function' && typeof api.chatMain !== 'function')) { alert('AI 不可用，請先到「寫作 → API 設置」設好模型'); return; }
         _mcChat.push({ role: 'user', content: msg }); ta.value = '';
+        _mcLastError = null;
         _mcPaintChat(host);
+        _mcCall(host);
+    }
+    // 真正發 API——_mcSend 與錯誤泡泡「重試」共用（用當前 _mcChat 重打、不重複塞 user 訊息）
+    function _mcCall(host) {
+        const api = (window.parent || window).OS_API || window.OS_API;
+        if (!api) return;
         const sendBtn = host.querySelector('#mc-send'); if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '生成中…'; }
         const existing = _mcWorking.blocks.length ? ('\n\n【目前人設區塊】\n' + _mcAssembleContent(_mcWorking.blocks)) : '';
         const messages = [{ role: 'system', content: _MC_SYS + existing }].concat(_mcChat.slice(-8));
         const done = (full) => {
             if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; }
             const reply = String(full || '');
+            // 驗貨（同主聊天室 7d2b629）：錯誤頁/空回應/截斷別當正常回覆收
+            const _bad = _studioBadReply(reply);
+            if (_bad.bad) { _mcLastError = _bad.reason; _mcPaintChat(host); return; }
+            _mcLastError = null;
             _mcChat.push({ role: 'assistant', content: reply });
             _mcPendCount += _mcMergeSegs(_mcParseSegs(reply));
             _mcPaintChat(host); _mcPaintPendBar(host);
         };
-        const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } alert('AI 失敗：' + (err && err.message || err)); };
+        const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } _mcLastError = (err && err.message) || String(err || '未知錯誤'); _mcPaintChat(host); };
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
         try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
@@ -2053,6 +2075,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const sys = _MC_SYS + '\n\n【對標世界】使用者要把現有人設改成貼合下面這個世界。請「保留人設的核心個性／這個人是誰」，只把外觀、說話習慣、背景這類「世界皮層」改寫成貼合該世界；不要改掉性格本質。一樣用 <persona><seg> 輸出全部區塊。\n\n【現有人設】\n' + _mcAssembleContent(_mcWorking.blocks) + '\n\n' + ctx;
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把我的人設對標到這個世界，重寫全部區塊。' }];
         const done = (full) => {
+            const _bad = _studioBadReply(String(full || ''));   // 錯誤頁/空/截斷 → 問重試
+            if (_bad.bad) { _studioConfirmRetry(_bad.reason, () => _mcDoAdapt(host, mode, desc)); return; }
             const segs = _mcParseSegs(String(full || ''));
             if (!segs.length) { alert('AI 沒吐出區塊，再試一次'); return; }
             const base = _mcWorking.name || '我';
@@ -2062,7 +2086,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             renderPersonaPanel();
             _wbToast('已生成變體，檢查後按確定寫入');
         };
-        const errCb = (err) => alert('AI 失敗：' + (err && err.message || err));
+        const errCb = (err) => _studioConfirmRetry((err && err.message) || err, () => _mcDoAdapt(host, mode, desc));
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
         try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
@@ -2191,6 +2215,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 [{ role: 'user', content: VTH_AI_PROMPT + desc }],
                 () => {},
                 (full) => {
+                    const _bad = _studioBadReply(String(full || ''));   // 錯誤頁/空/截斷 → 問重試
+                    if (_bad.bad) { genBtn.textContent = orig; genBtn.disabled = false; _studioConfirmRetry(_bad.reason, () => genBtn.onclick()); return; }
                     let out = String(full || '');
                     const m = out.match(/```(?:css)?\s*([\s\S]*?)```/i);
                     if (m) out = m[1];
@@ -2199,7 +2225,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     genBtn.textContent = '✓ 已生成（已預覽+套用）'; genBtn.disabled = false;
                     setTimeout(() => { genBtn.textContent = orig; }, 1800);
                 },
-                (err) => { genBtn.textContent = orig; genBtn.disabled = false; alert('生成失敗：' + ((err && err.message) || err)); }
+                (err) => { genBtn.textContent = orig; genBtn.disabled = false; _studioConfirmRetry((err && err.message) || err, () => genBtn.onclick()); }
             );
         };
 
@@ -2652,6 +2678,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <button class="studio-retry-btn">🔄 重試</button>
         `;
         bubble.querySelector('.studio-retry-btn').onclick = onRetry;
+    }
+
+    // 一次性 AI 流程（匯入整理/對標世界/換皮/主題生成）的統一壞回覆處置：問一聲就能重試，不用重走整個入口
+    //（聊天流不用這個——世界書/人設聊天各自有錯誤泡泡＋重試鈕）
+    function _studioConfirmRetry(reason, retryFn, fallbackFn) {
+        if (confirm('AI 回覆有問題：' + String(reason || '未知錯誤').slice(0, 140) + '\n\n要重試嗎？')) retryFn();
+        else if (fallbackFn) fallbackFn();
     }
 
     // 判斷 API「表面成功、實則錯誤/空/截斷」的回應：OS_API 只在「完全空」才 throw，
