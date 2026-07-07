@@ -4846,8 +4846,7 @@ ${d.usageDesc || ''}
         container.innerHTML = `
             <div class="studio-card">
                 <div class="studio-card-title">特效庫</div>
-                <div class="fx-pv-desc">劇情 AI 會在合適時機自動觸發這些特效。想要新的，直接在左邊描述給 AI 就行。</div>
-                <div class="vn-fx-preview-stage" id="fx-lib-stage"></div>
+                <div class="fx-pv-desc">劇情 AI 會在合適時機自動觸發這些特效。想要新的，直接在對話裡描述給 AI 就行。</div>
                 <div class="fx-lib-list">${rows.map((row, i) => `
                     <div class="fx-lib-row">
                         <div class="fx-lib-info">
@@ -4859,9 +4858,18 @@ ${d.usageDesc || ''}
                     </div>`).join('')}
                 </div>
             </div>`;
-        const stage = container.querySelector('#fx-lib-stage');
+        // 就地試播：預覽台展開在被點那一列的正下方（滾到哪播到哪、不用回頂上看）
         container.querySelectorAll('[data-fx-play]').forEach(btn => {
-            btn.onclick = () => { try { fxEngine.preview(rows[Number(btn.dataset.fxPlay)].recipe, stage); } catch (e) {} };
+            btn.onclick = () => {
+                try {
+                    container.querySelectorAll('.fx-lib-row-stage').forEach(n => n.remove());   // 收掉別列展開的台
+                    const rowEl = btn.closest('.fx-lib-row');
+                    const stage = document.createElement('div');
+                    stage.className = 'vn-fx-preview-stage fx-lib-row-stage';
+                    rowEl.insertAdjacentElement('afterend', stage);
+                    fxEngine.preview(rows[Number(btn.dataset.fxPlay)].recipe, stage);
+                } catch (e) { console.warn('[Studio] 特效試播失敗:', e); }
+            };
         });
         container.querySelectorAll('[data-fx-del]').forEach(btn => {
             btn.onclick = async () => {
