@@ -64,7 +64,7 @@
         ]},
     ];
 
-    const VALID_BLOCKS = ['particles', 'flash', 'shake', 'edge', 'streak', 'tint', 'bolt', 'svg'];
+    const VALID_BLOCKS = ['particles', 'flash', 'shake', 'edge', 'streak', 'tint', 'bolt', 'svg', 'code'];
     const VALID_PRESETS = ['snow', 'rain', 'drip', 'petal', 'ember', 'burst', 'bubble', 'sparkle'];
     const SVG_ANIMS = ['pop', 'drop', 'rise', 'pulse', 'burst'];
     const SVG_POS = ['center', 'top', 'bottom', 'full'];
@@ -126,6 +126,14 @@
                 st.anim = SVG_ANIMS.indexOf(s.anim) !== -1 ? s.anim : 'pop';
                 st.pos  = SVG_POS.indexOf(s.pos) !== -1 ? s.pos : 'center';
                 st.size = clamp(s.size || 30, 8, 100);
+            }
+            else if (s.block === 'code') {
+                // 自訂繪製：AI 寫每幀 canvas 繪製碼（積木做不到的效果用這條路，once/loop 都可）。
+                // 引擎只當播放器：生命週期/暫停/清理歸引擎，程式碼壞了停用該特效、不拖死舞台。
+                const js = String(s.js || '').trim();
+                if (!js || js.length > 20000) continue;
+                try { new Function('ctx', 'p', 'dt', 't', 'w', 'h', 'state', js); } catch (e) { console.warn('[OS_FX] 自訂特效語法錯誤，剔除:', e && e.message); continue; }
+                st.js = js;
             }
             else if (s.block === 'tint')    { st.alpha = clamp(s.alpha || 0.18, 0.02, 0.45); }
             steps.push(st);
@@ -312,6 +320,7 @@
                         p = inst.ending ? Math.min(1, Math.max(0, (inst.endAt - ts) / 600)) : 1;
                         if (s.block === 'tint') this._drawTint(ctx, s, 0.5 * p, w, h);
                         else if (s.block === 'edge') this._drawEdge(ctx, s, 0.5 * p, w, h);
+                        else if (s.block === 'code') this._runCode(ctx, s, p, dt, w, h, inst, _si);
                         continue;
                     }
                     if (el < s.at || el > s.at + s.dur) continue;
@@ -321,6 +330,7 @@
                     else if (s.block === 'tint')   this._drawTint(ctx, s, this._envelope(p), w, h);
                     else if (s.block === 'streak') this._drawStreak(ctx, s, p, w, h);
                     else if (s.block === 'bolt')   this._drawBolt(ctx, s, p, w, h, inst, _si, el - s.at);
+                    else if (s.block === 'code')   this._runCode(ctx, s, p, dt, w, h, inst, _si);
                     else if (s.block === 'shake')  shakeAmp = Math.max(shakeAmp, s.strength * (1 - p));
                 }
             }
@@ -542,6 +552,29 @@
             }
             if (!st.fading && elapsed > s.at + s.dur * 0.75) { st.fading = true; st.el.classList.add('vn-fx-svg-out'); }
         },
+        // 自訂繪製積木：每幀呼叫 AI 寫的 draw 碼。ctx 有 save/restore 護欄；連錯 3 次自動停用該段，別的積木照播
+        _runCode: function (ctx, s, p, dt, w, h, inst, si) {
+            const key = 'code' + si;
+            let st = inst.state[key];
+            if (!st) {
+                st = { fn: null, state: {}, errs: 0, t0: performance.now() };
+                try { st.fn = new Function('ctx', 'p', 'dt', 't', 'w', 'h', 'state', s.js); }
+                catch (e) { console.warn('[OS_FX] 自訂特效編譯失敗:', e && e.message); }
+                inst.state[key] = st;
+            }
+            if (!st.fn) return;
+            ctx.save();
+            try {
+                st.fn(ctx, p, dt, (performance.now() - st.t0) / 1000, w, h, st.state);
+                st.errs = 0;
+            } catch (e) {
+                st.errs++;
+                if (st.errs >= 3) { st.fn = null; console.warn('[OS_FX] 自訂特效連續出錯，已停用:', e && e.message); }
+            }
+            ctx.restore();
+            ctx.globalAlpha = 1;
+        },
+
         _cleanupInst: function (inst) {
             if (!inst || !inst.state) return;
             for (const k of Object.keys(inst.state)) {
