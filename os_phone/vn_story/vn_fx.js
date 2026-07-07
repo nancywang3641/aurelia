@@ -346,9 +346,12 @@
                 return;
             }
             // 族群維持型：現存 < 目標數就補（每幀限量、避免瞬間尖峰）
+            // 首次填充＝一次到位且「全場散開」——否則第一批粒子同齡同速，會結成一條帶狀「雪浪」整條下移（超怪）；
+            // 之後的補位才從邊緣（頂/底）進場，此時死亡時序已打散、不會再結浪。
             let alive = 0;
             for (const p of this._particles) if (p.em === em) alive++;
-            let budget = Math.min(8, s.count - alive, MAX_PARTICLES - this._particles.length);
+            const first = !em.warmed; em.warmed = true;
+            let budget = Math.min(first ? s.count : 8, s.count - alive, MAX_PARTICLES - this._particles.length);
             while (budget-- > 0) {
                 const p = { em: em, x: Math.random() * w, y: -10, vx: 0, vy: s.speed * (0.7 + Math.random() * 0.6),
                     size: s.size * (0.6 + Math.random() * 0.8), rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 2,
@@ -357,6 +360,7 @@
                 else if (s.preset === 'drip')   { p.vy = s.speed * (0.4 + Math.random() * 0.9); p.y0 = p.y = Math.random() * h * 0.25; }
                 else if (s.preset === 'ember' || s.preset === 'bubble') { p.y = h + 10; p.vy = -s.speed * (0.5 + Math.random() * 0.8); }
                 else if (s.preset === 'sparkle') { p.x = Math.random() * w; p.y = Math.random() * h; p.vy = 0; p.maxLife = 0.8 + Math.random() * 1.2; }
+                if (first && s.preset !== 'sparkle' && s.preset !== 'drip') p.y = Math.random() * h;   // 預散全場（sparkle 本來就散、drip 該待頂區）
                 this._particles.push(p);
             }
         },
