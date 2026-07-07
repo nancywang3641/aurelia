@@ -116,10 +116,34 @@
         if (cur && typeof cur === 'object') delete cur[keys[keys.length - 1]];
     }
 
-    // 把單筆 patch（key→value）套進 cur：點記法→巢狀；物件→深合併；純值→取新；刪除哨兵→整節點移除
+    // 按點記法讀當前值（不建中間節點）；路徑不存在回 undefined
+    function _getDeep(obj, path) {
+        let cur = obj;
+        for (const k of path.split('.')) {
+            if (!cur || typeof cur !== 'object') return undefined;
+            cur = cur[k];
+        }
+        return cur;
+    }
+
+    // 🧮 增減量計算機：值寫成 "+=3" / "-=2" → 腳本拿當前值自己加減（AI 只判斷幅度、不心算新值——
+    //   小模型算術不穩是絕對值寫錯的主因；相對量在 patch 重播/砍樓回滾下語義也更正確）。
+    //   當前值不是數字（缺欄/待定）就從 0 起算；非增減量格式原樣放行。
+    const DELTA_RE = /^([+-])=\s*(-?\d+(?:\.\d+)?)$/;
+    function _resolveDelta(cur, k, v) {
+        if (typeof v !== 'string') return v;
+        const m = v.trim().match(DELTA_RE);
+        if (!m) return v;
+        const base = Number(k.includes('.') ? _getDeep(cur, k) : cur[k]);
+        const d = Number(m[2]) * (m[1] === '-' ? -1 : 1);
+        return Math.round(((isNaN(base) ? 0 : base) + d) * 100) / 100;   // 修掉浮點尾巴
+    }
+
+    // 把單筆 patch（key→value）套進 cur：點記法→巢狀；物件→深合併；純值→取新；刪除哨兵→整節點移除；"+=n"→增減量
     function _applyPatchInto(cur, p) {
         if (!p || typeof p !== 'object') return;
-        for (const [k, v] of Object.entries(p)) {
+        for (const [k, rawV] of Object.entries(p)) {
+            const v = _resolveDelta(cur, k, rawV);
             if (v === DEL_SENTINEL) _deleteDeep(cur, k);                       // 退場刪除 → 節點整個移除
             else if (k.includes('.')) _setDeep(cur, k, v);                     // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
             else if (v && typeof v === 'object' && !Array.isArray(v)) cur[k] = _deepMergeObj(cur[k], v);  // 物件欄位 → 深合併(別整碗覆蓋)
@@ -461,7 +485,7 @@ ${modeRules}
 （removes 平常沒有就整個省略）
 
 【通用規則】
-- 數字欄位：給新數值（例：當下好感 12 + 升 3 → 15）
+- 數字欄位「報增減量、不要自己算新值」：值寫 "+=幅度" 或 "-=幅度"（例：好感升 3 → "+=3"；體力掉 10 → "-=10"），腳本會拿當前值自己加減，你心算反而會錯。例外＝「直接設成某值」才給純數字：初始化、新角色首登場的基礎屬性初值、劇情明定數值（歸零/直接變成50 之類）
 - 字串/enum：給新字串；list：給完整陣列（追加後完整輸出）
 - 不要編造劇情沒寫的事（初始化模式才可從 desc 推合理初值）
 - **嚴守每個欄位的 desc 約束**：desc 寫「0-100」就不准超範圍、寫枚舉就不准給別的值
