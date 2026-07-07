@@ -4823,7 +4823,8 @@ ${d.usageDesc || ''}
         setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再套一次
     }
 
-    // ⚡ 特效庫：特效工坊空狀態顯示（內建＝不可刪、自製＝可刪）；每列可試播
+    // ⚡ 特效庫：群組chip篩選 + 真開關(關=AI白名單剔除+不播) + 就地試播 + 自製可刪（照VN組件的組別/開關體感）
+    let _fxLibGroup = '全部';
     async function _renderFxLibrary(container) {
         const fxEngine = window.OS_FX || win.OS_FX;
         if (!fxEngine) { container.innerHTML = '<div class="studio-empty">特效引擎還沒載入，稍等幾秒再進來</div>'; return; }
@@ -4834,30 +4835,65 @@ ${d.usageDesc || ''}
             const all = await win.OS_DB.getAllUITemplates();
             saved = (all || []).filter(t => t && t.isFX && t.fxRecipe);
         } catch (e) {}
-        const savedIds = new Set(saved.map(t => String(t.fxRecipe.fxId || '').toLowerCase()));
-        const rows = [];
-        for (const t of saved) {
-            const r = t.fxRecipe;
-            rows.push({ recipe: r, dbId: t.id, mine: true });
-        }
-        for (const r of fxEngine.listAll()) {
-            if (!savedIds.has(r.fxId)) rows.push({ recipe: r, dbId: null, mine: false });
-        }
+        const dbIdByFx = {};
+        saved.forEach(t => { dbIdByFx[String(t.fxRecipe.fxId || '').toLowerCase()] = t.id; });
+        const rows = fxEngine.listAll().map(r => ({ recipe: r, dbId: dbIdByFx[r.fxId] || null, mine: !!dbIdByFx[r.fxId] }));
+        const groups = Array.from(new Set(rows.map(x => x.recipe.group).filter(Boolean)));
+        if (_fxLibGroup !== '全部' && groups.indexOf(_fxLibGroup) === -1) _fxLibGroup = '全部';   // 群組被清空就退回全部
+        const shown = rows.filter(x => _fxLibGroup === '全部' || x.recipe.group === _fxLibGroup);
+
         container.innerHTML = `
             <div class="studio-card">
                 <div class="studio-card-title">特效庫</div>
-                <div class="fx-pv-desc">劇情 AI 會在合適時機自動觸發這些特效。想要新的，直接在對話裡描述給 AI 就行。</div>
-                <div class="fx-lib-list">${rows.map((row, i) => `
-                    <div class="fx-lib-row">
+                <div class="fx-pv-desc">劇情 AI 會在合適時機自動觸發「開著」的特效；關掉的不會再用。點特效名旁的小標籤可以分組。</div>
+                ${groups.length ? `<div class="fx-grp-row">
+                    ${['全部'].concat(groups).map(g => `<button class="fx-grp-chip${g === _fxLibGroup ? ' active' : ''}" data-fx-chip="${_esc(g)}" type="button">${_esc(g)}</button>`).join('')}
+                    ${_fxLibGroup !== '全部' ? `<button class="fx-grp-batch" data-fx-batch="1" type="button">這組全開</button><button class="fx-grp-batch" data-fx-batch="0" type="button">這組全關</button>` : ''}
+                </div>` : ''}
+                <div class="fx-lib-list">${shown.map((row, i) => `
+                    <div class="fx-lib-row${row.recipe.enabled ? '' : ' fx-off'}">
                         <div class="fx-lib-info">
-                            <div class="fx-lib-name">${_esc(row.recipe.name)} <span class="fx-lib-kind">${row.recipe.kind === 'loop' ? '持續氛圍' : '瞬間效果'}</span>${row.mine ? '' : ' <span class="fx-lib-kind fx-lib-builtin">內建</span>'}</div>
+                            <div class="fx-lib-name">${_esc(row.recipe.name)} <span class="fx-lib-kind">${row.recipe.kind === 'loop' ? '持續氛圍' : '瞬間效果'}</span>${row.mine ? '' : ' <span class="fx-lib-kind fx-lib-builtin">內建</span>'} <button class="fx-lib-grp" data-fx-grp="${i}" type="button">${row.recipe.group ? _esc(row.recipe.group) : '＋分組'}</button></div>
                             <div class="fx-lib-desc">${_esc(row.recipe.desc || '')}</div>
                         </div>
+                        <label class="fx-switch" title="開著=劇情AI會用"><input type="checkbox" data-fx-on="${i}" ${row.recipe.enabled ? 'checked' : ''}><span class="fx-sw-knob"></span></label>
                         <button class="fx-lib-btn" data-fx-play="${i}" type="button" title="試播"><i class="fa-solid fa-play"></i></button>
                         ${row.mine ? `<button class="fx-lib-btn danger" data-fx-del="${i}" type="button" title="刪除"><i class="fa-solid fa-trash"></i></button>` : ''}
                     </div>`).join('')}
                 </div>
             </div>`;
+
+        // 群組chip篩選
+        container.querySelectorAll('[data-fx-chip]').forEach(btn => {
+            btn.onclick = () => { _fxLibGroup = btn.dataset.fxChip; _renderFxLibrary(container); };
+        });
+        // 批次：目前篩選那組全開/全關
+        container.querySelectorAll('[data-fx-batch]').forEach(btn => {
+            btn.onclick = () => {
+                const on = btn.dataset.fxBatch === '1';
+                shown.forEach(x => fxEngine.setEnabled(x.recipe.fxId, on));
+                _renderFxLibrary(container);
+            };
+        });
+        // 單顆開關（就地改樣式、不重繪，保住滾動位置）
+        container.querySelectorAll('[data-fx-on]').forEach(sw => {
+            sw.onchange = () => {
+                const row = shown[Number(sw.dataset.fxOn)];
+                fxEngine.setEnabled(row.recipe.fxId, sw.checked);
+                sw.closest('.fx-lib-row').classList.toggle('fx-off', !sw.checked);
+            };
+        });
+        // 分組標籤：點了輸入組名（留空=取消分組）
+        container.querySelectorAll('[data-fx-grp]').forEach(btn => {
+            btn.onclick = () => {
+                const row = shown[Number(btn.dataset.fxGrp)];
+                const cur = row.recipe.group || '';
+                const g = prompt(`「${row.recipe.name}」歸到哪一組？\n（留空＝不分組；輸入新名字＝建新組）`, cur);
+                if (g === null) return;
+                fxEngine.setGroup(row.recipe.fxId, g.trim());
+                _renderFxLibrary(container);
+            };
+        });
         // 就地試播：預覽台展開在被點那一列的正下方（滾到哪播到哪、不用回頂上看）
         container.querySelectorAll('[data-fx-play]').forEach(btn => {
             btn.onclick = () => {
@@ -4867,13 +4903,13 @@ ${d.usageDesc || ''}
                     const stage = document.createElement('div');
                     stage.className = 'vn-fx-preview-stage fx-lib-row-stage';
                     rowEl.insertAdjacentElement('afterend', stage);
-                    fxEngine.preview(rows[Number(btn.dataset.fxPlay)].recipe, stage);
+                    fxEngine.preview(shown[Number(btn.dataset.fxPlay)].recipe, stage);
                 } catch (e) { console.warn('[Studio] 特效試播失敗:', e); }
             };
         });
         container.querySelectorAll('[data-fx-del]').forEach(btn => {
             btn.onclick = async () => {
-                const row = rows[Number(btn.dataset.fxDel)];
+                const row = shown[Number(btn.dataset.fxDel)];
                 if (!row || !row.dbId) return;
                 if (!confirm(`刪除特效「${row.recipe.name}」？劇情 AI 之後就不會再用它了`)) return;
                 try {
