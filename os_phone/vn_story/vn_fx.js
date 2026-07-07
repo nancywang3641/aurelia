@@ -50,12 +50,52 @@
         { fxId: 'fx-flash-white', name: '白閃', desc: '白光一閃（爆炸/閃回/靈光）', kind: 'once', steps: [
             { block: 'flash', color: '#ffffff', times: 1, at: 0, dur: 420 },
         ]},
+        { fxId: 'fx-anger', name: '怒氣', desc: '漫畫怒氣💢符號彈出（生氣/暴怒/青筋）', kind: 'once', steps: [
+            { block: 'svg', anim: 'pop', pos: 'top', size: 22, at: 0, dur: 1400,
+              svg: '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e0342f" stroke-width="13" stroke-linecap="round"><path d="M52 14 C42 34 42 46 50 58"/><path d="M68 106 C78 86 78 74 70 62"/><path d="M14 68 C34 78 46 78 58 70"/><path d="M106 52 C86 42 74 42 62 50"/></svg>' },
+        ]},
+        { fxId: 'fx-speedlines', name: '集中線', desc: '漫畫集中線框住畫面（緊張/衝刺/關鍵一擊）', kind: 'once', steps: [
+            { block: 'svg', anim: 'pulse', pos: 'full', size: 100, at: 0, dur: 1800,
+              svg: '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" stroke="#15151a" stroke-linecap="round"><g stroke-width="7" opacity="0.85"><line x1="195" y1="100" x2="155" y2="100"/><line x1="167.2" y1="167.2" x2="138.9" y2="138.9"/><line x1="100" y1="195" x2="100" y2="155"/><line x1="32.8" y1="167.2" x2="61.1" y2="138.9"/><line x1="5" y1="100" x2="45" y2="100"/><line x1="32.8" y1="32.8" x2="61.1" y2="61.1"/><line x1="100" y1="5" x2="100" y2="45"/><line x1="167.2" y1="32.8" x2="138.9" y2="61.1"/></g><g stroke-width="4" opacity="0.55"><line x1="187.8" y1="136.4" x2="150.8" y2="121.1"/><line x1="136.4" y1="187.8" x2="121.1" y2="150.8"/><line x1="63.6" y1="187.8" x2="78.9" y2="150.8"/><line x1="12.2" y1="136.4" x2="49.2" y2="121.1"/><line x1="12.2" y1="63.6" x2="49.2" y2="78.9"/><line x1="63.6" y1="12.2" x2="78.9" y2="49.2"/><line x1="136.4" y1="12.2" x2="121.1" y2="49.2"/><line x1="187.8" y1="63.6" x2="150.8" y2="78.9"/></g></svg>' },
+        ]},
+        { fxId: 'fx-heart', name: '愛心', desc: '粉色愛心啵一下冒出飄走（心動/曖昧/戀愛）', kind: 'once', steps: [
+            { block: 'svg', anim: 'rise', pos: 'center', size: 18, at: 0, dur: 1600,
+              svg: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M50 84 C20 60 8 38 22 24 C34 12 50 20 50 32 C50 20 66 12 78 24 C92 38 80 60 50 84 Z" fill="#ff6b9a" opacity="0.95"/><path d="M30 30 C26 34 26 40 30 44" stroke="#ffd3e2" stroke-width="5" stroke-linecap="round" fill="none"/></svg>' },
+        ]},
     ];
 
-    const VALID_BLOCKS = ['particles', 'flash', 'shake', 'edge', 'streak', 'tint', 'bolt'];
+    const VALID_BLOCKS = ['particles', 'flash', 'shake', 'edge', 'streak', 'tint', 'bolt', 'svg'];
     const VALID_PRESETS = ['snow', 'rain', 'drip', 'petal', 'ember', 'burst', 'bubble', 'sparkle'];
+    const SVG_ANIMS = ['pop', 'drop', 'rise', 'pulse', 'burst'];
+    const SVG_POS = ['center', 'top', 'bottom', 'full'];
 
     function clamp(v, lo, hi) { const n = Number(v); return isNaN(n) ? lo : Math.min(hi, Math.max(lo, n)); }
+
+    // SVG 消毒：只留純圖形——剝 script/foreignObject/外部參照/事件屬性；必須帶 viewBox。回 '' = 不合格
+    function sanitizeSvg(raw) {
+        try {
+            const s = String(raw || '').trim();
+            if (!s || s.length > 20000 || !/^<svg[\s>]/i.test(s)) return '';
+            const doc = new DOMParser().parseFromString(s, 'image/svg+xml');
+            if (doc.querySelector('parsererror')) return '';
+            const root = doc.documentElement;
+            if (!root || root.tagName.toLowerCase() !== 'svg') return '';
+            if (!root.getAttribute('viewBox')) return '';
+            doc.querySelectorAll('script, foreignObject, iframe, embed, object, image, video, audio, use, a').forEach(n => n.remove());
+            const walk = (el) => {
+                for (const attr of Array.from(el.attributes || [])) {
+                    const n = attr.name.toLowerCase(), v = String(attr.value || '');
+                    if (n.indexOf('on') === 0 || n === 'href' || n === 'xlink:href'
+                        || /javascript:|data:text/i.test(v)
+                        || (n === 'style' && /url\s*\(|expression/i.test(v))) el.removeAttribute(attr.name);
+                }
+                for (const c of Array.from(el.children || [])) walk(c);
+            };
+            walk(root);
+            root.removeAttribute('width'); root.removeAttribute('height');   // 尺寸交給引擎控
+            return new XMLSerializer().serializeToString(root);
+        } catch (e) { return ''; }
+    }
 
     // 配方消毒：只認白名單積木、危險參數封頂；回 null = 整份不可用
     function normalizeRecipe(r) {
@@ -79,6 +119,14 @@
             else if (s.block === 'shake')   { st.strength = clamp(s.strength || 6, 1, 24); if (kind === 'loop') continue; }
             else if (s.block === 'streak')  { st.angle = clamp(s.angle === undefined ? 115 : s.angle, 0, 360); st.width = clamp(s.width || 3, 1, 12); if (kind === 'loop') continue; }
             else if (s.block === 'bolt')    { st.width = clamp(s.width || 3, 1, 12); if (kind === 'loop') continue; }
+            else if (s.block === 'svg') {
+                if (kind === 'loop') continue;
+                st.svg = sanitizeSvg(s.svg);
+                if (!st.svg) continue;
+                st.anim = SVG_ANIMS.indexOf(s.anim) !== -1 ? s.anim : 'pop';
+                st.pos  = SVG_POS.indexOf(s.pos) !== -1 ? s.pos : 'center';
+                st.size = clamp(s.size || 30, 8, 100);
+            }
             else if (s.block === 'tint')    { st.alpha = clamp(s.alpha || 0.18, 0.02, 0.45); }
             steps.push(st);
         }
@@ -128,9 +176,11 @@
         sceneChange: function () { this._stopLoops(false); },
 
         stopAll: function () {
+            for (const inst of this._fx) this._cleanupInst(inst);
             this._fx = []; this._emitters = []; this._particles = [];
             this._clearShake();
             if (this._ctx && this._canvas) this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+            try { if (this._overlay) this._overlay.querySelectorAll('.vn-fx-svg').forEach(n => n.remove()); } catch (e) {}
         },
 
         // 創作室試播：在指定容器上播一次；持續型自動 4 秒後停
@@ -231,8 +281,12 @@
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.clearRect(0, 0, w, h);
 
-            // 過期實例出場
-            this._fx = this._fx.filter(inst => !( (inst.ending || !inst.loop) && inst.endAt && ts > inst.endAt ));
+            // 過期實例出場（連同它掛的 SVG 元素一起收）
+            this._fx = this._fx.filter(inst => {
+                const dead = (inst.ending || !inst.loop) && inst.endAt && ts > inst.endAt;
+                if (dead) this._cleanupInst(inst);
+                return !dead;
+            });
             this._emitters = this._emitters.filter(em => this._fx.indexOf(em.fx) !== -1);
 
             // 發射器產粒子
@@ -252,6 +306,7 @@
                 for (let _si = 0; _si < inst.recipe.steps.length; _si++) {
                     const s = inst.recipe.steps[_si];
                     if (s.block === 'particles') continue;
+                    if (s.block === 'svg') { this._tickSvg(s, el, inst, _si); continue; }   // DOM 層自管生滅，不走 canvas 窗口
                     let p;   // 0~1 進度；loop 罩色恆定、ending 時淡出
                     if (inst.loop) {
                         p = inst.ending ? Math.min(1, Math.max(0, (inst.endAt - ts) / 600)) : 1;
@@ -459,6 +514,36 @@
             this._strokePath(ctx, st.path.pts);
             for (const bp of st.path.branches) { ctx.lineWidth = (s.width || 3) * 0.4; this._strokePath(ctx, bp); }
             ctx.restore();
+        },
+
+        // SVG 積木：DOM 元素生滅（進場動畫走 CSS、尾段 25% 淡出、窗口過了就收）
+        _tickSvg: function (s, elapsed, inst, si) {
+            const key = 'svg' + si;
+            let st = inst.state[key];
+            if (elapsed < s.at) return;
+            if (elapsed > s.at + s.dur) {
+                if (st && st.el) { try { st.el.remove(); } catch (e) {} st.el = null; }
+                return;
+            }
+            if (!st || !st.el) {
+                if (st && st.spent) return;   // 已播完收掉的別復活
+                const div = document.createElement('div');
+                div.className = 'vn-fx-svg vn-fx-pos-' + s.pos + ' vn-fx-anim-' + s.anim;
+                if (s.pos !== 'full') div.style.width = s.size + '%';
+                if (s.anim === 'rise' || s.anim === 'burst') div.style.setProperty('--vnfx-dur', s.dur + 'ms');
+                div.innerHTML = s.svg;
+                this._overlay.appendChild(div);
+                inst.state[key] = st = { el: div, fading: false, spent: true };
+                return;
+            }
+            if (!st.fading && elapsed > s.at + s.dur * 0.75) { st.fading = true; st.el.classList.add('vn-fx-svg-out'); }
+        },
+        _cleanupInst: function (inst) {
+            if (!inst || !inst.state) return;
+            for (const k of Object.keys(inst.state)) {
+                const st = inst.state[k];
+                if (st && st.el) { try { st.el.remove(); } catch (e) {} st.el = null; }
+            }
         },
 
         _applyShake: function (amp) {

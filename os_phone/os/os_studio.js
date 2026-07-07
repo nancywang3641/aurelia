@@ -341,6 +341,10 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
 5. 光軌 {"block":"streak","color":"顏色","angle":角度0-360,"width":粗細1-12}（一道光掃過：斬擊/流星；只准 once）
 6. 罩色 {"block":"tint","color":"顏色","alpha":0.02-0.45}（整屏染色氛圍）
 7. 閃電 {"block":"bolt","color":"顏色","width":粗細1-12}（鋸齒閃電劈下、帶分枝與頻閃：雷擊/魔法/衝擊；只准 once，常配 flash+shake）
+8. 簡易圖形 {"block":"svg","svg":"<svg viewBox=\\"0 0 寬 高\\">...</svg>","anim":"動畫","pos":"位置","size":寬度百分比8-100}
+   這塊是你「自己畫」：漫畫符號類（怒氣井字/汗滴/驚嘆號/問號/集中線/星星/音符…）用扁平簡約風 SVG 畫出來——幾何形狀+粗線條+單純配色，不要寫實漸層
+   規矩：必須帶 viewBox；只准純圖形（path/circle/rect/line/g 這類），script/外部圖片/連結一律會被引擎剝掉；只准 once
+   anim 五選一：pop(彈出)、drop(砸下)、rise(飄升淡出)、pulse(脈衝跳動)、burst(擴散消失)；pos 四選一：center/top/bottom/full(鋪滿全屏，集中線用這個)
 
 【時間軸】kind=once 時每個積木都要加 "at":開始毫秒 和 "dur":持續毫秒（總長 8000 內）；kind=loop 不用 at/dur，且只准用 particles/tint/edge。
 

@@ -20,3 +20,55 @@
     background: linear-gradient(160deg, #1c2333 0%, #2a3247 55%, #1a1f2e 100%);
     overflow: hidden;
 }
+
+/* ── SVG 積木（漫畫符號類：怒氣/集中線/愛心…）── */
+.vn-fx-svg {
+    position: absolute;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.3s ease-out;
+}
+.vn-fx-svg svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.vn-fx-svg-out {
+    opacity: 0;
+}
+.vn-fx-pos-center { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.vn-fx-pos-top    { left: 50%; top: 8%;  transform: translateX(-50%); }
+.vn-fx-pos-bottom { left: 50%; bottom: 18%; transform: translateX(-50%); }
+.vn-fx-pos-full   { inset: 0; }
+.vn-fx-pos-full svg { height: 100%; }
+
+/* 進場動畫掛在內層 svg 上（外層 transform 被定位用掉了） */
+.vn-fx-anim-pop svg   { animation: vnfxPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.vn-fx-anim-drop svg  { animation: vnfxDrop 0.5s ease-out both; }
+.vn-fx-anim-rise svg  { animation: vnfxRise var(--vnfx-dur, 1.6s) ease-out both; }
+.vn-fx-anim-pulse svg { animation: vnfxPulse 0.9s ease-in-out infinite; }
+.vn-fx-anim-burst svg { animation: vnfxBurst var(--vnfx-dur, 0.8s) ease-out both; }
+
+@keyframes vnfxPop {
+    0%   { transform: scale(0.2); opacity: 0; }
+    60%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+@keyframes vnfxDrop {
+    0%   { transform: translateY(-70%); opacity: 0; }
+    70%  { transform: translateY(8%); opacity: 1; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes vnfxRise {
+    0%   { transform: translateY(35%); opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translateY(-70%); opacity: 0; }
+}
+@keyframes vnfxPulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+}
+@keyframes vnfxBurst {
+    0%   { transform: scale(0.3); opacity: 0.95; }
+    100% { transform: scale(1.75); opacity: 0; }
+}
