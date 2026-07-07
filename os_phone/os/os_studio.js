@@ -4922,6 +4922,10 @@ ${d.usageDesc || ''}
             const _btn = previewMain.querySelector('#fx-pv-play');
             if (_btn) _btn.onclick = _play;
             setTimeout(_play, 250);   // 生成完自動播一次
+            // 草稿卡下面永遠跟著特效庫清單（不用清空對話才看得到）
+            const _libHost = document.createElement('div');
+            previewMain.appendChild(_libHost);
+            _renderFxLibrary(_libHost);
             return;
         }
 
