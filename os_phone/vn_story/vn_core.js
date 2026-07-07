@@ -1676,7 +1676,7 @@
                     const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
                     if (lbUrl) { this._avatarMemCache[name] = lbUrl; console.log(`[VN] 頭像使用世界書素材：${name}`); continue; }
                     const cached = await VN_Cache.get('avatar_cache', name);
-                    if (cached && cached.url && !cached.url.startsWith('blob:') && this._cacheModeOk(cached)) {
+                    if (cached && cached.url && !cached.url.startsWith('blob:')) {
                         const objUrl = await this._toObjectUrl(cached.url);
                         this._avatarMemCache[name] = objUrl || cached.url;
                         console.log(`[VN] 頭像從 IDB 載入：${name}`); continue;
@@ -1728,13 +1728,9 @@
             return { done: j.done, total: j.total, pending: j.inflight + j.scanning };
         },
         avatarPendingStatus: function() { return this.imgPendingStatus(); },   // 舊名相容
-        // 快取模式判定：頭像模式與立繪模式各認各的圖（record.sprite 沒記＝舊制頭像檔）。
-        // 模式不合＝當 miss → 重生並覆寫。治「開了立繪模式還端出舊頭像/帶背景圖」——快取命中排在生成前，
-        // 舊圖不擋掉的話永遠走不到立繪 prompt + AI 去背那一步。
-        _cacheModeOk: function(cached) {
-            if (!cached) return false;
-            return (cached.sprite === true) === (VN_Config.data.spriteDirect === true);
-        },
+        // 快取不分頭像/立繪模式＝刻意設計（Rae 2026-07-07 拍板）：切拉桿不重生舊圖、不燒額度——
+        // 舊頭像照用，要立繪她自己按 studio「一鍵生立繪」。真正的「開了拉桿還生頭像」bug 是
+        // VN_Config.load 時序（vn_config.js 已自讀修掉），別再往快取加模式判定。
         _genAvatarToCache: function(name) {
             if (this._avatarMemCache[name]) return Promise.resolve(this._avatarMemCache[name]);
             if (this._avatarInflight[name]) return this._avatarInflight[name];
@@ -1746,7 +1742,7 @@
                     const img = await self._makeCharImage(d, 'Neutral');   // 立繪模式由 _makeCharImage 內部換立繪 prompt + 去背
                     if (!img) { console.warn(`[VN] 角色圖生成失敗：${name}`); return ''; }
                     self._avatarMemCache[name] = img.objUrl;
-                    if (img.dataUrl) { try { await VN_Cache.set('avatar_cache', name, { prompt: d, url: img.dataUrl, sprite: (VN_Config.data.spriteDirect === true) }); } catch(e) {} }
+                    if (img.dataUrl) { try { await VN_Cache.set('avatar_cache', name, { prompt: d, url: img.dataUrl }); } catch(e) {} }
                     console.log(`[VN] 角色圖生成完成：${name}`);
                     return img.objUrl;
                 } catch(e) { console.warn(`[VN] 角色圖生成例外：${name}`, e); return ''; }
@@ -1922,7 +1918,7 @@
                     const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
                     if (lbUrl) continue;
                     const cached = await VN_Cache.get('avatar_cache', name);
-                    if (cached?.url && !cached.url.startsWith('blob:') && this._cacheModeOk(cached)) continue;
+                    if (cached?.url && !cached.url.startsWith('blob:')) continue;
                     if (this._getPersonaFallback(name)?.url) continue;
                     // 自備靜態立繪/預設圖存在 → 播放時直接讀靜態檔，不用生
                     if (await this._staticAvatarExists(name)) { console.log(`[VN] 頭像早鳥：${name} 有自備靜態圖，跳過生成`); continue; }
@@ -3346,7 +3342,7 @@
             try {
                 const cached = await VN_Cache.get('avatar_cache', name);
                 let url;
-                if (cached && cached.url && !cached.url.startsWith('blob:') && this._cacheModeOk(cached)) {
+                if (cached && cached.url && !cached.url.startsWith('blob:')) {
                     const objUrl = await this._toObjectUrl(cached.url);
                     url = objUrl || cached.url; this._avatarMemCache[name] = url;
                 } else {
@@ -3366,7 +3362,7 @@
                         const img2 = await this._makeCharImage(d, exp);
                         if (!img2) return;
                         url = img2.objUrl; this._avatarMemCache[name] = img2.objUrl;
-                        if (img2.dataUrl) { try { await VN_Cache.set('avatar_cache', name, { prompt: d, url: img2.dataUrl, sprite: (VN_Config.data.spriteDirect === true) }); } catch(e) {} }
+                        if (img2.dataUrl) { try { await VN_Cache.set('avatar_cache', name, { prompt: d, url: img2.dataUrl }); } catch(e) {} }
                     }
                 }
                 if (!url) { const fb = VN_Config.data.finalFallbackSprite; if (fb) showSprite(fb); else if (!_stale()) this._hideEl(img); return; }
