@@ -62,6 +62,16 @@
                 ctxChapters:         gi('ctx-chapters', 5)
             };
 
+            // 頭像↔立繪模式切換：記憶體快取全是舊模式的圖（IDB 端有 sprite 旗標判定、記憶體端沒有）→ 清掉讓解析鏈重走
+            try {
+                const prev = this.load();
+                if (prev.spriteDirect !== data.spriteDirect && window.VN_Core?._avatarMemCache) {
+                    for (const url of Object.values(window.VN_Core._avatarMemCache)) { try { if (String(url).startsWith('blob:')) URL.revokeObjectURL(url); } catch (e) {} }
+                    window.VN_Core._avatarMemCache = {};
+                    console.log('[VN] 立繪模式切換 → 已清記憶體頭像快取');
+                }
+            } catch (e) {}
+
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
             // 若 VN_Config 正在運行，即時同步（下次開啟 VN 時也會重新 load）
