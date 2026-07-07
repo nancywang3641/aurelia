@@ -232,6 +232,11 @@
                         <button class="se-icon-btn" title="刷新" id="se-btn-refresh">↻</button>
                     </div>
                 </div>
+                <div id="se-swipe-bar" class="se-hidden">
+                    <button class="se-swipe-btn" id="se-swipe-prev" type="button" title="上一個開場"><i class="fa-solid fa-chevron-left"></i></button>
+                    <div id="se-swipe-label">開場 1 / 1</div>
+                    <button class="se-swipe-btn" id="se-swipe-next" type="button" title="下一個開場"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
                 <div id="se-content-area"></div>
                 <div id="se-input-area"></div>
             `;
@@ -309,6 +314,8 @@
             const contentArea = document.getElementById('se-content-area');
             contentArea.innerHTML = '';
 
+            this._refreshSwipeBar();   // 開場白切換列（多開局卡）——async 自理、不擋渲染
+
             const firstMes = document.querySelector('#chat .mes[mesid="0"] .mes_text');
 
             if (!firstMes) {
@@ -380,6 +387,61 @@
                 }, { once: true });
             });
             console.log(`[StoryExtractor] ✅ 開場白渲染完成，共 ${contentArea.children.length} 個區塊`);
+        },
+
+        // ── 開場白切換列（卡片多開局）：拿「資料」自建、不搬酒館 DOM ──
+        //    來源＝第 0 樓 swipes ∪ 卡片 first_mes/alternate_greetings（保留既有、只補缺、宏先替換）；
+        //    切換走官方 setChatMessages swipe_id（真改第 0 樓＋自動重渲染＋存檔），切完重刮 mesid=0 照舊渲染。
+        //    只在「第 0 樓就是最後一樓」(劇情還沒推進) 時開放；開打後藏起來、只看當前開場。
+        async _refreshSwipeBar() {
+            const bar = document.getElementById('se-swipe-bar');
+            if (!bar) return;
+            bar.classList.add('se-hidden');
+            try {
+                const TH = window.TavernHelper;
+                if (!TH?.getChatMessages || !TH?.setChatMessages || !TH?.getLastMessageId) return;
+                if (TH.getLastMessageId() !== 0) return;   // 劇情已推進 → 不給改開局
+                const m0 = (TH.getChatMessages(0, { include_swipes: true }) || [])[0];
+                if (!m0) return;
+                let swipes = (Array.isArray(m0.swipes) && m0.swipes.length) ? m0.swipes.slice() : [String(m0.message || '')];
+
+                // 卡片的備用開場白還沒進第 0 樓 → 併進 swipes（宏替換後比對，原文/替換後任一已存在就不重複補）
+                try {
+                    const cd = TH.getCharData ? TH.getCharData('current') : null;
+                    const alts = [cd?.first_mes].concat(cd?.data?.alternate_greetings || cd?.alternate_greetings || []);
+                    const sub = (t) => { try { const c = window.SillyTavern?.getContext?.(); return c?.substituteParams ? c.substituteParams(t) : t; } catch (e) { return t; } };
+                    const have = new Set(swipes.map(s => String(s).trim()));
+                    const missing = [];
+                    for (const g of alts) {
+                        if (!g || !String(g).trim()) continue;
+                        const s = sub(String(g));
+                        if (have.has(s.trim()) || have.has(String(g).trim())) continue;
+                        missing.push(s); have.add(s.trim());
+                    }
+                    if (missing.length) {
+                        swipes = swipes.concat(missing);
+                        await TH.setChatMessages([{ message_id: 0, swipes }], { refresh: 'none' });
+                        console.log(`[StoryExtractor] 已把卡片的 ${missing.length} 個備用開場白補進第 0 樓`);
+                    }
+                } catch (e) { console.warn('[StoryExtractor] 補開場白清單失敗:', e); }
+
+                if (swipes.length <= 1) return;   // 單開場卡不顯示切換列
+                const cur = m0.swipe_id || 0;
+                bar.querySelector('#se-swipe-label').textContent = `開場 ${cur + 1} / ${swipes.length}`;
+                const prev = bar.querySelector('#se-swipe-prev'), next = bar.querySelector('#se-swipe-next');
+                prev.disabled = cur <= 0;
+                next.disabled = cur >= swipes.length - 1;
+                prev.onclick = () => this._switchGreeting(cur - 1);
+                next.onclick = () => this._switchGreeting(cur + 1);
+                bar.classList.remove('se-hidden');
+            } catch (e) { console.warn('[StoryExtractor] 開場白切換列失敗:', e); }
+        },
+
+        async _switchGreeting(idx) {
+            try {
+                await window.TavernHelper.setChatMessages([{ message_id: 0, swipe_id: idx }]);   // 官方切換：改第 0 樓＋重渲染＋存檔
+                setTimeout(() => this.scanAndRender(), 300);   // 等酒館把第 0 樓重畫完再重新提取
+            } catch (e) { console.warn('[StoryExtractor] 切換開場失敗:', e); }
         },
 
         // 文字 wrapper 偷學作者 HTML 面板的視覺：背景、遮罩、文字色、邊框、圓角、陰影、字體
