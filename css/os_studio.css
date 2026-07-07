@@ -1449,3 +1449,7 @@ html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { co
 .studio-container .fx-pv-play {
     width: 100%;
 }
+.studio-container .fx-lib-row-stage {
+    height: 180px;
+    margin: 2px 0 6px;
+}
