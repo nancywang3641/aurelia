@@ -16,10 +16,16 @@
         data: { bgm: '', sfx: '', spriteBase: '', stickerBase: '', charDefaultBase: '', finalFallbackSprite: 'https://files.catbox.moe/9je7j2.png', avatarBasePrompt: '', avatarNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text', bgBasePrompt: '', bgNegPrompt: 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render', itemBasePrompt: 'item only, product shot, no background, white background, clean illustration, high quality', itemNegPrompt: 'person, human, character, body, face, hands, people, crowd, bad anatomy, blurry, low quality, worst quality, watermark, text', ctxChapters: 5 },
         // UI 設置由 vn_settings.js 管理，此處只負責從 localStorage 載入供運行期使用
         load: function() {
-            const s = localStorage.getItem('vn_cfg_v4');
-            if (s) this.data = { ...this.data, ...JSON.parse(s) };
+            try {
+                const s = localStorage.getItem('vn_cfg_v4');
+                if (s) this.data = { ...this.data, ...JSON.parse(s) };
+            } catch (e) {}
         }
     };
+    // 🔑 腳本載入就先讀一次設定——早鳥/大總結補頭像等路徑在「VN 面板還沒開」時就會生圖，
+    //    等 vn_core init 才 load 的話，那些生成讀到的 spriteDirect 永遠是 undefined
+    //    → 立繪模式開著卻偶爾生出頭像（帶背景大頭照）的真兇。之後 vn_core/設定存檔會再 load、無害。
+    VN_Config.load();
 
     // === Prompt 排列管理（讀取順序供 API 使用，UI 統一在 os_prompts.js） ===
     const VN_PromptOrder = {
