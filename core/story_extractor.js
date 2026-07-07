@@ -279,7 +279,7 @@
                 };
             }
 
-            rootWrapper.querySelector('#se-btn-refresh').onclick = () => this.scanAndRender();
+            rootWrapper.querySelector('#se-btn-refresh').onclick = () => this.scanAndRender(true);   // 手動刷新＝強制重演（跳過原稿沒變的略過判定）
 
             const themeBtn = rootWrapper.querySelector('#se-btn-theme');
             themeBtn.onclick = () => this.toggleTheme();
@@ -307,14 +307,19 @@
             this._startChatSync();   // 卡片自帶跳轉鈕改第 0 樓時，藏書自動跟上
         },
 
+        // 多來源重渲染請求（切換鈕 / 第0樓觀察者 / 卡片跳轉）合併成一拍，只渲一次——治連發全套重演的卡頓
+        _renderTimer: null,
+        _lastRenderSig: null,
+        _scheduleRender(delay = 300) {
+            clearTimeout(this._renderTimer);
+            this._renderTimer = setTimeout(() => this.scanAndRender(), delay);
+        },
+
         // 把開場白整段渲染進單一區域：純文字 + HTML 區塊依原本順序堆疊
-        scanAndRender() {
-            this._stopPanelMedia();   // 重渲染前先停舊媒體(detached <audio> 不會自己停)，換卡不疊加 BGM
-            // 渲染後卡片自帶 BGM 會自動播 → 延遲幾拍靜掉(藏書是預覽、不該被卡片 BGM 洗版；含 iframe 晚載)
-            setTimeout(() => this._stopPanelMedia(), 300);
-            setTimeout(() => this._stopPanelMedia(), 1200);
+        // 卡頓優化：①原稿沒變就跳過（防重複請求白演）②區塊先組進 fragment、最後一次上牆（不逐塊 reflow）
+        scanAndRender(force = false) {
             const contentArea = document.getElementById('se-content-area');
-            contentArea.innerHTML = '';
+            if (!contentArea) return;
 
             this._refreshSwipeBar();   // 開場白切換列（多開局卡）——async 自理、不擋渲染
 
@@ -325,14 +330,25 @@
                     <div style="font-size:40px; margin-bottom:10px;">📭</div>
                     找不到開場白<br><small>請先開啟一個角色卡對話</small>
                 </div>`;
+                this._lastRenderSig = null;
                 return;
             }
 
+            const sig = firstMes.innerHTML;
+            if (!force && sig === this._lastRenderSig && contentArea.children.length) return;   // 原稿沒變 → 不重演
+            this._lastRenderSig = sig;
+
+            this._stopPanelMedia();   // 重渲染前先停舊媒體(detached <audio> 不會自己停)，換卡不疊加 BGM
+            // 渲染後卡片自帶 BGM 會自動播 → 延遲幾拍靜掉(藏書是預覽、不該被卡片 BGM 洗版；含 iframe 晚載)
+            setTimeout(() => this._stopPanelMedia(), 300);
+            setTimeout(() => this._stopPanelMedia(), 1200);
+
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = firstMes.innerHTML;
+            tempDiv.innerHTML = sig;
 
             const BLOCK_TAGS = ['DIV', 'TABLE', 'FORM', 'DETAILS', 'SECTION', 'ARTICLE', 'ASIDE', 'NAV', 'FIELDSET', 'FIGURE', 'IFRAME', 'CANVAS', 'SVG'];
 
+            const frag = document.createDocumentFragment();   // 先在記憶體組好、最後一次上牆
             let textBuffer = [];
             const flushText = () => {
                 if (textBuffer.length === 0) return;
@@ -341,7 +357,7 @@
                     const wrapper = document.createElement('div');
                     wrapper.className = 'native-render-wrapper';
                     wrapper.innerHTML = html;
-                    contentArea.appendChild(wrapper);
+                    frag.appendChild(wrapper);
                 }
                 textBuffer = [];
             };
@@ -359,13 +375,16 @@
                         wrapper.className = 'story-html-block';
                         wrapper.innerHTML = node.outerHTML;
                         wrapper.querySelectorAll('details:not([open])').forEach(el => el.setAttribute('open', 'true'));
-                        contentArea.appendChild(wrapper);
+                        frag.appendChild(wrapper);
                     } else {
                         textBuffer.push(node.outerHTML);
                     }
                 }
             });
             flushText();
+
+            contentArea.innerHTML = '';
+            contentArea.appendChild(frag);
 
             if (contentArea.children.length === 0) {
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
@@ -444,14 +463,13 @@
         async _switchGreeting(idx) {
             try {
                 await window.TavernHelper.setChatMessages([{ message_id: 0, swipe_id: idx }]);   // 官方切換：改第 0 樓＋重渲染＋存檔
-                setTimeout(() => this.scanAndRender(), 300);   // 等酒館把第 0 樓重畫完再重新提取（同步觀察者是備援、這裡主動快一拍）
+                this._scheduleRender(300);   // 跟同步觀察者共用同一個排程 → 一次切換只重演一遍
             } catch (e) { console.warn('[StoryExtractor] 切換開場失敗:', e); }
         },
 
         // ── 第 0 樓同步觀察者：卡片自帶的「跳轉開場」美化按鈕(QR/腳本)改的是酒館第 0 樓，
         //    藏書是拓印不會自己跟上 → 盯 #chat 裡 mesid=0 的 DOM 變動，防抖後自動重渲染。──
         _chatObserver: null,
-        _syncTimer: null,
         _startChatSync() {
             if (this._chatObserver) return;
             const chat = document.getElementById('chat');
@@ -463,11 +481,8 @@
                     return el && el.closest && el.closest('.mes[mesid="0"]');
                 });
                 if (!hit) return;
-                clearTimeout(this._syncTimer);
-                this._syncTimer = setTimeout(() => {
-                    console.log('[StoryExtractor] 偵測到第 0 樓變動 → 同步重渲染');
-                    this.scanAndRender();
-                }, 400);
+                console.log('[StoryExtractor] 偵測到第 0 樓變動 → 排程同步重渲染');
+                this._scheduleRender(400);
             });
             this._chatObserver.observe(chat, { childList: true, subtree: true, characterData: true });
             console.log('[StoryExtractor] 第 0 樓同步觀察者已啟動');
@@ -475,7 +490,7 @@
         _stopChatSync() {
             try { this._chatObserver?.disconnect(); } catch (e) {}
             this._chatObserver = null;
-            clearTimeout(this._syncTimer);
+            clearTimeout(this._renderTimer);
         },
 
         // 文字 wrapper 偷學作者 HTML 面板的視覺：背景、遮罩、文字色、邊框、圓角、陰影、字體
