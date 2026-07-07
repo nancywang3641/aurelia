@@ -1306,7 +1306,11 @@ ${numberedText}`;
         }
     }
 
-    // --- patch 維護：訊息變動時砍對應 patch ---
+    // --- patch 維護：訊息變動(刪樓/swipe/編輯)時砍對應 patch＋回滾狀態 ---
+    // 🔙 回滾原則：只回復「被刪那筆 patch 碰過的 key」到「base+剩餘 patch 重播」的值，其餘欄位不動——
+    //    不整份用重播取代（手動✏️改數值/去重合併等沒進 patch 系統的資料會被洗掉，同 extract 處不從空重建的理由）。
+    // 🐛 修正史：舊版只把重播結果寫 OS_DB、沒寫 _AVS_ENGINE → 面板(讀引擎)看不到回滾，
+    //    且下一輪抽取以引擎舊狀態為底又把回滾蓋回去 → 「手動刪樓 AVS 不回朔」的真兇。
     async function onMessageInvalidated(msgId) {
         try {
             if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過 patch 失效'); return; }
@@ -1314,15 +1318,45 @@ ${numberedText}`;
             if (!chatId || !win.OS_DB?.getStateData) return;
             const data = await win.OS_DB.getStateData(chatId);
             if (!data || !data.patches) return;
-            if (data.patches[msgId] === undefined) return;
+            const deadPatch = data.patches[msgId];
+            if (deadPatch === undefined) { console.log(`🛰️ [State Runtime] 訊息失效 msg#${msgId}：無對應 patch、不用回滾`); return; }
             const newPatches = { ...data.patches };
             delete newPatches[msgId];
-            await win.OS_DB.saveStateData(chatId, {
-                ...data,
-                patches: newPatches,
-                current: recomputeCurrent(newPatches, data.base)
-            });
-            console.log(`🛰️ [State Runtime] 砍 patch msg#${msgId}`);
+
+            const rolled = recomputeCurrent(newPatches, data.base);   // 重播基準（只用來查「被碰過的 key」該回到什麼值）
+            const cur = JSON.parse(JSON.stringify(win._AVS_ENGINE?.read?.() || data.current || {}));
+            // 被刪 patch 碰過的 key 攤平成葉路徑（物件型值逐葉展開，別整個容器覆蓋）
+            const leaves = [];
+            const flatten = (prefix, val) => {
+                if (val && typeof val === 'object' && !Array.isArray(val)) { for (const k of Object.keys(val)) flatten(prefix + '.' + k, val[k]); }
+                else leaves.push(prefix);
+            };
+            for (const [k, v] of Object.entries(deadPatch)) {
+                if (v && typeof v === 'object' && !Array.isArray(v)) flatten(k, v);
+                else leaves.push(k);
+            }
+            // 刪葉子後往上清「空殼父物件」（實體所有屬性都是這 patch 引入的 → 別留 {} 鬼實體）；頂層容器留著（空容器=正常）
+            const prune = (path) => {
+                const ks = path.split('.'); ks.pop();
+                while (ks.length >= 2) {
+                    const pp = ks.join('.');
+                    const parent = _getDeep(cur, pp);
+                    if (parent && typeof parent === 'object' && !Array.isArray(parent) && !Object.keys(parent).length) { _deleteDeep(cur, pp); ks.pop(); }
+                    else break;
+                }
+            };
+            for (const k of leaves) {
+                const v = _getDeep(rolled, k);
+                if (v === undefined) { _deleteDeep(cur, k); prune(k); }   // 這 patch 首次引入的欄位 → 整個拿掉+清空殼
+                else if (k.includes('.')) _setDeep(cur, k, v);
+                else cur[k] = v;
+            }
+
+            // 引擎 / DB / 面板三邊一起回滾
+            try { win._AVS_ENGINE?.write?.(cur); } catch (e) {}
+            await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, current: cur });
+            try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId, rollback: true }); } catch (e) {}
+            console.log(`🛰️ [State Runtime] 砍 patch msg#${msgId} → 已回滾 ${leaves.length} 個欄位`);
         } catch(e) {
             console.warn('[State Runtime] 砍 patch 失敗:', e);
         }
