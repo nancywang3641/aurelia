@@ -216,20 +216,48 @@
             } catch (e) { console.warn('[OS_FX] 載入已存特效失敗:', e); if (!this._saved) this._saved = []; }
         },
 
-        // 全清單（內建 + 已存），給清單注入與工坊瀏覽用
+        // ── 開關 / 群組（localStorage、內建與自製統一按 fxId 記；關掉＝不注入白名單、標記來了也不播）──
+        _disabled: function () {
+            try { return new Set(JSON.parse(localStorage.getItem('os_fx_disabled') || '[]')); } catch (e) { return new Set(); }
+        },
+        isEnabled: function (id) { return !this._disabled().has(String(id || '').trim().toLowerCase()); },
+        setEnabled: function (id, on) {
+            try {
+                const s = this._disabled();
+                const key = String(id || '').trim().toLowerCase();
+                if (on) s.delete(key); else s.add(key);
+                localStorage.setItem('os_fx_disabled', JSON.stringify(Array.from(s)));
+            } catch (e) {}
+        },
+        _groups: function () { try { return JSON.parse(localStorage.getItem('os_fx_groups') || '{}') || {}; } catch (e) { return {}; } },
+        getGroup: function (id) { return this._groups()[String(id || '').trim().toLowerCase()] || ''; },
+        setGroup: function (id, group) {
+            try {
+                const g = this._groups();
+                const key = String(id || '').trim().toLowerCase();
+                if (group && String(group).trim()) g[key] = String(group).trim().slice(0, 12); else delete g[key];
+                localStorage.setItem('os_fx_groups', JSON.stringify(g));
+            } catch (e) {}
+        },
+
+        // 全清單（內建 + 已存、含開關/群組標註），給工坊瀏覽用
         listAll: function () {
             const saved = this._saved || [];
             const ids = new Set(saved.map(r => r.fxId));
-            return BUILTINS.filter(b => !ids.has(b.fxId)).concat(saved);   // 已存同名蓋內建
+            const dis = this._disabled(), grp = this._groups();
+            return BUILTINS.filter(b => !ids.has(b.fxId)).concat(saved)   // 已存同名蓋內建
+                .map(r => Object.assign(r, { enabled: !dis.has(r.fxId), group: grp[r.fxId] || '' }));
         },
-        // 注入主模型的白名單文字（每行一個）
+        // 注入主模型的白名單文字（每行一個；只列開著的）
         listForPrompt: function () {
-            return this.listAll().map(r => `#${r.fxId}# ${r.desc || r.name}（${r.kind === 'loop' ? '持续到换场' : '瞬发'}）`).join('\n');
+            return this.listAll().filter(r => r.enabled)
+                .map(r => `#${r.fxId}# ${r.desc || r.name}（${r.kind === 'loop' ? '持续到换场' : '瞬发'}）`).join('\n');
         },
 
         // ── 內部 ──
         _resolve: function (id) {
             const key = String(id || '').trim().toLowerCase();
+            if (!this.isEnabled(key)) { console.log('[OS_FX] 特效已被關閉，略過:', key); return null; }
             const saved = this._saved || [];
             for (const r of saved) if (r.fxId === key) return r;
             for (const r of BUILTINS) if (r.fxId === key) return r;
