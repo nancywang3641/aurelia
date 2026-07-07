@@ -339,3 +339,41 @@
 }
 #se-root-wrapper.theme-darkgold #se-input-area #send_but:hover i,
 #se-root-wrapper.theme-darkgold #se-input-area .send_but:hover i { color: var(--se-navy-0) !important; fill: var(--se-navy-0) !important; }
+
+/* ── 開場白切換列（多開局卡） ── */
+.se-hidden { display: none !important; }
+#se-swipe-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--se-line);
+    flex-shrink: 0;
+}
+#se-swipe-label {
+    font-family: var(--se-serif);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--se-ink-soft);
+    min-width: 96px;
+    text-align: center;
+}
+.se-swipe-btn {
+    background: none;
+    border: 1px solid var(--se-line);
+    border-radius: 8px;
+    width: 32px;
+    height: 26px;
+    font-size: 12px;
+    color: var(--se-ink-soft);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.se-swipe-btn:hover:not(:disabled) { color: var(--se-ink); background: rgba(176,138,62,0.12); }
+.se-swipe-btn:disabled { opacity: 0.3; cursor: default; }
+.theme-darkgold #se-swipe-bar { border-bottom-color: var(--se-gold-line); }
+.theme-darkgold #se-swipe-label { color: var(--se-gold-soft); }
+.theme-darkgold .se-swipe-btn { border-color: var(--se-gold-line); color: var(--se-gold-soft); }
+.theme-darkgold .se-swipe-btn:hover:not(:disabled) { color: var(--se-gold); background: rgba(212,175,55,0.12); }
