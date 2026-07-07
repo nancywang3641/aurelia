@@ -1131,6 +1131,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     let _wbWorking = null;   // 工作世界書名(null=在選擇層)
     let _wbView = 'picker';  // picker|entries|detail|chat|confirm（5 換頁，任何時刻只顯示一頁）
     let _wbChat = [];        // [{role,content}]
+    let _wbLastError = null; // 上次 AI 呼叫的錯誤（畫在聊天尾巴的錯誤泡泡＋重試鈕；null=沒錯誤）
     let _wbEntries = [];     // 目前條目快取
     let _wbPending = null;   // 待套用 ops（跨輪累積的 diff；每輪 AI 只吐新改動、程式自己 merge）
     let _wbTempUid = -1;     // 待新增條目的臨時 uid（負數，跟酒館真 uid≥0 不撞）→ 讓「還沒寫入的新條目」也能被再次改/刪
@@ -1155,7 +1156,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return _wbRenderPicker(host);
     }
     function _wbEnter(name) {   // 進入某本書 → 條目瀏覽頁
-        _wbWorking = name; _wbChat = []; _wbPending = null; _wbTempUid = -1; _wbEntries = [];
+        _wbWorking = name; _wbChat = []; _wbPending = null; _wbTempUid = -1; _wbEntries = []; _wbLastError = null;
         _wbSearch = ''; _wbFilter = 'all'; _wbView = 'entries';
         renderWorldbookPanel();
     }
@@ -1409,12 +1410,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     }
     function _wbPaintChat(host) {
         const el = host.querySelector('#swb-chatlog'); if (!el) return;
-        if (!_wbChat.length) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-comment-dots"></i></div><div>跟 AI 說你想怎麼整理這本世界書<br>它幫你改／加條目，你確認後才寫入</div></div>`; return; }
-        el.innerHTML = _wbChat.map(m => {
+        if (!_wbChat.length && !_wbLastError) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-comment-dots"></i></div><div>跟 AI 說你想怎麼整理這本世界書<br>它幫你改／加條目，你確認後才寫入</div></div>`; return; }
+        let html = _wbChat.map(m => {
             let body = m.content;
             if (m.role === 'assistant') { body = _wbStripOps(m.content); if (!body) body = '✏️ 我擬好了改動，點下方「查看建議」確認。'; }
             return `<div class="swb-bubble swb-${m.role}">${renderMarkdown(body)}</div>`;
         }).join('');
+        // 錯誤泡泡＋重試（API錯誤頁/空回應/截斷都會落在這，不會再被當正常回覆收進對話）
+        if (_wbLastError) html += `<div class="swb-bubble swb-assistant studio-error-bubble"><div class="studio-error-msg">❌ 錯誤：${String(_wbLastError).replace(/</g, '&lt;').slice(0, 200)}</div><button class="studio-retry-btn">🔄 重試</button></div>`;
+        el.innerHTML = html;
+        const rb = el.querySelector('.studio-retry-btn');
+        if (rb) rb.onclick = () => { _wbLastError = null; _wbPaintChat(host); _wbCall(host); };
         el.scrollTop = el.scrollHeight;
     }
     function _wbPaintPendBar(host) {
@@ -1457,7 +1463,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const api = (window.parent || window).OS_API || window.OS_API;
         if (!api || (typeof api.chatSecondary !== 'function' && typeof api.chatMain !== 'function')) { alert('AI 不可用，請先到「寫作 → API 設置」設好模型'); return; }
         _wbChat.push({ role: 'user', content: msg }); ta.value = '';
+        _wbLastError = null;
         _wbPaintChat(host);
+        _wbCall(host);
+    }
+    // 真正發 API——_wbSend 與錯誤泡泡「重試」共用（用當前 _wbChat 重打、不重複塞 user 訊息）
+    function _wbCall(host) {
+        const api = (window.parent || window).OS_API || window.OS_API;
+        if (!api) return;
         const sendBtn = host.querySelector('#swb-send'); if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '生成中…'; }
         let _wbSysFull = _WB_SYS + '\n\n【目前條目】\n' + (_wbEntriesForPrompt() || '（空，還沒有條目）');
         const _pend = _wbPendingForPrompt();
@@ -1466,13 +1479,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const done = (full) => {
             if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; }
             const reply = String(full || '');
+            // 驗貨（同主聊天室 7d2b629）：錯誤頁/空回應/截斷別當正常回覆收進對話 → 轉錯誤泡泡給重試
+            const _bad = _studioBadReply(reply);
+            if (_bad.bad) { _wbLastError = _bad.reason; _wbPaintChat(host); return; }
+            _wbLastError = null;
             _wbChat.push({ role: 'assistant', content: reply });
             // 真 diff：AI 只吐這輪的改動 → merge 進已累積的待改動（不替換、不丟、沒提到的不碰）
             _wbPending = _wbMergeOps(_wbPending, _wbParseOps(reply));
             if (!_wbPending || !_wbPending.length) _wbPending = null;
             _wbPaintChat(host); _wbPaintPendBar(host);
         };
-        const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } alert('AI 失敗：' + (err && err.message || err)); };
+        const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } _wbLastError = (err && err.message) || String(err || '未知錯誤'); _wbPaintChat(host); };
         // 主模型＝chatMain（品質好、世界書二改首選）；副模型＝chatSecondary。選的入口若不存在則退另一個。
         const useMain = _wbModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
