@@ -233,6 +233,7 @@
                     </div>
                 </div>
                 <div id="se-swipe-bar" class="se-hidden">
+                    <button class="se-swipe-btn" id="se-swipe-first" type="button" title="回第一個開場"><i class="fa-solid fa-angles-left"></i></button>
                     <button class="se-swipe-btn" id="se-swipe-prev" type="button" title="上一個開場"><i class="fa-solid fa-chevron-left"></i></button>
                     <div id="se-swipe-label">開場 1 / 1</div>
                     <button class="se-swipe-btn" id="se-swipe-next" type="button" title="下一個開場"><i class="fa-solid fa-chevron-right"></i></button>
@@ -303,6 +304,7 @@
             console.log('[StoryExtractor] ✅ 窗口已顯示');
 
             this.scanAndRender();
+            this._startChatSync();   // 卡片自帶跳轉鈕改第 0 樓時，藏書自動跟上
         },
 
         // 把開場白整段渲染進單一區域：純文字 + HTML 區塊依原本順序堆疊
@@ -428,9 +430,11 @@
                 if (swipes.length <= 1) return;   // 單開場卡不顯示切換列
                 const cur = m0.swipe_id || 0;
                 bar.querySelector('#se-swipe-label').textContent = `開場 ${cur + 1} / ${swipes.length}`;
-                const prev = bar.querySelector('#se-swipe-prev'), next = bar.querySelector('#se-swipe-next');
+                const first = bar.querySelector('#se-swipe-first'), prev = bar.querySelector('#se-swipe-prev'), next = bar.querySelector('#se-swipe-next');
+                first.disabled = cur <= 0;
                 prev.disabled = cur <= 0;
                 next.disabled = cur >= swipes.length - 1;
+                first.onclick = () => this._switchGreeting(0);
                 prev.onclick = () => this._switchGreeting(cur - 1);
                 next.onclick = () => this._switchGreeting(cur + 1);
                 bar.classList.remove('se-hidden');
@@ -440,8 +444,38 @@
         async _switchGreeting(idx) {
             try {
                 await window.TavernHelper.setChatMessages([{ message_id: 0, swipe_id: idx }]);   // 官方切換：改第 0 樓＋重渲染＋存檔
-                setTimeout(() => this.scanAndRender(), 300);   // 等酒館把第 0 樓重畫完再重新提取
+                setTimeout(() => this.scanAndRender(), 300);   // 等酒館把第 0 樓重畫完再重新提取（同步觀察者是備援、這裡主動快一拍）
             } catch (e) { console.warn('[StoryExtractor] 切換開場失敗:', e); }
+        },
+
+        // ── 第 0 樓同步觀察者：卡片自帶的「跳轉開場」美化按鈕(QR/腳本)改的是酒館第 0 樓，
+        //    藏書是拓印不會自己跟上 → 盯 #chat 裡 mesid=0 的 DOM 變動，防抖後自動重渲染。──
+        _chatObserver: null,
+        _syncTimer: null,
+        _startChatSync() {
+            if (this._chatObserver) return;
+            const chat = document.getElementById('chat');
+            if (!chat) return;
+            this._chatObserver = new MutationObserver((muts) => {
+                if (!this.isVisible) return;
+                const hit = muts.some(m => {
+                    const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+                    return el && el.closest && el.closest('.mes[mesid="0"]');
+                });
+                if (!hit) return;
+                clearTimeout(this._syncTimer);
+                this._syncTimer = setTimeout(() => {
+                    console.log('[StoryExtractor] 偵測到第 0 樓變動 → 同步重渲染');
+                    this.scanAndRender();
+                }, 400);
+            });
+            this._chatObserver.observe(chat, { childList: true, subtree: true, characterData: true });
+            console.log('[StoryExtractor] 第 0 樓同步觀察者已啟動');
+        },
+        _stopChatSync() {
+            try { this._chatObserver?.disconnect(); } catch (e) {}
+            this._chatObserver = null;
+            clearTimeout(this._syncTimer);
         },
 
         // 文字 wrapper 偷學作者 HTML 面板的視覺：背景、遮罩、文字色、邊框、圓角、陰影、字體
@@ -637,6 +671,7 @@
             // 經 _maybeHideVnPanel → hideVnPanel 回呼 → 無限遞迴卡頓
             if (this._hiding) return;
             this._hiding = true;
+            this._stopChatSync();   // 面板收起就別再盯第 0 樓
             try { this._doHide(); } finally { this._hiding = false; }
         },
 
