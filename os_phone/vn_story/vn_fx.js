@@ -52,7 +52,7 @@
         ]},
         { fxId: 'fx-anger', name: '怒氣', desc: '漫畫怒氣💢符號彈出（生氣/暴怒/青筋）', kind: 'once', steps: [
             { block: 'svg', anim: 'pop', pos: 'top', size: 22, at: 0, dur: 1400,
-              svg: '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e0342f" stroke-width="13" stroke-linecap="round"><path d="M52 14 C42 34 42 46 50 58"/><path d="M68 106 C78 86 78 74 70 62"/><path d="M14 68 C34 78 46 78 58 70"/><path d="M106 52 C86 42 74 42 62 50"/></svg>' },
+              svg: '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e0342f" stroke-width="13" stroke-linecap="round"><path d="M18 46 Q44 44 46 18"/><path d="M74 18 Q76 44 102 46"/><path d="M102 74 Q76 76 74 102"/><path d="M46 102 Q44 76 18 74"/></svg>' },
         ]},
         { fxId: 'fx-speedlines', name: '集中線', desc: '漫畫集中線框住畫面（緊張/衝刺/關鍵一擊）', kind: 'once', steps: [
             { block: 'svg', anim: 'pulse', pos: 'full', size: 100, at: 0, dur: 1800,
