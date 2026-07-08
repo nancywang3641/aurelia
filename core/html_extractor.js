@@ -424,8 +424,10 @@
                         const doc = iframe.contentWindow?.document;
                         if (doc && doc.body) {
                             doc.querySelectorAll('details:not([open])').forEach(el => el.setAttribute('open', 'true'));
-                            if (doc.body.scrollHeight > 0) iframe.style.height = (doc.body.scrollHeight + 100) + 'px';
-                            doc.body.style.overflow = 'hidden';
+                            // 高度沒變就別寫——每寫一次就觸發下一輪 resize，ResizeObserver 自迴圈空轉的來源
+                            const want = (doc.body.scrollHeight + 100) + 'px';
+                            if (doc.body.scrollHeight > 0 && iframe.style.height !== want) iframe.style.height = want;
+                            if (doc.body.style.overflow !== 'hidden') doc.body.style.overflow = 'hidden';
                         }
                     } catch (e) { iframe.style.height = '600px'; }
                 };
