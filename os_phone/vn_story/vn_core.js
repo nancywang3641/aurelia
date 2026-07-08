@@ -1982,6 +1982,14 @@
             });
         },
 
+        // 🎲 表情格容錯（自由模式常駐）：[Char|名|「台詞」|Stay] 三欄制沒有表情格——
+        //   表情恆為純英文字，第二格不是純英文字＝它其實是台詞 → 補 Neutral 佔位，三欄四欄都吃。
+        //   固定模式下 AI 偶爾漏寫表情也順便救（不再整行死掉）。
+        _normCharParts: function(p) {
+            if (p.length >= 2 && !/^[A-Za-z]+$/.test(String(p[1] || '').trim())) p.splice(1, 0, 'Neutral');
+            return p;
+        },
+
         _extractTextAndSFX: function(parts) {
             // 第五欄「站位狀態」Stay/Leave（強制欄、schema 恆定）：最先抽走——所有 [Char] 消費端
             //（顯示/TTS/日誌/通話字幕）都經過這裡，集中剝除就全鏈乾淨；四欄舊行沒這欄=stage:''，完全相容。
@@ -2606,7 +2614,7 @@
 
             // 🎭 這是你最關心的核心：拆解 Type 和 Expression，然後呼叫對應系統
             if (line.startsWith('[Char|')) {
-                const p = line.slice(6, -1).split('|');
+                const p = this._normCharParts(line.slice(6, -1).split('|'));
                 const ex = this._extractTextAndSFX(p.slice(2));
                 const _cx = this._extractInlineSFX(ex.text);   // 正文內 #SFXID# → 抽音效 + 剝標記
                 if (!_cx.text) { this.playSFX(_cx.sfx !== 'NA' ? _cx.sfx : ex.sfx); return this.next(); }   // 只剩音效→跳過空對話泡
@@ -2856,7 +2864,7 @@
                 if (scanMode === 'chat' || scanMode === 'call') {
                     if (win.VN_Phone) win.VN_Phone.scanLog(line, scanMode, this);
                 } else {
-                    if (line.startsWith('[Char|'))  { const p = line.slice(6,-1).split('|'); const ex=this._extractTextAndSFX(p.slice(2)); this.addLog(p[0], this._stripInlineSFX(ex.text)); }
+                    if (line.startsWith('[Char|'))  { const p = this._normCharParts(line.slice(6,-1).split('|')); const ex=this._extractTextAndSFX(p.slice(2)); this.addLog(p[0], this._stripInlineSFX(ex.text)); }
                     else if (line.startsWith('[Inner|')) { const p = line.slice(7,-1).split('|'); const ex=this._extractTextAndSFX(p.slice(1)); this.addLog(p[0], `*${this._stripInlineSFX(ex.text)}*`); }
                     else if (line.startsWith('[Nar|'))  { const p = line.slice(5,-1).split('|'); const ex=this._extractTextAndSFX(p); this.addLog("旁白", this._stripInlineSFX(ex.text)); }
                     else if (line.startsWith('[Sys|'))  { const p = line.slice(5,-1).split('|'); this.addLog("系統", p.length >= 2 ? p.slice(1).join('|') : p[0]); }
