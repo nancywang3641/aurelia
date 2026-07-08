@@ -238,6 +238,11 @@
                     <div id="se-swipe-label">開場 1 / 1</div>
                     <button class="se-swipe-btn" id="se-swipe-next" type="button" title="下一個開場"><i class="fa-solid fa-chevron-right"></i></button>
                 </div>
+                <div id="se-mode-bar" class="se-hidden">
+                    <span id="se-mode-label">本卡模式</span>
+                    <button class="se-mode-chip" id="se-mode-lib" type="button" title="有準備圖庫的卡：表情立繪照舊，AI 輸出表情格">圖庫（表情立繪）</button>
+                    <button class="se-mode-chip" id="se-mode-free" type="button" title="世界卡/隨機NPC：立繪純生成，AI 不輸出表情格、省字">自由（純生成）</button>
+                </div>
                 <div id="se-content-area"></div>
                 <div id="se-input-area"></div>
             `;
@@ -305,6 +310,26 @@
 
             this.scanAndRender();
             this._startChatSync();   // 卡片自帶跳轉鈕改第 0 樓時，藏書自動跟上
+            this._refreshModeBar(rootWrapper);   // 🎲 本卡模式（圖庫/自由）chips
+        },
+
+        // ── 🎲 本卡模式切換（按 storyId=這張卡記，同卡開新聊天不用重選）：
+        //    圖庫＝現狀（表情立繪+生成fallback）；自由＝純生成、AI 不輸出表情格（VN_FREE_MODE 負責
+        //    總綱條目二選一+歷史表情格剝除正則的自動開關）。拿不到 VN_FREE_MODE（PWA）就整條藏起。──
+        _refreshModeBar(rootWrapper) {
+            try {
+                const bar = (rootWrapper || document).querySelector('#se-mode-bar');
+                if (!bar) return;
+                const FM = window.VN_FREE_MODE;
+                if (!FM || !FM.storyId()) { bar.classList.add('se-hidden'); return; }
+                const free = FM.isFree();
+                const libBtn = bar.querySelector('#se-mode-lib'), freeBtn = bar.querySelector('#se-mode-free');
+                libBtn.classList.toggle('active', !free);
+                freeBtn.classList.toggle('active', free);
+                libBtn.onclick = async () => { if (!FM.isFree()) return; await FM.set(false); this._refreshModeBar(rootWrapper); };
+                freeBtn.onclick = async () => { if (FM.isFree()) return; await FM.set(true); this._refreshModeBar(rootWrapper); };
+                bar.classList.remove('se-hidden');
+            } catch (e) { console.warn('[StoryExtractor] 模式列失敗:', e); }
         },
 
         // 多來源重渲染請求（切換鈕 / 第0樓觀察者 / 卡片跳轉）合併成一拍，只渲一次——治連發全套重演的卡頓

@@ -138,6 +138,8 @@ const MODULE_LOAD_ORDER = [
     { name: 'control_center', path: _AURELIA_EXT_BASE + '/core/control_center.js', key: 'controlCenter' },
     { name: 'html_extractor', path: _AURELIA_EXT_BASE + '/core/html_extractor.js', key: 'htmlExtractor' },
     { name: 'story_extractor', path: _AURELIA_EXT_BASE + '/core/story_extractor.js', key: 'storyExtractor' },
+    { name: 'vn_free_mode', path: _AURELIA_EXT_BASE + '/core/vn_free_mode.js', key: 'vnFreeMode' },   // 🎲 自由模式（總綱二選一+歷史表情格剝除，藏書切換）
+
     { name: 'regex_bridge', path: _AURELIA_EXT_BASE + '/core/aurelia_regex_bridge.js', key: 'regexBridge' },
     { name: 'vn_dom_bridge', path: _AURELIA_EXT_BASE + '/core/vn_dom_bridge.js', key: 'vnDomBridge' }
 ];

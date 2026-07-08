@@ -377,3 +377,40 @@
 .theme-darkgold #se-swipe-label { color: var(--se-gold-soft); }
 .theme-darkgold .se-swipe-btn { border-color: var(--se-gold-line); color: var(--se-gold-soft); }
 .theme-darkgold .se-swipe-btn:hover:not(:disabled) { color: var(--se-gold); background: rgba(212,175,55,0.12); }
+
+/* ── 本卡模式列（圖庫/自由） ── */
+#se-mode-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 5px 12px 7px;
+    border-bottom: 1px solid var(--se-line);
+    flex-shrink: 0;
+}
+#se-mode-label {
+    font-family: var(--se-serif);
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--se-ink-soft);
+}
+.se-mode-chip {
+    border: 1px solid var(--se-line);
+    background: transparent;
+    color: var(--se-ink-soft);
+    border-radius: 999px;
+    padding: 3px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.se-mode-chip.active {
+    background: var(--se-accent);
+    border-color: var(--se-accent);
+    color: #fffdf6;
+    font-weight: 700;
+}
+.theme-darkgold #se-mode-bar { border-bottom-color: var(--se-gold-line); }
+.theme-darkgold #se-mode-label { color: var(--se-gold-soft); }
+.theme-darkgold .se-mode-chip { border-color: var(--se-gold-line); color: var(--se-gold-soft); }
+.theme-darkgold .se-mode-chip.active { background: var(--se-gold); border-color: var(--se-gold); color: #1a1408; }
