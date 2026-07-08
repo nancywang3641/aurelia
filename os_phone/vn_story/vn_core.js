@@ -1938,10 +1938,12 @@
                 try { if (window.OS_FX) window.OS_FX.play(String(sfxId).trim()); } catch (e) {}
                 return;
             }
+            // 這句沒音效 → 什麼都別動（以前會先 stopSFX 再發現沒音效＝快速點字把上一個音效攔腰切斷）。
+            // 音效自然播完（5 秒上限照舊），只有「新音效來了」才頂掉舊的；換場/關面板的明確停止照舊。
+            if (!sfxId || sfxId === 'NA' || sfxId.trim() === '') return;
+
             // 切換新音效前，確保先停止上一個音效避免重疊
             this.stopSFX();
-
-            if (!sfxId || sfxId === 'NA' || sfxId.trim() === '') return;
             const sfxPath = VN_Config.data.sfx || '';
             let sfxVol = VN_Settings.data.sfxVolume !== undefined ? VN_Settings.data.sfxVolume : 50;
             const vol = parseInt(sfxVol) / 100;
