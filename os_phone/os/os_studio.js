@@ -3132,12 +3132,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         var rxItalic = new RegExp('[*](.+?)[*]', 'g');
         var rxCode = new RegExp('[\`](.+?)[\`]', 'g');
         return String(text)
-          .replace(/\\n/g, '\n')   // 字面 \n → 真換行（對齊 story st.md）
+          .replace(/\\\\n/g, '\\n')   // 字面換行符 → 真換行（對齊 story st.md；此註解勿寫反斜線,這是模板字串、會變真換行斬斷註解）
           .replace(rxBold, function(_, p1){ return '<b>' + p1 + '</b>'; })
           .replace(rxItalic, function(_, p1){ return '<i>' + p1 + '</i>'; })
           .replace(rxCode, function(_, p1){ return '<code>' + p1 + '</code>'; })
-          .replace(/\n/g, '<br>')
-          .replace(/(<br>\s*){3,}/g, '<br><br>');
+          .replace(/\\n/g, '<br>')
+          .replace(/(<br>\\s*){3,}/g, '<br><br>');
       },
       parse: function(){
         var result = {};
