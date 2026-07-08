@@ -3197,70 +3197,20 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return "```\n" + fullHtml + "\n```";
     }
 
-    // 把標籤說明折疊進主世界書，吃綠燈關鍵字觸發（省 token）
-    async function syncPromptToWorldbook(th, data) {
-        if (typeof th.getCharWorldbookNames !== 'function') return false;
-
-        const charWbInfo = th.getCharWorldbookNames('current');
-        const primaryWb = charWbInfo?.primary;
-        if (!primaryWb) return false;
-
-        const safeTagId = (data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
-        if (!safeTagId) return false;
-        const ENTRY_NAME = `[VN面板] ${safeTagId}`;
-
-        // 暴力扒掉 demoFormat 外層標籤
-        let cleanFormat = (data.demoFormat || '').trim();
-        const regStart = new RegExp(`^<${data.tagId}>\\s*`, 'i');
-        const regEnd = new RegExp(`\\s*<\\/${data.tagId}>$`, 'i');
-        cleanFormat = cleanFormat.replace(regStart, '').replace(regEnd, '').trim();
-
-        // 關鍵字保底：AI 沒給就拿 tagId 當唯一 key
-        let keywords = Array.isArray(data.keywords)
-            ? data.keywords.filter(k => typeof k === 'string' && k.trim()).map(k => k.trim())
-            : [];
-        if (keywords.length === 0) keywords = [safeTagId];
-        if (!keywords.includes(safeTagId)) keywords.unshift(safeTagId);
-
-        const content = `### [動態特效標籤：${data.tagId}]
-劇情提到相關情境時，請輸出此標籤強化視覺效果：
-
-【標籤：${data.tagId}】
-說明：${data.usageDesc || '無'}
-格式示範：
-<${data.tagId}>
-${cleanFormat}
-</${data.tagId}>`;
-
-        let entries = [];
+    // 🧹 舊制殘留清理：以前「注入酒館」會把使用說明寫成主世界書條目 [VN面板] X——
+    //    使用說明已改走自動注入（os_app_memory_inject 常駐/關鍵字），條目不再創建；
+    //    這裡負責把舊條目掃掉（注入時順手清 + 刪組件時清，兩邊共用）。
+    async function _deleteWbUsageEntry(th, safeTagId) {
         try {
-            entries = await th.getWorldbook(primaryWb);
-        } catch (e) {
-            console.error('[Studio] 讀取主世界書失敗:', e);
+            const wbInfo = th.getCharWorldbookNames ? th.getCharWorldbookNames('current') : null;
+            const wb = wbInfo && wbInfo.primary;
+            if (!wb || !th.getWorldbook || !th.deleteLorebookEntries) return false;
+            const sn = `[VN面板] ${safeTagId}`;
+            const ents = await th.getWorldbook(wb);
+            const hit = (ents || []).filter(e => e && e.name === sn);
+            if (hit.length) { await th.deleteLorebookEntries(wb, hit.map(e => e.uid)); return true; }
             return false;
-        }
-
-        const exists = entries.some(e => e.name === ENTRY_NAME);
-        if (exists) {
-            await th.updateWorldbookWith(primaryWb, (wbEntries) => {
-                const entry = wbEntries.find(e => e.name === ENTRY_NAME);
-                if (entry) {
-                    entry.enabled = true;
-                    entry.content = content;
-                    entry.strategy = { type: 'selective', keys: keywords };
-                }
-                return wbEntries;
-            });
-        } else {
-            await th.createWorldbookEntries(primaryWb, [{
-                name: ENTRY_NAME,
-                enabled: true,
-                content: content,
-                strategy: { type: 'selective', keys: keywords },
-                position: { type: 'before_author_note', order: -5 }
-            }]);
-        }
-        return true;
+        } catch (e) { console.warn('[Studio] 清舊制世界書說明條目失敗', e); return false; }
     }
 
     // 一鍵寫入酒館全局正則 + 同步至主世界書
@@ -3303,21 +3253,9 @@ ${cleanFormat}
                 return filtered;
             }, { type: 'global' });
 
+            // 使用說明走自動注入、不再寫世界書條目；順手掃掉舊制殘留的同名條目
             let wbMsg = "";
-            try {
-                const wbSynced = await syncPromptToWorldbook(th, data);
-                if (wbSynced) {
-                    const keywordHint = Array.isArray(data.keywords) && data.keywords.length
-                        ? `\n   觸發關鍵字：${data.keywords.join('、')}`
-                        : `\n   觸發關鍵字：${safeTagId}（AI 沒給 keywords，預設只用 tagId）`;
-                    wbMsg = `\n✅ 已折疊至角色主世界書（綠燈觸發，劇情提到關鍵字才激活，省 token）${keywordHint}`;
-                } else {
-                    wbMsg = "\n⚠️ 未找到角色綁定的主世界書，跳過提示詞同步。";
-                }
-            } catch (e) {
-                console.error('[Studio] 世界書同步錯誤:', e);
-                wbMsg = "\n❌ 同步主世界書失敗。";
-            }
+            try { if (await _deleteWbUsageEntry(th, safeTagId)) wbMsg = "\n🧹 已清掉舊版留在世界書的使用說明條目（說明現在自動注入、不佔世界書）。"; } catch (e) {}
 
             alert(`🎉 匯入成功！已將標籤 [${safeTagId}] 寫入酒館全局正則。${wbMsg}\n\n請發送新訊息或重新載入聊天查看效果。`);
         } catch (err) {
@@ -3339,15 +3277,7 @@ ${cleanFormat}
                 await th.updateTavernRegexesWith(rx => (rx || []).filter(r => r && r.script_name !== sn), { type: 'global' });
             }
         } catch (e) { console.warn('[Studio] 清酒館正則殘留失敗', e); }
-        try {
-            const wbInfo = th.getCharWorldbookNames ? th.getCharWorldbookNames('current') : null;
-            const wb = wbInfo && wbInfo.primary;
-            if (wb && th.getWorldbook && th.deleteLorebookEntries) {
-                const ents = await th.getWorldbook(wb);
-                const hit = (ents || []).filter(e => e && e.name === sn);
-                if (hit.length) await th.deleteLorebookEntries(wb, hit.map(e => e.uid));
-            }
-        } catch (e) { console.warn('[Studio] 清主世界書條目殘留失敗', e); }
+        await _deleteWbUsageEntry(th, safeTagId);
     }
 
     // 刪除 VN 組件時，連它對應的手機 app（srcTplId 反查）＋ app 的四桶資料一起清。
