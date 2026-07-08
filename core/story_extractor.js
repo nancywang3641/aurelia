@@ -678,8 +678,10 @@
                         if (doc && doc.body) {
                             doc.querySelectorAll('details:not([open])').forEach(el => el.setAttribute('open', 'true'));
                             const realHeight = doc.body.scrollHeight;
-                            if (realHeight > 0) iframe.style.height = (realHeight + 100) + 'px';
-                            doc.body.style.overflow = 'hidden';
+                            // 高度沒變就別寫——每寫一次就觸發下一輪 resize，ResizeObserver 自迴圈空轉的來源
+                            const want = (realHeight + 100) + 'px';
+                            if (realHeight > 0 && iframe.style.height !== want) iframe.style.height = want;
+                            if (doc.body.style.overflow !== 'hidden') doc.body.style.overflow = 'hidden';
                         }
                     } catch (e) { iframe.style.height = '600px'; }
                 };
