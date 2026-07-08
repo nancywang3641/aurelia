@@ -2,10 +2,9 @@
 // [檔案] vn_free_mode.js — VN「自由模式」（世界卡/純生成卡：[Char] 不寫表情格、省 token）
 // 核心思路（Rae 拍板）：AI 是跟著上下文範例走的，小紙條式的覆蓋指令壓不過總綱＋歷史——
 //   所以自由模式要讓 AI 看到的「規則＋歷史範例」整套自洽：
-//   ① 總綱條目二選一（Rae 定案：條目是「她的」、腳本只撥開關）：
-//      固定版＝她手寫的「🟦核心｜VN正文格式與TAG總綱」；
-//      自由版＝第一次切換時從固定版推導「生成一次」放進世界書，之後**永不覆蓋內容**——
-//      她可以自由手調自由版措辭；改了總綱想同步，把兩條丟給大丹對齊。
+//   ① 總綱條目二選一（Rae 定案：兩條條目都是「她的」、腳本**只撥開關、絕不創建/寫入條目**）：
+//      固定版＝「🟦核心｜VN正文格式與TAG總綱」；自由版＝名字含「自由」的總綱條目（她自己維護）。
+//      自由版條目不存在 → 不切換、console 提示，絕不代寫。
 //   ② 歷史對齊：一條 promptOnly 正則（跟著模式開關）把歷史裡的表情格從送 AI 的 prompt 剝掉。
 //   ③ 引擎端表情格容錯常駐（vn_core._normCharParts），三欄四欄都吃。
 // 模式按「storyId=這張卡」記（不是 chatId：同卡開新聊天該記得模式，不用重選）。
@@ -15,9 +14,8 @@
     'use strict';
     const win = window.parent || window;
 
-    const CORE_ENTRY_MATCH = 'VN正文格式與TAG總綱';                 // 固定版條目名（含這串、且不含「自由」）
-    const FREE_ENTRY_NAME = '🟦核心｜VN總綱-自由版(腳本自動開關)';   // 自由版條目名（腳本產生與維護）
-    const RX_NAME = '[VN自由模式] 歷史表情格剝除';                   // promptOnly 正則名
+    const CORE_ENTRY_MATCH = 'VN正文格式與TAG總綱';   // 總綱條目名關鍵字：固定版=含這串不含「自由」、自由版=含這串+含「自由」（兩條都Rae自己維護）
+    const RX_NAME = '[VN自由模式] 歷史表情格剝除';     // promptOnly 正則名
 
     function _th() { return win.TavernHelper || null; }
 
@@ -31,21 +29,6 @@
         try { return localStorage.getItem('vn_current_story_id') || ''; } catch (e) { return ''; }
     }
     function _key(id) { return 'vn_free_mode_' + id; }
-
-    // ── 自由版總綱推導（機械轉換，改總綱自動跟上）──
-    function _deriveFreeContent(src) {
-        let s = String(src || '');
-        // 1) [Char|名|表情|... → [Char|名|...（兩種寫法都吃：真表情詞=純英文字、模板佔位=中文「表情」二字）
-        s = s.replace(/\[Char\|([^|\[\]]+)\|\s*[A-Za-z]+\s*\|/g, '[Char|$1|');
-        s = s.replace(/\[Char\|([^|\[\]]+)\|表情\|/g, '[Char|$1|');
-        // 2) 欄位序號跟著位移
-        s = s.replace(/\[Char\]\s*第五欄/g, '[Char] 第四欄').replace(/第五欄必為/g, '第四欄必為');
-        // 3) 表情清單保留給 [Achievement] 用、明示 [Char] 不含表情格
-        s = s.replace(/^- 表情：/m, '- 表情清單（本卡僅 [Achievement] 的表情欄使用，[Char] 一律不含表情格）：');
-        // 4) 開頭插模式聲明
-        s = s.replace(/^(#[^\n]*\n)/, '$1（🎲 本卡為自由模式：[Char] 不寫表情格，格式一律為 [Char|角色名|「台詞」|Stay/Leave]）\n');
-        return s;
-    }
 
     // 找「固定版總綱」所在的世界書與條目（掃全域已選＋角色主/附加）
     async function _findCoreEntry() {
@@ -120,26 +103,22 @@
             if (!hit) { console.log('[VN自由模式] 找不到總綱條目（這張卡可能不掛VN世界書）→ 不動'); return; }
             const { book, ents } = hit;
             const core = ents.find(e => String(e.name || '').includes(CORE_ENTRY_MATCH) && !String(e.name || '').includes('自由'));
-            const freeEnt = ents.find(e => String(e.name || '') === FREE_ENTRY_NAME);
+            const freeEnt = ents.find(e => { const nm = String(e.name || ''); return nm.includes(CORE_ENTRY_MATCH) && nm.includes('自由'); });
 
-            // 自由版條目不存在 → 第一次（也是唯一一次）從總綱推導生成；之後它是「她的條目」，內容永不覆蓋
-            if (free && !freeEnt && th.createWorldbookEntries) {
-                await th.createWorldbookEntries(book, [{
-                    name: FREE_ENTRY_NAME, enabled: true, content: _deriveFreeContent(core.content),
-                    strategy: core.strategy || { type: 'constant' },
-                    position: core.position || undefined
-                }]);
-                console.log(`[VN自由模式] 首次啟用 → 已在「${book}」生成自由版總綱條目（之後只撥開關、不再動它的內容）`);
+            // 自由版條目是 Rae 自己維護的；不存在就不切換、絕不代寫（她明令：腳本不注入世界書）
+            if (free && !freeEnt) {
+                console.warn(`[VN自由模式] 「${book}」裡找不到自由版總綱條目（名字需含「${CORE_ENTRY_MATCH}」+「自由」）→ 維持固定版、不切換`);
+                return;
             }
 
             const coreOk = core.enabled === !free;
-            const freeOk = free ? (freeEnt ? freeEnt.enabled === true : true) : (!freeEnt || freeEnt.enabled === false);
+            const freeOk = free ? (freeEnt.enabled === true) : (!freeEnt || freeEnt.enabled === false);
             if (!(coreOk && freeOk)) {
                 await th.updateWorldbookWith(book, (list) => {
                     for (const e of list) {
                         const nm = String(e.name || '');
-                        if (nm.includes(CORE_ENTRY_MATCH) && !nm.includes('自由')) e.enabled = !free;
-                        else if (nm === FREE_ENTRY_NAME) e.enabled = free;   // 只撥開關，內容是她的
+                        if (!nm.includes(CORE_ENTRY_MATCH)) continue;
+                        e.enabled = nm.includes('自由') ? free : !free;   // 只撥開關，內容永遠是她的
                     }
                     return list;
                 });
@@ -173,7 +152,7 @@
     }
     if (_th()) _hook(); else setTimeout(() => { if (_th()) _hook(); }, 5000);
 
-    win.VN_FREE_MODE = { isFree, set, applyForCurrent, storyId: _storyId, _deriveFreeContent };
+    win.VN_FREE_MODE = { isFree, set, applyForCurrent, storyId: _storyId };
     window.VN_FREE_MODE = win.VN_FREE_MODE;
     console.log('🎲 [VN自由模式] 模組就緒');
 })();
