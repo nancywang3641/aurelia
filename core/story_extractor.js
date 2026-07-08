@@ -501,13 +501,18 @@
             const blocks = contentArea.querySelectorAll('.story-html-block');
             if (!blocks.length) return;
 
+            // 酒館主題的預設字色＝繼承來的、不是作者風格——找字色捐贈者時優先跳過它（Rae 抓到的白字真兇：
+            // 偷到「沒被作者調過色」的元素，拿走的其實是酒館預設白字）
+            let tavernDefaultColor = null;
+            try { tavernDefaultColor = getComputedStyle(document.querySelector('#chat .mes_text') || document.body).color; } catch (e) {}
+
             let bgDonor = null;
             let overlayDonor = null;
             let textDonor = null;
             for (const block of blocks) {
                 if (!bgDonor) bgDonor = this.findStyledDonor(block);
                 if (!overlayDonor) overlayDonor = this.findOverlayDonor(block);
-                if (!textDonor) textDonor = this.findTextDonor(block);
+                if (!textDonor) textDonor = this.findTextDonor(block, tavernDefaultColor);
                 if (bgDonor && overlayDonor && textDonor) break;
             }
 
@@ -532,13 +537,39 @@
                 ? `linear-gradient(${overlayColor}, ${overlayColor}), ${bgCs.backgroundImage}`
                 : bgCs.backgroundImage;
 
+            // ── 對比度守衛：bg 和字色來自「不同捐贈者」、沒人保證是一對（白底白字/深底深字的真兇）。
+            //    算「實際有效底色」（捐贈者底色透明就疊回藏書自身紙色、overlay 也疊進去）跟字色的對比，
+            //    不及格 → 按底色亮暗強制改成看得見的字色；底是圖片看不出亮暗 → 改給字加反差描邊保底。──
+            const _rgb = (s) => { const m = String(s || '').match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\)/); return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null; };
+            const _luma = (c) => (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255;
+            const _blend = (top, base) => !top || top.a <= 0 ? base : { r: top.r * top.a + base.r * (1 - top.a), g: top.g * top.a + base.g * (1 - top.a), b: top.b * top.a + base.b * (1 - top.a), a: 1 };
+            const _paper = this.currentTheme === THEMES.darkgold ? { r: 17, g: 26, b: 56, a: 1 } : { r: 246, g: 243, b: 234, a: 1 };
+            let _effBg = _blend(_rgb(bgCs.backgroundColor), _paper);
+            _effBg = _blend(_rgb(overlayColor), _effBg);
+            let finalTextColor = textColor;
+            let guardShadow = '';
+            const _txt = _rgb(textColor);
+            if (_txt) {
+                const hasImg = bgCs.backgroundImage !== 'none';
+                const lb = _luma(_effBg), lt = _luma(_txt);
+                const ratio = (Math.max(lb, lt) + 0.05) / (Math.min(lb, lt) + 0.05);
+                if (hasImg && !overlayColor) {
+                    // 底是圖片、又沒遮罩壓底 → 亮暗未知，給字上反差描邊保底（不改作者的字色）
+                    guardShadow = lt > 0.5 ? '0 0 4px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9)' : '0 0 4px rgba(255,255,255,0.85), 0 1px 2px rgba(255,255,255,0.9)';
+                } else if (ratio < 3) {
+                    finalTextColor = lb > 0.5 ? '#2c261d' : '#f2ead8';
+                    console.log(`[StoryExtractor] ⚠️ 偷到的字色跟底色對比不足(${ratio.toFixed(2)}) → 強制改 ${finalTextColor}`);
+                }
+            }
+
             contentArea.querySelectorAll('.native-render-wrapper').forEach(w => {
                 w.style.backgroundColor = bgCs.backgroundColor;
                 w.style.backgroundImage = composedBgImage;
                 w.style.backgroundSize = bgCs.backgroundSize;
                 w.style.backgroundPosition = bgCs.backgroundPosition;
                 w.style.backgroundRepeat = bgCs.backgroundRepeat;
-                w.style.color = textColor;
+                w.style.color = finalTextColor;
+                w.style.textShadow = guardShadow;
                 w.style.borderTop = `${bgCs.borderTopWidth} ${bgCs.borderTopStyle} ${bgCs.borderTopColor}`;
                 w.style.borderRight = `${bgCs.borderRightWidth} ${bgCs.borderRightStyle} ${bgCs.borderRightColor}`;
                 w.style.borderBottom = `${bgCs.borderBottomWidth} ${bgCs.borderBottomStyle} ${bgCs.borderBottomColor}`;
@@ -607,15 +638,19 @@
         },
 
         // 找第一個有直接文字內容的可見元素（用它的 color 當文字色）
-        findTextDonor(wrapper) {
-            return this._bfsFindFirst(wrapper, (el) => {
+        findTextDonor(wrapper, defaultColor) {
+            const hasText = (el) => {
                 for (const child of el.childNodes) {
-                    if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) {
-                        return true;
-                    }
+                    if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) return true;
                 }
                 return false;
-            }, 7);
+            };
+            // 兩段式：先找「作者真的調過字色」的元素（顏色≠酒館預設字色）；全都是預設色才退回第一個有字的
+            if (defaultColor) {
+                const styled = this._bfsFindFirst(wrapper, (el) => hasText(el) && getComputedStyle(el).color !== defaultColor, 7);
+                if (styled) return styled;
+            }
+            return this._bfsFindFirst(wrapper, hasText, 7);
         },
 
         // 找遮罩層：position:absolute/fixed + 全屏 (top/bottom/left/right 至少對角=0) + 有半透明底色
