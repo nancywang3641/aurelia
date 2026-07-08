@@ -1938,12 +1938,16 @@
                 try { if (window.OS_FX) window.OS_FX.play(String(sfxId).trim()); } catch (e) {}
                 return;
             }
-            // 這句沒音效 → 什麼都別動（以前會先 stopSFX 再發現沒音效＝快速點字把上一個音效攔腰切斷）。
-            // 音效自然播完（5 秒上限照舊），只有「新音效來了」才頂掉舊的；換場/關面板的明確停止照舊。
-            if (!sfxId || sfxId === 'NA' || sfxId.trim() === '') return;
+            // 「兩格狀態」制（Rae 設計）：音效活過「自己那格＋下一格」，第二次推進才收。
+            // 快速點字不掐頭（舊版每行推進都先 stopSFX＝音效總死在開頭）；也不放任沒切片的長音效裸奔（5 秒上限仍是天花板）。
+            if (!sfxId || sfxId === 'NA' || sfxId.trim() === '') {
+                if (this._currentSfxAudio && --this._sfxLives <= 0) this.stopSFX();   // 沒音效的行＝過一格、扣一條命
+                return;
+            }
 
             // 切換新音效前，確保先停止上一個音效避免重疊
             this.stopSFX();
+            this._sfxLives = 2;   // 自己那格 + 下一格
             const sfxPath = VN_Config.data.sfx || '';
             let sfxVol = VN_Settings.data.sfxVolume !== undefined ? VN_Settings.data.sfxVolume : 50;
             const vol = parseInt(sfxVol) / 100;
