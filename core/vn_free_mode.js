@@ -2,9 +2,10 @@
 // [檔案] vn_free_mode.js — VN「自由模式」（世界卡/純生成卡：[Char] 不寫表情格、省 token）
 // 核心思路（Rae 拍板）：AI 是跟著上下文範例走的，小紙條式的覆蓋指令壓不過總綱＋歷史——
 //   所以自由模式要讓 AI 看到的「規則＋歷史範例」整套自洽：
-//   ① 總綱條目二選一（腳本自動開關，沿用她世界書「(腳本自動開關)」慣例）：
+//   ① 總綱條目二選一（Rae 定案：條目是「她的」、腳本只撥開關）：
 //      固定版＝她手寫的「🟦核心｜VN正文格式與TAG總綱」；
-//      自由版＝腳本從固定版「機械推導」出來的三欄版（她改總綱、自由版自動跟上，不用人肉同步兩份）。
+//      自由版＝第一次切換時從固定版推導「生成一次」放進世界書，之後**永不覆蓋內容**——
+//      她可以自由手調自由版措辭；改了總綱想同步，把兩條丟給大丹對齊。
 //   ② 歷史對齊：一條 promptOnly 正則（跟著模式開關）把歷史裡的表情格從送 AI 的 prompt 剝掉。
 //   ③ 引擎端表情格容錯常駐（vn_core._normCharParts），三欄四欄都吃。
 // 模式按「storyId=這張卡」記（不是 chatId：同卡開新聊天該記得模式，不用重選）。
@@ -108,27 +109,29 @@
             const { book, ents } = hit;
             const core = ents.find(e => String(e.name || '').includes(CORE_ENTRY_MATCH) && !String(e.name || '').includes('自由'));
             const freeEnt = ents.find(e => String(e.name || '') === FREE_ENTRY_NAME);
-            const wantFreeContent = free ? _deriveFreeContent(core.content) : null;
+
+            // 自由版條目不存在 → 第一次（也是唯一一次）從總綱推導生成；之後它是「她的條目」，內容永不覆蓋
+            if (free && !freeEnt && th.createWorldbookEntries) {
+                await th.createWorldbookEntries(book, [{
+                    name: FREE_ENTRY_NAME, enabled: true, content: _deriveFreeContent(core.content),
+                    strategy: core.strategy || { type: 'constant' },
+                    position: core.position || undefined
+                }]);
+                console.log(`[VN自由模式] 首次啟用 → 已在「${book}」生成自由版總綱條目（之後只撥開關、不再動它的內容）`);
+            }
 
             const coreOk = core.enabled === !free;
-            const freeOk = free ? (freeEnt && freeEnt.enabled === true && freeEnt.content === wantFreeContent) : (!freeEnt || freeEnt.enabled === false);
+            const freeOk = free ? (freeEnt ? freeEnt.enabled === true : true) : (!freeEnt || freeEnt.enabled === false);
             if (!(coreOk && freeOk)) {
-                if (free && !freeEnt && th.createWorldbookEntries) {
-                    await th.createWorldbookEntries(book, [{
-                        name: FREE_ENTRY_NAME, enabled: true, content: wantFreeContent,
-                        strategy: core.strategy || { type: 'constant' },
-                        position: core.position || undefined
-                    }]);
-                }
                 await th.updateWorldbookWith(book, (list) => {
                     for (const e of list) {
                         const nm = String(e.name || '');
                         if (nm.includes(CORE_ENTRY_MATCH) && !nm.includes('自由')) e.enabled = !free;
-                        else if (nm === FREE_ENTRY_NAME) { e.enabled = free; if (free) e.content = wantFreeContent; }
+                        else if (nm === FREE_ENTRY_NAME) e.enabled = free;   // 只撥開關，內容是她的
                     }
                     return list;
                 });
-                console.log(`[VN自由模式] 世界書已切換 → ${free ? '自由版' : '固定版'}總綱（${book}）`);
+                console.log(`[VN自由模式] 世界書開關已切換 → ${free ? '自由版' : '固定版'}總綱（${book}）`);
             }
             await _setHistoryRegex(free);
         } catch (e) {
