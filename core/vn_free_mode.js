@@ -73,9 +73,21 @@
     }
 
     // 歷史表情格剝除正則（promptOnly；表情格=純英文字才剝，三欄行不會誤傷台詞）
+    // 🚨 鐵則：狀態沒變「絕不」呼叫 updateTavernRegexesWith——寫正則會讓酒館重載聊天(觸發CHAT_CHANGED)，
+    //    無條件寫＝重載→CHAT_CHANGED→再寫→無限刷頁卡死（2026-07-09 事故）。讀現況+本地快取雙保險。
+    let _rxState = null;
     async function _setHistoryRegex(on) {
         const th = _th();
         if (!th || !th.updateTavernRegexesWith) return;
+        if (_rxState === on) return;                       // 本頁已套用過同狀態 → 免談
+        try {
+            if (th.getTavernRegexes) {
+                const cur = th.getTavernRegexes() || [];
+                const has = cur.some(r => r && r.script_name === RX_NAME && r.enabled !== false);
+                if (has === on) { _rxState = on; return; }  // 現況已正確 → 不寫
+            }
+        } catch (e) {}
+        _rxState = on;
         await th.updateTavernRegexesWith(rx => {
             const out = (rx || []).filter(r => r && r.script_name !== RX_NAME);
             if (on) out.push({
