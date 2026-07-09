@@ -116,6 +116,14 @@
         .cfd-pack-io-hint { font-size: 10px; color: rgba(26,28,40,0.55); margin-top: 4px; line-height: 1.5; }
         .cfd-pack-file-hidden { display: none; }
 
+        /* 拖舊 ComfyUI 圖 → 還原工作流 */
+        .cfd-wf-restore { margin-top: 8px; }
+        .cfd-wf-restore-drop { border: 1px dashed rgba(26,28,40,0.35); border-radius: 8px; padding: 12px; text-align: center; font-size: 12px; line-height: 1.6; color: rgba(26,28,40,0.7); cursor: pointer; background: rgba(26,28,40,0.03); transition: background .15s, border-color .15s; }
+        .cfd-wf-restore-drop:hover { background: rgba(26,28,40,0.06); }
+        .cfd-wf-restore-drop.is-over { border-color: #2b6cb0; background: rgba(43,108,176,0.08); }
+        .cfd-wf-restore-status { font-size: 11px; margin-top: 6px; color: rgba(26,28,40,0.7); min-height: 14px; line-height: 1.5; }
+        .cfd-wf-restore-status.is-err { color: #c0392b; }
+
         /* ───── 圖片接口設定：連線設定 / 提示詞 兩欄分區（整盤重排 2026-06-14）───── */
         .iface-section-title { font-size: 13px; font-weight: 800; color: #1A1C28; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; margin: 20px 0 10px; padding-top: 14px; border-top: 2px solid rgba(26,28,40,0.15); }
         .iface-section-title.is-first { margin-top: 4px; padding-top: 0; border-top: none; }

@@ -1342,6 +1342,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動（推薦，在下面設定就好）</option>
                                         <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼自己的工作流）</option>
                                     </select>
+                                    <div class="cfd-wf-restore">
+                                        <div class="cfd-wf-restore-drop" id="img-cfd-wf-drop">🖼️ 把以前用 ComfyUI 生的圖拖進來（或點這裡選檔）<br>自動讀出當初那張圖的工作流</div>
+                                        <input type="file" id="img-cfd-wf-img" accept="image/png" class="cfd-pack-file-hidden">
+                                        <div class="cfd-wf-restore-status" id="img-cfd-wf-status"></div>
+                                    </div>
                                     <div id="img-cfd-custom-wf" class="${imgConfig.comfyuiDirect?.workflowMode==='custom'?'':'hidden'}" style="margin-top:8px;">
                                         <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${imgConfig.comfyuiDirect?.customWorkflow || ''}</textarea>
                                         <div class="set-desc" style="margin-top:4px;" title="貼 ComfyUI API 格式工作流（設定開 Dev mode → Save (API Format) 匯出）。只有這幾個變數會被注入，其餘（LoRA、採樣器、放大、修臉…）請寫死在工作流裡；下面的 LoRA/參數欄在自訂模式不生效。">
@@ -2558,6 +2563,60 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const box = container.querySelector('#img-cfd-custom-wf');
                 if (box) box.classList.toggle('hidden', wfModeSel.value !== 'custom');
             });
+            // 🖼️ 拖舊 ComfyUI 圖 → 讀出當初的工作流，改成活模板灌進「自訂工作流」框（免回 ComfyUI 手動重接）
+            (function(){
+                const drop = container.querySelector('#img-cfd-wf-drop');
+                const fileIn = container.querySelector('#img-cfd-wf-img');
+                const st = container.querySelector('#img-cfd-wf-status');
+                if (!drop || !fileIn) return;
+                const setSt = function(msg, err){ if (st){ st.textContent = msg || ''; st.classList.toggle('is-err', !!err); } };
+                // 把還原出來的 API 工作流改成「活模板」：正/負向提示換 %prompt%/%negative%、種子換 %seed%、空 latent 尺寸換 %width%/%height%
+                function templatize(api){
+                    let g; try { g = JSON.parse(JSON.stringify(api)); } catch(e){ return { json: JSON.stringify(api, null, 2), dynamic: false }; }
+                    const SAMP = ['KSampler','KSamplerAdvanced','SamplerCustom','SamplerCustomAdvanced'];
+                    let posId = null, negId = null;
+                    Object.keys(g).forEach(function(id){
+                        const n = g[id]; if (!n || !n.inputs) return;
+                        if (SAMP.indexOf(n.class_type) >= 0){
+                            if (Array.isArray(n.inputs.positive)) posId = String(n.inputs.positive[0]);
+                            if (Array.isArray(n.inputs.negative)) negId = String(n.inputs.negative[0]);
+                            if (typeof n.inputs.seed === 'number') n.inputs.seed = '%seed%';
+                            if (typeof n.inputs.noise_seed === 'number') n.inputs.noise_seed = '%seed%';
+                        }
+                        if (/EmptyLatent|EmptySD3Latent/.test(n.class_type || '')){
+                            if (typeof n.inputs.width === 'number') n.inputs.width = '%width%';
+                            if (typeof n.inputs.height === 'number') n.inputs.height = '%height%';
+                        }
+                    });
+                    let dynamic = false;
+                    if (posId && g[posId] && g[posId].inputs && typeof g[posId].inputs.text === 'string'){ g[posId].inputs.text = '%prompt%'; dynamic = true; }
+                    if (negId && g[negId] && g[negId].inputs && typeof g[negId].inputs.text === 'string'){ g[negId].inputs.text = '%negative%'; }
+                    return { json: JSON.stringify(g, null, 2), dynamic: dynamic };
+                }
+                async function handle(file){
+                    if (!file) return;
+                    const W = window.parent || window;
+                    const RECIPE = W.NAI_RECIPE || window.NAI_RECIPE;
+                    if (!RECIPE || !RECIPE.extractComfyWorkflow){ setSt('解析模組未就緒（重進一次設定再試）', true); return; }
+                    setSt('⏳ 讀取圖片工作流…');
+                    let res; try { res = await RECIPE.extractComfyWorkflow(file); } catch(e){ res = { ok:false, error: String((e && e.message) || e) }; }
+                    if (!res || !res.ok){ setSt('❌ ' + ((res && res.error) || '讀不到工作流'), true); return; }
+                    const t = templatize(res.api);
+                    const ta = container.querySelector('#img-cfd-custom-wf-text');
+                    if (ta) ta.value = t.json;
+                    if (wfModeSel) wfModeSel.value = 'custom';
+                    const box = container.querySelector('#img-cfd-custom-wf');
+                    if (box) box.classList.remove('hidden');
+                    setSt(t.dynamic
+                        ? '✅ 已還原並改成活模板：人物／場景提示會自動帶入、種子每次重骰。記得按底部「保存」。'
+                        : '✅ 已還原原始工作流，但認不出提示詞節點 → 生圖會固定用原圖的提示詞。可自己把要動態的欄位改成 "%prompt%"。記得按底部「保存」。', !t.dynamic);
+                }
+                drop.addEventListener('click', function(){ fileIn.value=''; fileIn.click(); });
+                fileIn.addEventListener('change', function(){ handle(fileIn.files && fileIn.files[0]); });
+                drop.addEventListener('dragover', function(e){ e.preventDefault(); drop.classList.add('is-over'); });
+                drop.addEventListener('dragleave', function(){ drop.classList.remove('is-over'); });
+                drop.addEventListener('drop', function(e){ e.preventDefault(); drop.classList.remove('is-over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; handle(f); });
+            })();
             function makeLoraRow(L){
                 L = L || { on: true, name: '', strengthModel: 1, strengthClip: 1 };
                 const row = document.createElement('div');
