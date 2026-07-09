@@ -1368,7 +1368,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             <button class="set-btn" type="button" onclick="window._cfdPreset.saveNew()" style="white-space:nowrap;">➕ 從目前設定另存</button>
                                         </div>
                                         <div class="cfd-wf-restore">
-                                            <div class="cfd-wf-restore-drop" id="img-cfd-wf-drop">🖼️ 拖一張以前用 ComfyUI 生的圖進來（或點這裡選檔）<br>直接讀出當初的工作流，變成一張預設包卡</div>
+                                            <div class="cfd-wf-restore-drop" id="img-cfd-wf-drop">🖼️ 拖一張以前用 ComfyUI 生的圖進來（或點這裡選檔）<br>自動把模型／LoRA／採樣器／提示詞拆進一張預設卡，套用後每格都能調</div>
                                             <input type="file" id="img-cfd-wf-img" accept="image/png" class="cfd-pack-file-hidden">
                                             <div class="cfd-wf-restore-status" id="img-cfd-wf-status"></div>
                                         </div>
@@ -2681,28 +2681,98 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const el = container.querySelector('#img-cfd-preview-prompt');
                 return (el && el.value.trim()) || '1 person, upper body portrait, looking at viewer, simple background';
             }
-            // 把還原出來的 API 工作流改成「活模板」：正/負向提示換 %prompt%/%negative%、種子換 %seed%、空 latent 尺寸換 %width%/%height%
-            function templatizeComfyApi(api){
-                let gr; try { gr = JSON.parse(JSON.stringify(api)); } catch(e){ return { json: JSON.stringify(api, null, 2), dynamic: false }; }
-                const SAMP = ['KSampler','KSamplerAdvanced','SamplerCustom','SamplerCustomAdvanced'];
-                let posId = null, negId = null;
-                Object.keys(gr).forEach(function(id){
-                    const n = gr[id]; if (!n || !n.inputs) return;
-                    if (SAMP.indexOf(n.class_type) >= 0){
-                        if (Array.isArray(n.inputs.positive)) posId = String(n.inputs.positive[0]);
-                        if (Array.isArray(n.inputs.negative)) negId = String(n.inputs.negative[0]);
-                        if (typeof n.inputs.seed === 'number') n.inputs.seed = '%seed%';
-                        if (typeof n.inputs.noise_seed === 'number') n.inputs.noise_seed = '%seed%';
+            // 把 ComfyUI API 工作流「拆解」成面板可編輯的預設卡欄位（模型/LoRA/採樣器/步數/CFG/尺寸/正負提示詞…）
+            // → 載入後每一格都能在奧瑞亞面板調，不丟工作流。認得標準 KSampler + Checkpoint/Flux/Anima 三種載入法。
+            // 回傳 { preset, parsed:{model,sampler,prompt,...哪些抓到了} }；抓不到的欄位留合理預設。
+            function parseComfyApiToPreset(api, fallbackName){
+                const g = api || {};
+                const get = function(id){ return g[id]; };
+                const idOf = function(ref){ return (Array.isArray(ref) && ref.length) ? String(ref[0]) : null; };
+                const byType = function(types){
+                    const ids = Object.keys(g);
+                    for (let i = 0; i < ids.length; i++){ const n = g[ids[i]]; if (n && types.indexOf(n.class_type) >= 0) return { id: ids[i], node: n }; }
+                    return null;
+                };
+                const p = {
+                    name: fallbackName || 'ComfyUI', modelType: 'checkpoint', model: '', vae: '',
+                    sampler: 'euler', scheduler: 'normal', steps: 28, cfg: 6.5,
+                    width: 1024, height: 1024, clipSkip: 0, basePrompt: '', negPrompt: '',
+                    fluxClipL: '', fluxT5: '', fluxAe: '', guidance: 3.5,
+                    animaClip: '', animaVae: '', loras: [], customWorkflow: ''
+                };
+                const parsed = { model:false, sampler:false, prompt:false, size:false, loras:0 };
+                // 沿提示詞鏈往回找 CLIPTextEncode 的文字（可能中間隔 FluxGuidance/Conditioning* 節點）
+                function extractText(startId){
+                    let id = startId, hop = 0;
+                    while (id && hop++ < 6){
+                        const n = get(id); if (!n) break;
+                        if (n.class_type === 'CLIPTextEncode') return String((n.inputs && n.inputs.text) || '');
+                        const inp = n.inputs || {};
+                        id = idOf(inp.conditioning || inp.conditioning_1 || inp.cond);
                     }
-                    if (/EmptyLatent|EmptySD3Latent/.test(n.class_type || '')){
-                        if (typeof n.inputs.width === 'number') n.inputs.width = '%width%';
-                        if (typeof n.inputs.height === 'number') n.inputs.height = '%height%';
+                    return '';
+                }
+                // 沿 model 鏈往回：收集 LoraLoader，走到底層 Checkpoint/UNET 載入器
+                function walkModel(startId){
+                    let id = startId, hop = 0;
+                    while (id && hop++ < 16){
+                        const n = get(id); if (!n) break;
+                        const ct = n.class_type, inp = n.inputs || {};
+                        if (ct === 'LoraLoader' || ct === 'LoraLoaderModelOnly'){
+                            p.loras.push({ on:true, name:String(inp.lora_name||''),
+                                strengthModel:(typeof inp.strength_model==='number'?inp.strength_model:1),
+                                strengthClip:(typeof inp.strength_clip==='number'?inp.strength_clip:1) });
+                            id = idOf(inp.model); continue;
+                        }
+                        if (ct === 'CheckpointLoaderSimple'){ p.modelType='checkpoint'; p.model=String(inp.ckpt_name||''); parsed.model=true; break; }
+                        if (ct === 'UNETLoader'){ p.model=String(inp.unet_name||''); parsed.model=true; break; }
+                        id = idOf(inp.model);  // 未知中繼(ModelSamplingFlux 等)→繼續往回
                     }
-                });
-                let dynamic = false;
-                if (posId && gr[posId] && gr[posId].inputs && typeof gr[posId].inputs.text === 'string'){ gr[posId].inputs.text = '%prompt%'; dynamic = true; }
-                if (negId && gr[negId] && gr[negId].inputs && typeof gr[negId].inputs.text === 'string'){ gr[negId].inputs.text = '%negative%'; }
-                return { json: JSON.stringify(gr, null, 2), dynamic: dynamic };
+                    p.loras.reverse();  // 由近到遠→還原載入順序
+                }
+                // 取樣器：抓步數/CFG/採樣器/排程 + 提示詞 + 尺寸 + model 鏈
+                const samp = byType(['KSampler','KSamplerAdvanced']);
+                if (samp){
+                    const inp = samp.node.inputs || {};
+                    if (typeof inp.steps === 'number'){ p.steps = inp.steps; parsed.sampler = true; }
+                    if (typeof inp.cfg === 'number') p.cfg = inp.cfg;
+                    if (inp.sampler_name){ p.sampler = String(inp.sampler_name); parsed.sampler = true; }
+                    if (inp.scheduler) p.scheduler = String(inp.scheduler);
+                    p.basePrompt = extractText(idOf(inp.positive));
+                    p.negPrompt  = extractText(idOf(inp.negative));
+                    if (p.basePrompt || p.negPrompt) parsed.prompt = true;
+                    const latN = get(idOf(inp.latent_image));
+                    if (latN && latN.inputs){ if (typeof latN.inputs.width==='number'){ p.width=latN.inputs.width; parsed.size=true; } if (typeof latN.inputs.height==='number'){ p.height=latN.inputs.height; parsed.size=true; } }
+                    walkModel(idOf(inp.model));
+                }
+                // 模型類型 + 專用檔（Flux=UNET+DualCLIP、Anima=UNET+單CLIPLoader）
+                const unet = byType(['UNETLoader']), dual = byType(['DualCLIPLoader']), single = byType(['CLIPLoader']);
+                if (unet){
+                    if (dual){ p.modelType='flux'; p.fluxClipL=String(dual.node.inputs.clip_name1||''); p.fluxT5=String(dual.node.inputs.clip_name2||''); }
+                    else if (single){ p.modelType='anima'; p.animaClip=String(single.node.inputs.clip_name||''); }
+                    else p.modelType='flux';
+                }
+                // 沒經取樣器 model 鏈也補抓一次底層載入器
+                if (!p.model){
+                    const ck = byType(['CheckpointLoaderSimple']);
+                    if (ck){ p.modelType='checkpoint'; p.model=String(ck.node.inputs.ckpt_name||''); parsed.model=true; }
+                    else if (unet){ p.model=String(unet.node.inputs.unet_name||''); parsed.model=true; }
+                }
+                // clipSkip（CLIPSetLastLayer 的 stop_at_clip_layer 是負數 → 取絕對值）
+                const csl = byType(['CLIPSetLastLayer']);
+                if (csl && typeof csl.node.inputs.stop_at_clip_layer==='number') p.clipSkip = Math.abs(csl.node.inputs.stop_at_clip_layer);
+                // FluxGuidance
+                const fg = byType(['FluxGuidance']);
+                if (fg && typeof fg.node.inputs.guidance==='number') p.guidance = fg.node.inputs.guidance;
+                // VAE：依模型類型放對欄位
+                const vae = byType(['VAELoader']);
+                if (vae && vae.node.inputs.vae_name){
+                    const vn = String(vae.node.inputs.vae_name);
+                    if (p.modelType==='flux') p.fluxAe = vn; else if (p.modelType==='anima') p.animaVae = vn; else p.vae = vn;
+                }
+                p.loras = p.loras.filter(function(l){ return l.name; });
+                parsed.loras = p.loras.length;
+                return { preset: p, parsed: parsed };
             }
             // File → dataURL（給拖圖預覽縮圖用）
             function fileToDataUrl(file){
@@ -2834,24 +2904,25 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     self._setImgStatus('⏳ 讀取圖片工作流…');
                     let res; try { res = await RECIPE.extractComfyWorkflow(file); } catch(e){ res = { ok:false, error: String((e && e.message) || e) }; }
                     if (!res || !res.ok){ self._setImgStatus('❌ ' + ((res && res.error) || '讀不到工作流'), true); return; }
-                    const t = templatizeComfyApi(res.api);
                     // 預設名：檔名去副檔名；同名自動加序號
-                    let base = String(file.name || 'ComfyUI 工作流').replace(/\.[a-z0-9]+$/i, '').trim() || 'ComfyUI 工作流';
+                    let base = String(file.name || 'ComfyUI').replace(/\.[a-z0-9]+$/i, '').trim() || 'ComfyUI';
                     let name = base, n = 2;
                     while (cfdPresets.some(function(p){ return p.name === name; })) { name = base + ' ' + (n++); }
+                    // 把工作流「拆解」進面板可編輯欄位（模型/LoRA/採樣器/提示詞…）
+                    const r = parseComfyApiToPreset(res.api, name);
+                    const preset = r.preset, pd = r.parsed;
                     // 原圖 → 縮圖當預覽（拖進來的那張圖就是它的預覽）
-                    let preview = '';
-                    try { preview = await toThumb(await fileToDataUrl(file)); } catch(e){}
-                    cfdPresets.push({
-                        name: name, modelType: 'checkpoint', model: '', vae: '',
-                        sampler: 'euler', scheduler: 'normal', steps: 28, cfg: 6.5,
-                        width: 1024, height: 1024, clipSkip: 0, basePrompt: '', negPrompt: '',
-                        loras: [], customWorkflow: t.json, preview: preview
-                    });
+                    try { preset.preview = await toThumb(await fileToDataUrl(file)); } catch(e){}
+                    cfdPresets.push(preset);
                     renderPresetGrid();
-                    self._setImgStatus(t.dynamic
-                        ? '✅ 已存成預設包「' + name + '」：套用後人物／場景提示會自動帶入、種子每次重骰。記得按底部「保存」。'
-                        : '✅ 已存成預設包「' + name + '」，但認不出提示詞節點 → 套用後生圖會固定用原圖的提示詞。記得按底部「保存」。', !t.dynamic);
+                    // 報告抓到哪些（讓她知道有沒有漏、要不要手動補）
+                    const got = [];
+                    if (pd.model) got.push('模型'); if (pd.loras) got.push('LoRA×' + pd.loras);
+                    if (pd.sampler) got.push('採樣器/步數/CFG'); if (pd.prompt) got.push('正負提示詞'); if (pd.size) got.push('尺寸');
+                    const miss = !pd.model && !pd.sampler && !pd.prompt;
+                    self._setImgStatus(miss
+                        ? '⚠️ 已建卡「' + name + '」，但這張圖的工作流結構特殊、只抓到少數欄位 → 套用後請自己在面板核對補齊。記得按底部「保存」。'
+                        : '✅ 已拆進預設卡「' + name + '」：' + (got.join('、') || '基本設定') + '。點「套用」就能在面板逐格微調，改完按底部「保存」。', miss);
                 },
                 overwriteIdx: function(i){
                     const old = cfdPresets[i]; if (!old) return;
