@@ -153,12 +153,17 @@
             //   別再自己硬編模板。沒設過才退預設(她的 cowboy shot + brown background 那組，避免 full body 打架被切、純色底好去背)。
             //   prompt 是角色描述：清掉跟立繪衝突的構圖/背景/視角 tag(同 studio renderAvatarPicker 的 stripPromptForSprite)。
             //   底詞/負詞/畫師串交給 generate(raw=!NAI 同 studio)：NAI 套 charBasePrompt、非 NAI raw 純模板，這裡不另塞。
-            const DEF_PFX = '(facing viewer:1.2), front view, looking at viewer, body in frame, (cowboy shot), clothes and pants, standing, ';
+            // ⚠️ 預設必須跟 studio「一鍵生立繪」的 DEF_PREFIX/DEF_SUFFIX 一字不差(os_settings.js _initSpriteUI)——
+            //    studio 手動生讀的是「框裡的值」(沒存過也預填這預設,所以永遠帶 no shading→不出陰影);
+            //    getSprite 讀 localStorage,沒存過就退這裡的預設。以前這裡前綴不同、後綴是空字串→少了 no shading + simple bright background
+            //    → spriteDirect 才會跑出陰影(手動不會)。改成一字不差,兩條路才真的一樣。改 studio 預設記得同步這裡。
+            const DEF_PFX = 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ';
+            const DEF_SFX = 'simple bright background, straight view, no shading';
             let pfx = null, sfx = null;
             try { pfx = localStorage.getItem('os_sprite_tpl_prefix'); } catch (e) {}
             try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
             if (pfx == null) pfx = DEF_PFX;
-            if (sfx == null) sfx = '';
+            if (sfx == null) sfx = DEF_SFX;
             const full = pfx + this._stripForSprite(prompt) + sfx;   // = studio 的 prefix + finalPrompt + suffix
             // 立繪尺寸：跟 studio 共用「立繪比例」設定 os_sprite_size，預設 512×896
             let _w = 512, _h = 896;
@@ -173,6 +178,7 @@
                 /\bclose[\s-]?up\b/gi, /\bcowboy(\s+|-)?shot\b/gi, /\bupper(\s+|-)?body\b/gi, /\bfull(\s+|-)?body\b/gi,
                 /\bhead\s+and\s+shoulders\b/gi, /\bwaist[\s-]?up\b/gi, /\bchest[\s-]?up\b/gi,
                 /\b[a-z]*\s*background\b/gi, /\bisolated\b/gi, /\bno\s+bg\b/gi,
+                /\bsoft\s+lighting\b/gi, /\bstudio\s+lighting\b/gi, /\bflat\s+lighting\b/gi,   // 同 studio：剝燈光詞避免跟後綴 no shading 打架
                 /\bfrom\s+(above|below|side|behind|front)\b/gi,
             ];
             let s = p;
