@@ -3469,7 +3469,10 @@
                 const useNAI = !!(_spriteSvc === 'novelai' && imCfg && imCfg.novelai && imCfg.novelai.token);
                 let _bw = 512, _bh = 896;
                 try { const _bp = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_bp[0] && _bp[1]) { _bw = _bp[0]; _bh = _bp[1]; } } catch(e) {}
-                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: _bw, height: _bh, raw: !useNAI });
+                // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面。空＝不送。
+                let _spriteNeg = null; try { _spriteNeg = localStorage.getItem('os_sprite_tpl_neg'); } catch(e) {}
+                _spriteNeg = (_spriteNeg && _spriteNeg.trim()) ? _spriteNeg.trim() : undefined;
+                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: _bw, height: _bh, raw: !useNAI, extraNegative: _spriteNeg });
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
                 setT('🪄 去背中…');
