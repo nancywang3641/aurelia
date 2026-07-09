@@ -313,8 +313,10 @@
             // 🔥 構建 URL
             let url = `${this.config.pollinations.url}/${encoded}?width=${width}&height=${height}&model=${model}&seed=${seed}&nologo=true`;
 
-            if (options.negativePrompt) {
-                url += `&negative_prompt=${encodeURIComponent(options.negativePrompt)}`;
+            // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，raw 也生效
+            const _polNeg = [options.negativePrompt, options.extraNegative].filter(Boolean).join(', ');
+            if (_polNeg) {
+                url += `&negative_prompt=${encodeURIComponent(_polNeg)}`;
             }
 
             // 檢查 API Key
@@ -404,6 +406,8 @@
 
             let posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
             let negText = options.negativePrompt || cfg.negPrompt || '';
+            // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，保留 comfy 面板負詞
+            if (options.extraNegative) negText = [negText, options.extraNegative].filter(Boolean).join(', ');
             // 防「男變女」：場景(scene)＋角色頭像/立繪(char) 的提示詞若沒有任何女性詞 → 三重防護
             // 中和女性化髮型詞 ＋ 正面加男性錨點(male focus, masculine) ＋ 負面強負女性特徵
             // （此模型太顛，男角穿粉色/M字瀏海等就變女；夾擊把它拉回男性。有女角的不動）
@@ -985,11 +989,13 @@
 
             // 負向提示詞：優先使用呼叫方傳入的 options.negativePrompt（使用者自訂），
             // 否則按類型使用預設值
-            const negativePrompt = options.negativePrompt ||
+            let negativePrompt = options.negativePrompt ||
                 (options.raw ? '' :
                     (isChar
                         ? (cfg.charNegPrompt || 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry')
                         : (cfg.itemNegPrompt || 'person, human, body, face, hands, worst quality, low quality, blurry, watermark, text')));
+            // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，raw 也生效且保留 NAI 品質負詞
+            if (options.extraNegative) negativePrompt = [negativePrompt, options.extraNegative].filter(Boolean).join(', ');
 
             const model   = cfg.model    || 'nai-diffusion-3';
             const isV4    = model.includes('nai-diffusion-4');
