@@ -560,14 +560,20 @@
             const cfg = Object.assign({}, live, presetCfg || {});  // 預設包覆蓋模型/LoRA/參數；url 等沿用 live
             const url = (cfg.url || '').trim();
             if (!url) throw new Error('ComfyUI 網址空白（先在面板填網址＋測試）');
-            if (!cfg.model) throw new Error('這個包沒有模型(model 空白) — 另存時面板可能沒選到模型');
+            const _hasCustomWf = !!(cfg.customWorkflow && String(cfg.customWorkflow).trim());
+            if (!cfg.model && !_hasCustomWf) throw new Error('這個包沒有模型(model 空白) — 另存時面板可能沒選到模型');
             const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
             const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
             const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
             const negText = cfg.negPrompt || '';
             // 預覽用小圖(512×768)。每次給新隨機種子→避開 ComfyUI 對「相同工作流」的快取
             // （完全命中快取時不產生新輸出→代理拿不到圖→伺服器 500），順便讓重新生成有變化
-            const wf = this._buildComfyWorkflow(posText, negText, 'char', { width: 512, height: 768, seed: Math.floor(Math.random() * 1e15) }, cfg);
+            const _pvOpts = { width: 512, height: 768, seed: Math.floor(Math.random() * 1e15) };
+            // 帶工作流的預設包（拖圖還原的卡）→ 走自訂工作流；否則自動組
+            const wf = _hasCustomWf
+                ? this._applyCustomWorkflow(cfg.customWorkflow, posText, negText, _pvOpts, cfg)
+                : this._buildComfyWorkflow(posText, negText, 'char', _pvOpts, cfg);
+            if (!wf) throw new Error('工作流解析失敗（自訂工作流 JSON 格式不對）');
             // PWA/手機：瀏覽器直連 ComfyUI（不吞錯，讓真正原因往上拋給卡片顯示）
             if (this._comfyDirectBrowser()) {
                 return await this._genComfyuiBrowserDirect(wf, url, null);
