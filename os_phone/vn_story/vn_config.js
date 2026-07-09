@@ -168,7 +168,10 @@
             // 立繪尺寸：跟 studio 共用「立繪比例」設定 os_sprite_size，預設 512×896
             let _w = 512, _h = 896;
             try { const _p = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_p[0] && _p[1]) { _w = _p[0]; _h = _p[1]; } } catch(e) {}
-            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: !_useNAI, force: !!force });
+            // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面(extraNegative)。空＝不送。
+            let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
+            _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: !_useNAI, force: !!force, extraNegative: _neg });
         },
         // 剝掉跟立繪衝突的構圖/背景/視角 tag（與 os_settings studio 的 stripPromptForSprite 同規則）
         _stripForSprite: function(p) {

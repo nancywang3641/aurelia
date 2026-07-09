@@ -545,6 +545,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const DEF_SUFFIX = 'simple bright background, straight view, no shading';
             const LS_PFX = 'os_sprite_tpl_prefix';
             const LS_SFX = 'os_sprite_tpl_suffix';
+            const LS_NEG = 'os_sprite_tpl_neg';   // 立繪負詞（使用者填，接在各接口既有負詞後面；空＝現狀）
             const LS_RATIO = 'os_sprite_upscale_ratio';
             const LS_HIRES = 'os_sprite_hires';
             const state = { inited: false, bgRemover: null, blob: null, blobUrl: null, isRemoved: false };
@@ -622,14 +623,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const _ratio = _isComfy ? (parseFloat((_ratioEl && _ratioEl.value) || localStorage.getItem(LS_RATIO) || '1.5') || 1.5) : 1;
                     const _hiresEl = document.getElementById('sprite-hires');
                     const _hiresOn = _isComfy && _hiresEl && _hiresEl.checked && _ratio > 1;
+                    // 立繪負詞（使用者在「負詞」框填）：接在各接口既有負詞後面(extraNegative,不取代)。空＝不送。
+                    const _spriteNeg = (document.getElementById('sprite-tpl-neg')?.value || '').trim() || undefined;
                     let _opts;
                     if (_hiresOn) {
-                        _opts = { force: true, width: _bw, height: _bh, raw: !_useNAI, comfyHires: { scale: _ratio, denoise: 0.45 } };
+                        _opts = { force: true, width: _bw, height: _bh, raw: !_useNAI, extraNegative: _spriteNeg, comfyHires: { scale: _ratio, denoise: 0.45 } };
                         setStatus('⏳ 為「' + name + '」生立繪中（高清修復，較久 15–60 秒）...');
                     } else {
                         const _sw = Math.round(_bw * _ratio / 8) * 8;
                         const _sh = Math.round(_bh * _ratio / 8) * 8;
-                        _opts = { force: true, width: _sw, height: _sh, raw: !_useNAI };
+                        _opts = { force: true, width: _sw, height: _sh, raw: !_useNAI, extraNegative: _spriteNeg };
                     }
                     const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', _opts);
                     if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
@@ -866,11 +869,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             window._initSpriteUI = function() {
                 const prefixEl = document.getElementById('sprite-tpl-prefix');
                 const suffixEl = document.getElementById('sprite-tpl-suffix');
+                const negEl = document.getElementById('sprite-tpl-neg');
                 if (!prefixEl || !suffixEl) return;
                 prefixEl.value = localStorage.getItem(LS_PFX) || DEF_PREFIX;
                 suffixEl.value = localStorage.getItem(LS_SFX) || DEF_SUFFIX;
                 prefixEl.onchange = () => localStorage.setItem(LS_PFX, prefixEl.value);
                 suffixEl.onchange = () => localStorage.setItem(LS_SFX, suffixEl.value);
+                if (negEl) {
+                    negEl.value = localStorage.getItem(LS_NEG) || '';   // 空＝現狀，使用者自己填
+                    negEl.onchange = () => localStorage.setItem(LS_NEG, negEl.value);
+                }
                 const sizeEl = document.getElementById('sprite-base-size');
                 if (sizeEl) {
                     sizeEl.value = localStorage.getItem('os_sprite_size') || '512x896';
@@ -898,8 +906,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 document.getElementById('sprite-tpl-reset').onclick = () => {
                     prefixEl.value = DEF_PREFIX;
                     suffixEl.value = DEF_SUFFIX;
+                    if (negEl) negEl.value = '';
                     localStorage.removeItem(LS_PFX);
                     localStorage.removeItem(LS_SFX);
+                    localStorage.removeItem(LS_NEG);
                 };
                 document.getElementById('sprite-removebg-btn').onclick = spriteRemoveBg;
                 document.getElementById('sprite-removebg-canvas-btn').onclick = spriteRemoveBgCanvas;
@@ -1823,6 +1833,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                                 <textarea class="set-input" id="sprite-tpl-prefix" style="margin-top:4px;min-height:48px;font-family:inherit;font-size:12px;"></textarea>
                                                 <div class="set-label" style="margin-top:8px;font-size:11px;">後綴</div>
                                                 <textarea class="set-input" id="sprite-tpl-suffix" style="margin-top:4px;min-height:48px;font-family:inherit;font-size:12px;"></textarea>
+                                                <div class="set-label" style="margin-top:8px;font-size:11px;">負詞</div>
+                                                <textarea class="set-input" id="sprite-tpl-neg" style="margin-top:4px;min-height:48px;font-family:inherit;font-size:12px;" placeholder="不想要的東西，逗號分隔（例：shadow, dramatic lighting）"></textarea>
                                                 <button class="btn-test" id="sprite-tpl-reset" style="margin-top:6px;padding:4px 10px;font-size:11px;">↻ 還原預設</button>
                                             </details>
                                         </div>
