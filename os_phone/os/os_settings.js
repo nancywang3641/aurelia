@@ -1342,11 +1342,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動（推薦，在下面設定就好）</option>
                                         <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼自己的工作流）</option>
                                     </select>
-                                    <div class="cfd-wf-restore">
-                                        <div class="cfd-wf-restore-drop" id="img-cfd-wf-drop">🖼️ 把以前用 ComfyUI 生的圖拖進來（或點這裡選檔）<br>自動讀出當初那張圖的工作流</div>
-                                        <input type="file" id="img-cfd-wf-img" accept="image/png" class="cfd-pack-file-hidden">
-                                        <div class="cfd-wf-restore-status" id="img-cfd-wf-status"></div>
-                                    </div>
                                     <div id="img-cfd-custom-wf" class="${imgConfig.comfyuiDirect?.workflowMode==='custom'?'':'hidden'}" style="margin-top:8px;">
                                         <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${imgConfig.comfyuiDirect?.customWorkflow || ''}</textarea>
                                         <div class="set-desc" style="margin-top:4px;" title="貼 ComfyUI API 格式工作流（設定開 Dev mode → Save (API Format) 匯出）。只有這幾個變數會被注入，其餘（LoRA、採樣器、放大、修臉…）請寫死在工作流裡；下面的 LoRA/參數欄在自訂模式不生效。">
@@ -1371,6 +1366,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div style="display:flex; gap:6px; align-items:center; margin-top:14px; border-top:1px solid rgba(26,28,40,0.12); padding-top:12px;">
                                             <input id="img-cfd-preset-newname" class="set-input" placeholder="新預設包名稱（如：日常動漫）" style="flex:1;">
                                             <button class="set-btn" type="button" onclick="window._cfdPreset.saveNew()" style="white-space:nowrap;">➕ 從目前設定另存</button>
+                                        </div>
+                                        <div class="cfd-wf-restore">
+                                            <div class="cfd-wf-restore-drop" id="img-cfd-wf-drop">🖼️ 拖一張以前用 ComfyUI 生的圖進來（或點這裡選檔）<br>直接讀出當初的工作流，變成一張預設包卡</div>
+                                            <input type="file" id="img-cfd-wf-img" accept="image/png" class="cfd-pack-file-hidden">
+                                            <div class="cfd-wf-restore-status" id="img-cfd-wf-status"></div>
                                         </div>
                                         <div class="cfd-pack-io-row">
                                             <button class="set-btn" type="button" onclick="window._cfdPreset.importPack()">📥 匯入預設包檔</button>
@@ -2563,60 +2563,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const box = container.querySelector('#img-cfd-custom-wf');
                 if (box) box.classList.toggle('hidden', wfModeSel.value !== 'custom');
             });
-            // 🖼️ 拖舊 ComfyUI 圖 → 讀出當初的工作流，改成活模板灌進「自訂工作流」框（免回 ComfyUI 手動重接）
-            (function(){
-                const drop = container.querySelector('#img-cfd-wf-drop');
-                const fileIn = container.querySelector('#img-cfd-wf-img');
-                const st = container.querySelector('#img-cfd-wf-status');
-                if (!drop || !fileIn) return;
-                const setSt = function(msg, err){ if (st){ st.textContent = msg || ''; st.classList.toggle('is-err', !!err); } };
-                // 把還原出來的 API 工作流改成「活模板」：正/負向提示換 %prompt%/%negative%、種子換 %seed%、空 latent 尺寸換 %width%/%height%
-                function templatize(api){
-                    let g; try { g = JSON.parse(JSON.stringify(api)); } catch(e){ return { json: JSON.stringify(api, null, 2), dynamic: false }; }
-                    const SAMP = ['KSampler','KSamplerAdvanced','SamplerCustom','SamplerCustomAdvanced'];
-                    let posId = null, negId = null;
-                    Object.keys(g).forEach(function(id){
-                        const n = g[id]; if (!n || !n.inputs) return;
-                        if (SAMP.indexOf(n.class_type) >= 0){
-                            if (Array.isArray(n.inputs.positive)) posId = String(n.inputs.positive[0]);
-                            if (Array.isArray(n.inputs.negative)) negId = String(n.inputs.negative[0]);
-                            if (typeof n.inputs.seed === 'number') n.inputs.seed = '%seed%';
-                            if (typeof n.inputs.noise_seed === 'number') n.inputs.noise_seed = '%seed%';
-                        }
-                        if (/EmptyLatent|EmptySD3Latent/.test(n.class_type || '')){
-                            if (typeof n.inputs.width === 'number') n.inputs.width = '%width%';
-                            if (typeof n.inputs.height === 'number') n.inputs.height = '%height%';
-                        }
-                    });
-                    let dynamic = false;
-                    if (posId && g[posId] && g[posId].inputs && typeof g[posId].inputs.text === 'string'){ g[posId].inputs.text = '%prompt%'; dynamic = true; }
-                    if (negId && g[negId] && g[negId].inputs && typeof g[negId].inputs.text === 'string'){ g[negId].inputs.text = '%negative%'; }
-                    return { json: JSON.stringify(g, null, 2), dynamic: dynamic };
-                }
-                async function handle(file){
-                    if (!file) return;
-                    const W = window.parent || window;
-                    const RECIPE = W.NAI_RECIPE || window.NAI_RECIPE;
-                    if (!RECIPE || !RECIPE.extractComfyWorkflow){ setSt('解析模組未就緒（重進一次設定再試）', true); return; }
-                    setSt('⏳ 讀取圖片工作流…');
-                    let res; try { res = await RECIPE.extractComfyWorkflow(file); } catch(e){ res = { ok:false, error: String((e && e.message) || e) }; }
-                    if (!res || !res.ok){ setSt('❌ ' + ((res && res.error) || '讀不到工作流'), true); return; }
-                    const t = templatize(res.api);
-                    const ta = container.querySelector('#img-cfd-custom-wf-text');
-                    if (ta) ta.value = t.json;
-                    if (wfModeSel) wfModeSel.value = 'custom';
-                    const box = container.querySelector('#img-cfd-custom-wf');
-                    if (box) box.classList.remove('hidden');
-                    setSt(t.dynamic
-                        ? '✅ 已還原並改成活模板：人物／場景提示會自動帶入、種子每次重骰。記得按底部「保存」。'
-                        : '✅ 已還原原始工作流，但認不出提示詞節點 → 生圖會固定用原圖的提示詞。可自己把要動態的欄位改成 "%prompt%"。記得按底部「保存」。', !t.dynamic);
-                }
-                drop.addEventListener('click', function(){ fileIn.value=''; fileIn.click(); });
-                fileIn.addEventListener('change', function(){ handle(fileIn.files && fileIn.files[0]); });
-                drop.addEventListener('dragover', function(e){ e.preventDefault(); drop.classList.add('is-over'); });
-                drop.addEventListener('dragleave', function(){ drop.classList.remove('is-over'); });
-                drop.addEventListener('drop', function(e){ e.preventDefault(); drop.classList.remove('is-over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; handle(f); });
-            })();
             function makeLoraRow(L){
                 L = L || { on: true, name: '', strengthModel: 1, strengthClip: 1 };
                 const row = document.createElement('div');
@@ -2726,12 +2672,46 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
                         strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
                         strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
-                    }; }).filter(function(l){ return l.name; })
+                    }; }).filter(function(l){ return l.name; }),
+                    // 自訂模式時把整份工作流也存進預設包（拖圖還原的卡靠這個攜帶）
+                    customWorkflow: (g('#img-cfd-wfmode') === 'custom') ? g('#img-cfd-custom-wf-text') : ''
                 };
             }
             function getPreviewPrompt(){
                 const el = container.querySelector('#img-cfd-preview-prompt');
                 return (el && el.value.trim()) || '1 person, upper body portrait, looking at viewer, simple background';
+            }
+            // 把還原出來的 API 工作流改成「活模板」：正/負向提示換 %prompt%/%negative%、種子換 %seed%、空 latent 尺寸換 %width%/%height%
+            function templatizeComfyApi(api){
+                let gr; try { gr = JSON.parse(JSON.stringify(api)); } catch(e){ return { json: JSON.stringify(api, null, 2), dynamic: false }; }
+                const SAMP = ['KSampler','KSamplerAdvanced','SamplerCustom','SamplerCustomAdvanced'];
+                let posId = null, negId = null;
+                Object.keys(gr).forEach(function(id){
+                    const n = gr[id]; if (!n || !n.inputs) return;
+                    if (SAMP.indexOf(n.class_type) >= 0){
+                        if (Array.isArray(n.inputs.positive)) posId = String(n.inputs.positive[0]);
+                        if (Array.isArray(n.inputs.negative)) negId = String(n.inputs.negative[0]);
+                        if (typeof n.inputs.seed === 'number') n.inputs.seed = '%seed%';
+                        if (typeof n.inputs.noise_seed === 'number') n.inputs.noise_seed = '%seed%';
+                    }
+                    if (/EmptyLatent|EmptySD3Latent/.test(n.class_type || '')){
+                        if (typeof n.inputs.width === 'number') n.inputs.width = '%width%';
+                        if (typeof n.inputs.height === 'number') n.inputs.height = '%height%';
+                    }
+                });
+                let dynamic = false;
+                if (posId && gr[posId] && gr[posId].inputs && typeof gr[posId].inputs.text === 'string'){ gr[posId].inputs.text = '%prompt%'; dynamic = true; }
+                if (negId && gr[negId] && gr[negId].inputs && typeof gr[negId].inputs.text === 'string'){ gr[negId].inputs.text = '%negative%'; }
+                return { json: JSON.stringify(gr, null, 2), dynamic: dynamic };
+            }
+            // File → dataURL（給拖圖預覽縮圖用）
+            function fileToDataUrl(file){
+                return new Promise(function(resolve, reject){
+                    const r = new FileReader();
+                    r.onload = function(){ resolve(String(r.result)); };
+                    r.onerror = function(){ reject(new Error('讀檔失敗')); };
+                    r.readAsDataURL(file);
+                });
             }
             // 把預設包填回面板（套用）
             function applyPresetToPanel(p){
@@ -2761,6 +2741,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 setVal('#img-cfd-anima-clip', p.animaClip || 'qwen_3_06b_base.safetensors');
                 setVal('#img-cfd-anima-vae', p.animaVae || 'qwen_image_vae.safetensors');
                 if (lorasBox) { lorasBox.innerHTML = ''; (Array.isArray(p.loras) ? p.loras : []).forEach(function(L){ lorasBox.appendChild(makeLoraRow(L)); }); }
+                // 帶工作流的預設包（拖圖還原的卡）：切自訂模式、灌回工作流框；否則回自動模式
+                const wfSel = container.querySelector('#img-cfd-wfmode');
+                const wfBox = container.querySelector('#img-cfd-custom-wf');
+                const wfTa  = container.querySelector('#img-cfd-custom-wf-text');
+                if (p.customWorkflow) {
+                    if (wfTa)  wfTa.value = p.customWorkflow;
+                    if (wfSel) wfSel.value = 'custom';
+                    if (wfBox) wfBox.classList.remove('hidden');
+                } else {
+                    if (wfSel) wfSel.value = 'auto';
+                    if (wfBox) wfBox.classList.add('hidden');
+                }
             }
             // 把生成的圖縮成 ~256px JPEG 縮圖（避免 localStorage 爆肥）
             function toThumb(dataUrl){
@@ -2796,7 +2788,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         : '<div style="width:100%; aspect-ratio:1; border-radius:6px; background:rgba(26,28,40,0.06); display:flex; align-items:center; justify-content:center; color:rgba(26,28,40,0.4); font-size:11px; text-align:center; line-height:1.5;">尚無預覽<br>點 🖼️ 生成</div>';
                     return '<div style="border:1px solid rgba(26,28,40,0.15); border-radius:8px; padding:8px; background:#fff;">' +
                         thumb +
-                        '<div style="font-size:12px; font-weight:600; color:#1A1C28; margin:6px 0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escAttr(p.name) + '">' + escAttr(p.name) + '</div>' +
+                        '<div style="font-size:12px; font-weight:600; color:#1A1C28; margin:6px 0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escAttr(p.name) + (p.customWorkflow ? '（自帶工作流）' : '') + '">' + (p.customWorkflow ? '⚙️ ' : '') + escAttr(p.name) + '</div>' +
                         '<div style="display:flex; gap:3px;">' +
                           '<span style="flex:1; text-align:center; font-size:11px; cursor:pointer; padding:4px 0; border:1px solid rgba(26,28,40,0.2); border-radius:4px; background:rgba(26,28,40,0.05);" onclick="window._cfdPreset.applyIdx(' + i + ')">套用</span>' +
                           '<span style="font-size:12px; cursor:pointer; padding:4px 7px; border:1px solid rgba(26,28,40,0.2); border-radius:4px; background:rgba(26,28,40,0.05);" title="生成風格預覽" onclick="window._cfdPreset.genPreviewIdx(' + i + ')">🖼️</span>' +
@@ -2823,6 +2815,43 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     cfdPresets.push(buildCfdPreset(name));
                     if (ni) ni.value = '';
                     renderPresetGrid();
+                },
+                // 🖼️ 拖/選一張以前 ComfyUI 生的圖 → 讀出當初工作流 → 直接變成一張帶工作流的預設包卡（原圖當預覽縮圖）
+                importImage: function(){
+                    const fi = container.querySelector('#img-cfd-wf-img');
+                    if (fi) { fi.value = ''; fi.click(); }
+                },
+                _setImgStatus: function(msg, err){
+                    const st = container.querySelector('#img-cfd-wf-status');
+                    if (st) { st.textContent = msg || ''; st.classList.toggle('is-err', !!err); }
+                },
+                _handleImage: async function(file){
+                    if (!file) return;
+                    const self = this;
+                    const W = window.parent || window;
+                    const RECIPE = W.NAI_RECIPE || window.NAI_RECIPE;
+                    if (!RECIPE || !RECIPE.extractComfyWorkflow){ self._setImgStatus('解析模組未就緒（重進一次設定再試）', true); return; }
+                    self._setImgStatus('⏳ 讀取圖片工作流…');
+                    let res; try { res = await RECIPE.extractComfyWorkflow(file); } catch(e){ res = { ok:false, error: String((e && e.message) || e) }; }
+                    if (!res || !res.ok){ self._setImgStatus('❌ ' + ((res && res.error) || '讀不到工作流'), true); return; }
+                    const t = templatizeComfyApi(res.api);
+                    // 預設名：檔名去副檔名；同名自動加序號
+                    let base = String(file.name || 'ComfyUI 工作流').replace(/\.[a-z0-9]+$/i, '').trim() || 'ComfyUI 工作流';
+                    let name = base, n = 2;
+                    while (cfdPresets.some(function(p){ return p.name === name; })) { name = base + ' ' + (n++); }
+                    // 原圖 → 縮圖當預覽（拖進來的那張圖就是它的預覽）
+                    let preview = '';
+                    try { preview = await toThumb(await fileToDataUrl(file)); } catch(e){}
+                    cfdPresets.push({
+                        name: name, modelType: 'checkpoint', model: '', vae: '',
+                        sampler: 'euler', scheduler: 'normal', steps: 28, cfg: 6.5,
+                        width: 1024, height: 1024, clipSkip: 0, basePrompt: '', negPrompt: '',
+                        loras: [], customWorkflow: t.json, preview: preview
+                    });
+                    renderPresetGrid();
+                    self._setImgStatus(t.dynamic
+                        ? '✅ 已存成預設包「' + name + '」：套用後人物／場景提示會自動帶入、種子每次重骰。記得按底部「保存」。'
+                        : '✅ 已存成預設包「' + name + '」，但認不出提示詞節點 → 套用後生圖會固定用原圖的提示詞。記得按底部「保存」。', !t.dynamic);
                 },
                 overwriteIdx: function(i){
                     const old = cfdPresets[i]; if (!old) return;
@@ -2890,6 +2919,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             return { on: !!(L && L.on !== false), name: s(L && L.name),
                                      strengthModel: num(L && L.strengthModel, 1), strengthClip: num(L && L.strengthClip, 1) };
                         }).filter(function(L){ return L.name; }),
+                        customWorkflow: s(p.customWorkflow),
                         preview: (typeof p.preview === 'string' && p.preview.indexOf('data:image') === 0) ? p.preview : ''
                     };
                 },
@@ -2926,6 +2956,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const f = fi.files && fi.files[0];
                     if (f) window._cfdPreset._importFile(f);
                 });
+            })();
+            // 🖼️ 拖圖還原工作流 → 建預設包卡：拖放 + 點擊選檔
+            (function(){
+                const drop = container.querySelector('#img-cfd-wf-drop');
+                const fi = container.querySelector('#img-cfd-wf-img');
+                if (!drop || !fi) return;
+                drop.addEventListener('click', function(){ window._cfdPreset.importImage(); });
+                fi.addEventListener('change', function(){ const f = fi.files && fi.files[0]; if (f) window._cfdPreset._handleImage(f); });
+                drop.addEventListener('dragover', function(e){ e.preventDefault(); drop.classList.add('is-over'); });
+                drop.addEventListener('dragleave', function(){ drop.classList.remove('is-over'); });
+                drop.addEventListener('drop', function(e){ e.preventDefault(); drop.classList.remove('is-over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) window._cfdPreset._handleImage(f); });
             })();
         })();
 
