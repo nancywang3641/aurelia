@@ -196,7 +196,23 @@
         return { ok: false, error: '這張圖讀不到生成資訊（可能是截圖、被轉成 JPG、或 metadata 被平台洗掉了）' };
     }
 
-    const NAI_RECIPE = { parseFile, parseSDParameters, _readStealth: readStealth, _readPngTextChunks: readPngTextChunks };
+    // ── ComfyUI 工作流萃取：ComfyUI 生成的 PNG 把「API 格式工作流」寫在 tEXt key=prompt、UI 圖寫在 key=workflow ──
+    //    給「拖舊圖還原工作流」用。回傳 { ok, api?(物件), apiRaw?(字串), ui?(字串), error? }
+    async function extractComfyWorkflow(file) {
+        let buf;
+        try { buf = await file.arrayBuffer(); } catch (e) { return { ok: false, error: '讀檔失敗' }; }
+        let chunks = {};
+        try { chunks = readPngTextChunks(buf); } catch (e) { return { ok: false, error: '這不是原始 PNG（ComfyUI 工作流只藏在原始 PNG 裡，截圖／JPG 讀不到）' }; }
+        const apiRaw = chunks['prompt'];
+        const uiRaw = chunks['workflow'];
+        if (!apiRaw && !uiRaw) return { ok: false, error: '這張圖沒有 ComfyUI 工作流資訊（可能不是 ComfyUI 生的、或被轉成 JPG／截圖洗掉了）' };
+        let api = null;
+        if (apiRaw) { try { api = JSON.parse(apiRaw); } catch (e) { api = null; } }
+        if (!api || typeof api !== 'object') return { ok: false, error: '讀到工作流但格式不對（不是 ComfyUI API 格式）' };
+        return { ok: true, api: api, apiRaw: apiRaw, ui: uiRaw || null };
+    }
+
+    const NAI_RECIPE = { parseFile, parseSDParameters, extractComfyWorkflow, _readStealth: readStealth, _readPngTextChunks: readPngTextChunks };
     window.NAI_RECIPE = NAI_RECIPE;
     try { (window.parent || window).NAI_RECIPE = NAI_RECIPE; } catch (e) {}
     console.log('[PhoneOS] 載入 NAI 配方解析器 (nai_recipe.js)');
