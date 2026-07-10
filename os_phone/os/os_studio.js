@@ -3847,6 +3847,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         }
     }
 
+    // 面板字體選項：每款都繁簡成對（Win/Mac/iOS/Android 各補退路），混排時筆畫粗細才一致
+    const _VC_FONTS = [
+        { label: '跟隨組件', value: '' },
+        { label: '黑體', value: "'Microsoft JhengHei','Microsoft YaHei','PingFang TC','PingFang SC','Noto Sans TC','Noto Sans SC',sans-serif" },
+        { label: '明體／宋體', value: "'PMingLiU','SimSun','Songti TC','Songti SC','Noto Serif TC','Noto Serif SC',serif" },
+        { label: '楷體', value: "'DFKai-SB','KaiTi','BiauKai','Kaiti TC','STKaiti',serif" },
+    ];
+
     // ── ③ 使用與設置：把詳情頁的按鈕牆拆過來，分組整齊 ──
     function _vcRenderSettings(listEl) {
         const tpl = _vcTpl; if (!tpl) { _vcView = 'browse'; return renderVnComponents(); }
@@ -3892,6 +3900,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         <div class="vc-fmt-actions">
                             <button class="swb-secondary btn-appear-try" type="button"><i class="fa-solid fa-play"></i> 試聽</button>
                         </div>
+                    </div>
+                </div>
+                <div class="vc-set-block"><div class="vc-set-blabel">面板字體</div>
+                    <div class="sgc-format-box">
+                        <select class="set-select" id="vc-appear-font"></select>
+                        <div class="vc-font-preview" id="vc-font-preview">繁體筆畫測試紋章編號　简体笔画测试纹章编号</div>
                     </div>
                 </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">整合</div>
@@ -3953,6 +3967,33 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 a.play().catch(() => _studioToast('播放失敗，確認音效目錄', 'warning', '試聽'));
             } catch (e) {}
         };
+        // 面板字體：留空=跟隨組件自帶樣式。每個選項都是「繁體字體+同款簡體字體」成對的字體串，
+        // 治 AI 吐簡體字時缺字退回系統預設、同一句話有細有粗的花版面（覆蓋時 !important 蓋過組件 CSS）。
+        const fontSel = listEl.querySelector('#vc-appear-font');
+        const fontPrev = listEl.querySelector('#vc-font-preview');
+        if (fontSel) {
+            const cur = tpl.appearFont || '';
+            let found = false;
+            _VC_FONTS.forEach(f => {
+                const o = document.createElement('option');
+                o.value = f.value; o.textContent = f.label;
+                if (f.value === cur) { o.selected = true; found = true; }
+                fontSel.appendChild(o);
+            });
+            if (cur && !found) {   // 目前值不在清單（自訂/舊值）→ 補一個保留，不洗掉
+                const o = document.createElement('option'); o.value = cur; o.textContent = '（自訂）'; o.selected = true;
+                fontSel.appendChild(o);
+            }
+            const _prevApply = () => { if (fontPrev) fontPrev.style.fontFamily = fontSel.value || ''; };
+            _prevApply();
+            fontSel.onchange = async () => {
+                tpl.appearFont = fontSel.value || '';
+                _prevApply();
+                await db.saveVNTagTemplate(tpl); await syncActiveTagsToLocal();
+                const lbl = fontSel.options[fontSel.selectedIndex];
+                _studioToast(tpl.appearFont ? ('面板字體：' + (lbl ? lbl.textContent : '')) : '已改回跟隨組件', 'success', '設置');
+            };
+        }
         listEl.querySelector('#vc-raw').onclick = () => openRawEditModal(tpl);
     }
     async function _vcTogglePhone(tpl, want) {

@@ -817,12 +817,22 @@
 
             // 🔊 組件登場音效：卡片確定要彈出了 → 查該 tag 的模板 appearSfx（沒設就不播）。
             // 音效來源＝素材設定的「音效目錄」(playSFX 走 VN_Config.data.sfx 基底)；留空＝無聲、不預設。
+            // 🔤 面板字體槽：同一次查模板順便拿 appearFont，蓋過卡片自帶字體（治繁簡混排有細有粗）。
+            // overlay 是重複使用的 → 字體 style 每次彈卡先清再掛，換到沒設字體的組件不殘留。
             try {
+                const _oldFont = document.getElementById('vn-dbo-font');
+                if (_oldFont) _oldFont.remove();
                 if (tagHint) {
                     const _dp = window.VN_DynamicParser;   // ⚠️掛在 VN 播放器自己的 window(非 parent)，全檔一致；用 win 會抓不到
                     const _tpl = _dp && Array.isArray(_dp.activeTemplates)
                         && _dp.activeTemplates.find(t => t.tagId && t.tagId.toLowerCase() === String(tagHint).toLowerCase());
                     if (_tpl && _tpl.appearSfx) this.playSFX(_tpl.appearSfx);
+                    if (_tpl && _tpl.appearFont) {
+                        const _fs = document.createElement('style');
+                        _fs.id = 'vn-dbo-font';
+                        _fs.textContent = '#vn-dom-block-body, #vn-dom-block-body *{font-family:' + _tpl.appearFont + ' !important}';
+                        document.head.appendChild(_fs);
+                    }
                 }
             } catch (e) {}
 
