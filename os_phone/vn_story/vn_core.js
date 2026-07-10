@@ -1738,7 +1738,10 @@
             const self = this;
             const job = (async () => {
                 try {
-                    const d = self._resolveAvatarPrompt(name);
+                    let d = self._resolveAvatarPrompt(name);
+                    // none 路人（有聲線無外觀）：只有立繪模式才合成 prompt 生全身；一般頭像模式維持剪影不生成
+                    if (!d && VN_Config.data.spriteDirect === true && self._isNoneChar(name)) d = await self._buildNonePrompt(name);
+                    if (!d) return '';   // 沒外觀（含 none 非立繪模式）→ 絕不用空 prompt 生圖（會出裸圖），交給剪影
                     const img = await self._makeCharImage(d, 'Neutral');   // 立繪模式由 _makeCharImage 內部換立繪 prompt + 去背
                     if (!img) { console.warn(`[VN] 角色圖生成失敗：${name}`); return ''; }
                     self._avatarMemCache[name] = img.objUrl;
@@ -3039,7 +3042,8 @@
             } catch(e) { return null; }
         },
 
-        _resolveAvatarPrompt: function(name) {
+        // 原始查表（不過濾 none）：外觀字串照實回傳，給 _isNoneChar 判斷用
+        _lookupAvatarDesc: function(name) {
             if (!name) return '';
             const avatars = this.avatars;
             // 1. 精確
@@ -3058,6 +3062,41 @@
                 if (k.includes(name) || name.includes(k)) return avatars[k];
             }
             return '';
+        },
+        // 「none」＝AI 宣告了聲線但沒給外觀（帶代號的路人，如 [Avatar|巡邏員|青男沉|none]）
+        //   ⚠️ 以前 'none' 會被當成外觀字串直接拿去生圖(生出垃圾/裸圖)，這裡統一視同「沒外觀」
+        _isNoneDesc: function(d) { return !d || /^none$/i.test(String(d).trim()); },
+        _isNoneChar: function(name) { const d = this._lookupAvatarDesc(name); return !!d && /^none$/i.test(String(d).trim()); },
+        _resolveAvatarPrompt: function(name) {
+            const d = this._lookupAvatarDesc(name);
+            return this._isNoneDesc(d) ? '' : d;   // none → ''，由呼叫端決定「剪影」還是「合成 prompt」
+        },
+        // 聲線模糊抓性別 → 1boy / 1girl（如「青男沉」→ 男 → 1boy）；抓不到就不掛性別詞
+        _genderFromVoice: function(name) {
+            let v = (this.charVoices && this.charVoices[name]) || '';
+            if (!v) { for (const k of this._nameVariants(name)) { if (this.charVoices && this.charVoices[k]) { v = this.charVoices[k]; break; } } }
+            v = String(v || '');
+            if (/男|male|boy/i.test(v)) return '1boy';
+            if (/女|female|girl/i.test(v)) return '1girl';
+            return '';
+        },
+        // none 路人的 prompt 合成（立繪模式 / 一鍵生立繪 專用）：
+        //   「故事標題, 角色名」→ 翻成英文（同 Bg 的中→英作法）→ 前面掛聲線推出的 1boy/1girl。
+        //   回傳的英文串會被存進 avatar_cache.prompt，一鍵生立繪之後可直接重用。
+        _buildNonePrompt: async function(name) {
+            const title = this._currentStoryTitle || '';
+            const zh = [title, name].filter(Boolean).join(', ');
+            let en = zh;
+            try {
+                const TM = win.TranslationManager;
+                if (TM && typeof TM.translate === 'function' && (!TM.isChinese || TM.isChinese(zh))) {
+                    const t = await TM.translate(zh, 'zh', 'en');
+                    if (t && String(t).trim()) en = String(t).trim();
+                }
+            } catch (e) { console.warn('[VN] none 角色 prompt 翻譯失敗，用原文：', e); }
+            const p = [this._genderFromVoice(name), en].filter(Boolean).join(', ');
+            console.log(`[VN] none 路人「${name}」合成立繪 prompt：${p}`);
+            return p;
         },
 
         // 立刻隱藏（無 transition，不留殘影）
@@ -3361,6 +3400,8 @@
                     url = objUrl || cached.url; this._avatarMemCache[name] = url;
                 } else {
                     let d = this._resolveAvatarPrompt(name);
+                    // none 路人（有聲線無外觀）：只有立繪模式才合成 prompt 生全身；一般頭像模式往下走剪影
+                    if (!d && VN_Config.data.spriteDirect === true && this._isNoneChar(name)) d = await this._buildNonePrompt(name);
                     if (!d) {
                         const pf = this._getPersonaFallback(name);
                         if (pf?.url) { url = pf.url; this._avatarMemCache[name] = url; }
@@ -3450,7 +3491,13 @@
                 // 跟工作檯同邏輯：優先用「這張頭像當初存的 prompt」(avatar_cache)→立繪跟頭像同一個人；沒有才退回腳本描述
                 let rawP = '';
                 try { const _av = await win.VN_Cache?.get?.('avatar_cache', name); if (_av && _av.prompt) rawP = String(_av.prompt); } catch (e) {}
-                if (!rawP) rawP = String(this._resolveAvatarPrompt(name) || name);
+                if (this._isNoneDesc(rawP)) rawP = '';   // 舊快取可能存過字串 'none'（舊版把它當外觀）→ 當作沒有
+                if (!rawP) {
+                    let d = this._resolveAvatarPrompt(name);
+                    // none 路人（有聲線無外觀）：一鍵生立繪不分模式都合成 prompt（標題+角色名翻英文＋聲線性別）
+                    if (!d && this._isNoneChar(name)) d = await this._buildNonePrompt(name);
+                    rawP = String(d || name);
+                }
                 // 完整清洗（同工作檯 stripPromptForSprite）：剝掉構圖/背景/燈光/視角詞(from behind/side/front…)→不再生出背面、側面、亂加背景
                 rawP = rawP
                     .replace(/\bbust(\s+|-)?shot\b/gi, '').replace(/\bportrait\b/gi, '').replace(/\bheadshot\b/gi, '').replace(/\bhead\s+shot\b/gi, '')
