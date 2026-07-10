@@ -3,8 +3,8 @@
 // 核心思路（Rae 拍板）：AI 是跟著上下文範例走的，小紙條式的覆蓋指令壓不過總綱＋歷史——
 //   所以自由模式要讓 AI 看到的「規則＋歷史範例」整套自洽：
 //   ① 總綱條目二選一（Rae 定案：兩條條目都是「她的」、腳本**只撥開關、絕不創建/寫入條目**）：
-//      固定版＝「🟦核心｜VN正文格式與TAG總綱」；自由版＝名字含「自由」的總綱條目（她自己維護）。
-//      自由版條目不存在 → 不切換、console 提示，絕不代寫。
+//      辨識＝名字同時含「VN」+「總綱」（縮寫如「VN總綱-自由版」、完整如「VN正文格式與TAG總綱」都吃）；
+//      自由版＝再含「自由」，固定版＝不含「自由」（她自己維護）。自由版條目不存在 → 不切換、console 提示，絕不代寫。
 //   ② 歷史對齊：一條 promptOnly 正則（跟著模式開關）把歷史裡的表情格從送 AI 的 prompt 剝掉。
 //   ③ 引擎端表情格容錯常駐（vn_core._normCharParts），三欄四欄都吃。
 // 模式按「storyId=這張卡」記（不是 chatId：同卡開新聊天該記得模式，不用重選）。
@@ -14,7 +14,11 @@
     'use strict';
     const win = window.parent || window;
 
-    const CORE_ENTRY_MATCH = 'VN正文格式與TAG總綱';   // 總綱條目名關鍵字：固定版=含這串不含「自由」、自由版=含這串+含「自由」（兩條都Rae自己維護）
+    // 總綱條目辨識：名字同時含「VN」與「總綱」即算總綱條目——容她的縮寫命名
+    //   (如「VN總綱-自由版」「VN總綱-固定版」) 與完整命名 (如「VN正文格式與TAG總綱」)，兩種都吃。
+    //   自由版=再含「自由」，固定版=不含「自由」。兩條都Rae自己維護、腳本只撥開關。
+    const _isCoreName = (nm) => { nm = String(nm || ''); return nm.includes('VN') && nm.includes('總綱'); };
+    const CORE_ENTRY_HINT = 'VN…總綱';                 // 只用於 console 提示文字
     const RX_NAME = '[VN自由模式] 歷史表情格剝除';     // promptOnly 正則名
 
     function _th() { return win.TavernHelper || null; }
@@ -48,7 +52,7 @@
             if (!book) continue;
             try {
                 const ents = await th.getWorldbook(book);
-                const core = (ents || []).find(e => e && String(e.name || '').includes(CORE_ENTRY_MATCH) && !String(e.name || '').includes('自由'));
+                const core = (ents || []).find(e => e && _isCoreName(e.name) && !String(e.name || '').includes('自由'));
                 if (core) return { book, ents };
             } catch (e) {}
         }
@@ -102,12 +106,12 @@
             const hit = await _findCoreEntry();
             if (!hit) { console.log('[VN自由模式] 找不到總綱條目（這張卡可能不掛VN世界書）→ 不動'); return; }
             const { book, ents } = hit;
-            const core = ents.find(e => String(e.name || '').includes(CORE_ENTRY_MATCH) && !String(e.name || '').includes('自由'));
-            const freeEnt = ents.find(e => { const nm = String(e.name || ''); return nm.includes(CORE_ENTRY_MATCH) && nm.includes('自由'); });
+            const core = ents.find(e => _isCoreName(e.name) && !String(e.name || '').includes('自由'));
+            const freeEnt = ents.find(e => { const nm = String(e.name || ''); return _isCoreName(nm) && nm.includes('自由'); });
 
             // 自由版條目是 Rae 自己維護的；不存在就不切換、絕不代寫（她明令：腳本不注入世界書）
             if (free && !freeEnt) {
-                console.warn(`[VN自由模式] 「${book}」裡找不到自由版總綱條目（名字需含「${CORE_ENTRY_MATCH}」+「自由」）→ 維持固定版、不切換`);
+                console.warn(`[VN自由模式] 「${book}」裡找不到自由版總綱條目（名字需含「${CORE_ENTRY_HINT}」+「自由」）→ 維持固定版、不切換`);
                 return;
             }
 
@@ -117,7 +121,7 @@
                 await th.updateWorldbookWith(book, (list) => {
                     for (const e of list) {
                         const nm = String(e.name || '');
-                        if (!nm.includes(CORE_ENTRY_MATCH)) continue;
+                        if (!_isCoreName(nm)) continue;
                         e.enabled = nm.includes('自由') ? free : !free;   // 只撥開關，內容永遠是她的
                     }
                     return list;
