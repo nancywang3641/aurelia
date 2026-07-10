@@ -3223,9 +3223,16 @@
             this._stageInit();
             let limit = parseInt(window.localStorage.getItem('vn_sprite_stale_limit'));
             if (isNaN(limit) || limit < 1) limit = 5;
+            let removed = false;
             for (let i = 0; i < 2; i++) {
                 const s = this._stage[i];
-                if (s && (this._stageTick - s.lastTick) >= limit) this._clearSlot(i);
+                if (s && (this._stageTick - s.lastTick) >= limit) { this._clearSlot(i); removed = true; }
+            }
+            // 清掃(擦屁股式移除)後只剩一位 → 補授予置中；明示離場([Exit]/|Leave)仍維持「倖存者釘原側」不走這裡。
+            // 後續 _applyStageLighting 對已置中者只維持不摘(grant 規則)，不會被旁白重打燈洗掉。
+            if (removed) {
+                const occ = [0, 1].filter(i => this._stage[i]);
+                if (occ.length === 1) { const el = this._slotEl(occ[0]); if (el) el.classList.add('vn-solo'); }
             }
         },
 
