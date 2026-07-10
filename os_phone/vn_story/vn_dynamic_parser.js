@@ -275,8 +275,15 @@
                 ? 'position:relative; width:100%; max-width:440px; height:82vh; max-height:760px; display:flex; flex-direction:column; overflow:auto; box-sizing:border-box; border-radius:16px; box-shadow:0 16px 50px rgba(0,0,0,0.55);'
                 : 'position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;';
             panel.innerHTML = tpl.html || '';
-            
+
             overlay.appendChild(panel);
+            // 🔤 面板字體槽：模板 appearFont 蓋過組件自帶字體（留空=跟隨組件）。
+            // 治繁簡混排時缺字退回系統字體、同一句有細有粗；style 掛 overlay 上，收卡即回收。
+            if (tpl.appearFont) {
+                const _fs = document.createElement('style');
+                _fs.textContent = `.vn-dynamic-panel-${tpl.tagId}, .vn-dynamic-panel-${tpl.tagId} *{font-family:${tpl.appearFont} !important}`;
+                overlay.appendChild(_fs);
+            }
             layer.appendChild(overlay);
             requestAnimationFrame(() => overlay.style.opacity = '1');
 
@@ -339,8 +346,14 @@
             panel.className = `vn-dynamic-panel-${tpl.tagId}`;
             panel.style.cssText = 'position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; box-sizing:border-box; padding:20px;';
             panel.innerHTML = html;
-            
+
             overlay.appendChild(panel);
+            // 🔤 面板字體槽（同 _renderBlock）：留空=跟隨組件
+            if (tpl.appearFont) {
+                const _fs = document.createElement('style');
+                _fs.textContent = `.vn-dynamic-panel-${tpl.tagId}, .vn-dynamic-panel-${tpl.tagId} *{font-family:${tpl.appearFont} !important}`;
+                overlay.appendChild(_fs);
+            }
             overlay.onclick = () => { 
                 overlay.style.opacity = '0'; 
                 setTimeout(() => { 
