@@ -1385,9 +1385,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div class="cfd-pack-io-row">
                                             <button class="set-btn" type="button" onclick="window._cfdPreset.importPack()">📥 匯入預設包檔</button>
                                             <button class="set-btn" type="button" onclick="window._cfdPreset.exportPack()">📤 匯出全部</button>
+                                            <button class="set-btn cfd-pack-clear" type="button" onclick="window._cfdPreset.clearAll()">🗑️ 清空</button>
                                             <input type="file" id="img-cfd-preset-file" accept=".json,application/json" class="cfd-pack-file-hidden">
                                         </div>
-                                        <div class="cfd-pack-io-hint">拿到別人分享的畫風包檔，按「匯入」讀進來；「匯出」會把整面卡片牆存成一個檔，可以分享給朋友。同名的包匯入時會直接更新。</div>
+                                        <div class="cfd-pack-io-hint">拿到別人分享的畫風包檔，按「匯入」讀進來；「匯出」會把整面卡片牆存成一個檔，可以分享給朋友。匯入時會問你要「覆蓋同名」還是「全部新增」。「清空」把整牆清掉（要按底部保存才真的生效）。</div>
+                                        <div id="img-cfd-import-choice" class="cfd-import-choice" style="display:none;">
+                                            <div class="cfd-import-choice-msg" id="img-cfd-import-msg"></div>
+                                            <div class="cfd-import-choice-btns">
+                                                <button class="set-btn" type="button" onclick="window._cfdPreset._applyImport('overwrite')">覆蓋同名</button>
+                                                <button class="set-btn" type="button" onclick="window._cfdPreset._applyImport('append')">全部新增</button>
+                                                <button class="set-btn cfd-import-cancel" type="button" onclick="window._cfdPreset._cancelImport()">取消</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="set-group">
@@ -2882,7 +2891,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 }).join('');
             }
             window._cfdPreset = {
-                open: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.style.display = 'flex'; renderPresetGrid(); },
+                open: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.style.display = 'flex'; this._cancelImport(); renderPresetGrid(); },
                 close: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.style.display = 'none'; },
                 applyIdx: function(i){
                     const p = cfdPresets[i]; if (!p) return;
@@ -3014,22 +3023,58 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             const j = JSON.parse(String(reader.result));
                             const arr = Array.isArray(j) ? j : (Array.isArray(j.presets) ? j.presets : null);
                             if (!arr || !arr.length) { alert('❌ 這個檔案裡找不到預設包，確認拿到的是畫風包檔（.json）再試一次。'); return; }
-                            let added = 0, updated = 0;
-                            arr.forEach(function(p){
-                                if (!p || !String(p.name || '').trim()) return;
-                                const clean = self._sanitizePreset(p);
-                                const idx = cfdPresets.findIndex(function(x){ return x.name === clean.name; });
-                                if (idx >= 0) {
-                                    if (!clean.preview && cfdPresets[idx].preview) clean.preview = cfdPresets[idx].preview; // 沒帶縮圖就沿用舊的
-                                    cfdPresets[idx] = clean; updated++;
-                                } else { cfdPresets.push(clean); added++; }
-                            });
-                            if (!added && !updated) { alert('❌ 檔案裡的預設包都沒有名稱，讀不進來。'); return; }
-                            renderPresetGrid();
-                            alert('✅ 讀進來了：新增 ' + added + ' 個、更新 ' + updated + ' 個畫風包。\n記得按底部「保存」才會真的存住。');
+                            // 收斂＋濾掉沒名字的，暫存等使用者選「覆蓋同名 / 全部新增」
+                            const clean = arr.filter(function(p){ return p && String(p.name || '').trim(); }).map(function(p){ return self._sanitizePreset(p); });
+                            if (!clean.length) { alert('❌ 檔案裡的預設包都沒有名稱，讀不進來。'); return; }
+                            self._pendingImport = clean;
+                            // 牆上還沒有任何包 → 不用問，直接全部加
+                            if (!cfdPresets.length) { self._applyImport('append'); return; }
+                            const msg = container.querySelector('#img-cfd-import-msg');
+                            if (msg) msg.textContent = '讀到 ' + clean.length + ' 個預設包。要怎麼放進現有的 ' + cfdPresets.length + ' 個裡？';
+                            const box = container.querySelector('#img-cfd-import-choice');
+                            if (box) box.style.display = 'block';
                         } catch(e) { alert('❌ 這個檔案讀不出來，確認是畫風包檔（.json）再試一次。'); }
                     };
                     reader.readAsText(file);
+                },
+                _cancelImport: function(){
+                    this._pendingImport = null;
+                    const box = container.querySelector('#img-cfd-import-choice');
+                    if (box) box.style.display = 'none';
+                },
+                // mode='overwrite'：同名更新、其餘新增；mode='append'：全部當新的加（同名自動加序號避免混淆）
+                _applyImport: function(mode){
+                    const clean = this._pendingImport;
+                    const box = container.querySelector('#img-cfd-import-choice');
+                    if (box) box.style.display = 'none';
+                    if (!clean || !clean.length) { this._pendingImport = null; return; }
+                    const norm = function(s){ return String(s || '').trim(); };
+                    let added = 0, updated = 0;
+                    clean.forEach(function(c){
+                        if (mode === 'overwrite') {
+                            const idx = cfdPresets.findIndex(function(x){ return norm(x.name) === norm(c.name); });
+                            if (idx >= 0) {
+                                if (!c.preview && cfdPresets[idx].preview) c.preview = cfdPresets[idx].preview; // 沒帶縮圖就沿用舊的
+                                cfdPresets[idx] = c; updated++; return;
+                            }
+                            cfdPresets.push(c); added++;
+                        } else {
+                            // 全部新增：同名就加序號，讓兩份都在、不互蓋
+                            let nm = c.name, n = 2;
+                            while (cfdPresets.some(function(x){ return norm(x.name) === norm(nm); })) { nm = c.name + ' ' + (n++); }
+                            c.name = nm; cfdPresets.push(c); added++;
+                        }
+                    });
+                    this._pendingImport = null;
+                    renderPresetGrid();
+                    alert('✅ 匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部「保存」才會真的存住。');
+                },
+                clearAll: function(){
+                    if (!cfdPresets.length) { alert('目前沒有預設包可以清空。'); return; }
+                    if (!confirm('確定清空全部 ' + cfdPresets.length + ' 個預設包？\n（要按底部「保存」後才真的生效；沒保存前重進設定就會復原）')) return;
+                    cfdPresets.length = 0;
+                    renderPresetGrid();
+                    if (statusEl) statusEl.textContent = '🗑️ 預設包已清空（記得按底部「保存」才會真的存住）';
                 }
             };
             // 匯入用的隱藏檔案選擇器
