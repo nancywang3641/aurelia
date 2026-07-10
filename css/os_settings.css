@@ -115,6 +115,14 @@
         .cfd-pack-io-row .set-btn { flex: 1; white-space: nowrap; }
         .cfd-pack-io-hint { font-size: 10px; color: rgba(26,28,40,0.55); margin-top: 4px; line-height: 1.5; }
         .cfd-pack-file-hidden { display: none; }
+        .cfd-pack-clear { color: #c0392b; border-color: rgba(192,57,43,0.4); }
+
+        /* 匯入方式選擇小窗（覆蓋同名 / 全部新增 / 取消） */
+        .cfd-import-choice { margin-top: 10px; padding: 10px; border: 1px solid rgba(26,28,40,0.18); border-radius: 8px; background: rgba(26,28,40,0.04); }
+        .cfd-import-choice-msg { font-size: 12px; color: #1A1C28; margin-bottom: 8px; line-height: 1.5; }
+        .cfd-import-choice-btns { display: flex; gap: 6px; }
+        .cfd-import-choice-btns .set-btn { flex: 1; white-space: nowrap; }
+        .cfd-import-cancel { color: rgba(26,28,40,0.6); }
 
         /* 拖舊 ComfyUI 圖 → 還原工作流 */
         .cfd-wf-restore { margin-top: 8px; }
