@@ -4026,6 +4026,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             </div>
             <div class="vc-page"><div class="vc-list" id="vc-pack-list"></div></div>
             <div class="vc-pack-foot">
+                <button class="vc-pack-clear" id="vc-pack-clear" type="button"><i class="fa-solid fa-trash"></i> 清空全部</button>
                 <span class="vc-pack-count" id="vc-pack-count"></span>
                 <button class="swb-primary" id="vc-pack-go" type="button"><i class="fa-solid fa-circle-check"></i> 驗證並打包</button>
             </div>`;
@@ -4051,6 +4052,21 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const go = listEl.querySelector('#vc-pack-go'); go.disabled = _vcPackSel.size === 0;
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'browse'; renderVnComponents(); };
         listEl.querySelector('#vc-selall').onclick = () => { if (allSel) _vcPackSel.clear(); else templates.forEach(t => _vcPackSel.add(t.id)); _vcRenderPackage(listEl); };
+        // 🗑️ 清空全部 VN 組件：逐筆走跟單顆刪除同套清理(酒館正則/世界書殘留+連動手機app)，不留孤兒
+        listEl.querySelector('#vc-pack-clear').onclick = async () => {
+            if (!templates.length) { _studioToast('目前沒有組件可清空。', 'warning', '清空'); return; }
+            if (!confirm(`確定刪除全部 ${templates.length} 個 VN 組件？\n\n建議先「驗證並打包」匯出備份再清。\n此動作會一併清掉注入酒館的正則／世界書殘留與連動的手機 app，無法復原。`)) return;
+            for (const t of templates) {
+                try { await db.deleteUITemplate(t.id); } catch (e) {}
+                try { await _removeTavernPanelArtifacts(t.tagId); } catch (e) {}
+                try { await _purgeLinkedPhoneApp(t.id); } catch (e) {}
+            }
+            try { await syncActiveTagsToLocal(); } catch (e) {}
+            if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
+            _vcPackSel.clear();
+            _studioToast(`🗑️ 已清空 ${templates.length} 個 VN 組件。`, 'success', '清空');
+            _vcView = 'browse'; renderVnComponents();
+        };
         go.onclick = () => {
             if (!_vcPackSel.size) return;
             const sel = templates.filter(t => _vcPackSel.has(t.id));
@@ -4867,6 +4883,12 @@ ${d.usageDesc || ''}
             <div class="studio-card">
                 <div class="studio-card-title">特效庫</div>
                 <div class="fx-pv-desc">劇情 AI 會在合適時機自動觸發「開著」的特效；關掉的不會再用。點特效名旁的小標籤可以分組。</div>
+                <div class="fx-lib-actions">
+                    <button class="fx-lib-act" data-fx-export="1" type="button"><i class="fa-solid fa-file-export"></i> 匯出自製</button>
+                    <button class="fx-lib-act" data-fx-import="1" type="button"><i class="fa-solid fa-file-import"></i> 匯入</button>
+                    <button class="fx-lib-act danger" data-fx-clear="1" type="button"><i class="fa-solid fa-trash"></i> 清空自製</button>
+                    <input type="file" id="fx-lib-import-file" accept=".json,application/json" class="fx-file-hidden">
+                </div>
                 ${groups.length ? `<div class="fx-grp-row">
                     ${['全部'].concat(groups).map(g => `<button class="fx-grp-chip${g === _fxLibGroup ? ' active' : ''}" data-fx-chip="${_esc(g)}" type="button">${_esc(g)}</button>`).join('')}
                     ${_fxLibGroup !== '全部' ? `<button class="fx-grp-batch" data-fx-batch="1" type="button">這組全開</button><button class="fx-grp-batch" data-fx-batch="0" type="button">這組全關</button>` : ''}
@@ -4940,6 +4962,81 @@ ${d.usageDesc || ''}
                 } catch (e) { alert('刪除失敗: ' + (e && e.message || e)); }
             };
         });
+        // ⚡ 匯出／匯入／清空「自製」特效（內建的不動）；匯入同 fxId 覆蓋、新的新增（fxId 穩定→PC轉手機不重複）
+        const _expBtn = container.querySelector('[data-fx-export]');
+        if (_expBtn) _expBtn.onclick = () => _exportFxPack();
+        const _clrBtn = container.querySelector('[data-fx-clear]');
+        if (_clrBtn) _clrBtn.onclick = () => _clearAllFx(container);
+        const _impBtn = container.querySelector('[data-fx-import]');
+        const _impFile = container.querySelector('#fx-lib-import-file');
+        if (_impBtn && _impFile) {
+            _impBtn.onclick = () => { _impFile.value = ''; _impFile.click(); };
+            _impFile.onchange = () => { const f = _impFile.files && _impFile.files[0]; if (f) _importFxPack(f, container); };
+        }
+    }
+
+    // ⚡ 特效匯出：只打包「自製」特效（isFX UITemplate 的 fxRecipe）；內建的引擎自帶不用匯
+    async function _exportFxPack() {
+        try {
+            const all = await win.OS_DB.getAllUITemplates();
+            const mine = (all || []).filter(t => t && t.isFX && t.fxRecipe);
+            if (!mine.length) { _studioToast('還沒有自製特效可以匯出（內建的不用匯）。', 'warning', '匯出'); return; }
+            const pack = { type: 'aurelia-fx-pack', version: 1, exportedAt: new Date().toISOString(), count: mine.length, recipes: mine.map(t => t.fxRecipe) };
+            const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            const d = new Date();
+            a.download = 'aurelia-特效包_' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.json';
+            document.body.appendChild(a); a.click();
+            setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} a.remove(); }, 0);
+            _studioToast(`✅ 已匯出 ${mine.length} 個自製特效，已下載到本機。`, 'success', '匯出');
+        } catch (e) { _studioToast('匯出失敗：' + ((e && e.message) || e), 'error', '匯出'); }
+    }
+
+    // ⚡ 特效匯入：讀 recipes（或整包 templates 內的 fxRecipe）→ validate → 存 UITemplate，同 fxId 覆蓋
+    async function _importFxPack(file, container) {
+        const fxEngine = window.OS_FX || win.OS_FX;
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            const list = Array.isArray(data) ? data
+                : (Array.isArray(data.recipes) ? data.recipes
+                : (Array.isArray(data.templates) ? data.templates.map(t => t && t.fxRecipe).filter(Boolean) : null));
+            if (!list || !list.length) { _studioToast('這個檔案裡找不到特效資料，不是有效的特效包。', 'warning', '匯入'); return; }
+            const all = await win.OS_DB.getAllUITemplates();
+            const byFx = {};
+            (all || []).forEach(t => { if (t && t.isFX && t.fxRecipe) byFx[String(t.fxRecipe.fxId || '').toLowerCase()] = t; });
+            let added = 0, updated = 0, bad = 0;
+            for (const raw of list) {
+                const norm = (fxEngine && fxEngine.validate) ? fxEngine.validate(raw) : raw;
+                if (!norm || !norm.fxId) { bad++; continue; }
+                const hit = byFx[String(norm.fxId).toLowerCase()];
+                await win.OS_DB.saveUITemplate({
+                    id: hit ? hit.id : ('fx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+                    title: norm.name, isFX: true, panelType: '特效', fxRecipe: norm,
+                    createdAt: hit ? hit.createdAt : Date.now()
+                });
+                if (hit) updated++; else added++;
+            }
+            try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
+            _renderFxLibrary(container);
+            _studioToast(`✅ 匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個` + (bad ? `（${bad} 個格式不對跳過）` : '') + '。', 'success', '匯入');
+        } catch (e) { _studioToast('匯入失敗：' + ((e && e.message) || e), 'error', '匯入'); }
+    }
+
+    // ⚡ 清空「自製」特效（內建不動）→ 即時刪 DB（同單顆刪除，不用另按保存）
+    async function _clearAllFx(container) {
+        try {
+            const all = await win.OS_DB.getAllUITemplates();
+            const mine = (all || []).filter(t => t && t.isFX && t.fxRecipe);
+            if (!mine.length) { _studioToast('沒有自製特效可以清空（內建的不受影響）。', 'warning', '清空'); return; }
+            if (!confirm(`確定刪除全部 ${mine.length} 個自製特效？\n（內建特效不受影響；此動作無法復原）`)) return;
+            for (const t of mine) { try { await win.OS_DB.deleteUITemplate(t.id); } catch (e) {} }
+            const fxEngine = window.OS_FX || win.OS_FX;
+            try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
+            _renderFxLibrary(container);
+            _studioToast(`🗑️ 已清空 ${mine.length} 個自製特效。`, 'success', '清空');
+        } catch (e) { _studioToast('清空失敗：' + ((e && e.message) || e), 'error', '清空'); }
     }
 
     function renderPreviewPanel() {

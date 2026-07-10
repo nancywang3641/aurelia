@@ -507,6 +507,8 @@
         .vc-pack-foot { display:flex; align-items:center; gap:10px; padding:10px 2px 4px; border-top:1px solid var(--jrpg-line); }
         .vc-pack-count { flex:1; min-width:0; font-size:13px; color:var(--jrpg-muted); }
         .vc-pack-foot .swb-primary { flex:0 0 auto; }
+        .vc-pack-clear { flex:0 0 auto; padding:8px 12px; font-size:13px; font-family:inherit; cursor:pointer; color:#c0392b; background:rgba(192,57,43,0.06); border:1px solid rgba(192,57,43,0.40); border-radius:10px; white-space:nowrap; }
+        .vc-pack-clear:hover { background:rgba(192,57,43,0.14); }
 
 /* ═══════════════════════════════════════════════════════════════
    404 模式：整套換綠終端機風
@@ -1380,6 +1382,33 @@ html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { co
     color: #806b58;
     margin: 4px 0 10px;
     line-height: 1.5;
+}
+/* 特效庫：匯出／匯入／清空 按鈕列 */
+.studio-container .fx-file-hidden { display: none; }
+.studio-container .fx-lib-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 0 0 10px;
+}
+.studio-container .fx-lib-act {
+    flex: 1;
+    min-width: 90px;
+    padding: 7px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    color: #6b5a48;
+    background: rgba(151, 108, 55, 0.08);
+    border: 1px solid rgba(151, 108, 55, 0.30);
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.studio-container .fx-lib-act:hover { background: rgba(151, 108, 55, 0.16); }
+.studio-container .fx-lib-act.danger {
+    color: #c0392b;
+    border-color: rgba(192, 57, 43, 0.40);
+    background: rgba(192, 57, 43, 0.06);
 }
 .studio-container .vn-fx-preview-stage {
     margin-bottom: 10px;
