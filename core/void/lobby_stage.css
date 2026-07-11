@@ -25,6 +25,12 @@
 @keyframes lstage-portrait-in { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
 .lstage-toggle-btn.off { opacity:.45; }
 
+/* ✖ 對話框關閉鈕（舞台模式限定，showDialog 動態掛上） */
+.lstage-dlg-close { position:absolute; top:-12px; right:-6px; width:30px; height:30px; border:none;
+  border-radius:50%; background:rgba(26,24,20,.85); color:#f3ead8; cursor:pointer; font-size:13px;
+  display:flex; align-items:center; justify-content:center; z-index:20; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+.lstage-dlg-close:hover { background:#c8874a; }
+
 /* 🛸 飄浮物件（LUNA-VII 核心）：上下輕輕漂 */
 .lstage-float { animation:lstage-hover 3.4s ease-in-out infinite; }
 @keyframes lstage-hover { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-14px); } }
