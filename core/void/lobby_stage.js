@@ -303,11 +303,15 @@
             const k = e.key.toLowerCase();
             if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) {
                 S.keys[k] = (e.type === 'keydown');
+                // 🚨 必須整條攔死：酒館本體綁了 ↑=編輯訊息、←→=swipe(會重新生成=燒API)
                 e.preventDefault();
+                e.stopPropagation();
+                if (e.stopImmediatePropagation) e.stopImmediatePropagation();
             }
         };
-        window.addEventListener('keydown', S.onKey);
-        window.addEventListener('keyup', S.onKey);
+        // 捕獲階段搶第一手，酒館的快捷鍵監聽器完全收不到
+        window.addEventListener('keydown', S.onKey, true);
+        window.addEventListener('keyup', S.onKey, true);
         S.root.querySelector('.lstage-click').addEventListener('click', (e) => {
             if (S.edit) return;
             if (S.talkTarget) { endTalk(); return; }
@@ -682,8 +686,8 @@
         cancelAnimationFrame(S.raf);
         window.removeEventListener('resize', fitCamera);
         if (S.onKey) {
-            window.removeEventListener('keydown', S.onKey);
-            window.removeEventListener('keyup', S.onKey);
+            window.removeEventListener('keydown', S.onKey, true);
+            window.removeEventListener('keyup', S.onKey, true);
             S.onKey = null;
         }
         S.root?.remove();
