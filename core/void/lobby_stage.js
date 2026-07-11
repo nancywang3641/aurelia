@@ -57,7 +57,7 @@
             base: 'lobby_hall_base_v2.png',   // v2=核心球已從底圖拆出(空核心版)
             cfgKey: 'lobby_stage_layout_hall_v1',
             layout: [
-                { file: 'lobby_hall_obj_core.png',    x: 652,  y: 190, w: 788,  h: 935,  footH: 200, s: 0.3, float: true }, // LUNA-VII 分形核心(飄浮)
+                { file: 'lobby_hall_obj_core.png',    x: 652,  y: 190, w: 788,  h: 935,  footH: 200, footW: 280, s: 0.3, float: true }, // LUNA-VII 分形核心(飄浮，佔地=底部尖錐)
                 { file: 'lobby_hall_obj_counter.png', x: 990,  y: 250, w: 1354, h: 449,  footH: 340, s: 0.32 }, // 接待櫃檯
                 { file: 'lobby_hall_obj_chairs.png',  x: 170,  y: 430, w: 1240, h: 520,  footH: 380, s: 0.34 }, // 等候椅組
                 { file: 'lobby_hall_obj_kiosk.png',   x: 1200, y: 470, w: 587,  h: 1308, footH: 260, s: 0.17 }, // 全息資訊台
@@ -80,9 +80,18 @@
         },
     };
     // 物件有效尺寸（s=個別縮放，預設1；佔地跟著縮）
+    // footW=佔地寬(未縮放，預設=全寬)；佔地框水平置中（treats 上寬下窄的懸浮物）
     function effDims(o) {
         const s = o.s || 1;
-        return { ew: Math.round(o.w * s), eh: Math.round(o.h * s), ef: Math.round(o.footH * s) };
+        return {
+            ew: Math.round(o.w * s), eh: Math.round(o.h * s),
+            ef: Math.round(o.footH * s),
+            efw: Math.round((o.footW != null ? o.footW : o.w) * s),
+        };
+    }
+    function footRect(o) {
+        const d = effDims(o);
+        return { x: o.x + Math.round((d.ew - d.efw) / 2), y: o.y + d.eh - d.ef, w: d.efw, h: d.ef };
     }
 
     // 讀取佈局：本機調過的蓋過預設（layout 按 file 名對位，points 整包；每場景各存各的）
@@ -95,7 +104,7 @@
             if (saved) {
                 (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
-                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.s != null) t.s = s.s; }
+                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; }
                 });
                 if (saved.points) {
                     if (saved.points.yingZone) points.yingZone = saved.points.yingZone;
@@ -127,10 +136,7 @@
     // ── 碰撞（牆=場景定義、物件腳印=佈局導出）──────────
     let BLOCKS = [];
     function rebuildBlocks() {
-        BLOCKS = SCENES[S.scene].walls.concat(CFG.layout.map(o => {
-            const d = effDims(o);
-            return { x: o.x, y: o.y + d.eh - d.ef, w: d.ew, h: d.ef };
-        }));
+        BLOCKS = SCENES[S.scene].walls.concat(CFG.layout.map(footRect));
     }
     const FOOT_W = 46, FOOT_H = 18;
     function blocked(x, y) {
@@ -611,8 +617,12 @@
               '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
             '</div>' +
             '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地</button>' +
-              '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地</button>' +
+              '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
+              '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地高</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="footwminus"><i class="fa-solid fa-minus"></i> 佔地寬</button>' +
+              '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="actminus"><i class="fa-solid fa-minus"></i> 人物</button>' +
@@ -633,6 +643,12 @@
                 if (S.edit.sel < 0) return;
                 const o = CFG.layout[S.edit.sel];
                 o.footH = Math.max(20, Math.min(o.h, o.footH + (act === 'footplus' ? 10 : -10)));
+                _syncFoot(S.edit.sel); _exportToPanel();
+            } else if (act === 'footwminus' || act === 'footwplus') {
+                if (S.edit.sel < 0) return;
+                const o = CFG.layout[S.edit.sel];
+                const cur = (o.footW != null ? o.footW : o.w);
+                o.footW = Math.max(20, Math.min(o.w, Math.round(cur * (act === 'footwplus' ? 1.1 : 0.9))));
                 _syncFoot(S.edit.sel); _exportToPanel();
             } else if (act === 'objminus' || act === 'objplus') {
                 if (S.edit.sel < 0) return;
@@ -668,11 +684,11 @@
     function _syncFoot(i) {
         const o = CFG.layout[i], foot = S.edit.feet[i];
         if (!foot) return;
-        const d = effDims(o);
-        foot.style.left = o.x + 'px';
-        foot.style.top = (o.y + d.eh - d.ef) + 'px';
-        foot.style.width = d.ew + 'px';
-        foot.style.height = d.ef + 'px';
+        const r = footRect(o);
+        foot.style.left = r.x + 'px';
+        foot.style.top = r.y + 'px';
+        foot.style.width = r.w + 'px';
+        foot.style.height = r.h + 'px';
         foot.classList.toggle('sel', S.edit.sel === i);
     }
     function _dragStart(e, info) {
@@ -726,7 +742,11 @@
     }
     function _exportData() {
         return {
-            layout: CFG.layout.map(o => ({ file: o.file, x: o.x, y: o.y, footH: o.footH, s: o.s || 1 })),
+            layout: CFG.layout.map(o => {
+                const rec = { file: o.file, x: o.x, y: o.y, footH: o.footH, s: o.s || 1 };
+                if (o.footW != null) rec.footW = o.footW;
+                return rec;
+            }),
             points: CFG.points,
         };
     }
