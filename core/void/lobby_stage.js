@@ -277,7 +277,9 @@
         if (!S.root) return;
         const vw = S.root.clientWidth, vh = S.root.clientHeight;
         const focus = S.edit ? S.edit.cam : (S.player ? { x: S.player.x, y: S.player.y } : { x: MAP_W / 2, y: MAP_H / 2 });
-        let cx = focus.x * S.scale - vw / 2, cy = focus.y * S.scale - vh / 2;
+        // 底部對話框會蓋住下緣 → 跟隨模式把焦點擺在畫面偏上(38%)，人不會躲進對話框後面
+        const focusRatio = S.edit ? 0.5 : 0.38;
+        let cx = focus.x * S.scale - vw / 2, cy = focus.y * S.scale - vh * focusRatio;
         cx = Math.max(0, Math.min(MAP_W * S.scale - vw, cx));
         cy = Math.max(0, Math.min(MAP_H * S.scale - vh, cy));
         S.world.style.transform = 'translate(' + (-cx) + 'px,' + (-cy) + 'px) scale(' + S.scale + ')';
