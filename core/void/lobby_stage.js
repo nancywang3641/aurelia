@@ -73,6 +73,7 @@
                 npcZone:  { x: 250, y: 560, w: 1000, h: 280 },
                 player: { x: 770, y: 790 },
                 arrive: { x: 770, y: 790 },   // 走門進來的落點（從書咖進大廳）
+                alicePos: { x: 940, y: 520 },   // 愛麗絲站位（可在擺設模式拖）
                 boundary: [
                     { x: 255, y: 240 }, { x: 1290, y: 240 }, { x: 1395, y: 560 },
                     { x: 1430, y: 868 }, { x: 105, y: 868 }, { x: 140, y: 560 },
@@ -94,6 +95,7 @@
             points: {
                 player: { x: 760, y: 760 },
                 arrive: { x: 600, y: 820 },
+                cheshirePos: { x: 900, y: 620 },   // 柴郡站位（可在擺設模式拖）
                 boundary: [ { x: 176, y: 470 }, { x: 1390, y: 470 }, { x: 1390, y: 930 }, { x: 176, y: 930 } ],  // 遮罩沒載時的粗略退路
                 actorScale: 0.7,
             },
@@ -179,6 +181,8 @@
                     if (saved.points.npcZone) points.npcZone = saved.points.npcZone;
                     if (saved.points.player) points.player = saved.points.player;
                     if (saved.points.arrive) points.arrive = saved.points.arrive;
+                    if (saved.points.alicePos) points.alicePos = saved.points.alicePos;
+                    if (saved.points.cheshirePos) points.cheshirePos = saved.points.cheshirePos;
                     if (Array.isArray(saved.points.boundary) && saved.points.boundary.length >= 3) points.boundary = saved.points.boundary;
                     if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
                 }
@@ -359,19 +363,21 @@
         const SC = SCENES[S.scene];
         // 純白大廳：只有愛麗絲（核心旁、不漫步、永遠面向玩家）
         if (SC.alice) {
+            const ap = CFG.points.alicePos || SC.alice;
             addNpc({ key: 'alice', name: '愛麗絲', personaFull: ALICE_PERSONA,
                      subTitle: '純白大廳 · 首席導覽官',
-                     storyTitle: '', x: SC.alice.x, y: SC.alice.y, h: 200,
+                     storyTitle: '', x: ap.x, y: ap.y, h: 200,
                      src: ASSET.alice, noWander: true, facePlayer: true,
-                     homeRect: { x: SC.alice.x, y: SC.alice.y, w: 0, h: 0 } });
+                     homeRect: { x: ap.x, y: ap.y, w: 0, h: 0 } });
             return;
         }
         if (SC.cheshire) {   // 404房只有柴郡（對話走原生 cheshire 軌道，同瀅瀅模式）
+            const cp = CFG.points.cheshirePos || SC.cheshire;
             addNpc({ key: 'cheshire', name: '柴郡', persona: null,
                      subTitle: '系統異常部門 · 灰色夢魘組',
-                     x: SC.cheshire.x, y: SC.cheshire.y, h: 200,
+                     x: cp.x, y: cp.y, h: 200,
                      src: ASSET.cheshire, noWander: true,
-                     homeRect: { x: SC.cheshire.x, y: SC.cheshire.y, w: 0, h: 0 } });
+                     homeRect: { x: cp.x, y: cp.y, w: 0, h: 0 } });
             return;
         }
         const z = CFG.points.yingZone;
@@ -784,6 +790,13 @@
             S.edit.markers.push(m);
             m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.arrive, m });
         }
+        // 常駐角色站位（拖了「完成」後生效）
+        [['alicePos', '愛', 'm-alice'], ['cheshirePos', '柴', 'm-cheshire']].forEach(([pk, label, cls]) => {
+            if (!CFG.points[pk]) return;
+            const m = mk(label, cls, () => CFG.points[pk]);
+            S.edit.markers.push(m);
+            m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points[pk], m });
+        });
         // 可拖拉區塊（拖框身=移動、拖右下角=調大小）：紫=瀅瀅活動區、綠=客人出沒區
         S.edit.zones = {};
         const mkZone = (pk, label, cls) => {
