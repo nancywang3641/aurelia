@@ -108,6 +108,12 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
     //   npc: { name, storyTitle, persona }  ctx: { userName, timeCtx }
     function buildNpcPrompt(npc, ctx) {
         const { userName, timeCtx } = ctx || {};
+        // personaFull=完整人設卡（如愛麗絲），直接採用＋補格式段
+        if (npc.personaFull) {
+            return npc.personaFull + '\n\n【對話對象】\n' + (userName || '訪客') + '。\n\n' +
+'【對話輸出格式】\n旁白/動作：[Nar|動作描述]\n角色對話：[Char|' + npc.name + '|表情|「對話內容」]\n表情只用：normal/smile/think/surprise/warning/error。\n' +
+(timeCtx || '');
+        }
         return '你現在扮演' + (npc.persona || ('角色「' + npc.name + '」')) + '，' +
 '此刻你正坐在「視差書咖」裡休息——這間店是故事角色們下班後歇腳的地方，店長是天然呆小說家瀅瀅。\n\n' +
 '【對話對象】\n書咖的常客、委託人：' + (userName || '客人') + '。\n\n' +

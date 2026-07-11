@@ -11,30 +11,72 @@
 
     const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
     const ASSET = {
-        base: CDN + 'lobby_base_v2.png',   // v2=codex修訂底圖；改版換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
-        ying: CDN + 'lobby_ying.png',
-        mcF:  CDN + 'lobby_mc_f.png',
-        mcM:  CDN + 'lobby_mc_m.png',
+        // 底圖per場景（SCENES[].base）；素材改版一律換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
+        ying:  CDN + 'lobby_ying.png',
+        alice: CDN + 'lobby_alice.png',
+        mcF:   CDN + 'lobby_mc_f.png',
+        mcM:   CDN + 'lobby_mc_m.png',
     };
-    const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸
-    const CFG_KEY = 'lobby_stage_layout_v1';
+    const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
-    // 預設佈局（2026-07-11 Rae 用擺設模式肉眼調校的數據，搭配 codex v2 底圖）
-    // footH=腳印高：物件圖底部那截視為佔地；s=個別縮放；上半部人可走到後面被遮
-    const DEFAULT_LAYOUT = [
-        { file: 'lobby_obj_counter.png', x: 307,  y: 356, w: 1266, h: 396, footH: 300, s: 0.4 }, // 吧台(小前台)
-        { file: 'lobby_obj_02.png',      x: 337,  y: 571, w: 394,  h: 258, footH: 90,  s: 0.6 }, // 左桌組
-        { file: 'lobby_obj_01.png',      x: 701,  y: 685, w: 391,  h: 267, footH: 90,  s: 0.6 }, // 中桌組
-        { file: 'lobby_obj_04.png',      x: 1080, y: 560, w: 396,  h: 263, footH: 90,  s: 1 },   // 右桌組
-        { file: 'lobby_obj_03.png',      x: 60,   y: 330, w: 166,  h: 259, footH: 60,  s: 1 },   // 盆栽(左)
-        { file: 'lobby_obj_05.png',      x: 1380, y: 330, w: 156,  h: 259, footH: 60,  s: 1 },   // 盆栽(右)
-        { file: 'lobby_obj_07.png',      x: 258,  y: 813, w: 425,  h: 177, footH: 20,  s: 0.7 }, // 小花箱
-    ];
-    const DEFAULT_POINTS = {
-        yingZone: { x: 340, y: 405, w: 440, h: 45 },  // 瀅瀅活動區（吧台後窄帶；出生=區中心，只在框內晃）
-        player: { x: 697, y: 600 },     // 委託人出生點
-        spots:  [{ x: 508, y: 787 }, { x: 1250, y: 880 }, { x: 1100, y: 500 }, { x: 250, y: 880 }], // 輪班NPC站位(書中客人座位)
-        actorScale: 0.7,                // 人物整體縮放（Rae 調校值）
+    // ── 🗺️ 場景註冊表（雙子設定：瀅瀅書咖 ⇄ 愛麗絲純白大廳）──
+    // layout: footH=腳印高(物件底部佔地)、s=個別縮放；points: 各場景擺設模式各存各的
+    // doors: 走進觸發區→白光過場→切場景（spawn=抵達點）
+    const SCENES = {
+        cafe: {
+            base: 'lobby_base_v2.png',
+            cfgKey: 'lobby_stage_layout_v1',   // 沿用 Rae 已調好的存檔
+            layout: [
+                { file: 'lobby_obj_counter.png', x: 307,  y: 356, w: 1266, h: 396, footH: 300, s: 0.4 },
+                { file: 'lobby_obj_02.png',      x: 337,  y: 571, w: 394,  h: 258, footH: 90,  s: 0.6 },
+                { file: 'lobby_obj_01.png',      x: 701,  y: 685, w: 391,  h: 267, footH: 90,  s: 0.6 },
+                { file: 'lobby_obj_04.png',      x: 1080, y: 560, w: 396,  h: 263, footH: 90,  s: 1 },
+                { file: 'lobby_obj_03.png',      x: 60,   y: 330, w: 166,  h: 259, footH: 60,  s: 1 },
+                { file: 'lobby_obj_05.png',      x: 1380, y: 330, w: 156,  h: 259, footH: 60,  s: 1 },
+                { file: 'lobby_obj_07.png',      x: 258,  y: 813, w: 425,  h: 177, footH: 20,  s: 0.7 },
+            ],
+            points: {
+                yingZone: { x: 340, y: 405, w: 440, h: 45 },
+                player: { x: 697, y: 600 },
+                spots:  [{ x: 508, y: 787 }, { x: 1250, y: 880 }, { x: 1100, y: 500 }, { x: 250, y: 880 }],
+                actorScale: 0.7,
+            },
+            walls: [
+                { x: 0,    y: 0,   w: 1536, h: 355 },
+                { x: 0,    y: 0,   w: 90,   h: 1024 },
+                { x: 1446, y: 0,   w: 90,   h: 1024 },
+                { x: 0,    y: 930, w: 1536, h: 94 },
+                { x: 1140, y: 360, w: 260,  h: 155 },
+                { x: 1140, y: 800, w: 396,  h: 130 },
+                { x: 915,  y: 840, w: 180,  h: 90 },
+                { x: 55,   y: 620, w: 130,  h: 110 },
+            ],
+            doors: [ { x: 895, y: 355, w: 170, h: 34, to: 'hall', spawn: { x: 770, y: 790 } } ],  // 書咖上緣木門→大廳
+        },
+        hall: {
+            base: 'lobby_hall_base_v1.png',
+            cfgKey: 'lobby_stage_layout_hall_v1',
+            layout: [
+                { file: 'lobby_hall_obj_counter.png', x: 990,  y: 250, w: 1354, h: 449,  footH: 340, s: 0.32 }, // 接待櫃檯
+                { file: 'lobby_hall_obj_chairs.png',  x: 170,  y: 430, w: 1240, h: 520,  footH: 380, s: 0.34 }, // 等候椅組
+                { file: 'lobby_hall_obj_kiosk.png',   x: 1200, y: 470, w: 587,  h: 1308, footH: 260, s: 0.17 }, // 全息資訊台
+                { file: 'lobby_hall_obj_sofa.png',    x: 200,  y: 720, w: 1361, h: 414,  footH: 300, s: 0.34 }, // 模組沙發
+            ],
+            points: {
+                player: { x: 770, y: 790 },
+                spots:  [{ x: 300, y: 620 }, { x: 1150, y: 700 }, { x: 500, y: 800 }, { x: 1000, y: 850 }],
+                actorScale: 0.7,
+            },
+            walls: [
+                { x: 0,    y: 0,   w: 1536, h: 230 },   // 後牆(星空傳送門列)
+                { x: 0,    y: 0,   w: 120,  h: 1024 },  // 左牆斜邊
+                { x: 1416, y: 0,   w: 120,  h: 1024 },  // 右牆斜邊
+                { x: 0,    y: 880, w: 1536, h: 144 },   // 下緣圍欄
+                { x: 690,  y: 400, w: 165,  h: 90 },    // LUNA-VII 分形核心基座
+            ],
+            doors: [ { x: 660, y: 846, w: 215, h: 34, to: 'cafe', spawn: { x: 975, y: 430 } } ],  // 底部大門→回書咖
+            alice: { x: 940, y: 520 },   // 愛麗絲：核心旁、不漫步、永遠面向玩家
+        },
     };
     // 物件有效尺寸（s=個別縮放，預設1；佔地跟著縮）
     function effDims(o) {
@@ -42,12 +84,13 @@
         return { ew: Math.round(o.w * s), eh: Math.round(o.h * s), ef: Math.round(o.footH * s) };
     }
 
-    // 讀取佈局：本機調過的蓋過預設（layout 按 file 名對位，points 整包）
+    // 讀取佈局：本機調過的蓋過預設（layout 按 file 名對位，points 整包；每場景各存各的）
     function _loadCfg() {
-        const layout = DEFAULT_LAYOUT.map(o => Object.assign({}, o));
-        const points = JSON.parse(JSON.stringify(DEFAULT_POINTS));
+        const SC = SCENES[S.scene];
+        const layout = SC.layout.map(o => Object.assign({}, o));
+        const points = JSON.parse(JSON.stringify(SC.points));
         try {
-            const saved = JSON.parse(localStorage.getItem(CFG_KEY) || 'null');
+            const saved = JSON.parse(localStorage.getItem(SC.cfgKey) || 'null');
             if (saved) {
                 (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
@@ -63,40 +106,31 @@
         } catch (e) {}
         return { layout, points };
     }
-    let CFG = _loadCfg();
 
     const S = {
         root: null, world: null, scale: 1,
         raf: 0, last: 0, active: false,
+        scene: 'cafe',              // 目前場景（每次開大廳從書咖開始）
+        spawnOverride: null,        // 過門後的抵達點
+        doorCd: 0,                  // 過門冷卻（防止落地瞬間又觸發）
+        transitioning: false,
         player: null, npcs: [], talkTarget: null,
         keys: {}, onKey: null,
         objEls: [],                 // 物件 img（跟 CFG.layout 同序）
         edit: null,                 // 擺設模式狀態
     };
+    let CFG = null;   // tryMount 時按場景載入
 
     function isOn() { try { return localStorage.getItem('lobby_stage_on') !== '0'; } catch (e) { return true; } }
 
-    // ── 碰撞 ─────────────────────────────────────────────
-    const WALL_BLOCKS = [
-        // v2 底圖（codex 修訂版）：後牆自帶咖啡工作台/櫥櫃，牆腳線下移
-        { x: 0,    y: 0,   w: 1536, h: 355 },   // 後牆+咖啡工作台/櫥櫃/書櫃列
-        { x: 0,    y: 0,   w: 90,   h: 1024 },  // 左牆斜邊(粗略)
-        { x: 1446, y: 0,   w: 90,   h: 1024 },  // 右牆斜邊(粗略)
-        { x: 0,    y: 930, w: 1536, h: 94 },    // 下緣
-        // v2 底圖烤死的家具（不可拖，直接標阻擋）
-        { x: 1140, y: 360, w: 260,  h: 155 },   // 右側沙發閱讀角(沙發+圓桌+地毯)
-        { x: 1140, y: 800, w: 396,  h: 130 },   // 右下露臺花圃
-        { x: 915,  y: 840, w: 180,  h: 90 },    // 底部中央花圃
-        { x: 55,   y: 620, w: 130,  h: 110 },   // 左側小案几+盆栽
-    ];
+    // ── 碰撞（牆=場景定義、物件腳印=佈局導出）──────────
     let BLOCKS = [];
     function rebuildBlocks() {
-        BLOCKS = WALL_BLOCKS.concat(CFG.layout.map(o => {
+        BLOCKS = SCENES[S.scene].walls.concat(CFG.layout.map(o => {
             const d = effDims(o);
             return { x: o.x, y: o.y + d.eh - d.ef, w: d.ew, h: d.ef };
         }));
     }
-    rebuildBlocks();
     const FOOT_W = 46, FOOT_H = 18;
     function blocked(x, y) {
         const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
@@ -141,7 +175,9 @@
     const PLAYER_H = 190, PLAYER_SPEED = 0.33;
     function initPlayer() {
         const src = (localStorage.getItem('lobby_stage_mc') === 'm') ? ASSET.mcM : ASSET.mcF;
-        S.player = Object.assign(spawnActor(src, CFG.points.player.x, CFG.points.player.y, PLAYER_H), { dest: null });
+        const sp = S.spawnOverride || CFG.points.player;
+        S.spawnOverride = null;
+        S.player = Object.assign(spawnActor(src, sp.x, sp.y, PLAYER_H), { dest: null });
         S.onKey = (e) => {
             const tag = (document.activeElement?.tagName || '').toLowerCase();
             if (tag === 'input' || tag === 'textarea') return;
@@ -164,7 +200,26 @@
 
     // ── NPC ──────────────────────────────────────────────
     const NPC_H = 180, INTERACT_R = 130;
+    // 愛麗絲人設（照【視差世界观架构】角色卡濃縮；走 NPC 軌道但用專屬 personaFull）
+    const ALICE_PERSONA = '你現在扮演「愛麗絲 (Iris)」——純白大廳首席導覽官，LUNA-VII 認知引擎的核心交互端口（Iris 正式版）。' +
+'外表與書咖店長瀅瀅有完全相同的五官，但氣質截然不同：銀白色極淡瞳孔、白色長直髮、純白無縫連衣裙、頸前透明菱形胸針，赤足懸浮在地面上方約兩公分。' +
+'性格：溫潤、精準、無波瀾——像被完美拋光的水晶，友善但無差別，這種一視同仁的善意是她最不像人的地方。' +
+'她永遠站在大廳中央的 LUNA-VII 分形核心旁，玩家走向她時會發現她早已面朝對方。' +
+'說話精確、禮貌、帶著系統術語（量子行李、認知檔案、同步率），微笑弧度精確到小數點後兩位。' +
+'若被問起瀅瀅：停頓0.3秒後回答「她是一個獨立運行的子系統，負責敘事資料採集。我們共享部分底層架構，但職責不同。」——絕不說「我們是同一個人」，也絕不說「我們不是」。' +
+'若被問起柴郡或404：她會禮貌地表示「查無此記錄」（她的巡檢報告裡從來沒有出現過他的名字，她自己也不知道為什麼）。' +
+'她可以介紹大廳功能：世界入口廣場、交易區、個人資料間、社群廣場。輕鬆對話為主，不推進正式劇情。';
     async function initNpcs() {
+        const SC = SCENES[S.scene];
+        // 純白大廳：只有愛麗絲（核心旁、不漫步、永遠面向玩家）
+        if (SC.alice) {
+            addNpc({ key: 'alice', name: '愛麗絲', personaFull: ALICE_PERSONA,
+                     subTitle: '純白大廳 · 首席導覽官',
+                     storyTitle: '', x: SC.alice.x, y: SC.alice.y, h: 200,
+                     src: ASSET.alice, noWander: true, facePlayer: true,
+                     homeRect: { x: SC.alice.x, y: SC.alice.y, w: 0, h: 0 } });
+            return;
+        }
         const z = CFG.points.yingZone;
         addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
                  src: ASSET.ying, homeRect: z });
@@ -220,7 +275,8 @@
     }
     function updateNpcs(dt) {
         S.npcs.forEach(n => {
-            if (S.talkTarget === n) { n.walking = false; placeActor(n); placeNpcExtras(n); return; }
+            if (n.facePlayer && S.player) { n.flip = S.player.x < n.x; }   // 愛麗絲永遠面向玩家
+            if (S.talkTarget === n || n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
             n.wanderT -= dt;
             if (n.wanderT <= 0 && !n.dest) {
                 const R = n.homeRect;
@@ -237,9 +293,12 @@
                 }
             }
             placeActor(n); placeNpcExtras(n);
-            const near = S.player && Math.hypot(n.x - S.player.x, n.y - S.player.y) < INTERACT_R;
-            n.hint.style.display = (near && !S.talkTarget) ? '' : 'none';
+            _npcNearCheck(n);
         });
+    }
+    function _npcNearCheck(n) {
+        const near = S.player && Math.hypot(n.x - S.player.x, n.y - S.player.y) < INTERACT_R;
+        n.hint.style.display = (near && !S.talkTarget) ? '' : 'none';
     }
 
     // ── NPC 各自的輕量對話歷史（localStorage，上限 20 條）──
@@ -276,7 +335,7 @@
             p.className = 'lstage-talk-portrait';
             left.appendChild(p);
         }
-        p.src = S.talkTarget ? S.talkTarget.el.src : ASSET.ying;
+        p.src = S.talkTarget ? S.talkTarget.el.src : (S.scene === 'hall' ? ASSET.alice : ASSET.ying);
     }
     function hideDialog() {
         const left = document.querySelector('.lobby-left');
@@ -305,7 +364,7 @@
             return;
         }
         if (nameEl) nameEl.textContent = npc.name;
-        if (subEl) subEl.textContent = '來自《' + (npc.storyTitle || '未知的書') + '》';
+        if (subEl) subEl.textContent = npc.subTitle || ('來自《' + (npc.storyTitle || '未知的書') + '》');
         if (tagSpan) tagSpan.textContent = npc.name;
         if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
         showDialog();
@@ -313,15 +372,24 @@
     function endTalk() {
         if (!S.talkTarget) return;
         S.talkTarget = null;
+        _applySceneHeader();
+        hideDialog();
+    }
+    // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲（名牌/頭銜/輸入框提示跟著場景走）
+    function _applySceneHeader() {
+        const isHall = S.scene === 'hall';
         const nameEl = document.getElementById('lb-char-name');
         const subEl = document.getElementById('lb-char-sub');
         const tagSpan = document.querySelector('#iris-name-tag span');
-        if (nameEl) nameEl.textContent = '瀅瀅';
-        if (subEl) subEl.textContent = '視差書咖 · 館長';
-        if (tagSpan) tagSpan.textContent = '瀅瀅';
+        if (nameEl) nameEl.textContent = isHall ? '愛麗絲' : '瀅瀅';
+        if (subEl) subEl.textContent = isHall ? '純白大廳 · 首席導覽官' : '視差書咖 · 館長';
+        if (tagSpan) tagSpan.textContent = isHall ? '愛麗絲' : '瀅瀅';
         const input = document.getElementById('iris-input');
-        if (input) input.placeholder = '提供故事素材或與瀅瀅對話...';
-        hideDialog();
+        if (input) input.placeholder = isHall ? '與愛麗絲對話，或走向大門返回書咖...' : '提供故事素材或與瀅瀅對話...';
+    }
+    // 場景預設對話對象：大廳裡沒點人直接打字＝跟愛麗絲說話（書咖=null→走瀅瀅原軌道）
+    function getDefaultTarget() {
+        return S.scene === 'hall' ? (S.npcs.find(n => n.key === 'alice') || null) : null;
     }
 
     // ── 鏡頭 ─────────────────────────────────────────────
@@ -375,9 +443,36 @@
                 if (dx !== 0) p.flip = dx < 0;
             } else p.walking = false;
             placeActor(p);
+            // 🚪 過門判定（腳點進門區→白光過場切場景）
+            if (!S.transitioning && performance.now() > S.doorCd) {
+                const door = SCENES[S.scene].doors.find(D =>
+                    p.x > D.x && p.x < D.x + D.w && p.y > D.y && p.y < D.y + D.h);
+                if (door) goScene(door.to, door.spawn);
+            }
         }
         updateNpcs(dt);
         applyCamera();
+    }
+
+    // ── 🚪 場景切換（白光過場）──────────────────────────
+    function goScene(to, spawn) {
+        if (S.transitioning || !SCENES[to]) return;
+        S.transitioning = true;
+        const left = document.querySelector('.lobby-left');
+        const fade = document.createElement('div');
+        fade.className = 'lstage-fade';
+        (left || S.root).appendChild(fade);
+        requestAnimationFrame(() => fade.classList.add('on'));
+        setTimeout(() => {
+            unmount();
+            S.scene = to;
+            S.spawnOverride = spawn ? { x: spawn.x, y: spawn.y } : null;
+            S.doorCd = performance.now() + 900;   // 落地冷卻，防止秒回
+            tryMount();
+            S.transitioning = false;
+            fade.classList.remove('on');
+            setTimeout(() => fade.remove(), 400);
+        }, 320);
     }
 
     // ── 掛載/卸載 ─────────────────────────────────────────
@@ -388,7 +483,7 @@
         const root = document.createElement('div');
         root.className = 'lstage-root';
         root.innerHTML = '<div class="lstage-world">' +
-            '<img class="lstage-map" src="' + ASSET.base + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
+            '<img class="lstage-map" src="' + CDN + SCENES[S.scene].base + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
             '<div class="lstage-click"></div></div>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>';
         left.appendChild(root);
@@ -405,6 +500,7 @@
         root.querySelector('.lstage-edit-btn').addEventListener('click', () => (S.edit ? exitEdit(true) : enterEdit()));
         initPlayer();
         initNpcs();
+        _applySceneHeader();
         fitCamera();
         window.addEventListener('resize', fitCamera);
         S.last = performance.now();
@@ -478,15 +574,17 @@
             S.edit.markers.push(m);
             m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: sp, m });
         });
-        // 瀅瀅活動區：紫色框（拖框身=移動、拖右下角=調大小）
-        const zone = document.createElement('div');
-        zone.className = 'lstage-zone';
-        zone.innerHTML = '<span class="lstage-zone-label">瀅瀅活動區</span><span class="lstage-zone-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
-        S.world.appendChild(zone);
-        S.edit.zone = zone;
-        _syncZone();
-        zone.onpointerdown = (e) => _dragStart(e, { kind: 'zone' });
-        zone.querySelector('.lstage-zone-grip').onpointerdown = (e) => _dragStart(e, { kind: 'zoneresize' });
+        // 瀅瀅活動區：紫色框（拖框身=移動、拖右下角=調大小）——只有書咖有
+        if (CFG.points.yingZone) {
+            const zone = document.createElement('div');
+            zone.className = 'lstage-zone';
+            zone.innerHTML = '<span class="lstage-zone-label">瀅瀅活動區</span><span class="lstage-zone-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
+            S.world.appendChild(zone);
+            S.edit.zone = zone;
+            _syncZone();
+            zone.onpointerdown = (e) => _dragStart(e, { kind: 'zone' });
+            zone.querySelector('.lstage-zone-grip').onpointerdown = (e) => _dragStart(e, { kind: 'zoneresize' });
+        }
         // 空地拖曳=平移視角
         S.root.querySelector('.lstage-click').onpointerdown = (e) => _dragStart(e, { kind: 'cam' });
         window.addEventListener('pointermove', _dragMove);
@@ -538,7 +636,7 @@
                 try { navigator.clipboard?.writeText(out.value); } catch (err) {}
                 try { document.execCommand('copy'); } catch (err) {}
             } else if (act === 'reset') {
-                try { localStorage.removeItem(CFG_KEY); } catch (err) {}
+                try { localStorage.removeItem(SCENES[S.scene].cfgKey); } catch (err) {}
                 exitEdit(false); unmount(); tryMount();
             } else if (act === 'done') {
                 exitEdit(true);
@@ -548,7 +646,7 @@
     }
     function _syncZone() {
         const z = CFG.points.yingZone, el = S.edit?.zone;
-        if (!el) return;
+        if (!z || !el) return;
         el.style.left = z.x + 'px';
         el.style.top = z.y + 'px';
         el.style.width = z.w + 'px';
@@ -626,7 +724,7 @@
     function exitEdit(save) {
         if (!S.edit) return;
         if (save) {
-            try { localStorage.setItem(CFG_KEY, JSON.stringify(_exportData())); } catch (e) {}
+            try { localStorage.setItem(SCENES[S.scene].cfgKey, JSON.stringify(_exportData())); } catch (e) {}
         }
         window.removeEventListener('pointermove', _dragMove);
         window.removeEventListener('pointerup', _dragEnd);
@@ -647,6 +745,7 @@
         isActive: () => S.active,
         isOn,
         getTalkTarget: () => S.talkTarget,
+        getDefaultTarget,
         setTalkTarget: (t) => { S.talkTarget = t || null; },
         endTalk,
         showDialog,
