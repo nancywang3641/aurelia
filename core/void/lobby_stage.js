@@ -139,6 +139,7 @@
         const SC = SCENES[S.scene];
         let layout = SC.layout.map(o => Object.assign({}, o));
         const points = JSON.parse(JSON.stringify(SC.points));
+        const doors = SC.doors.map(d => Object.assign({}, d));
         let baseOverride = null, maskOverride = null;
         try {
             const saved = JSON.parse(localStorage.getItem(SC.cfgKey) || 'null');
@@ -151,6 +152,9 @@
                 });
                 if (saved.baseOverride) baseOverride = saved.baseOverride;
                 if (saved.maskOverride) maskOverride = saved.maskOverride;
+                if (Array.isArray(saved.doors)) saved.doors.forEach((sd, i) => {
+                    if (doors[i] && sd) { doors[i].x = sd.x; doors[i].y = sd.y; doors[i].w = sd.w; doors[i].h = sd.h; }
+                });
                 if (saved.points) {
                     if (saved.points.yingZone) points.yingZone = saved.points.yingZone;
                     if (saved.points.npcZone) points.npcZone = saved.points.npcZone;
@@ -161,7 +165,7 @@
                 }
             }
         } catch (e) {}
-        return { layout, points, baseOverride, maskOverride };
+        return { layout, points, doors, baseOverride, maskOverride };
     }
 
     const S = {
@@ -600,7 +604,7 @@
             placeActor(p);
             // 🚪 過門判定：落地後必須先「走出」觸發區一次，門才重新武裝（防落點在門區內乒乓轉場）
             if (!S.transitioning) {
-                const door = SCENES[S.scene].doors.find(D =>
+                const door = CFG.doors.find(D =>
                     p.x > D.x && p.x < D.x + D.w && p.y > D.y && p.y < D.y + D.h);
                 if (door) {
                     if (S.doorArm && performance.now() > S.doorCd) goScene(door.to, door.spawn);
@@ -727,8 +731,8 @@
         };
         S.edit.markers.push(mk('我', 'm-player', () => CFG.points.player));
         S.edit.markers[0].onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.player, m: S.edit.markers[0] });
-        if (CFG.points.arrive) {   // 走門進場的落點
-            const m = mk('門', 'm-arrive', () => CFG.points.arrive);
+        if (CFG.points.arrive) {   // 過門後的落地點
+            const m = mk('落', 'm-arrive', () => CFG.points.arrive);
             S.edit.markers.push(m);
             m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.arrive, m });
         }
@@ -762,14 +766,16 @@
             S.world.appendChild(cv);
             S.edit.maskView = cv;
         }
-        // 過門觸發區：橘色虛線框（固定，門圓點別放進來——落在框內會直接被送走）
-        S.edit.doorRects = SCENES[S.scene].doors.map(D => {
+        // 過門區：踩進去就轉場（可拖、右下角調大小；「落」圓點別放進來）
+        S.edit.doorRects = CFG.doors.map((D, i) => {
             const el = document.createElement('div');
             el.className = 'lstage-doorrect';
-            el.innerHTML = '<span>過門區</span>';
-            el.style.left = D.x + 'px'; el.style.top = D.y + 'px';
-            el.style.width = D.w + 'px'; el.style.height = D.h + 'px';
+            el.innerHTML = '<span>過門區→' + (SCENES[D.to] ? (D.to === 'hall' ? '大廳' : '書咖') : D.to) + '</span>' +
+                '<span class="lstage-zone-grip lstage-door-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
             S.world.appendChild(el);
+            _syncDoor(i, el);
+            el.onpointerdown = (e) => _dragStart(e, { kind: 'door', i });
+            el.querySelector('.lstage-door-grip').onpointerdown = (e) => _dragStart(e, { kind: 'doorresize', i });
             return el;
         });
         // 外框鋼索：金色多邊形=可走範圍，白色錨點可拖（牆角）——有手繪遮罩的場景不顯示（遮罩優先）
@@ -801,7 +807,7 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         panel.innerHTML =
-            '<div class="lep-hint">拖東西調位置，拖空地移動視角。紅色罩=牆(遮罩不可走區)｜橘虛線框=過門區(門圓點別放進去)｜藍圓=出生點｜橘圓門=走門落點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅實心框=家具佔地</div>' +
+            '<div class="lep-hint">拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅實心框=家具佔地</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
               '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
@@ -946,6 +952,14 @@
         probe.onerror = () => console.warn('[LobbyStage] 圖片載入失敗');
         (dataUrl ? Promise.resolve(dataUrl) : resolveRef(ref)).then(src => { if (src) probe.src = src; });
     }
+    function _syncDoor(i, el) {
+        const D = CFG.doors[i], e = el || S.edit?.doorRects?.[i];
+        if (!D || !e) return;
+        e.style.left = D.x + 'px';
+        e.style.top = D.y + 'px';
+        e.style.width = D.w + 'px';
+        e.style.height = D.h + 'px';
+    }
     function _syncWire() {
         const w = S.edit?.wire;
         if (!w) return;
@@ -987,6 +1001,12 @@
         } else if (info.kind === 'zoneresize') {
             const z = CFG.points[info.pk];
             S.edit.drag.ox = z.w; S.edit.drag.oy = z.h;
+        } else if (info.kind === 'door') {
+            const D = CFG.doors[info.i];
+            S.edit.drag.ox = D.x; S.edit.drag.oy = D.y;
+        } else if (info.kind === 'doorresize') {
+            const D = CFG.doors[info.i];
+            S.edit.drag.ox = D.w; S.edit.drag.oy = D.h;
         } else if (info.kind === 'cam') {
             S.edit.drag.ox = S.edit.cam.x; S.edit.drag.oy = S.edit.cam.y;
         }
@@ -1012,6 +1032,15 @@
             z.w = Math.max(60, Math.round(d.ox + dx));
             z.h = Math.max(30, Math.round(d.oy + dy));
             _syncZone(d.pk);
+        } else if (d.kind === 'door') {
+            const D = CFG.doors[d.i];
+            D.x = Math.round(d.ox + dx); D.y = Math.round(d.oy + dy);
+            _syncDoor(d.i);
+        } else if (d.kind === 'doorresize') {
+            const D = CFG.doors[d.i];
+            D.w = Math.max(40, Math.round(d.ox + dx));
+            D.h = Math.max(24, Math.round(d.oy + dy));
+            _syncDoor(d.i);
         } else if (d.kind === 'cam') {
             S.edit.cam.x = d.ox - dx; S.edit.cam.y = d.oy - dy;
         }
@@ -1033,6 +1062,7 @@
                 return rec;
             }),
             points: CFG.points,
+            doors: CFG.doors.map(D => ({ x: D.x, y: D.y, w: D.w, h: D.h })),
         };
         if (CFG.baseOverride) data.baseOverride = CFG.baseOverride;
         if (CFG.maskOverride) data.maskOverride = CFG.maskOverride;
