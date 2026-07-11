@@ -2316,7 +2316,8 @@ ${sections}`;
 
         clearInput();
         // 🎮 書咖舞台 NPC 對話：歷史/人設走 NPC 自己的軌道，其餘管線共用
-        const npcTarget = (!is404Room && !isClaudeRoom && window.LobbyStage?.isActive?.()) ? window.LobbyStage.getTalkTarget() : null;
+        const _stageTarget = (!is404Room && !isClaudeRoom && window.LobbyStage?.isActive?.()) ? window.LobbyStage.getTalkTarget() : null;
+        const npcTarget = (_stageTarget && _stageTarget.key !== 'ying') ? _stageTarget : null;   // 瀅瀅走原本 iris 軌道
         if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, { role: 'user', content: text, ts: Date.now() });
         else IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
         if (!is404Room && !isClaudeRoom && window.LobbyStage?.isActive?.()) window.LobbyStage.showDialog();   // 舞台模式：發話才浮出對話框+立繪
