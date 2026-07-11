@@ -98,18 +98,59 @@
         return { x: o.x + Math.round((d.ew - d.efw) / 2), y: o.y + d.eh - d.ef, w: d.efw, h: d.ef };
     }
 
-    // 讀取佈局：本機調過的蓋過預設（layout 按 file 名對位，points 整包；每場景各存各的）
+    // ── 🧱 建構模式資產庫（上傳的圖存 IndexedDB，localStorage 只存引用）──
+    function idbOpen() {
+        return new Promise((res, rej) => {
+            const rq = indexedDB.open('lobby_stage_assets', 1);
+            rq.onupgradeneeded = () => rq.result.createObjectStore('imgs');
+            rq.onsuccess = () => res(rq.result);
+            rq.onerror = () => rej(rq.error);
+        });
+    }
+    async function idbPut(key, val) {
+        const db = await idbOpen();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('imgs', 'readwrite');
+            tx.objectStore('imgs').put(val, key);
+            tx.oncomplete = () => res();
+            tx.onerror = () => rej(tx.error);
+        });
+    }
+    async function idbGet(key) {
+        const db = await idbOpen();
+        return new Promise((res, rej) => {
+            const rq = db.transaction('imgs').objectStore('imgs').get(key);
+            rq.onsuccess = () => res(rq.result || null);
+            rq.onerror = () => rej(rq.error);
+        });
+    }
+    // 圖片引用解析：{file}=CDN內建、{url}=外部網址、{idb}=本機上傳
+    async function resolveRef(ref) {
+        if (!ref) return null;
+        if (ref.url) return ref.url;
+        if (ref.idb) { try { return await idbGet(ref.idb); } catch (e) { return null; } }
+        if (ref.file) return CDN + ref.file;
+        return null;
+    }
+
+    // 讀取佈局：本機調過的蓋過預設（每場景各存各的）
+    // 新版存 layoutFull=完整家具清單（可增刪）；舊版 layout=按 file 名對位覆蓋（相容）
     function _loadCfg() {
         const SC = SCENES[S.scene];
-        const layout = SC.layout.map(o => Object.assign({}, o));
+        let layout = SC.layout.map(o => Object.assign({}, o));
         const points = JSON.parse(JSON.stringify(SC.points));
+        let baseOverride = null, maskOverride = null;
         try {
             const saved = JSON.parse(localStorage.getItem(SC.cfgKey) || 'null');
             if (saved) {
-                (saved.layout || []).forEach(s => {
+                if (Array.isArray(saved.layoutFull) && saved.layoutFull.length) {
+                    layout = saved.layoutFull.map(o => Object.assign({}, o));
+                } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
                     if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; }
                 });
+                if (saved.baseOverride) baseOverride = saved.baseOverride;
+                if (saved.maskOverride) maskOverride = saved.maskOverride;
                 if (saved.points) {
                     if (saved.points.yingZone) points.yingZone = saved.points.yingZone;
                     if (saved.points.npcZone) points.npcZone = saved.points.npcZone;
@@ -120,7 +161,7 @@
                 }
             }
         } catch (e) {}
-        return { layout, points };
+        return { layout, points, baseOverride, maskOverride };
     }
 
     const S = {
@@ -147,12 +188,14 @@
         BLOCKS = (maskOk ? [] : SCENES[S.scene].walls).concat(CFG.layout.map(footRect));
     }
     // 手繪碰撞遮罩：白=可走、黑=不可走（<128 判黑）；jsdelivr 有 CORS 頭、canvas 可讀
-    function loadMask() {
+    async function loadMask() {
         S.mask = null;
+        const ovSrc = await resolveRef(CFG.maskOverride);   // 建構模式「換遮罩」優先
         const file = SCENES[S.scene].mask;
-        if (!file) return;
+        const src = ovSrc || (file ? CDN + file : null);
+        if (!src) return;
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        if (!String(src).startsWith('data:')) img.crossOrigin = 'anonymous';
         img.onload = () => {
             try {
                 const cv = document.createElement('canvas');
@@ -170,8 +213,8 @@
                 console.log('[LobbyStage] 碰撞遮罩已載入', file);
             } catch (e) { console.warn('[LobbyStage] 遮罩讀取失敗(退回鋼索)', e); }
         };
-        img.onerror = () => console.warn('[LobbyStage] 遮罩下載失敗(退回鋼索)', file);
-        img.src = CDN + file;
+        img.onerror = () => console.warn('[LobbyStage] 遮罩下載失敗(退回鋼索)', src);
+        img.src = src;
     }
     const FOOT_W = 46, FOOT_H = 18;
     // 射線法：點是否在多邊形內（外框鋼索用，用腳點中心判定）
@@ -592,15 +635,12 @@
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
         S.doorArm = false;   // 剛進場先解除門武裝，走出門區才啟動
-        S.objEls = CFG.layout.map(o => {
-            const img = document.createElement('img');
-            img.className = 'lstage-actor lstage-obj';
-            if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
-            img.src = CDN + o.file;
-            placeObj(img, o);
-            S.world.appendChild(img);
-            return img;
-        });
+        // 底圖：本機/網址覆蓋（建構模式「換底圖」）
+        if (CFG.baseOverride) {
+            const mapImg = root.querySelector('.lstage-map');
+            resolveRef(CFG.baseOverride).then(src => { if (src && mapImg) mapImg.src = src; });
+        }
+        S.objEls = CFG.layout.map(o => _spawnObjEl(o));
         root.querySelector('.lstage-edit-btn').addEventListener('click', () => (S.edit ? exitEdit(true) : enterEdit()));
         initPlayer();
         initNpcs();
@@ -610,6 +650,15 @@
         S.last = performance.now();
         S.raf = requestAnimationFrame(tick);
         console.log('[LobbyStage] mounted');
+    }
+    function _spawnObjEl(o) {
+        const img = document.createElement('img');
+        img.className = 'lstage-actor lstage-obj';
+        if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
+        resolveRef(o).then(src => { if (src) img.src = src; });
+        placeObj(img, o);
+        S.world.appendChild(img);
+        return img;
     }
     function placeObj(img, o) {
         const d = effDims(o);
@@ -652,16 +701,8 @@
             sel: -1, feet: [], markers: [], drag: null,
         };
         S.root.classList.add('lstage-editing');
-        // 物件可拖 + 佔地覆蓋層
-        S.objEls.forEach((img, i) => {
-            img.classList.add('lstage-editable');
-            const foot = document.createElement('div');
-            foot.className = 'lstage-foot';
-            S.world.appendChild(foot);
-            S.edit.feet.push(foot);
-            _syncFoot(i);
-            img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i });
-        });
+        // 物件可拖 + 佔地覆蓋層（index 動態查，配合建構模式增刪）
+        S.objEls.forEach((img, i) => { _makeEditable(img); _syncFoot(i); });
         // 站位標記
         const mk = (label, cls, get) => {
             const m = document.createElement('div');
@@ -766,6 +807,14 @@
               '<button class="lep-btn" data-act="actplus"><i class="fa-solid fa-plus"></i> 人物</button>' +
             '</div>' +
             '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="addobj"><i class="fa-solid fa-plus"></i> 新增家具</button>' +
+              '<button class="lep-btn lep-danger" data-act="delobj"><i class="fa-solid fa-trash"></i> 刪除家具</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="setbase"><i class="fa-solid fa-image"></i> 換底圖</button>' +
+              '<button class="lep-btn" data-act="setmask"><i class="fa-solid fa-map"></i> 換遮罩</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
               '<button class="lep-btn" data-act="copy"><i class="fa-solid fa-copy"></i> 複製數據</button>' +
               '<button class="lep-btn" data-act="reset"><i class="fa-solid fa-rotate-left"></i> 還原預設</button>' +
               '<button class="lep-btn lep-done" data-act="done"><i class="fa-solid fa-check"></i> 完成</button>' +
@@ -796,6 +845,28 @@
             } else if (act === 'actminus' || act === 'actplus') {
                 CFG.points.actorScale = Math.max(0.5, Math.min(1.6, Math.round((((CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));
                 applyActorScale(); _exportToPanel();
+            } else if (act === 'addobj') {
+                _askImage((ref, dataUrl) => _addFurniture(ref, dataUrl));
+            } else if (act === 'delobj') {
+                const i = S.edit.sel;
+                if (i < 0) return;
+                CFG.layout.splice(i, 1);
+                S.objEls[i].remove(); S.objEls.splice(i, 1);
+                S.edit.feet[i].remove(); S.edit.feet.splice(i, 1);
+                S.edit.sel = -1;
+                S.edit.feet.forEach((_, k) => _syncFoot(k));
+                _exportToPanel();
+            } else if (act === 'setbase' || act === 'setmask') {
+                _askImage((ref) => {
+                    if (act === 'setbase') {
+                        CFG.baseOverride = ref;
+                        resolveRef(ref).then(src => { const m = S.root?.querySelector('.lstage-map'); if (src && m) m.src = src; });
+                    } else {
+                        CFG.maskOverride = ref;
+                        loadMask();   // 立即重載碰撞（紅罩下次進擺設模式更新）
+                    }
+                    _exportToPanel();
+                });
             } else if (act === 'copy') {
                 const out = panel.querySelector('.lep-out');
                 out.select();
@@ -809,6 +880,59 @@
             }
         });
         _exportToPanel();
+    }
+    function _makeEditable(img) {
+        img.classList.add('lstage-editable');
+        const foot = document.createElement('div');
+        foot.className = 'lstage-foot';
+        S.world.appendChild(foot);
+        S.edit.feet.push(foot);
+        img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
+    }
+    // 建構模式選圖：貼網址或留空→從電腦選擇圖片（上傳存進本機資產庫 IndexedDB）
+    function _askImage(cb) {
+        const url = window.prompt('貼上圖片網址；或留空按「確定」改為從電腦選擇圖片');
+        if (url === null) return;
+        if (url.trim()) { cb({ url: url.trim() }); return; }
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.onchange = () => {
+            const f = inp.files && inp.files[0];
+            if (!f) return;
+            const rd = new FileReader();
+            rd.onload = async () => {
+                const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                try { await idbPut(id, rd.result); cb({ idb: id }, rd.result); }
+                catch (e) { console.warn('[LobbyStage] 圖片存檔失敗', e); }
+            };
+            rd.readAsDataURL(f);
+        };
+        inp.click();
+    }
+    // 新增家具：量原圖尺寸→縮到約240px高→放到目前視角中央→立即可拖
+    function _addFurniture(ref, dataUrl) {
+        const probe = new Image();
+        probe.onload = () => {
+            if (!S.edit) return;
+            const w = probe.naturalWidth || 200, h = probe.naturalHeight || 200;
+            const s = Math.min(1, Math.round(240 / h * 100) / 100);
+            const o = Object.assign({}, ref, {
+                x: Math.round(S.edit.cam.x - w * s / 2),
+                y: Math.round(S.edit.cam.y - h * s / 2),
+                w, h,
+                footH: Math.max(20, Math.round(h * 0.25)),
+                s,
+            });
+            CFG.layout.push(o);
+            const img = _spawnObjEl(o);
+            S.objEls.push(img);
+            _makeEditable(img);
+            S.edit.sel = CFG.layout.length - 1;
+            S.edit.feet.forEach((_, k) => _syncFoot(k));
+            _exportToPanel();
+        };
+        probe.onerror = () => console.warn('[LobbyStage] 圖片載入失敗');
+        (dataUrl ? Promise.resolve(dataUrl) : resolveRef(ref)).then(src => { if (src) probe.src = src; });
     }
     function _syncWire() {
         const w = S.edit?.wire;
@@ -886,14 +1010,21 @@
         _exportToPanel();
     }
     function _exportData() {
-        return {
-            layout: CFG.layout.map(o => {
-                const rec = { file: o.file, x: o.x, y: o.y, footH: o.footH, s: o.s || 1 };
+        const data = {
+            layoutFull: CFG.layout.map(o => {
+                const rec = { x: o.x, y: o.y, w: o.w, h: o.h, footH: o.footH, s: o.s || 1 };
+                if (o.file) rec.file = o.file;
+                if (o.url) rec.url = o.url;
+                if (o.idb) rec.idb = o.idb;
                 if (o.footW != null) rec.footW = o.footW;
+                if (o.float) rec.float = true;
                 return rec;
             }),
             points: CFG.points,
         };
+        if (CFG.baseOverride) data.baseOverride = CFG.baseOverride;
+        if (CFG.maskOverride) data.maskOverride = CFG.maskOverride;
+        return data;
     }
     function _exportToPanel() {
         const out = S.edit?.panel?.querySelector('.lep-out');
