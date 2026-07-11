@@ -278,8 +278,8 @@
     function placeActor(a) {
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
         const w = a.h * ratio;
-        // 整數化+只在變化時寫入（避免逐幀觸發重排/重疊層計算）
-        const left = Math.round(a.x - w / 2), top = Math.round(a.y - a.h), z = 2 + Math.round(a.y);
+        // 只在變化時寫入；座標保留小數（整數化會讓移動跳格卡卡）
+        const left = a.x - w / 2, top = a.y - a.h, z = 2 + Math.round(a.y);
         if (a._left !== left) { a.el.style.left = left + 'px'; a._left = left; }
         if (a._top !== top) { a.el.style.top = top + 'px'; a._top = top; }
         if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
@@ -556,8 +556,8 @@
         // 底部對話框會蓋住下緣 → 跟隨模式把焦點擺在畫面偏上(38%)，人不會躲進對話框後面
         const focusRatio = S.edit ? 0.5 : 0.38;
         let cx = focus.x * S.scale - vw / 2, cy = focus.y * S.scale - vh * focusRatio;
-        cx = Math.round(Math.max(0, Math.min(MAP_W * S.scale - vw, cx)));
-        cy = Math.round(Math.max(0, Math.min(MAP_H * S.scale - vh, cy)));
+        cx = Math.max(0, Math.min(MAP_W * S.scale - vw, cx));
+        cy = Math.max(0, Math.min(MAP_H * S.scale - vh, cy));
         if (S._camX === cx && S._camY === cy) return;   // 鏡頭沒動就不重寫 transform
         S._camX = cx; S._camY = cy;
         S.world.style.transform = 'translate(' + (-cx) + 'px,' + (-cy) + 'px) scale(' + S.scale + ')';
