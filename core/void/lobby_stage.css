@@ -57,6 +57,9 @@
 .lstage-marker.m-ying { background:#b46ac2; }
 .lstage-marker.m-player { background:#4a86c8; }
 .lstage-marker.m-spot { background:#4aa06a; }
+.lstage-marker.m-arrive { background:#d08a3e; }
+.lstage-zone.z-npc { background:rgba(74,160,106,.18); border-color:rgba(74,160,106,.85); }
+.lstage-zone.z-npc .lstage-zone-label, .lstage-zone.z-npc .lstage-zone-grip { background:#4aa06a; }
 .lstage-zone { position:absolute; background:rgba(180,106,194,.22); border:2px dashed rgba(180,106,194,.85);
   z-index:2550; cursor:grab; touch-action:none; }
 .lstage-zone:active { cursor:grabbing; }
