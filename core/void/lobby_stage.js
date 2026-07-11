@@ -625,7 +625,8 @@
             } else if (act === 'objminus' || act === 'objplus') {
                 if (S.edit.sel < 0) return;
                 const o = CFG.layout[S.edit.sel];
-                o.s = Math.max(0.3, Math.min(2, Math.round(((o.s || 1) + (act === 'objplus' ? 0.05 : -0.05)) * 100) / 100));
+                // 等比±10%：大圖小圖手感一致；下限0.05（大廳素材原圖超大、預設s本來就<0.3）
+                o.s = Math.max(0.05, Math.min(2, Math.round((o.s || 1) * (act === 'objplus' ? 1.1 : 0.9) * 1000) / 1000));
                 placeObj(S.objEls[S.edit.sel], o); _syncFoot(S.edit.sel); _exportToPanel();
             } else if (act === 'actminus' || act === 'actplus') {
                 CFG.points.actorScale = Math.max(0.5, Math.min(1.6, Math.round((((CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));
