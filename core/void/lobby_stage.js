@@ -94,7 +94,7 @@
         window.addEventListener('keydown', S.onKey);
         window.addEventListener('keyup', S.onKey);
         S.root.querySelector('.lstage-click').addEventListener('click', (e) => {
-            if (S.talkTarget) return;   // 對話中鎖移動（Task 5 加 endTalk）
+            if (S.talkTarget) { endTalk(); return; }   // 對話中點空地=結束對話
             const r = S.world.getBoundingClientRect();
             S.player.dest = { x: (e.clientX - r.left) / S.scale, y: (e.clientY - r.top) / S.scale };
         });
@@ -125,6 +125,7 @@
             S.world.appendChild(img);
         });
         initPlayer();
+        initNpcs();
         fitCamera();
         window.addEventListener('resize', fitCamera);
         S.last = performance.now();
@@ -147,6 +148,114 @@
         S.player = null; S.npcs = []; S.talkTarget = null; S.keys = {};
         S.active = false;
         console.log('[LobbyStage] unmounted');
+    }
+
+    // ── NPC ──────────────────────────────────────────────
+    const NPC_H = 180, INTERACT_R = 130;
+    async function initNpcs() {
+        // 瀅瀅固定「吧台後面」：腳點y(430) < 吧台底(682) → 下半身被吧台遮住只露上半身
+        // 她的漫步區在後牆阻擋帶內 → NPC 漫步不做 blocked 檢查，靠 homeRect 圈範圍
+        addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: 700, y: 430, h: 200,
+                 src: ASSET.ying, homeRect: { x: 300, y: 415, w: 700, h: 30 } });
+        // 藏書輪班：掃章節 [Char|名|...] 抽 2~4 個要角（出場≥2次；瀅瀅/柴郡除外）
+        try {
+            if (!window.OS_DB?.getAllVnChapters) return;
+            const chapters = await window.OS_DB.getAllVnChapters();
+            const byName = new Map();
+            chapters.forEach(ch => {
+                const text = String(ch.content || '');
+                const re = /\[Char\|([^|\]]{1,20})\|/g; let m;
+                while ((m = re.exec(text))) {
+                    const name = m[1].trim();
+                    if (!name || name === '瀅瀅' || name === '柴郡') continue;
+                    const rec = byName.get(name) || { name, count: 0, storyId: ch.storyId || '', storyTitle: ch.storyTitle || '' };
+                    rec.count++; byName.set(name, rec);
+                }
+            });
+            const pool = [...byName.values()].filter(r => r.count >= 2);
+            for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+            const picked = pool.slice(0, 2 + Math.floor(Math.random() * 3));
+            const SPOTS = [{ x: 460, y: 800 }, { x: 1250, y: 880 }, { x: 1100, y: 500 }, { x: 250, y: 880 }];
+            picked.forEach((r, i) => addNpc({
+                key: 'bk_' + (r.storyId || 'x') + '_' + r.name,
+                name: r.name, storyId: r.storyId, storyTitle: r.storyTitle,
+                persona: '《' + (r.storyTitle || '某本書') + '》裡的角色「' + r.name + '」',
+                x: SPOTS[i % SPOTS.length].x, y: SPOTS[i % SPOTS.length].y,
+                src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,   // v1 通用小人；像素分身生成是之後的進階
+                homeRect: { x: SPOTS[i % SPOTS.length].x - 140, y: SPOTS[i % SPOTS.length].y - 90, w: 280, h: 180 },
+            }));
+        } catch (e) { console.warn('[LobbyStage] 輪班讀取失敗', e); }
+    }
+    function addNpc(cfg) {
+        const a = spawnActor(cfg.src, cfg.x, cfg.y, cfg.h || NPC_H);
+        const npc = Object.assign(a, cfg, { h: cfg.h || NPC_H, wanderT: 1500 + Math.random() * 3000, dest: null });
+        const tag = document.createElement('div');
+        tag.className = 'lstage-tag'; tag.textContent = cfg.name;
+        S.world.appendChild(tag); npc.tag = tag;
+        const hint = document.createElement('div');
+        hint.className = 'lstage-hint'; hint.style.display = 'none';
+        hint.innerHTML = '<i class="fa-solid fa-comment-dots"></i>';
+        hint.addEventListener('click', (e) => { e.stopPropagation(); startTalk(npc); });
+        S.world.appendChild(hint); npc.hint = hint;
+        S.npcs.push(npc);
+        placeNpcExtras(npc);
+        return npc;
+    }
+    function placeNpcExtras(npc) {
+        npc.tag.style.left = npc.x + 'px';
+        npc.tag.style.top = (npc.y + 8) + 'px';
+        npc.hint.style.left = npc.x + 'px';
+        npc.hint.style.top = (npc.y - npc.h - 6) + 'px';
+    }
+    function updateNpcs(dt) {
+        S.npcs.forEach(n => {
+            if (S.talkTarget === n) { n.walking = false; placeActor(n); placeNpcExtras(n); return; }
+            n.wanderT -= dt;
+            if (n.wanderT <= 0 && !n.dest) {
+                const R = n.homeRect;
+                n.dest = { x: R.x + Math.random() * R.w, y: R.y + Math.random() * R.h };
+                n.wanderT = 2500 + Math.random() * 5000;
+            }
+            if (n.dest) {
+                const vx = n.dest.x - n.x, vy = n.dest.y - n.y, d = Math.hypot(vx, vy);
+                if (d < 5) { n.dest = null; n.walking = false; }
+                else {
+                    const step = 0.12 * dt;
+                    n.x += vx / d * step; n.y += vy / d * step;
+                    n.walking = true; if (vx) n.flip = vx < 0;
+                }
+            }
+            placeActor(n); placeNpcExtras(n);
+            const near = S.player && Math.hypot(n.x - S.player.x, n.y - S.player.y) < INTERACT_R;
+            n.hint.style.display = (near && !S.talkTarget) ? '' : 'none';
+        });
+    }
+
+    // ── 對話目標（對話本體仍走 void_terminal.sendIrisMessage）──
+    function startTalk(npc) {
+        if (npc.key === 'ying') { window.dispatchEvent(new CustomEvent('lstage-poke-ying')); return; }
+        S.talkTarget = npc;
+        S.npcs.forEach(n => { n.hint.style.display = 'none'; });
+        const nameEl = document.getElementById('lb-char-name');
+        const subEl = document.getElementById('lb-char-sub');
+        const tagSpan = document.querySelector('#iris-name-tag span');
+        if (nameEl) nameEl.textContent = npc.name;
+        if (subEl) subEl.textContent = '來自《' + (npc.storyTitle || '未知的書') + '》';
+        if (tagSpan) tagSpan.textContent = npc.name;
+        const input = document.getElementById('iris-input');
+        if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
+    }
+    function endTalk() {
+        if (!S.talkTarget) return;
+        S.talkTarget = null;
+        const nameEl = document.getElementById('lb-char-name');
+        const subEl = document.getElementById('lb-char-sub');
+        const tagSpan = document.querySelector('#iris-name-tag span');
+        if (nameEl) nameEl.textContent = '瀅瀅';
+        if (subEl) subEl.textContent = '視差書咖 · 館長';
+        if (tagSpan) tagSpan.textContent = '瀅瀅';
+        const input = document.getElementById('iris-input');
+        if (input) input.placeholder = '提供故事素材或與瀅瀅對話...';
     }
 
     // 鏡頭：等比縮放讓地圖蓋滿視口（cover），超出部分由鏡頭平移跟隨焦點
@@ -199,6 +308,7 @@
             } else p.walking = false;
             placeActor(p);
         }
+        updateNpcs(dt);
         applyCamera();
     }
 
@@ -208,6 +318,7 @@
         isOn,
         getTalkTarget: () => S.talkTarget,
         setTalkTarget: (t) => { S.talkTarget = t || null; },
+        endTalk,
         getNpcHistory: () => [],
         pushNpcHistory: () => {},
         _S: S,
