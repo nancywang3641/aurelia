@@ -25,6 +25,7 @@
     const SCENES = {
         cafe: {
             base: 'lobby_base_v2.png',
+            mask: 'lobby_mask_cafe_v1.png',   // Rae 手繪碰撞遮罩(白=可走)；載入後取代鋼索+烤死家具矩形
             cfgKey: 'lobby_stage_layout_v1',   // 沿用 Rae 已調好的存檔
             layout: [
                 { file: 'lobby_obj_counter.png', x: 307,  y: 356, w: 1266, h: 396, footH: 300, s: 0.4 },
@@ -58,6 +59,7 @@
         },
         hall: {
             base: 'lobby_hall_base_v2.png',   // v2=核心球已從底圖拆出(空核心版)
+            mask: 'lobby_mask_hall_v1.png',   // Rae 手繪碰撞遮罩(白=可走)
             cfgKey: 'lobby_stage_layout_hall_v1',
             layout: [
                 { file: 'lobby_hall_obj_core.png',    x: 652,  y: 190, w: 788,  h: 935,  footH: 200, footW: 280, s: 0.3, float: true }, // LUNA-VII 分形核心(飄浮，佔地=底部尖錐)
@@ -137,10 +139,32 @@
 
     function isOn() { try { return localStorage.getItem('lobby_stage_on') !== '0'; } catch (e) { return true; } }
 
-    // ── 碰撞（牆=場景定義、物件腳印=佈局導出）──────────
+    // ── 碰撞（優先序：手繪遮罩 > 鋼索/牆矩形；可拖家具腳印永遠有效）──
     let BLOCKS = [];
     function rebuildBlocks() {
-        BLOCKS = SCENES[S.scene].walls.concat(CFG.layout.map(footRect));
+        const maskOk = !!(S.mask && S.mask.ok);
+        BLOCKS = (maskOk ? [] : SCENES[S.scene].walls).concat(CFG.layout.map(footRect));
+    }
+    // 手繪碰撞遮罩：白=可走、黑=不可走（<128 判黑）；jsdelivr 有 CORS 頭、canvas 可讀
+    function loadMask() {
+        S.mask = null;
+        const file = SCENES[S.scene].mask;
+        if (!file) return;
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            try {
+                const cv = document.createElement('canvas');
+                cv.width = MAP_W; cv.height = MAP_H;
+                const ctx = cv.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(img, 0, 0, MAP_W, MAP_H);
+                S.mask = { ok: true, data: ctx.getImageData(0, 0, MAP_W, MAP_H).data };
+                rebuildBlocks();   // 遮罩生效→退役鋼索/牆矩形
+                console.log('[LobbyStage] 碰撞遮罩已載入', file);
+            } catch (e) { console.warn('[LobbyStage] 遮罩讀取失敗(退回鋼索)', e); }
+        };
+        img.onerror = () => console.warn('[LobbyStage] 遮罩下載失敗(退回鋼索)', file);
+        img.src = CDN + file;
     }
     const FOOT_W = 46, FOOT_H = 18;
     // 射線法：點是否在多邊形內（外框鋼索用，用腳點中心判定）
@@ -155,8 +179,14 @@
     function blocked(x, y) {
         const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
         if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
-        const P = CFG?.points?.boundary;
-        if (P && P.length >= 3 && !insidePoly(P, x, y)) return true;   // 鋼索圈外=牆
+        if (S.mask && S.mask.ok) {
+            // 手繪遮罩：腳點像素亮度 <128 = 不可走（取 R 通道即可，遮罩是黑白圖）
+            const mi = ((Math.round(y) * MAP_W) + Math.round(x)) * 4;
+            if (S.mask.data[mi] < 128) return true;
+        } else {
+            const P = CFG?.points?.boundary;
+            if (P && P.length >= 3 && !insidePoly(P, x, y)) return true;   // 鋼索圈外=牆（遮罩沒載時的退路）
+        }
         return BLOCKS.some(B => l < B.x + B.w && r > B.x && t < B.y + B.h && b > B.y);
     }
 
@@ -529,7 +559,7 @@
     function tryMount() {
         const left = document.querySelector('.lobby-left');
         if (!left || S.active || !isOn()) return;
-        CFG = _loadCfg(); rebuildBlocks();
+        CFG = _loadCfg(); rebuildBlocks(); loadMask();
         const root = document.createElement('div');
         root.className = 'lstage-root';
         root.innerHTML = '<div class="lstage-world">' +
@@ -584,6 +614,7 @@
         }
         S.root = S.world = null;
         S.player = null; S.npcs = []; S.talkTarget = null; S.keys = {}; S.objEls = [];
+        S.mask = null;
         S.active = false;
         console.log('[LobbyStage] unmounted');
     }
@@ -640,8 +671,8 @@
         };
         mkZone('yingZone', '瀅瀅活動區', 'z-ying');
         mkZone('npcZone', '客人出沒區', 'z-npc');
-        // 外框鋼索：金色多邊形=可走範圍，白色錨點可拖（牆角）
-        if (Array.isArray(CFG.points.boundary) && CFG.points.boundary.length >= 3) {
+        // 外框鋼索：金色多邊形=可走範圍，白色錨點可拖（牆角）——有手繪遮罩的場景不顯示（遮罩優先）
+        if (!SCENES[S.scene].mask && Array.isArray(CFG.points.boundary) && CFG.points.boundary.length >= 3) {
             const NS = 'http://www.w3.org/2000/svg';
             const svg = document.createElementNS(NS, 'svg');
             svg.setAttribute('class', 'lstage-wire');
