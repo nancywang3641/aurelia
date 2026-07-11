@@ -337,12 +337,22 @@
             left.appendChild(p);
         }
         p.src = S.talkTarget ? S.talkTarget.el.src : (S.scene === 'hall' ? ASSET.alice : ASSET.ying);
+        // ✖ 關閉鈕（掛在對話框右上角；點空地也能關，這顆是給直覺用的）
+        const box = document.getElementById('iris-dialogue-box');
+        if (box && !box.querySelector('.lstage-dlg-close')) {
+            const btn = document.createElement('button');
+            btn.className = 'lstage-dlg-close';
+            btn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            btn.addEventListener('click', (e) => { e.stopPropagation(); if (S.talkTarget) endTalk(); else hideDialog(); });
+            box.appendChild(btn);
+        }
     }
     function hideDialog() {
         const left = document.querySelector('.lobby-left');
         if (!left) return;
         left.classList.add('lstage-dlg-hidden');
         left.querySelector('.lstage-talk-portrait')?.remove();
+        document.querySelector('#iris-dialogue-box .lstage-dlg-close')?.remove();
     }
 
     // ── 對話目標（對話本體仍走 void_terminal.sendIrisMessage）──
