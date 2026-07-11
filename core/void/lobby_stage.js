@@ -14,6 +14,7 @@
         // 底圖per場景（SCENES[].base）；素材改版一律換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
         ying:  CDN + 'lobby_ying.png',
         alice: CDN + 'lobby_alice.png',
+        cheshire: CDN + 'lobby_cheshire.png',
         mcF:   CDN + 'lobby_mc_f.png',
         mcM:   CDN + 'lobby_mc_m.png',
     };
@@ -81,6 +82,24 @@
             walls: [],   // 外牆走 boundary 鋼索；核心基座=物件腳印
             doors: [ { x: 660, y: 846, w: 215, h: 34, to: 'cafe', spawn: { x: 975, y: 430 } } ],  // 底部大門→回書咖
             alice: { x: 940, y: 520 },   // 愛麗絲：核心旁、不漫步、永遠面向玩家
+        },
+        room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
+            base: 'lobby_404_base_v1.png',
+            mask: 'lobby_404_mask_v1.png',
+            cfgKey: 'lobby_stage_layout_404_v1',
+            layout: [
+                // 圓桌(筆電)：疊在底圖同位置做深度遮擋，人繞到桌後會被擋住
+                { file: 'lobby_404_obj_table.png', x: 468, y: 500, w: 243, h: 239, footH: 120, footW: 200, s: 0.72 },
+            ],
+            points: {
+                player: { x: 760, y: 760 },
+                arrive: { x: 600, y: 820 },
+                boundary: [ { x: 176, y: 470 }, { x: 1390, y: 470 }, { x: 1390, y: 930 }, { x: 176, y: 930 } ],  // 遮罩沒載時的粗略退路
+                actorScale: 0.7,
+            },
+            walls: [],
+            doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
+            cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
         },
     };
     // 物件有效尺寸（s=個別縮放，預設1；佔地跟著縮）
@@ -347,6 +366,14 @@
                      homeRect: { x: SC.alice.x, y: SC.alice.y, w: 0, h: 0 } });
             return;
         }
+        if (SC.cheshire) {   // 404房只有柴郡（對話走原生 cheshire 軌道，同瀅瀅模式）
+            addNpc({ key: 'cheshire', name: '柴郡', persona: null,
+                     subTitle: '系統異常部門 · 灰色夢魘組',
+                     x: SC.cheshire.x, y: SC.cheshire.y, h: 200,
+                     src: ASSET.cheshire, noWander: true,
+                     homeRect: { x: SC.cheshire.x, y: SC.cheshire.y, w: 0, h: 0 } });
+            return;
+        }
         const z = CFG.points.yingZone;
         addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
                  src: ASSET.ying, homeRect: z });
@@ -481,7 +508,8 @@
             p.className = 'lstage-talk-portrait';
             left.appendChild(p);
         }
-        p.src = S.talkTarget ? S.talkTarget.el.src : (S.scene === 'hall' ? ASSET.alice : ASSET.ying);
+        p.src = S.talkTarget ? S.talkTarget.el.src
+              : (S.scene === 'hall' ? ASSET.alice : (S.scene === 'room404' ? ASSET.cheshire : ASSET.ying));
         // ✖ 關閉鈕（掛在對話框右上角；點空地也能關，這顆是給直覺用的）
         const box = document.getElementById('iris-dialogue-box');
         if (box && !box.querySelector('.lstage-dlg-close')) {
@@ -509,14 +537,14 @@
         const subEl = document.getElementById('lb-char-sub');
         const tagSpan = document.querySelector('#iris-name-tag span');
         const input = document.getElementById('iris-input');
-        if (npc.key === 'ying') {
-            // 瀅瀅=對話目標，但管線走她原本的 iris 軌道（void_terminal 會排除 ying）
-            if (nameEl) nameEl.textContent = '瀅瀅';
-            if (subEl) subEl.textContent = '視差書咖 · 館長';
-            if (tagSpan) tagSpan.textContent = '瀅瀅';
-            if (input) input.placeholder = '和瀅瀅聊聊…（點空地結束）';
+        if (npc.key === 'ying' || npc.key === 'cheshire') {
+            // 瀅瀅/柴郡=對話目標，但管線走各自原生軌道（void_terminal 對這兩位不走 NPC 分支）
+            if (nameEl) nameEl.textContent = npc.name;
+            if (subEl) subEl.textContent = npc.subTitle || '視差書咖 · 館長';
+            if (tagSpan) tagSpan.textContent = npc.name;
+            if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
             showDialog();
-            window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句
+            window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句(404房自動用柴郡池)
             return;
         }
         if (nameEl) nameEl.textContent = npc.name;
@@ -531,17 +559,22 @@
         _applySceneHeader();
         hideDialog();
     }
-    // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲（名牌/頭銜/輸入框提示跟著場景走）
+    // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（名牌/頭銜/輸入框提示跟著場景走）
+    const SCENE_HEADER = {
+        cafe:    { name: '瀅瀅',   sub: '視差書咖 · 館長',        ph: '提供故事素材或與瀅瀅對話...' },
+        hall:    { name: '愛麗絲', sub: '純白大廳 · 首席導覽官',  ph: '與愛麗絲對話，或走向大門返回書咖...' },
+        room404: { name: '柴郡',   sub: '系統異常部門 · 灰色夢魘組', ph: '對404號房的看守者說話，或走底部出口離開...' },
+    };
     function _applySceneHeader() {
-        const isHall = S.scene === 'hall';
+        const H = SCENE_HEADER[S.scene] || SCENE_HEADER.cafe;
         const nameEl = document.getElementById('lb-char-name');
         const subEl = document.getElementById('lb-char-sub');
         const tagSpan = document.querySelector('#iris-name-tag span');
-        if (nameEl) nameEl.textContent = isHall ? '愛麗絲' : '瀅瀅';
-        if (subEl) subEl.textContent = isHall ? '純白大廳 · 首席導覽官' : '視差書咖 · 館長';
-        if (tagSpan) tagSpan.textContent = isHall ? '愛麗絲' : '瀅瀅';
+        if (nameEl) nameEl.textContent = H.name;
+        if (subEl) subEl.textContent = H.sub;
+        if (tagSpan) tagSpan.textContent = H.name;
         const input = document.getElementById('iris-input');
-        if (input) input.placeholder = isHall ? '與愛麗絲對話，或走向大門返回書咖...' : '提供故事素材或與瀅瀅對話...';
+        if (input) input.placeholder = H.ph;
     }
     // 場景預設對話對象：大廳裡沒點人直接打字＝跟愛麗絲說話（書咖=null→走瀅瀅原軌道）
     function getDefaultTarget() {
@@ -607,7 +640,13 @@
                 const door = CFG.doors.find(D =>
                     p.x > D.x && p.x < D.x + D.w && p.y > D.y && p.y < D.y + D.h);
                 if (door) {
-                    if (S.doorArm && performance.now() > S.doorCd) goScene(door.to, door.spawn);
+                    if (S.doorArm && performance.now() > S.doorCd) {
+                        if (door.restore) {   // 404出口：走系統還原流程(void_terminal 收事件跑 restoreLobby)
+                            S.doorArm = false;
+                            S.doorCd = performance.now() + 2000;
+                            window.dispatchEvent(new CustomEvent('lstage-restore-lobby'));
+                        } else goScene(door.to, door.spawn);
+                    }
                 } else S.doorArm = true;
             }
         }
@@ -616,7 +655,7 @@
     }
 
     // ── 🚪 場景切換（白光過場）──────────────────────────
-    function goScene(to, spawn) {
+    function goScene(to, spawn, spawnMode) {
         if (S.transitioning || !SCENES[to]) return;
         S.transitioning = true;
         const left = document.querySelector('.lobby-left');
@@ -627,13 +666,22 @@
         setTimeout(() => {
             unmount();
             S.scene = to;
-            S.spawnOverride = 'arrive';   // 落點=目標場景自己存的「門」圓點
+            S.spawnOverride = (spawnMode === 'player') ? null : 'arrive';   // 預設落在目標場景的「落」圓點
             S.doorCd = performance.now() + 900;   // 落地冷卻，防止秒回
             tryMount();
             S.transitioning = false;
             fade.classList.remove('on');
             setTimeout(() => fade.remove(), 400);
         }, 320);
+    }
+    // 404 進出（void_terminal 的 enter404Room/restoreLobby 呼叫；stage 關著時只記場景）
+    function enter404Stage() {
+        if (S.active) goScene('room404', null, 'arrive');
+        else S.scene = 'room404';
+    }
+    function exit404Stage() {
+        if (S.active) goScene('cafe', null, 'player');
+        else { S.scene = 'cafe'; tryMount(); }
     }
 
     // ── 掛載/卸載 ─────────────────────────────────────────
@@ -1096,6 +1144,7 @@
 
     window.LobbyStage = {
         tryMount, unmount,
+        enter404Stage, exit404Stage,
         isActive: () => S.active,
         isOn,
         getTalkTarget: () => S.talkTarget,
