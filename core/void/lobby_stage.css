@@ -10,6 +10,10 @@
 @keyframes lstage-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
 @keyframes lstage-bob-flip { 0%,100%{transform:scaleX(-1) translateY(0)} 50%{transform:scaleX(-1) translateY(-6px)} }
 .lstage-actor.flip { transform:scaleX(-1); }
+/* 走路圖角色：真幀動畫，關掉彈跳/翻面那套 */
+.lstage-sheet { background-repeat:no-repeat; }
+.lstage-sheet.walking, .lstage-sheet.walking.flip { animation:none; }
+.lstage-sheet.flip { transform:none; }
 .lstage-tag { position:absolute; transform:translateX(-50%); background:rgba(20,18,16,.72); color:#f3ead8;
   font-size:12px; line-height:1; padding:4px 8px; border-radius:8px; white-space:nowrap; pointer-events:none; z-index:2000; }
 .lstage-hint { position:absolute; transform:translate(-50%,-100%); color:#ffe9a8; font-size:20px;

@@ -17,6 +17,7 @@
         cheshire: CDN + 'lobby_cheshire.png',
         mcF:   CDN + 'lobby_mc_f.png',
         mcM:   CDN + 'lobby_mc_m.png',
+        walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖(列=下/左/右/上,欄=左步/立/右步)
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
@@ -280,14 +281,24 @@
     }
 
     // ── 角色（玩家/NPC 共用）────────────────────────────
+    // src=字串→單張立姿圖；src={sheet:url}→3×4走路圖(真走路動畫,四方向)
     function spawnActor(src, x, y, h) {
-        const img = document.createElement('img');
-        img.className = 'lstage-actor';
-        img.src = src;
-        S.world.appendChild(img);
-        const a = { x, y, baseH: h, h: Math.round(h * (CFG.points.actorScale || 1)), el: img, walking: false, flip: false };
-        img.style.height = a.h + 'px';
-        img.addEventListener('load', () => placeActor(a), { once: true });
+        const isSheet = (typeof src === 'object' && src && src.sheet);
+        const el = document.createElement(isSheet ? 'div' : 'img');
+        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '');
+        const a = { x, y, baseH: h, h: Math.round(h * (CFG.points.actorScale || 1)), el, walking: false, flip: false };
+        if (isSheet) {
+            a.sheet = true; a.dir = 0; a.frame = 1; a.animT = 0;
+            el.style.backgroundImage = 'url("' + src.sheet + '")';
+            const probe = new Image();
+            probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); };
+            probe.src = src.sheet;
+        } else {
+            el.src = src;
+            el.style.height = a.h + 'px';
+            el.addEventListener('load', () => placeActor(a), { once: true });
+        }
+        S.world.appendChild(el);
         placeActor(a);
         return a;
     }
@@ -303,6 +314,7 @@
         });
     }
     function placeActor(a) {
+        if (a.sheet) return placeSheetActor(a);
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
         const w = a.h * ratio;
         // 只在變化時寫入；座標保留小數（整數化會讓移動跳格卡卡）
@@ -314,10 +326,29 @@
         if (a._flipC !== !!a.flip) { a.el.classList.toggle('flip', !!a.flip); a._flipC = !!a.flip; }
     }
 
+    // 走路圖角色：尺寸/幀切換全走 background-position（幀序 0,1,2,1 循環、立定=中幀）
+    function placeSheetActor(a) {
+        const ratio = (a.frameW && a.frameH) ? a.frameW / a.frameH : 0.8;
+        const w = a.h * ratio;
+        const left = a.x - w / 2, top = a.y - a.h, z = 2 + Math.round(a.y);
+        if (a._left !== left) { a.el.style.left = left + 'px'; a._left = left; }
+        if (a._top !== top) { a.el.style.top = top + 'px'; a._top = top; }
+        if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
+        if (a._sizedH !== a.h || a._sizedW !== w) {
+            a.el.style.width = w + 'px';
+            a.el.style.height = a.h + 'px';
+            a.el.style.backgroundSize = (w * 3) + 'px ' + (a.h * 4) + 'px';
+            a._sizedH = a.h; a._sizedW = w;
+        }
+        const bg = (-(a.frame || 0) * w) + 'px ' + (-(a.dir || 0) * a.h) + 'px';
+        if (a._bg !== bg) { a.el.style.backgroundPosition = bg; a._bg = bg; }
+    }
+
     // ── 玩家 ─────────────────────────────────────────────
     const PLAYER_H = 190, PLAYER_SPEED = 0.33;
+    const WALK_FRAMES = [0, 1, 2, 1], WALK_FRAME_MS = 150;
     function initPlayer() {
-        const src = (localStorage.getItem('lobby_stage_mc') === 'm') ? ASSET.mcM : ASSET.mcF;
+        const src = { sheet: ASSET.walkBase };   // 玩家=3×4走路圖（真四方向走路動畫）
         // 'arrive'=走門進場（落點可在擺設模式拖橘色門圓點調整）；落點在牆裡自動彈到最近地板
         const raw = (S.spawnOverride === 'arrive' ? (CFG.points.arrive || CFG.points.player)
                   : S.spawnOverride) || CFG.points.player;
@@ -638,8 +669,16 @@
                 else if (dy && !blocked(p.x, ny)) { p.y = ny; p.dest = null; }
                 else p.dest = null;
                 p.walking = true;
-                if (dx !== 0) p.flip = dx < 0;
-            } else p.walking = false;
+                if (p.sheet) {
+                    // 方向列：0下/1左/2右/3上（主軸決定朝向），幀序 0,1,2,1
+                    p.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 1 : 2) : (dy < 0 ? 3 : 0);
+                    p.animT = (p.animT || 0) + dt;
+                    p.frame = WALK_FRAMES[Math.floor(p.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
+                } else if (dx !== 0) p.flip = dx < 0;
+            } else {
+                p.walking = false;
+                if (p.sheet) { p.frame = 1; p.animT = 0; }   // 立定=中幀
+            }
             placeActor(p);
             // 🚪 過門判定：落地後必須先「走出」觸發區一次，門才重新武裝（防落點在門區內乒乓轉場）
             if (!S.transitioning) {
