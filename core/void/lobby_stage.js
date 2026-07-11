@@ -231,6 +231,29 @@
         });
     }
 
+    // ── NPC 各自的輕量對話歷史（localStorage，上限 20 條）──
+    function getNpcHistory(key) {
+        try { return JSON.parse(localStorage.getItem('lstage_hist_' + key) || '[]'); } catch (e) { return []; }
+    }
+    function pushNpcHistory(key, msg) {
+        try {
+            const arr = getNpcHistory(key);
+            arr.push(msg);
+            while (arr.length > 20) arr.shift();
+            localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr));
+        } catch (e) {}
+    }
+    function popNpcHistoryTail(key, role) {
+        // API 失敗回滾用：尾端若是指定 role 就移除
+        try {
+            const arr = getNpcHistory(key);
+            if (arr.length && arr[arr.length - 1].role === role) {
+                arr.pop();
+                localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr));
+            }
+        } catch (e) {}
+    }
+
     // ── 對話目標（對話本體仍走 void_terminal.sendIrisMessage）──
     function startTalk(npc) {
         if (npc.key === 'ying') { window.dispatchEvent(new CustomEvent('lstage-poke-ying')); return; }
@@ -319,8 +342,9 @@
         getTalkTarget: () => S.talkTarget,
         setTalkTarget: (t) => { S.talkTarget = t || null; },
         endTalk,
-        getNpcHistory: () => [],
-        pushNpcHistory: () => {},
+        getNpcHistory,
+        pushNpcHistory,
+        popNpcHistoryTail,
         _S: S,
     };
 })();

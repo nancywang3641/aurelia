@@ -199,6 +199,8 @@ const IRIS_IDLE = [
         const pick = pool[Math.floor(Math.random() * pool.length)];
         playVoiceReaction(pick);
     }
+    // 🎮 書咖舞台：點舞台上的瀅瀅小人＝戳一下
+    window.addEventListener('lstage-poke-ying', () => pokeIris());
 
     function startIdleTimer() {
         stopIdleTimer();
@@ -2309,7 +2311,10 @@ ${sections}`;
         }
 
         clearInput();
-        IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
+        // 🎮 書咖舞台 NPC 對話：歷史/人設走 NPC 自己的軌道，其餘管線共用
+        const npcTarget = (!is404Room && !isClaudeRoom && window.LobbyStage?.isActive?.()) ? window.LobbyStage.getTalkTarget() : null;
+        if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, { role: 'user', content: text, ts: Date.now() });
+        else IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
 
         // 確保發送消息時隱藏閒聊，還原主線
         if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
@@ -2320,7 +2325,7 @@ ${sections}`;
         const box = document.getElementById('iris-text');
         const nameBox = document.getElementById('iris-name-tag');
         if (nameBox) nameBox.style.display = 'none';
-        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#5c3a28'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : '(瀅瀅咬著羽毛筆思索中...)'}</span>`;
+        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#5c3a28'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : (npcTarget ? `(${npcTarget.name}想了想...)` : '(瀅瀅咬著羽毛筆思索中...)')}</span>`;
 
         if (!window.OS_API) {
             playIrisSequence("[Nar|(系統斷線：無法連接到 LUNA-VII 認知引擎)]\n[Char|瀅瀅|error|「抱歉，委託人，我好像找不到這段劇情的靈感了（無網路連線）。」]");
@@ -2343,7 +2348,9 @@ ${sections}`;
 
             const journalCtx = await _buildJournalCtx();
             const worldCtx   = (window.OS_PROMPTS?.loadWorld?.() || '').trim();
-            const sysPrompt = VoidPrompts.buildSysPrompt(is404Room ? 'cheshire' : 'iris', {
+            const sysPrompt = npcTarget
+                ? VoidPrompts.buildNpcPrompt(npcTarget, { userName: currentUserName, timeCtx: _buildTimeCtx() })
+                : VoidPrompts.buildSysPrompt(is404Room ? 'cheshire' : 'iris', {
                 userName: currentUserName,
                 visit404Count,
                 timeCtx: _buildTimeCtx(),
@@ -2362,7 +2369,9 @@ ${sections}`;
             }
 
             const lastMsg = messages.pop();
-            const recentHistory = IRIS_STATE.history.slice(-11, -1);
+            const recentHistory = npcTarget
+                ? window.LobbyStage.getNpcHistory(npcTarget.key).slice(-11, -1)
+                : IRIS_STATE.history.slice(-11, -1);
             messages = messages.concat(recentHistory);
             if (lastMsg) messages.push(lastMsg);
             messages.unshift({ role: "system", content: sysPrompt });
@@ -2401,11 +2410,13 @@ ${sections}`;
 
             const isApiError = !reply || reply.includes('[请求失败') || reply.includes('[請求失敗') || reply.includes('No capacity') || reply.startsWith('{"error');
             if (isApiError) {
-                if (IRIS_STATE.history.length > 0 && IRIS_STATE.history[IRIS_STATE.history.length - 1].role === 'user') IRIS_STATE.history.pop();
+                if (npcTarget) window.LobbyStage.popNpcHistoryTail(npcTarget.key, 'user');
+                else if (IRIS_STATE.history.length > 0 && IRIS_STATE.history[IRIS_STATE.history.length - 1].role === 'user') IRIS_STATE.history.pop();
                 lastFailedInput = text;
                 const retryBtn = document.getElementById('iris-retry-btn');
                 if (retryBtn) retryBtn.classList.add('visible');
                 if (is404Room) playIrisSequence(`[Nar|(馬賽克雜訊劇烈閃爍)]\n[Char|柴郡|glitch|*(眼神滿是嫌棄)* 連線爛掉了，不是我的問題。]`);
+                else if (npcTarget) playIrisSequence(`[Nar|(${npcTarget.name}的身影微微晃動了一下，像訊號不良的殘影。)]\n[Char|${npcTarget.name}|error|「抱歉……剛剛走神了，能再說一次嗎？」]`);
                 else playIrisSequence(`[Nar|(空間產生劇烈波動)]\n[Char|瀅瀅|error|「抱歉，委託人，我的腦袋突然一片空白，請等我重整一下靈感。」]`);
                 return;
             }
@@ -2498,7 +2509,8 @@ ${sections}`;
             }
             reply = reply.replace(/\[LaunchApp\|[^\]]+\]/gi, '').trim();
 
-            IRIS_STATE.history.push({ role: 'assistant', content: reply, ts: Date.now() });
+            if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, { role: 'assistant', content: reply, ts: Date.now() });
+            else IRIS_STATE.history.push({ role: 'assistant', content: reply, ts: Date.now() });
             debouncedSave();
 
             // 播放對話，完成後檢查是否需要打開面板

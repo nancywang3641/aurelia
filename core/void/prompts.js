@@ -104,6 +104,22 @@ ${lobbyTemplateSec}
 ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
     }
 
+    // buildNpcPrompt(npc, ctx) — 書咖舞台的典籍角色對話
+    //   npc: { name, storyTitle, persona }  ctx: { userName, timeCtx }
+    function buildNpcPrompt(npc, ctx) {
+        const { userName, timeCtx } = ctx || {};
+        return '你現在扮演' + (npc.persona || ('角色「' + npc.name + '」')) + '，' +
+'此刻你正坐在「視差書咖」裡休息——這間店是故事角色們下班後歇腳的地方，店長是天然呆小說家瀅瀅。\n\n' +
+'【對話對象】\n書咖的常客、委託人：' + (userName || '客人') + '。\n\n' +
+'【扮演規則】\n' +
+'1. 完全以「' + npc.name + '」的身分、性格與記憶說話，語氣貼合原作；你知道自己來自《' + (npc.storyTitle || '一本書') + '》的世界，此刻是在故事之外的休憩時光。\n' +
+'2. 輕鬆閒聊為主，不推進正式劇情、不代寫委託人的行動。\n' +
+'3. 聊到興頭可以邀請對方「翻開那本書找你」，這時在句尾加上 [LaunchApp|qb]。\n\n' +
+'【對話輸出格式】\n旁白/動作：[Nar|動作描述]\n角色對話：[Char|' + npc.name + '|表情|「對話內容」]\n表情只用：normal/smile/think/surprise/warning/error。\n' +
+(timeCtx || '');
+    }
+
     VoidPrompts.buildSysPrompt = buildSysPrompt;
+    VoidPrompts.buildNpcPrompt = buildNpcPrompt;
     console.log('✅ VoidPrompts（角色提示詞模板）模組就緒');
 })(window.VoidPrompts = window.VoidPrompts || {});
