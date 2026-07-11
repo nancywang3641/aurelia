@@ -40,17 +40,19 @@
                 npcZone:  { x: 220, y: 600, w: 1100, h: 260 },   // 客人出沒區（輪班NPC隨機刷在框內）
                 player: { x: 697, y: 600 },
                 arrive: { x: 975, y: 430 },   // 走門進來的落點（從大廳回書咖）
+                // 外框鋼索：可走範圍多邊形（牆角錨點可在擺設模式拖）
+                boundary: [
+                    { x: 195, y: 360 }, { x: 1345, y: 360 }, { x: 1430, y: 640 },
+                    { x: 1458, y: 925 }, { x: 75, y: 925 }, { x: 105, y: 640 },
+                ],
                 actorScale: 0.7,
             },
             walls: [
-                { x: 0,    y: 0,   w: 1536, h: 355 },
-                { x: 0,    y: 0,   w: 90,   h: 1024 },
-                { x: 1446, y: 0,   w: 90,   h: 1024 },
-                { x: 0,    y: 930, w: 1536, h: 94 },
-                { x: 1140, y: 360, w: 260,  h: 155 },
-                { x: 1140, y: 800, w: 396,  h: 130 },
-                { x: 915,  y: 840, w: 180,  h: 90 },
-                { x: 55,   y: 620, w: 130,  h: 110 },
+                // 外牆改走 boundary 鋼索；這裡只留底圖烤死的家具
+                { x: 1140, y: 360, w: 260,  h: 155 },   // 右側沙發閱讀角
+                { x: 1140, y: 800, w: 396,  h: 130 },   // 右下露臺花圃
+                { x: 915,  y: 840, w: 180,  h: 90 },    // 底部中央花圃
+                { x: 55,   y: 620, w: 130,  h: 110 },   // 左側小案几
             ],
             doors: [ { x: 895, y: 355, w: 170, h: 34, to: 'hall', spawn: { x: 770, y: 790 } } ],  // 書咖上緣木門→大廳
         },
@@ -68,15 +70,13 @@
                 npcZone:  { x: 250, y: 560, w: 1000, h: 280 },
                 player: { x: 770, y: 790 },
                 arrive: { x: 770, y: 790 },   // 走門進來的落點（從書咖進大廳）
+                boundary: [
+                    { x: 255, y: 240 }, { x: 1290, y: 240 }, { x: 1395, y: 560 },
+                    { x: 1430, y: 868 }, { x: 105, y: 868 }, { x: 140, y: 560 },
+                ],
                 actorScale: 0.7,
             },
-            walls: [
-                { x: 0,    y: 0,   w: 1536, h: 230 },   // 後牆(星空傳送門列)
-                { x: 0,    y: 0,   w: 120,  h: 1024 },  // 左牆斜邊
-                { x: 1416, y: 0,   w: 120,  h: 1024 },  // 右牆斜邊
-                { x: 0,    y: 880, w: 1536, h: 144 },   // 下緣圍欄
-                // 核心基座阻擋改由 lobby_hall_obj_core 的物件腳印提供（可在擺設模式挪動）
-            ],
+            walls: [],   // 外牆走 boundary 鋼索；核心基座=物件腳印
             doors: [ { x: 660, y: 846, w: 215, h: 34, to: 'cafe', spawn: { x: 975, y: 430 } } ],  // 底部大門→回書咖
             alice: { x: 940, y: 520 },   // 愛麗絲：核心旁、不漫步、永遠面向玩家
         },
@@ -113,6 +113,7 @@
                     if (saved.points.npcZone) points.npcZone = saved.points.npcZone;
                     if (saved.points.player) points.player = saved.points.player;
                     if (saved.points.arrive) points.arrive = saved.points.arrive;
+                    if (Array.isArray(saved.points.boundary) && saved.points.boundary.length >= 3) points.boundary = saved.points.boundary;
                     if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
                 }
             }
@@ -142,9 +143,20 @@
         BLOCKS = SCENES[S.scene].walls.concat(CFG.layout.map(footRect));
     }
     const FOOT_W = 46, FOOT_H = 18;
+    // 射線法：點是否在多邊形內（外框鋼索用，用腳點中心判定）
+    function insidePoly(pts, x, y) {
+        let inside = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+            if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+        }
+        return inside;
+    }
     function blocked(x, y) {
         const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
         if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
+        const P = CFG?.points?.boundary;
+        if (P && P.length >= 3 && !insidePoly(P, x, y)) return true;   // 鋼索圈外=牆
         return BLOCKS.some(B => l < B.x + B.w && r > B.x && t < B.y + B.h && b > B.y);
     }
 
@@ -628,6 +640,27 @@
         };
         mkZone('yingZone', '瀅瀅活動區', 'z-ying');
         mkZone('npcZone', '客人出沒區', 'z-npc');
+        // 外框鋼索：金色多邊形=可走範圍，白色錨點可拖（牆角）
+        if (Array.isArray(CFG.points.boundary) && CFG.points.boundary.length >= 3) {
+            const NS = 'http://www.w3.org/2000/svg';
+            const svg = document.createElementNS(NS, 'svg');
+            svg.setAttribute('class', 'lstage-wire');
+            svg.setAttribute('width', String(MAP_W));
+            svg.setAttribute('height', String(MAP_H));
+            svg.setAttribute('viewBox', '0 0 ' + MAP_W + ' ' + MAP_H);
+            const poly = document.createElementNS(NS, 'polygon');
+            svg.appendChild(poly);
+            S.world.appendChild(svg);
+            S.edit.wire = { svg, poly, handles: [] };
+            CFG.points.boundary.forEach((pt) => {
+                const hnd = document.createElement('div');
+                hnd.className = 'lstage-vert';
+                S.world.appendChild(hnd);
+                hnd.onpointerdown = (e) => _dragStart(e, { kind: 'vert', pt, m: hnd });
+                S.edit.wire.handles.push(hnd);
+            });
+            _syncWire();
+        }
         // 空地拖曳=平移視角
         S.root.querySelector('.lstage-click').onpointerdown = (e) => _dragStart(e, { kind: 'cam' });
         window.addEventListener('pointermove', _dragMove);
@@ -636,7 +669,7 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         panel.innerHTML =
-            '<div class="lep-hint">拖東西調位置，拖空地移動視角。藍圓=出生點｜橘圓門=走門進來的落點｜綠框=客人出沒區(隨機刷在框內)｜紫框=瀅瀅活動範圍｜框都可拖右下角調大小｜紅框=走不進去的佔地</div>' +
+            '<div class="lep-hint">拖東西調位置，拖空地移動視角。金色鋼索=可走範圍外框(拖白色牆角錨點)｜藍圓=出生點｜橘圓門=走門落點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=佔地</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
               '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
@@ -698,6 +731,13 @@
         });
         _exportToPanel();
     }
+    function _syncWire() {
+        const w = S.edit?.wire;
+        if (!w) return;
+        const b = CFG.points.boundary;
+        w.poly.setAttribute('points', b.map(p => p.x + ',' + p.y).join(' '));
+        w.handles.forEach((h, i) => { h.style.left = b[i].x + 'px'; h.style.top = b[i].y + 'px'; });
+    }
     function _syncZone(pk) {
         const z = CFG.points[pk], el = S.edit?.zones?.[pk];
         if (!z || !el) return;
@@ -724,7 +764,7 @@
             const o = CFG.layout[info.i];
             S.edit.drag.ox = o.x; S.edit.drag.oy = o.y;
             S.edit.feet.forEach((_, k) => _syncFoot(k));
-        } else if (info.kind === 'pt') {
+        } else if (info.kind === 'pt' || info.kind === 'vert') {
             S.edit.drag.ox = info.pt.x; S.edit.drag.oy = info.pt.y;
         } else if (info.kind === 'zone') {
             const z = CFG.points[info.pk];
@@ -744,9 +784,10 @@
             const o = CFG.layout[d.i];
             o.x = Math.round(d.ox + dx); o.y = Math.round(d.oy + dy);
             placeObj(S.objEls[d.i], o); _syncFoot(d.i);
-        } else if (d.kind === 'pt') {
+        } else if (d.kind === 'pt' || d.kind === 'vert') {
             d.pt.x = Math.round(d.ox + dx); d.pt.y = Math.round(d.oy + dy);
             d.m.style.left = d.pt.x + 'px'; d.m.style.top = d.pt.y + 'px';
+            if (d.kind === 'vert') _syncWire();
         } else if (d.kind === 'zone') {
             const z = CFG.points[d.pk];
             z.x = Math.round(d.ox + dx); z.y = Math.round(d.oy + dy);
@@ -789,6 +830,7 @@
         S.edit.feet.forEach(f => f.remove());
         S.edit.markers.forEach(m => m.remove());
         Object.values(S.edit.zones || {}).forEach(el => el.remove());
+        if (S.edit.wire) { S.edit.wire.svg.remove(); S.edit.wire.handles.forEach(h => h.remove()); }
         S.edit.panel?.remove();
         S.objEls.forEach(img => { img.classList.remove('lstage-editable'); img.onpointerdown = null; });
         const click = S.root?.querySelector('.lstage-click');
