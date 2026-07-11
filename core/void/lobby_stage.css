@@ -19,7 +19,7 @@
 .lstage-toggle-btn.off { opacity:.45; }
 
 /* ── 🖊 擺設模式 ── */
-.lstage-edit-btn { position:absolute; right:10px; bottom:10px; z-index:3000; width:34px; height:34px;
+.lstage-edit-btn { position:absolute; right:10px; top:10px; z-index:3000; width:34px; height:34px;
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-edit-btn:hover { background:rgba(20,18,16,.85); }
 .lstage-editing .lstage-edit-btn { background:#c8874a; color:#fff; }
