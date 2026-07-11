@@ -288,16 +288,25 @@
     // ── 對話目標（對話本體仍走 void_terminal.sendIrisMessage）──
     function startTalk(npc) {
         if (S.edit) return;
-        if (npc.key === 'ying') { window.dispatchEvent(new CustomEvent('lstage-poke-ying')); return; }
         S.talkTarget = npc;
         S.npcs.forEach(n => { n.hint.style.display = 'none'; });
         const nameEl = document.getElementById('lb-char-name');
         const subEl = document.getElementById('lb-char-sub');
         const tagSpan = document.querySelector('#iris-name-tag span');
+        const input = document.getElementById('iris-input');
+        if (npc.key === 'ying') {
+            // 瀅瀅=對話目標，但管線走她原本的 iris 軌道（void_terminal 會排除 ying）
+            if (nameEl) nameEl.textContent = '瀅瀅';
+            if (subEl) subEl.textContent = '視差書咖 · 館長';
+            if (tagSpan) tagSpan.textContent = '瀅瀅';
+            if (input) input.placeholder = '和瀅瀅聊聊…（點空地結束）';
+            showDialog();
+            window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句
+            return;
+        }
         if (nameEl) nameEl.textContent = npc.name;
         if (subEl) subEl.textContent = '來自《' + (npc.storyTitle || '未知的書') + '》';
         if (tagSpan) tagSpan.textContent = npc.name;
-        const input = document.getElementById('iris-input');
         if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
         showDialog();
     }
