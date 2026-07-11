@@ -36,6 +36,70 @@
         keys: {}, onKey: null,
     };
 
+    // ── 碰撞 ─────────────────────────────────────────────
+    // 底圖牆面（手標；後牆腳線約 y=310、下緣露臺矮牆約 y=930 起）
+    const WALL_BLOCKS = [
+        { x: 0,    y: 0,   w: 1536, h: 310 },   // 後牆
+        { x: 0,    y: 0,   w: 90,   h: 1024 },  // 左牆斜邊(粗略)
+        { x: 1446, y: 0,   w: 90,   h: 1024 },  // 右牆斜邊(粗略)
+        { x: 0,    y: 930, w: 1536, h: 94 },    // 下緣+露臺矮牆
+    ];
+    // 物件腳印：物件圖底部 footH 那截視為佔地，上半部人可以走到後面被遮
+    const BLOCKS = WALL_BLOCKS.concat(LAYOUT.map(o => (
+        { x: o.x, y: o.y + o.h - o.footH, w: o.w, h: o.footH }
+    )));
+    const FOOT_W = 46, FOOT_H = 18;   // 小人腳底碰撞盒（以 x,y 為底邊中心）
+    function blocked(x, y) {
+        const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
+        if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
+        return BLOCKS.some(B => l < B.x + B.w && r > B.x && t < B.y + B.h && b > B.y);
+    }
+
+    // ── 角色（玩家/NPC 共用）────────────────────────────
+    function spawnActor(src, x, y, h) {
+        const img = document.createElement('img');
+        img.className = 'lstage-actor';
+        img.src = src;
+        img.style.height = h + 'px';
+        S.world.appendChild(img);
+        const a = { x, y, h, el: img, walking: false, flip: false };
+        img.addEventListener('load', () => placeActor(a), { once: true });
+        placeActor(a);
+        return a;
+    }
+    function placeActor(a) {
+        const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
+        const w = a.h * ratio;
+        a.el.style.left = (a.x - w / 2) + 'px';
+        a.el.style.top = (a.y - a.h) + 'px';
+        a.el.style.zIndex = String(2 + Math.round(a.y));
+        a.el.classList.toggle('walking', !!a.walking);
+        a.el.classList.toggle('flip', !!a.flip);
+    }
+
+    // ── 玩家 ─────────────────────────────────────────────
+    const PLAYER_H = 190, PLAYER_SPEED = 0.33;   // px(map)/ms
+    function initPlayer() {
+        const src = (localStorage.getItem('lobby_stage_mc') === 'm') ? ASSET.mcM : ASSET.mcF;
+        S.player = Object.assign(spawnActor(src, 640, 760, PLAYER_H), { dest: null });
+        S.onKey = (e) => {
+            const tag = (document.activeElement?.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea') return;
+            const k = e.key.toLowerCase();
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) {
+                S.keys[k] = (e.type === 'keydown');
+                e.preventDefault();
+            }
+        };
+        window.addEventListener('keydown', S.onKey);
+        window.addEventListener('keyup', S.onKey);
+        S.root.querySelector('.lstage-click').addEventListener('click', (e) => {
+            if (S.talkTarget) return;   // 對話中鎖移動（Task 5 加 endTalk）
+            const r = S.world.getBoundingClientRect();
+            S.player.dest = { x: (e.clientX - r.left) / S.scale, y: (e.clientY - r.top) / S.scale };
+        });
+    }
+
     function isOn() { try { return localStorage.getItem('lobby_stage_on') !== '0'; } catch (e) { return true; } }
 
     function tryMount() {
@@ -60,6 +124,7 @@
             img.style.zIndex = String(2 + Math.round(o.y + o.h));
             S.world.appendChild(img);
         });
+        initPlayer();
         fitCamera();
         window.addEventListener('resize', fitCamera);
         S.last = performance.now();
@@ -71,6 +136,11 @@
         if (!S.active) return;
         cancelAnimationFrame(S.raf);
         window.removeEventListener('resize', fitCamera);
+        if (S.onKey) {
+            window.removeEventListener('keydown', S.onKey);
+            window.removeEventListener('keyup', S.onKey);
+            S.onKey = null;
+        }
         S.root?.remove();
         document.querySelector('.lobby-left')?.classList.remove('lstage-on');
         S.root = S.world = null;
@@ -102,7 +172,35 @@
         update(dt);
         S.raf = requestAnimationFrame(tick);
     }
-    function update(dt) { applyCamera(); }
+    function update(dt) {
+        const p = S.player;
+        if (p && !S.talkTarget) {
+            let dx = 0, dy = 0;
+            if (S.keys['arrowleft'] || S.keys['a']) dx -= 1;
+            if (S.keys['arrowright'] || S.keys['d']) dx += 1;
+            if (S.keys['arrowup'] || S.keys['w']) dy -= 1;
+            if (S.keys['arrowdown'] || S.keys['s']) dy += 1;
+            if (dx || dy) p.dest = null;
+            else if (p.dest) {
+                const vx = p.dest.x - p.x, vy = p.dest.y - p.y, d = Math.hypot(vx, vy);
+                if (d < 6) p.dest = null; else { dx = vx / d; dy = vy / d; }
+            }
+            const len = Math.hypot(dx, dy);
+            if (len > 0) {
+                const step = PLAYER_SPEED * dt / len;
+                const nx = p.x + dx * step, ny = p.y + dy * step;
+                // 撞牆滑動：先試全移，不行再試單軸
+                if (!blocked(nx, ny)) { p.x = nx; p.y = ny; }
+                else if (dx && !blocked(nx, p.y)) { p.x = nx; p.dest = null; }
+                else if (dy && !blocked(p.x, ny)) { p.y = ny; p.dest = null; }
+                else p.dest = null;
+                p.walking = true;
+                if (dx !== 0) p.flip = dx < 0;
+            } else p.walking = false;
+            placeActor(p);
+        }
+        applyCamera();
+    }
 
     window.LobbyStage = {
         tryMount, unmount,
