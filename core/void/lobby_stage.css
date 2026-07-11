@@ -58,6 +58,14 @@
 .lstage-marker.m-player { background:#4a86c8; }
 .lstage-marker.m-spot { background:#4aa06a; }
 .lstage-marker.m-arrive { background:#d08a3e; }
+/* 遮罩視覺化（擺設模式）：不可走區半透明紅 */
+.lstage-maskview { position:absolute; left:0; top:0; z-index:2300; pointer-events:none; }
+/* 過門觸發區（擺設模式）：橘色虛線框 */
+.lstage-doorrect { position:absolute; border:2px dashed #d08a3e; background:rgba(208,138,62,.16);
+  z-index:2350; pointer-events:none; }
+.lstage-doorrect span { position:absolute; left:4px; top:-22px; background:#d08a3e; color:#fff;
+  font-size:11px; padding:3px 7px; border-radius:6px; white-space:nowrap; }
+
 /* 外框鋼索：金色多邊形+白色牆角錨點 */
 .lstage-wire { position:absolute; left:0; top:0; z-index:2400; pointer-events:none; }
 .lstage-wire polygon { fill:rgba(255,210,74,.06); stroke:#ffd24a; stroke-width:3; stroke-dasharray:10 6; }
