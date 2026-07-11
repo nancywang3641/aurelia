@@ -575,6 +575,7 @@ const IRIS_IDLE = [
                         <span class="void-mode-toggle-label">⬡ 404</span>
                     </button>
                     <button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏">⛶</button>
+                    <button class="lb-icon-btn lstage-toggle-btn" id="lstage-toggle" title="書咖舞台"><i class="fa-solid fa-gamepad"></i></button>
                     <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關">🔊</button>
                     <button class="lb-icon-btn" id="aurelia-global-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">⏻</button>
                     <audio id="lobby-bgm-player" loop style="display:none;"></audio>
@@ -1256,6 +1257,21 @@ const IRIS_IDLE = [
                 return { open: _open, close: _close, init: _init };
             })();
             LobbyChapterPanel.init();
+
+            // 🎮 書咖俯視舞台：掛載＋頂欄開關鈕
+            if (window.LobbyStage) window.LobbyStage.tryMount();
+            const lstageBtn = tab.querySelector('#lstage-toggle');
+            if (lstageBtn) {
+                const _syncLstageBtn = () => lstageBtn.classList.toggle('off', !window.LobbyStage?.isOn());
+                _syncLstageBtn();
+                lstageBtn.addEventListener('click', () => {
+                    if (!window.LobbyStage) return;
+                    const on = window.LobbyStage.isOn();
+                    try { localStorage.setItem('lobby_stage_on', on ? '0' : '1'); } catch(e) {}
+                    if (on) window.LobbyStage.unmount(); else window.LobbyStage.tryMount();
+                    _syncLstageBtn();
+                });
+            }
 
             // 📖 獨立閱讀器按鈕
             const vnReaderBtn = tab.querySelector('#vn-reader-lobby-btn');

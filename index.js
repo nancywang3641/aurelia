@@ -127,6 +127,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },
     { name: 'void_ambient', path: _AURELIA_EXT_BASE + '/core/void/ambient.js', key: 'voidAmbient' },
     { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
+    { name: 'void_lobby_stage', path: _AURELIA_EXT_BASE + '/core/void/lobby_stage.js', key: 'voidLobbyStage' },
     { name: 'void_login', path: _AURELIA_EXT_BASE + '/core/void/login.js', key: 'voidLogin' },
     { name: 'void_phone_shell', path: _AURELIA_EXT_BASE + '/core/void/phone_shell.js', key: 'voidPhoneShell' },
     { name: 'app_runtime', path: _AURELIA_EXT_BASE + '/core/void/app_runtime.js', key: 'appRuntime' },
@@ -414,6 +415,7 @@ async function initializeExtension() {
         console.log('[System] 正在載入核心樣式 (CSS)...');
         await loadCSS(_AURELIA_EXT_BASE + '/aurelia_core_st.css');
         await loadCSS(_AURELIA_EXT_BASE + '/core/void/lobby.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/core/void/lobby_stage.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/phone_shell.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/app_store.css');
 
