@@ -278,11 +278,13 @@
     function placeActor(a) {
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
         const w = a.h * ratio;
-        a.el.style.left = (a.x - w / 2) + 'px';
-        a.el.style.top = (a.y - a.h) + 'px';
-        a.el.style.zIndex = String(2 + Math.round(a.y));
-        a.el.classList.toggle('walking', !!a.walking);
-        a.el.classList.toggle('flip', !!a.flip);
+        // 整數化+只在變化時寫入（避免逐幀觸發重排/重疊層計算）
+        const left = Math.round(a.x - w / 2), top = Math.round(a.y - a.h), z = 2 + Math.round(a.y);
+        if (a._left !== left) { a.el.style.left = left + 'px'; a._left = left; }
+        if (a._top !== top) { a.el.style.top = top + 'px'; a._top = top; }
+        if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
+        if (a._walking !== !!a.walking) { a.el.classList.toggle('walking', !!a.walking); a._walking = !!a.walking; }
+        if (a._flipC !== !!a.flip) { a.el.classList.toggle('flip', !!a.flip); a._flipC = !!a.flip; }
     }
 
     // ── 玩家 ─────────────────────────────────────────────
@@ -397,10 +399,13 @@
         return npc;
     }
     function placeNpcExtras(npc) {
-        npc.tag.style.left = npc.x + 'px';
-        npc.tag.style.top = (npc.y + 8) + 'px';
-        npc.hint.style.left = npc.x + 'px';
-        npc.hint.style.top = (npc.y - npc.h - 6) + 'px';
+        const x = Math.round(npc.x), ty = Math.round(npc.y + 8), hy = Math.round(npc.y - npc.h - 6);
+        if (npc._ex === x && npc._ety === ty) return;   // 沒移動就不碰 DOM
+        npc._ex = x; npc._ety = ty;
+        npc.tag.style.left = x + 'px';
+        npc.tag.style.top = ty + 'px';
+        npc.hint.style.left = x + 'px';
+        npc.hint.style.top = hy + 'px';
     }
     function updateNpcs(dt) {
         S.npcs.forEach(n => {
@@ -541,6 +546,7 @@
         const vw = S.root.clientWidth, vh = S.root.clientHeight;
         if (!vw || !vh) return;
         S.scale = Math.max(vw / MAP_W, vh / MAP_H);
+        S._camX = S._camY = null;   // 縮放變了→強制重寫 transform（applyCamera 有快取）
         applyCamera();
     }
     function applyCamera() {
@@ -550,8 +556,10 @@
         // 底部對話框會蓋住下緣 → 跟隨模式把焦點擺在畫面偏上(38%)，人不會躲進對話框後面
         const focusRatio = S.edit ? 0.5 : 0.38;
         let cx = focus.x * S.scale - vw / 2, cy = focus.y * S.scale - vh * focusRatio;
-        cx = Math.max(0, Math.min(MAP_W * S.scale - vw, cx));
-        cy = Math.max(0, Math.min(MAP_H * S.scale - vh, cy));
+        cx = Math.round(Math.max(0, Math.min(MAP_W * S.scale - vw, cx)));
+        cy = Math.round(Math.max(0, Math.min(MAP_H * S.scale - vh, cy)));
+        if (S._camX === cx && S._camY === cy) return;   // 鏡頭沒動就不重寫 transform
+        S._camX = cx; S._camY = cy;
         S.world.style.transform = 'translate(' + (-cx) + 'px,' + (-cy) + 'px) scale(' + S.scale + ')';
     }
 
