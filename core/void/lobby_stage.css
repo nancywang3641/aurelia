@@ -1,0 +1,19 @@
+/* core/void/lobby_stage.css — 書咖俯視舞台 */
+.lstage-root { position:absolute; inset:0; overflow:hidden; background:#141210; z-index:1; }
+.lstage-world { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
+.lstage-map { position:absolute; left:0; top:0; display:block; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none; z-index:0; }
+.lstage-actor { position:absolute; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none; }
+.lstage-actor.walking { animation:lstage-bob .35s steps(2) infinite; }
+@keyframes lstage-bob { 0%{margin-top:0} 50%{margin-top:-6px} 100%{margin-top:0} }
+.lstage-actor.flip { transform:scaleX(-1); }
+.lstage-tag { position:absolute; transform:translateX(-50%); background:rgba(20,18,16,.72); color:#f3ead8;
+  font-size:12px; line-height:1; padding:4px 8px; border-radius:8px; white-space:nowrap; pointer-events:none; z-index:2000; }
+.lstage-hint { position:absolute; transform:translate(-50%,-100%); color:#ffe9a8; font-size:20px;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6)); cursor:pointer; pointer-events:auto; z-index:2100;
+  animation:lstage-hint-float 1.2s ease-in-out infinite; }
+@keyframes lstage-hint-float { 0%,100%{margin-top:0} 50%{margin-top:-5px} }
+.lstage-click { position:absolute; inset:0; cursor:pointer; z-index:1; }
+/* 舞台模式：藏原立繪與簽名，對話框保持最上層 */
+.lobby-left.lstage-on #iris-avatar, .lobby-left.lstage-on .lb-signature { display:none !important; }
+.lobby-left.lstage-on .void-dialogue-wrap { z-index:5; }
+.lstage-toggle-btn.off { opacity:.45; }
