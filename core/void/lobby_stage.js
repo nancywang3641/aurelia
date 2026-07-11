@@ -31,9 +31,9 @@
         { file: 'lobby_obj_07.png',      x: 258,  y: 813, w: 425,  h: 177, footH: 20,  s: 0.7 }, // 小花箱
     ];
     const DEFAULT_POINTS = {
-        ying:   { x: 700, y: 430 },     // 瀅瀅（吧台後）
+        yingZone: { x: 340, y: 405, w: 440, h: 45 },  // 瀅瀅活動區（吧台後窄帶；出生=區中心，只在框內晃）
         player: { x: 697, y: 600 },     // 委託人出生點
-        spots:  [{ x: 508, y: 787 }, { x: 1250, y: 880 }, { x: 1100, y: 500 }, { x: 250, y: 880 }], // 輪班NPC站位
+        spots:  [{ x: 508, y: 787 }, { x: 1250, y: 880 }, { x: 1100, y: 500 }, { x: 250, y: 880 }], // 輪班NPC站位(書中客人座位)
         actorScale: 0.7,                // 人物整體縮放（Rae 調校值）
     };
     // 物件有效尺寸（s=個別縮放，預設1；佔地跟著縮）
@@ -54,7 +54,7 @@
                     if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.s != null) t.s = s.s; }
                 });
                 if (saved.points) {
-                    if (saved.points.ying) points.ying = saved.points.ying;
+                    if (saved.points.yingZone) points.yingZone = saved.points.yingZone;
                     if (saved.points.player) points.player = saved.points.player;
                     if (Array.isArray(saved.points.spots) && saved.points.spots.length) points.spots = saved.points.spots;
                     if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
@@ -164,9 +164,9 @@
     // ── NPC ──────────────────────────────────────────────
     const NPC_H = 180, INTERACT_R = 130;
     async function initNpcs() {
-        const yp = CFG.points.ying;
-        addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: yp.x, y: yp.y, h: 200,
-                 src: ASSET.ying, homeRect: { x: yp.x - 350, y: yp.y - 15, w: 700, h: 30 } });
+        const z = CFG.points.yingZone;
+        addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
+                 src: ASSET.ying, homeRect: z });
         try {
             if (!window.OS_DB?.getAllVnChapters) return;
             const chapters = await window.OS_DB.getAllVnChapters();
@@ -434,15 +434,22 @@
             m.style.left = pos.x + 'px'; m.style.top = pos.y + 'px';
             return m;
         };
-        S.edit.markers.push(mk('瀅', 'm-ying', () => CFG.points.ying));
         S.edit.markers.push(mk('我', 'm-player', () => CFG.points.player));
-        CFG.points.spots.forEach((sp, i) => S.edit.markers.push(mk(String(i + 1), 'm-spot', () => sp)));
-        S.edit.markers[0].onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.ying, m: S.edit.markers[0] });
-        S.edit.markers[1].onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.player, m: S.edit.markers[1] });
+        S.edit.markers[0].onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.player, m: S.edit.markers[0] });
         CFG.points.spots.forEach((sp, i) => {
-            const m = S.edit.markers[2 + i];
+            const m = mk(String(i + 1), 'm-spot', () => sp);
+            S.edit.markers.push(m);
             m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: sp, m });
         });
+        // 瀅瀅活動區：紫色框（拖框身=移動、拖右下角=調大小）
+        const zone = document.createElement('div');
+        zone.className = 'lstage-zone';
+        zone.innerHTML = '<span class="lstage-zone-label">瀅瀅活動區</span><span class="lstage-zone-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
+        S.world.appendChild(zone);
+        S.edit.zone = zone;
+        _syncZone();
+        zone.onpointerdown = (e) => _dragStart(e, { kind: 'zone' });
+        zone.querySelector('.lstage-zone-grip').onpointerdown = (e) => _dragStart(e, { kind: 'zoneresize' });
         // 空地拖曳=平移視角
         S.root.querySelector('.lstage-click').onpointerdown = (e) => _dragStart(e, { kind: 'cam' });
         window.addEventListener('pointermove', _dragMove);
@@ -451,7 +458,7 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         panel.innerHTML =
-            '<div class="lep-hint">拖家具/圓點調位置，拖空地移動視角；點選家具後可縮放/調佔地</div>' +
+            '<div class="lep-hint">拖東西調位置，拖空地移動視角。藍圓=你的出生點｜綠圓1~4=書中客人的座位｜紫框=瀅瀅活動範圍(拖右下角調大小)｜紅框=走不進去的佔地</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
               '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
@@ -502,6 +509,14 @@
         });
         _exportToPanel();
     }
+    function _syncZone() {
+        const z = CFG.points.yingZone, el = S.edit?.zone;
+        if (!el) return;
+        el.style.left = z.x + 'px';
+        el.style.top = z.y + 'px';
+        el.style.width = z.w + 'px';
+        el.style.height = z.h + 'px';
+    }
     function _syncFoot(i) {
         const o = CFG.layout[i], foot = S.edit.feet[i];
         if (!foot) return;
@@ -522,6 +537,12 @@
             S.edit.feet.forEach((_, k) => _syncFoot(k));
         } else if (info.kind === 'pt') {
             S.edit.drag.ox = info.pt.x; S.edit.drag.oy = info.pt.y;
+        } else if (info.kind === 'zone') {
+            const z = CFG.points.yingZone;
+            S.edit.drag.ox = z.x; S.edit.drag.oy = z.y;
+        } else if (info.kind === 'zoneresize') {
+            const z = CFG.points.yingZone;
+            S.edit.drag.ox = z.w; S.edit.drag.oy = z.h;
         } else if (info.kind === 'cam') {
             S.edit.drag.ox = S.edit.cam.x; S.edit.drag.oy = S.edit.cam.y;
         }
@@ -537,6 +558,15 @@
         } else if (d.kind === 'pt') {
             d.pt.x = Math.round(d.ox + dx); d.pt.y = Math.round(d.oy + dy);
             d.m.style.left = d.pt.x + 'px'; d.m.style.top = d.pt.y + 'px';
+        } else if (d.kind === 'zone') {
+            const z = CFG.points.yingZone;
+            z.x = Math.round(d.ox + dx); z.y = Math.round(d.oy + dy);
+            _syncZone();
+        } else if (d.kind === 'zoneresize') {
+            const z = CFG.points.yingZone;
+            z.w = Math.max(60, Math.round(d.ox + dx));
+            z.h = Math.max(30, Math.round(d.oy + dy));
+            _syncZone();
         } else if (d.kind === 'cam') {
             S.edit.cam.x = d.ox - dx; S.edit.cam.y = d.oy - dy;
         }
@@ -565,6 +595,7 @@
         window.removeEventListener('pointerup', _dragEnd);
         S.edit.feet.forEach(f => f.remove());
         S.edit.markers.forEach(m => m.remove());
+        S.edit.zone?.remove();
         S.edit.panel?.remove();
         S.objEls.forEach(img => { img.classList.remove('lstage-editable'); img.onpointerdown = null; });
         const click = S.root?.querySelector('.lstage-click');
