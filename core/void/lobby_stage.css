@@ -16,6 +16,13 @@
 /* 舞台模式：藏原立繪與簽名，對話框保持最上層 */
 .lobby-left.lstage-on #iris-avatar, .lobby-left.lstage-on .lb-signature { display:none !important; }
 .lobby-left.lstage-on .void-dialogue-wrap { z-index:5; }
+/* 對話框平常收起（戳戳反應框不受影響），有對話才浮出 */
+.lobby-left.lstage-on.lstage-dlg-hidden #iris-dialogue-box { display:none !important; }
+/* 對話中的像素立繪（小人放大版，動森風） */
+.lstage-talk-portrait { position:absolute; left:12px; bottom:21%; height:38%; z-index:4;
+  image-rendering:pixelated; pointer-events:none; user-select:none;
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.35)); animation:lstage-portrait-in .18s ease-out; }
+@keyframes lstage-portrait-in { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
 .lstage-toggle-btn.off { opacity:.45; }
 
 /* ── 🖊 擺設模式 ── */

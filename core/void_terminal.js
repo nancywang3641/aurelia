@@ -2319,6 +2319,7 @@ ${sections}`;
         const npcTarget = (!is404Room && !isClaudeRoom && window.LobbyStage?.isActive?.()) ? window.LobbyStage.getTalkTarget() : null;
         if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, { role: 'user', content: text, ts: Date.now() });
         else IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
+        if (!is404Room && !isClaudeRoom && window.LobbyStage?.isActive?.()) window.LobbyStage.showDialog();   // 舞台模式：發話才浮出對話框+立繪
 
         // 確保發送消息時隱藏閒聊，還原主線
         if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
