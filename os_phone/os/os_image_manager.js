@@ -415,8 +415,12 @@
                 // 中和會讓男角變女的女性偏向髮型詞（保留中分外觀、拔掉女性 trigger）
                 posText = posText.replace(/\bm[-\s]?shaped bangs\b/ig, 'center-parted hair')
                                  .replace(/\bparted bangs\b/ig, 'parted hair');
-                posText = [posText, 'male focus, masculine'].filter(Boolean).join(', ');
-                negText = [negText, '(breast:1.5), (girl:1.5), (woman:1.5)'].filter(Boolean).join(', ');
+                // prompt 已明寫男性詞(1boy/2boys/male/masculine/yaoi/man…)＝上游已錨定性別 → 不再疊錨點/強負詞
+                // （這組救援是給「完全沒寫性別」的舊頭像詞用的；疊在寫好的 prompt 上會干擾構圖、1.5權重負詞還會偏移畫風）
+                if (!/(1boy|2boys|3boys|\bboys?\b|\bmale\b|\bmasculine\b|\byaoi\b|\bman\b|\bmen\b)/i.test(posText)) {
+                    posText = [posText, 'male focus, masculine'].filter(Boolean).join(', ');
+                    negText = [negText, '(breast:1.5), (girl:1.5), (woman:1.5)'].filter(Boolean).join(', ');
+                }
             }
             let wf;
             if (cfg.workflowMode === 'custom' && (cfg.customWorkflow || '').trim()) {
