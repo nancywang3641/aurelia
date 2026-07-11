@@ -34,7 +34,13 @@
         ying:   { x: 700, y: 430 },     // 瀅瀅（吧台後）
         player: { x: 640, y: 760 },     // 委託人出生點
         spots:  [{ x: 460, y: 800 }, { x: 1250, y: 880 }, { x: 1100, y: 500 }, { x: 250, y: 880 }], // 輪班NPC站位
+        actorScale: 1,                  // 人物整體縮放
     };
+    // 物件有效尺寸（s=個別縮放，預設1；佔地跟著縮）
+    function effDims(o) {
+        const s = o.s || 1;
+        return { ew: Math.round(o.w * s), eh: Math.round(o.h * s), ef: Math.round(o.footH * s) };
+    }
 
     // 讀取佈局：本機調過的蓋過預設（layout 按 file 名對位，points 整包）
     function _loadCfg() {
@@ -45,12 +51,13 @@
             if (saved) {
                 (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
-                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; }
+                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.s != null) t.s = s.s; }
                 });
                 if (saved.points) {
                     if (saved.points.ying) points.ying = saved.points.ying;
                     if (saved.points.player) points.player = saved.points.player;
                     if (Array.isArray(saved.points.spots) && saved.points.spots.length) points.spots = saved.points.spots;
+                    if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
                 }
             }
         } catch (e) {}
@@ -78,9 +85,10 @@
     ];
     let BLOCKS = [];
     function rebuildBlocks() {
-        BLOCKS = WALL_BLOCKS.concat(CFG.layout.map(o => (
-            { x: o.x, y: o.y + o.h - o.footH, w: o.w, h: o.footH }
-        )));
+        BLOCKS = WALL_BLOCKS.concat(CFG.layout.map(o => {
+            const d = effDims(o);
+            return { x: o.x, y: o.y + d.eh - d.ef, w: d.ew, h: d.ef };
+        }));
     }
     rebuildBlocks();
     const FOOT_W = 46, FOOT_H = 18;
@@ -95,12 +103,23 @@
         const img = document.createElement('img');
         img.className = 'lstage-actor';
         img.src = src;
-        img.style.height = h + 'px';
         S.world.appendChild(img);
-        const a = { x, y, h, el: img, walking: false, flip: false };
+        const a = { x, y, baseH: h, h: Math.round(h * (CFG.points.actorScale || 1)), el: img, walking: false, flip: false };
+        img.style.height = a.h + 'px';
         img.addEventListener('load', () => placeActor(a), { once: true });
         placeActor(a);
         return a;
+    }
+    // 人物整體縮放即時套用（擺設模式「人物−/＋」用）
+    function applyActorScale() {
+        const s = CFG.points.actorScale || 1;
+        const all = S.player ? [S.player].concat(S.npcs) : S.npcs;
+        all.forEach(a => {
+            a.h = Math.round(a.baseH * s);
+            a.el.style.height = a.h + 'px';
+            placeActor(a);
+            if (a.tag) placeNpcExtras(a);
+        });
     }
     function placeActor(a) {
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
@@ -172,7 +191,8 @@
     }
     function addNpc(cfg) {
         const a = spawnActor(cfg.src, cfg.x, cfg.y, cfg.h || NPC_H);
-        const npc = Object.assign(a, cfg, { h: cfg.h || NPC_H, wanderT: 1500 + Math.random() * 3000, dest: null });
+        const keepH = a.h;   // spawnActor 已套 actorScale，別讓 cfg.h(未縮放) 蓋回去
+        const npc = Object.assign(a, cfg, { h: keepH, wanderT: 1500 + Math.random() * 3000, dest: null });
         const tag = document.createElement('div');
         tag.className = 'lstage-tag'; tag.textContent = cfg.name;
         S.world.appendChild(tag); npc.tag = tag;
@@ -353,10 +373,11 @@
         console.log('[LobbyStage] mounted');
     }
     function placeObj(img, o) {
+        const d = effDims(o);
         img.style.left = o.x + 'px';
         img.style.top = o.y + 'px';
-        img.style.width = o.w + 'px';
-        img.style.zIndex = String(2 + Math.round(o.y + o.h));
+        img.style.width = d.ew + 'px';
+        img.style.zIndex = String(2 + Math.round(o.y + d.eh));
     }
     function unmount() {
         if (!S.active) return;
@@ -424,10 +445,18 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         panel.innerHTML =
-            '<div class="lep-hint">拖家具/圓點調位置，拖空地移動視角</div>' +
+            '<div class="lep-hint">拖家具/圓點調位置，拖空地移動視角；點選家具後可縮放/調佔地</div>' +
+            '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
+              '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
+            '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地</button>' +
               '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="actminus"><i class="fa-solid fa-minus"></i> 人物</button>' +
+              '<button class="lep-btn" data-act="actplus"><i class="fa-solid fa-plus"></i> 人物</button>' +
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="copy"><i class="fa-solid fa-copy"></i> 複製數據</button>' +
@@ -445,6 +474,14 @@
                 const o = CFG.layout[S.edit.sel];
                 o.footH = Math.max(20, Math.min(o.h, o.footH + (act === 'footplus' ? 10 : -10)));
                 _syncFoot(S.edit.sel); _exportToPanel();
+            } else if (act === 'objminus' || act === 'objplus') {
+                if (S.edit.sel < 0) return;
+                const o = CFG.layout[S.edit.sel];
+                o.s = Math.max(0.3, Math.min(2, Math.round(((o.s || 1) + (act === 'objplus' ? 0.05 : -0.05)) * 100) / 100));
+                placeObj(S.objEls[S.edit.sel], o); _syncFoot(S.edit.sel); _exportToPanel();
+            } else if (act === 'actminus' || act === 'actplus') {
+                CFG.points.actorScale = Math.max(0.5, Math.min(1.6, Math.round((((CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));
+                applyActorScale(); _exportToPanel();
             } else if (act === 'copy') {
                 const out = panel.querySelector('.lep-out');
                 out.select();
@@ -462,10 +499,11 @@
     function _syncFoot(i) {
         const o = CFG.layout[i], foot = S.edit.feet[i];
         if (!foot) return;
+        const d = effDims(o);
         foot.style.left = o.x + 'px';
-        foot.style.top = (o.y + o.h - o.footH) + 'px';
-        foot.style.width = o.w + 'px';
-        foot.style.height = o.footH + 'px';
+        foot.style.top = (o.y + d.eh - d.ef) + 'px';
+        foot.style.width = d.ew + 'px';
+        foot.style.height = d.ef + 'px';
         foot.classList.toggle('sel', S.edit.sel === i);
     }
     function _dragStart(e, info) {
@@ -504,7 +542,7 @@
     }
     function _exportData() {
         return {
-            layout: CFG.layout.map(o => ({ file: o.file, x: o.x, y: o.y, footH: o.footH })),
+            layout: CFG.layout.map(o => ({ file: o.file, x: o.x, y: o.y, footH: o.footH, s: o.s || 1 })),
             points: CFG.points,
         };
     }
