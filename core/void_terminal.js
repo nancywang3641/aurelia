@@ -199,8 +199,10 @@ const IRIS_IDLE = [
         const pick = pool[Math.floor(Math.random() * pool.length)];
         playVoiceReaction(pick);
     }
-    // 🎮 書咖舞台：點舞台上的瀅瀅小人＝戳一下
+    // 🎮 書咖舞台：點舞台上的瀅瀅/柴郡小人＝戳一下（池按 is404Room 自動切）
     window.addEventListener('lstage-poke-ying', () => pokeIris());
+    // 🎮 404號房舞台：走到底部出口＝系統還原回書咖
+    window.addEventListener('lstage-restore-lobby', () => { if (is404Room) restoreLobby(); });
 
     function startIdleTimer() {
         stopIdleTimer();
@@ -2035,8 +2037,8 @@ const IRIS_IDLE = [
     // ===== 404 彩蛋系統 =====
     function enter404Room() {
         is404Room = true; visit404Count++;
-        // 🎮 舞台不跟進404房（柴郡維持原立繪版）
-        if (window.LobbyStage?.isActive?.()) window.LobbyStage.unmount();
+        // 🎮 舞台切到404號房場景（柴郡的駭客車庫）
+        if (window.LobbyStage?.enter404Stage) window.LobbyStage.enter404Stage();
         _irisHistoryBackup = [...IRIS_STATE.history];
         IRIS_STATE.history = [..._cheshireHistoryBackup];
 
@@ -2132,8 +2134,8 @@ const IRIS_IDLE = [
             playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
             _updatePortalBtn();
             debouncedSave();
-            // 🎮 回大廳後重掛舞台（tryMount 自查開關，關著就不掛）
-            if (window.LobbyStage) window.LobbyStage.tryMount();
+            // 🎮 舞台切回書咖場景（關著就不掛）
+            if (window.LobbyStage?.exit404Stage) window.LobbyStage.exit404Stage();
         }, 580);
     }
 
