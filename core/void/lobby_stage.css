@@ -25,6 +25,11 @@
 @keyframes lstage-portrait-in { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
 .lstage-toggle-btn.off { opacity:.45; }
 
+/* 🚪 場景切換白光過場 */
+.lstage-fade { position:absolute; inset:0; background:#f5f7fb; opacity:0; pointer-events:none;
+  z-index:4000; transition:opacity .3s ease; }
+.lstage-fade.on { opacity:1; }
+
 /* ── 🖊 擺設模式 ── */
 .lstage-edit-btn { position:absolute; right:10px; top:10px; z-index:3000; width:34px; height:34px;
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
