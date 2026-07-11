@@ -11,7 +11,7 @@
 
     const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
     const ASSET = {
-        base: CDN + 'lobby_base.png',
+        base: CDN + 'lobby_base_v2.png',   // v2=codex修訂底圖；改版換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
         ying: CDN + 'lobby_ying.png',
         mcF:  CDN + 'lobby_mc_f.png',
         mcM:  CDN + 'lobby_mc_m.png',
