@@ -58,6 +58,13 @@
 .lstage-marker.m-player { background:#4a86c8; }
 .lstage-marker.m-spot { background:#4aa06a; }
 .lstage-marker.m-arrive { background:#d08a3e; }
+/* 外框鋼索：金色多邊形+白色牆角錨點 */
+.lstage-wire { position:absolute; left:0; top:0; z-index:2400; pointer-events:none; }
+.lstage-wire polygon { fill:rgba(255,210,74,.06); stroke:#ffd24a; stroke-width:3; stroke-dasharray:10 6; }
+.lstage-vert { position:absolute; transform:translate(-50%,-50%); width:22px; height:22px; border-radius:50%;
+  background:#fff; border:3px solid #ffd24a; cursor:grab; z-index:2650;
+  box-shadow:0 2px 6px rgba(0,0,0,.45); touch-action:none; }
+.lstage-vert:active { cursor:grabbing; }
 .lstage-zone.z-npc { background:rgba(74,160,106,.18); border-color:rgba(74,160,106,.85); }
 .lstage-zone.z-npc .lstage-zone-label, .lstage-zone.z-npc .lstage-zone-grip { background:#4aa06a; }
 .lstage-zone { position:absolute; background:rgba(180,106,194,.22); border:2px dashed rgba(180,106,194,.85);
