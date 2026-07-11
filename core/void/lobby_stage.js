@@ -129,6 +129,7 @@
         scene: 'cafe',              // 目前場景（每次開大廳從書咖開始）
         spawnOverride: null,        // 過門後的抵達點
         doorCd: 0,                  // 過門冷卻（防止落地瞬間又觸發）
+        doorArm: false,             // 門武裝狀態：落地後走出門區一次才重新啟動
         transitioning: false,
         player: null, npcs: [], talkTarget: null,
         keys: {}, onKey: null,
@@ -160,6 +161,12 @@
                 ctx.drawImage(img, 0, 0, MAP_W, MAP_H);
                 S.mask = { ok: true, data: ctx.getImageData(0, 0, MAP_W, MAP_H).data };
                 rebuildBlocks();   // 遮罩生效→退役鋼索/牆矩形
+                // 遮罩比出生時晚到：發現人站在黑色區→彈到最近地板
+                if (S.player && blocked(S.player.x, S.player.y)) {
+                    const sp = findFreeSpot(S.player.x, S.player.y);
+                    S.player.x = sp.x; S.player.y = sp.y;
+                    placeActor(S.player);
+                }
                 console.log('[LobbyStage] 碰撞遮罩已載入', file);
             } catch (e) { console.warn('[LobbyStage] 遮罩讀取失敗(退回鋼索)', e); }
         };
@@ -175,6 +182,18 @@
             if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
         }
         return inside;
+    }
+    // 找最近可走點（落點在牆裡/黑色遮罩上時自動彈出，螺旋環搜尋）
+    function findFreeSpot(x, y) {
+        if (!blocked(x, y)) return { x, y };
+        for (let r = 12; r <= 320; r += 12) {
+            for (let a = 0; a < 16; a++) {
+                const rad = a * Math.PI / 8;
+                const nx = x + Math.cos(rad) * r, ny = y + Math.sin(rad) * r;
+                if (nx > 0 && nx < MAP_W && ny > 0 && ny < MAP_H && !blocked(nx, ny)) return { x: nx, y: ny };
+            }
+        }
+        return { x, y };
     }
     function blocked(x, y) {
         const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
@@ -227,10 +246,11 @@
     const PLAYER_H = 190, PLAYER_SPEED = 0.33;
     function initPlayer() {
         const src = (localStorage.getItem('lobby_stage_mc') === 'm') ? ASSET.mcM : ASSET.mcF;
-        // 'arrive'=走門進場（落點可在擺設模式拖橘色門圓點調整）
-        const sp = (S.spawnOverride === 'arrive' ? (CFG.points.arrive || CFG.points.player)
+        // 'arrive'=走門進場（落點可在擺設模式拖橘色門圓點調整）；落點在牆裡自動彈到最近地板
+        const raw = (S.spawnOverride === 'arrive' ? (CFG.points.arrive || CFG.points.player)
                   : S.spawnOverride) || CFG.points.player;
         S.spawnOverride = null;
+        const sp = findFreeSpot(raw.x, raw.y);
         S.player = Object.assign(spawnActor(src, sp.x, sp.y, PLAYER_H), { dest: null });
         S.onKey = (e) => {
             const tag = (document.activeElement?.tagName || '').toLowerCase();
@@ -523,11 +543,13 @@
                 if (dx !== 0) p.flip = dx < 0;
             } else p.walking = false;
             placeActor(p);
-            // 🚪 過門判定（腳點進門區→白光過場切場景）
-            if (!S.transitioning && performance.now() > S.doorCd) {
+            // 🚪 過門判定：落地後必須先「走出」觸發區一次，門才重新武裝（防落點在門區內乒乓轉場）
+            if (!S.transitioning) {
                 const door = SCENES[S.scene].doors.find(D =>
                     p.x > D.x && p.x < D.x + D.w && p.y > D.y && p.y < D.y + D.h);
-                if (door) goScene(door.to, door.spawn);
+                if (door) {
+                    if (S.doorArm && performance.now() > S.doorCd) goScene(door.to, door.spawn);
+                } else S.doorArm = true;
             }
         }
         updateNpcs(dt);
@@ -569,6 +591,7 @@
         left.appendChild(root);
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
+        S.doorArm = false;   // 剛進場先解除門武裝，走出門區才啟動
         S.objEls = CFG.layout.map(o => {
             const img = document.createElement('img');
             img.className = 'lstage-actor lstage-obj';
@@ -671,6 +694,31 @@
         };
         mkZone('yingZone', '瀅瀅活動區', 'z-ying');
         mkZone('npcZone', '客人出沒區', 'z-npc');
+        // 遮罩視覺化：不可走區塗半透明紅（有載入遮罩才畫）
+        if (S.mask && S.mask.ok) {
+            const cv = document.createElement('canvas');
+            cv.width = MAP_W; cv.height = MAP_H;
+            cv.className = 'lstage-maskview';
+            const ctx = cv.getContext('2d');
+            const out = ctx.createImageData(MAP_W, MAP_H);
+            const src = S.mask.data;
+            for (let i = 0; i < src.length; i += 4) {
+                if (src[i] < 128) { out.data[i] = 220; out.data[i + 1] = 60; out.data[i + 2] = 60; out.data[i + 3] = 78; }
+            }
+            ctx.putImageData(out, 0, 0);
+            S.world.appendChild(cv);
+            S.edit.maskView = cv;
+        }
+        // 過門觸發區：橘色虛線框（固定，門圓點別放進來——落在框內會直接被送走）
+        S.edit.doorRects = SCENES[S.scene].doors.map(D => {
+            const el = document.createElement('div');
+            el.className = 'lstage-doorrect';
+            el.innerHTML = '<span>過門區</span>';
+            el.style.left = D.x + 'px'; el.style.top = D.y + 'px';
+            el.style.width = D.w + 'px'; el.style.height = D.h + 'px';
+            S.world.appendChild(el);
+            return el;
+        });
         // 外框鋼索：金色多邊形=可走範圍，白色錨點可拖（牆角）——有手繪遮罩的場景不顯示（遮罩優先）
         if (!SCENES[S.scene].mask && Array.isArray(CFG.points.boundary) && CFG.points.boundary.length >= 3) {
             const NS = 'http://www.w3.org/2000/svg';
@@ -700,7 +748,7 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         panel.innerHTML =
-            '<div class="lep-hint">拖東西調位置，拖空地移動視角。金色鋼索=可走範圍外框(拖白色牆角錨點)｜藍圓=出生點｜橘圓門=走門落點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=佔地</div>' +
+            '<div class="lep-hint">拖東西調位置，拖空地移動視角。紅色罩=牆(遮罩不可走區)｜橘虛線框=過門區(門圓點別放進去)｜藍圓=出生點｜橘圓門=走門落點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅實心框=家具佔地</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
               '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
@@ -862,6 +910,8 @@
         S.edit.markers.forEach(m => m.remove());
         Object.values(S.edit.zones || {}).forEach(el => el.remove());
         if (S.edit.wire) { S.edit.wire.svg.remove(); S.edit.wire.handles.forEach(h => h.remove()); }
+        S.edit.maskView?.remove();
+        (S.edit.doorRects || []).forEach(el => el.remove());
         S.edit.panel?.remove();
         S.objEls.forEach(img => { img.classList.remove('lstage-editable'); img.onpointerdown = null; });
         const click = S.root?.querySelector('.lstage-click');
