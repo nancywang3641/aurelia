@@ -54,9 +54,10 @@
             doors: [ { x: 895, y: 355, w: 170, h: 34, to: 'hall', spawn: { x: 770, y: 790 } } ],  // 書咖上緣木門→大廳
         },
         hall: {
-            base: 'lobby_hall_base_v1.png',
+            base: 'lobby_hall_base_v2.png',   // v2=核心球已從底圖拆出(空核心版)
             cfgKey: 'lobby_stage_layout_hall_v1',
             layout: [
+                { file: 'lobby_hall_obj_core.png',    x: 652,  y: 190, w: 788,  h: 935,  footH: 200, s: 0.3, float: true }, // LUNA-VII 分形核心(飄浮)
                 { file: 'lobby_hall_obj_counter.png', x: 990,  y: 250, w: 1354, h: 449,  footH: 340, s: 0.32 }, // 接待櫃檯
                 { file: 'lobby_hall_obj_chairs.png',  x: 170,  y: 430, w: 1240, h: 520,  footH: 380, s: 0.34 }, // 等候椅組
                 { file: 'lobby_hall_obj_kiosk.png',   x: 1200, y: 470, w: 587,  h: 1308, footH: 260, s: 0.17 }, // 全息資訊台
@@ -72,7 +73,7 @@
                 { x: 0,    y: 0,   w: 120,  h: 1024 },  // 左牆斜邊
                 { x: 1416, y: 0,   w: 120,  h: 1024 },  // 右牆斜邊
                 { x: 0,    y: 880, w: 1536, h: 144 },   // 下緣圍欄
-                { x: 690,  y: 400, w: 165,  h: 90 },    // LUNA-VII 分形核心基座
+                // 核心基座阻擋改由 lobby_hall_obj_core 的物件腳印提供（可在擺設模式挪動）
             ],
             doors: [ { x: 660, y: 846, w: 215, h: 34, to: 'cafe', spawn: { x: 975, y: 430 } } ],  // 底部大門→回書咖
             alice: { x: 940, y: 520 },   // 愛麗絲：核心旁、不漫步、永遠面向玩家
@@ -492,6 +493,7 @@
         S.objEls = CFG.layout.map(o => {
             const img = document.createElement('img');
             img.className = 'lstage-actor lstage-obj';
+            if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
             img.src = CDN + o.file;
             placeObj(img, o);
             S.world.appendChild(img);

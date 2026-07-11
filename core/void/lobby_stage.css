@@ -25,6 +25,10 @@
 @keyframes lstage-portrait-in { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
 .lstage-toggle-btn.off { opacity:.45; }
 
+/* 🛸 飄浮物件（LUNA-VII 核心）：上下輕輕漂 */
+.lstage-float { animation:lstage-hover 3.4s ease-in-out infinite; }
+@keyframes lstage-hover { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-14px); } }
+
 /* 🚪 場景切換白光過場 */
 .lstage-fade { position:absolute; inset:0; background:#f5f7fb; opacity:0; pointer-events:none;
   z-index:4000; transition:opacity .3s ease; }
