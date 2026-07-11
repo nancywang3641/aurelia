@@ -37,8 +37,9 @@
             ],
             points: {
                 yingZone: { x: 340, y: 405, w: 440, h: 45 },
+                npcZone:  { x: 220, y: 600, w: 1100, h: 260 },   // 客人出沒區（輪班NPC隨機刷在框內）
                 player: { x: 697, y: 600 },
-                spots:  [{ x: 508, y: 787 }, { x: 1250, y: 880 }, { x: 1100, y: 500 }, { x: 250, y: 880 }],
+                arrive: { x: 975, y: 430 },   // 走門進來的落點（從大廳回書咖）
                 actorScale: 0.7,
             },
             walls: [
@@ -64,8 +65,9 @@
                 { file: 'lobby_hall_obj_sofa.png',    x: 200,  y: 720, w: 1361, h: 414,  footH: 300, s: 0.34 }, // 模組沙發
             ],
             points: {
+                npcZone:  { x: 250, y: 560, w: 1000, h: 280 },
                 player: { x: 770, y: 790 },
-                spots:  [{ x: 300, y: 620 }, { x: 1150, y: 700 }, { x: 500, y: 800 }, { x: 1000, y: 850 }],
+                arrive: { x: 770, y: 790 },   // 走門進來的落點（從書咖進大廳）
                 actorScale: 0.7,
             },
             walls: [
@@ -108,8 +110,9 @@
                 });
                 if (saved.points) {
                     if (saved.points.yingZone) points.yingZone = saved.points.yingZone;
+                    if (saved.points.npcZone) points.npcZone = saved.points.npcZone;
                     if (saved.points.player) points.player = saved.points.player;
-                    if (Array.isArray(saved.points.spots) && saved.points.spots.length) points.spots = saved.points.spots;
+                    if (saved.points.arrive) points.arrive = saved.points.arrive;
                     if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
                 }
             }
@@ -182,7 +185,9 @@
     const PLAYER_H = 190, PLAYER_SPEED = 0.33;
     function initPlayer() {
         const src = (localStorage.getItem('lobby_stage_mc') === 'm') ? ASSET.mcM : ASSET.mcF;
-        const sp = S.spawnOverride || CFG.points.player;
+        // 'arrive'=走門進場（落點可在擺設模式拖橘色門圓點調整）
+        const sp = (S.spawnOverride === 'arrive' ? (CFG.points.arrive || CFG.points.player)
+                  : S.spawnOverride) || CFG.points.player;
         S.spawnOverride = null;
         S.player = Object.assign(spawnActor(src, sp.x, sp.y, PLAYER_H), { dest: null });
         S.onKey = (e) => {
@@ -247,15 +252,27 @@
             const pool = [...byName.values()].filter(r => r.count >= 2);
             for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
             const picked = pool.slice(0, 2 + Math.floor(Math.random() * 3));
-            const SPOTS = CFG.points.spots;
-            picked.forEach((r, i) => addNpc({
-                key: 'bk_' + (r.storyId || 'x') + '_' + r.name,
-                name: r.name, storyId: r.storyId, storyTitle: r.storyTitle,
-                persona: '《' + (r.storyTitle || '某本書') + '》裡的角色「' + r.name + '」',
-                x: SPOTS[i % SPOTS.length].x, y: SPOTS[i % SPOTS.length].y,
-                src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
-                homeRect: { x: SPOTS[i % SPOTS.length].x - 140, y: SPOTS[i % SPOTS.length].y - 90, w: 280, h: 180 },
-            }));
+            // 客人出沒區內隨機刷位置（避開佔地，最多重擲10次）
+            const Z = CFG.points.npcZone || { x: 200, y: 600, w: 1000, h: 250 };
+            const rollSpot = () => {
+                for (let t = 0; t < 10; t++) {
+                    const x = Z.x + Math.random() * Z.w, y = Z.y + Math.random() * Z.h;
+                    if (!blocked(x, y)) return { x, y };
+                }
+                return { x: Z.x + Z.w / 2, y: Z.y + Z.h / 2 };
+            };
+            picked.forEach((r, i) => {
+                const sp = rollSpot();
+                addNpc({
+                    key: 'bk_' + (r.storyId || 'x') + '_' + r.name,
+                    name: r.name, storyId: r.storyId, storyTitle: r.storyTitle,
+                    persona: '《' + (r.storyTitle || '某本書') + '》裡的角色「' + r.name + '」',
+                    x: sp.x, y: sp.y,
+                    src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
+                    homeRect: Z,          // 漫步範圍=整個出沒區
+                    avoidBlocks: true,    // 書中客人漫步避開佔地（瀅瀅在吧台後牆區不適用）
+                });
+            });
         } catch (e) { console.warn('[LobbyStage] 輪班讀取失敗', e); }
     }
     function addNpc(cfg) {
@@ -295,8 +312,12 @@
                 if (d < 5) { n.dest = null; n.walking = false; }
                 else {
                     const step = 0.12 * dt;
-                    n.x += vx / d * step; n.y += vy / d * step;
-                    n.walking = true; if (vx) n.flip = vx < 0;
+                    const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
+                    if (n.avoidBlocks && blocked(nx, ny)) { n.dest = null; n.walking = false; }
+                    else {
+                        n.x = nx; n.y = ny;
+                        n.walking = true; if (vx) n.flip = vx < 0;
+                    }
                 }
             }
             placeActor(n); placeNpcExtras(n);
@@ -483,7 +504,7 @@
         setTimeout(() => {
             unmount();
             S.scene = to;
-            S.spawnOverride = spawn ? { x: spawn.x, y: spawn.y } : null;
+            S.spawnOverride = 'arrive';   // 落點=目標場景自己存的「門」圓點
             S.doorCd = performance.now() + 900;   // 落地冷卻，防止秒回
             tryMount();
             S.transitioning = false;
@@ -587,22 +608,26 @@
         };
         S.edit.markers.push(mk('我', 'm-player', () => CFG.points.player));
         S.edit.markers[0].onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.player, m: S.edit.markers[0] });
-        CFG.points.spots.forEach((sp, i) => {
-            const m = mk(String(i + 1), 'm-spot', () => sp);
+        if (CFG.points.arrive) {   // 走門進場的落點
+            const m = mk('門', 'm-arrive', () => CFG.points.arrive);
             S.edit.markers.push(m);
-            m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: sp, m });
-        });
-        // 瀅瀅活動區：紫色框（拖框身=移動、拖右下角=調大小）——只有書咖有
-        if (CFG.points.yingZone) {
-            const zone = document.createElement('div');
-            zone.className = 'lstage-zone';
-            zone.innerHTML = '<span class="lstage-zone-label">瀅瀅活動區</span><span class="lstage-zone-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
-            S.world.appendChild(zone);
-            S.edit.zone = zone;
-            _syncZone();
-            zone.onpointerdown = (e) => _dragStart(e, { kind: 'zone' });
-            zone.querySelector('.lstage-zone-grip').onpointerdown = (e) => _dragStart(e, { kind: 'zoneresize' });
+            m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.arrive, m });
         }
+        // 可拖拉區塊（拖框身=移動、拖右下角=調大小）：紫=瀅瀅活動區、綠=客人出沒區
+        S.edit.zones = {};
+        const mkZone = (pk, label, cls) => {
+            if (!CFG.points[pk]) return;
+            const zone = document.createElement('div');
+            zone.className = 'lstage-zone ' + cls;
+            zone.innerHTML = '<span class="lstage-zone-label">' + label + '</span><span class="lstage-zone-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
+            S.world.appendChild(zone);
+            S.edit.zones[pk] = zone;
+            _syncZone(pk);
+            zone.onpointerdown = (e) => _dragStart(e, { kind: 'zone', pk });
+            zone.querySelector('.lstage-zone-grip').onpointerdown = (e) => _dragStart(e, { kind: 'zoneresize', pk });
+        };
+        mkZone('yingZone', '瀅瀅活動區', 'z-ying');
+        mkZone('npcZone', '客人出沒區', 'z-npc');
         // 空地拖曳=平移視角
         S.root.querySelector('.lstage-click').onpointerdown = (e) => _dragStart(e, { kind: 'cam' });
         window.addEventListener('pointermove', _dragMove);
@@ -611,7 +636,7 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         panel.innerHTML =
-            '<div class="lep-hint">拖東西調位置，拖空地移動視角。藍圓=你的出生點｜綠圓1~4=書中客人的座位｜紫框=瀅瀅活動範圍(拖右下角調大小)｜紅框=走不進去的佔地</div>' +
+            '<div class="lep-hint">拖東西調位置，拖空地移動視角。藍圓=出生點｜橘圓門=走門進來的落點｜綠框=客人出沒區(隨機刷在框內)｜紫框=瀅瀅活動範圍｜框都可拖右下角調大小｜紅框=走不進去的佔地</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
               '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
@@ -673,8 +698,8 @@
         });
         _exportToPanel();
     }
-    function _syncZone() {
-        const z = CFG.points.yingZone, el = S.edit?.zone;
+    function _syncZone(pk) {
+        const z = CFG.points[pk], el = S.edit?.zones?.[pk];
         if (!z || !el) return;
         el.style.left = z.x + 'px';
         el.style.top = z.y + 'px';
@@ -702,10 +727,10 @@
         } else if (info.kind === 'pt') {
             S.edit.drag.ox = info.pt.x; S.edit.drag.oy = info.pt.y;
         } else if (info.kind === 'zone') {
-            const z = CFG.points.yingZone;
+            const z = CFG.points[info.pk];
             S.edit.drag.ox = z.x; S.edit.drag.oy = z.y;
         } else if (info.kind === 'zoneresize') {
-            const z = CFG.points.yingZone;
+            const z = CFG.points[info.pk];
             S.edit.drag.ox = z.w; S.edit.drag.oy = z.h;
         } else if (info.kind === 'cam') {
             S.edit.drag.ox = S.edit.cam.x; S.edit.drag.oy = S.edit.cam.y;
@@ -723,14 +748,14 @@
             d.pt.x = Math.round(d.ox + dx); d.pt.y = Math.round(d.oy + dy);
             d.m.style.left = d.pt.x + 'px'; d.m.style.top = d.pt.y + 'px';
         } else if (d.kind === 'zone') {
-            const z = CFG.points.yingZone;
+            const z = CFG.points[d.pk];
             z.x = Math.round(d.ox + dx); z.y = Math.round(d.oy + dy);
-            _syncZone();
+            _syncZone(d.pk);
         } else if (d.kind === 'zoneresize') {
-            const z = CFG.points.yingZone;
+            const z = CFG.points[d.pk];
             z.w = Math.max(60, Math.round(d.ox + dx));
             z.h = Math.max(30, Math.round(d.oy + dy));
-            _syncZone();
+            _syncZone(d.pk);
         } else if (d.kind === 'cam') {
             S.edit.cam.x = d.ox - dx; S.edit.cam.y = d.oy - dy;
         }
@@ -763,7 +788,7 @@
         window.removeEventListener('pointerup', _dragEnd);
         S.edit.feet.forEach(f => f.remove());
         S.edit.markers.forEach(m => m.remove());
-        S.edit.zone?.remove();
+        Object.values(S.edit.zones || {}).forEach(el => el.remove());
         S.edit.panel?.remove();
         S.objEls.forEach(img => { img.classList.remove('lstage-editable'); img.onpointerdown = null; });
         const click = S.root?.querySelector('.lstage-click');
