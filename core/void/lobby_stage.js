@@ -156,6 +156,7 @@
         S.root.querySelector('.lstage-click').addEventListener('click', (e) => {
             if (S.edit) return;
             if (S.talkTarget) { endTalk(); return; }
+            hideDialog();   // 點空地=收起跟瀅瀅的對話框
             const r = S.world.getBoundingClientRect();
             S.player.dest = { x: (e.clientX - r.left) / S.scale, y: (e.clientY - r.top) / S.scale };
         });
@@ -263,6 +264,27 @@
         } catch (e) {}
     }
 
+    // ── 對話框顯隱＋像素立繪（VN風：平常收起、對話才浮出）──
+    function showDialog() {
+        const left = document.querySelector('.lobby-left');
+        if (!left || !S.active) return;
+        left.classList.remove('lstage-dlg-hidden');
+        // 立繪=說話對象的像素小人放大版（NPC=對方、跟瀅瀅聊=瀅瀅）
+        let p = left.querySelector('.lstage-talk-portrait');
+        if (!p) {
+            p = document.createElement('img');
+            p.className = 'lstage-talk-portrait';
+            left.appendChild(p);
+        }
+        p.src = S.talkTarget ? S.talkTarget.el.src : ASSET.ying;
+    }
+    function hideDialog() {
+        const left = document.querySelector('.lobby-left');
+        if (!left) return;
+        left.classList.add('lstage-dlg-hidden');
+        left.querySelector('.lstage-talk-portrait')?.remove();
+    }
+
     // ── 對話目標（對話本體仍走 void_terminal.sendIrisMessage）──
     function startTalk(npc) {
         if (S.edit) return;
@@ -277,6 +299,7 @@
         if (tagSpan) tagSpan.textContent = npc.name;
         const input = document.getElementById('iris-input');
         if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
+        showDialog();
     }
     function endTalk() {
         if (!S.talkTarget) return;
@@ -289,6 +312,7 @@
         if (tagSpan) tagSpan.textContent = '瀅瀅';
         const input = document.getElementById('iris-input');
         if (input) input.placeholder = '提供故事素材或與瀅瀅對話...';
+        hideDialog();
     }
 
     // ── 鏡頭 ─────────────────────────────────────────────
@@ -359,7 +383,7 @@
             '<div class="lstage-click"></div></div>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>';
         left.appendChild(root);
-        left.classList.add('lstage-on');
+        left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
         S.objEls = CFG.layout.map(o => {
             const img = document.createElement('img');
@@ -397,7 +421,11 @@
             S.onKey = null;
         }
         S.root?.remove();
-        document.querySelector('.lobby-left')?.classList.remove('lstage-on');
+        const _left = document.querySelector('.lobby-left');
+        if (_left) {
+            _left.classList.remove('lstage-on', 'lstage-dlg-hidden');
+            _left.querySelector('.lstage-talk-portrait')?.remove();
+        }
         S.root = S.world = null;
         S.player = null; S.npcs = []; S.talkTarget = null; S.keys = {}; S.objEls = [];
         S.active = false;
@@ -612,6 +640,8 @@
         getTalkTarget: () => S.talkTarget,
         setTalkTarget: (t) => { S.talkTarget = t || null; },
         endTalk,
+        showDialog,
+        hideDialog,
         getNpcHistory,
         pushNpcHistory,
         popNpcHistoryTail,
