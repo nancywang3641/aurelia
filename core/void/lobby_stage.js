@@ -135,6 +135,7 @@
 
     function unmount() {
         if (!S.active) return;
+        endTalk();   // 對話中被卸載（切404/關開關）→ 先還原名牌與輸入框
         cancelAnimationFrame(S.raf);
         window.removeEventListener('resize', fitCamera);
         if (S.onKey) {

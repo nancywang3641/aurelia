@@ -2035,6 +2035,8 @@ const IRIS_IDLE = [
     // ===== 404 彩蛋系統 =====
     function enter404Room() {
         is404Room = true; visit404Count++;
+        // 🎮 舞台不跟進404房（柴郡維持原立繪版）
+        if (window.LobbyStage?.isActive?.()) window.LobbyStage.unmount();
         _irisHistoryBackup = [...IRIS_STATE.history];
         IRIS_STATE.history = [..._cheshireHistoryBackup];
 
@@ -2130,6 +2132,8 @@ const IRIS_IDLE = [
             playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
             _updatePortalBtn();
             debouncedSave();
+            // 🎮 回大廳後重掛舞台（tryMount 自查開關，關著就不掛）
+            if (window.LobbyStage) window.LobbyStage.tryMount();
         }, 580);
     }
 
