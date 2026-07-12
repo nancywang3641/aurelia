@@ -35,6 +35,7 @@
 - 每個區域需給 mapX / mapY（0-100 整數座標，標出該區在「世界大地圖」上的位置；依世界書地理描述合理擺放——港口靠近邊緣、商業中心放中央、山區放角落、不同 zone 不可重疊）
 - 每個設施需給一個 emoji icon、短名 (shortName, 4 字內)、英文背景圖 prompt (background_prompt)
 - 整個世界另需一張「大地圖底板」，吐 world_map_prompt 欄位（英文關鍵詞，描述全景俯視構圖）
+- 🌏 **文化畫風必寫明（重要）**：每個 background_prompt 與 world_map_prompt 的**英文關鍵詞開頭第一個詞**，就要標出本世界的文化／時代畫風，別讓它預設成歐洲中世紀。依世界觀選：中式武俠／仙俠／古代中國→\`ancient chinese, wuxia\`；日式和風→\`traditional japanese\`；現代都市→\`modern\`；科幻賽博→\`sci-fi, cyberpunk\`；西方奇幻→\`medieval european fantasy\`；末日廢土→\`post-apocalyptic\`。例：武俠酒館寫 \`ancient chinese wuxia tavern, wooden...\` 而**不是** \`rough sailor tavern\`。下面範例是「西方奇幻」世界，換世界觀時整組文化詞要跟著換。
 
 【⚠ 世界類型判定（world_genre 欄位）— 影響大地圖視覺風格】
 請先讀世界書與角色卡，判定本世界類型，輸出在頂層的 world_genre 欄位：
