@@ -53,6 +53,11 @@
 (0,100) 左下角 ------- (100,100) 右下角
 
 ### 3. 生成邏輯要求
+- **🌏 文化畫風必寫明（重要）**：\`[地標底板|...]\` 的英文關鍵詞**開頭第一個詞就要標出本世界的文化／時代畫風**，別讓它預設成歐洲中世紀。依上文世界觀判斷後選對應詞：
+  - 中式武俠／仙俠／古代中國 → \`ancient chinese, wuxia, traditional chinese architecture\`
+  - 現代／都市 → \`modern, contemporary\`；未來科幻／賽博 → \`sci-fi, cyberpunk\`
+  - 西方奇幻／中世紀 → \`medieval european fantasy\`；末日廢土 → \`post-apocalyptic wasteland\`；日式和風 → \`japanese, traditional japanese\`
+  - 例：武俠酒館要寫 \`ancient chinese wuxia tavern, wooden...\` 而**不是** \`fantasy tavern\`。抓不準寧可多寫文化詞也別留白。
 - **底板一致性**：底板必須符合該世界觀（不可中世紀世界給出捷運站，不可末日廢土給出皇家城堡）
 - **物件數量**：3-5 個具有代表性的地標物件
 - **布局合理**：物件不要全部重疊，根據描述合理分布在 0-100 平面上
