@@ -1356,33 +1356,9 @@ ${facilityText}
 
         detailView.classList.add('active');
 
-        // 第一次進設施沒 sceneMap → 直接顯 loading，跳過 renderScanResults，避免小人先曝光
-        // 等 AI 完成才一次性 render（landmark + 小人一起出現）
-        if (!facility.sceneMap && win.SCENE_MAP_ENGINE && typeof win.SCENE_MAP_ENGINE.generateForFacility === 'function') {
-            const charGrid = document.getElementById('am-char-grid');
-            const resultsDiv = document.getElementById('am-scan-results');
-            resultsDiv.classList.add('active'); // 強制展開讓用戶看 loading
-            const loadingEl = document.createElement('div');
-            loadingEl.className = 'am-scene-loading';
-            loadingEl.textContent = '正在勘景...';
-            charGrid.appendChild(loadingEl);
-
-            try {
-                await win.SCENE_MAP_ENGINE.generateForFacility(STATE.currentZoneId, facKey);
-            } catch (e) {
-                console.error('[Map] sceneMap 生成失敗:', e);
-            }
-            // 用戶可能在 AI 期間切走了，避免覆蓋當下視圖
-            if (STATE.activeFacilityKey !== facKey) {
-                if (loadingEl.parentNode) loadingEl.remove();
-                return;
-            }
-            // AI 完成才 render（loading 會被 innerHTML 覆寫掉）
-            renderScanResults();
-        } else {
-            // 已有 sceneMap → 直接 render
-            renderScanResults();
-        }
+        // 進設施「不再自動」生小地圖（省 API）→ 生成已併進「🔍 探索此地」按鈕（scanForCharacters 內一次做完）。
+        // 這裡只 render 現有狀態：有 sceneMap 就顯示地標＋線框圖，沒有就等使用者按探索。
+        renderScanResults();
     }
 
     // 復古線框小地圖：沒生底板圖時用它當背景，取代黑底。純 SVG（零生圖 API、秒出、風格統一）。
@@ -1677,7 +1653,15 @@ ${facilityText}
         btn.disabled = true;
 
         const fac = STATE.activeFacility;
-        
+
+        // 🗺️ 探索＝一次做完：進設施不再自動生小地圖 → 這裡先補（地標＋底板），沒生過才生，再往下掃路人。
+        if (fac && !fac.sceneMap && win.SCENE_MAP_ENGINE && typeof win.SCENE_MAP_ENGINE.generateForFacility === 'function') {
+            btn.innerHTML = '<span>🗺️</span> 勘景中...';
+            try { await win.SCENE_MAP_ENGINE.generateForFacility(STATE.currentZoneId, STATE.activeFacilityKey); } catch (e) { console.error('[Map] sceneMap 生成失敗:', e); }
+            if (STATE.activeFacilityKey) renderScanResults();   // 先把地標/底板畫出來，再繼續掃路人
+            btn.innerHTML = '<span>📡</span> 掃描中...';
+        }
+
         // 使用 OS_API
         try {
             const prompt = `請為地點「${fac.name}」生成 2-3 位路人角色與一段環境描寫。`;
