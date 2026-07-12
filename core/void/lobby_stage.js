@@ -17,7 +17,8 @@
         cheshire: CDN + 'lobby_cheshire.png',
         mcF:   CDN + 'lobby_mc_f.png',
         mcM:   CDN + 'lobby_mc_m.png',
-        walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖(列=下/左/右/上,欄=左步/立/右步)
+        walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖素體(列=下/左/右/上,欄=左步/立/右步)
+        yingWalk: CDN + 'lobby_ying_walk_v1.png',   // 瀅瀅豆豆走路圖(Rae出品,官方預設)
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
@@ -507,7 +508,7 @@
         }
         const z = CFG.points.yingZone;
         addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
-                 src: ASSET.ying, homeRect: z });
+                 src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });
         try {
             if (!window.OS_DB?.getAllVnChapters) return;
             const chapters = await window.OS_DB.getAllVnChapters();
@@ -648,7 +649,9 @@
             p.className = 'lstage-talk-portrait';
             left.appendChild(p);
         }
-        p.src = S.talkTarget ? S.talkTarget.el.src
+        // 走路圖角色的el是div沒有src → 立繪用 portrait 欄位或退回預設字串圖
+        const t = S.talkTarget;
+        p.src = t ? (t.portrait || t.el.src || (typeof t.defaultSrc === 'string' ? t.defaultSrc : ASSET.ying))
               : (S.scene === 'hall' ? ASSET.alice : (S.scene === 'room404' ? ASSET.cheshire : ASSET.ying));
         // ✖ 關閉鈕（掛在對話框右上角；點空地也能關，這顆是給直覺用的）
         const box = document.getElementById('iris-dialogue-box');
