@@ -426,7 +426,21 @@
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (!act) return;
             if (act === 'img' || act === 'sheet') {
-                _askImage((ref) => {
+                _askImage(async (ref, dataUrl) => {
+                    // 🧊 單張立姿可選「壓成像素小小人」：格點化+單色背景變透明（取消=原圖直接用；走路圖不處理）
+                    if (act === 'img' && window.confirm('要幫這張圖壓成像素小小人嗎？\n會變成大顆粒的復古小人，單色背景也會自動變透明。\n按「取消」就原圖直接用。')) {
+                        try {
+                            const src = dataUrl || await resolveRef(ref);
+                            const out = src ? await _pixelify(src) : null;
+                            if (out) {
+                                const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                                await idbPut(id, out);
+                                ref = { idb: id };
+                            } else {
+                                window.alert('這張圖處理不了（多半是圖床不給讀），先原圖直接用。');
+                            }
+                        } catch (e) { console.warn('[LobbyStage] 小小人壓製失敗，改用原圖', e); }
+                    }
                     _saveSkin(a.key, { kind: act === 'sheet' ? 'sheet' : 'img', ref });
                     _applySkin(a, a.key);
                     _closeDressRoom();
@@ -1273,6 +1287,64 @@
         img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
     }
     // 建構模式選圖：貼網址或留空→從電腦選擇圖片（上傳存進本機資產庫 IndexedDB）
+    // ── 🧊 壓成像素小小人：縮到 96px 高（nearest=大顆粒）＋單色背景變透明 ──
+    //   去背只挖「從四邊連通進來、跟邊框主色相近」的像素（邊緣 BFS），不做全域色鍵——
+    //   全域色鍵會把身體內部同色塊一起挖掉（老教訓）。存小圖就好：舞台 CSS 是
+    //   image-rendering:pixelated，放大回 180px 依然銳利，IDB 還省空間。
+    function _loadImg(src) {
+        return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    }
+    async function _pixelify(src) {
+        try {
+            // 網址圖先抓成 dataURL（直接畫進 canvas 會被跨網域汙染、readback 直接炸）
+            if (/^https?:/i.test(String(src))) {
+                try {
+                    const b = await (await fetch(src)).blob();
+                    src = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+                } catch (e) { return null; }
+            }
+            const img = await _loadImg(src);
+            const H = 96, W = Math.max(1, Math.round((img.naturalWidth || 1) * H / (img.naturalHeight || 1)));
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.imageSmoothingEnabled = false;   // 關平滑=最近鄰取樣，縮下去直接變大顆粒
+            ctx.drawImage(img, 0, 0, W, H);
+            const d = ctx.getImageData(0, 0, W, H), px = d.data;
+            // 邊框主色：四邊像素投票；夠一致（>40%）才視為單色背景
+            const votes = new Map(); let borderN = 0, transparentN = 0;
+            const at = (x, y) => (y * W + x) * 4;
+            const border = [];
+            for (let x = 0; x < W; x++) border.push([x, 0], [x, H - 1]);
+            for (let y = 1; y < H - 1; y++) border.push([0, y], [W - 1, y]);
+            for (const [x, y] of border) {
+                const i = at(x, y); borderN++;
+                if (px[i + 3] < 16) { transparentN++; continue; }
+                const k = (px[i] >> 4) + ',' + (px[i + 1] >> 4) + ',' + (px[i + 2] >> 4);   // 量化到16階再投票（抗輕微雜訊）
+                votes.set(k, (votes.get(k) || 0) + 1);
+            }
+            if (transparentN < borderN * 0.5 && votes.size) {   // 邊框大多已透明=本來就去過背，跳過
+                let bestK = '', bestC = 0;
+                votes.forEach((c, k) => { if (c > bestC) { bestC = c; bestK = k; } });
+                if (bestC > borderN * 0.4) {
+                    const [br, bg, bb] = bestK.split(',').map(n => (parseInt(n, 10) << 4) + 8);
+                    const near = (i) => px[i + 3] > 0 && (Math.abs(px[i] - br) + Math.abs(px[i + 1] - bg) + Math.abs(px[i + 2] - bb)) < 72;
+                    const seen = new Uint8Array(W * H); const q = [];
+                    for (const [x, y] of border) { const p = y * W + x; if (!seen[p] && near(p * 4)) { seen[p] = 1; q.push(p); } }
+                    while (q.length) {
+                        const p = q.pop(); px[p * 4 + 3] = 0;
+                        const x = p % W, y = (p / W) | 0;
+                        if (x > 0 && !seen[p - 1] && near((p - 1) * 4)) { seen[p - 1] = 1; q.push(p - 1); }
+                        if (x < W - 1 && !seen[p + 1] && near((p + 1) * 4)) { seen[p + 1] = 1; q.push(p + 1); }
+                        if (y > 0 && !seen[p - W] && near((p - W) * 4)) { seen[p - W] = 1; q.push(p - W); }
+                        if (y < H - 1 && !seen[p + W] && near((p + W) * 4)) { seen[p + W] = 1; q.push(p + W); }
+                    }
+                    ctx.putImageData(d, 0, 0);
+                }
+            }
+            return cv.toDataURL('image/png');
+        } catch (e) { console.warn('[LobbyStage] _pixelify 失敗', e); return null; }
+    }
+
     function _askImage(cb) {
         const url = window.prompt('貼上圖片網址；或留空按「確定」改為從電腦選擇圖片');
         if (url === null) return;
@@ -1474,6 +1546,7 @@
         pushNpcHistory,
         popNpcHistoryTail,
         rollGuestPool: _journalGuestPool,   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個）
+        pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
         _S: S,
     };
 })();
