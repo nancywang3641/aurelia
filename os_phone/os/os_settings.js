@@ -64,6 +64,7 @@
             serviceLiving: 'pollinations',    // legacy：舊「活物桶」(角色+插圖共用)，保留供遷移
             serviceChar: 'pollinations',      // 頭像桶：char（角色頭像/立繪）
             serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖/CG）
+            serviceMap: 'pollinations',       // 小地圖桶：map（場景俯視底板）
             imgSourceSynced: true,            // 背景來源是否同步頭像（true＝沿用頭像接口）
             pollinations: {
                 url: 'https://gen.pollinations.ai/image',
@@ -221,6 +222,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     // 頭像/插圖拆桶遷移：沒存過新桶 → 繼承舊「活物桶」serviceLiving，現狀不變
                     serviceChar:  savedConfig.serviceChar  || savedConfig.serviceLiving || savedConfig.service || config.service,
                     serviceScene: savedConfig.serviceScene || savedConfig.serviceLiving || savedConfig.service || config.service,
+                    serviceMap:   savedConfig.serviceMap   || savedConfig.serviceInanimate || savedConfig.service || config.service,
                     pollinations: {
                         ...config.pollinations,
                         ...pol,
@@ -381,6 +383,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             win.OS_IMAGE_MANAGER.config.serviceInanimate = imgData.serviceInanimate || imgData.service;
             win.OS_IMAGE_MANAGER.config.serviceChar  = imgData.serviceChar  || imgData.serviceLiving || imgData.service;
             win.OS_IMAGE_MANAGER.config.serviceScene = imgData.serviceScene || imgData.serviceLiving || imgData.service;
+            win.OS_IMAGE_MANAGER.config.serviceMap   = imgData.serviceMap   || imgData.serviceInanimate || imgData.service;
             win.OS_IMAGE_MANAGER.config.serviceLiving = imgData.serviceLiving || imgData.serviceChar || imgData.service;
             win.OS_IMAGE_MANAGER.config.service = imgData.serviceLiving || imgData.serviceChar || imgData.service;
             if (typeof imgData.imgSourceSynced === 'boolean') win.OS_IMAGE_MANAGER.config.imgSourceSynced = imgData.imgSourceSynced;
@@ -1246,6 +1249,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="img-srctab" id="img-srctab-char" data-imgsrctab="char" onclick="window._switchImgSrcTab && window._switchImgSrcTab('char')">頭像</div>
                             <div class="img-srctab" id="img-srctab-scene" data-imgsrctab="scene" onclick="window._switchImgSrcTab && window._switchImgSrcTab('scene')">插圖</div>
                             <div class="img-srctab" id="img-srctab-bg" data-imgsrctab="bg" onclick="window._switchImgSrcTab && window._switchImgSrcTab('bg')">背景</div>
+                            <div class="img-srctab" id="img-srctab-map" data-imgsrctab="map" onclick="window._switchImgSrcTab && window._switchImgSrcTab('map')">小地圖</div>
                         </div>
 
                         <!-- ── 🎭 頭像 分頁 body（char：角色頭像／立繪）── -->
@@ -1288,6 +1292,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">場景插圖／CG 用這個來源。</div>
+                            </div>
+                        </div>
+
+                        <!-- ── 🗺️ 小地圖 分頁 body（map：場景俯視小地圖底板，畫風跟背景分開）── -->
+                        <div id="img-tab-map" class="img-srctab-body" style="display:none;">
+                            <div class="set-group">
+                                <div class="set-label" title="場景俯視小地圖底板用這個來源，畫風跟背景分開（例：俯視平面圖模型）。">🗺️ 小地圖 來源</div>
+                                <select class="set-select" id="img-service-map">
+                                    <option value="pollinations" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
+                                </select>
+                                <div class="set-desc" style="margin-top:6px;">場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。</div>
                             </div>
                         </div>
 
@@ -1335,14 +1353,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
                                 <div class="set-group cfd-bucket-row">
-                                    <div class="set-label">這組 ComfyUI 設定用於</div>
-                                    <select class="set-select" id="img-cfd-bucket">
-                                        <option value="char">角色（頭像／立繪）</option>
-                                        <option value="scene">插圖（劇情 CG）</option>
-                                        <option value="bg">背景（劇情背景）</option>
-                                        <option value="map">小地圖（俯視底板）</option>
-                                    </select>
-                                    <div class="set-desc">每個用途各一份模型／參數／預設包（連線網址共用）。切下拉會自動存目前這份、載入你選的那份。</div>
+                                    <div class="set-label">目前編輯：<b id="img-cfd-bucket-cur">角色</b> 的 ComfyUI 設定</div>
+                                    <div class="set-desc">跟著上面分頁走（角色／插圖／背景／小地圖）。每個用途各一份模型／參數／預設包，連線網址共用；切分頁自動存目前這份、載入那份。</div>
                                 </div>
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
@@ -2240,6 +2252,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elImgServiceInanimate = container.querySelector('#img-service-inanimate'); // 死物桶：背景/物品/寵物
         const elImgServiceLiving    = container.querySelector('#img-service-living');    // 頭像桶：char（角色頭像/立繪）
         const elImgServiceScene     = container.querySelector('#img-service-scene');     // 插圖桶：scene（場景插圖/CG）
+        const elImgServiceMap       = container.querySelector('#img-service-map');       // 小地圖桶：map（場景俯視底板）
         const elPolGroup = container.querySelector('#img-group-pollinations');
         const elPolApiKey = container.querySelector('#img-pol-apikey');
         const elPolModel = container.querySelector('#img-pol-model');
@@ -2456,6 +2469,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elImgTabChar    = container.querySelector('#img-tab-char');
         const elImgTabScene   = container.querySelector('#img-tab-scene');
         const elImgTabBg      = container.querySelector('#img-tab-bg');
+        const elImgTabMap     = container.querySelector('#img-tab-map');
         const elImgSceneBlock = container.querySelector('#img-scene-block');
         const elImgSceneExtract = container.querySelector('#img-scene-extract-block'); // 副模型版（插圖→角色）
         const elImgPixabay      = container.querySelector('#img-pixabay-block');        // 退路圖庫（背景）
@@ -2465,6 +2479,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const srcTabBtnChar   = container.querySelector('#img-srctab-char');
         const srcTabBtnScene  = container.querySelector('#img-srctab-scene');
         const srcTabBtnBg     = container.querySelector('#img-srctab-bg');
+        const srcTabBtnMap    = container.querySelector('#img-srctab-map');
 
         // 目前子分頁（預設「角色」）
         let imgSrcTab = 'char';
@@ -2495,14 +2510,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const _avT    = container.querySelector('#img-avatar-add-tav');
             const _itB    = container.querySelector('#img-nai-item-block');
 
-            // 三個子分頁鈕 active 樣式
+            // 四個子分頁鈕 active 樣式
             if (srcTabBtnChar)  srcTabBtnChar.classList.toggle('active', imgSrcTab === 'char');
             if (srcTabBtnScene) srcTabBtnScene.classList.toggle('active', imgSrcTab === 'scene');
             if (srcTabBtnBg)    srcTabBtnBg.classList.toggle('active', imgSrcTab === 'bg');
-            // 三個 body 一次只出一個
+            if (srcTabBtnMap)   srcTabBtnMap.classList.toggle('active', imgSrcTab === 'map');
+            // 四個 body 一次只出一個
             if (elImgTabChar)  elImgTabChar.style.display  = (imgSrcTab === 'char')  ? '' : 'none';
             if (elImgTabScene) elImgTabScene.style.display = (imgSrcTab === 'scene') ? '' : 'none';
             if (elImgTabBg)    elImgTabBg.style.display    = (imgSrcTab === 'bg')    ? '' : 'none';
+            if (elImgTabMap)   elImgTabMap.style.display   = (imgSrcTab === 'map')   ? '' : 'none';
 
             if (imgSrcTab === 'char') {
                 // 頭像分頁：頭像桶接口設定 + 頭像底詞 + 頭像追加詞（按接口）
@@ -2532,6 +2549,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const _row = container.querySelector('#img-scene-extract-row-' + _exSfx[s]);
                     if (_row) _row.classList.toggle('hidden', s !== sceneSvc);
                 });
+            } else if (imgSrcTab === 'map') {
+                // 小地圖分頁：小地圖桶接口設定（畫風跟背景分開，ComfyUI 桶在下面選「小地圖」）
+                const mapSvc = elImgServiceMap ? elImgServiceMap.value : 'pollinations';
+                showOnlyIfaceGroup(mapSvc);
+                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', mapSvc !== 'pollinations');
+                if (_avZone) _avZone.style.display = 'none';
+                if (_itB) _itB.classList.add('hidden');
+                if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
+                if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
+                if (elImgPixabay)      elImgPixabay.style.display = 'none';
             } else {
                 // 背景分頁
                 if (synced) {
@@ -2557,15 +2584,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             // 測試生成是通用工具 → 各分頁都留
         };
 
-        // 子分頁切換鈕
+        // 子分頁切換鈕（切分頁時，ComfyUI 設定/預設包也連動切到對應桶：頭像→char、插圖→scene、背景→bg、小地圖→map）
         window._switchImgSrcTab = (tab) => {
-            imgSrcTab = (tab === 'bg' || tab === 'scene') ? tab : 'char';
+            imgSrcTab = (tab === 'bg' || tab === 'scene' || tab === 'map') ? tab : 'char';
+            try { if (window._cfdSwitchBucket) window._cfdSwitchBucket(imgSrcTab); } catch (e) {}
             refreshImgPanel();
         };
 
         if (elImgServiceInanimate) elImgServiceInanimate.onchange = refreshImgPanel;
         if (elImgServiceLiving)    elImgServiceLiving.onchange = refreshImgPanel;
         if (elImgServiceScene)     elImgServiceScene.onchange = refreshImgPanel;
+        if (elImgServiceMap)       elImgServiceMap.onchange = refreshImgPanel;
         if (elImgSyncBg)           elImgSyncBg.addEventListener('change', refreshImgPanel);
         refreshImgPanel(); // 初始化同步一次
 
@@ -3145,6 +3174,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             }
             // 讀目前面板 → 桶物件（重用 buildCfdPreset 的欄位讀取 + 當前預設包）
             function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.presets = cfdPresets.slice(); return c; }
+            const _BUCKET_LABEL = { char:'角色', scene:'插圖', bg:'背景', map:'小地圖' };
             function _switchBucket(nb){
                 if (!_comfyBuckets.hasOwnProperty(nb) || nb === _cfdBucket) return;
                 _comfyBuckets[_cfdBucket] = _readPanelBucket();                 // 存目前桶
@@ -3153,8 +3183,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 applyPresetToPanel(cfg);                                        // 灌回面板（模型/LoRA/參數/自訂工作流…）
                 cfdPresets = Array.isArray(cfg.presets) ? cfg.presets.slice() : [];
                 renderPresetGrid();
+                const _cur = container.querySelector('#img-cfd-bucket-cur'); if (_cur) _cur.textContent = _BUCKET_LABEL[nb] || nb;
             }
-            (function(){ const sel = container.querySelector('#img-cfd-bucket'); if (sel) sel.onchange = function(){ _switchBucket(sel.value); }; })();
+            window._cfdSwitchBucket = _switchBucket;   // 給分頁切換連動
             // 給存檔用：收齊四桶（先把目前面板存進當前桶），沒獨立設過的桶用你現有設定
             window._cfdCollectBuckets = function(){
                 _comfyBuckets[_cfdBucket] = _readPanelBucket();
@@ -3537,6 +3568,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     serviceInanimate: _imgSynced ? _imgCharSvc : (elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations'),
                     serviceChar:      _imgCharSvc,
                     serviceScene:     _imgSceneSvc,
+                    serviceMap:       (elImgServiceMap ? elImgServiceMap.value : (_imgSynced ? _imgCharSvc : (elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations'))),
                     serviceLiving:    _imgCharSvc,
                     service:          _imgCharSvc,
                     imgSourceSynced:  _imgSynced,
