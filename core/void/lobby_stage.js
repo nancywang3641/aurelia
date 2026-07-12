@@ -418,10 +418,12 @@
             '<div class="lsd-hint">單張圖＝站立像+走路彈跳；走路圖＝3×4格圖（第1列朝下、第2列朝左、第3列朝右、第4列朝上，每列3幀）</div>' +
             '<button class="lep-btn" data-act="img"><i class="fa-solid fa-image"></i> 換單張立姿圖</button>' +
             '<button class="lep-btn" data-act="sheet"><i class="fa-solid fa-person-walking"></i> 換走路圖（3×4）</button>' +
+            _dressGenHtml(a) +
             '<button class="lep-btn" data-act="reset"' + (hasSkin ? '' : ' disabled') + '><i class="fa-solid fa-rotate-left"></i> 還原預設</button>' +
             '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
         S.root.appendChild(box);
         S.dressEl = box;
+        _wireDressGen(box, a);
         box.addEventListener('click', (e) => {
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (!act) return;
@@ -450,6 +452,110 @@
                 if (a.defaultSrc) _swapActorSrc(a, a.defaultSrc);
                 _closeDressRoom();
             } else if (act === 'close') _closeDressRoom();
+        });
+    }
+
+    // ── ✨ 裝扮室內建生成：選接口(ComfyUI/NAI)＋選預設包 → 用「角色頭像 prompt」直接生小小人 ──
+    //   prompt=avatar_cache 存的頭像生成詞(外觀 ground truth，日誌客人撈頭像時順手釘上)；
+    //   ComfyUI 走 previewComfyPreset(吃預設包、不碰全域設定)；NAI 走快照→套包→generate→finally 還原
+    //   （transient 鐵律，跟 profile 切換同款）。生完自動走 _pixelify 格點化+去背 → 存 skins。
+    const DRESS_GEN_KEY = 'lstage_dress_gen_v1';   // 記上次選的接口/預設包
+    function _dressGenCfg() {
+        try { const o = JSON.parse(localStorage.getItem(DRESS_GEN_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+    }
+    function _dressGenSave(patch) {
+        try { localStorage.setItem(DRESS_GEN_KEY, JSON.stringify(Object.assign(_dressGenCfg(), patch))); } catch (e) {}
+    }
+    function _imgMgr() { return window.OS_IMAGE_MANAGER || (window.parent || window).OS_IMAGE_MANAGER || null; }
+    function _dressPresetsOf(src) {
+        const M = _imgMgr();
+        if (!M?.config) return [];
+        if (src === 'novelai') return (M.config.novelai?.naiPresets || []);
+        return (M.config.comfyuiDirect?.presets || []);
+    }
+    function _dressGenHtml(a) {
+        const saved = _dressGenCfg();
+        const src = (saved.src === 'novelai') ? 'novelai' : 'comfyui_direct';
+        const presets = _dressPresetsOf(src);
+        const savedId = src === 'novelai' ? saved.naiPresetId : saved.comfyPresetId;
+        const opts = presets.length
+            ? presets.map((p, i) => '<option value="' + i + '"' + ((p.id && p.id === savedId) ? ' selected' : '') + '>' + String(p.name || ('預設 ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('')
+            : '<option value="" disabled selected>（這個接口還沒有預設包）</option>';
+        return '<div class="lsd-gen">' +
+            '<div class="lsd-gen-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 生成小小人（用這位的頭像外觀）</div>' +
+            '<div class="lsd-gen-row">' +
+                '<select class="lsd-gen-src">' +
+                    '<option value="comfyui_direct"' + (src === 'comfyui_direct' ? ' selected' : '') + '>ComfyUI</option>' +
+                    '<option value="novelai"' + (src === 'novelai' ? ' selected' : '') + '>NAI</option>' +
+                '</select>' +
+                '<select class="lsd-gen-preset">' + opts + '</select>' +
+            '</div>' +
+            '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成並套用</button>' +
+        '</div>';
+    }
+    function _wireDressGen(box, a) {
+        const srcSel = box.querySelector('.lsd-gen-src');
+        const pSel = box.querySelector('.lsd-gen-preset');
+        const btn = box.querySelector('.lsd-gen-btn');
+        if (!srcSel || !pSel || !btn) return;
+        const refillPresets = () => {
+            const src = srcSel.value;
+            const presets = _dressPresetsOf(src);
+            const savedId = src === 'novelai' ? _dressGenCfg().naiPresetId : _dressGenCfg().comfyPresetId;
+            pSel.innerHTML = presets.length
+                ? presets.map((p, i) => '<option value="' + i + '"' + ((p.id && p.id === savedId) ? ' selected' : '') + '>' + String(p.name || ('預設 ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('')
+                : '<option value="" disabled selected>（這個接口還沒有預設包）</option>';
+        };
+        srcSel.addEventListener('change', () => { _dressGenSave({ src: srcSel.value }); refillPresets(); });
+        pSel.addEventListener('change', () => {
+            const p = _dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)];
+            if (p?.id) _dressGenSave(srcSel.value === 'novelai' ? { naiPresetId: p.id } : { comfyPresetId: p.id });
+        });
+        btn.addEventListener('click', async () => {
+            if (btn.disabled) return;
+            const M = _imgMgr();
+            if (!M) { window.alert('生圖引擎還沒載入，稍等一下再按。'); return; }
+            const preset = _dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)];
+            if (!preset) { window.alert('先到「圖片設置」把這個接口的預設包存一個，這裡才有得選。'); return; }
+            if (!a.avatarPrompt) { window.alert('這位還沒有頭像資料。'); return; }
+            const label = btn.innerHTML;
+            btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 生成中…';
+            try {
+                let imgUrl = '';
+                if (srcSel.value === 'novelai') {
+                    // 快照→套包→生成→finally 還原（絕不留殘設定）
+                    const nai = M.config.novelai || (M.config.novelai = {});
+                    const KEYS = ['charBasePrompt', 'charNegPrompt', 'sampler', 'scale', 'steps', 'ucPreset'];
+                    const snap = {}; KEYS.forEach(k => { snap[k] = nai[k]; });
+                    KEYS.forEach(k => { if (preset[k] !== undefined) nai[k] = preset[k]; });
+                    try {
+                        imgUrl = await M.generate(a.avatarPrompt, 'char', { provider: 'novelai', width: 832, height: 1216 });
+                    } finally { KEYS.forEach(k => { nai[k] = snap[k]; }); }
+                } else {
+                    imgUrl = await M.previewComfyPreset(preset, a.avatarPrompt);
+                }
+                if (!imgUrl) throw new Error('接口沒回圖（檢查連線/預設包）');
+                let final = await _pixelify(imgUrl);   // 格點化+單色背景變透明；失敗就用原圖
+                if (!final) {
+                    // blob:/http 網址不能直接進 IDB（重整就死/會失連）→ 轉 dataURL 再存
+                    if (/^(blob:|https?:)/i.test(String(imgUrl))) {
+                        try {
+                            const b = await (await fetch(imgUrl)).blob();
+                            final = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+                        } catch (e) { throw new Error('圖拿到了但存不下來（轉檔失敗）'); }
+                    } else final = imgUrl;
+                }
+                const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                await idbPut(id, final);
+                _saveSkin(a.key, { kind: 'img', ref: { idb: id } });
+                _applySkin(a, a.key);
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> 完成！已套用';
+                setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1600);
+            } catch (e) {
+                console.warn('[LobbyStage] 裝扮室生成失敗', e);
+                window.alert('生成失敗：' + (e && e.message || e));
+                btn.innerHTML = label; btn.disabled = false;
+            }
         });
     }
 
@@ -681,7 +787,9 @@
             if (!hit && parts[0]) hit = metas.find(e => bare(e).includes(parts[0]));
             if (!hit) return;
             const full = await VC.getRaw('avatar_cache', hit.key);
-            if (full && full.url && npc && S.npcs.includes(npc)) npc.portrait = full.url;
+            if (!full || !npc) return;
+            if (full.prompt) npc.avatarPrompt = String(full.prompt);   // ✨ 外觀 ground truth：裝扮室「生成小小人」直接拿這串當 prompt
+            if (full.url && S.npcs.includes(npc)) npc.portrait = full.url;
         } catch (e) {}
     }
     function addNpc(cfg) {
@@ -1547,6 +1655,7 @@
         popNpcHistoryTail,
         rollGuestPool: _journalGuestPool,   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個）
         pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
+        openDressRoom: _openDressRoom,      // console 診斷用：直接開某個角色的裝扮室（傳 _S.npcs 裡的物件）
         _S: S,
     };
 })();
