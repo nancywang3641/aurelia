@@ -541,10 +541,11 @@
                     const snap = {}; KEYS.forEach(k => { snap[k] = nai[k]; });
                     KEYS.forEach(k => { if (preset[k] !== undefined) nai[k] = preset[k]; });
                     try {
-                        imgUrl = await M.generate(prompt, 'char', { provider: 'novelai', width: 832, height: 1216 });
+                        // 尺寸只聽包：拖圖進包時有存原圖尺寸；包沒存(手存舊包)就交給引擎預設，不自己塞數字
+                        imgUrl = await M.generate(prompt, 'char', { provider: 'novelai', width: preset.width, height: preset.height });
                     } finally { KEYS.forEach(k => { nai[k] = snap[k]; }); }
                 } else {
-                    imgUrl = await M.previewComfyPreset(preset, prompt);
+                    imgUrl = await M.previewComfyPreset(preset, prompt, { packSize: true });   // 尺寸用包裡調的 width/height
                 }
                 if (!imgUrl) throw new Error('接口沒回圖（檢查連線/預設包）');
                 let final = await _pixelify(imgUrl);   // 格點化+單色背景變透明；失敗就用原圖
