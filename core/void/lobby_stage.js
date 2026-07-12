@@ -548,7 +548,8 @@
                     imgUrl = await M.previewComfyPreset(preset, prompt, { packSize: true });   // 尺寸用包裡調的 width/height
                 }
                 if (!imgUrl) throw new Error('接口沒回圖（檢查連線/預設包）');
-                let final = await _pixelify(imgUrl);   // 格點化+單色背景變透明；失敗就用原圖
+                // 不壓縮（畫風交給預設包）：只去背+掃碎片，筆觸原封不動；失敗就用原圖
+                let final = await _pixelify(imgUrl, { noGrid: true });
                 if (!final) {
                     // blob:/http 網址不能直接進 IDB（重整就死/會失連）→ 轉 dataURL 再存
                     if (/^(blob:|https?:)/i.test(String(imgUrl))) {
@@ -1408,14 +1409,15 @@
         img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
     }
     // 建構模式選圖：貼網址或留空→從電腦選擇圖片（上傳存進本機資產庫 IndexedDB）
-    // ── 🧊 壓成像素小小人：縮到 96px 高（nearest=大顆粒）＋單色背景變透明 ──
-    //   去背只挖「從四邊連通進來、跟邊框主色相近」的像素（邊緣 BFS），不做全域色鍵——
-    //   全域色鍵會把身體內部同色塊一起挖掉（老教訓）。存小圖就好：舞台 CSS 是
-    //   image-rendering:pixelated，放大回 180px 依然銳利，IDB 還省空間。
+    // ── 🧊 像素處理管線：去背（邊緣連通 BFS）＋掃碎片；opts.noGrid=true 時「不壓縮」──
+    //   壓縮（縮到 96px 高、nearest=大顆粒）只給手動「壓成像素小小人」用；
+    //   裝扮室「生成並套用」走 noGrid＝畫風原封不動（Rae：以後要換不同Q版畫風，有些畫風不能壓）。
+    //   去背只挖「從四邊連通進來、跟邊框主色相近」的像素，不做全域色鍵——
+    //   全域色鍵會把身體內部同色塊一起挖掉（老教訓）。
     function _loadImg(src) {
         return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
     }
-    async function _pixelify(src) {
+    async function _pixelify(src, opts) {
         try {
             // 網址圖先抓成 dataURL（直接畫進 canvas 會被跨網域汙染、readback 直接炸）
             if (/^https?:/i.test(String(src))) {
@@ -1425,10 +1427,15 @@
                 } catch (e) { return null; }
             }
             const img = await _loadImg(src);
-            const H = 96, W = Math.max(1, Math.round((img.naturalWidth || 1) * H / (img.naturalHeight || 1)));
+            let W, H;
+            if (opts && opts.noGrid) {
+                W = img.naturalWidth || 1; H = img.naturalHeight || 1;   // 原尺寸原畫風，不格點化
+            } else {
+                H = 96; W = Math.max(1, Math.round((img.naturalWidth || 1) * H / (img.naturalHeight || 1)));
+            }
             const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
             const ctx = cv.getContext('2d', { willReadFrequently: true });
-            ctx.imageSmoothingEnabled = false;   // 關平滑=最近鄰取樣，縮下去直接變大顆粒
+            ctx.imageSmoothingEnabled = false;   // 關平滑=最近鄰取樣（noGrid 時 1:1 畫、無影響）
             ctx.drawImage(img, 0, 0, W, H);
             const d = ctx.getImageData(0, 0, W, H), px = d.data;
             // 邊框主色：四邊像素投票；夠一致（>40%）才視為單色背景
