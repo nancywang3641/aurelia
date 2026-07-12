@@ -122,15 +122,14 @@
         return null;
     }
 
-    // 生區域圖：走「小地圖桶」路由(imgType:'map')→用小地圖桶自己的模型/預設 + 強制去人物負詞(俯視平面圖、絕不長角色)。
-    //   ⚠️ 一次生一張、排序 await（世界生成很多張，非 poll 接口本來就慢/排隊，序列避免打爆）。
-    //   NAI 回 blob: URL 重載會失效 → 轉 data URL 才能存進世界 DB 持久化（poll/ComfyUI 本來就持久，原樣回）。
+    // 生區域圖/設施圖：走「背景桶」(generateBackgroundAsync 預設 bg)——區域圖是正常有景深的背景插圖，
+    //   ⚠️ 不接小地圖桶（那是俯視去人物去透視、只給進設施的小地圖底板用）。文化畫風靠 STAGE1_PROMPT 指令。
+    //   一次生一張、排序 await；NAI 回 blob: 轉 data URL 才能存進世界 DB 持久化（poll/ComfyUI 本來就持久）。
     async function _genBgPersistent(prompt, opts) {
         const IM = win.OS_IMAGE_MANAGER;
         if (!IM || typeof IM.generateBackgroundAsync !== 'function') return '';
-        const _o = Object.assign({ width: 1024, height: 1024 }, opts || {}, { imgType: 'map' });
         let url = '';
-        try { url = await IM.generateBackgroundAsync(prompt, _o) || ''; }
+        try { url = await IM.generateBackgroundAsync(prompt, opts || { width: 1024, height: 1024 }) || ''; }
         catch (e) { console.warn('[WorldGen] 圖生成失敗:', e && e.message); return ''; }
         if (url && url.indexOf('blob:') === 0) {
             try {
