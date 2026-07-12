@@ -1334,6 +1334,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="img-iface-groups">
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
+                                <div class="set-group cfd-bucket-row">
+                                    <div class="set-label">這組 ComfyUI 設定用於</div>
+                                    <select class="set-select" id="img-cfd-bucket">
+                                        <option value="char">角色（頭像／立繪）</option>
+                                        <option value="scene">插圖（劇情 CG）</option>
+                                        <option value="bg">背景（劇情背景）</option>
+                                        <option value="map">小地圖（俯視底板）</option>
+                                    </select>
+                                    <div class="set-desc">每個用途各一份模型／參數／預設包（連線網址共用）。切下拉會自動存目前這份、載入你選的那份。</div>
+                                </div>
                                 <div class="iface-section-title is-first">🔌 連線設定</div>
                                 <div class="set-group">
                                     <div class="set-desc">連接你電腦上的 ComfyUI。</div>
@@ -3105,6 +3115,59 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 drop.addEventListener('dragleave', function(){ drop.classList.remove('is-over'); });
                 drop.addEventListener('drop', function(e){ e.preventDefault(); drop.classList.remove('is-over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) window._cfdPreset._handleImage(f); });
             })();
+
+            // ===== ComfyUI 每桶各自一份設定＋預設包（char/scene/bg/map）=====
+            //   面板同一塊 DOM，靠「編輯桶」下拉切換：切換時存目前桶、載入目標桶。連線網址(url)四桶共用、不進桶。
+            //   沒設過的桶 → 用你現有設定當起點(_flatSeed)，切過去改完保存就各自獨立、絕不弄丟。
+            let _cfdBucket = 'char';
+            const _CFD_BUCKETS = ['char','scene','bg','map'];
+            const _comfyBuckets = { char:null, scene:null, bg:null, map:null };
+            (function(){
+                const sb = cfd.buckets && typeof cfd.buckets === 'object' ? cfd.buckets : null;
+                if (sb) _CFD_BUCKETS.forEach(function(b){ if (sb[b] && typeof sb[b] === 'object') _comfyBuckets[b] = sb[b]; });
+            })();
+            // 你現有扁平設定 → 一份桶起點（沒獨立設過的桶用它，等於「複製進四桶」）
+            function _flatSeed(){
+                const n = function(v,d){ const x=parseFloat(v); return isNaN(x)?d:x; };
+                const i = function(v,d){ const x=parseInt(v); return isNaN(x)?d:x; };
+                const s = function(v){ return (v==null)?'':String(v); };
+                return {
+                    modelType: s(cfd.modelType)||'checkpoint', model: s(cfd.model), vae: s(cfd.vae),
+                    sampler: s(cfd.sampler)||'euler', scheduler: s(cfd.scheduler)||'normal',
+                    steps: i(cfd.steps,28), cfg: n(cfd.cfg,6.5), width: i(cfd.width,1024), height: i(cfd.height,1024),
+                    clipSkip: i(cfd.clipSkip,0), basePrompt: s(cfd.basePrompt), negPrompt: s(cfd.negPrompt),
+                    fluxClipL: s(cfd.fluxClipL)||'clip_l.safetensors', fluxT5: s(cfd.fluxT5)||'t5xxl_fp8_e4m3fn.safetensors',
+                    fluxAe: s(cfd.fluxAe)||'ae.safetensors', guidance: n(cfd.guidance,3.5),
+                    animaClip: s(cfd.animaClip)||'qwen_3_06b_base.safetensors', animaVae: s(cfd.animaVae)||'qwen_image_vae.safetensors',
+                    loras: Array.isArray(cfd.loras)?cfd.loras.slice():[], customWorkflow: s(cfd.customWorkflow),
+                    presets: Array.isArray(cfd.presets)?cfd.presets.slice():[]
+                };
+            }
+            // 讀目前面板 → 桶物件（重用 buildCfdPreset 的欄位讀取 + 當前預設包）
+            function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.presets = cfdPresets.slice(); return c; }
+            function _switchBucket(nb){
+                if (!_comfyBuckets.hasOwnProperty(nb) || nb === _cfdBucket) return;
+                _comfyBuckets[_cfdBucket] = _readPanelBucket();                 // 存目前桶
+                _cfdBucket = nb;
+                const cfg = _comfyBuckets[nb] || _flatSeed();                   // 目標桶（沒設過退你現有設定）
+                applyPresetToPanel(cfg);                                        // 灌回面板（模型/LoRA/參數/自訂工作流…）
+                cfdPresets = Array.isArray(cfg.presets) ? cfg.presets.slice() : [];
+                renderPresetGrid();
+            }
+            (function(){ const sel = container.querySelector('#img-cfd-bucket'); if (sel) sel.onchange = function(){ _switchBucket(sel.value); }; })();
+            // 給存檔用：收齊四桶（先把目前面板存進當前桶），沒獨立設過的桶用你現有設定
+            window._cfdCollectBuckets = function(){
+                _comfyBuckets[_cfdBucket] = _readPanelBucket();
+                const out = {};
+                _CFD_BUCKETS.forEach(function(b){ out[b] = _comfyBuckets[b] || _flatSeed(); });
+                return out;
+            };
+            // 初始對齊：扁平面板可能是上次存檔時「別的桶」→ 強制載入 char 桶，確保 _cfdBucket='char' 跟面板一致
+            if (_comfyBuckets.char) {
+                applyPresetToPanel(_comfyBuckets.char);
+                cfdPresets = Array.isArray(_comfyBuckets.char.presets) ? _comfyBuckets.char.presets.slice() : [];
+                renderPresetGrid();
+            }
         })();
 
         // Fetch Logic (Primary)
@@ -3539,7 +3602,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         sceneHiresScale:   parseFloat(container.querySelector('#img-cfd-scene-hires-scale')?.value || 1.5) || 1.5,
                         sceneFaceDetailer: container.querySelector('#img-cfd-scene-facedetailer')?.checked ?? true,
                         workflowMode:  (container.querySelector('#img-cfd-wfmode')?.value || 'auto'),
-                        customWorkflow:(container.querySelector('#img-cfd-custom-wf-text')?.value || '')
+                        customWorkflow:(container.querySelector('#img-cfd-custom-wf-text')?.value || ''),
+                        buckets: (window._cfdCollectBuckets ? window._cfdCollectBuckets() : undefined)
                     },
                     sceneGen: {
                         size:             (() => { const _sz = container.querySelector('#img-scene-size'); if (_sz?.value === 'custom') { const _c = (container.querySelector('#img-scene-size-custom')?.value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x'); return /^\d{2,5}x\d{2,5}$/.test(_c) ? _c : '1024x1024'; } return _sz?.value || '1024x1024'; })(),
@@ -4529,7 +4593,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
                         strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
                         strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
-                    }; }).filter(function(l){ return l.name; })
+                    }; }).filter(function(l){ return l.name; }),
+                    buckets: (window._cfdCollectBuckets ? window._cfdCollectBuckets() : undefined)
                 };
 
                 // 測試跟著「當前子分頁」走：🎭頭像→char桶、🎬插圖→scene桶、🌄背景→bg桶；
