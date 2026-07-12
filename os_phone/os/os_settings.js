@@ -1252,6 +1252,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="img-srctab" id="img-srctab-map" data-imgsrctab="map" onclick="window._switchImgSrcTab && window._switchImgSrcTab('map')">小地圖</div>
                         </div>
 
+                        <!-- 目前桶＋套用的預設（置於分頁下方，最上面常駐顯示） -->
+                        <div class="cfd-bucket-row" id="img-cfd-bucket-status"><div class="set-label"><b id="img-cfd-bucket-cur">角色</b><span class="cfd-preset-cur" id="img-cfd-preset-cur">　·　（未套用預設）</span></div></div>
+
                         <!-- ── 🎭 頭像 分頁 body（char：角色頭像／立繪）── -->
                         <div id="img-tab-char" class="img-srctab-body">
                             <div class="set-group">
@@ -1352,9 +1355,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="img-iface-groups">
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
-                                <div class="set-group cfd-bucket-row">
-                                    <div class="set-label"><b id="img-cfd-bucket-cur">角色</b><span class="cfd-preset-cur" id="img-cfd-preset-cur">　·　（未套用預設）</span></div>
-                                </div>
                                 <div class="iface-section-title is-first">🔌 連線設定（連接你電腦上的 ComfyUI）</div>
                                 <div class="set-group">
                                     <div class="set-label">ComfyUI 網址</div>
