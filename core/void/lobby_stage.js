@@ -20,7 +20,7 @@
         walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖素體(列=下/左/右/上,欄=左步/立/右步)
         yingWalk: CDN + 'lobby_ying_walk_v1.png',       // 瀅瀅豆豆走路圖(Rae出品,官方預設)
         aliceWalk: CDN + 'lobby_alice_walk_v1.png',     // 愛麗絲走路圖
-        cheshireWalk: CDN + 'lobby_cheshire_walk_v1.png', // 柴郡走路圖
+        cheshireWalk: CDN + 'lobby_cheshire_walk_v2.png', // 柴郡走路圖(v2=Rae調過大小；改版必換檔名防快取)
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
