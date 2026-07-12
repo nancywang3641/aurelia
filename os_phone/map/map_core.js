@@ -1385,6 +1385,26 @@ ${facilityText}
         }
     }
 
+    // 復古線框小地圖：沒生底板圖時用它當背景，取代黑底。純 SVG（零生圖 API、秒出、風格統一）。
+    //   暗底 + 發光外框 + 淡網格 + 地標間巡邏虛線 + 每個地標的柔光暈；地標 emoji/名字仍由上層 div 疊放。
+    //   viewBox 0-100 配 background-size:100% 100% → 跟地標的 x/y 0-100% 座標系完全對齊。
+    function _buildSceneMinimap(landmarks) {
+        const lms = (Array.isArray(landmarks) ? landmarks : []).filter(l => l && typeof l.x === 'number' && typeof l.y === 'number');
+        let grid = '';
+        for (let i = 1; i < 8; i++) { const p = i * 12.5; grid += `<line x1='${p}' y1='0' x2='${p}' y2='100' stroke='#3a5a6a' stroke-width='0.15' opacity='0.22'/><line x1='0' y1='${p}' x2='100' y2='${p}' stroke='#3a5a6a' stroke-width='0.15' opacity='0.22'/>`; }
+        const pathLine = lms.length > 1
+            ? `<polyline points='${lms.map(l => `${l.x},${l.y}`).join(' ')}' fill='none' stroke='#d4af37' stroke-width='0.35' stroke-dasharray='1.5 1.6' opacity='0.32'/>`
+            : '';
+        const glows = lms.map(l => `<circle cx='${l.x}' cy='${l.y}' r='4.5' fill='#d4af37' opacity='0.10'/><circle cx='${l.x}' cy='${l.y}' r='1.1' fill='#ffe9a8' opacity='0.55'/>`).join('');
+        const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>`
+            + `<defs><radialGradient id='g' cx='50%' cy='38%' r='78%'><stop offset='0%' stop-color='#13212f'/><stop offset='100%' stop-color='#060b12'/></radialGradient></defs>`
+            + `<rect width='100' height='100' fill='url(#g)'/>${grid}`
+            + `<rect x='2' y='2' width='96' height='96' fill='none' stroke='#d4af37' stroke-width='0.5' opacity='0.55'/>`
+            + `<rect x='3.6' y='3.6' width='92.8' height='92.8' fill='none' stroke='#d4af37' stroke-width='0.18' opacity='0.3'/>`
+            + `${pathLine}${glows}</svg>`;
+        return 'data:image/svg+xml,' + encodeURIComponent(svg);
+    }
+
     function renderScanResults() {
         const resultsDiv = document.getElementById('am-scan-results');
         const charGrid = document.getElementById('am-char-grid');
@@ -1422,8 +1442,14 @@ ${facilityText}
             const sceneMap = STATE.activeFacility && STATE.activeFacility.sceneMap;
             if (sceneMap && sceneMap.backdropUrl) {
                 charGrid.style.backgroundImage = `url('${sceneMap.backdropUrl}')`;
+                charGrid.style.backgroundSize = 'cover';
+            } else if (sceneMap && Array.isArray(sceneMap.landmarks) && sceneMap.landmarks.length) {
+                // 沒生底板圖 → 復古線框小地圖當背景（不再黑）；地標 emoji 照舊疊上層
+                charGrid.style.backgroundImage = `url("${_buildSceneMinimap(sceneMap.landmarks)}")`;
+                charGrid.style.backgroundSize = '100% 100%';
             } else {
                 charGrid.style.backgroundImage = '';
+                charGrid.style.backgroundSize = '';
             }
 
             // 場景地標層（純靜態裝飾，避撞由 _startCharacterAnimations 處理）
