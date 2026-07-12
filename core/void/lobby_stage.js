@@ -344,6 +344,98 @@
         if (a._bg !== bg) { a.el.style.backgroundPosition = bg; a._bg = bg; }
     }
 
+    // ── 👗 裝扮室（每角色外觀：單圖或3×4走路圖，右鍵角色進入）──
+    const SKIN_KEY = 'lobby_stage_skins_v1';
+    function _skins() {
+        try { return JSON.parse(localStorage.getItem(SKIN_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    function _saveSkin(key, skin) {
+        try {
+            const all = _skins();
+            if (skin) all[key] = skin; else delete all[key];
+            localStorage.setItem(SKIN_KEY, JSON.stringify(all));
+        } catch (e) {}
+    }
+    // 換裝：把角色元素整顆換掉（img↔div 走路圖兩種形態）
+    function _swapActorSrc(a, src) {
+        const isSheet = (typeof src === 'object' && src && src.sheet);
+        const el = document.createElement(isSheet ? 'div' : 'img');
+        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '');
+        a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
+        a.frameW = a.frameH = null;
+        a._left = a._top = a._z = a._bg = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
+        if (isSheet) {
+            el.style.backgroundImage = 'url("' + src.sheet + '")';
+            const probe = new Image();
+            probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); };
+            probe.src = src.sheet;
+        } else {
+            el.src = src;
+            el.style.height = a.h + 'px';
+            el.addEventListener('load', () => placeActor(a), { once: true });
+        }
+        a.el.replaceWith(el);
+        a.el = el;
+        placeActor(a);
+    }
+    async function _applySkin(a, key) {
+        const skin = _skins()[key];
+        if (!skin) return;
+        const src = await resolveRef(skin.ref);
+        if (!src || !a.el || !S.active) return;
+        _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src);
+    }
+
+    // 右鍵角色→下拉單
+    function _closeActorMenu() { S.menuEl?.remove(); S.menuEl = null; }
+    function _openActorMenu(a, cx, cy) {
+        _closeActorMenu(); _closeDressRoom();
+        const rr = S.root.getBoundingClientRect();
+        const menu = document.createElement('div');
+        menu.className = 'lstage-actor-menu';
+        menu.innerHTML = '<div class="lam-title">' + (a.name || '角色') + '</div>' +
+            '<button class="lam-item" data-act="dress"><i class="fa-solid fa-shirt"></i> 裝扮室</button>';
+        menu.style.left = Math.max(6, Math.min(cx - rr.left, rr.width - 150)) + 'px';
+        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - 90)) + 'px';
+        S.root.appendChild(menu);
+        S.menuEl = menu;
+        menu.querySelector('[data-act="dress"]').addEventListener('click', () => { _closeActorMenu(); _openDressRoom(a); });
+        setTimeout(() => document.addEventListener('pointerdown', _menuOutside, { once: true }), 0);
+    }
+    function _menuOutside(e) { if (S.menuEl && !S.menuEl.contains(e.target)) _closeActorMenu(); }
+    // 裝扮室面板
+    function _closeDressRoom() { S.dressEl?.remove(); S.dressEl = null; }
+    function _openDressRoom(a) {
+        _closeDressRoom();
+        const box = document.createElement('div');
+        box.className = 'lstage-dress';
+        const hasSkin = !!_skins()[a.key];
+        box.innerHTML =
+            '<div class="lsd-title"><i class="fa-solid fa-shirt"></i> 裝扮室 — ' + (a.name || '角色') + '</div>' +
+            '<div class="lsd-hint">單張圖＝站立像+走路彈跳；走路圖＝3×4格圖（第1列朝下、第2列朝左、第3列朝右、第4列朝上，每列3幀）</div>' +
+            '<button class="lep-btn" data-act="img"><i class="fa-solid fa-image"></i> 換單張立姿圖</button>' +
+            '<button class="lep-btn" data-act="sheet"><i class="fa-solid fa-person-walking"></i> 換走路圖（3×4）</button>' +
+            '<button class="lep-btn" data-act="reset"' + (hasSkin ? '' : ' disabled') + '><i class="fa-solid fa-rotate-left"></i> 還原預設</button>' +
+            '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+        S.root.appendChild(box);
+        S.dressEl = box;
+        box.addEventListener('click', (e) => {
+            const act = e.target.closest('[data-act]')?.dataset.act;
+            if (!act) return;
+            if (act === 'img' || act === 'sheet') {
+                _askImage((ref) => {
+                    _saveSkin(a.key, { kind: act === 'sheet' ? 'sheet' : 'img', ref });
+                    _applySkin(a, a.key);
+                    _closeDressRoom();
+                });
+            } else if (act === 'reset') {
+                _saveSkin(a.key, null);
+                if (a.defaultSrc) _swapActorSrc(a, a.defaultSrc);
+                _closeDressRoom();
+            } else if (act === 'close') _closeDressRoom();
+        });
+    }
+
     // ── 玩家 ─────────────────────────────────────────────
     const PLAYER_H = 190, PLAYER_SPEED = 0.33;
     const WALK_FRAMES = [0, 1, 2, 1], WALK_FRAME_MS = 150;
@@ -355,7 +447,8 @@
                   : S.spawnOverride) || CFG.points.player;
         S.spawnOverride = null;
         const sp = findFreeSpot(raw.x, raw.y);
-        S.player = Object.assign(spawnActor(src, sp.x, sp.y, PLAYER_H), { dest: null });
+        S.player = Object.assign(spawnActor(src, sp.x, sp.y, PLAYER_H), { dest: null, key: 'player', name: '你', defaultSrc: src });
+        _applySkin(S.player, 'player');
         S.onKey = (e) => {
             const tag = (document.activeElement?.tagName || '').toLowerCase();
             if (tag === 'input' || tag === 'textarea') return;
@@ -458,7 +551,8 @@
     function addNpc(cfg) {
         const a = spawnActor(cfg.src, cfg.x, cfg.y, cfg.h || NPC_H);
         const keepH = a.h;   // spawnActor 已套 actorScale，別讓 cfg.h(未縮放) 蓋回去
-        const npc = Object.assign(a, cfg, { h: keepH, wanderT: 1500 + Math.random() * 3000, dest: null });
+        const npc = Object.assign(a, cfg, { h: keepH, wanderT: 1500 + Math.random() * 3000, dest: null, defaultSrc: cfg.src });
+        _applySkin(npc, cfg.key);
         const tag = document.createElement('div');
         tag.className = 'lstage-tag'; tag.textContent = cfg.name;
         S.world.appendChild(tag); npc.tag = tag;
@@ -482,7 +576,10 @@
     }
     function updateNpcs(dt) {
         S.npcs.forEach(n => {
-            if (n.facePlayer && S.player) { n.flip = S.player.x < n.x; }   // 愛麗絲永遠面向玩家
+            if (n.facePlayer && S.player) {   // 愛麗絲永遠面向玩家
+                if (n.sheet) n.dir = S.player.x < n.x ? 1 : 2;
+                else n.flip = S.player.x < n.x;
+            }
             if (S.talkTarget === n || n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
             n.wanderT -= dt;
             if (n.wanderT <= 0 && !n.dest) {
@@ -492,14 +589,19 @@
             }
             if (n.dest) {
                 const vx = n.dest.x - n.x, vy = n.dest.y - n.y, d = Math.hypot(vx, vy);
-                if (d < 5) { n.dest = null; n.walking = false; }
+                if (d < 5) { n.dest = null; n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
                 else {
                     const step = 0.12 * dt;
                     const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
-                    if (n.avoidBlocks && blocked(nx, ny)) { n.dest = null; n.walking = false; }
+                    if (n.avoidBlocks && blocked(nx, ny)) { n.dest = null; n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
                     else {
                         n.x = nx; n.y = ny;
-                        n.walking = true; if (vx) n.flip = vx < 0;
+                        n.walking = true;
+                        if (n.sheet) {   // 有走路圖的NPC走真幀動畫
+                            n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
+                            n.animT = (n.animT || 0) + dt;
+                            n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
+                        } else if (vx) n.flip = vx < 0;
                     }
                 }
             }
@@ -752,6 +854,20 @@
         }
         S.objEls = CFG.layout.map(o => _spawnObjEl(o));
         root.querySelector('.lstage-edit-btn').addEventListener('click', () => (S.edit ? exitEdit(true) : enterEdit()));
+        // 👗 右鍵角色→裝扮室（用座標命中判定，不動角色的 pointer-events）
+        root.addEventListener('contextmenu', (e) => {
+            if (S.edit) return;
+            const r = S.world.getBoundingClientRect();
+            const mx = (e.clientX - r.left) / S.scale, my = (e.clientY - r.top) / S.scale;
+            const all = (S.player ? [S.player] : []).concat(S.npcs);
+            const hit = all.find(a => {
+                const w = Math.max(50, a.h * ((a.frameW && a.frameH) ? a.frameW / a.frameH : 0.6));
+                return mx > a.x - w / 2 && mx < a.x + w / 2 && my > a.y - a.h && my < a.y;
+            });
+            if (!hit) return;
+            e.preventDefault(); e.stopPropagation();
+            _openActorMenu(hit, e.clientX, e.clientY);
+        });
         initPlayer();
         initNpcs();
         _applySceneHeader();
@@ -780,6 +896,7 @@
     function unmount() {
         if (!S.active) return;
         if (S.edit) exitEdit(false);
+        _closeActorMenu(); _closeDressRoom();
         endTalk();
         cancelAnimationFrame(S.raf);
         window.removeEventListener('resize', fitCamera);

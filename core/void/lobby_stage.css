@@ -33,6 +33,21 @@
 @keyframes lstage-portrait-in { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
 .lstage-toggle-btn.off { opacity:.45; }
 
+/* 👗 右鍵角色下拉單 + 裝扮室 */
+.lstage-actor-menu { position:absolute; z-index:3300; width:140px; background:rgba(26,24,20,.95);
+  border:1px solid rgba(243,234,216,.25); border-radius:10px; padding:6px; display:flex; flex-direction:column; gap:4px; }
+.lam-title { color:#d8cdb4; font-size:11px; padding:2px 6px 4px; border-bottom:1px solid rgba(243,234,216,.15); }
+.lam-item { border:none; border-radius:7px; padding:8px 6px; font-size:13px; cursor:pointer; text-align:left;
+  background:transparent; color:#f3ead8; }
+.lam-item:hover { background:rgba(243,234,216,.18); }
+.lstage-dress { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3300; width:250px;
+  background:rgba(26,24,20,.95); border:1px solid rgba(243,234,216,.25); border-radius:14px; padding:14px;
+  display:flex; flex-direction:column; gap:8px; }
+.lsd-title { color:#f3ead8; font-size:14px; font-weight:bold; }
+.lsd-hint { color:#d8cdb4; font-size:11px; line-height:1.5; }
+.lstage-dress .lep-btn { padding:9px 6px; }
+.lstage-dress .lep-btn[disabled] { opacity:.35; cursor:default; }
+
 /* ✖ 對話框關閉鈕（舞台模式限定，showDialog 動態掛上） */
 .lstage-dlg-close { position:absolute; top:-12px; right:-6px; width:30px; height:30px; border:none;
   border-radius:50%; background:rgba(26,24,20,.85); color:#f3ead8; cursor:pointer; font-size:13px;
