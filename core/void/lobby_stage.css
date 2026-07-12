@@ -56,6 +56,14 @@
 .lsd-hint { color:#d8cdb4; font-size:11px; line-height:1.5; }
 .lstage-dress .lep-btn { padding:9px 6px; }
 .lstage-dress .lep-btn[disabled] { opacity:.35; cursor:default; }
+/* ✨ 裝扮室內建生成（接口+預設包+生成鈕） */
+.lsd-gen { display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid rgba(243,234,216,.18);
+  border-radius:10px; background:rgba(243,234,216,.06); }
+.lsd-gen-title { color:#e8d9a8; font-size:11px; letter-spacing:.5px; }
+.lsd-gen-row { display:flex; gap:6px; }
+.lsd-gen-row select { flex:1; min-width:0; border:1px solid rgba(243,234,216,.25); border-radius:7px;
+  background:rgba(0,0,0,.35); color:#f3ead8; font-size:12px; padding:6px 4px; }
+.lsd-gen-row .lsd-gen-src { flex:0 0 92px; }
 
 /* ✖ 對話框關閉鈕（舞台模式限定，showDialog 動態掛上） */
 .lstage-dlg-close { position:absolute; top:-12px; right:-6px; width:30px; height:30px; border:none;
