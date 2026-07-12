@@ -136,9 +136,13 @@
                 // 順序：(來源對應)追加詞 → 角色描述詞 → 表情
                 const full = this._join(_base, prompt, `${exp} expression`);
                 const negPrompt = _neg || undefined;
-                // 角色頭像尺寸：讀「🎭 頭像 → 角色頭像尺寸」設定（空＝預設 512×768 小直式立繪，不再吃 NAI 1024 大正方；設了就用設的）
+                // 角色頭像尺寸：讀「🎭 頭像 → 角色頭像尺寸」設定。
+                //   有設＝明確覆寫（所有接口一致吃這格）；留空＝真的交給接口自己——
+                //   ComfyUI 落到「基本參數/預設包」調的寬高、Pollinations/NAI 用引擎預設（跟下拉說明對齊）。
+                //   ⚠️ 先前留空寫死 512×768 → ComfyUI 的包/面板寬高在劇情頭像上永遠無效＝「調了跟沒調一樣」（Rae 抓的）。
+                //   想要舊的 512×768 直式小圖＝下拉明選那格，不再是隱形預設。
                 const _avOpts = { negativePrompt: negPrompt, force: !!force };
-                try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').avatarSize) || '512x768').split('x').map(Number); if (_p[0]&&_p[1]) { _avOpts.width=_p[0]; _avOpts.height=_p[1]; } } catch(e) {}
+                try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').avatarSize) || '').split('x').map(Number); if (_p[0]&&_p[1]) { _avOpts.width=_p[0]; _avOpts.height=_p[1]; } } catch(e) {}
                 // force=true（畫廊「重生」用）→ 繞過 generate() 記憶體快取
                 return await win.OS_IMAGE_MANAGER.generate(full, 'char', _avOpts);
             } return "";

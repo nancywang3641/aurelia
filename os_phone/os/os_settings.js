@@ -1268,9 +1268,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。</div>
                             </div>
                             <div class="set-group">
-                                <div class="set-label" title="留空＝各接口預設：Pollinations 512、NovelAI 1024。">📐 角色頭像尺寸</div>
+                                <div class="set-label" title="設了＝所有接口都用這格（蓋過預設包）。留空＝交給接口：ComfyUI 用基本參數/預設包調的寬高、Pollinations 512、NovelAI 1024。">📐 角色頭像尺寸</div>
                                 <select class="set-select" id="img-avatar-size" style="font-size:12px;">
-                                    <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設</option>
+                                    <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設（ComfyUI＝預設包尺寸）</option>
+                                    <option value="512x768"   ${imgConfig.avatarSize==='512x768'   ? 'selected':''}>512×768（直式小圖，舊預設）</option>
                                     <option value="512x512"   ${imgConfig.avatarSize==='512x512'   ? 'selected':''}>512×512（方形）</option>
                                     <option value="768x768"   ${imgConfig.avatarSize==='768x768'   ? 'selected':''}>768×768</option>
                                     <option value="1024x1024" ${imgConfig.avatarSize==='1024x1024' ? 'selected':''}>1024×1024（清晰）</option>
