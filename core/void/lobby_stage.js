@@ -742,7 +742,30 @@
         S.world.style.transform = 'translate(' + (-cx) + 'px,' + (-cy) + 'px) scale(' + S.scale + ')';
     }
 
+    // 舞台看不見就別燒 CPU：VN 劇情/閱讀器全螢幕蓋著、大廳分頁被切走、瀏覽器分頁背景化
+    // → 60fps 迴圈降成每 500ms 探一次「能醒了嗎」，不跟 VN 的打字機/生圖/語音搶主執行緒。
+    function _stageHidden() {
+        try {
+            if (document.hidden) return true;
+            if (!S.root || !S.root.isConnected) return true;
+            if (S.root.offsetParent === null) return true;   // 大廳分頁 display:none（切去其他 tab）
+            const vn = document.getElementById('aurelia-vn-panel');
+            if (vn && vn.offsetParent !== null) return true;   // VN 劇情面板開著（全螢幕蓋住舞台）
+            const rd = document.getElementById('vn-reader-sa');
+            if (rd && rd.offsetParent !== null) return true;   // VN 閱讀器同理
+        } catch (e) {}
+        return false;
+    }
     function tick(now) {
+        if (_stageHidden()) {
+            S.raf = null;
+            S.sleepT = setTimeout(() => {
+                if (!S.active) return;
+                S.last = performance.now();
+                S.raf = requestAnimationFrame(tick);
+            }, 500);
+            return;
+        }
         const dt = Math.min(50, now - S.last); S.last = now;
         update(dt);
         S.raf = requestAnimationFrame(tick);
@@ -904,6 +927,7 @@
         _closeActorMenu(); _closeDressRoom();
         endTalk();
         cancelAnimationFrame(S.raf);
+        if (S.sleepT) { clearTimeout(S.sleepT); S.sleepT = null; }
         window.removeEventListener('resize', fitCamera);
         if (S.onKey) {
             window.removeEventListener('keydown', S.onKey, true);
