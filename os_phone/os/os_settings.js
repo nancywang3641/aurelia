@@ -1353,13 +1353,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
                                 <div class="set-group cfd-bucket-row">
-                                    <div class="set-label">目前編輯：<b id="img-cfd-bucket-cur">角色</b> 的 ComfyUI 設定</div>
-                                    <div class="set-desc">跟著上面分頁走（角色／插圖／背景／小地圖）。每個用途各一份模型／參數／預設包，連線網址共用；切分頁自動存目前這份、載入那份。</div>
+                                    <div class="set-label"><b id="img-cfd-bucket-cur">角色</b><span class="cfd-preset-cur" id="img-cfd-preset-cur">　·　（未套用預設）</span></div>
                                 </div>
-                                <div class="iface-section-title is-first">🔌 連線設定</div>
-                                <div class="set-group">
-                                    <div class="set-desc">連接你電腦上的 ComfyUI。</div>
-                                </div>
+                                <div class="iface-section-title is-first">🔌 連線設定（連接你電腦上的 ComfyUI）</div>
                                 <div class="set-group">
                                     <div class="set-label">ComfyUI 網址</div>
                                     <div style="display:flex; gap:8px;">
@@ -2946,6 +2942,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 applyIdx: function(i){
                     const p = cfdPresets[i]; if (!p) return;
                     applyPresetToPanel(p);
+                    try { if (window._cfdSetActivePreset) window._cfdSetActivePreset(p.name || ''); } catch(e){}   // 狀態列顯示目前套用的預設名
                     this.close();
                     if (statusEl) statusEl.textContent = '✅ 已套用預設包「' + (p.name || '') + '」（要正式生圖記得按底部保存）';
                 },
@@ -3173,14 +3170,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     loras: Array.isArray(cfd.loras)?cfd.loras.slice():[],
                     workflowMode: (s(cfd.workflowMode)==='custom') ? 'custom' : 'auto',
                     customWorkflow: (s(cfd.workflowMode)==='custom') ? s(cfd.customWorkflow) : '',
-                    presets: Array.isArray(cfd.presets)?cfd.presets.slice():[]
+                    presets: Array.isArray(cfd.presets)?cfd.presets.slice():[],
+                    activePreset: ''
                 };
             }
             // 桶正規化：一定要有 workflowMode（舊桶沒存過 → 當 auto 並清掉殘留 customWorkflow，治「全變自訂」）
             function _normBucket(cfg){ cfg = cfg || {}; if (cfg.workflowMode == null) { cfg.workflowMode = 'auto'; cfg.customWorkflow = ''; } if (cfg.workflowMode !== 'custom') cfg.customWorkflow = ''; return cfg; }
             // 讀目前面板 → 桶物件（重用 buildCfdPreset 的欄位讀取 + 當前預設包 + 明確 workflowMode）
-            function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.presets = cfdPresets.slice(); c.workflowMode = (container.querySelector('#img-cfd-wfmode')?.value || 'auto'); return c; }
+            function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.presets = cfdPresets.slice(); c.workflowMode = (container.querySelector('#img-cfd-wfmode')?.value || 'auto'); c.activePreset = _cfdActivePreset[_cfdBucket] || ''; return c; }
             const _BUCKET_LABEL = { char:'角色', scene:'插圖', bg:'背景', map:'小地圖' };
+            const _cfdActivePreset = { char:'', scene:'', bg:'', map:'' };   // 各桶「目前套用哪個預設包」
+            function _updateBucketHeader(){
+                const cur = container.querySelector('#img-cfd-bucket-cur'); if (cur) cur.textContent = _BUCKET_LABEL[_cfdBucket] || _cfdBucket;
+                const pc = container.querySelector('#img-cfd-preset-cur');
+                if (pc) { const nm = _cfdActivePreset[_cfdBucket]; pc.textContent = nm ? ('　·　預設：' + nm) : '　·　（未套用預設）'; }
+            }
+            window._cfdSetActivePreset = function(name){ _cfdActivePreset[_cfdBucket] = name || ''; _updateBucketHeader(); };
             function _switchBucket(nb){
                 if (!_comfyBuckets.hasOwnProperty(nb) || nb === _cfdBucket) return;
                 _comfyBuckets[_cfdBucket] = _readPanelBucket();                 // 存目前桶
@@ -3189,7 +3194,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 applyPresetToPanel(cfg);                                        // 灌回面板（模型/LoRA/參數/自訂工作流…）
                 cfdPresets = Array.isArray(cfg.presets) ? cfg.presets.slice() : [];
                 renderPresetGrid();
-                const _cur = container.querySelector('#img-cfd-bucket-cur'); if (_cur) _cur.textContent = _BUCKET_LABEL[nb] || nb;
+                _cfdActivePreset[nb] = cfg.activePreset || '';
+                _updateBucketHeader();
             }
             window._cfdSwitchBucket = _switchBucket;   // 給分頁切換連動
             // 給存檔用：收齊四桶（先把目前面板存進當前桶），沒獨立設過的桶用你現有設定
@@ -3205,7 +3211,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 applyPresetToPanel(_c0);
                 cfdPresets = Array.isArray(_c0.presets) ? _c0.presets.slice() : [];
                 renderPresetGrid();
+                _cfdActivePreset.char = _c0.activePreset || '';
             }
+            _updateBucketHeader();   // 狀態列顯示當前桶＋目前套用的預設名
         })();
 
         // Fetch Logic (Primary)
