@@ -114,6 +114,16 @@
         return `${y}.${m}.${day}`;
     }
 
+    // ── ☕ 書咖常客 pin：每張卡指定「哪一輪」的角色上書咖舞台（lobby_stage 讀同一把 key）──
+    //   map = { 卡名: chatId }；沒 pin 的卡預設用最新一輪
+    const NPC_PICK_KEY = 'lstage_npc_pick_v1';
+    function _npcPickMap() {
+        try { const o = JSON.parse(localStorage.getItem(NPC_PICK_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+    }
+    function _saveNpcPickMap(m) {
+        try { localStorage.setItem(NPC_PICK_KEY, JSON.stringify(m || {})); } catch (e) {}
+    }
+
     function _shortChatId(chatId) {
         if (!chatId) return '';
         // 截短：取末尾 8 字（chatId 通常含時間戳，末尾差異最大）
@@ -274,6 +284,10 @@
                     <span class="jrnl-view-full-sub">回顧更多細節，重溫完整故事</span>
                 </button>
                 <div class="jrnl-foot-acts">
+                    <button class="jrnl-act-btn jrnl-pin-npc ${_npcPickMap()[story.cardName] === story.chatId ? 'active' : ''}"
+                            title="書咖舞台的客人會從這一輪的角色裡挑（同一張卡只認一輪，沒指定就用最新的）">
+                        ${_npcPickMap()[story.cardName] === story.chatId ? '★ 書咖常客來源（點擊取消）' : '☕ 設為書咖常客'}
+                    </button>
                     <button class="jrnl-act-btn jrnl-edit-full">✏️ 編輯總結</button>
                     <button class="jrnl-act-btn jrnl-act-danger jrnl-wipe-story">🗑️ 清空這段劇情</button>
                 </div>
@@ -491,6 +505,18 @@
             }
             const wipeBtn = rightEl.querySelector('.jrnl-wipe-story');
             if (wipeBtn && active) wipeBtn.onclick = () => _openWipeConfirm(active);
+
+            // ☕ 書咖常客 pin：這張卡 → 這一輪；再點取消（回到預設「最新一輪」）
+            const pinBtn = rightEl.querySelector('.jrnl-pin-npc');
+            if (pinBtn && active) pinBtn.onclick = () => {
+                const m = _npcPickMap();
+                const on = m[active.cardName] === active.chatId;
+                if (on) delete m[active.cardName];
+                else m[active.cardName] = active.chatId;
+                _saveNpcPickMap(m);
+                pinBtn.classList.toggle('active', !on);
+                pinBtn.textContent = !on ? '★ 書咖常客來源（點擊取消）' : '☕ 設為書咖常客';
+            };
 
             // 角色卡片點擊 → 跳 modal 看完整內容（卡片塞不下全部）
             rightEl.querySelectorAll('.jrnl-char-card').forEach(card => {
