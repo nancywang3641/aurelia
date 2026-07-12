@@ -24,8 +24,17 @@
 /* 舞台模式：藏原立繪與簽名，對話框保持最上層 */
 .lobby-left.lstage-on #iris-avatar, .lobby-left.lstage-on .lb-signature { display:none !important; }
 .lobby-left.lstage-on .void-dialogue-wrap { z-index:5; }
-/* 對話框平常收起（戳戳反應框不受影響），有對話才浮出 */
+/* 對話框平常收起（戳戳反應框不受影響），有對話才浮出；輸入列跟對話框同進退 */
 .lobby-left.lstage-on.lstage-dlg-hidden #iris-dialogue-box { display:none !important; }
+.lobby-left.lstage-on.lstage-dlg-hidden .void-chat-input-row { display:none !important; }
+
+/* 💬 聊天符號浮鈕：自由漫遊（對話框收起）時顯示，點了浮出對話框＋輸入列 */
+.lstage-chat-fab { display:none; position:absolute; right:14px; bottom:16px; width:46px; height:46px;
+  border:none; border-radius:50%; background:rgba(26,24,20,.85); color:#f3ead8; cursor:pointer;
+  font-size:19px; align-items:center; justify-content:center; z-index:6;
+  box-shadow:0 3px 10px rgba(0,0,0,.4); transition:background .2s, transform .2s; }
+.lstage-chat-fab:hover { background:#c8874a; transform:translateY(-2px); }
+.lobby-left.lstage-on.lstage-dlg-hidden .lstage-chat-fab { display:flex; }
 /* 對話中的像素立繪（小人放大版，動森風） */
 .lstage-talk-portrait { position:absolute; left:12px; bottom:21%; height:38%; z-index:4;
   image-rendering:pixelated; pointer-events:none; user-select:none;
