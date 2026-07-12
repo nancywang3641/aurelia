@@ -496,7 +496,7 @@
                      subTitle: '純白大廳 · 首席導覽官',
                      storyTitle: '', x: ap.x, y: ap.y, h: 200,
                      src: { sheet: ASSET.aliceWalk }, portrait: ASSET.alice,
-                     noWander: true, facePlayer: true,
+                     noWander: true,   // 定點正面站姿（Rae定案：不用轉向面向玩家）
                      homeRect: { x: ap.x, y: ap.y, w: 0, h: 0 } });
             return;
         }
