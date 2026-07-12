@@ -121,17 +121,25 @@
         return null;
     }
 
-    // 跑 pollinations 出背景圖 URL（同步，不等下載完成）
-    function genFacilityImage(prompt) {
-        if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generateBackground !== 'function') {
-            return '';
+    // 生背景圖：走「死物桶」路由(generateBackgroundAsync)→跟圖片設置的背景接口同步(poll/NAI/ComfyUI/酒館)。
+    //   ⚠️ 一次生一張、排序 await（世界生成很多張，非 poll 接口本來就慢/排隊，序列避免打爆）。
+    //   NAI 回 blob: URL 重載會失效 → 轉 data URL 才能存進世界 DB 持久化（poll/ComfyUI 本來就持久，原樣回）。
+    async function _genBgPersistent(prompt, opts) {
+        const IM = win.OS_IMAGE_MANAGER;
+        if (!IM || typeof IM.generateBackgroundAsync !== 'function') return '';
+        let url = '';
+        try { url = await IM.generateBackgroundAsync(prompt, opts || { width: 1024, height: 1024 }) || ''; }
+        catch (e) { console.warn('[WorldGen] 圖生成失敗:', e && e.message); return ''; }
+        if (url && url.indexOf('blob:') === 0) {
+            try {
+                const blob = await (await fetch(url)).blob();
+                url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
+            } catch (e) { /* 轉檔失敗就退回 blob（本次 session 能用，重載才失效） */ }
         }
-        try {
-            return win.OS_IMAGE_MANAGER.generateBackground(prompt, { width: 1024, height: 1024 });
-        } catch (e) {
-            console.warn('[WorldGen] 圖生成失敗:', e.message);
-            return '';
-        }
+        return url;
+    }
+    async function genFacilityImage(prompt) {
+        return await _genBgPersistent(prompt, { width: 1024, height: 1024 });
     }
 
     // LoremFlickr fallback URL（永遠 work，當 onerror 時用）
@@ -142,21 +150,21 @@
         return `https://loremflickr.com/1280/720/${encodeURIComponent(tags || 'city')}`;
     }
 
-    // 把 AI 吐的 JSON 轉成 map_data 相容格式
-    function buildWorldData(rawJson) {
+    // 把 AI 吐的 JSON 轉成 map_data 相容格式（async：一張一張排序生圖，走背景桶接口）
+    async function buildWorldData(rawJson) {
         if (!rawJson || !rawJson.zones) return null;
         const zones = {};
 
-        Object.keys(rawJson.zones).forEach(zKey => {
+        for (const zKey of Object.keys(rawJson.zones)) {
             const z = rawJson.zones[zKey];
             const facilities = {};
             const facObj = z.facilities || {};
 
-            Object.keys(facObj).forEach(fKey => {
+            for (const fKey of Object.keys(facObj)) {
                 const f = facObj[fKey];
                 const sceneId = `${zKey}_${fKey}`;
                 const bgPrompt = f.background_prompt || z.background_prompt || f.name;
-                const imageUrl = genFacilityImage(bgPrompt);
+                const imageUrl = await genFacilityImage(bgPrompt);
                 facilities[fKey] = {
                     sceneId,
                     name: f.name || fKey,
@@ -168,7 +176,7 @@
                     fallbackUrl: genLoremFlickrUrl(bgPrompt),
                     bgPrompt
                 };
-            });
+            }
 
             // mapX / mapY：clamp 到 0-100，缺值給 null 讓 renderHome 退化成卡片排版
             const mapX = (typeof z.mapX === 'number') ? Math.max(0, Math.min(100, z.mapX)) : null;
@@ -179,11 +187,11 @@
                 icon: z.icon || '',
                 mapX,
                 mapY,
-                background: genFacilityImage(z.background_prompt || z.name) || genLoremFlickrUrl(z.background_prompt || z.name),
+                background: (await genFacilityImage(z.background_prompt || z.name)) || genLoremFlickrUrl(z.background_prompt || z.name),
                 bgPrompt: z.background_prompt || '',
                 facilities
             };
-        });
+        }
 
         // 世界類型：fictional（虛構奇幻）或 historical（真實歷史背景），預設 fictional
         const genre = (rawJson.world_genre === 'historical') ? 'historical' : 'fictional';
@@ -196,7 +204,7 @@
         if (rawJson.world_map_prompt && typeof rawJson.world_map_prompt === 'string') {
             worldMap.backdropPrompt = rawJson.world_map_prompt;
             const fullWorldPrompt = `${baseplate}, ${rawJson.world_map_prompt}`;
-            worldMap.backdropUrl = genFacilityImage(fullWorldPrompt) || genLoremFlickrUrl(rawJson.world_map_prompt);
+            worldMap.backdropUrl = (await genFacilityImage(fullWorldPrompt)) || genLoremFlickrUrl(rawJson.world_map_prompt);
         }
 
         return {
@@ -255,9 +263,9 @@
                 processed = true;
                 console.log('[WorldGen] ✅ AI JSON 解析成功:', json.world_name);
 
-                if (progressCb) progressCb('image', '正在生成設施背景圖...');
+                if (progressCb) progressCb('image', '正在生成設施背景圖（一張一張排序生成，非 poll 接口會慢些）...');
 
-                const worldData = buildWorldData(json);
+                const worldData = await buildWorldData(json);
                 if (!worldData) {
                     if (progressCb) progressCb('error', '世界資料構建失敗');
                     resolve(false);
