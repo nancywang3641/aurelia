@@ -538,6 +538,7 @@
                         persona: _guestPersona(g),
                         x: sp.x, y: sp.y,
                         src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
+                        noWander: true,   // Rae 定案：客人在出沒區隨機刷位置後站定，不漫步
                         homeRect: Z,
                         avoidBlocks: true,
                     });
@@ -570,8 +571,9 @@
                     persona: '《' + (r.storyTitle || '某本書') + '》裡的角色「' + r.name + '」',
                     x: sp.x, y: sp.y,
                     src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
-                    homeRect: Z,          // 漫步範圍=整個出沒區
-                    avoidBlocks: true,    // 書中客人漫步避開佔地（瀅瀅在吧台後牆區不適用）
+                    noWander: true,   // 同日誌制：客人站定不漫步
+                    homeRect: Z,
+                    avoidBlocks: true,
                 });
             });
         } catch (e) { console.warn('[LobbyStage] 輪班讀取失敗', e); }
