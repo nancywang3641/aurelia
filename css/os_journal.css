@@ -323,6 +323,9 @@
 .jrnl-act-btn:hover { transform: translateY(-1px); border-color: #e0a0b0; color: #c97a8e; background: #fff0f2; }
 .jrnl-act-danger { color: #d05a5a; border-color: #e8b0b0; background: #fff5f5; }
 .jrnl-act-danger:hover { color: #fff; background: #d96a6a; border-color: #d05a5a; box-shadow: 0 4px 14px rgba(208,90,90,0.2); }
+/* ☕ 書咖常客 pin：選定輪次亮金 */
+.jrnl-pin-npc.active { color: #a8781e; border-color: #e0bc72; background: #fdf3dc; }
+.jrnl-pin-npc.active:hover { color: #8a6010; border-color: #d0a850; background: #fbeecb; }
 /* 編輯總結 */
 .jrnl-edit-area {
     width: 100%; box-sizing: border-box; min-height: 320px; resize: vertical;

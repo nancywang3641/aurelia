@@ -514,6 +514,39 @@
         addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
                  src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });
         try {
+            // 客人出沒區內隨機刷位置（避開佔地，最多重擲10次）
+            const Z = CFG.points.npcZone || { x: 200, y: 600, w: 1000, h: 250 };
+            const rollSpot = () => {
+                for (let t = 0; t < 10; t++) {
+                    const x = Z.x + Math.random() * Z.w, y = Z.y + Math.random() * Z.h;
+                    if (!blocked(x, y)) return { x, y };
+                }
+                return { x: Z.x + Z.w / 2, y: Z.y + Z.h / 2 };
+            };
+            const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+
+            // ① 主池：日誌制（每卡挑一輪：pin 指定 > 最新；同輪角色表=那一輪的記憶，絕不跨輪混）
+            let pool = [];
+            try { pool = await _journalGuestPool(); } catch (e) {}
+            if (pool.length) {
+                const picked = shuffle(pool).slice(0, 2 + Math.floor(Math.random() * 3));
+                picked.forEach((g, i) => {
+                    const sp = rollSpot();
+                    const npc = addNpc({
+                        key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName,   // key 帶 chatId：對話歷史/裝扮皮膚都按「那一輪」隔離
+                        name: g.name, storyTitle: g.storyTitle,
+                        persona: _guestPersona(g),
+                        x: sp.x, y: sp.y,
+                        src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
+                        homeRect: Z,
+                        avoidBlocks: true,
+                    });
+                    _attachGuestPortrait(npc, g);   // 那一輪的頭像當對話立繪（撈不到就維持像素小人）
+                });
+                return;
+            }
+
+            // ② 墊底：日誌沒資料（還沒跑過大總結）→ 舊制掃全部 VN 章節 [Char|]
             if (!window.OS_DB?.getAllVnChapters) return;
             const chapters = await window.OS_DB.getAllVnChapters();
             const byName = new Map();
@@ -527,18 +560,8 @@
                     rec.count++; byName.set(name, rec);
                 }
             });
-            const pool = [...byName.values()].filter(r => r.count >= 2);
-            for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-            const picked = pool.slice(0, 2 + Math.floor(Math.random() * 3));
-            // 客人出沒區內隨機刷位置（避開佔地，最多重擲10次）
-            const Z = CFG.points.npcZone || { x: 200, y: 600, w: 1000, h: 250 };
-            const rollSpot = () => {
-                for (let t = 0; t < 10; t++) {
-                    const x = Z.x + Math.random() * Z.w, y = Z.y + Math.random() * Z.h;
-                    if (!blocked(x, y)) return { x, y };
-                }
-                return { x: Z.x + Z.w / 2, y: Z.y + Z.h / 2 };
-            };
+            const legacy = [...byName.values()].filter(r => r.count >= 2);
+            const picked = shuffle(legacy).slice(0, 2 + Math.floor(Math.random() * 3));
             picked.forEach((r, i) => {
                 const sp = rollSpot();
                 addNpc({
@@ -552,6 +575,98 @@
                 });
             });
         } catch (e) { console.warn('[LobbyStage] 輪班讀取失敗', e); }
+    }
+
+    // ── 📖 日誌 NPC 池（Rae 拍板：每卡挑一輪＋日誌 pin＋骰子混池）──────────
+    //   資料源=OS_DB.getLobbySummaryForPrompt()（大總結寫入、已按 (卡名,chatId) 分組、最新在前）。
+    //   每張卡只取「一輪」：日誌 pin（lstage_npc_pick_v1: 卡名→chatId）優先，沒 pin 或 pin 的輪次
+    //   已被清掉 → 退最新一輪。宮鬥卡重玩四次也只有選定那輪的角色進池，跨輪絕不混。
+    const NPC_PICK_KEY = 'lstage_npc_pick_v1';
+    function _npcPickMap() {
+        try { const o = JSON.parse(localStorage.getItem(NPC_PICK_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+    }
+    // 「名_姓」→「姓名」顯示（照 os_journal._displayName；配頭像仍用原始字串）
+    function _npcDisplayName(raw) {
+        const s = String(raw || '').trim();
+        if (!s || !/^[^\s_（）()]+_[^\s_（）()]+$/.test(s)) return s;
+        const [given, surname] = s.split('_').map(p => p.trim());
+        if (surname === '無' || surname === '无') return given;
+        if (given === '無' || given === '无') return surname;
+        return surname + given;
+    }
+    // 角色表 row + 表頭 → [{label,value}]（照 os_journal 動態對位，沒表頭按欄數套預設）
+    function _npcRowFields(row, header) {
+        const cut = (s) => { const c = String(s || '').split('|').map(x => x.trim()); if (c.length && c[0] === '') c.shift(); if (c.length && c[c.length - 1] === '') c.pop(); return c; };
+        const cells = cut(row);
+        let labels = cut(header);
+        if (labels.length < 2) labels = cells.length >= 8
+            ? ['姓名', '身份', '性格', '狀態 / 位置', '與主角關係', '髮色', '髮型', '眼色', '伏筆 / 備註']
+            : ['姓名', '身份', '性格', '狀態 / 位置', '特徵', '與主角關係', '備註'];
+        return cells.map((v, i) => ({ label: String(labels[i] || ('欄' + (i + 1))).trim(), value: v }));
+    }
+    async function _journalGuestPool() {
+        const OS_DB = window.OS_DB || (window.parent || window).OS_DB;
+        if (!OS_DB?.getLobbySummaryForPrompt) return [];
+        const stories = await OS_DB.getLobbySummaryForPrompt(3);
+        const pin = _npcPickMap();
+        const newest = new Map(), byPin = new Map();
+        for (const st of stories) {   // stories 已最新在前 → 每卡第一筆=最新輪
+            if (!Array.isArray(st.characters) || !st.characters.length) continue;
+            if (!newest.has(st.cardName)) newest.set(st.cardName, st);
+            if (pin[st.cardName] && pin[st.cardName] === st.chatId) byPin.set(st.cardName, st);
+        }
+        const pool = [];
+        for (const [card, st0] of newest) {
+            const st = byPin.get(card) || st0;
+            const brief = (st.briefs && st.briefs[0] && st.briefs[0].brief) || '';
+            for (const c of st.characters) {
+                const rawName = String(c.name || '').trim();
+                if (!rawName || rawName === '瀅瀅' || rawName === '柴郡') continue;
+                pool.push({
+                    rawName, name: _npcDisplayName(rawName),
+                    row: c.row || '', charHeader: st.charHeader || '',
+                    cardName: card, chatId: st.chatId || '',
+                    storyTitle: st.storyTitle || card, brief,
+                });
+            }
+        }
+        return pool;
+    }
+    function _guestPersona(g) {
+        let profile = '';
+        try {
+            profile = _npcRowFields(g.row, g.charHeader)
+                .filter(f => f.value && f.label !== '姓名')
+                .map(f => f.label + '：' + f.value).join('；');
+        } catch (e) {}
+        return '《' + (g.storyTitle || '某本書') + '》裡的角色「' + g.name + '」' +
+            (profile ? '。你的角色檔案：' + profile : '') +
+            (g.brief ? '。你那段故事最近的進展：' + g.brief : '');
+    }
+    // 那一輪(chatId)的頭像 → 對話立繪。avatar_cache key=`chatId::角色名`；chatId 兩邊都正規化再比
+    //   （lobby_summary_index 存的是正規化 chatId、VN_Cache 存 raw ctx.chatId，直接比對會 miss）。
+    async function _attachGuestPortrait(npc, g) {
+        try {
+            const VC = window.VN_Cache || (window.parent || window).VN_Cache;
+            if (!VC?.getAllMeta || !VC.getRaw) return;
+            const norm = w => !w ? '' : String(w).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
+            const wn = norm(g.chatId);
+            if (!wn) return;
+            const metas = (await VC.getAllMeta('avatar_cache')).filter(e => norm(VC.worldOf(e)) === wn);
+            if (!metas.length) return;
+            const bare = (e) => String(VC.bareKeyOf(e) || '').trim();
+            // 名字候選：原始「名_姓」→ 顯示名 → 姓名各種拼法 → 只有名
+            const parts = String(g.rawName).split('_').map(s => s.trim()).filter(s => s && s !== '無' && s !== '无');
+            const cands = [g.rawName, g.name];
+            if (parts.length >= 2) cands.push(parts[1] + parts[0], parts[1] + '·' + parts[0], parts[0] + parts[1], parts[0] + '·' + parts[1]);
+            if (parts.length) cands.push(parts[0]);
+            let hit = null;
+            for (const c of cands) { hit = metas.find(e => bare(e) === c); if (hit) break; }
+            if (!hit && parts[0]) hit = metas.find(e => bare(e).includes(parts[0]));
+            if (!hit) return;
+            const full = await VC.getRaw('avatar_cache', hit.key);
+            if (full && full.url && npc && S.npcs.includes(npc)) npc.portrait = full.url;
+        } catch (e) {}
     }
     function addNpc(cfg) {
         const a = spawnActor(cfg.src, cfg.x, cfg.y, cfg.h || NPC_H);
@@ -1356,6 +1471,7 @@
         getNpcHistory,
         pushNpcHistory,
         popNpcHistoryTail,
+        rollGuestPool: _journalGuestPool,   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個）
         _S: S,
     };
 })();
