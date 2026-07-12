@@ -467,6 +467,15 @@
         try { localStorage.setItem(DRESS_GEN_KEY, JSON.stringify(Object.assign(_dressGenCfg(), patch))); } catch (e) {}
     }
     function _imgMgr() { return window.OS_IMAGE_MANAGER || (window.parent || window).OS_IMAGE_MANAGER || null; }
+    // 頭像 prompt → 小人 prompt：[Avatar] 規範的「(表情, 服裝, 簡單背景)」括號組拆開，
+    //   只拔 background 類 tag（背景交給預設包的底詞，不然 simple indoor background 會打架、去背也髒），
+    //   表情/服裝保留——那件標誌性大衣就是角色識別，跟場景插圖的剝法(連服裝剝)刻意不同。
+    function _spritePromptOf(p) {
+        let s = String(p || '').replace(/[（(]([^（()]*)[)）]/g, (m, inner) => ', ' + inner + ', ');
+        return s.split(',').map(t => t.trim())
+            .filter(t => t && !/background$/i.test(t) && !/^background\b/i.test(t))
+            .join(', ');
+    }
     function _dressPresetsOf(src) {
         const M = _imgMgr();
         if (!M?.config) return [];
@@ -521,6 +530,7 @@
             const label = btn.innerHTML;
             btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 生成中…';
             try {
+                const prompt = _spritePromptOf(a.avatarPrompt);   // 拔掉頭像自帶的 simple xxx background，背景聽預設包的
                 let imgUrl = '';
                 if (srcSel.value === 'novelai') {
                     // 快照→套包→生成→finally 還原（絕不留殘設定）
@@ -529,10 +539,10 @@
                     const snap = {}; KEYS.forEach(k => { snap[k] = nai[k]; });
                     KEYS.forEach(k => { if (preset[k] !== undefined) nai[k] = preset[k]; });
                     try {
-                        imgUrl = await M.generate(a.avatarPrompt, 'char', { provider: 'novelai', width: 832, height: 1216 });
+                        imgUrl = await M.generate(prompt, 'char', { provider: 'novelai', width: 832, height: 1216 });
                     } finally { KEYS.forEach(k => { nai[k] = snap[k]; }); }
                 } else {
-                    imgUrl = await M.previewComfyPreset(preset, a.avatarPrompt);
+                    imgUrl = await M.previewComfyPreset(preset, prompt);
                 }
                 if (!imgUrl) throw new Error('接口沒回圖（檢查連線/預設包）');
                 let final = await _pixelify(imgUrl);   // 格點化+單色背景變透明；失敗就用原圖
