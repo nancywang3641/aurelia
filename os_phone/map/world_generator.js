@@ -121,14 +121,15 @@
         return null;
     }
 
-    // 生背景圖：走「死物桶」路由(generateBackgroundAsync)→跟圖片設置的背景接口同步(poll/NAI/ComfyUI/酒館)。
+    // 生區域圖：走「小地圖桶」路由(imgType:'map')→用小地圖桶自己的模型/預設 + 強制去人物負詞(俯視平面圖、絕不長角色)。
     //   ⚠️ 一次生一張、排序 await（世界生成很多張，非 poll 接口本來就慢/排隊，序列避免打爆）。
     //   NAI 回 blob: URL 重載會失效 → 轉 data URL 才能存進世界 DB 持久化（poll/ComfyUI 本來就持久，原樣回）。
     async function _genBgPersistent(prompt, opts) {
         const IM = win.OS_IMAGE_MANAGER;
         if (!IM || typeof IM.generateBackgroundAsync !== 'function') return '';
+        const _o = Object.assign({ width: 1024, height: 1024 }, opts || {}, { imgType: 'map' });
         let url = '';
-        try { url = await IM.generateBackgroundAsync(prompt, opts || { width: 1024, height: 1024 }) || ''; }
+        try { url = await IM.generateBackgroundAsync(prompt, _o) || ''; }
         catch (e) { console.warn('[WorldGen] 圖生成失敗:', e && e.message); return ''; }
         if (url && url.indexOf('blob:') === 0) {
             try {
