@@ -1214,19 +1214,29 @@
             // ✅ 優先使用外部傳入的 Negative Prompt，否則用預設防護詞
             const negativePrompt = options.negativePrompt || 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render';
 
-            // 🌄 背景接口由「死物桶」(背景・物品 來源) 決定（2026-06-12）：預設 Pollinations；
-            //    選 NAI / ComfyUI直連 / 酒館原生 就走對應接口（給只有 NAI、沒 GitHub 被 poll 限流的人）。
-            //    bgBasePrompt/bgNegPrompt 已由呼叫方(getBg) 處理好，這裡照搬。
-            const _bgSvc = (typeof this.serviceFor === 'function') ? this.serviceFor('bg') : 'pollinations';
+            // 🗺️ 小地圖模式(options.imgType==='map')：走「小地圖桶」(serviceFor/comfy 都用 map)，
+            //    並強制掛去人物/去透視負詞——區域圖底板要純俯視平面圖、絕不能中間長角色。
+            const _isMap = options.imgType === 'map';
+            const MAP_NEG = 'character, person, people, man, woman, boy, girl, 1girl, 1boy, human, face, portrait, isometric, 2.5D, 45-degree view, three-quarter view, angled view, perspective, perspective walls, building facades, side view, front view, horizon, sky, text, watermark, signature';
+            // 🌄 背景/小地圖接口由對應桶決定：背景→死物桶、小地圖→map 桶（各自的模型/負詞）。
+            const _tp = _isMap ? 'map' : 'bg';
+            const _bgSvc = (typeof this.serviceFor === 'function') ? this.serviceFor(_tp) : 'pollinations';
             if (_bgSvc !== 'pollinations') {
-                const _bgOpts = { ...options, negativePrompt: negativePrompt, width: options.width || 1024, height: options.height || 1024 };
+                const _bgOpts = { ...options, width: options.width || 1024, height: options.height || 1024 };
+                if (_isMap) {
+                    // 小地圖：不覆寫 negativePrompt（讓 comfy 用 map 桶自己的負詞），MAP_NEG 用 extraNegative 接在後面(保證去人物)
+                    delete _bgOpts.negativePrompt;
+                    _bgOpts.extraNegative = [options.extraNegative, MAP_NEG].filter(Boolean).join(', ');
+                } else {
+                    _bgOpts.negativePrompt = negativePrompt;
+                }
                 if (_bgSvc === 'novelai' && this.config.novelai && this.config.novelai.token) {
                     // raw=true：跳過 NAI 物品底詞(white background/no background…會毀背景)，只用 bgBasePrompt + bgNegPrompt
-                    return await this._genNovelAI(optimizedPrompt, 'bg', { ..._bgOpts, raw: true });
+                    return await this._genNovelAI(optimizedPrompt, _tp, { ..._bgOpts, raw: true });
                 } else if (_bgSvc === 'comfyui_direct') {
-                    return await this._genComfyuiDirect(optimizedPrompt, 'bg', _bgOpts);
+                    return await this._genComfyuiDirect(optimizedPrompt, _tp, _bgOpts);
                 } else if (_bgSvc === 'tavern_sd') {
-                    return await this._genTavernSd(optimizedPrompt, 'bg', _bgOpts);
+                    return await this._genTavernSd(optimizedPrompt, _tp, _bgOpts);
                 }
                 // 接口未就緒(例如 NAI 沒填 token) → 往下 fall through 回 Pollinations，不讓背景生不出來
             }
@@ -1238,8 +1248,10 @@
             const model = options.model || this.config.pollinations.model;
 
             const encoded = encodeURIComponent(optimizedPrompt);
-            const encodedNegative = encodeURIComponent(negativePrompt);
-            
+            // 小地圖(poll)：negativePrompt 併上 MAP_NEG，保證去人物/去透視
+            const _finalNeg = _isMap ? [negativePrompt, MAP_NEG].filter(Boolean).join(', ') : negativePrompt;
+            const encodedNegative = encodeURIComponent(_finalNeg);
+
             let url = `${this.config.pollinations.url}/${encoded}?width=${width}&height=${height}&model=${model}&seed=${seed}&negative_prompt=${encodedNegative}&nologo=true`;
 
             if (this.config.pollinations.apiKey && this.config.pollinations.apiKey.trim() !== '') {
