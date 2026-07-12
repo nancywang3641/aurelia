@@ -1365,19 +1365,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label" title="想用自己的工作流再開，否則不用碰。">⚙️ 進階設定</div>
-                                    <select class="set-select" id="img-cfd-wfmode">
-                                        <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動（推薦，在下面設定就好）</option>
-                                        <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼自己的工作流）</option>
-                                    </select>
-                                    <div id="img-cfd-custom-wf" class="${imgConfig.comfyuiDirect?.workflowMode==='custom'?'':'hidden'}" style="margin-top:8px;">
-                                        <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${imgConfig.comfyuiDirect?.customWorkflow || ''}</textarea>
-                                        <div class="set-desc" style="margin-top:4px;" title="貼 ComfyUI API 格式工作流（設定開 Dev mode → Save (API Format) 匯出）。只有這幾個變數會被注入，其餘（LoRA、採樣器、放大、修臉…）請寫死在工作流裡；下面的 LoRA/參數欄在自訂模式不生效。">
-                                            可用變數：<code>"%prompt%"</code>　<code>"%negative%"</code>　<code>"%model%"</code>　<code>"%seed%"</code>　<code>"%width%"</code>　<code>"%height%"</code>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="set-group">
                                     <div class="set-label" title="把整組設定存起來，一鍵切換。每個包存一組設定，可存預覽圖、套用、刪除。改完記得到底部按儲存。">📦 預設包</div>
                                     <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;">📦 打開預設包 · ${(imgConfig.comfyuiDirect?.presets || []).length} 個</button>
                                 </div>
@@ -1424,9 +1411,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <option value="flux" ${imgConfig.comfyuiDirect?.modelType==='flux'?'selected':''}>Flux（單體，需 clip_l/t5xxl/ae）</option>
                                         <option value="anima" ${imgConfig.comfyuiDirect?.modelType==='anima'?'selected':''}>Anima（自然語言動漫，需 qwen 編碼器＋VAE）</option>
                                     </select>
-                                </div>
-                                <div class="set-group">
-                                    <div class="set-label">模型</div>
+                                    <div class="set-label cfd-sublabel">模型</div>
                                     <select class="set-select" id="img-cfd-model">
                                         <option value="${imgConfig.comfyuiDirect?.model || ''}" selected>${imgConfig.comfyuiDirect?.model || '（先按上面「測試 / 抓清單」）'}</option>
                                     </select>
@@ -1450,12 +1435,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="set-desc" style="margin-top:4px;" title="自然語言提示詞、CFG 自動≈4、採樣 er_sde/simple；上面「模型」要選 diffusion_models 裡的 anima-base（按測試會自動列出）。">Anima 模式：自然語言提示詞、CFG 自動。</div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label" title="開關 ☑ + 名字 + 模型/CLIP 強度。LoRA 要跟模型同架構（SDXL 配 SDXL）。名字可下拉選或手打檔名。">LoRA</div>
-                                    <datalist id="img-cfd-lora-list"></datalist>
-                                    <div id="img-cfd-loras"></div>
-                                    <button class="set-btn" id="img-cfd-add-lora" type="button" style="margin-top:6px;">➕ 加 LoRA</button>
-                                </div>
-                                <div class="set-group">
                                     <div class="set-label">基本參數</div>
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
                                         <div><div class="set-label" style="font-size:11px;">採樣器</div><select class="set-select" id="img-cfd-sampler">${['euler','euler_ancestral','euler_cfg_pp','dpmpp_2m','dpmpp_2m_sde','dpmpp_3m_sde','dpmpp_sde','dpmpp_2s_ancestral','heun','dpm_2','lms','ddim','uni_pc','uni_pc_bh2','lcm','res_multistep','er_sde'].map(s => `<option value="${s}"${(imgConfig.comfyuiDirect?.sampler||'euler')===s?' selected':''}>${s}</option>`).join('')}</select></div>
@@ -1468,6 +1447,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div><div class="set-label" style="font-size:11px;" title="0 為關閉。">CLIP skip</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${imgConfig.comfyuiDirect?.clipSkip ?? 0}"></div>
                                         <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;" title="空＝模型內建。">VAE</div><select class="set-select" id="img-cfd-vae"><option value=""${!imgConfig.comfyuiDirect?.vae?' selected':''}>（內建 VAE）</option>${imgConfig.comfyuiDirect?.vae?`<option value="${imgConfig.comfyuiDirect.vae}" selected>${imgConfig.comfyuiDirect.vae}</option>`:''}</select></div>
                                     </div>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label" title="開關 ☑ + 名字 + 模型/CLIP 強度。LoRA 要跟模型同架構（SDXL 配 SDXL）。名字可下拉選或手打檔名。">LoRA</div>
+                                    <datalist id="img-cfd-lora-list"></datalist>
+                                    <div id="img-cfd-loras"></div>
+                                    <button class="set-btn" id="img-cfd-add-lora" type="button" style="margin-top:6px;">➕ 加 LoRA</button>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label" title="只在「場景插圖」自動套用，頭像不套；會變慢。">🖼️ 場景插圖品質</div>
@@ -1494,6 +1479,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="field-row">
                                         <div class="set-label" title="選填。">負面提示詞</div>
                                         <textarea class="set-textarea" id="img-cfd-neg">${imgConfig.comfyuiDirect?.negPrompt || ''}</textarea>
+                                    </div>
+                                </div>
+                                <div class="iface-section-title">⚙️ 進階：自訂工作流</div>
+                                <div class="set-group">
+                                    <div class="set-label" title="想用自己的工作流再開，否則不用碰。">工作流模式</div>
+                                    <select class="set-select" id="img-cfd-wfmode">
+                                        <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動（推薦，用上面的設定就好）</option>
+                                        <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼自己的工作流）</option>
+                                    </select>
+                                    <div id="img-cfd-custom-wf" class="${imgConfig.comfyuiDirect?.workflowMode==='custom'?'':'hidden'}" style="margin-top:8px;">
+                                        <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${imgConfig.comfyuiDirect?.customWorkflow || ''}</textarea>
+                                        <div class="set-desc" style="margin-top:4px;" title="貼 ComfyUI API 格式工作流（設定開 Dev mode → Save (API Format) 匯出）。只有這幾個變數會被注入，其餘（LoRA、採樣器、放大、修臉…）請寫死在工作流裡；上面的 LoRA/參數欄在自訂模式不生效。">
+                                            可用變數：<code>"%prompt%"</code>　<code>"%negative%"</code>　<code>"%model%"</code>　<code>"%seed%"</code>　<code>"%width%"</code>　<code>"%height%"</code>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

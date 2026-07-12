@@ -118,6 +118,7 @@
         .cfd-pack-clear { color: #c0392b; border-color: rgba(192,57,43,0.4); }
         .cfd-bucket-row { border: 1px solid rgba(43,108,176,0.35); border-radius: 8px; padding: 8px 10px; background: rgba(43,108,176,0.06); margin-bottom: 10px; }
         .cfd-bucket-row .cfd-preset-cur { font-weight: normal; color: rgba(26,28,40,0.6); font-size: 12px; }
+        .cfd-sublabel { margin-top: 8px; }
 
         /* 匯入方式選擇小窗（覆蓋同名 / 全部新增 / 取消） */
         .cfd-import-choice { margin-top: 10px; padding: 10px; border: 1px solid rgba(26,28,40,0.18); border-radius: 8px; background: rgba(26,28,40,0.04); }
