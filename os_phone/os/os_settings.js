@@ -2880,15 +2880,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 setVal('#img-cfd-anima-clip', p.animaClip || 'qwen_3_06b_base.safetensors');
                 setVal('#img-cfd-anima-vae', p.animaVae || 'qwen_image_vae.safetensors');
                 if (lorasBox) { lorasBox.innerHTML = ''; (Array.isArray(p.loras) ? p.loras : []).forEach(function(L){ lorasBox.appendChild(makeLoraRow(L)); }); }
-                // 帶工作流的預設包（拖圖還原的卡）：切自訂模式、灌回工作流框；否則回自動模式
+                // 工作流模式：優先尊重 p.workflowMode（桶會明確帶）；沒帶才用「有無 customWorkflow」推斷(拖圖還原的卡)
                 const wfSel = container.querySelector('#img-cfd-wfmode');
                 const wfBox = container.querySelector('#img-cfd-custom-wf');
                 const wfTa  = container.querySelector('#img-cfd-custom-wf-text');
-                if (p.customWorkflow) {
-                    if (wfTa)  wfTa.value = p.customWorkflow;
+                const _wantCustom = (p.workflowMode != null) ? (p.workflowMode === 'custom') : !!p.customWorkflow;
+                if (_wantCustom) {
+                    if (wfTa)  wfTa.value = p.customWorkflow || '';
                     if (wfSel) wfSel.value = 'custom';
                     if (wfBox) wfBox.classList.remove('hidden');
                 } else {
+                    if (wfTa)  wfTa.value = p.customWorkflow || '';   // 留著內容但不切自訂（auto 桶通常已清空）
                     if (wfSel) wfSel.value = 'auto';
                     if (wfBox) wfBox.classList.add('hidden');
                 }
@@ -3168,18 +3170,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     fluxClipL: s(cfd.fluxClipL)||'clip_l.safetensors', fluxT5: s(cfd.fluxT5)||'t5xxl_fp8_e4m3fn.safetensors',
                     fluxAe: s(cfd.fluxAe)||'ae.safetensors', guidance: n(cfd.guidance,3.5),
                     animaClip: s(cfd.animaClip)||'qwen_3_06b_base.safetensors', animaVae: s(cfd.animaVae)||'qwen_image_vae.safetensors',
-                    loras: Array.isArray(cfd.loras)?cfd.loras.slice():[], customWorkflow: s(cfd.customWorkflow),
+                    loras: Array.isArray(cfd.loras)?cfd.loras.slice():[],
+                    workflowMode: (s(cfd.workflowMode)==='custom') ? 'custom' : 'auto',
+                    customWorkflow: (s(cfd.workflowMode)==='custom') ? s(cfd.customWorkflow) : '',
                     presets: Array.isArray(cfd.presets)?cfd.presets.slice():[]
                 };
             }
-            // 讀目前面板 → 桶物件（重用 buildCfdPreset 的欄位讀取 + 當前預設包）
-            function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.presets = cfdPresets.slice(); return c; }
+            // 桶正規化：一定要有 workflowMode（舊桶沒存過 → 當 auto 並清掉殘留 customWorkflow，治「全變自訂」）
+            function _normBucket(cfg){ cfg = cfg || {}; if (cfg.workflowMode == null) { cfg.workflowMode = 'auto'; cfg.customWorkflow = ''; } if (cfg.workflowMode !== 'custom') cfg.customWorkflow = ''; return cfg; }
+            // 讀目前面板 → 桶物件（重用 buildCfdPreset 的欄位讀取 + 當前預設包 + 明確 workflowMode）
+            function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.presets = cfdPresets.slice(); c.workflowMode = (container.querySelector('#img-cfd-wfmode')?.value || 'auto'); return c; }
             const _BUCKET_LABEL = { char:'角色', scene:'插圖', bg:'背景', map:'小地圖' };
             function _switchBucket(nb){
                 if (!_comfyBuckets.hasOwnProperty(nb) || nb === _cfdBucket) return;
                 _comfyBuckets[_cfdBucket] = _readPanelBucket();                 // 存目前桶
                 _cfdBucket = nb;
-                const cfg = _comfyBuckets[nb] || _flatSeed();                   // 目標桶（沒設過退你現有設定）
+                const cfg = _normBucket(_comfyBuckets[nb] || _flatSeed());      // 目標桶（沒設過退你現有設定）
                 applyPresetToPanel(cfg);                                        // 灌回面板（模型/LoRA/參數/自訂工作流…）
                 cfdPresets = Array.isArray(cfg.presets) ? cfg.presets.slice() : [];
                 renderPresetGrid();
@@ -3195,8 +3201,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             };
             // 初始對齊：扁平面板可能是上次存檔時「別的桶」→ 強制載入 char 桶，確保 _cfdBucket='char' 跟面板一致
             if (_comfyBuckets.char) {
-                applyPresetToPanel(_comfyBuckets.char);
-                cfdPresets = Array.isArray(_comfyBuckets.char.presets) ? _comfyBuckets.char.presets.slice() : [];
+                const _c0 = _normBucket(_comfyBuckets.char);
+                applyPresetToPanel(_c0);
+                cfdPresets = Array.isArray(_c0.presets) ? _c0.presets.slice() : [];
                 renderPresetGrid();
             }
         })();
