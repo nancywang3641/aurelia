@@ -1459,9 +1459,39 @@
                         if (y > 0 && !seen[p - W] && near((p - W) * 4)) { seen[p - W] = 1; q.push(p - W); }
                         if (y < H - 1 && !seen[p + W] && near((p + W) * 4)) { seen[p + W] = 1; q.push(p + W); }
                     }
-                    ctx.putImageData(d, 0, 0);
                 }
             }
+            // 🧹 掃碎片：去背後常剩「飄在主體周圍的雜點/迷你分身」（SDXL 像素圖通病）。
+            //   連通塊分析：只留最大塊＋面積≥最大塊25%的大附件；碎屑/旁邊的小複製人全清。
+            //   全圖不透明（去背沒發生）＝整張一塊，自然跳過、不誤傷。
+            {
+                const label = new Int32Array(W * H).fill(-1);
+                const areas = [];
+                const qq = [];
+                for (let p0 = 0; p0 < W * H; p0++) {
+                    if (label[p0] !== -1 || px[p0 * 4 + 3] === 0) continue;
+                    const id = areas.length; let area = 0;
+                    label[p0] = id; qq.length = 0; qq.push(p0);
+                    while (qq.length) {
+                        const p = qq.pop(); area++;
+                        const x = p % W, y = (p / W) | 0;
+                        if (x > 0     && label[p - 1] === -1 && px[(p - 1) * 4 + 3] > 0) { label[p - 1] = id; qq.push(p - 1); }
+                        if (x < W - 1 && label[p + 1] === -1 && px[(p + 1) * 4 + 3] > 0) { label[p + 1] = id; qq.push(p + 1); }
+                        if (y > 0     && label[p - W] === -1 && px[(p - W) * 4 + 3] > 0) { label[p - W] = id; qq.push(p - W); }
+                        if (y < H - 1 && label[p + W] === -1 && px[(p + W) * 4 + 3] > 0) { label[p + W] = id; qq.push(p + W); }
+                    }
+                    areas.push(area);
+                }
+                if (areas.length > 1) {
+                    const biggest = Math.max.apply(null, areas);
+                    const keepMin = Math.max(12, biggest * 0.25);
+                    for (let p = 0; p < W * H; p++) {
+                        const id = label[p];
+                        if (id !== -1 && areas[id] < keepMin) px[p * 4 + 3] = 0;
+                    }
+                }
+            }
+            ctx.putImageData(d, 0, 0);
             return cv.toDataURL('image/png');
         } catch (e) { console.warn('[LobbyStage] _pixelify 失敗', e); return null; }
     }
