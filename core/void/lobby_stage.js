@@ -18,7 +18,9 @@
         mcF:   CDN + 'lobby_mc_f.png',
         mcM:   CDN + 'lobby_mc_m.png',
         walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖素體(列=下/左/右/上,欄=左步/立/右步)
-        yingWalk: CDN + 'lobby_ying_walk_v1.png',   // 瀅瀅豆豆走路圖(Rae出品,官方預設)
+        yingWalk: CDN + 'lobby_ying_walk_v1.png',       // 瀅瀅豆豆走路圖(Rae出品,官方預設)
+        aliceWalk: CDN + 'lobby_alice_walk_v1.png',     // 愛麗絲走路圖
+        cheshireWalk: CDN + 'lobby_cheshire_walk_v1.png', // 柴郡走路圖
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
@@ -493,7 +495,8 @@
             addNpc({ key: 'alice', name: '愛麗絲', personaFull: ALICE_PERSONA,
                      subTitle: '純白大廳 · 首席導覽官',
                      storyTitle: '', x: ap.x, y: ap.y, h: 200,
-                     src: ASSET.alice, noWander: true, facePlayer: true,
+                     src: { sheet: ASSET.aliceWalk }, portrait: ASSET.alice,
+                     noWander: true, facePlayer: true,
                      homeRect: { x: ap.x, y: ap.y, w: 0, h: 0 } });
             return;
         }
@@ -502,8 +505,9 @@
             addNpc({ key: 'cheshire', name: '柴郡', persona: null,
                      subTitle: '系統異常部門 · 灰色夢魘組',
                      x: cp.x, y: cp.y, h: 200,
-                     src: ASSET.cheshire, noWander: true,
-                     homeRect: { x: cp.x, y: cp.y, w: 0, h: 0 } });
+                     src: { sheet: ASSET.cheshireWalk }, portrait: ASSET.cheshire,
+                     avoidBlocks: true,   // 野貓在窩附近小範圍晃（有走路圖了）
+                     homeRect: { x: cp.x - 140, y: cp.y - 80, w: 280, h: 160 } });
             return;
         }
         const z = CFG.points.yingZone;
