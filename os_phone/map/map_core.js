@@ -858,8 +858,8 @@ ${facilityText}
                                 ${(win.SCENE_MAP_ENGINE && win.SCENE_MAP_ENGINE.isBackdropAuto && win.SCENE_MAP_ENGINE.isBackdropAuto()) ? 'checked' : ''}
                                 style="width:18px; height:18px; accent-color:#D4AF37;">
                             <div style="flex:1;">
-                                <div style="color:#D4AF37; font-weight:bold; font-size:13px;">自動補底板圖（Pollinations）</div>
-                                <div style="color:#888; font-size:10px; margin-top:2px;">進設施生地標時順便出張底板背景；關閉省流量，地標 emoji 仍會顯示</div>
+                                <div style="color:#D4AF37; font-weight:bold; font-size:13px;">自動補底板圖</div>
+                                <div style="color:#888; font-size:10px; margin-top:2px;">進設施生地標時順便出張底板背景（用「圖片設置→背景」選的接口生）；關閉省流量，地標 emoji 仍會顯示</div>
                             </div>
                         </label>
                     </div>
