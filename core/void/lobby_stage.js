@@ -348,7 +348,8 @@
     const PLAYER_H = 190, PLAYER_SPEED = 0.33;
     const WALK_FRAMES = [0, 1, 2, 1], WALK_FRAME_MS = 150;
     function initPlayer() {
-        const src = { sheet: ASSET.walkBase };   // 玩家=3×4走路圖（真四方向走路動畫）
+        // 單張立姿+彈跳翻面（Rae定案：多角色出走路圖太累沒必要）；要走路圖時改傳 {sheet: ASSET.walkBase}
+        const src = (localStorage.getItem('lobby_stage_mc') === 'm') ? ASSET.mcM : ASSET.mcF;
         // 'arrive'=走門進場（落點可在擺設模式拖橘色門圓點調整）；落點在牆裡自動彈到最近地板
         const raw = (S.spawnOverride === 'arrive' ? (CFG.points.arrive || CFG.points.player)
                   : S.spawnOverride) || CFG.points.player;
