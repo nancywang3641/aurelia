@@ -201,12 +201,16 @@
                 processed = true;
                 console.log(`[SceneMap] ✅ ${facility.name}：底板="${sceneMap.backdropPrompt}", 地標 ${sceneMap.landmarks.length} 個`);
 
-                // 開了補圖開關 → call pollinations 補底板（同步取 URL，不等下載完）
-                // 風格詞綴前置 + AI 內容後置，鎖死 2D 俯視插畫風
-                if (isBackdropAuto() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackground === 'function') {
+                // 開了補圖開關 → 補底板（走「死物桶」路由 generateBackgroundAsync→跟圖片設置的背景接口同步）
+                // 風格詞綴前置 + AI 內容後置，鎖死 2D 俯視插畫風。單張、等它生完；NAI 回 blob: 轉 data URL 才能存進世界 DB
+                if (isBackdropAuto() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
                     try {
                         const fullPrompt = `${DEFAULT_BASEPLATE}, ${sceneMap.backdropPrompt}`;
-                        sceneMap.backdropUrl = win.OS_IMAGE_MANAGER.generateBackground(fullPrompt, { width: 1024, height: 512 }) || '';
+                        let _bu = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(fullPrompt, { width: 1024, height: 512 }) || '';
+                        if (_bu && _bu.indexOf('blob:') === 0) {
+                            try { const _b = await (await fetch(_bu)).blob(); _bu = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(_b); }); } catch (e) {}
+                        }
+                        sceneMap.backdropUrl = _bu;
                     } catch (e) {
                         console.warn('[SceneMap] 底板圖生成失敗:', e);
                     }
