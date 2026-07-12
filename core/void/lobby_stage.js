@@ -680,22 +680,16 @@
         if (S.edit) return;
         S.talkTarget = npc;
         S.npcs.forEach(n => { n.hint.style.display = 'none'; });
-        const nameEl = document.getElementById('lb-char-name');
-        const subEl = document.getElementById('lb-char-sub');
         const tagSpan = document.querySelector('#iris-name-tag span');
         const input = document.getElementById('iris-input');
         if (npc.key === 'ying' || npc.key === 'cheshire') {
             // 瀅瀅/柴郡=對話目標，但管線走各自原生軌道（void_terminal 對這兩位不走 NPC 分支）
-            if (nameEl) nameEl.textContent = npc.name;
-            if (subEl) subEl.textContent = npc.subTitle || '視差書咖 · 館長';
             if (tagSpan) tagSpan.textContent = npc.name;
             if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
             showDialog();
             window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句(404房自動用柴郡池)
             return;
         }
-        if (nameEl) nameEl.textContent = npc.name;
-        if (subEl) subEl.textContent = npc.subTitle || ('來自《' + (npc.storyTitle || '未知的書') + '》');
         if (tagSpan) tagSpan.textContent = npc.name;
         if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
         showDialog();
@@ -706,20 +700,17 @@
         _applySceneHeader();
         hideDialog();
     }
-    // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（名牌/頭銜/輸入框提示跟著場景走）
+    // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {
-        cafe:    { name: '瀅瀅',   sub: '視差書咖 · 館長',        ph: '提供故事素材或與瀅瀅對話...' },
-        hall:    { name: '愛麗絲', sub: '純白大廳 · 首席導覽官',  ph: '與愛麗絲對話，或走向大門返回書咖...' },
-        room404: { name: '柴郡',   sub: '系統異常部門 · 灰色夢魘組', ph: '對404號房的看守者說話，或走底部出口離開...' },
+        cafe:    { name: '瀅瀅',   badge: '視差書咖', ph: '提供故事素材或與瀅瀅對話...' },
+        hall:    { name: '愛麗絲', badge: '純白大廳', ph: '與愛麗絲對話，或走向大門返回書咖...' },
+        room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
     };
     function _applySceneHeader() {
         const H = SCENE_HEADER[S.scene] || SCENE_HEADER.cafe;
-        const nameEl = document.getElementById('lb-char-name');
-        const subEl = document.getElementById('lb-char-sub');
         const tagSpan = document.querySelector('#iris-name-tag span');
-        if (nameEl) nameEl.textContent = H.name;
-        if (subEl) subEl.textContent = H.sub;
         if (tagSpan) tagSpan.textContent = H.name;
+        if (window.VoidTerminal?._bridge?.setSceneBadge) window.VoidTerminal._bridge.setSceneBadge(H.badge);
         const input = document.getElementById('iris-input');
         if (input) input.placeholder = H.ph;
     }
@@ -852,6 +843,13 @@
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>';
         left.appendChild(root);
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
+        // 💬 聊天符號（自由漫遊時的浮鈕）：點了浮出「對話框＋輸入框」一組
+        const fab = document.createElement('button');
+        fab.className = 'lstage-chat-fab';
+        fab.title = '開啟對話';
+        fab.innerHTML = '<i class="fa-solid fa-comment-dots"></i>';
+        fab.addEventListener('click', (e) => { e.stopPropagation(); showDialog(); });
+        left.appendChild(fab);
         S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
         S.doorArm = false;   // 剛進場先解除門武裝，走出門區才啟動
         // 底圖：本機/網址覆蓋（建構模式「換底圖」）
@@ -917,6 +915,7 @@
         if (_left) {
             _left.classList.remove('lstage-on', 'lstage-dlg-hidden');
             _left.querySelector('.lstage-talk-portrait')?.remove();
+            _left.querySelector('.lstage-chat-fab')?.remove();
         }
         S.root = S.world = null;
         S.player = null; S.npcs = []; S.talkTarget = null; S.keys = {}; S.objEls = [];
