@@ -1653,25 +1653,25 @@ ${facilityText}
         btn.disabled = true;
 
         const fac = STATE.activeFacility;
-
-        // 🗺️ 探索＝一次做完：進設施不再自動生小地圖 → 這裡先補（地標＋底板），沒生過才生，再往下掃路人。
-        if (fac && !fac.sceneMap && win.SCENE_MAP_ENGINE && typeof win.SCENE_MAP_ENGINE.generateForFacility === 'function') {
-            btn.innerHTML = '<span>🗺️</span> 勘景中...';
-            try { await win.SCENE_MAP_ENGINE.generateForFacility(STATE.currentZoneId, STATE.activeFacilityKey); } catch (e) { console.error('[Map] sceneMap 生成失敗:', e); }
-            if (STATE.activeFacilityKey) renderScanResults();   // 先把地標/底板畫出來，再繼續掃路人
-            btn.innerHTML = '<span>📡</span> 掃描中...';
-        }
+        const _SME = win.SCENE_MAP_ENGINE;
+        // 沒生過小地圖 → 這次探索「同一份 AI 回覆」順便把小地圖也要了（不再另打第二次 API）
+        const _needScene = !!(fac && !fac.sceneMap && _SME && typeof _SME.buildScenePrompt === 'function');
+        const _zid = STATE.currentZoneId, _fk = STATE.activeFacilityKey;
 
         // 使用 OS_API
         try {
-            const prompt = `請為地點「${fac.name}」生成 2-3 位路人角色與一段環境描寫。`;
+            let prompt = `請為地點「${fac.name}」生成 2-3 位路人角色與一段環境描寫。`;
+            if (_needScene) {
+                const _sp = _SME.buildScenePrompt(_zid, _fk);   // 把 <scene-map> 生成規則拼進同一次呼叫
+                if (_sp) prompt += '\n\n' + _sp;
+            }
             const messages = await win.OS_API.buildContext(prompt, 'map_scan');
-            win.OS_API.chat(messages, win.OS_SETTINGS.getConfig(), null, (txt) => {
+            win.OS_API.chat(messages, win.OS_SETTINGS.getConfig(), null, async (txt) => {
                 let chars = [];
                 let intro = [];
                 let discoveries = [];
-                
-                let cleanText = txt;
+
+                let cleanText = txt.replace(/<scene-map>[\s\S]*?<\/scene-map>/i, '');   // 剝掉小地圖區塊，免得被當對話播
 
                 // 1. 解析 NPC
                 const npcRegex = /\[NPC\|([^|]+)\|([^|]+)\|([^|]+)\|([^\]]+)\]/g;
@@ -1714,9 +1714,16 @@ ${facilityText}
                 STATE.generatedChars = chars.length > 0 ? chars : [{name:'路人A', role:'居民', dialogue:'...'}];
                 STATE.introSegments = intro.length > 0 ? intro : ["環境嘈雜，人來人往..."];
                 STATE.discoveries = discoveries;
-                
+
                 renderScanResults();
                 btn.disabled = false;
+
+                // 🗺️ 同一份回覆裡的 <scene-map> → 解析＋補底板圖＋存檔，完成再 render 一次把地標/底板畫上
+                //    （放最後：背景生圖較慢，別擋路人先顯示。這次沒要小地圖就跳過）
+                if (_needScene && _SME && typeof _SME.applySceneMapFromText === 'function') {
+                    try { const _sm = await _SME.applySceneMapFromText(_zid, _fk, txt); if (_sm) renderScanResults(); }
+                    catch (e) { console.error('[Map] sceneMap 解析失敗:', e); }
+                }
             });
         } catch (e) {
             btn.innerHTML = '失敗';

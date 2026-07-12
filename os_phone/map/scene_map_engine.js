@@ -192,8 +192,7 @@
             // 走 chatSecondary：簽名 (messages, onChunk, onFinish, onError)
             win.OS_API.chatSecondary(messages, null, async (responseText) => {
                 if (processed) return;
-                const sceneMap = parseSceneMap(responseText);
-                if (!sceneMap) {
+                if (!parseSceneMap(responseText)) {
                     // 流式可能還沒完整，等收尾再判失敗
                     if (responseText && responseText.length > 100 && /<\/scene-map>/i.test(responseText)) {
                         processed = true;
@@ -204,35 +203,9 @@
                     return;
                 }
                 processed = true;
-                console.log(`[SceneMap] ✅ ${facility.name}：底板="${sceneMap.backdropPrompt}", 地標 ${sceneMap.landmarks.length} 個`);
-
-                // 開了補圖開關 → 補底板（走「死物桶」路由 generateBackgroundAsync→跟圖片設置的背景接口同步）
-                // 風格詞綴前置 + AI 內容後置，鎖死 2D 俯視插畫風。單張、等它生完；NAI 回 blob: 轉 data URL 才能存進世界 DB
-                if (isBackdropAuto() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
-                    try {
-                        const fullPrompt = `${DEFAULT_BASEPLATE}, ${sceneMap.backdropPrompt}`;
-                        let _bu = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(fullPrompt, { width: 1024, height: 512, imgType: 'map' }) || '';
-                        if (_bu && _bu.indexOf('blob:') === 0) {
-                            try { const _b = await (await fetch(_bu)).blob(); _bu = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(_b); }); } catch (e) {}
-                        }
-                        sceneMap.backdropUrl = _bu;
-                    } catch (e) {
-                        console.warn('[SceneMap] 底板圖生成失敗:', e);
-                    }
-                }
-
-                // 寫入 facility（持久化）
-                let ok = false;
-                if (typeof win.WORLD_RUNTIME.saveFacilitySceneMap === 'function') {
-                    ok = await win.WORLD_RUNTIME.saveFacilitySceneMap(zoneId, facKey, sceneMap);
-                } else {
-                    // 降級：直接覆蓋 facility（不持久化）
-                    facility.sceneMap = sceneMap;
-                    ok = true;
-                }
-
-                if (progressCb) progressCb(ok ? 'done' : 'error', ok ? '勘景完成' : '存檔失敗');
-                resolve(ok ? sceneMap : null);
+                const sceneMap = await applySceneMapFromText(zoneId, facKey, responseText);
+                if (progressCb) progressCb(sceneMap ? 'done' : 'error', sceneMap ? '勘景完成' : '存檔失敗');
+                resolve(sceneMap);
             }, (err) => {
                 if (processed) return;
                 processed = true;
@@ -243,12 +216,48 @@
         });
     }
 
+    // 給「探索此地」合併呼叫用：拿某設施的 scene-map 生成 prompt（可拼進主模型的掃描 prompt，一次呼叫同時要小地圖+路人）
+    function buildScenePrompt(zoneId, facKey) {
+        const zone = win.WORLD_RUNTIME && win.WORLD_RUNTIME.getZone ? win.WORLD_RUNTIME.getZone(zoneId) : null;
+        if (!zone || !zone.facilities || !zone.facilities[facKey]) return '';
+        return buildPrompt(zone.facilities[facKey], zone);
+    }
+    // 從任意 AI 回覆文字抽 <scene-map> → 解析 + 補底板圖 + 存檔。回 sceneMap 或 null（抽不到就 null，不報錯）。
+    async function applySceneMapFromText(zoneId, facKey, responseText) {
+        const zone = win.WORLD_RUNTIME && win.WORLD_RUNTIME.getZone ? win.WORLD_RUNTIME.getZone(zoneId) : null;
+        if (!zone || !zone.facilities || !zone.facilities[facKey]) return null;
+        const facility = zone.facilities[facKey];
+        const sceneMap = parseSceneMap(responseText);
+        if (!sceneMap) return null;
+        console.log(`[SceneMap] ✅ ${facility.name}：底板="${sceneMap.backdropPrompt}", 地標 ${sceneMap.landmarks.length} 個`);
+        // 開了補圖開關 → 補底板（走「小地圖桶」imgType:'map'，俯視去人物）。NAI 回 blob: 轉 data URL 才能存進世界 DB
+        if (isBackdropAuto() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
+            try {
+                const fullPrompt = `${DEFAULT_BASEPLATE}, ${sceneMap.backdropPrompt}`;
+                let _bu = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(fullPrompt, { width: 1024, height: 512, imgType: 'map' }) || '';
+                if (_bu && _bu.indexOf('blob:') === 0) {
+                    try { const _b = await (await fetch(_bu)).blob(); _bu = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(_b); }); } catch (e) {}
+                }
+                sceneMap.backdropUrl = _bu;
+            } catch (e) { console.warn('[SceneMap] 底板圖生成失敗:', e); }
+        }
+        // 寫入 facility（持久化）
+        if (typeof win.WORLD_RUNTIME.saveFacilitySceneMap === 'function') {
+            const ok = await win.WORLD_RUNTIME.saveFacilitySceneMap(zoneId, facKey, sceneMap);
+            return ok ? sceneMap : null;
+        }
+        facility.sceneMap = sceneMap;   // 降級：不持久化
+        return sceneMap;
+    }
+
     win.SCENE_MAP_ENGINE = {
         BACKDROP_AUTO_KEY,
         DEFAULT_BASEPLATE,
         isBackdropAuto,
         setBackdropAuto,
         parseSceneMap,
+        buildScenePrompt,
+        applySceneMapFromText,
         generateForFacility
     };
 })();
