@@ -428,6 +428,22 @@ const IRIS_IDLE = [
         }
     }
 
+    // 左上場景牌（仿 VN #top-badge「時段 地點」，如「午後 視差書咖」）
+    function _sceneTimeWord() {
+        const h = new Date().getHours();
+        if (h >= 5  && h < 8)  return '清晨';
+        if (h >= 8  && h < 11) return '上午';
+        if (h >= 11 && h < 14) return '正午';
+        if (h >= 14 && h < 17) return '午後';
+        if (h >= 17 && h < 19) return '黃昏';
+        if (h >= 19 && h < 23) return '夜晚';
+        return '深夜';
+    }
+    function setSceneBadge(place) {
+        const el = document.getElementById('lb-scene-badge');
+        if (el) el.textContent = _sceneTimeWord() + ' ' + place;
+    }
+
     function _applyLoadedLobbyState() {
         // 如果載入的 session 是在聊天房間（Claude / Codex），還原房間 UI
         if (isClaudeRoom) {
@@ -513,6 +529,7 @@ const IRIS_IDLE = [
                 playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
             }
         }
+        setSceneBadge(is404Room ? '404號房' : '視差書咖');
         _updatePortalBtn();
     }
 
@@ -603,10 +620,7 @@ const IRIS_IDLE = [
             <div class="lobby-body">
                 <div class="lobby-left">
                     <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" alt="瀅瀅" style="display:none;">
-                    <div class="lb-char-id">
-                        <div class="lb-char-name" id="lb-char-name" data-name-404="柴郡">瀅瀅</div>
-                        <div class="lb-char-sub" id="lb-char-sub" data-sub-404="系統異常部門 · 灰色夢魘組">視差書咖 · 館長</div>
-                    </div>
+                    <div class="lb-scene-badge" id="lb-scene-badge">視差書咖</div>
                     <div class="lb-signature"></div>
                     <div class="void-dialogue-wrap">
                         <div style="position: relative; width: 100%;">
@@ -621,6 +635,13 @@ const IRIS_IDLE = [
                                 <div class="void-name-tag" id="iris-reaction-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
                                 <div class="void-text" id="iris-reaction-text">...</div>
                             </div>
+                        </div>
+                        <div class="void-chat-input-row">
+                            <button class="void-hist-btn void-hist-inline" id="iris-hist-btn" title="瀅瀅 對話歷史"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                            <button class="void-hist-btn void-hist-inline" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                            <textarea id="iris-input" class="void-input" placeholder="提供故事素材或與瀅瀅對話..." rows="1" autocomplete="off"></textarea>
+                            <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
+                            <button class="void-send-btn" id="iris-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
                         </div>
                     </div>
                 </div>
@@ -808,16 +829,7 @@ const IRIS_IDLE = [
                 </div>
             </div>
 
-            <div class="void-chat-bar">
-                <!-- app 按鈕全部搬進「📱 應用」手機殼浮窗；這裡只留大廳對話歷史鈕（瀅瀅/柴郡），移到輸入框前面 -->
-                <div class="void-chat-input-row">
-                    <button class="void-hist-btn void-hist-inline" id="iris-hist-btn" title="瀅瀅 對話歷史"><i class="fa-solid fa-clock-rotate-left"></i></button>
-                    <button class="void-hist-btn void-hist-inline" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i></button>
-                    <textarea id="iris-input" class="void-input" placeholder="提供故事素材或與瀅瀅對話..." rows="1" autocomplete="off"></textarea>
-                    <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
-                    <button class="void-send-btn" id="iris-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
-                </div>
-            </div>
+            <!-- 底部輸入列已搬進 .void-dialogue-wrap（對話框正下方）；獨立 .void-chat-bar 已移除 -->
 
             <!-- 📖 大廳章節選擇面板 -->
             <div id="lobby-chapter-panel" class="lcp-overlay">
@@ -2068,6 +2080,7 @@ const IRIS_IDLE = [
             if (inputField) inputField.placeholder = '...你最好有話說。';
             const nameBox = document.getElementById('iris-name-tag');
             if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='CHESHIRE / 柴郡'; }
+            setSceneBadge('404號房');
 
             const irisHistBtn404 = document.getElementById('iris-hist-btn');
             const cheshireHistBtn404 = document.getElementById('cheshire-hist-btn');
@@ -2118,6 +2131,7 @@ const IRIS_IDLE = [
             if (inputField) inputField.placeholder = '提供故事素材或與瀅瀅對話...';
             const nameBox = document.getElementById('iris-name-tag');
             if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='瀅瀅'; }
+            setSceneBadge('視差書咖');
 
             const irisHistBtnRestore = document.getElementById('iris-hist-btn');
             const cheshireHistBtnRestore = document.getElementById('cheshire-hist-btn');
@@ -2609,6 +2623,8 @@ ${sections}`;
         sendIris:      sendIrisMessage,   // 給 claude-room.js finally 還原 sendBtn.onclick 用
         // canvas.js
         is404: () => is404Room,
+        // lobby_stage.js — 場景切換時更新左上場景牌
+        setSceneBadge: (place) => setSceneBadge(place),
         // ambient.js
         isActivitySuspended: () => _isActivitySuspended,
         isPanelOpen:         () => _isPanelOpen,

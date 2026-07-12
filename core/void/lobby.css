@@ -159,7 +159,7 @@
    絕對定位夾在頂部列與底部列之間（沿用「各區塊獨立 absolute」的版型模型）
    ========================================================= */
 .lobby-body {
-    position:absolute; left:0; right:0; top:52px; bottom:52px;   /* bottom 由 92→52：底部欄已刪 app 鈕排、只剩一排輸入框 */
+    position:absolute; left:0; right:0; top:52px; bottom:0;   /* bottom 由 52→0：輸入列已搬進對話框下方，底部欄整條移除 */
     z-index:6; display:flex; gap:0;
     box-sizing:border-box; overflow:hidden;
 }
@@ -193,22 +193,37 @@
     background: var(--lb-scrim);
 }
 
-/* 角色名牌（左上疊字） */
-.lb-char-id {
-    position:absolute; top:14px; left:16px; z-index:2;
+/* 場景牌（左上疊字，仿 VN 劇情 #top-badge：水平漸隱黑遮罩條＋金色短線，內容=「時段 地點」） */
+.lb-scene-badge {
+    position:absolute; top:14px; left:10px; z-index:2;
+    background:linear-gradient(to right,
+        transparent 0%,
+        rgba(0,0,0,0.55) 12%,
+        rgba(0,0,0,0.55) 88%,
+        transparent 100%);
+    color:#f0e8d0; pointer-events:none;
+    padding:7px 28px;
+    font-weight:700; font-size:15px; letter-spacing:2.5px; line-height:1.5;
+    text-shadow:
+        0 0 4px  rgba(0,0,0,1),
+        0 0 10px rgba(0,0,0,0.9);
 }
-.lb-char-name {
-    font-size:22px; font-weight:900; letter-spacing:3px;
-    color:#FFFFFF; text-shadow:0 2px 10px rgba(0,0,0,0.7); /* 立繪上→鎖死白 */
-    font-family:'Cinzel','Noto Sans TC',serif;
+.lb-scene-badge::before {
+    content:''; display:inline-block; vertical-align:middle;
+    width:16px; height:1px;
+    background:linear-gradient(to right, transparent, #c8a96e);
+    margin-right:10px; margin-bottom:2px;
 }
-.lb-char-sub {
-    font-size:10px; color:#fff; opacity:0.82; letter-spacing:1px;
-    margin-top:6px; text-shadow:0 1px 6px rgba(0,0,0,0.8);
+.lb-scene-badge::after {
+    content:''; display:inline-block; vertical-align:middle;
+    width:16px; height:1px;
+    background:linear-gradient(to left, transparent, #c8a96e);
+    margin-left:10px; margin-bottom:2px;
 }
+.void-tab.mode-404 .lb-scene-badge { color:#9ef3b0; }
 /* 簽名圖 */
 .lb-signature {
-    position:absolute; top:96px; left:18px; z-index:2;
+    position:absolute; top:60px; left:18px; z-index:2;
     width:130px; height:46px;
     background:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/yingying_signature.png) left center/contain no-repeat;
     opacity:0.9; pointer-events:none;
@@ -223,6 +238,8 @@
     z-index:3; padding:0 16px 16px;
 }
 .lobby-left .void-dialogue-box { max-width:none; margin:0; }
+/* 輸入列跟對話框同住一個 wrap：貼在對話框正下方 */
+.lobby-left .void-dialogue-wrap .void-chat-input-row { margin-top:8px; }
 
 /* 白主題對話框：仿 404 框線卡片，改白霧版 */
 .void-tab:not(.mode-404) .lobby-left .void-dlg-bg    { display:none !important; }
@@ -337,11 +354,7 @@
 .void-tab.mode-404 .lb-menu-cn::after   { content:attr(data-cn-404);   font-size:21px; }
 .void-tab.mode-404 .lb-menu-en          { font-size:0; }
 .void-tab.mode-404 .lb-menu-en::after   { content:attr(data-en-404);   font-size:10px; }
-/* 柴郡皮膚：左欄角色名 / 副標換字 */
-.void-tab.mode-404 .lb-char-name        { font-size:0; }
-.void-tab.mode-404 .lb-char-name::after { content:attr(data-name-404); font-size:22px; }
-.void-tab.mode-404 .lb-char-sub         { font-size:0; }
-.void-tab.mode-404 .lb-char-sub::after  { content:attr(data-sub-404); font-size:10px; }
+/* （左欄角色名牌已改為場景牌 .lb-scene-badge，404 換字改由 JS setSceneBadge 寫入） */
 
 /* 選單背景圖 — 瀅瀅皮膚 */
 #void-quest-btn       { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/藏書_ying.png); }
@@ -378,15 +391,9 @@
 }
 
 /* =========================================================
-   區塊 3：底部列  .void-chat-bar
-   NEWS 跑馬燈 + 今日特調 + 點數 + APP 圖標列 + 輸入框
-   （沿用既有 absolute bottom:0；APP 列在上、輸入框在下不變）
+   區塊 3：輸入列（原底部列 .void-chat-bar 已移除——
+   .void-chat-input-row 現在住在 .void-dialogue-wrap、貼在對話框下方）
    ========================================================= */
-.void-tab .void-chat-bar {
-    background: var(--lb-panel) !important;
-    border-top:1px solid var(--lb-line) !important;
-    padding:5px 10px; gap:5px;
-}
 
 /* 3a. 資訊條：NEWS / 今日特調 / 點數 */
 .lb-botbar-info {
@@ -474,7 +481,7 @@
    窄螢幕：左右欄改上下堆疊（沿用既有斷點機制）
    ========================================================= */
 @media (max-width:560px) {
-    .lobby-body { flex-direction:column; top:46px; bottom:52px; }
+    .lobby-body { flex-direction:column; top:46px; bottom:0; }
     /* 立繪螢幕佔大部分 */
     .lobby-left { flex:1 1 auto; border-right:none; border-bottom:1px solid var(--lb-line); min-height:0; }
     /* 大廳右欄 3 個 main menu 按鈕並排，緊湊小 */
