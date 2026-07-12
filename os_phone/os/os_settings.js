@@ -4169,6 +4169,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         scale: (r.scale != null ? r.scale : 5),
                         steps: (r.steps != null ? r.steps : 28),
                         ucPreset: 1,
+                        width: (r.width || undefined), height: (r.height || undefined),   // 原圖尺寸跟著包走（裝扮室生成等吃包的尺寸）
                         thumbId, fromImage: true, model: r.model || ''
                     });
                     ok++;

@@ -581,7 +581,7 @@
 
         // 預設包風格預覽：用「指定預設包設定 + 測試詞」生一張小圖，不動到當前面板設定
         // presetCfg：一個預設包物件（含 model/loras/params…，但通常沒有 url）→ 與當前 config 合併補 url
-        previewComfyPreset: async function(presetCfg, prompt) {
+        previewComfyPreset: async function(presetCfg, prompt, opts) {
             const live = this.config.comfyuiDirect || {};
             const cfg = Object.assign({}, live, presetCfg || {});  // 預設包覆蓋模型/LoRA/參數；url 等沿用 live
             const url = (cfg.url || '').trim();
@@ -592,9 +592,13 @@
             const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
             const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
             const negText = cfg.negPrompt || '';
-            // 預覽用小圖(512×768)。每次給新隨機種子→避開 ComfyUI 對「相同工作流」的快取
+            // 尺寸：opts.packSize=true → 不塞任何尺寸、builder 落到 cfg.width/height＝完全用預設包自己調的
+            //   （裝扮室生成走這條）；沒帶 opts 維持預覽小圖 512×768（設置頁預設卡縮圖用）。
+            // 每次給新隨機種子→避開 ComfyUI 對「相同工作流」的快取
             // （完全命中快取時不產生新輸出→代理拿不到圖→伺服器 500），順便讓重新生成有變化
-            const _pvOpts = { width: 512, height: 768, seed: Math.floor(Math.random() * 1e15) };
+            const _pvOpts = (opts && opts.packSize)
+                ? { seed: Math.floor(Math.random() * 1e15) }
+                : { width: 512, height: 768, seed: Math.floor(Math.random() * 1e15) };
             // 帶工作流的預設包（拖圖還原的卡）→ 走自訂工作流；否則自動組
             const wf = _hasCustomWf
                 ? this._applyCustomWorkflow(cfg.customWorkflow, posText, negText, _pvOpts, cfg)
