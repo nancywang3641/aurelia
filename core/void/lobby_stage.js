@@ -482,14 +482,23 @@
         if (src === 'novelai') return (M.config.novelai?.naiPresets || []);
         return (M.config.comfyuiDirect?.presets || []);
     }
+    // 預設包身分：id 沒有就用 name（ComfyUI 包常沒 id 欄——只認 id 會「每次都要重選」）
+    function _dressPresetKey(p) { return (p && (p.id || p.name)) || ''; }
+    function _dressSavedKey(src) {
+        const c = _dressGenCfg();
+        return src === 'novelai' ? (c.naiPreset || c.naiPresetId || '') : (c.comfyPreset || c.comfyPresetId || '');
+    }
+    function _dressPresetOpts(src) {
+        const presets = _dressPresetsOf(src);
+        const savedKey = _dressSavedKey(src);
+        return presets.length
+            ? presets.map((p, i) => '<option value="' + i + '"' + (_dressPresetKey(p) === savedKey ? ' selected' : '') + '>' + String(p.name || ('預設 ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('')
+            : '<option value="" disabled selected>（這個接口還沒有預設包）</option>';
+    }
     function _dressGenHtml(a) {
         const saved = _dressGenCfg();
         const src = (saved.src === 'novelai') ? 'novelai' : 'comfyui_direct';
-        const presets = _dressPresetsOf(src);
-        const savedId = src === 'novelai' ? saved.naiPresetId : saved.comfyPresetId;
-        const opts = presets.length
-            ? presets.map((p, i) => '<option value="' + i + '"' + ((p.id && p.id === savedId) ? ' selected' : '') + '>' + String(p.name || ('預設 ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('')
-            : '<option value="" disabled selected>（這個接口還沒有預設包）</option>';
+        const opts = _dressPresetOpts(src);
         return '<div class="lsd-gen">' +
             '<div class="lsd-gen-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 生成小小人（用這位的頭像外觀）</div>' +
             '<div class="lsd-gen-row">' +
@@ -507,18 +516,11 @@
         const pSel = box.querySelector('.lsd-gen-preset');
         const btn = box.querySelector('.lsd-gen-btn');
         if (!srcSel || !pSel || !btn) return;
-        const refillPresets = () => {
-            const src = srcSel.value;
-            const presets = _dressPresetsOf(src);
-            const savedId = src === 'novelai' ? _dressGenCfg().naiPresetId : _dressGenCfg().comfyPresetId;
-            pSel.innerHTML = presets.length
-                ? presets.map((p, i) => '<option value="' + i + '"' + ((p.id && p.id === savedId) ? ' selected' : '') + '>' + String(p.name || ('預設 ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('')
-                : '<option value="" disabled selected>（這個接口還沒有預設包）</option>';
-        };
+        const refillPresets = () => { pSel.innerHTML = _dressPresetOpts(srcSel.value); };
         srcSel.addEventListener('change', () => { _dressGenSave({ src: srcSel.value }); refillPresets(); });
         pSel.addEventListener('change', () => {
-            const p = _dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)];
-            if (p?.id) _dressGenSave(srcSel.value === 'novelai' ? { naiPresetId: p.id } : { comfyPresetId: p.id });
+            const key = _dressPresetKey(_dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)]);
+            if (key) _dressGenSave(srcSel.value === 'novelai' ? { naiPreset: key } : { comfyPreset: key });
         });
         btn.addEventListener('click', async () => {
             if (btn.disabled) return;
