@@ -4650,6 +4650,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     char:  { type: 'char',  svcEl: elImgServiceLiving,   sizeSel: '#img-avatar-size' },
                     scene: { type: 'scene', svcEl: elImgServiceScene,     sizeSel: '#img-scene-size'  },
                     bg:    { type: 'bg',    svcEl: elImgServiceInanimate, sizeSel: '#img-bg-size'     },
+                    map:   { type: 'map',   svcEl: elImgServiceMap,       sizeSel: '#img-bg-size'     },
                 };
                 const _tabCfg = _tabMap[_activeTab] || _tabMap.char;
 
@@ -4674,6 +4675,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const _bgNeg  = (container.querySelector('#vncfg-bg-neg')?.value || '').trim();
                     if (_bgBase) _testPrompt = _bgBase + ', ' + _testPrompt;
                     if (_bgNeg)  _genOpts.negativePrompt = _bgNeg;
+                }
+                if (_activeTab === 'map' && !_testIsCfd) {
+                    // 小地圖測試也掛去人物/去透視負詞（對齊實際區域圖底板 imgType:'map'）
+                    _genOpts.negativePrompt = 'character, person, people, 1girl, 1boy, human, face, portrait, isometric, 2.5D, perspective, side view, front view, sky, text, watermark';
                 }
                 const imageUrl = await imageManager.generate(_testPrompt, _tabCfg.type, _genOpts);
 
