@@ -96,6 +96,7 @@
             serviceLiving: 'pollinations',    // legacy：舊「活物桶」(char+scene 共用)，保留供遷移/舊讀者；新路由走 serviceChar/serviceScene
             serviceChar: 'pollinations',      // 頭像桶：char（角色頭像／立繪）
             serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖／CG）
+            serviceMap: 'pollinations',       // 小地圖桶：map（場景俯視小地圖底板，畫風跟背景分開）
             pollinations: {
                 url: 'https://gen.pollinations.ai/image', // API 端點
                 apiKey: '', // Pollen API Key
@@ -161,6 +162,8 @@
                         // 頭像/插圖拆桶：沒存過新桶 → 遷移自舊「活物桶」serviceLiving，現狀不變（要分才分）
                         serviceChar:  savedConfig.serviceChar  || savedConfig.serviceLiving || savedConfig.service || this.config.service,
                         serviceScene: savedConfig.serviceScene || savedConfig.serviceLiving || savedConfig.service || this.config.service,
+                        // 小地圖桶：沒存過 → 退死物桶(背景)，現狀不變（要分才分）
+                        serviceMap:   savedConfig.serviceMap   || savedConfig.serviceInanimate || savedConfig.service || this.config.service,
                         pollinations: {
                             ...this.config.pollinations,
                             ...savedConfig.pollinations,
@@ -216,7 +219,22 @@
         serviceFor: function(type) {
             if (type === 'char')  return this.config.serviceChar  || this.config.serviceLiving || this.config.service || 'pollinations';
             if (type === 'scene') return this.config.serviceScene || this.config.serviceLiving || this.config.service || 'pollinations';
+            if (type === 'map')   return this.config.serviceMap   || this.config.serviceInanimate || this.config.service || 'pollinations';
             return this.config.serviceInanimate || this.config.service || 'pollinations';
+        },
+        // ComfyUI 每桶各自一份設定：char/scene/bg/map 各有 comfyuiDirect.buckets[桶] 覆蓋(模型/參數/底詞/預設包)，
+        //   只共用連線網址 url。沒設過該桶 → 退回扁平 comfyuiDirect(＝現狀,向後相容零風險)。
+        _comfyBucketOf: function(type) {
+            if (type === 'char') return 'char';
+            if (type === 'scene') return 'scene';
+            if (type === 'map') return 'map';
+            return 'bg';   // bg / item / pet → 背景桶
+        },
+        _comfyCfgFor: function(type) {
+            const cd = this.config.comfyuiDirect || {};
+            const b = cd.buckets && cd.buckets[this._comfyBucketOf(type)];
+            if (!b || typeof b !== 'object') return cd;         // 該桶沒獨立設定 → 用扁平共用設定（現狀）
+            return Object.assign({}, cd, b, { url: cd.url });   // 桶設定覆蓋，網址永遠用共用的
         },
 
         // --- 核心生成函數 (整合翻譯 + cache) ---
@@ -389,7 +407,7 @@
         // 不依賴 ST 的 workflow 檔；LoRA/參數全由 config.comfyuiDirect（奧瑞亞 UI）控制。
         _genComfyuiDirect: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
-            const cfg = this.config.comfyuiDirect || {};
+            const cfg = this._comfyCfgFor(type);   // 按桶取設定（char/scene/bg/map 各自一份，沒設過退共用）
             const url = (cfg.url || '').trim();
             if (!url) {
                 try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {}
