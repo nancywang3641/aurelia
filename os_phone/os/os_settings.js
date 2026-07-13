@@ -2596,6 +2596,24 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // ===== ComfyUI 直連：LoRA 行 + 測試連線 =====
         let cfdPresets = [...((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || [])];
+        // 🧷 包庫＝全域一份（Rae 鐵則：各桶可以各記「套用哪個包」，但包庫本身絕不分家）。
+        //   舊版「每桶各自包庫」把庫拆成四份副本 → 在插圖桶加的包別桶看不到＝「加了幾條發現不見」。
+        //   遷移：啟動時把四桶裡散落的包全部併回同一庫（id/名字去重），之後桶不再自帶包庫。
+        (function(){
+            try {
+                const bk = imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.buckets;
+                if (!bk || typeof bk !== 'object') return;
+                const keyOf = p => (p && (p.id || p.name)) || '';
+                const seen = new Set(cfdPresets.map(keyOf).filter(Boolean));
+                Object.values(bk).forEach(b => {
+                    (b && Array.isArray(b.presets) ? b.presets : []).forEach(p => {
+                        const k = keyOf(p);
+                        if (!k || seen.has(k)) return;
+                        seen.add(k); cfdPresets.push(p);
+                    });
+                });
+            } catch (e) {}
+        })();
         (function setupComfyDirect(){
             const cfd = (imgConfig && imgConfig.comfyuiDirect) || ((window.parent || window).OS_IMAGE_MANAGER && (window.parent || window).OS_IMAGE_MANAGER.config && (window.parent || window).OS_IMAGE_MANAGER.config.comfyuiDirect) || {};
             const lorasBox = container.querySelector('#img-cfd-loras');
@@ -3170,14 +3188,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     loras: Array.isArray(cfd.loras)?cfd.loras.slice():[],
                     workflowMode: (s(cfd.workflowMode)==='custom') ? 'custom' : 'auto',
                     customWorkflow: (s(cfd.workflowMode)==='custom') ? s(cfd.customWorkflow) : '',
-                    presets: Array.isArray(cfd.presets)?cfd.presets.slice():[],
-                    activePreset: ''
+                    activePreset: ''   // 包庫是全域一份(cfdPresets)，桶只記「套用哪個包」
                 };
             }
             // 桶正規化：一定要有 workflowMode（舊桶沒存過 → 當 auto 並清掉殘留 customWorkflow，治「全變自訂」）
             function _normBucket(cfg){ cfg = cfg || {}; if (cfg.workflowMode == null) { cfg.workflowMode = 'auto'; cfg.customWorkflow = ''; } if (cfg.workflowMode !== 'custom') cfg.customWorkflow = ''; return cfg; }
-            // 讀目前面板 → 桶物件（重用 buildCfdPreset 的欄位讀取 + 當前預設包 + 明確 workflowMode）
-            function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.presets = cfdPresets.slice(); c.workflowMode = (container.querySelector('#img-cfd-wfmode')?.value || 'auto'); c.activePreset = _cfdActivePreset[_cfdBucket] || ''; return c; }
+            // 讀目前面板 → 桶物件（重用 buildCfdPreset 的欄位讀取 + 明確 workflowMode；包庫不進桶——全域一份）
+            function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.workflowMode = (container.querySelector('#img-cfd-wfmode')?.value || 'auto'); c.activePreset = _cfdActivePreset[_cfdBucket] || ''; return c; }
             const _BUCKET_LABEL = { char:'角色', scene:'插圖', bg:'背景', map:'小地圖' };
             const _cfdActivePreset = { char:'', scene:'', bg:'', map:'' };   // 各桶「目前套用哪個預設包」
             function _updateBucketHeader(){
@@ -3192,25 +3209,28 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 _cfdBucket = nb;
                 const cfg = _normBucket(_comfyBuckets[nb] || _flatSeed());      // 目標桶（沒設過退你現有設定）
                 applyPresetToPanel(cfg);                                        // 灌回面板（模型/LoRA/參數/自訂工作流…）
-                cfdPresets = Array.isArray(cfg.presets) ? cfg.presets.slice() : [];
-                renderPresetGrid();
+                // 包庫(cfdPresets)不隨桶切換——全域同一份，四桶看到的牆永遠一樣
                 _cfdActivePreset[nb] = cfg.activePreset || '';
                 _updateBucketHeader();
             }
             window._cfdSwitchBucket = _switchBucket;   // 給分頁切換連動
             // 給存檔用：收齊四桶（先把目前面板存進當前桶），沒獨立設過的桶用你現有設定
+            //   桶物件一律剝掉 presets 殘留（舊存檔的桶內副本已在啟動時併回全域庫，別再寫回去分家）
             window._cfdCollectBuckets = function(){
                 _comfyBuckets[_cfdBucket] = _readPanelBucket();
                 const out = {};
-                _CFD_BUCKETS.forEach(function(b){ out[b] = _comfyBuckets[b] || _flatSeed(); });
+                _CFD_BUCKETS.forEach(function(b){
+                    const o = Object.assign({}, _comfyBuckets[b] || _flatSeed());
+                    delete o.presets;
+                    out[b] = o;
+                });
                 return out;
             };
             // 初始對齊：扁平面板可能是上次存檔時「別的桶」→ 強制載入 char 桶，確保 _cfdBucket='char' 跟面板一致
+            //   （包庫不動：cfdPresets 開頁時已載入全域一份＋併回四桶散落的）
             if (_comfyBuckets.char) {
                 const _c0 = _normBucket(_comfyBuckets.char);
                 applyPresetToPanel(_c0);
-                cfdPresets = Array.isArray(_c0.presets) ? _c0.presets.slice() : [];
-                renderPresetGrid();
                 _cfdActivePreset.char = _c0.activePreset || '';
             }
             _updateBucketHeader();   // 狀態列顯示當前桶＋目前套用的預設名
