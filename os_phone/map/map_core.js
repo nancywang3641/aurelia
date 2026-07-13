@@ -90,62 +90,17 @@
             return { x: 14 + Math.random() * 72, y: 62 + Math.random() * 23 };
         }
 
-        // 每隻角色一份運動狀態：當前位置、目標位置、停站結束時間、速度
-        const states = [];
+        // 🧍 小人站定不走動（Rae 定案，同書咖舞台客人）：進場擺一次位（撞到地標就重擲），
+        //    之後不再逐幀移動——省掉 rAF 迴圈，小地圖只留冒泡是活的。
         characters.forEach((charEl) => {
             const startX = parseFloat(charEl.style.left) || 50;
             const startY = parseFloat(charEl.style.top) || 75;
-            const initT = pickValidTarget();
-            states.push({
-                el: charEl,
-                x: startX,                                  // % 水平位置
-                y: startY,                                  // % 垂直位置（top）
-                targetX: initT.x,
-                targetY: initT.y,
-                standUntil: Date.now() + 500 + Math.random() * 1500, // 開場先站一下
-                speedX: 0.15 + Math.random() * 0.15,        // % per frame
-                speedY: 0.15 + Math.random() * 0.15,        // % per frame
-            });
+            if (isBlocked(startX, startY)) {
+                const p = pickValidTarget();
+                charEl.style.left = p.x + '%';
+                charEl.style.top = p.y + '%';
+            }
         });
-
-        // 逐幀更新：朝目標移動，到目標就停一下再選新目標
-        function tick() {
-            const now = Date.now();
-            states.forEach(s => {
-                if (!s.el.isConnected) return;
-                if (now < s.standUntil) return; // 站著休息
-
-                const dx = s.targetX - s.x;
-                const dy = s.targetY - s.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-
-                if (dist < 0.5) {
-                    // 抵達 → 站 1-3 秒後選新目標（避開所有 landmark）
-                    s.standUntil = now + 1000 + Math.random() * 2000;
-                    const newT = pickValidTarget();
-                    s.targetX = newT.x;
-                    s.targetY = newT.y;
-                    return;
-                }
-
-                // 朝目標走一步
-                const stepX = (dx / dist) * s.speedX;
-                const stepY = (dy / dist) * s.speedY;
-                s.x += stepX;
-                s.y += stepY;
-
-                // 朝向：只看 X 分量，避免微小晃動造成翻面閃爍
-                if (Math.abs(stepX) > 0.02) {
-                    s.el.classList.toggle('walking-left', stepX < 0);
-                }
-
-                s.el.style.left = s.x + '%';
-                s.el.style.top = s.y + '%';
-            });
-
-            STATE.rafId = requestAnimationFrame(tick);
-        }
-        STATE.rafId = requestAnimationFrame(tick);
 
         // 冒泡：每 4-8 秒冒一次，停 2-3 秒 fade out
         characters.forEach((charEl) => {
