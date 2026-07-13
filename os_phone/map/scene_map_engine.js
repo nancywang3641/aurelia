@@ -12,9 +12,8 @@
 
     const BACKDROP_AUTO_KEY = 'aurelia_scene_backdrop_auto';
 
-    // 預設底板風格詞綴 — 固定 2D 俯視插畫風，避免 pollinations 隨機出寫實 / 人物入鏡
-    // 與 AI 給的 backdropPrompt 拼接：DEFAULT_BASEPLATE + ", " + AI prompt
-    const DEFAULT_BASEPLATE = "rpg, 8 bit, masterpiece, highres, Highly detailed environment, (true top-down:1.5), NO walls, game world map, floor plan, straight down angle, panoramic pixel art scene, Top-down view,  serene atmosphere,  best quality,  no characters, environment-focused";
+    // 🗑️ 寫死的俯視底板風格詞綴已刪（Rae 定案）：風格詞她自己放「小地圖 TAB」的底詞欄，
+    //    要改也在那裡改——這裡只送 AI 給的 backdropPrompt，不再暗拼任何固定詞。
 
     function isBackdropAuto() {
         try { return localStorage.getItem(BACKDROP_AUTO_KEY) === '1'; } catch (e) { return false; }
@@ -233,7 +232,7 @@
         // 開了補圖開關 → 補底板（走「小地圖桶」imgType:'map'，俯視去人物）。NAI 回 blob: 轉 data URL 才能存進世界 DB
         if (isBackdropAuto() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
             try {
-                const fullPrompt = `${DEFAULT_BASEPLATE}, ${sceneMap.backdropPrompt}`;
+                const fullPrompt = sceneMap.backdropPrompt;   // 風格詞在「小地圖 TAB」底詞欄，不再暗拼固定詞
                 let _bu = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(fullPrompt, { width: 1024, height: 512, imgType: 'map' }) || '';
                 if (_bu && _bu.indexOf('blob:') === 0) {
                     try { const _b = await (await fetch(_bu)).blob(); _bu = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(_b); }); } catch (e) {}
@@ -252,7 +251,6 @@
 
     win.SCENE_MAP_ENGINE = {
         BACKDROP_AUTO_KEY,
-        DEFAULT_BASEPLATE,
         isBackdropAuto,
         setBackdropAuto,
         parseSceneMap,
