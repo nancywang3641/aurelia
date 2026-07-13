@@ -23,7 +23,10 @@
 .lstage-click { position:absolute; inset:0; cursor:pointer; z-index:1; }
 /* 舞台模式：藏原立繪與簽名，對話框保持最上層 */
 .lobby-left.lstage-on #iris-avatar, .lobby-left.lstage-on .lb-signature { display:none !important; }
-.lobby-left.lstage-on .void-dialogue-wrap { z-index:5; }
+.lobby-left.lstage-on .void-dialogue-wrap { z-index:5; pointer-events:none; }
+/* 容器縫隙(框周圍留白/框與輸入列之間)點擊穿透到地圖=「點空地收對話」不再有死角；框和輸入列本身照常可點 */
+.lobby-left.lstage-on .void-dialogue-wrap .void-dialogue-box,
+.lobby-left.lstage-on .void-dialogue-wrap .void-chat-input-row { pointer-events:auto; }
 /* 對話框平常收起（戳戳反應框不受影響），有對話才浮出；輸入列跟對話框同進退 */
 .lobby-left.lstage-on.lstage-dlg-hidden #iris-dialogue-box { display:none !important; }
 .lobby-left.lstage-on.lstage-dlg-hidden .void-chat-input-row { display:none !important; }
