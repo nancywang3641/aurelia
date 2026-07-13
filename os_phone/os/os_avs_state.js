@@ -321,6 +321,27 @@
 
             <div class="avs-card avs-st-toggle-row">
                 <div class="avs-st-toggle-text">
+                    <div class="avs-st-toggle-name">🎬 導演模式</div>
+                    <div class="avs-st-toggle-desc">開啟後，每輪劇情結束由「主模型接口」整理一份導演稿（誰知道什麼、誰在隱瞞、可用的衝突點），下一輪自動給寫正文的 AI 參考</div>
+                </div>
+                <div class="avs-st-toggle${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' on' : ''}" id="avs-st-director-toggle" role="switch"></div>
+            </div>
+            <div class="avs-card" id="avs-st-director-tools" style="${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? '' : 'display:none;'}">
+                <div class="avs-st-btn-grid">
+                    <button class="avs-btn avs-btn-outline" id="avs-st-director-view">📜 查看／編輯導演稿</button>
+                    <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿">🎬 立刻產一份</button>
+                </div>
+                <div id="avs-st-director-editor" style="display:none; margin-top:10px;">
+                    <textarea class="avs-textarea" id="avs-st-director-text" style="min-height:220px;"></textarea>
+                    <div class="avs-st-btn-grid" style="margin-top:8px;">
+                        <button class="avs-btn avs-btn-primary" id="avs-st-director-save">💾 儲存（下一輪生效）</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-director-close">收起</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="avs-card avs-st-toggle-row">
+                <div class="avs-st-toggle-text">
                     <div class="avs-st-toggle-name">即時記錄狀態</div>
                     <div class="avs-st-toggle-desc">開啟後，每次劇情推進都會自動更新下面的狀態</div>
                 </div>
@@ -402,6 +423,47 @@
             const on = this.classList.toggle('on');
             localStorage.setItem('aurelia_state_runtime_enabled', on ? '1' : '0');
             try { win.OS_STATE_RUNTIME?.setEnabled?.(on); } catch (e) {}
+        };
+
+        // 🎬 導演模式：開關 + 導演稿查看/手改/立產
+        const dirToggle = q('#avs-st-director-toggle');
+        if (dirToggle) dirToggle.onclick = function () {
+            const on = this.classList.toggle('on');
+            try { win.OS_STATE_RUNTIME?.director?.setOn?.(on); } catch (e) {}
+            const tools = q('#avs-st-director-tools');
+            if (tools) tools.style.display = on ? '' : 'none';
+        };
+        const _dirLoadText = async () => {
+            const ta = q('#avs-st-director-text');
+            if (!ta) return;
+            const t = await win.OS_STATE_RUNTIME?.director?.getText?.();
+            ta.value = t || '（還沒有導演稿——推進一輪劇情，或按「立刻產一份」）';
+        };
+        const dirViewBtn = q('#avs-st-director-view');
+        if (dirViewBtn) dirViewBtn.onclick = async () => {
+            const ed = q('#avs-st-director-editor');
+            if (!ed) return;
+            if (ed.style.display === 'none') { await _dirLoadText(); ed.style.display = ''; }
+            else ed.style.display = 'none';
+        };
+        const dirSaveBtn = q('#avs-st-director-save');
+        if (dirSaveBtn) dirSaveBtn.onclick = async () => {
+            const ta = q('#avs-st-director-text');
+            if (!ta) return;
+            let ok = false;
+            try { ok = await win.OS_STATE_RUNTIME?.director?.saveText?.(ta.value); } catch (e) {}
+            dirSaveBtn.textContent = ok ? '✅ 已儲存' : '❌ 存失敗';
+            setTimeout(() => { dirSaveBtn.textContent = '💾 儲存（下一輪生效）'; }, 1800);
+        };
+        const dirCloseBtn = q('#avs-st-director-close');
+        if (dirCloseBtn) dirCloseBtn.onclick = () => { const ed = q('#avs-st-director-editor'); if (ed) ed.style.display = 'none'; };
+        const dirNowBtn = q('#avs-st-director-now');
+        if (dirNowBtn) dirNowBtn.onclick = async () => {
+            dirNowBtn.textContent = '🎬 產稿中…'; dirNowBtn.classList.add('disabled');
+            try { await win.OS_STATE_RUNTIME?.director?.extractNow?.(); } catch (e) {}
+            dirNowBtn.textContent = '🎬 立刻產一份'; dirNowBtn.classList.remove('disabled');
+            const ed = q('#avs-st-director-editor');
+            if (ed && ed.style.display !== 'none') await _dirLoadText();
         };
 
         const bind = (sel, fn) => { const b = q(sel); if (b) b.onclick = fn; };

@@ -1355,6 +1355,7 @@
                         current: data.current || {},       // patches 累積後的當下狀態
                         npcLedger: data.npcLedger || null,     // 📇 NPC 登場記帳（npc_dossier.js）
                         npcDossiers: data.npcDossiers || null, // 📇 NPC 長期人物檔案（npc_dossier.js）
+                        director: data.director || null,       // 🎬 導演稿（state_runtime 導演模式：patches[msgId]=全文快照）
                         timestamp: Date.now()
                     };
                     const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');
