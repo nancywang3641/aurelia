@@ -1530,6 +1530,26 @@
                 }
             }
             ctx.putImageData(d, 0, 0);
+            // ✂️ 收緊透明邊：原圖(如512×728)角色多半只佔中間一塊，去背後大量留白仍撐著畫布，
+            //   舞台照畫布高度縮放 → 角色被留白吃掉顯得特別小、腳還會浮空。裁到人物外框，
+            //   尺寸才對得上走路圖角色（瀅瀅/玩家塞滿整格）。全不透明(沒去背)＝外框=全圖，自然跳過不誤傷。
+            let minX = W, minY = H, maxX = -1, maxY = -1;
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    if (px[(y * W + x) * 4 + 3] > 0) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+            if (maxX >= minX && maxY >= minY && (maxX - minX + 1 < W || maxY - minY + 1 < H)) {
+                const cw = maxX - minX + 1, ch = maxY - minY + 1;
+                const out = document.createElement('canvas'); out.width = cw; out.height = ch;
+                out.getContext('2d').drawImage(cv, minX, minY, cw, ch, 0, 0, cw, ch);
+                return out.toDataURL('image/png');
+            }
             return cv.toDataURL('image/png');
         } catch (e) { console.warn('[LobbyStage] _pixelify 失敗', e); return null; }
     }
