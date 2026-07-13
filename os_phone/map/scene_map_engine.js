@@ -76,9 +76,7 @@
 
 **必須包含的兩種元素：**
 
-**(1) 地圖底板（用於生成背景圖）**
-格式：\`[地標底板|英文基本布局關鍵詞]\`
-說明：描述小地圖底背景（如：village interior, library hall, garden corner...），其他外觀物件只能布局九宮格大概描述（上下左右中）。
+{BASEPLATE_RULE}
 
 **(2) 地標物件（地圖上的物體，人物 ≠ 地標物件，不可輸出人物）**
 格式：\`[地標物件|emoji+中文短名|長描述|x:0-100,y:0-100]\`
@@ -109,9 +107,9 @@
   - 長描述（第 2 欄）：10-25 字氛圍描寫，可有形容詞、場景細節、人群動態，例：「布告板附近擠滿了冒險者人群」、「爐火劈啪作響，幾隻獵犬伏在前方」
   - 短名是「標題」，長描述是「點擊浮窗內文」，別把長描述塞進短名
 
-### ✅ 輸出範例
+### ✅ 輸出範例（底板行只看格式骨架，內容按世界觀自己寫）
 <scene-map>
-[地標底板|cozy fantasy tavern interior, wooden tables left, bar counter back, fireplace right]
+{BASEPLATE_EXAMPLE}
 [地標物件|🔥壁爐|爐火劈啪作響，幾隻獵犬伏在前方烤火|x:80,y:35]
 [地標物件|🍻吧檯|老闆正擦拭著黃銅酒杯，目光犀利地掃視來客|x:50,y:25]
 [地標物件|🪑圓桌|散落著啤酒漬的木桌，三張舊木凳子圍著|x:25,y:75]
@@ -120,8 +118,37 @@
 
 只輸出 <scene-map>...</scene-map> 包裹的內容，不要其他文字、不要 markdown 包裹。`;
 
+    // 🔀 底板詞格式按「小地圖桶」當前接口自動切（Rae：Anima 吃自然語言、SDXL 反而不能吃）：
+    //    NAI / ComfyUI-SDXL(checkpoint) → 逗號標籤；Anima / Flux / Pollinations / 酒館原生 → 自然語言句子。
+    //    按下探索那一刻現判，切接口即時生效，不用改設定。
+    function _mapPromptStyle() {
+        try {
+            const IM = win.OS_IMAGE_MANAGER;
+            const svc = (IM && typeof IM.serviceFor === 'function') ? IM.serviceFor('map') : 'pollinations';
+            if (svc === 'novelai') return 'tags';
+            if (svc === 'comfyui_direct') {
+                const cfg = (typeof IM._comfyCfgFor === 'function') ? IM._comfyCfgFor('map') : ((IM.config && IM.config.comfyuiDirect) || {});
+                const mt = cfg.modelType;
+                return (mt === 'anima' || mt === 'flux') ? 'natural' : 'tags';   // SDXL(checkpoint)=標籤
+            }
+            return 'natural';   // pollinations / tavern_sd：自然語言比標籤好
+        } catch (e) { return 'tags'; }
+    }
+    const BASEPLATE_RULE_TAGS =
+`**(1) 地圖底板（用於生成背景圖）**
+格式：\`[地標底板|英文標籤關鍵詞]\`
+說明：用「逗號分隔的英文標籤(tag)」描述小地圖底背景與布局；家具物件只用九宮格方位詞（top/bottom/left/right/center）粗描；開頭第一個詞＝文化/時代畫風詞。`;
+    const BASEPLATE_RULE_NATURAL =
+`**(1) 地圖底板（用於生成背景圖）**
+格式：\`[地標底板|一句完整的英文自然語言描述]\`
+說明：用「一句完整的英文自然語言」描述這個場所的正俯視畫面：這是什麼場所、地面材質、主要家具大概在哪個方位（上/下/左/右/中）；**不要**逗號堆疊 tag。句子開頭一樣先點名文化/時代畫風。`;
+    const BASEPLATE_EX_TAGS    = '[地標底板|文化畫風詞, 場所類型 interior, 家具A at top, 家具B on the left, floor material]';
+    const BASEPLATE_EX_NATURAL = '[地標底板|A 文化畫風 場所類型 seen from directly above, with 家具A along the top, 家具B on the left, and 地面材質 floor]';
     function buildPrompt(facility, zone) {
+        const natural = _mapPromptStyle() === 'natural';
         return PROMPT_TEMPLATE
+            .replace('{BASEPLATE_RULE}', natural ? BASEPLATE_RULE_NATURAL : BASEPLATE_RULE_TAGS)
+            .replace('{BASEPLATE_EXAMPLE}', natural ? BASEPLATE_EX_NATURAL : BASEPLATE_EX_TAGS)
             .replace(/\{FAC_NAME\}/g, facility.name || '未命名設施')
             .replace(/\{FAC_DESC\}/g, facility.shortName || facility.name || '此地')
             .replace(/\{ZONE_NAME\}/g, zone.name || '此區域');
