@@ -1125,6 +1125,153 @@ ${numberedText}`;
         finally { _sceneRunning = false; }
     }
 
+    // ===== 🎬 導演模式（Rae 定案）：資訊不對稱帳本，走「奧瑞亞主模型接口」chatMain =====
+    // 分工：酒館正文=她選的寫手模型(如 Gemini)；導演稿=主接口掛的邏輯型模型(如 Sonnet)。
+    // 與 AVS/記憶(副模型 extractOnce)、獨立插圖(副模型 chatSecondary)三者各自獨立開關、互不搭車。
+    // 六類區塊：公共劇情 / 各角色私人記憶 / 各角色行動摘要 / 本輪可用張力。
+    // 存檔：stateData.director.patches[msgId]=全文快照（砍樓/重roll → onMessageInvalidated 一起回朔）。
+    // 開關：localStorage sp_director_on==='1'（預設關；UI 在變數工坊系統區）。
+    let _directorRunning = false;
+    let _directorDebounce = null;
+    let _lastDirectorUninject = null;
+    const DIRECTOR_INJECT_ID = 'aurelia_director_brief';
+    const DIRECTOR_MAX_PATCHES = 40;
+
+    function directorOn() { try { return localStorage.getItem('sp_director_on') === '1'; } catch (e) { return false; } }
+    function setDirectorOn(v) { try { localStorage.setItem('sp_director_on', v ? '1' : '0'); } catch (e) {} if (!v) { try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch (e) {} } }
+
+    function _latestDirectorText(director, uptoId) {
+        const patches = (director && director.patches) || {};
+        const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n) && (uptoId == null || n <= uptoId)).sort((a, b) => a - b);
+        return ids.length ? String(patches[ids[ids.length - 1]] || '') : '';
+    }
+
+    function _buildDirectorInstruction(castNames) {
+        const cast = castNames && castNames.length ? castNames.join('、') : '（依素材自行判定）';
+        return '[系統指令：劇情監製]\n' +
+'你是本作品的劇情監製（導演）。讀完素材後，輸出一份最新版「導演稿」；只輸出導演稿本體，不要其他文字、不要 markdown 包裹。\n\n' +
+'【格式】六類區塊，標題行用【】固定；「角色」區塊按實際有戲份的角色各開一份（目前在場：' + cast + '）：\n' +
+'【公共劇情】所有角色都知道、或場景中已明示的事（條列 3-6 條）\n' +
+'【<角色名>私人記憶】只有該角色知道的事；只寫該角色的主觀認知，不得寫成旁白真相；每位角色一個區塊\n' +
+'【<角色名>行動摘要】該角色最近做了什麼、說了什麼、隱瞞了什麼、誤會了什麼；每位角色一個區塊\n' +
+'【本輪可用張力】列 1-3 個「可以推進但不強迫」的衝突點\n\n' +
+'【規範】\n' +
+'- 以「上一版導演稿」為基礎增量更新：過時的刪掉、新資訊併入，不是重寫流水帳\n' +
+'- 全文條列、控制在 600 字內；玩家（USER）不開私人記憶區塊\n' +
+'- 只整理素材裡有的事實，不編造、不預告未來劇情';
+    }
+
+    async function extractDirector() {
+        if (_directorRunning) return;
+        _directorRunning = true;
+        try {
+            if (!directorOn()) return;
+            if (_genStopped) { console.log('🎬 [Director] 本通生成被手動停止 → 跳過'); return; }
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.OS_API?.chatMain || !win.OS_DB?.getStateData) return;
+            const chatId = getChatId();
+            if (!chatId) return;
+            // 截斷守門（同獨立插圖）：API 錯誤頁 / 半截正文 → 別拿去寫導演稿
+            try {
+                const _arr = await win.TavernHelper?.getChatMessages?.(-1);
+                const _raw = String((_arr && _arr[0] && (_arr[0].message || _arr[0].mes)) || '');
+                const _t = _raw.trim();
+                if (/^\[API Error\]/i.test(_t) || (_t.length < 200 && /(x-api-key|invalid_credentials|Authentication required|API 返回內容為空)/i.test(_t))) return;
+                const _rawNC = _raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                if (_rawNC.indexOf('<content>') !== -1 && _rawNC.indexOf('</content>') === -1) return;
+            } catch (e) {}
+            const { text: recentText, lastId } = await gatherRecentMessages();
+            if (!recentText || lastId < 0) return;
+            const data = (await win.OS_DB.getStateData(chatId)) || {};
+            const director = data.director || { patches: {} };
+            if (director.patches && director.patches[lastId] !== undefined) return;   // 這樓已有導演稿（重roll會先走失效回朔）
+            const prev = _latestDirectorText(director, lastId);
+            const cast = _activeCastNames();
+            const material =
+                (prev ? ('【上一版導演稿】\n' + prev + '\n\n') : '【上一版導演稿】\n（無，這是第一版）\n\n') +
+                '【最近劇情】\n' + recentText;
+            const messages = [
+                { role: 'system', content: _buildDirectorInstruction(cast) },
+                { role: 'user', content: material },
+            ];
+            console.log('🎬 [Director] 產稿中（主模型接口）msg#' + lastId);
+            const text = await new Promise((resolve, reject) => {
+                let done = false;
+                const timer = setTimeout(() => { if (!done) { done = true; reject(new Error('導演稿超時')); } }, 150000);
+                win.OS_API.chatMain(messages,
+                    null,
+                    (full) => { if (done) return; done = true; clearTimeout(timer); resolve(String(full || '')); },
+                    (err) => { if (done) return; done = true; clearTimeout(timer); reject(err || new Error('導演稿失敗')); });
+            });
+            let clean = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').trim();
+            if (!clean || clean.indexOf('【公共劇情】') === -1) { console.warn('🎬 [Director] 回稿沒有【公共劇情】區塊 → 丟棄不存'); return; }
+            // 寫 patch（cap 最舊）
+            const fresh = (await win.OS_DB.getStateData(chatId)) || {};   // 重讀防蓋掉期間別人寫入
+            const dir2 = fresh.director || { patches: {} };
+            const patches = { ...(dir2.patches || {}) };
+            patches[lastId] = clean;
+            const ids = Object.keys(patches).map(Number).sort((a, b) => a - b);
+            while (ids.length > DIRECTOR_MAX_PATCHES) { delete patches[ids.shift()]; }
+            await win.OS_DB.saveStateData(chatId, { ...fresh, director: { patches, updatedAt: Date.now() } });
+            console.log('🎬 [Director] 導演稿已更新 msg#' + lastId + '（' + clean.length + ' 字）');
+            try { win.eventEmit?.('AURELIA_DIRECTOR_UPDATED', { chatId, msgId: lastId }); } catch (e) {}
+        } catch (e) {
+            console.warn('🎬 [Director] 產稿失敗:', e?.message || e);
+        } finally {
+            _directorRunning = false;
+        }
+    }
+
+    // 注入給正文模型：整份導演稿＋邊界鐵則（正文模型演所有角色=必須全知，但輸出要守知識邊界）
+    async function injectDirector() {
+        try {
+            try { _lastDirectorUninject?.(); } catch (e) {}
+            _lastDirectorUninject = null;
+            if (!directorOn()) return;
+            if (!win.TavernHelper?.injectPrompts || !win.OS_DB?.getStateData) return;
+            const chatId = getChatId();
+            if (!chatId) return;
+            const data = await win.OS_DB.getStateData(chatId);
+            const text = _latestDirectorText(data && data.director, null);
+            if (!text.trim()) return;
+            const content = '<劇情監製稿 規則="寫作前必讀·知識邊界鐵則">\n' +
+                '下面是監製整理的劇情帳本。你演出所有角色，所以你全知；但每個角色「只能」依自己知道的資訊行動：\n' +
+                '- 角色的台詞、行動、內心不得使用「其他角色的私人記憶」——除非本輪劇情中正式得知。\n' +
+                '- 旁白不得直接揭露任何角色的私人記憶為客觀事實。\n' +
+                '- 【本輪可用張力】只是可選方向，不強迫推進，自然為先。\n\n' + text + '\n</劇情監製稿>';
+            const result = win.TavernHelper.injectPrompts([{
+                id: DIRECTOR_INJECT_ID,
+                content,
+                position: 'in_chat',
+                depth: 1,
+                role: 'system'
+            }], { once: true });
+            _lastDirectorUninject = result?.uninject || null;
+        } catch (e) {
+            console.warn('🎬 [Director] inject 失敗:', e?.message || e);
+        }
+    }
+
+    // 手改導演稿（變數工坊 UI 用）：存成「當前最後一樓」的 patch＝最高權威、下一輪就注入
+    async function saveDirectorText(text) {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return false;
+        let lastId = 0;
+        try { const arr = await win.TavernHelper?.getChatMessages?.(-1); lastId = (arr && arr[0] && (arr[0].message_id ?? arr[0].id)) || 0; } catch (e) {}
+        const data = (await win.OS_DB.getStateData(chatId)) || {};
+        const dir = data.director || { patches: {} };
+        const patches = { ...(dir.patches || {}) };
+        patches[lastId] = String(text || '').trim();
+        await win.OS_DB.saveStateData(chatId, { ...data, director: { patches, updatedAt: Date.now() } });
+        return true;
+    }
+    async function getDirectorText() {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return '';
+        const data = await win.OS_DB.getStateData(chatId);
+        return _latestDirectorText(data && data.director, null);
+    }
+
     // --- inject AVS rules：把當前生效規則的 <behavior_rules> 塞主模型 system prompt ---
     // 跟 injectCurrent 並列；用獨立 inject id 互不影響
     async function injectRules() {
@@ -1323,6 +1470,15 @@ ${numberedText}`;
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
             const data = await win.OS_DB.getStateData(chatId);
+            // 🎬 導演稿跟樓層走：這樓被砍/改/swipe → 對應導演 patch 一起刪（獨立於 AVS patch，
+            //    必須在下面 AVS 的 early-return 前處理；後面 AVS 若也存檔，spread 的 data 已含新 director）
+            if (data && data.director && data.director.patches && data.director.patches[msgId] !== undefined) {
+                const dp = { ...data.director.patches };
+                delete dp[msgId];
+                data.director = { ...data.director, patches: dp };
+                await win.OS_DB.saveStateData(chatId, { ...data });
+                console.log('🎬 [Director] 砍導演稿 patch msg#' + msgId);
+            }
             if (!data || !data.patches) return;
             const deadPatch = data.patches[msgId];
             if (deadPatch === undefined) { console.log(`🛰️ [State Runtime] 訊息失效 msg#${msgId}：無對應 patch、不用回滾`); return; }
@@ -1551,6 +1707,9 @@ ${numberedText}`;
             // 開頭設置補救(Bg/BGM)：獨立於狀態系統，狀態關著也修 → 排在 isEnabled gate 前；自己看 vn_fix_opening 開關
             clearTimeout(_repairDebounce);
             _repairDebounce = setTimeout(() => { if (!_genStopped && !win.__AURELIA_SUMMARIZING) _repairOpeningSettings(); }, CONFIG.debounceMs + 900);
+            // 🎬 導演稿：獨立於狀態系統(AVS 關著也能跑)→ 排在 isEnabled gate 前；函式自己看 sp_director_on
+            clearTimeout(_directorDebounce);
+            _directorDebounce = setTimeout(extractDirector, CONFIG.debounceMs + 1200);
             if (!isEnabled()) return;
             clearTimeout(_debounceTimer);
             _debounceTimer = setTimeout(extractOnce, CONFIG.debounceMs);
@@ -1569,6 +1728,8 @@ ${numberedText}`;
                 injectRules();
                 // 缺頭像提醒（永遠評估；一個都不缺就不 inject）
                 injectAvatarReminder();
+                // 🎬 導演稿（自己看 sp_director_on；沒稿就不注入）
+                injectDirector();
             });
         }
 
@@ -1596,6 +1757,7 @@ ${numberedText}`;
                 try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
                 try { _lastRulesUninject?.(); _lastRulesUninject = null; } catch(e) {}
                 try { _lastAvatarUninject?.(); _lastAvatarUninject = null; } catch(e) {}
+                try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch(e) {}
             });
         }
 
@@ -1684,6 +1846,14 @@ ${numberedText}`;
         getActiveSchema,   // V2：schema 從 AVS 變數包合併（給 status_panel 等外部 UI 用）
         getLastExtract: () => _lastExtract,   // 最近一次抽取(原始輸出+updates+current) 給狀態面板診斷/複製
         getStateDataDump: async () => { try { const cid = getChatId(); return (cid && win.OS_DB?.getStateData) ? await win.OS_DB.getStateData(cid) : null; } catch(e) { return null; } },  // 持久化的 patches/base/current 給診斷
+        // 🎬 導演模式 API（變數工坊系統區 UI 用）
+        director: {
+            isOn: directorOn,
+            setOn: setDirectorOn,
+            getText: getDirectorText,
+            saveText: saveDirectorText,
+            extractNow: extractDirector,   // 手動立刻產一份（測試/救援）
+        },
         CONFIG
     };
 
