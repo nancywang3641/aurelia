@@ -1666,7 +1666,12 @@ ${facilityText}
                 if (_sp) prompt += '\n\n' + _sp;
             }
             const messages = await win.OS_API.buildContext(prompt, 'map_scan');
-            win.OS_API.chat(messages, win.OS_SETTINGS.getConfig(), null, async (txt) => {
+            // 🔍 探索此地走副模型（Rae：主模型等太久）——工具型生成(路人/環境/小地圖)不需要主模型品質；
+            //   舊環境沒 chatSecondary 才退回主模型
+            const _dispatch = (typeof win.OS_API.chatSecondary === 'function')
+                ? (onFin) => win.OS_API.chatSecondary(messages, null, onFin)
+                : (onFin) => win.OS_API.chat(messages, win.OS_SETTINGS.getConfig(), null, onFin);
+            _dispatch(async (txt) => {
                 let chars = [];
                 let intro = [];
                 let discoveries = [];
