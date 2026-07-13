@@ -58,6 +58,58 @@
         }
     }
 
+    // 🗺️ 底板可站遮罩（Rae 的「黑白遮罩批量工具」同款演算法搬進瀏覽器：亮度閾值 128→白=可站）：
+    //    生成/載入底板圖後當場在 canvas 算，零安裝、手機同跑。白覆蓋 <30% 自動反轉（深色地板圖）；
+    //    全白/全黑=退化遮罩→當沒有，小人回原本的走道帶隨機刷位，絕不變更糟。
+    const _BDMASK_W = 96, _BDMASK_H = 54;
+    async function _buildBackdropMask(url) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image();
+                if (!/^data:/.test(String(url))) i.crossOrigin = 'anonymous';
+                i.onload = () => res(i); i.onerror = rej; i.src = url;
+            });
+            const cv = document.createElement('canvas'); cv.width = _BDMASK_W; cv.height = _BDMASK_H;
+            const cx = cv.getContext('2d', { willReadFrequently: true });
+            cx.drawImage(img, 0, 0, _BDMASK_W, _BDMASK_H);
+            const d = cx.getImageData(0, 0, _BDMASK_W, _BDMASK_H).data;
+            const white = new Uint8Array(_BDMASK_W * _BDMASK_H);
+            let n = 0;
+            for (let i = 0; i < white.length; i++) {
+                const lum = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
+                if (lum >= 128) { white[i] = 1; n++; }
+            }
+            let ratio = n / white.length;
+            if (ratio < 0.3) { for (let i = 0; i < white.length; i++) white[i] ^= 1; ratio = 1 - ratio; }   // 深色地板自動反轉
+            if (ratio > 0.02 && ratio < 0.98) return { w: _BDMASK_W, h: _BDMASK_H, white };
+        } catch (e) { /* 跨域/壞圖 → 無遮罩，走原行為 */ }
+        return null;
+    }
+    async function _getBackdropMask() {
+        const fac = STATE.activeFacility;
+        const url = fac && fac.sceneMap && fac.sceneMap.backdropUrl;
+        if (!url) return null;
+        if (STATE._bdMask && STATE._bdMask.url === url) return STATE._bdMask.mask;
+        const mask = await _buildBackdropMask(url);
+        STATE._bdMask = { url, mask };
+        return mask;
+    }
+    // 以 (x%,y%) 為中心、半徑 r% 的採樣圈白率（同書咖舞台 _whiteRatio 的打分思路）
+    function _bdWhiteRatio(mask, xPct, yPct, rPct) {
+        const cx = xPct / 100 * mask.w, cy = yPct / 100 * mask.h, r = Math.max(1, rPct / 100 * mask.w);
+        let ok = 0, n = 0;
+        for (let gy = Math.floor(cy - r); gy <= Math.ceil(cy + r); gy++) {
+            for (let gx = Math.floor(cx - r); gx <= Math.ceil(cx + r); gx++) {
+                const dx = gx - cx, dy = gy - cy;
+                if (dx * dx + dy * dy > r * r) continue;
+                n++;
+                if (gx < 0 || gy < 0 || gx >= mask.w || gy >= mask.h) continue;
+                if (mask.white[gy * mask.w + gx]) ok++;
+            }
+        }
+        return n ? ok / n : 0;
+    }
+
     function _startCharacterAnimations(charGrid) {
         if (!charGrid) return;
         const characters = charGrid.querySelectorAll('.walking-character');
@@ -101,6 +153,28 @@
                 charEl.style.top = p.y + '%';
             }
         });
+        // 🗺️ 底板遮罩站位（Rae 點子）：亮度遮罩算好後，把小人重擺到「最多%白」的開闊地板；
+        //    有可信遮罩就不再侷限走道帶（全圖找地板站）；遮罩退化/分數太低=不動、維持上面的擺位。
+        _getBackdropMask().then((mask) => {
+            if (!mask) return;
+            const taken = [];
+            characters.forEach((charEl) => {
+                if (!charEl.isConnected) return;
+                let best = null, bestScore = -1;
+                for (let t = 0; t < 40; t++) {
+                    const x = 8 + Math.random() * 84, y = 22 + Math.random() * 68;   // 全圖留邊；頂部留給名牌/冒泡
+                    if (isBlocked(x, y)) continue;
+                    let s = _bdWhiteRatio(mask, x, y, 6);
+                    if (taken.some(p => Math.hypot(p.x - x, p.y - y) < 14)) s -= 0.5;   // 別擠成一坨
+                    if (s > bestScore) { bestScore = s; best = { x, y }; }
+                }
+                if (best && bestScore >= 0.55) {   // 分太低=遮罩對這張圖不可信 → 不動
+                    taken.push(best);
+                    charEl.style.left = best.x + '%';
+                    charEl.style.top = best.y + '%';
+                }
+            });
+        }).catch(() => {});
 
         // 冒泡：每 4-8 秒冒一次，停 2-3 秒 fade out
         characters.forEach((charEl) => {
@@ -1794,7 +1868,10 @@ ${facilityText}
         _previewWorld,
         _deleteWorld,
         _wipeAllDynamicWorlds,
-        clearAllData
+        clearAllData,
+        // console 診斷用（無 F12 環境）：底板→可站遮罩 / 白率打分
+        buildBackdropMask: _buildBackdropMask,
+        bdWhiteRatio: _bdWhiteRatio,
     };
 
     // 🔥 註冊到 OS 系統
