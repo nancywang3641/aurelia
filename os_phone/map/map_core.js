@@ -272,12 +272,13 @@
 
         // 🔥 構建 AI 提示詞 (Hybrid Tag Protocol)
         const prompt = `[系統指令：情報網路掃描協議]
-你是奧瑞亞城市的情報經紀人（或者是系統導覽員）。請為以下設施生成 3-5 個隨機事件/委託。
+你是本世界的情報仲介（身分名稱依世界觀自定：現代=線人／武俠=茶館說書人／奇幻=公會職員…）。請為以下設施生成 3-5 個隨機事件/委託。
+🌏 事件內容與用詞一律貼合上文 [World Info] 的世界觀時代與文化，禁止預設賽博/科幻用語。
 
 **可用設施列表：**
 ${facilityText}
 
-事件類型可以是：delivery, combat, investigate, negotiate, escort, hack, rescue, theft, sabotage, surveillance 等。請根據設施的性質選擇合理的事件類型。
+事件類型可以是：delivery, combat, investigate, negotiate, escort, hack, rescue, theft, sabotage, surveillance 等。請根據設施的性質與世界觀選擇合理的事件類型（hack 之類只給科技世界用）。
 
 【輸出規則：絕對禁止使用 JSON】
 1. 導覽員對話：請使用標準對話標籤開場。
