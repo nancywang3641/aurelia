@@ -65,11 +65,17 @@
   background:rgba(0,0,0,.35); color:#f3ead8; font-size:12px; padding:6px 4px; }
 .lsd-gen-row .lsd-gen-src { flex:0 0 92px; }
 
-/* ✖ 對話框關閉鈕（舞台模式限定，showDialog 動態掛上） */
-.lstage-dlg-close { position:absolute; top:-12px; right:-6px; width:30px; height:30px; border:none;
-  border-radius:50%; background:rgba(26,24,20,.85); color:#f3ead8; cursor:pointer; font-size:13px;
-  display:flex; align-items:center; justify-content:center; z-index:20; box-shadow:0 2px 6px rgba(0,0,0,.4); }
-.lstage-dlg-close:hover { background:#c8874a; }
+/* ✖ 對話框關閉鈕（舞台模式限定，showDialog 動態掛上）
+   設計：仿左側名牌的 chip 樣式、貼框頂右側跟名牌對稱——融進對話框的設計語言，
+   不再是浮在框角的黑圓球；主題自動跟（白主題=白底墨字、404=終端機綠框）。 */
+.lstage-dlg-close { position:absolute; top:-22px; right:3%; padding:3px 10px; border-radius:3px;
+  background:rgba(255,255,255,.96); border:1px solid rgba(26,28,40,.20); color:#1A1C28;
+  cursor:pointer; font-size:12px; line-height:1.5; display:flex; align-items:center; justify-content:center;
+  z-index:20; box-shadow:none; transition:background .15s, color .15s; }
+.lstage-dlg-close:hover { background:#1A1C28; color:#fff; }
+.void-tab.mode-404 .lstage-dlg-close { background:rgba(0,18,0,.95); border-color:rgba(0,255,65,.5);
+  border-radius:2px; color:#00ff41; font-family:'Courier New',monospace; text-shadow:0 0 8px rgba(0,255,65,.45); }
+.void-tab.mode-404 .lstage-dlg-close:hover { background:rgba(0,45,0,.95); color:#b8ffcb; }
 
 /* 🛸 飄浮物件（LUNA-VII 核心）：上下輕輕漂 */
 .lstage-float { animation:lstage-hover 3.4s ease-in-out infinite; }
