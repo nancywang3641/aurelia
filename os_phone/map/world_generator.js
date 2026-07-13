@@ -123,13 +123,22 @@
     }
 
     // 生區域圖/設施圖：走「背景桶」(generateBackgroundAsync 預設 bg)——區域圖是正常有景深的背景插圖，
-    //   ⚠️ 不接小地圖桶（那是俯視去人物去透視、只給進設施的小地圖底板用）。文化畫風靠 STAGE1_PROMPT 指令。
+    //   ⚠️ 不接小地圖桶（那是俯視去人物去透視、只給進設施的小地圖底板用）。
+    //   🌄 底詞/負詞接「背景 TAB」那兩格（Rae 定案：跟 VN 背景 getBg 同款 join、兩邊共用一格）；
+    //   沒填或 VN_Config 沒載就原樣（畫風退回靠 STAGE1_PROMPT 指令）。
     //   一次生一張、排序 await；NAI 回 blob: 轉 data URL 才能存進世界 DB 持久化（poll/ComfyUI 本來就持久）。
     async function _genBgPersistent(prompt, opts) {
         const IM = win.OS_IMAGE_MANAGER;
         if (!IM || typeof IM.generateBackgroundAsync !== 'function') return '';
+        let full = prompt;
+        const o = Object.assign({ width: 1024, height: 1024 }, opts || {});
+        try {
+            const d = win.VN_Config && win.VN_Config.data;
+            if (d && d.bgBasePrompt) full = [d.bgBasePrompt, prompt].filter(Boolean).join(', ');
+            if (d && d.bgNegPrompt && !o.negativePrompt) o.negativePrompt = d.bgNegPrompt;
+        } catch (e) {}
         let url = '';
-        try { url = await IM.generateBackgroundAsync(prompt, opts || { width: 1024, height: 1024 }) || ''; }
+        try { url = await IM.generateBackgroundAsync(full, o) || ''; }
         catch (e) { console.warn('[WorldGen] 圖生成失敗:', e && e.message); return ''; }
         if (url && url.indexOf('blob:') === 0) {
             try {
