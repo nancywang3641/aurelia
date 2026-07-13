@@ -1218,19 +1218,17 @@
             // ✅ 優先使用外部傳入的 Negative Prompt，否則用預設防護詞
             const negativePrompt = options.negativePrompt || 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render';
 
-            // 🗺️ 小地圖模式(options.imgType==='map')：走「小地圖桶」(serviceFor/comfy 都用 map)，
-            //    並強制掛去人物/去透視負詞——區域圖底板要純俯視平面圖、絕不能中間長角色。
+            // 🗺️ 小地圖模式(options.imgType==='map')：走「小地圖桶」(serviceFor/comfy 都用 map)。
+            //    🗑️ 內建去人物/去透視負詞(MAP_NEG)已刪（Rae 定案）：負詞她自己放小地圖預設包/桶負詞欄，
+            //    引擎不再暗掛任何固定詞，要改直接改包。
             const _isMap = options.imgType === 'map';
-            const MAP_NEG = 'character, person, people, man, woman, boy, girl, 1girl, 1boy, human, face, portrait, isometric, 2.5D, 45-degree view, three-quarter view, angled view, perspective, perspective walls, building facades, side view, front view, horizon, sky, text, watermark, signature';
             // 🌄 背景/小地圖接口由對應桶決定：背景→死物桶、小地圖→map 桶（各自的模型/負詞）。
             const _tp = _isMap ? 'map' : 'bg';
             const _bgSvc = (typeof this.serviceFor === 'function') ? this.serviceFor(_tp) : 'pollinations';
             if (_bgSvc !== 'pollinations') {
                 const _bgOpts = { ...options, width: options.width || 1024, height: options.height || 1024 };
                 if (_isMap) {
-                    // 小地圖：不覆寫 negativePrompt（讓 comfy 用 map 桶自己的負詞），MAP_NEG 用 extraNegative 接在後面(保證去人物)
-                    delete _bgOpts.negativePrompt;
-                    _bgOpts.extraNegative = [options.extraNegative, MAP_NEG].filter(Boolean).join(', ');
+                    delete _bgOpts.negativePrompt;   // 小地圖：負詞全聽 map 桶/預設包自己的
                 } else {
                     _bgOpts.negativePrompt = negativePrompt;
                 }
