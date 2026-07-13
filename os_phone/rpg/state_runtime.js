@@ -202,7 +202,11 @@
 
     function callSecondary(prompt) {
         return new Promise((resolve, reject) => {
-            if (!win.OS_API?.chatSecondary) return reject(new Error('OS_API.chatSecondary 不可用'));
+            // 🎬 導演模式開著 → AVS＋記憶抽取升格走「主模型接口」（Rae：嚴謹的模型幫記 AVS）；
+            //    插圖她開「獨立插圖」留在副模型 flash。導演關著＝照舊全走副模型。
+            //    主接口通常掛較慢的模型 → 超時放寬到 2 倍。
+            const _viaMain = directorOn() && typeof win.OS_API?.chatMain === 'function';
+            if (!_viaMain && !win.OS_API?.chatSecondary) return reject(new Error('OS_API.chatSecondary 不可用'));
             const messages = [
                 { role: 'system', content: '你是嚴謹的劇情狀態抽取器：先做簡短分析推理（出場角色/本輪變化/新角色/主角/校對），最後把抽取結果放進一個 ```json 程式碼區塊。' },
                 { role: 'user', content: prompt }
@@ -210,9 +214,12 @@
             let done = false;
             const timer = setTimeout(() => {
                 if (done) return; done = true;
-                reject(new Error('副模型超時'));
-            }, CONFIG.timeoutMs);
-            win.OS_API.chatSecondary(messages, null, (text) => {
+                reject(new Error(_viaMain ? '抽取(主接口)超時' : '副模型超時'));
+            }, CONFIG.timeoutMs * (_viaMain ? 2 : 1));
+            const dispatch = _viaMain
+                ? win.OS_API.chatMain.bind(win.OS_API)
+                : win.OS_API.chatSecondary.bind(win.OS_API);
+            dispatch(messages, null, (text) => {
                 if (done) return; done = true;
                 clearTimeout(timer);
                 resolve(text);
