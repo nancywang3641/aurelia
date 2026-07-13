@@ -1250,9 +1250,8 @@
             const model = options.model || this.config.pollinations.model;
 
             const encoded = encodeURIComponent(optimizedPrompt);
-            // 小地圖(poll)：negativePrompt 併上 MAP_NEG，保證去人物/去透視
-            const _finalNeg = _isMap ? [negativePrompt, MAP_NEG].filter(Boolean).join(', ') : negativePrompt;
-            const encodedNegative = encodeURIComponent(_finalNeg);
+            // 小地圖(poll)也不再暗掛 MAP_NEG——負詞歸預設包/呼叫端
+            const encodedNegative = encodeURIComponent(negativePrompt);
 
             let url = `${this.config.pollinations.url}/${encoded}?width=${width}&height=${height}&model=${model}&seed=${seed}&negative_prompt=${encodedNegative}&nologo=true`;
 
