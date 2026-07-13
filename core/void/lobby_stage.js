@@ -269,6 +269,25 @@
         }
         return { x, y };
     }
+    // 🧭 站位開闊度：以 (x,y) 為中心、半徑 r 的採樣圈裡「白像素(可走)比例」。
+    //   Rae 的點子：拿手繪遮罩找「最多%白」的地方當站位——遮罩本來就已載進記憶體(S.mask.data)，
+    //   純資料採樣、零安裝、手機一樣跑；遮罩還沒載到就退回單點 blocked 判定(=現狀)。
+    function _whiteRatio(x, y, r) {
+        if (!(S.mask && S.mask.ok)) return blocked(x, y) ? 0 : 1;
+        const D = S.mask.data;
+        let ok = 0, n = 0;
+        const step = Math.max(6, Math.round(r / 6));
+        for (let dy = -r; dy <= r; dy += step) {
+            for (let dx = -r; dx <= r; dx += step) {
+                if (dx * dx + dy * dy > r * r) continue;
+                n++;
+                const px = Math.round(x + dx), py = Math.round(y + dy);
+                if (px < 0 || py < 0 || px >= MAP_W || py >= MAP_H) continue;   // 圈超出地圖=不算白
+                if (D[((py * MAP_W) + px) * 4] >= 128) ok++;
+            }
+        }
+        return n ? ok / n : 0;
+    }
     function blocked(x, y) {
         const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
         if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
@@ -648,14 +667,22 @@
         addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
                  src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });
         try {
-            // 客人出沒區內隨機刷位置（避開佔地，最多重擲10次）
+            // 客人出沒區刷位＝站位評分制（Rae 的遮罩點子）：撒 24 個候選點，
+            //   用 _whiteRatio 挑「周圍最開闊(最多%白)」的，疊到已放的人重罰——不再貼牆/卡家具邊/擠成一坨。
             const Z = CFG.points.npcZone || { x: 200, y: 600, w: 1000, h: 250 };
+            const _taken = [];
             const rollSpot = () => {
-                for (let t = 0; t < 10; t++) {
+                let best = null, bestScore = -1;
+                for (let t = 0; t < 24; t++) {
                     const x = Z.x + Math.random() * Z.w, y = Z.y + Math.random() * Z.h;
-                    if (!blocked(x, y)) return { x, y };
+                    if (blocked(x, y)) continue;
+                    let score = _whiteRatio(x, y, 70);
+                    if (_taken.some(p => Math.hypot(p.x - x, p.y - y) < 130)) score -= 0.5;   // 跟別的客人靠太近
+                    if (score > bestScore) { bestScore = score; best = { x, y }; }
                 }
-                return { x: Z.x + Z.w / 2, y: Z.y + Z.h / 2 };
+                const p = best || { x: Z.x + Z.w / 2, y: Z.y + Z.h / 2 };
+                _taken.push(p);
+                return p;
             };
             const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
 
