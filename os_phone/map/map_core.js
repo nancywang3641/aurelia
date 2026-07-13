@@ -61,7 +61,7 @@
     // 🗺️ 底板可站遮罩（Rae 的「黑白遮罩批量工具」同款演算法搬進瀏覽器：亮度閾值 128→白=可站）：
     //    生成/載入底板圖後當場在 canvas 算，零安裝、手機同跑。白覆蓋 <30% 自動反轉（深色地板圖）；
     //    全白/全黑=退化遮罩→當沒有，小人回原本的走道帶隨機刷位，絕不變更糟。
-    const _BDMASK_W = 96, _BDMASK_H = 54;
+    const _BDMASK_W = 192, _BDMASK_H = 108;   // 解析度夠細，630px 面積語意才對得上她工具的刻度
     async function _buildBackdropMask(url) {
         try {
             const img = await new Promise((res, rej) => {
@@ -71,16 +71,41 @@
             });
             const cv = document.createElement('canvas'); cv.width = _BDMASK_W; cv.height = _BDMASK_H;
             const cx = cv.getContext('2d', { willReadFrequently: true });
+            cx.imageSmoothingEnabled = false;   // nearest 取樣：黑塊邊緣不暈灰，「刪小黑塊」面積判定才準
             cx.drawImage(img, 0, 0, _BDMASK_W, _BDMASK_H);
             const d = cx.getImageData(0, 0, _BDMASK_W, _BDMASK_H).data;
             const white = new Uint8Array(_BDMASK_W * _BDMASK_H);
+            // 參數對齊 Rae 在「黑白遮罩批量工具」實測調好的那組：閾值 70、刪小黑塊 630px。
+            // localStorage 可微調（console 改口味用，不進 UI）：aurelia_bdmask_threshold / aurelia_bdmask_minblack
+            let TH = 70, MINBLACK = 630;
+            try { const t = parseInt(localStorage.getItem('aurelia_bdmask_threshold'), 10); if (t >= 0 && t <= 255) TH = t; } catch (e) {}
+            try { const m = parseInt(localStorage.getItem('aurelia_bdmask_minblack'), 10); if (m >= 0) MINBLACK = m; } catch (e) {}
             let n = 0;
             for (let i = 0; i < white.length; i++) {
                 const lum = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
-                if (lum >= 128) { white[i] = 1; n++; }
+                if (lum >= TH) { white[i] = 1; n++; }
             }
             let ratio = n / white.length;
             if (ratio < 0.3) { for (let i = 0; i < white.length; i++) white[i] ^= 1; ratio = 1 - ratio; }   // 深色地板自動反轉
+            // 刪小黑塊（同她工具的 cleanup）：面積換算到縮小後格數（630px @ 原圖 → 等比格）
+            const natPx = (img.naturalWidth || 1024) * (img.naturalHeight || 512);
+            const minCells = Math.max(2, Math.round(MINBLACK * (white.length / natPx)));
+            const seen = new Int32Array(white.length).fill(0);
+            const q = [];
+            for (let p0 = 0; p0 < white.length; p0++) {
+                if (white[p0] || seen[p0]) continue;
+                const comp = []; seen[p0] = 1; q.length = 0; q.push(p0);
+                while (q.length) {
+                    const p = q.pop(); comp.push(p);
+                    const x = p % _BDMASK_W, y = (p / _BDMASK_W) | 0;
+                    if (x > 0 && !seen[p - 1] && !white[p - 1]) { seen[p - 1] = 1; q.push(p - 1); }
+                    if (x < _BDMASK_W - 1 && !seen[p + 1] && !white[p + 1]) { seen[p + 1] = 1; q.push(p + 1); }
+                    if (y > 0 && !seen[p - _BDMASK_W] && !white[p - _BDMASK_W]) { seen[p - _BDMASK_W] = 1; q.push(p - _BDMASK_W); }
+                    if (y < _BDMASK_H - 1 && !seen[p + _BDMASK_W] && !white[p + _BDMASK_W]) { seen[p + _BDMASK_W] = 1; q.push(p + _BDMASK_W); }
+                }
+                if (comp.length < minCells) { comp.forEach(p => { white[p] = 1; n++; }); }
+            }
+            ratio = white.reduce((a, b) => a + b, 0) / white.length;
             if (ratio > 0.02 && ratio < 0.98) return { w: _BDMASK_W, h: _BDMASK_H, white };
         } catch (e) { /* 跨域/壞圖 → 無遮罩，走原行為 */ }
         return null;
