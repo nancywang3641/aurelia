@@ -4698,10 +4698,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     if (_bgBase) _testPrompt = _bgBase + ', ' + _testPrompt;
                     if (_bgNeg)  _genOpts.negativePrompt = _bgNeg;
                 }
-                if (_activeTab === 'map' && !_testIsCfd) {
-                    // 小地圖測試也掛去人物/去透視負詞（對齊實際區域圖底板 imgType:'map'）
-                    _genOpts.negativePrompt = 'character, person, people, 1girl, 1boy, human, face, portrait, isometric, 2.5D, perspective, side view, front view, sky, text, watermark';
-                }
+                // 🗑️ 小地圖測試的寫死去人物負詞已刪（Rae 定案）：負詞在小地圖預設包/桶負詞欄自管，測試對齊實際生成=不暗掛
                 const imageUrl = await imageManager.generate(_testPrompt, _tabCfg.type, _genOpts);
 
                 imgTestImage.src = imageUrl;
