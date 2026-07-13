@@ -207,6 +207,8 @@
             //    主接口通常掛較慢的模型 → 超時放寬到 2 倍。
             const _viaMain = directorOn() && typeof win.OS_API?.chatMain === 'function';
             if (!_viaMain && !win.OS_API?.chatSecondary) return reject(new Error('OS_API.chatSecondary 不可用'));
+            // 主接口通常掛「會思考」的模型＋她的破甲思考鏈 → Rae 實測回覆 138~173 秒才到，
+            // ×2(120s) 不夠用＝回覆到了卻被判超時、重試再白燒一通 → 放寬到 ×4(240s)。背景作業不擋畫面，慢沒關係。
             const messages = [
                 { role: 'system', content: '你是嚴謹的劇情狀態抽取器：先做簡短分析推理（出場角色/本輪變化/新角色/主角/校對），最後把抽取結果放進一個 ```json 程式碼區塊。' },
                 { role: 'user', content: prompt }
@@ -215,7 +217,7 @@
             const timer = setTimeout(() => {
                 if (done) return; done = true;
                 reject(new Error(_viaMain ? '抽取(主接口)超時' : '副模型超時'));
-            }, CONFIG.timeoutMs * (_viaMain ? 2 : 1));
+            }, CONFIG.timeoutMs * (_viaMain ? 4 : 1));
             const dispatch = _viaMain
                 ? win.OS_API.chatMain.bind(win.OS_API)
                 : win.OS_API.chatSecondary.bind(win.OS_API);
@@ -1200,8 +1202,19 @@ ${numberedText}`;
             if (director.patches && director.patches[lastId] !== undefined) return;   // 這樓已有導演稿（重roll會先走失效回朔）
             const prev = _latestDirectorText(director, lastId);
             const cast = _activeCastNames();
+            // 📊 AVS 當前狀態附進素材（唯讀參照）：導演稿跟狀態對帳（傷勢/位置/數值），不再各記各的
+            let stateRef = '';
+            try {
+                const st = win._AVS_ENGINE?.read?.() || {};
+                if (st && Object.keys(st).length) {
+                    let s = JSON.stringify(st);
+                    if (s.length > 1200) s = s.slice(0, 1200) + '…(截斷)';
+                    stateRef = '【當前狀態（AVS，唯讀參照）】\n' + s + '\n\n';
+                }
+            } catch (e) {}
             const material =
                 (prev ? ('【上一版導演稿】\n' + prev + '\n\n') : '【上一版導演稿】\n（無，這是第一版）\n\n') +
+                stateRef +
                 '【最近劇情】\n' + recentText;
             const messages = [
                 { role: 'system', content: _buildDirectorInstruction(cast) },
