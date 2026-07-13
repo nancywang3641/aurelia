@@ -15,6 +15,48 @@
     // 🗑️ 寫死的俯視底板風格詞綴已刪（Rae 定案）：風格詞她自己放「小地圖 TAB」的底詞欄，
     //    要改也在那裡改——這裡只送 AI 給的 backdropPrompt，不再暗拼任何固定詞。
 
+    // ✂️ 白邊自動裁切：AI 常把底板畫成「飄在素色底上的物件」（白邊/留白）——顯示端是
+    //    background-size:100% 100%，白邊會吃掉可用面積，亮度遮罩還會把白邊誤判成可站地板。
+    //    做法：從四邊往內掃，整排/整列顏色近乎一致（各通道極差 <26）就裁掉；每邊最多裁 22%、
+    //    裁剩不到一半就放棄（防呆），失敗一律回原圖。
+    async function trimUniformBorder(url) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image();
+                if (!/^data:/.test(String(url))) i.crossOrigin = 'anonymous';
+                i.onload = () => res(i); i.onerror = rej; i.src = url;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return url;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const cx = cv.getContext('2d', { willReadFrequently: true });
+            cx.drawImage(img, 0, 0);
+            const d = cx.getImageData(0, 0, W, H).data;
+            const TOL = 26, STEP = 7;
+            const lineUniform = (horizontal, idx) => {
+                let mn = [255, 255, 255], mx = [0, 0, 0];
+                const len = horizontal ? W : H;
+                for (let k = 0; k < len; k += STEP) {
+                    const p = horizontal ? (idx * W + k) * 4 : (k * W + idx) * 4;
+                    for (let c = 0; c < 3; c++) { const v = d[p + c]; if (v < mn[c]) mn[c] = v; if (v > mx[c]) mx[c] = v; }
+                }
+                return (mx[0] - mn[0]) < TOL && (mx[1] - mn[1]) < TOL && (mx[2] - mn[2]) < TOL;
+            };
+            let top = 0, bottom = H - 1, left = 0, right = W - 1;
+            const maxY = Math.floor(H * 0.22), maxX = Math.floor(W * 0.22);
+            while (top < maxY && lineUniform(true, top)) top++;
+            while ((H - 1 - bottom) < maxY && lineUniform(true, bottom)) bottom--;
+            while (left < maxX && lineUniform(false, left)) left++;
+            while ((W - 1 - right) < maxX && lineUniform(false, right)) right--;
+            if (top === 0 && left === 0 && bottom === H - 1 && right === W - 1) return url;   // 沒白邊
+            const w2 = right - left + 1, h2 = bottom - top + 1;
+            if (w2 < W * 0.5 || h2 < H * 0.5) return url;   // 裁過頭=圖本身就素色，放棄
+            const out = document.createElement('canvas'); out.width = w2; out.height = h2;
+            out.getContext('2d').drawImage(cv, left, top, w2, h2, 0, 0, w2, h2);
+            return out.toDataURL('image/png');
+        } catch (e) { return url; }
+    }
+
     function isBackdropAuto() {
         try { return localStorage.getItem(BACKDROP_AUTO_KEY) === '1'; } catch (e) { return false; }
     }
@@ -237,6 +279,7 @@
                 if (_bu && _bu.indexOf('blob:') === 0) {
                     try { const _b = await (await fetch(_bu)).blob(); _bu = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(_b); }); } catch (e) {}
                 }
+                if (_bu) _bu = await trimUniformBorder(_bu);   // ✂️ AI 出白邊就裁掉（沒白邊原樣回）
                 sceneMap.backdropUrl = _bu;
             } catch (e) { console.warn('[SceneMap] 底板圖生成失敗:', e); }
         }
@@ -251,6 +294,7 @@
 
     win.SCENE_MAP_ENGINE = {
         BACKDROP_AUTO_KEY,
+        trimUniformBorder,   // console 診斷用：白邊裁切（回 dataURL）
         isBackdropAuto,
         setBackdropAuto,
         parseSceneMap,
