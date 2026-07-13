@@ -926,6 +926,10 @@
         left.classList.add('lstage-dlg-hidden');
         left.querySelector('.lstage-talk-portrait')?.remove();
         document.querySelector('#iris-dialogue-box .lstage-dlg-close')?.remove();
+        // 戳戳反應框一起收：開聊招呼走反應框（不受 lstage-dlg-hidden 管，漫遊戳戳要能冒泡）
+        // → 按 ✖ 關對話時它會自己留到計時器到期（最長15s）＝「背景關不掉」。這裡直接收掉。
+        const rb = document.getElementById('iris-reaction-box');
+        if (rb) rb.style.display = 'none';
     }
 
     // ── 對話目標（對話本體仍走 void_terminal.sendIrisMessage）──
