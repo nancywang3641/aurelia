@@ -1393,6 +1393,14 @@
         else { S.scene = 'cafe'; tryMount(); }
     }
 
+    // 🍔 舞台全屏：漢堡隱藏 MAIN MENU（.lobby-right）→ 舞台吃滿；狀態存 localStorage
+    function _applyMenuHidden() {
+        let hidden = false;
+        try { hidden = localStorage.getItem('lobby_stage_menu_hidden') === '1'; } catch (e) {}
+        document.querySelector('.lobby-body')?.classList.toggle('stage-menu-hidden', hidden);
+        document.querySelector('.lstage-menu-btn')?.classList.toggle('active', hidden);
+    }
+
     // ── 掛載/卸載 ─────────────────────────────────────────
     function tryMount() {
         const left = document.querySelector('.lobby-left');
@@ -1403,8 +1411,15 @@
         root.innerHTML = '<div class="lstage-world">' +
             '<img class="lstage-map" src="' + CDN + SCENES[S.scene].base + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
             '<div class="lstage-click"></div></div>' +
+            '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>';
         left.appendChild(root);
+        _applyMenuHidden();   // 套用上次「舞台全屏（隱藏 MAIN MENU）」狀態
+        root.querySelector('.lstage-menu-btn').addEventListener('click', () => {
+            const on = localStorage.getItem('lobby_stage_menu_hidden') === '1';
+            try { localStorage.setItem('lobby_stage_menu_hidden', on ? '0' : '1'); } catch (e) {}
+            _applyMenuHidden();
+        });
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         // 💬 聊天符號（自由漫遊時的浮鈕）：點了浮出「對話框＋輸入框」一組
         const fab = document.createElement('button');
@@ -1465,6 +1480,7 @@
         if (!S.active) return;
         if (S.edit) exitEdit(false);
         _closeActorMenu(); _closeDressRoom(); _closeNpcHistory();
+        document.querySelector('.lobby-body')?.classList.remove('stage-menu-hidden');   // 舞台關掉→純文字大廳要看得到選單
         endTalk();
         cancelAnimationFrame(S.raf);
         if (S.sleepT) { clearTimeout(S.sleepT); S.sleepT = null; }
