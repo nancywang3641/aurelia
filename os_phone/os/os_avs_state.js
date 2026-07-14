@@ -236,7 +236,14 @@
         const runtimeOn = localStorage.getItem('aurelia_state_runtime_enabled') === '1';
 
         // 🔗 整合頁去重複：沒建檔時只顯示上方「開始追蹤」引導、藏掉下方「我的檔案」區（兩個建檔入口擇一）；建檔後才顯示檔案管理
-        try { const _pv = document.querySelector('#avs-view-packs'); if (_pv) _pv.classList.toggle('active', !!hasSchema); } catch (e) {}
+        // 🚨 只有「狀態檔案」tab 真的可見(#avs-view-state.active)時才連動顯示檔案區。
+        //    否則背景事件(抽取/schema 生成/開關 → hooks 呼叫 _build)會在使用者切到「記憶」tab 時
+        //    硬把 #avs-view-packs 重新 active → 檔案卡疊進記憶 tab（就是「後續注入的卡片」bug）。
+        try {
+            const _pv = document.querySelector('#avs-view-packs');
+            const _stateActive = !!document.querySelector('#avs-view-state')?.classList.contains('active');
+            if (_pv) _pv.classList.toggle('active', !!hasSchema && _stateActive);
+        } catch (e) {}
 
         const storyHtml = `<div class="avs-card avs-st-story">
             <div class="avs-st-story-label">目前故事</div>
