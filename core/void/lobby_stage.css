@@ -4,6 +4,7 @@
 .lstage-map { position:absolute; left:0; top:0; display:block; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none; z-index:0; }
 .lstage-actor { position:absolute; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none;
   will-change:transform; backface-visibility:hidden; }
+.lstage-actor.lstage-loading { visibility:hidden; }   /* 圖載入中先藏，防轉場單圖閃一下才換成走路圖 */
 /* 彈跳/翻面全走 transform（margin 會逐幀觸發重排版=掉幀元兇） */
 .lstage-actor.walking { animation:lstage-bob .35s steps(2) infinite; }
 .lstage-actor.walking.flip { animation:lstage-bob-flip .35s steps(2) infinite; }
