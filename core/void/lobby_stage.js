@@ -411,7 +411,7 @@
     // 右鍵角色→下拉單
     function _closeActorMenu() { S.menuEl?.remove(); S.menuEl = null; }
     function _openActorMenu(a, cx, cy) {
-        _closeActorMenu(); _closeDressRoom();
+        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory();
         const rr = S.root.getBoundingClientRect();
         const menu = document.createElement('div');
         menu.className = 'lstage-actor-menu';
@@ -436,7 +436,7 @@
         });
         menu.querySelector('[data-act="history"]')?.addEventListener('click', () => {
             _closeActorMenu();
-            window.VoidTerminal?.openHistoryPanel?.('npc:' + a.key, a.name);
+            _openNpcHistory(a);
         });
         menu.querySelector('[data-act="recompact"]')?.addEventListener('click', () => {
             _closeActorMenu();
@@ -491,6 +491,57 @@
                 if (a.defaultSrc) _swapActorSrc(a, a.defaultSrc);
                 _closeDressRoom();
             } else if (act === 'close') _closeDressRoom();
+        });
+    }
+
+    // ── 💬 NPC 對話紀錄小面板（舞台上，仿裝扮室：查看/逐條刪/清空徹底遺忘）──
+    function _closeNpcHistory() { S.histEl?.remove(); S.histEl = null; }
+    function _renderNpcHistoryBody(box, a) {
+        const hist = getNpcHistory(a.key);
+        const cnt = box.querySelector('.lsh-count');
+        if (cnt) cnt.textContent = hist.length + ' 條';
+        const list = box.querySelector('.lsh-list');
+        if (!list) return;
+        if (!hist.length) { list.innerHTML = '<div class="lsh-empty">── 還沒有對話 ──</div>'; return; }
+        list.innerHTML = '';
+        hist.forEach((m, i) => {
+            const isMe = m.role === 'user';
+            const mm = String(m.content || '').match(/「([\s\S]*?)」/);
+            const plain = (mm ? mm[1] : String(m.content || '').replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, '')).trim();
+            const row = document.createElement('div');
+            row.className = 'lsh-row' + (isMe ? ' me' : '');
+            row.innerHTML = '<span class="lsh-who"></span><div class="lsh-text"></div>'
+                + '<button class="lsh-del" title="刪除這條"><i class="fa-solid fa-xmark"></i></button>';
+            row.querySelector('.lsh-who').textContent = isMe ? '訪客' : (a.name || '角色');
+            row.querySelector('.lsh-text').textContent = plain || '（無內容）';
+            row.querySelector('.lsh-del').addEventListener('click', () => {
+                const arr = getNpcHistory(a.key); arr.splice(i, 1); setNpcHistory(a.key, arr); _renderNpcHistoryBody(box, a);
+            });
+            list.appendChild(row);
+        });
+        list.scrollTop = list.scrollHeight;
+    }
+    function _openNpcHistory(a) {
+        _closeNpcHistory(); _closeDressRoom();
+        const box = document.createElement('div');
+        box.className = 'lstage-dress lstage-history';
+        box.innerHTML =
+            '<div class="lsd-title"><i class="fa-solid fa-comment-dots"></i> 對話紀錄 — ' + (a.name || '角色') + '<span class="lsh-count"></span></div>' +
+            '<div class="lsh-list"></div>' +
+            '<button class="lep-btn lep-danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空（徹底遺忘）</button>' +
+            '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+        S.root.appendChild(box);
+        S.histEl = box;
+        _renderNpcHistoryBody(box, a);
+        box.addEventListener('click', (e) => {
+            const act = e.target.closest('[data-act]')?.dataset.act;
+            if (act === 'close') { _closeNpcHistory(); return; }
+            if (act === 'clear') {
+                if (!window.confirm('清空「' + (a.name || '這位') + '」的全部對話紀錄？\n連同長期記憶一起清空＝徹底遺忘，不可復原。')) return;
+                setNpcHistory(a.key, []);
+                try { (window.OS_DB || (window.parent || window).OS_DB)?.saveNpcMemory?.(a.key, { name: a.name || '', summary: '', lastCompactAt: 0 }); } catch (e) {}
+                _renderNpcHistoryBody(box, a);
+            }
         });
     }
 
@@ -1397,7 +1448,7 @@
     function unmount() {
         if (!S.active) return;
         if (S.edit) exitEdit(false);
-        _closeActorMenu(); _closeDressRoom();
+        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory();
         endTalk();
         cancelAnimationFrame(S.raf);
         if (S.sleepT) { clearTimeout(S.sleepT); S.sleepT = null; }
