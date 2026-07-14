@@ -2452,11 +2452,18 @@ ${sections}`;
             const journalCtx = await _buildJournalCtx();
             const worldCtx   = (window.OS_PROMPTS?.loadWorld?.() || '').trim();
 
-            // USER 身分：當前酒館 persona 庫（取不到退登入名）
+            // USER 身分：guest NPC 用「那輪大總結紀錄的 persona」(認得古風輪的你，不靠當前 USER)；
+            //   固定 NPC(瀅瀅/柴郡/愛麗絲)或沒紀錄 → 退當前 persona
             let userPersona = null;
             try {
-                const p = window.OS_PERSONA?.getCurrent?.();
-                if (p && p.name) userPersona = { name: p.name, desc: p.desc || '' };
+                if (npcTarget && (npcTarget.personaId || npcTarget.personaName)) {
+                    const rec = (npcTarget.personaId && window.OS_PERSONA?.getById?.(npcTarget.personaId)) || null;
+                    userPersona = rec ? { name: rec.name, desc: rec.desc || '' }
+                                      : { name: npcTarget.personaName || '訪客', desc: npcTarget.personaDesc || '' };
+                } else {
+                    const p = window.OS_PERSONA?.getCurrent?.();
+                    if (p && p.name) userPersona = { name: p.name, desc: p.desc || '' };
+                }
             } catch (e) {}
             // L2 一對一長期記憶：npcTarget 取 guest key；瀅瀅/柴郡取固定 key
             let npcMemSummary = '', fixedMemSummary = '';

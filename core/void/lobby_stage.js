@@ -820,6 +820,7 @@
                         key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName,   // key 帶 chatId：對話歷史/裝扮皮膚都按「那一輪」隔離
                         name: g.name, storyTitle: g.storyTitle,
                         persona: _guestPersona(g),
+                        personaId: g.personaId || '', personaName: g.personaName || '', personaDesc: g.personaDesc || '',   // 那輪玩的 USER persona
                         x: sp.x, y: sp.y,
                         src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
                         noWander: true,   // Rae 定案：客人在出沒區隨機刷位置後站定，不漫步
@@ -917,6 +918,7 @@
                     row: c.row || '', charHeader: st.charHeader || '',
                     cardName: card, chatId: st.chatId || '',
                     storyTitle: st.storyTitle || card, brief, fullBriefs,
+                    personaId: st.personaId || '', personaName: st.personaName || '', personaDesc: st.personaDesc || '',
                 });
             }
         }

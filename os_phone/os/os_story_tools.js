@@ -901,20 +901,37 @@
                     const bgCacheId = bgMatch ? bgMatch[1].trim() : '';
 
                     // 只沿用第一次的故事標題（不再做角色去重累積——改存「完整去重角色表」）
+                    //   + 沿用第一次紀錄的「玩這輪的 persona」與主角（大廳 guest NPC 用它認得訪客，不靠當前 USER）
+                    let personaId = '', personaName = '', personaDesc = '', protagonist = '';
                     try {
                         const existing = await osDb.getAllLobbySummaryIndex();
                         for (const r of existing) {
                             if ((r.cardName || '') !== cardName) continue;
                             if ((r.chatId || '') !== chatId) continue;
                             if (r.storyTitle) storyTitle = r.storyTitle;   // 沿用第一次的標題
+                            if (r.personaId && !personaId) { personaId = r.personaId; personaName = r.personaName || ''; personaDesc = r.personaDesc || ''; }
+                            if (r.protagonist && !protagonist) protagonist = r.protagonist;
                         }
                     } catch (_) {}
+                    // 第一次大總結：快照當前 persona（之後沿用第一次的、不覆蓋）
+                    if (!personaId) {
+                        try {
+                            const _op = (window.parent && window.parent.OS_PERSONA) || window.OS_PERSONA;
+                            const _p = _op && _op.getCurrent && _op.getCurrent();
+                            if (_p) { personaId = _p.id || ''; personaName = _p.name || ''; personaDesc = _p.desc || ''; }
+                        } catch (_) {}
+                    }
+                    if (!protagonist) {
+                        const _pm = finalContent.match(/\[Protagonist\|([^\]|]+)/i);
+                        if (_pm) protagonist = _pm[1].trim();
+                    }
 
                     if (brief || characters.length) {
                         await osDb.saveLobbySummaryIndex({
                             cardName, chatId, storyTitle, bgCacheId, summaryCount, brief,
                             characters,   // 存「這次大總結的完整去重角色表」(不再只存新增)→ 日誌用最新一筆即反映去重結果、不再賴舊重複卡
                             charHeader,
+                            personaId, personaName, personaDesc, protagonist,   // 那輪的 USER persona 快照 + 主角
                             lorebookBook: bookName,
                             lorebookKey: `tavern_summary::${chatId}`,   // 已搬 OS_DB，非世界書 key（保留欄位相容）
                         });

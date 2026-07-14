@@ -458,6 +458,20 @@
                 if (select) out = Array.from(select.options).map(opt => ({ id: opt.value, name: opt.text, desc: '', avatar: '' }));
             }
             return out;
+        },
+
+        // 依 id 取單一人設（給大廳 guest NPC：用「那輪玩的 persona」而非當前）。找不到回 null。
+        getById: function(id) {
+            if (!id) return null;
+            try {
+                const cur = this.getCurrent();
+                if (cur && cur.id === id) return cur;   // 當前就是它 → 直接回（最快、含 desc）
+            } catch (e) {}
+            try {
+                const found = (this.getList() || []).find(p => p && p.id === id);
+                if (found) return found;
+            } catch (e) {}
+            return null;
         }
     };
 

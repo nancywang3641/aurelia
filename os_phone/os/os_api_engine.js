@@ -45,6 +45,27 @@
         if (ok) rec.raw = (typeof payload === 'string') ? payload : '';
         else rec.err = (payload && payload.message) ? payload.message : String(payload);
     }
+    // token 估算：優先用酒館 tokenizer；PWA/取不到 → 粗估(CJK≈1字1token、其餘≈4字1token)。非阻塞。
+    async function _estTok(text) {
+        const s = String(text || '');
+        if (!s) return 0;
+        try {
+            const ST = win.SillyTavern || (win.parent && win.parent.SillyTavern);
+            if (ST && typeof ST.getTokenCountAsync === 'function') return await ST.getTokenCountAsync(s);
+        } catch (e) {}
+        const cjk = (s.match(/[㐀-鿿豈-﫿぀-ヿ]/g) || []).length;
+        return cjk + Math.ceil((s.length - cjk) / 4);
+    }
+    // 把 messages 拼成純文字（多模態只取 text 片段）供估 token
+    function _msgsText(messages) {
+        try {
+            return (messages || []).map(m => {
+                if (typeof m.content === 'string') return m.content;
+                if (Array.isArray(m.content)) return m.content.map(p => (p && p.text) || '').join(' ');
+                return '';
+            }).join('\n');
+        } catch (e) { return ''; }
+    }
 
     // 酒館主模型每次生成＝一輪起點：歸零本輪 + 主模型本身計一次。
     //   (副模型走 OS_API.chat、生圖走 image_manager，各自計數；大總結 generateRaw 也會觸發此事件→只計次、不重置輪)
@@ -454,8 +475,10 @@
                 const _rec = _apiLogStart(win.AURELIA_API_LOG, messages);
                 _rec.cat = _cat;
                 _rec.route = (config && config.route) || (options && options.label) || '';
+                _rec.inTok = null; _rec.outTok = null;   // token 估算(非阻塞，算完面板下次刷新即顯示)
+                _estTok(_msgsText(messages)).then(n => { _rec.inTok = n; }).catch(() => {});
                 const _of = onFinish, _oe = onError;
-                onFinish = (text) => { try { _secLogEnd(_rec, true, text); } catch (e) {} if (_of) _of(text); };
+                onFinish = (text) => { try { _secLogEnd(_rec, true, text); _estTok(text).then(n => { _rec.outTok = n; }).catch(() => {}); } catch (e) {} if (_of) _of(text); };
                 onError  = (err)  => { try { _secLogEnd(_rec, false, err); } catch (e) {} if (_oe) _oe(err); };
             }
 
