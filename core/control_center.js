@@ -25,6 +25,7 @@
     let syncInterval = null;
     let embedObserver = null;
     let _hiddenChatEl = null;   // 「只在訊息區」模式下被收起的 #chat，卸載時還原
+    let _extractPeek = false;   // extractor 抓取時暫時把 #chat 拉回可見(讓 TH 煮 html 卡)，observer 這期間別強制藏
     let syncTargetSelector = '#sheld';
     let _vnWasOpenBeforeTabSwitch = false;
     let _readerWasOpenBeforeTabSwitch = false;
@@ -308,23 +309,26 @@
         return modal;
     }
 
-    // 「只在訊息區」收起 #chat：❌不用 display:none（會讓 TavernHelper 不煮 ```html 卡、#chat 捲不動
-    //   → html_extractor/story_extractor 靠 live DOM+捲底渲染的抓取全抓空）。✅改「off-screen 絕對定位 +
-    //   visibility:hidden」→ #chat 仍有 layout(TH 照煮卡/可捲/extractor 讀得到)、視覺隱形、且移出 flex 流讓位給奧瑞亞。
+    // 「只在訊息區」收起 #chat：🚫絕不可 display:none / off-screen(left:-99999px) / visibility:hidden——
+    //   那樣 #chat 的訊息「不在視口」，ST 懶載/虛擬化就不渲染、TavernHelper 也不煮 ```html 卡 →
+    //   html_extractor 抓空(有些卡剛好已渲染沒被回收就矇對)。
+    //   ✅正解：#chat 留在「視口內」、絕對定位墊到最底層、被奧瑞亞不透明面板完全蓋住 → 懶載/TH 靠視口幾何照渲染
+    //   (不看遮擋)、視覺看不到、又移出 flex 流讓位給奧瑞亞。父層(#sheld)須 positioned 當定位錨點、inset:0 才貼合它不溢出。
     function _applyChatHidden(el) {
         if (!el) return;
         if (el.dataset.aureliaPrevCss == null) el.dataset.aureliaPrevCss = el.getAttribute('style') || '';
+        const p = el.parentElement;
+        if (p && getComputedStyle(p).position === 'static') { p.style.setProperty('position', 'relative'); p.dataset.aureliaChatAnchor = '1'; }
         el.style.setProperty('position', 'absolute', 'important');
-        el.style.setProperty('left', '-99999px', 'important');
-        el.style.setProperty('top', '0', 'important');
-        el.style.setProperty('width', '480px', 'important');
-        el.style.setProperty('height', '90vh', 'important');
-        el.style.setProperty('visibility', 'hidden', 'important');
-        el.style.setProperty('z-index', '-1', 'important');
+        el.style.setProperty('inset', '0', 'important');
+        el.style.setProperty('margin', '0', 'important');
+        el.style.setProperty('z-index', '0', 'important');
         el.style.setProperty('pointer-events', 'none', 'important');
     }
     function _restoreChat(el) {
         if (!el) return;
+        const p = el.parentElement;
+        if (p && p.dataset.aureliaChatAnchor) { p.style.removeProperty('position'); delete p.dataset.aureliaChatAnchor; }
         if (el.dataset.aureliaPrevCss != null) { el.setAttribute('style', el.dataset.aureliaPrevCss); if (!el.getAttribute('style')) el.removeAttribute('style'); }
         delete el.dataset.aureliaPrevCss;
     }
@@ -406,8 +410,8 @@
             if (embedObserver) embedObserver.disconnect();
             embedObserver = new MutationObserver(() => {
                 if (!isEmbedded || !embeddedRoot) return;
-                // 酒館重繪時保證 #chat 維持收起（off-screen）、奧瑞亞還在 #sheld 內
-                if (_hiddenChatEl && _hiddenChatEl.style.visibility !== 'hidden') _applyChatHidden(_hiddenChatEl);
+                // 酒館重繪時保證 #chat 維持收起（絕對定位墊底）、奧瑞亞還在 #sheld 內
+                if (_hiddenChatEl && _hiddenChatEl.style.position !== 'absolute') _applyChatHidden(_hiddenChatEl);
                 if (embeddedRoot.parentNode !== sheld) {
                     const f = sheld.querySelector('#form_sheld');
                     if (f) sheld.insertBefore(embeddedRoot, f); else sheld.appendChild(embeddedRoot);
