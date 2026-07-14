@@ -19,8 +19,11 @@
             container.innerHTML = `
                 <div class="cr-root">
                     <div class="cr-header">
-                        <div class="cr-title">🎛️ 控制室</div>
-                        <div class="cr-sub">SoVITS ＋ ComfyUI 都在這裡管，不用看黑窗</div>
+                        <div class="cr-header-text">
+                            <div class="cr-title">🎛️ 控制室</div>
+                            <div class="cr-sub">SoVITS ＋ ComfyUI 都在這裡管，不用看黑窗</div>
+                        </div>
+                        <button class="cr-help-btn" id="cr-help-open" title="怎麼設定？看說明書"><i class="fa-solid fa-circle-question"></i></button>
                     </div>
                     <div id="cr-tower-down" class="cr-tower-down hidden">
                         🔴 控制塔未啟動<br>
@@ -65,6 +68,50 @@
                         <button class="cr-btn cr-btn-big cr-btn-danger" data-act="stop" data-svc="all">■ 全部停止</button>
                     </div>
                     <div class="cr-foot" id="cr-foot">連線中…</div>
+
+                    <div class="cr-help hidden" id="cr-help">
+                        <div class="cr-help-bar">
+                            <button class="cr-help-back" id="cr-help-close"><i class="fa-solid fa-chevron-left"></i> 返回</button>
+                            <div class="cr-help-htitle">設定說明書</div>
+                        </div>
+                        <div class="cr-help-body">
+                            <p class="cr-help-lead">這個「控制室」是一支遙控器，讓你電腦上的<b>語音</b>跟<b>生圖</b>縮在螢幕右下角、安靜地在背景跑，不用一直開著一堆黑色小視窗。<br><span class="cr-help-note">不需要任何帳號或會員，它只是遙控你自己電腦裡已經裝好的程式。</span></p>
+
+                            <div class="cr-help-sect">
+                                <div class="cr-help-h">開始前，你電腦要先有這兩個</div>
+                                <p>「語音引擎」和「生圖引擎」這兩個程式要先自己裝好。<br><span class="cr-help-note">還沒裝也沒關係，劇情照樣能玩，只是暫時不能本地配音跟本地生圖。</span></p>
+                            </div>
+
+                            <div class="cr-help-sect">
+                                <div class="cr-help-h">三步驟，設定一次就好</div>
+                                <div class="cr-step">
+                                    <span class="cr-step-no">1</span>
+                                    <div class="cr-step-txt">跟分享給你的人要兩個檔案：<b>奧瑞亞控制塔.ps1</b> 和 <b>奧瑞亞控制塔.vbs</b>。把它們放進<b>同一個資料夾</b>。</div>
+                                </div>
+                                <div class="cr-step">
+                                    <span class="cr-step-no">2</span>
+                                    <div class="cr-step-txt">在 <b>奧瑞亞控制塔.ps1</b> 上按右鍵 →「用記事本開啟」。最上面會看到兩行寫著資料夾位置的字，把它們改成<b>你自己的</b>語音、生圖資料夾位置：
+                                        <div class="cr-help-code">語音的資料夾<br>生圖的資料夾</div>
+                                        <span class="cr-help-note">只改這兩行的位置就好，其他一個字都不用動。改完存檔關掉。</span>
+                                    </div>
+                                </div>
+                                <div class="cr-step">
+                                    <span class="cr-step-no">3</span>
+                                    <div class="cr-step-txt">雙擊 <b>奧瑞亞控制塔.vbs</b>。螢幕右下角出現一個金色「亞」的小圖示，就成功了！回到這個控制室，燈就會亮綠。</div>
+                                </div>
+                            </div>
+
+                            <div class="cr-help-sect">
+                                <div class="cr-help-h">想每次開機自動幫你開？</div>
+                                <p>對著 <b>奧瑞亞控制塔.vbs</b> 按右鍵建立捷徑，把捷徑丟進電腦的「啟動」資料夾就行。</p>
+                            </div>
+
+                            <div class="cr-help-sect">
+                                <div class="cr-help-h">燈一直是紅的怎麼辦？</div>
+                                <p>八成是這兩個原因：<br>①「亞」小圖示沒開 → 再去雙擊一次那個 <b>.vbs</b>。<br>② 第 2 步的兩行位置填錯了 → 重新確認是不是對到你自己的資料夾。</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>`;
 
             container.querySelectorAll('.cr-btn[data-act]').forEach(btn => {
@@ -72,6 +119,12 @@
             });
             const openBtn = container.querySelector('#cr-open-web');
             if (openBtn) openBtn.onclick = () => { this._post('/open'); };
+
+            const help = container.querySelector('#cr-help');
+            const helpOpen = container.querySelector('#cr-help-open');
+            const helpClose = container.querySelector('#cr-help-close');
+            if (helpOpen && help) helpOpen.onclick = () => help.classList.remove('hidden');
+            if (helpClose && help) helpClose.onclick = () => help.classList.add('hidden');
             const freeBtn = container.querySelector('#cr-free-vram');
             if (freeBtn) freeBtn.onclick = async () => {
                 const foot = container.querySelector('#cr-foot');
