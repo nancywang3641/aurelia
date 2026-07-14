@@ -1067,6 +1067,11 @@
                 bundle.bgCacheId  = bundle._recs.find(r => r.bgCacheId)?.bgCacheId || '';
                 // charHeader：角色表表頭，給日誌動態對位欄位(取最新一筆有值的)
                 bundle.charHeader = bundle._recs.find(r => r.charHeader)?.charHeader || '';
+                // 那輪玩的 USER persona 快照 + 主角（大廳 guest NPC 認得訪客用）
+                bundle.personaId   = bundle._recs.find(r => r.personaId)?.personaId   || '';
+                bundle.personaName = bundle._recs.find(r => r.personaName)?.personaName || '';
+                bundle.personaDesc = bundle._recs.find(r => r.personaDesc)?.personaDesc || '';
+                bundle.protagonist = bundle._recs.find(r => r.protagonist)?.protagonist || '';
                 bundle.briefs = bundle._recs.slice(0, briefsLimit).map(r => ({
                     count: r.summaryCount || 0,
                     brief: r.brief || '',
