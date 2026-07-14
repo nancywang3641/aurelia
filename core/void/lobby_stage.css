@@ -59,6 +59,17 @@
 .lsd-hint { color:#d8cdb4; font-size:11px; line-height:1.5; }
 .lstage-dress .lep-btn { padding:9px 6px; }
 .lstage-dress .lep-btn[disabled] { opacity:.35; cursor:default; }
+/* 💬 NPC 對話紀錄小面板（複用 lstage-dress 容器樣式） */
+.lstage-history { width:300px; }
+.lsh-count { color:#c8bfa6; font-size:11px; font-weight:normal; margin-left:4px; }
+.lsh-list { display:flex; flex-direction:column; gap:6px; overflow-y:auto; max-height:52vh; padding-right:2px; }
+.lsh-empty { color:#d8cdb4; font-size:12px; text-align:center; padding:16px; }
+.lsh-row { display:flex; gap:6px; align-items:flex-start; background:rgba(243,234,216,.06); border-radius:8px; padding:6px 8px; }
+.lsh-row.me { background:rgba(243,234,216,.12); }
+.lsh-who { flex:0 0 auto; font-size:11px; color:#c8bfa6; min-width:30px; }
+.lsh-text { flex:1; font-size:12px; line-height:1.5; color:#f3ead8; word-break:break-word; white-space:pre-wrap; }
+.lsh-del { flex:0 0 auto; border:none; background:transparent; color:rgba(243,234,216,.45); cursor:pointer; font-size:12px; padding:0 2px; }
+.lsh-del:hover { color:#e88a7a; }
 /* ✨ 裝扮室內建生成（接口+預設包+生成鈕） */
 .lsd-gen { display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid rgba(243,234,216,.18);
   border-radius:10px; background:rgba(243,234,216,.06); }
