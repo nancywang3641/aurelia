@@ -2325,7 +2325,7 @@ ${sections}`;
             ).filter(l => l.length > 4).join('\n');
             if (!chunkText.trim()) {   // 都是空/標記 → 只裁不壓
                 if (track === 'guest') window.LobbyStage.truncateNpcHistory(npcKey, NPC_MEM_KEEP_LAST);
-                else { IRIS_STATE.history = IRIS_STATE.history.slice(-NPC_MEM_KEEP_LAST); debouncedSave(); }
+                else if (hist === IRIS_STATE.history) { IRIS_STATE.history = IRIS_STATE.history.slice(-NPC_MEM_KEEP_LAST); debouncedSave(); }
                 return;
             }
 
@@ -2352,7 +2352,7 @@ ${sections}`;
             // 存成功才裁短（guest 動 localStorage；iris/cheshire 動 IRIS_STATE + 觸發存檔）
             if (track === 'guest') {
                 window.LobbyStage.truncateNpcHistory(npcKey, NPC_MEM_KEEP_LAST);
-            } else {
+            } else if (hist === IRIS_STATE.history) {   // 守衛：壓縮期間若已切場景(換了陣列)就不裁，避免裁錯場景歷史
                 IRIS_STATE.history = IRIS_STATE.history.slice(-NPC_MEM_KEEP_LAST);
                 debouncedSave();
             }
@@ -2469,7 +2469,7 @@ ${sections}`;
                     fixedMemSummary = ((await window.OS_DB?.getNpcMemory?.(fk))?.summary) || '';
                 }
             } catch (e) {}
-            const _userNameWithPersona = currentUserName + (userPersona?.desc ? '（' + userPersona.desc + '）' : '');
+            const _userNameWithPersona = (userPersona?.name || currentUserName) + (userPersona?.desc ? '（' + userPersona.desc + '）' : '');
 
             const sysPrompt = npcTarget
                 ? VoidPrompts.buildNpcPrompt(npcTarget, {
