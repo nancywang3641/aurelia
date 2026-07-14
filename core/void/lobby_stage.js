@@ -209,6 +209,7 @@
         edit: null,                 // 擺設模式狀態
     };
     let CFG = null;   // tryMount 時按場景載入
+    let _lpSuppressClick = false;   // 長按開選單後，抑制隨之而來的那次 click（免點擊移動誤觸）
 
     function isOn() { try { return localStorage.getItem('lobby_stage_on') !== '0'; } catch (e) { return true; } }
 
@@ -814,6 +815,7 @@
         window.addEventListener('keyup', S.onKey, true);
         S.root.querySelector('.lstage-click').addEventListener('click', (e) => {
             if (S.edit) return;
+            if (_lpSuppressClick) { _lpSuppressClick = false; return; }   // 長按剛開過選單→吃掉這次 click
             if (S.talkTarget) { endTalk(); return; }
             hideDialog();   // 點空地=收起跟瀅瀅的對話框
             const r = S.world.getBoundingClientRect();
@@ -1473,20 +1475,44 @@
         }
         S.objEls = CFG.layout.map(o => _spawnObjEl(o));
         root.querySelector('.lstage-edit-btn').addEventListener('click', () => (S.edit ? exitEdit(true) : enterEdit()));
-        // 👗 右鍵角色→裝扮室（用座標命中判定，不動角色的 pointer-events）
-        root.addEventListener('contextmenu', (e) => {
-            if (S.edit) return;
+        // 座標命中角色（不動角色 pointer-events）：桌機右鍵、手機長按共用
+        const _hitAt = (clientX, clientY) => {
             const r = S.world.getBoundingClientRect();
-            const mx = (e.clientX - r.left) / S.scale, my = (e.clientY - r.top) / S.scale;
-            const all = (S.player ? [S.player] : []).concat(S.npcs);
-            const hit = all.find(a => {
+            const mx = (clientX - r.left) / S.scale, my = (clientY - r.top) / S.scale;
+            return ((S.player ? [S.player] : []).concat(S.npcs)).find(a => {
                 const w = Math.max(50, a.h * ((a.frameW && a.frameH) ? a.frameW / a.frameH : 0.6));
                 return mx > a.x - w / 2 && mx < a.x + w / 2 && my > a.y - a.h && my < a.y;
             });
+        };
+        // 👗 桌機：右鍵角色→下拉單
+        root.addEventListener('contextmenu', (e) => {
+            if (S.edit) return;
+            const hit = _hitAt(e.clientX, e.clientY);
             if (!hit) return;
             e.preventDefault(); e.stopPropagation();
             _openActorMenu(hit, e.clientX, e.clientY);
         });
+        // 📱 手機：長按角色→下拉單（contextmenu 手機不可靠，改自訂長按計時器；移動/放開即取消）
+        let _lpTimer = null, _lpX = 0, _lpY = 0;
+        root.addEventListener('pointerdown', (e) => {
+            if (e.pointerType !== 'touch' || S.edit) return;
+            if (e.target.closest('.lstage-joy, .lstage-menu-btn, .lstage-edit-btn, .lstage-chat-fab, .lstage-hint, #iris-dialogue-box')) return;
+            _lpX = e.clientX; _lpY = e.clientY;
+            clearTimeout(_lpTimer);
+            _lpTimer = setTimeout(() => {
+                _lpTimer = null;
+                const hit = _hitAt(_lpX, _lpY);
+                if (hit) { _lpSuppressClick = true; _openActorMenu(hit, _lpX, _lpY); }
+            }, 450);
+        });
+        const _lpCancel = (e) => {
+            if (!_lpTimer) return;
+            if (e && e.type === 'pointermove' && Math.hypot(e.clientX - _lpX, e.clientY - _lpY) <= 12) return;   // 小抖動不算移動
+            clearTimeout(_lpTimer); _lpTimer = null;
+        };
+        root.addEventListener('pointermove', _lpCancel);
+        root.addEventListener('pointerup', _lpCancel);
+        root.addEventListener('pointercancel', _lpCancel);
         initPlayer();
         initNpcs();
         _applySceneHeader();
