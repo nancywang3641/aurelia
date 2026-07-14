@@ -21,6 +21,12 @@
   animation:lstage-hint-float 1.2s ease-in-out infinite; will-change:transform; }
 @keyframes lstage-hint-float { 0%,100%{transform:translate(-50%,-100%) translateY(0)} 50%{transform:translate(-50%,-100%) translateY(-5px)} }
 .lstage-click { position:absolute; inset:0; cursor:pointer; z-index:1; }
+/* 🕹️ 手機虛擬搖桿（左下角；只觸控裝置由 JS 建立） */
+.lstage-joy { position:absolute; left:16px; bottom:16px; width:100px; height:100px; border-radius:50%;
+  background:rgba(20,18,16,.32); border:2px solid rgba(243,234,216,.3); z-index:3000; touch-action:none; }
+.lstage-joy-knob { position:absolute; left:50%; top:50%; width:46px; height:46px; margin:-23px 0 0 -23px;
+  border-radius:50%; background:rgba(243,234,216,.72); box-shadow:0 2px 8px rgba(0,0,0,.45);
+  pointer-events:none; will-change:transform; }
 /* 舞台模式：藏原立繪與簽名，對話框保持最上層 */
 .lobby-left.lstage-on #iris-avatar, .lobby-left.lstage-on .lb-signature { display:none !important; }
 .lobby-left.lstage-on .void-dialogue-wrap { z-index:5; pointer-events:none; }

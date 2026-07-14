@@ -1319,6 +1319,7 @@
             if (S.keys['arrowright'] || S.keys['d']) dx += 1;
             if (S.keys['arrowup'] || S.keys['w']) dy -= 1;
             if (S.keys['arrowdown'] || S.keys['s']) dy += 1;
+            if (S.joy && (S.joy.x || S.joy.y)) { dx = S.joy.x; dy = S.joy.y; }   // 🕹️ 虛擬搖桿（手機）：方向覆蓋鍵盤/點擊
             if (dx || dy) p.dest = null;
             else if (p.dest) {
                 const vx = p.dest.x - p.x, vy = p.dest.y - p.y, d = Math.hypot(vx, vy);
@@ -1393,6 +1394,40 @@
         else { S.scene = 'cafe'; tryMount(); }
     }
 
+    // 🕹️ 手機虛擬搖桿：左下角圓盤拖動→餵 S.joy 方向向量（給 update 當 dx/dy）。只在觸控裝置建立。
+    function _setupJoystick(root) {
+        try { if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return; } catch (e) { return; }
+        const base = document.createElement('div');
+        base.className = 'lstage-joy';
+        const knob = document.createElement('div');
+        knob.className = 'lstage-joy-knob';
+        base.appendChild(knob);
+        root.appendChild(base);
+        const R = 34, DEAD = 7;   // R=拉桿半徑；DEAD=死區(px)
+        let active = false, cx = 0, cy = 0;
+        const setKnob = (x, y) => { knob.style.transform = 'translate(' + x + 'px,' + y + 'px)'; };
+        const onDown = (e) => {
+            active = true;
+            try { base.setPointerCapture(e.pointerId); } catch (_) {}
+            const r = base.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+            onMove(e);
+        };
+        const onMove = (e) => {
+            if (!active) return;
+            let dx = e.clientX - cx, dy = e.clientY - cy;
+            const d = Math.hypot(dx, dy);
+            if (d > R) { dx = dx / d * R; dy = dy / d * R; }
+            setKnob(dx, dy);
+            S.joy = (Math.hypot(dx, dy) < DEAD) ? null : { x: dx / R, y: dy / R };
+            e.preventDefault();
+        };
+        const onUp = () => { active = false; S.joy = null; setKnob(0, 0); };
+        base.addEventListener('pointerdown', onDown);
+        base.addEventListener('pointermove', onMove);
+        base.addEventListener('pointerup', onUp);
+        base.addEventListener('pointercancel', onUp);
+    }
+
     // 🍔 舞台全屏：漢堡隱藏 MAIN MENU（.lobby-right）→ 舞台吃滿；狀態存 localStorage
     function _applyMenuHidden() {
         let hidden = false;
@@ -1428,6 +1463,7 @@
         fab.innerHTML = '<i class="fa-solid fa-comment-dots"></i>';
         fab.addEventListener('click', (e) => { e.stopPropagation(); showDialog(); });
         left.appendChild(fab);
+        _setupJoystick(root);   // 🕹️ 手機左下角虛擬搖桿（只觸控裝置出現；桌機照舊鍵盤/點擊）
         S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
         S.doorArm = false;   // 剛進場先解除門武裝，走出門區才啟動
         // 底圖：本機/網址覆蓋（建構模式「換底圖」）
@@ -1480,6 +1516,7 @@
         if (!S.active) return;
         if (S.edit) exitEdit(false);
         _closeActorMenu(); _closeDressRoom(); _closeNpcHistory();
+        S.joy = null;   // 清搖桿殘留方向
         document.querySelector('.lobby-body')?.classList.remove('stage-menu-hidden');   // 舞台關掉→純文字大廳要看得到選單
         endTalk();
         cancelAnimationFrame(S.raf);
