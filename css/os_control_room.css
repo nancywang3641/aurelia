@@ -1,8 +1,30 @@
 /* ===== 控制室（SoVITS + ComfyUI 監控遙控）===== */
-.cr-root { width: 100%; height: 100%; overflow-y: auto; box-sizing: border-box; padding: 18px 16px 24px; background: #0a0906; color: #e8dcc0; font-family: 'Noto Sans TC', sans-serif; }
-.cr-header { margin-bottom: 14px; }
+.cr-root { position: relative; width: 100%; height: 100%; overflow-y: auto; box-sizing: border-box; padding: 18px 16px 24px; background: #0a0906; color: #e8dcc0; font-family: 'Noto Sans TC', sans-serif; }
+.cr-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.cr-header-text { flex: 1; min-width: 0; }
 .cr-title { font-size: 18px; font-weight: 900; letter-spacing: 3px; color: #d4af37; }
 .cr-sub { font-size: 11px; color: rgba(232,220,192,0.45); margin-top: 4px; letter-spacing: 1px; }
+.cr-help-btn { flex: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(212,175,55,0.35); background: rgba(212,175,55,0.1); color: #d4af37; font-size: 15px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.cr-help-btn:hover { background: rgba(212,175,55,0.22); }
+
+/* ===== 設定說明書（蓋在控制室上的一頁）===== */
+.cr-help { position: absolute; inset: 0; background: #0a0906; overflow-y: auto; box-sizing: border-box; padding: 14px 16px 28px; z-index: 5; }
+.cr-help-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.cr-help-back { flex: none; padding: 7px 12px; font-size: 12px; cursor: pointer; border-radius: 6px; border: 1px solid rgba(212,175,55,0.35); background: rgba(212,175,55,0.1); color: #d4af37; transition: all 0.2s; }
+.cr-help-back:hover { background: rgba(212,175,55,0.22); }
+.cr-help-htitle { font-size: 15px; font-weight: 800; letter-spacing: 2px; color: #d4af37; }
+.cr-help-body { font-size: 13px; line-height: 1.9; color: rgba(232,220,192,0.85); }
+.cr-help-lead { margin: 0 0 16px; }
+.cr-help-lead b { color: #d4af37; }
+.cr-help-note { font-size: 11.5px; color: rgba(232,220,192,0.5); }
+.cr-help-sect { margin-top: 18px; }
+.cr-help-sect p { margin: 6px 0 0; }
+.cr-help-h { font-size: 13.5px; font-weight: 800; letter-spacing: 1px; color: #e8dcc0; padding-left: 9px; border-left: 3px solid #d4af37; }
+.cr-help-sect b { color: #d4af37; }
+.cr-step { display: flex; gap: 10px; margin-top: 12px; }
+.cr-step-no { flex: none; width: 22px; height: 22px; border-radius: 50%; background: #d4af37; color: #0a0906; font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.cr-step-txt { flex: 1; }
+.cr-help-code { margin: 8px 0; padding: 10px 12px; background: rgba(212,175,55,0.06); border: 1px solid rgba(212,175,55,0.2); border-radius: 8px; font-family: 'Consolas', monospace; font-size: 12px; color: rgba(232,220,192,0.7); line-height: 1.8; }
 
 .cr-tower-down { border: 1px solid rgba(252,129,129,0.35); background: rgba(252,129,129,0.08); border-radius: 10px; padding: 16px; text-align: center; font-size: 14px; line-height: 2; margin-bottom: 14px; }
 .cr-tower-hint { font-size: 11px; color: rgba(232,220,192,0.55); }
