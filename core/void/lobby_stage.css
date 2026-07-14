@@ -148,6 +148,15 @@
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-menu-btn:hover { background:rgba(20,18,16,.85); }
 .lstage-menu-btn.active { background:#4a7ac8; color:#fff; }
+/* ⚙️ 大廳設置鈕（放漢堡左邊，同一組角落控制群） */
+.lstage-set-btn { position:absolute; right:94px; top:10px; z-index:3000; width:34px; height:34px;
+  border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
+.lstage-set-btn:hover { background:rgba(20,18,16,.85); }
+/* ⚙️ 設置小面板的開關列 */
+.lstage-settings .lset-row { display:flex; align-items:center; justify-content:space-between; gap:10px;
+  color:#f3ead8; font-size:13px; cursor:pointer; padding:4px 2px; }
+.lstage-settings .lset-chk { width:18px; height:18px; cursor:pointer; flex:0 0 auto; }
+.lstage-settings .lset-hint { color:#c8bfa6; font-size:11px; line-height:1.5; }
 /* 舞台全屏：隱藏右側 MAIN MENU、舞台吃滿（桌機吃寬、手機吃高） */
 .lobby-body.stage-menu-hidden .lobby-right { display:none !important; }
 .lobby-body.stage-menu-hidden .lobby-left { flex:1 1 100% !important; border-right:none !important; border-bottom:none !important; }
