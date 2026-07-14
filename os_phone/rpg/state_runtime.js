@@ -1230,7 +1230,8 @@ ${numberedText}`;
                     (err) => { if (done) return; done = true; clearTimeout(timer); reject(err || new Error('導演稿失敗')); });
             });
             let clean = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').trim();
-            if (!clean || clean.indexOf('【公共劇情】') === -1) { console.warn('🎬 [Director] 回稿沒有【公共劇情】區塊 → 丟棄不存'); return; }
+            // 驗收容繁簡：卡片是簡體時模型會跟著寫「剧情/记忆」——別把好稿當廢稿丟（Rae 踩過：兩份稿全被逐字比對錯殺）
+            if (!clean || !/【公共[劇剧]情】/.test(clean)) { console.warn('🎬 [Director] 回稿沒有【公共劇情】區塊 → 丟棄不存'); return; }
             // 寫 patch（cap 最舊）
             const fresh = (await win.OS_DB.getStateData(chatId)) || {};   // 重讀防蓋掉期間別人寫入
             const dir2 = fresh.director || { patches: {} };
