@@ -234,9 +234,49 @@
         });
     }
 
+    // 🙋 重試詢問彈窗（Rae：主接口慢模型逾時常常只是「慢出」不是真失敗 → 自動重打會多燒一整通＋造成重複觸發）。
+    //    非阻塞、單例、走 class 不寫 inline；回 Promise<bool>。主頁沒有 app 層的 stConfirm，故自建（仿 DEBUG.js 注一次 style）。
+    let _retryAsking = false;
+    function _askRetry(reason) {
+        return new Promise((resolve) => {
+            try {
+                const doc = win.document;
+                if (!doc || !doc.body || _retryAsking) { resolve(false); return; }
+                _retryAsking = true;
+                if (!doc.getElementById('avs-retry-style')) {
+                    const s = doc.createElement('style'); s.id = 'avs-retry-style';
+                    s.textContent = '.avs-retry-ov{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:rgba(0,0,0,.5)}.avs-retry-box{background:#1c1e2a;color:#eee;border:1px solid rgba(140,160,220,.35);border-radius:14px;padding:18px 18px 14px;max-width:320px;width:100%;box-shadow:0 10px 34px rgba(0,0,0,.55);font-size:14px;line-height:1.6}.avs-retry-msg{margin-bottom:14px;white-space:pre-wrap}.avs-retry-row{display:flex;gap:8px;justify-content:flex-end}.avs-retry-row button{padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;border:0}.avs-retry-no{background:transparent;border:1px solid rgba(200,200,220,.3);color:#cdd}.avs-retry-yes{background:#5a6bd8;color:#fff}';
+                    doc.head.appendChild(s);
+                }
+                const ov = doc.createElement('div'); ov.className = 'avs-retry-ov';
+                const box = doc.createElement('div'); box.className = 'avs-retry-box';
+                const m = doc.createElement('div'); m.className = 'avs-retry-msg';
+                m.textContent = (reason || '這一輪的狀態／記憶沒成功回來') + '\n可能只是比較慢、不一定是真的失敗。要重試一次嗎？';
+                const row = doc.createElement('div'); row.className = 'avs-retry-row';
+                const no = doc.createElement('button'); no.className = 'avs-retry-no'; no.textContent = '先不要';
+                const yes = doc.createElement('button'); yes.className = 'avs-retry-yes'; yes.textContent = '重試一次';
+                const close = (v) => { try { ov.remove(); } catch (e) {} _retryAsking = false; resolve(v); };
+                no.onclick = () => close(false);
+                yes.onclick = () => close(true);
+                ov.onclick = (e) => { if (e.target === ov) close(false); };
+                row.appendChild(no); row.appendChild(yes);
+                box.appendChild(m); box.appendChild(row); ov.appendChild(box);
+                doc.body.appendChild(ov);
+            } catch (e) { _retryAsking = false; resolve(false); }
+        });
+    }
+
     async function runWithRetry(prompt) {
+        // 🙋 導演開＝走主接口慢模型：逾時/失敗常只是慢出、接口沒真掛 → 自動重打多燒一整通＋重複觸發(Rae 抓的)。
+        //    改成第一次失敗之後「彈窗問過再打」；flash 副模型快又便宜 → 維持自動重試不打擾。
+        const _viaMain = directorOn() && typeof win.OS_API?.chatMain === 'function';
         let lastErr;
         for (let i = 0; i < CONFIG.retryCount; i++) {
+            if (i > 0 && _viaMain) {
+                const _slow = lastErr && /逾時|超時|timeout/i.test(lastErr.message || '');
+                const _go = await _askRetry(_slow ? '這一輪的狀態／記憶等太久沒回來' : '這一輪的狀態／記憶沒成功回來');
+                if (!_go) { console.log('🛰️ [State Runtime] 使用者選擇不重試 → 本輪到此為止（不重複觸發接口）'); break; }
+            }
             try {
                 const raw = await callSecondary(prompt);
                 _lastRawText = raw;   // 存原始輸出(成功/失敗都存，給診斷看格式有沒有亂)
@@ -1072,7 +1112,7 @@ ${numberedText}`;
                         await _saveDirectorPatch(chatId, lastId, _dClean);
                         _dirLanded = true;   // 便車落地 → finally 不再補獨立
                     } else {
-                        console.warn('🎬 [Director] 便車稿缺失/不合格 → 交 finally 補一通獨立');
+                        console.warn('🎬 [Director] 便車稿缺失/不合格 → 這輪不補（便車已打過一通、免重複觸發），下一輪再抽');
                     }
                 } catch (e) {}
             }
@@ -1082,12 +1122,13 @@ ${numberedText}`;
             if (pendingMem && !memIngested && win.OS_VECTOR_ENGINE?.isEnabled?.()) {
                 try { win.OS_VECTOR_ENGINE.ingest(pendingMem.content, pendingMem.storyId, pendingMem.chapterId); } catch(_) {}
             }
-            // 🎬 便車稿跟著整通陪葬 → 由 finally 統一補一通獨立（_dirLanded 仍 false）
+            // 🎬 便車稿跟著整通陪葬：這輪不再補（便車已打過那通、_dirRide=true → finally 不補），下一輪再抽
         } finally {
-            // 🎬 便車本該接手卻沒落地（提早 return／解析失敗／整通爆／沒搭上）→ 補一通獨立。
-            //    _directorHandledThisRound 已在開頭同步搶下＝獨立防抖那顆不會再跑，這裡是唯一補位點；
-            //    extractDirector 自帶同樓/截斷/停止/總結守門，重複呼叫也安全、絕不雙寫。
-            if (_dirIntended && !_dirLanded) { try { extractDirector(); } catch (_) {} }
+            // 🎬 導演補位：只在「便車根本沒打過那通」(_dirRide=false) 且沒手改稿(_dirLanded=false) 時補一通獨立——
+            //    例如 extractOnce 在掛導演前就提早 return。便車若已經打過一通(不管成敗)就不再補：
+            //    Rae 要的「只打一通、失敗就這輪算了」——別對同一個慢/卡住的接口重複觸發。
+            //    _directorHandledThisRound 已在開頭同步搶下＝獨立防抖那顆不會再跑；extractDirector 自帶同樓/截斷/停止守門。
+            if (_dirIntended && !_dirRide && !_dirLanded) { try { extractDirector(); } catch (_) {} }
             _running = false;
         }
     }
