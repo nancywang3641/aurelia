@@ -419,7 +419,7 @@
     // 右鍵角色→下拉單
     function _closeActorMenu() { S.menuEl?.remove(); S.menuEl = null; }
     function _openActorMenu(a, cx, cy) {
-        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory();
+        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory(); _closeLobbySettings();
         const rr = S.root.getBoundingClientRect();
         const menu = document.createElement('div');
         menu.className = 'lstage-actor-menu';
@@ -1014,8 +1014,29 @@
                     cardName: card, chatId: st.chatId || '',
                     storyTitle: st.storyTitle || card, brief, fullBriefs,
                     personaId: st.personaId || '', personaName: st.personaName || '', personaDesc: st.personaDesc || '',
-                    worldview: st.worldview || '',
+                    worldview: st.worldview || '', lorebookBook: st.lorebookBook || '',
                 });
+            }
+        }
+        // 世界觀來源：預設用大總結快照(constant摘要,截斷)；勾「讀角色卡世界書」→ live 讀整本覆蓋
+        //   （大總結只寫 NPC→主角關係，角色間橫向關係只在世界書；朋友的關係設定在此才回得來）
+        if (localStorage.getItem('lobby_worldview_use_lorebook') === '1') {
+            const TH = window.TavernHelper || (window.parent || window).TavernHelper || (window.top && window.top.TavernHelper);
+            if (TH && TH.getLorebookEntries) {
+                const cache = new Map();
+                for (const g of pool) {
+                    if (!g.lorebookBook) continue;
+                    try {
+                        if (!cache.has(g.lorebookBook)) {
+                            const entries = await TH.getLorebookEntries(g.lorebookBook);
+                            const txt = (entries || []).filter(e => e && e.enabled !== false && e.content)
+                                .map(e => String(e.content).trim()).filter(Boolean).join('\n\n').trim().slice(0, 8000);
+                            cache.set(g.lorebookBook, txt);
+                        }
+                        const live = cache.get(g.lorebookBook);
+                        if (live) g.worldview = live;
+                    } catch (e) {}
+                }
             }
         }
         return pool;
@@ -1448,6 +1469,29 @@
         base.addEventListener('pointercancel', onUp);
     }
 
+    // ── ⚙️ 大廳設置小面板（舞台上，仿裝扮室）──
+    function _closeLobbySettings() { S.setEl?.remove(); S.setEl = null; }
+    function _openLobbySettings() {
+        _closeLobbySettings(); _closeDressRoom(); _closeNpcHistory();
+        const useLore = localStorage.getItem('lobby_worldview_use_lorebook') === '1';
+        const box = document.createElement('div');
+        box.className = 'lstage-dress lstage-settings';
+        box.innerHTML =
+            '<div class="lsd-title"><i class="fa-solid fa-gear"></i> 大廳設置</div>' +
+            '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
+              '<input type="checkbox" class="lset-chk"' + (useLore ? ' checked' : '') + '></label>' +
+            '<div class="lset-hint">預設用大總結摘要的世界觀。勾選＝改讀角色卡的完整世界書（含角色之間的橫向關係，大總結不會寫）。</div>' +
+            '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+        S.root.appendChild(box);
+        S.setEl = box;
+        box.querySelector('.lset-chk').addEventListener('change', (e) => {
+            try { localStorage.setItem('lobby_worldview_use_lorebook', e.target.checked ? '1' : '0'); } catch (_) {}
+            _closeLobbySettings();
+            unmount(); tryMount();   // 重掛讓 guest 世界觀來源即時生效
+        });
+        box.addEventListener('click', (e) => { if (e.target.closest('[data-act="close"]')) _closeLobbySettings(); });
+    }
+
     // 🍔 舞台全屏：漢堡隱藏 MAIN MENU（.lobby-right）→ 舞台吃滿；狀態存 localStorage
     function _applyMenuHidden() {
         let hidden = false;
@@ -1466,6 +1510,7 @@
         root.innerHTML = '<div class="lstage-world">' +
             '<img class="lstage-map" src="' + CDN + SCENES[S.scene].base + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
             '<div class="lstage-click"></div></div>' +
+            '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
             '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>';
         left.appendChild(root);
@@ -1475,6 +1520,7 @@
             try { localStorage.setItem('lobby_stage_menu_hidden', on ? '0' : '1'); } catch (e) {}
             _applyMenuHidden();
         });
+        root.querySelector('.lstage-set-btn').addEventListener('click', () => _openLobbySettings());
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         // 💬 聊天符號（自由漫遊時的浮鈕）：點了浮出「對話框＋輸入框」一組
         const fab = document.createElement('button');
@@ -1559,7 +1605,7 @@
     function unmount() {
         if (!S.active) return;
         if (S.edit) exitEdit(false);
-        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory();
+        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory(); _closeLobbySettings();
         S.joy = null;   // 清搖桿殘留方向
         document.querySelector('.lobby-body')?.classList.remove('stage-menu-hidden');   // 舞台關掉→純文字大廳要看得到選單
         endTalk();
