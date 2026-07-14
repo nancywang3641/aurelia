@@ -2451,14 +2451,40 @@ ${sections}`;
 
             const journalCtx = await _buildJournalCtx();
             const worldCtx   = (window.OS_PROMPTS?.loadWorld?.() || '').trim();
+
+            // USER 身分：當前酒館 persona 庫（取不到退登入名）
+            let userPersona = null;
+            try {
+                const p = window.OS_PERSONA?.getCurrent?.();
+                if (p && p.name) userPersona = { name: p.name, desc: p.desc || '' };
+            } catch (e) {}
+            // L2 一對一長期記憶：npcTarget 取 guest key；瀅瀅/柴郡取固定 key
+            let npcMemSummary = '', fixedMemSummary = '';
+            const _onStage = !isClaudeRoom && window.LobbyStage?.isActive?.();
+            try {
+                if (npcTarget) {
+                    npcMemSummary = ((await window.OS_DB?.getNpcMemory?.(npcTarget.key))?.summary) || '';
+                } else if (_onStage) {
+                    const fk = is404Room ? 'cheshire' : 'ying';
+                    fixedMemSummary = ((await window.OS_DB?.getNpcMemory?.(fk))?.summary) || '';
+                }
+            } catch (e) {}
+            const _userNameWithPersona = currentUserName + (userPersona?.desc ? '（' + userPersona.desc + '）' : '');
+
             const sysPrompt = npcTarget
-                ? VoidPrompts.buildNpcPrompt(npcTarget, { userName: currentUserName, timeCtx: _buildTimeCtx() })
+                ? VoidPrompts.buildNpcPrompt(npcTarget, {
+                    userName: currentUserName,
+                    userPersona,
+                    memorySummary: npcMemSummary,
+                    timeCtx: _buildTimeCtx(),
+                })
                 : VoidPrompts.buildSysPrompt(is404Room ? 'cheshire' : 'iris', {
-                userName: currentUserName,
+                userName: _userNameWithPersona,
                 visit404Count,
                 timeCtx: _buildTimeCtx(),
                 lobbyTemplateSec,
-                supplement: is404Room ? cheshireSupplement : irisSupplement,
+                supplement: (is404Room ? cheshireSupplement : irisSupplement) +
+                    (fixedMemSummary ? ('\n\n【你和這位訪客先前的相處記憶】\n' + fixedMemSummary) : ''),
                 justReturnedFrom404: _justReturnedFrom404,
                 journalCtx,
                 worldCtx,
@@ -2615,6 +2641,16 @@ ${sections}`;
             if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, { role: 'assistant', content: reply, ts: Date.now() });
             else IRIS_STATE.history.push({ role: 'assistant', content: reply, ts: Date.now() });
             debouncedSave();
+
+            // 🎮 大廳 NPC 一對一記憶：到量背景壓縮（不 await，不阻塞打字機）
+            try {
+                if (npcTarget) {
+                    _compactNpcMemory(npcTarget.key, npcTarget.name, 'guest');
+                } else if (!isClaudeRoom && window.LobbyStage?.isActive?.()) {
+                    if (is404Room) _compactNpcMemory('cheshire', '柴郡', 'cheshire');
+                    else _compactNpcMemory('ying', '瀅瀅', 'iris');
+                }
+            } catch (e) {}
 
             // 播放對話，完成後檢查是否需要打開面板
             playIrisSequence(reply, () => {

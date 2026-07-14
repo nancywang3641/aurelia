@@ -107,16 +107,22 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
     // buildNpcPrompt(npc, ctx) — 書咖舞台的典籍角色對話
     //   npc: { name, storyTitle, persona }  ctx: { userName, timeCtx }
     function buildNpcPrompt(npc, ctx) {
-        const { userName, timeCtx } = ctx || {};
+        const { userName, userPersona, memorySummary, timeCtx } = ctx || {};
+        // 對話對象：優先當前酒館 persona（含描述），沒有才退登入名/訪客
+        const who = (userPersona && userPersona.name)
+            ? (userPersona.name + (userPersona.desc ? '（' + userPersona.desc + '）' : ''))
+            : (userName || '訪客');
+        // L2 長期記憶：先前在大廳跟這位訪客相處的摘要
+        const memBlock = memorySummary ? ('\n\n【你和這位訪客先前的相處記憶】\n' + memorySummary) : '';
         // personaFull=完整人設卡（如愛麗絲），直接採用＋補格式段
         if (npc.personaFull) {
-            return npc.personaFull + '\n\n【對話對象】\n' + (userName || '訪客') + '。\n\n' +
+            return npc.personaFull + memBlock + '\n\n【對話對象】\n' + who + '。\n\n' +
 '【對話輸出格式】\n旁白/動作：[Nar|動作描述]\n角色對話：[Char|' + npc.name + '|表情|「對話內容」]\n表情只用：normal/smile/think/surprise/warning/error。\n' +
 (timeCtx || '');
         }
         return '你現在扮演' + (npc.persona || ('角色「' + npc.name + '」')) + '，' +
-'此刻你正坐在「視差書咖」裡休息——這間店是故事角色們下班後歇腳的地方，店長是天然呆小說家瀅瀅。\n\n' +
-'【對話對象】\n書咖的常客、委託人：' + (userName || '客人') + '。\n\n' +
+'此刻你正坐在「視差書咖」裡休息——這間店是故事角色們下班後歇腳的地方，店長是天然呆小說家瀅瀅。' + memBlock + '\n\n' +
+'【對話對象】\n書咖的常客、委託人：' + who + '。\n\n' +
 '【扮演規則】\n' +
 '1. 完全以「' + npc.name + '」的身分、性格與記憶說話，語氣貼合原作；你知道自己來自《' + (npc.storyTitle || '一本書') + '》的世界，此刻是在故事之外的休憩時光。\n' +
 '2. 輕鬆閒聊為主，不推進正式劇情、不代寫委託人的行動。\n' +
