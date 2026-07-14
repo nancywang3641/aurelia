@@ -219,13 +219,17 @@ LINE:[用角色風格說一句話，10-20字]`;
         return null;
     }
 
-    // 從 DB 取得 lobbyEnabled 模板，組裝上下文說明字串（注入 sysPrompt 用）
+    // 「大廳顯示」＝組件在固定 id 的大廳組裡（取代舊每組件 lobbyEnabled 開關；舊旗標仍相容）
+    const LOBBY_GROUP_ID = 'g_lobby';
+    function _isLobbyTpl(t) { return !!(t && ((Array.isArray(t.groupIds) && t.groupIds.includes(LOBBY_GROUP_ID)) || t.lobbyEnabled)); }
+
+    // 從 DB 取得大廳組模板，組裝上下文說明字串（注入 sysPrompt 用）
     async function _buildLobbyTemplateCtx() {
         try {
             const db = window.OS_DB;
             if (!db || typeof db.getAllVNTagTemplates !== 'function') return '';
             const templates = await db.getAllVNTagTemplates();
-            const lobby = templates.filter(t => t.lobbyEnabled && t.isActive);
+            const lobby = templates.filter(t => _isLobbyTpl(t) && t.isActive);
             if (!lobby.length) return '';
             const lines = lobby.map(t =>
                 `- [${t.tagId}]：${t.usageDesc || '無說明'}${t.demoFormat ? `\n  調用示例：${t.demoFormat}` : ''}`
@@ -242,7 +246,7 @@ LINE:[用角色風格說一句話，10-20字]`;
             const db = window.OS_DB;
             if (!db || typeof db.getAllVNTagTemplates !== 'function') return;
             const templates = await db.getAllVNTagTemplates();
-            const tpl = templates.find(t => t.tagId === tagId && t.lobbyEnabled);
+            const tpl = templates.find(t => t.tagId === tagId && _isLobbyTpl(t));
             if (!tpl) {
                 console.warn('[LobbyTemplate] 找不到模板或大廳未啟用:', tagId);
                 return;
@@ -264,7 +268,7 @@ LINE:[用角色風格說一句話，10-20字]`;
             const db = window.OS_DB;
             if (!db || typeof db.getAllVNTagTemplates !== 'function') return null;
             const templates = await db.getAllVNTagTemplates();
-            const active = templates.filter(t => (t.isActive || t.lobbyEnabled) && t.isBlock && t.tagId);
+            const active = templates.filter(t => (t.isActive || _isLobbyTpl(t)) && t.isBlock && t.tagId);
             for (const tpl of active) {
                 const safeId = tpl.tagId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const re = new RegExp(`<${safeId}>([\\s\\S]*?)<\\/${safeId}>`, 'i');
