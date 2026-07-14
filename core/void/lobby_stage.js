@@ -539,24 +539,34 @@
             '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成立繪」。</div>' +
         '</div>';
     }
-    // 依邊界把原始3×4重切成乾淨等格(消除AI隨機留白/位移)：拿邊界內區域均分3欄4列，各格畫進正規格
-    function _resliceSheet(img, b) {
+    // 把邊界內的3×4逐格畫進目標畫布（flips[r]=該列左右鏡像；共用於即時預覽與最終重切）
+    function _paintSheet(ctx, img, b, flips, dcw, dch) {
         const natW = img.naturalWidth || 1, natH = img.naturalHeight || 1;
         const gl = b.left * natW, gr = b.right * natW, gt = b.top * natH, gb = b.bottom * natH;
         const cw = (gr - gl) / 3, ch = (gb - gt) / 4;
-        const ocw = Math.max(1, Math.round(cw)), och = Math.max(1, Math.round(ch));
-        const cv = document.createElement('canvas'); cv.width = ocw * 3; cv.height = och * 4;
-        const ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled = false;
         for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
-            ctx.drawImage(img, gl + c * cw, gt + r * ch, cw, ch, c * ocw, r * och, ocw, och);
+            const sx = gl + c * cw, sy = gt + r * ch;
+            if (flips && flips[r]) {   // 鏡像：翻轉整格像素，走路幀序不變（左走鏡像＝右走）
+                ctx.save(); ctx.translate((c + 1) * dcw, r * dch); ctx.scale(-1, 1);
+                ctx.drawImage(img, sx, sy, cw, ch, 0, 0, dcw, dch); ctx.restore();
+            } else ctx.drawImage(img, sx, sy, cw, ch, c * dcw, r * dch, dcw, dch);
         }
+    }
+    // 依邊界+翻轉把原始3×4重切成乾淨等格(消除AI隨機留白/位移、修LoRA朝向錯的列)
+    function _resliceSheet(img, b, flips) {
+        const natW = img.naturalWidth || 1, natH = img.naturalHeight || 1;
+        const ocw = Math.max(1, Math.round((b.right - b.left) * natW / 3));
+        const och = Math.max(1, Math.round((b.bottom - b.top) * natH / 4));
+        const cv = document.createElement('canvas'); cv.width = ocw * 3; cv.height = och * 4;
+        _paintSheet(cv.getContext('2d'), img, b, flips, ocw, och);
         return cv.toDataURL('image/png');
     }
     function _lgpSlider(label, key, min, max, val) {
         return '<label class="lgp-srow"><span>' + label + '</span>' +
             '<input class="lgp-slider" data-k="' + key + '" type="range" min="' + min + '" max="' + max + '" value="' + val + '" step="0.5"></label>';
     }
-    // 生成預覽：套用前先看圖。走路圖=可拖邊界的調框器（生成隨機→逐張把紅格對準每格角色含腳，套用時照邊界重切）
+    // 生成預覽：套用前先看圖。走路圖=可拖邊界的調框器（生成隨機→逐張把紅格對準每格角色含腳）＋每列翻轉（修LoRA朝向錯的列，如右列鏡像自左列）＋即時結果
     function _showGenPreview(dataUrl, kind, h) {
         const isSheet = (kind === 'sheet');
         const wrap = document.createElement('div');
@@ -569,9 +579,14 @@
                       '<div class="lgp-sliders">' +
                         _lgpSlider('上', 'top', 0, 40, 0) + _lgpSlider('下', 'bottom', 60, 100, 100) +
                         _lgpSlider('左', 'left', 0, 40, 0) + _lgpSlider('右', 'right', 60, 100, 100) +
-                      '</div>'
+                      '</div>' +
+                      '<div class="lgp-flips"><span>翻轉列</span>' +
+                        ['下', '左', '右', '上'].map((d, i) => '<button class="lgp-flip" data-r="' + i + '"><i class="fa-solid fa-left-right"></i>' + d + '</button>').join('') +
+                      '</div>' +
+                      '<div class="lgp-reslabel">套用後（重切＋翻轉）</div>' +
+                      '<canvas class="lgp-result"></canvas>'
                     : '<img class="lgp-img" src="' + dataUrl + '">') +
-                '<div class="lgp-hint">' + (isSheet ? '拖滑桿讓紅格剛好框住每格角色（含腳）；生成隨機，逐張微調' : '看去背乾不乾淨、有沒有缺手缺腳再套用') + '</div>' +
+                '<div class="lgp-hint">' + (isSheet ? '紅格對準每格角色含腳；某列朝向錯就按「翻轉列」左右鏡像（右列常可鏡像自左列）' : '看去背乾不乾淨、有沒有缺手缺腳再套用') + '</div>' +
                 '<div class="lgp-btns">' +
                     '<button class="lep-btn lgp-apply"><i class="fa-solid fa-check"></i> 套用</button>' +
                     '<button class="lep-btn lgp-retry"><i class="fa-solid fa-rotate"></i> 重新生成</button>' +
@@ -584,11 +599,14 @@
         if (isSheet) {
             const img = wrap.querySelector('.lgp-sheetimg');
             const cvs = wrap.querySelector('.lgp-grid');
+            const result = wrap.querySelector('.lgp-result');
+            const flips = [false, false, false, false];
             const sl = {}; wrap.querySelectorAll('.lgp-slider').forEach(s => { sl[s.dataset.k] = s; });
             const bounds = () => ({ top: +sl.top.value / 100, bottom: +sl.bottom.value / 100, left: +sl.left.value / 100, right: +sl.right.value / 100 });
-            const draw = () => {
+            const redraw = () => {
                 const b = bounds(), w = img.clientWidth, hh = img.clientHeight;
                 if (!w || !hh) return;
+                // 紅格疊在原圖上
                 cvs.width = w; cvs.height = hh;
                 const ctx = cvs.getContext('2d');
                 ctx.clearRect(0, 0, w, hh);
@@ -597,10 +615,18 @@
                 const cw = (gr - gl) / 3, ch = (gb - gt) / 4;
                 for (let c = 0; c <= 3; c++) { const x = gl + c * cw; ctx.beginPath(); ctx.moveTo(x, gt); ctx.lineTo(x, gb); ctx.stroke(); }
                 for (let r = 0; r <= 4; r++) { const y = gt + r * ch; ctx.beginPath(); ctx.moveTo(gl, y); ctx.lineTo(gr, y); ctx.stroke(); }
+                // 即時結果（重切＋翻轉後）
+                result.width = w; result.height = hh;
+                const rctx = result.getContext('2d');
+                rctx.clearRect(0, 0, w, hh);
+                _paintSheet(rctx, img, b, flips, w / 3, hh / 4);
             };
-            wrap.querySelectorAll('.lgp-slider').forEach(s => s.addEventListener('input', draw));
-            if (img.complete) draw(); else img.addEventListener('load', draw);
-            getFinal = () => _resliceSheet(img, bounds());
+            wrap.querySelectorAll('.lgp-slider').forEach(s => s.addEventListener('input', redraw));
+            wrap.querySelectorAll('.lgp-flip').forEach(btn => btn.addEventListener('click', () => {
+                const r = +btn.dataset.r; flips[r] = !flips[r]; btn.classList.toggle('on', flips[r]); redraw();
+            }));
+            if (img.complete) redraw(); else img.addEventListener('load', redraw);
+            getFinal = () => _resliceSheet(img, bounds(), flips);
         }
         wrap.querySelector('.lgp-apply').addEventListener('click', async () => { const out = await getFinal(); close(); h.apply && h.apply(out); });
         wrap.querySelector('.lgp-retry').addEventListener('click', () => { close(); h.retry && h.retry(); });

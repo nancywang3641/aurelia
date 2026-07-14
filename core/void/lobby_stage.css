@@ -72,7 +72,7 @@
 .lstage-genprev { position:absolute; inset:0; z-index:3400; display:flex; align-items:center; justify-content:center;
   background:rgba(0,0,0,.55); }
 .lgp-box { background:rgba(26,24,20,.97); border:1px solid rgba(243,234,216,.25); border-radius:14px; padding:14px;
-  display:flex; flex-direction:column; gap:10px; max-width:86%; max-height:86%; }
+  display:flex; flex-direction:column; gap:10px; max-width:86%; max-height:86%; overflow-y:auto; scrollbar-width:thin; }
 .lgp-title { color:#f3ead8; font-size:14px; font-weight:bold; text-align:center; }
 .lgp-img { max-width:260px; max-height:300px; align-self:center; image-rendering:pixelated;
   border:1px solid rgba(243,234,216,.2); border-radius:6px;
@@ -87,6 +87,16 @@
 .lgp-srow { display:flex; align-items:center; gap:6px; color:#d8cdb4; font-size:11px; }
 .lgp-srow > span { flex:0 0 14px; text-align:center; }
 .lgp-srow input[type=range] { flex:1; min-width:0; accent-color:#c8874a; }
+.lgp-flips { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:center; }
+.lgp-flips > span { color:#d8cdb4; font-size:11px; }
+.lgp-flip { display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:7px; cursor:pointer; font-size:12px;
+  border:1px solid rgba(243,234,216,.25); background:rgba(0,0,0,.3); color:#d8cdb4; }
+.lgp-flip.on { background:#c8874a; border-color:#c8874a; color:#fff; }
+.lgp-reslabel { color:#e8d9a8; font-size:11px; text-align:center; }
+.lgp-result { align-self:center; max-width:260px; max-height:300px; image-rendering:pixelated;
+  border:1px solid rgba(243,234,216,.2); border-radius:6px;
+  background-image:linear-gradient(45deg,#3a352c 25%,transparent 25%),linear-gradient(-45deg,#3a352c 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3a352c 75%),linear-gradient(-45deg,transparent 75%,#3a352c 75%);
+  background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0; }
 
 /* ✖ 對話框關閉鈕（舞台模式限定，showDialog 動態掛上）
    設計：仿左側名牌的 chip 樣式、貼框頂右側跟名牌對稱——融進對話框的設計語言，
