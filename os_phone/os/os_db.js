@@ -8,7 +8,7 @@
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 28; // 🔥 V28：通用 app 資料庫 app_data（創作室生的 app 用 st.dbSave/dbLoad；id=appId::scope::key）
+    const DB_VERSION = 29; // 🔥 V29：大廳 NPC 一對一長期記憶 lobby_npc_memory（id=NPC 對話 key）
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -35,6 +35,7 @@
     const STORE_NAME_APP_MEM = 'app_memory'; // 🔥 V26：插件通用記憶桶（角色對話型插件 st.remember 寫入；key = appId::角色名）
     const STORE_NAME_TAVERN_SUMMARY = 'tavern_summary'; // 🔥 V27：酒館大總結（key = chatId，一卡一筆全文存檔；程式壓縮注入、不再放世界書）
     const STORE_NAME_APP_DATA = 'app_data'; // 🔥 V28：通用 app 資料庫（創作室生的 app 用 st.dbSave/dbLoad；id = appId::scope::key）
+    const STORE_NAME_NPC_MEMORY = 'lobby_npc_memory'; // 🔥 V29：大廳 NPC 一對一長期記憶（id = NPC 對話 key）
 
     let dbInstance = null;
 
@@ -76,7 +77,8 @@
                         STORE_NAME_PHONE_APPS,   // 🔥 V25：手機殼 app 商店
                         STORE_NAME_APP_MEM,      // 🔥 V26：插件通用記憶桶
                         STORE_NAME_TAVERN_SUMMARY, // 🔥 V27：酒館大總結（key=chatId）
-                        STORE_NAME_APP_DATA // 🔥 V28：通用 app 資料庫
+                        STORE_NAME_APP_DATA, // 🔥 V28：通用 app 資料庫
+                        STORE_NAME_NPC_MEMORY // 🔥 V29：大廳 NPC 一對一長期記憶
                     ];
 
                     stores.forEach(name => {
@@ -97,6 +99,46 @@
                     reject(event.target.error);
                 };
             });
+        },
+
+        // ── 🎮 大廳 NPC 一對一長期記憶（V29；id = NPC 對話 key）──────────
+        getNpcMemory: async function(key) {
+            const db = await this.init();
+            return new Promise((resolve) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_NPC_MEMORY, 'readonly');
+                    const req = tx.objectStore(STORE_NAME_NPC_MEMORY).get(key);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => resolve(null);
+                } catch (e) { resolve(null); }
+            });
+        },
+        saveNpcMemory: async function(key, data) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_NPC_MEMORY, 'readwrite');
+                    tx.objectStore(STORE_NAME_NPC_MEMORY).put({
+                        id: key,
+                        name: (data && data.name) || '',
+                        summary: (data && data.summary) || '',
+                        lastCompactAt: (data && data.lastCompactAt) || 0,
+                        updatedAt: Date.now(),
+                    });
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 聚合某輪(cardName+chatId)全部結語成一段，當 guest NPC 的 L1 劇情底
+        getLobbySummaryBriefs: async function(cardName, chatId) {
+            try {
+                const stories = await this.getLobbySummaryForPrompt(8);
+                const st = (stories || []).find(s => s.cardName === cardName && (s.chatId || '') === (chatId || ''));
+                if (!st || !Array.isArray(st.briefs) || !st.briefs.length) return '';
+                // briefs 最新在前 → 反轉成時間順序，逐段串
+                return st.briefs.slice().reverse().map(b => (b && b.brief) || '').filter(Boolean).join('\n');
+            } catch (e) { return ''; }
         },
 
         // --- 🎨 靈感創作室 (Studio) 對話快取 ---
