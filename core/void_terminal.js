@@ -2696,6 +2696,7 @@ ${sections}`;
     // ===== 導出全局介面 =====
     // 暴露到外層，讓其他面板 (如 QB_CORE, IDOL_CORE) 能夠調用
     VoidTerminal.playSequence = playIrisSequence;
+    VoidTerminal.recompactNpcMemory = recompactNpcMemory;   // 大廳 NPC 記憶手動整理（actor menu 呼叫）
 
     VoidTerminal.logout = function() {
         // 登入頁已移除：重新依當前人設同步並刷新大廳
