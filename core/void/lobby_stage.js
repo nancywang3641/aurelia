@@ -15,8 +15,8 @@
         ying:  CDN + 'lobby_ying.png',
         alice: CDN + 'lobby_alice.png',
         cheshire: CDN + 'lobby_cheshire.png',
-        mcF:   CDN + 'lobby_mc_f.png',
-        mcM:   CDN + 'lobby_mc_m.png',
+        mcF:   CDN + 'lobby_mc_f_silhouette.png',   // 通用小人預設=剪影版(Rae定案 2026-07-15)；換裝在裝扮室
+        mcM:   CDN + 'lobby_mc_m_silhouette.png',
         walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖素體(列=下/左/右/上,欄=左步/立/右步)
         yingWalk: CDN + 'lobby_ying_walk_v1.png',       // 瀅瀅豆豆走路圖(Rae出品,官方預設)
         aliceWalk: CDN + 'lobby_alice_walk_v1.png',     // 愛麗絲走路圖
