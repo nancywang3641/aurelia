@@ -2509,6 +2509,8 @@ ${sections}`;
                     userPersona,
                     memorySummary: npcMemSummary,
                     timeCtx: _buildTimeCtx(),
+                    // 愛麗絲=視差看板娘/系統NPC，跟瀅瀅同級可調用大廳組件；書中角色 guest 不給(不該憑空生UI)
+                    lobbyTemplateSec: (npcTarget.key === 'alice') ? lobbyTemplateSec : '',
                 })
                 : VoidPrompts.buildSysPrompt(is404Room ? 'cheshire' : 'iris', {
                 userName: _userNameWithPersona,

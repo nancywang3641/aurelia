@@ -107,16 +107,18 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
     // buildNpcPrompt(npc, ctx) — 書咖舞台的典籍角色對話
     //   npc: { name, storyTitle, persona }  ctx: { userName, timeCtx }
     function buildNpcPrompt(npc, ctx) {
-        const { userName, userPersona, memorySummary, timeCtx } = ctx || {};
+        const { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec } = ctx || {};
         // 對話對象：優先當前酒館 persona（含描述），沒有才退登入名/訪客
         const who = (userPersona && userPersona.name)
             ? (userPersona.name + (userPersona.desc ? '（' + userPersona.desc + '）' : ''))
             : (userName || '訪客');
         // L2 長期記憶：先前在大廳跟這位訪客相處的摘要
         const memBlock = memorySummary ? ('\n\n【你和這位訪客先前的相處記憶】\n' + memorySummary) : '';
+        // 大廳組件（只有愛麗絲等系統NPC會帶進來）：可主動調用大廳面板
+        const lobbySec = lobbyTemplateSec ? ('\n\n' + lobbyTemplateSec) : '';
         // personaFull=完整人設卡（如愛麗絲），直接採用＋補格式段
         if (npc.personaFull) {
-            return npc.personaFull + memBlock + '\n\n【對話對象】\n' + who + '。\n\n' +
+            return npc.personaFull + memBlock + lobbySec + '\n\n【對話對象】\n' + who + '。\n\n' +
 '【對話輸出格式】\n旁白/動作：[Nar|動作描述]\n角色對話：[Char|' + npc.name + '|表情|「對話內容」]\n表情只用：normal/smile/think/surprise/warning/error。\n' +
 (timeCtx || '');
         }
