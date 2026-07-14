@@ -1405,7 +1405,7 @@
         knob.className = 'lstage-joy-knob';
         base.appendChild(knob);
         root.appendChild(base);
-        const R = 34, DEAD = 7;   // R=拉桿半徑；DEAD=死區(px)
+        const R = 46, DEAD = 8;   // R=拉桿半徑；DEAD=死區(px)
         let active = false, cx = 0, cy = 0;
         const setKnob = (x, y) => { knob.style.transform = 'translate(' + x + 'px,' + y + 'px)'; };
         const onDown = (e) => {
