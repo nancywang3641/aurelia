@@ -426,7 +426,7 @@
         menu.querySelector('[data-act="follow"]').addEventListener('click', () => {
             a.follow = !a.follow;
             a.dest = null;   // 清掉漫步目標，交給跟隨邏輯接手
-            if (!a.follow) { a.walking = false; if (a.sheet) { a.frame = 1; a.animT = 0; } }   // 取消跟隨=立定
+            if (!a.follow) { a.walking = false; if (a.sheet) { a.dir = 0; a.frame = 1; a.animT = 0; } }   // 取消跟隨=立定+轉回正面(第1列朝下)
             _closeActorMenu();
         });
         setTimeout(() => document.addEventListener('pointerdown', _menuOutside, { once: true }), 0);
@@ -539,6 +539,27 @@
             '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成立繪」。</div>' +
         '</div>';
     }
+    // 生成預覽：套用前先看圖（棋盤底＝透明處，走路圖看整片3×4對不對齊、腳有沒有被切）
+    function _showGenPreview(dataUrl, kind, h) {
+        const wrap = document.createElement('div');
+        wrap.className = 'lstage-genprev';
+        wrap.innerHTML =
+            '<div class="lgp-box">' +
+                '<div class="lgp-title">' + (kind === 'sheet' ? '走路圖預覽（3×4）' : '立繪預覽') + '</div>' +
+                '<img class="lgp-img" src="' + dataUrl + '">' +
+                '<div class="lgp-hint">' + (kind === 'sheet' ? '看 4 列朝向（下/左/右/上）、每列 3 步是否對齊，腳沒被切再套用' : '看去背乾不乾淨、有沒有缺手缺腳再套用') + '</div>' +
+                '<div class="lgp-btns">' +
+                    '<button class="lep-btn lgp-apply"><i class="fa-solid fa-check"></i> 套用</button>' +
+                    '<button class="lep-btn lgp-retry"><i class="fa-solid fa-rotate"></i> 重新生成</button>' +
+                    '<button class="lep-btn lgp-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>' +
+                '</div>' +
+            '</div>';
+        S.root.appendChild(wrap);
+        const close = () => wrap.remove();
+        wrap.querySelector('.lgp-apply').addEventListener('click', () => { close(); h.apply && h.apply(); });
+        wrap.querySelector('.lgp-retry').addEventListener('click', () => { close(); h.retry && h.retry(); });
+        wrap.querySelector('.lgp-cancel').addEventListener('click', () => { close(); h.cancel && h.cancel(); });
+    }
     function _wireDressGen(box, a) {
         const srcSel = box.querySelector('.lsd-gen-src');
         const pSel = box.querySelector('.lsd-gen-preset');
@@ -589,12 +610,20 @@
                         } catch (e) { throw new Error('圖拿到了但存不下來（轉檔失敗）'); }
                     } else final = imgUrl;
                 }
-                const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-                await idbPut(id, final);
-                _saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
-                _applySkin(a, a.key);
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> 完成！已套用';
-                setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1600);
+                // 先預覽再套用：讓 Rae 檢查去背/網格對不對（走路圖尤其要看 4 列朝向、腳有沒有被切）
+                btn.innerHTML = label; btn.disabled = false;
+                _showGenPreview(final, kind, {
+                    apply: async () => {
+                        const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                        await idbPut(id, final);
+                        _saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
+                        _applySkin(a, a.key);
+                        btn.innerHTML = '<i class="fa-solid fa-check"></i> 已套用';
+                        setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1600);
+                    },
+                    retry: () => doGen(kind, btn),
+                    cancel: () => {},
+                });
             } catch (e) {
                 console.warn('[LobbyStage] 裝扮室生成失敗', e);
                 window.alert('生成失敗：' + (e && e.message || e));
