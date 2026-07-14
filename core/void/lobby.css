@@ -484,6 +484,8 @@
     .lobby-body { flex-direction:column; top:46px; bottom:0; }
     /* 立繪螢幕佔大部分 */
     .lobby-left { flex:1 1 auto; border-right:none; border-bottom:1px solid var(--lb-line); min-height:0; }
+    /* 📱 直立手機：對話框抬離底部（貼底反拇指、又壓到搖桿）→ 落在拇指順手的下三分之一 */
+    .lobby-left .void-dialogue-wrap { bottom:96px; }
     /* 大廳右欄 3 個 main menu 按鈕並排，緊湊小 */
     .lobby-right {
         flex:0 0 auto;
