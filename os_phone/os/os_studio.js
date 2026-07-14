@@ -3567,6 +3567,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         let templates = [], _allVn = [];
         try { _allVn = await db.getAllVNTagTemplates(); templates = _allVn.filter(t => t && t.panelType !== '純應用'); }
         catch (e) { listEl.innerHTML = `<div class="vc-empty">載入失敗：${_sgcEsc(e.message)}</div>`; return; }
+        await _migrateLobbyFlag(_allVn);   // 舊「大廳顯示」開關一次性遷入大廳組
         _vcAllPhoneApps = db.getAllPhoneApps ? ((await db.getAllPhoneApps()) || []) : [];
         const groups = _loadGroups();
         const validIds = new Set(groups.map(g => g.id));
@@ -3911,9 +3912,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 <div class="vc-set-block"><div class="vc-set-blabel">整合</div>
                     <button class="vc-navrow" id="vc-import-st" type="button"><span class="vc-navrow-ico"><i class="fa-solid fa-file-import"></i></span><span class="vc-navrow-label">注入酒館正則</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
                     ${phoneRow}
-                    <div class="vc-set-row"><span class="vc-set-label"><i class="fa-solid fa-house"></i> 大廳顯示</span>
-                        <label class="sgc-switch"><input type="checkbox" class="sgc-switch-input" id="vc-set-lobby"${tpl.lobbyEnabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
-                    </div>
                 </div>
                 <div class="vc-set-block"><div class="vc-set-blabel">進階</div>
                     <button class="vc-navrow" id="vc-raw" type="button"><span class="vc-navrow-ico"><i class="fa-solid fa-code"></i></span><span class="vc-navrow-label">編輯原碼</span><span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span></button>
@@ -3931,7 +3929,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         listEl.querySelector('#vc-import-st').onclick = () => importToSillyTavern(tpl);
         const phoneInput = listEl.querySelector('#vc-set-phone');
         if (phoneInput) phoneInput.onchange = async (e) => { await _vcTogglePhone(tpl, e.target.checked); };
-        listEl.querySelector('#vc-set-lobby').onchange = async (e) => { tpl.lobbyEnabled = e.target.checked; await db.saveVNTagTemplate(tpl); };
         // 注入方式：常駐 ⇄ 關鍵字觸發
         const kwModeChk = listEl.querySelector('#vc-set-kwmode'), kwBox = listEl.querySelector('.vc-kw-box');
         if (kwModeChk) kwModeChk.onchange = async (e) => {
@@ -4082,9 +4079,33 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     //   不綁世界觀自動套，全手動（Rae 拍板）。
     // ════════════════════════════════════════════════════════════════
     const VN_GROUPS_KEY = 'vn_component_groups';
+    const LOBBY_GROUP_ID = 'g_lobby';   // 固定 id 的「大廳」內建組：組件丟進來＝大廳顯示(瀅瀅/愛麗絲可調用)，取代舊的每組件開關
     function _sgcEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-    function _loadGroups() { try { return JSON.parse(localStorage.getItem(VN_GROUPS_KEY) || '[]') || []; } catch (e) { return []; } }
+    function _loadGroups() {
+        let arr;
+        try { arr = JSON.parse(localStorage.getItem(VN_GROUPS_KEY) || '[]') || []; } catch (e) { arr = []; }
+        if (!Array.isArray(arr)) arr = [];
+        if (!arr.some(g => g && g.id === LOBBY_GROUP_ID)) { arr.unshift({ id: LOBBY_GROUP_ID, name: '大廳', builtin: true }); _saveGroups(arr); }   // 內建大廳組永遠在
+        return arr;
+    }
     function _saveGroups(arr) { try { localStorage.setItem(VN_GROUPS_KEY, JSON.stringify(arr || [])); } catch (e) {} }
+    // 一次性遷移：舊「大廳顯示」開關(lobbyEnabled) → 丟進大廳組、清掉舊旗標（之後成員關係為唯一真相）
+    async function _migrateLobbyFlag(tpls) {
+        if (localStorage.getItem('vn_lobby_group_migrated') === '1') return;
+        try {
+            const db = win.OS_DB;
+            const list = tpls || (db && db.getAllVNTagTemplates ? await db.getAllVNTagTemplates() : []);
+            for (const t of (list || [])) {
+                if (t && t.lobbyEnabled) {
+                    const ids = Array.isArray(t.groupIds) ? t.groupIds : [];
+                    if (!ids.includes(LOBBY_GROUP_ID)) ids.push(LOBBY_GROUP_ID);
+                    t.groupIds = ids; t.lobbyEnabled = false;
+                    if (db && db.saveVNTagTemplate) await db.saveVNTagTemplate(t);
+                }
+            }
+            localStorage.setItem('vn_lobby_group_migrated', '1');
+        } catch (e) {}
+    }
     function _newGroupId() { return 'g_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3); }
     function _tplGroupIds(tpl) { return Array.isArray(tpl.groupIds) ? tpl.groupIds : []; }
 
@@ -5207,9 +5228,13 @@ ${d.usageDesc || ''}
         toggleAppLobby: async function (tplId) {
             const tpl = await _getTplById(tplId);
             if (!tpl) return null;
-            tpl.lobbyEnabled = !tpl.lobbyEnabled;
+            _loadGroups();   // 確保大廳組存在
+            const ids = Array.isArray(tpl.groupIds) ? tpl.groupIds.slice() : [];
+            const i = ids.indexOf(LOBBY_GROUP_ID);
+            if (i >= 0) ids.splice(i, 1); else ids.push(LOBBY_GROUP_ID);   // 進大廳組=開；移出=關
+            tpl.groupIds = ids; tpl.lobbyEnabled = false;   // 舊旗標退役，成員關係為準
             try { await win.OS_DB.saveVNTagTemplate(tpl); await syncActiveTagsToLocal(); } catch (e) {}
-            return !!tpl.lobbyEnabled;
+            return ids.includes(LOBBY_GROUP_ID);
         },
         // 給「我的應用」卸載用：共用＝一個東西（VN組件＋app），卸載 app 時連它的 VN 組件模板＋酒館殘留一起清。
         // 只清模板側（app 那側由 app_store 自己刪）→ 卸載＝整個面板消失，不留 VN 組件孤兒。
