@@ -1107,7 +1107,16 @@
                 placeActor(n); placeNpcExtras(n); _npcNearCheck(n);
                 return;
             }
-            if (S.talkTarget === n || n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
+            if (S.talkTarget === n) {   // 💬 對話中：轉頭面向玩家（RPG 感）；走路圖設 dir、單張設 flip
+                n.walking = false;
+                if (S.player) {
+                    const vx = S.player.x - n.x, vy = S.player.y - n.y;
+                    if (n.sheet) { n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0); n.frame = 1; n.animT = 0; }
+                    else if (vx) n.flip = vx > 0;   // 原圖朝左：玩家在右才鏡像
+                }
+                placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return;
+            }
+            if (n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
             n.wanderT -= dt;
             if (n.wanderT <= 0 && !n.dest) {
                 const R = n.homeRect;
