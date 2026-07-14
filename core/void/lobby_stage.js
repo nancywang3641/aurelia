@@ -527,13 +527,16 @@
                 '</select>' +
                 '<select class="lsd-gen-preset">' + opts + '</select>' +
             '</div>' +
-            '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成並套用</button>' +
+            '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成立繪</button>' +
+            '<button class="lep-btn lsd-gen-btn-sheet"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-person-walking"></i> 生成走路圖（3×4）</button>' +
+            '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成立繪」。</div>' +
         '</div>';
     }
     function _wireDressGen(box, a) {
         const srcSel = box.querySelector('.lsd-gen-src');
         const pSel = box.querySelector('.lsd-gen-preset');
         const btn = box.querySelector('.lsd-gen-btn');
+        const btnSheet = box.querySelector('.lsd-gen-btn-sheet');
         if (!srcSel || !pSel || !btn) return;
         const refillPresets = () => { pSel.innerHTML = _dressPresetOpts(srcSel.value); };
         srcSel.addEventListener('change', () => { _dressGenSave({ src: srcSel.value }); refillPresets(); });
@@ -541,7 +544,8 @@
             const key = _dressPresetKey(_dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)]);
             if (key) _dressGenSave(srcSel.value === 'novelai' ? { naiPreset: key } : { comfyPreset: key });
         });
-        btn.addEventListener('click', async () => {
+        // kind='img'→單張立繪(去背+掃碎片+裁切)；kind='sheet'→3×4走路圖(只去背，跳過會毀網格的掃碎片/裁切)
+        const doGen = (kind, btn) => (async () => {
             if (btn.disabled) return;
             const M = _imgMgr();
             if (!M) { window.alert('生圖引擎還沒載入，稍等一下再按。'); return; }
@@ -567,8 +571,8 @@
                     imgUrl = await M.previewComfyPreset(preset, prompt, { packSize: true });   // 尺寸用包裡調的 width/height
                 }
                 if (!imgUrl) throw new Error('接口沒回圖（檢查連線/預設包）');
-                // 不壓縮（畫風交給預設包）：只去背+掃碎片，筆觸原封不動；失敗就用原圖
-                let final = await _pixelify(imgUrl, { noGrid: true });
+                // 不壓縮（畫風交給預設包）：立繪去背+掃碎片+裁切；走路圖只去背（掃碎片/裁切會毀12格網格）
+                let final = await _pixelify(imgUrl, { noGrid: true, sheet: kind === 'sheet' });
                 if (!final) {
                     // blob:/http 網址不能直接進 IDB（重整就死/會失連）→ 轉 dataURL 再存
                     if (/^(blob:|https?:)/i.test(String(imgUrl))) {
@@ -580,7 +584,7 @@
                 }
                 const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
                 await idbPut(id, final);
-                _saveSkin(a.key, { kind: 'img', ref: { idb: id } });
+                _saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
                 _applySkin(a, a.key);
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> 完成！已套用';
                 setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1600);
@@ -589,7 +593,9 @@
                 window.alert('生成失敗：' + (e && e.message || e));
                 btn.innerHTML = label; btn.disabled = false;
             }
-        });
+        })();
+        btn.addEventListener('click', () => doGen('img', btn));
+        if (btnSheet) btnSheet.addEventListener('click', () => doGen('sheet', btnSheet));
     }
 
     // ── 玩家 ─────────────────────────────────────────────
@@ -1502,7 +1508,8 @@
             // 🧹 掃碎片：去背後常剩「飄在主體周圍的雜點/迷你分身」（SDXL 像素圖通病）。
             //   連通塊分析：只留最大塊＋面積≥最大塊25%的大附件；碎屑/旁邊的小複製人全清。
             //   全圖不透明（去背沒發生）＝整張一塊，自然跳過、不誤傷。
-            {
+            //   ⚠️ 走路圖(sheet)必須跳過：3×4的12格各是獨立連通塊，掃碎片會把11格角色當碎屑刪光。
+            if (!(opts && opts.sheet)) {
                 const label = new Int32Array(W * H).fill(-1);
                 const areas = [];
                 const qq = [];
@@ -1533,22 +1540,25 @@
             // ✂️ 收緊透明邊：原圖(如512×728)角色多半只佔中間一塊，去背後大量留白仍撐著畫布，
             //   舞台照畫布高度縮放 → 角色被留白吃掉顯得特別小、腳還會浮空。裁到人物外框，
             //   尺寸才對得上走路圖角色（瀅瀅/玩家塞滿整格）。全不透明(沒去背)＝外框=全圖，自然跳過不誤傷。
-            let minX = W, minY = H, maxX = -1, maxY = -1;
-            for (let y = 0; y < H; y++) {
-                for (let x = 0; x < W; x++) {
-                    if (px[(y * W + x) * 4 + 3] > 0) {
-                        if (x < minX) minX = x;
-                        if (x > maxX) maxX = x;
-                        if (y < minY) minY = y;
-                        if (y > maxY) maxY = y;
+            //   ⚠️ 走路圖(sheet)跳過：整片裁切會打亂3×4的格線對齊。
+            if (!(opts && opts.sheet)) {
+                let minX = W, minY = H, maxX = -1, maxY = -1;
+                for (let y = 0; y < H; y++) {
+                    for (let x = 0; x < W; x++) {
+                        if (px[(y * W + x) * 4 + 3] > 0) {
+                            if (x < minX) minX = x;
+                            if (x > maxX) maxX = x;
+                            if (y < minY) minY = y;
+                            if (y > maxY) maxY = y;
+                        }
                     }
                 }
-            }
-            if (maxX >= minX && maxY >= minY && (maxX - minX + 1 < W || maxY - minY + 1 < H)) {
-                const cw = maxX - minX + 1, ch = maxY - minY + 1;
-                const out = document.createElement('canvas'); out.width = cw; out.height = ch;
-                out.getContext('2d').drawImage(cv, minX, minY, cw, ch, 0, 0, cw, ch);
-                return out.toDataURL('image/png');
+                if (maxX >= minX && maxY >= minY && (maxX - minX + 1 < W || maxY - minY + 1 < H)) {
+                    const cw = maxX - minX + 1, ch = maxY - minY + 1;
+                    const out = document.createElement('canvas'); out.width = cw; out.height = ch;
+                    out.getContext('2d').drawImage(cv, minX, minY, cw, ch, 0, 0, cw, ch);
+                    return out.toDataURL('image/png');
+                }
             }
             return cv.toDataURL('image/png');
         } catch (e) { console.warn('[LobbyStage] _pixelify 失敗', e); return null; }
