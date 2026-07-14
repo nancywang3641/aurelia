@@ -80,6 +80,13 @@
   background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0; }
 .lgp-hint { color:#d8cdb4; font-size:11px; line-height:1.5; text-align:center; max-width:260px; }
 .lgp-btns { display:flex; gap:8px; justify-content:center; }
+/* 走路圖調框器：圖上疊紅格 + 上下左右邊界滑桿 */
+.lgp-sheetwrap { position:relative; align-self:center; line-height:0; }
+.lgp-grid { position:absolute; left:0; top:0; pointer-events:none; }
+.lgp-sliders { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; max-width:280px; }
+.lgp-srow { display:flex; align-items:center; gap:6px; color:#d8cdb4; font-size:11px; }
+.lgp-srow > span { flex:0 0 14px; text-align:center; }
+.lgp-srow input[type=range] { flex:1; min-width:0; accent-color:#c8874a; }
 
 /* ✖ 對話框關閉鈕（舞台模式限定，showDialog 動態掛上）
    設計：仿左側名牌的 chip 樣式、貼框頂右側跟名牌對稱——融進對話框的設計語言，

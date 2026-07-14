@@ -539,15 +539,39 @@
             '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成立繪」。</div>' +
         '</div>';
     }
-    // 生成預覽：套用前先看圖（棋盤底＝透明處，走路圖看整片3×4對不對齊、腳有沒有被切）
+    // 依邊界把原始3×4重切成乾淨等格(消除AI隨機留白/位移)：拿邊界內區域均分3欄4列，各格畫進正規格
+    function _resliceSheet(img, b) {
+        const natW = img.naturalWidth || 1, natH = img.naturalHeight || 1;
+        const gl = b.left * natW, gr = b.right * natW, gt = b.top * natH, gb = b.bottom * natH;
+        const cw = (gr - gl) / 3, ch = (gb - gt) / 4;
+        const ocw = Math.max(1, Math.round(cw)), och = Math.max(1, Math.round(ch));
+        const cv = document.createElement('canvas'); cv.width = ocw * 3; cv.height = och * 4;
+        const ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
+            ctx.drawImage(img, gl + c * cw, gt + r * ch, cw, ch, c * ocw, r * och, ocw, och);
+        }
+        return cv.toDataURL('image/png');
+    }
+    function _lgpSlider(label, key, min, max, val) {
+        return '<label class="lgp-srow"><span>' + label + '</span>' +
+            '<input class="lgp-slider" data-k="' + key + '" type="range" min="' + min + '" max="' + max + '" value="' + val + '" step="0.5"></label>';
+    }
+    // 生成預覽：套用前先看圖。走路圖=可拖邊界的調框器（生成隨機→逐張把紅格對準每格角色含腳，套用時照邊界重切）
     function _showGenPreview(dataUrl, kind, h) {
+        const isSheet = (kind === 'sheet');
         const wrap = document.createElement('div');
         wrap.className = 'lstage-genprev';
         wrap.innerHTML =
             '<div class="lgp-box">' +
-                '<div class="lgp-title">' + (kind === 'sheet' ? '走路圖預覽（3×4）' : '立繪預覽') + '</div>' +
-                '<img class="lgp-img" src="' + dataUrl + '">' +
-                '<div class="lgp-hint">' + (kind === 'sheet' ? '看 4 列朝向（下/左/右/上）、每列 3 步是否對齊，腳沒被切再套用' : '看去背乾不乾淨、有沒有缺手缺腳再套用') + '</div>' +
+                '<div class="lgp-title">' + (isSheet ? '走路圖調框（3×4）' : '立繪預覽') + '</div>' +
+                (isSheet
+                    ? '<div class="lgp-sheetwrap"><img class="lgp-img lgp-sheetimg" src="' + dataUrl + '"><canvas class="lgp-grid"></canvas></div>' +
+                      '<div class="lgp-sliders">' +
+                        _lgpSlider('上', 'top', 0, 40, 0) + _lgpSlider('下', 'bottom', 60, 100, 100) +
+                        _lgpSlider('左', 'left', 0, 40, 0) + _lgpSlider('右', 'right', 60, 100, 100) +
+                      '</div>'
+                    : '<img class="lgp-img" src="' + dataUrl + '">') +
+                '<div class="lgp-hint">' + (isSheet ? '拖滑桿讓紅格剛好框住每格角色（含腳）；生成隨機，逐張微調' : '看去背乾不乾淨、有沒有缺手缺腳再套用') + '</div>' +
                 '<div class="lgp-btns">' +
                     '<button class="lep-btn lgp-apply"><i class="fa-solid fa-check"></i> 套用</button>' +
                     '<button class="lep-btn lgp-retry"><i class="fa-solid fa-rotate"></i> 重新生成</button>' +
@@ -556,7 +580,29 @@
             '</div>';
         S.root.appendChild(wrap);
         const close = () => wrap.remove();
-        wrap.querySelector('.lgp-apply').addEventListener('click', () => { close(); h.apply && h.apply(); });
+        let getFinal = () => dataUrl;   // 立繪：原樣套用
+        if (isSheet) {
+            const img = wrap.querySelector('.lgp-sheetimg');
+            const cvs = wrap.querySelector('.lgp-grid');
+            const sl = {}; wrap.querySelectorAll('.lgp-slider').forEach(s => { sl[s.dataset.k] = s; });
+            const bounds = () => ({ top: +sl.top.value / 100, bottom: +sl.bottom.value / 100, left: +sl.left.value / 100, right: +sl.right.value / 100 });
+            const draw = () => {
+                const b = bounds(), w = img.clientWidth, hh = img.clientHeight;
+                if (!w || !hh) return;
+                cvs.width = w; cvs.height = hh;
+                const ctx = cvs.getContext('2d');
+                ctx.clearRect(0, 0, w, hh);
+                ctx.strokeStyle = 'rgba(255,70,70,.92)'; ctx.lineWidth = 1;
+                const gl = b.left * w, gr = b.right * w, gt = b.top * hh, gb = b.bottom * hh;
+                const cw = (gr - gl) / 3, ch = (gb - gt) / 4;
+                for (let c = 0; c <= 3; c++) { const x = gl + c * cw; ctx.beginPath(); ctx.moveTo(x, gt); ctx.lineTo(x, gb); ctx.stroke(); }
+                for (let r = 0; r <= 4; r++) { const y = gt + r * ch; ctx.beginPath(); ctx.moveTo(gl, y); ctx.lineTo(gr, y); ctx.stroke(); }
+            };
+            wrap.querySelectorAll('.lgp-slider').forEach(s => s.addEventListener('input', draw));
+            if (img.complete) draw(); else img.addEventListener('load', draw);
+            getFinal = () => _resliceSheet(img, bounds());
+        }
+        wrap.querySelector('.lgp-apply').addEventListener('click', async () => { const out = await getFinal(); close(); h.apply && h.apply(out); });
         wrap.querySelector('.lgp-retry').addEventListener('click', () => { close(); h.retry && h.retry(); });
         wrap.querySelector('.lgp-cancel').addEventListener('click', () => { close(); h.cancel && h.cancel(); });
     }
@@ -613,9 +659,10 @@
                 // 先預覽再套用：讓 Rae 檢查去背/網格對不對（走路圖尤其要看 4 列朝向、腳有沒有被切）
                 btn.innerHTML = label; btn.disabled = false;
                 _showGenPreview(final, kind, {
-                    apply: async () => {
+                    apply: async (out) => {
+                        const data = out || final;   // 走路圖=調框重切後的圖；立繪=原圖
                         const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-                        await idbPut(id, final);
+                        await idbPut(id, data);
                         _saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
                         _applySkin(a, a.key);
                         btn.innerHTML = '<i class="fa-solid fa-check"></i> 已套用';
