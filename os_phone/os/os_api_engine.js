@@ -21,11 +21,12 @@
         newTurn:  function () { this.tText = 0; this.tImg = 0; }
     };
 
-    // ── 副模型輸出記錄環形緩衝（DEBUG 面板「副模型」TAB 讀；每次副模型呼叫存 prompt／原始輸出／狀態／耗時）──
+    // ── 副/主模型輸出記錄環形緩衝（DEBUG 面板「副模型」「主模型」TAB 讀；每次呼叫存 prompt／原始輸出／狀態／耗時）──
     win.AURELIA_SEC_LOG = win.AURELIA_SEC_LOG || [];
+    win.AURELIA_MAIN_LOG = win.AURELIA_MAIN_LOG || [];   // 主模型接口(chatMain：導演稿/升格AVS/深度整理…)
     const SEC_LOG_MAX = 60;
     let _secSeq = 0;
-    function _secLogStart(messages) {
+    function _apiLogStart(arr, messages) {
         let prompt = '';
         try {
             const u = (messages || []).filter(m => m && m.role === 'user').pop();
@@ -33,11 +34,12 @@
         } catch (e) {}
         const rec = { id: (++_secSeq), t: Date.now(), ok: null, ms: 0, prompt: prompt, raw: '', err: '' };
         try {
-            win.AURELIA_SEC_LOG.push(rec);
-            while (win.AURELIA_SEC_LOG.length > SEC_LOG_MAX) win.AURELIA_SEC_LOG.shift();
+            arr.push(rec);
+            while (arr.length > SEC_LOG_MAX) arr.shift();
         } catch (e) {}
         return rec;
     }
+    function _secLogStart(messages) { return _apiLogStart(win.AURELIA_SEC_LOG, messages); }
     function _secLogEnd(rec, ok, payload) {
         if (!rec) return;
         rec.ok = !!ok;
@@ -449,6 +451,12 @@
             //    不論從哪個入口（chatSecondary 狀態抽取 / analyzeSceneInserts 場景插圖直呼 chat）都抓得到 ──
             if (config && config._isSecondary) {
                 const _rec = _secLogStart(messages);
+                const _of = onFinish, _oe = onError;
+                onFinish = (text) => { try { _secLogEnd(_rec, true, text); } catch (e) {} if (_of) _of(text); };
+                onError  = (err)  => { try { _secLogEnd(_rec, false, err); } catch (e) {} if (_oe) _oe(err); };
+            } else if (config && config._isSecondary === false) {
+                // 主模型接口（chatMain 明確標記 false：導演稿/升格AVS/深度整理等）→ 記進「主模型」TAB
+                const _rec = _apiLogStart(win.AURELIA_MAIN_LOG, messages);
                 const _of = onFinish, _oe = onError;
                 onFinish = (text) => { try { _secLogEnd(_rec, true, text); } catch (e) {} if (_of) _of(text); };
                 onError  = (err)  => { try { _secLogEnd(_rec, false, err); } catch (e) {} if (_oe) _oe(err); };
