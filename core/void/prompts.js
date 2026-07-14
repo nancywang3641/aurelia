@@ -125,7 +125,27 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 (timeCtx || '');
     }
 
+    // buildNpcMemorySummaryPrompt — 大廳一對一閒聊的專屬總結（絕不套 VN 跑團角色表格式）
+    //   npc: { name }  existingSummary: 既有 L2 摘要  chunkText: 要壓縮的逐字閒聊
+    function buildNpcMemorySummaryPrompt(npc, existingSummary, chunkText) {
+        const name = (npc && npc.name) || '這名角色';
+        return '你是記憶整理器。以下是「' + name + '」與一位訪客在「視差書咖／大廳」的一對一閒聊逐字記錄。\n' +
+'請以「' + name + '」的第一人稱視角，把這段閒聊濃縮成他/她之後會記得的重點。\n\n' +
+'【濃縮維度】\n' +
+'1. 對方是誰、給你的印象。\n' +
+'2. 聊過的主題、對方透露的事。\n' +
+'3. 彼此做過的約定或承諾。\n' +
+'4. 情緒與關係的變化。\n\n' +
+'【規則】\n' +
+'- 只輸出濃縮後的記憶段落，不要旁白、不要角色表、不要條列表格、不要推進任何劇情。\n' +
+'- 用自然的短段落，第一人稱（「我」＝' + name + '）。\n' +
+'- 若這段沒有值得記住的內容，只回一個字：無。\n' +
+(existingSummary ? ('\n【你先前已經記得的（不要重複，只補新的）】\n' + existingSummary + '\n') : '') +
+'\n【這次要濃縮的閒聊記錄】\n' + chunkText;
+    }
+
     VoidPrompts.buildSysPrompt = buildSysPrompt;
     VoidPrompts.buildNpcPrompt = buildNpcPrompt;
+    VoidPrompts.buildNpcMemorySummaryPrompt = buildNpcMemorySummaryPrompt;
     console.log('✅ VoidPrompts（角色提示詞模板）模組就緒');
 })(window.VoidPrompts = window.VoidPrompts || {});
