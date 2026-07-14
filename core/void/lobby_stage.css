@@ -134,6 +134,14 @@
 .lstage-edit-btn { position:absolute; right:10px; top:10px; z-index:3000; width:34px; height:34px;
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-edit-btn:hover { background:rgba(20,18,16,.85); }
+/* 🍔 漢堡：隱藏 MAIN MENU → 舞台全屏（放擺設鈕左邊，成一組角落控制群） */
+.lstage-menu-btn { position:absolute; right:52px; top:10px; z-index:3000; width:34px; height:34px;
+  border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
+.lstage-menu-btn:hover { background:rgba(20,18,16,.85); }
+.lstage-menu-btn.active { background:#4a7ac8; color:#fff; }
+/* 舞台全屏：隱藏右側 MAIN MENU、舞台吃滿（桌機吃寬、手機吃高） */
+.lobby-body.stage-menu-hidden .lobby-right { display:none !important; }
+.lobby-body.stage-menu-hidden .lobby-left { flex:1 1 100% !important; border-right:none !important; border-bottom:none !important; }
 .lstage-editing .lstage-edit-btn { background:#c8874a; color:#fff; }
 .lstage-editable { pointer-events:auto !important; cursor:grab; }
 .lstage-editable:active { cursor:grabbing; }
