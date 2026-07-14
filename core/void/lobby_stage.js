@@ -878,8 +878,7 @@
                 if (n.sheet) n.dir = S.player.x < n.x ? 1 : 2;
                 else n.flip = S.player.x < n.x;
             }
-            if (S.talkTarget === n || n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
-            if (n.follow && S.player) {   // 跟隨玩家：走到身後 GAP 距離就停，共用走路動畫；avoidBlocks 者不穿牆
+            if (n.follow && S.player && S.talkTarget !== n) {   // 跟隨優先於 noWander/漫步（客人本是站定，跟隨要能蓋過）；對話中先停不跟
                 const FOLLOW_GAP = 46;
                 const vx = S.player.x - n.x, vy = S.player.y - n.y, d = Math.hypot(vx, vy);
                 if (d > FOLLOW_GAP) {
@@ -898,6 +897,7 @@
                 placeActor(n); placeNpcExtras(n); _npcNearCheck(n);
                 return;
             }
+            if (S.talkTarget === n || n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
             n.wanderT -= dt;
             if (n.wanderT <= 0 && !n.dest) {
                 const R = n.homeRect;
