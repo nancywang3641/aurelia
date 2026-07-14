@@ -2301,6 +2301,86 @@ ${sections}`;
         return `【時間記錄】距上次對話：${_fmtGap(Date.now() - lastTs)}（上次：${_fmtClock(lastTs)}，僅供參考，自然融入即可）`;
     }
 
+    // ── 🎮 大廳 NPC 一對一長期記憶壓縮 ──────────────────────────────
+    const NPC_MEM_COMPACT_EVERY = 20; // 短期歷史累積到 20 條觸發一次壓縮
+    const NPC_MEM_KEEP_LAST     = 6;  // 壓縮後保留最近 6 條原文餵 L3
+    const _npcCompacting = new Set(); // 並發鎖：同一 NPC key 同時只壓一次
+
+    // 到量→副模型走專屬一對一 prompt 濃縮→疊加 OS_DB→裁短歷史。背景跑、失敗靜默、絕不拋。
+    //   track: 'guest'（localStorage 軌）| 'iris' | 'cheshire'（IRIS_STATE.history 軌）
+    async function _compactNpcMemory(npcKey, npcName, track) {
+        if (_npcCompacting.has(npcKey)) return;
+        _npcCompacting.add(npcKey);
+        try {
+            if (!window.OS_DB || !window.OS_API || !window.VoidPrompts?.buildNpcMemorySummaryPrompt) return;
+            const hist = (track === 'guest') ? window.LobbyStage.getNpcHistory(npcKey) : IRIS_STATE.history;
+            if (!Array.isArray(hist) || hist.length < NPC_MEM_COMPACT_EVERY) return;
+
+            const mem = (await window.OS_DB.getNpcMemory(npcKey)) || { summary: '', lastCompactAt: 0 };
+            // 要壓的區段＝扣掉最近 KEEP_LAST 條的所有舊原文
+            const toCompact = hist.slice(0, Math.max(0, hist.length - NPC_MEM_KEEP_LAST));
+            if (!toCompact.length) return;
+            const chunkText = toCompact.map(m =>
+                (m.role === 'user' ? '訪客: ' : (npcName + ': ')) + String(m.content || '').replace(/\[[^\]]*\]/g, '').trim()
+            ).filter(l => l.length > 4).join('\n');
+            if (!chunkText.trim()) {   // 都是空/標記 → 只裁不壓
+                if (track === 'guest') window.LobbyStage.truncateNpcHistory(npcKey, NPC_MEM_KEEP_LAST);
+                else { IRIS_STATE.history = IRIS_STATE.history.slice(-NPC_MEM_KEEP_LAST); debouncedSave(); }
+                return;
+            }
+
+            const prompt = window.VoidPrompts.buildNpcMemorySummaryPrompt({ name: npcName }, mem.summary || '', chunkText);
+
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+            }
+            config.route = 'iris_chat';
+
+            const seg = await new Promise((resolve, reject) => {
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, {});
+            });
+            let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
+            if (!clean || clean === '無' || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) {
+                return;   // 壞生成不存不裁，下輪再試
+            }
+
+            const merged = (mem.summary ? (mem.summary + '\n\n') : '') + clean;
+            await window.OS_DB.saveNpcMemory(npcKey, { name: npcName, summary: merged, lastCompactAt: NPC_MEM_KEEP_LAST });
+
+            // 存成功才裁短（guest 動 localStorage；iris/cheshire 動 IRIS_STATE + 觸發存檔）
+            if (track === 'guest') {
+                window.LobbyStage.truncateNpcHistory(npcKey, NPC_MEM_KEEP_LAST);
+            } else {
+                IRIS_STATE.history = IRIS_STATE.history.slice(-NPC_MEM_KEEP_LAST);
+                debouncedSave();
+            }
+        } catch (e) { console.warn('[NPC記憶] 壓縮失敗', e); }
+        finally { _npcCompacting.delete(npcKey); }
+    }
+
+    // 手動整理（重壓）：把現有 summary 交副模型合併成更精簡的一段、覆蓋存回
+    async function recompactNpcMemory(npcKey, npcName) {
+        try {
+            const mem = await window.OS_DB?.getNpcMemory?.(npcKey);
+            if (!mem || !mem.summary) { window.toastr?.info?.('這位還沒有可整理的記憶'); return; }
+            const prompt = window.VoidPrompts.buildNpcMemorySummaryPrompt({ name: npcName }, '', mem.summary) +
+                '\n\n（以上是零散的舊記憶，請合併重整成更精簡、不流失重點的一段。）';
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+            }
+            config.route = 'iris_chat';
+            const seg = await new Promise((res, rej) => window.OS_API.chat([{ role: 'system', content: prompt }], config, null, res, rej, {}));
+            const clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
+            if (!clean || clean === '無') { window.toastr?.warning?.('整理失敗，記憶保持原樣'); return; }
+            await window.OS_DB.saveNpcMemory(npcKey, { name: npcName, summary: clean, lastCompactAt: mem.lastCompactAt || 0 });
+            window.toastr?.success?.('記憶已整理');
+        } catch (e) { window.toastr?.warning?.('整理失敗'); }
+    }
+
     async function sendIrisMessage() {
         const input = document.getElementById('iris-input');
         if (!input) return;
