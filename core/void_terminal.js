@@ -1335,10 +1335,18 @@ const IRIS_IDLE = [
             if (histClearBtn) histClearBtn.addEventListener('click', () => {
                 const h = getCharHistory(_historyPanel.char);
                 if (h.length === 0) return;
-                const charName = _historyPanel.char === 'iris' ? '瀅瀅'
+                const _isNpc = _historyPanel.char && _historyPanel.char.indexOf('npc:') === 0;
+                const charName = _isNpc ? (_historyPanel.npcName || '這位')
+                              : _historyPanel.char === 'iris' ? '瀅瀅'
                               : _historyPanel.char === 'claude' ? 'Claude'
                               : '柴郡';
-                showHistoryConfirm(`將清除 ${charName} 的全部 ${h.length} 條紀錄。此操作不可復原。`, 'danger', () => { setCharHistory(_historyPanel.char, []); renderHistoryList(); });
+                const extra = _isNpc ? '（連同長期記憶一起清空＝徹底遺忘）' : '';
+                showHistoryConfirm(`將清除 ${charName} 的全部 ${h.length} 條紀錄。${extra}此操作不可復原。`, 'danger', () => {
+                    setCharHistory(_historyPanel.char, []);
+                    // NPC 清空＝徹底遺忘：連 L2 長期記憶一起清
+                    if (_isNpc) { try { window.OS_DB?.saveNpcMemory?.(_historyPanel.char.slice(4), { name: _historyPanel.npcName || '', summary: '', lastCompactAt: 0 }); } catch (e) {} }
+                    renderHistoryList();
+                });
             });
 
             // ＋ Claude 新會話：建一條新 conv（舊 conv 自動保留在 Recents、非破壞性、不需 confirm）
@@ -1398,6 +1406,9 @@ const IRIS_IDLE = [
     const _historyPanel = { char: null };
 
     function getCharHistory(char) {
+        if (char && char.indexOf('npc:') === 0) {   // 大廳 guest/NPC：讀 localStorage lstage_hist_<key>
+            try { return window.LobbyStage.getNpcHistory(char.slice(4)) || []; } catch (e) { return []; }
+        }
         if (char === 'claude') {
             return isClaudeRoom ? IRIS_STATE.history : _claudeHistoryBackup;
         }
@@ -1411,6 +1422,10 @@ const IRIS_IDLE = [
     }
 
     function setCharHistory(char, newHistory) {
+        if (char && char.indexOf('npc:') === 0) {   // 大廳 guest/NPC：寫回 localStorage lstage_hist_<key>
+            try { window.LobbyStage.setNpcHistory(char.slice(4), newHistory); } catch (e) {}
+            return;
+        }
         if (char === 'claude') {
             if (isClaudeRoom) IRIS_STATE.history       = newHistory;
             else              _claudeHistoryBackup     = newHistory;
@@ -1436,8 +1451,9 @@ const IRIS_IDLE = [
         debouncedSave();
     }
 
-    function openHistoryPanel(char) {
+    function openHistoryPanel(char, npcName) {
         _historyPanel.char = char;
+        _historyPanel.npcName = npcName || '';
         const overlay = document.getElementById('iris-history-overlay');
         if (!overlay) return;
         const badgeEl = document.getElementById('hist-char-badge');
@@ -1448,7 +1464,14 @@ const IRIS_IDLE = [
         const checkAll = document.getElementById('hist-check-all');
         const checkAllLabel = checkAll && checkAll.closest('label');
         const titleEl = document.getElementById('hist-title');
-        if (char === 'iris') {
+        if (char && char.indexOf('npc:') === 0) {
+            if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = _historyPanel.npcName || '角色'; badgeEl.style.color = '#1A1C28'; badgeEl.style.borderColor = 'rgba(26,28,40,0.35)'; badgeEl.style.background = 'rgba(26,28,40,0.10)'; }
+            if (newConvBtn) newConvBtn.style.display = 'none';
+            if (titleEl) titleEl.textContent = (_historyPanel.npcName || '角色') + ' 的對話紀錄';
+            if (delBtn) delBtn.style.display = '';
+            if (clearBtn) clearBtn.style.display = '';
+            if (checkAllLabel) checkAllLabel.style.display = '';
+        } else if (char === 'iris') {
             if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = 'rgba(26,28,40,0.25)'; badgeEl.style.borderColor = 'rgba(26,28,40,0.25)'; badgeEl.style.background = 'rgba(26,28,40,0.10)'; }
             if (newConvBtn) newConvBtn.style.display = 'none';
             if (titleEl) titleEl.textContent = '故事素材紀錄';
@@ -1498,9 +1521,10 @@ const IRIS_IDLE = [
         listEl.innerHTML = '';
         const isCheshire = _historyPanel.char === 'cheshire';
         const isClaude   = _historyPanel.char === 'claude';
+        const isNpc      = _historyPanel.char && _historyPanel.char.indexOf('npc:') === 0;
         history.forEach((msg, index) => {
             const isUser        = msg.role === 'user';
-            const aiName        = isClaude ? 'Claude' : (isCheshire ? '柴郡' : '瀅瀅');
+            const aiName        = isNpc ? (_historyPanel.npcName || '角色') : (isClaude ? 'Claude' : (isCheshire ? '柴郡' : '瀅瀅'));
             const roleLabel     = isUser ? (IRIS_STATE.userName || 'USER') : aiName;
             const safeText      = msg.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
@@ -2381,6 +2405,31 @@ ${sections}`;
         } catch (e) { window.toastr?.warning?.('整理失敗'); }
     }
 
+    // 開聊/切換 NPC 時：清掉殘留(瀅瀅預設或上一位)的對話框文字，改顯示「這位自己的最後一句」(延續感)、沒有就中性提示。
+    function primeStageDialog(npc) {
+        try {
+            if (!npc) return;
+            if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
+            if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
+            if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
+            _hideReactionBox();
+            const nameBox = document.getElementById('iris-name-tag');
+            if (nameBox) { nameBox.style.display = ''; const s = nameBox.querySelector('span'); if (s) s.textContent = npc.name; }
+            const box = document.getElementById('iris-text');
+            if (!box) return;
+            let hist = [];
+            try { hist = (npc.key === 'ying' || npc.key === 'cheshire') ? IRIS_STATE.history : (window.LobbyStage.getNpcHistory(npc.key) || []); } catch (e) {}
+            const last = [...hist].reverse().find(m => m && m.role === 'assistant' && m.content);
+            if (last) {
+                const mm = String(last.content).match(/「([\s\S]*?)」/);
+                const plain = (mm ? mm[1] : String(last.content).replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, '')).trim();
+                box.textContent = plain || ('和' + npc.name + '繼續聊聊…');
+            } else {
+                box.textContent = '（和 ' + npc.name + ' 說點什麼吧…）';
+            }
+        } catch (e) {}
+    }
+
     async function sendIrisMessage() {
         const input = document.getElementById('iris-input');
         if (!input) return;
@@ -2704,6 +2753,8 @@ ${sections}`;
     // 暴露到外層，讓其他面板 (如 QB_CORE, IDOL_CORE) 能夠調用
     VoidTerminal.playSequence = playIrisSequence;
     VoidTerminal.recompactNpcMemory = recompactNpcMemory;   // 大廳 NPC 記憶手動整理（actor menu 呼叫）
+    VoidTerminal.primeStageDialog = primeStageDialog;       // 開聊/切換 NPC 清殘留對話框（lobby_stage 呼叫）
+    VoidTerminal.openHistoryPanel = openHistoryPanel;       // 開某 NPC 的對話紀錄窗（actor menu 呼叫，char='npc:'+key）
 
     VoidTerminal.logout = function() {
         // 登入頁已移除：重新依當前人設同步並刷新大廳

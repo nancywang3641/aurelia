@@ -419,9 +419,10 @@
         menu.innerHTML = '<div class="lam-title">' + (a.name || '角色') + '</div>' +
             '<button class="lam-item" data-act="dress"><i class="fa-solid fa-shirt"></i> 裝扮室</button>' +
             (isPlayer ? '' : '<button class="lam-item" data-act="follow"><i class="fa-solid fa-person-walking-arrow-right"></i> ' + (a.follow ? '取消跟隨' : '跟隨我') + '</button>') +
+            (isPlayer ? '' : '<button class="lam-item" data-act="history"><i class="fa-solid fa-comment-dots"></i> 對話紀錄</button>') +
             (isPlayer ? '' : '<button class="lam-item" data-act="recompact"><i class="fa-solid fa-brain"></i> 整理記憶</button>');
         menu.style.left = Math.max(6, Math.min(cx - rr.left, rr.width - 150)) + 'px';
-        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - (isPlayer ? 90 : 158))) + 'px';
+        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - (isPlayer ? 90 : 192))) + 'px';
         S.root.appendChild(menu);
         S.menuEl = menu;
         menu.querySelector('[data-act="dress"]').addEventListener('click', () => { _closeActorMenu(); _openDressRoom(a); });
@@ -432,6 +433,10 @@
             if (a.follow) S.followers.push(a);   // 加到隊尾：越晚跟的排越後面（串成一列不重疊）
             else { a.walking = false; if (a.sheet) { a.dir = 0; a.frame = 1; a.animT = 0; } }   // 取消跟隨=立定+轉回正面(第1列朝下)
             _closeActorMenu();
+        });
+        menu.querySelector('[data-act="history"]')?.addEventListener('click', () => {
+            _closeActorMenu();
+            window.VoidTerminal?.openHistoryPanel?.('npc:' + a.key, a.name);
         });
         menu.querySelector('[data-act="recompact"]')?.addEventListener('click', () => {
             _closeActorMenu();
@@ -1080,6 +1085,10 @@
             localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr));
         } catch (e) {}
     }
+    // 覆寫整條歷史（歷史窗編輯/刪除/回退用）
+    function setNpcHistory(key, arr) {
+        try { localStorage.setItem('lstage_hist_' + key, JSON.stringify(Array.isArray(arr) ? arr : [])); } catch (e) {}
+    }
     // 壓縮後裁短：只留最近 keepLast 條，回傳被裁掉的舊訊息（供組 chunk）
     function truncateNpcHistory(key, keepLast) {
         try {
@@ -1156,6 +1165,7 @@
         if (tagSpan) tagSpan.textContent = npc.name;
         if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
         showDialog();
+        window.VoidTerminal?.primeStageDialog?.(npc);   // 清掉殘留(瀅瀅預設/上一位)、改顯示這位自己的最後一句
     }
     function endTalk() {
         if (!S.talkTarget) return;
@@ -1938,6 +1948,7 @@
         pushNpcHistory,
         popNpcHistoryTail,
         truncateNpcHistory,
+        setNpcHistory,
         rollGuestPool: _journalGuestPool,   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個）
         pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
         openDressRoom: _openDressRoom,      // console 診斷用：直接開某個角色的裝扮室（傳 _S.npcs 裡的物件）
