@@ -841,7 +841,7 @@
                 const re = /\[Char\|([^|\]]{1,20})\|/g; let m;
                 while ((m = re.exec(text))) {
                     const name = m[1].trim();
-                    if (!name || name === '瀅瀅' || name === '柴郡') continue;
+                    if (name === '瀅瀅' || name === '柴郡' || _isMcName(name, null)) continue;   // 排除店員+MC本人(墊底路徑無紀錄→靠通用標記)
                     const rec = byName.get(name) || { name, count: 0, storyId: ch.storyId || '', storyTitle: ch.storyTitle || '' };
                     rec.count++; byName.set(name, rec);
                 }
@@ -891,6 +891,22 @@
             : ['姓名', '身份', '性格', '狀態 / 位置', '特徵', '與主角關係', '備註'];
         return cells.map((v, i) => ({ label: String(labels[i] || ('欄' + (i + 1))).trim(), value: v }));
     }
+    // 判定角色表某 row 是不是 MC/主角本人 → 抽 guest NPC 要排除（否則在大廳跟自己對話）
+    //   依據：通用標記 + 那輪紀錄的 protagonist / personaName（含「名_姓」正規化比對）
+    const _MC_MARKERS = new Set(['主角', 'MC', 'mc', 'Mc', 'You', 'you', 'YOU', 'Self', 'self', '我', '{{user}}', 'User', 'user']);
+    function _isMcName(rawName, st) {
+        const n = String(rawName || '').trim();
+        if (!n) return true;
+        if (_MC_MARKERS.has(n)) return true;
+        const disp = _npcDisplayName(n);
+        const cands = [st && st.protagonist, st && st.personaName].filter(Boolean);
+        for (const c of cands) {
+            const cc = String(c).trim();
+            if (!cc) continue;
+            if (n === cc || disp === cc || disp === _npcDisplayName(cc) || n === _npcDisplayName(cc)) return true;
+        }
+        return false;
+    }
     async function _journalGuestPool() {
         const OS_DB = window.OS_DB || (window.parent || window).OS_DB;
         if (!OS_DB?.getLobbySummaryForPrompt) return [];
@@ -912,7 +928,7 @@
                 : '';
             for (const c of st.characters) {
                 const rawName = String(c.name || '').trim();
-                if (!rawName || rawName === '瀅瀅' || rawName === '柴郡') continue;
+                if (rawName === '瀅瀅' || rawName === '柴郡' || _isMcName(rawName, st)) continue;   // 排除店員+MC本人
                 pool.push({
                     rawName, name: _npcDisplayName(rawName),
                     row: c.row || '', charHeader: st.charHeader || '',
