@@ -235,14 +235,14 @@
         const patchesCount = data?.patches ? Object.keys(data.patches).length : 0;
         const runtimeOn = localStorage.getItem('aurelia_state_runtime_enabled') === '1';
 
-        // 🔗 整合頁去重複：沒建檔時只顯示上方「開始追蹤」引導、藏掉下方「我的檔案」區（兩個建檔入口擇一）；建檔後才顯示檔案管理
-        // 🚨「我的檔案」(#avs-view-packs)只在第一層(home)瀏覽頁露出，且需「狀態檔案」tab 真的可見：
-        //    ① 進第二層(目前狀態/進階操作頁)就收起檔案卡，兩層才乾淨。
-        //    ② 背景事件(抽取/生成/開關 → hooks 呼叫 _build)在記憶 tab 觸發時，別硬把檔案卡塞進記憶 tab。
+        // 🔗「我的檔案」(#avs-view-packs)收進「進階 → 追蹤欄位」第二層，別掛在瀏覽頁/目前狀態頁上礙眼。
+        //    條件三重鎖：① hasSchema(有建檔才有檔案可管) ② #avs-view-state.active(狀態檔案 tab 真的可見，
+        //    否則背景事件在記憶 tab 觸發 _build 會把檔案卡塞進記憶 tab) ③ 正在看進階的追蹤欄位子分頁。
         try {
             const _pv = document.querySelector('#avs-view-packs');
             const _stateActive = !!document.querySelector('#avs-view-state')?.classList.contains('active');
-            if (_pv) _pv.classList.toggle('active', !!hasSchema && _stateActive && _page === 'home');
+            const _showPacks = !!hasSchema && _stateActive && _page === 'adv' && _advTab === 'fields';
+            if (_pv) _pv.classList.toggle('active', _showPacks);
         } catch (e) {}
 
         const storyHtml = `<div class="avs-card avs-st-story">
@@ -405,7 +405,7 @@
                 <div class="avs-st-toggle${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' on' : ''}" id="avs-st-director-toggle" role="switch"></div>
             </div>
             <div class="avs-card avs-st-director-tools${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' is-visible' : ''}" id="avs-st-director-tools">
-                <div class="avs-st-btn-grid">
+                <div class="avs-st-btn-grid col1">
                     <button class="avs-btn avs-btn-outline" id="avs-st-director-view">📜 查看／編輯導演稿</button>
                     <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿">🎬 立刻產一份</button>
                 </div>
@@ -431,7 +431,7 @@
                 <span class="avs-st-nav-chev">›</span>
             </button>
             <button class="avs-st-nav" id="avs-st-nav-adv">
-                <span class="avs-st-nav-txt">⚙️ 進階：追蹤設定與資料管理<span class="avs-st-nav-sub">追蹤欄位、抽取、還原、跨世界</span></span>
+                <span class="avs-st-nav-txt">⚙️ 進階：追蹤設定與資料管理<span class="avs-st-nav-sub">追蹤欄位、我的檔案、抽取、還原、跨世界</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
         </div>`;
