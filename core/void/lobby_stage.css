@@ -27,6 +27,8 @@
 .lstage-joy-knob { position:absolute; left:50%; top:50%; width:58px; height:58px; margin:-29px 0 0 -29px;
   border-radius:50%; background:rgba(243,234,216,.72); box-shadow:0 2px 8px rgba(0,0,0,.45);
   pointer-events:none; will-change:transform; }
+/* 對話開著時收起搖桿：對話中本來就不能走，且避免跟對話框在底部相撞 */
+.lobby-left:not(.lstage-dlg-hidden) .lstage-joy { display:none; }
 /* 舞台模式：藏原立繪與簽名，對話框保持最上層 */
 .lobby-left.lstage-on #iris-avatar, .lobby-left.lstage-on .lb-signature { display:none !important; }
 .lobby-left.lstage-on .void-dialogue-wrap { z-index:5; pointer-events:none; }
