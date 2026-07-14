@@ -1044,7 +1044,8 @@
         n.hint.style.display = (near && !S.talkTarget) ? '' : 'none';
     }
 
-    // ── NPC 各自的輕量對話歷史（localStorage，上限 20 條）──
+    // ── NPC 各自的輕量對話歷史（localStorage，上限 40 條）──
+    //   cap 提到 40：給一對一記憶壓縮留 headroom（累積到閾值才壓，壓縮失敗時不會立刻擠掉未總結的舊訊息）
     function getNpcHistory(key) {
         try { return JSON.parse(localStorage.getItem('lstage_hist_' + key) || '[]'); } catch (e) { return []; }
     }
@@ -1052,9 +1053,19 @@
         try {
             const arr = getNpcHistory(key);
             arr.push(msg);
-            while (arr.length > 20) arr.shift();
+            while (arr.length > 40) arr.shift();
             localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr));
         } catch (e) {}
+    }
+    // 壓縮後裁短：只留最近 keepLast 條，回傳被裁掉的舊訊息（供組 chunk）
+    function truncateNpcHistory(key, keepLast) {
+        try {
+            const arr = getNpcHistory(key);
+            if (arr.length <= keepLast) return [];
+            const dropped = arr.slice(0, arr.length - keepLast);
+            localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr.slice(-keepLast)));
+            return dropped;
+        } catch (e) { return []; }
     }
     function popNpcHistoryTail(key, role) {
         try {
@@ -1903,6 +1914,7 @@
         getNpcHistory,
         pushNpcHistory,
         popNpcHistoryTail,
+        truncateNpcHistory,
         rollGuestPool: _journalGuestPool,   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個）
         pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
         openDressRoom: _openDressRoom,      // console 診斷用：直接開某個角色的裝扮室（傳 _S.npcs 裡的物件）
