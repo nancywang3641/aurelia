@@ -824,7 +824,7 @@ ${numberedText}`;
     async function extractOnce(opts) {
         if (_running) return;
         _running = true;
-        let pendingMem = null, memIngested = false, _dedupe = null;
+        let pendingMem = null, memIngested = false, _dedupe = null, _dirRide = false;
         try {
             if (_genStopped) { console.log('🛰️ [State Runtime] 本通生成被手動停止 → 跳過抽取(AVS/記憶)'); return; }
             const chatId = getChatId();
@@ -947,6 +947,18 @@ ${numberedText}`;
                 }
             } catch (e) {}
 
+            // 🎬 導演稿搭便車（Rae：主接口沒必要一輪打兩通）：導演開著→六格稿掛同一通、JSON 之後輸出，
+            //    省一整段思考期＋重複上下文；沒搭上（模型漏寫/整通失敗）→ 降級回獨立 extractDirector 補一通。
+            try {
+                if (directorOn() && typeof win.OS_API?.chatMain === 'function'
+                    && !(data.director && data.director.patches && data.director.patches[lastId] !== undefined)) {
+                    const _dirPrev = _latestDirectorText(data.director, lastId);
+                    prompt += _directorAddendum(_dirPrev, _activeCastNames());
+                    _dirRide = true;
+                    _directorHandledThisRound = true;   // 攔下 2.7s 後那顆獨立呼叫的排程
+                }
+            } catch (e) {}
+
             const json = await runWithRetry(prompt);
             // 存本輪抽取(原始輸出+memories)，狀態部分等下面算完 filtered/current 再補上 → 給狀態面板診斷/複製
             _lastExtract = { at: Date.now(), msgId: lastId, raw: _lastRawText, updates: null, memories: Array.isArray(json.memories) ? json.memories : null, current: null };
@@ -1041,12 +1053,29 @@ ${numberedText}`;
                     console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
                 } catch(e) { console.warn('[State Runtime] 場景插圖派發失敗:', e?.message || e); }
             }
+
+            // 🎬 便車稿落地：從同一通原始輸出抓《導演稿開始/結束》（容繁簡）；缺失/不合格 → 降級獨立補一通
+            if (_dirRide) {
+                try {
+                    const _noCot = String(_lastRawText || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                    const _dm = _noCot.match(/《[導导]演稿[開开]始》([\s\S]*?)《[導导]演稿[結结]束》/);
+                    const _dClean = _dm ? _dm[1].trim() : '';
+                    if (_dClean && /【公共[劇剧]情】/.test(_dClean)) {
+                        await _saveDirectorPatch(chatId, lastId, _dClean);
+                    } else {
+                        console.warn('🎬 [Director] 便車稿缺失/不合格 → 降級獨立補一通');
+                        extractDirector();
+                    }
+                } catch (e) {}
+            }
         } catch(e) {
             console.warn('[State Runtime] 抽取失敗:', e?.message || e);
             // 整通失敗也別漏記憶：有 pending 就讓引擎自己補抽一通
             if (pendingMem && !memIngested && win.OS_VECTOR_ENGINE?.isEnabled?.()) {
                 try { win.OS_VECTOR_ENGINE.ingest(pendingMem.content, pendingMem.storyId, pendingMem.chapterId); } catch(_) {}
             }
+            // 🎬 便車稿跟著整通陪葬 → 降級獨立補一通（extractDirector 自己有同樓去重）
+            if (_dirRide) { try { extractDirector(); } catch (_) {} }
         } finally {
             _running = false;
         }
@@ -1143,6 +1172,7 @@ ${numberedText}`;
     let _directorRunning = false;
     let _directorDebounce = null;
     let _lastDirectorUninject = null;
+    let _directorHandledThisRound = false;   // 本輪導演稿已由「抽取便車」接手 → 攔下獨立呼叫排程（省一通）
     const DIRECTOR_INJECT_ID = 'aurelia_director_brief';
     const DIRECTOR_MAX_PATCHES = 40;
 
@@ -1155,11 +1185,10 @@ ${numberedText}`;
         return ids.length ? String(patches[ids[ids.length - 1]] || '') : '';
     }
 
-    function _buildDirectorInstruction(castNames) {
+    // 六格格式＋規範（共用：獨立呼叫的 system ／ 搭便車的附加任務，規則一字不差）
+    function _directorSpec(castNames) {
         const cast = castNames && castNames.length ? castNames.join('、') : '（依素材自行判定）';
-        return '[系統指令：劇情監製]\n' +
-'你是本作品的劇情監製（導演）。讀完素材後，輸出一份最新版「導演稿」；只輸出導演稿本體，不要其他文字、不要 markdown 包裹。\n\n' +
-'【格式】六類區塊，標題行用【】固定；「角色」區塊按實際有戲份的角色各開一份（目前在場：' + cast + '）：\n' +
+        return '【格式】六類區塊，標題行用【】固定；「角色」區塊按實際有戲份的角色各開一份（目前在場：' + cast + '）：\n' +
 '【公共劇情】所有角色都知道、或場景中已明示的事（條列 3-6 條）\n' +
 '【<角色名>私人記憶】只有該角色知道的事；只寫該角色的主觀認知，不得寫成旁白真相；每位角色一個區塊\n' +
 '【<角色名>行動摘要】該角色最近做了什麼、說了什麼、隱瞞了什麼、誤會了什麼；每位角色一個區塊\n' +
@@ -1174,6 +1203,34 @@ ${numberedText}`;
 '- 張力是選項不是任務：不得製造「必須熬夜／帶傷硬撐／一刻不停」的壓迫感；角色的傷勢與疲勞是硬約束，優先於任何推進\n' +
 '- 玩家（USER）不開私人記憶區塊\n' +
 '- 只整理素材裡有的事實，不編造、不預告未來劇情';
+    }
+    // 獨立呼叫版 system（備援路／手動「立刻產一份」用）
+    function _buildDirectorInstruction(castNames) {
+        return '[系統指令：劇情監製]\n' +
+'你是本作品的劇情監製（導演）。讀完素材後，輸出一份最新版「導演稿」；只輸出導演稿本體，不要其他文字、不要 markdown 包裹。\n\n' +
+_directorSpec(castNames);
+    }
+    // 🎬 搭便車版（Rae：主接口沒必要一輪打兩通）：掛在 AVS 抽取同一通的 prompt 尾端，
+    //    JSON 之後另附《導演稿開始/結束》包住的稿——省一整段思考期＋重複上下文。
+    function _directorAddendum(prev, castNames) {
+        return '\n\n═══ 額外任務：導演稿（跟上面的 JSON「都要」輸出）═══\n' +
+'你同時兼任本作品的劇情監製。輸出完上面要求的 ```json 程式碼區塊後，另起一行，' +
+'輸出一份最新版導演稿，用《導演稿開始》和《導演稿結束》兩行包住（除此之外不要其他文字）。\n\n' +
+'【上一版導演稿】\n' + (prev || '（無，這是第一版）') + '\n\n' +
+_directorSpec(castNames);
+    }
+    // 寫 patch（cap 最舊）；便車路/獨立路共用。回 true=有寫入
+    async function _saveDirectorPatch(chatId, lastId, clean) {
+        const fresh = (await win.OS_DB.getStateData(chatId)) || {};   // 重讀防蓋掉期間別人寫入
+        const dir2 = fresh.director || { patches: {} };
+        const patches = { ...(dir2.patches || {}) };
+        patches[lastId] = clean;
+        const ids = Object.keys(patches).map(Number).sort((a, b) => a - b);
+        while (ids.length > DIRECTOR_MAX_PATCHES) { delete patches[ids.shift()]; }
+        await win.OS_DB.saveStateData(chatId, { ...fresh, director: { patches, updatedAt: Date.now() } });
+        console.log('🎬 [Director] 導演稿已更新 msg#' + lastId + '（' + clean.length + ' 字）');
+        try { win.eventEmit?.('AURELIA_DIRECTOR_UPDATED', { chatId, msgId: lastId }); } catch (e) {}
+        return true;
     }
 
     async function extractDirector() {
@@ -1232,16 +1289,7 @@ ${numberedText}`;
             let clean = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').trim();
             // 驗收容繁簡：卡片是簡體時模型會跟著寫「剧情/记忆」——別把好稿當廢稿丟（Rae 踩過：兩份稿全被逐字比對錯殺）
             if (!clean || !/【公共[劇剧]情】/.test(clean)) { console.warn('🎬 [Director] 回稿沒有【公共劇情】區塊 → 丟棄不存'); return; }
-            // 寫 patch（cap 最舊）
-            const fresh = (await win.OS_DB.getStateData(chatId)) || {};   // 重讀防蓋掉期間別人寫入
-            const dir2 = fresh.director || { patches: {} };
-            const patches = { ...(dir2.patches || {}) };
-            patches[lastId] = clean;
-            const ids = Object.keys(patches).map(Number).sort((a, b) => a - b);
-            while (ids.length > DIRECTOR_MAX_PATCHES) { delete patches[ids.shift()]; }
-            await win.OS_DB.saveStateData(chatId, { ...fresh, director: { patches, updatedAt: Date.now() } });
-            console.log('🎬 [Director] 導演稿已更新 msg#' + lastId + '（' + clean.length + ' 字）');
-            try { win.eventEmit?.('AURELIA_DIRECTOR_UPDATED', { chatId, msgId: lastId }); } catch (e) {}
+            await _saveDirectorPatch(chatId, lastId, clean);
         } catch (e) {
             console.warn('🎬 [Director] 產稿失敗:', e?.message || e);
         } finally {
@@ -1735,9 +1783,11 @@ ${numberedText}`;
             // 開頭設置補救(Bg/BGM)：獨立於狀態系統，狀態關著也修 → 排在 isEnabled gate 前；自己看 vn_fix_opening 開關
             clearTimeout(_repairDebounce);
             _repairDebounce = setTimeout(() => { if (!_genStopped && !win.__AURELIA_SUMMARIZING) _repairOpeningSettings(); }, CONFIG.debounceMs + 900);
-            // 🎬 導演稿：獨立於狀態系統(AVS 關著也能跑)→ 排在 isEnabled gate 前；函式自己看 sp_director_on
+            // 🎬 導演稿：獨立於狀態系統(AVS 關著也能跑)→ 排在 isEnabled gate 前；函式自己看 sp_director_on。
+            //    AVS 抽取有跑且搭了便車（_directorHandledThisRound）→ 這顆獨立呼叫讓路，主接口一輪只打一通
             clearTimeout(_directorDebounce);
-            _directorDebounce = setTimeout(extractDirector, CONFIG.debounceMs + 1200);
+            _directorHandledThisRound = false;
+            _directorDebounce = setTimeout(() => { if (!_directorHandledThisRound) extractDirector(); }, CONFIG.debounceMs + 1200);
             if (!isEnabled()) return;
             clearTimeout(_debounceTimer);
             _debounceTimer = setTimeout(extractOnce, CONFIG.debounceMs);
