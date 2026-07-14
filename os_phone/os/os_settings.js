@@ -36,6 +36,7 @@
             usePresetPrompts: false, presetName: '', customCot: '', customCotMap: {}
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
+        config._isSecondary = false;   // 源頭貼標：走主模型連線 → DEBUG 面板歸「主模型」類（全新物件，不共用）
         return config;
     }
 
@@ -52,6 +53,7 @@
             usePresetPrompts: false, presetName: '', customCot: ''
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
+        config._isSecondary = true;   // 源頭貼標：走副模型連線 → DEBUG 面板歸「副模型」類（全新物件，不共用）
         return config;
     }
 
