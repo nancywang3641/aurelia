@@ -196,3 +196,69 @@
         .avs-mem-move { display: flex; gap: 8px; align-items: center; }
         .avs-mem-move .avs-input { flex: 1; min-width: 0; }
         .avs-mem-move .avs-btn { flex: 0 0 auto; padding: 8px 14px; font-size: 12px; white-space: nowrap; }
+
+        /* ===== 狀態面板：一般使用者優先的閱讀與操作層級 ===== */
+        .avs-st { gap: 16px; padding-bottom: 8px; }
+        .avs-st > .avs-st-story { order: 1; }
+        .avs-st > .avs-card:has(#avs-st-toggle) { order: 2; }
+        .avs-st > #avs-st-cur-btn { order: 3; }
+        .avs-st > #avs-st-cur { order: 4; }
+        .avs-st > #avs-st-adv-btn { order: 5; }
+        .avs-st > #avs-st-adv { order: 6; }
+        .avs-st > .avs-card:has(#avs-st-director-toggle) { order: 7; }
+        .avs-st > #avs-st-director-tools { order: 8; }
+        .avs-st-story { padding: 16px 18px; border-left: 4px solid #c8a030; }
+        .avs-st-story-label { margin-bottom: 6px; letter-spacing: .04em; }
+        .avs-st-story-name { font-size: 16px; line-height: 1.45; }
+
+        /* 開關是「是否自動記錄」的主要控制，不和其他按鈕混在一起。 */
+        .avs-st-toggle-row { min-height: 58px; padding: 16px 18px; border-radius: 12px; }
+        .avs-st-toggle-name { font-size: 15px; }
+        .avs-st-toggle-desc { max-width: 38em; font-size: 12px; line-height: 1.65; }
+        .avs-st-toggle { box-shadow: inset 0 0 0 1px rgba(26,28,40,.08); }
+
+        /* 目前狀態預設可見；標題與手動修正操作保持在同一個清楚的工具列。 */
+        .avs-st-cur-editbar { justify-content: flex-end; padding: 12px 14px; margin: 0; background: rgba(26,28,40,.045); border: 1px solid rgba(26,28,40,.12); border-radius: 10px 10px 0 0; }
+        .avs-st-editbar-hint { flex: 1; min-width: 120px; }
+        .avs-st-current-body { gap: 12px; padding: 12px; background: rgba(228,232,245,.48); border: 1px solid rgba(26,28,40,.12); border-top: 0; border-radius: 0 0 10px 10px; }
+        .avs-st-current-body .avs-st-empty { margin: 0; }
+        .avs-st-section { border-radius: 10px; box-shadow: 0 1px 2px rgba(26,28,40,.04); }
+        .avs-st-section-hd { padding: 12px 14px; font-size: 13.5px; }
+        .avs-st-section-body { padding: 12px 14px; }
+        .avs-st-row { gap: 16px; padding: 6px 0; }
+        .avs-st-row-k { line-height: 1.45; }
+        .avs-st-row-v { line-height: 1.45; }
+
+        /* 進階功能改成有明確邊界的工作區，不再像一整片按鈕牆。 */
+        .avs-st-adv-btn { padding: 14px 16px; font-size: 14px; color: #1A1C28; background: rgba(228,232,245,.92); }
+        .avs-st-adv { gap: 12px; padding: 2px 0; }
+        .avs-st-adv-sec { gap: 10px; padding: 14px; background: rgba(228,232,245,.62); border: 1px solid rgba(26,28,40,.11); border-radius: 10px; }
+        .avs-st-adv-hd { font-size: 13px; color: #1A1C28; }
+        .avs-st-adv-hint { display: block; margin: 4px 0 0; line-height: 1.55; }
+        .avs-st-btn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .avs-st-btn-grid .avs-btn { width: 100%; min-width: 0; min-height: 42px; padding: 9px 10px; line-height: 1.35; }
+        .avs-st-initpack { align-items: stretch; padding-top: 2px; }
+        .avs-st-initpack .avs-btn { min-width: 68px; }
+        .avs-st-wide { min-height: 42px; text-align: left; justify-content: flex-start; }
+        .avs-st-field { padding: 10px 12px; }
+        .avs-st-field-add { padding: 11px; }
+
+        /* 導演模式屬於創作輔助：關閉時完全不佔畫面，展開編輯器時才出現。 */
+        .avs-st-director-tools { display: none; }
+        .avs-st-director-tools.is-visible { display: block; }
+        .avs-st-director-editor { display: none; margin-top: 12px; }
+        .avs-st-director-editor.open { display: block; }
+        .avs-st-director-text { min-height: 220px; }
+        .avs-st-director-actions { margin-top: 8px; }
+
+        @media (max-width: 460px) {
+            .avs-st { gap: 14px; }
+            .avs-st-toggle-row { align-items: flex-start; }
+            .avs-st-toggle { margin-top: 5px; }
+            .avs-st-cur-editbar { align-items: flex-start; flex-wrap: wrap; }
+            .avs-st-btn-grid { grid-template-columns: 1fr; }
+            .avs-st-initpack { flex-direction: column; }
+            .avs-st-initpack .avs-btn { width: 100%; }
+            .avs-st-row { align-items: flex-start; flex-direction: column; gap: 2px; }
+            .avs-st-row-v { text-align: left; }
+        }
