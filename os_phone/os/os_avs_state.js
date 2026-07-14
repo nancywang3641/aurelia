@@ -27,8 +27,8 @@
     let _host = null;
     let _packs = [];
     let _editingFieldName = null; // null / 欄位名 / '__new__'
-    let _advOpen = false;
-    let _curOpen = true;    // 目前狀態是面板核心，預設直接展示
+    let _page = 'home';     // 兩層換頁：'home'(瀏覽) → 'current'(目前狀態) / 'adv'(進階) 操作頁
+    let _advTab = 'fields';  // 進階第二層子分頁：'fields'(追蹤欄位) / 'extract'(抽取)
     let _editingValues = false;   // 「✏️ 改數值」模式：把目前狀態的每個值變成可填的小格子（非 JSON），手動修正 AI 填錯
 
     // ── 人話版狀態渲染 ───────────────────────────────────────────
@@ -312,12 +312,83 @@
             return;
         }
 
+        // 「複製狀態數據」小按鈕：搬進「目前狀態」操作頁
+        const copyBtnHtml = `<button class="avs-btn avs-btn-outline avs-st-sm" id="avs-st-copy-diag">🔬 複製狀態數據</button>`;
+
+        // ── 第二層：📊 目前狀態 操作頁 ──────────────────────────────
+        if (_page === 'current') {
+            _host.innerHTML = `<div class="avs-st avs-st-l2">
+                <div class="avs-st-l2hd">
+                    <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
+                    <div class="avs-st-l2title">📊 目前狀態</div>
+                </div>
+                <div class="avs-st-cur-editbar">
+                    ${copyBtnHtml}
+                    <div class="avs-st-editbar-r">
+                        ${_editingValues
+                            ? `<button class="avs-btn avs-btn-primary avs-st-fe-btn" id="avs-st-val-save">💾 儲存</button><button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-cancel">取消</button>`
+                            : `<button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-edit">✏️ 改數值</button><span class="avs-st-editbar-hint">AI 偶爾填錯？點這手動改</span>`}
+                    </div>
+                </div>
+                <div class="avs-st-current-body">${_editingValues ? _humanizeEditable(cur) : _humanize(cur)}</div>
+            </div>`;
+            _bind(stateKey, snapCount);
+            return;
+        }
+
+        // ── 第二層：⚙️ 進階 操作頁（子分頁：追蹤欄位 / 抽取）─────────
+        if (_page === 'adv') {
+            const fieldsTab = `
+                <div class="avs-st-adv-sec">
+                    <div class="avs-st-adv-hd">追蹤欄位（${Object.keys(fields).length}）<span class="avs-st-adv-hint">AI 會盯著這些東西記錄</span></div>
+                    <div class="avs-st-field-list">${_renderSchemaList(fields)}</div>
+                    <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-regen">🧬 重新生成欄位</button>
+                </div>
+                <div class="avs-st-adv-sec">
+                    <div class="avs-st-adv-hd">這個故事的狀態</div>
+                    <div class="avs-st-btn-grid">
+                        <button class="avs-btn avs-btn-outline${snapCount === 0 ? ' disabled' : ''}" id="avs-st-rollback">↩ 還原上一步${snapCount ? ` (${snapCount})` : ''}</button>
+                        <button class="avs-btn avs-btn-danger" id="avs-st-clearstate">清空目前狀態</button>
+                    </div>
+                    <div class="avs-st-initpack">
+                        <select class="avs-select" id="avs-st-initpack-sel">
+                            <option value="">用檔案的預設值初始化…</option>
+                            ${(_packs || []).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
+                        </select>
+                        <button class="avs-btn avs-btn-primary" id="avs-st-initpack-btn">套用</button>
+                    </div>
+                </div>
+                <div class="avs-st-adv-sec">
+                    <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-cross">🌐 跨世界管理 — 所有已追蹤的世界</button>
+                    <button class="avs-btn avs-btn-outline avs-st-wide avs-st-gc" id="avs-st-gc">🧹 清理已刪除世界的殘留資料</button>
+                </div>`;
+            const extractTab = `
+                <div class="avs-st-adv-sec">
+                    <div class="avs-st-adv-hd">抽取${patchesCount ? `（已記 ${patchesCount} 筆）` : ''}<span class="avs-st-adv-hint">從最近劇情把狀態變化記進來</span></div>
+                    <div class="avs-st-btn-grid">
+                        <button class="avs-btn avs-btn-outline" id="avs-st-extract">🛰️ 立即抽一次</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-deep" title="用主模型把整份狀態清一輪：合併重複角色、移除純路人、按大總結修正過期欄位。整理前自動快照，可還原上一步。">♻️ 深度整理</button>
+                        <button class="avs-btn avs-btn-danger" id="avs-st-clearpatches">🧹 清空抽取紀錄</button>
+                    </div>
+                </div>`;
+            _host.innerHTML = `<div class="avs-st avs-st-l2">
+                <div class="avs-st-l2hd">
+                    <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
+                    <div class="avs-st-l2title">⚙️ 進階</div>
+                </div>
+                <div class="avs-st-subtabs">
+                    <button class="avs-st-subtab${_advTab === 'fields' ? ' active' : ''}" data-tab="fields">追蹤欄位（${Object.keys(fields).length}）</button>
+                    <button class="avs-st-subtab${_advTab === 'extract' ? ' active' : ''}" data-tab="extract">抽取</button>
+                </div>
+                <div class="avs-st-adv is-page">${_advTab === 'fields' ? fieldsTab : extractTab}</div>
+            </div>`;
+            _bind(stateKey, snapCount);
+            return;
+        }
+
+        // ── 第一層：home（瀏覽）：故事 + 開關 + 兩個換頁入口 ──────────
         _host.innerHTML = `<div class="avs-st">
             ${storyHtml}
-
-            <div class="avs-card">
-                <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-copy-diag">🔬 複製狀態數據</button>
-            </div>
 
             <div class="avs-card avs-st-toggle-row">
                 <div class="avs-st-toggle-text">
@@ -348,53 +419,14 @@
                 <div class="avs-st-toggle${runtimeOn ? ' on' : ''}" id="avs-st-toggle" role="switch"></div>
             </div>
 
-            <button class="avs-st-adv-btn${_curOpen ? ' open' : ''}" id="avs-st-cur-btn">📊 目前狀態</button>
-            <div class="avs-st-adv${_curOpen ? ' open' : ''}" id="avs-st-cur">
-                <div class="avs-st-cur-editbar">
-                    ${_editingValues
-                        ? `<button class="avs-btn avs-btn-primary avs-st-fe-btn" id="avs-st-val-save">💾 儲存</button><button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-cancel">取消</button>`
-                        : `<button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-edit">✏️ 改數值</button><span class="avs-st-editbar-hint">AI 偶爾填錯？點這手動改</span>`}
-                </div>
-                <div class="avs-st-current-body">${_editingValues ? _humanizeEditable(cur) : _humanize(cur)}</div>
-            </div>
-
-            <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-st-adv-btn">⚙️ 進階：追蹤設定與資料管理</button>
-            <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-st-adv">
-                <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">追蹤欄位（${Object.keys(fields).length}）<span class="avs-st-adv-hint">AI 會盯著這些東西記錄</span></div>
-                    <div class="avs-st-field-list">${_renderSchemaList(fields)}</div>
-                </div>
-
-                <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">抽取${patchesCount ? `（已記 ${patchesCount} 筆）` : ''}</div>
-                    <div class="avs-st-btn-grid">
-                        <button class="avs-btn avs-btn-outline" id="avs-st-extract">🛰️ 立即抽一次</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-st-deep" title="用主模型把整份狀態清一輪：合併重複角色、移除純路人、按大總結修正過期欄位。整理前自動快照，可還原上一步。">♻️ 深度整理</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-st-regen">🧬 重新生成欄位</button>
-                        <button class="avs-btn avs-btn-danger" id="avs-st-clearpatches">🧹 清空抽取紀錄</button>
-                    </div>
-                </div>
-
-                <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">這個故事的狀態</div>
-                    <div class="avs-st-btn-grid">
-                        <button class="avs-btn avs-btn-outline${snapCount === 0 ? ' disabled' : ''}" id="avs-st-rollback">↩ 還原上一步${snapCount ? ` (${snapCount})` : ''}</button>
-                        <button class="avs-btn avs-btn-danger" id="avs-st-clearstate">清空目前狀態</button>
-                    </div>
-                    <div class="avs-st-initpack">
-                        <select class="avs-select" id="avs-st-initpack-sel">
-                            <option value="">用檔案的預設值初始化…</option>
-                            ${(_packs || []).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
-                        </select>
-                        <button class="avs-btn avs-btn-primary" id="avs-st-initpack-btn">套用</button>
-                    </div>
-                </div>
-
-                <div class="avs-st-adv-sec">
-                    <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-cross">🌐 跨世界管理 — 所有已追蹤的世界</button>
-                    <button class="avs-btn avs-btn-outline avs-st-wide avs-st-gc" id="avs-st-gc">🧹 清理已刪除世界的殘留資料</button>
-                </div>
-            </div>
+            <button class="avs-st-nav" id="avs-st-nav-cur">
+                <span class="avs-st-nav-txt">📊 目前狀態<span class="avs-st-nav-sub">角色數值、任務、身上的物品</span></span>
+                <span class="avs-st-nav-chev">›</span>
+            </button>
+            <button class="avs-st-nav" id="avs-st-nav-adv">
+                <span class="avs-st-nav-txt">⚙️ 進階：追蹤設定與資料管理<span class="avs-st-nav-sub">追蹤欄位、抽取、還原、跨世界</span></span>
+                <span class="avs-st-nav-chev">›</span>
+            </button>
         </div>`;
 
         _bind(stateKey, snapCount);
@@ -405,13 +437,14 @@
         const q = sel => h.querySelector(sel);
         const eng = win._AVS_ENGINE;
 
-        // 進階摺疊
-        const advBtn = q('#avs-st-adv-btn'), adv = q('#avs-st-adv');
-        if (advBtn && adv) advBtn.onclick = () => { _advOpen = !_advOpen; advBtn.classList.toggle('open', _advOpen); adv.classList.toggle('open', _advOpen); };
-        const curBtn = q('#avs-st-cur-btn'), curBody = q('#avs-st-cur');
-        if (curBtn && curBody) curBtn.onclick = () => { _curOpen = !_curOpen; curBtn.classList.toggle('open', _curOpen); curBody.classList.toggle('open', _curOpen); };
+        // 兩層換頁：入口 → 操作頁 → 返回；進階子分頁切換
+        const _goTop = () => { try { h.closest('.avs-content')?.scrollTo?.(0, 0); } catch (e) {} };
+        { const b = q('#avs-st-nav-cur'); if (b) b.onclick = () => { _page = 'current'; _build(); _goTop(); }; }
+        { const b = q('#avs-st-nav-adv'); if (b) b.onclick = () => { _page = 'adv'; _build(); _goTop(); }; }
+        { const b = q('#avs-st-back'); if (b) b.onclick = () => { _page = 'home'; _editingValues = false; _build(); _goTop(); }; }
+        h.querySelectorAll('.avs-st-subtab').forEach(t => { t.onclick = () => { _advTab = t.dataset.tab || 'fields'; _build(); }; });
         // ✏️ 改數值 / 💾 儲存 / 取消（手動修正 AI 填錯的狀態值）
-        { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _curOpen = true; _build(); }; }
+        { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _page = 'current'; _build(); }; }
         { const sb = q('#avs-st-val-save'); if (sb) sb.onclick = () => { _saveStateValues(); }; }
         { const cb = q('#avs-st-val-cancel'); if (cb) cb.onclick = () => { _editingValues = false; _build(); }; }
         // 實體 × 鈕：切換「標記刪除」(再點一次取消)，儲存時才真的刪
@@ -551,8 +584,8 @@
     }
     function refresh() { _build(); }
 
-    function startEditField(name) { _editingFieldName = name; _advOpen = true; _build(); }
-    function startAddField() { _editingFieldName = '__new__'; _advOpen = true; _build(); }
+    function startEditField(name) { _editingFieldName = name; _page = 'adv'; _advTab = 'fields'; _build(); }
+    function startAddField() { _editingFieldName = '__new__'; _page = 'adv'; _advTab = 'fields'; _build(); }
     function cancelEditField() { _editingFieldName = null; _build(); }
     async function saveFieldEdit(originalName) {
         const scope = _host || document;
