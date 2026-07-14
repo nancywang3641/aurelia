@@ -1480,21 +1480,31 @@
     function _openLobbySettings() {
         _closeLobbySettings(); _closeDressRoom(); _closeNpcHistory();
         const useLore = localStorage.getItem('lobby_worldview_use_lorebook') === '1';
+        const seeStory = localStorage.getItem('lobby_npc_see_current_story') === '1';
         const box = document.createElement('div');
         box.className = 'lstage-dress lstage-settings';
         box.innerHTML =
             '<div class="lsd-title"><i class="fa-solid fa-gear"></i> 大廳設置</div>' +
             '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
-              '<input type="checkbox" class="lset-chk"' + (useLore ? ' checked' : '') + '></label>' +
+              '<input type="checkbox" class="lset-chk" data-k="lore"' + (useLore ? ' checked' : '') + '></label>' +
             '<div class="lset-hint">預設用大總結摘要的世界觀。勾選＝改讀角色卡的完整世界書（含角色之間的橫向關係，大總結不會寫）。</div>' +
+            '<label class="lset-row"><span class="lset-tx">大廳 NPC 看你當前劇情</span>' +
+              '<input type="checkbox" class="lset-chk" data-k="story"' + (seeStory ? ' checked' : '') + '></label>' +
+            '<div class="lset-hint">預設關（各書隔離）。勾選＝NPC 會知道你在別的故事裡的近況，可能跨書吐槽你 XD。</div>' +
             '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
         S.root.appendChild(box);
         S.setEl = box;
-        box.querySelector('.lset-chk').addEventListener('change', (e) => {
-            try { localStorage.setItem('lobby_worldview_use_lorebook', e.target.checked ? '1' : '0'); } catch (_) {}
-            _closeLobbySettings();
-            unmount(); tryMount();   // 重掛讓 guest 世界觀來源即時生效
-        });
+        box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
+            const k = e.target.dataset.k;
+            if (k === 'lore') {
+                try { localStorage.setItem('lobby_worldview_use_lorebook', e.target.checked ? '1' : '0'); } catch (_) {}
+                _closeLobbySettings();
+                unmount(); tryMount();   // 重掛讓 guest 世界觀來源即時生效
+            } else if (k === 'story') {
+                try { localStorage.setItem('lobby_npc_see_current_story', e.target.checked ? '1' : '0'); } catch (_) {}
+                // 走 buildContext 即時讀 localStorage，下句對話就生效，不用重掛
+            }
+        }));
         box.addEventListener('click', (e) => { if (e.target.closest('[data-act="close"]')) _closeLobbySettings(); });
     }
 
