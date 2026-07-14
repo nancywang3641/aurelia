@@ -2612,7 +2612,7 @@ ${sections}`;
                 const db = window.OS_DB;
                 if (db && typeof db.getAllVNTagTemplates === 'function') {
                     const templates = await db.getAllVNTagTemplates();
-                    const active = templates.filter(t => (t.isActive || t.lobbyEnabled) && t.isBlock && t.tagId);
+                    const active = templates.filter(t => (t.isActive || (Array.isArray(t.groupIds) && t.groupIds.includes('g_lobby')) || t.lobbyEnabled) && t.isBlock && t.tagId);   // 大廳組成員(或舊旗標)
                     for (const tpl of active) {
                         const safeId = tpl.tagId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                         const re = new RegExp(`<${safeId}>([\\s\\S]*?)<\\/${safeId}>`, 'i');
