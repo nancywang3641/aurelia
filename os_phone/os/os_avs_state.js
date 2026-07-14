@@ -235,14 +235,14 @@
         const patchesCount = data?.patches ? Object.keys(data.patches).length : 0;
         const runtimeOn = localStorage.getItem('aurelia_state_runtime_enabled') === '1';
 
-        // 🔗「我的檔案」(#avs-view-packs)收進「進階 → 追蹤欄位」第二層，別掛在瀏覽頁/目前狀態頁上礙眼。
-        //    條件三重鎖：① hasSchema(有建檔才有檔案可管) ② #avs-view-state.active(狀態檔案 tab 真的可見，
-        //    否則背景事件在記憶 tab 觸發 _build 會把檔案卡塞進記憶 tab) ③ 正在看進階的追蹤欄位子分頁。
+        // 🔗「我的檔案」(#avs-view-packs)在第一層(home)瀏覽頁露出，且需「狀態檔案」tab 真的可見：
+        //    ① 進第二層(目前狀態/進階操作頁)就收起檔案卡，兩層才乾淨。
+        //    ② 背景事件(抽取/生成/開關 → hooks 呼叫 _build)在記憶 tab 觸發時，別把檔案卡塞進記憶 tab。
+        //    （建檔按鈕「簡易預設/AI生成」是否顯示，由 renderPackList 依「當前有沒有卡」決定，不在這。）
         try {
             const _pv = document.querySelector('#avs-view-packs');
             const _stateActive = !!document.querySelector('#avs-view-state')?.classList.contains('active');
-            const _showPacks = !!hasSchema && _stateActive && _page === 'adv' && _advTab === 'fields';
-            if (_pv) _pv.classList.toggle('active', _showPacks);
+            if (_pv) _pv.classList.toggle('active', !!hasSchema && _stateActive && _page === 'home');
         } catch (e) {}
 
         const storyHtml = `<div class="avs-card avs-st-story">
@@ -431,7 +431,7 @@
                 <span class="avs-st-nav-chev">›</span>
             </button>
             <button class="avs-st-nav" id="avs-st-nav-adv">
-                <span class="avs-st-nav-txt">⚙️ 進階：追蹤設定與資料管理<span class="avs-st-nav-sub">追蹤欄位、我的檔案、抽取、還原、跨世界</span></span>
+                <span class="avs-st-nav-txt">⚙️ 進階：追蹤設定與資料管理<span class="avs-st-nav-sub">追蹤欄位、抽取、還原、跨世界</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
         </div>`;
