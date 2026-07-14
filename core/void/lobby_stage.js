@@ -33,23 +33,23 @@
             mask: 'lobby_mask_cafe_v1.png',   // Rae 手繪碰撞遮罩(白=可走)；載入後取代鋼索+烤死家具矩形
             cfgKey: 'lobby_stage_layout_v1',   // 沿用 Rae 已調好的存檔
             layout: [
-                { file: 'lobby_obj_counter.png', x: 307,  y: 356, w: 1266, h: 396, footH: 300, s: 0.4 },
-                { file: 'lobby_obj_02.png',      x: 337,  y: 571, w: 394,  h: 258, footH: 90,  s: 0.6 },
+                { file: 'lobby_obj_counter.png', x: 292,  y: 376, w: 1266, h: 396, footH: 150, s: 0.4 },
+                { file: 'lobby_obj_02.png',      x: 337,  y: 570, w: 394,  h: 258, footH: 90,  s: 0.6 },
                 { file: 'lobby_obj_01.png',      x: 701,  y: 685, w: 391,  h: 267, footH: 90,  s: 0.6 },
-                { file: 'lobby_obj_04.png',      x: 1080, y: 560, w: 396,  h: 263, footH: 90,  s: 1 },
-                { file: 'lobby_obj_03.png',      x: 60,   y: 330, w: 166,  h: 259, footH: 60,  s: 1 },
-                { file: 'lobby_obj_05.png',      x: 1380, y: 330, w: 156,  h: 259, footH: 60,  s: 1 },
-                { file: 'lobby_obj_07.png',      x: 258,  y: 813, w: 425,  h: 177, footH: 20,  s: 0.7 },
+                { file: 'lobby_obj_04.png',      x: 955,  y: 524, w: 396,  h: 263, footH: 90,  s: 0.6 },
+                { file: 'lobby_obj_03.png',      x: 1054, y: 217, w: 166,  h: 259, footH: 60,  s: 0.55 },
+                { file: 'lobby_obj_05.png',      x: 1413, y: 612, w: 156,  h: 259, footH: 60,  s: 0.59 },
+                { file: 'lobby_obj_07.png',      x: 101,  y: 829, w: 425,  h: 177, footH: 20,  s: 0.7 },
             ],
             points: {
-                yingZone: { x: 340, y: 405, w: 440, h: 45 },
-                npcZone:  { x: 220, y: 600, w: 1100, h: 260 },   // 客人出沒區（輪班NPC隨機刷在框內）
+                yingZone: { x: 315, y: 438, w: 465, h: 30 },
+                npcZone:  { x: 184, y: 542, w: 1109, h: 248 },   // 客人出沒區（輪班NPC隨機刷在框內）
                 player: { x: 697, y: 600 },
-                arrive: { x: 975, y: 430 },   // 走門進來的落點（從大廳回書咖）
+                arrive: { x: 990, y: 402 },   // 走門進來的落點（從大廳回書咖）
                 // 外框鋼索：可走範圍多邊形（牆角錨點可在擺設模式拖）
                 boundary: [
-                    { x: 195, y: 360 }, { x: 1345, y: 360 }, { x: 1430, y: 640 },
-                    { x: 1458, y: 925 }, { x: 75, y: 925 }, { x: 105, y: 640 },
+                    { x: 195, y: 360 }, { x: 1453, y: 315 }, { x: 1517, y: 642 },
+                    { x: 1529, y: 923 }, { x: 75, y: 925 }, { x: 105, y: 640 },
                 ],
                 actorScale: 0.7,
             },
@@ -60,24 +60,24 @@
                 { x: 915,  y: 840, w: 180,  h: 90 },    // 底部中央花圃
                 { x: 55,   y: 620, w: 130,  h: 110 },   // 左側小案几
             ],
-            doors: [ { x: 895, y: 355, w: 170, h: 34, to: 'hall', spawn: { x: 770, y: 790 } } ],  // 書咖上緣木門→大廳
+            doors: [ { x: 944, y: 318, w: 86, h: 35, to: 'hall', spawn: { x: 770, y: 790 } } ],  // 書咖上緣木門→大廳
         },
         hall: {
             base: 'lobby_hall_base_v2.png',   // v2=核心球已從底圖拆出(空核心版)
             mask: 'lobby_mask_hall_v1.png',   // Rae 手繪碰撞遮罩(白=可走)
             cfgKey: 'lobby_stage_layout_hall_v1',
             layout: [
-                { file: 'lobby_hall_obj_core.png',    x: 652,  y: 190, w: 788,  h: 935,  footH: 200, footW: 280, s: 0.3, float: true }, // LUNA-VII 分形核心(飄浮，佔地=底部尖錐)
-                { file: 'lobby_hall_obj_counter.png', x: 990,  y: 250, w: 1354, h: 449,  footH: 340, s: 0.32 }, // 接待櫃檯
-                { file: 'lobby_hall_obj_chairs.png',  x: 170,  y: 430, w: 1240, h: 520,  footH: 380, s: 0.34 }, // 等候椅組
-                { file: 'lobby_hall_obj_kiosk.png',   x: 1200, y: 470, w: 587,  h: 1308, footH: 260, s: 0.17 }, // 全息資訊台
-                { file: 'lobby_hall_obj_sofa.png',    x: 200,  y: 720, w: 1361, h: 414,  footH: 300, s: 0.34 }, // 模組沙發
+                { file: 'lobby_hall_obj_core.png',    x: 652, y: 189, w: 788,  h: 935,  footH: 200, footW: 280,  s: 0.3,   float: true }, // LUNA-VII 分形核心(飄浮，佔地=底部尖錐)
+                { file: 'lobby_hall_obj_counter.png', x: 990, y: 250, w: 1354, h: 449,  footH: 140, footW: 1301, s: 0.3 }, // 接待櫃檯
+                { file: 'lobby_hall_obj_chairs.png',  x: 340, y: 533, w: 1240, h: 520,  footH: 150, s: 0.3 }, // 等候椅組
+                { file: 'lobby_hall_obj_kiosk.png',   x: 938, y: 742, w: 587,  h: 1308, footH: 290, s: 0.104 }, // 全息資訊台
+                { file: 'lobby_hall_obj_sofa.png',    x: 194, y: 199, w: 1361, h: 414,  footH: 300, s: 0.3 }, // 模組沙發
             ],
             points: {
-                npcZone:  { x: 250, y: 560, w: 1000, h: 280 },
-                player: { x: 770, y: 790 },
-                arrive: { x: 770, y: 790 },   // 走門進來的落點（從書咖進大廳）
-                alicePos: { x: 940, y: 520 },   // 愛麗絲站位（可在擺設模式拖）
+                npcZone:  { x: 334, y: 538, w: 1000, h: 280 },
+                player: { x: 863, y: 634 },
+                arrive: { x: 772, y: 830 },   // 走門進來的落點（從書咖進大廳）
+                alicePos: { x: 1194, y: 318 },   // 愛麗絲站位（可在擺設模式拖）
                 boundary: [
                     { x: 255, y: 240 }, { x: 1290, y: 240 }, { x: 1395, y: 560 },
                     { x: 1430, y: 868 }, { x: 105, y: 868 }, { x: 140, y: 560 },
@@ -85,8 +85,8 @@
                 actorScale: 0.7,
             },
             walls: [],   // 外牆走 boundary 鋼索；核心基座=物件腳印
-            doors: [ { x: 660, y: 846, w: 215, h: 34, to: 'cafe', spawn: { x: 975, y: 430 } } ],  // 底部大門→回書咖
-            alice: { x: 940, y: 520 },   // 愛麗絲：核心旁、不漫步、永遠面向玩家
+            doors: [ { x: 664, y: 910, w: 213, h: 75, to: 'cafe', spawn: { x: 975, y: 430 } } ],  // 底部大門→回書咖
+            alice: { x: 1194, y: 318 },   // 愛麗絲：核心旁、不漫步、永遠面向玩家
         },
         room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
             base: 'lobby_404_base_v1.png',
@@ -308,18 +308,20 @@
     function spawnActor(src, x, y, h) {
         const isSheet = (typeof src === 'object' && src && src.sheet);
         const el = document.createElement(isSheet ? 'div' : 'img');
-        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '');
+        // lstage-loading=先藏著，圖真的載好才顯示（防轉場時預設單圖閃一下才換成走路圖）
+        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ' lstage-loading';
         const a = { x, y, baseH: h, h: Math.round(h * (CFG.points.actorScale || 1)), el, walking: false, flip: false };
         if (isSheet) {
             a.sheet = true; a.dir = 0; a.frame = 1; a.animT = 0;
             el.style.backgroundImage = 'url("' + src.sheet + '")';
             const probe = new Image();
-            probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); };
+            probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); a.el.classList.remove('lstage-loading'); };
             probe.src = src.sheet;
         } else {
             el.src = src;
             el.style.height = a.h + 'px';
-            el.addEventListener('load', () => placeActor(a), { once: true });
+            // 有皮膚(3x4)待換的話先別顯示這張預設單圖，等 _swapActorSrc 換好才顯示
+            el.addEventListener('load', () => { placeActor(a); if (!a._skinPending) a.el.classList.remove('lstage-loading'); }, { once: true });
         }
         S.world.appendChild(el);
         placeActor(a);
@@ -383,29 +385,34 @@
     function _swapActorSrc(a, src) {
         const isSheet = (typeof src === 'object' && src && src.sheet);
         const el = document.createElement(isSheet ? 'div' : 'img');
-        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '');
+        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ' lstage-loading';   // 換好的圖載入才顯示
         a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
         a.frameW = a.frameH = null;
         a._left = a._top = a._z = a._bg = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
         if (isSheet) {
             el.style.backgroundImage = 'url("' + src.sheet + '")';
             const probe = new Image();
-            probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); };
+            probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); a.el.classList.remove('lstage-loading'); };
             probe.src = src.sheet;
         } else {
             el.src = src;
             el.style.height = a.h + 'px';
-            el.addEventListener('load', () => placeActor(a), { once: true });
+            el.addEventListener('load', () => { placeActor(a); a.el.classList.remove('lstage-loading'); }, { once: true });
         }
         a.el.replaceWith(el);
         a.el = el;
+        a._skinPending = false;
         placeActor(a);
     }
     async function _applySkin(a, key) {
         const skin = _skins()[key];
         if (!skin) return;
         const src = await resolveRef(skin.ref);
-        if (!src || !a.el || !S.active) return;
+        if (!src || !a.el || !S.active) {   // 皮膚換不成→把先藏起來的預設圖還原顯示，別讓角色隱形
+            if (a) a._skinPending = false;
+            if (a && a.el) a.el.classList.remove('lstage-loading');
+            return;
+        }
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src);
     }
 
@@ -784,6 +791,7 @@
         S.spawnOverride = null;
         const sp = findFreeSpot(raw.x, raw.y);
         S.player = Object.assign(spawnActor(src, sp.x, sp.y, PLAYER_H), { dest: null, key: 'player', name: '你', defaultSrc: src });
+        if (_skins()['player']) S.player._skinPending = true;   // 玩家有自訂皮膚→預設圖先藏著(免閃)
         _applySkin(S.player, 'player');
         S.onKey = (e) => {
             const tag = (document.activeElement?.tagName || '').toLowerCase();
@@ -1057,6 +1065,7 @@
         const a = spawnActor(cfg.src, cfg.x, cfg.y, cfg.h || NPC_H);
         const keepH = a.h;   // spawnActor 已套 actorScale，別讓 cfg.h(未縮放) 蓋回去
         const npc = Object.assign(a, cfg, { h: keepH, wanderT: 1500 + Math.random() * 3000, dest: null, defaultSrc: cfg.src });
+        if (_skins()[cfg.key]) npc._skinPending = true;   // 有自訂皮膚→預設圖先藏著，等 _applySkin 換好才顯示(免閃)
         _applySkin(npc, cfg.key);
         const tag = document.createElement('div');
         tag.className = 'lstage-tag'; tag.textContent = cfg.name;
