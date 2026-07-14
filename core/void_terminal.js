@@ -2339,7 +2339,7 @@ ${sections}`;
             config.route = 'iris_chat';
 
             const seg = await new Promise((resolve, reject) => {
-                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, {});
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: 'NPC記憶壓縮:' + npcName });
             });
             let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
             if (!clean || clean === '無' || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) {
@@ -2373,7 +2373,7 @@ ${sections}`;
                 config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
             }
             config.route = 'iris_chat';
-            const seg = await new Promise((res, rej) => window.OS_API.chat([{ role: 'system', content: prompt }], config, null, res, rej, {}));
+            const seg = await new Promise((res, rej) => window.OS_API.chat([{ role: 'system', content: prompt }], config, null, res, rej, { label: 'NPC記憶整理:' + npcName }));
             const clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
             if (!clean || clean === '無') { window.toastr?.warning?.('整理失敗，記憶保持原樣'); return; }
             await window.OS_DB.saveNpcMemory(npcKey, { name: npcName, summary: clean, lastCompactAt: mem.lastCompactAt || 0 });
