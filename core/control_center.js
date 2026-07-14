@@ -308,6 +308,27 @@
         return modal;
     }
 
+    // 「只在訊息區」收起 #chat：❌不用 display:none（會讓 TavernHelper 不煮 ```html 卡、#chat 捲不動
+    //   → html_extractor/story_extractor 靠 live DOM+捲底渲染的抓取全抓空）。✅改「off-screen 絕對定位 +
+    //   visibility:hidden」→ #chat 仍有 layout(TH 照煮卡/可捲/extractor 讀得到)、視覺隱形、且移出 flex 流讓位給奧瑞亞。
+    function _applyChatHidden(el) {
+        if (!el) return;
+        if (el.dataset.aureliaPrevCss == null) el.dataset.aureliaPrevCss = el.getAttribute('style') || '';
+        el.style.setProperty('position', 'absolute', 'important');
+        el.style.setProperty('left', '-99999px', 'important');
+        el.style.setProperty('top', '0', 'important');
+        el.style.setProperty('width', '480px', 'important');
+        el.style.setProperty('height', '90vh', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('z-index', '-1', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+    }
+    function _restoreChat(el) {
+        if (!el) return;
+        if (el.dataset.aureliaPrevCss != null) { el.setAttribute('style', el.dataset.aureliaPrevCss); if (!el.getAttribute('style')) el.removeAttribute('style'); }
+        delete el.dataset.aureliaPrevCss;
+    }
+
     AureliaControlCenter.mountEmbedded = function(containerEl, placement = 'bottom') {
         if (!phoneModal) phoneModal = createPhoneModal();
         stopSyncing();
@@ -375,12 +396,9 @@
         embeddedRoot.appendChild(phoneFrame);
 
         if (messagesOnly) {
-            // 收起 #chat（記住原 display 以便還原），把奧瑞亞插在輸入框前面
+            // 收起 #chat（off-screen 隱藏、保 layout 給 extractor 讀），把奧瑞亞插在輸入框前面
             _hiddenChatEl = containerEl;
-            if (containerEl.style.display !== 'none') {
-                containerEl.dataset.aureliaPrevDisplay = containerEl.style.display || '';
-                containerEl.style.display = 'none';
-            }
+            _applyChatHidden(containerEl);
             const form = sheld.querySelector('#form_sheld');
             if (form) sheld.insertBefore(embeddedRoot, form);
             else sheld.appendChild(embeddedRoot);
@@ -388,8 +406,8 @@
             if (embedObserver) embedObserver.disconnect();
             embedObserver = new MutationObserver(() => {
                 if (!isEmbedded || !embeddedRoot) return;
-                // 酒館重繪時保證 #chat 維持收起、奧瑞亞還在 #sheld 內
-                if (_hiddenChatEl && _hiddenChatEl.style.display !== 'none') _hiddenChatEl.style.display = 'none';
+                // 酒館重繪時保證 #chat 維持收起（off-screen）、奧瑞亞還在 #sheld 內
+                if (_hiddenChatEl && _hiddenChatEl.style.visibility !== 'hidden') _applyChatHidden(_hiddenChatEl);
                 if (embeddedRoot.parentNode !== sheld) {
                     const f = sheld.querySelector('#form_sheld');
                     if (f) sheld.insertBefore(embeddedRoot, f); else sheld.appendChild(embeddedRoot);
@@ -480,8 +498,7 @@
 
         // 還原「只在訊息區」模式收起的 #chat
         if (_hiddenChatEl) {
-            _hiddenChatEl.style.display = _hiddenChatEl.dataset.aureliaPrevDisplay || '';
-            delete _hiddenChatEl.dataset.aureliaPrevDisplay;
+            _restoreChat(_hiddenChatEl);
             _hiddenChatEl = null;
         }
 
