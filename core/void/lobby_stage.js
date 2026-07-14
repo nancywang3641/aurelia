@@ -1238,7 +1238,7 @@
         if (box && !box.querySelector('.lstage-dlg-close')) {
             const btn = document.createElement('button');
             btn.className = 'lstage-dlg-close';
-            btn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            btn.innerHTML = '<i class="fa-solid fa-arrow-right-from-bracket"></i> 離開';
             btn.addEventListener('click', (e) => { e.stopPropagation(); if (S.talkTarget) endTalk(); else hideDialog(); });
             box.appendChild(btn);
         }
@@ -1277,7 +1277,13 @@
     }
     function endTalk() {
         if (!S.talkTarget) return;
+        const t = S.talkTarget;
         S.talkTarget = null;
+        // 對話結束→NPC 轉回正面（朝下）；facePlayer 的(愛麗絲)下一幀會自己再面向玩家，不影響
+        if (t) {
+            if (t.sheet) { t.dir = 0; t.frame = 1; t.animT = 0; } else { t.flip = false; }
+            if (t.el) placeActor(t);
+        }
         _applySceneHeader();
         hideDialog();
     }
