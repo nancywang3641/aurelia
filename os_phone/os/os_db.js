@@ -1072,6 +1072,7 @@
                 bundle.personaName = bundle._recs.find(r => r.personaName)?.personaName || '';
                 bundle.personaDesc = bundle._recs.find(r => r.personaDesc)?.personaDesc || '';
                 bundle.protagonist = bundle._recs.find(r => r.protagonist)?.protagonist || '';
+                bundle.worldview   = bundle._recs.find(r => r.worldview)?.worldview   || '';
                 bundle.briefs = bundle._recs.slice(0, briefsLimit).map(r => ({
                     count: r.summaryCount || 0,
                     brief: r.brief || '',
