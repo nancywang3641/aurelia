@@ -418,9 +418,10 @@
         const isPlayer = (a.key === 'player');   // 玩家不給「跟隨我」（跟自己很怪）
         menu.innerHTML = '<div class="lam-title">' + (a.name || '角色') + '</div>' +
             '<button class="lam-item" data-act="dress"><i class="fa-solid fa-shirt"></i> 裝扮室</button>' +
-            (isPlayer ? '' : '<button class="lam-item" data-act="follow"><i class="fa-solid fa-person-walking-arrow-right"></i> ' + (a.follow ? '取消跟隨' : '跟隨我') + '</button>');
+            (isPlayer ? '' : '<button class="lam-item" data-act="follow"><i class="fa-solid fa-person-walking-arrow-right"></i> ' + (a.follow ? '取消跟隨' : '跟隨我') + '</button>') +
+            (isPlayer ? '' : '<button class="lam-item" data-act="recompact"><i class="fa-solid fa-brain"></i> 整理記憶</button>');
         menu.style.left = Math.max(6, Math.min(cx - rr.left, rr.width - 150)) + 'px';
-        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - (isPlayer ? 90 : 124))) + 'px';
+        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - (isPlayer ? 90 : 158))) + 'px';
         S.root.appendChild(menu);
         S.menuEl = menu;
         menu.querySelector('[data-act="dress"]').addEventListener('click', () => { _closeActorMenu(); _openDressRoom(a); });
@@ -431,6 +432,10 @@
             if (a.follow) S.followers.push(a);   // 加到隊尾：越晚跟的排越後面（串成一列不重疊）
             else { a.walking = false; if (a.sheet) { a.dir = 0; a.frame = 1; a.animT = 0; } }   // 取消跟隨=立定+轉回正面(第1列朝下)
             _closeActorMenu();
+        });
+        menu.querySelector('[data-act="recompact"]')?.addEventListener('click', () => {
+            _closeActorMenu();
+            window.VoidTerminal?.recompactNpcMemory?.(a.key, a.name);
         });
         setTimeout(() => document.addEventListener('pointerdown', _menuOutside, { once: true }), 0);
     }
