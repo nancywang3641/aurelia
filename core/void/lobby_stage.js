@@ -788,6 +788,19 @@
             const tag = (document.activeElement?.tagName || '').toLowerCase();
             if (tag === 'input' || tag === 'textarea') return;
             const k = e.key.toLowerCase();
+            // 🎮 對話快捷鍵：走近 NPC 按 E/F 開聊；對話中按 E/F/Esc 收起（省得每次點 ✖）。不做「移動自動關」避免誤觸。
+            if (e.type === 'keydown' && (k === 'e' || k === 'f' || k === 'escape')) {
+                if (S.talkTarget) { endTalk(); e.preventDefault(); e.stopPropagation(); return; }
+                if (k !== 'escape' && S.player && !S.edit) {
+                    let best = null, bestD = INTERACT_R;
+                    for (const n of S.npcs) {
+                        if (!n.hint) continue;
+                        const d = Math.hypot(n.x - S.player.x, n.y - S.player.y);
+                        if (d < bestD) { bestD = d; best = n; }
+                    }
+                    if (best) { startTalk(best); e.preventDefault(); e.stopPropagation(); return; }
+                }
+            }
             if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) {
                 S.keys[k] = (e.type === 'keydown');
                 // 🚨 必須整條攔死：酒館本體綁了 ↑=編輯訊息、←→=swipe(會重新生成=燒API)
