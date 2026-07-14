@@ -229,7 +229,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.parse() → { 標籤名: [[欄1,欄2,…], …] }
 - st.md(text) → markdown 轉 HTML（內建，免疫 $1）
 - 🧩 進階功能（用法不常駐、省 token）：🖼️ 生圖(st.setImage)、📤 回傳對話框(st.toChat) 等——**要用就點對應的「功能 chip」**把完整用法帶進這次請求；使用者沒帶進來就別用該功能、也別自己瞎掰 API。
-- 🚫【鐵則】要把面板生的內容「送進劇情／對話」一律用 st.toChat（回傳對話框 chip）＝貼進送出框讓使用者自己送。**絕對禁止**用 createChatMessages／TavernHelper／generateRaw／直接操作 #send_textarea 等酒館原生 API 自己建訊息或硬送——那會在聊天串多出標 System 或用戶名的「幽靈訊息」，很怪。沒帶 st.toChat 用法就「不要做送進對話這件事」，別用原生 API 替代。
+- 🚫【鐵則】要把面板生的內容「送進劇情／對話」只准用回傳對話框 chip 提供的 st.toChat（貼輸入框、使用者自己送）或 st.toSystem（直接插一則 system 訊息進聊天）。**絕對禁止**用 createChatMessages／TavernHelper／generateRaw／直接操作 #send_textarea 等酒館原生 API 自己建訊息或硬送。沒帶回傳對話框 chip 用法就「不要做送進對話這件事」，別用原生 API 替代。
 - st.callAI(systemPrompt) → Promise，呼叫 AI 生文字（自動帶角色卡／最近劇情／世界書當背景，不必重述）。await 包 try/catch、生成中顯示 loading。
 - st.getCurrentChars() → Promise，回傳當前聊天室出現過的角色 [{name,count}]（依出現次數排序）。做「角色選單／搜尋」用——例如日記/檔案類面板讓用戶從清單挑角色，免手打名字。空陣列＝還沒角色。
 - st.getStory(n) → 回最近 n 條劇情 [{name, text}]（預設 30，已洗成乾淨文字）。**共用面板「讀當前劇情顯示」就用這個**（不經 AI、直接拿正文）。純展示卡別用它（那走 lines/st.parse）。
@@ -558,7 +558,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         { label: '卡片列表', text: '內容用一張張卡片直列呈現，每張資訊清楚、可點。' },
         { label: '深色主題', text: '用深色背景配色、字體清楚，沉穩不刺眼。' },
         { label: '🖼️ 生圖', feature: true, key: 'img', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct，用戶有指定才填、否則不傳）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
-        { label: '📤 回傳對話框', feature: true, key: 'tochat', text: '【回傳對話框功能】用 st.toChat(文字, opts) 把文字貼回酒館對話框（送出框）：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「app 生內容→使用者挑一條→送進劇情當輸入／指令」（例：隨機事件 app 生 5 條、選 1 條 toChat 進劇情）。' }
+        { label: '📤 回傳對話框', feature: true, key: 'tochat', text: '【回傳對話框功能】兩種回傳法，依需求選一個：\n① st.toChat(文字, opts)＝貼回「輸入框（送出框）」：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「要讓使用者挑一條、可再編輯後送進劇情當輸入／指令」（例：隨機事件生 5 條、選 1 條 toChat）。\n② st.toSystem(文字)＝不經輸入框，直接把文字當「system 訊息」插進聊天室成最新一則（旁白/系統公告式，不用再按送出）。用在「app 的結果要直接顯示在劇情流裡」（例：擲骰結果、系統宣告、事件觸發）。' }
     ];
     // 功能 chip（feature:true）＝toggle 啟用：用法在送出時併進請求(apiPayload 的 system)、不貼輸入框；話術 chip 照舊貼輸入框
     const _studioActiveFeatures = new Set();
@@ -3033,6 +3033,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'dbLoad:function(k,s){try{return window.dbLoad?window.dbLoad(k,s):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
             +   'getChatId:function(){try{return window.getChatId?window.getChatId():"";}catch(e){return "";}},'
             +   'toChat:function(t,o){try{return window.toChat?window.toChat(t,o):false;}catch(e){return false;}},'
+            +   'toSystem:function(t){try{return window.toSystem?window.toSystem(t):false;}catch(e){return false;}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
             + '(async function(){try{' + js + '}catch(e){console.error("[phone tpl]",e);}})();'
