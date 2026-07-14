@@ -900,6 +900,10 @@
         for (const [card, st0] of newest) {
             const st = byPin.get(card) || st0;
             const brief = (st.briefs && st.briefs[0] && st.briefs[0].brief) || '';
+            // 完整劇情底：該輪全部結語逐段串（最新在前 → 反轉成時間順序）
+            const fullBriefs = Array.isArray(st.briefs)
+                ? st.briefs.slice().reverse().map(b => (b && b.brief) || '').filter(Boolean).join('\n')
+                : '';
             for (const c of st.characters) {
                 const rawName = String(c.name || '').trim();
                 if (!rawName || rawName === '瀅瀅' || rawName === '柴郡') continue;
@@ -907,7 +911,7 @@
                     rawName, name: _npcDisplayName(rawName),
                     row: c.row || '', charHeader: st.charHeader || '',
                     cardName: card, chatId: st.chatId || '',
-                    storyTitle: st.storyTitle || card, brief,
+                    storyTitle: st.storyTitle || card, brief, fullBriefs,
                 });
             }
         }
@@ -920,9 +924,10 @@
                 .filter(f => f.value && f.label !== '姓名')
                 .map(f => f.label + '：' + f.value).join('；');
         } catch (e) {}
+        const backstory = (g.fullBriefs || g.brief || '').trim();
         return '《' + (g.storyTitle || '某本書') + '》裡的角色「' + g.name + '」' +
             (profile ? '。你的角色檔案：' + profile : '') +
-            (g.brief ? '。你那段故事最近的進展：' + g.brief : '');
+            (backstory ? '。\n\n【你經歷過的故事（你記得的過往）】\n' + backstory : '');
     }
     // 那一輪(chatId)的頭像 → 對話立繪。avatar_cache key=`chatId::角色名`；chatId 兩邊都正規化再比
     //   （lobby_summary_index 存的是正規化 chatId、VN_Cache 存 raw ctx.chatId，直接比對會 miss）。
