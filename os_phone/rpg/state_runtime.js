@@ -207,8 +207,9 @@
             //    主接口通常掛較慢的模型 → 超時放寬到 2 倍。
             const _viaMain = directorOn() && typeof win.OS_API?.chatMain === 'function';
             if (!_viaMain && !win.OS_API?.chatSecondary) return reject(new Error('OS_API.chatSecondary 不可用'));
-            // 主接口通常掛「會思考」的模型＋她的破甲思考鏈 → Rae 實測回覆 138~173 秒才到，
-            // ×2(120s) 不夠用＝回覆到了卻被判超時、重試再白燒一通 → 放寬到 ×4(240s)。背景作業不擋畫面，慢沒關係。
+            // 主接口通常掛「會思考」的模型＋她的破甲思考鏈 → Rae 實測回覆 138~173 秒才到；
+            // 便車合併通(AVS+記憶+導演)更重、實測 304 秒才回 → ×4(240s) 會誤判超時把真回覆丟掉、再白燒一通重試
+            // → 放寬到 ×6(360s)。背景作業不擋畫面，慢沒關係。
             const messages = [
                 { role: 'system', content: '你是嚴謹的劇情狀態抽取器：先做簡短分析推理（出場角色/本輪變化/新角色/主角/校對），最後把抽取結果放進一個 ```json 程式碼區塊。' },
                 { role: 'user', content: prompt }
@@ -217,7 +218,7 @@
             const timer = setTimeout(() => {
                 if (done) return; done = true;
                 reject(new Error(_viaMain ? '抽取(主接口)超時' : '副模型超時'));
-            }, CONFIG.timeoutMs * (_viaMain ? 4 : 1));
+            }, CONFIG.timeoutMs * (_viaMain ? 6 : 1));
             const dispatch = _viaMain
                 ? win.OS_API.chatMain.bind(win.OS_API)
                 : win.OS_API.chatSecondary.bind(win.OS_API);
@@ -824,7 +825,12 @@ ${numberedText}`;
     async function extractOnce(opts) {
         if (_running) return;
         _running = true;
-        let pendingMem = null, memIngested = false, _dedupe = null, _dirRide = false;
+        let pendingMem = null, memIngested = false, _dedupe = null, _dirRide = false, _dirLanded = false;
+        // 🎬 便車搶跑修正：導演開著就「同步」先搶下本輪防抖旗標——別等跑到下面設（那行藏在向量召回等 await 之後，
+        //    慢召回會讓獨立導演在 2.7s 先開打＝雙導演稿＋多打一通主接口）。真正落地與否由下方 _dirRide/_dirLanded 決定；
+        //    沒落地就在 finally 補一通獨立（extractDirector 自帶同樓/截斷/停止守門，重複呼叫也安全）。
+        const _dirIntended = directorOn() && typeof win.OS_API?.chatMain === 'function';
+        if (_dirIntended) _directorHandledThisRound = true;
         try {
             if (_genStopped) { console.log('🛰️ [State Runtime] 本通生成被手動停止 → 跳過抽取(AVS/記憶)'); return; }
             const chatId = getChatId();
@@ -950,12 +956,14 @@ ${numberedText}`;
             // 🎬 導演稿搭便車（Rae：主接口沒必要一輪打兩通）：導演開著→六格稿掛同一通、JSON 之後輸出，
             //    省一整段思考期＋重複上下文；沒搭上（模型漏寫/整通失敗）→ 降級回獨立 extractDirector 補一通。
             try {
-                if (directorOn() && typeof win.OS_API?.chatMain === 'function'
-                    && !(data.director && data.director.patches && data.director.patches[lastId] !== undefined)) {
-                    const _dirPrev = _latestDirectorText(data.director, lastId);
-                    prompt += _directorAddendum(_dirPrev, _activeCastNames());
-                    _dirRide = true;
-                    _directorHandledThisRound = true;   // 攔下 2.7s 後那顆獨立呼叫的排程
+                if (_dirIntended) {
+                    if (data.director && data.director.patches && data.director.patches[lastId] !== undefined) {
+                        _dirLanded = true;   // 本樓早有導演稿（手改/回放）→ 不用再補
+                    } else {
+                        const _dirPrev = _latestDirectorText(data.director, lastId);
+                        prompt += _directorAddendum(_dirPrev, _activeCastNames());
+                        _dirRide = true;   // 導演稿掛便車、隨這通 JSON 之後一起輸出
+                    }
                 }
             } catch (e) {}
 
@@ -1062,9 +1070,9 @@ ${numberedText}`;
                     const _dClean = _dm ? _dm[1].trim() : '';
                     if (_dClean && /【公共[劇剧]情】/.test(_dClean)) {
                         await _saveDirectorPatch(chatId, lastId, _dClean);
+                        _dirLanded = true;   // 便車落地 → finally 不再補獨立
                     } else {
-                        console.warn('🎬 [Director] 便車稿缺失/不合格 → 降級獨立補一通');
-                        extractDirector();
+                        console.warn('🎬 [Director] 便車稿缺失/不合格 → 交 finally 補一通獨立');
                     }
                 } catch (e) {}
             }
@@ -1074,9 +1082,12 @@ ${numberedText}`;
             if (pendingMem && !memIngested && win.OS_VECTOR_ENGINE?.isEnabled?.()) {
                 try { win.OS_VECTOR_ENGINE.ingest(pendingMem.content, pendingMem.storyId, pendingMem.chapterId); } catch(_) {}
             }
-            // 🎬 便車稿跟著整通陪葬 → 降級獨立補一通（extractDirector 自己有同樓去重）
-            if (_dirRide) { try { extractDirector(); } catch (_) {} }
+            // 🎬 便車稿跟著整通陪葬 → 由 finally 統一補一通獨立（_dirLanded 仍 false）
         } finally {
+            // 🎬 便車本該接手卻沒落地（提早 return／解析失敗／整通爆／沒搭上）→ 補一通獨立。
+            //    _directorHandledThisRound 已在開頭同步搶下＝獨立防抖那顆不會再跑，這裡是唯一補位點；
+            //    extractDirector 自帶同樓/截斷/停止/總結守門，重複呼叫也安全、絕不雙寫。
+            if (_dirIntended && !_dirLanded) { try { extractDirector(); } catch (_) {} }
             _running = false;
         }
     }
