@@ -416,12 +416,19 @@
         const menu = document.createElement('div');
         menu.className = 'lstage-actor-menu';
         menu.innerHTML = '<div class="lam-title">' + (a.name || '角色') + '</div>' +
-            '<button class="lam-item" data-act="dress"><i class="fa-solid fa-shirt"></i> 裝扮室</button>';
+            '<button class="lam-item" data-act="dress"><i class="fa-solid fa-shirt"></i> 裝扮室</button>' +
+            '<button class="lam-item" data-act="follow"><i class="fa-solid fa-person-walking-arrow-right"></i> ' + (a.follow ? '取消跟隨' : '跟隨我') + '</button>';
         menu.style.left = Math.max(6, Math.min(cx - rr.left, rr.width - 150)) + 'px';
-        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - 90)) + 'px';
+        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - 124)) + 'px';
         S.root.appendChild(menu);
         S.menuEl = menu;
         menu.querySelector('[data-act="dress"]').addEventListener('click', () => { _closeActorMenu(); _openDressRoom(a); });
+        menu.querySelector('[data-act="follow"]').addEventListener('click', () => {
+            a.follow = !a.follow;
+            a.dest = null;   // 清掉漫步目標，交給跟隨邏輯接手
+            if (!a.follow) { a.walking = false; if (a.sheet) { a.frame = 1; a.animT = 0; } }   // 取消跟隨=立定
+            _closeActorMenu();
+        });
         setTimeout(() => document.addEventListener('pointerdown', _menuOutside, { once: true }), 0);
     }
     function _menuOutside(e) { if (S.menuEl && !S.menuEl.contains(e.target)) _closeActorMenu(); }
@@ -872,6 +879,25 @@
                 else n.flip = S.player.x < n.x;
             }
             if (S.talkTarget === n || n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
+            if (n.follow && S.player) {   // 跟隨玩家：走到身後 GAP 距離就停，共用走路動畫；avoidBlocks 者不穿牆
+                const FOLLOW_GAP = 46;
+                const vx = S.player.x - n.x, vy = S.player.y - n.y, d = Math.hypot(vx, vy);
+                if (d > FOLLOW_GAP) {
+                    const step = Math.min(d - FOLLOW_GAP, 0.34 * dt);   // 略快於漫步以跟上玩家、又不衝過頭
+                    const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
+                    if (!(n.avoidBlocks && blocked(nx, ny))) {
+                        n.x = nx; n.y = ny; n.walking = true;
+                        if (n.sheet) {
+                            n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
+                            n.animT = (n.animT || 0) + dt;
+                            n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
+                        } else if (vx) n.flip = vx < 0;
+                    }
+                } else { n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
+                n.dest = null;
+                placeActor(n); placeNpcExtras(n); _npcNearCheck(n);
+                return;
+            }
             n.wanderT -= dt;
             if (n.wanderT <= 0 && !n.dest) {
                 const R = n.homeRect;
