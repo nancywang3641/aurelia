@@ -1073,6 +1073,7 @@
                 bundle.personaDesc = bundle._recs.find(r => r.personaDesc)?.personaDesc || '';
                 bundle.protagonist = bundle._recs.find(r => r.protagonist)?.protagonist || '';
                 bundle.worldview   = bundle._recs.find(r => r.worldview)?.worldview   || '';
+                bundle.lorebookBook = bundle._recs.find(r => r.lorebookBook)?.lorebookBook || '';   // 那張卡的世界書名（opt-in live 讀用）
                 bundle.briefs = bundle._recs.slice(0, briefsLimit).map(r => ({
                     count: r.summaryCount || 0,
                     brief: r.brief || '',
