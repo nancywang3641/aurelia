@@ -1315,7 +1315,7 @@
     function update(dt) {
         if (S.edit) { applyCamera(); return; }   // 擺設模式凍結移動/漫步
         const p = S.player;
-        if (p && !S.talkTarget) {
+        if (p && !S.talkTarget && !S.transitioning) {   // 過場期間凍結移動（防搖桿殘留方向在換場瞬間繼續推）
             let dx = 0, dy = 0;
             if (S.keys['arrowleft'] || S.keys['a']) dx -= 1;
             if (S.keys['arrowright'] || S.keys['d']) dx += 1;
@@ -1415,7 +1415,7 @@
             onMove(e);
         };
         const onMove = (e) => {
-            if (!active) return;
+            if (!active || !base.isConnected) return;   // 換場銷毀舊搖桿後，殘留 capture 的 move 別再寫 S.joy（防換場後卡方向飄移）
             let dx = e.clientX - cx, dy = e.clientY - cy;
             const d = Math.hypot(dx, dy);
             if (d > R) { dx = dx / d * R; dy = dy / d * R; }
