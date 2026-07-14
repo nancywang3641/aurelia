@@ -256,7 +256,7 @@
         .avs-st-btn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         .avs-st-btn-grid.col1 { grid-template-columns: 1fr; }   /* 一欄堆疊：兩顆按鈕並排易誤會時用 */
         .avs-st-btn-grid .avs-btn { width: 100%; min-width: 0; min-height: 42px; padding: 9px 10px; line-height: 1.35; }
-        /* 📦 我的檔案（#avs-view-packs，收在進階→追蹤欄位）：標題要看得清、建檔按鈕一欄堆疊 */
+        /* 📦 我的檔案（#avs-view-packs，第一層瀏覽頁）：標題要看得清、建檔按鈕一欄堆疊 */
         .avs-packs-title { font-size: 13px; font-weight: 700; color: #1A1C28; margin-top: 6px; padding-top: 14px; border-top: 1px solid rgba(26,28,40,0.10); }
         .avs-packs-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
         .avs-packs-actions .avs-btn { width: 100%; min-height: 42px; }

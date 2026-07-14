@@ -499,6 +499,15 @@
         const listEl = container.querySelector('#avs-pack-list');
         listEl.innerHTML = '';
         const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
+        const _curCid = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+
+        // 🚦 建檔快速入口「🪶 簡易預設 / 🧬 AI 從世界生成」只在「當前卡還沒有檔案」時顯示；
+        //    已經有卡(綁定當前卡的 or 全域)就藏——否則重生出重複包、也讓已建好的人一直看到多餘按鈕。
+        //    「＋ 創建新檔案」手動入口一律保留。
+        const _hasCard = currentPacks.some(p => !p.chatId || p.chatId === _curCid);
+        const _isTavern = !(win.OS_API?.isStandalone?.());
+        { const b = container.querySelector('#avs-btn-preset-pack'); if (b) b.style.display = _hasCard ? 'none' : ''; }
+        { const b = container.querySelector('#avs-btn-ai-gen-pack'); if (b) b.style.display = (!_hasCard && _isTavern) ? '' : 'none'; }
 
         if (currentPacks.length === 0) {
             listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">尚無檔案<br><br>點上方「＋ 創建新檔案」開始</div>';
@@ -506,7 +515,6 @@
         }
 
         // 排序顯示：當前卡綁定的排最上(正常)，其他卡的 / 全域的折疊起來、暗著只供檢視
-        const _curCid = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
         const _otherWrap = document.createElement('div');
         _otherWrap.style.opacity = '0.5';
         let _otherCount = 0;
