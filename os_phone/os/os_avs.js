@@ -90,11 +90,11 @@
                     <div id="avs-view-memory" class="avs-view"></div>
                     <div id="avs-view-state" class="avs-view active"></div>
                     <div id="avs-view-packs" class="avs-view">
-                        <div class="avs-label" style="font-size:13px; padding-top:14px; border-top:1px solid rgba(26,28,40,0.10);">📦 我的檔案</div>
-                        <div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-                            <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack" style="flex:1; min-width:140px;">＋ 創建新檔案</div>
-                            <div class="avs-btn avs-btn-outline" id="avs-btn-preset-pack" style="flex:1; min-width:140px;">🪶 簡易預設</div>
-                            <div class="avs-btn avs-btn-outline" id="avs-btn-ai-gen-pack" style="flex:1; min-width:140px; display:none;">🧬 AI 從世界生成</div>
+                        <div class="avs-packs-title">📦 我的檔案</div>
+                        <div class="avs-packs-actions">
+                            <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack">＋ 創建新檔案</div>
+                            <div class="avs-btn avs-btn-outline" id="avs-btn-preset-pack">🪶 簡易預設</div>
+                            <div class="avs-btn avs-btn-outline" id="avs-btn-ai-gen-pack" style="display:none;">🧬 AI 從世界生成</div>
                         </div>
                         <div id="avs-pack-list" style="display:flex; flex-direction:column; gap:10px;"></div>
                         <div id="avs-pack-editor" class="avs-card" style="display:none;">
