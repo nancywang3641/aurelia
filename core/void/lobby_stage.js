@@ -203,7 +203,7 @@
         doorCd: 0,                  // 過門冷卻（防止落地瞬間又觸發）
         doorArm: false,             // 門武裝狀態：落地後走出門區一次才重新啟動
         transitioning: false,
-        player: null, npcs: [], talkTarget: null,
+        player: null, npcs: [], talkTarget: null, followers: [],
         keys: {}, onKey: null,
         objEls: [],                 // 物件 img（跟 CFG.layout 同序）
         edit: null,                 // 擺設模式狀態
@@ -415,18 +415,21 @@
         const rr = S.root.getBoundingClientRect();
         const menu = document.createElement('div');
         menu.className = 'lstage-actor-menu';
+        const isPlayer = (a.key === 'player');   // 玩家不給「跟隨我」（跟自己很怪）
         menu.innerHTML = '<div class="lam-title">' + (a.name || '角色') + '</div>' +
             '<button class="lam-item" data-act="dress"><i class="fa-solid fa-shirt"></i> 裝扮室</button>' +
-            '<button class="lam-item" data-act="follow"><i class="fa-solid fa-person-walking-arrow-right"></i> ' + (a.follow ? '取消跟隨' : '跟隨我') + '</button>';
+            (isPlayer ? '' : '<button class="lam-item" data-act="follow"><i class="fa-solid fa-person-walking-arrow-right"></i> ' + (a.follow ? '取消跟隨' : '跟隨我') + '</button>');
         menu.style.left = Math.max(6, Math.min(cx - rr.left, rr.width - 150)) + 'px';
-        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - 124)) + 'px';
+        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - (isPlayer ? 90 : 124))) + 'px';
         S.root.appendChild(menu);
         S.menuEl = menu;
         menu.querySelector('[data-act="dress"]').addEventListener('click', () => { _closeActorMenu(); _openDressRoom(a); });
-        menu.querySelector('[data-act="follow"]').addEventListener('click', () => {
+        menu.querySelector('[data-act="follow"]')?.addEventListener('click', () => {
             a.follow = !a.follow;
             a.dest = null;   // 清掉漫步目標，交給跟隨邏輯接手
-            if (!a.follow) { a.walking = false; if (a.sheet) { a.dir = 0; a.frame = 1; a.animT = 0; } }   // 取消跟隨=立定+轉回正面(第1列朝下)
+            S.followers = S.followers.filter(x => x !== a);   // 先移除，維持佇列無重複
+            if (a.follow) S.followers.push(a);   // 加到隊尾：越晚跟的排越後面（串成一列不重疊）
+            else { a.walking = false; if (a.sheet) { a.dir = 0; a.frame = 1; a.animT = 0; } }   // 取消跟隨=立定+轉回正面(第1列朝下)
             _closeActorMenu();
         });
         setTimeout(() => document.addEventListener('pointerdown', _menuOutside, { once: true }), 0);
@@ -981,8 +984,11 @@
                 else n.flip = S.player.x < n.x;
             }
             if (n.follow && S.player && S.talkTarget !== n) {   // 跟隨優先於 noWander/漫步（客人本是站定，跟隨要能蓋過）；對話中先停不跟
-                const FOLLOW_GAP = 46;
-                const vx = S.player.x - n.x, vy = S.player.y - n.y, d = Math.hypot(vx, vy);
+                const FOLLOW_GAP = 60;
+                // 串成一列：隊首跟玩家、其餘各跟前一個→彼此保持 GAP 不重疊（多角色跟隨）
+                const fi = S.followers.indexOf(n);
+                const lead = fi > 0 ? S.followers[fi - 1] : S.player;
+                const vx = lead.x - n.x, vy = lead.y - n.y, d = Math.hypot(vx, vy);
                 if (d > FOLLOW_GAP) {
                     const step = Math.min(d - FOLLOW_GAP, 0.34 * dt);   // 略快於漫步以跟上玩家、又不衝過頭
                     const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
@@ -1360,7 +1366,7 @@
             _left.querySelector('.lstage-chat-fab')?.remove();
         }
         S.root = S.world = null;
-        S.player = null; S.npcs = []; S.talkTarget = null; S.keys = {}; S.objEls = [];
+        S.player = null; S.npcs = []; S.talkTarget = null; S.followers = []; S.keys = {}; S.objEls = [];
         S.mask = null;
         S.active = false;
         console.log('[LobbyStage] unmounted');
