@@ -991,6 +991,7 @@
                     cardName: card, chatId: st.chatId || '',
                     storyTitle: st.storyTitle || card, brief, fullBriefs,
                     personaId: st.personaId || '', personaName: st.personaName || '', personaDesc: st.personaDesc || '',
+                    worldview: st.worldview || '',
                 });
             }
         }
@@ -1004,8 +1005,10 @@
                 .map(f => f.label + '：' + f.value).join('；');
         } catch (e) {}
         const backstory = (g.fullBriefs || g.brief || '').trim();
+        const world = (g.worldview || '').trim();
         return '《' + (g.storyTitle || '某本書') + '》裡的角色「' + g.name + '」' +
             (profile ? '。你的角色檔案：' + profile : '') +
+            (world ? '。\n\n【你所在世界的設定（世界觀）】\n' + world : '') +
             (backstory ? '。\n\n【你經歷過的故事（你記得的過往）】\n' + backstory : '');
     }
     // 那一輪(chatId)的頭像 → 對話立繪。avatar_cache key=`chatId::角色名`；chatId 兩邊都正規化再比

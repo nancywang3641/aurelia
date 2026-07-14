@@ -902,7 +902,7 @@
 
                     // 只沿用第一次的故事標題（不再做角色去重累積——改存「完整去重角色表」）
                     //   + 沿用第一次紀錄的「玩這輪的 persona」與主角（大廳 guest NPC 用它認得訪客，不靠當前 USER）
-                    let personaId = '', personaName = '', personaDesc = '', protagonist = '';
+                    let personaId = '', personaName = '', personaDesc = '', protagonist = '', worldview = '';
                     try {
                         const existing = await osDb.getAllLobbySummaryIndex();
                         for (const r of existing) {
@@ -911,6 +911,7 @@
                             if (r.storyTitle) storyTitle = r.storyTitle;   // 沿用第一次的標題
                             if (r.personaId && !personaId) { personaId = r.personaId; personaName = r.personaName || ''; personaDesc = r.personaDesc || ''; }
                             if (r.protagonist && !protagonist) protagonist = r.protagonist;
+                            if (r.worldview && !worldview) worldview = r.worldview;
                         }
                     } catch (_) {}
                     // 第一次大總結：快照當前 persona（之後沿用第一次的、不覆蓋）
@@ -925,13 +926,26 @@
                         const _pm = finalContent.match(/\[Protagonist\|([^\]|]+)/i);
                         if (_pm) protagonist = _pm[1].trim();
                     }
+                    // 世界觀：取世界書「常駐條目」(作者寫的常在設定＝世界觀本身，免 AI)。世界觀是靜態的→只要還沒存就補(不限第一次)
+                    if (!worldview) {
+                        try {
+                            if (bookName && helper?.getLorebookEntries) {
+                                const _entries = await helper.getLorebookEntries(bookName);
+                                let _wv = (_entries || []).filter(e => e && e.enabled !== false && e.type === 'constant' && e.content)
+                                    .map(e => String(e.content).trim()).filter(Boolean).join('\n\n').trim();
+                                if (!_wv) _wv = (_entries || []).filter(e => e && e.enabled !== false && e.content)   // 沒常駐→退前幾條
+                                    .slice(0, 4).map(e => String(e.content).trim()).filter(Boolean).join('\n\n').trim();
+                                worldview = _wv.slice(0, 1200);
+                            }
+                        } catch (_) {}
+                    }
 
                     if (brief || characters.length) {
                         await osDb.saveLobbySummaryIndex({
                             cardName, chatId, storyTitle, bgCacheId, summaryCount, brief,
                             characters,   // 存「這次大總結的完整去重角色表」(不再只存新增)→ 日誌用最新一筆即反映去重結果、不再賴舊重複卡
                             charHeader,
-                            personaId, personaName, personaDesc, protagonist,   // 那輪的 USER persona 快照 + 主角
+                            personaId, personaName, personaDesc, protagonist, worldview,   // 那輪的 USER persona 快照 + 主角 + 世界觀
                             lorebookBook: bookName,
                             lorebookKey: `tavern_summary::${chatId}`,   // 已搬 OS_DB，非世界書 key（保留欄位相容）
                         });
