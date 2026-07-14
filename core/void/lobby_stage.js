@@ -1083,7 +1083,7 @@
         S.npcs.forEach(n => {
             if (n.facePlayer && S.player) {   // 愛麗絲永遠面向玩家
                 if (n.sheet) n.dir = S.player.x < n.x ? 1 : 2;
-                else n.flip = S.player.x < n.x;
+                else n.flip = S.player.x > n.x;   // 原圖朝左：玩家在右側才鏡像成朝右
             }
             if (n.follow && S.player && S.talkTarget !== n) {   // 跟隨優先於 noWander/漫步（客人本是站定，跟隨要能蓋過）；對話中先停不跟
                 const FOLLOW_GAP = 60;
@@ -1100,7 +1100,7 @@
                             n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
                             n.animT = (n.animT || 0) + dt;
                             n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
-                        } else if (vx) n.flip = vx < 0;
+                        } else if (vx) n.flip = vx > 0;   // 原圖朝左：往右走才鏡像
                     }
                 } else { n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
                 n.dest = null;
@@ -1128,7 +1128,7 @@
                             n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
                             n.animT = (n.animT || 0) + dt;
                             n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
-                        } else if (vx) n.flip = vx < 0;
+                        } else if (vx) n.flip = vx > 0;   // 原圖朝左：往右走才鏡像
                     }
                 }
             }
@@ -1341,7 +1341,7 @@
                     p.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 1 : 2) : (dy < 0 ? 3 : 0);
                     p.animT = (p.animT || 0) + dt;
                     p.frame = WALK_FRAMES[Math.floor(p.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
-                } else if (dx !== 0) p.flip = dx < 0;
+                } else if (dx !== 0) p.flip = dx > 0;   // 原圖朝左：往右走才鏡像
             } else {
                 p.walking = false;
                 if (p.sheet) { p.frame = 1; p.animT = 0; }   // 立定=中幀
