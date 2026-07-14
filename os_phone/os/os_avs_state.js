@@ -397,23 +397,25 @@
         _host.innerHTML = `<div class="avs-st">
             ${storyHtml}
 
-            <div class="avs-card avs-st-toggle-row">
-                <div class="avs-st-toggle-text">
-                    <div class="avs-st-toggle-name">🎬 導演模式</div>
-                    <div class="avs-st-toggle-desc">開啟後，每輪劇情結束由「主模型接口」整理一份導演稿（誰知道什麼、誰在隱瞞、可用的衝突點），下一輪自動給寫正文的 AI 參考</div>
+            <div class="avs-card avs-st-director-card">
+                <div class="avs-st-toggle-row">
+                    <div class="avs-st-toggle-text">
+                        <div class="avs-st-toggle-name">🎬 導演模式</div>
+                        <div class="avs-st-toggle-desc">開啟後，每輪劇情結束由「主模型接口」整理一份導演稿（誰知道什麼、誰在隱瞞、可用的衝突點），下一輪自動給寫正文的 AI 參考</div>
+                    </div>
+                    <div class="avs-st-toggle${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' on' : ''}" id="avs-st-director-toggle" role="switch"></div>
                 </div>
-                <div class="avs-st-toggle${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' on' : ''}" id="avs-st-director-toggle" role="switch"></div>
-            </div>
-            <div class="avs-card avs-st-director-tools${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' is-visible' : ''}" id="avs-st-director-tools">
-                <div class="avs-st-btn-grid col1">
-                    <button class="avs-btn avs-btn-outline" id="avs-st-director-view">📜 查看／編輯導演稿</button>
-                    <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿">🎬 立刻產一份</button>
-                </div>
-                <div class="avs-st-director-editor" id="avs-st-director-editor">
-                    <textarea class="avs-textarea avs-st-director-text" id="avs-st-director-text"></textarea>
-                    <div class="avs-st-btn-grid avs-st-director-actions">
-                        <button class="avs-btn avs-btn-primary" id="avs-st-director-save">💾 儲存（下一輪生效）</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-st-director-close">收起</button>
+                <div class="avs-st-director-tools${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' is-visible' : ''}" id="avs-st-director-tools">
+                    <div class="avs-st-btn-grid col1">
+                        <button class="avs-btn avs-btn-outline" id="avs-st-director-view">📜 查看／編輯導演稿</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿">🎬 立刻產一份</button>
+                    </div>
+                    <div class="avs-st-director-editor" id="avs-st-director-editor">
+                        <textarea class="avs-textarea avs-st-director-text" id="avs-st-director-text"></textarea>
+                        <div class="avs-st-btn-grid avs-st-director-actions">
+                            <button class="avs-btn avs-btn-primary" id="avs-st-director-save">💾 儲存（下一輪生效）</button>
+                            <button class="avs-btn avs-btn-outline" id="avs-st-director-close">收起</button>
+                        </div>
                     </div>
                 </div>
             </div>

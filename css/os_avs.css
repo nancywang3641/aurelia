@@ -266,9 +266,10 @@
         .avs-st-field { padding: 10px 12px; }
         .avs-st-field-add { padding: 11px; }
 
-        /* 導演模式屬於創作輔助：關閉時完全不佔畫面，展開編輯器時才出現。 */
+        /* 導演模式：開關 + 工具鈕併成同一張卡（avs-st-director-card），關閉時只剩開關列。 */
+        .avs-st-director-card .avs-st-toggle-row { padding: 0; min-height: 0; }
         .avs-st-director-tools { display: none; }
-        .avs-st-director-tools.is-visible { display: block; }
+        .avs-st-director-tools.is-visible { display: block; margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(26,28,40,0.10); }
         .avs-st-director-editor { display: none; margin-top: 12px; }
         .avs-st-director-editor.open { display: block; }
         .avs-st-director-text { min-height: 220px; }

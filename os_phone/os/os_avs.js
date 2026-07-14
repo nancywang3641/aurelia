@@ -579,7 +579,7 @@
                         </div>
                     </div>
                     <div style="display:flex; gap:8px; margin-bottom:6px;">
-                        <div class="avs-btn avs-btn-primary btn-refine-tpl" style="flex:1; padding:6px; font-size:12px;">✏️ 微調（只改你說的、省）</div>
+                        <div class="avs-btn avs-btn-primary btn-refine-tpl" style="flex:1; padding:6px; font-size:12px;">✏️ 微調</div>
                         <div class="avs-btn avs-btn-outline btn-refurnace" style="flex:1; padding:6px; font-size:12px;">🔄 重新煉丹</div>
                     </div>
                     <div style="display:flex; gap:8px;">
