@@ -993,13 +993,16 @@
             if (sysPrompt) apiMessages.push({ role: "system", content: `### Instruction\n${sysPrompt}` });
 
             let contextBlock = "";
-            if (userDesc || userName !== "User") contextBlock += `[User Persona — ${userName}]:\n${userDesc || '(玩家本人)'}\n⚠️ ${userName} 就是正在跟你聊天的真實使用者本人；你回覆與稱呼的對象永遠是 ${userName}，絕對不要把他當成劇情裡的其他角色或 NPC。\n\n`;
-
-            if (ctx.char.description) contextBlock += `[Character Description]:\n${ctx.char.description}\n\n`;
-            if (ctx.char.personality) contextBlock += `[Personality]:\n${ctx.char.personality}\n\n`;
-            if (ctx.char.scenario) contextBlock += `[Scenario]:\n${ctx.char.scenario}\n\n`;
-            const NO_LORE_ROUTES = ['iris_chat', 'cheshire_chat'];
-            if (ctx.lore && !NO_LORE_ROUTES.includes(promptKey)) contextBlock += `[World Info]:\n${ctx.lore}\n\n`;
+            // 🚫 大廳(iris/cheshire)完全自足：不吃「當前正在玩的卡」的 persona/角色卡/世界書，避免跨卡污染
+            //    （否則你在玩東京現代卡時，古風大廳 NPC 會吃到「MC 住東京」）。訪客身分/人設/世界觀由 buildNpcPrompt·buildSysPrompt 自己給。
+            const NO_CARD_ROUTES = ['iris_chat', 'cheshire_chat'];
+            if (!NO_CARD_ROUTES.includes(promptKey)) {
+                if (userDesc || userName !== "User") contextBlock += `[User Persona — ${userName}]:\n${userDesc || '(玩家本人)'}\n⚠️ ${userName} 就是正在跟你聊天的真實使用者本人；你回覆與稱呼的對象永遠是 ${userName}，絕對不要把他當成劇情裡的其他角色或 NPC。\n\n`;
+                if (ctx.char.description) contextBlock += `[Character Description]:\n${ctx.char.description}\n\n`;
+                if (ctx.char.personality) contextBlock += `[Personality]:\n${ctx.char.personality}\n\n`;
+                if (ctx.char.scenario) contextBlock += `[Scenario]:\n${ctx.char.scenario}\n\n`;
+                if (ctx.lore) contextBlock += `[World Info]:\n${ctx.lore}\n\n`;
+            }
             
             if (contextBlock) {
                 apiMessages.push({ role: "system", content: contextBlock });
@@ -1009,7 +1012,7 @@
             //   總結後舊樓又被自動隱藏(橋接 getApiContext 濾掉隱藏)→ 對被總結的舊劇情整段失憶。
             //   這裡補上酒館大總結壓縮版(getCurrentInjectionPayload，與正文同一份輕量版)，讓 APP 也共享長期記憶。
             //   ⚠️ 只給「劇情類 APP」路由：工具型呼叫(煉丹 general_assistant、UI 生成…)不該背劇情總結。關閉：localStorage sp_app_inject_summary='0'。
-            const _SUMMARY_ROUTES = new Set(['wx_chat_system', 'call_voice_system', 'iris_chat', 'cheshire_chat', 'wb_world_gen', 'wb_world_continue']);
+            const _SUMMARY_ROUTES = new Set(['wx_chat_system', 'call_voice_system', 'wb_world_gen', 'wb_world_continue']);   // 大廳(iris/cheshire)移除：NPC 靠自己的一對一記憶，不吃當前卡大總結(跨卡污染)
             try {
                 if (_SUMMARY_ROUTES.has(promptKey) && localStorage.getItem('sp_app_inject_summary') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
                     const _sum = await win.OS_STORY_TOOLS.getCurrentInjectionPayload();
@@ -1410,13 +1413,17 @@
                 return _vn;
             }
 
+            // 🚫 大廳(iris/cheshire)自足：不吃當前 persona/世界書/AVS 變數，避免跨卡污染(同酒館路徑)
+            const _NO_CARD_STD = (promptKey === 'iris_chat' || promptKey === 'cheshire_chat');
             let contextBlock = '';
-            if (userDesc || userName !== 'User') contextBlock += `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}\n\n`;
-            if (charPersona)  contextBlock += `[Character Persona (Private Chat)]:\n${charPersona}\n\n`;
-            if (lore)         contextBlock += `[World Info]:\n${lore}\n\n`;
+            if (!_NO_CARD_STD) {
+                if (userDesc || userName !== 'User') contextBlock += `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}\n\n`;
+                if (charPersona)  contextBlock += `[Character Persona (Private Chat)]:\n${charPersona}\n\n`;
+                if (lore)         contextBlock += `[World Info]:\n${lore}\n\n`;
+            }
             if (contextBlock) apiMessages.push({ role: 'system', content: contextBlock });
 
-            if (avsPrompt) apiMessages.push({ role: 'system', content: avsPrompt });
+            if (avsPrompt && !_NO_CARD_STD) apiMessages.push({ role: 'system', content: avsPrompt });
 
             if (promptKey === 'wx_chat_system' && win.WX_DB?.getApiChat && win.wxApp?.GLOBAL_ACTIVE_ID) {
                 try {
