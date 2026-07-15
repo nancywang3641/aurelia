@@ -1266,16 +1266,25 @@
         if (!CFG || !CFG.points) return;
         const pool = _theaterEligible();
         if (pool.length < 2) return;
-        // 配對去重：pool≥3 時避免連續兩場同一對（純視覺、無 API），最多重骰 6 次
+        // 配對去重：記最近幾對，從「當前所有可能配對」排掉最近用過的再抽 → 強制輪完其他組合(AC/BC/AD…)才回頭同一對。
+        //   maxRecent 留至少一個新選擇(=possiblePairs-1，上限4)；純視覺、無 API。
         const _sig = (x, y) => [x.key || x.name, y.key || y.name].sort().join('|');
-        let a, b;
-        for (let t = 0; t < 6; t++) {
+        const possible = pool.length * (pool.length - 1) / 2;
+        const recent = S._recentPairs || (S._recentPairs = []);
+        const maxRecent = Math.max(1, Math.min(possible - 1, 4));
+        const cands = [];
+        for (let x = 0; x < pool.length; x++) for (let y = x + 1; y < pool.length; y++) {
+            const s = _sig(pool[x], pool[y]);
+            if (!recent.includes(s)) cands.push([pool[x], pool[y], s]);
+        }
+        let a, b, sig;
+        if (cands.length) { const c = cands[Math.floor(Math.random() * cands.length)]; a = c[0]; b = c[1]; sig = c[2]; }
+        else {   // 全被排掉(人太少/組合用盡)→退隨機
             const i = Math.floor(Math.random() * pool.length);
             let j = Math.floor(Math.random() * (pool.length - 1)); if (j >= i) j++;
-            a = pool[i]; b = pool[j];
-            if (pool.length < 3 || _sig(a, b) !== S._lastTheaterPair) break;
+            a = pool[i]; b = pool[j]; sig = _sig(a, b);
         }
-        S._lastTheaterPair = _sig(a, b);
+        recent.push(sig); while (recent.length > maxRecent) recent.shift();
         const Z = CFG.points.npcZone;
         let bx = a.x + (Z && a.x > Z.x + Z.w / 2 ? -120 : 120);
         if (Z) bx = Math.max(Z.x + 20, Math.min(Z.x + Z.w - 20, bx));
