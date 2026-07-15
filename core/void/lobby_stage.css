@@ -177,6 +177,11 @@
   border-radius:10px; border:1px solid rgba(243,234,216,.2); background:rgba(0,0,0,.28); color:#f3ead8;
   font:inherit; line-height:1.5; resize:vertical; }
 .lstage-settings .lep-btn.lset-saved { background:#6b8e23; color:#1a1c28; }
+/* 小劇場頻率 segmented */
+.lstage-settings .ltheater-freq { display:inline-flex; gap:4px; }
+.lstage-settings .ltheater-freq-btn { border:none; border-radius:7px; padding:4px 10px; cursor:pointer;
+  background:rgba(243,234,216,.1); color:#d8cdb4; font-size:12px; }
+.lstage-settings .ltheater-freq-btn.on { background:#6b8e23; color:#1a1c28; }
 /* 舞台全屏：隱藏右側 MAIN MENU、舞台吃滿（桌機吃寬、手機吃高） */
 .lobby-body.stage-menu-hidden .lobby-right { display:none !important; }
 .lobby-body.stage-menu-hidden .lobby-left { flex:1 1 100% !important; border-right:none !important; border-bottom:none !important; }

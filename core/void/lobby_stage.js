@@ -1628,6 +1628,13 @@
                 '<label class="lset-row"><span class="lset-tx">大廳 NPC 看你當前劇情</span>' +
                   '<input type="checkbox" class="lset-chk" data-k="story"' + (seeStory ? ' checked' : '') + '></label>' +
                 '<div class="lset-hint">預設關（各書隔離）。勾選＝NPC 會知道你在別的故事裡的近況，可能跨書吐槽你 XD。</div>' +
+                '<label class="lset-row"><span class="lset-tx">NPC 小劇場</span>' +
+                  '<input type="checkbox" class="lset-chk" data-k="theater"' + (localStorage.getItem('lobby_theater_on') !== '0' ? ' checked' : '') + '></label>' +
+                '<div class="lset-hint">兩個 NPC 偶爾會湊在一起聊天，點頭頂符號可以偷聽。</div>' +
+                '<div class="lset-row"><span class="lset-tx">出現頻率</span>' +
+                  '<span class="ltheater-freq">' +
+                    ['low:低','mid:中','high:高'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_theater_freq')||'mid'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-freq="'+v+'">'+t+'</button>'; }).join('') +
+                  '</span></div>' +
                 '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
             box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
                 const k = e.target.dataset.k;
@@ -1637,7 +1644,13 @@
                     unmount(); tryMount();
                 } else if (k === 'story') {
                     try { localStorage.setItem('lobby_npc_see_current_story', e.target.checked ? '1' : '0'); } catch (_) {}
+                } else if (k === 'theater') {
+                    try { localStorage.setItem('lobby_theater_on', e.target.checked ? '1' : '0'); } catch (_) {}
                 }
+            }));
+            box.querySelectorAll('.ltheater-freq-btn').forEach(btn => btn.addEventListener('click', () => {
+                try { localStorage.setItem('lobby_theater_freq', btn.dataset.freq); } catch (_) {}
+                box.querySelectorAll('.ltheater-freq-btn').forEach(b => b.classList.toggle('on', b === btn));
             }));
             box.querySelectorAll('.lset-item').forEach(btn => btn.addEventListener('click', () => {
                 const e = EDITS.find(x => x.id === btn.dataset.edit);
