@@ -157,19 +157,30 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
     }
 
     // buildDuoScenePrompt — 兩個大廳 NPC 的環境閒聊（小劇場）。npcA/npcB = { name, personaText }
+    // buildDuoScenePrompt — 給酒館 AI(generateRaw) 寫一小段 VN 格式劇本（大廳小劇場）。
+    //   輸出交給 VN_Core 播放，立繪/[Scene|]插圖由 VN 引擎處理，故此處產「VN 劇本生成指令」而非直接對話。
     function buildDuoScenePrompt(npcA, npcB, worldCtx) {
-        const worldSec = worldCtx ? ('\n\n【世界觀】\n' + worldCtx) : '';
-        return '你是大廳的環境敘事引擎。以下兩位角色此刻在大廳／視差書咖裡偶然湊在一起，隨口閒聊。請寫出他們之間一段輕鬆、日常、無關緊要的來回對話。\n\n' +
-'【角色A：' + npcA.name + '】\n' + npcA.personaText + '\n\n' +
-'【角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + '\n\n' +
-'【輸出規則】\n' +
-'- 第一行先給這一幕的插圖描述，格式：[Scene|一句具體的畫面描述：場景氛圍＋兩人此刻的動作神態]，只給一個。\n' +
-'- 插圖之後才是對話，一行一句：[Char|角色名|表情|「對話內容」]\n' +
-'- 角色名只能是「' + npcA.name + '」或「' + npcB.name + '」，兩人交替發言。\n' +
-'- 表情只能用：normal/smile/think/surprise/warning/error。\n' +
-'- 全長 4～8 句。可選穿插最多 1 句 [Nar|一句動作或環境描寫]。\n' +
-'- 內容是閒聊：天氣、咖啡、最近的小事、互相吐槽都好；符合各自性格與上面的世界觀。\n' +
-'- 絕不推進任何正式劇情、不把玩家/委託人寫進來、不解釋系統或代碼、不輸出格式以外的任何文字。';
+        const worldSec = worldCtx ? ('\n\n【世界觀（背景，供你判斷用詞與環境，勿整段複述）】\n' + worldCtx) : '';
+        return '你是視覺小說(VN)腳本引擎。以下兩位角色此刻在「純白大廳／視差書咖」偶然湊在一起、隨口閒聊。請寫出一小段輕鬆日常、無關緊要的 VN 小劇場（兩人來回約 6～10 句），嚴格用下面的 VN 格式輸出。\n\n' +
+'【登場角色A：' + npcA.name + '】\n' + npcA.personaText + '\n\n' +
+'【登場角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + '\n\n' +
+'【VN 輸出格式（嚴格遵守）】\n' +
+'- 全部正文只包在「單一」<content>...</content> 內，裡面每個 TAG 各自單獨一行、不與旁白同行。\n' +
+'- 開頭先一個 <ChapterCard>...</ChapterCard>，內含（每行一個）：\n' +
+'  [Story|大廳小劇場]\n' +
+'  [Chapter|1|' + npcA.name + '與' + npcB.name + ']\n' +
+'  [Preface|一句話情境]\n' +
+'  [Protagonist|' + npcA.name + ']\n' +
+'  [World|现代]\n' +
+'  [Bg|季節|時段_地點|時段, 季節, 場景設施, 一句無人的環境描述]\n' +
+'  [Avatar|角色名|聲線|外觀tag串]（兩位各一行，聲線如 青男沉／青女甜／熟男 等，外觀用簡短 tag、描述內禁用「|」）\n' +
+'- ChapterCard 之後是正文：旁白直接寫（環境/動作/心理，不出聲）；角色出聲一律用一行：\n' +
+'  [Char|角色名|表情|「台詞」|Stay 或 Leave]（第五欄必填 Stay/Leave；聊完最後離開的人用 Leave，並在下一行接 [Exit|角色名]）\n' +
+'- 表情只能用：Neutral, Happy, Think, Surprised, Annoyed, Angry, Sighing, Awkward, Embarrassed, Excited, Sad, Confused, Tired, Pout, Laughing, Smirk, Amazed, Teasing。\n' +
+'- 角色名一律用簡體中文；對話引號用全形「」。\n' +
+'- 插圖：正文中至少穿插 1～2 張 [Scene|scene_id|tags]，scene_id 不可重複，tags 只用 Danbooru 英文標籤（不寫句子）。兩人外觀對稱寫、成年男性一定加 handsome_male（壓制模型女化）。格式範例：\n' +
+'  [Scene|cafe_chat_01|2 boys, [1 boy, handsome_male, slim, 外觀...], [1 boy, handsome_male, 外觀...], [friendly], [sitting at coffee table, having conversation, normal_distance, no_physical_contact], [coffee shop, indoors, warm lighting, medium shot, cozy atmosphere]]\n' +
+'- 只寫這一小段閒聊，不推進任何正式劇情、不把玩家/委託人寫進來、不解釋系統或代碼。輸出直接從 <content> 開始，結尾 </content> 收束，前後不要任何其他文字。';
     }
 
     VoidPrompts.buildSysPrompt = buildSysPrompt;
