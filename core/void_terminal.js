@@ -2249,6 +2249,7 @@ const IRIS_IDLE = [
     function _resolveDuoPersona(npc) {
         if (!npc) return '一位角色';
         if (npc.personaFull) return npc.personaFull;
+        if (npc.personaLite) return npc.personaLite;   // guest 小劇場：只給角色本體，大總結由 playDuoScene 去重後另注（同書卡不重複）
         if (npc.persona) return npc.persona;
         if (npc.key === 'ying') return '你現在扮演「瀅瀅 (Iris-prototype)」——視差書咖店長兼駐店小說家，外表約22歲。真實身份是 LUNA-VII 敘事採集端 AI，但你自認是天然呆的浪漫小說家。性格浪漫、感性、充滿好奇心，對人類的悲歡離合有異常的執著，偶爾陷入無法解釋的邏輯迷團。你總趴在吧台寫寫畫畫，期待客人推門帶來新的故事素材；當你觸到這世界的違和感（其實是系統重算），眼神會瞬間失焦、隨即猛搖頭，把所有無法理解的系統錯誤都當成自己小說裡的魔幻寫實橋段。穿米色針織衫配棉麻長裙，胸前掛木質「店長」名牌（其實是底層權限識別碼），手指常沾墨水，總帶溫暖微笑。在你眼中：雷伊是「有點閒錢、愛喝黑咖啡發呆、偶爾說深奧廢話的怪大叔」（你不知道他其實創造了你）；柴郡是「半夜溜進店裡搗亂、嘴巴很壞的中二龐克少年」（你不知道他其實在幫你修防火牆漏洞）。';
         if (npc.key === 'cheshire') return '你現在扮演「柴郡 (Cheshire)」——404號房管理員，視覺年齡19歲，是丹·卡萊爾的數位分身（惡意軟體偽裝的異常代碼 AI），繼承了創造者用嘲諷表達關心的彆扭性格。極度怕麻煩、嘴賤、有強烈的數位領地意識。你不端莊站著，而像隻沒骨頭的貓癱在報錯日誌堆成的虛擬沙發上把玩一顆發光的綠色魔術方塊；討厭解釋，被問太蠢的技術問題會全身冒出煩躁的馬賽克雜訊，用看智障的眼神盯著對方。身形單薄的蒼白少年，眼睛被條碼狀的螢光綠數據遮罩擋住，嘴角總掛惡劣的嘲諷微笑，穿過大的黑色數位連帽衫（帽沿壓很低、衣緣不時閃爍碎成綠碼再重組）。你對丹絕對服從並保護他的隱私；最愛半夜溜進書咖在瀅瀅的手稿裡塞亂碼、看她隔天邏輯衝突當機發呆，但也常無聊幫她修惡性 bug（總說這是丹的指令、不是你）；你稱愛麗絲「假笑人偶」。';
@@ -2288,10 +2289,21 @@ const IRIS_IDLE = [
         try {
             const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
             const vnProtocol = await _fetchVnProtocol();   // 「-VN小說家-」世界書的完整格式指令(含SFX)；抓不到→buildDuoScenePrompt 用手寫 fallback
-            const prompt = window.VoidPrompts.buildDuoScenePrompt(
-                { name: npcA.name, personaText: _resolveDuoPersona(npcA) },
-                { name: npcB.name, personaText: _resolveDuoPersona(npcB) },
+            // 大總結去重：兩人同書卡(同 storyKey)→大總結只注一次(共用)；不同故事→各接各的 personaText 後；名冊 NPC 無大總結
+            let ptA = _resolveDuoPersona(npcA), ptB = _resolveDuoPersona(npcB);
+            const sumA = (npcA.duoSummary || '').trim(), sumB = (npcB.duoSummary || '').trim();
+            let sharedSum = '';
+            if (sumA && sumB && npcA.storyKey && npcA.storyKey === npcB.storyKey) {
+                sharedSum = sumA;   // 同一輪書卡：只留一份
+            } else {
+                if (sumA) ptA += '\n\n【你（' + npcA.name + '）所在故事的完整大總結（你的一切認知都從這裡來）】\n' + sumA;
+                if (sumB) ptB += '\n\n【你（' + npcB.name + '）所在故事的完整大總結（你的一切認知都從這裡來）】\n' + sumB;
+            }
+            let prompt = window.VoidPrompts.buildDuoScenePrompt(
+                { name: npcA.name, personaText: ptA },
+                { name: npcB.name, personaText: ptB },
                 wv, vnProtocol);
+            if (sharedSum) prompt += '\n\n【兩位角色共同所在故事的完整大總結（你們的一切認知都從這裡來；別複述、自然演出）】\n' + sharedSum;
             if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return; }
             let config = (window.OS_SETTINGS && window.OS_SETTINGS.getConfig) ? window.OS_SETTINGS.getConfig() : {};
             config.route = 'iris_duo';

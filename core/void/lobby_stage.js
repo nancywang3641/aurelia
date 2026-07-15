@@ -941,6 +941,7 @@
                         key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName,   // key 帶 chatId：對話歷史/裝扮皮膚都按「那一輪」隔離
                         name: g.name, storyTitle: g.storyTitle,
                         persona: _guestPersona(g),
+                        personaLite: _guestPersonaLite(g), duoSummary: _guestSummary(g), storyKey: g.chatId || '',   // 小劇場去重用：角色本體/大總結/故事鍵分開存
                         personaId: g.personaId || '', personaName: g.personaName || '', personaDesc: g.personaDesc || '',   // 那輪玩的 USER persona
                         x: sp.x, y: sp.y,
                         src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
@@ -1086,19 +1087,25 @@
         }
         return pool;
     }
-    function _guestPersona(g) {
+    // 整份大總結全文優先（隨機 NPC 不在世界書裡，只能靠這份餵飽）；沒有才退壓縮 briefs
+    function _guestSummary(g) { return (g.fullSummary || g.fullBriefs || g.brief || '').trim(); }
+    // 角色本體（不含大總結）：intro + 角色表 + 世界觀
+    function _guestPersonaLite(g) {
         let profile = '';
         try {
             profile = _npcRowFields(g.row, g.charHeader)
                 .filter(f => f.value && f.label !== '姓名')
                 .map(f => f.label + '：' + f.value).join('；');
         } catch (e) {}
-        // 整份大總結全文優先（隨機 NPC 不在世界書裡，只能靠這份餵飽）；沒有才退壓縮 briefs
-        const backstory = (g.fullSummary || g.fullBriefs || g.brief || '').trim();
         const world = (g.worldview || '').trim();
         return '《' + (g.storyTitle || '某本書') + '》裡的角色「' + g.name + '」' +
             (profile ? '。你在這故事裡的角色檔案：' + profile : '') +
-            (world ? '。\n\n【你所在世界的設定（世界觀）】\n' + world : '') +
+            (world ? '。\n\n【你所在世界的設定（世界觀）】\n' + world : '');
+    }
+    // 完整（單獨對話用）＝ 角色本體 ＋ 大總結
+    function _guestPersona(g) {
+        const backstory = _guestSummary(g);
+        return _guestPersonaLite(g) +
             (backstory ? '。\n\n【這一輪的完整大總結（你所在故事的全部記憶：劇情時間軸＋所有角色＋事件，你的一切認知都從這裡來）】\n' + backstory : '');
     }
     // 那一輪(chatId)的頭像 → 對話立繪。avatar_cache key=`chatId::角色名`；chatId 兩邊都正規化再比
