@@ -2299,10 +2299,11 @@ const IRIS_IDLE = [
                 if (sumA) ptA += '\n\n【你（' + npcA.name + '）所在故事的完整大總結（你的一切認知都從這裡來）】\n' + sumA;
                 if (sumB) ptB += '\n\n【你（' + npcB.name + '）所在故事的完整大總結（你的一切認知都從這裡來）】\n' + sumB;
             }
+            const theaterCtx = await _buildTheaterCtx();   // 最近幾場小劇場記事：供自然回扣+避免重複題材
             let prompt = window.VoidPrompts.buildDuoScenePrompt(
                 { name: npcA.name, personaText: ptA },
                 { name: npcB.name, personaText: ptB },
-                wv, vnProtocol);
+                wv, vnProtocol, theaterCtx);
             if (sharedSum) prompt += '\n\n【兩位角色共同所在故事的完整大總結（你們的一切認知都從這裡來；別複述、自然演出）】\n' + sharedSum;
             if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return; }
             let config = (window.OS_SETTINGS && window.OS_SETTINGS.getConfig) ? window.OS_SETTINGS.getConfig() : {};
@@ -2324,6 +2325,7 @@ const IRIS_IDLE = [
             window._lobbyPendingChapter = ch;
             if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
             else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(content, null);
+            _summarizeTheater(npcA, npcB, content);   // fire-and-forget：背景抽一句記事存日誌（不 await、不拖播放）
         } catch (e) { console.warn('[playDuoScene]', e); }
         finally {
             // 延遲還原旗標：撐過生成後才發的 GENERATION_ENDED（state_runtime debounce 1500ms）再放行，別擋到 VN 播放本身的立繪/場景生圖
@@ -2376,6 +2378,93 @@ ${sections}`;
             return '';
         }
     }
+
+    // ── 🎭 小劇場日誌：注入最近記事 + 播完背景抽記事 + 手動重壓縮 ───────────
+    //   存 OS_DB.lobby_theater_log（跨配對全域時間線）。抽記事走副模型，仿 _compactNpcMemory：
+    //   OS_API.chat 直連本就不發 GENERATION_*，不會觸發 AVS/VecEngine 抽取，故不需設 __AURELIA_SUMMARIZING。
+    const THEATER_LOG_INJECT = 5;   // 注入 prompt 的最近條數
+    const THEATER_LOG_CAP    = 60;  // 硬上限，超過自動裁舊（重壓縮才是主要瘦身手段）
+
+    async function _buildTheaterCtx() {
+        try {
+            if (!window.OS_DB || !window.OS_DB.getAllTheaterLog) return '';
+            const all = await window.OS_DB.getAllTheaterLog();   // 最新在前
+            if (!all.length) return '';
+            return all.slice(0, THEATER_LOG_INJECT).reverse()    // 反轉成時間順序讀起來自然
+                .map(e => '· ' + (e.pair ? '（' + e.pair + '）' : '') + (e.brief || '')).filter(s => s.length > 3).join('\n');
+        } catch (e) { return ''; }
+    }
+
+    async function _summarizeTheater(npcA, npcB, content) {
+        try {
+            if (!window.OS_DB || !window.OS_API || !window.VoidPrompts?.buildTheaterSummaryPrompt) return;
+            const sceneText = String(content || '')
+                .replace(/<[^>]+>/g, ' ')                                              // 剝 <content> 等 HTML 標籤
+                .replace(/\[Char\|([^|\]]*)\|[^|\]]*\|(「[^」]*」)[^\]]*\]/g, '$1$2 ')   // [Char|名|表情|「台詞」|狀態] → 名「台詞」（台詞在括號內，要先救出來）
+                .replace(/\[[^\]]*\]/g, ' ')                                           // 其餘結構標記([Scene]/[Bg]/[Avatar]/[Exit]…)整條刪
+                .replace(/\s{2,}/g, ' ').trim();
+            if (sceneText.length < 8) return;
+            const prompt = window.VoidPrompts.buildTheaterSummaryPrompt(npcA.name, npcB.name, sceneText);
+
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+            }
+            config.route = 'iris_duo';
+
+            const seg = await new Promise((resolve, reject) => {
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '小劇場記事:' + npcA.name + '&' + npcB.name });
+            });
+            let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim();
+            if (!clean || clean === '無' || clean.length < 4 || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) return;
+
+            await window.OS_DB.saveTheaterLog({
+                pair: (npcA.name || '?') + ' × ' + (npcB.name || '?'),
+                npcKeys: [npcA.key || '', npcB.key || ''],
+                brief: clean, ts: Date.now(),
+            });
+            try {   // 硬上限裁舊
+                const all = await window.OS_DB.getAllTheaterLog();
+                if (all.length > THEATER_LOG_CAP) for (const old of all.slice(THEATER_LOG_CAP)) await window.OS_DB.deleteTheaterLog(old.id);
+            } catch (e) {}
+        } catch (e) { console.warn('[小劇場記事]', e); }
+    }
+
+    // 手動重壓縮：把「最近 N 條之外」的舊記事交副模型併成一段精簡綜述，用一筆 merged 記錄取代它們。回傳 { ok, msg }。
+    VoidTerminal.recompressTheaterLog = async function () {
+        const KEEP = THEATER_LOG_INJECT;
+        try {
+            if (!window.OS_DB || !window.OS_API || !window.VoidPrompts) return { ok: false, msg: '環境未就緒' };
+            const all = await window.OS_DB.getAllTheaterLog();   // 最新在前
+            if (all.length <= KEEP + 1) return { ok: false, msg: '記事還不多，暫時不用整理' };
+            const toMerge = all.slice(KEEP);                     // 舊的（含前次 merged）一起再併
+            const oldText = toMerge.slice().reverse()
+                .map(e => '· ' + (e.pair ? '（' + e.pair + '）' : '') + (e.brief || '')).filter(s => s.length > 3).join('\n');
+            if (!oldText.trim()) return { ok: false, msg: '沒有可整理的內容' };
+
+            const prompt = '你是大廳劇場的記事員。以下是往期的一串小劇場記事（按時間順序）。\n' +
+'請把它們濃縮成一段精簡的「往期大廳氛圍綜述」（3～5 句話），保留誰跟誰之間發生過的重點、留下的梗或約定，捨棄流水帳細節。\n' +
+'只輸出這段綜述，不要條列、不要旁白、不要角色表。\n\n【往期記事】\n' + oldText;
+
+            let config = {};
+            const sec = window.OS_SETTINGS && window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+            config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : (window.OS_SETTINGS ? window.OS_SETTINGS.getConfig() : {});
+            config.route = 'iris_duo';
+
+            const seg = await new Promise((resolve, reject) => {
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '小劇場重壓縮' });
+            });
+            let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim();
+            if (!clean || clean === '無' || clean.length < 8 || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) {
+                return { ok: false, msg: '整理失敗（生成無效），原記事保留' };
+            }
+            const oldestTs = toMerge[toMerge.length - 1].ts || Date.now();   // 新 merged 用最舊 ts→排最底，保時間序
+            await window.OS_DB.saveTheaterLog({ pair: '往期綜述', brief: clean, merged: true, ts: oldestTs });
+            for (const old of toMerge) await window.OS_DB.deleteTheaterLog(old.id);   // 存成功才刪舊
+            return { ok: true, msg: '已把 ' + toMerge.length + ' 條往期記事整理成 1 段綜述' };
+        } catch (e) { console.warn('[小劇場重壓縮]', e); return { ok: false, msg: '整理失敗：' + (e && e.message || e) }; }
+    };
 
     // 回傳要插入 sysPrompt 的時間紀錄字串，沒有歷史則回傳空字串
     function _buildTimeCtx() {
