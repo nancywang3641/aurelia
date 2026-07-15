@@ -423,7 +423,7 @@
     // 右鍵角色→下拉單
     function _closeActorMenu() { S.menuEl?.remove(); S.menuEl = null; }
     function _openActorMenu(a, cx, cy) {
-        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory(); _closeLobbySettings();
+        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory(); _closeLobbySettings(); _closeTheaterHistory();
         const rr = S.root.getBoundingClientRect();
         const menu = document.createElement('div');
         menu.className = 'lstage-actor-menu';
@@ -553,6 +553,95 @@
                 setNpcHistory(a.key, []);
                 try { (window.OS_DB || (window.parent || window).OS_DB)?.saveNpcMemory?.(a.key, { name: a.name || '', summary: '', lastCompactAt: 0 }); } catch (e) {}
                 _renderNpcHistoryBody(box, a);
+            }
+        });
+    }
+
+    // ── 🎭 小劇場歷史（看/編輯/刪除/清空/重壓縮；資料 = OS_DB.lobby_theater_log）──
+    function _osdb() { return window.OS_DB || (window.parent || window).OS_DB; }
+    function _thlTime(ts) {
+        if (!ts) return '';
+        const s = Math.floor((Date.now() - ts) / 1000);
+        if (s < 60) return '剛剛';
+        const m = Math.floor(s / 60); if (m < 60) return m + ' 分前';
+        const h = Math.floor(m / 60); if (h < 24) return h + ' 時前';
+        return Math.floor(h / 24) + ' 天前';
+    }
+    function _closeTheaterHistory() { S.thlEl?.remove(); S.thlEl = null; }
+    async function _renderTheaterHistoryBody(box) {
+        const db = _osdb();
+        const list = box.querySelector('.lsh-list');
+        const cnt = box.querySelector('.lsh-count');
+        if (!list) return;
+        let logs = [];
+        try { logs = (db && db.getAllTheaterLog) ? (await db.getAllTheaterLog()) : []; } catch (e) {}
+        if (cnt) cnt.textContent = logs.length + ' 條';
+        if (!logs.length) { list.innerHTML = '<div class="lsh-empty">── 還沒有小劇場記事 ──</div>'; return; }
+        list.innerHTML = '';
+        logs.forEach(log => {
+            const row = document.createElement('div');
+            row.className = 'ltl-row' + (log.merged ? ' merged' : '');
+            const head = document.createElement('div'); head.className = 'ltl-head';
+            const pair = document.createElement('span'); pair.className = 'ltl-pair';
+            pair.innerHTML = '<i class="fa-solid ' + (log.merged ? 'fa-compress' : 'fa-masks-theater') + '"></i> ';
+            pair.append(document.createTextNode(log.pair || '小劇場'));   // textNode 防注入
+            const time = document.createElement('span'); time.className = 'ltl-time'; time.textContent = _thlTime(log.ts);
+            const del = document.createElement('button'); del.className = 'ltl-del'; del.title = '刪除這條';
+            del.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            head.append(pair, time, del);
+            const ta = document.createElement('textarea'); ta.className = 'ltl-text'; ta.rows = 2; ta.value = log.brief || '';
+            row.append(head, ta);
+            ta.addEventListener('change', async () => {   // blur 自動存
+                try { if (db && db.saveTheaterLog) await db.saveTheaterLog({ id: log.id, pair: log.pair, npcKeys: log.npcKeys, brief: ta.value.trim(), merged: log.merged, ts: log.ts }); } catch (e) {}
+            });
+            del.addEventListener('click', async () => {
+                try { if (db && db.deleteTheaterLog) await db.deleteTheaterLog(log.id); } catch (e) {}
+                _renderTheaterHistoryBody(box);
+            });
+            list.appendChild(row);
+        });
+    }
+    function _openTheaterHistory() {
+        _closeTheaterHistory(); _closeDressRoom(); _closeNpcHistory(); _closeLobbySettings();
+        const box = document.createElement('div');
+        box.className = 'lstage-dress lstage-history lstage-theater-log';
+        box.innerHTML =
+            '<div class="lsd-title lset-editor-title">' +
+              '<button class="lset-back" data-act="back"><i class="fa-solid fa-chevron-left"></i></button>' +
+              '<span><i class="fa-solid fa-masks-theater"></i> 小劇場歷史</span><span class="lsh-count"></span></div>' +
+            '<div class="lset-hint">偷聽到的閒聊記事。可直接改字、刪除，記事變多時「重壓縮」會把往期併成一段綜述。</div>' +
+            '<div class="lsh-list"></div>' +
+            '<div class="ltl-actions">' +
+              '<button class="lep-btn" data-act="recompress"><i class="fa-solid fa-compress"></i> 重壓縮</button>' +
+              '<button class="lep-btn lep-danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空全部</button>' +
+            '</div>' +
+            '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+        S.root.appendChild(box);
+        S.thlEl = box;
+        _renderTheaterHistoryBody(box);
+        box.addEventListener('click', async (e) => {
+            const act = e.target.closest('[data-act]')?.dataset.act;
+            if (!act) return;
+            if (act === 'close') { _closeTheaterHistory(); return; }
+            if (act === 'back')  { _closeTheaterHistory(); _openLobbySettings(); return; }
+            if (act === 'clear') {
+                if (!window.confirm('清空全部小劇場記事？不可復原。')) return;
+                try { await _osdb()?.clearTheaterLog?.(); } catch (e) {}
+                _renderTheaterHistoryBody(box);
+                return;
+            }
+            if (act === 'recompress') {
+                const btn = e.target.closest('[data-act="recompress"]');
+                const vt = window.VoidTerminal || (window.parent || window).VoidTerminal;
+                if (!vt || !vt.recompressTheaterLog || !btn) return;
+                const old = btn.innerHTML; btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 整理中…';
+                let res = { ok: false, msg: '' };
+                try { res = await vt.recompressTheaterLog(); } catch (e) { res = { ok: false, msg: '整理失敗' }; }
+                btn.disabled = false; btn.innerHTML = old;
+                await _renderTheaterHistoryBody(box);
+                try { const t = window.toastr || (window.parent || window).toastr; t?.[res.ok ? 'success' : 'info']?.(res.msg); } catch (e) {}
+                return;
             }
         });
     }
@@ -1601,7 +1690,7 @@
     // ── ⚙️ 大廳設置小面板（舞台上，仿裝扮室）──
     function _closeLobbySettings() { S.setEl?.remove(); S.setEl = null; }
     function _openLobbySettings() {
-        _closeLobbySettings(); _closeDressRoom(); _closeNpcHistory();
+        _closeLobbySettings(); _closeDressRoom(); _closeNpcHistory(); _closeTheaterHistory();
         const useLore = localStorage.getItem('lobby_worldview_use_lorebook') === '1';
         const seeStory = localStorage.getItem('lobby_npc_see_current_story') === '1';
         const box = document.createElement('div');
@@ -1642,6 +1731,12 @@
                   '<span class="ltheater-freq' + (localStorage.getItem('lobby_theater_on') === '0' ? ' off' : '') + '">' +
                     ['low:低','mid:中','high:高'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_theater_freq')||'mid'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-freq="'+v+'">'+t+'</button>'; }).join('') +
                   '</span></div>' +
+                '<button class="lset-item" data-act="theater-log">' +
+                  '<i class="fa-solid fa-clock-rotate-left lset-item-ic"></i>' +
+                  '<span class="lset-item-tx"><span class="lset-item-name">小劇場歷史</span>' +
+                  '<span class="lset-item-sub">偷聽到的閒聊記事</span></span>' +
+                  '<i class="fa-solid fa-chevron-right lset-item-arrow"></i>' +
+                '</button>' +
                 '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
             box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
                 const k = e.target.dataset.k;
@@ -1664,6 +1759,8 @@
                 const e = EDITS.find(x => x.id === btn.dataset.edit);
                 if (e) renderEditor(e);
             }));
+            const tlBtn = box.querySelector('[data-act="theater-log"]');
+            if (tlBtn) tlBtn.addEventListener('click', () => { _openTheaterHistory(); });   // 內部會先關設置面板
         }
 
         function renderEditor(e) {
@@ -1811,7 +1908,7 @@
         if (S._theaterTimer) { clearInterval(S._theaterTimer); S._theaterTimer = null; }
         _endTheater();
         if (S.edit) exitEdit(false);
-        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory(); _closeLobbySettings();
+        _closeActorMenu(); _closeDressRoom(); _closeNpcHistory(); _closeLobbySettings(); _closeTheaterHistory();
         S.joy = null;   // 清搖桿殘留方向
         document.querySelector('.lobby-body')?.classList.remove('stage-menu-hidden');   // 舞台關掉→純文字大廳要看得到選單
         endTalk();
