@@ -2254,9 +2254,12 @@ const IRIS_IDLE = [
         if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
         return '角色「' + (npc.name || '某位') + '」';
     }
-    // 小劇場：用 OS_API.chat 走「主模型」連線(獨立路徑,乾淨——不吃當前卡世界書/歷史、不觸發 AVS/VecEngine/大總結)
-    //   生成一小段 VN 劇本 → 攔截不回傳 chat → 存 DB → 丟 VN 播放器播。立繪/[Scene|]插圖由 VN_Core 引擎處理。
+    // 小劇場：OS_API.chat 走「主模型」生成 VN 劇本 → 攔截不回傳 chat → 丟 VN 播放器 ephemeral 播（不存章節）。
+    //   🚨全程包 __AURELIA_SUMMARIZING：state_runtime(AVS)/VecEngine/dossier 都查此旗標，不設就會拿當前卡 preset 抽小劇場→污染。
+    //   🚨不 saveVnChapter：一存成章節就觸發 VecEngine ingest + state_runtime 抽取。改 ephemeral(_startWithLoader/autoload 不存)。
+    //   🚨沒 <content> 一律丟棄(照 VN 劇本鐵則，不 wrap 垃圾→黑屏)。立繪/[Scene|]插圖由 VN_Core 引擎處理。
     VoidTerminal.playDuoScene = async function (npcA, npcB) {
+        const _prevSum = window.__AURELIA_SUMMARIZING;
         try {
             const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
             const prompt = window.VoidPrompts.buildDuoScenePrompt(
@@ -2264,37 +2267,28 @@ const IRIS_IDLE = [
                 { name: npcB.name, personaText: _resolveDuoPersona(npcB) },
                 wv);
             if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return; }
-            // 主模型連線(getConfig)；route 標 iris_duo。整段自組資料，不帶當前卡任何上下文/世界書。
             let config = (window.OS_SETTINGS && window.OS_SETTINGS.getConfig) ? window.OS_SETTINGS.getConfig() : {};
             config.route = 'iris_duo';
+            window.__AURELIA_SUMMARIZING = true;   // 生成期間擋 AVS/VecEngine/dossier 抽取（它們都查此旗標）
             let script = await new Promise((resolve, reject) => {
                 window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, {});
             });
             script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
-            // 攔截：只保留 <content>…</content>（沒包就整段當正文）；不回傳酒館 chat
-            let content = script;
+            // 攔截：只吃合法 <content>…</content>；沒有一律丟棄（不 wrap 垃圾）
             const m = script.match(/<content>[\s\S]*?<\/content>/i);
-            if (m) content = m[0].trim();
-            else if (!/^<content>/i.test(content)) content = '<content>\n' + content + '\n</content>';
-            if (!content) return;
-            // 攔截後直接存 DB（大廳小劇場章節）
-            const ch = {
-                title: '🎭 小劇場：' + npcA.name + ' & ' + npcB.name,
-                storyId: 'lobby_theater',
-                storyTitle: '大廳小劇場',
-                content: content,
-                createdAt: Date.now(),
-            };
-            try { await (window.OS_DB && window.OS_DB.saveVnChapter && window.OS_DB.saveVnChapter(ch)); } catch (e) {}
-            // 丟 VN 播放器：立繪 + [Scene|] 插圖由 VN 引擎渲染（復用「續看章節」的 autoload 路徑）
+            if (!m) { console.warn('[playDuoScene] 無 <content>，丟棄'); return; }
+            const content = m[0].trim();
+            // ephemeral 播：不 saveVnChapter（免觸發 ingest/抽取）；autoload 讀 _lobbyPendingChapter.content 直接 _startWithLoader
+            const ch = { title: '🎭 小劇場：' + npcA.name + ' & ' + npcB.name, storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: content, createdAt: Date.now() };
             try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
             window._lobbyPendingChapter = ch;
-            if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) {
-                window.AureliaControlCenter.showVnPanel('autoload');
-            } else if (window.VN_Core && window.VN_Core._startWithLoader) {
-                window.VN_Core._startWithLoader(content, null);
-            }
+            if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
+            else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(content, null);
         } catch (e) { console.warn('[playDuoScene]', e); }
+        finally {
+            // 延遲還原旗標：撐過生成後才發的 GENERATION_ENDED（state_runtime debounce 1500ms）再放行，別擋到 VN 播放本身的立繪/場景生圖
+            setTimeout(function () { window.__AURELIA_SUMMARIZING = _prevSum; }, 4000);
+        }
     };
 
     // ===== 時間隔工具函式（注入 AI context 用，不做 UI）=====
