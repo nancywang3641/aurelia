@@ -2274,10 +2274,12 @@ const IRIS_IDLE = [
                 window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, {});
             });
             script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
-            // 攔截：只吃合法 <content>…</content>；沒有一律丟棄（不 wrap 垃圾）
-            const m = script.match(/<content>[\s\S]*?<\/content>/i);
-            if (!m) { console.warn('[playDuoScene] 無 <content>，丟棄'); return; }
-            const content = m[0].trim();
+            // 攔截 <content>…</content>：完整一對→直接用；只有開標籤(收尾被 maxtoken 截掉)→補上 </content>；完全沒 <content>→丟棄(不 wrap 垃圾→黑屏)
+            let content = '';
+            const _full = script.match(/<content>[\s\S]*?<\/content>/i);
+            if (_full) content = _full[0].trim();
+            else { const _open = script.match(/<content>[\s\S]*/i); if (_open) content = _open[0].trim() + '\n</content>'; }
+            if (!content) { console.warn('[playDuoScene] 無 <content>，丟棄'); return; }
             // ephemeral 播：不 saveVnChapter（免觸發 ingest/抽取）；autoload 讀 _lobbyPendingChapter.content 直接 _startWithLoader
             const ch = { title: '🎭 小劇場：' + npcA.name + ' & ' + npcB.name, storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: content, createdAt: Date.now() };
             try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
