@@ -163,7 +163,8 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 '【角色A：' + npcA.name + '】\n' + npcA.personaText + '\n\n' +
 '【角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + '\n\n' +
 '【輸出規則】\n' +
-'- 只用這個格式，一行一句：[Char|角色名|表情|「對話內容」]\n' +
+'- 第一行先給這一幕的插圖描述，格式：[Scene|一句具體的畫面描述：場景氛圍＋兩人此刻的動作神態]，只給一個。\n' +
+'- 插圖之後才是對話，一行一句：[Char|角色名|表情|「對話內容」]\n' +
 '- 角色名只能是「' + npcA.name + '」或「' + npcB.name + '」，兩人交替發言。\n' +
 '- 表情只能用：normal/smile/think/surprise/warning/error。\n' +
 '- 全長 4～8 句。可選穿插最多 1 句 [Nar|一句動作或環境描寫]。\n' +
