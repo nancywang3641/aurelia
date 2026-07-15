@@ -11,7 +11,7 @@
     function buildSysPrompt(scene, ctx) {
         const { userName, visit404Count, timeCtx, lobbyTemplateSec, supplement, justReturnedFrom404, journalCtx, worldCtx } = ctx;
         const journalSec = journalCtx ? `\n\n${journalCtx}\n` : '';
-        const worldSec   = worldCtx ? `\n\n【世界觀補充（Rae 維護的私人 lore）】\n${worldCtx}\n` : '';
+        const worldSec   = worldCtx ? `\n\n【世界觀】\n${worldCtx}\n` : '';
         if (scene === 'cheshire') {
             return `你現在是「柴郡 (Cheshire)」，404號房的管理員，丹·卡萊爾的數位分身。
 
