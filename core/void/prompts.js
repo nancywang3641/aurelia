@@ -156,8 +156,24 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 '\n【這次要濃縮的閒聊記錄】\n' + chunkText;
     }
 
+    // buildDuoScenePrompt — 兩個大廳 NPC 的環境閒聊（小劇場）。npcA/npcB = { name, personaText }
+    function buildDuoScenePrompt(npcA, npcB, worldCtx) {
+        const worldSec = worldCtx ? ('\n\n【世界觀】\n' + worldCtx) : '';
+        return '你是大廳的環境敘事引擎。以下兩位角色此刻在大廳／視差書咖裡偶然湊在一起，隨口閒聊。請寫出他們之間一段輕鬆、日常、無關緊要的來回對話。\n\n' +
+'【角色A：' + npcA.name + '】\n' + npcA.personaText + '\n\n' +
+'【角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + '\n\n' +
+'【輸出規則】\n' +
+'- 只用這個格式，一行一句：[Char|角色名|表情|「對話內容」]\n' +
+'- 角色名只能是「' + npcA.name + '」或「' + npcB.name + '」，兩人交替發言。\n' +
+'- 表情只能用：normal/smile/think/surprise/warning/error。\n' +
+'- 全長 4～8 句。可選穿插最多 1 句 [Nar|一句動作或環境描寫]。\n' +
+'- 內容是閒聊：天氣、咖啡、最近的小事、互相吐槽都好；符合各自性格與上面的世界觀。\n' +
+'- 絕不推進任何正式劇情、不把玩家/委託人寫進來、不解釋系統或代碼、不輸出格式以外的任何文字。';
+    }
+
     VoidPrompts.buildSysPrompt = buildSysPrompt;
     VoidPrompts.buildNpcPrompt = buildNpcPrompt;
     VoidPrompts.buildNpcMemorySummaryPrompt = buildNpcMemorySummaryPrompt;
+    VoidPrompts.buildDuoScenePrompt = buildDuoScenePrompt;
     console.log('✅ VoidPrompts（角色提示詞模板）模組就緒');
 })(window.VoidPrompts = window.VoidPrompts || {});
