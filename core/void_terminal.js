@@ -2244,6 +2244,49 @@ const IRIS_IDLE = [
         }, speed);
     }
 
+    // 小劇場：解析每方人設文字（personaFull > persona > 已知常駐 brief > 名字兜底）
+    function _resolveDuoPersona(npc) {
+        if (!npc) return '一位角色';
+        if (npc.personaFull) return npc.personaFull;
+        if (npc.persona) return npc.persona;
+        if (npc.key === 'ying') return '視差書咖的店長、天然呆小說家瀅瀅，浪漫感性、愛收集客人的故事，偶爾冒出對世界邊界的奇怪直覺。';
+        if (npc.key === 'cheshire') return '404號房管理員柴郡，嘴賤怕麻煩的數位野貓，是丹的數位分身，愛惡作劇。';
+        if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
+        return '角色「' + (npc.name || '某位') + '」';
+    }
+    // 小劇場：兩個大廳 NPC 的環境閒聊（副模型，route iris_duo）。由 lobby_stage 觸發。
+    VoidTerminal.playDuoScene = async function (npcA, npcB) {
+        try {
+            const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
+            const sysPrompt = window.VoidPrompts.buildDuoScenePrompt(
+                { name: npcA.name, personaText: _resolveDuoPersona(npcA) },
+                { name: npcB.name, personaText: _resolveDuoPersona(npcB) },
+                wv);
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                if (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) config = sec;
+                else config = window.OS_SETTINGS.getConfig();
+            }
+            config.route = 'iris_duo';
+            const messages = [
+                { role: 'system', content: sysPrompt },
+                { role: 'user', content: '（開始他們的閒聊）' },
+            ];
+            let reply = await new Promise((resolve, reject) => {
+                window.OS_API.chat(messages, config, null, resolve, reject, {});
+            });
+            reply = String(reply || '');
+            // 先剝 <thinking>（CoT 自檢會提到 tag 字樣）→ 再抓 <content> → 再砍註解
+            reply = reply.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+            const m = reply.match(/<content>([\s\S]*?)<\/content>/i);
+            if (m) reply = m[1];
+            reply = reply.replace(/<!--[\s\S]*?-->/g, '').replace(/^"|"$/g, '').replace(/\n{3,}/g, '\n\n').trim();
+            if (!reply) return;
+            await new Promise((res) => { playIrisSequence(reply, res); });
+        } catch (e) { console.warn('[playDuoScene]', e); }
+    };
+
     // ===== 時間隔工具函式（注入 AI context 用，不做 UI）=====
     function _fmtClock(ts) {
         const d = new Date(ts);
