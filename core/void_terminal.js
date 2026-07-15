@@ -2268,7 +2268,7 @@ const IRIS_IDLE = [
             if (!Array.isArray(entries) || !entries.length) return '';
             const KEEP = /TAG總綱|寫作規則|Scene場景|Scene插畫|表情包清單|SFX音效清單|禁止事項|BGM｜規範/;   // 只挑格式/音效/表情/禁令；不碰角色·CP·世界觀
             _vnProtocolCache = entries
-                .filter(e => e && e.content && KEEP.test(String(e.comment || e.name || '')))
+                .filter(e => e && e.enabled !== false && e.content && KEEP.test(String(e.comment || e.name || '')))   // 只拿綠燈(enabled)的，排除使用者關掉的條目
                 .map(e => String(e.content).trim())
                 .filter(Boolean)
                 .join('\n\n──────\n\n');
