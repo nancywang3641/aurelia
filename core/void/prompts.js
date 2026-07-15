@@ -156,31 +156,30 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 '\n【這次要濃縮的閒聊記錄】\n' + chunkText;
     }
 
-    // buildDuoScenePrompt — 兩個大廳 NPC 的環境閒聊（小劇場）。npcA/npcB = { name, personaText }
-    // buildDuoScenePrompt — 給副模型(OS_API.chat,獨立乾淨不吃當前卡) 寫一小段 VN 格式劇本（大廳小劇場）。
-    //   輸出交給 VN_Core 播放，立繪/[Scene|]插圖由 VN 引擎處理，故此處產「VN 劇本生成指令」而非直接對話。
-    function buildDuoScenePrompt(npcA, npcB, worldCtx) {
+    // buildDuoScenePrompt — 給主模型(OS_API.chat,獨立乾淨不吃當前卡) 寫一小段 VN 格式劇本（大廳小劇場）。
+    //   vnProtocol：從「-VN小說家-」世界書抓的完整 VN 格式指令(含 SFX/表情包/Scene)；有就用它、沒有退回手寫 fallback。
+    //   輸出交給 VN_Core 播放，立繪/[Scene|]插圖/音效由 VN 引擎處理。npcA/npcB = { name, personaText }。
+    function buildDuoScenePrompt(npcA, npcB, worldCtx, vnProtocol) {
         const worldSec = worldCtx ? ('\n\n【世界觀（背景，供你判斷用詞與環境，勿整段複述）】\n' + worldCtx) : '';
-        return '你是視覺小說(VN)腳本引擎。以下兩位角色此刻在「純白大廳／視差書咖」偶然湊在一起、隨口閒聊。請寫出一小段輕鬆日常、無關緊要的 VN 小劇場（兩人來回約 6～10 句），嚴格用下面的 VN 格式輸出。\n\n' +
+        const head = '你是視覺小說(VN)腳本引擎。以下兩位角色此刻在「純白大廳／視差書咖」偶然湊在一起、隨口閒聊。請寫出一小段輕鬆日常、無關緊要的 VN 小劇場（兩人來回約 6～10 句），嚴格用 VN 格式輸出。\n\n' +
 '【登場角色A：' + npcA.name + '】\n' + npcA.personaText + '\n\n' +
-'【登場角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + '\n\n' +
+'【登場角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + '\n\n';
+        // 小劇場專屬約束（兩條路都要）：只寫這一小段、包在單一 <content>、角色簡體名、不推正劇不拉玩家
+        const duoRules = '【本次小劇場專屬要求】\n' +
+'- 只寫這一小段兩人閒聊（約 6～10 句對話），不推進任何正式劇情、不把玩家/委託人寫進來、不解釋系統或代碼。\n' +
+'- 全部正文包在「單一」<content>...</content> 內，開頭一個 <ChapterCard>（含 [Story|大廳小劇場]／[Chapter|1|' + npcA.name + '與' + npcB.name + ']／[Preface|一句話情境]／[Protagonist|' + npcA.name + ']／[World|现代]／[Bg|…]／兩行 [Avatar|…]）。\n' +
+'- 角色名一律簡體中文、對話用全形「」。至少穿插 1～2 張 [Scene|scene_id|tags]（兩人外觀對稱、成年男性加 handsome_male）。輸出從 <content> 開始、以 </content> 收束，前後不要別的字。\n';
+        if (vnProtocol && String(vnProtocol).trim()) {
+            // 用「-VN小說家-」世界書的完整協議當格式規範（含 SFX 音效/表情包/Scene 等，比手寫完整）
+            return head + duoRules + '\n【VN 完整格式協議（照此協議輸出，尤其 TAG／表情／SFX音效／Scene 插畫規則）】\n' + String(vnProtocol).trim();
+        }
+        // fallback：世界書抓不到 → 手寫精簡格式
+        return head +
 '【VN 輸出格式（嚴格遵守）】\n' +
-'- 全部正文只包在「單一」<content>...</content> 內，裡面每個 TAG 各自單獨一行、不與旁白同行。\n' +
-'- 開頭先一個 <ChapterCard>...</ChapterCard>，內含（每行一個）：\n' +
-'  [Story|大廳小劇場]\n' +
-'  [Chapter|1|' + npcA.name + '與' + npcB.name + ']\n' +
-'  [Preface|一句話情境]\n' +
-'  [Protagonist|' + npcA.name + ']\n' +
-'  [World|现代]\n' +
-'  [Bg|季節|時段_地點|時段, 季節, 場景設施, 一句無人的環境描述]\n' +
-'  [Avatar|角色名|聲線|外觀tag串]（兩位各一行，聲線如 青男沉／青女甜／熟男 等，外觀用簡短 tag、描述內禁用「|」）\n' +
-'- ChapterCard 之後是正文：旁白直接寫（環境/動作/心理，不出聲）；角色出聲一律用一行：\n' +
-'  [Char|角色名|表情|「台詞」|Stay 或 Leave]（第五欄必填 Stay/Leave；聊完最後離開的人用 Leave，並在下一行接 [Exit|角色名]）\n' +
+'- ChapterCard 之後正文：旁白直接寫；角色出聲一律 [Char|角色名|表情|「台詞」|Stay 或 Leave]（第五欄必填；最後離開的人 Leave 並下一行 [Exit|角色名]）。\n' +
 '- 表情只能用：Neutral, Happy, Think, Surprised, Annoyed, Angry, Sighing, Awkward, Embarrassed, Excited, Sad, Confused, Tired, Pout, Laughing, Smirk, Amazed, Teasing。\n' +
-'- 角色名一律用簡體中文；對話引號用全形「」。\n' +
-'- 插圖：正文中至少穿插 1～2 張 [Scene|scene_id|tags]，scene_id 不可重複，tags 只用 Danbooru 英文標籤（不寫句子）。兩人外觀對稱寫、成年男性一定加 handsome_male（壓制模型女化）。格式範例：\n' +
-'  [Scene|cafe_chat_01|2 boys, [1 boy, handsome_male, slim, 外觀...], [1 boy, handsome_male, 外觀...], [friendly], [sitting at coffee table, having conversation, normal_distance, no_physical_contact], [coffee shop, indoors, warm lighting, medium shot, cozy atmosphere]]\n' +
-'- 只寫這一小段閒聊，不推進任何正式劇情、不把玩家/委託人寫進來、不解釋系統或代碼。輸出直接從 <content> 開始，結尾 </content> 收束，前後不要任何其他文字。';
+'- [Scene|scene_id|tags]：tags 只用 Danbooru 英文標籤。音效可用 #SFXID# 穿插在旁白後（沒有就略過）。\n' +
+duoRules;
     }
 
     VoidPrompts.buildSysPrompt = buildSysPrompt;
