@@ -1256,34 +1256,6 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         });
     }
 
-    function renderPersonas(body) {
-        body.innerHTML = `
-            <div class="pm-persona-block">
-                <div class="pm-persona-label">🌸 愛麗絲 (Iris) 人設</div>
-                <div class="pm-persona-desc">用於 NEXUS PARALLAX 大廳中 Iris 的系統 Prompt 補充（iris_system）</div>
-                <textarea class="pm-persona-ta" id="pm-iris-ta" placeholder="留空則不注入...">${loadIris()}</textarea>
-                <button class="pm-persona-save" id="pm-iris-save">保存 Iris 人設</button>
-            </div>
-            <div class="pm-persona-block">
-                <div class="pm-persona-label">😸 柴郡貓 (Cheshire) 人設</div>
-                <div class="pm-persona-desc">用於 NEXUS PARALLAX 大廳中 Cheshire 的系統 Prompt 補充（cheshire_system）</div>
-                <textarea class="pm-persona-ta" id="pm-chess-ta" placeholder="留空則不注入...">${loadCheshire()}</textarea>
-                <button class="pm-persona-save" id="pm-chess-save">保存 Cheshire 人設</button>
-            </div>
-        `;
-
-        body.querySelector('#pm-iris-save').onclick = function() {
-            saveIris(body.querySelector('#pm-iris-ta').value);
-            this.textContent = '已保存 ✓'; this.style.background = '#6b8e23'; this.style.color = '#1A1C28';
-            setTimeout(() => { this.textContent = '保存 Iris 人設'; this.style.background = ''; this.style.color = ''; }, 1200);
-        };
-        body.querySelector('#pm-chess-save').onclick = function() {
-            saveCheshire(body.querySelector('#pm-chess-ta').value);
-            this.textContent = '已保存 ✓'; this.style.background = '#6b8e23'; this.style.color = '#1A1C28';
-            setTimeout(() => { this.textContent = '保存 Cheshire 人設'; this.style.background = ''; this.style.color = ''; }, 1200);
-        };
-    }
-
     // ── Tab 2：條目庫 ──
     function renderLibrary(body) {
         body.innerHTML = '';
