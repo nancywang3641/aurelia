@@ -2282,10 +2282,36 @@ const IRIS_IDLE = [
             const m = reply.match(/<content>([\s\S]*?)<\/content>/i);
             if (m) reply = m[1];
             reply = reply.replace(/<!--[\s\S]*?-->/g, '').replace(/^"|"$/g, '').replace(/\n{3,}/g, '\n\n').trim();
+            // 抽出首個 [Scene|畫面] 當這一幕的插圖（非阻塞生圖，圖好了才浮現在對話框頂端）
+            let scenePrompt = '';
+            const sceneM = reply.match(/\[Scene\|([^\]]+)\]/i);
+            if (sceneM) { scenePrompt = sceneM[1].trim(); reply = reply.replace(sceneM[0], '').replace(/\n{3,}/g, '\n\n').trim(); }
             if (!reply) return;
-            await new Promise((res) => { playIrisSequence(reply, res); });
+            const sceneImg = scenePrompt ? _showDuoScene(scenePrompt) : null;
+            try {
+                await new Promise((res) => { playIrisSequence(reply, res); });
+            } finally {
+                if (sceneImg) sceneImg.remove();
+            }
         } catch (e) { console.warn('[playDuoScene]', e); }
     };
+    // 小劇場插圖：在對話框頂端塞一張圖，非阻塞生成（生好加 .ready 才顯示，免破圖/跳版）
+    function _showDuoScene(prompt) {
+        try {
+            const box = document.getElementById('iris-dialogue-box');
+            if (!box) return null;
+            const img = document.createElement('img');
+            img.className = 'iris-duo-scene';
+            box.insertBefore(img, box.firstChild);
+            const mgr = window.OS_IMAGE_MANAGER || (window.parent || window).OS_IMAGE_MANAGER;
+            if (mgr && mgr.generate) {
+                mgr.generate(prompt, 'scene').then(url => {
+                    if (url && img.isConnected) { img.src = url; img.classList.add('ready'); }
+                }).catch(() => {});
+            }
+            return img;
+        } catch (e) { return null; }
+    }
 
     // ===== 時間隔工具函式（注入 AI context 用，不做 UI）=====
     function _fmtClock(ts) {

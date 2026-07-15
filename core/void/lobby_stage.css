@@ -185,6 +185,11 @@
 .lstage-settings .ltheater-freq.off { opacity:.4; pointer-events:none; }
 /* 小劇場彈窗 hint（在 .lstage-dress 下，非 .lstage-settings，補色避免落到預設字色） */
 .lstage-theater-ask .lset-hint { color:#d8cdb4; font-size:11px; line-height:1.5; }
+/* 🎭 小劇場插圖（對話框頂端，生好才顯示） */
+#iris-dialogue-box .iris-duo-scene { display:none; width:100%; max-height:180px; object-fit:cover;
+  border-radius:10px; margin-bottom:8px; box-shadow:0 2px 8px rgba(0,0,0,.4); }
+#iris-dialogue-box .iris-duo-scene.ready { display:block; animation:iris-duo-fade .4s ease; }
+@keyframes iris-duo-fade { from { opacity:0; } to { opacity:1; } }
 /* 舞台全屏：隱藏右側 MAIN MENU、舞台吃滿（桌機吃寬、手機吃高） */
 .lobby-body.stage-menu-hidden .lobby-right { display:none !important; }
 .lobby-body.stage-menu-hidden .lobby-left { flex:1 1 100% !important; border-right:none !important; border-bottom:none !important; }
