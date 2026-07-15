@@ -2299,7 +2299,7 @@ const IRIS_IDLE = [
                 if (sumA) ptA += '\n\n【你（' + npcA.name + '）所在故事的完整大總結（你的一切認知都從這裡來）】\n' + sumA;
                 if (sumB) ptB += '\n\n【你（' + npcB.name + '）所在故事的完整大總結（你的一切認知都從這裡來）】\n' + sumB;
             }
-            const theaterCtx = await _buildTheaterCtx();   // 最近幾場小劇場記事：供自然回扣+避免重複題材
+            const theaterCtx = _buildTheaterCtx();   // 最近幾場小劇場記事(localStorage 同步讀)：供自然回扣+避免重複題材，絕不阻塞 API
             let prompt = window.VoidPrompts.buildDuoScenePrompt(
                 { name: npcA.name, personaText: ptA },
                 { name: npcB.name, personaText: ptB },
@@ -2380,15 +2380,39 @@ ${sections}`;
     }
 
     // ── 🎭 小劇場日誌：注入最近記事 + 播完背景抽記事 + 手動重壓縮 ───────────
-    //   存 OS_DB.lobby_theater_log（跨配對全域時間線）。抽記事走副模型，仿 _compactNpcMemory：
-    //   OS_API.chat 直連本就不發 GENERATION_*，不會觸發 AVS/VecEngine 抽取，故不需設 __AURELIA_SUMMARIZING。
+    //   🚨存 localStorage(key=lobby_theater_log)，NOT IndexedDB：日誌只是加值功能、資料量小(≤60 短句)，
+    //   絕不能為它動 DB schema/升版——一升版若 upgrade 被 deadlock，所有 await OS_DB(含書卡 NPC 生成 _journalGuestPool)全 hang。
+    //   localStorage 同步、無版本、零 hang 風險，且播放路徑(_buildTheaterCtx)完全同步、絕不阻塞 API 呼叫。
+    //   抽記事/重壓縮走副模型，仿 _compactNpcMemory：OS_API.chat 直連不發 GENERATION_*，不觸發 AVS/VecEngine，故不需 __AURELIA_SUMMARIZING。
     const THEATER_LOG_INJECT = 5;   // 注入 prompt 的最近條數
     const THEATER_LOG_CAP    = 60;  // 硬上限，超過自動裁舊（重壓縮才是主要瘦身手段）
+    const THEATER_LOG_KEY    = 'lobby_theater_log';
 
-    async function _buildTheaterCtx() {
+    function _thlRead() {
+        try { const a = JSON.parse(localStorage.getItem(THEATER_LOG_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+    }
+    function _thlWrite(arr) {
+        try { localStorage.setItem(THEATER_LOG_KEY, JSON.stringify(arr || [])); } catch (e) {}
+    }
+    // 對外統一 API（lobby_stage 歷史 UI 也走這個 → 同一份 localStorage）
+    VoidTerminal.theaterLog = {
+        getAll: function () { return _thlRead().slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)); },   // 最新在前
+        save: function (entry) {
+            const arr = _thlRead();
+            if (!entry.id) entry.id = 'thl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+            if (!entry.ts) entry.ts = Date.now();
+            const i = arr.findIndex(e => e.id === entry.id);
+            if (i >= 0) arr[i] = entry; else arr.push(entry);
+            _thlWrite(arr);
+            return entry.id;
+        },
+        remove: function (id) { _thlWrite(_thlRead().filter(e => e.id !== id)); },
+        clear: function () { _thlWrite([]); },
+    };
+
+    function _buildTheaterCtx() {   // 同步：絕不阻塞播放
         try {
-            if (!window.OS_DB || !window.OS_DB.getAllTheaterLog) return '';
-            const all = await window.OS_DB.getAllTheaterLog();   // 最新在前
+            const all = VoidTerminal.theaterLog.getAll();   // 最新在前
             if (!all.length) return '';
             return all.slice(0, THEATER_LOG_INJECT).reverse()    // 反轉成時間順序讀起來自然
                 .map(e => '· ' + (e.pair ? '（' + e.pair + '）' : '') + (e.brief || '')).filter(s => s.length > 3).join('\n');
@@ -2397,7 +2421,7 @@ ${sections}`;
 
     async function _summarizeTheater(npcA, npcB, content) {
         try {
-            if (!window.OS_DB || !window.OS_API || !window.VoidPrompts?.buildTheaterSummaryPrompt) return;
+            if (!window.OS_API || !window.VoidPrompts?.buildTheaterSummaryPrompt) return;
             const sceneText = String(content || '')
                 .replace(/<[^>]+>/g, ' ')                                              // 剝 <content> 等 HTML 標籤
                 .replace(/\[Char\|([^|\]]*)\|[^|\]]*\|(「[^」]*」)[^\]]*\]/g, '$1$2 ')   // [Char|名|表情|「台詞」|狀態] → 名「台詞」（台詞在括號內，要先救出來）
@@ -2419,15 +2443,13 @@ ${sections}`;
             let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim();
             if (!clean || clean === '無' || clean.length < 4 || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) return;
 
-            await window.OS_DB.saveTheaterLog({
+            VoidTerminal.theaterLog.save({
                 pair: (npcA.name || '?') + ' × ' + (npcB.name || '?'),
                 npcKeys: [npcA.key || '', npcB.key || ''],
                 brief: clean, ts: Date.now(),
             });
-            try {   // 硬上限裁舊
-                const all = await window.OS_DB.getAllTheaterLog();
-                if (all.length > THEATER_LOG_CAP) for (const old of all.slice(THEATER_LOG_CAP)) await window.OS_DB.deleteTheaterLog(old.id);
-            } catch (e) {}
+            const all = VoidTerminal.theaterLog.getAll();   // 硬上限裁舊
+            if (all.length > THEATER_LOG_CAP) for (const old of all.slice(THEATER_LOG_CAP)) VoidTerminal.theaterLog.remove(old.id);
         } catch (e) { console.warn('[小劇場記事]', e); }
     }
 
@@ -2435,8 +2457,8 @@ ${sections}`;
     VoidTerminal.recompressTheaterLog = async function () {
         const KEEP = THEATER_LOG_INJECT;
         try {
-            if (!window.OS_DB || !window.OS_API || !window.VoidPrompts) return { ok: false, msg: '環境未就緒' };
-            const all = await window.OS_DB.getAllTheaterLog();   // 最新在前
+            if (!window.OS_API || !window.VoidPrompts) return { ok: false, msg: '環境未就緒' };
+            const all = VoidTerminal.theaterLog.getAll();   // 最新在前
             if (all.length <= KEEP + 1) return { ok: false, msg: '記事還不多，暫時不用整理' };
             const toMerge = all.slice(KEEP);                     // 舊的（含前次 merged）一起再併
             const oldText = toMerge.slice().reverse()
@@ -2460,8 +2482,8 @@ ${sections}`;
                 return { ok: false, msg: '整理失敗（生成無效），原記事保留' };
             }
             const oldestTs = toMerge[toMerge.length - 1].ts || Date.now();   // 新 merged 用最舊 ts→排最底，保時間序
-            await window.OS_DB.saveTheaterLog({ pair: '往期綜述', brief: clean, merged: true, ts: oldestTs });
-            for (const old of toMerge) await window.OS_DB.deleteTheaterLog(old.id);   // 存成功才刪舊
+            for (const old of toMerge) VoidTerminal.theaterLog.remove(old.id);   // 先刪舊
+            VoidTerminal.theaterLog.save({ pair: '往期綜述', brief: clean, merged: true, ts: oldestTs });
             return { ok: true, msg: '已把 ' + toMerge.length + ' 條往期記事整理成 1 段綜述' };
         } catch (e) { console.warn('[小劇場重壓縮]', e); return { ok: false, msg: '整理失敗：' + (e && e.message || e) }; }
     };
