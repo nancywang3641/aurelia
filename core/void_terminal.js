@@ -210,6 +210,7 @@ const IRIS_IDLE = [
         _idleTimer = setInterval(() => {
             if (_isActivitySuspended) return; // 如果被暫停，就不觸發放置語音
             if (isClaudeRoom) return;
+            try { if (localStorage.getItem('lobby_stage_on') !== '0') return; } catch (e) {}  // 🎭 舞台模式：瀅瀅/柴郡不自動跳出來說話（走路時不搭）
             const homeTab = document.getElementById('aurelia-home-tab');
             if (!homeTab || homeTab.style.display === 'none') return;
             if (IRIS_STATE.isTyping || IRIS_STATE.queue.length > 0) return;
