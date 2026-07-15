@@ -156,14 +156,49 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 '\n【這次要濃縮的閒聊記錄】\n' + chunkText;
     }
 
+    // ── 🎲 小劇場情境骰子：情緒基調 × 話題切入 兩軸隨機交叉（只給抽象維度，不塞具體內容，避免 AI 照抄）──
+    const DUO_MOODS = [
+        '輕鬆打屁、氣氛鬆散', '微妙的緊張、有點欲言又止', '懷舊感傷、翻起舊事',
+        '你來我往地鬥嘴拌嘴', '一本正經地扯淡', '尷尬冷場後努力找話題',
+        '心照不宣的默契、話不用說完', '八卦模式、壓低聲音講悄悄話',
+    ];
+    const DUO_ANGLES = [
+        '為一件微不足道的小事各執己見', '各自分享一段過去的片段', '被一個突發的小狀況起了頭',
+        '聊到某個不在場的第三者、順口評價幾句', '交換一個無傷大雅的小秘密', '為某件事打一個小賭',
+        '互相抱怨最近的煩心事', '有一搭沒一搭、純粹打發時間',
+    ];
+    function pickDuoSeed() {
+        const m = DUO_MOODS[Math.floor(Math.random() * DUO_MOODS.length)];
+        const a = DUO_ANGLES[Math.floor(Math.random() * DUO_ANGLES.length)];
+        return '情緒基調：' + m + '；話題切入：' + a;
+    }
+
+    // buildTheaterSummaryPrompt — 小劇場播完後，把這段 VN 劇本濃縮成「一句客觀記事」存進日誌（供未來連動/避重）。
+    //   第三人稱、客觀、一句話；沒內容回「無」。
+    function buildTheaterSummaryPrompt(aName, bName, sceneText) {
+        return '你是大廳劇場的記事員。以下是「' + aName + '」與「' + bName + '」剛才在大廳的一小段閒聊劇本。\n' +
+'請用**第三人稱、客觀**的一句話（30 字內）記下這場閒聊的重點：他們聊了什麼、發生了什麼、有沒有留下什麼約定或梗。\n\n' +
+'【規則】\n' +
+'- 只輸出這一句記事，不要旁白、不要引號台詞、不要條列、不要角色表。\n' +
+'- 純粹客觀概括，不要評論、不要形容詞堆砌。\n' +
+'- 若這段沒有值得記的內容，只回一個字：無。\n\n' +
+'【這場閒聊劇本】\n' + sceneText;
+    }
+
     // buildDuoScenePrompt — 給主模型(OS_API.chat,獨立乾淨不吃當前卡) 寫一小段 VN 格式劇本（大廳小劇場）。
     //   vnProtocol：從「-VN小說家-」世界書抓的完整 VN 格式指令(含 SFX/表情包/Scene)；有就用它、沒有退回手寫 fallback。
+    //   theaterCtx：最近幾場小劇場的一句話記事（供自然回扣+避免重複題材）；沒有就略。
     //   輸出交給 VN_Core 播放，立繪/[Scene|]插圖/音效由 VN 引擎處理。npcA/npcB = { name, personaText }。
-    function buildDuoScenePrompt(npcA, npcB, worldCtx, vnProtocol) {
+    function buildDuoScenePrompt(npcA, npcB, worldCtx, vnProtocol, theaterCtx) {
         const worldSec = worldCtx ? ('\n\n【世界觀（背景，供你判斷用詞與環境，勿整段複述）】\n' + worldCtx) : '';
-        const head = '你是視覺小說(VN)腳本引擎。以下兩位角色此刻在「純白大廳／視差書咖」偶然湊在一起、隨口閒聊。請寫出一小段輕鬆日常、無關緊要的 VN 小劇場（兩人來回約 6～10 句），嚴格用 VN 格式輸出。\n\n' +
+        const seed = pickDuoSeed();
+        const histSec = (theaterCtx && String(theaterCtx).trim())
+            ? ('\n\n【最近大廳發生過的事（其他場閒聊的記事；你可以自然回扣一兩句，但不要重複同樣的話題或梗，也別假裝你當時在場）】\n' + String(theaterCtx).trim())
+            : '';
+        const head = '你是視覺小說(VN)腳本引擎。以下兩位角色此刻在「純白大廳／視差書咖」偶然湊在一起閒聊。請依「本場情境骰子」定調，寫出一小段 VN 小劇場（兩人來回約 6～10 句），嚴格用 VN 格式輸出。\n\n' +
+'【本場情境骰子（依此定調，別照字面把這兩個詞念出來，要自然演出來）】\n' + seed + '\n\n' +
 '【登場角色A：' + npcA.name + '】\n' + npcA.personaText + '\n\n' +
-'【登場角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + '\n\n';
+'【登場角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + histSec + '\n\n';
         // 小劇場專屬約束（兩條路都要）：只寫這一小段、包在單一 <content>、角色簡體名、不推正劇不拉玩家
         const duoRules = '【本次小劇場專屬要求】\n' +
 '- 上面的角色描述是「性格與背景參考」，請據此自然演出這一幕的**新對話**；絕對不要把人設裡的描述文字或舉例句子原封不動當台詞念出來（那會變成復讀機）。\n' +
@@ -187,5 +222,7 @@ duoRules;
     VoidPrompts.buildNpcPrompt = buildNpcPrompt;
     VoidPrompts.buildNpcMemorySummaryPrompt = buildNpcMemorySummaryPrompt;
     VoidPrompts.buildDuoScenePrompt = buildDuoScenePrompt;
+    VoidPrompts.buildTheaterSummaryPrompt = buildTheaterSummaryPrompt;
+    VoidPrompts.pickDuoSeed = pickDuoSeed;
     console.log('✅ VoidPrompts（角色提示詞模板）模組就緒');
 })(window.VoidPrompts = window.VoidPrompts || {});
