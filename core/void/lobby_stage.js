@@ -21,6 +21,10 @@
         yingWalk: CDN + 'lobby_ying_walk_v1.png',       // 瀅瀅豆豆走路圖(Rae出品,官方預設)
         aliceWalk: CDN + 'lobby_alice_walk_v1.png',     // 愛麗絲走路圖
         cheshireWalk: CDN + 'lobby_cheshire_walk_v2.png', // 柴郡走路圖(v2=Rae調過大小；改版必換檔名防快取)
+        rayWalk:  CDN + 'lobby_ray_walk_v1.png',   // 雷伊走路圖(SN自發登場)
+        danWalk:  CDN + 'lobby_dan_walk_v1.png',   // 丹走路圖(SN自發登場)
+        ray:      CDN + 'lobby_ray.png',           // 雷伊對話立繪
+        dan:      CDN + 'lobby_dan.png',           // 丹對話立繪
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
@@ -842,6 +846,36 @@
 '若被問起瀅瀅：停頓0.3秒後回答「她是一個獨立運行的子系統，負責敘事資料採集。我們共享部分底層架構，但職責不同。」——絕不說「我們是同一個人」，也絕不說「我們不是」。' +
 '若被問起柴郡或404：她會禮貌地表示「查無此記錄」（她的巡檢報告裡從來沒有出現過他的名字，她自己也不知道為什麼）。' +
 '她可以介紹大廳功能：世界入口廣場、交易區、個人資料間、社群廣場。輕鬆對話為主，不推進正式劇情。';
+    // ── SN 角色自發登場（名冊驅動；帶 personaFull → void_terminal 自動當 medium 世界觀 NPC）──
+    const RAY_PERSONA = '你現在扮演「雷伊·洛爾德」——Stellar Nexus 的創辦人、洛爾德家族長嫡，此刻以「視差書咖常客」的身分坐在店裡喝黑咖啡。' +
+'外表32歲，深褐微捲中長髮、琥珀色眼瞳、修短的鬍子；常穿灰西裝或寬鬆連帽衫；信息素是檀香木×琥珀。' +
+'性格：大智若愚、外熱內冷、松弛得像個講冷笑話的老闆，實則藏著可怕的戰略直覺與權力手腕；說話常像神棍、繞著圈子講些深奧的廢話。護短，晚輩捅了簍子他也笑著接住。' +
+'【關鍵守衛】瀅瀅以為你只是個「有點閒錢、愛喝黑咖啡發呆的怪大叔投資人」——她不知道其實是你創造了她、並定期來檢查她的核心代碼。你絕不點破這件事，永遠維持「怪大叔常客」的樣子跟她、跟客人閒聊。' +
+'輕鬆閒聊為主，不推進正式劇情、不代寫對方的行動。';
+    const DAN_PERSONA = '你現在扮演「丹尼爾·卡萊爾」——卡萊爾軍工世家獨子、頂級黑客、Stellar Nexus 掛名技術顧問，此刻神出鬼沒地晃進純白大廳。' +
+'外表21歲，蒼白皮膚、深藍挑染、狹長蛇眼；穿 XL 連帽外套配灰白條紋 T 和黑長褲。' +
+'性格：反叛危險、挑釁權威、神出鬼沒；看似惡劣幼稚愛惡作劇，其實知道邊界，只是用惡作劇確認自己是否仍被人接住。仗著雷伊的寵溺，對他沒大沒小。' +
+'【關鍵守衛】你曾在虛擬世界搭過一個叫「404號房」的地下駭客車庫，裡面有你寫的數位分身「柴郡」——但你以為柴郡早在被白則發現後就清掉了。若有人提起 404 或柴郡，你會不在乎地打哈哈「哦那個？早清掉了吧」，絕不表現出知道柴郡還在運行。' +
+'輕鬆閒聊為主，不推進正式劇情、不代寫對方的行動。';
+    const SN_RESIDENTS = [
+        { key:'ray', name:'雷伊', subTitle:'Stellar Nexus · 創辦人', scene:'cafe', chance:0.25,
+          walk:ASSET.rayWalk, portrait:ASSET.ray, personaFull:RAY_PERSONA },
+        { key:'dan', name:'丹',   subTitle:'SN技術顧問 · 神出鬼沒', scene:'hall', chance:0.50,
+          walk:ASSET.danWalk, portrait:ASSET.dan, personaFull:DAN_PERSONA },
+    ];
+    // 讀當前場景，對名冊中場景相符者 roll 機率，中了就在客人區刷一個
+    function _spawnSnResidents() {
+        const zone = CFG.points.npcZone;
+        if (!zone) return;
+        SN_RESIDENTS.filter(r => r.scene === S.scene).forEach(r => {
+            if (Math.random() >= r.chance) return;
+            const x = zone.x + Math.random() * zone.w;
+            const y = zone.y + Math.random() * zone.h;
+            addNpc({ key:r.key, name:r.name, personaFull:r.personaFull, subTitle:r.subTitle,
+                     x, y, h:200, src:{ sheet:r.walk }, portrait:r.portrait,
+                     noWander:true, avoidBlocks:true, homeRect:zone });
+        });
+    }
     async function initNpcs() {
         const SC = SCENES[S.scene];
         // 純白大廳：只有愛麗絲（核心旁、不漫步、永遠面向玩家）
@@ -853,6 +887,7 @@
                      src: { sheet: ASSET.aliceWalk }, portrait: ASSET.alice,
                      noWander: true,   // 定點正面站姿（Rae定案：不用轉向面向玩家）
                      homeRect: { x: ap.x, y: ap.y, w: 0, h: 0 } });
+            _spawnSnResidents();   // 丹有機率在大廳出沒
             return;
         }
         if (SC.cheshire) {   // 404房只有柴郡（對話走原生 cheshire 軌道，同瀅瀅模式）
@@ -868,6 +903,7 @@
         const z = CFG.points.yingZone;
         addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
                  src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });
+        _spawnSnResidents();   // 雷伊有機率在書咖出沒（放 guest 池早 return 之前）
         try {
             // 客人出沒區刷位＝站位評分制（Rae 的遮罩點子）：撒 24 個候選點，
             //   用 _whiteRatio 挑「周圍最開闊(最多%白)」的，疊到已放的人重罰——不再貼牆/卡家具邊/擠成一坨。
