@@ -557,8 +557,8 @@
         });
     }
 
-    // ── 🎭 小劇場歷史（看/編輯/刪除/清空/重壓縮；資料 = OS_DB.lobby_theater_log）──
-    function _osdb() { return window.OS_DB || (window.parent || window).OS_DB; }
+    // ── 🎭 小劇場歷史（看/編輯/刪除/清空/重壓縮；資料 = localStorage，經 VoidTerminal.theaterLog 存取）──
+    function _thl() { const vt = window.VoidTerminal || (window.parent || window).VoidTerminal; return vt && vt.theaterLog; }
     function _thlTime(ts) {
         if (!ts) return '';
         const s = Math.floor((Date.now() - ts) / 1000);
@@ -568,13 +568,13 @@
         return Math.floor(h / 24) + ' 天前';
     }
     function _closeTheaterHistory() { S.thlEl?.remove(); S.thlEl = null; }
-    async function _renderTheaterHistoryBody(box) {
-        const db = _osdb();
+    function _renderTheaterHistoryBody(box) {
+        const db = _thl();
         const list = box.querySelector('.lsh-list');
         const cnt = box.querySelector('.lsh-count');
         if (!list) return;
         let logs = [];
-        try { logs = (db && db.getAllTheaterLog) ? (await db.getAllTheaterLog()) : []; } catch (e) {}
+        try { logs = (db && db.getAll) ? db.getAll() : []; } catch (e) {}
         if (cnt) cnt.textContent = logs.length + ' 條';
         if (!logs.length) { list.innerHTML = '<div class="lsh-empty">── 還沒有小劇場記事 ──</div>'; return; }
         list.innerHTML = '';
@@ -591,11 +591,11 @@
             head.append(pair, time, del);
             const ta = document.createElement('textarea'); ta.className = 'ltl-text'; ta.rows = 2; ta.value = log.brief || '';
             row.append(head, ta);
-            ta.addEventListener('change', async () => {   // blur 自動存
-                try { if (db && db.saveTheaterLog) await db.saveTheaterLog({ id: log.id, pair: log.pair, npcKeys: log.npcKeys, brief: ta.value.trim(), merged: log.merged, ts: log.ts }); } catch (e) {}
+            ta.addEventListener('change', () => {   // blur 自動存
+                try { if (db && db.save) db.save({ id: log.id, pair: log.pair, npcKeys: log.npcKeys, brief: ta.value.trim(), merged: log.merged, ts: log.ts }); } catch (e) {}
             });
-            del.addEventListener('click', async () => {
-                try { if (db && db.deleteTheaterLog) await db.deleteTheaterLog(log.id); } catch (e) {}
+            del.addEventListener('click', () => {
+                try { if (db && db.remove) db.remove(log.id); } catch (e) {}
                 _renderTheaterHistoryBody(box);
             });
             list.appendChild(row);
@@ -626,7 +626,7 @@
             if (act === 'back')  { _closeTheaterHistory(); _openLobbySettings(); return; }
             if (act === 'clear') {
                 if (!window.confirm('清空全部小劇場記事？不可復原。')) return;
-                try { await _osdb()?.clearTheaterLog?.(); } catch (e) {}
+                try { _thl()?.clear?.(); } catch (e) {}
                 _renderTheaterHistoryBody(box);
                 return;
             }
