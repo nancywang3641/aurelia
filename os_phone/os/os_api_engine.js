@@ -26,10 +26,18 @@
     const SEC_LOG_MAX = 120;
     let _secSeq = 0;
     function _apiLogStart(arr, messages) {
+        // 記整包送出的 messages（標 role），DEBUG 面板「📤 送出 prompt」才看得到完整 sysPrompt＋上下文＋歷史；
+        // 原本只撈最後一則 user → 跟 inTok（用整包估）對不起來，也看不到組好的人設/世界觀。
         let prompt = '';
         try {
-            const u = (messages || []).filter(m => m && m.role === 'user').pop();
-            if (u) prompt = (typeof u.content === 'string') ? u.content : JSON.stringify(u.content);
+            prompt = (messages || []).map(m => {
+                const role = (m && m.role) || '?';
+                let c;
+                if (typeof m.content === 'string') c = m.content;
+                else if (Array.isArray(m.content)) c = m.content.map(p => (p && p.text) || (p && p.type) || '').join('\n');
+                else c = JSON.stringify(m && m.content);
+                return '【' + role + '】\n' + c;
+            }).join('\n\n');
         } catch (e) {}
         const rec = { id: (++_secSeq), t: Date.now(), ok: null, ms: 0, prompt: prompt, raw: '', err: '' };
         try {
