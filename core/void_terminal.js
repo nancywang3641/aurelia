@@ -2266,9 +2266,13 @@ const IRIS_IDLE = [
             if (!getBook) return '';
             const entries = await getBook.call(TH, '-VN小說家-');
             if (!Array.isArray(entries) || !entries.length) return '';
-            const KEEP = /TAG總綱|寫作規則|Scene場景|Scene插畫|表情包清單|SFX音效清單|禁止事項|BGM｜規範/;   // 只挑格式/音效/表情/禁令；不碰角色·CP·世界觀
+            // 只拿「藍燈(constant常駐)」條目，排除「綠燈(selective關鍵字)」與 vectorized——藍燈才是正常跑團一定注入的 VN 協議
             _vnProtocolCache = entries
-                .filter(e => e && e.enabled !== false && e.content && KEEP.test(String(e.comment || e.name || '')))   // 只拿綠燈(enabled)的，排除使用者關掉的條目
+                .filter(e => {
+                    if (!e || !e.content || e.enabled === false) return false;
+                    const t = (e.strategy && e.strategy.type) || e.type;   // getWorldbook→strategy.type；getLorebookEntries→type
+                    return t === 'constant';
+                })
                 .map(e => String(e.content).trim())
                 .filter(Boolean)
                 .join('\n\n──────\n\n');
