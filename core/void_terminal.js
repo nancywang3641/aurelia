@@ -2254,7 +2254,7 @@ const IRIS_IDLE = [
         if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
         return '角色「' + (npc.name || '某位') + '」';
     }
-    // 小劇場：用 OS_API.chat(副模型獨立路徑,乾淨——不吃當前卡世界書/歷史、不觸發 AVS/VecEngine/大總結)
+    // 小劇場：用 OS_API.chat 走「主模型」連線(獨立路徑,乾淨——不吃當前卡世界書/歷史、不觸發 AVS/VecEngine/大總結)
     //   生成一小段 VN 劇本 → 攔截不回傳 chat → 存 DB → 丟 VN 播放器播。立繪/[Scene|]插圖由 VN_Core 引擎處理。
     VoidTerminal.playDuoScene = async function (npcA, npcB) {
         try {
@@ -2264,13 +2264,8 @@ const IRIS_IDLE = [
                 { name: npcB.name, personaText: _resolveDuoPersona(npcB) },
                 wv);
             if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return; }
-            // 走副模型連線(沒設退主連線)；route 標 iris_duo。整段自組資料，不帶當前卡任何上下文/世界書。
-            let config = {};
-            if (window.OS_SETTINGS) {
-                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
-                if (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) config = sec;
-                else config = window.OS_SETTINGS.getConfig();
-            }
+            // 主模型連線(getConfig)；route 標 iris_duo。整段自組資料，不帶當前卡任何上下文/世界書。
+            let config = (window.OS_SETTINGS && window.OS_SETTINGS.getConfig) ? window.OS_SETTINGS.getConfig() : {};
             config.route = 'iris_duo';
             let script = await new Promise((resolve, reject) => {
                 window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, {});
