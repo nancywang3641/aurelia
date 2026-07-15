@@ -2255,6 +2255,26 @@ const IRIS_IDLE = [
         if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
         return '角色「' + (npc.name || '某位') + '」';
     }
+    // 小劇場：抓「-VN小說家-」世界書的「格式類」條目當完整 VN 指令(含 SFX/表情包/Scene)。排除角色/CP 條目(帶當前卡的應子騫等會污染)。抓不到回 '' → 退回手寫格式。
+    let _vnProtocolCache = null;
+    async function _fetchVnProtocol() {
+        if (_vnProtocolCache !== null) return _vnProtocolCache;
+        _vnProtocolCache = '';
+        try {
+            const TH = window.TavernHelper || (window.parent && window.parent.TavernHelper);
+            const getBook = TH && (TH.getWorldbook || TH.getLorebookEntries);
+            if (!getBook) return '';
+            const entries = await getBook.call(TH, '-VN小說家-');
+            if (!Array.isArray(entries) || !entries.length) return '';
+            const KEEP = /TAG總綱|寫作規則|Scene場景|Scene插畫|表情包清單|SFX音效清單|禁止事項|BGM｜規範/;   // 只挑格式/音效/表情/禁令；不碰角色·CP·世界觀
+            _vnProtocolCache = entries
+                .filter(e => e && e.content && KEEP.test(String(e.comment || e.name || '')))
+                .map(e => String(e.content).trim())
+                .filter(Boolean)
+                .join('\n\n──────\n\n');
+        } catch (e) { console.warn('[playDuoScene] 抓VN小說家世界書失敗', e); }
+        return _vnProtocolCache;
+    }
     // 小劇場：OS_API.chat 走「主模型」生成 VN 劇本 → 攔截不回傳 chat → 丟 VN 播放器 ephemeral 播（不存章節）。
     //   🚨全程包 __AURELIA_SUMMARIZING：state_runtime(AVS)/VecEngine/dossier 都查此旗標，不設就會拿當前卡 preset 抽小劇場→污染。
     //   🚨不 saveVnChapter：一存成章節就觸發 VecEngine ingest + state_runtime 抽取。改 ephemeral(_startWithLoader/autoload 不存)。
@@ -2263,10 +2283,11 @@ const IRIS_IDLE = [
         const _prevSum = window.__AURELIA_SUMMARIZING;
         try {
             const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
+            const vnProtocol = await _fetchVnProtocol();   // 「-VN小說家-」世界書的完整格式指令(含SFX)；抓不到→buildDuoScenePrompt 用手寫 fallback
             const prompt = window.VoidPrompts.buildDuoScenePrompt(
                 { name: npcA.name, personaText: _resolveDuoPersona(npcA) },
                 { name: npcB.name, personaText: _resolveDuoPersona(npcB) },
-                wv);
+                wv, vnProtocol);
             if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return; }
             let config = (window.OS_SETTINGS && window.OS_SETTINGS.getConfig) ? window.OS_SETTINGS.getConfig() : {};
             config.route = 'iris_duo';
