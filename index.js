@@ -124,6 +124,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'panel_manager', path: _AURELIA_EXT_BASE + '/core/panel_manager.js', key: 'panelManager' },
     { name: 'claude_terminal', path: _AURELIA_EXT_BASE + '/core/claude_terminal.js', key: 'claudeTerminal' },
     { name: 'void_panels', path: _AURELIA_EXT_BASE + '/core/void/panels.js', key: 'voidPanels' },
+    { name: 'void_worldview', path: _AURELIA_EXT_BASE + '/core/void/worldview.js', key: 'voidWorldview' },
     { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },
     { name: 'void_ambient', path: _AURELIA_EXT_BASE + '/core/void/ambient.js', key: 'voidAmbient' },
     { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
