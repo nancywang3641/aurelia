@@ -1192,21 +1192,10 @@
         box.querySelector('[data-act="skip"]').addEventListener('click', () => { _endTheater(); });
         box.querySelector('[data-act="watch"]').addEventListener('click', async () => {
             if (t.playing) return; t.playing = true;
-            if (t.ask) { t.ask.remove(); t.ask = null; }
-            if (t.icon) { t.icon.remove(); t.icon = null; }
-            _theaterRevealBox();
-            try { if (window.VoidTerminal && window.VoidTerminal.playDuoScene) await window.VoidTerminal.playDuoScene(t.a, t.b); } catch (e) {}
-            _theaterHideBox();
-            _endTheater();
+            const a = t.a, b = t.b;
+            _endTheater();   // 收掉舞台事件（清符號+解凍NPC）；播放改由 VN 面板接手
+            try { if (window.VoidTerminal && window.VoidTerminal.playDuoScene) await window.VoidTerminal.playDuoScene(a, b); } catch (e) {}
         });
-    }
-    function _theaterRevealBox() {
-        const left = document.querySelector('.lobby-left'); if (!left) return;
-        left.classList.remove('lstage-dlg-hidden');
-        left.querySelector('.lstage-talk-portrait')?.remove();   // 小劇場靠名字牌，不用單一立繪
-    }
-    function _theaterHideBox() {
-        const left = document.querySelector('.lobby-left'); if (left) left.classList.add('lstage-dlg-hidden');
     }
     function _endTheater() {
         const t = S.theater; if (!t) { S._theaterCd = Date.now(); return; }
