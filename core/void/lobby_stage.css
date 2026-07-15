@@ -79,6 +79,21 @@
 .lsh-text { flex:1; font-size:12px; line-height:1.5; color:#f3ead8; word-break:break-word; white-space:pre-wrap; }
 .lsh-del { flex:0 0 auto; border:none; background:transparent; color:rgba(243,234,216,.45); cursor:pointer; font-size:12px; padding:0 2px; }
 .lsh-del:hover { color:#e88a7a; }
+/* 🎭 小劇場歷史（記事列：可編輯 textarea + 刪除；底部重壓縮/清空動作列） */
+.lstage-theater-log { width:320px; }
+.lstage-theater-log .lsh-list { gap:8px; }
+.ltl-row { display:flex; flex-direction:column; gap:4px; background:rgba(243,234,216,.06); border-radius:8px; padding:6px 8px; }
+.ltl-row.merged { background:rgba(232,217,168,.12); border:1px solid rgba(232,217,168,.28); }
+.ltl-head { display:flex; align-items:center; gap:6px; }
+.ltl-pair { flex:1; min-width:0; font-size:11px; color:#c8bfa6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ltl-pair i { color:#d8cdb4; margin-right:2px; }
+.ltl-time { flex:0 0 auto; font-size:10px; color:#9a927e; }
+.ltl-del { flex:0 0 auto; border:none; background:transparent; color:rgba(243,234,216,.45); cursor:pointer; font-size:12px; padding:0 2px; }
+.ltl-del:hover { color:#e88a7a; }
+.ltl-text { width:100%; box-sizing:border-box; resize:vertical; border:1px solid rgba(243,234,216,.18); border-radius:6px;
+  background:rgba(0,0,0,.3); color:#f3ead8; font-size:12px; line-height:1.5; padding:5px 7px; font-family:inherit; }
+.ltl-text:focus { outline:none; border-color:rgba(232,217,168,.5); }
+.ltl-actions { display:flex; gap:6px; }
 /* ✨ 裝扮室內建生成（接口+預設包+生成鈕） */
 .lsd-gen { display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid rgba(243,234,216,.18);
   border-radius:10px; background:rgba(243,234,216,.06); }
