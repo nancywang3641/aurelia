@@ -858,16 +858,16 @@
 '【關鍵守衛】你曾在虛擬世界搭過一個叫「404號房」的地下駭客車庫，裡面有你寫的數位分身「柴郡」——但你以為柴郡早在被白則發現後就清掉了。若有人提起 404 或柴郡，你會不在乎地打哈哈「哦那個？早清掉了吧」，絕不表現出知道柴郡還在運行。' +
 '輕鬆閒聊為主，不推進正式劇情、不代寫對方的行動。';
     const SN_RESIDENTS = [
-        { key:'ray', name:'雷伊', subTitle:'Stellar Nexus · 創辦人', scene:'cafe', chance:0.25,
+        { key:'ray', name:'雷伊', subTitle:'Stellar Nexus · 創辦人', scenes:['cafe'], chance:0.25,
           walk:ASSET.rayWalk, portrait:ASSET.ray, personaFull:RAY_PERSONA },
-        { key:'dan', name:'丹',   subTitle:'SN技術顧問 · 神出鬼沒', scene:'hall', chance:0.50,
-          walk:ASSET.danWalk, portrait:ASSET.dan, personaFull:DAN_PERSONA },
+        { key:'dan', name:'丹',   subTitle:'SN技術顧問 · 神出鬼沒', scenes:['cafe','hall'], chance:0.50,
+          walk:ASSET.danWalk, portrait:ASSET.dan, personaFull:DAN_PERSONA },   // 丹隨意走(書咖+大廳)，只避 404
     ];
-    // 讀當前場景，對名冊中場景相符者 roll 機率，中了就在客人區刷一個
+    // 讀當前場景，對名冊中含此場景者 roll 機率，中了就在客人區刷一個
     function _spawnSnResidents() {
         const zone = CFG.points.npcZone;
         if (!zone) return;
-        SN_RESIDENTS.filter(r => r.scene === S.scene).forEach(r => {
+        SN_RESIDENTS.filter(r => Array.isArray(r.scenes) && r.scenes.includes(S.scene)).forEach(r => {
             if (Math.random() >= r.chance) return;
             const x = zone.x + Math.random() * zone.w;
             const y = zone.y + Math.random() * zone.h;
