@@ -2475,7 +2475,13 @@ ${sections}`;
             const lobbyTemplateSec = await VoidCanvas.buildTemplateCtx();
 
             const journalCtx = await _buildJournalCtx();
-            const worldCtx   = (window.OS_PROMPTS?.loadWorld?.() || '').trim();
+            // 主世界觀 tier 路由：瀅瀅/柴郡/愛麗絲/SN=medium；guest 書卡=lite（防污染硬守衛）
+            const _wv = window.VoidWorldview;
+            const _isGuestCard = !!(npcTarget && !npcTarget.personaFull);   // 有 personaFull=系統/原生NPC；沒有=外來書卡
+            const _worldTier = _isGuestCard ? 'lite' : (npcTarget?.worldTier || 'medium');
+            const worldCtx   = _wv ? _wv.getWorldview(_worldTier) : '';
+            const aliceSupplement = (npcTarget && npcTarget.key === 'alice' && window.OS_PROMPTS?.loadAlice)
+                ? (window.OS_PROMPTS.loadAlice() || '').trim() : '';
 
             // USER 身分：guest NPC 用「那輪大總結紀錄的 persona」(認得古風輪的你，不靠當前 USER)；
             //   固定 NPC(瀅瀅/柴郡/愛麗絲)或沒紀錄 → 退當前 persona
@@ -2511,6 +2517,8 @@ ${sections}`;
                     timeCtx: _buildTimeCtx(),
                     // 愛麗絲=視差看板娘/系統NPC，跟瀅瀅同級可調用大廳組件；書中角色 guest 不給(不該憑空生UI)
                     lobbyTemplateSec: (npcTarget.key === 'alice') ? lobbyTemplateSec : '',
+                    worldCtx,
+                    personaSupplement: aliceSupplement,
                 })
                 : VoidPrompts.buildSysPrompt(is404Room ? 'cheshire' : 'iris', {
                 userName: _userNameWithPersona,
