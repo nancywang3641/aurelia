@@ -1162,8 +1162,9 @@
             }
 
             try {
+                // 🚫 大廳(iris/cheshire)自足：不吃「當前正在玩的卡」的 AVS 狀態變數，避免跨卡污染（與獨立模式守衛一致）
                 const avsState = _avsRead();
-                if (Object.keys(avsState).length > 0) {
+                if (!NO_CARD_ROUTES.includes(promptKey) && Object.keys(avsState).length > 0) {
                     apiMessages.push({ role: "system", content: `[SYSTEM: Current Dynamic Variables (AVS)]\n${JSON.stringify(avsState)}` });
                 }
             } catch(e) {}
