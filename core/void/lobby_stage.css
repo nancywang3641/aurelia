@@ -237,3 +237,12 @@
 .lep-done:hover { background:#5cb87e; }
 .lep-out { width:100%; height:56px; resize:none; border:none; border-radius:8px; font-size:10px;
   background:rgba(0,0,0,.4); color:#cfe3c8; padding:6px; }
+
+/* 🎭 小劇場：頭頂對話符號 */
+.lstage-theater-icon { position:absolute; transform:translate(-50%,-50%); z-index:3200;
+  width:34px; height:34px; border:none; border-radius:50%; cursor:pointer;
+  background:rgba(26,24,20,.9); color:#ffd27a; font-size:15px;
+  box-shadow:0 2px 8px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; }
+.lstage-theater-icon:hover { background:rgba(40,36,30,.95); color:#ffe1a0; }
+/* 小劇場彈窗按鈕列 */
+.lstage-theater-ask .ltheater-btns { display:flex; gap:8px; margin-top:4px; }
