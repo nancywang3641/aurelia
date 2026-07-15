@@ -1374,6 +1374,7 @@
     // ── 對話目標（對話本體仍走 void_terminal.sendIrisMessage）──
     function startTalk(npc) {
         if (S.edit) return;
+        if (S.theater) _endTheater();   // 🎭 開正常對話前先收掉進行中的小劇場（清符號+解凍當事NPC），免孤兒殘留/卡住
         S.talkTarget = npc;
         S.npcs.forEach(n => { n.hint.style.display = 'none'; });
         const tagSpan = document.querySelector('#iris-name-tag span');
@@ -1632,7 +1633,7 @@
                   '<input type="checkbox" class="lset-chk" data-k="theater"' + (localStorage.getItem('lobby_theater_on') !== '0' ? ' checked' : '') + '></label>' +
                 '<div class="lset-hint">兩個 NPC 偶爾會湊在一起聊天，點頭頂符號可以偷聽。</div>' +
                 '<div class="lset-row"><span class="lset-tx">出現頻率</span>' +
-                  '<span class="ltheater-freq">' +
+                  '<span class="ltheater-freq' + (localStorage.getItem('lobby_theater_on') === '0' ? ' off' : '') + '">' +
                     ['low:低','mid:中','high:高'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_theater_freq')||'mid'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-freq="'+v+'">'+t+'</button>'; }).join('') +
                   '</span></div>' +
                 '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
@@ -1646,6 +1647,7 @@
                     try { localStorage.setItem('lobby_npc_see_current_story', e.target.checked ? '1' : '0'); } catch (_) {}
                 } else if (k === 'theater') {
                     try { localStorage.setItem('lobby_theater_on', e.target.checked ? '1' : '0'); } catch (_) {}
+                    const fr = box.querySelector('.ltheater-freq'); if (fr) fr.classList.toggle('off', !e.target.checked);
                 }
             }));
             box.querySelectorAll('.ltheater-freq-btn').forEach(btn => btn.addEventListener('click', () => {
