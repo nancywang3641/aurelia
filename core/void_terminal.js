@@ -2254,8 +2254,8 @@ const IRIS_IDLE = [
         if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
         return '角色「' + (npc.name || '某位') + '」';
     }
-    // 小劇場：讓酒館 AI(generate,保留preset但清空世界書/卡/歷史) 寫一小段 VN 劇本 → 攔截不回傳 chat → 存 DB → 丟 VN 播放器播。
-    //   立繪/[Scene|]插圖全由 VN 引擎(VN_Core)處理，不在大廳對話框自己造。由 lobby_stage 觸發。
+    // 小劇場：用 OS_API.chat(副模型獨立路徑,乾淨——不吃當前卡世界書/歷史、不觸發 AVS/VecEngine/大總結)
+    //   生成一小段 VN 劇本 → 攔截不回傳 chat → 存 DB → 丟 VN 播放器播。立繪/[Scene|]插圖由 VN_Core 引擎處理。
     VoidTerminal.playDuoScene = async function (npcA, npcB) {
         try {
             const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
@@ -2263,27 +2263,18 @@ const IRIS_IDLE = [
                 { name: npcA.name, personaText: _resolveDuoPersona(npcA) },
                 { name: npcB.name, personaText: _resolveDuoPersona(npcB) },
                 wv);
-            const TH = window.TavernHelper || (window.parent && window.parent.TavernHelper);
-            const gen = (TH && TH.generate) || window.generate || (window.parent && window.parent.generate);
-            if (typeof gen !== 'function') { console.warn('[playDuoScene] 無 generate'); return; }
-            // 保留酒館 preset(本來就擅長寫劇本)，但清空「當前世界書/角色卡/聊天歷史」——小劇場不能吃當前卡數據；
-            //   角色資料自己組進 user_input。包 __AURELIA_SUMMARIZING 擋 VN 自動偵測器/大總結 handler 誤抓這次生成。
-            let script;
-            const _prevSum = window.__AURELIA_SUMMARIZING;
-            window.__AURELIA_SUMMARIZING = true;
-            try {
-                script = await gen({
-                    user_input: prompt,
-                    should_silence: true,
-                    max_chat_history: 0,
-                    overrides: {
-                        world_info_before: '', world_info_after: '',
-                        char_description: '', char_personality: '', scenario: '',
-                        persona_description: '', dialogue_examples: '',
-                        chat_history: { with_depth_entries: false, prompts: [] },
-                    },
-                });
-            } finally { window.__AURELIA_SUMMARIZING = _prevSum; }
+            if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return; }
+            // 走副模型連線(沒設退主連線)；route 標 iris_duo。整段自組資料，不帶當前卡任何上下文/世界書。
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                if (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) config = sec;
+                else config = window.OS_SETTINGS.getConfig();
+            }
+            config.route = 'iris_duo';
+            let script = await new Promise((resolve, reject) => {
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, {});
+            });
             script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
             // 攔截：只保留 <content>…</content>（沒包就整段當正文）；不回傳酒館 chat
             let content = script;
