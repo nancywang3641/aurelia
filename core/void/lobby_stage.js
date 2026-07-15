@@ -1047,6 +1047,9 @@
             const fullBriefs = Array.isArray(st.briefs)
                 ? st.briefs.slice().reverse().map(b => (b && b.brief) || '').filter(Boolean).join('\n')
                 : '';
+            // 整份大總結全文（角色表+時間軸+事件，隨機NPC不在世界書裡→只能靠這份餵飽）
+            let fullSummary = '';
+            try { fullSummary = ((await OS_DB.getTavernSummary(st.chatId)) || {}).content || ''; } catch (e) {}
             for (const c of st.characters) {
                 const rawName = String(c.name || '').trim();
                 if (rawName === '瀅瀅' || rawName === '柴郡' || _isMcName(rawName, st)) continue;   // 排除店員+MC本人
@@ -1054,7 +1057,7 @@
                     rawName, name: _npcDisplayName(rawName),
                     row: c.row || '', charHeader: st.charHeader || '',
                     cardName: card, chatId: st.chatId || '',
-                    storyTitle: st.storyTitle || card, brief, fullBriefs,
+                    storyTitle: st.storyTitle || card, brief, fullBriefs, fullSummary,
                     personaId: st.personaId || '', personaName: st.personaName || '', personaDesc: st.personaDesc || '',
                     worldview: st.worldview || '', lorebookBook: st.lorebookBook || '',
                 });
@@ -1090,12 +1093,13 @@
                 .filter(f => f.value && f.label !== '姓名')
                 .map(f => f.label + '：' + f.value).join('；');
         } catch (e) {}
-        const backstory = (g.fullBriefs || g.brief || '').trim();
+        // 整份大總結全文優先（隨機 NPC 不在世界書裡，只能靠這份餵飽）；沒有才退壓縮 briefs
+        const backstory = (g.fullSummary || g.fullBriefs || g.brief || '').trim();
         const world = (g.worldview || '').trim();
         return '《' + (g.storyTitle || '某本書') + '》裡的角色「' + g.name + '」' +
-            (profile ? '。你的角色檔案：' + profile : '') +
+            (profile ? '。你在這故事裡的角色檔案：' + profile : '') +
             (world ? '。\n\n【你所在世界的設定（世界觀）】\n' + world : '') +
-            (backstory ? '。\n\n【你經歷過的故事（你記得的過往）】\n' + backstory : '');
+            (backstory ? '。\n\n【這一輪的完整大總結（你所在故事的全部記憶：劇情時間軸＋所有角色＋事件，你的一切認知都從這裡來）】\n' + backstory : '');
     }
     // 那一輪(chatId)的頭像 → 對話立繪。avatar_cache key=`chatId::角色名`；chatId 兩邊都正規化再比
     //   （lobby_summary_index 存的是正規化 chatId、VN_Cache 存 raw ctx.chatId，直接比對會 miss）。
