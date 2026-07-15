@@ -56,52 +56,61 @@
         init: function() {
             return new Promise((resolve, reject) => {
                 if (dbInstance) { resolve(dbInstance); return; }
-                
-                const request = indexedDB.open(DB_NAME, DB_VERSION); 
-                
-                request.onupgradeneeded = (event) => {
-                    console.log(`[OS_DB] 資料庫正在升級... (V${event.oldVersion} -> V${event.newVersion})`);
-                    const db = event.target.result;
 
-                    const stores = [
-                        STORE_NAME_IMAGES, STORE_NAME_CHATS, STORE_NAME_WB,
-                        STORE_NAME_INV, STORE_NAME_MAP, STORE_NAME_PETS,
-                        STORE_NAME_PET_LOGS, STORE_NAME_LOBBY, STORE_NAME_ACH,
-                        STORE_NAME_CHILD_CHAT, STORE_NAME_WORLDBOOK,
-                        STORE_NAME_VN_CHAPTERS, STORE_NAME_VAR_PACKS,
-                        STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO,
-                        STORE_NAME_STUDIO_DRAFTS,
-                        STORE_NAME_VN_MEMORIES,  // 🔥 V21：向量記憶庫
-                        STORE_NAME_VN_SUMMARIES, // 🔥 V22：大總結儲存
-                        STORE_NAME_STATE_DATA,   // 🔥 V23：狀態資料庫
-                        STORE_NAME_LOBBY_SUM_IDX,// 🔥 V24：酒館大廳跨卡總結索引
-                        STORE_NAME_PHONE_APPS,   // 🔥 V25：手機殼 app 商店
-                        STORE_NAME_APP_MEM,      // 🔥 V26：插件通用記憶桶
-                        STORE_NAME_TAVERN_SUMMARY, // 🔥 V27：酒館大總結（key=chatId）
-                        STORE_NAME_APP_DATA, // 🔥 V28：通用 app 資料庫
-                        STORE_NAME_NPC_MEMORY // 🔥 V29：大廳 NPC 一對一長期記憶
-                    ];
+                // versioned=true → 帶版本開(可 upgrade 建 store)；遇 VersionError(既有版本比程式碼高，例如曾短暫升到 V30 又退版)
+                //   → 改 versioned=false 無版本開啟，沿用既有 schema、不再 upgrade（保命：避免退版害 init 直接 reject 崩全站）。
+                const attempt = (versioned) => {
+                    const request = versioned ? indexedDB.open(DB_NAME, DB_VERSION) : indexedDB.open(DB_NAME);
 
-                    stores.forEach(name => {
-                        if (!db.objectStoreNames.contains(name)) {
-                            db.createObjectStore(name, { keyPath: 'id' });
-                            console.log(`[OS_DB] ✅ 創建倉庫成功: ${name}`);
+                    request.onupgradeneeded = (event) => {
+                        console.log(`[OS_DB] 資料庫正在升級... (V${event.oldVersion} -> V${event.newVersion})`);
+                        const db = event.target.result;
+                        const stores = [
+                            STORE_NAME_IMAGES, STORE_NAME_CHATS, STORE_NAME_WB,
+                            STORE_NAME_INV, STORE_NAME_MAP, STORE_NAME_PETS,
+                            STORE_NAME_PET_LOGS, STORE_NAME_LOBBY, STORE_NAME_ACH,
+                            STORE_NAME_CHILD_CHAT, STORE_NAME_WORLDBOOK,
+                            STORE_NAME_VN_CHAPTERS, STORE_NAME_VAR_PACKS,
+                            STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO,
+                            STORE_NAME_STUDIO_DRAFTS,
+                            STORE_NAME_VN_MEMORIES,  // 🔥 V21：向量記憶庫
+                            STORE_NAME_VN_SUMMARIES, // 🔥 V22：大總結儲存
+                            STORE_NAME_STATE_DATA,   // 🔥 V23：狀態資料庫
+                            STORE_NAME_LOBBY_SUM_IDX,// 🔥 V24：酒館大廳跨卡總結索引
+                            STORE_NAME_PHONE_APPS,   // 🔥 V25：手機殼 app 商店
+                            STORE_NAME_APP_MEM,      // 🔥 V26：插件通用記憶桶
+                            STORE_NAME_TAVERN_SUMMARY, // 🔥 V27：酒館大總結（key=chatId）
+                            STORE_NAME_APP_DATA, // 🔥 V28：通用 app 資料庫
+                            STORE_NAME_NPC_MEMORY // 🔥 V29：大廳 NPC 一對一長期記憶
+                        ];
+                        stores.forEach(name => {
+                            if (!db.objectStoreNames.contains(name)) {
+                                db.createObjectStore(name, { keyPath: 'id' });
+                                console.log(`[OS_DB] ✅ 創建倉庫成功: ${name}`);
+                            }
+                        });
+                    };
+
+                    // 🚨升版硬化：舊連線(另一分頁/iframe)不關會 onblocked→open 永不 onsuccess→init() hang。
+                    //   onversionchange 讓既有連線主動關閉，別 deadlock 擋住升級（IndexedDB 標準做法）。
+                    request.onblocked = () => { console.warn('[OS_DB] 版本升級被既有連線阻擋(onblocked)，等待舊連線關閉…'); };
+                    request.onsuccess = (event) => {
+                        dbInstance = event.target.result;
+                        dbInstance.onversionchange = () => { try { dbInstance.close(); } catch (e) {} dbInstance = null; };
+                        resolve(dbInstance);
+                    };
+                    request.onerror = (event) => {
+                        const err = event.target.error;
+                        if (versioned && err && err.name === 'VersionError') {
+                            console.warn('[OS_DB] 既有版本高於程式碼版本(VersionError)，改無版本開啟沿用現有 schema');
+                            attempt(false);   // 保命重試
+                            return;
                         }
-                    });
+                        console.error('[OS_DB] 資料庫連接失敗:', err);
+                        reject(err);
+                    };
                 };
-                
-                // 🚨升版硬化(未來若再 bump DB_VERSION 用)：舊連線(另一分頁/iframe)不關會 onblocked→open 永不 onsuccess→init() hang。
-                //   onversionchange 讓既有連線主動關閉，別 deadlock 擋住升級（IndexedDB 標準做法）。
-                request.onblocked = () => { console.warn('[OS_DB] 版本升級被既有連線阻擋(onblocked)，等待舊連線關閉…'); };
-                request.onsuccess = (event) => {
-                    dbInstance = event.target.result;
-                    dbInstance.onversionchange = () => { try { dbInstance.close(); } catch (e) {} dbInstance = null; };
-                    resolve(dbInstance);
-                };
-                request.onerror = (event) => {
-                    console.error('[OS_DB] 資料庫連接失敗:', event.target.error);
-                    reject(event.target.error);
-                };
+                attempt(true);
             });
         },
 
