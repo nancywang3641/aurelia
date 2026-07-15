@@ -12,17 +12,17 @@
     const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
     const ASSET = {
         // 底圖per場景（SCENES[].base）；素材改版一律換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
-        ying:  CDN + 'lobby_ying.png',
-        alice: CDN + 'lobby_alice.png',
+        ying:  CDN + 'lobby_ying_v2.png',    // 瀅瀅立繪(v2=Rae修圖;改版必換檔名防快取)
+        alice: CDN + 'lobby_alice_v2.png',   // 愛麗絲立繪(v2)
         cheshire: CDN + 'lobby_cheshire.png',
         mcF:   CDN + 'lobby_mc_f_silhouette.png',   // 通用小人預設=剪影版(Rae定案 2026-07-15)；換裝在裝扮室
         mcM:   CDN + 'lobby_mc_m_silhouette.png',
         walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖素體(列=下/左/右/上,欄=左步/立/右步)
-        yingWalk: CDN + 'lobby_ying_walk_v1.png',       // 瀅瀅豆豆走路圖(Rae出品,官方預設)
-        aliceWalk: CDN + 'lobby_alice_walk_v1.png',     // 愛麗絲走路圖
+        yingWalk: CDN + 'lobby_ying_walk_v2.png',       // 瀅瀅豆豆走路圖(v2=Rae修圖)
+        aliceWalk: CDN + 'lobby_alice_walk_v2.png',     // 愛麗絲走路圖(v2)
         cheshireWalk: CDN + 'lobby_cheshire_walk_v2.png', // 柴郡走路圖(v2=Rae調過大小；改版必換檔名防快取)
         rayWalk:  CDN + 'lobby_ray_walk_v1.png',   // 雷伊走路圖(SN自發登場)
-        danWalk:  CDN + 'lobby_dan_walk_v1.png',   // 丹走路圖(SN自發登場)
+        danWalk:  CDN + 'lobby_dan_walk_v2.png',   // 丹走路圖(v2=Rae修圖)
         ray:      CDN + 'lobby_ray.png',           // 雷伊對話立繪
         dan:      CDN + 'lobby_dan.png',           // 丹對話立繪
     };
