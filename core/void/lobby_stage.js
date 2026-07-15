@@ -1483,28 +1483,77 @@
         const seeStory = localStorage.getItem('lobby_npc_see_current_story') === '1';
         const box = document.createElement('div');
         box.className = 'lstage-dress lstage-settings';
-        box.innerHTML =
-            '<div class="lsd-title"><i class="fa-solid fa-gear"></i> 大廳設置</div>' +
-            '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
-              '<input type="checkbox" class="lset-chk" data-k="lore"' + (useLore ? ' checked' : '') + '></label>' +
-            '<div class="lset-hint">預設用大總結摘要的世界觀。勾選＝改讀角色卡的完整世界書（含角色之間的橫向關係，大總結不會寫）。</div>' +
-            '<label class="lset-row"><span class="lset-tx">大廳 NPC 看你當前劇情</span>' +
-              '<input type="checkbox" class="lset-chk" data-k="story"' + (seeStory ? ' checked' : '') + '></label>' +
-            '<div class="lset-hint">預設關（各書隔離）。勾選＝NPC 會知道你在別的故事裡的近況，可能跨書吐槽你 XD。</div>' +
-            '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+        const P = window.OS_PROMPTS || {};
+        // 第一層清單定義：名稱 / 副標 / FA 圖標 / load / save
+        const EDITS = [
+            { id:'iris',  name:'瀅瀅（店長）',    sub:'視差書咖駐店小說家', icon:'fa-book',           load:P.loadIris,    save:P.saveIris },
+            { id:'chess', name:'柴郡（404）',     sub:'404 號房管理員',     icon:'fa-cat',            load:P.loadCheshire, save:P.saveCheshire },
+            { id:'alice', name:'愛麗絲（導覽官）', sub:'純白大廳首席導覽',   icon:'fa-user-astronaut', load:P.loadAlice,   save:P.saveAlice },
+            { id:'world', name:'奧瑞亞世界觀',    sub:'主世界觀補充設定',   icon:'fa-globe',          load:P.loadWorld,   save:P.saveWorld },
+        ];
+
+        function renderList() {
+            box.innerHTML =
+                '<div class="lsd-title"><i class="fa-solid fa-gear"></i> 大廳設置</div>' +
+                '<div class="lset-section-label">人設 / 世界觀</div>' +
+                '<div class="lset-list">' +
+                EDITS.map(e =>
+                    '<button class="lset-item" data-edit="' + e.id + '">' +
+                      '<i class="fa-solid ' + e.icon + ' lset-item-ic"></i>' +
+                      '<span class="lset-item-tx"><span class="lset-item-name">' + e.name + '</span>' +
+                      '<span class="lset-item-sub">' + e.sub + '</span></span>' +
+                      '<i class="fa-solid fa-chevron-right lset-item-arrow"></i>' +
+                    '</button>').join('') +
+                '</div>' +
+                '<div class="lset-section-label">選項</div>' +
+                '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
+                  '<input type="checkbox" class="lset-chk" data-k="lore"' + (useLore ? ' checked' : '') + '></label>' +
+                '<div class="lset-hint">預設用大總結摘要的世界觀。勾選＝改讀角色卡的完整世界書（含角色之間的橫向關係，大總結不會寫）。</div>' +
+                '<label class="lset-row"><span class="lset-tx">大廳 NPC 看你當前劇情</span>' +
+                  '<input type="checkbox" class="lset-chk" data-k="story"' + (seeStory ? ' checked' : '') + '></label>' +
+                '<div class="lset-hint">預設關（各書隔離）。勾選＝NPC 會知道你在別的故事裡的近況，可能跨書吐槽你 XD。</div>' +
+                '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+            box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
+                const k = e.target.dataset.k;
+                if (k === 'lore') {
+                    try { localStorage.setItem('lobby_worldview_use_lorebook', e.target.checked ? '1' : '0'); } catch (_) {}
+                    _closeLobbySettings();
+                    unmount(); tryMount();
+                } else if (k === 'story') {
+                    try { localStorage.setItem('lobby_npc_see_current_story', e.target.checked ? '1' : '0'); } catch (_) {}
+                }
+            }));
+            box.querySelectorAll('.lset-item').forEach(btn => btn.addEventListener('click', () => {
+                const e = EDITS.find(x => x.id === btn.dataset.edit);
+                if (e) renderEditor(e);
+            }));
+        }
+
+        function renderEditor(e) {
+            const cur = (e.load && e.load()) || '';
+            box.innerHTML =
+                '<div class="lsd-title lset-editor-title">' +
+                  '<button class="lset-back" data-act="back"><i class="fa-solid fa-chevron-left"></i></button>' +
+                  '<span><i class="fa-solid ' + e.icon + '"></i> ' + e.name + '</span>' +
+                '</div>' +
+                '<div class="lset-hint">' + e.sub + '。留空則不注入補充。</div>' +
+                '<textarea class="lset-ta" placeholder="在這裡補充設定，會疊加在內建世界觀/人設之後..."></textarea>' +
+                '<button class="lep-btn lep-done" data-act="save"><i class="fa-solid fa-floppy-disk"></i> 保存</button>';
+            const ta = box.querySelector('.lset-ta');
+            ta.value = cur;
+            box.querySelector('[data-act="back"]').addEventListener('click', renderList);
+            box.querySelector('[data-act="save"]').addEventListener('click', function () {
+                if (e.save) e.save(ta.value);
+                const btn = this;
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> 已保存';
+                btn.classList.add('lset-saved');
+                setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存'; btn.classList.remove('lset-saved'); }, 1200);
+            });
+        }
+
+        renderList();
         S.root.appendChild(box);
         S.setEl = box;
-        box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
-            const k = e.target.dataset.k;
-            if (k === 'lore') {
-                try { localStorage.setItem('lobby_worldview_use_lorebook', e.target.checked ? '1' : '0'); } catch (_) {}
-                _closeLobbySettings();
-                unmount(); tryMount();   // 重掛讓 guest 世界觀來源即時生效
-            } else if (k === 'story') {
-                try { localStorage.setItem('lobby_npc_see_current_story', e.target.checked ? '1' : '0'); } catch (_) {}
-                // 走 buildContext 即時讀 localStorage，下句對話就生效，不用重掛
-            }
-        }));
         box.addEventListener('click', (e) => { if (e.target.closest('[data-act="close"]')) _closeLobbySettings(); });
     }
 

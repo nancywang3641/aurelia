@@ -157,6 +157,26 @@
   color:#f3ead8; font-size:13px; cursor:pointer; padding:4px 2px; }
 .lstage-settings .lset-chk { width:18px; height:18px; cursor:pointer; flex:0 0 auto; }
 .lstage-settings .lset-hint { color:#c8bfa6; font-size:11px; line-height:1.5; }
+/* 大廳設置：兩層人設/世界觀編輯器（配合 lstage-dress 暖色主題） */
+.lstage-settings .lset-section-label { color:#c8bfa6; font-size:11px; opacity:.85; margin:8px 2px 2px; letter-spacing:.05em; }
+.lstage-settings .lset-list { display:flex; flex-direction:column; gap:6px; }
+.lstage-settings .lset-item { display:flex; align-items:center; gap:10px; width:100%;
+  padding:9px 10px; border:none; border-radius:10px; cursor:pointer; text-align:left;
+  background:rgba(243,234,216,.08); color:#f3ead8; }
+.lstage-settings .lset-item:hover { background:rgba(243,234,216,.18); }
+.lstage-settings .lset-item-ic { width:18px; text-align:center; color:#d8cdb4; flex:0 0 auto; }
+.lstage-settings .lset-item-tx { display:flex; flex-direction:column; flex:1; min-width:0; }
+.lstage-settings .lset-item-name { font-size:13px; }
+.lstage-settings .lset-item-sub { font-size:11px; color:#c8bfa6; }
+.lstage-settings .lset-item-arrow { color:#c8bfa6; opacity:.6; font-size:12px; flex:0 0 auto; }
+.lstage-settings .lset-editor-title { display:flex; align-items:center; gap:8px; }
+.lstage-settings .lset-back { border:none; background:rgba(243,234,216,.14); color:#f3ead8;
+  width:28px; height:28px; border-radius:8px; cursor:pointer; flex:0 0 auto; }
+.lstage-settings .lset-back:hover { background:rgba(243,234,216,.28); }
+.lstage-settings .lset-ta { width:100%; box-sizing:border-box; min-height:150px; margin:8px 0; padding:10px;
+  border-radius:10px; border:1px solid rgba(243,234,216,.2); background:rgba(0,0,0,.28); color:#f3ead8;
+  font:inherit; line-height:1.5; resize:vertical; }
+.lstage-settings .lep-btn.lset-saved { background:#6b8e23; color:#1a1c28; }
 /* 舞台全屏：隱藏右側 MAIN MENU、舞台吃滿（桌機吃寬、手機吃高） */
 .lobby-body.stage-menu-hidden .lobby-right { display:none !important; }
 .lobby-body.stage-menu-hidden .lobby-left { flex:1 1 100% !important; border-right:none !important; border-bottom:none !important; }
