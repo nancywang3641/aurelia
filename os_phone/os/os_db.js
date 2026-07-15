@@ -8,7 +8,8 @@
     const win = window.parent || window;
 
     const DB_NAME = 'WeChat_Simulator_DB';
-    const DB_VERSION = 30; // 🔥 V30：大廳小劇場日誌 lobby_theater_log（跨配對全域時間線，供注入+歷史管理）
+    const DB_VERSION = 29; // 🔥 V29：大廳 NPC 一對一長期記憶 lobby_npc_memory（id=NPC 對話 key）
+    // 註：小劇場日誌不進 IndexedDB（改 localStorage，見 void_terminal VoidTerminal.theaterLog）→ 不動 schema、不升版、免 upgrade deadlock。
 
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
@@ -36,7 +37,6 @@
     const STORE_NAME_TAVERN_SUMMARY = 'tavern_summary'; // 🔥 V27：酒館大總結（key = chatId，一卡一筆全文存檔；程式壓縮注入、不再放世界書）
     const STORE_NAME_APP_DATA = 'app_data'; // 🔥 V28：通用 app 資料庫（創作室生的 app 用 st.dbSave/dbLoad；id = appId::scope::key）
     const STORE_NAME_NPC_MEMORY = 'lobby_npc_memory'; // 🔥 V29：大廳 NPC 一對一長期記憶（id = NPC 對話 key）
-    const STORE_NAME_THEATER_LOG = 'lobby_theater_log'; // 🔥 V30：大廳小劇場日誌（跨配對全域時間線，每場一句記事）
 
     let dbInstance = null;
 
@@ -79,8 +79,7 @@
                         STORE_NAME_APP_MEM,      // 🔥 V26：插件通用記憶桶
                         STORE_NAME_TAVERN_SUMMARY, // 🔥 V27：酒館大總結（key=chatId）
                         STORE_NAME_APP_DATA, // 🔥 V28：通用 app 資料庫
-                        STORE_NAME_NPC_MEMORY, // 🔥 V29：大廳 NPC 一對一長期記憶
-                        STORE_NAME_THEATER_LOG // 🔥 V30：大廳小劇場日誌
+                        STORE_NAME_NPC_MEMORY // 🔥 V29：大廳 NPC 一對一長期記憶
                     ];
 
                     stores.forEach(name => {
@@ -91,11 +90,14 @@
                     });
                 };
                 
+                // 🚨升版硬化(未來若再 bump DB_VERSION 用)：舊連線(另一分頁/iframe)不關會 onblocked→open 永不 onsuccess→init() hang。
+                //   onversionchange 讓既有連線主動關閉，別 deadlock 擋住升級（IndexedDB 標準做法）。
+                request.onblocked = () => { console.warn('[OS_DB] 版本升級被既有連線阻擋(onblocked)，等待舊連線關閉…'); };
                 request.onsuccess = (event) => {
                     dbInstance = event.target.result;
+                    dbInstance.onversionchange = () => { try { dbInstance.close(); } catch (e) {} dbInstance = null; };
                     resolve(dbInstance);
                 };
-                
                 request.onerror = (event) => {
                     console.error('[OS_DB] 資料庫連接失敗:', event.target.error);
                     reject(event.target.error);
@@ -141,54 +143,6 @@
                 // briefs 最新在前 → 反轉成時間順序，逐段串
                 return st.briefs.slice().reverse().map(b => (b && b.brief) || '').filter(Boolean).join('\n');
             } catch (e) { return ''; }
-        },
-
-        // ── 🎭 大廳小劇場日誌（V30；跨配對全域時間線）──────────
-        //   entry: { id, pair, npcKeys:[], brief, merged, ts }；save 兼新增/覆蓋(帶 id 即編輯)
-        saveTheaterLog: async function(entry) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    if (!entry.id) entry.id = 'thl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
-                    if (!entry.ts) entry.ts = Date.now();
-                    const tx = db.transaction(STORE_NAME_THEATER_LOG, 'readwrite');
-                    tx.objectStore(STORE_NAME_THEATER_LOG).put(entry);
-                    tx.oncomplete = () => r(entry.id);
-                    tx.onerror = (e) => j(e.target.error);
-                } catch (e) { j(e); }
-            });
-        },
-        getAllTheaterLog: async function() {
-            const db = await this.init();
-            return new Promise((r) => {
-                try {
-                    const req = db.transaction(STORE_NAME_THEATER_LOG, 'readonly').objectStore(STORE_NAME_THEATER_LOG).getAll();
-                    req.onsuccess = () => r((req.result || []).sort((a, b) => (b.ts || 0) - (a.ts || 0)));
-                    req.onerror = () => r([]);
-                } catch (e) { r([]); }
-            });
-        },
-        deleteTheaterLog: async function(id) {
-            const db = await this.init();
-            return new Promise((r) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_THEATER_LOG, 'readwrite');
-                    tx.objectStore(STORE_NAME_THEATER_LOG).delete(id);
-                    tx.oncomplete = () => r(true);
-                    tx.onerror = () => r(false);
-                } catch (e) { r(false); }
-            });
-        },
-        clearTheaterLog: async function() {
-            const db = await this.init();
-            return new Promise((r) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_THEATER_LOG, 'readwrite');
-                    tx.objectStore(STORE_NAME_THEATER_LOG).clear();
-                    tx.oncomplete = () => r(true);
-                    tx.onerror = () => r(false);
-                } catch (e) { r(false); }
-            });
         },
 
         // --- 🎨 靈感創作室 (Studio) 對話快取 ---
