@@ -1266,9 +1266,16 @@
         if (!CFG || !CFG.points) return;
         const pool = _theaterEligible();
         if (pool.length < 2) return;
-        const i = Math.floor(Math.random() * pool.length);
-        let j = Math.floor(Math.random() * (pool.length - 1)); if (j >= i) j++;
-        const a = pool[i], b = pool[j];
+        // 配對去重：pool≥3 時避免連續兩場同一對（純視覺、無 API），最多重骰 6 次
+        const _sig = (x, y) => [x.key || x.name, y.key || y.name].sort().join('|');
+        let a, b;
+        for (let t = 0; t < 6; t++) {
+            const i = Math.floor(Math.random() * pool.length);
+            let j = Math.floor(Math.random() * (pool.length - 1)); if (j >= i) j++;
+            a = pool[i]; b = pool[j];
+            if (pool.length < 3 || _sig(a, b) !== S._lastTheaterPair) break;
+        }
+        S._lastTheaterPair = _sig(a, b);
         const Z = CFG.points.npcZone;
         let bx = a.x + (Z && a.x > Z.x + Z.w / 2 ? -120 : 120);
         if (Z) bx = Math.max(Z.x + 20, Math.min(Z.x + Z.w - 20, bx));
