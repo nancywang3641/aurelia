@@ -157,7 +157,7 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
     }
 
     // buildDuoScenePrompt — 兩個大廳 NPC 的環境閒聊（小劇場）。npcA/npcB = { name, personaText }
-    // buildDuoScenePrompt — 給酒館 AI(generateRaw) 寫一小段 VN 格式劇本（大廳小劇場）。
+    // buildDuoScenePrompt — 給酒館 AI(generate,保留preset清空世界書/卡/歷史) 寫一小段 VN 格式劇本（大廳小劇場），當 user_input。
     //   輸出交給 VN_Core 播放，立繪/[Scene|]插圖由 VN 引擎處理，故此處產「VN 劇本生成指令」而非直接對話。
     function buildDuoScenePrompt(npcA, npcB, worldCtx) {
         const worldSec = worldCtx ? ('\n\n【世界觀（背景，供你判斷用詞與環境，勿整段複述）】\n' + worldCtx) : '';

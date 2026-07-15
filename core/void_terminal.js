@@ -2254,7 +2254,7 @@ const IRIS_IDLE = [
         if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
         return '角色「' + (npc.name || '某位') + '」';
     }
-    // 小劇場：讓酒館 AI(generateRaw) 寫一小段 VN 劇本 → 攔截不回傳 chat → 存 DB → 丟 VN 播放器播。
+    // 小劇場：讓酒館 AI(generate,保留preset但清空世界書/卡/歷史) 寫一小段 VN 劇本 → 攔截不回傳 chat → 存 DB → 丟 VN 播放器播。
     //   立繪/[Scene|]插圖全由 VN 引擎(VN_Core)處理，不在大廳對話框自己造。由 lobby_stage 觸發。
     VoidTerminal.playDuoScene = async function (npcA, npcB) {
         try {
@@ -2263,10 +2263,27 @@ const IRIS_IDLE = [
                 { name: npcA.name, personaText: _resolveDuoPersona(npcA) },
                 { name: npcB.name, personaText: _resolveDuoPersona(npcB) },
                 wv);
-            const gr = (window.TavernHelper && window.TavernHelper.generateRaw)
-                || (window.parent && window.parent.TavernHelper && window.parent.TavernHelper.generateRaw);
-            if (typeof gr !== 'function') { console.warn('[playDuoScene] 無 generateRaw'); return; }
-            let script = await gr({ ordered_prompts: [{ role: 'system', content: prompt }], max_chat_history: 0 });
+            const TH = window.TavernHelper || (window.parent && window.parent.TavernHelper);
+            const gen = (TH && TH.generate) || window.generate || (window.parent && window.parent.generate);
+            if (typeof gen !== 'function') { console.warn('[playDuoScene] 無 generate'); return; }
+            // 保留酒館 preset(本來就擅長寫劇本)，但清空「當前世界書/角色卡/聊天歷史」——小劇場不能吃當前卡數據；
+            //   角色資料自己組進 user_input。包 __AURELIA_SUMMARIZING 擋 VN 自動偵測器/大總結 handler 誤抓這次生成。
+            let script;
+            const _prevSum = window.__AURELIA_SUMMARIZING;
+            window.__AURELIA_SUMMARIZING = true;
+            try {
+                script = await gen({
+                    user_input: prompt,
+                    should_silence: true,
+                    max_chat_history: 0,
+                    overrides: {
+                        world_info_before: '', world_info_after: '',
+                        char_description: '', char_personality: '', scenario: '',
+                        persona_description: '', dialogue_examples: '',
+                        chat_history: { with_depth_entries: false, prompts: [] },
+                    },
+                });
+            } finally { window.__AURELIA_SUMMARIZING = _prevSum; }
             script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
             // 攔截：只保留 <content>…</content>（沒包就整段當正文）；不回傳酒館 chat
             let content = script;
