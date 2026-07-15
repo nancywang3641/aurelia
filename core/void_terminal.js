@@ -2254,64 +2254,45 @@ const IRIS_IDLE = [
         if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
         return '角色「' + (npc.name || '某位') + '」';
     }
-    // 小劇場：兩個大廳 NPC 的環境閒聊（副模型，route iris_duo）。由 lobby_stage 觸發。
+    // 小劇場：讓酒館 AI(generateRaw) 寫一小段 VN 劇本 → 攔截不回傳 chat → 存 DB → 丟 VN 播放器播。
+    //   立繪/[Scene|]插圖全由 VN 引擎(VN_Core)處理，不在大廳對話框自己造。由 lobby_stage 觸發。
     VoidTerminal.playDuoScene = async function (npcA, npcB) {
         try {
             const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
-            const sysPrompt = window.VoidPrompts.buildDuoScenePrompt(
+            const prompt = window.VoidPrompts.buildDuoScenePrompt(
                 { name: npcA.name, personaText: _resolveDuoPersona(npcA) },
                 { name: npcB.name, personaText: _resolveDuoPersona(npcB) },
                 wv);
-            let config = {};
-            if (window.OS_SETTINGS) {
-                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
-                if (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) config = sec;
-                else config = window.OS_SETTINGS.getConfig();
-            }
-            config.route = 'iris_duo';
-            const messages = [
-                { role: 'system', content: sysPrompt },
-                { role: 'user', content: '（開始他們的閒聊）' },
-            ];
-            let reply = await new Promise((resolve, reject) => {
-                window.OS_API.chat(messages, config, null, resolve, reject, {});
-            });
-            reply = String(reply || '');
-            // 先剝 <thinking>（CoT 自檢會提到 tag 字樣）→ 再抓 <content> → 再砍註解
-            reply = reply.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
-            const m = reply.match(/<content>([\s\S]*?)<\/content>/i);
-            if (m) reply = m[1];
-            reply = reply.replace(/<!--[\s\S]*?-->/g, '').replace(/^"|"$/g, '').replace(/\n{3,}/g, '\n\n').trim();
-            // 抽出首個 [Scene|畫面] 當這一幕的插圖（非阻塞生圖，圖好了才浮現在對話框頂端）
-            let scenePrompt = '';
-            const sceneM = reply.match(/\[Scene\|([^\]]+)\]/i);
-            if (sceneM) { scenePrompt = sceneM[1].trim(); reply = reply.replace(sceneM[0], '').replace(/\n{3,}/g, '\n\n').trim(); }
-            if (!reply) return;
-            const sceneImg = scenePrompt ? _showDuoScene(scenePrompt) : null;
-            try {
-                await new Promise((res) => { playIrisSequence(reply, res); });
-            } finally {
-                if (sceneImg) sceneImg.remove();
+            const gr = (window.TavernHelper && window.TavernHelper.generateRaw)
+                || (window.parent && window.parent.TavernHelper && window.parent.TavernHelper.generateRaw);
+            if (typeof gr !== 'function') { console.warn('[playDuoScene] 無 generateRaw'); return; }
+            let script = await gr({ ordered_prompts: [{ role: 'system', content: prompt }], max_chat_history: 0 });
+            script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+            // 攔截：只保留 <content>…</content>（沒包就整段當正文）；不回傳酒館 chat
+            let content = script;
+            const m = script.match(/<content>[\s\S]*?<\/content>/i);
+            if (m) content = m[0].trim();
+            else if (!/^<content>/i.test(content)) content = '<content>\n' + content + '\n</content>';
+            if (!content) return;
+            // 攔截後直接存 DB（大廳小劇場章節）
+            const ch = {
+                title: '🎭 小劇場：' + npcA.name + ' & ' + npcB.name,
+                storyId: 'lobby_theater',
+                storyTitle: '大廳小劇場',
+                content: content,
+                createdAt: Date.now(),
+            };
+            try { await (window.OS_DB && window.OS_DB.saveVnChapter && window.OS_DB.saveVnChapter(ch)); } catch (e) {}
+            // 丟 VN 播放器：立繪 + [Scene|] 插圖由 VN 引擎渲染（復用「續看章節」的 autoload 路徑）
+            try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
+            window._lobbyPendingChapter = ch;
+            if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) {
+                window.AureliaControlCenter.showVnPanel('autoload');
+            } else if (window.VN_Core && window.VN_Core._startWithLoader) {
+                window.VN_Core._startWithLoader(content, null);
             }
         } catch (e) { console.warn('[playDuoScene]', e); }
     };
-    // 小劇場插圖：在對話框頂端塞一張圖，非阻塞生成（生好加 .ready 才顯示，免破圖/跳版）
-    function _showDuoScene(prompt) {
-        try {
-            const box = document.getElementById('iris-dialogue-box');
-            if (!box) return null;
-            const img = document.createElement('img');
-            img.className = 'iris-duo-scene';
-            box.insertBefore(img, box.firstChild);
-            const mgr = window.OS_IMAGE_MANAGER || (window.parent || window).OS_IMAGE_MANAGER;
-            if (mgr && mgr.generate) {
-                mgr.generate(prompt, 'scene').then(url => {
-                    if (url && img.isConnected) { img.src = url; img.classList.add('ready'); }
-                }).catch(() => {});
-            }
-            return img;
-        } catch (e) { return null; }
-    }
 
     // ===== 時間隔工具函式（注入 AI context 用，不做 UI）=====
     function _fmtClock(ts) {
