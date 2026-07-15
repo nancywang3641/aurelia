@@ -711,6 +711,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     const ENTRIES_KEY = 'os_prompt_entries';
     const IRIS_KEY    = 'os_iris_persona';
     const CHESS_KEY   = 'os_cheshire_persona';
+    const ALICE_KEY   = 'os_alice_persona';
 
     function loadEntries() {
         try { return JSON.parse(localStorage.getItem(ENTRIES_KEY)) || []; } catch(e) { return []; }
@@ -720,6 +721,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     function saveIris(v)    { localStorage.setItem(IRIS_KEY, v); }
     function loadCheshire() { return localStorage.getItem(CHESS_KEY)  || ''; }
     function saveCheshire(v){ localStorage.setItem(CHESS_KEY, v); }
+    function loadAlice()    { return localStorage.getItem(ALICE_KEY)  || ''; }
+    function saveAlice(v)   { localStorage.setItem(ALICE_KEY, v); }
     const WORLD_KEY = 'os_lobby_world';
     function loadWorld()    { return localStorage.getItem(WORLD_KEY)  || ''; }
     function saveWorld(v)   { localStorage.setItem(WORLD_KEY, v); }
@@ -845,7 +848,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         getEntries: loadEntries,
         getBundles: loadBundles,
         // 大廳人設補充（瀅瀅 / 柴郡 / 世界觀）— 給 os_settings「大廳人設」分頁讀寫用
-        loadIris, saveIris, loadCheshire, saveCheshire, loadWorld, saveWorld,
+        loadIris, saveIris, loadCheshire, saveCheshire, loadAlice, saveAlice, loadWorld, saveWorld,
         PANELS,
         launchApp: null
     };
