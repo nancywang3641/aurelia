@@ -166,6 +166,7 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 '【登場角色B：' + npcB.name + '】\n' + npcB.personaText + worldSec + '\n\n';
         // 小劇場專屬約束（兩條路都要）：只寫這一小段、包在單一 <content>、角色簡體名、不推正劇不拉玩家
         const duoRules = '【本次小劇場專屬要求】\n' +
+'- 上面的角色描述是「性格與背景參考」，請據此自然演出這一幕的**新對話**；絕對不要把人設裡的描述文字或舉例句子原封不動當台詞念出來（那會變成復讀機）。\n' +
 '- 只寫這一小段兩人閒聊（約 6～10 句對話），不推進任何正式劇情、不把玩家/委託人寫進來、不解釋系統或代碼。\n' +
 '- 全部正文包在「單一」<content>...</content> 內，開頭一個 <ChapterCard>（含 [Story|大廳小劇場]／[Chapter|1|' + npcA.name + '與' + npcB.name + ']／[Preface|一句話情境]／[Protagonist|' + npcA.name + ']／[World|现代]／[Bg|…]／兩行 [Avatar|…]）。\n' +
 '- 角色名一律簡體中文、對話用全形「」。至少穿插 1～2 張 [Scene|scene_id|tags]（兩人外觀對稱、成年男性加 handsome_male）。輸出從 <content> 開始、以 </content> 收束，前後不要別的字。\n';
