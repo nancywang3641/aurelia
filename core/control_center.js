@@ -157,6 +157,8 @@
                 else if (action === 'autoload' && window._lobbyPendingChapter && window.VN_Core) {
                     const p = window._lobbyPendingChapter;
                     window._lobbyPendingChapter = null;
+                    // #page-game 模板預設 hidden，只有 switchPage 會揭開——少這行劇本會在隱藏頁裡播（面板全黑）
+                    if (window.VN_PLAYER && window.VN_PLAYER.switchPage) window.VN_PLAYER.switchPage('page-game');
                     try { window.VN_Core.earlybirdFromText(p.content); } catch (e) {}  // 頭像早鳥：先開生
                     window.VN_Core._startWithLoader(p.content, null);   // 載入→loading 等全部圖片→開播
                 }
@@ -168,6 +170,8 @@
         { const _hdr = document.querySelector('.void-top-bar'); if (_hdr) _hdr.style.display = 'none'; }
 
         if (!vnContainer.dataset.vnInited) {
+            // 大廳章節/小劇場優先：清掉酒館殘留的暫存劇本，否則 launchApp 會改播舊卡劇本、跳過 _runAction
+            if (action === 'autoload' && window._lobbyPendingChapter) window._pendingAutoScript = null;
             const hasPendingScript = !!window._pendingAutoScript;
             if (window.VN_PLAYER && window.VN_PLAYER.launchApp) {
                 window.VN_PLAYER.launchApp(vnContainer);
