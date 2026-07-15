@@ -1145,8 +1145,88 @@
         npc.hint.style.left = x + 'px';
         npc.hint.style.top = hy + 'px';
     }
+    // ── 🎭 NPC 環境小劇場（Phase A：配對事件 + 觀看）──
+    const THEATER_FREQ = { low: 0.08, mid: 0.18, high: 0.35 };
+    function _theaterOn()   { try { return localStorage.getItem('lobby_theater_on') !== '0'; } catch (e) { return true; } }
+    function _theaterFreq() { try { return THEATER_FREQ[localStorage.getItem('lobby_theater_freq')] || THEATER_FREQ.mid; } catch (e) { return THEATER_FREQ.mid; } }
+    function _theaterEligible() { return S.npcs.filter(n => n && n !== S.player && n.name); }
+    function _theaterFace(a, b) {
+        const L = a.x <= b.x ? a : b, R = a.x <= b.x ? b : a;
+        if (L.sheet) L.dir = 2; else L.flip = true;    // 左者面朝右
+        if (R.sheet) R.dir = 1; else R.flip = false;   // 右者面朝左
+        a._theaterFrozen = b._theaterFrozen = true;
+    }
+    function _startTheater() {
+        if (!CFG || !CFG.points) return;
+        const pool = _theaterEligible();
+        if (pool.length < 2) return;
+        const i = Math.floor(Math.random() * pool.length);
+        let j = Math.floor(Math.random() * (pool.length - 1)); if (j >= i) j++;
+        const a = pool[i], b = pool[j];
+        const Z = CFG.points.npcZone;
+        let bx = a.x + (Z && a.x > Z.x + Z.w / 2 ? -120 : 120);
+        if (Z) bx = Math.max(Z.x + 20, Math.min(Z.x + Z.w - 20, bx));
+        b.x = bx; b.y = a.y; b.dest = null; b.follow = false;
+        _theaterFace(a, b);
+        const icon = document.createElement('button');
+        icon.className = 'lstage-theater-icon lstage-float';
+        icon.innerHTML = '<i class="fa-solid fa-comments"></i>';
+        icon.style.left = Math.round((a.x + b.x) / 2) + 'px';
+        icon.style.top  = Math.round(a.y - Math.max(a.h, b.h) - 24) + 'px';
+        S.world.appendChild(icon);
+        S.theater = { a, b, icon, ask: null, playing: false };
+        icon.addEventListener('click', (e) => { e.stopPropagation(); _theaterPrompt(); });
+    }
+    function _theaterPrompt() {
+        const t = S.theater; if (!t || t.playing || t.ask) return;
+        const box = document.createElement('div');
+        box.className = 'lstage-dress lstage-theater-ask';
+        box.innerHTML =
+            '<div class="lsd-title"><i class="fa-solid fa-comments"></i> ' + t.a.name + ' 和 ' + t.b.name + '</div>' +
+            '<div class="lset-hint">他們正湊在一起聊天。要看看他們在聊什麼？</div>' +
+            '<div class="ltheater-btns">' +
+              '<button class="lep-btn" data-act="skip">算了</button>' +
+              '<button class="lep-btn lep-done" data-act="watch"><i class="fa-solid fa-eye"></i> 看看</button>' +
+            '</div>';
+        S.root.appendChild(box); t.ask = box;
+        box.querySelector('[data-act="skip"]').addEventListener('click', () => { _endTheater(); });
+        box.querySelector('[data-act="watch"]').addEventListener('click', async () => {
+            if (t.playing) return; t.playing = true;
+            if (t.ask) { t.ask.remove(); t.ask = null; }
+            if (t.icon) { t.icon.remove(); t.icon = null; }
+            _theaterRevealBox();
+            try { if (window.VoidTerminal && window.VoidTerminal.playDuoScene) await window.VoidTerminal.playDuoScene(t.a, t.b); } catch (e) {}
+            _theaterHideBox();
+            _endTheater();
+        });
+    }
+    function _theaterRevealBox() {
+        const left = document.querySelector('.lobby-left'); if (!left) return;
+        left.classList.remove('lstage-dlg-hidden');
+        left.querySelector('.lstage-talk-portrait')?.remove();   // 小劇場靠名字牌，不用單一立繪
+    }
+    function _theaterHideBox() {
+        const left = document.querySelector('.lobby-left'); if (left) left.classList.add('lstage-dlg-hidden');
+    }
+    function _endTheater() {
+        const t = S.theater; if (!t) { S._theaterCd = Date.now(); return; }
+        if (t.icon) t.icon.remove();
+        if (t.ask) t.ask.remove();
+        if (t.a) t.a._theaterFrozen = false;
+        if (t.b) t.b._theaterFrozen = false;
+        S.theater = null;
+        S._theaterCd = Date.now();
+    }
+    function _theaterTick() {
+        if (!S.active || !_theaterOn()) return;
+        if (S.theater || S.talkTarget || S.transitioning) return;
+        if (Date.now() - (S._theaterCd || 0) < 90000) return;   // cooldown 90 秒
+        if (_theaterEligible().length < 2) return;
+        if (Math.random() < _theaterFreq()) _startTheater();
+    }
     function updateNpcs(dt) {
         S.npcs.forEach(n => {
+            if (n._theaterFrozen) return;   // 🎭 小劇場：凍結當事 NPC 的漫步/跟隨/面向，維持面對面
             if (n.facePlayer && S.player) {   // 愛麗絲永遠面向玩家
                 if (n.sheet) n.dir = S.player.x < n.x ? 1 : 2;
                 else n.flip = S.player.x > n.x;   // 原圖朝左：玩家在右側才鏡像成朝右
@@ -1616,6 +1696,8 @@
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>';
         left.appendChild(root);
         _applyMenuHidden();   // 套用上次「舞台全屏（隱藏 MAIN MENU）」狀態
+        if (S._theaterTimer) clearInterval(S._theaterTimer);
+        S._theaterTimer = setInterval(_theaterTick, 15000);   // 🎭 小劇場輪詢
         root.querySelector('.lstage-menu-btn').addEventListener('click', () => {
             const on = localStorage.getItem('lobby_stage_menu_hidden') === '1';
             try { localStorage.setItem('lobby_stage_menu_hidden', on ? '0' : '1'); } catch (e) {}
@@ -1705,6 +1787,8 @@
     }
     function unmount() {
         if (!S.active) return;
+        if (S._theaterTimer) { clearInterval(S._theaterTimer); S._theaterTimer = null; }
+        _endTheater();
         if (S.edit) exitEdit(false);
         _closeActorMenu(); _closeDressRoom(); _closeNpcHistory(); _closeLobbySettings();
         S.joy = null;   // 清搖桿殘留方向
