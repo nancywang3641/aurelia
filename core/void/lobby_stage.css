@@ -48,8 +48,9 @@
 .lstage-chat-fab:hover { background:#c8874a; transform:translateY(-2px); }
 .lobby-left.lstage-on.lstage-dlg-hidden .lstage-chat-fab { display:flex; }
 /* 對話立繪：兩種擺放，跟 VN 面板同一套 —— 預設=立繪(全身貼底)；加 .is-avatar=頭像(半身浮框) */
-/* 立繪(全身)：貼底、全高、contain+底部對齊 → 腳貼地、底部不留空（零 JS 計算，純 CSS，抄自 VN #game-char） */
-.lstage-talk-portrait { position:absolute; left:0; bottom:0; height:90%; max-width:52%;
+/* 立繪(全身)：腳貼「對話框那疊之上」而非視窗底 —— 大廳比 VN 多一個輸入框，貼視窗底(bottom:0)會讓立繪下半身
+   躲進「對話框+輸入框」後面(z-index:4 在對話框 z-index:5 之後)被遮大半。故 bottom 抬高到那疊之上、腳踩在對話框頂。 */
+.lstage-talk-portrait { position:absolute; left:0; bottom:128px; height:72%; max-width:52%;
   object-fit:contain; object-position:left bottom; z-index:4; pointer-events:none; user-select:none;
   filter:drop-shadow(0 6px 18px rgba(0,0,0,.45)); animation:lstage-portrait-in .18s ease-out; }
 /* 頭像(半身)：不貼地、浮在對話框上方、正方框裁上半身 + 相框（抄自 VN .vn-avatar） */
