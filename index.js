@@ -132,6 +132,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_lobby_theater', path: _AURELIA_EXT_BASE + '/core/void/lobby_theater.js', key: 'voidLobbyTheater' },   // 🎭 小劇場（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_dress', path: _AURELIA_EXT_BASE + '/core/void/lobby_dress.js', key: 'voidLobbyDress' },   // 👗 裝扮室/右鍵選單/對話紀錄窗（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_editor', path: _AURELIA_EXT_BASE + '/core/void/lobby_editor.js', key: 'voidLobbyEditor' },   // 🖊 擺設模式編輯器（拆自 lobby_stage，靠 _b 橋，必須排它後面）
+    { name: 'void_lobby_npcs', path: _AURELIA_EXT_BASE + '/core/void/lobby_npcs.js', key: 'voidLobbyNpcs' },   // 🧑‍🤝‍🧑 NPC 生成/名冊（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_login', path: _AURELIA_EXT_BASE + '/core/void/login.js', key: 'voidLogin' },
     { name: 'void_phone_shell', path: _AURELIA_EXT_BASE + '/core/void/phone_shell.js', key: 'voidPhoneShell' },
     { name: 'app_runtime', path: _AURELIA_EXT_BASE + '/core/void/app_runtime.js', key: 'appRuntime' },
