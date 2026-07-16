@@ -113,6 +113,10 @@
         .am-landmark.popup-right.am-landmark-open .am-landmark-popup { animation: am-landmark-fade-side 0.18s ease; }
         @keyframes am-landmark-fade-side { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         .am-landmark:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.08); transition: transform 0.15s ease; }
+        /* 🔍 小發現 pin：跟地標同一套版型，金色強調＋微光呼吸區分「固有地標」vs「探索找到的物件」 */
+        .am-landmark-disc .am-landmark-emoji { filter: drop-shadow(0 0 6px rgba(212,175,55,0.85)); animation: am-disc-glow 2.6s ease-in-out infinite; }
+        .am-landmark-disc .am-landmark-label { color: #D4AF37; border-color: rgba(212,175,55,0.65); background: rgba(20,15,0,0.78); }
+        @keyframes am-disc-glow { 0%,100% { filter: drop-shadow(0 0 4px rgba(212,175,55,0.55)); } 50% { filter: drop-shadow(0 0 9px rgba(212,175,55,0.95)); } }
         .am-scene-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 6; background: rgba(0,0,0,0.4); color: #D4AF37; font-family: 'Cinzel', serif; letter-spacing: 2px; font-size: 12px; pointer-events: none; }
         .am-scene-loading::before { content: '◐'; display: inline-block; margin-right: 8px; animation: am-spin 1s linear infinite; }
         @keyframes am-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

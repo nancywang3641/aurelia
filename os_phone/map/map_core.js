@@ -33,7 +33,6 @@
         activeFacility: null,
         generatedChars: [],
         introSegments: [],
-        discoveries: [],
         activeCharIndex: -1,
         // 🔥 事件系統狀態
         activeEvents: {}, // { "zoneId_facilityKey": EventObject }
@@ -1352,17 +1351,15 @@ ${facilityText}
         // 上一輪的走路 / 冒泡定時器也要立刻收乾淨
         _clearAnimationTimers();
 
-        // 讀取舊有數據（臨時掃描的路人）
+        // 讀取舊有數據（臨時掃描的路人）；小發現改住 facility.sceneMap.landmarks（isDiscovery），跟場景圖一起載入
         STATE.generatedChars = [];
         STATE.introSegments = [];
-        STATE.discoveries = [];
         if (win.OS_DB) {
             try {
                 const saved = await win.OS_DB.getMapFacilityData(STATE.currentZoneId, facKey);
                 if (saved && saved.characters) {
                     STATE.generatedChars = saved.characters;
                     STATE.introSegments = saved.intro || [];
-                    STATE.discoveries = saved.discoveries || [];
                 }
             } catch (e) {}
         }
@@ -1443,26 +1440,11 @@ ${facilityText}
 
         // 有 sceneMap 也算「有內容」，這樣進設施一回來就能看到地標
         const hasSceneMap = !!(STATE.activeFacility && STATE.activeFacility.sceneMap);
-        if (STATE.generatedChars.length > 0 || STATE.introSegments.length > 0 || (STATE.discoveries && STATE.discoveries.length > 0) || hasSceneMap) {
+        if (STATE.generatedChars.length > 0 || STATE.introSegments.length > 0 || hasSceneMap) {
             resultsDiv.classList.add('active');
-            
+
+            // 🔍 發現物件已併進小地圖當 pin（sceneMap.landmarks 的 isDiscovery），不再出獨立文字清單
             let introHtml = STATE.introSegments.map(text => `<div style="background:rgba(0,0,0,0.5); padding:10px; margin-bottom:10px; border-radius:4px;">${text}</div>`).join('');
-            
-            // 加入 Discoveries UI
-            if (STATE.discoveries && STATE.discoveries.length > 0) {
-                introHtml += `<div style="margin-top: 15px; border-top: 1px solid #333; padding-top: 10px;">
-                    <h4 style="color:#D4AF37; margin:0 0 10px 0;">🔍 發現物件</h4>
-                    ${STATE.discoveries.map(d => `
-                        <div style="display:flex; align-items:center; background:rgba(20,20,20,0.8); padding:8px; border-radius:6px; margin-bottom:8px; border:1px solid #444;">
-                            <div style="font-size:24px; margin-right:10px;">${d.icon}</div>
-                            <div>
-                                <div style="color:#fff; font-weight:bold; font-size:13px;">${d.title}</div>
-                                <div style="color:#aaa; font-size:11px;">${d.desc}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>`;
-            }
             introBox.innerHTML = introHtml;
 
             // 重渲染前先把上一輪的走路 / 冒泡定時器清掉
@@ -1495,6 +1477,7 @@ ${facilityText}
                     // 靠邊自動翻向：避免 popup 被 stage 的 overflow:hidden 切掉
                     // popup 估算 ~100px 高 ≈ stage 40-50%，所以 y<50 都該翻下方
                     const sideClasses = ['am-landmark'];
+                    if (lm.isDiscovery) sideClasses.push('am-landmark-disc');   // 🔍 探索找到的發現物：金色強調區分固有地標
                     if (lm.y < 50) sideClasses.push('popup-below');     // 上半 → popup 改下方
                     if (lm.x < 28) sideClasses.push('popup-left');      // 太靠左 → popup 對齊左邊
                     else if (lm.x > 72) sideClasses.push('popup-right'); // 太靠右 → popup 對齊右邊
@@ -1542,7 +1525,6 @@ ${facilityText}
             // 按鈕文字：真的有掃描結果（路人 / intro / 發現）才改「重新掃描」
             // 只有常駐排程角色 / sceneMap 不算掃過（探索此地是去抽路人，跟 landmark 無關）
             const reallyScanned = (STATE.introSegments && STATE.introSegments.length > 0)
-                || (STATE.discoveries && STATE.discoveries.length > 0)
                 || STATE.generatedChars.some(c => !c.isResident && !c.isLive);
             document.getElementById('am-scan-btn').innerHTML = reallyScanned
                 ? '<span>↻</span> 重新掃描'
@@ -1700,6 +1682,29 @@ ${facilityText}
         exitMap();
     }
 
+    // 🔍 小發現 → 小地圖 pin：轉成地標同形狀（isDiscovery 標記）併進 sceneMap.landmarks，
+    //    同名去重、最多留 6 個（超出裁最舊）——地標不裁，只裁發現物。
+    function _mergeDiscoveriesIntoSceneMap(sceneMap, discoveries) {
+        if (!sceneMap || !Array.isArray(discoveries) || !discoveries.length) return false;
+        if (!Array.isArray(sceneMap.landmarks)) sceneMap.landmarks = [];
+        let added = false;
+        for (const d of discoveries) {
+            if (!d || !d.title) continue;
+            if (sceneMap.landmarks.some(l => l.isDiscovery && l.label === d.title)) continue;
+            sceneMap.landmarks.push({
+                label: d.title, emoji: d.icon || '🔍', description: d.desc || '',
+                x: d.x, y: d.y, isDiscovery: true
+            });
+            added = true;
+        }
+        const discs = sceneMap.landmarks.filter(l => l.isDiscovery);
+        if (discs.length > 6) {
+            const drop = new Set(discs.slice(0, discs.length - 6));
+            sceneMap.landmarks = sceneMap.landmarks.filter(l => !drop.has(l));
+        }
+        return added;
+    }
+
     // 🔥 掃描角色 (Hybrid Tag 解析版)
     async function scanForCharacters() {
         if (blockIfPreview('探索此地')) return;
@@ -1710,7 +1715,8 @@ ${facilityText}
         const fac = STATE.activeFacility;
         const _SME = win.SCENE_MAP_ENGINE;
         // 沒生過小地圖 → 這次探索「同一份 AI 回覆」順便把小地圖也要了（不再另打第二次 API）
-        const _needScene = !!(fac && !fac.sceneMap && _SME && typeof _SME.buildScenePrompt === 'function');
+        //   discoveryOnly＝之前只存過發現物的空圖（場景圖本體沒生成過）→ 照樣要
+        const _needScene = !!(fac && (!fac.sceneMap || fac.sceneMap.discoveryOnly) && _SME && typeof _SME.buildScenePrompt === 'function');
         const _zid = STATE.currentZoneId, _fk = STATE.activeFacilityKey;
 
         // 使用 OS_API
@@ -1753,13 +1759,18 @@ ${facilityText}
                     cleanText = cleanText.replace(match[0], '');
                 }
 
-                // 3. 解析 Discoveries [🔍|#1|💊|標題|描述]
-                const discRegex = /\[🔍\|[^|]+\|([^|]+)\|([^|]+)\|([^\]]+)\]/g;
+                // 3. 解析 Discoveries [🔍|#1|💊|標題|描述|x:12,y:38]（座標欄可缺＝舊格式，退隨機落點）
+                const discRegex = /\[🔍\|[^|]+\|([^|]+)\|([^|]+)\|([^|\]]+)(?:\|([^\]]+))?\]/g;
                 while ((match = discRegex.exec(txt)) !== null) {
+                    const coords = match[4] || '';
+                    const xm = coords.match(/x\s*[:：]\s*(\d+(?:\.\d+)?)/i);
+                    const ym = coords.match(/y\s*[:：]\s*(\d+(?:\.\d+)?)/i);
                     discoveries.push({
                         icon: match[1].trim(),
                         title: match[2].trim(),
-                        desc: match[3].trim()
+                        desc: match[3].trim(),
+                        x: xm ? Math.max(0, Math.min(100, parseFloat(xm[1]))) : (Math.floor(Math.random() * 70) + 15),
+                        y: ym ? Math.max(0, Math.min(100, parseFloat(ym[1]))) : (Math.floor(Math.random() * 40) + 18)
                     });
                     cleanText = cleanText.replace(match[0], '');
                 }
@@ -1773,17 +1784,36 @@ ${facilityText}
                 
                 STATE.generatedChars = chars.length > 0 ? chars : [{name:'路人A', role:'居民', dialogue:'...'}];
                 STATE.introSegments = intro.length > 0 ? intro : ["環境嘈雜，人來人往..."];
-                STATE.discoveries = discoveries;
 
                 renderScanResults();
                 btn.disabled = false;
 
-                // 🗺️ 同一份回覆裡的 <scene-map> → 解析＋補底板圖＋存檔，完成再 render 一次把地標/底板畫上
-                //    （放最後：背景生圖較慢，別擋路人先顯示。這次沒要小地圖就跳過）
-                if (_needScene && _SME && typeof _SME.applySceneMapFromText === 'function') {
-                    try { const _sm = await _SME.applySceneMapFromText(_zid, _fk, txt); if (_sm) renderScanResults(); }
-                    catch (e) { console.error('[Map] sceneMap 解析失敗:', e); }
-                }
+                // 🗺️ 同一份回覆裡的 <scene-map> → 解析＋補底板圖＋存檔；🔍 小發現轉成地標同形狀併進
+                //    sceneMap.landmarks（isDiscovery 標記），跟場景圖走同一條持久化管道——
+                //    治舊蟲：以前小發現只活在記憶體（saveMapFacilityData 從沒被呼叫），離開設施就蒸發。
+                //    （放最後：背景生圖較慢，別擋路人先顯示）
+                try {
+                    let _sm = (fac && fac.sceneMap) || null;
+                    let _fresh = false;
+                    if (_needScene && _SME && typeof _SME.applySceneMapFromText === 'function') {
+                        // 場景圖重生會換新物件 → 先撈舊圖上的小發現，等下併回來不弄丟
+                        const _oldDiscs = (_sm && Array.isArray(_sm.landmarks))
+                            ? _sm.landmarks.filter(l => l.isDiscovery).map(l => ({ icon: l.emoji, title: l.label, desc: l.description, x: l.x, y: l.y }))
+                            : [];
+                        const _gen = await _SME.applySceneMapFromText(_zid, _fk, txt);
+                        if (_gen) { _sm = _gen; _fresh = true; discoveries = _oldDiscs.concat(discoveries); }
+                    }
+                    // 連場景圖都沒有：開一張只有發現物的空圖，標 discoveryOnly 讓下次探索照樣補正圖
+                    if (!_sm && discoveries.length) _sm = { backdropPrompt: '', backdropUrl: '', landmarks: [], generatedAt: Date.now(), discoveryOnly: true };
+                    if (_sm) {
+                        const _merged = _mergeDiscoveriesIntoSceneMap(_sm, discoveries);
+                        if (_merged && _sm.landmarks.some(l => !l.isDiscovery)) delete _sm.discoveryOnly;
+                        if (_fresh || _merged) {
+                            try { await win.WORLD_RUNTIME?.saveFacilitySceneMap?.(_zid, _fk, _sm); } catch (e) { console.warn('[Map] 小地圖存檔失敗:', e); }
+                            renderScanResults();
+                        }
+                    }
+                } catch (e) { console.error('[Map] sceneMap 解析失敗:', e); }
             });
         } catch (e) {
             btn.innerHTML = '失敗';
@@ -1845,7 +1875,6 @@ ${facilityText}
         STATE.activeEvents = {};
         STATE.generatedChars = [];
         STATE.introSegments = [];
-        STATE.discoveries = [];
         STATE.lastRefreshTime = 0;
         STATE.pendingEventKey = null;
         STATE.activeCharIndex = -1;
