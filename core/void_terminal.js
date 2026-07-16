@@ -2777,6 +2777,12 @@ ${sections}`;
             // 避免渲染到對話框；跨行多段一律砍光，留下空行也清掉
             reply = reply.replace(/<!--[\s\S]*?-->/g, '').replace(/\n{3,}/g, '\n\n').trim();
 
+            // 某些接口把 {content, reasoning} 信封原樣吐回 → 拆出 content 當台詞；content 空=空回覆，下面 isApiError 會接住走重試，別把整段 JSON 當台詞渲染
+            if (/^\s*\{[\s\S]*"content"\s*:/.test(reply)) {
+                try { const _o = JSON.parse(reply); if (_o && typeof _o.content === 'string') reply = _o.content.trim(); }
+                catch (e) { if (/"content"\s*:\s*""/.test(reply)) reply = ''; }   // 壞/截斷 JSON 但明顯空 content → 當空回覆
+            }
+
             const isApiError = !reply || reply.includes('[请求失败') || reply.includes('[請求失敗') || reply.includes('No capacity') || reply.startsWith('{"error');
             if (isApiError) {
                 if (npcTarget) window.LobbyStage.popNpcHistoryTail(npcTarget.key, 'user');
