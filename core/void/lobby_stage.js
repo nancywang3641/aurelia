@@ -1221,7 +1221,7 @@
             const full = await VC.getRaw('avatar_cache', hit.key);
             if (!full || !npc) return;
             if (full.prompt) npc.avatarPrompt = String(full.prompt);   // ✨ 外觀 ground truth：裝扮室「生成小小人」直接拿這串當 prompt
-            if (full.url && S.npcs.includes(npc)) npc.portrait = full.url;
+            if (full.url && S.npcs.includes(npc)) { npc.portrait = full.url; npc.portraitKind = 'avatar'; }   // avatar_cache=頭像(半身)→對話用浮框擺放
         } catch (e) {}
     }
     function addNpc(cfg) {
@@ -1456,10 +1456,13 @@
             p.className = 'lstage-talk-portrait';
             left.appendChild(p);
         }
-        // 走路圖角色的el是div沒有src → 立繪用 portrait 欄位或退回預設字串圖
+        // 走路圖角色的el是div沒有src → 立繪用 portrait 欄位或退回預設字串圖。最終保底=中性剪影(非瀅瀅)。
         const t = S.talkTarget;
-        p.src = t ? (t.portrait || t.el.src || (typeof t.defaultSrc === 'string' ? t.defaultSrc : ASSET.ying))
+        p.src = t ? (t.portrait || t.el.src || (typeof t.defaultSrc === 'string' ? t.defaultSrc : ASSET.mcM))
               : (S.scene === 'hall' ? ASSET.alice : (S.scene === 'room404' ? ASSET.cheshire : ASSET.ying));
+        // 擺放種類：guest 從 avatar_cache 撈到的是「頭像(半身)」→ 浮框；其餘(名冊手繪立繪/剪影/走路圖)= 立繪(貼底)。
+        //   portraitKind='avatar' 只在 _attachGuestPortrait 成功設 portrait 時標；portrait 是 || 第一順位，標了顯示的就是它。
+        p.classList.toggle('is-avatar', !!(t && t.portraitKind === 'avatar' && t.portrait));
         // ✖ 關閉鈕（掛在對話框右上角；點空地也能關，這顆是給直覺用的）
         const box = document.getElementById('iris-dialogue-box');
         if (box && !box.querySelector('.lstage-dlg-close')) {
