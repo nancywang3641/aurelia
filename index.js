@@ -157,6 +157,7 @@ const PHONE_FILES = [
     'os/os_settings.js',
     'os/os_settings_comfyui.js', // 🧩 ComfyUI 直連設定（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_settings_claude.js', // 🦀 Claude 的房間＋Claude Presets CRUD（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
+    'os/os_settings_voice.js', // 🎵 語音清單：Minimax 音色檔案卡＋官方音色庫＋測試播放（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_db.js',
     'os/app_store.js',
     'os/os_sync.js',
