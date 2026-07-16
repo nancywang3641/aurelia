@@ -3,7 +3,7 @@
 // 職責：把 lobby-left 換成星露谷式俯視舞台（分層地圖/小人/NPC/互動）。
 //       對話仍走 void_terminal 的 sendIrisMessage（本模組只提供 talkTarget 與各 NPC 歷史）。
 // 分層：底圖(z0) → 物件與角色同一套「底邊y=z-index」深度排序（人走到桌後被遮）。
-// 擺設模式：舞台右下 🖊 鈕 → 拖物件/站位、調佔地 → 本機即時生效(localStorage) + 一鍵複製數據。
+// 擺設模式：舞台右下 🖊 鈕 → 拖物件/站位、調佔地 → 本機即時生效(localStorage) + 一鍵複製數據（實作拆在 lobby_editor.js）。
 // 開關：localStorage lobby_stage_on（'0' 關 → 完整還原原立繪大廳）
 // ----------------------------------------------------------------
 (function () {
@@ -1328,7 +1328,7 @@
             resolveRef(CFG.baseOverride).then(src => { if (src && mapImg) mapImg.src = src; });
         }
         S.objEls = CFG.layout.map(o => _spawnObjEl(o));
-        root.querySelector('.lstage-edit-btn').addEventListener('click', () => (S.edit ? exitEdit(true) : enterEdit()));
+        root.querySelector('.lstage-edit-btn').addEventListener('click', () => window.LobbyEditor?.toggle());   // 🖊 擺設模式（實作在 lobby_editor.js）
         // 座標命中角色（不動角色 pointer-events）：桌機右鍵、手機長按共用
         const _hitAt = (clientX, clientY) => {
             const r = S.world.getBoundingClientRect();
@@ -1398,7 +1398,7 @@
         if (!S.active) return;
         if (S._theaterTimer) { clearInterval(S._theaterTimer); S._theaterTimer = null; }
         window.LobbyTheater?.end();
-        if (S.edit) exitEdit(false);
+        if (S.edit) window.LobbyEditor?.exit(false);
         _closeWins();
         S.joy = null;   // 清搖桿殘留方向
         document.querySelector('.lobby-body')?.classList.remove('stage-menu-hidden');   // 舞台關掉→純文字大廳要看得到選單
@@ -1426,213 +1426,8 @@
         console.log('[LobbyStage] unmounted');
     }
 
-    // ── 🖊 擺設模式 ──────────────────────────────────────
-    // 拖物件=挪位置；點選物件後「佔地-/+」調 footH（紅色半透明=佔地，人走不進去）；
-    // 拖彩色圓點=角色站位（瀅=瀅瀅、我=出生點、1~4=輪班NPC位）；拖空地=平移視角。
-    function enterEdit() {
-        endTalk();
-        S.edit = {
-            cam: S.player ? { x: S.player.x, y: S.player.y } : { x: MAP_W / 2, y: MAP_H / 2 },
-            sel: -1, feet: [], markers: [], drag: null,
-        };
-        S.root.classList.add('lstage-editing');
-        // 物件可拖 + 佔地覆蓋層（index 動態查，配合建構模式增刪）
-        S.objEls.forEach((img, i) => { _makeEditable(img); _syncFoot(i); });
-        // 站位標記
-        const mk = (label, cls, get) => {
-            const m = document.createElement('div');
-            m.className = 'lstage-marker ' + cls;
-            m.textContent = label;
-            S.world.appendChild(m);
-            const pos = get();
-            m.style.left = pos.x + 'px'; m.style.top = pos.y + 'px';
-            return m;
-        };
-        S.edit.markers.push(mk('我', 'm-player', () => CFG.points.player));
-        S.edit.markers[0].onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.player, m: S.edit.markers[0] });
-        if (CFG.points.arrive) {   // 過門後的落地點
-            const m = mk('落', 'm-arrive', () => CFG.points.arrive);
-            S.edit.markers.push(m);
-            m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points.arrive, m });
-        }
-        // 常駐角色站位（拖了「完成」後生效）
-        [['alicePos', '愛', 'm-alice'], ['cheshirePos', '柴', 'm-cheshire']].forEach(([pk, label, cls]) => {
-            if (!CFG.points[pk]) return;
-            const m = mk(label, cls, () => CFG.points[pk]);
-            S.edit.markers.push(m);
-            m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: CFG.points[pk], m });
-        });
-        // 可拖拉區塊（拖框身=移動、拖右下角=調大小）：紫=瀅瀅活動區、綠=客人出沒區
-        S.edit.zones = {};
-        const mkZone = (pk, label, cls) => {
-            if (!CFG.points[pk]) return;
-            const zone = document.createElement('div');
-            zone.className = 'lstage-zone ' + cls;
-            zone.innerHTML = '<span class="lstage-zone-label">' + label + '</span><span class="lstage-zone-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
-            S.world.appendChild(zone);
-            S.edit.zones[pk] = zone;
-            _syncZone(pk);
-            zone.onpointerdown = (e) => _dragStart(e, { kind: 'zone', pk });
-            zone.querySelector('.lstage-zone-grip').onpointerdown = (e) => _dragStart(e, { kind: 'zoneresize', pk });
-        };
-        mkZone('yingZone', '瀅瀅活動區', 'z-ying');
-        mkZone('npcZone', '客人出沒區', 'z-npc');
-        // 遮罩視覺化：不可走區塗半透明紅（有載入遮罩才畫）
-        if (S.mask && S.mask.ok) {
-            const cv = document.createElement('canvas');
-            cv.width = MAP_W; cv.height = MAP_H;
-            cv.className = 'lstage-maskview';
-            const ctx = cv.getContext('2d');
-            const out = ctx.createImageData(MAP_W, MAP_H);
-            const src = S.mask.data;
-            for (let i = 0; i < src.length; i += 4) {
-                if (src[i] < 128) { out.data[i] = 220; out.data[i + 1] = 60; out.data[i + 2] = 60; out.data[i + 3] = 78; }
-            }
-            ctx.putImageData(out, 0, 0);
-            S.world.appendChild(cv);
-            S.edit.maskView = cv;
-        }
-        // 過門區：踩進去就轉場（可拖、右下角調大小；「落」圓點別放進來）
-        S.edit.doorRects = CFG.doors.map((D, i) => {
-            const el = document.createElement('div');
-            el.className = 'lstage-doorrect';
-            el.innerHTML = '<span>過門區→' + (SCENES[D.to] ? (D.to === 'hall' ? '大廳' : '書咖') : D.to) + '</span>' +
-                '<span class="lstage-zone-grip lstage-door-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
-            S.world.appendChild(el);
-            _syncDoor(i, el);
-            el.onpointerdown = (e) => _dragStart(e, { kind: 'door', i });
-            el.querySelector('.lstage-door-grip').onpointerdown = (e) => _dragStart(e, { kind: 'doorresize', i });
-            return el;
-        });
-        // 外框鋼索：金色多邊形=可走範圍，白色錨點可拖（牆角）——有手繪遮罩的場景不顯示（遮罩優先）
-        if (!SCENES[S.scene].mask && Array.isArray(CFG.points.boundary) && CFG.points.boundary.length >= 3) {
-            const NS = 'http://www.w3.org/2000/svg';
-            const svg = document.createElementNS(NS, 'svg');
-            svg.setAttribute('class', 'lstage-wire');
-            svg.setAttribute('width', String(MAP_W));
-            svg.setAttribute('height', String(MAP_H));
-            svg.setAttribute('viewBox', '0 0 ' + MAP_W + ' ' + MAP_H);
-            const poly = document.createElementNS(NS, 'polygon');
-            svg.appendChild(poly);
-            S.world.appendChild(svg);
-            S.edit.wire = { svg, poly, handles: [] };
-            CFG.points.boundary.forEach((pt) => {
-                const hnd = document.createElement('div');
-                hnd.className = 'lstage-vert';
-                S.world.appendChild(hnd);
-                hnd.onpointerdown = (e) => _dragStart(e, { kind: 'vert', pt, m: hnd });
-                S.edit.wire.handles.push(hnd);
-            });
-            _syncWire();
-        }
-        // 空地拖曳=平移視角
-        S.root.querySelector('.lstage-click').onpointerdown = (e) => _dragStart(e, { kind: 'cam' });
-        window.addEventListener('pointermove', _dragMove);
-        window.addEventListener('pointerup', _dragEnd);
-        // 控制面板
-        const panel = document.createElement('div');
-        panel.className = 'lstage-edit-panel';
-        panel.innerHTML =
-            '<div class="lep-hint">拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅實心框=家具佔地</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
-              '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
-            '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
-              '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地高</button>' +
-            '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="footwminus"><i class="fa-solid fa-minus"></i> 佔地寬</button>' +
-              '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
-            '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="actminus"><i class="fa-solid fa-minus"></i> 人物</button>' +
-              '<button class="lep-btn" data-act="actplus"><i class="fa-solid fa-plus"></i> 人物</button>' +
-            '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="addobj"><i class="fa-solid fa-plus"></i> 新增家具</button>' +
-              '<button class="lep-btn lep-danger" data-act="delobj"><i class="fa-solid fa-trash"></i> 刪除家具</button>' +
-            '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="setbase"><i class="fa-solid fa-image"></i> 換底圖</button>' +
-              '<button class="lep-btn" data-act="setmask"><i class="fa-solid fa-map"></i> 換遮罩</button>' +
-            '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="copy"><i class="fa-solid fa-copy"></i> 複製數據</button>' +
-              '<button class="lep-btn" data-act="reset"><i class="fa-solid fa-rotate-left"></i> 還原預設</button>' +
-              '<button class="lep-btn lep-done" data-act="done"><i class="fa-solid fa-check"></i> 完成</button>' +
-            '</div>' +
-            '<textarea class="lep-out" readonly></textarea>';
-        S.root.appendChild(panel);
-        S.edit.panel = panel;
-        panel.addEventListener('click', (e) => {
-            const act = e.target.closest('[data-act]')?.dataset.act;
-            if (!act) return;
-            if (act === 'footminus' || act === 'footplus') {
-                if (S.edit.sel < 0) return;
-                const o = CFG.layout[S.edit.sel];
-                o.footH = Math.max(20, Math.min(o.h, o.footH + (act === 'footplus' ? 10 : -10)));
-                _syncFoot(S.edit.sel); _exportToPanel();
-            } else if (act === 'footwminus' || act === 'footwplus') {
-                if (S.edit.sel < 0) return;
-                const o = CFG.layout[S.edit.sel];
-                const cur = (o.footW != null ? o.footW : o.w);
-                o.footW = Math.max(20, Math.min(o.w, Math.round(cur * (act === 'footwplus' ? 1.1 : 0.9))));
-                _syncFoot(S.edit.sel); _exportToPanel();
-            } else if (act === 'objminus' || act === 'objplus') {
-                if (S.edit.sel < 0) return;
-                const o = CFG.layout[S.edit.sel];
-                // 等比±10%：大圖小圖手感一致；下限0.05（大廳素材原圖超大、預設s本來就<0.3）
-                o.s = Math.max(0.05, Math.min(2, Math.round((o.s || 1) * (act === 'objplus' ? 1.1 : 0.9) * 1000) / 1000));
-                placeObj(S.objEls[S.edit.sel], o); _syncFoot(S.edit.sel); _exportToPanel();
-            } else if (act === 'actminus' || act === 'actplus') {
-                CFG.points.actorScale = Math.max(0.5, Math.min(1.6, Math.round((((CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));
-                applyActorScale(); _exportToPanel();
-            } else if (act === 'addobj') {
-                _askImage((ref, dataUrl) => _addFurniture(ref, dataUrl));
-            } else if (act === 'delobj') {
-                const i = S.edit.sel;
-                if (i < 0) return;
-                CFG.layout.splice(i, 1);
-                S.objEls[i].remove(); S.objEls.splice(i, 1);
-                S.edit.feet[i].remove(); S.edit.feet.splice(i, 1);
-                S.edit.sel = -1;
-                S.edit.feet.forEach((_, k) => _syncFoot(k));
-                _exportToPanel();
-            } else if (act === 'setbase' || act === 'setmask') {
-                _askImage((ref) => {
-                    if (act === 'setbase') {
-                        CFG.baseOverride = ref;
-                        resolveRef(ref).then(src => { const m = S.root?.querySelector('.lstage-map'); if (src && m) m.src = src; });
-                    } else {
-                        CFG.maskOverride = ref;
-                        loadMask();   // 立即重載碰撞（紅罩下次進擺設模式更新）
-                    }
-                    _exportToPanel();
-                });
-            } else if (act === 'copy') {
-                const out = panel.querySelector('.lep-out');
-                out.select();
-                try { navigator.clipboard?.writeText(out.value); } catch (err) {}
-                try { document.execCommand('copy'); } catch (err) {}
-            } else if (act === 'reset') {
-                try { localStorage.removeItem(SCENES[S.scene].cfgKey); } catch (err) {}
-                exitEdit(false); unmount(); tryMount();
-            } else if (act === 'done') {
-                exitEdit(true);
-            }
-        });
-        _exportToPanel();
-    }
-    function _makeEditable(img) {
-        img.classList.add('lstage-editable');
-        const foot = document.createElement('div');
-        foot.className = 'lstage-foot';
-        S.world.appendChild(foot);
-        S.edit.feet.push(foot);
-        img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
-    }
+    // 🖊 擺設模式（編輯器：拖物件/站位/門區/鋼索、佔地調整、換底圖遮罩、匯出存檔）→ 拆到 lobby_editor.js（走 _b 橋；2026-07-16）
+
     // 建構模式選圖：貼網址或留空→從電腦選擇圖片（上傳存進本機資產庫 IndexedDB）
     // ── 🧊 像素處理管線：去背（邊緣連通 BFS）＋掃碎片；opts.noGrid=true 時「不壓縮」──
     //   壓縮（縮到 96px 高、nearest=大顆粒）只給手動「壓成像素小小人」用；
@@ -1771,172 +1566,6 @@
         };
         inp.click();
     }
-    // 新增家具：量原圖尺寸→縮到約240px高→放到目前視角中央→立即可拖
-    function _addFurniture(ref, dataUrl) {
-        const probe = new Image();
-        probe.onload = () => {
-            if (!S.edit) return;
-            const w = probe.naturalWidth || 200, h = probe.naturalHeight || 200;
-            const s = Math.min(1, Math.round(240 / h * 100) / 100);
-            const o = Object.assign({}, ref, {
-                x: Math.round(S.edit.cam.x - w * s / 2),
-                y: Math.round(S.edit.cam.y - h * s / 2),
-                w, h,
-                footH: Math.max(20, Math.round(h * 0.25)),
-                s,
-            });
-            CFG.layout.push(o);
-            const img = _spawnObjEl(o);
-            S.objEls.push(img);
-            _makeEditable(img);
-            S.edit.sel = CFG.layout.length - 1;
-            S.edit.feet.forEach((_, k) => _syncFoot(k));
-            _exportToPanel();
-        };
-        probe.onerror = () => console.warn('[LobbyStage] 圖片載入失敗');
-        (dataUrl ? Promise.resolve(dataUrl) : resolveRef(ref)).then(src => { if (src) probe.src = src; });
-    }
-    function _syncDoor(i, el) {
-        const D = CFG.doors[i], e = el || S.edit?.doorRects?.[i];
-        if (!D || !e) return;
-        e.style.left = D.x + 'px';
-        e.style.top = D.y + 'px';
-        e.style.width = D.w + 'px';
-        e.style.height = D.h + 'px';
-    }
-    function _syncWire() {
-        const w = S.edit?.wire;
-        if (!w) return;
-        const b = CFG.points.boundary;
-        w.poly.setAttribute('points', b.map(p => p.x + ',' + p.y).join(' '));
-        w.handles.forEach((h, i) => { h.style.left = b[i].x + 'px'; h.style.top = b[i].y + 'px'; });
-    }
-    function _syncZone(pk) {
-        const z = CFG.points[pk], el = S.edit?.zones?.[pk];
-        if (!z || !el) return;
-        el.style.left = z.x + 'px';
-        el.style.top = z.y + 'px';
-        el.style.width = z.w + 'px';
-        el.style.height = z.h + 'px';
-    }
-    function _syncFoot(i) {
-        const o = CFG.layout[i], foot = S.edit.feet[i];
-        if (!foot) return;
-        const r = footRect(o);
-        foot.style.left = r.x + 'px';
-        foot.style.top = r.y + 'px';
-        foot.style.width = r.w + 'px';
-        foot.style.height = r.h + 'px';
-        foot.classList.toggle('sel', S.edit.sel === i);
-    }
-    function _dragStart(e, info) {
-        e.preventDefault(); e.stopPropagation();
-        S.edit.drag = Object.assign({ sx: e.clientX, sy: e.clientY }, info);
-        if (info.kind === 'obj') {
-            S.edit.sel = info.i;
-            const o = CFG.layout[info.i];
-            S.edit.drag.ox = o.x; S.edit.drag.oy = o.y;
-            S.edit.feet.forEach((_, k) => _syncFoot(k));
-        } else if (info.kind === 'pt' || info.kind === 'vert') {
-            S.edit.drag.ox = info.pt.x; S.edit.drag.oy = info.pt.y;
-        } else if (info.kind === 'zone') {
-            const z = CFG.points[info.pk];
-            S.edit.drag.ox = z.x; S.edit.drag.oy = z.y;
-        } else if (info.kind === 'zoneresize') {
-            const z = CFG.points[info.pk];
-            S.edit.drag.ox = z.w; S.edit.drag.oy = z.h;
-        } else if (info.kind === 'door') {
-            const D = CFG.doors[info.i];
-            S.edit.drag.ox = D.x; S.edit.drag.oy = D.y;
-        } else if (info.kind === 'doorresize') {
-            const D = CFG.doors[info.i];
-            S.edit.drag.ox = D.w; S.edit.drag.oy = D.h;
-        } else if (info.kind === 'cam') {
-            S.edit.drag.ox = S.edit.cam.x; S.edit.drag.oy = S.edit.cam.y;
-        }
-    }
-    function _dragMove(e) {
-        const d = S.edit?.drag;
-        if (!d) return;
-        const dx = (e.clientX - d.sx) / S.scale, dy = (e.clientY - d.sy) / S.scale;
-        if (d.kind === 'obj') {
-            const o = CFG.layout[d.i];
-            o.x = Math.round(d.ox + dx); o.y = Math.round(d.oy + dy);
-            placeObj(S.objEls[d.i], o); _syncFoot(d.i);
-        } else if (d.kind === 'pt' || d.kind === 'vert') {
-            d.pt.x = Math.round(d.ox + dx); d.pt.y = Math.round(d.oy + dy);
-            d.m.style.left = d.pt.x + 'px'; d.m.style.top = d.pt.y + 'px';
-            if (d.kind === 'vert') _syncWire();
-        } else if (d.kind === 'zone') {
-            const z = CFG.points[d.pk];
-            z.x = Math.round(d.ox + dx); z.y = Math.round(d.oy + dy);
-            _syncZone(d.pk);
-        } else if (d.kind === 'zoneresize') {
-            const z = CFG.points[d.pk];
-            z.w = Math.max(60, Math.round(d.ox + dx));
-            z.h = Math.max(30, Math.round(d.oy + dy));
-            _syncZone(d.pk);
-        } else if (d.kind === 'door') {
-            const D = CFG.doors[d.i];
-            D.x = Math.round(d.ox + dx); D.y = Math.round(d.oy + dy);
-            _syncDoor(d.i);
-        } else if (d.kind === 'doorresize') {
-            const D = CFG.doors[d.i];
-            D.w = Math.max(40, Math.round(d.ox + dx));
-            D.h = Math.max(24, Math.round(d.oy + dy));
-            _syncDoor(d.i);
-        } else if (d.kind === 'cam') {
-            S.edit.cam.x = d.ox - dx; S.edit.cam.y = d.oy - dy;
-        }
-    }
-    function _dragEnd() {
-        if (!S.edit?.drag) return;
-        S.edit.drag = null;
-        _exportToPanel();
-    }
-    function _exportData() {
-        const data = {
-            layoutFull: CFG.layout.map(o => {
-                const rec = { x: o.x, y: o.y, w: o.w, h: o.h, footH: o.footH, s: o.s || 1 };
-                if (o.file) rec.file = o.file;
-                if (o.url) rec.url = o.url;
-                if (o.idb) rec.idb = o.idb;
-                if (o.footW != null) rec.footW = o.footW;
-                if (o.float) rec.float = true;
-                return rec;
-            }),
-            points: CFG.points,
-            doors: CFG.doors.map(D => ({ x: D.x, y: D.y, w: D.w, h: D.h })),
-        };
-        if (CFG.baseOverride) data.baseOverride = CFG.baseOverride;
-        if (CFG.maskOverride) data.maskOverride = CFG.maskOverride;
-        return data;
-    }
-    function _exportToPanel() {
-        const out = S.edit?.panel?.querySelector('.lep-out');
-        if (out) out.value = JSON.stringify(_exportData());
-    }
-    function exitEdit(save) {
-        if (!S.edit) return;
-        if (save) {
-            try { localStorage.setItem(SCENES[S.scene].cfgKey, JSON.stringify(_exportData())); } catch (e) {}
-        }
-        window.removeEventListener('pointermove', _dragMove);
-        window.removeEventListener('pointerup', _dragEnd);
-        S.edit.feet.forEach(f => f.remove());
-        S.edit.markers.forEach(m => m.remove());
-        Object.values(S.edit.zones || {}).forEach(el => el.remove());
-        if (S.edit.wire) { S.edit.wire.svg.remove(); S.edit.wire.handles.forEach(h => h.remove()); }
-        S.edit.maskView?.remove();
-        (S.edit.doorRects || []).forEach(el => el.remove());
-        S.edit.panel?.remove();
-        S.objEls.forEach(img => { img.classList.remove('lstage-editable'); img.onpointerdown = null; });
-        const click = S.root?.querySelector('.lstage-click');
-        if (click) click.onpointerdown = null;
-        S.root?.classList.remove('lstage-editing');
-        S.edit = null;
-        if (save) { rebuildBlocks(); unmount(); tryMount(); }   // 重掛=重生NPC站位+碰撞
-    }
 
     // ── 🔌 拆檔橋＋窗口互斥登記制 ──
     //    子模組（lobby_theater.js…）經 window.LobbyStage._b 借核心狀態/工具，載入順序=lobby_stage 先。
@@ -1977,6 +1606,9 @@
             pixelify: _pixelify, askImage: _askImage,
             resolveRef, idbPut,
             getNpcHistory, setNpcHistory,
+            // 給 lobby_editor.js（擺設模式）：物件擺放/佔地/碰撞重建/遮罩/人物縮放
+            placeObj, spawnObjEl: _spawnObjEl, footRect,
+            rebuildBlocks, loadMask, applyActorScale,
         },
     };
 })();
