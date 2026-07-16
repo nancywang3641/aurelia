@@ -174,6 +174,7 @@ const PHONE_FILES = [
     'os/os_studio_worldbook.js', // 🌍 世界書設計師（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
     'os/os_studio_persona.js', // 🧑 我的角色人設寫作（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
     'os/os_studio_vn_gallery.js', // 🧩 VN 組件展廳（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
+    'os/os_studio_diff_engine.js', // VN 煉丹 Diff-refine 引擎（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
     'os/os_api_engine.js',
     'os/os_vector_engine.js', // 向量記憶引擎（embed/ingest/search；酒館原本沒載入，補上）
     'os/os_vector_inject.js', // 酒館版記憶召回注入器（GENERATION_STARTED → injectPrompts）
