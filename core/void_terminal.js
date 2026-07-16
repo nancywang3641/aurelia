@@ -2305,7 +2305,7 @@ const IRIS_IDLE = [
                 { name: npcB.name, personaText: ptB },
                 wv, vnProtocol, theaterCtx);
             if (sharedSum) prompt += '\n\n【兩位角色共同所在故事的完整大總結（你們的一切認知都從這裡來；別複述、自然演出）】\n' + sharedSum;
-            if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return; }
+            if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return false; }
             let config = (window.OS_SETTINGS && window.OS_SETTINGS.getConfig) ? window.OS_SETTINGS.getConfig() : {};
             config.route = 'iris_duo';
             window.__AURELIA_SUMMARIZING = true;   // 生成期間擋 AVS/VecEngine/dossier 抽取（它們都查此旗標）
@@ -2318,7 +2318,7 @@ const IRIS_IDLE = [
             const _full = script.match(/<content>[\s\S]*?<\/content>/i);
             if (_full) content = _full[0].trim();
             else { const _open = script.match(/<content>[\s\S]*/i); if (_open) content = _open[0].trim() + '\n</content>'; }
-            if (!content) { console.warn('[playDuoScene] 無 <content>，丟棄'); return; }
+            if (!content) { console.warn('[playDuoScene] 無 <content>，丟棄'); return false; }
             // ephemeral 播：不 saveVnChapter（免觸發 ingest/抽取）；autoload 讀 _lobbyPendingChapter.content 直接 _startWithLoader
             const ch = { title: '🎭 小劇場：' + npcA.name + ' & ' + npcB.name, storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: content, createdAt: Date.now() };
             try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
@@ -2326,7 +2326,8 @@ const IRIS_IDLE = [
             if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
             else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(content, null);
             _summarizeTheater(npcA, npcB, content);   // fire-and-forget：背景抽一句記事存日誌（不 await、不拖播放）
-        } catch (e) { console.warn('[playDuoScene]', e); }
+            return true;   // 回報成敗給大廳偷窺遮罩（true=已丟給 VN 播放器）
+        } catch (e) { console.warn('[playDuoScene]', e); return false; }
         finally {
             // 延遲還原旗標：撐過生成後才發的 GENERATION_ENDED（state_runtime debounce 1500ms）再放行，別擋到 VN 播放本身的立繪/場景生圖
             setTimeout(function () { window.__AURELIA_SUMMARIZING = _prevSum; }, 4000);
