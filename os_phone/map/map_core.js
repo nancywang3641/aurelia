@@ -1722,6 +1722,31 @@ ${facilityText}
         // 使用 OS_API
         try {
             let prompt = `請為地點「${fac.name}」生成 2-3 位路人角色與一段環境描寫。`;
+            // 🕒 時間一致性：讓 AI 從跑團上下文自己判定當下時段，別生出不合時宜的活動
+            prompt += '\n【時間一致性】從對話上下文判斷當前劇情的時段與情境，生成的人物與活動必須符合該時段。';
+            // 🧑‍🤝‍🧑 跨設施名冊：同區其他地點已掃出的人物唸給 AI 聽，防撞名/行蹤矛盾（A在食堂吃飯就別在B教室出現）
+            try {
+                const _zone = WORLD().getZone(_zid);
+                const _lines = [];
+                if (_zone && _zone.facilities && win.OS_DB) {
+                    for (const k of Object.keys(_zone.facilities)) {
+                        if (k === _fk) continue;
+                        const _saved = await win.OS_DB.getMapFacilityData(_zid, k);
+                        if (_saved && Array.isArray(_saved.characters) && _saved.characters.length) {
+                            const _list = _saved.characters
+                                .filter(c => c && c.name && !c.isResident && !c.isLive)
+                                .slice(0, 6)
+                                .map(c => c.name + (c.role ? `(${c.role})` : ''))
+                                .join('、');
+                            if (_list) _lines.push(`${_zone.facilities[k].name || k}：${_list}`);
+                        }
+                    }
+                }
+                if (_lines.length) {
+                    prompt += '\n【同區域其他地點已知在場人物】\n' + _lines.join('\n') +
+                        '\n規則：新生成的角色不得與上述人物同名；若劇情需要提及他們，其行蹤必須與所在地點一致。';
+                }
+            } catch (e) {}
             if (_needScene) {
                 const _sp = _SME.buildScenePrompt(_zid, _fk);   // 把 <scene-map> 生成規則拼進同一次呼叫
                 if (_sp) prompt += '\n\n' + _sp;
@@ -1759,20 +1784,39 @@ ${facilityText}
                     cleanText = cleanText.replace(match[0], '');
                 }
 
-                // 3. 解析 Discoveries [🔍|#1|💊|標題|描述|x:12,y:38]（座標欄可缺＝舊格式，退隨機落點）
-                const discRegex = /\[🔍\|[^|]+\|([^|]+)\|([^|]+)\|([^|\]]+)(?:\|([^\]]+))?\]/g;
+                // 3. 解析 Discoveries [🔍|#1|💊|標題|描述|x:12,y:38]
+                //    欄位容錯歸位：AI 常省略#編號、或把 emoji+標題黏一起（跟地標格式看齊）——
+                //    錯位會讓標題掉進 emoji 槽(22px大字常駐)、描述掉進短名槽 → 看起來像 popup 沒 toggle。
+                const EMOJI_HEAD = /^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F2FF}\u{2300}-\u{23FF}]/u;
+                const discRegex = /\[🔍\|([^\]]+)\]/g;
                 while ((match = discRegex.exec(txt)) !== null) {
-                    const coords = match[4] || '';
+                    cleanText = cleanText.replace(match[0], '');
+                    const fields = match[1].split('|').map(s => s.trim()).filter(Boolean);
+                    if (fields.length && /^[#＃]?\d+$/.test(fields[0])) fields.shift();   // 掉頭的 #編號 欄
+                    // 座標欄可能在任何位置（通常最後）
+                    let coords = '';
+                    const ci = fields.findIndex(f => /x\s*[:：]\s*\d/i.test(f) && /y\s*[:：]\s*\d/i.test(f));
+                    if (ci >= 0) coords = fields.splice(ci, 1)[0];
+                    // emoji：獨立欄 or 黏在標題開頭
+                    let icon = '🔍';
+                    if (fields.length) {
+                        const em = String(fields[0]).match(EMOJI_HEAD);
+                        if (em) {
+                            icon = em[0];
+                            const rest = fields[0].slice(em[0].length).trim();
+                            if (rest) fields[0] = rest; else fields.shift();
+                        }
+                    }
+                    const title = (fields.shift() || '').trim();
+                    if (!title) continue;
+                    const desc = fields.join('，').trim();
                     const xm = coords.match(/x\s*[:：]\s*(\d+(?:\.\d+)?)/i);
                     const ym = coords.match(/y\s*[:：]\s*(\d+(?:\.\d+)?)/i);
                     discoveries.push({
-                        icon: match[1].trim(),
-                        title: match[2].trim(),
-                        desc: match[3].trim(),
+                        icon, title, desc,
                         x: xm ? Math.max(0, Math.min(100, parseFloat(xm[1]))) : (Math.floor(Math.random() * 70) + 15),
                         y: ym ? Math.max(0, Math.min(100, parseFloat(ym[1]))) : (Math.floor(Math.random() * 40) + 18)
                     });
-                    cleanText = cleanText.replace(match[0], '');
                 }
 
                 cleanText = cleanText.trim();
@@ -1784,6 +1828,12 @@ ${facilityText}
                 
                 STATE.generatedChars = chars.length > 0 ? chars : [{name:'路人A', role:'居民', dialogue:'...'}];
                 STATE.introSegments = intro.length > 0 ? intro : ["環境嘈雜，人來人往..."];
+
+                // 💾 掃描結果落地（治「開場語/路人離開設施就蒸發」——saveMapFacilityData 以前是沒人呼叫的死代碼）
+                //    留到下一次掃描覆蓋＝狀態更新才換班；只存真解析結果，不存兜底填充
+                if (chars.length || intro.length) {
+                    try { await win.OS_DB?.saveMapFacilityData?.(_zid, _fk, { characters: chars, intro: intro }); } catch (e) {}
+                }
 
                 renderScanResults();
                 btn.disabled = false;
@@ -1798,7 +1848,9 @@ ${facilityText}
                     if (_needScene && _SME && typeof _SME.applySceneMapFromText === 'function') {
                         // 場景圖重生會換新物件 → 先撈舊圖上的小發現，等下併回來不弄丟
                         const _oldDiscs = (_sm && Array.isArray(_sm.landmarks))
-                            ? _sm.landmarks.filter(l => l.isDiscovery).map(l => ({ icon: l.emoji, title: l.label, desc: l.description, x: l.x, y: l.y }))
+                            ? _sm.landmarks
+                                .filter(l => l.isDiscovery && !(l.emoji && [...String(l.emoji)].length > 3))   // 錯位壞資料不搬進新圖
+                                .map(l => ({ icon: l.emoji, title: l.label, desc: l.description, x: l.x, y: l.y }))
                             : [];
                         const _gen = await _SME.applySceneMapFromText(_zid, _fk, txt);
                         if (_gen) { _sm = _gen; _fresh = true; discoveries = _oldDiscs.concat(discoveries); }
@@ -1806,9 +1858,15 @@ ${facilityText}
                     // 連場景圖都沒有：開一張只有發現物的空圖，標 discoveryOnly 讓下次探索照樣補正圖
                     if (!_sm && discoveries.length) _sm = { backdropPrompt: '', backdropUrl: '', landmarks: [], generatedAt: Date.now(), discoveryOnly: true };
                     if (_sm) {
+                        // 🧹 舊壞資料：先前欄位錯位存進來的發現物（emoji 槽塞了整串標題文字）→ 移除，這輪重新收
+                        let _cleaned = false;
+                        if (Array.isArray(_sm.landmarks)) {
+                            const _bad = l => l.isDiscovery && l.emoji && [...String(l.emoji)].length > 3;
+                            if (_sm.landmarks.some(_bad)) { _sm.landmarks = _sm.landmarks.filter(l => !_bad(l)); _cleaned = true; }
+                        }
                         const _merged = _mergeDiscoveriesIntoSceneMap(_sm, discoveries);
                         if (_merged && _sm.landmarks.some(l => !l.isDiscovery)) delete _sm.discoveryOnly;
-                        if (_fresh || _merged) {
+                        if (_fresh || _merged || _cleaned) {
                             try { await win.WORLD_RUNTIME?.saveFacilitySceneMap?.(_zid, _fk, _sm); } catch (e) { console.warn('[Map] 小地圖存檔失敗:', e); }
                             renderScanResults();
                         }
