@@ -61,9 +61,11 @@
     // --- 4. 主邏輯 ---
     win.OS_USER = {
         init: function() {
+            if (this._inited) return;   // init 再被呼叫不重疊 interval
+            this._inited = true;
             initModalDOM();
             this.syncFromST();
-            setInterval(() => this.syncFromST(), 1500);
+            setInterval(() => { if (!document.hidden) this.syncFromST(); }, 1500);
         },
 
         // 從 power_user 同步當前人設資料

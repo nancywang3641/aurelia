@@ -380,7 +380,7 @@
             renderApp(container);
             // 啟動時也啟動輪詢同步，確保不會掉速 (還原 V5.0 穩定度)
             if (!isStandalone() && !win._os_persona_sync_interval) {
-                win._os_persona_sync_interval = setInterval(() => syncFromST(), 1500);
+                win._os_persona_sync_interval = setInterval(() => { if (!document.hidden) syncFromST(); }, 1500);
             }
         },
         launchApp: function(container) { API.launch(container); }, 

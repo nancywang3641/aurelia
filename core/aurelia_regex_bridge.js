@@ -75,15 +75,18 @@
     }
 
     // 3. 設立自動監聽器
+    //    防抖：AI 串流吐字時 #chat subtree mutation 連發，每批各排一個 timer 會疊著重跑同樣的全 DOM 掃描
+    //    → 收斂成單一 pending timer（新 mutation 進來就重新計時，安靜 300ms 才掃一次）
+    let _pendingSync = null;
     const observer = new MutationObserver((mutations) => {
         let hasNewNodes = false;
-        mutations.forEach(mut => {
-            if (mut.addedNodes.length > 0) hasNewNodes = true;
-        });
-
+        for (const mut of mutations) {
+            if (mut.addedNodes.length > 0) { hasNewNodes = true; break; }
+        }
         if (hasNewNodes) {
-            // 等待酒館 DOM 渲染完畢後執行
-            setTimeout(() => {
+            if (_pendingSync) clearTimeout(_pendingSync);
+            _pendingSync = setTimeout(() => {
+                _pendingSync = null;
                 syncRegexStyles();
                 extractSystemTerminalData();
             }, 300);
