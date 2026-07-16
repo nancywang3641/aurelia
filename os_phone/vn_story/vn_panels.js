@@ -419,7 +419,9 @@
     async function _renderImgMgr(cfg) {
         const list = document.getElementById(cfg.listId); if (!list) return;
         const store = cfg.store, curWorld = VN_Cache.getCurrentWorld();
-        const all = await VN_Cache.getAllMeta(store);   // 只撈中繼資料，大圖等卡片進視口才逐張載（整庫一次全載會 OOM）
+        let all = await VN_Cache.getAllMeta(store);   // 只撈中繼資料，大圖等卡片進視口才逐張載（整庫一次全載會 OOM）
+        // spriteDirect(直生立繪)生的圖存同一個 avatar_cache（供遊戲重用、切拉桿不重生＝Rae 拍板），但相簿「頭像」tab 排除它(isSprite)→不再被全身立繪污染
+        if (cfg.kind === 'avatar') all = all.filter(e => !e.isSprite);
         const groups = {};
         all.forEach(e => { const w = VN_Cache.worldOf(e); (groups[w] = groups[w] || []).push(e); });
         const st = _mgrState[cfg.listId] || (_mgrState[cfg.listId] = { world: curWorld, filter: 'all' });
