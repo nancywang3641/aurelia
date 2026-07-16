@@ -155,6 +155,7 @@ const PHONE_BASE_PATH = _AURELIA_EXT_BASE + '/os_phone/';
 const PHONE_FILES = [
     // === 🟢 OS 層 (系統基礎) ===
     'os/os_settings.js',
+    'os/os_settings_comfyui.js', // 🧩 ComfyUI 直連設定（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_db.js',
     'os/app_store.js',
     'os/os_sync.js',
