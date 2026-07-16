@@ -141,6 +141,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'chat_group', path: _AURELIA_EXT_BASE + '/core/chat_group.js', key: 'chatGroup' },
     { name: 'chat_canvas', path: _AURELIA_EXT_BASE + '/core/chat_canvas.js', key: 'chatCanvas' },
     { name: 'void_terminal', path: _AURELIA_EXT_BASE + '/core/void_terminal.js', key: 'voidTerminal' },
+    { name: 'void_claude_recents', path: _AURELIA_EXT_BASE + '/core/void/claude_recents.js', key: 'voidClaudeRecents' },   // ☕ Claude Recents 多會話清單（拆自 void_terminal，靠 _bridge；排 chat_window 後面保 _VoidClaudeUpdateChip 覆蓋序）
     { name: 'control_center', path: _AURELIA_EXT_BASE + '/core/control_center.js', key: 'controlCenter' },
     { name: 'html_extractor', path: _AURELIA_EXT_BASE + '/core/html_extractor.js', key: 'htmlExtractor' },
     { name: 'story_extractor', path: _AURELIA_EXT_BASE + '/core/story_extractor.js', key: 'storyExtractor' },
