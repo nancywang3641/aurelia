@@ -356,12 +356,15 @@
     }
 
     // 走路圖角色：尺寸/幀切換全走 background-position（幀序 0,1,2,1 循環、立定=中幀）
+    //   定位走 transform 不走 left/top——left/top 逐幀寫入會反覆弄髒版面樹，桌機聊天 DOM 肥時走路掉幀。
+    //   走路圖角色沒有 CSS transform 動畫（.lstage-sheet 的 walking/flip 都關掉了），inline transform 不會打架；
+    //   單張立姿角色(placeActor)的彈跳/翻面 keyframes 吃 transform，所以維持 left/top 別搬。
     function placeSheetActor(a) {
         const ratio = (a.frameW && a.frameH) ? a.frameW / a.frameH : 0.8;
         const w = a.h * ratio;
         const left = a.x - w / 2, top = a.y - a.h, z = 2 + Math.round(a.y);
-        if (a._left !== left) { a.el.style.left = left + 'px'; a._left = left; }
-        if (a._top !== top) { a.el.style.top = top + 'px'; a._top = top; }
+        const tf = 'translate3d(' + left + 'px,' + top + 'px,0)';
+        if (a._tf !== tf) { a.el.style.transform = tf; a._tf = tf; }
         if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
         if (a._sizedH !== a.h || a._sizedW !== w) {
             a.el.style.width = w + 'px';
@@ -392,7 +395,7 @@
         el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ' lstage-loading';   // 換好的圖載入才顯示
         a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
         a.frameW = a.frameH = null;
-        a._left = a._top = a._z = a._bg = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
+        a._left = a._top = a._z = a._bg = a._tf = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
         if (isSheet) {
             el.style.backgroundImage = 'url("' + src.sheet + '")';
             const probe = new Image();
@@ -1681,17 +1684,21 @@
     }
 
     // ── 鏡頭 ─────────────────────────────────────────────
+    // 容器尺寸只在 fitCamera 讀（resize/ResizeObserver 觸發），RAF 內用快取——
+    // 每幀讀 clientWidth 是強制同步重排點，桌機聊天 DOM 肥時整條重排被拖著跑=走路卡卡的主因。
     function fitCamera() {
         if (!S.root) return;
         const vw = S.root.clientWidth, vh = S.root.clientHeight;
         if (!vw || !vh) return;
+        S._vw = vw; S._vh = vh;
         S.scale = Math.max(vw / MAP_W, vh / MAP_H);
         S._camX = S._camY = null;   // 縮放變了→強制重寫 transform（applyCamera 有快取）
         applyCamera();
     }
     function applyCamera() {
         if (!S.root) return;
-        const vw = S.root.clientWidth, vh = S.root.clientHeight;
+        const vw = S._vw, vh = S._vh;
+        if (!vw || !vh) return;
         const focus = S.edit ? S.edit.cam : (S.player ? { x: S.player.x, y: S.player.y } : { x: MAP_W / 2, y: MAP_H / 2 });
         // 底部對話框會蓋住下緣 → 跟隨模式把焦點擺在畫面偏上(38%)，人不會躲進對話框後面
         const focusRatio = S.edit ? 0.5 : 0.38;
@@ -2040,6 +2047,8 @@
         _applySceneHeader();
         fitCamera();
         window.addEventListener('resize', fitCamera);
+        // 容器自身變寬窄（漢堡全屏、佈局模式切換）不一定觸發 window resize → ResizeObserver 補刀
+        try { S._ro = new ResizeObserver(() => fitCamera()); S._ro.observe(root); } catch (e) {}
         S.last = performance.now();
         S.raf = requestAnimationFrame(tick);
         console.log('[LobbyStage] mounted');
@@ -2072,6 +2081,7 @@
         cancelAnimationFrame(S.raf);
         if (S.sleepT) { clearTimeout(S.sleepT); S.sleepT = null; }
         window.removeEventListener('resize', fitCamera);
+        if (S._ro) { try { S._ro.disconnect(); } catch (e) {} S._ro = null; }
         if (S.onKey) {
             window.removeEventListener('keydown', S.onKey, true);
             window.removeEventListener('keyup', S.onKey, true);
