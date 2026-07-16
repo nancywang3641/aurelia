@@ -606,7 +606,7 @@
 
     // --- 渲染隊列處理器 ---
     function processRenderQueue() {
-        if (RENDER_QUEUE_PROCESSING || RENDER_QUEUE.length === 0 || !APP_CONTAINER) return;
+        if (RENDER_QUEUE_PROCESSING || RENDER_QUEUE.length === 0 || !APP_CONTAINER || document.hidden) return;   // 分頁背景化先不渲染，回前景照常消化隊列
         RENDER_QUEUE_PROCESSING = true;
         const batchSize = 5; let processed = 0;
         while (RENDER_QUEUE.length > 0 && processed < batchSize) {

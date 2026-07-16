@@ -79,8 +79,8 @@
         }
     }
 
-    // 啟動定時同步
-    setInterval(updateApiCache, 3000);
+    // 啟動定時同步（分頁背景化就歇著；getPromptText 有空快取兜底，不怕漏）
+    setInterval(() => { if (!document.hidden) updateApiCache(); }, 3000);
     setTimeout(updateApiCache, 1000);
 
     // --- 導出全域接口 ---
