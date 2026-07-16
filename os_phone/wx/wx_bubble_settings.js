@@ -273,14 +273,17 @@
             ['wxModalTitle', 'wxModalInput', 'wxModalInput2'].forEach(id => { const el = doc.getElementById(id); if(el) el.style.display = 'none'; });
             const footer = modal.querySelector('.wx-modal-footer'); if(footer) footer.style.display = 'none';
             customContainer.innerHTML = innerHtml; customContainer.style.display = 'block'; modal.classList.add('show');
-            const observer = new MutationObserver((mutations) => {
+            // observer 單例＋善後即拆：這裡每次開面板都會跑，不拆的話同一個 modal 上會疊一堆 observer 越玩越卡
+            if (this._modalObserver) this._modalObserver.disconnect();
+            this._modalObserver = new MutationObserver(() => {
                 if (!modal.classList.contains('show')) {
                     customContainer.innerHTML = '';
                     ['wxModalTitle', 'wxModalInput'].forEach(id => { const el = doc.getElementById(id); if(el) el.style.display = 'block'; });
                     if(footer) footer.style.display = 'flex';
+                    if (this._modalObserver) { this._modalObserver.disconnect(); this._modalObserver = null; }
                 }
             });
-            observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+            this._modalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
         }
     };
 })();
