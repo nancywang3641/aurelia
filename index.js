@@ -220,6 +220,7 @@ const PHONE_FILES = [
     'vn_story/vn_fx.js',               // ⚡ 畫面特效引擎（#fx-id# 標記由 vn_core 抽取路由過來）
     'vn_story/vn_core.js',
     'vn_story/vn_core_images.js',      // 🖼️ 背景/場景CG/道具生圖管線（自 vn_core.js 拆出；Object.assign 掛回 VN_Core，必須在其後載入）
+    'vn_story/vn_core_stage.js',       // 🎭 雙格立繪舞台＋角色卡（自 vn_core.js 拆出；同上，排 vn_core 之後）
     'vn_story/vn_scene_insert.js',     // 副模型場景插圖渲染器（state_runtime.extractOnce → splice 進 VN 劇本）
     'vn_story/vn_avatar_earlybird.js', // 頭像早鳥：串流/訊息落地搶先生成 ChapterCard 的 [Avatar|...]（須在 vn_core 後）
     'vn_story/vn_inspect.js',
