@@ -1685,13 +1685,14 @@
                     if (this._avatarMemCache[name]) continue;
                     const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
                     if (lbUrl) { this._avatarMemCache[name] = lbUrl; console.log(`[VN] 頭像使用世界書素材：${name}`); continue; }
-                    const cached = await VN_Cache.get('avatar_cache', name);
+                    const _st = this._charImgStore();   // spriteDirect→sprite_cache（跟存檔一致，命中就不生，否則直生模式會每次誤判要生）
+                    const cached = await VN_Cache.get(_st, name);
                     if (cached && cached.url && !cached.url.startsWith('blob:')) {
                         const objUrl = await this._toObjectUrl(cached.url);
                         this._avatarMemCache[name] = objUrl || cached.url;
                         console.log(`[VN] 頭像從 IDB 載入：${name}`); continue;
                     }
-                    if (cached?.url?.startsWith('blob:')) await VN_Cache.delete('avatar_cache', name);
+                    if (cached?.url?.startsWith('blob:')) await VN_Cache.delete(_st, name);
                     // persona URL 橋接：若名字是主角且有頭像 URL，直接用；有 desc 則注入為生圖 prompt
                     const pf = this._getPersonaFallback(name);
                     if (pf?.url) { this._avatarMemCache[name] = pf.url; console.log(`[VN] 頭像使用 Persona URL：${name}`); continue; }
@@ -1755,7 +1756,7 @@
                     const img = await self._makeCharImage(d, 'Neutral');   // 立繪模式由 _makeCharImage 內部換立繪 prompt + 去背
                     if (!img) { console.warn(`[VN] 角色圖生成失敗：${name}`); return ''; }
                     self._avatarMemCache[name] = img.objUrl;
-                    if (img.dataUrl) { try { await VN_Cache.set('avatar_cache', name, { prompt: d, url: img.dataUrl }); } catch(e) {} }
+                    if (img.dataUrl) { try { const st = self._charImgStore(); await VN_Cache.set(st, name, st === 'sprite_cache' ? { prompt: d, url: img.dataUrl, isRemoved: true } : { prompt: d, url: img.dataUrl }); } catch(e) {} }
                     console.log(`[VN] 角色圖生成完成：${name}`);
                     return img.objUrl;
                 } catch(e) { console.warn(`[VN] 角色圖生成例外：${name}`, e); return ''; }
@@ -1765,6 +1766,10 @@
             job.finally(() => { delete self._avatarInflight[name]; self._imgJobEnd(); });
             return job;
         },
+
+        // spriteDirect 時 _makeCharImage 產出的是「全身去背立繪」→ 存/讀 sprite_cache（立繪庫），別灌進 avatar_cache（頭像庫）造成相簿頭像 tab 被污染。
+        //   非直生模式回 avatar_cache，行為完全不變。存/讀四個觸點(_genAvatarToCache 存、早鳥讀、fallbackToAI 讀+存)全走這個，讀寫一致才不會每次登場重生。
+        _charImgStore: function() { return (VN_Config.data.spriteDirect === true) ? 'sprite_cache' : 'avatar_cache'; },
 
         // ── 生成「一張角色圖」的共用咽喉（頭像 or 立繪，看 spriteDirect）──
         //   立繪模式＝唯二差別：① getSprite 模板取代 getAvatar ② AI 去背。整條 gate/解析/快取/去重由呼叫端
@@ -1930,7 +1935,7 @@
                     if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
                     const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
                     if (lbUrl) continue;
-                    const cached = await VN_Cache.get('avatar_cache', name);
+                    const cached = await VN_Cache.get(this._charImgStore(), name);   // spriteDirect→查 sprite_cache（跟存檔一致，命中就不重生）
                     if (cached?.url && !cached.url.startsWith('blob:')) continue;
                     if (this._getPersonaFallback(name)?.url) continue;
                     // 自備靜態立繪/預設圖存在 → 播放時直接讀靜態檔，不用生
@@ -3410,7 +3415,7 @@
             let _resolvePending;
             this._pendingAvatars[name] = new Promise(r => { _resolvePending = r; });
             try {
-                const cached = await VN_Cache.get('avatar_cache', name);
+                const cached = await VN_Cache.get(this._charImgStore(), name);   // spriteDirect→查 sprite_cache（跟存檔一致）
                 let url;
                 if (cached && cached.url && !cached.url.startsWith('blob:')) {
                     const objUrl = await this._toObjectUrl(cached.url);
@@ -3434,7 +3439,7 @@
                         const img2 = await this._makeCharImage(d, exp);
                         if (!img2) return;
                         url = img2.objUrl; this._avatarMemCache[name] = img2.objUrl;
-                        if (img2.dataUrl) { try { await VN_Cache.set('avatar_cache', name, { prompt: d, url: img2.dataUrl }); } catch(e) {} }
+                        if (img2.dataUrl) { try { const st = this._charImgStore(); await VN_Cache.set(st, name, st === 'sprite_cache' ? { prompt: d, url: img2.dataUrl, isRemoved: true } : { prompt: d, url: img2.dataUrl }); } catch(e) {} }
                     }
                 }
                 if (!url) { const fb = VN_Config.data.finalFallbackSprite; if (fb) showSprite(fb); else if (!_stale()) this._hideEl(img); return; }
