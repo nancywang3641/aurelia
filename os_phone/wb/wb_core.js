@@ -665,9 +665,11 @@
             if (win.PhoneSystem) {
                 await win.wbApp.init();
                 win.PhoneSystem.install('微博', '<span style="font-weight:bold; font-size:28px;">👁️</span>', '#ff8200', (c) => {
-                    APP_CONTAINER = c; 
+                    APP_CONTAINER = c;
                     win.wbApp.render();
-                    setInterval(() => win.wbApp.checkUserUpdate(), 1000);
+                    // 這個 callback 每次開微博 app 都會跑：interval 必須單例，否則輪詢一支一支疊上去越玩越卡
+                    if (win.wbApp._userTimer) clearInterval(win.wbApp._userTimer);
+                    win.wbApp._userTimer = setInterval(() => win.wbApp.checkUserUpdate(), 1000);
                 });
             } else { setTimeout(win.wbApp.install, 500); }
         }
