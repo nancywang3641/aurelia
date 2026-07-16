@@ -47,10 +47,16 @@
   box-shadow:0 3px 10px rgba(0,0,0,.4); transition:background .2s, transform .2s; }
 .lstage-chat-fab:hover { background:#c8874a; transform:translateY(-2px); }
 .lobby-left.lstage-on.lstage-dlg-hidden .lstage-chat-fab { display:flex; }
-/* 對話中的像素立繪（小人放大版，動森風） */
-.lstage-talk-portrait { position:absolute; left:12px; bottom:21%; height:38%; z-index:4;
-  image-rendering:pixelated; pointer-events:none; user-select:none;
-  filter:drop-shadow(0 6px 14px rgba(0,0,0,.35)); animation:lstage-portrait-in .18s ease-out; }
+/* 對話立繪：兩種擺放，跟 VN 面板同一套 —— 預設=立繪(全身貼底)；加 .is-avatar=頭像(半身浮框) */
+/* 立繪(全身)：貼底、全高、contain+底部對齊 → 腳貼地、底部不留空（零 JS 計算，純 CSS，抄自 VN #game-char） */
+.lstage-talk-portrait { position:absolute; left:0; bottom:0; height:90%; max-width:52%;
+  object-fit:contain; object-position:left bottom; z-index:4; pointer-events:none; user-select:none;
+  filter:drop-shadow(0 6px 18px rgba(0,0,0,.45)); animation:lstage-portrait-in .18s ease-out; }
+/* 頭像(半身)：不貼地、浮在對話框上方、正方框裁上半身 + 相框（抄自 VN .vn-avatar） */
+.lstage-talk-portrait.is-avatar { left:4%; bottom:30%; height:auto; width:230px; max-width:38%;
+  aspect-ratio:1/1; object-fit:cover; object-position:center top; max-height:none;
+  border:2px solid rgba(243,234,216,.5); padding:6px; background:rgba(10,10,14,.82);
+  border-radius:4px; box-shadow:0 16px 40px rgba(0,0,0,.8); }
 @keyframes lstage-portrait-in { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
 .lstage-toggle-btn.off { opacity:.45; }
 
