@@ -417,6 +417,8 @@
             if (a && a.el) a.el.classList.remove('lstage-loading');
             return;
         }
+        // 裝扮室「生成立繪」(kind='img'+asPortrait) 的去背全身立繪 → 同時當對話立繪(貼底擺放)；持久(skin 有存)、每次掛載重接
+        if (skin.kind === 'img' && skin.asPortrait) { a.portrait = src; a.portraitKind = 'sprite'; }
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src);
     }
 
@@ -854,7 +856,9 @@
                         const data = out || final;   // 走路圖=調框重切後的圖；立繪=原圖
                         const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
                         await idbPut(id, data);
-                        _saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
+                        // kind='img'=去背全身立繪 → 標 asPortrait，_applySkin 會接進對話立繪(貼底擺放)；走路圖(sheet)不當立繪
+                        _saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id }, asPortrait: kind === 'img' });
+                        if (kind === 'img') { a.portrait = data; a.portraitKind = 'sprite'; }   // 即時生效，不必等重新掛載
                         _applySkin(a, a.key);
                         btn.innerHTML = '<i class="fa-solid fa-check"></i> 已套用';
                         setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1600);
