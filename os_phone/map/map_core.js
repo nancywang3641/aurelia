@@ -1826,8 +1826,8 @@ ${facilityText}
                     win.AureliaControlCenter.playIrisSequence(cleanText);
                 }
                 
-                STATE.generatedChars = chars.length > 0 ? chars : [{name:'路人A', role:'居民', dialogue:'...'}];
-                STATE.introSegments = intro.length > 0 ? intro : ["環境嘈雜，人來人往..."];
+                STATE.generatedChars = chars;   // 可以為空：封閉場景（無限流副本之類）沒人就沒人，不硬塞路人
+                STATE.introSegments = intro.length > 0 ? intro : ["四周靜悄悄的，暫時沒有值得注意的動靜。"];
 
                 // 💾 掃描結果落地（治「開場語/路人離開設施就蒸發」——saveMapFacilityData 以前是沒人呼叫的死代碼）
                 //    留到下一次掃描覆蓋＝狀態更新才換班；只存真解析結果，不存兜底填充
