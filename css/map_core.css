@@ -70,6 +70,31 @@
         
         .am-detail-footer { padding: 20px; display: flex; justify-content: center; gap: 12px; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); }
         .am-scan-btn { background: #D4AF37; color: #000; border: none; padding: 12px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 0 15px rgba(212, 175, 55, 0.3); font-family: 'Cinzel'; display: flex; align-items: center; gap: 8px; }
+        /* 🎭 番外記事：設置入口 + 管理窗（改字/刪/重壓縮/清空） */
+        .amt-entry { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:rgba(20,20,20,0.4); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px; cursor:pointer; color:#D4AF37; }
+        .amt-entry:hover { background:rgba(40,35,20,0.5); }
+        .amt-entry-tx { flex:1; display:flex; flex-direction:column; gap:2px; }
+        .amt-entry-title { font-weight:bold; font-size:13px; }
+        .amt-entry-sub { color:#888; font-size:10px; }
+        .amt-entry-arrow { color:#888; font-size:16px; }
+        .amt-card { max-width:400px; max-height:85vh; display:flex; flex-direction:column; }
+        .amt-head { display:flex; align-items:center; gap:8px; padding:14px 16px 10px; border-bottom:1px solid #222; }
+        .amt-title { margin:0; flex:1; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px; font-size:15px; }
+        .amt-count { color:#888; font-size:11px; }
+        .amt-list { padding:12px 16px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px; }
+        .amt-empty { color:#888; font-size:12px; text-align:center; padding:18px 0; }
+        .amt-row { background:rgba(20,20,20,0.6); border:1px solid #333; border-radius:6px; padding:8px; }
+        .amt-row.merged { border-color:rgba(212,175,55,0.45); background:rgba(35,30,15,0.55); }
+        .amt-row-head { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+        .amt-row-title { flex:1; color:#D4AF37; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .amt-row-del { color:#777; cursor:pointer; font-size:14px; padding:0 4px; }
+        .amt-row-del:hover { color:#ff6b5e; }
+        .amt-row-text { width:100%; box-sizing:border-box; resize:vertical; background:rgba(0,0,0,0.35); border:1px solid #333; border-radius:4px; color:#ddd; font-size:12px; line-height:1.6; padding:6px 8px; font-family:inherit; }
+        .amt-row-text:focus { outline:none; border-color:rgba(212,175,55,0.6); }
+        .amt-actions { display:flex; gap:6px; padding:10px 16px; border-top:1px solid #222; }
+        .amt-danger { background:rgba(200,80,70,0.35); color:#ffb0a8; border:1px solid rgba(200,80,70,0.5); }
+        .amt-danger:hover { background:rgba(220,90,75,0.55); }
+
         /* 🎭 設施小劇場鈕：在場 ≥2 位才亮（JS 掛 .on）；深色底跟探索鈕區分主次 */
         #am-theater-btn { display: none; background: rgba(20,18,14,0.85); color: #D4AF37; border: 1px solid rgba(212,175,55,0.55); box-shadow: 0 0 12px rgba(212,175,55,0.15); }
         #am-theater-btn.on { display: flex; }
