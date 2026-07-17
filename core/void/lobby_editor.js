@@ -97,20 +97,26 @@
         // 控制面板
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
+        const _hint = _footOn()
+            ? '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地(選中家具後→拖框身挪位置、拖右下角把手調高寬)'
+            : '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區。此場景碰撞用手繪遮罩(換遮罩鈕)，家具不畫佔地、不擋路';
+        const _footRows = _footOn()
+            ? '<div class="lep-row">' +
+                '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
+                '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地高</button>' +
+              '</div>' +
+              '<div class="lep-row">' +
+                '<button class="lep-btn" data-act="footwminus"><i class="fa-solid fa-minus"></i> 佔地寬</button>' +
+                '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
+              '</div>'
+            : '';
         panel.innerHTML =
-            '<div class="lep-hint">拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地(選中家具後→拖框身挪位置、拖右下角把手調高寬)</div>' +
+            '<div class="lep-hint">' + _hint + '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
               '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
             '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
-              '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地高</button>' +
-            '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="footwminus"><i class="fa-solid fa-minus"></i> 佔地寬</button>' +
-              '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
-            '</div>' +
+            _footRows +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="actminus"><i class="fa-solid fa-minus"></i> 人物</button>' +
               '<button class="lep-btn" data-act="actplus"><i class="fa-solid fa-plus"></i> 人物</button>' +
@@ -160,7 +166,8 @@
                 if (i < 0) return;
                 _b.CFG.layout.splice(i, 1);
                 S.objEls[i].remove(); S.objEls.splice(i, 1);
-                S.edit.feet[i].remove(); S.edit.feet.splice(i, 1);
+                if (S.edit.feet[i]) S.edit.feet[i].remove();
+                S.edit.feet.splice(i, 1);   // noFoot 場景 feet 為空→splice no-op；有佔地時保持對位
                 S.edit.sel = -1;
                 S.edit.feet.forEach((_, k) => _syncFoot(k));
                 _exportToPanel();
@@ -190,8 +197,14 @@
         _exportToPanel();
         _b.fitCamera();   // 進建構模式→切 contain 縮放（整張看得見+可超界平移）
     }
+    // 此場景是否用佔地框（大地圖 noFoot=碰撞交給遮罩，不畫佔地）
+    function _footOn() { return !_b.SCENES[S.scene].noFoot; }
     function _makeEditable(img) {
         img.classList.add('lstage-editable');
+        if (!_footOn()) {   // noFoot 場景：家具只能拖位置，不做佔地框
+            img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
+            return;
+        }
         // 佔地框：選中物件後可整框拖放（挪位置）、拖右下角把手伸縮（調高寬）——不再固定黏底部
         const foot = document.createElement('div');
         foot.className = 'lstage-foot';
