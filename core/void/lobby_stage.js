@@ -114,13 +114,16 @@
             doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
         },
-        city: {   // 🏙 視差城市第一街區（戶外街景；書咖/純白大廳建築烤在底圖，走到大門白光過場進室內）
-            base: 'city/city_base_fixed.webp',
-            nightBase: 'city/city_base_fixed_night.webp',   // 18~06 自動夜景：整套素材替換（重繪光源），不是濾鏡
-            mask: null,   // 手繪碰撞遮罩後補；先走 boundary 鋼索+建築牆
-            cfgKey: 'lobby_stage_layout_city_v1',
+        city: {   // 🏙 視差城市第一街區（戶外街景；分層底板=地板框，建築/植栽都是可拖物件，走到大門白光過場進室內）
+            base: 'city/city_layers/city_floor_frame_day.webp',        // 分層版：底板只剩地板+外框，建築/植栽全改成可拖物件
+            nightBase: 'city/city_layers/city_floor_frame_night.webp',   // 18~06 自動夜景：整套素材替換（重繪光源），不是濾鏡
+            mask: null,   // 手繪碰撞遮罩後補；先走 boundary 鋼索+物件腳印
+            cfgKey: 'lobby_stage_layout_city_v2',   // v2=改分層底板(地板框+可拖建築)；舊烤製版存檔整組作廢，Rae 重新在擺設模式擺
             outdoor: true,   // 戶外：沒有駐店角色（瀅瀅/愛麗絲/柴郡都不在），客人池+SN 名冊照常刷
             layout: [
+                // 兩棟門面樓=可拖物件（吃深度排序）；日夜成對。起始座標抄 city_layout.json 的 landmark bounds，Rae 再手調
+                { file: 'city/city_layers/objects/book_cafe_day.webp', nightFile: 'city/city_layers/objects/book_cafe_night.webp', x: 205, y: 28,  w: 424, h: 346, footH: 300, s: 1 },     // 書咖門面（門→cafe）
+                { file: 'city/city_layers/objects/exchange_day.webp',  nightFile: 'city/city_layers/objects/exchange_night.webp',  x: 1040, y: 290, w: 468, h: 350, footH: 300, s: 0.78 },  // 交易所門面（門→hall；素材是「交易所」，想換別棟再說）
                 // 玩家住宅=動態物件（吃深度排序，人繞到屋後會被遮）；夜間素材成對替換
                 { file: 'city/player_house_lv1.webp', nightFile: 'city/player_house_lv1_night.webp', x: 145, y: 624, w: 455, h: 266, footH: 150, s: 1 },
             ],
@@ -135,10 +138,7 @@
                 ],
                 actorScale: 0.32,   // 🗺️ 地圖=俯視小棋子(脫鉤鏡頭後這數字≈螢幕高比例)；室內房間才用 0.7 那種大人
             },
-            walls: [
-                { x: 205, y: 28, w: 430, h: 305 },    // 書咖建築本體（大門在南面樓梯）
-                { x: 1040, y: 315, w: 365, h: 282 },  // 純白大廳建築本體（大門在南面）
-            ],
+            walls: [],   // 建築改成可拖物件→碰撞走物件腳印(footH)；外牆走 boundary 鋼索
             doors: [
                 { x: 334, y: 322, w: 100, h: 56, to: 'cafe', spawn: { x: 780, y: 868 } },    // 書咖大門→瀅瀅書咖（落在店內底部大門前）
                 { x: 1155, y: 592, w: 100, h: 50, to: 'hall', spawn: { x: 772, y: 830 } },   // 純白大廳大門→愛麗絲大廳（落在大廳底部大門前）
