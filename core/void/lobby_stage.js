@@ -114,14 +114,31 @@
             doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
         },
-        city: {   // 🏙 視差城市第一街區＝分層可走（day02 底板+遮罩擋踩+前景上層遮擋；玩家/NPC 走路，走到門進店）
-            base: 'city/city_layers/city_floor_frame_day02.webp',      // day02 底板：書咖/交易所/噴泉/長椅已烤進去
-            upper: 'city/city_layers/city_floor_frame_upper.webp',     // 前景上層：外圈樹蓋在角色上→走到樹後被遮，不會踩樹上
-            mask: 'city/city_layers/city_floor_frame_day02_mask.png',  // 碰撞遮罩：白=可走、黑=建築/噴泉/花台/長椅擋住
+        city: {   // 🏙 視差城市第一街區＝分層可走（day01 空底板+遮罩擋踩+前景物件各自深度排序；玩家/NPC 走路走到門進店）
+            base: 'city/city_layers/city_floor_frame_day01.webp',      // day01 空底板：只有地面+外圈樹框（建築/噴泉/中庭樹全拆成前景物件，才能走它們後面）
+            mask: 'city/city_layers/city_floor_frame_day02_mask.png',  // 碰撞遮罩：白=可走、黑=建築/噴泉/花台/長椅擋住（day02_mask 對齊）
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
-            cfgKey: 'lobby_stage_layout_city_v4',   // v4=day02 分層可走；舊靜態/走位版存檔整組作廢
+            cfgKey: 'lobby_stage_layout_city_v5',   // v5=day01+前景物件深度排序；舊版存檔整組作廢
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
-            layout: [],        // 建築烤進底板；NPC 房子之後往空地塊動態疊（不烤死，保留入住狀態）
+            // 前景物件＝從 upper01/02/03 拆出的獨立元素（書咖/交易所/噴泉/樹/燈柱/長椅）；bbox 即座標。
+            //   noCollide=不進碰撞(碰撞全走遮罩)；靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
+            layout: [
+                { file: 'city/city_layers/fg/fg01.webp', x: 144, y: 41, w: 404, h: 283, noCollide: true },   // 書咖
+                { file: 'city/city_layers/fg/fg02.webp', x: 971, y: 313, w: 436, h: 309, noCollide: true },   // 交易所
+                { file: 'city/city_layers/fg/fg03.webp', x: 589, y: 155, w: 54, h: 132, noCollide: true },
+                { file: 'city/city_layers/fg/fg04.webp', x: 894, y: 155, w: 56, h: 130, noCollide: true },
+                { file: 'city/city_layers/fg/fg05.webp', x: 954, y: 167, w: 32, h: 61, noCollide: true },
+                { file: 'city/city_layers/fg/fg06.webp', x: 465, y: 307, w: 132, h: 78, noCollide: true },
+                { file: 'city/city_layers/fg/fg07.webp', x: 703, y: 318, w: 142, h: 186, noCollide: true },   // 中央噴泉
+                { file: 'city/city_layers/fg/fg08.webp', x: 412, y: 487, w: 125, h: 75, noCollide: true },
+                { file: 'city/city_layers/fg/fg09.webp', x: 1097, y: 514, w: 38, h: 108, noCollide: true },
+                { file: 'city/city_layers/fg/fg10.webp', x: 1269, y: 514, w: 38, h: 108, noCollide: true },
+                { file: 'city/city_layers/fg/fg11.webp', x: 988, y: 606, w: 84, h: 49, noCollide: true },
+                { file: 'city/city_layers/fg/fg12.webp', x: 1302, y: 606, w: 84, h: 49, noCollide: true },
+                { file: 'city/city_layers/fg/fg13.webp', x: 842, y: 790, w: 33, h: 66, noCollide: true },
+                { file: 'city/city_layers/fg/fg14.webp', x: 477, y: 77, w: 81, h: 35, noCollide: true },
+                { file: 'city/city_layers/fg/fg15.webp', x: 949, y: 319, w: 132, h: 86, noCollide: true },
+            ],
             points: {
                 npcZone: { x: 400, y: 540, w: 600, h: 210 },   // 中央廣場（客人出沒區；避開建築/噴泉，都在遮罩白區）
                 player: { x: 768, y: 620 },
@@ -153,7 +170,7 @@
         const s = o.s || 1;
         return {
             ew: Math.round(o.w * s), eh: Math.round(o.h * s),
-            ef: Math.round(o.footH * s),
+            ef: Math.round((o.footH || 0) * s),
             efw: Math.round((o.footW != null ? o.footW : o.w) * s),
         };
     }
@@ -261,7 +278,7 @@
     function rebuildBlocks() {
         const maskOk = !!(S.mask && S.mask.ok);
         const alpha = !!SCENES[S.scene].alphaFoot;
-        const feet = alpha ? [] : CFG.layout.map(footRect);   // alphaFoot 場景：不用矩形腳印，改走 alpha 形狀
+        const feet = alpha ? [] : CFG.layout.filter(o => !o.noCollide).map(footRect);   // alphaFoot 不用腳印；noCollide 物件(城市前景)不擋路→碰撞全走遮罩
         BLOCKS = (maskOk ? [] : (SCENES[S.scene].walls || [])).concat(feet);   // 靜態地圖沒 walls→空陣列，別 undefined.concat 炸掉掛載
         ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha) : [];   // 只納入已載好 alpha 的物件
     }
