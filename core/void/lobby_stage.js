@@ -277,11 +277,9 @@
         BLOCKS = (maskOk ? [] : SCENES[S.scene].walls).concat(feet);
         ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha) : [];   // 只納入已載好 alpha 的物件
     }
-    // alpha 形狀擋路：腳點落在物件「底帶(footRect)」內、且該點圖片像素不透明(alpha≥128)=牆。
-    //   footRect 底帶＝切線高度(footH)：帶以上(屋子上半)不算牆→可穿過走屋後（把屋子當立體物）。
+    // alpha 形狀擋路：腳點落在物件圖片「不透明像素(alpha≥128)」上=牆＝整棟照剪影實心擋
+    //   (門面樓的上半就是屋身，不是空地，所以不做切線；要走屋後另議)。
     function _alphaHit(o, x, y) {
-        const r = footRect(o);
-        if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) return false;
         const a = o._alpha, s = o.s || 1;
         const lx = (x - o.x) / s, ly = (y - o.y) / s;   // 物件未縮放局部座標(0..w,0..h)
         if (lx < 0 || lx >= o.w || ly < 0 || ly >= o.h) return false;
