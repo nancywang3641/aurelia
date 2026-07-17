@@ -68,8 +68,12 @@
         .am-scan-results { width: 100%; display: none; flex-direction: column; gap: 20px; }
         .am-scan-results.active { display: flex; }
         
-        .am-detail-footer { padding: 20px; display: flex; justify-content: center; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); }
+        .am-detail-footer { padding: 20px; display: flex; justify-content: center; gap: 12px; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); }
         .am-scan-btn { background: #D4AF37; color: #000; border: none; padding: 12px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 0 15px rgba(212, 175, 55, 0.3); font-family: 'Cinzel'; display: flex; align-items: center; gap: 8px; }
+        /* 🎭 設施小劇場鈕：在場 ≥2 位才亮（JS 掛 .on）；深色底跟探索鈕區分主次 */
+        #am-theater-btn { display: none; background: rgba(20,18,14,0.85); color: #D4AF37; border: 1px solid rgba(212,175,55,0.55); box-shadow: 0 0 12px rgba(212,175,55,0.15); }
+        #am-theater-btn.on { display: flex; }
+        #am-theater-btn[disabled] { opacity: 0.6; cursor: default; }
 
         /* 角色與模態窗 */
         .am-char-grid-display { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; width: 100%; }
