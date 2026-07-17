@@ -205,7 +205,9 @@
             '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成單張立姿圖</button>' +
             '<button class="lep-btn lsd-gen-btn-sheet"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-person-walking"></i> 生成走路圖（3×4）</button>' +
             '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成單張立姿圖」。</div>' +
-        '</div>';
+        '</div>' +
+        '<button class="lep-btn lsd-sprite-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-image-portrait"></i> 生成立繪</button>' +
+        '<div class="lsd-hint">立繪＝對話框裡的角色大圖，跟上面的小人是兩回事；走劇情角色卡「一鍵生立繪」同一套，生完劇情那邊共用同一張。</div>';
     }
     // 把邊界內的3×4逐格畫進目標畫布（flips[r]=該列左右鏡像；共用於即時預覽與最終重切）
     function _paintSheet(ctx, img, b, flips, dcw, dch) {
@@ -374,6 +376,29 @@
         })();
         btn.addEventListener('click', () => doGen('img', btn));
         if (btnSheet) btnSheet.addEventListener('click', () => doGen('sheet', btnSheet));
+        // ── 🖼️ 生成立繪（對話框角色大圖）：直接呼叫 VN 劇情角色卡「一鍵生立繪」現成接口 ──
+        //   管線全在 VN_Core.autoGenSprite（studio 模板+清洗+isnet 去背+存 sprite_cache，進度字樣它自己管）；
+        //   key 用 avatarCacheKey(那輪chatId::名 複合鍵)→prompt 撈得到原頭像、立繪存回同鍵，掛載時 lobby_npcs 撈回當對話立繪。
+        const btnSprite = box.querySelector('.lsd-sprite-btn');
+        if (btnSprite) {
+            let busy = false;   // autoGenSprite 自己 1.5s/2.6s 後解鎖按鈕，這閂擋解鎖到圖標蓋回之間的重複點擊
+            btnSprite.addEventListener('click', async () => {
+                if (busy || btnSprite.disabled) return;
+                const VN = window.VN_Core || (window.parent || window).VN_Core;
+                if (!VN || typeof VN.autoGenSprite !== 'function') { window.alert('劇情引擎還沒載入，稍等一下再按。'); return; }
+                busy = true;
+                const orig = btnSprite.innerHTML;
+                const key = a.avatarCacheKey || a.name;
+                try {
+                    await VN.autoGenSprite(key, btnSprite);
+                    const VC = window.VN_Cache || (window.parent || window).VN_Cache;
+                    const sp = VC ? await VC.get('sprite_cache', key) : null;
+                    if (sp && sp.url) { a.portrait = sp.url; a.portraitKind = 'sprite'; }   // 即時接上對話立繪(貼底)，不必等重新掛載
+                } finally {
+                    setTimeout(() => { btnSprite.innerHTML = orig; btnSprite.disabled = false; busy = false; }, 2700);   // autoGenSprite 還原純文字後把含圖標版蓋回
+                }
+            });
+        }
     }
 
     // 三小窗加入互斥圈（誰要開窗先 closeWins 全關）
