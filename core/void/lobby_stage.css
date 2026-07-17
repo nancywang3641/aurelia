@@ -201,6 +201,11 @@
 .lstage-set-btn { position:absolute; right:94px; top:10px; z-index:3000; width:34px; height:34px;
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-set-btn:hover { background:rgba(20,18,16,.85); }
+/* 🏙 視差城市鈕（左上角；擺設模式時讓位給編輯面板） */
+.lstage-city-btn { position:absolute; left:10px; top:10px; z-index:3000; width:34px; height:34px;
+  border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
+.lstage-city-btn:hover { background:rgba(20,18,16,.85); }
+.lstage-editing .lstage-city-btn { display:none; }
 /* ⚙️ 設置小面板的開關列 */
 .lstage-settings .lset-row { display:flex; align-items:center; justify-content:space-between; gap:10px;
   color:#f3ead8; font-size:13px; cursor:pointer; padding:4px 2px; }
