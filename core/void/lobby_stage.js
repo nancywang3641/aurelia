@@ -118,16 +118,16 @@
             base: 'city/city_layers/city_floor_frame_day.webp',        // 分層版：底板只剩地板+外框，建築/植栽全改成可拖物件
             nightBase: 'city/city_layers/city_floor_frame_night.webp',   // 18~06 自動夜景：整套素材替換（重繪光源），不是濾鏡
             forceDay: true,   // 🌤 暫時鎖白天（Rae 調地圖中，先不跟時間走）；拿掉這行即恢復日夜自動切換
-            noFoot: true,     // 🚫 大地圖建築都是不規則形→不用矩形佔地擋路；碰撞全交給手繪遮罩（擺設模式不畫佔地框、碰撞不疊腳印）
+            alphaFoot: true,  // 🧊 建築當立體物：碰撞照圖片 alpha 形狀(不規則貼合)，只擋底部 footH 那條帶(切線以上可穿過走屋後)；佔地高=調切線
             mask: null,   // 手繪碰撞遮罩後補；先走 boundary 鋼索+物件腳印
             cfgKey: 'lobby_stage_layout_city_v2',   // v2=改分層底板(地板框+可拖建築)；舊烤製版存檔整組作廢，Rae 重新在擺設模式擺
             outdoor: true,   // 戶外：沒有駐店角色（瀅瀅/愛麗絲/柴郡都不在），客人池+SN 名冊照常刷
             layout: [
                 // 兩棟門面樓=可拖物件（吃深度排序）；日夜成對。起始座標抄 city_layout.json 的 landmark bounds，Rae 再手調
-                { file: 'city/city_layers/objects/book_cafe_day.webp', nightFile: 'city/city_layers/objects/book_cafe_night.webp', x: 205, y: 28,  w: 424, h: 346, footH: 300, s: 1 },     // 書咖門面（門→cafe）
-                { file: 'city/city_layers/objects/exchange_day.webp',  nightFile: 'city/city_layers/objects/exchange_night.webp',  x: 1040, y: 290, w: 468, h: 350, footH: 300, s: 0.78 },  // 交易所門面（門→hall；素材是「交易所」，想換別棟再說）
+                { file: 'city/city_layers/objects/book_cafe_day.webp', nightFile: 'city/city_layers/objects/book_cafe_night.webp', x: 205, y: 28,  w: 424, h: 346, footH: 130, s: 1 },     // 書咖門面（門→cafe；footH=底部擋路帶高，上面可繞後）
+                { file: 'city/city_layers/objects/exchange_day.webp',  nightFile: 'city/city_layers/objects/exchange_night.webp',  x: 1040, y: 290, w: 468, h: 350, footH: 130, s: 0.78 },  // 交易所門面（門→hall；素材是「交易所」，想換別棟再說）
                 // 玩家住宅=動態物件（吃深度排序，人繞到屋後會被遮）；夜間素材成對替換
-                { file: 'city/player_house_lv1.webp', nightFile: 'city/player_house_lv1_night.webp', x: 145, y: 624, w: 455, h: 266, footH: 150, s: 1 },
+                { file: 'city/player_house_lv1.webp', nightFile: 'city/player_house_lv1_night.webp', x: 145, y: 624, w: 455, h: 266, footH: 110, s: 1 },
             ],
             points: {
                 npcZone:  { x: 430, y: 430, w: 580, h: 280 },   // 中央廣場（客人出沒區；避開大廳牆與玩家房腳印）
@@ -169,18 +169,9 @@
             efw: Math.round((o.footW != null ? o.footW : o.w) * s),
         };
     }
-    // 佔地框：新版 foot={dx,dy,w,h}=可自由拖放/伸縮的框（未縮放物件局部座標，跟 s 縮放、隨物件移動）；
-    // 沒 foot 就退回舊制 footH/footW（底部水平置中，適合正方物件）。
+    // 佔地框＝物件底部那條「地面帶」：全寬(或 footW)、高 footH、底部對齊、水平置中。
+    //   一般家具＝這塊矩形直接當碰撞；alphaFoot 場景(大地圖)＝這塊只當「切線高度」，實際擋路形狀交給圖片 alpha。
     function footRect(o) {
-        if (o.foot) {
-            const s = o.s || 1;
-            return {
-                x: o.x + Math.round(o.foot.dx * s),
-                y: o.y + Math.round(o.foot.dy * s),
-                w: Math.round(o.foot.w * s),
-                h: Math.round(o.foot.h * s),
-            };
-        }
         const d = effDims(o);
         return { x: o.x + Math.round((d.ew - d.efw) / 2), y: o.y + d.eh - d.ef, w: d.efw, h: d.ef };
     }
@@ -276,12 +267,51 @@
 
     function isOn() { try { return localStorage.getItem('lobby_stage_on') !== '0'; } catch (e) { return true; } }
 
-    // ── 碰撞（優先序：手繪遮罩 > 鋼索/牆矩形；可拖家具腳印永遠有效）──
-    let BLOCKS = [];
+    // ── 碰撞（優先序：手繪遮罩 > 鋼索/牆矩形；家具腳印/alpha 形狀永遠有效）──
+    let BLOCKS = [];          // 矩形腳印（一般家具）
+    let ALPHA_BLOCKS = [];    // alpha 形狀擋路（大地圖建築：照圖形狀，只擋 footRect 底帶）
     function rebuildBlocks() {
         const maskOk = !!(S.mask && S.mask.ok);
-        const feet = SCENES[S.scene].noFoot ? [] : CFG.layout.map(footRect);   // noFoot 場景（大地圖）：碰撞不疊物件腳印，全靠遮罩
+        const alpha = !!SCENES[S.scene].alphaFoot;
+        const feet = alpha ? [] : CFG.layout.map(footRect);   // alphaFoot 場景：不用矩形腳印，改走 alpha 形狀
         BLOCKS = (maskOk ? [] : SCENES[S.scene].walls).concat(feet);
+        ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha) : [];   // 只納入已載好 alpha 的物件
+    }
+    // alpha 形狀擋路：腳點落在物件「底帶(footRect)」內、且該點圖片像素不透明(alpha≥128)=牆。
+    //   footRect 底帶＝切線高度(footH)：帶以上(屋子上半)不算牆→可穿過走屋後（把屋子當立體物）。
+    function _alphaHit(o, x, y) {
+        const r = footRect(o);
+        if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) return false;
+        const a = o._alpha, s = o.s || 1;
+        const lx = (x - o.x) / s, ly = (y - o.y) / s;   // 物件未縮放局部座標(0..w,0..h)
+        if (lx < 0 || lx >= o.w || ly < 0 || ly >= o.h) return false;
+        const ax = Math.min(a.w - 1, Math.floor(lx / o.w * a.w));
+        const ay = Math.min(a.h - 1, Math.floor(ly / o.h * a.h));
+        return a.data[ay * a.w + ax] >= 128;
+    }
+    // 抽物件圖片的 alpha 通道存成降採樣點陣（o._alpha={w,h,data}）；載好後重建碰撞。
+    //   jsdelivr 有 CORS 頭→canvas 可讀；只留 alpha 一個 byte，200px 上限省記憶體。
+    function _loadObjAlpha(o, src) {
+        const probe = new Image();
+        if (!String(src).startsWith('data:')) probe.crossOrigin = 'anonymous';
+        probe.onload = () => {
+            try {
+                const nw = probe.naturalWidth || o.w, nh = probe.naturalHeight || o.h;
+                const k = Math.min(1, 200 / Math.max(nw, nh));
+                const aw = Math.max(1, Math.round(nw * k)), ah = Math.max(1, Math.round(nh * k));
+                const cv = document.createElement('canvas');
+                cv.width = aw; cv.height = ah;
+                const ctx = cv.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(probe, 0, 0, aw, ah);
+                const px = ctx.getImageData(0, 0, aw, ah).data;
+                const data = new Uint8Array(aw * ah);
+                for (let i = 0; i < aw * ah; i++) data[i] = px[i * 4 + 3];   // 只取 alpha
+                o._alpha = { w: aw, h: ah, data };
+                rebuildBlocks();
+            } catch (e) { console.warn('[LobbyStage] 物件 alpha 讀取失敗', e); }
+        };
+        probe.onerror = () => console.warn('[LobbyStage] 物件 alpha 下載失敗', src);
+        probe.src = src;
     }
     // 手繪碰撞遮罩：白=可走、黑=不可走（<128 判黑）；jsdelivr 有 CORS 頭、canvas 可讀
     async function loadMask() {
@@ -364,7 +394,9 @@
             const P = CFG?.points?.boundary;
             if (P && P.length >= 3 && !insidePoly(P, x, y)) return true;   // 鋼索圈外=牆（遮罩沒載時的退路）
         }
-        return BLOCKS.some(B => l < B.x + B.w && r > B.x && t < B.y + B.h && b > B.y);
+        if (BLOCKS.some(B => l < B.x + B.w && r > B.x && t < B.y + B.h && b > B.y)) return true;
+        for (let i = 0; i < ALPHA_BLOCKS.length; i++) if (_alphaHit(ALPHA_BLOCKS[i], x, y)) return true;
+        return false;
     }
 
     // ── 角色（玩家/NPC 共用）────────────────────────────
@@ -1173,7 +1205,10 @@
         if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
         // 夜間成對素材：物件帶 nightFile 且場景現在是夜 → 換檔名（forceDay 場景永遠白天；座標/佔地不變）
         const ref = (o.nightFile && _sceneIsNight(SCENES[S.scene])) ? Object.assign({}, o, { file: o.nightFile }) : o;
-        resolveRef(ref).then(src => { if (src) img.src = src; });
+        resolveRef(ref).then(src => {
+            if (src) img.src = src;
+            if (src && SCENES[S.scene].alphaFoot) _loadObjAlpha(o, src);   // 大地圖建築：抽 alpha 形狀做碰撞
+        });
         placeObj(img, o);
         S.world.appendChild(img);
         return img;
