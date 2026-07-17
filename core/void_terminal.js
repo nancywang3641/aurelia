@@ -2009,6 +2009,7 @@ const IRIS_IDLE = [
         } catch (e) { console.warn('[playDuoScene] 抓VN小說家世界書失敗', e); }
         return _vnProtocolCache;
     }
+    VoidTerminal.getVnProtocol = _fetchVnProtocol;   // 外借：地圖設施小劇場（map_core）等要組 VN 劇本 prompt 時共用同一份協議快取
     // 小劇場：OS_API.chat 走「主模型」生成 VN 劇本 → 攔截不回傳 chat → 丟 VN 播放器 ephemeral 播（不存章節）。
     //   🚨全程包 __AURELIA_SUMMARIZING：state_runtime(AVS)/VecEngine/dossier 都查此旗標，不設就會拿當前卡 preset 抽小劇場→污染。
     //   🚨不 saveVnChapter：一存成章節就觸發 VecEngine ingest + state_runtime 抽取。改 ephemeral(_startWithLoader/autoload 不存)。
