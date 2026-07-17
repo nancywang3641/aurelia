@@ -244,9 +244,13 @@
 .lstage-editable { pointer-events:auto !important; cursor:grab; }
 .lstage-editable:active { cursor:grabbing; }
 .lstage-editing .lstage-hint { display:none !important; }
-.lstage-foot { position:absolute; background:rgba(220,60,60,.28); border:1px dashed rgba(220,60,60,.7);
-  pointer-events:none; z-index:2500; }
-.lstage-foot.sel { background:rgba(220,60,60,.42); border-color:#ff5a5a; }
+/* 家具佔地框：平時穿透（讓點擊選到家具本體）；選中後可整框拖放/拖右下把手伸縮 */
+.lstage-foot { position:absolute; background:rgba(220,60,60,.22); border:2px dashed rgba(220,60,60,.7);
+  pointer-events:none; z-index:2500; touch-action:none; }
+.lstage-foot.sel { background:rgba(220,60,60,.34); border-color:#ff5a5a; pointer-events:auto; cursor:grab; }
+.lstage-foot.sel:active { cursor:grabbing; }
+.lstage-foot-grip { background:#e0453c !important; display:none; }
+.lstage-foot.sel .lstage-foot-grip { display:flex; }
 .lstage-marker { position:absolute; transform:translate(-50%,-50%); width:34px; height:34px; border-radius:50%;
   display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:bold; color:#fff;
   cursor:grab; z-index:2600; box-shadow:0 2px 6px rgba(0,0,0,.45); user-select:none; touch-action:none; }
