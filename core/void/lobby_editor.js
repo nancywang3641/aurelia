@@ -200,12 +200,34 @@
     }
     function _makeEditable(img) {
         img.classList.add('lstage-editable');
-        // 佔地框＝底部地面帶視覺化（紅框），選中家具後用「佔地高/寬」±調；alphaFoot 場景這條帶=擋路切線高度
-        const foot = document.createElement('div');
-        foot.className = 'lstage-foot';
+        // 佔地視覺化：一般家具=紅矩形(footRect)；alphaFoot 場景(大地圖)=canvas 直接畫出屋子真實擋路剪影(照 alpha、只到切線)
+        const alphaFoot = !!_b.SCENES[S.scene].alphaFoot;
+        const foot = document.createElement(alphaFoot ? 'canvas' : 'div');
+        foot.className = 'lstage-foot' + (alphaFoot ? ' lstage-foot-shape' : '');
         S.world.appendChild(foot);
         S.edit.feet.push(foot);
         img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
+    }
+    // alphaFoot 剪影：把「切線以下 & 圖片不透明」的像素塗紅，畫在物件正上方＝玩家實際會被擋的形狀
+    function _syncFootShape(o, cv) {
+        const s = o.s || 1, ew = Math.round(o.w * s), eh = Math.round(o.h * s);
+        cv.style.left = o.x + 'px'; cv.style.top = o.y + 'px';
+        cv.style.width = ew + 'px'; cv.style.height = eh + 'px';
+        const a = o._alpha;
+        if (!a) { cv.width = cv.height = 1; return; }   // alpha 還沒載到→暫時空白（載好會回呼刷新）
+        if (cv.width !== a.w || cv.height !== a.h) { cv.width = a.w; cv.height = a.h; }
+        const ctx = cv.getContext('2d');
+        const img = ctx.createImageData(a.w, a.h);
+        const ayCut = Math.round((o.h - o.footH) / o.h * a.h);   // 切線：這列以下才算牆
+        for (let y = 0; y < a.h; y++) {
+            if (y < ayCut) continue;
+            for (let x = 0; x < a.w; x++) {
+                if (a.data[y * a.w + x] < 128) continue;
+                const p = (y * a.w + x) * 4;
+                img.data[p] = 230; img.data[p + 1] = 60; img.data[p + 2] = 60; img.data[p + 3] = 150;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
     }
     // 新增家具：量原圖尺寸→縮到約240px高→放到目前視角中央→立即可拖
     function _addFurniture(ref, dataUrl) {
@@ -251,11 +273,15 @@
     function _syncFoot(i) {
         const o = _b.CFG.layout[i], foot = S.edit.feet[i];
         if (!foot) return;
-        const r = _b.footRect(o);
-        foot.style.left = r.x + 'px';
-        foot.style.top = r.y + 'px';
-        foot.style.width = r.w + 'px';
-        foot.style.height = r.h + 'px';
+        if (foot.classList.contains('lstage-foot-shape')) {
+            _syncFootShape(o, foot);   // alphaFoot：畫真實剪影
+        } else {
+            const r = _b.footRect(o);
+            foot.style.left = r.x + 'px';
+            foot.style.top = r.y + 'px';
+            foot.style.width = r.w + 'px';
+            foot.style.height = r.h + 'px';
+        }
         foot.classList.toggle('sel', S.edit.sel === i);
     }
     function _dragStart(e, info) {
@@ -373,5 +399,6 @@
         exit: exitEdit,                 // exit(true)=存檔重掛、exit(false)=直接收（unmount 收殘留用）
         toggle: () => (S.edit ? exitEdit(true) : enterEdit()),   // 🖊 鈕（lobby_stage tryMount 呼叫）
         isOn: () => !!S.edit,
+        syncFeet: () => { if (S.edit) S.edit.feet.forEach((_, k) => _syncFoot(k)); },   // alpha 晚載到→回呼刷新剪影
     };
 })();

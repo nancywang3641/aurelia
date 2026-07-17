@@ -248,6 +248,9 @@
 .lstage-foot { position:absolute; background:rgba(220,60,60,.28); border:1px dashed rgba(220,60,60,.7);
   pointer-events:none; z-index:2500; }
 .lstage-foot.sel { background:rgba(220,60,60,.42); border-color:#ff5a5a; }
+/* alphaFoot 剪影：canvas 直接畫屋子真實擋路形狀，不要矩形底/框 */
+.lstage-foot-shape { background:none; border:none; }
+.lstage-foot-shape.sel { background:none; outline:2px dashed rgba(255,90,90,.9); outline-offset:2px; }
 .lstage-marker { position:absolute; transform:translate(-50%,-50%); width:34px; height:34px; border-radius:50%;
   display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:bold; color:#fff;
   cursor:grab; z-index:2600; box-shadow:0 2px 6px rgba(0,0,0,.45); user-select:none; touch-action:none; }
