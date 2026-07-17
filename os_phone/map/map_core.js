@@ -1688,6 +1688,24 @@ ${facilityText}
         exitMap();
     }
 
+    // 🎭 番外記事存檔：按 chatId 分卡（跨卡隔離），每卡上限 10 條；正文注入在 os_app_memory_inject.injectMapTheater
+    const MAP_THEATER_LOG_KEY = 'aurelia_map_theater_log';
+    function _mapTheaterChatId() {
+        try { const ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { const id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } } catch (e) {}
+        return '_global';
+    }
+    function _saveMapTheaterBrief(entry) {
+        try {
+            let all = {};
+            try { all = JSON.parse(localStorage.getItem(MAP_THEATER_LOG_KEY) || '{}'); } catch (e) {}
+            const cid = _mapTheaterChatId();
+            const list = Array.isArray(all[cid]) ? all[cid] : [];
+            list.unshift(entry);
+            all[cid] = list.slice(0, 10);
+            localStorage.setItem(MAP_THEATER_LOG_KEY, JSON.stringify(all));
+        } catch (e) { console.warn('[MapTheater] 記事存檔失敗', e); }
+    }
+
     // ── 🎭 設施 NPC 小劇場：跑團當前狀態下的番外（點按才生成，主模型吐 VN 劇本 → VN 播放器 ephemeral 播）──
     //    復用大廳小劇場的鐵則：包 __AURELIA_SUMMARIZING 防 AVS/VecEngine 誤抽、只抽 <content> 沒有就丟棄、
     //    不 saveVnChapter（ephemeral 不落章節）、播放走 showVnPanel('autoload')（switchPage 揭頁+清 _pendingAutoScript 都在那條路上）。
@@ -1711,11 +1729,12 @@ ${facilityText}
             let prompt = `【NPC 番外小劇場】請為以下兩位在場人物，在「${(fac && fac.name) || '此地'}」寫一段番外閒聊短劇。\n`
                 + `甲：${desc(a)}\n乙：${desc(b)}\n`
                 + `要求：\n1. 一切以當前劇情上下文為準（時段、氛圍、事件進展都要一致）；這是主線之外的小插曲，不推進主線、主角不登場。\n`
-                + `2. 兩人交替對話 4-8 句，符合各自身分口吻，可自然聊到此地環境或最近發生的事。\n`;
+                + `2. 兩人交替對話 4-8 句，符合各自身分口吻，可自然聊到此地環境或最近發生的事。\n`
+                + `3. </content> 收束後，緊接輸出一段 <theater_summary>...</theater_summary>：第三人稱客觀記事 100～200 字（兩人聊了什麼、透露了什麼資訊或情緒、留下什麼約定或伏筆、關係有無變化）。這段只存檔不播出。\n`;
             const vnProto = (win.VoidTerminal && typeof win.VoidTerminal.getVnProtocol === 'function') ? await win.VoidTerminal.getVnProtocol() : '';
             if (vnProto) prompt += '\n【VN 劇本格式協議（必須遵守）】\n' + vnProto + '\n';
             else prompt += '\n輸出格式：整段包在 <content></content> 內，每句一行 [Char|角色名|表情|「台詞」]，表情從 Neutral/Happy/Sad/Angry/Surprised/Think 擇一。\n';
-            prompt += '\n重要：只輸出劇本本體（<content>…</content>），不要任何其他說明文字。';
+            prompt += '\n重要：只輸出 <content>…</content> 與其後的 <theater_summary>…</theater_summary> 兩個區塊，不要任何其他說明文字。';
             const messages = await win.OS_API.buildContext(prompt, 'map_theater');
             let config = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig) ? win.OS_SETTINGS.getConfig() : {};
             config.route = 'map_theater';
@@ -1728,8 +1747,15 @@ ${facilityText}
             let content = '';
             const _full = script.match(/<content>[\s\S]*?<\/content>/i);
             if (_full) content = _full[0].trim();
-            else { const _open = script.match(/<content>[\s\S]*/i); if (_open) content = _open[0].trim() + '\n</content>'; }
+            else { const _open = script.match(/<content>[\s\S]*/i); if (_open) content = _open[0].replace(/<theater_summary>[\s\S]*$/i, '').trim() + '\n</content>'; }   // 截斷補收尾時剝掉尾端摘要，別播進正文
             if (!content) throw new Error('生成內容不完整');
+            // 📝 摘要跟劇本同一次生成：抓 </content> 後的 <theater_summary> 存進番外記事（供正文注入橋接，見 os_app_memory_inject）
+            try {
+                const _sum = script.match(/<theater_summary>([\s\S]*?)<\/theater_summary>/i);
+                const brief = _sum ? _sum[1].replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim() : '';
+                if (brief && brief.length >= 20) _saveMapTheaterBrief({ fac: (fac && fac.name) || '', pair: a.name + ' × ' + b.name, brief: brief, ts: Date.now() });
+                else console.warn('[MapTheater] 本次回覆沒附 <theater_summary>，這場番外不留記事');
+            } catch (e) {}
             const ch = { title: '🎭 ' + ((fac && fac.name) || '') + '番外：' + a.name + ' & ' + b.name, storyId: 'map_theater', storyTitle: '地圖小劇場', content: content, createdAt: Date.now() };
             try { if (win.VN_Core && win.VN_Core._setStoryId) win.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
             win._lobbyPendingChapter = ch;

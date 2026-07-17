@@ -2047,15 +2047,20 @@ const IRIS_IDLE = [
             let content = '';
             const _full = script.match(/<content>[\s\S]*?<\/content>/i);
             if (_full) content = _full[0].trim();
-            else { const _open = script.match(/<content>[\s\S]*/i); if (_open) content = _open[0].trim() + '\n</content>'; }
+            else { const _open = script.match(/<content>[\s\S]*/i); if (_open) content = _open[0].replace(/<theater_summary>[\s\S]*$/i, '').trim() + '\n</content>'; }   // 截斷補收尾時把尾端摘要區塊剝掉，別播進正文
             if (!content) { console.warn('[playDuoScene] 無 <content>，丟棄'); return false; }
+            // 📝 摘要跟劇本同一次生成（Rae：別再分開叫副模型）：抓 </content> 後的 <theater_summary>
+            let brief = '';
+            const _sum = script.match(/<theater_summary>([\s\S]*?)<\/theater_summary>/i);
+            if (_sum) brief = _sum[1].replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
             // ephemeral 播：不 saveVnChapter（免觸發 ingest/抽取）；autoload 讀 _lobbyPendingChapter.content 直接 _startWithLoader
             const ch = { title: '🎭 小劇場：' + npcA.name + ' & ' + npcB.name, storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: content, createdAt: Date.now() };
             try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
             window._lobbyPendingChapter = ch;
             if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
             else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(content, null);
-            _summarizeTheater(npcA, npcB, content);   // fire-and-forget：背景抽一句記事存日誌（不 await、不拖播放）
+            if (brief && brief.length >= 20) _saveTheaterBrief(npcA, npcB, brief);   // 同回覆的摘要直接落地，零額外 API
+            else _summarizeTheater(npcA, npcB, content);   // 補抽退路：AI 沒照要求附摘要才走（fire-and-forget 不拖播放）
             return true;   // 回報成敗給大廳偷窺遮罩（true=已丟給 VN 播放器）
         } catch (e) { console.warn('[playDuoScene]', e); return false; }
         finally {
@@ -2150,6 +2155,18 @@ ${sections}`;
         } catch (e) { return ''; }
     }
 
+    // 記事落地（共用）：主生成同回覆的 <theater_summary> 與補抽路徑都走這裡存
+    function _saveTheaterBrief(npcA, npcB, brief) {
+        try {
+            VoidTerminal.theaterLog.save({
+                pair: (npcA.name || '?') + ' × ' + (npcB.name || '?'),
+                npcKeys: [npcA.key || '', npcB.key || ''],
+                brief: brief, ts: Date.now(),
+            });
+            const all = VoidTerminal.theaterLog.getAll();   // 硬上限裁舊
+            if (all.length > THEATER_LOG_CAP) for (const old of all.slice(THEATER_LOG_CAP)) VoidTerminal.theaterLog.remove(old.id);
+        } catch (e) { console.warn('[小劇場記事] 存檔失敗', e); }
+    }
     async function _summarizeTheater(npcA, npcB, content) {
         try {
             if (!window.OS_API || !window.VoidPrompts?.buildTheaterSummaryPrompt) return;
@@ -2173,14 +2190,7 @@ ${sections}`;
             });
             let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim();
             if (!clean || clean === '無' || clean.length < 4 || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) return;
-
-            VoidTerminal.theaterLog.save({
-                pair: (npcA.name || '?') + ' × ' + (npcB.name || '?'),
-                npcKeys: [npcA.key || '', npcB.key || ''],
-                brief: clean, ts: Date.now(),
-            });
-            const all = VoidTerminal.theaterLog.getAll();   // 硬上限裁舊
-            if (all.length > THEATER_LOG_CAP) for (const old of all.slice(THEATER_LOG_CAP)) VoidTerminal.theaterLog.remove(old.id);
+            _saveTheaterBrief(npcA, npcB, clean);
         } catch (e) { console.warn('[小劇場記事]', e); }
     }
 
