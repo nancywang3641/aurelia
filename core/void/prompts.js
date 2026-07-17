@@ -173,13 +173,13 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
         return '情緒基調：' + m + '；話題切入：' + a;
     }
 
-    // buildTheaterSummaryPrompt — 小劇場播完後，把這段 VN 劇本濃縮成「一句客觀記事」存進日誌（供未來連動/避重）。
-    //   第三人稱、客觀、一句話；沒內容回「無」。
+    // buildTheaterSummaryPrompt — 小劇場摘要的「補抽」路徑（主生成沒附 <theater_summary> 才走這條）。
+    //   第三人稱、客觀、100～200 字；沒內容回「無」。
     function buildTheaterSummaryPrompt(aName, bName, sceneText) {
-        return '你是大廳劇場的記事員。以下是「' + aName + '」與「' + bName + '」剛才在大廳的一小段閒聊劇本。\n' +
-'請用**第三人稱、客觀**的一句話（30 字內）記下這場閒聊的重點：他們聊了什麼、發生了什麼、有沒有留下什麼約定或梗。\n\n' +
+        return '你是大廳劇場的記事員。以下是「' + aName + '」與「' + bName + '」剛才的一小段閒聊劇本。\n' +
+'請用**第三人稱、客觀**的記事寫 100～200 字：他們聊了什麼、透露了什麼資訊或情緒、有沒有留下什麼約定或梗、關係有無變化。\n\n' +
 '【規則】\n' +
-'- 只輸出這一句記事，不要旁白、不要引號台詞、不要條列、不要角色表。\n' +
+'- 只輸出這段記事本身，不要旁白、不要引號台詞、不要條列、不要角色表。\n' +
 '- 純粹客觀概括，不要評論、不要形容詞堆砌。\n' +
 '- 若這段沒有值得記的內容，只回一個字：無。\n\n' +
 '【這場閒聊劇本】\n' + sceneText;
@@ -204,7 +204,8 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 '- 上面的角色描述是「性格與背景參考」，請據此自然演出這一幕的**新對話**；絕對不要把人設裡的描述文字或舉例句子原封不動當台詞念出來（那會變成復讀機）。\n' +
 '- 只寫這一小段兩人閒聊（約 6～10 句對話），不推進任何正式劇情、不把玩家/委託人寫進來、不解釋系統或代碼。\n' +
 '- 全部正文包在「單一」<content>...</content> 內，開頭一個 <ChapterCard>（含 [Story|大廳小劇場]／[Chapter|1|' + npcA.name + '與' + npcB.name + ']／[Preface|一句話情境]／[Protagonist|' + npcA.name + ']／[World|现代]／[Bg|…]／兩行 [Avatar|…]）。\n' +
-'- 角色名一律簡體中文、對話用全形「」。至少穿插 1～2 張 [Scene|scene_id|tags]（兩人外觀對稱、成年男性加 handsome_male）。輸出從 <content> 開始、以 </content> 收束，前後不要別的字。\n';
+'- 角色名一律簡體中文、對話用全形「」。至少穿插 1～2 張 [Scene|scene_id|tags]（兩人外觀對稱、成年男性加 handsome_male）。輸出從 <content> 開始。\n' +
+'- </content> 收束後，緊接輸出一段 <theater_summary>...</theater_summary>：第三人稱客觀記事 100～200 字（兩人聊了什麼、透露了什麼資訊或情緒、留下什麼約定或梗、關係有無變化）。這段只存檔不播出。除這兩個區塊外，前後不要任何其他文字。\n';
         if (vnProtocol && String(vnProtocol).trim()) {
             // 用「-VN小說家-」世界書的完整協議當格式規範（含 SFX 音效/表情包/Scene 等，比手寫完整）
             return head + duoRules + '\n【VN 完整格式協議（照此協議輸出，尤其 TAG／表情／SFX音效／Scene 插畫規則）】\n' + String(vnProtocol).trim();

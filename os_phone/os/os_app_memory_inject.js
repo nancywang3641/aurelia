@@ -438,6 +438,34 @@
         } catch (e) { console.warn('[App Data Injector] 失敗:', (e && e.message) || e); }
     }
 
+    // 🎭 地圖 NPC 番外記事注入：設施小劇場的摘要回饋給正文（番外不能憑空消失，後續劇本要能橋接）。
+    //    資料來源＝map_core 存的 localStorage 'aurelia_map_theater_log'（按 chatId 分卡），只注最近 3 條。
+    var MAP_THEATER_INJECT_ID = 'aurelia_map_theater';
+    var _lastMapTheaterUninject = null;
+    function injectMapTheater() {
+        try {
+            try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {}
+            _lastMapTheaterUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var cid = null;
+            try { var ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { var c = ST.getCurrentChatId(); if (c != null && c !== '') cid = String(c); } } catch (e) {}
+            if (!cid) return;   // 🔒 chatId 隔離：取不到就不注，免跨卡污染
+            var all = {};
+            try { all = JSON.parse(localStorage.getItem('aurelia_map_theater_log') || '{}'); } catch (e) {}
+            var list = Array.isArray(all[cid]) ? all[cid] : [];
+            if (!list.length) return;
+            var lines = list.slice(0, 3).map(function (e) {
+                return '・〔' + (e.fac || '某處') + '〕' + (e.pair || '') + '：' + (e.brief || '');
+            });
+            var block = '<NPC番外記事 規則="以下是主線之外已發生的 NPC 互動番外（玩家旁觀所見）。當作既成事實：這些角色的認知、情緒與關係需與之一致，劇情合適時可自然呼應，但不要照抄或宣讀。">\n'
+                + lines.join('\n') + '\n</NPC番外記事>';
+            var result = win.TavernHelper.injectPrompts([{ id: MAP_THEATER_INJECT_ID, content: block, position: 'in_chat', depth: 2, role: 'system' }], { once: true });
+            _lastMapTheaterUninject = (result && result.uninject) || null;
+            console.log('🎭 [Map Theater Injector] 注入 ' + Math.min(3, list.length) + ' 條番外記事');
+        } catch (e) { console.warn('[Map Theater Injector] 失敗:', (e && e.message) || e); }
+    }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) {
@@ -446,9 +474,10 @@
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectFxList(); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectWxChatrooms(); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppData(); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });
         }
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; });
-        console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件 + app資料回傳）');
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; });
+        console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件 + app資料回傳 + 地圖番外記事）');
     }
 
     win.OS_APP_MEMORY_INJECT = {
