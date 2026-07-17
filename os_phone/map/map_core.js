@@ -1943,6 +1943,28 @@ ${facilityText}
         renderHome();
     }
 
+    // 🕒 跑團往前走一輪（正文生成完成）→ 全區探索快照過期：清空所有設施的路人/開場語
+    //    （Rae 定的清除時機：故事時間狀態變了；小地圖的地標/發現物是場景固有、不清。
+    //     「重新掃描」鈕仍是當前橋段內的手動重抽，兩者不衝突。）
+    //    dryRun 只發 STARTED 不發 ENDED → 這裡天然安全；大總結/小劇場等內部生成靠 __AURELIA_SUMMARIZING 擋。
+    let _scanPurgeT = null;
+    function _onStoryAdvanced() {
+        if (win.__AURELIA_SUMMARIZING) return;
+        if (_scanPurgeT) clearTimeout(_scanPurgeT);
+        _scanPurgeT = setTimeout(() => {
+            _scanPurgeT = null;
+            try { win.OS_DB?.clearMapScanSnapshots?.(); } catch (e) {}
+        }, 1500);   // debounce 跟 state_runtime 同款，避開連發事件
+    }
+    (function _wireScanPurge(tries) {
+        if (win.eventOn && win.tavern_events && win.tavern_events.GENERATION_ENDED) {
+            win.eventOn(win.tavern_events.GENERATION_ENDED, _onStoryAdvanced);
+            if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, _onStoryAdvanced);   // 換卡＝故事換頁，快照跨卡不留
+            return;
+        }
+        if ((tries || 0) < 20) setTimeout(() => _wireScanPurge((tries || 0) + 1), 500);   // 事件系統晚就緒→重試 10 秒放棄
+    })();
+
     // 訂閱世界容器變動 → 自動重渲染
     if (win.WORLD_RUNTIME && typeof win.WORLD_RUNTIME.onChange === 'function') {
         win.WORLD_RUNTIME.onChange(() => {
