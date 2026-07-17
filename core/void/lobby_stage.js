@@ -289,29 +289,26 @@
         const ay = Math.min(a.h - 1, Math.floor(ly / o.h * a.h));
         return a.data[ay * a.w + ax] >= 128;
     }
-    // 抽物件圖片的 alpha 通道存成降採樣點陣（o._alpha={w,h,data}）；載好後重建碰撞。
-    //   jsdelivr 有 CORS 頭→canvas 可讀；只留 alpha 一個 byte，200px 上限省記憶體。
-    function _loadObjAlpha(o, src) {
-        const probe = new Image();
-        if (!String(src).startsWith('data:')) probe.crossOrigin = 'anonymous';
-        probe.onload = () => {
-            try {
-                const nw = probe.naturalWidth || o.w, nh = probe.naturalHeight || o.h;
-                const k = Math.min(1, 200 / Math.max(nw, nh));
-                const aw = Math.max(1, Math.round(nw * k)), ah = Math.max(1, Math.round(nh * k));
-                const cv = document.createElement('canvas');
-                cv.width = aw; cv.height = ah;
-                const ctx = cv.getContext('2d', { willReadFrequently: true });
-                ctx.drawImage(probe, 0, 0, aw, ah);
-                const px = ctx.getImageData(0, 0, aw, ah).data;
-                const data = new Uint8Array(aw * ah);
-                for (let i = 0; i < aw * ah; i++) data[i] = px[i * 4 + 3];   // 只取 alpha
-                o._alpha = { w: aw, h: ah, data };
-                rebuildBlocks();
-            } catch (e) { console.warn('[LobbyStage] 物件 alpha 讀取失敗', e); }
-        };
-        probe.onerror = () => console.warn('[LobbyStage] 物件 alpha 下載失敗', src);
-        probe.src = src;
+    // 從已載好的物件 <img> 抽 alpha 通道存降採樣點陣（o._alpha={w,h,data}）；載好後重建碰撞。
+    //   只留 alpha 一個 byte、200px 上限省記憶體；編輯中順便刷新剪影。
+    function _extractObjAlpha(o, imgEl) {
+        try {
+            const nw = imgEl.naturalWidth || o.w, nh = imgEl.naturalHeight || o.h;
+            const k = Math.min(1, 200 / Math.max(nw, nh));
+            const aw = Math.max(1, Math.round(nw * k)), ah = Math.max(1, Math.round(nh * k));
+            const cv = document.createElement('canvas');
+            cv.width = aw; cv.height = ah;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(imgEl, 0, 0, aw, ah);
+            const px = ctx.getImageData(0, 0, aw, ah).data;
+            const data = new Uint8Array(aw * ah);
+            let opaque = 0;
+            for (let i = 0; i < aw * ah; i++) { data[i] = px[i * 4 + 3]; if (data[i] >= 128) opaque++; }
+            o._alpha = { w: aw, h: ah, data };
+            rebuildBlocks();
+            if (S.edit) { try { window.LobbyEditor?.syncFeet?.(); } catch (e) {} }   // 編輯中→刷新剪影
+            console.log('[LobbyStage] 物件 alpha OK', o.file || o.url, aw + 'x' + ah, '不透明像素', opaque);
+        } catch (e) { console.warn('[LobbyStage] 物件 alpha 讀取失敗(CORS?)', o.file || o.url, e); }
     }
     // 手繪碰撞遮罩：白=可走、黑=不可走（<128 判黑）；jsdelivr 有 CORS 頭、canvas 可讀
     async function loadMask() {
@@ -1205,9 +1202,17 @@
         if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
         // 夜間成對素材：物件帶 nightFile 且場景現在是夜 → 換檔名（forceDay 場景永遠白天；座標/佔地不變）
         const ref = (o.nightFile && _sceneIsNight(SCENES[S.scene])) ? Object.assign({}, o, { file: o.nightFile }) : o;
+        const wantAlpha = !!SCENES[S.scene].alphaFoot;   // 大地圖建築：抽 alpha 形狀做碰撞
         resolveRef(ref).then(src => {
-            if (src) img.src = src;
-            if (src && SCENES[S.scene].alphaFoot) _loadObjAlpha(o, src);   // 大地圖建築：抽 alpha 形狀做碰撞
+            if (!src) return;
+            // 🚨 alphaFoot：顯示圖本身就掛 crossOrigin（避免先無 CORS 載一次污染快取→canvas 讀不到 alpha）；直接從這張抽，不開第二探針
+            if (wantAlpha && !String(src).startsWith('data:')) img.crossOrigin = 'anonymous';
+            img.src = src;
+            if (wantAlpha) {
+                const grab = () => _extractObjAlpha(o, img);
+                if (img.complete && img.naturalWidth) grab();
+                else img.addEventListener('load', grab, { once: true });
+            }
         });
         placeObj(img, o);
         S.world.appendChild(img);
