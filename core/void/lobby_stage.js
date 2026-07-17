@@ -981,6 +981,20 @@
         box.addEventListener('click', (e) => { if (e.target.closest('[data-act="close"]')) _closeLobbySettings(); });
     }
 
+    // ── 🏙 視差城市入口：第一次點擊才注入 city_adapter.js（它再載 city_shell.js/css＋runtime 素材）──
+    //    城市三檔都不進 index.js 啟動清單；adapter 開城時會 unmount 本舞台、關城時 tryMount 復原。
+    function _openCityDistrict() {
+        _closeWins();
+        if (window.CityAdapter) { window.CityAdapter.open(); return; }
+        if (S._cityLoading) return;
+        S._cityLoading = true;
+        const s = document.createElement('script');
+        s.src = (window.AURELIA_EXT_BASE || '.') + '/core/void/city_adapter.js';
+        s.onload = () => { S._cityLoading = false; window.CityAdapter?.open(); };
+        s.onerror = () => { S._cityLoading = false; console.error('[LobbyStage] city_adapter.js 載入失敗'); };
+        document.head.appendChild(s);
+    }
+
     // 🍔 舞台全屏：漢堡隱藏 MAIN MENU（.lobby-right）→ 舞台吃滿；狀態存 localStorage
     function _applyMenuHidden() {
         let hidden = false;
@@ -1002,7 +1016,8 @@
             '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
             '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
-            '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-tx">小劇場</span><span class="ltb-badge"></span></button>';
+            '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-tx">小劇場</span><span class="ltb-badge"></span></button>' +
+            '<button class="lstage-city-btn" title="視差城市"><i class="fa-solid fa-city"></i></button>';
         left.appendChild(root);
         _applyMenuHidden();   // 套用上次「舞台全屏（隱藏 MAIN MENU）」狀態
         if (S._theaterTimer) clearInterval(S._theaterTimer);
@@ -1015,6 +1030,7 @@
         root.querySelector('.lstage-set-btn').addEventListener('click', () => _openLobbySettings());
         // 🎬 小劇場窗口：有未查看的配對→開「正在對話」，否則直接看「回顧」
         root.querySelector('.lstage-theater-btn').addEventListener('click', () => window.LobbyTheater?.openWin(S.theater && !S.theater.playing ? 'live' : 'review'));
+        root.querySelector('.lstage-city-btn').addEventListener('click', _openCityDistrict);   // 🏙 視差城市（懶載入）
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         // 💬 聊天符號（自由漫遊時的浮鈕）：點了浮出「對話框＋輸入框」一組
         const fab = document.createElement('button');
