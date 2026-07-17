@@ -420,8 +420,8 @@
             if (a && a.el) a.el.classList.remove('lstage-loading');
             return;
         }
-        // 裝扮室「生成立繪」(kind='img'+asPortrait) 的去背全身立繪 → 同時當對話立繪(貼底擺放)；持久(skin 有存)、每次掛載重接
-        if (skin.kind === 'img' && skin.asPortrait) { a.portrait = src; a.portraitKind = 'sprite'; }
+        // ⚠️ 皮膚只管大廳小人外觀，不碰 a.portrait——對話立繪另有來源(固定NPC自帶/訪客avatar_cache)，兩者是不同東西(Rae定案 2026-07-17)
+        //   舊 skin 可能殘留 asPortrait 旗標(已退役)，一律忽略。
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src);
     }
 
@@ -1135,7 +1135,7 @@
     // 建構模式選圖：貼網址或留空→從電腦選擇圖片（上傳存進本機資產庫 IndexedDB）
     // ── 🧊 像素處理管線：去背（邊緣連通 BFS）＋掃碎片；opts.noGrid=true 時「不壓縮」──
     //   壓縮（縮到 96px 高、nearest=大顆粒）只給手動「壓成像素小小人」用；
-    //   裝扮室「生成並套用」走 noGrid＝畫風原封不動（Rae：以後要換不同Q版畫風，有些畫風不能壓）。
+    //   裝扮室「生成單張立姿圖」走 noGrid＝畫風原封不動（Rae：以後要換不同Q版畫風，有些畫風不能壓）。
     //   去背只挖「從四邊連通進來、跟邊框主色相近」的像素，不做全域色鍵——
     //   全域色鍵會把身體內部同色塊一起挖掉（老教訓）。
     function _loadImg(src) {
