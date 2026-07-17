@@ -133,7 +133,7 @@
                     { x: 1275, y: 300 }, { x: 1450, y: 300 }, { x: 1490, y: 640 }, { x: 1490, y: 935 },
                     { x: 85, y: 935 }, { x: 60, y: 640 },
                 ],
-                actorScale: 0.55,   // 戶外街景，人比室內小一號
+                actorScale: 0.32,   // 🗺️ 地圖=俯視小棋子(脫鉤鏡頭後這數字≈螢幕高比例)；室內房間才用 0.7 那種大人
             },
             walls: [
                 { x: 205, y: 28, w: 430, h: 305 },    // 書咖建築本體（大門在南面樓梯）
@@ -351,12 +351,19 @@
 
     // ── 角色（玩家/NPC 共用）────────────────────────────
     // src=字串→單張立姿圖；src={sheet:url}→3×4走路圖(真走路動畫,四方向)
+    // 🗺️ 地圖場景(outdoor)的小人跟鏡頭 cover 縮放脫鉤：不管鏡頭把底圖放大幾倍，人都固定螢幕尺寸
+    //    (俯視棋子；桌機/手機/橫豎屏一致)。室內房間維持原樣=跟著 cover 放大一起填滿畫面。
+    function _actorScale() {
+        let s = CFG.points.actorScale || 1;
+        if (SCENES[S.scene] && SCENES[S.scene].outdoor && S.scale > 0 && isFinite(S.scale)) s = s / S.scale;
+        return s;
+    }
     function spawnActor(src, x, y, h) {
         const isSheet = (typeof src === 'object' && src && src.sheet);
         const el = document.createElement(isSheet ? 'div' : 'img');
         // lstage-loading=先藏著，圖真的載好才顯示（防轉場時預設單圖閃一下才換成走路圖）
         el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ' lstage-loading';
-        const a = { x, y, baseH: h, h: Math.round(h * (CFG.points.actorScale || 1)), el, walking: false, flip: false };
+        const a = { x, y, baseH: h, h: Math.round(h * _actorScale()), el, walking: false, flip: false };
         if (isSheet) {
             a.sheet = true; a.dir = 0; a.frame = 1; a.animT = 0;
             el.style.backgroundImage = 'url("' + src.sheet + '")';
@@ -375,7 +382,7 @@
     }
     // 人物整體縮放即時套用（擺設模式「人物−/＋」用）
     function applyActorScale() {
-        const s = CFG.points.actorScale || 1;
+        const s = _actorScale();
         const all = S.player ? [S.player].concat(S.npcs) : S.npcs;
         all.forEach(a => {
             a.h = Math.round(a.baseH * s);
@@ -766,6 +773,8 @@
         S.scale = Math.max(vw / MAP_W, vh / MAP_H);
         S._camX = S._camY = null;   // 縮放變了→強制重寫 transform（applyCamera 有快取）
         applyCamera();
+        // 🗺️ 地圖場景小人跟鏡頭脫鉤：cover 縮放一變(resize/旋轉/全屏)就把固定螢幕尺寸重算一次
+        if (SCENES[S.scene] && SCENES[S.scene].outdoor) applyActorScale();
     }
     function applyCamera() {
         if (!S.root) return;
