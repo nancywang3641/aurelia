@@ -316,10 +316,11 @@
     // 手繪碰撞遮罩：白=可走、黑=不可走（<128 判黑）；jsdelivr 有 CORS 頭、canvas 可讀
     async function loadMask() {
         S.mask = null;
+        S.maskFailed = false;   // 重置：載入前先當「載入中」→blocked 空窗期全擋（防穿牆）
         const ovSrc = await resolveRef(CFG.maskOverride);   // 建構模式「換遮罩」優先
         const file = SCENES[S.scene].mask;
         const src = ovSrc || (file ? CDN + file : null);
-        if (!src) return;
+        if (!src) { S.maskFailed = true; return; }   // 場景本來就沒遮罩→解除空窗期全擋
         const img = new Image();
         if (!String(src).startsWith('data:')) img.crossOrigin = 'anonymous';
         img.onload = () => {
@@ -337,9 +338,9 @@
                     placeActor(S.player);
                 }
                 console.log('[LobbyStage] 碰撞遮罩已載入', file);
-            } catch (e) { console.warn('[LobbyStage] 遮罩讀取失敗(退回鋼索)', e); }
+            } catch (e) { S.maskFailed = true; console.warn('[LobbyStage] 遮罩讀取失敗(退回鋼索/放行移動)', e); }
         };
-        img.onerror = () => console.warn('[LobbyStage] 遮罩下載失敗(退回鋼索)', src);
+        img.onerror = () => { S.maskFailed = true; console.warn('[LobbyStage] 遮罩下載失敗(放行移動)', src); };
         img.src = src;
     }
     const FOOT_W = 46, FOOT_H = 18;
@@ -386,6 +387,8 @@
     function blocked(x, y) {
         const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
         if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
+        // 🚨 宣告了遮罩但還沒載好（jsdelivr 非同步抓圖的空窗期）→ 先全擋，防止「一進場立刻走就穿牆」；載入失敗(maskFailed)才放行免永久凍住
+        if (SCENES[S.scene] && SCENES[S.scene].mask && !(S.mask && S.mask.ok)) return !S.maskFailed;
         if (S.mask && S.mask.ok) {
             // 手繪遮罩：腳點像素亮度 <128 = 不可走（取 R 通道即可，遮罩是黑白圖）
             const mi = ((Math.round(y) * MAP_W) + Math.round(x)) * 4;
