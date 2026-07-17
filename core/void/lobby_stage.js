@@ -256,7 +256,7 @@
         const maskOk = !!(S.mask && S.mask.ok);
         const alpha = !!SCENES[S.scene].alphaFoot;
         const feet = alpha ? [] : CFG.layout.map(footRect);   // alphaFoot 場景：不用矩形腳印，改走 alpha 形狀
-        BLOCKS = (maskOk ? [] : SCENES[S.scene].walls).concat(feet);
+        BLOCKS = (maskOk ? [] : (SCENES[S.scene].walls || [])).concat(feet);   // 靜態地圖沒 walls→空陣列，別 undefined.concat 炸掉掛載
         ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha) : [];   // 只納入已載好 alpha 的物件
     }
     // alpha 形狀擋路：腳點落在物件圖片「不透明像素(alpha≥128)」上=牆＝整棟照剪影實心擋
