@@ -567,6 +567,7 @@ ${facilityText}
                     </div>
                     <div class="am-detail-footer">
                         <button id="am-scan-btn" class="am-scan-btn" onclick="window.AUREALIS_MAP.scanForCharacters()"><span>🔍</span> 探索此地</button>
+                        <button id="am-theater-btn" class="am-scan-btn" onclick="window.AUREALIS_MAP.playFacilityTheater()"><span>🎭</span> 小劇場</button>
                     </div>
                 </div>
 
@@ -1529,6 +1530,9 @@ ${facilityText}
             document.getElementById('am-scan-btn').innerHTML = reallyScanned
                 ? '<span>↻</span> 重新掃描'
                 : '<span>🔍</span> 探索此地';
+            // 🎭 小劇場鈕：在場 ≥2 位（VN 即時角色不算）才亮
+            const theaterBtn = document.getElementById('am-theater-btn');
+            if (theaterBtn) theaterBtn.classList.toggle('on', STATE.generatedChars.filter(c => c && c.name && !c.isLive).length >= 2);
 
             // 啟動走路 + 冒泡動畫
             _startCharacterAnimations(charGrid);
@@ -1536,6 +1540,8 @@ ${facilityText}
             _clearAnimationTimers(); // 沒角色就把舊定時器收乾淨
             resultsDiv.classList.remove('active');
             document.getElementById('am-scan-btn').innerHTML = '<span>🔍</span> 探索此地';
+            const theaterBtn = document.getElementById('am-theater-btn');
+            if (theaterBtn) theaterBtn.classList.remove('on');
         }
     }
 
@@ -1680,6 +1686,64 @@ ${facilityText}
 
         // 4. 關閉手機
         exitMap();
+    }
+
+    // ── 🎭 設施 NPC 小劇場：跑團當前狀態下的番外（點按才生成，主模型吐 VN 劇本 → VN 播放器 ephemeral 播）──
+    //    復用大廳小劇場的鐵則：包 __AURELIA_SUMMARIZING 防 AVS/VecEngine 誤抽、只抽 <content> 沒有就丟棄、
+    //    不 saveVnChapter（ephemeral 不落章節）、播放走 showVnPanel('autoload')（switchPage 揭頁+清 _pendingAutoScript 都在那條路上）。
+    //    跟大廳版的差異：人設=掃描出的在場 NPC＋當前跑團上下文（buildContext），不注奧瑞亞世界觀、無劇場日誌。
+    async function playFacilityTheater() {
+        const btn = document.getElementById('am-theater-btn');
+        const pool = (STATE.generatedChars || []).filter(c => c && c.name && !c.isLive);
+        if (pool.length < 2) return;
+        if (btn && btn.disabled) return;
+        // 剛好兩位就是他們；多位隨機抽兩位
+        const i = Math.floor(Math.random() * pool.length);
+        let j = Math.floor(Math.random() * (pool.length - 1)); if (j >= i) j++;
+        const a = pool[i], b = pool[j];
+        const fac = STATE.activeFacility;
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span>🎭</span> 偷聽中...'; }
+        STATE._scanBusyUntil = Date.now() + 120000;   // 生成期間擋過期清空（🍎模式下這次生成也會發 GENERATION_ENDED）
+        const _prevSum = win.__AURELIA_SUMMARIZING;
+        try {
+            if (!win.OS_API || typeof win.OS_API.chat !== 'function') throw new Error('API 未就緒');
+            const desc = (c) => `「${c.name}」${c.role ? '，身分/職業：' + c.role : ''}${c.action ? '，正在：' + c.action : ''}${c.dialogue ? '，說過：' + c.dialogue : ''}`;
+            let prompt = `【NPC 番外小劇場】請為以下兩位在場人物，在「${(fac && fac.name) || '此地'}」寫一段番外閒聊短劇。\n`
+                + `甲：${desc(a)}\n乙：${desc(b)}\n`
+                + `要求：\n1. 一切以當前劇情上下文為準（時段、氛圍、事件進展都要一致）；這是主線之外的小插曲，不推進主線、主角不登場。\n`
+                + `2. 兩人交替對話 4-8 句，符合各自身分口吻，可自然聊到此地環境或最近發生的事。\n`;
+            const vnProto = (win.VoidTerminal && typeof win.VoidTerminal.getVnProtocol === 'function') ? await win.VoidTerminal.getVnProtocol() : '';
+            if (vnProto) prompt += '\n【VN 劇本格式協議（必須遵守）】\n' + vnProto + '\n';
+            else prompt += '\n輸出格式：整段包在 <content></content> 內，每句一行 [Char|角色名|表情|「台詞」]，表情從 Neutral/Happy/Sad/Angry/Surprised/Think 擇一。\n';
+            prompt += '\n重要：只輸出劇本本體（<content>…</content>），不要任何其他說明文字。';
+            const messages = await win.OS_API.buildContext(prompt, 'map_theater');
+            let config = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig) ? win.OS_SETTINGS.getConfig() : {};
+            config.route = 'map_theater';
+            win.__AURELIA_SUMMARIZING = true;   // 生成期間擋 AVS/VecEngine/dossier 抽取
+            let script = await new Promise((resolve, reject) => {
+                win.OS_API.chat(messages, config, null, resolve, reject, {});
+            });
+            script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+            // 攔 <content>：完整→用；只有開標籤(被 maxtoken 截)→補收尾；全無→丟棄（不 wrap 垃圾→黑屏）
+            let content = '';
+            const _full = script.match(/<content>[\s\S]*?<\/content>/i);
+            if (_full) content = _full[0].trim();
+            else { const _open = script.match(/<content>[\s\S]*/i); if (_open) content = _open[0].trim() + '\n</content>'; }
+            if (!content) throw new Error('生成內容不完整');
+            const ch = { title: '🎭 ' + ((fac && fac.name) || '') + '番外：' + a.name + ' & ' + b.name, storyId: 'map_theater', storyTitle: '地圖小劇場', content: content, createdAt: Date.now() };
+            try { if (win.VN_Core && win.VN_Core._setStoryId) win.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
+            win._lobbyPendingChapter = ch;
+            try { win.PhoneSystem?.goHome?.(); } catch (e) {}   // 先收掉地圖面板（從 VN 末尾開的話面板還蓋在 VN 上面）
+            if (win.AureliaControlCenter && win.AureliaControlCenter.showVnPanel) win.AureliaControlCenter.showVnPanel('autoload');
+            else if (win.VN_Core && win.VN_Core._startWithLoader) win.VN_Core._startWithLoader(content, null);
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span>🎭</span> 小劇場'; }
+        } catch (e) {
+            console.warn('[MapTheater] 小劇場生成失敗:', e);
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span>🎭</span> 失敗，再試一次'; }
+        } finally {
+            setTimeout(() => { win.__AURELIA_SUMMARIZING = _prevSum; }, 4000);   // 撐過 GENERATION_ENDED debounce 再還原
+            STATE._scanBusyUntil = Date.now() + 8000;
+        }
     }
 
     // 🔍 小發現 → 小地圖 pin：轉成地標同形狀（isDiscovery 標記）併進 sceneMap.landmarks，
@@ -1992,6 +2056,7 @@ ${facilityText}
         openFacilityDetail,
         closeDetail,
         scanForCharacters,
+        playFacilityTheater,
         openCharacterDetail,
         interactChar,
         acceptMission,
