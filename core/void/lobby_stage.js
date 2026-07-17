@@ -117,6 +117,7 @@
         city: {   // 🏙 視差城市第一街區（戶外街景；分層底板=地板框，建築/植栽都是可拖物件，走到大門白光過場進室內）
             base: 'city/city_layers/city_floor_frame_day.webp',        // 分層版：底板只剩地板+外框，建築/植栽全改成可拖物件
             nightBase: 'city/city_layers/city_floor_frame_night.webp',   // 18~06 自動夜景：整套素材替換（重繪光源），不是濾鏡
+            forceDay: true,   // 🌤 暫時鎖白天（Rae 調地圖中，先不跟時間走）；拿掉這行即恢復日夜自動切換
             mask: null,   // 手繪碰撞遮罩後補；先走 boundary 鋼索+物件腳印
             cfgKey: 'lobby_stage_layout_city_v2',   // v2=改分層底板(地板框+可拖建築)；舊烤製版存檔整組作廢，Rae 重新在擺設模式擺
             outdoor: true,   // 戶外：沒有駐店角色（瀅瀅/愛麗絲/柴郡都不在），客人池+SN 名冊照常刷
@@ -150,8 +151,12 @@
         const h = new Date().getHours();
         return !(h >= 6 && h < 18);
     }
+    // 場景實際是否夜間：帶 forceDay 的場景永遠白天（不跟時間走）
+    function _sceneIsNight(SC) {
+        return !!(SC && !SC.forceDay && _isNightNow());
+    }
     function _sceneBase(SC) {
-        return (SC.nightBase && _isNightNow()) ? SC.nightBase : SC.base;
+        return (SC.nightBase && _sceneIsNight(SC)) ? SC.nightBase : SC.base;
     }
     // 物件有效尺寸（s=個別縮放，預設1；佔地跟著縮）
     // footW=佔地寬(未縮放，預設=全寬)；佔地框水平置中（treats 上寬下窄的懸浮物）
@@ -163,7 +168,18 @@
             efw: Math.round((o.footW != null ? o.footW : o.w) * s),
         };
     }
+    // 佔地框：新版 foot={dx,dy,w,h}=可自由拖放/伸縮的框（未縮放物件局部座標，跟 s 縮放、隨物件移動）；
+    // 沒 foot 就退回舊制 footH/footW（底部水平置中，適合正方物件）。
     function footRect(o) {
+        if (o.foot) {
+            const s = o.s || 1;
+            return {
+                x: o.x + Math.round(o.foot.dx * s),
+                y: o.y + Math.round(o.foot.dy * s),
+                w: Math.round(o.foot.w * s),
+                h: Math.round(o.foot.h * s),
+            };
+        }
         const d = effDims(o);
         return { x: o.x + Math.round((d.ew - d.efw) / 2), y: o.y + d.eh - d.ef, w: d.efw, h: d.ef };
     }
@@ -1142,8 +1158,8 @@
         const img = document.createElement('img');
         img.className = 'lstage-actor lstage-obj';
         if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
-        // 夜間成對素材：物件帶 nightFile 且現在是夜 → 換檔名（座標/佔地不變；editor 存檔仍按 file 對位）
-        const ref = (o.nightFile && _isNightNow()) ? Object.assign({}, o, { file: o.nightFile }) : o;
+        // 夜間成對素材：物件帶 nightFile 且場景現在是夜 → 換檔名（forceDay 場景永遠白天；座標/佔地不變）
+        const ref = (o.nightFile && _sceneIsNight(SCENES[S.scene])) ? Object.assign({}, o, { file: o.nightFile }) : o;
         resolveRef(ref).then(src => { if (src) img.src = src; });
         placeObj(img, o);
         S.world.appendChild(img);

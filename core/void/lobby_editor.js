@@ -89,27 +89,7 @@
             el.querySelector('.lstage-door-grip').onpointerdown = (e) => _dragStart(e, { kind: 'doorresize', i });
             return el;
         });
-        // 外框鋼索：金色多邊形=可走範圍，白色錨點可拖（牆角）——有手繪遮罩的場景不顯示（遮罩優先）
-        if (!_b.SCENES[S.scene].mask && Array.isArray(_b.CFG.points.boundary) && _b.CFG.points.boundary.length >= 3) {
-            const NS = 'http://www.w3.org/2000/svg';
-            const svg = document.createElementNS(NS, 'svg');
-            svg.setAttribute('class', 'lstage-wire');
-            svg.setAttribute('width', String(_b.MAP_W));
-            svg.setAttribute('height', String(_b.MAP_H));
-            svg.setAttribute('viewBox', '0 0 ' + _b.MAP_W + ' ' + _b.MAP_H);
-            const poly = document.createElementNS(NS, 'polygon');
-            svg.appendChild(poly);
-            S.world.appendChild(svg);
-            S.edit.wire = { svg, poly, handles: [] };
-            _b.CFG.points.boundary.forEach((pt) => {
-                const hnd = document.createElement('div');
-                hnd.className = 'lstage-vert';
-                S.world.appendChild(hnd);
-                hnd.onpointerdown = (e) => _dragStart(e, { kind: 'vert', pt, m: hnd });
-                S.edit.wire.handles.push(hnd);
-            });
-            _syncWire();
-        }
+        // （外框鋼索黃色虛線已移除：改用手繪遮罩+物件佔地框做碰撞；boundary 資料仍留作 runtime 退路）
         // 空地拖曳=平移視角
         S.root.querySelector('.lstage-click').onpointerdown = (e) => _dragStart(e, { kind: 'cam' });
         window.addEventListener('pointermove', _dragMove);
@@ -118,7 +98,7 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         panel.innerHTML =
-            '<div class="lep-hint">拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅實心框=家具佔地</div>' +
+            '<div class="lep-hint">拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地(選中家具後→拖框身挪位置、拖右下角把手調高寬)</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
               '<button class="lep-btn" data-act="objplus"><i class="fa-solid fa-plus"></i> 家具</button>' +
@@ -156,14 +136,13 @@
             if (!act) return;
             if (act === 'footminus' || act === 'footplus') {
                 if (S.edit.sel < 0) return;
-                const o = _b.CFG.layout[S.edit.sel];
-                o.footH = Math.max(20, Math.min(o.h, o.footH + (act === 'footplus' ? 10 : -10)));
+                const f = _ensureFoot(_b.CFG.layout[S.edit.sel]);
+                f.h = Math.max(10, f.h + (act === 'footplus' ? 10 : -10));
                 _syncFoot(S.edit.sel); _exportToPanel();
             } else if (act === 'footwminus' || act === 'footwplus') {
                 if (S.edit.sel < 0) return;
-                const o = _b.CFG.layout[S.edit.sel];
-                const cur = (o.footW != null ? o.footW : o.w);
-                o.footW = Math.max(20, Math.min(o.w, Math.round(cur * (act === 'footwplus' ? 1.1 : 0.9))));
+                const f = _ensureFoot(_b.CFG.layout[S.edit.sel]);
+                f.w = Math.max(10, Math.round(f.w * (act === 'footwplus' ? 1.1 : 0.9)));
                 _syncFoot(S.edit.sel); _exportToPanel();
             } else if (act === 'objminus' || act === 'objplus') {
                 if (S.edit.sel < 0) return;
@@ -212,11 +191,28 @@
     }
     function _makeEditable(img) {
         img.classList.add('lstage-editable');
+        // 佔地框：選中物件後可整框拖放（挪位置）、拖右下角把手伸縮（調高寬）——不再固定黏底部
         const foot = document.createElement('div');
         foot.className = 'lstage-foot';
+        foot.innerHTML = '<span class="lstage-zone-grip lstage-foot-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
         S.world.appendChild(foot);
         S.edit.feet.push(foot);
+        foot.onpointerdown = (e) => _dragStart(e, { kind: 'foot', i: S.objEls.indexOf(img) });
+        foot.querySelector('.lstage-foot-grip').onpointerdown = (e) => _dragStart(e, { kind: 'footresize', i: S.objEls.indexOf(img) });
         img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
+    }
+    // 把舊制（footH/footW 底部置中）換算成 foot={dx,dy,w,h}（物件局部未縮放座標），第一次動佔地時初始化，維持原本外觀
+    function _ensureFoot(o) {
+        if (o.foot) return o.foot;
+        const s = o.s || 1;
+        const r = _b.footRect(o);   // 舊制矩形（地圖座標）
+        o.foot = {
+            dx: Math.round((r.x - o.x) / s),
+            dy: Math.round((r.y - o.y) / s),
+            w: Math.round(r.w / s),
+            h: Math.round(r.h / s),
+        };
+        return o.foot;
     }
     // 新增家具：量原圖尺寸→縮到約240px高→放到目前視角中央→立即可拖
     function _addFurniture(ref, dataUrl) {
@@ -251,13 +247,6 @@
         e.style.width = D.w + 'px';
         e.style.height = D.h + 'px';
     }
-    function _syncWire() {
-        const w = S.edit?.wire;
-        if (!w) return;
-        const b = _b.CFG.points.boundary;
-        w.poly.setAttribute('points', b.map(p => p.x + ',' + p.y).join(' '));
-        w.handles.forEach((h, i) => { h.style.left = b[i].x + 'px'; h.style.top = b[i].y + 'px'; });
-    }
     function _syncZone(pk) {
         const z = _b.CFG.points[pk], el = S.edit?.zones?.[pk];
         if (!z || !el) return;
@@ -284,7 +273,17 @@
             const o = _b.CFG.layout[info.i];
             S.edit.drag.ox = o.x; S.edit.drag.oy = o.y;
             S.edit.feet.forEach((_, k) => _syncFoot(k));
-        } else if (info.kind === 'pt' || info.kind === 'vert') {
+        } else if (info.kind === 'foot') {
+            S.edit.sel = info.i;
+            const f = _ensureFoot(_b.CFG.layout[info.i]);
+            S.edit.drag.ox = f.dx; S.edit.drag.oy = f.dy;
+            S.edit.feet.forEach((_, k) => _syncFoot(k));
+        } else if (info.kind === 'footresize') {
+            S.edit.sel = info.i;
+            const f = _ensureFoot(_b.CFG.layout[info.i]);
+            S.edit.drag.ox = f.w; S.edit.drag.oy = f.h;
+            S.edit.feet.forEach((_, k) => _syncFoot(k));
+        } else if (info.kind === 'pt') {
             S.edit.drag.ox = info.pt.x; S.edit.drag.oy = info.pt.y;
         } else if (info.kind === 'zone') {
             const z = _b.CFG.points[info.pk];
@@ -310,10 +309,19 @@
             const o = _b.CFG.layout[d.i];
             o.x = Math.round(d.ox + dx); o.y = Math.round(d.oy + dy);
             _b.placeObj(S.objEls[d.i], o); _syncFoot(d.i);
-        } else if (d.kind === 'pt' || d.kind === 'vert') {
+        } else if (d.kind === 'foot') {
+            // 佔地框整框拖放：foot 存物件局部未縮放座標 → 螢幕位移換算要再除以 s
+            const o = _b.CFG.layout[d.i], s = o.s || 1;
+            o.foot.dx = Math.round(d.ox + dx / s); o.foot.dy = Math.round(d.oy + dy / s);
+            _syncFoot(d.i);
+        } else if (d.kind === 'footresize') {
+            const o = _b.CFG.layout[d.i], s = o.s || 1;
+            o.foot.w = Math.max(10, Math.round(d.ox + dx / s));
+            o.foot.h = Math.max(10, Math.round(d.oy + dy / s));
+            _syncFoot(d.i);
+        } else if (d.kind === 'pt') {
             d.pt.x = Math.round(d.ox + dx); d.pt.y = Math.round(d.oy + dy);
             d.m.style.left = d.pt.x + 'px'; d.m.style.top = d.pt.y + 'px';
-            if (d.kind === 'vert') _syncWire();
         } else if (d.kind === 'zone') {
             const z = _b.CFG.points[d.pk];
             z.x = Math.round(d.ox + dx); z.y = Math.round(d.oy + dy);
@@ -344,11 +352,13 @@
     function _exportData() {
         const data = {
             layoutFull: _b.CFG.layout.map(o => {
-                const rec = { x: o.x, y: o.y, w: o.w, h: o.h, footH: o.footH, s: o.s || 1 };
+                const rec = { x: o.x, y: o.y, w: o.w, h: o.h, s: o.s || 1 };
+                // 新版佔地=可拖伸縮框 foot；沒 foot 的舊物件仍存 footH/footW（底部置中）
+                if (o.foot) rec.foot = { dx: o.foot.dx, dy: o.foot.dy, w: o.foot.w, h: o.foot.h };
+                else { rec.footH = o.footH; if (o.footW != null) rec.footW = o.footW; }
                 if (o.file) rec.file = o.file;
                 if (o.url) rec.url = o.url;
                 if (o.idb) rec.idb = o.idb;
-                if (o.footW != null) rec.footW = o.footW;
                 if (o.float) rec.float = true;
                 if (o.nightFile) rec.nightFile = o.nightFile;   // 夜間成對素材（城市物件）：不存會讓調過的物件夜裡變日版
                 return rec;
@@ -375,7 +385,6 @@
         S.edit.feet.forEach(f => f.remove());
         S.edit.markers.forEach(m => m.remove());
         Object.values(S.edit.zones || {}).forEach(el => el.remove());
-        if (S.edit.wire) { S.edit.wire.svg.remove(); S.edit.wire.handles.forEach(h => h.remove()); }
         S.edit.maskView?.remove();
         (S.edit.doorRects || []).forEach(el => el.remove());
         S.edit.panel?.remove();
