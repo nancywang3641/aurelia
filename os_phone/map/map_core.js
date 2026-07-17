@@ -918,6 +918,13 @@ ${facilityText}
                             </div>
                         </label>
                     </div>
+                    <button class="amt-entry" onclick="window.AUREALIS_MAP.showMapTheaterLog()">
+                        <span class="amt-entry-tx">
+                            <span class="amt-entry-title">🎭 番外記事</span>
+                            <span class="amt-entry-sub">設施小劇場的記事，會回饋給正文</span>
+                        </span>
+                        <span class="amt-entry-arrow">›</span>
+                    </button>
                 </div>
 
                 <div style="padding:10px 16px; border-top:1px solid #222; display:flex; gap:6px;">
@@ -926,6 +933,75 @@ ${facilityText}
                 </div>
             </div>
         `;
+        modal.classList.add('active');
+        modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+    }
+
+    // 🎭 番外記事管理窗（地圖設置進入）：改字自動存 / 逐條刪 / 重壓縮 / 清空（清空=按兩次確認，Tauri 擋 window.confirm）
+    function showMapTheaterLog() {
+        const modal = document.getElementById('am-char-modal');
+        const card = document.createElement('div');
+        card.className = 'am-modal-card amt-card';
+        card.onclick = (e) => e.stopPropagation();
+        const render = () => {
+            const list = _mapTheaterList();
+            card.innerHTML = '';
+            const head = document.createElement('div'); head.className = 'amt-head';
+            const back = document.createElement('span'); back.className = 'am-btn-icon'; back.textContent = '‹';
+            back.onclick = () => showMapSettings();
+            const title = document.createElement('h3'); title.className = 'amt-title';
+            title.textContent = '🎭 番外記事';
+            const count = document.createElement('span'); count.className = 'amt-count'; count.textContent = list.length + ' 條';
+            const close = document.createElement('span'); close.className = 'am-btn-icon'; close.textContent = '×';
+            close.onclick = () => closeModal();
+            head.append(back, title, count, close);
+            const body = document.createElement('div'); body.className = 'amt-list';
+            if (!list.length) {
+                const empty = document.createElement('div'); empty.className = 'amt-empty';
+                empty.textContent = '── 還沒有番外記事，去設施開一場小劇場吧 ──';
+                body.appendChild(empty);
+            }
+            list.forEach((e, idx) => {
+                const row = document.createElement('div'); row.className = 'amt-row' + (e.merged ? ' merged' : '');
+                const rh = document.createElement('div'); rh.className = 'amt-row-head';
+                const tt = document.createElement('span'); tt.className = 'amt-row-title';
+                tt.textContent = (e.merged ? '♻️ ' : '') + (e.fac ? '〔' + e.fac + '〕' : '') + (e.pair || '');
+                const del = document.createElement('span'); del.className = 'amt-row-del'; del.textContent = '×'; del.title = '刪除這條';
+                del.onclick = () => { const l = _mapTheaterList(); l.splice(idx, 1); _mapTheaterSaveList(l); render(); };
+                rh.append(tt, del);
+                const ta = document.createElement('textarea'); ta.className = 'amt-row-text'; ta.rows = 3; ta.value = e.brief || '';
+                ta.addEventListener('change', () => { const l = _mapTheaterList(); if (l[idx]) { l[idx].brief = ta.value.trim(); _mapTheaterSaveList(l); } });
+                row.append(rh, ta);
+                body.appendChild(row);
+            });
+            const acts = document.createElement('div'); acts.className = 'amt-actions';
+            const rec = document.createElement('button'); rec.className = 'am-btn-full am-btn-main';
+            rec.textContent = '♻️ 重壓縮';
+            rec.onclick = async () => {
+                rec.disabled = true; rec.textContent = '整理中…';
+                const res = await _recompressMapTheaterLog();
+                rec.disabled = false; rec.textContent = '♻️ 重壓縮';
+                if (win.toastr) win.toastr[res.ok ? 'success' : 'info'](res.msg, 'Map');
+                render();
+            };
+            const clr = document.createElement('button'); clr.className = 'am-btn-full amt-danger';
+            clr.textContent = '🗑️ 清空全部';
+            clr.onclick = () => {
+                if (!clr.dataset.armed) {   // Tauri 擋 window.confirm → 按兩次確認
+                    clr.dataset.armed = '1'; clr.textContent = '再按一次確認清空';
+                    setTimeout(() => { delete clr.dataset.armed; clr.textContent = '🗑️ 清空全部'; }, 3000);
+                    return;
+                }
+                delete clr.dataset.armed;
+                _mapTheaterSaveList([]);
+                render();
+            };
+            acts.append(rec, clr);
+            card.append(head, body, acts);
+        };
+        render();
+        modal.innerHTML = '';
+        modal.appendChild(card);
         modal.classList.add('active');
         modal.onclick = (e) => { if (e.target === modal) closeModal(); };
     }
@@ -1694,16 +1770,53 @@ ${facilityText}
         try { const ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { const id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } } catch (e) {}
         return '_global';
     }
-    function _saveMapTheaterBrief(entry) {
+    function _mapTheaterList() {
+        try {
+            const all = JSON.parse(localStorage.getItem(MAP_THEATER_LOG_KEY) || '{}');
+            const list = all[_mapTheaterChatId()];
+            return Array.isArray(list) ? list : [];
+        } catch (e) { return []; }
+    }
+    function _mapTheaterSaveList(list) {
         try {
             let all = {};
             try { all = JSON.parse(localStorage.getItem(MAP_THEATER_LOG_KEY) || '{}'); } catch (e) {}
-            const cid = _mapTheaterChatId();
-            const list = Array.isArray(all[cid]) ? all[cid] : [];
-            list.unshift(entry);
-            all[cid] = list.slice(0, 10);
+            all[_mapTheaterChatId()] = (list || []).slice(0, 10);
             localStorage.setItem(MAP_THEATER_LOG_KEY, JSON.stringify(all));
         } catch (e) { console.warn('[MapTheater] 記事存檔失敗', e); }
+    }
+    function _saveMapTheaterBrief(entry) {
+        const list = _mapTheaterList();
+        list.unshift(entry);
+        _mapTheaterSaveList(list);
+    }
+    // ♻️ 重壓縮：最近 3 條照留，更早的（含舊綜述）交副模型併成一段 150 字內綜述，用一筆 merged 記錄取代
+    async function _recompressMapTheaterLog() {
+        try {
+            if (!win.OS_API || typeof win.OS_API.chat !== 'function') return { ok: false, msg: 'API 未就緒' };
+            const list = _mapTheaterList();
+            const KEEP = 3;
+            if (list.length <= KEEP + 1) return { ok: false, msg: '記事還少，不用整理' };
+            const keep = list.slice(0, KEEP);
+            const olds = list.slice(KEEP);
+            const blob = olds.map(e => '・〔' + (e.fac || '某處') + '〕' + (e.pair || '') + '：' + (e.brief || '')).join('\n');
+            const prompt = '以下是多條 NPC 番外互動記事（由新到舊）。請濃縮成一段 150 字內的**第三人稱客觀綜述**：'
+                + '保留仍可能影響後續劇情的資訊（人物、約定、伏筆、關係變化），去掉重複與瑣碎。只輸出綜述本身，不要條列、不要其他說明。\n\n' + blob;
+            let config = {};
+            if (win.OS_SETTINGS) {
+                const sec = win.OS_SETTINGS.getSecondaryConfig ? win.OS_SETTINGS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : win.OS_SETTINGS.getConfig();
+            }
+            config.route = 'map_theater';
+            const seg = await new Promise((resolve, reject) => {
+                win.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '地圖番外重壓縮' });
+            });
+            const clean = String(seg || '').replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            if (!clean || clean.length < 10 || clean.startsWith('{"error') || clean.includes('請求失敗') || clean.includes('请求失败')) return { ok: false, msg: '整理失敗，記事未動' };
+            keep.push({ fac: '', pair: '往期綜述', brief: clean, ts: olds[olds.length - 1].ts || Date.now(), merged: true });
+            _mapTheaterSaveList(keep);
+            return { ok: true, msg: '已把 ' + olds.length + ' 條往期併成一段綜述' };
+        } catch (e) { return { ok: false, msg: '整理失敗，記事未動' }; }
     }
 
     // ── 🎭 設施 NPC 小劇場：跑團當前狀態下的番外（點按才生成，主模型吐 VN 劇本 → VN 播放器 ephemeral 播）──
@@ -2097,6 +2210,7 @@ ${facilityText}
         _regenerateSchedules,
         showWorldManager,
         showMapSettings,
+        showMapTheaterLog,
         _mapSaveSettings,
         exitPreview: exitPreviewMap,
         _previewWorld,
