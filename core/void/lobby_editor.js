@@ -99,18 +99,17 @@
         panel.className = 'lstage-edit-panel';
         const _alphaFoot = !!_b.SCENES[S.scene].alphaFoot;
         const _hint = _alphaFoot
-            ? '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紅框=屋子擋路帶(照屋子形狀擋，只擋這條高度內；調「佔地高」移切線，切線以上可穿過走屋後)'
+            ? '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紅剪影=屋子實際擋路範圍(照屋子形狀整棟實心，走不進去；靠拖屋子本體調位置即可)'
             : '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地';
-        const _footRows =
+        const _footRows = _alphaFoot ? '' :   // alphaFoot 場景：整棟照形狀實心擋，沒有切線/寬度可調
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
               '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地高</button>' +
             '</div>' +
-            (_alphaFoot ? '' :   // alphaFoot 場景：寬度照圖形狀自動決定，不需佔地寬
-              '<div class="lep-row">' +
-                '<button class="lep-btn" data-act="footwminus"><i class="fa-solid fa-minus"></i> 佔地寬</button>' +
-                '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
-              '</div>');
+            '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="footwminus"><i class="fa-solid fa-minus"></i> 佔地寬</button>' +
+              '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
+            '</div>';
         panel.innerHTML =
             '<div class="lep-hint">' + _hint + '</div>' +
             '<div class="lep-row">' +
@@ -208,7 +207,7 @@
         S.edit.feet.push(foot);
         img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
     }
-    // alphaFoot 剪影：把「切線以下 & 圖片不透明」的像素塗紅，畫在物件正上方＝玩家實際會被擋的形狀
+    // alphaFoot 剪影：把整棟「圖片不透明」的像素塗紅，畫在物件正上方＝玩家實際會被擋的形狀（整棟實心）
     function _syncFootShape(o, cv) {
         const s = o.s || 1, ew = Math.round(o.w * s), eh = Math.round(o.h * s);
         cv.style.left = o.x + 'px'; cv.style.top = o.y + 'px';
@@ -218,14 +217,10 @@
         if (cv.width !== a.w || cv.height !== a.h) { cv.width = a.w; cv.height = a.h; }
         const ctx = cv.getContext('2d');
         const img = ctx.createImageData(a.w, a.h);
-        const ayCut = Math.round((o.h - o.footH) / o.h * a.h);   // 切線：這列以下才算牆
-        for (let y = 0; y < a.h; y++) {
-            if (y < ayCut) continue;
-            for (let x = 0; x < a.w; x++) {
-                if (a.data[y * a.w + x] < 128) continue;
-                const p = (y * a.w + x) * 4;
-                img.data[p] = 230; img.data[p + 1] = 60; img.data[p + 2] = 60; img.data[p + 3] = 150;
-            }
+        for (let i = 0; i < a.w * a.h; i++) {
+            if (a.data[i] < 128) continue;
+            const p = i * 4;
+            img.data[p] = 230; img.data[p + 1] = 60; img.data[p + 2] = 60; img.data[p + 3] = 140;
         }
         ctx.putImageData(img, 0, 0);
     }
