@@ -49,7 +49,7 @@
                 yingZone: { x: 315, y: 438, w: 465, h: 30 },
                 npcZone:  { x: 184, y: 542, w: 1109, h: 248 },   // 客人出沒區（輪班NPC隨機刷在框內）
                 player: { x: 697, y: 600 },
-                arrive: { x: 990, y: 402 },   // 走門進來的落點（從大廳回書咖）
+                arrive: { x: 780, y: 868 },   // 走門進來的落點（從街區進書咖：底部大門前）
                 // 外框鋼索：可走範圍多邊形（牆角錨點可在擺設模式拖）
                 boundary: [
                     { x: 195, y: 360 }, { x: 1453, y: 315 }, { x: 1517, y: 642 },
@@ -64,7 +64,9 @@
                 { x: 915,  y: 840, w: 180,  h: 90 },    // 底部中央花圃
                 { x: 55,   y: 620, w: 130,  h: 110 },   // 左側小案几
             ],
-            doors: [ { x: 944, y: 318, w: 86, h: 35, to: 'hall', spawn: { x: 770, y: 790 } } ],  // 書咖上緣木門→大廳
+            // 書咖⇄大廳不再直通（2026-07-17 Rae 定案）：出入口只剩底部大門→城市街區；doorsV 擋舊存檔的門座標
+            doors: [ { x: 700, y: 895, w: 160, h: 40, to: 'city', spawn: { x: 384, y: 400 } } ],  // 底部大門→街區（落在書咖建築門口）
+            doorsV: 2,
         },
         hall: {
             base: 'lobby_hall_base_v2.png',   // v2=核心球已從底圖拆出(空核心版)
@@ -89,7 +91,8 @@
                 actorScale: 0.7,
             },
             walls: [],   // 外牆走 boundary 鋼索；核心基座=物件腳印
-            doors: [ { x: 664, y: 910, w: 213, h: 75, to: 'cafe', spawn: { x: 975, y: 430 } } ],  // 底部大門→回書咖
+            doors: [ { x: 664, y: 910, w: 213, h: 75, to: 'city', spawn: { x: 1205, y: 655 } } ],  // 底部大門→街區（落在純白大廳門口；不再直通書咖）
+            doorsV: 2,
             alice: { x: 1194, y: 318 },   // 愛麗絲：核心旁、不漫步、永遠面向玩家
         },
         room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
@@ -137,8 +140,8 @@
                 { x: 1040, y: 315, w: 365, h: 282 },  // 純白大廳建築本體（大門在南面）
             ],
             doors: [
-                { x: 334, y: 322, w: 100, h: 56, to: 'cafe' },    // 書咖大門→瀅瀅書咖
-                { x: 1155, y: 592, w: 100, h: 50, to: 'hall' },   // 純白大廳大門→愛麗絲大廳
+                { x: 334, y: 322, w: 100, h: 56, to: 'cafe', spawn: { x: 780, y: 868 } },    // 書咖大門→瀅瀅書咖（落在店內底部大門前）
+                { x: 1155, y: 592, w: 100, h: 50, to: 'hall', spawn: { x: 772, y: 830 } },   // 純白大廳大門→愛麗絲大廳（落在大廳底部大門前）
             ],
         },
     };
@@ -219,7 +222,8 @@
                 });
                 if (saved.baseOverride) baseOverride = saved.baseOverride;
                 if (saved.maskOverride) maskOverride = saved.maskOverride;
-                if (Array.isArray(saved.doors)) saved.doors.forEach((sd, i) => {
+                // doorsV 版本閘：場景門的「去向/配置」改版後，舊存檔的門座標整組作廢（防蓋到新門上）
+                if (Array.isArray(saved.doors) && (saved.doorsV || 1) === (SC.doorsV || 1)) saved.doors.forEach((sd, i) => {
                     if (doors[i] && sd) { doors[i].x = sd.x; doors[i].y = sd.y; doors[i].w = sd.w; doors[i].h = sd.h; }
                 });
                 if (saved.points) {
@@ -734,7 +738,7 @@
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {
         cafe:    { name: '瀅瀅',   badge: '視差書咖', ph: '提供故事素材或與瀅瀅對話...' },
-        hall:    { name: '愛麗絲', badge: '純白大廳', ph: '與愛麗絲對話，或走向大門返回書咖...' },
+        hall:    { name: '愛麗絲', badge: '純白大廳', ph: '與愛麗絲對話，或走向大門出去街區...' },
         room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
         city:    { name: '街區',   badge: '視差城市', ph: '在街區走走、點路人聊聊，或走進書咖／純白大廳...' },
     };
@@ -872,7 +876,8 @@
         setTimeout(() => {
             unmount();
             S.scene = to;
-            S.spawnOverride = (spawnMode === 'player') ? null : 'arrive';   // 預設落在目標場景的「落」圓點
+            // 門帶 spawn={x,y} 就落在指定點（每扇門各自的門口）；沒帶才用目標場景的「落」圓點
+            S.spawnOverride = spawn || ((spawnMode === 'player') ? null : 'arrive');
             S.doorCd = performance.now() + 900;   // 落地冷卻，防止秒回
             tryMount();
             S.transitioning = false;
