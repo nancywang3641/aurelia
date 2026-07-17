@@ -111,7 +111,45 @@
             doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
         },
+        city: {   // 🏙 視差城市第一街區（戶外街景；書咖/純白大廳建築烤在底圖，走到大門白光過場進室內）
+            base: 'city/city_base_fixed.webp',
+            nightBase: 'city/city_base_fixed_night.webp',   // 18~06 自動夜景：整套素材替換（重繪光源），不是濾鏡
+            mask: null,   // 手繪碰撞遮罩後補；先走 boundary 鋼索+建築牆
+            cfgKey: 'lobby_stage_layout_city_v1',
+            outdoor: true,   // 戶外：沒有駐店角色（瀅瀅/愛麗絲/柴郡都不在），客人池+SN 名冊照常刷
+            layout: [
+                // 玩家住宅=動態物件（吃深度排序，人繞到屋後會被遮）；夜間素材成對替換
+                { file: 'city/player_house_lv1.webp', nightFile: 'city/player_house_lv1_night.webp', x: 145, y: 624, w: 455, h: 266, footH: 150, s: 1 },
+            ],
+            points: {
+                npcZone:  { x: 430, y: 430, w: 580, h: 280 },   // 中央廣場（客人出沒區；避開大廳牆與玩家房腳印）
+                player: { x: 772, y: 520 },
+                arrive: { x: 772, y: 700 },   // 從書咖/大廳出來的落點（廣場南側）
+                boundary: [
+                    { x: 100, y: 330 }, { x: 635, y: 330 }, { x: 645, y: 80 }, { x: 1275, y: 80 },
+                    { x: 1275, y: 300 }, { x: 1450, y: 300 }, { x: 1490, y: 640 }, { x: 1490, y: 935 },
+                    { x: 85, y: 935 }, { x: 60, y: 640 },
+                ],
+                actorScale: 0.55,   // 戶外街景，人比室內小一號
+            },
+            walls: [
+                { x: 205, y: 28, w: 430, h: 305 },    // 書咖建築本體（大門在南面樓梯）
+                { x: 1040, y: 315, w: 365, h: 282 },  // 純白大廳建築本體（大門在南面）
+            ],
+            doors: [
+                { x: 334, y: 322, w: 100, h: 56, to: 'cafe' },    // 書咖大門→瀅瀅書咖
+                { x: 1155, y: 592, w: 100, h: 50, to: 'hall' },   // 純白大廳大門→愛麗絲大廳
+            ],
+        },
     };
+    // 🌗 城市日夜：跟大廳 BG 同時段律（ambient.js：6-18=day）；場景有 nightBase 才生效
+    function _isNightNow() {
+        const h = new Date().getHours();
+        return !(h >= 6 && h < 18);
+    }
+    function _sceneBase(SC) {
+        return (SC.nightBase && _isNightNow()) ? SC.nightBase : SC.base;
+    }
     // 物件有效尺寸（s=個別縮放，預設1；佔地跟著縮）
     // footW=佔地寬(未縮放，預設=全寬)；佔地框水平置中（treats 上寬下窄的懸浮物）
     function effDims(o) {
@@ -698,6 +736,7 @@
         cafe:    { name: '瀅瀅',   badge: '視差書咖', ph: '提供故事素材或與瀅瀅對話...' },
         hall:    { name: '愛麗絲', badge: '純白大廳', ph: '與愛麗絲對話，或走向大門返回書咖...' },
         room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
+        city:    { name: '街區',   badge: '視差城市', ph: '在街區走走、點路人聊聊，或走進書咖／純白大廳...' },
     };
     function _applySceneHeader() {
         const H = SCENE_HEADER[S.scene] || SCENE_HEADER.cafe;
@@ -981,20 +1020,6 @@
         box.addEventListener('click', (e) => { if (e.target.closest('[data-act="close"]')) _closeLobbySettings(); });
     }
 
-    // ── 🏙 視差城市入口：第一次點擊才注入 city_adapter.js（它再載 city_shell.js/css＋runtime 素材）──
-    //    城市三檔都不進 index.js 啟動清單；adapter 開城時會 unmount 本舞台、關城時 tryMount 復原。
-    function _openCityDistrict() {
-        _closeWins();
-        if (window.CityAdapter) { window.CityAdapter.open(); return; }
-        if (S._cityLoading) return;
-        S._cityLoading = true;
-        const s = document.createElement('script');
-        s.src = (window.AURELIA_EXT_BASE || '.') + '/core/void/city_adapter.js';
-        s.onload = () => { S._cityLoading = false; window.CityAdapter?.open(); };
-        s.onerror = () => { S._cityLoading = false; console.error('[LobbyStage] city_adapter.js 載入失敗'); };
-        document.head.appendChild(s);
-    }
-
     // 🍔 舞台全屏：漢堡隱藏 MAIN MENU（.lobby-right）→ 舞台吃滿；狀態存 localStorage
     function _applyMenuHidden() {
         let hidden = false;
@@ -1011,13 +1036,14 @@
         const root = document.createElement('div');
         root.className = 'lstage-root';
         root.innerHTML = '<div class="lstage-world">' +
-            '<img class="lstage-map" src="' + CDN + SCENES[S.scene].base + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
+            '<img class="lstage-map" src="' + CDN + _sceneBase(SCENES[S.scene]) + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
             '<div class="lstage-click"></div></div>' +
             '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
             '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
             '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-tx">小劇場</span><span class="ltb-badge"></span></button>' +
-            '<button class="lstage-city-btn" title="視差城市"><i class="fa-solid fa-city"></i></button>';
+            // 🏙 出門上街：只在書咖/大廳出現（404 要走還原流程、城裡本來就在街上）
+            ((S.scene === 'cafe' || S.scene === 'hall') ? '<button class="lstage-city-btn" title="到視差城市街區"><i class="fa-solid fa-city"></i></button>' : '');
         left.appendChild(root);
         _applyMenuHidden();   // 套用上次「舞台全屏（隱藏 MAIN MENU）」狀態
         if (S._theaterTimer) clearInterval(S._theaterTimer);
@@ -1030,7 +1056,7 @@
         root.querySelector('.lstage-set-btn').addEventListener('click', () => _openLobbySettings());
         // 🎬 小劇場窗口：有未查看的配對→開「正在對話」，否則直接看「回顧」
         root.querySelector('.lstage-theater-btn').addEventListener('click', () => window.LobbyTheater?.openWin(S.theater && !S.theater.playing ? 'live' : 'review'));
-        root.querySelector('.lstage-city-btn').addEventListener('click', _openCityDistrict);   // 🏙 視差城市（懶載入）
+        root.querySelector('.lstage-city-btn')?.addEventListener('click', () => goScene('city'));   // 🏙 出門上街（跟過門同一條白光過場）
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         // 💬 聊天符號（自由漫遊時的浮鈕）：點了浮出「對話框＋輸入框」一組
         const fab = document.createElement('button');
@@ -1102,7 +1128,9 @@
         const img = document.createElement('img');
         img.className = 'lstage-actor lstage-obj';
         if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
-        resolveRef(o).then(src => { if (src) img.src = src; });
+        // 夜間成對素材：物件帶 nightFile 且現在是夜 → 換檔名（座標/佔地不變；editor 存檔仍按 file 對位）
+        const ref = (o.nightFile && _isNightNow()) ? Object.assign({}, o, { file: o.nightFile }) : o;
+        resolveRef(ref).then(src => { if (src) img.src = src; });
         placeObj(img, o);
         S.world.appendChild(img);
         return img;

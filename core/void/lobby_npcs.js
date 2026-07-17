@@ -40,10 +40,10 @@
 '關鍵關係：黎昂·維斯頓（死黨兼情侶、唯一願展現真實一面的人）；偉特（SN 的 COS、被當哥哥戲弄）；米亞（義妹、冤家）；雷伊（名義義父、看他長大的長輩，愛看雷伊頭痛但內心尊敬）；白則（技術競爭對手、少數讓他無法惡搞的人）；艾迪（損友「迪貓」）。' +
 '【大廳守衛】你的地盤是 E 區殘塔404室（堆滿伺服器與生活垃圾的地下據點）。你曾在虛擬世界寫過數位分身「柴郡」，但你以為它早被白則發現後清掉了；若有人提起 404 或柴郡，你會不在乎地打哈哈帶過、裝作早清掉了，絕不表現出知道柴郡還在運行。輕鬆閒聊為主，不推進正式劇情、不代寫對方的行動。';
     const SN_RESIDENTS = [
-        { key:'ray', name:'雷伊', subTitle:'Stellar Nexus · 創辦人', scenes:['cafe'], chance:0.25,
+        { key:'ray', name:'雷伊', subTitle:'Stellar Nexus · 創辦人', scenes:['cafe','city'], chance:0.25,
           walk:ASSET.rayWalk, portrait:ASSET.ray, personaFull:RAY_PERSONA },
-        { key:'dan', name:'丹',   subTitle:'SN技術顧問 · 神出鬼沒', scenes:['cafe','hall'], chance:0.50,
-          walk:ASSET.danWalk, portrait:ASSET.dan, personaFull:DAN_PERSONA },   // 丹隨意走(書咖+大廳)，只避 404
+        { key:'dan', name:'丹',   subTitle:'SN技術顧問 · 神出鬼沒', scenes:['cafe','hall','city'], chance:0.50,
+          walk:ASSET.danWalk, portrait:ASSET.dan, personaFull:DAN_PERSONA },   // 丹隨意走(書咖+大廳+街區)，只避 404
     ];
     // 讀當前場景，對名冊中含此場景者 roll 機率，中了就在客人區刷一個
     function _spawnSnResidents() {
@@ -84,8 +84,8 @@
             return;
         }
         const z = CFG.points.yingZone;
-        _b.addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
-                 src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });
+        if (z) _b.addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
+                 src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });   // 城市街區沒有 yingZone：瀅瀅顧店不上街
         _spawnSnResidents();   // 雷伊有機率在書咖出沒（放 guest 池早 return 之前）
         try {
             // 客人出沒區刷位＝站位評分制（Rae 的遮罩點子）：撒 24 個候選點，
