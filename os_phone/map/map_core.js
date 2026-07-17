@@ -1937,7 +1937,8 @@ ${facilityText}
         STATE.pendingEventKey = null;
         STATE.activeCharIndex = -1;
         if (win.OS_DB) {
-            try { await win.OS_DB.clearAllMapData(); } catch (e) {}
+            // 只清探索快照（非 __world__ key）——世界資料同住 map_data store，刪世界走多世界管理的 _deleteWorld/_wipeAllDynamicWorlds
+            try { await win.OS_DB.clearMapScanSnapshots(); } catch (e) {}
         }
         alert('已清空地圖數據');
         renderHome();
