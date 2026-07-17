@@ -97,19 +97,20 @@
         // 控制面板
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
-        const _hint = _footOn()
-            ? '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地(選中家具後→拖框身挪位置、拖右下角把手調高寬)'
-            : '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區。此場景碰撞用手繪遮罩(換遮罩鈕)，家具不畫佔地、不擋路';
-        const _footRows = _footOn()
-            ? '<div class="lep-row">' +
-                '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
-                '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地高</button>' +
-              '</div>' +
+        const _alphaFoot = !!_b.SCENES[S.scene].alphaFoot;
+        const _hint = _alphaFoot
+            ? '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紅框=屋子擋路帶(照屋子形狀擋，只擋這條高度內；調「佔地高」移切線，切線以上可穿過走屋後)'
+            : '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地';
+        const _footRows =
+            '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
+              '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地高</button>' +
+            '</div>' +
+            (_alphaFoot ? '' :   // alphaFoot 場景：寬度照圖形狀自動決定，不需佔地寬
               '<div class="lep-row">' +
                 '<button class="lep-btn" data-act="footwminus"><i class="fa-solid fa-minus"></i> 佔地寬</button>' +
                 '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
-              '</div>'
-            : '';
+              '</div>');
         panel.innerHTML =
             '<div class="lep-hint">' + _hint + '</div>' +
             '<div class="lep-row">' +
@@ -142,13 +143,14 @@
             if (!act) return;
             if (act === 'footminus' || act === 'footplus') {
                 if (S.edit.sel < 0) return;
-                const f = _ensureFoot(_b.CFG.layout[S.edit.sel]);
-                f.h = Math.max(10, f.h + (act === 'footplus' ? 10 : -10));
+                const o = _b.CFG.layout[S.edit.sel];
+                o.footH = Math.max(20, Math.min(o.h, o.footH + (act === 'footplus' ? 10 : -10)));
                 _syncFoot(S.edit.sel); _exportToPanel();
             } else if (act === 'footwminus' || act === 'footwplus') {
                 if (S.edit.sel < 0) return;
-                const f = _ensureFoot(_b.CFG.layout[S.edit.sel]);
-                f.w = Math.max(10, Math.round(f.w * (act === 'footwplus' ? 1.1 : 0.9)));
+                const o = _b.CFG.layout[S.edit.sel];
+                const cur = (o.footW != null ? o.footW : o.w);
+                o.footW = Math.max(20, Math.min(o.w, Math.round(cur * (act === 'footwplus' ? 1.1 : 0.9))));
                 _syncFoot(S.edit.sel); _exportToPanel();
             } else if (act === 'objminus' || act === 'objplus') {
                 if (S.edit.sel < 0) return;
@@ -166,8 +168,7 @@
                 if (i < 0) return;
                 _b.CFG.layout.splice(i, 1);
                 S.objEls[i].remove(); S.objEls.splice(i, 1);
-                if (S.edit.feet[i]) S.edit.feet[i].remove();
-                S.edit.feet.splice(i, 1);   // noFoot 場景 feet 為空→splice no-op；有佔地時保持對位
+                S.edit.feet[i].remove(); S.edit.feet.splice(i, 1);
                 S.edit.sel = -1;
                 S.edit.feet.forEach((_, k) => _syncFoot(k));
                 _exportToPanel();
@@ -197,36 +198,14 @@
         _exportToPanel();
         _b.fitCamera();   // 進建構模式→切 contain 縮放（整張看得見+可超界平移）
     }
-    // 此場景是否用佔地框（大地圖 noFoot=碰撞交給遮罩，不畫佔地）
-    function _footOn() { return !_b.SCENES[S.scene].noFoot; }
     function _makeEditable(img) {
         img.classList.add('lstage-editable');
-        if (!_footOn()) {   // noFoot 場景：家具只能拖位置，不做佔地框
-            img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
-            return;
-        }
-        // 佔地框：選中物件後可整框拖放（挪位置）、拖右下角把手伸縮（調高寬）——不再固定黏底部
+        // 佔地框＝底部地面帶視覺化（紅框），選中家具後用「佔地高/寬」±調；alphaFoot 場景這條帶=擋路切線高度
         const foot = document.createElement('div');
         foot.className = 'lstage-foot';
-        foot.innerHTML = '<span class="lstage-zone-grip lstage-foot-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
         S.world.appendChild(foot);
         S.edit.feet.push(foot);
-        foot.onpointerdown = (e) => _dragStart(e, { kind: 'foot', i: S.objEls.indexOf(img) });
-        foot.querySelector('.lstage-foot-grip').onpointerdown = (e) => _dragStart(e, { kind: 'footresize', i: S.objEls.indexOf(img) });
         img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
-    }
-    // 把舊制（footH/footW 底部置中）換算成 foot={dx,dy,w,h}（物件局部未縮放座標），第一次動佔地時初始化，維持原本外觀
-    function _ensureFoot(o) {
-        if (o.foot) return o.foot;
-        const s = o.s || 1;
-        const r = _b.footRect(o);   // 舊制矩形（地圖座標）
-        o.foot = {
-            dx: Math.round((r.x - o.x) / s),
-            dy: Math.round((r.y - o.y) / s),
-            w: Math.round(r.w / s),
-            h: Math.round(r.h / s),
-        };
-        return o.foot;
     }
     // 新增家具：量原圖尺寸→縮到約240px高→放到目前視角中央→立即可拖
     function _addFurniture(ref, dataUrl) {
@@ -287,16 +266,6 @@
             const o = _b.CFG.layout[info.i];
             S.edit.drag.ox = o.x; S.edit.drag.oy = o.y;
             S.edit.feet.forEach((_, k) => _syncFoot(k));
-        } else if (info.kind === 'foot') {
-            S.edit.sel = info.i;
-            const f = _ensureFoot(_b.CFG.layout[info.i]);
-            S.edit.drag.ox = f.dx; S.edit.drag.oy = f.dy;
-            S.edit.feet.forEach((_, k) => _syncFoot(k));
-        } else if (info.kind === 'footresize') {
-            S.edit.sel = info.i;
-            const f = _ensureFoot(_b.CFG.layout[info.i]);
-            S.edit.drag.ox = f.w; S.edit.drag.oy = f.h;
-            S.edit.feet.forEach((_, k) => _syncFoot(k));
         } else if (info.kind === 'pt') {
             S.edit.drag.ox = info.pt.x; S.edit.drag.oy = info.pt.y;
         } else if (info.kind === 'zone') {
@@ -323,16 +292,6 @@
             const o = _b.CFG.layout[d.i];
             o.x = Math.round(d.ox + dx); o.y = Math.round(d.oy + dy);
             _b.placeObj(S.objEls[d.i], o); _syncFoot(d.i);
-        } else if (d.kind === 'foot') {
-            // 佔地框整框拖放：foot 存物件局部未縮放座標 → 螢幕位移換算要再除以 s
-            const o = _b.CFG.layout[d.i], s = o.s || 1;
-            o.foot.dx = Math.round(d.ox + dx / s); o.foot.dy = Math.round(d.oy + dy / s);
-            _syncFoot(d.i);
-        } else if (d.kind === 'footresize') {
-            const o = _b.CFG.layout[d.i], s = o.s || 1;
-            o.foot.w = Math.max(10, Math.round(d.ox + dx / s));
-            o.foot.h = Math.max(10, Math.round(d.oy + dy / s));
-            _syncFoot(d.i);
         } else if (d.kind === 'pt') {
             d.pt.x = Math.round(d.ox + dx); d.pt.y = Math.round(d.oy + dy);
             d.m.style.left = d.pt.x + 'px'; d.m.style.top = d.pt.y + 'px';
@@ -366,10 +325,8 @@
     function _exportData() {
         const data = {
             layoutFull: _b.CFG.layout.map(o => {
-                const rec = { x: o.x, y: o.y, w: o.w, h: o.h, s: o.s || 1 };
-                // 新版佔地=可拖伸縮框 foot；沒 foot 的舊物件仍存 footH/footW（底部置中）
-                if (o.foot) rec.foot = { dx: o.foot.dx, dy: o.foot.dy, w: o.foot.w, h: o.foot.h };
-                else { rec.footH = o.footH; if (o.footW != null) rec.footW = o.footW; }
+                const rec = { x: o.x, y: o.y, w: o.w, h: o.h, footH: o.footH, s: o.s || 1 };
+                if (o.footW != null) rec.footW = o.footW;
                 if (o.file) rec.file = o.file;
                 if (o.url) rec.url = o.url;
                 if (o.idb) rec.idb = o.idb;
