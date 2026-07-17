@@ -114,19 +114,25 @@
             doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
         },
-        city: {   // 🏙 視差城市第一街區＝靜態點擊地圖（一張完整烤好的城市圖；點建築進店，不走路/不生小人/不碰撞）
-            base: 'city/city_base_fixed.webp',          // 完整烤好圖（書咖＋交易所都烤在裡面）
-            nightBase: 'city/city_base_fixed_night.webp',
-            forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜
-            staticMap: true,   // 🗺️ 靜態點擊地圖：不 initPlayer/不生 NPC/不跑 RAF/無碰撞；整張置中顯示，點 hotspots 白光過場進室內
-            cfgKey: 'lobby_stage_layout_city_v3',   // v3=改靜態點擊地圖；舊走路版存檔整組作廢
-            layout: [],
-            // 點擊區（座標抄 city_layout.json landmark bounds）：點了走白光過場進室內；spawn=室內落點（店內底部大門前）
-            hotspots: [
-                { x: 205, y: 28,  w: 430, h: 305, to: 'cafe', spawn: { x: 780, y: 868 }, label: '書咖' },       // 書咖入口→瀅瀅書咖
-                { x: 1040, y: 315, w: 365, h: 282, to: 'hall', spawn: { x: 772, y: 830 }, label: '純白大廳' },   // 交易所→愛麗絲大廳
+        city: {   // 🏙 視差城市第一街區＝分層可走（day02 底板+遮罩擋踩+前景上層遮擋；玩家/NPC 走路，走到門進店）
+            base: 'city/city_layers/city_floor_frame_day02.webp',      // day02 底板：書咖/交易所/噴泉/長椅已烤進去
+            upper: 'city/city_layers/city_floor_frame_upper.webp',     // 前景上層：外圈樹蓋在角色上→走到樹後被遮，不會踩樹上
+            mask: 'city/city_layers/city_floor_frame_day02_mask.png',  // 碰撞遮罩：白=可走、黑=建築/噴泉/花台/長椅擋住
+            forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
+            cfgKey: 'lobby_stage_layout_city_v4',   // v4=day02 分層可走；舊靜態/走位版存檔整組作廢
+            outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
+            layout: [],        // 建築烤進底板；NPC 房子之後往空地塊動態疊（不烤死，保留入住狀態）
+            points: {
+                npcZone: { x: 400, y: 540, w: 600, h: 210 },   // 中央廣場（客人出沒區；避開建築/噴泉，都在遮罩白區）
+                player: { x: 768, y: 620 },
+                arrive: { x: 768, y: 580 },   // 從書咖/大廳出來的落點（廣場中央）
+                actorScale: 0.32,             // 🗺️ 地圖俯視小棋子（脫鉤鏡頭後≈螢幕高比例）
+            },
+            walls: [],   // 碰撞全走手繪遮罩
+            doors: [
+                { x: 335, y: 316, w: 100, h: 42, to: 'cafe', spawn: { x: 780, y: 868 } },   // 書咖門口→瀅瀅書咖（走到門口下方觸發）
+                { x: 1150, y: 600, w: 90, h: 40, to: 'hall', spawn: { x: 772, y: 830 } },   // 交易所門口→愛麗絲大廳
             ],
-            points: { player: { x: 772, y: 500 }, arrive: { x: 772, y: 500 } },   // 靜態用不到；留著防編輯器誤開時取 points.player 崩
         },
     };
     // 🌗 城市日夜：跟大廳 BG 同時段律（ambient.js：6-18=day）；場景有 nightBase 才生效
@@ -1128,6 +1134,14 @@
         if (CFG.baseOverride) {
             const mapImg = root.querySelector('.lstage-map');
             resolveRef(CFG.baseOverride).then(src => { if (src && mapImg) mapImg.src = src; });
+        }
+        // 🌳 前景上層：外圈樹/前景素材蓋在角色之上（走到樹後被遮，不會踩在樹上）；z 高於所有小人；編輯模式隱藏
+        if (SCENES[S.scene].upper) {
+            const up = document.createElement('img');
+            up.className = 'lstage-upper';
+            up.width = MAP_W; up.height = MAP_H;
+            resolveRef({ file: SCENES[S.scene].upper }).then(src => { if (src) up.src = src; });
+            S.world.appendChild(up);
         }
         S.objEls = CFG.layout.map(o => _spawnObjEl(o));
         const editBtn = root.querySelector('.lstage-edit-btn');
