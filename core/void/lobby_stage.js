@@ -115,7 +115,8 @@
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
         },
         city: {   // 🏙 視差城市第一街區＝分層可走（day01 空底板+遮罩擋踩+前景物件各自深度排序；玩家/NPC 走路走到門進店）
-            base: 'city/city_layers/city_floor_frame_day01.webp',      // day01 空底板：只有地面+外圈樹框（建築/噴泉/中庭樹全拆成前景物件，才能走它們後面）
+            base: 'city/city_layers/city_floor_frame_day01.webp',      // day01 空底板：地面+外圈樹框（建築/噴泉/中庭樹拆成前景物件，才能走它們後面）
+            upper: 'city/city_layers/city_floor_frame_upper.webp',     // 🌳 外圈樹前景層：蓋在角色上→站廣場邊時被外圈樹遮住，不會壓在樹上（內部建築/噴泉走物件深度排序）
             // 🟦 RPG Maker 式格子碰撞：格子表直接寫死(從 day02_mask 烤成)，不載圖→沒有 CORS/canvas/非同步空窗那些會爆的環節。1=擋 0=可走。
             grid: { cell: 24, cols: 64, rows: 43, bits: '/////j/////////+P/////////4///////wf/j/7j//+AA7+P4AB//wAAMw7AAA/8AAAAAAAAAf5//4AAAAAHxn//gACAAAcCf/8YAeAAAAB//xgBwAAAOP//GAHAAAA+f/4AAAAAA/4/AAAAAAAD+AAD4AA+AAH+AADAADwAA/4AAAAAPAAD/AAAAAAAAAPwAA8A+AAAAEAADwH4AAAAAAAAAPgP//AAAB8AAB//+BwAHwAAH//4nAAAAAAf//GYAAAAAA//4PwAAAAAAIEB+AAAAAAeAPHwAAAAAAAAAHgAAAAAAAAAeAAAAAAAAAD4AAAAAAAAAPgAAAAAAAAA4AAAAAAAAABgAAAAAAAAAHAAAAAAAAAAeAAAAAQAAAD8AAAAAAAAAf4AAA4AAAAD//gf/w///j///xAHBgD//////8AAP////////AH////////+A////8=' },
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
@@ -397,22 +398,23 @@
         const bi = row * g.cols + col;
         return ((g._bits[bi >> 3] >> (7 - (bi & 7))) & 1) === 1;
     }
+    // 單點是不是牆（格子/遮罩/鋼索）——不含腳印寬度
+    function _wallAt(x, y) {
+        const SC = SCENES[S.scene];
+        if (SC && SC.grid) return _gridBlocked(SC.grid, x, y);        // 🟦 格子碰撞（寫死、永不載入失敗）
+        if (SC && SC.mask && !(S.mask && S.mask.ok)) return !S.maskFailed;   // 遮罩載入中→空窗期全擋防穿牆
+        if (S.mask && S.mask.ok) {
+            const mi = ((Math.round(y) * MAP_W) + Math.round(x)) * 4;
+            return S.mask.data[mi] < 128;   // 手繪遮罩：<128=不可走
+        }
+        const P = CFG?.points?.boundary;
+        return !!(P && P.length >= 3 && !insidePoly(P, x, y));   // 鋼索圈外=牆
+    }
     function blocked(x, y) {
         const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
         if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
-        const SC = SCENES[S.scene];
-        if (SC && SC.grid) {                                    // 🟦 格子碰撞優先（寫死、永不載入失敗）
-            if (_gridBlocked(SC.grid, x, y)) return true;
-        } else if (SC && SC.mask && !(S.mask && S.mask.ok)) {   // 宣告了遮罩但還沒載好→空窗期全擋防穿牆；載入失敗才放行
-            return !S.maskFailed;
-        } else if (S.mask && S.mask.ok) {
-            // 手繪遮罩：腳點像素亮度 <128 = 不可走（取 R 通道即可，遮罩是黑白圖）
-            const mi = ((Math.round(y) * MAP_W) + Math.round(x)) * 4;
-            if (S.mask.data[mi] < 128) return true;
-        } else {
-            const P = CFG?.points?.boundary;
-            if (P && P.length >= 3 && !insidePoly(P, x, y)) return true;   // 鋼索圈外=牆（遮罩沒載時的退路）
-        }
+        // 🚨 採樣腳印矩形(中心+左右邊+四角)而非單點→小人身體有寬度，側面靠牆時邊緣就擋住，不會整個身體穿進去
+        if (_wallAt(x, y) || _wallAt(l, b) || _wallAt(r, b) || _wallAt(l, t) || _wallAt(r, t) || _wallAt(x, t)) return true;
         if (BLOCKS.some(B => l < B.x + B.w && r > B.x && t < B.y + B.h && b > B.y)) return true;
         for (let i = 0; i < ALPHA_BLOCKS.length; i++) if (_alphaHit(ALPHA_BLOCKS[i], x, y)) return true;
         return false;
