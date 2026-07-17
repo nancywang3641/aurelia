@@ -202,9 +202,9 @@
                 '</select>' +
                 '<select class="lsd-gen-preset">' + opts + '</select>' +
             '</div>' +
-            '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成立繪</button>' +
+            '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成單張立姿圖</button>' +
             '<button class="lep-btn lsd-gen-btn-sheet"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-person-walking"></i> 生成走路圖（3×4）</button>' +
-            '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成立繪」。</div>' +
+            '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成單張立姿圖」。</div>' +
         '</div>';
     }
     // 把邊界內的3×4逐格畫進目標畫布（flips[r]=該列左右鏡像；共用於即時預覽與最終重切）
@@ -241,7 +241,7 @@
         wrap.className = 'lstage-genprev';
         wrap.innerHTML =
             '<div class="lgp-box">' +
-                '<div class="lgp-title">' + (isSheet ? '走路圖調框（3×4）' : '立繪預覽') + '</div>' +
+                '<div class="lgp-title">' + (isSheet ? '走路圖調框（3×4）' : '單張立姿預覽') + '</div>' +
                 (isSheet
                     ? '<div class="lgp-sheetwrap"><img class="lgp-img lgp-sheetimg" src="' + dataUrl + '"><canvas class="lgp-grid"></canvas></div>' +
                       '<div class="lgp-sliders">' +
@@ -263,7 +263,7 @@
             '</div>';
         S.root.appendChild(wrap);
         const close = () => wrap.remove();
-        let getFinal = () => dataUrl;   // 立繪：原樣套用
+        let getFinal = () => dataUrl;   // 單張立姿：原樣套用
         if (isSheet) {
             const img = wrap.querySelector('.lgp-sheetimg');
             const cvs = wrap.querySelector('.lgp-grid');
@@ -312,7 +312,7 @@
             const key = _dressPresetKey(_dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)]);
             if (key) _dressGenSave(srcSel.value === 'novelai' ? { naiPreset: key } : { comfyPreset: key });
         });
-        // kind='img'→單張立繪(去背+掃碎片+裁切)；kind='sheet'→3×4走路圖(只去背，跳過會毀網格的掃碎片/裁切)
+        // kind='img'→單張立姿圖(去背+掃碎片+裁切)；kind='sheet'→3×4走路圖(只去背，跳過會毀網格的掃碎片/裁切)
         const doGen = (kind, btn) => (async () => {
             if (btn.disabled) return;
             const M = _imgMgr();
@@ -339,7 +339,7 @@
                     imgUrl = await M.previewComfyPreset(preset, prompt, { packSize: true });   // 尺寸用包裡調的 width/height
                 }
                 if (!imgUrl) throw new Error('接口沒回圖（檢查連線/預設包）');
-                // 不壓縮（畫風交給預設包）：立繪去背+掃碎片+裁切；走路圖只去背（掃碎片/裁切會毀12格網格）
+                // 不壓縮（畫風交給預設包）：單張立姿去背+掃碎片+裁切；走路圖只去背（掃碎片/裁切會毀12格網格）
                 let final = await _b.pixelify(imgUrl, { noGrid: true, sheet: kind === 'sheet' });
                 if (!final) {
                     // blob:/http 網址不能直接進 IDB（重整就死/會失連）→ 轉 dataURL 再存
@@ -354,12 +354,11 @@
                 btn.innerHTML = label; btn.disabled = false;
                 _showGenPreview(final, kind, {
                     apply: async (out) => {
-                        const data = out || final;   // 走路圖=調框重切後的圖；立繪=原圖
+                        const data = out || final;   // 走路圖=調框重切後的圖；單張立姿=原圖
                         const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
                         await _b.idbPut(id, data);
-                        // kind='img'=去背全身立繪 → 標 asPortrait，applySkin 會接進對話立繪(貼底擺放)；走路圖(sheet)不當立繪
-                        _b.saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id }, asPortrait: kind === 'img' });
-                        if (kind === 'img') { a.portrait = data; a.portraitKind = 'sprite'; }   // 即時生效，不必等重新掛載
+                        // 只存大廳小人皮膚，不碰對話立繪(a.portrait)——那是另一套東西(Rae定案 2026-07-17)
+                        _b.saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
                         _b.applySkin(a, a.key);
                         btn.innerHTML = '<i class="fa-solid fa-check"></i> 已套用';
                         setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1600);
