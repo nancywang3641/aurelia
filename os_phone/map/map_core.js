@@ -1713,6 +1713,7 @@ ${facilityText}
         btn.disabled = true;
 
         const fac = STATE.activeFacility;
+        STATE._scanBusyUntil = Date.now() + 120000;   // 掃描忙碌窗：生成期間擋住過期清空（上限2分鐘防呆，收尾時縮短）
         const _SME = win.SCENE_MAP_ENGINE;
         // 沒生過小地圖 → 這次探索「同一份 AI 回覆」順便把小地圖也要了（不再另打第二次 API）
         //   discoveryOnly＝之前只存過發現物的空圖（場景圖本體沒生成過）→ 照樣要
@@ -1872,10 +1873,12 @@ ${facilityText}
                         }
                     }
                 } catch (e) { console.error('[Map] sceneMap 解析失敗:', e); }
+                STATE._scanBusyUntil = Date.now() + 8000;   // 收尾：留 8 秒尾巴蓋過事件 debounce，之後照常放行過期清空
             });
         } catch (e) {
             btn.innerHTML = '失敗';
             btn.disabled = false;
+            STATE._scanBusyUntil = Date.now() + 8000;
         }
     }
 
@@ -1951,9 +1954,13 @@ ${facilityText}
     let _scanPurgeT = null;
     function _onStoryAdvanced() {
         if (win.__AURELIA_SUMMARIZING) return;
+        // 🚨 地圖自己的掃描若走 🍎 generateRaw 派發（跟隨酒館模式）也會發 GENERATION_ENDED——
+        //    沒這個守衛會「掃完 1.5 秒自己清掉自己剛存的快照」（NPC 關窗即蒸發的真兇）
+        if (Date.now() < (STATE._scanBusyUntil || 0)) return;
         if (_scanPurgeT) clearTimeout(_scanPurgeT);
         _scanPurgeT = setTimeout(() => {
             _scanPurgeT = null;
+            console.log('[Map] 🕒 跑團推進一輪 → 全區探索快照過期清空');
             try { win.OS_DB?.clearMapScanSnapshots?.(); } catch (e) {}
         }, 1500);   // debounce 跟 state_runtime 同款，避開連發事件
     }
