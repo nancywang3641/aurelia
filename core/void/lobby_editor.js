@@ -188,6 +188,7 @@
             }
         });
         _exportToPanel();
+        _b.fitCamera();   // 進建構模式→切 contain 縮放（整張看得見+可超界平移）
     }
     function _makeEditable(img) {
         img.classList.add('lstage-editable');
@@ -393,6 +394,7 @@
         if (click) click.onpointerdown = null;
         S.root?.classList.remove('lstage-editing');
         S.edit = null;
+        _b.fitCamera();   // 離開建構模式→還原 cover 縮放
         if (save) { _b.rebuildBlocks(); LS.unmount(); LS.tryMount(); }   // 重掛=重生NPC站位+碰撞
     }
 
