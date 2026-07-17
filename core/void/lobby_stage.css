@@ -2,6 +2,9 @@
 .lstage-root { position:absolute; inset:0; overflow:hidden; background:#141210; z-index:1; }
 .lstage-world { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
 .lstage-map { position:absolute; left:0; top:0; display:block; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none; z-index:0; }
+/* 🌳 前景上層：蓋在所有角色(z≤~1026)之上→走到樹後被遮；建構模式隱藏免擋操作 */
+.lstage-upper { position:absolute; left:0; top:0; display:block; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none; z-index:4000; }
+.lstage-editing .lstage-upper { display:none; }
 .lstage-actor { position:absolute; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none;
   will-change:transform; backface-visibility:hidden; }
 .lstage-actor.lstage-loading { visibility:hidden; }   /* 圖載入中先藏，防轉場單圖閃一下才換成走路圖 */
