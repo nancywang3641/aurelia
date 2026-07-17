@@ -786,7 +786,10 @@
         const vw = S.root.clientWidth, vh = S.root.clientHeight;
         if (!vw || !vh) return;
         S._vw = vw; S._vh = vh;
-        S.scale = Math.max(vw / MAP_W, vh / MAP_H);
+        // 建構模式：contain 縮放（整張地圖縮到看得見+四周留黑邊，好抓邊角）；遊玩：cover 填滿螢幕
+        S.scale = S.edit
+            ? Math.min(vw / MAP_W, vh / MAP_H) * 0.9
+            : Math.max(vw / MAP_W, vh / MAP_H);
         S._camX = S._camY = null;   // 縮放變了→強制重寫 transform（applyCamera 有快取）
         applyCamera();
         // 🗺️ 地圖場景小人跟鏡頭脫鉤：cover 縮放一變(resize/旋轉/全屏)就把固定螢幕尺寸重算一次
@@ -800,8 +803,16 @@
         // 底部對話框會蓋住下緣 → 跟隨模式把焦點擺在畫面偏上(38%)，人不會躲進對話框後面
         const focusRatio = S.edit ? 0.5 : 0.38;
         let cx = focus.x * S.scale - vw / 2, cy = focus.y * S.scale - vh * focusRatio;
-        cx = Math.max(0, Math.min(MAP_W * S.scale - vw, cx));
-        cy = Math.max(0, Math.min(MAP_H * S.scale - vh, cy));
+        const rangeX = MAP_W * S.scale - vw, rangeY = MAP_H * S.scale - vh;
+        if (S.edit) {
+            // 建構模式：允許超出邊界平移（看到外圈黑邊、把被面板擋住的角落拖出來）
+            const overX = vw * 0.6, overY = vh * 0.6;
+            cx = Math.max(Math.min(0, rangeX) - overX, Math.min(Math.max(0, rangeX) + overX, cx));
+            cy = Math.max(Math.min(0, rangeY) - overY, Math.min(Math.max(0, rangeY) + overY, cy));
+        } else {
+            cx = Math.max(0, Math.min(rangeX, cx));
+            cy = Math.max(0, Math.min(rangeY, cy));
+        }
         if (S._camX === cx && S._camY === cy) return;   // 鏡頭沒動就不重寫 transform
         S._camX = cx; S._camY = cy;
         S.world.style.transform = 'translate(' + (-cx) + 'px,' + (-cy) + 'px) scale(' + S.scale + ')';
@@ -1384,9 +1395,9 @@
             pixelify: _pixelify, askImage: _askImage,
             resolveRef, idbPut,
             getNpcHistory, setNpcHistory,
-            // 給 lobby_editor.js（擺設模式）：物件擺放/佔地/碰撞重建/遮罩/人物縮放
+            // 給 lobby_editor.js（擺設模式）：物件擺放/佔地/碰撞重建/遮罩/人物縮放/相機重算
             placeObj, spawnObjEl: _spawnObjEl, footRect,
-            rebuildBlocks, loadMask, applyActorScale,
+            rebuildBlocks, loadMask, applyActorScale, fitCamera,
             // 給 lobby_npcs.js（NPC 生成/名冊）：素材表/生NPC/碰撞判定/站位開闊度採樣
             ASSET, addNpc, blocked, whiteRatio: _whiteRatio,
         },
