@@ -1609,11 +1609,20 @@
                         if (panel) {
                             const prevZ = panel.style.zIndex;
                             panel.style.zIndex = '1002';   // 蓋過 VN 全螢幕層(51)
-                            const ps = win.PhoneSystem || window.PhoneSystem;
-                            if (ps && typeof ps.goHome === 'function') {
-                                const orig = ps.goHome;
-                                ps.goHome = function () { panel.style.zIndex = prevZ || ''; ps.goHome = orig; if (orig) orig(); };
-                            }
+                            // VN 沉浸模式藏了大廳頂欄 → 面板上緣會空一條；開 app 期間還原頂欄（跟大廳開 app 同畫面）
+                            const hdr = document.querySelector('.void-top-bar');
+                            const hdrWasHidden = !!(hdr && hdr.style.display === 'none');
+                            if (hdrWasHidden) hdr.style.display = '';
+                            // 關閉偵測用面板 display 變化：返回鍵被 launchGameApp 的攔截器直接 doClose、不經 goHome，
+                            // 掛 goHome 會漏——observer 兩條關閉路徑都蓋得到，觸發即自拆（不累積）
+                            const ob = new MutationObserver(() => {
+                                if (panel.style.display === 'none') {
+                                    if (hdrWasHidden && hdr) hdr.style.display = 'none';   // 回 VN 沉浸
+                                    panel.style.zIndex = prevZ || '';
+                                    ob.disconnect();
+                                }
+                            });
+                            ob.observe(panel, { attributes: true, attributeFilter: ['style'] });
                         }
                     };
                     const jrnlBtn = document.getElementById('vn-end-btn-journal');
