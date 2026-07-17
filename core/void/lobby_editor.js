@@ -81,7 +81,7 @@
         S.edit.doorRects = _b.CFG.doors.map((D, i) => {
             const el = document.createElement('div');
             el.className = 'lstage-doorrect';
-            el.innerHTML = '<span>過門區→' + (_b.SCENES[D.to] ? (D.to === 'hall' ? '大廳' : '書咖') : D.to) + '</span>' +
+            el.innerHTML = '<span>過門區→' + ({ cafe: '書咖', hall: '大廳', city: '街區', room404: '404' }[D.to] || D.to) + '</span>' +
                 '<span class="lstage-zone-grip lstage-door-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
             S.world.appendChild(el);
             _syncDoor(i, el);
@@ -350,10 +350,12 @@
                 if (o.idb) rec.idb = o.idb;
                 if (o.footW != null) rec.footW = o.footW;
                 if (o.float) rec.float = true;
+                if (o.nightFile) rec.nightFile = o.nightFile;   // 夜間成對素材（城市物件）：不存會讓調過的物件夜裡變日版
                 return rec;
             }),
             points: _b.CFG.points,
             doors: _b.CFG.doors.map(D => ({ x: D.x, y: D.y, w: D.w, h: D.h })),
+            doorsV: _b.SCENES[_b.S.scene].doorsV || 1,   // 門版本：場景門改版後舊存檔門座標作廢
         };
         if (_b.CFG.baseOverride) data.baseOverride = _b.CFG.baseOverride;
         if (_b.CFG.maskOverride) data.maskOverride = _b.CFG.maskOverride;
