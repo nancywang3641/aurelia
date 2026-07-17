@@ -118,6 +118,7 @@
             base: 'city/city_layers/city_floor_frame_day.webp',        // 分層版：底板只剩地板+外框，建築/植栽全改成可拖物件
             nightBase: 'city/city_layers/city_floor_frame_night.webp',   // 18~06 自動夜景：整套素材替換（重繪光源），不是濾鏡
             forceDay: true,   // 🌤 暫時鎖白天（Rae 調地圖中，先不跟時間走）；拿掉這行即恢復日夜自動切換
+            noFoot: true,     // 🚫 大地圖建築都是不規則形→不用矩形佔地擋路；碰撞全交給手繪遮罩（擺設模式不畫佔地框、碰撞不疊腳印）
             mask: null,   // 手繪碰撞遮罩後補；先走 boundary 鋼索+物件腳印
             cfgKey: 'lobby_stage_layout_city_v2',   // v2=改分層底板(地板框+可拖建築)；舊烤製版存檔整組作廢，Rae 重新在擺設模式擺
             outdoor: true,   // 戶外：沒有駐店角色（瀅瀅/愛麗絲/柴郡都不在），客人池+SN 名冊照常刷
@@ -279,7 +280,8 @@
     let BLOCKS = [];
     function rebuildBlocks() {
         const maskOk = !!(S.mask && S.mask.ok);
-        BLOCKS = (maskOk ? [] : SCENES[S.scene].walls).concat(CFG.layout.map(footRect));
+        const feet = SCENES[S.scene].noFoot ? [] : CFG.layout.map(footRect);   // noFoot 場景（大地圖）：碰撞不疊物件腳印，全靠遮罩
+        BLOCKS = (maskOk ? [] : SCENES[S.scene].walls).concat(feet);
     }
     // 手繪碰撞遮罩：白=可走、黑=不可走（<128 判黑）；jsdelivr 有 CORS 頭、canvas 可讀
     async function loadMask() {
