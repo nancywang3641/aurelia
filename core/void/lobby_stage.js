@@ -420,7 +420,7 @@
             if (a && a.el) a.el.classList.remove('lstage-loading');
             return;
         }
-        // ⚠️ 皮膚只管大廳小人外觀，不碰 a.portrait——對話立繪另有來源(固定NPC自帶/訪客avatar_cache)，兩者是不同東西(Rae定案 2026-07-17)
+        // ⚠️ 皮膚只管大廳小人外觀，不碰 a.portrait——對話立繪另有來源(固定NPC自帶/訪客avatar_cache頭像/裝扮室「生成立繪」的sprite_cache)，兩者是不同東西(Rae定案 2026-07-17)
         //   舊 skin 可能殘留 asPortrait 旗標(已退役)，一律忽略。
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src);
     }

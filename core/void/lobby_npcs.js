@@ -308,8 +308,14 @@
             if (!hit) return;
             const full = await VC.getRaw('avatar_cache', hit.key);
             if (!full || !npc) return;
+            npc.avatarCacheKey = hit.key;   // 複合鍵(那輪chatId::名)：裝扮室「生成立繪」拿它呼叫 VN autoGenSprite→立繪存回同鍵的 sprite_cache
             if (full.prompt) npc.avatarPrompt = String(full.prompt);   // ✨ 外觀 ground truth：裝扮室「生成小小人」直接拿這串當 prompt
             if (full.url && S.npcs.includes(npc)) { npc.portrait = full.url; npc.portraitKind = 'avatar'; }   // avatar_cache=頭像(半身)→對話用浮框擺放
+            // 裝扮室生過立繪(sprite_cache 同鍵)→ 蓋過頭像當對話立繪(貼底全高)；沒有就維持頭像浮框
+            try {
+                const sp = await VC.getRaw('sprite_cache', hit.key);
+                if (sp && sp.url && S.npcs.includes(npc)) { npc.portrait = sp.url; npc.portraitKind = 'sprite'; }
+            } catch (e) {}
         } catch (e) {}
     }
 
