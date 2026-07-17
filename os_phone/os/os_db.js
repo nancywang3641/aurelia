@@ -646,6 +646,22 @@
                 } catch(e) { j(e); }
             });
         },
+        // 只清「探索快照」（各設施掃出的路人/開場語）＝ id 不帶 __world__ 前綴的設施記錄。
+        // ⚠️ 世界資料（__world__*）同住這個 store，絕不能跟著清——跑團推進一輪的過期清空走這個，別用 clearAllMapData。
+        clearMapScanSnapshots: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME_MAP);
+                    const req = store.getAllKeys();
+                    req.onsuccess = () => {
+                        (req.result || []).forEach(k => { if (!String(k).startsWith('__world__')) store.delete(k); });
+                    };
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
+        },
         // === 🌍 動態世界資料 (複用 map_data store, 用 __world__ 前綴 key) ===
         saveWorldData: async function(worldId, data) {
             const db = await this.init();
