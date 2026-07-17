@@ -1599,13 +1599,12 @@
                     // CTX 彈窗現在是 #page-game 直屬置中 modal、對話/末尾共用 → 末尾直接 toggle，不再搬元素/浮右上
                     const ctxBtn = document.getElementById('vn-end-btn-ctx');
                     if (ctxBtn) ctxBtn.onclick = () => { window.VN_Core.toggleCtx(); };
-                    // 日誌：開「瀅瀅的故事日誌」手機 app。手機殼 panel z-index:50 < VN 全螢幕層 51 →
+                    // 日誌/地圖：開手機 app。手機殼 panel z-index:50 < VN 全螢幕層 51 →
                     //   直接開會被 VN 蓋在底下看不到，故把 panel 臨時頂到 VN 之上，關閉(goHome)時還原。
-                    const jrnlBtn = document.getElementById('vn-end-btn-journal');
-                    if (jrnlBtn) jrnlBtn.onclick = () => {
+                    const _openPhoneAppAboveVN = (appKey) => {
                         const cc = win.AureliaControlCenter || window.AureliaControlCenter;
-                        if (!(cc && typeof cc.launchGameApp === 'function')) { console.warn('[VN_Core] 找不到 AureliaControlCenter.launchGameApp（日誌）'); return; }
-                        cc.launchGameApp('journal');
+                        if (!(cc && typeof cc.launchGameApp === 'function')) { console.warn('[VN_Core] 找不到 AureliaControlCenter.launchGameApp（' + appKey + '）'); return; }
+                        cc.launchGameApp(appKey);
                         const panel = document.getElementById('aurelia-panel-container');
                         if (panel) {
                             const prevZ = panel.style.zIndex;
@@ -1617,6 +1616,11 @@
                             }
                         }
                     };
+                    const jrnlBtn = document.getElementById('vn-end-btn-journal');
+                    if (jrnlBtn) jrnlBtn.onclick = () => _openPhoneAppAboveVN('journal');
+                    // 🗺️ 地圖：劇情末尾直接開地圖面板看當前世界（探索/排程/小地圖都在裡面）
+                    const mapBtn = document.getElementById('vn-end-btn-map');
+                    if (mapBtn) mapBtn.onclick = () => _openPhoneAppAboveVN('map');
                 }
                 return;
             }
