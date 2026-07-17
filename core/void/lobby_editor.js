@@ -172,7 +172,7 @@
                 o.s = Math.max(0.05, Math.min(2, Math.round((o.s || 1) * (act === 'objplus' ? 1.1 : 0.9) * 1000) / 1000));
                 _b.placeObj(S.objEls[S.edit.sel], o); _syncFoot(S.edit.sel); _exportToPanel();
             } else if (act === 'actminus' || act === 'actplus') {
-                _b.CFG.points.actorScale = Math.max(0.5, Math.min(1.6, Math.round((((_b.CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));
+                _b.CFG.points.actorScale = Math.max(0.2, Math.min(1.6, Math.round((((_b.CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));   // 下限 0.2：地圖俯視小人要能調得比室內小很多
                 _b.applyActorScale(); _exportToPanel();
             } else if (act === 'addobj') {
                 _b.askImage((ref, dataUrl) => _addFurniture(ref, dataUrl));
