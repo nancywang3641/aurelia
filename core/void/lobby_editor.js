@@ -77,6 +77,26 @@
             S.world.appendChild(cv);
             S.edit.maskView = cv;
         }
+        // 🟦 格子碰撞視覺化：擋格塗半透明紅（RPG Maker 式格子場景；讓 Rae 看得到擋在哪）
+        const _g = _b.SCENES[S.scene].grid;
+        if (_g) {
+            if (!_g._bits) {
+                const bin = atob(_g.bits); const arr = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                _g._bits = arr;
+            }
+            const cv = document.createElement('canvas');
+            cv.width = _b.MAP_W; cv.height = _b.MAP_H;
+            cv.className = 'lstage-maskview';
+            const ctx = cv.getContext('2d');
+            ctx.fillStyle = 'rgba(220,60,60,.32)';
+            for (let r = 0; r < _g.rows; r++) for (let c = 0; c < _g.cols; c++) {
+                const bi = r * _g.cols + c;
+                if ((_g._bits[bi >> 3] >> (7 - (bi & 7))) & 1) ctx.fillRect(c * _g.cell, r * _g.cell, _g.cell, _g.cell);
+            }
+            S.world.appendChild(cv);
+            S.edit.maskView = cv;
+        }
         // 過門區：踩進去就轉場（可拖、右下角調大小；「落」圓點別放進來）
         S.edit.doorRects = _b.CFG.doors.map((D, i) => {
             const el = document.createElement('div');

@@ -116,9 +116,10 @@
         },
         city: {   // 🏙 視差城市第一街區＝分層可走（day01 空底板+遮罩擋踩+前景物件各自深度排序；玩家/NPC 走路走到門進店）
             base: 'city/city_layers/city_floor_frame_day01.webp',      // day01 空底板：只有地面+外圈樹框（建築/噴泉/中庭樹全拆成前景物件，才能走它們後面）
-            mask: 'city/city_layers/city_floor_frame_day02_mask.png',  // 碰撞遮罩：白=可走、黑=建築/噴泉/花台/長椅擋住（day02_mask 對齊）
+            // 🟦 RPG Maker 式格子碰撞：格子表直接寫死(從 day02_mask 烤成)，不載圖→沒有 CORS/canvas/非同步空窗那些會爆的環節。1=擋 0=可走。
+            grid: { cell: 24, cols: 64, rows: 43, bits: '/////j/////////+P/////////4///////wf/j/7j//+AA7+P4AB//wAAMw7AAA/8AAAAAAAAAf5//4AAAAAHxn//gACAAAcCf/8YAeAAAAB//xgBwAAAOP//GAHAAAA+f/4AAAAAA/4/AAAAAAAD+AAD4AA+AAH+AADAADwAA/4AAAAAPAAD/AAAAAAAAAPwAA8A+AAAAEAADwH4AAAAAAAAAPgP//AAAB8AAB//+BwAHwAAH//4nAAAAAAf//GYAAAAAA//4PwAAAAAAIEB+AAAAAAeAPHwAAAAAAAAAHgAAAAAAAAAeAAAAAAAAAD4AAAAAAAAAPgAAAAAAAAA4AAAAAAAAABgAAAAAAAAAHAAAAAAAAAAeAAAAAQAAAD8AAAAAAAAAf4AAA4AAAAD//gf/w///j///xAHBgD//////8AAP////////AH////////+A////8=' },
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
-            cfgKey: 'lobby_stage_layout_city_v5',   // v5=day01+前景物件深度排序；舊版存檔整組作廢
+            cfgKey: 'lobby_stage_layout_city_v6',   // v6=day01+前景物件+格子碰撞；舊版存檔整組作廢
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
             // 前景物件＝從 upper01/02/03 拆出的獨立元素（書咖/交易所/噴泉/樹/燈柱/長椅）；bbox 即座標。
             //   noCollide=不進碰撞(碰撞全走遮罩)；靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
@@ -384,12 +385,27 @@
         }
         return n ? ok / n : 0;
     }
+    // 🟦 格子碰撞：格子表寫死在場景(base64 bit-packed)，腳點落在「1」格=牆。首次用時解碼快取到 g._bits。
+    function _gridBlocked(g, x, y) {
+        if (!g._bits) {
+            const bin = atob(g.bits); const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            g._bits = arr;
+        }
+        const col = Math.floor(x / g.cell), row = Math.floor(y / g.cell);
+        if (col < 0 || row < 0 || col >= g.cols || row >= g.rows) return true;
+        const bi = row * g.cols + col;
+        return ((g._bits[bi >> 3] >> (7 - (bi & 7))) & 1) === 1;
+    }
     function blocked(x, y) {
         const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
         if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
-        // 🚨 宣告了遮罩但還沒載好（jsdelivr 非同步抓圖的空窗期）→ 先全擋，防止「一進場立刻走就穿牆」；載入失敗(maskFailed)才放行免永久凍住
-        if (SCENES[S.scene] && SCENES[S.scene].mask && !(S.mask && S.mask.ok)) return !S.maskFailed;
-        if (S.mask && S.mask.ok) {
+        const SC = SCENES[S.scene];
+        if (SC && SC.grid) {                                    // 🟦 格子碰撞優先（寫死、永不載入失敗）
+            if (_gridBlocked(SC.grid, x, y)) return true;
+        } else if (SC && SC.mask && !(S.mask && S.mask.ok)) {   // 宣告了遮罩但還沒載好→空窗期全擋防穿牆；載入失敗才放行
+            return !S.maskFailed;
+        } else if (S.mask && S.mask.ok) {
             // 手繪遮罩：腳點像素亮度 <128 = 不可走（取 R 通道即可，遮罩是黑白圖）
             const mi = ((Math.round(y) * MAP_W) + Math.round(x)) * 4;
             if (S.mask.data[mi] < 128) return true;
