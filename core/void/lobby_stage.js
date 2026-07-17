@@ -197,9 +197,9 @@
     // 新版存 layoutFull=完整家具清單（可增刪）；舊版 layout=按 file 名對位覆蓋（相容）
     function _loadCfg() {
         const SC = SCENES[S.scene];
-        let layout = SC.layout.map(o => Object.assign({}, o));
-        const points = JSON.parse(JSON.stringify(SC.points));
-        const doors = SC.doors.map(d => Object.assign({}, d));
+        let layout = (SC.layout || []).map(o => Object.assign({}, o));
+        const points = JSON.parse(JSON.stringify(SC.points || {}));
+        const doors = (SC.doors || []).map(d => Object.assign({}, d));   // 靜態地圖沒 doors→給空陣列，別讓 undefined.map 炸掉整個掛載
         let baseOverride = null, maskOverride = null;
         try {
             const saved = JSON.parse(localStorage.getItem(SC.cfgKey) || 'null');
