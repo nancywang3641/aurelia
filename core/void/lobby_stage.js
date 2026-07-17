@@ -114,37 +114,19 @@
             doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
         },
-        city: {   // 🏙 視差城市第一街區（戶外街景；分層底板=地板框，建築/植栽都是可拖物件，走到大門白光過場進室內）
-            base: 'city/city_layers/city_floor_frame_day.webp',        // 分層版：底板只剩地板+外框，建築/植栽全改成可拖物件
-            nightBase: 'city/city_layers/city_floor_frame_night.webp',   // 18~06 自動夜景：整套素材替換（重繪光源），不是濾鏡
-            forceDay: true,   // 🌤 暫時鎖白天（Rae 調地圖中，先不跟時間走）；拿掉這行即恢復日夜自動切換
-            alphaFoot: true,  // 🧊 建築當立體物：碰撞照圖片 alpha 形狀(不規則貼合)，只擋底部 footH 那條帶(切線以上可穿過走屋後)；佔地高=調切線
-            mask: null,   // 手繪碰撞遮罩後補；先走 boundary 鋼索+物件腳印
-            cfgKey: 'lobby_stage_layout_city_v2',   // v2=改分層底板(地板框+可拖建築)；舊烤製版存檔整組作廢，Rae 重新在擺設模式擺
-            outdoor: true,   // 戶外：沒有駐店角色（瀅瀅/愛麗絲/柴郡都不在），客人池+SN 名冊照常刷
-            layout: [
-                // 兩棟門面樓=可拖物件（吃深度排序）；日夜成對。起始座標抄 city_layout.json 的 landmark bounds，Rae 再手調
-                { file: 'city/city_layers/objects/book_cafe_day.webp', nightFile: 'city/city_layers/objects/book_cafe_night.webp', x: 205, y: 28,  w: 424, h: 346, footH: 130, s: 1 },     // 書咖門面（門→cafe；footH=底部擋路帶高，上面可繞後）
-                { file: 'city/city_layers/objects/exchange_day.webp',  nightFile: 'city/city_layers/objects/exchange_night.webp',  x: 1040, y: 290, w: 468, h: 350, footH: 130, s: 0.78 },  // 交易所門面（門→hall；素材是「交易所」，想換別棟再說）
-                // 玩家住宅=動態物件（吃深度排序，人繞到屋後會被遮）；夜間素材成對替換
-                { file: 'city/player_house_lv1.webp', nightFile: 'city/player_house_lv1_night.webp', x: 145, y: 624, w: 455, h: 266, footH: 110, s: 1 },
+        city: {   // 🏙 視差城市第一街區＝靜態點擊地圖（一張完整烤好的城市圖；點建築進店，不走路/不生小人/不碰撞）
+            base: 'city/city_base_fixed.webp',          // 完整烤好圖（書咖＋交易所都烤在裡面）
+            nightBase: 'city/city_base_fixed_night.webp',
+            forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜
+            staticMap: true,   // 🗺️ 靜態點擊地圖：不 initPlayer/不生 NPC/不跑 RAF/無碰撞；整張置中顯示，點 hotspots 白光過場進室內
+            cfgKey: 'lobby_stage_layout_city_v3',   // v3=改靜態點擊地圖；舊走路版存檔整組作廢
+            layout: [],
+            // 點擊區（座標抄 city_layout.json landmark bounds）：點了走白光過場進室內；spawn=室內落點（店內底部大門前）
+            hotspots: [
+                { x: 205, y: 28,  w: 430, h: 305, to: 'cafe', spawn: { x: 780, y: 868 }, label: '書咖' },       // 書咖入口→瀅瀅書咖
+                { x: 1040, y: 315, w: 365, h: 282, to: 'hall', spawn: { x: 772, y: 830 }, label: '純白大廳' },   // 交易所→愛麗絲大廳
             ],
-            points: {
-                npcZone:  { x: 430, y: 430, w: 580, h: 280 },   // 中央廣場（客人出沒區；避開大廳牆與玩家房腳印）
-                player: { x: 772, y: 520 },
-                arrive: { x: 772, y: 700 },   // 從書咖/大廳出來的落點（廣場南側）
-                boundary: [
-                    { x: 100, y: 330 }, { x: 635, y: 330 }, { x: 645, y: 80 }, { x: 1275, y: 80 },
-                    { x: 1275, y: 300 }, { x: 1450, y: 300 }, { x: 1490, y: 640 }, { x: 1490, y: 935 },
-                    { x: 85, y: 935 }, { x: 60, y: 640 },
-                ],
-                actorScale: 0.32,   // 🗺️ 地圖=俯視小棋子(脫鉤鏡頭後這數字≈螢幕高比例)；室內房間才用 0.7 那種大人
-            },
-            walls: [],   // 建築改成可拖物件→碰撞走物件腳印(footH)；外牆走 boundary 鋼索
-            doors: [
-                { x: 334, y: 322, w: 100, h: 56, to: 'cafe', spawn: { x: 780, y: 868 } },    // 書咖大門→瀅瀅書咖（落在店內底部大門前）
-                { x: 1155, y: 592, w: 100, h: 50, to: 'hall', spawn: { x: 772, y: 830 } },   // 純白大廳大門→愛麗絲大廳（落在大廳底部大門前）
-            ],
+            points: { player: { x: 772, y: 500 }, arrive: { x: 772, y: 500 } },   // 靜態用不到；留著防編輯器誤開時取 points.player 崩
         },
     };
     // 🌗 城市日夜：跟大廳 BG 同時段律（ambient.js：6-18=day）；場景有 nightBase 才生效
@@ -815,9 +797,10 @@
         const vw = S.root.clientWidth, vh = S.root.clientHeight;
         if (!vw || !vh) return;
         S._vw = vw; S._vh = vh;
-        // 建構模式：contain 縮放（整張地圖縮到看得見+四周留黑邊，好抓邊角）；遊玩：cover 填滿螢幕
-        S.scale = S.edit
-            ? Math.min(vw / MAP_W, vh / MAP_H) * 0.9
+        // 建構模式：contain*0.9(留黑邊好抓邊角)；靜態點擊地圖：contain(整張置中看完)；一般遊玩：cover 填滿螢幕跟人跑
+        const SC = SCENES[S.scene];
+        S.scale = S.edit ? Math.min(vw / MAP_W, vh / MAP_H) * 0.9
+            : (SC && SC.staticMap) ? Math.min(vw / MAP_W, vh / MAP_H)
             : Math.max(vw / MAP_W, vh / MAP_H);
         S._camX = S._camY = null;   // 縮放變了→強制重寫 transform（applyCamera 有快取）
         applyCamera();
@@ -833,7 +816,9 @@
         const focusRatio = S.edit ? 0.5 : 0.38;
         let cx = focus.x * S.scale - vw / 2, cy = focus.y * S.scale - vh * focusRatio;
         const rangeX = MAP_W * S.scale - vw, rangeY = MAP_H * S.scale - vh;
-        if (S.edit) {
+        if (SCENES[S.scene] && SCENES[S.scene].staticMap) {
+            cx = rangeX / 2; cy = rangeY / 2;   // 靜態地圖：整張置中（contain 時 range 為負→自動 letterbox 置中）
+        } else if (S.edit) {
             // 建構模式：允許超出邊界平移（看到外圈黑邊、把被面板擋住的角落拖出來）
             const overX = vw * 0.6, overY = vh * 0.6;
             cx = Math.max(Math.min(0, rangeX) - overX, Math.min(Math.max(0, rangeX) + overX, cx));
@@ -1103,6 +1088,7 @@
         const left = document.querySelector('.lobby-left');
         if (!left || S.active || !isOn()) return;
         CFG = _loadCfg(); rebuildBlocks(); loadMask();
+        const isStatic = !!SCENES[S.scene].staticMap;   // 🗺️ 靜態點擊地圖（大地圖）：不生小人/不走路/不碰撞
         const root = document.createElement('div');
         root.className = 'lstage-root';
         root.innerHTML = '<div class="lstage-world">' +
@@ -1135,7 +1121,7 @@
         fab.innerHTML = '<i class="fa-solid fa-comment-dots"></i>';
         fab.addEventListener('click', (e) => { e.stopPropagation(); showDialog(); });
         left.appendChild(fab);
-        _setupJoystick(root);   // 🕹️ 手機左下角虛擬搖桿（只觸控裝置出現；桌機照舊鍵盤/點擊）
+        if (!isStatic) _setupJoystick(root);   // 🕹️ 手機左下角虛擬搖桿（靜態地圖沒走路→不需要）
         S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
         S.doorArm = false;   // 剛進場先解除門武裝，走出門區才啟動
         // 底圖：本機/網址覆蓋（建構模式「換底圖」）
@@ -1144,7 +1130,27 @@
             resolveRef(CFG.baseOverride).then(src => { if (src && mapImg) mapImg.src = src; });
         }
         S.objEls = CFG.layout.map(o => _spawnObjEl(o));
-        root.querySelector('.lstage-edit-btn').addEventListener('click', () => window.LobbyEditor?.toggle());   // 🖊 擺設模式（實作在 lobby_editor.js）
+        const editBtn = root.querySelector('.lstage-edit-btn');
+        if (isStatic) editBtn.style.display = 'none';   // 靜態地圖沒有可拖佈局→藏擺設鈕
+        else editBtn.addEventListener('click', () => window.LobbyEditor?.toggle());   // 🖊 擺設模式（實作在 lobby_editor.js）
+        // 🗺️ 靜態點擊地圖：畫建築點擊區（點了白光過場進室內），跳過所有走路系統
+        if (isStatic) {
+            (SCENES[S.scene].hotspots || []).forEach(hs => {
+                const el = document.createElement('div');
+                el.className = 'lstage-hotspot';
+                el.style.left = hs.x + 'px'; el.style.top = hs.y + 'px';
+                el.style.width = hs.w + 'px'; el.style.height = hs.h + 'px';
+                if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid fa-door-open"></i> ' + hs.label + '</span>';
+                el.addEventListener('click', () => goScene(hs.to, hs.spawn, 'arrive'));
+                S.world.appendChild(el);
+            });
+            _applySceneHeader();
+            fitCamera();
+            window.addEventListener('resize', fitCamera);
+            try { S._ro = new ResizeObserver(() => fitCamera()); S._ro.observe(root); } catch (e) {}
+            console.log('[LobbyStage] mounted (static map)');
+            return;
+        }
         // 座標命中角色（不動角色 pointer-events）：桌機右鍵、手機長按共用
         const _hitAt = (clientX, clientY) => {
             const r = S.world.getBoundingClientRect();

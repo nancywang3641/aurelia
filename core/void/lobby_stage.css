@@ -5,6 +5,16 @@
 .lstage-actor { position:absolute; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none;
   will-change:transform; backface-visibility:hidden; }
 .lstage-actor.lstage-loading { visibility:hidden; }   /* 圖載入中先藏，防轉場單圖閃一下才換成走路圖 */
+/* 🗺️ 靜態點擊地圖：建築點擊區＋入口膠囊標籤（點了進店） */
+.lstage-hotspot { position:absolute; z-index:1500; cursor:pointer; border-radius:18px;
+  display:flex; align-items:flex-end; justify-content:center; padding-bottom:8px;
+  transition:background .16s ease, box-shadow .16s ease; }
+.lstage-hotspot:hover { background:rgba(140,200,255,.16); box-shadow:0 0 0 3px rgba(140,200,255,.6) inset; }
+.lstage-hotspot-chip { pointer-events:none; background:rgba(18,24,38,.84); color:#eaf2ff;
+  font-size:26px; font-weight:700; padding:8px 18px; border-radius:999px; white-space:nowrap;
+  box-shadow:0 4px 14px rgba(0,0,0,.45); border:1px solid rgba(150,200,255,.4);
+  display:inline-flex; align-items:center; gap:9px; }
+.lstage-hotspot-chip i { color:#9ecbff; }
 /* 彈跳/翻面全走 transform（margin 會逐幀觸發重排版=掉幀元兇） */
 .lstage-actor.walking { animation:lstage-bob .35s steps(2) infinite; }
 .lstage-actor.walking.flip { animation:lstage-bob-flip .35s steps(2) infinite; }
