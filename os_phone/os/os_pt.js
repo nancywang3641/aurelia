@@ -246,10 +246,10 @@
             '.os-pt-bal i{color:#ffe28a;margin-right:4px;}',
             '.os-pt-note{margin-top:6px;font-size:11px;color:#8a8298;font-style:italic;}',
             // 交易所面板：跟白兔對話時浮在右側停靠（不遮遊戲的立繪/對話框）
-            '.os-pt-dock{position:fixed;right:20px;top:11%;z-index:2147483600;width:min(90vw,370px);max-height:74vh;overflow:auto;',
+            '.os-pt-dock{position:absolute;right:16px;top:10%;z-index:80;width:min(42%,340px);max-height:72%;overflow:auto;',
             'opacity:0;transform:translateX(28px);transition:opacity .28s ease,transform .28s ease;}',
             '.os-pt-dock.on{opacity:1;transform:translateX(0);}',
-            '@media (max-width:680px){.os-pt-dock{right:10px;left:10px;width:auto;top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);max-height:52vh;}}',
+            '@media (max-width:680px){.os-pt-dock{right:8px;left:8px;width:auto;top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);max-height:44%;}}',
             '.os-pt-shop{width:100%;background:linear-gradient(165deg,rgba(36,31,56,.97),rgba(24,21,40,.97));',
             'border:1px solid rgba(180,150,255,.4);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.55);',
             'padding:20px 20px 16px;color:#f1ecff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}',
@@ -333,6 +333,7 @@
         const old = document.getElementById('os-pt-shop-dock');
         if (old) old.remove();
 
+        const host = document.querySelector('.lobby-left') || document.body;   // 掛進遊戲容器→貼遊戲畫面內側(非整個視窗，才不會跑到黑邊)
         const dock = document.createElement('div');
         dock.id = 'os-pt-shop-dock';
         dock.className = 'os-pt-dock';
@@ -345,7 +346,7 @@
             '<div id="os-pt-shop-items"></div>' +
             '<div class="os-pt-shop-msg" id="os-pt-shop-msg"></div>' +
             '</div>';
-        document.body.appendChild(dock);
+        host.appendChild(dock);
         requestAnimationFrame(() => dock.classList.add('on'));
         dock.querySelector('.x').addEventListener('click', () => {
             try { if (window.LobbyStage && window.LobbyStage.endTalk) window.LobbyStage.endTalk(); } catch (e) {}   // ✕=離開白兔對話（連帶關面板）
