@@ -274,6 +274,7 @@
 .lstage-marker.m-alice { background:#8fa8d8; }
 .lstage-marker.m-cheshire { background:#3f9c46; }
 .lstage-marker.m-rabbit { background:#e6e6ea; color:#333; }
+.lstage-obj.lstage-grouped { outline:3px dashed #4ab6ff; outline-offset:-2px; }
 /* 遮罩視覺化（擺設模式）：不可走區半透明紅 */
 .lstage-maskview { position:absolute; left:0; top:0; z-index:2300; pointer-events:none; }
 /* 過門觸發區（擺設模式）：橘色虛線框，可拖/右下角調大小 */
