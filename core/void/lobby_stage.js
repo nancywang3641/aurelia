@@ -277,7 +277,7 @@
                     layout = saved.layoutFull.map(o => Object.assign({}, o));
                 } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
-                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; }
+                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; if (s.noCollide != null) t.noCollide = s.noCollide; }
                 });
                 if (saved.baseOverride) baseOverride = saved.baseOverride;
                 if (saved.maskOverride) maskOverride = saved.maskOverride;
