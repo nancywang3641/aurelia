@@ -138,9 +138,9 @@
             '</div>' +
             _footRows +
             '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="layerfloor"><i class="fa-solid fa-layer-group"></i> 地板</button>' +
-              '<button class="lep-btn" data-act="layerauto"><i class="fa-solid fa-layer-group"></i> 自動</button>' +
-              '<button class="lep-btn" data-act="layerback"><i class="fa-solid fa-layer-group"></i> 牆背景</button>' +
+              '<button class="lep-btn" data-act="layerfloor" title="貼地、被踩在上面（例：地毯）"><i class="fa-solid fa-shoe-prints"></i> 地上</button>' +
+              '<button class="lep-btn" data-act="layerauto" title="會走它前面也走後面（例：櫃台、燈、椅）"><i class="fa-solid fa-person-walking"></i> 一般</button>' +
+              '<button class="lep-btn" data-act="layerback" title="貼牆當背景、永遠在物件後面（例：牆上螢幕）"><i class="fa-solid fa-image"></i> 牆上</button>' +
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="actminus"><i class="fa-solid fa-minus"></i> 人物</button>' +
