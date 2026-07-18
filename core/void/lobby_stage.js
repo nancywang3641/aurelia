@@ -25,6 +25,7 @@
         danWalk:  CDN + 'lobby_dan_walk_v2.png',   // 丹走路圖(v2=Rae修圖)
         ray:      CDN + 'lobby_ray.png',           // 雷伊對話立繪
         dan:      CDN + 'lobby_dan.png',           // 丹對話立繪
+        rabbitWalk: CDN + 'lobby_rabbit_walk_v1.png',   // 白兔先生走路圖(3×4；交易所店員)
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
@@ -69,31 +70,27 @@
             doorsV: 2,
         },
         hall: {
-            base: 'lobby_hall_base_v2.png',   // v2=核心球已從底圖拆出(空核心版)
-            mask: 'lobby_mask_hall_v1.png',   // Rae 手繪碰撞遮罩(白=可走)
-            cfgKey: 'lobby_stage_layout_hall_v1',
-            layout: [
-                { file: 'lobby_hall_obj_core.png',    x: 652, y: 189, w: 788,  h: 935,  footH: 200, footW: 280,  s: 0.3,   float: true }, // LUNA-VII 分形核心(飄浮，佔地=底部尖錐)
-                { file: 'lobby_hall_obj_counter.png', x: 990, y: 250, w: 1354, h: 449,  footH: 140, footW: 1301, s: 0.3 }, // 接待櫃檯
-                { file: 'lobby_hall_obj_chairs.png',  x: 340, y: 533, w: 1240, h: 520,  footH: 150, s: 0.3 }, // 等候椅組
-                { file: 'lobby_hall_obj_kiosk.png',   x: 938, y: 742, w: 587,  h: 1308, footH: 290, s: 0.104 }, // 全息資訊台
-                { file: 'lobby_hall_obj_sofa.png',    x: 194, y: 199, w: 1361, h: 414,  footH: 300, s: 0.3 }, // 模組沙發
-            ],
+            base: 'lobby_hall_base_v5.png',   // v5=quantum white 乾淨磁磚俯視版（含左牆交易所入口）；舊 painted 版整組換掉
+            mask: 'lobby_hall_mask_v5.png',   // v5 手繪碰撞遮罩(白=可走)
+            cfgKey: 'lobby_stage_layout_hall_v5',   // v5：底圖整換→舊擺設存檔作廢
+            layout: [],   // 新版極簡空房間；愛麗絲以外的舊 painted 家具(核心/櫃台/椅/資訊台/沙發)先移除
             points: {
-                npcZone:  { x: 334, y: 538, w: 1000, h: 280 },
-                player: { x: 863, y: 634 },
-                arrive: { x: 772, y: 830 },   // 走門進來的落點（從書咖進大廳）
-                alicePos: { x: 1194, y: 318 },   // 愛麗絲站位（可在擺設模式拖）
+                npcZone:  { x: 380, y: 560, w: 780, h: 240 },
+                player: { x: 760, y: 640 },
+                arrive: { x: 730, y: 820 },   // 從街區底部大門進來的落點
+                alicePos: { x: 1150, y: 360 },   // 愛麗絲站位（可在擺設模式拖）
                 boundary: [
-                    { x: 255, y: 240 }, { x: 1290, y: 240 }, { x: 1395, y: 560 },
-                    { x: 1430, y: 868 }, { x: 105, y: 868 }, { x: 140, y: 560 },
+                    { x: 190, y: 235 }, { x: 1400, y: 235 }, { x: 1465, y: 880 }, { x: 85, y: 880 },
                 ],
                 actorScale: 0.7,
             },
-            walls: [],   // 外牆走 boundary 鋼索；核心基座=物件腳印
-            doors: [ { x: 664, y: 910, w: 213, h: 75, to: 'city', spawn: { x: 1205, y: 655 } } ],  // 底部大門→街區（落在純白大廳門口；不再直通書咖）
-            doorsV: 2,
-            alice: { x: 1194, y: 318 },   // 愛麗絲：核心旁、不漫步、永遠面向玩家
+            walls: [],   // 碰撞全走手繪遮罩
+            doors: [
+                { x: 650, y: 900, w: 200, h: 80, to: 'city', spawn: { x: 1205, y: 655 } },   // 底部大門→街區
+                { x: 40, y: 460, w: 95, h: 210, to: 'exchange', spawn: { x: 1330, y: 620 } },   // 左拱門→交易所（落在交易所右側）
+            ],
+            doorsV: 3,   // 加左門→交易所，bump 清舊存檔門座標
+            alice: { x: 1150, y: 360 },   // 愛麗絲：不漫步、正面站
         },
         room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
             base: 'lobby_404_base_v1.png',
@@ -113,6 +110,36 @@
             walls: [],
             doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
+        },
+        exchange: {   // 🏦 交易所：純白大廳左門進的一間房；白兔先生站櫃台，點他開買房面板（家具粗擺，擺設模式可拖）
+            base: 'lobby_exchange_base_v1.png',
+            mask: 'lobby_exchange_mask_v1.png',
+            cfgKey: 'lobby_stage_layout_exchange_v1',
+            layout: [
+                { file: 'lobby_exchange_obj_rate_screen.png', x: 470,  y: 70,  w: 1682, h: 507, footH: 0,  s: 0.30 },   // 牆上幣值螢幕(不擋)
+                { file: 'lobby_exchange_obj_counter.png',     x: 380,  y: 240, w: 1949, h: 448, footH: 90, footW: 560, s: 0.34 }, // 接待櫃台
+                { file: 'lobby_exchange_obj_rug.png',         x: 470,  y: 470, w: 1150, h: 777, footH: 0,  s: 0.42 },   // 地毯(可走)
+                { file: 'lobby_exchange_obj_lamp_left.png',   x: 150,  y: 300, w: 212,  h: 678, footH: 30, s: 0.42 },
+                { file: 'lobby_exchange_obj_lamp_right.png',  x: 1300, y: 300, w: 212,  h: 678, footH: 30, s: 0.42 },
+                { file: 'lobby_exchange_obj_table.png',       x: 300,  y: 640, w: 651,  h: 769, footH: 60, s: 0.32 },   // 洽談桌
+                { file: 'lobby_exchange_obj_chair_left.png',  x: 210,  y: 660, w: 603,  h: 766, footH: 40, s: 0.30 },
+                { file: 'lobby_exchange_obj_chair_right.png', x: 470,  y: 660, w: 606,  h: 801, footH: 40, s: 0.30 },
+                { file: 'lobby_exchange_obj_planter.png',     x: 1180, y: 650, w: 352,  h: 822, footH: 40, s: 0.35 },
+            ],
+            points: {
+                npcZone:  { x: 420, y: 560, w: 700, h: 220 },
+                player:  { x: 760, y: 720 },
+                arrive:  { x: 1330, y: 620 },   // 從大廳左門進來→落在交易所右側(右拱門旁)
+                rabbitPos: { x: 760, y: 430 },  // 白兔站櫃台前(擺設模式可拖)
+                boundary: [ { x: 120, y: 250 }, { x: 1440, y: 250 }, { x: 1470, y: 900 }, { x: 90, y: 900 } ],
+                actorScale: 0.7,
+            },
+            walls: [],
+            doors: [
+                { x: 1400, y: 470, w: 95, h: 210, to: 'hall', spawn: { x: 175, y: 600 } },   // 右拱門→回純白大廳(落在大廳左門內側)
+            ],
+            doorsV: 1,
+            rabbit: { x: 760, y: 430 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
         },
         city: {   // 🏙 視差城市第一街區＝分層可走（day01 空底板+遮罩擋踩+前景物件各自深度排序；玩家/NPC 走路走到門進店）
             base: 'city/city_layers/city_floor_frame_day01.webp',      // day01 空底板：地面+外圈樹框（建築/噴泉/中庭樹拆成前景物件，才能走它們後面）
@@ -150,8 +177,7 @@
             walls: [],   // 碰撞全走手繪遮罩
             doors: [
                 { x: 335, y: 316, w: 100, h: 42, to: 'cafe', spawn: { x: 780, y: 868 } },   // 書咖門口→瀅瀅書咖（走到門口下方觸發）
-                { x: 1150, y: 600, w: 90, h: 40, panel: 'exchange' },   // 交易所建築門→彈交易所面板（花 PT 買房；不切場景）
-                { x: 712, y: 888, w: 84, h: 34, to: 'hall', spawn: { x: 772, y: 830 } },   // 底部大門→愛麗絲純白大廳（原交易所門的去處，改到底部牆縫當出口）
+                { x: 1150, y: 600, w: 90, h: 40, to: 'hall', spawn: { x: 772, y: 830 } },   // 交易所門口→愛麗絲純白大廳（交易所已移進大廳左門，這扇還原回大廳）
             ],
         },
     };
@@ -608,7 +634,7 @@
                         const d = Math.hypot(n.x - S.player.x, n.y - S.player.y);
                         if (d < bestD) { bestD = d; best = n; }
                     }
-                    if (best) { startTalk(best); e.preventDefault(); e.stopPropagation(); return; }
+                    if (best) { if (best.onInteract) best.onInteract(best); else startTalk(best); e.preventDefault(); e.stopPropagation(); return; }
                 }
             }
             if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) {
@@ -648,7 +674,7 @@
         const hint = document.createElement('div');
         hint.className = 'lstage-hint'; hint.style.display = 'none';
         hint.innerHTML = '<i class="fa-solid fa-comment-dots"></i>';
-        hint.addEventListener('click', (e) => { e.stopPropagation(); startTalk(npc); });
+        hint.addEventListener('click', (e) => { e.stopPropagation(); if (npc.onInteract) { npc.onInteract(npc); return; } startTalk(npc); });
         S.world.appendChild(hint); npc.hint = hint;
         S.npcs.push(npc);
         placeNpcExtras(npc);
@@ -852,6 +878,7 @@
         hall:    { name: '愛麗絲', badge: '純白大廳', ph: '與愛麗絲對話，或走向大門出去街區...' },
         room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
         city:    { name: '街區',   badge: '視差城市', ph: '在街區走走、點路人聊聊，或走進書咖／純白大廳...' },
+        exchange:{ name: '白兔先生', badge: '交易所', ph: '走近白兔先生，兌換屬於你的一席之地...' },
     };
     function _applySceneHeader() {
         const H = SCENE_HEADER[S.scene] || SCENE_HEADER.cafe;
