@@ -71,17 +71,16 @@
             doorsV: 2,
         },
         hall: {
-            base: 'lobby_hall_base_v5.png',   // v5=quantum white 乾淨磁磚俯視版（含左牆交易所入口）；舊 painted 版整組換掉
+            base: 'lobby_hall_base_v6.png',   // v6=Rae 修正底圖(exchange_left_entry02)
             mask: 'lobby_hall_mask_v5.png',   // v5 手繪碰撞遮罩(白=可走)
-            cfgKey: 'lobby_stage_layout_hall_v6',   // v6：擺上 v5 核心家具組（座標粗擺，擺設模式可拖）
-            layout: [   // v5 大廳家具（lobby_core_set）；footH/s 粗估，Rae 用擺設模式微調
+            cfgKey: 'lobby_stage_layout_hall_v7',   // v7：換底圖+沙發組（舊擺設作廢）
+            layout: [   // v5/v6 大廳家具（lobby_core_set）；footH/s 粗估，Rae 用擺設模式微調
                 { file: 'lobby_hall_obj_counter_v5.png',   x: 430, y: 150, w: 1548, h: 556, footH: 90,  footW: 520, s: 0.30 },   // 接待櫃台(後方)
                 { file: 'lobby_hall_obj_pedestal_v5.png',  x: 540, y: 300, w: 989,  h: 682, footH: 120, footW: 360, s: 0.42 },   // 核心基座(中央)
                 { file: 'lobby_hall_obj_core_v5.png',      x: 690, y: 140, w: 245,  h: 321, footH: 40,  s: 0.42, float: true },  // LUNA 核心(飄浮在基座上)
-                { file: 'lobby_hall_obj_holotable_v5.png', x: 980, y: 560, w: 625,  h: 569, footH: 70,  s: 0.40 },   // 全息圓桌(右側洽談區)
-                { file: 'lobby_hall_obj_chair_nw_v5.png',  x: 900, y: 540, w: 619,  h: 837, footH: 40,  s: 0.30 },
-                { file: 'lobby_hall_obj_chair_ne_v5.png',  x: 1180, y: 540, w: 668, h: 880, footH: 40,  s: 0.30 },
-                { file: 'lobby_hall_obj_chair_s_v5.png',    x: 1030, y: 700, w: 414, h: 429, footH: 40,  s: 0.34 },
+                { file: 'lobby_hall_obj_sofa_v6.png',      x: 940, y: 500, w: 1012, h: 844, footH: 70,  footW: 760, s: 0.34 },   // 長沙發(右側洽談區)
+                { file: 'lobby_hall_obj_coffee_v6.png',    x: 1000, y: 640, w: 754, h: 593, footH: 60,  s: 0.36 },   // 藍光咖啡桌
+                { file: 'lobby_hall_obj_lounge_v6.png',    x: 1250, y: 560, w: 544, h: 752, footH: 45,  s: 0.34 },   // 單人躺椅
                 { file: 'lobby_hall_obj_deco_03_v5.png',    x: 220, y: 560, w: 637, h: 665, footH: 60,  s: 0.34 },   // 大裝飾(左側,植栽/擺件)
                 { file: 'lobby_hall_obj_deco_04_v5.png',    x: 680, y: 640, w: 290, h: 197, footH: 30,  s: 0.40 },
                 { file: 'lobby_hall_obj_deco_05_v5.png',    x: 600, y: 430, w: 132, h: 139, footH: 20,  s: 0.50 },
