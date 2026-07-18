@@ -73,6 +73,17 @@
             _spawnSnResidents();   // 丹有機率在大廳出沒
             return;
         }
+        if (SC.rabbit) {   // 交易所：白兔先生站櫃台、不漫步、正面站；點他→開買房面板（不走對話）
+            const rp = CFG.points.rabbitPos || SC.rabbit;
+            _b.addNpc({ key: 'rabbit', name: '白兔先生',
+                     subTitle: '交易所 · 交易區職員',
+                     x: rp.x, y: rp.y, h: 200,
+                     src: { sheet: ASSET.rabbitWalk },
+                     noWander: true,
+                     homeRect: { x: rp.x, y: rp.y, w: 0, h: 0 },
+                     onInteract: () => { try { (window.OS_PT && window.OS_PT.openExchange) ? window.OS_PT.openExchange() : window.dispatchEvent(new CustomEvent('lstage-open-exchange')); } catch (e) {} } });
+            return;
+        }
         if (SC.cheshire) {   // 404房只有柴郡（對話走原生 cheshire 軌道，同瀅瀅模式）
             const cp = CFG.points.cheshirePos || SC.cheshire;
             _b.addNpc({ key: 'cheshire', name: '柴郡', persona: null,
