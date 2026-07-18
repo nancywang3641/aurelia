@@ -18,7 +18,7 @@
         LS.endTalk();
         S.edit = {
             cam: S.player ? { x: S.player.x, y: S.player.y } : { x: _b.MAP_W / 2, y: _b.MAP_H / 2 },
-            sel: -1, feet: [], markers: [], drag: null, zoom: 1,
+            sel: -1, feet: [], markers: [], drag: null, zoom: 1, group: [],
         };
         S.root.classList.add('lstage-editing');
         // 物件可拖 + 佔地覆蓋層（index 動態查，配合建構模式增刪）
@@ -151,6 +151,16 @@
               '<button class="lep-btn" data-act="flipx" title="左右翻轉選中的家具（一張當左右兩用）"><i class="fa-solid fa-left-right"></i> 水平翻轉</button>' +
             '</div>' +
             '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="groupadd" title="把目前選中的家具加進群組（可加多個一起操作）"><i class="fa-solid fa-object-group"></i> 加入群組</button>' +
+              '<button class="lep-btn" data-act="groupclear" title="清空群組選取"><i class="fa-solid fa-xmark"></i> 清空</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="groupmirror" title="把整個群組鏡射到房間另一側（自動翻轉+對稱位置）"><i class="fa-solid fa-clone"></i> 鏡像複製到對側</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="groupdup" title="整組原地複製一份（偏移，不鏡射）"><i class="fa-solid fa-copy"></i> 整組複製</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
               '<button class="lep-btn" data-act="addobj"><i class="fa-solid fa-plus"></i> 新增家具</button>' +
               '<button class="lep-btn lep-danger" data-act="delobj"><i class="fa-solid fa-trash"></i> 刪除家具</button>' +
             '</div>' +
@@ -210,6 +220,30 @@
                 const o = _b.CFG.layout[S.edit.sel];
                 o.flipX = !o.flipX;
                 _b.placeObj(S.objEls[S.edit.sel], o); _exportToPanel();
+            } else if (act === 'groupadd') {
+                if (S.edit.sel < 0) return;
+                if (!S.edit.group.includes(S.edit.sel)) S.edit.group.push(S.edit.sel);
+                _groupHighlight();
+            } else if (act === 'groupclear') {
+                S.edit.group = []; _groupHighlight();
+            } else if (act === 'groupmirror' || act === 'groupdup') {
+                const mirror = act === 'groupmirror';
+                const targets = S.edit.group.length ? S.edit.group.slice() : (S.edit.sel >= 0 ? [S.edit.sel] : []);
+                if (!targets.length) return;
+                targets.forEach(idx => {
+                    const src = _b.CFG.layout[idx];
+                    const ew = Math.round(src.w * (src.s || 1));
+                    const o = Object.assign({}, src);
+                    if (mirror) { o.x = _b.MAP_W - src.x - ew; o.flipX = !src.flipX; }   // 鏡射到房間對側(繞中線x=MAP_W/2)+左右翻轉
+                    else { o.x = src.x + 40; o.y = src.y + 40; }
+                    _b.CFG.layout.push(o);
+                    const img = _b.spawnObjEl(o);
+                    S.objEls.push(img);
+                    _makeEditable(img);
+                });
+                S.edit.group = []; _groupHighlight();
+                S.edit.feet.forEach((_, k) => _syncFoot(k));
+                _exportToPanel();
             } else if (act === 'addobj') {
                 _b.askImage((ref, dataUrl) => _addFurniture(ref, dataUrl));
             } else if (act === 'delobj') {
@@ -219,6 +253,7 @@
                 S.objEls[i].remove(); S.objEls.splice(i, 1);
                 S.edit.feet[i].remove(); S.edit.feet.splice(i, 1);
                 S.edit.sel = -1;
+                S.edit.group = []; _groupHighlight();   // 索引位移→群組作廢，免鏡射到錯物件
                 S.edit.feet.forEach((_, k) => _syncFoot(k));
                 _exportToPanel();
             } else if (act === 'setbase' || act === 'setmask') {
@@ -298,6 +333,9 @@
         };
         probe.onerror = () => console.warn('[LobbyEditor] 圖片載入失敗');
         (dataUrl ? Promise.resolve(dataUrl) : _b.resolveRef(ref)).then(src => { if (src) probe.src = src; });
+    }
+    function _groupHighlight() {
+        S.objEls.forEach((img, i) => img.classList.toggle('lstage-grouped', S.edit.group.includes(i)));
     }
     function _syncDoor(i, el) {
         const D = _b.CFG.doors[i], e = el || S.edit?.doorRects?.[i];
