@@ -410,8 +410,9 @@
         const P = CFG?.points?.boundary;
         return !!(P && P.length >= 3 && !insidePoly(P, x, y));   // 鋼索圈外=牆
     }
-    function blocked(x, y) {
-        const l = x - FOOT_W / 2, t = y - FOOT_H, r = x + FOOT_W / 2, b = y;
+    function blocked(x, y, hw) {
+        const fw = (hw && hw > 4) ? hw * 2 : FOOT_W;   // 有量到角色實際半寬就用它，否則退回 FOOT_W
+        const l = x - fw / 2, t = y - FOOT_H, r = x + fw / 2, b = y;
         if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
         // 🚨 採樣腳印矩形(中心+左右邊+四角)而非單點→小人身體有寬度，側面靠牆時邊緣就擋住，不會整個身體穿進去
         if (_wallAt(x, y) || _wallAt(l, b) || _wallAt(r, b) || _wallAt(l, t) || _wallAt(r, t) || _wallAt(x, t)) return true;
@@ -429,6 +430,27 @@
         if (SCENES[S.scene] && SCENES[S.scene].outdoor && S.scale > 0 && isFinite(S.scale)) s = s / S.scale;
         return s;
     }
+    // 🧍 量角色圖的「實際不透明範圍」→ 算下方padding(腳離圖底)+可見半寬比例，存 a.bpad/a.wfrac。
+    //   圖多半是角色置中、四周留透明padding；不修的話錨點會錨在圖底(腳下方)、碰撞寬對不上→貼牆會穿/離。
+    function _measureActorBounds(a) {
+        if (a.sheet || !a.el || !a.el.naturalWidth) return;
+        try {
+            const iw = a.el.naturalWidth, ih = a.el.naturalHeight;
+            const sw = 80, sh = Math.max(1, Math.round(ih * 80 / iw));
+            const cv = document.createElement('canvas'); cv.width = sw; cv.height = sh;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(a.el, 0, 0, sw, sh);
+            const d = ctx.getImageData(0, 0, sw, sh).data;
+            let minX = sw, maxX = -1, maxY = -1;
+            for (let yy = 0; yy < sh; yy++) for (let xx = 0; xx < sw; xx++) {
+                if (d[(yy * sw + xx) * 4 + 3] >= 40) { if (xx < minX) minX = xx; if (xx > maxX) maxX = xx; if (yy > maxY) maxY = yy; }
+            }
+            if (maxY < 0) return;   // 全透明
+            a.bpad = (sh - 1 - maxY) / sh;                // 下方padding比例(腳到圖底)
+            a.wfrac = ((maxX - minX + 1) / 2) / sw;        // 可見半寬佔圖寬比例→碰撞半寬
+            placeActor(a);                                 // 用新錨點/寬度重放
+        } catch (e) { /* CORS污染等→維持預設(FOOT_W/圖底錨) */ }
+    }
     function spawnActor(src, x, y, h) {
         const isSheet = (typeof src === 'object' && src && src.sheet);
         const el = document.createElement(isSheet ? 'div' : 'img');
@@ -442,10 +464,11 @@
             probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); a.el.classList.remove('lstage-loading'); };
             probe.src = src.sheet;
         } else {
+            if (!String(src).startsWith('data:')) el.crossOrigin = 'anonymous';   // 要讀alpha量範圍→掛CORS(jsdelivr有頭)
             el.src = src;
             el.style.height = a.h + 'px';
             // 有皮膚(3x4)待換的話先別顯示這張預設單圖，等 _swapActorSrc 換好才顯示
-            el.addEventListener('load', () => { placeActor(a); if (!a._skinPending) a.el.classList.remove('lstage-loading'); }, { once: true });
+            el.addEventListener('load', () => { placeActor(a); _measureActorBounds(a); if (!a._skinPending) a.el.classList.remove('lstage-loading'); }, { once: true });
         }
         S.world.appendChild(el);
         placeActor(a);
@@ -466,8 +489,11 @@
         if (a.sheet) return placeSheetActor(a);
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
         const w = a.h * ratio;
+        if (a.wfrac != null) a.hw = Math.max(6, Math.round(w * a.wfrac));   // 碰撞半寬=可見角色半寬(量到才設；沒量到 blocked 用 FOOT_W)
+        // 下方padding修正：把圖往下推 bpad*h，讓「可見的腳」正好落在 a.y(=碰撞判定點)，而不是錨在圖片底部(腳下方)
+        const footPad = Math.round(a.h * (a.bpad || 0));
         // 只在變化時寫入；座標保留小數（整數化會讓移動跳格卡卡）
-        const left = a.x - w / 2, top = a.y - a.h, z = 2 + Math.round(a.y);
+        const left = a.x - w / 2, top = a.y - a.h + footPad, z = 2 + Math.round(a.y);
         if (a._left !== left) { a.el.style.left = left + 'px'; a._left = left; }
         if (a._top !== top) { a.el.style.top = top + 'px'; a._top = top; }
         if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
@@ -516,15 +542,17 @@
         a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
         a.frameW = a.frameH = null;
         a._left = a._top = a._z = a._bg = a._tf = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
+        a.bpad = a.wfrac = a.hw = null;   // 換新圖→清掉舊的量測值，重新量
         if (isSheet) {
             el.style.backgroundImage = 'url("' + src.sheet + '")';
             const probe = new Image();
             probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); a.el.classList.remove('lstage-loading'); };
             probe.src = src.sheet;
         } else {
+            if (!String(src).startsWith('data:')) el.crossOrigin = 'anonymous';
             el.src = src;
             el.style.height = a.h + 'px';
-            el.addEventListener('load', () => { placeActor(a); a.el.classList.remove('lstage-loading'); }, { once: true });
+            el.addEventListener('load', () => { placeActor(a); _measureActorBounds(a); a.el.classList.remove('lstage-loading'); }, { once: true });
         }
         a.el.replaceWith(el);
         a.el = el;
@@ -646,7 +674,7 @@
                 if (d > FOLLOW_GAP) {
                     const step = Math.min(d - FOLLOW_GAP, 0.34 * dt);   // 略快於漫步以跟上玩家、又不衝過頭
                     const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
-                    if (!(n.avoidBlocks && blocked(nx, ny))) {
+                    if (!(n.avoidBlocks && blocked(nx, ny, n.hw))) {
                         n.x = nx; n.y = ny; n.walking = true;
                         if (n.sheet) {
                             n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
@@ -681,7 +709,7 @@
                 else {
                     const step = 0.12 * dt;
                     const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
-                    if (n.avoidBlocks && blocked(nx, ny)) { n.dest = null; n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
+                    if (n.avoidBlocks && blocked(nx, ny, n.hw)) { n.dest = null; n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
                     else {
                         n.x = nx; n.y = ny;
                         n.walking = true;
@@ -923,9 +951,9 @@
             if (len > 0) {
                 const step = PLAYER_SPEED * dt / len;
                 const nx = p.x + dx * step, ny = p.y + dy * step;
-                if (!blocked(nx, ny)) { p.x = nx; p.y = ny; }
-                else if (dx && !blocked(nx, p.y)) { p.x = nx; p.dest = null; }
-                else if (dy && !blocked(p.x, ny)) { p.y = ny; p.dest = null; }
+                if (!blocked(nx, ny, p.hw)) { p.x = nx; p.y = ny; }
+                else if (dx && !blocked(nx, p.y, p.hw)) { p.x = nx; p.dest = null; }
+                else if (dy && !blocked(p.x, ny, p.hw)) { p.y = ny; p.dest = null; }
                 else p.dest = null;
                 p.walking = true;
                 if (p.sheet) {
