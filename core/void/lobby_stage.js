@@ -116,9 +116,9 @@
             mask: 'lobby_exchange_mask_v1.png',
             cfgKey: 'lobby_stage_layout_exchange_v1',
             layout: [
-                { file: 'lobby_exchange_obj_rate_screen.png', x: 470,  y: 70,  w: 1682, h: 507, footH: 0,  s: 0.30 },   // 牆上幣值螢幕(不擋)
+                { file: 'lobby_exchange_obj_rate_screen.png', x: 470,  y: 70,  w: 1682, h: 507, footH: 0,  s: 0.30, layer: 'back' },   // 牆上幣值螢幕(貼牆背景、不擋)
                 { file: 'lobby_exchange_obj_counter.png',     x: 380,  y: 240, w: 1949, h: 448, footH: 90, footW: 560, s: 0.34 }, // 接待櫃台
-                { file: 'lobby_exchange_obj_rug.png',         x: 470,  y: 470, w: 1150, h: 777, footH: 0,  s: 0.42 },   // 地毯(可走)
+                { file: 'lobby_exchange_obj_rug.png',         x: 470,  y: 470, w: 1150, h: 777, footH: 0,  s: 0.42, layer: 'floor' },   // 地毯(壓地板、可走)
                 { file: 'lobby_exchange_obj_lamp_left.png',   x: 150,  y: 300, w: 212,  h: 678, footH: 30, s: 0.42 },
                 { file: 'lobby_exchange_obj_lamp_right.png',  x: 1300, y: 300, w: 212,  h: 678, footH: 30, s: 0.42 },
                 { file: 'lobby_exchange_obj_table.png',       x: 300,  y: 640, w: 651,  h: 769, footH: 60, s: 0.32 },   // 洽談桌
@@ -260,7 +260,7 @@
                     layout = saved.layoutFull.map(o => Object.assign({}, o));
                 } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
-                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; }
+                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; }
                 });
                 if (saved.baseOverride) baseOverride = saved.baseOverride;
                 if (saved.maskOverride) maskOverride = saved.maskOverride;
@@ -275,6 +275,7 @@
                     if (saved.points.arrive) points.arrive = saved.points.arrive;
                     if (saved.points.alicePos) points.alicePos = saved.points.alicePos;
                     if (saved.points.cheshirePos) points.cheshirePos = saved.points.cheshirePos;
+                    if (saved.points.rabbitPos) points.rabbitPos = saved.points.rabbitPos;
                     if (Array.isArray(saved.points.boundary) && saved.points.boundary.length >= 3) points.boundary = saved.points.boundary;
                     if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
                 }
@@ -648,7 +649,8 @@
         // 捕獲階段搶第一手，酒館的快捷鍵監聽器完全收不到
         window.addEventListener('keydown', S.onKey, true);
         window.addEventListener('keyup', S.onKey, true);
-        S.root.querySelector('.lstage-click').addEventListener('click', (e) => {
+        const _clickEl = S.root.querySelector('.lstage-click');   // 每次掛載重建的子元素→掛它上面不會累積監聽
+        _clickEl.addEventListener('click', (e) => {
             if (S.edit) return;
             if (_lpSuppressClick) { _lpSuppressClick = false; return; }   // 長按剛開過選單→吃掉這次 click
             if (S.talkTarget) { endTalk(); return; }
@@ -656,6 +658,14 @@
             const r = S.world.getBoundingClientRect();
             S.player.dest = { x: (e.clientX - r.left) / S.scale, y: (e.clientY - r.top) / S.scale };
         });
+        // 🔍 擺設模式滾輪縮放：放大精細擺家具、縮小看全景；拖空地平移（一般遊玩不攔滾輪）
+        _clickEl.addEventListener('wheel', (e) => {
+            if (!S.edit) return;
+            e.preventDefault();
+            const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+            S.edit.zoom = Math.max(1, Math.min(5, (S.edit.zoom || 1) * f));
+            fitCamera();
+        }, { passive: false });
     }
 
     // ── NPC ──────────────────────────────────────────────
@@ -903,7 +913,7 @@
         S._vw = vw; S._vh = vh;
         // 建構模式：contain*0.9(留黑邊好抓邊角)；靜態點擊地圖：contain(整張置中看完)；一般遊玩：cover 填滿螢幕跟人跑
         const SC = SCENES[S.scene];
-        S.scale = S.edit ? Math.min(vw / MAP_W, vh / MAP_H) * 0.9
+        S.scale = S.edit ? Math.min(vw / MAP_W, vh / MAP_H) * 0.9 * (S.edit.zoom || 1)   // 擺設模式：滾輪縮放(zoom≥1 放大看細節)
             : (SC && SC.staticMap) ? Math.min(vw / MAP_W, vh / MAP_H)
             : Math.max(vw / MAP_W, vh / MAP_H);
         S._camX = S._camY = null;   // 縮放變了→強制重寫 transform（applyCamera 有快取）
@@ -1343,7 +1353,12 @@
         img.style.left = o.x + 'px';
         img.style.top = o.y + 'px';
         img.style.width = d.ew + 'px';
-        img.style.zIndex = String(2 + Math.round(o.y + d.eh));
+        // 深度層級：floor=地板(壓最底、人踩上面)、back=牆背景(在物件後面)、其餘=自動腳底深度(能走前走後)
+        let z;
+        if (o.layer === 'floor') z = 1;
+        else if (o.layer === 'back') z = 2;
+        else z = 2 + Math.round(o.y + d.eh);
+        img.style.zIndex = String(z);
     }
     function unmount() {
         if (!S.active) return;

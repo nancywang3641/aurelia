@@ -18,7 +18,7 @@
         LS.endTalk();
         S.edit = {
             cam: S.player ? { x: S.player.x, y: S.player.y } : { x: _b.MAP_W / 2, y: _b.MAP_H / 2 },
-            sel: -1, feet: [], markers: [], drag: null,
+            sel: -1, feet: [], markers: [], drag: null, zoom: 1,
         };
         S.root.classList.add('lstage-editing');
         // 物件可拖 + 佔地覆蓋層（index 動態查，配合建構模式增刪）
@@ -41,7 +41,7 @@
             m.onpointerdown = (e) => _dragStart(e, { kind: 'pt', pt: _b.CFG.points.arrive, m });
         }
         // 常駐角色站位（拖了「完成」後生效）
-        [['alicePos', '愛', 'm-alice'], ['cheshirePos', '柴', 'm-cheshire']].forEach(([pk, label, cls]) => {
+        [['alicePos', '愛', 'm-alice'], ['cheshirePos', '柴', 'm-cheshire'], ['rabbitPos', '兔', 'm-rabbit']].forEach(([pk, label, cls]) => {
             if (!_b.CFG.points[pk]) return;
             const m = mk(label, cls, () => _b.CFG.points[pk]);
             S.edit.markers.push(m);
@@ -138,6 +138,11 @@
             '</div>' +
             _footRows +
             '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="layerfloor"><i class="fa-solid fa-layer-group"></i> 地板</button>' +
+              '<button class="lep-btn" data-act="layerauto"><i class="fa-solid fa-layer-group"></i> 自動</button>' +
+              '<button class="lep-btn" data-act="layerback"><i class="fa-solid fa-layer-group"></i> 牆背景</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
               '<button class="lep-btn" data-act="actminus"><i class="fa-solid fa-minus"></i> 人物</button>' +
               '<button class="lep-btn" data-act="actplus"><i class="fa-solid fa-plus"></i> 人物</button>' +
             '</div>' +
@@ -177,6 +182,11 @@
                 // 等比±10%：大圖小圖手感一致；下限0.05（大廳素材原圖超大、預設s本來就<0.3）
                 o.s = Math.max(0.05, Math.min(2, Math.round((o.s || 1) * (act === 'objplus' ? 1.1 : 0.9) * 1000) / 1000));
                 _b.placeObj(S.objEls[S.edit.sel], o); _syncFoot(S.edit.sel); _exportToPanel();
+            } else if (act === 'layerfloor' || act === 'layerauto' || act === 'layerback') {
+                if (S.edit.sel < 0) return;
+                const o = _b.CFG.layout[S.edit.sel];
+                o.layer = act === 'layerauto' ? undefined : (act === 'layerfloor' ? 'floor' : 'back');
+                _b.placeObj(S.objEls[S.edit.sel], o); _exportToPanel();
             } else if (act === 'actminus' || act === 'actplus') {
                 _b.CFG.points.actorScale = Math.max(0.2, Math.min(1.6, Math.round((((_b.CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));   // 下限 0.2：地圖俯視小人要能調得比室內小很多
                 _b.applyActorScale(); _exportToPanel();
@@ -368,6 +378,7 @@
             layoutFull: _b.CFG.layout.map(o => {
                 const rec = { x: o.x, y: o.y, w: o.w, h: o.h, footH: o.footH, s: o.s || 1 };
                 if (o.footW != null) rec.footW = o.footW;
+                if (o.layer) rec.layer = o.layer;
                 if (o.file) rec.file = o.file;
                 if (o.url) rec.url = o.url;
                 if (o.idb) rec.idb = o.idb;
