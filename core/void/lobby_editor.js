@@ -143,6 +143,9 @@
               '<button class="lep-btn" data-act="layerback" title="貼牆當背景、永遠在物件後面（例：牆上螢幕）"><i class="fa-solid fa-image"></i> 牆上</button>' +
             '</div>' +
             '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="nocollide" title="切換這件家具擋不擋路：地毯/裝飾設成不擋路，人就能走過去（紅佔地框會消失）"><i class="fa-solid fa-person-walking"></i> 不擋路 開/關</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
               '<button class="lep-btn" data-act="actminus"><i class="fa-solid fa-minus"></i> 人物</button>' +
               '<button class="lep-btn" data-act="actplus"><i class="fa-solid fa-plus"></i> 人物</button>' +
             '</div>' +
@@ -220,6 +223,11 @@
                 const o = _b.CFG.layout[S.edit.sel];
                 o.flipX = !o.flipX;
                 _b.placeObj(S.objEls[S.edit.sel], o); _exportToPanel();
+            } else if (act === 'nocollide') {
+                if (S.edit.sel < 0) return;
+                const o = _b.CFG.layout[S.edit.sel];
+                o.noCollide = !o.noCollide;   // 切換擋路/不擋路（rebuildBlocks 會排除 noCollide 物件）
+                _syncFoot(S.edit.sel); _exportToPanel();
             } else if (act === 'groupadd') {
                 if (S.edit.sel < 0) return;
                 if (!S.edit.group.includes(S.edit.sel)) S.edit.group.push(S.edit.sel);
@@ -358,6 +366,7 @@
     function _syncFoot(i) {
         const o = _b.CFG.layout[i], foot = S.edit.feet[i];
         if (!foot) return;
+        foot.style.display = o.noCollide ? 'none' : '';   // 不擋路→不畫紅佔地框
         if (foot.classList.contains('lstage-foot-shape')) {
             _syncFootShape(o, foot);   // alphaFoot：畫真實剪影
         } else {
@@ -452,6 +461,7 @@
                 if (o.footW != null) rec.footW = o.footW;
                 if (o.layer) rec.layer = o.layer;
                 if (o.flipX) rec.flipX = true;
+                if (o.noCollide) rec.noCollide = true;
                 if (o.file) rec.file = o.file;
                 if (o.url) rec.url = o.url;
                 if (o.idb) rec.idb = o.idb;
