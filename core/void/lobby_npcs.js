@@ -14,6 +14,12 @@
     const ASSET = _b.ASSET;
 
     // 愛麗絲人設（照【視差世界观架构】角色卡濃縮；走 NPC 軌道但用專屬 personaFull）
+    const RABBIT_PERSONA = '你現在扮演「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，愛麗絲夢遊仙境的白兔在這座量子白境的化身。' +
+'外表：清秀斯文的青年，銀白短髮、一對蓬鬆長白兔耳（耳尖鑲藍水晶）、左紅右藍異色瞳、戴細框單片眼鏡，一身白與冰藍的科幻馬甲制服配白手套，身邊漂浮著一只全息懷錶，腋下夾著資料帳冊。' +
+'性格：禮貌、勤懇、有點忙碌，講話有效率但親切，總把時間與數字掛在嘴邊（懷錶、匯率、結算、額度）。' +
+'職責：在交易所用交易區的正派貨幣 PT 為客人服務——PT 靠在世界裡生活與推進劇情累積，可在這裡兌換屬於自己的房子；買房的實際操作在你右手邊浮出的面板上，請引導客人在那裡進行。' +
+'不談柴郡黑市的碎片（那是另一條線、與 PT 互不換算，你也查無此記錄）。輕鬆對話為主，不推進正式劇情。';
+
     const ALICE_PERSONA = '你現在扮演「愛麗絲 (Iris)」——純白大廳首席導覽官，LUNA-VII 認知引擎的核心交互端口（Iris 正式版）。' +
 '外表與書咖店長瀅瀅有完全相同的五官，但氣質截然不同：銀白色極淡瞳孔、白色長直髮、純白無縫連衣裙、頸前透明菱形胸針，赤足懸浮在地面上方約兩公分。' +
 '性格：溫潤、精準、無波瀾——像被完美拋光的水晶，友善但無差別，這種一視同仁的善意是她最不像人的地方。' +
@@ -73,15 +79,14 @@
             _spawnSnResidents();   // 丹有機率在大廳出沒
             return;
         }
-        if (SC.rabbit) {   // 交易所：白兔先生站櫃台、不漫步、正面站；點他→開買房面板（不走對話）
+        if (SC.rabbit) {   // 交易所：白兔先生站櫃台、不漫步；跟愛麗絲同套對話(立繪+對話框)，開聊時右側浮出買房面板
             const rp = CFG.points.rabbitPos || SC.rabbit;
-            _b.addNpc({ key: 'rabbit', name: '白兔先生',
+            _b.addNpc({ key: 'rabbit', name: '白兔先生', personaFull: RABBIT_PERSONA,
                      subTitle: '交易所 · 交易區職員',
                      x: rp.x, y: rp.y, h: 200,
-                     src: { sheet: ASSET.rabbitWalk },
+                     src: { sheet: ASSET.rabbitWalk }, portrait: ASSET.rabbit,
                      noWander: true,
-                     homeRect: { x: rp.x, y: rp.y, w: 0, h: 0 },
-                     onInteract: () => { try { (window.OS_PT && window.OS_PT.openExchange) ? window.OS_PT.openExchange() : window.dispatchEvent(new CustomEvent('lstage-open-exchange')); } catch (e) {} } });
+                     homeRect: { x: rp.x, y: rp.y, w: 0, h: 0 } });
             return;
         }
         if (SC.cheshire) {   // 404房只有柴郡（對話走原生 cheshire 軌道，同瀅瀅模式）

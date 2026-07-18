@@ -21,9 +21,6 @@
         ledgerCap: 100,         // ledger 保留筆數
     };
 
-    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
-    const RABBIT_PORTRAIT = CDN + 'lobby_rabbit_portrait_v1.png';   // 白兔先生對話立繪（面板左側）
-
     const APP_ID = 'pt_wallet';   // OS_DB app_data 命名空間
     const K_BALANCE = 'balance';
     const K_LEDGER = 'ledger';
@@ -248,19 +245,14 @@
             '.os-pt-bal{margin-top:8px;text-align:right;font-size:12px;color:#9d94b5;}',
             '.os-pt-bal i{color:#ffe28a;margin-right:4px;}',
             '.os-pt-note{margin-top:6px;font-size:11px;color:#8a8298;font-style:italic;}',
-            // 交易所面板
-            '.os-pt-mask{position:fixed;inset:0;z-index:2147483550;background:rgba(8,6,16,.85);',
-            'display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .28s ease;}',
-            '.os-pt-mask.on{opacity:1;}',
-            // 立繪左 + 卡片右（立繪黑底融進深色遮罩）
-            '.os-pt-stage{display:flex;align-items:flex-end;justify-content:center;gap:6px;max-width:min(96vw,920px);width:100%;}',
-            '.os-pt-portrait{height:min(84vh,780px);width:auto;object-fit:contain;flex:0 0 auto;align-self:flex-end;',
-            'pointer-events:none;filter:drop-shadow(0 10px 30px rgba(0,0,0,.6));}',
-            '@media (max-width:680px){.os-pt-stage{gap:0;}.os-pt-portrait{height:46vh;margin-right:-10%;opacity:.85;}}',
-            '.os-pt-shop{width:min(94vw,440px);max-height:88vh;overflow:auto;background:linear-gradient(165deg,#241f38,#181528);',
-            'border:1px solid rgba(180,150,255,.35);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.6);',
-            'padding:22px 22px 18px;color:#f1ecff;transform:translateY(16px) scale(.98);transition:transform .28s ease;}',
-            '.os-pt-mask.on .os-pt-shop{transform:translateY(0) scale(1);}',
+            // 交易所面板：跟白兔對話時浮在右側停靠（不遮遊戲的立繪/對話框）
+            '.os-pt-dock{position:fixed;right:20px;top:11%;z-index:2147483600;width:min(90vw,370px);max-height:74vh;overflow:auto;',
+            'opacity:0;transform:translateX(28px);transition:opacity .28s ease,transform .28s ease;}',
+            '.os-pt-dock.on{opacity:1;transform:translateX(0);}',
+            '@media (max-width:680px){.os-pt-dock{right:10px;left:10px;width:auto;top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);max-height:52vh;}}',
+            '.os-pt-shop{width:100%;background:linear-gradient(165deg,rgba(36,31,56,.97),rgba(24,21,40,.97));',
+            'border:1px solid rgba(180,150,255,.4);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.55);',
+            'padding:20px 20px 16px;color:#f1ecff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}',
             '.os-pt-shop-head{display:flex;align-items:center;gap:10px;margin-bottom:4px;}',
             '.os-pt-shop-head .t{font-size:19px;font-weight:800;letter-spacing:.5px;}',
             '.os-pt-shop-head .x{margin-left:auto;cursor:pointer;opacity:.6;font-size:18px;padding:4px 8px;border-radius:10px;}',
@@ -338,38 +330,35 @@
         if (_shopOpen) return;
         _shopOpen = true;
         _injectStyle();
-        const old = document.getElementById('os-pt-shop-mask');
+        const old = document.getElementById('os-pt-shop-dock');
         if (old) old.remove();
 
-        const mask = document.createElement('div');
-        mask.id = 'os-pt-shop-mask';
-        mask.className = 'os-pt-mask';
-        mask.innerHTML =
-            '<div class="os-pt-stage">' +
-            '<img class="os-pt-portrait" src="' + RABBIT_PORTRAIT + '" alt="白兔先生">' +
+        const dock = document.createElement('div');
+        dock.id = 'os-pt-shop-dock';
+        dock.className = 'os-pt-dock';
+        dock.innerHTML =
             '<div class="os-pt-shop" role="dialog" aria-label="交易所">' +
             '<div class="os-pt-shop-head"><i class="fa-solid fa-store"></i>' +
             '<span class="t">交易所</span><span class="x" title="關閉"><i class="fa-solid fa-xmark"></i></span></div>' +
-            '<div class="os-pt-shop-sub">白兔先生為你服務——用交易區的 PT，兌換屬於你的一席之地。</div>' +
+            '<div class="os-pt-shop-sub">用交易區的 PT，兌換屬於你的一席之地。</div>' +
             '<div class="os-pt-wallet"><i class="fa-solid fa-coins"></i><span class="n" id="os-pt-shop-bal">…</span><span class="u">PT</span></div>' +
             '<div id="os-pt-shop-items"></div>' +
             '<div class="os-pt-shop-msg" id="os-pt-shop-msg"></div>' +
-            '</div>' +
             '</div>';
-        document.body.appendChild(mask);
-        requestAnimationFrame(() => mask.classList.add('on'));
+        document.body.appendChild(dock);
+        requestAnimationFrame(() => dock.classList.add('on'));
+        dock.querySelector('.x').addEventListener('click', () => {
+            try { if (window.LobbyStage && window.LobbyStage.endTalk) window.LobbyStage.endTalk(); } catch (e) {}   // ✕=離開白兔對話（連帶關面板）
+            closeExchange();
+        });
 
-        const close = () => {
-            _shopOpen = false;
-            mask.classList.remove('on');
-            setTimeout(() => mask.remove(), 300);
-        };
-        const _pi = mask.querySelector('.os-pt-portrait');
-        if (_pi) _pi.addEventListener('error', function () { this.style.display = 'none'; });   // 立繪抓不到就藏，不破版
-        mask.querySelector('.x').addEventListener('click', close);
-        mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
-
-        await _renderShopBody(mask);
+        await _renderShopBody(dock);
+    }
+    // 收起交易所面板（endTalk 時由 lobby_stage 呼叫）
+    function closeExchange() {
+        _shopOpen = false;
+        const el = document.getElementById('os-pt-shop-dock');
+        if (el) { el.classList.remove('on'); setTimeout(() => { try { el.remove(); } catch (e) {} }, 250); }
     }
 
     async function _renderShopBody(mask) {
@@ -417,7 +406,7 @@
         getPT, addPT, spendPT, getLedger,
         getPlotBuilt, setPlotBuilt,
         settleSummary,
-        openExchange,
+        openExchange, closeExchange,
         _cfg: PT_CFG,
     };
     if (win !== window) { try { window.OS_PT = win.OS_PT; } catch (e) {} }

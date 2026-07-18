@@ -26,6 +26,7 @@
         ray:      CDN + 'lobby_ray.png',           // 雷伊對話立繪
         dan:      CDN + 'lobby_dan.png',           // 丹對話立繪
         rabbitWalk: CDN + 'lobby_rabbit_walk_v1.png',   // 白兔先生走路圖(3×4；交易所店員)
+        rabbit: CDN + 'lobby_rabbit_portrait_v1.png',   // 白兔先生對話立繪
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
@@ -125,7 +126,7 @@
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
         },
         exchange: {   // 🏦 交易所：純白大廳左門進的一間房；白兔先生站櫃台，點他開買房面板（家具粗擺，擺設模式可拖）
-            base: 'lobby_exchange_base_v1.png',
+            base: 'lobby_exchange_base_v2.png',   // v2=Rae 修正版（換檔名防快取）
             mask: 'lobby_exchange_mask_v1.png',
             cfgKey: 'lobby_stage_layout_exchange_v1',
             layout: [
@@ -137,6 +138,9 @@
                 { file: 'lobby_exchange_obj_table.png',       x: 300,  y: 640, w: 651,  h: 769, footH: 60, s: 0.32 },   // 洽談桌
                 { file: 'lobby_exchange_obj_chair_left.png',  x: 210,  y: 660, w: 603,  h: 766, footH: 40, s: 0.30 },
                 { file: 'lobby_exchange_obj_chair_right.png', x: 470,  y: 660, w: 606,  h: 801, footH: 40, s: 0.30 },
+                { file: 'lobby_exchange_obj_chair_front_v2.png', x: 620, y: 560, w: 491, h: 471, footH: 40, s: 0.40 },   // 正面椅
+                { file: 'lobby_exchange_obj_bench.png',        x: 700,  y: 610, w: 978,  h: 613, footH: 60, s: 0.35 },   // 雙人長凳
+                { file: 'lobby_exchange_obj_plant.png',        x: 1280, y: 300, w: 485,  h: 1227, footH: 40, s: 0.38 },  // 盆栽(高)
                 { file: 'lobby_exchange_obj_planter.png',     x: 1180, y: 650, w: 352,  h: 822, footH: 40, s: 0.35 },
             ],
             points: {
@@ -882,6 +886,7 @@
         if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
         showDialog();
         window.VoidTerminal?.primeStageDialog?.(npc);   // 清掉殘留(瀅瀅預設/上一位)、改顯示這位自己的最後一句
+        if (npc.key === 'rabbit') { try { window.OS_PT?.openExchange?.(); } catch (e) {} }   // 白兔：對話時右側浮出買房面板
     }
     function endTalk() {
         if (!S.talkTarget) return;
@@ -894,6 +899,7 @@
         }
         _applySceneHeader();
         hideDialog();
+        try { window.OS_PT?.closeExchange?.(); } catch (e) {}   // 離開白兔→收起買房面板
     }
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {
