@@ -485,6 +485,10 @@
             if (a.tag) placeNpcExtras(a);
         });
     }
+    // 景深「往前」容差：大地圖(outdoor)角色站在物件底線稍高處仍算前面→貼著高樹/建築走不會頭被遮；室內不動
+    function _actorZBias(a) {
+        return (SCENES[S.scene] && SCENES[S.scene].outdoor) ? Math.round(a.h * 0.2) : 0;
+    }
     function placeActor(a) {
         if (a.sheet) return placeSheetActor(a);
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
@@ -493,7 +497,7 @@
         // 下方padding修正：把圖往下推 bpad*h，讓「可見的腳」正好落在 a.y(=碰撞判定點)，而不是錨在圖片底部(腳下方)
         const footPad = Math.round(a.h * (a.bpad || 0));
         // 只在變化時寫入；座標保留小數（整數化會讓移動跳格卡卡）
-        const left = a.x - w / 2, top = a.y - a.h + footPad, z = 2 + Math.round(a.y);
+        const left = a.x - w / 2, top = a.y - a.h + footPad, z = 2 + Math.round(a.y) + _actorZBias(a);
         if (a._left !== left) { a.el.style.left = left + 'px'; a._left = left; }
         if (a._top !== top) { a.el.style.top = top + 'px'; a._top = top; }
         if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
@@ -508,7 +512,7 @@
     function placeSheetActor(a) {
         const ratio = (a.frameW && a.frameH) ? a.frameW / a.frameH : 0.8;
         const w = a.h * ratio;
-        const left = a.x - w / 2, top = a.y - a.h, z = 2 + Math.round(a.y);
+        const left = a.x - w / 2, top = a.y - a.h, z = 2 + Math.round(a.y) + _actorZBias(a);
         const tf = 'translate3d(' + left + 'px,' + top + 'px,0)';
         if (a._tf !== tf) { a.el.style.transform = tf; a._tf = tf; }
         if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
