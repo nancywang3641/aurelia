@@ -201,6 +201,7 @@ const PHONE_FILES = [
     'os/nai_recipe.js',
     'os/os_journal.js',
     'os/os_story_tools.js',   // 故事管理（大總結 + 隱藏對話）— 從 RPG 面板 / VN 閱讀器搬來，掛進故事日誌
+    'os/os_pt.js',            // 🏦 交易區 PT 經濟：錢包+大總結結算估值+VN 結算卡+交易所面板（依賴 OS_DB/OS_API，排它們後面）
     'os/os_workbench.js',
 
     // === 📖 VN 視覺小說系統 ===

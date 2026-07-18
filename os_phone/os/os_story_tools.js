@@ -836,6 +836,8 @@
                 });
                 console.log('[大總結] ✅ 已存 OS_DB tavern_summary（chatId=' + chatId + '、第' + summaryCount + '次）');
                 try { window.parent.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}   // 讓注入器丟掉快取、下輪重抓壓縮版
+                // 🏦 PT 結算（fire-and-forget，不擋存檔）：副模型估值→加 PT→浮結算卡。去重同一份只算一次。
+                try { const _pt = window.parent.OS_PT || window.OS_PT; if (_pt?.settleSummary) _pt.settleSummary(finalContent, { chatId, summaryCount }); } catch (e) {}
             } catch (e) { console.error('[大總結] 存 OS_DB 失敗:', e); throw e; }
 
             // 🔒 自動隱藏已總結樓層，但預留最新 N 樓可見(近期上下文 + 末樓帶觸發 KEY)。
