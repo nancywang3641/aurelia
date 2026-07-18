@@ -260,7 +260,7 @@
                     layout = saved.layoutFull.map(o => Object.assign({}, o));
                 } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
-                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; }
+                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; }
                 });
                 if (saved.baseOverride) baseOverride = saved.baseOverride;
                 if (saved.maskOverride) maskOverride = saved.maskOverride;
@@ -649,8 +649,7 @@
         // 捕獲階段搶第一手，酒館的快捷鍵監聽器完全收不到
         window.addEventListener('keydown', S.onKey, true);
         window.addEventListener('keyup', S.onKey, true);
-        const _clickEl = S.root.querySelector('.lstage-click');   // 每次掛載重建的子元素→掛它上面不會累積監聽
-        _clickEl.addEventListener('click', (e) => {
+        S.root.querySelector('.lstage-click').addEventListener('click', (e) => {
             if (S.edit) return;
             if (_lpSuppressClick) { _lpSuppressClick = false; return; }   // 長按剛開過選單→吃掉這次 click
             if (S.talkTarget) { endTalk(); return; }
@@ -658,14 +657,15 @@
             const r = S.world.getBoundingClientRect();
             S.player.dest = { x: (e.clientX - r.left) / S.scale, y: (e.clientY - r.top) / S.scale };
         });
-        // 🔍 擺設模式滾輪縮放：放大精細擺家具、縮小看全景；拖空地平移（一般遊玩不攔滾輪）
-        _clickEl.addEventListener('wheel', (e) => {
+        // 🔍 擺設模式滾輪縮放：放大精細擺家具、縮小看全景。掛在 S.root（祖層）→滑到物件上也收得到；unmount 移除防累積。
+        S.onWheel = (e) => {
             if (!S.edit) return;
             e.preventDefault();
             const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
             S.edit.zoom = Math.max(1, Math.min(5, (S.edit.zoom || 1) * f));
             fitCamera();
-        }, { passive: false });
+        };
+        S.root.addEventListener('wheel', S.onWheel, { passive: false });
     }
 
     // ── NPC ──────────────────────────────────────────────
@@ -1359,12 +1359,14 @@
         else if (o.layer === 'back') z = 2;
         else z = 2 + Math.round(o.y + d.eh);
         img.style.zIndex = String(z);
+        img.style.transform = o.flipX ? 'scaleX(-1)' : '';   // 水平翻轉（一張素材當左右兩用）
     }
     function unmount() {
         if (!S.active) return;
         if (S._theaterTimer) { clearInterval(S._theaterTimer); S._theaterTimer = null; }
         window.LobbyTheater?.end();
         if (S.edit) window.LobbyEditor?.exit(false);
+        if (S.onWheel) { try { S.root?.removeEventListener('wheel', S.onWheel, { passive: false }); } catch (e) {} S.onWheel = null; }
         _closeWins();
         S.joy = null;   // 清搖桿殘留方向
         document.querySelector('.lobby-body')?.classList.remove('stage-menu-hidden');   // 舞台關掉→純文字大廳要看得到選單
