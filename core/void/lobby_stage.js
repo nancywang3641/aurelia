@@ -150,7 +150,8 @@
             walls: [],   // 碰撞全走手繪遮罩
             doors: [
                 { x: 335, y: 316, w: 100, h: 42, to: 'cafe', spawn: { x: 780, y: 868 } },   // 書咖門口→瀅瀅書咖（走到門口下方觸發）
-                { x: 1150, y: 600, w: 90, h: 40, to: 'hall', spawn: { x: 772, y: 830 } },   // 交易所門口→愛麗絲大廳
+                { x: 1150, y: 600, w: 90, h: 40, panel: 'exchange' },   // 交易所建築門→彈交易所面板（花 PT 買房；不切場景）
+                { x: 712, y: 888, w: 84, h: 34, to: 'hall', spawn: { x: 772, y: 830 } },   // 底部大門→愛麗絲純白大廳（原交易所門的去處，改到底部牆縫當出口）
             ],
         },
     };
@@ -981,6 +982,10 @@
                             S.doorArm = false;
                             S.doorCd = performance.now() + 2000;
                             window.dispatchEvent(new CustomEvent('lstage-restore-lobby'));
+                        } else if (door.panel) {   // 面板型門（交易所…）：彈面板、不切場景；踏出後才重新武裝
+                            S.doorArm = false;
+                            S.doorCd = performance.now() + 1500;
+                            window.dispatchEvent(new CustomEvent('lstage-open-' + door.panel));
                         } else goScene(door.to, door.spawn);
                     }
                 } else S.doorArm = true;
