@@ -230,6 +230,7 @@
                 const mirror = act === 'groupmirror';
                 const targets = S.edit.group.length ? S.edit.group.slice() : (S.edit.sel >= 0 ? [S.edit.sel] : []);
                 if (!targets.length) return;
+                const newIdx = [];
                 targets.forEach(idx => {
                     const src = _b.CFG.layout[idx];
                     const ew = Math.round(src.w * (src.s || 1));
@@ -237,11 +238,12 @@
                     if (mirror) { o.x = _b.MAP_W - src.x - ew; o.flipX = !src.flipX; }   // 鏡射到房間對側(繞中線x=MAP_W/2)+左右翻轉
                     else { o.x = src.x + 40; o.y = src.y + 40; }
                     _b.CFG.layout.push(o);
+                    newIdx.push(_b.CFG.layout.length - 1);
                     const img = _b.spawnObjEl(o);
                     S.objEls.push(img);
                     _makeEditable(img);
                 });
-                S.edit.group = []; _groupHighlight();
+                S.edit.group = newIdx; _groupHighlight();   // 複製出的整組=當前群組→可一起拖到位
                 S.edit.feet.forEach((_, k) => _syncFoot(k));
                 _exportToPanel();
             } else if (act === 'addobj') {
@@ -374,6 +376,10 @@
             S.edit.sel = info.i;
             const o = _b.CFG.layout[info.i];
             S.edit.drag.ox = o.x; S.edit.drag.oy = o.y;
+            // 群組拖動：拖到的物件在群組內→記下整組原始座標，一起移動
+            if (S.edit.group.includes(info.i)) {
+                S.edit.drag.groupOrig = S.edit.group.map(gi => ({ i: gi, x: _b.CFG.layout[gi].x, y: _b.CFG.layout[gi].y }));
+            }
             S.edit.feet.forEach((_, k) => _syncFoot(k));
         } else if (info.kind === 'pt') {
             S.edit.drag.ox = info.pt.x; S.edit.drag.oy = info.pt.y;
@@ -398,9 +404,17 @@
         if (!d) return;
         const dx = (e.clientX - d.sx) / S.scale, dy = (e.clientY - d.sy) / S.scale;
         if (d.kind === 'obj') {
-            const o = _b.CFG.layout[d.i];
-            o.x = Math.round(d.ox + dx); o.y = Math.round(d.oy + dy);
-            _b.placeObj(S.objEls[d.i], o); _syncFoot(d.i);
+            if (d.groupOrig) {   // 整組同移
+                d.groupOrig.forEach(g => {
+                    const oo = _b.CFG.layout[g.i];
+                    oo.x = Math.round(g.x + dx); oo.y = Math.round(g.y + dy);
+                    _b.placeObj(S.objEls[g.i], oo); _syncFoot(g.i);
+                });
+            } else {
+                const o = _b.CFG.layout[d.i];
+                o.x = Math.round(d.ox + dx); o.y = Math.round(d.oy + dy);
+                _b.placeObj(S.objEls[d.i], o); _syncFoot(d.i);
+            }
         } else if (d.kind === 'pt') {
             d.pt.x = Math.round(d.ox + dx); d.pt.y = Math.round(d.oy + dy);
             d.m.style.left = d.pt.x + 'px'; d.m.style.top = d.pt.y + 'px';

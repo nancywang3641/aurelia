@@ -21,6 +21,9 @@
         ledgerCap: 100,         // ledger 保留筆數
     };
 
+    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
+    const RABBIT_PORTRAIT = CDN + 'lobby_rabbit_portrait_v1.png';   // 白兔先生對話立繪（面板左側）
+
     const APP_ID = 'pt_wallet';   // OS_DB app_data 命名空間
     const K_BALANCE = 'balance';
     const K_LEDGER = 'ledger';
@@ -246,9 +249,14 @@
             '.os-pt-bal i{color:#ffe28a;margin-right:4px;}',
             '.os-pt-note{margin-top:6px;font-size:11px;color:#8a8298;font-style:italic;}',
             // 交易所面板
-            '.os-pt-mask{position:fixed;inset:0;z-index:2147483550;background:rgba(10,8,20,.62);',
+            '.os-pt-mask{position:fixed;inset:0;z-index:2147483550;background:rgba(8,6,16,.85);',
             'display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .28s ease;}',
             '.os-pt-mask.on{opacity:1;}',
+            // 立繪左 + 卡片右（立繪黑底融進深色遮罩）
+            '.os-pt-stage{display:flex;align-items:flex-end;justify-content:center;gap:6px;max-width:min(96vw,920px);width:100%;}',
+            '.os-pt-portrait{height:min(84vh,780px);width:auto;object-fit:contain;flex:0 0 auto;align-self:flex-end;',
+            'pointer-events:none;filter:drop-shadow(0 10px 30px rgba(0,0,0,.6));}',
+            '@media (max-width:680px){.os-pt-stage{gap:0;}.os-pt-portrait{height:46vh;margin-right:-10%;opacity:.85;}}',
             '.os-pt-shop{width:min(94vw,440px);max-height:88vh;overflow:auto;background:linear-gradient(165deg,#241f38,#181528);',
             'border:1px solid rgba(180,150,255,.35);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.6);',
             'padding:22px 22px 18px;color:#f1ecff;transform:translateY(16px) scale(.98);transition:transform .28s ease;}',
@@ -337,13 +345,16 @@
         mask.id = 'os-pt-shop-mask';
         mask.className = 'os-pt-mask';
         mask.innerHTML =
+            '<div class="os-pt-stage">' +
+            '<img class="os-pt-portrait" src="' + RABBIT_PORTRAIT + '" alt="白兔先生">' +
             '<div class="os-pt-shop" role="dialog" aria-label="交易所">' +
             '<div class="os-pt-shop-head"><i class="fa-solid fa-store"></i>' +
             '<span class="t">交易所</span><span class="x" title="關閉"><i class="fa-solid fa-xmark"></i></span></div>' +
-            '<div class="os-pt-shop-sub">交易區的正派貨幣 PT，在這裡兌換屬於你的一席之地。</div>' +
+            '<div class="os-pt-shop-sub">白兔先生為你服務——用交易區的 PT，兌換屬於你的一席之地。</div>' +
             '<div class="os-pt-wallet"><i class="fa-solid fa-coins"></i><span class="n" id="os-pt-shop-bal">…</span><span class="u">PT</span></div>' +
             '<div id="os-pt-shop-items"></div>' +
             '<div class="os-pt-shop-msg" id="os-pt-shop-msg"></div>' +
+            '</div>' +
             '</div>';
         document.body.appendChild(mask);
         requestAnimationFrame(() => mask.classList.add('on'));
@@ -353,6 +364,8 @@
             mask.classList.remove('on');
             setTimeout(() => mask.remove(), 300);
         };
+        const _pi = mask.querySelector('.os-pt-portrait');
+        if (_pi) _pi.addEventListener('error', function () { this.style.display = 'none'; });   // 立繪抓不到就藏，不破版
         mask.querySelector('.x').addEventListener('click', close);
         mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
 
