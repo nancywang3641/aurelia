@@ -147,6 +147,10 @@
               '<button class="lep-btn" data-act="actplus"><i class="fa-solid fa-plus"></i> 人物</button>' +
             '</div>' +
             '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="dupobj" title="複製選中的家具（同一張素材，不用重做）"><i class="fa-solid fa-clone"></i> 複製</button>' +
+              '<button class="lep-btn" data-act="flipx" title="左右翻轉選中的家具（一張當左右兩用）"><i class="fa-solid fa-left-right"></i> 水平翻轉</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
               '<button class="lep-btn" data-act="addobj"><i class="fa-solid fa-plus"></i> 新增家具</button>' +
               '<button class="lep-btn lep-danger" data-act="delobj"><i class="fa-solid fa-trash"></i> 刪除家具</button>' +
             '</div>' +
@@ -190,6 +194,22 @@
             } else if (act === 'actminus' || act === 'actplus') {
                 _b.CFG.points.actorScale = Math.max(0.2, Math.min(1.6, Math.round((((_b.CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));   // 下限 0.2：地圖俯視小人要能調得比室內小很多
                 _b.applyActorScale(); _exportToPanel();
+            } else if (act === 'dupobj') {
+                if (S.edit.sel < 0) return;
+                const src = _b.CFG.layout[S.edit.sel];
+                const o = Object.assign({}, src, { x: src.x + 40, y: src.y + 40 });   // 複製全屬性(素材/縮放/佔地/層級/翻轉)，偏移40避免疊死
+                _b.CFG.layout.push(o);
+                const img = _b.spawnObjEl(o);
+                S.objEls.push(img);
+                _makeEditable(img);
+                S.edit.sel = _b.CFG.layout.length - 1;
+                S.edit.feet.forEach((_, k) => _syncFoot(k));
+                _exportToPanel();
+            } else if (act === 'flipx') {
+                if (S.edit.sel < 0) return;
+                const o = _b.CFG.layout[S.edit.sel];
+                o.flipX = !o.flipX;
+                _b.placeObj(S.objEls[S.edit.sel], o); _exportToPanel();
             } else if (act === 'addobj') {
                 _b.askImage((ref, dataUrl) => _addFurniture(ref, dataUrl));
             } else if (act === 'delobj') {
@@ -379,6 +399,7 @@
                 const rec = { x: o.x, y: o.y, w: o.w, h: o.h, footH: o.footH, s: o.s || 1 };
                 if (o.footW != null) rec.footW = o.footW;
                 if (o.layer) rec.layer = o.layer;
+                if (o.flipX) rec.flipX = true;
                 if (o.file) rec.file = o.file;
                 if (o.url) rec.url = o.url;
                 if (o.idb) rec.idb = o.idb;
