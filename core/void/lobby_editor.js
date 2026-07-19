@@ -161,6 +161,7 @@
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="nocollide" title="切換這件家具擋不擋路：地毯/裝飾設成不擋路，人就能走過去（紅佔地框會消失）"><i class="fa-solid fa-person-walking"></i> 不擋路 開/關</button>' +
+              '<button class="lep-btn" data-act="plotswap" title="選中NPC房子或空地框後：切這塊地「蓋房↔空地」。空地=只顯示地塊框、房子藏起來不擋路；半透明=現在藏著的那個"><i class="fa-solid fa-house"></i> 蓋房/空地</button>' +
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="actminus"><i class="fa-solid fa-minus"></i> 人物</button>' +
@@ -292,6 +293,17 @@
                 ts.forEach(i => {
                     _b.CFG.layout[i].noCollide = on;   // rebuildBlocks 會排除 noCollide 物件
                     _syncFoot(i);
+                });
+                _exportToPanel();
+            } else if (act === 'plotswap') {
+                const ts = _targets(); if (!ts.length) return;
+                const done = new Set();   // 同塊地的房+框都被選到→只切一次
+                ts.forEach(i => {
+                    const o = _b.CFG.layout[i];
+                    const id = o.plot || o.plotFrame;
+                    if (!id || done.has(id)) return;
+                    done.add(id);
+                    _b.setPlot(id, !_b.plotOccupied(id));
                 });
                 _exportToPanel();
             } else if (act === 'groupadd') {
@@ -643,6 +655,8 @@
                 if (o.idb) rec.idb = o.idb;
                 if (o.float) rec.float = true;
                 if (o.nightFile) rec.nightFile = o.nightFile;   // 夜間成對素材（城市物件）：不存會讓調過的物件夜裡變日版
+                if (o.plot) rec.plot = o.plot;                  // 🏘 地塊欄位：不存的話「完成」一按房/框就脫鉤
+                if (o.plotFrame) rec.plotFrame = o.plotFrame;
                 return rec;
             }),
             points: _b.CFG.points,
