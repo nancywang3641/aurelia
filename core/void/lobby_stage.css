@@ -282,8 +282,10 @@
 /* 🏘 地塊隱藏面：遊玩=整個藏起來；擺設模式=半透明灰階(看得到、可調位置) */
 .lstage-plot-off { display:none; }
 .lstage-editing .lstage-plot-off { display:block; opacity:.4; filter:grayscale(.6); }
-/* 🌧 天氣層(小雨)：蓋過場景與前景牆(4000)、壓在編輯面板(5000)下;不吃滑鼠 */
-.lstage-weather { position:absolute; inset:0; z-index:4200; pointer-events:none; }
+/* 🌧 天氣層(小雨)：蓋過場景與前景牆(4000)、壓在編輯面板(5000)下;不吃滑鼠
+   底色=陰天濾鏡(冷灰藍暗罩):純白地圖上雨絲才看得清,也才有下雨的天色 */
+.lstage-weather { position:absolute; inset:0; z-index:4200; pointer-events:none;
+  background:rgba(38,48,68,.16); }
 /* 🗂 圖層列表小窗(擺設模式)：PS式,上=前;拖列調前後/換組,點列選中 */
 .lstage-layers-win { position:absolute; right:12px; top:56px; width:236px; max-height:64%; display:flex; flex-direction:column;
   background:rgba(20,22,30,.94); border:1px solid rgba(255,255,255,.14); border-radius:10px; z-index:2900;
