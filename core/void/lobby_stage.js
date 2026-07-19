@@ -177,7 +177,7 @@
             mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
             lower: 'city/obj/city_floor_frame_upper_part.png',   // 背景層：北牆(後牆)在底圖上、被所有物件遮住
             upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
-            alphaFoot: true,   // 🏢 建築照「實際不透明形狀(alpha)」擋路，不用四角方框；小裝飾可設「不擋路」放行
+            // 註：不用 alphaFoot（整棟實心會擋死、小人走不到建築後面）；改用「底部方框佔地」高/寬可調→只擋底部、上半可走過去
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
             cfgKey: 'lobby_stage_layout_city_v7',   // v7=換新地板+遮罩碰撞（舊格子版存檔作廢）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
