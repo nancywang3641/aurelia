@@ -177,6 +177,7 @@
             mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
             lower: 'city/obj/city_floor_frame_upper_part.png',   // 背景層：北牆(後牆)在底圖上、被所有物件遮住
             upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
+            alphaFoot: true,   // 🏢 建築照「實際不透明形狀(alpha)」擋路，不用四角方框；小裝飾可設「不擋路」放行
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
             cfgKey: 'lobby_stage_layout_city_v7',   // v7=換新地板+遮罩碰撞（舊格子版存檔作廢）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
@@ -351,7 +352,7 @@
         const alpha = !!SCENES[S.scene].alphaFoot;
         const feet = alpha ? [] : CFG.layout.filter(o => !o.noCollide).map(footRect);   // alphaFoot 不用腳印；noCollide 物件(城市前景)不擋路→碰撞全走遮罩
         BLOCKS = (maskOk ? [] : (SCENES[S.scene].walls || [])).concat(feet);   // 靜態地圖沒 walls→空陣列，別 undefined.concat 炸掉掛載
-        ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha) : [];   // 只納入已載好 alpha 的物件
+        ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha && !o.noCollide) : [];   // 只納入已載好 alpha 且沒設「不擋路」的物件（noCollide 在 alphaFoot 也生效）
     }
     // alpha 形狀擋路：腳點落在物件圖片「不透明像素(alpha≥128)」上=牆＝整棟照剪影實心擋
     //   (門面樓的上半就是屋身，不是空地，所以不做切線；要走屋後另議)。
