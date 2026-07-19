@@ -1514,7 +1514,7 @@
         let z;
         if (o.layer === 'floor') z = 1;
         else if (o.layer === 'back') z = 2;
-        else z = 2 + Math.round(o.y + d.eh);
+        else z = 2 + Math.round(o.y + d.eh + (o.zb || 0));   // zb=疊層微調(±px)：小物件立在大物件前緣(看板在屋前)時,底邊比不過→手動往前擠
         img.style.zIndex = String(z);
         img.style.transform = o.flipX ? 'scaleX(-1)' : '';   // 水平翻轉（一張素材當左右兩用）
     }
