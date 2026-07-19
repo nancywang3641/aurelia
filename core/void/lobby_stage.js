@@ -803,6 +803,7 @@
         // 🔍 擺設模式滾輪縮放：放大精細擺家具、縮小看全景。掛在 S.root（祖層）→滑到物件上也收得到；unmount 移除防累積。
         S.onWheel = (e) => {
             if (!S.edit) return;
+            if (e.target.closest('.lstage-layers-win, .lstage-edit-panel')) return;   // 圖層小窗/控制面板內的滾輪=捲它們自己的清單，別搶去縮放地圖
             e.preventDefault();
             const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
             S.edit.zoom = Math.max(0.25, Math.min(6, (S.edit.zoom || 1) * f));   // 可縮到 0.25(地圖變小、四周留白好拖) ~ 6(放大看細節)
