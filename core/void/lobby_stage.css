@@ -282,6 +282,26 @@
 /* 🏘 地塊隱藏面：遊玩=整個藏起來；擺設模式=半透明灰階(看得到、可調位置) */
 .lstage-plot-off { display:none; }
 .lstage-editing .lstage-plot-off { display:block; opacity:.4; filter:grayscale(.6); }
+/* 🗺 快轉小地圖(🏙鈕)：廣場俯瞰縮圖,點哪傳哪;建築熱點懸停亮框 */
+.lstage-citymap { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:5100;
+  background:rgba(24,26,34,.95); border:1px solid rgba(255,255,255,.16); border-radius:12px;
+  padding:10px; box-shadow:0 8px 26px rgba(0,0,0,.55); color:#e8e8ee; font-size:12px; }
+.lcm-title { display:flex; align-items:center; gap:6px; padding:0 2px 8px; white-space:nowrap; }
+.lcm-title .lcm-close { margin-left:auto; background:none; border:none; color:#e8e8ee; cursor:pointer; font-size:14px; padding:2px 6px; }
+.lcm-map { position:relative; overflow:hidden; border-radius:8px; cursor:crosshair; background:#111; }
+.lcm-obj { position:absolute; display:block; image-rendering:pixelated; pointer-events:none; user-select:none; }
+.lcm-spot { position:absolute; z-index:4500; background:transparent; border:1px dashed transparent; border-radius:6px;
+  cursor:pointer; padding:0; display:flex; align-items:flex-end; justify-content:center; }
+.lcm-spot span { background:rgba(20,22,30,.82); color:#fff; font-size:10px; padding:2px 6px; border-radius:6px;
+  margin-bottom:2px; opacity:0; transition:opacity .12s; pointer-events:none; white-space:nowrap; }
+.lcm-spot:hover { border-color:#4ab6ff; background:rgba(74,182,255,.14); }
+.lcm-spot:hover span { opacity:1; }
+.lcm-chips { display:flex; gap:6px; padding-top:8px; flex-wrap:wrap; }
+.lcm-chip { flex:1; min-width:44px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16);
+  color:#e8e8ee; border-radius:8px; padding:5px 0; cursor:pointer; font-size:12px; }
+.lcm-chip:hover { background:rgba(74,182,255,.2); }
+.lcm-chip:disabled { opacity:.35; cursor:default; }
+
 /* 🌦 天氣層(小雨/小雪)：蓋過場景與前景牆(4000)、壓在編輯面板(5000)下;不吃滑鼠
    底色=天色濾鏡:雨天冷灰藍暗罩(純白地圖上雨絲才看得清)、雪天淡淡冷霧 */
 .lstage-weather { position:absolute; inset:0; z-index:4200; pointer-events:none; }

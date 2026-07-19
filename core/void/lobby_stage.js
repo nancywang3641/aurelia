@@ -1404,6 +1404,87 @@
         base.addEventListener('pointercancel', onUp);
     }
 
+    // ── 🗺 快轉小地圖（🏙 鈕）：廣場俯瞰縮圖＝點哪傳哪；點建築＝直接進室內/落它門口；下排快捷區 ──
+    function _openCityMap() {
+        _closeWins();
+        const K = 0.2;   // 縮圖比例（1536×1024 → 307×205）
+        const isNight = _sceneIsNight(SCENES.city);
+        // 城市佈局跨場景讀：存檔(layoutFull)優先,沒有用預設——當前 CFG 是本場景的,不能用
+        let layout = SCENES.city.layout || [];
+        try {
+            const saved = JSON.parse(localStorage.getItem(SCENES.city.cfgKey) || 'null');
+            if (saved && Array.isArray(saved.layoutFull) && saved.layoutFull.length) layout = saved.layoutFull;
+        } catch (e) {}
+        const box = document.createElement('div');
+        box.className = 'lstage-citymap';
+        box.innerHTML =
+            '<div class="lcm-title"><i class="fa-solid fa-map-location-dot"></i> 快轉——點地圖上任何地方' +
+              '<button class="lcm-close"><i class="fa-solid fa-xmark"></i></button></div>' +
+            '<div class="lcm-map" style="width:' + Math.round(MAP_W * K) + 'px;height:' + Math.round(MAP_H * K) + 'px"></div>' +
+            '<div class="lcm-chips">' +
+              [['city', '廣場'], ['cafe', '書咖'], ['hall', '大廳'], ['exchange', '交易所'], ['room404', '404']]
+                .map(c => '<button class="lcm-chip" data-go="' + c[0] + '"' + (S.scene === c[0] ? ' disabled' : '') + '>' + c[1] + '</button>').join('') +
+            '</div>';
+        const map = box.querySelector('.lcm-map');
+        const df = (f) => (isNight && CITY_NIGHT[f]) ? CITY_NIGHT[f] : f;   // 日夜對照
+        const put = (fileOrRef, x, y, w, z, flip) => {
+            const im = document.createElement('img');
+            im.className = 'lcm-obj';
+            im.style.left = Math.round(x * K) + 'px';
+            im.style.top = Math.round(y * K) + 'px';
+            im.style.width = Math.round(w * K) + 'px';
+            im.style.zIndex = String(z);
+            if (flip) im.style.transform = 'scaleX(-1)';
+            resolveRef(typeof fileOrRef === 'string' ? { file: fileOrRef } : fileOrRef).then(src => { if (src) im.src = src; });
+            map.appendChild(im);
+        };
+        // 底板 + 前後牆框（跟真場景同一套圖與層級）
+        put(df(SCENES.city.base), 0, 0, MAP_W, 1);
+        (Array.isArray(SCENES.city.lower) ? SCENES.city.lower : (SCENES.city.lower ? [SCENES.city.lower] : [])).forEach(f => put(df(f), 0, 0, MAP_W, 2));
+        (Array.isArray(SCENES.city.upper) ? SCENES.city.upper : (SCENES.city.upper ? [SCENES.city.upper] : [])).forEach(f => put(df(f), 0, 0, MAP_W, 4000));
+        // 物件（地塊空↔房照真實狀態）
+        layout.forEach(o => {
+            if ((o.plot && !_plotOccupied(o.plot)) || (o.plotFrame && _plotOccupied(o.plotFrame))) return;
+            const s = o.s || 1;
+            const z = o.layer === 'floor' ? 1 : o.layer === 'back' ? 2 : 2 + Math.round(o.y + Math.round(o.h * s) + (o.zb || 0));
+            const nf = isNight ? (o.nightFile || CITY_NIGHT[o.file]) : null;
+            put(nf ? { file: nf } : o, o.x, o.y, o.w * s, z, o.flipX);
+        });
+        // 建築熱點：書咖/大廳=直接進室內；住宅=落到它門前
+        const dests = [];
+        layout.forEach(o => {
+            const f = String(o.file || ''), s = o.s || 1;
+            const front = { x: Math.round(o.x + o.w * s / 2), y: Math.round(o.y + o.h * s + 18) };
+            if (/book_cafe/.test(f)) dests.push({ o, label: '書咖', go: () => goScene('cafe') });
+            else if (/lobby_day/.test(f)) dests.push({ o, label: '大廳', go: () => goScene('hall') });
+            else if (/player_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '我的家', go: () => goScene('city', front) });
+            else if (/npc_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '鄰居家', go: () => goScene('city', front) });
+        });
+        dests.forEach(d => {
+            const o = d.o, s = o.s || 1;
+            const hs = document.createElement('button');
+            hs.className = 'lcm-spot';
+            hs.style.left = Math.round(o.x * K) + 'px';
+            hs.style.top = Math.round(o.y * K) + 'px';
+            hs.style.width = Math.round(o.w * s * K) + 'px';
+            hs.style.height = Math.round(o.h * s * K) + 'px';
+            hs.innerHTML = '<span>' + d.label + '</span>';
+            hs.addEventListener('click', (e) => { e.stopPropagation(); box.remove(); d.go(); });
+            map.appendChild(hs);
+        });
+        // 點空地＝傳送到該點（落點若在牆裡,掛載後的遮罩檢查會自動彈到最近可走處）
+        map.addEventListener('click', (e) => {
+            const r = map.getBoundingClientRect();
+            const x = Math.round((e.clientX - r.left) / K), y = Math.round((e.clientY - r.top) / K);
+            box.remove();
+            goScene('city', { x, y });
+        });
+        box.querySelector('.lcm-close').addEventListener('click', () => box.remove());
+        box.querySelectorAll('.lcm-chip').forEach(b => b.addEventListener('click', () => { box.remove(); goScene(b.dataset.go); }));
+        S.root.appendChild(box);
+        _regWin(() => box.remove());
+    }
+
     // ── ⚙️ 大廳設置小面板（舞台上，仿裝扮室）──
     function _closeLobbySettings() { S.setEl?.remove(); S.setEl = null; }
     function _openLobbySettings() {
@@ -1534,8 +1615,8 @@
             '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
             '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-tx">小劇場</span><span class="ltb-badge"></span></button>' +
-            // 🏙 出門上街：只在書咖/大廳出現（404 要走還原流程、城裡本來就在街上）
-            ((S.scene === 'cafe' || S.scene === 'hall') ? '<button class="lstage-city-btn" title="到視差城市街區"><i class="fa-solid fa-city"></i></button>' : '');
+            // 🏙 快轉地圖：書咖/大廳/城裡都出現（404 要走還原流程）
+            ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'city') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
         left.appendChild(root);
         _applyMenuHidden();   // 套用上次「舞台全屏（隱藏 MAIN MENU）」狀態
         if (S._theaterTimer) clearInterval(S._theaterTimer);
@@ -1548,7 +1629,7 @@
         root.querySelector('.lstage-set-btn').addEventListener('click', () => _openLobbySettings());
         // 🎬 小劇場窗口：有未查看的配對→開「正在對話」，否則直接看「回顧」
         root.querySelector('.lstage-theater-btn').addEventListener('click', () => window.LobbyTheater?.openWin(S.theater && !S.theater.playing ? 'live' : 'review'));
-        root.querySelector('.lstage-city-btn')?.addEventListener('click', () => goScene('city'));   // 🏙 出門上街（跟過門同一條白光過場）
+        root.querySelector('.lstage-city-btn')?.addEventListener('click', () => _openCityMap());   // 🏙 快轉地圖（廣場俯瞰縮圖,點哪去哪）
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         // 💬 聊天符號（自由漫遊時的浮鈕）：點了浮出「對話框＋輸入框」一組
         const fab = document.createElement('button');
