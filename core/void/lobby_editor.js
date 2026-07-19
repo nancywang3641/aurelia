@@ -348,8 +348,10 @@
         const cutRow = a.h * (o.h - fh) / o.h;               // 只畫底部這帶(對應 _alphaHit 的切割)
         for (let i = 0; i < a.w * a.h; i++) {
             if (a.data[i] < 128) continue;
-            if (Math.floor(i / a.w) < cutRow) continue;      // 上半超過佔地高→不畫(那裡可走)
-            const p = i * 4;
+            const row = Math.floor(i / a.w);
+            if (row < cutRow) continue;                      // 上半超過佔地高→不畫(那裡可走)
+            const px = o.flipX ? (row * a.w + (a.w - 1 - i % a.w)) : i;   // 翻轉物件→剪影跟著鏡像(對齊_alphaHit)
+            const p = px * 4;
             img.data[p] = 230; img.data[p + 1] = 60; img.data[p + 2] = 60; img.data[p + 3] = 140;
         }
         ctx.putImageData(img, 0, 0);

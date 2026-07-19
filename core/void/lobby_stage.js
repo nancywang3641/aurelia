@@ -354,17 +354,23 @@
         BLOCKS = (maskOk ? [] : (SCENES[S.scene].walls || [])).concat(feet);   // 靜態地圖沒 walls→空陣列，別 undefined.concat 炸掉掛載
         ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha && !o.noCollide) : [];   // 只納入已載好 alpha 且沒設「不擋路」的物件（noCollide 在 alphaFoot 也生效）
     }
-    // alpha 形狀擋路：腳點落在物件圖片「不透明像素(alpha≥128)」上=牆。
+    // alpha 形狀擋路：x那一直柱、y0..y1那段裡只要有「不透明像素(alpha≥128)」=牆。
     //   ✂️ 只算「底部 footH 那一帶」的形狀→照建築真實輪廓擋底部，上半可走過去(小人繞到建築後面)；footH 高度可調。
-    function _alphaHit(o, x, y) {
+    //   掃整段而非點採樣：佔地高調薄(帶高<步長)時，點採樣會從縫隙間跳過去（穿樓）。
+    function _alphaSpan(o, x, y0, y1) {
         const a = o._alpha, s = o.s || 1;
-        const lx = (x - o.x) / s, ly = (y - o.y) / s;   // 物件未縮放局部座標(0..w,0..h)
-        if (lx < 0 || lx >= o.w || ly < 0 || ly >= o.h) return false;
+        let lx = (x - o.x) / s;
+        if (lx < 0 || lx >= o.w) return false;
+        if (o.flipX) lx = o.w - 1 - lx;   // 物件水平翻轉→碰撞座標也鏡像（不然圖在右、碰撞在左）
         const fh = (o.footH != null ? o.footH : o.h);   // 佔地高(未縮放px)；沒設=整棟
-        if (ly < o.h - fh) return false;                // 上半(超過佔地高的部分)不擋→可走屋後
+        const top = Math.max((y0 - o.y) / s, o.h - fh); // 上半(超過佔地高的部分)不擋→可走屋後
+        const bot = Math.min((y1 - o.y) / s, o.h);
+        if (top > bot || bot < 0 || top >= o.h) return false;
         const ax = Math.min(a.w - 1, Math.floor(lx / o.w * a.w));
-        const ay = Math.min(a.h - 1, Math.floor(ly / o.h * a.h));
-        return a.data[ay * a.w + ax] >= 128;
+        const r0 = Math.max(0, Math.floor(top / o.h * a.h));
+        const r1 = Math.min(a.h - 1, Math.floor(bot / o.h * a.h));
+        for (let r = r0; r <= r1; r++) if (a.data[r * a.w + ax] >= 128) return true;
+        return false;
     }
     // 從已載好的物件 <img> 抽 alpha 通道存降採樣點陣（o._alpha={w,h,data}）；載好後重建碰撞。
     //   只留 alpha 一個 byte、200px 上限省記憶體；編輯中順便刷新剪影。
@@ -489,7 +495,20 @@
         // 🚨 採樣腳印矩形(中心+左右邊+四角)而非單點→小人身體有寬度，側面靠牆時邊緣就擋住，不會整個身體穿進去
         if (_wallAt(x, y) || _wallAt(l, b) || _wallAt(r, b) || _wallAt(l, t) || _wallAt(r, t) || _wallAt(x, t)) return true;
         if (BLOCKS.some(B => l < B.x + B.w && r > B.x && t < B.y + B.h && b > B.y)) return true;
-        for (let i = 0; i < ALPHA_BLOCKS.length; i++) if (_alphaHit(ALPHA_BLOCKS[i], x, y)) return true;
+        // alpha 建築：腳印左/中/右三條直柱各掃 [t..b] 整段——只驗腳中心單點的話，斜著靠近/凹角處身體會鑽進紅區
+        for (let i = 0; i < ALPHA_BLOCKS.length; i++) {
+            const A = ALPHA_BLOCKS[i];
+            if (_alphaSpan(A, l, t, b) || _alphaSpan(A, x, t, b) || _alphaSpan(A, r, t, b)) return true;
+        }
+        return false;
+    }
+    // 一整步拆小段沿路採樣：單幀最多走16.5px、只驗終點的話，薄的alpha邊緣會被一步跨過去（穿進建築）
+    function blockedPath(x0, y0, x1, y1, hw) {
+        const d = Math.hypot(x1 - x0, y1 - y0);
+        const n = Math.max(1, Math.ceil(d / 8));
+        for (let i = 1; i <= n; i++) {
+            if (blocked(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, hw)) return true;
+        }
         return false;
     }
 
@@ -759,7 +778,7 @@
                 if (d > FOLLOW_GAP) {
                     const step = Math.min(d - FOLLOW_GAP, 0.34 * dt);   // 略快於漫步以跟上玩家、又不衝過頭
                     const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
-                    if (!(n.avoidBlocks && blocked(nx, ny, n.hw))) {
+                    if (!(n.avoidBlocks && blockedPath(n.x, n.y, nx, ny, n.hw))) {
                         n.x = nx; n.y = ny; n.walking = true;
                         if (n.sheet) {
                             n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
@@ -794,7 +813,7 @@
                 else {
                     const step = 0.12 * dt;
                     const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
-                    if (n.avoidBlocks && blocked(nx, ny, n.hw)) { n.dest = null; n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
+                    if (n.avoidBlocks && blockedPath(n.x, n.y, nx, ny, n.hw)) { n.dest = null; n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
                     else {
                         n.x = nx; n.y = ny;
                         n.walking = true;
@@ -1039,9 +1058,9 @@
             if (len > 0) {
                 const step = PLAYER_SPEED * dt / len;
                 const nx = p.x + dx * step, ny = p.y + dy * step;
-                if (!blocked(nx, ny, p.hw)) { p.x = nx; p.y = ny; }
-                else if (dx && !blocked(nx, p.y, p.hw)) { p.x = nx; p.dest = null; }
-                else if (dy && !blocked(p.x, ny, p.hw)) { p.y = ny; p.dest = null; }
+                if (!blockedPath(p.x, p.y, nx, ny, p.hw)) { p.x = nx; p.y = ny; }
+                else if (dx && !blockedPath(p.x, p.y, nx, p.y, p.hw)) { p.x = nx; p.dest = null; }
+                else if (dy && !blockedPath(p.x, p.y, p.x, ny, p.hw)) { p.y = ny; p.dest = null; }
                 else p.dest = null;
                 p.walking = true;
                 if (p.sheet) {
