@@ -160,6 +160,10 @@
               '<button class="lep-btn" data-act="layerback" title="貼牆當背景、永遠在物件後面（例：牆上螢幕）"><i class="fa-solid fa-image"></i> 牆上</button>' +
             '</div>' +
             '<div class="lep-row">' +
+              '<button class="lep-btn" data-act="zfront" title="被大物件蓋住時按這個：不改位置、只把它的前後排序往前擠（例：立在屋子前緣的看板）。按到剛好蓋過就停，擠太多人物走位會穿幫"><i class="fa-solid fa-layer-group"></i> 往前疊</button>' +
+              '<button class="lep-btn" data-act="zback" title="往後退一層（「往前疊」的反向；歸零=回到只看底邊的預設排序）"><i class="fa-solid fa-layer-group fa-flip-vertical"></i> 往後疊</button>' +
+            '</div>' +
+            '<div class="lep-row">' +
               '<button class="lep-btn" data-act="nocollide" title="切換這件家具擋不擋路：地毯/裝飾設成不擋路，人就能走過去（紅佔地框會消失）"><i class="fa-solid fa-person-walking"></i> 不擋路 開/關</button>' +
               '<button class="lep-btn" data-act="plotswap" title="選中NPC房子或空地框後：切這塊地「蓋房↔空地」。空地=只顯示地塊框、房子藏起來不擋路；半透明=現在藏著的那個"><i class="fa-solid fa-house"></i> 蓋房/空地</button>' +
             '</div>' +
@@ -293,6 +297,15 @@
                 ts.forEach(i => {
                     _b.CFG.layout[i].noCollide = on;   // rebuildBlocks 會排除 noCollide 物件
                     _syncFoot(i);
+                });
+                _exportToPanel();
+            } else if (act === 'zfront' || act === 'zback') {
+                const ts = _targets(); if (!ts.length) return;
+                ts.forEach(i => {
+                    const o = _b.CFG.layout[i];
+                    o.zb = Math.max(-400, Math.min(400, (o.zb || 0) + (act === 'zfront' ? 20 : -20)));
+                    if (!o.zb) delete o.zb;   // 歸零就拿掉欄位（回預設排序、數據乾淨）
+                    _b.placeObj(S.objEls[i], o);
                 });
                 _exportToPanel();
             } else if (act === 'plotswap') {
@@ -657,6 +670,7 @@
                 if (o.nightFile) rec.nightFile = o.nightFile;   // 夜間成對素材（城市物件）：不存會讓調過的物件夜裡變日版
                 if (o.plot) rec.plot = o.plot;                  // 🏘 地塊欄位：不存的話「完成」一按房/框就脫鉤
                 if (o.plotFrame) rec.plotFrame = o.plotFrame;
+                if (o.zb) rec.zb = o.zb;                        // 疊層微調
                 return rec;
             }),
             points: _b.CFG.points,
