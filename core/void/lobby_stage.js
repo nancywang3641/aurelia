@@ -175,27 +175,37 @@
         city: {   // 🏙 視差城市廣場＝分層可走（新版：手繪遮罩碰撞，同大廳；前景建築物件各自深度排序）
             base: 'city/city_floor_v1.png',        // 新廣場地板（乾淨白色，同大廳套路）；建築/噴泉/樹走前景物件
             mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
+            upper: 'city/obj/city_floor_frame_upper_part.png',   // 前景遮擋層：廣場後牆(綠籬+入口階梯)蓋在角色上→走到最上被牆擋
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
             cfgKey: 'lobby_stage_layout_city_v7',   // v7=換新地板+遮罩碰撞（舊格子版存檔作廢）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
             // 前景物件＝從 upper01/02/03 拆出的獨立元素（書咖/交易所/噴泉/樹/燈柱/長椅）；bbox 即座標。
             //   noCollide=不進碰撞(碰撞全走遮罩)；靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
-            layout: [
-                { file: 'city/city_layers/fg/fg01.webp', x: 144, y: 41, w: 404, h: 283, noCollide: true },   // 書咖
-                { file: 'city/city_layers/fg/fg02.webp', x: 971, y: 313, w: 436, h: 309, noCollide: true },   // 交易所
-                { file: 'city/city_layers/fg/fg03.webp', x: 589, y: 155, w: 54, h: 132, noCollide: true },
-                { file: 'city/city_layers/fg/fg04.webp', x: 894, y: 155, w: 56, h: 130, noCollide: true },
-                { file: 'city/city_layers/fg/fg05.webp', x: 954, y: 167, w: 32, h: 61, noCollide: true },
-                { file: 'city/city_layers/fg/fg06.webp', x: 465, y: 307, w: 132, h: 78, noCollide: true },
-                { file: 'city/city_layers/fg/fg07.webp', x: 703, y: 318, w: 142, h: 186, noCollide: true },   // 中央噴泉
-                { file: 'city/city_layers/fg/fg08.webp', x: 412, y: 487, w: 125, h: 75, noCollide: true },
-                { file: 'city/city_layers/fg/fg09.webp', x: 1097, y: 514, w: 38, h: 108, noCollide: true },
-                { file: 'city/city_layers/fg/fg10.webp', x: 1269, y: 514, w: 38, h: 108, noCollide: true },
-                { file: 'city/city_layers/fg/fg11.webp', x: 988, y: 606, w: 84, h: 49, noCollide: true },
-                { file: 'city/city_layers/fg/fg12.webp', x: 1302, y: 606, w: 84, h: 49, noCollide: true },
-                { file: 'city/city_layers/fg/fg13.webp', x: 842, y: 790, w: 33, h: 66, noCollide: true },
-                { file: 'city/city_layers/fg/fg14.webp', x: 477, y: 77, w: 81, h: 35, noCollide: true },
-                { file: 'city/city_layers/fg/fg15.webp', x: 949, y: 319, w: 132, h: 86, noCollide: true },
+            layout: [   // ⬇ 新廣場物件（書咖+5棟房+街景裝飾）；粗鋪成格狀，Rae 擺設模式拖到位再複製數據定版
+                { file: "city/obj/book_cafe_day.png", x: 150, y: 140, w: 424, h: 346, footH: 104, s: 0.578 },
+                { file: "city/obj/player_house_lv1.png", x: 620, y: 140, w: 1284, h: 750, footH: 210, s: 0.307 },
+                { file: "city/obj/npc_house_01.png", x: 1090, y: 140, w: 1095, h: 839, footH: 235, s: 0.274 },
+                { file: "city/obj/npc_house_02.png", x: 150, y: 390, w: 794, h: 853, footH: 239, s: 0.27 },
+                { file: "city/obj/npc_house_03.png", x: 620, y: 390, w: 1030, h: 814, footH: 228, s: 0.283 },
+                { file: "city/obj/npc_house_04.png", x: 1090, y: 390, w: 1093, h: 850, footH: 238, s: 0.271 },
+                { file: "city/obj/fountain_node_day.png", x: 130, y: 650, w: 180, h: 222, footH: 67, s: 0.45 },
+                { file: "city/obj/crystal_monument_day.png", x: 355, y: 650, w: 151, h: 352, footH: 63, s: 0.398 },
+                { file: "city/obj/city_sign_01_day.png", x: 580, y: 650, w: 173, h: 371, footH: 67, s: 0.377 },
+                { file: "city/obj/terminal_02_day.png", x: 805, y: 650, w: 131, h: 235, footH: 42, s: 0.596 },
+                { file: "city/obj/street_lamp_02_day.png", x: 1030, y: 650, w: 105, h: 379, footH: 68, s: 0.369 },
+                { file: "city/obj/civic_light_cylinder_day.png", x: 1255, y: 650, w: 126, h: 196, footH: 35, s: 0.714 },
+                { file: "city/obj/conifer_tall_01_day.png", x: 130, y: 780, w: 157, h: 332, footH: 60, s: 0.422 },
+                { file: "city/obj/conifer_tall_02_day.png", x: 355, y: 780, w: 163, h: 328, footH: 59, s: 0.427 },
+                { file: "city/obj/tree_square_01_day.png", x: 580, y: 780, w: 159, h: 217, footH: 39, s: 0.645 },
+                { file: "city/obj/city_bench_01_day.png", x: 805, y: 780, w: 301, h: 253, footH: 76, s: 0.395 },
+                { file: "city/obj/city_bench_06_day.png", x: 1030, y: 780, w: 328, h: 280, footH: 84, s: 0.357 },
+                { file: "city/obj/city_bench_horizontal_02_day.png", x: 1255, y: 780, w: 510, h: 228, footH: 68, s: 0.439 },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 130, y: 910, w: 361, h: 164, footH: 49, s: 0.61 },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 355, y: 910, w: 447, h: 191, footH: 57, s: 0.524 },
+                { file: "city/obj/planter_long_01_day.png", x: 580, y: 910, w: 403, h: 191, footH: 57, s: 0.524 },
+                { file: "city/obj/planter_long_02_day.png", x: 805, y: 910, w: 360, h: 149, footH: 45, s: 0.671 },
+                { file: "city/obj/planter_long_03_day.png", x: 1030, y: 910, w: 442, h: 146, footH: 44, s: 0.685 },
+                { file: "city/obj/planter_medium_01_day.png", x: 1255, y: 910, w: 310, h: 188, footH: 56, s: 0.532 },
             ],
             points: {
                 npcZone: { x: 400, y: 540, w: 600, h: 210 },   // 中央廣場（客人出沒區；避開建築/噴泉，都在遮罩白區）
