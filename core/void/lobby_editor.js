@@ -131,6 +131,8 @@
               '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
             '</div>';
         panel.innerHTML =
+            '<div class="lep-collapse-bar"><span class="lep-title">擺設模式</span>' +
+              '<button class="lep-btn lep-collapse-btn" data-act="collapse" title="收合/展開面板（讓開被擋住的地圖）"><i class="fa-solid fa-chevron-up"></i></button></div>' +
             '<div class="lep-hint">' + _hint + '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="objminus"><i class="fa-solid fa-minus"></i> 家具</button>' +
@@ -182,6 +184,12 @@
         panel.addEventListener('click', (e) => {
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (!act) return;
+            if (act === 'collapse') {
+                S.edit.panel.classList.toggle('lep-collapsed');
+                const ic = S.edit.panel.querySelector('.lep-collapse-btn i');
+                if (ic) ic.className = S.edit.panel.classList.contains('lep-collapsed') ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up';
+                return;
+            }
             if (act === 'footminus' || act === 'footplus') {
                 if (S.edit.sel < 0) return;
                 const o = _b.CFG.layout[S.edit.sel];
