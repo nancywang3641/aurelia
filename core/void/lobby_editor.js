@@ -129,7 +129,7 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         const _alphaFoot = !!_b.SCENES[S.scene].alphaFoot;
-        const _kbHint = '。電腦快捷：Shift+拖=鎖直線(只走水平或垂直)｜Ctrl+點家具=多選成群組｜Ctrl+拖空地=框選成群組｜Ctrl+Z=一步步復原移動';
+        const _kbHint = '。選成群組後(圈選/多選/加入群組)，家具±/佔地/層級/翻轉/不擋路/複製/刪除都套用整組。電腦快捷：Shift+拖=鎖直線(只走水平或垂直)｜Ctrl+點家具=多選成群組｜Ctrl+拖空地=框選成群組｜Ctrl+Z=一步步復原移動';
         const _hint = (_alphaFoot
             ? '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紅剪影=屋子實際擋路範圍(照屋子形狀整棟實心，走不進去；靠拖屋子本體調位置即可)'
             : '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地') + _kbHint;
@@ -221,52 +221,78 @@
                 if (ic) ic.className = S.edit.panel.classList.contains('lep-collapsed') ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up';
                 return;
             }
+            // 🎯 套用對象：有群組(圈選/Ctrl多選/加入群組)＝整組一起；沒群組＝單選那件
+            const _targets = () => (S.edit.group.length ? S.edit.group.slice() : (S.edit.sel >= 0 ? [S.edit.sel] : []));
             if (act === 'footminus' || act === 'footplus') {
-                if (S.edit.sel < 0) return;
-                const o = _b.CFG.layout[S.edit.sel];
-                o.footH = Math.max(20, Math.min(o.h, o.footH + (act === 'footplus' ? 10 : -10)));
-                _syncFoot(S.edit.sel); _exportToPanel();
+                const ts = _targets(); if (!ts.length) return;
+                ts.forEach(i => {
+                    const o = _b.CFG.layout[i];
+                    o.footH = Math.max(20, Math.min(o.h, o.footH + (act === 'footplus' ? 10 : -10)));
+                    _syncFoot(i);
+                });
+                _exportToPanel();
             } else if (act === 'footwminus' || act === 'footwplus') {
-                if (S.edit.sel < 0) return;
-                const o = _b.CFG.layout[S.edit.sel];
-                const cur = (o.footW != null ? o.footW : o.w);
-                o.footW = Math.max(20, Math.min(o.w, Math.round(cur * (act === 'footwplus' ? 1.1 : 0.9))));
-                _syncFoot(S.edit.sel); _exportToPanel();
+                const ts = _targets(); if (!ts.length) return;
+                ts.forEach(i => {
+                    const o = _b.CFG.layout[i];
+                    const cur = (o.footW != null ? o.footW : o.w);
+                    o.footW = Math.max(20, Math.min(o.w, Math.round(cur * (act === 'footwplus' ? 1.1 : 0.9))));
+                    _syncFoot(i);
+                });
+                _exportToPanel();
             } else if (act === 'objminus' || act === 'objplus') {
-                if (S.edit.sel < 0) return;
-                const o = _b.CFG.layout[S.edit.sel];
-                // 等比±10%：大圖小圖手感一致；下限0.05（大廳素材原圖超大、預設s本來就<0.3）
-                o.s = Math.max(0.05, Math.min(2, Math.round((o.s || 1) * (act === 'objplus' ? 1.1 : 0.9) * 1000) / 1000));
-                _b.placeObj(S.objEls[S.edit.sel], o); _syncFoot(S.edit.sel); _exportToPanel();
+                const ts = _targets(); if (!ts.length) return;
+                ts.forEach(i => {
+                    const o = _b.CFG.layout[i];
+                    // 等比±10%：大圖小圖手感一致；下限0.05（大廳素材原圖超大、預設s本來就<0.3）
+                    o.s = Math.max(0.05, Math.min(2, Math.round((o.s || 1) * (act === 'objplus' ? 1.1 : 0.9) * 1000) / 1000));
+                    _b.placeObj(S.objEls[i], o); _syncFoot(i);
+                });
+                _exportToPanel();
             } else if (act === 'layerfloor' || act === 'layerauto' || act === 'layerback') {
-                if (S.edit.sel < 0) return;
-                const o = _b.CFG.layout[S.edit.sel];
-                o.layer = act === 'layerauto' ? undefined : (act === 'layerfloor' ? 'floor' : 'back');
-                _b.placeObj(S.objEls[S.edit.sel], o); _exportToPanel();
+                const ts = _targets(); if (!ts.length) return;
+                const layer = act === 'layerauto' ? undefined : (act === 'layerfloor' ? 'floor' : 'back');
+                ts.forEach(i => {
+                    const o = _b.CFG.layout[i];
+                    o.layer = layer;
+                    _b.placeObj(S.objEls[i], o);
+                });
+                _exportToPanel();
             } else if (act === 'actminus' || act === 'actplus') {
                 _b.CFG.points.actorScale = Math.max(0.2, Math.min(1.6, Math.round((((_b.CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));   // 下限 0.2：地圖俯視小人要能調得比室內小很多
                 _b.applyActorScale(); _exportToPanel();
             } else if (act === 'dupobj') {
-                if (S.edit.sel < 0) return;
-                const src = _b.CFG.layout[S.edit.sel];
-                const o = Object.assign({}, src, { x: src.x + 40, y: src.y + 40 });   // 複製全屬性(素材/縮放/佔地/層級/翻轉)，偏移40避免疊死
-                _b.CFG.layout.push(o);
-                const img = _b.spawnObjEl(o);
-                S.objEls.push(img);
-                _makeEditable(img);
-                S.edit.sel = _b.CFG.layout.length - 1;
+                const ts = _targets(); if (!ts.length) return;
+                const newIdx = [];
+                ts.forEach(idx => {
+                    const src = _b.CFG.layout[idx];
+                    const o = Object.assign({}, src, { x: src.x + 40, y: src.y + 40 });   // 複製全屬性(素材/縮放/佔地/層級/翻轉)，偏移40避免疊死
+                    _b.CFG.layout.push(o);
+                    newIdx.push(_b.CFG.layout.length - 1);
+                    const img = _b.spawnObjEl(o);
+                    S.objEls.push(img);
+                    _makeEditable(img);
+                });
+                if (S.edit.group.length) { S.edit.group = newIdx; _groupHighlight(); }   // 群組複製→複製出的新一組變群組，直接拖到位
+                else S.edit.sel = newIdx[0];
                 S.edit.feet.forEach((_, k) => _syncFoot(k));
                 _exportToPanel();
             } else if (act === 'flipx') {
-                if (S.edit.sel < 0) return;
-                const o = _b.CFG.layout[S.edit.sel];
-                o.flipX = !o.flipX;
-                _b.placeObj(S.objEls[S.edit.sel], o); _exportToPanel();
+                const ts = _targets(); if (!ts.length) return;
+                ts.forEach(i => {
+                    const o = _b.CFG.layout[i];
+                    o.flipX = !o.flipX;   // 各自原地翻轉
+                    _b.placeObj(S.objEls[i], o); _syncFoot(i);
+                });
+                _exportToPanel();
             } else if (act === 'nocollide') {
-                if (S.edit.sel < 0) return;
-                const o = _b.CFG.layout[S.edit.sel];
-                o.noCollide = !o.noCollide;   // 切換擋路/不擋路（rebuildBlocks 會排除 noCollide 物件）
-                _syncFoot(S.edit.sel); _exportToPanel();
+                const ts = _targets(); if (!ts.length) return;
+                const on = !_b.CFG.layout[ts[0]].noCollide;   // 群組統一切成同一狀態(照第一件的相反)，免得混著各切各的
+                ts.forEach(i => {
+                    _b.CFG.layout[i].noCollide = on;   // rebuildBlocks 會排除 noCollide 物件
+                    _syncFoot(i);
+                });
+                _exportToPanel();
             } else if (act === 'groupadd') {
                 if (S.edit.sel < 0) return;
                 if (!S.edit.group.includes(S.edit.sel)) S.edit.group.push(S.edit.sel);
@@ -296,11 +322,12 @@
             } else if (act === 'addobj') {
                 _b.askImage((ref, dataUrl) => _addFurniture(ref, dataUrl));
             } else if (act === 'delobj') {
-                const i = S.edit.sel;
-                if (i < 0) return;
-                _b.CFG.layout.splice(i, 1);
-                S.objEls[i].remove(); S.objEls.splice(i, 1);
-                S.edit.feet[i].remove(); S.edit.feet.splice(i, 1);
+                const ts = _targets(); if (!ts.length) return;
+                ts.sort((a, b) => b - a).forEach(i => {   // 由大到小刪，前面的索引才不會位移到錯物件
+                    _b.CFG.layout.splice(i, 1);
+                    S.objEls[i].remove(); S.objEls.splice(i, 1);
+                    S.edit.feet[i].remove(); S.edit.feet.splice(i, 1);
+                });
                 S.edit.sel = -1;
                 S.edit.group = []; _groupHighlight();   // 索引位移→群組作廢，免鏡射到錯物件
                 S.edit.undo = [];   // 索引位移→復原疊一併作廢（免 Ctrl+Z 搬到錯物件）
