@@ -114,18 +114,25 @@
         // 拖空地平移：掛在整個 S.root（含縮小後四周留白、建築間、小人身上都能拖）；只在沒點到可互動元素時啟動
         S.edit._panDown = (e) => {
             if (e.target.closest('.lstage-editable, .lstage-marker, .lstage-zone, .lstage-door, .lstage-edit-panel')) return;   // 物件/站點/區塊/門/面板→各自處理
+            if (e.ctrlKey) { _dragStart(e, { kind: 'marquee' }); return; }   // 🖱 Ctrl+拖空地=框選多個家具成群組（電腦端）
             _dragStart(e, { kind: 'cam' });
         };
         S.root.addEventListener('pointerdown', S.edit._panDown);
         window.addEventListener('pointermove', _dragMove);
         window.addEventListener('pointerup', _dragEnd);
+        // ⌨ Ctrl+Z=一步步復原移動（capture：遊戲方向鍵 handler 也是 capture，但只攔 z 不衝突）
+        S.edit._onKey = (e) => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); e.stopPropagation(); _undo(); }
+        };
+        window.addEventListener('keydown', S.edit._onKey, true);
         // 控制面板
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         const _alphaFoot = !!_b.SCENES[S.scene].alphaFoot;
-        const _hint = _alphaFoot
+        const _kbHint = '。電腦快捷：Shift+拖=鎖直線(只走水平或垂直)｜Ctrl+點家具=多選成群組｜Ctrl+拖空地=框選成群組｜Ctrl+Z=一步步復原移動';
+        const _hint = (_alphaFoot
             ? '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紅剪影=屋子實際擋路範圍(照屋子形狀整棟實心，走不進去；靠拖屋子本體調位置即可)'
-            : '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地';
+            : '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地') + _kbHint;
         const _footHigh =   // 佔地高：alphaFoot=底部形狀那帶多高；一般=底部方框多高
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
@@ -296,6 +303,7 @@
                 S.edit.feet[i].remove(); S.edit.feet.splice(i, 1);
                 S.edit.sel = -1;
                 S.edit.group = []; _groupHighlight();   // 索引位移→群組作廢，免鏡射到錯物件
+                S.edit.undo = [];   // 索引位移→復原疊一併作廢（免 Ctrl+Z 搬到錯物件）
                 S.edit.feet.forEach((_, k) => _syncFoot(k));
                 _exportToPanel();
             } else if (act === 'setbase' || act === 'setmask') {
@@ -332,7 +340,19 @@
         foot.className = 'lstage-foot' + (alphaFoot ? ' lstage-foot-shape' : '');
         S.world.appendChild(foot);
         S.edit.feet.push(foot);
-        img.onpointerdown = (e) => _dragStart(e, { kind: 'obj', i: S.objEls.indexOf(img) });
+        img.onpointerdown = (e) => {
+            const i = S.objEls.indexOf(img);
+            if (e.ctrlKey) {   // 🖱 Ctrl+點=加入/移出群組（電腦端多選；手機沿用面板「加入群組」鈕）
+                e.preventDefault(); e.stopPropagation();
+                const at = S.edit.group.indexOf(i);
+                if (at >= 0) S.edit.group.splice(at, 1); else S.edit.group.push(i);
+                S.edit.sel = i;
+                _groupHighlight();
+                S.edit.feet.forEach((_, k) => _syncFoot(k));
+                return;
+            }
+            _dragStart(e, { kind: 'obj', i });
+        };
     }
     // alphaFoot 剪影：把整棟「圖片不透明」的像素塗紅，畫在物件正上方＝玩家實際會被擋的形狀（整棟實心）
     function _syncFootShape(o, cv) {
@@ -443,12 +463,24 @@
             S.edit.drag.ox = D.w; S.edit.drag.oy = D.h;
         } else if (info.kind === 'cam') {
             S.edit.drag.ox = S.edit.cam.x; S.edit.drag.oy = S.edit.cam.y;
+        } else if (info.kind === 'marquee') {
+            const r = S.world.getBoundingClientRect();
+            S.edit.drag.mx = (e.clientX - r.left) / S.scale;   // 框選起點（地圖座標）
+            S.edit.drag.my = (e.clientY - r.top) / S.scale;
+            const box = document.createElement('div');
+            box.className = 'lstage-marquee';
+            S.world.appendChild(box);
+            S.edit.drag.box = box;
         }
     }
     function _dragMove(e) {
         const d = S.edit?.drag;
         if (!d) return;
-        const dx = (e.clientX - d.sx) / S.scale, dy = (e.clientY - d.sy) / S.scale;
+        let dx = (e.clientX - d.sx) / S.scale, dy = (e.clientY - d.sy) / S.scale;
+        // ⇧ Shift+拖=鎖直線：只走位移大的那個軸（搬位置類才鎖；調大小/平移/框選不鎖）
+        if (e.shiftKey && (d.kind === 'obj' || d.kind === 'pt' || d.kind === 'zone' || d.kind === 'door')) {
+            if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
+        }
         if (d.kind === 'obj') {
             if (d.groupOrig) {   // 整組同移
                 d.groupOrig.forEach(g => {
@@ -484,10 +516,77 @@
             _syncDoor(d.i);
         } else if (d.kind === 'cam') {
             S.edit.cam.x = d.ox - dx; S.edit.cam.y = d.oy - dy;
+        } else if (d.kind === 'marquee') {
+            d.rx = Math.min(d.mx, d.mx + dx); d.ry = Math.min(d.my, d.my + dy);
+            d.rw = Math.abs(dx); d.rh = Math.abs(dy);
+            d.box.style.left = d.rx + 'px'; d.box.style.top = d.ry + 'px';
+            d.box.style.width = d.rw + 'px'; d.box.style.height = d.rh + 'px';
         }
     }
+    // 拖完把「這一步的原始座標」推進復原疊（每步只存幾個數字，上限50步＝幾KB，不吃記憶體）
+    function _pushUndo(op) {
+        const u = S.edit.undo || (S.edit.undo = []);
+        u.push(op);
+        if (u.length > 50) u.shift();
+    }
+    function _undo() {
+        const u = S.edit?.undo;
+        if (!u || !u.length) return;
+        const op = u.pop();
+        if (op.t === 'obj') {
+            op.items.forEach(it => {
+                const o = _b.CFG.layout[it.i];
+                if (!o) return;
+                o.x = it.x; o.y = it.y;
+                _b.placeObj(S.objEls[it.i], o); _syncFoot(it.i);
+            });
+        } else if (op.t === 'pt') {
+            op.pt.x = op.x; op.pt.y = op.y;
+            if (op.m) { op.m.style.left = op.x + 'px'; op.m.style.top = op.y + 'px'; }
+        } else if (op.t === 'zone') {
+            const z = _b.CFG.points[op.pk]; z.x = op.x; z.y = op.y; _syncZone(op.pk);
+        } else if (op.t === 'zoneresize') {
+            const z = _b.CFG.points[op.pk]; z.w = op.w; z.h = op.h; _syncZone(op.pk);
+        } else if (op.t === 'door') {
+            const D = _b.CFG.doors[op.i]; if (D) { D.x = op.x; D.y = op.y; _syncDoor(op.i); }
+        } else if (op.t === 'doorresize') {
+            const D = _b.CFG.doors[op.i]; if (D) { D.w = op.w; D.h = op.h; _syncDoor(op.i); }
+        }
+        _exportToPanel();
+    }
     function _dragEnd() {
-        if (!S.edit?.drag) return;
+        const d = S.edit?.drag;
+        if (!d) return;
+        if (d.kind === 'marquee') {   // 放開=收框：框到的家具設成群組；框太小(等於點一下)=清空群組
+            d.box.remove();
+            if ((d.rw || 0) < 6 && (d.rh || 0) < 6) { S.edit.group = []; }
+            else {
+                const hit = [];
+                _b.CFG.layout.forEach((o, i) => {
+                    const s = o.s || 1, w = o.w * s, h = o.h * s;
+                    if (o.x < d.rx + d.rw && o.x + w > d.rx && o.y < d.ry + d.rh && o.y + h > d.ry) hit.push(i);
+                });
+                S.edit.group = hit;
+            }
+            _groupHighlight();
+        } else if (d.kind === 'obj') {
+            const items = d.groupOrig ? d.groupOrig.map(g => ({ i: g.i, x: g.x, y: g.y })) : [{ i: d.i, x: d.ox, y: d.oy }];
+            if (items.some(it => { const o = _b.CFG.layout[it.i]; return o && (o.x !== it.x || o.y !== it.y); })) _pushUndo({ t: 'obj', items });
+        } else if (d.kind === 'pt') {
+            if (d.pt.x !== d.ox || d.pt.y !== d.oy) _pushUndo({ t: 'pt', pt: d.pt, m: d.m, x: d.ox, y: d.oy });
+        } else if (d.kind === 'zone') {
+            const z = _b.CFG.points[d.pk];
+            if (z.x !== d.ox || z.y !== d.oy) _pushUndo({ t: 'zone', pk: d.pk, x: d.ox, y: d.oy });
+        } else if (d.kind === 'zoneresize') {
+            const z = _b.CFG.points[d.pk];
+            if (z.w !== d.ox || z.h !== d.oy) _pushUndo({ t: 'zoneresize', pk: d.pk, w: d.ox, h: d.oy });
+        } else if (d.kind === 'door') {
+            const D = _b.CFG.doors[d.i];
+            if (D.x !== d.ox || D.y !== d.oy) _pushUndo({ t: 'door', i: d.i, x: d.ox, y: d.oy });
+        } else if (d.kind === 'doorresize') {
+            const D = _b.CFG.doors[d.i];
+            if (D.w !== d.ox || D.h !== d.oy) _pushUndo({ t: 'doorresize', i: d.i, w: d.ox, h: d.oy });
+        }
         S.edit.drag = null;
         _exportToPanel();
     }
@@ -526,6 +625,8 @@
         window.removeEventListener('pointermove', _dragMove);
         window.removeEventListener('pointerup', _dragEnd);
         if (S.edit._panDown) S.root?.removeEventListener('pointerdown', S.edit._panDown);   // 移除拖空地平移監聽
+        if (S.edit._onKey) window.removeEventListener('keydown', S.edit._onKey, true);      // 移除 Ctrl+Z 監聽
+        S.edit.drag?.box?.remove();   // 框選拖到一半離開→收掉殘框
         S.edit.feet.forEach(f => f.remove());
         S.edit.markers.forEach(m => m.remove());
         Object.values(S.edit.zones || {}).forEach(el => el.remove());
