@@ -502,6 +502,19 @@
         }
         return false;
     }
+    // 🧈 絲滑移動（玩家用）：直走→被擋就把方向轉 ±25/50/75° 用同樣步長試走（牆滑+轉角助推）。
+    //   市面2D的手感來源：撞到不急停，貼牆滑、擦角讓位；轉角最多75°=前進分量恆為正，朝目的地必收斂不繞圈。
+    function _slideMove(p, ux, uy, L) {
+        let nx = p.x + ux * L, ny = p.y + uy * L;
+        if (!blockedPath(p.x, p.y, nx, ny, p.hw)) { p.x = nx; p.y = ny; return true; }
+        for (const deg of [25, -25, 50, -50, 75, -75]) {
+            const rad = deg * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
+            const rx = ux * c - uy * s, ry = ux * s + uy * c;
+            nx = p.x + rx * L; ny = p.y + ry * L;
+            if (!blockedPath(p.x, p.y, nx, ny, p.hw)) { p.x = nx; p.y = ny; return true; }
+        }
+        return false;   // 真的正面頂死平牆才原地不動
+    }
     // 一整步拆小段沿路採樣：單幀最多走16.5px、只驗終點的話，薄的alpha邊緣會被一步跨過去（穿進建築）
     function blockedPath(x0, y0, x1, y1, hw) {
         const d = Math.hypot(x1 - x0, y1 - y0);
@@ -1088,12 +1101,8 @@
             }
             const len = Math.hypot(dx, dy);
             if (len > 0) {
-                const step = PLAYER_SPEED * dt / len;
-                const nx = p.x + dx * step, ny = p.y + dy * step;
-                if (!blockedPath(p.x, p.y, nx, ny, p.hw)) { p.x = nx; p.y = ny; }
-                else if (dx && !blockedPath(p.x, p.y, nx, p.y, p.hw)) { p.x = nx; p.dest = null; }
-                else if (dy && !blockedPath(p.x, p.y, p.x, ny, p.hw)) { p.y = ny; p.dest = null; }
-                else p.dest = null;
+                // 🧈 牆滑+轉角助推：被擋自動沿牆/繞角滑（朝目的地分量恆正→點擊移動不會繞圈）；完全頂死平牆才停
+                if (!_slideMove(p, dx / len, dy / len, PLAYER_SPEED * dt)) p.dest = null;
                 p.walking = true;
                 if (p.sheet) {
                     // 方向列：0下/1左/2右/3上（主軸決定朝向），幀序 0,1,2,1
