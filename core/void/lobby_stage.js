@@ -182,7 +182,8 @@
             // 前景物件＝從 upper01/02/03 拆出的獨立元素（書咖/交易所/噴泉/樹/燈柱/長椅）；bbox 即座標。
             //   noCollide=不進碰撞(碰撞全走遮罩)；靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
             layout: [   // ⬇ 新廣場物件（書咖+5棟房+街景裝飾）；粗鋪成格狀，Rae 擺設模式拖到位再複製數據定版
-                { file: "city/obj/book_cafe_day.png", x: 150, y: 140, w: 424, h: 346, footH: 104, s: 0.578 },
+                { file: "city/obj/book_cafe_day.png", x: 150, y: 140, w: 424, h: 346, footH: 104, s: 0.578 },   // 書咖建築
+                { file: "city/obj/lobby_day.png", x: 390, y: 200, w: 468, h: 350, footH: 105, s: 0.571 },   // 大廳建築（回大廳門接這棟）
                 { file: "city/obj/player_house_lv1.png", x: 620, y: 140, w: 1284, h: 750, footH: 210, s: 0.307 },
                 { file: "city/obj/npc_house_01.png", x: 1090, y: 140, w: 1095, h: 839, footH: 235, s: 0.274 },
                 { file: "city/obj/npc_house_02.png", x: 150, y: 390, w: 794, h: 853, footH: 239, s: 0.27 },
@@ -975,7 +976,7 @@
             cx = rangeX / 2; cy = rangeY / 2;   // 靜態地圖：整張置中（contain 時 range 為負→自動 letterbox 置中）
         } else if (S.edit) {
             // 建構模式：允許超出邊界平移（看到外圈黑邊、把被面板擋住的角落拖出來）
-            const overX = vw * 0.6, overY = vh * 0.6;
+            const overX = vw * 1.2, overY = vh * 1.2;
             cx = Math.max(Math.min(0, rangeX) - overX, Math.min(Math.max(0, rangeX) + overX, cx));
             cy = Math.max(Math.min(0, rangeY) - overY, Math.min(Math.max(0, rangeY) + overY, cy));
         } else {
