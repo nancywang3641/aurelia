@@ -173,7 +173,7 @@
             rabbit: { x: 773, y: 365 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
         },
         city: {   // 🏙 視差城市廣場＝分層可走（新版：手繪遮罩碰撞，同大廳；前景建築物件各自深度排序）
-            base: 'city/city_floor_v1.png',        // 新廣場地板（乾淨白色，同大廳套路）；建築/噴泉/樹走前景物件
+            base: 'city/city_floor_v2.png',        // 廣場地板 v2（MC家地塊框已拆出→改獨立sprite）；建築/噴泉/樹走前景物件
             mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
             lower: 'city/obj/city_floor_frame_upper_part.png',   // 背景層：北牆(後牆)在底圖上、被所有物件遮住
             upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
@@ -192,6 +192,7 @@
                 { file: "city/obj/npc_house_02.png", x: 1165, y: 565, w: 794, h: 853, footH: 339, s: 0.327, plot: "npc02" },
                 { file: "city/obj/npc_house_03.png", x: 983, y: 126, w: 1030, h: 814, footH: 288, s: 0.283, plot: "npc03" },
                 { file: "city/obj/npc_house_04.png", x: 164, y: 327, w: 1093, h: 850, footH: 388, s: 0.271, plot: "npc04" },
+                { file: "city/obj/plot_frame_day_player.png", x: 108, y: 523, w: 1342, h: 836, footH: 0, s: 0.384, layer: "floor", noCollide: true },   // MC家地塊框(常駐地面裝飾,無空↔房機制)
                 { file: "city/obj/plot_frame_day_npc01.png", x: 829, y: 566, w: 357, h: 342, footH: 0, s: 0.84, layer: "floor", noCollide: true, plotFrame: "npc01" },
                 { file: "city/obj/plot_frame_day_npc02.png", x: 1165, y: 586, w: 342, h: 340, footH: 0, s: 0.76, layer: "floor", noCollide: true, plotFrame: "npc02" },
                 { file: "city/obj/plot_frame_day_npc03.png", x: 983, y: 137, w: 398, h: 300, footH: 0, s: 0.73, layer: "floor", noCollide: true, plotFrame: "npc03" },
@@ -366,6 +367,11 @@
                         const fix = PLOT_FRAME_FIX[o.file];
                         if (fix) { o.file = fix.file; o.w = fix.w; o.h = fix.h; }
                     });
+                    // 🩹 底板v2把MC家地塊框拆出來了：舊存檔沒有這件→補進去（有了就不重複）
+                    if (S.scene === 'city' && !layout.some(o => o.file === 'city/obj/plot_frame_day_player.png')) {
+                        const def = (SC.layout || []).find(o => o.file === 'city/obj/plot_frame_day_player.png');
+                        if (def) layout.push(Object.assign({}, def));
+                    }
                 } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
                     if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; if (s.noCollide != null) t.noCollide = s.noCollide; }
