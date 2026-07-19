@@ -702,7 +702,7 @@
             if (!S.edit) return;
             e.preventDefault();
             const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-            S.edit.zoom = Math.max(1, Math.min(5, (S.edit.zoom || 1) * f));
+            S.edit.zoom = Math.max(0.25, Math.min(6, (S.edit.zoom || 1) * f));   // 可縮到 0.25(地圖變小、四周留白好拖) ~ 6(放大看細節)
             fitCamera();
         };
         S.root.addEventListener('wheel', S.onWheel, { passive: false });

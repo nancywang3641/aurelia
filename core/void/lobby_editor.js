@@ -131,7 +131,7 @@
               '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
             '</div>';
         panel.innerHTML =
-            '<div class="lep-collapse-bar"><span class="lep-title">擺設模式</span>' +
+            '<div class="lep-collapse-bar"><i class="fa-solid fa-up-down-left-right"></i><span class="lep-title">擺設模式（拖我移動）</span>' +
               '<button class="lep-btn lep-collapse-btn" data-act="collapse" title="收合/展開面板（讓開被擋住的地圖）"><i class="fa-solid fa-chevron-up"></i></button></div>' +
             '<div class="lep-hint">' + _hint + '</div>' +
             '<div class="lep-row">' +
@@ -181,6 +181,23 @@
             '<textarea class="lep-out" readonly></textarea>';
         S.root.appendChild(panel);
         S.edit.panel = panel;
+        // 面板可拖移：抓標題列拖到任何地方（讓開被擋住的地圖）
+        const _bar = panel.querySelector('.lep-collapse-bar');
+        if (_bar) _bar.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.lep-collapse-btn')) return;   // 點收合鈕不算拖
+            e.preventDefault(); e.stopPropagation();
+            const pr = panel.getBoundingClientRect();
+            const par = panel.offsetParent ? panel.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
+            const ox = e.clientX - pr.left, oy = e.clientY - pr.top;
+            const move = (ev) => {
+                panel.style.left = (ev.clientX - ox - par.left) + 'px';
+                panel.style.top = (ev.clientY - oy - par.top) + 'px';
+                panel.style.right = 'auto';
+            };
+            const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+        });
         panel.addEventListener('click', (e) => {
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (!act) return;
