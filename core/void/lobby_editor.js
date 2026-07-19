@@ -155,13 +155,7 @@
             '</div>' +
             _footRows +
             '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="layerauto" title="預設。照「腳的位置」自動排前後：人走到它下方就蓋過它、走到它上方就被它遮。櫃台/椅/燈/建築都用這個"><i class="fa-solid fa-person-walking"></i> 自動</button>' +
-              '<button class="lep-btn" data-act="layerback" title="墊在所有家具和人物後面（只蓋過置底）。貼後牆的螢幕/掛畫用"><i class="fa-solid fa-image"></i> 背景</button>' +
-              '<button class="lep-btn" data-act="layerfloor" title="壓到最底，所有東西都蓋過它、人踩在它上面。地毯/地貼/空地框用"><i class="fa-solid fa-shoe-prints"></i> 置底</button>' +
-            '</div>' +
-            '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="zfront" title="跟PS圖層一樣往上一層：蓋過原本壓著它的下一個東西。在「置底/背景」的會先一階階升回「自動」。例：屋前看板被屋子遮→選看板按這個"><i class="fa-solid fa-arrow-up"></i> 上移一層</button>' +
-              '<button class="lep-btn" data-act="zback" title="往下退一層；在「自動」退到底後再按會降成「背景」→「置底」"><i class="fa-solid fa-arrow-down"></i> 下移一層</button>' +
+              '<button class="lep-btn" data-act="layers" title="開圖層列表（跟PS一樣）：上面＝蓋在前面。拖列子上下＝調誰蓋誰；拖進「背景／置底」那組＝墊到人物後面／腳下；點列子＝選中那件"><i class="fa-solid fa-layer-group"></i> 圖層列表</button>' +
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="nocollide" title="切換這件家具擋不擋路：地毯/裝飾設成不擋路，人就能走過去（紅佔地框會消失）"><i class="fa-solid fa-person-walking"></i> 不擋路 開/關</button>' +
@@ -255,15 +249,8 @@
                     _b.placeObj(S.objEls[i], o); _syncFoot(i);
                 });
                 _exportToPanel();
-            } else if (act === 'layerfloor' || act === 'layerauto' || act === 'layerback') {
-                const ts = _targets(); if (!ts.length) return;
-                const layer = act === 'layerauto' ? undefined : (act === 'layerfloor' ? 'floor' : 'back');
-                ts.forEach(i => {
-                    const o = _b.CFG.layout[i];
-                    o.layer = layer;
-                    _b.placeObj(S.objEls[i], o);
-                });
-                _exportToPanel();
+            } else if (act === 'layers') {
+                _toggleLayersWin();
             } else if (act === 'actminus' || act === 'actplus') {
                 _b.CFG.points.actorScale = Math.max(0.2, Math.min(1.6, Math.round((((_b.CFG.points.actorScale || 1)) + (act === 'actplus' ? 0.05 : -0.05)) * 100) / 100));   // 下限 0.2：地圖俯視小人要能調得比室內小很多
                 _b.applyActorScale(); _exportToPanel();
@@ -297,37 +284,6 @@
                 ts.forEach(i => {
                     _b.CFG.layout[i].noCollide = on;   // rebuildBlocks 會排除 noCollide 物件
                     _syncFoot(i);
-                });
-                _exportToPanel();
-            } else if (act === 'zfront' || act === 'zback') {
-                // 照PS圖層直覺：在「跟它疊住(畫面有重疊)的物件」裡上/下移一層——直接跳到剛好蓋過/讓給下一個，按一下就看得到
-                const ts = _targets(); if (!ts.length) return;
-                const dims = (b) => { const bs = b.s || 1; return { x: b.x, y: b.y, w: b.w * bs, h: b.h * bs }; };
-                const zOf = (b) => 2 + Math.round(b.y + Math.round(b.h * (b.s || 1)) + (b.zb || 0));   // 同 placeObj 的一般層公式
-                ts.forEach(i => {
-                    const o = _b.CFG.layout[i];
-                    // 整條樓梯：置底 → 背景 → 自動(層內再比前後)。上移/下移對每一階都有反應。
-                    if (o.layer) {   // 在最下兩階
-                        if (act === 'zfront') { o.layer = (o.layer === 'floor') ? 'back' : undefined; delete o.zb; _b.placeObj(S.objEls[i], o); }
-                        else if (o.layer === 'back') { o.layer = 'floor'; _b.placeObj(S.objEls[i], o); }   // 置底已是最底,再按不動
-                        return;
-                    }
-                    const me = dims(o), myZ = zOf(o);
-                    let best = null;
-                    _b.CFG.layout.forEach((b, j) => {
-                        if (j === i || b.layer || b._plotOff) return;
-                        const r = dims(b);
-                        if (!(me.x < r.x + r.w && me.x + me.w > r.x && me.y < r.y + r.h && me.y + me.h > r.y)) return;   // 畫面沒疊到→無關
-                        const bz = zOf(b);
-                        if (act === 'zfront' ? (bz >= myZ && (best == null || bz < best)) : (bz <= myZ && (best == null || bz > best))) best = bz;
-                    });
-                    if (best == null) {   // 同疊物件裡已最上/最下
-                        if (act === 'zback') { o.layer = 'back'; delete o.zb; _b.placeObj(S.objEls[i], o); }   // 自動層退到底→再按降成「背景」
-                        return;
-                    }
-                    o.zb = (act === 'zfront' ? best + 1 : best - 1) - (2 + Math.round(o.y + Math.round(o.h * (o.s || 1))));
-                    if (!o.zb) delete o.zb;   // 歸零就拿掉欄位（回預設排序、數據乾淨）
-                    _b.placeObj(S.objEls[i], o);
                 });
                 _exportToPanel();
             } else if (act === 'plotswap') {
@@ -475,6 +431,123 @@
     }
     function _groupHighlight() {
         S.objEls.forEach((img, i) => img.classList.toggle('lstage-grouped', S.edit.group.includes(i)));
+    }
+    // ── 🗂 圖層列表小窗（PS 式）：上面=蓋在前面；拖列子=調前後/換組；點列子=選中 ──
+    function _zOf(o) {   // 同 placeObj 的 z 公式
+        return o.layer === 'floor' ? 1 : o.layer === 'back' ? 2 : 2 + Math.round(o.y + Math.round(o.h * (o.s || 1)) + (o.zb || 0));
+    }
+    function _objLabel(o, i) {
+        const f = o.file || '';
+        return f ? f.split('/').pop().replace(/\.(png|webp|jpe?g)$/i, '').replace(/_day$/, '') : ('上傳圖 ' + (i + 1));
+    }
+    function _toggleLayersWin() {
+        if (S.edit.layersWin) { S.edit.layersWin.remove(); S.edit.layersWin = null; return; }
+        const win = document.createElement('div');
+        win.className = 'lstage-layers-win';
+        win.innerHTML = '<div class="llw-head"><i class="fa-solid fa-layer-group"></i> 圖層（上面＝蓋在前面）<button class="llw-close"><i class="fa-solid fa-xmark"></i></button></div><div class="llw-list"></div>';
+        S.root.appendChild(win);
+        S.edit.layersWin = win;
+        win.querySelector('.llw-close').onclick = () => { win.remove(); S.edit.layersWin = null; };
+        // 標題列可拖移（同控制面板）
+        const head = win.querySelector('.llw-head');
+        head.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.llw-close')) return;
+            e.preventDefault(); e.stopPropagation();
+            const pr = win.getBoundingClientRect();
+            const par = win.offsetParent ? win.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
+            const ox = e.clientX - pr.left, oy = e.clientY - pr.top;
+            const move = (ev) => { win.style.left = (ev.clientX - ox - par.left) + 'px'; win.style.top = (ev.clientY - oy - par.top) + 'px'; win.style.right = 'auto'; };
+            const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+        });
+        _syncLayersWin();
+    }
+    function _syncLayersWin() {
+        const win = S.edit?.layersWin;
+        if (!win) return;
+        const list = win.querySelector('.llw-list');
+        list.innerHTML = '';
+        [
+            { key: 'auto', label: '一般（人物照站位穿插這一組）', test: (o) => !o.layer },
+            { key: 'back', label: '背景（墊在所有家具、人物後面）', test: (o) => o.layer === 'back' },
+            { key: 'floor', label: '置底（貼地，人踩在上面）', test: (o) => o.layer === 'floor' },
+        ].forEach(g => {
+            const h = document.createElement('div');
+            h.className = 'llw-group';
+            h.dataset.group = g.key;
+            h.textContent = g.label;
+            list.appendChild(h);
+            _b.CFG.layout.map((o, i) => ({ o, i })).filter(x => g.test(x.o))
+                .sort((a, b) => _zOf(b.o) - _zOf(a.o))   // 蓋在前面的排上面
+                .forEach(({ o, i }) => {
+                    const row = document.createElement('div');
+                    row.className = 'llw-row' + (S.edit.sel === i ? ' sel' : '') + (o._plotOff ? ' off' : '');
+                    row.dataset.i = i;
+                    const img = document.createElement('img');
+                    _b.resolveRef(o).then(src => { if (src) img.src = src; });
+                    row.appendChild(img);
+                    const span = document.createElement('span');
+                    span.textContent = _objLabel(o, i);
+                    row.appendChild(span);
+                    row.onpointerdown = (e) => _rowDrag(e, row, i);
+                    list.appendChild(row);
+                });
+        });
+    }
+    function _rowDrag(e, row, i) {
+        e.preventDefault(); e.stopPropagation();
+        const list = S.edit.layersWin.querySelector('.llw-list');
+        let moved = false, mark = null;
+        const clearMark = () => { Array.from(list.children).forEach(el => el.classList.remove('llw-drop')); list.classList.remove('llw-drop-end'); };
+        const move = (ev) => {
+            if (Math.abs(ev.clientY - e.clientY) > 5) moved = true;
+            if (!moved) return;
+            clearMark(); mark = null;
+            for (const el of list.children) {   // 插入點=第一個「中線在指標下方」的元素前面；都不是→插最後
+                if (el === row) continue;
+                const r = el.getBoundingClientRect();
+                if (ev.clientY < r.top + r.height / 2) { el.classList.add('llw-drop'); mark = el; return; }
+            }
+            list.classList.add('llw-drop-end');
+        };
+        const up = () => {
+            window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+            const dropAt = mark; clearMark();
+            if (!moved) {   // 點一下=選中那件（同點地圖上的物件）
+                S.edit.sel = i;
+                S.edit.feet.forEach((_, k) => _syncFoot(k));
+                _syncLayersWin();
+                return;
+            }
+            _applyRowDrop(i, dropAt);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+    }
+    function _applyRowDrop(i, beforeEl) {
+        const list = S.edit.layersWin.querySelector('.llw-list');
+        const seq = Array.from(list.children).filter(el => !(el.classList.contains('llw-row') && Number(el.dataset.i) === i));   // 拔掉被拖的那列
+        const at = beforeEl ? seq.indexOf(beforeEl) : seq.length;   // 插在 beforeEl 前面；沒有=最後
+        let group = 'auto';
+        for (let k = at - 1; k >= 0; k--) if (seq[k].classList.contains('llw-group')) { group = seq[k].dataset.group; break; }
+        const o = _b.CFG.layout[i];
+        if (group === 'floor' || group === 'back') { o.layer = group; delete o.zb; }
+        else {
+            o.layer = undefined;
+            let above = null, below = null;   // 同組緊鄰的上下列
+            for (let k = at - 1; k >= 0; k--) { const el = seq[k]; if (el.classList.contains('llw-group')) break; if (el.classList.contains('llw-row')) { above = Number(el.dataset.i); break; } }
+            for (let k = at; k < seq.length; k++) { const el = seq[k]; if (el.classList.contains('llw-group')) break; if (el.classList.contains('llw-row')) { below = Number(el.dataset.i); break; } }
+            let target = null;
+            if (below != null) target = _zOf(_b.CFG.layout[below]) + 1;        // 塞在下面那件的正上方
+            else if (above != null) target = _zOf(_b.CFG.layout[above]) - 1;   // 這組最底
+            if (target != null) {
+                o.zb = target - (2 + Math.round(o.y + Math.round(o.h * (o.s || 1))));
+                if (!o.zb) delete o.zb;
+            } else delete o.zb;
+        }
+        _b.placeObj(S.objEls[i], o);
+        _exportToPanel();   // 會連帶重畫圖層列表
     }
     function _syncDoor(i, el) {
         const D = _b.CFG.doors[i], e = el || S.edit?.doorRects?.[i];
@@ -706,6 +779,7 @@
     function _exportToPanel() {
         const out = S.edit?.panel?.querySelector('.lep-out');
         if (out) out.value = JSON.stringify(_exportData());
+        _syncLayersWin();   // 圖層列表開著就跟著刷新
     }
     function exitEdit(save) {
         if (!S.edit) return;
@@ -722,6 +796,7 @@
         Object.values(S.edit.zones || {}).forEach(el => el.remove());
         S.edit.maskView?.remove();
         (S.edit.doorRects || []).forEach(el => el.remove());
+        S.edit.layersWin?.remove();
         S.edit.panel?.remove();
         S.objEls.forEach(img => { img.classList.remove('lstage-editable'); img.onpointerdown = null; });
         const click = S.root?.querySelector('.lstage-click');
