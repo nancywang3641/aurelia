@@ -192,10 +192,10 @@
                 { file: "city/obj/npc_house_02.png", x: 1165, y: 565, w: 794, h: 853, footH: 339, s: 0.327, plot: "npc02" },
                 { file: "city/obj/npc_house_03.png", x: 983, y: 126, w: 1030, h: 814, footH: 288, s: 0.283, plot: "npc03" },
                 { file: "city/obj/npc_house_04.png", x: 164, y: 327, w: 1093, h: 850, footH: 388, s: 0.271, plot: "npc04" },
-                { file: "city/obj/plot_frame_small_02_day.png", x: 829, y: 630, w: 411, h: 305, footH: 0, s: 0.73, layer: "floor", noCollide: true, plotFrame: "npc01" },
-                { file: "city/obj/plot_frame_small_03_day.png", x: 1165, y: 648, w: 398, h: 300, footH: 0, s: 0.653, layer: "floor", noCollide: true, plotFrame: "npc02" },
-                { file: "city/obj/plot_frame_small_04_day.png", x: 983, y: 77, w: 357, h: 342, footH: 0, s: 0.815, layer: "floor", noCollide: true, plotFrame: "npc03" },
-                { file: "city/obj/plot_frame_small_05_day.png", x: 164, y: 263, w: 342, h: 340, footH: 0, s: 0.865, layer: "floor", noCollide: true, plotFrame: "npc04" },
+                { file: "city/obj/plot_frame_day_npc01.png", x: 829, y: 566, w: 357, h: 342, footH: 0, s: 0.84, layer: "floor", noCollide: true, plotFrame: "npc01" },
+                { file: "city/obj/plot_frame_day_npc02.png", x: 1165, y: 586, w: 342, h: 340, footH: 0, s: 0.76, layer: "floor", noCollide: true, plotFrame: "npc02" },
+                { file: "city/obj/plot_frame_day_npc03.png", x: 983, y: 137, w: 398, h: 300, footH: 0, s: 0.73, layer: "floor", noCollide: true, plotFrame: "npc03" },
+                { file: "city/obj/plot_frame_day_npc04.png", x: 164, y: 337, w: 411, h: 305, footH: 0, s: 0.72, layer: "floor", noCollide: true, plotFrame: "npc04" },
                 { file: "city/obj/fountain_node_day.png", x: 706, y: 325, w: 180, h: 222, footH: 67, s: 0.799 },
                 { file: "city/obj/crystal_monument_day.png", x: 1086, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
                 { file: "city/obj/crystal_monument_day.png", x: 1224, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
@@ -271,7 +271,19 @@
         'city/obj/street_lamp_02_day.png': 'city/obj/street_lamp_02_night.png',
         'city/obj/terminal_02_day.png': 'city/obj/terminal_02_night.png',
         'city/obj/tree_square_01_day.png': 'city/obj/tree_square_01_night.png',
-        // 沒夜版的（plot_frame 空地框等）＝維持日版
+        'city/obj/plot_frame_day_npc01.png': 'city/obj/plot_frame_night_npc01.png',
+        'city/obj/plot_frame_day_npc02.png': 'city/obj/plot_frame_night_npc02.png',
+        'city/obj/plot_frame_day_npc03.png': 'city/obj/plot_frame_night_npc03.png',
+        'city/obj/plot_frame_day_npc04.png': 'city/obj/plot_frame_night_npc04.png',
+        'city/obj/plot_frame_day_player.png': 'city/obj/plot_frame_night_player.png',
+    };
+    // 🩹 地塊框改版導向（2026-07-20 Rae 重編號）：舊存檔裡的舊框檔名→新檔+新原始尺寸。
+    //    _loadCfg 載入時就地換掉→存檔不用手動改；她下次「完成」存檔即自動寫成新檔名。
+    const PLOT_FRAME_FIX = {
+        'city/obj/plot_frame_small_02_day.png': { file: 'city/obj/plot_frame_day_npc01.png', w: 357, h: 342 },
+        'city/obj/plot_frame_small_03_day.png': { file: 'city/obj/plot_frame_day_npc02.png', w: 342, h: 340 },
+        'city/obj/plot_frame_small_04_day.png': { file: 'city/obj/plot_frame_day_npc03.png', w: 398, h: 300 },
+        'city/obj/plot_frame_small_05_day.png': { file: 'city/obj/plot_frame_day_npc04.png', w: 411, h: 305 },
     };
     // 🌗 城市日夜：跟大廳 BG 同時段律（ambient.js：6-18=day）；場景有 nightBase 才生效
     function _isNightNow() {
@@ -350,6 +362,10 @@
             if (saved) {
                 if (Array.isArray(saved.layoutFull) && saved.layoutFull.length) {
                     layout = saved.layoutFull.map(o => Object.assign({}, o));
+                    layout.forEach(o => {   // 🩹 地塊框改版導向：舊框檔名就地換新檔+新原始尺寸（保留她調過的 x/y/s）
+                        const fix = PLOT_FRAME_FIX[o.file];
+                        if (fix) { o.file = fix.file; o.w = fix.w; o.h = fix.h; }
+                    });
                 } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
                     if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; if (s.noCollide != null) t.noCollide = s.noCollide; }
