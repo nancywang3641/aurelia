@@ -187,12 +187,12 @@
             layout: [   // ⬇ Rae 2026-07-19 擺設模式定版
                 { file: "city/obj/book_cafe_day.png", x: 173, y: 90, w: 424, h: 346, footH: 194, s: 0.77, layer: "floor" },   // 書咖建築
                 { file: "city/obj/lobby_day.png", x: 976, y: 308, w: 468, h: 350, footH: 155, s: 0.827 },   // 大廳建築（回大廳門接這棟）
-                { file: "city/obj/player_house_lv1.png", x: 108, y: 542, w: 1284, h: 750, footH: 350, footW: 1272, s: 0.402 },   // MC家（永遠顯示；地塊框烤在底板）
+                { file: "city/obj/player_house_lv1.png", x: 108, y: 542, w: 1284, h: 750, footH: 350, footW: 1272, s: 0.402, plot: "player" },   // MC家（跟白兔買了才蓋起來；狀態=OS_PT）
                 { file: "city/obj/npc_house_01.png", x: 829, y: 623, w: 1095, h: 839, footH: 445, s: 0.274, plot: "npc01" },
                 { file: "city/obj/npc_house_02.png", x: 1165, y: 565, w: 794, h: 853, footH: 339, s: 0.327, plot: "npc02" },
                 { file: "city/obj/npc_house_03.png", x: 983, y: 126, w: 1030, h: 814, footH: 288, s: 0.283, plot: "npc03" },
                 { file: "city/obj/npc_house_04.png", x: 164, y: 327, w: 1093, h: 850, footH: 388, s: 0.271, plot: "npc04" },
-                { file: "city/obj/plot_frame_day_player.png", x: 108, y: 523, w: 1342, h: 836, footH: 0, s: 0.384, layer: "floor", noCollide: true },   // MC家地塊框(常駐地面裝飾,無空↔房機制)
+                { file: "city/obj/plot_frame_day_player.png", x: 108, y: 523, w: 1342, h: 836, footH: 0, s: 0.384, layer: "floor", noCollide: true, plotFrame: "player" },   // MC家空地框(沒買房時顯示)
                 { file: "city/obj/plot_frame_day_npc01.png", x: 829, y: 566, w: 357, h: 342, footH: 0, s: 0.84, layer: "floor", noCollide: true, plotFrame: "npc01" },
                 { file: "city/obj/plot_frame_day_npc02.png", x: 1165, y: 586, w: 342, h: 340, footH: 0, s: 0.76, layer: "floor", noCollide: true, plotFrame: "npc02" },
                 { file: "city/obj/plot_frame_day_npc03.png", x: 983, y: 137, w: 398, h: 300, footH: 0, s: 0.73, layer: "floor", noCollide: true, plotFrame: "npc03" },
@@ -372,6 +372,10 @@
                         const def = (SC.layout || []).find(o => o.file === 'city/obj/plot_frame_day_player.png');
                         if (def) layout.push(Object.assign({}, def));
                     }
+                    layout.forEach(o => {   // 🩹 舊存檔的MC房/框補地塊編號（MC房=買了才蓋,狀態接OS_PT）
+                        if (o.file === 'city/obj/player_house_lv1.png' && !o.plot) o.plot = 'player';
+                        if (o.file === 'city/obj/plot_frame_day_player.png' && !o.plotFrame) o.plotFrame = 'player';
+                    });
                 } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
                     if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; if (s.noCollide != null) t.noCollide = s.noCollide; }
@@ -430,7 +434,7 @@
     //    小資料走 localStorage（🚨別動 OS_DB schema——升版加 store 會 deadlock）
     const PLOTS_KEY = 'lobby_city_plots_v1';
     function _plots() { try { return JSON.parse(localStorage.getItem(PLOTS_KEY) || '{}'); } catch (e) { return {}; } }
-    function _plotOccupied(id) { const v = _plots()[id]; return v == null ? true : !!v; }   // 預設=已蓋房（入住流程上線前城別空著；上線時改預設空地）
+    function _plotOccupied(id) { const v = _plots()[id]; return v == null ? id !== 'player' : !!v; }   // 預設：NPC地=已蓋房(入住流程上線前城別空著)；MC地=空地(要跟白兔先生買,真狀態在OS_PT)
     function _applyPlotVis(o, img) {
         const off = (o.plot && !_plotOccupied(o.plot)) || (o.plotFrame && _plotOccupied(o.plotFrame));
         o._plotOff = !!off;
@@ -443,6 +447,10 @@
         });
         rebuildBlocks();
     }
+    // 💰 買房即時反映：交易所(os_pt)買下→白兔那邊發事件→這裡把空地換成房子
+    window.addEventListener('os-pt-plot-changed', (e) => {
+        try { if (e.detail) setPlot(String(e.detail.plotId || 'player'), !!e.detail.built); } catch (err) {}
+    });
     // alpha 形狀擋路：x那一直柱、y0..y1那段裡只要有「不透明像素(alpha≥128)」=牆。
     //   ✂️ 只算「底部 footH 那一帶」的形狀→照建築真實輪廓擋底部，上半可走過去(小人繞到建築後面)；footH 高度可調。
     //   掃整段而非點採樣：佔地高調薄(帶高<步長)時，點採樣會從縫隙間跳過去（穿樓）。
@@ -1650,6 +1658,8 @@
         try { S._ro = new ResizeObserver(() => fitCamera()); S._ro.observe(root); } catch (e) {}
         S.last = performance.now();
         S.raf = requestAnimationFrame(tick);
+        // 🏘 MC地塊真狀態在 OS_PT(OS_DB)：掛載後異步對帳（買過→蓋房；沒買→空地）；本場景沒MC地塊也無害
+        try { window.OS_PT?.getPlotBuilt?.('player')?.then?.(b => { if (S.active) setPlot('player', !!b); }); } catch (e) {}
         console.log('[LobbyStage] mounted');
     }
     function _spawnObjEl(o) {
