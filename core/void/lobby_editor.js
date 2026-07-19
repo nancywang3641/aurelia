@@ -160,8 +160,8 @@
               '<button class="lep-btn" data-act="layerfloor" title="壓到最底，所有東西都蓋過它、人踩在它上面。地毯/地貼/空地框用"><i class="fa-solid fa-shoe-prints"></i> 置底</button>' +
             '</div>' +
             '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="zfront" title="跟PS圖層一樣：在「跟它疊住的東西」裡往上跳一層——按一下立刻蓋過原本壓著它的那個。例：屋前看板被屋子遮→選看板按這個"><i class="fa-solid fa-arrow-up"></i> 上移一層</button>' +
-              '<button class="lep-btn" data-act="zback" title="在「跟它疊住的東西」裡往下退一層（上移的反向）"><i class="fa-solid fa-arrow-down"></i> 下移一層</button>' +
+              '<button class="lep-btn" data-act="zfront" title="跟PS圖層一樣往上一層：蓋過原本壓著它的下一個東西。在「置底/背景」的會先一階階升回「自動」。例：屋前看板被屋子遮→選看板按這個"><i class="fa-solid fa-arrow-up"></i> 上移一層</button>' +
+              '<button class="lep-btn" data-act="zback" title="往下退一層；在「自動」退到底後再按會降成「背景」→「置底」"><i class="fa-solid fa-arrow-down"></i> 下移一層</button>' +
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="nocollide" title="切換這件家具擋不擋路：地毯/裝飾設成不擋路，人就能走過去（紅佔地框會消失）"><i class="fa-solid fa-person-walking"></i> 不擋路 開/關</button>' +
@@ -306,7 +306,12 @@
                 const zOf = (b) => 2 + Math.round(b.y + Math.round(b.h * (b.s || 1)) + (b.zb || 0));   // 同 placeObj 的一般層公式
                 ts.forEach(i => {
                     const o = _b.CFG.layout[i];
-                    if (o.layer) return;   // 「地上/牆上」層是固定底層，不吃疊層（先切回「一般」再調）
+                    // 整條樓梯：置底 → 背景 → 自動(層內再比前後)。上移/下移對每一階都有反應。
+                    if (o.layer) {   // 在最下兩階
+                        if (act === 'zfront') { o.layer = (o.layer === 'floor') ? 'back' : undefined; delete o.zb; _b.placeObj(S.objEls[i], o); }
+                        else if (o.layer === 'back') { o.layer = 'floor'; _b.placeObj(S.objEls[i], o); }   // 置底已是最底,再按不動
+                        return;
+                    }
                     const me = dims(o), myZ = zOf(o);
                     let best = null;
                     _b.CFG.layout.forEach((b, j) => {
@@ -316,7 +321,10 @@
                         const bz = zOf(b);
                         if (act === 'zfront' ? (bz >= myZ && (best == null || bz < best)) : (bz <= myZ && (best == null || bz > best))) best = bz;
                     });
-                    if (best == null) return;   // 在疊住它的東西裡已是最上/最下
+                    if (best == null) {   // 同疊物件裡已最上/最下
+                        if (act === 'zback') { o.layer = 'back'; delete o.zb; _b.placeObj(S.objEls[i], o); }   // 自動層退到底→再按降成「背景」
+                        return;
+                    }
                     o.zb = (act === 'zfront' ? best + 1 : best - 1) - (2 + Math.round(o.y + Math.round(o.h * (o.s || 1))));
                     if (!o.zb) delete o.zb;   // 歸零就拿掉欄位（回預設排序、數據乾淨）
                     _b.placeObj(S.objEls[i], o);
