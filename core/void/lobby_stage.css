@@ -282,6 +282,22 @@
 /* 🏘 地塊隱藏面：遊玩=整個藏起來；擺設模式=半透明灰階(看得到、可調位置) */
 .lstage-plot-off { display:none; }
 .lstage-editing .lstage-plot-off { display:block; opacity:.4; filter:grayscale(.6); }
+/* 🗂 圖層列表小窗(擺設模式)：PS式,上=前;拖列調前後/換組,點列選中 */
+.lstage-layers-win { position:absolute; right:12px; top:56px; width:236px; max-height:64%; display:flex; flex-direction:column;
+  background:rgba(20,22,30,.94); border:1px solid rgba(255,255,255,.14); border-radius:10px; z-index:2900;
+  box-shadow:0 6px 20px rgba(0,0,0,.5); color:#dde; font-size:12px; }
+.llw-head { display:flex; align-items:center; gap:6px; padding:8px 10px; cursor:grab; border-bottom:1px solid rgba(255,255,255,.1); }
+.llw-head .llw-close { margin-left:auto; background:none; border:none; color:#dde; cursor:pointer; font-size:14px; padding:2px 6px; }
+.llw-list { overflow-y:auto; padding:2px 0 8px; }
+.llw-group { padding:8px 10px 3px; color:#98a2b8; font-size:11px; }
+.llw-row { display:flex; align-items:center; gap:8px; padding:4px 10px; cursor:grab; touch-action:none; user-select:none; }
+.llw-row img { width:30px; height:30px; object-fit:contain; background:rgba(255,255,255,.06); border-radius:5px; pointer-events:none; flex:none; }
+.llw-row span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.llw-row:hover { background:rgba(255,255,255,.07); }
+.llw-row.sel { background:rgba(74,182,255,.18); box-shadow:inset 2px 0 0 #4ab6ff; }
+.llw-row.off { opacity:.45; }
+.llw-row.llw-drop, .llw-group.llw-drop { box-shadow:inset 0 2px 0 #4ab6ff; }
+.llw-list.llw-drop-end { box-shadow:inset 0 -2px 0 #4ab6ff; }
 /* 遮罩視覺化（擺設模式）：不可走區半透明紅 */
 .lstage-maskview { position:absolute; left:0; top:0; z-index:2300; pointer-events:none; }
 /* 過門觸發區（擺設模式）：橘色虛線框，可拖/右下角調大小 */
