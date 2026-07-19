@@ -111,7 +111,12 @@
         });
         // （外框鋼索黃色虛線已移除：改用手繪遮罩+物件佔地框做碰撞；boundary 資料仍留作 runtime 退路）
         // 空地拖曳=平移視角
-        S.root.querySelector('.lstage-click').onpointerdown = (e) => _dragStart(e, { kind: 'cam' });
+        // 拖空地平移：掛在整個 S.root（含縮小後四周留白、建築間、小人身上都能拖）；只在沒點到可互動元素時啟動
+        S.edit._panDown = (e) => {
+            if (e.target.closest('.lstage-editable, .lstage-marker, .lstage-zone, .lstage-door, .lstage-edit-panel')) return;   // 物件/站點/區塊/門/面板→各自處理
+            _dragStart(e, { kind: 'cam' });
+        };
+        S.root.addEventListener('pointerdown', S.edit._panDown);
         window.addEventListener('pointermove', _dragMove);
         window.addEventListener('pointerup', _dragEnd);
         // 控制面板
@@ -513,6 +518,7 @@
         }
         window.removeEventListener('pointermove', _dragMove);
         window.removeEventListener('pointerup', _dragEnd);
+        if (S.edit._panDown) S.root?.removeEventListener('pointerdown', S.edit._panDown);   // 移除拖空地平移監聽
         S.edit.feet.forEach(f => f.remove());
         S.edit.markers.forEach(m => m.remove());
         Object.values(S.edit.zones || {}).forEach(el => el.remove());
