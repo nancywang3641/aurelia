@@ -130,7 +130,7 @@
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         const _alphaFoot = !!_b.SCENES[S.scene].alphaFoot;
-        const _kbHint = '。選成群組後(圈選/多選/加入群組)，家具±/佔地/層級/翻轉/不擋路/複製/刪除都套用整組。電腦快捷：Shift+拖=鎖直線(只走水平或垂直)｜Ctrl+點家具=多選成群組｜Ctrl+拖空地=框選成群組｜點一下空地或按Esc=取消選取｜Ctrl+Z=一步步復原移動';
+        const _kbHint = '。選成群組後(圈選/多選/加入群組)，家具±/佔地/層級/翻轉/不擋路/複製/刪除都套用整組。電腦快捷：Shift+拖=鎖直線(只走水平或垂直)｜Ctrl或Shift+點家具=加入/移出群組(圈完想剔除某件也是這樣點)｜Ctrl+拖空地=框選成群組｜點一下空地或按Esc=取消選取｜Ctrl+Z=一步步復原移動';
         const _hint = (_alphaFoot
             ? '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紅剪影=屋子實際擋路範圍(照屋子形狀整棟實心，走不進去；靠拖屋子本體調位置即可)'
             : '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地') + _kbHint;
@@ -372,14 +372,11 @@
             const i = S.objEls.indexOf(img);
             if (e.ctrlKey) {   // 🖱 Ctrl+點=加入/移出群組（電腦端多選；手機沿用面板「加入群組」鈕）
                 e.preventDefault(); e.stopPropagation();
-                const at = S.edit.group.indexOf(i);
-                if (at >= 0) S.edit.group.splice(at, 1); else S.edit.group.push(i);
                 S.edit.sel = i;
-                _groupHighlight();
-                S.edit.feet.forEach((_, k) => _syncFoot(k));
+                _toggleGroup(i);
                 return;
             }
-            _dragStart(e, { kind: 'obj', i });
+            _dragStart(e, { kind: 'obj', i });   // Shift+點一下(沒拖動)也算多選→在 _dragEnd 判定
         };
     }
     // alphaFoot 剪影：把整棟「圖片不透明」的像素塗紅，畫在物件正上方＝玩家實際會被擋的形狀（整棟實心）
@@ -463,9 +460,15 @@
         }
         foot.classList.toggle('sel', S.edit.sel === i);
     }
+    function _toggleGroup(i) {
+        const at = S.edit.group.indexOf(i);
+        if (at >= 0) S.edit.group.splice(at, 1); else S.edit.group.push(i);
+        _groupHighlight();
+        S.edit.feet.forEach((_, k) => _syncFoot(k));
+    }
     function _dragStart(e, info) {
         e.preventDefault(); e.stopPropagation();
-        S.edit.drag = Object.assign({ sx: e.clientX, sy: e.clientY }, info);
+        S.edit.drag = Object.assign({ sx: e.clientX, sy: e.clientY, shift: e.shiftKey }, info);
         if (info.kind === 'obj') {
             S.edit.sel = info.i;
             const o = _b.CFG.layout[info.i];
@@ -600,6 +603,7 @@
         } else if (d.kind === 'obj') {
             const items = d.groupOrig ? d.groupOrig.map(g => ({ i: g.i, x: g.x, y: g.y })) : [{ i: d.i, x: d.ox, y: d.oy }];
             if (items.some(it => { const o = _b.CFG.layout[it.i]; return o && (o.x !== it.x || o.y !== it.y); })) _pushUndo({ t: 'obj', items });
+            else if (d.shift) _toggleGroup(d.i);   // ⇧ Shift+點一下家具(沒拖動)=加入/移出群組（拖了就是鎖直線移動）
         } else if (d.kind === 'pt') {
             if (d.pt.x !== d.ox || d.pt.y !== d.oy) _pushUndo({ t: 'pt', pt: d.pt, m: d.m, x: d.ox, y: d.oy });
         } else if (d.kind === 'zone') {
