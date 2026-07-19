@@ -160,8 +160,8 @@
               '<button class="lep-btn" data-act="layerback" title="貼牆當背景、永遠在物件後面（例：牆上螢幕）"><i class="fa-solid fa-image"></i> 牆上</button>' +
             '</div>' +
             '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="zfront" title="被大物件蓋住時按這個：不改位置、只把它的前後排序往前擠（例：立在屋子前緣的看板）。按到剛好蓋過就停，擠太多人物走位會穿幫"><i class="fa-solid fa-layer-group"></i> 往前疊</button>' +
-              '<button class="lep-btn" data-act="zback" title="往後退一層（「往前疊」的反向；歸零=回到只看底邊的預設排序）"><i class="fa-solid fa-layer-group fa-flip-vertical"></i> 往後疊</button>' +
+              '<button class="lep-btn" data-act="zfront" title="跟PS圖層一樣：在「跟它疊住的東西」裡往上跳一層——按一下立刻蓋過原本壓著它的那個。例：屋前看板被屋子遮→選看板按這個"><i class="fa-solid fa-arrow-up"></i> 上移一層</button>' +
+              '<button class="lep-btn" data-act="zback" title="在「跟它疊住的東西」裡往下退一層（上移的反向）"><i class="fa-solid fa-arrow-down"></i> 下移一層</button>' +
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="nocollide" title="切換這件家具擋不擋路：地毯/裝飾設成不擋路，人就能走過去（紅佔地框會消失）"><i class="fa-solid fa-person-walking"></i> 不擋路 開/關</button>' +
@@ -300,10 +300,24 @@
                 });
                 _exportToPanel();
             } else if (act === 'zfront' || act === 'zback') {
+                // 照PS圖層直覺：在「跟它疊住(畫面有重疊)的物件」裡上/下移一層——直接跳到剛好蓋過/讓給下一個，按一下就看得到
                 const ts = _targets(); if (!ts.length) return;
+                const dims = (b) => { const bs = b.s || 1; return { x: b.x, y: b.y, w: b.w * bs, h: b.h * bs }; };
+                const zOf = (b) => 2 + Math.round(b.y + Math.round(b.h * (b.s || 1)) + (b.zb || 0));   // 同 placeObj 的一般層公式
                 ts.forEach(i => {
                     const o = _b.CFG.layout[i];
-                    o.zb = Math.max(-400, Math.min(400, (o.zb || 0) + (act === 'zfront' ? 20 : -20)));
+                    if (o.layer) return;   // 「地上/牆上」層是固定底層，不吃疊層（先切回「一般」再調）
+                    const me = dims(o), myZ = zOf(o);
+                    let best = null;
+                    _b.CFG.layout.forEach((b, j) => {
+                        if (j === i || b.layer || b._plotOff) return;
+                        const r = dims(b);
+                        if (!(me.x < r.x + r.w && me.x + me.w > r.x && me.y < r.y + r.h && me.y + me.h > r.y)) return;   // 畫面沒疊到→無關
+                        const bz = zOf(b);
+                        if (act === 'zfront' ? (bz >= myZ && (best == null || bz < best)) : (bz <= myZ && (best == null || bz > best))) best = bz;
+                    });
+                    if (best == null) return;   // 在疊住它的東西裡已是最上/最下
+                    o.zb = (act === 'zfront' ? best + 1 : best - 1) - (2 + Math.round(o.y + Math.round(o.h * (o.s || 1))));
                     if (!o.zb) delete o.zb;   // 歸零就拿掉欄位（回預設排序、數據乾淨）
                     _b.placeObj(S.objEls[i], o);
                 });
