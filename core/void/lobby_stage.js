@@ -175,7 +175,7 @@
         city: {   // 🏙 視差城市廣場＝分層可走（新版：手繪遮罩碰撞，同大廳；前景建築物件各自深度排序）
             base: 'city/city_floor_v1.png',        // 新廣場地板（乾淨白色，同大廳套路）；建築/噴泉/樹走前景物件
             mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
-            upper: 'city/obj/city_floor_frame_upper_part.png',   // 前景遮擋層：廣場後牆(綠籬+入口階梯)蓋在角色上→走到最上被牆擋
+            upper: ['city/obj/city_floor_frame_upper_part.png', 'city/obj/city_floor_frame_lower_part.png'],   // 前景遮擋層(北牆+南牆)；南牆放最後=疊最上,壓住走到下緣的小人
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
             cfgKey: 'lobby_stage_layout_city_v7',   // v7=換新地板+遮罩碰撞（舊格子版存檔作廢）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
@@ -1290,12 +1290,16 @@
             resolveRef(CFG.baseOverride).then(src => { if (src && mapImg) mapImg.src = src; });
         }
         // 🌳 前景上層：外圈樹/前景素材蓋在角色之上（走到樹後被遮，不會踩在樹上）；z 高於所有小人；編輯模式隱藏
+        //    upper 可給單張或陣列（多張前景層，如廣場北牆+南牆各一張）
         if (SCENES[S.scene].upper) {
-            const up = document.createElement('img');
-            up.className = 'lstage-upper';
-            up.width = MAP_W; up.height = MAP_H;
-            resolveRef({ file: SCENES[S.scene].upper }).then(src => { if (src) up.src = src; });
-            S.world.appendChild(up);
+            const _uppers = Array.isArray(SCENES[S.scene].upper) ? SCENES[S.scene].upper : [SCENES[S.scene].upper];
+            for (const _uf of _uppers) {
+                const up = document.createElement('img');
+                up.className = 'lstage-upper';
+                up.width = MAP_W; up.height = MAP_H;
+                resolveRef({ file: _uf }).then(src => { if (src) up.src = src; });
+                S.world.appendChild(up);
+            }
         }
         S.objEls = CFG.layout.map(o => _spawnObjEl(o));
         const editBtn = root.querySelector('.lstage-edit-btn');
