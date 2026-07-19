@@ -542,6 +542,25 @@
             placeActor(a);                                 // 用新錨點/寬度重放
         } catch (e) { /* CORS污染等→維持預設(FOOT_W/圖底錨) */ }
     }
+    // 🧍 走路圖(3×4)版量測：取中間立定幀量可見寬度→a.wfrac（碰撞半寬比例）。
+    //   sheet 小人原本量不到實寬→blocked 退回寫死 FOOT_W=46：窄縫看起來能過、腳印卻塞不下=卡住。
+    function _measureSheetBounds(a, probe) {
+        try {
+            const fw = Math.max(1, Math.floor(probe.naturalWidth / 3)), fh = Math.max(1, Math.floor(probe.naturalHeight / 4));
+            const sw = 80, sh = Math.max(1, Math.round(fh * 80 / fw));
+            const cv = document.createElement('canvas'); cv.width = sw; cv.height = sh;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(probe, fw, 0, fw, fh, 0, 0, sw, sh);   // 第2欄第1列=朝下立定幀
+            const d = ctx.getImageData(0, 0, sw, sh).data;
+            let minX = sw, maxX = -1;
+            for (let yy = 0; yy < sh; yy++) for (let xx = 0; xx < sw; xx++) {
+                if (d[(yy * sw + xx) * 4 + 3] >= 40) { if (xx < minX) minX = xx; if (xx > maxX) maxX = xx; }
+            }
+            if (maxX < 0) return;
+            a.wfrac = ((maxX - minX + 1) / 2) / sw;
+            placeActor(a);
+        } catch (e) { /* CORS污染等→維持FOOT_W */ }
+    }
     function spawnActor(src, x, y, h) {
         const isSheet = (typeof src === 'object' && src && src.sheet);
         const el = document.createElement(isSheet ? 'div' : 'img');
@@ -550,9 +569,14 @@
         const a = { x, y, baseH: h, h: Math.round(h * _actorScale()), el, walking: false, flip: false };
         if (isSheet) {
             a.sheet = true; a.dir = 0; a.frame = 1; a.animT = 0;
-            el.style.backgroundImage = 'url("' + src.sheet + '")';
             const probe = new Image();
-            probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); a.el.classList.remove('lstage-loading'); };
+            if (!String(src.sheet).startsWith('data:')) probe.crossOrigin = 'anonymous';   // 要讀alpha量實寬
+            probe.onload = () => {
+                a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4;
+                el.style.backgroundImage = 'url("' + src.sheet + '")';   // 🚨 CORS探針先載、bg再吃快取；反序會污染快取讀不到alpha
+                _measureSheetBounds(a, probe);
+                placeActor(a); a.el.classList.remove('lstage-loading');
+            };
             probe.src = src.sheet;
         } else {
             if (!String(src).startsWith('data:')) el.crossOrigin = 'anonymous';   // 要讀alpha量範圍→掛CORS(jsdelivr有頭)
@@ -584,7 +608,9 @@
         if (a.sheet) return placeSheetActor(a);
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
         const w = a.h * ratio;
-        if (a.wfrac != null) a.hw = Math.max(6, Math.round(w * a.wfrac));   // 碰撞半寬=可見角色半寬(量到才設；沒量到 blocked 用 FOOT_W)
+        // 碰撞半寬=可見角色半寬(量到才設；沒量到 blocked 用 FOOT_W)。
+        // 🚨 用「邏輯尺寸」算(人物縮放,不含 outdoor 鏡頭脫鉤放大)：視覺放大是棋子表現,腳印跟著放大會變巨人塞不過縫
+        if (a.wfrac != null) a.hw = Math.max(6, Math.round(a.baseH * (CFG.points.actorScale || 1) * ratio * a.wfrac));
         // 下方padding修正：把圖往下推 bpad*h，讓「可見的腳」正好落在 a.y(=碰撞判定點)，而不是錨在圖片底部(腳下方)
         const footPad = Math.round(a.h * (a.bpad || 0));
         // 只在變化時寫入；座標保留小數（整數化會讓移動跳格卡卡）
@@ -603,6 +629,7 @@
     function placeSheetActor(a) {
         const ratio = (a.frameW && a.frameH) ? a.frameW / a.frameH : 0.8;
         const w = a.h * ratio;
+        if (a.wfrac != null) a.hw = Math.max(6, Math.round(a.baseH * (CFG.points.actorScale || 1) * ratio * a.wfrac));   // 同 placeActor:邏輯尺寸算腳印半寬
         const left = a.x - w / 2, top = a.y - a.h, z = 2 + Math.round(a.y) + _actorZBias(a);
         const tf = 'translate3d(' + left + 'px,' + top + 'px,0)';
         if (a._tf !== tf) { a.el.style.transform = tf; a._tf = tf; }
@@ -639,9 +666,14 @@
         a._left = a._top = a._z = a._bg = a._tf = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
         a.bpad = a.wfrac = a.hw = null;   // 換新圖→清掉舊的量測值，重新量
         if (isSheet) {
-            el.style.backgroundImage = 'url("' + src.sheet + '")';
             const probe = new Image();
-            probe.onload = () => { a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4; placeActor(a); a.el.classList.remove('lstage-loading'); };
+            if (!String(src.sheet).startsWith('data:')) probe.crossOrigin = 'anonymous';   // 要讀alpha量實寬
+            probe.onload = () => {
+                a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4;
+                el.style.backgroundImage = 'url("' + src.sheet + '")';   // 🚨 CORS探針先載、bg再吃快取；反序會污染快取讀不到alpha
+                _measureSheetBounds(a, probe);
+                placeActor(a); a.el.classList.remove('lstage-loading');
+            };
             probe.src = src.sheet;
         } else {
             if (!String(src).startsWith('data:')) el.crossOrigin = 'anonymous';
