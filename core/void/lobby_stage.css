@@ -303,8 +303,16 @@
   background:#b46ac2; color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px;
   cursor:nwse-resize; box-shadow:0 2px 6px rgba(0,0,0,.45); touch-action:none; }
 .lstage-edit-panel { position:absolute; left:10px; top:10px; z-index:3000; width:230px;
-  background:rgba(26,24,20,.92); border:1px solid rgba(243,234,216,.25); border-radius:12px; padding:10px;
+  max-height:calc(100% - 20px); overflow-y:auto;
+  background:rgba(26,24,20,.88); border:1px solid rgba(243,234,216,.25); border-radius:12px; padding:10px;
   display:flex; flex-direction:column; gap:8px; }
+.lep-collapse-bar { display:flex; align-items:center; gap:8px; }
+.lep-collapse-bar .lep-title { font-weight:700; font-size:13px; color:#f3ead8; opacity:.9; }
+.lep-collapse-btn { flex:0 0 auto !important; width:36px; margin-left:auto; }
+.lstage-edit-panel.lep-collapsed { gap:0; width:150px; }
+.lstage-edit-panel.lep-collapsed .lep-hint,
+.lstage-edit-panel.lep-collapsed .lep-row,
+.lstage-edit-panel.lep-collapsed .lep-out { display:none !important; }
 .lep-hint { color:#d8cdb4; font-size:11px; line-height:1.5; }
 .lep-row { display:flex; gap:6px; }
 .lep-btn { flex:1; border:none; border-radius:8px; padding:7px 4px; font-size:12px; cursor:pointer;
