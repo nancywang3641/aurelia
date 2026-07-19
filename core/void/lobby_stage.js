@@ -172,13 +172,11 @@
             doorsV: 1,
             rabbit: { x: 773, y: 365 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
         },
-        city: {   // 🏙 視差城市第一街區＝分層可走（day01 空底板+遮罩擋踩+前景物件各自深度排序；玩家/NPC 走路走到門進店）
-            base: 'city/city_layers/city_floor_frame_day01.webp',      // day01 空底板：地面+外圈樹框（建築/噴泉/中庭樹拆成前景物件，才能走它們後面）
-            upper: 'city/city_layers/city_floor_frame_upper.webp',     // 🌳 外圈樹前景層：蓋在角色上→站廣場邊時被外圈樹遮住，不會壓在樹上（內部建築/噴泉走物件深度排序）
-            // 🟦 RPG Maker 式格子碰撞：格子表直接寫死(從 day02_mask 烤成)，不載圖→沒有 CORS/canvas/非同步空窗那些會爆的環節。1=擋 0=可走。
-            grid: { cell: 24, cols: 64, rows: 43, bits: '/////j/////////+P/////////4///////wf/j/7j//+AA7+P4AB//wAAMw7AAA/8AAAAAAAAAf5//4AAAAAHxn//gACAAAcCf/8YAeAAAAB//xgBwAAAOP//GAHAAAA+f/4AAAAAA/4/AAAAAAAD+AAD4AA+AAH+AADAADwAA/4AAAAAPAAD/AAAAAAAAAPwAA8A+AAAAEAADwH4AAAAAAAAAPgP//AAAB8AAB//+BwAHwAAH//4nAAAAAAf//GYAAAAAA//4PwAAAAAAIEB+AAAAAAeAPHwAAAAAAAAAHgAAAAAAAAAeAAAAAAAAAD4AAAAAAAAAPgAAAAAAAAA4AAAAAAAAABgAAAAAAAAAHAAAAAAAAAAeAAAAAQAAAD8AAAAAAAAAf4AAA4AAAAD//gf/w///j///xAHBgD//////8AAP////////AH////////+A////8=' },
+        city: {   // 🏙 視差城市廣場＝分層可走（新版：手繪遮罩碰撞，同大廳；前景建築物件各自深度排序）
+            base: 'city/city_floor_v1.png',        // 新廣場地板（乾淨白色，同大廳套路）；建築/噴泉/樹走前景物件
+            mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
-            cfgKey: 'lobby_stage_layout_city_v6',   // v6=day01+前景物件+格子碰撞；舊版存檔整組作廢
+            cfgKey: 'lobby_stage_layout_city_v7',   // v7=換新地板+遮罩碰撞（舊格子版存檔作廢）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
             // 前景物件＝從 upper01/02/03 拆出的獨立元素（書咖/交易所/噴泉/樹/燈柱/長椅）；bbox 即座標。
             //   noCollide=不進碰撞(碰撞全走遮罩)；靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
