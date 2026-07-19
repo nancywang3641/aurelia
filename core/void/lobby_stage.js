@@ -73,30 +73,32 @@
         hall: {
             base: 'lobby_hall_base_v6.png',   // v6=Rae 修正底圖(exchange_left_entry02)
             mask: 'lobby_hall_mask_v5.png',   // v5 手繪碰撞遮罩(白=可走)
-            cfgKey: 'lobby_stage_layout_hall_v8',   // v8：清空舊存檔（桌椅組加回+沙發組並存）
-            layout: [   // 兩組座位都在：右=沙發組(拆開版)、左=桌椅組；footH/s 粗估，Rae 擺設模式微調
-                { file: 'lobby_hall_obj_counter_v5.png',   x: 430, y: 150, w: 1548, h: 556, footH: 90,  footW: 520, s: 0.30 },   // 接待櫃台(後方)
-                { file: 'lobby_hall_obj_pedestal_v5.png',  x: 540, y: 300, w: 989,  h: 682, footH: 120, footW: 360, s: 0.42 },   // 核心基座(中央)
-                { file: 'lobby_hall_obj_core_v5.png',      x: 690, y: 140, w: 245,  h: 321, footH: 40,  s: 0.42, float: true },  // LUNA 核心(飄浮在基座上)
-                // ── 沙發組(拆開版) 右側 ──
-                { file: 'lobby_hall_obj_sofa_v6.png',      x: 980,  y: 500, w: 1012, h: 844, footH: 70, footW: 760, s: 0.34 },   // 長沙發
-                { file: 'lobby_hall_obj_coffee_v6.png',    x: 1040, y: 640, w: 754,  h: 593, footH: 60, s: 0.36 },   // 藍光咖啡桌
-                { file: 'lobby_hall_obj_lounge_v6.png',    x: 1300, y: 560, w: 544,  h: 752, footH: 45, s: 0.34 },   // 單人躺椅
-                // ── 桌椅組 左側(加回來) ──
-                { file: 'lobby_hall_obj_holotable_v5.png', x: 330, y: 700, w: 625, h: 569, footH: 60, s: 0.32 },   // 全息圓桌
-                { file: 'lobby_hall_obj_chair_nw_v5.png',  x: 220, y: 680, w: 619, h: 837, footH: 40, s: 0.26 },
-                { file: 'lobby_hall_obj_chair_ne_v5.png',  x: 480, y: 680, w: 668, h: 880, footH: 40, s: 0.26 },
-                { file: 'lobby_hall_obj_chair_s_v5.png',    x: 360, y: 830, w: 414, h: 429, footH: 40, s: 0.28 },
-                // ── 裝飾 ──
-                { file: 'lobby_hall_obj_deco_05_v5.png',    x: 600, y: 430, w: 132, h: 139, footH: 20, s: 0.50 },
-                { file: 'lobby_hall_obj_deco_01_v5.png',    x: 150, y: 300, w: 67,  h: 124, footH: 20, s: 0.60 },
-                { file: 'lobby_hall_obj_deco_02_v5.png',    x: 1420, y: 300, w: 63, h: 99, footH: 20, s: 0.60 },
+            cfgKey: 'lobby_stage_layout_hall_v9',   // v9：定版 Rae 擺設數據（兩組座位左+右）
+            layout: [   // ⬇ Rae 擺設模式輸出（複製數據）；改版請直接換這份
+                { file: "lobby_hall_obj_counter_v5.png", x: 994, y: 229, w: 1548, h: 556, footH: 160, footW: 1548, s: 0.27 },
+                { file: "lobby_hall_obj_pedestal_v5.png", x: 630, y: 462, w: 989, h: 682, footH: 120, footW: 360, s: 0.275, layer: "floor", noCollide: true },
+                { file: "lobby_hall_obj_core_v5.png", x: 657, y: 252, w: 245, h: 321, footH: 40, footW: 86, s: 0.902, float: true },
+                { file: "lobby_hall_obj_sofa_v6.png", x: 108, y: 231, w: 1012, h: 844, footH: 570, footW: 798, s: 0.248 },
+                { file: "lobby_hall_obj_coffee_v6.png", x: 260, y: 309, w: 754, h: 593, footH: 360, footW: 754, s: 0.173 },
+                { file: "lobby_hall_obj_lounge_v6.png", x: 382, y: 234, w: 544, h: 752, footH: 295, footW: 485, s: 0.132 },
+                { file: "lobby_hall_obj_holotable_v5.png", x: 298, y: 679, w: 625, h: 569, footH: 200, footW: 369, s: 0.138 },
+                { file: "lobby_hall_obj_chair_nw_v5.png", x: 215, y: 631, w: 619, h: 837, footH: 310, footW: 557, s: 0.125 },
+                { file: "lobby_hall_obj_chair_ne_v5.png", x: 390, y: 631, w: 668, h: 880, footH: 310, footW: 601, s: 0.125 },
+                { file: "lobby_hall_obj_chair_s_v5.png", x: 307, y: 736, w: 414, h: 429, footH: 190, footW: 373, s: 0.178 },
+                { file: "lobby_hall_obj_deco_05_v5.png", x: 540, y: 116, w: 132, h: 139, footH: 60, footW: 118, s: 1.169 },
+                { file: "lobby_hall_obj_deco_01_v5.png", x: 985, y: 795, w: 67, h: 124, footH: 40, footW: 59, s: 0.799 },
+                { file: "lobby_hall_obj_deco_02_v5.png", x: 1420, y: 300, w: 63, h: 99, footH: 20, s: 0.6 },
+                { file: "lobby_hall_obj_chair_nw_v5.png", x: 1192, y: 537, w: 619, h: 837, footH: 310, footW: 557, s: 0.125 },
+                { file: "lobby_hall_obj_holotable_v5.png", x: 1275, y: 585, w: 625, h: 569, footH: 200, footW: 369, s: 0.138 },
+                { file: "lobby_hall_obj_chair_s_v5.png", x: 1284, y: 642, w: 414, h: 429, footH: 190, footW: 373, s: 0.178 },
+                { file: "lobby_hall_obj_chair_ne_v5.png", x: 1367, y: 537, w: 668, h: 880, footH: 310, footW: 601, s: 0.125 },
+                { file: "lobby_hall_obj_deco_05_v5.png", x: 842, y: 114, w: 132, h: 139, footH: 60, footW: 118, s: 1.169 },
             ],
             points: {
-                npcZone:  { x: 380, y: 560, w: 780, h: 240 },
+                npcZone:  { x: 191, y: 249, w: 1273, h: 626 },
                 player: { x: 760, y: 640 },
                 arrive: { x: 730, y: 820 },   // 從街區底部大門進來的落點
-                alicePos: { x: 1150, y: 360 },   // 愛麗絲站位（可在擺設模式拖）
+                alicePos: { x: 1072, y: 331 },   // 愛麗絲站位（可在擺設模式拖）
                 boundary: [
                     { x: 190, y: 235 }, { x: 1400, y: 235 }, { x: 1465, y: 880 }, { x: 85, y: 880 },
                 ],
@@ -104,11 +106,11 @@
             },
             walls: [],   // 碰撞全走手繪遮罩
             doors: [
-                { x: 650, y: 900, w: 200, h: 80, to: 'city', spawn: { x: 1205, y: 655 } },   // 底部大門→街區
-                { x: 40, y: 460, w: 95, h: 210, to: 'exchange', spawn: { x: 1330, y: 620 } },   // 左拱門→交易所（落在交易所右側）
+                { x: 577, y: 888, w: 385, h: 110, to: 'city', spawn: { x: 1205, y: 655 } },   // 底部大門→街區
+                { x: 65, y: 490, w: 58, h: 203, to: 'exchange', spawn: { x: 1330, y: 620 } },   // 左拱門→交易所（落在交易所右側）
             ],
-            doorsV: 3,   // 加左門→交易所，bump 清舊存檔門座標
-            alice: { x: 1150, y: 360 },   // 愛麗絲：不漫步、正面站
+            doorsV: 3,
+            alice: { x: 1072, y: 331 },   // 愛麗絲：不漫步、正面站
         },
         room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
             base: 'lobby_404_base_v1.png',
@@ -132,35 +134,43 @@
         exchange: {   // 🏦 交易所：純白大廳左門進的一間房；白兔先生站櫃台，點他開買房面板（家具粗擺，擺設模式可拖）
             base: 'lobby_exchange_base_v2.png',   // v2=Rae 修正版（換檔名防快取）
             mask: 'lobby_exchange_mask_v1.png',
-            cfgKey: 'lobby_stage_layout_exchange_v1',
-            layout: [
-                { file: 'lobby_exchange_obj_rate_screen.png', x: 470,  y: 70,  w: 1682, h: 507, footH: 0,  s: 0.30, layer: 'back' },   // 牆上幣值螢幕(貼牆背景、不擋)
-                { file: 'lobby_exchange_obj_counter.png',     x: 380,  y: 240, w: 1949, h: 448, footH: 90, footW: 560, s: 0.34 }, // 接待櫃台
-                { file: 'lobby_exchange_obj_rug.png',         x: 470,  y: 470, w: 1150, h: 777, footH: 0,  s: 0.42, layer: 'floor' },   // 地毯(壓地板、可走)
-                { file: 'lobby_exchange_obj_lamp_left.png',   x: 150,  y: 300, w: 212,  h: 678, footH: 30, s: 0.42 },
-                { file: 'lobby_exchange_obj_lamp_right.png',  x: 1300, y: 300, w: 212,  h: 678, footH: 30, s: 0.42 },
-                { file: 'lobby_exchange_obj_table.png',       x: 300,  y: 640, w: 651,  h: 769, footH: 60, s: 0.32 },   // 洽談桌
-                { file: 'lobby_exchange_obj_chair_left.png',  x: 210,  y: 660, w: 603,  h: 766, footH: 40, s: 0.30 },
-                { file: 'lobby_exchange_obj_chair_right.png', x: 470,  y: 660, w: 606,  h: 801, footH: 40, s: 0.30 },
-                { file: 'lobby_exchange_obj_chair_front_v2.png', x: 620, y: 560, w: 491, h: 471, footH: 40, s: 0.40 },   // 正面椅
-                { file: 'lobby_exchange_obj_bench.png',        x: 700,  y: 610, w: 978,  h: 613, footH: 60, s: 0.35 },   // 雙人長凳
-                { file: 'lobby_exchange_obj_plant.png',        x: 1280, y: 300, w: 485,  h: 1227, footH: 40, s: 0.38 },  // 盆栽(高)
-                { file: 'lobby_exchange_obj_planter.png',     x: 1180, y: 650, w: 352,  h: 822, footH: 40, s: 0.35 },
+            cfgKey: 'lobby_stage_layout_exchange_v2',   // v2：定版 Rae 擺設數據（兩組洽談區）
+            layout: [   // ⬇ Rae 擺設模式輸出（複製數據）；改版請直接換這份
+                { file: "lobby_exchange_obj_rate_screen.png", x: 524, y: 37, w: 1682, h: 507, footH: 0, s: 0.3, layer: "back" },
+                { file: "lobby_exchange_obj_counter.png", x: 366, y: 232, w: 1949, h: 448, footH: 90, footW: 1929, s: 0.411 },
+                { file: "lobby_exchange_obj_rug.png", x: 258, y: 593, w: 1150, h: 777, footH: 0, s: 0.3, layer: "floor", noCollide: true },
+                { file: "lobby_exchange_obj_lamp_left.png", x: 299, y: 524, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_table.png", x: 388, y: 632, w: 651, h: 769, footH: 320, footW: 422, s: 0.136 },
+                { file: "lobby_exchange_obj_chair_left.png", x: 315, y: 597, w: 603, h: 766, footH: 370, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_right.png", x: 472, y: 599, w: 606, h: 801, footH: 410, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_front_v2.png", x: 394, y: 715, w: 491, h: 471, footH: 240, s: 0.156 },
+                { file: "lobby_exchange_obj_bench.png", x: 192, y: 355, w: 978, h: 613, footH: 60, s: 0.132 },
+                { file: "lobby_exchange_obj_plant.png", x: 148, y: 348, w: 485, h: 1227, footH: 40, s: 0.07 },
+                { file: "lobby_exchange_obj_planter.png", x: 269, y: 710, w: 352, h: 822, footH: 200, footW: 317, s: 0.122 },
+                { file: "lobby_exchange_obj_lamp_left.png", x: 544, y: 525, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_planter.png", x: 1268, y: 722, w: 352, h: 822, footH: 200, footW: 317, s: 0.122 },
+                { file: "lobby_exchange_obj_rug.png", x: 967, y: 600, w: 1150, h: 777, footH: 0, s: 0.3, layer: "floor", noCollide: true },
+                { file: "lobby_exchange_obj_chair_left.png", x: 1024, y: 604, w: 603, h: 766, footH: 370, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_right.png", x: 1181, y: 606, w: 606, h: 801, footH: 410, s: 0.129 },
+                { file: "lobby_exchange_obj_table.png", x: 1097, y: 639, w: 651, h: 769, footH: 320, footW: 422, s: 0.136 },
+                { file: "lobby_exchange_obj_chair_front_v2.png", x: 1103, y: 722, w: 491, h: 471, footH: 230, s: 0.156 },
+                { file: "lobby_exchange_obj_lamp_left.png", x: 1008, y: 531, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_lamp_left.png", x: 1253, y: 532, w: 212, h: 678, footH: 170, s: 0.132 },
             ],
             points: {
-                npcZone:  { x: 420, y: 560, w: 700, h: 220 },
+                npcZone:  { x: 118, y: 418, w: 1260, h: 459 },
                 player:  { x: 760, y: 720 },
                 arrive:  { x: 1330, y: 620 },   // 從大廳左門進來→落在交易所右側(右拱門旁)
-                rabbitPos: { x: 760, y: 430 },  // 白兔站櫃台前(擺設模式可拖)
+                rabbitPos: { x: 773, y: 365 },  // 白兔站櫃台前(擺設模式可拖)
                 boundary: [ { x: 120, y: 250 }, { x: 1440, y: 250 }, { x: 1470, y: 900 }, { x: 90, y: 900 } ],
                 actorScale: 0.7,
             },
             walls: [],
             doors: [
-                { x: 1400, y: 470, w: 95, h: 210, to: 'hall', spawn: { x: 175, y: 600 } },   // 右拱門→回純白大廳(落在大廳左門內側)
+                { x: 1423, y: 513, w: 55, h: 158, to: 'hall', spawn: { x: 175, y: 600 } },   // 右拱門→回純白大廳(落在大廳左門內側)
             ],
             doorsV: 1,
-            rabbit: { x: 760, y: 430 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
+            rabbit: { x: 773, y: 365 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
         },
         city: {   // 🏙 視差城市第一街區＝分層可走（day01 空底板+遮罩擋踩+前景物件各自深度排序；玩家/NPC 走路走到門進店）
             base: 'city/city_layers/city_floor_frame_day01.webp',      // day01 空底板：地面+外圈樹框（建築/噴泉/中庭樹拆成前景物件，才能走它們後面）
