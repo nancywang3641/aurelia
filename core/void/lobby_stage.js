@@ -1139,6 +1139,48 @@
         } catch (e) {}
         return false;
     }
+    // ── 🌧 天氣層：小雨 ──────────────────────────────────
+    //    一張 canvas 蓋在場景上(螢幕座標)+150顆粒子+共用主 tick(不另開迴圈;台面藏起來時 tick 睡=雨自動停)。
+    //    只在 outdoor 場景下；擺設模式收掉(別干擾編輯)。
+    let _rain = null;   // { cv, ctx, w, h, drops }
+    function _rainDrop(w, h, anywhere) {
+        return {
+            x: Math.random() * (w + 80) - 40,
+            y: anywhere ? Math.random() * h : -30 - Math.random() * 40,
+            len: 9 + Math.random() * 8,          // 雨絲長
+            spd: 0.5 + Math.random() * 0.35,     // px/ms
+            drift: 0.05 + Math.random() * 0.05,  // 微斜
+        };
+    }
+    function _rainTick(dt) {
+        const on = S.active && !S.edit && SCENES[S.scene] && SCENES[S.scene].outdoor;
+        if (!on) { if (_rain) { _rain.cv.remove(); _rain = null; } return; }
+        if (!_rain) {
+            const cv = document.createElement('canvas');
+            cv.className = 'lstage-weather';
+            S.root.appendChild(cv);
+            _rain = { cv, ctx: cv.getContext('2d'), w: 0, h: 0, drops: [] };
+        }
+        const rc = S.root.getBoundingClientRect();
+        const w = Math.max(1, Math.round(rc.width)), h = Math.max(1, Math.round(rc.height));
+        if (_rain.w !== w || _rain.h !== h) {   // 尺寸變了(轉向/縮放)→重鋪畫布+按面積配密度(小雨~1滴/9000px²,封頂150)
+            _rain.w = _rain.cv.width = w; _rain.h = _rain.cv.height = h;
+            const n = Math.min(150, Math.round(w * h / 9000));
+            _rain.drops = Array.from({ length: n }, () => _rainDrop(w, h, true));
+        }
+        const { ctx, drops } = _rain;
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = 'rgba(205,222,255,.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (const d of drops) {
+            d.y += d.spd * dt; d.x += d.drift * dt;
+            if (d.y > h + 20) Object.assign(d, _rainDrop(w, h, false));
+            ctx.moveTo(d.x, d.y);
+            ctx.lineTo(d.x - d.drift * 22, d.y - d.len);
+        }
+        ctx.stroke();
+    }
     function tick(now) {
         if (_stageHidden()) {
             S.raf = null;
@@ -1151,6 +1193,7 @@
         }
         const dt = Math.min(50, now - S.last); S.last = now;
         update(dt);
+        _rainTick(dt);
         S.raf = requestAnimationFrame(tick);
     }
     function update(dt) {
@@ -1565,6 +1608,7 @@
         endTalk();
         cancelAnimationFrame(S.raf);
         if (S.sleepT) { clearTimeout(S.sleepT); S.sleepT = null; }
+        _rain = null;   // 🌧 雨層 canvas 跟著 S.root.remove() 一起走,清引用即可
         window.removeEventListener('resize', fitCamera);
         if (S._ro) { try { S._ro.disconnect(); } catch (e) {} S._ro = null; }
         if (S.onKey) {
