@@ -652,6 +652,35 @@
     function _actorZBias(a) {
         return (SCENES[S.scene] && SCENES[S.scene].outdoor) ? Math.round(a.h * 0.2) : 0;
     }
+    // 👻 圓形透視窗（市面ARPG作法）：小人走到建築/樹後面被蓋住→只對「蓋住他的那棟」開一個
+    //    以小人身體為圓心的柔邊遮罩洞（中心留25%不透明=磨砂感，不是整棟半透明）；走開就恢復。
+    //    只在 alphaFoot 場景（大地圖）啟用；遮罩座標=元素本地px，flipX 物件整個被鏡像→座標反著給。
+    let _seeThruEls = new Set();
+    function _updateSeeThrough() {
+        const p = S.player;
+        const on = p && CFG && SCENES[S.scene].alphaFoot;
+        const next = new Set();
+        if (on) {
+            const pw = p.h * ((p.frameW && p.frameH) ? p.frameW / p.frameH : 0.6);
+            const pl = p.x - pw / 2, pt = p.y - p.h;
+            const pz = 2 + Math.round(p.y) + _actorZBias(p);   // 同 placeActor 的 z
+            const cy = p.y - p.h * 0.45, R = Math.round(p.h * 0.62);
+            CFG.layout.forEach((o, i) => {
+                const el = S.objEls?.[i];
+                if (!el || o.layer || o._plotOff) return;   // 置底/背景在人物下面，不會遮人
+                const s = o.s || 1, ew = Math.round(o.w * s), eh = Math.round(o.h * s);
+                if (2 + Math.round(o.y + eh + (o.zb || 0)) <= pz) return;              // 沒畫在小人前面
+                if (!(pl < o.x + ew && pl + pw > o.x && pt < o.y + eh && p.y > o.y)) return;   // 畫面沒疊到
+                let lx = Math.round(p.x - o.x);
+                if (o.flipX) lx = ew - lx;
+                const m = 'radial-gradient(circle ' + R + 'px at ' + lx + 'px ' + Math.round(cy - o.y) + 'px, rgba(0,0,0,.25) 0 55%, #000 100%)';
+                if (el._mask !== m) { el.style.webkitMaskImage = m; el.style.maskImage = m; el._mask = m; }
+                next.add(el);
+            });
+        }
+        _seeThruEls.forEach(el => { if (!next.has(el)) { el.style.webkitMaskImage = ''; el.style.maskImage = ''; el._mask = null; } });
+        _seeThruEls = next;
+    }
     function placeActor(a) {
         if (a.sheet) return placeSheetActor(a);
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
@@ -1151,6 +1180,7 @@
                 if (p.sheet) { p.frame = 1; p.animT = 0; }   // 立定=中幀
             }
             placeActor(p);
+            _updateSeeThrough();   // 👻 被建築蓋住→開圓形透視窗
             // 🚪 過門判定：落地後必須先「走出」觸發區一次，門才重新武裝（防落點在門區內乒乓轉場）
             if (!S.transitioning) {
                 const door = CFG.doors.find(D =>
