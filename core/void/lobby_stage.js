@@ -179,39 +179,57 @@
             upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
             alphaFoot: true,   // 🏢 建築照真實輪廓(alpha)擋，但✂️只算底部「佔地高」那一帶→上半可走過去(小人繞屋後)；佔地高可調
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
-            cfgKey: 'lobby_stage_layout_city_v7',   // v7=換新地板+遮罩碰撞（舊格子版存檔作廢）
+            cfgKey: 'lobby_stage_layout_city_v8',   // v8=Rae定版佈局烤進預設+地塊(plot)欄位（v7舊存檔作廢，內容=同一份定版不掉東西）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
-            // 前景物件＝從 upper01/02/03 拆出的獨立元素（書咖/交易所/噴泉/樹/燈柱/長椅）；bbox 即座標。
-            //   noCollide=不進碰撞(碰撞全走遮罩)；靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
-            layout: [   // ⬇ 新廣場物件（書咖+5棟房+街景裝飾）；粗鋪成格狀，Rae 擺設模式拖到位再複製數據定版
-                { file: "city/obj/book_cafe_day.png", x: 150, y: 140, w: 424, h: 346, footH: 104, s: 0.578 },   // 書咖建築
-                { file: "city/obj/lobby_day.png", x: 390, y: 200, w: 468, h: 350, footH: 105, s: 0.571 },   // 大廳建築（回大廳門接這棟）
-                { file: "city/obj/player_house_lv1.png", x: 620, y: 140, w: 1284, h: 750, footH: 210, s: 0.307 },
-                { file: "city/obj/npc_house_01.png", x: 1090, y: 140, w: 1095, h: 839, footH: 235, s: 0.274 },
-                { file: "city/obj/npc_house_02.png", x: 150, y: 390, w: 794, h: 853, footH: 239, s: 0.27 },
-                { file: "city/obj/npc_house_03.png", x: 620, y: 390, w: 1030, h: 814, footH: 228, s: 0.283 },
-                { file: "city/obj/npc_house_04.png", x: 1090, y: 390, w: 1093, h: 850, footH: 238, s: 0.271 },
-                { file: "city/obj/fountain_node_day.png", x: 130, y: 650, w: 180, h: 222, footH: 67, s: 0.45 },
-                { file: "city/obj/crystal_monument_day.png", x: 355, y: 650, w: 151, h: 352, footH: 63, s: 0.398 },
-                { file: "city/obj/city_sign_01_day.png", x: 580, y: 650, w: 173, h: 371, footH: 67, s: 0.377 },
-                { file: "city/obj/terminal_02_day.png", x: 805, y: 650, w: 131, h: 235, footH: 42, s: 0.596 },
-                { file: "city/obj/street_lamp_02_day.png", x: 1030, y: 650, w: 105, h: 379, footH: 68, s: 0.369 },
-                { file: "city/obj/civic_light_cylinder_day.png", x: 1255, y: 650, w: 126, h: 196, footH: 35, s: 0.714 },
-                { file: "city/obj/conifer_tall_01_day.png", x: 130, y: 780, w: 157, h: 332, footH: 60, s: 0.422 },
-                { file: "city/obj/conifer_tall_02_day.png", x: 355, y: 780, w: 163, h: 328, footH: 59, s: 0.427 },
-                { file: "city/obj/tree_square_01_day.png", x: 580, y: 780, w: 159, h: 217, footH: 39, s: 0.645 },
-                { file: "city/obj/city_bench_01_day.png", x: 805, y: 780, w: 301, h: 253, footH: 76, s: 0.395 },
-                { file: "city/obj/city_bench_06_day.png", x: 1030, y: 780, w: 328, h: 280, footH: 84, s: 0.357 },
-                { file: "city/obj/city_bench_horizontal_02_day.png", x: 1255, y: 780, w: 510, h: 228, footH: 68, s: 0.439 },
-                { file: "city/obj/city_bench_horizontal_03_day.png", x: 130, y: 910, w: 361, h: 164, footH: 49, s: 0.61 },
-                { file: "city/obj/city_bench_horizontal_05_day.png", x: 355, y: 910, w: 447, h: 191, footH: 57, s: 0.524 },
-                { file: "city/obj/planter_long_01_day.png", x: 580, y: 910, w: 403, h: 191, footH: 57, s: 0.524 },
-                { file: "city/obj/planter_long_02_day.png", x: 805, y: 910, w: 360, h: 149, footH: 45, s: 0.671 },
-                { file: "city/obj/planter_long_03_day.png", x: 1030, y: 910, w: 442, h: 146, footH: 44, s: 0.685 },
-                { file: "city/obj/planter_medium_01_day.png", x: 1255, y: 910, w: 310, h: 188, footH: 56, s: 0.532 },
+            // 前景物件＝獨立元素（書咖/大廳/房子/噴泉/樹/燈柱/長椅）；noCollide=不進碰撞(碰撞全走遮罩)；
+            //   靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
+            // 🏘 plot='npc01..04'＝NPC房；plotFrame=同編號的空地框。一塊地「空地↔蓋房」二選一顯示（setPlot 切換）。
+            layout: [   // ⬇ Rae 2026-07-19 擺設模式定版
+                { file: "city/obj/book_cafe_day.png", x: 173, y: 90, w: 424, h: 346, footH: 194, s: 0.77, layer: "floor" },   // 書咖建築
+                { file: "city/obj/lobby_day.png", x: 976, y: 308, w: 468, h: 350, footH: 155, s: 0.827 },   // 大廳建築（回大廳門接這棟）
+                { file: "city/obj/player_house_lv1.png", x: 108, y: 542, w: 1284, h: 750, footH: 350, footW: 1272, s: 0.402 },   // MC家（永遠顯示；地塊框烤在底板）
+                { file: "city/obj/npc_house_01.png", x: 829, y: 623, w: 1095, h: 839, footH: 445, s: 0.274, plot: "npc01" },
+                { file: "city/obj/npc_house_02.png", x: 1165, y: 565, w: 794, h: 853, footH: 339, s: 0.327, plot: "npc02" },
+                { file: "city/obj/npc_house_03.png", x: 983, y: 126, w: 1030, h: 814, footH: 288, s: 0.283, plot: "npc03" },
+                { file: "city/obj/npc_house_04.png", x: 164, y: 327, w: 1093, h: 850, footH: 388, s: 0.271, plot: "npc04" },
+                { file: "city/obj/plot_frame_small_02_day.png", x: 829, y: 630, w: 411, h: 305, footH: 0, s: 0.73, layer: "floor", noCollide: true, plotFrame: "npc01" },
+                { file: "city/obj/plot_frame_small_03_day.png", x: 1165, y: 648, w: 398, h: 300, footH: 0, s: 0.653, layer: "floor", noCollide: true, plotFrame: "npc02" },
+                { file: "city/obj/plot_frame_small_04_day.png", x: 983, y: 77, w: 357, h: 342, footH: 0, s: 0.815, layer: "floor", noCollide: true, plotFrame: "npc03" },
+                { file: "city/obj/plot_frame_small_05_day.png", x: 164, y: 263, w: 342, h: 340, footH: 0, s: 0.865, layer: "floor", noCollide: true, plotFrame: "npc04" },
+                { file: "city/obj/fountain_node_day.png", x: 706, y: 325, w: 180, h: 222, footH: 67, s: 0.799 },
+                { file: "city/obj/crystal_monument_day.png", x: 1086, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
+                { file: "city/obj/crystal_monument_day.png", x: 1224, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
+                { file: "city/obj/city_sign_01_day.png", x: 463, y: 234, w: 173, h: 371, footH: 87, s: 0.201 },
+                { file: "city/obj/terminal_02_day.png", x: 819, y: 73, w: 131, h: 235, footH: 62, s: 0.391 },
+                { file: "city/obj/street_lamp_02_day.png", x: 559, y: 325, w: 105, h: 379, footH: 68, s: 0.242 },
+                { file: "city/obj/street_lamp_02_day.png", x: 944, y: 325, w: 105, h: 379, footH: 68, s: 0.242, flipX: true },
+                { file: "city/obj/civic_light_cylinder_day.png", x: 1322, y: 112, w: 126, h: 196, footH: 85, s: 0.308, layer: "back" },
+                { file: "city/obj/conifer_tall_01_day.png", x: 904, y: 175, w: 157, h: 332, footH: 220, s: 0.271 },
+                { file: "city/obj/conifer_tall_02_day.png", x: 583, y: 175, w: 163, h: 328, footH: 219, s: 0.28 },
+                { file: "city/obj/tree_square_01_day.png", x: 590, y: 275, w: 159, h: 217, footH: 110, s: 0.31 },
+                { file: "city/obj/tree_square_01_day.png", x: 886, y: 275, w: 159, h: 217, footH: 110, s: 0.31, flipX: true },
+                { file: "city/obj/tree_square_01_day.png", x: 590, y: 550, w: 159, h: 217, footH: 110, s: 0.31, flipX: true },
+                { file: "city/obj/tree_square_01_day.png", x: 896, y: 550, w: 159, h: 217, footH: 110, s: 0.31, flipX: true },
+                { file: "city/obj/city_bench_06_day.png", x: 1257, y: 95, w: 328, h: 280, footH: 280, s: 0.234, layer: "floor" },
+                { file: "city/obj/city_bench_horizontal_02_day.png", x: 543, y: 109, w: 510, h: 228, footH: 148, s: 0.21 },
+                { file: "city/obj/city_bench_horizontal_02_day.png", x: 866, y: 108, w: 510, h: 228, footH: 158, s: 0.21 },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 856, y: 530, w: 361, h: 164, footH: 109, s: 0.193 },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 621, y: 530, w: 361, h: 164, footH: 109, s: 0.193, flipX: true },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 621, y: 340, w: 361, h: 164, footH: 109, s: 0.193, flipX: true },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 856, y: 340, w: 361, h: 164, footH: 109, s: 0.193 },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 192, y: 920, w: 447, h: 191, footH: 107, s: 0.204, flipX: true },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 392, y: 919, w: 447, h: 191, footH: 107, s: 0.204 },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 1033, y: 919, w: 447, h: 191, footH: 107, s: 0.204, flipX: true },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 1233, y: 918, w: 447, h: 191, footH: 107, s: 0.204 },
+                { file: "city/obj/planter_long_01_day.png", x: 299, y: 920, w: 403, h: 191, footH: 101, s: 0.202 },
+                { file: "city/obj/planter_long_01_day.png", x: 1140, y: 919, w: 403, h: 191, footH: 111, s: 0.202 },
+                { file: "city/obj/planter_long_02_day.png", x: 445, y: 114, w: 360, h: 149, footH: 85, s: 0.289 },
+                { file: "city/obj/planter_long_02_day.png", x: 978, y: 113, w: 360, h: 149, footH: 85, s: 0.284 },
+                { file: "city/obj/planter_long_03_day.png", x: 879, y: 914, w: 442, h: 146, footH: 84, s: 0.318 },
+                { file: "city/obj/planter_medium_01_day.png", x: 503, y: 916, w: 310, h: 188, footH: 86, s: 0.23 },
             ],
             points: {
-                npcZone: { x: 400, y: 540, w: 600, h: 210 },   // 中央廣場（客人出沒區；避開建築/噴泉，都在遮罩白區）
+                npcZone: { x: 668, y: 968, w: 1430, h: 869 },   // 客人出沒區（Rae定版）
                 player: { x: 768, y: 620 },
                 arrive: { x: 768, y: 580 },   // 從書咖/大廳出來的落點（廣場中央）
                 actorScale: 0.32,             // 🗺️ 地圖俯視小棋子（脫鉤鏡頭後≈螢幕高比例）
@@ -219,7 +237,7 @@
             walls: [],   // 碰撞全走手繪遮罩
             doors: [
                 { x: 335, y: 316, w: 100, h: 42, to: 'cafe', spawn: { x: 780, y: 868 } },   // 書咖門口→瀅瀅書咖（走到門口下方觸發）
-                { x: 1150, y: 600, w: 90, h: 40, to: 'hall', spawn: { x: 772, y: 830 } },   // 交易所門口→愛麗絲純白大廳（交易所已移進大廳左門，這扇還原回大廳）
+                { x: 1136, y: 570, w: 86, h: 24, to: 'hall', spawn: { x: 772, y: 830 } },   // 大廳建築門口→愛麗絲純白大廳
             ],
         },
     };
@@ -350,9 +368,26 @@
     function rebuildBlocks() {
         const maskOk = !!(S.mask && S.mask.ok);
         const alpha = !!SCENES[S.scene].alphaFoot;
-        const feet = alpha ? [] : CFG.layout.filter(o => !o.noCollide).map(footRect);   // alphaFoot 不用腳印；noCollide 物件(城市前景)不擋路→碰撞全走遮罩
+        const feet = alpha ? [] : CFG.layout.filter(o => !o.noCollide && !o._plotOff).map(footRect);   // alphaFoot 不用腳印；noCollide 物件(城市前景)不擋路→碰撞全走遮罩
         BLOCKS = (maskOk ? [] : (SCENES[S.scene].walls || [])).concat(feet);   // 靜態地圖沒 walls→空陣列，別 undefined.concat 炸掉掛載
-        ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha && !o.noCollide) : [];   // 只納入已載好 alpha 且沒設「不擋路」的物件（noCollide 在 alphaFoot 也生效）
+        ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha && !o.noCollide && !o._plotOff) : [];   // 只納入已載好 alpha 且沒設「不擋路」的物件（noCollide/隱藏地塊 在 alphaFoot 也生效）
+    }
+    // ── 🏘 地塊入住狀態（NPC房：空地框↔蓋房二選一顯示；經濟③入住流程接 setPlot）──
+    //    小資料走 localStorage（🚨別動 OS_DB schema——升版加 store 會 deadlock）
+    const PLOTS_KEY = 'lobby_city_plots_v1';
+    function _plots() { try { return JSON.parse(localStorage.getItem(PLOTS_KEY) || '{}'); } catch (e) { return {}; } }
+    function _plotOccupied(id) { const v = _plots()[id]; return v == null ? true : !!v; }   // 預設=已蓋房（入住流程上線前城別空著；上線時改預設空地）
+    function _applyPlotVis(o, img) {
+        const off = (o.plot && !_plotOccupied(o.plot)) || (o.plotFrame && _plotOccupied(o.plotFrame));
+        o._plotOff = !!off;
+        if (img) img.classList.toggle('lstage-plot-off', !!off);
+    }
+    function setPlot(id, occupied) {
+        try { const all = _plots(); all[id] = !!occupied; localStorage.setItem(PLOTS_KEY, JSON.stringify(all)); } catch (e) {}
+        (CFG?.layout || []).forEach((o, i) => {
+            if (o.plot === id || o.plotFrame === id) _applyPlotVis(o, S.objEls?.[i]);
+        });
+        rebuildBlocks();
     }
     // alpha 形狀擋路：x那一直柱、y0..y1那段裡只要有「不透明像素(alpha≥128)」=牆。
     //   ✂️ 只算「底部 footH 那一帶」的形狀→照建築真實輪廓擋底部，上半可走過去(小人繞到建築後面)；footH 高度可調。
@@ -1466,6 +1501,7 @@
             }
         });
         placeObj(img, o);
+        _applyPlotVis(o, img);   // 🏘 地塊：這件是「沒入住的房」或「已蓋房的空地框」→藏起來(擺設模式半透明可調)
         S.world.appendChild(img);
         return img;
     }
@@ -1679,6 +1715,8 @@
         popNpcHistoryTail,
         truncateNpcHistory,
         setNpcHistory,
+        setPlot,                            // 🏘 地塊「空地↔蓋房」切換（經濟③入住流程呼叫；console 也可手動）
+        plotOccupied: _plotOccupied,
         rollGuestPool: () => window.LobbyNpcs?.rollGuestPool(),   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個；懶解析到 lobby_npcs.js，async 透傳）
         pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
         openDressRoom: (a) => window.LobbyDress?.openRoom(a),   // console 診斷用：直接開某個角色的裝扮室（傳 _S.npcs 裡的物件）
@@ -1698,6 +1736,7 @@
             // 給 lobby_editor.js（擺設模式）：物件擺放/佔地/碰撞重建/遮罩/人物縮放/相機重算
             placeObj, spawnObjEl: _spawnObjEl, footRect,
             rebuildBlocks, loadMask, applyActorScale, fitCamera,
+            setPlot, plotOccupied: _plotOccupied,   // 🏘 地塊切換（編輯器「蓋房/空地」鈕）
             // 給 lobby_npcs.js（NPC 生成/名冊）：素材表/生NPC/碰撞判定/站位開闊度採樣
             ASSET, addNpc, blocked, whiteRatio: _whiteRatio,
         },

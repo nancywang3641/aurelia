@@ -279,6 +279,9 @@
 /* 框選（擺設模式，Ctrl+拖空地）：藍色虛線框 */
 .lstage-marquee { position:absolute; border:2px dashed #4ab6ff; background:rgba(74,182,255,.12);
   z-index:2700; pointer-events:none; }
+/* 🏘 地塊隱藏面：遊玩=整個藏起來；擺設模式=半透明灰階(看得到、可調位置) */
+.lstage-plot-off { display:none; }
+.lstage-editing .lstage-plot-off { display:block; opacity:.4; filter:grayscale(.6); }
 /* 遮罩視覺化（擺設模式）：不可走區半透明紅 */
 .lstage-maskview { position:absolute; left:0; top:0; z-index:2300; pointer-events:none; }
 /* 過門觸發區（擺設模式）：橘色虛線框，可拖/右下角調大小 */
