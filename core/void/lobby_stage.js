@@ -178,7 +178,7 @@
             lower: 'city/obj/city_floor_frame_upper_part.png',   // 背景層：北牆(後牆)在底圖上、被所有物件遮住
             upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
             alphaFoot: true,   // 🏢 建築照真實輪廓(alpha)擋，但✂️只算底部「佔地高」那一帶→上半可走過去(小人繞屋後)；佔地高可調
-            forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
+            nightBase: 'city/city_floor_night.png',   // 🌙 夜版地板；物件/牆框夜版走 CITY_NIGHT 對照表（2026-07-20 夜版素材上齊,解鎖日夜）
             cfgKey: 'lobby_stage_layout_city_v8',   // v8=Rae定版佈局烤進預設+地塊(plot)欄位（v7舊存檔作廢，內容=同一份定版不掉東西）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
             // 前景物件＝獨立元素（書咖/大廳/房子/噴泉/樹/燈柱/長椅）；noCollide=不進碰撞(碰撞全走遮罩)；
@@ -240,6 +240,38 @@
                 { x: 1136, y: 570, w: 86, h: 24, to: 'hall', spawn: { x: 772, y: 830 } },   // 大廳建築門口→愛麗絲純白大廳
             ],
         },
+    };
+    // 🌙 城市夜版素材對照：日檔→夜檔。放 runtime 對照而非寫進 layout——Rae 的擺設存檔(layoutFull)
+    //    不帶 nightFile 欄位也能換夜；o.nightFile 手動欄位優先於這張表。特例：大廳門面樓夜版檔名叫 exchange_night。
+    const CITY_NIGHT = {
+        'city/city_floor_v1.png': 'city/city_floor_night.png',
+        'city/obj/city_floor_frame_upper_part.png': 'city/obj/city_floor_night_frame_upper_part.png',
+        'city/obj/city_floor_frame_lower_part.png': 'city/obj/city_floor_night_frame_lower_part.png',
+        'city/obj/book_cafe_day.png': 'city/obj/book_cafe_night.png',
+        'city/obj/lobby_day.png': 'city/obj/exchange_night.png',
+        'city/obj/player_house_lv1.png': 'city/obj/player_house_lv1_night.png',
+        'city/obj/npc_house_01.png': 'city/obj/npc_house_01_night.png',
+        'city/obj/npc_house_02.png': 'city/obj/npc_house_02_night.png',
+        'city/obj/npc_house_03.png': 'city/obj/npc_house_03_night.png',
+        'city/obj/npc_house_04.png': 'city/obj/npc_house_04_night.png',
+        'city/obj/city_bench_01_day.png': 'city/obj/city_bench_01_night.png',
+        'city/obj/city_bench_horizontal_02_day.png': 'city/obj/city_bench_horizontal_02_night.png',
+        'city/obj/city_bench_horizontal_03_day.png': 'city/obj/city_bench_horizontal_03_night.png',
+        'city/obj/city_bench_horizontal_05_day.png': 'city/obj/city_bench_horizontal_05_night.png',
+        'city/obj/city_sign_01_day.png': 'city/obj/city_sign_01_night.png',
+        'city/obj/civic_light_cylinder_day.png': 'city/obj/civic_light_cylinder_night.png',
+        'city/obj/conifer_tall_01_day.png': 'city/obj/conifer_tall_01_night.png',
+        'city/obj/conifer_tall_02_day.png': 'city/obj/conifer_tall_02_night.png',
+        'city/obj/crystal_monument_day.png': 'city/obj/crystal_monument_night.png',
+        'city/obj/fountain_node_day.png': 'city/obj/fountain_node_night.png',
+        'city/obj/planter_long_01_day.png': 'city/obj/planter_long_01_night.png',
+        'city/obj/planter_long_02_day.png': 'city/obj/planter_long_02_night.png',
+        'city/obj/planter_long_03_day.png': 'city/obj/planter_long_03_night.png',
+        'city/obj/planter_medium_01_day.png': 'city/obj/planter_medium_01_night.png',
+        'city/obj/street_lamp_02_day.png': 'city/obj/street_lamp_02_night.png',
+        'city/obj/terminal_02_day.png': 'city/obj/terminal_02_night.png',
+        'city/obj/tree_square_01_day.png': 'city/obj/tree_square_01_night.png',
+        // 沒夜版的（plot_frame 空地框等）＝維持日版
     };
     // 🌗 城市日夜：跟大廳 BG 同時段律（ambient.js：6-18=day）；場景有 nightBase 才生效
     function _isNightNow() {
@@ -1139,11 +1171,26 @@
         } catch (e) {}
         return false;
     }
-    // ── 🌧 天氣層：小雨 ──────────────────────────────────
-    //    一張 canvas 蓋在場景上(螢幕座標)+150顆粒子+共用主 tick(不另開迴圈;台面藏起來時 tick 睡=雨自動停)。
+    // ── 🌦 天氣層：小雨/小雪 ──────────────────────────────
+    //    一張 canvas 蓋在場景上(螢幕座標)+百來顆粒子+共用主 tick(不另開迴圈;台面藏起來時 tick 睡=天氣自動停)。
     //    只在 outdoor 場景下；擺設模式收掉(別干擾編輯)。
-    let _rain = null;   // { cv, ctx, w, h, drops }
-    function _rainDrop(w, h, anywhere) {
+    //    模式存 localStorage lobby_weather_v1：auto(進場擲骰 晴50/雨25/雪25)/clear/rain/snow；大廳設置可選。
+    let _wx = null;         // { cv, ctx, w, h, drops, mode }
+    let _wxSetting = null;  // 設定快取（設置窗改的時候直接改這個,免得每幀讀 localStorage）
+    function _weatherMode() {
+        if (_wxSetting == null) { try { _wxSetting = localStorage.getItem('lobby_weather_v1') || 'auto'; } catch (e) { _wxSetting = 'auto'; } }
+        if (_wxSetting !== 'auto') return _wxSetting;
+        if (S._wxRoll == null) S._wxRoll = Math.random();   // 進場擲一次(unmount 清)
+        return S._wxRoll < 0.5 ? 'clear' : S._wxRoll < 0.75 ? 'rain' : 'snow';
+    }
+    function _wxDrop(mode, w, h, anywhere) {
+        if (mode === 'snow') return {
+            x: Math.random() * (w + 60) - 30,
+            y: anywhere ? Math.random() * h : -12 - Math.random() * 30,
+            r: 1 + Math.random() * 1.6,           // 雪片半徑
+            spd: 0.05 + Math.random() * 0.07,     // 慢飄
+            phase: Math.random() * 1000,          // 左右搖擺相位
+        };
         return {
             x: Math.random() * (w + 80) - 40,
             y: anywhere ? Math.random() * h : -30 - Math.random() * 40,
@@ -1152,34 +1199,45 @@
             drift: 0.05 + Math.random() * 0.05,  // 微斜
         };
     }
-    function _rainTick(dt) {
-        const on = S.active && !S.edit && SCENES[S.scene] && SCENES[S.scene].outdoor;
-        if (!on) { if (_rain) { _rain.cv.remove(); _rain = null; } return; }
-        if (!_rain) {
+    function _weatherTick(dt) {
+        const mode = (S.active && !S.edit && SCENES[S.scene] && SCENES[S.scene].outdoor) ? _weatherMode() : 'clear';
+        if (mode === 'clear') { if (_wx) { _wx.cv.remove(); _wx = null; } return; }
+        if (_wx && _wx.mode !== mode) { _wx.cv.remove(); _wx = null; }   // 換天氣→重鋪
+        if (!_wx) {
             const cv = document.createElement('canvas');
-            cv.className = 'lstage-weather';
+            cv.className = 'lstage-weather ' + mode;   // rain=陰天暗罩 / snow=雪天冷霧,見 CSS
             S.root.appendChild(cv);
-            _rain = { cv, ctx: cv.getContext('2d'), w: 0, h: 0, drops: [] };
+            _wx = { cv, ctx: cv.getContext('2d'), w: 0, h: 0, drops: [], mode };
         }
         const rc = S.root.getBoundingClientRect();
         const w = Math.max(1, Math.round(rc.width)), h = Math.max(1, Math.round(rc.height));
-        if (_rain.w !== w || _rain.h !== h) {   // 尺寸變了(轉向/縮放)→重鋪畫布+按面積配密度(小雨~1滴/9000px²,封頂150)
-            _rain.w = _rain.cv.width = w; _rain.h = _rain.cv.height = h;
-            const n = Math.min(150, Math.round(w * h / 9000));
-            _rain.drops = Array.from({ length: n }, () => _rainDrop(w, h, true));
+        if (_wx.w !== w || _wx.h !== h) {   // 尺寸變了(轉向/縮放)→重鋪畫布+按面積配密度(封頂:雨150/雪120)
+            _wx.w = _wx.cv.width = w; _wx.h = _wx.cv.height = h;
+            const n = mode === 'snow' ? Math.min(120, Math.round(w * h / 11000)) : Math.min(150, Math.round(w * h / 9000));
+            _wx.drops = Array.from({ length: n }, () => _wxDrop(mode, w, h, true));
         }
-        const { ctx, drops } = _rain;
+        const { ctx, drops } = _wx;
         ctx.clearRect(0, 0, w, h);
-        ctx.strokeStyle = 'rgba(205,222,255,.35)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (const d of drops) {
-            d.y += d.spd * dt; d.x += d.drift * dt;
-            if (d.y > h + 20) Object.assign(d, _rainDrop(w, h, false));
-            ctx.moveTo(d.x, d.y);
-            ctx.lineTo(d.x - d.drift * 22, d.y - d.len);
+        if (mode === 'rain') {
+            ctx.strokeStyle = 'rgba(205,222,255,.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (const d of drops) {
+                d.y += d.spd * dt; d.x += d.drift * dt;
+                if (d.y > h + 20) Object.assign(d, _wxDrop('rain', w, h, false));
+                ctx.moveTo(d.x, d.y);
+                ctx.lineTo(d.x - d.drift * 22, d.y - d.len);
+            }
+            ctx.stroke();
+        } else {   // snow：白點慢飄+左右搖擺
+            ctx.fillStyle = 'rgba(255,255,255,.8)';
+            for (const d of drops) {
+                d.y += d.spd * dt;
+                d.x += Math.sin((d.y + d.phase) / 42) * 0.028 * dt;
+                if (d.y > h + 8) Object.assign(d, _wxDrop('snow', w, h, false));
+                ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 6.2832); ctx.fill();
+            }
         }
-        ctx.stroke();
     }
     function tick(now) {
         if (_stageHidden()) {
@@ -1193,7 +1251,7 @@
         }
         const dt = Math.min(50, now - S.last); S.last = now;
         update(dt);
-        _rainTick(dt);
+        _weatherTick(dt);
         S.raf = requestAnimationFrame(tick);
     }
     function update(dt) {
@@ -1360,6 +1418,11 @@
                   '<span class="ltheater-freq' + (localStorage.getItem('lobby_theater_on') === '0' ? ' off' : '') + '">' +
                     ['low:低','mid:中','high:高'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_theater_freq')||'mid'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-freq="'+v+'">'+t+'</button>'; }).join('') +
                   '</span></div>' +
+                '<div class="lset-row"><span class="lset-tx">城市天氣</span>' +
+                  '<span class="ltheater-freq">' +
+                    ['auto:自動','clear:晴','rain:雨','snow:雪'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_weather_v1')||'auto'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-wx="'+v+'">'+t+'</button>'; }).join('') +
+                  '</span></div>' +
+                '<div class="lset-hint">只影響戶外大地圖。自動＝每次進城隨機（晴／雨／雪）。</div>' +
                 '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
             box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
                 const k = e.target.dataset.k;
@@ -1374,9 +1437,15 @@
                     const fr = box.querySelector('.ltheater-freq'); if (fr) fr.classList.toggle('off', !e.target.checked);
                 }
             }));
-            box.querySelectorAll('.ltheater-freq-btn').forEach(btn => btn.addEventListener('click', () => {
+            box.querySelectorAll('.ltheater-freq-btn[data-freq]').forEach(btn => btn.addEventListener('click', () => {
                 try { localStorage.setItem('lobby_theater_freq', btn.dataset.freq); } catch (_) {}
-                box.querySelectorAll('.ltheater-freq-btn').forEach(b => b.classList.toggle('on', b === btn));
+                box.querySelectorAll('.ltheater-freq-btn[data-freq]').forEach(b => b.classList.toggle('on', b === btn));
+            }));
+            box.querySelectorAll('.ltheater-freq-btn[data-wx]').forEach(btn => btn.addEventListener('click', () => {
+                try { localStorage.setItem('lobby_weather_v1', btn.dataset.wx); } catch (_) {}
+                _wxSetting = btn.dataset.wx;   // 快取同步→下一幀立即生效
+                S._wxRoll = null;              // 切回自動時重擲
+                box.querySelectorAll('.ltheater-freq-btn[data-wx]').forEach(b => b.classList.toggle('on', b === btn));
             }));
             box.querySelectorAll('.lset-item').forEach(btn => btn.addEventListener('click', () => {
                 const e = EDITS.find(x => x.id === btn.dataset.edit);
@@ -1468,13 +1537,14 @@
         }
         // 🌳 前景上層：外圈樹/前景素材蓋在角色之上（走到樹後被遮，不會踩在樹上）；z 高於所有小人；編輯模式隱藏
         // 🧱 背景遮擋層 lower：在底圖之上、所有物件/角色之下（被全部物件遮住）；如廣場北牆(後牆)。可單張或陣列。
+        const _dayNight = (f) => (_sceneIsNight(SCENES[S.scene]) && CITY_NIGHT[f]) ? CITY_NIGHT[f] : f;   // 🌙 牆框層也吃夜版對照
         if (SCENES[S.scene].lower) {
             const _lowers = Array.isArray(SCENES[S.scene].lower) ? SCENES[S.scene].lower : [SCENES[S.scene].lower];
             for (const _lf of _lowers) {
                 const lo = document.createElement('img');
                 lo.className = 'lstage-lower';
                 lo.width = MAP_W; lo.height = MAP_H;
-                resolveRef({ file: _lf }).then(src => { if (src) lo.src = src; });
+                resolveRef({ file: _dayNight(_lf) }).then(src => { if (src) lo.src = src; });
                 S.world.appendChild(lo);
             }
         }
@@ -1485,7 +1555,7 @@
                 const up = document.createElement('img');
                 up.className = 'lstage-upper';
                 up.width = MAP_W; up.height = MAP_H;
-                resolveRef({ file: _uf }).then(src => { if (src) up.src = src; });
+                resolveRef({ file: _dayNight(_uf) }).then(src => { if (src) up.src = src; });
                 S.world.appendChild(up);
             }
         }
@@ -1564,8 +1634,9 @@
         const img = document.createElement('img');
         img.className = 'lstage-actor lstage-obj';
         if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
-        // 夜間成對素材：物件帶 nightFile 且場景現在是夜 → 換檔名（forceDay 場景永遠白天；座標/佔地不變）
-        const ref = (o.nightFile && _sceneIsNight(SCENES[S.scene])) ? Object.assign({}, o, { file: o.nightFile }) : o;
+        // 夜間成對素材：手動 nightFile 優先，其次 CITY_NIGHT 對照表；場景是夜才換（座標/佔地不變）
+        const _nf = _sceneIsNight(SCENES[S.scene]) ? (o.nightFile || CITY_NIGHT[o.file]) : null;
+        const ref = _nf ? Object.assign({}, o, { file: _nf }) : o;
         const wantAlpha = !!SCENES[S.scene].alphaFoot;   // 大地圖建築：抽 alpha 形狀做碰撞
         resolveRef(ref).then(src => {
             if (!src) return;
@@ -1608,7 +1679,7 @@
         endTalk();
         cancelAnimationFrame(S.raf);
         if (S.sleepT) { clearTimeout(S.sleepT); S.sleepT = null; }
-        _rain = null;   // 🌧 雨層 canvas 跟著 S.root.remove() 一起走,清引用即可
+        _wx = null; S._wxRoll = null;   // 🌦 天氣層 canvas 跟著 S.root.remove() 一起走;auto骰子下次進場重擲
         window.removeEventListener('resize', fitCamera);
         if (S._ro) { try { S._ro.disconnect(); } catch (e) {} S._ro = null; }
         if (S.onKey) {
