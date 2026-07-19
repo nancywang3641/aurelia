@@ -123,13 +123,14 @@
         // ⌨ Ctrl+Z=一步步復原移動（capture：遊戲方向鍵 handler 也是 capture，但只攔 z 不衝突）
         S.edit._onKey = (e) => {
             if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); e.stopPropagation(); _undo(); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _deselect(); }   // Esc=取消圈選/選取
         };
         window.addEventListener('keydown', S.edit._onKey, true);
         // 控制面板
         const panel = document.createElement('div');
         panel.className = 'lstage-edit-panel';
         const _alphaFoot = !!_b.SCENES[S.scene].alphaFoot;
-        const _kbHint = '。選成群組後(圈選/多選/加入群組)，家具±/佔地/層級/翻轉/不擋路/複製/刪除都套用整組。電腦快捷：Shift+拖=鎖直線(只走水平或垂直)｜Ctrl+點家具=多選成群組｜Ctrl+拖空地=框選成群組｜Ctrl+Z=一步步復原移動';
+        const _kbHint = '。選成群組後(圈選/多選/加入群組)，家具±/佔地/層級/翻轉/不擋路/複製/刪除都套用整組。電腦快捷：Shift+拖=鎖直線(只走水平或垂直)｜Ctrl+點家具=多選成群組｜Ctrl+拖空地=框選成群組｜點一下空地或按Esc=取消選取｜Ctrl+Z=一步步復原移動';
         const _hint = (_alphaFoot
             ? '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紅剪影=屋子實際擋路範圍(照屋子形狀整棟實心，走不進去；靠拖屋子本體調位置即可)'
             : '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地') + _kbHint;
@@ -613,9 +614,17 @@
         } else if (d.kind === 'doorresize') {
             const D = _b.CFG.doors[d.i];
             if (D.w !== d.ox || D.h !== d.oy) _pushUndo({ t: 'doorresize', i: d.i, w: d.ox, h: d.oy });
+        } else if (d.kind === 'cam') {
+            // 點一下空地(幾乎沒拖動)=取消圈選/選取——跟PS點空白處取消選取同直覺
+            if (Math.abs(S.edit.cam.x - d.ox) < 3 && Math.abs(S.edit.cam.y - d.oy) < 3) _deselect();
         }
         S.edit.drag = null;
         _exportToPanel();
+    }
+    function _deselect() {
+        S.edit.group = []; _groupHighlight();
+        S.edit.sel = -1;
+        S.edit.feet.forEach((_, k) => _syncFoot(k));
     }
     function _exportData() {
         const data = {
