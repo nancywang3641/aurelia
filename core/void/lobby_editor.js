@@ -126,11 +126,13 @@
         const _hint = _alphaFoot
             ? '拖東西調位置，拖空地移動視角。橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紅剪影=屋子實際擋路範圍(照屋子形狀整棟實心，走不進去；靠拖屋子本體調位置即可)'
             : '拖東西調位置，拖空地移動視角。紅色罩=牆｜橘虛線框=過門區(踩進去就轉場，可拖/右下角調大小)｜橘圓「落」=過門後的落地點(別放進過門區)｜藍圓=出生點｜綠框=客人出沒區｜紫框=瀅瀅活動範圍｜紅框=家具佔地';
-        const _footRows = _alphaFoot ? '' :   // alphaFoot 場景：整棟照形狀實心擋，沒有切線/寬度可調
+        const _footHigh =   // 佔地高：alphaFoot=底部形狀那帶多高；一般=底部方框多高
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="footminus"><i class="fa-solid fa-minus"></i> 佔地高</button>' +
               '<button class="lep-btn" data-act="footplus"><i class="fa-solid fa-plus"></i> 佔地高</button>' +
-            '</div>' +
+            '</div>';
+        const _footRows = _alphaFoot ? _footHigh :   // alphaFoot：只調佔地高(寬度照 alpha 真實輪廓)
+            _footHigh +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="footwminus"><i class="fa-solid fa-minus"></i> 佔地寬</button>' +
               '<button class="lep-btn" data-act="footwplus"><i class="fa-solid fa-plus"></i> 佔地寬</button>' +
@@ -342,8 +344,11 @@
         if (cv.width !== a.w || cv.height !== a.h) { cv.width = a.w; cv.height = a.h; }
         const ctx = cv.getContext('2d');
         const img = ctx.createImageData(a.w, a.h);
+        const fh = (o.footH != null ? o.footH : o.h);       // 佔地高(未縮放px)
+        const cutRow = a.h * (o.h - fh) / o.h;               // 只畫底部這帶(對應 _alphaHit 的切割)
         for (let i = 0; i < a.w * a.h; i++) {
             if (a.data[i] < 128) continue;
+            if (Math.floor(i / a.w) < cutRow) continue;      // 上半超過佔地高→不畫(那裡可走)
             const p = i * 4;
             img.data[p] = 230; img.data[p + 1] = 60; img.data[p + 2] = 60; img.data[p + 3] = 140;
         }
