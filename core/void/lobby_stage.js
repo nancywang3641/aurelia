@@ -184,18 +184,18 @@
             // 前景物件＝獨立元素（書咖/大廳/房子/噴泉/樹/燈柱/長椅）；noCollide=不進碰撞(碰撞全走遮罩)；
             //   靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
             // 🏘 plot='npc01..04'＝NPC房；plotFrame=同編號的空地框。一塊地「空地↔蓋房」二選一顯示（setPlot 切換）。
-            layout: [   // ⬇ Rae 2026-07-19 擺設模式定版
+            layout: [   // ⬇ Rae 2026-07-20 擺設模式定版（地塊框對位版）
                 { file: "city/obj/book_cafe_day.png", x: 173, y: 90, w: 424, h: 346, footH: 194, s: 0.77, layer: "floor" },   // 書咖建築
                 { file: "city/obj/lobby_day.png", x: 976, y: 308, w: 468, h: 350, footH: 155, s: 0.827 },   // 大廳建築（回大廳門接這棟）
-                { file: "city/obj/player_house_lv1.png", x: 108, y: 542, w: 1284, h: 750, footH: 350, footW: 1272, s: 0.402, plot: "player" },   // MC家（跟白兔買了才蓋起來；狀態=OS_PT）
-                { file: "city/obj/npc_house_01.png", x: 829, y: 623, w: 1095, h: 839, footH: 445, s: 0.274, plot: "npc01" },
-                { file: "city/obj/npc_house_02.png", x: 1165, y: 565, w: 794, h: 853, footH: 339, s: 0.327, plot: "npc02" },
-                { file: "city/obj/npc_house_03.png", x: 983, y: 126, w: 1030, h: 814, footH: 288, s: 0.283, plot: "npc03" },
+                { file: "city/obj/player_house_lv1.png", x: 97, y: 565, w: 1284, h: 750, footH: 350, footW: 1272, s: 0.402, plot: "player" },   // MC家（跟白兔買了才蓋起來；狀態=OS_PT）
+                { file: "city/obj/npc_house_01.png", x: 874, y: 638, w: 1095, h: 839, footH: 445, s: 0.274, plot: "npc01" },
+                { file: "city/obj/npc_house_02.png", x: 1182, y: 580, w: 794, h: 853, footH: 339, s: 0.327, plot: "npc02" },
+                { file: "city/obj/npc_house_03.png", x: 990, y: 128, w: 1030, h: 814, footH: 288, s: 0.281, plot: "npc03" },
                 { file: "city/obj/npc_house_04.png", x: 164, y: 327, w: 1093, h: 850, footH: 388, s: 0.271, plot: "npc04" },
-                { file: "city/obj/plot_frame_day_player.png", x: 108, y: 523, w: 1342, h: 836, footH: 0, s: 0.384, layer: "floor", noCollide: true, plotFrame: "player" },   // MC家空地框(沒買房時顯示)
-                { file: "city/obj/plot_frame_day_npc01.png", x: 829, y: 566, w: 357, h: 342, footH: 0, s: 0.84, layer: "floor", noCollide: true, plotFrame: "npc01" },
-                { file: "city/obj/plot_frame_day_npc02.png", x: 1165, y: 586, w: 342, h: 340, footH: 0, s: 0.76, layer: "floor", noCollide: true, plotFrame: "npc02" },
-                { file: "city/obj/plot_frame_day_npc03.png", x: 983, y: 137, w: 398, h: 300, footH: 0, s: 0.73, layer: "floor", noCollide: true, plotFrame: "npc03" },
+                { file: "city/obj/plot_frame_day_player.png", x: 156, y: 619, w: 1342, h: 836, footH: 0, s: 0.308, layer: "floor", noCollide: true, plotFrame: "player" },   // MC家空地框(沒買房時顯示)
+                { file: "city/obj/plot_frame_day_npc01.png", x: 889, y: 639, w: 357, h: 342, footH: 0, s: 0.673, layer: "floor", noCollide: true, plotFrame: "npc01" },
+                { file: "city/obj/plot_frame_day_npc02.png", x: 1180, y: 643, w: 342, h: 340, footH: 0, s: 0.684, layer: "floor", noCollide: true, plotFrame: "npc02" },
+                { file: "city/obj/plot_frame_day_npc03.png", x: 992, y: 152, w: 398, h: 300, footH: 0, s: 0.657, layer: "floor", noCollide: true, plotFrame: "npc03" },
                 { file: "city/obj/plot_frame_day_npc04.png", x: 164, y: 337, w: 411, h: 305, footH: 0, s: 0.72, layer: "floor", noCollide: true, plotFrame: "npc04" },
                 { file: "city/obj/fountain_node_day.png", x: 706, y: 325, w: 180, h: 222, footH: 67, s: 0.799 },
                 { file: "city/obj/crystal_monument_day.png", x: 1086, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
@@ -434,7 +434,7 @@
     //    小資料走 localStorage（🚨別動 OS_DB schema——升版加 store 會 deadlock）
     const PLOTS_KEY = 'lobby_city_plots_v1';
     function _plots() { try { return JSON.parse(localStorage.getItem(PLOTS_KEY) || '{}'); } catch (e) { return {}; } }
-    function _plotOccupied(id) { const v = _plots()[id]; return v == null ? id !== 'player' : !!v; }   // 預設：NPC地=已蓋房(入住流程上線前城別空著)；MC地=空地(要跟白兔先生買,真狀態在OS_PT)
+    function _plotOccupied(id) { const v = _plots()[id]; return v == null ? false : !!v; }   // 預設一律空地（Rae 2026-07-20 定案）：MC地=買了才蓋(真狀態OS_PT)；NPC地=入住流程蓋(待做)
     function _applyPlotVis(o, img) {
         const off = (o.plot && !_plotOccupied(o.plot)) || (o.plotFrame && _plotOccupied(o.plotFrame));
         o._plotOff = !!off;
