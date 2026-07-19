@@ -177,7 +177,7 @@
             mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
             lower: 'city/obj/city_floor_frame_upper_part.png',   // 背景層：北牆(後牆)在底圖上、被所有物件遮住
             upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
-            // 註：不用 alphaFoot（整棟實心會擋死、小人走不到建築後面）；改用「底部方框佔地」高/寬可調→只擋底部、上半可走過去
+            alphaFoot: true,   // 🏢 建築照真實輪廓(alpha)擋，但✂️只算底部「佔地高」那一帶→上半可走過去(小人繞屋後)；佔地高可調
             forceDay: true,    // 🌤 暫時鎖白天；拿掉這行即恢復日夜（夜版素材要另傳）
             cfgKey: 'lobby_stage_layout_city_v7',   // v7=換新地板+遮罩碰撞（舊格子版存檔作廢）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
@@ -354,12 +354,14 @@
         BLOCKS = (maskOk ? [] : (SCENES[S.scene].walls || [])).concat(feet);   // 靜態地圖沒 walls→空陣列，別 undefined.concat 炸掉掛載
         ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha && !o.noCollide) : [];   // 只納入已載好 alpha 且沒設「不擋路」的物件（noCollide 在 alphaFoot 也生效）
     }
-    // alpha 形狀擋路：腳點落在物件圖片「不透明像素(alpha≥128)」上=牆＝整棟照剪影實心擋
-    //   (門面樓的上半就是屋身，不是空地，所以不做切線；要走屋後另議)。
+    // alpha 形狀擋路：腳點落在物件圖片「不透明像素(alpha≥128)」上=牆。
+    //   ✂️ 只算「底部 footH 那一帶」的形狀→照建築真實輪廓擋底部，上半可走過去(小人繞到建築後面)；footH 高度可調。
     function _alphaHit(o, x, y) {
         const a = o._alpha, s = o.s || 1;
         const lx = (x - o.x) / s, ly = (y - o.y) / s;   // 物件未縮放局部座標(0..w,0..h)
         if (lx < 0 || lx >= o.w || ly < 0 || ly >= o.h) return false;
+        const fh = (o.footH != null ? o.footH : o.h);   // 佔地高(未縮放px)；沒設=整棟
+        if (ly < o.h - fh) return false;                // 上半(超過佔地高的部分)不擋→可走屋後
         const ax = Math.min(a.w - 1, Math.floor(lx / o.w * a.w));
         const ay = Math.min(a.h - 1, Math.floor(ly / o.h * a.h));
         return a.data[ay * a.w + ax] >= 128;
