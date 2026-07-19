@@ -777,6 +777,7 @@
                 if (o.plot) rec.plot = o.plot;                  // 🏘 地塊欄位：不存的話「完成」一按房/框就脫鉤
                 if (o.plotFrame) rec.plotFrame = o.plotFrame;
                 if (o.zb) rec.zb = o.zb;                        // 疊層微調
+                if (o.xray) rec.xray = true;                    // 屋子透視旗標
                 return rec;
             }),
             points: _b.CFG.points,
