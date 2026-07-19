@@ -155,9 +155,9 @@
             '</div>' +
             _footRows +
             '<div class="lep-row">' +
-              '<button class="lep-btn" data-act="layerfloor" title="貼地、被踩在上面（例：地毯）"><i class="fa-solid fa-shoe-prints"></i> 地上</button>' +
-              '<button class="lep-btn" data-act="layerauto" title="會走它前面也走後面（例：櫃台、燈、椅）"><i class="fa-solid fa-person-walking"></i> 一般</button>' +
-              '<button class="lep-btn" data-act="layerback" title="貼牆當背景、永遠在物件後面（例：牆上螢幕）"><i class="fa-solid fa-image"></i> 牆上</button>' +
+              '<button class="lep-btn" data-act="layerauto" title="預設。照「腳的位置」自動排前後：人走到它下方就蓋過它、走到它上方就被它遮。櫃台/椅/燈/建築都用這個"><i class="fa-solid fa-person-walking"></i> 自動</button>' +
+              '<button class="lep-btn" data-act="layerback" title="墊在所有家具和人物後面（只蓋過置底）。貼後牆的螢幕/掛畫用"><i class="fa-solid fa-image"></i> 背景</button>' +
+              '<button class="lep-btn" data-act="layerfloor" title="壓到最底，所有東西都蓋過它、人踩在它上面。地毯/地貼/空地框用"><i class="fa-solid fa-shoe-prints"></i> 置底</button>' +
             '</div>' +
             '<div class="lep-row">' +
               '<button class="lep-btn" data-act="zfront" title="跟PS圖層一樣：在「跟它疊住的東西」裡往上跳一層——按一下立刻蓋過原本壓著它的那個。例：屋前看板被屋子遮→選看板按這個"><i class="fa-solid fa-arrow-up"></i> 上移一層</button>' +
