@@ -498,21 +498,32 @@
     function _rowDrag(e, row, i) {
         e.preventDefault(); e.stopPropagation();
         const list = S.edit.layersWin.querySelector('.llw-list');
-        let moved = false, mark = null;
+        let moved = false, mark = null, lastY = e.clientY;
         const clearMark = () => { Array.from(list.children).forEach(el => el.classList.remove('llw-drop')); list.classList.remove('llw-drop-end'); };
-        const move = (ev) => {
-            if (Math.abs(ev.clientY - e.clientY) > 5) moved = true;
-            if (!moved) return;
+        const updateMark = () => {
             clearMark(); mark = null;
             for (const el of list.children) {   // 插入點=第一個「中線在指標下方」的元素前面；都不是→插最後
                 if (el === row) continue;
                 const r = el.getBoundingClientRect();
-                if (ev.clientY < r.top + r.height / 2) { el.classList.add('llw-drop'); mark = el; return; }
+                if (lastY < r.top + r.height / 2) { el.classList.add('llw-drop'); mark = el; return; }
             }
             list.classList.add('llw-drop-end');
         };
+        // 拖到清單上下邊緣→自動捲動（清單比窗高時才捲得動；捲動時插入標記跟著算）
+        const scrollTimer = setInterval(() => {
+            if (!moved) return;
+            const lr = list.getBoundingClientRect();
+            if (lastY < lr.top + 30) { list.scrollTop -= 12; updateMark(); }
+            else if (lastY > lr.bottom - 30) { list.scrollTop += 12; updateMark(); }
+        }, 40);
+        const move = (ev) => {
+            lastY = ev.clientY;
+            if (Math.abs(ev.clientY - e.clientY) > 5) moved = true;
+            if (moved) updateMark();
+        };
         const up = () => {
             window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+            clearInterval(scrollTimer);
             const dropAt = mark; clearMark();
             if (!moved) {   // 點一下=選中那件（同點地圖上的物件）
                 S.edit.sel = i;
