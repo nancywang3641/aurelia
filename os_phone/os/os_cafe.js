@@ -47,8 +47,11 @@
     const K_BOOKS = 'books';   // 書單 [{title,by,note,ts}]（NPC 首訪留書）
     const K_SHOP = 'shop';     // {popularity,revenue,cups,lastDay}
     const K_LAB = 'lab';       // 已試過的組合 {comboKey:tier}
-    const K_NPC = 'npc';       // 每位顧客 {name,prefs,incl,visits,spend,items:{menuId:{count,streak,lastDay,boredHits,coolUntil}}}
-    const K_LOG = 'visits';    // 訪客紀錄 [{day,key,name,item,line,price}]
+    const K_NPC = 'npc';       // 每位顧客 {name,prefs,incl,visits,spend,items:{menuId:{count,streak,lastDay,boredHits,coolUntil,devoted}}}
+    const K_LOG = 'visits';    // 訪客紀錄 [{id,day,key,name,item,line,price,said?,ev?}]
+    const K_EVQ = 'evq';       // A級事件佇列 [{type,key,item,itemId}](單次結算最多消化2件,超過留隊)
+    const EV_LABEL = { devotion: '本命認證', dropout: '吃膩告別' };
+    function _mkId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
     // 訪客紀錄的旁白模板(零API;③「點開看完整留言」才燒API讓角色親口說)
     const TPL = {
@@ -215,6 +218,69 @@
         }
         return best;
     }
+    // 🎧 點開紀錄→角色親口留言(一則只燒一次,存回該筆)
+    async function _hearNpc(l) {
+        const roster = (win.LobbyNpcs?.cafeRoster?.() || []);
+        const r = roster.find(x => x.key === l.key);
+        if (!r || !r.persona) return null;
+        const api = win.OS_API || window.OS_API;
+        if (!api || !api.chat) return null;
+        try {
+            let config = {};
+            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
+            if (OS) {
+                const sec = OS.getSecondaryConfig ? OS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
+            }
+            config = config || {};
+            config.route = 'cafe_voice';
+            const prompt =
+                '你要扮演這位角色,在書咖的留言板上對店主(玩家)留一句話。只回傳純 JSON:\n' +
+                '{"line":"{他口吻的留言,1到2句,不超過40字}"}\n' +
+                '人設:' + String(r.persona).slice(0, 800) + '\n' +
+                '今天他在店裡:' + l.line + (l.item ? '(品項:' + l.item + ')' : '') + '\n' +
+                '語言:繁體中文。';
+            const raw = await new Promise((resolve, reject) => {
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '書咖訪客留言', keepCodeFences: true });
+            });
+            const json = _extractJSON(raw);
+            return (json && json.line) ? String(json.line).slice(0, 60) : null;
+        } catch (e) { console.warn('[Cafe] 訪客留言失敗', e); return null; }
+    }
+    // 🎬 A級事件(敘事節點,燒1次API+改NPC口味設定)
+    async function _eventScene(r, ev) {
+        const api = win.OS_API || window.OS_API;
+        if (!api || !api.chat || !r.persona) return null;
+        try {
+            let config = {};
+            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
+            if (OS) {
+                const sec = OS.getSecondaryConfig ? OS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
+            }
+            config = config || {};
+            config.route = 'cafe_event';
+            const situ = ev.type === 'devotion'
+                ? '他把「' + ev.item + '」前後買了十次,這杯已經是他的本命飲品。回傳 JSON:{"line":"{他口吻的本命宣言,1到2句,不超過40字}","addTags":["{從標籤池挑最多2個他因此更偏愛的口味}"]}'
+                : '他把「' + ev.item + '」喝膩了,決定暫時不再點它。回傳 JSON:{"line":"{他口吻的告別吐槽,1到2句,不超過40字}","newTags":["{從標籤池挑1到3個,代表他口味的新轉向}"]}';
+            const prompt =
+                '你要扮演這位角色,回應書咖裡發生在他身上的事,並更新他的口味。只回傳純 JSON。\n' +
+                '標籤池(只准從中挑):' + _tagPool().join('、') + '\n' +
+                '人設:' + String(r.persona).slice(0, 800) + '\n' +
+                '事件:' + situ + '\n語言:繁體中文。';
+            const raw = await new Promise((resolve, reject) => {
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '書咖事件:' + (EV_LABEL[ev.type] || ev.type), keepCodeFences: true });
+            });
+            const json = _extractJSON(raw);
+            if (!json || !json.line) return null;
+            const pool = _tagPool();
+            return {
+                line: String(json.line).slice(0, 60),
+                addTags: (Array.isArray(json.addTags) ? json.addTags : []).filter(t => pool.includes(t)).slice(0, 2),
+                newTags: (Array.isArray(json.newTags) ? json.newTags : []).filter(t => pool.includes(t)).slice(0, 3),
+            };
+        } catch (e) { console.warn('[Cafe] 事件生成失敗,留隊下次', e); return null; }
+    }
     let _settling = null;   // 重入閂:開窗連點別疊跑
     async function _settle() {
         if (_settling) return _settling;
@@ -233,6 +299,7 @@
         const npcs = await _get(K_NPC, {});
         const menu = await getMenu();
         const logs = await _get(K_LOG, []);
+        const evq = await _get(K_EVQ, []);
         let earned = 0, cupsAdded = 0, anyVisit = false;
         for (let day = from; day <= today; day++) {
             let visitToday = false;
@@ -244,7 +311,7 @@
                         st.prefs = tuned.tags; st.incl = tuned.incl;
                         if (tuned.book) { try { await addBook({ title: tuned.book.title, by: r.name, note: tuned.book.note }); } catch (e) {} }
                         st.visits++; visitToday = anyVisit = true;
-                        logs.unshift({ day, key: r.key, name: r.name, line: TPL.first, price: 0 });
+                        logs.unshift({ id: _mkId(), day, key: r.key, name: r.name, line: TPL.first, price: 0 });
                     }
                     continue;
                 }
@@ -252,7 +319,7 @@
                 if (Math.random() >= p) continue;
                 visitToday = anyVisit = true; st.visits++;
                 const pick = _pickItem(menu, st, day);
-                if (!pick) { if (Math.random() < 0.4) logs.unshift({ day, key: r.key, name: r.name, line: TPL.browse, price: 0 }); continue; }
+                if (!pick) { if (Math.random() < 0.4) logs.unshift({ id: _mkId(), day, key: r.key, name: r.name, line: TPL.browse, price: 0 }); continue; }
                 const m = pick.m;
                 const it = st.items[m.id] || (st.items[m.id] = { count: 0, streak: 0, lastDay: 0, boredHits: 0, coolUntil: 0 });
                 const gap = it.lastDay ? day - it.lastDay : 0;
@@ -262,14 +329,33 @@
                 earned += m.price; cupsAdded++; st.spend += m.price;
                 let lineKey = pick.state;
                 if (gap > 7 && it.count > 1) lineKey = 'comeback';
-                if (pick.state === 'bored') { it.boredHits = (it.boredHits || 0) + 1; if (it.boredHits >= 2) { it.coolUntil = day + 7; it.boredHits = 0; } }
-                logs.unshift({ day, key: r.key, name: r.name, item: m.name, line: (TPL[lineKey] || TPL.normal).replace('{item}', m.name), price: m.price });
+                if (pick.state === 'bored') {
+                    it.boredHits = (it.boredHits || 0) + 1;
+                    if (it.boredHits >= 2) { it.coolUntil = day + 7; it.boredHits = 0; evq.push({ type: 'dropout', key: r.key, item: m.name, itemId: m.id }); }   // 🎬 吃膩棄坑
+                }
+                if (it.count === 10 && !it.devoted) { it.devoted = true; evq.push({ type: 'devotion', key: r.key, item: m.name, itemId: m.id }); }   // 🎬 本命認證
+                logs.unshift({ id: _mkId(), day, key: r.key, name: r.name, item: m.name, line: (TPL[lineKey] || TPL.normal).replace('{item}', m.name), price: m.price });
             }
             if (visitToday) shop.popularity = Math.min(999, (shop.popularity || 0) + 1);
+        }
+        // 🎬 A級事件消化:單次結算最多2件(敘事節點才燒API),API掛了整隊留到下次
+        let evDone = 0;
+        while (evq.length && evDone < 2) {
+            const ev = evq[0];
+            const r = roster.find(x => x.key === ev.key);
+            const st = npcs[ev.key];
+            if (!r || !st) { evq.shift(); continue; }
+            const out = await _eventScene(r, ev);
+            if (!out) break;
+            if (ev.type === 'devotion' && out.addTags.length) st.prefs = Array.from(new Set([].concat(st.prefs || [], out.addTags))).slice(0, 4);
+            if (ev.type === 'dropout' && out.newTags.length) st.prefs = out.newTags;   // 口味轉向:整組改寫
+            logs.unshift({ id: _mkId(), day: today, key: ev.key, name: st.name, item: ev.item, line: out.line, said: out.line, price: 0, ev: ev.type });
+            evq.shift(); evDone++; anyVisit = true;
         }
         shop.lastDay = today;
         shop.revenue = (shop.revenue || 0) + earned;
         shop.cups = (shop.cups || 0) + cupsAdded;
+        await _set(K_EVQ, evq);
         await _set(K_NPC, npcs); await _set(K_MENU, menu); await _set(K_LOG, logs.slice(0, 80)); await _set(K_SHOP, shop);
         if (earned > 0) { try { await (win.OS_PT || window.OS_PT)?.addPT?.(earned, { reason: '書咖營業收入' }); } catch (e) {} }
         return anyVisit;
@@ -300,7 +386,12 @@
             '.oc-tab.on{background:#7a5230;border-color:#7a5230;color:#f9f2e6;font-weight:700;}' +
             '.oc-body{overflow-y:auto;padding:10px 14px 14px;flex:1;display:flex;flex-direction:column;}' +
             '.oc-body .oc-empty{margin:auto;}' +   /* 空狀態置中,不縮窗 */
-            '.oc-item{display:flex;align-items:baseline;gap:8px;padding:9px 4px;border-bottom:1px dashed rgba(122,82,48,.22);}' +
+            '.oc-item{display:flex;align-items:baseline;gap:8px;padding:9px 4px;border-bottom:1px dashed rgba(122,82,48,.22);flex-wrap:wrap;}' +
+            '.oc-item.oc-click{cursor:pointer;}' +
+            '.oc-item.ev{background:rgba(214,158,84,.12);border-radius:9px;border-bottom:none;margin:5px 0;padding:9px 10px;}' +
+            '.oc-hear{color:#c9b28a;font-size:12px;margin-left:4px;}.oc-hear.has{color:#a9744a;}' +
+            '.oc-said{display:block;margin-top:6px;padding:7px 10px;background:rgba(169,116,74,.08);border-left:3px solid #c9a06a;border-radius:6px;color:#5a4030;font-size:12px;line-height:1.6;}' +
+            '.oc-loading{color:#a3906f;}' +
             '.oc-item .oc-name{font-weight:700;color:#5a4030;}' +
             '.oc-item .oc-price{margin-left:auto;white-space:nowrap;color:#a9744a;font-weight:700;}' +
             '.oc-blurb{display:block;color:#8a7358;font-size:12px;margin-top:2px;}' +
@@ -389,14 +480,40 @@
                     '<span class="oc-price">' + m.price + ' PT・售出' + (m.sold || 0) + '</span></div>').join('')
                 : '<div class="oc-empty">菜單還是空的。<br>去「調配台」研發出好東西再上架吧。</div>');
         } else if (tab === 'log') {
-            const logs = await _get(K_LOG, []);
+            let logs = await _get(K_LOG, []);
+            if (logs.some(l => !l.id)) { logs.forEach(l => { if (!l.id) l.id = _mkId(); }); await _set(K_LOG, logs); }   // 舊紀錄補id
             const md = (d) => { const t = new Date(d * DAY_MS); return (t.getMonth() + 1) + '/' + t.getDate(); };
             body.innerHTML = logs.length
-                ? logs.map(l =>
-                    '<div class="oc-item"><span><span class="oc-name">' + md(l.day) + '・' + l.name + '</span>' +
-                    '<span class="oc-blurb">' + l.line + '</span></span>' +
-                    (l.price ? '<span class="oc-price">+' + l.price + ' PT</span>' : '') + '</div>').join('')
+                ? logs.map(l => {
+                    if (l.ev) {   // 🎬 事件卡:角色親口說的,直接攤開
+                        return '<div class="oc-item ev"><span><span class="oc-name">⭐ ' + md(l.day) + '・' + l.name + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + l.item + '」' : '') + '</span>' +
+                            '<span class="oc-said">「' + l.line + '」</span></span></div>';
+                    }
+                    return '<div class="oc-item oc-click" data-id="' + l.id + '"><span><span class="oc-name">' + md(l.day) + '・' + l.name + '</span>' +
+                        '<span class="oc-blurb">' + l.line + '</span>' +
+                        (l.said ? '<span class="oc-said">「' + l.said + '」</span>' : '') + '</span>' +
+                        '<span class="oc-price">' + (l.price ? '+' + l.price + ' PT ' : '') +
+                        (l.key ? '<i class="fa-solid fa-comment-dots oc-hear' + (l.said ? ' has' : '') + '"></i>' : '') + '</span></div>';
+                }).join('')
                 : '<div class="oc-empty">還沒有客人來過。<br>上架點好東西,常客們就會自己上門了。</div>';
+            // 🎧 點一筆=請那位客人親口說(一筆只燒一次,說過的存起來、再點只是收合/展開)
+            body.querySelectorAll('.oc-click').forEach(el => el.addEventListener('click', async () => {
+                const id = el.dataset.id;
+                const cur = await _get(K_LOG, []);
+                const l = cur.find(x => x.id === id);
+                if (!l || !l.key) return;
+                const old = el.querySelector('.oc-said');
+                if (l.said) { if (old) old.remove(); else el.querySelector('.oc-blurb')?.insertAdjacentHTML('afterend', '<span class="oc-said">「' + l.said + '」</span>'); return; }
+                if (el.querySelector('.oc-loading')) return;
+                el.querySelector('.oc-blurb')?.insertAdjacentHTML('afterend', '<span class="oc-said oc-loading">他想了想…</span>');
+                const said = await _hearNpc(l);
+                const loading = el.querySelector('.oc-loading');
+                if (!said) { if (loading) loading.textContent = '他沒搭理你,再點一次試試。'; return; }
+                l.said = said;
+                await _set(K_LOG, cur);
+                if (loading) { loading.classList.remove('oc-loading'); loading.textContent = '「' + said + '」'; }
+                el.querySelector('.oc-hear')?.classList.add('has');
+            }));
         } else if (tab === 'books') {
             const books = await getBooks();
             body.innerHTML = books.length
