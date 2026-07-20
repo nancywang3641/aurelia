@@ -158,35 +158,37 @@
         const st = doc.createElement('style');
         st.id = 'os-cafe-style';
         st.textContent =
-            '.oc-win{position:absolute;right:max(3%, calc(50% - 340px));top:10%;z-index:3350;width:300px;max-width:88%;max-height:72%;display:flex;flex-direction:column;background:rgba(30,26,22,.94);border:1px solid rgba(243,234,216,.25);border-radius:14px;color:#f3ead8;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.55);}' +   /* 右側停靠(同白兔成例);寬螢幕(全屏)貼近中間、窄螢幕退回貼邊 */
-            '.oc-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(243,234,216,.14);}' +
-            '.oc-head .oc-close{margin-left:auto;background:none;border:none;color:#f3ead8;cursor:pointer;font-size:15px;padding:2px 6px;}' +
-            '.oc-tabs{display:flex;gap:6px;padding:8px 12px 0;}' +
-            '.oc-tab{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(243,234,216,.18);color:#f3ead8;border-radius:8px;padding:6px 0;cursor:pointer;font-size:12px;}' +
-            '.oc-tab.on{background:rgba(214,158,84,.3);border-color:#d69e54;}' +
-            '.oc-body{overflow-y:auto;padding:10px 12px 12px;flex:1;}' +
-            '.oc-item{display:flex;align-items:baseline;gap:8px;padding:8px 6px;border-bottom:1px dashed rgba(243,234,216,.12);}' +
-            '.oc-item .oc-name{font-weight:700;}' +
-            '.oc-item .oc-price{margin-left:auto;white-space:nowrap;color:#e8c98c;}' +
-            '.oc-blurb{display:block;color:#cbbfa8;font-size:12px;margin-top:2px;}' +
-            '.oc-badge{font-size:10px;padding:1px 6px;border-radius:6px;border:1px solid;white-space:nowrap;}' +
-            '.oc-badge.s{color:#ffd98a;border-color:#ffd98a;}.oc-badge.a{color:#9fd6a2;border-color:#9fd6a2;}.oc-badge.b{color:#aab;border-color:#889;}.oc-badge.c{color:#e08a8a;border-color:#e08a8a;}' +
-            '.oc-empty{color:#a99;padding:18px 4px;text-align:center;line-height:1.7;}' +
-            '.oc-slot-label{margin:8px 0 4px;color:#cbbfa8;font-size:12px;}' +
+            /* ☕ 書咖菜單板風格:奶油紙底+咖啡棕字+金棕點綴(配瀅瀅店裡的木質奶油色系,別再黑瀝青) */
+            '.oc-win{position:absolute;right:max(3%, calc(50% - 370px));top:9%;z-index:3350;width:344px;max-width:90%;max-height:78%;display:flex;flex-direction:column;background:rgba(249,242,230,.97);border:1px solid #d8c6a8;border-radius:16px;color:#4a3a2a;font-size:13px;box-shadow:0 10px 28px rgba(90,66,40,.35);}' +
+            '.oc-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px dashed #d8c6a8;background:rgba(122,82,48,.07);border-radius:16px 16px 0 0;font-weight:700;color:#6b4e32;}' +
+            '.oc-head .oc-close{margin-left:auto;background:none;border:none;color:#6b4e32;cursor:pointer;font-size:15px;padding:2px 6px;}' +
+            '.oc-tabs{display:flex;gap:6px;padding:10px 14px 0;}' +
+            '.oc-tab{flex:1;background:rgba(255,255,255,.55);border:1px solid #d3bf9f;color:#6b4e32;border-radius:9px;padding:6px 0;cursor:pointer;font-size:12px;}' +
+            '.oc-tab.on{background:#7a5230;border-color:#7a5230;color:#f9f2e6;font-weight:700;}' +
+            '.oc-body{overflow-y:auto;padding:10px 14px 14px;flex:1;}' +
+            '.oc-item{display:flex;align-items:baseline;gap:8px;padding:9px 4px;border-bottom:1px dashed rgba(122,82,48,.22);}' +
+            '.oc-item .oc-name{font-weight:700;color:#5a4030;}' +
+            '.oc-item .oc-price{margin-left:auto;white-space:nowrap;color:#a9744a;font-weight:700;}' +
+            '.oc-blurb{display:block;color:#8a7358;font-size:12px;margin-top:2px;}' +
+            '.oc-badge{font-size:10px;padding:1px 6px;border-radius:6px;border:1px solid;white-space:nowrap;background:rgba(255,255,255,.5);}' +
+            '.oc-badge.s{color:#b8860b;border-color:#caa24a;}.oc-badge.a{color:#4e8b57;border-color:#7cae85;}.oc-badge.b{color:#8a8a92;border-color:#b6b6bd;}.oc-badge.c{color:#c05b5b;border-color:#d99;}' +
+            '.oc-empty{color:#9b8a72;padding:20px 4px;text-align:center;line-height:1.8;}' +
+            '.oc-slot-label{margin:9px 0 5px;color:#8a7358;font-size:12px;}' +
             '.oc-chips{display:flex;flex-wrap:wrap;gap:6px;}' +
-            '.oc-chip{background:rgba(255,255,255,.06);border:1px solid rgba(243,234,216,.2);color:#f3ead8;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;}' +
-            '.oc-chip.on{background:rgba(214,158,84,.35);border-color:#d69e54;}' +
-            '.oc-brew{width:100%;margin-top:12px;background:#d69e54;border:none;color:#2a2118;font-weight:700;border-radius:10px;padding:9px 0;cursor:pointer;font-size:13px;}' +
-            '.oc-brew:disabled{opacity:.4;cursor:default;}' +
-            '.oc-result{margin-top:10px;border:1px solid rgba(243,234,216,.2);border-radius:10px;padding:10px;}' +
-            '.oc-result .oc-note{color:#cbbfa8;font-size:12px;margin-top:4px;}' +
-            '.oc-shelf{width:100%;margin-top:8px;background:rgba(159,214,162,.2);border:1px solid #9fd6a2;color:#cfe9d0;border-radius:10px;padding:8px 0;cursor:pointer;font-size:13px;}' +
+            '.oc-chip{background:rgba(255,255,255,.6);border:1px solid #d3bf9f;color:#5a4634;border-radius:9px;padding:5px 11px;cursor:pointer;font-size:12px;}' +
+            '.oc-chip.on{background:rgba(169,116,74,.22);border-color:#a9744a;font-weight:700;}' +
+            '.oc-brew{width:100%;margin-top:12px;background:#7a5230;border:none;color:#f9f2e6;font-weight:700;border-radius:11px;padding:10px 0;cursor:pointer;font-size:13px;}' +
+            '.oc-brew:disabled{opacity:.45;cursor:default;}' +
+            '.oc-result{margin-top:10px;border:1px solid #d8c6a8;border-radius:11px;padding:10px 12px;background:rgba(255,252,246,.7);}' +
+            '.oc-result .oc-note{color:#8a7358;font-size:12px;margin-top:4px;}' +
+            '.oc-shelf{width:100%;margin-top:8px;background:rgba(78,139,87,.12);border:1px solid #7cae85;color:#3c6b44;font-weight:700;border-radius:11px;padding:8px 0;cursor:pointer;font-size:13px;}' +
             '.oc-shelf:disabled{opacity:.5;cursor:default;}' +
-            '.oc-tried{color:#8a8074;font-size:11px;margin-top:6px;}' +
-            '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;padding-right:2px;}' +
-            '.oc-sym{width:38px;height:38px;font-size:18px;background:rgba(255,255,255,.05);border:1px solid rgba(243,234,216,.18);border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}' +
-            '.oc-sym.on{background:rgba(214,158,84,.35);border-color:#d69e54;}' +
-            '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.06);border:1px solid rgba(243,234,216,.2);border-radius:8px;color:#f3ead8;padding:7px 10px;font-size:12px;}' +
+            '.oc-tried{color:#a3906f;font-size:11px;margin-top:6px;}' +
+            '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:210px;overflow-y:auto;padding-right:2px;}' +
+            '.oc-sym{width:38px;height:38px;font-size:18px;background:rgba(255,255,255,.6);border:1px solid #d3bf9f;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}' +
+            '.oc-sym.on{background:rgba(214,158,84,.3);border-color:#a9744a;}' +
+            '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.75);border:1px solid #d3bf9f;border-radius:9px;color:#4a3a2a;padding:7px 10px;font-size:12px;}' +
+            '.oc-free-input::placeholder{color:#a3906f;}' +
             '@media (max-width:680px){' +
               '.oc-win{right:12px;left:12px;width:auto;top:7%;max-height:74%;}' +   /* 📱 面板站前排放大 */
               '.void-dock-open #iris-avatar{opacity:.25;filter:brightness(.55) blur(1px);transition:opacity .25s;}' +   /* 立繪退後變暗 */
