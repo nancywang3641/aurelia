@@ -159,13 +159,14 @@
         st.id = 'os-cafe-style';
         st.textContent =
             /* ☕ 書咖菜單板風格:奶油紙底+咖啡棕字+金棕點綴(配瀅瀅店裡的木質奶油色系,別再黑瀝青) */
-            '.oc-win{position:absolute;right:max(3%, calc(50% - 370px));top:9%;z-index:3350;width:344px;max-width:90%;max-height:78%;display:flex;flex-direction:column;background:rgba(249,242,230,.97);border:1px solid #d8c6a8;border-radius:16px;color:#4a3a2a;font-size:13px;box-shadow:0 10px 28px rgba(90,66,40,.35);}' +
+            '.oc-win{position:absolute;right:max(3%, calc(50% - 370px));top:50%;transform:translateY(-50%);z-index:3350;width:344px;max-width:90%;min-height:min(460px,74%);max-height:78%;display:flex;flex-direction:column;background:rgba(249,242,230,.97);border:1px solid #d8c6a8;border-radius:16px;color:#4a3a2a;font-size:13px;box-shadow:0 10px 28px rgba(90,66,40,.35);}' +
             '.oc-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px dashed #d8c6a8;background:rgba(122,82,48,.07);border-radius:16px 16px 0 0;font-weight:700;color:#6b4e32;}' +
             '.oc-head .oc-close{margin-left:auto;background:none;border:none;color:#6b4e32;cursor:pointer;font-size:15px;padding:2px 6px;}' +
             '.oc-tabs{display:flex;gap:6px;padding:10px 14px 0;}' +
             '.oc-tab{flex:1;background:rgba(255,255,255,.55);border:1px solid #d3bf9f;color:#6b4e32;border-radius:9px;padding:6px 0;cursor:pointer;font-size:12px;}' +
             '.oc-tab.on{background:#7a5230;border-color:#7a5230;color:#f9f2e6;font-weight:700;}' +
-            '.oc-body{overflow-y:auto;padding:10px 14px 14px;flex:1;}' +
+            '.oc-body{overflow-y:auto;padding:10px 14px 14px;flex:1;display:flex;flex-direction:column;}' +
+            '.oc-body .oc-empty{margin:auto;}' +   /* 空狀態置中,不縮窗 */
             '.oc-item{display:flex;align-items:baseline;gap:8px;padding:9px 4px;border-bottom:1px dashed rgba(122,82,48,.22);}' +
             '.oc-item .oc-name{font-weight:700;color:#5a4030;}' +
             '.oc-item .oc-price{margin-left:auto;white-space:nowrap;color:#a9744a;font-weight:700;}' +
@@ -190,7 +191,7 @@
             '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.75);border:1px solid #d3bf9f;border-radius:9px;color:#4a3a2a;padding:7px 10px;font-size:12px;}' +
             '.oc-free-input::placeholder{color:#a3906f;}' +
             '@media (max-width:680px){' +
-              '.oc-win{right:12px;left:12px;width:auto;top:7%;max-height:74%;}' +   /* 📱 面板站前排放大 */
+              '.oc-win{right:12px;left:12px;width:auto;max-height:74%;}' +   /* 📱 面板站前排放大(垂直置中沿用桌機規則) */
               '.void-dock-open #iris-avatar{opacity:.25;filter:brightness(.55) blur(1px);transition:opacity .25s;}' +   /* 立繪退後變暗 */
             '}';
         doc.head.appendChild(st);

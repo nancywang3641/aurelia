@@ -246,7 +246,7 @@
             '.os-pt-bal i{color:#ffe28a;margin-right:4px;}',
             '.os-pt-note{margin-top:6px;font-size:11px;color:#8a8298;font-style:italic;}',
             // 交易所面板：白色系、貼遊戲畫面右內側（跟白兔對話時浮出）
-            '.os-pt-dock{position:absolute;right:max(4%, calc(50% - 360px));top:15%;z-index:80;width:min(38%,320px);max-height:68%;overflow:auto;',   /* 寬螢幕(全屏)貼近中間、窄螢幕退回貼邊 */
+            '.os-pt-dock{position:absolute;right:max(4%, calc(50% - 360px));top:50%;transform:translateY(-50%);z-index:80;width:min(38%,320px);max-height:68%;overflow:auto;',   /* 寬螢幕貼近中間+垂直置中;窄螢幕退回貼邊 */
             'opacity:0;transform:translateX(24px);transition:opacity .28s ease,transform .28s ease;}',
             '.os-pt-dock.on{opacity:1;transform:translateX(0);}',
             '@media (max-width:680px){' +
