@@ -336,6 +336,18 @@
     window.LobbyNpcs = {
         init: initNpcs,                     // lobby_stage.tryMount 呼叫（async；掛載時生成本場景 NPC）
         rollGuestPool: _journalGuestPool,   // console 診斷用（LobbyStage.rollGuestPool 懶轉接到這；async 回傳池陣列）
-        cafeRoster: () => SN_RESIDENTS.map(r => ({ key: r.key, name: r.name, persona: r.personaFull })),   // ☕ 書咖經營②:顧客名冊(os_cafe 首訪定調用人設)
+        // ☕ 書咖經營:顧客名冊=SN住民+日誌客人池全員(當前各卡最新輪的角色;key帶chatId=每輪隔離,同場景客人規則)
+        cafeRoster: async () => {
+            const out = SN_RESIDENTS.map(r => ({ key: r.key, name: r.name, persona: r.personaFull }));
+            try {
+                const pool = await _journalGuestPool();
+                pool.forEach(g => out.push({
+                    key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName,
+                    name: g.name,
+                    persona: _guestPersona(g),
+                }));
+            } catch (e) { console.warn('[LobbyNpcs] cafeRoster 客人池讀取失敗', e); }
+            return out;
+        },
     };
 })();
