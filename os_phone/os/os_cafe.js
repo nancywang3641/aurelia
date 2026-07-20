@@ -220,7 +220,7 @@
     }
     // 🎧 點開紀錄→角色親口留言(一則只燒一次,存回該筆)
     async function _hearNpc(l) {
-        const roster = (win.LobbyNpcs?.cafeRoster?.() || []);
+        const roster = await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []);
         const r = roster.find(x => x.key === l.key);
         if (!r || !r.persona) return null;
         const api = win.OS_API || window.OS_API;
@@ -289,7 +289,7 @@
     }
     async function _settleInner() {
         try { if ((win.localStorage || localStorage).getItem('cafe_offline_visits') === '0') return false; } catch (e) {}
-        const roster = (win.LobbyNpcs?.cafeRoster?.() || []);
+        const roster = await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []);
         if (!roster.length) return false;
         const shop = await getShop();
         const today = _dayNum(Date.now());
@@ -300,13 +300,14 @@
         const menu = await getMenu();
         const logs = await _get(K_LOG, []);
         const evq = await _get(K_EVQ, []);
-        let earned = 0, cupsAdded = 0, anyVisit = false;
+        let earned = 0, cupsAdded = 0, anyVisit = false, tunedRun = 0;   // 首訪定調每次結算≤3次(名冊變大後防API爆發,沒輪到的自然留到下次)
         for (let day = from; day <= today; day++) {
             let visitToday = false;
             for (const r of roster) {
                 const st = npcs[r.key] || (npcs[r.key] = { name: r.name, prefs: null, incl: 0.5, visits: 0, spend: 0, items: {} });
                 if (!st.prefs) {   // 還沒定調=還沒第一次上門
-                    if (Math.random() < 0.55) {
+                    if (tunedRun < 3 && Math.random() < 0.55) {
+                        tunedRun++;
                         const tuned = await _tuneNpc(r);
                         st.prefs = tuned.tags; st.incl = tuned.incl;
                         if (tuned.book) { try { await addBook({ title: tuned.book.title, by: r.name, note: tuned.book.note }); } catch (e) {} }
