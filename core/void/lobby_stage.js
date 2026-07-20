@@ -1102,6 +1102,7 @@
             if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
             showDialog();
             window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句(404房自動用柴郡池)
+            if (npc.key === 'ying' && S.scene === 'cafe') { try { window.OS_CAFE?.openWorkshop?.(); } catch (e) {} }   // ☕ 跟瀅瀅開聊→右側停靠書咖櫃檯(同白兔買房面板成例)
             return;
         }
         if (tagSpan) tagSpan.textContent = npc.name;
@@ -1122,6 +1123,7 @@
         _applySceneHeader();
         hideDialog();
         try { window.OS_PT?.closeExchange?.(); } catch (e) {}   // 離開白兔→收起買房面板
+        try { window.OS_CAFE?.closeWorkshop?.(); } catch (e) {}   // 離開瀅瀅→收起書咖櫃檯
     }
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {
@@ -1616,9 +1618,8 @@
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
             '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-tx">小劇場</span><span class="ltb-badge"></span></button>' +
             // 🏙 快轉地圖：書咖/大廳/交易所/城裡都出現（404 要走還原流程）
-            ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'exchange' || S.scene === 'city') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '') +
-            // ☕ 書咖櫃檯：只在書咖出現（調配台/菜單/書單,實作在 os_cafe.js）
-            (S.scene === 'cafe' ? '<button class="lstage-cafe-btn" title="書咖櫃檯（菜單／調配台）"><i class="fa-solid fa-mug-hot"></i></button>' : '');
+            ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'exchange' || S.scene === 'city') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
+            // ☕ 書咖櫃檯入口=跟瀅瀅開聊(startTalk 掛鉤,同白兔成例);獨立鈕已退役
         left.appendChild(root);
         _applyMenuHidden();   // 套用上次「舞台全屏（隱藏 MAIN MENU）」狀態
         if (S._theaterTimer) clearInterval(S._theaterTimer);
@@ -1632,7 +1633,6 @@
         // 🎬 小劇場窗口：有未查看的配對→開「正在對話」，否則直接看「回顧」
         root.querySelector('.lstage-theater-btn').addEventListener('click', () => window.LobbyTheater?.openWin(S.theater && !S.theater.playing ? 'live' : 'review'));
         root.querySelector('.lstage-city-btn')?.addEventListener('click', () => _openCityMap());   // 🏙 快轉地圖（廣場俯瞰縮圖,點哪去哪）
-        root.querySelector('.lstage-cafe-btn')?.addEventListener('click', () => window.OS_CAFE?.openWorkshop?.());   // ☕ 書咖櫃檯
         left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
         // 💬 聊天符號（自由漫遊時的浮鈕）：點了浮出「對話框＋輸入框」一組
         const fab = document.createElement('button');
