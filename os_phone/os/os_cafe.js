@@ -186,17 +186,25 @@
             '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;padding-right:2px;}' +
             '.oc-sym{width:38px;height:38px;font-size:18px;background:rgba(255,255,255,.05);border:1px solid rgba(243,234,216,.18);border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}' +
             '.oc-sym.on{background:rgba(214,158,84,.35);border-color:#d69e54;}' +
-            '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.06);border:1px solid rgba(243,234,216,.2);border-radius:8px;color:#f3ead8;padding:7px 10px;font-size:12px;}';
+            '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.06);border:1px solid rgba(243,234,216,.2);border-radius:8px;color:#f3ead8;padding:7px 10px;font-size:12px;}' +
+            '@media (max-width:680px){' +
+              '.oc-win{right:12px;left:12px;width:auto;top:7%;max-height:74%;}' +   /* 📱 面板站前排放大 */
+              '.void-dock-open #iris-avatar{opacity:.25;filter:brightness(.55) blur(1px);transition:opacity .25s;}' +   /* 立繪退後變暗 */
+            '}';
         doc.head.appendChild(st);
     }
 
     let _winEl = null;
-    function closeWorkshop() { _winEl?.remove(); _winEl = null; }
+    function closeWorkshop() {
+        _winEl?.remove(); _winEl = null;
+        try { win.document.querySelector('.lobby-left')?.classList.remove('void-dock-open'); } catch (e) {}
+    }
     async function openWorkshop() {
         closeWorkshop();
         const doc = win.document;
         _ensureStyle(doc);
         const host = doc.querySelector('.lobby-left') || doc.body;
+        host.classList.add('void-dock-open');   // 📱 手機:立繪退後變暗、面板站前排
         const box = doc.createElement('div');
         box.className = 'oc-win';
         box.innerHTML =
