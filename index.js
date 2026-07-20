@@ -202,6 +202,7 @@ const PHONE_FILES = [
     'os/os_journal.js',
     'os/os_story_tools.js',   // 故事管理（大總結 + 隱藏對話）— 從 RPG 面板 / VN 閱讀器搬來，掛進故事日誌
     'os/os_pt.js',            // 🏦 交易區 PT 經濟：錢包+大總結結算估值+VN 結算卡+交易所面板（依賴 OS_DB/OS_API，排它們後面）
+    'os/os_cafe.js',          // ☕ 書咖經營：調配台研發+上架命名+菜單/書單（依賴 OS_DB/OS_API；設計書 docs/book_cafe_design.md）
     'os/os_workbench.js',
 
     // === 📖 VN 視覺小說系統 ===
