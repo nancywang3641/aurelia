@@ -23,6 +23,10 @@
         sCombos: ['coffee+caramel+foam', 'tea+floral+cookie', 'soda+berry+mint', 'coffee+spice+cookie', 'tea+berry+foam', 'soda+floral+mint'],
         cCombos: ['soda+caramel+foam', 'coffee+berry+mint', 'tea+spice+mint', 'soda+spice+cookie'],
         hashARatio: 0.45,   // 非策劃組合落 A 的比例
+        freeformCap: 3,     // 「自由創想」同時在架上限(防氪金灌爆菜單)
+        // 創想符號庫(遊戲材料,可增減):丟進鍋裡讓店長解讀成飲品意象
+        symbols: ['⭐', '🌙', '☀️', '🌧️', '❄️', '🔥', '🌸', '🍋', '🍇', '🍯', '🌿', '🫧', '🌊', '🍫', '🥛', '🫖', '💫', '🌈', '🍒', '⚡', '🧊', '🍑', '🌫️', '🖤'],
+        symbolMax: 4,       // 一鍋最多丟幾顆
     };
     const TIER_TEXT = {
         S: { label: '靈感之作', cls: 's', note: '這杯有靈魂——值得掛上菜單最顯眼的位置。' },
@@ -56,6 +60,7 @@
     }
     function _ing(slot, id) { return CAFE_CFG.pantry[slot].find(x => x.id === id) || null; }
     function _tagsOf(b, f, t) { return [_ing('base', b), _ing('flavor', f), _ing('top', t)].filter(Boolean).map(x => x.tag); }
+    function _tagPool() { return Object.values(CAFE_CFG.pantry).flat().map(x => x.tag); }   // 調性標籤詞彙表(創想只准從這挑,②配對才對得上)
 
     // ── 上架命名(副模型直連,仿 os_pt._valuate;失敗退機械名)──
     function _extractJSON(raw) {
@@ -91,6 +96,43 @@
             if (json && json.name) return { name: String(json.name).slice(0, 12), blurb: String(json.blurb || '').slice(0, 40) };
             return fallback;
         } catch (e) { console.warn('[Cafe] 命名失敗,退機械名', e); return fallback; }
+    }
+
+    // ── ✨ 自由創想(丟符號+備用詞→副模型當嚴格評審;整杯都是AI生的,失敗不退機械底、直接重試)──
+    async function _freeform(symbols, words) {
+        const api = win.OS_API || window.OS_API;
+        if (!api || !api.chat) return null;
+        try {
+            let config = {};
+            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
+            if (OS) {
+                const sec = OS.getSecondaryConfig ? OS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
+            }
+            config = config || {};
+            config.route = 'cafe_freeform';
+            const prompt =
+                '你是書咖店長兼飲品評審。玩家把一把符號丟進了調配鍋,請把符號解讀成飲品意象,發明一款飲品並嚴格評定品質。只回傳純 JSON:\n' +
+                '{"tier":"{S|A|B|C 其中之一}","name":"{品名,不超過8個字,有記憶點}","blurb":"{一句菜單文案,不超過30字}","tags":["{從標籤池挑1~3個}"],"why":"{一句評語,說明這杯成不成立}"}\n' +
+                '評分標準:S=靈感之作(意象協調且驚豔,極少給)/A=優良(成立且好喝)/B=平庸(能喝但無記憶點)/C=不成立(意象打架或難以下嚥)。嚴格把關,平庸就給B,別討好玩家。\n' +
+                '標籤池(只准從中挑):' + _tagPool().join('、') + '\n' +
+                '鍋裡的符號:' + symbols.join(' ') + '\n' +
+                (words ? '玩家補充的關鍵詞:' + words + '\n' : '') +
+                '語言:繁體中文。';
+            const raw = await new Promise((resolve, reject) => {
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '書咖自由創想', keepCodeFences: true });
+            });
+            const json = _extractJSON(raw);
+            if (!json || !/^[SABC]$/.test(String(json.tier))) return null;
+            const pool = _tagPool();
+            return {
+                tier: json.tier,
+                name: String(json.name || '').slice(0, 12),
+                blurb: String(json.blurb || '').slice(0, 40),
+                tags: (Array.isArray(json.tags) ? json.tags : []).filter(t => pool.includes(t)).slice(0, 3),
+                why: String(json.why || '').slice(0, 60),
+            };
+        } catch (e) { console.warn('[Cafe] 自由創想失敗', e); return null; }
     }
 
     // ── 對外資料 API(②之後 NPC 模擬/事件用)──
@@ -133,7 +175,11 @@
             '.oc-result .oc-note{color:#cbbfa8;font-size:12px;margin-top:4px;}' +
             '.oc-shelf{width:100%;margin-top:8px;background:rgba(159,214,162,.2);border:1px solid #9fd6a2;color:#cfe9d0;border-radius:10px;padding:8px 0;cursor:pointer;font-size:13px;}' +
             '.oc-shelf:disabled{opacity:.5;cursor:default;}' +
-            '.oc-tried{color:#8a8074;font-size:11px;margin-top:6px;}';
+            '.oc-tried{color:#8a8074;font-size:11px;margin-top:6px;}' +
+            '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;}' +
+            '.oc-sym{width:38px;height:38px;font-size:18px;background:rgba(255,255,255,.05);border:1px solid rgba(243,234,216,.18);border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}' +
+            '.oc-sym.on{background:rgba(214,158,84,.35);border-color:#d69e54;}' +
+            '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.06);border:1px solid rgba(243,234,216,.2);border-radius:8px;color:#f3ead8;padding:7px 10px;font-size:12px;}';
         doc.head.appendChild(st);
     }
 
@@ -153,6 +199,7 @@
               '<button class="oc-tab on" data-tab="menu">菜單</button>' +
               '<button class="oc-tab" data-tab="books">書單</button>' +
               '<button class="oc-tab" data-tab="lab">調配台</button>' +
+              '<button class="oc-tab" data-tab="free">創想</button>' +
             '</div>' +
             '<div class="oc-body"></div>';
         host.appendChild(box);
@@ -173,7 +220,7 @@
             body.innerHTML = menu.length
                 ? menu.map(m =>
                     '<div class="oc-item"><span class="oc-badge ' + (TIER_TEXT[m.tier]?.cls || 'a') + '">' + (TIER_TEXT[m.tier]?.label || '') + '</span>' +
-                    '<span><span class="oc-name">' + m.name + '</span><span class="oc-blurb">' + (m.blurb || '') + '</span></span>' +
+                    '<span><span class="oc-name">' + (m.free ? '✨' : '') + m.name + '</span><span class="oc-blurb">' + (m.blurb || '') + '</span></span>' +
                     '<span class="oc-price">' + m.price + ' PT・售出' + (m.sold || 0) + '</span></div>').join('')
                 : '<div class="oc-empty">菜單還是空的。<br>去「調配台」研發出好東西再上架吧。</div>';
         } else if (tab === 'books') {
@@ -183,9 +230,60 @@
                     '<div class="oc-item"><span><span class="oc-name">《' + b.title + '》</span>' +
                     '<span class="oc-blurb">' + (b.by ? b.by + ':' : '') + (b.note || '') + '</span></span></div>').join('')
                 : '<div class="oc-empty">書架還空著。<br>之後來店裡的客人會留下他們的推薦書。</div>';
+        } else if (tab === 'free') {
+            _renderFree(body);
         } else {
             _renderLab(body);
         }
+    }
+
+    // ✨ 創想頁:符號庫丟鍋(上限 symbolMax)+備用詞→「請店長特調」
+    async function _renderFree(body) {
+        const picked = [];
+        body.innerHTML =
+            '<div class="oc-slot-label">把符號丟進鍋裡(最多 ' + CAFE_CFG.symbolMax + ' 顆),店長會把它們釀成一杯:</div>' +
+            '<div class="oc-sym-grid">' + CAFE_CFG.symbols.map(s => '<button class="oc-sym" data-s="' + s + '">' + s + '</button>').join('') + '</div>' +
+            '<input class="oc-free-input" maxlength="24" placeholder="想補充的關鍵詞(可留空)">' +
+            '<button class="oc-brew" disabled><i class="fa-solid fa-wand-magic-sparkles"></i> 請店長特調(會呼叫 AI)</button>' +
+            '<div class="oc-result-slot"></div>';
+        const brew = body.querySelector('.oc-brew');
+        body.querySelector('.oc-sym-grid').addEventListener('click', (e) => {
+            const b = e.target.closest('.oc-sym');
+            if (!b) return;
+            const s = b.dataset.s, at = picked.indexOf(s);
+            if (at >= 0) { picked.splice(at, 1); b.classList.remove('on'); }
+            else if (picked.length < CAFE_CFG.symbolMax) { picked.push(s); b.classList.add('on'); }
+            brew.disabled = !picked.length;
+        });
+        brew.addEventListener('click', async () => {
+            brew.disabled = true;
+            brew.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 店長端詳著鍋裡的東西…';
+            const words = body.querySelector('.oc-free-input').value.trim();
+            const r = await _freeform(picked.slice(), words);
+            brew.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 請店長特調(會呼叫 AI)';
+            brew.disabled = !picked.length;
+            const slot = body.querySelector('.oc-result-slot');
+            if (!r) { slot.innerHTML = '<div class="oc-result"><div class="oc-note">店長走神了,什麼都沒釀出來——再按一次試試。</div></div>'; return; }
+            const T = TIER_TEXT[r.tier];
+            const ok = r.tier === 'S' || r.tier === 'A';
+            slot.innerHTML =
+                '<div class="oc-result"><span class="oc-badge ' + T.cls + '">' + T.label + '</span> ' +
+                (ok ? '✨' + r.name : picked.join(' ')) +
+                '<div class="oc-note">' + (r.why || T.note) + '</div>' +
+                (ok ? '<div class="oc-blurb">' + r.blurb + '</div><button class="oc-shelf"><i class="fa-solid fa-arrow-up-from-bracket"></i> 上架</button>' : '') +
+                '</div>';
+            const shelfBtn = slot.querySelector('.oc-shelf');
+            if (shelfBtn) shelfBtn.addEventListener('click', async () => {
+                const menu = await getMenu();
+                if (menu.filter(m => m.free).length >= CAFE_CFG.freeformCap) {
+                    shelfBtn.outerHTML = '<div class="oc-note">創想品在架已滿 ' + CAFE_CFG.freeformCap + ' 款——菜單頁下架一款再來。</div>';
+                    return;
+                }
+                menu.unshift({ id: 'free_' + Date.now(), key: 'free_' + Date.now(), name: r.name, blurb: r.blurb, tier: r.tier, price: CAFE_CFG.prices[r.tier], tags: r.tags, ings: picked.slice(), free: true, ts: Date.now(), sold: 0 });
+                await _set(K_MENU, menu);
+                shelfBtn.outerHTML = '<div class="oc-note">✨「' + r.name + '」上架了!到「菜單」頁看看。</div>';
+            });
+        });
     }
 
     async function _renderLab(body) {
