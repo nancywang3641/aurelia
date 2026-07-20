@@ -24,8 +24,15 @@
         cCombos: ['soda+caramel+foam', 'coffee+berry+mint', 'tea+spice+mint', 'soda+spice+cookie'],
         hashARatio: 0.45,   // 非策劃組合落 A 的比例
         freeformCap: 3,     // 「自由創想」同時在架上限(防氪金灌爆菜單)
-        // 創想符號庫(遊戲材料,可增減):丟進鍋裡讓店長解讀成飲品意象
-        symbols: ['⭐', '🌙', '☀️', '🌧️', '❄️', '🔥', '🌸', '🍋', '🍇', '🍯', '🌿', '🫧', '🌊', '🍫', '🥛', '🫖', '💫', '🌈', '🍒', '⚡', '🧊', '🍑', '🌫️', '🖤'],
+        // 創想符號庫(遊戲材料,可增減):丟進鍋裡讓店長解讀成飲品意象——視差是虛擬系統,不用正常化,蛇+櫻桃也給店長圓XD
+        symbols: [
+            '⭐', '🌙', '☀️', '🌧️', '❄️', '⚡', '🌈', '🌫️', '☄️', '🌪️', '🌊', '🫧', '🔥', '💫', '✨', '🧊', '💥', '🌋',
+            '🌸', '🌿', '🍀', '🌵', '🌹', '🥀', '🍄', '🌾', '🎋', '🌻', '🪷', '🌱',
+            '🍋', '🍇', '🍯', '🍫', '🥛', '🍒', '🍑', '🍎', '🥭', '🍍', '🥥', '🫐', '🍓', '🌶️', '🧂', '🍵', '☕', '🍶', '🥃', '🍬', '🍭', '🍪', '🎂', '🥚', '🍜', '🧋',
+            '🐍', '🐈', '🐇', '🦋', '🦉', '🐟', '🐙', '🦑', '🦂', '🕷️', '🐉', '🦢', '🐺', '🦊', '🐝', '🪲', '🦇', '🐌', '🦎', '🐸',
+            '🖤', '💜', '🤍', '💎', '🔮', '🪞', '🕯️', '🗝️', '⚙️', '🧿', '📜', '🎻', '🎐', '⌛', '🧬', '🪐', '👁️', '🌑', '💀', '👻', '⛓️', '🪶', '🎭', '🕸️', '🎲', '🧸', '📀', '🫀',
+            '♾️', '☯️', '⚗️', '🧪', '📡', '🧲', '🔋', '🛰️', '🕳️', '🎇', '🧩', '🪄',
+        ],
         symbolMax: 4,       // 一鍋最多丟幾顆
     };
     const TIER_TEXT = {
@@ -176,7 +183,7 @@
             '.oc-shelf{width:100%;margin-top:8px;background:rgba(159,214,162,.2);border:1px solid #9fd6a2;color:#cfe9d0;border-radius:10px;padding:8px 0;cursor:pointer;font-size:13px;}' +
             '.oc-shelf:disabled{opacity:.5;cursor:default;}' +
             '.oc-tried{color:#8a8074;font-size:11px;margin-top:6px;}' +
-            '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;}' +
+            '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;padding-right:2px;}' +
             '.oc-sym{width:38px;height:38px;font-size:18px;background:rgba(255,255,255,.05);border:1px solid rgba(243,234,216,.18);border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}' +
             '.oc-sym.on{background:rgba(214,158,84,.35);border-color:#d69e54;}' +
             '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.06);border:1px solid rgba(243,234,216,.2);border-radius:8px;color:#f3ead8;padding:7px 10px;font-size:12px;}';
