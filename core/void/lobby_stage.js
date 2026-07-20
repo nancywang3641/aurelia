@@ -469,6 +469,22 @@
         for (let r = r0; r <= r1; r++) if (a.data[r * a.w + ax] >= 128) return true;
         return false;
     }
+    // 🚦 alpha 抽取排隊:快取熱時 40+ 張建築圖的 load 事件同瞬間湧到,全擠主執行緒=進場卡一大下
+    //    → 一次處理一件、間隔30ms攤開;場景收掉就清隊
+    let _alphaQ = [], _alphaPump = false;
+    function _queueAlpha(o, imgEl) {
+        _alphaQ.push([o, imgEl]);
+        if (_alphaPump) return;
+        _alphaPump = true;
+        const pump = () => {
+            if (!S.active) { _alphaQ.length = 0; _alphaPump = false; return; }
+            const item = _alphaQ.shift();
+            if (!item) { _alphaPump = false; return; }
+            try { _extractObjAlpha(item[0], item[1]); } catch (e) {}
+            setTimeout(pump, 30);
+        };
+        setTimeout(pump, 0);
+    }
     // 從已載好的物件 <img> 抽 alpha 通道存降採樣點陣（o._alpha={w,h,data}）；載好後重建碰撞。
     //   只留 alpha 一個 byte、200px 上限省記憶體；編輯中順便刷新剪影。
     function _extractObjAlpha(o, imgEl) {
@@ -1241,8 +1257,13 @@
             S.root.appendChild(cv);
             _wx = { cv, ctx: cv.getContext('2d'), w: 0, h: 0, drops: [], mode };
         }
-        const rc = S.root.getBoundingClientRect();
-        const w = Math.max(1, Math.round(rc.width)), h = Math.max(1, Math.round(rc.height));
+        // 🚨 量尺寸別每幀來:getBoundingClientRect=版面讀取,混在每幀寫入裡會強迫重排(效能審計老病);~1秒查一次夠了
+        _wx.sizeTick = (_wx.sizeTick || 0) + 1;
+        let w = _wx.w, h = _wx.h;
+        if (!_wx.w || _wx.sizeTick % 60 === 1) {
+            const rc = S.root.getBoundingClientRect();
+            w = Math.max(1, Math.round(rc.width)); h = Math.max(1, Math.round(rc.height));
+        }
         if (_wx.w !== w || _wx.h !== h) {   // 尺寸變了(轉向/縮放)→重鋪畫布+按面積配密度(封頂:雨150/雪120)
             _wx.w = _wx.cv.width = w; _wx.h = _wx.cv.height = h;
             const n = mode === 'snow' ? Math.min(120, Math.round(w * h / 11000)) : Math.min(150, Math.round(w * h / 9000));
@@ -1765,7 +1786,7 @@
             if (wantAlpha && !String(src).startsWith('data:')) img.crossOrigin = 'anonymous';
             img.src = src;
             if (wantAlpha) {
-                const grab = () => _extractObjAlpha(o, img);
+                const grab = () => _queueAlpha(o, img);   // 排隊抽,別在進場瞬間全擠主執行緒
                 if (img.complete && img.naturalWidth) grab();
                 else img.addEventListener('load', grab, { once: true });
             }
