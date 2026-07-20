@@ -158,7 +158,7 @@
         const st = doc.createElement('style');
         st.id = 'os-cafe-style';
         st.textContent =
-            '.oc-win{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3350;width:340px;max-width:92%;max-height:86%;display:flex;flex-direction:column;background:rgba(30,26,22,.96);border:1px solid rgba(243,234,216,.25);border-radius:14px;color:#f3ead8;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.55);}' +
+            '.oc-win{position:absolute;right:3%;top:10%;z-index:3350;width:300px;max-width:88%;max-height:72%;display:flex;flex-direction:column;background:rgba(30,26,22,.94);border:1px solid rgba(243,234,216,.25);border-radius:14px;color:#f3ead8;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.55);}' +   /* 右側停靠(同白兔買房面板成例):跟瀅瀅對話時浮出,聊天框在下方不打架 */
             '.oc-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(243,234,216,.14);}' +
             '.oc-head .oc-close{margin-left:auto;background:none;border:none;color:#f3ead8;cursor:pointer;font-size:15px;padding:2px 6px;}' +
             '.oc-tabs{display:flex;gap:6px;padding:8px 12px 0;}' +
@@ -211,7 +211,11 @@
             '<div class="oc-body"></div>';
         host.appendChild(box);
         _winEl = box;
-        box.querySelector('.oc-close').addEventListener('click', closeWorkshop);
+        box.querySelector('.oc-close').addEventListener('click', () => {
+            // ✕=連對話一起結束(同白兔成例);endTalk 會回呼 closeWorkshop,單獨關窗也安全
+            try { win.LobbyStage?.endTalk?.(); } catch (e) {}
+            closeWorkshop();
+        });
         const body = box.querySelector('.oc-body');
         const tabs = box.querySelectorAll('.oc-tab');
         tabs.forEach(t => t.addEventListener('click', () => {
