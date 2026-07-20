@@ -1536,6 +1536,9 @@
                     ['auto:自動','clear:晴','rain:雨','snow:雪'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_weather_v1')||'auto'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-wx="'+v+'">'+t+'</button>'; }).join('') +
                   '</span></div>' +
                 '<div class="lset-hint">只影響戶外大地圖。自動＝每次進城隨機（晴／雨／雪）。</div>' +
+                '<label class="lset-row"><span class="lset-tx">書咖離線訪客</span>' +
+                  '<input type="checkbox" class="lset-chk" data-k="cafe"' + (localStorage.getItem('cafe_offline_visits') !== '0' ? ' checked' : '') + '></label>' +
+                '<div class="lset-hint">開著＝常客會自己來書咖消費、留下紀錄（每位第一次上門會請 AI 記一次他的口味）。關閉＝書咖不營業。</div>' +
                 '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
             box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
                 const k = e.target.dataset.k;
@@ -1548,6 +1551,8 @@
                 } else if (k === 'theater') {
                     try { localStorage.setItem('lobby_theater_on', e.target.checked ? '1' : '0'); } catch (_) {}
                     const fr = box.querySelector('.ltheater-freq'); if (fr) fr.classList.toggle('off', !e.target.checked);
+                } else if (k === 'cafe') {
+                    try { localStorage.setItem('cafe_offline_visits', e.target.checked ? '1' : '0'); } catch (_) {}
                 }
             }));
             box.querySelectorAll('.ltheater-freq-btn[data-freq]').forEach(btn => btn.addEventListener('click', () => {

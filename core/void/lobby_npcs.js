@@ -336,5 +336,6 @@
     window.LobbyNpcs = {
         init: initNpcs,                     // lobby_stage.tryMount 呼叫（async；掛載時生成本場景 NPC）
         rollGuestPool: _journalGuestPool,   // console 診斷用（LobbyStage.rollGuestPool 懶轉接到這；async 回傳池陣列）
+        cafeRoster: () => SN_RESIDENTS.map(r => ({ key: r.key, name: r.name, persona: r.personaFull })),   // ☕ 書咖經營②:顧客名冊(os_cafe 首訪定調用人設)
     };
 })();
