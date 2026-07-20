@@ -65,7 +65,7 @@
         browse: '進來晃了一圈,今天什麼都沒點。',
     };
     const DAY_MS = 86400000;
-    function _dayNum(ts) { return Math.floor(ts / DAY_MS); }
+    function _dayNum(ts) { return Math.floor((ts - new Date(ts).getTimezoneOffset() * 60000) / DAY_MS); }   // 本地午夜換日(UTC算的話台灣要早上8點才換,反直覺)
 
     function _db() { return win.OS_DB || window.OS_DB; }
     async function _get(k, dflt) {
