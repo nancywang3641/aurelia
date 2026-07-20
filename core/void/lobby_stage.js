@@ -1615,8 +1615,8 @@
             '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
             '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-tx">小劇場</span><span class="ltb-badge"></span></button>' +
-            // 🏙 快轉地圖：書咖/大廳/城裡都出現（404 要走還原流程）
-            ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'city') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
+            // 🏙 快轉地圖：書咖/大廳/交易所/城裡都出現（404 要走還原流程）
+            ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'exchange' || S.scene === 'city') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
         left.appendChild(root);
         _applyMenuHidden();   // 套用上次「舞台全屏（隱藏 MAIN MENU）」狀態
         if (S._theaterTimer) clearInterval(S._theaterTimer);
