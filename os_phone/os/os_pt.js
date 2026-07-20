@@ -249,7 +249,10 @@
             '.os-pt-dock{position:absolute;right:max(4%, calc(50% - 360px));top:15%;z-index:80;width:min(38%,320px);max-height:68%;overflow:auto;',   /* 寬螢幕(全屏)貼近中間、窄螢幕退回貼邊 */
             'opacity:0;transform:translateX(24px);transition:opacity .28s ease,transform .28s ease;}',
             '.os-pt-dock.on{opacity:1;transform:translateX(0);}',
-            '@media (max-width:680px){.os-pt-dock{right:10px;left:10px;width:auto;top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);max-height:44%;}}',
+            '@media (max-width:680px){' +
+              '.os-pt-dock{right:12px;left:12px;width:auto;top:7%;bottom:auto;max-height:72%;}' +   /* 📱 面板站前排放大 */
+              '.void-dock-open #iris-avatar{opacity:.25;filter:brightness(.55) blur(1px);transition:opacity .25s;}' +   /* 立繪退後變暗 */
+            '}',
             '.os-pt-shop{width:100%;background:rgba(255,255,255,.95);',
             'border:1px solid rgba(120,150,210,.35);border-radius:18px;box-shadow:0 16px 44px rgba(40,60,110,.26);',
             'padding:18px 18px 15px;color:#2b3652;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}',
@@ -335,6 +338,7 @@
         if (old) old.remove();
 
         const host = document.querySelector('.lobby-left') || document.body;   // 掛進遊戲容器→貼遊戲畫面內側(非整個視窗，才不會跑到黑邊)
+        host.classList.add('void-dock-open');   // 📱 手機:立繪退後變暗、面板站前排
         const dock = document.createElement('div');
         dock.id = 'os-pt-shop-dock';
         dock.className = 'os-pt-dock';
@@ -359,6 +363,7 @@
     // 收起交易所面板（endTalk 時由 lobby_stage 呼叫）
     function closeExchange() {
         _shopOpen = false;
+        try { document.querySelector('.lobby-left')?.classList.remove('void-dock-open'); } catch (e) {}
         const el = document.getElementById('os-pt-shop-dock');
         if (el) { el.classList.remove('on'); setTimeout(() => { try { el.remove(); } catch (e) {} }, 250); }
     }
