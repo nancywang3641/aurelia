@@ -1142,6 +1142,7 @@
         try { window.OS_PT?.closeExchange?.(); } catch (e) {}   // 離開白兔→收起買房面板
         try { window.OS_CAFE?.closeWorkshop?.(); } catch (e) {}   // 離開瀅瀅→收起書咖櫃檯
         try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {}   // 離開愛麗絲→收起世界門
+        try { window.OS_WORLDGATE?.closeMeet?.(); } catch (e) {}   // 離開旅人→收起組隊卡(身分卡不動,右鍵開的可獨立看)
     }
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {
