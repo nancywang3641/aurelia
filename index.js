@@ -103,7 +103,7 @@ window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 //   CDN(酒館助手，EXT_NAME 為 null) → 加 ?v=版本號 → 同版本內 jsdelivr/瀏覽器照樣快取(載入快)，
 //      但每次「改版 bump _AURELIA_VERSION」後，朋友的瀏覽器會自動重抓模組，不用手動清快取。
 //      （index.js 本身是 ?boot= 強制重抓的，所以這個版本號一改、下次載入就生效。）
-const _AURELIA_VERSION = '2026.07.22.1'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
+const _AURELIA_VERSION = '2026.07.22.2'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
 const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : ('?v=' + _AURELIA_VERSION);
 
 // 🔥 1. 全局通訊狀態
@@ -204,6 +204,7 @@ const PHONE_FILES = [
     'os/os_story_tools.js',   // 故事管理（大總結 + 隱藏對話）— 從 RPG 面板 / VN 閱讀器搬來，掛進故事日誌
     'os/os_pt.js',            // 🏦 交易區 PT 經濟：錢包+大總結結算估值+VN 結算卡+交易所面板（依賴 OS_DB/OS_API，排它們後面）
     'os/os_cafe.js',          // ☕ 書咖經營：調配台研發+上架命名+菜單/書單（依賴 OS_DB/OS_API；設計書 docs/book_cafe_design.md）
+    'os/os_worldgate.js',     // 🌌 世界門③：愛麗絲面板=種子抽選+世界落地視差書+旅人招募+DIVE（依賴 OS_DB/OS_API/AURELIA_WORLDGATE；設計書 docs/parallax_worldgate_design.md）
     'os/os_workbench.js',
 
     // === 📖 VN 視覺小說系統 ===

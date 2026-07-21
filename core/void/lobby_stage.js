@@ -1126,6 +1126,7 @@
         showDialog();
         window.VoidTerminal?.primeStageDialog?.(npc);   // 清掉殘留(瀅瀅預設/上一位)、改顯示這位自己的最後一句
         if (npc.key === 'rabbit') { try { window.OS_PT?.openExchange?.(); } catch (e) {} }   // 白兔：對話時右側浮出買房面板
+        if (npc.key === 'alice') { try { window.OS_WORLDGATE?.openGate?.(); } catch (e) {} }   // 🌌 愛麗絲：對話時右側浮出世界門(同白兔成例)
     }
     function endTalk() {
         if (!S.talkTarget) return;
@@ -1140,6 +1141,7 @@
         hideDialog();
         try { window.OS_PT?.closeExchange?.(); } catch (e) {}   // 離開白兔→收起買房面板
         try { window.OS_CAFE?.closeWorkshop?.(); } catch (e) {}   // 離開瀅瀅→收起書咖櫃檯
+        try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {}   // 離開愛麗絲→收起世界門
     }
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {
