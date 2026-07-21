@@ -2033,6 +2033,7 @@
             setPlot, plotOccupied: _plotOccupied,   // 🏘 地塊切換（編輯器「蓋房/空地」鈕）
             // 給 lobby_npcs.js（NPC 生成/名冊）：素材表/生NPC/碰撞判定/站位開闊度採樣
             ASSET, addNpc, blocked, whiteRatio: _whiteRatio,
+            startTalk,   // 給 os_worldgate.js（旅人偶遇窗「隨便聊聊」退回自由對話軌道）
         },
     };
 })();
