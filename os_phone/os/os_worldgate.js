@@ -119,9 +119,14 @@
     }
 
     // ── 旅人像素小人(大廳限定;LobbyStage._b 缺席=優雅跳過) ──
+    // 「同一個伺服器」感:展開世界/點開世界=旅人自動陸續上線大廳,不用按鈕召喚(Rae 定案 2026-07-22)
     let _travNpcs = [];
+    let _travWorldId = null;
+    let _travGen = 0;   // 世代閂:清場後殘留的錯峰 setTimeout 不准再刷人
     function _stage() { const LS = win.LobbyStage || window.LobbyStage; return (LS && LS._b) ? LS._b : null; }
     function _clearTravelers() {
+        _travGen++;
+        _travWorldId = null;
         const b = _stage();
         _travNpcs.forEach(n => {
             try {
@@ -139,7 +144,9 @@
     function _spawnTravelers(w) {
         const b = _stage();
         if (!b || b.S.scene !== 'hall') return false;
+        if (_travWorldId === w.id && _travNpcs.some(n => b.S.npcs.indexOf(n) >= 0)) return true;   // 同世界且人還活著(勾隊友重渲染別閃人;換過場景回來=物件已死→重新上線)
         _clearTravelers();
+        _travWorldId = w.id;
         const alice = b.S.npcs.find(n => n.key === 'alice');
         const ax = alice ? alice.x : 1000, ay = alice ? alice.y : 400;
         const Z = { x: Math.max(60, ax - 620), y: ay + 150, w: 640, h: 280 };   // 愛麗絲前方偏左的開闊區,rollSpot 會避開家具
@@ -158,19 +165,25 @@
             taken.push(p);
             return p;
         };
+        const gen = _travGen;
         (w.travelers || []).slice(0, MAX_TRAVELER_SPAWN).forEach((t, i) => {
-            const sp = rollSpot();
-            const npc = b.addNpc({
-                key: 'wg_' + w.id + '_' + i, name: t.name,
-                personaFull: _travelerPersona(t, w.name),
-                subTitle: '旅人・' + t.job,
-                x: sp.x, y: sp.y,
-                src: (i % 2 === 0) ? b.ASSET.mcM : b.ASSET.mcF,
-                noWander: true, avoidBlocks: true, homeRect: Z,
-            });
-            _travNpcs.push(npc);
+            const sp = rollSpot();   // 站位先佔好(彼此保持距離),上線時間錯開=玩家陸續登入的感覺
+            setTimeout(() => {
+                if (gen !== _travGen) return;   // 期間清過場(換世界/DIVE/關窗)就別再冒出來
+                const b2 = _stage();
+                if (!b2 || b2.S.scene !== 'hall') return;
+                const npc = b2.addNpc({
+                    key: 'wg_' + w.id + '_' + i, name: t.name,
+                    personaFull: _travelerPersona(t, w.name),
+                    subTitle: '旅人・' + t.job,
+                    x: sp.x, y: sp.y,
+                    src: (i % 2 === 0) ? b2.ASSET.mcM : b2.ASSET.mcF,
+                    noWander: true, avoidBlocks: true, homeRect: Z,
+                });
+                _travNpcs.push(npc);
+            }, 350 + i * 750);
         });
-        return _travNpcs.length > 0;
+        return true;
     }
 
     // ── DIVE:切書→開場指令注入聊天→收面板 ──
@@ -456,7 +469,7 @@
             (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(entryText.length > 600 ? entryText.slice(0, 600) + '…' : entryText) + '</div></div>' : '') +
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 旅人候選</span><span class="wg-section-note">點選=邀入隊</span></div>' +
             (travHtml || '<div class="wg-empty">這個世界沒有旅人候選。</div>') +
-            '<button class="wg-btn ghost" data-act="spawn"><i class="fa-solid fa-person-walking"></i> 讓旅人現身大廳(可搭話)</button>' +
+            (travHtml ? '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 旅人們已陸續上線大廳,走過去可以搭話。</div>' : '') +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
@@ -471,10 +484,7 @@
             if (idx >= 0) { worlds[idx] = w; await _set(K_WORLDS, worlds); }
             _renderDetail(w);
         }));
-        b.querySelector('[data-act="spawn"]').addEventListener('click', () => {
-            const ok = _spawnTravelers(w);
-            _toast(ok ? '旅人們出現在大廳裡了,走過去聊聊吧' : '旅人只會出現在純白大廳場景');
-        });
+        _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
         b.querySelector('[data-act="dive"]').addEventListener('click', async () => {
             if (_busy) return;
             _busy = true;
