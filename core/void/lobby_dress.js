@@ -21,14 +21,16 @@
         menu.className = 'lstage-actor-menu';
         const isPlayer = (a.key === 'player');   // 玩家不給「跟隨我」（跟自己很怪）
         menu.innerHTML = '<div class="lam-title">' + (a.name || '角色') + '</div>' +
+            (a.onProfile ? '<button class="lam-item" data-act="idcard"><i class="fa-solid fa-id-card"></i> 身分卡</button>' : '') +   // 🌌 世界門旅人掛 onProfile 才出現
             '<button class="lam-item" data-act="dress"><i class="fa-solid fa-shirt"></i> 裝扮室</button>' +
             (isPlayer ? '' : '<button class="lam-item" data-act="follow"><i class="fa-solid fa-person-walking-arrow-right"></i> ' + (a.follow ? '取消跟隨' : '跟隨我') + '</button>') +
             (isPlayer ? '' : '<button class="lam-item" data-act="history"><i class="fa-solid fa-comment-dots"></i> 對話紀錄</button>') +
             (isPlayer ? '' : '<button class="lam-item" data-act="recompact"><i class="fa-solid fa-brain"></i> 整理記憶</button>');
         menu.style.left = Math.max(6, Math.min(cx - rr.left, rr.width - 150)) + 'px';
-        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - (isPlayer ? 90 : 192))) + 'px';
+        menu.style.top = Math.max(6, Math.min(cy - rr.top, rr.height - ((isPlayer ? 90 : 192) + (a.onProfile ? 34 : 0)))) + 'px';
         S.root.appendChild(menu);
         S.menuEl = menu;
+        menu.querySelector('[data-act="idcard"]')?.addEventListener('click', () => { _closeActorMenu(); try { a.onProfile(a); } catch (e) {} });
         menu.querySelector('[data-act="dress"]').addEventListener('click', () => { _closeActorMenu(); _openDressRoom(a); });
         menu.querySelector('[data-act="follow"]')?.addEventListener('click', () => {
             a.follow = !a.follow;
