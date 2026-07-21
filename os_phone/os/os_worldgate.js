@@ -187,7 +187,16 @@
                     x: sp.x, y: sp.y,
                     src: (i % 2 === 0) ? b2.ASSET.mcM : b2.ASSET.mcF,
                     noWander: true, avoidBlocks: true, homeRect: Z,
-                    onInteract: (n) => _openEncounter(w.id, i, n),    // 點旅人=偶遇窗(零API考題),不直接進自由聊
+                    // 點旅人=進正常對話模式(開場白=預設對話,打字即自由聊)+右側浮組隊卡(同愛麗絲/瀅瀅成例)
+                    onInteract: (n) => {
+                        const b3 = _stage(); if (!b3) return;
+                        try {
+                            const LS = win.LobbyStage;
+                            if (t.greet && !(LS.getNpcHistory(n.key) || []).length) LS.pushNpcHistory(n.key, { role: 'assistant', content: t.greet });   // 開場白seed成他的第一句(只seed一次,之後接自由聊記憶)
+                        } catch (e) {}
+                        b3.startTalk(n);
+                        _openEncounter(w.id, i, n);
+                    },
                     onProfile: () => _openEncProfile(w.id, i),        // 右鍵=身分卡(lobby_dress 選單動態項)
                 });
                 _travNpcs.push(npc);
@@ -243,6 +252,7 @@
             const w = worlds.find(x => x.id === worldId);
             const t = w && w.travelers && w.travelers[ti];
             if (!t) { _toast('找不到這位旅人的資料'); return; }
+            closeGate();   // 右側停靠位只有一張卡:世界門面板先讓位
             _closeMeet(); _closeProfile();
             const doc = win.document;
             _ensureStyle(doc);
@@ -260,7 +270,6 @@
             const wire = () => {
                 box.querySelector('.wg-close')?.addEventListener('click', _closeMeet);
                 box.querySelector('[data-m="prof"]')?.addEventListener('click', () => _openProfileWin(t));
-                box.querySelector('[data-m="chat"]')?.addEventListener('click', () => { _closeMeet(); try { _stage()?.startTalk?.(npc); } catch (e) {} });
             };
             async function joinTeam() {
                 t.recruited = true;
@@ -269,21 +278,19 @@
                 if (_winEl && _curDetailId === w.id) _renderDetail(w);   // 面板正開著這個世界→隊伍狀態即時刷新
             }
             const renderIntro = () => {
+                // 對話本體在底部對話框(開場白已seed成預設對話,打字=自由聊);這張卡只管組隊
                 box.innerHTML = head() +
                     '<div class="wg-meet-body">' +
-                      '<div class="wg-say">' + _esc(t.greet || '(對方朝你點了點頭。)') + '</div>' +
+                      (t.persona ? '<div class="wg-note">' + _esc(t.persona) + '</div>' : '') +
                       (t.recruited
-                          ? '<div class="wg-note">已經是你的隊友,世界門面板可以看到隊伍狀態。</div>'
+                          ? '<div class="wg-note"><i class="fa-solid fa-circle-check"></i> 已經是你的隊友,世界門面板可以看到隊伍狀態。</div>'
                           : (quiz.length ? '<div class="wg-note">想邀他同行?先聊得來再說。</div>' : '')) +
                     '</div>' +
                     '<div class="wg-meet-btns">' +
                       (!t.recruited ? (quiz.length
                           ? '<button class="wg-btn" data-m="quiz"><i class="fa-solid fa-handshake"></i> 聊聊組隊的事</button>'
                           : '<button class="wg-btn" data-m="join"><i class="fa-solid fa-handshake"></i> 邀請入隊</button>') : '') +
-                      '<div class="wg-btn-row">' +
-                        '<button class="wg-btn ghost" data-m="prof"><i class="fa-solid fa-id-card"></i> 身分卡</button>' +
-                        '<button class="wg-btn ghost" data-m="chat"><i class="fa-solid fa-comments"></i> 隨便聊聊</button>' +
-                      '</div>' +
+                      '<button class="wg-btn ghost" data-m="prof"><i class="fa-solid fa-id-card"></i> 身分卡</button>' +
                     '</div>';
                 wire();
                 box.querySelector('[data-m="quiz"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
@@ -426,8 +433,9 @@
             '.wg-trav-sub{color:#5a5e75;font-size:10px;margin-top:2px;line-height:1.45;}' +
             '.wg-trav-check{color:#1A1C28;font-weight:900;font-size:13px;}' +
             '.wg-entry-text{color:#3a3e56;font-size:11px;line-height:1.7;white-space:pre-wrap;}' +
-            /* 🤝 偶遇窗/身分卡(小窗,疊在面板上層) */
-            '.wg-meet{position:absolute;right:max(2.2%,calc(50% - 410px));bottom:110px;z-index:3360;width:330px;max-width:88%;max-height:70%;overflow-y:auto;display:flex;flex-direction:column;background:linear-gradient(rgba(250,251,255,.98),rgba(238,240,246,.98));border:1px solid rgba(26,28,40,.18);border-radius:14px;color:#1A1C28;font-size:12px;box-shadow:0 12px 34px rgba(26,28,40,.32);backdrop-filter:blur(8px);scrollbar-width:thin;}' +
+            /* 🤝 組隊卡/身分卡:右側停靠(同愛麗絲世界門/瀅瀅書咖成例);對話本體在底部對話框 */
+            '.wg-meet{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3355;width:340px;max-width:52%;max-height:78%;overflow-y:auto;display:flex;flex-direction:column;background:linear-gradient(rgba(250,251,255,.98),rgba(238,240,246,.98));border:1px solid rgba(26,28,40,.18);border-radius:14px;color:#1A1C28;font-size:12px;box-shadow:0 12px 34px rgba(26,28,40,.32);backdrop-filter:blur(8px);scrollbar-width:thin;}' +
+            '.wg-profile{z-index:3365;margin-right:36px;top:46%;}' +
             '.wg-meet-head{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid rgba(26,28,40,.1);background:rgba(255,255,255,.6);position:sticky;top:0;}' +
             '.wg-meet-name{display:flex;align-items:center;gap:6px;font-weight:800;min-width:0;}.wg-meet-name small{color:#8a8ea6;font-weight:700;font-size:9px;}' +
             '.wg-joined{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px;border-radius:8px;background:rgba(60,120,80,.12);color:#3c6b44;font-size:9px;font-style:normal;font-weight:800;white-space:nowrap;}' +
@@ -439,7 +447,7 @@
             '.wg-meet-btns{padding:0 12px 12px;display:flex;flex-direction:column;}' +
             '.wg-prof-row{display:flex;gap:8px;padding:6px 2px;border-bottom:1px dashed rgba(26,28,40,.1);}.wg-prof-row:last-child{border-bottom:none;}.wg-prof-row span{flex:none;width:44px;color:#8a8ea6;font-size:10px;font-weight:700;padding-top:1px;}.wg-prof-row b{color:#2a2e44;font-weight:600;line-height:1.55;font-size:11px;}' +
             '.wg-profile .wg-meet-body{padding-bottom:12px;}' +
-            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}.wg-meet{right:10px;left:10px;width:auto;max-width:none;bottom:96px;}.wg-brand-copy small{display:none}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
+            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}.wg-meet{right:10px;left:10px;width:auto;max-width:none;max-height:66%;}.wg-profile{margin-right:0;top:42%;}.wg-brand-copy small{display:none}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
     }
 
@@ -456,6 +464,7 @@
     }
     async function openGate() {
         closeGate();
+        _closeMeet(); _closeProfile();   // 右側停靠位互斥:開世界門先收組隊卡
         const doc = win.document;
         _ensureStyle(doc);
         const host = doc.querySelector('.lobby-left') || doc.body;
@@ -678,11 +687,12 @@
             const worlds = await _get(K_WORLDS, []);
             await _set(K_WORLDS, worlds.filter(x => x.id !== w.id));
             _clearTravelers(); _closeMeet(); _closeProfile();
+            try { for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) win.localStorage.removeItem('lstage_hist_wg_' + w.id + '_' + i); } catch (e) {}   // 旅人對話歷史一起清,不留孤兒
             _toast('「' + w.name + '」已從檔案庫移除');
             _renderList();
         });
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate };
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, closeProfile: _closeProfile };
     console.log('[Worldgate③] 世界門面板就緒');
 })();
