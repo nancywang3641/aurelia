@@ -197,7 +197,7 @@
                         b3.startTalk(n);
                         _openEncounter(w.id, i, n);
                     },
-                    onProfile: () => _openEncProfile(w.id, i),        // 右鍵=身分卡(lobby_dress 選單動態項)
+                    onProfile: (n) => _openEncProfile(w.id, i, n),    // 右鍵=身分卡(lobby_dress 選單動態項;開在組隊卡的身分卡頁)
                 });
                 _travNpcs.push(npc);
             }, 350 + i * 750);
@@ -205,52 +205,31 @@
         return true;
     }
 
-    // ── 🤝 偶遇窗+身分卡(零API:考題/台詞在展開世界時已生成好) ──
-    let _meetEl = null, _profEl = null, _lobbyRegDone = false;
+    // ── 🤝 組隊卡(零API:考題/台詞在展開世界時已生成好;身分卡=卡內第二層頁,不疊modal) ──
+    let _meetEl = null, _lobbyRegDone = false;
     function _closeMeet() { _meetEl?.remove(); _meetEl = null; }
-    function _closeProfile() { _profEl?.remove(); _profEl = null; }
     function _lobbyReg() {   // 進大廳小窗互斥圈(開裝扮室等其他窗時自動被收掉)
         if (_lobbyRegDone) return;
         const b = _stage();
-        if (b && b.regWin) { b.regWin(_closeMeet); b.regWin(_closeProfile); _lobbyRegDone = true; }
+        if (b && b.regWin) { b.regWin(_closeMeet); _lobbyRegDone = true; }
     }
     async function _saveWorld(w) {
         const worlds = await _get(K_WORLDS, []);
         const i = worlds.findIndex(x => x.id === w.id);
         if (i >= 0) { worlds[i] = w; await _set(K_WORLDS, worlds); }
     }
-    function _openProfileWin(t) {
-        _lobbyReg();
-        const doc = win.document;
-        _ensureStyle(doc);
-        _closeProfile();
-        const host = doc.querySelector('.lobby-left') || doc.body;
-        const box = doc.createElement('div');
-        box.className = 'wg-meet wg-profile';
+    function _profRows(t) {
         const row = (k, v) => v ? '<div class="wg-prof-row"><span>' + k + '</span><b>' + _esc(v) + '</b></div>' : '';
-        box.innerHTML =
-            '<div class="wg-meet-head"><span class="wg-meet-name"><i class="fa-solid fa-id-card"></i> ' + _esc(t.name) +
-              (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</span>' +
-              '<button class="wg-close"><i class="fa-solid fa-xmark"></i></button></div>' +
-            '<div class="wg-meet-body">' +
-              row('定位', t.job) + row('外貌', t.look) + row('性格', t.persona) +
-              row('來歷', t.origin) + row('資歷', t.record) + row('擅長', t.skill) + row('動機', t.reason) +
-            '</div>';
-        host.appendChild(box);
-        _profEl = box;
-        box.querySelector('.wg-close').addEventListener('click', _closeProfile);
+        return row('定位', t.job) + row('外貌', t.look) + row('性格', t.persona) +
+            row('來歷', t.origin) + row('資歷', t.record) + row('擅長', t.skill) + row('動機', t.reason);
     }
-    async function _openEncProfile(worldId, ti) {
-        const worlds = await _get(K_WORLDS, []);
-        const t = worlds.find(x => x.id === worldId)?.travelers?.[ti];
-        if (t) _openProfileWin(t);
-    }
+    function _openEncProfile(worldId, ti, npc) { _openEncounter(worldId, ti, npc, true); }   // 右鍵=直接開在身分卡頁
     // 考題的「他說的話」直接打進底部對話框(對話感);純顯示、不進 lstage_hist——
     // 他的一對一記憶只有:開場白seed+自由聊天+入隊宣言,考題過程不污染
     function _sayInDialog(text) {
         try { const el = win.document.getElementById('iris-text'); if (el && text) el.textContent = String(text); } catch (e) {}
     }
-    function _openEncounter(worldId, ti, npc) {
+    function _openEncounter(worldId, ti, npc, startAtProfile) {
         _lobbyReg();
         (async () => {
             const worlds = await _get(K_WORLDS, []);
@@ -258,7 +237,7 @@
             const t = w && w.travelers && w.travelers[ti];
             if (!t) { _toast('找不到這位旅人的資料'); return; }
             closeGate();   // 右側停靠位只有一張卡:世界門面板先讓位
-            _closeMeet(); _closeProfile();
+            _closeMeet();
             const doc = win.document;
             _ensureStyle(doc);
             const host = doc.querySelector('.lobby-left') || doc.body;
@@ -266,25 +245,32 @@
             box.className = 'wg-meet';
             host.appendChild(box);
             _meetEl = box;
+            const npcKey = 'wg_' + worldId + '_' + ti;
             const quiz = Array.isArray(t.quiz) ? t.quiz.filter(q => q && q.q && Array.isArray(q.options) && q.options.length >= 2) : [];
             let step = 0, goods = 0;
-            const head = () =>
-                '<div class="wg-meet-head"><span class="wg-meet-name"><i class="fa-solid fa-user"></i> ' + _esc(t.name) + '<small>' + _esc(t.job || '') + '</small>' +
-                  (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</span>' +
-                  '<button class="wg-close"><i class="fa-solid fa-xmark"></i></button></div>';
+            let backTo = null;   // 身分卡頁的返回目標=進來前所在頁
+            const head = (back) =>
+                '<div class="wg-meet-head">' +
+                  (back ? '<button class="wg-back" data-m="back"><i class="fa-solid fa-chevron-left"></i></button>' : '') +
+                  '<span class="wg-meet-name"><i class="fa-solid fa-user"></i> ' + _esc(t.name) + '<small>' + _esc(t.job || '') + '</small>' +
+                  (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</span></div>';
             const wire = () => {
-                box.querySelector('.wg-close')?.addEventListener('click', _closeMeet);
-                box.querySelector('[data-m="prof"]')?.addEventListener('click', () => _openProfileWin(t));
+                box.querySelector('[data-m="prof"]')?.addEventListener('click', renderProfile);
+            };
+            const renderProfile = () => {   // 卡內第二層頁:‹返回切回組隊頁,不疊modal
+                box.innerHTML = head(true) + '<div class="wg-meet-body">' + _profRows(t) + '</div>';
+                box.querySelector('[data-m="back"]').addEventListener('click', () => (backTo || renderIntro)());
             };
             async function joinTeam() {
                 t.recruited = true;
                 await _saveWorld(w);
-                try { if (t.accept) win.LobbyStage.pushNpcHistory(npc.key, { role: 'assistant', content: t.accept }); } catch (e) {}   // 入隊宣言入他的記憶(考題過程不入)
+                try { if (t.accept) win.LobbyStage.pushNpcHistory(npcKey, { role: 'assistant', content: t.accept }); } catch (e) {}   // 入隊宣言入他的記憶(考題過程不入)
                 _toast(t.name + ' 加入了隊伍');
                 if (_winEl && _curDetailId === w.id) _renderDetail(w);   // 面板正開著這個世界→隊伍狀態即時刷新
             }
             const renderIntro = () => {
                 // 對話本體在底部對話框(開場白已seed成預設對話,打字=自由聊);這張卡只管組隊
+                backTo = renderIntro;
                 box.innerHTML = head() +
                     '<div class="wg-meet-body">' +
                       (t.persona ? '<div class="wg-note">' + _esc(t.persona) + '</div>' : '') +
@@ -334,6 +320,7 @@
                 });
             };
             const renderResult = (ok, line) => {
+                backTo = () => renderResult(ok, line);
                 _sayInDialog(line || (ok ? '(他答應同行了。)' : '(他搖了搖頭,婉拒了。)'));
                 box.innerHTML = head() +
                     '<div class="wg-meet-body">' +
@@ -346,7 +333,8 @@
                 wire();
                 box.querySelector('[data-m="retry"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
             };
-            renderIntro();
+            if (startAtProfile) { backTo = renderIntro; renderProfile(); }
+            else renderIntro();
         })();
     }
 
@@ -391,7 +379,7 @@
         const i = worlds.findIndex(x => x.id === w.id);
         if (i >= 0) worlds[i] = w;
         await _set(K_WORLDS, worlds);
-        _clearTravelers(); _closeMeet(); _closeProfile();
+        _clearTravelers(); _closeMeet();
         return { ok: true, msg: '已進入「' + w.name + '」' };
     }
 
@@ -410,7 +398,7 @@
             '.wg-brand-copy{display:flex;flex-direction:column;line-height:1.05;white-space:nowrap;}.wg-brand-copy b{font-size:15px;letter-spacing:.06em;}.wg-brand-copy small{margin-top:4px;color:#8a8ea6;font-size:8px;letter-spacing:.18em;font-weight:700;}' +
             '.wg-mode-pill{margin-left:auto;display:flex;align-items:center;gap:5px;padding:5px 9px;border:1px solid rgba(26,28,40,.14);border-radius:8px;background:rgba(255,255,255,.6);color:#5a5e75;font-size:10px;font-weight:700;white-space:nowrap;}' +
             '.wg-mode-pill.para{background:#1A1C28;color:#EAF2FF;border-color:#1A1C28;}' +
-            '.wg-head .wg-close{background:none;border:none;color:#4a4e66;cursor:pointer;font-size:15px;padding:5px 6px;border-radius:8px;}.wg-head .wg-close:hover{background:rgba(26,28,40,.08);}' +
+            '.wg-back{background:none;border:none;color:#4a4e66;cursor:pointer;font-size:15px;padding:4px 9px;border-radius:8px;flex:none;}.wg-back:hover{background:rgba(26,28,40,.08);}' +
             '.wg-body{overflow-y:auto;padding:11px 13px 14px;flex:1;display:flex;flex-direction:column;scrollbar-color:rgba(26,28,40,.25) transparent;scrollbar-width:thin;}' +
             '.wg-empty{margin:auto;color:#8a8ea6;padding:24px 6px;text-align:center;line-height:1.8;}.wg-empty i{display:block;margin-bottom:8px;color:#b9bed4;font-size:28px;}' +
             '.wg-section-head{display:flex;align-items:center;justify-content:space-between;margin:0 1px 8px;color:#3a3e56;}.wg-section-title{font-weight:800;font-size:13px;letter-spacing:.04em;}.wg-section-note{color:#8a8ea6;font-size:10px;}' +
@@ -441,19 +429,16 @@
             '.wg-entry-text{color:#3a3e56;font-size:11px;line-height:1.7;white-space:pre-wrap;}' +
             /* 🤝 組隊卡/身分卡:右側停靠(同愛麗絲世界門/瀅瀅書咖成例);對話本體在底部對話框 */
             '.wg-meet{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3355;width:340px;max-width:52%;max-height:78%;overflow-y:auto;display:flex;flex-direction:column;background:linear-gradient(rgba(250,251,255,.98),rgba(238,240,246,.98));border:1px solid rgba(26,28,40,.18);border-radius:14px;color:#1A1C28;font-size:12px;box-shadow:0 12px 34px rgba(26,28,40,.32);backdrop-filter:blur(8px);scrollbar-width:thin;}' +
-            '.wg-profile{z-index:3365;margin-right:36px;top:46%;}' +
             '.wg-meet-head{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid rgba(26,28,40,.1);background:rgba(255,255,255,.6);position:sticky;top:0;}' +
             '.wg-meet-name{display:flex;align-items:center;gap:6px;font-weight:800;min-width:0;}.wg-meet-name small{color:#8a8ea6;font-weight:700;font-size:9px;}' +
             '.wg-joined{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px;border-radius:8px;background:rgba(60,120,80,.12);color:#3c6b44;font-size:9px;font-style:normal;font-weight:800;white-space:nowrap;}' +
-            '.wg-meet-head .wg-close{margin-left:auto;background:none;border:none;color:#4a4e66;cursor:pointer;font-size:14px;padding:4px 6px;border-radius:8px;}.wg-meet-head .wg-close:hover{background:rgba(26,28,40,.08);}' +
             '.wg-meet-body{padding:11px 12px 4px;display:flex;flex-direction:column;gap:8px;}' +
             '.wg-say{padding:9px 11px;border-radius:10px;background:rgba(255,255,255,.78);border:1px solid rgba(26,28,40,.1);color:#2a2e44;line-height:1.65;}' +
             '.wg-opts{display:flex;flex-direction:column;gap:6px;}' +
             '.wg-opt{text-align:left;background:rgba(255,255,255,.62);border:1px solid rgba(26,28,40,.16);color:#3a3e56;border-radius:9px;padding:8px 10px;cursor:pointer;font-size:11px;line-height:1.5;transition:.15s;}.wg-opt:hover{background:#fff;border-color:rgba(26,28,40,.4);}' +
             '.wg-meet-btns{padding:0 12px 12px;display:flex;flex-direction:column;}' +
             '.wg-prof-row{display:flex;gap:8px;padding:6px 2px;border-bottom:1px dashed rgba(26,28,40,.1);}.wg-prof-row:last-child{border-bottom:none;}.wg-prof-row span{flex:none;width:44px;color:#8a8ea6;font-size:10px;font-weight:700;padding-top:1px;}.wg-prof-row b{color:#2a2e44;font-weight:600;line-height:1.55;font-size:11px;}' +
-            '.wg-profile .wg-meet-body{padding-bottom:12px;}' +
-            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}.wg-meet{right:10px;left:10px;width:auto;max-width:none;max-height:66%;}.wg-profile{margin-right:0;top:42%;}.wg-brand-copy small{display:none}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
+            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}.wg-meet{right:10px;left:10px;width:auto;max-width:none;max-height:66%;}.wg-brand-copy small{display:none}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
     }
 
@@ -470,7 +455,7 @@
     }
     async function openGate() {
         closeGate();
-        _closeMeet(); _closeProfile();   // 右側停靠位互斥:開世界門先收組隊卡
+        _closeMeet();   // 右側停靠位互斥:開世界門先收組隊卡
         const doc = win.document;
         _ensureStyle(doc);
         const host = doc.querySelector('.lobby-left') || doc.body;
@@ -481,12 +466,10 @@
             '<div class="wg-head">' +
               '<div class="wg-brand"><span class="wg-brand-icon"><i class="fa-solid fa-globe"></i></span>' +
                 '<span class="wg-brand-copy"><b>世界門</b><small>WORLD GATE PLAZA</small></span></div>' +
-              '<span class="wg-mode-pill" data-wg-mode><i class="fa-solid fa-city"></i> 主世界</span>' +
-              '<button class="wg-close" title="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
+              '<span class="wg-mode-pill" data-wg-mode><i class="fa-solid fa-city"></i> 主世界</span></div>' +
             '<div class="wg-body"></div>';
         host.appendChild(box);
         _winEl = box;
-        box.querySelector('.wg-close').addEventListener('click', closeGate);
         _refreshModePill();
         _renderList();
     }
@@ -633,6 +616,19 @@
         _renderDetail(w);
     }
 
+    // ── P4 隊友身分卡(面板內第二層頁) ──
+    function _renderProfilePage(w, ti) {
+        const b = _body(); if (!b) return;
+        const t = w.travelers && w.travelers[ti];
+        if (!t) return;
+        b.innerHTML =
+            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-id-card"></i> ' + _esc(t.name) + '</span>' +
+              '<span class="wg-section-note">' + (t.recruited ? '已入隊' : '旅人') + '・' + _esc(t.job || '') + '</span></div>' +
+            '<div class="wg-card">' + _profRows(t) + '</div>' +
+            '<button class="wg-btn ghost" data-act="back">返回</button>';
+        b.querySelector('[data-act="back"]').addEventListener('click', () => _renderDetail(w));
+    }
+
     // ── P3 世界詳情(隊伍狀態+DIVE) ──
     let _delArm = 0;   // 刪除兩段式確認(不用 window.confirm,Tauri 會攔)
     let _curDetailId = null;   // 面板當前顯示的世界(偶遇入隊時用來即時刷新隊伍區)
@@ -668,8 +664,7 @@
               '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' +
             '</div>';
         b.querySelectorAll('.wg-trav').forEach(el => el.addEventListener('click', () => {
-            const t = w.travelers[Number(el.dataset.i)];
-            if (t) _openProfileWin(t);
+            _renderProfilePage(w, Number(el.dataset.i));   // 面板內第二層頁,不彈modal
         }));
         _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
         b.querySelector('[data-act="dive"]').addEventListener('click', async () => {
@@ -692,13 +687,13 @@
             await _deleteEntry(w);
             const worlds = await _get(K_WORLDS, []);
             await _set(K_WORLDS, worlds.filter(x => x.id !== w.id));
-            _clearTravelers(); _closeMeet(); _closeProfile();
+            _clearTravelers(); _closeMeet();
             try { for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) win.localStorage.removeItem('lstage_hist_wg_' + w.id + '_' + i); } catch (e) {}   // 旅人對話歷史一起清,不留孤兒
             _toast('「' + w.name + '」已從檔案庫移除');
             _renderList();
         });
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, closeProfile: _closeProfile };
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet };
     console.log('[Worldgate③] 世界門面板就緒');
 })();
