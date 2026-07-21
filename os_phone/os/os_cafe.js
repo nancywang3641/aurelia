@@ -10,6 +10,8 @@
     'use strict';
     console.log('[Cafe] 載入書咖經營系統...');
     const win = window.parent || window;
+    const CAFE_ASSET_BASE = win.AURELIA_EXT_BASE || window.AURELIA_EXT_BASE || './scripts/extensions/third-party/my-tavern-extension';
+    const CAFE_ITEM_SHEET = CAFE_ASSET_BASE + '/core/assets/cafe/cafe-items-v1.webp';
 
     // ── 🎛 遊戲平衡數據(集中可調;材料/靈感矩陣要改就改這裡)──
     const CAFE_CFG = {
@@ -50,8 +52,33 @@
     const K_NPC = 'npc';       // 每位顧客 {name,prefs,incl,visits,spend,items:{menuId:{count,streak,lastDay,boredHits,coolUntil,devoted}}}
     const K_LOG = 'visits';    // 訪客紀錄 [{id,day,key,name,item,line,price,said?,ev?}]
     const K_EVQ = 'evq';       // A級事件佇列 [{type,key,item,itemId}](單次結算最多消化2件,超過留隊)
+    const K_SHIFT = 'shift';   // 值班小遊戲紀錄 {best,games,bestStreak}
     const EV_LABEL = { devotion: '本命認證', dropout: '吃膩告別' };
+    const ING_ICONS = {
+        coffee: '☕', tea: '🍵', soda: '🫧',
+        floral: '🌼', berry: '🫐', caramel: '🍮', spice: '🧂',
+        foam: '🥛', cookie: '🍪', mint: '🌿',
+        receipt: '🧾', bell: '🔔',
+    };
+    const SPRITE_POS = {
+        coffee: [0, 0], tea: [1, 0], soda: [2, 0], floral: [3, 0],
+        berry: [0, 1], caramel: [1, 1], spice: [2, 1], foam: [3, 1],
+        cookie: [0, 2], mint: [1, 2], receipt: [2, 2], bell: [3, 2],
+    };
+    const SLOT_LABEL = { base: '基底', flavor: '風味', top: '點綴' };
     function _mkId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+    function _ingIcon(id) { return ING_ICONS[id] || '✦'; }
+    function _sprite(id, extraClass) {
+        return '<span class="oc-sprite oc-sprite-' + (SPRITE_POS[id] ? id : 'coffee') + (extraClass ? ' ' + extraClass : '') + '" aria-hidden="true">' + _ingIcon(id) + '</span>';
+    }
+    // 雪碧圖座標→靜態 class(禁inline style;格位改動只需對 SPRITE_POS 同步這段)
+    function _spritePosCss() {
+        const xs = ['0%', '33.333%', '66.667%', '100%'], ys = ['0%', '50%', '100%'];
+        return Object.keys(SPRITE_POS).map(id => {
+            const p = SPRITE_POS[id];
+            return '.oc-sprite-' + id + '{background-position:' + xs[p[0]] + ' ' + ys[p[1]] + ';}';
+        }).join('');
+    }
 
     // 訪客紀錄的旁白模板(零API;③「點開看完整留言」才燒API讓角色親口說)
     const TPL = {
@@ -378,53 +405,71 @@
         const st = doc.createElement('style');
         st.id = 'os-cafe-style';
         st.textContent =
-            /* ☕ 書咖菜單板風格:奶油紙底+咖啡棕字+金棕點綴(配瀅瀅店裡的木質奶油色系,別再黑瀝青) */
-            '.oc-win{position:absolute;right:max(3%, calc(50% - 370px));top:50%;transform:translateY(-50%);z-index:3350;width:344px;max-width:90%;min-height:min(460px,74%);max-height:78%;display:flex;flex-direction:column;background:rgba(249,242,230,.97);border:1px solid #d8c6a8;border-radius:16px;color:#4a3a2a;font-size:13px;box-shadow:0 10px 28px rgba(90,66,40,.35);}' +
-            '.oc-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px dashed #d8c6a8;background:rgba(122,82,48,.07);border-radius:16px 16px 0 0;font-weight:700;color:#6b4e32;}' +
-            '.oc-head .oc-close{margin-left:auto;background:none;border:none;color:#6b4e32;cursor:pointer;font-size:15px;padding:2px 6px;}' +
-            '.oc-tabs{display:flex;gap:6px;padding:10px 14px 0;}' +
-            '.oc-tab{flex:1;background:rgba(255,255,255,.55);border:1px solid #d3bf9f;color:#6b4e32;border-radius:9px;padding:6px 0;cursor:pointer;font-size:12px;}' +
-            '.oc-tab.on{background:#7a5230;border-color:#7a5230;color:#f9f2e6;font-weight:700;}' +
-            '.oc-body{overflow-y:auto;padding:10px 14px 14px;flex:1;display:flex;flex-direction:column;}' +
-            '.oc-body .oc-empty{margin:auto;}' +   /* 空狀態置中,不縮窗 */
-            '.oc-item{display:flex;align-items:baseline;gap:8px;padding:9px 4px;border-bottom:1px dashed rgba(122,82,48,.22);flex-wrap:wrap;}' +
-            '.oc-item.oc-click{cursor:pointer;}' +
-            '.oc-item.ev{background:rgba(214,158,84,.12);border-radius:9px;border-bottom:none;margin:5px 0;padding:9px 10px;}' +
+            /* ☕ 奶油紙張＋點單票：保持書咖木質暖色，但把玩法層級拉出來 */
+            '.oc-win{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3350;width:420px;max-width:52%;min-height:min(520px,76%);max-height:82%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(rgba(250,244,234,.975),rgba(247,237,222,.975)),repeating-linear-gradient(0deg,transparent 0 7px,rgba(112,76,42,.018) 8px);border:1px solid #cbb58f;border-radius:18px;color:#4a3828;font-size:13px;box-shadow:0 16px 42px rgba(69,46,27,.34),inset 0 0 0 3px rgba(255,255,255,.35);backdrop-filter:blur(8px);}' +
+            '.oc-head{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid rgba(139,101,61,.18);background:rgba(255,252,245,.55);color:#65492f;}' +
+            '.oc-brand{display:flex;align-items:center;gap:9px;min-width:0;}.oc-brand-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#7a5230;color:#fff8ed;font-size:18px;box-shadow:0 3px 9px rgba(88,55,28,.18);}' +
+            '.oc-sprite{display:inline-block;width:32px;height:32px;flex:none;background-image:url("' + CAFE_ITEM_SHEET + '");background-repeat:no-repeat;background-size:400% 300%;border-radius:7px;font-size:0;vertical-align:middle;}.oc-assets-missing .oc-sprite{display:inline-grid;place-items:center;background-image:none!important;color:inherit;font-size:18px;}' + _spritePosCss() +
+            '.oc-brand-copy{display:flex;flex-direction:column;line-height:1.05;white-space:nowrap;}.oc-brand-copy b{font-size:15px;letter-spacing:.06em;}.oc-brand-copy small{margin-top:4px;color:#a18869;font-size:8px;letter-spacing:.18em;font-weight:700;}' +
+            '.oc-head-stats{display:flex;gap:5px;margin-left:auto;}.oc-stat-pill{display:flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid #dfceb2;border-radius:8px;background:rgba(255,255,255,.58);color:#816143;font-size:11px;white-space:nowrap;}.oc-stat-pill b{color:#5e4028;font-size:12px;}' +
+            '.oc-head .oc-close{background:none;border:none;color:#765638;cursor:pointer;font-size:15px;padding:5px 6px;border-radius:8px;}.oc-head .oc-close:hover{background:rgba(122,82,48,.1);}' +
+            '.oc-tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:9px 12px 0;}' +
+            '.oc-tab{min-width:0;background:rgba(255,255,255,.45);border:1px solid #dcc9aa;color:#735437;border-radius:8px;padding:6px 2px;cursor:pointer;font-size:10px;white-space:nowrap;}.oc-tab i{display:block;margin-bottom:3px;font-size:12px;}' +
+            '.oc-tab.on{background:#8a5c34;border-color:#8a5c34;color:#fff8ed;font-weight:700;box-shadow:0 3px 8px rgba(105,67,35,.18);}' +
+            '.oc-body{overflow-y:auto;padding:11px 13px 14px;flex:1;display:flex;flex-direction:column;scrollbar-color:#c9ae88 transparent;scrollbar-width:thin;}' +
+            '.oc-body .oc-empty{margin:auto;}' +
+            '.oc-section-head{display:flex;align-items:center;justify-content:space-between;margin:0 1px 8px;color:#6a4b30;}.oc-section-title{font-weight:800;font-size:13px;letter-spacing:.04em;}.oc-section-note{color:#a18465;font-size:10px;}' +
+            '.oc-item{display:flex;align-items:baseline;gap:8px;margin-bottom:7px;padding:9px 10px;border:1px solid rgba(194,164,124,.5);border-radius:10px;background:rgba(255,253,248,.58);flex-wrap:wrap;}' +
+            '.oc-item.oc-click{cursor:pointer;transition:transform .15s,background .15s;}.oc-item.oc-click:hover{transform:translateY(-1px);background:rgba(255,255,255,.82);}' +
+            '.oc-item.ev{background:rgba(214,158,84,.12);border-color:#d8bb89;}' +
             '.oc-hear{color:#c9b28a;font-size:12px;margin-left:4px;}.oc-hear.has{color:#a9744a;}' +
             '.oc-said{display:block;margin-top:6px;padding:7px 10px;background:rgba(169,116,74,.08);border-left:3px solid #c9a06a;border-radius:6px;color:#5a4030;font-size:12px;line-height:1.6;}' +
-            '.oc-loading{color:#a3906f;}' +
-            '.oc-item .oc-name{font-weight:700;color:#5a4030;}' +
-            '.oc-item .oc-price{margin-left:auto;white-space:nowrap;color:#a9744a;font-weight:700;}' +
-            '.oc-blurb{display:block;color:#8a7358;font-size:12px;margin-top:2px;}' +
-            '.oc-badge{font-size:10px;padding:1px 6px;border-radius:6px;border:1px solid;white-space:nowrap;background:rgba(255,255,255,.5);}' +
-            '.oc-badge.s{color:#b8860b;border-color:#caa24a;}.oc-badge.a{color:#4e8b57;border-color:#7cae85;}.oc-badge.b{color:#8a8a92;border-color:#b6b6bd;}.oc-badge.c{color:#c05b5b;border-color:#d99;}' +
-            '.oc-empty{color:#9b8a72;padding:20px 4px;text-align:center;line-height:1.8;}' +
-            '.oc-stats{color:#8a7358;font-size:12px;padding:2px 4px 8px;border-bottom:1px dashed rgba(122,82,48,.22);}' +
-            '.oc-slot-label{margin:9px 0 5px;color:#8a7358;font-size:12px;}' +
-            '.oc-chips{display:flex;flex-wrap:wrap;gap:6px;}' +
-            '.oc-chip{background:rgba(255,255,255,.6);border:1px solid #d3bf9f;color:#5a4634;border-radius:9px;padding:5px 11px;cursor:pointer;font-size:12px;}' +
-            '.oc-chip.on{background:rgba(169,116,74,.22);border-color:#a9744a;font-weight:700;}' +
-            '.oc-brew{width:100%;margin-top:12px;background:#7a5230;border:none;color:#f9f2e6;font-weight:700;border-radius:11px;padding:10px 0;cursor:pointer;font-size:13px;}' +
-            '.oc-brew:disabled{opacity:.45;cursor:default;}' +
-            '.oc-result{margin-top:10px;border:1px solid #d8c6a8;border-radius:11px;padding:10px 12px;background:rgba(255,252,246,.7);}' +
-            '.oc-result .oc-note{color:#8a7358;font-size:12px;margin-top:4px;}' +
-            '.oc-shelf{width:100%;margin-top:8px;background:rgba(78,139,87,.12);border:1px solid #7cae85;color:#3c6b44;font-weight:700;border-radius:11px;padding:8px 0;cursor:pointer;font-size:13px;}' +
-            '.oc-shelf:disabled{opacity:.5;cursor:default;}' +
-            '.oc-tried{color:#a3906f;font-size:11px;margin-top:6px;}' +
-            '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:210px;overflow-y:auto;padding-right:2px;}' +
-            '.oc-sym{width:38px;height:38px;font-size:18px;background:rgba(255,255,255,.6);border:1px solid #d3bf9f;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}' +
-            '.oc-sym.on{background:rgba(214,158,84,.3);border-color:#a9744a;}' +
-            '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.75);border:1px solid #d3bf9f;border-radius:9px;color:#4a3a2a;padding:7px 10px;font-size:12px;}' +
-            '.oc-free-input::placeholder{color:#a3906f;}' +
-            '@media (max-width:680px){' +
-              '.oc-win{right:12px;left:12px;width:auto;max-height:74%;}' +   /* 📱 面板站前排放大(垂直置中沿用桌機規則) */
-              '.void-dock-open #iris-avatar{opacity:.25;filter:brightness(.55) blur(1px);transition:opacity .25s;}' +   /* 立繪退後變暗 */
-            '}';
+            '.oc-loading{color:#a3906f;}.oc-item .oc-name{font-weight:700;color:#5a4030;}.oc-item .oc-price{margin-left:auto;white-space:nowrap;color:#a9744a;font-weight:700;}' +
+            '.oc-blurb{display:block;color:#8a7358;font-size:11px;margin-top:3px;line-height:1.45;}' +
+            '.oc-menu-card{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:9px;margin-bottom:8px;padding:9px 10px;border:1px solid rgba(194,164,124,.56);border-radius:12px;background:rgba(255,253,248,.7);box-shadow:0 2px 7px rgba(91,61,34,.06);}' +
+            '.oc-drink-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:11px;background:rgba(186,134,79,.13);}.oc-drink-icon .oc-sprite{width:40px;height:40px;border-radius:9px;}.oc-menu-main{min-width:0;}.oc-menu-title{display:flex;align-items:center;gap:5px;font-weight:800;color:#573b26;}.oc-menu-side{text-align:right;white-space:nowrap;}.oc-menu-price{display:block;margin-top:5px;color:#9d6638;font-weight:800;font-size:12px;}.oc-menu-sold{display:block;margin-top:2px;color:#a58b70;font-size:9px;}' +
+            '.oc-mini-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;}.oc-mini-tag{padding:1px 5px;border-radius:9px;background:#efe3d2;color:#896b4d;font-size:9px;}' +
+            '.oc-badge{font-size:9px;padding:2px 6px;border-radius:7px;border:1px solid;white-space:nowrap;background:rgba(255,255,255,.55);}' +
+            '.oc-badge.s{color:#a87500;border-color:#caa24a;}.oc-badge.a{color:#4e8155;border-color:#7cae85;}.oc-badge.b{color:#7e7e86;border-color:#b6b6bd;}.oc-badge.c{color:#b65050;border-color:#d99;}' +
+            '.oc-empty{color:#9b8267;padding:24px 6px;text-align:center;line-height:1.8;}.oc-empty i{display:block;margin-bottom:8px;color:#c5a47d;font-size:28px;}' +
+            '.oc-slot-label{display:flex;align-items:center;gap:6px;margin:10px 1px 6px;color:#7e5b39;font-size:11px;font-weight:800;}.oc-slot-label:after{content:"";height:1px;flex:1;background:rgba(146,102,61,.15);}' +
+            '.oc-chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}.oc-chips.three{grid-template-columns:repeat(3,minmax(0,1fr));}' +
+            '.oc-chip{min-width:0;background:rgba(255,255,255,.58);border:1px solid #d8c3a1;color:#5a4634;border-radius:10px;padding:6px 3px;cursor:pointer;font-size:10px;line-height:1.25;}.oc-chip .oc-ing-icon{display:block;width:34px;height:34px;margin:0 auto 3px;}' +
+            '.oc-chip.on{background:#f2dfc6;border-color:#b77b42;color:#674224;font-weight:700;box-shadow:inset 0 0 0 1px rgba(183,123,66,.15);}' +
+            '.oc-brew,.oc-action{width:100%;margin-top:12px;background:#7a4f2d;border:1px solid #6d4425;color:#fff8ed;font-weight:800;border-radius:11px;padding:10px 0;cursor:pointer;font-size:12px;box-shadow:0 4px 9px rgba(92,55,27,.16);}.oc-brew:disabled,.oc-action:disabled{opacity:.42;cursor:default;box-shadow:none;}' +
+            '.oc-result{margin-top:10px;border:1px solid #d8c6a8;border-radius:11px;padding:10px 12px;background:rgba(255,252,246,.72);}.oc-result .oc-note{color:#8a7358;font-size:11px;margin-top:4px;line-height:1.5;}' +
+            '.oc-shelf{width:100%;margin-top:8px;background:rgba(78,139,87,.12);border:1px solid #7cae85;color:#3c6b44;font-weight:700;border-radius:10px;padding:8px 0;cursor:pointer;font-size:12px;}.oc-shelf:disabled{opacity:.5;cursor:default;}' +
+            '.oc-tried{display:flex;justify-content:space-between;color:#a18a70;font-size:10px;margin-top:7px;}.oc-progress-line{height:4px;margin-top:5px;border-radius:5px;background:#eadcc8;overflow:hidden;}.oc-progress-line i{display:block;height:100%;background:#bd854c;border-radius:5px;}' +
+            '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:195px;overflow-y:auto;padding-right:2px;}.oc-sym{width:37px;height:37px;font-size:17px;background:rgba(255,255,255,.6);border:1px solid #d3bf9f;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}.oc-sym.on{background:rgba(214,158,84,.3);border-color:#a9744a;}' +
+            '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.75);border:1px solid #d3bf9f;border-radius:9px;color:#4a3a2a;padding:8px 10px;font-size:11px;}.oc-free-input::placeholder{color:#a3906f;}' +
+            '.oc-shift-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:9px;}.oc-shift-stat{padding:7px 5px;border:1px solid #dfceb2;border-radius:9px;background:rgba(255,255,255,.5);text-align:center;color:#8d7257;font-size:9px;}.oc-shift-stat b{display:block;margin-bottom:2px;color:#66482f;font-size:14px;}' +
+            '.oc-receipt{position:relative;margin:2px 0 10px;padding:11px 12px;border:1px dashed #c4a67c;border-radius:9px;background:rgba(255,254,248,.82);box-shadow:0 3px 9px rgba(88,57,30,.07);}.oc-receipt-head{display:flex;justify-content:space-between;align-items:center;color:#68492f;font-weight:800;}.oc-timer{color:#9c6335;font-size:13px;}.oc-timer.danger{color:#c45243;animation:oc-pulse .8s infinite;}' +
+            '.oc-order-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px;}.oc-order-part{padding:7px 3px;border:1px solid #e2d2b9;border-radius:9px;background:rgba(248,240,227,.7);text-align:center;color:#76583b;font-size:9px;}.oc-order-part .oc-order-icon{display:grid;place-items:center;height:48px;margin-bottom:4px;font-size:24px;}.oc-order-part .oc-order-icon .oc-sprite{width:48px;height:48px;}.oc-order-part.hidden .oc-order-icon{filter:grayscale(1);opacity:.45;}' +
+            '.oc-intro-pad{padding:14px 4px 8px;}.oc-shift-hint{text-align:center;color:#92785d;font-size:10px;line-height:1.5;margin:1px 0 8px;}.oc-ing-row{display:grid;grid-template-columns:44px repeat(4,minmax(0,1fr));gap:5px;align-items:stretch;margin-bottom:6px;}.oc-ing-row.three{grid-template-columns:44px repeat(3,minmax(0,1fr));}.oc-ing-row-label{display:grid;place-items:center;color:#84613f;font-size:10px;font-weight:800;}.oc-ing-btn{min-width:0;padding:5px 2px;border:1px solid #dbc7a7;border-radius:9px;background:rgba(255,255,255,.58);color:#72563c;cursor:pointer;font-size:9px;line-height:1.15;}.oc-ing-btn>.oc-sprite{display:block;width:32px;height:32px;margin:0 auto 2px;}.oc-ing-btn.on{border-color:#b6783f;background:#f1ddc3;color:#5e3e23;font-weight:800;}.oc-ing-btn:disabled{opacity:.45;cursor:default;}' +
+            '.oc-peek{display:block;margin:5px auto 0;border:none;background:none;color:#9a7959;text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-size:9px;}.oc-shift-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:6px 8px;border-top:1px dotted #cbb28f;color:#8e7255;font-size:10px;}.oc-shift-result{text-align:center;padding:12px 8px;}.oc-intro-sprite,.oc-result-mark .oc-sprite{width:58px;height:58px;border-radius:10px;}.oc-intro-sprite{display:block;margin:0 auto 7px;}.oc-result-mark{min-height:58px;}.oc-shift-result h3{margin:4px 0;color:#66462d;}.oc-compare{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px;text-align:left;}.oc-compare>div{padding:7px;border-radius:8px;background:rgba(239,226,207,.55);font-size:9px;color:#8a6c4f;}.oc-compare b{display:block;margin-bottom:4px;color:#65482f;}.oc-final-score{font-size:28px;font-weight:900;color:#86572f;margin:4px 0;}' +
+            '@keyframes oc-pulse{50%{transform:scale(1.08)}}' +
+            '@media (max-width:760px){.oc-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;min-height:min(500px,72%);}.oc-brand-copy small{display:none}.oc-stat-pill{padding:4px 5px}.oc-tab{font-size:9px}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
+        try {
+            const probe = new win.Image();
+            probe.onload = () => doc.documentElement.classList.remove('oc-assets-missing');
+            probe.onerror = () => doc.documentElement.classList.add('oc-assets-missing');
+            probe.src = CAFE_ITEM_SHEET;
+        } catch (e) { doc.documentElement.classList.add('oc-assets-missing'); }
     }
 
     let _winEl = null;
+    let _viewCleanup = null;
+    async function _refreshHeaderStats() {
+        if (!_winEl) return;
+        const shop = await getShop();
+        const pop = _winEl.querySelector('[data-cafe-stat="pop"]');
+        const cups = _winEl.querySelector('[data-cafe-stat="cups"]');
+        if (pop) pop.textContent = String(shop.popularity || 0);
+        if (cups) cups.textContent = String(shop.cups || 0);
+    }
     function closeWorkshop() {
+        if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
         _winEl?.remove(); _winEl = null;
         try { win.document.querySelector('.lobby-left')?.classList.remove('void-dock-open'); } catch (e) {}
     }
@@ -437,14 +482,21 @@
         const box = doc.createElement('div');
         box.className = 'oc-win';
         box.innerHTML =
-            '<div class="oc-head"><i class="fa-solid fa-mug-hot"></i> 書咖櫃檯' +
-              '<button class="oc-close"><i class="fa-solid fa-xmark"></i></button></div>' +
+            '<div class="oc-head">' +
+              '<div class="oc-brand"><span class="oc-brand-icon"><i class="fa-solid fa-mug-hot"></i></span>' +
+                '<span class="oc-brand-copy"><b>書咖櫃檯</b><small>PARALLAX CAFE</small></span></div>' +
+              '<div class="oc-head-stats">' +
+                '<span class="oc-stat-pill"><i class="fa-solid fa-heart"></i> 人氣 <b data-cafe-stat="pop">0</b></span>' +
+                '<span class="oc-stat-pill"><i class="fa-solid fa-mug-saucer"></i> 售出 <b data-cafe-stat="cups">0</b></span>' +
+              '</div>' +
+              '<button class="oc-close" title="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
             '<div class="oc-tabs">' +
-              '<button class="oc-tab on" data-tab="menu">菜單</button>' +
-              '<button class="oc-tab" data-tab="books">書單</button>' +
-              '<button class="oc-tab" data-tab="lab">調配台</button>' +
-              '<button class="oc-tab" data-tab="free">創想</button>' +
-              '<button class="oc-tab" data-tab="log">訪客</button>' +
+              '<button class="oc-tab on" data-tab="menu"><i class="fa-solid fa-receipt"></i>菜單</button>' +
+              '<button class="oc-tab" data-tab="lab"><i class="fa-solid fa-blender"></i>調配</button>' +
+              '<button class="oc-tab" data-tab="shift"><i class="fa-solid fa-bell-concierge"></i>值班</button>' +
+              '<button class="oc-tab" data-tab="free"><i class="fa-solid fa-wand-magic-sparkles"></i>創想</button>' +
+              '<button class="oc-tab" data-tab="books"><i class="fa-solid fa-book-open"></i>書單</button>' +
+              '<button class="oc-tab" data-tab="log"><i class="fa-solid fa-users"></i>訪客</button>' +
             '</div>' +
             '<div class="oc-body"></div>';
         host.appendChild(box);
@@ -461,30 +513,35 @@
             _renderTab(t.dataset.tab, body);
         }));
         _renderTab('menu', body);
+        _refreshHeaderStats();
         // ☕ 開窗=補算離線天數(有新動靜就刷新當前頁;背景跑不擋開窗)
         _settle().then(changed => {
             if (!changed || !_winEl) return;
             const on = _winEl.querySelector('.oc-tab.on');
-            _renderTab(on ? on.dataset.tab : 'menu', _winEl.querySelector('.oc-body'));
+            _refreshHeaderStats();
+            if (on?.dataset.tab !== 'shift') _renderTab(on ? on.dataset.tab : 'menu', _winEl.querySelector('.oc-body'));
         }).catch(() => {});
     }
 
     async function _renderTab(tab, body) {
+        if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
         if (tab === 'menu') {
-            const menu = await getMenu();
-            const shop = await getShop();
-            const stats = (shop.cups || shop.popularity) ? '<div class="oc-stats"><i class="fa-solid fa-fire"></i> 人氣 ' + (shop.popularity || 0) + '・累計 ' + (shop.revenue || 0) + ' PT・' + (shop.cups || 0) + ' 杯</div>' : '';
-            body.innerHTML = stats + (menu.length
-                ? menu.map(m =>
-                    '<div class="oc-item"><span class="oc-badge ' + (TIER_TEXT[m.tier]?.cls || 'a') + '">' + (TIER_TEXT[m.tier]?.label || '') + '</span>' +
-                    '<span><span class="oc-name">' + (m.free ? '✨' : '') + m.name + '</span><span class="oc-blurb">' + (m.blurb || '') + '</span></span>' +
-                    '<span class="oc-price">' + m.price + ' PT・售出' + (m.sold || 0) + '</span></div>').join('')
-                : '<div class="oc-empty">菜單還是空的。<br>去「調配台」研發出好東西再上架吧。</div>');
+            const [menu, shop] = await Promise.all([getMenu(), getShop()]);
+            body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-mug-hot"></i> 今日菜單</span><span class="oc-section-note">' + menu.length + ' 款・累計 ' + (shop.revenue || 0) + ' PT</span></div>' + (menu.length
+                ? menu.map(m => {
+                    const iconId = (m.ings || []).find(id => SPRITE_POS[id]) || (m.free ? 'receipt' : 'coffee');
+                    return '<div class="oc-menu-card"><span class="oc-drink-icon">' + _sprite(iconId) + '</span>' +
+                    '<span class="oc-menu-main"><span class="oc-menu-title">' + m.name + '</span><span class="oc-blurb">' + (m.blurb || '') + '</span>' +
+                    '<span class="oc-mini-tags">' + (m.tags || []).map(t => '<i class="oc-mini-tag">' + t + '</i>').join('') + '</span></span>' +
+                    '<span class="oc-menu-side"><span class="oc-badge ' + (TIER_TEXT[m.tier]?.cls || 'a') + '">' + (TIER_TEXT[m.tier]?.label || '') + '</span>' +
+                    '<span class="oc-menu-price">' + m.price + ' PT</span><span class="oc-menu-sold">售出 ' + (m.sold || 0) + '</span></span></div>';
+                }).join('')
+                : '<div class="oc-empty"><i class="fa-solid fa-mug-hot"></i>菜單還是空的。<br>去「調配」研發出好東西再上架吧。</div>');
         } else if (tab === 'log') {
             let logs = await _get(K_LOG, []);
             if (logs.some(l => !l.id)) { logs.forEach(l => { if (!l.id) l.id = _mkId(); }); await _set(K_LOG, logs); }   // 舊紀錄補id
             const md = (d) => { const t = new Date(d * DAY_MS); return (t.getMonth() + 1) + '/' + t.getDate(); };
-            body.innerHTML = logs.length
+            body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-users"></i> 訪客手札</span><span class="oc-section-note">最近 ' + logs.length + ' 筆</span></div>' + (logs.length
                 ? logs.map(l => {
                     if (l.ev) {   // 🎬 事件卡:角色親口說的,直接攤開
                         return '<div class="oc-item ev"><span><span class="oc-name">⭐ ' + md(l.day) + '・' + l.name + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + l.item + '」' : '') + '</span>' +
@@ -496,7 +553,7 @@
                         '<span class="oc-price">' + (l.price ? '+' + l.price + ' PT ' : '') +
                         (l.key ? '<i class="fa-solid fa-comment-dots oc-hear' + (l.said ? ' has' : '') + '"></i>' : '') + '</span></div>';
                 }).join('')
-                : '<div class="oc-empty">還沒有客人來過。<br>上架點好東西,常客們就會自己上門了。</div>';
+                : '<div class="oc-empty"><i class="fa-solid fa-door-open"></i>還沒有客人來過。<br>上架點好東西，常客們就會自己上門了。</div>');
             // 🎧 點一筆=請那位客人親口說(一筆只燒一次,說過的存起來、再點只是收合/展開)
             body.querySelectorAll('.oc-click').forEach(el => el.addEventListener('click', async () => {
                 const id = el.dataset.id;
@@ -517,22 +574,219 @@
             }));
         } else if (tab === 'books') {
             const books = await getBooks();
-            body.innerHTML = books.length
+            body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-book-open"></i> 客人書單</span><span class="oc-section-note">' + books.length + ' 本收藏</span></div>' + (books.length
                 ? books.map(b =>
                     '<div class="oc-item"><span><span class="oc-name">《' + b.title + '》</span>' +
                     '<span class="oc-blurb">' + (b.by ? b.by + ':' : '') + (b.note || '') + '</span></span></div>').join('')
-                : '<div class="oc-empty">書架還空著。<br>之後來店裡的客人會留下他們的推薦書。</div>';
+                : '<div class="oc-empty"><i class="fa-solid fa-book"></i>書架還空著。<br>之後來店裡的客人會留下他們的推薦書。</div>');
         } else if (tab === 'free') {
             _renderFree(body);
+        } else if (tab === 'shift') {
+            await _renderShift(body);
         } else {
             _renderLab(body);
         }
+    }
+
+    // 🔔 值班頁：三杯制點單記憶遊戲。全程零 API，也不碰 PT 經濟。
+    async function _renderShift(body) {
+        const record = await _get(K_SHIFT, { best: 0, games: 0, bestStreak: 0 });
+        if (!body.isConnected) return;
+        const state = {
+            round: 0,
+            score: 0,
+            streak: 0,
+            maxStreak: 0,
+            time: 18,
+            phase: 'idle',
+            target: null,
+            sel: { base: null, flavor: null, top: null },
+            peekUsed: false,
+            used: new Set(),
+        };
+        let phaseTimer = null;
+        let clock = null;
+        let peekTimer = null;
+        let disposed = false;
+
+        const clearTimers = () => {
+            if (phaseTimer) clearTimeout(phaseTimer);
+            if (clock) clearInterval(clock);
+            if (peekTimer) clearTimeout(peekTimer);
+            phaseTimer = clock = peekTimer = null;
+        };
+        _viewCleanup = () => { disposed = true; clearTimers(); };
+
+        const partHtml = (slot, id, hidden) => {
+            const ing = _ing(slot, id);
+            return '<div class="oc-order-part' + (hidden ? ' hidden' : '') + '">' +
+                '<span class="oc-order-icon">' + (hidden ? '❔' : _sprite(id)) + '</span>' +
+                (hidden ? SLOT_LABEL[slot] + '已摺起' : ing.name) + '</div>';
+        };
+        const orderHtml = (hidden) => ['base', 'flavor', 'top'].map(slot => partHtml(slot, state.target[slot], hidden)).join('');
+        const comboNames = (combo) => ['base', 'flavor', 'top'].map(slot => combo[slot] ? _ing(slot, combo[slot])?.name : '未選').join('＋');
+        const newTarget = () => {
+            let target;
+            let key;
+            do {
+                target = {};
+                Object.keys(CAFE_CFG.pantry).forEach(slot => {
+                    const list = CAFE_CFG.pantry[slot];
+                    target[slot] = list[Math.floor(Math.random() * list.length)].id;
+                });
+                key = _comboKey(target.base, target.flavor, target.top);
+            } while (state.used.has(key) && state.used.size < 3);
+            state.used.add(key);
+            return target;
+        };
+        const summaryHtml = () =>
+            '<div class="oc-shift-summary">' +
+              '<div class="oc-shift-stat"><b>' + (record.best || 0) + '</b>最高分</div>' +
+              '<div class="oc-shift-stat"><b>' + (record.bestStreak || 0) + '</b>最高連勝</div>' +
+              '<div class="oc-shift-stat"><b>' + (record.games || 0) + '</b>值班次數</div>' +
+            '</div>';
+
+        const renderIntro = () => {
+            body.innerHTML =
+                '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-bell-concierge"></i> 今日值班</span><span class="oc-section-note">離線小遊戲・不呼叫 API</span></div>' +
+                summaryHtml() +
+                '<div class="oc-receipt"><div class="oc-receipt-head"><span>點單記憶測驗</span><span>3 杯制</span></div>' +
+                  '<div class="oc-empty oc-intro-pad">' + _sprite('receipt', 'oc-intro-sprite') + '客人的點單只會攤開幾秒。<br>記住基底、風味與點綴，再照單完成飲品。</div>' +
+                '</div>' +
+                '<button class="oc-action"><i class="fa-solid fa-door-open"></i> 開始接單</button>' +
+                '<div class="oc-shift-foot"><span>答對越快，分數越高</span><span>偷看點單會扣 15 分</span></div>';
+            body.querySelector('.oc-action').addEventListener('click', startRound);
+        };
+
+        const pickerHtml = (disabled) => Object.keys(CAFE_CFG.pantry).map(slot => {
+            const list = CAFE_CFG.pantry[slot];
+            return '<div class="oc-ing-row' + (list.length === 3 ? ' three' : '') + '">' +
+                '<span class="oc-ing-row-label">' + SLOT_LABEL[slot] + '</span>' +
+                list.map(x => '<button class="oc-ing-btn" data-slot="' + slot + '" data-id="' + x.id + '"' + (disabled ? ' disabled' : '') + '>' +
+                    _sprite(x.id) + x.name + '</button>').join('') + '</div>';
+        }).join('');
+
+        const bindPickers = () => {
+            const action = body.querySelector('.oc-action');
+            body.querySelectorAll('.oc-ing-btn').forEach(btn => btn.addEventListener('click', () => {
+                if (state.phase !== 'pick') return;
+                const slot = btn.dataset.slot;
+                state.sel[slot] = btn.dataset.id;
+                body.querySelectorAll('.oc-ing-btn[data-slot="' + slot + '"]').forEach(x => x.classList.toggle('on', x === btn));
+                action.disabled = !(state.sel.base && state.sel.flavor && state.sel.top);
+            }));
+            action?.addEventListener('click', () => {
+                const ok = ['base', 'flavor', 'top'].every(slot => state.sel[slot] === state.target[slot]);
+                finishRound(ok, ok ? '完美照單完成' : '配方對不上點單');
+            });
+            const peek = body.querySelector('.oc-peek');
+            peek?.addEventListener('click', () => {
+                if (state.phase !== 'pick' || state.peekUsed) return;
+                state.peekUsed = true;
+                peek.disabled = true;
+                peek.textContent = '點單偷看中…（本杯 -15 分）';
+                const grid = body.querySelector('.oc-order-grid');
+                if (grid) grid.innerHTML = orderHtml(false);
+                peekTimer = setTimeout(() => {
+                    if (disposed || state.phase !== 'pick') return;
+                    const current = body.querySelector('.oc-order-grid');
+                    if (current) current.innerHTML = orderHtml(true);
+                    if (peek) peek.textContent = '點單已經摺回去了';
+                }, 1200);
+            });
+        };
+
+        const renderRound = (preview) => {
+            body.innerHTML =
+                '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-bell-concierge"></i> 今日值班</span><span class="oc-section-note">分數 ' + state.score + '・連勝 ' + state.streak + '</span></div>' +
+                '<div class="oc-receipt"><div class="oc-receipt-head"><span>今日點單・第 ' + state.round + ' 杯</span>' +
+                  '<span class="oc-timer">' + (preview ? '記住！' : state.time + 's') + '</span></div>' +
+                  '<div class="oc-order-grid">' + orderHtml(!preview) + '</div>' +
+                '</div>' +
+                '<div class="oc-shift-hint">' + (preview ? '客人正在確認點單，先把三樣材料記下來。' : '點單收起來了，請依照記憶選擇正確材料。') + '</div>' +
+                pickerHtml(preview) +
+                (preview ? '' : '<button class="oc-peek">偷看點單一次（本杯 -15 分）</button>') +
+                '<button class="oc-action" disabled><i class="fa-solid fa-mug-hot"></i> 完成飲品</button>' +
+                '<div class="oc-shift-foot"><span>第 ' + state.round + ' / 3 杯</span><span>連勝 ' + state.streak + '</span></div>';
+            if (!preview) bindPickers();
+        };
+
+        const beginPick = () => {
+            if (disposed || state.phase !== 'preview') return;
+            state.phase = 'pick';
+            state.time = 18;
+            renderRound(false);
+            clock = setInterval(() => {
+                state.time -= 1;
+                const timer = body.querySelector('.oc-timer');
+                if (timer) {
+                    timer.textContent = state.time + 's';
+                    timer.classList.toggle('danger', state.time <= 5);
+                }
+                if (state.time <= 0) finishRound(false, '時間到，客人等不下去了');
+            }, 1000);
+        };
+
+        async function finishRound(ok, reason) {
+            if (disposed || state.phase !== 'pick') return;
+            state.phase = 'result';
+            clearTimers();
+            const gained = ok ? Math.max(0, 100 + state.time * 5 - (state.peekUsed ? 15 : 0)) : 0;
+            state.score += gained;
+            if (ok) state.streak += 1; else state.streak = 0;
+            state.maxStreak = Math.max(state.maxStreak, state.streak);
+            const last = state.round >= 3;
+            if (last) {
+                record.best = Math.max(Number(record.best) || 0, state.score);
+                record.bestStreak = Math.max(Number(record.bestStreak) || 0, state.maxStreak);
+                record.games = (Number(record.games) || 0) + 1;
+                await _set(K_SHIFT, record);
+            }
+            if (disposed) return;
+            body.innerHTML =
+                '<div class="oc-section-head"><span class="oc-section-title">第 ' + state.round + ' 杯結果</span><span class="oc-section-note">目前 ' + state.score + ' 分</span></div>' +
+                '<div class="oc-receipt oc-shift-result"><div class="oc-result-mark">' + _sprite(ok ? 'coffee' : 'receipt') + '</div>' +
+                  '<h3>' + reason + '</h3><div class="oc-shift-hint">' + (ok ? '+' + gained + ' 分，咖啡香穩穩落地。' : '這杯先由瀅瀅接手，下一杯再追回來。') + '</div>' +
+                  '<div class="oc-compare"><div><b>客人點單</b>' + comboNames(state.target) + '</div><div><b>你的飲品</b>' + comboNames(state.sel) + '</div></div>' +
+                '</div>' +
+                '<button class="oc-action">' + (last ? '<i class="fa-solid fa-flag-checkered"></i> 查看結算' : '<i class="fa-solid fa-bell"></i> 下一位客人') + '</button>' +
+                '<div class="oc-shift-foot"><span>第 ' + state.round + ' / 3 杯</span><span>連勝 ' + state.streak + '</span></div>';
+            body.querySelector('.oc-action').addEventListener('click', last ? renderFinal : startRound);
+        }
+
+        function startRound() {
+            if (disposed) return;
+            clearTimers();
+            state.round += 1;
+            state.phase = 'preview';
+            state.target = newTarget();
+            state.sel = { base: null, flavor: null, top: null };
+            state.peekUsed = false;
+            renderRound(true);
+            phaseTimer = setTimeout(beginPick, 3200);
+        }
+
+        function renderFinal() {
+            body.innerHTML =
+                '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-stamp"></i> 值班結算</span><span class="oc-section-note">三杯完成</span></div>' +
+                '<div class="oc-receipt oc-shift-result"><div class="oc-result-mark">' + _sprite('bell') + '</div><h3>今日值班完成</h3>' +
+                  '<div class="oc-final-score">' + state.score + '</div><div class="oc-shift-hint">本輪最高連勝 ' + state.maxStreak + '・歷史最高分 ' + record.best + '</div></div>' +
+                summaryHtml() +
+                '<button class="oc-action"><i class="fa-solid fa-rotate-right"></i> 再值一班</button>';
+            body.querySelector('.oc-action').addEventListener('click', () => {
+                state.round = 0; state.score = 0; state.streak = 0; state.maxStreak = 0; state.used.clear();
+                startRound();
+            });
+        }
+
+        renderIntro();
     }
 
     // ✨ 創想頁:符號庫丟鍋(上限 symbolMax)+備用詞→「請店長特調」
     async function _renderFree(body) {
         const picked = [];
         body.innerHTML =
+            '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 自由創想</span><span class="oc-section-note">此功能會呼叫 AI</span></div>' +
             '<div class="oc-slot-label">把符號丟進鍋裡(最多 ' + CAFE_CFG.symbolMax + ' 顆),店長會把它們釀成一杯:</div>' +
             '<div class="oc-sym-grid">' + CAFE_CFG.symbols.map(s => '<button class="oc-sym" data-s="' + s + '">' + s + '</button>').join('') + '</div>' +
             '<input class="oc-free-input" maxlength="24" placeholder="想補充的關鍵詞(可留空)">' +
@@ -581,16 +835,20 @@
     async function _renderLab(body) {
         const lab = await _get(K_LAB, {});
         const sel = { base: null, flavor: null, top: null };
-        const slotName = { base: '基底', flavor: '風味', top: '點綴' };
+        const tried = Object.keys(lab).length;
+        const total = Object.values(CAFE_CFG.pantry).reduce((n, list) => n * list.length, 1);
         body.innerHTML =
+            '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-flask"></i> 飲品調配</span><span class="oc-section-note">配方圖鑑 ' + tried + ' / ' + total + '</span></div>' +
             Object.keys(CAFE_CFG.pantry).map(slot =>
-                '<div class="oc-slot-label">' + slotName[slot] + '</div>' +
-                '<div class="oc-chips" data-slot="' + slot + '">' +
-                CAFE_CFG.pantry[slot].map(x => '<button class="oc-chip" data-id="' + x.id + '">' + x.name + '</button>').join('') +
+                '<div class="oc-slot-label">' + SLOT_LABEL[slot] + '</div>' +
+                '<div class="oc-chips' + (CAFE_CFG.pantry[slot].length === 3 ? ' three' : '') + '" data-slot="' + slot + '">' +
+                CAFE_CFG.pantry[slot].map(x => '<button class="oc-chip" data-id="' + x.id + '">' + _sprite(x.id, 'oc-ing-icon') + x.name + '</button>').join('') +
                 '</div>').join('') +
-            '<button class="oc-brew" disabled><i class="fa-solid fa-blender"></i> 調配</button>' +
-            '<div class="oc-tried">已研發過 ' + Object.keys(lab).length + ' 種組合</div>' +
+            '<button class="oc-brew" disabled><i class="fa-solid fa-blender"></i> 開始調配</button>' +
+            '<div class="oc-tried"><span>已研發 ' + tried + ' 種</span><span>' + Math.round(tried / total * 100) + '%</span></div>' +
+            '<div class="oc-progress-line"><i></i></div>' +
             '<div class="oc-result-slot"></div>';
+        body.querySelector('.oc-progress-line i').style.width = Math.min(100, tried / total * 100) + '%';
         const brew = body.querySelector('.oc-brew');
         body.querySelectorAll('.oc-chips').forEach(row => row.addEventListener('click', (e) => {
             const chip = e.target.closest('.oc-chip');
@@ -606,7 +864,10 @@
             const tags = _tagsOf(sel.base, sel.flavor, sel.top);
             lab[key] = tier;
             await _set(K_LAB, lab);
-            body.querySelector('.oc-tried').textContent = '已研發過 ' + Object.keys(lab).length + ' 種組合';
+            const nowTried = Object.keys(lab).length;
+            body.querySelector('.oc-tried').innerHTML = '<span>已研發 ' + nowTried + ' 種</span><span>' + Math.round(nowTried / total * 100) + '%</span>';
+            const progress = body.querySelector('.oc-progress-line i');
+            if (progress) progress.style.width = Math.min(100, nowTried / total * 100) + '%';
             const T = TIER_TEXT[tier];
             const menu = await getMenu();
             const already = menu.some(m => m.key === key);
