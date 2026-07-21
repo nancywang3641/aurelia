@@ -245,6 +245,11 @@
         const t = worlds.find(x => x.id === worldId)?.travelers?.[ti];
         if (t) _openProfileWin(t);
     }
+    // 考題的「他說的話」直接打進底部對話框(對話感);純顯示、不進 lstage_hist——
+    // 他的一對一記憶只有:開場白seed+自由聊天+入隊宣言,考題過程不污染
+    function _sayInDialog(text) {
+        try { const el = win.document.getElementById('iris-text'); if (el && text) el.textContent = String(text); } catch (e) {}
+    }
     function _openEncounter(worldId, ti, npc) {
         _lobbyReg();
         (async () => {
@@ -274,6 +279,7 @@
             async function joinTeam() {
                 t.recruited = true;
                 await _saveWorld(w);
+                try { if (t.accept) win.LobbyStage.pushNpcHistory(npc.key, { role: 'assistant', content: t.accept }); } catch (e) {}   // 入隊宣言入他的記憶(考題過程不入)
                 _toast(t.name + ' 加入了隊伍');
                 if (_winEl && _curDetailId === w.id) _renderDetail(w);   // 面板正開著這個世界→隊伍狀態即時刷新
             }
@@ -298,12 +304,12 @@
             };
             const renderQuiz = () => {
                 const q = quiz[step];
+                _sayInDialog(q.q);   // 他的提問=底部對話框說出來
                 const order = q.options.map((_, i) => i);
                 for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }   // 洗選項順序,防AI把好答案固定放第一個
                 box.innerHTML = head() +
                     '<div class="wg-meet-body">' +
-                      '<div class="wg-note">第 ' + (step + 1) + ' / ' + quiz.length + ' 題</div>' +
-                      '<div class="wg-say">' + _esc(q.q) + '</div>' +
+                      '<div class="wg-note">第 ' + (step + 1) + ' / ' + quiz.length + ' 題・他在等你的回應</div>' +
                       '<div class="wg-opts">' + order.map(i => '<button class="wg-opt" data-i="' + i + '">' + _esc(q.options[i].t) + '</button>').join('') + '</div>' +
                     '</div>';
                 wire();
@@ -315,8 +321,8 @@
             };
             const renderReact = (o) => {
                 const last = step >= quiz.length - 1;
+                _sayInDialog((o && o.r) || '……');   // 他的反應也走對話框
                 box.innerHTML = head() +
-                    '<div class="wg-meet-body"><div class="wg-say">' + _esc((o && o.r) || '……') + '</div></div>' +
                     '<div class="wg-meet-btns"><button class="wg-btn" data-m="next">' + (last ? '看他的決定' : '下一題') + '</button></div>';
                 wire();
                 box.querySelector('[data-m="next"]').addEventListener('click', async () => {
@@ -328,10 +334,10 @@
                 });
             };
             const renderResult = (ok, line) => {
+                _sayInDialog(line || (ok ? '(他答應同行了。)' : '(他搖了搖頭,婉拒了。)'));
                 box.innerHTML = head() +
                     '<div class="wg-meet-body">' +
-                      '<div class="wg-say">' + _esc(line || (ok ? '(他答應同行了。)' : '(他搖了搖頭,婉拒了。)')) + '</div>' +
-                      '<div class="wg-note">' + (ok ? '已入隊——世界門面板可以看到隊伍狀態。' : '頻率沒對上……待會可以再聊一次。') + '</div>' +
+                      '<div class="wg-note">' + (ok ? '<i class="fa-solid fa-circle-check"></i> 已入隊——世界門面板可以看到隊伍狀態。' : '頻率沒對上……待會可以再聊一次。') + '</div>' +
                     '</div>' +
                     '<div class="wg-meet-btns">' +
                       (ok ? '<button class="wg-btn ghost" data-m="prof"><i class="fa-solid fa-id-card"></i> 身分卡</button>'
