@@ -1169,7 +1169,12 @@ ${numberedText}`;
                 const _t = _raw.trim();
                 if (/^\[API Error\]/i.test(_t) || (_t.length < 200 && /(x-api-key|invalid_credentials|Authentication required|API 返回內容為空)/i.test(_t))) return;
                 const _rawNC = _raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // CoT 提到 tag 字樣不算
-                if (_rawNC.indexOf('<content>') !== -1 && _rawNC.indexOf('</content>') === -1) return;
+                // 截斷守門對齊 extractOnce：①<content>開了沒關=半截正文；②VN前景卻連<content>都沒有=思考期就截、正文還沒冒出來。
+                //   原本只擋①→思考期截斷時這條穿門照發 chatSecondary、拿不到正文回空 scene；補②一起擋。
+                const _hasOpen = _rawNC.indexOf('<content>') !== -1;
+                const _hasClose = _rawNC.indexOf('</content>') !== -1;
+                const _vnFg = (() => { try { const p = win.document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && win.document.getElementById('page-game')); } catch (e) { return false; } })();
+                if ((_hasOpen && !_hasClose) || (_vnFg && !_hasOpen)) return;
             } catch (e) {}
             const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
             if (!recentText || lastId < 0) return;
