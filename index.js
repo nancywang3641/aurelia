@@ -103,7 +103,7 @@ window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 //   CDN(酒館助手，EXT_NAME 為 null) → 加 ?v=版本號 → 同版本內 jsdelivr/瀏覽器照樣快取(載入快)，
 //      但每次「改版 bump _AURELIA_VERSION」後，朋友的瀏覽器會自動重抓模組，不用手動清快取。
 //      （index.js 本身是 ?boot= 強制重抓的，所以這個版本號一改、下次載入就生效。）
-const _AURELIA_VERSION = '2026.06.12.1'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
+const _AURELIA_VERSION = '2026.07.22.1'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
 const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : ('?v=' + _AURELIA_VERSION);
 
 // 🔥 1. 全局通訊狀態
@@ -126,6 +126,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_panels', path: _AURELIA_EXT_BASE + '/core/void/panels.js', key: 'voidPanels' },
     { name: 'void_worldview', path: _AURELIA_EXT_BASE + '/core/void/worldview.js', key: 'voidWorldview' },
     { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },
+    { name: 'void_worldgate', path: _AURELIA_EXT_BASE + '/core/void/worldgate.js', key: 'voidWorldgate' },   // 🌌 視差切書（②）：enterParallax/exitParallax/殘局對帳
     { name: 'void_ambient', path: _AURELIA_EXT_BASE + '/core/void/ambient.js', key: 'voidAmbient' },
     { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
     { name: 'void_lobby_stage', path: _AURELIA_EXT_BASE + '/core/void/lobby_stage.js', key: 'voidLobbyStage' },
