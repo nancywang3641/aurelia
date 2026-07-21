@@ -250,9 +250,34 @@
             <div class="avs-st-story-name">${storyTitle ? esc(storyTitle) : '<span class="avs-st-dim">（尚未開啟故事）</span>'}</div>
         </div>`;
 
+        // 🎬 導演卡片：獨立系統，跟 AVS 追蹤解耦——AVS 未初始化(init 畫面)也要照樣露出，別被 hasSchema 一起擋掉
+        const directorCardHtml = `<div class="avs-card avs-st-director-card">
+            <div class="avs-st-toggle-row">
+                <div class="avs-st-toggle-text">
+                    <div class="avs-st-toggle-name">🎬 導演模式</div>
+                    <div class="avs-st-toggle-desc">開啟後，每輪劇情結束由「主模型接口」整理一份導演稿（誰知道什麼、誰在隱瞞、可用的衝突點），下一輪自動給寫正文的 AI 參考</div>
+                </div>
+                <div class="avs-st-toggle${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' on' : ''}" id="avs-st-director-toggle" role="switch"></div>
+            </div>
+            <div class="avs-st-director-tools${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' is-visible' : ''}" id="avs-st-director-tools">
+                <div class="avs-st-btn-grid col1">
+                    <button class="avs-btn avs-btn-outline" id="avs-st-director-view">📜 查看／編輯導演稿</button>
+                    <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿">🎬 立刻產一份</button>
+                </div>
+                <div class="avs-st-director-editor" id="avs-st-director-editor">
+                    <textarea class="avs-textarea avs-st-director-text" id="avs-st-director-text"></textarea>
+                    <div class="avs-st-btn-grid avs-st-director-actions">
+                        <button class="avs-btn avs-btn-primary" id="avs-st-director-save">💾 儲存（下一輪生效）</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-director-close">收起</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
         if (!hasSchema) {
             _host.innerHTML = `<div class="avs-st">
                 ${storyHtml}
+                ${directorCardHtml}
                 <div class="avs-card avs-st-init">
                     <div class="avs-st-init-icon">🛰️</div>
                     <div class="avs-st-init-title">這個世界還沒開始追蹤狀態</div>
@@ -316,6 +341,7 @@
                 if (real) real.click();
                 else alert('簡易預設未就緒，請切到上方「我的檔案」分頁套用');
             };
+            _bindDirector();   // 🎬 導演卡片在 init 畫面也露出，綁定它的開關與按鈕
             return;
         }
 
@@ -397,28 +423,7 @@
         _host.innerHTML = `<div class="avs-st">
             ${storyHtml}
 
-            <div class="avs-card avs-st-director-card">
-                <div class="avs-st-toggle-row">
-                    <div class="avs-st-toggle-text">
-                        <div class="avs-st-toggle-name">🎬 導演模式</div>
-                        <div class="avs-st-toggle-desc">開啟後，每輪劇情結束由「主模型接口」整理一份導演稿（誰知道什麼、誰在隱瞞、可用的衝突點），下一輪自動給寫正文的 AI 參考</div>
-                    </div>
-                    <div class="avs-st-toggle${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' on' : ''}" id="avs-st-director-toggle" role="switch"></div>
-                </div>
-                <div class="avs-st-director-tools${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' is-visible' : ''}" id="avs-st-director-tools">
-                    <div class="avs-st-btn-grid col1">
-                        <button class="avs-btn avs-btn-outline" id="avs-st-director-view">📜 查看／編輯導演稿</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿">🎬 立刻產一份</button>
-                    </div>
-                    <div class="avs-st-director-editor" id="avs-st-director-editor">
-                        <textarea class="avs-textarea avs-st-director-text" id="avs-st-director-text"></textarea>
-                        <div class="avs-st-btn-grid avs-st-director-actions">
-                            <button class="avs-btn avs-btn-primary" id="avs-st-director-save">💾 儲存（下一輪生效）</button>
-                            <button class="avs-btn avs-btn-outline" id="avs-st-director-close">收起</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            ${directorCardHtml}
 
             <div class="avs-card avs-st-toggle-row">
                 <div class="avs-st-toggle-text">
@@ -441,33 +446,10 @@
         _bind(stateKey, snapCount);
     }
 
-    function _bind(stateKey, snapCount) {
-        const h = _host;
-        const q = sel => h.querySelector(sel);
-        const eng = win._AVS_ENGINE;
-
-        // 兩層換頁：入口 → 操作頁 → 返回；進階子分頁切換
-        const _goTop = () => { try { h.closest('.avs-content')?.scrollTo?.(0, 0); } catch (e) {} };
-        { const b = q('#avs-st-nav-cur'); if (b) b.onclick = () => { _page = 'current'; _build(); _goTop(); }; }
-        { const b = q('#avs-st-nav-adv'); if (b) b.onclick = () => { _page = 'adv'; _build(); _goTop(); }; }
-        { const b = q('#avs-st-back'); if (b) b.onclick = () => { _page = 'home'; _editingValues = false; _build(); _goTop(); }; }
-        h.querySelectorAll('.avs-st-subtab').forEach(t => { t.onclick = () => { _advTab = t.dataset.tab || 'fields'; _build(); }; });
-        // ✏️ 改數值 / 💾 儲存 / 取消（手動修正 AI 填錯的狀態值）
-        { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _page = 'current'; _build(); }; }
-        { const sb = q('#avs-st-val-save'); if (sb) sb.onclick = () => { _saveStateValues(); }; }
-        { const cb = q('#avs-st-val-cancel'); if (cb) cb.onclick = () => { _editingValues = false; _build(); }; }
-        // 實體 × 鈕：切換「標記刪除」(再點一次取消)，儲存時才真的刪
-        h.querySelectorAll('.avs-st-edit-del').forEach(b => b.onclick = () => { const e = b.closest('.avs-st-edit-entity'); if (e) e.classList.toggle('deleting'); });
-
-        // 即時記錄開關
-        const toggle = q('#avs-st-toggle');
-        if (toggle) toggle.onclick = function () {
-            const on = this.classList.toggle('on');
-            localStorage.setItem('aurelia_state_runtime_enabled', on ? '1' : '0');
-            try { win.OS_STATE_RUNTIME?.setEnabled?.(on); } catch (e) {}
-        };
-
-        // 🎬 導演模式：開關 + 導演稿查看/手改/立產
+    // 🎬 導演模式：開關 + 導演稿查看/手改/立產。抽成獨立函式，因為 init 畫面(AVS 未初始化)
+    //    與 home 佈局都要綁——導演跟 AVS 追蹤是兩個獨立系統，不共命。
+    function _bindDirector() {
+        const q = sel => _host.querySelector(sel);
         const dirToggle = q('#avs-st-director-toggle');
         if (dirToggle) dirToggle.onclick = function () {
             const on = this.classList.toggle('on');
@@ -507,6 +489,36 @@
             const ed = q('#avs-st-director-editor');
             if (ed && ed.classList.contains('open')) await _dirLoadText();
         };
+    }
+
+    function _bind(stateKey, snapCount) {
+        const h = _host;
+        const q = sel => h.querySelector(sel);
+        const eng = win._AVS_ENGINE;
+
+        // 兩層換頁：入口 → 操作頁 → 返回；進階子分頁切換
+        const _goTop = () => { try { h.closest('.avs-content')?.scrollTo?.(0, 0); } catch (e) {} };
+        { const b = q('#avs-st-nav-cur'); if (b) b.onclick = () => { _page = 'current'; _build(); _goTop(); }; }
+        { const b = q('#avs-st-nav-adv'); if (b) b.onclick = () => { _page = 'adv'; _build(); _goTop(); }; }
+        { const b = q('#avs-st-back'); if (b) b.onclick = () => { _page = 'home'; _editingValues = false; _build(); _goTop(); }; }
+        h.querySelectorAll('.avs-st-subtab').forEach(t => { t.onclick = () => { _advTab = t.dataset.tab || 'fields'; _build(); }; });
+        // ✏️ 改數值 / 💾 儲存 / 取消（手動修正 AI 填錯的狀態值）
+        { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _page = 'current'; _build(); }; }
+        { const sb = q('#avs-st-val-save'); if (sb) sb.onclick = () => { _saveStateValues(); }; }
+        { const cb = q('#avs-st-val-cancel'); if (cb) cb.onclick = () => { _editingValues = false; _build(); }; }
+        // 實體 × 鈕：切換「標記刪除」(再點一次取消)，儲存時才真的刪
+        h.querySelectorAll('.avs-st-edit-del').forEach(b => b.onclick = () => { const e = b.closest('.avs-st-edit-entity'); if (e) e.classList.toggle('deleting'); });
+
+        // 即時記錄開關
+        const toggle = q('#avs-st-toggle');
+        if (toggle) toggle.onclick = function () {
+            const on = this.classList.toggle('on');
+            localStorage.setItem('aurelia_state_runtime_enabled', on ? '1' : '0');
+            try { win.OS_STATE_RUNTIME?.setEnabled?.(on); } catch (e) {}
+        };
+
+        // 🎬 導演模式綁定：抽成獨立函式，init 畫面(AVS 未初始化)也要綁
+        _bindDirector();
 
         const bind = (sel, fn) => { const b = q(sel); if (b) b.onclick = fn; };
         // 🔬 複製全部狀態診斷數據（引擎當前 + 本輪抽取 + 持久化 patches/base）→ 貼給工程師
