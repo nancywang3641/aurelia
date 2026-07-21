@@ -37,15 +37,19 @@
         try { const m = String(raw || '').match(/[\[{][\s\S]*[\]}]/); return m ? JSON.parse(m[0]) : null; }
         catch (e) { return null; }
     }
-    async function _callAI(prompt, label, route) {
+    async function _callAI(prompt, label, route, useMain) {
         const api = win.OS_API || window.OS_API;
         if (!api || !api.chat) return null;
         try {
             let config = {};
             const OS = win.OS_SETTINGS || window.OS_SETTINGS;
             if (OS) {
-                const sec = OS.getSecondaryConfig ? OS.getSecondaryConfig() : null;
-                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
+                if (useMain) {
+                    config = OS.getConfig() || {};   // 主模型:展開世界=正文+四張身分卡+考題包,重活別省
+                } else {
+                    const sec = OS.getSecondaryConfig ? OS.getSecondaryConfig() : null;
+                    config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
+                }
             }
             config = config || {};
             config.route = route;
@@ -67,17 +71,21 @@
         return (Array.isArray(arr) ? arr : []).filter(s => s && s.name).slice(0, 5);
     }
 
-    // ── 展開世界+旅人候選(1次API) ──
+    // ── 展開世界+旅人(1次API,主模型):世界正文+每位旅人的身分卡+偶遇考題包全在這次生完,之後零API ──
     async function _expandWorld(seed) {
         const prompt =
-            '你是視差系統的世界建構引擎。請把以下世界種子擴寫成可跑團的濃縮世界檔案,並生成在純白大廳等待組隊前往該世界的旅人候選人。只回傳純 JSON:\n' +
+            '你是視差系統的世界建構引擎。請把以下世界種子擴寫成可跑團的濃縮世界檔案,並生成在純白大廳等待組隊前往該世界的旅人。只回傳純 JSON:\n' +
             '{"entry":"{世界設定正文600~900字:依序包含 入口區域/3~4個主要區域(各自的景觀與危險)/2~3個勢力或重要NPC/世界目前的危機/撤離方式。分段書寫,不要條列符號堆砌}",' +
             '"keys":["{觸發關鍵字3~5個,第一個必須是世界名}"],' +
-            '"travelers":[{"name":"{旅人名}","job":"{職業/定位,不超過6字}","persona":"{一句話性格}","origin":"{一句話來歷}","skill":"{一句話擅長}"}]}\n' +
+            '"travelers":[{"name":"{旅人名}","job":"{職業/定位,不超過6字}","persona":"{一句話性格}","origin":"{一句話來歷}","skill":"{一句話擅長}","look":"{一句話外貌印象}","record":"{一句話視差資歷}","reason":"{一句話前往此世界的動機}",' +
+            '"greet":"{在大廳被搭話時的開場白1~2句,符合性格}",' +
+            '"quiz":[{"q":"{他用來考驗對方合不合拍的問題或話題}","options":[{"t":"{回應選項}","good":{true或false},"r":"{他對此回應的反應一句}"}]}],' +
+            '"accept":"{三題都滿意時的入隊台詞1~2句}","refuse":"{不滿意時的婉拒台詞一句}"}]}\n' +
             '旅人固定 4 名,彼此定位互補、性格差異明顯;他們是視差玩家(來自奧瑞亞的普通人),不是該世界的NPC。\n' +
+            '每位旅人 quiz 固定 3 題、每題 options 固定 3 個且恰好 1 個 good=true;good 選項不是討好或客套話,而是最對上這個人性格與在意之處的回應,要靠理解他才選得中,錯誤選項也要看起來合理。\n' +
             '【世界種子】' + JSON.stringify(seed) + '\n' +
             '語言:繁體中文。';
-        return await _callAI(prompt, '世界門展開世界', 'worldgate_expand');
+        return await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true);
     }
 
     // ── 世界條目落地【奧瑞亞-視差】書 ──
@@ -179,11 +187,154 @@
                     x: sp.x, y: sp.y,
                     src: (i % 2 === 0) ? b2.ASSET.mcM : b2.ASSET.mcF,
                     noWander: true, avoidBlocks: true, homeRect: Z,
+                    onInteract: (n) => _openEncounter(w.id, i, n),    // 點旅人=偶遇窗(零API考題),不直接進自由聊
+                    onProfile: () => _openEncProfile(w.id, i),        // 右鍵=身分卡(lobby_dress 選單動態項)
                 });
                 _travNpcs.push(npc);
             }, 350 + i * 750);
         });
         return true;
+    }
+
+    // ── 🤝 偶遇窗+身分卡(零API:考題/台詞在展開世界時已生成好) ──
+    let _meetEl = null, _profEl = null, _lobbyRegDone = false;
+    function _closeMeet() { _meetEl?.remove(); _meetEl = null; }
+    function _closeProfile() { _profEl?.remove(); _profEl = null; }
+    function _lobbyReg() {   // 進大廳小窗互斥圈(開裝扮室等其他窗時自動被收掉)
+        if (_lobbyRegDone) return;
+        const b = _stage();
+        if (b && b.regWin) { b.regWin(_closeMeet); b.regWin(_closeProfile); _lobbyRegDone = true; }
+    }
+    async function _saveWorld(w) {
+        const worlds = await _get(K_WORLDS, []);
+        const i = worlds.findIndex(x => x.id === w.id);
+        if (i >= 0) { worlds[i] = w; await _set(K_WORLDS, worlds); }
+    }
+    function _openProfileWin(t) {
+        _lobbyReg();
+        const doc = win.document;
+        _ensureStyle(doc);
+        _closeProfile();
+        const host = doc.querySelector('.lobby-left') || doc.body;
+        const box = doc.createElement('div');
+        box.className = 'wg-meet wg-profile';
+        const row = (k, v) => v ? '<div class="wg-prof-row"><span>' + k + '</span><b>' + _esc(v) + '</b></div>' : '';
+        box.innerHTML =
+            '<div class="wg-meet-head"><span class="wg-meet-name"><i class="fa-solid fa-id-card"></i> ' + _esc(t.name) +
+              (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</span>' +
+              '<button class="wg-close"><i class="fa-solid fa-xmark"></i></button></div>' +
+            '<div class="wg-meet-body">' +
+              row('定位', t.job) + row('外貌', t.look) + row('性格', t.persona) +
+              row('來歷', t.origin) + row('資歷', t.record) + row('擅長', t.skill) + row('動機', t.reason) +
+            '</div>';
+        host.appendChild(box);
+        _profEl = box;
+        box.querySelector('.wg-close').addEventListener('click', _closeProfile);
+    }
+    async function _openEncProfile(worldId, ti) {
+        const worlds = await _get(K_WORLDS, []);
+        const t = worlds.find(x => x.id === worldId)?.travelers?.[ti];
+        if (t) _openProfileWin(t);
+    }
+    function _openEncounter(worldId, ti, npc) {
+        _lobbyReg();
+        (async () => {
+            const worlds = await _get(K_WORLDS, []);
+            const w = worlds.find(x => x.id === worldId);
+            const t = w && w.travelers && w.travelers[ti];
+            if (!t) { _toast('找不到這位旅人的資料'); return; }
+            _closeMeet(); _closeProfile();
+            const doc = win.document;
+            _ensureStyle(doc);
+            const host = doc.querySelector('.lobby-left') || doc.body;
+            const box = doc.createElement('div');
+            box.className = 'wg-meet';
+            host.appendChild(box);
+            _meetEl = box;
+            const quiz = Array.isArray(t.quiz) ? t.quiz.filter(q => q && q.q && Array.isArray(q.options) && q.options.length >= 2) : [];
+            let step = 0, goods = 0;
+            const head = () =>
+                '<div class="wg-meet-head"><span class="wg-meet-name"><i class="fa-solid fa-user"></i> ' + _esc(t.name) + '<small>' + _esc(t.job || '') + '</small>' +
+                  (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</span>' +
+                  '<button class="wg-close"><i class="fa-solid fa-xmark"></i></button></div>';
+            const wire = () => {
+                box.querySelector('.wg-close')?.addEventListener('click', _closeMeet);
+                box.querySelector('[data-m="prof"]')?.addEventListener('click', () => _openProfileWin(t));
+                box.querySelector('[data-m="chat"]')?.addEventListener('click', () => { _closeMeet(); try { _stage()?.startTalk?.(npc); } catch (e) {} });
+            };
+            async function joinTeam() {
+                t.recruited = true;
+                await _saveWorld(w);
+                _toast(t.name + ' 加入了隊伍');
+                if (_winEl && _curDetailId === w.id) _renderDetail(w);   // 面板正開著這個世界→隊伍狀態即時刷新
+            }
+            const renderIntro = () => {
+                box.innerHTML = head() +
+                    '<div class="wg-meet-body">' +
+                      '<div class="wg-say">' + _esc(t.greet || '(對方朝你點了點頭。)') + '</div>' +
+                      (t.recruited
+                          ? '<div class="wg-note">已經是你的隊友,世界門面板可以看到隊伍狀態。</div>'
+                          : (quiz.length ? '<div class="wg-note">想邀他同行?先聊得來再說。</div>' : '')) +
+                    '</div>' +
+                    '<div class="wg-meet-btns">' +
+                      (!t.recruited ? (quiz.length
+                          ? '<button class="wg-btn" data-m="quiz"><i class="fa-solid fa-handshake"></i> 聊聊組隊的事</button>'
+                          : '<button class="wg-btn" data-m="join"><i class="fa-solid fa-handshake"></i> 邀請入隊</button>') : '') +
+                      '<div class="wg-btn-row">' +
+                        '<button class="wg-btn ghost" data-m="prof"><i class="fa-solid fa-id-card"></i> 身分卡</button>' +
+                        '<button class="wg-btn ghost" data-m="chat"><i class="fa-solid fa-comments"></i> 隨便聊聊</button>' +
+                      '</div>' +
+                    '</div>';
+                wire();
+                box.querySelector('[data-m="quiz"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
+                box.querySelector('[data-m="join"]')?.addEventListener('click', async () => { await joinTeam(); renderResult(true, ''); });   // 舊世界資料沒考題→直接邀
+            };
+            const renderQuiz = () => {
+                const q = quiz[step];
+                const order = q.options.map((_, i) => i);
+                for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }   // 洗選項順序,防AI把好答案固定放第一個
+                box.innerHTML = head() +
+                    '<div class="wg-meet-body">' +
+                      '<div class="wg-note">第 ' + (step + 1) + ' / ' + quiz.length + ' 題</div>' +
+                      '<div class="wg-say">' + _esc(q.q) + '</div>' +
+                      '<div class="wg-opts">' + order.map(i => '<button class="wg-opt" data-i="' + i + '">' + _esc(q.options[i].t) + '</button>').join('') + '</div>' +
+                    '</div>';
+                wire();
+                box.querySelectorAll('.wg-opt').forEach(el => el.addEventListener('click', () => {
+                    const o = q.options[Number(el.dataset.i)];
+                    if (o && o.good) goods++;
+                    renderReact(o);
+                }));
+            };
+            const renderReact = (o) => {
+                const last = step >= quiz.length - 1;
+                box.innerHTML = head() +
+                    '<div class="wg-meet-body"><div class="wg-say">' + _esc((o && o.r) || '……') + '</div></div>' +
+                    '<div class="wg-meet-btns"><button class="wg-btn" data-m="next">' + (last ? '看他的決定' : '下一題') + '</button></div>';
+                wire();
+                box.querySelector('[data-m="next"]').addEventListener('click', async () => {
+                    if (last) {
+                        const ok = goods >= quiz.length;   // 三題全滿意才入隊(Rae 定案)
+                        if (ok) await joinTeam();
+                        renderResult(ok, ok ? t.accept : t.refuse);
+                    } else { step++; renderQuiz(); }
+                });
+            };
+            const renderResult = (ok, line) => {
+                box.innerHTML = head() +
+                    '<div class="wg-meet-body">' +
+                      '<div class="wg-say">' + _esc(line || (ok ? '(他答應同行了。)' : '(他搖了搖頭,婉拒了。)')) + '</div>' +
+                      '<div class="wg-note">' + (ok ? '已入隊——世界門面板可以看到隊伍狀態。' : '頻率沒對上……待會可以再聊一次。') + '</div>' +
+                    '</div>' +
+                    '<div class="wg-meet-btns">' +
+                      (ok ? '<button class="wg-btn ghost" data-m="prof"><i class="fa-solid fa-id-card"></i> 身分卡</button>'
+                          : '<button class="wg-btn" data-m="retry"><i class="fa-solid fa-rotate-right"></i> 再聊一次</button>') +
+                    '</div>';
+                wire();
+                box.querySelector('[data-m="retry"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
+            };
+            renderIntro();
+        })();
     }
 
     // ── DIVE:切書→開場指令注入聊天→收面板 ──
@@ -227,7 +378,7 @@
         const i = worlds.findIndex(x => x.id === w.id);
         if (i >= 0) worlds[i] = w;
         await _set(K_WORLDS, worlds);
-        _clearTravelers();
+        _clearTravelers(); _closeMeet(); _closeProfile();
         return { ok: true, msg: '已進入「' + w.name + '」' };
     }
 
@@ -275,7 +426,20 @@
             '.wg-trav-sub{color:#5a5e75;font-size:10px;margin-top:2px;line-height:1.45;}' +
             '.wg-trav-check{color:#1A1C28;font-weight:900;font-size:13px;}' +
             '.wg-entry-text{color:#3a3e56;font-size:11px;line-height:1.7;white-space:pre-wrap;}' +
-            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}.wg-brand-copy small{display:none}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
+            /* 🤝 偶遇窗/身分卡(小窗,疊在面板上層) */
+            '.wg-meet{position:absolute;right:max(2.2%,calc(50% - 410px));bottom:110px;z-index:3360;width:330px;max-width:88%;max-height:70%;overflow-y:auto;display:flex;flex-direction:column;background:linear-gradient(rgba(250,251,255,.98),rgba(238,240,246,.98));border:1px solid rgba(26,28,40,.18);border-radius:14px;color:#1A1C28;font-size:12px;box-shadow:0 12px 34px rgba(26,28,40,.32);backdrop-filter:blur(8px);scrollbar-width:thin;}' +
+            '.wg-meet-head{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid rgba(26,28,40,.1);background:rgba(255,255,255,.6);position:sticky;top:0;}' +
+            '.wg-meet-name{display:flex;align-items:center;gap:6px;font-weight:800;min-width:0;}.wg-meet-name small{color:#8a8ea6;font-weight:700;font-size:9px;}' +
+            '.wg-joined{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px;border-radius:8px;background:rgba(60,120,80,.12);color:#3c6b44;font-size:9px;font-style:normal;font-weight:800;white-space:nowrap;}' +
+            '.wg-meet-head .wg-close{margin-left:auto;background:none;border:none;color:#4a4e66;cursor:pointer;font-size:14px;padding:4px 6px;border-radius:8px;}.wg-meet-head .wg-close:hover{background:rgba(26,28,40,.08);}' +
+            '.wg-meet-body{padding:11px 12px 4px;display:flex;flex-direction:column;gap:8px;}' +
+            '.wg-say{padding:9px 11px;border-radius:10px;background:rgba(255,255,255,.78);border:1px solid rgba(26,28,40,.1);color:#2a2e44;line-height:1.65;}' +
+            '.wg-opts{display:flex;flex-direction:column;gap:6px;}' +
+            '.wg-opt{text-align:left;background:rgba(255,255,255,.62);border:1px solid rgba(26,28,40,.16);color:#3a3e56;border-radius:9px;padding:8px 10px;cursor:pointer;font-size:11px;line-height:1.5;transition:.15s;}.wg-opt:hover{background:#fff;border-color:rgba(26,28,40,.4);}' +
+            '.wg-meet-btns{padding:0 12px 12px;display:flex;flex-direction:column;}' +
+            '.wg-prof-row{display:flex;gap:8px;padding:6px 2px;border-bottom:1px dashed rgba(26,28,40,.1);}.wg-prof-row:last-child{border-bottom:none;}.wg-prof-row span{flex:none;width:44px;color:#8a8ea6;font-size:10px;font-weight:700;padding-top:1px;}.wg-prof-row b{color:#2a2e44;font-weight:600;line-height:1.55;font-size:11px;}' +
+            '.wg-profile .wg-meet-body{padding-bottom:12px;}' +
+            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}.wg-meet{right:10px;left:10px;width:auto;max-width:none;bottom:96px;}.wg-brand-copy small{display:none}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
     }
 
@@ -330,6 +494,7 @@
     // ── P1 世界檔案庫 ──
     async function _renderList() {
         const b = _body(); if (!b) return;
+        _curDetailId = null;
         const worlds = await _get(K_WORLDS, []);
         const inPara = !!_gate()?.isInParallax?.();
         b.innerHTML =
@@ -430,6 +595,15 @@
             travelers: (Array.isArray(r.travelers) ? r.travelers : []).slice(0, 4).map(t => ({
                 name: String(t.name || '無名旅人'), job: String(t.job || '旅人'),
                 persona: String(t.persona || ''), origin: String(t.origin || ''), skill: String(t.skill || ''),
+                look: String(t.look || ''), record: String(t.record || ''), reason: String(t.reason || ''),
+                greet: String(t.greet || ''),
+                quiz: (Array.isArray(t.quiz) ? t.quiz : []).slice(0, 3).map(q => ({
+                    q: String((q && q.q) || ''),
+                    options: (Array.isArray(q && q.options) ? q.options : []).slice(0, 3)
+                        .map(o => ({ t: String((o && o.t) || ''), good: !!(o && o.good), r: String((o && o.r) || '') }))
+                        .filter(o => o.t),
+                })).filter(q => q.q && q.options.length >= 2),
+                accept: String(t.accept || ''), refuse: String(t.refuse || ''),
                 recruited: false,
             })),
             visits: 0, ts: Date.now(),
@@ -444,45 +618,43 @@
         _renderDetail(w);
     }
 
-    // ── P3 世界詳情(旅人招募+DIVE) ──
+    // ── P3 世界詳情(隊伍狀態+DIVE) ──
     let _delArm = 0;   // 刪除兩段式確認(不用 window.confirm,Tauri 會攔)
+    let _curDetailId = null;   // 面板當前顯示的世界(偶遇入隊時用來即時刷新隊伍區)
     async function _renderDetail(w) {
         const b = _body(); if (!b) return;
         _delArm = 0;
+        _curDetailId = w.id;
         let entryText = '';
         try {
             const entries = await _th()?.getLorebookEntries?.(BOOK_PARA);
             const e = (entries || []).find(x => x.comment === _entryComment(w));
             entryText = e ? e.content : '';
         } catch (e) {}
-        const travHtml = (w.travelers || []).map((t, i) =>
-            '<div class="wg-trav' + (t.recruited ? ' on' : '') + '" data-i="' + i + '">' +
+        // 隊伍區只列「確認組隊」的旅人;候選不露臉——他們在大廳裡等妳偶遇(Rae 定案 2026-07-22)
+        const team = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x.t.recruited);
+        const travHtml = team.map(x =>
+            '<div class="wg-trav on" data-i="' + x.i + '">' +
               '<span class="wg-trav-avatar"><i class="fa-solid fa-user"></i></span>' +
-              '<span class="wg-trav-main"><span class="wg-trav-name">' + _esc(t.name) + '<small>' + _esc(t.job) + '</small></span>' +
-                '<span class="wg-trav-sub">' + _esc(t.persona) + ' ' + _esc(t.origin) + '</span></span>' +
-              (t.recruited ? '<span class="wg-trav-check"><i class="fa-solid fa-check"></i></span>' : '') +
+              '<span class="wg-trav-main"><span class="wg-trav-name">' + _esc(x.t.name) + '<small>' + _esc(x.t.job) + '</small></span>' +
+                '<span class="wg-trav-sub">' + _esc(x.t.skill || x.t.persona) + '</span></span>' +
+              '<span class="wg-trav-check"><i class="fa-solid fa-circle-check"></i></span>' +
             '</div>').join('');
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) + '</span><span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>' +
             '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' +
               '<div class="wg-tags"><span class="wg-tag">' + _esc(w.style) + '</span><span class="wg-tag">' + _esc(w.lure) + '</span><span class="wg-tag warn">' + _esc(w.danger) + '</span></div></div>' +
             (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(entryText.length > 600 ? entryText.slice(0, 600) + '…' : entryText) + '</div></div>' : '') +
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 旅人候選</span><span class="wg-section-note">點選=邀入隊</span></div>' +
-            (travHtml || '<div class="wg-empty">這個世界沒有旅人候選。</div>') +
-            (travHtml ? '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 旅人們已陸續上線大廳,走過去可以搭話。</div>' : '') +
+            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 隊伍</span><span class="wg-section-note">' + team.length + ' 人同行・點開看身分卡</span></div>' +
+            (travHtml || '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 還沒有隊友——旅人們已陸續上線大廳,走過去搭話,聊得投機才會答應同行。(小人也可以右鍵看身分卡)</div>') +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
               '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' +
             '</div>';
-        b.querySelectorAll('.wg-trav').forEach(el => el.addEventListener('click', async () => {
+        b.querySelectorAll('.wg-trav').forEach(el => el.addEventListener('click', () => {
             const t = w.travelers[Number(el.dataset.i)];
-            if (!t) return;
-            t.recruited = !t.recruited;
-            const worlds = await _get(K_WORLDS, []);
-            const idx = worlds.findIndex(x => x.id === w.id);
-            if (idx >= 0) { worlds[idx] = w; await _set(K_WORLDS, worlds); }
-            _renderDetail(w);
+            if (t) _openProfileWin(t);
         }));
         _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
         b.querySelector('[data-act="dive"]').addEventListener('click', async () => {
@@ -505,7 +677,7 @@
             await _deleteEntry(w);
             const worlds = await _get(K_WORLDS, []);
             await _set(K_WORLDS, worlds.filter(x => x.id !== w.id));
-            _clearTravelers();
+            _clearTravelers(); _closeMeet(); _closeProfile();
             _toast('「' + w.name + '」已從檔案庫移除');
             _renderList();
         });
