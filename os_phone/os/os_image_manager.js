@@ -426,20 +426,6 @@
             let negText = options.negativePrompt || cfg.negPrompt || '';
             // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，保留 comfy 面板負詞
             if (options.extraNegative) negText = [negText, options.extraNegative].filter(Boolean).join(', ');
-            // 防「男變女」：場景(scene)＋角色頭像/立繪(char) 的提示詞若沒有任何女性詞 → 三重防護
-            // 中和女性化髮型詞 ＋ 正面加男性錨點(male focus, masculine) ＋ 負面強負女性特徵
-            // （此模型太顛，男角穿粉色/M字瀏海等就變女；夾擊把它拉回男性。有女角的不動）
-            if ((type === 'scene' || type === 'char') && !/(\bgirl\b|\bgirls\b|\bwoman\b|\bwomen\b|\bfemale\b|1girl|2girls)/i.test(posText)) {
-                // 中和會讓男角變女的女性偏向髮型詞（保留中分外觀、拔掉女性 trigger）
-                posText = posText.replace(/\bm[-\s]?shaped bangs\b/ig, 'center-parted hair')
-                                 .replace(/\bparted bangs\b/ig, 'parted hair');
-                // prompt 已明寫男性詞(1boy/2boys/male/masculine/yaoi/man…)＝上游已錨定性別 → 不再疊錨點/強負詞
-                // （這組救援是給「完全沒寫性別」的舊頭像詞用的；疊在寫好的 prompt 上會干擾構圖、1.5權重負詞還會偏移畫風）
-                if (!/(1boy|2boys|3boys|\bboys?\b|\bmale\b|\bmasculine\b|\byaoi\b|\bman\b|\bmen\b)/i.test(posText)) {
-                    posText = [posText, 'male focus, masculine'].filter(Boolean).join(', ');
-                    negText = [negText, '(breast:1.5), (girl:1.5), (woman:1.5)'].filter(Boolean).join(', ');
-                }
-            }
             let wf;
             if (cfg.workflowMode === 'custom' && (cfg.customWorkflow || '').trim()) {
                 // 自帶工作流模式（進階）：用使用者貼的 ComfyUI 工作流，只注入 %prompt%/%negative%/%seed%/%width%/%height%
