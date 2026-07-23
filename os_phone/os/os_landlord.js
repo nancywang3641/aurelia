@@ -268,7 +268,7 @@
         if (d.getElementById('ll-style')) return;
         const s = d.createElement('style'); s.id = 'll-style';
         s.textContent = [
-            '.ll-wrap{padding:14px;color:#e7eaf1;font-family:inherit}',
+            '.ll-wrap{padding:16px;color:#e7eaf1;font-family:inherit;background:#0e1015;min-height:100%;box-sizing:border-box}',
             '.ll-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}',
             '.ll-title{font-size:15px;font-weight:700}',
             '.ll-purse{font-size:13px;color:#d9b06a}',
@@ -282,7 +282,8 @@
             '.ll-btn:hover{border-color:#d98fb0}',
             '.ll-empty{color:#7a8090}',
             '.ll-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}',
-            '.ll-cand{display:flex;justify-content:space-between;align-items:center;border:1px solid #262b37;border-radius:9px;padding:9px}',
+            '.ll-cand{display:flex;justify-content:space-between;align-items:center;border:1px solid #2c3140;border-radius:9px;padding:10px 11px;background:#171a21}',
+            '.ll-cand > div{color:#e7eaf1;font-size:13px}',
             '.ll-btn:disabled{opacity:.5;cursor:default}',
             '.ll-error{color:#e08a8a}',
         ].join('\n');
