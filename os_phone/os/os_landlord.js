@@ -209,6 +209,7 @@
     // ── 開 app：先補算離線收租,再畫主畫面 ──
     // 🚨入帳與存檔綁定：有租金時,唯有 addPT 真的成功才可以把 lastSettleDay 推進到今天。
     //   否則存檔會讓這筆房租永久消失(下次開 app 誤以為已收過)。
+    // 修正#4：入帳成功後若存檔失敗,需重試一次後回傳 saveFailed 旗標,避免重複入帳
     async function _openAndSettle() {
         const state = await getState();
         const r = settleCore(state, _dayNum(_now()));
@@ -222,8 +223,28 @@
                 // 不存檔 → lastSettleDay 保持原樣,下次開 app 會重新補算這段期間
                 return { state: state, days: r.days, earned: r.earned, perUnit: r.perUnit, payFailed: true };
             }
+            // 入帳成功後,存檔帶重試保護（兩次都失敗才算失敗）
+            let saveFailed = false;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    await saveState(r.state);
+                    break;
+                } catch (e) {
+                    if (attempt === 0) {
+                        console.warn('[Landlord] 存檔失敗,正在重試…', e);
+                    } else {
+                        console.warn('[Landlord] 存檔重試仍失敗,房租已入帳但結算紀錄未保存', e);
+                        saveFailed = true;
+                    }
+                }
+            }
+            if (saveFailed) {
+                return { state: r.state, days: r.days, earned: r.earned, perUnit: r.perUnit, saveFailed: true };
+            }
+        } else {
+            // earned === 0 時正常存檔,無重試(維持既有行為)
+            await saveState(r.state);
         }
-        await saveState(r.state);
         return { state: r.state, days: r.days, earned: r.earned, perUnit: r.perUnit, payFailed: false };
     }
 
@@ -285,9 +306,11 @@
             const note = d.createElement('div'); note.className = 'll-note';
             note.textContent = res.payFailed
                 ? '房租入帳暫時失敗，晚點再開一次房產就會自動重新結算。'
-                : (res.days > 0 && res.earned > 0
-                    ? ('你不在的這 ' + res.days + ' 天，收到房租 ' + res.earned + '。')
-                    : (res.days > 0 ? ('過了 ' + res.days + ' 天，目前沒有房客繳租。') : '今天的房租已經收過了。'));
+                : (res.saveFailed
+                    ? '房租已經進帳，但今天的收租紀錄沒有保存。下次打開房產時可能會再收一次租，屬於正常情況。'
+                    : (res.days > 0 && res.earned > 0
+                        ? ('你不在的這 ' + res.days + ' 天，收到房租 ' + res.earned + '。')
+                        : (res.days > 0 ? ('過了 ' + res.days + ' 天，目前沒有房客繳租。') : '今天的房租已經收過了。')));
             wrap.appendChild(note);
 
             const units = d.createElement('div'); units.className = 'll-units';
