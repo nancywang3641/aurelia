@@ -696,6 +696,16 @@ const IRIS_IDLE = [
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
+                    <div class="void-btn" id="void-landlord-btn" data-app-launch="landlord" title="我的房產">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-building"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="房產紀錄">我的房產</span>
+                                <span class="lb-menu-en" data-en-404="PROPERTY FILE">MY PROPERTY</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
                     <div class="void-btn" id="void-achievement-btn" title="資料庫成就清單">
                         <div class="void-btn-inner">
                             <i class="lb-menu-icon fa-solid fa-trophy"></i>

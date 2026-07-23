@@ -677,6 +677,7 @@
             rpg:        () => window.RPG_PANEL?.launch,
             worldbook:  () => window.OS_WORLDBOOK?.launch,
             journal:    () => window.OS_JOURNAL?.launch,
+            landlord:   () => window.OS_LANDLORD?.launch,
         };
         const getFn = GAME_APP_MAP[key];
         if (!getFn) return;
