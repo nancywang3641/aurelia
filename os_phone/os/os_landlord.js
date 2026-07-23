@@ -207,17 +207,24 @@
     }
 
     // ── 開 app：先補算離線收租,再畫主畫面 ──
+    // 🚨入帳與存檔綁定：有租金時,唯有 addPT 真的成功才可以把 lastSettleDay 推進到今天。
+    //   否則存檔會讓這筆房租永久消失(下次開 app 誤以為已收過)。
     async function _openAndSettle() {
         const state = await getState();
         const r = settleCore(state, _dayNum(_now()));
         if (r.earned > 0) {
+            const pt = win.OS_PT || window.OS_PT;
             try {
-                const pt = win.OS_PT || window.OS_PT;
-                if (pt && pt.addPT) await pt.addPT(r.earned, { reason: '房租收入', items: r.perUnit });
-            } catch (e) { console.warn('[Landlord] 入帳失敗', e); }
+                if (!pt || typeof pt.addPT !== 'function') throw new Error('包租戶錢包尚未就緒');
+                await pt.addPT(r.earned, { reason: '房租收入', items: r.perUnit });
+            } catch (e) {
+                console.warn('[Landlord] 入帳失敗,本次房租暫不結算,下次開啟再補算', e);
+                // 不存檔 → lastSettleDay 保持原樣,下次開 app 會重新補算這段期間
+                return { state: state, days: r.days, earned: r.earned, perUnit: r.perUnit, payFailed: true };
+            }
         }
         await saveState(r.state);
-        return { state: r.state, days: r.days, earned: r.earned, perUnit: r.perUnit };
+        return { state: r.state, days: r.days, earned: r.earned, perUnit: r.perUnit, payFailed: false };
     }
 
     function _injectStyle() {
@@ -240,54 +247,88 @@
             '.ll-empty{color:#7a8090}',
             '.ll-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}',
             '.ll-cand{display:flex;justify-content:space-between;align-items:center;border:1px solid #262b37;border-radius:9px;padding:9px}',
+            '.ll-btn:disabled{opacity:.5;cursor:default}',
+            '.ll-error{color:#e08a8a}',
         ].join('\n');
         (d.head || d.documentElement).appendChild(s);
     }
 
+    // 防連點：結算流程進行中時,忽略重複呼叫(否則可能重複入帳)
+    let _launching = false;
+
     async function launch(container) {
-        const d = win.document;
-        const root = container || d.body;
-        _injectStyle();
-        root.innerHTML = '<div class="ll-wrap"><div class="ll-note">正在整理房產…</div></div>';
+        if (_launching) return;
+        _launching = true;
+        try {
+            const d = win.document;
+            const root = container || d.body;
+            _injectStyle();
+            root.innerHTML = '<div class="ll-wrap"><div class="ll-note">正在整理房產…</div></div>';
 
-        const res = await _openAndSettle();
-        let purse = 0;
-        try { const pt = win.OS_PT || window.OS_PT; if (pt && pt.getPT) purse = await pt.getPT(); } catch (e) {}
-
-        const wrap = d.createElement('div'); wrap.className = 'll-wrap';
-        const head = d.createElement('div'); head.className = 'll-head';
-        head.innerHTML = '<span class="ll-title"><i class="fa-solid fa-building"></i> 我的房產</span>'
-            + '<span class="ll-purse"><i class="fa-solid fa-coins"></i> ' + purse + '</span>';
-        wrap.appendChild(head);
-
-        const note = d.createElement('div'); note.className = 'll-note';
-        note.textContent = res.days > 0 && res.earned > 0
-            ? ('你不在的這 ' + res.days + ' 天，收到房租 ' + res.earned + '。')
-            : (res.days > 0 ? ('過了 ' + res.days + ' 天，目前沒有房客繳租。') : '今天的房租已經收過了。');
-        wrap.appendChild(note);
-
-        const units = d.createElement('div'); units.className = 'll-units';
-        const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
-        res.state.units.forEach(function (u) {
-            const card = d.createElement('div'); card.className = 'll-unit';
-            const label = (RT[u.roomTypeKey] && RT[u.roomTypeKey].label) || u.roomTypeKey;
-            const top = d.createElement('div'); top.className = 'll-unit-top';
-            const left = d.createElement('div');
-            left.innerHTML = '<div class="ll-unit-name">' + label + '</div>'
-                + '<div class="ll-unit-sub">' + (u.tenantName
-                    ? ('房客：' + u.tenantName + '　每日租金 ' + u.rent)
-                    : '<span class="ll-empty">空著</span>') + '</div>';
-            top.appendChild(left);
-            if (!u.tenantKey) {
-                const btn = d.createElement('button'); btn.className = 'll-btn';
-                btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> 招租';
-                btn.onclick = function () { _renderRecruit(root, u.id); };
-                top.appendChild(btn);
+            let res;
+            try {
+                res = await _openAndSettle();
+            } catch (e) {
+                console.warn('[Landlord] 開啟房產失敗', e);
+                _renderError(root);
+                return;
             }
-            card.appendChild(top);
-            units.appendChild(card);
-        });
-        wrap.appendChild(units);
+            let purse = 0;
+            try { const pt = win.OS_PT || window.OS_PT; if (pt && pt.getPT) purse = await pt.getPT(); } catch (e) {}
+
+            const wrap = d.createElement('div'); wrap.className = 'll-wrap';
+            const head = d.createElement('div'); head.className = 'll-head';
+            head.innerHTML = '<span class="ll-title"><i class="fa-solid fa-building"></i> 我的房產</span>'
+                + '<span class="ll-purse"><i class="fa-solid fa-coins"></i> ' + purse + '</span>';
+            wrap.appendChild(head);
+
+            const note = d.createElement('div'); note.className = 'll-note';
+            note.textContent = res.payFailed
+                ? '房租入帳暫時失敗，晚點再開一次房產就會自動重新結算。'
+                : (res.days > 0 && res.earned > 0
+                    ? ('你不在的這 ' + res.days + ' 天，收到房租 ' + res.earned + '。')
+                    : (res.days > 0 ? ('過了 ' + res.days + ' 天，目前沒有房客繳租。') : '今天的房租已經收過了。'));
+            wrap.appendChild(note);
+
+            const units = d.createElement('div'); units.className = 'll-units';
+            const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
+            res.state.units.forEach(function (u) {
+                const card = d.createElement('div'); card.className = 'll-unit';
+                const label = (RT[u.roomTypeKey] && RT[u.roomTypeKey].label) || '未知房型';
+                const top = d.createElement('div'); top.className = 'll-unit-top';
+                const left = d.createElement('div');
+                left.innerHTML = '<div class="ll-unit-name">' + label + '</div>'
+                    + '<div class="ll-unit-sub">' + (u.tenantName
+                        ? ('房客：' + u.tenantName + '　每日租金 ' + u.rent)
+                        : '<span class="ll-empty">空著</span>') + '</div>';
+                top.appendChild(left);
+                if (!u.tenantKey) {
+                    const btn = d.createElement('button'); btn.className = 'll-btn';
+                    btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> 招租';
+                    btn.onclick = function () { _renderRecruit(root, u.id); };
+                    top.appendChild(btn);
+                }
+                card.appendChild(top);
+                units.appendChild(card);
+            });
+            wrap.appendChild(units);
+            root.innerHTML = ''; root.appendChild(wrap);
+        } finally {
+            _launching = false;
+        }
+    }
+
+    // 開啟房產失敗時的畫面:給玩家一個看得懂的提示與重試入口,不讓畫面卡在載入中
+    function _renderError(root) {
+        const d = win.document;
+        const wrap = d.createElement('div'); wrap.className = 'll-wrap';
+        const note = d.createElement('div'); note.className = 'll-note ll-error';
+        note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 房產資料暫時讀不到，請稍後再試一次。';
+        wrap.appendChild(note);
+        const btn = d.createElement('button'); btn.className = 'll-btn';
+        btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 再試一次';
+        btn.onclick = function () { launch(root); };
+        wrap.appendChild(btn);
         root.innerHTML = ''; root.appendChild(wrap);
     }
 
@@ -309,17 +350,28 @@
         wrap.appendChild(note);
 
         const list = d.createElement('div'); list.className = 'll-list';
+        const allBtns = [];   // 防並發：點下任一候選人時,整批候選按鈕一起鎖住
         free.forEach(function (c) {
             const row = d.createElement('div'); row.className = 'll-cand';
             const nm = d.createElement('div'); nm.textContent = c.name;
             const btn = d.createElement('button'); btn.className = 'll-btn';
             btn.innerHTML = '<i class="fa-solid fa-key"></i> 讓他入住';
+            allBtns.push(btn);
             btn.onclick = async function () {
-                btn.disabled = true; btn.textContent = '安排中…';
-                await tuneTenant(c);                       // 每人只燒一次
-                const s = await getState();
-                await saveState(moveIn(s, unitId, c));
-                await launch(root);
+                // 同步先鎖住整批按鈕,避免玩家快速連點不同候選人時兩條流程平行跑、互相覆蓋
+                allBtns.forEach(function (b) { b.disabled = true; });
+                btn.textContent = '安排中…';
+                try {
+                    await tuneTenant(c);                       // 每人只燒一次
+                    const s = await getState();
+                    const target = s.units.find(function (x) { return x.id === unitId; });
+                    if (target && !target.tenantKey) {
+                        await saveState(moveIn(s, unitId, c));
+                    }
+                    // 這戶已被別的候選人搶先入住 → 不覆蓋,直接回主畫面看目前狀態
+                } finally {
+                    await launch(root);
+                }
             };
             row.appendChild(nm); row.appendChild(btn);
             list.appendChild(row);
@@ -336,7 +388,7 @@
 
     win.OS_LANDLORD = {
         _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, _dayNum, settleCore,
-        listCandidates, tuneTenant, moveIn, _fallbackTuning, launch,
+        listCandidates, tuneTenant, moveIn, _fallbackTuning, launch, _openAndSettle,   // _openAndSettle=console 診斷用
     };
     if (win !== window) { try { window.OS_LANDLORD = win.OS_LANDLORD; } catch (e) {} }
     console.log('[Landlord] 包租婆系統已載入');
