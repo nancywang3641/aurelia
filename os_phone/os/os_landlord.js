@@ -71,8 +71,32 @@
         await db.saveAppData(APP_ID, K_TUNE + '::' + String(npcKey), tuning);
     }
 
+    // ── 離線補算(旅行青蛙式)：純函式,不碰 DB/DOM,好驗 ──
+    function settleCore(state, todayDay) {
+        const s = JSON.parse(JSON.stringify(state));
+        if (s.lastSettleDay === null || s.lastSettleDay === undefined) {
+            s.lastSettleDay = todayDay;
+            return { state: s, days: 0, earned: 0, perUnit: [] };
+        }
+        let days = todayDay - s.lastSettleDay;
+        if (days <= 0) return { state: s, days: 0, earned: 0, perUnit: [] };
+        if (days > LL_CFG.catchUpDays) days = LL_CFG.catchUpDays;   // 封頂,防久未開啟爆量
+
+        const perUnit = [];
+        let earned = 0;
+        s.units.forEach(function (u) {
+            if (!u.tenantKey) return;                 // 空戶不收租
+            const amount = (u.rent || 0) * days;
+            if (amount <= 0) return;
+            earned += amount;
+            perUnit.push({ unitId: u.id, tenantName: u.tenantName || '房客', amount: amount });
+        });
+        s.lastSettleDay = todayDay;
+        return { state: s, days: days, earned: earned, perUnit: perUnit };
+    }
+
     win.OS_LANDLORD = {
-        _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, _dayNum,
+        _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, _dayNum, settleCore,
     };
     if (win !== window) { try { window.OS_LANDLORD = win.OS_LANDLORD; } catch (e) {} }
     console.log('[Landlord] 包租婆系統已載入');
