@@ -105,7 +105,7 @@
         const out = [];
         for (const r of roster) {
             if (!r || !r.key) continue;
-            out.push({ key: r.key, name: r.name || '無名', persona: r.persona || '', tuned: !!(await getTuning(r.key)) });
+            out.push({ key: r.key, name: r.name || '無名', persona: r.persona || '', tuned: _isValidTuning(await getTuning(r.key)) });
         }
         return out;
     }
@@ -117,6 +117,16 @@
         let h = 0;
         for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
         return { idealTypeKey: keys[h % keys.length], rentTolerance: 0.6, habitTags: [] };
+    }
+
+    // ── 快取有效性判斷（修正#2）──
+    // 檢查：t 存在、idealTypeKey 有值、房型清單存在時該 key 必須在清單內
+    // 房型清單尚未載入時不判定為無效，防止重複燒 API
+    function _isValidTuning(t) {
+        if (!t || !t.idealTypeKey) return false;
+        const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES);
+        if (!RT) return true;  // 房型清單還沒載入，保守判定為有效(不重複燒 API)
+        return !!RT[t.idealTypeKey];
     }
 
     function _tuneMessages(npc) {
@@ -138,7 +148,7 @@
     async function tuneTenant(npc) {
         if (!npc || !npc.key) return _fallbackTuning(npc);
         const cached = await getTuning(npc.key);
-        if (cached && cached.idealTypeKey) return cached;
+        if (_isValidTuning(cached)) return cached;
 
         const api = win.OS_API || window.OS_API;
         const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
@@ -146,7 +156,16 @@
         if (api && typeof api.chatSecondary === 'function' && npc.persona) {
             result = await new Promise(function (resolve) {
                 let done = false;
-                const finish = (v) => { if (!done) { done = true; resolve(v); } };
+                let timer = null;
+                const finish = (v) => {
+                    if (!done) {
+                        done = true;
+                        if (timer) clearTimeout(timer);
+                        resolve(v);
+                    }
+                };
+                // 修正#1：逾時保護（30秒）——防 chatSecondary 連線卡住招租流程
+                timer = setTimeout(() => finish(null), 30000);
                 try {
                     api.chatSecondary(_tuneMessages(npc), null,
                         function (text) {
@@ -176,6 +195,10 @@
 
     // 入住：純函式,回新 state
     function moveIn(state, unitId, npc) {
+        // 修正#3：防 npc 為 null/undefined 導致拋錯
+        if (!npc || !npc.key) {
+            return JSON.parse(JSON.stringify(state));  // 無效 npc → 原樣回傳深拷貝
+        }
         const s = JSON.parse(JSON.stringify(state));
         const u = s.units.find(x => x.id === unitId);
         if (!u || u.tenantKey) return s;                 // 找不到或已有人 → 原樣回
