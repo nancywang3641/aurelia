@@ -95,8 +95,97 @@
         return { state: s, days: days, earned: earned, perUnit: perUnit };
     }
 
+    // ── 招租：候選名冊(沿用書咖的顧客名冊來源) ──
+    async function listCandidates() {
+        let roster = [];
+        try {
+            const ln = win.LobbyNpcs || window.LobbyNpcs;
+            if (ln && typeof ln.cafeRoster === 'function') roster = (await ln.cafeRoster()) || [];
+        } catch (e) { console.warn('[Landlord] 讀名冊失敗', e); }
+        const out = [];
+        for (const r of roster) {
+            if (!r || !r.key) continue;
+            out.push({ key: r.key, name: r.name || '無名', persona: r.persona || '', tuned: !!(await getTuning(r.key)) });
+        }
+        return out;
+    }
+
+    // 本地退路：沒 API 或解析失敗時,依名字雜湊穩定挑一款房型(同一人每次結果一致)
+    function _fallbackTuning(npc) {
+        const keys = Object.keys((win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || { standard: 1 });
+        const name = String((npc && npc.key) || (npc && npc.name) || '');
+        let h = 0;
+        for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+        return { idealTypeKey: keys[h % keys.length], rentTolerance: 0.6, habitTags: [] };
+    }
+
+    function _tuneMessages(npc) {
+        const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
+        const list = Object.keys(RT).map(k => '    ' + k + '　＝　' + (RT[k].desc || '')).join('\n');
+        const sys = [
+            '你是租客分析器。讀一份角色人設，判斷這位角色會想住哪一種房，只回傳純 JSON、不要解釋、不要 markdown：',
+            '{"idealTypeKey":"<從下面清單挑一個 KEY>","rentTolerance":<0到1的小數，越高越付得起房租>,"habitTags":["<兩三個生活習性標籤>"]}',
+            '房型清單（只准從中挑一個 KEY）：',
+            list,
+        ].join('\n');
+        return [
+            { role: 'system', content: sys },
+            { role: 'user', content: '角色人設：\n' + String((npc && npc.persona) || (npc && npc.name) || '') },
+        ];
+    }
+
+    // 定調：每人只燒一次 API；有快取先回快取；失敗一律回 fallback,不 throw
+    async function tuneTenant(npc) {
+        if (!npc || !npc.key) return _fallbackTuning(npc);
+        const cached = await getTuning(npc.key);
+        if (cached && cached.idealTypeKey) return cached;
+
+        const api = win.OS_API || window.OS_API;
+        const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
+        let result = null;
+        if (api && typeof api.chatSecondary === 'function' && npc.persona) {
+            result = await new Promise(function (resolve) {
+                let done = false;
+                const finish = (v) => { if (!done) { done = true; resolve(v); } };
+                try {
+                    api.chatSecondary(_tuneMessages(npc), null,
+                        function (text) {
+                            try {
+                                const t = String(text || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+                                const m = t.match(/\{[\s\S]*\}/);
+                                const o = m ? JSON.parse(m[0]) : null;
+                                if (!o || !RT[o.idealTypeKey]) return finish(null);
+                                let tol = parseFloat(o.rentTolerance);
+                                if (!isFinite(tol)) tol = 0.6;
+                                finish({
+                                    idealTypeKey: o.idealTypeKey,
+                                    rentTolerance: Math.max(0, Math.min(1, tol)),
+                                    habitTags: Array.isArray(o.habitTags) ? o.habitTags.slice(0, 3).map(String) : [],
+                                });
+                            } catch (e) { finish(null); }
+                        },
+                        function () { finish(null); },
+                        { label: '租客定調' });
+                } catch (e) { finish(null); }
+            });
+        }
+        const tuning = result || _fallbackTuning(npc);
+        await saveTuning(npc.key, tuning);
+        return tuning;
+    }
+
+    // 入住：純函式,回新 state
+    function moveIn(state, unitId, npc) {
+        const s = JSON.parse(JSON.stringify(state));
+        const u = s.units.find(x => x.id === unitId);
+        if (!u || u.tenantKey) return s;                 // 找不到或已有人 → 原樣回
+        u.tenantKey = npc.key; u.tenantName = npc.name || '房客'; u.movedInAt = _now();
+        return s;
+    }
+
     win.OS_LANDLORD = {
         _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, _dayNum, settleCore,
+        listCandidates, tuneTenant, moveIn, _fallbackTuning,
     };
     if (win !== window) { try { window.OS_LANDLORD = win.OS_LANDLORD; } catch (e) {} }
     console.log('[Landlord] 包租婆系統已載入');
