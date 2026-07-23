@@ -369,8 +369,15 @@
     async function _renderRecruit(root, unitId) {
         const d = win.document;
         root.innerHTML = '<div class="ll-wrap"><div class="ll-note">正在看看有誰想租…</div></div>';
-        const cands = await listCandidates();
-        const state = await getState();
+        let cands, state;
+        try {
+            cands = await listCandidates();
+            state = await getState();
+        } catch (e) {
+            console.warn('[Landlord] 招租時房產資料讀取失敗', e);
+            _renderError(root);
+            return;
+        }
         const taken = {}; state.units.forEach(u => { if (u.tenantKey) taken[u.tenantKey] = 1; });
         const free = cands.filter(c => !taken[c.key]);
 
@@ -402,6 +409,9 @@
                         await saveState(moveIn(s, unitId, c));
                     }
                     // 這戶已被別的候選人搶先入住 → 不覆蓋,直接回主畫面看目前狀態
+                } catch (e) {
+                    console.warn('[Landlord] 入住時房產資料讀取失敗', e);
+                    // catch 中無需額外處理,finally 會回到主畫面
                 } finally {
                     await launch(root);
                 }
