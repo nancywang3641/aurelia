@@ -243,7 +243,7 @@
     //   FIGURE_PX＝小人實際畫多高。這才是「小人看起來大不大」的旋鈕。
     //     兩者相等＝完全照真實比例；FIGURE_PX 調小＝小人相對房間變小（RPG 常見的處理）。
     const PERSON_PX = 200;
-    const FIGURE_PX = 150;
+    let FIGURE_PX = 150;
     function _fit(viewBox, W, H, personH) {
         let s = (personH > 0) ? (PERSON_PX / personH) : Math.min(W / viewBox[0], H / viewBox[1]);
         s = Math.min(s, W / viewBox[0], H / viewBox[1]);   // 保險：房間再大也不准撐出舞台
@@ -291,6 +291,8 @@
     win.OS_ROOM_GEN = {
         deliver, buildBase, stageLayers, positionWord, orderMessages, parseLayout, sanitizeCeiling,
         listStylePresets, getStyleName, setStyleName, pickStylePreset,
+        // console 調小人大小用：改完重進房間就看得到（決定好再寫回上面那個常數）
+        _setFigure: function (px) { const v = parseFloat(px); if (isFinite(v) && v > 20) FIGURE_PX = v; return FIGURE_PX; },
         _cfg: { DENOISE, PROTECT, LONG_SIDE },
     };
     if (win !== window) { try { window.OS_ROOM_GEN = win.OS_ROOM_GEN; } catch (e) {} }
