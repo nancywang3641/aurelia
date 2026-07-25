@@ -101,7 +101,10 @@
         S.edit.doorRects = _b.CFG.doors.map((D, i) => {
             const el = document.createElement('div');
             el.className = 'lstage-doorrect';
-            el.innerHTML = '<span>過門區→' + ({ cafe: '書咖', hall: '大廳', city: '街區', room404: '404' }[D.to] || D.to) + '</span>' +
+            // 面板型門沒有 to（不切場景，交給別的模組接手）→ 標它的用途，別印 undefined
+            const _dn = ({ cafe: '書咖', hall: '大廳', city: '街區', room404: '404' }[D.to] || D.to)
+                || ({ myhome: '你家', exchange: '交易所' }[D.panel] || D.panel) || '？';
+            el.innerHTML = '<span>過門區→' + _dn + '</span>' +
                 '<span class="lstage-zone-grip lstage-door-grip"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>';
             S.world.appendChild(el);
             _syncDoor(i, el);

@@ -247,6 +247,10 @@
             doors: [
                 { x: 335, y: 316, w: 100, h: 42, to: 'cafe', spawn: { x: 780, y: 868 } },   // 書咖門口→瀅瀅書咖（走到門口下方觸發）
                 { x: 1136, y: 570, w: 86, h: 24, to: 'hall', spawn: { x: 772, y: 830 } },   // 大廳建築門口→愛麗絲純白大廳
+                // 🏠 你自己那棟：買了才有門(plot 沒蓋房就走不進去)。走進去＝進自己的房間,不切固定場景→用 panel 型門交給房產那邊處理。
+                //    門的位置可以在擺設模式直接拖(新增在陣列最後,不影響上面兩扇已調好的門)。
+                //    觸發區要落在房子「下緣外側」那一條——房子本體會擋路,站不進去就永遠踩不到門(同書咖那扇的做法)。
+                { x: 330, y: 850, w: 100, h: 42, panel: 'myhome', plot: 'player' },
             ],
         },
     };
@@ -1356,8 +1360,10 @@
             _updateSeeThrough();   // 👻 被建築蓋住→開圓形透視窗
             // 🚪 過門判定：落地後必須先「走出」觸發區一次，門才重新武裝（防落點在門區內乒乓轉場）
             if (!S.transitioning) {
+                // 🏘 帶 plot 的門＝那塊地上的房子，房子還沒蓋就沒有門可以進
                 const door = CFG.doors.find(D =>
-                    p.x > D.x && p.x < D.x + D.w && p.y > D.y && p.y < D.y + D.h);
+                    p.x > D.x && p.x < D.x + D.w && p.y > D.y && p.y < D.y + D.h
+                    && (!D.plot || _plotOccupied(D.plot)));
                 if (door) {
                     if (S.doorArm && performance.now() > S.doorCd) {
                         if (door.restore) {   // 404出口：走系統還原流程(void_terminal 收事件跑 restoreLobby)
