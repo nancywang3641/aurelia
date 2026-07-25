@@ -279,10 +279,14 @@
         const cancel = _btn('fa-solid fa-xmark', '取消');
         const add = _btn('fa-solid fa-plus', '添加包裹');
         const ship = _btn('fa-solid fa-truck-fast', '配送', 'is-go');
-        bar.appendChild(cancel); bar.appendChild(add); bar.appendChild(ship);
+        bar.appendChild(cancel); bar.appendChild(add);
+        // 已經布置過才給「清空」：把房間退回空屋(不燒生圖)。沒布置過的房本來就是空的,不用這顆。
+        const wipe = (_ctx.room && _ctx.room.order && _ctx.room.order.length) ? _btn('fa-solid fa-broom', '清空', 'llr-danger') : null;
+        if (wipe) bar.appendChild(wipe);
+        bar.appendChild(ship);
         root.appendChild(bar);
 
-        _ctx.deco = { root: root, world: world, layer: layer, tip: tip, bar: bar, btns: [cancel, add, ship] };
+        _ctx.deco = { root: root, world: world, layer: layer, tip: tip, bar: bar, btns: [cancel, add, ship].concat(wipe ? [wipe] : []) };
 
         function say(msg) {
             tip.textContent = msg || (_ctx.items.length
@@ -305,6 +309,35 @@
             _openEditor(it, redraw, say);
         };
         ship.onclick = function () { _deliver(say); };
+        // 清空＝退回空屋。要按兩次（Tauri 會擋 confirm，所以用「再按一次」代替跳窗）
+        if (wipe) {
+            let armed = false, armT = null;
+            wipe.onclick = async function () {
+                if (!armed) {
+                    armed = true;
+                    wipe.innerHTML = '<i class="fa-solid fa-broom"></i> 再按一次清空';
+                    say('清空會把這間房退回空屋，裡面的東西全部沒有。要的話再按一次。');
+                    armT = win.setTimeout(function () {
+                        armed = false;
+                        wipe.innerHTML = '<i class="fa-solid fa-broom"></i> 清空';
+                        say();
+                    }, 4000);
+                    return;
+                }
+                win.clearTimeout(armT);
+                const id = _ctx.unitId, isHome = (id === HOME_ID);
+                try {
+                    await _LL().saveRoom(id, null);
+                    _endDeco();
+                    if (isHome) await openHome(); else await open(null, id);
+                } catch (e) {
+                    console.warn('[LandlordRoom] 清空失敗', e);
+                    armed = false;
+                    wipe.innerHTML = '<i class="fa-solid fa-broom"></i> 清空';
+                    say('這次沒清成，再試一次。');
+                }
+            };
+        }
 
         redraw();
     }
