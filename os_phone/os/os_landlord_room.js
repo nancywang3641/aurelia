@@ -342,11 +342,12 @@
         //    掛在元素上(就算有 setPointerCapture)只要捕獲沒成立就整個拖不動。
         function onMove(ev) {
             moved = Math.max(moved, Math.hypot(ev.clientX - startX, ev.clientY - startY));
-            const w = stage && stage._S && stage._S.world;
-            if (!w) return;
-            const r = w.getBoundingClientRect();   // 世界層被縮放過，用它自己的框換算螢幕→舞台座標
-            if (!r.width || !r.height) return;
-            const rm = _toRoom((ev.clientX - r.left) / r.width * 1536, (ev.clientY - r.top) / r.height * 1024);
+            // 🚨 世界層的孩子全是絕對定位 → 它自己的框是 0×0，r.width/r.height 不能用(拿來當分母就整個拖不動)。
+            //    只有 r.left/r.top(＝縮放後的原點)跟 S.scale 是可信的——舞台自己的點擊移動也是這樣換算。
+            const st = stage && stage._S;
+            if (!st || !st.world || !st.scale) return;
+            const r = st.world.getBoundingClientRect();
+            const rm = _toRoom((ev.clientX - r.left) / st.scale, (ev.clientY - r.top) / st.scale);
             it.x = Math.max(1, Math.min(99, rm[0]));
             it.y = Math.max(1, Math.min(99, rm[1]));
             const q = _toStage(it.x, it.y);
