@@ -14,8 +14,9 @@
     const ROOM_POSITIVE = "bird's-eye top-down tilemap room layout, fixed camera looking downward, objects may be placed on the floor plane or mounted on the wall plane, all visible from above";
     const ROOM_NEGATIVE = 'ceiling plane objects, ceiling-mounted objects, objects hanging from the ceiling, objects suspended from the ceiling, low-angle view, eye-level view, interior photography perspective';
 
-    // 🚨 生圖參數已實測定案，寫死不外露(重繪幅度 0.9／保護 4px)。面板一律不給調。
-    const DENOISE = 0.90;
+    // 🚨 生圖參數寫死不外露，面板一律不給調。
+    //   重繪幅度：0.90 → 0.85（Rae 2026-07-25 調低試看看；低一點＝更貼母圖的房型與透視，家具也比較不會亂長）
+    const DENOISE = 0.85;
     const PROTECT = 4;
     const LONG_SIDE = 1024;      // 母圖長邊
 
