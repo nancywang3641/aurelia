@@ -1429,7 +1429,9 @@
             py = Math.round(sy / poly.length + (maxY - minY) * 0.18);
             doorY = Math.round(maxY - 26);
         }
-        const pts = { player: { x: px, y: py }, arrive: { x: px, y: py }, actorScale: dyn.actorScale || 0.62 };
+        // 小人多高：房間自己算出來的「一個人該多少 px」除以角色基準高；沒給才退回一個保守值。
+        const scale = dyn.actorPx ? (dyn.actorPx / PLAYER_H) : (dyn.actorScale || 0.62);
+        const pts = { player: { x: px, y: py }, arrive: { x: px, y: py }, actorScale: scale };
         if (poly) pts.boundary = poly.map(p => ({ x: p[0], y: p[1] }));   // 遮罩沒載成功時的退路輪廓
         SCENES.room.points = pts;
         const ex = dyn.exit || { to: 'city' };

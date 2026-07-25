@@ -13,6 +13,10 @@
 
     const MAX_ITEMS = 10;      // 一間房最多幾件（再多會擠成一團，生圖也顧不來）
     const DRAG_SLOP = 6;       // 位移小於這個算「點一下」不算拖曳
+    // 🧍 小人畫多大＝房間幾何算出來的「真實比例」再乘這個係數。
+    //   1 ＝ 完全照真實比例（跟家具對得準，但小人會被放大、像素變粗）。
+    //   要小一點就往下調（0.8、0.7…）——這是唯一該動的數字，別回頭去填死 actorScale。
+    const FIGURE = 1;
 
     function _LL() { return win.OS_LANDLORD || window.OS_LANDLORD || null; }
     function _GEN() { return win.OS_ROOM_GEN || window.OS_ROOM_GEN || null; }
@@ -111,10 +115,10 @@
                 // 還沒布置過：空房母圖當底，地板一樣走得
                 const base = await GEN.buildBase(info.spec);
                 room = { image: base.baseData, floor: base.room.floor, viewBox: base.room.viewBox, order: [] };
-            } else if (!room.floor || !room.viewBox) {
-                // 舊存檔只存了圖、沒存地板 → 用同一份房規格重算一次（同 spec 出的幾何完全一樣，對得上那張圖）
+            } else if (!room.floor || !room.viewBox || !room.personH) {
+                // 舊存檔缺幾何 → 用同一份房規格重算一次（同 spec 出的幾何完全一樣，對得上那張圖）
                 const base = await GEN.buildBase(info.spec);
-                room = Object.assign({}, room, { floor: base.room.floor, viewBox: base.room.viewBox });
+                room = Object.assign({}, room, { floor: base.room.floor, viewBox: base.room.viewBox, personH: base.room.personH });
             }
         } catch (e) {
             console.warn('[LandlordRoom] 開房失敗', e);
@@ -154,6 +158,7 @@
                 ph: '在房裡走走，或按右下角布置這間房…',
             },
             exit: info.exit,
+            actorPx: layers.personPx * FIGURE,
         });
 
         // 面板讓開，讓舞台變成主角
