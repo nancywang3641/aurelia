@@ -81,15 +81,19 @@
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
     }
-    function _specOf(unit) {
-        const RT = (_SVG() && _SVG().ROOM_TYPES) || {};
-        const t = RT[unit && unit.roomTypeKey] || RT.standard || { w: 4.2, d: 4.0, wallH: 1.0, floor: 'oak' };
-        return { w: t.w, d: t.d, wallH: t.wallH, floor: t.floor, window: true, label: t.label || '' };
-    }
+    const HOME_ID = 'home';          // 你自己那間（城市裡自己那棟房子走進去的）
+    const HOME_TYPE = 'standard';    // 自家預設房型；之後升級公寓再讓它可換
 
-    // ── 走進一間房 ──
+    function _specOfKey(key) {
+        const RT = (_SVG() && _SVG().ROOM_TYPES) || {};
+        const t = RT[key] || RT.standard || { w: 4.2, d: 4.0, wallH: 1.0, floor: 'oak' };
+        return { w: t.w, d: t.d, wallH: t.wallH, floor: t.floor, window: true, label: t.label || '', typeKey: key };
+    }
+    function _specOf(unit) { return _specOfKey(unit && unit.roomTypeKey); }
+
+    // ── 走進一間房（房客的房 / 你自己家共用這條）──
     // 有成品圖就用成品圖，還沒布置過就用空房母圖——兩種都走得進去。
-    async function open(container, unitId) {
+    async function _enter(container, info) {
         _injectStyle();
         const stage = _STAGE();
         if (!stage || typeof stage.enterRoom !== 'function') { _sorry(container, '這個版本的大廳還進不了房間。'); return; }
@@ -98,15 +102,12 @@
         const LL = _LL(), GEN = _GEN();
         if (!LL || !GEN) { _sorry(container, '房間功能還沒載入完，稍等一下再試。'); return; }
 
-        let unit, room;
+        let room;
         try {
-            const state = await LL.getState();
-            unit = state.units.find(function (u) { return u.id === unitId; });
-            if (!unit) throw new Error('找不到這一戶。');
-            room = await LL.getRoom(unitId);
+            room = await LL.getRoom(info.id);
             if (!room || !room.image) {
                 // 還沒布置過：空房母圖當底，地板一樣走得
-                const base = await GEN.buildBase(_specOf(unit));
+                const base = await GEN.buildBase(info.spec);
                 room = { image: base.baseData, floor: base.room.floor, viewBox: base.room.viewBox, order: [] };
             }
         } catch (e) {
@@ -125,12 +126,14 @@
         }
 
         _ctx = {
-            unitId: unitId,
-            unitName: unit.tenantName || '房客',
+            unitId: info.id,
+            unitName: info.name,
+            spec: info.spec,
             room: room,
             viewBox: layers.viewBox,
             fit: layers.fit,
             floor: room.floor,
+            exit: info.exit,
             items: null,
             deco: null,
         };
@@ -140,16 +143,56 @@
             mask: layers.mask,
             floorStage: layers.floorStage,
             header: {
-                name: _ctx.unitName,
-                badge: _ctx.unitName + '的房間',
+                name: info.name,
+                badge: info.badge || (info.name + '的房間'),
                 ph: '在房裡走走，或按右下角布置這間房…',
             },
-            exit: { to: 'city' },
+            exit: info.exit,
         });
 
         // 面板讓開，讓舞台變成主角
         try { if (win.PhoneSystem && typeof win.PhoneSystem.goHome === 'function') win.PhoneSystem.goHome(); } catch (e) {}
     }
+
+    // 從房產面板點某一戶「進房間」
+    async function open(container, unitId) {
+        const LL = _LL();
+        if (!LL) { _sorry(container, '房產還沒載入完，稍等一下再試。'); return; }
+        let unit;
+        try {
+            const state = await LL.getState();
+            unit = state.units.find(function (u) { return u.id === unitId; });
+            if (!unit) throw new Error('找不到這一戶。');
+        } catch (e) {
+            console.warn('[LandlordRoom] 讀這一戶失敗', e);
+            _sorry(container, (e && e.message) || '房間暫時打不開。');
+            return;
+        }
+        return _enter(container, {
+            id: unitId,
+            name: unit.tenantName || '房客',
+            spec: _specOf(unit),
+            exit: { to: 'city' },
+        });
+    }
+
+    // 🏠 從城市走進自己那棟房子
+    async function openHome() {
+        const LL = _LL();
+        let saved = null;
+        try { if (LL) saved = await LL.getRoom(HOME_ID); } catch (e) {}
+        return _enter(null, {
+            id: HOME_ID,
+            name: '你的家',
+            badge: '你的家',
+            spec: _specOfKey((saved && saved.roomTypeKey) || HOME_TYPE),
+            exit: { to: 'city', spawn: { x: 364, y: 892 } },   // 出來就站在自家門口外
+        });
+    }
+    // 走進城市裡自己那棟房子的門（lobby_stage 的 panel 型門發的事件）
+    win.addEventListener('lstage-open-myhome', function () {
+        openHome().catch(function (e) { console.warn('[LandlordRoom] 進自己家失敗', e); });
+    });
 
     function _sorry(container, msg) {
         if (!container) { try { win.toastr && win.toastr.info(msg); } catch (e) {} return; }
@@ -383,21 +426,21 @@
         busy.textContent = '正在核對這批包裹…';
         dc.root.appendChild(busy);
 
-        const unitId = _ctx.unitId;
+        const unitId = _ctx.unitId, spec = _ctx.spec, isHome = (unitId === HOME_ID);
         const order = items.map(function (it) { return { name: it.name, content: it.content, x: it.x, y: it.y }; });
         try {
             const LL = _LL();
-            const state = await LL.getState();
-            const unit = state.units.find(function (u) { return u.id === unitId; });
-            const result = await _GEN().deliver(_specOf(unit), order, function (msg) { busy.textContent = msg; });
+            const result = await _GEN().deliver(spec, order, function (msg) { busy.textContent = msg; });
             busy.textContent = '正在收好房間…';
             await LL.saveRoom(unitId, {
                 image: result.image, layout: result.layout, order: order,
+                roomTypeKey: spec.typeKey,   // 房型跟著房間走,下次進來要用同一間
                 styleName: result.styleName, at: result.at,
             });
             _endDeco();
             try { busy.remove(); } catch (e) {}
-            await open(null, unitId);   // 就地重進這間房＝看到剛剛生出來的樣子
+            // 就地重進這間房＝看到剛剛生出來的樣子
+            if (isHome) await openHome(); else await open(null, unitId);
         } catch (e) {
             console.warn('[LandlordRoom] 配送失敗', e);
             try { busy.remove(); } catch (_) {}
@@ -406,7 +449,7 @@
         }
     }
 
-    win.OS_LANDLORD_ROOM = { open };
+    win.OS_LANDLORD_ROOM = { open, openHome };
     if (win !== window) { try { window.OS_LANDLORD_ROOM = win.OS_LANDLORD_ROOM; } catch (e) {} }
     console.log('[LandlordRoom] 房間（舞台版）已載入');
 })();
