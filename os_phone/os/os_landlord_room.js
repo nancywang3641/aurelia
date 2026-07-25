@@ -111,8 +111,9 @@
             room = await LL.getRoom(info.id);
             if (!room || !room.image) {
                 // 還沒布置過：空房母圖當底，地板一樣走得
+                // 🚨 personH 一定要帶上：少了它 stageLayers 會退回「拉滿舞台」，空房就跟布置過的房不同尺度
                 const base = await GEN.buildBase(info.spec);
-                room = { image: base.baseData, floor: base.room.floor, viewBox: base.room.viewBox, order: [] };
+                room = { image: base.baseData, floor: base.room.floor, viewBox: base.room.viewBox, personH: base.room.personH, order: [] };
             } else if (!room.floor || !room.viewBox || !room.personH) {
                 // 舊存檔缺幾何 → 用同一份房規格重算一次（同 spec 出的幾何完全一樣，對得上那張圖）
                 const base = await GEN.buildBase(info.spec);
@@ -490,7 +491,8 @@
             await LL.saveRoom(unitId, {
                 image: result.image, layout: result.layout, order: order,
                 roomTypeKey: spec.typeKey,   // 房型跟著房間走,下次進來要用同一間
-                floor: result.floor, viewBox: result.viewBox,   // 🚨 地板一定要一起存：沒有它就算不出可走區,走進去會整片不能動
+                // 🚨 幾何三件套一定要一起存：地板＝可走區(沒有就整片不能動)、personH＝尺度(沒有就退回拉滿舞台)
+                floor: result.floor, viewBox: result.viewBox, personH: result.personH,
                 styleName: result.styleName, at: result.at,
             });
             _endDeco();

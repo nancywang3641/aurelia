@@ -227,6 +227,7 @@
             layout: layout,
             floor: base.room.floor,
             viewBox: base.room.viewBox,
+            personH: base.room.personH,   // 🚨 尺度參考,少了它下次進來會退回「拉滿舞台」
             styleName: preset.name || '',
             at: Date.now(),
         };
