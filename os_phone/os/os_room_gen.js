@@ -268,7 +268,12 @@
             floorStage.forEach(function (p, i) { if (i) mx.lineTo(p[0], p[1]); else mx.moveTo(p[0], p[1]); });
             mx.closePath(); mx.fill();
         }
-        return { base: cv.toDataURL('image/png'), mask: mv.toDataURL('image/png'), floorStage: floorStage, fit: f, viewBox: vb };
+        return {
+            base: cv.toDataURL('image/png'), mask: mv.toDataURL('image/png'),
+            floorStage: floorStage, fit: f, viewBox: vb,
+            // 🧍 一個成年人在這間房裡、站在舞台座標系下該有多高（房間幾何算出來的，不是填死的）
+            personPx: (room.personH || 0) * f.s,
+        };
     }
 
     win.OS_ROOM_GEN = {

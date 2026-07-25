@@ -14,6 +14,10 @@
     //   makeRoom 與 parseSpec 都會夾在這個上限內——外面丟什麼進來都一樣。
     var WALL_MAX = 0.80;
 
+    // 🧍 一個成年人有多高（房間單位＝公尺）。房間 4.2×4.0 就是一間正常臥室，
+    //   小人該畫多大由這個值加房間幾何算出來，不要在別處填死。
+    var PERSON_H = 1.7;
+
     // ============================================================
     // SVG 房間幾何模組
     // makeRoom(spec) → { svg, floor 地板碰撞多邊形, viewBox }；pointInPolygon；
@@ -153,7 +157,13 @@
                 + '</g>'
                 + lipFronts + lipTops
                 + '</svg>';
-            return { svg: svg, floor: floorPoly, interior: interiorPoly, viewBox: [_f(vbW), _f(vbH)] };
+            // 🧍 尺度參考：一個 PERSON_H 單位高的人站在房間正中央,投影出來有多少 viewBox 像素高。
+            //   小人該畫多大是「房間幾何算出來的」不是隨手填的——同一個固定值在小房間會太小、大房間會太大。
+            var _pf = P(0, 0, d / 2), _ph = P(0, PERSON_H, d / 2);
+            return {
+                svg: svg, floor: floorPoly, interior: interiorPoly, viewBox: [_f(vbW), _f(vbH)],
+                personH: _f(Math.abs(_ph[1] - _pf[1])),
+            };
         }
 
         function pointInPolygon(pt, poly) {
