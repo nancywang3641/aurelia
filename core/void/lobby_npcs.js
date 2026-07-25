@@ -65,6 +65,8 @@
     async function initNpcs() {
         const CFG = _b.CFG;
         const SC = _b.SCENES[S.scene];
+        // 🏠 房間：私人空間，誰都不刷（不然書咖客人會出現在房客的臥室）；住戶之後另外接
+        if (SC.dynamic) return;
         // 純白大廳：只有愛麗絲（核心旁、不漫步、永遠面向玩家）
         if (SC.alice) {
             const ap = CFG.points.alicePos || SC.alice;

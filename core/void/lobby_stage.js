@@ -172,6 +172,14 @@
             doorsV: 1,
             rabbit: { x: 773, y: 365 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
         },
+        room: {   // 🏠 房間：底圖與碰撞遮罩不是素材，是「進門當下」餵進來的（見 enterRoom）
+            //   房間圖＝生成的那張、可走區＝房間地板多邊形轉的白遮罩，所以每一間都不一樣、也不吃 CDN 素材。
+            //   points/doors 由 enterRoom 依當間房的地板算好再寫進來；沒有 cfgKey＝不存擺設（每間房各自不同）。
+            dynamic: true,
+            base: '', mask: '',
+            layout: [], walls: [], doors: [],
+            points: { player: { x: 768, y: 700 }, arrive: { x: 768, y: 700 }, actorScale: 0.7 },
+        },
         city: {   // 🏙 視差城市廣場＝分層可走（新版：手繪遮罩碰撞，同大廳；前景建築物件各自深度排序）
             base: 'city/city_floor_v2.png',        // 廣場地板 v2（MC家地塊框已拆出→改獨立sprite）；建築/噴泉/樹走前景物件
             mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
@@ -359,7 +367,7 @@
         const doors = (SC.doors || []).map(d => Object.assign({}, d));   // 靜態地圖沒 doors→給空陣列，別讓 undefined.map 炸掉整個掛載
         let baseOverride = null, maskOverride = null;
         try {
-            const saved = JSON.parse(localStorage.getItem(SC.cfgKey) || 'null');
+            const saved = SC.cfgKey ? JSON.parse(localStorage.getItem(SC.cfgKey) || 'null') : null;   // 動態場景沒 cfgKey＝不存擺設
             if (saved) {
                 if (Array.isArray(saved.layoutFull) && saved.layoutFull.length) {
                     layout = saved.layoutFull.map(o => Object.assign({}, o));
@@ -511,8 +519,10 @@
         S.mask = null;
         S.maskFailed = false;   // 重置：載入前先當「載入中」→blocked 空窗期全擋（防穿牆）
         const ovSrc = await resolveRef(CFG.maskOverride);   // 建構模式「換遮罩」優先
-        const file = SCENES[S.scene].mask;
-        const src = ovSrc || (file ? CDN + file : null);
+        const SCm = SCENES[S.scene];
+        const file = SCm.mask;
+        // 動態場景(房間)：遮罩是進門時算好的 dataURL，不是 CDN 素材
+        const src = ovSrc || (SCm.dynamic ? (S.dyn && S.dyn.mask) || null : (file ? CDN + file : null));
         if (!src) { S.maskFailed = true; return; }   // 場景本來就沒遮罩→解除空窗期全擋
         const img = new Image();
         if (!String(src).startsWith('data:')) img.crossOrigin = 'anonymous';
@@ -1153,7 +1163,9 @@
         exchange:{ name: '白兔先生', badge: '交易所', ph: '走近白兔先生，兌換屬於你的一席之地...' },
     };
     function _applySceneHeader() {
-        const H = SCENE_HEADER[S.scene] || SCENE_HEADER.cafe;
+        // 房間：抬頭跟著是誰的房間走（進門時給），不是固定文案
+        const H = (SCENES[S.scene] && SCENES[S.scene].dynamic && S.dyn && S.dyn.header)
+            || SCENE_HEADER[S.scene] || SCENE_HEADER.cafe;
         const tagSpan = document.querySelector('#iris-name-tag span');
         if (tagSpan) tagSpan.textContent = H.name;
         if (window.VoidTerminal?._bridge?.setSceneBadge) window.VoidTerminal._bridge.setSceneBadge(H.badge);
@@ -1394,6 +1406,32 @@
     function exit404Stage() {
         if (S.active) goScene('cafe', null, 'player');
         else { S.scene = 'cafe'; tryMount(); }
+    }
+
+    // ── 🏠 走進一間房 ────────────────────────────────────
+    //   房間不是素材場景：底圖＝那間房的成品圖(或還沒布置的空房)，可走區＝房間地板多邊形轉的白遮罩。
+    //   dyn = { base, mask, floorStage:[[x,y]…], header:{name,badge,ph}, exit:{to,spawn}, actorScale? }
+    //   落點放地板重心稍微靠前；出口貼地板下緣正中＝房間正面那道門口，往下走就出去。
+    function enterRoom(dyn) {
+        if (!dyn || !dyn.base || !dyn.mask) return false;
+        const poly = (Array.isArray(dyn.floorStage) && dyn.floorStage.length >= 3) ? dyn.floorStage : null;
+        let px = MAP_W / 2, py = Math.round(MAP_H * 0.66), doorY = Math.round(MAP_H * 0.86);
+        if (poly) {
+            let sx = 0, sy = 0, minY = 1e9, maxY = -1e9;
+            poly.forEach(p => { sx += p[0]; sy += p[1]; minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]); });
+            px = Math.round(sx / poly.length);
+            py = Math.round(sy / poly.length + (maxY - minY) * 0.18);
+            doorY = Math.round(maxY - 26);
+        }
+        const pts = { player: { x: px, y: py }, arrive: { x: px, y: py }, actorScale: dyn.actorScale || 0.62 };
+        if (poly) pts.boundary = poly.map(p => ({ x: p[0], y: p[1] }));   // 遮罩沒載成功時的退路輪廓
+        SCENES.room.points = pts;
+        const ex = dyn.exit || { to: 'city' };
+        SCENES.room.doors = [{ x: px - 95, y: doorY - 24, w: 190, h: 48, to: ex.to, spawn: ex.spawn }];
+        S.dyn = dyn;
+        if (S.active) goScene('room', null, 'arrive');
+        else { S.scene = 'room'; tryMount(); }
+        return true;
     }
 
     // 🕹️ 手機虛擬搖桿：左下角圓盤拖動→餵 S.joy 方向向量（給 update 當 dx/dy）。只在觸控裝置建立。
@@ -1640,7 +1678,7 @@
         const root = document.createElement('div');
         root.className = 'lstage-root';
         root.innerHTML = '<div class="lstage-world">' +
-            '<img class="lstage-map" src="' + CDN + _sceneBase(SCENES[S.scene]) + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
+            '<img class="lstage-map" src="' + (SCENES[S.scene].dynamic ? ((S.dyn && S.dyn.base) || '') : (CDN + _sceneBase(SCENES[S.scene]))) + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
             '<div class="lstage-click"></div></div>' +
             '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
             '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
@@ -1704,7 +1742,7 @@
         }
         S.objEls = CFG.layout.map(o => _spawnObjEl(o));
         const editBtn = root.querySelector('.lstage-edit-btn');
-        if (isStatic) editBtn.style.display = 'none';   // 靜態地圖沒有可拖佈局→藏擺設鈕
+        if (isStatic || SCENES[S.scene].dynamic) editBtn.style.display = 'none';   // 靜態地圖／房間沒有可拖佈局→藏擺設鈕
         else editBtn.addEventListener('click', () => window.LobbyEditor?.toggle());   // 🖊 擺設模式（實作在 lobby_editor.js）
         // 🗺️ 靜態點擊地圖：畫建築點擊區（點了白光過場進室內），跳過所有走路系統
         if (isStatic) {
@@ -1773,6 +1811,8 @@
         S.raf = requestAnimationFrame(tick);
         // 🏘 MC地塊真狀態在 OS_PT(OS_DB)：掛載後異步對帳（買過→蓋房；沒買→空地）；本場景沒MC地塊也無害
         try { window.OS_PT?.getPlotBuilt?.('player')?.then?.(b => { if (S.active) setPlot('player', !!b); }); } catch (e) {}
+        // 掛好了才發：要往場景上加東西的模組(如房間的布置工具)靠這個知道「現在可以掛了」
+        try { window.dispatchEvent(new CustomEvent('lstage-mounted', { detail: { scene: S.scene } })); } catch (e) {}
         console.log('[LobbyStage] mounted');
     }
     function _spawnObjEl(o) {
@@ -1997,6 +2037,7 @@
     window.LobbyStage = {
         tryMount, unmount,
         enter404Stage, exit404Stage,
+        enterRoom,                          // 🏠 走進一間房（房產／公寓那條線用）
         isActive: () => S.active,
         isOn,
         getTalkTarget: () => S.talkTarget,

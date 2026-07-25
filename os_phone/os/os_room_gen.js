@@ -219,8 +219,47 @@
         };
     }
 
+    // ── 房間 → 舞台圖層 ──
+    //   舞台的座標系是固定的 W×H，房間圖不是。等比置中鋪進去(留黑邊)，
+    //   底圖與地板遮罩走「同一個縮放位移」，所以踩到的白區跟看到的地板完全對齊。
+    function _fit(viewBox, W, H) {
+        const s = Math.min(W / viewBox[0], H / viewBox[1]);
+        return { s: s, ox: (W - viewBox[0] * s) / 2, oy: (H - viewBox[1] * s) / 2 };
+    }
+    function _loadImg(src) {
+        return new Promise(function (resolve, reject) {
+            const im = new win.Image();
+            im.onload = function () { resolve(im); };
+            im.onerror = function () { reject(new Error('房間圖讀不進來')); };
+            im.src = src;
+        });
+    }
+    // room：{ image, floor, viewBox }。回 { base, mask, floorStage }，floorStage=換算成舞台座標的地板多邊形
+    async function stageLayers(room, W, H) {
+        if (!room || !room.image) throw new Error('這間房還沒有圖。');
+        const vb = (room.viewBox && room.viewBox.length === 2) ? room.viewBox : [W, H];
+        const f = _fit(vb, W, H);
+        const doc = win.document;
+
+        const cv = doc.createElement('canvas'); cv.width = W; cv.height = H;
+        const cx = cv.getContext('2d');
+        cx.fillStyle = '#0b0d12'; cx.fillRect(0, 0, W, H);
+        cx.drawImage(await _loadImg(room.image), f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
+
+        const floorStage = (room.floor || []).map(function (p) { return [p[0] * f.s + f.ox, p[1] * f.s + f.oy]; });
+        const mv = doc.createElement('canvas'); mv.width = W; mv.height = H;
+        const mx = mv.getContext('2d');
+        mx.fillStyle = '#000'; mx.fillRect(0, 0, W, H);
+        if (floorStage.length >= 3) {
+            mx.fillStyle = '#fff'; mx.beginPath();
+            floorStage.forEach(function (p, i) { if (i) mx.lineTo(p[0], p[1]); else mx.moveTo(p[0], p[1]); });
+            mx.closePath(); mx.fill();
+        }
+        return { base: cv.toDataURL('image/png'), mask: mv.toDataURL('image/png'), floorStage: floorStage, fit: f, viewBox: vb };
+    }
+
     win.OS_ROOM_GEN = {
-        deliver, buildBase, positionWord, orderMessages, parseLayout, sanitizeCeiling,
+        deliver, buildBase, stageLayers, positionWord, orderMessages, parseLayout, sanitizeCeiling,
         listStylePresets, getStyleName, setStyleName, pickStylePreset,
         _cfg: { DENOISE, PROTECT, LONG_SIDE },
     };
