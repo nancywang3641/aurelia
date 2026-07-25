@@ -156,7 +156,7 @@
                 ph: '在房裡走走，或按右下角布置這間房…',
             },
             exit: info.exit,
-            actorPx: layers.personPx,
+            actorPx: layers.figurePx,
         });
 
         // 面板讓開，讓舞台變成主角
