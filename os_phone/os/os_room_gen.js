@@ -192,15 +192,24 @@
     // ── 對外主流程：訂單 → 整房一次生圖 ──
     // order：[{name, content, x, y}]，x/y 是 0~100 的房間座標
     // onStep：進度回呼(給畫面顯示現在做到哪，純文案)
-    async function deliver(spec, order, onStep) {
+    // opts.layout：上次翻好的那份英文清單。給了就不再燒副模型重翻——「重新生成」走這條，
+    //   同一份提示詞只換種子，調參數時才是單一變因。
+    async function deliver(spec, order, onStep, opts) {
         if (!Array.isArray(order) || !order.length) throw new Error('房間裡還沒有東西，先丟幾個包裹進去。');
         const manager = _mgr();
         if (!manager || typeof manager.previewComfyPreset !== 'function') throw new Error('找不到生圖介面。');
         const preset = pickStylePreset();
         if (!preset) throw new Error('還沒挑房間的畫風，先到設置的圖片頁挑一個。');
 
-        if (onStep) onStep('正在核對這批包裹…');
-        const layout = await translateOrder(order);
+        const reuse = String((opts && opts.layout) || '').trim();
+        let layout;
+        if (reuse) {
+            if (onStep) onStep('照上次那份清單重畫…');
+            layout = reuse;
+        } else {
+            if (onStep) onStep('正在核對這批包裹…');
+            layout = await translateOrder(order);
+        }
 
         if (onStep) onStep('正在準備空房…');
         const base = await buildBase(spec);
