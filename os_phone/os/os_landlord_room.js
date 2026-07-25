@@ -109,6 +109,10 @@
                 // 還沒布置過：空房母圖當底，地板一樣走得
                 const base = await GEN.buildBase(info.spec);
                 room = { image: base.baseData, floor: base.room.floor, viewBox: base.room.viewBox, order: [] };
+            } else if (!room.floor || !room.viewBox) {
+                // 舊存檔只存了圖、沒存地板 → 用同一份房規格重算一次（同 spec 出的幾何完全一樣，對得上那張圖）
+                const base = await GEN.buildBase(info.spec);
+                room = Object.assign({}, room, { floor: base.room.floor, viewBox: base.room.viewBox });
             }
         } catch (e) {
             console.warn('[LandlordRoom] 開房失敗', e);
@@ -331,46 +335,46 @@
         el.style.left = p[0] + 'px';
         el.style.top = p[1] + 'px';
 
-        let dragging = false, moved = 0, startX = 0, startY = 0, lastX = it.x, lastY = it.y;
+        let moved = 0, startX = 0, startY = 0, lastX = it.x, lastY = it.y;
         const stage = _STAGE();
 
-        el.addEventListener('pointerdown', function (ev) {
-            dragging = true; moved = 0;
-            startX = ev.clientX; startY = ev.clientY;
-            lastX = it.x; lastY = it.y;
-            el.classList.add('is-drag');
-            ev.stopPropagation();
-            try { el.setPointerCapture(ev.pointerId); } catch (e) {}
-        });
-        el.addEventListener('pointermove', function (ev) {
-            if (!dragging) return;
+        // 🚨 拖曳的 move/up 一律掛在 window：滑鼠一定會跑出這顆小方塊，
+        //    掛在元素上(就算有 setPointerCapture)只要捕獲沒成立就整個拖不動。
+        function onMove(ev) {
             moved = Math.max(moved, Math.hypot(ev.clientX - startX, ev.clientY - startY));
-            // 螢幕座標 → 舞台世界座標（世界層是被縮放過的，用它自己的框換算）
             const w = stage && stage._S && stage._S.world;
             if (!w) return;
-            const r = w.getBoundingClientRect();
+            const r = w.getBoundingClientRect();   // 世界層被縮放過，用它自己的框換算螢幕→舞台座標
             if (!r.width || !r.height) return;
-            const sx = (ev.clientX - r.left) / r.width * 1536;
-            const sy = (ev.clientY - r.top) / r.height * 1024;
-            const rm = _toRoom(sx, sy);
+            const rm = _toRoom((ev.clientX - r.left) / r.width * 1536, (ev.clientY - r.top) / r.height * 1024);
             it.x = Math.max(1, Math.min(99, rm[0]));
             it.y = Math.max(1, Math.min(99, rm[1]));
             const q = _toStage(it.x, it.y);
             el.style.left = q[0] + 'px';
             el.style.top = q[1] + 'px';
-        });
-        function endDrag(ev) {
-            if (!dragging) return;
-            dragging = false;
+            ev.preventDefault();
+        }
+        function onUp() {
+            win.removeEventListener('pointermove', onMove, true);
+            win.removeEventListener('pointerup', onUp, true);
+            win.removeEventListener('pointercancel', onUp, true);
             el.classList.remove('is-drag');
-            try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
             if (moved < DRAG_SLOP) { _snap(el, it, lastX, lastY); _openEditor(it, redraw, say); return; }
             // 掉到房間外面 → 退回原位，包裹只能放在房裡的地板上
             if (!_onFloor(it.x, it.y)) { _snap(el, it, lastX, lastY); say('那裡不在房間裡，包裹放回原本的位置了。'); }
             else say();
         }
-        el.addEventListener('pointerup', endDrag);
-        el.addEventListener('pointercancel', endDrag);
+        el.addEventListener('pointerdown', function (ev) {
+            moved = 0;
+            startX = ev.clientX; startY = ev.clientY;
+            lastX = it.x; lastY = it.y;
+            el.classList.add('is-drag');
+            ev.preventDefault();
+            ev.stopPropagation();   // 別讓舞台把這下當成「點地板走過去」
+            win.addEventListener('pointermove', onMove, true);
+            win.addEventListener('pointerup', onUp, true);
+            win.addEventListener('pointercancel', onUp, true);
+        });
         return el;
     }
     function _snap(el, it, x, y) {
@@ -435,6 +439,7 @@
             await LL.saveRoom(unitId, {
                 image: result.image, layout: result.layout, order: order,
                 roomTypeKey: spec.typeKey,   // 房型跟著房間走,下次進來要用同一間
+                floor: result.floor, viewBox: result.viewBox,   // 🚨 地板一定要一起存：沒有它就算不出可走區,走進去會整片不能動
                 styleName: result.styleName, at: result.at,
             });
             _endDeco();
