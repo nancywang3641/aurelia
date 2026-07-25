@@ -26,11 +26,13 @@
         if (d.getElementById('llr-style')) return;
         const s = d.createElement('style'); s.id = 'llr-style';
         s.textContent = [
-            // 房間右下角的浮鈕：跟舞台既有的聊天浮鈕同一種語言，位置錯開
-            '.llr-fab{position:absolute;right:18px;bottom:96px;z-index:60;display:flex;align-items:center;gap:7px;',
+            // 房間右下角的浮鈕組：跟舞台既有的聊天浮鈕同一種語言，位置錯開，由下往上疊
+            '.llr-fabs{position:absolute;right:18px;bottom:96px;z-index:60;display:flex;flex-direction:column;gap:8px;align-items:flex-end}',
+            '.llr-fab{display:flex;align-items:center;gap:7px;',
             '  padding:10px 14px;border-radius:22px;border:1px solid rgba(217,176,106,.55);background:rgba(14,16,21,.86);',
             '  color:#f0e2c6;font-size:13px;font-family:inherit;cursor:pointer}',
             '.llr-fab:hover{border-color:#d98fb0}',
+            '.llr-fab:disabled{opacity:.5;cursor:default}',
             // 布置模式的工具列：螢幕座標，不跟著舞台縮放
             '.llr-bar{position:absolute;left:0;right:0;bottom:0;z-index:62;display:flex;gap:8px;justify-content:center;',
             '  padding:12px 14px;background:linear-gradient(180deg,rgba(14,16,21,0) 0%,rgba(14,16,21,.9) 45%)}',
@@ -218,14 +220,42 @@
             const root = stage && stage._S && stage._S.root;
             if (!root) return;
             _injectStyle();
-            const fab = d.createElement('button');
-            fab.type = 'button';
-            fab.className = 'llr-fab';
-            fab.innerHTML = '<i class="fa-solid fa-box-open"></i> 布置這間房';
-            fab.onclick = function () { _startDeco(root); };
-            root.appendChild(fab);
+            _mountFabs(root);
         } catch (err) { console.warn('[LandlordRoom] 房間工具掛載失敗', err); }
     });
+
+    // 房間裡的浮鈕組：一定有「布置」；布置過的房才多一顆「重新生成」
+    function _mountFabs(root) {
+        const old = root.querySelector('.llr-fabs');
+        if (old) old.remove();
+        const box = d.createElement('div'); box.className = 'llr-fabs';
+        const deco = d.createElement('button');
+        deco.type = 'button'; deco.className = 'llr-fab';
+        deco.innerHTML = '<i class="fa-solid fa-box-open"></i> 布置這間房';
+        deco.onclick = function () { _startDeco(root); };
+        box.appendChild(deco);
+        if (_ctx && _ctx.room && Array.isArray(_ctx.room.order) && _ctx.room.order.length) {
+            const again = d.createElement('button');
+            again.type = 'button'; again.className = 'llr-fab';
+            again.innerHTML = '<i class="fa-solid fa-rotate"></i> 重新生成';
+            again.onclick = function () { _regen(root, [deco, again]); };
+            box.appendChild(again);
+        }
+        root.appendChild(box);
+    }
+
+    // 重新生成：東西與位置都不動，直接沿用上次翻好的那份清單再畫一張。
+    //   不重翻訂單＝少燒一次副模型，也讓「只有種子/參數在變」成立。
+    async function _regen(root, btns) {
+        if (!_ctx || !_ctx.room || !Array.isArray(_ctx.room.order) || !_ctx.room.order.length) return;
+        btns.forEach(function (b) { b.disabled = true; });
+        try {
+            await _runDeliver(_ctx.room.order, root, { layout: _ctx.room.layout });
+        } catch (e) {
+            btns.forEach(function (b) { b.disabled = false; });
+            try { win.toastr && win.toastr.info((e && e.message) || '這次沒生成，再按一次就好。'); } catch (_) {}
+        }
+    }
 
     // ── 座標換算：包裹存房間座標(0~100)，畫在舞台上要換成舞台座標 ──
     function _toStage(x, y) {
@@ -264,8 +294,8 @@
             return { id: 'p' + i + '_' + Math.random().toString(36).slice(2, 6), name: String(it.name || ''), content: String(it.content || ''), x: Number(it.x) || 50, y: Number(it.y) || 50 };
         });
 
-        const fab = root.querySelector('.llr-fab');
-        if (fab) fab.remove();
+        const fabs = root.querySelector('.llr-fabs');
+        if (fabs) fabs.remove();
 
         const layer = d.createElement('div');
         layer.className = 'llr-layer';
@@ -347,15 +377,7 @@
         const dc = _ctx.deco;
         [dc.layer, dc.tip, dc.bar].forEach(function (el) { try { el.remove(); } catch (e) {} });
         _ctx.deco = null;
-        // 布置鈕放回去
-        try {
-            const fab = d.createElement('button');
-            fab.type = 'button';
-            fab.className = 'llr-fab';
-            fab.innerHTML = '<i class="fa-solid fa-box-open"></i> 布置這間房';
-            fab.onclick = function () { _startDeco(dc.root); };
-            dc.root.appendChild(fab);
-        } catch (e) {}
+        try { _mountFabs(dc.root); } catch (e) {}   // 浮鈕組放回去
     }
 
     function _makePkg(it, redraw, say) {
@@ -451,24 +473,16 @@
         };
     }
 
-    // ── 配送：訂單 → 整房一次生圖 → 存起來 → 就地換成新的房間 ──
-    async function _deliver(say) {
-        const dc = _ctx.deco;
-        if (!dc) return;
-        const items = _ctx.items;
-        if (!items.length) { say('房間還是空的，先添加一個包裹。'); return; }
-        if (items.some(function (it) { return !String(it.name || '').trim(); })) { say('有包裹還沒寫名稱，點開它填一下再配送。'); return; }
-
-        dc.btns.forEach(function (b) { b.disabled = true; });
+    // ── 生圖那一段：訂單 → 整房一次生圖 → 存起來 → 就地換成新的房間 ──
+    //   「配送」與「重新生成」共用這條；差別只在 opts.layout 給不給(給了就不重翻訂單)。
+    async function _runDeliver(order, root, opts) {
         const busy = d.createElement('div'); busy.className = 'llr-busy';
-        busy.textContent = '正在核對這批包裹…';
-        dc.root.appendChild(busy);
-
+        busy.textContent = '正在準備…';
+        root.appendChild(busy);
         const unitId = _ctx.unitId, spec = _ctx.spec, isHome = (unitId === HOME_ID);
-        const order = items.map(function (it) { return { name: it.name, content: it.content, x: it.x, y: it.y }; });
         try {
             const LL = _LL();
-            const result = await _GEN().deliver(spec, order, function (msg) { busy.textContent = msg; });
+            const result = await _GEN().deliver(spec, order, function (msg) { busy.textContent = msg; }, opts);
             busy.textContent = '正在收好房間…';
             await LL.saveRoom(unitId, {
                 image: result.image, layout: result.layout, order: order,
@@ -481,8 +495,25 @@
             // 就地重進這間房＝看到剛剛生出來的樣子
             if (isHome) await openHome(); else await open(null, unitId);
         } catch (e) {
-            console.warn('[LandlordRoom] 配送失敗', e);
+            console.warn('[LandlordRoom] 生成失敗', e);
             try { busy.remove(); } catch (_) {}
+            throw e;
+        }
+    }
+
+    // 配送：把布置模式現在擺的這批包裹送出去（要重翻訂單）
+    async function _deliver(say) {
+        const dc = _ctx.deco;
+        if (!dc) return;
+        const items = _ctx.items;
+        if (!items.length) { say('房間還是空的，先添加一個包裹。'); return; }
+        if (items.some(function (it) { return !String(it.name || '').trim(); })) { say('有包裹還沒寫名稱，點開它填一下再配送。'); return; }
+
+        dc.btns.forEach(function (b) { b.disabled = true; });
+        const order = items.map(function (it) { return { name: it.name, content: it.content, x: it.x, y: it.y }; });
+        try {
+            await _runDeliver(order, dc.root, null);
+        } catch (e) {
             dc.btns.forEach(function (b) { b.disabled = false; });
             say((e && e.message) || '這次沒送成，再按一次配送就好。');
         }
