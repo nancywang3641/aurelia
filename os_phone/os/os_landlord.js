@@ -19,6 +19,7 @@
     const APP_ID = 'landlord';
     const K_STATE = 'state';
     const K_TUNE = 'tune';      // tune::<npcKey>
+    const K_ROOM = 'room';      // room::<unitId>（房間圖另存一格,不塞進 state,免得每次讀房產都拖著幾 MB 的圖）
 
     function _db() { return win.OS_DB || window.OS_DB; }
     function _now() { try { return Date.now(); } catch (e) { return 0; } }
@@ -76,6 +77,22 @@
         const db = _db();
         if (!db?.saveAppData) return;
         await db.saveAppData(APP_ID, K_TUNE + '::' + String(npcKey), tuning);
+    }
+
+    // ── 房間圖(包裹配送的成果)：一戶一格,生好就存,之後直接讀不重生 ──
+    //   讀失敗一律當「還沒布置」處理:最壞情況是玩家再布置一次,不會弄丟房產資料。
+    async function getRoom(unitId) {
+        try {
+            const db = _db();
+            if (!db?.getAppData) return null;
+            return (await db.getAppData(APP_ID, K_ROOM + '::' + String(unitId))) || null;
+        } catch (e) { console.warn('[Landlord] 讀房間圖失敗', e); return null; }
+    }
+
+    async function saveRoom(unitId, room) {
+        const db = _db();
+        if (!db?.saveAppData) throw new Error('OS_DB.saveAppData 不存在');
+        await db.saveAppData(APP_ID, K_ROOM + '::' + String(unitId), room);
     }
 
     // ── 離線補算(旅行青蛙式)：純函式,不碰 DB/DOM,好驗 ──
@@ -344,6 +361,14 @@
                 btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> 招租';
                 btn.onclick = function () { _renderRecruit(root, u.id); };
                 top.appendChild(btn);
+            } else if (win.OS_LANDLORD_ROOM) {
+                const btn = d.createElement('button'); btn.className = 'll-btn';
+                btn.innerHTML = '<i class="fa-solid fa-door-open"></i> 進房間';
+                btn.onclick = function () {
+                    try { win.OS_LANDLORD_ROOM.open(root, u.id); }
+                    catch (e) { console.warn('[Landlord] 進房間失敗', e); _renderError(root); }
+                };
+                top.appendChild(btn);
             }
             card.appendChild(top);
             units.appendChild(card);
@@ -431,7 +456,7 @@
     }
 
     win.OS_LANDLORD = {
-        _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, _dayNum, settleCore,
+        _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, getRoom, saveRoom, _dayNum, settleCore,
         listCandidates, tuneTenant, moveIn, _fallbackTuning, launch, _openAndSettle,   // _openAndSettle=console 診斷用
     };
     if (win !== window) { try { window.OS_LANDLORD = win.OS_LANDLORD; } catch (e) {} }

@@ -1757,6 +1757,26 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
 
+                        <!-- ── 房間畫風：房客的房間整間生出來時用哪個畫風包（選了就存，不用按保存）── -->
+                        <div class="set-group" id="img-room-style-block">
+                            <div class="set-label">房間畫風</div>
+                            <select class="set-select" id="img-room-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">
+                                ${(() => {
+                                    const _w = window.parent || window;
+                                    const _G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
+                                    const _list = (_G && _G.listStylePresets) ? _G.listStylePresets() : [];
+                                    const _cur = (_G && _G.getStyleName) ? _G.getStyleName() : '';
+                                    if (!_list.length) return '<option value="">還沒有可用的畫風</option>';
+                                    return _list.map(p => {
+                                        const nm = String((p && p.name) || '未命名');
+                                        const v = nm.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                                        return '<option value="' + v + '"' + (nm === _cur ? ' selected' : '') + '>' + v + '</option>';
+                                    }).join('');
+                                })()}
+                            </select>
+                            <div class="set-desc" style="margin-top:6px;">房客的房間整間畫出來時用這個畫風。</div>
+                        </div>
+
                         <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
                             <div style="display:flex; align-items:center; justify-content:space-between;" title="開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會順便依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。其它觸發：主模型直接吐 [Scene|]（世界書開規則，最省）。">
                                 <span>🖼️ 自動插圖</span>
