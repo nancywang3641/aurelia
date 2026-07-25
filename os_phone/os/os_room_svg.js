@@ -8,6 +8,12 @@
     'use strict';
     const win = window.parent || window;
 
+    // 🚨🚨 牆高上限＝這整套房間的鐵律（Rae 2026-07-25）
+    //   生圖會照母圖上看得到的牆高決定家具多大：牆一高，家具整組跟著放大變成大家具，
+    //   多出來的空白直牆它還會自己找高櫃子來填。牆高**不可以拿來表現挑高**。
+    //   makeRoom 與 parseSpec 都會夾在這個上限內——外面丟什麼進來都一樣。
+    var WALL_MAX = 0.80;
+
     // ============================================================
     // SVG 房間幾何模組
     // makeRoom(spec) → { svg, floor 地板碰撞多邊形, viewBox }；pointInPolygon；
@@ -50,7 +56,7 @@
         var UIDN = 0;
         // spec: { w, d, wallH, floor, window } → { svg, floor:[[x,y]x4], viewBox:[w,h] }
         function makeRoom(spec) {
-            var w = spec.w, d = spec.d, WALLH = spec.wallH == null ? 0.69 : spec.wallH;
+            var w = spec.w, d = spec.d, WALLH = Math.min(WALL_MAX, spec.wallH == null ? 0.68 : spec.wallH);
             var FL = FLOORS[spec.floor] || FLOORS.oak;
             var hasWin = spec.window !== false;
             var UID = 'k' + (++UIDN);
@@ -168,7 +174,7 @@
             var o = JSON.parse(jm[0]);
             var w = Math.max(1.6, Math.min(8, parseFloat(o.w)));
             var d = Math.max(1.4, Math.min(6, parseFloat(o.d)));
-            var wallH = Math.max(0.5, Math.min(1.7, parseFloat(o.wallH != null ? o.wallH : 0.92)));
+            var wallH = Math.max(0.45, Math.min(WALL_MAX, parseFloat(o.wallH != null ? o.wallH : 0.68)));
             var floor = FLOORS[o.floor] ? o.floor : 'oak';
             var win = !(o.window === false || o.window === 'false' || o.window === 0);
             if (!(w > 0) || !(d > 0)) throw new Error('房規格數值無效，請再按一次。');
@@ -210,20 +216,28 @@
     // ============================================================
     // 房型清單：給呼叫端「挑一個」而不是自己寫數字（挑選比生成數字可靠，差距才拉得開）。
     // 每型的寬深牆高地板都寫死、差距拉到極端。
-    // 🚨 牆高全面降到原本的 0.75（Rae 2026-07-25）：牆一高，母圖上就多出一大片空白直牆，
-    //    生圖會自己拿高櫃子去填它。矮牆＝沒地方長櫃子。各房型的相對差距照舊保留。
+    // 🚨🚨 牆高＝生圖的家具尺度基準（Rae 2026-07-25 定案，以後一律照這條）：
+    //    模型會照母圖上看得到的牆高去決定家具多大。牆一拉高，櫃子床鋪整組跟著放大變成大家具；
+    //    多出來的那片空白直牆它還會自己找高櫃子來填。
+    //    → 所以牆高**不能拿來表現「挑高」**，全部房型一律收在 0.52~0.80 這個窄帶裡。
+    //    房型的差異交給寬／深／地板材質去表現（本來就從 2.2×2.0 拉到 7.8×5.6，差距夠明顯）。
+    //    WALL_MAX（檔案開頭）是硬上限：新增房型也不准超過。
     // ============================================================
     var ROOM_TYPES = {
         studio_small: { w: 2.2, d: 2.0, wallH: 0.52, floor: 'carpet',   label: '蝸居小套房', desc: '清貧／學生／租屋／極簡苦行 → 又小又矮的小套房' },
-        snug:         { w: 3.4, d: 3.0, wallH: 0.64, floor: 'oak',      label: '溫馨暖窩',   desc: '慵懶／居家／宅／怕冷 → 小而軟的溫馨窩' },
-        cozy:         { w: 3.6, d: 3.2, wallH: 0.71, floor: 'walnut',   label: '樸實獨居',   desc: '一般單身上班族／樸實務實 → 中小型居家' },
-        standard:     { w: 4.2, d: 4.0, wallH: 0.75, floor: 'oak',      label: '標準方正',   desc: '真的沒明顯特徵、中規中矩才選這個' },
-        wide:         { w: 6.4, d: 3.0, wallH: 0.79, floor: 'oak',      label: '開闊寬廳',   desc: '外向／社交／愛熱鬧／開闊感 → 又寬又淺的大廳' },
-        deep:         { w: 2.8, d: 5.4, wallH: 0.86, floor: 'walnut',   label: '深長書齋',   desc: '書房／研究／工作狂／內斂專注 → 又窄又深的長間' },
-        lofty:        { w: 4.8, d: 3.8, wallH: 1.24, floor: 'greywash', label: '挑高設計宅', desc: '講究品味／設計師／冷調時尚 → 挑高、石灰調' },
-        maker:        { w: 5.6, d: 4.8, wallH: 0.94, floor: 'greywash', label: '寬敞工作室', desc: '創作者／工程師／實驗狂／東西多 → 寬敞實用工坊' },
-        grand:        { w: 7.8, d: 5.6, wallH: 1.28, floor: 'tile',     label: '豪門大邸',   desc: '千金／豪門／權貴／極度奢華排場 → 巨大挑高、大理石' }
+        snug:         { w: 3.4, d: 3.0, wallH: 0.60, floor: 'oak',      label: '溫馨暖窩',   desc: '慵懶／居家／宅／怕冷 → 小而軟的溫馨窩' },
+        cozy:         { w: 3.6, d: 3.2, wallH: 0.64, floor: 'walnut',   label: '樸實獨居',   desc: '一般單身上班族／樸實務實 → 中小型居家' },
+        standard:     { w: 4.2, d: 4.0, wallH: 0.68, floor: 'oak',      label: '標準方正',   desc: '真的沒明顯特徵、中規中矩才選這個' },
+        wide:         { w: 6.4, d: 3.0, wallH: 0.70, floor: 'oak',      label: '開闊寬廳',   desc: '外向／社交／愛熱鬧／開闊感 → 又寬又淺的大廳' },
+        deep:         { w: 2.8, d: 5.4, wallH: 0.72, floor: 'walnut',   label: '深長書齋',   desc: '書房／研究／工作狂／內斂專注 → 又窄又深的長間' },
+        maker:        { w: 5.6, d: 4.8, wallH: 0.74, floor: 'greywash', label: '寬敞工作室', desc: '創作者／工程師／實驗狂／東西多 → 寬敞實用工坊' },
+        lofty:        { w: 4.8, d: 3.8, wallH: 0.78, floor: 'greywash', label: '挑高設計宅', desc: '講究品味／設計師／冷調時尚 → 挑高、石灰調' },
+        grand:        { w: 7.8, d: 5.6, wallH: 0.80, floor: 'tile',     label: '豪門大邸',   desc: '千金／豪門／權貴／極度奢華排場 → 巨大挑高、大理石' }
     };
+    // 保險絲：不管誰改了上面的數字或外面丟了什麼 spec 進來，牆高都不會再超過上限
+    Object.keys(ROOM_TYPES).forEach(function (k) {
+        if (ROOM_TYPES[k].wallH > WALL_MAX) ROOM_TYPES[k].wallH = WALL_MAX;
+    });
 
     win.OS_ROOM_SVG = {
         ROOM_TYPES: ROOM_TYPES,
