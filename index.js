@@ -205,7 +205,9 @@ const PHONE_FILES = [
     'os/os_pt.js',            // 🏦 交易區 PT 經濟：錢包+大總結結算估值+VN 結算卡+交易所面板（依賴 OS_DB/OS_API，排它們後面）
     'os/os_cafe.js',          // ☕ 書咖經營：調配台研發+上架命名+菜單/書單（依賴 OS_DB/OS_API；設計書 docs/book_cafe_design.md）
     'os/os_room_svg.js',      // 🏠 SVG 房間產生器（純幾何，無相依；供包租婆/城市共用）
+    'os/os_room_gen.js',      // 📦 整房生圖引擎：包裹訂單→英文布置提示詞→空房母圖一次 inpaint（依賴 OS_ROOM_SVG/OS_IMAGE_MANAGER/OS_API）
     'os/os_landlord.js',      // 🏘️ 包租婆①：招租/入住/離線收租（依賴 OS_DB/OS_API/OS_PT/OS_ROOM_SVG/LobbyNpcs；設計書 docs/landlord_design.md）
+    'os/os_landlord_room.js', // 📦 包租婆房間頁＋包裹配送 UI（依賴 OS_LANDLORD/OS_ROOM_GEN）
     'os/os_worldgate.js',     // 🌌 世界門③：愛麗絲面板=種子抽選+世界落地視差書+旅人招募+DIVE（依賴 OS_DB/OS_API/AURELIA_WORLDGATE；設計書 docs/parallax_worldgate_design.md）
     'os/os_workbench.js',
 
