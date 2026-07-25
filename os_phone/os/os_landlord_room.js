@@ -522,7 +522,15 @@
         }
     }
 
-    win.OS_LANDLORD_ROOM = { open, openHome };
+    // 重進「現在這一間」：調完數值要立刻看效果時用（測試面板按鈕接這個）
+    async function reenter() {
+        if (!_ctx) return false;
+        const id = _ctx.unitId;
+        if (id === HOME_ID) await openHome(); else await open(null, id);
+        return true;
+    }
+
+    win.OS_LANDLORD_ROOM = { open, openHome, reenter };
     if (win !== window) { try { window.OS_LANDLORD_ROOM = win.OS_LANDLORD_ROOM; } catch (e) {} }
     console.log('[LandlordRoom] 房間（舞台版）已載入');
 })();
