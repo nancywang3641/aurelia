@@ -54,7 +54,9 @@
             var FL = FLOORS[spec.floor] || FLOORS.oak;
             var hasWin = spec.window !== false;
             var UID = 'k' + (++UIDN);
-            var FOC = 7.0, SC = 150, FRONTH = 0.20, E = 0.16, PILLAR = 0.17, NOTCHW = 0.52;
+            // DOORW＝正面那道門口的寬度。門口置中、左右各一段矮牆(前緣)。
+            //   舊版是「左矮牆＋中央柱＋右矮牆」＝兩個門口夾一根柱子,看起來像牆中間卡了一塊,已改回單一門口。
+            var FOC = 7.0, SC = 150, FRONTH = 0.20, E = 0.16, DOORW = 1.04;
             var CAMH = 4.2, CAMZ = -3.2, CTRY = 0.2;
             var Cam = [0, CAMH, CAMZ], Ctr = [0, CTRY, d / 2];
             var fwd = _v3nrm(_v3sub(Ctr, Cam));
@@ -79,7 +81,7 @@
             var floorPoly = [g(fFL), g(fFR), g(fBR), g(fBL)];
             // 內部輪廓（地板＋三面牆內面）：inpaint 白區用，只排除邊框與外面黑區
             var interiorPoly = [g(iFLt), g(iBLt), g(iBRt), g(iFRt), g(fFR), g(fFL)];
-            var segs = [[L, -(PILLAR + NOTCHW)], [-PILLAR, PILLAR], [(PILLAR + NOTCHW), R]]
+            var segs = [[L, -DOORW / 2], [DOORW / 2, R]]
                 .map(function (s) { return [Math.max(L, Math.min(R, s[0])), Math.max(L, Math.min(R, s[1]))]; })
                 .filter(function (s) { return s[1] - s[0] > 0.02; });
             var floorLines = '';
