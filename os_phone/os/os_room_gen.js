@@ -15,8 +15,11 @@
     const ROOM_NEGATIVE = 'ceiling plane objects, ceiling-mounted objects, objects hanging from the ceiling, objects suspended from the ceiling, low-angle view, eye-level view, interior photography perspective';
 
     // 🚨 生圖參數寫死不外露，面板一律不給調。
-    //   重繪幅度：0.90 → 0.85（Rae 2026-07-25 調低試看看；低一點＝更貼母圖的房型與透視，家具也比較不會亂長）
-    const DENOISE = 0.85;
+    //   重繪幅度 0.90＝定案，**不要再調低**。
+    //   實測過 0.85：畫面確實更貼母圖，但提示詞的份量跟著變小，位置就開始不聽話——
+    //   訂單寫「放上面」它畫到下面去。位置擺對是這套玩法的全部意義（包裹是玩家親手擺的），
+    //   家具偏大可以忍，位置錯不能忍。位置飄要往「調高」的方向找，不是調低。
+    const DENOISE = 0.90;
     const PROTECT = 4;
     const LONG_SIDE = 1024;      // 母圖長邊
 
