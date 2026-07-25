@@ -15,11 +15,12 @@
     const ROOM_NEGATIVE = 'ceiling plane objects, ceiling-mounted objects, objects hanging from the ceiling, objects suspended from the ceiling, low-angle view, eye-level view, interior photography perspective';
 
     // 🚨 生圖參數寫死不外露，面板一律不給調。
-    //   重繪幅度 0.90＝定案，**不要再調低**。
-    //   實測過 0.85：畫面確實更貼母圖，但提示詞的份量跟著變小，位置就開始不聽話——
-    //   訂單寫「放上面」它畫到下面去。位置擺對是這套玩法的全部意義（包裹是玩家親手擺的），
-    //   家具偏大可以忍，位置錯不能忍。位置飄要往「調高」的方向找，不是調低。
-    const DENOISE = 0.90;
+    //   重繪幅度 0.85（Rae 2026-07-26 想過之後定的，取代先前的 0.90）。
+    //   權衡：0.85 畫面更貼母圖的房型與透視，代價是提示詞份量變小、位置偶爾不聽話
+    //   （訂單寫「放上面」它畫到下面去）。但「重新生成」只換圖不重翻訂單、成本很低，
+    //   位置歪掉重抽幾次就好——所以選畫面品質，靠重抽補位置。
+    //   🚨 要動這個數字前先看：往上＝位置更準但更不貼母圖，往下＝反之。別無腦回 0.90。
+    const DENOISE = 0.85;
     const PROTECT = 4;
     const LONG_SIDE = 1024;      // 母圖長邊
 
