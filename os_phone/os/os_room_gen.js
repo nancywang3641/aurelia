@@ -242,8 +242,10 @@
     //     上限由最大的房型（豪門 7.8m 寬）決定，再大就撐出舞台。
     //   FIGURE_PX＝小人實際畫多高。這才是「小人看起來大不大」的旋鈕。
     //     兩者相等＝完全照真實比例；FIGURE_PX 調小＝小人相對房間變小（RPG 常見的處理）。
+    //     🚨 135 是 Rae 2026-07-26 在房間裡逐個試出來的定案（200 寫實太大、150 還是偏大）。
+    //     ＝真人尺度的 0.68；chibi 比例的角色頭佔份量大，畫到寫實高度會顯得笨重。
     const PERSON_PX = 200;
-    let FIGURE_PX = 150;
+    let FIGURE_PX = 135;
     function _fit(viewBox, W, H, personH) {
         let s = (personH > 0) ? (PERSON_PX / personH) : Math.min(W / viewBox[0], H / viewBox[1]);
         s = Math.min(s, W / viewBox[0], H / viewBox[1]);   // 保險：房間再大也不准撐出舞台
