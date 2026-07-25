@@ -14,6 +14,16 @@
     const ROOM_POSITIVE = "bird's-eye top-down tilemap room layout, fixed camera looking downward, objects may be placed on the floor plane or mounted on the wall plane, all visible from above";
     const ROOM_NEGATIVE = 'ceiling plane objects, ceiling-mounted objects, objects hanging from the ceiling, objects suspended from the ceiling, low-angle view, eye-level view, interior photography perspective';
 
+    // 🚨 地板材質一定要寫進提示詞：房型定了材質、母圖也畫了，但重繪幅度夠高時整片室內都會被重畫，
+    //   沒有提示詞護著就被模型自己編的地板蓋掉（房型的材質設定等於白設）。順便讓重抽時地板保持一致。
+    const FLOOR_WORDS = {
+        oak:      'warm oak plank wood flooring',
+        walnut:   'dark walnut plank wood flooring',
+        greywash: 'grey washed wood plank flooring',
+        tile:     'pale grey ceramic tile flooring',
+        carpet:   'soft green carpet flooring',
+    };
+
     // 🚨 生圖參數寫死不外露，面板一律不給調。
     //   重繪幅度 0.87＝Rae 2026-07-26 在 ComfyUI 原介面細調出來的定案（0.90 位置準但放飛、0.85 太貼母圖）。
     //   取捨：往上＝位置更準、畫面更放飛；往下＝更貼母圖的房型與透視、但提示詞份量變小位置會飄。
@@ -154,11 +164,11 @@
     }
 
     // ── 整房 inpaint 工作流：母圖＋遮罩塞進畫風預設包，重繪幅度與保護像素寫死 ──
-    function buildInpaintPreset(manager, preset, layout, baseData, maskData, size) {
+    function buildInpaintPreset(manager, preset, layout, baseData, maskData, size, floorWord) {
         if (!manager || typeof manager._buildComfyWorkflow !== 'function') throw new Error('目前版本的生圖介面接不上房間。');
         const live = (manager.config && manager.config.comfyuiDirect) || {};
         const cfg = Object.assign({}, live, preset, { modelType: 'anima' });
-        const posText = [cfg.basePrompt, ROOM_POSITIVE, layout].filter(Boolean).join(', ');
+        const posText = [cfg.basePrompt, ROOM_POSITIVE, floorWord, layout].filter(Boolean).join(', ');
         const negText = [cfg.negPrompt, ROOM_NEGATIVE].filter(Boolean).join(', ');
         const workflow = manager._buildComfyWorkflow(posText, negText, 'char', {
             width: size.width, height: size.height, seed: Math.floor(Math.random() * 1e15),
@@ -218,7 +228,8 @@
         const base = await buildBase(spec);
 
         if (onStep) onStep('正在把東西一件件擺進房間…');
-        const runPreset = buildInpaintPreset(manager, preset, layout, base.baseData, base.maskData, { width: base.width, height: base.height });
+        const runPreset = buildInpaintPreset(manager, preset, layout, base.baseData, base.maskData,
+            { width: base.width, height: base.height }, FLOOR_WORDS[spec && spec.floor] || FLOOR_WORDS.oak);
         const image = await manager.previewComfyPreset(runPreset, '', { packSize: true });
         if (!image) throw new Error('這次沒生出房間圖，再按一次配送就好。');
 
