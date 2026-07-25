@@ -237,9 +237,13 @@
     //   所以不是把每間房都拉滿舞台（那會讓 2.2m 的蝸居跟 7.8m 的豪門在螢幕上一樣大，
     //   比例尺永遠對不上），而是**讓「一個人的高度」在每間房裡都等於同一個像素值**，
     //   房間圖跟著那個比例縮放置中——小房間就佔比較小、周圍留黑（那本來就是牆外）。
-    //   PERSON_PX 是這條唯一的旋鈕：它同時決定小人多高、以及房間畫多大。
-    //   上限由最大的房型（豪門 7.8m 寬）決定：再大就會撐出舞台，所以別往上加太多。
+    //   兩個旋鈕，都是常數、跟房型無關（所以小人在每一間房都一樣大）：
+    //   PERSON_PX＝房間畫多大（等於「一個真人高」佔幾像素）。往上加＝所有房間一起放大；
+    //     上限由最大的房型（豪門 7.8m 寬）決定，再大就撐出舞台。
+    //   FIGURE_PX＝小人實際畫多高。這才是「小人看起來大不大」的旋鈕。
+    //     兩者相等＝完全照真實比例；FIGURE_PX 調小＝小人相對房間變小（RPG 常見的處理）。
     const PERSON_PX = 200;
+    const FIGURE_PX = 150;
     function _fit(viewBox, W, H, personH) {
         let s = (personH > 0) ? (PERSON_PX / personH) : Math.min(W / viewBox[0], H / viewBox[1]);
         s = Math.min(s, W / viewBox[0], H / viewBox[1]);   // 保險：房間再大也不准撐出舞台
@@ -277,8 +281,10 @@
         return {
             base: cv.toDataURL('image/png'), mask: mv.toDataURL('image/png'),
             floorStage: floorStage, fit: f, viewBox: vb,
-            // 🧍 一個成年人在這間房裡、站在舞台座標系下該有多高（房間幾何算出來的，不是填死的）
+            // 🧍 一個真人在這間房裡、站在舞台座標系下該有多高（房間幾何算出來的；等於 PERSON_PX）
             personPx: (room.personH || 0) * f.s,
+            // 🧍 小人實際畫多高：固定值，走到哪一間房都一樣大（RPG 規矩）
+            figurePx: FIGURE_PX,
         };
     }
 
