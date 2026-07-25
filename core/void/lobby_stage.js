@@ -1417,17 +1417,25 @@
     // ── 🏠 走進一間房 ────────────────────────────────────
     //   房間不是素材場景：底圖＝那間房的成品圖(或還沒布置的空房)，可走區＝房間地板多邊形轉的白遮罩。
     //   dyn = { base, mask, floorStage:[[x,y]…], header:{name,badge,ph}, exit:{to,spawn}, actorScale? }
-    //   落點放地板重心稍微靠前；出口貼地板下緣正中＝房間正面那道門口，往下走就出去。
+    //   落點＝地板重心；出口貼地板下緣正中＝房間正面那道門口，往下走到底才出去。
+    //   🚨 門的大小要跟著房間縮放：固定像素的觸發區在小房間會佔掉半個地板，走沒兩步就被傳出去。
     function enterRoom(dyn) {
         if (!dyn || !dyn.base || !dyn.mask) return false;
         const poly = (Array.isArray(dyn.floorStage) && dyn.floorStage.length >= 3) ? dyn.floorStage : null;
-        let px = MAP_W / 2, py = Math.round(MAP_H * 0.66), doorY = Math.round(MAP_H * 0.86);
+        let px = MAP_W / 2, py = Math.round(MAP_H * 0.66), maxY = Math.round(MAP_H * 0.9);
+        let dw = 190, dh = 48;
         if (poly) {
-            let sx = 0, sy = 0, minY = 1e9, maxY = -1e9;
-            poly.forEach(p => { sx += p[0]; sy += p[1]; minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]); });
+            let sx = 0, sy = 0, minX = 1e9, maxX = -1e9, minY = 1e9;
+            maxY = -1e9;
+            poly.forEach(p => {
+                sx += p[0]; sy += p[1];
+                minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]);
+                minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]);
+            });
             px = Math.round(sx / poly.length);
-            py = Math.round(sy / poly.length + (maxY - minY) * 0.18);
-            doorY = Math.round(maxY - 26);
+            py = Math.round(sy / poly.length);   // 落在地板正中，離門口最遠
+            dw = Math.round(Math.max(70, Math.min(190, (maxX - minX) * 0.24)));
+            dh = Math.round(Math.max(20, Math.min(48, (maxY - minY) * 0.12)));
         }
         // 小人多高：房間自己算出來的「一個人該多少 px」除以角色基準高；沒給才退回一個保守值。
         const scale = dyn.actorPx ? (dyn.actorPx / PLAYER_H) : (dyn.actorScale || 0.62);
@@ -1435,7 +1443,8 @@
         if (poly) pts.boundary = poly.map(p => ({ x: p[0], y: p[1] }));   // 遮罩沒載成功時的退路輪廓
         SCENES.room.points = pts;
         const ex = dyn.exit || { to: 'city' };
-        SCENES.room.doors = [{ x: px - 95, y: doorY - 24, w: 190, h: 48, to: ex.to, spawn: ex.spawn }];
+        // 觸發區貼著地板最下緣那一條，不往房間裡面吃
+        SCENES.room.doors = [{ x: Math.round(px - dw / 2), y: Math.round(maxY - dh), w: dw, h: dh, to: ex.to, spawn: ex.spawn }];
         S.dyn = dyn;
         if (S.active) goScene('room', null, 'arrive');
         else { S.scene = 'room'; tryMount(); }
