@@ -15,12 +15,11 @@
     const ROOM_NEGATIVE = 'ceiling plane objects, ceiling-mounted objects, objects hanging from the ceiling, objects suspended from the ceiling, low-angle view, eye-level view, interior photography perspective';
 
     // 🚨 生圖參數寫死不外露，面板一律不給調。
-    //   重繪幅度 0.85（Rae 2026-07-26 想過之後定的，取代先前的 0.90）。
-    //   權衡：0.85 畫面更貼母圖的房型與透視，代價是提示詞份量變小、位置偶爾不聽話
-    //   （訂單寫「放上面」它畫到下面去）。但「重新生成」只換圖不重翻訂單、成本很低，
-    //   位置歪掉重抽幾次就好——所以選畫面品質，靠重抽補位置。
-    //   🚨 要動這個數字前先看：往上＝位置更準但更不貼母圖，往下＝反之。別無腦回 0.90。
-    const DENOISE = 0.85;
+    //   重繪幅度 0.87＝Rae 2026-07-26 在 ComfyUI 原介面細調出來的定案（0.90 位置準但放飛、0.85 太貼母圖）。
+    //   取捨：往上＝位置更準、畫面更放飛；往下＝更貼母圖的房型與透視、但提示詞份量變小位置會飄。
+    //   位置偶爾歪掉不用改參數——「重新生成」只換圖不重翻訂單，重抽很便宜。
+    //   🚨 這是三個值來回比出來的，別無腦改成整數。
+    const DENOISE = 0.87;
     const PROTECT = 4;
     const LONG_SIDE = 1024;      // 母圖長邊
 
