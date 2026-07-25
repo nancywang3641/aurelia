@@ -13,10 +13,8 @@
 
     const MAX_ITEMS = 10;      // 一間房最多幾件（再多會擠成一團，生圖也顧不來）
     const DRAG_SLOP = 6;       // 位移小於這個算「點一下」不算拖曳
-    // 🧍 小人畫多大＝房間幾何算出來的「真實比例」再乘這個係數。
-    //   1 ＝ 完全照真實比例（跟家具對得準，但小人會被放大、像素變粗）。
-    //   要小一點就往下調（0.8、0.7…）——這是唯一該動的數字，別回頭去填死 actorScale。
-    const FIGURE = 1;
+    // 🧍 小人多高不在這裡調：房間圖已經照「一個人＝固定像素高」縮放好了（os_room_gen 的 PERSON_PX），
+    //   這裡照著用就好，小人才會在每一間房都是同一個大小。
 
     function _LL() { return win.OS_LANDLORD || window.OS_LANDLORD || null; }
     function _GEN() { return win.OS_ROOM_GEN || window.OS_ROOM_GEN || null; }
@@ -158,7 +156,7 @@
                 ph: '在房裡走走，或按右下角布置這間房…',
             },
             exit: info.exit,
-            actorPx: layers.personPx * FIGURE,
+            actorPx: layers.personPx,
         });
 
         // 面板讓開，讓舞台變成主角

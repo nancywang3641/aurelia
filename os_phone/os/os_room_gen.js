@@ -233,10 +233,16 @@
     }
 
     // ── 房間 → 舞台圖層 ──
-    //   舞台的座標系是固定的 W×H，房間圖不是。等比置中鋪進去(留黑邊)，
-    //   底圖與地板遮罩走「同一個縮放位移」，所以踩到的白區跟看到的地板完全對齊。
-    function _fit(viewBox, W, H) {
-        const s = Math.min(W / viewBox[0], H / viewBox[1]);
+    //   🚨 走 RPG 的規矩：**小人固定大小，地圖照真實尺寸畫**。
+    //   所以不是把每間房都拉滿舞台（那會讓 2.2m 的蝸居跟 7.8m 的豪門在螢幕上一樣大，
+    //   比例尺永遠對不上），而是**讓「一個人的高度」在每間房裡都等於同一個像素值**，
+    //   房間圖跟著那個比例縮放置中——小房間就佔比較小、周圍留黑（那本來就是牆外）。
+    //   PERSON_PX 是這條唯一的旋鈕：它同時決定小人多高、以及房間畫多大。
+    //   上限由最大的房型（豪門 7.8m 寬）決定：再大就會撐出舞台，所以別往上加太多。
+    const PERSON_PX = 200;
+    function _fit(viewBox, W, H, personH) {
+        let s = (personH > 0) ? (PERSON_PX / personH) : Math.min(W / viewBox[0], H / viewBox[1]);
+        s = Math.min(s, W / viewBox[0], H / viewBox[1]);   // 保險：房間再大也不准撐出舞台
         return { s: s, ox: (W - viewBox[0] * s) / 2, oy: (H - viewBox[1] * s) / 2 };
     }
     function _loadImg(src) {
@@ -251,7 +257,7 @@
     async function stageLayers(room, W, H) {
         if (!room || !room.image) throw new Error('這間房還沒有圖。');
         const vb = (room.viewBox && room.viewBox.length === 2) ? room.viewBox : [W, H];
-        const f = _fit(vb, W, H);
+        const f = _fit(vb, W, H, room.personH);
         const doc = win.document;
 
         const cv = doc.createElement('canvas'); cv.width = W; cv.height = H;
