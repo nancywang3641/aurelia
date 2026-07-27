@@ -204,6 +204,38 @@
         openHome().catch(function (e) { console.warn('[LandlordRoom] 進自己家失敗', e); });
     });
 
+    // 🏘 走進城市裡某一棟出租房：門上帶 plot=那塊地,對回是哪一戶。
+    //    布置/看房都從這裡進(手機那邊只管租金帳),所以沒有房客也要進得去——空房就是拿來布置的。
+    async function openByPlot(plotId, door) {
+        const LL = _LL();
+        if (!LL) { _sorry(null, '房產還沒載入完，稍等一下再試。'); return; }
+        let unit;
+        try {
+            const state = await LL.getState();
+            unit = state.units.find(function (u) { return u.plotId === plotId; });
+        } catch (e) {
+            console.warn('[LandlordRoom] 讀這一戶失敗', e);
+            _sorry(null, '這間房暫時打不開。');
+            return;
+        }
+        if (!unit) { _sorry(null, '這棟房子還沒有登記成出租房。'); return; }
+        const exit = door
+            ? { to: 'city', spawn: { x: Math.round(door.x + (door.w || 0) / 2), y: Math.round(door.y + (door.h || 0)) } }   // 出來站回這扇門外
+            : { to: 'city' };
+        return _enter(null, {
+            id: unit.id,
+            name: unit.tenantName || '空房',
+            badge: unit.tenantName ? (unit.tenantName + '的房間') : '還沒有房客',
+            spec: _specOf(unit),
+            exit: exit,
+        });
+    }
+    win.addEventListener('lstage-open-rental', function (e) {
+        const door = (e && e.detail && e.detail.door) || null;
+        if (!door || !door.plot) return;
+        openByPlot(door.plot, door).catch(function (err) { console.warn('[LandlordRoom] 進出租房失敗', err); });
+    });
+
     function _sorry(container, msg) {
         if (!container) { try { win.toastr && win.toastr.info(msg); } catch (e) {} return; }
         const wrap = d.createElement('div'); wrap.className = 'll-wrap';
@@ -532,7 +564,7 @@
         return true;
     }
 
-    win.OS_LANDLORD_ROOM = { open, openHome, reenter };
+    win.OS_LANDLORD_ROOM = { open, openHome, openByPlot, reenter };
     if (win !== window) { try { window.OS_LANDLORD_ROOM = win.OS_LANDLORD_ROOM; } catch (e) {} }
     console.log('[LandlordRoom] 房間（舞台版）已載入');
 })();
