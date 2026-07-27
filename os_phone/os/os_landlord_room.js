@@ -337,6 +337,26 @@
                 cx.beginPath(); cx.arc(hp[0], hp[1], 5.5, 0, Math.PI * 2);
                 cx.fillStyle = '#e8d9b5'; cx.fill();
                 cx.strokeStyle = 'rgba(0,0,0,.35)'; cx.lineWidth = 1.5; cx.stroke();
+                // 🪧 門牌：刻意不跟著牆的透視歪——現實裡門牌也是平的，歪了反而讀不出來
+                const mid = at(u, TOP * 0.78);
+                const dw = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]);
+                const pw = Math.max(34, dw * 0.52), ph = Math.max(16, dw * 0.2);
+                const px = mid[0] - pw / 2, py = mid[1] - ph / 2;
+                cx.fillStyle = '#f6f2e8'; cx.fillRect(px, py, pw, ph);
+                cx.strokeStyle = 'rgba(0,0,0,.3)'; cx.lineWidth = 1.5; cx.strokeRect(px, py, pw, ph);
+                cx.fillStyle = '#4a3a2c';
+                cx.textAlign = 'center'; cx.textBaseline = 'middle';
+                cx.font = '700 ' + Math.round(ph * 0.62) + 'px sans-serif';
+                cx.fillText(c.plate, mid[0], mid[1] + 0.5);
+                // 誰住裡面：門牌下面一行小字（門牌本身塞不下名字）
+                if (c.sub) {
+                    const sy = py + ph + Math.max(9, ph * 0.52);
+                    cx.font = '600 ' + Math.round(ph * 0.5) + 'px sans-serif';
+                    cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,.45)';
+                    cx.strokeText(c.sub, mid[0], sy);
+                    cx.fillStyle = '#f2ece0';
+                    cx.fillText(c.sub, mid[0], sy);
+                }
             });
             base = cv.toDataURL('image/png');
         } catch (e) { console.warn('[LandlordRoom] 走廊的門畫不上去，觸發區還在', e); }
@@ -366,9 +386,13 @@
             }, 1536, 1024);
         } catch (e) { console.warn('[LandlordRoom] 走廊底圖失敗', e); _sorry(null, '走廊的圖讀不進來，再試一次。'); return; }
 
-        // 一戶一扇門（自己那戶排最前面）
-        const cells = [{ id: HOME_ID, label: '你的家', home: true }].concat(units.map(function (u) {
-            return { id: u.id, label: u.tenantName || '空房' };
+        // 一戶一扇門（自己那戶排最前面）。門牌＝樓層＋戶別（f2-a → 2A）；名字太長會擠爆門牌，截短。
+        const cells = [{ id: HOME_ID, plate: '我家', home: true }].concat(units.map(function (u) {
+            return {
+                id: u.id,
+                plate: (u.floor || 1) + String.fromCharCode(65 + (u.slot || 0)),
+                sub: u.tenantName ? String(u.tenantName).slice(0, 5) : '空房',
+            };
         }));
         const fs = layers.floorStage || [];
         const painted = await _paintCorridorDoors(layers.base, geo, layers.fit, cells);
