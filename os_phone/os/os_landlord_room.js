@@ -261,7 +261,9 @@
         if (!fFL || !fFR) return { base: baseUrl, door: null };
         const bh = Math.max(60, (figurePx || 120) * 0.92), bw = bh * BEACON.w / BEACON.h;
         const bx = fFL[0] + (fFR[0] - fFL[0]) * 0.12, by = fFL[1] + (fFR[1] - fFL[1]) * 0.12;
-        const door = { x: bx - bw / 2, y: by - 26, w: Math.max(70, bw), h: 46, panel: 'apartment-lift', floor: floor || 1 };
+        // 🚨 觸發區要往地板「內側」鋪，不能跨到地板外緣：
+        //    柱子立在地板前緣，往外那半塊根本走不到，可走的只剩十幾像素＝走過去常常踩不到。
+        const door = { x: bx - bw / 2, y: by - 62, w: Math.max(80, bw), h: 62, panel: 'apartment-lift', floor: floor || 1 };
         let base = baseUrl;
         try {
             const imgs = await Promise.all([_loadImg(CDN + BEACON.file), _loadImg(baseUrl)]);
@@ -421,7 +423,11 @@
     // 🕹 走到走廊那根控制錨點：加蓋一層／換到其他樓層
     async function _openLift(floor) {
         const LL = _LL(), stage = _STAGE();
-        const root = stage && stage._S && stage._S.root;
+        // 🚨 S.root 可能還指著上一個場景那顆已經被 remove 的節點：掛上去＝面板開了但看不見
+        //   （症狀就是「第一次走過去沒反應，進出一趟房間就好了」）。掛之前先確認它還在畫面上。
+        let root = stage && stage._S && stage._S.root;
+        if (root && !root.isConnected) root = null;
+        if (!root) root = d.querySelector('.lobby-left') || d.body;
         if (!LL || !root) return;
         if (root.querySelector('.llr-sheet')) return;   // 已經開著就不疊第二層
 
