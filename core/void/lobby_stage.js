@@ -251,12 +251,6 @@
                 //    門的位置可以在擺設模式直接拖(新增在陣列最後,不影響上面兩扇已調好的門)。
                 //    觸發區要落在房子「下緣外側」那一條——房子本體會擋路,站不進去就永遠踩不到門(同書咖那扇的做法)。
                 { x: 330, y: 850, w: 100, h: 42, panel: 'myhome', plot: 'player' },
-                // 🏘 四棟出租房：一棟＝一戶,門帶 plot=那塊地(沒蓋房就沒門)。走進去＝進那一戶的房間(布置/看房都在舞台這邊)。
-                //    座標抓「房子水平置中、垂直落在底緣」,同 myhome 那扇的算法；擺設模式可以直接拖到準位。
-                { x: 974, y: 847, w: 100, h: 42, panel: 'rental', plot: 'npc01' },
-                { x: 1262, y: 838, w: 100, h: 42, panel: 'rental', plot: 'npc02' },
-                { x: 1084, y: 336, w: 100, h: 42, panel: 'rental', plot: 'npc03' },
-                { x: 262, y: 536, w: 100, h: 42, panel: 'rental', plot: 'npc04' },
             ],
         },
     };
@@ -1451,7 +1445,23 @@
         SCENES.room.points = pts;
         const ex = dyn.exit || { to: 'city' };
         // 觸發區貼著地板最下緣那一條，不往房間裡面吃
-        SCENES.room.doors = [{ x: Math.round(px - dw / 2), y: Math.round(maxY - dh), w: dw, h: dh, to: ex.to, spawn: ex.spawn }];
+        // 出口也可以是 panel 型：公寓裡走出一戶＝回到那層走廊，而不是一路彈回城市
+        SCENES.room.doors = [{
+            x: Math.round(px - dw / 2), y: Math.round(maxY - dh), w: dw, h: dh,
+            to: ex.to, spawn: ex.spawn, panel: ex.panel, floor: ex.floor, unitId: ex.unitId,
+        }];
+        // 🚪 房間自己帶的門（公寓走廊：一條走廊上好幾扇門，各自通到一戶）。
+        //    座標跟 floorStage 同一個系（舞台座標），沒給大小就沿用出口門那組。
+        if (Array.isArray(dyn.doors)) {
+            dyn.doors.forEach(dr => {
+                if (!dr) return;
+                SCENES.room.doors.push({
+                    x: Math.round(dr.x), y: Math.round(dr.y),
+                    w: Math.round(dr.w || dw), h: Math.round(dr.h || dh),
+                    to: dr.to, spawn: dr.spawn, panel: dr.panel, floor: dr.floor, unitId: dr.unitId,
+                });
+            });
+        }
         S.dyn = dyn;
         if (S.active) goScene('room', null, 'arrive');
         else { S.scene = 'room'; tryMount(); }

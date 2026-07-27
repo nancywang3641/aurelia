@@ -178,62 +178,114 @@
             _sorry(container, (e && e.message) || '房間暫時打不開。');
             return;
         }
+        // 空房也進得去（空房就是拿來布置的），標題別假裝有房客
+        // 走出這一戶＝回到那層走廊（公寓戶一定是從走廊進來的）
         return _enter(container, {
             id: unitId,
-            name: unit.tenantName || '房客',
+            name: unit.tenantName || '空房',
+            badge: unit.tenantName ? (unit.tenantName + '的房間') : '還沒有房客',
             spec: _specOf(unit),
-            exit: { to: 'city' },
+            exit: unit.floor ? { panel: 'apartment-back', floor: unit.floor } : { to: 'city', spawn: CITY_SPAWN },
         });
     }
 
     // 🏠 從城市走進自己那棟房子
     async function openHome() {
         const LL = _LL();
-        let saved = null;
+        let saved = null, floors = 0;
         try { if (LL) saved = await LL.getRoom(HOME_ID); } catch (e) {}
+        try { if (LL) floors = ((await LL.getState()).floors) || 0; } catch (e) {}
         return _enter(null, {
             id: HOME_ID,
             name: '你的家',
             badge: '你的家',
             spec: _specOfKey((saved && saved.roomTypeKey) || HOME_TYPE),
-            exit: { to: 'city', spawn: { x: 364, y: 892 } },   // 出來就站在自家門口外
+            // 蓋了公寓＝自己那戶開在走廊上,走出來要回走廊;還沒蓋才是直接走回城市
+            exit: floors > 0 ? { panel: 'apartment-back', floor: 1 } : { to: 'city', spawn: CITY_SPAWN },
         });
     }
     // 走進城市裡自己那棟房子的門（lobby_stage 的 panel 型門發的事件）
+    // 🏢 蓋了公寓就先進走廊(自己那戶變成走廊上的一扇門)；還沒蓋＝那棟就是自己家,直接進。
     win.addEventListener('lstage-open-myhome', function () {
-        openHome().catch(function (e) { console.warn('[LandlordRoom] 進自己家失敗', e); });
+        (async function () {
+            let floors = 0;
+            try { const LL = _LL(); if (LL) floors = ((await LL.getState()).floors) || 0; }
+            catch (e) { console.warn('[LandlordRoom] 讀樓層失敗,當作還沒蓋公寓', e); }
+            if (floors > 0) await openCorridor(1);
+            else await openHome();
+        })().catch(function (e) { console.warn('[LandlordRoom] 進自己那棟失敗', e); });
     });
 
-    // 🏘 走進城市裡某一棟出租房：門上帶 plot=那塊地,對回是哪一戶。
-    //    布置/看房都從這裡進(手機那邊只管租金帳),所以沒有房客也要進得去——空房就是拿來布置的。
-    async function openByPlot(plotId, door) {
-        const LL = _LL();
-        if (!LL) { _sorry(null, '房產還沒載入完，稍等一下再試。'); return; }
-        let unit;
+    // ── 🏢 公寓走廊：一層一條,一戶一扇門(你自己那戶也在這條走廊上) ──
+    // 走廊底圖之後會換成手繪的;現在先用 makeRoom 生一個長形空間頂著(定案:先頂著,別卡在缺素材)。
+    const CORRIDOR = { w: 6.4, d: 1.8, wallH: 0.62, floor: 'tile', window: false };
+    const CITY_SPAWN = { x: 364, y: 892 };   // 從樓裡出來站的位置＝自家門口外
+
+    async function openCorridor(floor) {
+        const LL = _LL(), GEN = _GEN(), stage = _STAGE();
+        if (!LL || !GEN) { _sorry(null, '房間功能還沒載入完，稍等一下再試。'); return; }
+        if (!stage || typeof stage.enterRoom !== 'function') { _sorry(null, '這個版本的大廳還進不了房間。'); return; }
+        if (typeof stage.isOn === 'function' && !stage.isOn()) { _sorry(null, '舞台目前是關的，先在大廳設置把它打開就能上樓。'); return; }
+
+        let units = [];
         try {
             const state = await LL.getState();
-            unit = state.units.find(function (u) { return u.plotId === plotId; });
-        } catch (e) {
-            console.warn('[LandlordRoom] 讀這一戶失敗', e);
-            _sorry(null, '這間房暫時打不開。');
-            return;
+            units = (state.units || []).filter(function (u) { return (u.floor || 1) === floor; });
+        } catch (e) { console.warn('[LandlordRoom] 讀樓層失敗', e); _sorry(null, '這一層暫時上不去。'); return; }
+
+        let layers;
+        try {
+            const base = await GEN.buildBase(CORRIDOR);
+            layers = await GEN.stageLayers({
+                image: base.baseData, floor: base.room.floor,
+                viewBox: base.room.viewBox, personH: base.room.personH,
+            }, 1536, 1024);
+        } catch (e) { console.warn('[LandlordRoom] 走廊底圖失敗', e); _sorry(null, '走廊的圖讀不進來，再試一次。'); return; }
+
+        // 一戶一扇門,沿著地板最裡面那條邊等距排開（自己那戶排最前面）
+        const cells = [{ id: HOME_ID, label: '你的家' }].concat(units.map(function (u) {
+            return { id: u.id, label: u.tenantName || '空房' };
+        }));
+        const fs = layers.floorStage || [];
+        const bl = fs[3], br = fs[2];
+        let doors = [];
+        if (bl && br) {
+            const span = Math.abs(br[0] - bl[0]);
+            const dw = Math.max(64, Math.min(150, span / cells.length * 0.56));
+            doors = cells.map(function (c, i) {
+                const t = (i + 0.5) / cells.length;
+                return {
+                    x: bl[0] + (br[0] - bl[0]) * t - dw / 2,
+                    y: bl[1] + (br[1] - bl[1]) * t,
+                    w: dw, h: 44, panel: 'apartment', unitId: c.id,
+                };
+            });
         }
-        if (!unit) { _sorry(null, '這棟房子還沒有登記成出租房。'); return; }
-        const exit = door
-            ? { to: 'city', spawn: { x: Math.round(door.x + (door.w || 0) / 2), y: Math.round(door.y + (door.h || 0)) } }   // 出來站回這扇門外
-            : { to: 'city' };
-        return _enter(null, {
-            id: unit.id,
-            name: unit.tenantName || '空房',
-            badge: unit.tenantName ? (unit.tenantName + '的房間') : '還沒有房客',
-            spec: _specOf(unit),
-            exit: exit,
+
+        _ctx = null;   // 走廊不是「站在某一間房裡」，布置那套不能作用
+        stage.enterRoom({
+            base: layers.base, mask: layers.mask, floorStage: layers.floorStage,
+            header: { name: floor + '樓', badge: '公寓走廊', ph: '走到最裡面那排門，就能進去各戶…' },
+            exit: { to: 'city', spawn: CITY_SPAWN },
+            doors: doors,
+            actorPx: layers.figurePx,
         });
+        try { if (win.PhoneSystem && typeof win.PhoneSystem.goHome === 'function') win.PhoneSystem.goHome(); } catch (e) {}
     }
-    win.addEventListener('lstage-open-rental', function (e) {
+
+    // 從某一戶走出來＝回到那層走廊（不是一路彈回城市）
+    win.addEventListener('lstage-open-apartment-back', function (e) {
         const door = (e && e.detail && e.detail.door) || null;
-        if (!door || !door.plot) return;
-        openByPlot(door.plot, door).catch(function (err) { console.warn('[LandlordRoom] 進出租房失敗', err); });
+        openCorridor((door && door.floor) || 1).catch(function (err) { console.warn('[LandlordRoom] 回走廊失敗', err); });
+    });
+
+    // 走廊上的門：自己那戶走自宅那條，其他走出租戶那條
+    win.addEventListener('lstage-open-apartment', function (e) {
+        const door = (e && e.detail && e.detail.door) || null;
+        if (!door || !door.unitId) return;
+        const id = door.unitId;
+        (id === HOME_ID ? openHome() : open(null, id))
+            .catch(function (err) { console.warn('[LandlordRoom] 進這一戶失敗', err); });
     });
 
     function _sorry(container, msg) {
@@ -564,7 +616,7 @@
         return true;
     }
 
-    win.OS_LANDLORD_ROOM = { open, openHome, openByPlot, reenter };
+    win.OS_LANDLORD_ROOM = { open, openHome, openCorridor, reenter };
     if (win !== window) { try { window.OS_LANDLORD_ROOM = win.OS_LANDLORD_ROOM; } catch (e) {} }
     console.log('[LandlordRoom] 房間（舞台版）已載入');
 })();

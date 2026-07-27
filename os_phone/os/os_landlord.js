@@ -9,13 +9,18 @@
     'use strict';
     const win = window.parent || window;
 
+    // 🏢 出租生意長在玩家自己那塊地(plot:'player')上：空地 →(買)自宅 →(再花 PT)公寓,一層一層加上去。
+    //    鄰居那幾棟(npc01~04)是鄰居自己的房子,跟生意無關。
     const LL_CFG = {
-        initialUnits: 2,        // ①期固定 2 戶
         baseRent: 12,           // 每戶每天固定基礎租金(PT)——①期不接係數
         catchUpDays: 7,         // 離線補算上限
-        initialTypes: ['cozy', 'deep'],   // 初始兩戶的房型
-        plots: ['npc01', 'npc02', 'npc03', 'npc04'],   // 🏘 城市裡四塊 NPC 地＝四棟出租房(對照 lobby_stage layout 的 o.plot)
+        unitsPerFloor: 2,       // 一層隔成幾間出租(自己住的那間 home 不算在內)
+        floorTypes: ['cozy', 'deep'],   // 一層各戶的房型(照 slot 順序)
+        maxFloors: 4,
+        floorPrice: 600,        // 加蓋一層要多少 PT
     };
+    const SLOTS = 'abcdefgh';
+    function _unitId(floor, slot) { return 'f' + floor + '-' + SLOTS[slot]; }
 
     const APP_ID = 'landlord';
     const K_STATE = 'state';
@@ -27,46 +32,48 @@
     // 以「天」為刻度(本地日期)，跟書咖同一招
     function _dayNum(ts) { return Math.floor(ts / 86400000); }
 
+    // 還沒蓋公寓＝一戶都沒有(招租入口也跟著關)。蓋一層才長出那層的出租戶。
     function _defaultState() {
+        return { floors: 0, units: [], lastSettleDay: null, createdAt: _now() };
+    }
+
+    // 一層樓長出來的出租戶(自住那間 home 另外存,不在 units 裡)
+    function _makeFloorUnits(floor) {
         const units = [];
-        for (let i = 0; i < LL_CFG.initialUnits; i++) {
+        for (let i = 0; i < LL_CFG.unitsPerFloor; i++) {
             units.push({
-                id: 'u' + (i + 1),
-                plotId: LL_CFG.plots[i] || null,   // 這一戶是城市裡哪一棟
-                roomTypeKey: LL_CFG.initialTypes[i] || 'standard',
+                id: _unitId(floor, i),
+                floor: floor, slot: i,
+                roomTypeKey: LL_CFG.floorTypes[i] || 'standard',
                 tenantKey: null, tenantName: null,
                 rent: LL_CFG.baseRent,
                 movedInAt: null,
             });
         }
-        return { units: units, lastSettleDay: null, createdAt: _now() };
+        return units;
     }
 
-    // ── 🏘 每一戶對上城市的一塊地(走進那棟房子的門＝進這一戶) ──
-    // 舊存檔沒有 plotId：依序補上還沒被占的地。回傳有沒有動過(有動才需要存回)。
-    function _fillPlots(state) {
-        let changed = false;
-        const used = {};
-        state.units.forEach(function (u) { if (u.plotId) used[u.plotId] = true; });
-        state.units.forEach(function (u) {
-            if (u.plotId) return;
-            const free = LL_CFG.plots.find(function (p) { return !used[p]; });
-            if (!free) return;
-            u.plotId = free; used[free] = true; changed = true;
+    // ── 舊存檔(平舖 u1/u2)→ 樓層制(f1-a/f1-b) ──
+    // 🚨 房間圖是 key 在 unitId 上的(room::u1),改 id 不搬圖＝玩家布置好的房間憑空消失、要重燒一次生圖。
+    //    所以搬 id 的同時把圖複製到新 key;舊 key 留著不刪(讀不到就不讀,刪錯反而危險)。
+    async function _migrateToFloors(state) {
+        if (state.floors != null) return false;            // 已經是樓層制
+        const old = state.units || [];
+        if (!old.length) { state.floors = 0; state.units = []; return true; }
+        state.floors = 1;                                   // 已經有戶在收租＝當作一樓已經蓋好
+        const moved = [];
+        state.units = old.slice(0, LL_CFG.unitsPerFloor).map(function (u, i) {
+            const nid = _unitId(1, i);
+            if (u.id !== nid) moved.push({ from: u.id, to: nid });
+            return Object.assign({}, u, { id: nid, floor: 1, slot: i });
         });
-        return changed;
-    }
-    // 有房的地塊要讓城市那邊真的蓋起來——不然房子不顯示,門的 plot 判定也過不了(走上去沒反應)。
-    function _syncPlots(state) {
-        try {
-            const stage = win.LobbyStage || window.LobbyStage;
-            if (!stage || typeof stage.setPlot !== 'function') return;
-            state.units.forEach(function (u) {
-                if (!u.plotId) return;
-                if (typeof stage.plotOccupied === 'function' && stage.plotOccupied(u.plotId)) return;   // 已經蓋了就別重跑(setPlot 會重建碰撞)
-                stage.setPlot(u.plotId, true);
-            });
-        } catch (e) { console.warn('[Landlord] 同步城市地塊失敗', e); }
+        for (const m of moved) {
+            try {
+                const room = await getRoom(m.from);
+                if (room) await saveRoom(m.to, room);
+            } catch (e) { console.warn('[Landlord] 搬房間圖失敗(那一戶要重新布置一次)', m, e); }
+        }
+        return true;
     }
 
     // 🚨區分「查無資料」與「讀取失敗」：前者安全(建預設值並寫入),後者危險(絕不可寫入,一律往外拋)。
@@ -81,15 +88,14 @@
             console.warn('[Landlord] getState 讀取失敗,拒絕以預設值覆蓋,原樣往外拋', e);
             throw e;
         }
-        if (v && Array.isArray(v.units) && v.units.length) {
-            if (_fillPlots(v)) { try { await saveState(v); } catch (e) { console.warn('[Landlord] 補地塊後存檔失敗,這次先照用', e); } }
-            _syncPlots(v);
+        if (v && Array.isArray(v.units)) {
+            let changed = await _migrateToFloors(v);
+            if (changed) { try { await saveState(v); } catch (e) { console.warn('[Landlord] 轉樓層制後存檔失敗,這次先照用', e); } }
             return v;
         }
         // 走到這裡代表「查無資料」(讀取本身沒出錯,只是還沒有記錄)→ 安全,建立預設值並寫入
         const fresh = _defaultState();
         await saveState(fresh);
-        _syncPlots(fresh);
         return fresh;
     }
 
@@ -97,6 +103,37 @@
         const db = _db();
         if (!db?.saveAppData) throw new Error('OS_DB.saveAppData 不存在');
         await db.saveAppData(APP_ID, K_STATE, state);
+    }
+
+    // 🏢 加蓋一層：扣 PT → 長出那一層的出租戶。第一層＝把自宅那棟變成公寓。
+    //    狀態機照設計：空地 →(跟白兔買)自宅 →(這裡)公寓,所以沒有自宅不給蓋。
+    async function addFloor() {
+        const pt = win.OS_PT || window.OS_PT;
+        if (!pt || typeof pt.spendPT !== 'function') return { ok: false, reason: 'nopt' };
+        if (typeof pt.getPlotBuilt === 'function') {
+            let built = false;
+            try { built = await pt.getPlotBuilt('player'); } catch (e) { return { ok: false, reason: 'read' }; }
+            if (!built) return { ok: false, reason: 'nohouse' };
+        }
+        let state;
+        try { state = await getState(); } catch (e) { return { ok: false, reason: 'read' }; }
+        if ((state.floors || 0) >= LL_CFG.maxFloors) return { ok: false, reason: 'max' };
+
+        const r = await pt.spendPT(LL_CFG.floorPrice, '加蓋公寓樓層');
+        if (!r || !r.ok) return { ok: false, reason: 'poor', short: (r && r.short) || LL_CFG.floorPrice };
+
+        const floor = (state.floors || 0) + 1;
+        state.floors = floor;
+        state.units = (state.units || []).concat(_makeFloorUnits(floor));
+        try {
+            await saveState(state);
+        } catch (e) {
+            // 🚨 扣了錢卻沒存起來＝玩家白花：退回去,寧可讓他重按一次
+            console.warn('[Landlord] 加蓋存檔失敗,退款', e);
+            try { await pt.addPT(LL_CFG.floorPrice, { reason: '加蓋失敗退款' }); } catch (e2) { console.warn('[Landlord] 退款也失敗', e2); }
+            return { ok: false, reason: 'save' };
+        }
+        return { ok: true, floors: floor, state: state };
     }
 
     async function getTuning(npcKey) {
@@ -383,7 +420,8 @@
         const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
         res.state.units.forEach(function (u) {
             const card = d.createElement('div'); card.className = 'll-unit';
-            const label = (RT[u.roomTypeKey] && RT[u.roomTypeKey].label) || '未知房型';
+            const type = (RT[u.roomTypeKey] && RT[u.roomTypeKey].label) || '未知房型';
+            const label = (u.floor ? (u.floor + '樓 ' + String(SLOTS[u.slot] || '').toUpperCase() + '　') : '') + type;
             const top = d.createElement('div'); top.className = 'll-unit-top';
             const left = d.createElement('div');
             const got = u.earnedTotal || 0;
@@ -407,6 +445,35 @@
             units.appendChild(card);
         });
         wrap.appendChild(units);
+
+        // 🏢 還沒有公寓＝一戶都沒有:這頁只說明狀況並給加蓋入口,不放招租(沒房子可租)
+        const floors = res.state.floors || 0;
+        const foot = d.createElement('div'); foot.className = 'll-note';
+        if (!floors) {
+            foot.textContent = '你的樓還沒隔出租房。加蓋一層，就能隔成 ' + LL_CFG.unitsPerFloor + ' 間公寓出租。';
+        } else if (floors >= LL_CFG.maxFloors) {
+            foot.textContent = '整棟已經蓋到 ' + floors + ' 樓，不能再往上加了。';
+        } else {
+            foot.textContent = '目前 ' + floors + ' 樓。再加一層就多 ' + LL_CFG.unitsPerFloor + ' 間可以出租。';
+        }
+        wrap.appendChild(foot);
+        if (floors < LL_CFG.maxFloors) {
+            const add = d.createElement('button'); add.className = 'll-btn';
+            add.innerHTML = '<i class="fa-solid fa-layer-group"></i> 加蓋一層（' + LL_CFG.floorPrice + '）';
+            add.onclick = async function () {
+                add.disabled = true;
+                let r;
+                try { r = await addFloor(); } catch (e) { console.warn('[Landlord] 加蓋失敗', e); r = { ok: false, reason: 'save' }; }
+                if (r && r.ok) { launch(root); return; }
+                foot.className = 'll-note ll-error';
+                foot.textContent = r && r.reason === 'nohouse' ? '要先在城市裡有自己的房子，才能往上加蓋。'
+                    : r && r.reason === 'poor' ? ('還差 ' + r.short + ' 才蓋得起這一層。')
+                    : r && r.reason === 'max' ? '整棟已經蓋到頂了。'
+                    : '這次沒蓋成，錢沒有扣掉，再試一次就好。';
+                add.disabled = false;
+            };
+            wrap.appendChild(add);
+        }
         root.innerHTML = ''; root.appendChild(wrap);
     }
 
@@ -491,6 +558,7 @@
     win.OS_LANDLORD = {
         _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, getRoom, saveRoom, _dayNum, settleCore,
         listCandidates, tuneTenant, moveIn, _fallbackTuning, launch, _openAndSettle,   // _openAndSettle=console 診斷用
+        addFloor, _makeFloorUnits, _unitId,   // 🏢 樓層制
     };
     if (win !== window) { try { window.OS_LANDLORD = win.OS_LANDLORD; } catch (e) {} }
     console.log('[Landlord] 包租婆系統已載入');
