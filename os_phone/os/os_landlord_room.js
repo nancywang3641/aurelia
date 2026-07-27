@@ -66,6 +66,12 @@
             '.llr-card-bar{display:flex;gap:8px;margin-top:12px}',
             '.llr-card-bar .llr-btn{flex:1;justify-content:center}',
             '.llr-danger{border-color:#5a3038;color:#e0a0a8}',
+            // 樓層清單：一層一顆，會換行
+            '.llr-floors{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}',
+            '.llr-floors .llr-btn{flex:0 0 auto}',
+            '.llr-btn.is-now{border-color:rgba(217,176,106,.6);color:#f0e2c6}',
+            '.llr-msg{margin-top:10px;font-size:12px;line-height:1.7;color:#9aa1b0}',
+            '.llr-msg.is-bad{color:#e0a0a8}',
             '.llr-busy{position:absolute;left:0;top:0;right:0;bottom:0;z-index:75;background:rgba(8,10,14,.8);',
             '  display:flex;align-items:center;justify-content:center;padding:18px;text-align:center;',
             '  color:#e7eaf1;font-size:14px;line-height:1.8}',
@@ -147,16 +153,26 @@
             deco: null,
         };
 
+        // 🕹 自己家裡也立一根控制柱：還沒加蓋公寓的人是走進自宅的，
+        //    柱子只放走廊的話，他就永遠找不到加蓋的地方（雞生蛋）。
+        let base = layers.base, extraDoors = null;
+        if (info.lift) {
+            const bea = await _placeBeacon(layers.base, layers.floorStage, layers.figurePx, info.liftFloor || 1);
+            base = bea.base;
+            if (bea.door) extraDoors = [bea.door];
+        }
+
         stage.enterRoom({
-            base: layers.base,
+            base: base,
             mask: layers.mask,
             floorStage: layers.floorStage,
             header: {
                 name: info.name,
                 badge: info.badge || (info.name + '的房間'),
-                ph: '在房裡走走，或按右下角布置這間房…',
+                ph: info.lift ? '在房裡走走、按右下角布置，走到那根柱子可以加蓋樓層…' : '在房裡走走，或按右下角布置這間房…',
             },
             exit: info.exit,
+            doors: extraDoors,
             actorPx: layers.figurePx,
         });
 
@@ -202,6 +218,7 @@
             spec: _specOfKey((saved && saved.roomTypeKey) || HOME_TYPE),
             // 蓋了公寓＝自己那戶開在走廊上,走出來要回走廊;還沒蓋才是直接走回城市
             exit: floors > 0 ? { panel: 'apartment-back', floor: 1 } : { to: 'city', spawn: CITY_SPAWN },
+            lift: true, liftFloor: Math.max(1, floors),   // 自己家裡看得到那根柱子
         });
     }
     // 走進城市裡自己那棟房子的門（lobby_stage 的 panel 型門發的事件）
@@ -220,6 +237,38 @@
     // 走廊底圖之後會換成手繪的;現在先用 makeRoom 生一個長形空間頂著(定案:先頂著,別卡在缺素材)。
     const CORRIDOR = { w: 6.4, d: 1.8, wallH: 0.62, floor: 'tile', window: false };
     const CITY_SPAWN = { x: 364, y: 892 };   // 從樓裡出來站的位置＝自家門口外
+    // 🕹 走廊裡那根控制錨點：加蓋樓層／換樓層都走它（先借城市的信標素材頂著）
+    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
+    const BEACON = { file: 'city/obj/beacon_short_01_day.png', w: 130, h: 204 };
+
+    function _loadImg(src) {
+        return new Promise(function (resolve, reject) {
+            const im = new win.Image();
+            if (!String(src).startsWith('data:')) im.crossOrigin = 'anonymous';
+            im.onload = function () { resolve(im); };
+            im.onerror = function () { reject(new Error('圖讀不到：' + src)); };
+            im.src = src;
+        });
+    }
+    // 把控制錨點立在地板前緣靠邊（那一帶通常是空的，不會壓到家具，也不擋走廊盡頭的門）。
+    // 🚨 圖畫不上去也要留下觸發區——不然沒公寓的人就永遠找不到加蓋的地方。
+    async function _placeBeacon(baseUrl, floorStage, figurePx, floor) {
+        const fFL = (floorStage || [])[0], fFR = (floorStage || [])[1];
+        if (!fFL || !fFR) return { base: baseUrl, door: null };
+        const bh = Math.max(60, (figurePx || 120) * 0.92), bw = bh * BEACON.w / BEACON.h;
+        const bx = fFL[0] + (fFR[0] - fFL[0]) * 0.12, by = fFL[1] + (fFR[1] - fFL[1]) * 0.12;
+        const door = { x: bx - bw / 2, y: by - 26, w: Math.max(70, bw), h: 46, panel: 'apartment-lift', floor: floor || 1 };
+        let base = baseUrl;
+        try {
+            const imgs = await Promise.all([_loadImg(CDN + BEACON.file), _loadImg(baseUrl)]);
+            const cv = d.createElement('canvas'); cv.width = 1536; cv.height = 1024;
+            const cx = cv.getContext('2d');
+            cx.drawImage(imgs[1], 0, 0);
+            cx.drawImage(imgs[0], bx - bw / 2, by - bh, bw, bh);   // 底部中心對齊地板上那一點
+            base = cv.toDataURL('image/png');
+        } catch (e) { console.warn('[LandlordRoom] 控制錨點的圖畫不上去，觸發區還在', e); }
+        return { base: base, door: door };
+    }
 
     async function openCorridor(floor) {
         const LL = _LL(), GEN = _GEN(), stage = _STAGE();
@@ -262,16 +311,84 @@
             });
         }
 
+        // 🕹 控制錨點：走過去＝加蓋樓層／換樓層
+        const bea = await _placeBeacon(layers.base, fs, layers.figurePx, floor);
+        const base = bea.base;
+        if (bea.door) doors.push(bea.door);
+
         _ctx = null;   // 走廊不是「站在某一間房裡」，布置那套不能作用
         stage.enterRoom({
-            base: layers.base, mask: layers.mask, floorStage: layers.floorStage,
-            header: { name: floor + '樓', badge: '公寓走廊', ph: '走到最裡面那排門，就能進去各戶…' },
+            base: base, mask: layers.mask, floorStage: layers.floorStage,
+            header: { name: floor + '樓', badge: '公寓走廊', ph: '走到門口進各戶，走到那根柱子可以加蓋或換樓層…' },
             exit: { to: 'city', spawn: CITY_SPAWN },
             doors: doors,
             actorPx: layers.figurePx,
         });
         try { if (win.PhoneSystem && typeof win.PhoneSystem.goHome === 'function') win.PhoneSystem.goHome(); } catch (e) {}
     }
+
+    // 🕹 走到走廊那根控制錨點：加蓋一層／換到其他樓層
+    async function _openLift(floor) {
+        const LL = _LL(), stage = _STAGE();
+        const root = stage && stage._S && stage._S.root;
+        if (!LL || !root) return;
+        if (root.querySelector('.llr-sheet')) return;   // 已經開著就不疊第二層
+
+        let state;
+        try { state = await LL.getState(); }
+        catch (e) { console.warn('[LandlordRoom] 讀樓層失敗', e); _sorry(null, '這棟樓的資料暫時讀不到。'); return; }
+        const cfg = LL._cfg || {};
+        const maxFloors = cfg.maxFloors || 4, perFloor = cfg.unitsPerFloor || 2, price = cfg.floorPrice || 600;
+        const floors = state.floors || 0;
+
+        const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
+        const card = d.createElement('div'); card.className = 'llr-card';
+        const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '這棟樓';
+        card.appendChild(title);
+
+        const list = d.createElement('div'); list.className = 'llr-floors';
+        for (let i = 1; i <= floors; i++) {
+            const b = _btn('fa-solid fa-building', i + '樓', i === floor ? 'is-now' : '');
+            if (i === floor) b.disabled = true;
+            else b.onclick = function () { close(); openCorridor(i).catch(function (err) { console.warn('[LandlordRoom] 換樓層失敗', err); }); };
+            list.appendChild(b);
+        }
+        card.appendChild(list);
+
+        const msg = d.createElement('div'); msg.className = 'llr-msg';
+        msg.textContent = floors >= maxFloors
+            ? ('已經蓋到 ' + floors + ' 樓，不能再往上了。')
+            : ('再加一層，就多 ' + perFloor + ' 間可以出租。');
+        card.appendChild(msg);
+
+        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
+        const closeBtn = _btn('fa-solid fa-xmark', '關上');
+        bar.appendChild(closeBtn);
+        const add = floors < maxFloors ? _btn('fa-solid fa-layer-group', '加蓋一層（' + price + '）', 'is-go') : null;
+        if (add) bar.appendChild(add);
+        card.appendChild(bar);
+        sheet.appendChild(card); root.appendChild(sheet);
+
+        function close() { try { sheet.remove(); } catch (e) {} }
+        closeBtn.onclick = close;
+        if (add) add.onclick = async function () {
+            add.disabled = true;
+            let r;
+            try { r = await LL.addFloor(); }
+            catch (e) { console.warn('[LandlordRoom] 加蓋失敗', e); r = { ok: false, reason: 'save' }; }
+            if (r && r.ok) { close(); await openCorridor(r.floors); return; }   // 蓋好就直接上去看
+            msg.className = 'llr-msg is-bad';
+            msg.textContent = r && r.reason === 'poor' ? ('還差 ' + r.short + ' 才蓋得起這一層。')
+                : r && r.reason === 'nohouse' ? '要先在城市裡有自己的房子。'
+                : r && r.reason === 'max' ? '已經蓋到頂了。'
+                : '這次沒蓋成，錢沒有扣掉，再試一次就好。';
+            add.disabled = false;
+        };
+    }
+    win.addEventListener('lstage-open-apartment-lift', function (e) {
+        const door = (e && e.detail && e.detail.door) || null;
+        _openLift((door && door.floor) || 1).catch(function (err) { console.warn('[LandlordRoom] 開控制錨點失敗', err); });
+    });
 
     // 從某一戶走出來＝回到那層走廊（不是一路彈回城市）
     win.addEventListener('lstage-open-apartment-back', function (e) {

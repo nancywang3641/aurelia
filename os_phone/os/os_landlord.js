@@ -446,34 +446,15 @@
         });
         wrap.appendChild(units);
 
-        // 🏢 還沒有公寓＝一戶都沒有:這頁只說明狀況並給加蓋入口,不放招租(沒房子可租)
+        // 🏢 加蓋是「操作」＝在樓裡那根控制柱做,這頁只管帳,所以這裡只說現況不放按鈕。
         const floors = res.state.floors || 0;
         const foot = d.createElement('div'); foot.className = 'll-note';
-        if (!floors) {
-            foot.textContent = '你的樓還沒隔出租房。加蓋一層，就能隔成 ' + LL_CFG.unitsPerFloor + ' 間公寓出租。';
-        } else if (floors >= LL_CFG.maxFloors) {
-            foot.textContent = '整棟已經蓋到 ' + floors + ' 樓，不能再往上加了。';
-        } else {
-            foot.textContent = '目前 ' + floors + ' 樓。再加一層就多 ' + LL_CFG.unitsPerFloor + ' 間可以出租。';
-        }
+        foot.textContent = !floors
+            ? '你的樓還沒隔出租房。走進城市裡自己那棟，用裡面那根柱子加蓋。'
+            : (floors >= LL_CFG.maxFloors
+                ? ('整棟 ' + floors + ' 樓，已經蓋到頂了。')
+                : ('整棟 ' + floors + ' 樓。想再加一層，到樓裡那根柱子。'));
         wrap.appendChild(foot);
-        if (floors < LL_CFG.maxFloors) {
-            const add = d.createElement('button'); add.className = 'll-btn';
-            add.innerHTML = '<i class="fa-solid fa-layer-group"></i> 加蓋一層（' + LL_CFG.floorPrice + '）';
-            add.onclick = async function () {
-                add.disabled = true;
-                let r;
-                try { r = await addFloor(); } catch (e) { console.warn('[Landlord] 加蓋失敗', e); r = { ok: false, reason: 'save' }; }
-                if (r && r.ok) { launch(root); return; }
-                foot.className = 'll-note ll-error';
-                foot.textContent = r && r.reason === 'nohouse' ? '要先在城市裡有自己的房子，才能往上加蓋。'
-                    : r && r.reason === 'poor' ? ('還差 ' + r.short + ' 才蓋得起這一層。')
-                    : r && r.reason === 'max' ? '整棟已經蓋到頂了。'
-                    : '這次沒蓋成，錢沒有扣掉，再試一次就好。';
-                add.disabled = false;
-            };
-            wrap.appendChild(add);
-        }
         root.innerHTML = ''; root.appendChild(wrap);
     }
 
