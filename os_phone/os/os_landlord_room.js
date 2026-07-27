@@ -431,43 +431,52 @@
         if (!LL || !root) return;
         if (root.querySelector('.llr-sheet')) return;   // 已經開著就不疊第二層
 
-        let state;
-        try { state = await LL.getState(); }
-        catch (e) { console.warn('[LandlordRoom] 讀樓層失敗', e); _sorry(null, '這棟樓的資料暫時讀不到。'); return; }
-        const cfg = LL._cfg || {};
-        const maxFloors = cfg.maxFloors || 4, perFloor = cfg.unitsPerFloor || 2, price = cfg.floorPrice || 600;
-        const floors = state.floors || 0;
-
+        // 🚨 先把面板掛上去、再去讀資料：反過來的話，DB 冷啟動那幾百毫秒裡玩家已經走開了，
+        //   等資料回來面板才「突然跳出」，接著換場把整個舞台容器移除，面板又跟著消失
+        //   ——症狀就是「走到柱子沒反應，碰到房間門才閃一下」。
         const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
         const card = d.createElement('div'); card.className = 'llr-card';
         const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '這棟樓';
         card.appendChild(title);
-
         const list = d.createElement('div'); list.className = 'llr-floors';
+        card.appendChild(list);
+        const msg = d.createElement('div'); msg.className = 'llr-msg';
+        msg.textContent = '正在看這棟樓…';
+        card.appendChild(msg);
+        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
+        const closeBtn = _btn('fa-solid fa-xmark', '關上');
+        bar.appendChild(closeBtn);
+        card.appendChild(bar);
+        sheet.appendChild(card); root.appendChild(sheet);
+
+        function close() { try { sheet.remove(); } catch (e) {} }
+        closeBtn.onclick = close;
+
+        let state;
+        try { state = await LL.getState(); }
+        catch (e) {
+            console.warn('[LandlordRoom] 讀樓層失敗', e);
+            msg.className = 'llr-msg is-bad'; msg.textContent = '這棟樓的資料暫時讀不到，關上再走過來一次。';
+            return;
+        }
+        if (!sheet.isConnected) return;   // 讀的時候玩家已經換場了，別再往一個被丟掉的面板填東西
+
+        const cfg = LL._cfg || {};
+        const maxFloors = cfg.maxFloors || 4, perFloor = cfg.unitsPerFloor || 2, price = cfg.floorPrice || 600;
+        const floors = state.floors || 0;
+
         for (let i = 1; i <= floors; i++) {
             const b = _btn('fa-solid fa-building', i + '樓', i === floor ? 'is-now' : '');
             if (i === floor) b.disabled = true;
             else b.onclick = function () { close(); openCorridor(i).catch(function (err) { console.warn('[LandlordRoom] 換樓層失敗', err); }); };
             list.appendChild(b);
         }
-        card.appendChild(list);
-
-        const msg = d.createElement('div'); msg.className = 'llr-msg';
         msg.textContent = floors >= maxFloors
             ? ('已經蓋到 ' + floors + ' 樓，不能再往上了。')
             : ('再加一層，就多 ' + perFloor + ' 間可以出租。');
-        card.appendChild(msg);
 
-        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
-        const closeBtn = _btn('fa-solid fa-xmark', '關上');
-        bar.appendChild(closeBtn);
         const add = floors < maxFloors ? _btn('fa-solid fa-layer-group', '加蓋一層（' + price + '）', 'is-go') : null;
         if (add) bar.appendChild(add);
-        card.appendChild(bar);
-        sheet.appendChild(card); root.appendChild(sheet);
-
-        function close() { try { sheet.remove(); } catch (e) {} }
-        closeBtn.onclick = close;
         if (add) add.onclick = async function () {
             add.disabled = true;
             let r;
