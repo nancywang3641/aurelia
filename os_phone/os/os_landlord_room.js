@@ -93,6 +93,7 @@
     }
     const HOME_ID = 'home';          // 你自己那間（城市裡自己那棟房子走進去的）
     const HOME_TYPE = 'standard';    // 自家預設房型；之後升級公寓再讓它可換
+    const HOME_FLOOR = 1;            // 🚨 自己住一樓,而且只有一樓——加蓋是往上長,自宅不會跟著複製上去
 
     function _specOfKey(key) {
         const RT = (_SVG() && _SVG().ROOM_TYPES) || {};
@@ -215,10 +216,10 @@
         return _enter(null, {
             id: HOME_ID,
             name: '你的家',
-            badge: floors > 0 ? '1樓 · 你的家' : '你的家',   // 蓋了公寓才有樓層可言
+            badge: floors > 0 ? (HOME_FLOOR + '樓 · 你的家') : '你的家',   // 蓋了公寓才有樓層可言
             spec: _specOfKey((saved && saved.roomTypeKey) || HOME_TYPE),
             // 蓋了公寓＝自己那戶開在走廊上,走出來要回走廊;還沒蓋才是直接走回城市
-            exit: floors > 0 ? { panel: 'apartment-back', floor: 1 } : { to: 'city', spawn: CITY_SPAWN },
+            exit: floors > 0 ? { panel: 'apartment-back', floor: HOME_FLOOR } : { to: 'city', spawn: CITY_SPAWN },
             lift: true, liftFloor: Math.max(1, floors),   // 自己家裡看得到那根柱子
         });
     }
@@ -386,8 +387,10 @@
             }, 1536, 1024);
         } catch (e) { console.warn('[LandlordRoom] 走廊底圖失敗', e); _sorry(null, '走廊的圖讀不進來，再試一次。'); return; }
 
-        // 一戶一扇門（自己那戶排最前面）。門牌＝樓層＋戶別（f2-a → 2A）；名字太長會擠爆門牌，截短。
-        const cells = [{ id: HOME_ID, plate: '我家', home: true }].concat(units.map(function (u) {
+        // 一戶一扇門（自己那戶排最前面，而且只出現在自己住的那層）。
+        // 門牌＝樓層＋戶別（f2-a → 2A）；名字太長會擠爆門牌，截短。
+        const mine = (floor === HOME_FLOOR) ? [{ id: HOME_ID, plate: '我家', home: true }] : [];
+        const cells = mine.concat(units.map(function (u) {
             return {
                 id: u.id,
                 plate: (u.floor || 1) + String.fromCharCode(65 + (u.slot || 0)),
