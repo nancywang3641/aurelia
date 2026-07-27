@@ -235,7 +235,9 @@
 
     // ── 🏢 公寓走廊：一層一條,一戶一扇門(你自己那戶也在這條走廊上) ──
     // 走廊底圖之後會換成手繪的;現在先用 makeRoom 生一個長形空間頂著(定案:先頂著,別卡在缺素材)。
-    const CORRIDOR = { w: 6.4, d: 1.8, wallH: 0.62, floor: 'tile', window: false };
+    // 🚨 牆要高過人（PERSON_H=1.7）門才畫得下：0.80 那個上限是給「會拿去生圖」的房間用的
+    //    （牆高＝家具尺度基準），走廊純幾何不生圖，所以走 noWallCap 繞過去。
+    const CORRIDOR = { w: 6.4, d: 2.2, wallH: 2.1, floor: 'tile', window: false, noWallCap: true };
     const CITY_SPAWN = { x: 364, y: 892 };   // 從樓裡出來站的位置＝自家門口外
     // 🕹 走廊裡那根控制錨點：加蓋樓層／換樓層都走它（先借城市的信標素材頂著）
     const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
@@ -270,6 +272,77 @@
         return { base: base, door: door };
     }
 
+    // 🚪 在走廊後牆上真的畫出門——沒有門的話，玩家只會覺得「撞到牆就被傳走」。
+    //    畫上去的門與觸發區用同一組座標算，所見即所得。
+    async function _paintCorridorDoors(baseUrl, geo, fit, cells) {
+        const iv = (geo && geo.interior) || [], fl = (geo && geo.floor) || [];
+        // 後牆四角：地板後緣兩點 ＋ 牆頂內側兩點
+        const bL = fl[3], bR = fl[2], tL = iv[1], tR = iv[2];
+        if (!bL || !bR || !tL || !tR || !cells.length) return { base: baseUrl, doors: [] };
+
+        const S = fit.s, OX = fit.ox, OY = fit.oy;
+        const lerp = function (a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; };
+        // u＝沿後牆由左到右，v＝0 地板 → 1 牆頂；回傳舞台座標
+        const at = function (u, v) {
+            const p = lerp(lerp(bL, bR, u), lerp(tL, tR, u), v);
+            return [p[0] * S + OX, p[1] * S + OY];
+        };
+        const n = cells.length, HALF = (1 / n) * 0.3, TOP = 0.8;
+
+        // 觸發區先算好：就算圖畫不上去，門還是要走得進去
+        const doors = cells.map(function (c, i) {
+            const u = (i + 0.5) / n;
+            const a = at(u - HALF, 0), b = at(u + HALF, 0);
+            const w = Math.max(64, Math.abs(b[0] - a[0]));
+            return {
+                x: (a[0] + b[0]) / 2 - w / 2, y: (a[1] + b[1]) / 2,
+                w: w, h: 46, panel: 'apartment', unitId: c.id,
+            };
+        });
+
+        let base = baseUrl;
+        try {
+            const img = await _loadImg(baseUrl);
+            const cv = d.createElement('canvas'); cv.width = 1536; cv.height = 1024;
+            const cx = cv.getContext('2d');
+            cx.drawImage(img, 0, 0);
+            const quad = function (u0, u1, v0, v1) {
+                const q = [at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1)];
+                cx.beginPath();
+                cx.moveTo(q[0][0], q[0][1]);
+                for (let k = 1; k < 4; k++) cx.lineTo(q[k][0], q[k][1]);
+                cx.closePath();
+                return q;
+            };
+            cells.forEach(function (c, i) {
+                const u = (i + 0.5) / n, u0 = u - HALF, u1 = u + HALF;
+                const jamb = (u1 - u0) * 0.13;   // 門框厚度（沿牆方向）
+                // 門框：比門板大一圈的淺色框
+                quad(u0 - jamb, u1 + jamb, 0, TOP + 0.05);
+                cx.fillStyle = '#efe9dc'; cx.fill();
+                cx.strokeStyle = '#cdc4b2'; cx.lineWidth = 2; cx.stroke();
+                // 門板：自己那戶暖木色，出租戶冷灰藍，一眼看得出哪扇是自己的
+                const q = quad(u0, u1, 0, TOP);
+                const g = cx.createLinearGradient(q[3][0], q[3][1], q[0][0], q[0][1]);
+                if (c.home) { g.addColorStop(0, '#9a6b4a'); g.addColorStop(1, '#6b4832'); }
+                else { g.addColorStop(0, '#5c6675'); g.addColorStop(1, '#3d4552'); }
+                cx.fillStyle = g; cx.fill();
+                // 門板上的兩塊嵌板：純色塊看起來像色卡，有嵌板才像一扇門
+                cx.fillStyle = 'rgba(0,0,0,.18)';
+                quad(u0 + jamb, u1 - jamb, TOP * 0.56, TOP * 0.92); cx.fill();
+                quad(u0 + jamb, u1 - jamb, TOP * 0.12, TOP * 0.46); cx.fill();
+                // 門把：開門那側、約腰高
+                const hp = at(u1 - (u1 - u0) * 0.18, TOP * 0.5);
+                cx.beginPath(); cx.arc(hp[0], hp[1], 5.5, 0, Math.PI * 2);
+                cx.fillStyle = '#e8d9b5'; cx.fill();
+                cx.strokeStyle = 'rgba(0,0,0,.35)'; cx.lineWidth = 1.5; cx.stroke();
+            });
+            base = cv.toDataURL('image/png');
+        } catch (e) { console.warn('[LandlordRoom] 走廊的門畫不上去，觸發區還在', e); }
+
+        return { base: base, doors: doors };
+    }
+
     async function openCorridor(floor) {
         const LL = _LL(), GEN = _GEN(), stage = _STAGE();
         if (!LL || !GEN) { _sorry(null, '房間功能還沒載入完，稍等一下再試。'); return; }
@@ -282,37 +355,26 @@
             units = (state.units || []).filter(function (u) { return (u.floor || 1) === floor; });
         } catch (e) { console.warn('[LandlordRoom] 讀樓層失敗', e); _sorry(null, '這一層暫時上不去。'); return; }
 
-        let layers;
+        let layers, geo;
         try {
-            const base = await GEN.buildBase(CORRIDOR);
+            const built = await GEN.buildBase(CORRIDOR);
+            geo = built.room;
             layers = await GEN.stageLayers({
-                image: base.baseData, floor: base.room.floor,
-                viewBox: base.room.viewBox, personH: base.room.personH,
+                image: built.baseData, floor: geo.floor,
+                viewBox: geo.viewBox, personH: geo.personH,
             }, 1536, 1024);
         } catch (e) { console.warn('[LandlordRoom] 走廊底圖失敗', e); _sorry(null, '走廊的圖讀不進來，再試一次。'); return; }
 
-        // 一戶一扇門,沿著地板最裡面那條邊等距排開（自己那戶排最前面）
-        const cells = [{ id: HOME_ID, label: '你的家' }].concat(units.map(function (u) {
+        // 一戶一扇門（自己那戶排最前面）
+        const cells = [{ id: HOME_ID, label: '你的家', home: true }].concat(units.map(function (u) {
             return { id: u.id, label: u.tenantName || '空房' };
         }));
         const fs = layers.floorStage || [];
-        const bl = fs[3], br = fs[2];
-        let doors = [];
-        if (bl && br) {
-            const span = Math.abs(br[0] - bl[0]);
-            const dw = Math.max(64, Math.min(150, span / cells.length * 0.56));
-            doors = cells.map(function (c, i) {
-                const t = (i + 0.5) / cells.length;
-                return {
-                    x: bl[0] + (br[0] - bl[0]) * t - dw / 2,
-                    y: bl[1] + (br[1] - bl[1]) * t,
-                    w: dw, h: 44, panel: 'apartment', unitId: c.id,
-                };
-            });
-        }
+        const painted = await _paintCorridorDoors(layers.base, geo, layers.fit, cells);
+        let doors = painted.doors;
 
         // 🕹 控制錨點：走過去＝加蓋樓層／換樓層
-        const bea = await _placeBeacon(layers.base, fs, layers.figurePx, floor);
+        const bea = await _placeBeacon(painted.base, fs, layers.figurePx, floor);
         const base = bea.base;
         if (bea.door) doors.push(bea.door);
 
