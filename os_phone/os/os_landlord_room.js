@@ -196,10 +196,11 @@
         }
         // 空房也進得去（空房就是拿來布置的），標題別假裝有房客
         // 走出這一戶＝回到那層走廊（公寓戶一定是從走廊進來的）
+        const at = unit.floor ? (unit.floor + '樓 · ') : '';
         return _enter(container, {
             id: unitId,
             name: unit.tenantName || '空房',
-            badge: unit.tenantName ? (unit.tenantName + '的房間') : '還沒有房客',
+            badge: at + (unit.tenantName ? (unit.tenantName + '的房間') : '還沒有房客'),
             spec: _specOf(unit),
             exit: unit.floor ? { panel: 'apartment-back', floor: unit.floor } : { to: 'city', spawn: CITY_SPAWN },
         });
@@ -214,7 +215,7 @@
         return _enter(null, {
             id: HOME_ID,
             name: '你的家',
-            badge: '你的家',
+            badge: floors > 0 ? '1樓 · 你的家' : '你的家',   // 蓋了公寓才有樓層可言
             spec: _specOfKey((saved && saved.roomTypeKey) || HOME_TYPE),
             // 蓋了公寓＝自己那戶開在走廊上,走出來要回走廊;還沒蓋才是直接走回城市
             exit: floors > 0 ? { panel: 'apartment-back', floor: 1 } : { to: 'city', spawn: CITY_SPAWN },
@@ -381,7 +382,8 @@
         _ctx = null;   // 走廊不是「站在某一間房裡」，布置那套不能作用
         stage.enterRoom({
             base: base, mask: layers.mask, floorStage: layers.floorStage,
-            header: { name: floor + '樓', badge: '公寓走廊', ph: '走到門口進各戶，走到那根柱子可以加蓋或換樓層…' },
+            // 🚨 樓層要寫在 badge（左上角那條）：name 是對話框的名字標籤，走廊沒有對話對象＝看不到
+            header: { name: floor + '樓', badge: '公寓 ' + floor + '樓', ph: '走到門口進各戶，走到那根柱子可以加蓋或換樓層…' },
             exit: { to: 'city', spawn: CITY_SPAWN },
             doors: doors,
             actorPx: layers.figurePx,
