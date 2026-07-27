@@ -12,6 +12,8 @@
     //   生圖會照母圖上看得到的牆高決定家具多大：牆一高，家具整組跟著放大變成大家具，
     //   多出來的空白直牆它還會自己找高櫃子來填。牆高**不可以拿來表現挑高**。
     //   makeRoom 與 parseSpec 都會夾在這個上限內——外面丟什麼進來都一樣。
+    //   ⚠️ 唯一例外：`spec.noWallCap`。只給「不會拿去生圖」的純幾何空間用（公寓走廊就是），
+    //     因為那種空間要在牆上畫得下一扇門，0.80 的牆連人的一半都不到。租客的房間絕不可以用。
     var WALL_MAX = 0.80;
 
     // 🧍 一個成年人有多高（房間單位＝公尺）。房間 4.2×4.0 就是一間正常臥室，
@@ -60,7 +62,9 @@
         var UIDN = 0;
         // spec: { w, d, wallH, floor, window } → { svg, floor:[[x,y]x4], viewBox:[w,h] }
         function makeRoom(spec) {
-            var w = spec.w, d = spec.d, WALLH = Math.min(WALL_MAX, spec.wallH == null ? 0.68 : spec.wallH);
+            var w = spec.w, d = spec.d;
+            var WALLH = spec.noWallCap ? Math.max(0.45, spec.wallH == null ? 0.68 : spec.wallH)
+                : Math.min(WALL_MAX, spec.wallH == null ? 0.68 : spec.wallH);
             var FL = FLOORS[spec.floor] || FLOORS.oak;
             var hasWin = spec.window !== false;
             var UID = 'k' + (++UIDN);
