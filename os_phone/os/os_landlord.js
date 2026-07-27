@@ -14,6 +14,7 @@
         baseRent: 12,           // 每戶每天固定基礎租金(PT)——①期不接係數
         catchUpDays: 7,         // 離線補算上限
         initialTypes: ['cozy', 'deep'],   // 初始兩戶的房型
+        plots: ['npc01', 'npc02', 'npc03', 'npc04'],   // 🏘 城市裡四塊 NPC 地＝四棟出租房(對照 lobby_stage layout 的 o.plot)
     };
 
     const APP_ID = 'landlord';
@@ -31,6 +32,7 @@
         for (let i = 0; i < LL_CFG.initialUnits; i++) {
             units.push({
                 id: 'u' + (i + 1),
+                plotId: LL_CFG.plots[i] || null,   // 這一戶是城市裡哪一棟
                 roomTypeKey: LL_CFG.initialTypes[i] || 'standard',
                 tenantKey: null, tenantName: null,
                 rent: LL_CFG.baseRent,
@@ -38,6 +40,33 @@
             });
         }
         return { units: units, lastSettleDay: null, createdAt: _now() };
+    }
+
+    // ── 🏘 每一戶對上城市的一塊地(走進那棟房子的門＝進這一戶) ──
+    // 舊存檔沒有 plotId：依序補上還沒被占的地。回傳有沒有動過(有動才需要存回)。
+    function _fillPlots(state) {
+        let changed = false;
+        const used = {};
+        state.units.forEach(function (u) { if (u.plotId) used[u.plotId] = true; });
+        state.units.forEach(function (u) {
+            if (u.plotId) return;
+            const free = LL_CFG.plots.find(function (p) { return !used[p]; });
+            if (!free) return;
+            u.plotId = free; used[free] = true; changed = true;
+        });
+        return changed;
+    }
+    // 有房的地塊要讓城市那邊真的蓋起來——不然房子不顯示,門的 plot 判定也過不了(走上去沒反應)。
+    function _syncPlots(state) {
+        try {
+            const stage = win.LobbyStage || window.LobbyStage;
+            if (!stage || typeof stage.setPlot !== 'function') return;
+            state.units.forEach(function (u) {
+                if (!u.plotId) return;
+                if (typeof stage.plotOccupied === 'function' && stage.plotOccupied(u.plotId)) return;   // 已經蓋了就別重跑(setPlot 會重建碰撞)
+                stage.setPlot(u.plotId, true);
+            });
+        } catch (e) { console.warn('[Landlord] 同步城市地塊失敗', e); }
     }
 
     // 🚨區分「查無資料」與「讀取失敗」：前者安全(建預設值並寫入),後者危險(絕不可寫入,一律往外拋)。
@@ -52,10 +81,15 @@
             console.warn('[Landlord] getState 讀取失敗,拒絕以預設值覆蓋,原樣往外拋', e);
             throw e;
         }
-        if (v && Array.isArray(v.units) && v.units.length) return v;
+        if (v && Array.isArray(v.units) && v.units.length) {
+            if (_fillPlots(v)) { try { await saveState(v); } catch (e) { console.warn('[Landlord] 補地塊後存檔失敗,這次先照用', e); } }
+            _syncPlots(v);
+            return v;
+        }
         // 走到這裡代表「查無資料」(讀取本身沒出錯,只是還沒有記錄)→ 安全,建立預設值並寫入
         const fresh = _defaultState();
         await saveState(fresh);
+        _syncPlots(fresh);
         return fresh;
     }
 
@@ -113,6 +147,7 @@
             const amount = (u.rent || 0) * days;
             if (amount <= 0) return;
             earned += amount;
+            u.earnedTotal = (u.earnedTotal || 0) + amount;   // 這一戶到今天總共收了多少(手機那頁的帳)
             perUnit.push({ unitId: u.id, tenantName: u.tenantName || '房客', amount: amount });
         });
         s.lastSettleDay = todayDay;
@@ -351,23 +386,21 @@
             const label = (RT[u.roomTypeKey] && RT[u.roomTypeKey].label) || '未知房型';
             const top = d.createElement('div'); top.className = 'll-unit-top';
             const left = d.createElement('div');
+            const got = u.earnedTotal || 0;
+            const paid = res.perUnit && res.perUnit.find(function (p) { return p.unitId === u.id; });
             left.innerHTML = '<div class="ll-unit-name">' + label + '</div>'
                 + '<div class="ll-unit-sub">' + (u.tenantName
-                    ? ('房客：' + u.tenantName + '　每日租金 ' + u.rent)
+                    ? ('房客：' + u.tenantName + '　每日租金 ' + u.rent
+                        + (got ? '<br>累計收租 ' + got : '')
+                        + (paid ? '　這次 +' + paid.amount : ''))
                     : '<span class="ll-empty">空著</span>') + '</div>';
             top.appendChild(left);
+            // 🏘 布置與看房都在城市那邊走進門處理,這頁只管帳——所以沒有「進房間」鈕。
+            //    招租鈕暫留:等看房訪客(擲骰)做好就換掉。
             if (!u.tenantKey) {
                 const btn = d.createElement('button'); btn.className = 'll-btn';
                 btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> 招租';
                 btn.onclick = function () { _renderRecruit(root, u.id); };
-                top.appendChild(btn);
-            } else if (win.OS_LANDLORD_ROOM) {
-                const btn = d.createElement('button'); btn.className = 'll-btn';
-                btn.innerHTML = '<i class="fa-solid fa-door-open"></i> 進房間';
-                btn.onclick = function () {
-                    try { win.OS_LANDLORD_ROOM.open(root, u.id); }
-                    catch (e) { console.warn('[Landlord] 進房間失敗', e); _renderError(root); }
-                };
                 top.appendChild(btn);
             }
             card.appendChild(top);

@@ -251,6 +251,12 @@
                 //    門的位置可以在擺設模式直接拖(新增在陣列最後,不影響上面兩扇已調好的門)。
                 //    觸發區要落在房子「下緣外側」那一條——房子本體會擋路,站不進去就永遠踩不到門(同書咖那扇的做法)。
                 { x: 330, y: 850, w: 100, h: 42, panel: 'myhome', plot: 'player' },
+                // 🏘 四棟出租房：一棟＝一戶,門帶 plot=那塊地(沒蓋房就沒門)。走進去＝進那一戶的房間(布置/看房都在舞台這邊)。
+                //    座標抓「房子水平置中、垂直落在底緣」,同 myhome 那扇的算法；擺設模式可以直接拖到準位。
+                { x: 974, y: 847, w: 100, h: 42, panel: 'rental', plot: 'npc01' },
+                { x: 1262, y: 838, w: 100, h: 42, panel: 'rental', plot: 'npc02' },
+                { x: 1084, y: 336, w: 100, h: 42, panel: 'rental', plot: 'npc03' },
+                { x: 262, y: 536, w: 100, h: 42, panel: 'rental', plot: 'npc04' },
             ],
         },
     };
@@ -1373,7 +1379,8 @@
                         } else if (door.panel) {   // 面板型門（交易所…）：彈面板、不切場景；踏出後才重新武裝
                             S.doorArm = false;
                             S.doorCd = performance.now() + 1500;
-                            window.dispatchEvent(new CustomEvent('lstage-open-' + door.panel));
+                            // detail 帶整扇門：同一個 panel 型別可以有好幾扇（出租房四棟共用 'rental'，靠 door.plot 分辨是哪一戶）
+                            window.dispatchEvent(new CustomEvent('lstage-open-' + door.panel, { detail: { door: door } }));
                         } else goScene(door.to, door.spawn);
                     }
                 } else S.doorArm = true;
