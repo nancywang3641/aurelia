@@ -101,7 +101,10 @@
             var PAD = 34, ox = -mnx + PAD, oy = -mny + PAD;
             function g(p) { return [p[0] + ox, p[1] + oy]; }
             var vbW = (mxx - mnx) + PAD * 2, vbH = (mxy - mny) + PAD * 2;
-            var floorPoly = [g(fFL), g(fFR), g(fBR), g(fBL)];
+            // 🚪 可走地板＝房內 ＋ 門口那段玄關（前緣中間往外凸出去的一塊）。
+            //   出口的觸發區是照「地板最下緣」算的，玄關進來以後出口自然落在玄關深處：
+            //   房間本身變成一個走得滿的方形空間，不會走到底就被傳出去。
+            var floorPoly = [g(fFL), g(pBL), g(pFL), g(pFR), g(pBR), g(fFR), g(fBR), g(fBL)];
             // 內部輪廓（地板＋三面牆內面）：inpaint 白區用，只排除邊框與外面黑區
             var interiorPoly = [g(iFLt), g(iBLt), g(iBRt), g(iFRt), g(fFR), g(fFL)];
             var segs = [[L, -DOORW / 2], [DOORW / 2, R]]
@@ -140,8 +143,7 @@
                     + '<line x1="' + _f(mv[0][0]) + '" y1="' + _f(mv[0][1]) + '" x2="' + _f(mv[1][0]) + '" y2="' + _f(mv[1][1]) + '" stroke="#f4f1ea" stroke-width="2.4"/>'
                     + '<line x1="' + _f(mh[0][0]) + '" y1="' + _f(mh[0][1]) + '" x2="' + _f(mh[1][0]) + '" y2="' + _f(mh[1][1]) + '" stroke="#f4f1ea" stroke-width="2.4"/>';
             }
-            // 🚪 玄關：門口外那一小塊地板＋兩側短邊，讓門看起來是「走得出去」而不是地板被切斷
-            var porchD = _polyPath([g(pBL), g(pBR), g(pFR), g(pFL)]);
+            // 🚪 玄關：地板本身已經含在 floorPoly 裡（clip 會畫到），這裡只補木紋與兩側短邊
             var porchLines = '';
             for (var pi = 1; pi <= 2; pi++) {
                 var pt = pi / 3;
@@ -151,9 +153,7 @@
             // 兩側短邊：延續前緣那道白邊，收住玄關左右
             var porchSideL = _roundPath([g(P(dL, FRONTH, iF)), g(pTL), g(pFL), g(pBL)], 4);
             var porchSideR = _roundPath([g(P(dR, FRONTH, iF)), g(pTR), g(pFR), g(pBR)], 4);
-            var porchSvg = '<path d="' + porchD + '" fill="url(#gFloor' + UID + ')"/>'
-                + porchLines
-                + '<path d="' + porchSideL + '" fill="url(#gLipF' + UID + ')"/>'
+            var porchSvg = '<path d="' + porchSideL + '" fill="url(#gLipF' + UID + ')"/>'
                 + '<path d="' + porchSideR + '" fill="url(#gLipF' + UID + ')"/>';
 
             var cx = (g(oFL0)[0] + g(oFR0)[0]) / 2, cyb = Math.max(g(oFL0)[1], g(oFR0)[1]);
@@ -181,7 +181,7 @@
                 + '<path d="' + rightWall + '" fill="url(#gSideR' + UID + ')"/>'
                 + '<g clip-path="url(#clipFloor' + UID + ')">'
                 + '<path d="' + floorD + '" fill="url(#gFloor' + UID + ')"/>'
-                + floorLines
+                + floorLines + porchLines
                 + '<rect x="0" y="0" width="' + _f(vbW) + '" height="' + _f(vbH) + '" fill="url(#gAO' + UID + ')"/>'
                 + '</g>'
                 + porchSvg
