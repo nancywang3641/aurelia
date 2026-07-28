@@ -613,10 +613,11 @@
                     + (rent > p.suggest ? '　開得比建議高，會比較難租出去。' : (rent < p.suggest ? '　開得比建議低，很快會有人要。' : ''));
             }
             function step(v) { rent = Math.max(p.min, Math.min(p.max, rent + v)); paint(); }
-            const minus = _btn('fa-solid fa-minus', '－5'); minus.onclick = function () { step(-5); };
-            const minus1 = _btn('fa-solid fa-minus', '－1'); minus1.onclick = function () { step(-1); };
-            const plus1 = _btn('fa-solid fa-plus', '＋1'); plus1.onclick = function () { step(1); };
-            const plus = _btn('fa-solid fa-plus', '＋5'); plus.onclick = function () { step(5); };
+            // 圖標已經是加減號了，文字只寫數字，不然會變成「－ －5」
+            const minus = _btn('fa-solid fa-minus', '5'); minus.onclick = function () { step(-5); };
+            const minus1 = _btn('fa-solid fa-minus', '1'); minus1.onclick = function () { step(-1); };
+            const plus1 = _btn('fa-solid fa-plus', '1'); plus1.onclick = function () { step(1); };
+            const plus = _btn('fa-solid fa-plus', '5'); plus.onclick = function () { step(5); };
             const fair = _btn('fa-solid fa-scale-balanced', '照建議'); fair.onclick = function () { rent = p.suggest; paint(); };
             [minus, minus1, plus1, plus, fair].forEach(function (b) { row.appendChild(b); });
 

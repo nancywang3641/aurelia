@@ -133,7 +133,9 @@
         return {
             unit: unit, orderCount: orderCount, suggest: suggest,
             min: range.min, max: range.max,
-            rent: unit.rent || suggest, listed: !!unit.listed,
+            // 先夾進範圍再給 UI：舊戶還帶著預設的 12，布置過之後那個數字已經低於下限了
+            rent: Math.max(range.min, Math.min(range.max, unit.rent || suggest)),
+            listed: !!unit.listed,
         };
     }
 
