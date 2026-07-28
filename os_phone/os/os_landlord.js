@@ -145,6 +145,61 @@
         return Math.max(0, Math.min(1, score));
     }
 
+    // ── 🏃 續租／退租：住進去以後，房客每天回頭看一次這間房值不值得住 ──
+    // 用的是跟看房同一把尺（judgeFit），差別在門檻放寬（都住下來了，有黏性）
+    // 而且刻意不帶心情種子：住戶的評價要穩定，玩家重新布置、加家具才有明確的因果。
+    const STAY_CFG = {
+        badBelow: 0.42,   // 低於這個就開始累積不滿（看房的門檻是 0.5）
+        goodAbove: 0.5,   // 高於這個就消一格不滿
+        leaveAt: 5,       // 不滿累積到這個數就搬走——玩家有五天可以補救
+        keepDays: 14,     // 退租紀錄留幾天
+    };
+    // 純函式：補算每一天，回 { state, left:[搬走的] }
+    function settleTenants(state, todayDay, rooms, tunings) {
+        const s = JSON.parse(JSON.stringify(state));
+        s.moveOuts = Array.isArray(s.moveOuts) ? s.moveOuts : [];
+        const last = (s.lastStayDay === null || s.lastStayDay === undefined) ? todayDay - 1 : s.lastStayDay;
+        const left = [];
+        let from = last + 1;
+        if (todayDay - from > LL_CFG.catchUpDays) from = todayDay - LL_CFG.catchUpDays;
+
+        for (let day = from; day <= todayDay; day++) {
+            s.units.forEach(function (u) {
+                if (!u.tenantKey) return;
+                const info = (rooms && rooms[u.id]) || { tags: [], suggest: u.rent || 12 };
+                const tuning = (tunings && tunings[u.tenantKey]) || _fallbackTuning({ key: u.tenantKey, name: u.tenantName });
+                const fit = judgeFit(tuning, u, info.suggest, info.tags);
+                u.fit = Math.round(fit * 100) / 100;
+                if (fit < STAY_CFG.badBelow) u.unhappy = (u.unhappy || 0) + 1;
+                else if (fit >= STAY_CFG.goodAbove) u.unhappy = Math.max(0, (u.unhappy || 0) - 1);
+
+                if ((u.unhappy || 0) >= STAY_CFG.leaveAt) {
+                    const rec = {
+                        id: 'o' + day + '_' + u.id + '_' + u.tenantKey,
+                        unitId: u.id, npcKey: u.tenantKey, name: u.tenantName || '房客',
+                        day: day, rent: u.rent || 0, fit: u.fit, line: '', done: false,
+                    };
+                    if (!s.moveOuts.some(function (x) { return x.id === rec.id; })) { s.moveOuts.push(rec); left.push(rec); }
+                    u.tenantKey = null; u.tenantName = null; u.movedInAt = null;
+                    u.unhappy = 0; u.fit = null;
+                    u.listed = false;   // 空出來要玩家自己重新掛招租（順便逼他先看看哪裡沒做好）
+                }
+            });
+        }
+        s.moveOuts = s.moveOuts.filter(function (o) { return o.day > todayDay - STAY_CFG.keepDays; });
+        s.lastStayDay = todayDay;
+        return { state: s, left: left };
+    }
+    // 房客現在的心情，給 UI 一句話（不是數字，玩家不需要看到分數）
+    function stayMood(unit) {
+        if (!unit || !unit.tenantKey) return '';
+        const n = unit.unhappy || 0;
+        if (n >= 4) return '快要搬走了';
+        if (n >= 2) return '有點不滿';
+        if (n >= 1) return '有些地方不合意';
+        return (unit.fit != null && unit.fit >= 0.7) ? '住得很滿意' : '住得還安穩';
+    }
+
     // 純函式：把「上次結算到今天」之間，每天每個招租中的戶各骰一次。
     // roster=候選名冊、rooms={unitId:{tags:[],suggest:N}}、tunings={npcKey:tuning}
     function settleViewings(state, todayDay, roster, rooms, tunings) {
@@ -534,28 +589,30 @@
             await saveState(r.state);
         }
         // 🔔 收租結算完才跑看房（本地擲骰，不燒 API）；失敗不影響已經收好的租
-        let finalState = r.state, viewAdded = [];
+        let finalState = r.state, viewAdded = [], moveOut = [];
         try {
-            const vr = await _runViewings(r.state);
-            finalState = vr.state; viewAdded = vr.added;
-        } catch (e) { console.warn('[Landlord] 看房結算失敗，這次先跳過', e); }
-        return { state: finalState, days: r.days, earned: r.earned, perUnit: r.perUnit, payFailed: false, viewAdded: viewAdded };
+            const vr = await _runDaily(r.state);
+            finalState = vr.state; viewAdded = vr.added; moveOut = vr.left;
+        } catch (e) { console.warn('[Landlord] 每日結算失敗，這次先跳過', e); }
+        return { state: finalState, days: r.days, earned: r.earned, perUnit: r.perUnit, payFailed: false, viewAdded: viewAdded, moveOut: moveOut };
     }
 
     // 把看房要用的資料備好（房裡有哪些口味的家具、建議價、名冊、已快取的定調）再跑純函式
-    async function _runViewings(state) {
+    async function _runDaily(state) {
         const today = _dayNum(_now());
-        const listed = (state.units || []).filter(function (u) { return u.listed && !u.tenantKey; });
-        if (!listed.length) {
-            // 沒有戶在招租：日子照樣推到今天，免得哪天掛上招租就一口氣補算一堆人
+        // 要看的戶＝掛招租的(等人上門) ＋ 有房客的(住得爽不爽)
+        const care = (state.units || []).filter(function (u) { return (u.listed && !u.tenantKey) || u.tenantKey; });
+        if (!care.length) {
+            // 什麼都沒有：日子照樣推到今天，免得哪天掛上招租就一口氣補算一堆人
             const s = JSON.parse(JSON.stringify(state));
             s.viewings = Array.isArray(s.viewings) ? s.viewings : [];
-            s.lastViewDay = today;
+            s.moveOuts = Array.isArray(s.moveOuts) ? s.moveOuts : [];
+            s.lastViewDay = today; s.lastStayDay = today;
             await saveState(s);
-            return { state: s, added: [] };
+            return { state: s, added: [], left: [] };
         }
         const rooms = {};
-        for (const u of listed) {
+        for (const u of care) {
             let order = [];
             try { const room = await getRoom(u.id); order = (room && Array.isArray(room.order)) ? room.order : []; }
             catch (e) { console.warn('[Landlord] 看房時讀房間失敗，當空房算', u.id, e); }
@@ -571,7 +628,10 @@
             if (!r || !r.key) continue;
             try { const t = await getTuning(r.key); if (_isValidTuning(t)) tunings[r.key] = t; } catch (e) {}
         }
-        const vr = settleViewings(state, today, roster, rooms, tunings);
+        // 先算住戶：不滿累積夠了就搬走，那間房空出來(而且不會自動掛招租)
+        const tr = settleTenants(state, today, rooms, tunings);
+        // 再算看房：剛空出來的戶因為沒掛招租，今天不會有人來看
+        const vr = settleViewings(tr.state, today, roster, rooms, tunings);
 
         // 新面孔補一次定調（照人設決定他的理想房型與口味），之後永久快取不再燒。
         // 一次結算最多兩個人，久沒開 app 不會一口氣燒一串；沒定調到的就先用雜湊退路。
@@ -596,7 +656,7 @@
         }
 
         await saveState(vr.state);
-        return vr;
+        return { state: vr.state, added: vr.added, left: tr.left };
     }
 
     // 讓某位看房客入住：房子租出去，這戶其他還掛著的看房紀錄一起收掉
@@ -627,28 +687,26 @@
     }
 
     // 🎧 想聽這位訪客怎麼說：一筆只燒一次副模型，講完存回那筆紀錄
-    async function hearViewing(viewingId) {
-        const state = await getState();
-        const v = (state.viewings || []).find(function (x) { return x.id === viewingId; });
-        if (!v) throw new Error('找不到這筆看房紀錄。');
-        if (v.line) return v.line;
-
+    // 共用：抓那一戶的背景（人設、房型、房裡有什麼），再問副模型要一句話。
+    //   兩個入口（看完房的訪客／搬走的房客）差的只有 prompt。
+    async function _npcContext(state, npcKey, unitId) {
         let persona = '';
         try {
             const roster = await _roster();
-            const hit = roster.find(function (r) { return r && r.key === v.npcKey; });
+            const hit = roster.find(function (r) { return r && r.key === npcKey; });
             persona = (hit && hit.persona) || '';
         } catch (e) {}
-
-        const unit = (state.units || []).find(function (u) { return u.id === v.unitId; }) || {};
+        const unit = (state.units || []).find(function (u) { return u.id === unitId; }) || {};
         const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
         const typeLabel = (RT[unit.roomTypeKey] && RT[unit.roomTypeKey].label) || '房間';
         let stuff = [];
         try {
-            const room = await getRoom(v.unitId);
+            const room = await getRoom(unitId);
             stuff = ((room && room.order) || []).map(function (it) { return it.name; }).filter(Boolean).slice(0, 10);
         } catch (e) {}
-
+        return { persona: persona, typeLabel: typeLabel, stuff: stuff };
+    }
+    async function _askLine(sys, body, label) {
         const api = win.OS_API || window.OS_API;
         if (!api || !api.chat) throw new Error('找不到副模型接口。');
         let config = {};
@@ -658,7 +716,28 @@
             config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
         }
         config = config || {};
-        config.route = 'landlord_viewing';
+        config.route = 'landlord_line';
+        const raw = await new Promise(function (resolve, reject) {
+            api.chat([{ role: 'system', content: sys }, { role: 'user', content: body }],
+                config, null, resolve, reject, { label: label, keepCodeFences: true });
+        });
+        let line = '';
+        try {
+            const t = String(raw || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').replace(/```(?:[a-z]+)?/gi, '').replace(/```/g, '');
+            const m = t.match(/\{[\s\S]*\}/);
+            if (m) line = String((JSON.parse(m[0]) || {}).line || '').slice(0, 60);
+        } catch (e) { console.warn('[Landlord] 留言解析失敗', e); }
+        if (!line) throw new Error('他這次沒說什麼，等一下再問問。');
+        return line;
+    }
+
+    async function hearViewing(viewingId) {
+        const state = await getState();
+        const v = (state.viewings || []).find(function (x) { return x.id === viewingId; });
+        if (!v) throw new Error('找不到這筆看房紀錄。');
+        if (v.line) return v.line;
+
+        const c = await _npcContext(state, v.npcKey, v.unitId);
         const sys = [
             '你要扮演這位角色，剛看完一間出租房，對房東（玩家）說一句話。',
             '只回傳純 JSON：{"line":"{他口吻的一到兩句話，不超過 45 字}"}',
@@ -667,26 +746,52 @@
             '不要問候語、不要解釋、不要 markdown。語言：繁體中文。',
         ].join('\n');
         const body = [
-            '角色人設：' + (persona ? String(persona).slice(0, 800) : '（沒有特別的設定，用中性口吻）'),
-            '房間：' + typeLabel + (stuff.length ? ('，裡面有：' + stuff.join('、')) : '，空的什麼都沒有'),
+            '角色人設：' + (c.persona ? String(c.persona).slice(0, 800) : '（沒有特別的設定，用中性口吻）'),
+            '房間：' + c.typeLabel + (c.stuff.length ? ('，裡面有：' + c.stuff.join('、')) : '，空的什麼都沒有'),
             '租金：每日 ' + (v.rent || 0) + (v.rent > 0 ? '（他覺得' + (v.fit >= 0.5 ? '還可以' : '偏貴') + '）' : ''),
         ].join('\n');
 
-        const raw = await new Promise(function (resolve, reject) {
-            api.chat([{ role: 'system', content: sys }, { role: 'user', content: body }],
-                config, null, resolve, reject, { label: '看房訪客留言', keepCodeFences: true });
-        });
-        let line = '';
-        try {
-            const t = String(raw || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').replace(/```(?:[a-z]+)?/gi, '').replace(/```/g, '');
-            const m = t.match(/\{[\s\S]*\}/);
-            if (m) line = String((JSON.parse(m[0]) || {}).line || '').slice(0, 60);
-        } catch (e) { console.warn('[Landlord] 看房留言解析失敗', e); }
-        if (!line) throw new Error('他這次沒說什麼，等一下再問問。');
-
+        const line = await _askLine(sys, body, '看房訪客留言');
         v.line = line;
         try { await saveState(state); } catch (e) { console.warn('[Landlord] 存看房留言失敗', e); }
         return line;
+    }
+
+    // 🎧 想聽他為什麼搬走：一筆只燒一次
+    async function hearMoveOut(id) {
+        const state = await getState();
+        const o = (state.moveOuts || []).find(function (x) { return x.id === id; });
+        if (!o) throw new Error('找不到這筆紀錄。');
+        if (o.line) return o.line;
+
+        const c = await _npcContext(state, o.npcKey, o.unitId);
+        const sys = [
+            '你要扮演這位角色，剛退租搬走，對房東（玩家）留一句話說明為什麼。',
+            '只回傳純 JSON：{"line":"{他口吻的一到兩句話，不超過 45 字}"}',
+            '他是住了一陣子之後決定搬的，不是一開始就不喜歡：語氣要像「住下來才發現」，不要翻臉、也不要客套到看不出原因。',
+            '可以提到房間的格局、擺設不合他的習慣，或租金與住起來的感覺不成正比，但不要報數字，用感覺講。',
+            '不要問候語、不要解釋、不要 markdown。語言：繁體中文。',
+        ].join('\n');
+        const body = [
+            '角色人設：' + (c.persona ? String(c.persona).slice(0, 800) : '（沒有特別的設定，用中性口吻）'),
+            '他住的房間：' + c.typeLabel + (c.stuff.length ? ('，裡面有：' + c.stuff.join('、')) : '，空的什麼都沒有'),
+            '他付的租金：每日 ' + (o.rent || 0),
+        ].join('\n');
+
+        const line = await _askLine(sys, body, '退租留言');
+        o.line = line;
+        try { await saveState(state); } catch (e) { console.warn('[Landlord] 存退租留言失敗', e); }
+        return line;
+    }
+
+    // 知道了：把這筆退租通知收起來
+    async function dismissMoveOut(id) {
+        const state = await getState();
+        const o = (state.moveOuts || []).find(function (x) { return x.id === id; });
+        if (!o) return { ok: false, reason: 'gone' };
+        o.done = true;
+        try { await saveState(state); } catch (e) { return { ok: false, reason: 'save' }; }
+        return { ok: true, state: state };
     }
 
     function _injectStyle() {
@@ -717,6 +822,10 @@
             '.ll-pass{color:#9aa1b0;font-size:11px}',
             '.ll-view-line{margin-top:5px;font-size:12px;line-height:1.7;color:#c9cfdb}',
             '.ll-view-bar{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}',
+            '.ll-mood-ok{color:#a8d8b0}',
+            '.ll-mood-warn{color:#e7c98a}',
+            '.ll-mood-bad{color:#e0a0a8}',
+            '.ll-left{color:#e0a0a8;font-size:11px}',
             '.ll-btn-sm{padding:6px 10px;font-size:11px}',
             '.ll-btn-quiet{color:#9aa1b0}',
             '.ll-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}',
@@ -778,9 +887,12 @@
             const vacant = u.listed
                 ? '<span class="ll-listed">招租中</span>　每日開價 ' + (u.rent || 0)
                 : '<span class="ll-empty">空著，還沒掛招租</span>';
+            const mood = stayMood(u);
+            const moodCls = (u.unhappy || 0) >= 4 ? 'll-mood-bad' : ((u.unhappy || 0) >= 2 ? 'll-mood-warn' : 'll-mood-ok');
             left.innerHTML = '<div class="ll-unit-name">' + label + '</div>'
                 + '<div class="ll-unit-sub">' + (u.tenantName
                     ? ('房客：' + u.tenantName + '　每日租金 ' + u.rent
+                        + (mood ? '　<span class="' + moodCls + '">' + mood + '</span>' : '')
                         + (got ? '<br>累計收租 ' + got : '')
                         + (paid ? '　這次 +' + paid.amount : ''))
                     : vacant) + '</div>';
@@ -791,6 +903,11 @@
             const open = (res.state.viewings || [])
                 .filter(function (v) { return v.unitId === u.id && !v.done; })
                 .sort(function (a, b) { return (b.want - a.want) || (b.day - a.day); });
+            // 🏃 剛搬走的：先講一聲再談招租
+            (res.state.moveOuts || [])
+                .filter(function (o) { return o.unitId === u.id && !o.done; })
+                .forEach(function (o) { card.appendChild(_moveOutRow(root, o)); });
+
             if (!u.tenantKey && open.length) {
                 open.forEach(function (v) { card.appendChild(_viewingRow(root, v)); });
             } else if (!u.tenantKey && u.listed) {
@@ -812,6 +929,52 @@
                 : ('整棟 ' + floors + ' 樓。想再加一層，到樓裡那根柱子。'));
         wrap.appendChild(foot);
         root.innerHTML = ''; root.appendChild(wrap);
+    }
+
+    // 🏃 一筆退租：誰搬走了、想不想聽他說為什麼
+    function _moveOutRow(root, o) {
+        const d = win.document;
+        const row = d.createElement('div'); row.className = 'll-view';
+        const head = d.createElement('div'); head.className = 'll-view-head';
+        head.innerHTML = '<span class="ll-view-name">' + _esc(o.name) + '</span>'
+            + '<span class="ll-left">搬走了</span>';
+        row.appendChild(head);
+
+        const line = d.createElement('div'); line.className = 'll-view-line';
+        line.textContent = o.line || '';
+        if (o.line) row.appendChild(line);
+
+        const bar = d.createElement('div'); bar.className = 'll-view-bar';
+        if (!o.line) {
+            const hear = d.createElement('button'); hear.className = 'll-btn ll-btn-sm';
+            hear.innerHTML = '<i class="fa-solid fa-comment"></i> 他為什麼走';
+            hear.onclick = async function () {
+                hear.disabled = true;
+                hear.innerHTML = '<i class="fa-solid fa-comment"></i> 問問看…';
+                try {
+                    const txt = await hearMoveOut(o.id);
+                    line.textContent = txt; row.insertBefore(line, bar); hear.remove();
+                } catch (e) {
+                    hear.disabled = false;
+                    hear.innerHTML = '<i class="fa-solid fa-comment"></i> 他為什麼走';
+                    line.className = 'll-view-line ll-error';
+                    line.textContent = (e && e.message) || '他沒多說什麼。';
+                    row.insertBefore(line, bar);
+                }
+            };
+            bar.appendChild(hear);
+        }
+        const ok = d.createElement('button'); ok.className = 'll-btn ll-btn-sm ll-btn-quiet';
+        ok.innerHTML = '<i class="fa-solid fa-check"></i> 知道了';
+        ok.onclick = async function () {
+            ok.disabled = true;
+            const r = await dismissMoveOut(o.id).catch(function () { return { ok: false }; });
+            if (r && r.ok) { launch(root); return; }
+            ok.disabled = false;
+        };
+        bar.appendChild(ok);
+        row.appendChild(bar);
+        return row;
     }
 
     // 🔔 一筆看房紀錄：誰來看過、想不想租、想聽他說什麼、要不要租給他
@@ -899,6 +1062,7 @@
         addFloor, _makeFloorUnits, _unitId,   // 🏢 樓層制
         suggestRent, rentRange, getPricing, setListing,   // 💰 定價＋掛招租
         settleViewings, judgeFit, moveInFromViewing, dismissViewing, hearViewing,   // 🔔 看房訪客
+        settleTenants, stayMood, hearMoveOut, dismissMoveOut, _cfgStay: STAY_CFG,   // 🏃 續租／退租
         _normRoster, _roster,   // 🚨 名冊身分正規化（M-6）
     };
     if (win !== window) { try { window.OS_LANDLORD = win.OS_LANDLORD; } catch (e) {} }
