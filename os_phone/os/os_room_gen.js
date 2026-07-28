@@ -78,6 +78,38 @@
         return ROWS[r] + ' ' + COLS[c];
     }
 
+    // 🛋 玩家把幾件東西擺在一起＝他要的是一個生活區域（沙發配電視、書桌配椅子）。
+    //   只給九宮格位置的話 AI 只知道「同一區」，不知道「這是一組」，也不知道彼此該怎麼擺；
+    //   而且九宮格是粗格子，兩件明明靠在一起卻可能跨在格線兩側被說成不同區。
+    //   → 先把距離近的併成一群，位置用整群的重心算，翻譯時整群寫成一行。
+    const CLUSTER_R = 20;   // 中心距離小於這個（座標是 0~100 的百分比）就算擺在一起
+    function clusterOrder(order) {
+        const n = order.length;
+        const parent = order.map(function (_, i) { return i; });
+        function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                const dx = (order[i].x || 0) - (order[j].x || 0), dy = (order[i].y || 0) - (order[j].y || 0);
+                if (Math.sqrt(dx * dx + dy * dy) <= CLUSTER_R) {
+                    const ra = find(i), rb = find(j);
+                    if (ra !== rb) parent[ra] = rb;
+                }
+            }
+        }
+        const buckets = {}, seq = [];
+        order.forEach(function (it, i) {
+            const r = find(i);
+            if (!buckets[r]) { buckets[r] = []; seq.push(r); }
+            buckets[r].push(it);
+        });
+        return seq.map(function (r) {
+            const items = buckets[r];
+            let sx = 0, sy = 0;
+            items.forEach(function (it) { sx += (it.x || 0); sy += (it.y || 0); });
+            return { items: items, x: sx / items.length, y: sy / items.length };
+        });
+    }
+
     // ── 訂單 → 副模型 messages：只准翻譯，不准自己加減物件、不准改位置 ──
     function orderMessages(order) {
         const sys = [
@@ -88,15 +120,19 @@
             '三、這是固定俯視角的房間布置，鏡頭只能由上往下看。牆面物件、壁掛物件、靠牆物件全部允許。',
             '四、唯獨附著於天花板、位於天花板平面，或從天花板向下垂落的元素一律不准出現；照明只能用立燈、壁燈、桌燈這類不碰天花板的燈具。',
             '五、不得加入人物。',
+            '六、標了「※同一組」的那幾件，是玩家刻意擺在一起的一個生活區域：要畫成彼此相鄰、方向互相配合（例如電視要對著沙發、椅子要靠著書桌），不是各擺各的；但它們仍然是各自獨立的物件，不可以合併成一件。',
             '輸出骨架只能理解為：<位置> <該件東西的英文名稱與必要細節>，各件之間用英文逗號分隔。',
             '角括號是結構佔位說明，正式輸出時要換成實際英文內容，不可保留角括號或方括號。',
             '不要解釋、不要 markdown、不要給替代版本。只輸出 <room-layout>...</room-layout>。',
         ].join('\n');
-        const body = order.map(function (it) {
-            const pos = positionWord(it.x, it.y);
-            const name = String(it.name || '').trim();
-            const note = String(it.content || '').trim();
-            return pos + '：' + name + (note ? '（' + note + '）' : '');
+        const body = clusterOrder(order).map(function (g) {
+            const pos = positionWord(g.x, g.y);   // 整群用重心定位，不會被格線切開
+            const line = g.items.map(function (it) {
+                const name = String(it.name || '').trim();
+                const note = String(it.content || '').trim();
+                return name + (note ? '（' + note + '）' : '');
+            }).join('、');
+            return pos + '：' + line + (g.items.length > 1 ? '　※同一組，這 ' + g.items.length + ' 件要擺在一起' : '');
         }).join('\n');
         return [
             { role: 'system', content: sys },
@@ -303,7 +339,7 @@
     }
 
     win.OS_ROOM_GEN = {
-        deliver, buildBase, stageLayers, positionWord, orderMessages, parseLayout, sanitizeCeiling,
+        deliver, buildBase, stageLayers, positionWord, orderMessages, parseLayout, sanitizeCeiling, clusterOrder,
         listStylePresets, getStyleName, setStyleName, pickStylePreset,
         // console 調小人大小用：改完重進房間就看得到（決定好再寫回上面那個常數）
         _setFigure: function (px) { const v = parseFloat(px); if (isFinite(v) && v > 20) FIGURE_PX = v; return FIGURE_PX; },
