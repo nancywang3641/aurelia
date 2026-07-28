@@ -696,7 +696,7 @@
         if (!world) return;
 
         _ctx.items = ((_ctx.room && _ctx.room.order) || []).slice(0, MAX_ITEMS).map(function (it, i) {
-            return { id: 'p' + i + '_' + Math.random().toString(36).slice(2, 6), name: String(it.name || ''), content: String(it.content || ''), x: Number(it.x) || 50, y: Number(it.y) || 50 };
+            return { id: 'p' + i + '_' + Math.random().toString(36).slice(2, 6), name: String(it.name || ''), content: String(it.content || ''), x: Number(it.x) || 50, y: Number(it.y) || 50, tags: (it.tags || []).slice() };
         });
 
         const fabs = root.querySelector('.llr-fabs');
@@ -891,6 +891,7 @@
                     _ctx.items.push({
                         id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
                         sid: s.sid, name: s.name, content: s.note || '', x: spot.x, y: spot.y,
+                        tags: (s.tags || []).slice(),   // 🔔 看房訪客要拿這個判斷合不合他的味
                     });
                     close(); redraw();
                     say(s.name + ' 放進來了，拖到你要的位置。');
@@ -974,7 +975,7 @@
         if (items.some(function (it) { return !String(it.name || '').trim(); })) { say('有包裹還沒寫名稱，點開它填一下再配送。'); return; }
 
         dc.btns.forEach(function (b) { b.disabled = true; });
-        const order = items.map(function (it) { return { name: it.name, content: it.content, x: it.x, y: it.y }; });
+        const order = items.map(function (it) { return { name: it.name, content: it.content, x: it.x, y: it.y, tags: (it.tags || []).slice() }; });
         const usedSids = items.map(function (it) { return it.sid; }).filter(Boolean);
         try {
             await _runDeliver(order, dc.root, null);
