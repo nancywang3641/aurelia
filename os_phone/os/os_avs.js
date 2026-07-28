@@ -230,6 +230,12 @@
             const stateView = container.querySelector('#avs-view-state');
             if (stateView && stateView.classList.contains('active')) renderStateView(container);
         });
+
+        // 變數包新增/儲存後重載檔案卡列表——「開始追蹤狀態」在 os_avs_state 那頭生成完只重繪狀態視圖，
+        // 檔案列表畫的是 currentPacks 快取，不收事件重載的話要關掉重開面板才看得到新卡
+        win.addEventListener('AVS_PACKS_UPDATED', () => {
+            if (container.isConnected) loadAllData(container);
+        });
     }
 
     // 🧬 共用：AI 生成 schema → 轉變數 → 存變數包 → 存規則 → 同步世界書 → 觸發初始填充。
@@ -300,6 +306,7 @@
             }
         }
         await syncVarPackToLorebook();
+        try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
         if (win.toastr) win.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 個項目 / ${savedRuleCount} 條規則），世界書已同步`);
         if (win.OS_STATE_RUNTIME?.extractOnce) {
             setTimeout(() => {
