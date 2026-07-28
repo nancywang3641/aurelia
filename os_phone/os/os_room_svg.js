@@ -193,6 +193,10 @@
             return {
                 svg: svg, floor: floorPoly, interior: interiorPoly, viewBox: [_f(vbW), _f(vbH)],
                 personH: _f(Math.abs(_ph[1] - _pf[1])),
+                // 🚨 房內地板的四角（前左、前右、後右、後左），不含門口那塊玄關。
+                //   floor 會因為玄關而變成 8 點，凡是要「牆在哪、前緣在哪」的地方一律用這個，
+                //   不要去猜 floor 的索引（走廊的門就是這樣被凸出的玄關拉歪過一次）。
+                inner4: [g(fFL), g(fFR), g(fBR), g(fBL)],
             };
         }
 

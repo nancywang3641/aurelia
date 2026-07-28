@@ -122,11 +122,13 @@
                 // 還沒布置過：空房母圖當底，地板一樣走得
                 // 🚨 personH 一定要帶上：少了它 stageLayers 會退回「拉滿舞台」，空房就跟布置過的房不同尺度
                 const base = await GEN.buildBase(info.spec);
-                room = { image: base.baseData, floor: base.room.floor, viewBox: base.room.viewBox, personH: base.room.personH, order: [] };
-            } else if (!room.floor || !room.viewBox || !room.personH) {
+                room = { image: base.baseData, floor: base.room.floor, inner4: base.room.inner4, viewBox: base.room.viewBox, personH: base.room.personH, order: [] };
+            // 缺幾何要重算。最後那條是相容用的：玄關上線後、inner4 上線前存的房間會是
+            // 「8 點 floor 但沒有 inner4」，那種要重算才拿得到房內四角（玄關之前存的 4 點 floor 本身就等於房內四角，不用動）。
+            } else if (!room.floor || !room.viewBox || !room.personH || (room.floor.length > 4 && !room.inner4)) {
                 // 舊存檔缺幾何 → 用同一份房規格重算一次（同 spec 出的幾何完全一樣，對得上那張圖）
                 const base = await GEN.buildBase(info.spec);
-                room = Object.assign({}, room, { floor: base.room.floor, viewBox: base.room.viewBox, personH: base.room.personH });
+                room = Object.assign({}, room, { floor: base.room.floor, inner4: base.room.inner4, viewBox: base.room.viewBox, personH: base.room.personH });
             }
         } catch (e) {
             console.warn('[LandlordRoom] 開房失敗', e);
@@ -160,7 +162,7 @@
         //    柱子只放走廊的話，他就永遠找不到加蓋的地方（雞生蛋）。
         let base = layers.base, extraDoors = null;
         if (info.lift) {
-            const bea = await _placeBeacon(layers.base, layers.floorStage, layers.figurePx, info.liftFloor || 1);
+            const bea = await _placeBeacon(layers.base, layers.innerStage || layers.floorStage, layers.figurePx, info.liftFloor || 1);
             base = bea.base;
             if (bea.door) extraDoors = [bea.door];
         }
@@ -258,6 +260,7 @@
     }
     // 把控制錨點立在地板前緣靠邊（那一帶通常是空的，不會壓到家具，也不擋走廊盡頭的門）。
     // 🚨 圖畫不上去也要留下觸發區——不然沒公寓的人就永遠找不到加蓋的地方。
+    // 🚨 floorStage 這裡要傳 innerStage（房內四角）：floor 含玄關，[0]/[1] 會變成門口那塊的角
     async function _placeBeacon(baseUrl, floorStage, figurePx, floor) {
         const fFL = (floorStage || [])[0], fFR = (floorStage || [])[1];
         if (!fFL || !fFR) return { base: baseUrl, door: null };
@@ -281,7 +284,9 @@
     // 🚪 在走廊後牆上真的畫出門——沒有門的話，玩家只會覺得「撞到牆就被傳走」。
     //    畫上去的門與觸發區用同一組座標算，所見即所得。
     async function _paintCorridorDoors(baseUrl, geo, fit, cells) {
-        const iv = (geo && geo.interior) || [], fl = (geo && geo.floor) || [];
+        const iv = (geo && geo.interior) || [];
+        // 🚨 用 inner4（房內地板四角）不是 floor——floor 含門口那塊玄關，索引會歪掉
+        const fl = (geo && geo.inner4) || (geo && geo.floor) || [];
         // 後牆四角：地板後緣兩點 ＋ 牆頂內側兩點
         const bL = fl[3], bR = fl[2], tL = iv[1], tR = iv[2];
         if (!bL || !bR || !tL || !tR || !cells.length) return { base: baseUrl, doors: [] };
@@ -386,7 +391,7 @@
             const built = await GEN.buildBase(CORRIDOR);
             geo = built.room;
             layers = await GEN.stageLayers({
-                image: built.baseData, floor: geo.floor,
+                image: built.baseData, floor: geo.floor, inner4: geo.inner4,
                 viewBox: geo.viewBox, personH: geo.personH,
             }, 1536, 1024);
         } catch (e) { console.warn('[LandlordRoom] 走廊底圖失敗', e); _sorry(null, '走廊的圖讀不進來，再試一次。'); return; }
@@ -401,7 +406,7 @@
                 sub: u.tenantName ? String(u.tenantName).slice(0, 5) : '空房',
             };
         }));
-        const fs = layers.floorStage || [];
+        const fs = layers.innerStage || layers.floorStage || [];   // 柱子貼房內前緣，不能用含玄關的那份
         const painted = await _paintCorridorDoors(layers.base, geo, layers.fit, cells);
         let doors = painted.doors;
 
@@ -952,7 +957,7 @@
                 image: result.image, layout: result.layout, order: order,
                 roomTypeKey: spec.typeKey,   // 房型跟著房間走,下次進來要用同一間
                 // 🚨 幾何三件套一定要一起存：地板＝可走區(沒有就整片不能動)、personH＝尺度(沒有就退回拉滿舞台)
-                floor: result.floor, viewBox: result.viewBox, personH: result.personH,
+                floor: result.floor, inner4: result.inner4, viewBox: result.viewBox, personH: result.personH,
                 styleName: result.styleName, at: result.at,
             });
             _endDeco();
