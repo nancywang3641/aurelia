@@ -226,12 +226,15 @@
         const s = document.createElement('style');
         s.id = 'os-pt-style';
         s.textContent = [
-            '.os-pt-card{position:fixed;left:50%;bottom:36px;transform:translateX(-50%) translateY(20px);',
-            'z-index:2147483600;min-width:280px;max-width:min(92vw,420px);opacity:0;pointer-events:auto;',
+            // 🚨 別放畫面底部中央：那裡是 VN 的對話框與 LOG/COT/SKIP 那排，結算卡會整個壓上去。
+            //    改成右上角、退出鈕下面那塊空白；窄螢幕(手機)退回頂部橫幅，不去擠立繪。
+            '.os-pt-card{position:fixed;right:16px;top:84px;transform:translateY(-12px);',
+            'z-index:2147483600;min-width:240px;max-width:min(86vw,340px);opacity:0;pointer-events:auto;',
             'background:linear-gradient(160deg,#2a2340,#1b1830);color:#f3eefe;border:1px solid rgba(180,150,255,.35);',
             'border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:16px 18px;font-size:14px;',
             'transition:opacity .35s ease,transform .35s ease;font-family:inherit;}',
-            '.os-pt-card.on{opacity:1;transform:translateX(-50%) translateY(0);}',
+            '.os-pt-card.on{opacity:1;transform:translateY(0);}',
+            '@media(max-width:620px){.os-pt-card{right:8px;left:8px;top:64px;max-width:none;min-width:0;}}',
             '.os-pt-card-head{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;margin-bottom:10px;color:#e9dcff;}',
             '.os-pt-card-head i{color:#c9a6ff;}',
             '.os-pt-card-close{margin-left:auto;cursor:pointer;opacity:.6;padding:2px 6px;border-radius:8px;}',
@@ -415,6 +418,7 @@
         settleSummary,
         openExchange, closeExchange,
         _cfg: PT_CFG,
+        _showSettleCard,   // 診斷用：不跑結算也能把卡叫出來看位置
     };
     if (win !== window) { try { window.OS_PT = win.OS_PT; } catch (e) {} }
 
