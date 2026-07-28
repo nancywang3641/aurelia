@@ -105,6 +105,56 @@
         await db.saveAppData(APP_ID, K_STATE, state);
     }
 
+    // ── 💰 定價：建議租金＝房間本身值多少 ＋ 你布置了多少 ──
+    // 家具是玩家花 PT 買來的，會直接反映在建議租金上——布置得好就能收更貴。
+    // 玩家仍可自己標價，但只能在建議價的一半到兩倍之間，免得標成天價或白送。
+    function suggestRent(unit, orderCount) {
+        const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
+        const t = RT[unit && unit.roomTypeKey] || RT.standard || { w: 4.2, d: 4.0 };
+        const area = (t.w || 4.2) * (t.d || 4.0);
+        const base = 4 + area * 0.8;
+        const furni = Math.min(14, Math.max(0, Number(orderCount) || 0) * 1.6);
+        return Math.max(6, Math.round(base + furni));
+    }
+    function rentRange(suggest) {
+        return { min: Math.max(3, Math.round(suggest * 0.5)), max: Math.round(suggest * 2) };
+    }
+
+    // 這一戶目前的定價資訊（含房間裡擺了幾件）——UI 直接拿這包畫
+    async function getPricing(unitId) {
+        const state = await getState();
+        const unit = (state.units || []).find(function (u) { return u.id === unitId; });
+        if (!unit) throw new Error('找不到這一戶。');
+        let orderCount = 0;
+        try { const room = await getRoom(unitId); orderCount = (room && Array.isArray(room.order)) ? room.order.length : 0; }
+        catch (e) { console.warn('[Landlord] 讀房間布置失敗，當作空房估價', e); }
+        const suggest = suggestRent(unit, orderCount);
+        const range = rentRange(suggest);
+        return {
+            unit: unit, orderCount: orderCount, suggest: suggest,
+            min: range.min, max: range.max,
+            rent: unit.rent || suggest, listed: !!unit.listed,
+        };
+    }
+
+    // 標價＋掛招租：兩件事一起存（玩家在同一個面板做完）
+    async function setListing(unitId, rent, listed) {
+        const state = await getState();
+        const unit = (state.units || []).find(function (u) { return u.id === unitId; });
+        if (!unit) return { ok: false, reason: 'gone' };
+        if (unit.tenantKey) return { ok: false, reason: 'occupied' };   // 有房客就不能改價/撤租
+
+        let orderCount = 0;
+        try { const room = await getRoom(unitId); orderCount = (room && Array.isArray(room.order)) ? room.order.length : 0; } catch (e) {}
+        const range = rentRange(suggestRent(unit, orderCount));
+        const v = Math.round(Number(rent));
+        if (!isFinite(v)) return { ok: false, reason: 'bad' };
+        unit.rent = Math.max(range.min, Math.min(range.max, v));
+        unit.listed = !!listed;
+        try { await saveState(state); } catch (e) { console.warn('[Landlord] 存定價失敗', e); return { ok: false, reason: 'save' }; }
+        return { ok: true, rent: unit.rent, listed: unit.listed, clamped: unit.rent !== v };
+    }
+
     // 🏢 加蓋一層：扣 PT → 長出那一層的出租戶。第一層＝把自宅那棟變成公寓。
     //    狀態機照設計：空地 →(跟白兔買)自宅 →(這裡)公寓,所以沒有自宅不給蓋。
     async function addFloor() {
@@ -299,6 +349,7 @@
         const u = s.units.find(x => x.id === unitId);
         if (!u || u.tenantKey) return s;                 // 找不到或已有人 → 原樣回
         u.tenantKey = npc.key; u.tenantName = npc.name || '房客'; u.movedInAt = _now();
+        u.listed = false;   // 租掉了就把招租牌收起來
         return s;
     }
 
@@ -370,6 +421,7 @@
             '.ll-btn{padding:7px 12px;border-radius:8px;border:1px solid #2c3140;background:#20242e;color:#e7eaf1;font-size:12px;cursor:pointer}',
             '.ll-btn:hover{border-color:#d98fb0}',
             '.ll-empty{color:#7a8090}',
+            '.ll-listed{color:#e7c98a}',
             '.ll-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}',
             '.ll-cand{display:flex;justify-content:space-between;align-items:center;border:1px solid #2c3140;border-radius:9px;padding:10px 11px;background:#171a21}',
             '.ll-cand > div{color:#e7eaf1;font-size:13px}',
@@ -426,16 +478,19 @@
             const left = d.createElement('div');
             const got = u.earnedTotal || 0;
             const paid = res.perUnit && res.perUnit.find(function (p) { return p.unitId === u.id; });
+            const vacant = u.listed
+                ? '<span class="ll-listed">招租中</span>　每日開價 ' + (u.rent || 0)
+                : '<span class="ll-empty">空著，還沒掛招租</span>';
             left.innerHTML = '<div class="ll-unit-name">' + label + '</div>'
                 + '<div class="ll-unit-sub">' + (u.tenantName
                     ? ('房客：' + u.tenantName + '　每日租金 ' + u.rent
                         + (got ? '<br>累計收租 ' + got : '')
                         + (paid ? '　這次 +' + paid.amount : ''))
-                    : '<span class="ll-empty">空著</span>') + '</div>';
+                    : vacant) + '</div>';
             top.appendChild(left);
-            // 🏘 布置與看房都在城市那邊走進門處理,這頁只管帳——所以沒有「進房間」鈕。
-            //    招租鈕暫留:等看房訪客(擲骰)做好就換掉。
-            if (!u.tenantKey) {
+            // 🏘 布置、定價、掛招租都在那間房裡做（走進去、右下角）——這頁只管帳。
+            //    招租鈕暫留：等看房訪客(擲骰)做好就換掉；沒掛招租的戶不給招。
+            if (!u.tenantKey && u.listed) {
                 const btn = d.createElement('button'); btn.className = 'll-btn';
                 btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> 招租';
                 btn.onclick = function () { _renderRecruit(root, u.id); };
@@ -540,6 +595,7 @@
         _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, getRoom, saveRoom, _dayNum, settleCore,
         listCandidates, tuneTenant, moveIn, _fallbackTuning, launch, _openAndSettle,   // _openAndSettle=console 診斷用
         addFloor, _makeFloorUnits, _unitId,   // 🏢 樓層制
+        suggestRent, rentRange, getPricing, setListing,   // 💰 定價＋掛招租
     };
     if (win !== window) { try { window.OS_LANDLORD = win.OS_LANDLORD; } catch (e) {} }
     console.log('[Landlord] 包租婆系統已載入');

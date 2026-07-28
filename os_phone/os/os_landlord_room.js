@@ -71,6 +71,7 @@
             '.llr-floors{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}',
             '.llr-floors .llr-btn{flex:0 0 auto}',
             '.llr-btn.is-now{border-color:rgba(217,176,106,.6);color:#f0e2c6}',
+            '.llr-rent{margin:6px 0 8px;font-size:20px;font-weight:700;color:#f0e2c6}',
             '.llr-msg{margin-top:10px;font-size:12px;line-height:1.7;color:#9aa1b0}',
             '.llr-msg.is-bad{color:#e0a0a8}',
             '.llr-busy{position:absolute;left:0;top:0;right:0;bottom:0;z-index:75;background:rgba(8,10,14,.8);',
@@ -557,7 +558,94 @@
             again.onclick = function () { _regen(root, [deco, again]); };
             box.appendChild(again);
         }
+        // 💰 出租設定：只有出租戶有（自己家不用標租金）
+        if (_ctx && _ctx.unitId && _ctx.unitId !== HOME_ID) {
+            const price = d.createElement('button');
+            price.type = 'button'; price.className = 'llr-fab';
+            price.innerHTML = '<i class="fa-solid fa-tag"></i> 出租設定';
+            price.onclick = function () { _openPricing(root); };
+            box.appendChild(price);
+        }
         root.appendChild(box);
+    }
+
+    // ── 💰 出租設定：站在這間房裡標租金、掛招租 ──
+    //   定價放在房裡而不是手機，是因為你要看著自己布置的成果決定收多少；
+    //   手機那頁只負責顯示帳。
+    function _openPricing(root) {
+        _injectStyle();   // 冪等；沒樣式的話這個窗會是一塊看不見的裸 div
+        const LL = _LL();
+        if (!root || !LL || !_ctx || !_ctx.unitId) return;
+        if (root.querySelector('.llr-sheet')) return;
+
+        // 🚨 先掛窗再讀 DB：反過來的話冷啟動那幾百毫秒會像是按了沒反應
+        const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
+        const card = d.createElement('div'); card.className = 'llr-card';
+        const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '出租設定';
+        const rentLine = d.createElement('div'); rentLine.className = 'llr-rent';
+        const row = d.createElement('div'); row.className = 'llr-floors';
+        const msg = d.createElement('div'); msg.className = 'llr-msg'; msg.textContent = '正在看這間房…';
+        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
+        const closeBtn = _btn('fa-solid fa-xmark', '關上');
+        bar.appendChild(closeBtn);
+        card.appendChild(title); card.appendChild(rentLine); card.appendChild(row);
+        card.appendChild(msg); card.appendChild(bar);
+        sheet.appendChild(card); root.appendChild(sheet);
+        const close = function () { try { sheet.remove(); } catch (e) {} };
+        closeBtn.onclick = close;
+
+        LL.getPricing(_ctx.unitId).then(function (p) {
+            if (!sheet.isConnected) return;
+            if (p.unit.tenantKey) {
+                rentLine.textContent = '每日租金 ' + (p.unit.rent || 0);
+                msg.textContent = (p.unit.tenantName || '房客') + ' 正住在這裡，租約期間不能改價。';
+                return;
+            }
+
+            let rent = p.rent;
+            function paint() {
+                rentLine.textContent = '每日租金 ' + rent;
+                const bonus = Math.round(Math.min(14, p.orderCount * 1.6));
+                msg.className = 'llr-msg';
+                msg.textContent = '建議收 ' + p.suggest
+                    + (p.orderCount ? '（房裡的 ' + p.orderCount + ' 件家具幫它加了 ' + bonus + '）' : '（空房，擺點家具能開更高）')
+                    + '。可以標 ' + p.min + ' 到 ' + p.max + '。'
+                    + (rent > p.suggest ? '　開得比建議高，會比較難租出去。' : (rent < p.suggest ? '　開得比建議低，很快會有人要。' : ''));
+            }
+            function step(v) { rent = Math.max(p.min, Math.min(p.max, rent + v)); paint(); }
+            const minus = _btn('fa-solid fa-minus', '－5'); minus.onclick = function () { step(-5); };
+            const minus1 = _btn('fa-solid fa-minus', '－1'); minus1.onclick = function () { step(-1); };
+            const plus1 = _btn('fa-solid fa-plus', '＋1'); plus1.onclick = function () { step(1); };
+            const plus = _btn('fa-solid fa-plus', '＋5'); plus.onclick = function () { step(5); };
+            const fair = _btn('fa-solid fa-scale-balanced', '照建議'); fair.onclick = function () { rent = p.suggest; paint(); };
+            [minus, minus1, plus1, plus, fair].forEach(function (b) { row.appendChild(b); });
+
+            const go = _btn('fa-solid fa-sign-hanging', p.listed ? '改成這個價' : '掛上招租', 'is-go');
+            const off = p.listed ? _btn('fa-solid fa-ban', '撤下招租', 'llr-danger') : null;
+            go.onclick = async function () {
+                go.disabled = true; if (off) off.disabled = true;
+                const r = await LL.setListing(_ctx.unitId, rent, true).catch(function (e) {
+                    console.warn('[LandlordRoom] 掛招租失敗', e); return { ok: false, reason: 'save' };
+                });
+                if (r && r.ok) { close(); try { win.toastr && win.toastr.info('已經掛上招租，每日 ' + r.rent + '。'); } catch (e) {} return; }
+                msg.className = 'llr-msg is-bad';
+                msg.textContent = r && r.reason === 'occupied' ? '這間已經有房客了。' : '這次沒存起來，再按一次就好。';
+                go.disabled = false; if (off) off.disabled = false;
+            };
+            if (off) off.onclick = async function () {
+                go.disabled = true; off.disabled = true;
+                const r = await LL.setListing(_ctx.unitId, rent, false).catch(function () { return { ok: false }; });
+                if (r && r.ok) { close(); try { win.toastr && win.toastr.info('招租撤下來了。'); } catch (e) {} return; }
+                msg.className = 'llr-msg is-bad'; msg.textContent = '這次沒存起來，再按一次就好。';
+                go.disabled = false; off.disabled = false;
+            };
+            bar.insertBefore(go, closeBtn);
+            if (off) bar.appendChild(off);
+            paint();
+        }).catch(function (e) {
+            console.warn('[LandlordRoom] 讀定價失敗', e);
+            if (sheet.isConnected) { msg.className = 'llr-msg is-bad'; msg.textContent = '這間房的資料暫時讀不到，關上再試一次。'; }
+        });
     }
 
     // 重新生成：東西與位置都不動，直接沿用上次翻好的那份清單再畫一張。
