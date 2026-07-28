@@ -20,6 +20,7 @@
     function _GEN() { return win.OS_ROOM_GEN || window.OS_ROOM_GEN || null; }
     function _SVG() { return win.OS_ROOM_SVG || window.OS_ROOM_SVG || null; }
     function _STAGE() { return win.LobbyStage || window.LobbyStage || null; }
+    function _FUR() { return win.OS_FURNITURE || window.OS_FURNITURE || null; }
 
     // 目前站在哪間房：進門時填，走出去就作廢
     let _ctx = null;   // { unitId, unitName, room, viewBox, floor, fit, items, deco }
@@ -623,15 +624,17 @@
         const bar = d.createElement('div'); bar.className = 'llr-bar';
         const cancel = _btn('fa-solid fa-xmark', '取消');
         const add = _btn('fa-solid fa-plus', '添加包裹');
+        const fromStock = _FUR() ? _btn('fa-solid fa-box-open', '倉庫') : null;   // 🛋 商城買的東西從這裡拿出來擺
         const ship = _btn('fa-solid fa-truck-fast', '配送', 'is-go');
         bar.appendChild(cancel); bar.appendChild(add);
+        if (fromStock) bar.appendChild(fromStock);
         // 已經布置過才給「清空」：把房間退回空屋(不燒生圖)。沒布置過的房本來就是空的,不用這顆。
         const wipe = (_ctx.room && _ctx.room.order && _ctx.room.order.length) ? _btn('fa-solid fa-broom', '清空', 'llr-danger') : null;
         if (wipe) bar.appendChild(wipe);
         bar.appendChild(ship);
         root.appendChild(bar);
 
-        _ctx.deco = { root: root, world: world, layer: layer, tip: tip, bar: bar, btns: [cancel, add, ship].concat(wipe ? [wipe] : []) };
+        _ctx.deco = { root: root, world: world, layer: layer, tip: tip, bar: bar, btns: [cancel, add, ship].concat(wipe ? [wipe] : []).concat(fromStock ? [fromStock] : []) };
 
         function say(msg) {
             tip.textContent = msg || (_ctx.items.length
@@ -653,6 +656,7 @@
             redraw();
             _openEditor(it, redraw, say);
         };
+        if (fromStock) fromStock.onclick = function () { _openStockPicker(redraw, say); };
         ship.onclick = function () { _deliver(say); };
         // 清空＝退回空屋。要按兩次（Tauri 會擋 confirm，所以用「再按一次」代替跳窗）
         if (wipe) {
@@ -755,6 +759,61 @@
         el.style.top = p[1] + 'px';
     }
 
+    // 🛋 倉庫小窗：把家具商城買來的東西拿出來擺。
+    //   這裡只是「先擺著」，配送成功才真的從倉庫扣掉——取消或中途離開都不會白花 PT。
+    function _openStockPicker(redraw, say) {
+        _injectStyle();   // 冪等；沒注入樣式的話這個窗會是一塊看不見的裸 div
+        const root = _ctx && _ctx.deco && _ctx.deco.root;
+        const F = _FUR();
+        if (!root || !F) return;
+        if (root.querySelector('.llr-sheet')) return;
+
+        // 🚨 先把窗掛上去再讀 DB：反過來的話冷啟動那幾百毫秒會像是按了沒反應
+        const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
+        const card = d.createElement('div'); card.className = 'llr-card';
+        const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '倉庫裡的東西';
+        const list = d.createElement('div'); list.className = 'llr-floors';
+        const note = d.createElement('div'); note.className = 'llr-msg'; note.textContent = '正在找倉庫…';
+        const bar2 = d.createElement('div'); bar2.className = 'llr-card-bar';
+        const closeBtn = _btn('fa-solid fa-xmark', '關上');
+        bar2.appendChild(closeBtn);
+        card.appendChild(title); card.appendChild(list); card.appendChild(note); card.appendChild(bar2);
+        sheet.appendChild(card); root.appendChild(sheet);
+        const close = function () { try { sheet.remove(); } catch (e) {} };
+        closeBtn.onclick = close;
+
+        F.getStock().then(function (stock) {
+            if (!sheet.isConnected) return;
+            const used = {};
+            _ctx.items.forEach(function (it) { if (it.sid) used[it.sid] = true; });
+            const avail = (stock || []).filter(function (s) { return !used[s.sid]; });
+            if (!avail.length) {
+                note.textContent = stock && stock.length
+                    ? '倉庫裡的東西都已經擺進這間房了。'
+                    : '倉庫是空的。到手機的家具商城買些東西，會送到這裡。';
+                return;
+            }
+            note.textContent = '點一件就會放進房裡，再拖到你要的位置。';
+            avail.slice().reverse().forEach(function (s) {
+                const b = _btn('fa-solid fa-cube', s.name);
+                b.onclick = function () {
+                    if (_ctx.items.length >= MAX_ITEMS) { close(); say('一間房最多放 ' + MAX_ITEMS + ' 件，先拿走一件再放。'); return; }
+                    const spot = _freeSpot();
+                    _ctx.items.push({
+                        id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                        sid: s.sid, name: s.name, content: s.note || '', x: spot.x, y: spot.y,
+                    });
+                    close(); redraw();
+                    say(s.name + ' 放進來了，拖到你要的位置。');
+                };
+                list.appendChild(b);
+            });
+        }).catch(function (e) {
+            console.warn('[LandlordRoom] 讀倉庫失敗', e);
+            if (sheet.isConnected) { note.className = 'llr-msg is-bad'; note.textContent = '倉庫暫時打不開，關上再試一次。'; }
+        });
+    }
+
     // 包裹小窗：名稱＋內容，或直接拿走
     function _openEditor(it, redraw, say) {
         const root = _ctx.deco && _ctx.deco.root;
@@ -827,8 +886,16 @@
 
         dc.btns.forEach(function (b) { b.disabled = true; });
         const order = items.map(function (it) { return { name: it.name, content: it.content, x: it.x, y: it.y }; });
+        const usedSids = items.map(function (it) { return it.sid; }).filter(Boolean);
         try {
             await _runDeliver(order, dc.root, null);
+            // 🛋 配送成功才把商城買的那幾件從倉庫扣掉——取消布置或中途離開都不會白白吃掉玩家花的 PT
+            const F = _FUR();
+            if (F && usedSids.length) {
+                for (const sid of usedSids) {
+                    try { await F.takeOut(sid); } catch (e) { console.warn('[LandlordRoom] 倉庫扣件失敗', sid, e); }
+                }
+            }
         } catch (e) {
             dc.btns.forEach(function (b) { b.disabled = false; });
             say((e && e.message) || '這次沒送成，再按一次配送就好。');

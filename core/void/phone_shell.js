@@ -13,6 +13,7 @@
         { id: 'tarot',  name: '塔羅', emoji: '🔮',  mode: 'inside', go: function (c) { return win.OS_TAROT && win.OS_TAROT.launch && win.OS_TAROT.launch(c); } },
         { id: 'rpg',    name: 'RPG',  emoji: '🛡️', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },
         { id: 'landlord', name: '房產', emoji: '🏢', mode: 'inside', go: function (c) { return win.OS_LANDLORD && win.OS_LANDLORD.launch && win.OS_LANDLORD.launch(c); } },
+        { id: 'furniture', name: '家具', emoji: '🛋️', mode: 'inside', go: function (c) { return win.OS_FURNITURE && win.OS_FURNITURE.launch && win.OS_FURNITURE.launch(c); } },
         { id: 'reader', name: '閱讀', emoji: '📖',  mode: 'inside', go: function (c) {
             if (!win.VN_READER || !win.VN_READER.show) return;
             win.VN_READER.show(c);
