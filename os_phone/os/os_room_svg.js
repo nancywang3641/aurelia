@@ -86,7 +86,16 @@
             var iL = L + E, iR = R - E, iF = E, iB = d - E;
             var fFL = P(iL, 0, iF), fFR = P(iR, 0, iF), fBR = P(iR, 0, iB), fBL = P(iL, 0, iB);
             var iFLt = P(iL, FRONTH, iF), iFRt = P(iR, FRONTH, iF), iBRt = P(iR, WALLH, iB), iBLt = P(iL, WALLH, iB);
-            var allp = [oFL0, oFR0, oFLt, oFRt, oBRt, oBLt, fFL, fFR, fBR, fBL, iFLt, iFRt, iBRt, iBLt];
+            // 🚪 門口往外延一小段玄關：不加的話地板到前緣就被切掉，看起來像房間破了一個洞。
+            //   純視覺——不進 floorPoly(碰撞)也不進 interiorPoly(inpaint 白區)，
+            //   所以小人走不出去、AI 也不會在門外畫家具，生圖時它會原樣保留。
+            var PORCH = 0.45;
+            var dL = -DOORW / 2, dR = DOORW / 2;
+            var pFL = P(dL, 0, -PORCH), pFR = P(dR, 0, -PORCH);   // 玄關外緣
+            var pBL = P(dL, 0, iF), pBR = P(dR, 0, iF);           // 接房內地板前緣
+            var pTL = P(dL, FRONTH, -PORCH), pTR = P(dR, FRONTH, -PORCH);   // 兩側短牆的頂
+
+            var allp = [oFL0, oFR0, oFLt, oFRt, oBRt, oBLt, fFL, fFR, fBR, fBL, iFLt, iFRt, iBRt, iBLt, pFL, pFR, pTL, pTR];
             var mnx = 1e9, mny = 1e9, mxx = -1e9, mxy = -1e9;
             allp.forEach(function (p) { mnx = Math.min(mnx, p[0]); mny = Math.min(mny, p[1]); mxx = Math.max(mxx, p[0]); mxy = Math.max(mxy, p[1]); });
             var PAD = 34, ox = -mnx + PAD, oy = -mny + PAD;
@@ -131,6 +140,22 @@
                     + '<line x1="' + _f(mv[0][0]) + '" y1="' + _f(mv[0][1]) + '" x2="' + _f(mv[1][0]) + '" y2="' + _f(mv[1][1]) + '" stroke="#f4f1ea" stroke-width="2.4"/>'
                     + '<line x1="' + _f(mh[0][0]) + '" y1="' + _f(mh[0][1]) + '" x2="' + _f(mh[1][0]) + '" y2="' + _f(mh[1][1]) + '" stroke="#f4f1ea" stroke-width="2.4"/>';
             }
+            // 🚪 玄關：門口外那一小塊地板＋兩側短邊，讓門看起來是「走得出去」而不是地板被切斷
+            var porchD = _polyPath([g(pBL), g(pBR), g(pFR), g(pFL)]);
+            var porchLines = '';
+            for (var pi = 1; pi <= 2; pi++) {
+                var pt = pi / 3;
+                var pa = g(_lerp(pBL, pFL, pt)), pb = g(_lerp(pBR, pFR, pt));
+                porchLines += '<line x1="' + _f(pa[0]) + '" y1="' + _f(pa[1]) + '" x2="' + _f(pb[0]) + '" y2="' + _f(pb[1]) + '" stroke="' + (FL.line || '#00000022') + '" stroke-width="1.4" stroke-opacity="0.42"/>';
+            }
+            // 兩側短邊：延續前緣那道白邊，收住玄關左右
+            var porchSideL = _roundPath([g(P(dL, FRONTH, iF)), g(pTL), g(pFL), g(pBL)], 4);
+            var porchSideR = _roundPath([g(P(dR, FRONTH, iF)), g(pTR), g(pFR), g(pBR)], 4);
+            var porchSvg = '<path d="' + porchD + '" fill="url(#gFloor' + UID + ')"/>'
+                + porchLines
+                + '<path d="' + porchSideL + '" fill="url(#gLipF' + UID + ')"/>'
+                + '<path d="' + porchSideR + '" fill="url(#gLipF' + UID + ')"/>';
+
             var cx = (g(oFL0)[0] + g(oFR0)[0]) / 2, cyb = Math.max(g(oFL0)[1], g(oFR0)[1]);
             var shW = _len(_sub(g(oFL0), g(oFR0))) * 0.6, shH = shW * 0.14;
             var svg = '<svg viewBox="0 0 ' + _f(vbW) + ' ' + _f(vbH) + '" xmlns="http://www.w3.org/2000/svg">'
@@ -159,6 +184,7 @@
                 + floorLines
                 + '<rect x="0" y="0" width="' + _f(vbW) + '" height="' + _f(vbH) + '" fill="url(#gAO' + UID + ')"/>'
                 + '</g>'
+                + porchSvg
                 + lipFronts + lipTops
                 + '</svg>';
             // 🧍 尺度參考：一個 PERSON_H 單位高的人站在房間正中央,投影出來有多少 viewBox 像素高。
