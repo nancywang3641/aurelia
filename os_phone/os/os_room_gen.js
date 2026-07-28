@@ -273,6 +273,7 @@
             image: image,
             layout: layout,
             floor: base.room.floor,
+            inner4: base.room.inner4,     // 房內四角(不含玄關)：貼牆放東西的都靠這個
             viewBox: base.room.viewBox,
             personH: base.room.personH,   // 🚨 尺度參考,少了它下次進來會退回「拉滿舞台」
             styleName: preset.name || '',
@@ -319,7 +320,10 @@
         cx.fillStyle = '#0b0d12'; cx.fillRect(0, 0, W, H);
         cx.drawImage(await _loadImg(room.image), f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
 
-        const floorStage = (room.floor || []).map(function (p) { return [p[0] * f.s + f.ox, p[1] * f.s + f.oy]; });
+        const toStage = function (p) { return [p[0] * f.s + f.ox, p[1] * f.s + f.oy]; };
+        const floorStage = (room.floor || []).map(toStage);
+        // 房內地板四角（不含玄關）：要貼牆放東西的一律用這個，別去猜 floorStage 的索引
+        const innerStage = (room.inner4 || room.floor || []).map(toStage);
         const mv = doc.createElement('canvas'); mv.width = W; mv.height = H;
         const mx = mv.getContext('2d');
         mx.fillStyle = '#000'; mx.fillRect(0, 0, W, H);
@@ -330,7 +334,7 @@
         }
         return {
             base: cv.toDataURL('image/png'), mask: mv.toDataURL('image/png'),
-            floorStage: floorStage, fit: f, viewBox: vb,
+            floorStage: floorStage, innerStage: innerStage, fit: f, viewBox: vb,
             // 🧍 一個真人在這間房裡、站在舞台座標系下該有多高（房間幾何算出來的；等於 PERSON_PX）
             personPx: (room.personH || 0) * f.s,
             // 🧍 小人實際畫多高：固定值，走到哪一間房都一樣大（RPG 規矩）
