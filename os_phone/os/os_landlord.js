@@ -34,7 +34,7 @@
 
     // 還沒蓋公寓＝一戶都沒有(招租入口也跟著關)。蓋一層才長出那層的出租戶。
     function _defaultState() {
-        return { floors: 0, units: [], lastSettleDay: null, createdAt: _now() };
+        return { floors: 0, units: [], lastSettleDay: null, createdAt: _now(), keysV: 2 };
     }
 
     // 一層樓長出來的出租戶(自住那間 home 另外存,不在 units 裡)
@@ -90,7 +90,9 @@
         }
         if (v && Array.isArray(v.units)) {
             let changed = await _migrateToFloors(v);
-            if (changed) { try { await saveState(v); } catch (e) { console.warn('[Landlord] 轉樓層制後存檔失敗,這次先照用', e); } }
+            try { if (await _migrateKeys(v)) changed = true; }
+            catch (e) { console.warn('[Landlord] 身分搬家失敗,這次先照用', e); }
+            if (changed) { try { await saveState(v); } catch (e) { console.warn('[Landlord] 遷移後存檔失敗,這次先照用', e); } }
             return v;
         }
         // 走到這裡代表「查無資料」(讀取本身沒出錯,只是還沒有記錄)→ 安全,建立預設值並寫入
@@ -332,17 +334,51 @@
 
     // ── 招租：候選名冊(沿用書咖的顧客名冊來源) ──
     async function listCandidates() {
-        let roster = [];
-        try {
-            const ln = win.LobbyNpcs || window.LobbyNpcs;
-            if (ln && typeof ln.cafeRoster === 'function') roster = (await ln.cafeRoster()) || [];
-        } catch (e) { console.warn('[Landlord] 讀名冊失敗', e); }
+        const roster = await _roster();
         const out = [];
         for (const r of roster) {
             if (!r || !r.key) continue;
             out.push({ key: r.key, name: r.name || '無名', persona: r.persona || '', tuned: _isValidTuning(await getTuning(r.key)) });
         }
         return out;
+    }
+
+    // ── 🚨 名冊身分正規化（M-6）──
+    // cafeRoster 的 key 帶 chatId＝「這一輪的他」，那是給對話歷史/裝扮用的。
+    // 房東這邊要的是「這個人」：換一輪還是同一個房客，所以一律改用 stableKey。
+    // 不然：換輪重燒一次定調、同一個人可以同時占兩戶、舊房客在新名冊裡查無此人變幽靈。
+    function _normRoster(roster) {
+        return (roster || [])
+            .filter(function (r) { return r && (r.stableKey || r.key); })
+            .map(function (r) { return { key: r.stableKey || r.key, name: r.name, persona: r.persona, rawKey: r.key }; });
+    }
+    async function _roster() {
+        try {
+            const ln = win.LobbyNpcs || window.LobbyNpcs;
+            if (ln && typeof ln.cafeRoster === 'function') return _normRoster(await ln.cafeRoster());
+        } catch (e) { console.warn('[Landlord] 讀名冊失敗', e); }
+        return [];
+    }
+
+    // 舊資料搬到穩定身分：房客與看房紀錄裡帶 chatId 的 key 換掉，定調快取一併搬過去（省得重燒）。
+    // 只跑一次（keysV 記在 state 裡）；對不上的保留原樣，不亂改。
+    async function _migrateKeys(state) {
+        if (state.keysV >= 2) return false;
+        const roster = await _roster();
+        const map = {};
+        roster.forEach(function (r) { if (r.rawKey && r.rawKey !== r.key) map[r.rawKey] = r.key; });
+        state.units = state.units || [];
+        state.units.forEach(function (u) { if (u.tenantKey && map[u.tenantKey]) u.tenantKey = map[u.tenantKey]; });
+        (state.viewings || []).forEach(function (v) { if (v.npcKey && map[v.npcKey]) v.npcKey = map[v.npcKey]; });
+        for (const oldK of Object.keys(map)) {
+            try {
+                const t = await getTuning(oldK);
+                if (!t) continue;
+                if (!(await getTuning(map[oldK]))) await saveTuning(map[oldK], t);
+            } catch (e) { console.warn('[Landlord] 搬定調失敗，那個人下次會重燒一次', oldK, e); }
+        }
+        state.keysV = 2;
+        return true;
     }
 
     // 本地退路：沒 API 或解析失敗時,依名字雜湊穩定挑一款房型(同一人每次結果一致)
@@ -529,11 +565,7 @@
             });
             rooms[u.id] = { tags: tags, suggest: suggestRent(u, order.length) };
         }
-        let roster = [];
-        try {
-            const ln = win.LobbyNpcs || window.LobbyNpcs;
-            if (ln && typeof ln.cafeRoster === 'function') roster = (await ln.cafeRoster()) || [];
-        } catch (e) { console.warn('[Landlord] 看房名冊讀不到', e); }
+        const roster = await _roster();
         const tunings = {};
         for (const r of roster) {
             if (!r || !r.key) continue;
@@ -603,8 +635,7 @@
 
         let persona = '';
         try {
-            const ln = win.LobbyNpcs || window.LobbyNpcs;
-            const roster = (ln && ln.cafeRoster) ? (await ln.cafeRoster()) || [] : [];
+            const roster = await _roster();
             const hit = roster.find(function (r) { return r && r.key === v.npcKey; });
             persona = (hit && hit.persona) || '';
         } catch (e) {}
@@ -868,6 +899,7 @@
         addFloor, _makeFloorUnits, _unitId,   // 🏢 樓層制
         suggestRent, rentRange, getPricing, setListing,   // 💰 定價＋掛招租
         settleViewings, judgeFit, moveInFromViewing, dismissViewing, hearViewing,   // 🔔 看房訪客
+        _normRoster, _roster,   // 🚨 名冊身分正規化（M-6）
     };
     if (win !== window) { try { window.OS_LANDLORD = win.OS_LANDLORD; } catch (e) {} }
     console.log('[Landlord] 包租婆系統已載入');

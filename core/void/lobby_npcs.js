@@ -339,12 +339,17 @@
         init: initNpcs,                     // lobby_stage.tryMount 呼叫（async；掛載時生成本場景 NPC）
         rollGuestPool: _journalGuestPool,   // console 診斷用（LobbyStage.rollGuestPool 懶轉接到這；async 回傳池陣列）
         // ☕ 書咖經營:顧客名冊=SN住民+日誌客人池全員(當前各卡最新輪的角色;key帶chatId=每輪隔離,同場景客人規則)
+        // 🚨 key vs stableKey：
+        //   key       ＝帶 chatId，「這一輪的他」。對話歷史、裝扮皮膚這種本來就該按輪次隔離的用它。
+        //   stableKey ＝不帶 chatId，「這個人」。跨輪次要記得同一個人的用它
+        //     （包租婆的租客定調/房客身分：不然換一輪就重燒定調、同一個人還能占兩戶、舊房客變成查不到人設的幽靈）。
         cafeRoster: async () => {
-            const out = SN_RESIDENTS.map(r => ({ key: r.key, name: r.name, persona: r.personaFull }));
+            const out = SN_RESIDENTS.map(r => ({ key: r.key, stableKey: r.key, name: r.name, persona: r.personaFull }));
             try {
                 const pool = await _journalGuestPool();
                 pool.forEach(g => out.push({
                     key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName,
+                    stableKey: 'jr_' + g.rawName,
                     name: g.name,
                     persona: _guestPersona(g),
                 }));
