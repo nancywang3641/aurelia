@@ -58,6 +58,9 @@
             { block: 'svg', anim: 'pulse', pos: 'full', size: 100, at: 0, dur: 1800,
               svg: '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" stroke="#15151a" stroke-linecap="round"><g stroke-width="7" opacity="0.85"><line x1="195" y1="100" x2="155" y2="100"/><line x1="167.2" y1="167.2" x2="138.9" y2="138.9"/><line x1="100" y1="195" x2="100" y2="155"/><line x1="32.8" y1="167.2" x2="61.1" y2="138.9"/><line x1="5" y1="100" x2="45" y2="100"/><line x1="32.8" y1="32.8" x2="61.1" y2="61.1"/><line x1="100" y1="5" x2="100" y2="45"/><line x1="167.2" y1="32.8" x2="138.9" y2="61.1"/></g><g stroke-width="4" opacity="0.55"><line x1="187.8" y1="136.4" x2="150.8" y2="121.1"/><line x1="136.4" y1="187.8" x2="121.1" y2="150.8"/><line x1="63.6" y1="187.8" x2="78.9" y2="150.8"/><line x1="12.2" y1="136.4" x2="49.2" y2="121.1"/><line x1="12.2" y1="63.6" x2="49.2" y2="78.9"/><line x1="63.6" y1="12.2" x2="78.9" y2="49.2"/><line x1="136.4" y1="12.2" x2="121.1" y2="49.2"/><line x1="187.8" y1="63.6" x2="150.8" y2="78.9"/></g></svg>' },
         ]},
+        { fxId: 'fx-bloodedge', name: '濺血邊框', desc: '寫實血液沿螢幕邊緣與四角滲出滴落（重傷/瀕死/血腥衝擊）', kind: 'once', steps: [
+            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/blood-edge.webm', blend: 'normal', audio: 1, at: 0, dur: 8000 },
+        ]},
         { fxId: 'fx-freeze', name: '螢幕結冰', desc: '冰霜從畫面邊緣蔓延凍住螢幕＋結冰聲（寒冷/冰魔法/氣氛凝結），持續到換場', kind: 'loop', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/frost-freeze.mp4', blend: 'screen', audio: 1 },
         ]},
@@ -605,6 +608,11 @@
             }
             if (!st || !st.el) {
                 if (st && st.spent) return;   // 播完收掉的別復活
+                // alpha webm（vp9 透明通道）不支援的環境（如 iOS Safari）＝整段優雅跳過，不播出綠幕/黑底原片
+                if (/\.webm$/i.test(s.src) && !document.createElement('video').canPlayType('video/webm; codecs="vp9"')) {
+                    inst.state[key] = { el: null, spent: true };
+                    return;
+                }
                 const v = document.createElement('video');
                 v.className = 'vn-fx-video vn-fx-blend-' + (s.blend || 'screen');
                 v.src = s.src;
