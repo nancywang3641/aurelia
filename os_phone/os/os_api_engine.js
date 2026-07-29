@@ -453,6 +453,10 @@
                 mainConfig = Object.assign({}, win.OS_SETTINGS.getConfig());
             }
             mainConfig._isSecondary = false;   // 明確走主模型連線（防 getConfig 回傳被副模型標過的共用物件）
+            // 長輸出任務保底：深度整理/重壓要「整份重印」，連線設定的最大輸出若偏低(如2048)，
+            // JSON 會印到一半被掐＝解析失敗整趟白跑。這裡強制下限 8192，不動使用者原設定值本身。
+            const _mt = parseInt(mainConfig.maxTokens);
+            if (isNaN(_mt) || _mt < 8192) mainConfig.maxTokens = 8192;
             this.chat(messages, mainConfig, onChunk, onFinish, onError, Object.assign({ stream: true }, options || {}));
         },
 
