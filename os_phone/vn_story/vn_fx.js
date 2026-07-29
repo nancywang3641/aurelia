@@ -257,7 +257,7 @@
             this._clearShake();
             if (this._ctx && this._canvas) this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
             try { if (this._overlay) this._overlay.querySelectorAll('.vn-fx-svg').forEach(n => n.remove()); } catch (e) {}
-            try { if (this._overlay) this._overlay.querySelectorAll('.vn-fx-video').forEach(n => { try { n.pause(); n.removeAttribute('src'); n.load(); } catch (e2) {} n.remove(); }); } catch (e) {}
+            try { const _vh = this._stageEl || this._overlay; if (_vh) _vh.querySelectorAll('.vn-fx-video').forEach(n => { try { n.pause(); n.removeAttribute('src'); n.load(); } catch (e2) {} n.remove(); }); } catch (e) {}
         },
 
         // 創作室試播：在指定容器上播一次；持續型自動 4 秒後停
@@ -678,7 +678,9 @@
                     try { const sv = window.VN_Settings && window.VN_Settings.data ? window.VN_Settings.data.sfxVolume : undefined; if (sv !== undefined) vol = parseInt(sv) / 100; } catch (e) {}
                     v.volume = Math.min(1, Math.max(0, isNaN(vol) ? 0.5 : vol));
                 } else v.muted = true;
-                this._overlay.appendChild(v);
+                // 🚨掛在舞台容器、不能掛進 overlay：overlay 有 z-index=自成堆疊上下文,
+                //   mix-blend-mode 只會跟「同組」混合→看不到場景背景,黑底就變不透明實色
+                (this._stageEl || this._overlay).appendChild(v);
                 v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
                 inst.state[key] = st = { el: v, fading: false, spent: true };
                 return;
