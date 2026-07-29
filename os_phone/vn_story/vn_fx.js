@@ -97,7 +97,8 @@
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/heal-rise.mp4', blend: 'screen', audio: 1, at: 0, dur: 8000 },
         ]},
         { fxId: 'fx-coins', name: '金幣交易', desc: '錢袋傾出金幣＋叮噹聲（交易/付款/收款/獲得賞金），2秒瞬發', kind: 'once', steps: [
-            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/coins-pour.mp4', blend: 'screen', audio: 1, at: 0, dur: 2200 },
+            // alpha webm(lumakey去黑底)：皮袋是中間亮度物件,screen混合會半透明;真透明通道才有實色錢袋
+            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/coins-pour-alpha.webm', blend: 'normal', audio: 1, at: 0, dur: 2200 },
         ]},
         { fxId: 'fx-underwater', name: '水下氣泡', desc: '氣泡沿兩側上浮＋水下環境音（潛水/深海/溺水/水中場景），持續到換場', kind: 'loop', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/bubbles-loop.mp4', blend: 'screen', audio: 1, loop: 1 },
