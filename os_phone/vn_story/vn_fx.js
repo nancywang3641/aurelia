@@ -58,13 +58,17 @@
             { block: 'svg', anim: 'pulse', pos: 'full', size: 100, at: 0, dur: 1800,
               svg: '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" stroke="#15151a" stroke-linecap="round"><g stroke-width="7" opacity="0.85"><line x1="195" y1="100" x2="155" y2="100"/><line x1="167.2" y1="167.2" x2="138.9" y2="138.9"/><line x1="100" y1="195" x2="100" y2="155"/><line x1="32.8" y1="167.2" x2="61.1" y2="138.9"/><line x1="5" y1="100" x2="45" y2="100"/><line x1="32.8" y1="32.8" x2="61.1" y2="61.1"/><line x1="100" y1="5" x2="100" y2="45"/><line x1="167.2" y1="32.8" x2="138.9" y2="61.1"/></g><g stroke-width="4" opacity="0.55"><line x1="187.8" y1="136.4" x2="150.8" y2="121.1"/><line x1="136.4" y1="187.8" x2="121.1" y2="150.8"/><line x1="63.6" y1="187.8" x2="78.9" y2="150.8"/><line x1="12.2" y1="136.4" x2="49.2" y2="121.1"/><line x1="12.2" y1="63.6" x2="49.2" y2="78.9"/><line x1="63.6" y1="12.2" x2="78.9" y2="49.2"/><line x1="136.4" y1="12.2" x2="121.1" y2="49.2"/><line x1="187.8" y1="63.6" x2="150.8" y2="78.9"/></g></svg>' },
         ]},
+        { fxId: 'fx-freeze', name: '螢幕結冰', desc: '冰霜從畫面邊緣蔓延凍住螢幕＋結冰聲（寒冷/冰魔法/氣氛凝結），持續到換場', kind: 'loop', steps: [
+            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/frost-freeze.mp4', blend: 'screen', audio: 1 },
+        ]},
         { fxId: 'fx-heart', name: '愛心', desc: '粉色愛心啵一下冒出飄走（心動/曖昧/戀愛）', kind: 'once', steps: [
             { block: 'svg', anim: 'rise', pos: 'center', size: 18, at: 0, dur: 1600,
               svg: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M50 84 C20 60 8 38 22 24 C34 12 50 20 50 32 C50 20 66 12 78 24 C92 38 80 60 50 84 Z" fill="#ff6b9a" opacity="0.95"/><path d="M30 30 C26 34 26 40 30 44" stroke="#ffd3e2" stroke-width="5" stroke-linecap="round" fill="none"/></svg>' },
         ]},
     ];
 
-    const VALID_BLOCKS = ['particles', 'flash', 'shake', 'edge', 'streak', 'tint', 'bolt', 'svg', 'code'];
+    const VALID_BLOCKS = ['particles', 'flash', 'shake', 'edge', 'streak', 'tint', 'bolt', 'svg', 'code', 'video'];
+    const VIDEO_BLENDS = ['screen', 'lighten', 'normal'];   // screen/lighten＝黑底素材自動透明
     const VALID_PRESETS = ['snow', 'rain', 'drip', 'petal', 'ember', 'burst', 'bubble', 'sparkle'];
     const SVG_ANIMS = ['pop', 'drop', 'rise', 'pulse', 'burst'];
     const SVG_POS = ['center', 'top', 'bottom', 'full'];
@@ -136,6 +140,14 @@
                 st.js = js;
             }
             else if (s.block === 'tint')    { st.alpha = clamp(s.alpha || 0.18, 0.02, 0.45); }
+            else if (s.block === 'video') {
+                // 特效影片疊加層（黑底素材＋screen 混合＝免去背）。once/loop 都可；loop＝播完定格最後一幀直到換場
+                const src = String(s.src || '').trim();
+                if (!/^https:\/\/[^\s"'<>]{10,300}\.(mp4|webm)$/i.test(src)) continue;
+                st.src = src;
+                st.blend = VIDEO_BLENDS.indexOf(s.blend) !== -1 ? s.blend : 'screen';
+                st.audio = s.audio ? 1 : 0;
+            }
             steps.push(st);
         }
         if (!steps.length) return null;
@@ -189,6 +201,7 @@
             this._clearShake();
             if (this._ctx && this._canvas) this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
             try { if (this._overlay) this._overlay.querySelectorAll('.vn-fx-svg').forEach(n => n.remove()); } catch (e) {}
+            try { if (this._overlay) this._overlay.querySelectorAll('.vn-fx-video').forEach(n => { try { n.pause(); n.removeAttribute('src'); n.load(); } catch (e2) {} n.remove(); }); } catch (e) {}
         },
 
         // 創作室試播：在指定容器上播一次；持續型自動 4 秒後停
@@ -343,6 +356,7 @@
                     const s = inst.recipe.steps[_si];
                     if (s.block === 'particles') continue;
                     if (s.block === 'svg') { this._tickSvg(s, el, inst, _si); continue; }   // DOM 層自管生滅，不走 canvas 窗口
+                    if (s.block === 'video') { this._tickVideo(s, el, inst, _si); continue; }   // DOM 層 video 疊加，同樣自管生滅
                     let p;   // 0~1 進度；loop 罩色恆定、ending 時淡出
                     if (inst.loop) {
                         p = inst.ending ? Math.min(1, Math.max(0, (inst.endAt - ts) / 600)) : 1;
@@ -580,6 +594,41 @@
             }
             if (!st.fading && elapsed > s.at + s.dur * 0.75) { st.fading = true; st.el.classList.add('vn-fx-svg-out'); }
         },
+        // video 積木：黑底特效影片 DOM 疊加（screen 混合＝黑色自動透明，免去背）。
+        // once＝at/dur 窗口生滅；loop＝播完自然定格最後一幀、持續到換場（ending 時淡出）。
+        _tickVideo: function (s, elapsed, inst, si) {
+            const key = 'video' + si;
+            let st = inst.state[key];
+            if (!inst.loop) {
+                if (elapsed < s.at) return;
+                if (elapsed > s.at + s.dur) { if (st && st.el) this._removeVideo(st); return; }
+            }
+            if (!st || !st.el) {
+                if (st && st.spent) return;   // 播完收掉的別復活
+                const v = document.createElement('video');
+                v.className = 'vn-fx-video vn-fx-blend-' + (s.blend || 'screen');
+                v.src = s.src;
+                v.playsInline = true; v.setAttribute('playsinline', '');
+                v.preload = 'auto';
+                if (s.audio) {
+                    // 音量跟音效設定走；autoplay 帶聲被瀏覽器擋 → 退靜音重播（畫面優先、聲音盡力）
+                    let vol = 0.5;
+                    try { const sv = window.VN_Settings && window.VN_Settings.data ? window.VN_Settings.data.sfxVolume : undefined; if (sv !== undefined) vol = parseInt(sv) / 100; } catch (e) {}
+                    v.volume = Math.min(1, Math.max(0, isNaN(vol) ? 0.5 : vol));
+                } else v.muted = true;
+                this._overlay.appendChild(v);
+                v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+                inst.state[key] = st = { el: v, fading: false, spent: true };
+                return;
+            }
+            const fade = inst.loop ? inst.ending : (elapsed > s.at + s.dur * 0.75);
+            if (fade && !st.fading) { st.fading = true; st.el.classList.add('vn-fx-video-out'); }
+        },
+        _removeVideo: function (st) {
+            try { st.el.pause(); st.el.removeAttribute('src'); st.el.load(); } catch (e) {}   // 確保音軌立即停（detached video 某些瀏覽器會續播聲音）
+            try { st.el.remove(); } catch (e) {}
+            st.el = null;
+        },
         // 自訂繪製積木：每幀呼叫 AI 寫的 draw 碼。ctx 有 save/restore 護欄；連錯 3 次自動停用該段，別的積木照播
         _runCode: function (ctx, s, p, dt, w, h, inst, si) {
             const key = 'code' + si;
@@ -607,7 +656,10 @@
             if (!inst || !inst.state) return;
             for (const k of Object.keys(inst.state)) {
                 const st = inst.state[k];
-                if (st && st.el) { try { st.el.remove(); } catch (e) {} st.el = null; }
+                if (st && st.el) {
+                    if (st.el.tagName === 'VIDEO') { this._removeVideo(st); continue; }
+                    try { st.el.remove(); } catch (e) {} st.el = null;
+                }
             }
         },
 
