@@ -58,6 +58,9 @@
             { block: 'svg', anim: 'pulse', pos: 'full', size: 100, at: 0, dur: 1800,
               svg: '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" stroke="#15151a" stroke-linecap="round"><g stroke-width="7" opacity="0.85"><line x1="195" y1="100" x2="155" y2="100"/><line x1="167.2" y1="167.2" x2="138.9" y2="138.9"/><line x1="100" y1="195" x2="100" y2="155"/><line x1="32.8" y1="167.2" x2="61.1" y2="138.9"/><line x1="5" y1="100" x2="45" y2="100"/><line x1="32.8" y1="32.8" x2="61.1" y2="61.1"/><line x1="100" y1="5" x2="100" y2="45"/><line x1="167.2" y1="32.8" x2="138.9" y2="61.1"/></g><g stroke-width="4" opacity="0.55"><line x1="187.8" y1="136.4" x2="150.8" y2="121.1"/><line x1="136.4" y1="187.8" x2="121.1" y2="150.8"/><line x1="63.6" y1="187.8" x2="78.9" y2="150.8"/><line x1="12.2" y1="136.4" x2="49.2" y2="121.1"/><line x1="12.2" y1="63.6" x2="49.2" y2="78.9"/><line x1="63.6" y1="12.2" x2="78.9" y2="49.2"/><line x1="136.4" y1="12.2" x2="121.1" y2="49.2"/><line x1="187.8" y1="63.6" x2="150.8" y2="78.9"/></g></svg>' },
         ]},
+        { fxId: 'fx-underwater', name: '水下氣泡', desc: '氣泡沿兩側上浮＋水下環境音（潛水/深海/溺水/水中場景），持續到換場', kind: 'loop', steps: [
+            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/bubbles-loop.mp4', blend: 'screen', audio: 1, loop: 1 },
+        ]},
         { fxId: 'fx-fire', name: '烈焰竄燒', desc: '寫實火焰從畫面下緣與兩側竄燒＋火場聲（失火/爆燃/激戰/怒火沖天）', kind: 'once', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/fire-edge.mp4', blend: 'screen', audio: 1, at: 0, dur: 8000 },
         ]},
@@ -153,6 +156,7 @@
                 st.src = src;
                 st.blend = VIDEO_BLENDS.indexOf(s.blend) !== -1 ? s.blend : 'screen';
                 st.audio = s.audio ? 1 : 0;
+                st.loop = s.loop ? 1 : 0;   // 1=影片無限循環（素材須無縫循環）；0=播完定格最後一幀
             }
             steps.push(st);
         }
@@ -621,6 +625,7 @@
                 v.src = s.src;
                 v.playsInline = true; v.setAttribute('playsinline', '');
                 v.preload = 'auto';
+                if (s.loop) v.loop = true;
                 if (s.audio) {
                     // 音量跟音效設定走；autoplay 帶聲被瀏覽器擋 → 退靜音重播（畫面優先、聲音盡力）
                     let vol = 0.5;
