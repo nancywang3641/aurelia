@@ -58,7 +58,24 @@
             { block: 'svg', anim: 'pulse', pos: 'full', size: 100, at: 0, dur: 1800,
               svg: '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" stroke="#15151a" stroke-linecap="round"><g stroke-width="7" opacity="0.85"><line x1="195" y1="100" x2="155" y2="100"/><line x1="167.2" y1="167.2" x2="138.9" y2="138.9"/><line x1="100" y1="195" x2="100" y2="155"/><line x1="32.8" y1="167.2" x2="61.1" y2="138.9"/><line x1="5" y1="100" x2="45" y2="100"/><line x1="32.8" y1="32.8" x2="61.1" y2="61.1"/><line x1="100" y1="5" x2="100" y2="45"/><line x1="167.2" y1="32.8" x2="138.9" y2="61.1"/></g><g stroke-width="4" opacity="0.55"><line x1="187.8" y1="136.4" x2="150.8" y2="121.1"/><line x1="136.4" y1="187.8" x2="121.1" y2="150.8"/><line x1="63.6" y1="187.8" x2="78.9" y2="150.8"/><line x1="12.2" y1="136.4" x2="49.2" y2="121.1"/><line x1="12.2" y1="63.6" x2="49.2" y2="78.9"/><line x1="63.6" y1="12.2" x2="78.9" y2="49.2"/><line x1="136.4" y1="12.2" x2="121.1" y2="49.2"/><line x1="187.8" y1="63.6" x2="150.8" y2="78.9"/></g></svg>' },
         ]},
-        { fxId: 'fx-wind', name: '風吹', desc: '氣流線橫掃＋落葉翻滾橫飛（狂風/山頂曠野/離別氛圍/風系魔法），持續到換場', kind: 'loop', steps: [
+        { fxId: 'fx-cctv', name: '監視器畫面', desc: '監控鏡頭訊號感：掃描線＋雜訊雪花＋滾動亮帶＋REC紅點（回憶錄影/監控視角/偷窺/詭異氛圍），持續到換場', kind: 'loop', steps: [
+            { block: 'tint', color: '#0a140c', alpha: 0.16 },
+            { block: 'edge', color: '#000000' },
+            { block: 'code', js: [
+                'if(!state.init){state.init=1;state.roll=-40;state.t=0;}',
+                'state.t+=dt;',
+                'ctx.fillStyle="#000000";ctx.globalAlpha=0.16*p;',
+                'for(var y=0;y<h;y+=3)ctx.fillRect(0,y,w,1);',
+                'ctx.fillStyle="#cfd8cf";',
+                'for(var i=0;i<80;i++){ctx.globalAlpha=(0.06+Math.random()*0.22)*p;ctx.fillRect(Math.random()*w,Math.random()*h,1.5,1.5);}',
+                'state.roll+=dt*h*0.25;if(state.roll>h+40)state.roll=-40;',
+                'ctx.globalAlpha=0.06*p;ctx.fillStyle="#ffffff";ctx.fillRect(0,state.roll,w,26);',
+                'if(Math.random()<0.02){ctx.globalAlpha=0.22*p;ctx.fillStyle="#9fb3a3";ctx.fillRect(0,Math.random()*h,w,2+Math.random()*5);}',
+                'if(Math.floor(state.t*1.4)%2===0){ctx.globalAlpha=0.9*p;ctx.fillStyle="#e03434";ctx.beginPath();ctx.arc(26,24,6,0,6.29);ctx.fill();}',
+                'ctx.globalAlpha=1;',
+            ].join('\n') },
+        ]},
+        { fxId: 'fx-wind', name: '風吹', desc: '氣流線橫掃＋落葉翻滾橫飛＋風聲（狂風/山頂曠野/離別氛圍/風系魔法），持續到換場', kind: 'loop', sfx: 'weather-wind', steps: [
             { block: 'code', js: [
                 'if(!state.init){state.init=1;state.streaks=[];state.leaves=[];',
                 ' for(var i=0;i<14;i++)state.streaks.push({x:Math.random()*w,y:Math.random()*h,len:60+Math.random()*160,sp:850+Math.random()*650,a:0.09+Math.random()*0.16,th:1+Math.random()*1.4});',
@@ -185,7 +202,11 @@
             steps.push(st);
         }
         if (!steps.length) return null;
-        return { fxId: fxId, name: String(r.name || fxId).slice(0, 30), desc: String(r.desc || '').slice(0, 60), kind: kind, steps: steps };
+        const out = { fxId: fxId, name: String(r.name || fxId).slice(0, 30), desc: String(r.desc || '').slice(0, 60), kind: kind, steps: steps };
+        // 配方級音效：素材音效目錄裡的檔名 id（同 playSFX 資源）。loop=循環播、once=播一次；沒設定音效目錄就靜默跳過
+        const sfx = String(r.sfx || '').trim();
+        if (/^[A-Za-z0-9_\-&]{1,60}$/.test(sfx)) out.sfx = sfx;
+        return out;
     }
 
     // ── 引擎本體 ──
@@ -219,6 +240,7 @@
                 for (const s of recipe.steps) {
                     if (s.block === 'particles') this._emitters.push({ fx: inst, step: s, t0: inst.t0 + s.at, stopped: false, burstDone: false });
                 }
+                if (recipe.sfx) this._playFxAudio(inst, recipe);
                 this._start();
                 return true;
             } catch (e) { console.warn('[OS_FX] play 失敗:', e); return false; }
@@ -664,6 +686,27 @@
             const fade = inst.loop ? inst.ending : (elapsed > s.at + s.dur * 0.75);
             if (fade && !st.fading) { st.fading = true; st.el.classList.add('vn-fx-video-out'); }
         },
+        // 配方級音效：從素材設定的音效目錄載入（VN_Config.data.sfx，playSFX 同源）。
+        // loop 型循環播放直到換場；once 型播一次。目錄沒設定或載入失敗＝靜默跳過，不影響畫面。
+        _playFxAudio: function (inst, recipe) {
+            try {
+                const base = (window.VN_Config && window.VN_Config.data && window.VN_Config.data.sfx) || '';
+                if (!base) return;
+                let vol = 0.5;
+                try { const sv = window.VN_Settings && window.VN_Settings.data ? window.VN_Settings.data.sfxVolume : undefined; if (sv !== undefined) vol = parseInt(sv) / 100; } catch (e) {}
+                const audio = new Audio(base + recipe.sfx + '.mp3');
+                audio.loop = recipe.kind === 'loop';
+                audio.volume = Math.min(1, Math.max(0, isNaN(vol) ? 0.5 : vol));
+                audio.onerror = () => {   // .mp3 不在 → 退 .wav 一次
+                    if (audio._triedWav) return;
+                    audio._triedWav = true;
+                    audio.src = base + recipe.sfx + '.wav';
+                    audio.play().catch(() => {});
+                };
+                audio.play().catch(() => {});
+                inst.state['fxaudio'] = { el: null, audio: audio };
+            } catch (e) {}
+        },
         _removeVideo: function (st) {
             try { st.el.pause(); st.el.removeAttribute('src'); st.el.load(); } catch (e) {}   // 確保音軌立即停（detached video 某些瀏覽器會續播聲音）
             try { st.el.remove(); } catch (e) {}
@@ -696,6 +739,7 @@
             if (!inst || !inst.state) return;
             for (const k of Object.keys(inst.state)) {
                 const st = inst.state[k];
+                if (st && st.audio) { try { st.audio.pause(); st.audio.removeAttribute('src'); st.audio.load(); } catch (e) {} st.audio = null; }
                 if (st && st.el) {
                     if (st.el.tagName === 'VIDEO') { this._removeVideo(st); continue; }
                     try { st.el.remove(); } catch (e) {} st.el = null;
