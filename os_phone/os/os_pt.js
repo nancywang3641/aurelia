@@ -228,6 +228,9 @@
         s.textContent = [
             // 🚨 別放畫面底部中央：那裡是 VN 的對話框與 LOG/COT/SKIP 那排，結算卡會整個壓上去。
             //    改成右上角、退出鈕下面那塊空白；窄螢幕(手機)退回頂部橫幅，不去擠立繪。
+            // 🚨 position:fixed=釘整個瀏覽器視窗——PWA滿版沒差,酒館裡VN是窗口→卡片飄到窗口外。
+            //    掛進 #page-game 時改 absolute 貼舞台右上(設定/退出鈕下方);找不到舞台才退回 fixed。
+            '#page-game .os-pt-card{position:absolute;top:110px;right:14px;}',
             '.os-pt-card{position:fixed;right:16px;top:84px;transform:translateY(-12px);',
             'z-index:2147483600;min-width:240px;max-width:min(86vw,340px);opacity:0;pointer-events:auto;',
             'background:linear-gradient(160deg,#2a2340,#1b1830);color:#f3eefe;border:1px solid rgba(180,150,255,.35);',
@@ -319,7 +322,7 @@
             '<div class="os-pt-total"><span>合計</span><span class="v">+' + Math.floor(data.total || 0) + ' PT</span></div>' +
             '<div class="os-pt-bal"><i class="fa-solid fa-coins"></i>餘額 ' + Math.floor(data.balance || 0) + ' PT</div>' +
             (data.fallback ? '<div class="os-pt-note">（估值離線，以基準值結算）</div>' : '');
-        document.body.appendChild(card);
+        (document.getElementById('page-game') || document.body).appendChild(card);
         requestAnimationFrame(() => card.classList.add('on'));
         let closed = false;
         const close = () => {
