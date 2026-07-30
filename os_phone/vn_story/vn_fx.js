@@ -109,8 +109,9 @@
         { fxId: 'fx-bloodedge', name: '濺血邊框', desc: '寫實血液沿螢幕邊緣與四角滲出滴落（重傷/瀕死/血腥衝擊）', kind: 'once', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/blood-edge.webm', blend: 'normal', audio: 1, at: 0, dur: 8000 },
         ]},
-        { fxId: 'fx-freeze', name: '螢幕結冰', desc: '冰霜從畫面邊緣蔓延凍住螢幕＋結冰聲（寒冷/冰魔法/氣氛凝結），持續到換場', kind: 'loop', steps: [
-            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/frost-freeze.mp4', blend: 'screen', audio: 1 },
+        // 冰霜會長滿整片、擋正文 → 走 once：長到一半就開始淡出退場，不留到換場
+        { fxId: 'fx-freeze', name: '螢幕結冰', desc: '冰霜從畫面邊緣蔓延＋結冰聲（寒冷/冰魔法/氣氛凝結）', kind: 'once', steps: [
+            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/frost-freeze.mp4', blend: 'screen', audio: 1, at: 0, dur: 6000 },
         ]},
         { fxId: 'fx-heart', name: '愛心', desc: '粉色愛心啵一下冒出飄走（心動/曖昧/戀愛）', kind: 'once', steps: [
             { block: 'svg', anim: 'rise', pos: 'center', size: 18, at: 0, dur: 1600,
@@ -687,7 +688,20 @@
                 return;
             }
             const fade = inst.loop ? inst.ending : (elapsed > s.at + s.dur * 0.75);
-            if (fade && !st.fading) { st.fading = true; st.el.classList.add('vn-fx-video-out'); }
+            if (fade && !st.fading) {
+                st.fading = true;
+                st.el.classList.add('vn-fx-video-out');
+                // 音軌跟著畫面一起淡（否則畫面淡完、聲音是「啪」一聲被切掉）
+                if (!st.el.muted && st.el.volume > 0) {
+                    const step = st.el.volume / 12;
+                    st.audioFade = setInterval(() => {
+                        if (!st.el) { clearInterval(st.audioFade); st.audioFade = 0; return; }
+                        const v = st.el.volume - step;
+                        if (v <= 0.01) { st.el.volume = 0; clearInterval(st.audioFade); st.audioFade = 0; }
+                        else st.el.volume = v;
+                    }, 50);
+                }
+            }
         },
         // 配方級音效：從素材設定的音效目錄載入（VN_Config.data.sfx，playSFX 同源）。
         // loop 型循環播放直到換場；once 型播一次。目錄沒設定或載入失敗＝靜默跳過，不影響畫面。
@@ -711,6 +725,7 @@
             } catch (e) {}
         },
         _removeVideo: function (st) {
+            if (st.audioFade) { clearInterval(st.audioFade); st.audioFade = 0; }   // 淡出計時器沒收＝孤兒 interval 一直跑
             try { st.el.pause(); st.el.removeAttribute('src'); st.el.load(); } catch (e) {}   // 確保音軌立即停（detached video 某些瀏覽器會續播聲音）
             try { st.el.remove(); } catch (e) {}
             st.el = null;
