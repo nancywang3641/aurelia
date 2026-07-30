@@ -112,11 +112,6 @@
         .avs-st-back { flex-shrink: 0; display: inline-flex; align-items: center; padding: 8px 14px; font-size: 13px; font-weight: 700; color: #1A1C28; background: rgba(228,232,245,0.9); border: 1px solid rgba(26,28,40,0.12); border-radius: 10px; cursor: pointer; transition: .2s; }
         .avs-st-back:hover { background: #EEF0F6; }
         .avs-st-l2title { font-size: 16px; font-weight: 800; color: #1A1C28; }
-        /* 進階第二層：子分頁切換 */
-        .avs-st-subtabs { display: flex; gap: 4px; padding: 4px; background: rgba(26,28,40,0.05); border: 1px solid rgba(26,28,40,0.10); border-radius: 12px; }
-        .avs-st-subtab { flex: 1; padding: 10px 6px; text-align: center; font-size: 13.5px; font-weight: 700; color: rgba(26,28,40,0.55); background: transparent; border: none; border-radius: 9px; cursor: pointer; transition: .2s; }
-        .avs-st-subtab:hover { color: #1A1C28; }
-        .avs-st-subtab.active { color: #1A1C28; background: #EEF0F6; box-shadow: 0 1px 4px rgba(26,28,40,0.10); }
         /* 目前狀態操作頁的「複製狀態數據」小按鈕 */
         .avs-st-sm { padding: 7px 12px; font-size: 12px; flex-shrink: 0; }
         .avs-st-editbar-r { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -255,6 +250,7 @@
         .avs-st-adv-hint { display: block; margin: 4px 0 0; line-height: 1.55; }
         .avs-st-btn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         .avs-st-btn-grid.col1 { grid-template-columns: 1fr; }   /* 一欄堆疊：兩顆按鈕並排易誤會時用 */
+        .avs-st-btn-grid.col3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }   /* 三顆一排：狀態頁的抽取/整理/還原 */
         .avs-st-btn-grid .avs-btn { width: 100%; min-width: 0; min-height: 42px; padding: 9px 10px; line-height: 1.35; }
         /* 📦 我的檔案（#avs-view-packs，第一層瀏覽頁）：標題要看得清、建檔按鈕一欄堆疊 */
         .avs-packs-title { font-size: 13px; font-weight: 700; color: #1A1C28; margin-top: 6px; padding-top: 14px; border-top: 1px solid rgba(26,28,40,0.10); }

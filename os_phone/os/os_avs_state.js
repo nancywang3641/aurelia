@@ -27,8 +27,9 @@
     let _host = null;
     let _packs = [];
     let _editingFieldName = null; // null / 欄位名 / '__new__'
-    let _page = 'home';     // 兩層換頁：'home'(瀏覽) → 'current'(目前狀態) / 'adv'(進階) 操作頁
-    let _advTab = 'fields';  // 進階第二層子分頁：'fields'(追蹤欄位) / 'extract'(抽取)
+    // 兩層換頁：'home'(瀏覽) → 'current'(目前狀態＋更新操作) / 'fields'(追蹤欄位) / 'data'(資料管理)
+    // 按「操作對象」分頁，不設第三層子分頁——動狀態值的操作跟著狀態頁走，破壞性/跨世界操作集中在資料管理
+    let _page = 'home';
     let _editingValues = false;   // 「✏️ 改數值」模式：把目前狀態的每個值變成可填的小格子（非 JSON），手動修正 AI 填錯
     // 🚀 換頁快取：schema/抽取紀錄只有「抽取完成/改欄位/整理」才變，純換頁(home↔目前狀態↔進階)沒必要重讀 DB。
     //    沒快取就走 loading→await→填內容（會閃一下、無法避免）；有快取＝整趟同步渲染，點下去立刻換頁不閃。
@@ -375,56 +376,66 @@
                     </div>
                 </div>
                 <div class="avs-st-current-body">${_editingValues ? _humanizeEditable(cur) : _humanize(cur)}</div>
+                <div class="avs-st-adv-sec">
+                    <div class="avs-st-adv-hd">更新這份狀態${patchesCount ? `（已記 ${patchesCount} 筆）` : ''}</div>
+                    <div class="avs-st-btn-grid col3">
+                        <button class="avs-btn avs-btn-outline" id="avs-st-extract">🛰️ 立即抽一次</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-deep" title="用主模型把整份狀態清一輪：合併重複角色、移除純路人、按大總結修正過期欄位。整理前自動快照，可還原上一步。">♻️ 深度整理</button>
+                        <button class="avs-btn avs-btn-outline${snapCount === 0 ? ' disabled' : ''}" id="avs-st-rollback">↩ 還原上一步${snapCount ? ` (${snapCount})` : ''}</button>
+                    </div>
+                </div>
             </div>`;
             _bind(stateKey, snapCount);
             return;
         }
 
-        // ── 第二層：⚙️ 進階 操作頁（子分頁：追蹤欄位 / 抽取）─────────
-        if (_page === 'adv') {
-            const fieldsTab = `
-                <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">追蹤欄位（${Object.keys(fields).length}）<span class="avs-st-adv-hint">AI 會盯著這些東西記錄</span></div>
-                    <div class="avs-st-field-list">${_renderSchemaList(fields)}</div>
-                    <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-regen">🧬 重新生成欄位</button>
-                </div>
-                <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">這個故事的狀態</div>
-                    <div class="avs-st-btn-grid">
-                        <button class="avs-btn avs-btn-outline${snapCount === 0 ? ' disabled' : ''}" id="avs-st-rollback">↩ 還原上一步${snapCount ? ` (${snapCount})` : ''}</button>
-                        <button class="avs-btn avs-btn-danger" id="avs-st-clearstate">清空目前狀態</button>
-                    </div>
-                    <div class="avs-st-initpack">
-                        <select class="avs-select" id="avs-st-initpack-sel">
-                            <option value="">用檔案的預設值初始化…</option>
-                            ${(_packs || []).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
-                        </select>
-                        <button class="avs-btn avs-btn-primary" id="avs-st-initpack-btn">套用</button>
-                    </div>
-                </div>
-                <div class="avs-st-adv-sec">
-                    <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-cross">🌐 跨世界管理 — 所有已追蹤的世界</button>
-                    <button class="avs-btn avs-btn-outline avs-st-wide avs-st-gc" id="avs-st-gc">🧹 清理已刪除世界的殘留資料</button>
-                </div>`;
-            const extractTab = `
-                <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">抽取${patchesCount ? `（已記 ${patchesCount} 筆）` : ''}<span class="avs-st-adv-hint">從最近劇情把狀態變化記進來</span></div>
-                    <div class="avs-st-btn-grid">
-                        <button class="avs-btn avs-btn-outline" id="avs-st-extract">🛰️ 立即抽一次</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-st-deep" title="用主模型把整份狀態清一輪：合併重複角色、移除純路人、按大總結修正過期欄位。整理前自動快照，可還原上一步。">♻️ 深度整理</button>
-                        <button class="avs-btn avs-btn-danger" id="avs-st-clearpatches">🧹 清空抽取紀錄</button>
-                    </div>
-                </div>`;
+        // ── 第二層：⚙️ 追蹤欄位（只管「AI 要盯著記什麼」，不混資料操作）──
+        if (_page === 'fields') {
             _host.innerHTML = `<div class="avs-st avs-st-l2">
                 <div class="avs-st-l2hd">
                     <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
-                    <div class="avs-st-l2title">⚙️ 進階</div>
+                    <div class="avs-st-l2title">⚙️ 追蹤欄位</div>
                 </div>
-                <div class="avs-st-subtabs">
-                    <button class="avs-st-subtab${_advTab === 'fields' ? ' active' : ''}" data-tab="fields">追蹤欄位（${Object.keys(fields).length}）</button>
-                    <button class="avs-st-subtab${_advTab === 'extract' ? ' active' : ''}" data-tab="extract">抽取</button>
+                <div class="avs-st-adv is-page">
+                    <div class="avs-st-adv-sec">
+                        <div class="avs-st-adv-hd">追蹤欄位（${Object.keys(fields).length}）<span class="avs-st-adv-hint">AI 會盯著這些東西記錄</span></div>
+                        <div class="avs-st-field-list">${_renderSchemaList(fields)}</div>
+                        <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-regen">🧬 重新生成欄位</button>
+                    </div>
                 </div>
-                <div class="avs-st-adv is-page">${_advTab === 'fields' ? fieldsTab : extractTab}</div>
+            </div>`;
+            _bind(stateKey, snapCount);
+            return;
+        }
+
+        // ── 第二層：🗂️ 資料管理（破壞性操作與跨世界，集中一處免得散落）──
+        if (_page === 'data') {
+            _host.innerHTML = `<div class="avs-st avs-st-l2">
+                <div class="avs-st-l2hd">
+                    <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
+                    <div class="avs-st-l2title">🗂️ 資料管理</div>
+                </div>
+                <div class="avs-st-adv is-page">
+                    <div class="avs-st-adv-sec">
+                        <div class="avs-st-adv-hd">這個故事</div>
+                        <div class="avs-st-initpack">
+                            <select class="avs-select" id="avs-st-initpack-sel">
+                                <option value="">用檔案的預設值初始化…</option>
+                                ${(_packs || []).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
+                            </select>
+                            <button class="avs-btn avs-btn-primary" id="avs-st-initpack-btn">套用</button>
+                        </div>
+                        <div class="avs-st-btn-grid">
+                            <button class="avs-btn avs-btn-danger" id="avs-st-clearstate">清空目前狀態</button>
+                            <button class="avs-btn avs-btn-danger" id="avs-st-clearpatches">清空抽取紀錄</button>
+                        </div>
+                    </div>
+                    <div class="avs-st-adv-sec">
+                        <div class="avs-st-adv-hd">所有世界</div>
+                        <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-cross">🌐 跨世界管理 — 所有已追蹤的世界</button>
+                        <button class="avs-btn avs-btn-outline avs-st-wide avs-st-gc" id="avs-st-gc">🧹 清理已刪除世界的殘留資料</button>
+                    </div>
+                </div>
             </div>`;
             _bind(stateKey, snapCount);
             return;
@@ -445,11 +456,15 @@
             </div>
 
             <button class="avs-st-nav" id="avs-st-nav-cur">
-                <span class="avs-st-nav-txt">📊 目前狀態<span class="avs-st-nav-sub">角色數值、任務、身上的物品</span></span>
+                <span class="avs-st-nav-txt">📊 目前狀態<span class="avs-st-nav-sub">角色數值、任務、物品；抽取與還原也在裡面</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
-            <button class="avs-st-nav" id="avs-st-nav-adv">
-                <span class="avs-st-nav-txt">⚙️ 進階：追蹤設定與資料管理<span class="avs-st-nav-sub">追蹤欄位、抽取、還原、跨世界</span></span>
+            <button class="avs-st-nav" id="avs-st-nav-fields">
+                <span class="avs-st-nav-txt">⚙️ 追蹤欄位<span class="avs-st-nav-sub">AI 要盯著記錄哪些東西</span></span>
+                <span class="avs-st-nav-chev">›</span>
+            </button>
+            <button class="avs-st-nav" id="avs-st-nav-data">
+                <span class="avs-st-nav-txt">🗂️ 資料管理<span class="avs-st-nav-sub">初始化、清空、所有已追蹤的世界</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
         </div>`;
@@ -507,12 +522,12 @@
         const q = sel => h.querySelector(sel);
         const eng = win._AVS_ENGINE;
 
-        // 兩層換頁：入口 → 操作頁 → 返回；進階子分頁切換
+        // 兩層換頁：入口 → 操作頁 → 返回（三個操作頁各自只綁得到自己那頁的鈕，q() 找不到就跳過）
         const _goTop = () => { try { h.closest('.avs-content')?.scrollTo?.(0, 0); } catch (e) {} };
         { const b = q('#avs-st-nav-cur'); if (b) b.onclick = () => { _page = 'current'; _build(); _goTop(); }; }
-        { const b = q('#avs-st-nav-adv'); if (b) b.onclick = () => { _page = 'adv'; _build(); _goTop(); }; }
+        { const b = q('#avs-st-nav-fields'); if (b) b.onclick = () => { _page = 'fields'; _build(); _goTop(); }; }
+        { const b = q('#avs-st-nav-data'); if (b) b.onclick = () => { _page = 'data'; _build(); _goTop(); }; }
         { const b = q('#avs-st-back'); if (b) b.onclick = () => { _page = 'home'; _editingValues = false; _build(); _goTop(); }; }
-        h.querySelectorAll('.avs-st-subtab').forEach(t => { t.onclick = () => { _advTab = t.dataset.tab || 'fields'; _build(); }; });
         // ✏️ 改數值 / 💾 儲存 / 取消（手動修正 AI 填錯的狀態值）
         { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _page = 'current'; _build(); }; }
         { const sb = q('#avs-st-val-save'); if (sb) sb.onclick = () => { _saveStateValues(); }; }
@@ -616,8 +631,8 @@
     }
     function refresh() { _build({ fresh: true }); }   // 對外刷新＝背景事件(抽取完成/開關/生成)→資料可能變了，重讀
 
-    function startEditField(name) { _editingFieldName = name; _page = 'adv'; _advTab = 'fields'; _build(); }
-    function startAddField() { _editingFieldName = '__new__'; _page = 'adv'; _advTab = 'fields'; _build(); }
+    function startEditField(name) { _editingFieldName = name; _page = 'fields'; _build(); }
+    function startAddField() { _editingFieldName = '__new__'; _page = 'fields'; _build(); }
     function cancelEditField() { _editingFieldName = null; _build(); }
     async function saveFieldEdit(originalName) {
         const scope = _host || document;
