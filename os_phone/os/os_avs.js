@@ -508,11 +508,11 @@
         const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
         const _curCid = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
 
-        // 🚦 建檔快速入口「🪶 簡易預設 / 🧬 AI 從世界生成」只在「當前卡還沒有檔案」時顯示；
-        //    已經有卡(綁定當前卡的 or 全域)就藏——否則重生出重複包、也讓已建好的人一直看到多餘按鈕。
-        //    「＋ 創建新檔案」手動入口一律保留。
+        // 🚦 建檔入口（＋創建新檔案 / 🪶簡易預設 / 🧬AI從世界生成）只在「當前卡還沒有檔案」時顯示。
+        //    一個故事一套追蹤欄位就夠——已經有卡還擺著建檔鈕只會誘導做出重複包；要重做就先刪舊的。
         const _hasCard = currentPacks.some(p => !p.chatId || p.chatId === _curCid);
         const _isTavern = !(win.OS_API?.isStandalone?.());
+        { const b = container.querySelector('#avs-btn-new-pack'); if (b) b.style.display = _hasCard ? 'none' : ''; }
         { const b = container.querySelector('#avs-btn-preset-pack'); if (b) b.style.display = _hasCard ? 'none' : ''; }
         { const b = container.querySelector('#avs-btn-ai-gen-pack'); if (b) b.style.display = (!_hasCard && _isTavern) ? '' : 'none'; }
 

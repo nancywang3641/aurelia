@@ -289,16 +289,12 @@
         // 沿用區：把別的聊天已經做好的追蹤欄位＋條件規則＋UI 面板整套搬過來（不帶數值）。
         //   重玩同一張卡時最常用——開新聊天不必再等 AI 生成、也不必重煉 UI。舊聊天原封不動。
         const _adoptable = (_packs || []).filter(p => p && p.chatId && p.chatId !== chatId);
+        //   用浮層挑（不用原生下拉）：原生 select 的清單由瀏覽器畫在最上層、會衝出手機殼；
+        //   而且同一張卡的檔案常常同名，浮層才擺得下「幾項/幾條規則/哪個聊天」這些分辨資訊。
         const adoptHtml = _adoptable.length ? `
             <div class="avs-st-adv-sec">
                 <div class="avs-st-adv-hd">沿用其他故事的設定<span class="avs-st-adv-hint">追蹤欄位、條件規則、UI 面板一起搬過來，不會帶入舊數值</span></div>
-                <div class="avs-st-initpack">
-                    <select class="avs-select" id="avs-st-adopt-sel">
-                        <option value="">選一個故事…</option>
-                        ${_adoptable.map(p => `<option value="${esc(p.id)}">${esc(p.name)}（${(p.variables || []).length} 項）</option>`).join('')}
-                    </select>
-                    <button class="avs-btn avs-btn-primary" id="avs-st-adopt-btn">沿用</button>
-                </div>
+                <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-adopt-open">📋 從其他故事挑一份（${_adoptable.length}）</button>
             </div>` : '';
 
         if (!hasSchema) {
@@ -460,10 +456,9 @@
         }
 
         // ── 第一層：home（瀏覽）：故事 + 開關 + 兩個換頁入口 ──────────
+        // 排序（Rae 定）：目前故事 → 即時記錄 → 導演模式 → 目前狀態 → 資料管理 → 追蹤欄位 →（我的檔案在另一個容器）
         _host.innerHTML = `<div class="avs-st">
             ${storyHtml}
-
-            ${directorCardHtml}
 
             <div class="avs-card avs-st-toggle-row">
                 <div class="avs-st-toggle-text">
@@ -473,16 +468,18 @@
                 <div class="avs-st-toggle${runtimeOn ? ' on' : ''}" id="avs-st-toggle" role="switch"></div>
             </div>
 
+            ${directorCardHtml}
+
             <button class="avs-st-nav" id="avs-st-nav-cur">
                 <span class="avs-st-nav-txt">📊 目前狀態<span class="avs-st-nav-sub">角色數值、任務、物品；抽取與還原也在裡面</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
-            <button class="avs-st-nav" id="avs-st-nav-fields">
-                <span class="avs-st-nav-txt">⚙️ 追蹤欄位<span class="avs-st-nav-sub">AI 要盯著記錄哪些東西</span></span>
-                <span class="avs-st-nav-chev">›</span>
-            </button>
             <button class="avs-st-nav" id="avs-st-nav-data">
                 <span class="avs-st-nav-txt">🗂️ 資料管理<span class="avs-st-nav-sub">初始化、清空、所有已追蹤的世界</span></span>
+                <span class="avs-st-nav-chev">›</span>
+            </button>
+            <button class="avs-st-nav" id="avs-st-nav-fields">
+                <span class="avs-st-nav-txt">⚙️ 追蹤欄位<span class="avs-st-nav-sub">AI 要盯著記錄哪些東西</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
         </div>`;
@@ -539,56 +536,100 @@
     //   不碰來源故事、不帶任何數值 —— 重玩同一張卡開新聊天時，省掉重新生成與重煉 UI。
     //   init 畫面與資料管理頁共用（init 分支不走 _bind，各自呼叫一次）。
     function _bindAdopt() {
-        const btn = _host.querySelector('#avs-st-adopt-btn');
-        if (!btn) return;
-        btn.onclick = async () => {
-            const sel = _host.querySelector('#avs-st-adopt-sel');
-            const srcId = sel && sel.value;
-            if (!srcId) { alert('請先在左邊選一個故事'); return; }
-            const src = (_packs || []).find(p => p.id === srcId);
-            const chatId = win.SillyTavern?.getContext?.()?.chatId || '';
-            if (!src) { alert('找不到這個故事的設定'); return; }
-            if (!chatId) { alert('目前沒有進行中的聊天'); return; }
-            if (!confirm(`把「${src.name}」的設定沿用到這個故事？\n\n・追蹤欄位、條件規則、UI 面板都會複製過來\n・不會帶入舊故事的數值，從空白開始記錄\n・原本那個故事完全不受影響`)) return;
-            const orig = btn.textContent;
-            btn.textContent = '沿用中…'; btn.classList.add('disabled');
-            try {
-                const newPackId = 'pack_' + Date.now();
-                const copy = JSON.parse(JSON.stringify(src));
-                copy.id = newPackId;
-                copy.chatId = chatId;
-                await win.OS_DB.saveVarPack(copy);
-                let nRules = 0, nTpl = 0;
-                try {   // 條件規則跟著變數包走（packId 綁定）
-                    const rules = win.OS_AVS_RULES?.loadRules?.() || [];
-                    const mine = rules.filter(r => r && r.packId === src.id);
-                    if (mine.length && win.OS_AVS_RULES?.saveRules) {
-                        const added = mine.map(r => Object.assign({}, r, { id: win.OS_AVS_RULES.newId(), packId: newPackId }));
-                        win.OS_AVS_RULES.saveRules(rules.concat(added));
-                        nRules = added.length;
-                    }
-                } catch (e) { console.warn('[AVS State] 規則沿用失敗', e); }
-                try {   // 煉丹爐做的 UI 面板也綁 packId，一起搬（含啟用狀態）
-                    const all = (await win.OS_DB.getAllUITemplates?.()) || [];
-                    for (const t of all.filter(t => t && t.packId === src.id)) {
-                        const c = JSON.parse(JSON.stringify(t));
-                        c.id = 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-                        c.packId = newPackId;
-                        c.packName = copy.name;
-                        await win.OS_DB.saveUITemplate(c);
-                        nTpl++;
-                    }
-                } catch (e) { console.warn('[AVS State] UI 面板沿用失敗', e); }
-                _packs = (_packs || []).concat([copy]);
-                try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
-                alert(`✅ 已沿用「${src.name}」\n\n・追蹤欄位 ${(copy.variables || []).length} 項\n・條件規則 ${nRules} 條\n・UI 面板 ${nTpl} 個\n\n數值從空白開始，推進劇情就會自動記錄。`);
-                _build({ fresh: true });
-            } catch (e) {
-                alert('沿用失敗：' + ((e && e.message) || e));
-            } finally {
-                btn.textContent = orig; btn.classList.remove('disabled');
-            }
-        };
+        const btn = _host.querySelector('#avs-st-adopt-open');
+        if (btn) btn.onclick = () => _openAdoptModal();
+    }
+
+    // 挑選浮層：建在最外層 document（不受手機殼裁切），一列一個故事、附可分辨的細節
+    function _ensureAdoptModal() {
+        const doc = win.document || document;
+        let m = doc.getElementById('avs-adopt-modal');
+        if (m) return m;
+        m = doc.createElement('div');
+        m.id = 'avs-adopt-modal';
+        m.className = 'avs-sm-modal';
+        m.innerHTML = `<div class="avs-sm-card">
+            <div class="avs-sm-title">📋 沿用其他故事的設定</div>
+            <div class="avs-sm-desc">追蹤欄位、條件規則、UI 面板會一起搬到目前這個故事；不會帶入舊數值，來源故事也完全不受影響。</div>
+            <div id="avs-adopt-list" class="avs-sm-list"></div>
+            <div class="avs-sm-actions"><button class="avs-btn avs-btn-outline avs-sm-close-btn" id="avs-adopt-close">關閉</button></div>
+        </div>`;
+        (doc.body || doc.documentElement).appendChild(m);
+        m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+        m.querySelector('#avs-adopt-close').onclick = () => m.classList.remove('active');
+        return m;
+    }
+
+    async function _openAdoptModal() {
+        const m = _ensureAdoptModal();
+        m.classList.add('active');
+        const listEl = m.querySelector('#avs-adopt-list');
+        listEl.innerHTML = '<div class="avs-sm-tip">載入中…</div>';
+        const chatId = win.SillyTavern?.getContext?.()?.chatId || '';
+        const items = (_packs || []).filter(p => p && p.chatId && p.chatId !== chatId);
+        if (!items.length) { listEl.innerHTML = '<div class="avs-sm-tip">還沒有其他故事的設定可以沿用</div>'; return; }
+        let rules = [], tpls = [];
+        try { rules = win.OS_AVS_RULES?.loadRules?.() || []; } catch (e) {}
+        try { tpls = (await win.OS_DB.getAllUITemplates?.()) || []; } catch (e) {}
+        listEl.innerHTML = items.map(p => {
+            const nR = rules.filter(r => r && r.packId === p.id).length;
+            const nT = tpls.filter(t => t && t.packId === p.id).length;
+            return `<div class="avs-sm-row" data-adopt="${esc(p.id)}">
+                <div class="avs-sm-row-main">
+                    <div class="avs-sm-row-id">${esc(p.name)}</div>
+                    <div class="avs-sm-row-meta">${(p.variables || []).length} 個追蹤項 · ${nR} 條規則 · ${nT ? nT + ' 個 UI 面板' : '沒有 UI 面板'}</div>
+                    <div class="avs-sm-row-meta">來自：${esc(p.chatId)}</div>
+                </div>
+                <button class="avs-btn avs-btn-primary avs-st-sm">沿用</button>
+            </div>`;
+        }).join('');
+        listEl.querySelectorAll('[data-adopt]').forEach(row => {
+            const b = row.querySelector('button');
+            if (b) b.onclick = () => { m.classList.remove('active'); _doAdopt(row.getAttribute('data-adopt')); };
+        });
+    }
+
+    // 實際搬移：變數包 + 條件規則 + UI 面板 → 當前聊天；來源與數值都不動
+    async function _doAdopt(srcId) {
+        const src = (_packs || []).find(p => p.id === srcId);
+        const chatId = win.SillyTavern?.getContext?.()?.chatId || '';
+        if (!src) { alert('找不到這個故事的設定'); return; }
+        if (!chatId) { alert('目前沒有進行中的聊天'); return; }
+        if (!confirm(`把「${src.name}」的設定沿用到這個故事？\n\n・追蹤欄位、條件規則、UI 面板都會複製過來\n・不會帶入舊故事的數值，從空白開始記錄\n・原本那個故事完全不受影響`)) return;
+        try {
+            const newPackId = 'pack_' + Date.now();
+            const copy = JSON.parse(JSON.stringify(src));
+            copy.id = newPackId;
+            copy.chatId = chatId;
+            await win.OS_DB.saveVarPack(copy);
+            let nRules = 0, nTpl = 0;
+            try {   // 條件規則跟著變數包走（packId 綁定）
+                const rules = win.OS_AVS_RULES?.loadRules?.() || [];
+                const mine = rules.filter(r => r && r.packId === src.id);
+                if (mine.length && win.OS_AVS_RULES?.saveRules) {
+                    const added = mine.map(r => Object.assign({}, r, { id: win.OS_AVS_RULES.newId(), packId: newPackId }));
+                    win.OS_AVS_RULES.saveRules(rules.concat(added));
+                    nRules = added.length;
+                }
+            } catch (e) { console.warn('[AVS State] 規則沿用失敗', e); }
+            try {   // 煉丹爐做的 UI 面板也綁 packId，一起搬（含啟用狀態）
+                const all = (await win.OS_DB.getAllUITemplates?.()) || [];
+                for (const t of all.filter(t => t && t.packId === src.id)) {
+                    const c = JSON.parse(JSON.stringify(t));
+                    c.id = 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                    c.packId = newPackId;
+                    c.packName = copy.name;
+                    await win.OS_DB.saveUITemplate(c);
+                    nTpl++;
+                }
+            } catch (e) { console.warn('[AVS State] UI 面板沿用失敗', e); }
+            _packs = (_packs || []).concat([copy]);
+            try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
+            alert(`✅ 已沿用「${src.name}」\n\n・追蹤欄位 ${(copy.variables || []).length} 項\n・條件規則 ${nRules} 條\n・UI 面板 ${nTpl} 個\n\n數值從空白開始，推進劇情就會自動記錄。`);
+            _build({ fresh: true });
+        } catch (e) {
+            alert('沿用失敗：' + ((e && e.message) || e));
+        }
     }
 
     function _bind(stateKey, snapCount) {
@@ -702,6 +743,11 @@
         if (!host) return;
         _host = host;
         _packs = (opts && opts.packs) || [];
+        // 面板重新掛載＝從首頁開始。不重置的話會停在上次的第二層，
+        // 而那頁在新條件下可能根本不該存在（例如已無追蹤欄位卻停在資料管理頁）→ 使用者回不了首頁。
+        // refresh()（背景事件）刻意不重置，讓人留在正在看的那頁。
+        _page = 'home';
+        _editingValues = false;
         await _build({ fresh: true });
     }
     function refresh() { _build({ fresh: true }); }   // 對外刷新＝背景事件(抽取完成/開關/生成)→資料可能變了，重讀
