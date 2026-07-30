@@ -30,6 +30,10 @@
     let _page = 'home';     // 兩層換頁：'home'(瀏覽) → 'current'(目前狀態) / 'adv'(進階) 操作頁
     let _advTab = 'fields';  // 進階第二層子分頁：'fields'(追蹤欄位) / 'extract'(抽取)
     let _editingValues = false;   // 「✏️ 改數值」模式：把目前狀態的每個值變成可填的小格子（非 JSON），手動修正 AI 填錯
+    // 🚀 換頁快取：schema/抽取紀錄只有「抽取完成/改欄位/整理」才變，純換頁(home↔目前狀態↔進階)沒必要重讀 DB。
+    //    沒快取就走 loading→await→填內容（會閃一下、無法避免）；有快取＝整趟同步渲染，點下去立刻換頁不閃。
+    //    數值(cur)一律從引擎記憶體現讀，不進快取 → 換頁看到的數字永遠是最新的。
+    let _cache = { ready: false, key: '', fields: null, data: null };
 
     // ── 人話版狀態渲染 ───────────────────────────────────────────
     function _isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
@@ -213,13 +217,14 @@
     }
 
     // ── 主建構 ───────────────────────────────────────────────────
-    async function _build() {
+    async function _build(opts) {
         if (!_host) return;
-        _host.innerHTML = `<div class="avs-st"><div class="avs-st-loading">載入狀態中…</div></div>`;
-
         const eng = win._AVS_ENGINE;
         const ctx = win.SillyTavern?.getContext?.();
         const chatId = ctx?.chatId || '';
+        // fresh=true（外部事件、資料真的變了）才重讀；換頁沿用快取＝不清空、不 await、不閃
+        const _useCache = !(opts && opts.fresh) && _cache.ready && _cache.key === chatId;
+        if (!_useCache) _host.innerHTML = `<div class="avs-st"><div class="avs-st-loading">載入狀態中…</div></div>`;
         const storyId = win.OS_AVS_ADAPTER?.getStoryId?.() || localStorage.getItem('vn_current_story_id') || '';
         const stateKey = eng ? eng.getKey() : (storyId ? `avs_state_${storyId}` : 'avs_current_state');
         const storyTitle = win.OS_AVS_ADAPTER?.getStoryTitle?.() || localStorage.getItem('vn_current_story_title') || storyId || '';
@@ -228,8 +233,14 @@
         try { snapCount = JSON.parse(localStorage.getItem(`avs_snap_${stateKey}`) || '[]').length; } catch (e) {}
 
         let fields = null, data = null, cur = {};
-        try { fields = await win.OS_STATE_RUNTIME?.getActiveSchema?.(); } catch (e) {}
-        try { if (chatId && win.OS_DB?.getStateData) data = await win.OS_DB.getStateData(chatId); } catch (e) {}
+        if (_useCache) {
+            fields = _cache.fields; data = _cache.data;
+        } else {
+            try { fields = await win.OS_STATE_RUNTIME?.getActiveSchema?.(); } catch (e) {}
+            try { if (chatId && win.OS_DB?.getStateData) data = await win.OS_DB.getStateData(chatId); } catch (e) {}
+            _cache = { ready: true, key: chatId, fields, data };
+            if (!_host.isConnected) return;   // await 期間面板被關掉 → 別往空殼寫
+        }
         try { cur = (eng?.read?.()) || data?.current || {}; } catch (e) { cur = data?.current || {}; }
         const hasSchema = fields && Object.keys(fields).length > 0;
         const patchesCount = data?.patches ? Object.keys(data.patches).length : 0;
@@ -324,7 +335,7 @@
                 ib.style.pointerEvents = 'none';
                 try {
                     const r = await win.OS_AVS.generateAndSaveSchema(_up);   // 生成 schema + 存進變數包（帶 TAG 取捨＋選填要求）
-                    if (r) _build();   // 重繪：此時變數包已有剛生成的 schema → 顯示追蹤狀態
+                    if (r) _build({ fresh: true });   // 重繪：此時變數包已有剛生成的 schema → 顯示追蹤狀態
                 } catch (e) {
                     console.error('[AVS State] AI 生成失敗:', e);
                     alert('生成失敗：' + (e?.message || e));
@@ -545,7 +556,7 @@
                 if (r && r.ok) alert(`✅ 整理完成：合併 ${r.merged}、移除 ${r.removed}、修正 ${r.fixed}`);
                 else alert('❌ 整理失敗：' + ((r && r.msg) || '未知錯誤') + '\n（狀態未被更動）');
             } catch (e) { alert('❌ 整理失敗：' + (e?.message || e) + '\n（狀態未被更動）'); }
-            _build();
+            _build({ fresh: true });
         });
         bind('#avs-st-regen', () => { if (confirm('重新生成追蹤欄位？已記錄的內容會保留。')) win.OS_STATE_SCHEMA?.generate?.(); });
         bind('#avs-st-clearpatches', () => { if (confirm('清空抽取紀錄？追蹤欄位保留。')) win.OS_STATE_RUNTIME?.clearPatches?.(); });
@@ -569,7 +580,7 @@
             const pack = (_packs || []).find(p => p.id === sel.value);
             if (!pack || !eng) return;
             if (!confirm(`用「${pack.name}」的預設值初始化目前狀態？原本的數值會被覆蓋。`)) return;
-            eng.initFromPack(pack); _build();
+            eng.initFromPack(pack); _build({ fresh: true });
         });
         // 清理孤兒
         bind('#avs-st-gc', async () => {
@@ -588,10 +599,10 @@
                     }
                 }
                 del.forEach(k => localStorage.removeItem(k));
-                setTimeout(() => { alert(`✅ 清理完成，回收了 ${del.length} 筆殘留資料。`); _build(); }, 200);
+                setTimeout(() => { alert(`✅ 清理完成，回收了 ${del.length} 筆殘留資料。`); _build({ fresh: true }); }, 200);
             } catch (e) {
                 alert('清理失敗：' + (e?.message || e));
-                _build();
+                _build({ fresh: true });
             }
         });
     }
@@ -601,9 +612,9 @@
         if (!host) return;
         _host = host;
         _packs = (opts && opts.packs) || [];
-        await _build();
+        await _build({ fresh: true });
     }
-    function refresh() { _build(); }
+    function refresh() { _build({ fresh: true }); }   // 對外刷新＝背景事件(抽取完成/開關/生成)→資料可能變了，重讀
 
     function startEditField(name) { _editingFieldName = name; _page = 'adv'; _advTab = 'fields'; _build(); }
     function startAddField() { _editingFieldName = '__new__'; _page = 'adv'; _advTab = 'fields'; _build(); }
@@ -619,13 +630,13 @@
         if (isNew && !name) { alert('請輸入欄位名'); return; }
         if (isNew) { const ok = await win.OS_STATE_SCHEMA?.addField?.(name, { type, desc }); if (!ok) return; }
         else { await win.OS_STATE_SCHEMA?.updateField?.(originalName, { type, desc }); }
-        _editingFieldName = null; _build();
+        _editingFieldName = null; _build({ fresh: true });
     }
     async function deleteFieldConfirm(name) {
         if (!confirm(`刪除欄位「${name}」？\n會從追蹤設定、目前狀態、所有紀錄一起清掉，不可復原。`)) return;
         await win.OS_STATE_SCHEMA?.deleteField?.(name);
         if (_editingFieldName === name) _editingFieldName = null;
-        _build();
+        _build({ fresh: true });
     }
 
     // 跨世界管理 modal（亮色，動態建在 parent document）
@@ -673,7 +684,7 @@
                 const id = btn.getAttribute('data-state-del');
                 if (!confirm(`刪除 [${id}] 的狀態資料？\n追蹤欄位 + 紀錄 + 目前狀態全部清掉，不可復原。`)) return;
                 await win.OS_STATE_RUNTIME.removeStateData(id);
-                renderStateManager(); _build();
+                renderStateManager(); _build({ fresh: true });
             }));
         } catch (e) {
             listEl.innerHTML = `<div class="avs-sm-tip err">載入失敗：${esc(String(e?.message || e))}</div>`;
@@ -685,7 +696,7 @@
     (function hooks() {
         if (!win.eventOn) { setTimeout(hooks, 1000); return; }
         ['AURELIA_STATE_SCHEMA_GENERATED', 'AURELIA_STATE_PATCHED', 'AURELIA_STATE_RUNTIME_TOGGLED', 'AURELIA_STATE_DATA_REMOVED'].forEach(ev => {
-            try { win.eventOn(ev, () => { if (_host) _build(); }); } catch (e) {}
+            try { win.eventOn(ev, () => { if (_host) _build({ fresh: true }); }); } catch (e) {}   // 抽取/schema 真的變了 → 必須重讀
         });
     })();
 
