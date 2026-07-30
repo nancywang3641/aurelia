@@ -286,10 +286,26 @@
             </div>
         </div>`;
 
+        // 沿用區：把別的聊天已經做好的追蹤欄位＋條件規則＋UI 面板整套搬過來（不帶數值）。
+        //   重玩同一張卡時最常用——開新聊天不必再等 AI 生成、也不必重煉 UI。舊聊天原封不動。
+        const _adoptable = (_packs || []).filter(p => p && p.chatId && p.chatId !== chatId);
+        const adoptHtml = _adoptable.length ? `
+            <div class="avs-st-adv-sec">
+                <div class="avs-st-adv-hd">沿用其他故事的設定<span class="avs-st-adv-hint">追蹤欄位、條件規則、UI 面板一起搬過來，不會帶入舊數值</span></div>
+                <div class="avs-st-initpack">
+                    <select class="avs-select" id="avs-st-adopt-sel">
+                        <option value="">選一個故事…</option>
+                        ${_adoptable.map(p => `<option value="${esc(p.id)}">${esc(p.name)}（${(p.variables || []).length} 項）</option>`).join('')}
+                    </select>
+                    <button class="avs-btn avs-btn-primary" id="avs-st-adopt-btn">沿用</button>
+                </div>
+            </div>` : '';
+
         if (!hasSchema) {
             _host.innerHTML = `<div class="avs-st">
                 ${storyHtml}
                 ${directorCardHtml}
+                ${adoptHtml ? `<div class="avs-card">${adoptHtml}</div>` : ''}
                 <div class="avs-card avs-st-init">
                     <div class="avs-st-init-icon">🛰️</div>
                     <div class="avs-st-init-title">這個世界還沒開始追蹤狀態</div>
@@ -354,6 +370,7 @@
                 else alert('簡易預設未就緒，請切到上方「我的檔案」分頁套用');
             };
             _bindDirector();   // 🎬 導演卡片在 init 畫面也露出，綁定它的開關與按鈕
+            _bindAdopt();      // 開新聊天第一眼就在這頁 → 沿用入口也得在這裡綁
             return;
         }
 
@@ -416,6 +433,7 @@
                     <div class="avs-st-l2title">🗂️ 資料管理</div>
                 </div>
                 <div class="avs-st-adv is-page">
+                    ${adoptHtml}
                     <div class="avs-st-adv-sec">
                         <div class="avs-st-adv-hd">這個故事</div>
                         <div class="avs-st-initpack">
@@ -517,6 +535,62 @@
         };
     }
 
+    // 「沿用其他故事的設定」：整套搬 追蹤欄位(變數包) + 條件規則 + UI 面板 到當前聊天。
+    //   不碰來源故事、不帶任何數值 —— 重玩同一張卡開新聊天時，省掉重新生成與重煉 UI。
+    //   init 畫面與資料管理頁共用（init 分支不走 _bind，各自呼叫一次）。
+    function _bindAdopt() {
+        const btn = _host.querySelector('#avs-st-adopt-btn');
+        if (!btn) return;
+        btn.onclick = async () => {
+            const sel = _host.querySelector('#avs-st-adopt-sel');
+            const srcId = sel && sel.value;
+            if (!srcId) { alert('請先在左邊選一個故事'); return; }
+            const src = (_packs || []).find(p => p.id === srcId);
+            const chatId = win.SillyTavern?.getContext?.()?.chatId || '';
+            if (!src) { alert('找不到這個故事的設定'); return; }
+            if (!chatId) { alert('目前沒有進行中的聊天'); return; }
+            if (!confirm(`把「${src.name}」的設定沿用到這個故事？\n\n・追蹤欄位、條件規則、UI 面板都會複製過來\n・不會帶入舊故事的數值，從空白開始記錄\n・原本那個故事完全不受影響`)) return;
+            const orig = btn.textContent;
+            btn.textContent = '沿用中…'; btn.classList.add('disabled');
+            try {
+                const newPackId = 'pack_' + Date.now();
+                const copy = JSON.parse(JSON.stringify(src));
+                copy.id = newPackId;
+                copy.chatId = chatId;
+                await win.OS_DB.saveVarPack(copy);
+                let nRules = 0, nTpl = 0;
+                try {   // 條件規則跟著變數包走（packId 綁定）
+                    const rules = win.OS_AVS_RULES?.loadRules?.() || [];
+                    const mine = rules.filter(r => r && r.packId === src.id);
+                    if (mine.length && win.OS_AVS_RULES?.saveRules) {
+                        const added = mine.map(r => Object.assign({}, r, { id: win.OS_AVS_RULES.newId(), packId: newPackId }));
+                        win.OS_AVS_RULES.saveRules(rules.concat(added));
+                        nRules = added.length;
+                    }
+                } catch (e) { console.warn('[AVS State] 規則沿用失敗', e); }
+                try {   // 煉丹爐做的 UI 面板也綁 packId，一起搬（含啟用狀態）
+                    const all = (await win.OS_DB.getAllUITemplates?.()) || [];
+                    for (const t of all.filter(t => t && t.packId === src.id)) {
+                        const c = JSON.parse(JSON.stringify(t));
+                        c.id = 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                        c.packId = newPackId;
+                        c.packName = copy.name;
+                        await win.OS_DB.saveUITemplate(c);
+                        nTpl++;
+                    }
+                } catch (e) { console.warn('[AVS State] UI 面板沿用失敗', e); }
+                _packs = (_packs || []).concat([copy]);
+                try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
+                alert(`✅ 已沿用「${src.name}」\n\n・追蹤欄位 ${(copy.variables || []).length} 項\n・條件規則 ${nRules} 條\n・UI 面板 ${nTpl} 個\n\n數值從空白開始，推進劇情就會自動記錄。`);
+                _build({ fresh: true });
+            } catch (e) {
+                alert('沿用失敗：' + ((e && e.message) || e));
+            } finally {
+                btn.textContent = orig; btn.classList.remove('disabled');
+            }
+        };
+    }
+
     function _bind(stateKey, snapCount) {
         const h = _host;
         const q = sel => h.querySelector(sel);
@@ -545,6 +619,7 @@
 
         // 🎬 導演模式綁定：抽成獨立函式，init 畫面(AVS 未初始化)也要綁
         _bindDirector();
+        _bindAdopt();
 
         const bind = (sel, fn) => { const b = q(sel); if (b) b.onclick = fn; };
         // 🔬 複製全部狀態診斷數據（引擎當前 + 本輪抽取 + 持久化 patches/base）→ 貼給工程師
