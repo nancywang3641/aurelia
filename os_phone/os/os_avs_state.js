@@ -457,9 +457,8 @@
 
         // ── 第一層：home（瀏覽）：故事 + 開關 + 兩個換頁入口 ──────────
         // 排序（Rae 定）：目前故事 → 即時記錄 → 導演模式 → 目前狀態 → 資料管理 → 追蹤欄位 →（我的檔案在另一個容器）
-        //   is-home 讓 CSS 用 order 把順序釘死：實測 DOM 照寫、畫面卻被重排過，
-        //   與其追那個看不見的重排來源，不如把版面順序宣告在版面層（order 對 flex 是絕對權威）。
-        _host.innerHTML = `<div class="avs-st is-home">
+        //   順序就照這裡的先後，CSS 不再用 order 干預（舊的那套已刪）。要改順序＝改這裡。
+        _host.innerHTML = `<div class="avs-st">
             ${storyHtml}
 
             <div class="avs-card avs-st-toggle-row avs-st-runtime-toggle">
