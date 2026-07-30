@@ -98,7 +98,8 @@
         ]},
         { fxId: 'fx-coins', name: '金幣交易', desc: '錢袋傾出金幣＋叮噹聲（交易/付款/收款/獲得賞金），2秒瞬發', kind: 'once', steps: [
             // alpha webm(lumakey去黑底)：皮袋是中間亮度物件,screen混合會半透明;真透明通道才有實色錢袋
-            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/coins-pour-alpha.webm', blend: 'normal', audio: 1, at: 0, dur: 2200 },
+            // shiftX：素材錢袋生在右側(量測亮度重心 59.4%)，往左推 10% 才置中
+            { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/coins-pour-alpha.webm', blend: 'normal', audio: 1, at: 0, dur: 2200, shiftX: -10 },
         ]},
         { fxId: 'fx-underwater', name: '水下氣泡', desc: '氣泡沿兩側上浮＋水下環境音（潛水/深海/溺水/水中場景），持續到換場', kind: 'loop', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/bubbles-loop.mp4', blend: 'screen', audio: 1, loop: 1 },
@@ -199,6 +200,7 @@
                 st.src = src;
                 st.blend = VIDEO_BLENDS.indexOf(s.blend) !== -1 ? s.blend : 'screen';
                 st.audio = s.audio ? 1 : 0;
+                st.shiftX = clamp(s.shiftX || 0, -50, 50);   // 素材主體沒置中時的水平校正（%畫面寬，負=往左）
                 st.loop = s.loop ? 1 : 0;   // 1=影片無限循環（素材須無縫循環）；0=播完定格最後一幀
             }
             steps.push(st);
@@ -674,6 +676,7 @@
                 v.playsInline = true; v.setAttribute('playsinline', '');
                 v.preload = 'auto';
                 if (s.loop) v.loop = true;
+                if (s.shiftX) v.style.setProperty('--vnfx-shift-x', s.shiftX + '%');   // 規則在 CSS，只有數值從配方來（同 SVG 積木的 --vnfx-dur）
                 if (s.audio) {
                     // 音量跟音效設定走；autoplay 帶聲被瀏覽器擋 → 退靜音重播（畫面優先、聲音盡力）
                     let vol = 0.5;

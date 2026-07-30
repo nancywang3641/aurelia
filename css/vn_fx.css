@@ -85,6 +85,8 @@
     pointer-events: none;
     z-index: 9499;
     opacity: 1;
+    /* 素材主體沒置中時的水平校正（配方給 shiftX，兩側空白區本來就透明，移出去看不出來） */
+    transform: translateX(var(--vnfx-shift-x, 0));
     transition: opacity 0.6s ease-out;
 }
 .vn-fx-blend-screen  { mix-blend-mode: screen; }
