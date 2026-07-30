@@ -36,13 +36,8 @@
 
         /* ===== 目前狀態分頁（os_avs_state.js）—— 亮色系，與變數工坊一致；人性化狀態 + 進階摺疊 ===== */
         .avs-st { display: flex; flex-direction: column; gap: 12px; }
-        /* 首頁版面順序：用 order 釘死，不依賴 DOM 先後（只作用於 is-home，第二層與初始畫面不受影響） */
-        .avs-st.is-home > .avs-st-story { order: 1; }
-        .avs-st.is-home > .avs-st-runtime-toggle { order: 2; }
-        .avs-st.is-home > .avs-st-director-card { order: 3; }
-        .avs-st.is-home > #avs-st-nav-cur { order: 4; }
-        .avs-st.is-home > #avs-st-nav-data { order: 5; }
-        .avs-st.is-home > #avs-st-nav-fields { order: 6; }
+        /* 版面順序一律照 HTML 寫的先後，這裡不要再出現任何 order —— 開第二套就會像 2026-07-31
+           那次：舊清單漏掉新入口 → 新入口 order 預設 0 → 被頂到最前面，改 HTML 完全沒用。 */
         .avs-st-loading { padding: 30px; text-align: center; color: rgba(26,28,40,0.35); font-size: 13px; }
         .avs-st-dim { color: rgba(26,28,40,0.30); }
         .avs-st-err { padding: 20px; text-align: center; color: #c0392b; font-size: 13px; }
