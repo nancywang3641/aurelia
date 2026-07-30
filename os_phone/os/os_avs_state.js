@@ -457,10 +457,12 @@
 
         // ── 第一層：home（瀏覽）：故事 + 開關 + 兩個換頁入口 ──────────
         // 排序（Rae 定）：目前故事 → 即時記錄 → 導演模式 → 目前狀態 → 資料管理 → 追蹤欄位 →（我的檔案在另一個容器）
-        _host.innerHTML = `<div class="avs-st">
+        //   is-home 讓 CSS 用 order 把順序釘死：實測 DOM 照寫、畫面卻被重排過，
+        //   與其追那個看不見的重排來源，不如把版面順序宣告在版面層（order 對 flex 是絕對權威）。
+        _host.innerHTML = `<div class="avs-st is-home">
             ${storyHtml}
 
-            <div class="avs-card avs-st-toggle-row">
+            <div class="avs-card avs-st-toggle-row avs-st-runtime-toggle">
                 <div class="avs-st-toggle-text">
                     <div class="avs-st-toggle-name">即時記錄狀態</div>
                     <div class="avs-st-toggle-desc">開啟後，每次劇情推進都會自動更新下面的狀態</div>

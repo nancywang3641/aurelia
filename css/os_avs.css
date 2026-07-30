@@ -36,6 +36,13 @@
 
         /* ===== 目前狀態分頁（os_avs_state.js）—— 亮色系，與變數工坊一致；人性化狀態 + 進階摺疊 ===== */
         .avs-st { display: flex; flex-direction: column; gap: 12px; }
+        /* 首頁版面順序：用 order 釘死，不依賴 DOM 先後（只作用於 is-home，第二層與初始畫面不受影響） */
+        .avs-st.is-home > .avs-st-story { order: 1; }
+        .avs-st.is-home > .avs-st-runtime-toggle { order: 2; }
+        .avs-st.is-home > .avs-st-director-card { order: 3; }
+        .avs-st.is-home > #avs-st-nav-cur { order: 4; }
+        .avs-st.is-home > #avs-st-nav-data { order: 5; }
+        .avs-st.is-home > #avs-st-nav-fields { order: 6; }
         .avs-st-loading { padding: 30px; text-align: center; color: rgba(26,28,40,0.35); font-size: 13px; }
         .avs-st-dim { color: rgba(26,28,40,0.30); }
         .avs-st-err { padding: 20px; text-align: center; color: #c0392b; font-size: 13px; }
@@ -214,12 +221,9 @@
 
         /* ===== 狀態面板：一般使用者優先的閱讀與操作層級 ===== */
         .avs-st { gap: 16px; padding-bottom: 8px; }
-        .avs-st > .avs-st-story { order: 1; }
-        .avs-st > .avs-card:has(#avs-st-toggle) { order: 2; }
-        .avs-st > #avs-st-nav-cur { order: 3; }
-        .avs-st > #avs-st-nav-adv { order: 5; }
-        .avs-st > .avs-card:has(#avs-st-director-toggle) { order: 7; }
-        .avs-st > #avs-st-director-tools { order: 8; }
+        /* 🗑️ 舊的一套 order 規則已刪（2026-07-31）：它是為「進階(#avs-st-nav-adv)」那版寫的，
+           拆成資料管理/追蹤欄位後沒同步 → 新入口不在清單裡＝order 預設 0 ＝ 被排到全部人前面。
+           首頁順序現由上方 .avs-st.is-home 那組單一負責，別在這裡再開第二套。 */
         .avs-st-story { padding: 16px 18px; border-left: 4px solid #c8a030; }
         .avs-st-story-label { margin-bottom: 6px; letter-spacing: .04em; }
         .avs-st-story-name { font-size: 16px; line-height: 1.45; }
