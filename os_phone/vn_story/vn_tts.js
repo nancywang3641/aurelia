@@ -149,9 +149,9 @@ const VN_TTS = {
 
     _cacheKey(modelId, text) { return `${modelId}\x00${text}`; },
 
-    // 🔬 診斷（2026-08-01 查「語音很慢出」用，預設開）：印出語音快取命中/現生/換模型/預熱耗時
-    //    查完要關掉 → 把下面的 !== '0' 改成 === '1' 即可（或 localStorage.aurelia_gpu_trace='0'）
-    _trace() { try { return localStorage.getItem('aurelia_gpu_trace') !== '0'; } catch (e) { return true; } },
+    // 🔬 診斷（預設關）：印出語音快取命中/現生/換模型/預熱耗時。
+    //    要查語音問題時把 === '1' 改成 !== '0' 就會預設開（TauriTavern 沒 console，改碼比設 localStorage 快）。
+    _trace() { try { return localStorage.getItem('aurelia_gpu_trace') === '1'; } catch (e) { return false; } },
 
 
     // 收集本局「已被占用」的聲音模型 id：
