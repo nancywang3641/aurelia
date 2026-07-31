@@ -1691,8 +1691,18 @@ _directorSpec(castNames);
             if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過對帳'); return; }
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
-            const lastId = await _currentLastId();
-            if (lastId < 0) { console.warn('🛰️ [State Runtime] 對帳：拿不到當前樓號，保守不動（可用狀態面板「還原上一步」）'); return; }
+
+            // 🚨 樓數必須讀「真實全檔」：VN_READER.fetchFullChat 直接讀聊天檔、繞開懶載入窗口
+            //    （記憶系統 reconcileToStory 也是走這條才會準）。getChatMessages 在 TauriTavern
+            //    會被懶載窗口騙出小樓號 → 對帳算出「沒有孤兒」→ 刪了也毫無反應。
+            let fullMsgs = null;
+            try { fullMsgs = await win.VN_READER?.fetchFullChat?.(); } catch (e) {}
+            let total = Array.isArray(fullMsgs) ? fullMsgs.length : -1;
+            let lastId = total > 0 ? total - 1 : await _currentLastId();   // 退路：拿不到全檔才用窗口號
+            if (total <= 0 && lastId >= 0) console.warn('🛰️ [State Runtime] 對帳：讀不到完整聊天檔，退回窗口號（可能不準）');
+            if (lastId < 0) { console.warn('🛰️ [State Runtime] 對帳：連樓號都拿不到，保守不動（可用狀態面板「還原上一步」）'); return; }
+            console.log(`🛰️ [State Runtime] 對帳(${tag})：真實樓數=${total > 0 ? total : '未知'}，最後一樓=#${lastId}`);
+
             const data = await win.OS_DB.getStateData(chatId);
             if (!data) return;
 
@@ -1708,16 +1718,20 @@ _directorSpec(castNames);
             const ids = Object.keys(data.patches).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
             if (!ids.length) return;
 
-            // 只讀 patch 覆蓋到的樓層範圍，不掃整本聊天
+            // 建 樓號→內容簽名 對照表。優先用讀檔結果（陣列索引＝真實樓號），拿不到才退回窗口 API。
             const sigNow = new Map();
-            try {
-                const from = Math.max(0, Math.min(ids[0], lastId));
-                const msgs = await win.TavernHelper?.getChatMessages?.(`${from}-${lastId}`);
-                for (const m of (msgs || [])) {
-                    const id = m.message_id ?? m.id;
-                    if (typeof id === 'number') sigNow.set(id, _msgSig(m.message || m.mes || ''));
-                }
-            } catch (e) { console.warn('[State Runtime] 對帳讀訊息失敗，改用樓號範圍判定:', e); }
+            if (total > 0) {
+                fullMsgs.forEach((m, i) => sigNow.set(i, _msgSig((m && (m.message || m.mes)) || '')));
+            } else {
+                try {
+                    const from = Math.max(0, Math.min(ids[0], lastId));
+                    const msgs = await win.TavernHelper?.getChatMessages?.(`${from}-${lastId}`);
+                    for (const m of (msgs || [])) {
+                        const id = m.message_id ?? m.id;
+                        if (typeof id === 'number') sigNow.set(id, _msgSig(m.message || m.mes || ''));
+                    }
+                } catch (e) { console.warn('[State Runtime] 對帳讀訊息失敗，改用樓號範圍判定:', e); }
+            }
 
             const sigs = data.sigs || {};
             const dead = ids.filter(id => {
@@ -1728,7 +1742,17 @@ _directorSpec(castNames);
                 if (!old) return false;                          // 舊資料沒存簽名 → 無從比對，保守留著
                 return old !== sigNow.get(id);                   // ③ 內容不符（被編輯／位移）
             });
-            if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${ids.length} 筆 patch 全部對得上，無需回滾`); return; }
+            if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${ids.length} 筆 patch 全部對得上（樓號都 ≤${lastId}、簽名也相符），無需回滾`); return; }
+            // 🛡️ 保險（同記憶系統 reconcileToStory 的精神）：判斷依據是「樓數有沒有異常縮水」，
+            //    不是「要清幾筆」——刪掉最後三樓時三筆 patch 全中是正常的，不該被誤擋。
+            //    只有讀檔成功(total>0)才有可靠樓數可比；退路模式沒有基準，不套用。
+            if (total > 0) {
+                const maxKey = ids[ids.length - 1];
+                if (total < (maxKey + 1) / 2) {
+                    console.warn(`🛰️ [State Runtime] 對帳(${tag})：只讀到 ${total} 樓、但 patch 最大鍵是 #${maxKey}（少掉一半以上）→ 疑似讀到殘缺聊天檔，中止不動`);
+                    return;
+                }
+            }
 
             const n = await _rollbackPatches(chatId, data, dead);
             console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(#${dead.join(',#')})，回復 ${n} 個欄位`);
