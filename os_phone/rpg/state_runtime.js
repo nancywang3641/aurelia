@@ -1704,7 +1704,8 @@ _directorSpec(castNames);
             console.log(`🛰️ [State Runtime] 對帳(${tag})：真實樓數=${total > 0 ? total : '未知'}，最後一樓=#${lastId}`);
 
             const data = await win.OS_DB.getStateData(chatId);
-            if (!data) return;
+            // 🔍 這三個出口以前是靜默 return，查半天不知道卡在哪 → 一律說明原因
+            if (!data) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：這個聊天沒有任何狀態資料 → 沒東西可回滾`); return; }
 
             // 導演稿：只認樓號範圍（它存的是全文快照，沒有簽名機制）
             if (data.director && data.director.patches) {
@@ -1714,9 +1715,19 @@ _directorSpec(castNames);
                 if (dn) { data.director = { ...data.director, patches: dp }; await win.OS_DB.saveStateData(chatId, { ...data }); console.log(`🎬 [Director] 清掉 ${dn} 筆孤兒導演稿`); }
             }
 
-            if (!data.patches) return;
+            const _pn = data.patches ? Object.keys(data.patches).length : -1;
+            const _cn = data.current ? Object.keys(data.current).length : 0;
+            const _bn = data.base ? Object.keys(data.base).length : 0;
+            const _sn = data.sigs ? Object.keys(data.sigs).length : 0;
+            console.log(`🛰️ [State Runtime] 對帳(${tag})：chatId=${chatId}｜逐輪紀錄 ${_pn} 筆｜當前狀態 ${_cn} 個頂層欄位｜底 ${_bn}｜簽名 ${_sn}`);
+            if (!data.patches || !_pn) {
+                console.warn(`🛰️ [State Runtime] 對帳(${tag})：沒有逐輪紀錄可回滾（patches 空）。`
+                    + `current 有 ${_cn} 個欄位表示狀態是別的路徑寫的——例如跑過「深度整理」(會清空 patches)、`
+                    + `或狀態由主模型 <vars> 直接寫入。這種資料無法自動回溯，只能用面板「還原上一步」。`);
+                return;
+            }
             const ids = Object.keys(data.patches).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
-            if (!ids.length) return;
+            if (!ids.length) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：patches 的鍵都不是數字樓號，無法對位`); return; }
 
             // 建 樓號→內容簽名 對照表。優先用讀檔結果（陣列索引＝真實樓號），拿不到才退回窗口 API。
             const sigNow = new Map();
@@ -2092,11 +2103,7 @@ _directorSpec(castNames);
                     await win.OS_DB.deleteStateData(oldId);
                     skipped++;
                 } else {
-                    await win.OS_DB.saveStateData(newId, {
-                        schema: entry.schema,
-                        patches: entry.patches,
-                        current: entry.current
-                    });
+                    await win.OS_DB.saveStateData(newId, { ...entry, id: newId });   // 整筆搬，別只挑三個欄位
                     await win.OS_DB.deleteStateData(oldId);
                     migrated++;
                 }

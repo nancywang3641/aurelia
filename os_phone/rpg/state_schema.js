@@ -357,7 +357,9 @@ ${materials.headMessages || '（無）'}
             desc: (def && def.desc) || '',
             init: (def && def.init) || ''
         };
+        // ...data 不可省：只列欄位會把 base/sigs/director/npcLedger 一起抹掉（AVS 回溯失效的根因之一）
         await win.OS_DB.saveStateData(chatId, {
+            ...data,
             schema,
             patches: data.patches || {},
             current: data.current || {}
@@ -379,6 +381,7 @@ ${materials.headMessages || '（無）'}
             desc: def && def.desc !== undefined ? def.desc : schema[name].desc
         };
         await win.OS_DB.saveStateData(chatId, {
+            ...data,
             schema,
             patches: data.patches || {},
             current: data.current || {}
@@ -405,7 +408,7 @@ ${materials.headMessages || '（無）'}
             delete np[name];
             if (Object.keys(np).length > 0) patches[pid] = np;
         }
-        await win.OS_DB.saveStateData(chatId, { schema, patches, current });
+        await win.OS_DB.saveStateData(chatId, { ...data, schema, patches, current });
         try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
         showToast(`🗑 已刪除欄位「${name}」`, 'info');
         return true;
