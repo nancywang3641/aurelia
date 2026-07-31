@@ -149,6 +149,10 @@ const VN_TTS = {
 
     _cacheKey(modelId, text) { return `${modelId}\x00${text}`; },
 
+    // 🔬 診斷（2026-08-01 查「語音很慢出」用，預設開）：印出語音快取命中/現生/換模型/預熱耗時
+    //    查完要關掉 → 把下面的 !== '0' 改成 === '1' 即可（或 localStorage.aurelia_gpu_trace='0'）
+    _trace() { try { return localStorage.getItem('aurelia_gpu_trace') !== '0'; } catch (e) { return true; } },
+
 
     // 收集本局「已被占用」的聲音模型 id：
     //  - charMappings：手動綁定/標過模型的角色 → 這些音不讓隨機 NPC 共用
@@ -368,8 +372,10 @@ const VN_TTS = {
                 return;
             }
             const _W = (window.parent || window);
+            const _tag = '即時語音(串流)/' + String(cacheKey || '').split('\x00')[0];
+            if (this._trace()) console.log('[VN_TTS🔬] 現生（快取沒有）→ ' + _tag);
             const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
-                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0, 90000)   // 即時語音：最高優先（插隊），90 秒逾時防堵隊
+                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0, 90000, _tag)   // 即時語音：最高優先（插隊），90 秒逾時防堵隊
                 : (fn) => fn();
             try {
                 await _runQ(async () => {
@@ -410,8 +416,10 @@ const VN_TTS = {
     // ── WAV 完整下載後播放（fallback）──────────────────────────────────
     async _playWavFetch(url, cacheKey) {
         const _W = (window.parent || window);
+        const _tag = '即時語音(WAV)/' + String(cacheKey || '').split('\x00')[0];
+        if (this._trace()) console.log('[VN_TTS🔬] 現生（快取沒有）→ ' + _tag);
         const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
-            ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0, 90000)   // 即時語音：最高優先（插隊），90 秒逾時防堵隊
+            ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0, 90000, _tag)   // 即時語音：最高優先（插隊），90 秒逾時防堵隊
             : (fn) => fn();
         try {
             await _runQ(async () => {
@@ -534,12 +542,17 @@ const VN_TTS = {
     // ── 共用：拿到模型後的快取/切換/播放流程 ─────────────────────────────
     async _speakWithModel(model, text, emotion) {
         const k = this._cacheKey(model.id, text);
-        if (this._cache[k])    { this._playBlobUrl(this._cache[k]); return; }
-        if (this._pending.has(k)) { this._waitAndPlay(k); return; }
+        const _tr = this._trace();
+        if (this._cache[k])    { if (_tr) console.log('[VN_TTS🔬] ✅ 快取命中（早鳥有效）[' + model.id + ']「' + String(text).slice(0, 14) + '…」'); this._playBlobUrl(this._cache[k]); return; }
+        if (this._pending.has(k)) { if (_tr) console.log('[VN_TTS🔬] ⏳ 這句正在生（預熱還沒生完）→ 等它 [' + model.id + ']「' + String(text).slice(0, 14) + '…」'); this._waitAndPlay(k); return; }
+        if (_tr) console.log('[VN_TTS🔬] ❌ 快取沒有，要現生 [' + model.id + ']「' + String(text).slice(0, 14) + '…」');
 
         this._pending.add(k);
         try {
+            const _tSwap = Date.now();
+            const _need = (this._loadedGpt !== model.gptPath && !!model.gptPath) || (this._loadedSovits !== model.sovitsPath && !!model.sovitsPath);
             await this._ensureModel(model);
+            if (_tr && _need) console.log('[VN_TTS🔬] ⚠️ 播放前換模型（在佇列外執行）→ ' + model.id + '　耗時 ' + ((Date.now() - _tSwap) / 1000).toFixed(1) + 's');
         } catch (e) {
             console.error('[VN_TTS] 模型切換失敗', e);
             this._pending.delete(k);
@@ -578,22 +591,33 @@ const VN_TTS = {
 
     async _runPrewarm() {
         this._prewarmRunning = true;
+        const _tr = this._trace();
+        const _t0 = Date.now();
+        let _n = 0, _swaps = 0;
+        if (_tr) console.log('[VN_TTS🔬] 預熱佇列啟動：待生 ' + this._prewarmQueue.length + ' 條');
         while (this._prewarmQueue.length) {
             const { model, text, emotion, key } = this._prewarmQueue.shift();
             if (this._cache[key]) { this._pending.delete(key); continue; }
             const _W = (window.parent || window);
             const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
-                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 2, 120000)   // 預熱語音：最低優先（圖片/即時語音都先走），120 秒逾時防堵隊
+                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 2, 120000, '預熱語音/' + model.id)   // 預熱語音：最低優先（圖片/即時語音都先走），120 秒逾時防堵隊
                 : (fn) => fn();
+            const _needSwap = (this._loadedGpt !== model.gptPath && !!model.gptPath) || (this._loadedSovits !== model.sovitsPath && !!model.sovitsPath);
+            if (_needSwap) _swaps++;
+            const _tItem = Date.now();
             try {
                 await _runQ(async () => {
+                    const _tSwap = Date.now();
                     await this._ensureModel(model);
+                    if (_tr && _needSwap) console.log('[VN_TTS🔬] 　換模型 → ' + model.id + '　耗時 ' + ((Date.now() - _tSwap) / 1000).toFixed(1) + 's');
                     const url  = this._buildUrl(model, text, emotion, false);
                     const resp = await fetch(url);
                     if (!resp.ok) return;
                     const blob = await resp.blob();
                     this._cache[key] = URL.createObjectURL(blob);
                 });
+                _n++;
+                if (_tr) console.log('[VN_TTS🔬] 　預熱好一條 [' + model.id + '] ' + ((Date.now() - _tItem) / 1000).toFixed(1) + 's（含排隊）　「' + String(text).slice(0, 14) + '…」　剩 ' + this._prewarmQueue.length + ' 條');
             } catch (e) {
                 console.warn('[VN_TTS] prewarm 失敗', key, e);
             } finally {
@@ -601,6 +625,7 @@ const VN_TTS = {
             }
         }
         this._prewarmRunning = false;
+        if (_tr) console.log('[VN_TTS🔬] 預熱佇列跑完：' + _n + ' 條／總計 ' + ((Date.now() - _t0) / 1000).toFixed(1) + 's／換模型 ' + _swaps + ' 次');
     },
 
     // ── 清除快取 ─────────────────────────────────────────────────────────
