@@ -1067,12 +1067,17 @@ ${numberedText}`;
                 // 📸 寫入前快照「抽取前狀態」→ 狀態面板「還原上一步」能撤掉這輪亂抽（小模型掉鏈子的保險）。
                 //   舊快照只掛在主模型 <vars> 退役路徑上，副模型抽取從沒寫過 → 按鈕永遠是暗的。
                 try { win._AVS_ENGINE?.snapshot?.(currentState || {}); } catch (e) {}
-                try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
                 // 🔖 存下這則訊息的簽名 → 之後刪樓/編輯時靠它對帳（跟著 patches 一起 trim，不留孤兒簽名）
                 const newSigs = { ...(data.sigs || {}) };
                 newSigs[lastId] = _msgSig(lastContent);
                 for (const k of Object.keys(newSigs)) if (trimmed.patches[k] === undefined) delete newSigs[k];
+                // 🚨 順序與 await 都是關鍵：engine.write 內部是 async 且會「讀 DB→寫回 DB」。
+                //    以前它排在 saveStateData 之前、又沒 await → 它讀到的是還沒寫入新 patch 的舊資料，
+                //    等 saveStateData 存好之後它才慢一步寫回去，把剛存的 patches/sigs 蓋成舊值。
+                //    結果就是逐輪紀錄永遠停在 0 筆、回溯永遠沒東西可退。
+                //    正確順序：先把完整資料落地，再 await 引擎（此時它讀到的已是新資料，spread 原樣保留）。
                 await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent, sigs: newSigs });
+                try { await win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
                 const changed = Object.keys(filtered).length;
                 if (changed > 0) console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);
                 try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: lastId, updates: filtered }); } catch(e) {}
@@ -1674,8 +1679,9 @@ _directorSpec(castNames);
         // 引擎 / DB / 面板三邊一起回滾（少寫引擎 → 下輪抽取以舊底為基準，回滾等於沒發生）
         const newSigs = { ...(data.sigs || {}) };
         for (const id of deadIds) delete newSigs[id];
-        try { win._AVS_ENGINE?.write?.(cur); } catch (e) {}
+        // 先落地再 await 引擎（順序顛倒或漏 await → 引擎慢一步用舊資料蓋回來，回滾等於沒發生）
         await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, sigs: newSigs, current: cur });
+        try { await win._AVS_ENGINE?.write?.(cur); } catch (e) {}
         try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: deadIds[deadIds.length - 1], rollback: true }); } catch (e) {}
         return leafSet.size;
     }
@@ -1899,11 +1905,11 @@ _directorSpec(castNames);
         }
 
         try { win._AVS_ENGINE?.snapshot?.(currentState); } catch (e) {}   // 整理前快照 → 還原上一步可撤
-        try { win._AVS_ENGINE?.write?.(cleaned); } catch (e) { return { ok: false, msg: '寫入失敗：' + (e?.message || e) }; }
-        try {
+        try {   // 同樣先落地再 await 引擎，避免引擎用舊資料回寫
             const data = (await win.OS_DB.getStateData(chatId)) || {};
-            await win.OS_DB.saveStateData(chatId, { ...data, base: cleaned, patches: {}, current: cleaned });
+            await win.OS_DB.saveStateData(chatId, { ...data, base: cleaned, patches: {}, sigs: {}, current: cleaned });
         } catch (e) {}
+        try { await win._AVS_ENGINE?.write?.(cleaned); } catch (e) { return { ok: false, msg: '寫入失敗：' + (e?.message || e) }; }
         const n = a => Array.isArray(a) ? a.length : 0;
         console.log('♻️ [State Runtime] 深度整理完成', { merged: obj.merged, removed: obj.removed, fixed: obj.fixed });
         return { ok: true, merged: n(obj.merged), removed: n(obj.removed), fixed: n(obj.fixed) };
