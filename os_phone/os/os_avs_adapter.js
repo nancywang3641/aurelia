@@ -99,14 +99,18 @@
         },
 
         /** 寫變數狀態（async；PWA 走 localStorage，酒館寫 OS_DB.state_data.current）*/
+        // 🚨 必須用 spread 保留整份資料：這裡以前只列 schema/patches/current 三個欄位重建物件，
+        //    等於每寫一次狀態就把 base / sigs / director / npcLedger / npcDossiers 全部抹掉。
+        //    「還原上一步」「回滾」「手動改值」都會走這條 → 按幾次就洗幾次，逐輪紀錄(patches)
+        //    最後變成 {}，之後任何自動回溯都沒東西可退。這是 AVS 回溯反覆失效的根本原因。
         async writeState(state) {
             if (isStandalone()) { _pwaWriteState(state); return; }
             const cid = getCurrentChatId();
             if (!cid || !win.OS_DB?.getStateData) return;
             const data = (await win.OS_DB.getStateData(cid)) || {};
             await win.OS_DB.saveStateData(cid, {
+                ...data,                                      // ← 其餘欄位原封不動帶過去
                 schema: data.schema || _cache.schema,
-                patches: data.patches || {},
                 current: state || {}
             });
             _cache = { chatId: cid, vars: { ...(state || {}) }, schema: data.schema, ts: Date.now() };
