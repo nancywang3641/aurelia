@@ -357,11 +357,11 @@ ${materials.headMessages || '（無）'}
             desc: (def && def.desc) || '',
             init: (def && def.init) || ''
         };
-        // ...data 不可省：只列欄位會把 base/sigs/director/npcLedger 一起抹掉（AVS 回溯失效的根因之一）
+        // ...data 不可省：只列欄位會把 base/director/npcLedger 一起抹掉（AVS 回溯失效的根因之一）
         await win.OS_DB.saveStateData(chatId, {
             ...data,
             schema,
-            patches: data.patches || {},
+            patches: data.patches || [],
             current: data.current || {}
         });
         try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
@@ -383,7 +383,7 @@ ${materials.headMessages || '（無）'}
         await win.OS_DB.saveStateData(chatId, {
             ...data,
             schema,
-            patches: data.patches || {},
+            patches: data.patches || [],
             current: data.current || {}
         });
         try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
@@ -401,13 +401,14 @@ ${materials.headMessages || '（無）'}
         // 從 current 砍
         const current = { ...(data.current || {}) };
         delete current[name];
-        // 從每筆 patch 砍掉這欄位
-        const patches = {};
-        for (const [pid, p] of Object.entries(data.patches || {})) {
-            const np = { ...p };
-            delete np[name];
-            if (Object.keys(np).length > 0) patches[pid] = np;
-        }
+        // 從每筆 patch 砍掉這欄位（patches 是身分制時序陣列 [{id, updates}]）
+        const patches = (Array.isArray(data.patches) ? data.patches : [])
+            .map(p => {
+                const np = { ...(p.updates || {}) };
+                delete np[name];
+                return { id: p.id, updates: np };
+            })
+            .filter(p => Object.keys(p.updates).length > 0);
         await win.OS_DB.saveStateData(chatId, { ...data, schema, patches, current });
         try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
         showToast(`🗑 已刪除欄位「${name}」`, 'info');

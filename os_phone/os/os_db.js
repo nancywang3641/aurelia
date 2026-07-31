@@ -1429,11 +1429,11 @@
                     const entry = {
                         id: chatId,
                         schema: data.schema || null,       // Stage 1 生成的欄位定義
-                        patches: data.patches || {},       // 每 msgId 一筆 patch
+                        patches: data.patches || [],       // 身分制時序陣列 [{id, updates}]，id＝正文裡的 <!--avs:id-->
                         current: data.current || {},       // patches 累積後的當下狀態
                         npcLedger: data.npcLedger || null,     // 📇 NPC 登場記帳（npc_dossier.js）
                         npcDossiers: data.npcDossiers || null, // 📇 NPC 長期人物檔案（npc_dossier.js）
-                        director: data.director || null,       // 🎬 導演稿（state_runtime 導演模式：patches[msgId]=全文快照）
+                        director: data.director || null,       // 🎬 導演稿（state_runtime 導演模式：patches=[{id,text}]）
                         timestamp: Date.now()
                     };
                     const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');

@@ -2,7 +2,8 @@
 // [檔案] state_runtime.js (V1 - Stage 2：副模型抽 + patch + injectPrompts)
 // 路徑：os_phone/rpg/state_runtime.js
 // 職責：
-// 1. 監聽 GENERATION_ENDED → 副模型按 schema 抽劇情狀態變化 → 寫 patches[msgId] → 重算 current
+// 1. 監聽 GENERATION_ENDED → 副模型按 schema 抽劇情狀態變化 → 釘 <!--avs:id--> 進正文 → 寫 patches → 重算 current
+//    （2026-08-01 身分制：patch 認正文裡的 id，不認樓號；刪使用者指令／刪中間樓不再誤回滾）
 // 2. 監聽 GENERATION_STARTED → injectPrompts 把 current state 注入下一輪主模型 system prompt
 // 3. 監聽 MESSAGE_DELETED / SWIPED / UPDATED / EDITED → 砍對應 patch → 重算 current
 // 4. 對外：setEnabled / forceExtract / clearPatches
@@ -151,25 +152,43 @@
         }
     }
 
-    // 從 base 快照起算，依 msgId 順序重播 patches → current。
+    // ══ patch 身分制（2026-08-01 整改）══════════════════════════════════
+    // 舊制以「樓號」當 patch 的鍵、另存內容簽名對帳 → 刪掉中間任何一則（含使用者的純指令）
+    // 都會讓後面整批位移、簽名全部對不上，於是 AI 正文明明還在、狀態卻被回滾。
+    // 新制照 VN_SceneInsert 的原則：**識別碼住在正文裡**。
+    //   • 抽取完成 → 產一個 id，寫進該則正文的 <!--avs:id--> 標記，patch 記成 { id, updates }
+    //   • patches 是「時序陣列」，順序＝陣列順序，完全不碰樓號
+    //   • 對帳＝掃全檔收集現存 id，patch 的 id 還在就活、不在就死
+    //   ⇒ 刪使用者指令／刪中間樓／樓號漂移一律無感；改寫正文只要沒刪標記也不誤殺。
+    const AVS_TAG_RE = /<!--avs:([a-z0-9]+)-->/gi;
+    function _newAvsId() {
+        return Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36).padStart(3, '0');
+    }
+    function _idsInText(text) {
+        const out = [];
+        String(text || '').replace(AVS_TAG_RE, (_m, id) => { out.push(id); return _m; });
+        return out;
+    }
+    // patches 一律是 [{id, updates}]；非陣列＝還沒遷移完的殘骸，當空看待（遷移函式負責補）
+    function _patchList(patches) { return Array.isArray(patches) ? patches.filter(p => p && p.id) : []; }
+
+    // 從 base 快照起算，依陣列順序重播 patches → current。
     // base 是「被 trim 掉的舊 patch 收斂成的底」，確保穩定屬性(形象/身分等)不會因 patch 被砍而消失。
     function recomputeCurrent(patches, base) {
-        const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
         const cur = base ? JSON.parse(JSON.stringify(base)) : {};
-        for (const id of ids) _applyPatchInto(cur, patches[id]);
+        for (const p of _patchList(patches)) _applyPatchInto(cur, p.updates);
         return cur;
     }
 
     // patches 超過上限時：把最舊的幾筆「疊進 base 快照」再刪除（資料不流失、只是收斂成底）。
     // 回傳 { patches, base }。
     function trimPatches(patches, base) {
-        const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
+        const list = _patchList(patches);
         const newBase = base ? JSON.parse(JSON.stringify(base)) : {};
-        if (ids.length <= CONFIG.maxPatches) return { patches, base: newBase };
-        const cut = ids.slice(0, ids.length - CONFIG.maxPatches);
-        const out = { ...patches };
-        cut.forEach(id => { _applyPatchInto(newBase, patches[id]); delete out[id]; });
-        return { patches: out, base: newBase };
+        if (list.length <= CONFIG.maxPatches) return { patches: list, base: newBase };
+        const keep = list.length - CONFIG.maxPatches;
+        list.slice(0, keep).forEach(p => _applyPatchInto(newBase, p.updates));
+        return { patches: list.slice(keep), base: newBase };
     }
 
     // --- 蒐集最近幾條訊息給副模型 ---
@@ -930,9 +949,18 @@ ${numberedText}`;
 
             const data = (await win.OS_DB.getStateData(chatId)) || {};
             // force（狀態面板「立即抽一次」）＝無視「這樓已抽過」守門重抽——按鈕的意義就是換好模型重來一次，
-            // 原本 patches[lastId] 已存在就靜默跳過，按了等於沒按
+            // 原本已抽過就靜默跳過，按了等於沒按
+            // 🆔 身分制：「這樓抽過沒」看正文有沒有 avs 標記、且那個 id 確實在 patches 裡（不再比樓號）
+            //    ⚠️ 必須讀完整正文：lastContent 是截斷到 4000 字的，標記釘在 </content> 前會被切掉
             const _force = !!(opts && opts.force);
-            const stateAlreadyDone = !_force && hasState && data.patches && lastId >= 0 && data.patches[lastId] !== undefined;
+            let _lastFull = '';
+            try {
+                const _lm = await win.TavernHelper?.getChatMessages?.(lastId);
+                _lastFull = String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || '');
+            } catch (e) {}
+            const _doneIds = _idsInText(_lastFull || lastContent);
+            const _known = new Set(_patchList(data.patches).map(p => String(p.id)));
+            const stateAlreadyDone = !_force && hasState && lastId >= 0 && _doneIds.some(id => _known.has(id));
             const doState = hasState && !stateAlreadyDone && !!recentText && lastId >= 0;
 
             if (!doState && !wantMemory) return;
@@ -1003,10 +1031,11 @@ ${numberedText}`;
             //    省一整段思考期＋重複上下文；沒搭上（模型漏寫/整通失敗）→ 降級回獨立 extractDirector 補一通。
             try {
                 if (_dirIntended) {
-                    if (data.director && data.director.patches && data.director.patches[lastId] !== undefined) {
+                    const _dirIds = new Set((Array.isArray(data.director?.patches) ? data.director.patches : []).map(d => String(d.id)));
+                    if (_doneIds.some(id => _dirIds.has(id))) {
                         _dirLanded = true;   // 本樓早有導演稿（手改/回放）→ 不用再補
                     } else {
-                        const _dirPrev = _latestDirectorText(data.director, lastId);
+                        const _dirPrev = _latestDirectorText(data.director);
                         prompt += _directorAddendum(_dirPrev, _activeCastNames());
                         _dirRide = true;   // 導演稿掛便車、隨這通 JSON 之後一起輸出
                     }
@@ -1050,7 +1079,14 @@ ${numberedText}`;
                     }
                     if (removedN > 0) console.log(`🗑️ [State Runtime] 本輪退場刪除 ${removedN} 個實體:`, json.removes);
                 }
-                const trimmed = trimPatches({ ...(data.patches || {}), [lastId]: filtered }, data.base);
+                // 🆔 身分制：先把 <!--avs:id--> 釘進這則正文，釘成功才把 patch 記下去。
+                //    釘不上（樓號漂到使用者樓／API 不給改）＝這輪沒有身分 → 狀態照樣寫進 current，
+                //    只是不進 patch（不可單獨回滾），總比記一筆對帳時找不到 id、下一輪被當孤兒清掉好。
+                const _avsId = _newAvsId();
+                const _stamped = await _stampAvsId(lastId, _avsId);
+                if (!_stamped) console.warn(`🛰️ [State Runtime] msg#${lastId} 釘不上 avs 標記 → 這輪不記 patch（狀態仍會寫入，只是不能單獨回滾）`);
+                const _prev = _patchList(data.patches);
+                const trimmed = trimPatches(_stamped ? [..._prev, { id: _avsId, updates: filtered }] : _prev, data.base);
                 // 🔑 新 current 一律「以引擎現有狀態為底、只疊這輪 patch」——不要用 recomputeCurrent 從 base 空白重建。
                 //   因為 patches/base 可能是空的(先前狀態由主模型 <vars> 寫入、沒進 patch 系統)，從空重建會把累積的角色全洗光——這就是覆蓋根因。
                 //   點記法 _setDeep 只動有變化的葉節點、其餘角色與屬性原封保留。
@@ -1067,16 +1103,12 @@ ${numberedText}`;
                 // 📸 寫入前快照「抽取前狀態」→ 狀態面板「還原上一步」能撤掉這輪亂抽（小模型掉鏈子的保險）。
                 //   舊快照只掛在主模型 <vars> 退役路徑上，副模型抽取從沒寫過 → 按鈕永遠是暗的。
                 try { win._AVS_ENGINE?.snapshot?.(currentState || {}); } catch (e) {}
-                // 🔖 存下這則訊息的簽名 → 之後刪樓/編輯時靠它對帳（跟著 patches 一起 trim，不留孤兒簽名）
-                const newSigs = { ...(data.sigs || {}) };
-                newSigs[lastId] = _msgSig(lastContent);
-                for (const k of Object.keys(newSigs)) if (trimmed.patches[k] === undefined) delete newSigs[k];
                 // 🚨 順序與 await 都是關鍵：engine.write 內部是 async 且會「讀 DB→寫回 DB」。
                 //    以前它排在 saveStateData 之前、又沒 await → 它讀到的是還沒寫入新 patch 的舊資料，
-                //    等 saveStateData 存好之後它才慢一步寫回去，把剛存的 patches/sigs 蓋成舊值。
+                //    等 saveStateData 存好之後它才慢一步寫回去，把剛存的 patches 蓋成舊值。
                 //    結果就是逐輪紀錄永遠停在 0 筆、回溯永遠沒東西可退。
                 //    正確順序：先把完整資料落地，再 await 引擎（此時它讀到的已是新資料，spread 原樣保留）。
-                await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent, sigs: newSigs });
+                await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent, patchFmt: 2 });
                 try { await win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
                 const changed = Object.keys(filtered).length;
                 if (changed > 0) console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);
@@ -1239,7 +1271,7 @@ ${numberedText}`;
     // 分工：酒館正文=她選的寫手模型(如 Gemini)；導演稿=主接口掛的邏輯型模型(如 Sonnet)。
     // 與 AVS/記憶(副模型 extractOnce)、獨立插圖(副模型 chatSecondary)三者各自獨立開關、互不搭車。
     // 六類區塊：公共劇情 / 各角色私人記憶 / 各角色行動摘要 / 本輪可用張力。
-    // 存檔：stateData.director.patches[msgId]=全文快照（砍樓/重roll → onMessageInvalidated 一起回朔）。
+    // 存檔：stateData.director.patches=[{id,text}] 全文快照，id 錨在同輪 AVS patch（一起回朔）。
     // 開關：localStorage sp_director_on==='1'（預設關；UI 在變數工坊系統區）。
     let _directorRunning = false;
     let _directorDebounce = null;
@@ -1251,10 +1283,10 @@ ${numberedText}`;
     function directorOn() { try { return localStorage.getItem('sp_director_on') === '1'; } catch (e) { return false; } }
     function setDirectorOn(v) { try { localStorage.setItem('sp_director_on', v ? '1' : '0'); } catch (e) {} if (!v) { try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch (e) {} } }
 
-    function _latestDirectorText(director, uptoId) {
-        const patches = (director && director.patches) || {};
-        const ids = Object.keys(patches).map(Number).filter(n => !isNaN(n) && (uptoId == null || n <= uptoId)).sort((a, b) => a - b);
-        return ids.length ? String(patches[ids[ids.length - 1]] || '') : '';
+    // 導演稿也走身分制：[{id, text}] 時序陣列，最新一份＝最後一筆（不再有樓號可比大小）
+    function _latestDirectorText(director) {
+        const list = Array.isArray(director && director.patches) ? director.patches : [];
+        return list.length ? String(list[list.length - 1].text || '') : '';
     }
 
     // 六格格式＋規範（共用：獨立呼叫的 system ／ 搭便車的附加任務，規則一字不差）
@@ -1292,15 +1324,19 @@ _directorSpec(castNames);
 _directorSpec(castNames);
     }
     // 寫 patch（cap 最舊）；便車路/獨立路共用。回 true=有寫入
+    // 🆔 導演稿錨在「這一輪 AVS patch 的 id」上：patch 被回滾 → 導演稿跟著走（_rollbackPatches 同批砍）。
+    //    這輪釘不上 id（純指令樓／API 拒改）就沿用最後一筆 patch 的 id；連 patch 都沒有就不存
+    //    ——沒有身分的導演稿等於孤兒，對帳時無從判斷生死。
     async function _saveDirectorPatch(chatId, lastId, clean) {
         const fresh = (await win.OS_DB.getStateData(chatId)) || {};   // 重讀防蓋掉期間別人寫入
-        const dir2 = fresh.director || { patches: {} };
-        const patches = { ...(dir2.patches || {}) };
-        patches[lastId] = clean;
-        const ids = Object.keys(patches).map(Number).sort((a, b) => a - b);
-        while (ids.length > DIRECTOR_MAX_PATCHES) { delete patches[ids.shift()]; }
-        await win.OS_DB.saveStateData(chatId, { ...fresh, director: { patches, updatedAt: Date.now() } });
-        console.log('🎬 [Director] 導演稿已更新 msg#' + lastId + '（' + clean.length + ' 字）');
+        const pl = _patchList(fresh.patches);
+        if (!pl.length) { console.warn('🎬 [Director] 這輪沒有可錨定的 avs id → 導演稿不落地（避免孤兒稿）'); return false; }
+        const anchor = String(pl[pl.length - 1].id);
+        const list = (Array.isArray(fresh.director?.patches) ? fresh.director.patches : []).filter(d => String(d.id) !== anchor);
+        list.push({ id: anchor, text: clean });
+        while (list.length > DIRECTOR_MAX_PATCHES) list.shift();
+        await win.OS_DB.saveStateData(chatId, { ...fresh, director: { patches: list, updatedAt: Date.now() } });
+        console.log('🎬 [Director] 導演稿已更新（錨 ' + anchor + '，' + clean.length + ' 字）');
         try { win.eventEmit?.('AURELIA_DIRECTOR_UPDATED', { chatId, msgId: lastId }); } catch (e) {}
         return true;
     }
@@ -1327,9 +1363,15 @@ _directorSpec(castNames);
             const { text: recentText, lastId } = await gatherRecentMessages();
             if (!recentText || lastId < 0) return;
             const data = (await win.OS_DB.getStateData(chatId)) || {};
-            const director = data.director || { patches: {} };
-            if (director.patches && director.patches[lastId] !== undefined) return;   // 這樓已有導演稿（重roll會先走失效回朔）
-            const prev = _latestDirectorText(director, lastId);
+            const director = data.director || { patches: [] };
+            // 這輪已有導演稿？看正文的 avs id 有沒有被導演稿錨過（重roll 會先走失效回朔）
+            try {
+                const _lm = await win.TavernHelper?.getChatMessages?.(lastId);
+                const _ids = _idsInText(String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || ''));
+                const _dids = new Set((Array.isArray(director.patches) ? director.patches : []).map(d => String(d.id)));
+                if (_ids.some(id => _dids.has(id))) return;
+            } catch (e) {}
+            const prev = _latestDirectorText(director);
             const cast = _activeCastNames();
             // 📊 AVS 當前狀態附進素材（唯讀參照）：導演稿跟狀態對帳（傷勢/位置/數值），不再各記各的
             let stateRef = '';
@@ -1379,7 +1421,7 @@ _directorSpec(castNames);
             const chatId = getChatId();
             if (!chatId) return;
             const data = await win.OS_DB.getStateData(chatId);
-            const text = _latestDirectorText(data && data.director, null);
+            const text = _latestDirectorText(data && data.director);
             if (!text.trim()) return;
             const content = '<劇情監製稿 規則="寫作前必讀·知識邊界鐵則">\n' +
                 '下面是監製整理的劇情帳本。你演出所有角色，所以你全知；但每個角色「只能」依自己知道的資訊行動：\n' +
@@ -1407,17 +1449,20 @@ _directorSpec(castNames);
         let lastId = 0;
         try { const arr = await win.TavernHelper?.getChatMessages?.(-1); lastId = (arr && arr[0] && (arr[0].message_id ?? arr[0].id)) || 0; } catch (e) {}
         const data = (await win.OS_DB.getStateData(chatId)) || {};
-        const dir = data.director || { patches: {} };
-        const patches = { ...(dir.patches || {}) };
-        patches[lastId] = String(text || '').trim();
-        await win.OS_DB.saveStateData(chatId, { ...data, director: { patches, updatedAt: Date.now() } });
+        // 手改稿一樣錨在最後一筆 patch 的 id 上（沒有 patch 可錨 → 存不了，同 _saveDirectorPatch）
+        const pl = _patchList(data.patches);
+        if (!pl.length) { showToast('⚠ 目前沒有可錨定的逐輪紀錄，導演稿無法存檔', 'warning'); return false; }
+        const anchor = String(pl[pl.length - 1].id);
+        const list = (Array.isArray(data.director?.patches) ? data.director.patches : []).filter(d => String(d.id) !== anchor);
+        list.push({ id: anchor, text: String(text || '').trim() });
+        await win.OS_DB.saveStateData(chatId, { ...data, director: { patches: list, updatedAt: Date.now() } });
         return true;
     }
     async function getDirectorText() {
         const chatId = getChatId();
         if (!chatId || !win.OS_DB?.getStateData) return '';
         const data = await win.OS_DB.getStateData(chatId);
-        return _latestDirectorText(data && data.director, null);
+        return _latestDirectorText(data && data.director);
     }
 
     // --- inject AVS rules：把當前生效規則的 <behavior_rules> 塞主模型 system prompt ---
@@ -1620,9 +1665,78 @@ _directorSpec(castNames);
     //    簽名都會對不上，patch 即失效。這樣完全不必依賴酒館事件參數（它在刪除時傳的是剩餘則數）。
     //    ⚠️ 先截到 4000 再算：抽取端拿到的 lastContent 本來就被 gatherRecentMessages 截過，
     //       對帳端讀到的是全文——不統一截斷長度，長訊息的簽名會永遠對不上。
-    function _msgSig(text) {
-        const s = String(text || '').slice(0, 4000);
-        return s.length + '|' + s.slice(0, 60) + '|' + s.slice(-60);
+    // 把 <!--avs:id--> 標記寫進指定樓的正文（同 VN_SceneInsert：識別碼住在正文裡）。
+    //   • 冪等：正文已有這 id 就不重寫
+    //   • 位置：<content> 結束前；沒有 <content> 就接在最後（純指令樓不會走到這）
+    //   • _selfEditing 擋自己觸發 MESSAGE_UPDATED → 免得剛存的 patch 被自己砍掉
+    // 回傳 true=正文確實帶著這個 id 了（呼叫端才敢把 patch 記下去）
+    async function _stampAvsId(arrIdx, id) {
+        try {
+            const TH = win.TavernHelper;
+            if (!TH?.getChatMessages || !TH?.setChatMessages) return false;
+            const msgs = await TH.getChatMessages(arrIdx);
+            const m = Array.isArray(msgs) ? msgs[0] : null;
+            const text = m && (m.message || m.mes);
+            if (typeof text !== 'string' || !text) return false;
+            if (m.is_user || m.role === 'user') return false;          // 只釘 AI 正文樓
+            if (text.indexOf('<!--avs:' + id + '-->') >= 0) return true;   // 已經有了
+            const tag = '<!--avs:' + id + '-->';
+            const ci = text.lastIndexOf('</content>');
+            const next = ci >= 0 ? (text.slice(0, ci) + tag + '\n' + text.slice(ci)) : (text + '\n' + tag);
+            _selfEditing = true;
+            try {
+                await TH.setChatMessages([{ message_id: arrIdx, message: next, mes: next }], { refresh: 'none' });
+            } finally {
+                setTimeout(() => { _selfEditing = false; }, 2500);
+            }
+            return true;
+        } catch (e) {
+            console.warn('🛰️ [State Runtime] 寫入 avs 標記失敗:', e?.message || e);
+            return false;
+        }
+    }
+
+    // 一次性遷移：舊制 { 樓號: updates } + sigs → 新制 [{id, updates}] + 正文標記。
+    //   對每筆舊 patch，找到它當時那一樓，補釘 id；釘不上（那樓已不存在／唯讀）就把它疊進 base
+    //   ——資料不流失，只是收斂成底、失去單獨回滾能力。跑完 sigs 直接丟掉。
+    async function _migratePatches(chatId, data, fullMsgs) {
+        if (Array.isArray(data.patches)) return false;
+        const old = data.patches && typeof data.patches === 'object' ? data.patches : null;
+        const ids = old ? Object.keys(old).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b) : [];
+        const list = [];
+        const newBase = data.base ? JSON.parse(JSON.stringify(data.base)) : {};
+        let stamped = 0, folded = 0;
+        for (const oldId of ids) {
+            const updates = old[oldId];
+            if (!updates || !Object.keys(updates).length) continue;
+            const msg = Array.isArray(fullMsgs) ? fullMsgs[oldId] : null;
+            const isAi = msg && !(msg.is_user || msg.role === 'user');
+            let ok = false, id = '';
+            if (isAi) {
+                const exist = _idsInText(msg.message || msg.mes);
+                if (exist.length) { id = exist[0]; ok = true; }                 // 已經有標記＝直接沿用
+                else { id = _newAvsId(); ok = await _stampAvsId(oldId, id); }
+            }
+            if (ok) { list.push({ id, updates }); stamped++; }
+            else { _applyPatchInto(newBase, updates); folded++; }               // 釘不上 → 收斂進底，不丟資料
+        }
+        const dir = data.director && data.director.patches && !Array.isArray(data.director.patches)
+            ? data.director.patches : null;
+        let dirList = Array.isArray(data.director?.patches) ? data.director.patches : [];
+        if (dir) {
+            // 導演稿只留最新一份有意義（本來就是全文快照、後蓋前）
+            const dids = Object.keys(dir).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
+            const lastText = dids.length ? String(dir[dids[dids.length - 1]] || '') : '';
+            const anchor = list.length ? list[list.length - 1].id : '';
+            dirList = (lastText && anchor) ? [{ id: anchor, text: lastText }] : [];
+        }
+        const next = { ...data, patches: list, base: newBase, sigs: undefined, patchFmt: 2 };
+        delete next.sigs;
+        if (data.director) next.director = { ...data.director, patches: dirList };
+        await win.OS_DB.saveStateData(chatId, next);
+        Object.assign(data, next);
+        console.log(`🛰️ [State Runtime] patch 身分制遷移完成：${stamped} 筆釘上正文 id，${folded} 筆收斂進 base（那些樓已不在）`);
+        return true;
     }
 
     // 現在最後一樓的號碼——刻意跟抽取端用同一個來源(getChatMessages(-1))，
@@ -1638,11 +1752,10 @@ _directorSpec(castNames);
     // 回滾核心：一次砍掉 deadIds 這幾筆 patch，並把它們碰過的欄位回復成「base+剩餘patch」的值。
     // 回傳實際回滾的欄位數（0 = 沒有對應 patch，什麼都沒做）。
     async function _rollbackPatches(chatId, data, deadIds) {
-        const newPatches = { ...data.patches };
-        const deadPatches = [];
-        for (const id of deadIds) {
-            if (newPatches[id] !== undefined) { deadPatches.push(newPatches[id]); delete newPatches[id]; }
-        }
+        const kill = new Set((deadIds || []).map(String));
+        const list = _patchList(data.patches);
+        const newPatches = list.filter(p => !kill.has(String(p.id)));
+        const deadPatches = list.filter(p => kill.has(String(p.id))).map(p => p.updates);
         if (!deadPatches.length) return 0;
 
         const rolled = recomputeCurrent(newPatches, data.base);   // 重播基準（只用來查「被碰過的 key」該回到什麼值）
@@ -1677,10 +1790,12 @@ _directorSpec(castNames);
         }
 
         // 引擎 / DB / 面板三邊一起回滾（少寫引擎 → 下輪抽取以舊底為基準，回滾等於沒發生）
-        const newSigs = { ...(data.sigs || {}) };
-        for (const id of deadIds) delete newSigs[id];
+        // 導演稿跟著同一批 id 走（它現在也以正文 id 為錨，不再有樓號）
+        const newDir = data.director
+            ? { ...data.director, patches: (Array.isArray(data.director.patches) ? data.director.patches : []).filter(d => !kill.has(String(d.id))) }
+            : data.director;
         // 先落地再 await 引擎（順序顛倒或漏 await → 引擎慢一步用舊資料蓋回來，回滾等於沒發生）
-        await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, sigs: newSigs, current: cur });
+        await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, director: newDir, current: cur });
         try { await win._AVS_ENGINE?.write?.(cur); } catch (e) {}
         try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: deadIds[deadIds.length - 1], rollback: true }); } catch (e) {}
         return leafSet.size;
@@ -1688,10 +1803,11 @@ _directorSpec(castNames);
 
     // 🧾 對帳式回滾（刪樓／任何說不準的變動都走這條）
     // 🚨 為什麼不能信事件參數：酒館 MESSAGE_DELETED 傳的是「刪完還剩幾則」(script.js: emit(MESSAGE_DELETED, chat.length))，
-    //    不是被刪那則的號碼。舊版拿它當 patch 鍵查 → 只有「剛好刪最後一樓」時數字碰巧相等才會動，
+    //    不是被刪那則的號碼。拿它當 patch 鍵查 → 只有「剛好刪最後一樓」時數字碰巧相等才會動，
     //    刪多則／批量刪一律查無此鍵、靜默 return ＝ 使用者眼中的「AVS 又沒回溯」。
-    // 做法：拿現存訊息的內容簽名跟抽取當時存的比對，三種情況都判定為失效 →
-    //    ①樓號已超出（尾部被刪）②讀不到那則 ③簽名不符（被編輯，或刪了中間樓導致整批位移）。
+    // 做法（2026-08-01 身分制）：掃全檔收集現存的 <!--avs:id--> 標記，patch 的 id 還在就活、不在就死。
+    //    樓號與內容簽名一概不參與 ⇒ 刪使用者純指令、刪中間樓、樓號漂移都不會誤殺；
+    //    改寫正文只要沒把標記刪掉也不誤殺（舊的簽名制會把每個錯字修正都當成失效）。
     async function _reconcilePatches(tag) {
         try {
             if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過對帳'); return; }
@@ -1710,69 +1826,41 @@ _directorSpec(castNames);
             console.log(`🛰️ [State Runtime] 對帳(${tag})：真實樓數=${total > 0 ? total : '未知'}，最後一樓=#${lastId}`);
 
             const data = await win.OS_DB.getStateData(chatId);
-            // 🔍 這三個出口以前是靜默 return，查半天不知道卡在哪 → 一律說明原因
+            // 🔍 這幾個出口以前是靜默 return，查半天不知道卡在哪 → 一律說明原因
             if (!data) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：這個聊天沒有任何狀態資料 → 沒東西可回滾`); return; }
 
-            // 導演稿：只認樓號範圍（它存的是全文快照，沒有簽名機制）
-            if (data.director && data.director.patches) {
-                const dp = { ...data.director.patches };
-                let dn = 0;
-                for (const k of Object.keys(dp)) if (Number(k) > lastId) { delete dp[k]; dn++; }
-                if (dn) { data.director = { ...data.director, patches: dp }; await win.OS_DB.saveStateData(chatId, { ...data }); console.log(`🎬 [Director] 清掉 ${dn} 筆孤兒導演稿`); }
+            // 舊制存檔（樓號為鍵＋sigs）→ 一次性遷移成身分制，之後永遠走 id
+            if (!Array.isArray(data.patches)) {
+                if (total <= 0) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：要遷移舊 patch 但讀不到完整聊天檔 → 這次不動，下次再說`); return; }
+                await _migratePatches(chatId, data, fullMsgs);
             }
 
-            const _pn = data.patches ? Object.keys(data.patches).length : -1;
+            const list = _patchList(data.patches);
             const _cn = data.current ? Object.keys(data.current).length : 0;
             const _bn = data.base ? Object.keys(data.base).length : 0;
-            const _sn = data.sigs ? Object.keys(data.sigs).length : 0;
-            console.log(`🛰️ [State Runtime] 對帳(${tag})：chatId=${chatId}｜逐輪紀錄 ${_pn} 筆｜當前狀態 ${_cn} 個頂層欄位｜底 ${_bn}｜簽名 ${_sn}`);
-            if (!data.patches || !_pn) {
+            console.log(`🛰️ [State Runtime] 對帳(${tag})：chatId=${chatId}｜逐輪紀錄 ${list.length} 筆｜當前狀態 ${_cn} 個頂層欄位｜底 ${_bn}`);
+            if (!list.length) {
                 console.warn(`🛰️ [State Runtime] 對帳(${tag})：沒有逐輪紀錄可回滾（patches 空）。`
                     + `current 有 ${_cn} 個欄位表示狀態是別的路徑寫的——例如跑過「深度整理」(會清空 patches)、`
                     + `或狀態由主模型 <vars> 直接寫入。這種資料無法自動回溯，只能用面板「還原上一步」。`);
                 return;
             }
-            const ids = Object.keys(data.patches).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
-            if (!ids.length) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：patches 的鍵都不是數字樓號，無法對位`); return; }
 
-            // 建 樓號→內容簽名 對照表。優先用讀檔結果（陣列索引＝真實樓號），拿不到才退回窗口 API。
-            const sigNow = new Map();
-            if (total > 0) {
-                fullMsgs.forEach((m, i) => sigNow.set(i, _msgSig((m && (m.message || m.mes)) || '')));
-            } else {
-                try {
-                    const from = Math.max(0, Math.min(ids[0], lastId));
-                    const msgs = await win.TavernHelper?.getChatMessages?.(`${from}-${lastId}`);
-                    for (const m of (msgs || [])) {
-                        const id = m.message_id ?? m.id;
-                        if (typeof id === 'number') sigNow.set(id, _msgSig(m.message || m.mes || ''));
-                    }
-                } catch (e) { console.warn('[State Runtime] 對帳讀訊息失敗，改用樓號範圍判定:', e); }
+            // 掃全檔收集「現存的 avs id」——這就是唯一判準，樓號完全不參與
+            const alive = new Set();
+            if (total > 0) fullMsgs.forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
+            // 🛡️ 保命閘：一個 id 都沒掃到，但 patch 卻有一堆 → 十之八九是讀到殘缺聊天檔／標記還沒釘上，
+            //    這時候照判會把狀態整碗清空。寧可不動。
+            if (!alive.size) {
+                console.warn(`🛰️ [State Runtime] 對帳(${tag})：全檔掃不到任何 avs 標記、但有 ${list.length} 筆 patch → 疑似殘缺聊天檔，中止不動`);
+                return;
             }
 
-            const sigs = data.sigs || {};
-            const dead = ids.filter(id => {
-                if (id > lastId) return true;                    // ① 尾部被刪
-                if (!sigNow.size) return false;                  // 讀不到訊息 → 只信 ①，別亂刪
-                if (!sigNow.has(id)) return true;                // ② 這樓讀不到了
-                const old = sigs[id];
-                if (!old) return false;                          // 舊資料沒存簽名 → 無從比對，保守留著
-                return old !== sigNow.get(id);                   // ③ 內容不符（被編輯／位移）
-            });
-            if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${ids.length} 筆 patch 全部對得上（樓號都 ≤${lastId}、簽名也相符），無需回滾`); return; }
-            // 🛡️ 保險（同記憶系統 reconcileToStory 的精神）：判斷依據是「樓數有沒有異常縮水」，
-            //    不是「要清幾筆」——刪掉最後三樓時三筆 patch 全中是正常的，不該被誤擋。
-            //    只有讀檔成功(total>0)才有可靠樓數可比；退路模式沒有基準，不套用。
-            if (total > 0) {
-                const maxKey = ids[ids.length - 1];
-                if (total < (maxKey + 1) / 2) {
-                    console.warn(`🛰️ [State Runtime] 對帳(${tag})：只讀到 ${total} 樓、但 patch 最大鍵是 #${maxKey}（少掉一半以上）→ 疑似讀到殘缺聊天檔，中止不動`);
-                    return;
-                }
-            }
+            const dead = list.filter(p => !alive.has(String(p.id))).map(p => p.id);
+            if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${list.length} 筆 patch 的正文標記都還在，無需回滾`); return; }
 
             const n = await _rollbackPatches(chatId, data, dead);
-            console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(#${dead.join(',#')})，回復 ${n} 個欄位`);
+            console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(${dead.join(',')})，回復 ${n} 個欄位`);
             if (n) showToast(`↩ 狀態已回溯（${dead.length} 輪、${n} 個欄位）`, 'success');
         } catch (e) {
             console.warn('[State Runtime] 對帳回滾失敗:', e);
@@ -1787,22 +1875,21 @@ _directorSpec(castNames);
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
             const data = await win.OS_DB.getStateData(chatId);
-            // 🎬 導演稿跟樓層走：這樓被改/swipe → 對應導演 patch 一起刪（獨立於 AVS patch，
-            //    必須在下面 AVS 的 early-return 前處理；後面 AVS 若也存檔，spread 的 data 已含新 director）
-            if (data && data.director && data.director.patches && data.director.patches[msgId] !== undefined) {
-                const dp = { ...data.director.patches };
-                delete dp[msgId];
-                data.director = { ...data.director, patches: dp };
-                await win.OS_DB.saveStateData(chatId, { ...data });
-                console.log('🎬 [Director] 砍導演稿 patch msg#' + msgId);
+            if (!data) return;
+            // 🆔 身分制：msgId 只是「哪一樓被動過」的提示，真正要砍哪筆 patch 看那樓正文裡的 avs id。
+            //    這樓被 swipe/重生 → 正文換了、標記沒了 → 交給對帳統一處理（它掃全檔，比事件參數可靠）。
+            let _hit = [];
+            try {
+                const _lm = await win.TavernHelper?.getChatMessages?.(msgId);
+                _hit = _idsInText(String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || ''));
+            } catch (e) {}
+            const _known = new Set(_patchList(data.patches).map(p => String(p.id)));
+            const _dead = _hit.filter(id => _known.has(id));
+            if (!_dead.length) {
+                console.log(`🛰️ [State Runtime] msg#${msgId} 正文裡沒有已登記的 avs id → 改走對帳確認`);
+                return _reconcilePatches('msg#' + msgId + ' 查無id');
             }
-            if (!data || !data.patches) return;
-            // 查無此鍵不代表沒事：可能是樓號位移或事件參數不準 → 交給對帳確認，別再靜默 return
-            if (data.patches[msgId] === undefined) {
-                console.log(`🛰️ [State Runtime] msg#${msgId} 查無對應 patch → 改走對帳確認`);
-                return _reconcilePatches('msg#' + msgId + ' 查無patch');
-            }
-            const n = await _rollbackPatches(chatId, data, [msgId]);
+            const n = await _rollbackPatches(chatId, data, _dead);
             console.log(`🛰️ [State Runtime] 砍 patch msg#${msgId} → 已回滾 ${n} 個欄位`);
             if (n) showToast(`↩ 狀態已回溯（${n} 個欄位）`, 'success');
         } catch(e) {
@@ -1818,7 +1905,7 @@ _directorSpec(castNames);
         if (!data) return;
         await win.OS_DB.saveStateData(chatId, {
             ...data,
-            patches: {},
+            patches: [],
             base: {},
             current: {}
         });
@@ -1907,7 +1994,7 @@ _directorSpec(castNames);
         try { win._AVS_ENGINE?.snapshot?.(currentState); } catch (e) {}   // 整理前快照 → 還原上一步可撤
         try {   // 同樣先落地再 await 引擎，避免引擎用舊資料回寫
             const data = (await win.OS_DB.getStateData(chatId)) || {};
-            await win.OS_DB.saveStateData(chatId, { ...data, base: cleaned, patches: {}, sigs: {}, current: cleaned });
+            await win.OS_DB.saveStateData(chatId, { ...data, base: cleaned, patches: [], current: cleaned });
         } catch (e) {}
         try { await win._AVS_ENGINE?.write?.(cleaned); } catch (e) { return { ok: false, msg: '寫入失敗：' + (e?.message || e) }; }
         const n = a => Array.isArray(a) ? a.length : 0;
@@ -2078,7 +2165,7 @@ _directorSpec(castNames);
         return all.map(e => ({
             chatId: e.id,
             schemaCount: e.schema ? Object.keys(e.schema).length : 0,
-            patchesCount: e.patches ? Object.keys(e.patches).length : 0,
+            patchesCount: Array.isArray(e.patches) ? e.patches.length : (e.patches ? Object.keys(e.patches).length : 0),
             currentCount: e.current ? Object.keys(e.current).length : 0,
             timestamp: e.timestamp || 0
         })).sort((a, b) => b.timestamp - a.timestamp);

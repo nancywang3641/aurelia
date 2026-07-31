@@ -247,7 +247,7 @@
         }
         try { cur = (eng?.read?.()) || data?.current || {}; } catch (e) { cur = data?.current || {}; }
         const hasSchema = fields && Object.keys(fields).length > 0;
-        const patchesCount = data?.patches ? Object.keys(data.patches).length : 0;
+        const patchesCount = Array.isArray(data?.patches) ? data.patches.length : (data?.patches ? Object.keys(data.patches).length : 0);
         const runtimeOn = localStorage.getItem('aurelia_state_runtime_enabled') === '1';
 
         // 🔗「我的檔案」(#avs-view-packs)在第一層(home)瀏覽頁露出，且需「狀態檔案」tab 真的可見：
