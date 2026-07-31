@@ -1863,7 +1863,8 @@ _directorSpec(castNames);
             const alive = new Set();
             if (total > 0) fullMsgs.forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
             try {
-                const live = await win.TavernHelper?.getChatMessages?.(`0-${lastId}`);
+                // role:'assistant' ＝ 只看 AI 的輪（@types.txt：ChatMessage.role），使用者樓不可能有 avs id
+                const live = await win.TavernHelper?.getChatMessages?.(`0-${lastId}`, { role: 'assistant' });
                 (live || []).forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
             } catch (e) { console.warn('🛰️ [State Runtime] 對帳讀記憶體訊息失敗，只用讀檔結果:', e?.message || e); }
             // 🛡️ 保命閘：一個 id 都沒掃到，但 patch 卻有一堆 → 十之八九是讀到殘缺聊天檔／標記還沒釘上，
@@ -1873,8 +1874,13 @@ _directorSpec(castNames);
                 return;
             }
 
-            const dead = list.filter(p => !alive.has(String(p.id))).map(p => p.id);
-            if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${list.length} 筆 patch 的正文標記都還在，無需回滾`); return; }
+            // 🔎 從最後一筆 patch 往前對 id：對不上就砍、再往前一筆；一對上就停，它前面的全部保留。
+            //    （不用「集合差集」：差集會連中間那些「id 還在、只是排序看起來怪」的也一起殺。
+            //      跑團是線性推進，尾端對得上就代表劇情線沒斷，什麼都不該動 ⇒ 誤殺機率為零。）
+            let cut = list.length;
+            while (cut > 0 && !alive.has(String(list[cut - 1].id))) cut--;
+            const dead = list.slice(cut).map(p => p.id);
+            if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${list.length} 筆 patch，尾端 id 對得上，無需回滾`); return; }
 
             const n = await _rollbackPatches(chatId, data, dead);
             console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(${dead.join(',')})，回復 ${n} 個欄位`);
