@@ -1068,7 +1068,11 @@ ${numberedText}`;
                 //   舊快照只掛在主模型 <vars> 退役路徑上，副模型抽取從沒寫過 → 按鈕永遠是暗的。
                 try { win._AVS_ENGINE?.snapshot?.(currentState || {}); } catch (e) {}
                 try { win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
-                await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent });
+                // 🔖 存下這則訊息的簽名 → 之後刪樓/編輯時靠它對帳（跟著 patches 一起 trim，不留孤兒簽名）
+                const newSigs = { ...(data.sigs || {}) };
+                newSigs[lastId] = _msgSig(lastContent);
+                for (const k of Object.keys(newSigs)) if (trimmed.patches[k] === undefined) delete newSigs[k];
+                await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent, sigs: newSigs });
                 const changed = Object.keys(filtered).length;
                 if (changed > 0) console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);
                 try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: lastId, updates: filtered }); } catch(e) {}
@@ -1603,13 +1607,143 @@ _directorSpec(castNames);
     //    不整份用重播取代（手動✏️改數值/去重合併等沒進 patch 系統的資料會被洗掉，同 extract 處不從空重建的理由）。
     // 🐛 修正史：舊版只把重播結果寫 OS_DB、沒寫 _AVS_ENGINE → 面板(讀引擎)看不到回滾，
     //    且下一輪抽取以引擎舊狀態為底又把回滾蓋回去 → 「手動刪樓 AVS 不回朔」的真兇。
+    // 🔖 訊息簽名：patch 真正該綁的是「那則訊息」，不是會位移的樓號。
+    //    存下抽取當時的內容簽名，之後對帳時比對——訊息被刪、被改、或因刪中間樓而位移到別的號碼，
+    //    簽名都會對不上，patch 即失效。這樣完全不必依賴酒館事件參數（它在刪除時傳的是剩餘則數）。
+    //    ⚠️ 先截到 4000 再算：抽取端拿到的 lastContent 本來就被 gatherRecentMessages 截過，
+    //       對帳端讀到的是全文——不統一截斷長度，長訊息的簽名會永遠對不上。
+    function _msgSig(text) {
+        const s = String(text || '').slice(0, 4000);
+        return s.length + '|' + s.slice(0, 60) + '|' + s.slice(-60);
+    }
+
+    // 現在最後一樓的號碼——刻意跟抽取端用同一個來源(getChatMessages(-1))，
+    // 兩邊 id 空間一致，懶載入的影響也一致，才不會對不上鍵。拿不到回 -1（呼叫端就別動手）。
+    async function _currentLastId() {
+        try {
+            const last = await win.TavernHelper?.getChatMessages?.(-1);
+            const v = last && last[0] ? (last[0].message_id ?? last[0].id) : undefined;
+            return (typeof v === 'number' && v >= 0) ? v : -1;
+        } catch (e) { return -1; }
+    }
+
+    // 回滾核心：一次砍掉 deadIds 這幾筆 patch，並把它們碰過的欄位回復成「base+剩餘patch」的值。
+    // 回傳實際回滾的欄位數（0 = 沒有對應 patch，什麼都沒做）。
+    async function _rollbackPatches(chatId, data, deadIds) {
+        const newPatches = { ...data.patches };
+        const deadPatches = [];
+        for (const id of deadIds) {
+            if (newPatches[id] !== undefined) { deadPatches.push(newPatches[id]); delete newPatches[id]; }
+        }
+        if (!deadPatches.length) return 0;
+
+        const rolled = recomputeCurrent(newPatches, data.base);   // 重播基準（只用來查「被碰過的 key」該回到什麼值）
+        const cur = JSON.parse(JSON.stringify(win._AVS_ENGINE?.read?.() || data.current || {}));
+        // 被刪 patch 碰過的 key 攤平成葉路徑（物件型值逐葉展開，別整個容器覆蓋）；多筆取聯集
+        const leafSet = new Set();
+        const flatten = (prefix, val) => {
+            if (val && typeof val === 'object' && !Array.isArray(val)) { for (const k of Object.keys(val)) flatten(prefix + '.' + k, val[k]); }
+            else leafSet.add(prefix);
+        };
+        for (const dp of deadPatches) {
+            for (const [k, v] of Object.entries(dp)) {
+                if (v && typeof v === 'object' && !Array.isArray(v)) flatten(k, v);
+                else leafSet.add(k);
+            }
+        }
+        // 刪葉子後往上清「空殼父物件」（實體所有屬性都是這 patch 引入的 → 別留 {} 鬼實體）；頂層容器留著（空容器=正常）
+        const prune = (path) => {
+            const ks = path.split('.'); ks.pop();
+            while (ks.length >= 2) {
+                const pp = ks.join('.');
+                const parent = _getDeep(cur, pp);
+                if (parent && typeof parent === 'object' && !Array.isArray(parent) && !Object.keys(parent).length) { _deleteDeep(cur, pp); ks.pop(); }
+                else break;
+            }
+        };
+        for (const k of leafSet) {
+            const v = _getDeep(rolled, k);
+            if (v === undefined) { _deleteDeep(cur, k); prune(k); }   // 這 patch 首次引入的欄位 → 整個拿掉+清空殼
+            else if (k.includes('.')) _setDeep(cur, k, v);
+            else cur[k] = v;
+        }
+
+        // 引擎 / DB / 面板三邊一起回滾（少寫引擎 → 下輪抽取以舊底為基準，回滾等於沒發生）
+        const newSigs = { ...(data.sigs || {}) };
+        for (const id of deadIds) delete newSigs[id];
+        try { win._AVS_ENGINE?.write?.(cur); } catch (e) {}
+        await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, sigs: newSigs, current: cur });
+        try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: deadIds[deadIds.length - 1], rollback: true }); } catch (e) {}
+        return leafSet.size;
+    }
+
+    // 🧾 對帳式回滾（刪樓／任何說不準的變動都走這條）
+    // 🚨 為什麼不能信事件參數：酒館 MESSAGE_DELETED 傳的是「刪完還剩幾則」(script.js: emit(MESSAGE_DELETED, chat.length))，
+    //    不是被刪那則的號碼。舊版拿它當 patch 鍵查 → 只有「剛好刪最後一樓」時數字碰巧相等才會動，
+    //    刪多則／批量刪一律查無此鍵、靜默 return ＝ 使用者眼中的「AVS 又沒回溯」。
+    // 做法：拿現存訊息的內容簽名跟抽取當時存的比對，三種情況都判定為失效 →
+    //    ①樓號已超出（尾部被刪）②讀不到那則 ③簽名不符（被編輯，或刪了中間樓導致整批位移）。
+    async function _reconcilePatches(tag) {
+        try {
+            if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過對帳'); return; }
+            const chatId = getChatId();
+            if (!chatId || !win.OS_DB?.getStateData) return;
+            const lastId = await _currentLastId();
+            if (lastId < 0) { console.warn('🛰️ [State Runtime] 對帳：拿不到當前樓號，保守不動（可用狀態面板「還原上一步」）'); return; }
+            const data = await win.OS_DB.getStateData(chatId);
+            if (!data) return;
+
+            // 導演稿：只認樓號範圍（它存的是全文快照，沒有簽名機制）
+            if (data.director && data.director.patches) {
+                const dp = { ...data.director.patches };
+                let dn = 0;
+                for (const k of Object.keys(dp)) if (Number(k) > lastId) { delete dp[k]; dn++; }
+                if (dn) { data.director = { ...data.director, patches: dp }; await win.OS_DB.saveStateData(chatId, { ...data }); console.log(`🎬 [Director] 清掉 ${dn} 筆孤兒導演稿`); }
+            }
+
+            if (!data.patches) return;
+            const ids = Object.keys(data.patches).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
+            if (!ids.length) return;
+
+            // 只讀 patch 覆蓋到的樓層範圍，不掃整本聊天
+            const sigNow = new Map();
+            try {
+                const from = Math.max(0, Math.min(ids[0], lastId));
+                const msgs = await win.TavernHelper?.getChatMessages?.(`${from}-${lastId}`);
+                for (const m of (msgs || [])) {
+                    const id = m.message_id ?? m.id;
+                    if (typeof id === 'number') sigNow.set(id, _msgSig(m.message || m.mes || ''));
+                }
+            } catch (e) { console.warn('[State Runtime] 對帳讀訊息失敗，改用樓號範圍判定:', e); }
+
+            const sigs = data.sigs || {};
+            const dead = ids.filter(id => {
+                if (id > lastId) return true;                    // ① 尾部被刪
+                if (!sigNow.size) return false;                  // 讀不到訊息 → 只信 ①，別亂刪
+                if (!sigNow.has(id)) return true;                // ② 這樓讀不到了
+                const old = sigs[id];
+                if (!old) return false;                          // 舊資料沒存簽名 → 無從比對，保守留著
+                return old !== sigNow.get(id);                   // ③ 內容不符（被編輯／位移）
+            });
+            if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${ids.length} 筆 patch 全部對得上，無需回滾`); return; }
+
+            const n = await _rollbackPatches(chatId, data, dead);
+            console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(#${dead.join(',#')})，回復 ${n} 個欄位`);
+            if (n) showToast(`↩ 狀態已回溯（${dead.length} 輪、${n} 個欄位）`, 'success');
+        } catch (e) {
+            console.warn('[State Runtime] 對帳回滾失敗:', e);
+            showToast('⚠ 狀態回溯失敗，請用狀態面板「還原上一步」', 'warning');
+        }
+    }
+
+    // ✏️ 內容變動專用（MESSAGE_UPDATED / EDITED / SWIPED）——這三個事件傳的才是真正的訊息號碼
     async function onMessageInvalidated(msgId) {
         try {
             if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過 patch 失效'); return; }
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
             const data = await win.OS_DB.getStateData(chatId);
-            // 🎬 導演稿跟樓層走：這樓被砍/改/swipe → 對應導演 patch 一起刪（獨立於 AVS patch，
+            // 🎬 導演稿跟樓層走：這樓被改/swipe → 對應導演 patch 一起刪（獨立於 AVS patch，
             //    必須在下面 AVS 的 early-return 前處理；後面 AVS 若也存檔，spread 的 data 已含新 director）
             if (data && data.director && data.director.patches && data.director.patches[msgId] !== undefined) {
                 const dp = { ...data.director.patches };
@@ -1619,45 +1753,14 @@ _directorSpec(castNames);
                 console.log('🎬 [Director] 砍導演稿 patch msg#' + msgId);
             }
             if (!data || !data.patches) return;
-            const deadPatch = data.patches[msgId];
-            if (deadPatch === undefined) { console.log(`🛰️ [State Runtime] 訊息失效 msg#${msgId}：無對應 patch、不用回滾`); return; }
-            const newPatches = { ...data.patches };
-            delete newPatches[msgId];
-
-            const rolled = recomputeCurrent(newPatches, data.base);   // 重播基準（只用來查「被碰過的 key」該回到什麼值）
-            const cur = JSON.parse(JSON.stringify(win._AVS_ENGINE?.read?.() || data.current || {}));
-            // 被刪 patch 碰過的 key 攤平成葉路徑（物件型值逐葉展開，別整個容器覆蓋）
-            const leaves = [];
-            const flatten = (prefix, val) => {
-                if (val && typeof val === 'object' && !Array.isArray(val)) { for (const k of Object.keys(val)) flatten(prefix + '.' + k, val[k]); }
-                else leaves.push(prefix);
-            };
-            for (const [k, v] of Object.entries(deadPatch)) {
-                if (v && typeof v === 'object' && !Array.isArray(v)) flatten(k, v);
-                else leaves.push(k);
+            // 查無此鍵不代表沒事：可能是樓號位移或事件參數不準 → 交給對帳確認，別再靜默 return
+            if (data.patches[msgId] === undefined) {
+                console.log(`🛰️ [State Runtime] msg#${msgId} 查無對應 patch → 改走對帳確認`);
+                return _reconcilePatches('msg#' + msgId + ' 查無patch');
             }
-            // 刪葉子後往上清「空殼父物件」（實體所有屬性都是這 patch 引入的 → 別留 {} 鬼實體）；頂層容器留著（空容器=正常）
-            const prune = (path) => {
-                const ks = path.split('.'); ks.pop();
-                while (ks.length >= 2) {
-                    const pp = ks.join('.');
-                    const parent = _getDeep(cur, pp);
-                    if (parent && typeof parent === 'object' && !Array.isArray(parent) && !Object.keys(parent).length) { _deleteDeep(cur, pp); ks.pop(); }
-                    else break;
-                }
-            };
-            for (const k of leaves) {
-                const v = _getDeep(rolled, k);
-                if (v === undefined) { _deleteDeep(cur, k); prune(k); }   // 這 patch 首次引入的欄位 → 整個拿掉+清空殼
-                else if (k.includes('.')) _setDeep(cur, k, v);
-                else cur[k] = v;
-            }
-
-            // 引擎 / DB / 面板三邊一起回滾
-            try { win._AVS_ENGINE?.write?.(cur); } catch (e) {}
-            await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, current: cur });
-            try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId, rollback: true }); } catch (e) {}
-            console.log(`🛰️ [State Runtime] 砍 patch msg#${msgId} → 已回滾 ${leaves.length} 個欄位`);
+            const n = await _rollbackPatches(chatId, data, [msgId]);
+            console.log(`🛰️ [State Runtime] 砍 patch msg#${msgId} → 已回滾 ${n} 個欄位`);
+            if (n) showToast(`↩ 狀態已回溯（${n} 個欄位）`, 'success');
         } catch(e) {
             console.warn('[State Runtime] 砍 patch 失敗:', e);
         }
@@ -1884,10 +1987,12 @@ _directorSpec(castNames);
         }
 
         // 訊息失效 → 砍對應 patch
-        const invalidateEvents = [
-            'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED'
-        ];
-        invalidateEvents.forEach(name => {
+        // 🚨 MESSAGE_DELETED 的參數語意跟其他三個【不一樣】：酒館傳的是「刪完還剩幾則」而非訊息號
+        //    （script.js: emit(MESSAGE_DELETED, chat.length)）→ 不可當 patch 鍵用，走專屬的對帳回滾。
+        if (win.tavern_events.MESSAGE_DELETED) {
+            win.eventOn(win.tavern_events.MESSAGE_DELETED, () => _reconcilePatches('刪樓'));
+        }
+        ['MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED'].forEach(name => {
             const ev = win.tavern_events[name];
             if (ev) win.eventOn(ev, (msgId) => onMessageInvalidated(msgId));
         });
