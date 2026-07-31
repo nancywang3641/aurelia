@@ -1555,6 +1555,9 @@ _directorSpec(castNames);
             if (!win.TavernHelper?.injectPrompts) return;
             const chatId = getChatId();
             if (!chatId || !win.OS_DB?.getStateData) return;
+            // 🧾 注入前先對帳（Scene 的做法：每次要用資料時對一次，不指望刪除事件會來）
+            //    ——刪樓事件在某些環境根本不觸發，只靠事件回滾就會是「刪了也沒反應」。
+            await _reconcilePatches('注入前');
 
             // 變數定義說明書（2026-06-29 改：跟「當前值」一起即時注入，取代「每個 chatId 寫一條世界書」→不再堆條目）
             let defsBlock = '';
@@ -2085,6 +2088,7 @@ _directorSpec(castNames);
         isEnabled, setEnabled,
         forceExtract, clearPatches, deepConsolidate,
         injectCurrent, injectRules, extractOnce,
+        reconcile: _reconcilePatches,   // 對帳回滾：不靠刪除事件，任何「要用狀態」的入口都可以先叫它
         repairOpeningSettings: _repairOpeningSettings,   // 手動補一次開頭 Bg/BGM（測試/救援用）
         compressOldMemories,   // 🗜️ 記憶合併壓縮（治長線過載），給 os_avs_memory 整理鈕呼叫
         listAllStateData, removeStateData,
