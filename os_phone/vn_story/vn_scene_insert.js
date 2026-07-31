@@ -161,7 +161,8 @@
                 if (!entries.length) return;
 
                 // 「最新這輪」直插用：記下這次的圖。VN 因「生成結束」載最新 script 時(loadScript 尾端 applyLatestFresh)直接插、不靠 ID 數字。
-                this._latest = { chatId: chatId, entries: entries };
+                //   msgId 一起帶著 → 章節存檔才知道「這批是哪一樓的」，同樓重生時能先清掉上一版（見 _persistToLatestChapter）
+                this._latest = { chatId: chatId, msgId: msgId, entries: entries };
                 console.log('[VN_SceneInsert] 已記最新這輪 ' + entries.length + ' 張(已預熱) msg#' + msgId);
 
                 // ★持久化主力：把 ID-only [Scene|cacheId] 標籤寫回酒館正文錨點位置（fire-and-forget）。
@@ -184,10 +185,13 @@
 
         // 把一組 entries splice 進「VN 現在載著的那份 script」（冪等靠 scene-id）。
         //   ★呼叫端負責保證「現在這份 script 就是該插的那則」——本函式不管 ID，只管插。回傳插入張數。
-        _spliceInto: function (entries) {
+        //   opts.requireAnchor：回放存檔插圖時用——有寫錨點卻在本章正文找不到，代表那段劇情已被刪改，
+        //   這張是舊插圖的遺物，直接跳過（不可退回「平均分散」，那正是舊圖亂入畫面的來源）。
+        _spliceInto: function (entries, opts) {
             const VN = win.VN_Core;
             if (!VN || !Array.isArray(VN.script) || !VN.script.length) { console.log('[VN_SceneInsert🔎] _spliceInto 跳過：劇本未載入/空'); return 0; }
             if (localStorage.getItem('vn_scene_enabled') === '0') { console.log('[VN_SceneInsert🔎] _spliceInto 跳過：場景顯示關(vn_scene_enabled=0)'); return 0; }
+            const requireAnchor = !!(opts && opts.requireAnchor);
             let cursor = (typeof VN.index === 'number') ? VN.index : -1;
             let inserted = 0;
             for (let k = 0; k < entries.length; k++) {
@@ -202,6 +206,9 @@
                 let pos;
                 if (aIdx >= 0 && aIdx + 1 > cursor) {
                     pos = aIdx + 1; // 錨點行之後
+                } else if (requireAnchor && e.after) {
+                    console.log('[VN_SceneInsert] 回放：錨點 "' + e.after + '" 不在本章正文 → 判定為已刪段落的舊插圖，跳過');
+                    continue;
                 } else {
                     const denom = entries.length + 1;       // 2 張 → 1/3、2/3 處
                     pos = Math.round(VN.script.length * (e.idx + 1) / denom);
@@ -230,7 +237,7 @@
                 const n = this._spliceInto(L.entries);
                 if (n) console.log('[VN_SceneInsert] 最新這輪：直接 splice ' + n + ' 張(不靠ID)，往下點即播');
                 // 寫回「最新這章」存檔（章節選擇/重整後回放也看得到，不丟）；圖檔本就在硬碟，只補「插哪一段」的資訊
-                this._persistToLatestChapter(L.entries);
+                this._persistToLatestChapter(L.entries, L.msgId);
                 // ★用完即清：下一個「沒出插圖的輪」載 script 時 _latest 會是 null → 不會把這張舊圖誤插進新劇本
                 this._latest = null;
             } catch (e) {
@@ -239,7 +246,10 @@
         },
 
         // 把插圖 entries 寫回「最新一章」存檔的 scenes 欄（不動原始正文）；回放時 applyChapterScenes 用同一套錨點插回。
-        _persistToLatestChapter: async function (entries) {
+        // 🚨 同一樓重生要「先清舊版再寫新版」：舊版只加不刪 → 刪掉某樓重新生成後，
+        //    章節存檔會同時留著兩批（舊的那批正文早就沒了、_spliceInto 的「正文已有就跳過」對它無效），
+        //    回放時舊插圖就硬插回來 ＝ Rae 遇到的「重複展示刪除過的舊插畫」。
+        _persistToLatestChapter: async function (entries, msgId) {
             try {
                 if (!Array.isArray(entries) || !entries.length) return;
                 if (!win.OS_DB || !win.OS_DB.getAllVnChapters || !win.OS_DB.saveVnChapter) return;
@@ -250,14 +260,21 @@
                 if (!latest) return;
                 // 守衛：最新章節必須是「剛存的」(2分鐘內)——否則多半是本輪章節還沒存好，別把新圖誤掛到上一章
                 if (Date.now() - (latest.createdAt || 0) > 120000) { console.log('[VN_SceneInsert🔎] 寫回章節跳過：最新章節非近期(本輪可能還沒存)'); return; }
-                const saved = Array.isArray(latest.scenes) ? latest.scenes.slice() : [];
+                let saved = Array.isArray(latest.scenes) ? latest.scenes.slice() : [];
+                // 同樓重生：先移除這一樓先前存的插圖（沒帶 msgId 的舊資料保守留著，避免誤刪別輪的）
+                let dropped = 0;
+                if (msgId != null) {
+                    const before = saved.length;
+                    saved = saved.filter(s => !(s && s.msgId != null && String(s.msgId) === String(msgId)));
+                    dropped = before - saved.length;
+                }
                 const have = {}; saved.forEach(s => { if (s && s.cacheId) have[s.cacheId] = 1; });
                 let added = 0;
-                entries.forEach(e => { if (e && e.cacheId && !have[e.cacheId]) { saved.push({ cacheId: e.cacheId, prompt: e.prompt, after: e.after || '', idx: e.idx }); added++; } });
-                if (!added) return;
+                entries.forEach(e => { if (e && e.cacheId && !have[e.cacheId]) { saved.push({ cacheId: e.cacheId, prompt: e.prompt, after: e.after || '', idx: e.idx, msgId: (msgId != null ? String(msgId) : undefined) }); added++; } });
+                if (!added && !dropped) return;
                 latest.scenes = saved;
                 await win.OS_DB.saveVnChapter(latest);   // put = upsert，同 id 覆寫
-                console.log('[VN_SceneInsert] 插圖寫回章節存檔 #' + latest.id + '(+' + added + '張)，回放/重整後可見');
+                console.log('[VN_SceneInsert] 插圖寫回章節存檔 #' + latest.id + '(+' + added + '張' + (dropped ? '，清掉同樓舊版 ' + dropped + ' 張' : '') + ')，回放/重整後可見');
             } catch (e) { console.warn('[VN_SceneInsert] 寫回章節失敗:', (e && e.message) || e); }
         },
 
@@ -268,7 +285,7 @@
                 const entries = scenes.filter(s => s && s.cacheId && s.prompt)
                     .map((s, i) => ({ cacheId: s.cacheId, prompt: s.prompt, after: s.after || '', idx: (typeof s.idx === 'number' ? s.idx : i) }));
                 if (!entries.length) return;
-                const n = this._spliceInto(entries);
+                const n = this._spliceInto(entries, { requireAnchor: true });
                 if (n) console.log('[VN_SceneInsert] 回放章節：splice ' + n + ' 張存檔插圖');
             } catch (e) { console.warn('[VN_SceneInsert] applyChapterScenes 失敗:', (e && e.message) || e); }
         }
