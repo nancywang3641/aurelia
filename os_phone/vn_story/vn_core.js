@@ -1488,7 +1488,10 @@
             const lines = [];
             for (const line of this.script) {
                 if (!line.startsWith('[Char|')) continue;
-                const parts = line.slice(6, -1).split('|');
+                // ⚠️ 必須跟播放端走同一條 _normCharParts（自由模式 [Char|名|「台詞」|Stay] 沒有表情格）。
+                //    漏掉的話 parts.slice(2) 只剩 ["Stay"] → 預熱的是「Stay」而不是台詞，
+                //    快取 key 跟播放端永遠對不上 ⇒ 每一句都得現生 ⇒ 語音很慢出。
+                const parts = this._normCharParts(line.slice(6, -1).split('|'));
                 const charName = parts[0];
                 const ex = this._extractTextAndSFX(parts.slice(2));
                 const text = this._cleanTextForSoVITS(ex.text);

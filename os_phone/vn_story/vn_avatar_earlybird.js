@@ -64,7 +64,10 @@
                 const line = raw.trim();
                 if (!line.startsWith('[Char|') || !line.endsWith(']') || _voiceSeen.has(line)) continue;
                 _voiceSeen.add(line);
-                const parts = line.slice(6, -1).split('|');
+                // ⚠️ 必須跟播放端走同一條 _normCharParts（自由模式 [Char|名|「台詞」|Stay] 沒有表情格）。
+                //    漏掉的話 parts.slice(2) 只剩 ["Stay"] → 早鳥預熱的是「Stay」而不是台詞。
+                const _sp = line.slice(6, -1).split('|');
+                const parts = VN._normCharParts ? VN._normCharParts(_sp) : _sp;
                 const charName = parts[0];
                 const ex = VN._extractTextAndSFX(parts.slice(2));
                 const t = VN._cleanTextForSoVITS(ex.text);
