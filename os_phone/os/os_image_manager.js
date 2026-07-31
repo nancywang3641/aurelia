@@ -55,11 +55,16 @@
             _q: [], _running: false, _seq: 0,
             // maxMs：單項逾時保險（預設 240 秒）。一項卡死（SoVITS 沒開、連線懸掛…）不准堵死整條隊，
             // 逾時就放行後面的單，孤兒請求留在背景自生自滅。
-            run: function(fn, prio, maxMs) {
+            // 🔬 診斷（2026-08-01 查「語音很慢出」用，預設開）：印出每件工作的等待/執行時間與隊列深度
+            //    查完要關掉 → 把下面的 !== '0' 改成 === '1' 即可（或 localStorage.aurelia_gpu_trace='0'）
+            _trace: function() { try { return localStorage.getItem('aurelia_gpu_trace') !== '0'; } catch (e) { return true; } },
+            run: function(fn, prio, maxMs, tag) {
                 const self = this;
                 return new Promise(function(resolve, reject) {
-                    self._q.push({ fn: fn, prio: (prio == null ? 1 : prio), maxMs: (maxMs || 240000), seq: self._seq++, resolve: resolve, reject: reject });
+                    const _p = (prio == null ? 1 : prio);
+                    self._q.push({ fn: fn, prio: _p, maxMs: (maxMs || 240000), seq: self._seq++, resolve: resolve, reject: reject, tag: (tag || ('prio' + _p)), tQueued: Date.now() });
                     self._q.sort(function(a, b) { return (a.prio - b.prio) || (a.seq - b.seq); });
+                    if (self._trace()) console.log('[GPU佇列] ＋排入 ' + (tag || ('prio' + _p)) + '(prio' + _p + ')　隊列深度=' + self._q.length + (self._running ? '　⚠️ 目前有工作在跑，得等它做完' : ''));
                     self._pump();
                 });
             },
@@ -69,11 +74,15 @@
                 const item = self._q.shift();
                 if (!item) return;
                 self._running = true;
+                const _tr = self._trace();
+                const _tStart = Date.now();
+                if (_tr) console.log('[GPU佇列] ▶ 開跑 ' + item.tag + '　等了 ' + ((_tStart - item.tQueued) / 1000).toFixed(1) + 's　後面還排 ' + self._q.length + ' 件');
                 let done = false;
                 const finish = function(cb, v) {
                     if (done) return;
                     done = true;
                     clearTimeout(timer);
+                    if (_tr) console.log('[GPU佇列] ■ 完成 ' + item.tag + '　佔用 ' + ((Date.now() - _tStart) / 1000).toFixed(1) + 's　（等待 ' + ((_tStart - item.tQueued) / 1000).toFixed(1) + 's）');
                     cb(v);
                     self._running = false;
                     self._pump();
