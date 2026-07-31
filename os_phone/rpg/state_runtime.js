@@ -1689,7 +1689,16 @@ _directorSpec(castNames);
             } finally {
                 setTimeout(() => { _selfEditing = false; }, 2500);
             }
-            return true;
+            // ✅ 寫完必須回讀驗證：setChatMessages 不保證當下就把標記落到記憶體訊息上，
+            //    沒驗證就回 true → patch 記了一個「正文其實沒有」的 id → 下次對帳判它死亡、無辜回滾。
+            //    （2026-08-01 實測：4 筆 patch 只有 2 筆的標記真的在聊天檔裡）
+            try {
+                const back = await TH.getChatMessages(arrIdx);
+                const bt = back && back[0] && (back[0].message || back[0].mes);
+                if (typeof bt === 'string' && bt.indexOf('<!--avs:' + id + '-->') >= 0) return true;
+                console.warn('🛰️ [State Runtime] avs 標記寫入後回讀不到 → 這輪不記 patch');
+                return false;
+            } catch (e) { return false; }
         } catch (e) {
             console.warn('🛰️ [State Runtime] 寫入 avs 標記失敗:', e?.message || e);
             return false;
@@ -1846,9 +1855,17 @@ _directorSpec(castNames);
                 return;
             }
 
-            // 掃全檔收集「現存的 avs id」——這就是唯一判準，樓號完全不參與
+            // 掃全檔收集「現存的 avs id」——這就是唯一判準，樓號完全不參與。
+            // 🚨 必須「讀檔 ∪ 記憶體」聯集：fetchFullChat 讀的是磁碟上的聊天檔，而 TauriTavern
+            //    落盤有延遲——剛釘上的標記可能還只在記憶體裡。只信讀檔會把最新那筆 patch
+            //    誤判成死亡、無辜回滾（2026-08-01 實測：檔案只有 2 個標記，實際有 4 筆 patch）。
+            //    聯集只會讓 alive 變多、不會變少 ⇒ 方向永遠偏保守，寧可漏殺不可誤殺。
             const alive = new Set();
             if (total > 0) fullMsgs.forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
+            try {
+                const live = await win.TavernHelper?.getChatMessages?.(`0-${lastId}`);
+                (live || []).forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
+            } catch (e) { console.warn('🛰️ [State Runtime] 對帳讀記憶體訊息失敗，只用讀檔結果:', e?.message || e); }
             // 🛡️ 保命閘：一個 id 都沒掃到，但 patch 卻有一堆 → 十之八九是讀到殘缺聊天檔／標記還沒釘上，
             //    這時候照判會把狀態整碗清空。寧可不動。
             if (!alive.size) {
