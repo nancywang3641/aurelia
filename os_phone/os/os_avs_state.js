@@ -237,6 +237,9 @@
         if (_useCache) {
             fields = _cache.fields; data = _cache.data;
         } else {
+            // 🧾 讀資料前先對帳一次：刪樓事件在某些環境不會觸發，靠事件回滾會讓面板一直顯示已刪劇情的舊值。
+            //    對帳自己會判斷「有沒有東西要回滾」，沒事就是一次輕量比對。
+            try { await win.OS_STATE_RUNTIME?.reconcile?.('開面板'); } catch (e) {}
             try { fields = await win.OS_STATE_RUNTIME?.getActiveSchema?.(); } catch (e) {}
             try { if (chatId && win.OS_DB?.getStateData) data = await win.OS_DB.getStateData(chatId); } catch (e) {}
             _cache = { ready: true, key: chatId, fields, data };
