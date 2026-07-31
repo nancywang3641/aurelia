@@ -1526,6 +1526,12 @@
         // 送 GPT-SoVITS 前清理文字：去掉開頭與結尾標點，避免後端切句異常與靜音
         _cleanTextForSoVITS: function(text) {
             if (!text) return '';
+            // 🔇 站位佔位符不念（2026-08-01）：[Char|名|表情|Stay] 這種「沒台詞、只更新立繪」的行，
+            //    _extractTextAndSFX 的 `parts.length > 1` 守衛剝不掉（parts 只剩一個元素），
+            //    text 就變成字面的 "Stay"/"Leave" → 預熱真的跑去合成「Stay」。實測一條吃 7.4 秒
+            //    （其中 4.5 秒是換模型），還把 GPU 上的模型換成當下用不到的角色，白白燒掉串流窗口。
+            //    TTS 是唯一共用入口（earlybird／預熱／播放都經過這裡）→ 這裡擋掉即全鏈乾淨，不動顯示端。
+            if (/^(stay|leave)$/i.test(String(text).trim())) return '';
             // 語音壓到「」內（有引號才作用）——播放/系統音/預熱全走這裡 → 快取 key 自動對齊
             let cleaned = this._speechOnly(text);
             // 再剝掉 ()（）內的動作/語氣描述（如「(輕笑)」）——那是舞台指示，不該被念出來。
