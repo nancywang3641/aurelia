@@ -197,7 +197,9 @@
     }
 
     // ── schema 欄位編輯表單（進階區內）────────────────────────────
-    const TYPE_OPTIONS = ['string', 'number', 'enum', 'list'];
+    // ⚠️ 一定要含 object：「角色狀態」這種裝所有角色的容器就是 object，
+    //    少了它，編輯既有 object 欄位時下拉選不到原型別 → 落到第一個(string) → 一按儲存整個容器被改成 string。
+    const TYPE_OPTIONS = ['string', 'number', 'enum', 'list', 'object'];
     function renderFieldEdit(name, type, desc, isNew) {
         const dataName = isNew ? '__new__' : name;
         const safe = esc(dataName).replace(/'/g, '&#39;');
@@ -205,7 +207,8 @@
             <div class="avs-st-fe-row"><span class="avs-st-fe-label">名稱</span>
                 <input class="avs-input" data-edit-key="name" ${isNew ? 'data-edit-focus placeholder="例：體力 / 心情 / 任務" value=""' : `value="${esc(name)}" disabled`} /></div>
             <div class="avs-st-fe-row"><span class="avs-st-fe-label">類型</span>
-                <select class="avs-select" data-edit-key="type">${TYPE_OPTIONS.map(t => `<option value="${t}" ${t === type ? 'selected' : ''}>${t.toUpperCase()}</option>`).join('')}</select></div>
+                <select class="avs-select" data-edit-key="type" ${(!isNew && type === 'object') ? 'disabled title="這是裝所有角色的容器，改型別會把裡面的角色資料全毀掉"' : ''}>${TYPE_OPTIONS.map(t => `<option value="${t}" ${t === type ? 'selected' : ''}>${t.toUpperCase()}</option>`).join('')}</select></div>
+            ${(!isNew && type === 'object') ? '<div class="avs-st-fe-hint">這欄裝的是所有角色，類型不能改；要調整記什麼請改下面的說明。</div>' : ''}
             <div class="avs-st-fe-row"><span class="avs-st-fe-label">說明</span>
                 <textarea class="avs-textarea" data-edit-key="desc" ${isNew ? '' : 'data-edit-focus'} placeholder="這欄位記什麼、何時會變">${esc(desc || '')}</textarea></div>
             <div class="avs-st-fe-actions">
