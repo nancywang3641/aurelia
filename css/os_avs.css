@@ -102,6 +102,16 @@
         .avs-st-chip.removable { display: inline-flex; align-items: center; gap: 5px; }
         .avs-st-chip .chip-x { cursor: pointer; opacity: 0.5; font-size: 10px; }
         .avs-st-chip .chip-x:hover { opacity: 1; color: #c0392b; }
+        /* 沿用浮層：按角色卡分頁（同一張卡玩過幾輪就有幾份設定） */
+        .avs-adopt-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid rgba(26,28,40,0.10); scrollbar-width: none; }
+        .avs-adopt-tabs::-webkit-scrollbar { display: none; }
+        .avs-adopt-tab { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 4px 11px 4px 4px; border-radius: 999px; border: 1px solid rgba(26,28,40,0.15); background: transparent; color: rgba(26,28,40,0.6); font-size: 12px; cursor: pointer; max-width: 190px; }
+        .avs-adopt-tab.on { background: rgba(26,28,40,0.85); color: #EEF0F6; border-color: rgba(26,28,40,0.85); }
+        .avs-adopt-ava { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: rgba(26,28,40,0.10); }
+        .avs-adopt-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .avs-adopt-tab-n { flex-shrink: 0; opacity: 0.65; font-size: 11px; }
+        .avs-adopt-panel { display: none; }
+        .avs-adopt-panel.on { display: block; }
         .avs-st-fe-hint { font-size: 11px; color: #8a7a4a; line-height: 1.5; margin: -2px 0 6px; }
         /* 使用者自己存的常用項：虛線邊跟預設項分開，一眼看得出哪些是自己加的 */
         .avs-st-chip.is-mine { border-style: dashed; background: rgba(200,160,48,0.07); }
