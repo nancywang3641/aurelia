@@ -50,7 +50,10 @@
         .avs-st-init-icon { font-size: 34px; margin-bottom: 10px; }
         .avs-st-init-title { font-size: 15px; font-weight: 700; color: #1A1C28; margin-bottom: 8px; }
         .avs-st-init-desc { font-size: 12.5px; color: rgba(26,28,40,0.5); line-height: 1.8; margin-bottom: 16px; }
-        .avs-st-init-btn { padding: 11px 26px; font-size: 14px; }
+        /* 主鈕吃滿寬；替代方案兩顆並排各半 → 三顆不會各長各的寬度 */
+        .avs-st-init-btn { padding: 11px 20px; font-size: 14px; width: 100%; box-sizing: border-box; }
+        .avs-st-init-alt { display: flex; gap: 8px; margin-top: 8px; }
+        .avs-st-init-alt .avs-st-init-btn { flex: 1; min-width: 0; padding: 10px 8px; font-size: 13px; }
         .avs-st-init-foot { font-size: 11px; color: rgba(26,28,40,0.3); margin-top: 10px; }
 
         .avs-st-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; }
@@ -102,7 +105,8 @@
         .avs-st-fe-hint { font-size: 11px; color: #8a7a4a; line-height: 1.5; margin: -2px 0 6px; }
         /* 使用者自己存的常用項：虛線邊跟預設項分開，一眼看得出哪些是自己加的 */
         .avs-st-chip.is-mine { border-style: dashed; background: rgba(200,160,48,0.07); }
-        .avs-st-chip-add { width: 100%; margin-top: 6px; font-size: 11px; }
+        /* 存成常用項＝輸入框的附屬動作，靠右縮小，別跟下面的建檔主鈕搶 */
+        .avs-st-chip-add { display: block; width: auto; margin: 6px 0 16px auto; padding: 5px 12px; font-size: 11px; }
         .avs-st-init-tags { margin-bottom: 14px; }
         .avs-st-init-tags .avs-st-chips { justify-content: center; }
         .avs-st-init-prompt { width: 100%; box-sizing: border-box; min-height: 54px; margin-bottom: 14px; }
