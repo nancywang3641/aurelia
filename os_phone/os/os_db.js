@@ -1247,12 +1247,55 @@
                 const sid = String(o.storyId);
                 await _safe('向量記憶', async () => { if (self.deleteVnMemoriesByStoryId) await self.deleteVnMemoriesByStoryId(sid); return 'ok'; });
                 await _safe('PWA大總結', () => _purge(STORE_NAME_VN_SUMMARIES, v => v && (v.storyId || '') === sid));
+                await _safe('章節', async () => { if (self.deleteVnChaptersByStoryId) await self.deleteVnChaptersByStoryId(sid); return 'ok'; });
             } else {
                 report['向量記憶'] = 'skip(無storyId)';
                 report['PWA大總結'] = 'skip(無storyId)';
+                report['章節'] = 'skip(無storyId)';
             }
 
-            // 五、VN 圖片快取（背景/頭像/立繪/場景/物品）走 VN_Cache（獨立 DB、world=raw chatId）
+            // 五、變數包（＝狀態面板的「追蹤檔案」）＋ 連帶的 UI 面板與條件規則。
+            //     ⚠️ 只清「綁定這個 chatId」的包；chatId 空的是全域包(所有卡共用)，絕不能碰。
+            //     沒清這裡就是孤兒的來源：聊天刪掉了、檔案還躺在 DB 裡愈積愈多。
+            const _killedPackIds = [];
+            await _safe('追蹤檔案', () => new Promise((res, rej) => {
+                try {
+                    let n = 0;
+                    const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_VAR_PACKS).openCursor();
+                    req.onsuccess = e => {
+                        const c = e.target.result;
+                        if (!c) return;
+                        const v = c.value;
+                        if (v && v.chatId && _inSet(v.chatId)) { _killedPackIds.push(v.id); c.delete(); n++; }
+                        c.continue();
+                    };
+                    tx.oncomplete = () => res(n);
+                    tx.onerror = e => rej(e.target.error);
+                } catch (e) { rej(e); }
+            }));
+            // UI 面板與條件規則是綁 packId 的 → 包沒了它們也是孤兒
+            await _safe('UI面板', () => _purge(STORE_NAME_UI_TEMPLATES, v => v && _killedPackIds.indexOf(v.packId) !== -1));
+            await _safe('條件規則', async () => {
+                try {
+                    const LS = win.localStorage || localStorage;
+                    const KEY = 'aurelia_rules_tavern';   // 酒館端規則(跨 chat 共用一份陣列，逐條過濾)
+                    const arr = JSON.parse(LS.getItem(KEY) || '[]');
+                    if (!Array.isArray(arr) || !arr.length) return 0;
+                    const kept = arr.filter(r => !(r && (_killedPackIds.indexOf(r.packId) !== -1 || _inSet(r.worldId))));
+                    const n = arr.length - kept.length;
+                    if (n) LS.setItem(KEY, JSON.stringify(kept));
+                    return n;
+                } catch (e) { return 'err:' + (e && e.message || e); }
+            });
+
+            // 六、創作室 app 的資料（id = appId::chat:<chatId>::key）
+            await _safe('app資料', () => _purge(STORE_NAME_APP_DATA, v => {
+                const id = String((v && v.id) || '');
+                return ids.some(x => id.indexOf('::chat:' + x + '::') !== -1);
+            }));
+
+            // 七、VN 圖片快取（背景/頭像/立繪/場景/物品）走 VN_Cache（獨立 DB、world=raw chatId）
             await _safe('圖片快取', async () => {
                 const VC = (typeof window !== 'undefined' && window.VN_Cache) || win.VN_Cache;
                 if (!VC || !VC.deleteByWorld) return 'skip(無VN_Cache)';
