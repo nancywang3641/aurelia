@@ -261,8 +261,6 @@
         .avs-st-btn-grid .avs-btn { width: 100%; min-width: 0; min-height: 42px; padding: 9px 10px; line-height: 1.35; }
         /* 📦 我的檔案（#avs-view-packs，第一層瀏覽頁）：標題要看得清、建檔按鈕一欄堆疊 */
         .avs-packs-title { font-size: 13px; font-weight: 700; color: #1A1C28; margin-top: 6px; padding-top: 14px; border-top: 1px solid rgba(26,28,40,0.10); }
-        .avs-packs-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
-        .avs-packs-actions .avs-btn { width: 100%; min-height: 42px; }
         .avs-st-initpack { align-items: stretch; padding-top: 2px; }
         .avs-st-initpack .avs-btn { min-width: 68px; }
         .avs-st-wide { min-height: 42px; text-align: left; justify-content: flex-start; }

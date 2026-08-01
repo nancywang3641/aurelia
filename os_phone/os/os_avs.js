@@ -17,7 +17,10 @@
     let activeEditingPack = null;
     let _furnaceRefineTpl = null;   // 非 null = 煉丹爐開在「✏️ 微調(diff)」模式，值＝正在微調的面板 tpl
 
+    let _appContainer = null;   // launchApp 掛載的容器；給對外 API（openNewPackEditor 等）取用
+
     async function launchApp(container) {
+        _appContainer = container;
         container.innerHTML = `
             <div class="avs-container">
                 <div class="avs-header">
@@ -91,11 +94,6 @@
                     <div id="avs-view-state" class="avs-view active"></div>
                     <div id="avs-view-packs" class="avs-view">
                         <div class="avs-packs-title">📦 我的檔案</div>
-                        <div class="avs-packs-actions">
-                            <div class="avs-btn avs-btn-primary" id="avs-btn-new-pack">＋ 創建新檔案</div>
-                            <div class="avs-btn avs-btn-outline" id="avs-btn-preset-pack">🪶 簡易預設</div>
-                            <div class="avs-btn avs-btn-outline" id="avs-btn-ai-gen-pack" style="display:none;">🧬 AI 從世界生成</div>
-                        </div>
                         <div id="avs-pack-list" style="display:flex; flex-direction:column; gap:10px;"></div>
                         <div id="avs-pack-editor" class="avs-card" style="display:none;">
                             <div class="avs-label">檔案名稱</div>
@@ -508,16 +506,11 @@
         const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
         const _curCid = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
 
-        // 🚦 建檔入口（＋創建新檔案 / 🪶簡易預設 / 🧬AI從世界生成）只在「當前卡還沒有檔案」時顯示。
-        //    一個故事一套追蹤欄位就夠——已經有卡還擺著建檔鈕只會誘導做出重複包；要重做就先刪舊的。
-        const _hasCard = currentPacks.some(p => !p.chatId || p.chatId === _curCid);
-        const _isTavern = !(win.OS_API?.isStandalone?.());
-        { const b = container.querySelector('#avs-btn-new-pack'); if (b) b.style.display = _hasCard ? 'none' : ''; }
-        { const b = container.querySelector('#avs-btn-preset-pack'); if (b) b.style.display = _hasCard ? 'none' : ''; }
-        { const b = container.querySelector('#avs-btn-ai-gen-pack'); if (b) b.style.display = (!_hasCard && _isTavern) ? '' : 'none'; }
+        // 建檔入口一律走「狀態檔案」的建檔畫面（開始追蹤狀態／簡易預設／自己建），這裡不再放第二套按鈕。
+        //    一個故事一套追蹤欄位就夠——擺兩組入口只會誘導做出重複包；要重做就先刪舊的。
 
         if (currentPacks.length === 0) {
-            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">尚無檔案<br><br>點上方「＋ 創建新檔案」開始</div>';
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">尚無檔案<br><br>回上方建檔畫面選一種建立方式</div>';
             return;
         }
 
@@ -825,120 +818,104 @@
         return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    // 🪶 簡易預設：一鍵套「角色狀態(形象/身分/好感度)」，跳過 AI 生成。
+    //    入口在「狀態檔案」的建檔畫面（os_avs_state.js 的 #avs-st-preset）；這裡是實作本體。
+    async function applySimplePreset(btnEl) {
+            if (!confirm('套用「簡易預設」檔案？\n每個角色追蹤：形象(髮色/眼色/體型)、身分、好感度。\n適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。')) return;
+            const _o = btnEl && btnEl.textContent;
+            if (btnEl) { btnEl.textContent = '套用中...'; btnEl.style.pointerEvents = 'none'; }
+            try {
+                const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+                // 已有「簡易預設」就沿用同 id 覆蓋(不另建重複包)；重套＝更新結構，不重置已記錄的角色資料
+                let _existingId = '';
+                try { const _all = await win.OS_DB.getAllVarPacks() || []; const _e = _all.find(p => (p.name || '').includes('簡易預設') && (!p.chatId || p.chatId === currentChatId)); if (_e) _existingId = _e.id; } catch(e) {}
+                const pack = {
+                    id: _existingId || ('pack_' + Date.now()),
+                    name: '簡易預設（形象/身分/好感度）',
+                    notes: '輕量預設：每個角色追蹤 形象(髮色/眼色/體型)、身分、好感度。新角色登場自動套這組。適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。',
+                    // 物件型必須給「縮排結構範本」(parseTree 解析)，副模型才看得到固定子欄位、不會每輪亂編結構而導致覆蓋。外層用變數名包裝當範本(會被剝掉)。
+                    variables: [{
+                        name: '主線目標',
+                        type: 'string',
+                        defaultValue: '',
+                        desc: '整個故事的核心目標／最初接下的任務，一句話講清「為什麼出發、最終要達成什麼」。穩定錨點：開場確立後固定不動，跑團再深也別覆蓋（防 AI 忘記初衷）。跟「當前任務」不同——當前任務每輪會變、主線目標幾乎不動；劇情明確翻轉主線才改。'
+                    }, {
+                        name: '角色狀態',
+                        type: 'object',
+                        defaultValue: '角色狀態:\n  髮色: 待定\n  眼色: 待定\n  體型: 待定\n  身分: 待定\n  好感度: 0',
+                        desc: '每個「有意義的具名角色」的即時狀態。固定基礎屬性(每個角色同一組、全部平鋪不要再分層、順序一致)：髮色、眼色、體型、身分、好感度(0-100，對主角MC的好感，純數字不加符號)。'
+                            + '【更新方式】用點記法只更新有變化的「單一屬性」，固定三層「角色狀態.角色名.屬性」(例：角色狀態.愛麗絲.好感度、角色狀態.愛麗絲.髮色)，不要再多包一層、不要整包重寫、沒變的別動，避免洗掉其他角色與屬性。'
+                            + '【誰要記】只記有名字、對劇情有份量的人物角色；雜魚/怪獸/野生動物/路人敵兵這類不要當角色(除非是有劇情份量的具名角色)。'
+                            + '【主角MC例外】主角 / MC / {{user}} 本人「不要好感度」→ 好感度欄填 null，其餘欄照記。'
+                            + '新角色登場時按固定基礎屬性組補齊每一欄初值。'
+                    }],
+                    chatId: currentChatId
+                };
+                await win.OS_DB.saveVarPack(pack);
+                // 把現有資料的舊「形象」巢狀一併攤平(形象.髮色 → 髮色)，跟新的平結構對齊、不丟角色
+                try {
+                    const _eng = win._AVS_ENGINE; const _st = _eng?.read?.();
+                    if (_st && _st['角色狀態'] && typeof _st['角色狀態'] === 'object') {
+                        for (const _ent of Object.values(_st['角色狀態'])) {
+                            if (_ent && typeof _ent === 'object' && _ent['形象'] && typeof _ent['形象'] === 'object') {
+                                for (const [_k, _v] of Object.entries(_ent['形象'])) if (_ent[_k] === undefined) _ent[_k] = _v;
+                                delete _ent['形象'];
+                            }
+                        }
+                        _eng.write(_st);
+                    }
+                } catch(e) {}
+                // 附一個「內建簡單面板」：沒有美化面板時自動裝+啟用，朋友/測試期不用每次叫 AI 生（有 AI 面板就不搶）
+                try {
+                    const _DEF_HTML = '<div class="avsdef-wrap"><div class="avsdef-quest">🎯 主線目標：{{主線目標}}</div><div class="avsdef-title">📋 角色狀態</div><div class="avsdef-grid">{{#each 角色狀態}}<div class="avsdef-card"><div class="avsdef-hd"><img class="avsdef-ava" src="{{@avatar}}"><div class="avsdef-name">{{@key}}</div></div><div class="avsdef-row"><span class="avsdef-k">身分</span><span class="avsdef-v">{{身分}}</span></div><div class="avsdef-row"><span class="avsdef-k">好感度</span><span class="avsdef-v avsdef-fav">{{好感度}}</span></div><div class="avsdef-sep"></div><div class="avsdef-row"><span class="avsdef-k">髮色</span><span class="avsdef-v">{{髮色}}</span></div><div class="avsdef-row"><span class="avsdef-k">眼色</span><span class="avsdef-v">{{眼色}}</span></div><div class="avsdef-row"><span class="avsdef-k">體型</span><span class="avsdef-v">{{體型}}</span></div></div>{{/each}}</div></div>';
+                    const _DEF_CSS = '.avsdef-wrap{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;padding:4px 0;}.avsdef-quest{font-size:12px;color:#5a4a78;background:rgba(120,90,160,0.10);border:1px solid rgba(120,90,160,0.18);border-radius:8px;padding:8px 10px;margin:0 0 10px;line-height:1.5;}.avsdef-title{font-size:15px;font-weight:700;color:#7a5fb0;letter-spacing:1px;margin:0 0 10px 2px;}.avsdef-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}.avsdef-card{background:#fff;border:1px solid rgba(120,90,160,0.18);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px rgba(120,90,160,0.08);}.avsdef-hd{display:flex;align-items:center;gap:9px;margin-bottom:8px;border-bottom:1px dashed rgba(120,90,160,0.25);padding-bottom:8px;}.avsdef-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;background:rgba(120,90,160,0.08);border:1px solid rgba(120,90,160,0.2);}.avsdef-name{font-size:15px;font-weight:800;color:#5a4a78;}.avsdef-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12px;}.avsdef-k{color:#9a90b0;flex-shrink:0;}.avsdef-v{color:#3a3450;font-weight:600;text-align:right;word-break:break-word;}.avsdef-fav{color:#e0608a;}.avsdef-sep{height:1px;background:rgba(120,90,160,0.10);margin:5px 0;}';
+                    const _allTpls = (await win.OS_DB.getAllUITemplates?.()) || [];
+                    const _mine = _allTpls.filter(t => t.packId === pack.id);
+                    const _hasActive = _mine.some(t => t.isActive);
+                    const _defId = 'tpl_default_' + pack.id;
+                    if (!_mine.some(t => t.id === _defId)) {
+                        await win.OS_DB.saveUITemplate({
+                            id: _defId, packId: pack.id, packName: pack.name,
+                            cssContent: _DEF_CSS, htmlContent: _DEF_HTML,
+                            isActive: !_hasActive, isDefault: true, createdAt: Date.now()
+                        });
+                        const _all2 = (await win.OS_DB.getAllUITemplates?.()) || [];
+                        localStorage.setItem('avs_active_ui_templates', JSON.stringify(_all2.filter(t => t.isActive)));
+                    }
+                } catch(e) { console.warn('[AVS] 內建簡單面板安裝失敗:', e); }
+                if (_appContainer) await loadAllData(_appContainer);
+                await syncVarPackToLorebook();
+                if (win.toastr) win.toastr.success('✅ 已套用簡易預設檔案');
+                try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}   // 從狀態面板初始引導觸發時，套用後刷新該面板（init 卡 → 追蹤視圖）
+                if (win.OS_STATE_RUNTIME?.extractOnce) {
+                    setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
+                }
+            } catch (e) {
+                console.error('[AVS] 套用簡易預設失敗:', e);
+                alert('套用失敗：' + (e?.message || e));
+        } finally {
+            if (btnEl) { btnEl.textContent = _o; btnEl.style.pointerEvents = ''; }
+        }
+    }
+
+    // ＋ 建新檔案：開空白的變數包編輯器（自己填欄位名／型別／預設值／說明，不經過 AI）。
+    //    入口在建檔畫面的「自己建」；這裡確保檔案區塊看得到再開編輯器。
+    function openNewPackEditor() {
+        if (!_appContainer) return false;
+        try { _appContainer.querySelector('#avs-view-packs')?.classList.add('active'); } catch (e) {}
+        openPackEditor(_appContainer, null);
+        try { _appContainer.querySelector('#avs-pack-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+        return true;
+    }
+
     function bindPackEditorEvents(container) {
-        const btnNew = container.querySelector('#avs-btn-new-pack');
         const btnSave = container.querySelector('#avs-btn-save-pack');
         const btnCancel = container.querySelector('#avs-btn-cancel-pack');
         const btnAddVar = container.querySelector('#avs-btn-add-var');
         const rowsContainer = container.querySelector('#avs-var-rows-container');
 
-        btnNew.onclick = () => openPackEditor(container, null);
-        btnCancel.onclick = () => { container.querySelector('#avs-pack-editor').style.display = 'none'; container.querySelector('#avs-pack-list').style.display = 'flex'; btnNew.style.display = 'inline-flex'; };
+        btnCancel.onclick = () => { container.querySelector('#avs-pack-editor').style.display = 'none'; container.querySelector('#avs-pack-list').style.display = 'flex'; };
         btnAddVar.onclick = () => addVarRow(rowsContainer, '', '', '', 'string');
-
-        // 酒館特有：AI 從世界書/角色卡/開頭劇情生成變數包（PWA 有 VN_STORY_STARTED 自動觸發，不需此按鈕）
-        const btnAiGen = container.querySelector('#avs-btn-ai-gen-pack');
-        const isTavern = !(win.OS_API?.isStandalone?.());
-        if (btnAiGen && isTavern) {
-            btnAiGen.style.display = 'inline-flex';
-            btnAiGen.onclick = async () => {
-                const original = btnAiGen.textContent;
-                btnAiGen.textContent = '🧬 AI 分析中...';
-                btnAiGen.style.pointerEvents = 'none';
-                try {
-                    const r = await _aiGenerateAndSavePack();
-                    if (r) await loadAllData(container);
-                } catch(e) {
-                    console.error('[AVS] AI 生成變數包失敗:', e);
-                    alert('生成失敗：' + (e?.message || e));
-                } finally {
-                    btnAiGen.textContent = original;
-                    btnAiGen.style.pointerEvents = '';
-                }
-            };
-        }
-
-        // 🪶 簡易預設：一鍵套「角色狀態(形象/身分/好感度)」，跳過 AI 生成。可選、不強制——朋友想簡單就點這個
-        const btnPreset = container.querySelector('#avs-btn-preset-pack');
-        if (btnPreset) {
-            btnPreset.onclick = async () => {
-                if (!confirm('套用「簡易預設」檔案？\n每個角色追蹤：形象(髮色/眼色/體型)、身分、好感度。\n適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。')) return;
-                const original = btnPreset.textContent;
-                btnPreset.textContent = '套用中...'; btnPreset.style.pointerEvents = 'none';
-                try {
-                    const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
-                    // 已有「簡易預設」就沿用同 id 覆蓋(不另建重複包)；重套＝更新結構，不重置已記錄的角色資料
-                    let _existingId = '';
-                    try { const _all = await win.OS_DB.getAllVarPacks() || []; const _e = _all.find(p => (p.name || '').includes('簡易預設') && (!p.chatId || p.chatId === currentChatId)); if (_e) _existingId = _e.id; } catch(e) {}
-                    const pack = {
-                        id: _existingId || ('pack_' + Date.now()),
-                        name: '簡易預設（形象/身分/好感度）',
-                        notes: '輕量預設：每個角色追蹤 形象(髮色/眼色/體型)、身分、好感度。新角色登場自動套這組。適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。',
-                        // 物件型必須給「縮排結構範本」(parseTree 解析)，副模型才看得到固定子欄位、不會每輪亂編結構而導致覆蓋。外層用變數名包裝當範本(會被剝掉)。
-                        variables: [{
-                            name: '主線目標',
-                            type: 'string',
-                            defaultValue: '',
-                            desc: '整個故事的核心目標／最初接下的任務，一句話講清「為什麼出發、最終要達成什麼」。穩定錨點：開場確立後固定不動，跑團再深也別覆蓋（防 AI 忘記初衷）。跟「當前任務」不同——當前任務每輪會變、主線目標幾乎不動；劇情明確翻轉主線才改。'
-                        }, {
-                            name: '角色狀態',
-                            type: 'object',
-                            defaultValue: '角色狀態:\n  髮色: 待定\n  眼色: 待定\n  體型: 待定\n  身分: 待定\n  好感度: 0',
-                            desc: '每個「有意義的具名角色」的即時狀態。固定基礎屬性(每個角色同一組、全部平鋪不要再分層、順序一致)：髮色、眼色、體型、身分、好感度(0-100，對主角MC的好感，純數字不加符號)。'
-                                + '【更新方式】用點記法只更新有變化的「單一屬性」，固定三層「角色狀態.角色名.屬性」(例：角色狀態.愛麗絲.好感度、角色狀態.愛麗絲.髮色)，不要再多包一層、不要整包重寫、沒變的別動，避免洗掉其他角色與屬性。'
-                                + '【誰要記】只記有名字、對劇情有份量的人物角色；雜魚/怪獸/野生動物/路人敵兵這類不要當角色(除非是有劇情份量的具名角色)。'
-                                + '【主角MC例外】主角 / MC / {{user}} 本人「不要好感度」→ 好感度欄填 null，其餘欄照記。'
-                                + '新角色登場時按固定基礎屬性組補齊每一欄初值。'
-                        }],
-                        chatId: currentChatId
-                    };
-                    await win.OS_DB.saveVarPack(pack);
-                    // 把現有資料的舊「形象」巢狀一併攤平(形象.髮色 → 髮色)，跟新的平結構對齊、不丟角色
-                    try {
-                        const _eng = win._AVS_ENGINE; const _st = _eng?.read?.();
-                        if (_st && _st['角色狀態'] && typeof _st['角色狀態'] === 'object') {
-                            for (const _ent of Object.values(_st['角色狀態'])) {
-                                if (_ent && typeof _ent === 'object' && _ent['形象'] && typeof _ent['形象'] === 'object') {
-                                    for (const [_k, _v] of Object.entries(_ent['形象'])) if (_ent[_k] === undefined) _ent[_k] = _v;
-                                    delete _ent['形象'];
-                                }
-                            }
-                            _eng.write(_st);
-                        }
-                    } catch(e) {}
-                    // 附一個「內建簡單面板」：沒有美化面板時自動裝+啟用，朋友/測試期不用每次叫 AI 生（有 AI 面板就不搶）
-                    try {
-                        const _DEF_HTML = '<div class="avsdef-wrap"><div class="avsdef-quest">🎯 主線目標：{{主線目標}}</div><div class="avsdef-title">📋 角色狀態</div><div class="avsdef-grid">{{#each 角色狀態}}<div class="avsdef-card"><div class="avsdef-hd"><img class="avsdef-ava" src="{{@avatar}}"><div class="avsdef-name">{{@key}}</div></div><div class="avsdef-row"><span class="avsdef-k">身分</span><span class="avsdef-v">{{身分}}</span></div><div class="avsdef-row"><span class="avsdef-k">好感度</span><span class="avsdef-v avsdef-fav">{{好感度}}</span></div><div class="avsdef-sep"></div><div class="avsdef-row"><span class="avsdef-k">髮色</span><span class="avsdef-v">{{髮色}}</span></div><div class="avsdef-row"><span class="avsdef-k">眼色</span><span class="avsdef-v">{{眼色}}</span></div><div class="avsdef-row"><span class="avsdef-k">體型</span><span class="avsdef-v">{{體型}}</span></div></div>{{/each}}</div></div>';
-                        const _DEF_CSS = '.avsdef-wrap{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;padding:4px 0;}.avsdef-quest{font-size:12px;color:#5a4a78;background:rgba(120,90,160,0.10);border:1px solid rgba(120,90,160,0.18);border-radius:8px;padding:8px 10px;margin:0 0 10px;line-height:1.5;}.avsdef-title{font-size:15px;font-weight:700;color:#7a5fb0;letter-spacing:1px;margin:0 0 10px 2px;}.avsdef-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}.avsdef-card{background:#fff;border:1px solid rgba(120,90,160,0.18);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px rgba(120,90,160,0.08);}.avsdef-hd{display:flex;align-items:center;gap:9px;margin-bottom:8px;border-bottom:1px dashed rgba(120,90,160,0.25);padding-bottom:8px;}.avsdef-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;background:rgba(120,90,160,0.08);border:1px solid rgba(120,90,160,0.2);}.avsdef-name{font-size:15px;font-weight:800;color:#5a4a78;}.avsdef-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12px;}.avsdef-k{color:#9a90b0;flex-shrink:0;}.avsdef-v{color:#3a3450;font-weight:600;text-align:right;word-break:break-word;}.avsdef-fav{color:#e0608a;}.avsdef-sep{height:1px;background:rgba(120,90,160,0.10);margin:5px 0;}';
-                        const _allTpls = (await win.OS_DB.getAllUITemplates?.()) || [];
-                        const _mine = _allTpls.filter(t => t.packId === pack.id);
-                        const _hasActive = _mine.some(t => t.isActive);
-                        const _defId = 'tpl_default_' + pack.id;
-                        if (!_mine.some(t => t.id === _defId)) {
-                            await win.OS_DB.saveUITemplate({
-                                id: _defId, packId: pack.id, packName: pack.name,
-                                cssContent: _DEF_CSS, htmlContent: _DEF_HTML,
-                                isActive: !_hasActive, isDefault: true, createdAt: Date.now()
-                            });
-                            const _all2 = (await win.OS_DB.getAllUITemplates?.()) || [];
-                            localStorage.setItem('avs_active_ui_templates', JSON.stringify(_all2.filter(t => t.isActive)));
-                        }
-                    } catch(e) { console.warn('[AVS] 內建簡單面板安裝失敗:', e); }
-                    await loadAllData(container);
-                    await syncVarPackToLorebook();
-                    if (win.toastr) win.toastr.success('✅ 已套用簡易預設檔案');
-                    try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}   // 從狀態面板初始引導觸發時，套用後刷新該面板（init 卡 → 追蹤視圖）
-                    if (win.OS_STATE_RUNTIME?.extractOnce) {
-                        setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
-                    }
-                } catch (e) {
-                    console.error('[AVS] 套用簡易預設失敗:', e);
-                    alert('套用失敗：' + (e?.message || e));
-                } finally {
-                    btnPreset.textContent = original; btnPreset.style.pointerEvents = '';
-                }
-            };
-        }
 
         btnSave.onclick = async () => {
             const name = container.querySelector('#avs-pack-name').value;
@@ -1293,7 +1270,6 @@
     function openPackEditor(container, pack) {
         activeEditingPack = pack;
         container.querySelector('#avs-pack-list').style.display = 'none';
-        container.querySelector('#avs-btn-new-pack').style.display = 'none';
         const editor = container.querySelector('#avs-pack-editor');
         editor.style.display = 'block';
         container.querySelector('#avs-pack-name').value = pack ? pack.name : '';
@@ -1689,7 +1665,9 @@
         buildAvatarMap: _avsBuildAvatarMap,   // 預撈角色頭像(async) 給 {{@avatar}} 用
         syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發（現為「清理舊世界書條目」）
         buildVarDefsContent,     // 變數定義說明書內容→給 state_runtime.injectCurrent 即時注入主提示詞（取代寫世界書）
-        generateAndSaveSchema: _aiGenerateAndSavePack,   // AVS 狀態面板「開始追蹤狀態」按鈕共用此核心（生成+存+同步）
+        generateAndSaveSchema: _aiGenerateAndSavePack,   // 建檔畫面「開始追蹤狀態」共用此核心（生成+存+同步）
+        applySimplePreset,      // 建檔畫面「🪶 簡易預設」共用此實作
+        openNewPackEditor,      // 建檔畫面「自己建」共用此實作
         // V3：規則 modal helper（給 inline onclick 呼叫）
         _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,
         activateTemplateForPack,
