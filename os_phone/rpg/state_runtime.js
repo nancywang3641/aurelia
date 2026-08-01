@@ -682,7 +682,7 @@ ${_memoryRulesText()}
 
     // 從 AVS 狀態抽「角色外觀錨點」：掃 object 容器(角色狀態)裡每個角色的外觀欄位，組成權威外觀清單。
     // 用途：補漏——給沒有頭像快取、但 AVS 有記外觀的角色。skip：已被頭像快取覆蓋的角色名(不重複列)。
-    function _charLooksRef(state, skip, keep) {
+    function _charLooksRef(state, skip) {
         if (!state || typeof state !== 'object') return '';
         const LOOK_KEYS = ['髮色','髮型','瀏海','眼色','瞳色','膚色','體型','身材','身高','服裝','衣著','外觀','形象','身分','身份','氣質','臉型'];
         const lines = [];
@@ -691,7 +691,6 @@ ${_memoryRulesText()}
             for (const [name, ent] of Object.entries(v)) {
                 if (!ent || typeof ent !== 'object' || Array.isArray(ent)) continue;   // 每個角色實體
                 if (skip && skip.has(name)) continue;                         // 頭像快取已覆蓋 → 不重複
-                if (keep && !keep(name)) continue;                            // 近期濾鏡：不在最近名單就跳過
                 const looks = LOOK_KEYS
                     .filter(k => ent[k] != null && String(ent[k]).trim() && String(ent[k]).trim() !== '待定')
                     .map(k => `${k}:${String(ent[k]).trim()}`);
@@ -701,40 +700,17 @@ ${_memoryRulesText()}
         return lines.join('\n');
     }
 
-    // 「最近出現過的角色」名單：掃 [Char|名字] 標籤 = 當前這輪正文 + 最近 3 章 content。
-    //   給 _buildLooksRef 當濾鏡 → 外觀錨點只留近期角色，不再每個曾畫過的都塞、無限長。
-    //   ★安全閥：空集合(剛開局/掃不到標籤)→ 呼叫端退回「全列」，永不因濾過頭害副模型沒外觀可參考、把人畫崩。
-    async function _recentCharNames() {
-        const names = new Set();
-        const scan = (txt) => {
-            if (!txt) return;
-            const re = /\[Char\|([^|\]\n]+)/g; let m;
-            while ((m = re.exec(String(txt))) !== null) { const n = (m[1] || '').trim(); if (n) names.add(n); }
-        };
-        // 當前這輪（讀最後一則原文，含正在被抽的這輪、其說話角色一定保留）
-        try { const arr = await win.TavernHelper?.getChatMessages?.(-1); scan(arr && arr[0] && (arr[0].message || arr[0].mes)); } catch (e) {}
-        // 最近 3 章正文（每章 saveVnChapter 都存了 content）
-        try {
-            if (win.OS_DB && win.OS_DB.getAllVnChapters) {
-                let chs = (await win.OS_DB.getAllVnChapters()) || [];
-                let sid = '';
-                try { sid = localStorage.getItem('vn_current_story_id') || (win.OS_AVS_ADAPTER && win.OS_AVS_ADAPTER.getStoryId && win.OS_AVS_ADAPTER.getStoryId()) || ''; } catch (e) {}
-                if (sid) { const f = chs.filter(c => c && c.storyId === sid); if (f.length) chs = f; }   // 只看當前故事；對不到就全章退路
-                chs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                chs.slice(0, 3).forEach(c => scan(c && c.content));
-            }
-        } catch (e) {}
-        return names;
-    }
-
     // 組「角色外觀錨點」：★主來源＝每個角色「頭像當初生成用的提示詞」(avatar_cache, ground truth)——
     //   插圖照它畫就跟頭像/立繪同一個人。沒有頭像的角色才退回 AVS 狀態記的外觀(_charLooksRef)。
     //   跟 vn_core 立繪同邏輯(優先 avatar_cache.prompt，沒有才退腳本描述)，徹底解決「久了被摘要、副模型查不到外觀」。
-    //   ★ 只列「最近出現過的角色」(近 3 章 + 這輪)，避免清單隨遊戲無限累積；空集合則不濾(全列)。
+    //
+    // 🗑️ 2026-08-01 移除「近期濾鏡」（原本只列近 3 章 + 這輪出現過的角色）：
+    //    角色只要離場超過 3 章，頭像生成詞就從參考清單消失 → 副模型畫插圖時沒有錨點可對 →
+    //    同一個角色每次回歸都被重畫成另一張臉。而「久違的角色回歸」正是最需要錨點的時候，
+    //    濾鏡剛好把它濾掉，方向是反的。
+    //    現在：當前世界所有「有頭像」的角色一律列出（avatar_cache 本身就只存畫過的人、且只看當前世界，
+    //    天然有界）。代價是副模型 prompt 變長，覺得太肥再加「取最近 N 個」的數量上限，而不是時間窗。
     async function _buildLooksRef(state) {
-        const recentNames = await _recentCharNames();
-        const filterOn = recentNames.size > 0;
-        const keep = (name) => !filterOn || recentNames.has(name);
         const lines = [];
         const seen = new Set();
         try {
@@ -748,13 +724,12 @@ ${_memoryRulesText()}
                     const name = (C.bareKeyOf ? C.bareKeyOf(e) : e.key) || '';
                     const p = String(e.prompt).trim();
                     if (!name || !p || seen.has(name)) continue;
-                    if (!keep(name)) continue;                                   // 近期濾鏡：只留最近出現的角色
                     seen.add(name);
                     lines.push(`・${name}｜頭像生成詞：${p}`);
                 }
             }
         } catch (e) {}
-        const avs = _charLooksRef(state, seen);   // 補漏：沒頭像但 AVS 有外觀的角色 → 保持全列、不吃近期濾鏡(AVS 是全開的底，近期濾鏡只砍重的頭像生成詞)
+        const avs = _charLooksRef(state, seen);   // 補漏：沒頭像但 AVS 有外觀的角色（本來就全列）
         if (avs) lines.push(avs);
         return lines.join('\n');
     }
