@@ -332,7 +332,7 @@
                             <span class="avs-st-chip removable" data-k="劇情目標：長期目標＋短期待辦">🎯 劇情目標<i class="fa-solid fa-xmark chip-x"></i></span>
                             <span class="avs-st-chip removable" data-k="每個角色的當前目標與時限">📋 角色待辦<i class="fa-solid fa-xmark chip-x"></i></span>
                             <span class="avs-st-chip removable" data-k="當前場景／地點">📍 當前場景<i class="fa-solid fa-xmark chip-x"></i></span>
-                            <span class="avs-st-chip removable" data-k="角色攜帶／持有的物品">🎒 物品攜帶<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="主角攜帶／持有的物品（只有主角一份 list，NPC 不要開物品欄）">🎒 物品攜帶<i class="fa-solid fa-xmark chip-x"></i></span>
                             <span class="avs-st-chip removable" data-k="題材專屬數值（HP／理智／倒計時等）">⚙️ 題材數值<i class="fa-solid fa-xmark chip-x"></i></span>
                             ${_loadMyChips().map(v => `<span class="avs-st-chip removable is-mine" data-k="${esc(v)}" title="${esc(v)}">${esc(_chipLabel(v))}<i class="fa-solid fa-xmark chip-x"></i></span>`).join('')}
                         </div>
