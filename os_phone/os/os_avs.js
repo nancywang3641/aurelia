@@ -189,9 +189,11 @@
                 tab.classList.add('active');
                 const _t = tab.dataset.tab;
                 if (_t === 'state') {
-                    // 「狀態檔案」整合頁＝目前狀態(上) + 檔案(下) 同一頁
+                    // 「狀態檔案」整合頁＝目前狀態(上) + 檔案(下) 同一頁。
+                    // ⚠️ 檔案區塊【不要】在這裡 add active：狀態那邊是 async（先顯示「載入狀態中…」），
+                    //    檔案清單卻是同步的會馬上畫好 → 檔案先蹦出來卡在載入訊息底下。
+                    //    交給 os_avs_state 的 _build 收尾時依「有沒有 schema」toggle（見 os_avs_state.js 的 #avs-view-packs）。
                     container.querySelector('#avs-view-state').classList.add('active');
-                    container.querySelector('#avs-view-packs').classList.add('active');
                     renderStateView(container);
                     renderPackList(container);
                 } else {
@@ -217,8 +219,8 @@
         // 🛡️ await loadAllData 期間使用者可能已切到「記憶」tab；若已切走就別硬補 active，
         //    否則檔案 view 會跟記憶 view 同時 active（兩者都 display:flex）→ 我的檔案 UI 疊進記憶 tab
         if (container.querySelector('.avs-tab[data-tab="state"]')?.classList.contains('active')) {
+            // 同上：檔案區塊的顯示與否交給 os_avs_state 的 _build 決定，這裡不搶著開
             container.querySelector('#avs-view-state')?.classList.add('active');
-            container.querySelector('#avs-view-packs')?.classList.add('active');
             renderStateView(container);
             renderPackList(container);
         }
