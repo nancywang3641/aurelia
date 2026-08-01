@@ -668,7 +668,7 @@
     /* 面板：取消垂直置中，改上緣固定，底部讓給對話卡 */
     .lobby-left.void-dock-open .oc-win {
         top:10px; bottom:auto; transform:none;
-        max-height:calc(100% - 196px); min-height:0;
+        max-height:calc(100% - 258px); min-height:0;
     }
 
     /* 對話卡：貼到面板正下方（面板開著時不必再避搖桿） */
@@ -676,8 +676,8 @@
         bottom:8px; padding:0 10px;
     }
 
-    /* 立繪被面板蓋住 → 壓暗當底，不跟卡片搶視線 */
-    .lobby-left.void-dock-open::after { background:rgba(18,15,12,0.46); }
+    /* ⚠️ 別動 .lobby-left::after 的 --lb-scrim：書咖舞台靠那層白膜蓋住底下的立繪背景圖，
+       換成暗色/半透明會讓立繪整個透出來壓在場景上。 */
 
     /* 對話框 → 「頭像｜名字＋台詞」兩欄小卡 */
     .void-tab:not(.mode-404) .lobby-left.void-dock-open .void-dialogue-box {
@@ -701,8 +701,21 @@
         position:static !important; top:auto !important; left:auto !important; width:auto !important;
     }
     .void-tab:not(.mode-404) .lobby-left.void-dock-open .void-text {
-        grid-area:text; max-height:15vh !important; font-size:12.5px !important;
+        /* 用 px 不用 vh：面板 z-index 比對話卡高，卡片長過頭會被面板壓住上緣 */
+        grid-area:text; max-height:5.25em !important; font-size:12.5px !important;
+        scrollbar-width:none;
     }
     /* ▼ 續行箭頭改貼右下，不佔格 */
     .lobby-left.void-dock-open .void-next { position:absolute; right:10px; bottom:6px; }
+
+    /* 反應框＝同一個人接著說的第二張卡：不重複長頭像，收成單欄並跟上面那張隔開 */
+    .void-tab:not(.mode-404) .lobby-left.void-dock-open #iris-reaction-box {
+        grid-template-columns:minmax(0,1fr);
+        grid-template-areas:"name" "text";
+        margin-top:6px;
+    }
+    .lobby-left.void-dock-open #iris-reaction-box::before { display:none; }
+    .void-tab:not(.mode-404) .lobby-left.void-dock-open #iris-reaction-box .void-text { max-height:3.5em !important; }
+    /* 手機直接滑就好，捲軸條在小卡上太搶眼 */
+    .lobby-left.void-dock-open .void-text::-webkit-scrollbar { width:0; height:0; }
 }
