@@ -2172,16 +2172,27 @@ _directorSpec(castNames);
             });
         }
 
-        // chat 被酒館刪 → 自動清對應 state_data（避免孤兒資料）
+        // chat 被酒館刪 → 把綁這個 chatId 的資料全清掉（不只 state_data）。
+        //   以前只清 state_data，其餘（追蹤檔案／UI面板／規則／大總結／向量記憶／app 資料…）全留下來變孤兒，
+        //   狀態面板的「其他檔案（N）」就是這樣愈積愈多的。聊天都刪了，那些留著也沒有主人。
+        //   全域包（chatId 空）與世界書／地圖是跨卡共用，deleteAllByChatId 不會碰。
+        //   sp_purge_on_chat_delete=0 可退回舊行為（只清 state_data）。
         if (win.tavern_events.CHAT_DELETED) {
             win.eventOn(win.tavern_events.CHAT_DELETED, async (chatFileName) => {
                 try {
                     const id = normalizeChatId(chatFileName);
-                    if (!id || !win.OS_DB?.getStateData) return;
-                    const data = await win.OS_DB.getStateData(id);
-                    if (!data) return;
-                    await win.OS_DB.deleteStateData(id);
-                    console.log(`🛰️ [State Runtime] chat 被刪 → 自動清 state_data: ${id}`);
+                    if (!id || !win.OS_DB) return;
+                    const _full = localStorage.getItem('sp_purge_on_chat_delete') !== '0';
+                    if (_full && win.OS_DB.deleteAllByChatId) {
+                        // storyId 傳 id：酒館端向量記憶就是用 chatId 當 storyId（見 os_vector_inject._storyId）
+                        const report = await win.OS_DB.deleteAllByChatId(id, { rawChatId: chatFileName, storyId: id, vnWorld: id });
+                        console.log(`🛰️ [State Runtime] chat 被刪 → 已清掉這個聊天的所有綁定資料: ${id}`, report);
+                    } else {
+                        const data = await win.OS_DB.getStateData?.(id);
+                        if (!data) return;
+                        await win.OS_DB.deleteStateData(id);
+                        console.log(`🛰️ [State Runtime] chat 被刪 → 自動清 state_data: ${id}`);
+                    }
                     try { win.eventEmit?.('AURELIA_STATE_DATA_REMOVED', { chatId: id }); } catch(e) {}
                 } catch(e) {
                     console.warn('[State Runtime] CHAT_DELETED 清理失敗:', e);
