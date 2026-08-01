@@ -489,7 +489,7 @@
     /* 大廳右欄 3 個 main menu 按鈕並排，緊湊小 */
     .lobby-right {
         flex:0 0 auto;
-        display:grid !important;
+        display:grid;
         grid-template-columns: 1fr 1fr 1fr;
         grid-template-areas:
             "head head head"
@@ -664,9 +664,11 @@
    ========================================================= */
 @media (max-width:760px) {
 
-    /* 舞台模式的立繪背景圖：面板一開就整張關掉。
-       ⚠️ 別靠 .lobby-left::after 的 --lb-scrim 白膜去蓋 —— 那層一被改寫立繪就透出來。 */
-    .lobby-left.lstage-on.void-dock-open { background-image:none !important; }
+    /* 對話立繪：只有「管理員」(瀅瀅/柴郡/白兔/愛麗絲＝會開停靠面板的那幾位)才收起，
+       因為手機上面板已經佔滿、立繪沒地方站。一般 NPC 沒有 .void-dock-open，立繪照常顯示。
+       ⚠️ 目標是 .lstage-talk-portrait（showDialog 時建立的 VN 風立繪），
+          不是 .lobby-left 的背景圖，也別去動 ::after 的 --lb-scrim 白膜。 */
+    .lobby-left.void-dock-open .lstage-talk-portrait { display:none !important; }
 
     /* 面板：貼底對齊（底邊剛好在輸入框上方），上方留出場景 */
     /* top+bottom 一起給＝高度固定，不隨內容縮（縮了下緣的對話卡就會吃掉內容區） */
@@ -689,7 +691,7 @@
 
     /* 對話框 → 「頭像｜名字＋台詞」兩欄小卡 */
     .void-tab:not(.mode-404) .lobby-left.void-dock-open .void-dialogue-box {
-        display:grid !important;
+        display:grid;
         grid-template-columns:46px minmax(0,1fr);
         grid-template-areas:"face name" "face text";
         align-items:start; gap:3px 11px;
