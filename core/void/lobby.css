@@ -655,6 +655,9 @@
 /* Empty state */
 .lcp-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:#9c9083; font-size:12px; gap:8px; padding:20px; text-align:center; line-height:1.6; }
 
+/* 收起鈕（📱 手機＋停靠面板開著時才由下面的 media 打開；桌機用不到） */
+.lstage-dlg-fold { display:none; }
+
 /* =========================================================
    📱 手機：NPC 停靠面板開著時的版型
    桌機是 16:9「左立繪＋右面板」；手機直立沒有左右，面板一開就整個
@@ -739,5 +742,19 @@
     .lobby-left.void-dock-open .void-send-btn {
         width:46px !important; height:46px !important; flex:0 0 46px !important;
         border-radius:50% !important; padding:0 !important;
+    }
+    /* 對話收起時（點了 ▾ 或還沒開聊）：面板自己長高吃滿螢幕，專心操作；
+       💬 浮鈕要浮在面板之上才點得到（面板 z-index 3350） */
+    .lobby-left.void-dock-open.lstage-dlg-hidden .oc-win { top:12%; bottom:14px; }
+    .lobby-left.void-dock-open .lstage-chat-fab { z-index:3500; }
+
+    /* 「離開」與「收起」兩顆並排在泡泡右上外側，靠螢幕右邊對齊 */
+    .lobby-left.void-dock-open .lstage-dlg-close { right:44px; }
+    .lobby-left.void-dock-open .lstage-dlg-fold {
+        display:flex; align-items:center; justify-content:center;
+        position:absolute; top:-22px; right:0; width:34px; height:22px;
+        padding:0; border-radius:3px; cursor:pointer;
+        background:rgba(250,251,255,0.92); border:1px solid rgba(26,28,40,0.18);
+        color:#1A1C28; font-size:11px;
     }
 }

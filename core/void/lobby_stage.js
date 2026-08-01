@@ -1105,6 +1105,17 @@
             btn.addEventListener('click', (e) => { e.stopPropagation(); if (S.talkTarget) endTalk(); else hideDialog(); });
             box.appendChild(btn);
         }
+        // 📱 收起鈕：手機上停靠面板(書咖/交易所/世界門)跟對話搶空間，面板會被擠到看不清。
+        //    這顆只收對話、【不】結束對話，面板留著且會自己長高；要講話再點 💬 浮鈕叫回來。
+        //    跟「離開」不同：離開走 endTalk()，連面板一起收掉。只在手機＋面板開著時由 CSS 顯示。
+        if (box && !box.querySelector('.lstage-dlg-fold')) {
+            const fold = document.createElement('button');
+            fold.className = 'lstage-dlg-fold';
+            fold.title = '收起對話（面板留著）';
+            fold.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
+            fold.addEventListener('click', (e) => { e.stopPropagation(); left.classList.add('lstage-dlg-hidden'); });
+            box.appendChild(fold);
+        }
     }
     function hideDialog() {
         const left = document.querySelector('.lobby-left');
