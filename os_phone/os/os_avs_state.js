@@ -310,7 +310,7 @@
 
         // 沿用區：把別的聊天已經做好的追蹤欄位＋條件規則＋UI 面板整套搬過來（不帶數值）。
         //   重玩同一張卡時最常用——開新聊天不必再等 AI 生成、也不必重煉 UI。舊聊天原封不動。
-        const _adoptable = (_packs || []).filter(p => p && p.chatId && p.chatId !== chatId);
+        const _adoptable = _adoptCandidates(chatId);
         //   用浮層挑（不用原生下拉）：原生 select 的清單由瀏覽器畫在最上層、會衝出手機殼；
         //   而且同一張卡的檔案常常同名，浮層才擺得下「幾項/幾條規則/哪個聊天」這些分辨資訊。
         const adoptHtml = _adoptable.length ? `
@@ -597,6 +597,13 @@
     // 「沿用其他故事的設定」：整套搬 追蹤欄位(變數包) + 條件規則 + UI 面板 到當前聊天。
     //   不碰來源故事、不帶任何數值 —— 重玩同一張卡開新聊天時，省掉重新生成與重煉 UI。
     //   init 畫面與資料管理頁共用（init 分支不走 _bind，各自呼叫一次）。
+    // 可沿用的清單：綁在「別的聊天」的檔案；排除「簡易預設」——那個按建檔畫面的按鈕就能直接建，
+    // 內容也都一樣，列進來只是佔位子。
+    function _adoptCandidates(curChatId) {
+        return (_packs || []).filter(p => p && p.chatId && p.chatId !== curChatId
+            && !String(p.name || '').includes('簡易預設'));
+    }
+
     // chatId 是 ST 的聊天檔名「角色卡名 - YYYY-MM-DD@時間」→ 取前面那段當角色卡名
     function _cardNameOf(chatId) {
         const s = String(chatId || '');
@@ -650,7 +657,7 @@
         const listEl = m.querySelector('#avs-adopt-list');
         listEl.innerHTML = '<div class="avs-sm-tip">載入中…</div>';
         const chatId = win.SillyTavern?.getContext?.()?.chatId || '';
-        const items = (_packs || []).filter(p => p && p.chatId && p.chatId !== chatId);
+        const items = _adoptCandidates(chatId);
         if (!items.length) { listEl.innerHTML = '<div class="avs-sm-tip">還沒有其他故事的設定可以沿用</div>'; return; }
         let rules = [], tpls = [];
         try { rules = win.OS_AVS_RULES?.loadRules?.() || []; } catch (e) {}
