@@ -695,7 +695,10 @@
         /* ⚠️ display 不可加 !important：主線框/反應框是靠 inline style.display 互斥的，
               加了會蓋過 inline → 兩個泡泡同時出現 */
         display:block;
-        max-width:74%; margin-left:auto;
+        /* 立繪是 .lstage-talk-portrait{left:0; max-width:52%} → 泡泡最多 48% 才完全不壓到它。
+           百分比基準是扣掉 wrap padding 後的寬，實測 47% 剛好貼齊立繪右緣＝零重疊。
+           width:fit-content ＝ 短句自己收窄，不用每句都撐滿。 */
+        width:fit-content; max-width:47%; margin-left:auto;
         padding:11px 14px !important; min-height:0 !important;
         border-radius:16px 16px 16px 5px !important;
         background:rgba(255,253,248,0.97) !important;
@@ -719,8 +722,8 @@
         font-size:12.5px !important; color:#8a6a4a !important; letter-spacing:0.5px !important;
     }
     .void-tab:not(.mode-404) .lobby-left.void-dock-open .void-text {
-        /* 用行高倍數不用 px：切在整行上，不會切半個字 */
-        max-height:6em !important; font-size:13px !important;
+        /* 切在整行上不切半個字：line-height 是 1.75，所以 6 行＝ 6*1.75em（em 是字級不是行高） */
+        max-height:calc(6 * 1.75em) !important; font-size:13px !important;
         color:#4a3828 !important; scrollbar-width:none;
     }
     /* 手機直接滑就好，捲軸條在泡泡上太搶眼 */
