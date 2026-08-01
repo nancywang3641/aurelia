@@ -669,9 +669,11 @@
 
     /* 面板：貼底對齊（底邊剛好在輸入框上方），上方留給立繪與泡泡。
        top+bottom 一起給＝高度固定，不隨內容縮。 */
-    .lobby-left.void-dock-open .oc-win {
-        top:34%; bottom:74px; transform:none;
-        max-height:none; min-height:0;
+    .lobby-left.void-dock-open .oc-win,
+    .lobby-left.void-dock-open .wg-win,
+    .lobby-left.void-dock-open .os-pt-dock {
+        top:34%; bottom:74px; left:10px; right:10px; width:auto; max-width:none;
+        transform:none; max-height:none; min-height:0;
         border-radius:20px;
     }
 
@@ -746,10 +748,22 @@
         width:46px !important; height:46px !important; flex:0 0 46px !important;
         border-radius:50% !important; padding:0 !important;
     }
+    /* 立繪改貼「元素框頂端」而不是貼底。
+       原本 object-position:left bottom 是為了讓腳踩在桌機的對話框上方；手機面板貼底之後，
+       腳那端本來就被面板蓋住，貼底只會把整張圖往下推。
+       白兔/愛麗絲/柴郡的立繪是 972×1882（比瀅瀅的 708×1882 寬），contain 之後顯示高度只有
+       瀅瀅的七成 → 貼底時圖頂落在 305px，而面板從 276px 開始蓋，整張立繪會消失。
+       貼頂後三個人露出的高度一致（約 177px，剛好是頭到胸口）。 */
+    .lobby-left.void-dock-open .lstage-talk-portrait { object-position:left top; }
+
     /* 對話收起時（點了 ▾ 或還沒開聊）：面板自己長高吃滿螢幕，專心操作；
        💬 浮鈕要浮在面板之上才點得到（面板 z-index 3350） */
-    .lobby-left.void-dock-open.lstage-dlg-hidden .oc-win { top:12%; bottom:14px; }
+    .lobby-left.void-dock-open.lstage-dlg-hidden .oc-win,
+    .lobby-left.void-dock-open.lstage-dlg-hidden .wg-win,
+    .lobby-left.void-dock-open.lstage-dlg-hidden .os-pt-dock { top:12%; bottom:14px; }
     .lobby-left.void-dock-open .lstage-chat-fab { z-index:3500; }
+    /* 交易所面板原本 z-index:80（另兩個是 3350）→ 抬齊，三個面板行為才一致 */
+    .lobby-left.void-dock-open .os-pt-dock { z-index:3350; }
 
     /* 「離開」與「收起」兩顆並排在泡泡右上外側，靠螢幕右邊對齊 */
     .lobby-left.void-dock-open .lstage-dlg-close { right:44px; }
