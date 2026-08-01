@@ -153,6 +153,70 @@ ${list}
         }
     }
 
+    // ── 2.5 對帳：正文才是底本，檔案跟著正文走 ──────────────────────────────
+    // 🚨 這個模組原本只有寫入路徑（prepare 累加登場數、commit 寫檔案），沒有任何回收：
+    //    刪正文／重生／swipe 一律不影響 DB。名冊又是「無條件全塞」（不看有沒有被提到），
+    //    所以刪光某角色的正文、重新生成，AI 照樣從名冊看到他 → 又寫一次 → 越滾越多。
+    //    而且 lastMsgId 只防同樓重複計數，刪樓後樓號往前，重生一次就再記一次登場。
+    // 做法：重掃全檔的 [Char|名] → 正文裡沒有的角色，檔案與帳一起移除；
+    //      登場次數也用「實際出現的樓數」重算，不再是只增不減的計數器。
+    async function reconcile(tag) {
+        try {
+            if (!_isOn()) return;
+            const chatId = _getChatId();
+            if (!chatId || !win.OS_DB?.getStateData) return;
+            const data = await win.OS_DB.getStateData(chatId);
+            if (!data) return;
+            const dossiers = data.npcDossiers || {};
+            const chars = data.npcLedger?.chars || {};
+            if (!Object.keys(dossiers).length && !Object.keys(chars).length) return;
+
+            let msgs = null;
+            try { msgs = await win.VN_READER?.fetchFullChat?.(); } catch (e) {}
+            if (!Array.isArray(msgs) || !msgs.length) {
+                console.warn(`📇 [NPC Dossier] 對帳(${tag})：讀不到完整聊天檔 → 不動`);
+                return;
+            }
+
+            // 逐樓重算：n＝該名字出現過的樓數（跟原本「一樓算一次」同語意）
+            const nowChars = {};
+            for (const m of msgs) {
+                if (!m || m.is_user || m.role === 'user') continue;
+                for (const name of _charNamesIn(m.message || m.mes || '')) {
+                    const c = nowChars[name] || { n: 0, firstAt: chars[name]?.firstAt || Date.now() };
+                    c.n++;
+                    c.lastAt = chars[name]?.lastAt || Date.now();
+                    nowChars[name] = c;
+                }
+            }
+
+            // 🛡️ 保命閘：全檔掃不到任何角色、但原本有一堆檔案 → 十之八九讀到殘缺檔，寧可不動
+            if (!Object.keys(nowChars).length && Object.keys(dossiers).length) {
+                console.warn(`📇 [NPC Dossier] 對帳(${tag})：全檔掃不到任何 [Char|]、但有 ${Object.keys(dossiers).length} 份檔案 → 疑似殘缺聊天檔，不動`);
+                return;
+            }
+
+            const dead = Object.keys(dossiers).filter(n => !nowChars[n]);
+            const sameCount = Object.keys(chars).length === Object.keys(nowChars).length
+                && Object.keys(nowChars).every(n => chars[n] && chars[n].n === nowChars[n].n);
+            if (!dead.length && sameCount) return;   // 沒變化就別寫 DB
+
+            const nextDossiers = {};
+            for (const n of Object.keys(dossiers)) if (nowChars[n]) nextDossiers[n] = dossiers[n];
+
+            await win.OS_DB.saveStateData(chatId, {
+                ...data,
+                npcLedger: { lastMsgId: msgs.length - 1, chars: nowChars },
+                npcDossiers: nextDossiers
+            });
+            console.log(`📇 [NPC Dossier] 對帳(${tag})：正文現存 ${Object.keys(nowChars).length} 人`
+                + (dead.length ? `，移除已不在正文的檔案 [${dead.join('、')}]` : '，無檔案需移除')
+                + `｜登場次數已依正文重算`);
+        } catch (e) {
+            console.warn('[NPC Dossier] 對帳失敗:', e?.message || e);
+        }
+    }
+
     // ── 3. 注入：名冊常駐 + 名字命中的完整檔案 ─────────────────────────────
     let _lastUninject = null;
 
@@ -228,11 +292,23 @@ ${list}
                 try { _lastUninject?.(); _lastUninject = null; } catch (e) {}
             });
         }
-        console.log('📇 [NPC Dossier] Ready');
+        // 🧾 對帳：正文變動就重算，檔案不再只進不出（刪樓/編輯/swipe 都要跟）
+        const _ev = win.tavern_events;
+        const _wire = (name, tag) => {
+            if (_ev[name]) win.eventOn(_ev[name], () => {
+                if (win.__AURELIA_SUMMARIZING) return;
+                setTimeout(() => reconcile(tag), 300);   // 讓酒館先把刪除/編輯落地再掃
+            });
+        };
+        _wire('MESSAGE_DELETED', '刪樓');
+        _wire('MESSAGE_UPDATED', '編輯');
+        _wire('MESSAGE_EDITED', '編輯');
+        _wire('MESSAGE_SWIPED', 'swipe');
+        console.log('📇 [NPC Dossier] Ready（含正文對帳）');
     }
 
     win.OS_NPC_DOSSIER = {
-        prepare, commit, injectDossiers,
+        prepare, commit, injectDossiers, reconcile,
         isOn: _isOn,
         // 診斷/管理用：撈當前卡全部檔案與登場帳
         dump: async () => {
