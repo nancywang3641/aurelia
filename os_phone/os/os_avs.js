@@ -516,12 +516,9 @@
             return;
         }
 
-        // 排序顯示：當前卡綁定的排最上(正常)，其他卡的 / 全域的折疊起來、暗著只供檢視
-        const _otherWrap = document.createElement('div');
-        _otherWrap.style.opacity = '0.5';
-        let _otherCount = 0;
-
-        currentPacks.forEach(pack => {
+        // 只渲染「當前卡」的檔案。其他卡 / 全域的檔案改從建檔畫面的「📋 沿用其他故事的設定」看，
+        // 那邊按角色卡分頁、附頭像，比這裡摺一個灰色清單清楚；也省掉替 N 個用不到的檔案建卡片＋渲染 UI 面板預覽。
+        currentPacks.filter(p => p.chatId && p.chatId === _curCid).forEach(pack => {
             const rulesCount = allRules.filter(r => r.packId === pack.id).length;
             // 找此 pack 的 UI 面板（只看屬於 AVS 的：有 packId + 沒 VN 標記）
             const packTpls = currentTemplates.filter(t => t.packId === pack.id && !t.isVNTag && !t.isBlock && !t.tagId);
@@ -654,17 +651,8 @@
                 await syncVarPackToLorebook();
                 console.log(`[AVS] 已刪除變數包「${pack.name}」+ ${orphanedTpls.length} 模板 + ${orphanedRules.length} 規則`);
             };
-            if (pack.chatId && pack.chatId === _curCid) { listEl.appendChild(card); }
-            else { _otherWrap.appendChild(card); _otherCount++; }
+            listEl.appendChild(card);
         });
-
-        if (_otherCount) {
-            const det = document.createElement('details');
-            det.style.marginTop = '6px';
-            det.innerHTML = `<summary style="cursor:pointer;color:rgba(26,28,40,0.45);font-size:12px;padding:10px 2px;list-style:none;">▸ 其他檔案（${_otherCount}）· 非當前卡 / 全域，僅供檢視</summary>`;
-            det.appendChild(_otherWrap);
-            listEl.appendChild(det);
-        }
     }
 
     // ================================================================

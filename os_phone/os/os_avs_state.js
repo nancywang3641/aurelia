@@ -597,6 +597,28 @@
     // 「沿用其他故事的設定」：整套搬 追蹤欄位(變數包) + 條件規則 + UI 面板 到當前聊天。
     //   不碰來源故事、不帶任何數值 —— 重玩同一張卡開新聊天時，省掉重新生成與重煉 UI。
     //   init 畫面與資料管理頁共用（init 分支不走 _bind，各自呼叫一次）。
+    // chatId 是 ST 的聊天檔名「角色卡名 - YYYY-MM-DD@時間」→ 取前面那段當角色卡名
+    function _cardNameOf(chatId) {
+        const s = String(chatId || '');
+        const m = s.match(/^(.*?)\s-\s\d{4}-\d{2}-\d{2}@/);
+        return (m ? m[1] : s).trim() || '（未命名）';
+    }
+    // 聊天檔名去掉角色卡名後剩下的時間戳，當同一張卡底下各個故事的區分
+    function _chatStampOf(chatId) {
+        const s = String(chatId || '');
+        const n = _cardNameOf(chatId);
+        return s.startsWith(n) ? s.slice(n.length).replace(/^\s*-\s*/, '') : s;
+    }
+    // 角色卡頭像（酒館才有；PWA 取不到就不顯示圖）
+    function _cardAvatarOf(cardName) {
+        try {
+            const list = win.SillyTavern?.getContext?.()?.characters || [];
+            const c = list.find(x => x && x.name === cardName);
+            if (c && c.avatar) return '/thumbnail?type=avatar&file=' + encodeURIComponent(c.avatar);
+        } catch (e) {}
+        return '';
+    }
+
     function _bindAdopt() {
         const btn = _host.querySelector('#avs-st-adopt-open');
         if (btn) btn.onclick = () => _openAdoptModal();
@@ -633,18 +655,53 @@
         let rules = [], tpls = [];
         try { rules = win.OS_AVS_RULES?.loadRules?.() || []; } catch (e) {}
         try { tpls = (await win.OS_DB.getAllUITemplates?.()) || []; } catch (e) {}
-        listEl.innerHTML = items.map(p => {
+        // 按「角色卡」分頁：同一張卡玩過幾輪就會有幾份設定，混在一起很難挑
+        const groups = new Map();
+        items.forEach(p => {
+            const k = _cardNameOf(p.chatId);
+            if (!groups.has(k)) groups.set(k, []);
+            groups.get(k).push(p);
+        });
+        const names = [...groups.keys()].sort((a, b) => groups.get(b).length - groups.get(a).length);
+        const _rowHtml = (p) => {
             const nR = rules.filter(r => r && r.packId === p.id).length;
             const nT = tpls.filter(t => t && t.packId === p.id).length;
             return `<div class="avs-sm-row" data-adopt="${esc(p.id)}">
                 <div class="avs-sm-row-main">
                     <div class="avs-sm-row-id">${esc(p.name)}</div>
                     <div class="avs-sm-row-meta">${(p.variables || []).length} 個追蹤項 · ${nR} 條規則 · ${nT ? nT + ' 個 UI 面板' : '沒有 UI 面板'}</div>
-                    <div class="avs-sm-row-meta">來自：${esc(p.chatId)}</div>
+                    <div class="avs-sm-row-meta">${esc(_chatStampOf(p.chatId))}</div>
                 </div>
                 <button class="avs-btn avs-btn-primary avs-st-sm">沿用</button>
             </div>`;
-        }).join('');
+        };
+        // 只有一張卡就不必分頁，直接列
+        if (names.length <= 1) {
+            listEl.innerHTML = items.map(_rowHtml).join('');
+        } else {
+            const tabs = names.map((n, i) => {
+                const av = _cardAvatarOf(n);
+                return `<button class="avs-adopt-tab${i === 0 ? ' on' : ''}" data-tab="${esc(n)}" title="${esc(n)}">
+                    ${av ? `<img class="avs-adopt-ava" src="${esc(av)}" alt="">` : ''   /* 找不到角色卡就不留位，別掛一顆空灰圓 */}
+                    <span class="avs-adopt-tab-name">${esc(n)}</span><span class="avs-adopt-tab-n">${groups.get(n).length}</span>
+                </button>`;
+            }).join('');
+            const panels = names.map((n, i) =>
+                `<div class="avs-adopt-panel${i === 0 ? ' on' : ''}" data-panel="${esc(n)}">${groups.get(n).map(_rowHtml).join('')}</div>`
+            ).join('');
+            listEl.innerHTML = `<div class="avs-adopt-tabs">${tabs}</div>${panels}`;
+            listEl.querySelectorAll('.avs-adopt-tab').forEach(t => {
+                t.onclick = () => {
+                    const k = t.getAttribute('data-tab');
+                    listEl.querySelectorAll('.avs-adopt-tab').forEach(x => x.classList.toggle('on', x === t));
+                    listEl.querySelectorAll('.avs-adopt-panel').forEach(x => x.classList.toggle('on', x.getAttribute('data-panel') === k));
+                };
+            });
+            // 頭像抓不到（PWA／卡片已刪）就把位子收掉，不要留一顆灰圓
+            listEl.querySelectorAll('.avs-adopt-ava').forEach(img => {
+                if (img.tagName === 'IMG') img.onerror = () => img.remove();
+            });
+        }
         listEl.querySelectorAll('[data-adopt]').forEach(row => {
             const b = row.querySelector('button');
             if (b) b.onclick = () => { m.classList.remove('active'); _doAdopt(row.getAttribute('data-adopt')); };
