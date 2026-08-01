@@ -343,8 +343,9 @@
                     <textarea class="avs-textarea avs-st-init-prompt" id="avs-st-init-prompt" placeholder="（選填）還想追蹤什麼，或對上面的追蹤項有特別要求，打在這"></textarea>
                     <button class="avs-btn avs-btn-outline avs-st-chip-add" id="avs-st-chip-add"><i class="fa-solid fa-plus"></i> 把上面這句存成常用項，下次直接點</button>
                     <button class="avs-btn avs-btn-primary avs-st-init-btn" id="avs-st-init">開始追蹤狀態 ▸</button>
-                    <div class="avs-st-init-foot">第一次生成大約 5–30 秒；想簡單跑、跳過 AI 就用下面這個</div>
+                    <div class="avs-st-init-foot">第一次生成大約 5–30 秒；不想等 AI 就用下面兩個</div>
                     <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset">🪶 簡易預設（形象/身分/好感度）</button>
+                    <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-manual"><i class="fa-solid fa-pen-to-square"></i> 自己建欄位</button>
                 </div>
             </div>`;
             // 預設 TAG 可刪（🎭 外貌 data-warn=1 → 刪前警告生圖會不一致）
@@ -383,6 +384,20 @@
                 }
                 ta.value = '';
             };
+            // ✏️ 自己建欄位：不叫 AI，直接開檔案編輯器自己填欄位名／型別／預設值／說明。
+            //    ⚠️ 那邊的「＋ 創建新檔案」鈕平常被兩個條件夾殺、永遠看不到：
+            //       「我的檔案」整塊要 hasSchema 才顯示，而建檔鈕只在「還沒有檔案」時才顯示 → 互斥。
+            //    這裡直接把那塊叫出來並觸發它。
+            const _manualBtn = _host.querySelector('#avs-st-manual');
+            if (_manualBtn) _manualBtn.onclick = () => {
+                const _pv = document.querySelector('#avs-view-packs');
+                const _nb = document.querySelector('#avs-btn-new-pack');
+                if (!_pv || !_nb) { alert('檔案編輯器還沒載入完，請稍候再試'); return; }
+                _pv.classList.add('active');
+                _nb.click();
+                document.querySelector('#avs-pack-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            };
+
             const ib = _host.querySelector('#avs-st-init');
             if (ib) ib.onclick = async () => {
                 if (!win.OS_AVS?.generateAndSaveSchema) { alert('AVS 模組未就緒，請稍候再試'); return; }
