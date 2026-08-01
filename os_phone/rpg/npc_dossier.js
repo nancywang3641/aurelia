@@ -206,7 +206,8 @@ ${list}
                 role: 'system'
             }], { once: true });
             _lastUninject = result?.uninject || null;
-            console.log(`📇 [NPC Dossier] 注入：名冊 ${rosterNames.length} 人` + (mentioned.length ? `＋完整檔案 [${mentioned.join('、')}]` : '（本輪無名字命中）'));
+            // 🔬 chatId 一起印：查「新聊天室卻冒出舊角色」時，這串直接告訴你檔案是從哪一格 DB 撈的
+            console.log(`📇 [NPC Dossier] 注入：名冊 ${rosterNames.length} 人` + (mentioned.length ? `＋完整檔案 [${mentioned.join('、')}]` : '（本輪無名字命中）') + `｜讀自 chatId=${chatId}`);
         } catch (e) {
             console.warn('[NPC Dossier] 注入失敗:', e?.message || e);
         }
