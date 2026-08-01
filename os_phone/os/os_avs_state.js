@@ -341,11 +341,13 @@
                         </div>
                     </div>
                     <textarea class="avs-textarea avs-st-init-prompt" id="avs-st-init-prompt" placeholder="（選填）還想追蹤什麼，或對上面的追蹤項有特別要求，打在這"></textarea>
-                    <button class="avs-btn avs-btn-outline avs-st-chip-add" id="avs-st-chip-add"><i class="fa-solid fa-plus"></i> 把上面這句存成常用項，下次直接點</button>
+                    <button class="avs-btn avs-btn-outline avs-st-chip-add" id="avs-st-chip-add" title="把上面那句存起來，下次開建檔畫面直接點，不用再打一次"><i class="fa-solid fa-plus"></i> 存成常用項</button>
                     <button class="avs-btn avs-btn-primary avs-st-init-btn" id="avs-st-init">開始追蹤狀態 ▸</button>
                     <div class="avs-st-init-foot">第一次生成大約 5–30 秒；不想等 AI 就用下面兩個</div>
-                    <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset">🪶 簡易預設（形象/身分/好感度）</button>
-                    <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-manual"><i class="fa-solid fa-pen-to-square"></i> 自己建欄位</button>
+                    <div class="avs-st-init-alt">
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset" title="不叫 AI，直接套形象／身分／好感度三欄">🪶 簡易預設</button>
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-manual" title="自己填欄位名／型別／預設值／說明"><i class="fa-solid fa-pen-to-square"></i> 自己建</button>
+                    </div>
                 </div>
             </div>`;
             // 預設 TAG 可刪（🎭 外貌 data-warn=1 → 刪前警告生圖會不一致）
