@@ -386,18 +386,10 @@
                 }
                 ta.value = '';
             };
-            // ✏️ 自己建欄位：不叫 AI，直接開檔案編輯器自己填欄位名／型別／預設值／說明。
-            //    ⚠️ 那邊的「＋ 創建新檔案」鈕平常被兩個條件夾殺、永遠看不到：
-            //       「我的檔案」整塊要 hasSchema 才顯示，而建檔鈕只在「還沒有檔案」時才顯示 → 互斥。
-            //    這裡直接把那塊叫出來並觸發它。
+            // ✏️ 自己建欄位：不叫 AI，直接開檔案編輯器自己填欄位名／型別／預設值／說明
             const _manualBtn = _host.querySelector('#avs-st-manual');
             if (_manualBtn) _manualBtn.onclick = () => {
-                const _pv = document.querySelector('#avs-view-packs');
-                const _nb = document.querySelector('#avs-btn-new-pack');
-                if (!_pv || !_nb) { alert('檔案編輯器還沒載入完，請稍候再試'); return; }
-                _pv.classList.add('active');
-                _nb.click();
-                document.querySelector('#avs-pack-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (!win.OS_AVS?.openNewPackEditor?.()) alert('檔案編輯器還沒載入完，請稍候再試');
             };
 
             const ib = _host.querySelector('#avs-st-init');
@@ -427,13 +419,12 @@
                     ib.style.pointerEvents = '';
                 }
             };
-            // 🪶 簡易預設：跳過 AI 的快速建檔入口。觸發「我的檔案」那顆真按鈕(在 DOM 內、初始狀態只是被藏)，
-            //    它套用後會 call OS_AVS_STATE.refresh() 把這張 init 卡刷新成追蹤視圖。
+            // 🪶 簡易預設：跳過 AI 的快速建檔入口。套用後 os_avs 會 call OS_AVS_STATE.refresh()
+            //    把這張 init 卡刷新成追蹤視圖。
             const pb = _host.querySelector('#avs-st-preset');
             if (pb) pb.onclick = () => {
-                const real = document.querySelector('#avs-btn-preset-pack');
-                if (real) real.click();
-                else alert('簡易預設未就緒，請切到上方「我的檔案」分頁套用');
+                if (win.OS_AVS?.applySimplePreset) win.OS_AVS.applySimplePreset(pb);
+                else alert('簡易預設未就緒，請稍候再試');
             };
             _bindDirector();   // 🎬 導演卡片在 init 畫面也露出，綁定它的開關與按鈕
             _bindAdopt();      // 開新聊天第一眼就在這頁 → 沿用入口也得在這裡綁
