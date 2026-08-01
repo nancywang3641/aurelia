@@ -1838,6 +1838,17 @@ _directorSpec(castNames);
             // 🔍 這幾個出口以前是靜默 return，查半天不知道卡在哪 → 一律說明原因
             if (!data) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：這個聊天沒有任何狀態資料 → 沒東西可回滾`); return; }
 
+            // 🚪 這個聊天根本沒開 AVS → 直接跳過，別往下跑。
+            //    注意 data 非空不代表有 AVS：NPC Dossier 把 npcLedger/npcDossiers 寫進「同一筆」
+            //    state_data(chatId)，所以沒建過狀態的聊天照樣有記錄，會一路跑到底、
+            //    印出「current 有 0 個欄位表示狀態是別的路徑寫的（跑過深度整理…）」這種誤導訊息。
+            const _hasSchema = !!(data.schema && Object.keys(data.schema).length);
+            const _hasAny = _hasSchema
+                || _patchList(data.patches).length
+                || (data.current && Object.keys(data.current).length)
+                || (data.base && Object.keys(data.base).length);
+            if (!_hasAny) { console.log(`🛰️ [State Runtime] 對帳(${tag})：這個聊天沒在追蹤狀態（無 schema、無紀錄）→ 跳過`); return; }
+
             // 舊制存檔（樓號為鍵＋sigs）→ 一次性遷移成身分制，之後永遠走 id
             if (!Array.isArray(data.patches)) {
                 if (total <= 0) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：要遷移舊 patch 但讀不到完整聊天檔 → 這次不動，下次再說`); return; }
