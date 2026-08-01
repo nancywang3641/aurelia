@@ -24,6 +24,22 @@
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    // ── 建檔畫面的「常用追蹤項」（使用者自己存的快捷，跨世界共用、不隨聊天室走）──
+    //    只是一串短句，量很小 → 直接 localStorage，不動 OS_DB schema（升版加 store 會 deadlock）
+    const MY_CHIPS_KEY = 'avs_init_my_chips';
+    function _loadMyChips() {
+        try { const a = JSON.parse(localStorage.getItem(MY_CHIPS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+        catch (e) { return []; }
+    }
+    function _saveMyChips(arr) {
+        try { localStorage.setItem(MY_CHIPS_KEY, JSON.stringify(arr || [])); } catch (e) {}
+    }
+    // 標籤只顯示前幾個字（完整內容放 title / data-k，送 AI 的是完整的）
+    function _chipLabel(v) {
+        const s = String(v || '').replace(/\s+/g, ' ').trim();
+        return s.length > 12 ? s.slice(0, 12) + '…' : s;
+    }
+
     let _host = null;
     let _packs = [];
     let _editingFieldName = null; // null / 欄位名 / '__new__'
@@ -318,9 +334,11 @@
                             <span class="avs-st-chip removable" data-k="當前場景／地點">📍 當前場景<i class="fa-solid fa-xmark chip-x"></i></span>
                             <span class="avs-st-chip removable" data-k="角色攜帶／持有的物品">🎒 物品攜帶<i class="fa-solid fa-xmark chip-x"></i></span>
                             <span class="avs-st-chip removable" data-k="題材專屬數值（HP／理智／倒計時等）">⚙️ 題材數值<i class="fa-solid fa-xmark chip-x"></i></span>
+                            ${_loadMyChips().map(v => `<span class="avs-st-chip removable is-mine" data-k="${esc(v)}" title="${esc(v)}">${esc(_chipLabel(v))}<i class="fa-solid fa-xmark chip-x"></i></span>`).join('')}
                         </div>
                     </div>
                     <textarea class="avs-textarea avs-st-init-prompt" id="avs-st-init-prompt" placeholder="（選填）還想追蹤什麼，或對上面的追蹤項有特別要求，打在這"></textarea>
+                    <button class="avs-btn avs-btn-outline avs-st-chip-add" id="avs-st-chip-add"><i class="fa-solid fa-plus"></i> 把上面這句存成常用項，下次直接點</button>
                     <button class="avs-btn avs-btn-primary avs-st-init-btn" id="avs-st-init">開始追蹤狀態 ▸</button>
                     <div class="avs-st-init-foot">第一次生成大約 5–30 秒；想簡單跑、跳過 AI 就用下面這個</div>
                     <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset">🪶 簡易預設（形象/身分/好感度）</button>
@@ -328,23 +346,52 @@
             </div>`;
             // 預設 TAG 可刪（🎭 外貌 data-warn=1 → 刪前警告生圖會不一致）
             const _tagWrap = _host.querySelector('#avs-st-tags');
-            const _totalTags = _tagWrap ? _tagWrap.querySelectorAll('.avs-st-chip').length : 0;
-            if (_tagWrap) _tagWrap.querySelectorAll('.chip-x').forEach(x => {
+            //  ⚠️ _totalTags ＝「可選的全部項目數」，跟 _kept 比對來判斷有沒有刪過：
+            //     加常用項時要 ++（kept 也同步 +1 → 不會誤判成刪過）；刪 chip 時【不要】動它，否則永遠比不出差
+            let _totalTags = _tagWrap ? _tagWrap.querySelectorAll('.avs-st-chip').length : 0;
+            // ×：預設項＝這次不用；自己存的(.is-mine)＝連常用清單一起拿掉（要復原就再打一次按 ＋）
+            const _bindChipX = (x) => {
                 x.onclick = () => {
                     const chip = x.closest('.avs-st-chip');
                     if (!chip) return;
                     if (chip.dataset.warn === '1' && !confirm('刪掉「角色外貌」後，AI 不會記角色的髮色/眼色/體型——之後生圖角色長相每次可能都不一樣。確定要刪？')) return;
+                    if (chip.classList.contains('is-mine')) _saveMyChips(_loadMyChips().filter(v => v !== chip.dataset.k));
                     chip.remove();
                 };
-            });
+            };
+            if (_tagWrap) _tagWrap.querySelectorAll('.chip-x').forEach(_bindChipX);
+            // ＋：把輸入框那句存成常用項（跨世界共用），立刻變成一顆 chip，下次開建檔畫面自動帶出來
+            const _addBtn = _host.querySelector('#avs-st-chip-add');
+            if (_addBtn && _tagWrap) _addBtn.onclick = () => {
+                const ta = _host.querySelector('#avs-st-init-prompt');
+                const v = (ta?.value || '').trim();
+                if (!v) { ta?.focus(); return; }
+                const arr = _loadMyChips();
+                if (!arr.includes(v)) { arr.push(v); _saveMyChips(arr); }
+                if (!_tagWrap.querySelector(`.avs-st-chip.is-mine[data-k="${CSS.escape(v)}"]`)) {
+                    const chip = document.createElement('span');
+                    chip.className = 'avs-st-chip removable is-mine';
+                    chip.dataset.k = v;
+                    chip.title = v;
+                    chip.innerHTML = esc(_chipLabel(v)) + '<i class="fa-solid fa-xmark chip-x"></i>';
+                    _bindChipX(chip.querySelector('.chip-x'));
+                    _tagWrap.appendChild(chip);
+                    _totalTags++;
+                }
+                ta.value = '';
+            };
             const ib = _host.querySelector('#avs-st-init');
             if (ib) ib.onclick = async () => {
                 if (!win.OS_AVS?.generateAndSaveSchema) { alert('AVS 模組未就緒，請稍候再試'); return; }
                 // 組指令：有刪 TAG 才告訴 AI「只追蹤保留的」；全留＝不送排除指令(純自動)。再加輸入框自訂。
                 const _kept = [...(_tagWrap?.querySelectorAll('.avs-st-chip') || [])].map(c => c.dataset.k).filter(Boolean);
                 const _custom = (_host.querySelector('#avs-st-init-prompt')?.value || '').trim();
+                // 自己存的常用項要單獨再點名一次：沒刪過任何預設 chip 時上面那條排除指令不會送，
+                // 只靠 _kept 的話這些自訂維度就整個沒進 prompt
+                const _mine = [...(_tagWrap?.querySelectorAll('.avs-st-chip.is-mine') || [])].map(c => c.dataset.k).filter(Boolean);
                 let _up = '';
                 if (_totalTags && _kept.length < _totalTags) _up += '【使用者只要追蹤這些維度，沒列到的別硬生】' + _kept.join('、');
+                if (_mine.length) _up += (_up ? '\n' : '') + '【使用者指定一定要追蹤這些】' + _mine.join('、');
                 if (_custom) _up += (_up ? '\n' : '') + '【額外要求】' + _custom;
                 const orig = ib.textContent;
                 ib.textContent = '🧬 AI 分析中…';
