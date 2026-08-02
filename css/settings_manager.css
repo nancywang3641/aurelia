@@ -24,7 +24,7 @@
                 pointer-events: auto !important;
                 }
                 
-                .settings-panel-container {
+                .settings-panel-overlay .settings-panel-container {
                 position: relative !important;
                 top: auto !important;
                 left: auto !important;
@@ -44,12 +44,12 @@
                 flex-direction: column !important;
                 }
                 
-                .settings-panel-container.active {
+                .settings-panel-overlay .settings-panel-container.active {
                 transform: none !important;
                 opacity: 1 !important;
                 }
                 
-                .settings-panel-header {
+                .settings-panel-overlay .settings-panel-header {
                 background: rgba(100, 181, 246, 0.2) !important;
                 color: rgba(255, 255, 255, 0.9) !important;
                 padding: 20px !important;
@@ -59,14 +59,14 @@
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
                 }
                 
-                .settings-panel-header h2 {
+                .settings-panel-overlay .settings-panel-header h2 {
                 margin: 0 !important;
                 font-size: 1.3rem !important;
                 font-weight: 600 !important;
                 color: rgba(255, 255, 255, 0.9) !important;
                 }
                 
-                .close-settings-btn {
+                .settings-panel-overlay .close-settings-btn {
                 background: rgba(255, 255, 255, 0.2) !important;
                 border: none !important;
                 color: white !important;
@@ -81,23 +81,23 @@
                 transition: all 0.2s !important;
                 }
                 
-                .close-settings-btn:hover {
+                .settings-panel-overlay .close-settings-btn:hover {
                 background: rgba(255, 255, 255, 0.3) !important;
                 transform: scale(1.1) !important;
                 }
                 
-                .settings-panel-content {
+                .settings-panel-overlay .settings-panel-content {
                 flex: 1 !important;
                 overflow-y: auto !important;
                 padding: 20px !important;
                 background: rgba(20, 20, 25, 0.95) !important;
                 }
                 
-                .settings-section {
+                .settings-panel-overlay .settings-section {
                 margin-bottom: 30px !important;
                 }
                 
-                .section-title {
+                .settings-panel-overlay .section-title {
                 background: rgba(255, 255, 255, 0.1) !important;
                 padding: 15px !important;
                 margin: 0 0 15px 0 !important;
@@ -113,48 +113,48 @@
                 transition: all 0.2s !important;
                 }
                 
-                .section-title:hover {
+                .settings-panel-overlay .section-title:hover {
                 background: rgba(255, 255, 255, 0.2) !important;
                 transform: translateY(-1px) !important;
             }
             
-            .section-title.collapsible {
+            .settings-panel-overlay .section-title.collapsible {
                 border: 1px solid rgba(255, 255, 255, 0.1) !important;
                 }
                 
-                .collapse-icon {
+                .settings-panel-overlay .collapse-icon {
                 transition: transform 0.3s !important;
                 font-size: 0.8em !important;
                 }
                 
-                .section-title.collapsed .collapse-icon {
+                .settings-panel-overlay .section-title.collapsed .collapse-icon {
                 transform: rotate(-90deg) !important;
                 }
                 
-                .settings-content {
+                .settings-panel-overlay .settings-content {
                 transition: all 0.3s ease !important;
                 overflow: hidden !important;
                 }
                 
-                .settings-content.collapsed {
+                .settings-panel-overlay .settings-content.collapsed {
                 max-height: 0 !important;
                 opacity: 0 !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 }
                 
-                .form-group {
+                .settings-panel-overlay .form-group {
                 margin-bottom: 20px !important;
                 }
                 
-                .form-group label {
+                .settings-panel-overlay .form-group label {
                 display: block !important;
                 margin-bottom: 8px !important;
                 font-weight: 500 !important;
                 color: rgba(255, 255, 255, 0.8) !important;
             }
             
-            .form-group input, .form-group select {
+            .settings-panel-overlay .form-group input, .settings-panel-overlay .form-group select {
                 width: 100% !important;
                 padding: 12px !important;
                 border: 2px solid rgba(255, 255, 255, 0.1) !important;
@@ -166,30 +166,30 @@
                 color: rgba(255, 255, 255, 0.9) !important;
             }
             
-            .form-group input::placeholder {
+            .settings-panel-overlay .form-group input::placeholder {
                 color: rgba(255, 255, 255, 0.4) !important;
             }
             
-            .form-group input:focus, .form-group select:focus {
+            .settings-panel-overlay .form-group input:focus, .settings-panel-overlay .form-group select:focus {
                 border-color: rgba(100, 181, 246, 0.5) !important;
                 box-shadow: 0 0 0 3px rgba(100, 181, 246, 0.1) !important;
                 outline: none !important;
                 background: rgba(255, 255, 255, 0.08) !important;
                 }
                 
-                .form-help {
+                .settings-panel-overlay .form-help {
                 font-size: 12px !important;
                 color: rgba(255, 255, 255, 0.6) !important;
                 margin-top: 5px !important;
                 }
                 
-                .slider-container {
+                .settings-panel-overlay .slider-container {
                 display: flex !important;
                 align-items: center !important;
                 gap: 15px !important;
                 }
                 
-                .size-slider {
+                .settings-panel-overlay .size-slider {
                 flex: 1 !important;
                 height: 8px !important;
                 border-radius: 4px !important;
@@ -199,7 +199,7 @@
                 appearance: none !important;
                 }
                 
-                .size-slider::-webkit-slider-thumb {
+                .settings-panel-overlay .size-slider::-webkit-slider-thumb {
                 -webkit-appearance: none !important;
                 appearance: none !important;
                 width: 20px !important;
@@ -210,7 +210,7 @@
                 box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
                 }
                 
-                .slider-value {
+                .settings-panel-overlay .slider-value {
                 font-weight: 600 !important;
                 color: rgba(255, 255, 255, 0.9) !important;
                 min-width: 60px !important;
@@ -221,14 +221,14 @@
                 border: 1px solid rgba(255, 255, 255, 0.1) !important;
                 }
                 
-                .icon-grid {
+                .settings-panel-overlay .icon-grid {
                 display: grid !important;
                 grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
                 gap: 15px !important;
                 margin: 15px 0 !important;
                 }
                 
-                .icon-item {
+                .settings-panel-overlay .icon-item {
                 padding: 15px !important;
                 border: 2px solid rgba(255, 255, 255, 0.1) !important;
                 border-radius: 8px !important;
@@ -240,14 +240,14 @@
                 align-items: center !important;
             }
             
-            .icon-item:hover {
+            .settings-panel-overlay .icon-item:hover {
                 border-color: rgba(100, 181, 246, 0.5) !important;
                 box-shadow: 0 4px 12px rgba(100, 181, 246, 0.2) !important;
                 transform: translateY(-2px) !important;
                 background: rgba(255, 255, 255, 0.1) !important;
                 }
                 
-                .icon-item label {
+                .settings-panel-overlay .icon-item label {
                 display: block !important;
                 margin-top: 10px !important;
                 font-size: 12px !important;
@@ -256,7 +256,7 @@
                 font-weight: 500 !important;
             }
             
-                .icon-item input {
+                .settings-panel-overlay .icon-item input {
                 width: 100% !important;
                 margin-top: 8px !important;
                 padding: 8px !important;
@@ -267,13 +267,13 @@
                 border-radius: 6px !important;
                 }
                 
-                .icon-item input:focus {
+                .settings-panel-overlay .icon-item input:focus {
                 border-color: rgba(100, 181, 246, 0.5) !important;
                 background: rgba(255, 255, 255, 0.08) !important;
                 outline: none !important;
                 }
                 
-                .icon-preview {
+                .settings-panel-overlay .icon-preview {
                 width: 64px !important;
                 height: 64px !important;
                 margin: 10px auto !important;
@@ -287,23 +287,23 @@
                 transition: all 0.2s !important;
                 }
                 
-                .icon-preview img {
+                .settings-panel-overlay .icon-preview img {
                 width: 100% !important;
                 height: 100% !important;
                 object-fit: contain !important;
                 }
                 
-                .icon-preview i {
+                .settings-panel-overlay .icon-preview i {
                 font-size: 32px !important;
                 color: rgba(100, 181, 246, 1) !important;
                 }
                 
-                .icon-preview.has-image {
+                .settings-panel-overlay .icon-preview.has-image {
                 border-color: rgba(100, 181, 246, 0.5) !important;
                 background: rgba(255, 255, 255, 0.05) !important;
                 }
             
-            .settings-panel-actions {
+            .settings-panel-overlay .settings-panel-actions {
                 padding: 20px !important;
                 border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
                 display: flex !important;
@@ -312,7 +312,7 @@
                 background: rgba(20, 20, 25, 0.95) !important;
             }
             
-            .settings-btn {
+            .settings-panel-overlay .settings-btn {
                 padding: 12px 24px !important;
                 border: none !important;
                 border-radius: 8px !important;
@@ -322,41 +322,41 @@
                 font-size: 14px !important;
             }
             
-            .settings-btn.primary {
+            .settings-panel-overlay .settings-btn.primary {
                 background: rgba(100, 181, 246, 0.3) !important;
                 color: rgba(255, 255, 255, 0.9) !important;
                 border: 1px solid rgba(100, 181, 246, 0.5) !important;
             }
             
-            .settings-btn.primary:hover {
+            .settings-panel-overlay .settings-btn.primary:hover {
                 background: rgba(100, 181, 246, 0.4) !important;
                 transform: translateY(-1px) !important;
                 box-shadow: 0 4px 12px rgba(100, 181, 246, 0.3) !important;
             }
             
-            .settings-btn.secondary {
+            .settings-panel-overlay .settings-btn.secondary {
                 background: rgba(255, 255, 255, 0.1) !important;
                 color: rgba(255, 255, 255, 0.9) !important;
                 border: 1px solid rgba(255, 255, 255, 0.2) !important;
             }
             
-            .settings-btn.secondary:hover {
+            .settings-panel-overlay .settings-btn.secondary:hover {
                 background: rgba(255, 255, 255, 0.2) !important;
                 transform: translateY(-1px) !important;
             }
             
-            .settings-btn.danger {
+            .settings-panel-overlay .settings-btn.danger {
                 background: rgba(220, 53, 69, 0.3) !important;
                 color: rgba(255, 255, 255, 0.9) !important;
                 border: 1px solid rgba(220, 53, 69, 0.5) !important;
             }
             
-            .settings-btn.danger:hover {
+            .settings-panel-overlay .settings-btn.danger:hover {
                 background: rgba(220, 53, 69, 0.4) !important;
                 transform: translateY(-1px) !important;
             }
             
-            .upload-area {
+            .settings-panel-overlay .upload-area {
                 border: 2px dashed rgba(255, 255, 255, 0.2) !important;
                 border-radius: 8px !important;
                 padding: 20px !important;
@@ -367,12 +367,12 @@
                 color: rgba(255, 255, 255, 0.8) !important;
             }
             
-            .upload-area:hover {
+            .settings-panel-overlay .upload-area:hover {
                 border-color: rgba(100, 181, 246, 0.5) !important;
                 background: rgba(100, 181, 246, 0.1) !important;
             }
             
-            .upload-btn {
+            .settings-panel-overlay .upload-btn {
                 background: #28a745 !important;
                 color: white !important;
                 border: none !important;
@@ -386,22 +386,22 @@
                 transition: all 0.2s !important;
             }
             
-            .upload-btn:hover {
+            .settings-panel-overlay .upload-btn:hover {
                 background: #218838 !important;
                 transform: translateY(-1px) !important;
             }
             
-            .upload-icon {
+            .settings-panel-overlay .upload-icon {
                 font-size: 16px !important;
             }
             
-            .upload-text {
+            .settings-panel-overlay .upload-text {
                 font-weight: 500 !important;
                 }
 
                 /* 響應式設計 - 移動端優化 */
                 @media (max-width: 768px) {
-                    .settings-panel-container {
+                    .settings-panel-overlay .settings-panel-container {
                     width: calc(100vw - 20px) !important;
                     max-width: none !important;
                     max-height: calc(100vh - 40px) !important;
@@ -410,101 +410,101 @@
                     transform: none !important;
                 }
                 
-                .settings-panel-container.active {
+                .settings-panel-overlay .settings-panel-container.active {
                     transform: none !important;
                     }
                     
-                    .settings-panel-header {
+                    .settings-panel-overlay .settings-panel-header {
                     padding: 15px !important;
                 }
                 
-                .settings-panel-header h2 {
+                .settings-panel-overlay .settings-panel-header h2 {
                     font-size: 1.1rem !important;
                     }
                     
-                    .settings-panel-content {
+                    .settings-panel-overlay .settings-panel-content {
                     padding: 15px !important;
                 }
                 
-                .form-group {
+                .settings-panel-overlay .form-group {
                     margin-bottom: 15px !important;
                 }
                 
                 .form-group input,
-                .form-group select {
+                .settings-panel-overlay .form-group select {
                     padding: 10px !important;
                     font-size: 14px !important;
                     }
                     
-                    .icon-grid {
+                    .settings-panel-overlay .icon-grid {
                     grid-template-columns: repeat(2, 1fr) !important;
                     gap: 10px !important;
                 }
                 
-                .icon-item {
+                .settings-panel-overlay .icon-item {
                     padding: 8px !important;
                 }
                 
-                .icon-item label {
+                .settings-panel-overlay .icon-item label {
                     font-size: 12px !important;
                 }
                 
-                .icon-preview {
+                .settings-panel-overlay .icon-preview {
                     width: 48px !important;
                     height: 48px !important;
                 }
                 
-                .icon-preview i {
+                .settings-panel-overlay .icon-preview i {
                     font-size: 24px !important;
                     color: rgba(100, 181, 246, 1) !important;
                 }
                 
-                .upload-btn {
+                .settings-panel-overlay .upload-btn {
                     padding: 10px 16px !important;
                     font-size: 13px !important;
                 }
                 
-                .upload-icon {
+                .settings-panel-overlay .upload-icon {
                     font-size: 14px !important;
                     }
                     
-                    .settings-panel-actions {
+                    .settings-panel-overlay .settings-panel-actions {
                     padding: 15px !important;
                 }
                 
-                .settings-btn {
+                .settings-panel-overlay .settings-btn {
                     padding: 12px 20px !important;
                     font-size: 14px !important;
                     }
                 }
                 
                 @media (max-width: 480px) {
-                    .settings-panel-container {
+                    .settings-panel-overlay .settings-panel-container {
                     width: calc(100vw - 16px) !important;
                     max-height: calc(100vh - 32px) !important;
                 }
                 
-                .settings-panel-header {
+                .settings-panel-overlay .settings-panel-header {
                     padding: 12px !important;
                 }
                 
-                .settings-panel-header h2 {
+                .settings-panel-overlay .settings-panel-header h2 {
                     font-size: 1rem !important;
                 }
                 
-                .settings-panel-content {
+                .settings-panel-overlay .settings-panel-content {
                     padding: 12px !important;
                 }
                 
-                .settings-panel-actions {
+                .settings-panel-overlay .settings-panel-actions {
                     flex-direction: column !important;
                 }
                 
-                .settings-btn {
+                .settings-panel-overlay .settings-btn {
                     width: 100% !important;
                     }
                     
-                    .icon-grid {
+                    .settings-panel-overlay .icon-grid {
                     grid-template-columns: 1fr !important;
                 }
             }
