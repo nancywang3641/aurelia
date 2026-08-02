@@ -64,8 +64,9 @@
     async function _drawSeeds(hint) {
         const prompt =
             '你是視差系統(NEXUS PARALLAX)的世界生成引擎。請生成 4 個彼此題材、核心規則、玩法差異明顯的虛擬世界種子。只回傳純 JSON 陣列:\n' +
-            '[{"name":"{世界名,不超過8字,有記憶點}","concept":"{一句話概念,不超過25字}","style":"{視覺風格,不超過10字}","lure":"{玩家前往的理由/可獲得什麼,不超過20字}","danger":"{主要危險,不超過15字}","crisis":"{世界目前正在發生的危機,不超過20字}"}]\n' +
+            '[{"name":"{世界名,不超過8字,有記憶點}","concept":"{一句話概念,不超過25字}","twist":"{一條違反常識的核心規則,不超過25字}","style":"{視覺風格,不超過10字}","lure":"{玩家前往的理由/可獲得什麼,不超過20字}","danger":"{主要危險,不超過15字}","crisis":"{世界目前正在發生的危機,不超過20字}"}]\n' +
             (hint ? '玩家偏好參考(不必全照做):' + hint + '\n' : '') +
+            'twist 是種子的靈魂,必須是「規則」不是「景觀」:這個世界某件基本事物的運作方式與現實相反、或掛鉤到意想不到的東西,而且滲透所有人謀生、交易、社交的日常——不是只是看起來奇特。4 顆種子的 twist 必須分別掛在不同領域(生存/經濟/身體/情感/語言/時間/記憶/身分等任選)。\n' +
             '世界必須適合多目的探索(可戰鬥/解謎/交易/採集/調查/純閒逛),不要設計成單一主線。語言:繁體中文。';
         const arr = await _callAI(prompt, '世界門抽種子', 'worldgate_seeds');
         return (Array.isArray(arr) ? arr : []).filter(s => s && s.name).slice(0, 5);
@@ -75,7 +76,7 @@
     async function _expandWorld(seed) {
         const prompt =
             '你是視差系統的世界建構引擎。請把以下世界種子擴寫成可跑團的濃縮世界檔案,並生成在純白大廳等待組隊前往該世界的旅人。只回傳純 JSON:\n' +
-            '{"entry":"{世界設定正文600~900字:依序包含 入口區域/3~4個主要區域(各自的景觀與危險)/2~3個勢力或重要NPC/世界目前的危機/撤離方式。分段書寫,不要條列符號堆砌}",' +
+            '{"entry":"{世界設定正文700~1000字,依序寫這六段: ①核心法則=把種子的 twist 落實成完整規則,寫明它如何滲透職業/買賣/社交/日常,至少一種靠這條規則吃飯的職業、以及違反它的下場 ②旅人的位置=外來旅人會被套進什麼身分,第一桶金的兩三條路,每天醒來的基本循環(接什麼活/跟誰打交道/避開什麼) ③錢與價格=貨幣名+4~6個具體價格錨點(一餐/一晚落腳/一次尋常委託的酬勞/一件人人想要的貴東西),數字要能直接拿來跑團結算 ④張力軸=兩股對立勢力或兩套並行制度,各自給旅人什麼好處、要求什麼代價,旅人可以站隊/兩邊吃/被夾在中間 ⑤區域速寫=入口+2~3個區域,每個一兩句(樣貌+在那裡能做什麼) ⑥危機與撤離=正在發生的危機、它與核心法則的關係、兩個懸而未決的鉤子、撤離方式。分段書寫,不要條列符號堆砌。鐵則:這是給旅人「生活」的世界,不是觀光手冊——每個設定都要能回答『旅人能拿它做什麼』;寧可少一個區域,不可少掉價格與循環}",' +
             '"keys":["{觸發關鍵字3~5個,第一個必須是世界名}"],' +
             '"travelers":[{"name":"{旅人名}","job":"{職業/定位,不超過6字}","persona":"{一句話性格}","origin":"{一句話來歷}","skill":"{一句話擅長}","look":"{一句話外貌印象}","record":"{一句話視差資歷}","reason":"{一句話前往此世界的動機}",' +
             '"greet":"{在大廳被搭話時的開場白1~2句,符合性格}",' +
@@ -93,7 +94,8 @@
     function _entryContent(w, entryText) {
         const trav = (w.travelers || []).map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ' ' + t.origin).join('\n');
         return '# 視差世界檔案:' + w.name + '\n' +
-            '一句話:' + w.concept + '(風格:' + w.style + ')\n\n' + entryText +
+            '一句話:' + w.concept + '(風格:' + w.style + ')\n' +
+            (w.twist ? '核心法則:' + w.twist + '\n' : '') + '\n' + entryText +
             (trav ? '\n\n## 本世界的同行旅人候選(視差玩家,非本世界NPC)\n' + trav : '');
     }
     async function _writeEntry(w, entryText) {
@@ -563,6 +565,7 @@
                 '<div class="wg-card click" data-i="' + i + '">' +
                   '<div class="wg-card-title"><i class="fa-solid fa-seedling"></i> ' + _esc(s.name) + '</div>' +
                   '<div class="wg-card-sub">' + _esc(s.concept) + '</div>' +
+                  (s.twist ? '<div class="wg-card-sub"><i class="fa-solid fa-scale-unbalanced"></i> ' + _esc(s.twist) + '</div>' : '') +
                   '<div class="wg-card-sub">' + _esc(s.crisis || '') + '</div>' +
                   '<div class="wg-tags"><span class="wg-tag">' + _esc(s.style) + '</span>' +
                     '<span class="wg-tag">' + _esc(s.lure) + '</span>' +
@@ -587,7 +590,7 @@
         _busy = false;
         if (!r || !r.entry) { _toast('世界建構失敗,請重試'); _renderSeedCards(); return; }
         const w = {
-            id: _mkId(), name: seed.name, concept: seed.concept, style: seed.style,
+            id: _mkId(), name: seed.name, concept: seed.concept, twist: seed.twist || '', style: seed.style,
             lure: seed.lure, danger: seed.danger, crisis: seed.crisis,
             keys: (Array.isArray(r.keys) && r.keys.length) ? r.keys.map(String) : [seed.name],
             travelers: (Array.isArray(r.travelers) ? r.travelers : []).slice(0, 4).map(t => ({
