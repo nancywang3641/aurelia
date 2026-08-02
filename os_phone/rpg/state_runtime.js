@@ -208,8 +208,15 @@
             //   最後兩則(玩家輸入+AI回覆)＝本輪要抽的；更早的＝僅供理解上下文。
             const text = msgs.map((m, i) => {
                 const role = m.is_user ? 'USER' : (m.name || 'AI');
-                const t = (m.message || m.mes || '').slice(0, 1500);
-                const tag = i >= msgs.length - 2 ? '〔本輪新內容〕' : '〔前情參照·已入帳〕';
+                const isCurrent = i >= msgs.length - 2;
+                const raw = String(m.message || m.mes || '');
+                // 〔本輪新內容〕是唯一的記帳來源，不能砍尾——交易/結算幾乎都寫在場景結尾，
+                // 一律 slice(0,1500) 砍尾＝副模型「劇情沒寫價格」、錢包長期對不準的元兇。
+                // 超長時保頭保尾、犧牲中段；前情參照僅供理解，維持 1500 省 token。
+                const t = isCurrent
+                    ? (raw.length <= 6000 ? raw : raw.slice(0, 3000) + '\n……（中段省略）……\n' + raw.slice(-3000))
+                    : raw.slice(0, 1500);
+                const tag = isCurrent ? '〔本輪新內容〕' : '〔前情參照·已入帳〕';
                 return `${tag}[${role}] ${t}`;
             }).join('\n\n');
             return { text, lastId, lastContent };
