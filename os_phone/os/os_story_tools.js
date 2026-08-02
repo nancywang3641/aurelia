@@ -316,16 +316,19 @@
         }
     }
 
-    // 自動總結存檔前的「品質閘門」：壞生成(空/截斷/錯誤頁/夾帶舊總結/缺核心區塊)→不存、保留舊的，
+    // 自動總結存檔前的「品質閘門」：只擋「根本不是總結」的壞生成(空/截斷/API錯誤頁)→不存、保留舊的，
     //   根治「自動時報錯卻還是被套用、覆蓋掉好資料」。手動模式有預覽窗把關，這裡只補背景模式的缺口。
     function _validateSummary(content) {
         const txt = String(content == null ? '' : content).trim();
         if (txt.length < 80) return { ok: false, reason: '內容過短或空（疑似生成失敗 / 被截斷）' };
         if (/^\s*(<!doctype|<html|<head|\{?\s*"error"|error code|rate.?limit|too many requests|quota exceeded|bad gateway|gateway time-?out|service unavailable|cloudflare)/i.test(txt))
             return { ok: false, reason: '回傳像錯誤頁 / 錯誤訊息，不是總結內容' };
-        const afterHead = txt.replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
-        if (/【大总结[^】]*】/.test(afterHead)) return { ok: false, reason: '內文夾帶了第二個「大总结」標題（疑似舊總結被黏進來）' };
-        if (!/【事件表】/.test(txt) || !/【角色表】/.test(txt)) return { ok: false, reason: '缺少核心區塊（事件表 / 角色表）' };
+        // 🚫 不要再加「檔頭出現幾次」「有沒有某某區塊」這類格式檢查（2026-08-02 拔掉，Rae 定）：
+        //    開頭那行【大总结(第N次)】Last:NN 是程式自己蓋的【檔頭／版本戳】，記第幾次總結、收到第幾樓，
+        //    不是故事標題（故事標題在【故事標題】區塊的下一行）。存檔前那段本來就會「有就取代第一個、沒有就補上」，
+        //    AI 多吐幾個檔頭頂多內文多一行雜訊——為這種事丟掉整份總結＝白燒一次 API 再重生成一次，
+        //    而且連「第 1 次總結」都會被誤判成「夾帶舊總結」（根本還沒有舊總結可以夾帶）。
+        //    這裡只擋「根本不是總結」的東西（空的／被截斷／API 錯誤頁），那些存進去會真的毀掉舊總結。
         return { ok: true };
     }
 
