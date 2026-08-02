@@ -1886,10 +1886,25 @@ _directorSpec(castNames);
             const alive = new Set();
             if (total > 0) fullMsgs.forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
             try {
+                // 🚨 記憶體這一路必須用「記憶體自己的最後樓號」當上限，不能沿用上面那個 lastId：
+                //    lastId 是磁碟檔長度算出來的，而酒館一律「先 emit 事件、後存檔」
+                //    （script.js: emit(MESSAGE_UPDATED) → saveChatConditional()），
+                //    對帳跑的當下磁碟必定落後一則 → 上限少 1 → 最新那樓被排除在查詢範圍外
+                //    → 剛釘上的標記讀檔沒有、記憶體也沒撈到 → 尾端對不上 → 誤砍最新 patch。
+                //    （這就是「編輯訊息必跳回溯提示、刪訊息時有時無」的根因。）
+                const _memLast = await _currentLastId();
+                const _hi = _memLast >= 0 ? _memLast : lastId;
                 // role:'assistant' ＝ 只看 AI 的輪（@types.txt：ChatMessage.role），使用者樓不可能有 avs id
-                const live = await win.TavernHelper?.getChatMessages?.(`0-${lastId}`, { role: 'assistant' });
+                const live = await win.TavernHelper?.getChatMessages?.(`0-${_hi}`, { role: 'assistant' });
                 (live || []).forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
             } catch (e) { console.warn('🛰️ [State Runtime] 對帳讀記憶體訊息失敗，只用讀檔結果:', e?.message || e); }
+            // 🛡️ 再單獨補掃最後一則：懶載入窗口可能讓上面兩個上限都偏小，而剛釘標記的永遠是最後一則。
+            //    getChatMessages(-1) 不受範圍算術影響 ⇒ 最新那筆 patch 一定有機會被認活。
+            try {
+                const _last = await win.TavernHelper?.getChatMessages?.(-1);
+                const _lt = _last && _last[0] && (_last[0].message || _last[0].mes);
+                _idsInText(_lt || '').forEach(id => alive.add(id));
+            } catch (e) {}
             // 🛡️ 保命閘：一個 id 都沒掃到，但 patch 卻有一堆 → 十之八九是讀到殘缺聊天檔／標記還沒釘上，
             //    這時候照判會把狀態整碗清空。寧可不動。
             if (!alive.size) {
