@@ -1008,7 +1008,7 @@ ${numberedText}`;
             let _npc = null;
             try {
                 if (win.OS_NPC_DOSSIER?.prepare) {
-                    _npc = await win.OS_NPC_DOSSIER.prepare(chatId, lastContent, lastId);
+                    _npc = await win.OS_NPC_DOSSIER.prepare(chatId, _lastFull || lastContent, lastId);   // 完整正文：長章節後半登場的NPC也要記到出場數
                     if (_npc && _npc.block) prompt += _npc.block;
                 }
             } catch (e) {}
@@ -1017,7 +1017,7 @@ ${numberedText}`;
             let _looksMap = null;   // ##角色名##佔位模式才建；null = 用外觀錨點舊模式、派發時不展開
             const _useNamePH = wantScenes && _sceneCfg.useNamePlaceholder !== false;   // 預設開
             if (wantScenes && (doState || wantMemory) && recentText) {
-                _sceneParas = _segmentStory(lastContent || '');
+                _sceneParas = _segmentStory(_lastFull || lastContent || '');   // 完整正文分段：4000字後的段落也要能掛插圖（結尾高潮戲原本永遠沒編號）
                 if (_sceneParas.length) {
                     const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
                     if (_useNamePH) {
