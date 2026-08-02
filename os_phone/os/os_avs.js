@@ -980,8 +980,13 @@
             let blocks = '';
             for (const [entityKey, entityValRaw] of Object.entries(container)) {
                 if (entityKey === containerPath) continue;                       // 跳過自包裝範本鍵(鬼實體)
-                if (!entityValRaw || typeof entityValRaw !== 'object') continue; // 非實體(範本殘留純值)跳過
-                const flatReal = _avsFlatObj(entityValRaw);                       // 這個實體「實際擁有」的欄位(攤平)
+                if (entityValRaw === null || entityValRaw === undefined) continue;
+                // 純量/陣列成員不再整個丟掉：混合群組(如 MC財富與交易)被模板誤用 {{#each}} 時，
+                // 金錢餘額(數字)原本被當「範本殘留」跳過＝欄位直接消失。包成單欄位偽實體照樣渲染。
+                const flatReal = Array.isArray(entityValRaw)
+                    ? Object.fromEntries(entityValRaw.map((x, i) => [String(i + 1), x]))
+                    : (typeof entityValRaw === 'object') ? _avsFlatObj(entityValRaw)
+                    : { [entityKey]: entityValRaw };                              // 這個實體「實際擁有」的欄位(攤平)
                 const entityVal = { ...entTpl, ...flatReal };                     // 範本當底 + 實體(舊「形象」巢狀也攤平)
                 let block = innerTpl;
                 block = block.split('{{@key}}').join(entityKey);
@@ -1015,8 +1020,17 @@
             }
             return blocks;
         });
+        // 清單美化：陣列→逐行文字（物件元素取值串接）；空陣列給 —
+        const _avsListText = (arr) => arr.length
+            ? arr.map(x => (x && typeof x === 'object')
+                ? (Array.isArray(x) ? x.map(f).join('·') : Object.values(x).map(f).join('·'))
+                : f(x)).join('<br>')
+            : '—';
         // 2. 一般佔位符 {{變數}}（扁平變數；object 型已由 each 處理，跳過）
+        //    ⚠️ 陣列也是 object——list 型變數({{委託日誌}}/{{MC物品欄}}等)原本被這行跳過、
+        //    最後被「殘留佔位符→—」清掉＝清單永遠空白的真兇。陣列改成逐行渲染。
         Object.entries(state || {}).forEach(([k, v]) => {
+            if (Array.isArray(v)) { out = out.split(`{{${k}}}`).join(_avsListText(v)); return; }
             if (v && typeof v === 'object') return;
             out = out.split(`{{${k}}}`).join(f(v));
         });
@@ -1031,6 +1045,7 @@
             if (key.indexOf('.') < 0) return mm;          // 扁平的（前面已處理／留給步驟3）
             const val = _avsGetByPath(state, key);
             if (val === undefined || val === null) return mm;
+            if (Array.isArray(val)) return _avsListText(val);   // 點記法取到清單(如 {{MC財富與交易.交易日誌}})→逐行,別吐 JSON
             return (typeof val === 'object') ? JSON.stringify(val) : f(val);
         });
         // 3. 殘留佔位符 → —
@@ -1364,7 +1379,9 @@
                 const _classifyObj = (v) => {
                     const cur = _curState[v.name];
                     if (cur && typeof cur === 'object') {
-                        const firstObj = Object.values(cur).find(x => x && typeof x === 'object');
+                        // ⚠️ 陣列不算實體證據：混合群組(如 MC財富與交易={金錢餘額:數字,交易日誌:[]})曾因陣列被誤判成多實體
+                        //    → 模板套 {{#each}}、純量成員(金錢)被 each 丟掉＝「錢包欄位消失」真兇
+                        const firstObj = Object.values(cur).find(x => x && typeof x === 'object' && !Array.isArray(x));
                         if (firstObj) return { kind: 'multi',  fields: Object.keys(firstObj) };
                         return { kind: 'single', fields: Object.keys(cur) };
                     }
