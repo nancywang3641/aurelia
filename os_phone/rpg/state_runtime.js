@@ -5,7 +5,7 @@
 // 1. 監聽 GENERATION_ENDED → 副模型按 schema 抽劇情狀態變化 → 釘 <!--avs:id--> 進正文 → 寫 patches → 重算 current
 //    （2026-08-01 身分制：patch 認正文裡的 id，不認樓號；刪使用者指令／刪中間樓不再誤回滾）
 // 2. 監聽 GENERATION_STARTED → injectPrompts 把 current state 注入下一輪主模型 system prompt
-// 3. 監聽 MESSAGE_DELETED / SWIPED / UPDATED / EDITED → 砍對應 patch → 重算 current
+// 3. 監聽 MESSAGE_DELETED / SWIPED → 砍對應 patch → 重算 current（編輯 UPDATED/EDITED 絕不觸發回朔）
 // 4. 對外：setEnabled / forceExtract / clearPatches
 // ----------------------------------------------------------------
 (function() {
@@ -1936,7 +1936,8 @@ _directorSpec(castNames);
         }
     }
 
-    // ✏️ 內容變動專用（MESSAGE_UPDATED / EDITED / SWIPED）——這三個事件傳的才是真正的訊息號碼
+    // ✏️ 內容替換專用（只掛 MESSAGE_SWIPED；事件參數是真正的訊息號碼）
+    //    🚨 UPDATED/EDITED 已拔線（Rae 鐵令 2026-08-04）：編輯不是內容替換，標記還在就不准砍 patch。
     async function onMessageInvalidated(msgId) {
         try {
             if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過 patch 失效'); return; }
@@ -2191,10 +2192,13 @@ _directorSpec(castNames);
         if (win.tavern_events.MESSAGE_DELETED) {
             win.eventOn(win.tavern_events.MESSAGE_DELETED, () => _reconcilePatches('刪樓'));
         }
-        ['MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED'].forEach(name => {
-            const ev = win.tavern_events[name];
-            if (ev) win.eventOn(ev, (msgId) => onMessageInvalidated(msgId));
-        });
+        // ✏️ 編輯（UPDATED/EDITED）【絕不觸發回朔】（Rae 鐵令 2026-08-04）：
+        //    編輯＝改字，正文還在、avs 標記還在；舊邏輯的「直接命中」卻把這樓登記中的 patch 當失效砍掉
+        //    ＝每編輯一次就白丟一輪狀態（還不會重抽）。孤兒清理交給「注入前對帳」與刪樓/swipe——
+        //    它們只認「標記從全檔消失」，編輯只要沒把標記刪掉就永遠不會誤殺。
+        if (win.tavern_events.MESSAGE_SWIPED) {
+            win.eventOn(win.tavern_events.MESSAGE_SWIPED, (msgId) => onMessageInvalidated(msgId));
+        }
 
         // 切聊天 → 清 inject（新 chatId 的 inject 會在下次 GENERATION_STARTED 重新跑）
         if (win.tavern_events.CHAT_CHANGED) {
