@@ -160,7 +160,7 @@ ${list}
     //    而且 lastMsgId 只防同樓重複計數，刪樓後樓號往前，重生一次就再記一次登場。
     // 做法：重掃全檔的 [Char|名] → 正文裡沒有的角色，檔案與帳一起移除；
     //      登場次數也用「實際出現的樓數」重算，不再是只增不減的計數器。
-    async function reconcile(tag) {
+    async function reconcile(tag, corpusList) {
         try {
             if (!_isOn()) return;
             const chatId = _getChatId();
@@ -171,11 +171,18 @@ ${list}
             const chars = data.npcLedger?.chars || {};
             if (!Object.keys(dossiers).length && !Object.keys(chars).length) return;
 
+            // 指定底本模式（VN回朔）：呼叫方直接給「還活著的章節正文」陣列當唯一真相，
+            // 不掃酒館聊天檔——VN 回朔刪的是 DB 章節，酒館樓層可能還留著舊文，掃它會把該死的角色救回來
+            const _hasCorpus = Array.isArray(corpusList);
             let msgs = null;
-            try { msgs = await win.VN_READER?.fetchFullChat?.(); } catch (e) {}
-            if (!Array.isArray(msgs) || !msgs.length) {
-                console.warn(`📇 [NPC Dossier] 對帳(${tag})：讀不到完整聊天檔 → 不動`);
-                return;
+            if (_hasCorpus) {
+                msgs = corpusList.map(t => ({ message: String(t || '') }));
+            } else {
+                try { msgs = await win.VN_READER?.fetchFullChat?.(); } catch (e) {}
+                if (!Array.isArray(msgs) || !msgs.length) {
+                    console.warn(`📇 [NPC Dossier] 對帳(${tag})：讀不到完整聊天檔 → 不動`);
+                    return;
+                }
             }
 
             // 逐樓重算：n＝該名字出現過的樓數（跟原本「一樓算一次」同語意）
@@ -191,7 +198,8 @@ ${list}
             }
 
             // 🛡️ 保命閘：全檔掃不到任何角色、但原本有一堆檔案 → 十之八九讀到殘缺檔，寧可不動
-            if (!Object.keys(nowChars).length && Object.keys(dossiers).length) {
+            //    （指定底本模式不設閘：呼叫方給的就是全部真相——回朔到零章節＝角色本來就該全清）
+            if (!_hasCorpus && !Object.keys(nowChars).length && Object.keys(dossiers).length) {
                 console.warn(`📇 [NPC Dossier] 對帳(${tag})：全檔掃不到任何 [Char|]、但有 ${Object.keys(dossiers).length} 份檔案 → 疑似殘缺聊天檔，不動`);
                 return;
             }
