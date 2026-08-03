@@ -401,6 +401,16 @@
                 localStorage.setItem(stateKey, JSON.stringify(lastCh.avsStateBefore));
                 if (win.dispatchEvent) win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: lastCh.avsStateBefore }));
 
+                // 📇 回朔對帳（Rae 定案 2026-08-03）：以「還活著的章節」為底本重掃 [Char|...]，
+                //    多出來的角色手冊＋登場帳一起刪——否則名冊每輪對主模型下「嚴禁當新角色」的
+                //    亡靈復活令，回朔掉的角色重生成時必定原樣回歸。記憶側順路對齊（自帶守門，安全）。
+                try {
+                    const alive = storyChs.filter(c => c.id !== lastCh.id)
+                        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                    await win.OS_NPC_DOSSIER?.reconcile?.('VN回朔', alive.map(c => String(c.content || '')));
+                } catch (e2) { console.warn('[AVS] 回朔對帳(人物手冊)失敗:', e2); }
+                try { await win.OS_VECTOR_INJECT?.reconcileToStory?.(); } catch (e2) {}
+
                 console.log('[AVS] ↩ 回朔成功，刪除章節:', lastCh.title || lastCh.id);
             } catch(e) {
                 console.error('[AVS] 回朔失敗:', e);
