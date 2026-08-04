@@ -412,6 +412,32 @@
             }, 1);
         },
 
+        // 底詞污染偵測：底詞(basePrompt)會附加到「每一張」圖，只該放品質/風格/LoRA trigger。
+        //   一旦被存進具體人物或場景（多半是匯入 ComfyUI 工作流時把當下的 positive CLIP 整串吃進來），
+        //   舊背景/舊人物就會跟著每張新圖跑出來 → 背景穿越＋畫面多出第三人。
+        //   這裡只警告不自動刪：風格詞跟場景詞沒有可靠的機器判準，誤刪比誤留傷害大。
+        _SCENE_SIGNALS: /(?:\b\d+\s*(?:boys?|girls?|males?|females?|others?|people)\b|\bon the (?:left|right)\b|##\s*C?\d+[^#]*##|\b(?:standing|sitting|kneeling|lying|walking|running|holding|pointing|licking|kissing|hugging)\b|\b(?:cave|forest|beach|castle|tower|dome|temple|street|bedroom|kitchen|classroom|dungeon|mine)\b)/i,
+
+        // 組最終正向詞：底詞 + 本輪動態詞。三段分開印出來，出事時一眼看得出污染來自哪一段。
+        _composePos: function(cfg, prompt, tag) {
+            const base = String((cfg && cfg.basePrompt) || '').trim();
+            const dyn  = String(prompt || '').trim();
+            const final = [base, dyn].filter(Boolean).join(', ');
+            console.log(`[ImageManager] ── 正向詞三段 [${tag || '?'}] ──`);
+            console.log('[ImageManager] ① 底詞 basePrompt:', base || '（空）');
+            console.log('[ImageManager] ② 本輪動態詞:', dyn || '（空）');
+            console.log('[ImageManager] ③ 最終送出:', final);
+            if (base && this._SCENE_SIGNALS.test(base)) {
+                const hit = (base.match(this._SCENE_SIGNALS) || [''])[0];
+                console.warn(`[ImageManager] ⚠️ 底詞裡有具體人物/場景字樣「${hit}」——底詞會加到每一張圖，這會造成背景殘留或多出人物。請到 ComfyUI 直連把底詞清成只剩品質/風格/LoRA trigger。`);
+                if (!this.__basePolluteToasted) {
+                    this.__basePolluteToasted = true;   // 一次就好，別每張圖都跳
+                    try { win.toastr && win.toastr.warning(`底詞含有具體場景／人物字樣（${hit}），會附加到每張插圖。請到「ComfyUI 直連」清理底詞。`, '底詞可能被污染', { timeOut: 12000 }); } catch (e) {}
+                }
+            }
+            return final;
+        },
+
         // --- ComfyUI 直連：奧瑞亞內部自動組 workflow → 走酒館伺服器代理(/api/sd/comfy/generate) → 回 base64 ---
         // 不依賴 ST 的 workflow 檔；LoRA/參數全由 config.comfyuiDirect（奧瑞亞 UI）控制。
         _genComfyuiDirect: async function(prompt, type, options = {}) {
@@ -431,7 +457,7 @@
             const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
             const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
 
-            let posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
+            let posText = this._composePos(cfg, prompt, type);
             let negText = options.negativePrompt || cfg.negPrompt || '';
             // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，保留 comfy 面板負詞
             if (options.extraNegative) negText = [negText, options.extraNegative].filter(Boolean).join(', ');
@@ -585,7 +611,7 @@
             if (!cfg.model && !_hasCustomWf) throw new Error('這個包沒有模型(model 空白) — 另存時面板可能沒選到模型');
             const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
             const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
-            const posText = [cfg.basePrompt, prompt].filter(Boolean).join(', ');
+            const posText = this._composePos(cfg, prompt, 'preview');
             const negText = cfg.negPrompt || '';
             // 尺寸：opts.packSize=true → 不塞任何尺寸、builder 落到 cfg.width/height＝完全用預設包自己調的
             //   （裝扮室生成走這條）；沒帶 opts 維持預覽小圖 512×768（設置頁預設卡縮圖用）。
