@@ -1714,7 +1714,14 @@ _directorSpec(castNames);
             try {
                 const back = await TH.getChatMessages(arrIdx);
                 const bt = back && back[0] && (back[0].message || back[0].mes);
-                if (typeof bt === 'string' && bt.indexOf('<!--avs:' + id + '-->') >= 0) return true;
+                if (typeof bt === 'string' && bt.indexOf('<!--avs:' + id + '-->') >= 0) {
+                    // 💾 驗證通過後強制落盤：setChatMessages 的 refresh 只管畫面、不保證存檔（@types.txt），
+                    //    TauriTavern 又是懶存檔——標記只活在記憶體時，/del 觸發「從磁碟重讀→重寫」會讓它蒸發，
+                    //    對帳兩遍都掃不到 → 無辜回滾（「刪用戶樓也跳回溯」真兇）。存檔失敗只警告，複核制當第二道防線。
+                    try { await win.SillyTavern?.getContext?.()?.saveChat?.(); }
+                    catch (e2) { console.warn('🛰️ [State Runtime] avs 標記落盤失敗（標記僅在記憶體，刪樓可能誤回滾）:', e2?.message || e2); }
+                    return true;
+                }
                 console.warn('🛰️ [State Runtime] avs 標記寫入後回讀不到 → 這輪不記 patch');
                 return false;
             } catch (e) { return false; }
