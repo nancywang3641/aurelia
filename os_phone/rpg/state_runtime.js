@@ -823,17 +823,39 @@ ${_memoryRulesText()}
     // 把 scene prompt 裡的 ##角色名## / ##C2## / ##C2. 名## 換成登記表外觀；
     //   對不到走小寫正規化、再拆「代號+名」各試一次，都不到才留原名(別讓 ## 進生圖)。
     //   用 ## 不用 {{}}：NAI 的 {{}}/[]/() 是權重語法，佔位改 ## 才不會跟底詞/預設包的權重撞(Rae 2026-06-23)。
+    // 同一個角色在一條 prompt 裡被展開第二次以上時，改用的簡短代稱。
+    //   完整外觀重複兩三次，文字編碼器會當成「介紹了好幾個人」→ 複製人／畫面多出第三人。
+    //   取得出「是誰」的一兩個標籤（性別／髮色／瞳色優先）當回指，保留指向性又不再多生一個人。
+    function _shortLookRef(full) {
+        const tags = String(full || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (!tags.length) return '';
+        const KEY = /(hair|eyes?|\bman\b|\bmen\b|\bboy\b|\bgirl\b|\bwoman\b|male|female|elf|beast|skin)/i;
+        const picked = tags.filter(t => KEY.test(t)).slice(0, 2);
+        return (picked.length ? picked : tags.slice(0, 2)).join(', ');
+    }
+
+    // 代號去重展開：第一次給完整外觀，之後同一個人改代稱並留 warning（模板規範是每個代號只該寫一次）。
+    //   去重的 key 用「展開後的外觀字串」而不是代號 —— 同一人被 ##C3## 跟 ##名字## 各寫一次也算重複。
+    function _dedupeExpand(seen, hit, label) {
+        const n = (seen[hit] = (seen[hit] || 0) + 1);
+        if (n === 1) return hit;
+        const short = _shortLookRef(hit);
+        console.warn(`🖼️ [插圖] 同一個角色的代號 ##${label}## 在這條 prompt 裡是第 ${n} 次出現 → 只有第一次展開完整外觀，這次改成代稱「${short}」。重複展開完整外觀會讓模型以為要畫好幾個人（複製人／多出第三人）。副模型模板應該讓每個代號只出現一次。`);
+        return short;
+    }
+
     function _expandSceneNames(str, map) {
         if (!str || String(str).indexOf('##') < 0) return str;
         const lowerMap = {};
         for (const k of Object.keys(map || {})) lowerMap[k.toLowerCase()] = map[k];
         const _look = (k) => { if (!k) return null; const kk = String(k).trim(); return (map && (map[kk] || map[kk.toUpperCase()])) || lowerMap[kk.toLowerCase()] || null; };
+        const seen = Object.create(null);
         return String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
             const name = String(raw).trim();
             let hit = _look(name);
-            if (hit) return hit;
+            if (hit) return _dedupeExpand(seen, hit, name);
             const mm = name.match(/^(C\d+)[\s.．:：、,，_-]+(.+)$/i);   // ##C2. 名## → 拆代號與名各試
-            if (mm) { hit = _look(mm[1]) || _look(mm[2]); if (hit) return hit; }
+            if (mm) { hit = _look(mm[1]) || _look(mm[2]); if (hit) return _dedupeExpand(seen, hit, name); }
             return name;
         });
     }
@@ -1223,10 +1245,11 @@ ${numberedText}`;
     function _expandHashNames(str, map) {
         if (!str || String(str).indexOf('##') < 0) return str;
         const lower = {}; for (const k of Object.keys(map || {})) lower[k.toLowerCase()] = map[k];
+        const seen = Object.create(null);   // 同一人重複出現只展開第一次（見 _dedupeExpand）
         return String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
             const name = String(raw).trim();
             const hit = (map && (map[name] || map[name.toUpperCase()])) || lower[name.toLowerCase()];
-            return hit || name;   // 登記到→外觀；沒登記→拿掉井號留原文（別讓 ## 進 NAI）
+            return hit ? _dedupeExpand(seen, hit, name) : name;   // 登記到→外觀；沒登記→拿掉井號留原文（別讓 ## 進 NAI）
         });
     }
     let _sceneRunning = false;

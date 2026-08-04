@@ -427,9 +427,24 @@
                     if (pd.model) got.push('模型'); if (pd.loras) got.push('LoRA×' + pd.loras);
                     if (pd.sampler) got.push('採樣器/步數/CFG'); if (pd.prompt) got.push('正負提示詞'); if (pd.size) got.push('尺寸');
                     const miss = !pd.model && !pd.sampler && !pd.prompt;
-                    self._setImgStatus(miss
+                    // 底詞污染提醒：工作流的正向 CLIP 會整串被存成底詞，而底詞是「每張圖都會加」的。
+                    //   拖進來的圖若是拿某個具體場景測出來的，那個場景就會黏在之後每一張插圖上
+                    //   → 背景穿越、畫面多出人。這裡只提醒不自動刪（風格詞跟場景詞沒有可靠機器判準）。
+                    const _polluteHit = (function(){
+                        try {
+                            const _W = window.parent || window;
+                            const re = (_W.OS_IMAGE_MANAGER && _W.OS_IMAGE_MANAGER._SCENE_SIGNALS)
+                                || /(?:\b\d+\s*(?:boys?|girls?|males?|females?|others?|people)\b|\bon the (?:left|right)\b|##\s*C?\d+[^#]*##)/i;
+                            const m = String(preset.basePrompt || '').match(re);
+                            return m ? m[0] : '';
+                        } catch (e) { return ''; }
+                    })();
+                    const _polluteMsg = _polluteHit
+                        ? '　⚠️ 這張圖的正向詞裡有具體人物／場景字樣（' + _polluteHit + '），已被存成這張卡的「底詞」。底詞會加到每一張圖 → 套用前先把底詞清成只剩畫質／風格／LoRA 觸發詞，否則舊背景舊人物會跟著跑。'
+                        : '';
+                    self._setImgStatus((miss
                         ? '⚠️ 已建卡「' + name + '」，但這張圖的工作流結構特殊、只抓到少數欄位 → 套用後請自己在面板核對補齊。記得按底部「保存」。'
-                        : '✅ 已拆進預設卡「' + name + '」：' + (got.join('、') || '基本設定') + '。點「套用」就能在面板逐格微調，改完按底部「保存」。', miss);
+                        : '✅ 已拆進預設卡「' + name + '」：' + (got.join('、') || '基本設定') + '。點「套用」就能在面板逐格微調，改完按底部「保存」。') + _polluteMsg, miss || !!_polluteHit);
                 },
                 overwriteIdx: function(i){
                     const old = cfdPresets[i]; if (!old) return;
