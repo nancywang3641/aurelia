@@ -1887,10 +1887,13 @@ _directorSpec(castNames);
             if (lastId < 0) { console.warn('🛰️ [State Runtime] 對帳：連樓號都拿不到，保守不動（可用狀態面板「還原上一步」）'); return; }
             console.log(`🛰️ [State Runtime] 對帳(${tag})：真實樓數=${total > 0 ? total : '未知'}，最後一樓=#${lastId}`);
 
-            // ⚖️ AI 樓數基準：判別「這次刪的是誰的樓」。刪樓初判讀的是刪除前的舊檔，不准污染基準。
+            // ⚖️ AI 樓數基準：判別「這次刪的是誰的樓」。刪樓初判讀的是刪除前的舊檔，不准污染既有基準；
+            //    但基準還是 -1（剛重開、還沒跑過生成）時，初判的「刪除前」讀值正好可以當首發基準——
+            //    否則重開後第一刀刪 AI 樓會因 -1 被誤判成「未減少」走認養、該回朔沒回朔。
             const _asstNow = (total > 0) ? fullMsgs.filter(m => m && !(m.is_user || m.role === 'user')).length : -1;
-            const _prevAsst = _lastAsstCount;
+            const _prevAsst = (_lastAsstCount < 0 && tag === '刪樓') ? _asstNow : _lastAsstCount;
             if (_asstNow >= 0 && tag !== '刪樓') _lastAsstCount = _asstNow;
+            if (_asstNow >= 0 && tag === '刪樓' && _lastAsstCount < 0) _lastAsstCount = _asstNow;
 
             const data = await win.OS_DB.getStateData(chatId);
             // 🔍 這幾個出口以前是靜默 return，查半天不知道卡在哪 → 一律說明原因
@@ -2271,6 +2274,7 @@ _directorSpec(castNames);
         // 切聊天 → 清 inject（新 chatId 的 inject 會在下次 GENERATION_STARTED 重新跑）
         if (win.tavern_events.CHAT_CHANGED) {
             win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
+                _lastAsstCount = -1;   // AI 樓數基準是「每張卡各自的」——不清掉會拿 A 卡的基準去判 B 卡的刪樓
                 try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
                 try { _lastRulesUninject?.(); _lastRulesUninject = null; } catch(e) {}
                 try { _lastAvatarUninject?.(); _lastAvatarUninject = null; } catch(e) {}
