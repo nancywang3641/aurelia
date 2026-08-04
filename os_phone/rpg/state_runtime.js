@@ -27,6 +27,7 @@
     let _debounceTimer = null;
     let _repairDebounce = null;     // 開頭設置(Bg/BGM)補救的 debounce
     let _selfEditing = false;       // 開頭補救正在改寫訊息 → 擋 onMessageInvalidated 誤砍本則剛存的 patch
+    let _lastAsstCount = -1;        // 已知的 AI 樓數基準（刪樓判別用：AI 樓沒變少＝刪的是用戶樓＝鐵令不准回朔）
     let _running = false;           // 防止並發抽取
     let _genStopped = false;        // 本通生成是否被「手動停止」(GENERATION_STOPPED)→ 全副模型跳過，別拿半截正文白燒
     let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
@@ -1860,6 +1861,11 @@ _directorSpec(castNames);
             if (lastId < 0) { console.warn('🛰️ [State Runtime] 對帳：連樓號都拿不到，保守不動（可用狀態面板「還原上一步」）'); return; }
             console.log(`🛰️ [State Runtime] 對帳(${tag})：真實樓數=${total > 0 ? total : '未知'}，最後一樓=#${lastId}`);
 
+            // ⚖️ AI 樓數基準：判別「這次刪的是誰的樓」。刪樓初判讀的是刪除前的舊檔，不准污染基準。
+            const _asstNow = (total > 0) ? fullMsgs.filter(m => m && !(m.is_user || m.role === 'user')).length : -1;
+            const _prevAsst = _lastAsstCount;
+            if (_asstNow >= 0 && tag !== '刪樓') _lastAsstCount = _asstNow;
+
             const data = await win.OS_DB.getStateData(chatId);
             // 🔍 這幾個出口以前是靜默 return，查半天不知道卡在哪 → 一律說明原因
             if (!data) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：這個聊天沒有任何狀態資料 → 沒東西可回滾`); return; }
@@ -1943,9 +1949,29 @@ _directorSpec(castNames);
                 return _reconcilePatches('刪樓·複核');
             }
 
+            // ⚖️ 生死判決（Rae 鐵令 2026-08-04：只有「AI 正文樓真的變少」才有資格回朔）：
+            //    ─ 刪樓·複核：AI 樓數比基準少＝真的刪了 AI 樓 → 回滾。
+            //      沒變少＝刪的是用戶樓、標記卻失聯＝標記蒸發的孤兒（修復前釘的沒落盤/懶存檔吃掉）
+            //      → 不回滾，把孤兒「認養」到最新 AI 樓（重新釘標記＋落盤），資料一筆不丟。
+            //    ─ 注入前：沒有刪除事件卻尾端失聯＝十之八九是蒸發不是刪樓 → 同樣認養。
+            //      （代價：真的在外部刪 AI 樓而沒發事件時不會自動回朔——用面板「還原上一步」處理，罕見。）
+            //    ─ 其他（msg# swipe 後備）：內容真的被替換 → 照舊回滾。
+            const _aiDeleted = (tag === '刪樓·複核') && _asstNow >= 0 && _prevAsst >= 0 && _asstNow < _prevAsst;
+            if ((tag === '刪樓·複核' && !_aiDeleted) || tag === '注入前') {
+                let lastAsstIdx = -1;
+                if (total > 0) for (let i = fullMsgs.length - 1; i >= 0; i--) { const mm = fullMsgs[i]; if (mm && !(mm.is_user || mm.role === 'user')) { lastAsstIdx = i; break; } }
+                let adopted = 0;
+                for (const id of dead) { try { if (lastAsstIdx >= 0 && await _stampAvsId(lastAsstIdx, id)) adopted++; } catch (e) {} }
+                console.log(`🛰️ [State Runtime] 對帳(${tag})：AI樓數 ${_prevAsst}→${_asstNow} 未減少 → 依鐵令不回朔；${adopted}/${dead.length} 筆失聯 patch 認養到 #${lastAsstIdx}（重釘標記+落盤）`);
+                if (adopted < dead.length) console.warn(`🛰️ [State Runtime] 對帳(${tag})：${dead.length - adopted} 筆認養失敗 → 保留不動，下輪再試`);
+                if (tag === '刪樓·複核' && _asstNow >= 0) _lastAsstCount = _asstNow;
+                return;
+            }
+
             const n = await _rollbackPatches(chatId, data, dead);
             console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(${dead.join(',')})，回復 ${n} 個欄位`);
             if (n) showToast(`↩ 狀態已回溯（${dead.length} 輪、${n} 個欄位）`, 'success');
+            if (tag === '刪樓·複核' && _asstNow >= 0) _lastAsstCount = _asstNow;
         } catch (e) {
             console.warn('[State Runtime] 對帳回滾失敗:', e);
             showToast('⚠ 狀態回溯失敗，請用狀態面板「還原上一步」', 'warning');
