@@ -122,7 +122,6 @@ const MODULE_LOAD_ORDER = [
     { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
     { name: 'tavern_bridge', path: _AURELIA_EXT_BASE + '/core/tavern_bridge.js', key: 'bridge' },
     { name: 'panel_manager', path: _AURELIA_EXT_BASE + '/core/panel_manager.js', key: 'panelManager' },
-    { name: 'claude_terminal', path: _AURELIA_EXT_BASE + '/core/claude_terminal.js', key: 'claudeTerminal' },
     { name: 'void_panels', path: _AURELIA_EXT_BASE + '/core/void/panels.js', key: 'voidPanels' },
     { name: 'void_worldview', path: _AURELIA_EXT_BASE + '/core/void/worldview.js', key: 'voidWorldview' },
     { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },
@@ -137,12 +136,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_login', path: _AURELIA_EXT_BASE + '/core/void/login.js', key: 'voidLogin' },
     { name: 'void_phone_shell', path: _AURELIA_EXT_BASE + '/core/void/phone_shell.js', key: 'voidPhoneShell' },
     { name: 'app_runtime', path: _AURELIA_EXT_BASE + '/core/void/app_runtime.js', key: 'appRuntime' },
-    { name: 'chat_window', path: _AURELIA_EXT_BASE + '/core/chat_window.js', key: 'chatWindow' },
-    { name: 'chat_room', path: _AURELIA_EXT_BASE + '/core/chat_room.js', key: 'voidClaudeRoom' },
-    { name: 'chat_group', path: _AURELIA_EXT_BASE + '/core/chat_group.js', key: 'chatGroup' },
-    { name: 'chat_canvas', path: _AURELIA_EXT_BASE + '/core/chat_canvas.js', key: 'chatCanvas' },
     { name: 'void_terminal', path: _AURELIA_EXT_BASE + '/core/void_terminal.js', key: 'voidTerminal' },
-    { name: 'void_claude_recents', path: _AURELIA_EXT_BASE + '/core/void/claude_recents.js', key: 'voidClaudeRecents' },   // ☕ Claude Recents 多會話清單（拆自 void_terminal，靠 _bridge；排 chat_window 後面保 _VoidClaudeUpdateChip 覆蓋序）
     { name: 'control_center', path: _AURELIA_EXT_BASE + '/core/control_center.js', key: 'controlCenter' },
     { name: 'html_extractor', path: _AURELIA_EXT_BASE + '/core/html_extractor.js', key: 'htmlExtractor' },
     { name: 'story_extractor', path: _AURELIA_EXT_BASE + '/core/story_extractor.js', key: 'storyExtractor' },
@@ -158,7 +152,6 @@ const PHONE_FILES = [
     // === 🟢 OS 層 (系統基礎) ===
     'os/os_settings.js',
     'os/os_settings_comfyui.js', // 🧩 ComfyUI 直連設定（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
-    'os/os_settings_claude.js', // 🦀 Claude 的房間＋Claude Presets CRUD（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_settings_voice.js', // 🎵 語音清單：Minimax 音色檔案卡＋官方音色庫＋測試播放（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_db.js',
     'os/app_store.js',
@@ -196,8 +189,6 @@ const PHONE_FILES = [
     'os/os_backup.js',
     'os/os_404_store.js',
     'os/os_tarot.js',
-    'os/os_spend_panel.js',
-    'os/os_board.js',
     'os/os_card_import.js',
     'os/nai_recipe.js',
     'os/os_journal.js',
@@ -210,7 +201,6 @@ const PHONE_FILES = [
     'os/os_furniture.js',     // 🛋️ 家具商城：固定目錄逛街＋訂製燒副模型；買到的東西進倉庫，布置時當包裹用（依賴 OS_DB/OS_PT/OS_API）
     'os/os_landlord_room.js', // 📦 包租婆房間頁＋包裹配送 UI（依賴 OS_LANDLORD/OS_ROOM_GEN/OS_FURNITURE）
     'os/os_worldgate.js',     // 🌌 世界門③：愛麗絲面板=種子抽選+世界落地視差書+旅人招募+DIVE（依賴 OS_DB/OS_API/AURELIA_WORLDGATE；設計書 docs/parallax_worldgate_design.md）
-    'os/os_workbench.js',
 
     // === 📖 VN 視覺小說系統 ===
     'vn_story/vn_styles.js',
@@ -464,7 +454,6 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_tarot.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_story_tools.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/os_workbench.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_user_center.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_monitor.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_barrage.css');
@@ -482,10 +471,6 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/map_core.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/rpg_status_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/void_achievement.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/void_claude_recents.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/void_claude_ask.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/chat_window.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/os_board.css');
 
         if (_AURELIA_EXT_NAME) {
             // 本機：維持原樣(本地讀檔極快、且已驗證穩定，不動)
