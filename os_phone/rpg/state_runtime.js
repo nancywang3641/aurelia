@@ -1705,7 +1705,15 @@ _directorSpec(castNames);
             const next = ci >= 0 ? (text.slice(0, ci) + tag + '\n' + text.slice(ci)) : (text + '\n' + tag);
             _selfEditing = true;
             try {
-                await TH.setChatMessages([{ message_id: arrIdx, message: next, mes: next }], { refresh: 'none' });
+                // 💾 用舊版 setChatMessage（單數）寫入：它內部無條件 await saveChatConditional()＝立即落盤。
+                //    新版 setChatMessages 在 refresh:'none' 只叫「防抖存檔」——TauriTavern 的 /del 走磁碟
+                //    重讀重寫，防抖沒趕上＝標記蒸發（2026-08-04 驗屍：被砍的 id 從未出現在聊天檔）。
+                //    getContext().saveChat 在 TauriTavern 不存在（?.靜默跳過），不能依賴。
+                if (typeof TH.setChatMessage === 'function') {
+                    await TH.setChatMessage({ message: next }, arrIdx, { refresh: 'none' });
+                } else {
+                    await TH.setChatMessages([{ message_id: arrIdx, message: next, mes: next }], { refresh: 'none' });
+                }
             } finally {
                 setTimeout(() => { _selfEditing = false; }, 2500);
             }
