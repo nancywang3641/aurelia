@@ -44,10 +44,8 @@
             }
         },
         _hideDomIcons() {
-            ['aurelia-floating-icon', 'aurelia-chat-launcher'].forEach((id) => {
-                const el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-            });
+            const el = document.getElementById('aurelia-floating-icon');
+            if (el) el.style.display = 'none';
         },
 
         createIcon() {
@@ -68,23 +66,6 @@
                 });
                 document.body.appendChild(icon);
                 this.iconElement = icon;
-            }
-
-            // 💬 Claude / Codex 浮窗啟動鈕（點了跳小選單）
-            if (!document.getElementById('aurelia-chat-launcher')) {
-                const chatIcon = document.createElement('div');
-                chatIcon.id = 'aurelia-chat-launcher';
-                chatIcon.style.display = 'none';
-                chatIcon.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    if (window.ChatWindow && typeof window.ChatWindow.toggleLauncherMenu === 'function') {
-                        window.ChatWindow.toggleLauncherMenu(chatIcon);
-                    } else {
-                        console.warn('ChatWindow 尚未加載');
-                    }
-                });
-                document.body.appendChild(chatIcon);
             }
         },
 
@@ -116,31 +97,12 @@
 
                 leftSendForm.insertBefore(icon, leftSendForm.firstChild);
             }
-
-            // 💬 啟動鈕：緊跟在 🏰 右邊
-            const chatIcon = document.getElementById('aurelia-chat-launcher');
-            if (leftSendForm && chatIcon && chatIcon.parentElement !== leftSendForm) {
-                chatIcon.className = '';
-                chatIcon.innerHTML = '💬';
-                chatIcon.title = 'Claude / Codex 浮窗';
-                Object.assign(chatIcon.style, {
-                    position: 'static', width: '30px', height: '30px',
-                    borderRadius: '5px', marginRight: '4px', marginLeft: '2px',
-                    boxShadow: 'none', transform: 'none', fontSize: '18px',
-                    flexShrink: '0', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                });
-                const castle = document.getElementById('aurelia-floating-icon');
-                if (castle && castle.parentElement === leftSendForm) {
-                    leftSendForm.insertBefore(chatIcon, castle.nextSibling);
-                } else {
-                    leftSendForm.insertBefore(chatIcon, leftSendForm.firstChild);
-                }
-            }
         },
 
         // 移動端：用酒館原生 QR 按鈕(quickReplyApi)取代「硬插 DOM + 監聽重插」。
         // 由 QR 擴展自己管 → 換聊天/角色卡 QR 欄重繪也不會被洗、零閃爍、不會卡住。
-        // 動作走斜線命令 /aurelia、/aurelia-chat。建一次即持久存進 QR 設定。
+        // 動作走斜線命令 /aurelia。建一次即持久存進 QR 設定。
+        // （💬 Claude / Codex 房間已獨立成 claude-codex-room 擴展，由它自己註冊 /aurelia-chat）
         registerQrButtons() {
             if (this._qrDone) return;
             const w = window.parent || window;
@@ -164,11 +126,6 @@
                     callback: () => { try { (window.AureliaControlCenter || w.AureliaControlCenter)?.toggle(); } catch (e) {} return ''; },
                     helpString: '開啟奧瑞亞面板',
                 }));
-                ctx.SlashCommandParser.addCommandObject(ctx.SlashCommand.fromProps({
-                    name: 'aurelia-chat',
-                    callback: () => { try { (window.ChatWindow || w.ChatWindow)?.toggleLauncherMenu?.(document.getElementById('qr--bar') || document.body); } catch (e) {} return ''; },
-                    helpString: '開啟 Claude / Codex 浮窗選單',
-                }));
                 window.__AURELIA_QR_CMD__ = true;
             }
             // 2. 全域 QR set + 按鈕(冪等：set 不存在才建，避免重複)
@@ -178,7 +135,6 @@
                 set = await qrApi.createSet(SET, {});
                 if (!set) set = qrApi.getSetByName(SET);
                 qrApi.createQuickReply(SET, '🏰', { message: '/aurelia', title: '奧瑞亞面板' });
-                qrApi.createQuickReply(SET, '💬', { message: '/aurelia-chat', title: 'Claude / Codex 浮窗' });
             }
             // 3. 設為全域可見(冪等)
             try { if (!qrApi.settings?.config?.hasSet?.(set)) qrApi.addGlobalSet(SET, true); }

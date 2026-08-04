@@ -39,7 +39,8 @@
         { id: 'appstore', name: '應用商城', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
         { id: 'ctrlroom', name: '控制室', emoji: '🎛️', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
         { id: 'aichat', name: 'AI 助手', emoji: '🤖', mode: 'inside', go: function (c) {
-            if (!win.ChatWindow || !win.ChatWindow.mountInside) { if (c) c.innerHTML = '<div class="aps-fail">AI 助手未載入</div>'; return; }
+            // 房間本體已獨立成 claude-codex-room 擴展；沒裝就顯示提示（純 optional，不影響其他 app）
+            if (!win.ChatWindow || !win.ChatWindow.mountInside) { if (c) c.innerHTML = '<div class="aps-fail">AI 助手未安裝</div>'; return; }
             win.ChatWindow.mountInside(c);
             // 離開回呼：恢復大廳活動/BGM（窗本身留著，下次大廳鈕或再開 app 會復原狀態）
             return function () { try { if (win.VoidTerminal && win.VoidTerminal.resumeLobbyActivity) win.VoidTerminal.resumeLobbyActivity(); } catch (e) {} };

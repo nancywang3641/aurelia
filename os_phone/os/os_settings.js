@@ -21,7 +21,6 @@
     const SEC_LLM_STORAGE_KEY = 'os_secondary_llm_config';
     const IMG_STORAGE_KEY = 'os_image_config';
     const MINIMAX_STORAGE_KEY = 'os_minimax_config';
-    const CLAUDE_ROOM_STORAGE_KEY = 'os_claude_room_config';
     
     // --- 讀取 LLM 設置 ---
     function loadLlmConfig() {
@@ -286,84 +285,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         return config;
     }
 
-    // --- 讀取Claude 的房間設置（獨立 Claude 接口，跟主/副模型完全隔離；不對接酒館 profile / preset） ---
-    // 新版資料結構：跟其他 AI 提供者一樣只有 URL + 密鑰，多預設可隨時切換
-    // - 朋友只填一個 Anthropic 預設就能用、不需要 server / cc-bridge
-    // - Rae 可加多組（例如本機 cc-bridge / VPS cc-bridge / Anthropic 直連）
-    function loadClaudeRoomConfig() {
-        let saved = localStorage.getItem(CLAUDE_ROOM_STORAGE_KEY);
-        // 2026-05-24:Anthropic 直連預設拔除;奧瑞亞 = agent 前端,新安裝預設空 preset,
-        // 使用者自己加 cc-bridge / VPS cc-bridge 等端點。
-        const defaultPresets = [];
-        let config = {
-            presets: defaultPresets,
-            activePresetId: '',
-            // 預設值（聊天時 inline picker 不選的話用這些）
-            model: 'claude-opus-4-7',
-            maxTokens: 4096,
-            temperature: 1.0,
-            top_p: 1.0,
-            // inline picker 覆寫值（空字串 = 用該 endpoint server 的預設）
-            inlineModel:   '',
-            inlineEffort:  '',
-            inlineBackend: '',
-        };
-        if (saved) {
-            try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {}
-
-            // 從舊版 endpoints 結構 migrate 到 presets array（一次性、之後不再執行）
-            if (saved.includes('"endpoints"') && (!config.presets || config.presets.length === 1)) {
-                try {
-                    const old = JSON.parse(saved);
-                    const migrated = [];
-                    if (old.endpoints) {
-                        for (const [slotId, ep] of Object.entries(old.endpoints)) {
-                            const key = ep.token || ep.apiKey || '';
-                            if (ep.url || key) {
-                                migrated.push({ id: slotId, name: ep.name || slotId, url: ep.url || '', key });
-                            }
-                        }
-                    }
-                    if (migrated.length) {
-                        config.presets = migrated;
-                        config.activePresetId = old.activeEndpoint || migrated[0].id;
-                    }
-                } catch(e) {}
-            }
-
-            // 從更早的舊版（單一 url/key）migrate
-            if (saved.includes('"url"') && (!config.presets || config.presets.every(p => !p.url && !p.key))) {
-                try {
-                    const old = JSON.parse(saved);
-                    if (old.url || old.key) {
-                        config.presets = [
-                            { id: 'legacy', name: '預設', url: old.url || '', key: old.key || '' },
-                            ...defaultPresets,
-                        ];
-                        config.activePresetId = 'legacy';
-                    }
-                } catch(e) {}
-            }
-
-            if (!config.presets || !config.presets.length) config.presets = defaultPresets;
-            if (!config.presets.find(p => p.id === config.activePresetId)) {
-                config.activePresetId = config.presets[0].id;
-            }
-        }
-        return config;
-    }
-
-    // 取得當前 active preset 的展開資料
-    function getActivePreset(config) {
-        config = config || loadClaudeRoomConfig();
-        const presets = config.presets || [];
-        return presets.find(p => p.id === config.activePresetId) || presets[0] || { id: '', name: '', url: '', key: '' };
-    }
-
-    function saveClaudeRoomConfig(data) {
-        localStorage.setItem(CLAUDE_ROOM_STORAGE_KEY, JSON.stringify(data));
-    }
-
     function saveConfig(llmData, secLlmData, imgData, minimaxData) {
         localStorage.setItem(LLM_STORAGE_KEY, JSON.stringify(llmData));
         localStorage.setItem(SEC_LLM_STORAGE_KEY, JSON.stringify(secLlmData));
@@ -475,14 +396,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         getSecondaryConfig: loadSecLlmConfig,
         getImageConfig: loadImageConfig,
         getMinimaxConfig: loadMinimaxConfig,
-        getClaudeRoomConfig: loadClaudeRoomConfig,
-        saveClaudeRoomConfig: saveClaudeRoomConfig,
-        getActiveClaudePreset: getActivePreset,
-        // 向下相容的舊 API（其他地方還在用），轉接到新 getActivePreset
-        getActiveClaudeEndpoint: function() {
-            const p = getActivePreset();
-            return { id: p.id, name: p.name, url: p.url, token: p.key, apiKey: '' };
-        },
         saveConfig: saveConfig
     };
 
@@ -493,7 +406,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const secLlmConfig = loadSecLlmConfig();
         const imgConfig = loadImageConfig();
         const minimaxConfig = loadMinimaxConfig();
-        const claudeRoomConfig = loadClaudeRoomConfig();
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
 
         // 畫廊子 tab 切換 helper（含 avatar/bg 列表 lazy load）
@@ -2733,14 +2645,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             }
         };
 
-        // ===== Claude 的房間（獨立 Claude 接口）binding＋Claude Presets CRUD：已拆到 os_settings_claude.js（參數注入 ctx＝閉包變數）=====
-        //   模組發布 window._claudeNormalizeChatUrl 給下面存檔呼叫點 normalize preset URL，其餘照舊不變。
-        if (window.OS_SETTINGS_CLAUDE && window.OS_SETTINGS_CLAUDE.wire) {
-            window.OS_SETTINGS_CLAUDE.wire({ container: container });
-        } else {
-            console.warn('[OS_SETTINGS] os_settings_claude.js 未載入，Claude 的房間設定停用');
-        }
-
         btnSave.onclick = () => {
             try {
                 const layoutMode = container.querySelector('#os-layout-mode')?.value || 'auto';
@@ -2942,36 +2846,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                 // 換產圖器後：依新 service 自動翻「-VN小說家-」世界書三條目的開關（只翻 enabled，不寫內容）
                 try { (window.parent || window).OS_AVATAR_RULES_INJECTOR?.syncAvatarRuleEntries?.(); } catch (e) {}
-
-                // Claude 的房間設定（獨立儲存，跟主/副模型完全隔離）
-                const elClaudeRoomModel = container.querySelector('#claude-room-model');
-                if (elClaudeRoomModel) {
-                    // 從 hidden field 讀回現場編輯的 presets / activeId
-                    let presets = [];
-                    try { presets = JSON.parse(container.querySelector('#claude-presets-json')?.value || '[]') || []; } catch(e) {}
-                    // URL 跑一次 normalize（保證後端格式統一）：_normalizeChatUrl 已拆進 os_settings_claude.js，
-                    //   經窗口 window._claudeNormalizeChatUrl 拿；模組缺席就原樣存（不擋存檔）
-                    const _normUrl = window._claudeNormalizeChatUrl || (u => u);
-                    presets = presets.map(p => ({ ...p, url: _normUrl(p.url || '') || (p.url || '') }));
-                    const activePresetId = container.querySelector('#claude-active-preset-id')?.value
-                        || (presets[0]?.id || '');
-
-                    // 讀回 inline picker 既有覆寫值（不被儲存覆蓋掉）
-                    const existing = loadClaudeRoomConfig();
-
-                    const claudeRoomData = {
-                        presets,
-                        activePresetId,
-                        model: elClaudeRoomModel.value.trim() || 'claude-opus-4-7',
-                        maxTokens: parseInt(container.querySelector('#claude-room-max-tokens').value) || 4096,
-                        temperature: parseFloat(container.querySelector('#claude-room-temperature').value) || 1.0,
-                        top_p: parseFloat(container.querySelector('#claude-room-top-p').value) || 1.0,
-                        inlineModel:   existing.inlineModel   || '',
-                        inlineEffort:  existing.inlineEffort  || '',
-                        inlineBackend: existing.inlineBackend || '',
-                    };
-                    saveClaudeRoomConfig(claudeRoomData);
-                }
 
                 // 向量記憶設定
                 if (vecEnabled) {
