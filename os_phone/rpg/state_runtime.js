@@ -27,7 +27,6 @@
     let _debounceTimer = null;
     let _repairDebounce = null;     // 開頭設置(Bg/BGM)補救的 debounce
     let _selfEditing = false;       // 開頭補救正在改寫訊息 → 擋 onMessageInvalidated 誤砍本則剛存的 patch
-    let _lastAsstCount = -1;        // 已知的 AI 樓數基準（刪樓判別用：AI 樓沒變少＝刪的是用戶樓＝鐵令不准回朔）
     let _running = false;           // 防止並發抽取
     let _genStopped = false;        // 本通生成是否被「手動停止」(GENERATION_STOPPED)→ 全副模型跳過，別拿半截正文白燒
     let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
@@ -1887,13 +1886,6 @@ _directorSpec(castNames);
             if (lastId < 0) { console.warn('🛰️ [State Runtime] 對帳：連樓號都拿不到，保守不動（可用狀態面板「還原上一步」）'); return; }
             console.log(`🛰️ [State Runtime] 對帳(${tag})：真實樓數=${total > 0 ? total : '未知'}，最後一樓=#${lastId}`);
 
-            // ⚖️ AI 樓數基準：判別「這次刪的是誰的樓」。刪樓初判讀的是刪除前的舊檔，不准污染既有基準；
-            //    但基準還是 -1（剛重開、還沒跑過生成）時，初判的「刪除前」讀值正好可以當首發基準——
-            //    否則重開後第一刀刪 AI 樓會因 -1 被誤判成「未減少」走認養、該回朔沒回朔。
-            const _asstNow = (total > 0) ? fullMsgs.filter(m => m && !(m.is_user || m.role === 'user')).length : -1;
-            const _prevAsst = (_lastAsstCount < 0 && tag === '刪樓') ? _asstNow : _lastAsstCount;
-            if (_asstNow >= 0 && tag !== '刪樓') _lastAsstCount = _asstNow;
-            if (_asstNow >= 0 && tag === '刪樓' && _lastAsstCount < 0) _lastAsstCount = _asstNow;
 
             const data = await win.OS_DB.getStateData(chatId);
             // 🔍 這幾個出口以前是靜默 return，查半天不知道卡在哪 → 一律說明原因
@@ -1978,29 +1970,26 @@ _directorSpec(castNames);
                 return _reconcilePatches('刪樓·複核');
             }
 
-            // ⚖️ 生死判決（Rae 鐵令 2026-08-04：只有「AI 正文樓真的變少」才有資格回朔）：
-            //    ─ 刪樓·複核：AI 樓數比基準少＝真的刪了 AI 樓 → 回滾。
-            //      沒變少＝刪的是用戶樓、標記卻失聯＝標記蒸發的孤兒（修復前釘的沒落盤/懶存檔吃掉）
-            //      → 不回滾，把孤兒「認養」到最新 AI 樓（重新釘標記＋落盤），資料一筆不丟。
-            //    ─ 注入前：沒有刪除事件卻尾端失聯＝十之八九是蒸發不是刪樓 → 同樣認養。
-            //      （代價：真的在外部刪 AI 樓而沒發事件時不會自動回朔——用面板「還原上一步」處理，罕見。）
-            //    ─ 其他（msg# swipe 後備）：內容真的被替換 → 照舊回滾。
-            const _aiDeleted = (tag === '刪樓·複核') && _asstNow >= 0 && _prevAsst >= 0 && _asstNow < _prevAsst;
-            if ((tag === '刪樓·複核' && !_aiDeleted) || tag === '注入前') {
+            // ⚖️ 生死判決（Rae 定案 2026-08-04：判別器＝id 本身，不數樓、不看 msgid——樓號會因刪樓/隱藏/懶載入漂移）：
+            //    標記強制落盤（setChatMessage 立即存）後，「全檔掃不到某 id」只有兩種可能：
+            //    ─ 內容移除事件（刪樓·複核 / msg# swipe 後備）：它的 AI 樓真的被刪/被換 → 回滾。
+            //      刪用戶樓時所有標記都還在檔案裡 → dead 為空 → 上面就 return 了，根本走不到這。
+            //    ─ 非移除事件（注入前 / 開卡歸化 / 開面板）：沒刪東西卻失聯＝落盤修復前的殭屍老 patch
+            //      → 「認養」到最新 AI 樓（重釘標記＋立即落盤）＝一次性歸化，之後它跟新 patch 一樣可靠。
+            const _isRemoval = (tag === '刪樓·複核') || /^msg#/.test(tag);
+            if (!_isRemoval) {
                 let lastAsstIdx = -1;
                 if (total > 0) for (let i = fullMsgs.length - 1; i >= 0; i--) { const mm = fullMsgs[i]; if (mm && !(mm.is_user || mm.role === 'user')) { lastAsstIdx = i; break; } }
                 let adopted = 0;
                 for (const id of dead) { try { if (lastAsstIdx >= 0 && await _stampAvsId(lastAsstIdx, id)) adopted++; } catch (e) {} }
-                console.log(`🛰️ [State Runtime] 對帳(${tag})：AI樓數 ${_prevAsst}→${_asstNow} 未減少 → 依鐵令不回朔；${adopted}/${dead.length} 筆失聯 patch 認養到 #${lastAsstIdx}（重釘標記+落盤）`);
+                console.log(`🛰️ [State Runtime] 對帳(${tag})：非內容移除事件卻有 ${dead.length} 筆失聯（殭屍老patch）→ 不回朔；${adopted}/${dead.length} 筆認養到 #${lastAsstIdx}（重釘標記+落盤）`);
                 if (adopted < dead.length) console.warn(`🛰️ [State Runtime] 對帳(${tag})：${dead.length - adopted} 筆認養失敗 → 保留不動，下輪再試`);
-                if (tag === '刪樓·複核' && _asstNow >= 0) _lastAsstCount = _asstNow;
                 return;
             }
 
             const n = await _rollbackPatches(chatId, data, dead);
             console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(${dead.join(',')})，回復 ${n} 個欄位`);
             if (n) showToast(`↩ 狀態已回溯（${dead.length} 輪、${n} 個欄位）`, 'success');
-            if (tag === '刪樓·複核' && _asstNow >= 0) _lastAsstCount = _asstNow;
         } catch (e) {
             console.warn('[State Runtime] 對帳回滾失敗:', e);
             showToast('⚠ 狀態回溯失敗，請用狀態面板「還原上一步」', 'warning');
@@ -2274,7 +2263,9 @@ _directorSpec(castNames);
         // 切聊天 → 清 inject（新 chatId 的 inject 會在下次 GENERATION_STARTED 重新跑）
         if (win.tavern_events.CHAT_CHANGED) {
             win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
-                _lastAsstCount = -1;   // AI 樓數基準是「每張卡各自的」——不清掉會拿 A 卡的基準去判 B 卡的刪樓
+                // 🧬 開卡歸化：載入聊天後掃一遍，落盤修復前的殭屍老 patch（標記從未進檔案）先認養重釘，
+                //    之後任何刪樓事件的「純 id 掃描」判定就是乾淨的——不會再有殭屍在刪用戶樓時被誤殺。
+                setTimeout(() => { try { _reconcilePatches('開卡歸化'); } catch (e) {} }, 2500);
                 try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
                 try { _lastRulesUninject?.(); _lastRulesUninject = null; } catch(e) {}
                 try { _lastAvatarUninject?.(); _lastAvatarUninject = null; } catch(e) {}
