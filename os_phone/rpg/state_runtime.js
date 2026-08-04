@@ -942,8 +942,26 @@ ${numberedText}`;
                 const _hasOpen = _rawNoCot.indexOf('<content>') !== -1;
                 const _hasClose = _rawNoCot.indexOf('</content>') !== -1;
                 const _vnFg = (() => { try { const p = win.document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && win.document.getElementById('page-game')); } catch (e) { return false; } })();
+                // 這張卡是不是 VN 正文格式（同 vn_core._storyFormatChat；Rae 鐵令：截斷判定看格式不看面板）：
+                // 往前找最多 6 則「先前的」AI 樓，任一帶 <content> ＝ VN 格式卡 → 新樓連 <content> 都沒有＝壞樓，
+                // 不管面板開沒開都跳過抽取（API 錯誤樓不匹配錯誤特徵字串時，靠這條兜底）。
+                const _storyFmt = (() => {
+                    try {
+                        const c = win.SillyTavern?.getContext?.()?.chat;
+                        if (!Array.isArray(c)) return false;
+                        let seen = 0, skippedCur = false;
+                        for (let i = c.length - 1; i >= 0 && seen < 6; i--) {
+                            const m = c[i];
+                            if (!m || m.is_user) continue;
+                            if (!skippedCur) { skippedCur = true; continue; }
+                            seen++;
+                            if (String(m.mes || m.message || '').indexOf('<content>') !== -1) return true;
+                        }
+                        return false;
+                    } catch (e) { return false; }
+                })();
                 const _isInitFill = !!(opts && opts.skipScenes);
-                if ((_hasOpen && !_hasClose) || (_vnFg && !_hasOpen && !_isInitFill)) {
+                if ((_hasOpen && !_hasClose) || ((_vnFg || _storyFmt) && !_hasOpen && !_isInitFill)) {
                     console.log('🛰️ [State Runtime] 正文截斷 → 跳過本通抽取，等補齊/重生再抽');
                     return;
                 }

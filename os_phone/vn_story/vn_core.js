@@ -3057,6 +3057,25 @@
             // VN 是否正在前景（玩家在看故事）→ 此時主模型這通理應產出 <content>…</content>，沒收尾＝截斷。
             // 用來判斷「連 <content> 都還沒生出來就截斷(思考期截)」要不要當截斷，避免誤傷非 VN 的一般聊天訊息。
             function _vnVisibleNow() { const p = document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && document.getElementById('page-game')); }
+            // 這張卡是不是 VN 正文格式（Rae 鐵令 2026-08-04：截斷判定看「格式」不看「面板開沒開」——
+            // exe 裡 VN 是常態，面板剛好沒開著時 API 壞樓照樣要跳截斷窗）。
+            // 判法：往前找最多 6 則「先前的」AI 樓，任一帶 <content> ＝ 這卡就是 VN 格式。最新這則(正在判定的)不算證據。
+            function _storyFormatChat() {
+                try {
+                    const stCtx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                    const chat = stCtx && Array.isArray(stCtx.chat) ? stCtx.chat : null;
+                    if (!chat) return false;
+                    let seen = 0, skippedCur = false;
+                    for (let i = chat.length - 1; i >= 0 && seen < 6; i--) {
+                        const m = chat[i];
+                        if (!m || m.is_user) continue;
+                        if (!skippedCur) { skippedCur = true; continue; }
+                        seen++;
+                        if (String(m.mes || m.message || '').indexOf('<content>') !== -1) return true;
+                    }
+                    return false;
+                } catch (e) { return false; }
+            }
             function _hideTruncBanner() { const b = document.getElementById('vn-trunc-banner'); if (b) b.classList.remove('show'); }
             // 重試：/regenerate(整則重生，破甲截斷首選) 或 /continue(接著補寫，乾淨早停用)。
             // 補/重生完會再發 GENERATION_ENDED → 收尾完整就自動套用；先清 _lastApplied，確保即使內容雷同也照樣重套。
@@ -3147,8 +3166,10 @@
                             _lastApplied = { mid: messageId, sig: sig };
                         } else {
                             try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
-                            // 截斷：①有 <content> 沒收尾＝正文截在中間 ②連 <content> 都沒(思考期就截) → 只在 VN 前景時當截斷，避免誤判非 VN 訊息
-                            if (_hasOpen(text) || _vnVisibleNow()) _showTruncBanner(messageId);
+                            // 截斷：①有 <content> 沒收尾＝正文截在中間 ②連 <content> 都沒(思考期就截/API壞樓)
+                            //    ②的判定看「這卡是不是 VN 格式」(_storyFormatChat)，不看面板開沒開——
+                            //    面板可見度只是加分條件（保舊行為），格式命中就全局跳窗。
+                            if (_hasOpen(text) || _vnVisibleNow() || _storyFormatChat()) _showTruncBanner(messageId);
                         }
                     } catch (e) { console.error('[PhoneOS] 自動偵測失敗:', e); }
                 }, 600);
