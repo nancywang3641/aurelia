@@ -1927,6 +1927,15 @@ _directorSpec(castNames);
             const dead = list.slice(cut).map(p => p.id);
             if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${list.length} 筆 patch，尾端 id 對得上，無需回滾`); return; }
 
+            // 🛡️ 刪樓複核制（治「/del 刪自己的對話框也跳回溯」）：酒館先發事件後存檔，
+            //    對帳跑在空窗裡會掃不到剛釘的標記 → 誤判失效。第一遍發現要砍時不動手，
+            //    等 800ms 讓刪除落定後整套重掃，兩遍都說死才真的砍。真刪 AI 樓的照樣會被複核確認。
+            if (tag === '刪樓') {
+                console.log(`🛰️ [State Runtime] 對帳(刪樓)：初判 ${dead.length} 筆失效(${dead.join(',')})→ 800ms 後複核再定生死`);
+                await new Promise(r => setTimeout(r, 800));
+                return _reconcilePatches('刪樓·複核');
+            }
+
             const n = await _rollbackPatches(chatId, data, dead);
             console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(${dead.join(',')})，回復 ${n} 個欄位`);
             if (n) showToast(`↩ 狀態已回溯（${dead.length} 輪、${n} 個欄位）`, 'success');
