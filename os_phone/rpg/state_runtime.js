@@ -1961,15 +1961,6 @@ _directorSpec(castNames);
             const dead = list.slice(cut).map(p => p.id);
             if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${list.length} 筆 patch，尾端 id 對得上，無需回滾`); return; }
 
-            // 🛡️ 刪樓複核制（治「/del 刪自己的對話框也跳回溯」）：酒館先發事件後存檔，
-            //    對帳跑在空窗裡會掃不到剛釘的標記 → 誤判失效。第一遍發現要砍時不動手，
-            //    等 800ms 讓刪除落定後整套重掃，兩遍都說死才真的砍。真刪 AI 樓的照樣會被複核確認。
-            if (tag === '刪樓') {
-                console.log(`🛰️ [State Runtime] 對帳(刪樓)：初判 ${dead.length} 筆失效(${dead.join(',')})→ 800ms 後複核再定生死`);
-                await new Promise(r => setTimeout(r, 800));
-                return _reconcilePatches('刪樓·複核');
-            }
-
             // ⚖️ 生死判決（Rae 定案 2026-08-04：判別器＝id 本身，不數樓、不看 msgid——樓號會因刪樓/隱藏/懶載入漂移）：
             //    標記強制落盤（setChatMessage 立即存）後，「全檔掃不到某 id」只有兩種可能：
             //    ─ 內容移除事件（刪樓·複核 / msg# swipe 後備）：它的 AI 樓真的被刪/被換 → 回滾。
@@ -2250,7 +2241,13 @@ _directorSpec(castNames);
         // 🚨 MESSAGE_DELETED 的參數語意跟其他三個【不一樣】：酒館傳的是「刪完還剩幾則」而非訊息號
         //    （script.js: emit(MESSAGE_DELETED, chat.length)）→ 不可當 patch 鍵用，走專屬的對帳回滾。
         if (win.tavern_events.MESSAGE_DELETED) {
-            win.eventOn(win.tavern_events.MESSAGE_DELETED, () => _reconcilePatches('刪樓'));
+            // ⏱️ 不做「立刻初判」：酒館先發事件、後存檔——事件當下讀到的必然是刪除前的舊檔，
+            //    初判永遠「全活著」→ 靜默收工，真正的死訊要等下一個事件才被發現＝判決遲到一拍
+            //    （Rae 實測：刪 AI 樓沒跳窗、7 秒後刪用戶樓卻跳窗——那是上一刀的帳）。
+            //    一律等 800ms 落定後直接複核，判決落在正確的事件上。
+            win.eventOn(win.tavern_events.MESSAGE_DELETED, () => {
+                setTimeout(() => { try { _reconcilePatches('刪樓·複核'); } catch (e) {} }, 800);
+            });
         }
         // ✏️ 編輯（UPDATED/EDITED）【絕不觸發回朔】（Rae 鐵令 2026-08-04）：
         //    編輯＝改字，正文還在、avs 標記還在；舊邏輯的「直接命中」卻把這樓登記中的 patch 當失效砍掉
