@@ -353,6 +353,7 @@
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
+            this._sceneIdPlayed = Object.create(null);  // 本份劇本已播過的插圖 ID（同一份裡重複的只播第一次，見 [Scene| handler）
             this.charVoices = this._loadCharVoices();   // 先載入本卡持久化的固定聲線（跨訊息/大總結/重載留存），下面解析 [Avatar] 再合併
             // 🔄 學 PWA：重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 生效。
             //    ⚠️ 不可 await（呼叫端是 loadScript()→next() 同步契約，await 會讓 next() 在空腳本上跑→劇情跳過）。
@@ -1856,6 +1857,16 @@
                 const parts = line.slice(7, -1).split('|');
                 const cacheId = parts[0];
                 const prompt  = parts[1];
+                // 同一份劇本裡同一個 ID 只播第一次。正常寫回是冪等的（正文已有就不重寫），
+                // 會重複多半是 AI 看上下文學著自己填了 [Scene|舊ID] → 播放時對相簿撈到上一輪的圖。
+                // （治本是讓 AI 看不到這些標籤：酒館正則「[VN自由模式] 歷史插圖ID剝除」，promptOnly）
+                if (cacheId) {
+                    if (this._sceneIdPlayed && this._sceneIdPlayed[cacheId]) {
+                        console.warn('[VN] [Scene|' + cacheId + '] 這份劇本裡重複出現 → 跳過（多半是 AI 抄了上文的插圖 ID，會放出舊圖）');
+                        this.next(); return;
+                    }
+                    if (this._sceneIdPlayed) this._sceneIdPlayed[cacheId] = 1;
+                }
                 const overlay = document.getElementById('scene-cg-overlay');
                 const cgImg   = document.getElementById('scene-cg-img');
                 if (overlay && cgImg) {
