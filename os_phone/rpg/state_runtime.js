@@ -855,15 +855,31 @@ ${_memoryRulesText()}
 
     // 代號去重展開：第一次給完整外觀，之後同一個人改代稱並留 warning（模板規範是每個代號只該寫一次）。
     //   去重的 key 用「展開後的外觀字串」而不是代號 —— 同一人被 ##C3## 跟 ##名字## 各寫一次也算重複。
-    function _dedupeExpand(seen, hit, label) {
+    function _dedupeExpand(seen, hit, label, used) {
         const n = (seen[hit] = (seen[hit] || 0) + 1);
-        if (n === 1) return hit;
+        if (n === 1) { if (used) used.push(hit); return hit; }
         const short = _shortLookRef(hit);
         console.warn(`🖼️ [插圖] 同一個角色的代號 ##${label}## 在這條 prompt 裡是第 ${n} 次出現 → 只有第一次展開完整外觀，這次改成代稱「${short}」。重複展開完整外觀會讓模型以為要畫好幾個人（複製人／多出第三人）。副模型模板應該讓每個代號只出現一次。`);
         return short;
     }
 
-    function _expandSceneNames(str, map) {
+    // 展開之外的「額外人物引介」偵測（治第四人／多頭鬼）。
+    //   系統已經把 ##C3## 填成完整外觀了，副模型卻常在同一子句再補一句 "a sturdy dwarf"、
+    //   或在場面句寫 "a massive man pinning a priest" —— 對文字編碼器來說那是又介紹了一個人，
+    //   於是畫面多長一顆頭／多一個人。這裡只警告不改內容（改寫語意風險太大），讓違規在 console 現形。
+    const _PERSON_INTRO = /(?:^|[,.;:]\s*|\s)(?:a|an|another|one|two|three)\s+(?:[a-z][a-z-]*\s+){0,4}(men|man|women|woman|males?|females?|dwarf|dwarves|elf|elves|orc|priests?|knights?|soldiers?|guys?|persons?|people|monsters?)\b/gi;
+    function _warnExtraPersons(finalPrompt, used) {
+        try {
+            let rest = String(finalPrompt || '');
+            for (const u of (used || [])) rest = rest.split(u).join(' ');   // 挖掉系統自己展開的角色外觀，只看副模型多寫的
+            const hits = rest.match(_PERSON_INTRO);
+            if (!hits || !hits.length) return;
+            const list = hits.map(h => h.replace(/^[,.;:\s]+/, '').trim()).join('｜');
+            console.warn(`🖼️ [插圖] 這條 prompt 在「系統展開的角色」之外還引介了 ${hits.length} 個人物：${list}。每一個 a/an + 人物名詞都會被模型當成畫面上多一個人（第四人、多頭鬼多半是這樣來的）。登記角色的外觀交給代號展開就好，重述請改成 he／the man on the left 這類代稱；場面句也別用 "a massive man pinning a priest" 這種寫法。`);
+        } catch (e) {}
+    }
+
+    function _expandSceneNames(str, map, used) {
         if (!str || String(str).indexOf('##') < 0) return str;
         const lowerMap = {};
         for (const k of Object.keys(map || {})) lowerMap[k.toLowerCase()] = map[k];
@@ -872,9 +888,9 @@ ${_memoryRulesText()}
         return String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
             const name = String(raw).trim();
             let hit = _look(name);
-            if (hit) return _dedupeExpand(seen, hit, name);
+            if (hit) return _dedupeExpand(seen, hit, name, used);
             const mm = name.match(/^(C\d+)[\s.．:：、,，_-]+(.+)$/i);   // ##C2. 名## → 拆代號與名各試
-            if (mm) { hit = _look(mm[1]) || _look(mm[2]); if (hit) return _dedupeExpand(seen, hit, name); }
+            if (mm) { hit = _look(mm[1]) || _look(mm[2]); if (hit) return _dedupeExpand(seen, hit, name, used); }
             return name;
         });
     }
@@ -1220,7 +1236,10 @@ ${numberedText}`;
                         if (n >= 1 && _sceneParas[n - 1]) after = _sceneParas[n - 1];
                         else if (s.after) after = String(s.after);  // 舊格式相容（AI 真給了引文）
                         // 佔位模式：把 ##角色名## 換成登記表外觀（頭像詞→AVS→留原名）；非佔位模式 _looksMap=null 不動
-                        return { after: after, prompt: _scrubSceneCounts(_looksMap ? _expandSceneNames(s.prompt, _looksMap) : s.prompt) };
+                        const _used = [];
+                        const _p = _scrubSceneCounts(_looksMap ? _expandSceneNames(s.prompt, _looksMap, _used) : s.prompt);
+                        _warnExtraPersons(_p, _used);
+                        return { after: after, prompt: _p };
                     }).filter(s => s && s.prompt);
                     win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId });
                     console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
@@ -1261,14 +1280,14 @@ ${numberedText}`;
     // 🎯 獨立插圖副模型：scenes 拆成「單獨一通 chatSecondary」，只吃 standaloneSpec、不背 AVS/記憶。
     //    開關在 圖片設定→插圖→「獨立插圖副模型」。沒開＝走 extractOnce 搭便車路（上面，原碼保留），互不影響。
     // 獨立插圖佔位展開：把 ##角色名##/##代號## 換成登記表外觀；NAI 的 {{}}/[]/() 權重一概不碰（只動井號 ##）。
-    function _expandHashNames(str, map) {
+    function _expandHashNames(str, map, used) {
         if (!str || String(str).indexOf('##') < 0) return str;
         const lower = {}; for (const k of Object.keys(map || {})) lower[k.toLowerCase()] = map[k];
         const seen = Object.create(null);   // 同一人重複出現只展開第一次（見 _dedupeExpand）
         return String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
             const name = String(raw).trim();
             const hit = (map && (map[name] || map[name.toUpperCase()])) || lower[name.toLowerCase()];
-            return hit ? _dedupeExpand(seen, hit, name) : name;   // 登記到→外觀；沒登記→拿掉井號留原文（別讓 ## 進 NAI）
+            return hit ? _dedupeExpand(seen, hit, name, used) : name;   // 登記到→外觀；沒登記→拿掉井號留原文（別讓 ## 進 NAI）
         });
     }
     let _sceneRunning = false;
@@ -1334,7 +1353,10 @@ ${numberedText}`;
                 const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
                 if (n >= 1 && paras[n - 1]) after = paras[n - 1];
                 else if (s.after) after = String(s.after);
-                return { after, prompt: _scrubSceneCounts(_expandHashNames(s.prompt, looksMap)) };
+                const _used = [];
+                const _p = _scrubSceneCounts(_expandHashNames(s.prompt, looksMap, _used));
+                _warnExtraPersons(_p, _used);
+                return { after, prompt: _p };
             }).filter(s => s && s.prompt);
             if (mapped.length) {
                 // 派發對位 msgId 用 getChatMessages(-1) 的「窗口號」lastId——跟 VN(_currentMessageId/loadScript)同一個 id 空間。
