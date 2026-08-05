@@ -27,6 +27,10 @@
 (function (win) {
     'use strict';
 
+    // 每輪插圖張數：由「插圖規範」自己決定（規範寫最多幾張就幾張），這裡只是防副模型抽風的安全閥。
+    //   插圖是串行生成（NAI 不支援並發），張數越多＝開播 loading 等越久、生圖費用越高。
+    const MAX_SCENES_PER_TURN = 8;
+
     const VN_SceneInsert = {
         _latest: null, // 最新一次 fromExtract 的 { chatId, entries }（「最新這輪」直插用，不靠 ID；用完即清）
 
@@ -148,8 +152,14 @@
                 if (msgId == null) return;
                 const chatId = (ctx.chatId != null) ? String(ctx.chatId) : '';
 
+                // 張數由「插圖規範」自己說了算（規範寫幾張就幾張），程式不再寫死 2 張。
+                //   只留一個安全閥：副模型抽風吐一大串時擋住，免得串行生圖燒錢又把開播 loading 卡死。
+                //   ⚠️ 被擋到一定要 log 出來——靜默截斷會讓人以為「AI 又只給兩張」，查不到原因。
                 const entries = [];
-                scenes.slice(0, 2).forEach((s, idx) => {
+                if (scenes.length > MAX_SCENES_PER_TURN) {
+                    console.warn('[VN_SceneInsert] 這輪副模型給了 ' + scenes.length + ' 張插圖，超過安全閥 ' + MAX_SCENES_PER_TURN + ' → 只取前 ' + MAX_SCENES_PER_TURN + ' 張。要更多的話改 MAX_SCENES_PER_TURN；插圖是串行生成的，張數越多開播等越久、生圖費用也越高。');
+                }
+                scenes.slice(0, MAX_SCENES_PER_TURN).forEach((s, idx) => {
                     if (!s || !s.prompt) return;
                     const prompt = String(s.prompt).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
                     if (!prompt) return;
