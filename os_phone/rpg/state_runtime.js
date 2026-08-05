@@ -879,6 +879,27 @@ ${_memoryRulesText()}
         } catch (e) {}
     }
 
+    // 三人以上時的「總結互動句」風險（Rae 實測：刪掉最後那句就從四個人變回三個人）。
+    //   模板結構要求「第 3 段寫一句核心互動，只用位置代稱」，但 Anima/NAI 沒有指代消解——
+    //   the right man 對它不是「前面提過的那個人」，只是又一個 man 名詞短語。
+    //   雙人時 2＋2 剛好湊得上看不出來；三人時 3＋2 就超過宣告人數，多的長成第四個人。
+    //   動作本來就該寫在各人自己的子句裡，總結句是純重複。
+    const _PERSON_REF = /\bthe\s+(?:[a-z][a-z-]*\s+){0,3}(men|man|women|woman|males?|females?|dwarf|dwarves|elf|elves|guys?|persons?)\b/gi;
+    function _warnTrailingInteraction(finalPrompt) {
+        try {
+            const s = String(finalPrompt || '');
+            const dec = s.match(/\b([2-9]|two|three|four|five)\s+(?:male|female|man|men|woman|women)\b/i);
+            const n = dec ? ({ two: 2, three: 3, four: 4, five: 5 }[String(dec[1]).toLowerCase()] || parseInt(dec[1], 10)) : 0;
+            if (n < 3) return;   // 雙人是模板的標準寫法，不吵
+            // 取鏡頭段之前的最後一個句子當「總結互動句」
+            const body = s.split(/\b(?:eye-level|medium shot|wide shot|cowboy shot|full body|close-?up|from side|from behind)\b/i)[0];
+            const last = (body.split(/[.;]\s*/).filter(Boolean).pop() || '');
+            const refs = last.match(_PERSON_REF);
+            if (!refs || refs.length < 2) return;
+            console.warn(`🖼️ [插圖] 這是 ${n} 人的畫面，結尾還有一句總結互動「${last.trim()}」，裡面帶了 ${refs.length} 個人物代稱（${refs.join('｜')}）。生圖模型不會把 the right man 認成前面那個人，只會當成又一個人 → 三人以上很容易多長一個。動作寫進各人自己的子句就好，這句可以整句拿掉。`);
+        } catch (e) {}
+    }
+
     function _expandSceneNames(str, map, used) {
         if (!str || String(str).indexOf('##') < 0) return str;
         const lowerMap = {};
@@ -1239,6 +1260,8 @@ ${numberedText}`;
                         const _used = [];
                         const _p = _scrubSceneCounts(_looksMap ? _expandSceneNames(s.prompt, _looksMap, _used) : s.prompt);
                         _warnExtraPersons(_p, _used);
+                _warnTrailingInteraction(_p);
+                        _warnTrailingInteraction(_p);
                         return { after: after, prompt: _p };
                     }).filter(s => s && s.prompt);
                     win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId });
@@ -1356,6 +1379,7 @@ ${numberedText}`;
                 const _used = [];
                 const _p = _scrubSceneCounts(_expandHashNames(s.prompt, looksMap, _used));
                 _warnExtraPersons(_p, _used);
+                _warnTrailingInteraction(_p);
                 return { after, prompt: _p };
             }).filter(s => s && s.prompt);
             if (mapped.length) {
