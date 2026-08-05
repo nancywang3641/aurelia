@@ -1162,6 +1162,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="img-srctab" id="img-srctab-scene" data-imgsrctab="scene" onclick="window._switchImgSrcTab && window._switchImgSrcTab('scene')">插圖</div>
                             <div class="img-srctab" id="img-srctab-bg" data-imgsrctab="bg" onclick="window._switchImgSrcTab && window._switchImgSrcTab('bg')">背景</div>
                             <div class="img-srctab" id="img-srctab-map" data-imgsrctab="map" onclick="window._switchImgSrcTab && window._switchImgSrcTab('map')">小地圖</div>
+                            <div class="img-srctab" id="img-srctab-misc" data-imgsrctab="misc" onclick="window._switchImgSrcTab && window._switchImgSrcTab('misc')">其他</div>
                         </div>
 
                         <!-- 目前桶＋套用的預設（置於分頁下方，最上面常駐顯示） -->
@@ -1222,6 +1223,29 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="comfyui_direct" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。</div>
+                            </div>
+                        </div>
+
+                        <!-- ── 🧰 其他 分頁 body：不屬於頭像/插圖/背景/小地圖任何一桶的設定都放這 ── -->
+                        <div id="img-tab-misc" class="img-srctab-body" style="display:none;">
+                            <!-- 🏠 房間畫風：房客的房間整間生出來時用哪個畫風包。選了就存(localStorage)、不用按底部保存。 -->
+                            <div class="set-group" id="img-room-style-block">
+                                <div class="set-label" title="包租婆的房客房間是「整間一次畫出來」，用這裡選的畫風。">🏠 房間畫風</div>
+                                <select class="set-select" id="img-room-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">
+                                    ${(() => {
+                                        const _w = window.parent || window;
+                                        const _G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
+                                        const _list = (_G && _G.listStylePresets) ? _G.listStylePresets() : [];
+                                        const _cur = (_G && _G.getStyleName) ? _G.getStyleName() : '';
+                                        if (!_list.length) return '<option value="">還沒有可用的畫風</option>';
+                                        return _list.map(p => {
+                                            const nm = String((p && p.name) || '未命名');
+                                            const v = nm.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                                            return '<option value="' + v + '"' + (nm === _cur ? ' selected' : '') + '>' + v + '</option>';
+                                        }).join('');
+                                    })()}
+                                </select>
+                                <div class="set-desc" style="margin-top:6px;">房客的房間整間畫出來時用這個畫風。選好就生效。</div>
                             </div>
                         </div>
 
@@ -1730,27 +1754,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
 
-                        <!-- ── 🏠 房間畫風：房客的房間整間生出來時用哪個畫風包 ──
-                             放在最下面、四個子分頁都看得到（它不屬於頭像/插圖/背景/小地圖任何一桶）。
-                             選了就存(localStorage)，不用按底部保存。 -->
-                        <div class="set-group" id="img-room-style-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
-                            <div class="set-label" title="包租婆的房客房間是「整間一次畫出來」，用這裡選的畫風。">🏠 房間畫風</div>
-                            <select class="set-select" id="img-room-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">
-                                ${(() => {
-                                    const _w = window.parent || window;
-                                    const _G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
-                                    const _list = (_G && _G.listStylePresets) ? _G.listStylePresets() : [];
-                                    const _cur = (_G && _G.getStyleName) ? _G.getStyleName() : '';
-                                    if (!_list.length) return '<option value="">還沒有可用的畫風</option>';
-                                    return _list.map(p => {
-                                        const nm = String((p && p.name) || '未命名');
-                                        const v = nm.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                                        return '<option value="' + v + '"' + (nm === _cur ? ' selected' : '') + '>' + v + '</option>';
-                                    }).join('');
-                                })()}
-                            </select>
-                            <div class="set-desc" style="margin-top:6px;">房客的房間整間畫出來時用這個畫風。選好就生效。</div>
-                        </div>
 
 
                         </div><!-- /view-img-api -->
@@ -2400,6 +2403,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elImgTabScene   = container.querySelector('#img-tab-scene');
         const elImgTabBg      = container.querySelector('#img-tab-bg');
         const elImgTabMap     = container.querySelector('#img-tab-map');
+        const elImgTabMisc    = container.querySelector('#img-tab-misc');   // 🧰 其他：不屬於任何一桶的設定
         const elImgSceneBlock = container.querySelector('#img-scene-block');
         const elImgSceneExtract = container.querySelector('#img-scene-extract-block'); // 副模型版（插圖→角色）
         const elImgPixabay      = container.querySelector('#img-pixabay-block');        // 退路圖庫（背景）
@@ -2410,6 +2414,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const srcTabBtnScene  = container.querySelector('#img-srctab-scene');
         const srcTabBtnBg     = container.querySelector('#img-srctab-bg');
         const srcTabBtnMap    = container.querySelector('#img-srctab-map');
+        const srcTabBtnMisc   = container.querySelector('#img-srctab-misc');
+        const elImgBucketRow  = container.querySelector('#img-cfd-bucket-status');   // 「目前桶／套用的預設」狀態列（其他分頁沒有桶，要藏）
 
         // 目前子分頁（預設「角色」）
         let imgSrcTab = 'char';
@@ -2440,18 +2446,31 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const _avT    = container.querySelector('#img-avatar-add-tav');
             const _itB    = container.querySelector('#img-nai-item-block');
 
-            // 四個子分頁鈕 active 樣式
+            // 子分頁鈕 active 樣式
             if (srcTabBtnChar)  srcTabBtnChar.classList.toggle('active', imgSrcTab === 'char');
             if (srcTabBtnScene) srcTabBtnScene.classList.toggle('active', imgSrcTab === 'scene');
             if (srcTabBtnBg)    srcTabBtnBg.classList.toggle('active', imgSrcTab === 'bg');
             if (srcTabBtnMap)   srcTabBtnMap.classList.toggle('active', imgSrcTab === 'map');
-            // 四個 body 一次只出一個
+            if (srcTabBtnMisc)  srcTabBtnMisc.classList.toggle('active', imgSrcTab === 'misc');
+            // body 一次只出一個
             if (elImgTabChar)  elImgTabChar.style.display  = (imgSrcTab === 'char')  ? '' : 'none';
             if (elImgTabScene) elImgTabScene.style.display = (imgSrcTab === 'scene') ? '' : 'none';
             if (elImgTabBg)    elImgTabBg.style.display    = (imgSrcTab === 'bg')    ? '' : 'none';
             if (elImgTabMap)   elImgTabMap.style.display   = (imgSrcTab === 'map')   ? '' : 'none';
+            if (elImgTabMisc)  elImgTabMisc.style.display  = (imgSrcTab === 'misc')  ? '' : 'none';
+            // 「目前桶／套用的預設」是四個桶專用的狀態列，其他分頁沒有桶 → 藏起來
+            if (elImgBucketRow) elImgBucketRow.style.display = (imgSrcTab === 'misc') ? 'none' : '';
 
-            if (imgSrcTab === 'char') {
+            if (imgSrcTab === 'misc') {
+                // 🧰 其他：不屬於任何一桶 → 接口設定、底詞、插圖、退路圖庫全藏，只留本分頁自己的東西
+                showOnlyIfaceGroup(null);
+                if (elImgPolPrompts) elImgPolPrompts.classList.add('hidden');
+                if (_avZone) _avZone.style.display = 'none';
+                if (_itB) _itB.classList.add('hidden');
+                if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
+                if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
+                if (elImgPixabay)      elImgPixabay.style.display = 'none';
+            } else if (imgSrcTab === 'char') {
                 // 頭像分頁：頭像桶接口設定 + 頭像底詞 + 頭像追加詞（按接口）
                 showOnlyIfaceGroup(charSvc);
                 if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', charSvc !== 'pollinations');
@@ -2516,8 +2535,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // 子分頁切換鈕（切分頁時，ComfyUI 設定/預設包也連動切到對應桶：頭像→char、插圖→scene、背景→bg、小地圖→map）
         window._switchImgSrcTab = (tab) => {
-            imgSrcTab = (tab === 'bg' || tab === 'scene' || tab === 'map') ? tab : 'char';
-            try { if (window._cfdSwitchBucket) window._cfdSwitchBucket(imgSrcTab); } catch (e) {}
+            imgSrcTab = (tab === 'bg' || tab === 'scene' || tab === 'map' || tab === 'misc') ? tab : 'char';
+            // 「其他」不是生圖桶 → 不去切 ComfyUI 的桶（切了會把預設包套錯地方）
+            if (imgSrcTab !== 'misc') { try { if (window._cfdSwitchBucket) window._cfdSwitchBucket(imgSrcTab); } catch (e) {} }
             refreshImgPanel();
         };
 
