@@ -788,13 +788,32 @@ ${_memoryRulesText()}
             /^(portrait|bust[\s_-]?shot|upper[\s_-]?body|cowboy[\s_-]?shot|head\s?shot|close[\s_-]?up|closeup|face\s+focus)$/i,
             /^(simple|white|plain|gradient|grey|gray|dark|light|blurry)[\s_].*background$/i,
             /^(simple\s+)?background$/i,
+            /^.*\bbackground\b.*$/i,            // 頭像詞常寫 "underground mine background"/"tavern background" → 背景一律交給場景，不然舊場景跟著角色跑
             /^looking[\s_]at[\s_]viewer$/i,
+            // ↓ 以下都是「畫那張頭像當下的狀態」，不是這個人的固定長相。留著會黏在他之後的每一張插圖上
+            //   （佣兵甲在礦洞打鬥還端著酒杯就是這樣來的）。服裝／動作／表情一律交給場景副模型按當下劇情寫。
+            /^(holding|carrying|wielding|gripping|grabbing|grasping)\b/i,          // 手上的道具
+            /^(looking|gazing|staring|glancing|facing|watching)\b/i,               // 視線朝向
+            /^(sitting|standing|kneeling|lying|leaning|walking|running|posing)\b/i, // 姿勢
+            /^(wearing|dressed\s+in|clad\s+in)\b/i,                                // 服裝（洗澡場景還穿著衣服就是沒剝這個）
+            /\bexpression\b/i,                                                     // "a focused and sharp expression"
+            /\b(smil\w*|smirk\w*|grin\w*|frown\w*|pout\w*|scowl\w*|blush\w*|crying|laughing)\b/i,  // "gentle smile" / "a faint smile"：拍頭像那一瞬的表情
+            /^[\s.,;:!?]*$/,                                                        // 剝完剩標點的空片段
         ];
-        // 先整個剝掉 (服裝, simple background) 括號組——這是 [Avatar] 格式的「服裝+背景」欄。
-        //   插圖展開時只要固定外觀(髮/瞳/種族/年齡/特徵)，服裝由場景副模型按當下劇情自己寫(洗澡→裸、戰鬥→盔甲)，
-        //   不然頭像預設服裝會蓋掉劇情狀態(洗澡還穿著衣服)；背景也由場景畫。逗號切前先剝，否則括號會被切成兩半漏出。
-        const s = String(p || '').replace(/[（(][^（()]*[)）]/g, ' ');
-        return s.split(',').map(t => t.trim()).filter(t => t && !DROP.some(re => re.test(t))).join(', ');
+        // 先處理括號組，兩種待遇：
+        //   ① (服裝, simple background) ＝ [Avatar] 格式的「服裝+背景」欄 → 整組剝掉（背景交給場景畫）。
+        //   ② (short grayish-brown hair:1.25) ＝ NAI 權重語法、是外觀本體 → 整組保留。
+        //      剝掉會讓角色沒髮色（克里就是這樣掉了髮色，還留下破碎的 "in his 20s with,"）。
+        //   ⚠️ 保留的要先換成佔位符再切逗號：權重括號裡本來就有逗號，直接切會把它切散，
+        //      萬一切出來的某段命中 DROP，括號就剩半邊、NAI 語法整條壞掉。
+        const keep = [];
+        const s = String(p || '').replace(/[（(]([^（()]*)[)）]/g, (m, inner) => {
+            if (/:\s*[\d.]+\s*$/.test(inner)) { keep.push(m); return ' K' + (keep.length - 1) + ' '; }
+            return ' ';
+        });
+        return s.split(',').map(t => t.trim()).filter(t => t && !DROP.some(re => re.test(t)))
+                .join(', ').replace(/\s+([,.])/g, '$1').replace(/(?:\s*with)\s*$/i, '').trim()
+                .replace(/ K(\d+) /g, (m, i) => keep[i] || '');
     }
 
     // {角色名 → 外觀字串}登記表：avatar_cache 頭像生成詞(主，剝肖像框架) + AVS 簡易形象(補漏)。給「##角色名## 佔位模式」展開用。
