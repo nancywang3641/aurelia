@@ -1324,6 +1324,7 @@ ${numberedText}`;
             //    _directorHandledThisRound 已在開頭同步搶下＝獨立防抖那顆不會再跑；extractDirector 自帶同樓/截斷/停止守門。
             if (_dirIntended && !_dirRide && !_dirLanded) { try { extractDirector(); } catch (_) {} }
             _running = false;
+            _sceneGateRelease('ride');   // 搭便車路的插圖已派發（或這輪沒有）→ 交棒給真正的生圖單，放開 VN 開播閘門
         }
     }
 
@@ -1340,6 +1341,52 @@ ${numberedText}`;
             return hit ? _dedupeExpand(seen, hit, name, used) : name;   // 登記到→外觀；沒登記→拿掉井號留原文（別讓 ## 進 NAI）
         });
     }
+    // ══ VN 開播閘門佔位（治「副模型還沒生插圖，loading 就放行了」）════════════
+    //   VN 的閘門判「圖都好了」是看「連續 1.5 秒沒有生圖單」，但插圖副模型是 GENERATION_ENDED
+    //   之後 debounceMs+600 ≈ 2.1 秒才開跑 —— 那 0.6 秒空窗必定被判成清空、劇情先播、圖後到。
+    //   所以在 GENERATION_ENDED 當下就先舉「盤點中」的牌佔位，等副模型把 scenes 派發出去
+    //   （那時真正的生圖單已經接手計數器）再降旗。
+    let _sceneGateHeld = false;
+    let _sceneGateOwner = '';       // 'standalone' | 'ride'：誰負責這輪的插圖，就由誰降旗
+    let _sceneGateTimer = null;
+
+    // 這輪到底會不會有插圖要生（不會就別佔位，免得白等）
+    function _willMakeScenes() {
+        try { if (localStorage.getItem('vn_scene_enabled') === '0') return ''; } catch (e) {}
+        const sg = (function () { try { return (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen) || {}; } catch (e) { return {}; } })();
+        if (sg.standaloneEnabled) return String(sg.standaloneSpec || '').trim() ? 'standalone' : '';
+        if (sg.extractEnabled && _pickScenePrompt(sg) && isEnabled()) return 'ride';
+        return '';
+    }
+
+    function _sceneGateRaise() {
+        if (_sceneGateHeld) return;
+        const VN = win.VN_Core;
+        if (!VN || typeof VN._imgScanStart !== 'function') return;
+        const owner = _willMakeScenes();
+        if (!owner) return;
+        VN._imgScanStart();
+        _sceneGateHeld = true;
+        _sceneGateOwner = owner;
+        clearTimeout(_sceneGateTimer);
+        // 保險閥：副模型掛掉/超時也一定要放行，絕不把開播 loading 卡死
+        _sceneGateTimer = setTimeout(function () {
+            if (!_sceneGateHeld) return;
+            console.warn('🖼️ [插圖] 副模型超過 90 秒還沒把插圖派發出來 → 先放行開播，圖之後補上。');
+            _sceneGateRelease(_sceneGateOwner);
+        }, 90000);
+    }
+
+    function _sceneGateRelease(owner) {
+        if (!_sceneGateHeld || (owner && owner !== _sceneGateOwner)) return;
+        _sceneGateHeld = false;
+        _sceneGateOwner = '';
+        clearTimeout(_sceneGateTimer);
+        // 延一個 macrotask 再降：fromExtract 的預熱是 promise chain（microtask）才掛進計數器，
+        // 立刻降旗會出現「舊牌已放、新單還沒掛」的空窗。
+        setTimeout(function () { try { win.VN_Core && win.VN_Core._imgScanEnd && win.VN_Core._imgScanEnd(); } catch (e) {} }, 0);
+    }
+
     let _sceneRunning = false;
     let _sceneDebounce = null;
     async function extractScenesStandalone() {
@@ -1416,7 +1463,7 @@ ${numberedText}`;
                 console.log(`🖼️ [獨立插圖] 派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? '?').join(',')}]/共${paras.length}段 (msg#${lastId})`);
             }
         } catch (e) { console.warn('[獨立插圖] 失敗:', e?.message || e); }
-        finally { _sceneRunning = false; }
+        finally { _sceneRunning = false; _sceneGateRelease('standalone'); }   // 插圖已派發（或這輪沒有）→ 放開 VN 開播閘門
     }
 
     // ===== 🎬 導演模式（Rae 定案）：資訊不對稱帳本，走「奧瑞亞主模型接口」chatMain =====
@@ -2309,6 +2356,9 @@ _directorSpec(castNames);
         win.eventOn(win.tavern_events.GENERATION_ENDED, () => {
             console.log('[State Runtime] 🔎 GENERATION_ENDED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷：抽取的事件是否落在旗標窗內
             if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結的 generateRaw 也會發 GENERATION_ENDED → 別抽，否則重複 AVS/記憶/場景生圖
+            // 🖼️ 先幫 VN 開播閘門佔位：插圖副模型要 2.1 秒後才開跑，閘門 1.5 秒沒單就放行 →
+            //    不佔位的話必定「劇情先播、插圖後到」。派發完（或這輪沒插圖）由 _sceneGateRelease 降旗。
+            _sceneGateRaise();
             // 🎯 獨立插圖副模型：獨立於狀態系統(AVS)，狀態關著也能跑 → 在 isEnabled 檢查前排程；函式自己看開關
             clearTimeout(_sceneDebounce);
             _sceneDebounce = setTimeout(extractScenesStandalone, CONFIG.debounceMs + 600);
