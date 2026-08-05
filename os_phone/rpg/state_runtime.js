@@ -131,12 +131,39 @@
     //   小模型算術不穩是絕對值寫錯的主因；相對量在 patch 重播/砍樓回滾下語義也更正確）。
     //   當前值不是數字（缺欄/待定）就從 0 起算；非增減量格式原樣放行。
     const DELTA_RE = /^([+-])=\s*(-?\d+(?:\.\d+)?)$/;
+    //   容錯版：AI 常忘了等號("+25")、帶單位("+=25 金幣")、或吐全形("＋＝25")。
+    //   這些原本都判定成「不是 delta」→ 整串字串被寫進數字欄位 → 下一次 delta 拿它當基底 = NaN
+    //   → 從 0 重新起算＝錢憑空歸零（Rae 的 200 開局金幣就是這樣消失的：-1 再 +25 剛好剩 24）。
+    const DELTA_LOOSE_RE = /^([+-])=?\s*(\d+(?:\.\d+)?)\s*[^\d]{0,6}$/;
     function _resolveDelta(cur, k, v) {
         if (typeof v !== 'string') return v;
-        const m = v.trim().match(DELTA_RE);
-        if (!m) return v;
-        const base = Number(k.includes('.') ? _getDeep(cur, k) : cur[k]);
+        if (v === DEL_SENTINEL) return v;                     // 刪除哨兵照原樣交給 _applyPatchInto
+        const raw = v.trim()
+            .replace(/[＋]/g, '+').replace(/[－−—]/g, '-').replace(/[＝]/g, '=');   // 全形正規化
+        const hasField = (k.includes('.') ? _getDeep(cur, k) : cur[k]);
+        const base = Number(hasField);
+
+        let m = raw.match(DELTA_RE);
+        if (!m) {
+            const loose = raw.match(DELTA_LOOSE_RE);
+            if (loose) {
+                m = loose;
+                console.warn(`🧮 [AVS] 「${k}」的增減量寫成「${v}」（正確格式是 "+=25"）→ 已按 ${loose[1]}${loose[2]} 計算。不修的話這串會整個被寫進數字欄位，下一次加減就從 0 重算、餘額憑空歸零。`);
+            }
+        }
+        if (!m) {
+            // 不是增減量：數字欄位卻收到一串沒辦法當數字的東西 → 拒收、保住舊值。
+            //   （直接寫絕對數字如 "200" 仍照舊放行，那是初始化/劇情明定數值的正當用法）
+            if (hasField !== undefined && hasField !== null && !isNaN(base) && raw !== '' && isNaN(Number(raw))) {
+                console.warn(`🧮 [AVS] 「${k}」目前是數字 ${base}，但這輪想寫成「${v}」→ 已拒收、保留原值。數字欄位被寫成字串的話，之後的加減會從 0 重算＝整筆歸零。`);
+                return base;
+            }
+            return v;
+        }
         const d = Number(m[2]) * (m[1] === '-' ? -1 : 1);
+        if (hasField !== undefined && hasField !== null && isNaN(base)) {
+            console.warn(`🧮 [AVS] 「${k}」要加減 ${m[1]}${m[2]}，但它現在的值「${hasField}」不是數字 → 只能從 0 起算。上一輪多半把非數字寫進了這個欄位。`);
+        }
         return Math.round(((isNaN(base) ? 0 : base) + d) * 100) / 100;   // 修掉浮點尾巴
     }
 
