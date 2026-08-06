@@ -1049,7 +1049,27 @@
             return (typeof val === 'object') ? JSON.stringify(val) : f(val);
         });
         // 3. 殘留佔位符 → —
-        out = out.replace(/\{\{[^{}]+\}\}/g, '—');
+        //    🚨 這行是「面板欄位不顯示」的黑洞：模板寫死的鍵名一旦跟資料對不上
+        //    （換過變數包／欄位改名／副模型換了寫法），佔位符會被靜默吃掉變「—」，
+        //    跟「這欄真的沒值」在畫面上長得一模一樣 → 每次都查半天（Rae：怎麼又不顯示了）。
+        //    → 把被吃掉的佔位符印出來，附上資料實際有的鍵，一眼看出是名字不合還是真的空。
+        const _eaten = [];
+        out = out.replace(/\{\{[^{}]+\}\}/g, (mm) => { _eaten.push(String(mm)); return '—'; });
+        if (_eaten.length) {
+            try {
+                const _keys = Object.keys(state || {}).map(k => {
+                    const v = state[k];
+                    if (Array.isArray(v)) return k + '[清單]';
+                    if (v && typeof v === 'object') return k + '{' + Object.keys(v).join('・') + '}';
+                    return k;
+                });
+                console.warn('🧪 [AVS UI] 這張面板有 ' + _eaten.length + ' 個佔位符對不上資料、被顯示成「—」：'
+                    + [...new Set(_eaten)].join(' ')
+                    + '\n   資料實際有的鍵：' + (_keys.join('｜') || '（空）')
+                    + '\n   ↑ 名字對得上就是真的沒值；對不上＝面板是舊 schema 煉的、資料已經換成新變數包了'
+                    + ' → 要重新煉丹一張面板（✏️ 微調只改外觀、補不回對不上的欄位）。');
+            } catch (e) {}
+        }
         return out;
     }
 
