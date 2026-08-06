@@ -564,6 +564,27 @@ ${list}`;
 - 補齊例外：若【當下狀態】裡某個已登場實體，缺少 schema 基礎屬性組裡的穩定欄位，這輪順手把缺的那幾個補上（從劇情或世界觀推合理值）；穩定屬性補一次即可、之後不必再動
 - 如果這輪劇情完全沒觸發任何欄位變化，輸出 { "updates": {} }`;
 
+        // 「schema 有、當下狀態卻完全沒有」的頂層欄位。
+        //   中途才套用變數包／沿用別的故事設定時，這些欄位不會被更新模式抽到——AI 只寫劇情提到的，
+        //   沒人提的 HP／貨幣／主線進度就永遠掛著「—」（初始化模式只在 current 全空時才觸發，中途套包碰不到）。
+        //   ⚠️ 空陣列不算缺：像「契約夥伴清單」desc 本來就寫「未取得前為空」，那是正當的值。
+        const _curForFill = current || {};
+        const _missingKeys = Object.keys(schema || {}).filter(k => {
+            const v = _curForFill[k];
+            if (v === undefined || v === null || v === '') return true;
+            if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) return true;
+            return false;
+        });
+        const _fillMissing = (!isInitialFill && _missingKeys.length)
+            ? `
+
+【補初值 — 這些欄位到現在還沒有任何值，這輪一併補齊】
+${_missingKeys.map(k => '- ' + k).join('\n')}
+- 依各欄位的 schema 定義（desc／init／structure 範本）＋開局設定給出合理初值；劇情沒明說的就用世界觀常識推，**不要留空**。
+- 物件型欄位要照 structure 範本把子欄位一起補齊，不要只補外層。
+- 這是一次性補齊：補完之後這些欄位就照常只抽變化。`
+            : '';
+
         // 檢查清單依「這張卡實際在追蹤的欄位」動態長出來——寫死的通用步驟只會檢查角色，
         // 每張卡各自的數值欄位（錢／物資／進度…）永遠不在清單裡，就是漏帳的根源。
         // 只列名稱＋型別；完整 desc 在上面的 schema 區塊，不重複佔 token。
@@ -582,7 +603,7 @@ ${JSON.stringify(current, null, 2)}
 【最近劇情】（〔本輪新內容〕＝這一輪要抽的變化來源；〔前情參照·已入帳〕＝只供理解上下文，裡面的變化早已記過帳、嚴禁再抽）
 ${recentText || '（無）'}
 
-${modeRules}
+${modeRules}${_fillMissing}
 
 ---
 【第一步 · 先分析】純文字、簡短，每項一兩句，**不准省略這步**：
@@ -1112,6 +1133,17 @@ ${numberedText}`;
             if (doState) {
                 const isInitialFill = !currentState || Object.keys(currentState).length === 0;
                 prompt = buildExtractPrompt(schema, currentState, recentText, isInitialFill);
+                if (!isInitialFill) {   // 中途才套變數包時，把「還沒有值的欄位」印出來，對照面板缺什麼
+                    try {
+                        const _c = currentState || {};
+                        const _miss = Object.keys(schema || {}).filter(k => {
+                            const v = _c[k];
+                            return v === undefined || v === null || v === ''
+                                || (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+                        });
+                        if (_miss.length) console.log('🛰️ [State Runtime] 這輪要補初值的欄位（' + _miss.length + '）：' + _miss.join('、'));
+                    } catch (e) {}
+                }
                 // 📜 大總結參照（唯讀）：早期劇情被總結收走後最近樓層看不到 → 副模型對不到帳，
                 //   任務早完成了狀態還掛「進行中」。附壓縮版總結讓它比對「當前狀態 vs 既成事實」修正。
                 //   sp_avs_summary_ref=0 可關（省 token）。
