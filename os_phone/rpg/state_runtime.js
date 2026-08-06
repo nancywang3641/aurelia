@@ -2140,11 +2140,22 @@ _directorSpec(castNames);
                 const _lt = _last && _last[0] && (_last[0].message || _last[0].mes);
                 _idsInText(_lt || '').forEach(id => alive.add(id));
             } catch (e) {}
-            // 🛡️ 保命閘：一個 id 都沒掃到，但 patch 卻有一堆 → 十之八九是讀到殘缺聊天檔／標記還沒釘上，
-            //    這時候照判會把狀態整碗清空。寧可不動。
-            if (!alive.size) {
-                console.warn(`🛰️ [State Runtime] 對帳(${tag})：全檔掃不到任何 avs 標記、但有 ${list.length} 筆 patch → 疑似殘缺聊天檔，中止不動`);
+            // 🛡️ 保命閘：一個 id 都沒掃到 → 要先分清楚是「讀不到檔」還是「讀到了、裡面真的沒標記」。
+            //    ⚠️ 舊版兩種都一律 return，於是「中途才開始抽取／舊制殘留的無標記 patch」永遠對不完帳，
+            //       卡在原地什麼都不做（Rae 2026-08-06：明明樓數讀到 4 還說殘缺）。
+            //    正確判準＝有沒有真的讀到正文：
+            //      ・讀不到任何正文（TauriTavern incomplete utf-8／懶載入空殼）→ 保護，寧可不動
+            //      ・讀到了正文卻掃不到標記 → 那就是事實，這些 patch 全是殭屍，照下面的規則辦
+            //        （非移除事件＝認養歸化重釘標記、狀態保留；真的刪樓＝回滾。兩條都是對帳該做的事）
+            //    total 的語義剛好夠用：-1 ＝ fetchFullChat 失敗（不可信）；0 ＝ 成功讀到「空聊天」（刪到空是事實，不是失敗）
+            const _chatReadOk = total >= 0;
+            const _hasBody = total === 0 || fullMsgs.some(m => String((m && (m.message || m.mes)) || '').trim().length > 0);
+            if (!alive.size && !(_chatReadOk && _hasBody)) {
+                console.warn(`🛰️ [State Runtime] 對帳(${tag})：聊天檔讀不到（樓數=${total}，正文全空）、卻有 ${list.length} 筆 patch → 讀取殘缺，中止不動`);
                 return;
+            }
+            if (!alive.size) {
+                console.warn(`🛰️ [State Runtime] 對帳(${tag})：${total === 0 ? '聊天已經是空的' : '讀到 ' + total + ' 則正文、裡面確實沒有任何 avs 標記'} → ${list.length} 筆 patch 全是殭屍（中途才開始抽取／舊制殘留／樓被刪光），交由下面處理`);
             }
 
             // 🔎 從最後一筆 patch 往前對 id：對不上就砍、再往前一筆；一對上就停，它前面的全部保留。
@@ -2162,11 +2173,17 @@ _directorSpec(castNames);
             //    ─ 非移除事件（注入前 / 開卡歸化 / 開面板）：沒刪東西卻失聯＝落盤修復前的殭屍老 patch
             //      → 「認養」到最新 AI 樓（重釘標記＋立即落盤）＝一次性歸化，之後它跟新 patch 一樣可靠。
             const _isRemoval = (tag === '刪樓·複核') || /^msg#/.test(tag);
-            if (!_isRemoval) {
-                let lastAsstIdx = -1;
-                if (total > 0) for (let i = fullMsgs.length - 1; i >= 0; i--) { const mm = fullMsgs[i]; if (mm && !(mm.is_user || mm.role === 'user')) { lastAsstIdx = i; break; } }
+            // 認養需要一個「宿主樓」來重釘標記。聊天被刪到空 / 只剩使用者樓時根本沒有宿主，
+            // 舊版還是走認養 → 每次都 0/N 失敗、印「保留不動，下輪再試」→ 永遠卡著（Rae：刪到空還給我保留）。
+            // 沒有宿主樓就代表那些 patch 確定是孤兒 → 直接走回滾清掉。
+            let lastAsstIdx = -1;
+            if (total > 0) for (let i = fullMsgs.length - 1; i >= 0; i--) { const mm = fullMsgs[i]; if (mm && !(mm.is_user || mm.role === 'user')) { lastAsstIdx = i; break; } }
+            if (!_isRemoval && lastAsstIdx < 0) {
+                console.warn(`🛰️ [State Runtime] 對帳(${tag})：聊天裡已經沒有任何 AI 樓可以認養（樓數=${total}）→ ${dead.length} 筆 patch 確定是孤兒，直接清掉`);
+            }
+            if (!_isRemoval && lastAsstIdx >= 0) {
                 let adopted = 0;
-                for (const id of dead) { try { if (lastAsstIdx >= 0 && await _stampAvsId(lastAsstIdx, id)) adopted++; } catch (e) {} }
+                for (const id of dead) { try { if (await _stampAvsId(lastAsstIdx, id)) adopted++; } catch (e) {} }
                 console.log(`🛰️ [State Runtime] 對帳(${tag})：非內容移除事件卻有 ${dead.length} 筆失聯（殭屍老patch）→ 不回朔；${adopted}/${dead.length} 筆認養到 #${lastAsstIdx}（重釘標記+落盤）`);
                 if (adopted < dead.length) console.warn(`🛰️ [State Runtime] 對帳(${tag})：${dead.length - adopted} 筆認養失敗 → 保留不動，下輪再試`);
                 return;
