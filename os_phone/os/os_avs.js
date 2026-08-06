@@ -1450,7 +1450,13 @@
                     fullPrompt +=
                         `\n\n【單一群組變數】是「一組固定欄位」、不是多個實體 → **一律用點記法 {{群組名.欄位名}} 直接取值，禁止用迴圈**（用迴圈整段會空白）：\n` +
                         singleObj.map(o => `  - 「${o.v.name}」欄位：${o.fields.join('、') || '（動態）'}　→ 寫成 {{${o.v.name}.欄位名}}`).join('\n') + `\n` +
-                        `把每個欄位逐一放進版面（一個欄位一個 {{${singleObj[0].v.name}.欄位名}} 佔位符），不要包迴圈、不要寫死數值。`;
+                        `把每個欄位逐一放進版面（一個欄位一個 {{${singleObj[0].v.name}.欄位名}} 佔位符），不要包迴圈、不要寫死數值。\n` +
+                        `★★【欄位名必須逐字照抄，這是機器比對、不是給人看的】佔位符裡的群組名與欄位名，一個字都不能改：\n` +
+                        `  - 禁止翻譯（「魔力值」不可寫成 mana）、禁止縮寫（「魔力值」不可寫成 MP、「金錢餘額」不可寫成 gold）、禁止改用同義詞、禁止改大小寫、禁止加減空格或標點。\n` +
+                        `  - 想在畫面上顯示別的名字沒問題——**標籤文字**你可以自由命名（例如標籤寫「魔力源」），但**佔位符裡的欄位名**必須是上面清單裡的原字。\n` +
+                        `    ✓ <span>魔力源</span><b>{{MC生命與魔力.魔力值}}</b>\n` +
+                        `    ✗ <span>魔力源</span><b>{{MC生命與魔力.MP}}</b>　← 系統查不到這個鍵，欄位會變成「—」\n` +
+                        `  - 也不要自己發明清單上沒有的欄位（那種佔位符永遠是「—」）。`;
                 }
 
                 fullPrompt +=
@@ -1487,6 +1493,38 @@
 
                 if (!content) throw new Error('AI 未輸出 <ui_template> 格式，請重試');
 
+                // 🧪 出爐即校驗：AI 常把欄位名改寫成自己習慣的縮寫（「魔力值」→ MP、「金錢餘額」→ gold），
+                //    而渲染引擎查不到鍵只會靜默顯示「—」→ 面板看起來就是「壞了但查不出原因」。
+                //    這裡當場把模板裡的 {{群組.欄位}} 抓出來跟已知欄位名對，不靠 AI 自律。
+                //    只提示不自動改：欄位名沒有可靠的機器對應（MP 到底是魔力值還是魔法點數？猜錯更糟）。
+                let _badCount = 0;
+                try {
+                    const _known = {};                       // 群組名 → 該群組已知欄位名
+                    objInfo.forEach(o => { _known[o.v.name] = new Set(o.fields || []); });
+                    const _flatNames = new Set(flatVars.map(v => v.name));
+                    const _bad = [];
+                    for (const mm of content.matchAll(/\{\{\s*([^#\/@{}][^{}]*?)\s*\}\}/g)) {
+                        const expr = String(mm[1]).trim();
+                        if (expr.indexOf('.') < 0) {         // 扁平變數（或被當群組直接引用）
+                            if (!_flatNames.has(expr) && !_known[expr]) _bad.push({ ph: mm[0], group: '', field: expr });
+                            continue;
+                        }
+                        const _i = expr.indexOf('.');
+                        const g = expr.slice(0, _i), fld = expr.slice(_i + 1);
+                        if (!_known[g]) { _bad.push({ ph: mm[0], group: '', field: expr }); continue; }
+                        // fields 為空＝煉丹時算不出欄位清單（沒 runtime 資料且範本解不出）→ 無從比對，不誤報
+                        if (_known[g].size && !_known[g].has(fld)) _bad.push({ ph: mm[0], group: g, field: fld });
+                    }
+                    if (_bad.length) {
+                        const _lines = _bad.map(b => '　' + b.ph + (b.group
+                            ? '　（「' + b.group + '」實際有：' + [..._known[b.group]].join('、') + '）'
+                            : '　（變數包裡沒有這個變數）')).join('\n');
+                        console.warn('🧪 [AVS 煉丹] 這張面板有 ' + _bad.length + ' 個佔位符對不上變數包，套用後會顯示「—」：\n' + _lines
+                            + '\n   AI 又把欄位名改寫了（常見：魔力值→MP、金錢餘額→gold）。重煉一次通常就好，也可以直接編輯模板把名字改回來。');
+                        _badCount = _bad.length;
+                    }
+                } catch (e) {}
+
                 const styleMatch = content.match(/<style>([\s\S]*?)<\/style>/i);
                 await win.OS_DB.saveUITemplate({
                     id: 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -1499,7 +1537,9 @@
                     createdAt: Date.now(),
                 });
 
-                log.innerHTML = '🎉 煉丹完成！已嵌入到檔案卡片中。';
+                log.innerHTML = _badCount
+                    ? '⚠️ 煉好了，但有 ' + _badCount + ' 個欄位名對不上變數包（套用後那些欄位會顯示「—」）→ 建議按上面的按鈕重煉一次。哪幾個看 console。'
+                    : '🎉 煉丹完成！已嵌入到檔案卡片中。';
 
                 // 刷新變數包列表（卡片底部 UI 面板區會自動顯示新煉的）
                 win.OS_DB.getAllUITemplates().then(tpls => {
@@ -1507,7 +1547,7 @@
                     renderPackList(container);
                 });
                 // 1.5 秒後自動關閉 modal
-                setTimeout(() => closeFurnaceModal(container), 1500);
+                if (!_badCount) setTimeout(() => closeFurnaceModal(container), 1500);   // 有欄位對不上就留著視窗，別讓警告一閃而過
             } catch (e) {
                 console.error('[AVS Furnace]', e);
                 log.innerHTML = `❌ 炸鍋了：${e.message}`;
