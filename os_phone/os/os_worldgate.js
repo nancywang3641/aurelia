@@ -15,7 +15,7 @@
     console.log('[Worldgate③] 載入世界門面板...');
     const win = window.parent || window;
     const APP_ID = 'worldgate';
-    const K_WORLDS = 'worlds';   // [{id,name,concept,style,lure,danger,crisis,keys,travelers:[{name,job,persona,origin,skill,recruited}],visits,ts}]
+    const K_WORLDS = 'worlds';   // [{id,name,concept,genre,style,lure,danger,crisis,keys,entryText,travelers:[{name,job,persona,origin,skill,fit,goal,weakness,recruited}],visits,ts}]
     const BOOK_PARA = '【奧瑞亞-視差】';
     const MAX_TRAVELER_SPAWN = 4;
 
@@ -37,7 +37,11 @@
         try { const m = String(raw || '').match(/[\[{][\s\S]*[\]}]/); return m ? JSON.parse(m[0]) : null; }
         catch (e) { return null; }
     }
-    async function _callAI(prompt, label, route, useMain) {
+    function _stripFences(s) {
+        return String(s == null ? '' : s).replace(/^\s*```[a-zA-Z]*\s*\n?/, '').replace(/```\s*$/, '').trim();
+    }
+    // asText=true:世界檔案正文近三千字,包進 JSON 字串太容易被引號/換行搞爆 parse → 直接收 markdown 純文字
+    async function _callAI(prompt, label, route, useMain, asText) {
         const api = win.OS_API || window.OS_API;
         if (!api || !api.chat) return null;
         try {
@@ -56,7 +60,7 @@
             const raw = await new Promise((resolve, reject) => {
                 api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label, keepCodeFences: true });
             });
-            return _extractJSON(raw);
+            return asText ? _stripFences(raw) : _extractJSON(raw);
         } catch (e) { console.warn('[Worldgate③] ' + label + ' 失敗', e); return null; }
     }
 
@@ -75,28 +79,100 @@
         return (Array.isArray(arr) ? arr : []).filter(s => s && s.name).slice(0, 5);
     }
 
-    // ── 展開世界+旅人(1次API,主模型):世界正文+每位旅人的身分卡+偶遇考題包全在這次生完,之後零API ──
-    async function _expandWorld(seed) {
+    // ── 展開世界(主模型,2次API):①世界檔案正文十節1800~2600字 ②四名旅人身分卡+偶遇考題包 ──
+    //    分兩次是因為兩份加起來遠超單次輸出上限,擠在一起=旅人考題必被截斷(整包 JSON 一起報廢)。
+    //    正文改收 markdown 純文字(不包 JSON 字串),近三千字的引號換行不會再搞爆 parse。
+    function _genreLine(seed) {
+        return '【題材】' + String(seed.genre || seed.style || '') + '——專有名詞、貨幣、職業、勢力、危機、風景全部都要落在這個題材裡,一個字都不准跑題。' +
+            '除非題材本身就是科幻,否則不得出現系統、數據、程式、介面、協議、迴路、裝備艙、探勘隊這類科技或現代說法。\n';
+    }
+    const _WORLD_SECTIONS =
+        '## 一、世界總覽\n世界名 / 一句話概念 / 題材與視覺風格 / 核心法則(把種子的 twist 落實成完整規則:它如何滲透職業、買賣、社交、日常,至少一種靠它吃飯的職業,以及違反它的下場) / 當前世界危機 / 在這個世界活下去的主要目標。\n' +
+        '## 二、世界地圖\n先用一段話交代區域之間的相對位置與通行關係(誰接壤誰、走過去要多久、路上會遇到什麼),再逐一寫入口區與另外 2~3 個區域,每區都要有:名稱 / 類型(降生地、城市、荒野、邊境、禁區) / 樣貌與環境 / 由誰控制 / 能取得什麼物資 / 能做什麼 / 主要危險 / 通往哪些區域 / 移動需要的條件或代價。要讓人看得出「從哪裡能走去哪裡」,不是幾個漂浮的地名。\n' +
+        '## 三、降生點與初始配置\n玩家降生時看到的第一幕 / 世界法則把他改造成什麼種族或身體 / 當地人怎麼理解他的身分 / 身上的衣著與裝備 / 初始貨幣與物資 / 身體能力與限制 / 需要盯著的生存數值(挑真的會影響行動的:飢餓、體溫、氧氣、汙染、聲望等) / 最快賺到第一筆錢的方法 / 初期能安全落腳的地方 / 他必須保護、隱藏或完成的事。\n' +
+        '## 四、社會結構\n統治方式 / 階級與身分制度 / 主要職業 / 資源由誰生產、控制、分配 / 法律、執法者與刑罰 / 宗教或主流信仰 / 普通人一天怎麼過 / 外來者能怎麼往上爬。勢力是演員,社會結構才是舞台——不准只寫兩個勢力對立就當交代完。\n' +
+        '## 五、社會常識\n當地人從小就知道、外來者最容易踩雷的事:日常禮儀 / 禁忌 / 危險徵兆 / 常見騙局 / 通用暗語或俗諺 / 找活、住宿、交易的規矩 / 對死亡、婚姻、親屬、財產的看法 / 哪些舉動會立刻讓人看出他是外來者。這節直接決定 NPC 講不講人話,要具體到可以照著演,不要寫成抽象形容。\n' +
+        '## 六、經濟與生活\n貨幣名與來源 / 基本物價 / 住宿、醫療、交通的價格 / 尋常委託的報酬 / 黑市行情 / 稀有物品價格 / 戰利品賣給誰、怎麼賣 / 玩家每天最低生存成本。數字要能直接拿來跑團結算。\n' +
+        '## 七、勢力與邦交\n3~4 個主要政權或勢力,每個都要有:控制地域 / 公開目標 / 真正想要的東西 / 能提供玩家什麼 / 要玩家付出什麼 / 與其他勢力的關係(貿易、戰爭、停戰、聯姻) / 玩家能利用的矛盾。就算這個世界沒有「國家」,也要用城邦、部族、教團、商會之類的東西替代,不准整片世界只有兩幫人互瞪。\n' +
+        '## 八、世界正史\n3~5 個歷史節點串成一條因果鏈,每個寫:事件名稱與年代 / 發生了什麼 / 誰因此獲利 / 誰被犧牲 / 留下什麼遺跡、制度或仇恨 / 它今天怎麼影響玩家。重點不是年表,是每段歷史都要留下今天還碰得到的後果。\n' +
+        '## 九、核心人物\n3~4 位本世界的重要人物(本地人,不是同行旅人),每位寫:姓名與公開身分 / 所屬勢力 / 外在形象 / 真正的欲望 / 掌握的資源或秘密 / 最害怕失去什麼 / 與其他核心人物的關係 / 對玩家的初始態度 / 在什麼條件下會變成盟友、敵人或委託人。\n' +
+        '## 十、危機與冒險引擎\n當前危機會怎麼一步步惡化 / 玩家放著不管會發生什麼 / 3~5 個可各自獨立探索的事件鉤子 / 戰鬥、調查、交易、採集、社交在這個世界各自能做什麼 / 這裡最珍貴的獎勵 / 要離開這個世界需要什麼條件(用世界自己的說法,例如渡口、歸門、季風、儀式) / 沒能順利離開的下場 / 玩家下次再進來時,世界可能已經變成什麼樣。\n';
+    async function _expandWorldText(seed) {
         const prompt =
-            '你是一位資深的跑團世界觀設計師。請把以下世界種子擴寫成可跑團的濃縮世界檔案,並生成正在準備前往該世界的同行旅人。只回傳純 JSON:\n' +
-            '【題材】' + String(seed.genre || seed.style || '') + '——整份檔案的專有名詞、貨幣、職業、勢力、危機、風景全部都要落在這個題材裡,一個字都不准跑題。除非題材本身就是科幻,否則不得出現系統、數據、程式、介面、協議、迴路、裝備艙、探勘隊這類科技或現代說法。\n' +
-            '{"entry":"{世界設定正文700~1000字,依序寫這六段: ①核心法則=把種子的 twist 落實成完整規則,寫明它如何滲透職業/買賣/社交/日常,至少一種靠這條規則吃飯的職業、以及違反它的下場 ②旅人的位置=初來乍到的外地人會被當地社會歸類成什麼身分(用這個世界既有的身分去理解他,例如遊方術士、投親的遠房、還願的朝聖者),第一筆進帳的兩三條路,每天醒來的基本循環(接什麼活/跟誰打交道/避開什麼)。旅人是住進這個世界的人,不是外面派來的調查隊、潛水隊、探勘隊,世界不是一趟任務或一次出差 ③錢與價格=貨幣名+4~6個具體價格錨點(一餐/一晚落腳/一次尋常委託的酬勞/一件人人想要的貴東西),數字要能直接拿來跑團結算 ④張力軸=兩股對立勢力或兩套並行制度,各自給旅人什麼好處、要求什麼代價,旅人可以站隊/兩邊吃/被夾在中間 ⑤區域速寫=入口+2~3個區域,每個一兩句(樣貌+在那裡能做什麼) ⑥危機與歸途=正在發生的危機、它與核心法則的關係、兩個懸而未決的鉤子、離開這個世界的方式(用這個世界自己的說法,例如渡口、歸門、季風、儀式)。分段書寫,不要條列符號堆砌。鐵則:這是給旅人「生活」的世界,不是觀光手冊——每個設定都要能回答『旅人能拿它做什麼』;寧可少一個區域,不可少掉價格與循環}",' +
-            '"keys":["{觸發關鍵字3~5個,第一個必須是世界名}"],' +
-            '"travelers":[{"name":"{旅人名}","job":"{職業/定位,不超過6字}","persona":"{一句話性格}","origin":"{一句話來歷}","skill":"{一句話擅長}","look":"{一句話外貌印象}","record":"{一句話視差資歷}","reason":"{一句話前往此世界的動機}",' +
+            '你是一位資深的跑團世界觀設計師。請把以下世界種子擴寫成一份可以直接拿來跑團的世界檔案。\n' +
+            _genreLine(seed) +
+            '【世界種子】' + JSON.stringify(seed) + '\n' +
+            '【輸出格式】直接輸出檔案正文,用下列標題分節,不要 JSON、不要程式碼區塊、不要開場白或結語。總長 1800~2600 字,十節依序寫完,每節都要有實質內容,不准只留標題或用一句話帶過。\n' +
+            _WORLD_SECTIONS +
+            '【鐵則】這是給人「住進去生活」的世界,不是觀光手冊:每個設定都要能回答「玩家能拿它做什麼」。' +
+            '外來者是被當地社會歸類進既有身分的人(遊方術士、投親的遠房、還願的朝聖者之類),不是外面派來的調查隊、潛水隊、探勘隊,這個世界不是一趟任務或一次出差。' +
+            '寧可少一個區域,不可少掉價格、循環與常識。\n' +
+            '寫完後另起一行,只輸出這一行:關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
+            '語言:繁體中文。';
+        let text = await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true);
+        if (!text) return null;
+        // 截斷保險:尾巴那節沒寫到就接著補完(整份重生太貴,也會換一套設定)
+        if (!/十[、.]|冒險引擎|關鍵字[:：]/.test(text.slice(-600))) {
+            console.warn('[Worldgate③] 世界檔案疑似被截斷,續寫補完');
+            const more = await _callAI(
+                '以下是一份寫到一半的跑團世界檔案。請直接接著往下寫完剩下的段落,不要重複已經寫過的內容,不要開場白或結語,不要重寫標題以外的舊段落。' +
+                '完整節次如下(缺哪節補哪節):\n' + _WORLD_SECTIONS +
+                '寫完後另起一行,只輸出這一行:關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔)\n' +
+                _genreLine(seed) + '語言:繁體中文。\n\n【已寫好的部分】\n' + text,
+                '世界門續寫檔案', 'worldgate_expand', true, true);
+            if (more) text += '\n' + more;
+        }
+        const km = text.match(/關鍵字[:：]\s*(.+)/);
+        const keys = km ? km[1].split(/[、,，\/]+/).map(s => s.trim()).filter(Boolean).slice(0, 5) : [];
+        if (km) text = text.replace(km[0], '').trim();   // 關鍵字行是給程式吃的,不留在正文裡
+        if (!keys.length || keys[0] !== seed.name) keys.unshift(seed.name);
+        return { text, keys: keys.slice(0, 5) };
+    }
+    async function _expandTravelers(seed, worldText) {
+        const prompt =
+            '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
+            '他們是視差玩家(來自奧瑞亞的普通人),不是這個世界的原住民;世界檔案第九節的核心人物不算在內,不可重複。四人定位互補、性格差異明顯。\n' +
+            '只回傳純 JSON:\n' +
+            '{"travelers":[{"name":"{旅人名}","job":"{職業/定位,不超過6字}","persona":"{一句話性格}","origin":"{一句話來歷}","skill":"{一句話擅長}","look":"{一句話外貌印象}","record":"{一句話視差資歷}","reason":"{一句話前往此世界的動機}",' +
+            '"fit":"{他哪一點正好對上這個世界的核心法則或社會規矩,一句}","weakness":"{明確的弱點,一句,要能在跑團裡出事}","goal":"{他自己的個人目標,一句}",' +
+            '"clash":"{最可能跟哪一類隊友或哪種做法起衝突,一句}","breakup":"{在什麼條件下他會離隊或翻臉,一句}",' +
             '"greet":"{在大廳被搭話時的開場白1~2句,符合性格}",' +
             '"quiz":[{"q":"{他用來考驗對方合不合拍的問題或話題}","options":[{"t":"{回應選項}","good":{true或false},"r":"{他對此回應的反應一句}"}]}],' +
             '"accept":"{三題都滿意時的入隊台詞1~2句}","refuse":"{不滿意時的婉拒台詞一句}"}]}\n' +
-            '旅人固定 4 名,彼此定位互補、性格差異明顯;他們是視差玩家(來自奧瑞亞的普通人),不是該世界的NPC。\n' +
             '每位旅人 quiz 固定 3 題、每題 options 固定 3 個且恰好 1 個 good=true;good 選項不是討好或客套話,而是最對上這個人性格與在意之處的回應,要靠理解他才選得中,錯誤選項也要看起來合理。\n' +
-            '【世界種子】' + JSON.stringify(seed) + '\n' +
+            '【世界檔案】\n' + worldText + '\n' +
             '語言:繁體中文。';
-        return await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true);
+        const r = await _callAI(prompt, '世界門召集旅人', 'worldgate_expand', true);
+        const arr = Array.isArray(r) ? r : (r && Array.isArray(r.travelers) ? r.travelers : []);
+        return arr.filter(t => t && t.name);
+    }
+    function _normTravelers(arr) {
+        return (Array.isArray(arr) ? arr : []).slice(0, 4).map(t => ({
+            name: String(t.name || '無名旅人'), job: String(t.job || '旅人'),
+            persona: String(t.persona || ''), origin: String(t.origin || ''), skill: String(t.skill || ''),
+            look: String(t.look || ''), record: String(t.record || ''), reason: String(t.reason || ''),
+            fit: String(t.fit || ''), weakness: String(t.weakness || ''), goal: String(t.goal || ''),
+            clash: String(t.clash || ''), breakup: String(t.breakup || ''),
+            greet: String(t.greet || ''),
+            quiz: (Array.isArray(t.quiz) ? t.quiz : []).slice(0, 3).map(q => ({
+                q: String((q && q.q) || ''),
+                options: (Array.isArray(q && q.options) ? q.options : []).slice(0, 3)
+                    .map(o => ({ t: String((o && o.t) || ''), good: !!(o && o.good), r: String((o && o.r) || '') }))
+                    .filter(o => o.t),
+            })).filter(q => q.q && q.options.length >= 2),
+            accept: String(t.accept || ''), refuse: String(t.refuse || ''),
+            recruited: false,
+        }));
     }
 
     // ── 世界條目落地【奧瑞亞-視差】書 ──
     function _entryComment(w) { return '【世界檔案-' + w.name + '】'; }
     function _entryContent(w, entryText) {
-        const trav = (w.travelers || []).map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ' ' + t.origin).join('\n');
+        // 旅人區塊帶上目標/弱點/翻臉條件——這是給主持AI看的底牌,玩家在身分卡上看不到這幾欄
+        const trav = (w.travelers || []).map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ' ' + t.origin +
+            (t.skill ? ';擅長' + t.skill : '') + (t.fit ? ';與本世界的契合點:' + t.fit : '') +
+            (t.goal ? ';個人目標:' + t.goal : '') + (t.weakness ? ';弱點:' + t.weakness : '') +
+            (t.clash ? ';容易起衝突於:' + t.clash : '') + (t.breakup ? ';離隊或翻臉的條件:' + t.breakup : '')).join('\n');
         return '# 視差世界檔案:' + w.name + '\n' +
             '一句話:' + w.concept + '(' + (w.genre ? '題材:' + w.genre + ' ' : '') + '風格:' + w.style + ')\n' +
             (w.genre ? '本世界的一切描寫都必須維持在「' + w.genre + '」的題材裡,不得混入不屬於此題材的科技或現代說法。\n' : '') +
@@ -228,7 +304,8 @@
     function _profRows(t) {
         const row = (k, v) => v ? '<div class="wg-prof-row"><span>' + k + '</span><b>' + _esc(v) + '</b></div>' : '';
         return row('定位', t.job) + row('外貌', t.look) + row('性格', t.persona) +
-            row('來歷', t.origin) + row('資歷', t.record) + row('擅長', t.skill) + row('動機', t.reason);
+            row('來歷', t.origin) + row('資歷', t.record) + row('擅長', t.skill) + row('動機', t.reason) +
+            row('目標', t.goal) + row('對這個世界', t.fit) + row('弱點', t.weakness);
     }
     function _openEncProfile(worldId, ti, npc) { _openEncounter(worldId, ti, npc, true); }   // 右鍵=直接開在身分卡頁
     // 考題的「他說的話」直接打進底部對話框(對話感);純顯示、不進 lstage_hist——
@@ -366,10 +443,11 @@
         return '🌌 NEXUS PARALLAX · 世界啟動\n' +
             '━━━━━━━━━━━━━━━━━━━━━\n' +
             '[System:玩家從純白大廳進入視差世界「' + w.name + '」]\n' +
-            '世界概念:' + w.concept + '(風格:' + w.style + ')\n' +
+            '世界概念:' + w.concept + '(' + (w.genre ? '題材:' + w.genre + ' ' : '') + '風格:' + w.style + ')\n' +
             '同行旅人:\n' + teamStr + '\n\n' +
             '【指令】\n' +
-            '1. 以「' + w.name + '」的世界檔案為準,從入口區域開場,描寫玩家(與同行旅人)抵達時的所見所感。\n' +
+            '1. 以「' + w.name + '」的世界檔案為準,從入口區域開場,描寫玩家(與同行旅人)抵達時的所見所感。' +
+            (w.genre ? '全篇用「' + w.genre + '」的語彙書寫,不得混入不屬於此題材的科技或現代說法。' : '') + '\n' +
             '2. 遵循視差跑團主持規範:不強推主線、只描述可感知資訊、事件制推進。\n' +
             '3. 開場結尾給出眼前可見的幾個方向或機會,然後停下等待玩家行動。\n' +
             '━━━━━━━━━━━━━━━━━━━━━';
@@ -590,33 +668,24 @@
         const seed = _seeds[i];
         if (!seed) return;
         _busy = true;
-        _loading('正在建構「' + _esc(seed.name) + '」…');
-        const r = await _expandWorld(seed);
+        _loading('正在建構「' + _esc(seed.name) + '」的世界檔案…');
+        const r = await _expandWorldText(seed);
+        if (!r || !r.text) { _busy = false; _toast('世界建構失敗,請重試'); _renderSeedCards(); return; }
+        _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
+        const trav = await _expandTravelers(seed, r.text);
         _busy = false;
-        if (!r || !r.entry) { _toast('世界建構失敗,請重試'); _renderSeedCards(); return; }
         const w = {
             id: _mkId(), name: seed.name, concept: seed.concept, twist: seed.twist || '', style: seed.style,
             genre: seed.genre || '',
             lure: seed.lure, danger: seed.danger, crisis: seed.crisis,
-            keys: (Array.isArray(r.keys) && r.keys.length) ? r.keys.map(String) : [seed.name],
-            travelers: (Array.isArray(r.travelers) ? r.travelers : []).slice(0, 4).map(t => ({
-                name: String(t.name || '無名旅人'), job: String(t.job || '旅人'),
-                persona: String(t.persona || ''), origin: String(t.origin || ''), skill: String(t.skill || ''),
-                look: String(t.look || ''), record: String(t.record || ''), reason: String(t.reason || ''),
-                greet: String(t.greet || ''),
-                quiz: (Array.isArray(t.quiz) ? t.quiz : []).slice(0, 3).map(q => ({
-                    q: String((q && q.q) || ''),
-                    options: (Array.isArray(q && q.options) ? q.options : []).slice(0, 3)
-                        .map(o => ({ t: String((o && o.t) || ''), good: !!(o && o.good), r: String((o && o.r) || '') }))
-                        .filter(o => o.t),
-                })).filter(q => q.q && q.options.length >= 2),
-                accept: String(t.accept || ''), refuse: String(t.refuse || ''),
-                recruited: false,
-            })),
+            keys: r.keys.map(String),
+            entryText: r.text,      // 世界檔案原文(不含頁首/旅人區塊)——重新召集旅人時要拿它重組條目
+            travelers: _normTravelers(trav),
             visits: 0, ts: Date.now(),
         };
-        const wrote = await _writeEntry(w, String(r.entry));
+        const wrote = await _writeEntry(w, r.text);
         if (!wrote) { _toast('世界條目寫入失敗(確認已匯入' + BOOK_PARA + ')'); _renderSeedCards(); return; }
+        if (!w.travelers.length) _toast('世界已建好,但旅人沒召集到——詳情頁可重新召集');
         const worlds = await _get(K_WORLDS, []);
         worlds.unshift(w);
         await _set(K_WORLDS, worlds);
@@ -667,6 +736,7 @@
             (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(entryText.length > 600 ? entryText.slice(0, 600) + '…' : entryText) + '</div></div>' : '') +
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 隊伍</span><span class="wg-section-note">' + team.length + ' 人同行・點開看身分卡</span></div>' +
             (travHtml || '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 還沒有隊友——旅人們已陸續上線大廳,走過去搭話,聊得投機才會答應同行。(小人也可以右鍵看身分卡)</div>') +
+            ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
@@ -675,6 +745,22 @@
         b.querySelectorAll('.wg-trav').forEach(el => el.addEventListener('click', () => {
             _renderProfilePage(w, Number(el.dataset.i));   // 面板內第二層頁,不彈modal
         }));
+        // 世界檔案與旅人是分兩次生的:旅人那次掛掉時世界照樣存下來,這裡補一次(沒有旅人=偶遇組隊整條路都走不了)
+        b.querySelector('[data-act="regen-trav"]')?.addEventListener('click', async () => {
+            if (_busy) return;
+            _busy = true;
+            _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
+            const trav = await _expandTravelers(
+                { name: w.name, genre: w.genre, style: w.style, concept: w.concept, twist: w.twist },
+                w.entryText || entryText || w.concept || w.name);
+            _busy = false;
+            if (!trav.length) { _toast('旅人召集失敗,請再試一次'); _renderDetail(w); return; }
+            w.travelers = _normTravelers(trav);
+            await _saveWorld(w);
+            if (w.entryText) await _writeEntry(w, w.entryText);   // 條目裡的旅人區塊一起更新
+            _toast('旅人已上線大廳');
+            _renderDetail(w);
+        });
         _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
         b.querySelector('[data-act="dive"]').addEventListener('click', async () => {
             if (_busy) return;
