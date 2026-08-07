@@ -1247,6 +1247,33 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">房客的房間整間畫出來時用這個畫風。選好就生效。</div>
                             </div>
+
+                            <!-- 🚪 世界門旅人畫風：展開世界後，大廳那四個旅人的小人自動用這個畫風生出來（不選＝維持剪影） -->
+                            <div class="set-group" id="img-wg-sprite-block">
+                                <div class="set-label" title="展開世界後，大廳的旅人小人會自動用這個畫風生成，不用一個一個進裝扮室。">🚪 世界門旅人畫風</div>
+                                <select class="set-select" id="img-wg-sprite" onchange="window._saveWgSpritePack && window._saveWgSpritePack(this.value)">
+                                    ${(() => {
+                                        const _w = window.parent || window;
+                                        const _LD = _w.LobbyDress || window.LobbyDress;
+                                        let cur = {};
+                                        try { cur = JSON.parse(_w.localStorage.getItem('wg_sprite_pack_v1') || '{}') || {}; } catch (e) {}
+                                        const _esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                                        let html = '<option value="">不自動生成（維持剪影）</option>';
+                                        if (!_LD || !_LD.listPresets) return html;
+                                        [['comfyui_direct', 'ComfyUI'], ['novelai', 'NAI']].forEach(([src, label]) => {
+                                            (_LD.listPresets(src) || []).forEach(p => {
+                                                const k = _LD.presetKeyOf(p);
+                                                if (!k) return;
+                                                const v = src + '|' + k;
+                                                const sel = (cur.src === src && cur.key === k) ? ' selected' : '';
+                                                html += '<option value="' + _esc(v) + '"' + sel + '>' + label + '｜' + _esc(p.name || '未命名') + '</option>';
+                                            });
+                                        });
+                                        return html;
+                                    })()}
+                                </select>
+                                <div class="set-desc" style="margin-top:6px;">生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。</div>
+                            </div>
                         </div>
 
                         <!-- ── 🌄 背景 分頁 body（死物：背景・物品）── -->
@@ -2531,6 +2558,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (elImgPixabay)      elImgPixabay.style.display = '';   // 退路圖庫（背景生不出抓照片）屬背景
             }
             // 測試生成是通用工具 → 各分頁都留
+        };
+
+        // 🚪 世界門旅人畫風：值＝「接口|預設包key」，選了就存，不用按底部保存（同 🏠 房間畫風的作風）
+        window._saveWgSpritePack = (v) => {
+            const _w = window.parent || window;
+            try {
+                const i = String(v || '').indexOf('|');
+                const o = (i > 0) ? { src: String(v).slice(0, i), key: String(v).slice(i + 1) } : {};
+                _w.localStorage.setItem('wg_sprite_pack_v1', JSON.stringify(o));
+            } catch (e) {}
         };
 
         // 子分頁切換鈕（切分頁時，ComfyUI 設定/預設包也連動切到對應桶：頭像→char、插圖→scene、背景→bg、小地圖→map）

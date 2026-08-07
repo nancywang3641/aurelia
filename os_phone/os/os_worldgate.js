@@ -137,6 +137,8 @@
             '"fit":"{他哪一點正好對上這個世界的核心法則或社會規矩,一句}","weakness":"{明確的弱點,一句,要能在跑團裡出事}","goal":"{他自己的個人目標,一句}",' +
             '"clash":"{最可能跟哪一類隊友或哪種做法起衝突,一句}","breakup":"{在什麼條件下他會離隊或翻臉,一句}",' +
             '"greet":"{在大廳被搭話時的開場白1~2句,符合性格}",' +
+            // 🎨 這欄是給生圖用的，不給玩家看：大廳小人要照這串畫，所以只寫外觀、不寫劇情
+            '"sprite":"{這個人的外觀,英文逗號分隔的關鍵詞,只寫看得見的東西:性別年齡體型/髮色髮型/瞳色/服裝與配件/隨身物,大約10~16個詞;不要背景、不要姿勢、不要畫風或畫質詞}",' +
             '"quiz":[{"q":"{他用來考驗對方合不合拍的問題或話題}","options":[{"t":"{回應選項}","good":{true或false},"r":"{他對此回應的反應一句}"}]}],' +
             '"accept":"{三題都滿意時的入隊台詞1~2句}","refuse":"{不滿意時的婉拒台詞一句}"}]}\n' +
             '每位旅人 quiz 固定 3 題、每題 options 固定 3 個且恰好 1 個 good=true;good 選項不是討好或客套話,而是最對上這個人性格與在意之處的回應,要靠理解他才選得中,錯誤選項也要看起來合理。\n' +
@@ -153,7 +155,7 @@
             look: String(t.look || ''), record: String(t.record || ''), reason: String(t.reason || ''),
             fit: String(t.fit || ''), weakness: String(t.weakness || ''), goal: String(t.goal || ''),
             clash: String(t.clash || ''), breakup: String(t.breakup || ''),
-            greet: String(t.greet || ''),
+            greet: String(t.greet || ''), sprite: String(t.sprite || ''),
             quiz: (Array.isArray(t.quiz) ? t.quiz : []).slice(0, 3).map(q => ({
                 q: String((q && q.q) || ''),
                 options: (Array.isArray(q && q.options) ? q.options : []).slice(0, 3)
@@ -285,7 +287,45 @@
                 _travNpcs.push(npc);
             }, 350 + i * 750);
         });
+        _autofillSprites(w, gen);
         return true;
+    }
+
+    // ── 🎨 旅人立姿自動補圖：不用一個一個右鍵進裝扮室，四個剪影會自己陸續換成本人 ──
+    //   走裝扮室同一條管線(LobbyDress.genSpriteInto)：生圖→去背像素化→存 skins。
+    //   存進 skins 之後就是永久的——下次再進大廳 addNpc 會自己套用，不會重生、不再燒圖。
+    //   逐一排隊生(不並發)：同時打四張圖 ComfyUI 會塞車，而且錯開換裝比較像人陸續到齊。
+    const SPRITE_PACK_LS = 'wg_sprite_pack_v1';   // {src, key}；沒設=不自動生，維持剪影
+    function _spritePackCfg() {
+        try { const o = JSON.parse(win.localStorage.getItem(SPRITE_PACK_LS) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+    }
+    async function _autofillSprites(w, gen) {
+        const cfg = _spritePackCfg();
+        if (!cfg.key) return;                                  // 沒在設置頁挑畫風包＝這功能沒開
+        const LD = win.LobbyDress || window.LobbyDress;
+        if (!LD || !LD.genSpriteInto) return;                  // 舊版 lobby_dress＝優雅跳過
+        const list = (w.travelers || []).slice(0, MAX_TRAVELER_SPAWN);
+        for (let i = 0; i < list.length; i++) {
+            if (gen !== _travGen) return;                      // 換世界/DIVE/關窗＝立刻停手，別再燒圖
+            const t = list[i];
+            if (!t || !t.sprite) continue;                     // 舊世界沒有 sprite 欄位→跳過(重新召集旅人就會有)
+            const key = 'wg_' + w.id + '_' + i;
+            const b = _stage();
+            if (!b) return;
+            try { if (b.skins && b.skins()[key]) continue; } catch (e) {}   // 生過就不再生
+            const preset = (LD.listPresets(cfg.src) || []).find(p => LD.presetKeyOf(p) === cfg.key);
+            if (!preset) return;                               // 包被刪或改名→整批停手，不要拿錯包亂生
+            try {
+                const ok = await LD.genSpriteInto(key, t.sprite, { src: cfg.src, preset: preset });
+                // 🚨換裝要等生成回來才找小人：旅人是錯峰上線的(最晚 2.6 秒)，開跑當下第一位還沒站上場。
+                //   期間若換世界/DIVE/關窗就別再動場上的人(皮膚已存好，下次進大廳照樣是本人)。
+                if (ok && gen === _travGen) {
+                    const b2 = _stage();
+                    const npc = _travNpcs.find(n => n && n.key === key);
+                    if (b2 && npc) b2.applySkin(npc, key);
+                }
+            } catch (e) { console.warn('[Worldgate] 旅人立姿生成失敗', t.name, e); }
+        }
     }
 
     // ── 🤝 組隊卡(零API:考題/台詞在展開世界時已生成好;身分卡=卡內第二層頁,不疊modal) ──
