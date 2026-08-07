@@ -97,10 +97,16 @@
         '## 八、世界正史\n3~5 個歷史節點串成一條因果鏈,每個寫:事件名稱與年代 / 發生了什麼 / 誰因此獲利 / 誰被犧牲 / 留下什麼遺跡、制度或仇恨 / 它今天怎麼影響玩家。重點不是年表,是每段歷史都要留下今天還碰得到的後果。\n' +
         '## 九、核心人物\n3~4 位本世界的重要人物(本地人,不是同行旅人),每位寫:姓名與公開身分 / 所屬勢力 / 外在形象 / 真正的欲望 / 掌握的資源或秘密 / 最害怕失去什麼 / 與其他核心人物的關係 / 對玩家的初始態度 / 在什麼條件下會變成盟友、敵人或委託人。\n' +
         '## 十、危機與冒險引擎\n當前危機會怎麼一步步惡化 / 玩家放著不管會發生什麼 / 3~5 個可各自獨立探索的事件鉤子 / 戰鬥、調查、交易、採集、社交在這個世界各自能做什麼 / 這裡最珍貴的獎勵 / 要離開這個世界需要什麼條件(用世界自己的說法,例如渡口、歸門、季風、儀式) / 沒能順利離開的下場 / 玩家下次再進來時,世界可能已經變成什麼樣。\n';
-    async function _expandWorldText(seed) {
+    // 玩家在選種子時填的追加要求。措辭要硬:寫成「可參考」會被當裝飾忽略(抽種子那邊的偏好詞就吃過這個虧)。
+    function _noteLine(note) {
+        note = String(note || '').trim();
+        return note ? '【玩家的追加要求】' + note + '——這是玩家指定要有的東西,必須落實在世界裡並貫穿相關章節,不可以只在某一句話裡提一下就算數,也不可以與題材衝突。\n' : '';
+    }
+    async function _expandWorldText(seed, note) {
         const prompt =
             '你是一位資深的跑團世界觀設計師。請把以下世界種子擴寫成一份可以直接拿來跑團的世界檔案。\n' +
             _genreLine(seed) +
+            _noteLine(note) +
             '【世界種子】' + JSON.stringify(seed) + '\n' +
             '【輸出格式】直接輸出檔案正文,用下列標題分節,不要 JSON、不要程式碼區塊、不要開場白或結語。總長 1800~2600 字,十節依序寫完,每節都要有實質內容,不准只留標題或用一句話帶過。\n' +
             _WORLD_SECTIONS +
@@ -128,9 +134,10 @@
         if (!keys.length || keys[0] !== seed.name) keys.unshift(seed.name);
         return { text, keys: keys.slice(0, 5) };
     }
-    async function _expandTravelers(seed, worldText) {
+    async function _expandTravelers(seed, worldText, note) {
         const prompt =
             '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
+            _noteLine(note) +
             '他們是視差玩家(來自奧瑞亞的普通人),不是這個世界的原住民;世界檔案第九節的核心人物不算在內,不可重複。四人定位互補、性格差異明顯。\n' +
             '只回傳純 JSON:\n' +
             '{"travelers":[{"name":"{旅人名}","job":"{職業/定位,不超過6字}","persona":"{一句話性格}","origin":"{一句話來歷}","skill":"{一句話擅長}","look":"{一句話外貌印象}","record":"{一句話視差資歷}","reason":"{一句話前往此世界的動機}",' +
@@ -702,25 +709,30 @@
                     '<span class="wg-tag">' + _esc(s.lure) + '</span>' +
                     '<span class="wg-tag warn">' + _esc(s.danger) + '</span></div>' +
                 '</div>').join('') +
+            '<input class="wg-input" data-wg-note maxlength="120" placeholder="想加進這個世界的東西(可留空)">' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
               '<button class="wg-btn ghost" data-act="reroll"><i class="fa-solid fa-rotate-right"></i> 重抽一把</button>' +
             '</div>' +
-            '<div class="wg-note">點選種子後會展開成完整世界並存進檔案庫(呼叫一次 AI)。</div>';
+            '<div class="wg-note">先填上面那格再點種子,展開時會照著加進去。點選種子後會展開成完整世界並存進檔案庫(呼叫一次 AI)。</div>';
         b.querySelector('[data-act="back"]').addEventListener('click', _renderSeedPage);
         b.querySelector('[data-act="reroll"]').addEventListener('click', () => { _seeds = []; _renderSeedPage(); });
-        b.querySelectorAll('.wg-card.click').forEach(el => el.addEventListener('click', () => _pickSeed(Number(el.dataset.i))));
+        b.querySelectorAll('.wg-card.click').forEach(el => el.addEventListener('click', () => {
+            // 備註要在 innerHTML 被 _loading 洗掉之前先讀出來
+            _pickSeed(Number(el.dataset.i), b.querySelector('[data-wg-note]')?.value?.trim() || '');
+        }));
     }
-    async function _pickSeed(i) {
+    async function _pickSeed(i, note) {
         if (_busy) return;
         const seed = _seeds[i];
         if (!seed) return;
         _busy = true;
+        note = String(note || '').trim();
         _loading('正在建構「' + _esc(seed.name) + '」的世界檔案…');
-        const r = await _expandWorldText(seed);
+        const r = await _expandWorldText(seed, note);
         if (!r || !r.text) { _busy = false; _toast('世界建構失敗,請重試'); _renderSeedCards(); return; }
         _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
-        const trav = await _expandTravelers(seed, r.text);
+        const trav = await _expandTravelers(seed, r.text, note);
         _busy = false;
         const w = {
             id: _mkId(), name: seed.name, concept: seed.concept, twist: seed.twist || '', style: seed.style,
@@ -728,6 +740,7 @@
             lure: seed.lure, danger: seed.danger, crisis: seed.crisis,
             keys: r.keys.map(String),
             entryText: r.text,      // 世界檔案原文(不含頁首/旅人區塊)——重新召集旅人時要拿它重組條目
+            note: note,             // 展開時的追加要求——重新召集旅人時要跟著帶,不然新旅人會不符合當初的設定
             travelers: _normTravelers(trav),
             visits: 0, ts: Date.now(),
         };
@@ -800,7 +813,8 @@
             _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
             const trav = await _expandTravelers(
                 { name: w.name, genre: w.genre, style: w.style, concept: w.concept, twist: w.twist },
-                w.entryText || entryText || w.concept || w.name);
+                w.entryText || entryText || w.concept || w.name,
+                w.note || '');   // 當初展開時的追加要求要跟著帶,不然重召的旅人會跟這個世界對不上
             _busy = false;
             if (!trav.length) { _toast('旅人召集失敗,請再試一次'); _renderDetail(w); return; }
             w.travelers = _normTravelers(trav);
