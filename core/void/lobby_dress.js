@@ -152,9 +152,8 @@
     }
 
     // ── ✨ 裝扮室內建生成：選接口(ComfyUI/NAI)＋選預設包 → 用「角色頭像 prompt」直接生小小人 ──
-    //   prompt=avatar_cache 存的頭像生成詞(外觀 ground truth，日誌客人撈頭像時順手釘上)；
-    //   ComfyUI 走 previewComfyPreset(吃預設包、不碰全域設定)；NAI 走快照→套包→generate→finally 還原
-    //   （transient 鐵律，跟 profile 切換同款）。生完自動走 pixelify 格點化+去背 → 存 skins。
+    //   prompt=avatar_cache 存的頭像生成詞(外觀 ground truth，日誌客人撈頭像時順手釘上)。
+    //   實際生圖那段在下面的 _renderSpriteImage（與世界門旅人自動補圖共用同一條管線）。
     const DRESS_GEN_KEY = 'lstage_dress_gen_v1';   // 記上次選的接口/預設包
     function _dressGenCfg() {
         try { const o = JSON.parse(localStorage.getItem(DRESS_GEN_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
@@ -304,6 +303,62 @@
         wrap.querySelector('.lgp-retry').addEventListener('click', () => { close(); h.retry && h.retry(); });
         wrap.querySelector('.lgp-cancel').addEventListener('click', () => { close(); h.cancel && h.cancel(); });
     }
+    // ── 🎨 生圖→去背像素化→可存的 dataURL（裝扮室按鈕與世界門自動補圖共用這一段）──
+    //   ComfyUI 走 previewComfyPreset(吃預設包、不碰全域設定)；NAI 走快照→套包→生成→finally 還原
+    //   （transient 鐵律，跟 profile 切換同款）。kind='sheet' 只去背，跳過會毀 3×4 網格的掃碎片/裁切。
+    //   只回圖、不落地：要不要存皮膚、要不要先給人看過，由呼叫方決定。
+    async function _renderSpriteImage(prompt, src, preset, kind) {
+        const M = _imgMgr();
+        if (!M) throw new Error('生圖引擎還沒載入');
+        let imgUrl = '';
+        if (src === 'novelai') {
+            const nai = M.config.novelai || (M.config.novelai = {});
+            const KEYS = ['charBasePrompt', 'charNegPrompt', 'sampler', 'scale', 'steps', 'ucPreset'];
+            const snap = {}; KEYS.forEach(k => { snap[k] = nai[k]; });
+            KEYS.forEach(k => { if (preset[k] !== undefined) nai[k] = preset[k]; });
+            try {
+                // 尺寸只聽包：拖圖進包時有存原圖尺寸；包沒存(手存舊包)就交給引擎預設，不自己塞數字
+                imgUrl = await M.generate(prompt, 'char', { provider: 'novelai', width: preset.width, height: preset.height });
+            } finally { KEYS.forEach(k => { nai[k] = snap[k]; }); }
+        } else {
+            imgUrl = await M.previewComfyPreset(preset, prompt, { packSize: true });   // 尺寸用包裡調的 width/height
+        }
+        if (!imgUrl) throw new Error('接口沒回圖（檢查連線/預設包）');
+        let final = await _b.pixelify(imgUrl, { noGrid: true, sheet: kind === 'sheet' });
+        if (!final) {
+            // blob:/http 網址不能直接進 IDB（重整就死/會失連）→ 轉 dataURL 再存
+            if (/^(blob:|https?:)/i.test(String(imgUrl))) {
+                try {
+                    const b = await (await fetch(imgUrl)).blob();
+                    final = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+                } catch (e) { throw new Error('圖拿到了但存不下來（轉檔失敗）'); }
+            } else final = imgUrl;
+        }
+        return final;
+    }
+    async function _saveSpriteSkin(key, data, kind) {
+        const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        await _b.idbPut(id, data);
+        // 只存大廳小人皮膚，不碰對話立繪(a.portrait)——那是另一套東西(Rae定案 2026-07-17)
+        _b.saveSkin(key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
+    }
+
+    // ── 🤖 無人值守版立姿生成（世界門旅人自動補圖）──
+    //   跟按鈕版唯一的差別：不開預覽窗、生完直接落地。失敗就靜靜回 false，讓小人維持預設圖。
+    //   prompt 直接給英文外觀詞（旅人是展開世界時一起產的，沒有頭像 prompt 可拆）。
+    async function genSpriteInto(key, prompt, opts) {
+        opts = opts || {};
+        if (!key || !prompt || !_imgMgr()) return false;
+        const src = (opts.src === 'novelai') ? 'novelai' : 'comfyui_direct';
+        const preset = opts.preset || _dressPresetsOf(src).find(p => _dressPresetKey(p) === _dressSavedKey(src)) || _dressPresetsOf(src)[0];
+        if (!preset) return false;
+        let final;
+        try { final = await _renderSpriteImage(prompt, src, preset, 'img'); } catch (e) { return false; }
+        if (!final) return false;
+        await _saveSpriteSkin(key, final, 'img');
+        return true;   // 只負責生成＋存皮膚；要不要立刻換裝由呼叫方決定(它才知道小人生成了沒、場景還在不在)
+    }
+
     function _wireDressGen(box, a) {
         const srcSel = box.querySelector('.lsd-gen-src');
         const pSel = box.querySelector('.lsd-gen-preset');
@@ -328,41 +383,13 @@
             btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 生成中…';
             try {
                 const prompt = _spritePromptOf(a.avatarPrompt);   // 拔掉頭像自帶的 simple xxx background，背景聽預設包的
-                let imgUrl = '';
-                if (srcSel.value === 'novelai') {
-                    // 快照→套包→生成→finally 還原（絕不留殘設定）
-                    const nai = M.config.novelai || (M.config.novelai = {});
-                    const KEYS = ['charBasePrompt', 'charNegPrompt', 'sampler', 'scale', 'steps', 'ucPreset'];
-                    const snap = {}; KEYS.forEach(k => { snap[k] = nai[k]; });
-                    KEYS.forEach(k => { if (preset[k] !== undefined) nai[k] = preset[k]; });
-                    try {
-                        // 尺寸只聽包：拖圖進包時有存原圖尺寸；包沒存(手存舊包)就交給引擎預設，不自己塞數字
-                        imgUrl = await M.generate(prompt, 'char', { provider: 'novelai', width: preset.width, height: preset.height });
-                    } finally { KEYS.forEach(k => { nai[k] = snap[k]; }); }
-                } else {
-                    imgUrl = await M.previewComfyPreset(preset, prompt, { packSize: true });   // 尺寸用包裡調的 width/height
-                }
-                if (!imgUrl) throw new Error('接口沒回圖（檢查連線/預設包）');
                 // 不壓縮（畫風交給預設包）：單張立姿去背+掃碎片+裁切；走路圖只去背（掃碎片/裁切會毀12格網格）
-                let final = await _b.pixelify(imgUrl, { noGrid: true, sheet: kind === 'sheet' });
-                if (!final) {
-                    // blob:/http 網址不能直接進 IDB（重整就死/會失連）→ 轉 dataURL 再存
-                    if (/^(blob:|https?:)/i.test(String(imgUrl))) {
-                        try {
-                            const b = await (await fetch(imgUrl)).blob();
-                            final = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
-                        } catch (e) { throw new Error('圖拿到了但存不下來（轉檔失敗）'); }
-                    } else final = imgUrl;
-                }
+                const final = await _renderSpriteImage(prompt, srcSel.value, preset, kind);
                 // 先預覽再套用：讓 Rae 檢查去背/網格對不對（走路圖尤其要看 4 列朝向、腳有沒有被切）
                 btn.innerHTML = label; btn.disabled = false;
                 _showGenPreview(final, kind, {
                     apply: async (out) => {
-                        const data = out || final;   // 走路圖=調框重切後的圖；單張立姿=原圖
-                        const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-                        await _b.idbPut(id, data);
-                        // 只存大廳小人皮膚，不碰對話立繪(a.portrait)——那是另一套東西(Rae定案 2026-07-17)
-                        _b.saveSkin(a.key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
+                        await _saveSpriteSkin(a.key, out || final, kind);   // 走路圖=調框重切後的圖；單張立姿=原圖
                         _b.applySkin(a, a.key);
                         btn.innerHTML = '<i class="fa-solid fa-check"></i> 已套用';
                         setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1600);
@@ -412,5 +439,8 @@
         openMenu: _openActorMenu,       // 右鍵/長按角色→下拉單（lobby_stage tryMount 呼叫）
         openRoom: _openDressRoom,       // 裝扮室（LobbyStage.openDressRoom 轉呼叫）
         openHistory: _openNpcHistory,   // NPC 對話紀錄窗
+        genSpriteInto,                  // 無人值守生立姿（世界門旅人自動補圖；與裝扮室同一條管線）
+        listPresets: _dressPresetsOf,   // 給設置頁列預設包（免得那邊再抄一份取法）
+        presetKeyOf: _dressPresetKey,
     };
 })();
