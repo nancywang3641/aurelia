@@ -68,9 +68,13 @@
     async function _drawSeeds(hint) {
         const prompt =
             '你是一位資深的跑團世界觀設計師,替玩家設計可以長期生活、探索的異世界。請生成 4 顆世界種子。只回傳純 JSON 陣列:\n' +
-            '[{"genre":"{題材類型,不超過8字,例如:劍與魔法/仙俠修真/神話史詩/海洋與深淵/蒸汽工業/民俗怪談}","name":"{世界名,不超過8字,有記憶點}","concept":"{一句話概念,不超過25字}","twist":"{一條違反常識的核心規則,不超過45字}","daily":"{這條規則讓當地人每天實際在做什麼,不超過25字}","style":"{視覺風格,不超過10字}","lure":"{玩家前往的理由/可獲得什麼,不超過20字}","danger":"{主要危險,不超過15字}","crisis":"{世界目前正在發生的危機,不超過20字}"}]\n' +
+            '[{"genre":"{題材類型,不超過8字,例如:劍與魔法/仙俠修真/神話史詩/海洋與深淵/蒸汽工業/民俗怪談}","type":"{基調,不超過6字}","name":"{世界名,不超過8字,有記憶點}","concept":"{一句話概念,不超過25字}","twist":"{一條違反常識的核心規則,不超過45字}","daily":"{這條規則讓當地人每天實際在做什麼,不超過25字}","style":"{視覺風格,不超過10字}","lure":"{玩家前往的理由/可獲得什麼,不超過20字}","danger":"{主要危險,不超過15字}","crisis":"{這個世界現在正在發生、玩家會撞上的事,不超過20字}"}]\n' +
+            // 🚨type 一樣不給清單(理由同下面 twist 那段)。只講它是哪一個維度、以及四顆要拉開。
+            '【基調 type】type 跟 genre 是兩件事:genre 是題材,type 是玩家住進去會過什麼樣的日子、故事讀起來是什麼味道。不要把題材再寫一次當 type。\n' +
+            '4 顆種子的 type 必須明顯不同,而且**不是每個世界都要背著沉重的使命或世界級危機**——至少要有一顆是低風險、可以慢慢過日子的走向。\n' +
+            'danger 與 crisis 的量級要跟著 type 走:輕鬆或日常向的世界就寫當地人真的在煩惱的小事,不要硬套災難;沉重或高風險的才寫大危機。世界不會因為沒有末日就不值得去。\n' +
             (hint
-                ? '【題材鎖定,硬性要求】玩家指定:「' + hint + '」。4 顆種子的 genre 全部都要落在這個題材裡,不准有任何一顆跑題。差異體現在地域、文明、勢力、核心規則與危機上,不是靠換題材製造差異。\n'
+                ? '【題材鎖定,硬性要求】玩家指定:「' + hint + '」。4 顆種子的 genre 全部都要落在這個題材裡,不准有任何一顆跑題。差異體現在基調、地域、文明、勢力、核心規則與危機上,不是靠換題材製造差異。\n'
                 : '【題材分配】4 顆種子的 genre 要分屬四種不同題材,且至少 3 顆是非科幻題材(劍與魔法、仙俠修真、神話史詩、海洋與深淵、蒸汽工業、民俗怪談、荒野拓荒、宮廷權謀、妖怪異聞等,不限於此)。不要每次都往科技或未來的方向靠。\n') +
             '【用詞守則】世界名、地名、貨幣、職業、勢力、規則全部都要用該題材自己的語彙。除非題材本身就是科幻,否則不得出現系統、數據、程式、介面、協議、迴路、晶片、義體、賽博等科技說法,也不要把世界寫成模擬空間或遊戲副本——它就是一個真實存在的世界。\n' +
             // 🚨別在這裡列「領域清單」或造句範例:模型會直接照著清單輪流填,四顆種子就變成同一個模子印的。
@@ -90,6 +94,14 @@
     function _genreLine(seed) {
         return '【題材】' + String(seed.genre || seed.style || '') + '——專有名詞、貨幣、職業、勢力、危機、風景全部都要落在這個題材裡,一個字都不准跑題。' +
             '除非題材本身就是科幻,否則不得出現系統、數據、程式、介面、協議、迴路、裝備艙、探勘隊這類科技或現代說法。\n';
+    }
+    // 🚨基調要跟著種子一路帶下去:下面的十節規格本身很重(正史、勢力邦交、危機引擎),
+    //    不特別壓住的話,一個輕鬆向的種子會被規格硬拉回史詩災難片。
+    function _toneLine(seed) {
+        const t = String((seed && seed.type) || '').trim();
+        return t ? '【基調】' + t + '——每一節的取材、事件量級與敘述口吻都要維持這個基調。' +
+            '危機與危險的規模要跟基調相稱:輕鬆或日常向就把衝突留在人與人之間的小麻煩,不要升級成世界存亡;' +
+            '沉重或高風險向才鋪大災難。不要因為規格裡有「危機」欄位就硬寫一場浩劫。\n' : '';
     }
     const _WORLD_SECTIONS =
         '## 一、世界總覽\n世界名 / 一句話概念 / 題材與視覺風格 / 核心法則(把種子的 twist 落實成完整規則:它如何滲透職業、買賣、社交、日常,至少一種靠它吃飯的職業,以及違反它的下場) / 當前世界危機 / 在這個世界活下去的主要目標。\n' +
@@ -111,6 +123,7 @@
         const prompt =
             '你是一位資深的跑團世界觀設計師。請把以下世界種子擴寫成一份可以直接拿來跑團的世界檔案。\n' +
             _genreLine(seed) +
+            _toneLine(seed) +
             _noteLine(note) +
             '【世界種子】' + JSON.stringify(seed) + '\n' +
             '【輸出格式】直接輸出檔案正文,用下列標題分節,不要 JSON、不要程式碼區塊、不要開場白或結語。總長 1800~2600 字,十節依序寫完,每節都要有實質內容,不准只留標題或用一句話帶過。\n' +
@@ -142,6 +155,7 @@
     async function _expandTravelers(seed, worldText, note) {
         const prompt =
             '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
+            _toneLine(seed) +   // 喜劇向的世界配四段悲愴身世會很出戲
             _noteLine(note) +
             '他們是視差玩家(來自奧瑞亞的普通人),不是這個世界的原住民;世界檔案第九節的核心人物不算在內,不可重複。四人定位互補、性格差異明顯。\n' +
             '只回傳純 JSON:\n' +
@@ -712,7 +726,8 @@
                   // 規則落到日常＝這張卡才像一個「地方」而不是一句謎語
                   (s.daily ? '<div class="wg-card-sub"><i class="fa-solid fa-person-walking"></i> ' + _esc(s.daily) + '</div>' : '') +
                   '<div class="wg-card-sub">' + _esc(s.crisis || '') + '</div>' +
-                  '<div class="wg-tags"><span class="wg-tag">' + _esc(s.style) + '</span>' +
+                  '<div class="wg-tags">' + (s.type ? '<span class="wg-tag">' + _esc(s.type) + '</span>' : '') +
+                    '<span class="wg-tag">' + _esc(s.style) + '</span>' +
                     '<span class="wg-tag">' + _esc(s.lure) + '</span>' +
                     '<span class="wg-tag warn">' + _esc(s.danger) + '</span></div>' +
                 '</div>').join('') +
@@ -743,7 +758,7 @@
         _busy = false;
         const w = {
             id: _mkId(), name: seed.name, concept: seed.concept, twist: seed.twist || '', style: seed.style,
-            genre: seed.genre || '',
+            genre: seed.genre || '', type: seed.type || '',   // 基調要留著:重新召集旅人時得跟著帶,不然新旅人會跟世界不同調
             lure: seed.lure, danger: seed.danger, crisis: seed.crisis,
             keys: r.keys.map(String),
             entryText: r.text,      // 世界檔案原文(不含頁首/旅人區塊)——重新召集旅人時要拿它重組條目
@@ -819,7 +834,7 @@
             _busy = true;
             _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
             const trav = await _expandTravelers(
-                { name: w.name, genre: w.genre, style: w.style, concept: w.concept, twist: w.twist },
+                { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept, twist: w.twist },
                 w.entryText || entryText || w.concept || w.name,
                 w.note || '');   // 當初展開時的追加要求要跟著帶,不然重召的旅人會跟這個世界對不上
             _busy = false;
