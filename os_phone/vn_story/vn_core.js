@@ -371,10 +371,21 @@
 
             // 解析 <branches> 區塊（位於 <content> 外，作為一次性選擇，不進入 AI 上下文）；同樣避開 CoT 裡的假 branches
             const branchesMatch = _txtNoCot.match(/<branches>([\s\S]*?)<\/branches>/i);
+            // 🚨<branches> 裡不是只有選項:選項插圖卡的 <panels>(角色外觀設計行＋每格分鏡)也包在裡面。
+            //   以前逐行轉 [Choice|]，等於把「traveler: chibi boy, black-haired…」這種外觀資料當成選項灌進劇本。
+            //   先把成對的子區塊整個切掉，再把殘留的標籤行濾掉，只留真正給玩家點的那幾行。
+            const _branchRaw = branchesMatch
+                ? branchesMatch[1]
+                    .replace(/<panels>[\s\S]*?<\/panels>/gi, '')
+                    .replace(/<summary>[\s\S]*?<\/summary>/gi, '')
+                : '';
             const _branchLines = branchesMatch
-                ? branchesMatch[1].split('\n')
+                ? _branchRaw.split('\n')
                     .map(l => l.trim())
-                    .filter(Boolean) // 過濾掉空行
+                    .filter(Boolean)                                   // 空行
+                    .filter(l => !/^<\/?[A-Za-z][\w-]*[^>]*>$/.test(l)) // 整行只有一個標籤(<details>、</panels> 之類)
+                    .map(l => l.replace(/<br\s*\/?>/gi, '').trim())     // 選項行尾常帶 <br>
+                    .filter(Boolean)
                     .map(l => {
                         // 向下相容：如果 AI 還是輸出了舊格式，就直接保留
                         if (l.startsWith('[Choice|')) return l;
