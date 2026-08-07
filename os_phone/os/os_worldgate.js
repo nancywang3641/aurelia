@@ -170,8 +170,13 @@
     // ── 世界條目落地【奧瑞亞-視差】書 ──
     function _entryComment(w) { return '【世界檔案-' + w.name + '】'; }
     function _entryContent(w, entryText) {
+        // 🚨只寫「真的入隊」的旅人：條目是持久的、隊伍是每趟都可能不同的,兩者本來就不同層。
+        //   寫進全部候選的話,玩家單人進去時主持AI仍收到四份旅人檔案→沒招募的人自己走進劇情;
+        //   留在大廳的人的弱點/翻臉條件也等於白白劇透。隊伍在按下 DIVE 那刻定案(之後就清場),
+        //   所以 _dive 會在注入開場指令前重寫一次條目。
         // 旅人區塊帶上目標/弱點/翻臉條件——這是給主持AI看的底牌,玩家在身分卡上看不到這幾欄
-        const trav = (w.travelers || []).map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ' ' + t.origin +
+        const trav = (w.travelers || []).filter(t => t && t.recruited)
+            .map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ' ' + t.origin +
             (t.skill ? ';擅長' + t.skill : '') + (t.fit ? ';與本世界的契合點:' + t.fit : '') +
             (t.goal ? ';個人目標:' + t.goal : '') + (t.weakness ? ';弱點:' + t.weakness : '') +
             (t.clash ? ';容易起衝突於:' + t.clash : '') + (t.breakup ? ';離隊或翻臉的條件:' + t.breakup : '')).join('\n');
@@ -179,7 +184,7 @@
             '一句話:' + w.concept + '(' + (w.genre ? '題材:' + w.genre + ' ' : '') + '風格:' + w.style + ')\n' +
             (w.genre ? '本世界的一切描寫都必須維持在「' + w.genre + '」的題材裡,不得混入不屬於此題材的科技或現代說法。\n' : '') +
             (w.twist ? '核心法則:' + w.twist + '\n' : '') + '\n' + entryText +
-            (trav ? '\n\n## 本世界的同行旅人候選(視差玩家,非本世界NPC)\n' + trav : '');
+            (trav ? '\n\n## 這趟同行的旅人(視差玩家,非本世界NPC)\n' + trav : '');
     }
     async function _writeEntry(w, entryText) {
         const TH = _th();
@@ -497,6 +502,9 @@
         if (!gate) return { ok: false, msg: '切書模組不可用' };
         const r = await gate.enterParallax();
         if (!r.ok) return r;
+        // 隊伍在按下 DIVE 這刻定案(下面馬上 _clearTravelers 清場,之後不會再變)
+        // → 先把條目的旅人區塊刷成「這趟真正同行的人」,免得開場指令說單人行動、世界檔案裡卻躺著沒招募的人。
+        if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) { console.warn('[Worldgate] DIVE 前更新世界條目失敗', e); } }
         const sent = _toChat(_divePrompt(w));
         if (!sent) { await gate.exitParallax(); return { ok: false, msg: '找不到酒館輸入框,已切回主世界' }; }
         w.visits = (w.visits || 0) + 1;
