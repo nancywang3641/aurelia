@@ -590,6 +590,10 @@
                 el.innerHTML = '<div id="vn-start-loader-track"><div id="vn-start-loader-bar"></div></div><div id="vn-start-loader-label">Loading</div><button id="vn-start-loader-skip" type="button">跳過等待</button>';
                 gamePage.appendChild(el);
             }
+            // 🛰 視差校準艙：把氣氛層鋪進這個殼（透視框／資料碎片／HUD／管理員待機動畫）。
+            //    上面那三個原件（track/label/skip）會被搬進艙內的 UI 區，id 不變，
+            //    所以 _showStartLoader 既有的進度與跳過邏輯完全不用動。
+            try { win.VN_LoaderChamber?.mount(el); } catch (e) { console.warn('[VN] 校準艙掛載失敗，退純色 loading', e); }
             return el;
         },
 
@@ -601,6 +605,7 @@
             if (!el) return;
             this._writerCurtain = true;
             el.style.display = 'flex';
+            try { win.VN_LoaderChamber?.start(); win.VN_LoaderChamber?.phase('text'); } catch (e) {}
             const label = el.querySelector('#vn-start-loader-label');
             if (label) label.textContent = '故事撰寫中…';
             const skip = el.querySelector('#vn-start-loader-skip');
@@ -613,6 +618,7 @@
             this._writerCurtain = false;
             const el = document.getElementById('vn-start-loader');
             if (el) el.style.display = 'none';
+            try { win.VN_LoaderChamber?.stop(); } catch (e) {}   // 藏起來≠停止：rAF 不收會一直空轉
         },
 
         _showStartLoader: function(ms, onDone) {
@@ -620,6 +626,7 @@
             if (!el) { if (onDone) onDone(); return; }
             this._writerCurtain = false;        // 幕布交棒給正式 loading
             el.style.display = 'flex';          // ⚠️ 重用必須重新打開（之前少這行→第二次起永遠隱形）
+            try { win.VN_LoaderChamber?.start(); win.VN_LoaderChamber?.phase('wait'); } catch (e) {}
 
             const bar = el.querySelector('#vn-start-loader-bar');
             bar.style.transition = 'none';
@@ -636,6 +643,7 @@
             const finish = function() {
                 el.style.display = 'none';
                 if (skipBtn) { skipBtn.style.display = 'none'; skipBtn.onclick = null; }
+                try { win.VN_LoaderChamber?.stop(); } catch (e) {}   // 收 loading＝收 rAF 與影片，別留背景空轉
                 if (onDone) onDone();
             };
             setTimeout(function() {
@@ -645,7 +653,11 @@
                 let closed = false, idle = 0;
                 const stop = function() {
                     if (closed) return; closed = true;
-                    clearInterval(tick); finish();
+                    clearInterval(tick);
+                    self._chamberImgPhase = 0;
+                    // 所有層瞬間重合＋一次很短的銀藍閃光，閃完才切回劇情
+                    try { win.VN_LoaderChamber?.phase('done'); } catch (e) {}
+                    setTimeout(finish, 460);
                 };
                 // 跳過＝明確按鈕。整面可點的舊設計會被「VN 玩家手不停點」誤觸秒跳（2026-06-11 實測）
                 if (skipBtn) {
@@ -656,6 +668,8 @@
                     const s2 = (typeof self.imgPendingStatus === 'function') ? self.imgPendingStatus() : { done: 0, total: 0, pending: 0 };
                     if (s2.total > 0) {
                         if (label) label.textContent = '圖片繪製中 ' + s2.done + '/' + s2.total;
+                        // 進到繪圖階段才切一次（碎片向外炸開再聚合）；每輪都切會一直在爆
+                        if (!self._chamberImgPhase) { self._chamberImgPhase = 1; try { win.VN_LoaderChamber?.phase('img'); } catch (e) {} }
                         bar.style.transition = 'none';
                         bar.style.width = Math.min(100, Math.round(s2.done / Math.max(1, s2.total) * 100)) + '%';
                     } else if (s2.pending > 0 && label) {
