@@ -155,6 +155,9 @@
             // 🚨玩家的追加要求放最後:放前面的話後面隔著兩千多字規格才輪到下筆,權重被稀釋到等於沒寫。
             _noteLine(note) +
             '寫完後另起一行,只輸出這一行:關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
+            // 降生地清單跟關鍵字一樣用「結尾單行」帶回來：同一次呼叫、不另外燒 API，也不用在正文裡塞 JSON
+            '再另起一行,只輸出這一行:降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
+            '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
             '語言:繁體中文。';
         let text = await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true);
         if (!text) return null;
@@ -173,7 +176,43 @@
         const keys = km ? km[1].split(/[、,，\/]+/).map(s => s.trim()).filter(Boolean).slice(0, 5) : [];
         if (km) text = text.replace(km[0], '').trim();   // 關鍵字行是給程式吃的,不留在正文裡
         if (!keys.length || keys[0] !== seed.name) keys.unshift(seed.name);
-        return { text, keys: keys.slice(0, 5) };
+        // 降生地：同樣是「結尾單行」給程式吃的，解析完就從正文剝掉（留著會被當劇情念出來）
+        const sm = text.match(/降生地[:：]\s*(.+)/);
+        const spawns = sm ? _parseSpawns(sm[1]) : [];
+        if (sm) text = text.replace(sm[0], '').trim();
+        return { text, keys: keys.slice(0, 5), spawns };
+    }
+    // 降生地選擇：純 CSS 的九宮格方位圖（不生任何圖、不打任何 API）
+    //   舊世界沒有 spawns 欄位 → 整塊不顯示，行為跟以前一樣（落點交給主持AI）
+    const _DIR_CELL = { 西北: 1, 北: 2, 東北: 3, 西: 4, 中央: 5, 東: 6, 西南: 7, 南: 8, 東南: 9 };
+    function _spawnHtml(w) {
+        const list = Array.isArray(w.spawns) ? w.spawns : [];
+        if (!list.length) return '';
+        const cells = [];
+        for (let i = 1; i <= 9; i++) {
+            const s = list.find(x => _DIR_CELL[x.dir] === i);
+            cells.push(s
+                ? '<div class="wg-spawn' + (w.spawn === s.name ? ' on' : '') + '" data-n="' + _esc(s.name) + '" title="' + _esc(s.note || '') + '">' +
+                    '<span class="wg-spawn-n">' + _esc(s.name) + '</span>' +
+                    (s.note ? '<span class="wg-spawn-s">' + _esc(s.note) + '</span>' : '') +
+                  '</div>'
+                : '<div class="wg-spawn-empty"></div>');
+        }
+        return '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-location-dot"></i> 降生地</span>' +
+                 '<span class="wg-section-note" data-spawn-tip>' + (w.spawn ? '降生地：' + _esc(w.spawn) : '沒選＝落在哪由主持AI安排') + '</span></div>' +
+               '<div class="wg-spawn-grid">' + cells.join('') + '</div>';
+    }
+    // 「名稱|方位|一句話 / 名稱|方位|一句話」→ [{name,dir,note}]
+    // 方位認不得就給 '中央'（版面照樣排得出來，不會因為 AI 亂寫就整個功能壞掉）
+    const _DIRS = ['北', '東北', '東', '東南', '南', '西南', '西', '西北', '中央'];
+    function _parseSpawns(line) {
+        return String(line || '').split(/\s*\/\s*/).map(seg => {
+            const p = seg.split(/\s*[|｜]\s*/).map(s => s.trim());
+            const name = (p[0] || '').replace(/^[\s\-—•]+/, '').replace(/^\d+\s*[.、)]\s*/, '').trim();
+            if (!name) return null;
+            const dir = _DIRS.indexOf(p[1]) >= 0 ? p[1] : '中央';
+            return { name: name.slice(0, 12), dir, note: String(p[2] || '').slice(0, 24) };
+        }).filter(Boolean).slice(0, 4);
     }
     async function _expandTravelers(seed, worldText, note) {
         const prompt =
@@ -538,12 +577,13 @@
             '━━━━━━━━━━━━━━━━━━━━━\n' +
             '[System:玩家從純白大廳進入視差世界「' + w.name + '」]\n' +
             '世界概念:' + w.concept + '(' + (w.genre ? '題材:' + w.genre + ' ' : '') + '風格:' + w.style + ')\n' +
-            '同行旅人:\n' + teamStr + '\n\n' +
+            '同行旅人:\n' + teamStr + '\n' +
+            (w.spawn ? '降生地:' + w.spawn + '(玩家指定,開場就從這裡起)\n' : '') + '\n' +
             '【指令】\n' +
             // 開場就是她看到「兩腳獸在海底游」的地方——身體轉化要在這裡當場發生,不能等世界檔案裡寫過就算數
             '0. 玩家與同行旅人都是從奧瑞亞進來的人類,抵達時會依這個世界的法則被改造成能在這裡生存的形態(世界檔案第三節寫的那個)。' +
             '開場必須寫出他們發現自己身體變了的那一刻,之後全篇都用改造後的身體描寫他們——不要讓人類身體靠裝備在這個世界裡通行。\n' +
-            '1. 以「' + w.name + '」的世界檔案為準,從入口區域開場,描寫玩家(與同行旅人)抵達時的所見所感。' +
+            '1. 以「' + w.name + '」的世界檔案為準,從' + (w.spawn ? '「' + w.spawn + '」' : '入口區域') + '開場,描寫玩家(與同行旅人)抵達時的所見所感。' +
             (w.genre ? '全篇用「' + w.genre + '」的語彙書寫,不得混入不屬於此題材的科技或現代說法。' : '') + '\n' +
             '2. 遵循視差跑團主持規範:不強推主線、只描述可感知資訊、事件制推進。' +
             '世界檔案裡的法則與危機是這個地方的背景質地,不是玩家的任務——不要拿它當開場鉤子逼玩家表態或選邊,玩家要在這裡做生意、找人、閒晃都可以。\n' +
@@ -595,6 +635,15 @@
             '.wg-card-sub{color:#5a5e75;font-size:11px;margin-top:3px;line-height:1.5;}' +
             '.wg-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}.wg-tag{padding:1px 6px;border-radius:9px;background:rgba(26,28,40,.06);color:#5a5e75;font-size:9px;border:1px solid rgba(26,28,40,.08);}' +
             '.wg-tag.warn{background:rgba(180,80,60,.08);color:#a05040;border-color:rgba(180,80,60,.2);}' +
+            // 降生地九宮格：純 CSS 排方位，不生任何圖
+            '.wg-spawn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:4px;}' +
+            '.wg-spawn-empty{border-radius:9px;border:1px dashed rgba(26,28,40,.07);min-height:44px;}' +
+            '.wg-spawn{display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:44px;padding:6px 7px;cursor:pointer;border-radius:9px;' +
+              'border:1px solid rgba(26,28,40,.16);background:rgba(255,255,255,.78);transition:transform .15s,background .15s,border-color .15s;}' +
+            '.wg-spawn:hover{transform:translateY(-1px);background:#fff;border-color:rgba(26,28,40,.34);}' +
+            '.wg-spawn.on{border-color:#1A1C28;box-shadow:0 0 0 1px #1A1C28;background:#fff;}' +
+            '.wg-spawn-n{font-size:10px;font-weight:800;color:#22263c;line-height:1.25;}' +
+            '.wg-spawn-s{font-size:8px;color:#7a7e95;line-height:1.3;}' +
             '.wg-btn{width:100%;margin-top:10px;background:#1A1C28;border:1px solid #1A1C28;color:#fff;font-weight:800;border-radius:11px;padding:10px 0;cursor:pointer;font-size:12px;box-shadow:0 4px 10px rgba(26,28,40,.2);}' +
             '.wg-btn:disabled{opacity:.4;cursor:default;box-shadow:none;}' +
             '.wg-btn.ghost{background:rgba(255,255,255,.6);color:#3a3e56;border:1px solid rgba(26,28,40,.18);box-shadow:none;}' +
@@ -790,6 +839,8 @@
             keys: r.keys.map(String),
             entryText: r.text,      // 世界檔案原文(不含頁首/旅人區塊)——重新召集旅人時要拿它重組條目
             note: note,             // 展開時的追加要求——重新召集旅人時要跟著帶,不然新旅人會不符合當初的設定
+            spawns: r.spawns || [], // 可選的降生地(展開時同一次 API 順便帶回來的,不另外呼叫)
+            spawn: '',              // 玩家選的那個(空=交給主持AI自己安排,維持舊行為)
             travelers: _normTravelers(trav),
             visits: 0, ts: Date.now(),
         };
@@ -847,6 +898,7 @@
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 隊伍</span><span class="wg-section-note">' + team.length + ' 人同行・點開看身分卡</span></div>' +
             (travHtml || '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 還沒有隊友——旅人們已陸續上線大廳,走過去搭話,聊得投機才會答應同行。(小人也可以右鍵看身分卡)</div>') +
             ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
+            _spawnHtml(w) +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
@@ -854,6 +906,15 @@
             '</div>';
         b.querySelectorAll('.wg-trav').forEach(el => el.addEventListener('click', () => {
             _renderProfilePage(w, Number(el.dataset.i));   // 面板內第二層頁,不彈modal
+        }));
+        // 降生地:純前端切換,選好存進世界資料;再點一次同一個=取消(交回主持AI安排)
+        b.querySelectorAll('.wg-spawn').forEach(el => el.addEventListener('click', async () => {
+            const nm = el.dataset.n || '';
+            w.spawn = (w.spawn === nm) ? '' : nm;
+            await _saveWorld(w);
+            b.querySelectorAll('.wg-spawn').forEach(x => x.classList.toggle('on', !!w.spawn && x.dataset.n === w.spawn));
+            const tip = b.querySelector('[data-spawn-tip]');
+            if (tip) tip.textContent = w.spawn ? ('降生地：' + w.spawn) : '沒選＝落在哪由主持AI安排';
         }));
         // 世界檔案與旅人是分兩次生的:旅人那次掛掉時世界照樣存下來,這裡補一次(沒有旅人=偶遇組隊整條路都走不了)
         b.querySelector('[data-act="regen-trav"]')?.addEventListener('click', async () => {
