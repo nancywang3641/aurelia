@@ -196,6 +196,10 @@
         const vnPanel = document.getElementById('aurelia-vn-panel');
         if (vnPanel) vnPanel.style.display = 'none';
 
+        // ⚡ 回大廳 → 畫面特效全停。面板是 display:none 不是移除，引擎的「斷線自停」看不到，
+        //    持續型的循環音效會一路播到下一輪劇情換場才停
+        try { const _fx = window.OS_FX || (window.parent && window.parent.OS_FX); if (_fx) _fx.stopAll(); } catch (e) {}
+
         // 🛟 先呼叫 StoryExtractor.hide() 把劫持的 #form_sheld 還回原位，
         // 否則直接藏 storyExtractorContainer 會讓酒館原生輸入框跟著消失
         if (window.StoryExtractor?.hide) {
