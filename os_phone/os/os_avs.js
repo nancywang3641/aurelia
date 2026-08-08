@@ -888,6 +888,114 @@
         }
     }
 
+    // 🌌 視差通用預設：世界門專用的一鍵建檔，跳過 AI。跟簡易預設並列、互不影響。
+    //    跟簡易預設的差別＝多了視差跑團真正會變的三樣東西：
+    //      ① 所在世界（同一個聊天室會前後進不同世界，沒這欄 AI 會把上一個世界的設定串進來）
+    //      ② 貨幣（每個世界都有錢，只是叫法不同；單位穩定、持有走 delta）
+    //      ③ 角色狀態多一欄「形態」（DIVE 開場就會把人改造成能在該世界生存的樣子，
+    //         只有髮色眼色體型三欄的話，AI 跑兩輪就滑回人類描寫）
+    //    skin＝'prism' | 'cheshire'：兩張皮都會裝進同一個包，點的那張設為啟用，
+    //    之後隨時能在 UI 面板展廳切換（同包只會有一個啟用中）。
+    async function applyParallaxPreset(btnEl, skin) {
+        // 🚨不要用 confirm 問「確定嗎」——TauriTavern 會擋掉原生彈窗，按了等於沒反應。
+        //   兩張皮各給一顆按鈕，點下去就是決定，不需要再確認一次。
+        const _o = btnEl && btnEl.textContent;
+        if (btnEl) { btnEl.textContent = '套用中...'; btnEl.style.pointerEvents = 'none'; }
+        try {
+            const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+            let _existingId = '';
+            try {
+                const _all = await win.OS_DB.getAllVarPacks() || [];
+                const _e = _all.find(p => (p.name || '').includes('視差預設') && (!p.chatId || p.chatId === currentChatId));
+                if (_e) _existingId = _e.id;
+            } catch (e) {}
+            const pack = {
+                id: _existingId || ('pack_' + Date.now()),
+                name: '視差預設（世界門）',
+                notes: '世界門專用：追蹤所在世界、本趟目標、當地貨幣，以及每個角色的形態／身分／好感度與外貌三欄。面板有稜鏡與柴郡兩張皮，可在 UI 面板切換。',
+                variables: [{
+                    name: '所在世界',
+                    type: 'string',
+                    defaultValue: '',
+                    desc: '玩家現在人在哪個視差世界（世界檔案上的名字）。穩定錨點：進入時確立後固定不動，'
+                        + '直到玩家撤離並進入另一個世界才改。同一個聊天室會前後去過好幾個世界，這一欄是用來擋「把上一個世界的設定串進來」的。'
+                }, {
+                    name: '本趟目標',
+                    type: 'string',
+                    defaultValue: '',
+                    desc: '這一趟進來想達成什麼，一句話講清「為什麼來、要拿到什麼才算沒白來」。穩定錨點：開場確立後固定不動，'
+                        + '劇情明確翻轉才改。跟每輪都在變的當前任務不同。撤離後進新世界時整句換掉。'
+                }, {
+                    name: '貨幣',
+                    type: 'object',
+                    defaultValue: '貨幣:\n  單位: 待定\n  持有: 0',
+                    desc: '玩家在這個世界身上的錢。固定兩欄：單位、持有。'
+                        + '【單位】這個世界的貨幣叫什麼（世界檔案第六節寫過的那個名稱）。開場確立後就固定不動，'
+                        + '不准中途改叫法——換個叫法會讓帳對不起來。換世界才換單位並把持有歸零重記。'
+                        + '【持有】純數字不加單位符號。收支用增減寫法只寫變化量（例：貨幣.持有 += 30、貨幣.持有 -= 12），'
+                        + '不要每輪重寫絕對值，只有一開始給初值時才寫絕對值。'
+                        + '這是世界裡的錢，跟視差自己的 PT 是兩回事，不要混在一起記。'
+                }, {
+                    name: '角色狀態',
+                    type: 'object',
+                    defaultValue: '角色狀態:\n  形態: 待定\n  髮色: 待定\n  眼色: 待定\n  體型: 待定\n  身分: 待定\n  好感度: 0',
+                    desc: '每個「有意義的具名角色」的即時狀態。固定基礎屬性（每個角色同一組、全部平鋪不要再分層、順序一致）：'
+                        + '形態、髮色、眼色、體型、身分、好感度（0-100，對主角MC的好感，純數字不加符號）。'
+                        + '【形態】這個世界的法則把他的身體改造成什麼樣子（抵達時就會發生），要寫得看得出來不是人類，例如尾巴顏色、鰓、鰭耳、鱗片。'
+                        + '本來就是人類形態的世界就寫人類。這一欄比外貌三欄重要，全篇都要照它描寫身體。'
+                        + '【身分】當地人怎麼理解這個人（外來者、同行旅人、某某行會的誰）。'
+                        + '【更新方式】用點記法只更新有變化的「單一屬性」，固定三層「角色狀態.角色名.屬性」'
+                        + '（例：角色狀態.賀嵐.好感度、角色狀態.賀嵐.形態），不要再多包一層、不要整包重寫、沒變的別動。'
+                        + '【誰要記】只記有名字、對劇情有份量的人物；雜魚／怪獸／野生動物／路人這類不要當角色。'
+                        + '【主角MC例外】主角 / MC / {{user}} 本人「不要好感度」→ 好感度欄填「—」（一個破折號，不要填 null，會被原樣印在面板上）。'
+                        + '新角色登場時按固定基礎屬性組補齊每一欄初值。'
+                }],
+                chatId: currentChatId
+            };
+            await win.OS_DB.saveVarPack(pack);
+
+            // 兩張皮都裝進同一個包：點的那張啟用，另一張留著備用。
+            // 同包只能有一個啟用中（展廳的切換邏輯會自動關掉另一個），所以這裡也要自己守住。
+            const SK = win.OS_AVS_SKINS || {};
+            const want = (skin === 'cheshire') ? 'cheshire' : 'prism';
+            try {
+                for (const key of ['prism', 'cheshire']) {
+                    const s = SK[key];
+                    if (!s) continue;
+                    await win.OS_DB.saveUITemplate({
+                        id: 'tpl_px_' + key + '_' + pack.id,
+                        packId: pack.id, packName: pack.name,
+                        cssContent: s.css, htmlContent: s.html,
+                        isActive: key === want, isDefault: true, createdAt: Date.now()
+                    });
+                }
+                const _all2 = (await win.OS_DB.getAllUITemplates?.()) || [];
+                // 同包裡「不是這次選的」那些舊模板一律取消啟用，避免兩張皮同時亮著互相蓋
+                for (const t of _all2) {
+                    if (t.packId === pack.id && t.isActive && t.id !== 'tpl_px_' + want + '_' + pack.id) {
+                        t.isActive = false;
+                        await win.OS_DB.saveUITemplate(t);
+                    }
+                }
+                const _all3 = (await win.OS_DB.getAllUITemplates?.()) || [];
+                localStorage.setItem('avs_active_ui_templates', JSON.stringify(_all3.filter(t => t.isActive)));
+            } catch (e) { console.warn('[AVS] 視差面板皮安裝失敗:', e); }
+
+            if (_appContainer) await loadAllData(_appContainer);
+            await syncVarPackToLorebook();
+            if (win.toastr) win.toastr.success('✅ 已套用視差預設（' + (SK[want]?.label || want) + '）；想換另一張皮到 UI 面板切換');
+            try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}
+            if (win.OS_STATE_RUNTIME?.extractOnce) {
+                setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
+            }
+        } catch (e) {
+            console.error('[AVS] 套用視差預設失敗:', e);
+            alert('套用失敗：' + (e?.message || e));
+        } finally {
+            if (btnEl) { btnEl.textContent = _o; btnEl.style.pointerEvents = ''; }
+        }
+    }
+
     // ＋ 建新檔案：開空白的變數包編輯器（自己填欄位名／型別／預設值／說明，不經過 AI）。
     //    入口在建檔畫面的「自己建」；這裡確保檔案區塊看得到再開編輯器。
     function openNewPackEditor() {
@@ -1734,6 +1842,7 @@
         buildVarDefsContent,     // 變數定義說明書內容→給 state_runtime.injectCurrent 即時注入主提示詞（取代寫世界書）
         generateAndSaveSchema: _aiGenerateAndSavePack,   // 建檔畫面「開始追蹤狀態」共用此核心（生成+存+同步）
         applySimplePreset,      // 建檔畫面「🪶 簡易預設」共用此實作
+        applyParallaxPreset,    // 建檔畫面「🌌 視差預設・稜鏡／柴郡」共用此實作（傳 skin 決定啟用哪張皮）
         openNewPackEditor,      // 建檔畫面「自己建」共用此實作
         // V3：規則 modal helper（給 inline onclick 呼叫）
         _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,

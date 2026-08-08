@@ -348,6 +348,10 @@
                         <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset" title="不叫 AI，直接套形象／身分／好感度三欄">🪶 簡易預設</button>
                         <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-manual" title="自己填欄位名／型別／預設值／說明"><i class="fa-solid fa-pen-to-square"></i> 自己建</button>
                     </div>
+                    <div class="avs-st-init-alt">
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-px-prism" title="世界門專用：所在世界／本趟目標／當地貨幣／角色形態，面板走量子白稜鏡">🌌 視差預設・稜鏡</button>
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-px-cheshire" title="欄位與稜鏡完全相同，只有面板外觀換成柴郡貼紙">🐈‍⬛ 視差預設・柴郡</button>
+                    </div>
                 </div>
             </div>`;
             // 預設 TAG 可刪（🎭 外貌 data-warn=1 → 刪前警告生圖會不一致）
@@ -426,6 +430,16 @@
                 if (win.OS_AVS?.applySimplePreset) win.OS_AVS.applySimplePreset(pb);
                 else alert('簡易預設未就緒，請稍候再試');
             };
+            // 🌌 視差預設：兩張皮各一顆按鈕。不彈確認窗——TauriTavern 會擋原生 confirm，
+            //    點下去就是決定；兩張皮都會裝進同一個包，之後在 UI 面板還能切換。
+            [['#avs-st-px-prism', 'prism'], ['#avs-st-px-cheshire', 'cheshire']].forEach(([sel, skin]) => {
+                const b = _host.querySelector(sel);
+                if (!b) return;
+                b.onclick = () => {
+                    if (win.OS_AVS?.applyParallaxPreset) win.OS_AVS.applyParallaxPreset(b, skin);
+                    else alert('視差預設未就緒，請稍候再試');
+                };
+            });
             _bindDirector();   // 🎬 導演卡片在 init 畫面也露出，綁定它的開關與按鈕
             _bindAdopt();      // 開新聊天第一眼就在這頁 → 沿用入口也得在這裡綁
             return;
