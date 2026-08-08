@@ -35,10 +35,54 @@
     // ── 副模型呼叫(仿 os_cafe:優先副模型 config,失敗回 null 讓 UI 給重試) ──
     function _extractJSON(raw) {
         try { const m = String(raw || '').match(/[\[{][\s\S]*[\]}]/); return m ? JSON.parse(m[0]) : null; }
-        catch (e) { return null; }
+        catch (e) { return _salvageObjects(raw); }   // 被截斷 → 還是把已經寫完的那幾個撿回來
+    }
+    // 🚨JSON 被截斷時別整包丟掉:掃出所有「大括號成對且 parse 得過」的物件。
+    //   四個旅人寫到第三個被切,以前是回空陣列→整批失敗→使用者手動重按(她實測連按三次都是這樣),
+    //   現在至少拿得到前兩三個,不用再燒一次主模型。
+    function _salvageObjects(raw) {
+        const s = String(raw || '');
+        const out = [];
+        for (let i = 0; i < s.length; i++) {
+            if (s[i] !== '{') continue;
+            let depth = 0, inStr = false, esc = false;
+            for (let j = i; j < s.length; j++) {
+                const c = s[j];
+                if (esc) { esc = false; continue; }
+                if (c === '\\') { esc = true; continue; }
+                if (c === '"') { inStr = !inStr; continue; }
+                if (inStr) continue;
+                if (c === '{') depth++;
+                else if (c === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        try { const o = JSON.parse(s.slice(i, j + 1)); if (o && o.name) out.push(o); } catch (e) {}
+                        i = j;   // 這顆處理完，從它後面繼續找
+                        break;
+                    }
+                }
+            }
+        }
+        if (out.length) console.warn('[Worldgate③] JSON 疑似被截斷,已搶救 ' + out.length + ' 筆');
+        return out.length ? out : null;
     }
     function _stripFences(s) {
         return String(s == null ? '' : s).replace(/^\s*```[a-zA-Z]*\s*\n?/, '').replace(/```\s*$/, '').trim();
+    }
+    // 🚨模型會照著角色卡的系統規範多吐一堆附加模組(思考鏈/草稿/摘要/選項/免責聲明)。
+    //   那些是給劇情用的,對世界檔案完全是垃圾——不清掉的話:①整包被當成世界正文寫進世界書條目
+    //   ②下一支 API 又把它整包當「世界檔案」餵回去(實測送出字數從三千暴增到一萬三)
+    //   ③輸出額度被附加模組吃掉 → 旅人 JSON 被截斷 → 召集失敗要重按 → 又是好幾次呼叫。
+    function _cleanModelOutput(s) {
+        let t = String(s == null ? '' : s);
+        ['thinking', 'think', 'draft', 'branches', 'disclaimer', 'reasoning', 'plan'].forEach(tag => {
+            t = t.replace(new RegExp('<' + tag + '[^>]*>[\\s\\S]*?<\\/' + tag + '>', 'gi'), '');
+            t = t.replace(new RegExp('<\\/?' + tag + '[^>]*>', 'gi'), '');   // 只剩單邊標籤也清掉
+        });
+        const cm = t.match(/<content>([\s\S]*?)<\/content>/i);   // 有包 <content> 就只取裡面
+        if (cm) t = cm[1];
+        return t.replace(/<!--[\s\S]*?-->/g, '')                 // <!-- {} --> 這種殘留
+                .replace(/\n{3,}/g, '\n\n').trim();
     }
     // asText=true:世界檔案正文近三千字,包進 JSON 字串太容易被引號/換行搞爆 parse → 直接收 markdown 純文字
     async function _callAI(prompt, label, route, useMain, asText) {
@@ -159,10 +203,12 @@
             '再另起一行,只輸出這一行:降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
             '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
             '語言:繁體中文。';
-        let text = await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true);
+        let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true));
         if (!text) return null;
         // 截斷保險:尾巴那節沒寫到就接著補完(整份重生太貴,也會換一套設定)
-        if (!/十[、.]|冒險引擎|關鍵字[:：]/.test(text.slice(-600))) {
+        // 🚨判斷一定要在「清乾淨之後」的文字上做,而且別綁節名——節名改過一次(冒險引擎→自己在轉的事),
+        //    舊字串比對不到就會每次都誤判成截斷、白白多燒一次主模型。
+        if (!/關鍵字[:：]|降生地[:：]/.test(text.slice(-800))) {
             console.warn('[Worldgate③] 世界檔案疑似被截斷,續寫補完');
             const more = await _callAI(
                 '以下是一份寫到一半的跑團世界檔案。請直接接著往下寫完剩下的段落,不要重複已經寫過的內容,不要開場白或結語,不要重寫標題以外的舊段落。' +
@@ -170,7 +216,7 @@
                 '寫完後另起一行,只輸出這一行:關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔)\n' +
                 _genreLine(seed) + '語言:繁體中文。\n\n【已寫好的部分】\n' + text,
                 '世界門續寫檔案', 'worldgate_expand', true, true);
-            if (more) text += '\n' + more;
+            if (more) text += '\n' + _cleanModelOutput(more);
         }
         const km = text.match(/關鍵字[:：]\s*(.+)/);
         const keys = km ? km[1].split(/[、,，\/]+/).map(s => s.trim()).filter(Boolean).slice(0, 5) : [];
@@ -230,11 +276,20 @@
             '"quiz":[{"q":"{他用來考驗對方合不合拍的問題或話題}","options":[{"t":"{回應選項}","good":{true或false},"r":"{他對此回應的反應一句}"}]}],' +
             '"accept":"{三題都滿意時的入隊台詞1~2句}","refuse":"{不滿意時的婉拒台詞一句}"}]}\n' +
             '每位旅人 quiz 固定 3 題、每題 options 固定 3 個且恰好 1 個 good=true;good 選項不是討好或客套話,而是最對上這個人性格與在意之處的回應,要靠理解他才選得中,錯誤選項也要看起來合理。\n' +
-            '【世界檔案】\n' + worldText + '\n' +
+            // 🚨只餵前段:旅人要的是世界長怎樣、社會怎麼運作,用不到正史/核心人物/事件鉤子。
+            //   整份塞回去會讓這支的輸入暴增(實測破萬字),輸出額度被擠掉 → JSON 被截斷 → 召集失敗。
+            '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
             '語言:繁體中文。';
         const r = await _callAI(prompt, '世界門召集旅人', 'worldgate_expand', true);
         const arr = Array.isArray(r) ? r : (r && Array.isArray(r.travelers) ? r.travelers : []);
         return arr.filter(t => t && t.name);
+    }
+    // 旅人只需要前半段(世界總覽/地圖/降生點/社會結構/社會常識)；再長就砍到 1800 字為止
+    function _briefWorld(t) {
+        let s = _cleanModelOutput(t);
+        const cut = s.search(/\n#+\s*六[、.]|\n#+\s*七[、.]|\n#+\s*八[、.]/);
+        if (cut > 400) s = s.slice(0, cut);
+        return s.length > 1800 ? s.slice(0, 1800) : s;
     }
     function _normTravelers(arr) {
         return (Array.isArray(arr) ? arr : []).slice(0, 4).map(t => ({
