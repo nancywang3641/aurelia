@@ -1617,6 +1617,7 @@
                 const panelWrapper = document.getElementById('text-panel-wrapper');
                 if (panelWrapper) panelWrapper.style.display = 'none';
                 this._stageClear();   // 章節結束 → 清空兩格立繪
+                try { if (window.OS_FX) window.OS_FX.stopWeather(); } catch (e) {}   // ⚡ 章節結束 → 持續型特效(含循環音效)跟著收，別播到末尾畫面上
                 const endOverlay = document.getElementById('vn-end-overlay');
                 if (endOverlay) {
                     endOverlay.classList.add('active');
@@ -2654,7 +2655,10 @@
         document.querySelectorAll('.page').forEach(e => e.classList.add('hidden'));
         const target = document.getElementById(id);
         if (target) target.classList.remove('hidden');
-        if (id !== 'page-game') { const bgm = document.getElementById('bgm-player'); if (bgm) { bgm.pause(); bgm.currentTime = 0; } }
+        if (id !== 'page-game') {
+            const bgm = document.getElementById('bgm-player'); if (bgm) { bgm.pause(); bgm.currentTime = 0; }
+            try { const _fx = window.OS_FX || win.OS_FX; if (_fx) _fx.stopAll(); } catch (e) {}   // ⚡ 離開劇情頁 → 特效與循環音效一起收
+        }
         // 進入 VN 劇情時暫停大廳 BGM，避免兩條音樂重疊；離開時恢復
         try {
             if (id === 'page-game') {
@@ -2676,6 +2680,7 @@
         window.VN_Core.resetState();
         const bgm = document.getElementById('bgm-player');
         if (bgm) { bgm.pause(); bgm.currentTime = 0; }
+        try { if (window.OS_FX) window.OS_FX.stopAll(); } catch (e) {}   // ⚡ 退出遊戲 → 特效畫面與音效一起收
         const pageGame = document.getElementById('page-game');
         if (pageGame) pageGame.classList.add('hidden');
         if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();

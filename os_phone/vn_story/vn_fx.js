@@ -16,6 +16,7 @@
     const MAX_PER_EMITTER = 300;      // 單積木粒子封頂
     const ONCE_MAX_DUR = 8000;        // 瞬發特效總長封頂(ms)
     const PREVIEW_LOOP_MS = 4000;     // 試播持續型時自動停的時長
+    const HIDDEN_STOP_MS = 1200;      // 舞台被藏起來(量到 0 尺寸)這麼久 → 視同關閉，全停
 
     // ── 內建特效包（配方格式與創作室生成的完全相同）──
     const BUILTINS = [
@@ -218,7 +219,7 @@
         _saved: null,          // 創作室已存配方快取（null = 未載入）
         _overlay: null, _canvas: null, _ctx: null,
         _stageEl: null,        // 震動目標（overlay 的父容器）
-        _raf: 0, _lastT: 0,
+        _raf: 0, _lastT: 0, _hiddenSince: 0,
         _fx: [],               // 進行中特效實例 [{recipe, t0, loop, ending, endAt}]
         _particles: [],        // 全域粒子池 [{em, x, y, vx, vy, size, rot, vr, life, maxLife, phase}]
         _emitters: [],         // 進行中發射器 [{fx, step, t0, stopped, burstDone}]
@@ -382,7 +383,15 @@
 
             // 尺寸同步（含 DPR 封頂）
             const w = ov.clientWidth, h = ov.clientHeight;
-            if (!w || !h) return;
+            if (!w || !h) {
+                // 舞台被藏起來（祖先 display:none）＝ DOM 還在、isConnected 照樣是 true，
+                // 只 return 的話持續型的循環音效會一路播下去關不掉。給寬限期（開播瞬間/換版面
+                // 可能短暫量到 0）→ 逾時當作面板已關，全停。
+                if (!this._hiddenSince) this._hiddenSince = ts;
+                else if (ts - this._hiddenSince > HIDDEN_STOP_MS) { this._hiddenSince = 0; this.stopAll(); }
+                return;
+            }
+            this._hiddenSince = 0;
             const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
             const cw = Math.round(w * dpr), ch = Math.round(h * dpr);
             if (this._canvas.width !== cw || this._canvas.height !== ch) { this._canvas.width = cw; this._canvas.height = ch; }
