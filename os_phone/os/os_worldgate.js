@@ -198,9 +198,12 @@
             '寧可少一個區域,不可少掉價格、循環與常識。\n' +
             // 🚨玩家的追加要求放最後:放前面的話後面隔著兩千多字規格才輪到下筆,權重被稀釋到等於沒寫。
             _noteLine(note) +
-            '寫完後另起一行,只輸出這一行:關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
-            // 降生地清單跟關鍵字一樣用「結尾單行」帶回來：同一次呼叫、不另外燒 API，也不用在正文裡塞 JSON
-            '再另起一行,只輸出這一行:降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
+            // 關鍵字與降生地都是「結尾單行」給程式吃的：同一次呼叫帶回來、不另外燒 API，也不用在正文裡塞 JSON。
+            // 🚨兩行必須綁成同一個收尾區塊。分開寫、各自標「只輸出這一行」的話，模型吐完第一行就當任務結束，
+            //   第二行永遠是被漏掉的那個（實測：十節九千多字全寫完、關鍵字有、降生地整行不存在）。
+            '全部寫完後,最後補上兩行給程式讀的資料,兩行都必須有、缺一不可、順序如下:\n' +
+            '第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
+            '第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
             '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
             '語言:繁體中文。';
         let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true));
@@ -213,7 +216,9 @@
             const more = await _callAI(
                 '以下是一份寫到一半的跑團世界檔案。請直接接著往下寫完剩下的段落,不要重複已經寫過的內容,不要開場白或結語,不要重寫標題以外的舊段落。' +
                 '完整節次如下(缺哪節補哪節):\n' + _WORLD_SECTIONS +
-                '寫完後另起一行,只輸出這一行:關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔)\n' +
+                '全部寫完後,最後補上兩行給程式讀的資料,兩行都必須有、缺一不可、順序如下:\n' +
+                '第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔)\n' +
+                '第二行 降生地:名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個)\n' +
                 _genreLine(seed) + '語言:繁體中文。\n\n【已寫好的部分】\n' + text,
                 '世界門續寫檔案', 'worldgate_expand', true, true);
             if (more) text += '\n' + _cleanModelOutput(more);
@@ -231,12 +236,53 @@
     // 降生地選擇：純 CSS 的九宮格方位圖（不生任何圖、不打任何 API）
     //   舊世界沒有 spawns 欄位 → 整塊不顯示，行為跟以前一樣（落點交給主持AI）
     const _DIR_CELL = { 西北: 1, 北: 2, 東北: 3, 西: 4, 中央: 5, 東: 6, 西南: 7, 南: 8, 東南: 9 };
-    function _spawnHtml(w) {
-        const list = Array.isArray(w.spawns) ? w.spawns : [];
+    // 方位撞格或根本沒方位時的補位順序（中央→四正→四隅）：AI 給兩個「北」不能讓第二個憑空消失
+    const _CELL_ORDER = [5, 2, 6, 8, 4, 3, 9, 7, 1];
+    function _spawnCells(list) {
+        const cells = new Array(10).fill(null);
+        const rest = [];
+        for (const s of list) {
+            const c = _DIR_CELL[s.dir];
+            if (c && !cells[c]) cells[c] = s; else rest.push(s);
+        }
+        for (const s of rest) {
+            const c = _CELL_ORDER.find(i => !cells[i]);
+            if (c) cells[c] = s;
+        }
+        return cells;
+    }
+    // 退路：模型漏掉結尾那行（或世界是加這功能之前展開的）→ 從世界檔案第二節把區域撈出來當候選。
+    //   零 API，只讀已經寫好的正文；括號註記裡帶方位就照方位排，沒有就補位。不寫回 spawns（那欄只放模型真的給過的）。
+    function _spawnsFromText(text) {
+        const m = String(text || '').match(/##\s*二[、,.．][^\n]*\n([\s\S]*?)(?=\n##\s|$)/);
+        const body = m ? m[1] : '';
+        if (!body) return [];
+        const out = [];
+        const re = /^\s*\*\*(.+?)\*\*\s*$/gm;   // 區域標題自成一行的粗體
+        let x;
+        while ((x = re.exec(body)) && out.length < 4) {
+            const raw = x[1].trim();
+            if (/^類型|^[一二三四五六七八九十]、/.test(raw)) continue;   // 欄位標籤不是區域名
+            const pm = raw.match(/^(.+?)[（(](.+?)[)）]\s*$/);
+            const name = (pm ? pm[1] : raw).trim();
+            const tag = pm ? pm[2] : '';
+            if (!name || name.length > 12) continue;
+            const dir = _DIRS.find(d => d.length === 2 && tag.includes(d))
+                     || _DIRS.find(d => d.length === 1 && tag.includes(d)) || '';
+            const after = body.slice(x.index + x[0].length, x.index + x[0].length + 80);
+            const tm = after.match(/類型[:：]\s*([^\n。．,，、]{1,8})/);
+            out.push({ name: name.slice(0, 12), dir, note: (tm ? tm[1] : tag).slice(0, 12) });
+        }
+        return out;
+    }
+    function _spawnHtml(w, entryText) {
+        let list = Array.isArray(w.spawns) ? w.spawns : [];
+        if (!list.length) list = _spawnsFromText(entryText);
         if (!list.length) return '';
+        const grid = _spawnCells(list);
         const cells = [];
         for (let i = 1; i <= 9; i++) {
-            const s = list.find(x => _DIR_CELL[x.dir] === i);
+            const s = grid[i];
             cells.push(s
                 ? '<div class="wg-spawn' + (w.spawn === s.name ? ' on' : '') + '" data-n="' + _esc(s.name) + '" title="' + _esc(s.note || '') + '">' +
                     '<span class="wg-spawn-n">' + _esc(s.name) + '</span>' +
@@ -953,7 +999,7 @@
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 隊伍</span><span class="wg-section-note">' + team.length + ' 人同行・點開看身分卡</span></div>' +
             (travHtml || '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 還沒有隊友——旅人們已陸續上線大廳,走過去搭話,聊得投機才會答應同行。(小人也可以右鍵看身分卡)</div>') +
             ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
-            _spawnHtml(w) +
+            _spawnHtml(w, entryText) +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
