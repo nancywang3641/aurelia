@@ -830,15 +830,30 @@
                         // 砍掉舊的 UI profile switching dance（之前會把 #connection_profiles select 切過去再切回來）
                         // 原因：並發呼叫會互相 abort 對方的 in-flight fetch，console 噴 "Canceled because main api changed"
                         // ST 的 sendRequest(profileId, ...) 本身就會用對應 profile 的 url/key/model，不需要 UI 同步切
-                        // stream:false 隔離酒館串流開關：奧瑞亞不需要串流、一律強制關（overridePayload 蓋過 oai_settings.stream_openai）
-                        // → 酒館串流開著也不影響奧瑞亞，免撞「便宜端點(如 Pioneer gemini)不支援串流」的 404。
-                        let _ov = _vertexOverride(context, stProfileId, { temperature, stream: false, ...extraParams });
+                        // 串流＝呼叫端決定（options.stream），預設關：隔離酒館串流開關（overridePayload 蓋過
+                        // oai_settings.stream_openai），酒館開著也不影響奧瑞亞，免撞「便宜端點(如 Pioneer gemini)
+                        // 不支援串流」的 404。沒傳 stream 的呼叫端行為與從前完全相同。
+                        // 🚨長輸出任務一定要傳 true：非串流是整篇生完才回第一個位元組，反代那條連線就這樣空掛著。
+                        //   實測世界檔案要寫七千多 token、跑 250~260 秒,反代 300 秒整掐斷 → 502 upstream request failed
+                        //   （時間戳分毫不差的 300 秒＝逾時，不是隨機錯誤）。🍎 那條早就這樣寫了，這條漏掉。
+                        const _streamOn = options.stream === true;
+                        let _ov = _vertexOverride(context, stProfileId, { temperature, stream: _streamOn, ...extraParams });
                         _ov = _ensureModelOverride(context, stProfileId, _ov, config.model);
                         const response = await context.ConnectionManagerRequestService.sendRequest(
-                            stProfileId, cleanMessages, maxTokens, { signal: options.signal }, _ov   // 帶 abort signal→停止鈕才停得了
+                            stProfileId, cleanMessages, maxTokens, { signal: options.signal, stream: _streamOn }, _ov   // 帶 abort signal→停止鈕才停得了
                         );
-                        rawApiResponse = response;
-                        fullText = normalizeResponse(response, _keepFences);
+                        if (_streamOn && typeof response === 'function') {
+                            // 串流：generator 每次 yield {text: 累積全文} → 收到最後一筆＝完整輸出（同 🍎 路徑寫法）
+                            let _acc = '';
+                            for await (const _chunk of response()) {
+                                if (_chunk && typeof _chunk.text === 'string') { _acc = _chunk.text; if (onChunk) { try { onChunk(_acc); } catch (e) {} } }
+                            }
+                            rawApiResponse = { content: _acc };
+                            fullText = normalizeResponse({ content: _acc }, _keepFences);
+                        } else {
+                            rawApiResponse = response;
+                            fullText = normalizeResponse(response, _keepFences);
+                        }
                     } else {
                         const headers = context.getRequestHeaders();
                         const activeSource = context.oai_settings?.chat_completion_source
