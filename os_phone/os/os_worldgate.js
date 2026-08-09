@@ -1000,7 +1000,8 @@
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-dice"></i> 世界種子</span><span class="wg-section-note">此頁功能會呼叫 AI</span></div>' +
             '<div class="wg-empty" data-wg-seedhint><i class="fa-solid fa-wand-magic-sparkles"></i>填了題材,四顆種子都會是那個題材,<br>留空就讓愛麗絲隨手抽一把。</div>' +
-            '<input class="wg-input" data-wg-hint maxlength="30" placeholder="想玩的題材/氛圍(可留空)">' +
+            // 30 字連一句完整的題材都寫不完(實測「…挖掘海洋世界的秘」就是在第 30 字被切掉的)
+            '<textarea class="wg-input area" data-wg-hint maxlength="300" rows="2" placeholder="想玩的題材/氛圍(可留空)"></textarea>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
               '<button class="wg-btn" data-act="roll"><i class="fa-solid fa-dice"></i> 抽世界種子</button>' +
