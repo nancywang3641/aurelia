@@ -864,8 +864,10 @@
             '.wg-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}.wg-tag{padding:1px 6px;border-radius:9px;background:rgba(26,28,40,.06);color:#5a5e75;font-size:9px;border:1px solid rgba(26,28,40,.08);}' +
             '.wg-tag.warn{background:rgba(180,80,60,.08);color:#a05040;border-color:rgba(180,80,60,.2);}' +
             // 降生地九宮格：純 CSS 排方位，不生任何圖
-            '.wg-art{border-radius:12px;overflow:hidden;margin-bottom:8px;line-height:0;background:rgba(26,28,40,.06);}' +
-            '.wg-art img{width:100%;height:auto;display:block;}' +
+            // 🚨flex:none 不能省:.wg-body 是直向 flex,圖片當 flex item 預設會被壓扁(實測高度只剩幾十px)。
+            //   aspect-ratio + cover 是第二道保險,圖片比例跟預期不同時也不會變形。
+            '.wg-art{flex:none;border-radius:12px;overflow:hidden;margin-bottom:8px;line-height:0;background:rgba(26,28,40,.06);}' +
+            '.wg-art img{width:100%;height:auto;display:block;aspect-ratio:12/7;object-fit:cover;}' +
             '.wg-spawn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:4px;}' +
             // 有方位圖時格子疊在圖上面:底板要壓暗一點,不然白底的格子跟圖糊在一起看不出邊界
             '.wg-spawn-grid.has-map{background-image:var(--wg-map);background-size:cover;background-position:center;padding:5px;border-radius:11px;}' +
