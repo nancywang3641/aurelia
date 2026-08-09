@@ -45,7 +45,11 @@
         // 中央角色區
         '#vn-start-loader .vsl-stage{position:absolute;top:10%;left:50%;transform:translateX(-50%);height:56%;',
         'aspect-ratio:16/9;display:grid;place-items:center;pointer-events:none;}',
-        '#vn-start-loader .vsl-vid{height:100%;max-width:100%;object-fit:contain;opacity:0;transition:opacity .6s ease;}',
+        // 🔑 黑底影片真正的「去背」：screen 混合對黑色不作用 ⇒ 影片的黑底直接消失，
+        //    方形邊界不會再壓在背景暈染上（這就是為什麼不需要真的做透明影片）。
+        //    前提是底下那塊要是純黑，所以 .vsl-glow 才把中央挖成 #000 —— 疊在純黑上 screen 的結果就是原色。
+        '#vn-start-loader .vsl-vid{height:100%;max-width:100%;object-fit:contain;opacity:0;transition:opacity .6s ease;',
+        'mix-blend-mode:screen;}',
         '#vn-start-loader .vsl-vid.on{opacity:1;}',
         // HUD
         '#vn-start-loader .vsl-hud{position:absolute;inset:0;pointer-events:none;}',
