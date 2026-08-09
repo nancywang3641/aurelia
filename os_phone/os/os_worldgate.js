@@ -404,6 +404,20 @@
 
     // ── 世界條目落地【奧瑞亞-視差】書 ──
     function _entryComment(w) { return '【世界檔案-' + w.name + '】'; }
+    // 面板那塊是純文字容器(white-space:pre-wrap),markdown 不會被渲染——**世界名** 的星號就這樣露在臉上。
+    // 而且條目開頭那幾行是寫給主持AI的題材規範,玩家看了沒意義,還先吃掉一半篇幅,截到 600 字還沒進正題。
+    // 所以先砍頁首、再把記號剝乾淨,剩下的篇幅才都是世界本身。
+    function _plainPreview(t, n) {
+        const s = String(t == null ? '' : t)
+            .replace(/^#\s*視差世界檔案[\s\S]*?\n\n/, '')     // 給主持AI的頁首(舊世界的條目才有)
+            .replace(/^\s*#{1,6}\s*/gm, '')                   // 標題記號
+            .replace(/\*\*([^*]+)\*\*/g, '$1')                // 粗體
+            .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2')        // 斜體
+            .replace(/^\s*[-–—•]\s+/gm, '・')                  // 條列符號
+            .replace(/[ \t]+$/gm, '')
+            .replace(/\n{3,}/g, '\n\n').trim();
+        return s.length > n ? s.slice(0, n) + '…' : s;
+    }
     function _entryContent(w, entryText) {
         // 🚨只寫「真的入隊」的旅人：條目是持久的、隊伍是每趟都可能不同的,兩者本來就不同層。
         //   寫進全部候選的話,玩家單人進去時主持AI仍收到四份旅人檔案→沒招募的人自己走進劇情;
@@ -1041,7 +1055,7 @@
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) + '</span><span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>' +
             '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' +
               '<div class="wg-tags"><span class="wg-tag">' + _esc(w.style) + '</span><span class="wg-tag">' + _esc(w.lure) + '</span><span class="wg-tag warn">' + _esc(w.danger) + '</span></div></div>' +
-            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(entryText.length > 600 ? entryText.slice(0, 600) + '…' : entryText) + '</div></div>' : '') +
+            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_plainPreview(entryText, 600)) + '</div></div>' : '') +
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 隊伍</span><span class="wg-section-note">' + team.length + ' 人同行・點開看身分卡</span></div>' +
             (travHtml || '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 還沒有隊友——旅人們已陸續上線大廳,走過去搭話,聊得投機才會答應同行。(小人也可以右鍵看身分卡)</div>') +
             ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
