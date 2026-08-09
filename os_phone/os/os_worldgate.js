@@ -73,16 +73,48 @@
     //   那些是給劇情用的,對世界檔案完全是垃圾——不清掉的話:①整包被當成世界正文寫進世界書條目
     //   ②下一支 API 又把它整包當「世界檔案」餵回去(實測送出字數從三千暴增到一萬三)
     //   ③輸出額度被附加模組吃掉 → 旅人 JSON 被截斷 → 召集失敗要重按 → 又是好幾次呼叫。
+    // 🚨模型常常寫著寫著就從思考鏈滑進正文,忘了補結束標籤。成對比對配不到、單邊那條又只刪標籤不刪內容,
+    //   那幾千字草稿就整包留在正文裡:①吃掉輸出額度,正文寫不完就斷 ②截斷續寫時又被當「已寫好的部分」餵回去。
+    //   孤兒開標籤要從它自己砍到正文的第一個分節標題;找不到標題就整段不動,寧可留著也不能把正文砍光。
+    function _dropOrphanTag(t, tag) {
+        const open = new RegExp('<' + tag + '[^>]*>', 'i');
+        let m;
+        while ((m = t.match(open))) {
+            const rest = t.slice(m.index + m[0].length);
+            const h = rest.search(/\n#{1,6}[ 　]/);
+            if (h < 0) break;
+            t = t.slice(0, m.index) + rest.slice(h);
+        }
+        return t;
+    }
     function _cleanModelOutput(s) {
         let t = String(s == null ? '' : s);
         ['thinking', 'think', 'draft', 'branches', 'disclaimer', 'reasoning', 'plan'].forEach(tag => {
             t = t.replace(new RegExp('<' + tag + '[^>]*>[\\s\\S]*?<\\/' + tag + '>', 'gi'), '');
+            t = _dropOrphanTag(t, tag);                                      // 有開無閉:連內容一起砍
             t = t.replace(new RegExp('<\\/?' + tag + '[^>]*>', 'gi'), '');   // 只剩單邊標籤也清掉
         });
         const cm = t.match(/<content>([\s\S]*?)<\/content>/i);   // 有包 <content> 就只取裡面
         if (cm) t = cm[1];
         return t.replace(/<!--[\s\S]*?-->/g, '')                 // <!-- {} --> 這種殘留
                 .replace(/\n{3,}/g, '\n\n').trim();
+    }
+    // 白名單制:只收模型放進 <worldfile> 的那一段。比逐一剝掉附加模組穩——剝除是黑名單,
+    //   漏掉一種標籤(或那個標籤沒閉合)就整包污染;取標籤內則是不管外面包了什麼都拿得到正文。
+    // 標籤名不用通用字眼,避免跟角色卡自己的區塊撞名。
+    const _WF_TAG = 'worldfile';
+    // 🚨開標籤取最後一個:思考鏈會先把這個標籤名唸過一遍,取第一個等於連草稿一起收進來。
+    // 🚨沒有結束標籤照樣要收(那正是被截斷的情況),收到結尾就對了,續寫那支會接上去。
+    // 模型沒照做(整份沒有標籤)就原樣回傳,交給剝除那條路處理,行為跟以前一樣。
+    function _pickBlock(s) {
+        const t = String(s == null ? '' : s);
+        const open = new RegExp('<' + _WF_TAG + '[^>]*>', 'gi');
+        let m, at = -1, len = 0;
+        while ((m = open.exec(t))) { at = m.index; len = m[0].length; }
+        if (at < 0) return t;
+        const rest = t.slice(at + len);
+        const end = rest.search(new RegExp('<\\/' + _WF_TAG + '\\s*>', 'i'));
+        return end < 0 ? rest : rest.slice(0, end);
     }
     // asText=true:世界檔案正文近三千字,包進 JSON 字串太容易被引號/換行搞爆 parse → 直接收 markdown 純文字
     async function _callAI(prompt, label, route, useMain, asText) {
@@ -182,7 +214,11 @@
             _genreLine(seed) +
             _toneLine(seed) +
             '【世界種子】' + JSON.stringify(seed) + '\n' +
-            '【輸出格式】直接輸出檔案正文,用下列標題分節,不要 JSON、不要程式碼區塊、不要開場白或結語。總長 1800~2600 字,十節依序寫完,每節都要有實質內容,不准只留標題或用一句話帶過。\n' +
+            // 🚨整份包進標籤是為了跟角色卡自己的附加模組(思考鏈/草稿/免責聲明)隔開:程式只收標籤裡面那一段。
+            //   沒有這道隔離的話,模型的思考鏈草稿會被當成世界正文,還會吃掉輸出額度害正文寫不完。
+            '【輸出格式】整份世界檔案要寫在 <' + _WF_TAG + '> 與 </' + _WF_TAG + '> 之間,標籤外不要有任何內容,' +
+            '結尾那兩行給程式讀的資料也要寫在標籤裡面。標籤裡直接輸出檔案正文,用下列標題分節,不要 JSON、不要程式碼區塊、不要開場白或結語。' +
+            '總長 1800~2600 字,十節依序寫完,每節都要有實質內容,不准只留標題或用一句話帶過。\n' +
             _WORLD_SECTIONS +
             '【鐵則】這是給人「住進去生活」的世界,不是觀光手冊:每個設定都要能回答「玩家能拿它做什麼」。' +
             // 🚨這裡以前列了三種人類社會角色當範本,結果把「玩家會被改造成什麼」整條蓋掉——
@@ -205,8 +241,8 @@
             '第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
             '第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
             '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
-            '語言:繁體中文。';
-        let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true));
+            '寫完 </' + _WF_TAG + '> 就停,標籤外不要再補任何說明。語言:繁體中文。';
+        let text = _cleanModelOutput(_pickBlock(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true)));
         if (!text) return null;
         // 截斷保險:尾巴那節沒寫到就接著補完(整份重生太貴,也會換一套設定)
         // 🚨判斷一定要在「清乾淨之後」的文字上做,而且別綁節名——節名改過一次(冒險引擎→自己在轉的事),
@@ -215,13 +251,14 @@
             console.warn('[Worldgate③] 世界檔案疑似被截斷,續寫補完');
             const more = await _callAI(
                 '以下是一份寫到一半的跑團世界檔案。請直接接著往下寫完剩下的段落,不要重複已經寫過的內容,不要開場白或結語,不要重寫標題以外的舊段落。' +
+                '補寫的內容要寫在 <' + _WF_TAG + '> 與 </' + _WF_TAG + '> 之間,標籤外不要有任何內容。' +
                 '完整節次如下(缺哪節補哪節):\n' + _WORLD_SECTIONS +
                 '全部寫完後,最後補上兩行給程式讀的資料,兩行都必須有、缺一不可、順序如下:\n' +
                 '第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔)\n' +
                 '第二行 降生地:名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個)\n' +
                 _genreLine(seed) + '語言:繁體中文。\n\n【已寫好的部分】\n' + text,
                 '世界門續寫檔案', 'worldgate_expand', true, true);
-            if (more) text += '\n' + _cleanModelOutput(more);
+            if (more) text += '\n' + _cleanModelOutput(_pickBlock(more));
         }
         const km = text.match(/關鍵字[:：]\s*(.+)/);
         const keys = km ? km[1].split(/[、,，\/]+/).map(s => s.trim()).filter(Boolean).slice(0, 5) : [];
