@@ -144,11 +144,16 @@
                     config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
                 }
             }
-            // 🚨這幾支是工具呼叫,不是劇情:一律不套用酒館預設(撥號、動態解析、創作室、工坊都是這樣做的)。
-            //   套進來的話,角色卡的破甲會強制模型第一個 token 就寫 <thinking>、把思考鏈打進正文——
-            //   那段草稿吃掉整個輸出額度,正文一個字都寫不出來(實測一支 13514 字全是英文草稿)。
+            // 🚨這幾支是工具呼叫,不是劇情:破甲一律不要帶進來。它會強制模型第一個 token 就寫 <thinking>、
+            //   把整段推理打進正文——那段草稿吃掉整個輸出額度,正文一個字都寫不出來(實測一支 13514 字全是英文草稿)。
+            //   破甲有兩個來源,要一起關,只關一邊沒用:
+            //     ①酒館預設(usePresetPrompts)——在入口被整包 unshift 成一則 system
+            //     ②自訂前置指令(customCot / customCotMap)——走另一條路,只在 🍎 路徑插,所以①關了它照樣進得來
             //   順帶用複製的:原本直接改 getConfig() 回傳的物件,route 會寫回設定裡。
-            config = Object.assign({}, config || {}, { usePresetPrompts: false, enableThinking: false, route });
+            config = Object.assign({}, config || {}, {
+                usePresetPrompts: false, enableThinking: false,
+                customCot: '', customCotMap: {}, route
+            });
             const raw = await new Promise((resolve, reject) => {
                 api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label, keepCodeFences: true });
             });
