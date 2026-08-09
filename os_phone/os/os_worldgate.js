@@ -85,7 +85,10 @@
                 .replace(/\n{3,}/g, '\n\n').trim();
     }
     // asText=true:世界檔案正文近三千字,包進 JSON 字串太容易被引號/換行搞爆 parse → 直接收 markdown 純文字
-    async function _callAI(prompt, label, route, useMain, asText) {
+    // 🚨stream:長輸出的那幾支一定要開。非串流是整篇生完才回第一個位元組,反代那條連線空掛著,
+    //   實測世界檔案要寫七千多 token、跑 250~260 秒,反代 300 秒整掐斷 → 502 upstream request failed。
+    //   短的那支(抽種子,三十秒)不必開,維持原樣。
+    async function _callAI(prompt, label, route, useMain, asText, stream) {
         const api = win.OS_API || window.OS_API;
         if (!api || !api.chat) return null;
         try {
@@ -102,7 +105,7 @@
             config = config || {};
             config.route = route;
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label, keepCodeFences: true });
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label, keepCodeFences: true, stream: stream === true });
             });
             return asText ? _stripFences(raw) : _extractJSON(raw);
         } catch (e) { console.warn('[Worldgate③] ' + label + ' 失敗', e); return null; }
@@ -206,7 +209,7 @@
             '第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
             '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
             '語言:繁體中文。';
-        let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true));
+        let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true, true));
         if (!text) return null;
         // 截斷保險:尾巴那節沒寫到就接著補完(整份重生太貴,也會換一套設定)
         // 🚨判斷一定要在「清乾淨之後」的文字上做,而且別綁節名——節名改過一次(冒險引擎→自己在轉的事),
@@ -220,7 +223,7 @@
                 '第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔)\n' +
                 '第二行 降生地:名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個)\n' +
                 _genreLine(seed) + '語言:繁體中文。\n\n【已寫好的部分】\n' + text,
-                '世界門續寫檔案', 'worldgate_expand', true, true);
+                '世界門續寫檔案', 'worldgate_expand', true, true, true);
             if (more) text += '\n' + _cleanModelOutput(more);
         }
         const km = text.match(/關鍵字[:：]\s*(.+)/);
@@ -335,7 +338,7 @@
             //   整份塞回去會讓這支的輸入暴增(實測破萬字),輸出額度被擠掉 → JSON 被截斷 → 召集失敗。
             '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
             '語言:繁體中文。';
-        const r = await _callAI(prompt, '世界門召集旅人', 'worldgate_expand', true);
+        const r = await _callAI(prompt, '世界門召集旅人', 'worldgate_expand', true, false, true);   // 這支也跑兩百多秒,同樣要串流
         const arr = Array.isArray(r) ? r : (r && Array.isArray(r.travelers) ? r.travelers : []);
         return arr.filter(t => t && t.name);
     }
