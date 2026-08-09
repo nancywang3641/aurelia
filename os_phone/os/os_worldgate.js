@@ -144,8 +144,11 @@
                     config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
                 }
             }
-            config = config || {};
-            config.route = route;
+            // 🚨這幾支是工具呼叫,不是劇情:一律不套用酒館預設(撥號、動態解析、創作室、工坊都是這樣做的)。
+            //   套進來的話,角色卡的破甲會強制模型第一個 token 就寫 <thinking>、把思考鏈打進正文——
+            //   那段草稿吃掉整個輸出額度,正文一個字都寫不出來(實測一支 13514 字全是英文草稿)。
+            //   順帶用複製的:原本直接改 getConfig() 回傳的物件,route 會寫回設定裡。
+            config = Object.assign({}, config || {}, { usePresetPrompts: false, enableThinking: false, route });
             const raw = await new Promise((resolve, reject) => {
                 api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label, keepCodeFences: true });
             });
