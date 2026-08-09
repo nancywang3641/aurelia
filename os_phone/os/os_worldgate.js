@@ -428,6 +428,18 @@
             .replace(/\n{3,}/g, '\n\n').trim();
         return s.length > n ? s.slice(0, n) + '…' : s;
     }
+    // 面板上方已經有世界名、一句話概念與風格標籤,預覽再抄一遍沒意義;整份世界檔案本來就會進世界書,
+    // 玩家在這裡要知道的只有「這個世界的規矩是什麼」,不是先被劇透一輪。所以只取核心法則那一段。
+    function _corePreview(t) {
+        const s = _plainPreview(t, 1e6);
+        const i = s.search(/核心法則/);
+        if (i < 0) return _plainPreview(t, 220);
+        // 標題行(核心法則——某某:)有時自己就帶內容、有時內容在下一段,兩種都要收
+        const seg = (s.slice(i).replace(/^核心法則[^\n:：]*[:：]?[ \t]*/, '').replace(/^\n+/, '')
+            .split(/\n\s*\n/).filter(x => x.trim())[0] || '').trim();
+        if (!seg) return _plainPreview(t, 220);
+        return seg.length > 220 ? seg.slice(0, 220) + '…' : seg;
+    }
     function _entryContent(w, entryText) {
         // 🚨只寫「真的入隊」的旅人：條目是持久的、隊伍是每趟都可能不同的,兩者本來就不同層。
         //   寫進全部候選的話,玩家單人進去時主持AI仍收到四份旅人檔案→沒招募的人自己走進劇情;
@@ -633,15 +645,20 @@
     }
     // 在背景補圖,不擋玩家:世界檔案已經等了好幾分鐘,不能再為了兩張圖把畫面卡住。
     // 生完寫回檔案庫;玩家若還停在這個世界的頁面就順手重繪(同隊伍區的做法)。
+    // 🚨一張一張生,不要 Promise.all:生圖那端是排隊處理的,兩張同時送會有一張被丟掉
+    //   (實測方位圖出得來、概念圖沒有)。map 面板的世界大地圖也是照順序一張張生的。
     async function _fillArt(w) {
         if (!w || (w.art && w.mapArt)) return;
-        const [art, mapArt] = await Promise.all([
-            w.art ? '' : _genArt(w.artPrompt, _ART_BASE, 768, 448),
-            w.mapArt ? '' : _genArt(w.mapPrompt, _MAP_BASE, 640, 640)
-        ]);
-        if (!art && !mapArt) return;
-        if (art) w.art = art;
-        if (mapArt) w.mapArt = mapArt;
+        let got = false;
+        if (!w.art && w.artPrompt) {
+            const art = await _genArt(w.artPrompt, _ART_BASE, 768, 448);
+            if (art) { w.art = art; got = true; } else console.warn('[Worldgate③] 概念圖沒生出來');
+        }
+        if (!w.mapArt && w.mapPrompt) {
+            const mapArt = await _genArt(w.mapPrompt, _MAP_BASE, 640, 640);
+            if (mapArt) { w.mapArt = mapArt; got = true; } else console.warn('[Worldgate③] 方位圖沒生出來');
+        }
+        if (!got) return;
         await _saveWorld(w);
         if (_winEl && _curDetailId === w.id) { try { _renderDetail(w); } catch (e) {} }
     }
@@ -872,6 +889,7 @@
             '@keyframes wgSpin{to{transform:rotate(360deg)}}' +
             '.wg-input{width:100%;box-sizing:border-box;margin-top:8px;background:rgba(255,255,255,.8);border:1px solid rgba(26,28,40,.16);border-radius:9px;color:#1A1C28;padding:8px 10px;font-size:11px;}' +
             '.wg-input::placeholder{color:#a0a4ba;}' +
+            '.wg-input.area{resize:vertical;min-height:58px;line-height:1.6;font-family:inherit;}' +
             '.wg-trav{display:flex;align-items:center;gap:9px;margin-bottom:6px;padding:8px 10px;border:1px solid rgba(26,28,40,.12);border-radius:10px;background:rgba(255,255,255,.65);cursor:pointer;transition:.15s;}' +
             '.wg-trav:hover{background:#fff;}.wg-trav.on{border-color:#1A1C28;background:#fff;box-shadow:0 0 0 1px #1A1C28;}' +
             '.wg-trav-avatar{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:rgba(26,28,40,.07);color:#3a3e56;font-size:13px;flex:none;}' +
@@ -1024,7 +1042,8 @@
                     '<span class="wg-tag">' + _esc(s.lure) + '</span>' +
                     '<span class="wg-tag warn">' + _esc(s.danger) + '</span></div>' +
                 '</div>').join('') +
-            '<input class="wg-input" data-wg-note maxlength="120" placeholder="想加進這個世界的東西(可留空)">' +
+            // 單行 input 加 120 字上限太緊,一個想法都寫不完;改成可換行、可拉高的多行輸入
+            '<textarea class="wg-input area" data-wg-note maxlength="500" rows="3" placeholder="想加進這個世界的東西(可留空)"></textarea>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
               '<button class="wg-btn ghost" data-act="reroll"><i class="fa-solid fa-rotate-right"></i> 重抽一把</button>' +
@@ -1115,7 +1134,7 @@
             (w.art ? '<div class="wg-art"><img src="' + _esc(w.art) + '" alt=""></div>' : '') +
             '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' +
               '<div class="wg-tags"><span class="wg-tag">' + _esc(w.style) + '</span><span class="wg-tag">' + _esc(w.lure) + '</span><span class="wg-tag warn">' + _esc(w.danger) + '</span></div></div>' +
-            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_plainPreview(entryText, 600)) + '</div></div>' : '') +
+            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>' : '') +
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 隊伍</span><span class="wg-section-note">' + team.length + ' 人同行・點開看身分卡</span></div>' +
             (travHtml || '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 還沒有隊友——旅人們已陸續上線大廳,走過去搭話,聊得投機才會答應同行。(小人也可以右鍵看身分卡)</div>') +
             ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
