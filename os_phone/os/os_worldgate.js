@@ -210,10 +210,15 @@
             // 關鍵字與降生地都是「結尾單行」給程式吃的：同一次呼叫帶回來、不另外燒 API，也不用在正文裡塞 JSON。
             // 🚨兩行必須綁成同一個收尾區塊。分開寫、各自標「只輸出這一行」的話，模型吐完第一行就當任務結束，
             //   第二行永遠是被漏掉的那個（實測：十節九千多字全寫完、關鍵字有、降生地整行不存在）。
-            '全部寫完後,最後補上兩行給程式讀的資料,兩行都必須有、缺一不可、順序如下:\n' +
+            '全部寫完後,最後補上四行給程式讀的資料,四行都必須有、缺一不可、順序如下:\n' +
             '第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
             '第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
             '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
+            // 這兩行是拿去生圖的,所以要英文關鍵詞;構圖與畫風由程式端補,這裡只寫「畫面裡有什麼」。
+            '第三行 概念圖:用英文關鍵詞描述這個世界最具代表性的一幅遠景——地貌、建築樣式、天色與氣氛,' +
+            '12~20 個詞、逗號分隔,只寫看得見的東西,不要寫人物、招牌文字、畫風或畫質詞\n' +
+            '第四行 方位圖:用英文關鍵詞描述從高空俯瞰整片疆域的樣子——各區域的地形怎麼分布、彼此怎麼相接,' +
+            '10~16 個詞、逗號分隔,同樣不要人物與文字\n' +
             '語言:繁體中文。';
         let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true, true));
         if (!text) return null;
@@ -240,7 +245,11 @@
         const sm = text.match(/降生地[:：]\s*(.+)/);
         const spawns = sm ? _parseSpawns(sm[1]) : [];
         if (sm) text = text.replace(sm[0], '').trim();
-        return { text, keys: keys.slice(0, 5), spawns };
+        // 兩條生圖用的關鍵詞:同樣是結尾單行,解析完就從正文剝掉(留著會被主持AI當成劇情念出來)
+        const pick = re => { const m = text.match(re); if (!m) return ''; text = text.replace(m[0], '').trim(); return m[1].trim().slice(0, 400); };
+        const artPrompt = pick(/概念圖[:：]\s*(.+)/);
+        const mapPrompt = pick(/方位圖[:：]\s*(.+)/);
+        return { text, keys: keys.slice(0, 5), spawns, artPrompt, mapPrompt };
     }
     // 降生地選擇：純 CSS 的九宮格方位圖（不生任何圖、不打任何 API）
     //   舊世界沒有 spawns 欄位 → 整塊不顯示，行為跟以前一樣（落點交給主持AI）
@@ -301,7 +310,8 @@
         }
         return '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-location-dot"></i> 降生地</span>' +
                  '<span class="wg-section-note" data-spawn-tip>' + (w.spawn ? '降生地：' + _esc(w.spawn) : '沒選＝落在哪由主持AI安排') + '</span></div>' +
-               '<div class="wg-spawn-grid">' + cells.join('') + '</div>';
+               // 方位圖墊在格子底下(圖是動態網址,只能由 JS 設成 CSS 變數);沒生出圖就是原本的樣子
+               '<div class="wg-spawn-grid' + (w.mapArt ? ' has-map' : '') + '" data-spawn-grid>' + cells.join('') + '</div>';
     }
     // 「名稱|方位|一句話 / 名稱|方位|一句話」→ [{name,dir,note}]
     // 方位認不得就給 '中央'（版面照樣排得出來，不會因為 AI 亂寫就整個功能壞掉）
@@ -595,6 +605,46 @@
         const i = worlds.findIndex(x => x.id === w.id);
         if (i >= 0) { worlds[i] = w; await _set(K_WORLDS, worlds); }
     }
+    // ── 世界的兩張圖:概念圖(一幅遠景)＋方位圖(俯瞰全境,墊在降生地九宮格底下) ──
+    // 學 map 面板大地圖那條:AI 只在展開世界那一次順便吐內容關鍵詞,不另外呼叫文字模型;
+    // 風格底詞由程式端補,再走背景桶生圖。生不出來就當沒有,面板照常顯示。
+    // 🚨方位圖上面要疊九宮格,所以底詞得壓掉文字標籤跟裝飾邊框,不然格子會蓋在字上面。
+    const _ART_BASE = 'wide establishing shot, sweeping vista of the whole land, atmospheric lighting, painted concept art, highly detailed environment, no people, no text, no watermark';
+    const _MAP_BASE = 'top-down aerial view, painted overhead map, whole territory in one frame, regions separated by terrain, soft muted colours, no labels, no text, no people, no border decoration';
+    async function _genArt(prompt, base, w, h) {
+        const IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+        if (!IM || typeof IM.generateBackgroundAsync !== 'function') return '';
+        const p = String(prompt || '').trim();
+        if (!p) return '';
+        const o = { width: w, height: h };
+        // 只借負向詞,不借 VN 的背景底詞:那份是給劇情場景用的,套上來會把世界圖拉成同一種畫風
+        try { const d = win.VN_Config && win.VN_Config.data; if (d && d.bgNegPrompt) o.negativePrompt = d.bgNegPrompt; } catch (e) {}
+        let url = '';
+        try { url = await IM.generateBackgroundAsync(base + ', ' + p, o) || ''; }
+        catch (e) { console.warn('[Worldgate③] 生圖失敗', e && e.message); return ''; }
+        // blob: 重載就失效 → 轉成 data URL 才存得進檔案庫
+        if (url.indexOf('blob:') === 0) {
+            try {
+                const blob = await (await fetch(url)).blob();
+                url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
+            } catch (e) {}   // 轉檔失敗就留著 blob:這次還看得到,重開才沒有
+        }
+        return url;
+    }
+    // 在背景補圖,不擋玩家:世界檔案已經等了好幾分鐘,不能再為了兩張圖把畫面卡住。
+    // 生完寫回檔案庫;玩家若還停在這個世界的頁面就順手重繪(同隊伍區的做法)。
+    async function _fillArt(w) {
+        if (!w || (w.art && w.mapArt)) return;
+        const [art, mapArt] = await Promise.all([
+            w.art ? '' : _genArt(w.artPrompt, _ART_BASE, 768, 448),
+            w.mapArt ? '' : _genArt(w.mapPrompt, _MAP_BASE, 640, 640)
+        ]);
+        if (!art && !mapArt) return;
+        if (art) w.art = art;
+        if (mapArt) w.mapArt = mapArt;
+        await _saveWorld(w);
+        if (_winEl && _curDetailId === w.id) { try { _renderDetail(w); } catch (e) {} }
+    }
     function _profRows(t) {
         const row = (k, v) => v ? '<div class="wg-prof-row"><span>' + k + '</span><b>' + _esc(v) + '</b></div>' : '';
         return row('定位', t.job) + row('外貌', t.look) + row('性格', t.persona) +
@@ -797,7 +847,13 @@
             '.wg-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}.wg-tag{padding:1px 6px;border-radius:9px;background:rgba(26,28,40,.06);color:#5a5e75;font-size:9px;border:1px solid rgba(26,28,40,.08);}' +
             '.wg-tag.warn{background:rgba(180,80,60,.08);color:#a05040;border-color:rgba(180,80,60,.2);}' +
             // 降生地九宮格：純 CSS 排方位，不生任何圖
+            '.wg-art{border-radius:12px;overflow:hidden;margin-bottom:8px;line-height:0;background:rgba(26,28,40,.06);}' +
+            '.wg-art img{width:100%;height:auto;display:block;}' +
             '.wg-spawn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:4px;}' +
+            // 有方位圖時格子疊在圖上面:底板要壓暗一點,不然白底的格子跟圖糊在一起看不出邊界
+            '.wg-spawn-grid.has-map{background-image:var(--wg-map);background-size:cover;background-position:center;padding:5px;border-radius:11px;}' +
+            '.wg-spawn-grid.has-map .wg-spawn{background:rgba(255,255,255,.86);}' +
+            '.wg-spawn-grid.has-map .wg-spawn-empty{border-color:rgba(255,255,255,.42);}' +
             '.wg-spawn-empty{border-radius:9px;border:1px dashed rgba(26,28,40,.07);min-height:44px;}' +
             '.wg-spawn{display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:44px;padding:6px 7px;cursor:pointer;border-radius:9px;' +
               'border:1px solid rgba(26,28,40,.16);background:rgba(255,255,255,.78);transition:transform .15s,background .15s,border-color .15s;}' +
@@ -1002,6 +1058,8 @@
             note: note,             // 展開時的追加要求——重新召集旅人時要跟著帶,不然新旅人會不符合當初的設定
             spawns: r.spawns || [], // 可選的降生地(展開時同一次 API 順便帶回來的,不另外呼叫)
             spawn: '',              // 玩家選的那個(空=交給主持AI自己安排,維持舊行為)
+            artPrompt: r.artPrompt || '', mapPrompt: r.mapPrompt || '',   // 兩張圖的關鍵詞,同一次 API 順便帶回來的
+            art: '', mapArt: '',    // 圖在世界存好之後才在背景生,不擋畫面
             travelers: _normTravelers(trav),
             visits: 0, ts: Date.now(),
         };
@@ -1014,6 +1072,7 @@
         _seeds = [];
         _toast('「' + w.name + '」已存入檔案庫');
         _renderDetail(w);
+        _fillArt(w);   // 不 await:兩張圖在背景慢慢生,好了會自己寫回檔案庫並重繪
     }
 
     // ── P4 隊友身分卡(面板內第二層頁) ──
@@ -1053,6 +1112,7 @@
             '</div>').join('');
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) + '</span><span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>' +
+            (w.art ? '<div class="wg-art"><img src="' + _esc(w.art) + '" alt=""></div>' : '') +
             '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' +
               '<div class="wg-tags"><span class="wg-tag">' + _esc(w.style) + '</span><span class="wg-tag">' + _esc(w.lure) + '</span><span class="wg-tag warn">' + _esc(w.danger) + '</span></div></div>' +
             (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_plainPreview(entryText, 600)) + '</div></div>' : '') +
@@ -1068,6 +1128,11 @@
         b.querySelectorAll('.wg-trav').forEach(el => el.addEventListener('click', () => {
             _renderProfilePage(w, Number(el.dataset.i));   // 面板內第二層頁,不彈modal
         }));
+        // 方位圖是動態網址,只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
+        if (w.mapArt) {
+            const mg = b.querySelector('[data-spawn-grid]');
+            if (mg) mg.style.setProperty('--wg-map', 'url("' + w.mapArt + '")');
+        }
         // 降生地:純前端切換,選好存進世界資料;再點一次同一個=取消(交回主持AI安排)
         b.querySelectorAll('.wg-spawn').forEach(el => el.addEventListener('click', async () => {
             const nm = el.dataset.n || '';
