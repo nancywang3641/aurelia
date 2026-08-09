@@ -102,8 +102,14 @@
                     config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
                 }
             }
-            config = config || {};
-            config.route = route;
+            // 複製再改:config 是 getConfig()/getSecondaryConfig() 回傳的,直接改等於動到設定本身。
+            config = Object.assign({}, config || {}, { route });
+            // 長輸出那幾支保底 8192:副模型的預設額度只有 1000,旅人那包 JSON 會被印到一半 → 整份 parse 失敗。
+            // 不動使用者填的數值本身,只在這一趟呼叫拉高(同 chatMain 的做法)。
+            if (stream === true) {
+                const _mt = parseInt(config.maxTokens);
+                if (isNaN(_mt) || _mt < 8192) config.maxTokens = 8192;
+            }
             const raw = await new Promise((resolve, reject) => {
                 api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label, keepCodeFences: true, stream: stream === true });
             });
@@ -338,7 +344,9 @@
             //   整份塞回去會讓這支的輸入暴增(實測破萬字),輸出額度被擠掉 → JSON 被截斷 → 召集失敗。
             '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
             '語言:繁體中文。';
-        const r = await _callAI(prompt, '世界門召集旅人', 'worldgate_expand', true, false, true);   // 這支也跑兩百多秒,同樣要串流
+        // 旅人走副模型:四張身分卡＋考題包是照規格填欄位,不是重活,主模型寫這個又慢又貴。
+        // 世界檔案那支仍留給主模型——那份是整個世界的地基,後面所有東西都長在它上面。
+        const r = await _callAI(prompt, '世界門召集旅人', 'worldgate_travelers', false, false, true);   // 這支也跑兩百多秒,同樣要串流
         const arr = Array.isArray(r) ? r : (r && Array.isArray(r.travelers) ? r.travelers : []);
         return arr.filter(t => t && t.name);
     }
