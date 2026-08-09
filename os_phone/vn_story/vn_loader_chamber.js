@@ -14,7 +14,18 @@
     if (window.VN_LoaderChamber) return;
 
     const CDN = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/loading/';
-    const CASTS = ['alice', 'rabbit', 'yingying', 'cheshire'];
+    // 三支純黑底的已做成真透明通道（VP9 alpha webm）→ 直接是去背素材，不靠混合模式。
+    // 🚨 混合模式那條路在這裡走不通：影片被包在有 transform 的容器裡＝自成堆疊上下文，
+    //    mix-blend-mode 只會跟同組混合、看不到底下的背景，黑底就變成不透明實色
+    //    （特效引擎的 video 積木早就踩過這個坑，那邊的解法是掛去舞台容器而不是 overlay）。
+    // 柴郡那支的背景不是黑的（外框平均亮度 36，整片鋪滿飄浮方塊與綠光），去背無效，
+    //    維持 mp4 靠邊緣羽化融進艙內。
+    const CASTS = [
+        { k: 'alice', f: 'alice.webm' },
+        { k: 'rabbit', f: 'rabbit.webm' },
+        { k: 'yingying', f: 'yingying.webm' },
+        { k: 'cheshire', f: 'cheshire.mp4' },
+    ];
     const BITS = 70;   // 資料碎片數；動態幅度要小，等待畫面不該比故事本身搶眼
 
     const CSS = [
@@ -43,13 +54,14 @@
         '#vn-start-loader .vsl-mark::before{inset:13%;}#vn-start-loader .vsl-mark::after{inset:27%;}',
         '@keyframes vslSpin{from{transform:rotate(45deg);}to{transform:rotate(405deg);}}',
         // 中央角色區
-        '#vn-start-loader .vsl-stage{position:absolute;top:10%;left:50%;transform:translateX(-50%);height:56%;',
-        'aspect-ratio:16/9;display:grid;place-items:center;pointer-events:none;}',
-        // 🔑 黑底影片真正的「去背」：screen 混合對黑色不作用 ⇒ 影片的黑底直接消失，
-        //    方形邊界不會再壓在背景暈染上（這就是為什麼不需要真的做透明影片）。
-        //    前提是底下那塊要是純黑，所以 .vsl-glow 才把中央挖成 #000 —— 疊在純黑上 screen 的結果就是原色。
+        // 不用 transform 置中：transform 會讓這層自成堆疊上下文，影片就再也混不到底下的背景。
+        '#vn-start-loader .vsl-stage{position:absolute;top:10%;left:0;right:0;height:56%;',
+        'display:grid;place-items:center;pointer-events:none;}',
+        // 素材本身就是透明通道，不需要任何混合模式。羽化只為了柴郡那支非黑底的：
+        // 四邊淡出讓矩形邊界融進艙裡（對已透明的三支沒有副作用）。
         '#vn-start-loader .vsl-vid{height:100%;max-width:100%;object-fit:contain;opacity:0;transition:opacity .6s ease;',
-        'mix-blend-mode:screen;}',
+        '-webkit-mask-image:radial-gradient(72% 74% at 50% 50%,#000 62%,transparent 97%);',
+        'mask-image:radial-gradient(72% 74% at 50% 50%,#000 62%,transparent 97%);}',
         '#vn-start-loader .vsl-vid.on{opacity:1;}',
         // HUD
         '#vn-start-loader .vsl-hud{position:absolute;inset:0;pointer-events:none;}',
@@ -198,11 +210,12 @@
 
     // 每次開 loading 隨機抽一位管理員待機。柴郡抽到就整套 glitch，其餘只換文案。
     function _pickCast() {
-        const c = CASTS[Math.floor(Math.random() * CASTS.length)];
+        const pick = CASTS[Math.floor(Math.random() * CASTS.length)];
+        const c = pick.k;
         S.cast = c;
         if (S.vid) {
             S.vid.classList.remove('on');
-            S.vid.src = CDN + c + '.mp4';
+            S.vid.src = CDN + pick.f;
             // 影片載不到就純背景跑，不擋 loading（離線／CDN 掛掉都不該卡住開場）
             S.vid.oncanplay = () => { S.vid.classList.add('on'); };
             S.vid.onerror = () => { S.vid.classList.remove('on'); };
