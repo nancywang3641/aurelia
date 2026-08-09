@@ -18,13 +18,13 @@
     // 🚨 混合模式那條路在這裡走不通：影片被包在有 transform 的容器裡＝自成堆疊上下文，
     //    mix-blend-mode 只會跟同組混合、看不到底下的背景，黑底就變成不透明實色
     //    （特效引擎的 video 積木早就踩過這個坑，那邊的解法是掛去舞台容器而不是 overlay）。
-    // 柴郡那支的背景不是黑的（外框平均亮度 36，整片鋪滿飄浮方塊與綠光），去背無效，
-    //    維持 mp4 靠邊緣羽化融進艙內。
+    // 四支都是透明通道素材。長度各自照自己的循環週期裁：白兔的動作週期比較短，
+    // 裁 6 秒會截進下一輪（實測與第 0 幀色差 8.21），5 秒才是接縫最小的點（6.84）。
     const CASTS = [
         { k: 'alice', f: 'alice.webm' },
         { k: 'rabbit', f: 'rabbit.webm' },
         { k: 'yingying', f: 'yingying.webm' },
-        { k: 'cheshire', f: 'cheshire.mp4' },
+        { k: 'cheshire', f: 'cheshire.webm' },
     ];
     const BITS = 70;   // 資料碎片數；動態幅度要小，等待畫面不該比故事本身搶眼
 
