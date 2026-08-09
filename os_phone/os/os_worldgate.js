@@ -214,8 +214,22 @@
             '第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
             '第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
             '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
-            '語言:繁體中文。';
-        let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true, true));
+            '語言:繁體中文。\n' +
+            // 旅人接在世界檔案後面同一支寫完:省掉一次呼叫與一次等待,而且模型剛把這個世界寫出來,
+            //   第九節的核心人物就在眼前,配出來的旅人不會跟他們撞名、跟世界的調性也更貼。
+            // 🚨要包在標籤裡才切得開:那兩行給程式讀的資料必須留在世界檔案的結尾,
+            //   剝掉旅人區塊之後,尾巴的截斷判斷才不會被這段 JSON 擋住而誤判成寫不完。
+            '最後,在上述兩行資料之後另起一段,寫出 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。' +
+            '這一段整個包在 <travelers> 與 </travelers> 之間,標籤裡只放純 JSON,不要任何說明文字。\n' +
+            _TRAVELER_RULES + _TRAVELER_JSON;
+        const raw = await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true, true);
+        // 先把旅人區塊切下來,剩下的才是世界檔案本體。缺結束標籤(被截斷)照樣收到結尾,
+        // 撿得回幾個算幾個——_extractJSON 接不住時會退到 _salvageObjects 逐個撿。
+        let travelers = [];
+        let body = String(raw == null ? '' : raw);
+        const tm = body.match(/<travelers>([\s\S]*?)<\/travelers>/i) || body.match(/<travelers>([\s\S]*)$/i);
+        if (tm) { body = body.replace(tm[0], ''); travelers = _pickTravelers(_extractJSON(tm[1])); }
+        let text = _cleanModelOutput(body);
         if (!text) return null;
         // 截斷保險:尾巴那節沒寫到就接著補完(整份重生太貴,也會換一套設定)
         // 🚨判斷一定要在「清乾淨之後」的文字上做,而且別綁節名——節名改過一次(冒險引擎→自己在轉的事),
@@ -240,7 +254,7 @@
         const sm = text.match(/降生地[:：]\s*(.+)/);
         const spawns = sm ? _parseSpawns(sm[1]) : [];
         if (sm) text = text.replace(sm[0], '').trim();
-        return { text, keys: keys.slice(0, 5), spawns };
+        return { text, keys: keys.slice(0, 5), spawns, travelers };
     }
     // 降生地選擇：純 CSS 的九宮格方位圖（不生任何圖、不打任何 API）
     //   舊世界沒有 spawns 欄位 → 整塊不顯示，行為跟以前一樣（落點交給主持AI）
@@ -315,20 +329,18 @@
             return { name: name.slice(0, 12), dir, note: String(p[2] || '').slice(0, 24) };
         }).filter(Boolean).slice(0, 4);
     }
-    async function _expandTravelers(seed, worldText, note) {
-        const prompt =
-            '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
-            _toneLine(seed) +   // 喜劇向的世界配四段悲愴身世會很出戲
-            _noteLine(note) +
-            '他們是視差玩家(來自奧瑞亞的普通人),不是這個世界的原住民;世界檔案第九節的核心人物不算在內,不可重複。性格差異明顯。\n' +
-            // 🚨這四個人是各自報名、在大廳湊在一起的陌生人,不是一支照著世界主題配好的專業小隊。
-            //   沒有下面這組配額的話,模型會讓四個人的職業全部咬合這個世界的題材(藝術世界配四個藝術從業者),
-            //   而且一律往需要學歷的專業人士靠——出來的不是組隊,是跟團出行。
-            '四人的社會位置、年齡層、來歷要明顯拉開,不是一支功能互補的專業小隊。以下配額必須全部滿足:\n' +
-            '- 職業跟這個世界的題材直接相關的,最多一人。其餘三人的本行與這個世界無關,是被別的東西吸引來的。\n' +
-            '- 至少兩人的職業不需要專業訓練或學歷。\n' +
-            '- 至少一人來這裡沒有正當理由,動機講出來顯得沒什麼份量,他就只是想來。\n' +
-            '只回傳純 JSON:\n' +
+    // 旅人規格抽出來共用:展開世界那支會順便把旅人一起寫完(同一次呼叫),
+    // 這裡保留獨立呼叫的版本給「重新召集旅人」以及合併那次沒吐出旅人時的保底。
+    const _TRAVELER_RULES =
+        '他們是視差玩家(來自奧瑞亞的普通人),不是這個世界的原住民;世界檔案第九節的核心人物不算在內,不可重複。性格差異明顯。\n' +
+        // 🚨這四個人是各自報名、在大廳湊在一起的陌生人,不是一支照著世界主題配好的專業小隊。
+        //   沒有下面這組配額的話,模型會讓四個人的職業全部咬合這個世界的題材(藝術世界配四個藝術從業者),
+        //   而且一律往需要學歷的專業人士靠——出來的不是組隊,是跟團出行。
+        '四人的社會位置、年齡層、來歷要明顯拉開,不是一支功能互補的專業小隊。以下配額必須全部滿足:\n' +
+        '- 職業跟這個世界的題材直接相關的,最多一人。其餘三人的本行與這個世界無關,是被別的東西吸引來的。\n' +
+        '- 至少兩人的職業不需要專業訓練或學歷。\n' +
+        '- 至少一人來這裡沒有正當理由,動機講出來顯得沒什麼份量,他就只是想來。\n';
+    const _TRAVELER_JSON =
             '{"travelers":[{"name":"{旅人名}","job":"{職業,不超過6字,普通人在做的工作}","persona":"{一句話性格}","origin":"{一句話來歷}",' +
             '"skill":"{一句話擅長,可以是專業本事,也可以只是生活裡練出來的小能力}","look":"{一句話外貌印象}","record":"{一句話視差資歷}",' +
             '"reason":"{一句話前往此世界的動機,份量可輕可重}",' +
@@ -339,7 +351,19 @@
             '"sprite":"{這個人的外觀,英文逗號分隔的關鍵詞,只寫看得見的東西:性別年齡體型/髮色髮型/瞳色/服裝與配件/隨身物,大約10~16個詞;不要背景、不要姿勢、不要畫風或畫質詞}",' +
             '"quiz":[{"q":"{他用來考驗對方合不合拍的問題或話題}","options":[{"t":"{回應選項}","good":{true或false},"r":"{他對此回應的反應一句}"}]}],' +
             '"accept":"{三題都滿意時的入隊台詞1~2句}","refuse":"{不滿意時的婉拒台詞一句}"}]}\n' +
-            '每位旅人 quiz 固定 3 題、每題 options 固定 3 個且恰好 1 個 good=true;good 選項不是討好或客套話,而是最對上這個人性格與在意之處的回應,要靠理解他才選得中,錯誤選項也要看起來合理。\n' +
+            '每位旅人 quiz 固定 3 題、每題 options 固定 3 個且恰好 1 個 good=true;good 選項不是討好或客套話,而是最對上這個人性格與在意之處的回應,要靠理解他才選得中,錯誤選項也要看起來合理。\n';
+    function _pickTravelers(r) {
+        const arr = Array.isArray(r) ? r : (r && Array.isArray(r.travelers) ? r.travelers : []);
+        return arr.filter(t => t && t.name);
+    }
+    // 獨立召集:給「重新召集旅人」用,以及展開世界那支沒把旅人一起吐出來時的保底。
+    async function _expandTravelers(seed, worldText, note) {
+        const prompt =
+            '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
+            _toneLine(seed) +   // 喜劇向的世界配四段悲愴身世會很出戲
+            _noteLine(note) +
+            _TRAVELER_RULES +
+            '只回傳純 JSON:\n' + _TRAVELER_JSON +
             // 🚨只餵前段:旅人要的是世界長怎樣、社會怎麼運作,用不到正史/核心人物/事件鉤子。
             //   整份塞回去會讓這支的輸入暴增(實測破萬字),輸出額度被擠掉 → JSON 被截斷 → 召集失敗。
             '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
@@ -347,8 +371,7 @@
         // 旅人走副模型:四張身分卡＋考題包是照規格填欄位,不是重活,主模型寫這個又慢又貴。
         // 世界檔案那支仍留給主模型——那份是整個世界的地基,後面所有東西都長在它上面。
         const r = await _callAI(prompt, '世界門召集旅人', 'worldgate_travelers', false, false, true);   // 這支也跑兩百多秒,同樣要串流
-        const arr = Array.isArray(r) ? r : (r && Array.isArray(r.travelers) ? r.travelers : []);
-        return arr.filter(t => t && t.name);
+        return _pickTravelers(r);
     }
     // 旅人只需要前半段(世界總覽/地圖/降生點/社會結構/社會常識)；再長就砍到 1800 字為止
     function _briefWorld(t) {
@@ -950,8 +973,12 @@
         _loading('正在建構「' + _esc(seed.name) + '」的世界檔案…');
         const r = await _expandWorldText(seed, note);
         if (!r || !r.text) { _busy = false; _toast('世界建構失敗,請重試'); _renderSeedCards(); return; }
-        _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
-        const trav = await _expandTravelers(seed, r.text, note);
+        // 旅人通常已經跟著世界檔案一起回來了(同一支呼叫)；只有那一段沒吐出來或撿不到人時才補打一支。
+        let trav = r.travelers || [];
+        if (!trav.length) {
+            _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
+            trav = await _expandTravelers(seed, r.text, note);
+        }
         _busy = false;
         const w = {
             id: _mkId(), name: seed.name, concept: seed.concept, twist: seed.twist || '', style: seed.style,
