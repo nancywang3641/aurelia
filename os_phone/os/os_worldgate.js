@@ -129,6 +129,23 @@
         const end = rest.search(new RegExp('<\\/' + _WF_TAG + '\\s*>', 'i'));
         return end < 0 ? rest : rest.slice(0, end);
     }
+    // 🚨破甲要留:世界檔案本來就要能承載成人向、黑暗向的內容,裸著生成模型會自我審查,
+    //   寫出一個乾乾淨淨的世界,後面的劇情就沒有土壤了。
+    //   但破甲裡「強制第一個 token 是 <thinking>、把推理過程整段打進正文」那一塊對工具呼叫是純傷害:
+    //   它把輸出額度整個吃光,正文一個字都寫不出來。所以只剪這一塊,其餘原樣送。
+    //   剪的是複製出來的副本,設置裡填的內容不會被改動。
+    const _COT_TAGS = ['Cognitive_Protocol_Override', 'thinking_requirements', 'thinking_protocol', 'cot_protocol', 'chain_of_thought'];
+    function _stripCotDirective(s) {
+        let t = String(s == null ? '' : s);
+        _COT_TAGS.forEach(tag => {
+            t = t.replace(new RegExp('<' + tag + '[^>]*>[\\s\\S]*?<\\/' + tag + '>', 'gi'), '');
+            t = t.replace(new RegExp('<\\/?' + tag + '[^>]*>', 'gi'), '');
+        });
+        // 結尾那種「立刻開始思考」的啟動句:等於把筆按在思考鏈的第一個字上,不剪的話照樣先寫草稿。
+        return t.replace(/^[^\S\n]*\[SYS_EXECUTE\][^\n]*$/gim, '')
+                .replace(/^[^\S\n]*(开始思考|開始思考)[^\n]{0,4}$/gim, '')
+                .replace(/\n{3,}/g, '\n\n').trim();
+    }
     // asText=true:世界檔案正文近三千字,包進 JSON 字串太容易被引號/換行搞爆 parse → 直接收 markdown 純文字
     async function _callAI(prompt, label, route, useMain, asText) {
         const api = win.OS_API || window.OS_API;
@@ -144,15 +161,17 @@
                     config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
                 }
             }
-            // 🚨這幾支是工具呼叫,不是劇情:破甲一律不要帶進來。它會強制模型第一個 token 就寫 <thinking>、
-            //   把整段推理打進正文——那段草稿吃掉整個輸出額度,正文一個字都寫不出來(實測一支 13514 字全是英文草稿)。
-            //   破甲有兩個來源,要一起關,只關一邊沒用:
-            //     ①酒館預設(usePresetPrompts)——在入口被整包 unshift 成一則 system
-            //     ②自訂前置指令(customCot / customCotMap)——走另一條路,只在 🍎 路徑插,所以①關了它照樣進得來
-            //   順帶用複製的:原本直接改 getConfig() 回傳的物件,route 會寫回設定裡。
+            // 破甲(自訂前置指令)照送——世界檔案要能承載成人向內容,只把強制思考鏈那段剪掉(見 _stripCotDirective)。
+            // 🚨它有兩個來源、走不同路徑,兩邊都要處理:①customCot 舊版單格 ②customCotMap[profileId] 每個連接各記各的。
+            // 酒館預設(usePresetPrompts)則整包關掉:那是給劇情用的一大包規則,對世界檔案是純噪音,還會再塞一份思考鏈要求。
+            // 🚨用複製的:原本直接改 getConfig() 回傳的物件,等於把這些改動寫回她的設定裡。
+            const _srcMap = (config && config.customCotMap) || {};
+            const _cutMap = {};
+            Object.keys(_srcMap).forEach(k => { _cutMap[k] = _stripCotDirective(_srcMap[k]); });
             config = Object.assign({}, config || {}, {
                 usePresetPrompts: false, enableThinking: false,
-                customCot: '', customCotMap: {}, route
+                customCot: _stripCotDirective(config && config.customCot),
+                customCotMap: _cutMap, route
             });
             const raw = await new Promise((resolve, reject) => {
                 api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label, keepCodeFences: true });
