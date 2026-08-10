@@ -230,8 +230,10 @@
             const icon = document.createElement('button');
             icon.className = 'lstage-theater-icon lstage-float';
             icon.innerHTML = '<i class="fa-solid fa-comments"></i>';
-            icon.style.left = Math.round(n.x) + 'px';
-            icon.style.top  = Math.round(n.y - n.h - 24) + 'px';
+            // 挪到頭頂右上：正中央那格是搭話泡泡(.lstage-hint)的位置，這顆 34px 又壓在它上層，
+            //   疊上去就變成「泡泡看起來只剩小劇場」——點下去開的是劇場窗，開不了世界門/書咖。
+            icon.style.left = Math.round(n.x + 36) + 'px';
+            icon.style.top  = Math.round(n.y - n.h - 30) + 'px';
             icon.addEventListener('click', (e) => { e.stopPropagation(); _openTheaterWin('live'); });
             S.world.appendChild(icon);
             return icon;

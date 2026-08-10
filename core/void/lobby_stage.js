@@ -970,7 +970,9 @@
     }
     function updateNpcs(dt) {
         S.npcs.forEach(n => {
-            if (n._theaterFrozen) return;   // 🎭 小劇場：凍結當事 NPC 的漫步/跟隨/面向，維持面對面
+            // 🎭 小劇場：凍結當事 NPC 的漫步/跟隨/面向，維持面對面。凍的是走動不是搭話——
+            //    近距檢查照跑，否則玩家走過去搭話泡泡不會亮，愛麗絲/瀅瀅被抓去配對時就等於點不開。
+            if (n._theaterFrozen) { _npcNearCheck(n); return; }
             if (n.facePlayer && S.player) {   // 愛麗絲永遠面向玩家
                 if (n.sheet) n.dir = S.player.x < n.x ? 1 : 2;
                 else n.flip = S.player.x > n.x;   // 原圖朝左：玩家在右側才鏡像成朝右
