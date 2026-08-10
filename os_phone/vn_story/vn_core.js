@@ -803,6 +803,65 @@
         // tagHint：觸發的 <tag> 名（會去原始訊息撈整顆 <tag>…</tag> 來比對）
         // rawBlockOverride：直接給整段區塊文字（如 【…】 這種非 tag 形式）
         // precomputedHtml：偵測階段已算好的卡片 HTML（避免重複掃描正則）
+        // ⚔️ 開一場戰鬥：截掉 AI 沒等結果就寫好的戰果 → 讀玩家現況 → 開面板 → 結果寫回正文 → 推進劇情
+        _runBattle: async function (raw) {
+            const self = this;
+            const _th = (win && win.TavernHelper) || window.TavernHelper;
+            const mid = this._currentMessageId;
+
+            // 這行之後的段落是 AI 自己把仗打完寫的：劇本層不播、歷史層也剪掉。
+            //   留著的話下一輪它讀到自己寫的「主角贏了」，會跟真實戰果打架，而畫面上看不出異常。
+            const _tail = this.script.slice(this.index + 1);
+            this.script.length = this.index + 1;
+            if (_tail.some(l => /<\/content>/i.test(l))) this.script.push('</content>');   // VN 靠這行收尾渲染
+
+            let msgRaw = '';
+            try {
+                if (_th && mid != null && _th.getChatMessages) {
+                    const _m = await _th.getChatMessages(mid);
+                    msgRaw = (_m && _m[0] && _m[0].message) || '';
+                    if (msgRaw) {
+                        const _c = window.VN_Battle.cut(msgRaw);
+                        msgRaw = _c.text;
+                        // refresh:'none' —— 重渲染會打斷正在播的 VN
+                        if (_c.cut && _th.setChatMessages)
+                            await _th.setChatMessages([{ message_id: mid, message: _c.text }], { refresh: 'none' });
+                    }
+                }
+            } catch (e) { console.warn('[VN_Battle] 剪掉續寫戰果失敗:', e); }
+
+            const player = await this._battlePlayerStats();
+            const host = document.getElementById('page-game') || document.body;
+            window.VN_Battle.start({ host: host, raw: raw, player: player }, async function (result) {
+                try {
+                    if (result && msgRaw && _th && mid != null && _th.setChatMessages)
+                        await _th.setChatMessages([{ message_id: mid, message: window.VN_Battle.writeResult(msgRaw, result) }], { refresh: 'none' });
+                } catch (e) { console.warn('[VN_Battle] 結果寫回失敗:', e); }
+                self.next();
+            });
+        },
+
+        // 玩家戰鬥數值：往回找最後一個 [BattleResult|…hp:x/y]。不另存 DB —— 刪樓重玩時記錄跟著沒，狀態自動退回。
+        _battlePlayerStats: async function () {
+            const out = {};
+            try {
+                const _th = (win && win.TavernHelper) || window.TavernHelper;
+                if (!_th || !_th.getLastMessageId || !_th.getChatMessages) return out;
+                const last = await _th.getLastMessageId();
+                const msgs = (await _th.getChatMessages(Math.max(0, (last || 0) - 30) + '-' + last)) || [];
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    const m = /\[BattleResult\|[^\]]*hp:(\d+)\/(\d+)/i.exec((msgs[i] && msgs[i].message) || '');
+                    if (!m) continue;
+                    const hp = parseInt(m[1], 10), maxHp = parseInt(m[2], 10);
+                    out.maxHp = maxHp;
+                    // 上一場是被打倒(hp 0)→這場不要用 1 滴血開打(必死循環)。戰敗後劇情通常會有休息/被救，給滿血。
+                    out.hp = hp > 0 ? hp : maxHp;
+                    break;
+                }
+            } catch (e) {}
+            return out;
+        },
+
         _showDomBlock: function(tagHint, rawBlockOverride, precomputedHtml) {
             const _win = window.parent || window;
             const _doc = _win.document || document;
@@ -1762,6 +1821,20 @@
                 while (_smi < this.script.length && this.script[_smi] !== '</SceneMap>' && this.script[_smi] !== '[/SceneMap]') _smi++;
                 if (_smi < this.script.length) this.index = _smi;   // 找到閉合→跳到閉合行整塊略過；找不到→只跳過 opener 這行，不吃光劇本
                 this.next(); return;
+            }
+
+            // ⚔️ 戰鬥：<BattleStart>…</BattleStart> 整塊收走 → 開戰鬥面板 → 打完寫回正文才推進。
+            //    必須攔在下面「自訂區塊過濾」之前：那段會把它當 ST 渲染的同名殘影靜默跳過(見 _showDomBlock
+            //    的 _tagHintUp 過濾)，區塊確實不會亂播，但戰鬥也就永遠不會開。
+            if (/^<BattleStart>\s*$/i.test(line)) {
+                const _bLines = [];
+                let _bi = this.index + 1;
+                while (_bi < this.script.length && !/^<\/BattleStart>\s*$/i.test(this.script[_bi])) { _bLines.push(this.script[_bi]); _bi++; }
+                if (_bi < this.script.length) this.index = _bi;   // 找到閉合→停在閉合行；找不到→只跳 opener，別把 index 推到劇本末
+                const _bRaw = _bLines.join('\n');
+                if (!window.VN_Battle || !_bRaw.trim()) { this.next(); return; }
+                this._runBattle(_bRaw);
+                return;
             }
 
             // 🔥 【動態積木攔截 - 最優先，必須在 DOM block 過濾之前】
