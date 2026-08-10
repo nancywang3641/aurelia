@@ -216,7 +216,8 @@
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-set-btn:hover { background:rgba(20,18,16,.85); }
 /* 🏙 視差城市鈕（左上角；擺設模式時讓位給編輯面板） */
-.lstage-city-btn { position:absolute; left:10px; top:10px; z-index:3000; width:34px; height:34px;
+/* 🏙 快轉地圖：原本孤零零掛在左上角，改成接在小劇場右邊(136+42)，跟其他控制鈕成同一排 */
+.lstage-city-btn { position:absolute; right:178px; top:10px; z-index:3000; width:34px; height:34px;
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-city-btn:hover { background:rgba(20,18,16,.85); }
 .lstage-editing .lstage-city-btn { display:none; }
@@ -381,10 +382,11 @@
   box-shadow:0 2px 8px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; }
 .lstage-theater-icon:hover { background:rgba(40,36,30,.95); color:#ffe1a0; }
 
-/* 🎬 小劇場：右上入口鈕（帶未查看角標） */
-.lstage-theater-btn { position:absolute; right:136px; top:10px; z-index:3000; height:34px; padding:0 12px;
-  display:flex; align-items:center; gap:6px; border:none; border-radius:17px; cursor:pointer;
-  background:rgba(20,18,16,.66); color:#f3ead8; font-size:12px; }
+/* 🎬 小劇場：右上入口鈕（帶未查看角標）。做成跟同排其他鈕一樣的 34px 方鈕——
+   這排只有它帶文字又是膠囊形，夾在四顆方鈕中間看起來歪掉 */
+.lstage-theater-btn { position:absolute; right:136px; top:10px; z-index:3000; width:34px; height:34px; padding:0;
+  display:flex; align-items:center; justify-content:center; border:none; border-radius:10px; cursor:pointer;
+  background:rgba(20,18,16,.62); color:#f3ead8; font-size:14px; }
 .lstage-theater-btn:hover { background:rgba(20,18,16,.85); }
 .ltb-badge { display:none; position:absolute; top:-4px; right:-2px; min-width:16px; height:16px; border-radius:8px;
   background:#4aa06a; color:#fff; font-size:10px; line-height:16px; text-align:center; padding:0 3px; box-sizing:border-box; }

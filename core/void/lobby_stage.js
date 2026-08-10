@@ -1730,7 +1730,7 @@
             '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
             '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
-            '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-tx">小劇場</span><span class="ltb-badge"></span></button>' +
+            '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-badge"></span></button>' +
             // 🏙 快轉地圖：書咖/大廳/交易所/城裡都出現（404 要走還原流程）
             ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'exchange' || S.scene === 'city') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
             // ☕ 書咖櫃檯入口=跟瀅瀅開聊(startTalk 掛鉤,同白兔成例);獨立鈕已退役
