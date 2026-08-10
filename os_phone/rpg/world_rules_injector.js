@@ -57,6 +57,19 @@
         return { on: on, managed: [BATTLE].concat(PHONE).concat(Object.values(BGM)) };
     }
 
+    // 跨卡守衛：綁定裡出現任一本奧瑞亞書才動手（照 core/void/worldgate.js 的 ours 判斷）。
+    //   少了這道，玩別人的角色卡時 current 同樣是空的，會被當成「人在奧瑞亞大廳」，
+    //   於是強行開手機那三條、關戰鬥、把 BGM 換成現代一般——玩武俠卡就整個被翻掉。
+    function _isAurelia() {
+        try {
+            const TH = win.TavernHelper || window.TavernHelper;
+            if (!TH || typeof TH.getCharLorebooks !== 'function') return false;
+            const c = TH.getCharLorebooks() || {};
+            return [c.primary].concat(Array.isArray(c.additional) ? c.additional : [])
+                   .some(b => b && /奧瑞亞/.test(String(b)));
+        } catch (e) { return false; }
+    }
+
     async function _currentWorld() {
         try {
             const db = win.OS_DB || window.OS_DB;
@@ -76,6 +89,7 @@
         try {
             const TH = win.TavernHelper || window.TavernHelper;
             if (!TH || !TH.getLorebookEntries || !TH.setLorebookEntries) return;
+            if (!_isAurelia()) { console.log('🌍 [World Rules] 非奧瑞亞角色卡 → 一條都不碰（' + reason + '）'); return; }
 
             let entries;
             try { entries = await TH.getLorebookEntries(BOOK); }
