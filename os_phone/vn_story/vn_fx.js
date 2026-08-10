@@ -19,47 +19,49 @@
     const HIDDEN_STOP_MS = 1200;      // 舞台被藏起來(量到 0 尺寸)這麼久 → 視同關閉，全停
 
     // ── 內建特效包（配方格式與創作室生成的完全相同）──
+    //    desc＝工坊 UI 給人看的「長什麼樣」；use＝注入主模型的「什麼時候用」，只寫時機不寫視覺，
+    //    這份每輪常駐所以能省一字是一字（沒寫 use 就退回 desc，創作室生成的特效走這條）。
     const BUILTINS = [
-        { fxId: 'fx-snow', name: '下雪', desc: '雪花緩緩飄落', kind: 'loop', steps: [
+        { fxId: 'fx-snow', name: '下雪', desc: '雪花緩緩飄落', use: '下雪', kind: 'loop', steps: [
             { block: 'particles', preset: 'snow', count: 140, size: 3, speed: 45, color: '#ffffff' },
         ]},
-        { fxId: 'fx-rain', name: '下雨', desc: '雨絲落下', kind: 'loop', steps: [
+        { fxId: 'fx-rain', name: '下雨', desc: '雨絲落下', use: '下雨', kind: 'loop', steps: [
             { block: 'particles', preset: 'rain', count: 160, size: 11, speed: 850, color: 'rgba(180,200,230,0.55)' },
         ]},
-        { fxId: 'fx-petals', name: '花瓣飄落', desc: '粉色花瓣隨風飄落', kind: 'loop', steps: [
+        { fxId: 'fx-petals', name: '花瓣飄落', desc: '粉色花瓣隨風飄落', use: '花瓣飄落、櫻花', kind: 'loop', steps: [
             { block: 'particles', preset: 'petal', count: 40, size: 6, speed: 55, color: '#ffc0d0' },
         ]},
-        { fxId: 'fx-blood', name: '滴血閃紅', desc: '受傷／重創：螢幕邊緣滲血、血珠下滑、閃紅兩下', kind: 'once', steps: [
+        { fxId: 'fx-blood', name: '滴血閃紅', desc: '受傷／重創：螢幕邊緣滲血、血珠下滑、閃紅兩下', use: '受傷、中招', kind: 'once', steps: [
             { block: 'flash', color: '#c00000', times: 2, at: 0, dur: 520 },
             { block: 'edge', color: '#8a0000', at: 0, dur: 2600 },
             { block: 'particles', preset: 'drip', count: 12, size: 5, speed: 60, color: 'rgba(150,0,0,0.85)', at: 150, dur: 2200 },
             { block: 'shake', strength: 6, at: 0, dur: 420 },
         ]},
-        { fxId: 'fx-thunder', name: '雷擊', desc: '鋸齒閃電劈下＋白閃＋震動（雷劈/驚嚇/衝擊性轉折）', kind: 'once', steps: [
+        { fxId: 'fx-thunder', name: '雷擊', desc: '鋸齒閃電劈下＋白閃＋震動（雷劈/驚嚇/衝擊性轉折）', use: '雷劈、驚嚇、衝擊性轉折', kind: 'once', steps: [
             { block: 'bolt', color: '#bfe3ff', width: 3, at: 0, dur: 620 },
             { block: 'flash', color: '#eaf6ff', times: 2, at: 0, dur: 480 },
             { block: 'shake', strength: 5, at: 100, dur: 380 },
         ]},
-        { fxId: 'fx-slash', name: '劍光', desc: '一道斜切光軌劃過畫面＋震動（斬擊/攻擊）', kind: 'once', steps: [
+        { fxId: 'fx-slash', name: '劍光', desc: '一道斜切光軌劃過畫面＋震動（斬擊/攻擊）', use: '斬擊、攻擊', kind: 'once', steps: [
             { block: 'streak', color: '#e8f4ff', angle: 115, width: 3, at: 0, dur: 320 },
             { block: 'flash', color: '#ffffff', times: 1, at: 60, dur: 200 },
             { block: 'shake', strength: 8, at: 120, dur: 320 },
         ]},
-        { fxId: 'fx-shake', name: '震動', desc: '畫面劇烈搖晃（撞擊/爆炸/地震）', kind: 'once', steps: [
+        { fxId: 'fx-shake', name: '震動', desc: '畫面劇烈搖晃（撞擊/爆炸/地震）', use: '撞擊、爆炸、地震', kind: 'once', steps: [
             { block: 'shake', strength: 10, at: 0, dur: 600 },
         ]},
-        { fxId: 'fx-flash-white', name: '白閃', desc: '白光一閃（爆炸/閃回/靈光）', kind: 'once', steps: [
+        { fxId: 'fx-flash-white', name: '白閃', desc: '白光一閃（爆炸/閃回/靈光）', use: '爆炸、閃回、靈光', kind: 'once', steps: [
             { block: 'flash', color: '#ffffff', times: 1, at: 0, dur: 420 },
         ]},
-        { fxId: 'fx-anger', name: '怒氣', desc: '漫畫怒氣💢符號彈出（生氣/暴怒/青筋）', kind: 'once', steps: [
+        { fxId: 'fx-anger', name: '怒氣', desc: '漫畫怒氣💢符號彈出（生氣/暴怒/青筋）', use: '生氣、暴怒', kind: 'once', steps: [
             { block: 'svg', anim: 'pop', pos: 'top', size: 22, at: 0, dur: 1400,
               svg: '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e0342f" stroke-width="13" stroke-linecap="round"><path d="M18 46 Q44 44 46 18"/><path d="M74 18 Q76 44 102 46"/><path d="M102 74 Q76 76 74 102"/><path d="M46 102 Q44 76 18 74"/></svg>' },
         ]},
-        { fxId: 'fx-speedlines', name: '集中線', desc: '漫畫集中線框住畫面（緊張/衝刺/關鍵一擊）', kind: 'once', steps: [
+        { fxId: 'fx-speedlines', name: '集中線', desc: '漫畫集中線框住畫面（緊張/衝刺/關鍵一擊）', use: '緊張、衝刺、關鍵一擊', kind: 'once', steps: [
             { block: 'svg', anim: 'pulse', pos: 'full', size: 100, at: 0, dur: 1800,
               svg: '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" stroke="#15151a" stroke-linecap="round"><g stroke-width="7" opacity="0.85"><line x1="195" y1="100" x2="155" y2="100"/><line x1="167.2" y1="167.2" x2="138.9" y2="138.9"/><line x1="100" y1="195" x2="100" y2="155"/><line x1="32.8" y1="167.2" x2="61.1" y2="138.9"/><line x1="5" y1="100" x2="45" y2="100"/><line x1="32.8" y1="32.8" x2="61.1" y2="61.1"/><line x1="100" y1="5" x2="100" y2="45"/><line x1="167.2" y1="32.8" x2="138.9" y2="61.1"/></g><g stroke-width="4" opacity="0.55"><line x1="187.8" y1="136.4" x2="150.8" y2="121.1"/><line x1="136.4" y1="187.8" x2="121.1" y2="150.8"/><line x1="63.6" y1="187.8" x2="78.9" y2="150.8"/><line x1="12.2" y1="136.4" x2="49.2" y2="121.1"/><line x1="12.2" y1="63.6" x2="49.2" y2="78.9"/><line x1="63.6" y1="12.2" x2="78.9" y2="49.2"/><line x1="136.4" y1="12.2" x2="121.1" y2="49.2"/><line x1="187.8" y1="63.6" x2="150.8" y2="78.9"/></g></svg>' },
         ]},
-        { fxId: 'fx-cctv', name: '監視器畫面', desc: '監控鏡頭訊號感：掃描線＋雜訊雪花＋滾動亮帶＋REC紅點（回憶錄影/監控視角/偷窺/詭異氛圍），持續到換場', kind: 'loop', steps: [
+        { fxId: 'fx-cctv', name: '監視器畫面', desc: '監控鏡頭訊號感：掃描線＋雜訊雪花＋滾動亮帶＋REC紅點（回憶錄影/監控視角/偷窺/詭異氛圍），持續到換場', use: '監控視角、偷窺、回憶錄影', kind: 'loop', steps: [
             { block: 'tint', color: '#0a140c', alpha: 0.16 },
             { block: 'edge', color: '#000000' },
             { block: 'code', js: [
@@ -76,7 +78,7 @@
                 'ctx.globalAlpha=1;',
             ].join('\n') },
         ]},
-        { fxId: 'fx-wind', name: '風吹', desc: '氣流線橫掃＋落葉翻滾橫飛＋風聲（狂風/山頂曠野/離別氛圍/風系魔法），持續到換場', kind: 'loop', sfx: 'weather-wind', steps: [
+        { fxId: 'fx-wind', name: '風吹', desc: '氣流線橫掃＋落葉翻滾橫飛＋風聲（狂風/山頂曠野/離別氛圍/風系魔法），持續到換場', use: '狂風、曠野、離別、風系魔法', kind: 'loop', sfx: 'weather-wind', steps: [
             { block: 'code', js: [
                 'if(!state.init){state.init=1;state.streaks=[];state.leaves=[];',
                 ' for(var i=0;i<14;i++)state.streaks.push({x:Math.random()*w,y:Math.random()*h,len:60+Math.random()*160,sp:850+Math.random()*650,a:0.09+Math.random()*0.16,th:1+Math.random()*1.4});',
@@ -94,28 +96,28 @@
                 'ctx.globalAlpha=1;',
             ].join('\n') },
         ]},
-        { fxId: 'fx-heal', name: '治癒魔法', desc: '金綠光塵沿兩側升起＋水晶鈴音（治療/恩典/祝福/狀態解除）', kind: 'once', steps: [
+        { fxId: 'fx-heal', name: '治癒魔法', desc: '金綠光塵沿兩側升起＋水晶鈴音（治療/恩典/祝福/狀態解除）', use: '治療、祝福、狀態解除', kind: 'once', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/heal-rise.mp4', blend: 'screen', audio: 1, at: 0, dur: 8000 },
         ]},
-        { fxId: 'fx-coins', name: '金幣交易', desc: '錢袋傾出金幣＋叮噹聲（交易/付款/收款/獲得賞金），2秒瞬發', kind: 'once', steps: [
+        { fxId: 'fx-coins', name: '金幣交易', desc: '錢袋傾出金幣＋叮噹聲（交易/付款/收款/獲得賞金），2秒瞬發', use: '交易、付款、收款、賞金', kind: 'once', steps: [
             // alpha webm(lumakey去黑底)：皮袋是中間亮度物件,screen混合會半透明;真透明通道才有實色錢袋
             // shiftX：素材錢袋生在右側(量測亮度重心 59.4%)，往左推 10% 才置中
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/coins-pour-alpha.webm', blend: 'normal', audio: 1, at: 0, dur: 2200, shiftX: -10 },
         ]},
-        { fxId: 'fx-underwater', name: '水下氣泡', desc: '氣泡沿兩側上浮＋水下環境音（潛水/深海/溺水/水中場景），持續到換場', kind: 'loop', steps: [
+        { fxId: 'fx-underwater', name: '水下氣泡', desc: '氣泡沿兩側上浮＋水下環境音（潛水/深海/溺水/水中場景），持續到換場', use: '潛水、深海、溺水', kind: 'loop', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/bubbles-loop.mp4', blend: 'screen', audio: 1, loop: 1 },
         ]},
-        { fxId: 'fx-fire', name: '烈焰竄燒', desc: '寫實火焰從畫面下緣與兩側竄燒＋火場聲（失火/爆燃/激戰/怒火沖天）', kind: 'once', steps: [
+        { fxId: 'fx-fire', name: '烈焰竄燒', desc: '寫實火焰從畫面下緣與兩側竄燒＋火場聲（失火/爆燃/激戰/怒火沖天）', use: '失火、爆燃、火系激戰', kind: 'once', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/fire-edge.mp4', blend: 'screen', audio: 1, at: 0, dur: 8000 },
         ]},
-        { fxId: 'fx-bloodedge', name: '濺血邊框', desc: '寫實血液沿螢幕邊緣與四角滲出滴落（重傷/瀕死/血腥衝擊）', kind: 'once', steps: [
+        { fxId: 'fx-bloodedge', name: '濺血邊框', desc: '寫實血液沿螢幕邊緣與四角滲出滴落（重傷/瀕死/血腥衝擊）', use: '重傷、瀕死', kind: 'once', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/blood-edge.webm', blend: 'normal', audio: 1, at: 0, dur: 8000 },
         ]},
         // 冰霜會長滿整片、擋正文 → 走 once：長到一半就開始淡出退場，不留到換場
-        { fxId: 'fx-freeze', name: '螢幕結冰', desc: '冰霜從畫面邊緣蔓延＋結冰聲（寒冷/冰魔法/氣氛凝結）', kind: 'once', steps: [
+        { fxId: 'fx-freeze', name: '螢幕結冰', desc: '冰霜從畫面邊緣蔓延＋結冰聲（寒冷/冰魔法/氣氛凝結）', use: '嚴寒、冰魔法、氣氛凝結', kind: 'once', steps: [
             { block: 'video', src: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/fx/frost-freeze.mp4', blend: 'screen', audio: 1, at: 0, dur: 6000 },
         ]},
-        { fxId: 'fx-heart', name: '愛心', desc: '粉色愛心啵一下冒出飄走（心動/曖昧/戀愛）', kind: 'once', steps: [
+        { fxId: 'fx-heart', name: '愛心', desc: '粉色愛心啵一下冒出飄走（心動/曖昧/戀愛）', use: '心動、曖昧', kind: 'once', steps: [
             { block: 'svg', anim: 'rise', pos: 'center', size: 18, at: 0, dur: 1600,
               svg: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M50 84 C20 60 8 38 22 24 C34 12 50 20 50 32 C50 20 66 12 78 24 C92 38 80 60 50 84 Z" fill="#ff6b9a" opacity="0.95"/><path d="M30 30 C26 34 26 40 30 44" stroke="#ffd3e2" stroke-width="5" stroke-linecap="round" fill="none"/></svg>' },
         ]},
@@ -323,9 +325,18 @@
                 .map(r => Object.assign(r, { enabled: !dis.has(r.fxId), group: grp[r.fxId] || '' }));
         },
         // 注入主模型的白名單文字（每行一個；只列開著的）
+        //    只寫「什麼時候用」：這份每輪常駐，視覺長相對選用沒幫助、純燒 token。
+        //    創作室生成的沒有 use → 退回 desc，順手剝掉句尾贅字，以及跟後綴撞在一起的「持續到換場」。
+        //    瞬發是預設、不標；只有持續型需要標，讓模型知道它會留到換場。
         listForPrompt: function () {
-            return this.listAll().filter(r => r.enabled)
-                .map(r => `#${r.fxId}# ${r.desc || r.name}（${r.kind === 'loop' ? '持续到换场' : '瞬发'}）`).join('\n');
+            return this.listAll().filter(r => r.enabled).map(function (r) {
+                let t = String(r.use || r.desc || r.name || '').trim();
+                if (!r.use) {
+                    t = t.replace(/[，,、]?\s*[（(]?持續到換場[）)]?\s*$/, '')
+                         .replace(/時(觸發|使用)\s*$/, '').trim();
+                }
+                return `#${r.fxId}# ${t}${r.kind === 'loop' ? '（持續）' : ''}`;
+            }).join('\n');
         },
 
         // ── 內部 ──

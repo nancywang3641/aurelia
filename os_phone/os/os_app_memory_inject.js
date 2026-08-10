@@ -301,9 +301,8 @@
             if (!isVn) return;
             var list = fx.listForPrompt();
             if (!list) return;
-            var content = '# [📱模式｜畫面特效] 可在正文句子後穿插 #fx-id# 觸發畫面特效（用法同 #SFXID#、不可單獨一行）。'
-                + '只准用下列 ID、禁止自創、沒有合適的就不用：\n' + list
-                + '\n規則：瞬發型緊跟對應劇情句；持續型是天氣/氛圍、換 [Bg] 自動停止，一章最多 1-2 次、平常大多數輪次都不需要特效。';
+            var content = '# [📱模式｜畫面特效] 正文句尾可穿插 #fx-id#（用法同 #SFXID#，不可單獨一行）。'
+                + '只用下列 ID、不可自創；大多數輪次都不需要，一章最多 1-2 次。標（持續）者換 [Bg] 自動停止：\n' + list;
             var result = win.TavernHelper.injectPrompts([{
                 id: FX_LIST_INJECT_ID,
                 content: content,
