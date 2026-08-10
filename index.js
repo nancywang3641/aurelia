@@ -219,6 +219,7 @@ const PHONE_FILES = [
     'vn_story/vn_dynamic_parser.js',   // 創作室（展廳）動態標籤引擎 — 原本只有 PWA(index.html) 載，酒館漏載害自建 tag 摸不到 → 補上
     'vn_story/vn_theme.js',            // VN 劇情面板主題（[World|] 驅動換樣式）— 須在 vn_core 前
     'vn_story/vn_fx.js',               // ⚡ 畫面特效引擎（#fx-id# 標記由 vn_core 抽取路由過來）
+    'vn_story/vn_battle.js',           // ⚔️ 回合制戰鬥面板（<BattleStart> 區塊由 vn_core 攔截後叫起；純本地骰、零 API）
     'vn_story/vn_loader_chamber.js',   // 🛰 開場 Loading 的視差校準艙（vn_core 掛載時要用得到）
     'vn_story/vn_core.js',
     'vn_story/vn_core_images.js',      // 🖼️ 背景/場景CG/道具生圖管線（自 vn_core.js 拆出；Object.assign 掛回 VN_Core，必須在其後載入）
@@ -464,6 +465,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_styles.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_core.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_fx.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_battle.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_gallery.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_tts_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_ui_workshop.css');
