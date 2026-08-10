@@ -237,6 +237,7 @@ const PHONE_FILES = [
     'rpg/state_runtime.js',        // Stage 2：副模型抽 + patch + injectPrompts
     'rpg/blacklist_injector.js',   // 每輪 inject 黑名單條目（避免世界書 keys 觸發漏掉）
     'rpg/avatar_rules_injector.js', // 依選的頭像產圖器，自動翻「-VN小說家-」世界書三條目(依名字)的開關
+    'rpg/world_rules_injector.js',  // 🌍 依這個聊天室所在世界的題材，自動翻戰鬥/手機/BGM 那幾條的開關（同上，只動 enabled）
     // 'rpg/summary_core.js',  // ⛔ 已刪(2026-06-19)：舊「<summary>→[RPG_LOG]世界書」自動寫入，key 從不觸發=寫了沒人讀，已被 AVS+向量+大總結取代
     'rpg/status_panel.js',
     // 'rpg/avatar_manager.js',  // ⛔ 已停用：廢棄舊檔，會與 VN 頭像系統並行重複生成同一角色（浪費資源）+ 亂跳「已收錄」toast。檔案保留；vn_core 仍會讀世界書既有頭像。

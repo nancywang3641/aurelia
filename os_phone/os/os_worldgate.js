@@ -16,6 +16,7 @@
     const win = window.parent || window;
     const APP_ID = 'worldgate';
     const K_WORLDS = 'worlds';   // [{id,name,concept,genre,style,lure,danger,crisis,keys,entryText,travelers:[{name,job,persona,origin,skill,fit,goal,weakness,recruited}],visits,ts}]
+    const K_CURRENT = 'current'; // 這個聊天室目前在哪個世界（世界 id；撤離清空）— world_rules_injector 依此翻模組條目
     const BOOK_PARA = '【奧瑞亞-視差】';
     const MAX_TRAVELER_SPAWN = 4;
 
@@ -842,6 +843,10 @@
         const i = worlds.findIndex(x => x.id === w.id);
         if (i >= 0) worlds[i] = w;
         await _set(K_WORLDS, worlds);
+        // 這個聊天室從此屬於這個世界（app_data 是 chat-scope，換聊天室就換世界、回來還原）
+        //   → 依題材翻「-VN小說家-」的模組條目：奇幻世界不給手機、和平題材不給戰鬥、BGM 換成對應那條
+        await _set(K_CURRENT, w.id);
+        try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
         _clearTravelers(); _closeMeet();
         return { ok: true, msg: '已進入「' + w.name + '」' };
     }
@@ -1000,6 +1005,8 @@
         b.querySelector('[data-act="draw"]')?.addEventListener('click', _renderSeedPage);
         b.querySelector('[data-act="leave"]')?.addEventListener('click', async () => {
             const r = await _gate()?.exitParallax?.();
+            await _set(K_CURRENT, '');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
+            try { window.WORLD_RULES && window.WORLD_RULES.sync('撤離'); } catch (e) {}
             _toast(r?.msg || '已返回主世界');
             _refreshModePill(); _renderList();
         });
