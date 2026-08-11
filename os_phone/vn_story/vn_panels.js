@@ -762,13 +762,21 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         let _chs = [], _sel = 0;
         const _isMobile = () => window.matchMedia('(max-width: 768px)').matches;
 
-        function _loadChapter(ch) {
-            window.VN_Core.loadScript(ch.content, ch.message_id);
-            // 回放也把這章存檔的插圖插回（生成當時已寫進 ch.scenes）；圖檔在硬碟、不重生
-            try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
-            if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
-            closeChapterPanel();
-            window.VN_Core.next();
+        function _loadChapter(ch, thumbEl) {
+            const doLoad = () => {
+                window.VN_Core.loadScript(ch.content, ch.message_id);
+                // 回放也把這章存檔的插圖插回（生成當時已寫進 ch.scenes）；圖檔在硬碟、不重生
+                try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
+                if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
+                closeChapterPanel();
+                window.VN_Core.next();
+            };
+            // 🌀 穿越轉場：縮圖碎裂 zoom-in，白閃高峰才真的換場景（底下換完由校準艙接手）。
+            //    canvas 掛在 chapter-window 外層的 vn-container：closeChapterPanel 收掉 overlay 時
+            //    演出還在最上層，玩家看不到切換的瞬間。轉場自帶 3 秒保險絲，掛了照樣放行載入。
+            const host = document.querySelector('.vn-container') || document.getElementById('chapter-window');
+            if (window.VN_ChapterWarp && host) window.VN_ChapterWarp.play({ thumb: thumbEl, host, bg: ch.bg }, doLoad);
+            else doLoad();
         }
 
         // 選誰＝重算每張卡的 data-off（CSS 吃這個做位移縮放）＋底欄資訊＋頁點
@@ -824,7 +832,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                     <div class="chx-card-bar"><i></i></div>
                     <img class="chx-card-node" src="${CHX}09-node-completed.png" alt="">`;
                 card.onclick = () => {
-                    if (_isMobile() || i === _sel) { _loadChapter(ch); return; }
+                    if (_isMobile() || i === _sel) { _loadChapter(ch, card.querySelector('.chx-thumb')); return; }
                     _sel = i;
                     _applySelection();
                 };
@@ -849,7 +857,11 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             const prevBtn = document.getElementById('ch-nav-prev');
             if (prevBtn) prevBtn.onclick = () => { _sel = (_sel - 1 + _chs.length) % _chs.length; _applySelection(); };
             const enterBtn = document.getElementById('chx-enter');
-            if (enterBtn) enterBtn.onclick = () => { if (_chs[_sel]) _loadChapter(_chs[_sel]); };
+            if (enterBtn) enterBtn.onclick = () => {
+                if (!_chs[_sel]) return;
+                const selCard = list.querySelectorAll('.chx-card')[_sel];
+                _loadChapter(_chs[_sel], selCard && selCard.querySelector('.chx-thumb'));
+            };
             _applySelection();
         }
 
