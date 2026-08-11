@@ -7,10 +7,12 @@
 // 概念：不是一間實體房間，是跑團 API 重新生成期間暫時展開的「現實層校準介面」。
 //       中央保持乾淨安靜區 —— 管理員素材是透明通道，底色只影響氣氛不影響去背。
 //
-// 🎨 兩套配色（同一份結構，只換 CSS 變數）：
-//    預設 light＝灰白底＋藍色線條，配大廳那套純白；
-//    .vsl-dark＝原本的全黑校準艙，留給 404 入口開的局（柴郡的地盤本來就該是黑的）。
-//    判定順序：setTheme() 明確指定 > 人在 404 房 > light。
+// 🎨 兩套配色（同一份結構，只換 CSS 變數），預設 dark：
+//    dark＝全黑校準艙；light＝灰白底＋藍色線條（配大廳那套純白）。
+//    🚨 light 目前不當預設：四支管理員素材都是照黑底畫的，alpha 邊緣留著黑色殘留，
+//       黑底看不出來、淺色底整圈露出來（柴郡最明顯，瀅瀅與白兔也有）。
+//       要換回 light 得先把素材重做乾淨，光改配色會滿邊雜訊。
+//    判定順序：setTheme('light'|'dark') 明確指定 > dark。
 //
 // 🚨 收掉 loading 一定要 stop()：面板只是被 display:none 藏起來的話 DOM 還在，
 //    rAF 迴圈會一直空轉燒電（跟持續型特效那次是同一個坑）。
@@ -161,11 +163,10 @@
     const TIP_MS = 7000;    // 一條停留多久；比對話還快就變成閃字，比這慢又讀不到第二條
     const TIP_FADE = 800;   // 要等淡出走完才換字，不然會被看見字在原地跳掉
 
-    // 明確指定 > 人在 404 房 > 灰白。404 那條之後接正式入口時改這裡就好。
+    // 🚨 預設 dark：素材是照黑底畫的，淺色底會露出 alpha 邊緣的黑色殘留（四支都有，柴郡最重）。
+    //    灰白那套整組留著，素材重做乾淨之後 setTheme('light') 就能換回去。
     function _resolveTheme() {
-        if (S.forced) return S.forced;
-        try { if (window.VoidTerminal && window.VoidTerminal._bridge && window.VoidTerminal._bridge.is404()) return 'dark'; } catch (e) {}
-        return 'light';
+        return S.forced || 'dark';
     }
 
     function _applyTheme() {
