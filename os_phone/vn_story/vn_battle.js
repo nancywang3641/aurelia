@@ -885,7 +885,9 @@
         tally: tally,
         toTag: function (r) {
             const parts = ['[BattleResult', r.outcome, 'hp:' + r.hp + '/' + r.maxHp, 'round:' + r.rounds];
-            if (r.killed.length) parts.push('kill:' + tally(r.killed, '+'));
+            // down 不是 kill：HP 歸零只代表失去戰鬥能力，寫成 kill 模型會以為非死不可，
+            //   還得自己開會討論「罪不致死」——生死本來就該由主持人按劇情分寸裁定
+            if (r.killed.length) parts.push('down:' + tally(r.killed, '+'));
             if (r.escaped.length) parts.push('left:' + tally(r.escaped, '+'));
             return parts.join('|') + ']';
         },
