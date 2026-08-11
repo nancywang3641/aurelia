@@ -366,11 +366,7 @@
                             <div class="chx-meta-row"><i class="fa-solid fa-globe"></i><span class="chx-meta-k">世界</span><span class="chx-meta-v" id="chx-info-world"></span></div>
                         </div>
                         <div class="chx-status"><i class="fa-solid fa-circle-check"></i><span>已完成</span></div>
-                        <button class="chx-enter" id="chx-enter">
-                            <img class="chx-enter-cap chx-cap-l" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/14-button-cap-left.png" alt="">
-                            <span>進入章節</span>
-                            <img class="chx-enter-cap chx-cap-r" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/15-button-cap-right.png" alt="">
-                        </button>
+                        <button class="chx-enter" id="chx-enter"><span>進入章節</span></button>
                     </div>
                 </div>
             </div>

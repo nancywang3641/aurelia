@@ -471,28 +471,21 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             font-size: clamp(9px, 1.8cqh, 14px); letter-spacing: 0.2em; color: var(--chx-sub);
         }
         .chx-status i { color: var(--chx-accent); }
+        /* 進入按鈕：整殼直接用圖（阿洛 16/17，兩枚同畫布同輪廓）。
+           之前是 CSS 按鈕身＋左右端帽拼裝，端帽跟身體對不齊；整圖只縮放不拼接就沒這個問題。
+           文字由程式疊、不烤進圖（README 契約），所以佈局照常是 <span> 置中。 */
         .chx-enter {
             position: relative; flex-shrink: 0;
-            height: 6.4cqh; padding: 0 3.4cqw;
+            height: 8.6cqh; aspect-ratio: 720 / 142;
             display: flex; align-items: center; justify-content: center;
-            border: 1px solid color-mix(in srgb, var(--chx-accent) 55%, transparent);
-            border-radius: 6px; cursor: pointer;
-            background: linear-gradient(180deg,
-                color-mix(in srgb, var(--chx-accent) 88%, #fff),
-                var(--chx-accent));
-            color: #fff; font-family: var(--chx-font);
+            padding: 0; border: none; cursor: pointer;
+            background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/16-enter-chapter-normal.png') center / 100% 100% no-repeat;
+            color: #24557f; font-family: var(--chx-font); font-weight: 600;
             font-size: clamp(11px, 2.2cqh, 17px); letter-spacing: 0.34em; text-indent: 0.34em;
-            box-shadow: 0 0.8cqh 2cqh color-mix(in srgb, var(--chx-accent) 35%, transparent);
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
             transition: filter 0.2s, transform 0.2s;
         }
         .chx-enter:hover { filter: brightness(1.08); transform: translateY(-1px); }
-        .chx-enter-cap {
-            position: absolute; top: 50%; height: 118%; transform: translateY(-50%);
-            pointer-events: none; filter: var(--chx-deco-filter);
-            user-select: none; -webkit-user-drag: none;
-        }
-        .chx-cap-l { left: 0; transform: translate(-46%, -50%); }
-        .chx-cap-r { right: 0; transform: translate(46%, -50%); }
 
         /* ── 空狀態／讀取中 ── */
         .chx-empty {
@@ -584,8 +577,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                 radial-gradient(120% 100% at 50% 0%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
         }
         #aurelia-phone-screen.mode-404 .chx-enter {
-            background: linear-gradient(180deg, rgba(0, 255, 136, 0.28), rgba(0, 255, 136, 0.14));
-            border-color: rgba(0, 255, 136, 0.6);
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/17-enter-chapter-404.png');
             color: #00ff88; text-shadow: 0 0 6px rgba(0, 255, 136, 0.6);
         }
         #aurelia-phone-screen.mode-404 .chx-card-num,
