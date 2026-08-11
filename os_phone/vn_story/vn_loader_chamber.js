@@ -311,9 +311,12 @@
         clearTimeout(S.tipFade);
         S.tipFade = setTimeout(() => {
             if (!S.el || !S.tips.length) return;
-            txt.textContent = S.tips[S.tipI % S.tips.length];
+            const tip = S.tips[S.tipI % S.tips.length];
+            txt.textContent = tip;
             S.tipI++;
             box.classList.add('on');
+            // 回報看過：下一局才知道要把這條排到後面（一局只播得完四五條，不回報就會一直重播同幾句）
+            try { window.VN_LoaderTips && window.VN_LoaderTips.seen(tip); } catch (e) {}
         }, TIP_FADE);
     }
 
