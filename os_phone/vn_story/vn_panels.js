@@ -568,13 +568,16 @@
     async function openChapterPanel() {
         const list = document.getElementById('chapter-list');
         const subheader = document.getElementById('chapter-subheader');
-        document.getElementById('chapter-overlay').classList.add('active');
+        const overlay = document.getElementById('chapter-overlay');
+        overlay.classList.add('active');
 
-        // 獨立模式：從 OS_DB 讀取本地存檔
+        // 獨立模式：從 OS_DB 讀取本地存檔（故事資料夾列表；輪播底欄/頁點由 chx-mode-list 收起）
         const isStandalone = win.OS_API?.isStandalone?.() ?? false;
+        overlay.classList.toggle('chx-mode-list', isStandalone);
         if (isStandalone) {
-            list.innerHTML = '<div style="color:#aaa; text-align:center; padding: 25px; font-weight: bold;">讀取本地存檔中...</div>';
-            if (subheader) subheader.textContent = '📦 來源: 本地存檔 (IndexedDB)';
+            list.className = 'chx-track';
+            list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-hourglass-half"></i><div>讀取本地存檔中…</div></div>';
+            if (subheader) subheader.textContent = '本地存檔';
 
             try {
                 if (!win.OS_DB) throw new Error('OS_DB 未載入');
@@ -582,7 +585,7 @@
                 list.innerHTML = '';
 
                 if (!chapters.length) {
-                    list.innerHTML = '<div style="color:#ff453a; text-align:center; padding: 25px; line-height:1.6;">尚無存檔記錄。<br><span style="font-size:0.85rem; color:#aaa;">按「✨ 踏入故事」生成第一章吧！</span></div>';
+                    list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>尚無存檔記錄<br>按「踏入故事」生成第一章吧</div></div>';
                     return;
                 }
 
@@ -618,7 +621,7 @@
                         <span class="ch-story-arrow">${isActive ? '▼' : '▶'}</span>
                         <span class="ch-story-title">${group.storyTitle}</span>
                         <span class="ch-story-meta">${dateStr}${dateStr ? ' · ' : ''}${group.chapters.length} 章</span>
-                        <button class="ch-story-del" title="刪除整個劇情">🗑️</button>
+                        <button class="ch-story-del" title="刪除整個劇情"><i class="fa-solid fa-trash-can"></i></button>
                     `;
 
                     // ── 章節容器（預設：當前故事展開，其他折疊）──
@@ -629,7 +632,7 @@
 
                     // 折疊 / 展開
                     header.onclick = (e) => {
-                        if (e.target.classList.contains('ch-story-del')) return;
+                        if (e.target.closest('.ch-story-del')) return;   // 刪除鈕裡包了 FA <i>，classList 直判會漏
                         const open = body.style.display !== 'none';
                         body.style.display = open ? 'none' : 'block';
                         header.querySelector('.ch-story-arrow').textContent = open ? '▶' : '▼';
@@ -666,15 +669,13 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                     group.chapters.forEach(ch => {
                         const item = document.createElement('div');
                         item.className = 'ch-item';
-                        // 移除單獨時間，並增加右側 padding 避免標題太長壓到刪除鈕
-                        item.style.cssText = 'position:relative; padding-right: 50px;';
                         item.innerHTML = `
                             <span class="ch-name">${ch.title}</span>
-                            <button style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(200,50,50,.15);border:1px solid rgba(200,50,50,.3);color:#e06060;border-radius:4px;padding:2px 8px;font-size:0.75rem;cursor:pointer;" data-id="${ch.id}">刪</button>
+                            <button class="ch-item-del" data-id="${ch.id}" title="刪除此章"><i class="fa-solid fa-trash-can"></i></button>
                         `;
                         // 點擊載入
                         item.onclick = (e) => {
-                            if (e.target.dataset.id) return;
+                            if (e.target.closest('.ch-item-del')) return;
                             window.VN_Core._setStoryId(ch.storyId || '', ch.storyTitle || '');
                             if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
                             closeChapterPanel();
@@ -704,15 +705,16 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
 
             } catch(e) {
                 console.error('[VN_PLAYER] 讀取本地存檔失敗:', e);
-                list.innerHTML = `<div style="color:#ff453a; text-align:center; padding: 25px;">讀取失敗: ${e.message}</div>`;
+                list.innerHTML = `<div class="chx-empty"><i class="fa-solid fa-triangle-exclamation"></i><div>讀取失敗: ${e.message}</div></div>`;
             }
             return;
         }
 
-        // 酒館模式：從 ST 聊天歷史讀取，渲染筆記本卡片
-        list.className = 'ch-cards-container';
-        list.innerHTML = '<div class="ch-empty"><div style="font-size:22px">⏳</div><div>讀取中...</div></div>';
+        // 酒館模式：從 ST 聊天歷史讀取，渲染量子薄片輪播（選中置中，底欄「進入章節」）
+        list.className = 'chx-track';
+        list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-hourglass-half"></i><div>讀取中…</div></div>';
         if (subheader) subheader.textContent = '酒館數據庫';
+        const CHX = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/';
 
         const TIME_GRAD = {
             '黎明': 'linear-gradient(160deg,#c4a68a,#e8c4a0)',
@@ -738,15 +740,10 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             const bg = TIME_GRAD[time] || SEASON_GRAD[season] || 'linear-gradient(160deg,#7a8a9a,#5a6a7a)';
             return { place: place || '', bg, cacheId: cacheIdRaw };
         }
-        // 嘗試從 mem / IDB 取已保存的 bg 圖片塗到 .ch-scene
+        // 嘗試從 mem / IDB 取已保存的 bg 圖片塗到縮圖（尺寸/裁切都在 CSS，這裡只換圖）
         async function _fillSceneImg(sceneEl, cacheId) {
             if (!sceneEl || !cacheId) return;
-            const apply = (url) => {
-                sceneEl.style.backgroundImage = `url('${url}')`;
-                sceneEl.style.backgroundSize = 'cover';
-                sceneEl.style.backgroundPosition = 'center';
-                sceneEl.style.backgroundRepeat = 'no-repeat';
-            };
+            const apply = (url) => { sceneEl.style.backgroundImage = `url('${url}')`; };
             const memUrl = win.VN_Core?._bgMemCache?.[cacheId];
             if (memUrl) { apply(memUrl); return; }
             try {
@@ -758,61 +755,102 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             const m = text.match(/\[World\|([^\]]+)\]/);
             return m ? m[1].trim() : '';
         }
-        let _pages = [], _page = 0;
 
-        function _renderPage(pg) {
-            list.innerHTML = '';
-            const slice = _pages[pg] || [];
-            if (!slice.length) {
-                list.innerHTML = '<div class="ch-empty"><div style="font-size:28px;opacity:.45">📖</div><div>此頁無章節</div></div>';
-            } else {
-                slice.forEach((ch, i) => {
-                    const isGold = (i === 1 && slice.length > 1);
-                    const { place, bg, cacheId } = _parseBg(ch.content);
-                    const world = _parseWorld(ch.content);
-                    const card = document.createElement('div');
-                    card.className = 'ch-card' + (isGold ? ' ch-active' : '');
-                    card.innerHTML = `
-                        <div class="ch-tab-wrap"><div class="ch-tab"></div></div>
-                        <div class="ch-chapter-label">CHAPTER</div>
-                        <div class="ch-chapter-num">${String(ch.index).padStart(2, '0')}</div>
-                        <div class="ch-chapter-title">${ch.title}</div>
-                        <div class="ch-scene" style="background:${bg}"></div>
-                        <div class="ch-card-info">
-                            <div class="ch-info-row"><span class="ch-info-label">地點</span><span class="ch-info-sep">｜</span><span class="ch-info-val">${place || '—'}</span></div>
-                            <div class="ch-info-row"><span class="ch-info-label">世界</span><span class="ch-info-sep">｜</span><span class="ch-info-val">${world || '—'}</span></div>
-                        </div>
-                        <div class="ch-card-progress">
-                            <span class="ch-progress-label">已完成</span>
-                            <div class="ch-progress-bar"><div class="ch-progress-fill" style="width:100%"></div></div>
-                        </div>`;
-                    card.onclick = () => {
-                        window.VN_Core.loadScript(ch.content, ch.message_id);
-                        // 回放也把這章存檔的插圖插回（生成當時已寫進 ch.scenes）；圖檔在硬碟、不重生
-                        try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
-                        if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
-                        closeChapterPanel();
-                        window.VN_Core.next();
-                    };
-                    list.appendChild(card);
-                    // 從已保存的圖片快取（mem / IDB）拉真實場景圖
-                    _fillSceneImg(card.querySelector('.ch-scene'), cacheId);
-                });
+        // ── 薄片輪播：全部章節排一列，選中置中放大、±2 張退後、更遠的淡出 ──
+        // 桌機互動＝瀏覽（點旁卡/頁點/箭頭選）→ 操作（點選中卡或「進入章節」載入）兩段式；
+        // 手機 CSS 把輪播攤平成垂直列表、藏底欄 → 點卡直接載入。
+        let _chs = [], _sel = 0;
+        const _isMobile = () => window.matchMedia('(max-width: 768px)').matches;
+
+        function _loadChapter(ch) {
+            window.VN_Core.loadScript(ch.content, ch.message_id);
+            // 回放也把這章存檔的插圖插回（生成當時已寫進 ch.scenes）；圖檔在硬碟、不重生
+            try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
+            if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
+            closeChapterPanel();
+            window.VN_Core.next();
+        }
+
+        // 選誰＝重算每張卡的 data-off（CSS 吃這個做位移縮放）＋底欄資訊＋頁點
+        function _applySelection() {
+            const cards = list.querySelectorAll('.chx-card');
+            cards.forEach((card, i) => {
+                const off = i - _sel;
+                if (Math.abs(off) <= 2) {
+                    card.dataset.off = String(off);
+                    card.classList.remove('chx-far');
+                    card.removeAttribute('data-side');
+                } else {
+                    card.classList.add('chx-far');
+                    card.removeAttribute('data-off');
+                    card.dataset.side = off > 0 ? 'r' : 'l';
+                }
+            });
+            const ch = _chs[_sel];
+            if (ch) {
+                const numEl = document.getElementById('chx-info-num');
+                const titleEl = document.getElementById('chx-info-title');
+                const placeEl = document.getElementById('chx-info-place');
+                const worldEl = document.getElementById('chx-info-world');
+                if (numEl) numEl.textContent = String(ch.index).padStart(2, '0');
+                if (titleEl) titleEl.textContent = ch.title;
+                if (placeEl) placeEl.textContent = ch.place || '—';
+                if (worldEl) worldEl.textContent = ch.world || '—';
             }
             const dotsEl = document.getElementById('ch-dots');
             if (dotsEl) {
+                dotsEl.querySelectorAll('.chx-dot').forEach((d, i) =>
+                    d.classList.toggle('active', i === _sel));
+            }
+        }
+
+        function _renderCarousel() {
+            list.innerHTML = '';
+            _chs.forEach((ch, i) => {
+                const card = document.createElement('div');
+                card.className = 'chx-card chx-far';
+                card.innerHTML = `
+                    <div class="chx-card-glass"></div>
+                    <img class="chx-corner chx-c-tl" src="${CHX}05-card-corner-upper-left.png" alt="">
+                    <img class="chx-corner chx-c-tr" src="${CHX}06-card-corner-upper-right.png" alt="">
+                    <img class="chx-corner chx-c-bl" src="${CHX}07-card-corner-lower-left.png" alt="">
+                    <img class="chx-corner chx-c-br" src="${CHX}08-card-corner-lower-right.png" alt="">
+                    <img class="chx-sel-top" src="${CHX}03-selected-card-top-ornament.png" alt="">
+                    <img class="chx-sel-prism" src="${CHX}04-selected-card-bottom-prism.png" alt="">
+                    <div class="chx-card-cap">CHAPTER</div>
+                    <div class="chx-card-num">${String(ch.index).padStart(2, '0')}</div>
+                    <div class="chx-thumb"></div>
+                    <div class="chx-card-title">${ch.title}</div>
+                    <div class="chx-card-bar"><i></i></div>
+                    <img class="chx-card-node" src="${CHX}09-node-completed.png" alt="">`;
+                card.onclick = () => {
+                    if (_isMobile() || i === _sel) { _loadChapter(ch); return; }
+                    _sel = i;
+                    _applySelection();
+                };
+                list.appendChild(card);
+                // 場景縮圖：先鋪時段/季節漸層打底，再拿真實快取圖蓋上
+                const thumb = card.querySelector('.chx-thumb');
+                if (thumb && ch.bg) thumb.style.background = ch.bg;
+                _fillSceneImg(thumb, ch.cacheId);
+            });
+            const dotsEl = document.getElementById('ch-dots');
+            if (dotsEl) {
                 dotsEl.innerHTML = '';
-                _pages.forEach((_, idx) => {
+                _chs.forEach((_, i) => {
                     const dot = document.createElement('button');
-                    dot.className = 'ch-dot' + (idx === pg ? ' active' : '');
-                    dot.onclick = () => { _page = idx; _renderPage(idx); };
+                    dot.className = 'chx-dot';
+                    dot.onclick = () => { _sel = i; _applySelection(); };
                     dotsEl.appendChild(dot);
                 });
             }
             const navBtn = document.getElementById('ch-nav-btn');
-            if (navBtn) navBtn.onclick = () => { _page = (_page + 1) % _pages.length; _renderPage(_page); };
+            if (navBtn) navBtn.onclick = () => { _sel = (_sel + 1) % _chs.length; _applySelection(); };
             const prevBtn = document.getElementById('ch-nav-prev');
-            if (prevBtn) prevBtn.onclick = () => { _page = (_page - 1 + _pages.length) % _pages.length; _renderPage(_page); };
+            if (prevBtn) prevBtn.onclick = () => { _sel = (_sel - 1 + _chs.length) % _chs.length; _applySelection(); };
+            const enterBtn = document.getElementById('chx-enter');
+            if (enterBtn) enterBtn.onclick = () => { if (_chs[_sel]) _loadChapter(_chs[_sel]); };
+            _applySelection();
         }
 
         try {
@@ -831,25 +869,23 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 const storyMatch = text.match(/\[Story\|([^\]]+)\]/i);
                 if (chMatch) chTitle = chMatch[1].trim();
                 else if (storyMatch) chTitle = storyMatch[1];
-                chapters.push({ title: chTitle, content: text, index: index++, message_id: m.message_id });
+                const { place, bg, cacheId } = _parseBg(text);
+                chapters.push({ title: chTitle, content: text, index: index++, message_id: m.message_id,
+                    place, bg, cacheId, world: _parseWorld(text) });
             });
 
             if (!chapters.length) {
-                list.innerHTML = '<div class="ch-empty"><div style="font-size:28px;opacity:.45">📖</div><div>未找到含 &lt;content&gt; 標籤的劇情</div></div>';
+                list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>未找到含 &lt;content&gt; 標籤的劇情</div></div>';
                 return;
             }
 
-            // 手機（≤768px）CSS 把左右翻頁箭頭與圓點藏了、卡片容器改垂直滾動，
-            // 所以手機一頁塞全部章節靠滾動看；桌機維持每頁 4 張的卡片輪播。
-            const isMobile = window.matchMedia('(max-width: 768px)').matches;
-            const PER = isMobile ? chapters.length : 4;
-            _pages = [];
-            for (let i = 0; i < chapters.length; i += PER) _pages.push(chapters.slice(i, i + PER));
-            _renderPage(0);
+            _chs = chapters;
+            _sel = chapters.length - 1;   // 預設選最新一章：回放通常是接著最近的進度
+            _renderCarousel();
 
         } catch (e) {
             console.error('[VN_PLAYER] 讀取酒館歷史失敗:', e);
-            list.innerHTML = `<div class="ch-empty"><div style="font-size:22px">❌</div><div>讀取失敗: ${e.message}</div></div>`;
+            list.innerHTML = `<div class="chx-empty"><i class="fa-solid fa-triangle-exclamation"></i><div>讀取失敗: ${e.message}</div></div>`;
         }
     }
 

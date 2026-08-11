@@ -337,48 +337,41 @@
             </div>
 
             <div id="chapter-overlay">
-                <div class="ch-table-bg"></div>
-                <div class="ch-canvas">
                 <div id="chapter-window">
-                    <div class="ch-book-spread">
-                        <div class="ch-page ch-page-left"></div>
-                        <div class="ch-book-spine"></div>
-                        <div class="ch-page ch-page-right"></div>
+                    <div class="chx-bg"></div>
+                    <div class="chx-veil"></div>
+                    <div class="chx-top">
+                        <img class="chx-top-rail" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/01-header-star-rail.png" alt="">
+                        <div class="chx-top-name">WORLDLINE ARCHIVE</div>
+                        <button class="chx-close" onclick="window.VN_PLAYER.closeChapterPanel()" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-                    <button class="ch-close" onclick="window.VN_PLAYER.closeChapterPanel()"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/></svg></button>
-                    <div class="ch-nb-inner">
-                        <div class="ch-header">
-                            <div class="ch-hdr-left">
-                                <div class="ch-title-main">章節選擇</div>
-                                <div class="ch-title-sub">Chapter Select</div>
-                            </div>
-                            <div class="ch-hdr-divider"></div>
-                            <div class="ch-hdr-right">
-                                <div class="ch-src-zh" id="chapter-subheader">酒館數據庫</div>
-                                <div class="ch-src-en">Story Archive</div>
-                            </div>
-                        </div>
-                        <div class="ch-cards-area">
-                            <div class="ch-cards-viewport">
-                                <button class="ch-nav-arrow ch-nav-prev" id="ch-nav-prev"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="8,2 4,6 8,10"/></svg></button>
-                                <div id="chapter-list" class="ch-cards-container"></div>
-                                <button class="ch-nav-arrow ch-nav-next" id="ch-nav-btn"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4,2 8,6 4,10"/></svg></button>
-                            </div>
-                            <div class="ch-carousel-dots" id="ch-dots"></div>
-                        </div>
-                        <div class="ch-bottom-panel">
-                            <div class="ch-quote-sec">
-                                <div class="ch-quote-text">「故事還在繼續，而我們也在。」</div>
-                                <div class="ch-quote-signature" aria-label="Yingying"></div>
-                            </div>
-                            <div class="ch-bottom-close" onclick="window.VN_PLAYER.closeChapterPanel()">
-                                <div class="ch-close-zh">關閉</div>
-                                <div class="ch-close-en">CLOSE</div>
-                                <div class="ch-close-arrow">›</div>
-                            </div>
-                        </div>
+                    <div class="chx-title">
+                        <div class="chx-title-zh">章節選擇</div>
+                        <div class="chx-title-sub" id="chapter-subheader">酒館數據庫</div>
+                        <img class="chx-title-divider" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/02-title-divider.png" alt="">
                     </div>
-                </div>
+                    <div class="chx-stage">
+                        <button class="chx-nav chx-nav-prev" id="ch-nav-prev" aria-label="上一章"><img src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/12-nav-left.png" alt=""></button>
+                        <div id="chapter-list" class="chx-track"></div>
+                        <button class="chx-nav chx-nav-next" id="ch-nav-btn" aria-label="下一章"><img src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/13-nav-right.png" alt=""></button>
+                    </div>
+                    <div class="chx-dots" id="ch-dots"></div>
+                    <div class="chx-info" id="chx-info">
+                        <div class="chx-info-main">
+                            <div class="chx-info-label">CHAPTER <span id="chx-info-num"></span></div>
+                            <div class="chx-info-title" id="chx-info-title"></div>
+                        </div>
+                        <div class="chx-info-meta">
+                            <div class="chx-meta-row"><i class="fa-solid fa-location-dot"></i><span class="chx-meta-k">地點</span><span class="chx-meta-v" id="chx-info-place"></span></div>
+                            <div class="chx-meta-row"><i class="fa-solid fa-globe"></i><span class="chx-meta-k">世界</span><span class="chx-meta-v" id="chx-info-world"></span></div>
+                        </div>
+                        <div class="chx-status"><i class="fa-solid fa-circle-check"></i><span>已完成</span></div>
+                        <button class="chx-enter" id="chx-enter">
+                            <img class="chx-enter-cap chx-cap-l" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/14-button-cap-left.png" alt="">
+                            <span>進入章節</span>
+                            <img class="chx-enter-cap chx-cap-r" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/15-button-cap-right.png" alt="">
+                        </button>
+                    </div>
                 </div>
             </div>
 
