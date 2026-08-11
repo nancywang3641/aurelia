@@ -569,10 +569,13 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             --chx-font: 'Courier New', 'Consolas', monospace;
             background: #04120b;
         }
+        /* 404 專屬背景：柴郡塗鴉大廳（有專圖就不用把白廳整張壓黑硬轉色了）；
+           只留輕微壓暗讓綠字卡片浮在前面 */
         #aurelia-phone-screen.mode-404 .chx-bg {
-            filter: brightness(0.22) saturate(0.4) hue-rotate(80deg);
+            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/bg-404-desktop.png');
+            filter: brightness(0.8);
         }
-        /* 掃描線 + 綠暈（老 CRT 監視器） */
+        /* 白霧遮罩是給白廳的，404 換成掃描線＋暗角（老 CRT 監視器）；直式沒有專圖，沿用桌機圖置中裁 */
         #aurelia-phone-screen.mode-404 .chx-veil {
             background:
                 repeating-linear-gradient(0deg,
