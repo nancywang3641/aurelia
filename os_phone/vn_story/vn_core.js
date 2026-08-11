@@ -428,6 +428,7 @@
             // 這些行的內容由 DOM 渲染版本呈現（_showDomBlock），原文不需出現在對話框
             {
                 const _skipSys = ['content','call','chat','status','summary','avatar','scene',
+                    'battlestart',   // ⚔️ 戰鬥設定區塊：內容要完整留給播放時的攔截收走；不加的話這裡會把 [Foe|…] 全刪光，攔截收到空區塊靜默跳過＝戰鬥永遠不開
                     'p','div','span','br','hr','b','i','em','strong','a','img',
                     'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
                     'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
@@ -1833,7 +1834,9 @@
                 while (_bi < this.script.length && !/^<\/BattleStart>\s*$/i.test(this.script[_bi])) { _bLines.push(this.script[_bi]); _bi++; }
                 if (_bi < this.script.length) this.index = _bi;   // 找到閉合→停在閉合行；找不到→只跳 opener，別把 index 推到劇本末
                 const _bRaw = _bLines.join('\n');
-                if (!window.VN_Battle || !_bRaw.trim()) { this.next(); return; }
+                // 這裡不准靜默：空區塊＝上游把內容剝掉了（loadScript 的區塊過濾就幹過一次），沒警告根本查不到
+                if (!window.VN_Battle) { console.warn('[VN_Battle] 模組未載入，跳過戰鬥'); this.next(); return; }
+                if (!_bRaw.trim()) { console.warn('[VN_Battle] <BattleStart> 區塊是空的（內容被上游過濾掉？），跳過戰鬥'); this.next(); return; }
                 this._runBattle(_bRaw);
                 return;
             }
