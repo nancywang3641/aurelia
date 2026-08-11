@@ -817,27 +817,38 @@
             this.script.length = this.index + 1;
             if (_tail.some(l => /<\/content>/i.test(l))) this.script.push('</content>');   // VN 靠這行收尾渲染
 
+            // 每一步都出聲：這條鏈四步（讀訊息→剪續寫→開打→寫回），之前只在 throw 才警告，
+            //   條件不成立的靜默路一個 log 都沒有，斷在哪一步完全查不到。
             let msgRaw = '';
             try {
+                if (!_th) console.warn('[VN_Battle] TavernHelper 不在，結果將無法寫回');
+                else if (mid == null) console.warn('[VN_Battle] _currentMessageId 是空的，結果將無法寫回');
                 if (_th && mid != null && _th.getChatMessages) {
                     const _m = await _th.getChatMessages(mid);
                     msgRaw = (_m && _m[0] && _m[0].message) || '';
+                    if (!msgRaw) console.warn('[VN_Battle] 讀不到 msg#' + mid + ' 的正文，結果將無法寫回');
                     if (msgRaw) {
                         const _c = window.VN_Battle.cut(msgRaw);
                         msgRaw = _c.text;
                         // refresh:'none' —— 重渲染會打斷正在播的 VN
-                        if (_c.cut && _th.setChatMessages)
+                        if (_c.cut && _th.setChatMessages) {
                             await _th.setChatMessages([{ message_id: mid, message: _c.text }], { refresh: 'none' });
+                            console.log('[VN_Battle] 已剪掉續寫戰果 ' + _c.cut.length + ' 字（msg#' + mid + '）');
+                        } else console.log('[VN_Battle] 訊息裡沒有待剪的續寫段');
                     }
                 }
             } catch (e) { console.warn('[VN_Battle] 剪掉續寫戰果失敗:', e); }
 
             const player = await this._battlePlayerStats();
+            console.log('[VN_Battle] 開戰 msg#' + mid + '，玩家現況:', JSON.stringify(player));
             const host = document.getElementById('page-game') || document.body;
             window.VN_Battle.start({ host: host, raw: raw, player: player }, async function (result) {
+                console.log('[VN_Battle] 戰鬥結束:', result ? result.outcome + ' hp:' + result.hp + '/' + result.maxHp : '（無結果）');
                 try {
-                    if (result && msgRaw && _th && mid != null && _th.setChatMessages)
+                    if (result && msgRaw && _th && mid != null && _th.setChatMessages) {
                         await _th.setChatMessages([{ message_id: mid, message: window.VN_Battle.writeResult(msgRaw, result) }], { refresh: 'none' });
+                        console.log('[VN_Battle] 結果已寫回 msg#' + mid + '：' + window.VN_Battle.toTag(result));
+                    } else console.warn('[VN_Battle] 結果沒寫回（result:' + !!result + ' msgRaw:' + !!msgRaw + ' mid:' + mid + '）');
                 } catch (e) { console.warn('[VN_Battle] 結果寫回失敗:', e); }
                 self.next();
             });
