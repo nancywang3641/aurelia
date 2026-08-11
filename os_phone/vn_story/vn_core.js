@@ -3195,6 +3195,10 @@
             function _noCot(t) { return String(t).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, ''); }
             function _hasOpen(t)  { return _noCot(t).indexOf('<content>')  !== -1; }
             function _hasClose(t) { return _noCot(t).indexOf('</content>') !== -1; }
+            // ⚔️ 戰鬥交棒不算截斷：世界書要求輸出 </BattleStart> 後立刻停筆，這種訊息天生沒有 </content>。
+            //    判「含有閉合的戰鬥區塊」而不是「以它結尾」——就算模型不聽話在後面又寫了半截戰果才真被截，
+            //    這章照樣能播（開打時那半截本來就會被剪掉），跳截斷窗反而擋住一場能打的仗。
+            function _battleDone(t) { return /<\/BattleStart>/i.test(_noCot(t)); }
             // 已套用特徵：擋掉「副模型在 🍎/generateRaw 模式也會發 GENERATION_ENDED 但沒設 __AURELIA_SUMMARIZING」「事件偶爾連發」
             //   造成的重複 loadScript（會洗掉剛 splice 進去的場景插圖）。比對「同樓號＋同 <content> 內容」才算已套用。
             let _lastApplied = null;   // { mid, sig }
@@ -3304,7 +3308,7 @@
                 _endTimer = setTimeout(() => {
                     try {
                         const text = _readMsgText(messageId);
-                        if (_hasOpen(text) && _hasClose(text)) {
+                        if (_hasOpen(text) && (_hasClose(text) || _battleDone(text))) {
                             const sig = _sig(text);
                             // 同一則、同內容已套用過 → 這通多半是副模型(🍎/generateRaw 也發 END)或事件連發 → 跳過，免得重跑 loadScript 洗掉場景插圖
                             if (_lastApplied && _lastApplied.mid === messageId && _lastApplied.sig === sig) return;

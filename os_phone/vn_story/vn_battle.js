@@ -242,6 +242,9 @@
                       .replace(/\n{3,}/g, '\n\n')
                       .replace(/\n\s*\n(\s*<\/content>)/i, '\n$1');   // 撤掉區塊後留下的空行，別留在收尾前
         s = s.replace(/\s*$/, '');
+        // 交棒訊息天生沒收尾（模型照規矩在 </BattleStart> 停筆）：寫回時補上 </content>，
+        //   別讓歷史裡留一則沒閉合的正文——模型看多了會學壞。
+        if (/<content>/i.test(s) && !/<\/content>/i.test(s)) s += '\n</content>';
         return s + '\n' + VN_Battle.toNarrative(result) + '\n' + VN_Battle.toTag(result);
     }
 
