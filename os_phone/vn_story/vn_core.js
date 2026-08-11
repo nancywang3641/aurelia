@@ -846,7 +846,9 @@
                 console.log('[VN_Battle] 戰鬥結束:', result ? result.outcome + ' hp:' + result.hp + '/' + result.maxHp : '（無結果）');
                 try {
                     if (result && msgRaw && _th && mid != null && _th.setChatMessages) {
-                        await _th.setChatMessages([{ message_id: mid, message: window.VN_Battle.writeResult(msgRaw, result) }], { refresh: 'none' });
+                        // 這次要 refresh:'affected'：開打前那次剪除在播放中途、不能重渲染，但打完這裡戰鬥已收場，
+                        //   不刷的話資料寫進去了、聊天畫面還是舊的——看起來就像結果沒寫回，要開編輯窗才現形
+                        await _th.setChatMessages([{ message_id: mid, message: window.VN_Battle.writeResult(msgRaw, result) }], { refresh: 'affected' });
                         console.log('[VN_Battle] 結果已寫回 msg#' + mid + '：' + window.VN_Battle.toTag(result));
                     } else console.warn('[VN_Battle] 結果沒寫回（result:' + !!result + ' msgRaw:' + !!msgRaw + ' mid:' + mid + '）');
                 } catch (e) { console.warn('[VN_Battle] 結果寫回失敗:', e); }
