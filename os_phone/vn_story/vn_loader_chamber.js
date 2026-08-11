@@ -25,11 +25,14 @@
     //    （特效引擎的 video 積木早就踩過這個坑，那邊的解法是掛去舞台容器而不是 overlay）。
     // 四支都是透明通道素材。長度各自照自己的循環週期裁：白兔的動作週期比較短，
     // 裁 6 秒會截進下一輪（實測與第 0 幀色差 8.21），5 秒才是接縫最小的點（6.84）。
+    // 🚨 darkOnly＝只在黑艙抽得到。柴郡那支是照黑底畫的：螢幕的外光暈本身就是一圈黑（實心像素，
+    //    不是 alpha 邊緣噪點，清 alpha 清不掉），灰白底一放就是一圈髒邊；再說他本來就是 404 的管理員，
+    //    只在 404 那套黑艙待機語意也對。其餘三位是白色貼紙外框，放灰白底乾淨。
     const CASTS = [
         { k: 'alice', f: 'alice.webm' },
         { k: 'rabbit', f: 'rabbit.webm' },
         { k: 'yingying', f: 'yingying.webm' },
-        { k: 'cheshire', f: 'cheshire.webm' },
+        { k: 'cheshire', f: 'cheshire.webm', darkOnly: true },
     ];
     const BITS = 70;   // 資料碎片數；動態幅度要小，等待畫面不該比故事本身搶眼
 
@@ -263,7 +266,8 @@
 
     // 每次開 loading 隨機抽一位管理員待機。柴郡抽到就整套 glitch，其餘只換文案。
     function _pickCast() {
-        const pick = CASTS[Math.floor(Math.random() * CASTS.length)];
+        const pool = CASTS.filter(c => !c.darkOnly || S.theme === 'dark');
+        const pick = pool[Math.floor(Math.random() * pool.length)];
         const c = pick.k;
         S.cast = c;
         if (S.vid) {
