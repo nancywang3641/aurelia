@@ -536,6 +536,7 @@
     // ── 玩家的一次揮擊：命中檢定→骰子→結算→日誌。攻擊/重擊/技能全部共用這條 ──
     function strike(t, opt, verb, done) {
         const r = attackRoll(S.me, t, opt);
+        if (r.crit && S.beats) S.beats.crits++;
         showDice(r.nat, r.crit ? '會心一擊！' : r.fumble ? '失手' : r.hit ? '命中' : '未命中');
         later(() => {
             const acTxt = opt.acMul ? '（' + r.total + ' vs 防禦 ' + r.ac + '·已破防）' : '（' + r.total + ' vs 防禦 ' + r.ac + '）';
@@ -572,6 +573,7 @@
         S.busy = true; actsEnabled(false); closeSkills();
         S.me.guard = false;
         S.me.sp -= sk.cost;
+        if (S.beats && S.beats.skills.indexOf(sk.name) < 0) S.beats.skills.push(sk.name);
         renderMe();
         const done = () => later(checkOverThenNext, T_NEXT);
 
@@ -643,7 +645,7 @@
                 const verb = big ? '全力砸下' : '撲上來';
                 // 擋下大招＝敵人失衡，下回合跳過。沒有這個回報的話，擋一次省下的傷害
                 // 剛好等於少打一次的損失（實測 17% vs 19%），防禦仍是白按的。
-                if (big && S.me.guard) f.stunned = true;
+                if (big && S.me.guard) { f.stunned = true; if (S.beats) S.beats.guardedBig++; }
                 if (r.hit) {
                     const dmg = applyDamage(f, S.me, r, { extraDice: big ? f.dmg[0] * 2 : 0 });
                     renderMe();
@@ -718,6 +720,9 @@
             killed: killed,
             alive: alive,                                          // 還站著的：戰敗敘事要指名是誰打倒你
             escaped: outcome === 'flee' ? alive : [],
+            skills: (S.beats && S.beats.skills.slice()) || [],     // 過程重點：橋接句用，AI 靠這些接續
+            guardedBig: (S.beats && S.beats.guardedBig) || 0,
+            crits: (S.beats && S.beats.crits) || 0,
             log: S.log.slice(),
         };
 
@@ -797,6 +802,7 @@
             S.foes = []; S.order = []; S.oi = 0; S.round = 1;
             S.busy = false; S.over = false; S.log = []; S.target = null;
             S.notes = []; S.fleeDC = 12; S.skills = null;
+            S.beats = { skills: [], guardedBig: 0, crits: 0 };   // 過程重點：寫回正文的橋接句要用（AI 靠這個接續）
             S.onEnd = onEnd || null; S.host = host;
 
             let list = spec.enemies || ['goblin'], aiSkills = null, field = null;
@@ -880,11 +886,20 @@
             if (r.escaped.length) parts.push('left:' + tally(r.escaped, '+'));
             return parts.join('|') + ']';
         },
+        //   這句是 AI 下一輪唯一的戰鬥記憶（假戰果被剪掉了），寫太薄它會沒頭沒尾接不下去，
+        //   所以把過程重點也帶上：打了幾回合、用過什麼招、有沒有擋下重擊——給它接續的材料，不是只給輸贏。
         toNarrative: function (r) {
             const w = { none: '毫髮無傷', light: '有些擦傷', heavy: '傷得不輕', critical: '傷勢很重，快撐不住了', down: '被打倒在地' }[r.wound];
-            if (r.outcome === 'win') return '（戰鬥結果：擊倒了' + tally(r.killed) + '，你' + w + '。）';
-            if (r.outcome === 'flee') return '（戰鬥結果：你甩開' + tally(r.escaped) + '脫離戰場，' + w + '。）';
-            return '（戰鬥結果：你被' + (tally(r.alive || []) || tally(r.killed || []) || '對手') + '擊倒。）';
+            const bits = [];
+            if (r.skills && r.skills.length) bits.push('期間使出了' + r.skills.slice(0, 3).join('、'));
+            if (r.guardedBig) bits.push('穩穩擋下對方蓄力的重擊');
+            if (r.crits) bits.push('打出過會心一擊');
+            const mid = bits.length ? '，' + bits.join('，') : '';
+            if (r.outcome === 'win')
+                return '（戰鬥結果：與' + tally(r.killed) + '交手了' + r.rounds + '回合' + mid + '，最終將對方擊倒；你' + w + '。）';
+            if (r.outcome === 'flee')
+                return '（戰鬥結果：與' + tally(r.escaped) + '纏鬥了' + r.rounds + '回合' + mid + '，你抽身甩開對方脫離戰場；' + w + '。）';
+            return '（戰鬥結果：與' + (tally(r.alive || []) || tally(r.killed || []) || '對手') + '纏鬥了' + r.rounds + '回合' + mid + '，你力竭被擊倒。）';
         },
     };
 
