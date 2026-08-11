@@ -487,6 +487,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
         .chx-enter:hover { filter: brightness(1.08); transform: translateY(-1px); }
 
+        /* ── 進入章節穿越轉場的畫布（vn_chapter_warp 動態掛上；蓋整窗、吃掉點擊防連按） ── */
+        .chx-warp-canvas {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            z-index: 60; pointer-events: auto;
+        }
+
         /* ── 空狀態／讀取中 ── */
         .chx-empty {
             position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);

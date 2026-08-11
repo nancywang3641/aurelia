@@ -220,6 +220,7 @@ const PHONE_FILES = [
     'vn_story/vn_theme.js',            // VN 劇情面板主題（[World|] 驅動換樣式）— 須在 vn_core 前
     'vn_story/vn_fx.js',               // ⚡ 畫面特效引擎（#fx-id# 標記由 vn_core 抽取路由過來）
     'vn_story/vn_battle.js',           // ⚔️ 回合制戰鬥面板（<BattleStart> 區塊由 vn_core 攔截後叫起；純本地骰、零 API）
+    'vn_story/vn_chapter_warp.js',     // 🌀 進入章節的碎裂穿越轉場（vn_panels 載入前的演出層；純 canvas 零 API）
     'vn_story/vn_loader_tips.js',      // 📜 Loading 的世界觀提示切句器（校準艙輪播用；零 API，須在其前）
     'vn_story/vn_loader_chamber.js',   // 🛰 開場 Loading 的視差校準艙（vn_core 掛載時要用得到）
     'vn_story/vn_core.js',
