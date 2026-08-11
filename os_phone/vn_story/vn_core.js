@@ -574,13 +574,13 @@
             if (!document.getElementById('vn-sl-style')) {
                 const s = document.createElement('style');
                 s.id = 'vn-sl-style';
-                // 校準艙掛不上時的純色退路：配色跟艙的預設一致（灰白＋藍），免得退路一出來整片黑
-                s.textContent = '#vn-start-loader{position:absolute;inset:0;z-index:900;background:#eceff5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}' +
-                    '#vn-start-loader-track{width:60%;height:3px;background:rgba(90,126,168,0.20);border-radius:2px;overflow:hidden}' +
-                    '#vn-start-loader-bar{height:100%;width:0%;background:#3d7cbe;border-radius:2px;transition:width linear}' +
-                    '#vn-start-loader-label{font-size:10px;letter-spacing:3px;color:rgba(47,72,100,0.72);text-transform:uppercase}' +
-                    '#vn-start-loader-skip{display:none;margin-top:6px;font-size:11px;letter-spacing:2px;color:rgba(42,62,84,0.72);border:1px solid rgba(90,126,168,0.34);border-radius:4px;padding:6px 18px;cursor:pointer;background:transparent}' +
-                    '#vn-start-loader-skip:hover{color:#1b3a5c;border-color:#3d7cbe}';
+                // 校準艙掛不上時的純色退路：配色跟艙的預設一致（深色）
+                s.textContent = '#vn-start-loader{position:absolute;inset:0;z-index:900;background:#050402;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}' +
+                    '#vn-start-loader-track{width:60%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}' +
+                    '#vn-start-loader-bar{height:100%;width:0%;background:#d4af37;border-radius:2px;transition:width linear}' +
+                    '#vn-start-loader-label{font-size:10px;letter-spacing:3px;color:rgba(212,175,55,0.5);text-transform:uppercase}' +
+                    '#vn-start-loader-skip{display:none;margin-top:6px;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.35);border:1px solid rgba(255,255,255,0.18);border-radius:4px;padding:6px 18px;cursor:pointer;background:transparent}' +
+                    '#vn-start-loader-skip:hover{color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.4)}';
                 document.head.appendChild(s);
             }
 
