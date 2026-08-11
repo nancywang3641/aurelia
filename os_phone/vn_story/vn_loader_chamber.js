@@ -122,6 +122,14 @@
         'color:var(--vsl-skip);border:1px solid var(--vsl-skip-bd);background:var(--vsl-skip-bg);',
         'border-radius:3px;padding:7px 22px;cursor:pointer;}',
         '#vn-start-loader-skip:hover{color:var(--vsl-skip-hv);border-color:var(--vsl-skip-hv-bd);}',
+        // 世界觀提示：擺在進度條上方那塊空檔（下面已經被狀態文字與跳過鈕佔滿了）。
+        // 掛在「資料碎片」這個名目下——這艙的設定本來就是正在讀取這個世界的資料，
+        // 畫面上也真的在飄資料碎片，提示就是讀出來的碎片，不是硬貼上去的 UI。
+        '#vn-start-loader .vsl-tip{position:absolute;left:0;right:0;bottom:28%;padding:0 12%;text-align:center;',
+        'pointer-events:none;opacity:0;transition:opacity .8s ease;}',
+        '#vn-start-loader .vsl-tip.on{opacity:1;}',
+        '#vn-start-loader .vsl-tip-k{font-size:clamp(6px,.66vw,9px);letter-spacing:.3em;color:var(--vsl-foot);margin-bottom:8px;}',
+        '#vn-start-loader .vsl-tip-t{font-size:clamp(11px,1.05vw,14px);line-height:1.8;color:var(--vsl-label);letter-spacing:.03em;}',
         // 完成閃光
         '#vn-start-loader .vsl-flash{position:absolute;inset:0;pointer-events:none;opacity:0;',
         'background:radial-gradient(50% 40% at 50% 46%,var(--vsl-flash),transparent 70%);}',
@@ -147,7 +155,11 @@
         raf: 0, bits: [], burst: 0, W: 0, H: 0,
         sync: 42.8, syncTarget: 44, syncTimer: 0, cast: '',
         theme: 'light', forced: '',
+        tips: [], tipI: 0, tipTimer: 0, tipFade: 0, tipBusy: false,
     };
+
+    const TIP_MS = 7000;    // 一條停留多久；比對話還快就變成閃字，比這慢又讀不到第二條
+    const TIP_FADE = 800;   // 要等淡出走完才換字，不然會被看見字在原地跳掉
 
     // 明確指定 > 人在 404 房 > 灰白。404 那條之後接正式入口時改這裡就好。
     function _resolveTheme() {
@@ -252,11 +264,14 @@
             + '<div class="vsl-tr">REALITY LAYERS <i class="vsl-ly">04</i> &nbsp;//&nbsp; SYNC <i class="vsl-sy">42.8%</i></div>'
             + '<div class="vsl-bc">PARALLAX FIELD STABLE</div>';
         const ui = document.createElement('div'); ui.className = 'vsl-ui';
+        const tip = document.createElement('div');
+        tip.className = 'vsl-tip';
+        tip.innerHTML = '<div class="vsl-tip-k">DATA FRAGMENT</div><div class="vsl-tip-t"></div>';
         const flash = document.createElement('div'); flash.className = 'vsl-flash';
 
         el.appendChild(glow); el.appendChild(layers); el.appendChild(cv);
         el.appendChild(mark); el.appendChild(stage); el.appendChild(hud);
-        el.appendChild(ui); el.appendChild(flash);
+        el.appendChild(tip); el.appendChild(ui); el.appendChild(flash);
         if (track) ui.appendChild(track);
         if (label) ui.appendChild(label);
         if (skip) ui.appendChild(skip);
@@ -284,12 +299,63 @@
         return c;
     }
 
+    // 世界觀提示輪播。切句在 VN_LoaderTips，這裡只管換字。
+    // 沒進視差／切不出東西／沒有酒館助手（PWA）都會拿到空陣列 → 整條不顯示，不留一個空殼在那裡。
+    function _tipShow() {
+        if (!S.el || !S.tips.length) return;
+        const box = S.el.querySelector('.vsl-tip');
+        const txt = box && box.querySelector('.vsl-tip-t');
+        if (!txt) return;
+        box.classList.remove('on');
+        clearTimeout(S.tipFade);
+        S.tipFade = setTimeout(() => {
+            if (!S.el || !S.tips.length) return;
+            txt.textContent = S.tips[S.tipI % S.tips.length];
+            S.tipI++;
+            box.classList.add('on');
+        }, TIP_FADE);
+    }
+
+    function _tipStart() {
+        const box = S.el && S.el.querySelector('.vsl-tip');
+        if (!box) return;
+        box.classList.remove('on');
+        S.tips = []; S.tipI = 0;
+        const run = (list) => {
+            // 讀世界書是非同步的，回來時 loading 可能已經收掉了 → 用 rAF 還在不在當作「艙還開著」
+            if (!S.el || !S.raf) return;
+            S.tips = Array.isArray(list) ? list : [];
+            if (!S.tips.length) return;
+            _tipShow();
+            S.tipTimer = setInterval(_tipShow, TIP_MS);
+        };
+        try {
+            const p = window.VN_LoaderTips && window.VN_LoaderTips.load();
+            if (p && p.then) p.then(run).catch(() => {});
+        } catch (e) {}
+    }
+
+    function _tipStop() {
+        if (S.tipTimer) { clearInterval(S.tipTimer); S.tipTimer = 0; }
+        if (S.tipFade) { clearTimeout(S.tipFade); S.tipFade = 0; }
+        S.tips = []; S.tipI = 0;
+        const box = S.el && S.el.querySelector('.vsl-tip');
+        if (box) {
+            box.classList.remove('on');
+            const txt = box.querySelector('.vsl-tip-t');
+            if (txt) txt.textContent = '';
+        }
+    }
+
     function start() {
         if (!S.el) return;
         _applyTheme();   // 每次開 loading 重判一次：同一個殼會被不同的局重用
         _resize();
         if (!S.cast) _pickCast();
         if (!S.raf) S.raf = requestAnimationFrame(_draw);
+        // 🚨 一輪 loading 會 start() 兩次（撰寫幕布→正式 loading）。沒有這個閂的話提示會在中途
+        //    整個重來，玩家讀到一半的那條就沒了，還會多讀一次世界書。
+        if (!S.tipBusy) { S.tipBusy = true; _tipStart(); }
         if (!S.syncTimer) {
             S.syncTimer = setInterval(() => {
                 S.sync += (S.syncTarget - S.sync) * 0.08;
@@ -304,6 +370,8 @@
         if (S.syncTimer) { clearInterval(S.syncTimer); S.syncTimer = 0; }
         // 影片也要停：detached 的 video 在某些瀏覽器會繼續解碼
         if (S.vid) { try { S.vid.pause(); } catch (e) {} S.vid.classList.remove('on'); }
+        _tipStop();
+        S.tipBusy = false;
         S.cast = '';
         S.sync = 42.8; S.syncTarget = 44;
         if (S.el) S.el.classList.remove('vsl-aligned', 'vsl-flashing');
