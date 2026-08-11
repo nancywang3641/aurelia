@@ -91,7 +91,9 @@
         // 不用 transform 置中：transform 會讓這層自成堆疊上下文，影片就再也混不到底下的背景。
         // 🚨 用 flex 不用 grid：grid 的隱式列是內容高＝影片的 height:100% 沒有可依據的定高，
         //    會退回照寬度算（16:9），橫式比例下就長到蓋住下面的進度文字與跳過鈕。
-        '#vn-start-loader .vsl-stage{position:absolute;top:10%;left:0;right:0;height:56%;',
+        // 高度收窄＝橫式比例下角色跟著變小（直式是被寬度卡住、不受影響）。
+        // top 跟著往下推，讓這條帶的中心維持在 38%：直式的角色位置才不會跟著漂。
+        '#vn-start-loader .vsl-stage{position:absolute;top:17%;left:0;right:0;height:42%;',
         'display:flex;align-items:center;justify-content:center;pointer-events:none;}',
         // 素材本身就是透明通道（四支都是 VP9 alpha），不需要任何混合模式，換底色也不會露出方框。
         // 羽化只是讓四邊淡出、融進艙裡。
