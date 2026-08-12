@@ -568,6 +568,10 @@ const IRIS_IDLE = [
                             <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-archive-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="禁庫">藏書</span>
                         </button>
+                        <button class="lb-dock-btn" id="lb-dock-story" data-proxy="void-story-btn" title="踏入故事">
+                            <i class="fa-solid fa-masks-theater"></i>
+                            <span class="lb-dock-label" data-cn-404="故事">故事</span>
+                        </button>
                         <button class="lb-dock-btn" data-proxy="void-chapter-btn" title="章節選擇">
                             <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-chapters-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="異常記錄">章節</span>
@@ -927,10 +931,13 @@ const IRIS_IDLE = [
                 };
             }
 
-            // ST 版：隱藏「踏入故事」按鈕（與「館藏」功能重複）
+            // ST 版：隱藏「踏入故事」按鈕（與「館藏」功能重複）；獨立版 dock 補「故事」快捷
             const storyBtn = tab.querySelector('#void-story-btn');
             if (storyBtn && !(window.OS_API?.isStandalone?.() ?? false)) {
                 storyBtn.style.display = 'none';
+            } else {
+                const dockStory = tab.querySelector('#lb-dock-story');
+                if (dockStory) dockStory.style.display = 'flex';
             }
 
             if (closeBookshelfBtn) {

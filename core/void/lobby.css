@@ -173,10 +173,11 @@
 
 /* ── 2a. 左欄：合成立繪（人物＋背景同圖）＋ 疊字 ── */
 .lobby-left {
-    position:relative; flex:0 0 60%; min-width:0; overflow:hidden;
+    position:relative; flex:1 1 100%; min-width:0; overflow:hidden;
     background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/yingying.png) center top / cover no-repeat;
-    border-right:1px solid var(--lb-line);
 }
+/* MAIN MENU 右欄已退役：功能全走左側 dock。DOM 留著（dock 代理點擊那些按鈕），只是永不顯示 */
+.lobby-right { display:none !important; }
 .void-tab.mode-404 .lobby-left {
     background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/cheshire.png);
 }
@@ -251,6 +252,9 @@
 .lb-dock-ic { width:30px; height:30px; object-fit:contain; display:block; pointer-events:none; }
 .lb-dock-label { font-size:11px; font-weight:700; letter-spacing:1px; color:#2b3652; line-height:1.2; pointer-events:none; }
 .lb-dock-sep { width:34px; height:1px; margin:1px 0; background:linear-gradient(to right,transparent,rgba(60,80,130,0.4),transparent); }
+#lb-dock-story { display:none; }   /* 踏入故事：只在獨立版(PWA)出現，void_terminal 依 isStandalone 開 */
+#lb-dock-story i { font-size:22px; height:30px; line-height:30px; color:#4f74c8; pointer-events:none; }
+.void-tab.mode-404 #lb-dock-story i { color:#7de89a; }
 .lb-dock-exit i { font-size:22px; height:30px; line-height:30px; color:#4f74c8; pointer-events:none; }
 /* 成就待兌換小圓點 */
 .lb-dock-btn.has-pending::after {
