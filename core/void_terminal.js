@@ -563,6 +563,33 @@ const IRIS_IDLE = [
                     <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" alt="瀅瀅" style="display:none;">
                     <div class="lb-scene-badge" id="lb-scene-badge">視差書咖</div>
                     <div class="lb-signature"></div>
+                    <div class="lb-dock" id="lb-dock">
+                        <button class="lb-dock-btn" data-proxy="void-quest-btn" title="藏書">
+                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-archive-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="禁庫">藏書</span>
+                        </button>
+                        <button class="lb-dock-btn" data-proxy="void-chapter-btn" title="章節選擇">
+                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-chapters-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="異常記錄">章節</span>
+                        </button>
+                        <button class="lb-dock-btn" data-proxy="void-journal-btn" title="故事日誌">
+                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-journal-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="案件日誌">日誌</span>
+                        </button>
+                        <button class="lb-dock-btn" id="lb-dock-ach" data-proxy="void-achievement-btn" title="成就">
+                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-achievements-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="異常蒐集">成就</span>
+                        </button>
+                        <button class="lb-dock-btn" data-proxy="void-apps-btn" title="應用">
+                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-apps-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="終端機">應用</span>
+                        </button>
+                        <div class="lb-dock-sep"></div>
+                        <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
+                            <i class="fa-solid fa-umbrella"></i>
+                            <span class="lb-dock-label" data-cn-404="墜入404">出門</span>
+                        </button>
+                    </div>
                     <div class="void-dialogue-wrap">
                         <div style="position: relative; width: 100%;">
                             <div class="void-dialogue-box" id="iris-dialogue-box">
@@ -738,7 +765,10 @@ const IRIS_IDLE = [
                 </div>
                 <div class="ach-stats" style="display:flex;align-items:center;justify-content:space-between;">
                     <span id="ach-stats">0 個成就 · 0 個待兌換</span>
-                    <button id="ach-clear-btn" style="display:none;padding:3px 9px;background:rgba(180,60,60,0.15);border:1px solid rgba(200,80,80,0.35);color:#e07070;border-radius:5px;cursor:pointer;font-size:11px;letter-spacing:1px;white-space:nowrap;">🗑 清空</button>
+                    <div class="ach-actions">
+                        <button id="ach-redeem-btn" style="display:none;">💎 一鍵兌換</button>
+                        <button id="ach-clear-btn" style="display:none;padding:3px 9px;background:rgba(180,60,60,0.15);border:1px solid rgba(200,80,80,0.35);color:#e07070;border-radius:5px;cursor:pointer;font-size:11px;letter-spacing:1px;white-space:nowrap;">🗑 清空</button>
+                    </div>
                 </div>
                 <div class="ach-list" id="ach-list"></div>
                 <div class="ach-footer">📡 提示：收集異常成就可前往 404 號房進行黑市交易</div>
@@ -981,6 +1011,15 @@ const IRIS_IDLE = [
             const appsBtn = tab.querySelector('#void-apps-btn');
             if (appsBtn) appsBtn.addEventListener('click', function () {
                 if (window.VoidPhoneShell && window.VoidPhoneShell.open) window.VoidPhoneShell.open();
+            });
+
+            // 🧭 左側常駐 dock：代理點擊右側 MAIN MENU 的既有按鈕，邏輯全部沿用
+            const lbDock = tab.querySelector('#lb-dock');
+            if (lbDock) lbDock.addEventListener('click', function (e) {
+                const b = e.target.closest('.lb-dock-btn');
+                if (!b || !b.dataset.proxy) return;
+                const proxy = tab.querySelector('#' + b.dataset.proxy);
+                if (proxy) proxy.click();
             });
 
             // ===== 右上角人設頭像 + 下拉（取代舊「我」TAB，內容＝ OS_PERSONA 人設管理）=====
