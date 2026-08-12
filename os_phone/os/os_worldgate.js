@@ -1008,12 +1008,14 @@
             '.wg-meet-x{position:absolute;right:12px;top:12px;z-index:6;width:32px;height:32px;border-radius:50%;cursor:pointer;' +
               'border:1px solid rgba(20,36,61,.22);background:rgba(255,255,255,.92);color:#14243d;font-size:14px;box-shadow:0 2px 10px rgba(14,24,40,.18);}' +
             '.wg-meet-x:hover{background:#10243d;color:#fff;}' +
-            /* ── 左:角色海報(白斜板 + 左下墨藍節奏區 + 巨大描邊姓名 + 立繪 + 代號) ── */
+            /* ── 左:角色海報(底板圖 + 巨大描邊姓名 + 立繪 + 代號) ──
+               底板是阿洛拆好的透明 PNG(白斜板/墨藍階梯/細金線/水藍刻度/點陣),不用 CSS 重畫——
+               clip-path 只畫得出色塊，畫不出那些細節，實測就是差一截。 */
             '.wg-poster{position:relative;flex:0 0 40%;min-width:0;}' +
-            '.wg-poster-plane{position:absolute;inset:0;background:linear-gradient(158deg,rgba(250,252,255,.97),rgba(235,241,249,.95));' +
-              'clip-path:polygon(0 0,100% 0,72% 100%,0 100%);box-shadow:0 12px 44px rgba(14,24,40,.26);}' +
-            '.wg-poster-plane::after{content:"";position:absolute;left:0;bottom:0;width:58%;height:32%;background:var(--party-navy);' +
-              'clip-path:polygon(0 26%,100% 0,80% 100%,0 100%);}' +
+            // 100% 100% 不等比:海報欄的長寬比會隨舞台變，contain 會露出四周空隙、cover 會把邊上的金線刻度切掉。
+            //   底板幾乎全是直線與斜線，小幅拉伸看不出來，缺角/缺線一眼就看得出來。
+            '.wg-poster-plane{position:absolute;inset:0;background:url("' + _WG_ART + 'poster-plate.png") center/100% 100% no-repeat;' +
+              'filter:drop-shadow(0 12px 30px rgba(14,24,40,.24));}' +
             // 巨大姓名只當背景圖形：描邊透明字、直排，壓在立繪後面
             '.wg-poster-name{position:absolute;left:5%;top:5%;z-index:2;writing-mode:vertical-rl;letter-spacing:6px;' +
               'font-size:clamp(34px,11vh,96px);line-height:1.12;font-weight:900;color:transparent;-webkit-text-stroke:1.5px rgba(53,110,175,.4);pointer-events:none;}' +
@@ -1027,9 +1029,12 @@
             '.wg-poster-sig span{font-size:12px;letter-spacing:2px;color:var(--party-muted);border-top:1px solid var(--party-gold);padding-top:3px;}' +
             '.wg-joined{display:inline-flex;align-items:center;gap:3px;margin-top:5px;padding:2px 8px;border-radius:8px;background:rgba(60,120,80,.14);color:#2f6b46;font-size:10px;font-style:normal;font-weight:800;white-space:nowrap;}' +
             /* ── 右:事件殼(白霧玻璃 + 斜切角),頁籤軌固定在殼內最下緣 ── */
-            '.wg-shell{position:relative;flex:1 1 60%;min-width:0;display:flex;flex-direction:column;' +
-              'background:rgba(249,251,255,.96);backdrop-filter:blur(7px);box-shadow:-8px 0 34px rgba(14,24,40,.2);' +
-              'clip-path:polygon(5% 0,100% 0,100% 100%,0 100%,0 7%);}' +
+            // 事件底板用的是切掉最下面那條墨藍基座的版本:那條把三等分畫死了,而這裡只有兩個頁籤。
+            //   頁籤軌改用獨立的 tab-rail(分隔線也已抹掉),寬高怎麼變都不會對不上。
+            // 🚨 min-height:0 不能省:手機是直向 flex,沒有它 flex item 撐不下就往外長(min-height:auto),
+            //    整個殼會溢出面板、頁籤軌掉到底部對話列上面。桌機是橫向所以只有 min-width 生效,兩個都要留。
+            '.wg-shell{position:relative;flex:1 1 60%;min-width:0;min-height:0;display:flex;flex-direction:column;' +
+              'background:url("' + _WG_ART + 'event-plate.png") center/100% 100% no-repeat;}' +
             '.wg-shell-body{flex:1;min-height:0;overflow-y:auto;padding:22px 26px 10px 34px;scrollbar-width:thin;}' +
             '.wg-ev-meta{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:3px;font-weight:700;color:var(--party-muted);}' +
             '.wg-ev-meta b{color:var(--npc-accent);font-size:14px;letter-spacing:1px;}' +
@@ -1050,25 +1055,29 @@
             '.wg-prof-row{display:flex;gap:12px;padding:9px 2px;border-bottom:1px dashed rgba(20,36,61,.14);}.wg-prof-row:last-child{border-bottom:none;}' +
             '.wg-prof-row span{flex:none;width:64px;color:var(--party-muted);font-size:12px;font-weight:700;padding-top:2px;}' +
             '.wg-prof-row b{color:#22334c;font-weight:600;line-height:1.6;font-size:14px;}' +
-            '.wg-tabs{display:flex;flex:none;background:var(--party-navy);clip-path:polygon(4% 0,100% 0,100% 100%,0 100%);}' +
+            // 頁籤軌是整條斜切金邊的墨藍條(獨立素材);左右尖端是造型,按鈕靠 padding 讓開不要壓上去
+            '.wg-tabs{display:flex;flex:none;min-height:52px;padding:0 4%;background:url("' + _WG_ART + 'tab-rail.png") center/100% 100% no-repeat;}' +
             '.wg-tab{position:relative;flex:1;padding:13px 4px;background:none;border:none;cursor:pointer;' +
               'color:rgba(233,240,250,.7);font-size:14px;font-weight:700;letter-spacing:3px;font-family:inherit;}' +
-            '.wg-tab+.wg-tab{border-left:1px solid rgba(201,170,114,.32);}' +
+            '.wg-tab+.wg-tab{border-left:1px solid rgba(201,170,114,.5);}' +
             '.wg-tab:hover{color:#fff;}.wg-tab.on{color:#fff;}' +
             '.wg-tab.on::after{content:"";position:absolute;left:28%;right:28%;bottom:7px;height:2px;background:var(--npc-accent);}' +
             // 手機:上下堆疊,海報收成角色橫幅;字級一律不縮(縮了就變回催眠表單)
             '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}' +
               '.wg-meet{flex-direction:column;}' +
-              '.wg-poster{flex:0 0 32vh;}' +
-              '.wg-poster-plane{clip-path:polygon(0 0,100% 0,100% 76%,0 100%);}' +
-              // 🚨左緣要齊平不能斜:斜的話代號牌最上面那行(姓名)會露在楔形外＝白字落到白斜板上,整個讀不到
-              '.wg-poster-plane::after{width:52%;height:40%;clip-path:polygon(0 0,100% 0,86% 100%,0 100%);}' +
-              '.wg-poster-fig{left:26%;right:6%;}.wg-poster-name{font-size:clamp(26px,11vw,48px);}' +
-              // 手機版代號牌落在墨藍楔形上→整組換成亮色，桌機版是白斜板不能一起改
-              '.wg-poster-sig{right:auto;left:6%;bottom:6%;align-items:flex-start;text-align:left;}' +
-              '.wg-poster-sig b{color:#fff;}' +
-              '.wg-poster-sig span{color:rgba(226,235,247,.84);border-top-color:rgba(201,170,114,.85);}' +
-              '.wg-shell{clip-path:none;box-shadow:0 -6px 24px rgba(14,24,40,.2);}' +
+              // 手機換另一張底板:桌機那張是 2:3 直式，攤成橫幅會整個變形。這張是專門的角色舞台，
+              //   底部中央有發光平台＝人站的位置，左側墨藍楔形＝放代號牌的地方。
+              // 用面板的百分比而不是 vh:這塊是面板內的元件,vh 量的是整個視窗、跟面板高度不是同一回事
+              '.wg-poster{flex:0 0 38%;}' +
+              '.wg-poster-plane{background-image:url("' + _WG_ART + 'mobile-stage.png");}' +
+              // 兩張底板各自帶透明邊,並排會看成「兩張紙」→ 讓事件板往上壓一點,接成一體
+              '.wg-shell{margin-top:-3%;}' +
+              '.wg-poster-fig{left:24%;right:24%;top:6%;bottom:9%;}' +
+              // 手機的巨大姓名要收在墨藍楔形上緣以內:壓下去的話藍色描邊落在深底上會整個消失
+              '.wg-poster-name{font-size:clamp(24px,10vw,40px);left:6%;top:3%;}' +
+              // 代號牌留在右側白區(跟桌機同一側):挪到左邊的墨藍楔形上會跟巨大姓名疊在一起,
+              //   而且深字疊深底還得整組改色——右側白區兩個問題都不存在。
+              '.wg-poster-sig{bottom:36%;}' +
               '.wg-shell-body{padding:16px 16px 8px;}' +
               '.wg-brand-copy small{display:none}' +
               '.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
@@ -1274,8 +1283,9 @@
     }
 
     // ── 🧍 出發編成槽位 ──
-    const SLOT_BACK  = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/worldgate_ui/party-slot-back.png';
-    const SLOT_FRONT = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/worldgate_ui/party-slot-front.png';
+    const _WG_ART = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/worldgate_ui/';
+    const SLOT_BACK  = _WG_ART + 'party-slot-back.png';
+    const SLOT_FRONT = _WG_ART + 'party-slot-front.png';
     // 職業→菱石圖示。旅人的 job 是「普通人在做的工作」的自由文字,對不上就回預設的人形,
     //   不為了這顆裝飾去要模型多吐一個欄位(多一條規格就多一個它會照字面辦事的地方)。
     const JOB_ICONS = [
