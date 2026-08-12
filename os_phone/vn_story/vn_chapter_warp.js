@@ -160,7 +160,7 @@
                 clone.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;max-width:none;aspect-ratio:auto;transform:none;margin:0;z-index:1;';
                 wrap.appendChild(clone);
 
-                const CS = 6, RS = 8;                     // 白色碎片格數（不切卡片內容，純白 div，便宜）
+                const CS = 9, RS = 12;                    // 白色碎片格數（不切卡片內容，純白 div，便宜）
                 const cw = crect.width, chh = crect.height;
                 const cxc = cw / 2, cyc = chh / 2;
                 const maxD = Math.hypot(cxc, cyc);
@@ -185,16 +185,17 @@
                         const px = (gx + 0.5) / CS * cw, py = (gy + 0.5) / RS * chh;
                         const dist = Math.hypot(px - cxc, py - cyc) / maxD;
                         const on = WAVE_T0 + (WAVE_T1 - WAVE_T0) * dist + Math.random() * 0.03;
-                        const spd = 3.2 + Math.random() * 2.2 + dist * 2;
+                        // 擴散收斂：外推 1.2~2.4 倍卡距就好，太發散會變滿天紙屑、跟卡片脫節
+                        const spd = 1.2 + Math.random() * 0.6 + dist * 0.6;
                         const dx = (px - cxc) * spd, dy = (py - cyc) * spd;
-                        const rot = (Math.random() - 0.5) * 50;
+                        const rot = (Math.random() - 0.5) * 24;
                         piece.animate(
                             [
                                 { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 0, offset: 0 },
                                 { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 0, offset: Math.max(0, Math.min(0.98, on - 0.02)) },
                                 { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1, offset: Math.min(0.985, on) },
-                                { transform: 'translate(' + (dx * 0.5).toFixed(1) + 'px,' + (dy * 0.5).toFixed(1) + 'px) rotate(' + (rot * 0.5).toFixed(1) + 'deg) scale(1.3)', opacity: 0.95, offset: Math.min(0.995, on + (1 - on) * 0.5) },
-                                { transform: 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) rotate(' + rot.toFixed(1) + 'deg) scale(1.6)', opacity: 0 },
+                                { transform: 'translate(' + (dx * 0.5).toFixed(1) + 'px,' + (dy * 0.5).toFixed(1) + 'px) rotate(' + (rot * 0.5).toFixed(1) + 'deg) scale(1.15)', opacity: 0.95, offset: Math.min(0.995, on + (1 - on) * 0.5) },
+                                { transform: 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) rotate(' + rot.toFixed(1) + 'deg) scale(1.3)', opacity: 0 },
                             ],
                             { duration: DUR, easing: 'linear', fill: 'forwards' });
                     }
