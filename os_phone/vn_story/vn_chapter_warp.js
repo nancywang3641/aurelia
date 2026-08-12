@@ -97,12 +97,14 @@
         _busy = true;
         const fuse = setTimeout(fire, 3000);   // 保險絲：演出掛了也要放行載入
 
-        // 殘局收拾放外層：中途 throw 也要拆掉碎片層、把原卡還原，不然面板上永遠疊著一張假卡
-        let wrap = null, hidCard = null;
+        // 殘局收拾放外層：中途 throw 也要拆掉碎片層、把原卡還原、取消旁卡動畫，
+        // 不然面板上永遠疊著一張假卡（或旁卡永遠停在飛出去的位置）
+        let wrap = null, hidCard = null, sideAnims = [];
         const restore = () => {
             try { if (wrap) wrap.remove(); } catch (e) {}
             if (hidCard) hidCard.style.visibility = '';
-            wrap = null; hidCard = null;
+            sideAnims.forEach(a => { try { a.cancel(); } catch (e) {} });
+            wrap = null; hidCard = null; sideAnims = [];
         };
 
         try {
@@ -188,6 +190,29 @@
                 // 原卡藏起來（碎片層就是它的替身）；restore 會還原
                 hidCard = card;
                 card.style.visibility = 'hidden';
+
+                // 旁卡被爆風推開：沿「選中卡心→旁卡心」方向飛出畫面、微轉、淡出——
+                // 跟中心爆炸同一個力場，不是各自亂飛。
+                // 🚨 transform 用 composite:'add' 疊在輪播的置中 transform 上；opacity 不能跟著
+                //    composite:'add'（base 1＋關鍵幀值＝永遠不透明，淡出會失效），拆成第二支動畫。
+                const ccx = crect.left + crect.width / 2, ccy = crect.top + crect.height / 2;
+                (card.parentElement ? card.parentElement.querySelectorAll('.chx-card') : []).forEach(sib => {
+                    if (sib === card) return;
+                    const sr = sib.getBoundingClientRect();
+                    if (!sr.width) return;
+                    let ddx = sr.left + sr.width / 2 - ccx, ddy = sr.top + sr.height / 2 - ccy;
+                    const len = Math.hypot(ddx, ddy) || 1;
+                    const fly = Math.max(W, H) * 1.1;
+                    ddx = ddx / len * fly; ddy = ddy / len * fly;
+                    const rot = ((Math.random() - 0.5) * 26).toFixed(1);
+                    const opt = { duration: Math.round(DUR * 0.6), delay: Math.round(DUR * 0.1), fill: 'forwards' };
+                    sideAnims.push(sib.animate(
+                        [{ transform: 'translate(0,0) rotate(0deg)', easing: 'cubic-bezier(0.55, 0, 0.8, 0.45)' },
+                         { transform: 'translate(' + ddx.toFixed(0) + 'px,' + ddy.toFixed(0) + 'px) rotate(' + rot + 'deg) scale(1.3)' }],
+                        Object.assign({ composite: 'add' }, opt)));
+                    sideAnims.push(sib.animate(
+                        [{ opacity: 1, easing: 'cubic-bezier(0.7, 0, 0.9, 0.6)' }, { opacity: 0 }], opt));
+                });
             }
 
             const rFull = { x: 0, y: 0, w: W, h: H };
