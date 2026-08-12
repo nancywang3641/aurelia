@@ -1085,7 +1085,7 @@
               'font-size:clamp(34px,11vh,96px);line-height:1.12;font-weight:900;color:transparent;-webkit-text-stroke:1.5px rgba(53,110,175,.4);pointer-events:none;}' +
             // 立繪是像素小人：放大時一律 pixelated，別讓瀏覽器插值糊成一團
             // 右邊要留給代號牌：圖框佔滿整個海報的話，人一定壓在代號上(斜板本來就往右收窄)
-            '.wg-poster-fig{position:absolute;inset:5.4% 16.6% 1.8% 11.3%;z-index:3;image-rendering:pixelated;' +
+            '.wg-poster-fig{position:absolute;inset:5.3% 12.9% 1.5% 6.6%;z-index:3;image-rendering:pixelated;' +
               'background:var(--wg-fig) center bottom/contain no-repeat;}' +
             '.wg-poster-fig.sheet{background-size:300% 400%;background-position:0 0;}' +
             '.wg-poster-sig{position:absolute;right:2%;bottom:49.9%;z-index:4;display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;}' +
@@ -1103,9 +1103,9 @@
             //   底板是 background-size:100% 100% 拉伸的圖,白板塊的邊界固定在某個百分比上,
             //   px padding 一遇到面板改尺寸就跟底板脫節(標題/選項/身分卡欄位整組跑歪)。
             //   同時這也是「版位微調」拖得動它們的前提——flex 排的東西沒有可拖的四邊。
-            '.wg-ev-head{position:absolute;left:24.8%;top:5%;right:3.9%;bottom:83%;}' +
+            '.wg-ev-head{position:absolute;left:24.8%;top:5%;right:4%;bottom:85.4%;}' +
             '.wg-ev-text{position:absolute;left:24.8%;top:17%;right:3.9%;bottom:74.5%;overflow-y:auto;}' +
-            '.wg-ev-main{position:absolute;left:12.9%;top:27.9%;right:3.9%;bottom:18.3%;overflow-y:auto;scrollbar-width:thin;}' +
+            '.wg-ev-main{position:absolute;left:12.9%;top:27.9%;right:3.6%;bottom:10.1%;overflow-y:auto;scrollbar-width:thin;}' +
             '.wg-ev-meta{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:3px;font-weight:700;color:var(--party-muted);}' +
             '.wg-ev-meta b{color:var(--npc-accent);font-size:14px;letter-spacing:1px;}' +
             '.wg-ev-meta::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,170,114,.7),rgba(201,170,114,0));}' +
@@ -1130,7 +1130,7 @@
             // 頁籤軌是整條斜切金邊的墨藍條(獨立素材);左右尖端是造型,按鈕靠 padding 讓開不要壓上去
             // 用 top/bottom 定高、不用 height:四邊都是可拖的量,微調模式吐出來的 CSS 才貼得回來
             //   (同時設 height 跟 top+bottom 會打架,height 贏、bottom 被忽略)
-            '.wg-tabs{position:absolute;left:-0.1%;right:26.7%;top:94.1%;bottom:-2.3%;display:flex;padding:0 4%;' +
+            '.wg-tabs{position:absolute;left:0.2%;right:26.1%;top:93%;bottom:-0.3%;display:flex;padding:0 4%;' +
               'background:url("' + _WG_ART + 'tab-rail.png") center/100% 100% no-repeat;}' +
             '.wg-tab{position:relative;flex:1;padding:13px 4px;background:none;border:none;cursor:pointer;' +
               'color:rgba(233,240,250,.7);font-size:14px;font-weight:700;letter-spacing:3px;font-family:inherit;}' +
