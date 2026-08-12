@@ -359,9 +359,13 @@
             '"clash":"{最可能跟哪一類隊友或哪種做法起衝突,一句}","breakup":"{在什麼條件下他會離隊或翻臉,一句}",' +
             '"greet":"{在大廳被搭話時的開場白1~2句,符合性格}",' +
             // 🎨 這欄是給生圖用的，不給玩家看：大廳小人要照這串畫，所以只寫外觀、不寫劇情
-            '"sprite":"{這個人的外觀,英文逗號分隔的關鍵詞,只寫看得見的東西:性別年齡體型/髮色髮型/瞳色/服裝與配件/隨身物,大約10~16個詞;不要背景、不要姿勢、不要畫風或畫質詞}",' +
+            '"sprite":"{這個人的外觀,英文逗號分隔的關鍵詞,只寫看得見的東西:性別/年齡/體型/髮色髮型/瞳色/服裝與配件/隨身物,大約10~16個詞;不要背景、不要姿勢、不要畫風或畫質詞}",' +
             '"quiz":[{"q":"{他用來考驗對方合不合拍的問題或話題}","options":[{"t":"{回應選項}","good":{true或false},"r":"{他對此回應的反應一句}"}]}],' +
             '"accept":"{三題都滿意時的入隊台詞1~2句}","refuse":"{不滿意時的婉拒台詞一句}"}]}\n' +
+            // 🚨sprite 的年齡不寫清楚就會吐 age 32 這種數字:生圖模型看不懂數字,只會把它當雜訊,
+            //   年紀完全畫不出來(實機回報)。這裡只描述「要什麼性質」,不列年齡層清單——列了四個檔位
+            //   模型會拿它當題庫輪流填,四個旅人的年齡就被那份清單決定了。
+            '【sprite 的年齡】年齡要寫成生圖模型看得懂的英文年齡說法,不准出現數字、也不准出現 age 這個字。四十歲以上還要再補一個看得見的老化特徵,不然畫出來一律是年輕臉。\n' +
             '每位旅人 quiz 固定 3 題、每題 options 固定 3 個且恰好 1 個 good=true;good 選項不是討好或客套話,而是最對上這個人性格與在意之處的回應,要靠理解他才選得中,錯誤選項也要看起來合理。\n' +
             // 🚨只餵前段:旅人要的是世界長怎樣、社會怎麼運作,用不到正史/核心人物/事件鉤子。
             //   整份塞回去會讓這支的輸入暴增(實測破萬字),輸出額度被擠掉 → JSON 被截斷 → 召集失敗。
@@ -604,6 +608,20 @@
     function _spritePackCfg() {
         try { const o = JSON.parse(win.localStorage.getItem(SPRITE_PACK_LS) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
     }
+    // 舊世界的 sprite 欄可能還帶著「age 32」這種數字(規格是後來才收緊的)。
+    //   生圖模型看不懂數字,留著只是雜訊,送出去之前洗掉——不必要求她重新召集旅人。
+    // 舊世界的 sprite 欄可能還帶著數字年齡(age 32 / 27 years old)——規格是後來才收緊的。
+    //   生圖模型看不懂數字,留著只是雜訊,送出去之前洗掉,不必要求重新召集旅人。
+    //   清完照逗號重組:直接 replace 會留下「male , tall」「man, .,」這種毛邊。
+    function _cleanSpriteAge(p) {
+        const s = String(p || "")
+            .replace(/\bage[d]?\s*[:：]?\s*\d+/gi, "")
+            .replace(/\b\d+\s*(?:years?\s*old|y\.?o\.?|yrs?)/gi, "")
+            .replace(/\d+\s*歲/g, "");
+        return s.split(",").map(x => x.trim())
+            .filter(x => x && /[a-z0-9\u4e00-\u9fff]/i.test(x))
+            .join(", ");
+    }
     async function _autofillSprites(w, gen) {
         const cfg = _spritePackCfg();
         if (!cfg.key) return;                                  // 沒在設置頁挑畫風包＝這功能沒開
@@ -621,7 +639,7 @@
             const preset = (LD.listPresets(cfg.src) || []).find(p => LD.presetKeyOf(p) === cfg.key);
             if (!preset) return;                               // 包被刪或改名→整批停手，不要拿錯包亂生
             try {
-                const ok = await LD.genSpriteInto(key, t.sprite, { src: cfg.src, preset: preset });
+                const ok = await LD.genSpriteInto(key, _cleanSpriteAge(t.sprite), { src: cfg.src, preset: preset });
                 // 🚨換裝要等生成回來才找小人：旅人是錯峰上線的(最晚 2.6 秒)，開跑當下第一位還沒站上場。
                 //   期間若換世界/DIVE/關窗就別再動場上的人(皮膚已存好，下次進大廳照樣是本人)。
                 if (ok && gen === _travGen) {
