@@ -638,6 +638,7 @@
     function _closeMeet() {
         try { _meetRO?.disconnect(); } catch (e) {}
         _meetRO = null;
+        try { win.document.querySelector('.lobby-left')?.classList.remove('wg-host-on', 'wg-host-chat'); } catch (e) {}
         _meetEl?.remove(); _meetEl = null;
     }
     function _lobbyReg() {   // 進大廳小窗互斥圈(開裝扮室等其他窗時自動被收掉)
@@ -739,6 +740,8 @@
                 if (dw) {
                     const sync = () => {
                         if (!box.isConnected) return;
+                        // 純對話模式以外對話列是收起來的(display:none)→ 量不到也不必讓位,直接吃滿高度
+                        if (!dw.offsetHeight) { box.style.setProperty('--wg-meet-pb', '0px'); return; }
                         const hostRect = (box.offsetParent || host).getBoundingClientRect();
                         let top = dw.getBoundingClientRect().top;
                         dw.querySelectorAll('*').forEach(el => {
@@ -769,6 +772,7 @@
                     '<button class="wg-tab" data-tab="id">身分</button>' +
                   '</nav>' +
                 '</div>' +
+                '<button class="wg-meet-chat" title="切換"><i class="fa-solid fa-comment-dots"></i><b>聊天</b></button>' +
                 '<button class="wg-meet-x" title="結束"><i class="fa-solid fa-xmark"></i></button>';
             // 🚨標題那組與內容(選項/身分卡欄位)是「兩個各自定位的容器」,不是同一欄由上往下排:
             //   底板是不規則形,白區能放字的地方不是一條垂直帶——綁成一欄就只能整組上下移,
@@ -776,6 +780,15 @@
             const headEl = box.querySelector('.wg-ev-head');
             const mainEl = box.querySelector('.wg-ev-main');
             box.querySelector('.wg-meet-x').addEventListener('click', _closeMeet);
+            // 💬 純對話模式:海報整個讓開、底部對話列回來,想自由打字聊天時用。
+            //   組隊模式下對話列是收起來的——題目與反應本來就印在海報上,底下再放一份只是把畫面擠滿。
+            host.classList.add('wg-host-on');
+            box.querySelector('.wg-meet-chat').addEventListener('click', () => {
+                const on = host.classList.toggle('wg-host-chat');
+                box.classList.toggle('wg-chat', on);
+                box.querySelector('.wg-meet-chat b').textContent = on ? '組隊' : '聊天';
+                box.querySelector('.wg-meet-chat i').className = on ? 'fa-solid fa-reply' : 'fa-solid fa-comment-dots';
+            });
             // 立繪是動態網址(IDB),只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
             _figureOf(worldId, ti).then(f => {
                 const el = box.querySelector('[data-fig]');
@@ -1040,6 +1053,20 @@
             '.wg-meet-x{position:absolute;right:12px;top:12px;z-index:6;width:32px;height:32px;border-radius:50%;cursor:pointer;' +
               'border:1px solid rgba(20,36,61,.22);background:rgba(255,255,255,.92);color:#14243d;font-size:14px;box-shadow:0 2px 10px rgba(14,24,40,.18);}' +
             '.wg-meet-x:hover{background:#10243d;color:#fff;}' +
+            // 🚨大廳的狀態 class 用 wg-host-* :叫 wg-meet-chat 會跟切換鈕的 class 同名,
+            //   .wg-meet-chat{position:absolute;height:32px;border-radius:16px…} 那條就整組套到 .lobby-left 上。
+            // 💬 組隊模式:底部對話列收起來(題目與反應都印在海報上了,再放一份只是把畫面擠滿)
+            '.lobby-left.wg-host-on .void-dialogue-wrap{display:none;}' +
+            '.lobby-left.wg-host-on.wg-host-chat .void-dialogue-wrap{display:block;}' +
+            '.wg-meet-chat{position:absolute;right:52px;top:12px;z-index:6;display:inline-flex;align-items:center;gap:6px;' +
+              'height:32px;padding:0 13px;border-radius:16px;cursor:pointer;border:1px solid rgba(20,36,61,.22);' +
+              'background:rgba(255,255,255,.92);color:#14243d;font-size:12px;font-weight:800;font-family:inherit;' +
+              'box-shadow:0 2px 10px rgba(14,24,40,.18);}' +
+            '.wg-meet-chat:hover{background:#10243d;color:#fff;}' +
+            // 純對話模式:海報整個讓開,只留這顆鈕浮著;面板本身不吃點擊,免得擋到大廳
+            '.wg-meet.wg-chat{background:none;backdrop-filter:none;pointer-events:none;}' +
+            '.wg-meet.wg-chat .wg-poster,.wg-meet.wg-chat .wg-shell,.wg-meet.wg-chat .wg-meet-x{display:none;}' +
+            '.wg-meet.wg-chat .wg-meet-chat{pointer-events:auto;right:12px;}' +
             /* ── 左:角色海報(底板圖 + 巨大描邊姓名 + 立繪 + 代號) ──
                底板是阿洛拆好的透明 PNG(白斜板/墨藍階梯/細金線/水藍刻度/點陣),不用 CSS 重畫——
                clip-path 只畫得出色塊，畫不出那些細節，實測就是差一截。 */
