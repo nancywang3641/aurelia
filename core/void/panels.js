@@ -29,48 +29,12 @@
         Unhappy: 'both', Sighing: 'both'
     };
 
-    /** 偵測當前大廳模式對應哪個角色看面板 */
-    function getCurrentChar() {
-        const tab = document.querySelector('.void-tab');
-        if (tab && tab.classList.contains('mode-404')) return 'cheshire';
-        // claude 房間 / 預設大廳 → 都走瀅瀅皮（票根）
-        return 'yingying';
-    }
-
-    /** 此成就是否該在當前角色面板顯示 */
-    function shouldShowForChar(emotion, currentChar) {
-        if (!emotion) return true;                       // 舊資料無 emotion：兩邊都顯示
-        const owner = EMOTION_TO_CHAR[emotion];
-        if (!owner) return true;                          // 未知 emotion：兩邊都顯示，避免懸空
-        if (owner === 'both') return true;                // 中性：兩邊都顯示
-        return owner === currentChar;
-    }
-
-    // VN 立繪 25 個 emotion 的貼紙張數 (與 aseets/achievements/ 資料夾對齊)
-    // V1.3 改用立繪 emotion 同步後，原 Mock_xxx 等 PNG 暫時 orphan，等 Rae 重命名
-    // 加新貼紙時：把對應 emotion 數字 +1
-    const STICKER_MANIFEST = {
-        Neutral: 0, Happy: 0, Think: 0, Surprised: 0, JumpScare: 0,
-        Annoyed: 0, Angry: 0, Sighing: 0, Awkward: 0, Embarrassed: 0,
-        Excited: 0, Sad: 0, Dissatisfied: 0, Distressed: 0, Confused: 0,
-        Tired: 0, Craving: 0, Pout: 0, Laughing: 0, Sleepy: 0,
-        Unhappy: 0, Smirk: 0, Amazed: 0, Teasing: 0, Sex: 0
-    };
-    /**
-     * 依 emotion 分類隨機抽一張貼紙
-     * @param {string|null} emotion - VN 寫進來的分類
-     * @returns {string|null}       - sticker key (例如 "Smirk_002") 或 null = 用 default
-     *
-     * 編號純粹只是「同分類第幾張」，沒有語義 — AI 寫 emotion 後從池中隨機抽。
-     * URL 由 CSS [data-sticker="..."] 規則解析，避免酒館 document 根目錄錯位。
-     */
-    function pickStickerKey(emotion) {
-        if (!emotion || !STICKER_MANIFEST[emotion]) return null;
-        const count = STICKER_MANIFEST[emotion];
-        if (count <= 0) return null;
-        const idx = Math.floor(Math.random() * count) + 1;
-        const num = String(idx).padStart(3, '0');
-        return `${emotion}_${num}`;
+    /** 分類：異常(柴郡)/故事(瀅瀅)/日常(中性+舊資料)——收藏冊 tab 跟兌換分流都用這個 */
+    function catOf(a) {
+        const o = EMOTION_TO_CHAR[a.emotion];
+        if (o === 'cheshire') return 'anomaly';
+        if (o === 'yingying') return 'story';
+        return 'daily';
     }
 
     // ===== 成就面板 =====
@@ -90,122 +54,197 @@
         return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // ── 成就收藏冊（單本共用：tab 分類取代舊「雙皮膚各看各的」；兌換按票券類型分流）──
+    let _achTab = 'all';
+
+    function _achMsg(text, ok) {
+        const el = document.getElementById('achv2-msg');
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.toggle('ok', !!ok);
+        clearTimeout(el._t);
+        if (text) el._t = setTimeout(() => { el.textContent = ''; }, 6000);
+    }
+
+    function _achDate(ts) {
+        const d = new Date(ts || 0);
+        return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // 單張票券：異常=404 黑卡、其餘=白票券；待兌換給「領取」鈕（白票→白兔換PT、黑卡→柴郡換碎片）
+    function _achTicketEl(a) {
+        const cat = catOf(a);
+        const anomaly = cat === 'anomaly';
+        const tk = document.createElement('div');
+        tk.className = 'achv2-tk ' + (anomaly ? 'anomaly' : 'std') + (a.redeemed ? ' redeemed' : '');
+        tk.title = a.name + (a.desc ? ' — ' + a.desc : '');
+
+        const stub = document.createElement('div');
+        stub.className = 'achv2-tk-stub';
+        stub.textContent = anomaly ? 'ANOMALY FILE' : (a.redeemed ? 'MEMORY SAVED' : 'UNCLAIMED');
+
+        const main = document.createElement('div');
+        main.className = 'achv2-tk-main';
+        const head = document.createElement('div');
+        head.className = 'achv2-tk-head';
+        const badge = document.createElement('div');
+        badge.className = 'achv2-tk-badge';
+        badge.innerHTML = '<i class="fa-solid ' + (anomaly ? 'fa-cat' : (cat === 'story' ? 'fa-feather' : 'fa-star')) + '"></i>';
+        const name = document.createElement('div');
+        name.className = 'achv2-tk-name';
+        name.textContent = a.name || '未命名成就';   // textContent 防注入
+        head.append(badge, name);
+        const desc = document.createElement('div');
+        desc.className = 'achv2-tk-desc';
+        desc.textContent = a.desc || '';
+        const foot = document.createElement('div');
+        foot.className = 'achv2-tk-foot';
+        const status = document.createElement('span');
+        status.className = 'achv2-tk-status';
+        if (a.redeemed) {
+            status.innerHTML = a.currency === 'pt'
+                ? '<i class="fa-solid fa-coins"></i> ' + (a.shards || 0) + ' PT'
+                : '<i class="fa-solid fa-gem"></i> ' + (a.shards || 0);
+        } else {
+            status.innerHTML = '<i class="fa-regular fa-hourglass-half"></i> 待兌換';
+        }
+        const date = document.createElement('span');
+        date.className = 'achv2-tk-date';
+        date.textContent = _achDate(a.timestamp);
+        foot.append(status, date);
+        if (!a.redeemed) {
+            const claim = document.createElement('button');
+            claim.className = 'achv2-tk-claim';
+            claim.textContent = '領取';
+            claim.addEventListener('click', async () => {
+                if (claim.disabled) return;
+                claim.disabled = true;
+                claim.textContent = '估值中…';
+                let r = { ok: false, msg: '兌換窗口沒開' };
+                try {
+                    r = anomaly
+                        ? await window.OS_404_STORE.evaluateAchievements([a])
+                        : await window.OS_PT.evaluateAchievementsPT([a]);
+                } catch (e) { r = { ok: false, msg: '系統異常' }; }
+                if (r.ok) {
+                    const gain = anomaly ? (r.totalShards + ' 碎片') : (r.totalPT + ' PT');
+                    const say = (r.results && r.results[0] && r.results[0].comment) ? '「' + r.results[0].comment + '」' : '';
+                    _achMsg((anomaly ? '柴郡收下了，' : '白兔先生蓋章，') + '+' + gain + ' ' + say, true);
+                    refreshAchievement();
+                    renderAchievementList();
+                } else {
+                    _achMsg(r.msg || '估值失敗，再試一次', false);
+                    claim.disabled = false;
+                    claim.textContent = '領取';
+                }
+            });
+            foot.appendChild(claim);
+        }
+        // 高額紀念：兌換值 ≥100 貼稀有星星
+        if (a.redeemed && (a.shards || 0) >= 100) {
+            const star = document.createElement('div');
+            star.className = 'achv2-tk-star';
+            tk.appendChild(star);
+        }
+        main.append(head, desc, foot);
+        tk.append(stub, main);
+        return tk;
+    }
+
     function renderAchievementList() {
-        const listEl  = document.getElementById('ach-list');
-        const statsEl = document.getElementById('ach-stats');
-        const achBtn  = document.getElementById('achievement-hist-btn');
+        const listEl = document.getElementById('ach-list');
+        const achBtn = document.getElementById('achievement-hist-btn');
         if (!listEl) return;
 
-        const allAchievements = (window.OS_ACHIEVEMENT && window.OS_ACHIEVEMENT.getAll)
+        const all = (window.OS_ACHIEVEMENT && window.OS_ACHIEVEMENT.getAll)
             ? window.OS_ACHIEVEMENT.getAll() : [];
+        const pendingAll = all.filter(a => !a.redeemed);
 
-        // V1.4: 按當前模式情緒分流
-        const currentChar = getCurrentChar();
-        const achievements = allAchievements.filter(a => shouldShowForChar(a.emotion, currentChar));
-        const pending  = achievements.filter(a => !a.redeemed);
-        const redeemed = achievements.filter(a =>  a.redeemed);
+        const countEl = document.getElementById('achv2-count');
+        const pendEl  = document.getElementById('achv2-pending');
+        if (countEl) countEl.textContent = String(all.length);
+        if (pendEl)  pendEl.textContent  = String(pendingAll.length);
 
-        if (statsEl) statsEl.textContent = `${achievements.length} 個成就 · ${pending.length} 個待兌換`;
+        // 分類 tab（只綁一次）
+        const tabsEl = document.getElementById('achv2-tabs');
+        if (tabsEl && !tabsEl._bound) {
+            tabsEl._bound = true;
+            tabsEl.addEventListener('click', (e) => {
+                const b = e.target.closest('.achv2-tab');
+                if (!b) return;
+                _achTab = b.dataset.cat || 'all';
+                renderAchievementList();
+            });
+        }
+        if (tabsEl) tabsEl.querySelectorAll('.achv2-tab').forEach(b => b.classList.toggle('on', (b.dataset.cat || 'all') === _achTab));
 
-        // 清空按鈕：有成就才顯示（按未過濾總數判斷），並只綁一次事件
+        // 清空（只綁一次）
         const clearBtn = document.getElementById('ach-clear-btn');
-        if (clearBtn) clearBtn.style.display = allAchievements.length > 0 ? '' : 'none';
+        if (clearBtn) clearBtn.style.display = all.length > 0 ? '' : 'none';
         if (clearBtn && !clearBtn._bound) {
             clearBtn._bound = true;
             clearBtn.onclick = async () => {
-                if (!confirm(`確定要清空全部 ${allAchievements.length} 筆成就？此動作無法復原。`)) return;
+                const n = (window.OS_ACHIEVEMENT?.getAll?.() || []).length;
+                if (!confirm(`確定要清空全部 ${n} 筆成就？此動作無法復原。`)) return;
                 if (window.OS_DB && window.OS_DB.clearAchievements) await window.OS_DB.clearAchievements();
                 if (window.OS_ACHIEVEMENT && window.OS_ACHIEVEMENT.load) await window.OS_ACHIEVEMENT.load();
                 renderAchievementList();
             };
         }
 
-        // 一鍵兌換：有待兌換才顯示；估值仍走 404 那套(柴郡 API)，換到💎碎片
+        // 一鍵全兌：白兔跟柴郡各跑一輪（只綁一次）
         const redeemBtn = document.getElementById('ach-redeem-btn');
-        if (redeemBtn) redeemBtn.style.display = pending.length > 0 ? '' : 'none';
+        if (redeemBtn) redeemBtn.style.display = pendingAll.length > 0 ? '' : 'none';
         if (redeemBtn && !redeemBtn._bound) {
             redeemBtn._bound = true;
             redeemBtn.onclick = async () => {
                 if (redeemBtn.disabled) return;
                 redeemBtn.disabled = true;
-                redeemBtn.textContent = '⏳ 估值中…';
-                const footer = document.querySelector('#achievement-panel-overlay .ach-footer');
-                if (footer && !footer.dataset.origText) footer.dataset.origText = footer.textContent;
-                const store = window.OS_404_STORE;
-                const r = (store && store.evaluateAchievements)
-                    ? await store.evaluateAchievements()
-                    : { ok: false, msg: '黑市窗口沒開' };
+                const old = redeemBtn.innerHTML;
+                redeemBtn.textContent = '估值中…';
+                let pt = 0, shards = 0, fail = '';
+                try {
+                    const r1 = await window.OS_PT?.evaluateAchievementsPT?.();
+                    if (r1?.ok) pt = r1.totalPT || 0; else if (r1 && !/沒有/.test(r1.msg || '')) fail = r1.msg || '';
+                } catch (e) {}
+                try {
+                    const r2 = await window.OS_404_STORE?.evaluateAchievements?.();
+                    if (r2?.ok) shards = r2.totalShards || 0; else if (r2 && !fail && !/沒有/.test(r2.msg || '')) fail = r2.msg || '';
+                } catch (e) {}
                 redeemBtn.disabled = false;
-                redeemBtn.textContent = '💎 一鍵兌換';
-                if (footer) {
-                    footer.textContent = r.ok ? `💎 兌換完成！獲得 ${r.totalShards} 碎片` : `📡 ${r.msg || '估值失敗，再試一次'}`;
-                    clearTimeout(footer._restoreTimer);
-                    footer._restoreTimer = setTimeout(() => { footer.textContent = footer.dataset.origText; }, 6000);
+                redeemBtn.innerHTML = old;
+                if (pt || shards) {
+                    const parts = [];
+                    if (pt) parts.push('+' + pt + ' PT');
+                    if (shards) parts.push('+' + shards + ' 碎片');
+                    _achMsg('兌換完成！' + parts.join('、'), true);
+                } else {
+                    _achMsg(fail || '沒有成功兌換任何成就', false);
                 }
-                if (r.ok) refreshAchievement();
+                refreshAchievement();
+                renderAchievementList();
             };
         }
 
-        // 更新按鈕 "待兌換" 小圓點（按當前模式可看到的 pending 算）
-        if (achBtn) {
-            if (pending.length > 0) achBtn.classList.add('has-pending');
-            else                    achBtn.classList.remove('has-pending');
-        }
+        // 入口紅點（全域 pending，不再按皮膚分）
+        if (achBtn) achBtn.classList.toggle('has-pending', pendingAll.length > 0);
         const dockAch = document.getElementById('lb-dock-ach');
-        if (dockAch) dockAch.classList.toggle('has-pending', pending.length > 0);
+        if (dockAch) dockAch.classList.toggle('has-pending', pendingAll.length > 0);
 
-        // 切換成卡帶 grid 模式
-        listEl.classList.add('relic-grid-mode');
-
-        if (achievements.length === 0) {
-            listEl.classList.remove('relic-grid-mode');
-            // 依當前模式給不同空狀態文案
-            const hint = currentChar === 'cheshire'
-                ? '異常紀錄為零。把人玩崩了她就會出現。'
-                : '尚無故事素材。瀅瀅還在等你帶委託來。';
-            listEl.innerHTML = `<div class="ach-empty">── 尚無成就記錄 ──<br><span class="ach-empty-hint">${hint}</span></div>`;
-            return;
-        }
+        // 過濾 + 排序：待兌換優先、新的在前
+        const show = all
+            .filter(a => _achTab === 'all' || catOf(a) === _achTab)
+            .sort((x, y) => (x.redeemed - y.redeemed) || ((y.timestamp || 0) - (x.timestamp || 0)));
 
         listEl.innerHTML = '';
-        // 待兌換優先顯示
-        [...pending, ...redeemed].forEach((ach, idx) => {
-            const safeName    = _escapeHtml(ach.name);
-            const safeDesc    = _escapeHtml(ach.desc || '');
-            const safeEmotion = _escapeHtml(ach.emotion || '');
-            const stickerKey  = pickStickerKey(ach.emotion);
-            const d = new Date(ach.timestamp);
-            const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-            const statusText = ach.redeemed
-                ? `💠 ${ach.shards || 0}`
-                : '待兌換';
-            const titleAttr = safeEmotion
-                ? `[${safeEmotion}] ${safeName}${safeDesc ? ' — ' + safeDesc : ''}`
-                : `${safeName}${safeDesc ? ' — ' + safeDesc : ''}`;
-
-            const wrap = document.createElement('div');
-            wrap.className = 'relic-card-wrap' + (ach.redeemed ? ' redeemed' : '');
-            wrap.title = titleAttr;
-            // 貼紙 key 用 data-sticker 屬性，URL 由 CSS [data-sticker="..."] 解析。
-            // 沒 emotion 或分類不存在 → 不設屬性，CSS fallback 到 achievements_default.png
-            const stickerAttr = stickerKey ? ` data-sticker="${_escapeHtml(stickerKey)}"` : '';
-            // 螢幕區：名稱 + 描述（純文字疊在卡帶黑螢幕上）
-            // 貼紙：絕對定位在卡帶角落，傾斜，會超出邊界（真實「貼上去」的姿態）
-            wrap.innerHTML = `
-                <div class="relic-card">
-                    <div class="relic-card-screen">
-                        <div class="relic-screen-name">${safeName}</div>
-                        ${safeDesc ? `<div class="relic-screen-desc">${safeDesc}</div>` : ''}
-                    </div>
-                    <div class="relic-card-sticker"${stickerAttr}></div>
-                    <div class="relic-card-status">${statusText}</div>
-                </div>
-                <div class="relic-card-info">
-                    <div class="relic-card-meta">${dateStr}</div>
-                </div>
-            `;
-            listEl.appendChild(wrap);
-        });
+        if (!show.length) {
+            const hint = _achTab === 'anomaly'
+                ? '異常紀錄為零。把人玩崩了它們就會出現。'
+                : '還沒有這一類的收藏。';
+            listEl.innerHTML = `<div class="achv2-empty">── 這一頁還是空白 ──<br><span class="achv2-empty-hint">${_escapeHtml(hint)}</span></div>`;
+            return;
+        }
+        show.forEach(a => listEl.appendChild(_achTicketEl(a)));
     }
 
     // ===== 404 商店面板 =====
@@ -248,16 +287,14 @@
     }
 
     // refreshAchievement：原 VoidTerminal.refreshAchievementPanel 的函式體（render + 按鈕圓點）
-    // V1.4: 按鈕圓點按「當前模式 visible 的 pending」算，避免在瀅瀅模式時顯示柴郡 emotion 的紅點
+    // 收藏冊制：紅點按全域 pending 算（分類靠冊內 tab，不再按皮膚分）
     function refreshAchievement() {
         const overlay = document.getElementById('achievement-panel-overlay');
         if (overlay && overlay.style.display !== 'none') renderAchievementList();
         const achBtn = document.getElementById('achievement-hist-btn');
         const dockAch = document.getElementById('lb-dock-ach');
         if ((achBtn || dockAch) && window.OS_ACHIEVEMENT) {
-            const currentChar = getCurrentChar();
-            const hasPending = window.OS_ACHIEVEMENT.getPending()
-                .some(a => shouldShowForChar(a.emotion, currentChar));
+            const hasPending = window.OS_ACHIEVEMENT.getPending().length > 0;
             if (achBtn) achBtn.classList.toggle('has-pending', hasPending);
             if (dockAch) dockAch.classList.toggle('has-pending', hasPending);
         }
@@ -267,6 +304,8 @@
     VoidPanels.closeAchievement      = closeAchievementPanel;
     VoidPanels.renderAchievementList = renderAchievementList;
     VoidPanels.refreshAchievement    = refreshAchievement;
+    // 成就歸屬（兌換分流用）：'cheshire'=異常→404黑市換碎片；'yingying'=其餘(含中性/舊資料)→白兔交易所換PT
+    VoidPanels.emotionOwner = (emotion) => (EMOTION_TO_CHAR[emotion] === 'cheshire' ? 'cheshire' : 'yingying');
     VoidPanels.openStore             = openStorePanel;
     VoidPanels.closeStore            = closeStorePanel;
 

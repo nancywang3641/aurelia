@@ -242,10 +242,18 @@ ${JSON.stringify({ shards, items: itemsState })}`;
 
     // ================================================================
     // 核心：批次評估待兌換成就（呼叫 Cheshire API）
+    // 分工：柴郡只收「異常系」成就(emotion 歸屬=cheshire)；其餘歸白兔交易所(os_pt 換 PT)。
+    // list 可指定要兌換哪幾個(收藏冊單票領取用)；不給=撈全部異常系 pending。
     // ================================================================
-    async function evaluateAchievements() {
-        const pending = win.OS_ACHIEVEMENT ? win.OS_ACHIEVEMENT.getPending() : [];
-        if (!pending.length) return { ok: false, msg: '目前沒有待兌換的成就' };
+    function _cheshirePending() {
+        const vp = window.VoidPanels || win.VoidPanels;
+        const all = win.OS_ACHIEVEMENT ? win.OS_ACHIEVEMENT.getPending() : [];
+        if (!vp || !vp.emotionOwner) return all;   // 分流表沒載到→照舊全收，別把兌換卡死
+        return all.filter(a => vp.emotionOwner(a.emotion) === 'cheshire');
+    }
+    async function evaluateAchievements(list) {
+        const pending = (Array.isArray(list) && list.length) ? list : _cheshirePending();
+        if (!pending.length) return { ok: false, msg: '目前沒有柴郡要收的成就' };
 
         if (!win.OS_API) return { ok: false, msg: 'API 尚未初始化' };
 
@@ -324,16 +332,16 @@ ${JSON.stringify({ shards, items: itemsState })}`;
         const shardsDisplay = container.closest?.('#store-panel-overlay')?.querySelector('#store-shards-display');
         if (shardsDisplay) shardsDisplay.textContent = `💎 ${shards} FRAGMENTS`;
         const itemsState = getItemsState();
-        const pendingCount = win.OS_ACHIEVEMENT ? win.OS_ACHIEVEMENT.getPending().length : 0;
+        const pendingCount = _cheshirePending().length;   // 黑市只數異常系
 
         container.innerHTML = `
 ${ pendingCount > 0 ? `
 <div class="store-eval-bar">
-    <span>📋 ${pendingCount} 個成就待估值</span>
+    <span>📋 ${pendingCount} 個異常成就待估值</span>
     <button class="store-eval-btn" id="cheshire-eval-btn">找柴郡估值</button>
 </div>` : `
 <div class="store-eval-bar empty">
-    <span>✅ 沒有待估值的成就</span>
+    <span>✅ 沒有待估值的異常成就</span>
 </div>`}
 
 <div class="store-item-list">

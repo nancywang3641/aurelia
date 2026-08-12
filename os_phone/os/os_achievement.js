@@ -156,11 +156,12 @@
     // ================================================================
     // 擴充：標記成就已兌換 (供 404 商店呼叫)
     // ================================================================
-    async function markRedeemed(id, shards) {
+    async function markRedeemed(id, shards, currency) {
         const ach = _achievements.find(a => a.id === id);
         if (!ach) return;
         ach.redeemed = true;
         ach.shards   = shards || 0;
+        ach.currency = currency || 'shards';   // 'shards'=柴郡碎片(預設,舊資料同) / 'pt'=白兔交易所 PT
         ach.exp      = Math.round((shards || 0) / 8);  // EXP = shards / 8
 
         const db = win.OS_DB;
