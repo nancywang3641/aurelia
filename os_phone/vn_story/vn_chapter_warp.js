@@ -155,29 +155,37 @@
                 //    完整 clone 一張在中間衝，碎裂感全部交給「白色碎片」——從卡面沿波前剝落、
                 //    向外飛、微轉、淡出，像玻璃鍍膜一片片崩掉，中間的卡從頭到尾讀得出來。
                 const clone = card.cloneNode(true);
-                clone.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;max-width:none;aspect-ratio:auto;transform:none;margin:0;';
+                // 🚨 z-index:1 必須寫死：clone 帶著輪播選中卡的 z-index:6，碎片 z-auto 整層
+                //    被墊在卡片底下＝碎了完全看不見（實測踩過）
+                clone.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;max-width:none;aspect-ratio:auto;transform:none;margin:0;z-index:1;';
                 wrap.appendChild(clone);
 
                 const CS = 6, RS = 8;                     // 白色碎片格數（不切卡片內容，純白 div，便宜）
                 const cw = crect.width, chh = crect.height;
                 const cxc = cw / 2, cyc = chh / 2;
                 const maxD = Math.hypot(cxc, cyc);
-                const WAVE_T0 = 0.16, WAVE_T1 = 0.62;     // 波前：卡心小圓 → 掃到卡角
+                // 🚨 波前延到 zoom 一半才起：前 0.4 全是乾淨的衝刺，碎裂是「衝到一半解體」，
+                //    開頭就碎會把 zoom 的第一眼吃掉（實測回饋）。
+                const WAVE_T0 = 0.42, WAVE_T1 = 0.78;     // 波前：卡心小圓 → 掃到卡角
                 for (let gy = 0; gy < RS; gy++) {
                     for (let gx = 0; gx < CS; gx++) {
                         if (Math.random() < 0.18) continue;   // 留些缺口，崩落才不像整齊瓷磚
                         const piece = document.createElement('div');
                         const w = 100 / CS, h = 100 / RS;
+                        // 🚨 陰影＋細邊必加：純白片疊在白卡上整段隱形＝碎了等於沒碎（實測回饋）；
+                        //    有影子才讀得出「浮起剝離」，在卡上跟飛出去都看得見
                         piece.style.cssText = 'position:absolute;left:' + (gx * w).toFixed(2) + '%;top:' + (gy * h).toFixed(2) +
                             '%;width:' + w.toFixed(2) + '%;height:' + h.toFixed(2) + '%;' +
-                            'background:rgba(255,255,255,' + (0.82 + Math.random() * 0.18).toFixed(2) + ');' +
-                            'will-change:transform,opacity;opacity:0;';
+                            'background:rgba(255,255,255,' + (0.88 + Math.random() * 0.12).toFixed(2) + ');' +
+                            'border:1px solid rgba(150,178,206,0.5);box-shadow:0 3px 12px rgba(58,88,126,0.35);' +
+                            'z-index:3;will-change:transform,opacity;opacity:0;';
                         wrap.appendChild(piece);
-                        // 這格的剝落時刻＝波前掃到的距離；飛行方向＝卡心 → 格心
+                        // 這格的剝落時刻＝波前掃到的距離；飛行方向＝卡心 → 格心；
+                        // 距離要飛得夠遠——卡片自己也在長大，飛太慢等於永遠貼在卡上
                         const px = (gx + 0.5) / CS * cw, py = (gy + 0.5) / RS * chh;
                         const dist = Math.hypot(px - cxc, py - cyc) / maxD;
                         const on = WAVE_T0 + (WAVE_T1 - WAVE_T0) * dist + Math.random() * 0.03;
-                        const spd = 1.8 + Math.random() * 1.6 + dist * 1.4;
+                        const spd = 3.2 + Math.random() * 2.2 + dist * 2;
                         const dx = (px - cxc) * spd, dy = (py - cyc) * spd;
                         const rot = (Math.random() - 0.5) * 50;
                         piece.animate(
