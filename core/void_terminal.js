@@ -763,19 +763,28 @@ const IRIS_IDLE = [
             </div>
 
             <div id="achievement-panel-overlay" style="display:none;">
-                <div class="ach-header">
-                    <span class="ach-title">🏆 資料庫成就清單</span>
-                    <button class="ach-close" id="ach-close-btn">✕</button>
+                <div class="achv2-crest-top"></div>
+                <button class="achv2-close" id="ach-close-btn" title="關閉"><i class="fa-solid fa-xmark"></i></button>
+                <div class="achv2-title">成 就 收 藏 冊</div>
+                <div class="achv2-title-en">MEMORY &amp; MERIT COLLECTION</div>
+                <div class="achv2-stats">
+                    <span class="achv2-stat"><i class="fa-solid fa-gem"></i> <b id="achv2-count">0</b> 收藏</span>
+                    <span class="achv2-stat"><i class="fa-solid fa-trophy"></i> <b id="achv2-pending">0</b> 待兌換</span>
+                    <span class="achv2-stat-actions">
+                        <button id="ach-redeem-btn" style="display:none;"><i class="fa-solid fa-wand-magic-sparkles"></i> 一鍵全兌</button>
+                        <button id="ach-clear-btn" style="display:none;" title="清空全部成就"><i class="fa-solid fa-trash"></i></button>
+                    </span>
                 </div>
-                <div class="ach-stats" style="display:flex;align-items:center;justify-content:space-between;">
-                    <span id="ach-stats">0 個成就 · 0 個待兌換</span>
-                    <div class="ach-actions">
-                        <button id="ach-redeem-btn" style="display:none;">💎 一鍵兌換</button>
-                        <button id="ach-clear-btn" style="display:none;padding:3px 9px;background:rgba(180,60,60,0.15);border:1px solid rgba(200,80,80,0.35);color:#e07070;border-radius:5px;cursor:pointer;font-size:11px;letter-spacing:1px;white-space:nowrap;">🗑 清空</button>
-                    </div>
+                <div class="achv2-tabs" id="achv2-tabs">
+                    <button class="achv2-tab on" data-cat="all">全部</button>
+                    <button class="achv2-tab" data-cat="story"><i class="fa-solid fa-feather"></i> 故事</button>
+                    <button class="achv2-tab" data-cat="daily"><i class="fa-regular fa-star"></i> 日常</button>
+                    <button class="achv2-tab" data-cat="anomaly"><i class="fa-solid fa-triangle-exclamation"></i> 異常</button>
                 </div>
-                <div class="ach-list" id="ach-list"></div>
-                <div class="ach-footer">📡 提示：收集異常成就可前往 404 號房進行黑市交易</div>
+                <div class="achv2-msg" id="achv2-msg"></div>
+                <div class="achv2-list" id="ach-list"></div>
+                <div class="achv2-foot">白票券由交易所的白兔先生收購換 PT，黑卡是柴郡的異常收藏換碎片。</div>
+                <div class="achv2-crest-bottom"></div>
             </div>
 
             <div id="store-panel-overlay" style="display:none;">

@@ -13,8 +13,9 @@
 
     // ── 可調參數集中一處 ─────────────────────────────────
     const PT_CFG = {
-        caps: { base: 40, progress: 30, goal: 30, event: 20, achv: 20 },   // 估值每格上限
-        totalCap: 140,          // 單章總額上限
+        caps: { base: 40, progress: 30, goal: 30, event: 20 },   // 估值每格上限（achv 格已退役：成就改白兔櫃檯逐筆兌換，免雙重計價）
+        totalCap: 120,          // 單章總額上限
+        achvCaps: { normal: 15, great: 40, legend: 100 },   // 白兔成就估值量級（普通/亮眼/值得紀念）
         fallbackPerK: 2,        // 解析失敗退機械底：每 1000 字給 2 PT
         fallbackCap: 20,        // 機械底(字數部分)上限
         housePrice: 1000,       // 玩家房價
@@ -129,10 +130,9 @@
             `- progress：劇情整體推進的幅度，0 ~ ${c.progress}`,
             `- goal：明確目標或任務的達成程度，0 ~ ${c.goal}`,
             `- event：關係轉折或重要事件的份量，0 ~ ${c.event}`,
-            `- achv：這段期間達成成就的紅利，0 ~ ${c.achv}`,
             '',
             '嚴格只輸出這個 JSON 結構（數字自行依內容填）：',
-            '{"base":0,"progress":0,"goal":0,"event":0,"achv":0}',
+            '{"base":0,"progress":0,"goal":0,"event":0}',
             '',
             '大總結全文：',
             '"""',
@@ -145,7 +145,7 @@
     function _mechanicalFallback(text) {
         const words = String(text || '').length;
         const bonus = Math.min(PT_CFG.fallbackCap, Math.floor(words / 1000) * PT_CFG.fallbackPerK);
-        return { base: PT_CFG.caps.base, progress: bonus, goal: 0, event: 0, achv: 0, _fallback: true };
+        return { base: PT_CFG.caps.base, progress: bonus, goal: 0, event: 0, _fallback: true };
     }
 
     // clamp 每格 + 加總封頂，回傳 { items:{...}, total }
@@ -157,9 +157,8 @@
             progress: clamp(raw.progress, c.progress),
             goal: clamp(raw.goal, c.goal),
             event: clamp(raw.event, c.event),
-            achv: clamp(raw.achv, c.achv),
         };
-        let total = items.base + items.progress + items.goal + items.event + items.achv;
+        let total = items.base + items.progress + items.goal + items.event;
         total = Math.min(PT_CFG.totalCap, total);
         return { items, total };
     }
@@ -308,7 +307,6 @@
             { k: 'progress', label: '推進', icon: 'fa-arrow-trend-up' },
             { k: 'goal', label: '目標', icon: 'fa-bullseye' },
             { k: 'event', label: '事件', icon: 'fa-bolt' },
-            { k: 'achv', label: '成就', icon: 'fa-trophy' },
         ];
         const rowHtml = rows.map(r => {
             const v = Math.floor(Number(it[r.k]) || 0);
@@ -336,6 +334,71 @@
         };
         card.querySelector('.os-pt-card-close').addEventListener('click', close);
         setTimeout(close, 9000);   // 自動收
+    }
+
+    // ── 白兔成就估值：正派櫃檯收「非異常系」成就，換 PT ──────
+    // 分工：異常系(emotion 歸屬=cheshire)歸 404 柴郡換碎片(os_404_store)；其餘全歸這裡。
+    // list 可指定要兌換哪幾個(收藏冊單票領取用)；不給=撈全部白兔側 pending。
+    function _rabbitPending() {
+        const vp = window.VoidPanels || win.VoidPanels;
+        const ach = win.OS_ACHIEVEMENT || window.OS_ACHIEVEMENT;
+        const all = ach && ach.getPending ? ach.getPending() : [];
+        if (!vp || !vp.emotionOwner) return all;   // 分流表沒載到→照舊全收，別把兌換卡死
+        return all.filter(a => vp.emotionOwner(a.emotion) !== 'cheshire');
+    }
+    async function evaluateAchievementsPT(list) {
+        const pending = (Array.isArray(list) && list.length) ? list : _rabbitPending();
+        if (!pending.length) return { ok: false, msg: '目前沒有白兔要收的成就' };
+        const api = win.OS_API || window.OS_API;
+        if (!api) return { ok: false, msg: 'API 尚未初始化' };
+
+        const cc = PT_CFG.achvCaps;
+        const achList = pending.map((a, i) =>
+            `${i + 1}. 成就名稱：「${a.name}」\n   描述：${a.desc || '（無描述）'}`
+        ).join('\n');
+        const systemPrompt = '你是「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，斯文、守時、照章辦事。' +
+            `你的工作是替客人「估值」他們在故事中達成的成就，換算成正派貨幣「PT」。` +
+            `評分標準：日常小事 5~${cc.normal} PT，亮眼表現 ${cc.normal + 5}~${cc.great} PT，值得紀念的里程碑 ${cc.great + 10}~${cc.legend} PT。` +
+            '請以 JSON 陣列格式回覆，每筆格式如下：' +
+            '{"name":"成就名稱","pt":整數,"comment":"白兔先生的一句話點評"}' +
+            '只回傳 JSON 陣列，不要加任何 markdown 或說明文字。';
+        const userPrompt = `以下是待估值的成就清單：\n${achList}\n\n請逐一估值並回傳 JSON 陣列。`;
+
+        try {
+            let messages = [];
+            if (typeof api.buildContext === 'function') messages = await api.buildContext(userPrompt, 'rabbit_eval');
+            else messages = [{ role: 'user', content: userPrompt }];
+            messages.unshift({ role: 'system', content: systemPrompt });
+            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
+            const config = OS ? { ...OS.getConfig(), route: 'rabbit_eval' } : { route: 'rabbit_eval' };
+            const raw = await new Promise((res, rej) => api.chat(messages, config, null, res, rej));
+
+            let results = null;
+            try {
+                const jsonMatch = String(raw || '').match(/\[[\s\S]*\]/);
+                results = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+            } catch (e) {
+                console.error('[PT] 白兔估值 JSON 解析失敗:', e, raw);
+                return { ok: false, msg: 'API 回傳格式錯誤，白兔先生先去對錶了' };
+            }
+            if (!results || !Array.isArray(results)) return { ok: false, msg: '白兔先生沒有回應…' };
+
+            const achApi = win.OS_ACHIEVEMENT || window.OS_ACHIEVEMENT;
+            let totalPT = 0;
+            for (const r of results) {
+                const a = pending.find(x => x.name === r.name);
+                if (!a) continue;
+                const pt = Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0));   // 單筆封頂防暴走
+                await achApi.markRedeemed(a.id, pt, 'pt');
+                totalPT += pt;
+            }
+            if (totalPT > 0) await addPT(totalPT, { reason: '成就兌換（交易所）' });
+            console.log(`[PT] 白兔估值完成，共兌換 ${totalPT} PT`);
+            return { ok: true, results, totalPT };
+        } catch (e) {
+            console.error('[PT] evaluateAchievementsPT 失敗:', e);
+            return { ok: false, msg: '系統異常：' + (e.message || e) };
+        }
     }
 
     // ── 交易所面板 ───────────────────────────────────────
@@ -393,11 +456,8 @@
             ? '<button class="os-pt-buy owned" disabled><i class="fa-solid fa-check"></i>&nbsp;已擁有</button>'
             : '<button class="os-pt-buy" id="os-pt-buy-house"' + (canBuy ? '' : ' disabled') + '>' + price + ' PT</button>';
 
-        // 成就兌換：白兔代收，估值仍走 404 那套(柴郡 API)，換到的是💎碎片不是 PT
-        const achApi = window.OS_ACHIEVEMENT || win.OS_ACHIEVEMENT;
-        const store404 = window.OS_404_STORE || win.OS_404_STORE;
-        const pendingN = (achApi && achApi.getPending) ? achApi.getPending().length : 0;
-        const shards = (store404 && store404.getShards) ? store404.getShards() : 0;
+        // 成就兌換：白兔只收「非異常系」成就，估值換 PT（異常系歸 404 柴郡換碎片）
+        const pendingN = _rabbitPending().length;
         const achBtnHtml = pendingN
             ? '<button class="os-pt-buy ach" id="os-pt-redeem-ach">兌換 ' + pendingN + ' 個</button>'
             : '<button class="os-pt-buy" disabled>兌換</button>';
@@ -411,8 +471,8 @@
             '<div class="os-pt-item">' +
             '<div class="ic ach"><i class="fa-solid fa-trophy"></i></div>' +
             '<div class="body"><div class="n">成就兌換</div>' +
-            '<div class="d">' + (pendingN ? ('把 ' + pendingN + ' 個成就送去估值，換成碎片。') : '沒有待兌換的成就。') + '</div>' +
-            '<div class="os-pt-ach-shards"><i class="fa-solid fa-gem"></i> 碎片 ' + shards + '</div></div>' +
+            '<div class="d">' + (pendingN ? ('把 ' + pendingN + ' 個成就送去估值，換成 PT。') : '沒有白兔要收的成就。') + '</div>' +
+            '<div class="os-pt-ach-shards"><i class="fa-solid fa-circle-info"></i> 異常成就請找 404 號房的柴郡</div></div>' +
             achBtnHtml + '</div>';
 
         if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = built ? '' : (canBuy ? '' : ('還差 ' + (price - bal) + ' PT')); }
@@ -436,11 +496,8 @@
         if (redeemBtn) redeemBtn.addEventListener('click', async () => {
             redeemBtn.disabled = true;
             redeemBtn.textContent = '估值中…';
-            if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = '白兔先生把成就送去估值了，稍等…'; }
-            const store = window.OS_404_STORE || win.OS_404_STORE;
-            const r = (store && store.evaluateAchievements)
-                ? await store.evaluateAchievements()
-                : { ok: false, msg: '估值窗口沒開' };
+            if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = '白兔先生正在替你的成就估值，稍等…'; }
+            const r = await evaluateAchievementsPT();
             if (!r.ok) {
                 if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = r.msg || '估值失敗，再試一次'; }
                 redeemBtn.disabled = false;
@@ -448,8 +505,8 @@
                 return;
             }
             try { window.VoidPanels?.refreshAchievement?.(); } catch (e) {}
-            await _renderShopBody(mask);   // 先重繪(會清 msg)再寫結果，成功訊息才留得住
-            if (msgEl) { msgEl.className = 'os-pt-shop-msg ok'; msgEl.textContent = '兌換完成！獲得 ' + r.totalShards + ' 碎片。'; }
+            await _renderShopBody(mask);   // 先重繪(會清 msg、更新錢包)再寫結果，成功訊息才留得住
+            if (msgEl) { msgEl.className = 'os-pt-shop-msg ok'; msgEl.textContent = '兌換完成！獲得 ' + r.totalPT + ' PT。'; }
         });
     }
 
@@ -458,6 +515,7 @@
         getPT, addPT, spendPT, getLedger,
         getPlotBuilt, setPlotBuilt,
         settleSummary,
+        evaluateAchievementsPT,
         openExchange, closeExchange,
         _cfg: PT_CFG,
         _showSettleCard,   // 診斷用：不跑結算也能把卡叫出來看位置
