@@ -853,6 +853,9 @@
         { sel: '.wg-poster-fig',  label: '立繪框',   box: true,  css: 'inset' },
         { sel: '.wg-poster-name', label: '巨大姓名', box: false, edges: ['left', 'top'] },
         { sel: '.wg-poster-sig',  label: '代號牌',   box: false, edges: ['right', 'bottom'] },
+        // 右側:標題/題幹/選項/身分卡欄位全都住在內文區裡,拖這一框就整組跟著走
+        { sel: '.wg-shell-body',  label: '內文區',   box: true,  css: 'edges' },
+        { sel: '.wg-tabs',        label: '頁籤軌',   box: true,  css: 'edges' },
     ];
     let _tuneEl = null;
     function _tuneClose() {
@@ -880,16 +883,17 @@
     }
     function _tuneApply(t, v) {
         const el = t.el;
-        if (t.box) { ['left', 'top', 'right', 'bottom'].forEach(k => { el.style[k] = v[k].toFixed(1) + '%'; }); }
-        else { t.edges.forEach(k => { el.style[k] = v[k].toFixed(1) + '%'; }); }
+        if (t.box) { ['left', 'top', 'right', 'bottom'].forEach(k => { el.style[k] = _tn(v[k]) + '%'; }); }
+        else { t.edges.forEach(k => { el.style[k] = _tn(v[k]) + '%'; }); }
     }
+    const _tn = (x) => (Math.abs(x) < 0.05 ? 0 : x).toFixed(1);   // 收掉 "-0.0"
     function _tuneCss(states) {
         const lines = [];
         states.forEach(t => {
             const v = t.v;
-            if (t.css === 'inset') lines.push(t.sel + '{inset:' + [v.top, v.right, v.bottom, v.left].map(x => x.toFixed(1) + '%').join(' ') + ';}');
-            else if (t.box) lines.push(t.sel + '{left:' + v.left.toFixed(1) + '%;top:' + v.top.toFixed(1) + '%;right:' + v.right.toFixed(1) + '%;bottom:' + v.bottom.toFixed(1) + '%;}');
-            else lines.push(t.sel + '{' + t.edges.map(k => k + ':' + v[k].toFixed(1) + '%').join(';') + ';}');
+            if (t.css === 'inset') lines.push(t.sel + '{inset:' + [v.top, v.right, v.bottom, v.left].map(x => _tn(x) + '%').join(' ') + ';}');
+            else if (t.box) lines.push(t.sel + '{left:' + _tn(v.left) + '%;top:' + _tn(v.top) + '%;right:' + _tn(v.right) + '%;bottom:' + _tn(v.bottom) + '%;}');
+            else lines.push(t.sel + '{' + t.edges.map(k => k + ':' + _tn(v[k]) + '%').join(';') + ';}');
         });
         return lines.join('\n');
     }
@@ -922,7 +926,7 @@
         const refresh = () => {
             list.innerHTML = states.map((t, i) =>
                 '<div class="wg-tune-item"><b>' + t.label + '</b><span>' +
-                (t.box ? ['top', 'right', 'bottom', 'left'] : t.edges).map(k => k[0].toUpperCase() + ' ' + t.v[k].toFixed(1)).join(' / ') +
+                (t.box ? ['top', 'right', 'bottom', 'left'] : t.edges).map(k => k[0].toUpperCase() + ' ' + _tn(t.v[k])).join(' / ') +
                 '</span></div>').join('');
             // .wg-meet 的 bottom 平常是跟著底部對話列的實際高度算的(--wg-meet-pb),
             //   貼死 % 會讓對話列變高時被蓋住 → 提醒一句,沒動到就別貼那行
@@ -935,9 +939,10 @@
         // 拖曳:框身=四邊一起移(維持大小)、右下角 grip=只動 right/bottom(改大小)
         states.forEach(t => {
             if (t.box) {
-                const g = doc.createElement('div');
-                g.className = 'wg-tune-grip';
-                t.el.appendChild(g);
+                // 兩顆把手:藍色(左上)=移動、紅色(右下)=改大小。
+                //   內文區/頁籤軌裡面塞滿文字與按鈕,抓不到空白處,不給把手就等於拖不動。
+                const mv = doc.createElement('div'); mv.className = 'wg-tune-move'; t.el.appendChild(mv);
+                const g = doc.createElement('div'); g.className = 'wg-tune-grip'; t.el.appendChild(g);
             }
             const start = (e, mode) => {
                 e.preventDefault(); e.stopPropagation();
@@ -959,7 +964,8 @@
             };
             t.el.addEventListener('pointerdown', (e) => {
                 if (e.target.classList.contains('wg-tune-grip')) start(e, 'size');
-                else if (e.target === t.el) start(e, 'move');   // 只認框本身,點到子元素不搶
+                else if (e.target.classList.contains('wg-tune-move')) start(e, 'move');
+                else if (e.target === t.el) start(e, 'move');   // 空白處也能拖;點到子元素不搶(頁籤還要能按)
             });
         });
 
@@ -1185,9 +1191,13 @@
             //   頁籤軌改用獨立的 tab-rail(分隔線也已抹掉),寬高怎麼變都不會對不上。
             // 🚨 min-height:0 不能省:手機是直向 flex,沒有它 flex item 撐不下就往外長(min-height:auto),
             //    整個殼會溢出面板、頁籤軌掉到底部對話列上面。桌機是橫向所以只有 min-width 生效,兩個都要留。
-            '.wg-shell{position:relative;flex:1 1 60%;min-width:0;min-height:0;display:flex;flex-direction:column;' +
+            '.wg-shell{position:relative;flex:1 1 60%;min-width:0;min-height:0;' +
               'background:url("' + _WG_ART + 'event-plate.png") center/100% 100% no-repeat;}' +
-            '.wg-shell-body{flex:1;min-height:0;overflow-y:auto;padding:22px 26px 10px 34px;scrollbar-width:thin;}' +
+            // 🚨內文區與頁籤軌都用「相對外殼的 % 絕對定位」,不要用 px padding 排:
+            //   底板是 background-size:100% 100% 拉伸的圖,白板塊的邊界固定在某個百分比上,
+            //   px padding 一遇到面板改尺寸就跟底板脫節(標題/選項/身分卡欄位整組跑歪)。
+            //   同時這也是「版位微調」拖得動它們的前提——flex 排的東西沒有可拖的四邊。
+            '.wg-shell-body{position:absolute;left:7%;right:5%;top:4%;bottom:17%;overflow-y:auto;scrollbar-width:thin;}' +
             '.wg-ev-meta{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:3px;font-weight:700;color:var(--party-muted);}' +
             '.wg-ev-meta b{color:var(--npc-accent);font-size:14px;letter-spacing:1px;}' +
             '.wg-ev-meta::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,170,114,.7),rgba(201,170,114,0));}' +
@@ -1208,7 +1218,10 @@
             '.wg-prof-row span{flex:none;width:64px;color:var(--party-muted);font-size:12px;font-weight:700;padding-top:2px;}' +
             '.wg-prof-row b{color:#22334c;font-weight:600;line-height:1.6;font-size:14px;}' +
             // 頁籤軌是整條斜切金邊的墨藍條(獨立素材);左右尖端是造型,按鈕靠 padding 讓開不要壓上去
-            '.wg-tabs{display:flex;flex:none;min-height:52px;padding:0 4%;background:url("' + _WG_ART + 'tab-rail.png") center/100% 100% no-repeat;}' +
+            // 用 top/bottom 定高、不用 height:四邊都是可拖的量,微調模式吐出來的 CSS 才貼得回來
+            //   (同時設 height 跟 top+bottom 會打架,height 贏、bottom 被忽略)
+            '.wg-tabs{position:absolute;left:0;right:0;top:86%;bottom:0;display:flex;padding:0 4%;' +
+              'background:url("' + _WG_ART + 'tab-rail.png") center/100% 100% no-repeat;}' +
             '.wg-tab{position:relative;flex:1;padding:13px 4px;background:none;border:none;cursor:pointer;' +
               'color:rgba(233,240,250,.7);font-size:14px;font-weight:700;letter-spacing:3px;font-family:inherit;}' +
             '.wg-tab+.wg-tab{border-left:1px solid rgba(201,170,114,.5);}' +
@@ -1216,8 +1229,12 @@
             '.wg-tab.on::after{content:"";position:absolute;left:28%;right:28%;bottom:7px;height:2px;background:var(--npc-accent);}' +
             /* 🛠 版位微調模式(dev,OS_WORLDGATE.tune() 才會出現) */
             '.wg-tune-on .wg-meet,.wg-tune-on.wg-meet{outline:2px dashed rgba(226,66,96,.9);outline-offset:-2px;}' +
-            '.wg-tune-on .wg-poster-fig,.wg-tune-on .wg-poster-name,.wg-tune-on .wg-poster-sig{outline:2px dashed rgba(226,66,96,.75);cursor:move;pointer-events:auto;}' +
-            '.wg-tune-grip{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:3px;background:#e24260;border:1px solid #fff;cursor:nwse-resize;z-index:9;}' +
+            '.wg-tune-on .wg-poster-fig,.wg-tune-on .wg-poster-name,.wg-tune-on .wg-poster-sig,' +
+              '.wg-tune-on .wg-shell-body,.wg-tune-on .wg-tabs{outline:2px dashed rgba(226,66,96,.75);cursor:move;pointer-events:auto;}' +
+            // 內文區平常會捲動,把手是絕對定位會跟著捲走 → 微調時關掉捲動,把手才釘得住
+            '.wg-tune-on .wg-shell-body{overflow:hidden;}' +
+            '.wg-tune-grip{position:absolute;right:2px;bottom:2px;width:14px;height:14px;border-radius:3px;background:#e24260;border:1px solid #fff;cursor:nwse-resize;z-index:9;}' +
+            '.wg-tune-move{position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:3px;background:#2f6fd0;border:1px solid #fff;cursor:move;z-index:9;}' +
             '.wg-tune-card{position:absolute;left:12px;top:12px;z-index:3400;width:290px;padding:9px 11px 11px;border-radius:12px;' +
               'background:rgba(18,22,34,.94);color:#e8edf7;font-size:11px;box-shadow:0 10px 30px rgba(0,0,0,.4);}' +
             '.wg-tune-head{display:flex;align-items:center;gap:7px;margin-bottom:7px;cursor:move;touch-action:none;}' +
@@ -1245,7 +1262,8 @@
               // 代號牌留在右側白區(跟桌機同一側):挪到左邊的墨藍楔形上會跟巨大姓名疊在一起,
               //   而且深字疊深底還得整組改色——右側白區兩個問題都不存在。
               '.wg-poster-sig{bottom:36%;}' +
-              '.wg-shell-body{padding:16px 16px 8px;}' +
+              '.wg-shell-body{left:4%;right:4%;top:4%;bottom:16%;}' +
+              '.wg-tabs{top:84%;}' +
               '.wg-brand-copy small{display:none}' +
               '.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
