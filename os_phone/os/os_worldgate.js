@@ -1011,7 +1011,7 @@
                整套純 CSS(斜切/巨大姓名/選項列都是即時文字),不切任何 PNG——切了就換不了角色、換不了題數。 */
             // 🚨底板是「有形狀」的透明 PNG,兩張板之間與板外一律透空——底下是大廳的像素場景,
             //   不鋪一層霧的話整個舞台從縫隙透上來,字直接讀不到(harness 用的是純色假背景,看不出這件事)。
-            '.wg-meet{position:absolute;left:0;right:-0.2%;top:0;bottom:var(--wg-meet-pb,150px);z-index:3355;display:flex;' +
+            '.wg-meet{position:absolute;left:0;right:-0.1%;top:0;bottom:var(--wg-meet-pb,150px);z-index:3355;display:flex;' +
               'background:rgba(240,244,250,.82);backdrop-filter:blur(7px);' +
               'color:var(--party-ink,#14243d);font-size:13px;--party-navy:#10243d;--party-muted:#60718a;--party-gold:#c9aa72;--npc-accent:#35c9e8;}' +
             '.wg-meet-x{position:absolute;right:12px;top:12px;z-index:6;width:32px;height:32px;border-radius:50%;cursor:pointer;' +
@@ -1048,8 +1048,8 @@
             //   底板是 background-size:100% 100% 拉伸的圖,白板塊的邊界固定在某個百分比上,
             //   px padding 一遇到面板改尺寸就跟底板脫節(標題/選項/身分卡欄位整組跑歪)。
             //   同時這也是「版位微調」拖得動它們的前提——flex 排的東西沒有可拖的四邊。
-            '.wg-ev-head{position:absolute;left:25.5%;top:4.3%;right:-13.5%;bottom:73.7%;}' +
-            '.wg-ev-main{position:absolute;left:12.9%;top:32.9%;right:3.9%;bottom:13.3%;overflow-y:auto;scrollbar-width:thin;}' +
+            '.wg-ev-head{position:absolute;left:24.8%;top:5%;right:3.9%;bottom:74.5%;}' +
+            '.wg-ev-main{position:absolute;left:12.9%;top:27.9%;right:3.9%;bottom:18.3%;overflow-y:auto;scrollbar-width:thin;}' +
             '.wg-ev-meta{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:3px;font-weight:700;color:var(--party-muted);}' +
             '.wg-ev-meta b{color:var(--npc-accent);font-size:14px;letter-spacing:1px;}' +
             '.wg-ev-meta::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,170,114,.7),rgba(201,170,114,0));}' +
