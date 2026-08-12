@@ -9,12 +9,12 @@
 //   ① punch-in 用「真 DOM 縮放」：WAAPI 對 chapter-window 整個 scale 1→4.6，
 //      transform-origin 釘在選中卡縮圖中心——卡片、標題、旁卡全部一起衝，
 //      不是抽一張背景圖出來放大（🚨第一版就是那樣，畫面突然換成陌生的大圖，超突兀）。
-//   ② 碎片在上層 canvas，會飛，而且碎裂順序是「圓形波前」：從卡片中心的小圓開始
-//      往外圈擴大到全屏，波前掃到才碎、波前外零碎片。🚨開場只要有任何一塊碎片出現在
-//      外圈（哪怕一塊），眼睛就鎖定那個靜止位置，zoom 動勢直接歸零——第二版滿屏格線
-//      如此，第三版「random 權重蓋過距離」也是如此，都實測陣亡。
-//      碎片沿射線外爆、越飛越大越淡＝跟 punch-in 同一個方向場。
-//      白片＝沒讀到資料；圖片＝目的地場景的對應區塊（生成時凍結，像帶畫面的碎玻璃）。
+//   ② 碎裂＝白色碎片沿「圓形波前」從卡面剝落（卡心小圓→卡角），沿卡心射線外飛、
+//      微轉、淡出；🚨卡片本體保持一張完整的——把卡片內容切碎飛（縮圖剁成暗色塊）
+//      實測醜爆；白片在卡上時白對白隱形、飛出卡外立刻可見＝天然的「從邊緣剝落」。
+//      波前外零碎片：開場只要有任何一塊碎片出現在外圈，眼睛就鎖定那個靜止位置，
+//      zoom 動勢直接歸零（滿屏格線版與 random 蓋過距離版都實測陣亡）。
+//      旁卡同時被爆風沿「卡心→旁卡心」推出畫面（composite:'add' 疊在輪播定位上）。
 //   ③ t≈0.55 起目的地場景整層淡入墊底＝衝刺的終點是「已經在場景裡」，再白閃收尾。
 //   ④ 白閃全滿（t=0.88）才回呼 doLoad：canvas 大部分是透明的，太早換場景會從
 //      碎塊縫隙看到面板消失的瞬間。
@@ -151,43 +151,48 @@
                     ],
                     { duration: Math.round(DUR * LOAD_AT), fill: 'forwards' });
 
-                const CS = 7, RS = 9;                     // 7×9 格 ≈ 63 片；卡片節點少，clone 得起
+                // 🚨 卡片保持一張完整的：把卡片內容切碎飛（縮圖被剁成暗色塊）實測醜爆。
+                //    完整 clone 一張在中間衝，碎裂感全部交給「白色碎片」——從卡面沿波前剝落、
+                //    向外飛、微轉、淡出，像玻璃鍍膜一片片崩掉，中間的卡從頭到尾讀得出來。
+                const clone = card.cloneNode(true);
+                clone.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;max-width:none;aspect-ratio:auto;transform:none;margin:0;';
+                wrap.appendChild(clone);
+
+                const CS = 6, RS = 8;                     // 白色碎片格數（不切卡片內容，純白 div，便宜）
                 const cw = crect.width, chh = crect.height;
                 const cxc = cw / 2, cyc = chh / 2;
                 const maxD = Math.hypot(cxc, cyc);
                 const WAVE_T0 = 0.16, WAVE_T1 = 0.62;     // 波前：卡心小圓 → 掃到卡角
                 for (let gy = 0; gy < RS; gy++) {
                     for (let gx = 0; gx < CS; gx++) {
+                        if (Math.random() < 0.18) continue;   // 留些缺口，崩落才不像整齊瓷磚
                         const piece = document.createElement('div');
-                        const l = gx / CS * 100, tp = gy / RS * 100;
-                        piece.style.cssText = 'position:absolute;inset:0;will-change:transform,opacity;' +
-                            'clip-path:inset(' + tp.toFixed(2) + '% ' + (100 - l - 100 / CS).toFixed(2) + '% ' +
-                            (100 - tp - 100 / RS).toFixed(2) + '% ' + l.toFixed(2) + '%);';
-                        const clone = card.cloneNode(true);
-                        // 蓋掉 .chx-card 的置中定位與輪播 transform；選中卡的頂飾/稜鏡在碎裂時會被 clip 切爛，直接拔
-                        clone.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;max-width:none;aspect-ratio:auto;transform:none;margin:0;';
-                        clone.querySelectorAll('.chx-sel-top,.chx-sel-prism').forEach(el => el.remove());
-                        piece.appendChild(clone);
+                        const w = 100 / CS, h = 100 / RS;
+                        piece.style.cssText = 'position:absolute;left:' + (gx * w).toFixed(2) + '%;top:' + (gy * h).toFixed(2) +
+                            '%;width:' + w.toFixed(2) + '%;height:' + h.toFixed(2) + '%;' +
+                            'background:rgba(255,255,255,' + (0.82 + Math.random() * 0.18).toFixed(2) + ');' +
+                            'will-change:transform,opacity;opacity:0;';
                         wrap.appendChild(piece);
-                        // 這格的碎裂時刻＝波前掃到的距離；飛行方向＝卡心 → 格心
+                        // 這格的剝落時刻＝波前掃到的距離；飛行方向＝卡心 → 格心
                         const px = (gx + 0.5) / CS * cw, py = (gy + 0.5) / RS * chh;
                         const dist = Math.hypot(px - cxc, py - cyc) / maxD;
                         const on = WAVE_T0 + (WAVE_T1 - WAVE_T0) * dist + Math.random() * 0.03;
-                        const spd = 1.6 + Math.random() * 1.4 + dist * 1.2;
+                        const spd = 1.8 + Math.random() * 1.6 + dist * 1.4;
                         const dx = (px - cxc) * spd, dy = (py - cyc) * spd;
-                        const rot = (Math.random() - 0.5) * 40;
+                        const rot = (Math.random() - 0.5) * 50;
                         piece.animate(
                             [
-                                { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1, offset: 0 },
-                                { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1, offset: Math.min(0.99, on) },
-                                { transform: 'translate(' + (dx * 0.5).toFixed(1) + 'px,' + (dy * 0.5).toFixed(1) + 'px) rotate(' + (rot * 0.5).toFixed(1) + 'deg) scale(1.25)', opacity: 1, offset: Math.min(0.995, on + (1 - on) * 0.5) },
-                                { transform: 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) rotate(' + rot.toFixed(1) + 'deg) scale(1.55)', opacity: 0 },
+                                { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 0, offset: 0 },
+                                { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 0, offset: Math.max(0, Math.min(0.98, on - 0.02)) },
+                                { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1, offset: Math.min(0.985, on) },
+                                { transform: 'translate(' + (dx * 0.5).toFixed(1) + 'px,' + (dy * 0.5).toFixed(1) + 'px) rotate(' + (rot * 0.5).toFixed(1) + 'deg) scale(1.3)', opacity: 0.95, offset: Math.min(0.995, on + (1 - on) * 0.5) },
+                                { transform: 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) rotate(' + rot.toFixed(1) + 'deg) scale(1.6)', opacity: 0 },
                             ],
                             { duration: DUR, easing: 'linear', fill: 'forwards' });
                     }
                 }
                 mount.appendChild(wrap);
-                // 原卡藏起來（碎片層就是它的替身）；restore 會還原
+                // 原卡藏起來（完整 clone 就是它的替身）；restore 會還原
                 hidCard = card;
                 card.style.visibility = 'hidden';
 
