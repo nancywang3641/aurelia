@@ -981,9 +981,12 @@
         });
         card.querySelector('[data-t="x"]').addEventListener('click', _tuneClose);
         card.querySelector('[data-t="copy"]').addEventListener('click', async () => {
-            out.select();
-            try { await win.navigator.clipboard.writeText(out.value); _toast('CSS 已複製'); }
-            catch (e) { _toast('複製失敗,請直接從框裡選取'); }
+            out.focus(); out.select();
+            // Tauri 殼裡 navigator.clipboard 不一定給用(非安全來源/權限) → 退 execCommand,
+            //   兩條都不成才叫她自己選取。文字本來就選好了,最差情況也只是手動 Ctrl+C。
+            try { await win.navigator.clipboard.writeText(out.value); _toast('CSS 已複製'); return; } catch (e) {}
+            try { if (win.document.execCommand('copy')) { _toast('CSS 已複製'); return; } } catch (e) {}
+            _toast('複製失敗——文字已選起來,直接 Ctrl+C');
         });
     }
 
