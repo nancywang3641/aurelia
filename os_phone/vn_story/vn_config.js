@@ -168,10 +168,16 @@
             try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
             if (pfx == null) pfx = DEF_PFX;
             if (sfx == null) sfx = DEF_SFX;
-            const full = pfx + this._stripForSprite(prompt) + sfx;   // = studio 的 prefix + finalPrompt + suffix
+            let full = pfx + this._stripForSprite(prompt) + sfx;   // = studio 的 prefix + finalPrompt + suffix
             // 立繪尺寸：跟 studio 共用「立繪比例」設定 os_sprite_size，預設 512×896
             let _w = 512, _h = 896;
             try { const _p = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_p[0] && _p[1]) { _w = _p[0]; _h = _p[1]; } } catch(e) {}
+            // 🪽 帶翼角色(羽人/惡魔/harpy/fairy)：人身比例的畫布一定切到翅膀 → 加寬畫框、附上「整對翅膀進框」約束。
+            //    判定看角色描述本身(prompt)，不是套完模板的 full——模板裡沒有翅膀詞。
+            try {
+                const _wf = win.OS_IMAGE_MANAGER.wideFrame(_w, _h, prompt);
+                if (_wf.extra) { _w = _wf.width; _h = _wf.height; full += ', ' + _wf.extra; }
+            } catch (e) {}
             // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面(extraNegative)。空＝不送。
             let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;

@@ -231,6 +231,27 @@
             if (type === 'map')   return this.config.serviceMap   || this.config.serviceInanimate || this.config.service || 'pollinations';
             return this.config.serviceInanimate || this.config.service || 'pollinations';
         },
+        // 🪽 帶翼角色的畫框加寬（角色圖路徑各自呼叫，不做在 generate() 裡）
+        //   翅膀的輪廓寬度是人身的 2~3 倍，人身比例的畫布必定切到翅膀；去背後那是一條直線切邊，
+        //   羽化只會把它變成半透明霧邊(羽毛淡出到一半，換任何背景都看得出是「消失」不是「延伸出畫面」)，
+        //   所以治本是加寬畫布、讓整對翅膀進得來。
+        //   ⚠️ 只認「輪廓會超出人身」的部位：獸耳/角/尾巴幅度小、魚尾往下長，畫框本來就裝得下，一律不算。
+        //   ⚠️ fairy 要收：模型看到 fairy 常自己長出翅膀，prompt 裡不一定寫 wings。
+        //   ⚠️ 刻意不做進 generate()：大廳走路圖(3×4 sheet)的寬高是切格幾何，被偷偷加寬會整張切錯格。
+        WING_RE: /\bwings?\b|\bharpy\b|\bfair(?:y|ies)\b/i,
+        // 光加寬有時模型會把翅膀跟著撐大填滿 → 要同時約束「整對翅膀進框、四周留白」
+        WING_FRAME_WORDS: 'entire wings visible in frame, empty margin around subject',
+        needsWideFrame: function (prompt) { return this.WING_RE.test(String(prompt || '')); },
+        // 回 { width, height, extra }；沒命中＝原樣回傳、extra 為空字串（呼叫端無腦串接即可）
+        wideFrame: function (w, h, prompt) {
+            w = parseInt(w, 10) || 0; h = parseInt(h, 10) || 0;
+            if (!w || !h || !this.needsWideFrame(prompt)) return { width: w, height: h, extra: '' };
+            const nw = Math.max(w, Math.round(w * 1.5 / 64) * 64);   // 64 倍數：NAI/SD 的硬規矩
+            if (nw === w) return { width: w, height: h, extra: '' };
+            console.log(`[ImageManager] 🪽 偵測到帶翼角色 → 畫框加寬 ${w}x${h} → ${nw}x${h}`);
+            return { width: nw, height: h, extra: this.WING_FRAME_WORDS };
+        },
+
         // ComfyUI 每桶各自一份設定：char/scene/bg/map 各有 comfyuiDirect.buckets[桶] 覆蓋(模型/參數/底詞/預設包)，
         //   只共用連線網址 url。沒設過該桶 → 退回扁平 comfyuiDirect(＝現狀,向後相容零風險)。
         _comfyBucketOf: function(type) {
