@@ -23,6 +23,13 @@
         return Math.floor(h / 24) + ' 天前';
     }
     function _closeTheaterWin() { S.twEl?.remove(); S.twEl = null; }
+    // 票券上的絕對時間（回顧卡：2026/08/13 02:24）
+    function _thlDate(ts) {
+        if (!ts) return '';
+        const d = new Date(ts), p = (n) => String(n).padStart(2, '0');
+        return d.getFullYear() + '/' + p(d.getMonth() + 1) + '/' + p(d.getDate()) + '  ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+    function _npcByKey(key) { return key ? (S.npcs || []).find(n => n && n.key === key) || null : null; }
     // 角色視覺分身（不掛地圖、不碰真 NPC）：走路圖取中幀、單張立姿整張。facing: 'front'|'left'|'right'
     function _actorCloneEl(n, h, facing) {
         if (n && n.sheet && n.el) {
@@ -44,18 +51,73 @@
         if (facing === 'right') img.classList.add('flip');   // 單張立姿原圖朝左，朝右=鏡像（同 placeActor flip）
         return img;
     }
-    // 方形小頭像：小框裁分身上半身（頭在框頂）
-    function _actorMiniEl(n) {
+    // 圓形小頭像：圓框裁分身上半身（頭在框頂）；n 缺席（回顧的 NPC 不在場）→ 面具替身
+    function _actorCircleEl(n) {
         const box = document.createElement('div');
-        box.className = 'ltw-ava';
-        const inner = _actorCloneEl(n, 74, 'front');
-        inner.classList.add('ltw-ava-img');
-        box.appendChild(inner);
+        box.className = 'ltw2-ava';
+        if (n && (n.el || n.defaultSrc)) {
+            const inner = _actorCloneEl(n, 56, 'front');
+            inner.classList.add('ltw2-ava-img');
+            box.appendChild(inner);
+        } else {
+            box.innerHTML = '<i class="fa-solid fa-masks-theater"></i>';
+        }
         return box;
+    }
+    // 票券卡：opt = { avatars:[nA,nB]|null, title, loc, time, quote, rec, merged, playTitle, onPlay, onOpen }
+    function _ticketEl(opt) {
+        const tk = document.createElement('div');
+        tk.className = 'ltw2-ticket' + (opt.merged ? ' merged' : '');
+        const main = document.createElement('button');
+        main.className = 'ltw2-tk-main';
+        const head = document.createElement('div'); head.className = 'ltw2-tk-head';
+        const avaRow = document.createElement('div'); avaRow.className = 'ltw2-tk-avas';
+        if (opt.merged) {
+            const one = document.createElement('div'); one.className = 'ltw2-ava';
+            one.innerHTML = '<i class="fa-solid fa-layer-group"></i>';
+            avaRow.appendChild(one);
+        } else {
+            (opt.avatars || [null, null]).forEach(n => avaRow.appendChild(_actorCircleEl(n)));
+        }
+        const tt = document.createElement('div'); tt.className = 'ltw2-tk-name';
+        tt.textContent = opt.title || '小劇場';   // textContent 防注入
+        head.append(avaRow, tt);
+        const meta = document.createElement('div'); meta.className = 'ltw2-tk-meta';
+        if (opt.loc) {
+            const lo = document.createElement('div'); lo.className = 'ltw2-tk-line';
+            lo.innerHTML = '<i class="fa-solid fa-location-dot"></i> ';
+            lo.append(document.createTextNode(opt.loc));
+            meta.appendChild(lo);
+        }
+        if (opt.time) {
+            const ti = document.createElement('div'); ti.className = 'ltw2-tk-line';
+            ti.innerHTML = '<i class="fa-regular fa-clock"></i> ';
+            ti.append(document.createTextNode(opt.time));
+            meta.appendChild(ti);
+        }
+        main.append(head, meta);
+        if (opt.quote) {
+            const q = document.createElement('div'); q.className = 'ltw2-tk-quote';
+            q.textContent = '「' + opt.quote + '」';
+            main.appendChild(q);
+        }
+        if (opt.onOpen) main.addEventListener('click', opt.onOpen);
+        tk.appendChild(main);
+        if (opt.rec) {
+            const rec = document.createElement('span'); rec.className = 'ltw2-tk-rec';
+            rec.innerHTML = '<i class="fa-solid fa-circle"></i> REC';
+            tk.appendChild(rec);
+        }
+        const play = document.createElement('button');
+        play.className = 'ltw2-tk-play';
+        play.title = opt.playTitle || '打開';
+        play.addEventListener('click', (e) => { e.stopPropagation(); (opt.onPlay || opt.onOpen || (() => {}))(); });
+        tk.appendChild(play);
+        return tk;
     }
     function _twRender() {
         const box = S.twEl; if (!box) return;
-        box.querySelectorAll('.ltw-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === S.twTab));
+        box.querySelectorAll('.ltw2-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === S.twTab));
         const body = box.querySelector('.ltw-body');
         body.innerHTML = '';
         if (S.twTab === 'live') _renderTwLive(body); else _renderTwReview(body);
@@ -63,61 +125,49 @@
     function _renderTwLive(body) {
         const t = S.theater;
         if (!t || t.playing) {
-            const d = document.createElement('div'); d.className = 'lsh-empty';
+            const d = document.createElement('div'); d.className = 'ltw2-empty';
             d.textContent = t ? '正在偷窺中……' : '現在沒有人湊在一起聊天';
             const hint = document.createElement('div'); hint.className = 'ltw-hint';
             hint.textContent = '兩位角色偶爾會湊在一起閒聊，出現時這裡會亮起。';
             body.append(d, hint);
             return;
         }
-        const sub = document.createElement('div'); sub.className = 'ltw-sub'; sub.textContent = '1 組未查看';
-        const card = document.createElement('div'); card.className = 'ltw-card';
-        const row = document.createElement('div'); row.className = 'ltw-pairrow';
-        row.append(_actorMiniEl(t.a), _actorMiniEl(t.b));
-        const info = document.createElement('div'); info.className = 'ltw-info';
-        const name = document.createElement('div'); name.className = 'ltw-name';
-        name.textContent = t.a.name + ' 和 ' + t.b.name;
-        const loc = document.createElement('div'); loc.className = 'ltw-loc';
-        loc.innerHTML = '<i class="fa-solid fa-location-dot"></i> ';
-        loc.append(document.createTextNode((_b.SCENE_HEADER[S.scene] || {}).badge || ''));
-        const desc = document.createElement('div'); desc.className = 'ltw-desc'; desc.textContent = '似乎正在談論某件事……';
-        info.append(name, loc, desc);
-        row.appendChild(info);
-        const watch = document.createElement('button');
-        watch.className = 'lep-btn lep-done ltw-watch';
-        watch.innerHTML = '<i class="fa-solid fa-eye"></i> 查看';
-        watch.addEventListener('click', () => { _closeTheaterWin(); _presentTheater(); });
-        card.append(row, watch);
+        body.appendChild(_ticketEl({
+            avatars: [t.a, t.b],
+            title: t.a.name + ' & ' + t.b.name,
+            loc: (_b.SCENE_HEADER[S.scene] || {}).badge || '',
+            quote: '似乎正在談論某件事……',
+            rec: true,
+            playTitle: '查看',
+            onPlay: () => { _closeTheaterWin(); _presentTheater(); },
+        }));
         const note = document.createElement('div'); note.className = 'ltw-note'; note.textContent = '查看後將移至回顧';
-        body.append(sub, card, note);
+        body.appendChild(note);
     }
     function _renderTwReview(body) {
         let logs = [];
         try { const db = _thl(); logs = (db && db.getAll) ? db.getAll() : []; } catch (e) {}
         const sub = document.createElement('div'); sub.className = 'ltw-sub';
-        sub.textContent = '小劇場回顧 · ' + logs.length + ' 條';
-        const list = document.createElement('div'); list.className = 'lsh-list ltw-list';
-        if (!logs.length) list.innerHTML = '<div class="lsh-empty">── 還沒有看過的小劇場 ──</div>';
+        sub.textContent = '回顧 · ' + logs.length + ' 條';
+        const list = document.createElement('div'); list.className = 'ltw2-list';
+        if (!logs.length) list.innerHTML = '<div class="ltw2-empty">── 還沒有看過的小劇場 ──</div>';
         logs.forEach(log => {
-            const row = document.createElement('button');
-            row.className = 'ltw-row' + (log.merged ? ' merged' : '');
-            const ic = document.createElement('i');
-            ic.className = 'fa-solid ' + (log.merged ? 'fa-compress' : 'fa-masks-theater') + ' ltw-row-ic';
-            const tx = document.createElement('span'); tx.className = 'ltw-row-tx';
-            const tt = document.createElement('span'); tt.className = 'ltw-row-title';
-            tt.textContent = log.merged ? '往期綜述' : (log.pair || '小劇場');   // textContent 防注入
-            const sb = document.createElement('span'); sb.className = 'ltw-row-sub';
-            sb.textContent = _thlTime(log.ts) + (log.brief ? ' · ' + log.brief : '');
-            tx.append(tt, sb);
-            const arrow = document.createElement('i'); arrow.className = 'fa-solid fa-chevron-right ltw-row-arrow';
-            row.append(ic, tx, arrow);
-            row.addEventListener('click', () => _renderTwEntry(log));
-            list.appendChild(row);
+            list.appendChild(_ticketEl({
+                avatars: log.merged ? null : [_npcByKey((log.npcKeys || [])[0]), _npcByKey((log.npcKeys || [])[1])],
+                title: log.merged ? '往期綜述' : (log.pair || '小劇場'),
+                loc: log.loc || '',
+                time: _thlDate(log.ts),
+                quote: log.brief || '',
+                merged: !!log.merged,
+                playTitle: '打開',
+                onOpen: () => _renderTwEntry(log),
+            }));
         });
-        const acts = document.createElement('div'); acts.className = 'ltl-actions';
+        const acts = document.createElement('div'); acts.className = 'ltw2-acts';
         acts.innerHTML =
-            '<button class="lep-btn" data-act="recompress"><i class="fa-solid fa-compress"></i> 重壓縮</button>' +
-            '<button class="lep-btn lep-danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空全部</button>';
+            '<button class="ltw2-act" data-act="recompress"><i class="fa-solid fa-compress"></i> 重壓縮</button>' +
+            '<span class="ltw2-act-dot">·</span>' +
+            '<button class="ltw2-act danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空全部</button>';
         acts.querySelector('[data-act="clear"]').addEventListener('click', () => {
             if (!window.confirm('清空全部小劇場記事？不可復原。')) return;
             try { _thl()?.clear?.(); } catch (e) {}
@@ -167,22 +217,23 @@
     function _openTheaterWin(tab) {
         _b.closeWins();   // 互斥：關掉裝扮室/對話紀錄/設置等其他小窗（含自己的舊窗）
         const box = document.createElement('div');
-        box.className = 'lstage-dress lstage-theater-win';
+        box.className = 'lstage-theater-win2';
         box.innerHTML =
-            '<div class="ltw-head">' +
-              '<span class="lsd-title"><i class="fa-solid fa-clapperboard"></i> 小劇場</span>' +
-              '<button class="ltw-close" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
-            '</div>' +
-            '<div class="ltw-tabs">' +
-              '<button class="ltw-tab" data-tab="live">正在對話</button>' +
-              '<button class="ltw-tab" data-tab="review">回顧</button>' +
-            '</div>' +
-            '<div class="ltw-body"></div>';
+            '<div class="ltw2-in">' +
+              '<button class="ltw2-close" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
+              '<div class="ltw2-title">小 劇 場</div>' +
+              '<div class="ltw2-title-en">MEMORY THEATER</div>' +
+              '<div class="ltw2-tabs">' +
+                '<button class="ltw2-tab" data-tab="live">正在對話</button>' +
+                '<button class="ltw2-tab" data-tab="review">回顧</button>' +
+              '</div>' +
+              '<div class="ltw-body ltw2-body"></div>' +
+            '</div>';
         S.root.appendChild(box);
         S.twEl = box;
         S.twTab = (tab === 'review') ? 'review' : 'live';
-        box.querySelector('.ltw-close').addEventListener('click', _closeTheaterWin);
-        box.querySelectorAll('.ltw-tab').forEach(b => b.addEventListener('click', () => { S.twTab = b.dataset.tab; _twRender(); }));
+        box.querySelector('.ltw2-close').addEventListener('click', _closeTheaterWin);
+        box.querySelectorAll('.ltw2-tab').forEach(b => b.addEventListener('click', () => { S.twTab = b.dataset.tab; _twRender(); }));
         _twRender();
     }
 
