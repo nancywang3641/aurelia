@@ -232,6 +232,49 @@
     background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/cheshire_signature.png);
 }
 
+/* ── 左側常駐 dock：MAIN MENU 快捷（漢堡收掉右欄也照常可用）── */
+.lb-dock {
+    position:absolute; left:10px; top:50%; transform:translateY(-50%);
+    z-index:40; display:flex; flex-direction:column; align-items:center; gap:9px;
+}
+.lb-dock-btn {
+    position:relative; width:58px; padding:7px 4px 6px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:rgba(255,255,255,0.82); border:1px solid rgba(60,80,130,0.28); border-radius:14px;
+    cursor:pointer; font-family:inherit;
+    box-shadow:0 4px 14px rgba(40,60,110,0.18);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.lb-dock-btn:hover { transform:translateX(3px); background:rgba(255,255,255,0.95); box-shadow:0 6px 18px rgba(40,60,110,0.28); }
+.lb-dock-btn:active { transform:translateX(1px) scale(0.97); }
+.lb-dock-ic { width:30px; height:30px; object-fit:contain; display:block; pointer-events:none; }
+.lb-dock-label { font-size:11px; font-weight:700; letter-spacing:1px; color:#2b3652; line-height:1.2; pointer-events:none; }
+.lb-dock-sep { width:34px; height:1px; margin:1px 0; background:linear-gradient(to right,transparent,rgba(60,80,130,0.4),transparent); }
+.lb-dock-exit i { font-size:22px; height:30px; line-height:30px; color:#4f74c8; pointer-events:none; }
+/* 成就待兌換小圓點 */
+.lb-dock-btn.has-pending::after {
+    content:''; position:absolute; top:6px; right:8px; width:7px; height:7px; border-radius:50%;
+    background:#e0a52e; box-shadow:0 0 6px rgba(224,165,46,0.8);
+    animation:lbDockDot 1.5s ease-in-out infinite;
+}
+@keyframes lbDockDot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+/* 404 綠皮：字換黑話、icon 轉綠 */
+.void-tab.mode-404 .lb-dock-btn { background:rgba(0,10,2,0.75); border-color:rgba(0,255,65,0.3); box-shadow:0 4px 14px rgba(0,0,0,0.5); }
+.void-tab.mode-404 .lb-dock-btn:hover { background:rgba(0,18,4,0.9); }
+.void-tab.mode-404 .lb-dock-ic { filter:sepia(1) saturate(3) hue-rotate(80deg) brightness(0.95); }
+.void-tab.mode-404 .lb-dock-label { font-size:0; color:#9ef3b0; }
+.void-tab.mode-404 .lb-dock-label::after { content:attr(data-cn-404); font-size:11px; }
+.void-tab.mode-404 .lb-dock-exit i { color:#7de89a; }
+@media (max-width:560px) {
+    .lb-dock { left:6px; gap:6px; }
+    .lb-dock-btn { width:46px; padding:5px 3px 4px; border-radius:11px; }
+    .lb-dock-ic { width:24px; height:24px; }
+    .lb-dock-label { font-size:9px; }
+    .void-tab.mode-404 .lb-dock-label::after { font-size:9px; }
+    .lb-dock-exit i { font-size:18px; height:24px; line-height:24px; }
+}
+
 /* 對話框：移進左欄底部、疊在立繪上 */
 .lobby-left .void-dialogue-wrap {
     position:absolute; left:0; right:0; bottom:0; top:auto;

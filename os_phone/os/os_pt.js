@@ -287,6 +287,10 @@
             '.os-pt-buy.owned{background:rgba(90,180,120,.16);color:#2e8a52;box-shadow:none;}',
             '.os-pt-shop-msg{min-height:18px;text-align:center;font-size:12.5px;margin-top:6px;color:#d3475f;}',
             '.os-pt-shop-msg.ok{color:#2e8a52;}',
+            // 成就兌換區塊：白兔代收異常成就送 404 估值，貨幣是💎碎片(跟 PT 分開)
+            '.os-pt-item .ic.ach{background:rgba(150,110,220,.14);color:#8a6fd0;}',
+            '.os-pt-buy.ach{background:linear-gradient(135deg,#9a7fe0,#7a5fd0);box-shadow:0 4px 12px rgba(122,95,208,.35);}',
+            '.os-pt-ach-shards{font-size:11.5px;color:#8a6fd0;margin-top:3px;font-variant-numeric:tabular-nums;}',
         ].join('');
         document.head.appendChild(s);
     }
@@ -389,12 +393,27 @@
             ? '<button class="os-pt-buy owned" disabled><i class="fa-solid fa-check"></i>&nbsp;已擁有</button>'
             : '<button class="os-pt-buy" id="os-pt-buy-house"' + (canBuy ? '' : ' disabled') + '>' + price + ' PT</button>';
 
+        // 成就兌換：白兔代收，估值仍走 404 那套(柴郡 API)，換到的是💎碎片不是 PT
+        const achApi = window.OS_ACHIEVEMENT || win.OS_ACHIEVEMENT;
+        const store404 = window.OS_404_STORE || win.OS_404_STORE;
+        const pendingN = (achApi && achApi.getPending) ? achApi.getPending().length : 0;
+        const shards = (store404 && store404.getShards) ? store404.getShards() : 0;
+        const achBtnHtml = pendingN
+            ? '<button class="os-pt-buy ach" id="os-pt-redeem-ach">兌換 ' + pendingN + ' 個</button>'
+            : '<button class="os-pt-buy" disabled>兌換</button>';
+
         itemsEl.innerHTML =
             '<div class="os-pt-item">' +
             '<div class="ic"><i class="fa-solid fa-house-chimney"></i></div>' +
             '<div class="body"><div class="n">蓋你的房</div>' +
             '<div class="d">在視差城市擁有一間屬於自己的房子。</div></div>' +
-            btn + '</div>';
+            btn + '</div>' +
+            '<div class="os-pt-item">' +
+            '<div class="ic ach"><i class="fa-solid fa-trophy"></i></div>' +
+            '<div class="body"><div class="n">成就兌換</div>' +
+            '<div class="d">' + (pendingN ? ('把 ' + pendingN + ' 個成就送去估值，換成碎片。') : '沒有待兌換的成就。') + '</div>' +
+            '<div class="os-pt-ach-shards"><i class="fa-solid fa-gem"></i> 碎片 ' + shards + '</div></div>' +
+            achBtnHtml + '</div>';
 
         if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = built ? '' : (canBuy ? '' : ('還差 ' + (price - bal) + ' PT')); }
 
@@ -411,6 +430,26 @@
             if (msgEl) { msgEl.className = 'os-pt-shop-msg ok'; msgEl.textContent = '入手了！你在城市有家了。'; }
             try { window.dispatchEvent(new CustomEvent('os-pt-plot-changed', { detail: { plotId: 'player', built: true } })); } catch (e) {}
             await _renderShopBody(mask);   // 重繪：餘額↓、按鈕→已擁有
+        });
+
+        const redeemBtn = mask.querySelector('#os-pt-redeem-ach');
+        if (redeemBtn) redeemBtn.addEventListener('click', async () => {
+            redeemBtn.disabled = true;
+            redeemBtn.textContent = '估值中…';
+            if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = '白兔先生把成就送去估值了，稍等…'; }
+            const store = window.OS_404_STORE || win.OS_404_STORE;
+            const r = (store && store.evaluateAchievements)
+                ? await store.evaluateAchievements()
+                : { ok: false, msg: '估值窗口沒開' };
+            if (!r.ok) {
+                if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = r.msg || '估值失敗，再試一次'; }
+                redeemBtn.disabled = false;
+                redeemBtn.textContent = '兌換';
+                return;
+            }
+            try { window.VoidPanels?.refreshAchievement?.(); } catch (e) {}
+            await _renderShopBody(mask);   // 先重繪(會清 msg)再寫結果，成功訊息才留得住
+            if (msgEl) { msgEl.className = 'os-pt-shop-msg ok'; msgEl.textContent = '兌換完成！獲得 ' + r.totalShards + ' 碎片。'; }
         });
     }
 

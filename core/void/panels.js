@@ -120,11 +120,39 @@
             };
         }
 
+        // 一鍵兌換：有待兌換才顯示；估值仍走 404 那套(柴郡 API)，換到💎碎片
+        const redeemBtn = document.getElementById('ach-redeem-btn');
+        if (redeemBtn) redeemBtn.style.display = pending.length > 0 ? '' : 'none';
+        if (redeemBtn && !redeemBtn._bound) {
+            redeemBtn._bound = true;
+            redeemBtn.onclick = async () => {
+                if (redeemBtn.disabled) return;
+                redeemBtn.disabled = true;
+                redeemBtn.textContent = '⏳ 估值中…';
+                const footer = document.querySelector('#achievement-panel-overlay .ach-footer');
+                if (footer && !footer.dataset.origText) footer.dataset.origText = footer.textContent;
+                const store = window.OS_404_STORE;
+                const r = (store && store.evaluateAchievements)
+                    ? await store.evaluateAchievements()
+                    : { ok: false, msg: '黑市窗口沒開' };
+                redeemBtn.disabled = false;
+                redeemBtn.textContent = '💎 一鍵兌換';
+                if (footer) {
+                    footer.textContent = r.ok ? `💎 兌換完成！獲得 ${r.totalShards} 碎片` : `📡 ${r.msg || '估值失敗，再試一次'}`;
+                    clearTimeout(footer._restoreTimer);
+                    footer._restoreTimer = setTimeout(() => { footer.textContent = footer.dataset.origText; }, 6000);
+                }
+                if (r.ok) refreshAchievement();
+            };
+        }
+
         // 更新按鈕 "待兌換" 小圓點（按當前模式可看到的 pending 算）
         if (achBtn) {
             if (pending.length > 0) achBtn.classList.add('has-pending');
             else                    achBtn.classList.remove('has-pending');
         }
+        const dockAch = document.getElementById('lb-dock-ach');
+        if (dockAch) dockAch.classList.toggle('has-pending', pending.length > 0);
 
         // 切換成卡帶 grid 模式
         listEl.classList.add('relic-grid-mode');
@@ -225,12 +253,13 @@
         const overlay = document.getElementById('achievement-panel-overlay');
         if (overlay && overlay.style.display !== 'none') renderAchievementList();
         const achBtn = document.getElementById('achievement-hist-btn');
-        if (achBtn && window.OS_ACHIEVEMENT) {
+        const dockAch = document.getElementById('lb-dock-ach');
+        if ((achBtn || dockAch) && window.OS_ACHIEVEMENT) {
             const currentChar = getCurrentChar();
             const hasPending = window.OS_ACHIEVEMENT.getPending()
                 .some(a => shouldShowForChar(a.emotion, currentChar));
-            if (hasPending) achBtn.classList.add('has-pending');
-            else            achBtn.classList.remove('has-pending');
+            if (achBtn) achBtn.classList.toggle('has-pending', hasPending);
+            if (dockAch) dockAch.classList.toggle('has-pending', hasPending);
         }
     }
 
