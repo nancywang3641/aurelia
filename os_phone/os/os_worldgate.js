@@ -1026,7 +1026,10 @@
             '.wg-poster-plane{position:absolute;inset:0;background:url("' + _WG_ART + 'poster-plate.png") center/100% 100% no-repeat;' +
               'filter:drop-shadow(0 12px 30px rgba(14,24,40,.24));}' +
             // 巨大姓名只當背景圖形：描邊透明字、直排，壓在立繪後面
+            // 🚨字型一定要指定粗黑體:沒指定會掉到比較細的字面,字的筆畫比外框線還細,
+            //   描邊描在筆畫兩側就變成兩條快要重合的線,交叉處整個糊掉(實測 A/B 對照)。
             '.wg-poster-name{position:absolute;left:5%;top:5%;z-index:2;writing-mode:vertical-rl;letter-spacing:6px;' +
+              'font-family:"Microsoft JhengHei","Noto Sans TC","PingFang TC",sans-serif;' +
               'font-size:clamp(34px,11vh,96px);line-height:1.12;font-weight:900;color:transparent;-webkit-text-stroke:1.5px rgba(53,110,175,.4);pointer-events:none;}' +
             // 立繪是像素小人：放大時一律 pixelated，別讓瀏覽器插值糊成一團
             // 右邊要留給代號牌：圖框佔滿整個海報的話，人一定壓在代號上(斜板本來就往右收窄)
