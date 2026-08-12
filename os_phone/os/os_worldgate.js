@@ -1048,8 +1048,10 @@
             '.wg-ev-meta::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,170,114,.7),rgba(201,170,114,0));}' +
             '.wg-ev-title{margin-top:8px;font-size:clamp(21px,3.4vh,34px);font-weight:900;letter-spacing:3px;line-height:1.25;color:#14243d;}' +
             // 灰字不得再降淡：這面板以前就是被淡灰小字弄成催眠表單的
-            '.wg-ev-prompt{margin-top:9px;font-size:15px;line-height:1.62;color:#3d4f68;max-width:46em;}' +
-            '.wg-choices{display:flex;flex-direction:column;gap:9px;margin-top:16px;}' +
+            '.wg-ev-prompt{margin-top:9px;font-size:15px;line-height:1.62;color:#3d4f68;max-width:34em;}' +
+            // 標題那組(meta/大標/題幹)跟選項要看得出是兩段:貼太近會讀成一整塊,分不清哪裡是「該我做決定」了。
+            //   選項也不能拉滿寬——桌機事件殼有六成螢幕寬,整條橫過去像表格列不像按鈕,而且眼睛要從編號掃很遠才到文字。
+            '.wg-choices{display:flex;flex-direction:column;gap:9px;margin-top:30px;max-width:34em;}' +
             '.wg-choice{display:flex;align-items:center;gap:15px;width:100%;text-align:left;cursor:pointer;min-height:58px;padding:11px 18px;' +
               'border:1px solid rgba(20,36,61,.15);background:rgba(255,255,255,.92);color:#14243d;transition:.16s;' +
               'clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,0 100%);}' +
