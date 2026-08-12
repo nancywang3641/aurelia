@@ -634,8 +634,12 @@
     }
 
     // ── 🤝 組隊卡(零API:考題/台詞在展開世界時已生成好;身分卡=卡內第二層頁,不疊modal) ──
-    let _meetEl = null, _lobbyRegDone = false;
-    function _closeMeet() { _meetEl?.remove(); _meetEl = null; }
+    let _meetEl = null, _lobbyRegDone = false, _meetRO = null;
+    function _closeMeet() {
+        try { _meetRO?.disconnect(); } catch (e) {}
+        _meetRO = null;
+        _meetEl?.remove(); _meetEl = null;
+    }
     function _lobbyReg() {   // 進大廳小窗互斥圈(開裝扮室等其他窗時自動被收掉)
         if (_lobbyRegDone) return;
         const b = _stage();
@@ -725,9 +729,28 @@
             box.style.setProperty('--npc-accent', _accentOf(t.name));
             // 海報覆蓋整個舞台,但要讓開既有的底部對話列——問題與反應都在那裡說出口,兩者是不同層、不能合併。
             //   對話列高度會因為輸入列/字數變,量一次寫進變數,比寫死安全。
+            // 海報要讓開底部對話列。這裡有兩個都會咬人的細節:
+            //   ① 不能只量 wrap 的 offsetHeight:名牌是 position:absolute;top:-22px,浮在對話框上緣之外,
+            //      量不到它 → 面板下緣正好切在名牌上(實機回報「底部的對話框被遮住」就是這個)。
+            //      改成掃 wrap 與它所有子孫,取最高的那條上緣。
+            //   ② 不能只在開窗時量一次:台詞長短會讓那組東西改變高度 → 用 ResizeObserver 跟著改。
             try {
                 const dw = doc.querySelector('.lobby-left .void-dialogue-wrap');
-                if (dw && dw.offsetHeight) box.style.setProperty('--wg-meet-pb', (dw.offsetHeight + 6) + 'px');
+                if (dw) {
+                    const sync = () => {
+                        if (!box.isConnected) return;
+                        const hostRect = (box.offsetParent || host).getBoundingClientRect();
+                        let top = dw.getBoundingClientRect().top;
+                        dw.querySelectorAll('*').forEach(el => {
+                            const r = el.getBoundingClientRect();
+                            if (r.height && r.top < top) top = r.top;
+                        });
+                        const gap = Math.max(0, Math.round(hostRect.bottom - top) + 8);
+                        if (gap) box.style.setProperty('--wg-meet-pb', gap + 'px');
+                    };
+                    sync();
+                    try { _meetRO = new win.ResizeObserver(sync); _meetRO.observe(dw); } catch (e) {}
+                }
             } catch (e) {}
             // 外殼(海報/頁籤軌)只建一次,切頁只換兩個內容框——整顆重建會讓立繪和頁籤跟著閃。
             box.innerHTML =
