@@ -122,10 +122,13 @@
     async function _drawSeeds(hint) {
         const prompt =
             '你是一位資深的跑團世界觀設計師,替玩家設計可以長期生活、探索的異世界。請生成 4 顆世界種子。只回傳純 JSON 陣列:\n' +
-            '[{"genre":"{題材類型,不超過8字,例如:劍與魔法/仙俠修真/神話史詩/海洋與深淵/蒸汽工業/民俗怪談}","type":"{基調,不超過6字}","name":"{世界名,不超過8字,有記憶點}","concept":"{一句話概念,不超過25字}","twist":"{一條違反常識的核心規則,不超過45字}","daily":"{這條規則讓當地人每天實際在做什麼,不超過25字}","style":"{視覺風格,不超過10字}","lure":"{玩家前往的理由/可獲得什麼,不超過20字}","danger":"{主要危險,不超過15字}","crisis":"{這個世界現在正在發生、玩家會撞上的事,不超過20字}"}]\n' +
+            '[{"genre":"{題材類型,不超過8字,例如:劍與魔法/仙俠修真/神話史詩/海洋與深淵/蒸汽工業/民俗怪談}","type":"{基調,不超過6字}","name":"{世界名,不超過8字,有記憶點}","concept":"{一句話概念,不超過25字}","twist":"{一條違反常識的核心規則,不超過45字}","daily":"{這條規則讓當地人每天實際在做什麼,不超過25字}","style":"{視覺風格,名詞短語,不超過5字}","lure":"{這個世界最吸引人的那樣東西,名詞短語,不超過5字}","danger":"{主要危險,名詞短語,不超過5字}","crisis":"{這個世界現在正在發生、玩家會撞上的事,不超過20字}"}]\n' +
             // 🚨type 一樣不給清單(理由同下面 twist 那段)。只講它是哪一個維度、以及四顆要拉開。
             '【基調 type】type 跟 genre 是兩件事:genre 是題材,type 是玩家住進去會過什麼樣的日子、故事讀起來是什麼味道。不要把題材再寫一次當 type。\n' +
             '4 顆種子的 type 必須明顯不同,而且**不是每個世界都要背著沉重的使命或世界級危機**——至少要有一顆是低風險、可以慢慢過日子的走向。\n' +
+            // style/lure/danger 是面板上的三顆標籤(印在概念圖上),不是句子。放寬字數它就會寫成短句、
+            //   標籤直接撐爆整排(舊世界的「幸福感作為通用貨幣」就是這樣長出來的)。
+            '【標籤 style / lure / danger】這三個是印在世界概念圖上的短標籤,只寫名詞短語,不要動詞、不要句子、不要標點。\n' +
             'danger 與 crisis 的量級要跟著 type 走:輕鬆或日常向的世界就寫當地人真的在煩惱的小事,不要硬套災難;沉重或高風險的才寫大危機。世界不會因為沒有末日就不值得去。\n' +
             (hint
                 ? '【題材鎖定,硬性要求】玩家指定:「' + hint + '」。4 顆種子的 genre 全部都要落在這個題材裡,不准有任何一顆跑題。差異體現在基調、地域、文明、勢力、核心規則與危機上,不是靠換題材製造差異。\n'
@@ -903,8 +906,48 @@
             // 降生地九宮格：純 CSS 排方位，不生任何圖
             // 🚨flex:none 不能省:.wg-body 是直向 flex,圖片當 flex item 預設會被壓扁(實測高度只剩幾十px)。
             //   aspect-ratio + cover 是第二道保險,圖片比例跟預期不同時也不會變形。
-            '.wg-art{flex:none;border-radius:12px;overflow:hidden;margin-bottom:8px;line-height:0;background:rgba(26,28,40,.06);}' +
+            '.wg-art{position:relative;flex:none;border-radius:12px;overflow:hidden;margin-bottom:8px;line-height:0;background:rgba(26,28,40,.06);}' +
             '.wg-art img{width:100%;height:auto;display:block;aspect-ratio:12/7;object-fit:cover;}' +
+            // 概念句＋三顆標籤壓在概念圖上(詳情頁)：底下那張漸層布幕是必要的，
+            //   概念圖的下緣亮暗完全看世界長什麼樣，沒有布幕時白字會在亮景上整段消失。
+            '.wg-art-ov{position:absolute;left:0;right:0;bottom:0;padding:22px 11px 9px;line-height:normal;' +
+              'background:linear-gradient(rgba(10,12,22,0),rgba(10,12,22,.34) 38%,rgba(10,12,22,.78));}' +
+            '.wg-art-concept{color:#fff;font-size:15px;font-weight:800;letter-spacing:.6px;line-height:1.35;text-shadow:0 1px 8px rgba(10,12,22,.6);}' +
+            '.wg-art .wg-tags{margin-top:6px;}' +
+            '.wg-art .wg-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:10px;font-weight:700;' +
+              'background:rgba(255,255,255,.16);color:#f0f3ff;border-color:rgba(255,255,255,.32);backdrop-filter:blur(4px);}' +
+            '.wg-art .wg-tag.lure{background:rgba(70,170,130,.3);border-color:rgba(150,235,200,.5);}' +
+            '.wg-art .wg-tag.warn{background:rgba(190,80,70,.32);color:#ffe9e6;border-color:rgba(255,160,150,.5);}' +
+            // ── 🧍 出發編成：四格槽位(素材=sound-files/aseets/worldgate_ui 前後兩層玻璃艙) ──
+            //   前後夾層的用意：人站在後層玻璃與腳下光環之上、又被前框與底座包住＝真的進到艙裡，
+            //   單張完整殼會把頭髮衣服壓白。兩層必須同尺寸同定位(素材已用同一個 bbox 裁好)。
+            '.wg-slots{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px;}' +
+            '.wg-slot{display:flex;flex-direction:column;align-items:center;min-width:0;}' +
+            '.wg-slot.on{cursor:pointer;}' +
+            '.wg-slot-shell{position:relative;width:100%;aspect-ratio:320/656;}' +
+            '.wg-slot-shell>img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;}' +
+            '.wg-slot-back{z-index:1;}.wg-slot-front{z-index:3;pointer-events:none;}' +
+            // 人物框內縮：上下留給頂框與底座，腳底落在光環上(contain+bottom 對齊)
+            '.wg-slot-fig{position:absolute;inset:7% 11% 17% 11%;z-index:2;background:var(--wg-fig) center bottom/contain no-repeat;}' +
+            // 走路圖(3×4)當皮膚時只取第一格，不然整張 12 宮格塞進艙裡
+            '.wg-slot-fig.sheet{background-size:300% 400%;background-position:0 0;}' +
+            '.wg-slot-ghost{position:absolute;inset:7% 11% 17% 11%;z-index:2;display:grid;place-items:center;color:rgba(120,140,190,.34);font-size:26px;}' +
+            '.wg-slot.empty .wg-slot-shell{opacity:.62;}' +
+            // 🚨 top 的百分比吃的是「高度」不是寬度：槽位高是寬的兩倍，-6% 會把菱石甩到艙外、還撞到上一行標題。
+            //   改成把菱石的「中心」壓在頂框橫桿上(top:3% + translate -50%,-50%)，尺寸也收小一級。
+            '.wg-slot-gem{position:absolute;top:3%;left:50%;z-index:4;width:26%;aspect-ratio:1;display:grid;place-items:center;' +
+              'transform:translate(-50%,-50%) rotate(45deg);border-radius:4px;background:linear-gradient(140deg,#fdfefe,#cfe0f5);' +
+              'border:1px solid rgba(120,150,200,.55);box-shadow:0 1px 5px rgba(26,28,40,.22);}' +
+            '.wg-slot-gem i{transform:rotate(-45deg);font-size:9px;color:#3a5580;}' +
+            '.wg-slot-check{position:absolute;right:4%;bottom:20%;z-index:4;color:#2f6fd0;font-size:13px;' +
+              'filter:drop-shadow(0 1px 3px rgba(255,255,255,.9));}' +
+            '.wg-slot-name{margin-top:-6%;position:relative;z-index:5;max-width:100%;padding:2px 7px;border-radius:8px;' +
+              'background:#1e2540;color:#fff;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' +
+              'box-shadow:0 2px 6px rgba(26,28,40,.3);}' +
+            '.wg-slot.empty .wg-slot-name{background:#5b6480;}' +
+            '.wg-slot-job{margin-top:4px;max-width:100%;display:flex;align-items:center;gap:3px;color:#5a5e75;font-size:9px;' +
+              'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+            '.wg-slot-job i{color:#3a5580;font-size:8px;flex:none;}' +
             '.wg-spawn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:4px;}' +
             // 有方位圖時格子疊在圖上面:底板要壓暗一點,不然白底的格子跟圖糊在一起看不出邊界
             '.wg-spawn-grid.has-map{background-image:var(--wg-map);background-size:cover;background-position:center;padding:5px;border-radius:11px;}' +
@@ -929,12 +972,6 @@
             '.wg-input{width:100%;box-sizing:border-box;margin-top:8px;background:rgba(255,255,255,.8);border:1px solid rgba(26,28,40,.16);border-radius:9px;color:#1A1C28;padding:8px 10px;font-size:11px;}' +
             '.wg-input::placeholder{color:#a0a4ba;}' +
             '.wg-input.area{resize:vertical;min-height:58px;line-height:1.6;font-family:inherit;}' +
-            '.wg-trav{display:flex;align-items:center;gap:9px;margin-bottom:6px;padding:8px 10px;border:1px solid rgba(26,28,40,.12);border-radius:10px;background:rgba(255,255,255,.65);cursor:pointer;transition:.15s;}' +
-            '.wg-trav:hover{background:#fff;}.wg-trav.on{border-color:#1A1C28;background:#fff;box-shadow:0 0 0 1px #1A1C28;}' +
-            '.wg-trav-avatar{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:rgba(26,28,40,.07);color:#3a3e56;font-size:13px;flex:none;}' +
-            '.wg-trav-main{min-width:0;flex:1;}.wg-trav-name{font-weight:800;color:#22263c;font-size:12px;}.wg-trav-name small{color:#8a8ea6;font-weight:700;font-size:9px;margin-left:5px;}' +
-            '.wg-trav-sub{color:#5a5e75;font-size:10px;margin-top:2px;line-height:1.45;}' +
-            '.wg-trav-check{color:#1A1C28;font-weight:900;font-size:13px;}' +
             '.wg-entry-text{color:#3a3e56;font-size:11px;line-height:1.7;white-space:pre-wrap;}' +
             /* 🤝 組隊卡/身分卡:右側停靠(同愛麗絲世界門/瀅瀅書咖成例);對話本體在底部對話框 */
             '.wg-meet{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3355;width:340px;max-width:52%;max-height:78%;overflow-y:auto;display:flex;flex-direction:column;background:linear-gradient(rgba(250,251,255,.98),rgba(238,240,246,.98));border:1px solid rgba(26,28,40,.18);border-radius:14px;color:#1A1C28;font-size:12px;box-shadow:0 12px 34px rgba(26,28,40,.32);backdrop-filter:blur(8px);scrollbar-width:thin;}' +
@@ -1149,6 +1186,74 @@
         b.querySelector('[data-act="back"]').addEventListener('click', () => _renderDetail(w));
     }
 
+    // ── 🧍 出發編成槽位 ──
+    const SLOT_BACK  = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/worldgate_ui/party-slot-back.png';
+    const SLOT_FRONT = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/worldgate_ui/party-slot-front.png';
+    // 職業→菱石圖示。旅人的 job 是「普通人在做的工作」的自由文字,對不上就回預設的人形,
+    //   不為了這顆裝飾去要模型多吐一個欄位(多一條規格就多一個它會照字面辦事的地方)。
+    const JOB_ICONS = [
+        [/醫|療|護|藥|診|治/, 'fa-heart-pulse'], [/廚|料理|烘|焙|餐|咖啡|酒保|麵/, 'fa-utensils'],
+        [/修|工程|技師|機械|水電|木匠|師傅/, 'fa-screwdriver-wrench'], [/教|學|研究|老師|講師|圖書|編輯|作家/, 'fa-book'],
+        [/警|衛|兵|獵|保全|傭/, 'fa-shield-halved'], [/商|販|店|業務|會計|櫃/, 'fa-store'],
+        [/畫|樂|唱|舞|演|藝|設計|攝影/, 'fa-palette'], [/農|園|花|漁|牧|林/, 'fa-seedling'],
+        [/司機|運|快遞|物流|送|船/, 'fa-truck-fast'], [/程式|電腦|網路|工程師|資料/, 'fa-microchip'],
+    ];
+    function _jobIcon(job) {
+        const s = String(job || '');
+        const hit = JOB_ICONS.find(p => p[0].test(s));
+        return hit ? hit[1] : 'fa-user';
+    }
+    // 槽位裡的人＝大廳小人皮膚(自動補圖存的那張,key=wg_世界_索引)。沒生過就維持剪影。
+    //   資料在 localStorage(lobby_stage_skins_v1),不需要人在大廳場景裡也讀得到。
+    async function _slotFigures(w) {
+        const out = {};
+        const b = _stage();
+        if (!b || !b.skins || !b.resolveRef) return out;
+        let all = {};
+        try { all = b.skins() || {}; } catch (e) { return out; }
+        for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) {
+            const sk = all['wg_' + w.id + '_' + i];
+            if (!sk || !sk.ref) continue;
+            try {
+                const src = await b.resolveRef(sk.ref);
+                if (src) out[i] = { src: src, sheet: sk.kind === 'sheet' };
+            } catch (e) {}
+        }
+        return out;
+    }
+    function _slotsHtml(team) {
+        const cells = [];
+        for (let s = 0; s < MAX_TRAVELER_SPAWN; s++) {
+            const x = team[s];
+            if (x) {
+                cells.push(
+                    '<div class="wg-slot on" data-i="' + x.i + '">' +
+                      '<div class="wg-slot-shell">' +
+                        '<img class="wg-slot-back" src="' + SLOT_BACK + '" alt="">' +
+                        '<div class="wg-slot-fig" data-fig="' + x.i + '"></div>' +
+                        '<img class="wg-slot-front" src="' + SLOT_FRONT + '" alt="">' +
+                        '<span class="wg-slot-gem"><i class="fa-solid ' + _jobIcon(x.t.job) + '"></i></span>' +
+                        '<span class="wg-slot-check"><i class="fa-solid fa-circle-check"></i></span>' +
+                      '</div>' +
+                      '<span class="wg-slot-name">' + _esc(x.t.name) + '</span>' +
+                      '<span class="wg-slot-job"><i class="fa-solid ' + _jobIcon(x.t.job) + '"></i>' + _esc(x.t.job || '') + '</span>' +
+                    '</div>');
+            } else {
+                cells.push(
+                    '<div class="wg-slot empty" data-empty="1">' +
+                      '<div class="wg-slot-shell">' +
+                        '<img class="wg-slot-back" src="' + SLOT_BACK + '" alt="">' +
+                        '<span class="wg-slot-ghost"><i class="fa-solid fa-user-plus"></i></span>' +
+                        '<img class="wg-slot-front" src="' + SLOT_FRONT + '" alt="">' +
+                      '</div>' +
+                      '<span class="wg-slot-name">邀請成員</span>' +
+                      '<span class="wg-slot-job"><i class="fa-solid fa-user"></i>自由選擇</span>' +
+                    '</div>');
+            }
+        }
+        return '<div class="wg-slots">' + cells.join('') + '</div>';
+    }
+
     // ── P3 世界詳情(隊伍狀態+DIVE) ──
     let _delArm = 0;   // 刪除兩段式確認(不用 window.confirm,Tauri 會攔)
     let _curDetailId = null;   // 面板當前顯示的世界(偶遇入隊時用來即時刷新隊伍區)
@@ -1164,21 +1269,21 @@
         } catch (e) {}
         // 隊伍區只列「確認組隊」的旅人;候選不露臉——他們在大廳裡等妳偶遇(Rae 定案 2026-07-22)
         const team = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x.t.recruited);
-        const travHtml = team.map(x =>
-            '<div class="wg-trav on" data-i="' + x.i + '">' +
-              '<span class="wg-trav-avatar"><i class="fa-solid fa-user"></i></span>' +
-              '<span class="wg-trav-main"><span class="wg-trav-name">' + _esc(x.t.name) + '<small>' + _esc(x.t.job) + '</small></span>' +
-                '<span class="wg-trav-sub">' + _esc(x.t.skill || x.t.persona) + '</span></span>' +
-              '<span class="wg-trav-check"><i class="fa-solid fa-circle-check"></i></span>' +
-            '</div>').join('');
+        const figs = await _slotFigures(w);
+        // 概念句與三顆標籤壓在概念圖上(不再自己佔一張卡)；沒有概念圖時退回原本的文字卡
+        const tagsHtml = '<div class="wg-tags">' +
+            '<span class="wg-tag"><i class="fa-solid fa-wand-magic-sparkles"></i>' + _esc(w.style) + '</span>' +
+            '<span class="wg-tag lure"><i class="fa-solid fa-gem"></i>' + _esc(w.lure) + '</span>' +
+            '<span class="wg-tag warn"><i class="fa-solid fa-triangle-exclamation"></i>' + _esc(w.danger) + '</span></div>';
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) + '</span><span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>' +
-            (w.art ? '<div class="wg-art"><img src="' + _esc(w.art) + '" alt=""></div>' : '') +
-            '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' +
-              '<div class="wg-tags"><span class="wg-tag">' + _esc(w.style) + '</span><span class="wg-tag">' + _esc(w.lure) + '</span><span class="wg-tag warn">' + _esc(w.danger) + '</span></div></div>' +
+            (w.art
+                ? '<div class="wg-art"><img src="' + _esc(w.art) + '" alt="">' +
+                    '<div class="wg-art-ov"><div class="wg-art-concept">' + _esc(w.concept) + '</div>' + tagsHtml + '</div></div>'
+                : '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' + tagsHtml + '</div>') +
             (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>' : '') +
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 隊伍</span><span class="wg-section-note">' + team.length + ' 人同行・點開看身分卡</span></div>' +
-            (travHtml || '<div class="wg-note"><i class="fa-solid fa-person-walking"></i> 還沒有隊友——旅人們已陸續上線大廳,走過去搭話,聊得投機才會答應同行。(小人也可以右鍵看身分卡)</div>') +
+            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 出發編成</span><span class="wg-section-note">' + team.length + ' / ' + MAX_TRAVELER_SPAWN + '</span></div>' +
+            _slotsHtml(team) +
             ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
             _spawnHtml(w, entryText) +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
@@ -1186,9 +1291,20 @@
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
               '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' +
             '</div>';
-        b.querySelectorAll('.wg-trav').forEach(el => el.addEventListener('click', () => {
+        b.querySelectorAll('.wg-slot.on').forEach(el => el.addEventListener('click', () => {
             _renderProfilePage(w, Number(el.dataset.i));   // 面板內第二層頁,不彈modal
         }));
+        // 空槽不放說明文字(身分卡在偶遇窗裡已經有一份)——點下去才講怎麼補人
+        b.querySelectorAll('.wg-slot.empty').forEach(el => el.addEventListener('click', () => {
+            _toast('旅人在純白大廳等你搭話,聊得投機才會答應同行');
+        }));
+        // 小人皮膚是動態網址(IDB blob/dataURL),只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
+        b.querySelectorAll('[data-fig]').forEach(el => {
+            const f = figs[Number(el.dataset.fig)];
+            if (!f) return;
+            el.style.setProperty('--wg-fig', 'url("' + f.src + '")');
+            if (f.sheet) el.classList.add('sheet');
+        });
         // 方位圖是動態網址,只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
         if (w.mapArt) {
             const mg = b.querySelector('[data-spawn-grid]');
