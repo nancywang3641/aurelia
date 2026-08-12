@@ -590,7 +590,7 @@ const IRIS_IDLE = [
                         </button>
                         <div class="lb-dock-sep"></div>
                         <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
-                            <i class="fa-solid fa-umbrella"></i>
+                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-depart-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="墜入404">出門</span>
                         </button>
                     </div>
