@@ -21,6 +21,7 @@
         injectId: 'aurelia_state_brief',
         rulesInjectId: 'aurelia_avs_rules',
         avatarInjectId: 'aurelia_avatar_reminder',
+        achvInjectId: 'aurelia_achv_reminder',
         storageKey: 'aurelia_state_runtime_enabled'
     };
 
@@ -32,6 +33,7 @@
     let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
     let _lastRulesUninject = null;  // 上次 rules inject 的 uninject 函式
     let _lastAvatarUninject = null; // 上次「缺頭像提醒」inject 的 uninject 函式
+    let _lastAchvUninject = null;   // 上次「成就乾旱提醒」inject 的 uninject 函式
 
     // --- 工具 ---
     // 把 ctx.chatId 或 chat_file_name 清乾淨：剝路徑、砍 .jsonl/.json
@@ -1792,6 +1794,46 @@ _directorSpec(castNames);
         }
     }
 
+    // --- inject 成就乾旱提醒：規則埋在總綱裡一行，主模型常常幾十輪想不起來發 [Achievement] ---
+    // 只在「近期是 VN 劇情(有 [Char])且連續多輪零成就」時注入；窗口內出現過就不吵。
+    // 措辭比照缺頭像提醒的教訓：硬性「必須檢查」，但保留「真沒事可記就不發」的窄出口——強迫每輪硬發會變模板成就。
+    async function injectAchievementReminder() {
+        try {
+            try { _lastAchvUninject?.(); } catch(e) {}
+            _lastAchvUninject = null;
+            if (!win.TavernHelper?.injectPrompts) return;
+
+            let droughtN = parseInt(localStorage.getItem('sp_achv_drought_msgs'));
+            if (!Number.isFinite(droughtN) || droughtN < 4) droughtN = 12;   // 預設看最近 12 則(約 6 輪)
+
+            let text = '';
+            try {
+                const ctx = win.SillyTavern?.getContext?.();
+                if (ctx && Array.isArray(ctx.chat)) {
+                    if (ctx.chat.length < droughtN) return;   // 開場沒幾輪 → 還談不上乾旱，別催
+                    text = ctx.chat.slice(-droughtN).filter(m => m && !m.is_system).map(m => m.mes || m.message || '').join('\n');
+                }
+            } catch(e) {}
+            if (!text) return;
+            if (!/\[Char\|/.test(text)) return;          // 近期不是 VN 劇情輪 → 不吵
+            const dry = !/\[Achievement\|/.test(text);
+            console.log('[成就提醒] 近 ' + droughtN + ' 則' + (dry ? '零成就 → 注入提醒' : '有成就 → 不注入'));
+            if (!dry) return;
+
+            const content = `<成就檢查·硬性必答 規則="本輪必須執行·不得略過">\n已經連續多輪沒有頒發任何成就。你【必須】在本輪回顧近期劇情：只要出現過目標達成、關係轉折、值得紀念或獵奇出格的節點，就在本輪正文附上 [Achievement|表情|名|描述]（表情決定歸檔：異常系＝柴郡，一般系＝愛麗絲）。不准拖到下一輪、不准用「之後再補」帶過。\n唯一例外：近期劇情確實全是過場、毫無可記之事，才可以不發；不得為了湊數捏造成就。\n</成就檢查·硬性必答>`;
+            const result = win.TavernHelper.injectPrompts([{
+                id: CONFIG.achvInjectId,
+                content,
+                position: 'in_chat',
+                depth: 0,           // 越小越深、最貼生成點(最後一個讀到→最難被忽略)
+                role: 'system'
+            }], { once: true });
+            _lastAchvUninject = result?.uninject || null;
+        } catch(e) {
+            console.warn('[State Runtime] achievement reminder inject 失敗:', e?.message || e);
+        }
+    }
+
     // 好感度數字 → preset 的 5 階（每 20 一階；階段詞跟 preset 一字不差）
     function _affinityStage(n) {
         const v = parseFloat(n);
@@ -2437,6 +2479,8 @@ _directorSpec(castNames);
                 injectRules();
                 // 缺頭像提醒（永遠評估；一個都不缺就不 inject）
                 injectAvatarReminder();
+                // 成就乾旱提醒（近期 VN 劇情連續零成就才 inject）
+                injectAchievementReminder();
                 // 🎬 導演稿（自己看 sp_director_on；沒稿就不注入）
                 injectDirector();
             });
@@ -2480,6 +2524,7 @@ _directorSpec(castNames);
                 try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
                 try { _lastRulesUninject?.(); _lastRulesUninject = null; } catch(e) {}
                 try { _lastAvatarUninject?.(); _lastAvatarUninject = null; } catch(e) {}
+                try { _lastAchvUninject?.(); _lastAchvUninject = null; } catch(e) {}
                 try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch(e) {}
             });
         }
