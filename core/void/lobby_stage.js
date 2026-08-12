@@ -1708,14 +1708,6 @@
         box.addEventListener('click', (e) => { if (e.target.closest('[data-act="close"]')) _closeLobbySettings(); });
     }
 
-    // 🍔 舞台全屏：漢堡隱藏 MAIN MENU（.lobby-right）→ 舞台吃滿；狀態存 localStorage
-    function _applyMenuHidden() {
-        let hidden = false;
-        try { hidden = localStorage.getItem('lobby_stage_menu_hidden') === '1'; } catch (e) {}
-        document.querySelector('.lobby-body')?.classList.toggle('stage-menu-hidden', hidden);
-        document.querySelector('.lstage-menu-btn')?.classList.toggle('active', hidden);
-    }
-
     // ── 掛載/卸載 ─────────────────────────────────────────
     function tryMount() {
         const left = document.querySelector('.lobby-left');
@@ -1728,21 +1720,14 @@
             '<img class="lstage-map" src="' + (SCENES[S.scene].dynamic ? ((S.dyn && S.dyn.base) || '') : (CDN + _sceneBase(SCENES[S.scene]))) + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
             '<div class="lstage-click"></div></div>' +
             '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
-            '<button class="lstage-menu-btn" title="隱藏選單／舞台全屏"><i class="fa-solid fa-bars"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
             '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-badge"></span></button>' +
             // 🏙 快轉地圖：書咖/大廳/交易所/城裡都出現（404 要走還原流程）
             ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'exchange' || S.scene === 'city') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
             // ☕ 書咖櫃檯入口=跟瀅瀅開聊(startTalk 掛鉤,同白兔成例);獨立鈕已退役
         left.appendChild(root);
-        _applyMenuHidden();   // 套用上次「舞台全屏（隱藏 MAIN MENU）」狀態
         if (S._theaterTimer) clearInterval(S._theaterTimer);
         S._theaterTimer = setInterval(() => window.LobbyTheater?.tick(), 15000);   // 🎭 小劇場輪詢（實作在 lobby_theater.js）
-        root.querySelector('.lstage-menu-btn').addEventListener('click', () => {
-            const on = localStorage.getItem('lobby_stage_menu_hidden') === '1';
-            try { localStorage.setItem('lobby_stage_menu_hidden', on ? '0' : '1'); } catch (e) {}
-            _applyMenuHidden();
-        });
         root.querySelector('.lstage-set-btn').addEventListener('click', () => _openLobbySettings());
         // 🎬 小劇場窗口：有未查看的配對→開「正在對話」，否則直接看「回顧」
         root.querySelector('.lstage-theater-btn').addEventListener('click', () => window.LobbyTheater?.openWin(S.theater && !S.theater.playing ? 'live' : 'review'));
@@ -1830,7 +1815,7 @@
         let _lpTimer = null, _lpX = 0, _lpY = 0;
         root.addEventListener('pointerdown', (e) => {
             if (e.pointerType !== 'touch' || S.edit) return;
-            if (e.target.closest('.lstage-joy, .lstage-menu-btn, .lstage-edit-btn, .lstage-chat-fab, .lstage-hint, #iris-dialogue-box')) return;
+            if (e.target.closest('.lstage-joy, .lstage-edit-btn, .lstage-chat-fab, .lstage-hint, #iris-dialogue-box')) return;
             _lpX = e.clientX; _lpY = e.clientY;
             clearTimeout(_lpTimer);
             _lpTimer = setTimeout(() => {
@@ -1907,7 +1892,6 @@
         if (S.onWheel) { try { S.root?.removeEventListener('wheel', S.onWheel, { passive: false }); } catch (e) {} S.onWheel = null; }
         _closeWins();
         S.joy = null;   // 清搖桿殘留方向
-        document.querySelector('.lobby-body')?.classList.remove('stage-menu-hidden');   // 舞台關掉→純文字大廳要看得到選單
         endTalk();
         cancelAnimationFrame(S.raf);
         if (S.sleepT) { clearTimeout(S.sleepT); S.sleepT = null; }

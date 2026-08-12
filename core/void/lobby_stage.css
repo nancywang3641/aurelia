@@ -206,18 +206,13 @@
 .lstage-edit-btn { position:absolute; right:10px; top:10px; z-index:3000; width:34px; height:34px;
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-edit-btn:hover { background:rgba(20,18,16,.85); }
-/* 🍔 漢堡：隱藏 MAIN MENU → 舞台全屏（放擺設鈕左邊，成一組角落控制群） */
-.lstage-menu-btn { position:absolute; right:52px; top:10px; z-index:3000; width:34px; height:34px;
-  border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
-.lstage-menu-btn:hover { background:rgba(20,18,16,.85); }
-.lstage-menu-btn.active { background:#4a7ac8; color:#fff; }
-/* ⚙️ 大廳設置鈕（放漢堡左邊，同一組角落控制群） */
-.lstage-set-btn { position:absolute; right:94px; top:10px; z-index:3000; width:34px; height:34px;
+/* ⚙️ 大廳設置鈕（放擺設鈕左邊，同一組角落控制群；漢堡已退役→整排左移補位） */
+.lstage-set-btn { position:absolute; right:52px; top:10px; z-index:3000; width:34px; height:34px;
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-set-btn:hover { background:rgba(20,18,16,.85); }
 /* 🏙 視差城市鈕（左上角；擺設模式時讓位給編輯面板） */
-/* 🏙 快轉地圖：原本孤零零掛在左上角，改成接在小劇場右邊(136+42)，跟其他控制鈕成同一排 */
-.lstage-city-btn { position:absolute; right:178px; top:10px; z-index:3000; width:34px; height:34px;
+/* 🏙 快轉地圖：接在小劇場右邊(94+42)，跟其他控制鈕成同一排 */
+.lstage-city-btn { position:absolute; right:136px; top:10px; z-index:3000; width:34px; height:34px;
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-city-btn:hover { background:rgba(20,18,16,.85); }
 .lstage-editing .lstage-city-btn { display:none; }
@@ -252,9 +247,6 @@
   background:rgba(243,234,216,.1); color:#d8cdb4; font-size:12px; }
 .lstage-settings .ltheater-freq-btn.on { background:#6b8e23; color:#1a1c28; }
 .lstage-settings .ltheater-freq.off { opacity:.4; pointer-events:none; }
-/* 舞台全屏：隱藏右側 MAIN MENU、舞台吃滿（桌機吃寬、手機吃高） */
-.lobby-body.stage-menu-hidden .lobby-right { display:none !important; }
-.lobby-body.stage-menu-hidden .lobby-left { flex:1 1 100% !important; border-right:none !important; border-bottom:none !important; }
 .lstage-editing .lstage-edit-btn { background:#c8874a; color:#fff; }
 .lstage-editable { pointer-events:auto !important; cursor:grab; }
 .lstage-editable:active { cursor:grabbing; }
@@ -384,7 +376,7 @@
 
 /* 🎬 小劇場：右上入口鈕（帶未查看角標）。做成跟同排其他鈕一樣的 34px 方鈕——
    這排只有它帶文字又是膠囊形，夾在四顆方鈕中間看起來歪掉 */
-.lstage-theater-btn { position:absolute; right:136px; top:10px; z-index:3000; width:34px; height:34px; padding:0;
+.lstage-theater-btn { position:absolute; right:94px; top:10px; z-index:3000; width:34px; height:34px; padding:0;
   display:flex; align-items:center; justify-content:center; border:none; border-radius:10px; cursor:pointer;
   background:rgba(20,18,16,.62); color:#f3ead8; font-size:14px; }
 .lstage-theater-btn:hover { background:rgba(20,18,16,.85); }
