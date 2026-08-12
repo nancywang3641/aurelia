@@ -722,70 +722,96 @@
             const npcKey = 'wg_' + worldId + '_' + ti;
             const quiz = Array.isArray(t.quiz) ? t.quiz.filter(q => q && q.q && Array.isArray(q.options) && q.options.length >= 2) : [];
             let step = 0, goods = 0;
-            let backTo = null;   // 身分卡頁的返回目標=進來前所在頁
-            const head = (back) =>
-                '<div class="wg-meet-head">' +
-                  (back ? '<button class="wg-back" data-m="back"><i class="fa-solid fa-chevron-left"></i></button>' : '') +
-                  '<span class="wg-meet-name"><i class="fa-solid fa-user"></i> ' + _esc(t.name) + '<small>' + _esc(t.job || '') + '</small>' +
-                  (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</span></div>';
-            const wire = () => {
-                box.querySelector('[data-m="prof"]')?.addEventListener('click', renderProfile);
-            };
-            const renderProfile = () => {   // 卡內第二層頁:‹返回切回組隊頁,不疊modal
-                box.innerHTML = head(true) + '<div class="wg-meet-body">' + _profRows(t) + '</div>';
-                box.querySelector('[data-m="back"]').addEventListener('click', () => (backTo || renderIntro)());
-            };
+            box.style.setProperty('--npc-accent', _accentOf(t.name));
+            // 海報覆蓋整個舞台,但要讓開既有的底部對話列——問題與反應都在那裡說出口,兩者是不同層、不能合併。
+            //   對話列高度會因為輸入列/字數變,量一次寫進變數,比寫死安全。
+            try {
+                const dw = doc.querySelector('.lobby-left .void-dialogue-wrap');
+                if (dw && dw.offsetHeight) box.style.setProperty('--wg-meet-pb', (dw.offsetHeight + 6) + 'px');
+            } catch (e) {}
+            // 外殼(海報/頁籤軌)只建一次,切頁只換 .wg-shell-body——整顆重建會讓立繪和頁籤跟著閃。
+            box.innerHTML =
+                '<div class="wg-poster">' +
+                  '<div class="wg-poster-plane"></div>' +
+                  '<div class="wg-poster-name">' + _esc(t.name) + '</div>' +
+                  '<div class="wg-poster-fig" data-fig></div>' +
+                  '<div class="wg-poster-sig"><b>' + _esc(t.name) + '</b><span>' + _esc(t.job || '') + '</span>' +
+                    (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</div>' +
+                '</div>' +
+                '<div class="wg-shell">' +
+                  '<div class="wg-shell-body"></div>' +
+                  '<nav class="wg-tabs">' +
+                    '<button class="wg-tab on" data-tab="talk">對話</button>' +
+                    '<button class="wg-tab" data-tab="id">身分</button>' +
+                  '</nav>' +
+                '</div>' +
+                '<button class="wg-meet-x" title="結束"><i class="fa-solid fa-xmark"></i></button>';
+            const bodyEl = box.querySelector('.wg-shell-body');
+            box.querySelector('.wg-meet-x').addEventListener('click', _closeMeet);
+            // 立繪是動態網址(IDB),只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
+            _figureOf(worldId, ti).then(f => {
+                const el = box.querySelector('[data-fig]');
+                if (!f || !el || !box.isConnected) return;
+                el.style.setProperty('--wg-fig', 'url("' + f.src + '")');
+                if (f.sheet) el.classList.add('sheet');
+            });
+
+            const meta = (i, total) => '<div class="wg-ev-meta">組隊對談<b>' +
+                String(i).padStart(2, '0') + '</b>/ ' + String(total).padStart(2, '0') + '</div>';
+            // 🚨標題一律不用第三人稱代名詞:旅人資料沒有性別欄,寫「他」會有一半的人被叫錯。
+            const page = (metaHtml, title, prompt, rest) =>
+                metaHtml + '<div class="wg-ev-title">' + _esc(title) + '</div>' +
+                (prompt ? '<div class="wg-ev-prompt">' + _esc(prompt) + '</div>' : '') + (rest || '');
+            const choices = (arr) => '<div class="wg-choices">' + arr.map((c, n) =>
+                '<button class="wg-choice" data-c="' + c.k + '"><span class="wg-choice-i">' +
+                  String(n + 1).padStart(2, '0') + '</span><span class="wg-choice-t">' + _esc(c.t) + '</span></button>').join('') + '</div>';
+
+            let cur = null;   // 目前的「對話」頁畫面(切回對話頁時重畫這個)
             async function joinTeam() {
                 t.recruited = true;
                 await _saveWorld(w);
                 try { if (t.accept) win.LobbyStage.pushNpcHistory(npcKey, { role: 'assistant', content: t.accept }); } catch (e) {}   // 入隊宣言入他的記憶(考題過程不入)
+                const sig = box.querySelector('.wg-poster-sig');
+                if (sig && !sig.querySelector('.wg-joined')) sig.insertAdjacentHTML('beforeend', '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>');
                 _toast(t.name + ' 加入了隊伍');
                 if (_winEl && _curDetailId === w.id) _renderDetail(w);   // 面板正開著這個世界→隊伍狀態即時刷新
             }
+            const renderProfile = () => {
+                // 不放 persona 當題幹:下面的欄位表本來就有「性格」那列,擺上面等於同一句印兩次
+                bodyEl.innerHTML = page('<div class="wg-ev-meta">旅人檔案</div>', t.name, '',
+                    '<div class="wg-prof">' + _profRows(t) + '</div>');
+            };
             const renderIntro = () => {
-                // 對話本體在底部對話框(開場白已seed成預設對話,打字=自由聊);這張卡只管組隊
-                backTo = renderIntro;
-                box.innerHTML = head() +
-                    '<div class="wg-meet-body">' +
-                      (t.persona ? '<div class="wg-note">' + _esc(t.persona) + '</div>' : '') +
-                      (t.recruited
-                          ? '<div class="wg-note"><i class="fa-solid fa-circle-check"></i> 已經是你的隊友,世界門面板可以看到隊伍狀態。</div>'
-                          : (quiz.length ? '<div class="wg-note">想邀他同行?先聊得來再說。</div>' : '')) +
-                    '</div>' +
-                    '<div class="wg-meet-btns">' +
-                      (!t.recruited ? (quiz.length
-                          ? '<button class="wg-btn" data-m="quiz"><i class="fa-solid fa-handshake"></i> 聊聊組隊的事</button>'
-                          : '<button class="wg-btn" data-m="join"><i class="fa-solid fa-handshake"></i> 邀請入隊</button>') : '') +
-                      '<button class="wg-btn ghost" data-m="prof"><i class="fa-solid fa-id-card"></i> 身分卡</button>' +
-                    '</div>';
-                wire();
-                box.querySelector('[data-m="quiz"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
-                box.querySelector('[data-m="join"]')?.addEventListener('click', async () => { await joinTeam(); renderResult(true, ''); });   // 舊世界資料沒考題→直接邀
+                cur = renderIntro;
+                // 對話本體在底部對話框(開場白已seed成預設對話,打字=自由聊);這張海報只管組隊
+                bodyEl.innerHTML = t.recruited
+                    ? page('<div class="wg-ev-meta">同行中</div>', '已經同行', '世界門面板的出發編成可以看到隊伍狀態。', '')
+                    : page('<div class="wg-ev-meta">大廳偶遇</div>', '要不要一起走', t.persona || '',
+                        choices([{ k: quiz.length ? 'quiz' : 'join', t: quiz.length ? '聊聊組隊的事' : '邀請入隊' }]));
+                bodyEl.querySelector('[data-c="quiz"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
+                bodyEl.querySelector('[data-c="join"]')?.addEventListener('click', async () => { await joinTeam(); renderResult(true, ''); });   // 舊世界資料沒考題→直接邀
             };
             const renderQuiz = () => {
+                cur = renderQuiz;
                 const q = quiz[step];
-                _sayInDialog(q.q);   // 他的提問=底部對話框說出來
+                _sayInDialog(q.q);   // 提問=底部對話框說出來
                 const order = q.options.map((_, i) => i);
                 for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }   // 洗選項順序,防AI把好答案固定放第一個
-                box.innerHTML = head() +
-                    '<div class="wg-meet-body">' +
-                      '<div class="wg-note">第 ' + (step + 1) + ' / ' + quiz.length + ' 題・他在等你的回應</div>' +
-                      '<div class="wg-opts">' + order.map(i => '<button class="wg-opt" data-i="' + i + '">' + _esc(q.options[i].t) + '</button>').join('') + '</div>' +
-                    '</div>';
-                wire();
-                box.querySelectorAll('.wg-opt').forEach(el => el.addEventListener('click', () => {
-                    const o = q.options[Number(el.dataset.i)];
+                bodyEl.innerHTML = page(meta(step + 1, quiz.length), '等你的回應', q.q,
+                    choices(order.map(i => ({ k: i, t: q.options[i].t }))));
+                bodyEl.querySelectorAll('.wg-choice').forEach(el => el.addEventListener('click', () => {
+                    const o = q.options[Number(el.dataset.c)];
                     if (o && o.good) goods++;
                     renderReact(o);
                 }));
             };
             const renderReact = (o) => {
                 const last = step >= quiz.length - 1;
-                _sayInDialog((o && o.r) || '……');   // 他的反應也走對話框
-                box.innerHTML = head() +
-                    '<div class="wg-meet-btns"><button class="wg-btn" data-m="next">' + (last ? '看他的決定' : '下一題') + '</button></div>';
-                wire();
-                box.querySelector('[data-m="next"]').addEventListener('click', async () => {
+                cur = () => renderReact(o);
+                _sayInDialog((o && o.r) || '……');   // 反應也走對話框
+                bodyEl.innerHTML = page(meta(step + 1, quiz.length), '聽完你的回答', (o && o.r) || '……',
+                    choices([{ k: 'next', t: last ? '看看這趟要不要一起' : '下一題' }]));
+                bodyEl.querySelector('[data-c="next"]').addEventListener('click', async () => {
                     if (last) {
                         const ok = goods >= quiz.length;   // 三題全滿意才入隊(Rae 定案)
                         if (ok) await joinTeam();
@@ -794,21 +820,24 @@
                 });
             };
             const renderResult = (ok, line) => {
-                backTo = () => renderResult(ok, line);
-                _sayInDialog(line || (ok ? '(他答應同行了。)' : '(他搖了搖頭,婉拒了。)'));
-                box.innerHTML = head() +
-                    '<div class="wg-meet-body">' +
-                      '<div class="wg-note">' + (ok ? '<i class="fa-solid fa-circle-check"></i> 已入隊——世界門面板可以看到隊伍狀態。' : '頻率沒對上……待會可以再聊一次。') + '</div>' +
-                    '</div>' +
-                    '<div class="wg-meet-btns">' +
-                      (ok ? '<button class="wg-btn ghost" data-m="prof"><i class="fa-solid fa-id-card"></i> 身分卡</button>'
-                          : '<button class="wg-btn" data-m="retry"><i class="fa-solid fa-rotate-right"></i> 再聊一次</button>') +
-                    '</div>';
-                wire();
-                box.querySelector('[data-m="retry"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
+                cur = () => renderResult(ok, line);
+                _sayInDialog(line || (ok ? '(答應同行了。)' : '(搖了搖頭,婉拒了。)'));
+                bodyEl.innerHTML = page(meta(quiz.length || 1, quiz.length || 1),
+                    ok ? '答應同行了' : '頻率沒對上',
+                    line || (ok ? '世界門面板的出發編成可以看到隊伍狀態。' : '待會可以再聊一次。'),
+                    ok ? '' : choices([{ k: 'retry', t: '再聊一次' }]));
+                bodyEl.querySelector('[data-c="retry"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
             };
-            if (startAtProfile) { backTo = renderIntro; renderProfile(); }
-            else renderIntro();
+            // 頁籤只切 .wg-shell-body:海報、外殼、頁籤軌都不重建
+            box.querySelectorAll('.wg-tab').forEach(el => el.addEventListener('click', () => {
+                box.querySelectorAll('.wg-tab').forEach(x => x.classList.toggle('on', x === el));
+                if (el.dataset.tab === 'id') renderProfile(); else (cur || renderIntro)();
+            }));
+            renderIntro();
+            if (startAtProfile) {   // 右鍵進來=直接開在身分頁(對話頁的畫面已經備好,切回去就有)
+                box.querySelectorAll('.wg-tab').forEach(x => x.classList.toggle('on', x.dataset.tab === 'id'));
+                renderProfile();
+            }
         })();
     }
 
@@ -892,7 +921,6 @@
             '.wg-brand-copy{display:flex;flex-direction:column;line-height:1.05;white-space:nowrap;}.wg-brand-copy b{font-size:15px;letter-spacing:.06em;}.wg-brand-copy small{margin-top:4px;color:#8a8ea6;font-size:8px;letter-spacing:.18em;font-weight:700;}' +
             '.wg-mode-pill{margin-left:auto;display:flex;align-items:center;gap:5px;padding:5px 9px;border:1px solid rgba(26,28,40,.14);border-radius:8px;background:rgba(255,255,255,.6);color:#5a5e75;font-size:10px;font-weight:700;white-space:nowrap;}' +
             '.wg-mode-pill.para{background:#1A1C28;color:#EAF2FF;border-color:#1A1C28;}' +
-            '.wg-back{background:none;border:none;color:#4a4e66;cursor:pointer;font-size:15px;padding:4px 9px;border-radius:8px;flex:none;}.wg-back:hover{background:rgba(26,28,40,.08);}' +
             '.wg-body{overflow-y:auto;padding:11px 13px 14px;flex:1;display:flex;flex-direction:column;scrollbar-color:rgba(26,28,40,.25) transparent;scrollbar-width:thin;}' +
             '.wg-empty{margin:auto;color:#8a8ea6;padding:24px 6px;text-align:center;line-height:1.8;}.wg-empty i{display:block;margin-bottom:8px;color:#b9bed4;font-size:28px;}' +
             '.wg-section-head{display:flex;align-items:center;justify-content:space-between;margin:0 1px 8px;color:#3a3e56;}.wg-section-title{font-weight:800;font-size:13px;letter-spacing:.04em;}.wg-section-note{color:#8a8ea6;font-size:10px;}' +
@@ -973,18 +1001,77 @@
             '.wg-input::placeholder{color:#a0a4ba;}' +
             '.wg-input.area{resize:vertical;min-height:58px;line-height:1.6;font-family:inherit;}' +
             '.wg-entry-text{color:#3a3e56;font-size:11px;line-height:1.7;white-space:pre-wrap;}' +
-            /* 🤝 組隊卡/身分卡:右側停靠(同愛麗絲世界門/瀅瀅書咖成例);對話本體在底部對話框 */
-            '.wg-meet{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3355;width:340px;max-width:52%;max-height:78%;overflow-y:auto;display:flex;flex-direction:column;background:linear-gradient(rgba(250,251,255,.98),rgba(238,240,246,.98));border:1px solid rgba(26,28,40,.18);border-radius:14px;color:#1A1C28;font-size:12px;box-shadow:0 12px 34px rgba(26,28,40,.32);backdrop-filter:blur(8px);scrollbar-width:thin;}' +
-            '.wg-meet-head{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid rgba(26,28,40,.1);background:rgba(255,255,255,.6);position:sticky;top:0;}' +
-            '.wg-meet-name{display:flex;align-items:center;gap:6px;font-weight:800;min-width:0;}.wg-meet-name small{color:#8a8ea6;font-weight:700;font-size:9px;}' +
-            '.wg-joined{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px;border-radius:8px;background:rgba(60,120,80,.12);color:#3c6b44;font-size:9px;font-style:normal;font-weight:800;white-space:nowrap;}' +
-            '.wg-meet-body{padding:11px 12px 4px;display:flex;flex-direction:column;gap:8px;}' +
-            '.wg-say{padding:9px 11px;border-radius:10px;background:rgba(255,255,255,.78);border:1px solid rgba(26,28,40,.1);color:#2a2e44;line-height:1.65;}' +
-            '.wg-opts{display:flex;flex-direction:column;gap:6px;}' +
-            '.wg-opt{text-align:left;background:rgba(255,255,255,.62);border:1px solid rgba(26,28,40,.16);color:#3a3e56;border-radius:9px;padding:8px 10px;cursor:pointer;font-size:11px;line-height:1.5;transition:.15s;}.wg-opt:hover{background:#fff;border-color:rgba(26,28,40,.4);}' +
-            '.wg-meet-btns{padding:0 12px 12px;display:flex;flex-direction:column;}' +
-            '.wg-prof-row{display:flex;gap:8px;padding:6px 2px;border-bottom:1px dashed rgba(26,28,40,.1);}.wg-prof-row:last-child{border-bottom:none;}.wg-prof-row span{flex:none;width:44px;color:#8a8ea6;font-size:10px;font-weight:700;padding-top:1px;}.wg-prof-row b{color:#2a2e44;font-weight:600;line-height:1.55;font-size:11px;}' +
-            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}.wg-meet{right:10px;left:10px;width:auto;max-width:none;max-height:66%;}.wg-brand-copy small{display:none}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
+            /* 🤝 組隊海報:左角色海報 + 右事件殼,覆蓋舞台但讓開底部對話列(問題與反應在那裡說出口,兩者不同層不能合併)。
+               整套純 CSS(斜切/巨大姓名/選項列都是即時文字),不切任何 PNG——切了就換不了角色、換不了題數。 */
+            '.wg-meet{position:absolute;left:0;right:0;top:0;bottom:var(--wg-meet-pb,150px);z-index:3355;display:flex;' +
+              'color:var(--party-ink,#14243d);font-size:13px;--party-navy:#10243d;--party-muted:#60718a;--party-gold:#c9aa72;--npc-accent:#35c9e8;}' +
+            '.wg-meet-x{position:absolute;right:12px;top:12px;z-index:6;width:32px;height:32px;border-radius:50%;cursor:pointer;' +
+              'border:1px solid rgba(20,36,61,.22);background:rgba(255,255,255,.92);color:#14243d;font-size:14px;box-shadow:0 2px 10px rgba(14,24,40,.18);}' +
+            '.wg-meet-x:hover{background:#10243d;color:#fff;}' +
+            /* ── 左:角色海報(白斜板 + 左下墨藍節奏區 + 巨大描邊姓名 + 立繪 + 代號) ── */
+            '.wg-poster{position:relative;flex:0 0 40%;min-width:0;}' +
+            '.wg-poster-plane{position:absolute;inset:0;background:linear-gradient(158deg,rgba(250,252,255,.97),rgba(235,241,249,.95));' +
+              'clip-path:polygon(0 0,100% 0,72% 100%,0 100%);box-shadow:0 12px 44px rgba(14,24,40,.26);}' +
+            '.wg-poster-plane::after{content:"";position:absolute;left:0;bottom:0;width:58%;height:32%;background:var(--party-navy);' +
+              'clip-path:polygon(0 26%,100% 0,80% 100%,0 100%);}' +
+            // 巨大姓名只當背景圖形：描邊透明字、直排，壓在立繪後面
+            '.wg-poster-name{position:absolute;left:5%;top:5%;z-index:2;writing-mode:vertical-rl;letter-spacing:6px;' +
+              'font-size:clamp(34px,11vh,96px);line-height:1.12;font-weight:900;color:transparent;-webkit-text-stroke:1.5px rgba(53,110,175,.4);pointer-events:none;}' +
+            // 立繪是像素小人：放大時一律 pixelated，別讓瀏覽器插值糊成一團
+            // 右邊要留給代號牌：圖框佔滿整個海報的話，人一定壓在代號上(斜板本來就往右收窄)
+            '.wg-poster-fig{position:absolute;left:0;right:27%;top:4%;bottom:2%;z-index:3;image-rendering:pixelated;' +
+              'background:var(--wg-fig) center bottom/contain no-repeat;}' +
+            '.wg-poster-fig.sheet{background-size:300% 400%;background-position:0 0;}' +
+            '.wg-poster-sig{position:absolute;right:5%;bottom:42%;z-index:4;display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;}' +
+            '.wg-poster-sig b{font-size:17px;font-weight:800;letter-spacing:3px;color:#14243d;}' +
+            '.wg-poster-sig span{font-size:12px;letter-spacing:2px;color:var(--party-muted);border-top:1px solid var(--party-gold);padding-top:3px;}' +
+            '.wg-joined{display:inline-flex;align-items:center;gap:3px;margin-top:5px;padding:2px 8px;border-radius:8px;background:rgba(60,120,80,.14);color:#2f6b46;font-size:10px;font-style:normal;font-weight:800;white-space:nowrap;}' +
+            /* ── 右:事件殼(白霧玻璃 + 斜切角),頁籤軌固定在殼內最下緣 ── */
+            '.wg-shell{position:relative;flex:1 1 60%;min-width:0;display:flex;flex-direction:column;' +
+              'background:rgba(249,251,255,.96);backdrop-filter:blur(7px);box-shadow:-8px 0 34px rgba(14,24,40,.2);' +
+              'clip-path:polygon(5% 0,100% 0,100% 100%,0 100%,0 7%);}' +
+            '.wg-shell-body{flex:1;min-height:0;overflow-y:auto;padding:22px 26px 10px 34px;scrollbar-width:thin;}' +
+            '.wg-ev-meta{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:3px;font-weight:700;color:var(--party-muted);}' +
+            '.wg-ev-meta b{color:var(--npc-accent);font-size:14px;letter-spacing:1px;}' +
+            '.wg-ev-meta::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,170,114,.7),rgba(201,170,114,0));}' +
+            '.wg-ev-title{margin-top:8px;font-size:clamp(21px,3.4vh,34px);font-weight:900;letter-spacing:3px;line-height:1.25;color:#14243d;}' +
+            // 灰字不得再降淡：這面板以前就是被淡灰小字弄成催眠表單的
+            '.wg-ev-prompt{margin-top:9px;font-size:15px;line-height:1.62;color:#3d4f68;max-width:46em;}' +
+            '.wg-choices{display:flex;flex-direction:column;gap:9px;margin-top:16px;}' +
+            '.wg-choice{display:flex;align-items:center;gap:15px;width:100%;text-align:left;cursor:pointer;min-height:58px;padding:11px 18px;' +
+              'border:1px solid rgba(20,36,61,.15);background:rgba(255,255,255,.92);color:#14243d;transition:.16s;' +
+              'clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,0 100%);}' +
+            '.wg-choice-i{flex:none;min-width:52px;font-family:Georgia,"Times New Roman",serif;font-size:31px;font-weight:900;line-height:1;color:#14243d;}' +
+            '.wg-choice-t{flex:1;min-width:0;font-size:15px;font-weight:700;line-height:1.5;padding-left:15px;border-left:1px solid rgba(20,36,61,.2);}' +
+            '.wg-choice:hover,.wg-choice:focus-visible{background:var(--party-navy);border-color:var(--party-navy);color:#fff;outline:none;}' +
+            '.wg-choice:hover .wg-choice-i,.wg-choice:focus-visible .wg-choice-i{color:var(--npc-accent);}' +
+            '.wg-choice:hover .wg-choice-t,.wg-choice:focus-visible .wg-choice-t{border-left-color:rgba(255,255,255,.32);}' +
+            '.wg-prof{margin-top:14px;}' +
+            '.wg-prof-row{display:flex;gap:12px;padding:9px 2px;border-bottom:1px dashed rgba(20,36,61,.14);}.wg-prof-row:last-child{border-bottom:none;}' +
+            '.wg-prof-row span{flex:none;width:64px;color:var(--party-muted);font-size:12px;font-weight:700;padding-top:2px;}' +
+            '.wg-prof-row b{color:#22334c;font-weight:600;line-height:1.6;font-size:14px;}' +
+            '.wg-tabs{display:flex;flex:none;background:var(--party-navy);clip-path:polygon(4% 0,100% 0,100% 100%,0 100%);}' +
+            '.wg-tab{position:relative;flex:1;padding:13px 4px;background:none;border:none;cursor:pointer;' +
+              'color:rgba(233,240,250,.7);font-size:14px;font-weight:700;letter-spacing:3px;font-family:inherit;}' +
+            '.wg-tab+.wg-tab{border-left:1px solid rgba(201,170,114,.32);}' +
+            '.wg-tab:hover{color:#fff;}.wg-tab.on{color:#fff;}' +
+            '.wg-tab.on::after{content:"";position:absolute;left:28%;right:28%;bottom:7px;height:2px;background:var(--npc-accent);}' +
+            // 手機:上下堆疊,海報收成角色橫幅;字級一律不縮(縮了就變回催眠表單)
+            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}' +
+              '.wg-meet{flex-direction:column;}' +
+              '.wg-poster{flex:0 0 32vh;}' +
+              '.wg-poster-plane{clip-path:polygon(0 0,100% 0,100% 76%,0 100%);}' +
+              // 🚨左緣要齊平不能斜:斜的話代號牌最上面那行(姓名)會露在楔形外＝白字落到白斜板上,整個讀不到
+              '.wg-poster-plane::after{width:52%;height:40%;clip-path:polygon(0 0,100% 0,86% 100%,0 100%);}' +
+              '.wg-poster-fig{left:26%;right:6%;}.wg-poster-name{font-size:clamp(26px,11vw,48px);}' +
+              // 手機版代號牌落在墨藍楔形上→整組換成亮色，桌機版是白斜板不能一起改
+              '.wg-poster-sig{right:auto;left:6%;bottom:6%;align-items:flex-start;text-align:left;}' +
+              '.wg-poster-sig b{color:#fff;}' +
+              '.wg-poster-sig span{color:rgba(226,235,247,.84);border-top-color:rgba(201,170,114,.85);}' +
+              '.wg-shell{clip-path:none;box-shadow:0 -6px 24px rgba(14,24,40,.2);}' +
+              '.wg-shell-body{padding:16px 16px 8px;}' +
+              '.wg-brand-copy small{display:none}' +
+              '.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
     }
 
@@ -1203,23 +1290,37 @@
         const hit = JOB_ICONS.find(p => p[0].test(s));
         return hit ? hit[1] : 'fa-user';
     }
-    // 槽位裡的人＝大廳小人皮膚(自動補圖存的那張,key=wg_世界_索引)。沒生過就維持剪影。
+    // 旅人的圖＝大廳小人皮膚(自動補圖存的那張,key=wg_世界_索引)。沒生過就維持剪影。
     //   資料在 localStorage(lobby_stage_skins_v1),不需要人在大廳場景裡也讀得到。
+    //   槽位與組隊海報共用這一條,兩邊看到的一定是同一張圖。
+    async function _figureOf(worldId, i) {
+        const b = _stage();
+        if (!b || !b.skins || !b.resolveRef) return null;
+        let all = {};
+        try { all = b.skins() || {}; } catch (e) { return null; }
+        const sk = all['wg_' + worldId + '_' + i];
+        if (!sk || !sk.ref) return null;
+        try {
+            const src = await b.resolveRef(sk.ref);
+            return src ? { src: src, sheet: sk.kind === 'sheet' } : null;
+        } catch (e) { return null; }
+    }
     async function _slotFigures(w) {
         const out = {};
-        const b = _stage();
-        if (!b || !b.skins || !b.resolveRef) return out;
-        let all = {};
-        try { all = b.skins() || {}; } catch (e) { return out; }
         for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) {
-            const sk = all['wg_' + w.id + '_' + i];
-            if (!sk || !sk.ref) continue;
-            try {
-                const src = await b.resolveRef(sk.ref);
-                if (src) out[i] = { src: src, sheet: sk.kind === 'sheet' };
-            } catch (e) {}
+            const f = await _figureOf(w.id, i);
+            if (f) out[i] = f;
         }
         return out;
+    }
+    // 角色色只用在小面積強調(編號/頁籤底線)。固定挑一組跟量子白+墨藍搭得起來的冷色,
+    //   不用 hash 直接生 hue——會抽到跟系統色打架的濁黃濁綠。
+    const NPC_ACCENTS = ['#35c9e8', '#4f8cf0', '#7a6cf0', '#3fb98f', '#e0894a', '#dd6079'];
+    function _accentOf(name) {
+        let h = 0;
+        const s = String(name || '');
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+        return NPC_ACCENTS[h % NPC_ACCENTS.length];
     }
     function _slotsHtml(team) {
         const cells = [];
