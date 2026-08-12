@@ -97,12 +97,12 @@
         _busy = true;
         const fuse = setTimeout(fire, 3000);   // 保險絲：演出掛了也要放行載入
 
-        // DOM 縮放的殘局收拾放外層：中途 throw 也要把 transform 還原，不然下次開面板整個歪掉
-        let anim = null, zoomEl = null, prevOrigin = '', prevWillChange = '';
+        // 殘局收拾放外層：中途 throw 也要拆掉碎片層、把原卡還原，不然面板上永遠疊著一張假卡
+        let wrap = null, hidCard = null;
         const restore = () => {
-            try { if (anim) anim.cancel(); } catch (e) {}
-            if (zoomEl) { zoomEl.style.transformOrigin = prevOrigin; zoomEl.style.willChange = prevWillChange; }
-            anim = null; zoomEl = null;
+            try { if (wrap) wrap.remove(); } catch (e) {}
+            if (hidCard) hidCard.style.visibility = '';
+            wrap = null; hidCard = null;
         };
 
         try {
@@ -124,68 +124,72 @@
             cx.setTransform(dpr, 0, 0, dpr, 0, 0);
             const W = hr.width, H = hr.height;
 
-            // ① 整面 punch-in：真 DOM 縮放，origin 釘在選中卡縮圖中心 → 卡片跟整個面板一起衝
-            zoomEl = opts.zoomEl || null;
-            let vp = { x: W * 0.5, y: H * 0.44 };   // 消失點（碎塊景深用），預設中心偏上
-            if (zoomEl) {
-                const zr = zoomEl.getBoundingClientRect();
-                let ox = 50, oy = 44;
-                if (opts.thumb) {
-                    const tr = opts.thumb.getBoundingClientRect();
-                    if (tr.width && zr.width) {
-                        ox = (tr.left + tr.width / 2 - zr.left) / zr.width * 100;
-                        oy = (tr.top + tr.height / 2 - zr.top) / zr.height * 100;
-                        vp = { x: (tr.left + tr.width / 2 - hr.left), y: (tr.top + tr.height / 2 - hr.top) };
-                    }
-                }
-                prevOrigin = zoomEl.style.transformOrigin;
-                prevWillChange = zoomEl.style.willChange;
-                zoomEl.style.transformOrigin = ox.toFixed(2) + '% ' + oy.toFixed(2) + '%';
-                zoomEl.style.willChange = 'transform';
-                // 前段就要衝起來：慢熱曲線＋滿屏靜止碎塊＝觀感上「沒有 zoom」（上一版的死因）
-                anim = zoomEl.animate(
+            // ① 卡片本體 punch-in ＋ 真 DOM 碎裂：
+            //    把選中卡 clone 35 份、每份 clip-path 只露一格，全部裝進跟卡片同位置的 wrapper；
+            //    wrapper 整個 zoom（＝卡片衝向玩家），波前掃到的格子帶著自己的 transform 沿
+            //    卡心射線飛出去——巢狀 transform 相乘，碎片同時被 zoom 帶著走，方向場一致。
+            //    🚨 wrapper 必須掛回 chapter-window 裡：卡片的字級/框角全是 cqw/cqh，
+            //    掛外面 container units 斷鏈、碎片全變形。
+            //    面板其餘部分不動（前幾版整面 zoom 被驗證是錯的主角）。
+            const card = opts.thumb && opts.thumb.closest ? opts.thumb.closest('.chx-card') : null;
+            const mount = opts.zoomEl || host;
+            if (card && mount) {
+                const mrect = mount.getBoundingClientRect();
+                const crect = card.getBoundingClientRect();
+                wrap = document.createElement('div');
+                wrap.className = 'chx-warp-shatter';
+                wrap.style.cssText = 'position:absolute;left:' + (crect.left - mrect.left) + 'px;top:' + (crect.top - mrect.top) +
+                    'px;width:' + crect.width + 'px;height:' + crect.height + 'px;z-index:55;pointer-events:none;will-change:transform;';
+                // 卡片 zoom：前段就要衝起來，中點破 2 倍、結尾 6 倍（卡片是主角，衝得比整面版狠）
+                wrap.animate(
                     [
-                        { transform: 'scale(1)', easing: 'cubic-bezier(0.4, 0, 0.7, 0.4)' },
-                        { transform: 'scale(2)', offset: 0.5, easing: 'cubic-bezier(0.4, 0, 0.8, 0.5)' },
-                        { transform: 'scale(4.8)' },
+                        { transform: 'scale(1)', easing: 'cubic-bezier(0.42, 0, 0.72, 0.42)' },
+                        { transform: 'scale(2.2)', offset: 0.5, easing: 'cubic-bezier(0.4, 0, 0.8, 0.5)' },
+                        { transform: 'scale(6)' },
                     ],
                     { duration: Math.round(DUR * LOAD_AT), fill: 'forwards' });
+
+                const CS = 7, RS = 9;                     // 7×9 格 ≈ 63 片；卡片節點少，clone 得起
+                const cw = crect.width, chh = crect.height;
+                const cxc = cw / 2, cyc = chh / 2;
+                const maxD = Math.hypot(cxc, cyc);
+                const WAVE_T0 = 0.16, WAVE_T1 = 0.62;     // 波前：卡心小圓 → 掃到卡角
+                for (let gy = 0; gy < RS; gy++) {
+                    for (let gx = 0; gx < CS; gx++) {
+                        const piece = document.createElement('div');
+                        const l = gx / CS * 100, tp = gy / RS * 100;
+                        piece.style.cssText = 'position:absolute;inset:0;will-change:transform,opacity;' +
+                            'clip-path:inset(' + tp.toFixed(2) + '% ' + (100 - l - 100 / CS).toFixed(2) + '% ' +
+                            (100 - tp - 100 / RS).toFixed(2) + '% ' + l.toFixed(2) + '%);';
+                        const clone = card.cloneNode(true);
+                        // 蓋掉 .chx-card 的置中定位與輪播 transform；選中卡的頂飾/稜鏡在碎裂時會被 clip 切爛，直接拔
+                        clone.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;max-width:none;aspect-ratio:auto;transform:none;margin:0;';
+                        clone.querySelectorAll('.chx-sel-top,.chx-sel-prism').forEach(el => el.remove());
+                        piece.appendChild(clone);
+                        wrap.appendChild(piece);
+                        // 這格的碎裂時刻＝波前掃到的距離；飛行方向＝卡心 → 格心
+                        const px = (gx + 0.5) / CS * cw, py = (gy + 0.5) / RS * chh;
+                        const dist = Math.hypot(px - cxc, py - cyc) / maxD;
+                        const on = WAVE_T0 + (WAVE_T1 - WAVE_T0) * dist + Math.random() * 0.03;
+                        const spd = 1.6 + Math.random() * 1.4 + dist * 1.2;
+                        const dx = (px - cxc) * spd, dy = (py - cyc) * spd;
+                        const rot = (Math.random() - 0.5) * 40;
+                        piece.animate(
+                            [
+                                { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1, offset: 0 },
+                                { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1, offset: Math.min(0.99, on) },
+                                { transform: 'translate(' + (dx * 0.5).toFixed(1) + 'px,' + (dy * 0.5).toFixed(1) + 'px) rotate(' + (rot * 0.5).toFixed(1) + 'deg) scale(1.25)', opacity: 1, offset: Math.min(0.995, on + (1 - on) * 0.5) },
+                                { transform: 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) rotate(' + rot.toFixed(1) + 'deg) scale(1.55)', opacity: 0 },
+                            ],
+                            { duration: DUR, easing: 'linear', fill: 'forwards' });
+                    }
+                }
+                mount.appendChild(wrap);
+                // 原卡藏起來（碎片層就是它的替身）；restore 會還原
+                hidCard = card;
+                card.style.visibility = 'hidden';
             }
 
-            // ② 碎片：🚨會飛的，不是釘在格線上的。釘死的滿屏格子等於一層靜止紗窗，
-            //    把底下的 zoom 動勢整個遮沒（上一版實測）。碎片沿「消失點→自身」的射線向外爆，
-            //    越飛越大越淡＝跟 punch-in 同一個方向場，是在放大動勢而不是抵消它。
-            //    內容在生成時就凍結（目的地場景的對應區塊或白塊）＝螢幕碎成帶畫面的玻璃片。
-            const COLS = W > 700 ? 16 : 10, ROWS = W > 700 ? 10 : 7;
-            const iw = img.width || 1, ih = img.height || 1;
-            const cover0 = Math.max(W / iw, H / ih);
-            const cox = W / 2 - iw * cover0 / 2, coy = H / 2 - ih * cover0 / 2;   // 目的地圖 cover 全屏的貼法
-            // 🚨 碎裂順序是嚴格的圓形波前：從卡片中心的小圓開始、圓圈擴大到全屏，
-            //    波前掃到那格才准碎，波前外面一塊碎片都沒有——開場任何一塊碎片出現在
-            //    外圈（哪怕只有一塊），眼睛就會鎖定那個靜止格線，zoom 動勢直接歸零
-            //    （第三版的 dist*0.25+random*0.25 就是這樣死的：random 比 dist 權重還大，
-            //    等於開場就全屏撒碎片）。距離正規化用「離消失點最遠的角落」，波前才會
-            //    真的掃完整個畫面。jitter 只留 0.03，攪不亂掃描順序。
-            const maxDist = Math.max(
-                Math.hypot(vp.x, vp.y), Math.hypot(W - vp.x, vp.y),
-                Math.hypot(vp.x, H - vp.y), Math.hypot(W - vp.x, H - vp.y));
-            const WAVE_T0 = 0.12, WAVE_T1 = 0.68;   // 波前從中心到最遠角落的時間窗
-            const shards = [];
-            for (let gy = 0; gy < ROWS; gy++) {
-                for (let gx = 0; gx < COLS; gx++) {
-                    if (Math.random() > 0.62) continue;
-                    const x = gx * W / COLS, y = gy * H / ROWS, w = W / COLS + 1, h = H / ROWS + 1;
-                    const dist = Math.hypot(x + w / 2 - vp.x, y + h / 2 - vp.y) / maxDist;
-                    shards.push({
-                        x, y, w, h, dist,
-                        white: Math.random() < 0.42,
-                        on: WAVE_T0 + (WAVE_T1 - WAVE_T0) * dist + Math.random() * 0.03,
-                        speed: 2.2 + Math.random() * 2 + dist * 1.6,     // 遠的飛得快＝假景深
-                        // 圖塊內容凍結：取目的地場景在這個位置的區塊（cover 對映回原圖座標）
-                        sx: (x - cox) / cover0, sy: (y - coy) / cover0, sw: w / cover0, sh: h / cover0,
-                    });
-                }
-            }
             const rFull = { x: 0, y: 0, w: W, h: H };
 
             const t0 = performance.now();
@@ -197,27 +201,6 @@
                 // ③ 目的地場景滲入墊底：t≈0.55 起整層淡入並緩慢推進＝衝刺終點已在場景裡
                 const arrive = Math.max(0, (t - 0.55) / 0.3);
                 if (arrive > 0) _drawCover(cx, img, rFull, 1 + 0.35 * _easeOut(Math.min(1, arrive)), Math.min(0.92, _easeOut(Math.min(1, arrive))));
-
-                // 飛行碎片：沿射線外爆、放大、後段淡出
-                for (const s of shards) {
-                    if (t < s.on) continue;
-                    const u = Math.min(1, (t - s.on) / (1 - s.on));
-                    const k = 1 + s.speed * _easeIn(u);                  // 位置外推倍率＝跟 zoom 同方向場
-                    const px = vp.x + (s.x + s.w / 2 - vp.x) * k;
-                    const py = vp.y + (s.y + s.h / 2 - vp.y) * k;
-                    const g = 1 + 1.6 * _easeIn(u);                      // 碎片自身也放大
-                    const dw = s.w * g, dh = s.h * g;
-                    const a = u < 0.55 ? 1 : Math.max(0, 1 - (u - 0.55) / 0.45);
-                    if (px + dw / 2 < 0 || px - dw / 2 > W || py + dh / 2 < 0 || py - dh / 2 > H) continue;
-                    if (s.white) {
-                        cx.fillStyle = 'rgba(255,255,255,' + (a * 0.9).toFixed(2) + ')';
-                        cx.fillRect(px - dw / 2, py - dh / 2, dw, dh);
-                    } else {
-                        cx.globalAlpha = a;
-                        try { cx.drawImage(img, s.sx, s.sy, s.sw, s.sh, px - dw / 2, py - dh / 2, dw, dh); } catch (e) {}
-                        cx.globalAlpha = 1;
-                    }
-                }
 
                 // ④ 白閃：0.6 起爬，0.88 全滿（此刻才真正換場景），尾段淡出交給 loading
                 const flash = Math.max(0, (t - 0.6) / 0.28);
