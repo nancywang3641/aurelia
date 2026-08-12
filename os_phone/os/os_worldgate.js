@@ -1011,7 +1011,7 @@
                整套純 CSS(斜切/巨大姓名/選項列都是即時文字),不切任何 PNG——切了就換不了角色、換不了題數。 */
             // 🚨底板是「有形狀」的透明 PNG,兩張板之間與板外一律透空——底下是大廳的像素場景,
             //   不鋪一層霧的話整個舞台從縫隙透上來,字直接讀不到(harness 用的是純色假背景,看不出這件事)。
-            '.wg-meet{position:absolute;left:0;right:0;top:0;bottom:var(--wg-meet-pb,150px);z-index:3355;display:flex;' +
+            '.wg-meet{position:absolute;left:0;right:-0.2%;top:0;bottom:var(--wg-meet-pb,150px);z-index:3355;display:flex;' +
               'background:rgba(240,244,250,.82);backdrop-filter:blur(7px);' +
               'color:var(--party-ink,#14243d);font-size:13px;--party-navy:#10243d;--party-muted:#60718a;--party-gold:#c9aa72;--npc-accent:#35c9e8;}' +
             '.wg-meet-x{position:absolute;right:12px;top:12px;z-index:6;width:32px;height:32px;border-radius:50%;cursor:pointer;' +
@@ -1030,10 +1030,10 @@
               'font-size:clamp(34px,11vh,96px);line-height:1.12;font-weight:900;color:transparent;-webkit-text-stroke:1.5px rgba(53,110,175,.4);pointer-events:none;}' +
             // 立繪是像素小人：放大時一律 pixelated，別讓瀏覽器插值糊成一團
             // 右邊要留給代號牌：圖框佔滿整個海報的話，人一定壓在代號上(斜板本來就往右收窄)
-            '.wg-poster-fig{position:absolute;left:0;right:27%;top:4%;bottom:2%;z-index:3;image-rendering:pixelated;' +
+            '.wg-poster-fig{position:absolute;inset:5.4% 16.6% 1.8% 11.3%;z-index:3;image-rendering:pixelated;' +
               'background:var(--wg-fig) center bottom/contain no-repeat;}' +
             '.wg-poster-fig.sheet{background-size:300% 400%;background-position:0 0;}' +
-            '.wg-poster-sig{position:absolute;right:5%;bottom:42%;z-index:4;display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;}' +
+            '.wg-poster-sig{position:absolute;right:2%;bottom:49.9%;z-index:4;display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;}' +
             '.wg-poster-sig b{font-size:17px;font-weight:800;letter-spacing:3px;color:#14243d;}' +
             '.wg-poster-sig span{font-size:12px;letter-spacing:2px;color:var(--party-muted);border-top:1px solid var(--party-gold);padding-top:3px;}' +
             '.wg-joined{display:inline-flex;align-items:center;gap:3px;margin-top:5px;padding:2px 8px;border-radius:8px;background:rgba(60,120,80,.14);color:#2f6b46;font-size:10px;font-style:normal;font-weight:800;white-space:nowrap;}' +
@@ -1048,17 +1048,17 @@
             //   底板是 background-size:100% 100% 拉伸的圖,白板塊的邊界固定在某個百分比上,
             //   px padding 一遇到面板改尺寸就跟底板脫節(標題/選項/身分卡欄位整組跑歪)。
             //   同時這也是「版位微調」拖得動它們的前提——flex 排的東西沒有可拖的四邊。
-            '.wg-ev-head{position:absolute;left:7%;right:5%;top:4%;bottom:74%;}' +
-            '.wg-ev-main{position:absolute;left:7%;right:5%;top:28%;bottom:17%;overflow-y:auto;scrollbar-width:thin;}' +
+            '.wg-ev-head{position:absolute;left:25.5%;top:4.3%;right:-13.5%;bottom:73.7%;}' +
+            '.wg-ev-main{position:absolute;left:12.9%;top:32.9%;right:3.9%;bottom:13.3%;overflow-y:auto;scrollbar-width:thin;}' +
             '.wg-ev-meta{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:3px;font-weight:700;color:var(--party-muted);}' +
             '.wg-ev-meta b{color:var(--npc-accent);font-size:14px;letter-spacing:1px;}' +
             '.wg-ev-meta::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,170,114,.7),rgba(201,170,114,0));}' +
             '.wg-ev-title{margin-top:8px;font-size:clamp(21px,3.4vh,34px);font-weight:900;letter-spacing:3px;line-height:1.25;color:#14243d;}' +
             // 灰字不得再降淡：這面板以前就是被淡灰小字弄成催眠表單的
-            '.wg-ev-prompt{margin-top:9px;font-size:15px;line-height:1.62;color:#3d4f68;max-width:34em;}' +
+            '.wg-ev-prompt{margin-top:9px;font-size:15px;line-height:1.62;color:#3d4f68;}' +
             // 標題那組(meta/大標/題幹)跟選項要看得出是兩段:貼太近會讀成一整塊,分不清哪裡是「該我做決定」了。
             //   選項也不能拉滿寬——桌機事件殼有六成螢幕寬,整條橫過去像表格列不像按鈕,而且眼睛要從編號掃很遠才到文字。
-            '.wg-choices{display:flex;flex-direction:column;gap:9px;max-width:34em;}' +
+            '.wg-choices{display:flex;flex-direction:column;gap:9px;}' +
             '.wg-choice{display:flex;align-items:center;gap:15px;width:100%;text-align:left;cursor:pointer;min-height:58px;padding:11px 18px;' +
               'border:1px solid rgba(20,36,61,.15);background:rgba(255,255,255,.92);color:#14243d;transition:.16s;' +
               'clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,0 100%);}' +
@@ -1074,7 +1074,7 @@
             // 頁籤軌是整條斜切金邊的墨藍條(獨立素材);左右尖端是造型,按鈕靠 padding 讓開不要壓上去
             // 用 top/bottom 定高、不用 height:四邊都是可拖的量,微調模式吐出來的 CSS 才貼得回來
             //   (同時設 height 跟 top+bottom 會打架,height 贏、bottom 被忽略)
-            '.wg-tabs{position:absolute;left:0;right:0;top:86%;bottom:0;display:flex;padding:0 4%;' +
+            '.wg-tabs{position:absolute;left:-0.1%;right:26.7%;top:94.1%;bottom:-2.3%;display:flex;padding:0 4%;' +
               'background:url("' + _WG_ART + 'tab-rail.png") center/100% 100% no-repeat;}' +
             '.wg-tab{position:relative;flex:1;padding:13px 4px;background:none;border:none;cursor:pointer;' +
               'color:rgba(233,240,250,.7);font-size:14px;font-weight:700;letter-spacing:3px;font-family:inherit;}' +
