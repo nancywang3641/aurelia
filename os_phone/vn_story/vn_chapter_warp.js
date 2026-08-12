@@ -9,9 +9,11 @@
 //   ① punch-in 用「真 DOM 縮放」：WAAPI 對 chapter-window 整個 scale 1→4.6，
 //      transform-origin 釘在選中卡縮圖中心——卡片、標題、旁卡全部一起衝，
 //      不是抽一張背景圖出來放大（🚨第一版就是那樣，畫面突然換成陌生的大圖，超突兀）。
-//   ② datamosh 在上層 canvas：白塊＝沒讀到資料的 tile；圖塊＝「目的地場景」提前漏進來
-//      （破損的 tile 顯示到你正要去的地方）。離消失點越遠壞得越重＝假景深。
-//   ③ t≈0.5 起目的地場景整層淡入墊底＝衝刺的終點是「已經在場景裡」，再白閃收尾。
+//   ② 碎片在上層 canvas 而且會飛：從卡片中心沿射線向外爆、越飛越大越淡，跟 punch-in
+//      同一個方向場。🚨釘死在格線上的滿屏碎塊＝一層靜止紗窗，會把底下的 zoom 動勢
+//      整個遮沒（第二版實測，觀感直接變「整屏切碎、沒有 zoom」）。
+//      白片＝沒讀到資料；圖片＝目的地場景的對應區塊（生成時凍結，像帶畫面的碎玻璃）。
+//   ③ t≈0.55 起目的地場景整層淡入墊底＝衝刺的終點是「已經在場景裡」，再白閃收尾。
 //   ④ 白閃全滿（t=0.88）才回呼 doLoad：canvas 大部分是透明的，太早換場景會從
 //      碎塊縫隙看到面板消失的瞬間。
 //
@@ -138,25 +140,37 @@
                 prevWillChange = zoomEl.style.willChange;
                 zoomEl.style.transformOrigin = ox.toFixed(2) + '% ' + oy.toFixed(2) + '%';
                 zoomEl.style.willChange = 'transform';
+                // 前段就要衝起來：慢熱曲線＋滿屏靜止碎塊＝觀感上「沒有 zoom」（上一版的死因）
                 anim = zoomEl.animate(
-                    [{ transform: 'scale(1)' }, { transform: 'scale(4.6)' }],
-                    { duration: Math.round(DUR * LOAD_AT), easing: 'cubic-bezier(0.6, 0, 0.85, 0.4)', fill: 'forwards' });
+                    [
+                        { transform: 'scale(1)', easing: 'cubic-bezier(0.4, 0, 0.7, 0.4)' },
+                        { transform: 'scale(2)', offset: 0.5, easing: 'cubic-bezier(0.4, 0, 0.8, 0.5)' },
+                        { transform: 'scale(4.8)' },
+                    ],
+                    { duration: Math.round(DUR * LOAD_AT), fill: 'forwards' });
             }
 
-            // ② datamosh 格子：白塊＝沒讀到資料；圖塊＝目的地場景提前漏進來。離消失點越遠壞得越重
-            const COLS = W > 700 ? 18 : 11, ROWS = W > 700 ? 11 : 8;
-            const tiles = [];
+            // ② 碎片：🚨會飛的，不是釘在格線上的。釘死的滿屏格子等於一層靜止紗窗，
+            //    把底下的 zoom 動勢整個遮沒（上一版實測）。碎片沿「消失點→自身」的射線向外爆，
+            //    越飛越大越淡＝跟 punch-in 同一個方向場，是在放大動勢而不是抵消它。
+            //    內容在生成時就凍結（目的地場景的對應區塊或白塊）＝螢幕碎成帶畫面的玻璃片。
+            const COLS = W > 700 ? 16 : 10, ROWS = W > 700 ? 10 : 7;
+            const iw = img.width || 1, ih = img.height || 1;
+            const cover0 = Math.max(W / iw, H / ih);
+            const cox = W / 2 - iw * cover0 / 2, coy = H / 2 - ih * cover0 / 2;   // 目的地圖 cover 全屏的貼法
+            const shards = [];
             for (let gy = 0; gy < ROWS; gy++) {
                 for (let gx = 0; gx < COLS; gx++) {
-                    if (Math.random() > 0.5) continue;
-                    const tx = gx * W / COLS, ty = gy * H / ROWS;
-                    const dist = Math.hypot(tx + W / COLS / 2 - vp.x, ty + H / ROWS / 2 - vp.y) / Math.hypot(W / 2, H / 2);
-                    tiles.push({
-                        x: tx, y: ty, w: W / COLS + 1, h: H / ROWS + 1,
-                        white: Math.random() < 0.5,
-                        zoom: 1 + Math.random() * 0.5 + dist * 0.4,            // 圖塊各自的取景縮放＝壞得參差
-                        on: 0.14 + (0.5 - dist * 0.3) * Math.random() + 0.12 * Math.random(),  // 邊緣先壞、中央晚壞
-                        flicker: Math.random() < 0.35,                          // 部分格子會閃爍
+                    if (Math.random() > 0.42) continue;
+                    const x = gx * W / COLS, y = gy * H / ROWS, w = W / COLS + 1, h = H / ROWS + 1;
+                    const dist = Math.hypot(x + w / 2 - vp.x, y + h / 2 - vp.y) / Math.hypot(W / 2, H / 2);
+                    shards.push({
+                        x, y, w, h, dist,
+                        white: Math.random() < 0.42,
+                        on: 0.1 + dist * 0.25 + Math.random() * 0.25,   // 中央（卡片）先碎，往外圈蔓延
+                        speed: 2.2 + Math.random() * 2 + dist * 1.6,     // 遠的飛得快＝假景深
+                        // 圖塊內容凍結：取目的地場景在這個位置的區塊（cover 對映回原圖座標）
+                        sx: (x - cox) / cover0, sy: (y - coy) / cover0, sw: w / cover0, sh: h / cover0,
                     });
                 }
             }
@@ -168,24 +182,28 @@
                 if (t >= 1) { cv.remove(); restore(); _busy = false; clearTimeout(fuse); return; }
                 cx.clearRect(0, 0, W, H);
 
-                // ③ 目的地場景滲入墊底：t≈0.5 起整層淡入並緩慢推進＝衝刺終點已在場景裡
-                const arrive = Math.max(0, (t - 0.5) / 0.32);
+                // ③ 目的地場景滲入墊底：t≈0.55 起整層淡入並緩慢推進＝衝刺終點已在場景裡
+                const arrive = Math.max(0, (t - 0.55) / 0.3);
                 if (arrive > 0) _drawCover(cx, img, rFull, 1 + 0.35 * _easeOut(Math.min(1, arrive)), Math.min(0.92, _easeOut(Math.min(1, arrive))));
 
-                // datamosh 壞塊（蓋在 DOM 縮放畫面之上）
-                for (const tile of tiles) {
-                    if (t < tile.on) continue;
-                    if (tile.flicker && Math.random() < 0.25) continue;   // 閃爍：這幀跳過
-                    if (tile.white) {
-                        cx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.45 * Math.random()).toFixed(2) + ')';
-                        cx.fillRect(tile.x, tile.y, tile.w, tile.h);
+                // 飛行碎片：沿射線外爆、放大、後段淡出
+                for (const s of shards) {
+                    if (t < s.on) continue;
+                    const u = Math.min(1, (t - s.on) / (1 - s.on));
+                    const k = 1 + s.speed * _easeIn(u);                  // 位置外推倍率＝跟 zoom 同方向場
+                    const px = vp.x + (s.x + s.w / 2 - vp.x) * k;
+                    const py = vp.y + (s.y + s.h / 2 - vp.y) * k;
+                    const g = 1 + 1.6 * _easeIn(u);                      // 碎片自身也放大
+                    const dw = s.w * g, dh = s.h * g;
+                    const a = u < 0.55 ? 1 : Math.max(0, 1 - (u - 0.55) / 0.45);
+                    if (px + dw / 2 < 0 || px - dw / 2 > W || py + dh / 2 < 0 || py - dh / 2 > H) continue;
+                    if (s.white) {
+                        cx.fillStyle = 'rgba(255,255,255,' + (a * 0.9).toFixed(2) + ')';
+                        cx.fillRect(px - dw / 2, py - dh / 2, dw, dh);
                     } else {
-                        cx.save();
-                        cx.beginPath();
-                        cx.rect(tile.x, tile.y, tile.w, tile.h);
-                        cx.clip();
-                        _drawCover(cx, img, rFull, tile.zoom + 0.6 * _easeIn(t), 0.9);
-                        cx.restore();
+                        cx.globalAlpha = a;
+                        try { cx.drawImage(img, s.sx, s.sy, s.sw, s.sh, px - dw / 2, py - dh / 2, dw, dh); } catch (e) {}
+                        cx.globalAlpha = 1;
                     }
                 }
 
