@@ -255,7 +255,6 @@
 #lb-dock-story { display:none; }   /* 踏入故事：只在獨立版(PWA)出現，void_terminal 依 isStandalone 開 */
 #lb-dock-story i { font-size:22px; height:30px; line-height:30px; color:#4f74c8; pointer-events:none; }
 .void-tab.mode-404 #lb-dock-story i { color:#7de89a; }
-.lb-dock-exit i { font-size:22px; height:30px; line-height:30px; color:#4f74c8; pointer-events:none; }
 /* 成就待兌換小圓點 */
 .lb-dock-btn.has-pending::after {
     content:''; position:absolute; top:6px; right:8px; width:7px; height:7px; border-radius:50%;
@@ -269,14 +268,12 @@
 .void-tab.mode-404 .lb-dock-ic { filter:sepia(1) saturate(3) hue-rotate(80deg) brightness(0.95); }
 .void-tab.mode-404 .lb-dock-label { font-size:0; color:#9ef3b0; }
 .void-tab.mode-404 .lb-dock-label::after { content:attr(data-cn-404); font-size:11px; }
-.void-tab.mode-404 .lb-dock-exit i { color:#7de89a; }
 @media (max-width:560px) {
     .lb-dock { left:6px; gap:6px; }
     .lb-dock-btn { width:46px; padding:5px 3px 4px; border-radius:11px; }
     .lb-dock-ic { width:24px; height:24px; }
     .lb-dock-label { font-size:9px; }
     .void-tab.mode-404 .lb-dock-label::after { font-size:9px; }
-    .lb-dock-exit i { font-size:18px; height:24px; line-height:24px; }
 }
 
 /* 對話框：移進左欄底部、疊在立繪上 */
