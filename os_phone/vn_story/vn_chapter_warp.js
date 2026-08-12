@@ -22,7 +22,8 @@
 (function () {
     if (window.VN_ChapterWarp) return;
 
-    const SFX = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/enter-warp.mp3';
+    // 短版 7.5 秒（原 10 秒版還在同資料夾）；已剪掉素材開頭 0.4 秒純靜音，點擊反饋即時
+    const SFX = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/enter-warp-short.mp3';
     const DUR = 1400;          // 演出總長 ms（含尾段淡出）
     const LOAD_AT = 0.72;      // 白閃接近頂點的時刻回呼載入
     let _busy = false;
