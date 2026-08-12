@@ -1,22 +1,25 @@
 // ----------------------------------------------------------------
-// [檔案] vn_chapter_warp.js — 「進入章節」穿越轉場（碎裂 zoom-in）
+// [檔案] vn_chapter_warp.js — 「進入章節」穿越轉場（整面 zoom-in＋碎裂）
 // 路徑：os_phone/vn_story/vn_chapter_warp.js
-// 職責：點「進入章節」→ 選中卡的場景縮圖 punch-in 放大 + datamosh 方塊碎裂
-//       + 假 radial blur + 白閃 → 高峰時回呼真正的載入（校準艙 loading 在底下接手）。
+// 職責：點「進入章節」→ 整個章節面板（卡片＋UI＋背景）一起衝向選中卡並碎裂
+//       → 目的地場景從碎塊間滲入 → 白閃到頂時回呼真正的載入（校準艙在底下接手）。
 //       只管演出，載入邏輯仍在 vn_panels 的 _loadChapter。
 //
-// 效果拆解（照 Gemini 概念片仿製，純 2D canvas、零 WebGL）：
-//   ① punch-in：從縮圖矩形一路放大到蓋滿容器再往裡衝，origin 釘在畫面中心偏上
-//      （走廊構圖的消失點九成在那）→「走進圖裡」的體感。
-//   ② datamosh：畫面切格，部分格子用「滯後的縮放時間」重畫同一張圖＝顯示到舊幀的壓縮壞塊，
-//      另一部分直接白塊（沒讀到資料的 tile）。距消失點越遠滯後越重＝假景深視差。
-//   ③ radial blur：同一張圖多疊幾層遞增縮放的半透明 echo，2D 版八成像。
-//   ④ 白閃到頂時回呼 doLoad（此刻換場景玩家看不見），canvas 再淡出讓底下的 loading 浮現。
+// 效果拆解（照 Gemini 概念片仿製，零 WebGL 零依賴）：
+//   ① punch-in 用「真 DOM 縮放」：WAAPI 對 chapter-window 整個 scale 1→4.6，
+//      transform-origin 釘在選中卡縮圖中心——卡片、標題、旁卡全部一起衝，
+//      不是抽一張背景圖出來放大（🚨第一版就是那樣，畫面突然換成陌生的大圖，超突兀）。
+//   ② datamosh 在上層 canvas：白塊＝沒讀到資料的 tile；圖塊＝「目的地場景」提前漏進來
+//      （破損的 tile 顯示到你正要去的地方）。離消失點越遠壞得越重＝假景深。
+//   ③ t≈0.5 起目的地場景整層淡入墊底＝衝刺的終點是「已經在場景裡」，再白閃收尾。
+//   ④ 白閃全滿（t=0.88）才回呼 doLoad：canvas 大部分是透明的，太早換場景會從
+//      碎塊縫隙看到面板消失的瞬間。
 //
 // 🚨 canvas 只 drawImage 不 getImageData：縮圖來源可能是無 CORS 的遠端圖，
 //    讀像素會炸 taint，純畫不讀就永遠安全。
-// 🚨 rAF 迴圈固定時長（~1.4s）自己收尾，另掛 3 秒保險絲：演出中途出錯也要把載入放行，
-//    轉場絕不能反過來把章節卡死。
+// 🚨 rAF 迴圈固定時長（~1.5s）自己收尾，另掛 3 秒保險絲：演出中途出錯也要把載入放行，
+//    轉場絕不能反過來把章節卡死；DOM 縮放結束一定要 cancel＋還原 origin，
+//    殘留 transform 會讓下次開面板整個歪掉。
 // 開關：localStorage vn_chwarp=0 → 跳過演出直接載入。
 // ----------------------------------------------------------------
 (function () {
@@ -24,8 +27,10 @@
 
     // 短版 7.5 秒（原 10 秒版還在同資料夾）；已剪掉素材開頭 0.4 秒純靜音，點擊反饋即時
     const SFX = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/enter-warp-short.mp3';
-    const DUR = 1400;          // 演出總長 ms（含尾段淡出）
-    const LOAD_AT = 0.72;      // 白閃接近頂點的時刻回呼載入
+    const DUR = 1500;          // 演出總長 ms（含尾段淡出）
+    // 🚨 必須等白閃「全滿」才載入：這版 canvas 大部分是透明的（底下是真 DOM 在縮放），
+    //    太早換場景會從碎塊縫隙看到面板消失的瞬間（第一版 0.72 就是這樣穿幫）
+    const LOAD_AT = 0.88;
     let _busy = false;
 
     function enabled() {
@@ -78,8 +83,8 @@
     const _easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
     /**
-     * 播轉場。opts = { thumb: 縮圖元素, host: 蓋 canvas 的容器, bg: CSS 漸層退路 }
-     * doLoad 在白閃高峰執行一次；任何錯誤都保證 doLoad 仍會被呼叫。
+     * 播轉場。opts = { thumb: 縮圖元素, host: 蓋 canvas 的容器, zoomEl: 要整個縮放的面板, bg: CSS 漸層退路 }
+     * doLoad 在白閃全滿時執行一次；任何錯誤都保證 doLoad 仍會被呼叫。
      */
     async function play(opts, doLoad) {
         let loaded = false;
@@ -87,6 +92,14 @@
         if (_busy || !enabled() || !opts || !opts.host) { fire(); return; }
         _busy = true;
         const fuse = setTimeout(fire, 3000);   // 保險絲：演出掛了也要放行載入
+
+        // DOM 縮放的殘局收拾放外層：中途 throw 也要把 transform 還原，不然下次開面板整個歪掉
+        let anim = null, zoomEl = null, prevOrigin = '', prevWillChange = '';
+        const restore = () => {
+            try { if (anim) anim.cancel(); } catch (e) {}
+            if (zoomEl) { zoomEl.style.transformOrigin = prevOrigin; zoomEl.style.willChange = prevWillChange; }
+            anim = null; zoomEl = null;
+        };
 
         try {
             const host = opts.host;
@@ -107,89 +120,90 @@
             cx.setTransform(dpr, 0, 0, dpr, 0, 0);
             const W = hr.width, H = hr.height;
 
-            // 起點＝縮圖在容器內的矩形（找不到就用中央小框）；終點＝整個容器
-            let r0 = { x: W * 0.36, y: H * 0.3, w: W * 0.28, h: H * 0.3 };
-            if (opts.thumb) {
-                const tr = opts.thumb.getBoundingClientRect();
-                if (tr.width && tr.height) r0 = { x: tr.left - hr.left, y: tr.top - hr.top, w: tr.width, h: tr.height };
+            // ① 整面 punch-in：真 DOM 縮放，origin 釘在選中卡縮圖中心 → 卡片跟整個面板一起衝
+            zoomEl = opts.zoomEl || null;
+            let vp = { x: W * 0.5, y: H * 0.44 };   // 消失點（碎塊景深用），預設中心偏上
+            if (zoomEl) {
+                const zr = zoomEl.getBoundingClientRect();
+                let ox = 50, oy = 44;
+                if (opts.thumb) {
+                    const tr = opts.thumb.getBoundingClientRect();
+                    if (tr.width && zr.width) {
+                        ox = (tr.left + tr.width / 2 - zr.left) / zr.width * 100;
+                        oy = (tr.top + tr.height / 2 - zr.top) / zr.height * 100;
+                        vp = { x: (tr.left + tr.width / 2 - hr.left), y: (tr.top + tr.height / 2 - hr.top) };
+                    }
+                }
+                prevOrigin = zoomEl.style.transformOrigin;
+                prevWillChange = zoomEl.style.willChange;
+                zoomEl.style.transformOrigin = ox.toFixed(2) + '% ' + oy.toFixed(2) + '%';
+                zoomEl.style.willChange = 'transform';
+                anim = zoomEl.animate(
+                    [{ transform: 'scale(1)' }, { transform: 'scale(4.6)' }],
+                    { duration: Math.round(DUR * LOAD_AT), easing: 'cubic-bezier(0.6, 0, 0.85, 0.4)', fill: 'forwards' });
             }
-            const rFull = { x: 0, y: 0, w: W, h: H };
-            // 消失點：中心偏上（穿越走廊時視線釘的地方）
-            const vp = { x: W * 0.5, y: H * 0.44 };
 
-            // datamosh 格子：一次生成，各自帶「滯後量」與「白塊機率」；離消失點越遠滯後越重＝假景深
+            // ② datamosh 格子：白塊＝沒讀到資料；圖塊＝目的地場景提前漏進來。離消失點越遠壞得越重
             const COLS = W > 700 ? 18 : 11, ROWS = W > 700 ? 11 : 8;
             const tiles = [];
             for (let gy = 0; gy < ROWS; gy++) {
                 for (let gx = 0; gx < COLS; gx++) {
-                    if (Math.random() > 0.46) continue;   // 只有一部分格子壞掉，底圖是好的
+                    if (Math.random() > 0.5) continue;
                     const tx = gx * W / COLS, ty = gy * H / ROWS;
                     const dist = Math.hypot(tx + W / COLS / 2 - vp.x, ty + H / ROWS / 2 - vp.y) / Math.hypot(W / 2, H / 2);
                     tiles.push({
                         x: tx, y: ty, w: W / COLS + 1, h: H / ROWS + 1,
-                        lag: (0.06 + Math.random() * 0.1) * (0.35 + dist),   // 滯後的縮放時間
-                        white: Math.random() < 0.34,                           // 白塊（沒讀到資料）
-                        on: 0.18 + Math.random() * 0.3,                        // 幾時開始壞
-                        off: 0.85 + Math.random() * 0.15,                      // 幾時修好/被白閃吃掉
+                        white: Math.random() < 0.5,
+                        zoom: 1 + Math.random() * 0.5 + dist * 0.4,            // 圖塊各自的取景縮放＝壞得參差
+                        on: 0.14 + (0.5 - dist * 0.3) * Math.random() + 0.12 * Math.random(),  // 邊緣先壞、中央晚壞
+                        flicker: Math.random() < 0.35,                          // 部分格子會閃爍
                     });
                 }
             }
-
-            // 某時刻 t 的取景框：先從縮圖長到滿版（0~0.38），再往圖裡衝（extra 放大）
-            const frameAt = (t) => {
-                const g = _easeOut(Math.min(1, t / 0.38));
-                const r = {
-                    x: r0.x + (rFull.x - r0.x) * g, y: r0.y + (rFull.y - r0.y) * g,
-                    w: r0.w + (rFull.w - r0.w) * g, h: r0.h + (rFull.h - r0.h) * g,
-                };
-                const extra = 1 + 4.2 * _easeIn(Math.max(0, (t - 0.3) / 0.7));
-                return { r, extra };
-            };
+            const rFull = { x: 0, y: 0, w: W, h: H };
 
             const t0 = performance.now();
             const tick = () => {
                 const t = (performance.now() - t0) / DUR;
-                if (t >= 1) { cv.remove(); _busy = false; clearTimeout(fuse); return; }
+                if (t >= 1) { cv.remove(); restore(); _busy = false; clearTimeout(fuse); return; }
                 cx.clearRect(0, 0, W, H);
 
-                const { r, extra } = frameAt(t);
-                // 假 radial blur：3 層遞減縮放的殘影墊底 + 本幀
-                for (let e = 3; e >= 1; e--) _drawCover(cx, img, r, extra * (1 - e * 0.045), 0.16);
-                _drawCover(cx, img, r, extra, 1);
+                // ③ 目的地場景滲入墊底：t≈0.5 起整層淡入並緩慢推進＝衝刺終點已在場景裡
+                const arrive = Math.max(0, (t - 0.5) / 0.32);
+                if (arrive > 0) _drawCover(cx, img, rFull, 1 + 0.35 * _easeOut(Math.min(1, arrive)), Math.min(0.92, _easeOut(Math.min(1, arrive))));
 
-                // datamosh 壞塊：clip 出格子，用滯後時間的取景重畫（＝顯示到舊幀）
+                // datamosh 壞塊（蓋在 DOM 縮放畫面之上）
                 for (const tile of tiles) {
-                    if (t < tile.on || t > tile.off) continue;
-                    cx.save();
-                    cx.beginPath();
-                    cx.rect(tile.x, tile.y, tile.w, tile.h);
-                    cx.clip();
+                    if (t < tile.on) continue;
+                    if (tile.flicker && Math.random() < 0.25) continue;   // 閃爍：這幀跳過
                     if (tile.white) {
-                        cx.fillStyle = 'rgba(255,255,255,' + (0.55 + 0.4 * Math.random()).toFixed(2) + ')';
+                        cx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.45 * Math.random()).toFixed(2) + ')';
                         cx.fillRect(tile.x, tile.y, tile.w, tile.h);
                     } else {
-                        const lagF = frameAt(Math.max(0, t - tile.lag));
-                        _drawCover(cx, img, lagF.r, lagF.extra, 1);
+                        cx.save();
+                        cx.beginPath();
+                        cx.rect(tile.x, tile.y, tile.w, tile.h);
+                        cx.clip();
+                        _drawCover(cx, img, rFull, tile.zoom + 0.6 * _easeIn(t), 0.9);
+                        cx.restore();
                     }
-                    cx.restore();
                 }
 
-                // 白閃：0.55 起爬，LOAD_AT 附近到頂；頂點後整片白蓋住換場景
-                const flash = Math.max(0, (t - 0.55) / 0.3);
+                // ④ 白閃：0.6 起爬，0.88 全滿（此刻才真正換場景），尾段淡出交給 loading
+                const flash = Math.max(0, (t - 0.6) / 0.28);
                 if (flash > 0) {
                     cx.fillStyle = 'rgba(255,255,255,' + Math.min(1, _easeIn(Math.min(1, flash))).toFixed(3) + ')';
                     cx.fillRect(0, 0, W, H);
                 }
-                if (t >= LOAD_AT) fire();
-                // 尾段：白幕淡出，底下的校準艙 loading 浮現
-                if (t > 0.86) cv.style.opacity = String(Math.max(0, 1 - (t - 0.86) / 0.14));
+                if (t >= LOAD_AT) { fire(); restore(); }   // 面板已藏在全白底下，transform 立刻還原也看不見
+                if (t > 0.9) cv.style.opacity = String(Math.max(0, 1 - (t - 0.9) / 0.1));
 
                 requestAnimationFrame(tick);
             };
             requestAnimationFrame(tick);
         } catch (e) {
             console.warn('[ChapterWarp] 演出失敗，直接載入', e);
-            fire(); _busy = false; clearTimeout(fuse);
+            restore(); fire(); _busy = false; clearTimeout(fuse);
         }
     }
 

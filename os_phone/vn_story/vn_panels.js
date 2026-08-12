@@ -775,7 +775,8 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             //    canvas 掛在 chapter-window 外層的 vn-container：closeChapterPanel 收掉 overlay 時
             //    演出還在最上層，玩家看不到切換的瞬間。轉場自帶 3 秒保險絲，掛了照樣放行載入。
             const host = document.querySelector('.vn-container') || document.getElementById('chapter-window');
-            if (window.VN_ChapterWarp && host) window.VN_ChapterWarp.play({ thumb: thumbEl, host, bg: ch.bg }, doLoad);
+            const zoomEl = document.getElementById('chapter-window');   // 整個面板（卡片+UI+背景）一起衝，不是只有縮圖
+            if (window.VN_ChapterWarp && host) window.VN_ChapterWarp.play({ thumb: thumbEl, host, zoomEl, bg: ch.bg }, doLoad);
             else doLoad();
         }
 
