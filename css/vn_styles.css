@@ -487,10 +487,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
         .chx-enter:hover { filter: brightness(1.08); transform: translateY(-1px); }
 
-        /* ── 進入章節穿越轉場的畫布（vn_chapter_warp 動態掛上；蓋整窗、吃掉點擊防連按） ── */
+        /* ── 進入章節穿越轉場的畫布（vn_chapter_warp 動態掛上；蓋整窗、吃掉點擊防連按） ──
+           🚨 z 必須壓過章節面板(100)與開場 loading(900)：60 的話整場演出都在面板後面，
+              玩家只聽得到音效、畫面直接跳 loading（2026-08-12 實測踩過） */
         .chx-warp-canvas {
             position: absolute; inset: 0; width: 100%; height: 100%;
-            z-index: 60; pointer-events: auto;
+            z-index: 1500; pointer-events: auto;
         }
 
         /* ── 空狀態／讀取中 ── */
