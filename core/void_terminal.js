@@ -1944,10 +1944,12 @@ ${sections}`;
     // 記事落地（共用）：主生成同回覆的 <theater_summary> 與補抽路徑都走這裡存
     function _saveTheaterBrief(npcA, npcB, brief) {
         try {
+            let loc = '';   // 發生地點＝當下場景牌（回顧票券顯示用；舊資料沒有這欄，顯示端要容錯）
+            try { const b = window.LobbyStage?._b; loc = b ? ((b.SCENE_HEADER[b.S.scene] || {}).badge || '') : ''; } catch (e) {}
             VoidTerminal.theaterLog.save({
                 pair: (npcA.name || '?') + ' × ' + (npcB.name || '?'),
                 npcKeys: [npcA.key || '', npcB.key || ''],
-                brief: brief, ts: Date.now(),
+                brief: brief, ts: Date.now(), loc: loc,
             });
             const all = VoidTerminal.theaterLog.getAll();   // 硬上限裁舊
             if (all.length > THEATER_LOG_CAP) for (const old of all.slice(THEATER_LOG_CAP)) VoidTerminal.theaterLog.remove(old.id);
