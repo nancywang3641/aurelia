@@ -515,7 +515,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 document.getElementById('sprite-selected-info').innerHTML =
                     '🎯 當前：<b style="color:#1A1C28;">' + name + '</b>';
 
-                const fullPrompt = document.getElementById('sprite-tpl-prefix').value + finalPrompt + document.getElementById('sprite-tpl-suffix').value;
+                let fullPrompt = document.getElementById('sprite-tpl-prefix').value + finalPrompt + document.getElementById('sprite-tpl-suffix').value;
                 setStatus('⏳ 為「' + name + '」生立繪中（5–30 秒）...');
                 document.getElementById('sprite-preview').innerHTML = '<span style="color:#666;font-size:11px;">生成中...</span>';
                 enableBtn('sprite-removebg-btn', false);
@@ -533,6 +533,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     // 立繪 base 比例（可調，「立繪比例」下拉，預設 512×896；鎧甲/壯角色選寬一點）
                     let _bw = 512, _bh = 896;
                     try { const _bp = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_bp[0] && _bp[1]) { _bw = _bp[0]; _bh = _bp[1]; } } catch(e) {}
+                    // 🪽 帶翼角色加寬畫框（三條立繪路徑共用 OS_IMAGE_MANAGER.wideFrame）：判定看角色描述 finalPrompt，
+                    //    不看套完模板的 fullPrompt（模板裡沒有翅膀詞）。加寬在倍率之前，倍率照樣往上乘。
+                    try {
+                        const _wf = win2.OS_IMAGE_MANAGER.wideFrame(_bw, _bh, finalPrompt);
+                        if (_wf.extra) { _bw = _wf.width; _bh = _wf.height; fullPrompt += ', ' + _wf.extra; }
+                    } catch(e) {}
                     // 精緻度倍率＋高清修復都是 ComfyUI 直連專屬；非 ComfyUI 不套倍率（base 比例就是最終尺寸）
                     const _ratioEl = document.getElementById('sprite-upscale-ratio');
                     const _ratio = _isComfy ? (parseFloat((_ratioEl && _ratioEl.value) || localStorage.getItem(LS_RATIO) || '1.5') || 1.5) : 1;

@@ -382,13 +382,18 @@
                     .replace(/\bsoft\s+lighting\b/gi, '').replace(/\bstudio\s+lighting\b/gi, '').replace(/\bflat\s+lighting\b/gi, '')
                     .replace(/\bfrom\s+(above|below|side|behind|front)\b/gi, '')
                     .replace(/\s*,\s*,+/g, ', ').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
-                const prompt = pfx + rawP + sfx;
+                let prompt = pfx + rawP + sfx;
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
                 const imCfg = win.OS_IMAGE_MANAGER.config;
                 const _spriteSvc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (imCfg && imCfg.service);
                 const useNAI = !!(_spriteSvc === 'novelai' && imCfg && imCfg.novelai && imCfg.novelai.token);
                 let _bw = 512, _bh = 896;
                 try { const _bp = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_bp[0] && _bp[1]) { _bw = _bp[0]; _bh = _bp[1]; } } catch(e) {}
+                // 🪽 帶翼角色加寬畫框（同 VN_Image.getSprite）：判定看角色描述 rawP，模板裡沒有翅膀詞
+                try {
+                    const _wf = win.OS_IMAGE_MANAGER.wideFrame(_bw, _bh, rawP);
+                    if (_wf.extra) { _bw = _wf.width; _bh = _wf.height; prompt += ', ' + _wf.extra; }
+                } catch (e) {}
                 // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面。空＝不送。
                 let _spriteNeg = null; try { _spriteNeg = localStorage.getItem('os_sprite_tpl_neg'); } catch(e) {}
                 _spriteNeg = (_spriteNeg && _spriteNeg.trim()) ? _spriteNeg.trim() : undefined;
