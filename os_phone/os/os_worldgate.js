@@ -766,6 +766,7 @@
                 '</div>' +
                 '<div class="wg-shell">' +
                   '<div class="wg-ev-head"></div>' +
+                  '<div class="wg-ev-text"></div>' +
                   '<div class="wg-ev-main"></div>' +
                   '<nav class="wg-tabs">' +
                     '<button class="wg-tab on" data-tab="talk">對話</button>' +
@@ -776,8 +777,9 @@
                 '<button class="wg-meet-x" title="結束"><i class="fa-solid fa-xmark"></i></button>';
             // 🚨標題那組與內容(選項/身分卡欄位)是「兩個各自定位的容器」,不是同一欄由上往下排:
             //   底板是不規則形,白區能放字的地方不是一條垂直帶——綁成一欄就只能整組上下移,
-            //   永遠對不上板子。拆開之後兩框在版位微調裡各自可拖。
+            //   永遠對不上板子。標題/題幹/選項三段各一個框,在版位微調裡各自可拖。
             const headEl = box.querySelector('.wg-ev-head');
+            const textEl = box.querySelector('.wg-ev-text');
             const mainEl = box.querySelector('.wg-ev-main');
             box.querySelector('.wg-meet-x').addEventListener('click', _closeMeet);
             // 💬 純對話模式:海報整個讓開、底部對話列回來,想自由打字聊天時用。
@@ -801,8 +803,8 @@
                 String(i).padStart(2, '0') + '</b>/ ' + String(total).padStart(2, '0') + '</div>';
             // 🚨標題一律不用第三人稱代名詞:旅人資料沒有性別欄,寫「他」會有一半的人被叫錯。
             const page = (metaHtml, title, prompt, rest) => {
-                headEl.innerHTML = metaHtml + '<div class="wg-ev-title">' + _esc(title) + '</div>' +
-                    (prompt ? '<div class="wg-ev-prompt">' + _esc(prompt) + '</div>' : '');
+                headEl.innerHTML = metaHtml + '<div class="wg-ev-title">' + _esc(title) + '</div>';
+                textEl.innerHTML = prompt ? '<div class="wg-ev-prompt">' + _esc(prompt) + '</div>' : '';
                 mainEl.innerHTML = rest || '';
             };
             const choices = (arr) => '<div class="wg-choices">' + arr.map((c, n) =>
@@ -1101,14 +1103,15 @@
             //   底板是 background-size:100% 100% 拉伸的圖,白板塊的邊界固定在某個百分比上,
             //   px padding 一遇到面板改尺寸就跟底板脫節(標題/選項/身分卡欄位整組跑歪)。
             //   同時這也是「版位微調」拖得動它們的前提——flex 排的東西沒有可拖的四邊。
-            '.wg-ev-head{position:absolute;left:24.8%;top:5%;right:3.9%;bottom:74.5%;}' +
+            '.wg-ev-head{position:absolute;left:24.8%;top:5%;right:3.9%;bottom:83%;}' +
+            '.wg-ev-text{position:absolute;left:24.8%;top:17%;right:3.9%;bottom:74.5%;overflow-y:auto;}' +
             '.wg-ev-main{position:absolute;left:12.9%;top:27.9%;right:3.9%;bottom:18.3%;overflow-y:auto;scrollbar-width:thin;}' +
             '.wg-ev-meta{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:3px;font-weight:700;color:var(--party-muted);}' +
             '.wg-ev-meta b{color:var(--npc-accent);font-size:14px;letter-spacing:1px;}' +
             '.wg-ev-meta::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,170,114,.7),rgba(201,170,114,0));}' +
             '.wg-ev-title{margin-top:8px;font-size:clamp(21px,3.4vh,34px);font-weight:900;letter-spacing:3px;line-height:1.25;color:#14243d;}' +
             // 灰字不得再降淡：這面板以前就是被淡灰小字弄成催眠表單的
-            '.wg-ev-prompt{margin-top:9px;font-size:15px;line-height:1.62;color:#3d4f68;}' +
+            '.wg-ev-prompt{font-size:15px;line-height:1.62;color:#3d4f68;}' +
             // 標題那組(meta/大標/題幹)跟選項要看得出是兩段:貼太近會讀成一整塊,分不清哪裡是「該我做決定」了。
             //   選項也不能拉滿寬——桌機事件殼有六成螢幕寬,整條橫過去像表格列不像按鈕,而且眼睛要從編號掃很遠才到文字。
             '.wg-choices{display:flex;flex-direction:column;gap:9px;}' +
@@ -1150,7 +1153,8 @@
               // 代號牌留在右側白區(跟桌機同一側):挪到左邊的墨藍楔形上會跟巨大姓名疊在一起,
               //   而且深字疊深底還得整組改色——右側白區兩個問題都不存在。
               '.wg-poster-sig{bottom:36%;}' +
-              '.wg-ev-head{left:4%;right:4%;top:4%;bottom:72%;}' +
+              '.wg-ev-head{left:4%;right:4%;top:4%;bottom:82%;}' +
+              '.wg-ev-text{left:4%;right:4%;top:18%;bottom:70%;}' +
               '.wg-ev-main{left:4%;right:4%;top:30%;bottom:16%;}' +
               '.wg-tabs{top:84%;}' +
               '.wg-brand-copy small{display:none}' +
