@@ -9,9 +9,11 @@
 //   ① punch-in 用「真 DOM 縮放」：WAAPI 對 chapter-window 整個 scale 1→4.6，
 //      transform-origin 釘在選中卡縮圖中心——卡片、標題、旁卡全部一起衝，
 //      不是抽一張背景圖出來放大（🚨第一版就是那樣，畫面突然換成陌生的大圖，超突兀）。
-//   ② 碎片在上層 canvas 而且會飛：從卡片中心沿射線向外爆、越飛越大越淡，跟 punch-in
-//      同一個方向場。🚨釘死在格線上的滿屏碎塊＝一層靜止紗窗，會把底下的 zoom 動勢
-//      整個遮沒（第二版實測，觀感直接變「整屏切碎、沒有 zoom」）。
+//   ② 碎片在上層 canvas，會飛，而且碎裂順序是「圓形波前」：從卡片中心的小圓開始
+//      往外圈擴大到全屏，波前掃到才碎、波前外零碎片。🚨開場只要有任何一塊碎片出現在
+//      外圈（哪怕一塊），眼睛就鎖定那個靜止位置，zoom 動勢直接歸零——第二版滿屏格線
+//      如此，第三版「random 權重蓋過距離」也是如此，都實測陣亡。
+//      碎片沿射線外爆、越飛越大越淡＝跟 punch-in 同一個方向場。
 //      白片＝沒讀到資料；圖片＝目的地場景的對應區塊（生成時凍結，像帶畫面的碎玻璃）。
 //   ③ t≈0.55 起目的地場景整層淡入墊底＝衝刺的終點是「已經在場景裡」，再白閃收尾。
 //   ④ 白閃全滿（t=0.88）才回呼 doLoad：canvas 大部分是透明的，太早換場景會從
@@ -158,16 +160,26 @@
             const iw = img.width || 1, ih = img.height || 1;
             const cover0 = Math.max(W / iw, H / ih);
             const cox = W / 2 - iw * cover0 / 2, coy = H / 2 - ih * cover0 / 2;   // 目的地圖 cover 全屏的貼法
+            // 🚨 碎裂順序是嚴格的圓形波前：從卡片中心的小圓開始、圓圈擴大到全屏，
+            //    波前掃到那格才准碎，波前外面一塊碎片都沒有——開場任何一塊碎片出現在
+            //    外圈（哪怕只有一塊），眼睛就會鎖定那個靜止格線，zoom 動勢直接歸零
+            //    （第三版的 dist*0.25+random*0.25 就是這樣死的：random 比 dist 權重還大，
+            //    等於開場就全屏撒碎片）。距離正規化用「離消失點最遠的角落」，波前才會
+            //    真的掃完整個畫面。jitter 只留 0.03，攪不亂掃描順序。
+            const maxDist = Math.max(
+                Math.hypot(vp.x, vp.y), Math.hypot(W - vp.x, vp.y),
+                Math.hypot(vp.x, H - vp.y), Math.hypot(W - vp.x, H - vp.y));
+            const WAVE_T0 = 0.12, WAVE_T1 = 0.68;   // 波前從中心到最遠角落的時間窗
             const shards = [];
             for (let gy = 0; gy < ROWS; gy++) {
                 for (let gx = 0; gx < COLS; gx++) {
-                    if (Math.random() > 0.42) continue;
+                    if (Math.random() > 0.62) continue;
                     const x = gx * W / COLS, y = gy * H / ROWS, w = W / COLS + 1, h = H / ROWS + 1;
-                    const dist = Math.hypot(x + w / 2 - vp.x, y + h / 2 - vp.y) / Math.hypot(W / 2, H / 2);
+                    const dist = Math.hypot(x + w / 2 - vp.x, y + h / 2 - vp.y) / maxDist;
                     shards.push({
                         x, y, w, h, dist,
                         white: Math.random() < 0.42,
-                        on: 0.1 + dist * 0.25 + Math.random() * 0.25,   // 中央（卡片）先碎，往外圈蔓延
+                        on: WAVE_T0 + (WAVE_T1 - WAVE_T0) * dist + Math.random() * 0.03,
                         speed: 2.2 + Math.random() * 2 + dist * 1.6,     // 遠的飛得快＝假景深
                         // 圖塊內容凍結：取目的地場景在這個位置的區塊（cover 對映回原圖座標）
                         sx: (x - cox) / cover0, sy: (y - coy) / cover0, sw: w / cover0, sh: h / cover0,
