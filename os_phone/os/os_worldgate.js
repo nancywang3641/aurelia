@@ -760,7 +760,7 @@
                 '<div class="wg-poster">' +
                   '<div class="wg-poster-plane"></div>' +
                   '<div class="wg-poster-name">' + _esc(t.name) + '</div>' +
-                  '<div class="wg-poster-fig" data-fig></div>' +
+                  '<div class="wg-poster-fig" data-fig><img class="wg-poster-figimg" alt=""></div>' +
                   '<div class="wg-poster-sig"><b>' + _esc(t.name) + '</b><span>' + _esc(t.job || '') + '</span>' +
                     (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</div>' +
                 '</div>' +
@@ -795,8 +795,8 @@
             _figureOf(worldId, ti).then(f => {
                 const el = box.querySelector('[data-fig]');
                 if (!f || !el || !box.isConnected) return;
-                el.style.setProperty('--wg-fig', 'url("' + f.src + '")');
-                if (f.sheet) el.classList.add('sheet');
+                if (f.sheet) { el.classList.add('sheet'); el.style.setProperty('--wg-fig', 'url("' + f.src + '")'); }
+                else el.querySelector('.wg-poster-figimg').src = f.src;
             });
 
             const meta = (i, total) => '<div class="wg-ev-meta">組隊對談<b>' +
@@ -1085,9 +1085,14 @@
               'font-size:clamp(34px,11vh,96px);line-height:1.12;font-weight:900;color:transparent;-webkit-text-stroke:1.5px rgba(53,110,175,.4);pointer-events:none;}' +
             // 立繪是像素小人：放大時一律 pixelated，別讓瀏覽器插值糊成一團
             // 右邊要留給代號牌：圖框佔滿整個海報的話，人一定壓在代號上(斜板本來就往右收窄)
-            '.wg-poster-fig{position:absolute;inset:5.3% 12.9% 1.5% 6.6%;z-index:3;image-rendering:pixelated;' +
-              'background:var(--wg-fig) center bottom/contain no-repeat;}' +
-            '.wg-poster-fig.sheet{background-size:300% 400%;background-position:0 0;}' +
+            // 🚨立繪不能用 contain:那是「整張塞進框裡」,遇到比較寬的素材(髮型/道具/鰭把畫布撐寬)會改以寬度為準縮小,
+            //   同一個框裡不同角色就一大一小。改成一律對齊框高(height:100%),角色高度才會一致;
+            //   而且用 <img> 不用背景圖——背景一定裁在框邊,img 可以往兩側溢出,過寬的頭髮不會被切掉。
+            '.wg-poster-fig{position:absolute;inset:5.3% 12.9% 1.5% 6.6%;z-index:3;overflow:visible;}' +
+            '.wg-poster-figimg{position:absolute;left:50%;bottom:0;height:100%;width:auto;max-width:130%;' +
+              'transform:translateX(-50%);image-rendering:pixelated;}' +
+            '.wg-poster-fig.sheet{image-rendering:pixelated;background:var(--wg-fig) 0 0/300% 400% no-repeat;}' +
+            '.wg-poster-fig.sheet .wg-poster-figimg{display:none;}' +
             '.wg-poster-sig{position:absolute;right:2%;bottom:49.9%;z-index:4;display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;}' +
             '.wg-poster-sig b{font-size:17px;font-weight:800;letter-spacing:3px;color:#14243d;}' +
             '.wg-poster-sig span{font-size:12px;letter-spacing:2px;color:var(--party-muted);border-top:1px solid var(--party-gold);padding-top:3px;}' +
