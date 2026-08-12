@@ -635,7 +635,7 @@
 
     // ── 🤝 組隊卡(零API:考題/台詞在展開世界時已生成好;身分卡=卡內第二層頁,不疊modal) ──
     let _meetEl = null, _lobbyRegDone = false;
-    function _closeMeet() { _meetEl?.remove(); _meetEl = null; }
+    function _closeMeet() { _tuneClose(); _meetEl?.remove(); _meetEl = null; }
     function _lobbyReg() {   // 進大廳小窗互斥圈(開裝扮室等其他窗時自動被收掉)
         if (_lobbyRegDone) return;
         const b = _stage();
@@ -841,6 +841,152 @@
         })();
     }
 
+    // ════════════════════════════════════════════════════════
+    // 🛠 版位微調模式(dev):在大廳開著組隊海報時 → OS_WORLDGATE.tune()
+    //    底板是圖、內容是 DOM,兩邊的對位只能看著畫面調——單位、比例、裝置寬度一變就跑掉,
+    //    用猜的來回改 CSS 太慢。這裡把幾個關鍵框變成可拖曳(手勢同建構模式:拖框身=移動、
+    //    拖右下角=改大小),調好按「複製 CSS」貼回 _ensureStyle。
+    //    ⚠️ 執行期寫 inline style 只活在這個模式裡;最後進版的永遠是 CSS。
+    // ════════════════════════════════════════════════════════
+    const TUNE_TARGETS = [
+        { sel: '.wg-meet',        label: '整個面板', box: true,  css: 'edges' },
+        { sel: '.wg-poster-fig',  label: '立繪框',   box: true,  css: 'inset' },
+        { sel: '.wg-poster-name', label: '巨大姓名', box: false, edges: ['left', 'top'] },
+        { sel: '.wg-poster-sig',  label: '代號牌',   box: false, edges: ['right', 'bottom'] },
+    ];
+    let _tuneEl = null;
+    function _tuneClose() {
+        if (!_tuneEl) return;
+        try {
+            const box = _meetEl;
+            if (box) {
+                box.classList.remove('wg-tune-on');
+                box.querySelectorAll('.wg-tune-grip').forEach(g => g.remove());
+            }
+        } catch (e) {}
+        _tuneEl.remove(); _tuneEl = null;
+    }
+    // 讀某個元素相對 offsetParent 的四邊距(%)
+    function _tuneRead(el) {
+        const p = el.offsetParent || el.parentElement;
+        const r = el.getBoundingClientRect(), q = p.getBoundingClientRect();
+        return {
+            left:   (r.left - q.left) / q.width * 100,
+            top:    (r.top - q.top) / q.height * 100,
+            right:  (q.right - r.right) / q.width * 100,
+            bottom: (q.bottom - r.bottom) / q.height * 100,
+            pw: q.width, ph: q.height,
+        };
+    }
+    function _tuneApply(t, v) {
+        const el = t.el;
+        if (t.box) { ['left', 'top', 'right', 'bottom'].forEach(k => { el.style[k] = v[k].toFixed(1) + '%'; }); }
+        else { t.edges.forEach(k => { el.style[k] = v[k].toFixed(1) + '%'; }); }
+    }
+    function _tuneCss(states) {
+        const lines = [];
+        states.forEach(t => {
+            const v = t.v;
+            if (t.css === 'inset') lines.push(t.sel + '{inset:' + [v.top, v.right, v.bottom, v.left].map(x => x.toFixed(1) + '%').join(' ') + ';}');
+            else if (t.box) lines.push(t.sel + '{left:' + v.left.toFixed(1) + '%;top:' + v.top.toFixed(1) + '%;right:' + v.right.toFixed(1) + '%;bottom:' + v.bottom.toFixed(1) + '%;}');
+            else lines.push(t.sel + '{' + t.edges.map(k => k + ':' + v[k].toFixed(1) + '%').join(';') + ';}');
+        });
+        return lines.join('\n');
+    }
+    function tune() {
+        const box = _meetEl;
+        if (!box) { _toast('先走到旅人身邊打開組隊海報,再執行 tune()'); return; }
+        _tuneClose();
+        const doc = win.document;
+        box.classList.add('wg-tune-on');
+        const states = TUNE_TARGETS.map(t => {
+            const el = box.matches(t.sel) ? box : box.querySelector(t.sel);
+            return el ? Object.assign({}, t, { el: el, v: _tuneRead(el) }) : null;
+        }).filter(Boolean);
+
+        const card = doc.createElement('div');
+        card.className = 'wg-tune-card';
+        const poster = box.querySelector('.wg-poster');
+        const split0 = poster ? Math.round(poster.getBoundingClientRect().width / box.getBoundingClientRect().width * 100) : 40;
+        card.innerHTML =
+            '<div class="wg-tune-head"><b>版位微調</b><span>拖框身=移動・拖右下角=改大小</span>' +
+              '<button data-t="x"><i class="fa-solid fa-xmark"></i></button></div>' +
+            '<label class="wg-tune-row">左右比例 <input type="range" min="20" max="70" value="' + split0 + '" data-t="split"><b data-t="splitv">' + split0 + '%</b></label>' +
+            '<div class="wg-tune-list"></div>' +
+            '<textarea class="wg-tune-out" readonly rows="6"></textarea>' +
+            '<button class="wg-tune-copy" data-t="copy"><i class="fa-solid fa-copy"></i> 複製 CSS</button>';
+        (doc.querySelector('.lobby-left') || doc.body).appendChild(card);
+        _tuneEl = card;
+        const out = card.querySelector('.wg-tune-out');
+        const list = card.querySelector('.wg-tune-list');
+        const refresh = () => {
+            list.innerHTML = states.map((t, i) =>
+                '<div class="wg-tune-item"><b>' + t.label + '</b><span>' +
+                (t.box ? ['top', 'right', 'bottom', 'left'] : t.edges).map(k => k[0].toUpperCase() + ' ' + t.v[k].toFixed(1)).join(' / ') +
+                '</span></div>').join('');
+            // .wg-meet 的 bottom 平常是跟著底部對話列的實際高度算的(--wg-meet-pb),
+            //   貼死 % 會讓對話列變高時被蓋住 → 提醒一句,沒動到就別貼那行
+            let css = '/* 沒動到的行不用貼。.wg-meet 的 bottom 平常跟著底部對話列高度走,要沿用就別貼它 */\n' + _tuneCss(states);
+            if (poster) css += '\n.wg-poster{flex:0 0 ' + card.querySelector('[data-t="split"]').value + '%;}';
+            out.value = css;
+        };
+        refresh();
+
+        // 拖曳:框身=四邊一起移(維持大小)、右下角 grip=只動 right/bottom(改大小)
+        states.forEach(t => {
+            if (t.box) {
+                const g = doc.createElement('div');
+                g.className = 'wg-tune-grip';
+                t.el.appendChild(g);
+            }
+            const start = (e, mode) => {
+                e.preventDefault(); e.stopPropagation();
+                const sx = e.clientX, sy = e.clientY, v0 = Object.assign({}, t.v);
+                const move = (ev) => {
+                    const dx = (ev.clientX - sx) / t.v.pw * 100, dy = (ev.clientY - sy) / t.v.ph * 100;
+                    if (mode === 'size') { t.v.right = v0.right - dx; t.v.bottom = v0.bottom - dy; }
+                    else if (t.box) { t.v.left = v0.left + dx; t.v.right = v0.right - dx; t.v.top = v0.top + dy; t.v.bottom = v0.bottom - dy; }
+                    else {
+                        if (t.edges.indexOf('left') >= 0) t.v.left = v0.left + dx;
+                        if (t.edges.indexOf('right') >= 0) t.v.right = v0.right - dx;
+                        if (t.edges.indexOf('top') >= 0) t.v.top = v0.top + dy;
+                        if (t.edges.indexOf('bottom') >= 0) t.v.bottom = v0.bottom - dy;
+                    }
+                    _tuneApply(t, t.v); refresh();
+                };
+                const up = () => { win.removeEventListener('pointermove', move); win.removeEventListener('pointerup', up); };
+                win.addEventListener('pointermove', move); win.addEventListener('pointerup', up);
+            };
+            t.el.addEventListener('pointerdown', (e) => {
+                if (e.target.classList.contains('wg-tune-grip')) start(e, 'size');
+                else if (e.target === t.el) start(e, 'move');   // 只認框本身,點到子元素不搶
+            });
+        });
+
+        card.querySelector('[data-t="split"]').addEventListener('input', (e) => {
+            if (poster) poster.style.flex = '0 0 ' + e.target.value + '%';
+            card.querySelector('[data-t="splitv"]').textContent = e.target.value + '%';
+            states.forEach(t => { t.v = _tuneRead(t.el); });   // 比例一動,框的實際%就變了,重讀
+            refresh();
+        });
+        // 卡片自己也要能拖:面板是整個舞台大,卡片固定在左上角就會壓住要調的框
+        card.querySelector('.wg-tune-head').addEventListener('pointerdown', (e) => {
+            if (e.target.closest('button')) return;
+            e.preventDefault();
+            const r = card.getBoundingClientRect(), q = card.offsetParent.getBoundingClientRect();
+            const sx = e.clientX, sy = e.clientY, l0 = r.left - q.left, t0 = r.top - q.top;
+            const move = (ev) => { card.style.left = (l0 + ev.clientX - sx) + 'px'; card.style.top = (t0 + ev.clientY - sy) + 'px'; };
+            const up = () => { win.removeEventListener('pointermove', move); win.removeEventListener('pointerup', up); };
+            win.addEventListener('pointermove', move); win.addEventListener('pointerup', up);
+        });
+        card.querySelector('[data-t="x"]').addEventListener('click', _tuneClose);
+        card.querySelector('[data-t="copy"]').addEventListener('click', async () => {
+            out.select();
+            try { await win.navigator.clipboard.writeText(out.value); _toast('CSS 已複製'); }
+            catch (e) { _toast('複製失敗,請直接從框裡選取'); }
+        });
+    }
+
     // ── DIVE:切書→開場指令注入聊天→收面板 ──
     function _toChat(text) {
         try {
@@ -1003,7 +1149,10 @@
             '.wg-entry-text{color:#3a3e56;font-size:11px;line-height:1.7;white-space:pre-wrap;}' +
             /* 🤝 組隊海報:左角色海報 + 右事件殼,覆蓋舞台但讓開底部對話列(問題與反應在那裡說出口,兩者不同層不能合併)。
                整套純 CSS(斜切/巨大姓名/選項列都是即時文字),不切任何 PNG——切了就換不了角色、換不了題數。 */
+            // 🚨底板是「有形狀」的透明 PNG,兩張板之間與板外一律透空——底下是大廳的像素場景,
+            //   不鋪一層霧的話整個舞台從縫隙透上來,字直接讀不到(harness 用的是純色假背景,看不出這件事)。
             '.wg-meet{position:absolute;left:0;right:0;top:0;bottom:var(--wg-meet-pb,150px);z-index:3355;display:flex;' +
+              'background:rgba(240,244,250,.82);backdrop-filter:blur(7px);' +
               'color:var(--party-ink,#14243d);font-size:13px;--party-navy:#10243d;--party-muted:#60718a;--party-gold:#c9aa72;--npc-accent:#35c9e8;}' +
             '.wg-meet-x{position:absolute;right:12px;top:12px;z-index:6;width:32px;height:32px;border-radius:50%;cursor:pointer;' +
               'border:1px solid rgba(20,36,61,.22);background:rgba(255,255,255,.92);color:#14243d;font-size:14px;box-shadow:0 2px 10px rgba(14,24,40,.18);}' +
@@ -1062,6 +1211,21 @@
             '.wg-tab+.wg-tab{border-left:1px solid rgba(201,170,114,.5);}' +
             '.wg-tab:hover{color:#fff;}.wg-tab.on{color:#fff;}' +
             '.wg-tab.on::after{content:"";position:absolute;left:28%;right:28%;bottom:7px;height:2px;background:var(--npc-accent);}' +
+            /* 🛠 版位微調模式(dev,OS_WORLDGATE.tune() 才會出現) */
+            '.wg-tune-on .wg-meet,.wg-tune-on.wg-meet{outline:2px dashed rgba(226,66,96,.9);outline-offset:-2px;}' +
+            '.wg-tune-on .wg-poster-fig,.wg-tune-on .wg-poster-name,.wg-tune-on .wg-poster-sig{outline:2px dashed rgba(226,66,96,.75);cursor:move;pointer-events:auto;}' +
+            '.wg-tune-grip{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:3px;background:#e24260;border:1px solid #fff;cursor:nwse-resize;z-index:9;}' +
+            '.wg-tune-card{position:absolute;left:12px;top:12px;z-index:3400;width:290px;padding:9px 11px 11px;border-radius:12px;' +
+              'background:rgba(18,22,34,.94);color:#e8edf7;font-size:11px;box-shadow:0 10px 30px rgba(0,0,0,.4);}' +
+            '.wg-tune-head{display:flex;align-items:center;gap:7px;margin-bottom:7px;cursor:move;touch-action:none;}' +
+            '.wg-tune-head b{font-size:12px;}.wg-tune-head span{color:#8a93ab;font-size:9px;flex:1;}' +
+            '.wg-tune-head button{background:none;border:none;color:#e8edf7;cursor:pointer;font-size:13px;}' +
+            '.wg-tune-row{display:flex;align-items:center;gap:7px;margin-bottom:7px;}.wg-tune-row input{flex:1;}' +
+            '.wg-tune-item{display:flex;gap:7px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.08);}' +
+            '.wg-tune-item b{width:60px;flex:none;}.wg-tune-item span{color:#9fb0cc;font-size:10px;}' +
+            '.wg-tune-out{width:100%;margin-top:7px;box-sizing:border-box;background:#0c1020;color:#b9ffd0;border:1px solid rgba(255,255,255,.14);' +
+              'border-radius:7px;padding:6px;font-family:monospace;font-size:10px;line-height:1.5;resize:vertical;}' +
+            '.wg-tune-copy{width:100%;margin-top:6px;padding:7px;border-radius:8px;border:none;cursor:pointer;background:#e24260;color:#fff;font-weight:800;font-size:11px;}' +
             // 手機:上下堆疊,海報收成角色橫幅;字級一律不縮(縮了就變回催眠表單)
             '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}' +
               '.wg-meet{flex-direction:column;}' +
@@ -1475,6 +1639,6 @@
         });
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet };
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, tune: tune };
     console.log('[Worldgate③] 世界門面板就緒');
 })();
