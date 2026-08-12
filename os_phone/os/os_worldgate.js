@@ -729,7 +729,7 @@
                 const dw = doc.querySelector('.lobby-left .void-dialogue-wrap');
                 if (dw && dw.offsetHeight) box.style.setProperty('--wg-meet-pb', (dw.offsetHeight + 6) + 'px');
             } catch (e) {}
-            // 外殼(海報/頁籤軌)只建一次,切頁只換 .wg-shell-body——整顆重建會讓立繪和頁籤跟著閃。
+            // 外殼(海報/頁籤軌)只建一次,切頁只換兩個內容框——整顆重建會讓立繪和頁籤跟著閃。
             box.innerHTML =
                 '<div class="wg-poster">' +
                   '<div class="wg-poster-plane"></div>' +
@@ -739,14 +739,19 @@
                     (t.recruited ? '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>' : '') + '</div>' +
                 '</div>' +
                 '<div class="wg-shell">' +
-                  '<div class="wg-shell-body"></div>' +
+                  '<div class="wg-ev-head"></div>' +
+                  '<div class="wg-ev-main"></div>' +
                   '<nav class="wg-tabs">' +
                     '<button class="wg-tab on" data-tab="talk">對話</button>' +
                     '<button class="wg-tab" data-tab="id">身分</button>' +
                   '</nav>' +
                 '</div>' +
                 '<button class="wg-meet-x" title="結束"><i class="fa-solid fa-xmark"></i></button>';
-            const bodyEl = box.querySelector('.wg-shell-body');
+            // 🚨標題那組與內容(選項/身分卡欄位)是「兩個各自定位的容器」,不是同一欄由上往下排:
+            //   底板是不規則形,白區能放字的地方不是一條垂直帶——綁成一欄就只能整組上下移,
+            //   永遠對不上板子。拆開之後兩框在版位微調裡各自可拖。
+            const headEl = box.querySelector('.wg-ev-head');
+            const mainEl = box.querySelector('.wg-ev-main');
             box.querySelector('.wg-meet-x').addEventListener('click', _closeMeet);
             // 立繪是動態網址(IDB),只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
             _figureOf(worldId, ti).then(f => {
@@ -759,9 +764,11 @@
             const meta = (i, total) => '<div class="wg-ev-meta">組隊對談<b>' +
                 String(i).padStart(2, '0') + '</b>/ ' + String(total).padStart(2, '0') + '</div>';
             // 🚨標題一律不用第三人稱代名詞:旅人資料沒有性別欄,寫「他」會有一半的人被叫錯。
-            const page = (metaHtml, title, prompt, rest) =>
-                metaHtml + '<div class="wg-ev-title">' + _esc(title) + '</div>' +
-                (prompt ? '<div class="wg-ev-prompt">' + _esc(prompt) + '</div>' : '') + (rest || '');
+            const page = (metaHtml, title, prompt, rest) => {
+                headEl.innerHTML = metaHtml + '<div class="wg-ev-title">' + _esc(title) + '</div>' +
+                    (prompt ? '<div class="wg-ev-prompt">' + _esc(prompt) + '</div>' : '');
+                mainEl.innerHTML = rest || '';
+            };
             const choices = (arr) => '<div class="wg-choices">' + arr.map((c, n) =>
                 '<button class="wg-choice" data-c="' + c.k + '"><span class="wg-choice-i">' +
                   String(n + 1).padStart(2, '0') + '</span><span class="wg-choice-t">' + _esc(c.t) + '</span></button>').join('') + '</div>';
@@ -778,18 +785,17 @@
             }
             const renderProfile = () => {
                 // 不放 persona 當題幹:下面的欄位表本來就有「性格」那列,擺上面等於同一句印兩次
-                bodyEl.innerHTML = page('<div class="wg-ev-meta">旅人檔案</div>', t.name, '',
+                page('<div class="wg-ev-meta">旅人檔案</div>', t.name, '',
                     '<div class="wg-prof">' + _profRows(t) + '</div>');
             };
             const renderIntro = () => {
                 cur = renderIntro;
                 // 對話本體在底部對話框(開場白已seed成預設對話,打字=自由聊);這張海報只管組隊
-                bodyEl.innerHTML = t.recruited
-                    ? page('<div class="wg-ev-meta">同行中</div>', '已經同行', '世界門面板的出發編成可以看到隊伍狀態。', '')
-                    : page('<div class="wg-ev-meta">大廳偶遇</div>', '要不要一起走', t.persona || '',
-                        choices([{ k: quiz.length ? 'quiz' : 'join', t: quiz.length ? '聊聊組隊的事' : '邀請入隊' }]));
-                bodyEl.querySelector('[data-c="quiz"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
-                bodyEl.querySelector('[data-c="join"]')?.addEventListener('click', async () => { await joinTeam(); renderResult(true, ''); });   // 舊世界資料沒考題→直接邀
+                if (t.recruited) page('<div class="wg-ev-meta">同行中</div>', '已經同行', '世界門面板的出發編成可以看到隊伍狀態。', '');
+                else page('<div class="wg-ev-meta">大廳偶遇</div>', '要不要一起走', t.persona || '',
+                    choices([{ k: quiz.length ? 'quiz' : 'join', t: quiz.length ? '聊聊組隊的事' : '邀請入隊' }]));
+                mainEl.querySelector('[data-c="quiz"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
+                mainEl.querySelector('[data-c="join"]')?.addEventListener('click', async () => { await joinTeam(); renderResult(true, ''); });   // 舊世界資料沒考題→直接邀
             };
             const renderQuiz = () => {
                 cur = renderQuiz;
@@ -797,9 +803,9 @@
                 _sayInDialog(q.q);   // 提問=底部對話框說出來
                 const order = q.options.map((_, i) => i);
                 for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }   // 洗選項順序,防AI把好答案固定放第一個
-                bodyEl.innerHTML = page(meta(step + 1, quiz.length), '等你的回應', q.q,
+                page(meta(step + 1, quiz.length), '等你的回應', q.q,
                     choices(order.map(i => ({ k: i, t: q.options[i].t }))));
-                bodyEl.querySelectorAll('.wg-choice').forEach(el => el.addEventListener('click', () => {
+                mainEl.querySelectorAll('.wg-choice').forEach(el => el.addEventListener('click', () => {
                     const o = q.options[Number(el.dataset.c)];
                     if (o && o.good) goods++;
                     renderReact(o);
@@ -809,9 +815,9 @@
                 const last = step >= quiz.length - 1;
                 cur = () => renderReact(o);
                 _sayInDialog((o && o.r) || '……');   // 反應也走對話框
-                bodyEl.innerHTML = page(meta(step + 1, quiz.length), '聽完你的回答', (o && o.r) || '……',
+                page(meta(step + 1, quiz.length), '聽完你的回答', (o && o.r) || '……',
                     choices([{ k: 'next', t: last ? '看看這趟要不要一起' : '下一題' }]));
-                bodyEl.querySelector('[data-c="next"]').addEventListener('click', async () => {
+                mainEl.querySelector('[data-c="next"]').addEventListener('click', async () => {
                     if (last) {
                         const ok = goods >= quiz.length;   // 三題全滿意才入隊(Rae 定案)
                         if (ok) await joinTeam();
@@ -822,13 +828,13 @@
             const renderResult = (ok, line) => {
                 cur = () => renderResult(ok, line);
                 _sayInDialog(line || (ok ? '(答應同行了。)' : '(搖了搖頭,婉拒了。)'));
-                bodyEl.innerHTML = page(meta(quiz.length || 1, quiz.length || 1),
+                page(meta(quiz.length || 1, quiz.length || 1),
                     ok ? '答應同行了' : '頻率沒對上',
                     line || (ok ? '世界門面板的出發編成可以看到隊伍狀態。' : '待會可以再聊一次。'),
                     ok ? '' : choices([{ k: 'retry', t: '再聊一次' }]));
-                bodyEl.querySelector('[data-c="retry"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
+                mainEl.querySelector('[data-c="retry"]')?.addEventListener('click', () => { step = 0; goods = 0; renderQuiz(); });
             };
-            // 頁籤只切 .wg-shell-body:海報、外殼、頁籤軌都不重建
+            // 頁籤只切兩個內容框:海報、外殼、頁籤軌都不重建
             box.querySelectorAll('.wg-tab').forEach(el => el.addEventListener('click', () => {
                 box.querySelectorAll('.wg-tab').forEach(x => x.classList.toggle('on', x === el));
                 if (el.dataset.tab === 'id') renderProfile(); else (cur || renderIntro)();
@@ -1042,7 +1048,8 @@
             //   底板是 background-size:100% 100% 拉伸的圖,白板塊的邊界固定在某個百分比上,
             //   px padding 一遇到面板改尺寸就跟底板脫節(標題/選項/身分卡欄位整組跑歪)。
             //   同時這也是「版位微調」拖得動它們的前提——flex 排的東西沒有可拖的四邊。
-            '.wg-shell-body{position:absolute;left:7%;right:5%;top:4%;bottom:17%;overflow-y:auto;scrollbar-width:thin;}' +
+            '.wg-ev-head{position:absolute;left:7%;right:5%;top:4%;bottom:74%;}' +
+            '.wg-ev-main{position:absolute;left:7%;right:5%;top:28%;bottom:17%;overflow-y:auto;scrollbar-width:thin;}' +
             '.wg-ev-meta{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:3px;font-weight:700;color:var(--party-muted);}' +
             '.wg-ev-meta b{color:var(--npc-accent);font-size:14px;letter-spacing:1px;}' +
             '.wg-ev-meta::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,170,114,.7),rgba(201,170,114,0));}' +
@@ -1051,7 +1058,7 @@
             '.wg-ev-prompt{margin-top:9px;font-size:15px;line-height:1.62;color:#3d4f68;max-width:34em;}' +
             // 標題那組(meta/大標/題幹)跟選項要看得出是兩段:貼太近會讀成一整塊,分不清哪裡是「該我做決定」了。
             //   選項也不能拉滿寬——桌機事件殼有六成螢幕寬,整條橫過去像表格列不像按鈕,而且眼睛要從編號掃很遠才到文字。
-            '.wg-choices{display:flex;flex-direction:column;gap:9px;margin-top:30px;max-width:34em;}' +
+            '.wg-choices{display:flex;flex-direction:column;gap:9px;max-width:34em;}' +
             '.wg-choice{display:flex;align-items:center;gap:15px;width:100%;text-align:left;cursor:pointer;min-height:58px;padding:11px 18px;' +
               'border:1px solid rgba(20,36,61,.15);background:rgba(255,255,255,.92);color:#14243d;transition:.16s;' +
               'clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,0 100%);}' +
@@ -1060,7 +1067,7 @@
             '.wg-choice:hover,.wg-choice:focus-visible{background:var(--party-navy);border-color:var(--party-navy);color:#fff;outline:none;}' +
             '.wg-choice:hover .wg-choice-i,.wg-choice:focus-visible .wg-choice-i{color:var(--npc-accent);}' +
             '.wg-choice:hover .wg-choice-t,.wg-choice:focus-visible .wg-choice-t{border-left-color:rgba(255,255,255,.32);}' +
-            '.wg-prof{margin-top:14px;}' +
+            
             '.wg-prof-row{display:flex;gap:12px;padding:9px 2px;border-bottom:1px dashed rgba(20,36,61,.14);}.wg-prof-row:last-child{border-bottom:none;}' +
             '.wg-prof-row span{flex:none;width:64px;color:var(--party-muted);font-size:12px;font-weight:700;padding-top:2px;}' +
             '.wg-prof-row b{color:#22334c;font-weight:600;line-height:1.6;font-size:14px;}' +
@@ -1090,7 +1097,8 @@
               // 代號牌留在右側白區(跟桌機同一側):挪到左邊的墨藍楔形上會跟巨大姓名疊在一起,
               //   而且深字疊深底還得整組改色——右側白區兩個問題都不存在。
               '.wg-poster-sig{bottom:36%;}' +
-              '.wg-shell-body{left:4%;right:4%;top:4%;bottom:16%;}' +
+              '.wg-ev-head{left:4%;right:4%;top:4%;bottom:72%;}' +
+              '.wg-ev-main{left:4%;right:4%;top:30%;bottom:16%;}' +
               '.wg-tabs{top:84%;}' +
               '.wg-brand-copy small{display:none}' +
               '.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
