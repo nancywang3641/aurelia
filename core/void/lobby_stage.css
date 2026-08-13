@@ -240,36 +240,51 @@
   border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
 .lstage-city-btn:hover { background:rgba(20,18,16,.85); }
 .lstage-editing .lstage-city-btn { display:none; }
-/* ⚙️ 設置小面板的開關列 */
+/* ⚙️ 大廳設置：白色系（跟快轉/收藏冊/小劇場同一家），同窗兩分頁＋限高捲動 */
+.lstage-settings { background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28);
+  box-shadow:0 12px 34px rgba(40,60,110,.28); width:280px; max-height:82%;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.lstage-settings .lsd-title { color:#23315e; letter-spacing:1px; }
+.lstage-settings .lsd-title i { color:#4f74c8; }
+.lstage-settings .lset-tabs { display:flex; gap:4px; background:rgba(35,49,94,.06);
+  border:1px solid rgba(35,49,94,.12); border-radius:999px; padding:3px; flex-shrink:0; }
+.lstage-settings .lset-tab { flex:1; border:none; background:transparent; border-radius:999px;
+  padding:6px 4px; font-size:12px; color:#5a6784; cursor:pointer; letter-spacing:1px; font-family:inherit; }
+.lstage-settings .lset-tab.on { background:#23315e; color:#fff; font-weight:700; }
+.lstage-settings .lset-body { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:2px; }
+.lstage-settings .lset-body::-webkit-scrollbar { width:4px; }
+.lstage-settings .lset-body::-webkit-scrollbar-thumb { background:rgba(35,49,94,.2); border-radius:2px; }
 .lstage-settings .lset-row { display:flex; align-items:center; justify-content:space-between; gap:10px;
-  color:#f3ead8; font-size:13px; cursor:pointer; padding:4px 2px; }
-.lstage-settings .lset-chk { width:18px; height:18px; cursor:pointer; flex:0 0 auto; }
-.lstage-settings .lset-hint { color:#c8bfa6; font-size:11px; line-height:1.5; }
-/* 大廳設置：兩層人設/世界觀編輯器（配合 lstage-dress 暖色主題） */
-.lstage-settings .lset-section-label { color:#c8bfa6; font-size:11px; opacity:.85; margin:8px 2px 2px; letter-spacing:.05em; }
+  color:#2b3652; font-size:13px; cursor:pointer; padding:4px 2px; }
+.lstage-settings .lset-chk { width:18px; height:18px; cursor:pointer; flex:0 0 auto; accent-color:#23315e; }
+.lstage-settings .lset-hint { color:#8a93ad; font-size:11px; line-height:1.5; }
 .lstage-settings .lset-list { display:flex; flex-direction:column; gap:6px; }
 .lstage-settings .lset-item { display:flex; align-items:center; gap:10px; width:100%;
-  padding:9px 10px; border:none; border-radius:10px; cursor:pointer; text-align:left;
-  background:rgba(243,234,216,.08); color:#f3ead8; }
-.lstage-settings .lset-item:hover { background:rgba(243,234,216,.18); }
-.lstage-settings .lset-item-ic { width:18px; text-align:center; color:#d8cdb4; flex:0 0 auto; }
+  padding:9px 10px; border:1px solid rgba(60,80,130,.18); border-radius:12px; cursor:pointer; text-align:left;
+  background:rgba(240,244,252,.65); color:#23315e; font-family:inherit; }
+.lstage-settings .lset-item:hover { border-color:#4a78d8; background:rgba(74,120,216,.08); }
+.lstage-settings .lset-item-ic { width:18px; text-align:center; color:#4f74c8; flex:0 0 auto; }
 .lstage-settings .lset-item-tx { display:flex; flex-direction:column; flex:1; min-width:0; }
-.lstage-settings .lset-item-name { font-size:13px; }
-.lstage-settings .lset-item-sub { font-size:11px; color:#c8bfa6; }
-.lstage-settings .lset-item-arrow { color:#c8bfa6; opacity:.6; font-size:12px; flex:0 0 auto; }
+.lstage-settings .lset-item-name { font-size:13px; font-weight:700; }
+.lstage-settings .lset-item-sub { font-size:11px; color:#8a93ad; }
+.lstage-settings .lset-item-arrow { color:#8a93ad; opacity:.7; font-size:12px; flex:0 0 auto; }
 .lstage-settings .lset-editor-title { display:flex; align-items:center; gap:8px; }
-.lstage-settings .lset-back { border:none; background:rgba(243,234,216,.14); color:#f3ead8;
+.lstage-settings .lset-back { border:1px solid rgba(35,49,94,.25); background:#fff; color:#23315e;
   width:28px; height:28px; border-radius:8px; cursor:pointer; flex:0 0 auto; }
-.lstage-settings .lset-back:hover { background:rgba(243,234,216,.28); }
+.lstage-settings .lset-back:hover { border-color:#23315e; }
 .lstage-settings .lset-ta { width:100%; box-sizing:border-box; min-height:150px; margin:8px 0; padding:10px;
-  border-radius:10px; border:1px solid rgba(243,234,216,.2); background:rgba(0,0,0,.28); color:#f3ead8;
+  border-radius:10px; border:1px solid rgba(35,49,94,.25); background:rgba(255,255,255,.85); color:#2b3652;
   font:inherit; line-height:1.5; resize:vertical; }
-.lstage-settings .lep-btn.lset-saved { background:#6b8e23; color:#1a1c28; }
+.lstage-settings .lset-ta:focus { outline:none; border-color:#c8a96e; }
+.lstage-settings .lep-btn { background:rgba(240,244,252,.8); color:#23315e; border:1px solid rgba(60,80,130,.25); flex-shrink:0; }
+.lstage-settings .lep-btn:hover { border-color:#23315e; }
+.lstage-settings .lep-btn.lep-done { background:linear-gradient(135deg,#6a9be0,#4a78d8); color:#fff; border:none; }
+.lstage-settings .lep-btn.lset-saved { background:#2e8a52; color:#fff; }
 /* 小劇場頻率 segmented */
 .lstage-settings .ltheater-freq { display:inline-flex; gap:4px; }
-.lstage-settings .ltheater-freq-btn { border:none; border-radius:7px; padding:4px 10px; cursor:pointer;
-  background:rgba(243,234,216,.1); color:#d8cdb4; font-size:12px; }
-.lstage-settings .ltheater-freq-btn.on { background:#6b8e23; color:#1a1c28; }
+.lstage-settings .ltheater-freq-btn { border:1px solid rgba(60,80,130,.22); border-radius:999px; padding:4px 10px; cursor:pointer;
+  background:rgba(240,244,252,.7); color:#5a6784; font-size:12px; font-family:inherit; }
+.lstage-settings .ltheater-freq-btn.on { background:#23315e; border-color:#23315e; color:#fff; font-weight:700; }
 .lstage-settings .ltheater-freq.off { opacity:.4; pointer-events:none; }
 .lstage-editing .lstage-edit-btn { background:#c8874a; color:#fff; }
 .lstage-editable { pointer-events:auto !important; cursor:grab; }
@@ -299,25 +314,28 @@
 /* 🏘 地塊隱藏面：遊玩=整個藏起來；擺設模式=半透明灰階(看得到、可調位置) */
 .lstage-plot-off { display:none; }
 .lstage-editing .lstage-plot-off { display:block; opacity:.4; filter:grayscale(.6); }
-/* 🗺 快轉小地圖(🏙鈕)：廣場俯瞰縮圖,點哪傳哪;建築熱點懸停亮框 */
+/* 🗺 快轉小地圖(🏙鈕)：廣場俯瞰縮圖,點哪傳哪;建築熱點懸停亮框。白色系＝跟收藏冊/小劇場同一家(白+深藍+金) */
 .lstage-citymap { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:5100;
-  background:rgba(24,26,34,.95); border:1px solid rgba(255,255,255,.16); border-radius:12px;
-  padding:10px; box-shadow:0 8px 26px rgba(0,0,0,.55); color:#e8e8ee; font-size:12px; }
-.lcm-title { display:flex; align-items:center; gap:6px; padding:0 2px 8px; white-space:nowrap; }
-.lcm-title .lcm-close { margin-left:auto; background:none; border:none; color:#e8e8ee; cursor:pointer; font-size:14px; padding:2px 6px; }
-.lcm-map { position:relative; overflow:hidden; border-radius:8px; cursor:crosshair; background:#111; }
+  background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28); border-radius:16px;
+  padding:12px; box-shadow:0 12px 34px rgba(40,60,110,.28); color:#23315e; font-size:12px;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.lcm-title { display:flex; align-items:center; gap:6px; padding:0 2px 9px; white-space:nowrap; font-weight:700; letter-spacing:1px; color:#23315e; }
+.lcm-title i { color:#4f74c8; }
+.lcm-title .lcm-close { margin-left:auto; background:none; border:none; color:#8a93ad; cursor:pointer; font-size:15px; padding:2px 6px; }
+.lcm-title .lcm-close:hover { color:#23315e; }
+.lcm-map { position:relative; overflow:hidden; border-radius:10px; cursor:crosshair; background:#dfe5f2; border:1px solid rgba(60,80,130,.18); }
 .lcm-obj { position:absolute; display:block; image-rendering:pixelated; pointer-events:none; user-select:none; }
 .lcm-spot { position:absolute; z-index:4500; background:transparent; border:1px dashed transparent; border-radius:6px;
   cursor:pointer; padding:0; display:flex; align-items:flex-end; justify-content:center; }
-.lcm-spot span { background:rgba(20,22,30,.82); color:#fff; font-size:10px; padding:2px 6px; border-radius:6px;
-  margin-bottom:2px; opacity:0; transition:opacity .12s; pointer-events:none; white-space:nowrap; }
-.lcm-spot:hover { border-color:#4ab6ff; background:rgba(74,182,255,.14); }
+.lcm-spot span { background:rgba(255,255,255,.92); color:#23315e; font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px;
+  border:1px solid rgba(60,80,130,.3); margin-bottom:2px; opacity:0; transition:opacity .12s; pointer-events:none; white-space:nowrap; }
+.lcm-spot:hover { border-color:#4a78d8; background:rgba(74,120,216,.15); }
 .lcm-spot:hover span { opacity:1; }
-.lcm-chips { display:flex; gap:6px; padding-top:8px; flex-wrap:wrap; }
-.lcm-chip { flex:1; min-width:44px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16);
-  color:#e8e8ee; border-radius:8px; padding:5px 0; cursor:pointer; font-size:12px; }
-.lcm-chip:hover { background:rgba(74,182,255,.2); }
-.lcm-chip:disabled { opacity:.35; cursor:default; }
+.lcm-chips { display:flex; gap:6px; padding-top:9px; flex-wrap:wrap; }
+.lcm-chip { flex:1; min-width:44px; background:rgba(240,244,252,.8); border:1px solid rgba(60,80,130,.25);
+  color:#23315e; border-radius:999px; padding:5px 0; cursor:pointer; font-size:12px; font-weight:600; letter-spacing:1px; }
+.lcm-chip:hover { background:#23315e; color:#fff; }
+.lcm-chip:disabled { opacity:.35; cursor:default; background:rgba(240,244,252,.8); color:#23315e; }
 
 /* 🌦 天氣層(小雨/小雪)：蓋過場景與前景牆(4000)、壓在編輯面板(5000)下;不吃滑鼠
    底色=天色濾鏡:雨天冷灰藍暗罩(純白地圖上雨絲才看得清)、雪天淡淡冷霧 */
