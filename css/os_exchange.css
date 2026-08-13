@@ -112,14 +112,14 @@
     margin-top: calc(var(--osx-card-mid-lift) * -1);
     background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-center-empty.png);
 }
-/* 卡頂菱形編號 */
+/* 卡頂編號：菱形本來就畫在卡殼圖上（量過三張卡：菱形都在自身高度 0~7%，中心約 4.5%），
+   這裡只把數字疊上去，不要再貼一張菱形。 */
 .osx-node {
-    position: absolute; left: 50%; top: 0; transform: translate(-50%, -46%);
-    width: 30%; aspect-ratio: 268 / 212;
-    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-orbit-diamond-node.png) center / contain no-repeat;
+    position: absolute; left: 50%; top: 4.5%; transform: translate(-50%, -50%);
     display: flex; align-items: center; justify-content: center;
-    font-size: clamp(6px, 2.4cqw, 13px); font-weight: 800; color: #f4f8ff;
+    font-size: clamp(5px, 2cqw, 11px); font-weight: 800; color: #f4f8ff;
     text-shadow: 0 1px 2px rgba(30, 60, 120, 0.55);
+    pointer-events: none;
 }
 .osx-card-ic {
     width: 52%; aspect-ratio: 1; flex: 0 0 auto;
