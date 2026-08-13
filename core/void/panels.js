@@ -218,8 +218,10 @@
                     if (pt) parts.push('+' + pt + ' PT');
                     if (shards) parts.push('+' + shards + ' 碎片');
                     _achMsg('兌換完成！' + parts.join('、'), true);
+                    window.VoidUiSfx?.play('unlock');
                 } else {
                     _achMsg(fail || '沒有成功兌換任何成就', false);
+                    window.VoidUiSfx?.play('error');
                 }
                 refreshAchievement();
                 renderAchievementList();
