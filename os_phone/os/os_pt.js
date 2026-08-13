@@ -391,12 +391,13 @@
         dock.className = 'osx-dock';
         dock.innerHTML =
             '<div class="osx-frame" role="dialog" aria-label="量子交易所">' +
+              '<div class="osx-plate"></div>' +
               '<button class="osx-close" type="button" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
               '<div class="osx-title"><span class="zh">量子交易所</span>' +
                 '<span class="en">AURELIA PARALLAX EXCHANGE</span></div>' +
               '<div class="osx-bal"><span class="osx-bal-coin"></span>' +
                 '<span class="osx-bal-n" id="os-pt-shop-bal">…</span><span class="osx-bal-u">PT</span></div>' +
-              '<div class="osx-stage"><div class="osx-coin"></div></div>' +
+              '<div class="osx-stage"></div>' +
               '<div class="osx-cards" id="os-pt-shop-items"></div>' +
               '<div class="osx-rail"><span class="osx-rail-ic"><i class="fa-solid fa-hourglass-half"></i></span>' +
                 '<span class="osx-rail-tx"><span class="t">交易所狀態</span>' +
