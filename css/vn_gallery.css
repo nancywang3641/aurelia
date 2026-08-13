@@ -121,7 +121,9 @@
 .vrd-card-summary { font-size:12.5px; line-height:1.7; color:#b6ad9c; }
 .vrd-card-readmore { font-size:11px; color:#d4af37; opacity:.85; text-align:right; }
 /* 全文詳情頁 */
-.vrd-detail-bar { display:flex; align-items:center; gap:10px; margin-bottom:8px; position:sticky; top:0; background:rgba(6,6,10,0.97); padding:6px 0; z-index:1; }
+/* sticky 的 top 是對齊捲動區的內容框，body 有 16px padding-top → 吸頂時上面會露出 16px 縫隙讓正文透出來。
+   往上多吃 16px（top/margin 負值 + padding 補回）讓背景蓋滿到頂，靜止時的位置維持不變。 */
+.vrd-detail-bar { display:flex; align-items:center; gap:10px; margin:-16px 0 8px; position:sticky; top:-16px; background:rgba(6,6,10,0.97); padding:22px 0 6px; z-index:1; }
 .vrd-detail-title { flex:1; min-width:0; font-size:14px; font-weight:700; color:#d4af37; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .vrd-back-btn { background:transparent; border:1px solid rgba(212,175,55,0.3); color:#d4af37; padding:6px 14px; border-radius:8px; cursor:pointer; font-size:12px; flex-shrink:0; }
 .vrd-back-btn:hover { background:rgba(212,175,55,0.1); }
