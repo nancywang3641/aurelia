@@ -242,10 +242,8 @@
     function _theaterOn()   { try { return localStorage.getItem('lobby_theater_on') !== '0'; } catch (e) { return true; } }
     function _theaterFreq() { try { return THEATER_FREQ[localStorage.getItem('lobby_theater_freq')] || THEATER_FREQ.mid; } catch (e) { return THEATER_FREQ.mid; } }
     function _theaterEligible() { return S.npcs.filter(n => n && n !== S.player && n.name && !n.follow); }   // 跟隨玩家中的客人不抓來配對（免打斷跟隨、也免 follow 態被凍結卡住）
-    function _theaterFace(a, b) {
-        const L = a.x <= b.x ? a : b, R = a.x <= b.x ? b : a;
-        if (L.sheet) L.dir = 2; else L.flip = true;    // 左者面朝右
-        if (R.sheet) R.dir = 1; else R.flip = false;   // 右者面朝左
+    // 配對只凍結原地、不強迫轉向（面對面交給偷窺 overlay 的分身動畫演；地圖上的人保持原姿勢）
+    function _theaterHold(a, b) {
         a._theaterFrozen = b._theaterFrozen = true;
     }
     function _startTheater() {
@@ -272,24 +270,21 @@
             a = pool[i]; b = pool[j]; sig = _sig(a, b);
         }
         recent.push(sig); while (recent.length > maxRecent) recent.shift();
-        // 🎬 呈現與內容分離：配對＝純資料事件＋頭頂泡泡，不動任何 NPC 座標（原地立定、面向彼此）。
+        // 🎬 呈現與內容分離：配對＝純資料事件＋兩人中間一顆「聊天中」泡泡，不動任何 NPC 座標與朝向。
         //   過場/播放交給 _presentTheater 的 overlay 分身演出；未來 world 模式（尋路集合）也從那裡分流。
         a.dest = null; b.dest = null;
-        _theaterFace(a, b);
+        _theaterHold(a, b);
         [a, b].forEach(n => { n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } _b.placeActor(n); });
-        const mkIcon = (n) => {
-            const icon = document.createElement('button');
-            icon.className = 'lstage-theater-icon lstage-float';
-            icon.innerHTML = '<i class="fa-solid fa-comments"></i>';
-            // 挪到頭頂右上：正中央那格是搭話泡泡(.lstage-hint)的位置，這顆 34px 又壓在它上層，
-            //   疊上去就變成「泡泡看起來只剩小劇場」——點下去開的是劇場窗，開不了世界門/書咖。
-            icon.style.left = Math.round(n.x + 36) + 'px';
-            icon.style.top  = Math.round(n.y - n.h - 30) + 'px';
-            icon.addEventListener('click', (e) => { e.stopPropagation(); _openTheaterWin('live'); });
-            S.world.appendChild(icon);
-            return icon;
-        };
-        S.theater = { a, b, iconA: mkIcon(a), iconB: mkIcon(b), playing: false };
+        // 單顆共用泡泡：掛在兩人頭頂中間（不再左一顆右一顆）；打字三點動畫，點了開小劇場窗
+        const icon = document.createElement('button');
+        icon.className = 'lstage-theater-pair lstage-float';
+        icon.title = '小劇場';
+        icon.innerHTML = '<span class="ltp-dots"><i></i><i></i><i></i></span>';
+        icon.style.left = Math.round((a.x + b.x) / 2) + 'px';   // CSS translateX(-50%) 置中
+        icon.style.top  = Math.round(Math.min(a.y - a.h, b.y - b.h) - 40) + 'px';
+        icon.addEventListener('click', (e) => { e.stopPropagation(); _openTheaterWin('live'); });
+        S.world.appendChild(icon);
+        S.theater = { a, b, icon, playing: false };
         _updateTheaterBadge();
         if (S.twEl) _twRender();   // 列表窗開著→「正在對話」即時亮起
     }
@@ -362,8 +357,7 @@
     }
     function _endTheater() {
         const t = S.theater; if (!t) { S._theaterCd = Date.now(); return; }
-        if (t.iconA) t.iconA.remove();
-        if (t.iconB) t.iconB.remove();
+        if (t.icon) t.icon.remove();
         if (t.a) t.a._theaterFrozen = false;
         if (t.b) t.b._theaterFrozen = false;
         S.theater = null;
