@@ -127,6 +127,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },
     { name: 'void_worldgate', path: _AURELIA_EXT_BASE + '/core/void/worldgate.js', key: 'voidWorldgate' },   // 🌌 視差切書（②）：enterParallax/exitParallax/殘局對帳
     { name: 'void_ambient', path: _AURELIA_EXT_BASE + '/core/void/ambient.js', key: 'voidAmbient' },
+    { name: 'void_ui_sfx', path: _AURELIA_EXT_BASE + '/core/void/ui_sfx.js', key: 'voidUiSfx' },   // 🔊 大廳介面音效（點擊/滑過/開關/面板開合）
     { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
     { name: 'void_lobby_stage', path: _AURELIA_EXT_BASE + '/core/void/lobby_stage.js', key: 'voidLobbyStage' },
     { name: 'void_lobby_theater', path: _AURELIA_EXT_BASE + '/core/void/lobby_theater.js', key: 'voidLobbyTheater' },   // 🎭 小劇場（拆自 lobby_stage，靠 _b 橋，必須排它後面）

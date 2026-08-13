@@ -1653,7 +1653,16 @@
                 '</div>';
         }
         function _optsHtml() {
-            return '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
+            const sfxOn = window.VoidUiSfx ? window.VoidUiSfx.isOn() : false;
+            const sfxVol = String(Math.round((window.VoidUiSfx ? window.VoidUiSfx.getVol() : 0.35) * 100));
+            return '<label class="lset-row"><span class="lset-tx">介面音效</span>' +
+                  '<input type="checkbox" class="lset-chk" data-k="uisfx"' + (sfxOn ? ' checked' : '') + '></label>' +
+                '<div class="lset-row"><span class="lset-tx">音效音量</span>' +
+                  '<span class="ltheater-freq' + (sfxOn ? '' : ' off') + '" data-volrow>' +
+                    ['15:小','35:中','60:大'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; return '<button class="ltheater-freq-btn'+(sfxVol===v?' on':'')+'" data-vol="'+v+'">'+t+'</button>'; }).join('') +
+                  '</span></div>' +
+                '<div class="lset-hint">大廳按鈕的點擊、滑過、開關面板提示音。點音量會馬上放一聲給你聽。</div>' +
+                '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
                   '<input type="checkbox" class="lset-chk" data-k="lore"' + (useLore ? ' checked' : '') + '></label>' +
                 '<div class="lset-hint">預設用大總結摘要的世界觀。勾選＝改讀角色卡的完整世界書（含角色之間的橫向關係，大總結不會寫）。</div>' +
                 '<label class="lset-row"><span class="lset-tx">大廳 NPC 看你當前劇情</span>' +
@@ -1695,7 +1704,16 @@
                     const fr = box.querySelector('.ltheater-freq'); if (fr) fr.classList.toggle('off', !e.target.checked);
                 } else if (k === 'cafe') {
                     try { localStorage.setItem('cafe_offline_visits', e.target.checked ? '1' : '0'); } catch (_) {}
+                } else if (k === 'uisfx') {
+                    window.VoidUiSfx?.setOn(e.target.checked);
+                    const vr = box.querySelector('[data-volrow]'); if (vr) vr.classList.toggle('off', !e.target.checked);
+                    if (e.target.checked) window.VoidUiSfx?.play('toggle');
                 }
+            }));
+            box.querySelectorAll('.ltheater-freq-btn[data-vol]').forEach(btn => btn.addEventListener('click', () => {
+                window.VoidUiSfx?.setVol(parseInt(btn.dataset.vol, 10));
+                box.querySelectorAll('.ltheater-freq-btn[data-vol]').forEach(b => b.classList.toggle('on', b === btn));
+                window.VoidUiSfx?.play('click');   // 改完馬上放一聲，不用關掉設置去試
             }));
             box.querySelectorAll('.ltheater-freq-btn[data-freq]').forEach(btn => btn.addEventListener('click', () => {
                 try { localStorage.setItem('lobby_theater_freq', btn.dataset.freq); } catch (_) {}

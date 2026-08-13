@@ -1519,6 +1519,7 @@ const IRIS_IDLE = [
         item.style.cssText = `--bc:${pal.c}; --bc-rgb:${pal.r}; background: rgba(228,232,245,0.96) !important; color:#1A1C28 !important; border: 1px solid rgba(26,28,40,0.15); box-shadow: 0 4px 10px rgba(0,0,0,0.5);`;
         item.innerHTML = `<div class="void-bubble-tag">${tag.toUpperCase()}</div><div class="void-bubble-text">${text}</div>`;
         layer.appendChild(item);
+        window.VoidUiSfx?.play('ping');
         // 超過 7 條時移除最舊的
         const all = layer.querySelectorAll('.void-bubble');
         if (all.length > 7) all[0].remove();
