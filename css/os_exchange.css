@@ -136,6 +136,11 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     transition: background .18s, color .18s;
 }
+/* 中央主卡的凹槽／菱形／插圖本來就比左右卡大一圈，另給一組座標 */
+.osx-card.center .osx-node { left: 36.1%; right: 35.2%; }
+.osx-card.center .osx-card-name { top: 63.6%; height: 9.1%; }
+.osx-card.center .osx-card-btn { left: 14.7%; right: 13.7%; top: 72.7%; height: 18.3%; }
+
 .osx-card-btn:hover:not(:disabled) { background: rgba(120, 160, 230, 0.16); color: #2b4f9e; }
 .osx-card-btn:disabled { cursor: default; }
 .osx-card-btn.owned { color: #2f8a58; }
