@@ -226,20 +226,29 @@
   z-index:4000; transition:opacity .3s ease; }
 .lstage-fade.on { opacity:1; }
 
-/* ── 🖊 擺設模式 ── */
-.lstage-edit-btn { position:absolute; right:10px; top:10px; z-index:3000; width:34px; height:34px;
-  border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
-.lstage-edit-btn:hover { background:rgba(20,18,16,.85); }
-/* ⚙️ 大廳設置鈕（放擺設鈕左邊，同一組角落控制群；漢堡已退役→整排左移補位） */
-.lstage-set-btn { position:absolute; right:52px; top:10px; z-index:3000; width:34px; height:34px;
-  border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
-.lstage-set-btn:hover { background:rgba(20,18,16,.85); }
-/* 🏙 視差城市鈕（左上角；擺設模式時讓位給編輯面板） */
+/* ── 右上舞台工具列（擺設/設置/小劇場/快轉）：白玻璃皮跟左側 dock 同一家 ── */
+.lstage-edit-btn, .lstage-set-btn, .lstage-city-btn {
+  position:absolute; top:10px; z-index:3000; width:34px; height:34px;
+  border:1px solid rgba(60,80,130,.28); border-radius:11px;
+  background:rgba(255,255,255,.82); color:#2b3652; cursor:pointer; font-size:14px;
+  box-shadow:0 4px 14px rgba(40,60,110,.18);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+.lstage-edit-btn:hover, .lstage-set-btn:hover, .lstage-city-btn:hover {
+  background:rgba(255,255,255,.95); box-shadow:0 6px 18px rgba(40,60,110,.28); }
+.lstage-edit-btn { right:10px; }
+/* ⚙️ 大廳設置鈕（放擺設鈕左邊，同一組角落控制群） */
+.lstage-set-btn { right:52px; }
 /* 🏙 快轉地圖：接在小劇場右邊(94+42)，跟其他控制鈕成同一排 */
-.lstage-city-btn { position:absolute; right:136px; top:10px; z-index:3000; width:34px; height:34px;
-  border:none; border-radius:10px; background:rgba(20,18,16,.62); color:#f3ead8; cursor:pointer; font-size:14px; }
-.lstage-city-btn:hover { background:rgba(20,18,16,.85); }
+.lstage-city-btn { right:136px; }
 .lstage-editing .lstage-city-btn { display:none; }
+/* 404 房：跟 dock 同款暗綠皮 */
+.void-tab.mode-404 .lstage-edit-btn, .void-tab.mode-404 .lstage-set-btn,
+.void-tab.mode-404 .lstage-city-btn, .void-tab.mode-404 .lstage-theater-btn {
+  background:rgba(0,10,2,.75); border:1px solid rgba(0,255,65,.3); color:#7de89a;
+  box-shadow:0 4px 14px rgba(0,0,0,.5); }
+.void-tab.mode-404 .lstage-edit-btn:hover, .void-tab.mode-404 .lstage-set-btn:hover,
+.void-tab.mode-404 .lstage-city-btn:hover, .void-tab.mode-404 .lstage-theater-btn:hover {
+  background:rgba(0,18,4,.9); }
 /* ⚙️ 大廳設置：白色系（跟快轉/收藏冊/小劇場同一家），同窗兩分頁＋限高捲動 */
 .lstage-settings { background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28);
   box-shadow:0 12px 34px rgba(40,60,110,.28); width:280px; max-height:82%;
@@ -286,7 +295,7 @@
   background:rgba(240,244,252,.7); color:#5a6784; font-size:12px; font-family:inherit; }
 .lstage-settings .ltheater-freq-btn.on { background:#23315e; border-color:#23315e; color:#fff; font-weight:700; }
 .lstage-settings .ltheater-freq.off { opacity:.4; pointer-events:none; }
-.lstage-editing .lstage-edit-btn { background:#c8874a; color:#fff; }
+.lstage-editing .lstage-edit-btn { background:#23315e; border-color:#23315e; color:#fff; }
 .lstage-editable { pointer-events:auto !important; cursor:grab; }
 .lstage-editable:active { cursor:grabbing; }
 .lstage-editing .lstage-hint { display:none !important; }
@@ -419,11 +428,15 @@
 /* 🎬 小劇場：右上入口鈕（帶未查看角標）。做成跟同排其他鈕一樣的 34px 方鈕——
    這排只有它帶文字又是膠囊形，夾在四顆方鈕中間看起來歪掉 */
 .lstage-theater-btn { position:absolute; right:94px; top:10px; z-index:3000; width:34px; height:34px; padding:0;
-  display:flex; align-items:center; justify-content:center; border:none; border-radius:10px; cursor:pointer;
-  background:rgba(20,18,16,.62); color:#f3ead8; font-size:14px; }
-.lstage-theater-btn:hover { background:rgba(20,18,16,.85); }
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  border:1px solid rgba(60,80,130,.28); border-radius:11px;
+  background:rgba(255,255,255,.82); color:#2b3652; font-size:14px;
+  box-shadow:0 4px 14px rgba(40,60,110,.18);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+.lstage-theater-btn:hover { background:rgba(255,255,255,.95); box-shadow:0 6px 18px rgba(40,60,110,.28); }
 .ltb-badge { display:none; position:absolute; top:-4px; right:-2px; min-width:16px; height:16px; border-radius:8px;
-  background:#4aa06a; color:#fff; font-size:10px; line-height:16px; text-align:center; padding:0 3px; box-sizing:border-box; }
+  background:#e0a52e; color:#fff; font-size:10px; line-height:16px; text-align:center; padding:0 3px; box-sizing:border-box;
+  box-shadow:0 0 6px rgba(224,165,46,.7); }
 .ltb-badge.on { display:block; }
 
 /* 🎬 偷窺 Loading 遮罩：全屏黑 + 中央場景小舞台（分身左右滑入面對面、頭頂表情圖示輕跳）+ 白點循環 */
