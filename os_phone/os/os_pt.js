@@ -365,10 +365,13 @@
         const userPrompt = `以下是待估值的成就清單：\n${achList}\n\n請逐一估值並回傳 JSON 陣列。`;
 
         try {
-            let messages = [];
-            if (typeof api.buildContext === 'function') messages = await api.buildContext(userPrompt, 'rabbit_eval');
-            else messages = [{ role: 'user', content: userPrompt }];
-            messages.unshift({ role: 'system', content: systemPrompt });
+            // 估值是工具型呼叫：只送成就清單，不走 buildContext。
+            // buildContext 會把人設、整段劇情歷史、AVS 變數全塞進來（單次三萬多 token），
+            // 而待估值的成就是跨卡累積的，當前這張卡的劇情反而對不上多數成就。
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user',   content: userPrompt },
+            ];
             const OS = win.OS_SETTINGS || window.OS_SETTINGS;
             const config = OS ? { ...OS.getConfig(), route: 'rabbit_eval' } : { route: 'rabbit_eval' };
             const raw = await new Promise((res, rej) => api.chat(messages, config, null, res, rej));

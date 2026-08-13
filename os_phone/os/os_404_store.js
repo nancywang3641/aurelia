@@ -272,13 +272,11 @@ ${JSON.stringify({ shards, items: itemsState })}`;
         const userPrompt = `以下是待估值的成就清單：\n${achList}\n\n請逐一估值並回傳 JSON 陣列。`;
 
         try {
-            let messages = [];
-            if (typeof win.OS_API.buildContext === 'function') {
-                messages = await win.OS_API.buildContext(userPrompt, 'cheshire_eval');
-            } else {
-                messages = [{ role: 'user', content: userPrompt }];
-            }
-            messages.unshift({ role: 'system', content: systemPrompt });
+            // 同白兔估值：工具型呼叫只送成就清單，不走 buildContext（否則人設+劇情歷史+AVS 全帶上）
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user',   content: userPrompt },
+            ];
 
             const config = win.OS_SETTINGS ? { ...win.OS_SETTINGS.getConfig(), route: 'cheshire_eval' } : { route: 'cheshire_eval' };
 
