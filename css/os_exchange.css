@@ -97,63 +97,52 @@
     top: var(--osx-card-y); z-index: 2;
     display: flex; justify-content: center; align-items: flex-start; gap: var(--osx-card-gap);
 }
+/* 卡殼圖已經含商品插圖（房子／獎章／鎖）與底部的按鈕凹槽，
+   所以卡片內不再放圖示，只把「名稱」與「按鈕」絕對定位對進圖上的槽位。
+   槽位是量出來的（三張卡同規格 413x660）：凹槽 y 84.7%~94.7%、x 17%~83%；插圖下緣約 66%。 */
 .osx-card {
     position: relative; flex: 0 0 var(--osx-card-w); min-width: 0;
-    aspect-ratio: 375 / 521;
+    aspect-ratio: 413 / 660;
     background: center / 100% 100% no-repeat;
-    display: flex; flex-direction: column; align-items: center;
-    padding: 3.8% 1.9% 1.9%;   /* % 相對卡片列寬，單卡佔 24% → 約等於卡片自身的 16%/8% */
 }
 .osx-card.left   { background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-left-empty.png); }
 .osx-card.right  { background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-right-empty.png); }
 .osx-card.center {
-    flex: 0 0 var(--osx-card-mid-w); aspect-ratio: 437 / 657;
-    padding: 4.3% 2.2% 2.2%;
+    flex: 0 0 var(--osx-card-mid-w);
     margin-top: calc(var(--osx-card-mid-lift) * -1);
     background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-center-empty.png);
 }
 /* 卡頂編號：菱形本來就畫在卡殼圖上（量過三張卡：菱形都在自身高度 0~7%，中心約 4.5%），
    這裡只把數字疊上去，不要再貼一張菱形。 */
 .osx-node {
-    position: absolute; left: 50%; top: 4.5%; transform: translate(-50%, -50%);
+    position: absolute; left: 50%; top: 5.5%; transform: translate(-50%, -50%);
     display: flex; align-items: center; justify-content: center;
     font-size: clamp(5px, 2cqw, 11px); font-weight: 800; color: #f4f8ff;
     text-shadow: 0 1px 2px rgba(30, 60, 120, 0.55);
     pointer-events: none;
 }
-.osx-card-ic {
-    width: 52%; aspect-ratio: 1; flex: 0 0 auto;
-    display: flex; align-items: center; justify-content: center;
-    font-size: clamp(13px, 9cqw, 34px); color: #6c8fd6;
-}
-.osx-card.center .osx-card-ic { color: #c9a02e; }
-.osx-card.locked .osx-card-ic { color: #9aa4bb; }
+/* 名稱：插圖下緣(66%)與凹槽上緣(84.7%)之間那條空白 */
 .osx-card-name {
-    margin-top: auto; font-size: clamp(8px, 3.2cqw, 15px); font-weight: 800;
-    color: #2b3a63; letter-spacing: 1px; white-space: nowrap;
-}
-.osx-card-btn {
-    margin-top: 6%; width: 100%; border: 1px solid rgba(120, 150, 210, 0.4);
-    border-radius: 999px; padding: 6% 4%; cursor: pointer;
-    font-family: inherit; font-size: clamp(7px, 2.5cqw, 12.5px); font-weight: 700;
-    background: linear-gradient(135deg, #7ea3e8, #5b7fd0); color: #fff;
-    box-shadow: 0 3px 10px rgba(74, 120, 216, 0.32);
-    transition: filter .18s, opacity .18s;
+    position: absolute; left: 6%; right: 6%; top: 71%; transform: translateY(-50%);
+    text-align: center; font-size: clamp(8px, 3.2cqw, 15px); font-weight: 800;
+    color: #2b3a63; letter-spacing: 1px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.osx-card-btn:hover:not(:disabled) { filter: brightness(1.08); }
-.osx-card-btn:disabled { cursor: default; opacity: .95; }
-.osx-card-btn.owned { background: rgba(96, 178, 128, 0.16); color: #2f8a58; border-color: rgba(96, 178, 128, 0.45); box-shadow: none; }
-.osx-card-btn.locked { background: rgba(150, 160, 185, 0.14); color: #8b93a8; border-color: rgba(150, 160, 185, 0.35); box-shadow: none; }
-.osx-card-btn.gold { background: linear-gradient(135deg, #e8c86a, #c9a02e); border-color: rgba(201, 160, 46, 0.5); box-shadow: 0 3px 10px rgba(201, 160, 46, 0.3); }
-/* 未開放卡：中央蓋一枚封印章 */
-.osx-seal {
-    position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%);
-    width: 46%; aspect-ratio: 441 / 450; pointer-events: none;
-    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-future-seal-empty.png) center / contain no-repeat;
+/* 按鈕：直接坐進卡殼圖自帶的凹槽，不再自己畫底 */
+.osx-card-btn {
+    position: absolute; left: 17%; right: 17%; top: 84.7%; height: 10%;
     display: flex; align-items: center; justify-content: center;
-    font-size: clamp(9px, 5cqw, 22px); color: #93a0bb;
+    border: none; background: transparent; border-radius: 999px; padding: 0;
+    cursor: pointer; font-family: inherit; font-weight: 700;
+    font-size: clamp(7px, 2.5cqw, 12.5px); color: #4a6bb5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: background .18s, color .18s;
 }
+.osx-card-btn:hover:not(:disabled) { background: rgba(120, 160, 230, 0.16); color: #2b4f9e; }
+.osx-card-btn:disabled { cursor: default; }
+.osx-card-btn.owned { color: #2f8a58; }
+.osx-card-btn.locked { color: #97a0b5; }
+.osx-card-btn.gold { color: #b8901f; }
 
 /* ── 底部狀態列 ── */
 .osx-rail {

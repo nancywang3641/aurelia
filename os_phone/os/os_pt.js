@@ -431,7 +431,7 @@
         const canBuy = !built && bal >= price;
 
         const houseBtn = built
-            ? '<button class="osx-card-btn owned" disabled><i class="fa-solid fa-house"></i>&nbsp;已擁有</button>'
+            ? '<button class="osx-card-btn owned" disabled>已擁有</button>'
             : '<button class="osx-card-btn" id="os-pt-buy-house"' + (canBuy ? '' : ' disabled') + '>' + price + ' PT</button>';
 
         // 成就兌換：白兔只收「非異常系」成就，估值換 PT（異常系歸 404 柴郡換碎片）
@@ -443,18 +443,14 @@
         itemsEl.innerHTML =
             '<div class="osx-card left" title="在視差城市擁有一間屬於自己的房子。">' +
               '<span class="osx-node">1</span>' +
-              '<span class="osx-card-ic"><i class="fa-solid fa-house-chimney"></i></span>' +
               '<span class="osx-card-name">蓋你的房</span>' + houseBtn +
             '</div>' +
             '<div class="osx-card center" title="異常成就請找 404 號房的柴郡">' +
               '<span class="osx-node">2</span>' +
-              '<span class="osx-card-ic"><i class="fa-solid fa-award"></i></span>' +
               '<span class="osx-card-name">成就兌換</span>' + achBtn +
             '</div>' +
             '<div class="osx-card right locked" title="之後會開">' +
               '<span class="osx-node">3</span>' +
-              '<span class="osx-seal"><i class="fa-solid fa-lock"></i></span>' +
-              '<span class="osx-card-ic"></span>' +
               '<span class="osx-card-name">限時商品</span>' +
               '<button class="osx-card-btn locked" disabled>敬請期待</button>' +
             '</div>';
