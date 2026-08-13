@@ -2855,6 +2855,9 @@
             const overlay = document.getElementById('vn-reader-overlay');
             if (!overlay) return;
             overlay.classList.add('active');
+            // 大總結鈕只在 PWA 顯示（同 vn_reader）：酒館跑團總結在 tavern_summary、要去故事日誌看
+            const _sumBtn = document.getElementById('vn-reader-summary-btn');
+            if (_sumBtn) _sumBtn.style.display = win.OS_API?.isStandalone?.() ? '' : 'none';
             const body = document.getElementById('vn-reader-body');
             body.innerHTML = '<div class="vn-reader-loading">載入中...</div>';
 
