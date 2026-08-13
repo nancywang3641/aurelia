@@ -11,19 +11,18 @@
 
     const BASE = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/';
     const FILES = {
-        click:  'ui-click',        // 一般按鈕
+        click:  'ui-click',        // 一般按鈕（含 dock 開面板：開場音跟點擊音色不搭，已退掉）
         hover:  'ui-hover',        // 滑過
         confirm:'ui-confirm',      // 送出／保存
         cancel: 'ui-cancel',       // 返回上一層
         error:  'ui-error',        // 清空／刪除
-        open:   'ui-panel_open',   // 開面板／進場
         close:  'ui-panel_close',  // 關面板
         toggle: 'ui-toggle',       // 開關／分頁切換
         ping:   'ui-ping',         // 世界頻道新訊息
         unlock: 'ui-unlock',       // 兌換成功
     };
     // 各音效的相對音量：滑過最輕，提示音最響（總音量之外再乘一層）
-    const GAIN = { hover: 0.4, click: 0.75, toggle: 0.8, cancel: 0.8, close: 0.8, open: 0.9, error: 0.9, confirm: 1, ping: 1, unlock: 1 };
+    const GAIN = { hover: 0.4, click: 0.75, toggle: 0.8, cancel: 0.8, close: 0.8, error: 0.9, confirm: 1, ping: 1, unlock: 1 };
 
     const ROOT_SEL = '#aurelia-home-tab';
 
@@ -34,8 +33,7 @@
         ['#iris-send-btn, #iris-retry-btn, [data-act="save"], .lep-done, .hist-edit-confirm-btn', 'confirm'],
         ['.danger, #hist-clear-btn, #ach-clear-btn, #hist-del-sel', 'error'],
         ['#lobby-bgm-toggle, #lstage-toggle, #aurelia-fullscreen-btn, .lset-tab, .achv2-tab, .ltheater-freq-btn, .lset-chk, .hist-edit-cancel-btn', 'toggle'],
-        ['.lb-dock-btn, .lstage-set-btn, .lstage-edit-btn, .lstage-theater-btn, .lstage-city-btn, .lset-item, #lb-top-user, #iris-hist-btn, #cheshire-hist-btn, [data-app-launch], [data-os-launch], [data-proxy]', 'open'],
-        ['.void-btn, .void-hist-btn, .lb-icon-btn, .hist-icon-btn, .hist-action-btn, .lep-btn, .lb-persona-item', 'click'],
+        ['.lb-dock-btn, .lstage-set-btn, .lstage-edit-btn, .lstage-theater-btn, .lstage-city-btn, .lset-item, #lb-top-user, #iris-hist-btn, #cheshire-hist-btn, [data-app-launch], [data-os-launch], [data-proxy], .void-btn, .void-hist-btn, .lb-icon-btn, .hist-icon-btn, .hist-action-btn, .lep-btn, .lb-persona-item', 'click'],
     ];
     const HOVER_SEL = '.lb-dock-btn, .lb-icon-btn, .lstage-set-btn, .lstage-edit-btn, .lstage-theater-btn, .lstage-city-btn, .void-hist-btn, .void-btn, .lset-item, .lset-tab, .achv2-tab';
 
