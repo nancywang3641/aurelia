@@ -460,6 +460,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_debug_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_tarot.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_exchange.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_story_tools.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_user_center.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_monitor.css');

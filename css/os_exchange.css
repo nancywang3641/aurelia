@@ -1,0 +1,190 @@
+/* ================================================================
+   交易所面板（阿洛「PT 軌道展台」拆件）
+   素材：sound-files/aseets/exchange_ui/*.png（切好的 RGBA 空殼）
+   文字／數字／圖示／按鈕全部由 DOM 畫，圖片只當殼 → 之後改名或加商品不用重畫圖。
+   版位走 % 變數（--osx-*），字級走 cqw（相對外框寬），微調集中在最上面那一區。
+   ================================================================ */
+.osx-dock {
+    /* 版位：標 W 者相對外框寬、標 H 者相對外框高 */
+    --osx-title-x: 8%;
+    --osx-title-y: 6.5%;
+    --osx-bal-w: 25%;         /* W */
+    --osx-bal-x: 7%;
+    --osx-bal-y: 5.5%;
+    --osx-ring-w: 45%;        /* W */
+    --osx-ring-y: 18%;        /* H */
+    --osx-cards-inset: 8%;    /* W，卡片區左右各留給邊框花紋的安全距 */
+    --osx-card-w: 24%;        /* 卡片區寬，左右卡 */
+    --osx-card-mid-w: 27%;    /* 卡片區寬，中央主卡 */
+    --osx-card-y: 34%;        /* H，左右卡上緣 */
+    --osx-card-mid-lift: 4%;  /* H，中央卡再往上抬 */
+    --osx-card-gap: 4%;       /* 卡片區寬 */
+    --osx-rail-w: 68%;        /* W */
+    --osx-rail-y: 5%;         /* H，距底 */
+
+    position: absolute; z-index: 80;
+    right: 3%; top: 50%;
+    width: min(44%, 520px);
+    opacity: 0; transform: translate(24px, -50%);
+    transition: opacity .28s ease, transform .28s ease;
+}
+.osx-dock.on { opacity: 1; transform: translate(0, -50%); }
+
+/* ⚠️ 百分比 padding 一律是「相對containing block的寬」，不是自己的寬 →
+   凡是用 % padding 的元素都必須 border-box，數值也要換算成「相對父層寬」再填。 */
+.osx-frame, .osx-frame * { box-sizing: border-box; }
+
+.osx-frame {
+    position: relative; width: 100%; aspect-ratio: 1251 / 1034;
+    container-type: inline-size;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-frame-desktop-base.png) center / 100% 100% no-repeat;
+    color: #2f3f66; font-family: inherit;
+    filter: drop-shadow(0 18px 40px rgba(40, 60, 110, 0.3));
+}
+
+/* 關閉：框右上角，不壓到邊框花紋 */
+.osx-close {
+    position: absolute; right: 1.5%; top: 1.5%; z-index: 3;
+    width: 8%; aspect-ratio: 1; border: none; padding: 0; cursor: pointer;
+    background: transparent; color: #6b7ea8; font-size: clamp(12px, 3cqw, 20px);
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; transition: color .18s, background .18s;
+}
+.osx-close:hover { color: #2f3f66; background: rgba(120, 150, 210, 0.14); }
+
+/* ── 標題 ── */
+.osx-title {
+    position: absolute; left: var(--osx-title-x); top: var(--osx-title-y); z-index: 2;
+    max-width: 44%; overflow: hidden; line-height: 1.25;
+}
+.osx-title .zh { display: block; font-size: clamp(13px, 5cqw, 26px); font-weight: 800; letter-spacing: 3px; color: #2b3a63; white-space: nowrap; }
+.osx-title .en { display: block; margin-top: 2px; font-size: clamp(5px, 1.7cqw, 11px); letter-spacing: 1.5px; color: #8b9bc0; white-space: nowrap; }
+
+/* ── 餘額膠囊 ── */
+.osx-bal {
+    position: absolute; right: var(--osx-bal-x); top: var(--osx-bal-y); z-index: 2;
+    width: var(--osx-bal-w); aspect-ratio: 726 / 287;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-balance-capsule-empty.png) center / 100% 100% no-repeat;
+    display: flex; align-items: center; gap: 1%; padding: 0 3% 0 1.5%;   /* % 相對外框寬，膠囊本身佔 25% → 約等於膠囊自身的 12%/6% */
+}
+.osx-bal-coin {
+    width: 30%; aspect-ratio: 1; flex: 0 0 auto;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-pt-coin-pt-face.png) center / contain no-repeat;
+}
+.osx-bal-n { font-size: clamp(11px, 5.2cqw, 24px); font-weight: 800; color: #2b3a63; font-variant-numeric: tabular-nums; line-height: 1; }
+.osx-bal-u { font-size: clamp(7px, 2.2cqw, 12px); color: #8b9bc0; align-self: flex-end; margin-bottom: 4%; }
+
+/* ── 中央軌道展台 ── */
+.osx-stage {
+    position: absolute; left: 50%; top: var(--osx-ring-y); transform: translateX(-50%);
+    width: var(--osx-ring-w); aspect-ratio: 1239 / 923; z-index: 1;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-orbit-ring-empty.png) center / 100% 100% no-repeat;
+}
+.osx-coin {
+    position: absolute; left: 50%; top: 50%;
+    width: 41%; aspect-ratio: 1;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-pt-coin-pt-face.png) center / contain no-repeat;
+    animation: osx-coin-float 5.5s ease-in-out infinite;
+}
+@keyframes osx-coin-float {
+    0%, 100% { transform: translate(-50%, -50%); }
+    50%      { transform: translate(-50%, -56%); }
+}
+
+/* ── 商品卡 ── */
+.osx-cards {
+    position: absolute; left: var(--osx-cards-inset); right: var(--osx-cards-inset);
+    top: var(--osx-card-y); z-index: 2;
+    display: flex; justify-content: center; align-items: flex-start; gap: var(--osx-card-gap);
+}
+.osx-card {
+    position: relative; flex: 0 0 var(--osx-card-w); min-width: 0;
+    aspect-ratio: 375 / 521;
+    background: center / 100% 100% no-repeat;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 3.8% 1.9% 1.9%;   /* % 相對卡片列寬，單卡佔 24% → 約等於卡片自身的 16%/8% */
+}
+.osx-card.left   { background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-left-empty.png); }
+.osx-card.right  { background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-right-empty.png); }
+.osx-card.center {
+    flex: 0 0 var(--osx-card-mid-w); aspect-ratio: 437 / 657;
+    padding: 4.3% 2.2% 2.2%;
+    margin-top: calc(var(--osx-card-mid-lift) * -1);
+    background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-center-empty.png);
+}
+/* 卡頂菱形編號 */
+.osx-node {
+    position: absolute; left: 50%; top: 0; transform: translate(-50%, -46%);
+    width: 30%; aspect-ratio: 268 / 212;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-orbit-diamond-node.png) center / contain no-repeat;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(6px, 2.4cqw, 13px); font-weight: 800; color: #f4f8ff;
+    text-shadow: 0 1px 2px rgba(30, 60, 120, 0.55);
+}
+.osx-card-ic {
+    width: 52%; aspect-ratio: 1; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(13px, 9cqw, 34px); color: #6c8fd6;
+}
+.osx-card.center .osx-card-ic { color: #c9a02e; }
+.osx-card.locked .osx-card-ic { color: #9aa4bb; }
+.osx-card-name {
+    margin-top: auto; font-size: clamp(8px, 3.2cqw, 15px); font-weight: 800;
+    color: #2b3a63; letter-spacing: 1px; white-space: nowrap;
+}
+.osx-card-btn {
+    margin-top: 6%; width: 100%; border: 1px solid rgba(120, 150, 210, 0.4);
+    border-radius: 999px; padding: 6% 4%; cursor: pointer;
+    font-family: inherit; font-size: clamp(7px, 2.5cqw, 12.5px); font-weight: 700;
+    background: linear-gradient(135deg, #7ea3e8, #5b7fd0); color: #fff;
+    box-shadow: 0 3px 10px rgba(74, 120, 216, 0.32);
+    transition: filter .18s, opacity .18s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.osx-card-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.osx-card-btn:disabled { cursor: default; opacity: .95; }
+.osx-card-btn.owned { background: rgba(96, 178, 128, 0.16); color: #2f8a58; border-color: rgba(96, 178, 128, 0.45); box-shadow: none; }
+.osx-card-btn.locked { background: rgba(150, 160, 185, 0.14); color: #8b93a8; border-color: rgba(150, 160, 185, 0.35); box-shadow: none; }
+.osx-card-btn.gold { background: linear-gradient(135deg, #e8c86a, #c9a02e); border-color: rgba(201, 160, 46, 0.5); box-shadow: 0 3px 10px rgba(201, 160, 46, 0.3); }
+/* 未開放卡：中央蓋一枚封印章 */
+.osx-seal {
+    position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%);
+    width: 46%; aspect-ratio: 441 / 450; pointer-events: none;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-future-seal-empty.png) center / contain no-repeat;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(9px, 5cqw, 22px); color: #93a0bb;
+}
+
+/* ── 底部狀態列 ── */
+.osx-rail {
+    position: absolute; left: 50%; bottom: var(--osx-rail-y); transform: translateX(-50%);
+    width: var(--osx-rail-w); aspect-ratio: 821 / 169; z-index: 2;
+    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-status-rail-empty.png) center / 100% 100% no-repeat;
+    display: flex; align-items: center; gap: 1.5%; padding: 0 6%;   /* % 相對外框寬，狀態列佔 68% → 約等於列本身的 9% */
+}
+.osx-rail-ic { flex: 0 0 auto; width: 8%; text-align: center; color: #6c8fd6; font-size: clamp(7px, 2.6cqw, 14px); }
+.osx-rail-tx { flex: 1; min-width: 0; line-height: 1.35; }
+.osx-rail-tx .t { display: block; font-size: clamp(6px, 2.2cqw, 11px); font-weight: 800; color: #2b3a63; letter-spacing: 1px; }
+.osx-rail-tx .m { display: block; font-size: clamp(6px, 2.1cqw, 11px); color: #6d7fa4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.osx-rail-tx .m.ok { color: #2f8a58; }
+.osx-rail-tx .m.bad { color: #c2506a; }
+
+/* ── 手機：換直式框、站前排 ── */
+@media (max-width: 680px) {
+    .osx-dock {
+        right: 10px; left: 10px; top: 50%; width: auto;
+        --osx-ring-w: 60%;
+        --osx-ring-y: 20%;
+        --osx-cards-inset: 7%;
+        --osx-card-w: 29%;
+        --osx-card-mid-w: 33%;
+        --osx-card-y: 46%;
+        --osx-rail-w: 82%;
+        --osx-bal-w: 34%;
+    }
+    .osx-frame {
+        aspect-ratio: 950 / 1471;
+        background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-frame-mobile-base.png);
+    }
+    .void-dock-open #iris-avatar { opacity: .25; filter: brightness(.55) blur(1px); transition: opacity .25s; }
+}

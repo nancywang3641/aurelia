@@ -250,46 +250,7 @@
             '.os-pt-bal{margin-top:8px;text-align:right;font-size:12px;color:#9d94b5;}',
             '.os-pt-bal i{color:#ffe28a;margin-right:4px;}',
             '.os-pt-note{margin-top:6px;font-size:11px;color:#8a8298;font-style:italic;}',
-            // 交易所面板：白色系、貼遊戲畫面右內側（跟白兔對話時浮出）
-            '.os-pt-dock{position:absolute;right:max(4%, calc(50% - 360px));top:50%;transform:translateY(-50%);z-index:80;width:min(38%,320px);max-height:68%;overflow:auto;',   /* 寬螢幕貼近中間+垂直置中;窄螢幕退回貼邊 */
-            'opacity:0;transform:translateX(24px);transition:opacity .28s ease,transform .28s ease;}',
-            '.os-pt-dock.on{opacity:1;transform:translateX(0);}',
-            '@media (max-width:680px){' +
-              '.os-pt-dock{right:12px;left:12px;width:auto;top:7%;bottom:auto;max-height:72%;}' +   /* 📱 面板站前排放大 */
-              '.void-dock-open #iris-avatar{opacity:.25;filter:brightness(.55) blur(1px);transition:opacity .25s;}' +   /* 立繪退後變暗 */
-            '}',
-            '.os-pt-shop{width:100%;background:rgba(255,255,255,.95);',
-            'border:1px solid rgba(120,150,210,.35);border-radius:18px;box-shadow:0 16px 44px rgba(40,60,110,.26);',
-            'padding:18px 18px 15px;color:#2b3652;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}',
-            '.os-pt-shop-head{display:flex;align-items:center;gap:9px;margin-bottom:4px;}',
-            '.os-pt-shop-head i{color:#5b7fd0;}',
-            '.os-pt-shop-head .t{font-size:18px;font-weight:800;letter-spacing:.5px;color:#233152;}',
-            '.os-pt-shop-head .x{margin-left:auto;cursor:pointer;opacity:.5;font-size:18px;padding:4px 8px;border-radius:10px;color:#5a6784;}',
-            '.os-pt-shop-head .x:hover{opacity:1;background:rgba(70,100,170,.1);}',
-            '.os-pt-shop-sub{font-size:12px;color:#6d7791;margin-bottom:14px;}',
-            '.os-pt-wallet{display:flex;align-items:center;gap:8px;justify-content:center;margin:6px 0 16px;',
-            'padding:12px;border-radius:14px;background:linear-gradient(120deg,rgba(255,208,110,.18),rgba(120,160,230,.12));border:1px solid rgba(220,180,90,.4);}',
-            '.os-pt-wallet i{color:#e0a52e;font-size:20px;}',
-            '.os-pt-wallet .n{font-size:25px;font-weight:800;color:#c98a1e;font-variant-numeric:tabular-nums;}',
-            '.os-pt-wallet .u{font-size:13px;color:#7a86a0;align-self:flex-end;margin-bottom:3px;}',
-            '.os-pt-item{display:flex;align-items:center;gap:12px;padding:13px;border-radius:15px;',
-            'background:rgba(90,130,210,.07);border:1px solid rgba(120,150,210,.22);margin-bottom:10px;}',
-            '.os-pt-item .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;',
-            'background:rgba(90,130,210,.14);color:#4f74c8;font-size:21px;flex:0 0 auto;}',
-            '.os-pt-item .body{flex:1;min-width:0;}',
-            '.os-pt-item .body .n{font-weight:700;font-size:15px;color:#28324c;}',
-            '.os-pt-item .body .d{font-size:12px;color:#6d7791;margin-top:2px;}',
-            '.os-pt-buy{flex:0 0 auto;border:none;cursor:pointer;border-radius:12px;padding:9px 15px;font-size:14px;font-weight:700;',
-            'font-family:inherit;background:linear-gradient(135deg,#6a9be0,#4a78d8);color:#fff;transition:filter .2s,opacity .2s;box-shadow:0 4px 12px rgba(74,120,216,.35);}',
-            '.os-pt-buy:hover{filter:brightness(1.08);}',
-            '.os-pt-buy:disabled{cursor:default;opacity:.5;filter:grayscale(.3);box-shadow:none;}',
-            '.os-pt-buy.owned{background:rgba(90,180,120,.16);color:#2e8a52;box-shadow:none;}',
-            '.os-pt-shop-msg{min-height:18px;text-align:center;font-size:12.5px;margin-top:6px;color:#d3475f;}',
-            '.os-pt-shop-msg.ok{color:#2e8a52;}',
-            // 成就兌換區塊：白兔代收異常成就送 404 估值，貨幣是💎碎片(跟 PT 分開)
-            '.os-pt-item .ic.ach{background:rgba(150,110,220,.14);color:#8a6fd0;}',
-            '.os-pt-buy.ach{background:linear-gradient(135deg,#9a7fe0,#7a5fd0);box-shadow:0 4px 12px rgba(122,95,208,.35);}',
-            '.os-pt-ach-shards{font-size:11.5px;color:#8a6fd0;margin-top:3px;font-variant-numeric:tabular-nums;}',
+            // 交易所面板的樣式在 css/os_exchange.css（阿洛拆件版），這裡只留 VN 結算卡
         ].join('');
         document.head.appendChild(s);
     }
@@ -427,19 +388,23 @@
         host.classList.add('void-dock-open');   // 📱 手機:立繪退後變暗、面板站前排
         const dock = document.createElement('div');
         dock.id = 'os-pt-shop-dock';
-        dock.className = 'os-pt-dock';
+        dock.className = 'osx-dock';
         dock.innerHTML =
-            '<div class="os-pt-shop" role="dialog" aria-label="交易所">' +
-            '<div class="os-pt-shop-head"><i class="fa-solid fa-store"></i>' +
-            '<span class="t">交易所</span><span class="x" title="關閉"><i class="fa-solid fa-xmark"></i></span></div>' +
-            '<div class="os-pt-shop-sub">用交易區的 PT，兌換屬於你的一席之地。</div>' +
-            '<div class="os-pt-wallet"><i class="fa-solid fa-coins"></i><span class="n" id="os-pt-shop-bal">…</span><span class="u">PT</span></div>' +
-            '<div id="os-pt-shop-items"></div>' +
-            '<div class="os-pt-shop-msg" id="os-pt-shop-msg"></div>' +
+            '<div class="osx-frame" role="dialog" aria-label="量子交易所">' +
+              '<button class="osx-close" type="button" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
+              '<div class="osx-title"><span class="zh">量子交易所</span>' +
+                '<span class="en">AURELIA PARALLAX EXCHANGE</span></div>' +
+              '<div class="osx-bal"><span class="osx-bal-coin"></span>' +
+                '<span class="osx-bal-n" id="os-pt-shop-bal">…</span><span class="osx-bal-u">PT</span></div>' +
+              '<div class="osx-stage"><div class="osx-coin"></div></div>' +
+              '<div class="osx-cards" id="os-pt-shop-items"></div>' +
+              '<div class="osx-rail"><span class="osx-rail-ic"><i class="fa-solid fa-hourglass-half"></i></span>' +
+                '<span class="osx-rail-tx"><span class="t">交易所狀態</span>' +
+                '<span class="m" id="os-pt-shop-msg">白兔先生在櫃檯，隨時可以替你估值。</span></span></div>' +
             '</div>';
         host.appendChild(dock);
         requestAnimationFrame(() => dock.classList.add('on'));
-        dock.querySelector('.x').addEventListener('click', () => {
+        dock.querySelector('.osx-close').addEventListener('click', () => {
             try { if (window.LobbyStage && window.LobbyStage.endTalk) window.LobbyStage.endTalk(); } catch (e) {}   // ✕=離開白兔對話（連帶關面板）
             closeExchange();
         });
@@ -465,42 +430,53 @@
         const price = PT_CFG.housePrice;
         const canBuy = !built && bal >= price;
 
-        const btn = built
-            ? '<button class="os-pt-buy owned" disabled><i class="fa-solid fa-check"></i>&nbsp;已擁有</button>'
-            : '<button class="os-pt-buy" id="os-pt-buy-house"' + (canBuy ? '' : ' disabled') + '>' + price + ' PT</button>';
+        const houseBtn = built
+            ? '<button class="osx-card-btn owned" disabled><i class="fa-solid fa-house"></i>&nbsp;已擁有</button>'
+            : '<button class="osx-card-btn" id="os-pt-buy-house"' + (canBuy ? '' : ' disabled') + '>' + price + ' PT</button>';
 
         // 成就兌換：白兔只收「非異常系」成就，估值換 PT（異常系歸 404 柴郡換碎片）
         const pendingN = _rabbitPending().length;
-        const achBtnHtml = pendingN
-            ? '<button class="os-pt-buy ach" id="os-pt-redeem-ach">兌換 ' + pendingN + ' 個</button>'
-            : '<button class="os-pt-buy" disabled>兌換</button>';
+        const achBtn = pendingN
+            ? '<button class="osx-card-btn gold" id="os-pt-redeem-ach">兌換 ' + pendingN + ' 個</button>'
+            : '<button class="osx-card-btn locked" disabled>沒有待估值</button>';
 
         itemsEl.innerHTML =
-            '<div class="os-pt-item">' +
-            '<div class="ic"><i class="fa-solid fa-house-chimney"></i></div>' +
-            '<div class="body"><div class="n">蓋你的房</div>' +
-            '<div class="d">在視差城市擁有一間屬於自己的房子。</div></div>' +
-            btn + '</div>' +
-            '<div class="os-pt-item">' +
-            '<div class="ic ach"><i class="fa-solid fa-trophy"></i></div>' +
-            '<div class="body"><div class="n">成就兌換</div>' +
-            '<div class="d">' + (pendingN ? ('把 ' + pendingN + ' 個成就送去估值，換成 PT。') : '沒有白兔要收的成就。') + '</div>' +
-            '<div class="os-pt-ach-shards"><i class="fa-solid fa-circle-info"></i> 異常成就請找 404 號房的柴郡</div></div>' +
-            achBtnHtml + '</div>';
+            '<div class="osx-card left" title="在視差城市擁有一間屬於自己的房子。">' +
+              '<span class="osx-node">1</span>' +
+              '<span class="osx-card-ic"><i class="fa-solid fa-house-chimney"></i></span>' +
+              '<span class="osx-card-name">蓋你的房</span>' + houseBtn +
+            '</div>' +
+            '<div class="osx-card center" title="異常成就請找 404 號房的柴郡">' +
+              '<span class="osx-node">2</span>' +
+              '<span class="osx-card-ic"><i class="fa-solid fa-award"></i></span>' +
+              '<span class="osx-card-name">成就兌換</span>' + achBtn +
+            '</div>' +
+            '<div class="osx-card right locked" title="之後會開">' +
+              '<span class="osx-node">3</span>' +
+              '<span class="osx-seal"><i class="fa-solid fa-lock"></i></span>' +
+              '<span class="osx-card-ic"></span>' +
+              '<span class="osx-card-name">限時商品</span>' +
+              '<button class="osx-card-btn locked" disabled>敬請期待</button>' +
+            '</div>';
 
-        if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = built ? '' : (canBuy ? '' : ('還差 ' + (price - bal) + ' PT')); }
+        if (msgEl) {
+            msgEl.className = 'm';
+            msgEl.textContent = built
+                ? (pendingN ? ('白兔先生的櫃檯上有 ' + pendingN + ' 個成就等著估值。') : '白兔先生在櫃檯，隨時可以替你估值。')
+                : (canBuy ? '餘額足夠蓋房，隨時可以簽約。' : ('離蓋房還差 ' + (price - bal) + ' PT。'));
+        }
 
         const buyBtn = mask.querySelector('#os-pt-buy-house');
         if (buyBtn) buyBtn.addEventListener('click', async () => {
             buyBtn.disabled = true;
             const r = await spendPT(price, '購買玩家房');
             if (!r.ok) {
-                if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = '還差 ' + r.short + ' PT'; }
+                if (msgEl) { msgEl.className = 'm bad'; msgEl.textContent = '還差 ' + r.short + ' PT。'; }
                 buyBtn.disabled = false;
                 return;
             }
             await setPlotBuilt('player', true);
-            if (msgEl) { msgEl.className = 'os-pt-shop-msg ok'; msgEl.textContent = '入手了！你在城市有家了。'; }
+            if (msgEl) { msgEl.className = 'm ok'; msgEl.textContent = '簽約完成，你在視差城市有家了。'; }
             try { window.dispatchEvent(new CustomEvent('os-pt-plot-changed', { detail: { plotId: 'player', built: true } })); } catch (e) {}
             await _renderShopBody(mask);   // 重繪：餘額↓、按鈕→已擁有
         });
@@ -509,17 +485,18 @@
         if (redeemBtn) redeemBtn.addEventListener('click', async () => {
             redeemBtn.disabled = true;
             redeemBtn.textContent = '估值中…';
-            if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = '白兔先生正在替你的成就估值，稍等…'; }
+            if (msgEl) { msgEl.className = 'm'; msgEl.textContent = '白兔先生正在替你的成就估值，稍等…'; }
             const r = await evaluateAchievementsPT();
             if (!r.ok) {
-                if (msgEl) { msgEl.className = 'os-pt-shop-msg'; msgEl.textContent = r.msg || '估值失敗，再試一次'; }
+                if (msgEl) { msgEl.className = 'm bad'; msgEl.textContent = r.msg || '估值失敗，再試一次'; }
                 redeemBtn.disabled = false;
                 redeemBtn.textContent = '兌換';
                 return;
             }
             try { window.VoidPanels?.refreshAchievement?.(); } catch (e) {}
             await _renderShopBody(mask);   // 先重繪(會清 msg、更新錢包)再寫結果，成功訊息才留得住
-            if (msgEl) { msgEl.className = 'os-pt-shop-msg ok'; msgEl.textContent = '兌換完成！獲得 ' + r.totalPT + ' PT。'; }
+            const _m = mask.querySelector('#os-pt-shop-msg');
+            if (_m) { _m.className = 'm ok'; _m.textContent = '蓋章完成，入帳 ' + r.totalPT + ' PT。點評寫在成就票券上了。'; }
         });
     }
 
