@@ -16,18 +16,20 @@
         confirm:'ui-confirm',      // 送出／保存
         cancel: 'ui-cancel',       // 返回上一層
         error:  'ui-error',        // 清空／刪除
+        slide:  'ui-hover',        // 章節卡片左右翻頁（跟滑過同一顆音，但當點擊回饋用，音量給足）
         close:  'ui-panel_close',  // 關面板
         toggle: 'ui-toggle',       // 開關／分頁切換
         ping:   'ui-ping',         // 世界頻道新訊息
         unlock: 'ui-unlock',       // 兌換成功
     };
     // 各音效的相對音量：滑過最輕，提示音最響（總音量之外再乘一層）
-    const GAIN = { hover: 0.4, click: 0.75, toggle: 0.8, cancel: 0.8, close: 0.8, error: 0.9, confirm: 1, ping: 1, unlock: 1 };
+    const GAIN = { hover: 0.4, slide: 0.7, click: 0.75, toggle: 0.8, cancel: 0.8, close: 0.8, error: 0.9, confirm: 1, ping: 1, unlock: 1 };
 
     const ROOT_SEL = '#aurelia-home-tab';
 
     // 點擊規則：由上往下比對，第一個命中的勝
     const CLICK_RULES = [
+        ['.lcp-nav', 'slide'],   // 章節選擇的左右翻頁：滑過音當翻卡聲
         ['[data-act="close"], #ach-close-btn, #hist-close-btn, #lca-close, #close-bookshelf-btn, .lsd-close, .lstage-win-close', 'close'],
         ['[data-act="back"], .lset-back, .lb-back-btn', 'cancel'],
         ['#iris-send-btn, #iris-retry-btn, [data-act="save"], .lep-done, .hist-edit-confirm-btn', 'confirm'],
