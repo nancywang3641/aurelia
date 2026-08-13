@@ -64,6 +64,13 @@
         return _overlay;
     }
 
+    // 大總結鈕只在 PWA 顯示：這顆讀的是 vn_grand_summaries(by storyId)，
+    // 酒館跑團的總結存在 tavern_summary(by chatId)、要在故事日誌看 → 酒館入口顯示會拿到別套資料。
+    function _syncSummaryBtn(overlay) {
+        const btn = overlay && overlay.querySelector('#vn-reader-sa-summary-btn');
+        if (btn) btn.style.display = _isTavernMode() ? 'none' : '';
+    }
+
     // ── strip VN tags → 純文字 ────────────────────────────────────
     function _strip(text) {
         if (!text) return '';
@@ -282,6 +289,7 @@
         async show(mountInto) {
             const overlay = _ensureDOM(mountInto);
             overlay.style.display = 'flex';
+            _syncSummaryBtn(overlay);
 
             const body   = overlay.querySelector('#vn-reader-sa-body');
             const tabsEl = overlay.querySelector('#vn-reader-sa-tabs');
@@ -357,6 +365,7 @@
 
         // ── 大總結編輯器 ──────────────────────────────────────────
         async showSummaryEditor() {
+            if (_isTavernMode()) return;   // 酒館版總結不在這套；鈕已隱藏，擋掉舊 DOM 的殘留呼叫
             const overlay = _ensureDOM();
             const body    = overlay.querySelector('#vn-reader-sa-body');
             const tabsEl  = overlay.querySelector('#vn-reader-sa-tabs');
