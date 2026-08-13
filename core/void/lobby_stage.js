@@ -1628,11 +1628,21 @@
             { id:'world', name:'奧瑞亞世界觀',    sub:'主世界觀補充設定',   icon:'fa-globe',          load:P.loadWorld,   save:P.saveWorld },
         ];
 
+        let curTab = 'chars';   // 'chars'=人設/世界觀、'opts'=選項（窗口越疊越長→改同窗分頁）
         function renderList() {
             box.innerHTML =
                 '<div class="lsd-title"><i class="fa-solid fa-gear"></i> 大廳設置</div>' +
-                '<div class="lset-section-label">人設 / 世界觀</div>' +
-                '<div class="lset-list">' +
+                '<div class="lset-tabs">' +
+                  '<button class="lset-tab' + (curTab === 'chars' ? ' on' : '') + '" data-tab="chars">人設 / 世界觀</button>' +
+                  '<button class="lset-tab' + (curTab === 'opts' ? ' on' : '') + '" data-tab="opts">選項</button>' +
+                '</div>' +
+                '<div class="lset-body">' + (curTab === 'chars' ? _charsHtml() : _optsHtml()) + '</div>' +
+                '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+            box.querySelectorAll('.lset-tab').forEach(b => b.addEventListener('click', () => { curTab = b.dataset.tab; renderList(); }));
+            if (curTab === 'chars') _bindChars(); else _bindOpts();
+        }
+        function _charsHtml() {
+            return '<div class="lset-list">' +
                 EDITS.map(e =>
                     '<button class="lset-item" data-edit="' + e.id + '">' +
                       '<i class="fa-solid ' + e.icon + ' lset-item-ic"></i>' +
@@ -1640,9 +1650,10 @@
                       '<span class="lset-item-sub">' + e.sub + '</span></span>' +
                       '<i class="fa-solid fa-chevron-right lset-item-arrow"></i>' +
                     '</button>').join('') +
-                '</div>' +
-                '<div class="lset-section-label">選項</div>' +
-                '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
+                '</div>';
+        }
+        function _optsHtml() {
+            return '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
                   '<input type="checkbox" class="lset-chk" data-k="lore"' + (useLore ? ' checked' : '') + '></label>' +
                 '<div class="lset-hint">預設用大總結摘要的世界觀。勾選＝改讀角色卡的完整世界書（含角色之間的橫向關係，大總結不會寫）。</div>' +
                 '<label class="lset-row"><span class="lset-tx">大廳 NPC 看你當前劇情</span>' +
@@ -1662,8 +1673,15 @@
                 '<div class="lset-hint">只影響戶外大地圖。自動＝每次進城隨機（晴／雨／雪）。</div>' +
                 '<label class="lset-row"><span class="lset-tx">書咖離線訪客</span>' +
                   '<input type="checkbox" class="lset-chk" data-k="cafe"' + (localStorage.getItem('cafe_offline_visits') !== '0' ? ' checked' : '') + '></label>' +
-                '<div class="lset-hint">開著＝常客會自己來書咖消費、留下紀錄（每位第一次上門會請 AI 記一次他的口味）。關閉＝書咖不營業。</div>' +
-                '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+                '<div class="lset-hint">開著＝常客會自己來書咖消費、留下紀錄（每位第一次上門會請 AI 記一次他的口味）。關閉＝書咖不營業。</div>';
+        }
+        function _bindChars() {
+            box.querySelectorAll('.lset-item').forEach(btn => btn.addEventListener('click', () => {
+                const e = EDITS.find(x => x.id === btn.dataset.edit);
+                if (e) renderEditor(e);
+            }));
+        }
+        function _bindOpts() {
             box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
                 const k = e.target.dataset.k;
                 if (k === 'lore') {
@@ -1688,10 +1706,6 @@
                 _wxSetting = btn.dataset.wx;   // 快取同步→下一幀立即生效
                 S._wxRoll = null;              // 切回自動時重擲
                 box.querySelectorAll('.ltheater-freq-btn[data-wx]').forEach(b => b.classList.toggle('on', b === btn));
-            }));
-            box.querySelectorAll('.lset-item').forEach(btn => btn.addEventListener('click', () => {
-                const e = EDITS.find(x => x.id === btn.dataset.edit);
-                if (e) renderEditor(e);
             }));
         }
 
