@@ -37,13 +37,15 @@
                  padding:calc(14px + env(safe-area-inset-top,0px)) 20px 14px;
                  border-bottom:1px solid rgba(212,175,55,0.2);flex-shrink:0;box-sizing:border-box;">
                 <div style="color:#d4af37;font-size:1rem;letter-spacing:2px;
-                            font-family:'Playfair Display','Noto Serif TC',serif;">📖 劇情閱讀器</div>
+                            font-family:'Playfair Display','Noto Serif TC',serif;">
+                    <i class="fa-solid fa-book-open vrd-hd-ico"></i> 劇情閱讀器</div>
                 <div style="display:flex;align-items:center;gap:10px;">
-                    <div id="vn-reader-sa-summary-btn"
-                         style="color:#888;font-size:0.78rem;cursor:pointer;padding:3px 8px;
-                                border:1px solid rgba(212,175,55,0.2);border-radius:4px;">📝 大總結</div>
-                    <div id="vn-reader-sa-close"
-                         style="color:#666;font-size:1.6rem;cursor:pointer;line-height:1;">✕</div>
+                    <div id="vn-reader-sa-summary-btn" class="vrd-hd-btn">
+                        <i class="fa-solid fa-file-lines"></i> 大總結</div>
+                    <div id="vn-reader-sa-settings-btn" class="vrd-hd-icobtn" title="閱讀器設置">
+                        <i class="fa-solid fa-gear"></i></div>
+                    <div id="vn-reader-sa-close" class="vrd-hd-icobtn vrd-hd-close">
+                        <i class="fa-solid fa-xmark"></i></div>
                 </div>
             </div>
             <div id="vn-reader-sa-tabs"
@@ -58,8 +60,9 @@
 
         container.appendChild(_overlay);
 
-        _overlay.querySelector('#vn-reader-sa-close').onclick      = () => VN_READER.hide();
-        _overlay.querySelector('#vn-reader-sa-summary-btn').onclick = () => VN_READER.showSummaryEditor();
+        _overlay.querySelector('#vn-reader-sa-close').onclick        = () => VN_READER.hide();
+        _overlay.querySelector('#vn-reader-sa-summary-btn').onclick  = () => VN_READER.showSummaryEditor();
+        _overlay.querySelector('#vn-reader-sa-settings-btn').onclick = () => VN_READER.showSettings();
 
         return _overlay;
     }
@@ -71,12 +74,50 @@
         if (btn) btn.style.display = _isTavernMode() ? 'none' : '';
     }
 
+    // ── 章節摘要標記（換 PRESET 後摘要格式會變，讓使用者自己填）──────
+    const SUM_OPEN_KEY  = 'vn_reader_sum_open';
+    const SUM_CLOSE_KEY = 'vn_reader_sum_close';
+    const SUM_OPEN_DEF  = '<summary>';
+    const SUM_CLOSE_DEF = '</summary>';
+
+    function _getSumMarks() {
+        let o = '', c = '';
+        try { o = localStorage.getItem(SUM_OPEN_KEY)  || ''; } catch (e) {}
+        try { c = localStorage.getItem(SUM_CLOSE_KEY) || ''; } catch (e) {}
+        o = o.trim(); c = c.trim();
+        if (!o || !c) return { open: SUM_OPEN_DEF, close: SUM_CLOSE_DEF, custom: false };
+        return { open: o, close: c, custom: (o !== SUM_OPEN_DEF || c !== SUM_CLOSE_DEF) };
+    }
+
+    function _rxEsc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, function (m) { return '\\' + m; }); }
+
+    function _sumRegex(open, close) {
+        return new RegExp(_rxEsc(open) + '([\\s\\S]*?)' + _rxEsc(close), 'i');
+    }
+
+    // 抽章節摘要：先用使用者設的標記，抓不到再退回預設 <summary>；都沒有回空字串。
+    function _extractSummary(content) {
+        if (!content) return '';
+        const marks = _getSumMarks();
+        let m = null;
+        try { m = content.match(_sumRegex(marks.open, marks.close)); } catch (e) {}
+        if (!m && marks.custom) {
+            try { m = content.match(_sumRegex(SUM_OPEN_DEF, SUM_CLOSE_DEF)); } catch (e) {}
+        }
+        return m ? m[1].trim().replace(/<[^>]+>/g, '').trim() : '';
+    }
+
     // ── strip VN tags → 純文字 ────────────────────────────────────
     function _strip(text) {
         if (!text) return '';
         let s = text;
         s = s.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '');
         s = s.replace(/<summary>[\s\S]*?<\/summary>/gi, '');
+        // 自訂摘要標記也一起剝掉，免得摘要跟著正文一起顯示
+        const _sm = _getSumMarks();
+        if (_sm.custom) {
+            try { s = s.replace(new RegExp(_rxEsc(_sm.open) + '[\\s\\S]*?' + _rxEsc(_sm.close), 'gi'), ''); } catch (e) {}
+        }
         s = s.replace(/<avatar>[\s\S]*?<\/avatar>/gi, '');
         s = s.replace(/<status>[\s\S]*?<\/status>/gi, '');
         const cm = s.match(/<content>([\s\S]*?)<\/content>/i);
@@ -100,6 +141,7 @@
     }
 
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function escAttr(s) { return esc(s).replace(/"/g,'&quot;'); }
 
     // ── 模式偵測：有 TavernHelper 且非 standalone 視為酒館模式 ────
     function _isTavernMode() {
@@ -228,8 +270,7 @@
         sorted.forEach((ch, i) => {
             const content   = ch.content || '';
             const fullPlain = _strip(content);
-            const sm = content.match(/<summary>([\s\S]*?)<\/summary>/i);
-            let summary = sm ? sm[1].trim().replace(/<[^>]+>/g, '').trim() : fullPlain;
+            let summary = _extractSummary(content) || fullPlain;
             summary = summary.slice(0, 100) + (summary.length > 100 ? '…' : '');   // 卡片只顯示前 100 字
             const summaryHtml = summary.trim() ? esc(summary).replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>') : '<span style="color:#666">（無摘要）</span>';
             const ts = ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('zh-TW') : '';
@@ -452,6 +493,97 @@
                 }
                 body._summaryEntry = entry;
             } catch(e) { alert('儲存失敗: ' + (e.message || e)); }
+        },
+
+        // ── 閱讀器設置 ────────────────────────────────────────────
+        showSettings() {
+            const overlay = _ensureDOM();
+            const body    = overlay.querySelector('#vn-reader-sa-body');
+            const tabsEl  = overlay.querySelector('#vn-reader-sa-tabs');
+            if (!body) return;
+
+            body._prevHtml   = body.innerHTML;
+            body._prevScroll = body.scrollTop;
+            if (tabsEl) { body._prevTabsDisplay = tabsEl.style.display; tabsEl.style.display = 'none'; }
+
+            const marks = _getSumMarks();
+            body.innerHTML = `
+                <div class="vrd-set">
+                    <div class="vrd-set-bar">
+                        <button class="vrd-back-btn" onclick="window.VN_READER.hideSettings()">
+                            <i class="fa-solid fa-arrow-left"></i> 返回</button>
+                        <span class="vrd-detail-title">閱讀器設置</span>
+                    </div>
+
+                    <div class="vrd-set-sec">章節摘要</div>
+                    <div class="vrd-set-note">換了預設之後摘要格式跟著變的話，把新的開頭、結尾填進來。</div>
+
+                    <label class="vrd-set-label">摘要開頭</label>
+                    <input id="vrd-set-sum-open" class="vrd-set-input" spellcheck="false"
+                           placeholder="${escAttr(SUM_OPEN_DEF)}" value="${escAttr(marks.open)}"
+                           oninput="window.VN_READER._settingsPreview()">
+
+                    <label class="vrd-set-label">摘要結尾</label>
+                    <input id="vrd-set-sum-close" class="vrd-set-input" spellcheck="false"
+                           placeholder="${escAttr(SUM_CLOSE_DEF)}" value="${escAttr(marks.close)}"
+                           oninput="window.VN_READER._settingsPreview()">
+
+                    <div class="vrd-set-label">抓到的樣子</div>
+                    <div id="vrd-set-preview" class="vrd-set-preview"></div>
+
+                    <div class="vrd-set-acts">
+                        <button class="vrd-set-btn" onclick="window.VN_READER._settingsReset()">
+                            <i class="fa-solid fa-rotate-left"></i> 恢復原本</button>
+                        <button class="vrd-set-btn primary" onclick="window.VN_READER.saveSettings()">儲存</button>
+                    </div>
+                </div>`;
+
+            this._settingsPreview();
+        },
+
+        hideSettings() { this.hideSummaryEditor(); },
+
+        saveSettings() {
+            const o = (document.getElementById('vrd-set-sum-open')?.value || '').trim();
+            const c = (document.getElementById('vrd-set-sum-close')?.value || '').trim();
+            try {
+                if (o && c) { localStorage.setItem(SUM_OPEN_KEY, o); localStorage.setItem(SUM_CLOSE_KEY, c); }
+                else { localStorage.removeItem(SUM_OPEN_KEY); localStorage.removeItem(SUM_CLOSE_KEY); }
+            } catch (e) {}
+            // 回章節列表並用新標記重畫摘要
+            const body = _overlay?.querySelector('#vn-reader-sa-body');
+            const tabsEl = _overlay?.querySelector('#vn-reader-sa-tabs');
+            if (tabsEl && body && body._prevTabsDisplay !== undefined) tabsEl.style.display = body._prevTabsDisplay;
+            if (body && _readerSorted.length) _renderChapters(_readerSorted, body);
+            else this.hideSettings();
+        },
+
+        // 即時試抓：拿最新一章當樣本，看填的標記抓不抓得到
+        _settingsPreview() {
+            const box = document.getElementById('vrd-set-preview');
+            if (!box) return;
+            const o = (document.getElementById('vrd-set-sum-open')?.value || '').trim() || SUM_OPEN_DEF;
+            const c = (document.getElementById('vrd-set-sum-close')?.value || '').trim() || SUM_CLOSE_DEF;
+            const sample = _readerSorted.length ? (_readerSorted[_readerSorted.length - 1].content || '') : '';
+            if (!sample) { box.className = 'vrd-set-preview miss'; box.textContent = '目前沒有章節可以試抓'; return; }
+            let m = null;
+            try { m = sample.match(_sumRegex(o, c)); } catch (e) {}
+            if (m) {
+                const t = m[1].trim().replace(/<[^>]+>/g, '').trim();
+                box.className = 'vrd-set-preview';
+                box.textContent = t ? (t.length > 120 ? t.slice(0, 120) + '…' : t) : '（抓到了，但裡面是空的）';
+            } else {
+                box.className = 'vrd-set-preview miss';
+                box.textContent = '最新一章抓不到，卡片會改顯示正文開頭';
+            }
+        },
+
+        _settingsReset() {
+            const o = document.getElementById('vrd-set-sum-open');
+            const c = document.getElementById('vrd-set-sum-close');
+            if (o) o.value = SUM_OPEN_DEF;
+            if (c) c.value = SUM_CLOSE_DEF;
+            this._settingsPreview();
         },
 
         // ── 內部輔助（供 onclick 呼叫）────────────────────────────
