@@ -151,6 +151,16 @@
 }
 .achv2-tk.anomaly .achv2-tk-desc { color: #9fd8ae; }
 
+/* 估值點評：兌換後才有，一行帶章戳圖示的斜體簽註 */
+.achv2-tk-note {
+    display: flex; align-items: baseline; gap: 5px; min-width: 0;
+    color: #7b6a4a; font-size: 10px; font-style: italic; line-height: 1.45;
+}
+.achv2-tk-note i { flex: 0 0 auto; font-size: 9px; color: #b39247; font-style: normal; }
+.achv2-tk-note span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.achv2-tk.anomaly .achv2-tk-note { color: #7fc596; }
+.achv2-tk.anomaly .achv2-tk-note i { color: #57e389; }
+
 .achv2-tk-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .achv2-tk-status { color: #5a6784; font-size: 10.5px; white-space: nowrap; }
 .achv2-tk-status i { margin-right: 3px; color: #4f74c8; }

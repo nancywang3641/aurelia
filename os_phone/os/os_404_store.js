@@ -304,7 +304,7 @@ ${JSON.stringify({ shards, items: itemsState })}`;
                 const ach = pending.find(a => a.name === r.name);
                 if (!ach) continue;
                 const shards = Math.max(0, parseInt(r.shards) || 0);
-                await win.OS_ACHIEVEMENT.markRedeemed(ach.id, shards);
+                await win.OS_ACHIEVEMENT.markRedeemed(ach.id, shards, 'shards', r.comment);
                 addShards(shards);
                 totalShards += shards;
             }

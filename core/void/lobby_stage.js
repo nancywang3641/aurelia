@@ -1625,6 +1625,7 @@
             { id:'iris',  name:'瀅瀅（店長）',    sub:'視差書咖駐店小說家', icon:'fa-book',           load:P.loadIris,    save:P.saveIris },
             { id:'chess', name:'柴郡（404）',     sub:'404 號房管理員',     icon:'fa-cat',            load:P.loadCheshire, save:P.saveCheshire },
             { id:'alice', name:'愛麗絲（導覽官）', sub:'純白大廳首席導覽',   icon:'fa-user-astronaut', load:P.loadAlice,   save:P.saveAlice },
+            { id:'rabbit',name:'白兔先生（交易所）', sub:'交易區職員 · 成就估值', icon:'fa-stopwatch',   load:P.loadRabbit,  save:P.saveRabbit },
             { id:'world', name:'奧瑞亞世界觀',    sub:'主世界觀補充設定',   icon:'fa-globe',          load:P.loadWorld,   save:P.saveWorld },
         ];
 
