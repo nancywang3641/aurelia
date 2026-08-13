@@ -25,11 +25,12 @@
     // 各音效的相對音量：滑過最輕，提示音最響（總音量之外再乘一層）
     const GAIN = { hover: 0.4, slide: 0.7, click: 0.75, toggle: 0.8, cancel: 0.8, close: 0.8, error: 0.9, confirm: 1, ping: 1, unlock: 1 };
 
-    const ROOT_SEL = '#aurelia-home-tab';
+    // 大廳 tab 之外，只多放行章節選擇面板 —— 它是 VN 層的全屏 overlay，不在大廳 tab 裡
+    const ROOT_SEL = '#aurelia-home-tab, #chapter-overlay';
 
     // 點擊規則：由上往下比對，第一個命中的勝
     const CLICK_RULES = [
-        ['.lcp-nav', 'slide'],   // 章節選擇的左右翻頁：滑過音當翻卡聲
+        ['.chx-nav, .lcp-nav', 'slide'],   // 章節選擇的左右翻頁（量子白廳 chx／舊筆記本 lcp）：滑過音當翻卡聲
         ['[data-act="close"], #ach-close-btn, #hist-close-btn, #lca-close, #close-bookshelf-btn, .lsd-close, .lstage-win-close', 'close'],
         ['[data-act="back"], .lset-back, .lb-back-btn', 'cancel'],
         ['#iris-send-btn, #iris-retry-btn, [data-act="save"], .lep-done, .hist-edit-confirm-btn', 'confirm'],
