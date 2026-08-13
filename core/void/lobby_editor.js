@@ -481,12 +481,34 @@
             h.dataset.group = g.key;
             h.textContent = g.label;
             list.appendChild(h);
-            _b.CFG.layout.map((o, i) => ({ o, i })).filter(x => g.test(x.o))
-                .sort((a, b) => _zOf(b.o) - _zOf(a.o))   // 蓋在前面的排上面
-                .forEach(({ o, i }) => {
+            const entries = _b.CFG.layout.map((o, i) => ({ kind: 'obj', o, i, z: _zOf(o) })).filter(x => g.test(x.o));
+            // 👤 一般組把在場人物按「此刻的 z（腳底站位）」插進清單標出來——人物會走動,這是開窗當下的快照
+            if (g.key === 'auto') {
+                (S.npcs || []).forEach(n => {
+                    if (!n || !n.el) return;
+                    const az = (n._z != null) ? n._z : (2 + Math.round(n.y || 0));
+                    entries.push({ kind: 'actor', name: (n === S.player) ? '你' : (n.name || '訪客'), z: az });
+                });
+            }
+            entries.sort((a, b) => b.z - a.z)   // 蓋在前面的排上面
+                .forEach(en => {
+                    if (en.kind === 'actor') {
+                        const row = document.createElement('div');
+                        row.className = 'llw-row llw-actor';
+                        row.dataset.az = en.z;
+                        row.title = '人物照站位自動穿插（會走動,此為開窗當下位置）；把物件拖到這列上下＝以他為基準壓前/壓後';
+                        row.innerHTML = '<span class="llw-actor-ic"><i class="fa-solid fa-user"></i></span>';
+                        const span = document.createElement('span');
+                        span.textContent = en.name;
+                        row.appendChild(span);
+                        list.appendChild(row);
+                        return;
+                    }
+                    const { o, i } = en;
                     const row = document.createElement('div');
                     row.className = 'llw-row' + (S.edit.sel === i ? ' sel' : '') + (o._plotOff ? ' off' : '');
                     row.dataset.i = i;
+                    if (o._plotOff) row.title = '這件目前沒顯示在地圖上（地塊還沒蓋）,調它不會有視覺變化';
                     const img = document.createElement('img');
                     _b.resolveRef(o).then(src => { if (src) img.src = src; });
                     row.appendChild(img);
@@ -549,12 +571,18 @@
         if (group === 'floor' || group === 'back') { o.layer = group; delete o.zb; }
         else {
             o.layer = undefined;
-            let above = null, below = null;   // 同組緊鄰的上下列
-            for (let k = at - 1; k >= 0; k--) { const el = seq[k]; if (el.classList.contains('llw-group')) break; if (el.classList.contains('llw-row')) { above = Number(el.dataset.i); break; } }
-            for (let k = at; k < seq.length; k++) { const el = seq[k]; if (el.classList.contains('llw-group')) break; if (el.classList.contains('llw-row')) { below = Number(el.dataset.i); break; } }
+            // 鄰列的 z：物件列＝_zOf；人物列（llw-actor,帶 data-az）＝那個人此刻的站位 z——拖到人物上/下＝以他為基準壓前/壓後
+            const rowZ = (el) => {
+                if (el.classList.contains('llw-actor')) return Number(el.dataset.az);
+                const k = Number(el.dataset.i);
+                return Number.isFinite(k) && _b.CFG.layout[k] ? _zOf(_b.CFG.layout[k]) : null;
+            };
+            let above = null, below = null;   // 同組緊鄰的上下列 z
+            for (let k = at - 1; k >= 0; k--) { const el = seq[k]; if (el.classList.contains('llw-group')) break; if (el.classList.contains('llw-row')) { above = rowZ(el); break; } }
+            for (let k = at; k < seq.length; k++) { const el = seq[k]; if (el.classList.contains('llw-group')) break; if (el.classList.contains('llw-row')) { below = rowZ(el); break; } }
             let target = null;
-            if (below != null) target = _zOf(_b.CFG.layout[below]) + 1;        // 塞在下面那件的正上方
-            else if (above != null) target = _zOf(_b.CFG.layout[above]) - 1;   // 這組最底
+            if (below != null && Number.isFinite(below)) target = below + 1;        // 塞在下面那列的正上方
+            else if (above != null && Number.isFinite(above)) target = above - 1;   // 這組最底
             if (target != null) {
                 o.zb = target - (2 + Math.round(o.y + Math.round(o.h * (o.s || 1))));
                 if (!o.zb) delete o.zb;

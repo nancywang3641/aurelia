@@ -365,6 +365,11 @@
 .llw-row:hover { background:rgba(255,255,255,.07); }
 .llw-row.sel { background:rgba(74,182,255,.18); box-shadow:inset 2px 0 0 #4ab6ff; }
 .llw-row.off { opacity:.45; }
+/* 👤 人物列：站位快照標記（不可拖,當基準用） */
+.llw-row.llw-actor { cursor:default; color:#ffd98a; background:rgba(255,210,110,.06);
+  border-top:1px dashed rgba(255,210,110,.3); border-bottom:1px dashed rgba(255,210,110,.3); }
+.llw-actor-ic { width:30px; height:30px; flex:none; display:flex; align-items:center; justify-content:center;
+  border:1px dashed rgba(255,210,110,.45); border-radius:50%; color:#ffd98a; font-size:13px; }
 .llw-row.llw-drop, .llw-group.llw-drop { box-shadow:inset 0 2px 0 #4ab6ff; }
 .llw-list.llw-drop-end { box-shadow:inset 0 -2px 0 #4ab6ff; }
 /* 遮罩視覺化（擺設模式）：不可走區半透明紅 */
