@@ -1423,9 +1423,11 @@
         if (S.active) goScene('room404', null, 'arrive');
         else S.scene = 'room404';
     }
-    function exit404Stage() {
-        if (S.active) goScene('cafe', null, 'player');
-        else { S.scene = 'cafe'; tryMount(); }
+    function exit404Stage(target, spawn) {
+        // target/spawn：快轉地圖離開 404 帶目標場景（含點地圖任意落點）；沒帶＝回書咖（原還原流程）
+        const to = (typeof target === 'string' && SCENES[target] && target !== 'room404') ? target : 'cafe';
+        if (S.active) goScene(to, spawn || null, (to === 'cafe' && !spawn) ? 'player' : 'arrive');
+        else { S.scene = to; tryMount(); }
     }
 
     // ── 🏠 走進一間房 ────────────────────────────────────
@@ -1526,6 +1528,20 @@
             const saved = JSON.parse(localStorage.getItem(SCENES.city.cfgKey) || 'null');
             if (saved && Array.isArray(saved.layoutFull) && saved.layoutFull.length) layout = saved.layoutFull;
         } catch (e) {}
+        // 🐈‍⬛ 404 目的地：解鎖過（進過一次 ERR_404）才顯示；沒解鎖整顆藏起來
+        const _vt = window.VoidTerminal || {};
+        const _st404 = (_vt.get404State ? _vt.get404State() : null) || { unlocked: false, active: false };
+        const chips = [['city', '廣場'], ['cafe', '書咖'], ['hall', '大廳'], ['exchange', '交易所']];
+        if (_st404.unlocked) chips.push(['room404', '404']);
+        // 🚪 統一跳場口：進 404 走 enter404Room（glitch 特效+音效+柴郡開場）；從 404 離開走 restoreLobby 還原流程再落到目標
+        const jump = (to, spawn) => {
+            if (to === 'room404' && S.scene !== 'room404') {
+                if (_vt.enter404Room) { _vt.enter404Room(); return; }
+            } else if (S.scene === 'room404' && to !== 'room404') {
+                if (_vt.restoreLobby) { _vt.restoreLobby(to, spawn); return; }
+            }
+            goScene(to, spawn);
+        };
         const box = document.createElement('div');
         box.className = 'lstage-citymap';
         box.innerHTML =
@@ -1533,8 +1549,7 @@
               '<button class="lcm-close"><i class="fa-solid fa-xmark"></i></button></div>' +
             '<div class="lcm-map" style="width:' + Math.round(MAP_W * K) + 'px;height:' + Math.round(MAP_H * K) + 'px"></div>' +
             '<div class="lcm-chips">' +
-              [['city', '廣場'], ['cafe', '書咖'], ['hall', '大廳'], ['exchange', '交易所'], ['room404', '404']]
-                .map(c => '<button class="lcm-chip" data-go="' + c[0] + '"' + (S.scene === c[0] ? ' disabled' : '') + '>' + c[1] + '</button>').join('') +
+              chips.map(c => '<button class="lcm-chip" data-go="' + c[0] + '"' + (S.scene === c[0] ? ' disabled' : '') + '>' + c[1] + '</button>').join('') +
             '</div>';
         const map = box.querySelector('.lcm-map');
         const df = (f) => (isNight && CITY_NIGHT[f]) ? CITY_NIGHT[f] : f;   // 日夜對照
@@ -1566,10 +1581,10 @@
         layout.forEach(o => {
             const f = String(o.file || ''), s = o.s || 1;
             const front = { x: Math.round(o.x + o.w * s / 2), y: Math.round(o.y + o.h * s + 18) };
-            if (/book_cafe/.test(f)) dests.push({ o, label: '書咖', go: () => goScene('cafe') });
-            else if (/lobby_day/.test(f)) dests.push({ o, label: '大廳', go: () => goScene('hall') });
-            else if (/player_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '我的家', go: () => goScene('city', front) });
-            else if (/npc_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '鄰居家', go: () => goScene('city', front) });
+            if (/book_cafe/.test(f)) dests.push({ o, label: '書咖', go: () => jump('cafe') });
+            else if (/lobby_day/.test(f)) dests.push({ o, label: '大廳', go: () => jump('hall') });
+            else if (/player_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '我的家', go: () => jump('city', front) });
+            else if (/npc_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '鄰居家', go: () => jump('city', front) });
         });
         dests.forEach(d => {
             const o = d.o, s = o.s || 1;
@@ -1588,10 +1603,10 @@
             const r = map.getBoundingClientRect();
             const x = Math.round((e.clientX - r.left) / K), y = Math.round((e.clientY - r.top) / K);
             box.remove();
-            goScene('city', { x, y });
+            jump('city', { x, y });
         });
         box.querySelector('.lcm-close').addEventListener('click', () => box.remove());
-        box.querySelectorAll('.lcm-chip').forEach(b => b.addEventListener('click', () => { box.remove(); goScene(b.dataset.go); }));
+        box.querySelectorAll('.lcm-chip').forEach(b => b.addEventListener('click', () => { box.remove(); jump(b.dataset.go); }));
         S.root.appendChild(box);
         _regWin(() => box.remove());
     }
@@ -1722,8 +1737,8 @@
             '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
             '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-badge"></span></button>' +
-            // 🏙 快轉地圖：書咖/大廳/交易所/城裡都出現（404 要走還原流程）
-            ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'exchange' || S.scene === 'city') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
+            // 🏙 快轉地圖：書咖/大廳/交易所/城裡/404 都出現（404 進出走完整轉場流程，見 _openCityMap 的 jump）
+            ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'exchange' || S.scene === 'city' || S.scene === 'room404') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
             // ☕ 書咖櫃檯入口=跟瀅瀅開聊(startTalk 掛鉤,同白兔成例);獨立鈕已退役
         left.appendChild(root);
         if (S._theaterTimer) clearInterval(S._theaterTimer);
