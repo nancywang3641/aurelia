@@ -386,18 +386,25 @@
         return '';
     }
     // 音效清單：直接讀「全域世界書」的「SFX音效清單」條目當唯一來源（VN 世界書掛全域、不掛當前聊天）。
-    // 逐本找 comment 帶「SFX音效清單」或內容含 <音效_ID> 的條目，解析成分組。單一來源＝朋友只維護世界書一處。
+    // 清單依時代拆成多條（通用常駐／現代增補／奇幻中世紀增補）→ 必須把命中的條目「全部」收進來合併，
+    // 只取第一條會讓其餘條目的音效整組從下拉消失。停用的條目照收：停用只是不讓 AI 選用，
+    // 組件登場音效是本地播放、與 AI 無關，選單該給全部。單一來源＝朋友只維護世界書一處。
     let _sfxListCache = null;
-    function _parseSfxListContent(text) {
-        const groups = []; let cur = null;
+    function _parseSfxListContent(text, into) {
+        const groups = into || []; let cur = null;
         String(text || '').split(/\r?\n/).forEach(raw => {
             const l = raw.trim();
-            if (!l || l === '### SFX清单' || l === '<音效_ID>' || l === '</音效_ID>') return;
-            if (l[0] === '#') { cur = { name: l.replace(/^#+\s*/, ''), ids: [] }; groups.push(cur); return; }
-            if (!cur) { cur = { name: '音效', ids: [] }; groups.push(cur); }
-            cur.ids.push(l);
+            if (!l || /^<\/?[^>]*>$/.test(l) || /^#{2,}/.test(l)) return;   // 空行、<音效_ID*> 標籤、### 標題（分組名只有單個 #）
+            if (l[0] === '#') {
+                const name = l.replace(/^#+\s*/, '');
+                cur = groups.filter(g => g.name === name)[0];   // 同名分組合併（通用與增補都有「戰鬥」）
+                if (!cur) { cur = { name: name, ids: [] }; groups.push(cur); }
+                return;
+            }
+            if (!cur) { cur = groups.filter(g => g.name === '音效')[0]; if (!cur) { cur = { name: '音效', ids: [] }; groups.push(cur); } }
+            if (cur.ids.indexOf(l) < 0) cur.ids.push(l);
         });
-        return groups.length ? { groups } : null;
+        return groups;
     }
     async function _loadSfxList() {
         if (_sfxListCache) return _sfxListCache;
@@ -407,14 +414,17 @@
         try { if (TH.getGlobalWorldbookNames) books = TH.getGlobalWorldbookNames() || []; } catch (e) {}
         if (!books.length) { try { const s = TH.getLorebookSettings && TH.getLorebookSettings(); books = (s && s.selected_global_lorebooks) || []; } catch (e) {} }
         if (!books.length) { try { books = (TH.getLorebooks && TH.getLorebooks()) || []; } catch (e) {} }   // 保底：掃全部（仍靠條目名比對，找得到全域那本）
+        const groups = [];
         for (const b of books) {
             let entries = [];
             try { entries = (await TH.getLorebookEntries(b)) || []; } catch (e) { continue; }
-            const hit = entries.find(e => /SFX音效清單|SFX清单|音效_ID/.test(String(e.comment || '')))
-                     || entries.find(e => String(e.content || '').includes('<音效_ID>'));
-            if (hit) { const g = _parseSfxListContent(hit.content); if (g) { _sfxListCache = g; return g; } }
+            entries.filter(e => /SFX音效清單|SFX清单|音效_ID/.test(String(e.comment || ''))
+                             || String(e.content || '').indexOf('<音效_ID') >= 0)   // NSFW 條目是 <SFX_ID_SEXVER>，不會被掃進來
+                   .forEach(e => _parseSfxListContent(e.content, groups));
         }
-        return null;
+        if (!groups.length) return null;
+        _sfxListCache = { groups };
+        return _sfxListCache;
     }
     async function _populateAppearSfxSelect(sel, current) {
         const m = await _loadSfxList();
