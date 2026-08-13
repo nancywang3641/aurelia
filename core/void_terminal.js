@@ -1531,8 +1531,38 @@ const IRIS_IDLE = [
 
 
     // ===== 404 彩蛋系統 =====
+    // 🎬 404 開場片（cheshire_v1）：全屏蓋層播放，結尾鏡頭推進片尾的貓耳霓虹框內、
+    //    框內黑色撐滿全螢幕同時淡出 → 底下早就切好的 404 房露出來（不用黑屏硬切）。
+    function _play404OpeningVideo() {
+        const tab = document.getElementById('aurelia-home-tab');
+        if (!tab || document.getElementById('ch-open-ov')) return;
+        const ov = document.createElement('div');
+        ov.id = 'ch-open-ov';
+        ov.innerHTML =
+            '<video id="ch-open-vid" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/opening/cheshire_v1.mp4" playsinline preload="auto"></video>' +
+            '<button id="ch-open-skip">跳過 <i class="fa-solid fa-forward"></i></button>';
+        tab.appendChild(ov);
+        const vid = ov.querySelector('video');
+        let _done = false;
+        const done = () => {
+            if (_done) return; _done = true;
+            new Audio('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/glitch1.mp3').play().catch(() => {});
+            ov.classList.add('out');   // 推進框內 + 淡出（CSS transition）
+            setTimeout(() => { try { ov.remove(); } catch (e) {} }, 850);
+        };
+        ov.querySelector('#ch-open-skip').addEventListener('click', done);
+        vid.addEventListener('ended', done);
+        vid.addEventListener('error', done);
+        const loadT = setTimeout(() => { if (vid.readyState < 2) done(); }, 5000);   // CDN 載不動→別讓人黑屏乾等
+        vid.addEventListener('canplay', () => {
+            clearTimeout(loadT);
+            vid.play().catch(() => { vid.muted = true; vid.play().catch(done); });   // 帶聲播不了就靜音播
+        }, { once: true });
+    }
+
     function enter404Room() {
         is404Room = true; visit404Count++;
+        if (visit404Count === 1) _play404OpeningVideo();   // 第一次踏進 404 才播全片；之後照常 glitch 短轉場
         // 🎮 舞台切到404號房場景（柴郡的駭客車庫）
         if (window.LobbyStage?.enter404Stage) window.LobbyStage.enter404Stage();
         _irisHistoryBackup = [...IRIS_STATE.history];
@@ -2463,6 +2493,7 @@ ${sections}`;
     VoidTerminal.enter404Room = enter404Room;
     VoidTerminal.restoreLobby = restoreLobby;
     VoidTerminal.get404State = () => ({ unlocked: visit404Count >= 1, active: is404Room });
+    VoidTerminal.play404Opening = _play404OpeningVideo;   // 測試用：不動 visit404Count 直接重播開場片
 
     // ===== 內部橋（給 core/void/ 子模組借用核心狀態與函式）=====
     function resetActiveHistory() {
