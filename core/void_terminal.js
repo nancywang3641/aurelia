@@ -382,20 +382,7 @@ const IRIS_IDLE = [
     }
 
     // 更新頂部 404↔大廳 切換按鈕外觀（首次解鎖後才顯示）
-    function _updatePortalBtn() {
-        const btn = document.getElementById('room-portal-btn');
-        if (!btn) return;
-        if (visit404Count < 1) { btn.style.display = 'none'; return; }
-        btn.style.display = '';
-        const label = btn.querySelector('.void-mode-toggle-label');
-        if (is404Room) {
-            if (label) label.textContent = '⬡ 視差書咖';
-            btn.title = '返回視差書咖';
-        } else {
-            if (label) label.textContent = '⬡ 404';
-            btn.title = '傳送至 404 號房';
-        }
-    }
+    // （404 傳送鈕已退役：進出 404 併入快轉地圖 lobby_stage._openCityMap，解鎖過才顯示 404 目的地）
 
     // 左上場景牌（仿 VN #top-badge「時段 地點」，如「午後 視差書咖」）
     function _sceneTimeWord() {
@@ -471,7 +458,6 @@ const IRIS_IDLE = [
             }
         }
         setSceneBadge(is404Room ? '404號房' : '視差書咖');
-        _updatePortalBtn();
     }
 
     // 取代舊登入頁：直接依當前人設自動進場（酒館抓 ST persona／PWA 用 OS_PERSONA 預設 USER）
@@ -533,9 +519,6 @@ const IRIS_IDLE = [
                     </div>
                 </div>
                 <div class="lb-top-ctrls">
-                    <button class="void-mode-toggle-btn" id="room-portal-btn" title="傳送至 404 號房" style="display:none;">
-                        <span class="void-mode-toggle-label">⬡ 404</span>
-                    </button>
                     <button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏">⛶</button>
                     <button class="lb-icon-btn lstage-toggle-btn" id="lstage-toggle" title="書咖舞台"><i class="fa-solid fa-gamepad"></i></button>
                     <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關">🔊</button>
@@ -1095,35 +1078,7 @@ const IRIS_IDLE = [
             const storeShopBtn = tab.querySelector('#store-shop-btn');
             if (storeShopBtn) storeShopBtn.addEventListener('click', VoidPanels.openStore);
 
-            // 404 ↔ 視差書咖 切換 (頂部左側按鈕)
-            const portalBtn = tab.querySelector('#room-portal-btn');
-            if (portalBtn) portalBtn.addEventListener('click', () => {
-                if (is404Room) restoreLobby();
-                else enter404Room();
-            });
-
-            // 📱 手機把 404 portal 按鈕從頂部 .lb-top-ctrls 搬進 .lb-menu-head 右側（避免擠壓頂部）
-            const _relocatePortalBtns = () => {
-                const ctrls  = tab.querySelector('.lb-top-ctrls');
-                const head   = tab.querySelector('.lb-menu-head');
-                const portal = tab.querySelector('#room-portal-btn');
-                if (!ctrls || !portal) return;
-                const isMobile = window.matchMedia('(max-width: 560px)').matches;
-                const moveToHead = isMobile && head;
-                if (moveToHead) {
-                    if (portal.parentElement !== head) head.appendChild(portal);
-                } else {
-                    const fsBtn = ctrls.querySelector('#aurelia-fullscreen-btn');
-                    if (portal.parentElement !== ctrls) ctrls.insertBefore(portal, fsBtn || null);
-                }
-            };
-            _relocatePortalBtns();
-            if (!window._voidPortalRelocateBound) {
-                window._voidPortalRelocateBound = true;
-                window.addEventListener('resize', _relocatePortalBtns);
-                // 監聽 .void-tab class 變化（進出 mode-404 時自動重排）
-                new MutationObserver(_relocatePortalBtns).observe(tab, { attributes: true, attributeFilter: ['class'] });
-            }
+            // （404 傳送鈕已退役：進出 404 併入快轉地圖，解鎖過才顯示）
 
             // 大廳畫布關閉按鈕
             const lcaCloseBtn = tab.querySelector('#lca-close');
@@ -1622,12 +1577,13 @@ const IRIS_IDLE = [
             document.getElementById('aurelia-phone-screen')?.classList.add('mode-404');
 
             playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個天然呆店長消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個假笑的寫作機器。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
-            _updatePortalBtn();
             debouncedSave();
         }, 580);
     }
 
-    function restoreLobby() {
+    function restoreLobby(targetScene, targetSpawn) {
+        // targetScene/targetSpawn：快轉地圖離開 404 時帶目標場景；沒帶＝走回書咖（原還原流程）
+        const _target = (typeof targetScene === 'string') ? targetScene : null;
         is404Room = false; _justReturnedFrom404 = true;
         _cheshireHistoryBackup = [...IRIS_STATE.history];
         IRIS_STATE.history = [..._irisHistoryBackup];
@@ -1671,10 +1627,9 @@ const IRIS_IDLE = [
             document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
 
             playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
-            _updatePortalBtn();
             debouncedSave();
-            // 🎮 舞台切回書咖場景（關著就不掛）
-            if (window.LobbyStage?.exit404Stage) window.LobbyStage.exit404Stage();
+            // 🎮 舞台切回目標場景（快轉帶目標；預設書咖。關著就不掛）
+            if (window.LobbyStage?.exit404Stage) window.LobbyStage.exit404Stage(_target, targetSpawn);
         }, 580);
     }
 
@@ -2503,6 +2458,11 @@ ${sections}`;
 
     // 供 OS_ACHIEVEMENT 回呼：刷新已開啟的成就面板
     VoidTerminal.refreshAchievementPanel = () => VoidPanels.refreshAchievement();
+
+    // 供快轉地圖（lobby_stage._openCityMap）呼叫：404 進出走完整流程（glitch 特效/音效/BGM/柴郡開場）
+    VoidTerminal.enter404Room = enter404Room;
+    VoidTerminal.restoreLobby = restoreLobby;
+    VoidTerminal.get404State = () => ({ unlocked: visit404Count >= 1, active: is404Room });
 
     // ===== 內部橋（給 core/void/ 子模組借用核心狀態與函式）=====
     function resetActiveHistory() {
