@@ -125,6 +125,27 @@
 .vrd-detail-title { flex:1; min-width:0; font-size:14px; font-weight:700; color:#d4af37; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .vrd-back-btn { background:transparent; border:1px solid rgba(212,175,55,0.3); color:#d4af37; padding:6px 14px; border-radius:8px; cursor:pointer; font-size:12px; flex-shrink:0; }
 .vrd-back-btn:hover { background:rgba(212,175,55,0.1); }
+/* 標題列按鈕 */
+.vrd-hd-ico { font-size:0.9em; margin-right:2px; }
+.vrd-hd-btn { color:#888; font-size:0.78rem; cursor:pointer; padding:3px 8px; border:1px solid rgba(212,175,55,0.2); border-radius:4px; transition:color .15s, border-color .15s; }
+.vrd-hd-btn:hover { color:#d4af37; border-color:rgba(212,175,55,0.5); }
+.vrd-hd-icobtn { color:#666; font-size:1.05rem; line-height:1; cursor:pointer; padding:2px 4px; transition:color .15s; }
+.vrd-hd-icobtn:hover { color:#d4af37; }
+.vrd-hd-close { font-size:1.25rem; }
+/* 設置頁 */
+.vrd-set { display:flex; flex-direction:column; gap:9px; padding:2px 2px 24px; }
+.vrd-set-bar { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.vrd-set-sec { font-size:13px; font-weight:700; color:#d4af37; letter-spacing:1px; margin-top:4px; }
+.vrd-set-note { font-size:11.5px; line-height:1.7; color:#8a8172; }
+.vrd-set-label { font-size:11px; color:#9c9384; letter-spacing:1px; margin-top:6px; }
+.vrd-set-input { width:100%; box-sizing:border-box; background:rgba(255,255,255,0.04); border:1px solid rgba(212,175,55,0.18); border-radius:6px; color:#e8dfc8; padding:9px 11px; font-family:'Courier New',monospace; font-size:12.5px; outline:none; }
+.vrd-set-input:focus { border-color:rgba(212,175,55,0.5); }
+.vrd-set-preview { min-height:38px; background:rgba(255,255,255,0.03); border:1px dashed rgba(212,175,55,0.22); border-radius:6px; padding:9px 11px; font-size:12px; line-height:1.65; color:#b6ad9c; white-space:pre-wrap; word-break:break-word; }
+.vrd-set-preview.miss { border-color:rgba(220,120,120,0.35); color:#c98a8a; }
+.vrd-set-acts { display:flex; gap:8px; margin-top:14px; }
+.vrd-set-btn { flex:1; min-width:0; background:transparent; border:1px solid rgba(255,255,255,0.14); color:#999; padding:8px 10px; border-radius:6px; cursor:pointer; font-size:12.5px; font-family:inherit; }
+.vrd-set-btn:hover { border-color:rgba(212,175,55,0.4); color:#d4af37; }
+.vrd-set-btn.primary { background:rgba(212,175,55,0.12); border-color:rgba(212,175,55,0.4); color:#d4af37; font-weight:700; }
 
 /* ── 創作室：劇情面板自訂 CSS 框（像酒館自訂樣式）── */
 .vth-mini { padding:6px 12px; font-size:12px; border-radius:7px; border:1px solid rgba(128,128,128,0.35); background:rgba(255,255,255,0.06); color:inherit; cursor:pointer; white-space:nowrap; }
