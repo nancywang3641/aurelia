@@ -233,9 +233,9 @@
     background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/cheshire_signature.png);
 }
 
-/* ── 左側常駐 dock：MAIN MENU 快捷（漢堡收掉右欄也照常可用）── */
+/* ── 右側常駐 dock：MAIN MENU 快捷（她慣用手在右,2026-08-13 從左邊搬過來）── */
 .lb-dock {
-    position:absolute; left:10px; top:50%; transform:translateY(-50%);
+    position:absolute; right:10px; top:50%; transform:translateY(-50%);
     z-index:40; display:flex; flex-direction:column; align-items:center; gap:9px;
 }
 .lb-dock-btn {
@@ -247,8 +247,8 @@
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
     transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
 }
-.lb-dock-btn:hover { transform:translateX(3px); background:rgba(255,255,255,0.95); box-shadow:0 6px 18px rgba(40,60,110,0.28); }
-.lb-dock-btn:active { transform:translateX(1px) scale(0.97); }
+.lb-dock-btn:hover { transform:translateX(-3px); background:rgba(255,255,255,0.95); box-shadow:0 6px 18px rgba(40,60,110,0.28); }
+.lb-dock-btn:active { transform:translateX(-1px) scale(0.97); }
 .lb-dock-ic { width:30px; height:30px; object-fit:contain; display:block; pointer-events:none; }
 .lb-dock-label { font-size:11px; font-weight:700; letter-spacing:1px; color:#2b3652; line-height:1.2; pointer-events:none; }
 .lb-dock-sep { width:34px; height:1px; margin:1px 0; background:linear-gradient(to right,transparent,rgba(60,80,130,0.4),transparent); }
@@ -269,7 +269,7 @@
 .void-tab.mode-404 .lb-dock-label { font-size:0; color:#9ef3b0; }
 .void-tab.mode-404 .lb-dock-label::after { content:attr(data-cn-404); font-size:11px; }
 @media (max-width:560px) {
-    .lb-dock { left:6px; gap:6px; }
+    .lb-dock { right:6px; gap:6px; }
     .lb-dock-btn { width:46px; padding:5px 3px 4px; border-radius:11px; }
     .lb-dock-ic { width:24px; height:24px; }
     .lb-dock-label { font-size:9px; }
