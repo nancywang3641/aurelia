@@ -156,13 +156,15 @@
     // ================================================================
     // 擴充：標記成就已兌換 (供 404 商店呼叫)
     // ================================================================
-    async function markRedeemed(id, shards, currency) {
+    async function markRedeemed(id, shards, currency, comment) {
         const ach = _achievements.find(a => a.id === id);
         if (!ach) return;
         ach.redeemed = true;
         ach.shards   = shards || 0;
         ach.currency = currency || 'shards';   // 'shards'=柴郡碎片(預設,舊資料同) / 'pt'=白兔交易所 PT
         ach.exp      = Math.round((shards || 0) / 8);  // EXP = shards / 8
+        // 估值當下那句點評：以前只在 toast 閃一下就沒了，存進票券才留得住
+        if (comment) ach.comment = String(comment).trim();
 
         const db = win.OS_DB;
         if (db && db.updateAchievement) {

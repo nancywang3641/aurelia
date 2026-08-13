@@ -97,6 +97,18 @@
         const desc = document.createElement('div');
         desc.className = 'achv2-tk-desc';
         desc.textContent = a.desc || '';
+        // 估值當下的那句點評（白兔／柴郡）：兌換後蓋在票上，滑過看全文
+        let note = null;
+        if (a.redeemed && a.comment) {
+            note = document.createElement('div');
+            note.className = 'achv2-tk-note';
+            note.title = a.comment;
+            const nico = document.createElement('i');
+            nico.className = 'fa-solid ' + (anomaly ? 'fa-cat' : 'fa-stamp');
+            const ntxt = document.createElement('span');
+            ntxt.textContent = a.comment;   // textContent 防注入
+            note.append(nico, ntxt);
+        }
         const foot = document.createElement('div');
         foot.className = 'achv2-tk-foot';
         const status = document.createElement('span');
@@ -146,7 +158,9 @@
             star.className = 'achv2-tk-star';
             tk.appendChild(star);
         }
-        main.append(head, desc, foot);
+        main.append(head, desc);
+        if (note) main.appendChild(note);
+        main.appendChild(foot);
         tk.append(stub, main);
         return tk;
     }

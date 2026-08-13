@@ -2196,8 +2196,12 @@ ${sections}`;
             const _isGuestCard = !!(npcTarget && !npcTarget.personaFull);   // 有 personaFull=系統/原生NPC；沒有=外來書卡
             const _worldTier = _isGuestCard ? 'lite' : (npcTarget?.worldTier || 'medium');
             const worldCtx   = _wv ? _wv.getWorldview(_worldTier) : '';
-            const aliceSupplement = (npcTarget && npcTarget.key === 'alice' && window.OS_PROMPTS?.loadAlice)
-                ? (window.OS_PROMPTS.loadAlice() || '').trim() : '';
+            // 使用者自填的補充人設：愛麗絲、白兔各一槽（大廳設置→人設）
+            let aliceSupplement = '';
+            try {
+                if (npcTarget && npcTarget.key === 'alice') aliceSupplement = (window.OS_PROMPTS?.loadAlice?.() || '').trim();
+                else if (npcTarget && npcTarget.key === 'rabbit') aliceSupplement = (window.OS_PROMPTS?.loadRabbit?.() || '').trim();
+            } catch (e) {}
 
             // USER 身分：guest NPC 用「那輪大總結紀錄的 persona」(認得古風輪的你，不靠當前 USER)；
             //   固定 NPC(瀅瀅/柴郡/愛麗絲)或沒紀錄 → 退當前 persona

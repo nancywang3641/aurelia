@@ -356,7 +356,17 @@
         const achList = pending.map((a, i) =>
             `${i + 1}. 成就名稱：「${a.name}」\n   描述：${a.desc || '（無描述）'}`
         ).join('\n');
+        // 白兔的人格（點評口吻）：跟大廳那份同一個人，這裡只取估值櫃檯用得到的部分。
+        // 使用者在「大廳設置 → 人設 → 白兔先生」填的補充，兩邊共用同一槽。
+        const rabbitExtra = (() => {
+            try { return (win.OS_PROMPTS?.loadRabbit?.() || '').trim(); } catch (e) { return ''; }
+        })();
+        const RABBIT_VOICE =
+            '你不擺架子、不勸說、不奉承，只把價碼算清楚攤在客人面前。' +
+            '點評一句話講完：精算、守時、帶一點看戲的興味；漂亮的操作你不吝於承認，蠢事你也會禮貌地記上一筆。' +
+            '難聽的話要包成客氣的提醒，但不要因此說得含糊。';
         const systemPrompt = '你是「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，斯文、守時、照章辦事。' +
+            RABBIT_VOICE + (rabbitExtra ? `\n【補充人設】\n${rabbitExtra}\n` : '') +
             `你的工作是替客人「估值」他們在故事中達成的成就，換算成正派貨幣「PT」。` +
             `評分標準：日常小事 5~${cc.normal} PT，亮眼表現 ${cc.normal + 5}~${cc.great} PT，值得紀念的里程碑 ${cc.great + 10}~${cc.legend} PT。` +
             '請以 JSON 陣列格式回覆，每筆格式如下：' +
@@ -392,7 +402,7 @@
                 const a = pending.find(x => x.name === r.name);
                 if (!a) continue;
                 const pt = Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0));   // 單筆封頂防暴走
-                await achApi.markRedeemed(a.id, pt, 'pt');
+                await achApi.markRedeemed(a.id, pt, 'pt', r.comment);
                 totalPT += pt;
             }
             if (totalPT > 0) await addPT(totalPT, { reason: '成就兌換（交易所）' });
