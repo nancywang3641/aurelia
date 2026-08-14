@@ -89,7 +89,9 @@
     // 🚨stream:長輸出的那幾支一定要開。非串流是整篇生完才回第一個位元組,反代那條連線空掛著,
     //   實測世界檔案要寫七千多 token、跑 250~260 秒,反代 300 秒整掐斷 → 502 upstream request failed。
     //   短的那支(抽種子,三十秒)不必開,維持原樣。
-    async function _callAI(prompt, label, route, useMain, asText, stream) {
+    // onChunk:串流途中每收到一塊就被叫一次,參數是「到目前為止的全文」(不是增量)。
+    //   只有選了連接 profile 的人真的會串流,其餘路徑送出去也是整篇才回 → onChunk 從頭到尾不觸發,行為同以往。
+    async function _callAI(prompt, label, route, useMain, asText, stream, onChunk) {
         const api = win.OS_API || window.OS_API;
         if (!api || !api.chat) return null;
         try {
@@ -112,7 +114,7 @@
                 if (isNaN(_mt) || _mt < 8192) config.maxTokens = 8192;
             }
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label, keepCodeFences: true, stream: stream === true });
+                api.chat([{ role: 'system', content: prompt }], config, (typeof onChunk === 'function' ? onChunk : null), resolve, reject, { label, keepCodeFences: true, stream: stream === true });
             });
             return asText ? _stripFences(raw) : _extractJSON(raw);
         } catch (e) { console.warn('[Worldgate③] ' + label + ' 失敗', e); return null; }
@@ -220,20 +222,26 @@
             '寧可少一個區域,不可少掉價格、循環與常識。\n' +
             // 🚨玩家的追加要求放最後:放前面的話後面隔著兩千多字規格才輪到下筆,權重被稀釋到等於沒寫。
             _noteLine(note) +
-            // 關鍵字與降生地都是「結尾單行」給程式吃的：同一次呼叫帶回來、不另外燒 API，也不用在正文裡塞 JSON。
-            // 🚨兩行必須綁成同一個收尾區塊。分開寫、各自標「只輸出這一行」的話，模型吐完第一行就當任務結束，
-            //   第二行永遠是被漏掉的那個（實測：十節九千多字全寫完、關鍵字有、降生地整行不存在）。
-            '全部寫完後,最後補上四行給程式讀的資料,四行都必須有、缺一不可、順序如下:\n' +
-            '第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
-            '第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
-            '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
+            // 給程式讀的四行分成前後兩個區塊。
+            // 🚨兩張生圖關鍵詞改成寫在「正文之前」:正文要跑兩百多秒,關鍵詞先到就能一邊寫正文一邊把圖生好
+            //   (同 VN 頭像早鳥搭串流便車那招)。擺在結尾等於整篇寫完才拿得到,提前量是零。
+            //   代價:模型是還沒寫正文就先描述畫面,只能依種子推,不像寫完再回頭挑那麼貼——所以這裡要它照種子的地貌與氛圍寫。
+            // 🚨同一個區塊裡的行必須綁在一起講。分開寫、各自標「只輸出這一行」的話,模型吐完第一行就當任務結束,
+            //   第二行永遠是被漏掉的那個(實測:十節九千多字全寫完、關鍵字有、降生地整行不存在)。
+            '【輸出順序】依序輸出三段:開頭兩行資料、世界檔案正文、結尾兩行資料。四行都必須有、缺一不可。\n' +
             // 這兩行是拿去生圖的,所以要英文關鍵詞;構圖與畫風由程式端補,這裡只寫「畫面裡有什麼」。
-            '第三行 概念圖:用英文關鍵詞描述這個世界最具代表性的一幅遠景——地貌、建築樣式、天色與氣氛,' +
+            '開頭第一行 概念圖:依世界種子的地貌與氛圍,用英文關鍵詞描述這個世界最具代表性的一幅遠景——地貌、建築樣式、天色與氣氛,' +
             '12~20 個詞、逗號分隔,只寫看得見的東西,不要寫人物、招牌文字、畫風或畫質詞\n' +
-            '第四行 方位圖:用英文關鍵詞描述從高空俯瞰整片疆域的樣子——各區域的地形怎麼分布、彼此怎麼相接,' +
+            '開頭第二行 方位圖:用英文關鍵詞描述從高空俯瞰整片疆域的樣子——各區域的地形怎麼分布、彼此怎麼相接,' +
             '10~16 個詞、逗號分隔,同樣不要人物與文字\n' +
+            '這兩行寫完就直接接著寫世界檔案正文,不要為它們加標題、編號或任何說明文字。\n' +
+            '正文全部寫完後,再補上結尾兩行:\n' +
+            '結尾第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
+            '結尾第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
+            '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
             '語言:繁體中文。';
-        let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true, true));
+        _earlyStart();   // 🐣 這一趟的早鳥開張:串流一吐出概念圖那行就開生,不等正文寫完
+        let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true, true, _earlyScan));
         if (!text) return null;
         // 截斷保險:尾巴那節沒寫到就接著補完(整份重生太貴,也會換一套設定)
         // 🚨判斷一定要在「清乾淨之後」的文字上做,而且別綁節名——節名改過一次(冒險引擎→自己在轉的事),
@@ -713,6 +721,36 @@
         }
         return url;
     }
+    // 🐣 早鳥:兩張圖的關鍵詞寫在正文之前,串流一吐出來就開生,不必等整篇寫完(正文本身要跑兩百多秒)。
+    //   只有走連接 profile 的人真的會串流;其他路徑 onChunk 不觸發 → _early 一直是空的,_fillArt 照舊自己生。
+    let _early = null;
+    function _earlyStart() { _early = { artPrompt: '', mapPrompt: '', art: null, mapArt: null }; }
+    function _earlyScan(acc) {
+        if (!_early || _early.done || !acc) return;
+        const text = String(acc);
+        // 🚨一定要等那行「換行了」才動手:串流是一塊一塊來的,半句關鍵詞生出來的是另一張圖,而且生了就收不回來
+        if (!_early.artPrompt) {
+            const m = text.match(/概念圖[:：]\s*([^\n]+)\n/);
+            if (m) {
+                _early.artPrompt = m[1].trim().slice(0, 400);
+                _early.art = _genArt(_early.artPrompt, _ART_BASE, 768, 448).catch(() => '');
+                console.log('[Worldgate③] 🐣 概念圖早鳥:正文還在寫,圖先開生');
+            }
+        }
+        if (!_early.mapPrompt) {
+            const m = text.match(/方位圖[:：]\s*([^\n]+)\n/);
+            if (m) {
+                _early.mapPrompt = m[1].trim().slice(0, 400);
+                // 🚨接在概念圖後面跑,不併發:生圖那端是排隊處理的,兩張同時送會有一張被丟掉
+                const prev = _early.art || Promise.resolve('');
+                _early.mapArt = prev.then(() => _genArt(_early.mapPrompt, _MAP_BASE, 640, 640)).catch(() => '');
+            }
+        }
+        // 那兩行規定寫在正文最前面,掃過開頭幾千字還沒有就是模型沒照做——收工,
+        // 不要之後每來一塊都對著整篇正文重跑正則(七千 token 的文章會掃上百次)。
+        if (_early.artPrompt && _early.mapPrompt) _early.done = true;
+        else if (text.length > 4000) { _early.done = true; console.warn('[Worldgate③] 🐣 早鳥沒等到生圖關鍵詞,退回寫完再生'); }
+    }
     // 在背景補圖,不擋玩家:世界檔案已經等了好幾分鐘,不能再為了兩張圖把畫面卡住。
     // 生完寫回檔案庫;玩家若還停在這個世界的頁面就順手重繪(同隊伍區的做法)。
     // 🚨一張一張生,不要 Promise.all:生圖那端是排隊處理的,兩張同時送會有一張被丟掉
@@ -720,14 +758,21 @@
     async function _fillArt(w) {
         if (!w || (w.art && w.mapArt)) return;
         let got = false;
+        // 早鳥的成果只在「關鍵詞一模一樣」時才認:同一趟展開才對得上,續寫/重抽拿到的是別的世界
+        const early = _early || {};
         if (!w.art && w.artPrompt) {
-            const art = await _genArt(w.artPrompt, _ART_BASE, 768, 448);
+            if (early.art && early.artPrompt !== w.artPrompt) console.warn('[Worldgate③] 🐣 早鳥的關鍵詞跟最終解析出來的對不上,那張圖不採用', early.artPrompt, '≠', w.artPrompt);
+            let art = (early.art && early.artPrompt === w.artPrompt) ? await early.art : '';
+            if (art) console.log('[Worldgate③] 🐣 概念圖早鳥接手成功,不必再等');
+            else art = await _genArt(w.artPrompt, _ART_BASE, 768, 448);   // 沒早鳥或早鳥失敗→照原本的路生一次
             if (art) { w.art = art; got = true; } else console.warn('[Worldgate③] 概念圖沒生出來');
         }
         if (!w.mapArt && w.mapPrompt) {
-            const mapArt = await _genArt(w.mapPrompt, _MAP_BASE, 640, 640);
+            let mapArt = (early.mapArt && early.mapPrompt === w.mapPrompt) ? await early.mapArt : '';
+            if (!mapArt) mapArt = await _genArt(w.mapPrompt, _MAP_BASE, 640, 640);
             if (mapArt) { w.mapArt = mapArt; got = true; } else console.warn('[Worldgate③] 方位圖沒生出來');
         }
+        _early = null;   // 這一趟用完就丟,別讓上一個世界的圖被下一個世界接走
         if (!got) return;
         await _saveWorld(w);
         if (_winEl && _curDetailId === w.id) { try { _renderDetail(w); } catch (e) {} }
