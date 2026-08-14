@@ -799,7 +799,14 @@
             const headEl = box.querySelector('.wg-ev-head');
             const textEl = box.querySelector('.wg-ev-text');
             const mainEl = box.querySelector('.wg-ev-main');
-            box.querySelector('.wg-meet-x').addEventListener('click', _closeMeet);
+            // ✕ = 離開這個人,不是只脫一層皮:走過去點旅人時是先 startTalk() 再開海報,
+            //   只收海報會掉回「對話框還亮著」的中間態,要再按一次離開才回得到走路模式。
+            //   右鍵開的身分卡沒有 startTalk 過(對話目標不是他)→ 那條只收海報,不動別人的對話。
+            box.querySelector('.wg-meet-x').addEventListener('click', () => {
+                const LS = win.LobbyStage || window.LobbyStage;
+                if (LS && LS.getTalkTarget && LS.getTalkTarget() === npc) LS.endTalk();   // endTalk 內部會呼叫 closeMeet
+                else _closeMeet();
+            });
             // 💬 純對話模式:海報整個讓開、底部對話列回來,想自由打字聊天時用。
             //   組隊模式下對話列是收起來的——題目與反應本來就印在海報上,底下再放一份只是把畫面擠滿。
             host.classList.add('wg-host-on');
@@ -965,6 +972,9 @@
         await _set(K_CURRENT, w.id);
         try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
         _clearTravelers(); _closeMeet();
+        // 大廳那層對話也要收:DIVE 是點愛麗絲開的面板,面板收掉後她的對話框還亮著＝
+        // 人已經穿越到別的世界了,畫面卻還停在跟她講話。
+        try { (win.LobbyStage || window.LobbyStage)?.endTalk?.(); } catch (e) {}
         return { ok: true, msg: '已進入「' + w.name + '」' };
     }
 
@@ -1078,6 +1088,11 @@
             // 💬 組隊模式:底部對話列收起來(題目與反應都印在海報上了,再放一份只是把畫面擠滿)
             '.lobby-left.wg-host-on .void-dialogue-wrap{display:none;}' +
             '.lobby-left.wg-host-on.wg-host-chat .void-dialogue-wrap{display:block;}' +
+            // 🚨立繪也要一起收:一般對話模式的 .lstage-talk-portrait 是掛在 .lobby-left 底下的獨立元素,
+            //   不在 .void-dialogue-wrap 裡面 → 只收對話列的話它會留在原地,
+            //   海報底是半透明的,於是同一個人的立繪在畫面上出現兩張(海報一張、背景一張)。
+            //   切到聊天模式時海報整個讓開,那張立繪就該回來 → 用 :not() 一條解決,不必寫還原規則。
+            '.lobby-left.wg-host-on:not(.wg-host-chat) .lstage-talk-portrait{display:none;}' +
             '.wg-meet-chat{position:absolute;right:52px;top:12px;z-index:6;display:inline-flex;align-items:center;gap:6px;' +
               'height:32px;padding:0 13px;border-radius:16px;cursor:pointer;border:1px solid rgba(20,36,61,.22);' +
               'background:rgba(255,255,255,.92);color:#14243d;font-size:12px;font-weight:800;font-family:inherit;' +
