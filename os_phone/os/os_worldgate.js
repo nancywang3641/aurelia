@@ -234,8 +234,11 @@
             '12~20 個詞、逗號分隔,只寫看得見的東西,不要寫人物、招牌文字、畫風或畫質詞\n' +
             '開頭第二行 方位圖:用英文關鍵詞描述從高空俯瞰整片疆域的樣子——各區域的地形怎麼分布、彼此怎麼相接,' +
             '10~16 個詞、逗號分隔,同樣不要人物與文字\n' +
-            '這兩行寫完就直接接著寫世界檔案正文,不要為它們加標題、編號或任何說明文字。\n' +
-            '正文全部寫完後,再補上結尾兩行:\n' +
+            // 🚨「不要加標題」會被連行首那三個字一起省掉:實測模型把兩行英文關鍵詞光禿禿地寫出來、
+            //   四行標籤全不見(連結尾的關鍵字/降生地也被這股潔癖感染),程式端整組解析失敗。
+            //   所以這裡要正面講「行首那幾個字是必須寫的」,別只講不要什麼。
+            '這兩行的行首必須原樣寫出「概念圖:」與「方位圖:」這幾個字,程式要靠它認行;除了行首這幾個字之外不要加標題、編號或說明,寫完直接接著寫世界檔案正文。\n' +
+            '正文全部寫完後,再補上結尾兩行,同樣要原樣寫出行首的「關鍵字:」與「降生地:」:\n' +
             '結尾第一行 關鍵字:世界名、其他2~4個本世界專有名詞(頓號分隔,不要加任何其他文字)\n' +
             '結尾第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
             '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
@@ -246,7 +249,11 @@
         // 截斷保險:尾巴那節沒寫到就接著補完(整份重生太貴,也會換一套設定)
         // 🚨判斷一定要在「清乾淨之後」的文字上做,而且別綁節名——節名改過一次(冒險引擎→自己在轉的事),
         //    舊字串比對不到就會每次都誤判成截斷、白白多燒一次主模型。
-        if (!/關鍵字[:：]|降生地[:：]/.test(text.slice(-800))) {
+        // 🚨這裡也不能只認標籤:模型省略標籤時會被誤判成截斷,白燒一次續寫。
+        //   降生地那行帶 | 與 / 的長相最好認,拿它當第二道判準。
+        const _tail = text.slice(-800);
+        if (!/關鍵字[:：]|降生地[:：]/.test(_tail) &&
+            !_tail.split('\n').some(s => s.indexOf('|') >= 0 && s.indexOf('/') >= 0)) {
             console.warn('[Worldgate③] 世界檔案疑似被截斷,續寫補完');
             const more = await _callAI(
                 '以下是一份寫到一半的跑團世界檔案。請直接接著往下寫完剩下的段落,不要重複已經寫過的內容,不要開場白或結語,不要重寫標題以外的舊段落。' +
@@ -258,19 +265,63 @@
                 '世界門續寫檔案', 'worldgate_expand', true, true, true);
             if (more) text += '\n' + _cleanModelOutput(more);
         }
-        const km = text.match(/關鍵字[:：]\s*(.+)/);
-        const keys = km ? km[1].split(/[、,，\/]+/).map(s => s.trim()).filter(Boolean).slice(0, 5) : [];
-        if (km) text = text.replace(km[0], '').trim();   // 關鍵字行是給程式吃的,不留在正文裡
+        const r = _parseProgramLines(text);
+        const keys = r.keys;
         if (!keys.length || keys[0] !== seed.name) keys.unshift(seed.name);
-        // 降生地：同樣是「結尾單行」給程式吃的，解析完就從正文剝掉（留著會被當劇情念出來）
-        const sm = text.match(/降生地[:：]\s*(.+)/);
-        const spawns = sm ? _parseSpawns(sm[1]) : [];
-        if (sm) text = text.replace(sm[0], '').trim();
-        // 兩條生圖用的關鍵詞:同樣是結尾單行,解析完就從正文剝掉(留著會被主持AI當成劇情念出來)
-        const pick = re => { const m = text.match(re); if (!m) return ''; text = text.replace(m[0], '').trim(); return m[1].trim().slice(0, 400); };
-        const artPrompt = pick(/概念圖[:：]\s*(.+)/);
-        const mapPrompt = pick(/方位圖[:：]\s*(.+)/);
-        return { text, keys: keys.slice(0, 5), spawns, artPrompt, mapPrompt };
+        return { text: r.text, keys: keys.slice(0, 5), spawns: r.spawns, artPrompt: r.artPrompt, mapPrompt: r.mapPrompt };
+    }
+    // ── 四行程式資料的解析(解析完一律從正文剝掉,留著會被主持AI當成劇情念出來) ──
+    // 🚨不能只認行首標籤:模型會把「概念圖:」這種行首當成「標題」一起省掉,
+    //   實測整份四行全禿——兩行光禿禿的英文關鍵詞、結尾兩行也沒了標籤,程式端整組解析失敗、一張圖都沒生。
+    //   所以每一行都是兩道:先認標籤,認不到再靠位置與長相認。
+    function _isArtLine(s) {   // 生圖關鍵詞行:沒有中文、逗號夠多、有一定長度
+        const t = String(s || '').trim();
+        if (t.length < 20 || /[一-鿿]/.test(t)) return false;
+        return (t.match(/,/g) || []).length >= 4;
+    }
+    function _isKeysLine(s) {  // 關鍵字行:短、有中文、頓號分隔,而且不是降生地那種帶 | 的行
+        const t = String(s || '').trim();
+        if (!t || t.length > 60 || t.indexOf('|') >= 0) return false;
+        if (!/[一-鿿]/.test(t)) return false;
+        if (/[。!?！？:：#*]/.test(t)) return false;   // 句子或標題不算
+        return t.indexOf('、') >= 0;
+    }
+    function _parseProgramLines(text) {
+        const lines = String(text || '').split('\n');
+        const tagged = (re) => {   // 有標籤:抽出值,那行剩下空白就整行刪掉
+            for (let i = 0; i < lines.length; i++) {
+                const m = lines[i].match(re);
+                if (!m) continue;
+                const v = m[1].trim();
+                const rest = lines[i].replace(m[0], '').trim();
+                if (rest) lines[i] = rest; else lines.splice(i, 1);
+                return v;
+            }
+            return '';
+        };
+        const byShape = (test, from) => {   // 沒標籤:在規定的位置附近照長相認
+            const idx = [];
+            lines.forEach((s, i) => { if (test(s)) idx.push(i); });
+            const hit = from === 'head' ? idx.filter(i => i < 6) : idx.filter(i => i >= lines.length - 8);
+            if (!hit.length) return '';
+            const i = from === 'head' ? hit[0] : hit[hit.length - 1];
+            const v = lines[i].trim();
+            lines.splice(i, 1);
+            return v;
+        };
+        // 開頭兩行(生圖關鍵詞):第一條是概念圖、第二條是方位圖——沒標籤時就靠這個順序
+        const artPrompt = (tagged(/概念圖[:：]\s*(.+)/) || byShape(_isArtLine, 'head')).slice(0, 400);
+        const mapPrompt = (tagged(/方位圖[:：]\s*(.+)/) || byShape(_isArtLine, 'head')).slice(0, 400);
+        // 結尾兩行:降生地先抓(帶 | 的長相最好認,免得被當成關鍵字撿走)
+        const spawnLine = tagged(/降生地[:：]\s*(.+)/) ||
+            byShape(s => s.indexOf('|') >= 0 && s.indexOf('/') >= 0, 'tail');
+        const keysLine = tagged(/關鍵字[:：]\s*(.+)/) || byShape(_isKeysLine, 'tail');
+        return {
+            text: lines.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+            keys: keysLine ? keysLine.split(/[、,，\/]+/).map(s => s.trim()).filter(Boolean).slice(0, 5) : [],
+            spawns: spawnLine ? _parseSpawns(spawnLine) : [],
+            artPrompt, mapPrompt,
+        };
     }
     // 降生地選擇：純 CSS 的九宮格方位圖（不生任何圖、不打任何 API）
     //   舊世界沒有 spawns 欄位 → 整塊不顯示，行為跟以前一樣（落點交給主持AI）
@@ -729,18 +780,26 @@
         if (!_early || _early.done || !acc) return;
         const text = String(acc);
         // 🚨一定要等那行「換行了」才動手:串流是一塊一塊來的,半句關鍵詞生出來的是另一張圖,而且生了就收不回來
+        //   → 切掉最後一段(它可能只寫到一半),只認已經換行的那幾行。
+        //   標籤同樣不可靠(模型會把行首「概念圖:」當標題省掉),認不到標籤就照長相與順序認:
+        //   規定它們是最前面兩行,所以第一條英文關鍵詞行=概念圖、第二條=方位圖。
+        const _done = text.split('\n');
+        _done.pop();
+        const _arts = _done.slice(0, 6).filter(_isArtLine);
         if (!_early.artPrompt) {
             const m = text.match(/概念圖[:：]\s*([^\n]+)\n/);
-            if (m) {
-                _early.artPrompt = m[1].trim().slice(0, 400);
+            const v = m ? m[1].trim() : (_arts[0] || '');
+            if (v) {
+                _early.artPrompt = v.slice(0, 400);
                 _early.art = _genArt(_early.artPrompt, _ART_BASE, 768, 448).catch(() => '');
                 console.log('[Worldgate③] 🐣 概念圖早鳥:正文還在寫,圖先開生');
             }
         }
         if (!_early.mapPrompt) {
             const m = text.match(/方位圖[:：]\s*([^\n]+)\n/);
-            if (m) {
-                _early.mapPrompt = m[1].trim().slice(0, 400);
+            const v2 = m ? m[1].trim() : (_arts[1] || '');
+            if (v2) {
+                _early.mapPrompt = v2.slice(0, 400);
                 // 🚨接在概念圖後面跑,不併發:生圖那端是排隊處理的,兩張同時送會有一張被丟掉
                 const prev = _early.art || Promise.resolve('');
                 _early.mapArt = prev.then(() => _genArt(_early.mapPrompt, _MAP_BASE, 640, 640)).catch(() => '');
@@ -750,6 +809,26 @@
         // 不要之後每來一塊都對著整篇正文重跑正則(七千 token 的文章會掃上百次)。
         if (_early.artPrompt && _early.mapPrompt) _early.done = true;
         else if (text.length > 4000) { _early.done = true; console.warn('[Worldgate③] 🐣 早鳥沒等到生圖關鍵詞,退回寫完再生'); }
+    }
+    // 🩹 舊世界補救:模型省略行首標籤那幾份,四行程式資料當初整組沒被認出來,
+    //   但它們原封不動留在正文開頭與結尾 → 用現在這套容錯重新解析一次,補回欄位、把正文清乾淨,
+    //   不必為了修資料重燒一次主模型(一份世界檔案要跑八分鐘)。
+    //   只認「正文開頭真的有光禿禿英文關鍵詞行」的那種,其餘世界一律不動,免得誤傷。
+    async function _salvageWorld(w) {
+        if (!w || !w.entryText || w.artPrompt) return false;
+        const r = _parseProgramLines(w.entryText);
+        if (!r.artPrompt) return false;
+        w.artPrompt = r.artPrompt;
+        if (!w.mapPrompt && r.mapPrompt) w.mapPrompt = r.mapPrompt;
+        if ((!w.spawns || !w.spawns.length) && r.spawns.length) w.spawns = r.spawns;
+        if (r.keys.length && (!w.keys || w.keys.length <= 1)) {
+            w.keys = [w.name].concat(r.keys.filter(k => k !== w.name)).slice(0, 5);
+        }
+        w.entryText = r.text;
+        await _saveWorld(w);
+        try { await _writeEntry(w, r.text); } catch (e) {}   // 世界書條目跟著更新,免得正文裡那四行被主持AI念出來
+        console.log('[Worldgate③] 🩹 舊世界補救:重新解析出程式資料', w.name);
+        return true;
     }
     // 在背景補圖,不擋玩家:世界檔案已經等了好幾分鐘,不能再為了兩張圖把畫面卡住。
     // 生完寫回檔案庫;玩家若還停在這個世界的頁面就順手重繪(同隊伍區的做法)。
@@ -1607,6 +1686,7 @@
         _delArm = 0;
         _mgrOff();   // 離開檔案庫=管理模式歸零,回來時不會還停在勾選狀態
         _curDetailId = w.id;
+        if (await _salvageWorld(w)) _fillArt(w);   // 🩹 那四行沒被認出來的舊世界:補回欄位後順手把圖補生
         let entryText = '';
         try {
             const entries = await _th()?.getLorebookEntries?.(BOOK_PARA);
