@@ -572,6 +572,44 @@
             return true;
         } catch (e) { console.error('[Worldgate③] 世界條目寫入失敗', e); return false; }
     }
+    // 🚨世界條目的燈由程式管，不要靠關鍵字觸發，也不要靠人記得開關：
+    //   ① 條目的關鍵字是世界名與專有名詞，觸發來源其實是 DIVE 那則開場指令（第 0 樓）。
+    //      每二十輪總結後舊樓被隱藏、連第 0 樓一起隱藏 → 關鍵字整個消失 → 世界書從此不載入，AI 開始忘記這個世界。
+    //   ② 手動改成藍燈(常駐)可以解決①，但換世界時忘記關掉上一個 → 同時吃到兩個世界的設定。
+    //   所以：只有「現在人在的那個世界」是常駐，其餘視差世界一律關閉，切換與撤離時自動同步。
+    //   常駐欄位在不同版本的助手是三種寫法（strategy.type / constant / type），三個都寫，讀哪個都對。
+    async function _syncWorldLamps(activeId) {
+        const TH = _th();
+        if (!TH || !TH.updateLorebookEntriesWith) return;
+        try {
+            const worlds = await _get(K_WORLDS, []);
+            const owned = {};
+            worlds.forEach(w => { owned[_entryComment(w)] = w.id; });
+            // 已經是對的就不要寫：這支會被開窗時順手叫到，每次都寫一遍世界書沒必要
+            const cur = (TH.getLorebookEntries ? await TH.getLorebookEntries(BOOK_PARA) : null) || [];
+            const isOn = e => (e.constant === true) || (e.type === 'constant') ||
+                (e.strategy && e.strategy.type === 'constant');
+            const dirty = cur.some(e => {
+                const wid = owned[e && e.comment];
+                if (!wid) return false;
+                const on = !!activeId && wid === activeId;
+                return isOn(e) !== on || (e.enabled !== false) !== on;
+            });
+            if (!dirty) return;
+            await TH.updateLorebookEntriesWith(BOOK_PARA, list => (list || []).map(e => {
+                const wid = owned[e && e.comment];
+                if (!wid) return e;   // 不是世界門建的條目（別人放在同一本書裡的東西）→ 一律不碰
+                const on = !!activeId && wid === activeId;
+                return Object.assign({}, e, {
+                    enabled: on,
+                    constant: on,
+                    type: on ? 'constant' : 'selective',
+                    strategy: Object.assign({}, e.strategy || {}, { type: on ? 'constant' : 'selective' }),
+                });
+            }));
+            console.log('[Worldgate③] 世界條目燈號已同步，常駐：' + (activeId || '（無，全部關閉）'));
+        } catch (e) { console.warn('[Worldgate③] 同步世界條目燈號失敗', e); }
+    }
     async function _deleteEntry(w) {
         const TH = _th();
         if (!TH || !TH.updateLorebookEntriesWith) return;
@@ -588,7 +626,9 @@
         await _set(K_WORLDS, worlds.filter(x => !ids.has(x.id)));
         // 這個聊天室記著「現在屬於哪個世界」,刪掉的正好是它就要一起清,
         // 不然 WORLD_RULES 會照著一個已經不存在的 id 去翻模組條目。
-        try { if (ids.has(await _get(K_CURRENT, ''))) await _set(K_CURRENT, ''); } catch (e) {}
+        try {
+            if (ids.has(await _get(K_CURRENT, ''))) { await _set(K_CURRENT, ''); await _syncWorldLamps(''); }
+        } catch (e) {}
         _clearTravelers(); _closeMeet();
         try {   // 旅人對話歷史一起清,不留孤兒
             ids.forEach(id => {
@@ -1112,6 +1152,7 @@
         // 這個聊天室從此屬於這個世界（app_data 是 chat-scope，換聊天室就換世界、回來還原）
         //   → 依題材翻「-VN小說家-」的模組條目：奇幻世界不給手機、和平題材不給戰鬥、BGM 換成對應那條
         await _set(K_CURRENT, w.id);
+        await _syncWorldLamps(w.id);   // 這個世界改成常駐、其餘關掉——不靠關鍵字，也不用人記得切
         try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
         _clearTravelers(); _closeMeet();
         // 大廳那層對話也要收:DIVE 是點愛麗絲開的面板,面板收掉後她的對話框還亮著＝
@@ -1363,6 +1404,8 @@
     async function openGate() {
         closeGate();
         _mgrOff();   // 每次開窗都從乾淨的檔案庫開始
+        // 開窗順手把燈號校正回來（手動開過藍燈、或換世界時忘了關掉舊的，都在這裡自動修正；沒歪就不寫）
+        _get(K_CURRENT, '').then(id => _syncWorldLamps(id)).catch(() => {});
         _closeMeet();   // 右側停靠位互斥:開世界門先收組隊卡
         const doc = win.document;
         _ensureStyle(doc);
@@ -1475,6 +1518,7 @@
         b.querySelector('[data-act="leave"]')?.addEventListener('click', async () => {
             const r = await _gate()?.exitParallax?.();
             await _set(K_CURRENT, '');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
+            await _syncWorldLamps('');   // 世界條目全部關掉，免得回到主世界還在吃異世界設定
             try { window.WORLD_RULES && window.WORLD_RULES.sync('撤離'); } catch (e) {}
             _toast(r?.msg || '已返回主世界');
             _refreshModePill(); _renderList();
