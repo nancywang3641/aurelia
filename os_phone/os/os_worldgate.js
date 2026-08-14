@@ -519,6 +519,24 @@
         try { await TH.updateLorebookEntriesWith(BOOK_PARA, list => list.filter(e => e.comment !== _entryComment(w))); }
         catch (e) { console.warn('[Worldgate③] 世界條目刪除失敗', e); }
     }
+    // 刪除的完整動作:世界書條目、檔案庫、大廳上的旅人、旅人對話歷史。
+    // 詳情頁的單張刪除與檔案庫的批次刪除共用這條,免得兩邊各寫一份、日後漏掉其中一項。
+    async function _deleteWorlds(list) {
+        if (!list.length) return;
+        for (const w of list) await _deleteEntry(w);   // 世界書是同一份檔案,一個個改不併發
+        const ids = new Set(list.map(w => w.id));
+        const worlds = await _get(K_WORLDS, []);
+        await _set(K_WORLDS, worlds.filter(x => !ids.has(x.id)));
+        // 這個聊天室記著「現在屬於哪個世界」,刪掉的正好是它就要一起清,
+        // 不然 WORLD_RULES 會照著一個已經不存在的 id 去翻模組條目。
+        try { if (ids.has(await _get(K_CURRENT, ''))) await _set(K_CURRENT, ''); } catch (e) {}
+        _clearTravelers(); _closeMeet();
+        try {   // 旅人對話歷史一起清,不留孤兒
+            ids.forEach(id => {
+                for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) win.localStorage.removeItem('lstage_hist_wg_' + id + '_' + i);
+            });
+        } catch (e) {}
+    }
 
     // ── 旅人像素小人(大廳限定;LobbyStage._b 缺席=優雅跳過) ──
     // 「同一個伺服器」感:展開世界/點開世界=旅人自動陸續上線大廳,不用按鈕召喚(Rae 定案 2026-07-22)
@@ -999,6 +1017,13 @@
             '.wg-card{margin-bottom:8px;padding:10px 12px;border:1px solid rgba(26,28,40,.13);border-radius:12px;background:rgba(255,255,255,.72);box-shadow:0 2px 7px rgba(26,28,40,.05);}' +
             '.wg-card.click{cursor:pointer;transition:transform .15s,background .15s,border-color .15s;}.wg-card.click:hover{transform:translateY(-1px);background:#fff;border-color:rgba(26,28,40,.3);}' +
             '.wg-card.sel{border-color:#1A1C28;box-shadow:0 0 0 1px #1A1C28;background:#fff;}' +
+            // 檔案庫管理模式:標題列右邊的小鈕(管理/全選),勾選框直接借用卡片標題原本那顆圖示的位置
+            '.wg-head-acts{display:flex;align-items:center;gap:7px;}' +
+            '.wg-mgr-btn{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:9px;cursor:pointer;' +
+              'font-family:inherit;font-size:10px;font-weight:700;color:#5a5e75;background:rgba(26,28,40,.06);border:1px solid rgba(26,28,40,.12);}' +
+            '.wg-mgr-btn:hover,.wg-mgr-btn.on{background:#1A1C28;color:#fff;border-color:#1A1C28;}' +
+            '.wg-card.pick .wg-card-title>i:first-child{color:#8a8ea6;}' +
+            '.wg-card.pick.sel .wg-card-title>i:first-child{color:#1A1C28;}' +
             '.wg-card-title{display:flex;align-items:center;gap:6px;font-weight:800;color:#22263c;}.wg-card-title .wg-visits{margin-left:auto;color:#8a8ea6;font-size:9px;font-weight:700;white-space:nowrap;}' +
             '.wg-card-sub{color:#5a5e75;font-size:11px;margin-top:3px;line-height:1.5;}' +
             '.wg-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}.wg-tag{padding:1px 6px;border-radius:9px;background:rgba(26,28,40,.06);color:#5a5e75;font-size:9px;border:1px solid rgba(26,28,40,.08);}' +
@@ -1213,6 +1238,7 @@
     }
     async function openGate() {
         closeGate();
+        _mgrOff();   // 每次開窗都從乾淨的檔案庫開始
         _closeMeet();   // 右側停靠位互斥:開世界門先收組隊卡
         const doc = win.document;
         _ensureStyle(doc);
@@ -1248,17 +1274,33 @@
     }
 
     // ── P1 世界檔案庫 ──
+    // 管理模式:一次刪好幾個世界。原本只能一張一張點進詳情頁刪,清舊世界要進出好幾趟。
+    let _mgr = false;                 // 檔案庫是否在管理(勾選)模式
+    let _bulkArm = 0;                 // 批次刪除的兩段式確認(同詳情頁那顆的做法)
+    const _selIds = new Set();        // 已勾選的世界 id
+    function _mgrOff() { _mgr = false; _bulkArm = 0; _selIds.clear(); }
     async function _renderList() {
         const b = _body(); if (!b) return;
         _curDetailId = null;
         const worlds = await _get(K_WORLDS, []);
+        if (!worlds.length) _mgrOff();   // 空檔案庫沒東西可管
+        _selIds.forEach(id => { if (!worlds.some(w => w.id === id)) _selIds.delete(id); });   // 別留已被刪掉的殘影
         const inPara = !!_gate()?.isInParallax?.();
+        const allOn = worlds.length > 0 && _selIds.size === worlds.length;
         b.innerHTML =
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-book-atlas"></i> 世界檔案庫</span><span class="wg-section-note">' + worlds.length + ' 個世界</span></div>' +
+            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-book-atlas"></i> 世界檔案庫</span>' +
+              '<span class="wg-head-acts">' +
+                (_mgr
+                    ? '<span class="wg-section-note">已選 ' + _selIds.size + ' 個</span>' +
+                      '<button class="wg-mgr-btn" data-act="mgr-all">' + (allOn ? '取消全選' : '全選') + '</button>'
+                    : '<span class="wg-section-note">' + worlds.length + ' 個世界</span>' +
+                      (worlds.length ? '<button class="wg-mgr-btn" data-act="mgr"><i class="fa-solid fa-list-check"></i> 管理</button>' : '')) +
+              '</span></div>' +
             (worlds.length
                 ? worlds.map(w =>
-                    '<div class="wg-card click" data-id="' + w.id + '">' +
-                      '<div class="wg-card-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) +
+                    '<div class="wg-card ' + (_mgr ? 'click pick' + (_selIds.has(w.id) ? ' sel' : '') : 'click') + '" data-id="' + w.id + '">' +
+                      '<div class="wg-card-title"><i class="fa-solid ' +
+                        (_mgr ? (_selIds.has(w.id) ? 'fa-square-check' : 'fa-square') : 'fa-earth-asia') + '"></i> ' + _esc(w.name) +
                         '<span class="wg-visits">進入 ' + (w.visits || 0) + ' 次</span></div>' +
                       '<div class="wg-card-sub">' + _esc(w.concept) + '</div>' +
                       '<div class="wg-tags"><span class="wg-tag">' + _esc(w.style) + '</span>' +
@@ -1266,14 +1308,45 @@
                         '<span class="wg-tag warn">' + _esc(w.danger) + '</span></div>' +
                     '</div>').join('')
                 : '<div class="wg-empty"><i class="fa-solid fa-globe"></i>檔案庫還是空的。<br>請愛麗絲為你調出新的世界。</div>') +
-            '<button class="wg-btn" data-act="draw"><i class="fa-solid fa-dice"></i> 請愛麗絲調出新世界</button>' +
-            '<div class="wg-note">調出新世界會呼叫 AI(抽選+展開共兩次);重進已有世界不呼叫。</div>' +
+            (_mgr
+                ? '<div class="wg-btn-row">' +
+                    '<button class="wg-btn ghost" data-act="mgr-done">完成</button>' +
+                    '<button class="wg-btn danger" data-act="bulk-del"' + (_selIds.size ? '' : ' disabled') + '>' +
+                      '<i class="fa-solid fa-trash-can"></i> ' +
+                      (_bulkArm ? '再按一次確認刪除' : '刪除選取的 ' + _selIds.size + ' 個') + '</button>' +
+                  '</div>'
+                : '<button class="wg-btn" data-act="draw"><i class="fa-solid fa-dice"></i> 請愛麗絲調出新世界</button>' +
+                  '<div class="wg-note">調出新世界會呼叫 AI(抽選+展開共兩次);重進已有世界不呼叫。</div>') +
             (inPara ? '<button class="wg-btn danger" data-act="leave"><i class="fa-solid fa-door-open"></i> 撤離視差,返回主世界</button>' : '');
         b.querySelectorAll('.wg-card.click').forEach(el => el.addEventListener('click', async () => {
+            if (_mgr) {   // 管理模式下點卡片=勾選,不進詳情
+                const id = el.dataset.id;
+                if (_selIds.has(id)) _selIds.delete(id); else _selIds.add(id);
+                _bulkArm = 0;   // 勾選有變動→確認要重按,免得改完選擇按下去刪到不是想刪的那批
+                _renderList();
+                return;
+            }
             const worlds2 = await _get(K_WORLDS, []);
             const w = worlds2.find(x => x.id === el.dataset.id);
             if (w) _renderDetail(w);
         }));
+        b.querySelector('[data-act="mgr"]')?.addEventListener('click', () => { _mgr = true; _bulkArm = 0; _selIds.clear(); _renderList(); });
+        b.querySelector('[data-act="mgr-done"]')?.addEventListener('click', () => { _mgrOff(); _renderList(); });
+        b.querySelector('[data-act="mgr-all"]')?.addEventListener('click', () => {
+            _bulkArm = 0;
+            if (allOn) _selIds.clear(); else worlds.forEach(w => _selIds.add(w.id));
+            _renderList();
+        });
+        b.querySelector('[data-act="bulk-del"]')?.addEventListener('click', async () => {
+            if (!_selIds.size) return;
+            if (_bulkArm === 0) { _bulkArm = 1; _renderList(); return; }
+            const hit = worlds.filter(w => _selIds.has(w.id));
+            _loading('正在收回這些世界…');
+            await _deleteWorlds(hit);
+            _toast('已從檔案庫移除 ' + hit.length + ' 個世界');
+            _mgrOff();
+            _renderList();
+        });
         b.querySelector('[data-act="draw"]')?.addEventListener('click', _renderSeedPage);
         b.querySelector('[data-act="leave"]')?.addEventListener('click', async () => {
             const r = await _gate()?.exitParallax?.();
@@ -1487,6 +1560,7 @@
     async function _renderDetail(w) {
         const b = _body(); if (!b) return;
         _delArm = 0;
+        _mgrOff();   // 離開檔案庫=管理模式歸零,回來時不會還停在勾選狀態
         _curDetailId = w.id;
         let entryText = '';
         try {
@@ -1581,11 +1655,7 @@
                 ev.currentTarget.innerHTML = '<i class="fa-solid fa-trash-can"></i> 再按一次確認刪除';
                 return;
             }
-            await _deleteEntry(w);
-            const worlds = await _get(K_WORLDS, []);
-            await _set(K_WORLDS, worlds.filter(x => x.id !== w.id));
-            _clearTravelers(); _closeMeet();
-            try { for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) win.localStorage.removeItem('lstage_hist_wg_' + w.id + '_' + i); } catch (e) {}   // 旅人對話歷史一起清,不留孤兒
+            await _deleteWorlds([w]);
             _toast('「' + w.name + '」已從檔案庫移除');
             _renderList();
         });
