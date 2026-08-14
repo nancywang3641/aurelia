@@ -384,6 +384,53 @@
         } catch (e) { return ''; }
     }
 
+    // 🧪 出爐即校驗：把煉好的模板跟變數包對一次，回傳白話問題清單（空陣列＝沒問題）。
+    //   為什麼要有這個：渲染引擎對「接不到資料」全都是靜默的——欄位名對不上只顯示「—」、
+    //   迴圈容器名對不上整段消失、變數根本沒被引用就永遠不出現。面板於是「畫得漂亮但資料一片空白」，
+    //   而且從畫面上看不出是資料還沒進來、還是模板寫錯。
+    //   只提示不自動改：欄位名沒有可靠的機器對應（MP 到底是魔力值還是魔法點數？猜錯更糟）。
+    function _auditTemplate(content, objInfo, flatVars) {
+        const issues = [];
+        const html = String(content || '');
+        const known = {};                       // 群組名 → 該群組已知欄位名
+        (objInfo || []).forEach(o => { known[o.v.name] = new Set(o.fields || []); });
+        const flatNames = new Set((flatVars || []).map(v => v.name));
+        // ① 欄位名：AI 常把欄位改寫成自己習慣的縮寫（魔力值→MP、金錢餘額→gold）
+        const bad = [];
+        for (const mm of html.matchAll(/\{\{\s*([^#\/@{}][^{}]*?)\s*\}\}/g)) {
+            const expr = String(mm[1]).trim();
+            if (expr.indexOf('.') < 0) {         // 扁平變數（或被當群組直接引用）
+                if (!flatNames.has(expr) && !known[expr]) bad.push({ ph: mm[0], group: '' });
+                continue;
+            }
+            const i = expr.indexOf('.');
+            const g = expr.slice(0, i), fld = expr.slice(i + 1);
+            if (!known[g]) { bad.push({ ph: mm[0], group: '' }); continue; }
+            // fields 為空＝煉丹時算不出欄位清單（沒 runtime 資料且範本解不出）→ 無從比對，不誤報
+            if (known[g].size && !known[g].has(fld)) bad.push({ ph: mm[0], group: g });
+        }
+        if (bad.length) issues.push(bad.length + ' 個欄位名對不上變數包，那幾格會顯示「—」：' +
+            bad.slice(0, 4).map(b => b.ph).join('、') + (bad.length > 4 ? ' …' : ''));
+        // ② 容器與迴圈：「標題都在、資料一片空白」幾乎都壞在這裡
+        const usedEach = new Set();
+        for (const mm of html.matchAll(/\{\{#each\s+([^\s{}]+)\}\}/g)) usedEach.add(String(mm[1]).trim());
+        usedEach.forEach(n => {
+            if (!known[n]) issues.push('迴圈 {{#each ' + n + '}} 的容器不存在，這一段不會顯示任何東西');
+        });
+        (objInfo || []).forEach(o => {
+            const n = o.v.name;
+            const dot = html.indexOf('{{' + n + '.') >= 0;
+            if (!usedEach.has(n) && !dot && html.indexOf('{{' + n + '}}') < 0) {
+                issues.push('「' + n + '」整個沒被用到，面板上不會有它的資料');
+            } else if (o.kind === 'multi' && !usedEach.has(n) && dot) {
+                issues.push('「' + n + '」是多實體，卻用了點記法（要用 {{#each}}）');
+            } else if (o.kind === 'single' && usedEach.has(n) && !dot) {
+                issues.push('「' + n + '」是一組固定欄位，卻套了迴圈（要用 {{' + n + '.欄位}}）');
+            }
+        });
+        return issues;
+    }
+
     // 🔥 開煉丹爐 modal（永遠帶 packId，從變數包卡片內按鈕進入）
     function openFurnaceModal(container, packId, refineTpl) {
         if (!packId) { console.warn('[AVS] openFurnaceModal 需要 packId'); return; }
@@ -1685,33 +1732,8 @@
                 //    而渲染引擎查不到鍵只會靜默顯示「—」→ 面板看起來就是「壞了但查不出原因」。
                 //    這裡當場把模板裡的 {{群組.欄位}} 抓出來跟已知欄位名對，不靠 AI 自律。
                 //    只提示不自動改：欄位名沒有可靠的機器對應（MP 到底是魔力值還是魔法點數？猜錯更糟）。
-                let _badCount = 0;
-                try {
-                    const _known = {};                       // 群組名 → 該群組已知欄位名
-                    objInfo.forEach(o => { _known[o.v.name] = new Set(o.fields || []); });
-                    const _flatNames = new Set(flatVars.map(v => v.name));
-                    const _bad = [];
-                    for (const mm of content.matchAll(/\{\{\s*([^#\/@{}][^{}]*?)\s*\}\}/g)) {
-                        const expr = String(mm[1]).trim();
-                        if (expr.indexOf('.') < 0) {         // 扁平變數（或被當群組直接引用）
-                            if (!_flatNames.has(expr) && !_known[expr]) _bad.push({ ph: mm[0], group: '', field: expr });
-                            continue;
-                        }
-                        const _i = expr.indexOf('.');
-                        const g = expr.slice(0, _i), fld = expr.slice(_i + 1);
-                        if (!_known[g]) { _bad.push({ ph: mm[0], group: '', field: expr }); continue; }
-                        // fields 為空＝煉丹時算不出欄位清單（沒 runtime 資料且範本解不出）→ 無從比對，不誤報
-                        if (_known[g].size && !_known[g].has(fld)) _bad.push({ ph: mm[0], group: g, field: fld });
-                    }
-                    if (_bad.length) {
-                        const _lines = _bad.map(b => '　' + b.ph + (b.group
-                            ? '　（「' + b.group + '」實際有：' + [..._known[b.group]].join('、') + '）'
-                            : '　（變數包裡沒有這個變數）')).join('\n');
-                        console.warn('🧪 [AVS 煉丹] 這張面板有 ' + _bad.length + ' 個佔位符對不上變數包，套用後會顯示「—」：\n' + _lines
-                            + '\n   AI 又把欄位名改寫了（常見：魔力值→MP、金錢餘額→gold）。重煉一次通常就好，也可以直接編輯模板把名字改回來。');
-                        _badCount = _bad.length;
-                    }
-                } catch (e) {}
+                let _issues = [];
+                try { _issues = _auditTemplate(content, objInfo, flatVars); } catch (e) { console.warn('[AVS 煉丹] 校驗失敗', e); }
 
                 const styleMatch = content.match(/<style>([\s\S]*?)<\/style>/i);
                 await win.OS_DB.saveUITemplate({
@@ -1725,8 +1747,14 @@
                     createdAt: Date.now(),
                 });
 
-                log.innerHTML = _badCount
-                    ? '⚠️ 煉好了，但有 ' + _badCount + ' 個欄位名對不上變數包（套用後那些欄位會顯示「—」）→ 建議按上面的按鈕重煉一次。哪幾個看 console。'
+                // 問題直接寫在爐口，不要只丟 console：面板「畫得漂亮但資料空白」時，
+                // 使用者手上沒有任何線索可以判斷是資料還沒進來、還是模板寫錯。
+                const _esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+                log.innerHTML = _issues.length
+                    ? '⚠️ 煉好了，但這張面板有幾個地方接不到資料：\n' +
+                      _issues.slice(0, 6).map(s => '　• ' + _esc(s)).join('\n') +
+                      (_issues.length > 6 ? '\n　…還有 ' + (_issues.length - 6) + ' 項' : '') +
+                      '\n→ 按「🔄 重新煉丹」再來一次通常就好。'
                     : '🎉 煉丹完成！已嵌入到檔案卡片中。';
 
                 // 刷新變數包列表（卡片底部 UI 面板區會自動顯示新煉的）
@@ -1735,7 +1763,7 @@
                     renderPackList(container);
                 });
                 // 1.5 秒後自動關閉 modal
-                if (!_badCount) setTimeout(() => closeFurnaceModal(container), 1500);   // 有欄位對不上就留著視窗，別讓警告一閃而過
+                if (!_issues.length) setTimeout(() => closeFurnaceModal(container), 1500);   // 有問題就留著視窗，別讓警告一閃而過
             } catch (e) {
                 console.error('[AVS Furnace]', e);
                 log.innerHTML = `❌ 炸鍋了：${e.message}`;
@@ -1917,6 +1945,7 @@
     win.OS_AVS = {
         launch: launchApp,
         renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
+        auditTemplate: _auditTemplate,        // 出爐即校驗：模板接不接得到資料（煉丹後自動跑，也可單獨驗一張舊面板）
         buildAvatarMap: _avsBuildAvatarMap,   // 預撈角色頭像(async) 給 {{@avatar}} 用
         syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發（現為「清理舊世界書條目」）
         buildVarDefsContent,     // 變數定義說明書內容→給 state_runtime.injectCurrent 即時注入主提示詞（取代寫世界書）
