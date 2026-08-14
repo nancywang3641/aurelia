@@ -1,0 +1,287 @@
+// ----------------------------------------------------------------
+// [檔案] os_ui_style_packs.js — 🎨 UI 風格 DNA 資料庫（VN／AVS 共用）
+// 職責：存放風格包與版型骨架，選一包、產出 450~900 字的精簡美術指令。
+//   設計原則：終端模型「永遠只讀到選中的那一包」——整個風格庫塞進去會增加 token、
+//   讓規則互相打架，還會把所有風格平均成同一種味道。選哪包由前端決定。
+// 資料為何寫在程式裡不進 OS_DB：這是唯讀的內建資料（約 15KB），不是使用者資料；
+//   OS_DB 升版加 store 會 deadlock 全站。只有「最近用過什麼」需要留下來 → localStorage。
+// 來源：docs/aurelia-ui-art-direction/（參考圖已萃取成文字，不再需要原圖）
+// 入口：window.OS_UI_STYLE.build(styleId, layoutId) → 直接接在生成提示後面
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window.parent || window;
+    const K_RECENT = 'aurelia_ui_style_recent';   // 最近用過的（避重用）
+    const RECENT_MAX = 5;
+
+    // ── 版型骨架：跟風格分開選，同一個風格要能搭不同構圖 ──
+    //   綁死「一風格一版型」的話，換風格只是換色，畫面骨架永遠是那一套。
+    const LAYOUTS = {
+        L1: { name: 'ticket-rail',        desc: '窄側欄像票根、主內容像票面，用條碼、序號與裁切線建立節奏' },
+        L2: { name: 'diagonal-surge',     desc: '大面積斜切與對角動線，主視覺或標題穿越區塊邊界' },
+        L3: { name: 'object-interface',   desc: '整個介面是一件物品：卡帶、檔案夾、護照、終端或儀表' },
+        L4: { name: 'editorial-bleed',    desc: '超大字、影像與色塊出血交疊，靠留白與基線維持秩序' },
+        L5: { name: 'bento-dashboard',    desc: '不同尺寸的資訊磚形成主次，不要每格都做成一樣的卡片' },
+        L6: { name: 'evidence-desk',      desc: '文件、照片、標籤、便條像被整理在桌面或卷宗裡' },
+        L7: { name: 'scrapbook-pinboard', desc: '紙片、膠帶、圖釘、手寫標記形成非對稱拼貼' },
+        L8: { name: 'specimen-showroom',  desc: '單一物件置中展示、規格環繞，畫面大量留白' },
+        L9: { name: 'layered-tabs',       desc: '標籤、頁籤或抽屜分層揭露資料，不一頁攤到底' },
+        L10:{ name: 'poster-impact',      desc: '一個巨大標題、角色或符號主導，其餘資訊退為微型標註' },
+    };
+
+    // ── 風格包：每包都要講得出構圖與資訊怎麼整合，只有色票和關鍵詞的包不合格 ──
+    //   cssOnly=true：不靠外部圖片也成立（AVS 只能 HTML+CSS，沒素材時只從這幾包挑）
+    const PACKS = [
+        {
+            id: 'frontier-ticket', name: '邊境工業票券', use: '身分證、任務卡、角色檔案、科幻面板',
+            cssOnly: true, layouts: ['L1', 'L4'],
+            metaphor: '一張發給邊境旅人的通行票券／識別證',
+            tone: '冷峻科幻、工業識別、軍規但不髒亂',
+            comp: '主畫面佔 70~80%，側邊票根承載名稱、編號與狀態',
+            shape: '硬直角、斜切角、細框、裁切線、條碼、量測刻度、微型標註',
+            color: '霧白或淺灰底、炭黑資訊面，一種高亮酸黃或螢光綠作導引',
+            type: '巨大窄體英文背景字配清楚中文無襯線；標題可以超出可視框，但資料不可被遮',
+            detail: '序列號、分類章、短橫線、左右對應的小箭頭',
+            avoid: '滿版霓虹、玻璃卡片、每項資料都框成小膠囊',
+        },
+        {
+            id: 'neon-rhythm', name: '高彩節奏動漫宣傳', use: '活動頁、音樂、角色組合、慶典',
+            cssOnly: false, layouts: ['L2', 'L4'],
+            metaphor: '一張電子音樂現場的宣傳主視覺',
+            tone: '電子音樂、年輕、快速、節拍明確',
+            comp: '主視覺跨越彩色幾何區，標題用大黑字壓住背景；構圖不對稱',
+            shape: '尖角、速度線、波形、音軌刻度、細小像素與點陣',
+            color: '酸綠、亮黃、橘、電藍擇二至三種，搭配大面積米白或深色穩住',
+            type: '粗黑斜體標題配極小技術字；不可全部同一大小',
+            detail: '播放刻度、節拍條、舞台編號、假介面微標籤',
+            avoid: '彩虹平均分布、元素全部置中、主視覺被關進普通圖片卡',
+        },
+        {
+            id: 'street-diorama', name: '街頭塗鴉立體場景', use: '團隊首頁、城市事件、社群、探索',
+            cssOnly: false, layouts: ['L4', 'L2'],
+            metaphor: '一座擺在街角的城市模型',
+            tone: '城市街頭、俏皮、探索感，帶玩具模型的立體層次',
+            comp: '場景或人物集中在一側，文字與資訊在另一側；用欄杆、路牌或牆面作自然分隔',
+            shape: '噴漆筆觸、貼紙、金屬網、路牌、撕裂膠帶，但資訊區保持乾淨',
+            color: '白、黑、青綠為底，加一個萊姆綠或亮黃爆點',
+            type: '粗窄體標題搭配手寫塗鴉字；正文仍用高可讀無襯線',
+            detail: '禁止標誌、街道路線、座標、社群式小圖標',
+            avoid: '把塗鴉當背景紋理鋪滿導致文字無法閱讀',
+        },
+        {
+            id: 'kinetic-combat', name: '動勢戰鬥海報', use: 'Boss、警報、重大事件、決戰',
+            cssOnly: false, layouts: ['L2', 'L10'],
+            metaphor: '一張決戰前夜的電影海報',
+            tone: '危險、決斷、速度與壓迫',
+            comp: '主體或巨大筆畫形成主對角線，超大中文字分裂左右畫面',
+            shape: '刀鋒多邊形、破裂斜線、強透視、硬陰影，不用柔軟圓角',
+            color: '黑或深紫配高飽和紅，只用少量白色保持焦點',
+            type: '超大粗黑中文字、壓縮英數與票據式小字形成尺度反差',
+            detail: '警戒線、票根、座標、行動編號',
+            avoid: '平均分欄、溫柔漸層、過多小卡稀釋衝擊',
+        },
+        {
+            id: 'future-editorial', name: '未來編輯識別', use: '角色主頁、世界章節、品牌式封面',
+            cssOnly: true, layouts: ['L4'],
+            metaphor: '一本高級雜誌的封面與內頁識別',
+            tone: '清潔、理性、品牌型科幻，比儀表板更像雜誌',
+            comp: '超大描邊或實心英文作背景層，主視覺跨在字與色塊之間',
+            shape: '大色帶、細基線、留白、少量環形符號；裝飾保持精準',
+            color: '白底配電藍或青藍大色塊，再加橘色或黑色作單點反差',
+            type: '幾何無襯線大字搭配少量手寫簽名字，兩者不可搶同一層級',
+            detail: '日期、章節號、細線框與頁碼',
+            avoid: '滿畫面儀表、發光外框、普通科技卡片網格',
+        },
+        {
+            id: 'evidence-dossier', name: '調查證物檔案', use: '線索、物品欄、人物關係、任務追蹤',
+            cssOnly: true, layouts: ['L6', 'L9'],
+            metaphor: '一份攤在桌上的調查卷宗',
+            tone: '冷靜調查、檔案管理、紙本與儀器混合',
+            comp: '左側分類籤、中間證物格、右側放大檢視與摘要',
+            shape: '舊紙、文件夾、透明收納袋、索引標籤、膠片邊、印章',
+            color: '米灰、紙白、深藍，單一黃框標記目前選取項',
+            type: '打字機或等寬標註配清楚正文；數字與編號建立秩序',
+            detail: '日期戳、案件編號、鉛筆圈選、文件缺口',
+            avoid: '恐怖血污濫用、每格等大、做成一般電商商品網格',
+        },
+        {
+            id: 'cassette-modular', name: '卡帶模組介面', use: '劇情選單、音樂、章節、收藏',
+            cssOnly: true, layouts: ['L3', 'L9'],
+            metaphor: '一台可以按下去的卡帶播放機',
+            tone: '復古音樂媒介、玩具感、明亮而機械',
+            comp: '把卡帶、播放機、唱片盒當成整體介面，旋鈕與帶輪可以是功能入口',
+            shape: '塑膠外殼、紙標籤、螺絲孔、磁帶窗、實體按鍵',
+            color: '奶油白、深藍或黑，搭配萊姆綠、珊瑚橘或淡紫色模組',
+            type: '復古襯線章節字配窄體機械標籤；大字不要全部大寫',
+            detail: 'A/B 面、曲目序號、播放箭頭、磁帶齒輪',
+            avoid: '所有模組都是普通圓角卡；物件隱喻只停留在小圖示',
+        },
+        {
+            id: 'racing-telemetry', name: '賽車遙測拼磚', use: '數據總覽、進度、成就、隊伍狀態',
+            cssOnly: true, layouts: ['L5'],
+            metaphor: '賽事轉播的即時遙測畫面',
+            tone: '快速、功能導向、運動轉播與車庫資訊',
+            comp: '磚塊尺寸不等：一個大磚配兩個數據磚與窄導航帶形成節奏',
+            shape: '近直角面板、影像裁切、細標籤、進度與排名圖表',
+            color: '白、炭黑、賽車黃，背景影像可模糊退後',
+            type: '粗窄體大標、短標籤、巨型數字；資訊優先於裝飾',
+            detail: '獎盃剪影、路線圖、圈速、編號與警示點',
+            avoid: '每磚同尺寸、所有資料同權重、用大量圓角削弱速度感',
+        },
+        {
+            id: 'precision-showroom', name: '精密展廳型錄', use: '裝備、載具、商品、角色配置',
+            cssOnly: true, layouts: ['L8'],
+            metaphor: '展示櫃裡的單一件收藏品與它的規格牌',
+            tone: '產品展示、工程型錄、潔淨且帶一點中古機械感',
+            comp: '單一物件置中、大留白，規格與選項沿左右邊緣排列',
+            shape: '細線、圓形量表、色票、規格表、底部操作軌，不做厚重容器',
+            color: '白或極淺灰為主，用物件本身的顏色，再加單一橘紅操作色',
+            type: '工業無襯線與大號數值，標題像型號銘牌',
+            detail: '等級、時間、比較數值、零件清單、確認條',
+            avoid: '背景塞滿裝飾、物件縮成小縮圖、普通購物商城卡片',
+        },
+        {
+            id: 'pastel-idol-trip', name: '粉彩偶像旅程手帳', use: '活動票、行程、紀念冊、友情頁',
+            cssOnly: false, layouts: ['L7'],
+            metaphor: '一頁貼滿票根與拍立得的旅行手帳',
+            tone: '清新、夢幻、青春旅行與舞台回憶',
+            comp: '主照片像拍立得或記事本頁，交通票券與活動票疊在前景',
+            shape: '透明彩色塑膠、星星貼紙、活頁環、卡帶、閃光與紙票',
+            color: '粉紅、淡紫、天藍，加入少量亮黃星點；背景保持柔白',
+            type: '圓潤粗體標題、手寫英文短句、清楚中文資訊',
+            detail: '日期、地點箭頭、場館號、紀念章、照片角貼',
+            avoid: '所有區塊同樣粉色、文字對比不足、裝飾遮住票券資訊',
+        },
+        {
+            id: 'campus-stationery', name: '清新校園文具拼貼', use: '寵物、社團、人物資料、日程與公告',
+            cssOnly: true, layouts: ['L3', 'L6', 'L7'],
+            metaphor: '一本貼滿紙膠帶的社團資料夾',
+            tone: '萌、清新、校園社團與品牌文具感，不幼兒化',
+            comp: '護照、資料夾、方格紙、置物櫃或提案板本身就是介面主體',
+            shape: '格線紙、便利貼、紙膠帶、迴紋針、活頁孔、橡皮章、鉛筆塗鴉',
+            color: '奶油白或暖米色打底，搭配鈷藍或校園藍，再選珊瑚橘、淡黃或薄荷綠點綴',
+            type: '圓潤手寫標題配端正正文；手寫只負責情緒，長文不可全手寫',
+            detail: '日期欄、喜好與不喜歡、社團章、姓名貼、照片框、彩色索引',
+            avoid: '全部元素漂浮沒有基線、過多粉嫩色、把可愛等同於每個盒子都超大圓角',
+            asset: '沒有現成圖時用簡單線稿、爪印、星星、鉛筆與首字頭像，不要硬畫複雜角色',
+        },
+        {
+            id: 'retro-runner-club', name: '復古跑團社團刊物', use: '社團、運動、活動報名、成員頁',
+            cssOnly: true, layouts: ['L4', 'L6'],
+            metaphor: '一份老派路跑社團的會刊與報名表',
+            tone: '健康、悠閒、社團刊物與老式運動票券',
+            comp: '上半部是大型社團標題與報名紙，下半部以三欄資訊像會刊版面展開',
+            shape: '撕邊記事紙、格線、棋盤格、號碼布、郵票齒孔、細襯線標題',
+            color: '皇家藍配奶油白為主，可加草綠或黑色',
+            type: '復古運動襯線或手寫斜體標誌，搭配清楚無襯線資訊',
+            detail: '日期、集合地點、配速、路線、抽獎券、俱樂部章',
+            avoid: '現代健身應用的發光數據環、整頁都做成藍底白卡',
+        },
+        {
+            id: 'storybook-adventure', name: '彩色童話冒險書', use: '事件說明、旅行、節慶、輕鬆任務',
+            cssOnly: true, layouts: ['L3'],
+            metaphor: '一本攤開的冒險繪本',
+            tone: '溫暖、旅行、節慶，像一本攤開的兒童冒險冊',
+            comp: '左頁是大幅插圖或地圖、右頁是標題短文與獎勵，書頁本身就是外框',
+            shape: '羊皮紙、彩色剪紙、葉片、水波、壓花角飾、絲帶書籤',
+            color: '奶油紙色配湖水藍、珊瑚橘與葉綠；外圍可用明亮天空色',
+            type: '溫柔襯線標題配高可讀正文，避免過度童趣泡泡字',
+            detail: '章節徽章、旅行印記、獎勵寶石、手繪分隔線',
+            avoid: '仿舊太重、背景紋理蓋住文字、把資訊拆成普通任務卡列表',
+        },
+        {
+            id: 'ethereal-quest-ledger', name: '空靈花影任務簿', use: '幻想任務、章節、獎勵、儀式',
+            cssOnly: true, layouts: ['L9'],
+            metaphor: '一卷擺在祭壇上的半透明任務書',
+            tone: '幻想、儀式、安靜華麗，帶花與風的流動感',
+            comp: '左側章節垂直籤，右側任務與獎勵依層級排列，中央像半透明書頁或卷軸',
+            shape: '薄紙、淡金細框、花瓣剪影、雲霧、柔和發光邊，不做厚玻璃卡',
+            color: '乳白、青綠、霧藍，少量珊瑚紅用於主要操作',
+            type: '優雅襯線章節名配清楚正文；數字與獎勵維持整齊基線',
+            detail: '章回印記、鎖定態、花形索引、漂浮光點',
+            avoid: '每列都是同一張圓角卡、發光過量、花紋壓過狀態與按鈕',
+        },
+    ];
+
+    // ── 版型變奏：同一包連兩次也不該長一樣，這幾軸每次重擲 ──
+    const VARIANTS = {
+        focus:   ['主視覺置中', '主視覺偏左', '主視覺偏右', '主視覺跨欄', '主視覺背景化'],
+        flow:    ['資訊走對角', '資訊走 Z 字', '資訊環繞主體', '資訊上下分層', '資訊逐層揭露'],
+        density: ['留白型', '均衡型', '高密度編輯型'],
+        edge:    ['票券切角', '撕紙邊', '硬直角', '裝置外殼', '無外框滿版'],
+    };
+
+    // ── 共用美化原則：跟哪一包無關，每次都帶 ──
+    //   這裡只寫「怎麼算好看」，工程規則(響應式、佔位符、API)留在各系統自己的提示裡，不在這裡重複。
+    const PRINCIPLES =
+        '【共用美術原則】\n' +
+        '- 先想一句話說得出的視覺隱喻(這個面板「是什麼東西」)，再決定顏色。沒有隱喻的面板一定會長得像上一個。\n' +
+        '- 資訊要長進主體裡，不是在主體旁邊再貼一排卡片。嚴禁卡中卡。\n' +
+        '- 一定要有一個佔畫面足夠比例的主導元素，其餘退為次要。\n' +
+        '- 大中小三層字級要拉開，文字本身就是構圖的一部分，不是填空。\n' +
+        '- 只用一種主要材質語言。玻璃、紙、金屬全混在一起等於沒有風格。\n' +
+        '- 圖示一律用 Font Awesome 的 <i class="fa-solid fa-..."> 標籤，不要用 emoji 當圖示。\n' +
+        '- 不要萬年圓角、不要無目的的漸層與陰影、不要每項資料都框成小膠囊。\n' +
+        '- 把顏色全部拿掉之後，構圖本身仍然要成立。\n' +
+        '- 手機窄框下裝飾不可以遮住資料或操作。\n';
+
+    function _get(id) { return PACKS.find(p => p.id === id) || null; }
+    function _recent() {
+        try { const a = JSON.parse(win.localStorage.getItem(K_RECENT) || '[]'); return Array.isArray(a) ? a : []; }
+        catch (e) { return []; }
+    }
+    // 記住這次用了什麼。避重看的是「風格」而不是「風格+版型」——同一包換版型仍然是同一種味道。
+    function remember(styleId, layoutId) {
+        try {
+            const a = _recent().filter(x => x && x.s !== styleId);
+            a.unshift({ s: styleId, l: layoutId });
+            win.localStorage.setItem(K_RECENT, JSON.stringify(a.slice(0, RECENT_MAX)));
+        } catch (e) {}
+    }
+    function _rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+    // 挑一包:先排除最近用過的,全被排掉才放寬。cssOnly=true 時只從能靠 HTML/CSS 自立的包裡挑。
+    function pick(opts) {
+        opts = opts || {};
+        const used = new Set(_recent().map(x => x.s));
+        let pool = PACKS.filter(p => !opts.cssOnly || p.cssOnly);
+        const fresh = pool.filter(p => !used.has(p.id));
+        if (fresh.length) pool = fresh;
+        const pack = _rand(pool);
+        return { styleId: pack.id, layoutId: _rand(pack.layouts) };
+    }
+    // 產出要接進生成提示的那段文字(含共用原則約 700~900 字)。
+    // 🚨只放選中的這一包:把整個風格庫給模型讀,它會平均掉所有風格,還多燒 token。
+    function build(styleId, layoutId, opts) {
+        opts = opts || {};
+        const p = _get(styleId);
+        if (!p) return '';
+        const L = LAYOUTS[layoutId] || LAYOUTS[p.layouts[0]];
+        const variant = [_rand(VARIANTS.focus), _rand(VARIANTS.flow), _rand(VARIANTS.density), _rand(VARIANTS.edge)].join('、');
+        let s = PRINCIPLES + '\n【本次美術方向:' + p.name + '】\n' +
+            '視覺隱喻:' + p.metaphor + '。語氣是' + p.tone + '。\n' +
+            '構圖:' + L.desc + '。' + p.comp + '。\n' +
+            '形狀與材質:' + p.shape + '。\n' +
+            '色彩邏輯:' + p.color + '。\n' +
+            '字體層級:' + p.type + '。\n' +
+            '標誌性細節:' + p.detail + '。\n';
+        if (opts.cssOnly) {
+            s += '素材策略:沒有任何外部圖片可用,主視覺要靠排版、幾何、內嵌 SVG 或裝置結構撐起來;' +
+                 '不要假裝純 CSS 畫得出完整人物或手繪吉祥物' + (p.asset ? ',' + p.asset : '') + '。\n';
+        } else if (p.asset) {
+            s += '素材策略:' + p.asset + '。\n';
+        }
+        s += '本次變奏:' + variant + '。\n' +
+             '避免:' + p.avoid + '。\n' +
+             '不要照抄任何現有作品的角色、標誌與專有名稱,只取構圖、形狀、材質與色彩邏輯。\n';
+        return s;
+    }
+
+    win.OS_UI_STYLE = window.OS_UI_STYLE = {
+        packs: () => PACKS.map(p => ({ id: p.id, name: p.name, use: p.use, cssOnly: p.cssOnly })),
+        layouts: () => LAYOUTS,
+        get: _get,
+        pick, build, remember,
+        recent: _recent,
+    };
+    console.log('[UI風格庫] 已載入 ' + PACKS.length + ' 個風格包');
+})();

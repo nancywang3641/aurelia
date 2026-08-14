@@ -169,6 +169,7 @@ const PHONE_FILES = [
     'os/os_avs_state.js',     // STATE 管理 UI（從 status_panel 搬入；必須在 os_avs.js 之前）
     'os/os_avs_memory.js',    // 📝 記憶 分頁 UI（向量記憶；必須在 os_avs.js 之前）
     'os/os_avs_skins.js',     // 🎴 視差預設的兩張面板皮（稜鏡／柴郡；必須在 os_avs.js 之前）
+    'os/os_ui_style_packs.js',// 🎨 UI 風格 DNA 資料庫（煉丹爐與 VN 生成共用；必須在使用它的 UI 之前）
     'os/os_avs.js',           // 變數工坊 UI（PWA / 酒館共用一套面板）
     'os/os_studio.js',        // 靈感創作室（VN UI 煉丹，PWA / 酒館共用）
     'os/os_studio_worldbook.js', // 🌍 世界書設計師（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
