@@ -110,17 +110,17 @@
 .osx-card.center { left: var(--osx-card-l2); top: var(--osx-card-t-mid); background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-center-empty.png); }
 .osx-card.right  { left: var(--osx-card-l3); background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-right-empty.png); }
 
-/* 卡內槽位（相對卡片自身，三張共用；來源 components_v2/README.md）
-   菱形 x 32.91~68.56% / y 0~22.70%；插圖 y 22.70~63.40%；名稱 y 63.40~77%；按鈕 y 77~90.70% */
+/* 卡內槽位：三張卡各自量出來的（來源 components_v5/README.md），
+   插圖下緣一律 63.56%，凹槽左中右各有零點幾個百分點的差，別共用同一組。 */
 .osx-node {
-    position: absolute; left: 32.91%; right: 31.44%; top: 0; height: 22.7%;
+    position: absolute; left: 33.2%; right: 31.12%; top: 0; height: 22.71%;
     display: flex; align-items: center; justify-content: center;
     font-size: clamp(5px, 1.9cqw, 11px); font-weight: 800; color: #f4f8ff;
     text-shadow: 0 1px 2px rgba(30, 60, 120, 0.55);
     pointer-events: none;
 }
 .osx-card-name {
-    position: absolute; left: 18.79%; right: 16.82%; top: 63.4%; height: 13.6%;
+    position: absolute; left: 18.79%; right: 16.85%; top: 63.56%; height: 13.58%;
     display: flex; align-items: center; justify-content: center;
     font-size: clamp(8px, 2.9cqw, 14px); font-weight: 800;
     color: #2b3a63; letter-spacing: 1px;
@@ -128,7 +128,7 @@
 }
 /* 按鈕直接坐進卡殼圖自帶的凹槽，不再自己畫底 */
 .osx-card-btn {
-    position: absolute; left: 18.79%; right: 16.82%; top: 77%; height: 13.7%;
+    position: absolute; left: 18.79%; right: 16.85%; top: 77.14%; height: 13.53%;
     display: flex; align-items: center; justify-content: center;
     border: none; background: transparent; border-radius: 999px; padding: 0;
     cursor: pointer; font-family: inherit; font-weight: 700;
@@ -136,10 +136,13 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     transition: background .18s, color .18s;
 }
-/* 中央主卡的凹槽／菱形／插圖本來就比左右卡大一圈，另給一組座標 */
-.osx-card.center .osx-node { left: 36.1%; right: 35.2%; }
-.osx-card.center .osx-card-name { top: 63.6%; height: 9.1%; }
-.osx-card.center .osx-card-btn { left: 14.7%; right: 13.7%; top: 72.7%; height: 18.3%; }
+/* 中央卡：菱形較窄、插圖較高、凹槽整體再高一點 */
+.osx-card.center .osx-node { left: 36.18%; right: 35.17%; }
+.osx-card.center .osx-card-name { top: 63.56%; height: 12.22%; }
+.osx-card.center .osx-card-btn { left: 18.35%; right: 17.34%; top: 75.78%; height: 13.52%; }
+/* 右卡：整體比左卡右移約半個百分點 */
+.osx-card.right .osx-node { left: 33.62%; right: 30.76%; }
+.osx-card.right .osx-card-btn { left: 19.24%; right: 16.51%; }
 
 .osx-card-btn:hover:not(:disabled) { background: rgba(120, 160, 230, 0.16); color: #2b4f9e; }
 .osx-card-btn:disabled { cursor: default; }
