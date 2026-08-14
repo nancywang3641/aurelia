@@ -139,6 +139,12 @@
                                     <div class="avs-btn avs-btn-outline" id="furnace-art-reroll">換一個</div>
                                 </div>
                                 <div class="avs-art-note" id="furnace-art-note"></div>
+                                <div class="avs-label">世界貼紙</div>
+                                <select class="avs-input" id="furnace-sticker">
+                                    <option value="none">不用</option>
+                                    <option value="gen">畫一張九宮格貼紙給面板當裝飾（會多花一次生圖）</option>
+                                </select>
+                                <div class="avs-art-note">貼紙的東西從這個世界裡挑，畫風跟著上面的美術方向走。只當裝飾，不會壓到資料。</div>
                             </div>
 
                             <div class="avs-label">視覺風格要求</div>
@@ -1481,6 +1487,140 @@
         select.innerHTML = currentPacks.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
     }
 
+    // 🌍 當前世界觀：煉丹的參考素材是「這個世界長什麼樣」，不是使用者人設。
+    //   🚨以前一張角色卡配一本世界書，酒館的世界書觸發剛好等於當前世界，所以一直沒事；
+    //     世界門上線後所有世界擠在同一本【奧瑞亞-視差】裡當條目，而煉丹是工具型呼叫、沒有劇情文字去觸發關鍵字
+    //     → 一條都沒被撈進來，AI 手上只剩使用者人設。這裡直接跟世界門要，不繞世界書。
+    async function _worldContext(maxLen) {
+        try {
+            const WG = win.OS_WORLDGATE || window.OS_WORLDGATE;
+            const w = WG && WG.getCurrentWorld ? await WG.getCurrentWorld() : null;
+            if (!w) return '';
+            const head = [w.genre, w.type, w.style].filter(Boolean).join('・');
+            return '【這個面板要放在哪個世界裡】' + w.name + (head ? '（' + head + '）' : '') + '\n' +
+                (w.concept ? w.concept + '\n' : '') +
+                [w.lure ? '這裡的人在追求：' + w.lure : '', w.danger ? '這裡的麻煩：' + w.danger : '']
+                    .filter(Boolean).join('　') + '\n' +
+                (w.entryText ? '【世界檔案節錄】\n' + w.entryText.slice(0, maxLen || 1800) + '\n' : '');
+        } catch (e) { return ''; }
+    }
+
+    // ── 🐚 世界貼紙：一張貼紙圖，格數由 AI 依這個世界拿得出的物件數決定 ──
+    //   不切圖：整張當 background，用 background-position 取單格（一張圖九用，也不必存九份）。
+    //   貼紙 CSS 在存檔時就併進模板自己的 cssContent → 渲染端（三個入口）完全不用改。
+    const _STICKER_SPEC =
+        '根據當前世界觀、場景、角色特徵與代表性物件，輸出簡潔、可直接使用的英文 Prompt，作為一張 3×3 世界觀裝飾貼紙圖。生成結果將用於 VN 組件與 UI 裝飾。\n\n' +
+        '規則：\n' +
+        // 🚨原規格是寫死九張。改成讓它自己決定：這個世界真正拿得出手的代表物件有幾個就畫幾張，
+        //   湊數的貼紙只會變成看不懂的小圖；而且格數越少每一張的解析度越高（同一張圖切九格 vs 切四格）。
+        '1. 先決定這次要畫幾張貼紙，版面只能是 1x1、2x1、2x2、3x2 或 3x3（也就是 1、2、4、6、9 張）。\n' +
+        '　 依這個世界「真正有代表性、輪廓又好認」的物件數量來選，不要為了填滿版面硬湊；寧可四張精準，也不要九張湊數。\n' +
+        '　 決定後在輸出的第一行寫成 Grid: 欄數x列數，接著每個位置都必須明確指定一個不同主體，不得缺少、重複或自行替換。\n' +
+        '2. 主體從當前世界觀提取，例如代表性道具、食物、動植物、交通工具、徽記、魔法物件、角色隨身配件或場景元素；不得殘留上一世界的物品。\n' +
+        '2b. 每一格都要標出它在版面上的位置（例如 top-left、center、bottom-right），生圖那端要靠這個擺位置。\n' +
+        '3. 每格只能有一個主要物件。允許物件不可分離的構造，但禁止物件組、文件堆、道具套裝或多件物品聚在同一格。\n' +
+        '4. 預設不生成完整人物。只有使用者明確要求角色貼紙時，才可加入當前名單中的角色，並使用簡化 chibi 造型；不得添加名單外人物。\n' +
+        '5. 九個主體必須輪廓差異明顯，縮小至 48–96px 時仍可辨識。避免過細線條、複雜內部構造與微小零件。\n' +
+        '6. 所有貼紙使用同一套畫風、線條粗細、光影方式與色彩邏輯；不得有的寫實、有的扁平、有的變成 3D。\n' +
+        '7. 使用 flat 2D illustration、clean cel shading、simple rounded shapes 與 limited color palette。除非世界觀明確需要，禁止寫實材質與高光塑膠感。\n' +
+        '8. 每個物件外圍必須有沿著實際輪廓延伸的 thick white die-cut border；不得使用圓形底座、徽章底板、盤子、相框或 App Icon 容器。\n' +
+        '9. 每個主體直接浮在純色中灰背景上。格子只是排列位置，不得畫出可見分隔線。只有一張時同樣置中、四周留白。\n' +
+        '10. 九個主體彼此不接觸、不重疊、不跨格、不裁切；大小接近，四周保留充足去背空間。\n' +
+        '11. 貼紙內禁止文字、字母、數字、Logo、水印、條碼與偽文字。需要標籤的位置保持空白或改成純色圖形。\n' +
+        '12. 不生成完整背景、桌面、房間、風景或情境插畫。畫面只能包含九個獨立貼紙與純色背景。\n' +
+        '13. 未指定風格時，依當前世界觀選擇最合適的可愛插畫風格；清新校園題材使用 soft pastel campus stationery style。\n' +
+        '14. 鏡頭固定為正面或輕微俯視的產品圖角度，不使用強透視，不讓物件變形。\n' +
+        '15. 輸出只能包含指定標籤內的英文 Prompt，不得附加中文、解釋或建議。\n\n' +
+        '輸出格式：\n\n' +
+        '<世界貼紙>\n' +
+        'Grid: [欄數]x[列數]\n\n' +
+        'Style: [unified illustration style], [current world aesthetic], [limited color palette], flat 2D illustration, clean cel shading, bold readable silhouettes, consistent line weight,\n\n' +
+        'Layout: a sticker sheet containing exactly [張數] separate die-cut stickers arranged in [列數] rows and [欄數] columns, equal spacing, solid neutral medium-gray background,\n\n' +
+        'Cells: [位置] [object], [位置] [object], …（依左上到右下的順序逐格寫完，位置與物件之間留一個空格，格與格之間用逗號分開）\n\n' +
+        'Rendering: each object centered and fully visible, comparable scale, minimal internal details, thick uniform white die-cut outline following the exact object silhouette, no cast shadow, no overlap, no cropped objects, no duplicate objects,\n\n' +
+        'Exclusions: no text, no letters, no numbers, no logo, no watermark, no fake writing, no object clusters, no visible grid lines, no circular backing, no badge base, no plate, no frame, no icon container, no background scene, no photorealism, no glossy 3D render,\n' +
+        '</世界貼紙>';
+    // 從 AI 產的 prompt 裡讀出版面與每一格畫什麼（不然煉丹那支只能亂放貼紙）
+    //   版面允許 1/2/4/6/9 張：湊數的貼紙沒有用，而且格數越少每張的解析度越高。
+    const _STICKER_GRIDS = { '1x1': [1, 1], '2x1': [2, 1], '1x2': [1, 2], '2x2': [2, 2], '3x2': [3, 2], '2x3': [2, 3], '3x3': [3, 3] };
+    function _parseSticker(prompt) {
+        const body = String(prompt || '');
+        const gm = body.match(/Grid:\s*(\d)\s*[x×]\s*(\d)/i);
+        let cols = gm ? Number(gm[1]) : 3, rows = gm ? Number(gm[2]) : 3;
+        if (!_STICKER_GRIDS[cols + 'x' + rows]) { cols = 3; rows = 3; }
+        const cm = body.match(/Cells:\s*([^\n]+)/i);
+        let names = [];
+        if (cm) {
+            names = cm[1].split(',').map(s => s
+                .replace(/[\[\]]/g, '')
+                // 去掉開頭的位置詞（top-left / middle-right / center / upper left…），留下物件本身
+                .replace(/^\s*(?:top|bottom|middle|upper|lower|left|right|center|centre)(?:[\s-]+(?:left|right|center|centre))?\s+/i, '')
+                .trim()).filter(Boolean);
+        }
+        const need = cols * rows;
+        // 格數跟實際寫出來的數量對不上：以實際的為準往回推版面，免得 CSS 切在半張貼紙上
+        if (names.length !== need) {
+            const fit = Object.entries(_STICKER_GRIDS).find(([, g]) => g[0] * g[1] === names.length);
+            if (fit) { cols = fit[1][0]; rows = fit[1][1]; }
+            else return null;   // 連推都推不出來就別放貼紙，畫面切壞比沒有更糟
+        }
+        return { cols, rows, names };
+    }
+    // 生一張貼紙圖：先燒一次副模型產英文 prompt，再走背景桶生圖。失敗就回 null，煉丹照常進行。
+    async function _genStickerSheet(pack, artText, log) {
+        const IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+        if (!IM || typeof IM.generateBackgroundAsync !== 'function') return null;
+        let state = {};
+        try { state = win._AVS_ENGINE?.read?.() || {}; } catch (e) {}
+        const ctx = (await _worldContext(1200)) + '\n' +
+            '【這個檔案在追蹤什麼】' + (pack.name || '') + '\n' +
+            '變數：' + (pack.variables || []).map(v => v.name).join('、') + '\n' +
+            '目前狀態（節錄）：' + JSON.stringify(state).slice(0, 900) + '\n' +
+            (artText ? '【面板的美術方向】貼紙的畫風要跟它同一調性：\n' + artText.slice(0, 600) + '\n' : '');
+        if (log) log.innerHTML = '🐚 正在想這個世界有哪些小東西…';
+        let raw = '';
+        try {
+            raw = await (win.OS_API_ENGINE?.generateText?.('general_assistant', ctx + '\n' + _STICKER_SPEC) || Promise.resolve(''));
+        } catch (e) { console.warn('[AVS 貼紙] 產 prompt 失敗', e); return null; }
+        const m = String(raw || '').match(/<世界貼紙>([\s\S]*?)<\/世界貼紙>/);
+        const imgPrompt = (m ? m[1] : String(raw || '')).trim();
+        if (!imgPrompt || imgPrompt.length < 40) return null;
+        const info = _parseSticker(imgPrompt);
+        if (!info) { console.warn('[AVS 貼紙] 版面讀不出來，這次不放貼紙'); return null; }
+        if (log) log.innerHTML = '🐚 正在畫 ' + (info.cols * info.rows) + ' 張貼紙…';
+        let url = '';
+        // 尺寸跟著版面走：每格固定 384px，格子才不會被拉扁（一張圖切幾格由 AI 決定）
+        try { url = await IM.generateBackgroundAsync(imgPrompt, { width: info.cols * 384, height: info.rows * 384 }) || ''; }
+        catch (e) { console.warn('[AVS 貼紙] 生圖失敗', e && e.message); return null; }
+        if (!url) return null;
+        // blob: 重載就失效 → 轉成 data URL 才存得進模板
+        if (url.indexOf('blob:') === 0) {
+            try {
+                const blob = await (await fetch(url)).blob();
+                url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
+            } catch (e) {}
+        }
+        if (!url) return null;
+        return { url, cols: info.cols, rows: info.rows, names: info.names };
+    }
+    // 貼紙的 CSS：整張圖當背景，用 background-position 取單格（不切圖，一張圖幾格都行）。
+    //   background-size 放大成「欄數×100%」，某一格的位移百分比＝該格序號 ÷ (格數-1)；只有一格時就是滿版。
+    function _stickerCss(url, cols, rows) {
+        cols = cols || 3; rows = rows || 3;
+        const at = (i, n) => (n > 1 ? (i / (n - 1)) * 100 : 0);
+        const rules = [];
+        for (let i = 0; i < cols * rows; i++) {
+            rules.push('.custom-status-panel .wsk-' + (i + 1) + '{background-position:' +
+                at(i % cols, cols).toFixed(2).replace(/\.?0+$/, '') + '% ' +
+                at(Math.floor(i / cols), rows).toFixed(2).replace(/\.?0+$/, '') + '%;}');
+        }
+        return '\n/* 🐚 世界貼紙（' + cols + '×' + rows + '，用 background-position 取單格）*/\n' +
+            '.custom-status-panel .wsk{display:inline-block;vertical-align:middle;flex:none;' +
+            'width:var(--wsk-size,44px);height:var(--wsk-size,44px);' +
+            'background-image:url("' + url + '");background-size:' + (cols * 100) + '% ' + (rows * 100) + '%;' +
+            'background-repeat:no-repeat;}\n' + rules.join('\n') + '\n';
+    }
+
     // ── 🎨 美術方向（風格庫）──
     //   風格庫只負責美術，工程規則（手機相容、佔位符、迴圈語法）永遠在它前面、不受它影響。
     //   AVS 只吐 HTML+CSS、不能用外部圖片 → 一律以 cssOnly 模式挑包與組字。
@@ -1602,6 +1742,14 @@
             }
             // 兩個都空才擋：有選美術方向就不必再打字
             if (!stylePromptVal && !artText) { log.innerHTML = '⚠️ 請先選一個美術方向，或填寫風格要求'; return; }
+            const worldCtx = await _worldContext(1800);   // 沒 DIVE 進任何世界時是空字串，行為同以往
+            if (!worldCtx) console.warn('[AVS 煉丹] 沒抓到當前世界（沒進過世界門？）→ 這次只能靠變數與風格設計');
+            // 🐚 貼紙要在組 prompt 之前先生好：AI 得知道每一格是什麼東西，才放得到對的位置
+            let sticker = null;
+            if (container.querySelector('#furnace-sticker')?.value === 'gen') {
+                try { sticker = await _genStickerSheet(pack, artText, log); } catch (e) { console.warn('[AVS 貼紙]', e); }
+                if (!sticker) log.innerHTML = '🐚 貼紙沒畫出來，這次先不放貼紙，繼續煉面板…';
+            }
 
             log.innerHTML = '🔥 火力全開，煉製中…';
             const btn = container.querySelector('#furnace-start-btn');
@@ -1643,6 +1791,8 @@
                     `<style>\n/* 所有 CSS，父類必須是 .custom-status-panel */\n</style>\n` +
                     `<!-- HTML 結構 -->\n` +
                     `</ui_template>\n\n` +
+                    // 世界觀擺在最前面：面板長什麼樣要從「這是哪裡」推，不是從使用者人設推
+                    (worldCtx ? worldCtx + '\n' : '') +
                     (stylePromptVal ? `風格要求：${stylePromptVal}\n\n` : '') +
                     `【手機相容鐵則｜最優先，違反即失敗】面板最窄會被塞進約 320–390px 的手機框，絕對不能溢出或被裁切：\n` +
                     `- 寬度一律響應式：width:100% / max-width / 百分比 / flex / grid / clamp()；嚴禁寫死大於螢幕的固定像素寬（如 width:600px 或過大的 min-width）。\n` +
@@ -1709,6 +1859,18 @@
                         `不可以為了構圖、留白或視覺主體省略任何資料列與欄位。多實體一律 {{#each}} 配 {{#fields}}、` +
                         `單一群組一律 {{群組.欄位}}——資料區空掉的面板一律視為失敗。`;
                 }
+                // 🐚 貼紙：告訴 AI 每一格畫的是什麼，它才放得到有意義的位置（而不是隨便撒九個圖）
+                if (sticker) {
+                    const n9 = sticker.names.length;
+                    const list = sticker.names.map((n, i) => '　' + (i + 1) + '：' + (n || '（這個世界的小物件）')).join('\n');
+                    fullPrompt +=
+                        `\n\n【🐚 這次有 ${n9} 張世界貼紙可以用】已經替你畫好，都是這個世界裡的東西：\n` + list + `\n` +
+                        `用法：<i class="wsk wsk-N"></i>，N 是 1 到 ${n9}。` +
+                        `大小用 CSS 變數 --wsk-size 調（預設 44px），例如 .deco{--wsk-size:64px}。這幾個 class 已經幫你定義好，不要自己再寫 .wsk 的樣式。\n` +
+                        `★ 貼紙只是裝飾：擺在角落、標題旁、分隔處、空白區這種不會遮住資料的位置，` +
+                        `不要排成一整排圖示牆、不要拿它當資料列的項目符號、不要放在文字上面。` +
+                        `挑跟該區塊內容有關的那幾張用就好，不必每張都用上。`;
+                }
 
                 // 使用與其他模組一致的 generateText 介面
                 const full = await (
@@ -1736,12 +1898,16 @@
                 try { _issues = _auditTemplate(content, objInfo, flatVars); } catch (e) { console.warn('[AVS 煉丹] 校驗失敗', e); }
 
                 const styleMatch = content.match(/<style>([\s\S]*?)<\/style>/i);
+                // 🐚 貼紙 CSS 直接併進這張模板自己的樣式：渲染端（三個入口）完全不必知道有貼紙這回事，
+                //    微調(diff)也不會動到它，模板刪掉貼紙就跟著走。
+                const _css = (styleMatch ? styleMatch[1].trim() : '') +
+                    (sticker ? _stickerCss(sticker.url, sticker.cols, sticker.rows) : '');
                 await win.OS_DB.saveUITemplate({
                     id: 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
                     packId: pack.id,
                     packName: pack.name,
                     stylePrompt: stylePromptVal,
-                    cssContent: styleMatch ? styleMatch[1].trim() : '',
+                    cssContent: _css,
                     htmlContent: content.replace(/<style>[\s\S]*?<\/style>/gi, '').trim(),
                     isActive: false,
                     createdAt: Date.now(),
