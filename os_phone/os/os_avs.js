@@ -140,11 +140,15 @@
                                 </div>
                                 <div class="avs-art-note" id="furnace-art-note"></div>
                                 <div class="avs-label">世界貼紙</div>
-                                <select class="avs-input" id="furnace-sticker">
-                                    <option value="none">不用</option>
-                                    <option value="gen">畫一張九宮格貼紙給面板當裝飾（會多花一次生圖）</option>
-                                </select>
-                                <div class="avs-art-note">貼紙的東西從這個世界裡挑，畫風跟著上面的美術方向走。只當裝飾，不會壓到資料。</div>
+                                <div class="avs-art-row">
+                                    <select class="avs-input" id="furnace-sticker-src">
+                                        <option value="none">不用</option>
+                                        <option value="comfyui_direct">ComfyUI</option>
+                                        <option value="novelai">NAI</option>
+                                    </select>
+                                    <select class="avs-input" id="furnace-sticker-preset"></select>
+                                </div>
+                                <div class="avs-art-note" id="furnace-sticker-note">貼紙的東西從這個世界裡挑，畫風由你選的預設包決定。只當裝飾，不會壓到資料。</div>
                             </div>
 
                             <div class="avs-label">視覺風格要求</div>
@@ -1566,10 +1570,65 @@
         }
         return { cols, rows, names };
     }
-    // 生一張貼紙圖：先燒一次副模型產英文 prompt，再走背景桶生圖。失敗就回 null，煉丹照常進行。
-    async function _genStickerSheet(pack, artText, log) {
-        const IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
-        if (!IM || typeof IM.generateBackgroundAsync !== 'function') return null;
+    // 貼紙的生圖接口與預設包：照裝扮室那條（來源＋預設包各自選、底詞來自包）。
+    //   🚨不可以走背景桶 generateBackgroundAsync：那會套上 VN 背景的底詞，貼紙會被拉成場景畫，
+    //     而且使用者完全沒得選風格。生圖一律「使用者選的接口＋使用者選的預設包」。
+    const STK_CFG = 'avs_sticker_gen_v1';
+    function _imgMgr() { return win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER || null; }
+    function _stkCfg() {
+        try { const o = JSON.parse(localStorage.getItem(STK_CFG) || '{}'); return (o && typeof o === 'object') ? o : {}; }
+        catch (e) { return {}; }
+    }
+    function _stkSave(patch) {
+        try { localStorage.setItem(STK_CFG, JSON.stringify(Object.assign(_stkCfg(), patch))); } catch (e) {}
+    }
+    function _stkPresets(src) {
+        const LD = win.LobbyDress || window.LobbyDress;
+        if (LD && typeof LD.listPresets === 'function') return LD.listPresets(src) || [];   // 大廳已經有一份取法，別再抄
+        const M = _imgMgr();
+        if (!M || !M.config) return [];
+        return src === 'novelai' ? ((M.config.novelai && M.config.novelai.naiPresets) || [])
+                                 : ((M.config.comfyuiDirect && M.config.comfyuiDirect.presets) || []);
+    }
+    function _stkPresetKey(p) {
+        const LD = win.LobbyDress || window.LobbyDress;
+        if (LD && typeof LD.presetKeyOf === 'function') return LD.presetKeyOf(p);
+        return (p && (p.id || p.name)) || '';
+    }
+    // 真正去生那張圖：ComfyUI 走預設包（尺寸用我們算的，蓋掉包裡的）；NAI 走快照→套包→生成→finally 還原
+    async function _stkRender(prompt, src, preset, w, h) {
+        const M = _imgMgr();
+        if (!M) throw new Error('生圖引擎還沒載入');
+        let url = '';
+        if (src === 'novelai') {
+            const nai = M.config.novelai || (M.config.novelai = {});
+            const KEYS = ['charBasePrompt', 'charNegPrompt', 'sampler', 'scale', 'steps', 'ucPreset'];
+            const snap = {}; KEYS.forEach(k => { snap[k] = nai[k]; });
+            KEYS.forEach(k => { if (preset[k] !== undefined) nai[k] = preset[k]; });
+            try { url = await M.generate(prompt, 'char', { provider: 'novelai', width: w, height: h }); }
+            finally { KEYS.forEach(k => { nai[k] = snap[k]; }); }   // transient 鐵律：借用完一定還原
+        } else {
+            // packSize 會讓它用「包裡的 width/height」→ 把包複製一份、尺寸換成貼紙要的比例
+            url = await M.previewComfyPreset(Object.assign({}, preset, { width: w, height: h }), prompt, { packSize: true });
+        }
+        if (!url) throw new Error('接口沒回圖（檢查連線與預設包）');
+        // 去背：貼紙圖是「中灰底＋白色 die-cut 邊」，正好給邊框投票去背用。
+        //   noGrid＝原尺寸原畫風不像素化，sheet＝只去背、不掃碎片也不裁切（會毀掉九宮格）
+        try {
+            const PX = (win.LobbyStage && win.LobbyStage._b && win.LobbyStage._b.pixelify) || null;
+            if (PX) { const cut = await PX(url, { noGrid: true, sheet: true }); if (cut) return cut; }
+        } catch (e) { console.warn('[AVS 貼紙] 去背失敗，用原圖', e); }
+        if (/^(blob:|https?:)/i.test(String(url))) {   // 沒去背的話自己轉 dataURL，blob 重載就失效
+            try {
+                const b = await (await fetch(url)).blob();
+                url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(b); });
+            } catch (e) {}
+        }
+        return url;
+    }
+    // 生一張貼紙圖：先燒一次副模型產英文 prompt，再用選定的接口生圖。失敗回 null，煉丹照常進行。
+    async function _genStickerSheet(pack, artText, log, src, preset) {
+        if (!_imgMgr() || !preset) return null;
         let state = {};
         try { state = win._AVS_ENGINE?.read?.() || {}; } catch (e) {}
         const ctx = (await _worldContext(1200)) + '\n' +
@@ -1590,16 +1649,8 @@
         if (log) log.innerHTML = '🐚 正在畫 ' + (info.cols * info.rows) + ' 張貼紙…';
         let url = '';
         // 尺寸跟著版面走：每格固定 384px，格子才不會被拉扁（一張圖切幾格由 AI 決定）
-        try { url = await IM.generateBackgroundAsync(imgPrompt, { width: info.cols * 384, height: info.rows * 384 }) || ''; }
+        try { url = await _stkRender(imgPrompt, src, preset, info.cols * 384, info.rows * 384); }
         catch (e) { console.warn('[AVS 貼紙] 生圖失敗', e && e.message); return null; }
-        if (!url) return null;
-        // blob: 重載就失效 → 轉成 data URL 才存得進模板
-        if (url.indexOf('blob:') === 0) {
-            try {
-                const blob = await (await fetch(url)).blob();
-                url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
-            } catch (e) {}
-        }
         if (!url) return null;
         return { url, cols: info.cols, rows: info.rows, names: info.names };
     }
@@ -1653,6 +1704,31 @@
         const p = S.get(_furnaceArt.styleId);
         const L = S.layouts()[_furnaceArt.layoutId];
         note.textContent = p ? ('這次用「' + p.name + '」＋' + (L ? L.name + '：' + L.desc : '預設骨架')) : '';
+    }
+    // 貼紙的接口/預設包下拉（同裝扮室：選了什麼下次記得）
+    function _refreshStickerUI(container) {
+        const srcSel = container.querySelector('#furnace-sticker-src');
+        const pSel = container.querySelector('#furnace-sticker-preset');
+        const note = container.querySelector('#furnace-sticker-note');
+        if (!srcSel || !pSel) return;
+        const src = srcSel.value;
+        if (src === 'none') {
+            pSel.style.display = 'none';
+            if (note) note.textContent = '這次不放貼紙。';
+            return;
+        }
+        pSel.style.display = '';
+        const list = _stkPresets(src);
+        const saved = _stkCfg()[src === 'novelai' ? 'naiPreset' : 'comfyPreset'] || '';
+        pSel.innerHTML = list.length
+            ? list.map((p, i) => '<option value="' + i + '"' + (_stkPresetKey(p) === saved ? ' selected' : '') + '>' +
+                String(p.name || ('預設 ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('')
+            : '<option value="" disabled selected>（這個接口還沒有預設包）</option>';
+        if (note) {
+            note.textContent = list.length
+                ? '貼紙的東西從這個世界裡挑，畫風由這個預設包決定。只當裝飾，不會壓到資料。'
+                : '這個接口還沒有預設包，先去圖片設置裡存一個，或改用另一個接口。';
+        }
     }
     // 更新煉丹爐風格建議列表（根據選中的 packId）
     function _refreshFurnacePresets(container, packId) {
@@ -1722,6 +1798,20 @@
         const artRe = container.querySelector('#furnace-art-reroll');
         if (artRe) artRe.onclick = () => _refreshFurnaceArt(container, true);
         _refreshFurnaceArt(container, false);
+        // 🐚 貼紙接口/預設包：換接口重列預設包，選了就記住（同裝扮室）
+        const stkSrc = container.querySelector('#furnace-sticker-src');
+        const stkPre = container.querySelector('#furnace-sticker-preset');
+        if (stkSrc) {
+            const c = _stkCfg();
+            if (c.src && stkSrc.querySelector('[value="' + c.src + '"]')) stkSrc.value = c.src;
+            stkSrc.onchange = () => { _stkSave({ src: stkSrc.value }); _refreshStickerUI(container); };
+        }
+        if (stkPre) stkPre.onchange = () => {
+            const src = stkSrc ? stkSrc.value : 'comfyui_direct';
+            const p = _stkPresets(src)[parseInt(stkPre.value, 10)];
+            if (p) _stkSave(src === 'novelai' ? { naiPreset: _stkPresetKey(p) } : { comfyPreset: _stkPresetKey(p) });
+        };
+        _refreshStickerUI(container);
 
         container.querySelector('#furnace-start-btn').onclick = async () => {
             // ✏️ 微調(diff)模式：走 find/replace、只改你說的；其他保留。跟「重新煉丹」全生成分流。
@@ -1742,18 +1832,23 @@
             }
             // 兩個都空才擋：有選美術方向就不必再打字
             if (!stylePromptVal && !artText) { log.innerHTML = '⚠️ 請先選一個美術方向，或填寫風格要求'; return; }
+            // 按鈕在這裡就鎖：貼紙那段也要跑一趟文字模型加一次生圖，不鎖的話這段期間可以連按
+            const btn = container.querySelector('#furnace-start-btn');
+            btn.disabled = true;
             const worldCtx = await _worldContext(1800);   // 沒 DIVE 進任何世界時是空字串，行為同以往
             if (!worldCtx) console.warn('[AVS 煉丹] 沒抓到當前世界（沒進過世界門？）→ 這次只能靠變數與風格設計');
             // 🐚 貼紙要在組 prompt 之前先生好：AI 得知道每一格是什麼東西，才放得到對的位置
             let sticker = null;
-            if (container.querySelector('#furnace-sticker')?.value === 'gen') {
-                try { sticker = await _genStickerSheet(pack, artText, log); } catch (e) { console.warn('[AVS 貼紙]', e); }
+            const _stkSrc = container.querySelector('#furnace-sticker-src')?.value || 'none';
+            if (_stkSrc !== 'none') {
+                const _pi = parseInt(container.querySelector('#furnace-sticker-preset')?.value, 10);
+                const _preset = _stkPresets(_stkSrc)[_pi];
+                if (!_preset) { log.innerHTML = '⚠️ 貼紙要先選一個預設包（或把上面的貼紙改成「不用」）'; btn.disabled = false; return; }
+                try { sticker = await _genStickerSheet(pack, artText, log, _stkSrc, _preset); } catch (e) { console.warn('[AVS 貼紙]', e); }
                 if (!sticker) log.innerHTML = '🐚 貼紙沒畫出來，這次先不放貼紙，繼續煉面板…';
             }
 
             log.innerHTML = '🔥 火力全開，煉製中…';
-            const btn = container.querySelector('#furnace-start-btn');
-            btn.disabled = true;
 
             try {
                 const flatVars = pack.variables.filter(v => v.type !== 'object');
