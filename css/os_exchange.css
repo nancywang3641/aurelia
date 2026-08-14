@@ -9,8 +9,8 @@
    ================================================================ */
 .osx-dock {
     /* 標 W = 相對外框寬、標 H = 相對外框高；數值同設計稿 */
-    --osx-title-x: 5%;
-    --osx-title-y: 7%;
+    --osx-title-x: 12.86%;   /* 量自設計稿的文字實際落點，不是猜的 */
+    --osx-title-y: 8.43%;    /* H，這是行框上緣；設計稿的字面上緣落在 8.36% */
     --osx-bal-x: 4.8%;         /* 距右 */
     --osx-bal-y: 6.2%;         /* H */
     --osx-bal-w: 26.5%;        /* W */
@@ -73,22 +73,36 @@
     position: absolute; left: var(--osx-title-x); top: var(--osx-title-y); z-index: 3;
     max-width: 44%; overflow: hidden; line-height: 1.25;
 }
-.osx-title .zh { display: block; font-size: clamp(13px, 4.6cqw, 25px); font-weight: 800; letter-spacing: 3px; color: #2b3a63; white-space: nowrap; }
-.osx-title .en { display: block; margin-top: 2px; font-size: clamp(5px, 1.6cqw, 10px); letter-spacing: 1.5px; color: #8b9bc0; white-space: nowrap; }
+/* 設計稿量到：中文 x 14.2~33.07%、y 8.36~11.8%（字高 3.4%H≒3.7cqw）；英文副標 x 12.86%、y 13.4% */
+.osx-title .zh {
+    display: block; margin-left: 1.35cqw; margin-right: -0.22em; line-height: 1;
+    font-size: clamp(11px, 3.15cqw, 18px); font-weight: 800; letter-spacing: 0.22em;
+    color: #2b3a63; white-space: nowrap;
+}
+.osx-title .en {
+    display: block; margin-top: 1.3cqw; line-height: 1;
+    font-size: clamp(5px, 1.35cqw, 9px); letter-spacing: 0.18em;
+    color: #8b9bc0; white-space: nowrap;
+}
 
 /* ── 餘額膠囊 ── */
 .osx-bal {
     position: absolute; right: var(--osx-bal-x); top: var(--osx-bal-y); z-index: 3;
     width: var(--osx-bal-w); aspect-ratio: 276 / 90;
     background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-balance-capsule-empty.png) center / 100% 100% no-repeat;
-    display: flex; align-items: center; gap: 1%; padding: 0 3.4% 0 1.4%;   /* % 相對外框寬，膠囊佔 26.5% */
 }
+/* 膠囊內部槽位量自設計稿（相對膠囊自身）：左圓 5.8~29.4%、數字 33.7~70.3%、右圓 70.6~94.2% */
 .osx-bal-coin {
-    width: 26%; aspect-ratio: 1; flex: 0 0 auto;
+    position: absolute; left: 5.8%; top: 16.6%; width: 23.6%; height: 67.2%;
     background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-pt-coin-pt-face.png) center / contain no-repeat;
 }
-.osx-bal-n { flex: 1; text-align: center; font-size: clamp(11px, 4.8cqw, 23px); font-weight: 800; color: #2b3a63; font-variant-numeric: tabular-nums; line-height: 1; }
-.osx-bal-u { font-size: clamp(7px, 2cqw, 11px); color: #8b9bc0; align-self: flex-end; margin-bottom: 4%; }
+.osx-bal-n {
+    position: absolute; left: 33.7%; right: 29.7%; top: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center; gap: 0.3em;
+    font-size: clamp(11px, 3.9cqw, 20px); font-weight: 800; color: #2b3a63;
+    font-variant-numeric: tabular-nums; line-height: 1;
+}
+.osx-bal-u { font-size: 0.5em; color: #8b9bc0; align-self: flex-end; margin-bottom: 0.35em; }
 
 /* ── 中央軌道展台（環與中心幣是同一張圖，不再另疊硬幣） ── */
 .osx-stage {
@@ -155,12 +169,18 @@
     position: absolute; left: var(--osx-rail-x); top: var(--osx-rail-y);
     width: var(--osx-rail-w); aspect-ratio: 942 / 135; z-index: 1;
     background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-status-rail-empty.png) center / 100% 100% no-repeat;
-    display: flex; align-items: center; gap: 1.5%; padding: 0 6%;   /* % 相對外框寬，狀態列佔 90.5% */
 }
-.osx-rail-ic { flex: 0 0 auto; width: 5%; text-align: center; color: #6c8fd6; font-size: clamp(7px, 2.4cqw, 13px); }
-.osx-rail-tx { flex: 1; min-width: 0; line-height: 1.35; }
-.osx-rail-tx .t { display: block; font-size: clamp(6px, 2cqw, 10px); font-weight: 800; color: #2b3a63; letter-spacing: 1px; }
-.osx-rail-tx .m { display: block; font-size: clamp(6px, 2cqw, 10.5px); color: #6d7fa4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 狀態列內部槽位量自設計稿（相對狀態列自身）：左圓 3.4~13.8%、文字 19.4% 起、右圓 86.2~94.8% */
+.osx-rail-ic {
+    position: absolute; left: 3.4%; top: 50%; transform: translateY(-50%);
+    width: 10.4%; text-align: center; color: #6c8fd6; font-size: clamp(7px, 2.2cqw, 12px);
+}
+.osx-rail-tx {
+    position: absolute; left: 19.4%; right: 15%; top: 27.6%; bottom: 34%;
+    min-width: 0; display: flex; flex-direction: column; justify-content: space-between; line-height: 1.15;
+}
+.osx-rail-tx .t { display: block; font-size: clamp(6px, 1.75cqw, 9px); font-weight: 800; color: #2b3a63; letter-spacing: 1px; }
+.osx-rail-tx .m { display: block; font-size: clamp(6px, 1.75cqw, 9.5px); color: #6d7fa4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .osx-rail-tx .m.ok { color: #2f8a58; }
 .osx-rail-tx .m.bad { color: #c2506a; }
 
