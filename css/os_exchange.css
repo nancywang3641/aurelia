@@ -170,13 +170,14 @@
     width: var(--osx-rail-w); aspect-ratio: 942 / 135; z-index: 1;
     background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-status-rail-empty.png) center / 100% 100% no-repeat;
 }
-/* 狀態列內部槽位量自設計稿（相對狀態列自身）：左圓 3.4~13.8%、文字 19.4% 起、右圓 86.2~94.8% */
+/* 狀態列內部槽位量自設計稿（相對狀態列自身）：左圓 3.4~13.8%、文字 19.4% 起、右圓 86.2~94.8%
+   左圓素材上本來就有圖案，狀態圖示改放右圓那格。 */
 .osx-rail-ic {
-    position: absolute; left: 3.4%; top: 50%; transform: translateY(-50%);
-    width: 10.4%; text-align: center; color: #6c8fd6; font-size: clamp(7px, 2.2cqw, 12px);
+    position: absolute; right: 5.2%; top: 50%; transform: translateY(-50%);
+    width: 8.6%; text-align: center; color: #6c8fd6; font-size: clamp(7px, 2.2cqw, 12px);
 }
 .osx-rail-tx {
-    position: absolute; left: 19.4%; right: 15%; top: 27.6%; bottom: 34%;
+    position: absolute; left: 19.4%; right: 17%; top: 27.6%; bottom: 34%;
     min-width: 0; display: flex; flex-direction: column; justify-content: space-between; line-height: 1.15;
 }
 .osx-rail-tx .t { display: block; font-size: clamp(6px, 1.75cqw, 9px); font-weight: 800; color: #2b3a63; letter-spacing: 1px; }
