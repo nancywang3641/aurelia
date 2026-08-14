@@ -396,7 +396,8 @@
               '<div class="osx-title"><span class="zh">量子交易所</span>' +
                 '<span class="en">AURELIA PARALLAX EXCHANGE</span></div>' +
               '<div class="osx-bal"><span class="osx-bal-coin"></span>' +
-                '<span class="osx-bal-n" id="os-pt-shop-bal">…</span><span class="osx-bal-u">PT</span></div>' +
+                '<span class="osx-bal-n"><span id="os-pt-shop-bal">…</span>' +
+                '<span class="osx-bal-u">PT</span></span></div>' +
               '<div class="osx-stage"></div>' +
               '<div class="osx-cards" id="os-pt-shop-items"></div>' +
               '<div class="osx-rail"><span class="osx-rail-ic"><i class="fa-solid fa-hourglass-half"></i></span>' +
