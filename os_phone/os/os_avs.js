@@ -131,8 +131,18 @@
                                 <div id="furnace-presets-list" style="display:flex;flex-direction:column;gap:6px;"></div>
                             </div>
 
+                            <!-- 🎨 美術方向：從風格庫挑一包當底，治「每次生出來都同一種味道」-->
+                            <div id="furnace-art-wrap">
+                                <div class="avs-label">美術方向</div>
+                                <div class="avs-art-row">
+                                    <select class="avs-input" id="furnace-art-select"></select>
+                                    <div class="avs-btn avs-btn-outline" id="furnace-art-reroll">換一個</div>
+                                </div>
+                                <div class="avs-art-note" id="furnace-art-note"></div>
+                            </div>
+
                             <div class="avs-label">視覺風格要求</div>
-                            <textarea class="avs-textarea" id="furnace-style-prompt" placeholder="例如：賽博龐克風格、霓虹發光、半透明玻璃&#10;或點上方「載入風格建議」快速填入" style="margin-bottom:15px;"></textarea>
+                            <textarea class="avs-textarea" id="furnace-style-prompt" placeholder="例如：賽博龐克風格、霓虹發光、半透明玻璃&#10;可留空，交給上面的美術方向決定" style="margin-bottom:15px;"></textarea>
                             <div class="avs-btn avs-btn-primary" id="furnace-start-btn" style="width:100%;">🔥 開始煉丹</div>
                             <div class="furnace-log" id="furnace-log-output" style="margin-top:15px;">等待點火...</div>
                         </div>
@@ -393,7 +403,11 @@
         const styleEl  = container.querySelector('#furnace-style-prompt');
         const startEl  = container.querySelector('#furnace-start-btn');
         const presetEl = container.querySelector('#furnace-presets-wrap');
+        const artEl    = container.querySelector('#furnace-art-wrap');
         const logEl    = container.querySelector('#furnace-log-output');
+        // 🚨微調走 find/replace,只能改你指名的地方。這時候注入一整套美術方向,
+        //   模型會照著新風格重寫、find 全部定位不到 → 看起來就是「按了沒反應」。所以微調模式整區收起來。
+        if (artEl) artEl.style.display = _furnaceRefineTpl ? 'none' : '';
         if (_furnaceRefineTpl) {
             if (titleEl)  titleEl.textContent = '✏️ 微調面板 · 只改你說的、其他不動';
             if (styleEl)  { styleEl.value = ''; styleEl.placeholder = '說你要改哪裡，例如：標題字大一點、邊框改金色、血條改紅色（只動你說的，其他保留）'; }
@@ -406,6 +420,7 @@
             if (startEl)  startEl.textContent = '🔥 開始煉丹';
             if (logEl)    logEl.innerHTML = '等待點火...';
             try { _refreshFurnacePresets(container, packId); } catch (e) {}   // 重評風格建議顯示（剛從微調模式切回來時把它復原）
+            try { _refreshFurnaceArt(container, true); } catch (e) {}          // 每次開爐重擲一次美術方向
         }
 
         if (modal) modal.style.display = 'flex';
@@ -1419,6 +1434,39 @@
         select.innerHTML = currentPacks.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
     }
 
+    // ── 🎨 美術方向（風格庫）──
+    //   風格庫只負責美術，工程規則（手機相容、佔位符、迴圈語法）永遠在它前面、不受它影響。
+    //   AVS 只吐 HTML+CSS、不能用外部圖片 → 一律以 cssOnly 模式挑包與組字。
+    let _furnaceArt = null;   // { styleId, layoutId }；null = 這次不用風格庫
+    function _uiStyle() { return win.OS_UI_STYLE || window.OS_UI_STYLE; }
+    function _refreshFurnaceArt(container, reroll) {
+        const S = _uiStyle();
+        const sel = container.querySelector('#furnace-art-select');
+        const note = container.querySelector('#furnace-art-note');
+        const wrap = container.querySelector('#furnace-art-wrap');
+        if (!sel || !note) return;
+        if (!S) { if (wrap) wrap.style.display = 'none'; _furnaceArt = null; return; }   // 風格庫沒載入就當沒這功能
+        if (!sel.options.length) {
+            sel.innerHTML = '<option value="auto">隨機挑一種（避開最近用過的）</option>' +
+                '<option value="none">不用，只照下面的文字</option>' +
+                S.packs().filter(p => p.cssOnly).map(p =>
+                    '<option value="' + p.id + '">' + p.name + '（' + p.use + '）</option>').join('');
+        }
+        const v = sel.value || 'auto';
+        if (v === 'none') { _furnaceArt = null; note.textContent = '這次不套風格庫，只照下面填的文字。'; return; }
+        if (v === 'auto') {
+            if (reroll || !_furnaceArt || !_furnaceArt.auto) _furnaceArt = Object.assign({ auto: true }, S.pick({ cssOnly: true }));
+        } else if (reroll || !_furnaceArt || _furnaceArt.styleId !== v) {
+            const p = S.get(v);
+            const ls = (p && p.layouts) || [];
+            const cur = _furnaceArt && _furnaceArt.styleId === v ? _furnaceArt.layoutId : '';
+            // 手選同一包時按「換一個」＝換版型骨架（同風格也不該每次長一樣）
+            _furnaceArt = { styleId: v, layoutId: ls.length ? (reroll ? ls[(ls.indexOf(cur) + 1) % ls.length] : ls[0]) : '' };
+        }
+        const p = S.get(_furnaceArt.styleId);
+        const L = S.layouts()[_furnaceArt.layoutId];
+        note.textContent = p ? ('這次用「' + p.name + '」＋' + (L ? L.name + '：' + L.desc : '預設骨架')) : '';
+    }
     // 更新煉丹爐風格建議列表（根據選中的 packId）
     function _refreshFurnacePresets(container, packId) {
         const wrap = container.querySelector('#furnace-presets-wrap');
@@ -1481,6 +1529,12 @@
         packSelect.onchange = () => _refreshFurnacePresets(container, packSelect.value);
         // 初始載入
         _refreshFurnacePresets(container, packSelect.value);
+        // 🎨 美術方向：換包重挑、「換一個」重擲（auto 換風格、手選換版型骨架）
+        const artSel = container.querySelector('#furnace-art-select');
+        if (artSel) artSel.onchange = () => _refreshFurnaceArt(container, true);
+        const artRe = container.querySelector('#furnace-art-reroll');
+        if (artRe) artRe.onclick = () => _refreshFurnaceArt(container, true);
+        _refreshFurnaceArt(container, false);
 
         container.querySelector('#furnace-start-btn').onclick = async () => {
             // ✏️ 微調(diff)模式：走 find/replace、只改你說的；其他保留。跟「重新煉丹」全生成分流。
@@ -1490,7 +1544,17 @@
             if (!pack) return;
             const log = container.querySelector('#furnace-log-output');
             const stylePromptVal = container.querySelector('#furnace-style-prompt').value.trim();
-            if (!stylePromptVal) { log.innerHTML = '⚠️ 請先填寫風格要求'; return; }
+            // 🎨 美術方向文字：整個風格庫只送這一包（全部送進去會平均掉所有風格、還多燒 token）
+            let artText = '';
+            const S = _uiStyle();
+            if (S && _furnaceArt) {
+                try {
+                    artText = S.build(_furnaceArt.styleId, _furnaceArt.layoutId, { cssOnly: true });
+                    S.remember(_furnaceArt.styleId, _furnaceArt.layoutId);   // 記下來，下次隨機會避開
+                } catch (e) { console.warn('[AVS] 美術方向組字失敗', e); }
+            }
+            // 兩個都空才擋：有選美術方向就不必再打字
+            if (!stylePromptVal && !artText) { log.innerHTML = '⚠️ 請先選一個美術方向，或填寫風格要求'; return; }
 
             log.innerHTML = '🔥 火力全開，煉製中…';
             const btn = container.querySelector('#furnace-start-btn');
@@ -1532,7 +1596,9 @@
                     `<style>\n/* 所有 CSS，父類必須是 .custom-status-panel */\n</style>\n` +
                     `<!-- HTML 結構 -->\n` +
                     `</ui_template>\n\n` +
-                    `風格要求：${stylePromptVal}\n\n` +
+                    // 使用者自己打的字排在美術方向前面：她指名要的東西優先於風格庫挑到的那包
+                    (stylePromptVal ? `風格要求：${stylePromptVal}\n\n` : '') +
+                    (artText ? artText + '\n' : '') +
                     `【手機相容鐵則｜最優先，違反即失敗】面板最窄會被塞進約 320–390px 的手機框，絕對不能溢出或被裁切：\n` +
                     `- 寬度一律響應式：width:100% / max-width / 百分比 / flex / grid / clamp()；嚴禁寫死大於螢幕的固定像素寬（如 width:600px 或過大的 min-width）。\n` +
                     `- 根容器 .custom-status-panel 必須 box-sizing:border-box、width:100%、max-width:100%，不可橫向外溢。\n` +
