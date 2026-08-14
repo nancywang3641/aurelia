@@ -572,6 +572,70 @@
             return true;
         } catch (e) { console.error('[Worldgate③] 世界條目寫入失敗', e); return false; }
     }
+    // ── 🩺 體檢：檔案庫（OS_DB）與酒館世界書兩邊的狀態對不對得上 ──
+    //   會歪的三種：①整本書被刪或沒匯入 ②某個世界的條目被手動刪掉 ③書在但沒掛到這張角色卡。
+    //   ①②自己補得回來（世界檔案原文留在檔案庫裡，重建不必再燒 API）；
+    //   ③只提示不自動修——大廳在別人的卡裡也開得起來，自動掛載等於把視差世界書塞進別人的角色卡。
+    //   新舊兩版助手的函式名不同，這裡各包一層。
+    function _th2() { const T = _th(); return T || {}; }
+    async function _bookExists() {
+        const T = _th2();
+        try {
+            if (typeof T.getWorldbookNames === 'function') return (T.getWorldbookNames() || []).includes(BOOK_PARA);
+            if (typeof T.getLorebooks === 'function') return (T.getLorebooks() || []).includes(BOOK_PARA);
+        } catch (e) {}
+        return true;   // 問不到就當它在，不要嚇人
+    }
+    async function _createBook() {
+        const T = _th2();
+        try {
+            if (typeof T.createWorldbook === 'function') return !!(await T.createWorldbook(BOOK_PARA));
+            if (typeof T.createLorebook === 'function') return !!(await T.createLorebook(BOOK_PARA));
+        } catch (e) { console.warn('[Worldgate③] 建立世界書失敗', e); }
+        return false;
+    }
+    function _charBooks() {
+        const T = _th2();
+        try {
+            if (typeof T.getCharWorldbookNames === 'function') return T.getCharWorldbookNames('current') || {};
+            if (typeof T.getCharLorebooks === 'function') return T.getCharLorebooks({ type: 'all' }) || {};
+        } catch (e) {}
+        return null;   // 問不到（例如沒開角色卡）→ 不判定、不提示
+    }
+    async function _linkBook() {
+        const T = _th2();
+        const cur = _charBooks();
+        if (!cur) return false;
+        const add = (cur.additional || []).slice();
+        if (!add.includes(BOOK_PARA)) add.push(BOOK_PARA);
+        const next = { primary: cur.primary || null, additional: add };
+        try {
+            if (typeof T.rebindCharWorldbooks === 'function') { await T.rebindCharWorldbooks('current', next); return true; }
+            if (typeof T.setCurrentCharLorebooks === 'function') { await T.setCurrentCharLorebooks(next); return true; }
+        } catch (e) { console.warn('[Worldgate③] 掛載世界書失敗', e); }
+        return false;
+    }
+    // 回傳 { fixed:補回幾個條目, linked:有沒有掛在這張卡上(null=判斷不了) }
+    async function _healthCheck() {
+        const T = _th2();
+        const worlds = await _get(K_WORLDS, []);
+        if (!worlds.length) return { fixed: 0, linked: null };
+        if (!(await _bookExists())) await _createBook();
+        let fixed = 0;
+        try {
+            const entries = (T.getLorebookEntries ? await T.getLorebookEntries(BOOK_PARA) : []) || [];
+            const have = new Set(entries.map(e => e && e.comment));
+            for (const w of worlds) {
+                if (have.has(_entryComment(w))) continue;
+                if (!w.entryText) continue;   // 沒有原文就補不回來（很舊的世界）
+                if (await _writeEntry(w, w.entryText)) fixed++;
+            }
+        } catch (e) { console.warn('[Worldgate③] 體檢補條目失敗', e); }
+        const cb = _charBooks();
+        const linked = cb ? ((cb.primary === BOOK_PARA) || (cb.additional || []).includes(BOOK_PARA)) : null;
+        return { fixed, linked };
+    }
+
     // 🚨世界條目的燈由程式管，不要靠關鍵字觸發，也不要靠人記得開關：
     //   ① 條目的關鍵字是世界名與專有名詞，觸發來源其實是 DIVE 那則開場指令（第 0 樓）。
     //      每二十輪總結後舊樓被隱藏、連第 0 樓一起隱藏 → 關鍵字整個消失 → 世界書從此不載入，AI 開始忘記這個世界。
@@ -1184,6 +1248,12 @@
             '.wg-card.sel{border-color:#1A1C28;box-shadow:0 0 0 1px #1A1C28;background:#fff;}' +
             // 檔案庫管理模式:標題列右邊的小鈕(管理/全選),勾選框直接借用卡片標題原本那顆圖示的位置
             '.wg-head-acts{display:flex;align-items:center;gap:7px;}' +
+            // 🩺 體檢提示列：只在「世界書沒掛在這張卡上」時出現
+            '.wg-warn{display:flex;align-items:center;gap:8px;margin:0 1px 9px;padding:9px 11px;border-radius:10px;' +
+              'background:rgba(180,80,60,.09);border:1px solid rgba(180,80,60,.28);color:#a05040;font-size:11px;line-height:1.55;}' +
+            '.wg-warn i{flex:none;}.wg-warn span{flex:1;min-width:0;}' +
+            '.wg-warn .wg-mgr-btn{flex:none;background:rgba(180,80,60,.14);border-color:rgba(180,80,60,.3);color:#a05040;}' +
+            '.wg-warn .wg-mgr-btn:hover{background:#a05040;color:#fff;border-color:#a05040;}' +
             '.wg-mgr-btn{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:9px;cursor:pointer;' +
               'font-family:inherit;font-size:10px;font-weight:700;color:#5a5e75;background:rgba(26,28,40,.06);border:1px solid rgba(26,28,40,.12);}' +
             '.wg-mgr-btn:hover,.wg-mgr-btn.on{background:#1A1C28;color:#fff;border-color:#1A1C28;}' +
@@ -1406,6 +1476,12 @@
         _mgrOff();   // 每次開窗都從乾淨的檔案庫開始
         // 開窗順手把燈號校正回來（手動開過藍燈、或換世界時忘了關掉舊的，都在這裡自動修正；沒歪就不寫）
         _get(K_CURRENT, '').then(id => _syncWorldLamps(id)).catch(() => {});
+        // 🩺 體檢：條目掉了自己補回來；沒掛在這張卡上只記下來，由列表頁提示（不自動改別人的角色卡）
+        _healthCheck().then(r => {
+            _health = r;
+            if (r.fixed) _toast('世界檔案少了 ' + r.fixed + ' 份，已經補回來');
+            if (_winEl && !_curDetailId) { try { _renderList(); } catch (e) {} }
+        }).catch(() => {});
         _closeMeet();   // 右側停靠位互斥:開世界門先收組隊卡
         const doc = win.document;
         _ensureStyle(doc);
@@ -1442,6 +1518,7 @@
 
     // ── P1 世界檔案庫 ──
     // 管理模式:一次刪好幾個世界。原本只能一張一張點進詳情頁刪,清舊世界要進出好幾趟。
+    let _health = null;               // 最近一次體檢結果 { fixed, linked }
     let _mgr = false;                 // 檔案庫是否在管理(勾選)模式
     let _bulkArm = 0;                 // 批次刪除的兩段式確認(同詳情頁那顆的做法)
     const _selIds = new Set();        // 已勾選的世界 id
@@ -1463,6 +1540,13 @@
                     : '<span class="wg-section-note">' + worlds.length + ' 個世界</span>' +
                       (worlds.length ? '<button class="wg-mgr-btn" data-act="mgr"><i class="fa-solid fa-list-check"></i> 管理</button>' : '')) +
               '</span></div>' +
+            // 🩺 書在、條目也在，但沒掛到這張角色卡上＝面板看得到世界，故事裡的主持AI卻讀不到。
+            //   不自動掛：大廳在別人的卡裡也開得起來，自動掛等於把視差世界書塞進別人的角色卡。
+            (_health && _health.linked === false
+                ? '<div class="wg-warn"><i class="fa-solid fa-triangle-exclamation"></i>' +
+                  '<span>這張角色卡沒有掛上世界檔案庫。你可以照常挑世界，但進去之後主持故事的 AI 讀不到世界設定。</span>' +
+                  '<button class="wg-mgr-btn" data-act="link">掛上去</button></div>'
+                : '') +
             (worlds.length
                 ? worlds.map(w =>
                     '<div class="wg-card ' + (_mgr ? 'click pick' + (_selIds.has(w.id) ? ' sel' : '') : 'click') + '" data-id="' + w.id + '">' +
@@ -1512,6 +1596,13 @@
             await _deleteWorlds(hit);
             _toast('已從檔案庫移除 ' + hit.length + ' 個世界');
             _mgrOff();
+            _renderList();
+        });
+        b.querySelector('[data-act="link"]')?.addEventListener('click', async (ev) => {
+            ev.currentTarget.disabled = true;
+            const ok = await _linkBook();
+            _toast(ok ? '已經掛上去了' : '掛不上去，請在角色卡的世界書設定裡手動加上 ' + BOOK_PARA);
+            if (ok) { _health = await _healthCheck(); await _syncWorldLamps(await _get(K_CURRENT, '')); }
             _renderList();
         });
         b.querySelector('[data-act="draw"]')?.addEventListener('click', _renderSeedPage);
