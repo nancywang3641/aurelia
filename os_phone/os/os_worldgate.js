@@ -1786,6 +1786,25 @@
         });
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet };
+    // 這個聊天室現在在哪個世界（沒 DIVE 過就是 null）。
+    // 🚨給煉丹爐/UI 生成那些工具型呼叫用:它們原本靠酒館的世界書觸發拿世界觀,
+    //   但視差的世界全部擠在同一本【奧瑞亞-視差】裡當條目,工具型呼叫沒有劇情文字去觸發關鍵字
+    //   → 一條都沒進來、世界觀整個是空的。所以要能直接把當前世界問出來,不繞世界書。
+    async function getCurrentWorld() {
+        try {
+            const id = await _get(K_CURRENT, '');
+            if (!id) return null;
+            const worlds = await _get(K_WORLDS, []);
+            const w = worlds.find(x => x.id === id);
+            if (!w) return null;
+            return {
+                id: w.id, name: w.name, genre: w.genre || '', type: w.type || '', style: w.style || '',
+                concept: w.concept || '', lure: w.lure || '', danger: w.danger || '', spawn: w.spawn || '',
+                entryText: w.entryText || '',
+            };
+        } catch (e) { return null; }
+    }
+
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld };
     console.log('[Worldgate③] 世界門面板就緒');
 })();
