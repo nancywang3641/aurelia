@@ -2713,18 +2713,33 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             full:   { w: (window.screen && screen.width) || 1920, h: (window.screen && screen.height) || 1080 }
         };
         let vp = 'phone';
+        const dv = (boxEl.ownerDocument && boxEl.ownerDocument.defaultView) || window;   // 預覽可能在手機殼的 iframe 裡
         const apply = () => {
             const f = FRAMES[vp] || FRAMES.phone;
-            const s = Math.min((wrapEl.clientWidth || 320) / f.w, 1);
+            // 🚨可用寬要扣掉 padding：clientWidth 是「內容寬＋padding」，直接拿它當分母會把縮放比算大，
+            //   卡片右緣就被 wrap 的 overflow:hidden 裁掉。煉丹爐的框有 10px padding、創作室的沒有
+            //   → 同一支縮放器在兩邊表現不同，長年只有煉丹爐那邊「手機預覽歪一邊」。
+            //   手機模式最明顯是因為 390 跟框寬接近，那 20px 佔比大；中間/全屏縮得很小所以看不太出來。
+            const cs = dv.getComputedStyle(wrapEl);
+            const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+            const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+            const avail = Math.max(1, (wrapEl.clientWidth || 320) - padX);
+            const s = Math.min(avail / f.w, 1);
             boxEl.style.width = f.w + 'px';
             boxEl.style.height = f.h + 'px';
             boxEl.style.transform = 'scale(' + s + ')';
-            wrapEl.style.height = Math.round(f.h * s) + 'px';
+            // box-sizing 是 border-box 時 height 會把 padding 吃進去 → 卡片下緣同樣被切一截
+            wrapEl.style.height = Math.round(f.h * s + (cs.boxSizing === 'border-box' ? padY : 0)) + 'px';
             tabsEl.querySelectorAll('[data-pv]').forEach(b => b.classList.toggle('active', b.dataset.pv === vp));
         };
         tabsEl.querySelectorAll('[data-pv]').forEach(b => b.onclick = () => { vp = b.dataset.pv; apply(); });
         apply();
         setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再套一次
+        // 框寬會變（手機殼開闔、面板展開、視窗縮放）→ 只在建構時量兩次的話，之後全部算錯
+        try {
+            const ro = new dv.ResizeObserver(() => { if (wrapEl.isConnected) apply(); });
+            ro.observe(wrapEl);
+        } catch (e) {}
     }
 
     // ⚡ 特效庫：群組chip篩選 + 真開關(關=AI白名單剔除+不播) + 就地試播 + 自製可刪（照VN組件的組別/開關體感）
