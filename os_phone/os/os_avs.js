@@ -1595,6 +1595,26 @@
         if (LD && typeof LD.presetKeyOf === 'function') return LD.presetKeyOf(p);
         return (p && (p.id || p.name)) || '';
     }
+    // 壓圖：長邊縮到 maxSide、轉 WebP（有 alpha 又比 PNG 小一個量級）。壓不動就回原圖讓上層擋。
+    const STK_MAX_SIDE = 512;
+    const STK_MAX_CHARS = 320 * 1024;   // 壓完還超過這個字數就不要了（面板樣式表不該有這種東西）
+    async function _stkShrink(dataUrl) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+            });
+            const w = img.naturalWidth || 1, h = img.naturalHeight || 1;
+            const k = Math.min(1, STK_MAX_SIDE / Math.max(w, h));
+            const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+            const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+            cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+            const webp = cv.toDataURL('image/webp', 0.82);
+            const out = (webp.indexOf('data:image/webp') === 0) ? webp : cv.toDataURL('image/png');
+            console.log('[AVS 貼紙] 壓圖 ' + w + '×' + h + ' → ' + cw + '×' + ch +
+                '，' + Math.round(dataUrl.length / 1024) + 'KB → ' + Math.round(out.length / 1024) + 'KB');
+            return out;
+        } catch (e) { console.warn('[AVS 貼紙] 壓圖失敗', e); return dataUrl; }
+    }
     // 真正去生那張圖：ComfyUI 走預設包（尺寸用我們算的，蓋掉包裡的）；NAI 走快照→套包→生成→finally 還原
     async function _stkRender(prompt, src, preset, w, h) {
         const M = _imgMgr();
@@ -1612,17 +1632,27 @@
             url = await M.previewComfyPreset(Object.assign({}, preset, { width: w, height: h }), prompt, { packSize: true });
         }
         if (!url) throw new Error('接口沒回圖（檢查連線與預設包）');
+        // 🚨🚨圖一定要壓過才准往下走：這張圖最後會變成 dataURL 寫進面板的樣式，
+        //   而狀態面板每次訊息更新都會重新解析一次樣式表 —— 實測一張沒壓的去背 PNG ＝ 1.39M 字的 CSS，
+        //   酒館打開狀態面板就整個卡死到要去工作管理員砍掉。
+        //   貼紙顯示大小才 44px（高解析螢幕算兩倍也就 88px），512 綽綽有餘。
         // 去背：貼紙圖是「中灰底＋白色 die-cut 邊」，正好給邊框投票去背用。
         //   noGrid＝原尺寸原畫風不像素化，sheet＝只去背、不掃碎片也不裁切（會毀掉九宮格）
         try {
             const PX = (win.LobbyStage && win.LobbyStage._b && win.LobbyStage._b.pixelify) || null;
-            if (PX) { const cut = await PX(url, { noGrid: true, sheet: true }); if (cut) return cut; }
+            if (PX) { const cut = await PX(url, { noGrid: true, sheet: true }); if (cut) url = cut; }
         } catch (e) { console.warn('[AVS 貼紙] 去背失敗，用原圖', e); }
-        if (/^(blob:|https?:)/i.test(String(url))) {   // 沒去背的話自己轉 dataURL，blob 重載就失效
+        if (/^(blob:|https?:)/i.test(String(url))) {   // blob 重載就失效，一律轉成 dataURL 再壓
             try {
                 const b = await (await fetch(url)).blob();
                 url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(b); });
             } catch (e) {}
+        }
+        if (!url) throw new Error('圖拿到了但轉不成可存的格式');
+        url = await _stkShrink(url);
+        // 壓完還是太大就整張不要：寧可沒貼紙，也不要再把酒館搞死一次
+        if (url.length > STK_MAX_CHARS) {
+            throw new Error('貼紙圖壓完還有 ' + Math.round(url.length / 1024) + 'KB，太大了，這次不放貼紙');
         }
         return url;
     }
@@ -1995,15 +2025,27 @@
                 const styleMatch = content.match(/<style>([\s\S]*?)<\/style>/i);
                 // 🐚 貼紙 CSS 直接併進這張模板自己的樣式：渲染端（三個入口）完全不必知道有貼紙這回事，
                 //    微調(diff)也不會動到它，模板刪掉貼紙就跟著走。
-                const _css = (styleMatch ? styleMatch[1].trim() : '') +
+                let _css = (styleMatch ? styleMatch[1].trim() : '') +
                     (sticker ? _stickerCss(sticker.url, sticker.cols, sticker.rows) : '');
+                let _html = content.replace(/<style>[\s\S]*?<\/style>/gi, '').trim();
+                // 🚨🚨最後一道防線：不管圖是貼紙放的還是 AI 自己寫死的 base64，太大一律剝掉。
+                //   狀態面板每次訊息更新都會重新解析整份樣式表，一張沒壓的圖＝一百多萬字的 CSS，
+                //   實測會讓酒館卡死到必須從工作管理員砍掉，而且刪除鈕就在那個打不開的面板裡。
+                const _TPL_MAX = 500 * 1024;
+                if (_css.length + _html.length > _TPL_MAX) {
+                    const _strip = s => s.replace(/data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/g, '');
+                    const _before = _css.length + _html.length;
+                    _css = _strip(_css); _html = _strip(_html);
+                    console.warn('[AVS 煉丹] 這張面板太大（' + Math.round(_before / 1024) + 'KB），已把內嵌圖剝掉再存');
+                    _issues.push('面板裡有太大的圖（' + Math.round(_before / 1024) + 'KB），已經拿掉，不然酒館會被拖死');
+                }
                 await win.OS_DB.saveUITemplate({
                     id: 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
                     packId: pack.id,
                     packName: pack.name,
                     stylePrompt: stylePromptVal,
                     cssContent: _css,
-                    htmlContent: content.replace(/<style>[\s\S]*?<\/style>/gi, '').trim(),
+                    htmlContent: _html,
                     isActive: false,
                     createdAt: Date.now(),
                 });
