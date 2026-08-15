@@ -1138,6 +1138,22 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-end-panel::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background: radial-gradient(circle at 50% 48%, rgba(0,0,0,0) 32%, rgba(4,6,14,0.45) 68%, rgba(3,4,10,0.88) 100%); }
         #vn-end-panel .vnep-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
         #vn-end-panel .vnep-live { cursor: pointer; }
+        /* === 🏅 成就頁：疊在面板之上的固定樣式表（資料清單維持一致外觀，不交給生成端做） === */
+        #vn-end-panel .vnep-achv { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 3; display: flex; flex-direction: column; background: rgba(6,7,12,0.96); }
+        #vn-end-panel .vnep-ac-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid rgba(212,175,55,0.25); flex: none; }
+        #vn-end-panel .vnep-ac-title { color: var(--gold); font-family: var(--font-classic); letter-spacing: 2px; font-size: 0.95rem; }
+        #vn-end-panel .vnep-ac-count { color: #8b8b93; font-size: 0.8rem; margin-left: auto; }
+        #vn-end-panel .vnep-ac-x { color: #888; cursor: pointer; font-size: 1rem; padding: 0 4px; }
+        #vn-end-panel .vnep-ac-x:hover { color: var(--gold); }
+        #vn-end-panel .vnep-ac-body { flex: 1; overflow-y: auto; padding: 8px 18px 18px; }
+        #vn-end-panel .vnep-ac-sec { color: #6f707a; font-size: 0.72rem; letter-spacing: 2px; margin: 14px 0 6px; }
+        #vn-end-panel .vnep-ac-row { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; margin-bottom: 6px; border-left: 2px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); }
+        #vn-end-panel .vnep-ac-row.done { border-left-color: var(--gold); background: rgba(212,175,55,0.07); }
+        #vn-end-panel .vnep-ac-n { color: #7d7e88; font-size: 0.9rem; }
+        #vn-end-panel .vnep-ac-row.done .vnep-ac-n { color: #e8e2d8; }
+        #vn-end-panel .vnep-ac-d { color: #63646d; font-size: 0.76rem; line-height: 1.5; }
+        #vn-end-panel .vnep-ac-row.done .vnep-ac-d { color: #9a958c; }
+
         /* 面板做了但程式還沒接上的入口（例：成就）：看得出來還沒開，而不是點了沒反應 */
         #vn-end-panel .vnep-dead { opacity: 0.35; pointer-events: none; filter: grayscale(1); }
 

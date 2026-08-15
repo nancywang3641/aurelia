@@ -186,6 +186,41 @@
     }
     function _unwatch() { try { _ro && _ro.disconnect(); } catch (e) {} _ro = null; }
 
+    // ── 🏅 成就頁 ──
+    //   刻意不交給生成端做：這是資料清單，每個世界長不一樣會很難讀，而且隱藏成就要遮。
+    //   系統性的東西維持固定樣子（同系統鍵那條理由），變化留給面板本身。
+    function _esc(s) { return String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
+    function _achvRows(list, done, hidden) {
+        return (list || []).map(x => {
+            const ok = !!(done && done[x.name]);
+            // 隱藏成就沒達成前連名字都不給：給了就不叫隱藏了
+            const n = (hidden && !ok) ? '？？？' : x.name;
+            const d = (hidden && !ok) ? '還沒被碰到的事' : (x.desc || '');
+            return '<div class="vnep-ac-row' + (ok ? ' done' : '') + '">' +
+                   '<span class="vnep-ac-n">' + _esc(n) + '</span>' +
+                   '<span class="vnep-ac-d">' + _esc(d) + '</span></div>';
+        }).join('');
+    }
+    function _openAchv(root, w) {
+        root.querySelector('.vnep-achv')?.remove();
+        const a = w.achv || {}, done = w.achvDone || {};
+        const all = [].concat(a.normal || [], a.bond || [], a.hidden || []);
+        const got = all.filter(x => done[x.name]).length;
+        const sec = (title, list, hidden) => (list && list.length)
+            ? '<div class="vnep-ac-sec">' + title + '</div>' + _achvRows(list, done, hidden) : '';
+        const box = document.createElement('div');
+        box.className = 'vnep-achv';
+        box.innerHTML =
+            '<div class="vnep-ac-head"><span class="vnep-ac-title">這個世界的成就</span>' +
+              '<span class="vnep-ac-count">' + got + ' / ' + all.length + '</span>' +
+              '<span class="vnep-ac-x">✕</span></div>' +
+            '<div class="vnep-ac-body">' +
+              sec('一般', a.normal, false) + sec('與同行者之間', a.bond, false) + sec('隱藏', a.hidden, true) +
+            '</div>';
+        box.querySelector('.vnep-ac-x').addEventListener('click', () => box.remove());
+        root.appendChild(box);
+    }
+
     async function render(acts) {
         const root = _el();
         if (!root) return null;
@@ -206,13 +241,16 @@
         root.appendChild(ui);
         _applyBg(root, w);
         _lockSysLabels(root);
-        const found = _bindActs(root, acts);
+        // 成就頁的資料就在手上，不必繞回 vn_core 再拿一次；沒有清單就不接，那顆維持暗的
+        const acts2 = (w.achv && (w.achv.normal || w.achv.bond || w.achv.hidden))
+            ? Object.assign({}, acts, { achv: () => _openAchv(root, w) }) : acts;
+        const found = _bindActs(root, acts2);
         _toggleNative(found);
         root.classList.add('active');
         _guardContrast(root);   // 要在掛上 active、文字也寫定之後才量，量的是最終畫面
         _guardOverflow(root);
         _watchResize(root);     // 聊天欄被拉寬拉窄時要重算，不然又跑出去
-        const miss = Object.keys(acts || {}).filter(a => found.indexOf(a) < 0);
+        const miss = Object.keys(acts2 || {}).filter(a => found.indexOf(a) < 0);
         console.log('[VN末尾面板] 已套用「' + (w.name || '未命名世界') + '」的活動面板' +
             (miss.length ? '；模型漏做了 ' + miss.join('、') + '，那幾顆維持原本的按鈕' : ''));
         return { found: found, missing: miss };
