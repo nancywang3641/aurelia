@@ -1758,19 +1758,33 @@
                         journal: () => _openPhoneAppAboveVN('journal'),
                         // 🗺️ 地圖：劇情末尾直接開地圖面板看當前世界（探索/排程/小地圖都在裡面）
                         map: () => _openPhoneAppAboveVN('map'),
+                        // 系統鍵：世界活動面板會把右上角那三顆一起重畫，行為指向原本那三顆做的事
+                        phone: () => { try { win.VoidPhoneShell && win.VoidPhoneShell.open(); } catch (e) {} },
+                        settings: () => { try { window.VN_PLAYER.openGameSettings(); } catch (e) {} },
+                        home: () => { try { window.VN_PLAYER.stopGame(); } catch (e) {} },
                     };
-                    const _bindBasic = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
-                    _bindBasic('vn-end-btn-data', acts.data);
-                    _bindBasic('vn-end-btn-ctx', acts.ctx);
-                    _bindBasic('vn-end-btn-journal', acts.journal);
-                    _bindBasic('vn-end-btn-map', acts.map);
-                    // 🎴 這個世界有活動面板就換上去，基本鍵組讓位；沒有(舊世界/還沒生成/生成失敗)一律維持原樣。
+                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', map: 'vn-end-btn-map' };
+                    Object.keys(BASIC_OF).forEach(k => {
+                        const b = document.getElementById(BASIC_OF[k]);
+                        if (b) { b.onclick = acts[k]; b.classList.remove('hidden'); }
+                    });
+                    // 🎴 這個世界有活動面板就換上去；沒有(舊世界/還沒生成/生成失敗)一律維持原樣。
                     //   面板要讀 OS_DB 是非同步的 → 先讓基本鍵組顯示著，讀到才換，中間不會出現空畫面。
+                    //   🚨逐顆收起而不是整組藏掉：模型漏做哪一顆，那顆就留著原本的按鈕，功能不會消失。
                     const basic = document.getElementById('vn-end-basic');
                     if (basic) basic.classList.remove('hidden');
                     try {
-                        window.VN_EndPanel?.render(acts)?.then(ok => {
-                            if (ok && basic) basic.classList.add('hidden');
+                        window.VN_EndPanel?.render(acts)?.then(r => {
+                            if (!r || !basic) return;
+                            let left = 0;
+                            Object.keys(BASIC_OF).forEach(k => {
+                                const b = document.getElementById(BASIC_OF[k]);
+                                if (!b) return;
+                                const covered = r.found.indexOf(k) >= 0;
+                                b.classList.toggle('hidden', covered);
+                                if (!covered) left++;
+                            });
+                            if (!left) basic.classList.add('hidden');
                         })?.catch(() => {});
                     } catch (e) {}
                 }
