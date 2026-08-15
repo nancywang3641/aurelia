@@ -600,6 +600,44 @@
             .replace(/position\s*:\s*fixed/gi, 'position:absolute')
             .trim();
     }
+    // 生成當下把玩家的裝置與實際畫面尺寸一起告訴它:同一份規則在手機上排出來的桌機版面沒法用。
+    //   判斷沿用專案既有那套(UA 比對 + 視窗寬度,同 control_center.isMobileDevice)。
+    //   hover 另外講:觸控螢幕沒有 hover,狀態回饋只放在 hover 上等於手機玩家看不到。
+    function _isMobile() {
+        try {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(win.navigator.userAgent)
+                || (win.innerWidth || 0) < 768;
+        } catch (e) { return false; }
+    }
+    function _screenLine() {
+        const doc = win.document;
+        let w = 0, h = 0;
+        // 由內而外找:VN 全螢幕層 → VN 容器 → 酒館聊天欄。都拿不到才退回整個視窗。
+        ['#page-game', '.vn-container', '#sheld'].some(sel => {
+            try {
+                const r = doc.querySelector(sel)?.getBoundingClientRect();
+                if (r && r.width > 120 && r.height > 120) { w = Math.round(r.width); h = Math.round(r.height); return true; }
+            } catch (e) {}
+            return false;
+        });
+        if (!w) { w = Math.round(win.innerWidth || 0); h = Math.round(win.innerHeight || 0); }
+        const mobile = _isMobile();
+        let s = '【這個玩家用什麼在玩】' + (mobile ? '手機端' : '電腦端');
+        if (w && h) {
+            const ratio = w / h;
+            s += ',面板的實際範圍大約 ' + w + ' × ' + h +
+                 '(' + (ratio >= 1.3 ? '橫式' : (ratio <= 0.85 ? '直式' : '接近正方')) + ')';
+        }
+        s += '。請照這個做版面。\n';
+        if (mobile) {
+            s += '手機端要注意:收成單欄或沿邊排,不要做成需要橫向掃視的多欄;' +
+                 '可以點的東西要夠大(手指不是滑鼠);字不可以小到看不清;元素之間留出間隔,不要擠在一起。\n';
+        }
+        let hover = true;
+        try { hover = !(win.matchMedia && win.matchMedia('(hover: none), (pointer: coarse)').matches); } catch (e) {}
+        if (!hover) s += '這是觸控螢幕,沒有 hover——任何看得出狀態的東西都不可以只靠 hover 呈現,平常就要看得出哪些可以點。\n';
+        return s;
+    }
     async function _expandPanel(seed, worldText) {
         const S = win.OS_UI_STYLE || window.OS_UI_STYLE;
         if (!S || !S.pick) return null;   // 風格庫沒載入=沒有這個功能,世界照樣能玩(末尾退回原本那幾顆鍵)
@@ -608,6 +646,7 @@
         const art = S.pick();
         const prompt =
             _PANEL_RULES +
+            _screenLine() +
             '【這個世界】' + seed.name + ':' + (seed.concept || '') +
             (seed.genre ? '(題材:' + seed.genre + ')' : '') + (seed.style ? '(風格:' + seed.style + ')' : '') + '\n' +
             '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
