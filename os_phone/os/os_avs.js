@@ -1513,8 +1513,16 @@
     //   不切圖：整張當 background，用 background-position 取單格（一張圖九用，也不必存九份）。
     //   貼紙 CSS 在存檔時就併進模板自己的 cssContent → 渲染端（三個入口）完全不用改。
     const _STICKER_SPEC =
-        '根據當前世界觀、場景、角色特徵與代表性物件，輸出簡潔、可直接使用的英文 Prompt，作為一張 3×3 世界觀裝飾貼紙圖。生成結果將用於 VN 組件與 UI 裝飾。\n\n' +
-        '規則：\n' +
+        '\n\n【🐚 這次要順便設計一組世界貼紙】\n' +
+        '在 <ui_template> 之前，先輸出一個 <世界貼紙> 區塊，裡面是給生圖模型看的英文 Prompt。\n' +
+        '我們會照它畫成一張貼紙圖，再切好讓你在面板裡用：<i class="wsk wsk-N"></i>，' +
+        'N=1 是左上，依序由左到右、由上到下。大小用 CSS 變數 --wsk-size 調（預設 44px），' +
+        '例如 .deco{--wsk-size:64px}；.wsk 這些 class 我們會定義好，你不要自己寫它的樣式。\n' +
+        '★ 貼紙畫什麼是你自己決定的，所以你在寫面板時就知道每一張是什麼、該擺哪裡。\n' +
+        '★ 貼紙只是裝飾：擺在角落、標題旁、分隔處、空白區這種不會遮住資料的位置，' +
+        '不要排成一整排圖示牆、不要拿它當資料列的項目符號、不要壓在文字上面，也不必每一張都用上。\n' +
+        '★ 生圖可能會失敗；失敗時那幾個 <i> 就是空的，所以面板的排版不可以依賴貼紙撐開。\n\n' +
+        '貼紙的規則：\n' +
         // 🚨原規格是寫死九張。改成讓它自己決定：這個世界真正拿得出手的代表物件有幾個就畫幾張，
         //   湊數的貼紙只會變成看不懂的小圖；而且格數越少每一張的解析度越高（同一張圖切九格 vs 切四格）。
         '1. 先決定這次要畫幾張貼紙，版面只能是 1x1、2x1、2x2、3x2 或 3x3（也就是 1、2、4、6、9 張）。\n' +
@@ -1534,8 +1542,8 @@
         '12. 不生成完整背景、桌面、房間、風景或情境插畫。畫面只能包含九個獨立貼紙與純色背景。\n' +
         '13. 未指定風格時，依當前世界觀選擇最合適的可愛插畫風格；清新校園題材使用 soft pastel campus stationery style。\n' +
         '14. 鏡頭固定為正面或輕微俯視的產品圖角度，不使用強透視，不讓物件變形。\n' +
-        '15. 輸出只能包含指定標籤內的英文 Prompt，不得附加中文、解釋或建議。\n\n' +
-        '輸出格式：\n\n' +
+        '15. <世界貼紙> 區塊裡只能有英文 Prompt，不得附加中文、解釋或建議；區塊結束後緊接著照原本的規格輸出 <ui_template>。\n\n' +
+        '貼紙區塊的格式：\n\n' +
         '<世界貼紙>\n' +
         'Grid: [欄數]x[列數]\n\n' +
         'Style: [unified illustration style], [current world aesthetic], [limited color palette], flat 2D illustration, clean cel shading, bold readable silhouettes, consistent line weight,\n\n' +
@@ -1656,23 +1664,14 @@
         }
         return url;
     }
-    // 生一張貼紙圖：先燒一次副模型產英文 prompt，再用選定的接口生圖。失敗回 null，煉丹照常進行。
-    async function _genStickerSheet(pack, artText, log, src, preset) {
+    // 從煉丹那一次的回覆裡把貼紙區塊挑出來生圖。
+    //   🚨貼紙與面板是同一次呼叫產出的：貼紙畫什麼是設計面板的那個 AI 自己決定的，
+    //     它當然知道哪一張要放哪裡——另外開一次呼叫去問「這個世界有什麼東西」是白燒一次模型。
+    async function _stickerFromReply(full, log, src, preset) {
         if (!_imgMgr() || !preset) return null;
-        let state = {};
-        try { state = win._AVS_ENGINE?.read?.() || {}; } catch (e) {}
-        const ctx = (await _worldContext(1200)) + '\n' +
-            '【這個檔案在追蹤什麼】' + (pack.name || '') + '\n' +
-            '變數：' + (pack.variables || []).map(v => v.name).join('、') + '\n' +
-            '目前狀態（節錄）：' + JSON.stringify(state).slice(0, 900) + '\n' +
-            (artText ? '【面板的美術方向】貼紙的畫風要跟它同一調性：\n' + artText.slice(0, 600) + '\n' : '');
-        if (log) log.innerHTML = '🐚 正在想這個世界有哪些小東西…';
-        let raw = '';
-        try {
-            raw = await (win.OS_API_ENGINE?.generateText?.('general_assistant', ctx + '\n' + _STICKER_SPEC) || Promise.resolve(''));
-        } catch (e) { console.warn('[AVS 貼紙] 產 prompt 失敗', e); return null; }
-        const m = String(raw || '').match(/<世界貼紙>([\s\S]*?)<\/世界貼紙>/);
-        const imgPrompt = (m ? m[1] : String(raw || '')).trim();
+        const m = String(full || '').match(/<世界貼紙>([\s\S]*?)<\/世界貼紙>/);
+        if (!m) { console.warn('[AVS 貼紙] 這次回覆裡沒有貼紙區塊'); return null; }
+        const imgPrompt = m[1].trim();
         if (!imgPrompt || imgPrompt.length < 40) return null;
         const info = _parseSticker(imgPrompt);
         if (!info) { console.warn('[AVS 貼紙] 版面讀不出來，這次不放貼紙'); return null; }
@@ -1867,15 +1866,14 @@
             btn.disabled = true;
             const worldCtx = await _worldContext(1800);   // 沒 DIVE 進任何世界時是空字串，行為同以往
             if (!worldCtx) console.warn('[AVS 煉丹] 沒抓到當前世界（沒進過世界門？）→ 這次只能靠變數與風格設計');
-            // 🐚 貼紙要在組 prompt 之前先生好：AI 得知道每一格是什麼東西，才放得到對的位置
+            // 🐚 貼紙跟面板同一次生：這裡只先確認接口與預設包選好了，實際的貼紙內容由煉丹那次回覆一起帶回來
             let sticker = null;
             const _stkSrc = container.querySelector('#furnace-sticker-src')?.value || 'none';
+            let _stkPreset = null;
             if (_stkSrc !== 'none') {
                 const _pi = parseInt(container.querySelector('#furnace-sticker-preset')?.value, 10);
-                const _preset = _stkPresets(_stkSrc)[_pi];
-                if (!_preset) { log.innerHTML = '⚠️ 貼紙要先選一個預設包（或把上面的貼紙改成「不用」）'; btn.disabled = false; return; }
-                try { sticker = await _genStickerSheet(pack, artText, log, _stkSrc, _preset); } catch (e) { console.warn('[AVS 貼紙]', e); }
-                if (!sticker) log.innerHTML = '🐚 貼紙沒畫出來，這次先不放貼紙，繼續煉面板…';
+                _stkPreset = _stkPresets(_stkSrc)[_pi];
+                if (!_stkPreset) { log.innerHTML = '⚠️ 貼紙要先選一個預設包（或把上面的貼紙改成「不用」）'; btn.disabled = false; return; }
             }
 
             log.innerHTML = '🔥 火力全開，煉製中…';
@@ -1984,18 +1982,8 @@
                         `不可以為了構圖、留白或視覺主體省略任何資料列與欄位。多實體一律 {{#each}} 配 {{#fields}}、` +
                         `單一群組一律 {{群組.欄位}}——資料區空掉的面板一律視為失敗。`;
                 }
-                // 🐚 貼紙：告訴 AI 每一格畫的是什麼，它才放得到有意義的位置（而不是隨便撒九個圖）
-                if (sticker) {
-                    const n9 = sticker.names.length;
-                    const list = sticker.names.map((n, i) => '　' + (i + 1) + '：' + (n || '（這個世界的小物件）')).join('\n');
-                    fullPrompt +=
-                        `\n\n【🐚 這次有 ${n9} 張世界貼紙可以用】已經替你畫好，都是這個世界裡的東西：\n` + list + `\n` +
-                        `用法：<i class="wsk wsk-N"></i>，N 是 1 到 ${n9}。` +
-                        `大小用 CSS 變數 --wsk-size 調（預設 44px），例如 .deco{--wsk-size:64px}。這幾個 class 已經幫你定義好，不要自己再寫 .wsk 的樣式。\n` +
-                        `★ 貼紙只是裝飾：擺在角落、標題旁、分隔處、空白區這種不會遮住資料的位置，` +
-                        `不要排成一整排圖示牆、不要拿它當資料列的項目符號、不要放在文字上面。` +
-                        `挑跟該區塊內容有關的那幾張用就好，不必每張都用上。`;
-                }
+                // 🐚 貼紙的設計指示跟面板寫在同一份 prompt：同一個 AI 一次想完，它自己決定畫什麼、自己知道放哪
+                if (_stkPreset) fullPrompt += _STICKER_SPEC;
 
                 // 使用與其他模組一致的 generateText 介面
                 const full = await (
@@ -2010,7 +1998,9 @@
                 const raw = matches.length ? matches[matches.length - 1][1] : null;
 
                 // fallback：若沒有 <ui_template> 標籤，嘗試直接抓 HTML 內容
-                const htmlFallback = !raw && full.includes('<div') ? full : null;
+                //   ⚠️ 先把貼紙區塊剝掉，不然那段英文 Prompt 會被當成面板內容一起存進去
+                const _noStk = String(full).replace(/<世界貼紙>[\s\S]*?<\/世界貼紙>/g, '');
+                const htmlFallback = !raw && _noStk.includes('<div') ? _noStk : null;
                 const content = raw || htmlFallback;
 
                 if (!content) throw new Error('AI 未輸出 <ui_template> 格式，請重試');
@@ -2021,6 +2011,13 @@
                 //    只提示不自動改：欄位名沒有可靠的機器對應（MP 到底是魔力值還是魔法點數？猜錯更糟）。
                 let _issues = [];
                 try { _issues = _auditTemplate(content, objInfo, flatVars); } catch (e) { console.warn('[AVS 煉丹] 校驗失敗', e); }
+
+                // 貼紙圖在這裡才生：面板已經寫好了，圖生不出來也只是那幾個 <i> 空著，不影響版面
+                if (_stkPreset) {
+                    try { sticker = await _stickerFromReply(full, log, _stkSrc, _stkPreset); }
+                    catch (e) { console.warn('[AVS 貼紙]', e); }
+                    if (!sticker) _issues.push('貼紙沒畫出來（面板本身沒問題，那幾個裝飾位置會空著）');
+                }
 
                 const styleMatch = content.match(/<style>([\s\S]*?)<\/style>/i);
                 // 🐚 貼紙 CSS 直接併進這張模板自己的樣式：渲染端（三個入口）完全不必知道有貼紙這回事，
