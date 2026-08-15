@@ -653,6 +653,7 @@
                         <div class="avs-btn avs-btn-primary btn-refine-tpl" style="flex:1; padding:6px; font-size:12px;">✏️ 微調</div>
                         <div class="avs-btn avs-btn-outline btn-refurnace" style="flex:1; padding:6px; font-size:12px;">🔄 重新煉丹</div>
                     </div>
+                    ${/\bwsk\b/.test(activeTpl.htmlContent || '') ? `<div class="avs-btn avs-btn-outline btn-wsk-tune" style="width:100%; padding:6px; font-size:12px; margin-bottom:6px;">🐚 調整貼紙位置</div>` : ''}
                     <div style="display:flex; gap:8px;">
                         <div class="avs-btn avs-btn-outline btn-toggle-active" style="flex:1; padding:6px; font-size:12px;">${activeTpl.isActive ? '✓ 取消啟用' : '設為啟用'}</div>
                         <div class="avs-btn avs-btn-danger btn-del-tpl" style="padding:6px 12px; font-size:12px;">🗑</div>
@@ -683,6 +684,7 @@
                     updateActiveTemplatesCache();
                     renderPackList(container);
                 };
+                uiArea.querySelector('.btn-wsk-tune')?.addEventListener('click', () => _openStickerTuner(container, activeTpl, pack));
                 uiArea.querySelector('.btn-refine-tpl').onclick = () => openFurnaceModal(container, pack.id, activeTpl);
                 uiArea.querySelector('.btn-refurnace').onclick = () => openFurnaceModal(container, pack.id);
                 uiArea.querySelector('.btn-del-tpl').onclick = async () => {
@@ -1850,6 +1852,196 @@
             'width:var(--wsk-size,72px);height:var(--wsk-size,72px);' +
             'background-image:url("' + url + '");background-repeat:no-repeat;background-size:' +
             fmt(cols / STK_INSET * 100) + '% ' + fmt(rows / STK_INSET * 100) + '%;}\n' + rules.join('\n') + '\n';
+    }
+
+    function _wskSay(m, ok) {
+        try { if (win.toastr) return ok ? win.toastr.success(m) : win.toastr.info(m); } catch (e) {}
+        try { alert(m); } catch (e) {}
+    }
+    // ── 🐚 貼紙微調：拖位置、調大小、轉角度，存回這張面板 ──
+    //   AI 放不準是常態（會壓到資料、會縮成小圖），所以留一個手動的最後一哩。
+    //   調整值寫成 [data-wsk-i="N"] 的規則，夾在標記之間，重調時整段換掉、不會越疊越多。
+    const WSK_MARK_A = '/* WSK-TUNE-START */', WSK_MARK_B = '/* WSK-TUNE-END */';
+    function _wskStripTune(css) {
+        const s = String(css || ''), a = s.indexOf(WSK_MARK_A), b = s.indexOf(WSK_MARK_B);
+        return (a >= 0 && b > a) ? (s.slice(0, a) + s.slice(b + WSK_MARK_B.length)).trim() : s;
+    }
+    function _wskReadTune(css) {
+        const out = {};
+        const s = String(css || '');
+        const a = s.indexOf(WSK_MARK_A), b = s.indexOf(WSK_MARK_B);
+        if (a < 0 || b <= a) return out;
+        for (const m of s.slice(a, b).matchAll(/\[data-wsk-i="(\d+)"\]\{([^}]*)\}/g)) {
+            const g = (re) => { const x = m[2].match(re); return x ? parseFloat(x[1]) : null; };
+            out[m[1]] = { x: g(/left:\s*(-?[\d.]+)%/), y: g(/top:\s*(-?[\d.]+)%/), s: g(/--wsk-size:\s*([\d.]+)px/), r: g(/rotate\((-?[\d.]+)deg\)/) };
+        }
+        return out;
+    }
+    function _wskBuildTune(tune) {
+        const keys = Object.keys(tune).filter(k => tune[k]);
+        if (!keys.length) return '';
+        // 絕對定位要有參考點；貼紙是裝飾，一律不吃點擊，免得蓋住底下的東西
+        let css = '\n' + WSK_MARK_A + '\n.custom-status-panel{position:relative;}\n' +
+            '.custom-status-panel .wsk[data-wsk-i]{pointer-events:none;}\n';
+        keys.forEach(k => {
+            const t = tune[k];
+            const bits = [];
+            if (t.x != null && t.y != null) bits.push('position:absolute', 'left:' + t.x.toFixed(2) + '%', 'top:' + t.y.toFixed(2) + '%', 'z-index:4');
+            if (t.s != null) bits.push('--wsk-size:' + Math.round(t.s) + 'px');
+            if (t.r) bits.push('transform:rotate(' + t.r.toFixed(1) + 'deg)');
+            if (bits.length) css += '.custom-status-panel .wsk[data-wsk-i="' + k + '"]{' + bits.join(';') + ';}\n';
+        });
+        return css + WSK_MARK_B + '\n';
+    }
+    // 模板裡的每個貼紙標上編號（迴圈裡的那顆會被複製成很多實例，它們共用同一個編號＝一起調，這是對的）
+    function _wskIndexHtml(html) {
+        try {
+            const doc = new DOMParser().parseFromString('<div id="wskroot">' + String(html || '') + '</div>', 'text/html');
+            const root = doc.getElementById('wskroot');
+            const list = root.querySelectorAll('.wsk');
+            if (!list.length) return null;
+            list.forEach((el, i) => el.setAttribute('data-wsk-i', String(i)));
+            return { html: root.innerHTML, count: list.length };
+        } catch (e) { return null; }
+    }
+
+    // 微調視窗：在真的面板上拖貼紙。座標一律換算成百分比，所以預覽縮放多少都不影響結果。
+    async function _openStickerTuner(container, tpl, pack) {
+        const idx = _wskIndexHtml(tpl.htmlContent);
+        if (!idx) { _wskSay('這張面板裡沒有貼紙'); return; }
+        if (idx.html !== tpl.htmlContent) { tpl.htmlContent = idx.html; try { await win.OS_DB.saveUITemplate(tpl); } catch (e) {} }
+        const tune = _wskReadTune(tpl.cssContent);
+        const doc = container.ownerDocument || document;
+        container.querySelector('.wsk-tuner')?.remove();
+        const back = doc.createElement('div');
+        back.className = 'wsk-tuner';
+        back.innerHTML =
+            '<div class="wsk-tuner-win">' +
+              '<div class="wsk-tuner-bar"><strong>🐚 調整貼紙</strong>' +
+                '<span class="wsk-tuner-hint">拖曳搬位置，選中後用下面兩條調大小與角度</span>' +
+                '<button class="wsk-tuner-x">✕</button></div>' +
+              '<div class="wsk-stage-wrap"><div class="wsk-stage"></div></div>' +
+              '<div class="wsk-tuner-ctl">' +
+                '<div class="wsk-ctl-none">點一下面板上的貼紙來選它</div>' +
+                '<div class="wsk-ctl-on">' +
+                  '<label>大小 <input type="range" class="wsk-size" min="32" max="220" step="2"><b class="wsk-size-v"></b></label>' +
+                  '<label>角度 <input type="range" class="wsk-rot" min="-45" max="45" step="1"><b class="wsk-rot-v"></b></label>' +
+                  '<button class="avs-btn avs-btn-outline wsk-reset">還原這張</button>' +
+                '</div>' +
+              '</div>' +
+              '<div class="wsk-tuner-foot">' +
+                '<button class="avs-btn avs-btn-outline wsk-cancel">取消</button>' +
+                '<button class="avs-btn avs-btn-primary wsk-save">存起來</button>' +
+              '</div>' +
+            '</div>';
+        container.appendChild(back);
+
+        // 用跟卡片預覽同一套 scope 做法，避免面板的 CSS 外洩到工坊介面
+        const scopeId = 'wsk-stage-' + tpl.id;
+        const stage = back.querySelector('.wsk-stage');
+        stage.id = scopeId;
+        const scoped = String(tpl.cssContent || '').replace(/([^{}@][^{}]*)\{/g, (m, sel) =>
+            sel.trim().split(',').map(s => '#' + scopeId + ' ' + s.trim()).join(', ') + ' {');
+        const state = win._AVS_ENGINE?.read?.() || {};
+        const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
+        const avMem = (win.VN_PLAYER || win.VN_Core)?._avatarMemCache || {};
+        stage.innerHTML = '<style>' + scoped + '</style>' +
+            _avsRenderTemplate(tpl.htmlContent || '', state, pack.variables || [], fmt, avMem);
+
+        const root = stage.querySelector('.custom-status-panel') || stage.firstElementChild;
+        if (root) root.style.position = 'relative';
+        const stickers = [...stage.querySelectorAll('.wsk[data-wsk-i]')];
+        if (!stickers.length) { _wskSay('預覽裡看不到貼紙'); back.remove(); return; }
+
+        let cur = null;   // 目前選中的那顆
+        const rectOf = () => (root || stage).getBoundingClientRect();
+        // 還沒調過的貼紙：把它現在的位置換算成百分比當起點，之後就都是絕對定位
+        const ensure = (el) => {
+            const i = el.dataset.wskI;
+            if (!tune[i]) tune[i] = { x: null, y: null, s: null, r: null };
+            if (tune[i].x == null) {
+                const r = rectOf(), b = el.getBoundingClientRect();
+                tune[i].x = ((b.left - r.left) / r.width) * 100;
+                tune[i].y = ((b.top - r.top) / r.height) * 100;
+            }
+            if (tune[i].s == null) tune[i].s = Math.round(el.getBoundingClientRect().width) || 72;
+            if (tune[i].r == null) tune[i].r = 0;
+            return tune[i];
+        };
+        const paint = (el) => {
+            const t = tune[el.dataset.wskI];
+            if (!t) return;
+            el.style.position = 'absolute';
+            el.style.left = t.x.toFixed(2) + '%';
+            el.style.top = t.y.toFixed(2) + '%';
+            el.style.setProperty('--wsk-size', Math.round(t.s) + 'px');
+            el.style.transform = t.r ? 'rotate(' + t.r + 'deg)' : '';
+            el.style.zIndex = '4';
+        };
+        const ctlOn = back.querySelector('.wsk-ctl-on'), ctlNone = back.querySelector('.wsk-ctl-none');
+        const sizeEl = back.querySelector('.wsk-size'), rotEl = back.querySelector('.wsk-rot');
+        const sizeV = back.querySelector('.wsk-size-v'), rotV = back.querySelector('.wsk-rot-v');
+        const select = (el) => {
+            stickers.forEach(s => s.classList.remove('wsk-sel'));
+            cur = el;
+            if (!el) { ctlOn.style.display = 'none'; ctlNone.style.display = ''; return; }
+            el.classList.add('wsk-sel');
+            const t = ensure(el);
+            ctlOn.style.display = 'flex'; ctlNone.style.display = 'none';
+            sizeEl.value = Math.round(t.s); sizeV.textContent = Math.round(t.s) + 'px';
+            rotEl.value = Math.round(t.r); rotV.textContent = Math.round(t.r) + '°';
+        };
+        select(null);
+
+        stickers.forEach(el => {
+            el.style.cursor = 'grab';
+            el.style.pointerEvents = 'auto';   // 存檔後的規則會關掉點擊，編輯時要打開
+            let drag = null;
+            el.addEventListener('pointerdown', (ev) => {
+                ev.preventDefault(); ev.stopPropagation();
+                select(el);
+                const r = rectOf(), b = el.getBoundingClientRect();
+                drag = { dx: ev.clientX - b.left, dy: ev.clientY - b.top, r };
+                el.setPointerCapture(ev.pointerId);
+                el.style.cursor = 'grabbing';
+            });
+            el.addEventListener('pointermove', (ev) => {
+                if (!drag) return;
+                const t = tune[el.dataset.wskI];
+                const r = rectOf();
+                t.x = ((ev.clientX - drag.dx - r.left) / r.width) * 100;
+                t.y = ((ev.clientY - drag.dy - r.top) / r.height) * 100;
+                paint(el);
+            });
+            const stop = (ev) => { if (!drag) return; drag = null; el.style.cursor = 'grab'; try { el.releasePointerCapture(ev.pointerId); } catch (e) {} };
+            el.addEventListener('pointerup', stop);
+            el.addEventListener('pointercancel', stop);
+            if (tune[el.dataset.wskI]) paint(el);   // 之前調過的先套上
+        });
+
+        sizeEl.oninput = () => { if (!cur) return; tune[cur.dataset.wskI].s = Number(sizeEl.value); sizeV.textContent = sizeEl.value + 'px'; paint(cur); };
+        rotEl.oninput = () => { if (!cur) return; tune[cur.dataset.wskI].r = Number(rotEl.value); rotV.textContent = rotEl.value + '°'; paint(cur); };
+        back.querySelector('.wsk-reset').onclick = () => {
+            if (!cur) return;
+            delete tune[cur.dataset.wskI];
+            cur.style.cssText = 'cursor:grab;pointer-events:auto';
+            select(cur);   // 重新以現在的版位當起點
+        };
+        const close = () => back.remove();
+        back.querySelector('.wsk-tuner-x').onclick = close;
+        back.querySelector('.wsk-cancel').onclick = close;
+        back.addEventListener('pointerdown', (ev) => { if (ev.target === back) close(); });
+        back.querySelector('.wsk-save').onclick = async () => {
+            tpl.cssContent = _wskStripTune(tpl.cssContent) + _wskBuildTune(tune);
+            try {
+                await win.OS_DB.saveUITemplate(tpl);
+                currentTemplates = (await win.OS_DB.getAllUITemplates()) || [];
+                updateActiveTemplatesCache();
+                _wskSay('貼紙位置已存起來', 1);
+                close();
+                renderPackList(container);
+            } catch (e) { _wskSay('存不起來：' + ((e && e.message) || e)); }
+        };
     }
 
     // ── 🎨 美術方向（風格庫）──
