@@ -1616,6 +1616,69 @@
         return (p && (p.id || p.name)) || '';
     }
     // 壓圖：長邊縮到 maxSide、轉 WebP（有 alpha 又比 PNG 小一個量級）。壓不動就回原圖讓上層擋。
+    // ✂️ 去背：從畫布四邊往內 flood fill，只清「連得到邊緣」的背景色。
+    //   🚨不靠大廳的 pixelify：那支掛在 LobbyStage 上，而煉丹跑在手機 App 裡，
+    //     win（window.parent）不一定拿得到它 —— 拿不到就整張沒去背，貼紙帶著灰方塊貼在面板上。
+    //   用 flood fill 而不是「整張掃同色」：貼紙內部若有跟背景同色的區域不會被打洞，
+    //   而且白色 die-cut 邊會自然擋住填充，邊界剛好落在描邊外緣。
+    async function _stkCutout(dataUrl) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return dataUrl;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const im = ctx.getImageData(0, 0, W, H), d = im.data;
+            const at = (x, y) => (y * W + x) * 4;
+            const cor = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]].map(([x, y]) => at(x, y));
+            if (cor.every(i => d[i + 3] < 16)) return dataUrl;   // 已經是透明背景，不用再做
+            let r = 0, g = 0, b = 0;
+            cor.forEach(i => { r += d[i]; g += d[i + 1]; b += d[i + 2]; });
+            r /= 4; g /= 4; b /= 4;
+            const TOL = 72;   // 顏色距離容差（三通道差值相加）
+            const seen = new Uint8Array(W * H);
+            // 🚨用 scanline 不要用四鄰逐點推：逐點推每個像素會塞四個座標進 stack，
+            //   九十萬像素的圖直接把 stack 撐到幾百萬筆、整個卡住。scanline 一次吃掉一整段，種子少一個數量級。
+            const ok = (p) => {
+                const i = p * 4;
+                if (d[i + 3] < 16) return true;   // 已經透明的也算通得過
+                return Math.abs(d[i] - r) + Math.abs(d[i + 1] - g) + Math.abs(d[i + 2] - b) <= TOL;
+            };
+            const stack = [];   // 存 packed index = y*W + x
+            for (let x = 0; x < W; x++) { stack.push(x, (H - 1) * W + x); }
+            for (let y = 0; y < H; y++) { stack.push(y * W, y * W + W - 1); }
+            let cleared = 0;
+            while (stack.length) {
+                const p0 = stack.pop();
+                if (seen[p0] || !ok(p0)) continue;
+                const y = (p0 / W) | 0, rowStart = y * W;
+                let xl = p0 - rowStart, xr = xl;
+                while (xl > 0 && !seen[rowStart + xl - 1] && ok(rowStart + xl - 1)) xl--;
+                while (xr < W - 1 && !seen[rowStart + xr + 1] && ok(rowStart + xr + 1)) xr++;
+                for (let x = xl; x <= xr; x++) {
+                    const p = rowStart + x;
+                    seen[p] = 1;
+                    if (d[p * 4 + 3] >= 16) { d[p * 4 + 3] = 0; cleared++; }
+                }
+                for (const ny of [y - 1, y + 1]) {
+                    if (ny < 0 || ny >= H) continue;
+                    const nRow = ny * W;
+                    for (let x = xl; x <= xr; x++) {
+                        const p = nRow + x;
+                        if (!seen[p] && ok(p)) stack.push(p);
+                    }
+                }
+            }
+            if (!cleared) { console.warn('[AVS 貼紙] 去背沒清掉任何像素，維持原圖'); return dataUrl; }
+            ctx.putImageData(im, 0, 0);
+            console.log('[AVS 貼紙] 去背清掉 ' + Math.round(cleared / (W * H) * 100) + '% 的畫面');
+            const webp = cv.toDataURL('image/webp', 0.9);
+            return (webp.indexOf('data:image/webp') === 0) ? webp : cv.toDataURL('image/png');
+        } catch (e) { console.warn('[AVS 貼紙] 去背失敗，用原圖', e); return dataUrl; }
+    }
     const STK_PER_CELL = 288;           // 每格保留的像素：當裝飾可以放到 140px，高解析螢幕要兩倍
     const STK_MAX_CHARS = 320 * 1024;   // 壓完還超過這個字數就不要了（面板樣式表不該有這種東西）
     async function _stkShrink(dataUrl, maxSide) {
@@ -1656,19 +1719,14 @@
         //   而狀態面板每次訊息更新都會重新解析一次樣式表 —— 實測一張沒壓的去背 PNG ＝ 1.39M 字的 CSS，
         //   酒館打開狀態面板就整個卡死到要去工作管理員砍掉。
         //   貼紙顯示大小才 44px（高解析螢幕算兩倍也就 88px），512 綽綽有餘。
-        // 去背：貼紙圖是「中灰底＋白色 die-cut 邊」，正好給邊框投票去背用。
-        //   noGrid＝原尺寸原畫風不像素化，sheet＝只去背、不掃碎片也不裁切（會毀掉九宮格）
-        try {
-            const PX = (win.LobbyStage && win.LobbyStage._b && win.LobbyStage._b.pixelify) || null;
-            if (PX) { const cut = await PX(url, { noGrid: true, sheet: true }); if (cut) url = cut; }
-        } catch (e) { console.warn('[AVS 貼紙] 去背失敗，用原圖', e); }
-        if (/^(blob:|https?:)/i.test(String(url))) {   // blob 重載就失效，一律轉成 dataURL 再壓
+        if (/^(blob:|https?:)/i.test(String(url))) {   // blob 重載就失效，一律先轉成 dataURL
             try {
                 const b = await (await fetch(url)).blob();
                 url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(b); });
             } catch (e) {}
         }
         if (!url) throw new Error('圖拿到了但轉不成可存的格式');
+        url = await _stkCutout(url);   // 去背：中灰底清掉，只留貼紙本體與白色描邊
         // 縮圖上限跟著格數走：生圖是每格 384，保留每格 288 給高解析螢幕用（一格的圖就是 288）
         url = await _stkShrink(url, Math.round(Math.max(w, h) * (STK_PER_CELL / 384)));
         // 壓完還是太大就整張不要：寧可沒貼紙，也不要再把酒館搞死一次
