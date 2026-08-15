@@ -1483,7 +1483,18 @@
         const ev = win.tavern_events;
         if (!ev.CHAT_CHANGED) return;
         const _resync = async () => {
-            try { await _migrateCurrent(); await _syncWorldLamps(await _getCurrentId()); } catch (e) {}
+            try { await _migrateCurrent(); } catch (e) {}
+            let id = '';
+            try { id = await _getCurrentId(); } catch (e) {}
+            // 🚨切書狀態綁在角色卡上，「人在哪個世界」綁在聊天室 → 兩者會脫節：
+            //   在 A 室進了世界(表世界主書被卸下)，換到沒進過世界的 B 室，綁定還停在視差模式，
+            //   B 室等於連表世界書都沒有。所以換室時把綁定校正回這個聊天室該有的樣子。
+            //   兩支都有「已經是這個狀態就不寫」的守衛，非奧瑞亞卡也會自己拒絕，不會反覆寫綁定。
+            try {
+                const g = _gate();
+                if (g) { if (id) await g.enterParallax(); else await g.exitParallax(); }
+            } catch (e) {}
+            try { await _syncWorldLamps(id); } catch (e) {}
         };
         // 延遲是等酒館把 chatId 切過去,太早讀到的還是上一個聊天室(同 vn_free_mode 的作法)
         win.eventOn(ev.CHAT_CHANGED, () => { setTimeout(_resync, 800); });
