@@ -45,24 +45,51 @@
 
     // 面板裡的按鈕綁既有行為。認不得的 data-act 不綁、也不刪:那是還沒做完的功能(成就)，
     // 整顆藏掉會讓版面破一個洞，留成能點卻沒反應又更糟 → 標成暗的、不吃點擊，看得出來「還沒開」。
+    // 回傳真的綁上的那幾個：呼叫方要靠它決定哪些原生按鈕可以收起來（模型漏做的那顆不能收）。
     function _bindActs(root, acts) {
+        const found = [];
         root.querySelectorAll('[data-act]').forEach(el => {
-            const fn = acts && acts[el.getAttribute('data-act')];
+            const act = el.getAttribute('data-act');
+            const fn = acts && acts[act];
             if (typeof fn !== 'function') { el.classList.add('vnep-dead'); return; }
             el.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
             el.classList.add('vnep-live');
+            if (found.indexOf(act) < 0) found.push(act);
+        });
+        return found;
+    }
+    // 🚨系統鍵的文字鎖死：模型會忍不住把它們改寫成這個世界的說法（離艦／調律／終端），
+    //   但那三顆是遊戲本身的功能，換了名字玩家會找不到自己的手機。
+    //   只換 [data-label] 裡那幾個字，模型設計的外框與圖示原樣留著；沒照規則包 span 才整顆換掉。
+    const SYS_LABEL = { phone: '手機', settings: '設定', home: '退出' };
+    const SYS_NATIVE = { phone: 'btn-phone', settings: 'btn-settings', home: 'btn-home' };
+    function _lockSysLabels(root) {
+        Object.keys(SYS_LABEL).forEach(act => {
+            const el = root.querySelector('[data-act="' + act + '"]');
+            if (!el) return;
+            const slot = el.querySelector('[data-label]');
+            if (slot) slot.textContent = SYS_LABEL[act];
+            else el.textContent = SYS_LABEL[act];
+        });
+    }
+    // 面板自己做了哪顆，就收起哪顆原生系統鍵。模型漏做的那顆維持原本的金色框留在畫面上——
+    // 醜歸醜，總比手機或退出整個消失好（重做一次面板就會補齊）。
+    function _toggleNative(found) {
+        Object.keys(SYS_NATIVE).forEach(act => {
+            const b = document.getElementById(SYS_NATIVE[act]);
+            if (b) b.classList.toggle('vnep-off', found.indexOf(act) >= 0);
         });
     }
 
     async function render(acts) {
         const root = _el();
-        if (!root) return false;
+        if (!root) return null;
         clear();
         const WG = _wg();
-        if (!WG || typeof WG.getWorldPanel !== 'function') return false;   // 舊版世界門＝優雅跳過
+        if (!WG || typeof WG.getWorldPanel !== 'function') return null;    // 舊版世界門＝優雅跳過
         let w = null;
         try { w = await WG.getWorldPanel(); } catch (e) { w = null; }
-        if (!w || !w.panel || !w.panel.html) return false;                 // 沒生成過面板＝走原本那四顆按鈕
+        if (!w || !w.panel || !w.panel.html) return null;                  // 沒生成過面板＝走原本那四顆按鈕
 
         // 🚨面板是在「上一次演完」之後才可能被換掉的東西：每次都重建，不要沿用上一個世界的節點。
         const style = document.createElement('style');
@@ -73,14 +100,19 @@
         root.appendChild(style);
         root.appendChild(ui);
         _applyBg(root, w);
-        _bindActs(root, acts);
+        _lockSysLabels(root);
+        const found = _bindActs(root, acts);
+        _toggleNative(found);
         root.classList.add('active');
-        console.log('[VN末尾面板] 已套用「' + (w.name || '未命名世界') + '」的活動面板');
-        return true;
+        const miss = Object.keys(acts || {}).filter(a => found.indexOf(a) < 0);
+        console.log('[VN末尾面板] 已套用「' + (w.name || '未命名世界') + '」的活動面板' +
+            (miss.length ? '；模型漏做了 ' + miss.join('、') + '，那幾顆維持原本的按鈕' : ''));
+        return { found: found, missing: miss };
     }
 
     function clear() {
         const root = _el();
+        _toggleNative([]);   // 原生系統鍵先還原，不然面板拆了按鈕也跟著不見
         if (!root) return;
         root.classList.remove('active', 'has-bg');
         root.style.removeProperty('--vnep-bg');

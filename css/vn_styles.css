@@ -1121,6 +1121,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 基本鍵組：沒有世界活動面板時的原樣（舊世界、還沒生成過、生成失敗都走這條） */
         #vn-end-basic { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
         #vn-end-basic.hidden { display: none; }
+        /* 面板做了哪顆，那顆基本鍵就收起來；面板漏做的留在原地，功能不會消失 */
+        #vn-end-basic .hidden { display: none; }
+        /* 同理，面板自己重畫了系統鍵時收起原生那顆（面板拆掉時 clear() 會還原） */
+        #btn-home.vnep-off, #btn-settings.vnep-off, #btn-phone.vnep-off { display: none; }
 
         /* === 🎴 視差世界的活動面板（AI 生成的外觀掛在 .vnep-ui 裡）=== */
         /* 三層：底圖(::before) → 暗角(::after) → UI(.vnep-ui, z-index 拉高才不會被 ::after 蓋住) */
