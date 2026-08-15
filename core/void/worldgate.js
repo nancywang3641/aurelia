@@ -109,8 +109,32 @@
     }
     _hookEvents();
 
+    // 給世界門面板體檢用:它要判斷的是「這張卡歸不歸我們管」與「書齊不齊」,
+    // 🚨不是「視差書在不在」——主世界模式下視差書本來就被收起來,拿它當判準會永遠誤報沒掛。
+    function status() {
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return null;                    // 問不到就不判定,不要亂提示
+        return { ours: s.ours, inParallax: isInParallax(), missing: _missingBooks(TH) || [] };
+    }
+    // 把一張還沒綁過的卡設成奧瑞亞卡(主世界模式)。刻意不掛視差書:那本由切書機制在 DIVE 時才掛,
+    // 手動掛上去會變成兩個世界的設定同時在場,而且下一次校正就會被收走。
+    async function bindMain() {
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return { ok: false, msg: '世界書 API 不可用' };
+        const missing = _missingBooks(TH);
+        if (missing === null) return { ok: false, msg: '世界書清單讀取失敗' };
+        if (missing.length) return { ok: false, msg: '還沒匯入：' + missing.join('、') };
+        const add = s.additional.filter(b => b !== BOOK_PARA && b !== BOOK_CORE);
+        add.push(BOOK_CORE);
+        try { await TH.setCurrentCharLorebooks({ primary: BOOK_MAIN, additional: add }); }
+        catch (e) { return { ok: false, msg: '掛載失敗：' + (e && e.message || e) }; }
+        return { ok: true, msg: '已掛上奧瑞亞的世界書' };
+    }
+
     window.AURELIA_WORLDGATE = {
-        isInParallax, enterParallax, exitParallax, reconcile,
+        isInParallax, enterParallax, exitParallax, reconcile, status, bindMain,
         BOOKS: { main: BOOK_MAIN, core: BOOK_CORE, para: BOOK_PARA },
     };
     console.log('[Worldgate] 視差切書模組已載入');

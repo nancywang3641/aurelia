@@ -828,28 +828,8 @@
         } catch (e) { console.warn('[Worldgate③] 建立世界書失敗', e); }
         return false;
     }
-    function _charBooks() {
-        const T = _th2();
-        try {
-            if (typeof T.getCharWorldbookNames === 'function') return T.getCharWorldbookNames('current') || {};
-            if (typeof T.getCharLorebooks === 'function') return T.getCharLorebooks({ type: 'all' }) || {};
-        } catch (e) {}
-        return null;   // 問不到（例如沒開角色卡）→ 不判定、不提示
-    }
-    async function _linkBook() {
-        const T = _th2();
-        const cur = _charBooks();
-        if (!cur) return false;
-        const add = (cur.additional || []).slice();
-        if (!add.includes(BOOK_PARA)) add.push(BOOK_PARA);
-        const next = { primary: cur.primary || null, additional: add };
-        try {
-            if (typeof T.rebindCharWorldbooks === 'function') { await T.rebindCharWorldbooks('current', next); return true; }
-            if (typeof T.setCurrentCharLorebooks === 'function') { await T.setCurrentCharLorebooks(next); return true; }
-        } catch (e) { console.warn('[Worldgate③] 掛載世界書失敗', e); }
-        return false;
-    }
-    // 回傳 { fixed:補回幾個條目, linked:有沒有掛在這張卡上(null=判斷不了) }
+    // （原本的 _charBooks/_linkBook 已移除：綁定判斷與掛載都搬去切書模組，那邊才知道兩種模式的差別）
+    // 回傳 { fixed:補回幾個條目, link:綁定狀態(null=判斷不了) }
     async function _healthCheck() {
         const T = _th2();
         const worlds = await _get(K_WORLDS, []);
@@ -865,9 +845,10 @@
                 if (await _writeEntry(w, w.entryText)) fixed++;
             }
         } catch (e) { console.warn('[Worldgate③] 體檢補條目失敗', e); }
-        const cb = _charBooks();
-        const linked = cb ? ((cb.primary === BOOK_PARA) || (cb.additional || []).includes(BOOK_PARA)) : null;
-        return { fixed, linked };
+        // 🚨判斷交給切書模組:那邊才知道「主世界模式下視差書本來就不在」。
+        //   以前這裡直接看視差書在不在 → 在主世界時永遠報「沒掛」,而她的卡其實綁得好好的。
+        const st = _gate()?.status?.() || null;
+        return { fixed, link: st };
     }
 
     // 🚨世界條目的燈由程式管，不要靠關鍵字觸發，也不要靠人記得開關：
@@ -2036,7 +2017,22 @@
 
     // ── P1 世界檔案庫 ──
     // 管理模式:一次刪好幾個世界。原本只能一張一張點進詳情頁刪,清舊世界要進出好幾趟。
-    let _health = null;               // 最近一次體檢結果 { fixed, linked }
+    let _health = null;               // 最近一次體檢結果 { fixed, link:{ours,inParallax,missing} }
+    function _warnHtml() {
+        const L = _health && _health.link;
+        if (!L) return '';                                   // 問不到就不提示
+        if (L.missing && L.missing.length) {
+            return '<div class="wg-warn"><i class="fa-solid fa-triangle-exclamation"></i>' +
+                '<span>還缺這幾本世界書：' + _esc(L.missing.join('、')) +
+                '。先去酒館的世界書把它們匯入，不然進不了世界。</span></div>';
+        }
+        if (!L.ours) {
+            return '<div class="wg-warn"><i class="fa-solid fa-triangle-exclamation"></i>' +
+                '<span>這張角色卡沒有掛奧瑞亞的世界書。你可以照常挑世界，但進去之後主持故事的 AI 讀不到世界設定。</span>' +
+                '<button class="wg-mgr-btn" data-act="link">掛上去</button></div>';
+        }
+        return '';
+    }
     let _mgr = false;                 // 檔案庫是否在管理(勾選)模式
     let _bulkArm = 0;                 // 批次刪除的兩段式確認(同詳情頁那顆的做法)
     const _selIds = new Set();        // 已勾選的世界 id
@@ -2058,13 +2054,12 @@
                     : '<span class="wg-section-note">' + worlds.length + ' 個世界</span>' +
                       (worlds.length ? '<button class="wg-mgr-btn" data-act="mgr"><i class="fa-solid fa-list-check"></i> 管理</button>' : '')) +
               '</span></div>' +
-            // 🩺 書在、條目也在，但沒掛到這張角色卡上＝面板看得到世界，故事裡的主持AI卻讀不到。
-            //   不自動掛：大廳在別人的卡裡也開得起來，自動掛等於把視差世界書塞進別人的角色卡。
-            (_health && _health.linked === false
-                ? '<div class="wg-warn"><i class="fa-solid fa-triangle-exclamation"></i>' +
-                  '<span>這張角色卡沒有掛上世界檔案庫。你可以照常挑世界，但進去之後主持故事的 AI 讀不到世界設定。</span>' +
-                  '<button class="wg-mgr-btn" data-act="link">掛上去</button></div>'
-                : '') +
+            // 🩺 只在真的有問題時才提示。兩種情況，處理方式完全不同：
+            //   ①書沒匯入齊 → 切書會被擋下來，這要她自己去匯入世界書檔，程式補不了。
+            //   ②不是奧瑞亞卡 → 不自動掛（大廳在別人的卡裡也開得起來，自動掛等於塞進別人的角色卡），
+            //     給一顆讓她自己決定要不要掛。掛的是主世界那組，視差書由切書機制在 DIVE 時才上。
+            //   🚨「視差書在不在」不能當判準：主世界模式下它本來就被收起來，拿它判會永遠誤報。
+            _warnHtml() +
             (worlds.length
                 ? worlds.map(w =>
                     '<div class="wg-card ' + (_mgr ? 'click pick' + (_selIds.has(w.id) ? ' sel' : '') : 'click') + '" data-id="' + w.id + '">' +
@@ -2118,9 +2113,11 @@
         });
         b.querySelector('[data-act="link"]')?.addEventListener('click', async (ev) => {
             ev.currentTarget.disabled = true;
-            const ok = await _linkBook();
-            _toast(ok ? '已經掛上去了' : '掛不上去，請在角色卡的世界書設定裡手動加上 ' + BOOK_PARA);
-            if (ok) { _health = await _healthCheck(); await _syncWorldLamps(await _getCurrentId()); }
+            // 掛的是主世界那組(主書＋人物核心)。視差書刻意不掛:那本由切書機制在 DIVE 時才上,
+            // 手動掛會變成兩個世界的設定同時在場,而且下一次校正就會把它收走。
+            const r = (await _gate()?.bindMain?.()) || { ok: false, msg: '切書模組不可用' };
+            _toast(r.msg);
+            if (r.ok) { _health = await _healthCheck(); await _syncWorldLamps(await _getCurrentId()); }
             _renderList();
         });
         b.querySelector('[data-act="draw"]')?.addEventListener('click', _renderSeedPage);
