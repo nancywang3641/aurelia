@@ -1539,11 +1539,18 @@
         //   把三行併成一句 Cells 之後實測整張排版就散了——大小不一、位置亂跑、根本不成網格。
         '2b. 版面要逐行描述：每一列各寫一行 Row N，行內依「由左到右」列出該列每一格的位置詞與主體。\n' +
         '3. 每格只能有一個主要物件。允許物件不可分離的構造，但禁止物件組、文件堆、道具套裝或多件物品聚在同一格。\n' +
+        // 🚨真正進生圖模型的只有 <世界貼紙> 裡那段英文；中文規則它看不到。
+        //   所以「別畫背景」不能只寫在規則裡——物件描述本身一帶氛圍詞，模型就自己補場景。
+        //   實測 "boat with glowing particles" → 畫出整片夜景海面；"glowing moss" → 畫出發光底板。
+        '3b. 每格的物件描述**只寫物件本身**：材質、造型、顏色可以，但嚴禁寫 glowing、particles、aura、mist、sparkles、' +
+        'light rays、reflection、floating、in the sky、on the water 這類氛圍或環境詞——寫了模型就會替它補一整片場景或發光底板。\n' +
+        '3c. 每個物件在描述裡都要自帶 die-cut sticker 這個說法（例如 a brass lantern die-cut sticker），一格一個，不要省略。\n' +
         '4. 預設不生成完整人物。只有使用者明確要求角色貼紙時，才可加入當前名單中的角色，並使用簡化 chibi 造型；不得添加名單外人物。\n' +
         '5. 所有主體必須輪廓差異明顯，縮小至 48–96px 時仍可辨識。避免過細線條、複雜內部構造與微小零件。\n' +
         '6. 所有貼紙使用同一套畫風、線條粗細、光影方式與色彩邏輯；不得有的寫實、有的扁平、有的變成 3D。\n' +
         '7. 使用 flat 2D illustration、clean cel shading、simple rounded shapes 與 limited color palette。除非世界觀明確需要，禁止寫實材質與高光塑膠感。\n' +
         '8. 每個物件外圍必須有沿著實際輪廓延伸的 thick white die-cut border；不得使用圓形底座、徽章底板、盤子、相框或 App Icon 容器。\n' +
+        '8b. 白色描邊要貼著物件自己的外形走。物件底下不可以再墊任何色塊、圓盤、光暈或漸層——貼紙背後只有那片純色背景。\n' +
         '9. 每個主體直接浮在純色中灰背景上。格子只是排列位置，不得畫出可見分隔線。只有一張時同樣置中、四周留白。\n' +
         '10. 所有主體彼此不接觸、不重疊、不跨格、不裁切；**每一張的佔格比例要接近**（不可以一張塞滿整格、另一張只有一半大），四周保留充足去背空間。\n' +
         '11. 貼紙內禁止文字、字母、數字、Logo、水印、條碼與偽文字。需要標籤的位置保持空白或改成純色圖形。\n' +
@@ -1557,10 +1564,11 @@
         'Style: [unified illustration style], [current world aesthetic], [limited color palette], flat 2D illustration, clean cel shading, bold readable silhouettes, consistent line weight,\n\n' +
         'Layout: a sticker sheet containing exactly [張數] separate die-cut stickers arranged in [列數] rows and [欄數] columns, equal spacing, equal cell size, solid neutral medium-gray background,\n\n' +
         // 逐行寫，一列一行 Row N；欄數決定行內要寫幾格（左/中/右）。這是原本就驗證過有效的寫法，不要再壓成一行。
-        'Row 1: [位置] [object], [位置] [object], …（這一列由左到右的每一格）\n\n' +
+        'Row 1: [位置] [object] die-cut sticker, [位置] [object] die-cut sticker, …（這一列由左到右的每一格）\n\n' +
         'Row 2: …（有幾列就寫幾行 Row，只有一列就只寫 Row 1）\n\n' +
-        'Rendering: each object centered and fully visible, comparable scale, minimal internal details, thick uniform white die-cut outline following the exact object silhouette, no cast shadow, no overlap, no cropped objects, no duplicate objects,\n\n' +
-        'Exclusions: no text, no letters, no numbers, no logo, no watermark, no fake writing, no object clusters, no visible grid lines, no circular backing, no badge base, no plate, no frame, no icon container, no background scene, no photorealism, no glossy 3D render,\n' +
+        'Rendering: every sticker is one isolated object cut out on the flat background, centered and fully visible, comparable scale, minimal internal details, thick uniform white die-cut outline following the exact object silhouette, no cast shadow, no overlap, no cropped objects, no duplicate objects,\n\n' +
+        // 排除詞要把「會長出背景」的東西一起關掉：發光、粒子、光束、倒影、天空、水面、場景插畫
+        'Exclusions: no text, no letters, no numbers, no logo, no watermark, no fake writing, no object clusters, no visible grid lines, no circular backing, no badge base, no plate, no frame, no icon container, no background scene, no scenery, no landscape, no sky, no water, no glow, no glowing aura, no particles, no sparkles, no light rays, no lens flare, no reflections, no vignette, no gradient backdrop, no photorealism, no glossy 3D render,\n' +
         '</世界貼紙>';
     // 從 AI 產的 prompt 裡讀出版面與每一格畫什麼（不然煉丹那支只能亂放貼紙）
     //   版面允許 1/2/4/6/9 張：湊數的貼紙沒有用，而且格數越少每張的解析度越高。
