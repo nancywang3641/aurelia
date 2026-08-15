@@ -309,6 +309,8 @@
 
             const endOverlay = document.getElementById('vn-end-overlay');
             if(endOverlay) endOverlay.classList.remove('active');
+            // 🎴 世界活動面板一併拆掉：底圖常常是 dataURL，留著等於整章都掛在畫面上
+            try { window.VN_EndPanel?.clear(); } catch(e) {}
         },
 
         stopSFX: function() {
@@ -1709,9 +1711,9 @@
                 const endOverlay = document.getElementById('vn-end-overlay');
                 if (endOverlay) {
                     endOverlay.classList.add('active');
-                    const endBtn = document.getElementById('vn-end-btn-data');
-                    if (endBtn) {
-                        endBtn.onclick = () => {
+                    // 四個功能鍵的行為集中在這裡：基本鍵組與世界活動面板共用同一份，
+                    //   面板裡的按鈕用 data-act 認，不在那邊再寫一份開 app 的邏輯。
+                    const _actData = () => {
                             if (win.OS_API?.isStandalone?.() ?? false) {
                                 VN_StandaloneArchive.show();
                             } else if (win.AureliaHtmlExtractor && typeof win.AureliaHtmlExtractor.show === 'function') {
@@ -1721,11 +1723,9 @@
                             } else {
                                 console.warn('[VN_Core] 找不到 AureliaHtmlExtractor (狀態提取模組)');
                             }
-                        };
-                    }
+                    };
                     // CTX 彈窗現在是 #page-game 直屬置中 modal、對話/末尾共用 → 末尾直接 toggle，不再搬元素/浮右上
-                    const ctxBtn = document.getElementById('vn-end-btn-ctx');
-                    if (ctxBtn) ctxBtn.onclick = () => { window.VN_Core.toggleCtx(); };
+                    const _actCtx = () => { window.VN_Core.toggleCtx(); };
                     // 日誌/地圖：開手機 app。手機殼 panel z-index:50 < VN 全螢幕層 51 →
                     //   直接開會被 VN 蓋在底下看不到，故把 panel 臨時頂到 VN 之上，關閉(goHome)時還原。
                     const _openPhoneAppAboveVN = (appKey) => {
@@ -1752,11 +1752,27 @@
                             ob.observe(panel, { attributes: true, attributeFilter: ['style'] });
                         }
                     };
-                    const jrnlBtn = document.getElementById('vn-end-btn-journal');
-                    if (jrnlBtn) jrnlBtn.onclick = () => _openPhoneAppAboveVN('journal');
-                    // 🗺️ 地圖：劇情末尾直接開地圖面板看當前世界（探索/排程/小地圖都在裡面）
-                    const mapBtn = document.getElementById('vn-end-btn-map');
-                    if (mapBtn) mapBtn.onclick = () => _openPhoneAppAboveVN('map');
+                    const acts = {
+                        data: _actData,
+                        ctx: _actCtx,
+                        journal: () => _openPhoneAppAboveVN('journal'),
+                        // 🗺️ 地圖：劇情末尾直接開地圖面板看當前世界（探索/排程/小地圖都在裡面）
+                        map: () => _openPhoneAppAboveVN('map'),
+                    };
+                    const _bindBasic = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+                    _bindBasic('vn-end-btn-data', acts.data);
+                    _bindBasic('vn-end-btn-ctx', acts.ctx);
+                    _bindBasic('vn-end-btn-journal', acts.journal);
+                    _bindBasic('vn-end-btn-map', acts.map);
+                    // 🎴 這個世界有活動面板就換上去，基本鍵組讓位；沒有(舊世界/還沒生成/生成失敗)一律維持原樣。
+                    //   面板要讀 OS_DB 是非同步的 → 先讓基本鍵組顯示著，讀到才換，中間不會出現空畫面。
+                    const basic = document.getElementById('vn-end-basic');
+                    if (basic) basic.classList.remove('hidden');
+                    try {
+                        window.VN_EndPanel?.render(acts)?.then(ok => {
+                            if (ok && basic) basic.classList.add('hidden');
+                        })?.catch(() => {});
+                    } catch (e) {}
                 }
                 return;
             }

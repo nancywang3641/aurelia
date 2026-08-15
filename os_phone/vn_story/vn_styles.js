@@ -131,10 +131,14 @@
                 </div>
 
                 <div id="vn-end-overlay">
-                    <button id="vn-end-btn-data">資料中心</button>
-                    <button id="vn-end-btn-ctx">CTX</button>
-                    <button id="vn-end-btn-journal">日誌</button>
-                    <button id="vn-end-btn-map">地圖</button>
+                    <!-- 🎴 視差世界的活動面板掛載點：有生成過就蓋掉下面那組基本鍵，沒有就空著 -->
+                    <div id="vn-end-panel"></div>
+                    <div id="vn-end-basic">
+                        <button id="vn-end-btn-data">資料中心</button>
+                        <button id="vn-end-btn-ctx">CTX</button>
+                        <button id="vn-end-btn-journal">日誌</button>
+                        <button id="vn-end-btn-map">地圖</button>
+                    </div>
                 </div>
 
                 <div id="vn-log-overlay">
