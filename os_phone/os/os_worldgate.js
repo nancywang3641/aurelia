@@ -1338,7 +1338,8 @@
         '<LaunchArt>\n' +
         'Background: [畫風], [世界觀], [隊伍落腳處的室內或有邊界的空間], [光線與氣氛], wide shot, full body, head to toe, feet visible, slightly high angle, wide-angle lens, 16:9,\n' +
         'Characters: only [實際人數與性別構成] in scene, [依當前名單,每名角色一行:a/an + age + gender + species + fixed appearance + world clothing]\n' +
-        'Action: [所有角色都在這個落腳處等待出發], the [hair + gender + species] is [持續性的待機動作], [逐一描述所有角色], standing by, waiting to depart, evenly spaced apart, full bodies visible, comparable character scale, surrounding environment visible,\n' +
+        // 尾巴那三個構圖詞拿掉:景別已經在 Background 那行講過,這裡再堆一次會把鏡頭往回帶
+        'Action: [所有角色都在這個落腳處等待出發], the [hair + gender + species] is [持續性的待機動作], [逐一描述所有角色], standing by, waiting to depart, evenly spaced apart,\n' +
         '</LaunchArt>\n';
     // 隊伍組成當 key:重進舊世界目前是 0 次 API,不能因為又 DIVE 一次就重生一張圖。
     //   同一組人再進去＝重用上次那張;換過人才重新要一張。
