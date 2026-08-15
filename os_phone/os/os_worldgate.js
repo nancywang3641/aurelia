@@ -1281,17 +1281,21 @@
         '3. 人類標記 human;非人類必須標記明確種族。\n' +
         '4. 保留角色固定外貌;種族、服裝、職業、配件與身體構造跟隨當前世界觀,不得殘留上一個世界的元素。\n' +
         '5. 每名角色只用一行描述,不編號、不寫姓名、不重複身分詞。\n' +
-        '6. 鏡頭未指定時使用 medium-wide ensemble shot, eye-level view, 16:9;單人時可用 medium shot。\n' +
-        '7. 多人時角色位於同一個有限空間,分布在前景與中景,尺寸接近、互不遮擋;不得擠成合照,也不得有人站在遙遠背景。\n' +
+        // 🚨景別要寫死:不明講「看得到腳」模型一律裁到胸口,四張臉塞滿畫面,環境完全看不到,
+        //   而且介面沒地方擺。微俯是為了讓人互不遮擋又露出地面——壓成鳥瞰臉會變形,那是地圖不是啟程畫面。
+        '6. 鏡頭與景別未指定時一律用 wide shot, full body, head to toe, feet visible, slightly high angle, wide-angle lens, 16:9;單人時同樣要全身入鏡。\n' +
+        '7. 多人時角色位於同一個有限空間,彼此之間要留出間隔、互不遮擋、尺寸接近;不得擠成合照、不得只拍上半身,也不得有人站在遙遠背景。\n' +
         '8. 每名角色各做一項活動。除非情境要求,不得圍著同一個物件、全部看向中央或形成共同焦點。\n' +
         '9. Action 每次提到角色都用「髮色＋性別＋種族」;辨識特徵重複時再加入服裝特徵。禁止 he、she、the other character 這類含糊指代。\n' +
+        // 這張圖是面板底圖:頭上與兩側那幾塊要留給介面,人塞滿了介面就沒地方擺、環境也看不到
+        '10. 角色高度約佔畫面的一半,站在中間偏下;頭頂上方與左右兩側要留出環境空間,不要讓人物撐滿整個畫面。\n' +
         // 🚨行首那幾個字要正面要求寫出來:講「不要加標題」會被連行首標籤一起省掉(世界門那四行踩過)
         // 🚨標籤與行首都用 ASCII:中文標籤會被寫成簡體,一個字不一樣程式就整組認不到
         '輸出格式如下。標籤與三行的行首都必須原樣照抄下面的英文,不可翻譯、不可改寫、不可換成中文,程式要靠它們認位置:\n' +
         '<LaunchArt>\n' +
-        'Background: [畫風], [世界觀], [地點與環境], [光線與氣氛], [鏡頭], [景別], 16:9,\n' +
+        'Background: [畫風], [世界觀], [地點與環境], [光線與氣氛], wide shot, full body, head to toe, feet visible, slightly high angle, wide-angle lens, 16:9,\n' +
         'Characters: only [實際人數與性別構成] in scene, [依當前名單,每名角色一行:a/an + age + gender + species + fixed appearance + world clothing]\n' +
-        'Action: [所有實際角色處於同一場景], the [hair + gender + species] is [action], [逐一描述所有角色], compact composition, comparable character scale, natural interaction,\n' +
+        'Action: [所有實際角色處於同一場景], the [hair + gender + species] is [action], [逐一描述所有角色], evenly spaced apart, full bodies visible, comparable character scale, natural interaction, surrounding environment visible,\n' +
         '</LaunchArt>\n';
     // 隊伍組成當 key:重進舊世界目前是 0 次 API,不能因為又 DIVE 一次就重生一張圖。
     //   同一組人再進去＝重用上次那張;換過人才重新要一張。
@@ -1336,7 +1340,11 @@
         if (!IM || typeof IM.generate !== 'function') return false;
         let url = '';
         // 走插圖桶(scene):它會自動套高清修復與修臉,群像要的正是這個;背景桶那條是給無人場景用的
-        try { url = await IM.generate(promptText, 'scene', { width: 896, height: 512 }) || ''; }
+        // 尺寸取正 16:9:這張是面板的滿版底圖,比例不對就會被裁掉一邊(角色的腳最先被切)。
+        // extraNegative 是「追加」不是覆蓋:她在圖片設置裡調好的負向詞照樣生效,這裡只多擋景別。
+        // 🚨拉遠視角光靠正向詞不夠,模型的預設構圖偏好就是特寫;負面把特寫那幾種說法一起擋掉才穩。
+        const CLOSE_NEG = 'close-up, extreme close-up, portrait, bust shot, head shot, cropped legs, cropped body, out of frame, faces filling the frame';
+        try { url = await IM.generate(promptText, 'scene', { width: 1024, height: 576, extraNegative: CLOSE_NEG }) || ''; }
         catch (e) { console.warn('[Worldgate③] 啟航圖生成失敗', e && e.message); return false; }
         if (!url) return false;
         if (url.indexOf('blob:') === 0) {   // blob: 重載就失效 → 轉 dataURL 才存得住
