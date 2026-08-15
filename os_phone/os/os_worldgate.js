@@ -1940,6 +1940,26 @@
         } catch (e) { return null; }
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld };
+    // 🎴 給 VN 劇情末尾的活動面板用。刻意跟 getCurrentWorld 分開兩支:
+    //   那支的回傳會被組進工具型呼叫的 prompt,面板的 html/css 有好幾 KB、底圖還是 dataURL,
+    //   混進去等於每支工具呼叫都多背一份面板原始碼。這支只給前端渲染用,不進任何 prompt。
+    async function getWorldPanel() {
+        try {
+            const id = await _get(K_CURRENT, '');
+            if (!id) return null;
+            const worlds = await _get(K_WORLDS, []);
+            const w = worlds.find(x => x.id === id);
+            if (!w) return null;
+            return {
+                id: w.id, name: w.name, concept: w.concept || '', style: w.style || '',
+                panel: w.panel || null,          // {html,css,styleId,layoutId} — 面板外觀
+                achv: w.achv || null,            // 這個世界的成就清單
+                launchArt: w.launchArt || null,  // {teamKey,url} — 這趟隊伍的啟航群像
+                art: w.art || '',                // 退路底圖:世界概念圖(無人遠景)
+            };
+        } catch (e) { return null; }
+    }
+
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, getWorldPanel };
     console.log('[Worldgate③] 世界門面板就緒');
 })();
