@@ -1625,7 +1625,17 @@
         if (!win.eventOn || !win.tavern_events) { setTimeout(_initChatHook, 1000); return; }
         const ev = win.tavern_events;
         if (!ev.CHAT_CHANGED) return;
+        let _retried = false;
         const _resync = async () => {
+            // 🚨🚨「問不到」不等於「不在任何世界」。這支會把燈全關、還把書切回主世界,
+            //   而 DIVE 當下正好會撞上:切書要寫角色卡綁定 → 酒館重載聊天 → 觸發換聊天事件,
+            //   這時聊天室識別可能還沒回來、所在世界也還沒寫進去 → 剛進去的世界立刻被關燈。
+            //   搬家那支本來就有這道防線,校正這支漏了(實測:DIVE 完三個世界條目全滅)。
+            //   面板正在跑展開或 DIVE 時也別插手:它自己會把狀態設好,中途搶著校正只會打架。
+            if (!_cid() || _busy) {
+                if (!_retried) { _retried = true; setTimeout(() => { _retried = false; _resync(); }, 3000); }
+                return;   // 只補排一次,不要變成無限重試
+            }
             try { await _migrateCurrent(); } catch (e) {}
             let id = '';
             try { id = await _getCurrentId(); } catch (e) {}
