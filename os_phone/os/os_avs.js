@@ -1516,11 +1516,17 @@
         '\n\n【🐚 這次要順便設計一組世界貼紙】\n' +
         '在 <ui_template> 之前，先輸出一個 <世界貼紙> 區塊，裡面是給生圖模型看的英文 Prompt。\n' +
         '我們會照它畫成一張貼紙圖，再切好讓你在面板裡用：<i class="wsk wsk-N"></i>，' +
-        'N=1 是左上，依序由左到右、由上到下。大小用 CSS 變數 --wsk-size 調（預設 44px），' +
-        '例如 .deco{--wsk-size:64px}；.wsk 這些 class 我們會定義好，你不要自己寫它的樣式。\n' +
+        'N=1 是左上，依序由左到右、由上到下。大小用 CSS 變數 --wsk-size 調（預設 72px），' +
+        '例如 .deco{--wsk-size:120px}；.wsk 這些 class 我們會定義好，你不要自己寫它的樣式。\n' +
         '★ 貼紙畫什麼是你自己決定的，所以你在寫面板時就知道每一張是什麼、該擺哪裡。\n' +
-        '★ 貼紙只是裝飾：擺在角落、標題旁、分隔處、空白區這種不會遮住資料的位置，' +
-        '不要排成一整排圖示牆、不要拿它當資料列的項目符號、不要壓在文字上面，也不必每一張都用上。\n' +
+        // 🚨這幾條是重點：模型的預設反應是把貼紙當成小圖示塞進標題或欄位前面，
+        //   縮到 20~40px 之後整張圖糊成一團，等於白生。它是「裝飾物」不是「符號」。
+        '★ 貼紙是「貼在面板上的裝飾物」，不是圖示、不是符號：\n' +
+        '　 嚴禁拿它當欄位前的小圖標、項目符號、按鈕圖示、狀態指示，或排成一整排圖示牆。\n' +
+        '　 該用的地方是：壓在外框邊角當角飾、斜貼在標題旁邊、疊在分隔帶或封條上、擺在大片留白處當落款、' +
+        '半露在面板邊緣像真的貼歪的貼紙。可以旋轉、可以壓到外框線上，就是不要縮成小圖。\n' +
+        '　 尺寸不要小於 64px；當主要裝飾時 100~140px 才看得清楚。整張面板用兩三張就夠，不必每一張都用上。\n' +
+        '　 一律不要遮住資料與操作區。\n' +
         '★ 生圖可能會失敗；失敗時那幾個 <i> 就是空的，所以面板的排版不可以依賴貼紙撐開。\n\n' +
         '貼紙的規則：\n' +
         // 🚨原規格是寫死九張。改成讓它自己決定：這個世界真正拿得出手的代表物件有幾個就畫幾張，
@@ -1529,17 +1535,19 @@
         '　 依這個世界「真正有代表性、輪廓又好認」的物件數量來選，不要為了填滿版面硬湊；寧可四張精準，也不要九張湊數。\n' +
         '　 決定後在輸出的第一行寫成 Grid: 欄數x列數，接著每個位置都必須明確指定一個不同主體，不得缺少、重複或自行替換。\n' +
         '2. 主體從當前世界觀提取，例如代表性道具、食物、動植物、交通工具、徽記、魔法物件、角色隨身配件或場景元素；不得殘留上一世界的物品。\n' +
-        '2b. 每一格都要標出它在版面上的位置（例如 top-left、center、bottom-right），生圖那端要靠這個擺位置。\n' +
+        // 🚨逐行寫（Row 1/Row 2…）不可以壓成一行清單：生圖模型是靠「第幾行、行內哪個位置」理解版面的，
+        //   把三行併成一句 Cells 之後實測整張排版就散了——大小不一、位置亂跑、根本不成網格。
+        '2b. 版面要逐行描述：每一列各寫一行 Row N，行內依「由左到右」列出該列每一格的位置詞與主體。\n' +
         '3. 每格只能有一個主要物件。允許物件不可分離的構造，但禁止物件組、文件堆、道具套裝或多件物品聚在同一格。\n' +
         '4. 預設不生成完整人物。只有使用者明確要求角色貼紙時，才可加入當前名單中的角色，並使用簡化 chibi 造型；不得添加名單外人物。\n' +
-        '5. 九個主體必須輪廓差異明顯，縮小至 48–96px 時仍可辨識。避免過細線條、複雜內部構造與微小零件。\n' +
+        '5. 所有主體必須輪廓差異明顯，縮小至 48–96px 時仍可辨識。避免過細線條、複雜內部構造與微小零件。\n' +
         '6. 所有貼紙使用同一套畫風、線條粗細、光影方式與色彩邏輯；不得有的寫實、有的扁平、有的變成 3D。\n' +
         '7. 使用 flat 2D illustration、clean cel shading、simple rounded shapes 與 limited color palette。除非世界觀明確需要，禁止寫實材質與高光塑膠感。\n' +
         '8. 每個物件外圍必須有沿著實際輪廓延伸的 thick white die-cut border；不得使用圓形底座、徽章底板、盤子、相框或 App Icon 容器。\n' +
         '9. 每個主體直接浮在純色中灰背景上。格子只是排列位置，不得畫出可見分隔線。只有一張時同樣置中、四周留白。\n' +
-        '10. 九個主體彼此不接觸、不重疊、不跨格、不裁切；大小接近，四周保留充足去背空間。\n' +
+        '10. 所有主體彼此不接觸、不重疊、不跨格、不裁切；**每一張的佔格比例要接近**（不可以一張塞滿整格、另一張只有一半大），四周保留充足去背空間。\n' +
         '11. 貼紙內禁止文字、字母、數字、Logo、水印、條碼與偽文字。需要標籤的位置保持空白或改成純色圖形。\n' +
-        '12. 不生成完整背景、桌面、房間、風景或情境插畫。畫面只能包含九個獨立貼紙與純色背景。\n' +
+        '12. 不生成完整背景、桌面、房間、風景或情境插畫。畫面只能包含那幾張獨立貼紙與純色背景。\n' +
         '13. 未指定風格時，依當前世界觀選擇最合適的可愛插畫風格；清新校園題材使用 soft pastel campus stationery style。\n' +
         '14. 鏡頭固定為正面或輕微俯視的產品圖角度，不使用強透視，不讓物件變形。\n' +
         '15. <世界貼紙> 區塊裡只能有英文 Prompt，不得附加中文、解釋或建議；區塊結束後緊接著照原本的規格輸出 <ui_template>。\n\n' +
@@ -1547,8 +1555,10 @@
         '<世界貼紙>\n' +
         'Grid: [欄數]x[列數]\n\n' +
         'Style: [unified illustration style], [current world aesthetic], [limited color palette], flat 2D illustration, clean cel shading, bold readable silhouettes, consistent line weight,\n\n' +
-        'Layout: a sticker sheet containing exactly [張數] separate die-cut stickers arranged in [列數] rows and [欄數] columns, equal spacing, solid neutral medium-gray background,\n\n' +
-        'Cells: [位置] [object], [位置] [object], …（依左上到右下的順序逐格寫完，位置與物件之間留一個空格，格與格之間用逗號分開）\n\n' +
+        'Layout: a sticker sheet containing exactly [張數] separate die-cut stickers arranged in [列數] rows and [欄數] columns, equal spacing, equal cell size, solid neutral medium-gray background,\n\n' +
+        // 逐行寫，一列一行 Row N；欄數決定行內要寫幾格（左/中/右）。這是原本就驗證過有效的寫法，不要再壓成一行。
+        'Row 1: [位置] [object], [位置] [object], …（這一列由左到右的每一格）\n\n' +
+        'Row 2: …（有幾列就寫幾行 Row，只有一列就只寫 Row 1）\n\n' +
         'Rendering: each object centered and fully visible, comparable scale, minimal internal details, thick uniform white die-cut outline following the exact object silhouette, no cast shadow, no overlap, no cropped objects, no duplicate objects,\n\n' +
         'Exclusions: no text, no letters, no numbers, no logo, no watermark, no fake writing, no object clusters, no visible grid lines, no circular backing, no badge base, no plate, no frame, no icon container, no background scene, no photorealism, no glossy 3D render,\n' +
         '</世界貼紙>';
@@ -1560,10 +1570,12 @@
         const gm = body.match(/Grid:\s*(\d)\s*[x×]\s*(\d)/i);
         let cols = gm ? Number(gm[1]) : 3, rows = gm ? Number(gm[2]) : 3;
         if (!_STICKER_GRIDS[cols + 'x' + rows]) { cols = 3; rows = 3; }
-        const cm = body.match(/Cells:\s*([^\n]+)/i);
+        // 逐行 Row N（現行格式）；舊的一行式 Cells 也留著相容
+        const rowLines = [...body.matchAll(/^[ \t]*Row\s*\d+\s*:\s*([^\n]+)/gim)].map(m => m[1]);
+        const cellsLine = rowLines.length ? rowLines.join(',') : ((body.match(/Cells:\s*([^\n]+)/i) || [])[1] || '');
         let names = [];
-        if (cm) {
-            names = cm[1].split(',').map(s => s
+        if (cellsLine) {
+            names = cellsLine.split(',').map(s => s
                 .replace(/[\[\]]/g, '')
                 // 去掉開頭的位置詞（top-left / middle-right / center / upper left…），留下物件本身
                 .replace(/^\s*(?:top|bottom|middle|upper|lower|left|right|center|centre)(?:[\s-]+(?:left|right|center|centre))?\s+/i, '')
@@ -1604,15 +1616,15 @@
         return (p && (p.id || p.name)) || '';
     }
     // 壓圖：長邊縮到 maxSide、轉 WebP（有 alpha 又比 PNG 小一個量級）。壓不動就回原圖讓上層擋。
-    const STK_MAX_SIDE = 512;
+    const STK_PER_CELL = 288;           // 每格保留的像素：當裝飾可以放到 140px，高解析螢幕要兩倍
     const STK_MAX_CHARS = 320 * 1024;   // 壓完還超過這個字數就不要了（面板樣式表不該有這種東西）
-    async function _stkShrink(dataUrl) {
+    async function _stkShrink(dataUrl, maxSide) {
         try {
             const img = await new Promise((res, rej) => {
                 const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
             });
             const w = img.naturalWidth || 1, h = img.naturalHeight || 1;
-            const k = Math.min(1, STK_MAX_SIDE / Math.max(w, h));
+            const k = Math.min(1, (maxSide || 512) / Math.max(w, h));
             const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
             const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
             cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
@@ -1657,7 +1669,8 @@
             } catch (e) {}
         }
         if (!url) throw new Error('圖拿到了但轉不成可存的格式');
-        url = await _stkShrink(url);
+        // 縮圖上限跟著格數走：生圖是每格 384，保留每格 288 給高解析螢幕用（一格的圖就是 288）
+        url = await _stkShrink(url, Math.round(Math.max(w, h) * (STK_PER_CELL / 384)));
         // 壓完還是太大就整張不要：寧可沒貼紙，也不要再把酒館搞死一次
         if (url.length > STK_MAX_CHARS) {
             throw new Error('貼紙圖壓完還有 ' + Math.round(url.length / 1024) + 'KB，太大了，這次不放貼紙');
@@ -1681,24 +1694,96 @@
         try { url = await _stkRender(imgPrompt, src, preset, info.cols * 384, info.rows * 384); }
         catch (e) { console.warn('[AVS 貼紙] 生圖失敗', e && e.message); return null; }
         if (!url) return null;
-        return { url, cols: info.cols, rows: info.rows, names: info.names };
+        const boxes = await _stkBoxes(url, info.cols, info.rows);   // 逐格找出實際邊界，之後照它切
+        return { url, cols: info.cols, rows: info.rows, names: info.names, boxes };
+    }
+    // 🔍 逐格找出「這張貼紙實際佔的範圍」：純 canvas，手機端一樣跑得動，而且只在生成當下算一次。
+    //   為什麼要偵測：生圖那端就算照網格畫，物件還是會偏移、撐邊、大小不一 —— 按格子硬切一定會把隔壁的角切進來。
+    //   去背過的圖看 alpha；沒去背的用四角像素當背景色比對。
+    //   取到的框會擴成正方形（容器是正方形，直接套長方形框會把船壓扁），再夾回格子內。
+    async function _stkBoxes(dataUrl, cols, rows) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return null;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const d = ctx.getImageData(0, 0, W, H).data;
+            const at = (x, y) => (y * W + x) * 4;
+            const corners = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]]
+                .map(([x, y]) => at(x, y)).filter(i => d[i + 3] >= 16);
+            const bg = corners.length ? [d[corners[0]], d[corners[0] + 1], d[corners[0] + 2]] : null;
+            const isBg = (i) => {
+                if (d[i + 3] < 16) return true;
+                if (!bg) return false;
+                return Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 60;
+            };
+            const cw = W / cols, ch = H / rows;
+            const boxes = [];
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x0 = Math.floor(c * cw), x1 = Math.min(W, Math.floor((c + 1) * cw));
+                    const y0 = Math.floor(r * ch), y1 = Math.min(H, Math.floor((r + 1) * ch));
+                    let minX = x1, minY = y1, maxX = x0, maxY = y0, n = 0;
+                    for (let y = y0; y < y1; y++) {
+                        for (let x = x0; x < x1; x++) {
+                            if (isBg(at(x, y))) continue;
+                            n++;
+                            if (x < minX) minX = x; if (x > maxX) maxX = x;
+                            if (y < minY) minY = y; if (y > maxY) maxY = y;
+                        }
+                    }
+                    if (n < 60 || maxX <= minX || maxY <= minY) { boxes.push(null); continue; }
+                    const pad = Math.max(maxX - minX, maxY - minY) * 0.05;   // 白色描邊也算它的一部分，別切太緊
+                    let side = Math.min(Math.max(maxX - minX, maxY - minY) + pad * 2, x1 - x0, y1 - y0);
+                    let cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+                    cx = Math.min(Math.max(cx, x0 + side / 2), x1 - side / 2);   // 夾回自己的格子裡，絕不越界
+                    cy = Math.min(Math.max(cy, y0 + side / 2), y1 - side / 2);
+                    boxes.push({ x: (cx - side / 2) / W, y: (cy - side / 2) / H, w: side / W, h: side / H });
+                }
+            }
+            const hit = boxes.filter(Boolean).length;
+            console.log('[AVS 貼紙] 邊界偵測：' + hit + '/' + (cols * rows) + ' 格找到主體');
+            return hit ? boxes : null;
+        } catch (e) { console.warn('[AVS 貼紙] 邊界偵測失敗，退回按格子切', e); return null; }
     }
     // 貼紙的 CSS：整張圖當背景，用 background-position 取單格（不切圖，一張圖幾格都行）。
-    //   background-size 放大成「欄數×100%」，某一格的位移百分比＝該格序號 ÷ (格數-1)；只有一格時就是滿版。
-    function _stickerCss(url, cols, rows) {
+    //   🚨每格只取中間 INSET 的範圍，不切滿整格：生圖那端就算照著網格畫，物件也常常撐到格線邊上，
+    //     切滿整格會把隔壁那張的一角一起切進來。往內縮一點，寧可切掉自己的邊緣留白。
+    //   數學：背景放大成 (欄數/INSET)×100%，要讓第 i 格的中心落在容器中心，
+    //     位移百分比 p = (0.5 − t·k) / (1 − k)，其中 k = 欄數/INSET、t = (i+0.5)/欄數。
+    const STK_INSET = 0.86;   // 偵測失敗時的退路：按格子切但往內縮，寧可切掉自己的留白也不要切到隔壁
+    function _stickerCss(url, cols, rows, boxes) {
         cols = cols || 3; rows = rows || 3;
-        const at = (i, n) => (n > 1 ? (i / (n - 1)) * 100 : 0);
+        const fmt = v => Number(v).toFixed(2).replace(/\.?0+$/, '');
+        const insetAt = (i, n) => {
+            const k = n / STK_INSET, t = (i + 0.5) / n;
+            return (k === 1) ? 50 : ((0.5 - t * k) / (1 - k)) * 100;
+        };
         const rules = [];
         for (let i = 0; i < cols * rows; i++) {
-            rules.push('.custom-status-panel .wsk-' + (i + 1) + '{background-position:' +
-                at(i % cols, cols).toFixed(2).replace(/\.?0+$/, '') + '% ' +
-                at(Math.floor(i / cols), rows).toFixed(2).replace(/\.?0+$/, '') + '%;}');
+            const b = boxes && boxes[i];
+            let rule;
+            if (b) {
+                // 讓這張貼紙的實際範圍剛好填滿容器：放大倍率＝1/範圍大小，位移＝範圍起點 ÷ (1−範圍大小)
+                rule = 'background-size:' + fmt(100 / b.w) + '% ' + fmt(100 / b.h) + '%;background-position:' +
+                    fmt(b.w < 1 ? (b.x / (1 - b.w)) * 100 : 0) + '% ' +
+                    fmt(b.h < 1 ? (b.y / (1 - b.h)) * 100 : 0) + '%;';
+            } else {
+                rule = 'background-position:' + fmt(insetAt(i % cols, cols)) + '% ' +
+                    fmt(insetAt(Math.floor(i / cols), rows)) + '%;';
+            }
+            rules.push('.custom-status-panel .wsk-' + (i + 1) + '{' + rule + '}');
         }
-        return '\n/* 🐚 世界貼紙（' + cols + '×' + rows + '，用 background-position 取單格）*/\n' +
+        return '\n/* 🐚 世界貼紙（' + cols + '×' + rows + '）：' +
+            (boxes ? '每張都照實際偵測到的邊界取，不會切到隔壁' : '偵測失敗，退回按格子往內縮 ' + Math.round(STK_INSET * 100) + '%') + ' */\n' +
             '.custom-status-panel .wsk{display:inline-block;vertical-align:middle;flex:none;' +
-            'width:var(--wsk-size,44px);height:var(--wsk-size,44px);' +
-            'background-image:url("' + url + '");background-size:' + (cols * 100) + '% ' + (rows * 100) + '%;' +
-            'background-repeat:no-repeat;}\n' + rules.join('\n') + '\n';
+            'width:var(--wsk-size,72px);height:var(--wsk-size,72px);' +
+            'background-image:url("' + url + '");background-repeat:no-repeat;background-size:' +
+            fmt(cols / STK_INSET * 100) + '% ' + fmt(rows / STK_INSET * 100) + '%;}\n' + rules.join('\n') + '\n';
     }
 
     // ── 🎨 美術方向（風格庫）──
@@ -2023,7 +2108,7 @@
                 // 🐚 貼紙 CSS 直接併進這張模板自己的樣式：渲染端（三個入口）完全不必知道有貼紙這回事，
                 //    微調(diff)也不會動到它，模板刪掉貼紙就跟著走。
                 let _css = (styleMatch ? styleMatch[1].trim() : '') +
-                    (sticker ? _stickerCss(sticker.url, sticker.cols, sticker.rows) : '');
+                    (sticker ? _stickerCss(sticker.url, sticker.cols, sticker.rows, sticker.boxes) : '');
                 let _html = content.replace(/<style>[\s\S]*?<\/style>/gi, '').trim();
                 // 🚨🚨最後一道防線：不管圖是貼紙放的還是 AI 自己寫死的 base64，太大一律剝掉。
                 //   狀態面板每次訊息更新都會重新解析整份樣式表，一張沒壓的圖＝一百多萬字的 CSS，
