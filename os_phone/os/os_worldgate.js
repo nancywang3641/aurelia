@@ -1088,6 +1088,12 @@
     // 學 map 面板大地圖那條:AI 只在展開世界那一次順便吐內容關鍵詞,不另外呼叫文字模型;
     // 風格底詞由程式端補,再走背景桶生圖。生不出來就當沒有,面板照常顯示。
     // 🚨方位圖上面要疊九宮格,所以底詞得壓掉文字標籤跟裝飾邊框,不然格子會蓋在字上面。
+    // 🚨這三組尺寸會蓋掉圖片設置裡的預設值,所以要自己顧好兩件事:
+    //   ①別跌破模型原生解析度(約 100 萬像素),不然出來就是糊的,高清修復補不回來。
+    //   ②NAI 免 Anlas 的上限是 1,048,576 像素、寬高必須是 64 的倍數。引擎那邊有防呆會等比縮回,
+    //     但縮完比例就跑掉(滿版底圖會被裁),所以不要去踩那條線。ComfyUI 沒有這個限制,同一組值兩邊通用。
+    const _ART_W = 1344, _ART_H = 768;    // 概念圖:遠景橫幅,103.2 萬像素
+    const _MAP_W = 1024, _MAP_H = 1024;   // 方位圖:正方,104.9 萬像素(剛好貼齊上限)
     const _ART_BASE = 'wide establishing shot, sweeping vista of the whole land, atmospheric lighting, painted concept art, highly detailed environment, no people, no text, no watermark';
     const _MAP_BASE = 'top-down aerial view, painted overhead map, whole territory in one frame, regions separated by terrain, soft muted colours, no labels, no text, no people, no border decoration';
     async function _genArt(prompt, base, w, h) {
@@ -1129,7 +1135,7 @@
             const v = m ? m[1].trim() : (_arts[0] || '');
             if (v) {
                 _early.artPrompt = v.slice(0, 400);
-                _early.art = _genArt(_early.artPrompt, _ART_BASE, 768, 448).catch(() => '');
+                _early.art = _genArt(_early.artPrompt, _ART_BASE, _ART_W, _ART_H).catch(() => '');
                 console.log('[Worldgate③] 🐣 概念圖早鳥:正文還在寫,圖先開生');
             }
         }
@@ -1140,7 +1146,7 @@
                 _early.mapPrompt = v2.slice(0, 400);
                 // 🚨接在概念圖後面跑,不併發:生圖那端是排隊處理的,兩張同時送會有一張被丟掉
                 const prev = _early.art || Promise.resolve('');
-                _early.mapArt = prev.then(() => _genArt(_early.mapPrompt, _MAP_BASE, 640, 640)).catch(() => '');
+                _early.mapArt = prev.then(() => _genArt(_early.mapPrompt, _MAP_BASE, _MAP_W, _MAP_H)).catch(() => '');
             }
         }
         // 那兩行規定寫在正文最前面,掃過開頭幾千字還沒有就是模型沒照做——收工,
@@ -1181,12 +1187,12 @@
             if (early.art && early.artPrompt !== w.artPrompt) console.warn('[Worldgate③] 🐣 早鳥的關鍵詞跟最終解析出來的對不上,那張圖不採用', early.artPrompt, '≠', w.artPrompt);
             let art = (early.art && early.artPrompt === w.artPrompt) ? await early.art : '';
             if (art) console.log('[Worldgate③] 🐣 概念圖早鳥接手成功,不必再等');
-            else art = await _genArt(w.artPrompt, _ART_BASE, 768, 448);   // 沒早鳥或早鳥失敗→照原本的路生一次
+            else art = await _genArt(w.artPrompt, _ART_BASE, _ART_W, _ART_H);   // 沒早鳥或早鳥失敗→照原本的路生一次
             if (art) { w.art = art; got = true; } else console.warn('[Worldgate③] 概念圖沒生出來');
         }
         if (!w.mapArt && w.mapPrompt) {
             let mapArt = (early.mapArt && early.mapPrompt === w.mapPrompt) ? await early.mapArt : '';
-            if (!mapArt) mapArt = await _genArt(w.mapPrompt, _MAP_BASE, 640, 640);
+            if (!mapArt) mapArt = await _genArt(w.mapPrompt, _MAP_BASE, _MAP_W, _MAP_H);
             if (mapArt) { w.mapArt = mapArt; got = true; } else console.warn('[Worldgate③] 方位圖沒生出來');
         }
         _early = null;   // 這一趟用完就丟,別讓上一個世界的圖被下一個世界接走
@@ -1518,7 +1524,8 @@
         // extraNegative 是「追加」不是覆蓋:她在圖片設置裡調好的負向詞照樣生效,這裡只多擋景別。
         // 🚨拉遠視角光靠正向詞不夠,模型的預設構圖偏好就是特寫;負面把特寫那幾種說法一起擋掉才穩。
         const CLOSE_NEG = 'close-up, extreme close-up, portrait, bust shot, head shot, cropped legs, cropped body, out of frame, faces filling the frame';
-        try { url = await IM.generate(promptText, 'scene', { width: 1344, height: 768, extraNegative: CLOSE_NEG }) || ''; }
+        // 跟概念圖共用同一組尺寸(理由寫在那個常數上面):同比例、不跌破原生解析度、不踩 NAI 的免費上限
+        try { url = await IM.generate(promptText, 'scene', { width: _ART_W, height: _ART_H, extraNegative: CLOSE_NEG }) || ''; }
         catch (e) { console.warn('[Worldgate③] 啟航圖生成失敗', e && e.message); return false; }
         if (!url) return false;
         if (url.indexOf('blob:') === 0) {   // blob: 重載就失效 → 轉 dataURL 才存得住
