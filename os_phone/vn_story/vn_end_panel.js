@@ -131,6 +131,61 @@
         return { fixed: fixed, outlined: outlined };
     }
 
+    // ── 🩹 溢出守衛：把飛出面板的元素拉回來 ──
+    //   規則已經禁了 px 寫死與視窗單位，但模型照樣會照桌機尺寸排。面板本身 overflow:hidden，
+    //   所以飛出去的東西不是擠壞版面而是「整顆被裁掉看不見」——按鈕消失比排版醜嚴重得多。
+    //   用 transform 位移而不是改 left/top：模型可能是用 right/bottom 定位的，改錯邊會跑更遠。
+    function _guardOverflow(root) {
+        const pr = root.getBoundingClientRect();
+        if (!pr.width || !pr.height) return 0;
+        let moved = 0;
+        const list = root.querySelectorAll('.vnep-ui *');
+        // 🚨面板寬度會變（她會拉酒館的聊天欄），這支會重跑 → 先把上一次的位移全部清掉再量，
+        //   不然 translate 會一次疊一次，元素愈跑愈遠。清完才量，因為清父層會連帶移動子層。
+        list.forEach(el => {
+            if (el.style.transform) el.style.transform = '';
+            if (el.style.maxWidth) { el.style.maxWidth = ''; el.style.boxSizing = ''; }
+        });
+        // 依文件順序處理：父層先被拉回來，子層量到的位置已經含那次位移
+        list.forEach(el => {
+            const cs = getComputedStyle(el);
+            if (cs.position !== 'absolute' && cs.position !== 'fixed') return;
+            let r = el.getBoundingClientRect();
+            if (!r.width || !r.height) return;
+            // 元素本身就比面板寬時位移救不回來（推回左緣右邊照樣凸出去）→ 先把寬度夾住
+            if (r.width > pr.width) {
+                el.style.boxSizing = 'border-box';
+                el.style.maxWidth = Math.round(pr.width) + 'px';
+                r = el.getBoundingClientRect();
+            }
+            let dx = 0, dy = 0;
+            if (r.right > pr.right) dx = pr.right - r.right;
+            if (r.left + dx < pr.left) dx = pr.left - r.left;     // 比面板還寬 → 至少對齊左緣
+            if (r.bottom > pr.bottom) dy = pr.bottom - r.bottom;
+            if (r.top + dy < pr.top) dy = pr.top - r.top;
+            if (!dx && !dy) return;
+            const t = cs.transform && cs.transform !== 'none' ? cs.transform + ' ' : '';
+            el.style.transform = t + 'translate(' + Math.round(dx) + 'px,' + Math.round(dy) + 'px)';
+            moved++;
+        });
+        if (moved) console.warn('[VN末尾面板] 有 ' + moved + ' 個元素排到面板外面，已拉回可視範圍');
+        return moved;
+    }
+
+    // 面板尺寸一變就重算溢出（酒館聊天欄是可以拖寬拖窄的）。只留一個觀察者，換世界時拆掉。
+    let _ro = null;
+    function _watchResize(root) {
+        _unwatch();
+        if (typeof ResizeObserver !== 'function') return;
+        let t = null;
+        _ro = new ResizeObserver(() => {
+            clearTimeout(t);
+            t = setTimeout(() => { try { _guardOverflow(root); } catch (e) {} }, 120);
+        });
+        _ro.observe(root);
+    }
+    function _unwatch() { try { _ro && _ro.disconnect(); } catch (e) {} _ro = null; }
+
     async function render(acts) {
         const root = _el();
         if (!root) return null;
@@ -155,6 +210,8 @@
         _toggleNative(found);
         root.classList.add('active');
         _guardContrast(root);   // 要在掛上 active、文字也寫定之後才量，量的是最終畫面
+        _guardOverflow(root);
+        _watchResize(root);     // 聊天欄被拉寬拉窄時要重算，不然又跑出去
         const miss = Object.keys(acts || {}).filter(a => found.indexOf(a) < 0);
         console.log('[VN末尾面板] 已套用「' + (w.name || '未命名世界') + '」的活動面板' +
             (miss.length ? '；模型漏做了 ' + miss.join('、') + '，那幾顆維持原本的按鈕' : ''));
@@ -163,6 +220,7 @@
 
     function clear() {
         const root = _el();
+        _unwatch();
         _toggleNative([]);   // 原生系統鍵先還原，不然面板拆了按鈕也跟著不見
         if (!root) return;
         root.classList.remove('active', 'has-bg');
