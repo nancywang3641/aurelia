@@ -74,7 +74,11 @@
         try {
             const db = win.OS_DB || window.OS_DB;
             if (!db || !db.getAppData) return null;
-            const id = await db.getAppData(APP_ID, 'current');       // DIVE 時寫入，撤離時清掉
+            // 🚨current 綁 chatId（跟世界門那邊同一套）：不帶 chatId 會讀到舊的 global 那一格，
+            //    換聊天室之後還是上一個世界，模組條目就翻錯組。worlds 是共用清單，維持 global。
+            const cid = (db.currentChatId && db.currentChatId()) || '';
+            if (!cid) return null;
+            const id = await db.getAppData(APP_ID, 'current', cid);  // DIVE 時寫入，撤離時清掉
             if (!id) return null;
             const worlds = (await db.getAppData(APP_ID, 'worlds')) || [];
             return worlds.find(w => w && w.id === id) || null;

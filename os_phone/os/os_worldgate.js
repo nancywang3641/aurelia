@@ -21,12 +21,31 @@
     const MAX_TRAVELER_SPAWN = 4;
 
     function _db() { return win.OS_DB || window.OS_DB; }
-    async function _get(k, dflt) {
-        try { const db = _db(); if (!db?.getAppData) return dflt; const v = await db.getAppData(APP_ID, k); return (v === undefined || v === null) ? dflt : v; }
+    async function _get(k, dflt, chatId) {
+        try { const db = _db(); if (!db?.getAppData) return dflt; const v = await db.getAppData(APP_ID, k, chatId); return (v === undefined || v === null) ? dflt : v; }
         catch (e) { return dflt; }
     }
-    async function _set(k, v) {
-        try { const db = _db(); if (!db?.saveAppData) return; await db.saveAppData(APP_ID, k, v); } catch (e) { console.warn('[Worldgate③] 存檔失敗', k, e); }
+    async function _set(k, v, chatId) {
+        try { const db = _db(); if (!db?.saveAppData) return; await db.saveAppData(APP_ID, k, v, chatId); } catch (e) { console.warn('[Worldgate③] 存檔失敗', k, e); }
+    }
+    // 🚨「現在在哪個世界」必須綁 chatId(同 AVS／頭像／通訊錄那套)：
+    //   以前這一格存在 global，換聊天室它還是舊值 → 舊世界的條目一直亮著常駐燈，
+    //   新聊天室生成世界時整份被餵進去。檔案庫(K_WORLDS)維持 global：世界清單與世界書條目本來就跨聊天室共用。
+    function _cid() { try { const db = _db(); return (db?.currentChatId && db.currentChatId()) || ''; } catch (e) { return ''; } }
+    async function _getCurrentId() { const c = _cid(); return c ? (await _get(K_CURRENT, '', c)) : ''; }
+    async function _setCurrentId(v) { const c = _cid(); if (c) await _set(K_CURRENT, v, c); }
+    // 舊資料搬家:把 global 那一格搬進「現在這個聊天室」，然後清掉。
+    //   只做一次，其餘聊天室從乾淨狀態開始——所以絕不能在拿不到 chatId 時就清掉 global。
+    async function _migrateCurrent() {
+        try {
+            const g = await _get(K_CURRENT, '');            // 不帶 chatId＝讀舊的 global 那一格
+            if (!g) return;
+            const c = _cid();
+            if (!c) return;   // 聊天室還沒就緒 → 這輪不動，等 CHAT_CHANGED 再來
+            if (!(await _get(K_CURRENT, '', c))) await _set(K_CURRENT, g, c);
+            await _set(K_CURRENT, '');                     // 清掉 global，之後只認 chat-scope
+            console.log('[Worldgate③] 目前世界已改綁 chatId:' + c);
+        } catch (e) {}
     }
     function _th() { return win.TavernHelper || window.TavernHelper; }
     function _gate() { return win.AURELIA_WORLDGATE || window.AURELIA_WORLDGATE; }
@@ -817,7 +836,7 @@
         // 這個聊天室記著「現在屬於哪個世界」,刪掉的正好是它就要一起清,
         // 不然 WORLD_RULES 會照著一個已經不存在的 id 去翻模組條目。
         try {
-            if (ids.has(await _get(K_CURRENT, ''))) { await _set(K_CURRENT, ''); await _syncWorldLamps(''); }
+            if (ids.has(await _getCurrentId())) { await _setCurrentId(''); await _syncWorldLamps(''); }
         } catch (e) {}
         _clearTravelers(); _closeMeet();
         try {   // 旅人對話歷史一起清,不留孤兒
@@ -1427,7 +1446,7 @@
     let _launchBusy = false;
     async function _scanLaunchArt(text) {
         if (_launchBusy) return;
-        const id = await _get(K_CURRENT, '');
+        const id = await _getCurrentId();
         if (!id) return;                                   // 不在視差世界裡
         const worlds = await _get(K_WORLDS, []);
         const w = worlds.find(x => x.id === id);
@@ -1455,6 +1474,23 @@
         console.log('[Worldgate③] 🚀 啟航圖便車已掛載');
     }
     _initLaunchHook();
+
+    // 🚨換聊天室要重新對燈:條目的常駐燈是全域的,「人在哪個世界」卻是每個聊天室各自的。
+    //   沒有這一條的話,舊世界的燈會一直亮著,新聊天室生成世界時整份被餵進去(她實測撞到)。
+    //   _syncWorldLamps 自己有「已經是對的就不寫」的守衛,所以重複觸發不會反覆寫世界書。
+    function _initChatHook() {
+        if (!win.eventOn || !win.tavern_events) { setTimeout(_initChatHook, 1000); return; }
+        const ev = win.tavern_events;
+        if (!ev.CHAT_CHANGED) return;
+        const _resync = async () => {
+            try { await _migrateCurrent(); await _syncWorldLamps(await _getCurrentId()); } catch (e) {}
+        };
+        // 延遲是等酒館把 chatId 切過去,太早讀到的還是上一個聊天室(同 vn_free_mode 的作法)
+        win.eventOn(ev.CHAT_CHANGED, () => { setTimeout(_resync, 800); });
+        setTimeout(_resync, 3000);   // 開機也對一次:上一輪關掉時停在哪個世界不算數
+        console.log('[Worldgate③] 🔄 換聊天室自動對燈已掛載');
+    }
+    _initChatHook();
 
     function _divePrompt(w) {
         const team = (w.travelers || []).filter(t => t.recruited);
@@ -1512,7 +1548,7 @@
         await _set(K_WORLDS, worlds);
         // 這個聊天室從此屬於這個世界（app_data 是 chat-scope，換聊天室就換世界、回來還原）
         //   → 依題材翻「-VN小說家-」的模組條目：奇幻世界不給手機、和平題材不給戰鬥、BGM 換成對應那條
-        await _set(K_CURRENT, w.id);
+        await _setCurrentId(w.id);
         await _syncWorldLamps(w.id);   // 這個世界改成常駐、其餘關掉——不靠關鍵字，也不用人記得切
         try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
         _clearTravelers(); _closeMeet();
@@ -1772,7 +1808,7 @@
         closeGate();
         _mgrOff();   // 每次開窗都從乾淨的檔案庫開始
         // 開窗順手把燈號校正回來（手動開過藍燈、或換世界時忘了關掉舊的，都在這裡自動修正；沒歪就不寫）
-        _get(K_CURRENT, '').then(id => _syncWorldLamps(id)).catch(() => {});
+        _getCurrentId().then(id => _syncWorldLamps(id)).catch(() => {});
         // 🩺 體檢：條目掉了自己補回來；沒掛在這張卡上只記下來，由列表頁提示（不自動改別人的角色卡）
         _healthCheck().then(r => {
             _health = r;
@@ -1899,13 +1935,13 @@
             ev.currentTarget.disabled = true;
             const ok = await _linkBook();
             _toast(ok ? '已經掛上去了' : '掛不上去，請在角色卡的世界書設定裡手動加上 ' + BOOK_PARA);
-            if (ok) { _health = await _healthCheck(); await _syncWorldLamps(await _get(K_CURRENT, '')); }
+            if (ok) { _health = await _healthCheck(); await _syncWorldLamps(await _getCurrentId()); }
             _renderList();
         });
         b.querySelector('[data-act="draw"]')?.addEventListener('click', _renderSeedPage);
         b.querySelector('[data-act="leave"]')?.addEventListener('click', async () => {
             const r = await _gate()?.exitParallax?.();
-            await _set(K_CURRENT, '');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
+            await _setCurrentId('');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
             await _syncWorldLamps('');   // 世界條目全部關掉，免得回到主世界還在吃異世界設定
             try { window.WORLD_RULES && window.WORLD_RULES.sync('撤離'); } catch (e) {}
             _toast(r?.msg || '已返回主世界');
@@ -2259,7 +2295,7 @@
     //   → 一條都沒進來、世界觀整個是空的。所以要能直接把當前世界問出來,不繞世界書。
     async function getCurrentWorld() {
         try {
-            const id = await _get(K_CURRENT, '');
+            const id = await _getCurrentId();
             if (!id) return null;
             const worlds = await _get(K_WORLDS, []);
             const w = worlds.find(x => x.id === id);
@@ -2277,7 +2313,7 @@
     //   混進去等於每支工具呼叫都多背一份面板原始碼。這支只給前端渲染用,不進任何 prompt。
     async function getWorldPanel() {
         try {
-            const id = await _get(K_CURRENT, '');
+            const id = await _getCurrentId();
             if (!id) return null;
             const worlds = await _get(K_WORLDS, []);
             const w = worlds.find(x => x.id === id);
