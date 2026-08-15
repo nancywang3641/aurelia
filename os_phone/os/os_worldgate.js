@@ -1599,6 +1599,24 @@
         await _saveWorld(w);
         console.log('[Worldgate③] 🏅「' + w.name + '」達成 ' + hit + ' 條世界成就');
     }
+    // ══ 🩺 每輪自我確認（照 AVS 的作法）══════════════════════════════
+    // 🚨🚨世界書的狀態跟其他系統不同層級:別的地方掉鏈子只是畫面顯示錯,這裡掉鏈子是
+    //   主持AI 直接讀到別的世界(或什麼都讀不到)——錯的是生成內容本身,而且玩家看不出來。
+    //   所以不能只靠「換聊天室的事件來了寫一次」,那一次寫錯就一直錯到底。
+    // AVS 是每次要用資料前都比對一次快取歸不歸這一室,不對就重讀。這裡照抄那個習慣:
+    //   每則訊息落地都驗一次「書掛對了嗎、燈亮對了嗎」,不對才寫。
+    //   兩支底層都有「已經是對的就不寫」的守衛,所以驗歸驗,不會反覆寫世界書或綁定。
+    //   順帶也修得掉她自己在世界書面板手動撥過的燈。
+    async function _verifyWorldState() {
+        if (!_cid() || _busy) return;   // 問不到或面板正忙 → 這輪不動（問不到不等於沒有）
+        let id = '';
+        try { id = await _getCurrentId(); } catch (e) { return; }
+        try {
+            const g = _gate();
+            if (g) { if (id) await g.enterParallax(); else await g.exitParallax(); }
+        } catch (e) {}
+        try { await _syncWorldLamps(id); } catch (e) {}
+    }
     function _initLaunchHook() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(_initLaunchHook, 1000); return; }
         const ev = win.tavern_events;
@@ -1610,6 +1628,7 @@
                 const m = msgs && msgs[0];
                 if (!m || m.is_user) return;
                 const _t = m.message || m.mes || '';
+                await _verifyWorldState();    // 🩺 每輪先確認書掛對了沒:錯的話下一輪主持AI 就讀到別的世界
                 await _scanAchv(_t);          // 先記成就:生圖那支會等好幾十秒,不要卡著它
                 await _scanLaunchArt(_t);
             } catch (e) {}
