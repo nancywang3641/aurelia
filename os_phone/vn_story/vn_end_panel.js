@@ -110,21 +110,22 @@
             const fg = _rgb(cs.color);
             if (!fg) return;
             const bg = _bgUnder(el, root);
-            if (!bg) {
-                // 底是圖片，亮暗說不準 → 不去動模型挑的顏色，加一圈反差描邊保底
-                if (!cs.textShadow || cs.textShadow === 'none') {
-                    el.style.textShadow = _luma(fg) > 0.5
-                        ? '0 0 4px rgba(0,0,0,.85), 0 1px 2px rgba(0,0,0,.9)'
-                        : '0 0 4px rgba(255,255,255,.85), 0 1px 2px rgba(255,255,255,.9)';
-                    outlined++;
-                }
-                return;
-            }
+            // 🚨半透明卡片(規則禁了但它照做不誤)算出來的對比不作數：底圖會從後面透上來，
+            //   而那張圖每個世界都不一樣。底不夠實、或一路透明到底，都補一圈反差描邊。
+            const outline = () => {
+                if (cs.textShadow && cs.textShadow !== 'none') return;
+                el.style.textShadow = _luma(fg) > 0.5
+                    ? '0 0 4px rgba(0,0,0,.85), 0 1px 2px rgba(0,0,0,.9)'
+                    : '0 0 4px rgba(255,255,255,.85), 0 1px 2px rgba(255,255,255,.9)';
+                outlined++;
+            };
+            if (!bg) { outline(); return; }   // 底是圖片，亮暗說不準 → 不動模型挑的顏色，只加描邊
             const lb = _luma(bg), lt = _luma(fg);
             if ((Math.max(lb, lt) + 0.05) / (Math.min(lb, lt) + 0.05) < 3) {
                 el.style.color = lb > 0.5 ? '#14161c' : '#f2f4f8';   // 行內樣式贏過模型寫的任何選擇器
                 fixed++;
             }
+            if (bg.a < 0.9) outline();
         });
         if (fixed || outlined) console.log('[VN末尾面板] 對比守衛：改字色 ' + fixed + ' 處、加描邊 ' + outlined + ' 處');
         return { fixed: fixed, outlined: outlined };
