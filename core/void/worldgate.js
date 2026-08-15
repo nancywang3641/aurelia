@@ -73,6 +73,9 @@
         const s = _snapshot();
         if (!TH || !s) return { ok: false, msg: '世界書 API 不可用' };
         if (!s.ours) return { ok: false, msg: '當前角色卡不是奧瑞亞卡，不動它的世界書' };
+        // 🚨已經是主世界就不要寫：寫綁定會讓酒館重載聊天(觸發 CHAT_CHANGED)，
+        //   而這支現在也掛在 CHAT_CHANGED 上——無條件寫＝重載→再寫→無限刷頁（正則那邊出過這個事故）。
+        if (s.primary === BOOK_MAIN && s.additional.indexOf(BOOK_PARA) < 0) return { ok: true, msg: '已在主世界' };
         const add = s.additional.filter(b => b !== BOOK_PARA && b !== BOOK_CORE);
         add.push(BOOK_CORE);
         try {
