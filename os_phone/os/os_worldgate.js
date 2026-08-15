@@ -663,6 +663,56 @@
         };
     }
 
+    // ══ 🏅 這個世界的成就清單 ═══════════════════════════════════════
+    // 🚨不另開一套解鎖機制:VN 本來就有 [Achievement|表情|名|描述],每三輪必出一個。
+    //   這裡只是「先把這個世界該有哪些成就寫下來」,解鎖照樣走那條既有管道 → 零對撞。
+    //   名字對得上清單的就是這個世界的成就,對不上的就是原本那種即興成就,兩邊互不干擾。
+    // 真正的用途不是收集要素,是「給主持AI 的方向」:清單寫進世界書條目、每一輪都看得到,
+    //   它就會朝那些方向鋪機會。全是戰鬥成就的世界,主持AI 也只會給你戰鬥。
+    async function _expandAchv(seed, worldText) {
+        const prompt =
+            '你是一位跑團設計師。請為以下這個世界設計一份成就清單,玩家在這個世界裡達成後會被記錄下來。\n' +
+            // 🚨她做這份清單的原因就是這條:預設情況下每個世界都變成打打殺殺,隊友淪為工具人
+            '【最重要的一條】這個世界不是只有戰鬥。一般成就裡最多一條跟戰鬥或危險有關,' +
+            '其餘要來自這個世界的日常:謀生、手藝、交易、旅行、見識、吃住、打聽消息、跟當地人打交道。\n' +
+            '【情感成就】寫玩家與同行旅人之間會發生的事。他們是各自報名、在大廳湊在一起的陌生人,' +
+            '不是玩家的部下——所以這幾條要寫「關係怎麼變化」:從陌生到願意搭話、看見對方不想被看見的一面、' +
+            '被拒絕、意見不合之後仍然同行、有人先走。不要寫成好感度數值,也不要預設關係一定會變好。\n' +
+            '不要指名特定旅人(隊伍每趟都可能不同),用「同行的人」這種寫法。\n' +
+            '【隱藏成就】玩家事先看不到條件的那種。要有點偏門,是玩家做了不尋常的事才會碰到。\n' +
+            '只回傳純 JSON:\n' +
+            '{"normal":[{"name":"{成就名,2~8字}","desc":"{給玩家看的一句話,不要寫出達成方法}","how":"{怎樣才算達成,一句,寫給主持AI 判斷用}"}],' +
+            '"bond":[同樣格式],"hidden":[同樣格式]}\n' +
+            'normal 五條、bond 五條、hidden 三條,數量不可增減。\n' +
+            '成就名要用這個世界自己的說法,不要用「成就」「達成」「任務」這種字眼。\n' +
+            '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
+            _toneLine(seed) + '語言:繁體中文。';
+        const r = await _callAI(prompt, '世界門設計成就', 'worldgate_achv', false, false, true);
+        if (!r) return null;
+        const pick = (arr, n) => (Array.isArray(arr) ? arr : []).slice(0, n)
+            .map(x => ({ name: String((x && x.name) || '').slice(0, 12), desc: String((x && x.desc) || ''), how: String((x && x.how) || '') }))
+            .filter(x => x.name);
+        const out = { normal: pick(r.normal, 5), bond: pick(r.bond, 5), hidden: pick(r.hidden, 3) };
+        if (!out.normal.length && !out.bond.length && !out.hidden.length) return null;
+        return out;
+    }
+    // 清單寫進條目給主持AI 看。隱藏成就照樣給它(它要知道才鋪得出來),玩家那邊才遮。
+    // 🚨明講「名字要一字不差」:程式端靠名字比對來標已完成,寫成同義詞就對不上。
+    function _achvBlock(w) {
+        const a = w.achv;
+        if (!a) return '';
+        const rows = g => (a[g] || []).map(x => '- ' + x.name + '：' + (x.how || x.desc)).join('\n');
+        const parts = [];
+        if ((a.normal || []).length) parts.push('### 一般\n' + rows('normal'));
+        if ((a.bond || []).length) parts.push('### 與同行者之間\n' + rows('bond'));
+        if ((a.hidden || []).length) parts.push('### 隱藏(玩家看不到條件)\n' + rows('hidden'));
+        if (!parts.length) return '';
+        return '\n\n## 這個世界的成就\n' + parts.join('\n') +
+            '\n這是這個世界值得被記下來的事,不是任務清單,玩家不做也沒關係——但機會要鋪得出來:' +
+            '別讓這個世界只剩下戰鬥,上面那些日常與關係的事也要有發生的餘地。' +
+            '玩家真的達成其中一條時,用既有的成就標記把它記下來,名字必須跟上面一字不差,不可以改寫或換同義詞。';
+    }
+
     // ── 世界條目落地【奧瑞亞-視差】書 ──
     function _entryComment(w) { return '【世界檔案-' + w.name + '】'; }
     // 面板那塊是純文字容器(white-space:pre-wrap),markdown 不會被渲染——**世界名** 的星號就這樣露在臉上。
@@ -731,7 +781,7 @@
             (w.genre ? '本世界的一切描寫都必須維持在「' + w.genre + '」的題材裡,不得混入不屬於此題材的科技或現代說法。\n' : '') +
             (w.twist ? '核心法則:' + w.twist + '\n' : '') + '\n' + entryText +
             (trav ? '\n\n## 這趟同行的旅人(視差玩家,非本世界NPC)\n' + trav : '') +
-            _lookBlock(recruited) + _pcBlock(w);
+            _lookBlock(recruited) + _pcBlock(w) + _achvBlock(w);
     }
     async function _writeEntry(w, entryText) {
         const TH = _th();
@@ -2086,10 +2136,11 @@
         _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
         // 旅人與面板兩支並行:各自只吃世界檔案節錄、彼此不相干,牆鐘時間等於慢的那一支。
         // 連接設定是逐次隨請求帶的(不是切全域),兩支同時在跑不會互相踩。
-        // 面板掛了就當這個世界沒有面板(末尾退回原本那幾顆鍵),不能連累旅人與世界存檔。
-        const [trav, panel] = await Promise.all([
+        // 面板或成就掛了就當這個世界沒有那一項,不能連累旅人與世界存檔。
+        const [trav, panel, achv] = await Promise.all([
             _expandTravelers(seed, r.text, note),
             _expandPanel(seed, r.text).catch(e => { console.warn('[Worldgate③] 面板生成失敗', e); return null; }),
+            _expandAchv(seed, r.text).catch(e => { console.warn('[Worldgate③] 成就生成失敗', e); return null; }),
         ]);
         _busy = false;
         const w = {
@@ -2105,6 +2156,7 @@
             art: '', mapArt: '',    // 圖在世界存好之後才在背景生,不擋畫面
             travelers: _normTravelers(trav),
             panel: panel || null,   // 🎴 VN 劇情末尾那一頁的外觀;null=沒生成到,末尾退回原本那幾顆鍵
+            achv: achv || null,     // 🏅 這個世界的成就清單;解鎖仍走既有的成就標記,這裡只是清單
             visits: 0, ts: Date.now(),
         };
         const wrote = await _writeEntry(w, r.text);
@@ -2251,6 +2303,9 @@
             // 面板是後來才加的功能:舊世界一律沒有,這裡補一顆給它們;已經有的話這顆就是「換一個樣子」
             '<button class="wg-btn ghost" data-act="regen-panel"><i class="fa-solid fa-palette"></i> ' +
               (w.panel ? '換一個結束畫面' : '做這個世界的結束畫面') + '</button>' +
+            // 成就也是後來才加的:舊世界一律沒有,這顆補給它們
+            '<button class="wg-btn ghost" data-act="regen-achv"><i class="fa-solid fa-medal"></i> ' +
+              (w.achv ? '重擬這個世界的成就' : '設計這個世界的成就') + '</button>' +
             _spawnHtml(w, entryText) +
             // 🎭 玩家在這個世界要當什麼。不做選單:每個世界的職業與種族體系都不一樣,
             //   給清單等於把它變成題庫,而且清單外的東西就填不了。自由填寫最不設限。
@@ -2305,6 +2360,23 @@
             w.panel = panel;
             await _saveWorld(w);
             _toast('結束畫面已換上,下次劇情演完就看得到');
+            _renderDetail(w);
+        });
+        // 🏅 成就清單:舊世界沒有、生成失敗也沒有。重擬之後條目要跟著更新,主持AI 才看得到新的那份
+        b.querySelector('[data-act="regen-achv"]')?.addEventListener('click', async () => {
+            if (_busy) return;
+            _busy = true;
+            _loading('正在擬定「' + _esc(w.name) + '」的成就…');
+            const achv = await _expandAchv(
+                { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept },
+                w.entryText || entryText || w.concept || w.name,
+            ).catch(() => null);
+            _busy = false;
+            if (!achv) { _toast('成就沒擬出來,再試一次'); _renderDetail(w); return; }
+            w.achv = achv;
+            await _saveWorld(w);
+            if (w.entryText) await _writeEntry(w, w.entryText);
+            _toast('成就已寫進這個世界');
             _renderDetail(w);
         });
         // 世界檔案與旅人是分兩次生的:旅人那次掛掉時世界照樣存下來,這裡補一次(沒有旅人=偶遇組隊整條路都走不了)
