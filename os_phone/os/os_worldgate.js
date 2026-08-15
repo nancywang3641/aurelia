@@ -1272,12 +1272,13 @@
         '8. 每名角色各做一項活動。除非情境要求,不得圍著同一個物件、全部看向中央或形成共同焦點。\n' +
         '9. Action 每次提到角色都用「髮色＋性別＋種族」;辨識特徵重複時再加入服裝特徵。禁止 he、she、the other character 這類含糊指代。\n' +
         // 🚨行首那幾個字要正面要求寫出來:講「不要加標題」會被連行首標籤一起省掉(世界門那四行踩過)
-        '輸出格式如下,三行的行首必須原樣寫出 Background:、Characters:、Action: 這幾個字,程式要靠它認行:\n' +
-        '<啟航攝影>\n' +
+        // 🚨標籤與行首都用 ASCII:中文標籤會被寫成簡體,一個字不一樣程式就整組認不到
+        '輸出格式如下。標籤與三行的行首都必須原樣照抄下面的英文,不可翻譯、不可改寫、不可換成中文,程式要靠它們認位置:\n' +
+        '<LaunchArt>\n' +
         'Background: [畫風], [世界觀], [地點與環境], [光線與氣氛], [鏡頭], [景別], 16:9,\n' +
         'Characters: only [實際人數與性別構成] in scene, [依當前名單,每名角色一行:a/an + age + gender + species + fixed appearance + world clothing]\n' +
         'Action: [所有實際角色處於同一場景], the [hair + gender + species] is [action], [逐一描述所有角色], compact composition, comparable character scale, natural interaction,\n' +
-        '</啟航攝影>\n';
+        '</LaunchArt>\n';
     // 隊伍組成當 key:重進舊世界目前是 0 次 API,不能因為又 DIVE 一次就重生一張圖。
     //   同一組人再進去＝重用上次那張;換過人才重新要一張。
     function _teamKey(w) {
@@ -1288,15 +1289,20 @@
         return !w.launchArt || !w.launchArt.url || w.launchArt.teamKey !== _teamKey(w);
     }
     // 開標籤取最後一個(思考鏈會先把標籤名唸一遍)、缺結束標籤照樣收到結尾(那正是被截斷的情況)。
-    // 認不到標籤就靠長相:那三行的行首標籤本身就是判準,模型連標籤都省掉時撿得回來。
+    // 🚨標籤用 ASCII:中文標籤會被模型寫成簡體(它的思考鏈本來就常常是簡體,早期整包混進過世界書條目),
+    //   差一個字就整組認不到。中文那兩個仍然收——預設或破甲裡若已經寫過,不必為了這件事改設定。
+    // 三道都沒中就靠長相:那三行的行首本身就是判準,模型連標籤都省掉時還撿得回來。
+    const _LAUNCH_TAGS = ['LaunchArt', '啟航攝影', '启航摄影'];
     function _pickLaunchBlock(text) {
         const s = String(text || '');
-        const open = /<啟航攝影[^>]*>/gi;
-        let m, at = -1, len = 0;
-        while ((m = open.exec(s))) { at = m.index; len = m[0].length; }
-        if (at >= 0) {
+        for (let i = 0; i < _LAUNCH_TAGS.length; i++) {
+            const tag = _LAUNCH_TAGS[i];
+            const open = new RegExp('<\\s*' + tag + '[^>]*>', 'gi');
+            let m, at = -1, len = 0;
+            while ((m = open.exec(s))) { at = m.index; len = m[0].length; }
+            if (at < 0) continue;
             const rest = s.slice(at + len);
-            const end = rest.search(/<\/啟航攝影\s*>/i);
+            const end = rest.search(new RegExp('<\\s*/\\s*' + tag + '\\s*>', 'i'));
             return (end >= 0 ? rest.slice(0, end) : rest).trim();
         }
         const shape = s.match(/Background\s*:[\s\S]*?Action\s*:[^\n]*(?:\n(?!\s*\n)[^\n]*)*/i);
