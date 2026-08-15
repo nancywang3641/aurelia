@@ -317,7 +317,13 @@
     }
 
     win.OS_UI_STYLE = window.OS_UI_STYLE = {
-        packs: () => PACKS.map(p => ({ id: p.id, name: p.name, use: p.use, cssOnly: p.cssOnly })),
+        // 🚨對外只給「風格長什麼樣」(tone)：use 是內部拿來自動選包用的用途標籤，
+        //   放進選單會被當成「這個風格只能做任務/成就」的項目分類，完全誤導——它們是風格，不是項目。
+        packs: () => PACKS.map(p => ({
+            id: p.id, name: p.name, cssOnly: p.cssOnly,
+            tone: String(p.tone || '').split('、').slice(0, 2).join('、'),
+            use: p.use,
+        })),
         layouts: () => LAYOUTS,
         get: _get,
         pick, build, remember,
