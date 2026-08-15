@@ -488,6 +488,90 @@
         }));
     }
 
+    // ══ 🎴 這個世界的活動面板外觀(VN 劇情末尾那一頁) ══════════════════
+    // 跟旅人那支並行:兩支都只吃世界檔案節錄、彼此不相干。
+    // 🚨不跟旅人合成一支:旅人是 4 人 × 三題三選項的高結構 JSON,面板是一大坨連續 CSS,
+    //   誰排在後面誰被寫壞——結構化輸出擺在長輸出的尾巴是品質最差的位置(旅人當初從世界檔案拆出來就是這條)。
+    //   而且風格庫那七八百字的美術指令只有面板用得到,合併等於讓旅人也讀一遍。
+    // 🚨輸出不用 JSON:CSS 的引號、大括號與換行包進 JSON 字串太容易讓整份 parse 失敗
+    //   (世界檔案當初改收純文字就是這個理由)。改用標籤把要的兩段圈起來,外面包什麼都不必管。
+    const _PANEL_RULES =
+        '你要做的是一款遊戲的「活動主畫面」:玩家打完一段劇情後看到的那一頁。' +
+        '畫面中央會站著這趟同行的人物(那張圖由程式墊在你下面,你看不到、也不必畫),你要做的是疊在它上面的那層介面。\n' +
+        '【輸出格式】只輸出下面兩個區塊,兩個都要有、缺一不可,區塊外不要任何說明、開場白或程式碼圍欄:\n' +
+        '<panel-html>介面的 HTML</panel-html>\n<panel-css>它的 CSS</panel-css>\n' +
+        '【工程規則·不可違反,與底下的美術方向衝突時一律以這裡為準】\n' +
+        // 🚨前綴是為了不跟酒館/VN 既有樣式互相蓋。程式端出口還會再前綴一次做保險,但模型自己帶前綴,
+        //   萬一有哪條漏掉也不會撞到菜市場名(.card/.btn 那些兩邊都有的)。
+        '- 每一個 class 名稱都要以 wgp- 開頭,例如 wgp-rail、wgp-badge。\n' +
+        '- 你的面板容器已經是一塊寬高各 100% 的絕對定位區域。元素用 position:absolute 貼到四邊,不要用 position:fixed。\n' +
+        // 中央淨空是這個畫面的骨架:人物站中間,UI 沿邊——同 P5 那類啟程畫面的作法
+        '- 畫面正中央那一塊(上下左右各往內三成的範圍)是人物區,不可以放任何元素、色塊或半透明遮罩。\n' +
+        '- 不要寫 background-image,也不要給整面鋪底色:底圖在你下面,蓋掉就看不到人物了。\n' +
+        '- 不准用 !important。不准連任何外部網址(圖片、字型、CDN 一律不行),要圖案就用 CSS 畫或內嵌 SVG。\n' +
+        '- 不要 script、不要 onclick,互動只能靠 CSS 的 :hover 與 transition。\n' +
+        '- 窄畫面(手機直向)也要能看:用 @media 調整,不要讓元素擠成一團或掉出畫面。\n' +
+        '【必須有的入口】下面五個都要做出來,各自帶上指定的 data-act;程式靠這個字串綁行為,寫錯就點不動:\n' +
+        '　data-act="data"(這一章的資料與狀態)、data-act="ctx"(上下文用量)、data-act="journal"(日誌)、' +
+        'data-act="map"(地圖)、data-act="achv"(這個世界的成就)\n' +
+        '這五個的文案由你依這個世界的說法重寫,但 data-act 的值一個字都不能改。\n' +
+        '另外做一個標題區放世界名與一句話,那一區不要做成可以點的東西。\n' +
+        '【文字】介面上的中文一律繁體。不要在介面上寫解釋性的說明文字。\n';
+    // 開標籤取最後一個:思考鏈會先把標籤名唸過一遍,取第一個等於把草稿也收進來。
+    // 缺結束標籤照樣收到結尾——那正是被截斷的情況,硬要成對就等於整份丟掉。
+    function _pickTagged(text, tag) {
+        const s = String(text || '');
+        const open = new RegExp('<' + tag + '[^>]*>', 'gi');
+        let m, at = -1, len = 0;
+        while ((m = open.exec(s))) { at = m.index; len = m[0].length; }
+        if (at < 0) return '';
+        const rest = s.slice(at + len);
+        const end = rest.search(new RegExp('</' + tag + '\\s*>', 'i'));
+        return (end >= 0 ? rest.slice(0, end) : rest).trim();
+    }
+    // 🚨規則寫了不等於模型照做。這幾樣漏進來都是全域災難:!important 會蓋到酒館、外連在別人那邊載不到、
+    //   script 會直接在面板裡跑。所以規則歸規則,出口再剝一次。
+    function _cleanPanelHtml(s) {
+        return String(s || '')
+            .replace(/<(script|style|iframe|object|embed)[\s\S]*?<\/\1>/gi, '')
+            .replace(/<\/?(?:script|style|iframe|object|embed|link|meta)[^>]*>/gi, '')
+            .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+            .replace(/\s(?:src|href|xlink:href)\s*=\s*"(?:https?:)?\/\/[^"]*"/gi, '')
+            .replace(/\s(?:src|href|xlink:href)\s*=\s*'(?:https?:)?\/\/[^']*'/gi, '')
+            .trim();
+    }
+    function _cleanPanelCss(s) {
+        return String(s || '')
+            .replace(/@import[^;]*;/gi, '')
+            .replace(/url\(\s*['"]?(?:https?:)?\/\/[^)]*\)/gi, 'none')
+            .replace(/\s*!\s*important/gi, '')
+            .replace(/position\s*:\s*fixed/gi, 'position:absolute')
+            .trim();
+    }
+    async function _expandPanel(seed, worldText) {
+        const S = win.OS_UI_STYLE || window.OS_UI_STYLE;
+        if (!S || !S.pick) return null;   // 風格庫沒載入=沒有這個功能,世界照樣能玩(末尾退回原本那幾顆鍵)
+        // 不限 cssOnly:AVS 只能純 CSS 所以挑得到的包有限,這裡底下墊著一張圖,
+        //   那幾包要有主視覺才成立的風格終於用得上——這是風格庫接進 VN 才拿得到的東西。
+        const art = S.pick();
+        const prompt =
+            _PANEL_RULES +
+            '【這個世界】' + seed.name + ':' + (seed.concept || '') +
+            (seed.genre ? '(題材:' + seed.genre + ')' : '') + (seed.style ? '(風格:' + seed.style + ')' : '') + '\n' +
+            '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
+            S.build(art.styleId, art.layoutId) +
+            '語言:繁體中文。';
+        const raw = await _callAI(prompt, '世界門生成活動面板', 'worldgate_panel', false, true, true);
+        if (!raw) return null;
+        const html = _pickTagged(raw, 'panel-html');
+        if (!html) { console.warn('[Worldgate③] 面板沒認到 <panel-html>,這個世界先不做面板'); return null; }
+        S.remember(art.styleId, art.layoutId);
+        return {
+            html: _cleanPanelHtml(html), css: _cleanPanelCss(_pickTagged(raw, 'panel-css')),
+            styleId: art.styleId, layoutId: art.layoutId,
+        };
+    }
+
     // ── 世界條目落地【奧瑞亞-視差】書 ──
     function _entryComment(w) { return '【世界檔案-' + w.name + '】'; }
     // 面板那塊是純文字容器(white-space:pre-wrap),markdown 不會被渲染——**世界名** 的星號就這樣露在臉上。
@@ -1689,7 +1773,13 @@
         const r = await _expandWorldText(seed, note);
         if (!r || !r.text) { _busy = false; _toast('世界建構失敗,請重試'); _renderSeedCards(); return; }
         _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
-        const trav = await _expandTravelers(seed, r.text, note);
+        // 旅人與面板兩支並行:各自只吃世界檔案節錄、彼此不相干,牆鐘時間等於慢的那一支。
+        // 連接設定是逐次隨請求帶的(不是切全域),兩支同時在跑不會互相踩。
+        // 面板掛了就當這個世界沒有面板(末尾退回原本那幾顆鍵),不能連累旅人與世界存檔。
+        const [trav, panel] = await Promise.all([
+            _expandTravelers(seed, r.text, note),
+            _expandPanel(seed, r.text).catch(e => { console.warn('[Worldgate③] 面板生成失敗', e); return null; }),
+        ]);
         _busy = false;
         const w = {
             id: _mkId(), name: seed.name, concept: seed.concept, twist: seed.twist || '', style: seed.style,
@@ -1703,6 +1793,7 @@
             artPrompt: r.artPrompt || '', mapPrompt: r.mapPrompt || '',   // 兩張圖的關鍵詞,同一次 API 順便帶回來的
             art: '', mapArt: '',    // 圖在世界存好之後才在背景生,不擋畫面
             travelers: _normTravelers(trav),
+            panel: panel || null,   // 🎴 VN 劇情末尾那一頁的外觀;null=沒生成到,末尾退回原本那幾顆鍵
             visits: 0, ts: Date.now(),
         };
         const wrote = await _writeEntry(w, r.text);
@@ -1846,6 +1937,9 @@
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 出發編成</span><span class="wg-section-note">' + team.length + ' / ' + MAX_TRAVELER_SPAWN + '</span></div>' +
             _slotsHtml(team) +
             ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
+            // 面板是後來才加的功能:舊世界一律沒有,這裡補一顆給它們;已經有的話這顆就是「換一個樣子」
+            '<button class="wg-btn ghost" data-act="regen-panel"><i class="fa-solid fa-palette"></i> ' +
+              (w.panel ? '換一個結束畫面' : '做這個世界的結束畫面') + '</button>' +
             _spawnHtml(w, entryText) +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
             '<div class="wg-btn-row">' +
@@ -1880,6 +1974,22 @@
             const tip = b.querySelector('[data-spawn-tip]');
             if (tip) tip.textContent = w.spawn ? ('降生地：' + w.spawn) : '沒選＝落在哪由主持AI安排';
         }));
+        // 🎴 結束畫面:舊世界沒有、生成失敗也沒有,這裡補一次;已經有的話就是重抽一個風格重做
+        b.querySelector('[data-act="regen-panel"]')?.addEventListener('click', async () => {
+            if (_busy) return;
+            _busy = true;
+            _loading('正在佈置「' + _esc(w.name) + '」的結束畫面…');
+            const panel = await _expandPanel(
+                { name: w.name, genre: w.genre, style: w.style, concept: w.concept },
+                w.entryText || entryText || w.concept || w.name,
+            ).catch(() => null);
+            _busy = false;
+            if (!panel) { _toast('結束畫面沒做出來,再試一次'); _renderDetail(w); return; }
+            w.panel = panel;
+            await _saveWorld(w);
+            _toast('結束畫面已換上,下次劇情演完就看得到');
+            _renderDetail(w);
+        });
         // 世界檔案與旅人是分兩次生的:旅人那次掛掉時世界照樣存下來,這裡補一次(沒有旅人=偶遇組隊整條路都走不了)
         b.querySelector('[data-act="regen-trav"]')?.addEventListener('click', async () => {
             if (_busy) return;
