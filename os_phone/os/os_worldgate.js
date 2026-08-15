@@ -1547,6 +1547,40 @@
         _launchBusy = true;
         try { await _genLaunchArt(w, p); } finally { _launchBusy = false; }
     }
+    // 🏅 主持AI 發的成就名對得上清單就標記完成;對不上的完全不管——那是既有的即興成就,
+    //   照樣走原本的柴郡／愛麗絲歸檔,跟這裡互不干擾。所以成就系統本體一行都不用改。
+    // 比對前把標點與空白洗掉:它偶爾會多加引號或全形空格,那不該算成不同的成就。
+    function _achvKey(s) {
+        return String(s || '').replace(/[\s　「」『』"'·・,，。、.!！?？~～:：;；\-—_()（）\[\]【】]/g, '').toLowerCase();
+    }
+    function _allAchv(w) {
+        const a = w && w.achv;
+        return a ? [].concat(a.normal || [], a.bond || [], a.hidden || []) : [];
+    }
+    async function _scanAchv(text) {
+        const id = await _getCurrentId();
+        if (!id) return;
+        const worlds = await _get(K_WORLDS, []);
+        const w = worlds.find(x => x.id === id);
+        const list = _allAchv(w);
+        if (!list.length) return;
+        const got = [];
+        const re = /\[Achievement\|([^\]|]*)\|([^\]|]*)\|/gi;   // [Achievement|表情|名|描述]
+        let m;
+        while ((m = re.exec(String(text || '')))) got.push(m[2].trim());
+        if (!got.length) return;
+        const done = Object.assign({}, w.achvDone || {});
+        let hit = 0;
+        got.forEach(n => {
+            const k = _achvKey(n);
+            const t = list.find(x => _achvKey(x.name) === k);
+            if (t && !done[t.name]) { done[t.name] = Date.now(); hit++; }
+        });
+        if (!hit) return;
+        w.achvDone = done;
+        await _saveWorld(w);
+        console.log('[Worldgate③] 🏅「' + w.name + '」達成 ' + hit + ' 條世界成就');
+    }
     function _initLaunchHook() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(_initLaunchHook, 1000); return; }
         const ev = win.tavern_events;
@@ -1557,7 +1591,9 @@
                 const msgs = await win.TavernHelper?.getChatMessages?.(messageId);
                 const m = msgs && msgs[0];
                 if (!m || m.is_user) return;
-                await _scanLaunchArt(m.message || m.mes || '');
+                const _t = m.message || m.mes || '';
+                await _scanAchv(_t);          // 先記成就:生圖那支會等好幾十秒,不要卡著它
+                await _scanLaunchArt(_t);
             } catch (e) {}
         });
         console.log('[Worldgate③] 🚀 啟航圖便車已掛載');
@@ -2456,6 +2492,7 @@
                 id: w.id, name: w.name, concept: w.concept || '', style: w.style || '',
                 panel: w.panel || null,          // {html,css,styleId,layoutId} — 面板外觀
                 achv: w.achv || null,            // 這個世界的成就清單
+                achvDone: w.achvDone || null,    // {成就名:達成時間}——名字對得上清單的那幾條
                 launchArt: w.launchArt || null,  // {teamKey,url} — 這趟隊伍的啟航群像
                 art: w.art || '',                // 退路底圖:世界概念圖(無人遠景)
             };
