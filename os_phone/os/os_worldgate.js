@@ -1253,6 +1253,118 @@
             return true;
         } catch (e) { console.error('[Worldgate③] 注入聊天失敗', e); return false; }
     }
+    // ══ 🚀 啟航封面圖(這趟隊伍的群像,VN 劇情末尾當底圖) ═════════════════
+    // 這張圖不另外呼叫模型:主持AI 寫第一層正文的那一輪,手上剛好有隊伍名單與外觀基準,
+    //   而且它才剛寫完這些人落地後被改造成什麼樣——那正是這張圖要畫的內容。
+    //   另開一支副模型等於把它剛寫過的東西再問一次。
+    // 時序剛好:正文一回來就開生,VN 要演好幾分鐘,生圖時間被演出吃掉,走到末尾面板時圖早就在了。
+    // 🚨這段規則不包在 <request> 裡:她的正則把 <request> 區塊從「系統提示詞」也一起剝掉,
+    //   包起來等於主持AI 根本讀不到這段。純文字寫在指令裡最保險。
+    const _LAUNCH_REQ =
+        '\n【啟航攝影】正文全部寫完之後,再根據這一章的世界觀、場景與在場角色,輸出一段簡潔的英文生圖關鍵詞當作這趟的封面。規則:\n' +
+        '1. 出場人數依當前名單:玩家可以單獨出場,也可以帶 1~4 名隊友。不得固定四人或固定性別比例,不得加入名單以外的人物。\n' +
+        '2. 性別只用 male、female;每名角色只寫一次性別與一次種族。\n' +
+        '3. 人類標記 human;非人類必須標記明確種族。\n' +
+        '4. 保留角色固定外貌;種族、服裝、職業、配件與身體構造跟隨當前世界觀,不得殘留上一個世界的元素。\n' +
+        '5. 每名角色只用一行描述,不編號、不寫姓名、不重複身分詞。\n' +
+        '6. 鏡頭未指定時使用 medium-wide ensemble shot, eye-level view, 16:9;單人時可用 medium shot。\n' +
+        '7. 多人時角色位於同一個有限空間,分布在前景與中景,尺寸接近、互不遮擋;不得擠成合照,也不得有人站在遙遠背景。\n' +
+        '8. 每名角色各做一項活動。除非情境要求,不得圍著同一個物件、全部看向中央或形成共同焦點。\n' +
+        '9. Action 每次提到角色都用「髮色＋性別＋種族」;辨識特徵重複時再加入服裝特徵。禁止 he、she、the other character 這類含糊指代。\n' +
+        // 🚨行首那幾個字要正面要求寫出來:講「不要加標題」會被連行首標籤一起省掉(世界門那四行踩過)
+        '輸出格式如下,三行的行首必須原樣寫出 Background:、Characters:、Action: 這幾個字,程式要靠它認行:\n' +
+        '<啟航攝影>\n' +
+        'Background: [畫風], [世界觀], [地點與環境], [光線與氣氛], [鏡頭], [景別], 16:9,\n' +
+        'Characters: only [實際人數與性別構成] in scene, [依當前名單,每名角色一行:a/an + age + gender + species + fixed appearance + world clothing]\n' +
+        'Action: [所有實際角色處於同一場景], the [hair + gender + species] is [action], [逐一描述所有角色], compact composition, comparable character scale, natural interaction,\n' +
+        '</啟航攝影>\n';
+    // 隊伍組成當 key:重進舊世界目前是 0 次 API,不能因為又 DIVE 一次就重生一張圖。
+    //   同一組人再進去＝重用上次那張;換過人才重新要一張。
+    function _teamKey(w) {
+        const names = (w.travelers || []).filter(t => t && t.recruited).map(t => String(t.name)).sort();
+        return names.length ? names.join('/') : '(單人)';
+    }
+    function _needLaunchArt(w) {
+        return !w.launchArt || !w.launchArt.url || w.launchArt.teamKey !== _teamKey(w);
+    }
+    // 開標籤取最後一個(思考鏈會先把標籤名唸一遍)、缺結束標籤照樣收到結尾(那正是被截斷的情況)。
+    // 認不到標籤就靠長相:那三行的行首標籤本身就是判準,模型連標籤都省掉時撿得回來。
+    function _pickLaunchBlock(text) {
+        const s = String(text || '');
+        const open = /<啟航攝影[^>]*>/gi;
+        let m, at = -1, len = 0;
+        while ((m = open.exec(s))) { at = m.index; len = m[0].length; }
+        if (at >= 0) {
+            const rest = s.slice(at + len);
+            const end = rest.search(/<\/啟航攝影\s*>/i);
+            return (end >= 0 ? rest.slice(0, end) : rest).trim();
+        }
+        const shape = s.match(/Background\s*:[\s\S]*?Action\s*:[^\n]*(?:\n(?!\s*\n)[^\n]*)*/i);
+        return shape ? shape[0].trim() : '';
+    }
+    // 三行合成一段送進生圖。標籤行首留著沒關係(她拿去 ComfyUI 對照過的就是這個長相),
+    //   但把空行與說明性的方括號殘留清掉,免得模型沒填的欄位原樣進了關鍵詞。
+    function _launchPrompt(block) {
+        const lines = String(block || '').split('\n')
+            .map(x => x.trim())
+            .filter(x => x && /^(?:Background|Characters|Action)\s*:/i.test(x) || (x && !/^[<\[]/.test(x)));
+        const t = lines.join(' ').replace(/\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').trim();
+        return t.length > 40 ? t : '';
+    }
+    async function _genLaunchArt(w, promptText) {
+        const IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+        if (!IM || typeof IM.generate !== 'function') return false;
+        let url = '';
+        // 走插圖桶(scene):它會自動套高清修復與修臉,群像要的正是這個;背景桶那條是給無人場景用的
+        try { url = await IM.generate(promptText, 'scene', { width: 896, height: 512 }) || ''; }
+        catch (e) { console.warn('[Worldgate③] 啟航圖生成失敗', e && e.message); return false; }
+        if (!url) return false;
+        if (url.indexOf('blob:') === 0) {   // blob: 重載就失效 → 轉 dataURL 才存得住
+            try {
+                const blob = await (await fetch(url)).blob();
+                url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
+            } catch (e) {}
+        }
+        if (!url) return false;
+        w.launchArt = { teamKey: _teamKey(w), url: url };
+        await _saveWorld(w);
+        console.log('[Worldgate③] 🚀 啟航圖已存入「' + w.name + '」(' + w.launchArt.teamKey + ')');
+        return true;
+    }
+    // 訊息落地就掃。掛在這裡而不是 VN 那邊:要判斷「現在在哪個世界、這組隊伍有沒有圖了」,
+    //   那兩份資料都在世界門手上。
+    let _launchBusy = false;
+    async function _scanLaunchArt(text) {
+        if (_launchBusy) return;
+        const id = await _get(K_CURRENT, '');
+        if (!id) return;                                   // 不在視差世界裡
+        const worlds = await _get(K_WORLDS, []);
+        const w = worlds.find(x => x.id === id);
+        if (!w || !_needLaunchArt(w)) return;              // 這組隊伍已經有圖了
+        const block = _pickLaunchBlock(text);
+        if (!block) return;
+        const p = _launchPrompt(block);
+        if (!p) return;
+        _launchBusy = true;
+        try { await _genLaunchArt(w, p); } finally { _launchBusy = false; }
+    }
+    function _initLaunchHook() {
+        if (!win.eventOn || !win.tavern_events) { setTimeout(_initLaunchHook, 1000); return; }
+        const ev = win.tavern_events;
+        if (!ev.MESSAGE_RECEIVED) return;
+        win.eventOn(ev.MESSAGE_RECEIVED, async function (messageId) {
+            try {
+                if (win.__AURELIA_SUMMARIZING) return;     // 🚫 大總結的呼叫也發這個事件,別跟著生圖
+                const msgs = await win.TavernHelper?.getChatMessages?.(messageId);
+                const m = msgs && msgs[0];
+                if (!m || m.is_user) return;
+                await _scanLaunchArt(m.message || m.mes || '');
+            } catch (e) {}
+        });
+        console.log('[Worldgate③] 🚀 啟航圖便車已掛載');
+    }
+    _initLaunchHook();
+
     function _divePrompt(w) {
         const team = (w.travelers || []).filter(t => t.recruited);
         const teamStr = team.length
@@ -1280,6 +1392,8 @@
             '2. 遵循視差跑團主持規範:不強推主線、只描述可感知資訊、事件制推進。' +
             '世界檔案裡的法則與危機是這個地方的背景質地,不是玩家的任務——不要拿它當開場鉤子逼玩家表態或選邊,玩家要在這裡做生意、找人、閒晃都可以。\n' +
             '3. 開場結尾給出眼前可見的幾個方向或機會,然後停下等待玩家行動。\n' +
+            // 這組隊伍已經有封面就不要再帶這段:重進舊世界本來是 0 次 API,不能每次 DIVE 都多背一份規則
+            (_needLaunchArt(w) ? _LAUNCH_REQ : '') +
             '━━━━━━━━━━━━━━━━━━━━━';
     }
     async function _dive(w) {
