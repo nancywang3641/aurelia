@@ -81,6 +81,55 @@
         });
     }
 
+    // ── 🩹 對比度守衛（原理同 story_extractor 偷學樣式那條）──
+    //   實測最常見的壞法：模型給某個元素換了背景色卻沒給文字色，文字色就從 VN 繼承下來，
+    //   白底配上淺色字＝整行看不見。規則裡有寫要成對指定，但寫了不等於做到 → 渲染後自己量一遍。
+    function _rgb(s) {
+        const m = String(s || '').match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\)/);
+        return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+    }
+    function _luma(c) { return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255; }
+    // 往上找第一層夠實的底色。一路透明到面板本身＝底下是那張啟航圖，亮暗未知。
+    function _bgUnder(el, root) {
+        let cur = el;
+        while (cur && cur !== root) {
+            const c = _rgb(win.getComputedStyle ? getComputedStyle(cur).backgroundColor : '');
+            if (c && c.a >= 0.5) return c;
+            cur = cur.parentElement;
+        }
+        return null;
+    }
+    function _guardContrast(root) {
+        let fixed = 0, outlined = 0;
+        root.querySelectorAll('*').forEach(el => {
+            if (el.tagName === 'STYLE') return;
+            // 只管自己直接帶文字的元素：容器的文字色改了會連累它整棵子樹
+            const hasText = Array.prototype.some.call(el.childNodes, n => n.nodeType === 3 && n.nodeValue.trim());
+            if (!hasText) return;
+            const cs = getComputedStyle(el);
+            const fg = _rgb(cs.color);
+            if (!fg) return;
+            const bg = _bgUnder(el, root);
+            if (!bg) {
+                // 底是圖片，亮暗說不準 → 不去動模型挑的顏色，加一圈反差描邊保底
+                if (!cs.textShadow || cs.textShadow === 'none') {
+                    el.style.textShadow = _luma(fg) > 0.5
+                        ? '0 0 4px rgba(0,0,0,.85), 0 1px 2px rgba(0,0,0,.9)'
+                        : '0 0 4px rgba(255,255,255,.85), 0 1px 2px rgba(255,255,255,.9)';
+                    outlined++;
+                }
+                return;
+            }
+            const lb = _luma(bg), lt = _luma(fg);
+            if ((Math.max(lb, lt) + 0.05) / (Math.min(lb, lt) + 0.05) < 3) {
+                el.style.color = lb > 0.5 ? '#14161c' : '#f2f4f8';   // 行內樣式贏過模型寫的任何選擇器
+                fixed++;
+            }
+        });
+        if (fixed || outlined) console.log('[VN末尾面板] 對比守衛：改字色 ' + fixed + ' 處、加描邊 ' + outlined + ' 處');
+        return { fixed: fixed, outlined: outlined };
+    }
+
     async function render(acts) {
         const root = _el();
         if (!root) return null;
@@ -104,6 +153,7 @@
         const found = _bindActs(root, acts);
         _toggleNative(found);
         root.classList.add('active');
+        _guardContrast(root);   // 要在掛上 active、文字也寫定之後才量，量的是最終畫面
         const miss = Object.keys(acts || {}).filter(a => found.indexOf(a) < 0);
         console.log('[VN末尾面板] 已套用「' + (w.name || '未命名世界') + '」的活動面板' +
             (miss.length ? '；模型漏做了 ' + miss.join('、') + '，那幾顆維持原本的按鈕' : ''));
