@@ -1128,6 +1128,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-end-panel::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background: radial-gradient(circle at 50% 48%, rgba(0,0,0,0) 32%, rgba(4,6,14,0.45) 68%, rgba(3,4,10,0.88) 100%); }
         #vn-end-panel .vnep-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
         #vn-end-panel .vnep-live { cursor: pointer; }
+        /* 面板做了但程式還沒接上的入口（例：成就）：看得出來還沒開，而不是點了沒反應 */
+        #vn-end-panel .vnep-dead { opacity: 0.35; pointer-events: none; filter: grayscale(1); }
 
         /* 末尾選單鈕直排 + 同寬 */
         #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map { box-sizing: border-box; width: 200px; text-align: center; }

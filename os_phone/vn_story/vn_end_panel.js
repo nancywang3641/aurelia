@@ -43,12 +43,12 @@
         root.classList.toggle('has-bg', !!url);
     }
 
-    // 面板裡的按鈕綁既有行為。認不得的 data-act 一律不綁也不刪——
-    // 那可能是還沒做的功能(成就)，留著讓它不動作，比整顆消失好判斷是哪裡沒接上。
+    // 面板裡的按鈕綁既有行為。認不得的 data-act 不綁、也不刪:那是還沒做完的功能(成就)，
+    // 整顆藏掉會讓版面破一個洞，留成能點卻沒反應又更糟 → 標成暗的、不吃點擊，看得出來「還沒開」。
     function _bindActs(root, acts) {
         root.querySelectorAll('[data-act]').forEach(el => {
             const fn = acts && acts[el.getAttribute('data-act')];
-            if (typeof fn !== 'function') return;
+            if (typeof fn !== 'function') { el.classList.add('vnep-dead'); return; }
             el.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
             el.classList.add('vnep-live');
         });
