@@ -1094,6 +1094,26 @@
     //     但縮完比例就跑掉(滿版底圖會被裁),所以不要去踩那條線。ComfyUI 沒有這個限制,同一組值兩邊通用。
     const _ART_W = 1344, _ART_H = 768;    // 概念圖:遠景橫幅,103.2 萬像素
     const _MAP_W = 1024, _MAP_H = 1024;   // 方位圖:正方,104.9 萬像素(剛好貼齊上限)
+    // ── 🖼 沒有圖片 API／生圖失敗時的預備圖（六種題材各一組概念圖＋俯視圖）──
+    //   放在素材 repo：本 repo 已經超過 jsdelivr 上限，圖不能進來。
+    // 🚨題材由程式端從 genre 對關鍵字，不要求模型多輸出一行 TAG：
+    //   世界檔案那支的四行程式資料整組被省略過(標籤全禿、一張圖都沒生)，能不加就不加。
+    const _FB_BASE = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/worldgate/';
+    // 先比對最具體的：星際要排在科幻之前，恐怖排在題材之前（恐怖可以配任何背景，但畫面最好認）
+    const _FB_TAGS = [
+        ['space', /星際|太空|宇宙|星艦|星艦|銀河|外星|行星/],
+        ['horror', /恐怖|驚悚|靈異|克蘇魯|喪屍|詭譚|鬼|邪祟|生存恐懼/],
+        ['wuxia', /武俠|仙俠|修仙|江湖|武林|玄幻|東方|古風|門派/],
+        ['western_fantasy', /西幻|奇幻|魔法|劍與魔法|中世紀|龍|精靈|矮人|騎士/],
+        ['future', /未來|近未來|科幻|賽博|cyber|機械|義體|廢土/i],
+        ['modern', /現代|都市|校園|日常|職場|當代/],
+    ];
+    function _fbTag(w) {
+        const s = [w && w.genre, w && w.style, w && w.concept].filter(Boolean).join(' ');
+        const hit = _FB_TAGS.find(([, re]) => re.test(s));
+        return hit ? hit[0] : 'modern';   // 認不出來就用現代（阿洛那份說明書指定的預設）
+    }
+    function _fbUrl(w, kind) { return _FB_BASE + _fbTag(w) + '-' + (kind === 'map' ? 'topdown' : 'concept') + '.webp'; }
     const _ART_BASE = 'wide establishing shot, sweeping vista of the whole land, atmospheric lighting, painted concept art, highly detailed environment, no people, no text, no watermark';
     const _MAP_BASE = 'top-down aerial view, painted overhead map, whole territory in one frame, regions separated by terrain, soft muted colours, no labels, no text, no people, no border decoration';
     async function _genArt(prompt, base, w, h) {
@@ -1179,7 +1199,8 @@
     // 🚨一張一張生,不要 Promise.all:生圖那端是排隊處理的,兩張同時送會有一張被丟掉
     //   (實測方位圖出得來、概念圖沒有)。map 面板的世界大地圖也是照順序一張張生的。
     async function _fillArt(w) {
-        if (!w || (w.art && w.mapArt)) return;
+        // 目前掛著的如果是預備圖,就當作還沒填——哪天她接上圖片 API,下一次補圖會換成真的
+        if (!w || (w.art && w.mapArt && !w.artFb && !w.mapFb)) return;
         let got = false;
         // 早鳥的成果只在「關鍵詞一模一樣」時才認:同一趟展開才對得上,續寫/重抽拿到的是別的世界
         const early = _early || {};
@@ -1196,6 +1217,12 @@
             if (mapArt) { w.mapArt = mapArt; got = true; } else console.warn('[Worldgate③] 方位圖沒生出來');
         }
         _early = null;   // 這一趟用完就丟,別讓上一個世界的圖被下一個世界接走
+        // 🖼 到這裡還是沒有圖(沒接圖片 API、生圖失敗、或模型連關鍵詞都沒吐)→ 掛上這個題材的預備圖。
+        //   標記起來:那不是這個世界真正的樣子,以後補得到真圖就換掉。
+        if (!w.art) { w.art = _fbUrl(w, 'art'); w.artFb = true; got = true; }
+        if (!w.mapArt) { w.mapArt = _fbUrl(w, 'map'); w.mapFb = true; got = true; }
+        if (w.art && !w.artFb) delete w.artFb;
+        if (w.mapArt && !w.mapFb) delete w.mapFb;
         if (!got) return;
         await _saveWorld(w);
         if (_winEl && _curDetailId === w.id) { try { _renderDetail(w); } catch (e) {} }
