@@ -1511,11 +1511,14 @@
         if (!IM || typeof IM.generate !== 'function') return false;
         let url = '';
         // 走插圖桶(scene):它會自動套高清修復與修臉,群像要的正是這個;背景桶那條是給無人場景用的
-        // 尺寸取正 16:9:這張是面板的滿版底圖,比例不對就會被裁掉一邊(角色的腳最先被切)。
+        // 🚨尺寸傳進去會蓋掉圖片設置裡的預設值(那邊是 1024×1024 ≈ 105 萬像素)。
+        //   原本給 1024×576 只有 59 萬像素,跌破模型的原生解析度 → 整張糊掉,
+        //   高清修復救不了(它是放大已經糊掉的東西,補不回一開始就沒生出來的細節)。
+        //   1344×768 是同一個比例(1.75)但像素回到 103 萬,構圖不變、清晰度回來,兩邊都還是 64 的倍數。
         // extraNegative 是「追加」不是覆蓋:她在圖片設置裡調好的負向詞照樣生效,這裡只多擋景別。
         // 🚨拉遠視角光靠正向詞不夠,模型的預設構圖偏好就是特寫;負面把特寫那幾種說法一起擋掉才穩。
         const CLOSE_NEG = 'close-up, extreme close-up, portrait, bust shot, head shot, cropped legs, cropped body, out of frame, faces filling the frame';
-        try { url = await IM.generate(promptText, 'scene', { width: 1024, height: 576, extraNegative: CLOSE_NEG }) || ''; }
+        try { url = await IM.generate(promptText, 'scene', { width: 1344, height: 768, extraNegative: CLOSE_NEG }) || ''; }
         catch (e) { console.warn('[Worldgate③] 啟航圖生成失敗', e && e.message); return false; }
         if (!url) return false;
         if (url.indexOf('blob:') === 0) {   // blob: 重載就失效 → 轉 dataURL 才存得住
