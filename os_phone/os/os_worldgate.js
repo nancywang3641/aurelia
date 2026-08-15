@@ -1311,13 +1311,18 @@
         '這是一張「出發前的集結畫面」:隊伍聚在他們落腳的地方,各自等著出發。' +
         '它是這個世界的固定門面,玩家每結束一段劇情都會再看到同一張,所以畫面不可以綁在某個瞬間上。\n' +
         '規則:\n' +
+        // 🚨人數與性別一定要加權:只用普通描述寫,權重壓不過後面那幾行角色描述,生出來常常多人或少人。
         '1. 出場人數依當前名單:玩家可以單獨出場,也可以帶 1~4 名隊友。不得固定四人或固定性別比例,不得加入名單以外的人物。\n' +
+        '1-1. 人數那一句必須照這個形狀寫成加權:(only N characters in scene:1.5),後面緊接著用英文寫出男女各幾人。' +
+        'N 要跟你底下實際列出的角色行數一模一樣。\n' +
         '2. 性別只用 male、female;每名角色只寫一次性別與一次種族。\n' +
         '3. 人類標記 human;非人類必須標記明確種族。\n' +
         '4. 保留角色固定外貌;種族、服裝、職業、配件與身體構造跟隨當前世界觀,不得殘留上一個世界的元素。\n' +
         // 玩家指定過身分時,那一行不可以自己換一個:圖跟正文寫的是同一個人才對得上
         '4-1. 玩家如果指定過自己的身分,玩家那一行必須照那個身分寫(種族形態、能力路線、外觀),不可以另外編一個。\n' +
-        '5. 每名角色只用一行描述,不編號、不寫姓名、不重複身分詞。\n' +
+        // 外觀與動作寫在同一行:分成兩段會讓同一個人被描述兩次,重複本身就會讓模型算錯人數
+        '5. 每名角色只用一行,行末以分號結尾,不編號、不寫姓名、不重複身分詞。' +
+        '同一行裡先寫外觀,接著寫他此刻的待機動作。\n' +
         // 🚨景別要寫死:不明講「看得到腳」模型一律裁到胸口,四張臉塞滿畫面,環境完全看不到,
         //   而且介面沒地方擺。微俯是為了讓人互不遮擋又露出地面——壓成鳥瞰臉會變形,那是地圖不是啟程畫面。
         '6. 鏡頭與景別未指定時一律用 wide shot, full body, head to toe, feet visible, slightly high angle, wide-angle lens, 16:9;單人時同樣要全身入鏡。\n' +
@@ -1329,17 +1334,18 @@
         // 地點不給範例:世界差異太大(有的根本沒有「房間」),只講性質讓它自己從世界條件推
         '8-1. 地點是他們在這個世界落腳、準備出發的地方,不是正文裡那個場景。那裡長什麼樣由這個世界自己的條件決定。' +
         '要有明確的空間感,看得出牆面、地面或邊界,不是一片空白或空無一物的背景。\n' +
-        '9. Action 每次提到角色都用「髮色＋性別＋種族」;辨識特徵重複時再加入服裝特徵。禁止 he、she、the other character 這類含糊指代。\n' +
+        '9. 角色那幾行每次提到角色都用「髮色＋性別＋種族」;辨識特徵重複時再加入服裝特徵。禁止 he、she、the other character 這類含糊指代。\n' +
         // 這張圖是面板底圖:頭上與兩側那幾塊要留給介面,人塞滿了介面就沒地方擺、環境也看不到
         '10. 角色高度約佔畫面的一半,站在中間偏下;頭頂上方與左右兩側要留出環境空間,不要讓人物撐滿整個畫面。\n' +
         // 🚨行首那幾個字要正面要求寫出來:講「不要加標題」會被連行首標籤一起省掉(世界門那四行踩過)
         // 🚨標籤與行首都用 ASCII:中文標籤會被寫成簡體,一個字不一樣程式就整組認不到
         '輸出格式如下。標籤與三行的行首都必須原樣照抄下面的英文,不可翻譯、不可改寫、不可換成中文,程式要靠它們認位置:\n' +
         '<LaunchArt>\n' +
-        'Background: [畫風], [世界觀], [隊伍落腳處的室內或有邊界的空間], [光線與氣氛], wide shot, full body, head to toe, feet visible, slightly high angle, wide-angle lens, 16:9,\n' +
-        'Characters: only [實際人數與性別構成] in scene, [依當前名單,每名角色一行:a/an + age + gender + species + fixed appearance + world clothing]\n' +
-        // 尾巴那三個構圖詞拿掉:景別已經在 Background 那行講過,這裡再堆一次會把鏡頭往回帶
-        'Action: [所有角色都在這個落腳處等待出發], the [hair + gender + species] is [持續性的待機動作], [逐一描述所有角色], standing by, waiting to depart, evenly spaced apart,\n' +
+        // 微縮模型／等距那組詞擺在最前面:它決定整張圖的取景方式,放後面會被前面的內容詞蓋過去
+        'Background: diorama, miniature, isometric, isometric concept, from above, front view, [畫風], [世界觀], [隊伍落腳處的室內或有邊界的空間], [光線與氣氛], wide shot, full body, head to toe, feet visible, slightly high angle, wide-angle lens, 16:9,\n' +
+        'Characters: (only [人數] characters in scene:1.5), [男女各幾人的英文寫法],\n' +
+        '[依當前名單,每名角色一行,行末分號:a/an + age + gender + species + 固定外貌 + 這個世界的服裝, is + 待機動作 ;]\n' +
+        'in the [落腳處] , standing by, waiting to depart, evenly spaced apart\n' +
         '</LaunchArt>\n';
     // 隊伍組成當 key:重進舊世界目前是 0 次 API,不能因為又 DIVE 一次就重生一張圖。
     //   同一組人再進去＝重用上次那張;換過人才重新要一張。
@@ -1367,15 +1373,28 @@
             const end = rest.search(new RegExp('<\\s*/\\s*' + tag + '\\s*>', 'i'));
             return (end >= 0 ? rest.slice(0, end) : rest).trim();
         }
-        const shape = s.match(/Background\s*:[\s\S]*?Action\s*:[^\n]*(?:\n(?!\s*\n)[^\n]*)*/i);
+        // 標籤全省時的最後一道:從 Background 那行收到結尾。角色行的數量不固定,
+        // 用空行當邊界會在模型多打一個換行時把名單砍掉一半 → 寧可多收,後面再按行過濾。
+        const shape = s.match(/Background\s*:[\s\S]*$/i);
         return shape ? shape[0].trim() : '';
     }
-    // 三行合成一段送進生圖。標籤行首留著沒關係(她拿去 ComfyUI 對照過的就是這個長相),
-    //   但把空行與說明性的方括號殘留清掉,免得模型沒填的欄位原樣進了關鍵詞。
+    // 各行合成一段送進生圖。標籤行首留著沒關係(拿去 ComfyUI 對照過的就是這個長相),
+    //   但把說明性的方括號殘留清掉,免得模型沒填的欄位原樣進了關鍵詞。
+    // 🚨中文行一律丟掉:送進去的是英文關鍵詞,中文只可能是模型自己加的說明或收尾句。
+    //   標籤全省時是從 Background 收到結尾的,那條路最容易把後面的中文一起撿進來。
+    function _cjkRatio(s) {
+        const t = String(s).replace(/\s/g, '');
+        if (!t) return 0;
+        return (t.match(/[一-鿿]/g) || []).length / t.length;
+    }
     function _launchPrompt(block) {
         const lines = String(block || '').split('\n')
             .map(x => x.trim())
-            .filter(x => x && /^(?:Background|Characters|Action)\s*:/i.test(x) || (x && !/^[<\[]/.test(x)));
+            .filter(x => x && !/^[<\[]/.test(x) && _cjkRatio(x) < 0.2);
+        // 🚨模型把範本原樣抄回來時,角色那行是「[依當前名單,每名角色一行…]」,開頭是方括號會先被上面濾掉
+        //   → 只剩兩行標籤就是「這趟沒有真的產出」,別送去生圖。用字數當判準擋不住:
+        //   方括號拿掉之後標籤行本身就有四十幾個字。
+        if (!lines.some(x => !/^(?:Background|Characters)\s*:/i.test(x))) return '';
         const t = lines.join(' ').replace(/\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').trim();
         return t.length > 40 ? t : '';
     }
