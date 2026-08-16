@@ -2033,8 +2033,8 @@
             '.wg-btn.ghost{background:rgba(255,255,255,.6);color:#3a3e56;border:1px solid rgba(26,28,40,.18);box-shadow:none;}' +
             '.wg-btn.danger{background:rgba(180,80,60,.1);color:#a05040;border:1px solid rgba(180,80,60,.3);box-shadow:none;}' +
             '.wg-btn-row{display:flex;gap:7px;}.wg-btn-row .wg-btn{flex:1;}' +
-            // 移除這種次要動作不該跟主要動作平分寬度：縮成剛好裝得下字的窄鈕靠在旁邊
-            '.wg-btn-row .wg-btn.slim{flex:0 0 auto;width:auto;padding:10px 14px;}' +
+            // 標題列右邊那組小鈕：兩顆並排時要有間距，不然黏在一起
+            '.wg-section-head .wg-mgr-btn + .wg-mgr-btn{margin-left:5px;}' +
             '.wg-note{color:#8a8ea6;font-size:10px;text-align:center;margin-top:7px;line-height:1.5;}' +
             '.wg-loading{margin:auto;display:flex;flex-direction:column;align-items:center;gap:12px;color:#8a8ea6;font-size:11px;letter-spacing:2px;font-weight:700;}' +
             '.wg-spinner{width:26px;height:26px;border:2px solid rgba(26,28,40,.15);border-top-color:#1A1C28;border-radius:50%;animation:wgSpin 1s linear infinite;}' +
@@ -2590,19 +2590,16 @@
             '<textarea class="wg-input area" data-wg-pc maxlength="200" rows="2" ' +
               'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>' +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
-            // 🚨這幾顆是「維護這個世界」不是「出發前要做的事」,擺在編成與降生地中間會打斷動線。
-            //   移到 DIVE 之後、跟刪除世界放在一起;移除縮成窄鈕,不跟主要動作平分寬度。
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-screwdriver-wrench"></i> 這個世界的內容</span></div>' +
-            '<div class="wg-btn-row">' +
-              '<button class="wg-btn ghost" data-act="regen-panel"><i class="fa-solid fa-palette"></i> ' +
-                (w.panel ? '換一個結束畫面' : '做結束畫面') + '</button>' +
-              (w.panel ? '<button class="wg-btn ghost slim" data-act="drop-panel">移除</button>' : '') +
-            '</div>' +
-            '<div class="wg-btn-row">' +
-              '<button class="wg-btn ghost" data-act="regen-achv"><i class="fa-solid fa-medal"></i> ' +
-                (w.achv ? '重擬成就' : '設計成就') + '</button>' +
-              (w.achv ? '<button class="wg-btn ghost slim" data-act="drop-achv">移除</button>' : '') +
-            '</div>' +
+            // 🚨這幾個是難得用一次的維護動作,不該佔整行按鈕。照檔案庫「管理」那顆的做法:
+            //   縮成標題列右邊的小鈕,變成標籤行的一部分,不進主要視野也不打斷出發動線。
+            '<div class="wg-section-head"><span class="wg-section-title">結束畫面</span><span>' +
+              '<button class="wg-mgr-btn" data-act="regen-panel">' + (w.panel ? '換一個' : '做一個') + '</button>' +
+              (w.panel ? '<button class="wg-mgr-btn" data-act="drop-panel">移除</button>' : '') +
+            '</span></div>' +
+            '<div class="wg-section-head"><span class="wg-section-title">成就</span><span>' +
+              '<button class="wg-mgr-btn" data-act="regen-achv">' + (w.achv ? '重擬' : '設計') + '</button>' +
+              (w.achv ? '<button class="wg-mgr-btn" data-act="drop-achv">移除</button>' : '') +
+            '</span></div>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
               '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' +
