@@ -571,7 +571,8 @@
         const overlay = document.getElementById('chapter-overlay');
         overlay.classList.add('active');
         // 轉場語音在玩家還在挑卡片時就抓好：點下去才 new Audio 要下載＋解碼，聲音會慢畫面一拍
-        try { win.VN_ChapterWarp && win.VN_ChapterWarp.prime && win.VN_ChapterWarp.prime(); } catch (e) {}
+        // 🚨 掛在本層 window，不是 win（win = window.parent＝酒館主頁，那邊沒有這個模組）
+        try { window.VN_ChapterWarp && window.VN_ChapterWarp.prime && window.VN_ChapterWarp.prime(); } catch (e) {}
 
         // 獨立模式：從 OS_DB 讀取本地存檔（故事資料夾列表；輪播底欄/頁點由 chx-mode-list 收起）
         const isStandalone = win.OS_API?.isStandalone?.() ?? false;
@@ -765,13 +766,20 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         const _isMobile = () => window.matchMedia('(max-width: 768px)').matches;
 
         function _loadChapter(ch, thumbEl) {
+            // 每一步都具名：任何一步掛掉都要講得出「是哪一步、什麼錯」。
+            // 🚨 以前整段裸奔，轉場的 catch 只 console.error 一行 —— 玩家看到的是
+            //    「點了進入章節→演完→回到章節選擇」，沒有任何線索（她沒有 console）。
+            const _step = (name, fn) => {
+                try { return fn(); } catch (e) { throw new Error(name + '｜' + (e && e.message ? e.message : e)); }
+            };
             const doLoad = () => {
-                window.VN_Core.loadScript(ch.content, ch.message_id);
+                if (!window.VN_Core) throw new Error('劇情引擎未載入');
+                _step('解析劇本', () => window.VN_Core.loadScript(ch.content, ch.message_id));
                 // 回放也把這章存檔的插圖插回（生成當時已寫進 ch.scenes）；圖檔在硬碟、不重生
                 try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
-                if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
-                closeChapterPanel();
-                window.VN_Core.next();
+                _step('切到劇情頁', () => { if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game'); });
+                _step('收起章節面板', () => closeChapterPanel());
+                _step('開播', () => window.VN_Core.next());
             };
             // 🌀 穿越轉場：縮圖碎裂 zoom-in，白閃高峰才真的換場景（底下換完由校準艙接手）。
             //    canvas 掛在 chapter-window 外層的 vn-container：closeChapterPanel 收掉 overlay 時
@@ -779,7 +787,17 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             const host = document.querySelector('.vn-container') || document.getElementById('chapter-window');
             const zoomEl = document.getElementById('chapter-window');   // 整個面板（卡片+UI+背景）一起衝，不是只有縮圖
             if (window.VN_ChapterWarp && host) window.VN_ChapterWarp.play({ thumb: thumbEl, host, zoomEl, bg: ch.bg }, doLoad);
-            else doLoad();
+            else {
+                // 沒有轉場時也不能靜默失敗（轉場那條路徑自己會把錯誤彈出來）
+                try { doLoad(); } catch (e) {
+                    console.error('[VN_PLAYER] 章節載入失敗', e);
+                    try {
+                        const T = win.toastr || window.toastr;
+                        if (T && T.error) T.error('章節載入失敗：' + e.message, '', { timeOut: 12000 });
+                        else alert('章節載入失敗：' + e.message);
+                    } catch (_) {}
+                }
+            }
         }
 
         // 選誰＝重算每張卡的 data-off（CSS 吃這個做位移縮放）＋底欄資訊＋頁點

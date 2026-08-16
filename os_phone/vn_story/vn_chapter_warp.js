@@ -113,7 +113,20 @@
      */
     async function play(opts, doLoad) {
         let loaded = false;
-        const fire = () => { if (!loaded) { loaded = true; try { doLoad(); } catch (e) { console.error('[ChapterWarp] 載入回呼失敗', e); } } };
+        // 🚨 doLoad 掛掉不能只印 console：玩家看到的是「點了進入章節→演完→回到章節選擇」，
+        //    完全不知道發生什麼事（她沒有 console）。錯誤一定要浮到畫面上。
+        const fire = () => {
+            if (loaded) return;
+            loaded = true;
+            try { doLoad(); } catch (e) {
+                console.error('[ChapterWarp] 載入回呼失敗', e);
+                try {
+                    const T = window.toastr || (window.parent && window.parent.toastr);
+                    if (T && T.error) T.error('章節載入失敗：' + (e && e.message ? e.message : e), '', { timeOut: 12000 });
+                    else alert('章節載入失敗：' + (e && e.message ? e.message : e));
+                } catch (_) {}
+            }
+        };
         if (_busy || !enabled() || !opts || !opts.host) { fire(); return; }
         _busy = true;
         const fuse = setTimeout(fire, 3000);   // 保險絲：演出掛了也要放行載入
