@@ -945,12 +945,16 @@
                 try {
                     const after = (await TH.getLorebookEntries(BOOK_PARA)) || [];
                     const me = after.find(e => owned[e && e.comment] === activeId);
+                    // 🔎 把助手真正回給我們的欄位原樣印出來:寫下去沒生效時,問題永遠是
+                    //   「它的欄位名跟我們寫的不一樣」,但那個名字只有這裡看得到。
+                    const b4 = cur.find(e => owned[e && e.comment] === activeId);
+                    console.warn('[Worldgate③] 🔎 條目欄位（寫入前）', JSON.stringify(b4));
+                    console.warn('[Worldgate③] 🔎 條目欄位（寫入後）', JSON.stringify(me));
                     if (me && !(isOn(me) && isEnabled(me))) {
-                        console.warn('[Worldgate③] 條目寫下去了但沒生效', me);
                         _toast('世界書條目打不開（助手版本的欄位不一樣）。請手動把「' +
                             (me.comment || '') + '」設成啟用＋常駐。');
                     }
-                } catch (e) {}
+                } catch (e) { console.warn('[Worldgate③] 🔎 讀回條目失敗', e); }
             }
         } catch (e) { console.warn('[Worldgate③] 同步世界條目燈號失敗', e); }
     }
@@ -1835,8 +1839,20 @@
         // 隊伍在按下 DIVE 這刻定案(下面馬上 _clearTravelers 清場,之後不會再變)
         // → 先把條目的旅人區塊刷成「這趟真正同行的人」,免得開場指令說單人行動、世界檔案裡卻躺著沒招募的人。
         if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) { console.warn('[Worldgate] DIVE 前更新世界條目失敗', e); } }
+        // 🚨🚨點燈一定要在送出之前。送出去的下一瞬間酒館就開始組 prompt 讀世界書,
+        //   晚一步點燈＝第一章是在「條目還關著」的狀態下生成的(實測日誌:送出 08:42:52、點燈 08:42:53)。
+        //   這個順序以前是對的,是後來在送出那支加了「確認有沒有真的送出去」的等待才被推到後面。
+        // 這個聊天室從此屬於這個世界（app_data 是 chat-scope，換聊天室就換世界、回來還原）
+        //   → 依題材翻「-VN小說家-」的模組條目：奇幻世界不給手機、和平題材不給戰鬥、BGM 換成對應那條
+        await _setCurrentId(w.id);
+        await _syncWorldLamps(w.id, 'DIVE');   // 這個世界改成常駐、其餘關掉——不靠關鍵字，也不用人記得切
+        try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
         const sent = await _toChat(_divePrompt(w));
-        if (sent === 'nofield') { await gate.exitParallax(); return { ok: false, msg: '找不到酒館輸入框,已切回主世界' }; }
+        if (sent === 'nofield') {
+            await gate.exitParallax();
+            await _setCurrentId(''); await _syncWorldLamps('', '撤離');   // 進不去就把剛點的燈收回來
+            return { ok: false, msg: '找不到酒館輸入框,已切回主世界' };
+        }
         // stuck=文字塞進去了但送不出去(通常是還沒設定 API,送出鍵被鎖著)。
         //   世界照樣算進去了——她只要開好 API 再按送出就接得上,不必重來一次。
         //   但一定要講清楚,不然畫面只顯示「已進入」,她會以為是程式壞了。
@@ -1845,11 +1861,6 @@
         const i = worlds.findIndex(x => x.id === w.id);
         if (i >= 0) worlds[i] = w;
         await _set(K_WORLDS, worlds);
-        // 這個聊天室從此屬於這個世界（app_data 是 chat-scope，換聊天室就換世界、回來還原）
-        //   → 依題材翻「-VN小說家-」的模組條目：奇幻世界不給手機、和平題材不給戰鬥、BGM 換成對應那條
-        await _setCurrentId(w.id);
-        await _syncWorldLamps(w.id, 'DIVE');   // 這個世界改成常駐、其餘關掉——不靠關鍵字，也不用人記得切
-        try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
         _clearTravelers(); _closeMeet();
         // 大廳那層對話也要收:DIVE 是點愛麗絲開的面板,面板收掉後她的對話框還亮著＝
         // 人已經穿越到別的世界了,畫面卻還停在跟她講話。
