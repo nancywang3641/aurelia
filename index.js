@@ -141,6 +141,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'control_center', path: _AURELIA_EXT_BASE + '/core/control_center.js', key: 'controlCenter' },
     { name: 'html_extractor', path: _AURELIA_EXT_BASE + '/core/html_extractor.js', key: 'htmlExtractor' },
     { name: 'story_extractor', path: _AURELIA_EXT_BASE + '/core/story_extractor.js', key: 'storyExtractor' },
+    { name: 'story_entry_wizard', path: _AURELIA_EXT_BASE + '/core/story_entry_wizard.js', key: 'storyEntryWizard' },   // 🎫 藏書入場精靈（白金視差風,第0樓開局規劃）
     { name: 'vn_free_mode', path: _AURELIA_EXT_BASE + '/core/vn_free_mode.js', key: 'vnFreeMode' },   // 🎲 自由模式（總綱二選一+歷史表情格剝除，藏書切換）
 
     { name: 'regex_bridge', path: _AURELIA_EXT_BASE + '/core/aurelia_regex_bridge.js', key: 'regexBridge' },
@@ -445,6 +446,7 @@ async function initializeExtension() {
         // core 模組 CSS（兩版共用，selector 已 scoped 不污染酒館）
         await loadCSS(_AURELIA_EXT_BASE + '/css/toast_manager.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/story_extractor.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/story_entry_wizard.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/html_extractor.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/image_settings_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/settings_manager.css');

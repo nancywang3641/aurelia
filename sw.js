@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 146;                         // ← 每次部署 +1
+const CACHE_VERSION = 147;                         // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -21,6 +21,7 @@ const SHELL_ASSETS = [
     // css/ 模組樣式（從各 JS 抽離後的集中區）
     './css/toast_manager.css',
     './css/story_extractor.css',
+    './css/story_entry_wizard.css',
     './css/html_extractor.css',
     './css/image_settings_panel.css',
     './css/settings_manager.css',
