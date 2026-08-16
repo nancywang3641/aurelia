@@ -821,12 +821,22 @@
                 order: 95,
             };
             const entries = await TH.getLorebookEntries(BOOK_PARA);
-            const exist = (entries || []).find(e => e.comment === entryData.comment);
+            // 🚨認條目要用 uid,不要用名字:名字是 AI 取的,抽到同名就會兩個世界共用一條。
+            //   uid 是條目自己的身分證,建好之後記在世界上,之後開關燈、改寫、刪除都照它認。
+            const exist = (w.entryUid != null && (entries || []).find(e => e && e.uid === w.entryUid))
+                || (entries || []).find(e => e && e.comment === entryData.comment);
             if (exist) {
                 await TH.updateLorebookEntriesWith(BOOK_PARA, list =>
-                    list.map(e => e.comment === entryData.comment ? { ...e, ...entryData } : e));
+                    list.map(e => (e && e.uid === exist.uid) ? { ...e, ...entryData } : e));
+                if (w.entryUid !== exist.uid) { w.entryUid = exist.uid; await _saveWorld(w); }
             } else {
                 await TH.createLorebookEntries(BOOK_PARA, [entryData]);
+                // 建完回頭把 uid 抓下來記住(建立那支不一定回傳 uid,重讀最保險)
+                try {
+                    const after = (await TH.getLorebookEntries(BOOK_PARA)) || [];
+                    const mine = after.find(e => e && e.comment === entryData.comment);
+                    if (mine && mine.uid != null) { w.entryUid = mine.uid; await _saveWorld(w); }
+                } catch (e) {}
             }
             return true;
         } catch (e) { console.error('[Worldgate③] 世界條目寫入失敗', e); return false; }
@@ -902,7 +912,14 @@
             //   條目本來就是用名字建的,那就直接比名字——少一層轉換,少一種壞法。
             const _me = activeId ? worlds.find(x => x && x.id === activeId) : null;
             const activeComment = _me ? _entryComment(_me) : '';
+            const activeUid = _me && _me.entryUid != null ? _me.entryUid : null;
             if (activeId && !activeComment) console.warn('[Worldgate③] 檔案庫裡找不到 id=' + activeId + ' 的世界');
+            // uid 是條目自己的身分證:知道就只認它(同名也分得開)。舊世界沒記過 uid 才退回比名字。
+            const isMine = e => !!e && (activeUid != null ? e.uid === activeUid
+                                                          : (!!activeComment && e.comment === activeComment));
+            // 這本書裡屬於世界門的條目:uid 記過的優先,其餘照名字認
+            const uidSet = new Set(worlds.map(x => x && x.entryUid).filter(u => u != null));
+            const isOurs = e => !!e && (uidSet.has(e.uid) || owned[e.comment] !== undefined);
             // 已經是對的就不要寫：這支會被開窗時順手叫到，每次都寫一遍世界書沒必要
             const cur = (TH.getLorebookEntries ? await TH.getLorebookEntries(BOOK_PARA) : null) || [];
             // 🚨要轉成布林:沒有 strategy 欄位時 (e.strategy && …) 回的是 undefined,
@@ -913,17 +930,14 @@
             //   於是「已經是對的就不寫」誤判成不用寫,關掉的條目連寫都沒寫就跳過了。
             const isEnabled = e => (e.disable === true ? false : (e.enabled !== false));
             const dirty = cur.some(e => {
-                const wid = owned[e && e.comment];
-                if (!wid) return false;
-                const on = !!activeComment && e.comment === activeComment;
+                if (!isOurs(e)) return false;
+                const on = isMine(e);
                 return isOn(e) !== on || isEnabled(e) !== on;
             });
             if (!dirty) return;
             // 有原本亮著、這次要被關掉的 → 講出來是誰下的手、當下讀到的聊天室與世界是什麼
-            const killing = cur.filter(e => {
-                const wid = owned[e && e.comment];
-                return wid && isOn(e) && isEnabled(e) && e.comment !== activeComment;
-            }).map(e => e.comment);
+            const killing = cur.filter(e => isOurs(e) && isOn(e) && isEnabled(e) && !isMine(e))
+                .map(e => e.comment);
             if (killing.length) {
                 const line = '[Worldgate③] 關閉世界條目：' + killing.join('、') +
                     '｜來源=' + (why || '未標示') + '｜聊天室=' + (_cid() || '(讀不到)') +
@@ -932,9 +946,8 @@
                 if (why !== '撤離' && why !== '刪世界') _toast(line);
             }
             await TH.updateLorebookEntriesWith(BOOK_PARA, list => (list || []).map(e => {
-                const wid = owned[e && e.comment];
-                if (!wid) return e;   // 不是世界門建的條目（別人放在同一本書裡的東西）→ 一律不碰
-                const on = !!activeComment && e.comment === activeComment;
+                if (!isOurs(e)) return e;   // 不是世界門建的條目（別人放在同一本書裡的東西）→ 一律不碰
+                const on = isMine(e);
                 // 🚨🚨「啟用」欄位在酒館的世界書裡是 disable(反過來的),不是 enabled。
                 //   原本只寫 enabled → 那個欄位在檔案裡根本不存在,disable 從頭到尾沒被碰過,
                 //   條目一旦是關的就再也打不開(實測:DIVE 之後三條世界檔案永遠灰著)。
@@ -952,10 +965,10 @@
             if (activeId) {
                 try {
                     const after = (await TH.getLorebookEntries(BOOK_PARA)) || [];
-                    const me = after.find(e => e && e.comment === activeComment);
+                    const me = after.find(isMine);
                     // 🔎 把助手真正回給我們的欄位原樣印出來:寫下去沒生效時,問題永遠是
                     //   「它的欄位名跟我們寫的不一樣」,但那個名字只有這裡看得到。
-                    const b4 = cur.find(e => e && e.comment === activeComment);
+                    const b4 = cur.find(isMine);
                     if (!b4) {
                         // 找不到＝比對就沒對上,那就把兩邊的字串原樣攤開,一次看清楚差在哪
                         console.warn('[Worldgate③] 🔎 對不上！要找的世界 id =', activeId);
