@@ -1405,17 +1405,25 @@
     }
 
     // ── DIVE:切書→開場指令注入聊天→收面板 ──
-    function _toChat(text) {
+    // 回傳 'sent'（真的送出去了）／'stuck'（塞進去了但沒送出）／'nofield'（連輸入框都找不到）
+    // 🚨不能只看「值塞進去了」就當成功:沒開 API 時酒館會鎖住送出鍵,點下去沒反應、文字留在框裡,
+    //   但程式已經把這一室標記成「在這個世界」了。她只會看到「已進入」的提示,然後什麼都沒發生。
+    //   所以點完之後回頭看一眼:框裡還有沒有我們塞的那段。
+    async function _toChat(text) {
         try {
             const doc = win.document;
             const ta = doc.querySelector('#send_textarea'), btn = doc.querySelector('#send_but');
-            if (!ta) return false;
+            if (!ta) return 'nofield';
             ta.value = text;
             ta.dispatchEvent(new Event('input', { bubbles: true }));
             try { ta.focus(); } catch (e) {}
-            if (btn) setTimeout(() => btn.click(), 150);
-            return true;
-        } catch (e) { console.error('[Worldgate③] 注入聊天失敗', e); return false; }
+            if (!btn) return 'stuck';
+            btn.click();
+            // 送出後酒館會把輸入框清空。等一下再看:還留著就是被擋下來了（送出鍵鎖住）
+            await new Promise(r => setTimeout(r, 600));
+            const head = String(text).slice(0, 24);
+            return (ta.value && ta.value.indexOf(head) >= 0) ? 'stuck' : 'sent';
+        } catch (e) { console.error('[Worldgate③] 注入聊天失敗', e); return 'nofield'; }
     }
     // ══ 🚀 啟航封面圖(這趟隊伍的群像,VN 劇情末尾當底圖) ═════════════════
     // 這張圖不另外呼叫模型:主持AI 寫第一層正文的那一輪,手上剛好有隊伍名單與外觀基準,
@@ -1734,8 +1742,11 @@
         // 隊伍在按下 DIVE 這刻定案(下面馬上 _clearTravelers 清場,之後不會再變)
         // → 先把條目的旅人區塊刷成「這趟真正同行的人」,免得開場指令說單人行動、世界檔案裡卻躺著沒招募的人。
         if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) { console.warn('[Worldgate] DIVE 前更新世界條目失敗', e); } }
-        const sent = _toChat(_divePrompt(w));
-        if (!sent) { await gate.exitParallax(); return { ok: false, msg: '找不到酒館輸入框,已切回主世界' }; }
+        const sent = await _toChat(_divePrompt(w));
+        if (sent === 'nofield') { await gate.exitParallax(); return { ok: false, msg: '找不到酒館輸入框,已切回主世界' }; }
+        // stuck=文字塞進去了但送不出去(通常是還沒設定 API,送出鍵被鎖著)。
+        //   世界照樣算進去了——她只要開好 API 再按送出就接得上,不必重來一次。
+        //   但一定要講清楚,不然畫面只顯示「已進入」,她會以為是程式壞了。
         w.visits = (w.visits || 0) + 1;
         const worlds = await _get(K_WORLDS, []);
         const i = worlds.findIndex(x => x.id === w.id);
@@ -1750,7 +1761,9 @@
         // 大廳那層對話也要收:DIVE 是點愛麗絲開的面板,面板收掉後她的對話框還亮著＝
         // 人已經穿越到別的世界了,畫面卻還停在跟她講話。
         try { (win.LobbyStage || window.LobbyStage)?.endTalk?.(); } catch (e) {}
-        return { ok: true, msg: '已進入「' + w.name + '」' };
+        return sent === 'stuck'
+            ? { ok: true, msg: '已進入「' + w.name + '」，但開場指令送不出去（還沒設定 AI？）。內容留在輸入框，設定好再按送出就接得上。' }
+            : { ok: true, msg: '已進入「' + w.name + '」' };
     }
 
     // ════════════════════════════════════════════════════════
