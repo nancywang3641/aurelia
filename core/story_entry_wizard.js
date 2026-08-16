@@ -190,6 +190,9 @@
             };
             $('#sew-enter').onclick = () => {
                 _entered.add(this._chatKey());
+                // 剛從精靈出來這一次,閱讀畫面不再重複顯示開場切換列/模式列(精靈裡都選過了);
+                // 之後重開藏書(精靈不彈)會重建面板、兩條照舊出現,當切開場/換模式的後門
+                try { root.closest('#se-root-wrapper')?.classList.add('sew-planned'); } catch (e) { }
                 this.dismiss(root);
             };
 

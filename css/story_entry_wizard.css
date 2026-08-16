@@ -7,6 +7,10 @@
 
 #se-root-wrapper { position: relative; }
 
+/* 剛從精靈「進入故事」出來的這一輪:閱讀畫面不重複顯示開場切換列/模式列 */
+#se-root-wrapper.sew-planned #se-swipe-bar,
+#se-root-wrapper.sew-planned #se-mode-bar { display: none !important; }
+
 #sew-root {
     --sew-navy: #2a4a80;
     --sew-navy-deep: #1e3554;
