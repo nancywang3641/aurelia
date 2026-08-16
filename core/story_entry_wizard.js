@@ -107,6 +107,21 @@
                                 <button class="sew-cta sew-enter" id="sew-enter" type="button"><span>進入故事</span></button>
                             </div>
                         </div>
+
+                        <div class="sew-screen sew-hidden" id="sew-screen-embark">
+                            <div class="sew-badge">
+                                <img class="sew-badge-icon" src="${CDN}badge-icon.webp" alt="">
+                                <span class="sew-badge-text sew-chip2-text">啟程</span>
+                            </div>
+                            <div class="sew-embark-frame">
+                                <div class="sew-embark-hint">寫下你踏入故事的第一步——行動、對白或心聲都可以</div>
+                                <textarea class="sew-embark-input" id="sew-embark-input" placeholder="在這裡寫下你的第一句…"></textarea>
+                            </div>
+                            <div class="sew-btn-row">
+                                <button class="sew-btn-outline" id="sew-embark-back" type="button"><i class="fa-solid fa-chevron-left"></i><span>上一步</span></button>
+                                <button class="sew-cta sew-enter" id="sew-embark-go" type="button"><span>啟 程</span><i class="fa-solid fa-feather"></i></button>
+                            </div>
+                        </div>
                     </div>
                 </div>`;
 
@@ -188,12 +203,41 @@
                 $('#sew-screen-preview').classList.add('sew-hidden');
                 $('#sew-screen-plan').classList.remove('sew-hidden');
             };
+            // 進入故事 = 到「啟程」輸入幕;整條流程不再露出舊閱讀面板
             $('#sew-enter').onclick = () => {
-                _entered.add(this._chatKey());
-                // 剛從精靈出來這一次,閱讀畫面不再重複顯示開場切換列/模式列(精靈裡都選過了);
-                // 之後重開藏書(精靈不彈)會重建面板、兩條照舊出現,當切開場/換模式的後門
-                try { root.closest('#se-root-wrapper')?.classList.add('sew-planned'); } catch (e) { }
-                this.dismiss(root);
+                $('#sew-screen-preview').classList.add('sew-hidden');
+                $('#sew-screen-embark').classList.remove('sew-hidden');
+                setTimeout(() => { try { $('#sew-embark-input').focus(); } catch (e) { } }, 60);
+            };
+            $('#sew-embark-back').onclick = () => {
+                $('#sew-screen-embark').classList.add('sew-hidden');
+                $('#sew-screen-preview').classList.remove('sew-hidden');
+            };
+            // 啟程:把第一句塞進酒館輸入框直接送出;精靈留在原地當底,
+            // 生成開始後 story_extractor 的「故事撰寫中」等待室蓋上來(z-index 已抬高),
+            // 完成後 hide() 整包收掉直接進 VN——舊面板全程不露臉
+            $('#sew-embark-go').onclick = () => {
+                const ta = document.getElementById('send_textarea');
+                const btn = document.getElementById('send_but');
+                const txt = ($('#sew-embark-input').value || '').trim();
+                if (!txt) { $('#sew-embark-input').focus(); return; }
+                if (ta && btn) {
+                    try {
+                        ta.value = txt;
+                        ta.dispatchEvent(new Event('input', { bubbles: true }));
+                        btn.click();
+                        _entered.add(this._chatKey());
+                        $('#sew-embark-go').disabled = true;
+                    } catch (e) {
+                        console.warn('[StoryEntryWizard] 送出失敗:', e);
+                        this.dismiss(root);   // 送不出去就讓路給原本的輸入流程
+                    }
+                } else {
+                    // 找不到酒館輸入框(特殊掛載)→ 退回原路:收精靈露出面板自己打
+                    _entered.add(this._chatKey());
+                    try { root.closest('#se-root-wrapper')?.classList.add('sew-planned'); } catch (e) { }
+                    this.dismiss(root);
+                }
             };
 
             $('#sew-swipe-prev').onclick = () => this._switch(root, -1);

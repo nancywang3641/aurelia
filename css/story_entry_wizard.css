@@ -11,6 +11,9 @@
 #se-root-wrapper.sew-planned #se-swipe-bar,
 #se-root-wrapper.sew-planned #se-mode-bar { display: none !important; }
 
+/* 從精靈啟程送出後,「故事撰寫中」等待室要蓋在精靈(z 60)上面 */
+#se-root-wrapper #se-flow-overlay { z-index: 70 !important; }
+
 #sew-root {
     --sew-navy: #2a4a80;
     --sew-navy-deep: #1e3554;
@@ -397,6 +400,43 @@
 }
 .sew-preview-body p { margin: 0 0 calc(var(--sew-u, 1px) * 10); }
 
+/* ── 幕三:啟程(第一句輸入) ── */
+.sew-embark-frame {
+    width: 100%;
+    display: flex; flex-direction: column;
+    gap: calc(var(--sew-u, 1px) * 10);
+    padding: calc(var(--sew-u, 1px) * 18) calc(var(--sew-u, 1px) * 22);
+    background: var(--sew-paper);
+    border: calc(var(--sew-u, 1px) * 1.5) solid var(--sew-navy);
+    box-shadow: inset 0 0 0 calc(var(--sew-u, 1px) * 4) rgba(42, 74, 128, 0.06);
+    box-sizing: border-box;
+}
+.sew-embark-hint {
+    text-align: center;
+    font-size: calc(var(--sew-u, 1px) * 13);
+    letter-spacing: 0.12em;
+    color: var(--sew-ink-soft);
+}
+.sew-embark-input {
+    width: 100%;
+    height: min(calc(var(--sew-u, 1px) * 220), calc(var(--sew-h, 1000px) * 0.34));
+    resize: none;
+    box-sizing: border-box;
+    padding: calc(var(--sew-u, 1px) * 12) calc(var(--sew-u, 1px) * 14);
+    background: #fff;
+    border: calc(var(--sew-u, 1px) * 1) solid rgba(42, 74, 128, 0.35);
+    color: var(--sew-ink);
+    font-family: inherit;
+    font-size: calc(var(--sew-u, 1px) * 14);
+    line-height: 1.9;
+    letter-spacing: 0.05em;
+    outline: none;
+    scrollbar-width: thin;
+}
+.sew-embark-input:focus { border-color: var(--sew-navy); box-shadow: 0 0 0 calc(var(--sew-u, 1px) * 2) rgba(42, 74, 128, 0.18); }
+.sew-embark-input::placeholder { color: #9fb0cc; }
+.sew-cta:disabled { filter: grayscale(0.4) brightness(0.9); cursor: default; }
+
 /* 幕二按鈕列 */
 .sew-btn-row {
     width: 100%;
@@ -469,3 +509,5 @@
     text-indent: 0.15em;
 }
 #sew-root.sew-portrait .sew-cta.sew-enter { min-width: 36%; height: calc(var(--sew-u, 1px) * 40); font-size: calc(var(--sew-u, 1px) * 14); letter-spacing: 0.3em; text-indent: 0.3em; }
+#sew-root.sew-portrait .sew-embark-frame { padding: calc(var(--sew-u, 1px) * 14) calc(var(--sew-u, 1px) * 14); }
+#sew-root.sew-portrait .sew-embark-input { height: calc(var(--sew-h, 1000px) * 0.3); }
