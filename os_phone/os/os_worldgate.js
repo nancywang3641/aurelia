@@ -2033,8 +2033,8 @@
             '.wg-btn.ghost{background:rgba(255,255,255,.6);color:#3a3e56;border:1px solid rgba(26,28,40,.18);box-shadow:none;}' +
             '.wg-btn.danger{background:rgba(180,80,60,.1);color:#a05040;border:1px solid rgba(180,80,60,.3);box-shadow:none;}' +
             '.wg-btn-row{display:flex;gap:7px;}.wg-btn-row .wg-btn{flex:1;}' +
-            // 標題列右邊那組小鈕：兩顆並排時要有間距，不然黏在一起
-            '.wg-section-head .wg-mgr-btn + .wg-mgr-btn{margin-left:5px;}' +
+            // 管理模式下卡片底部那排維護鈕
+            '.wg-card-ops{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,28,40,.12);}' +
             '.wg-note{color:#8a8ea6;font-size:10px;text-align:center;margin-top:7px;line-height:1.5;}' +
             '.wg-loading{margin:auto;display:flex;flex-direction:column;align-items:center;gap:12px;color:#8a8ea6;font-size:11px;letter-spacing:2px;font-weight:700;}' +
             '.wg-spinner{width:26px;height:26px;border:2px solid rgba(26,28,40,.15);border-top-color:#1A1C28;border-radius:50%;animation:wgSpin 1s linear infinite;}' +
@@ -2281,6 +2281,18 @@
                       '<div class="wg-tags"><span class="wg-tag">' + _esc(w.style) + '</span>' +
                         '<span class="wg-tag">' + _esc(w.lure) + '</span>' +
                         '<span class="wg-tag warn">' + _esc(w.danger) + '</span></div>' +
+                      // 🚨這幾個是難得動一次的維護動作,只在管理模式露出:詳情頁是出發用的,
+                      //   把它們放在那裡等於每次出發都要看一次自己用不到的東西。
+                      (_mgr
+                        ? '<div class="wg-card-ops">' +
+                            '<button class="wg-mgr-btn" data-op="panel" data-id="' + w.id + '">' +
+                              (w.panel ? '換結束畫面' : '做結束畫面') + '</button>' +
+                            (w.panel ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除</button>' : '') +
+                            '<button class="wg-mgr-btn" data-op="achv" data-id="' + w.id + '">' +
+                              (w.achv ? '重擬成就' : '設計成就') + '</button>' +
+                            (w.achv ? '<button class="wg-mgr-btn" data-op="achv-x" data-id="' + w.id + '">移除</button>' : '') +
+                          '</div>'
+                        : '') +
                     '</div>').join('')
                 : '<div class="wg-empty"><i class="fa-solid fa-globe"></i>檔案庫還是空的。<br>請愛麗絲為你調出新的世界。</div>') +
             (_mgr
@@ -2293,6 +2305,11 @@
                 : '<button class="wg-btn" data-act="draw"><i class="fa-solid fa-dice"></i> 請愛麗絲調出新世界</button>' +
                   '<div class="wg-note">調出新世界會呼叫 AI(抽選+展開共兩次);重進已有世界不呼叫。</div>') +
             (inPara ? '<button class="wg-btn danger" data-act="leave"><i class="fa-solid fa-door-open"></i> 撤離視差,返回主世界</button>' : '');
+        // 卡片上的維護鈕:要擋掉冒泡,不然按下去會變成勾選那張卡
+        b.querySelectorAll('[data-op]').forEach(el => el.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            _worldOp(el.dataset.id, el.dataset.op);
+        }));
         b.querySelectorAll('.wg-card.click').forEach(el => el.addEventListener('click', async () => {
             if (_mgr) {   // 管理模式下點卡片=勾選,不進詳情
                 const id = el.dataset.id;
@@ -2550,6 +2567,45 @@
 
     // ── P3 世界詳情(隊伍狀態+DIVE) ──
     let _delArm = 0;   // 刪除兩段式確認(不用 window.confirm,Tauri 會攔)
+    // 檔案庫管理模式裡那幾顆維護鈕。放在這裡而不是詳情頁:詳情頁是出發用的,
+    //   把難得動一次的東西擺在那,等於每次出發都要看一遍自己用不到的按鈕。
+    async function _worldOp(id, op) {
+        if (_busy) return;
+        const worlds = await _get(K_WORLDS, []);
+        const w = worlds.find(x => x && x.id === id);
+        if (!w) return;
+        const src = { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept };
+        const text = w.entryText || w.concept || w.name;
+        // 移除是純本地的動作,不燒 API。成就拿掉要順手把條目裡那一段也清掉,
+        //   不然主持AI 還照著一份已經不存在的清單鋪機會、發成就。
+        if (op === 'panel-x') {
+            delete w.panel; await _saveWorld(w);
+            _toast('結束畫面已移除,劇情末尾回到原本的樣子'); _renderList(); return;
+        }
+        if (op === 'achv-x') {
+            delete w.achv; delete w.achvDone; await _saveWorld(w);
+            if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
+            _toast('成就已移除'); _renderList(); return;
+        }
+        _busy = true;
+        try {
+            if (op === 'panel') {
+                _loading('正在佈置「' + _esc(w.name) + '」的結束畫面…');
+                const panel = await _expandPanel(src, text).catch(() => null);
+                if (!panel) { _toast('結束畫面沒做出來,再試一次'); return; }
+                w.panel = panel; await _saveWorld(w);
+                _toast('結束畫面已換上,下次劇情演完就看得到');
+            } else if (op === 'achv') {
+                _loading('正在擬定「' + _esc(w.name) + '」的成就…');
+                const achv = await _expandAchv(src, text).catch(() => null);
+                if (!achv) { _toast('成就沒擬出來,再試一次'); return; }
+                w.achv = achv; await _saveWorld(w);
+                if (w.entryText) await _writeEntry(w, w.entryText);   // 條目跟著更新,主持AI 才看得到新的那份
+                _toast('成就已寫進這個世界');
+            }
+        } finally { _busy = false; _renderList(); }
+    }
+
     let _curDetailId = null;   // 面板當前顯示的世界(偶遇入隊時用來即時刷新隊伍區)
     async function _renderDetail(w) {
         const b = _body(); if (!b) return;
@@ -2590,16 +2646,7 @@
             '<textarea class="wg-input area" data-wg-pc maxlength="200" rows="2" ' +
               'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>' +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
-            // 🚨這幾個是難得用一次的維護動作,不該佔整行按鈕。照檔案庫「管理」那顆的做法:
-            //   縮成標題列右邊的小鈕,變成標籤行的一部分,不進主要視野也不打斷出發動線。
-            '<div class="wg-section-head"><span class="wg-section-title">結束畫面</span><span>' +
-              '<button class="wg-mgr-btn" data-act="regen-panel">' + (w.panel ? '換一個' : '做一個') + '</button>' +
-              (w.panel ? '<button class="wg-mgr-btn" data-act="drop-panel">移除</button>' : '') +
-            '</span></div>' +
-            '<div class="wg-section-head"><span class="wg-section-title">成就</span><span>' +
-              '<button class="wg-mgr-btn" data-act="regen-achv">' + (w.achv ? '重擬' : '設計') + '</button>' +
-              (w.achv ? '<button class="wg-mgr-btn" data-act="drop-achv">移除</button>' : '') +
-            '</span></div>' +
+            // 維護那幾個動作搬到檔案庫的管理模式了：詳情頁只留出發相關的東西
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
               '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' +
@@ -2632,56 +2679,7 @@
             const tip = b.querySelector('[data-spawn-tip]');
             if (tip) tip.textContent = w.spawn ? ('降生地：' + w.spawn) : '沒選＝落在哪由主持AI安排';
         }));
-        // 🎴 結束畫面:舊世界沒有、生成失敗也沒有,這裡補一次;已經有的話就是重抽一個風格重做
-        b.querySelector('[data-act="regen-panel"]')?.addEventListener('click', async () => {
-            if (_busy) return;
-            _busy = true;
-            _loading('正在佈置「' + _esc(w.name) + '」的結束畫面…');
-            const panel = await _expandPanel(
-                { name: w.name, genre: w.genre, style: w.style, concept: w.concept },
-                w.entryText || entryText || w.concept || w.name,
-            ).catch(() => null);
-            _busy = false;
-            if (!panel) { _toast('結束畫面沒做出來,再試一次'); _renderDetail(w); return; }
-            w.panel = panel;
-            await _saveWorld(w);
-            _toast('結束畫面已換上,下次劇情演完就看得到');
-            _renderDetail(w);
-        });
-        // 移除:面板拿掉之後劇情末尾自動退回原本那幾顆基本鍵;成就拿掉要順手把條目裡那一段也清掉,
-        //   不然主持AI 還照著一份已經不存在的清單鋪機會、發成就。
-        b.querySelector('[data-act="drop-panel"]')?.addEventListener('click', async () => {
-            if (_busy) return;
-            delete w.panel;
-            await _saveWorld(w);
-            _toast('結束畫面已移除,劇情末尾回到原本的樣子');
-            _renderDetail(w);
-        });
-        b.querySelector('[data-act="drop-achv"]')?.addEventListener('click', async () => {
-            if (_busy) return;
-            delete w.achv; delete w.achvDone;
-            await _saveWorld(w);
-            if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
-            _toast('成就已移除');
-            _renderDetail(w);
-        });
-        // 🏅 成就清單:舊世界沒有、生成失敗也沒有。重擬之後條目要跟著更新,主持AI 才看得到新的那份
-        b.querySelector('[data-act="regen-achv"]')?.addEventListener('click', async () => {
-            if (_busy) return;
-            _busy = true;
-            _loading('正在擬定「' + _esc(w.name) + '」的成就…');
-            const achv = await _expandAchv(
-                { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept },
-                w.entryText || entryText || w.concept || w.name,
-            ).catch(() => null);
-            _busy = false;
-            if (!achv) { _toast('成就沒擬出來,再試一次'); _renderDetail(w); return; }
-            w.achv = achv;
-            await _saveWorld(w);
-            if (w.entryText) await _writeEntry(w, w.entryText);
-            _toast('成就已寫進這個世界');
-            _renderDetail(w);
-        });
+        // （結束畫面／成就的維護動作已移到檔案庫的管理模式，見 _worldOp）
         // 世界檔案與旅人是分兩次生的:旅人那次掛掉時世界照樣存下來,這裡補一次(沒有旅人=偶遇組隊整條路都走不了)
         b.querySelector('[data-act="regen-trav"]')?.addEventListener('click', async () => {
             if (_busy) return;
