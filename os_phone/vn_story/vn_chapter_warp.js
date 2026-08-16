@@ -160,10 +160,35 @@
                 clone.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;max-width:none;aspect-ratio:auto;transform:none;margin:0;z-index:1;';
                 wrap.appendChild(clone);
 
-                const CS = 9, RS = 12;                    // 白色碎片格數（不切卡片內容，純白 div，便宜）
+                const CS = 9, RS = 12;                    // 碎片格數
                 const cw = crect.width, chh = crect.height;
                 const cxc = cw / 2, cyc = chh / 2;
                 const maxD = Math.hypot(cxc, cyc);
+
+                // 碎片貼場景圖：取景**完全對齊底下的縮圖**（同一個 cover 縮放與置中偏移），
+                //  每格再用負偏移露出自己那一塊＝縮圖本身裂成方塊浮起飛走。
+                //  🚨 取景必須跟縮圖一致：改用整張卡去 cover 會變成另一個裁切，
+                //     碎片跟底下的畫面對不上，讀起來只是半透明玻璃格（實測過）。
+                //  卡片白底區的格子落在圖框外 → 維持白片，跟卡面本來的顏色一致。
+                // 🚨 純 CSS background 只是貼圖不讀像素，遠端無 CORS 圖照樣安全（canvas 才會 taint）。
+                let pieceBg = null;
+                try {
+                    // 🚨 只認真實圖片的 src：漸層退路是 canvas，轉 dataURL 會把幾十 KB 的 base64
+                    //    塞進近百個 inline style（整段演出瞬間吃掉數 MB）——沒真圖就乖乖用白片
+                    const url = img && img.src ? img.src : '';
+                    const trect = opts.thumb && opts.thumb.getBoundingClientRect ? opts.thumb.getBoundingClientRect() : null;
+                    if (url && trect && trect.width) {
+                        const iw = img.width || 1, ih = img.height || 1;
+                        const tw = trect.width, th = trect.height;
+                        const s = Math.max(tw / iw, th / ih);            // 跟 .chx-thumb 的 background-size:cover 同一套算法
+                        const bw = iw * s, bh = ih * s;
+                        pieceBg = {
+                            url, bw, bh,
+                            ox: (trect.left - crect.left) + (tw - bw) / 2,   // 圖左上角相對卡片左上角
+                            oy: (trect.top - crect.top) + (th - bh) / 2,
+                        };
+                    }
+                } catch (e) {}
                 // 🚨 波前延到 zoom 一半才起：前 0.4 全是乾淨的衝刺，碎裂是「衝到一半解體」，
                 //    開頭就碎會把 zoom 的第一眼吃掉（實測回饋）。
                 const WAVE_T0 = 0.42, WAVE_T1 = 0.78;     // 波前：卡心小圓 → 掃到卡角
@@ -172,12 +197,24 @@
                         if (Math.random() < 0.18) continue;   // 留些缺口，崩落才不像整齊瓷磚
                         const piece = document.createElement('div');
                         const w = 100 / CS, h = 100 / RS;
-                        // 🚨 陰影＋細邊必加：純白片疊在白卡上整段隱形＝碎了等於沒碎（實測回饋）；
-                        //    有影子才讀得出「浮起剝離」，在卡上跟飛出去都看得見
+                        // 🚨 陰影＋細邊必加：圖塊飛到白閃／白卡上時邊界會糊掉，
+                        //    有影子跟細邊才讀得出「一片片浮起剝離」而不是一團色斑
+                        let skin = 'background:rgba(255,255,255,' + (0.88 + Math.random() * 0.12).toFixed(2) + ');';
+                        // 這格在卡片座標裡的範圍；跟圖框有交集才貼圖，否則是白卡區的白片
+                        const gxPx = gx * (cw / CS), gyPx = gy * (chh / RS);
+                        if (pieceBg &&
+                            gxPx + cw / CS > pieceBg.ox && gxPx < pieceBg.ox + pieceBg.bw &&
+                            gyPx + chh / RS > pieceBg.oy && gyPx < pieceBg.oy + pieceBg.bh) {
+                            // 每格露出自己那一塊：整圖尺寸不變，位置扣掉這格的左上角
+                            skin = "background-image:url('" + pieceBg.url + "');" +
+                                'background-size:' + pieceBg.bw.toFixed(1) + 'px ' + pieceBg.bh.toFixed(1) + 'px;' +
+                                'background-position:' + (pieceBg.ox - gxPx).toFixed(1) + 'px ' +
+                                (pieceBg.oy - gyPx).toFixed(1) + 'px;background-repeat:no-repeat;' +
+                                'background-color:rgba(255,255,255,0.92);';   // 圖框邊緣那排格子：沒蓋到的部分接回白卡
+                        }
                         piece.style.cssText = 'position:absolute;left:' + (gx * w).toFixed(2) + '%;top:' + (gy * h).toFixed(2) +
-                            '%;width:' + w.toFixed(2) + '%;height:' + h.toFixed(2) + '%;' +
-                            'background:rgba(255,255,255,' + (0.88 + Math.random() * 0.12).toFixed(2) + ');' +
-                            'border:1px solid rgba(150,178,206,0.5);box-shadow:0 3px 12px rgba(58,88,126,0.35);' +
+                            '%;width:' + w.toFixed(2) + '%;height:' + h.toFixed(2) + '%;' + skin +
+                            'border:1px solid rgba(255,255,255,0.55);box-shadow:0 3px 12px rgba(30,52,84,0.45);' +
                             'z-index:3;will-change:transform,opacity;opacity:0;';
                         wrap.appendChild(piece);
                         // 這格的剝落時刻＝波前掃到的距離；飛行方向＝卡心 → 格心；
