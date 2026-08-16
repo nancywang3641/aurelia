@@ -377,8 +377,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .chx-thumb {
             position: absolute; top: 26%; left: 6.5%; right: 6.5%; height: 38%;
             border-radius: 4px; border: 1px solid var(--chx-line);
-            background: linear-gradient(160deg, #aebfd4, #d5e0ec);
-            background-size: cover; background-position: center;
+            /* 底色（時段漸層）跟真實快取圖都走變數疊層：JS 不能碰 background 簡寫，
+               否則 cover/center 會被洗成 auto/左上，圖只剩一角 */
+            background-image: var(--chx-thumb-img, none), var(--chx-thumb-base, linear-gradient(160deg, #aebfd4, #d5e0ec));
+            background-size: cover; background-position: center; background-repeat: no-repeat;
         }
         .chx-card-title {
             position: absolute; top: 68%; left: 7%; right: 7%; text-align: center;

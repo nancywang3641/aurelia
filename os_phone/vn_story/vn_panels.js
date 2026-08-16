@@ -743,7 +743,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         // 嘗試從 mem / IDB 取已保存的 bg 圖片塗到縮圖（尺寸/裁切都在 CSS，這裡只換圖）
         async function _fillSceneImg(sceneEl, cacheId) {
             if (!sceneEl || !cacheId) return;
-            const apply = (url) => { sceneEl.style.backgroundImage = `url('${url}')`; };
+            const apply = (url) => { sceneEl.style.setProperty('--chx-thumb-img', `url('${url}')`); };
             const memUrl = win.VN_Core?._bgMemCache?.[cacheId];
             if (memUrl) { apply(memUrl); return; }
             try {
@@ -840,7 +840,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 list.appendChild(card);
                 // 場景縮圖：先鋪時段/季節漸層打底，再拿真實快取圖蓋上
                 const thumb = card.querySelector('.chx-thumb');
-                if (thumb && ch.bg) thumb.style.background = ch.bg;
+                if (thumb && ch.bg) thumb.style.setProperty('--chx-thumb-base', ch.bg);
                 _fillSceneImg(thumb, ch.cacheId);
             });
             const dotsEl = document.getElementById('ch-dots');
