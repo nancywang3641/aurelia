@@ -1405,6 +1405,7 @@
             }
         }
         updateNpcs(dt);
+        window.LobbyTheater?.follow?.();   // 🎭 配對泡泡跟著當事人頭頂走（有人走開就不會留在原地）
         applyCamera();
     }
 
