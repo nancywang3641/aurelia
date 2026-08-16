@@ -74,8 +74,14 @@
         try {
             const db = win.OS_DB || window.OS_DB;
             if (!db || !db.getAppData) return null;
-            // 🚨current 綁 chatId（跟世界門那邊同一套）：不帶 chatId 會讀到舊的 global 那一格，
-            //    換聊天室之後還是上一個世界，模組條目就翻錯組。worlds 是共用清單，維持 global。
+            // 🚨優先問世界門:那邊才知道「全新聊天室還沒有 chatId」的空窗期要怎麼處理
+            //    (酒館要等第一則訊息落地才給 id,而 DIVE 常常就發生在那之前)。
+            //    自己讀的話,那段空窗會回「不在任何世界」→ 第一則劇情的模組條目整組翻錯。
+            const WG = win.OS_WORLDGATE || window.OS_WORLDGATE;
+            if (WG && typeof WG.getCurrentWorld === 'function') {
+                try { const w = await WG.getCurrentWorld(); if (w) return w; } catch (e) {}
+            }
+            // 退路:世界門還沒載入時自己讀（同樣要帶 chatId，不然換聊天室後讀到的是上一個世界）
             const cid = (db.currentChatId && db.currentChatId()) || '';
             if (!cid) return null;
             const id = await db.getAppData(APP_ID, 'current', cid);  // DIVE 時寫入，撤離時清掉
