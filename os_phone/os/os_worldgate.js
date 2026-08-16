@@ -895,6 +895,14 @@
             const worlds = await _get(K_WORLDS, []);
             const owned = {};
             worlds.forEach(w => { owned[_entryComment(w)] = w.id; });
+            // 🚨🚨判斷「這一條是不是當前世界」不要繞 id。
+            //   實測:條目名兩邊一模一樣,拿 owned 反查 id 卻對不上,燈因此永遠點不亮。
+            //   owned 是「條目名 → 世界 id」的表,只要有任何一種情況讓那個對應不成立
+            //   (名字重複互相覆蓋、檔案庫與傳進來的世界不同源…),反查就會落空。
+            //   條目本來就是用名字建的,那就直接比名字——少一層轉換,少一種壞法。
+            const _me = activeId ? worlds.find(x => x && x.id === activeId) : null;
+            const activeComment = _me ? _entryComment(_me) : '';
+            if (activeId && !activeComment) console.warn('[Worldgate③] 檔案庫裡找不到 id=' + activeId + ' 的世界');
             // 已經是對的就不要寫：這支會被開窗時順手叫到，每次都寫一遍世界書沒必要
             const cur = (TH.getLorebookEntries ? await TH.getLorebookEntries(BOOK_PARA) : null) || [];
             // 🚨要轉成布林:沒有 strategy 欄位時 (e.strategy && …) 回的是 undefined,
@@ -907,14 +915,14 @@
             const dirty = cur.some(e => {
                 const wid = owned[e && e.comment];
                 if (!wid) return false;
-                const on = !!activeId && wid === activeId;
+                const on = !!activeComment && e.comment === activeComment;
                 return isOn(e) !== on || isEnabled(e) !== on;
             });
             if (!dirty) return;
             // 有原本亮著、這次要被關掉的 → 講出來是誰下的手、當下讀到的聊天室與世界是什麼
             const killing = cur.filter(e => {
                 const wid = owned[e && e.comment];
-                return wid && isOn(e) && isEnabled(e) && wid !== activeId;
+                return wid && isOn(e) && isEnabled(e) && e.comment !== activeComment;
             }).map(e => e.comment);
             if (killing.length) {
                 const line = '[Worldgate③] 關閉世界條目：' + killing.join('、') +
@@ -926,7 +934,7 @@
             await TH.updateLorebookEntriesWith(BOOK_PARA, list => (list || []).map(e => {
                 const wid = owned[e && e.comment];
                 if (!wid) return e;   // 不是世界門建的條目（別人放在同一本書裡的東西）→ 一律不碰
-                const on = !!activeId && wid === activeId;
+                const on = !!activeComment && e.comment === activeComment;
                 // 🚨🚨「啟用」欄位在酒館的世界書裡是 disable(反過來的),不是 enabled。
                 //   原本只寫 enabled → 那個欄位在檔案裡根本不存在,disable 從頭到尾沒被碰過,
                 //   條目一旦是關的就再也打不開(實測:DIVE 之後三條世界檔案永遠灰著)。
@@ -944,13 +952,15 @@
             if (activeId) {
                 try {
                     const after = (await TH.getLorebookEntries(BOOK_PARA)) || [];
-                    const me = after.find(e => owned[e && e.comment] === activeId);
+                    const me = after.find(e => e && e.comment === activeComment);
                     // 🔎 把助手真正回給我們的欄位原樣印出來:寫下去沒生效時,問題永遠是
                     //   「它的欄位名跟我們寫的不一樣」,但那個名字只有這裡看得到。
-                    const b4 = cur.find(e => owned[e && e.comment] === activeId);
+                    const b4 = cur.find(e => e && e.comment === activeComment);
                     if (!b4) {
                         // 找不到＝比對就沒對上,那就把兩邊的字串原樣攤開,一次看清楚差在哪
                         console.warn('[Worldgate③] 🔎 對不上！要找的世界 id =', activeId);
+                        console.warn('[Worldgate③] 🔎 檔案庫裡的世界 =',
+                            JSON.stringify(worlds.map(x => (x && x.id) + '｜' + (x && x.name))));
                         console.warn('[Worldgate③] 🔎 檔案庫算出來的條目名 =', JSON.stringify(Object.keys(owned)));
                         console.warn('[Worldgate③] 🔎 書裡實際有的條目名 =', JSON.stringify(cur.map(e => e && e.comment)));
                     } else {
