@@ -932,6 +932,23 @@
                 for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) win.localStorage.removeItem('lstage_hist_wg_' + id + '_' + i);
             });
         } catch (e) {}
+        // 旅人小人的皮膚也要清:索引在 localStorage、圖片本體在 IDB,
+        // 只刪世界的話那幾張圖沒人引用卻一直佔著空間(每個世界最多四張)。
+        try {
+            const b = (win.LobbyStage || window.LobbyStage)?._b;
+            if (b?.skins && b.saveSkin) {
+                const all = b.skins() || {};
+                for (const id of ids) {
+                    for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) {
+                        const key = 'wg_' + id + '_' + i;
+                        const sk = all[key];
+                        if (!sk) continue;
+                        if (sk.ref && sk.ref.idb && b.idbDel) { try { await b.idbDel(sk.ref.idb); } catch (e) {} }
+                        b.saveSkin(key, null);
+                    }
+                }
+            }
+        } catch (e) { console.warn('[Worldgate③] 清旅人皮膚失敗', e); }
     }
 
     // ── 旅人像素小人(大廳限定;LobbyStage._b 缺席=優雅跳過) ──
@@ -2431,11 +2448,18 @@
             _slotsHtml(team) +
             ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
             // 面板是後來才加的功能:舊世界一律沒有,這裡補一顆給它們;已經有的話這顆就是「換一個樣子」
-            '<button class="wg-btn ghost" data-act="regen-panel"><i class="fa-solid fa-palette"></i> ' +
-              (w.panel ? '換一個結束畫面' : '做這個世界的結束畫面') + '</button>' +
+            // 已經有的話多給一顆移除:不想要那個畫面時得有地方拿掉,不然只能整個世界刪掉
+            '<div class="wg-btn-row">' +
+              '<button class="wg-btn ghost" data-act="regen-panel"><i class="fa-solid fa-palette"></i> ' +
+                (w.panel ? '換一個結束畫面' : '做這個世界的結束畫面') + '</button>' +
+              (w.panel ? '<button class="wg-btn ghost" data-act="drop-panel"><i class="fa-solid fa-xmark"></i> 移除</button>' : '') +
+            '</div>' +
             // 成就也是後來才加的:舊世界一律沒有,這顆補給它們
-            '<button class="wg-btn ghost" data-act="regen-achv"><i class="fa-solid fa-medal"></i> ' +
-              (w.achv ? '重擬這個世界的成就' : '設計這個世界的成就') + '</button>' +
+            '<div class="wg-btn-row">' +
+              '<button class="wg-btn ghost" data-act="regen-achv"><i class="fa-solid fa-medal"></i> ' +
+                (w.achv ? '重擬這個世界的成就' : '設計這個世界的成就') + '</button>' +
+              (w.achv ? '<button class="wg-btn ghost" data-act="drop-achv"><i class="fa-solid fa-xmark"></i> 移除</button>' : '') +
+            '</div>' +
             _spawnHtml(w, entryText) +
             // 🎭 玩家在這個世界要當什麼。不做選單:每個世界的職業與種族體系都不一樣,
             //   給清單等於把它變成題庫,而且清單外的東西就填不了。自由填寫最不設限。
@@ -2490,6 +2514,23 @@
             w.panel = panel;
             await _saveWorld(w);
             _toast('結束畫面已換上,下次劇情演完就看得到');
+            _renderDetail(w);
+        });
+        // 移除:面板拿掉之後劇情末尾自動退回原本那幾顆基本鍵;成就拿掉要順手把條目裡那一段也清掉,
+        //   不然主持AI 還照著一份已經不存在的清單鋪機會、發成就。
+        b.querySelector('[data-act="drop-panel"]')?.addEventListener('click', async () => {
+            if (_busy) return;
+            delete w.panel;
+            await _saveWorld(w);
+            _toast('結束畫面已移除,劇情末尾回到原本的樣子');
+            _renderDetail(w);
+        });
+        b.querySelector('[data-act="drop-achv"]')?.addEventListener('click', async () => {
+            if (_busy) return;
+            delete w.achv; delete w.achvDone;
+            await _saveWorld(w);
+            if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
+            _toast('成就已移除');
             _renderDetail(w);
         });
         // 🏅 成就清單:舊世界沒有、生成失敗也沒有。重擬之後條目要跟著更新,主持AI 才看得到新的那份
