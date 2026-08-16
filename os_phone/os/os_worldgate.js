@@ -2285,12 +2285,13 @@
                       //   把它們放在那裡等於每次出發都要看一次自己用不到的東西。
                       (_mgr
                         ? '<div class="wg-card-ops">' +
+                            // 🚨每顆自己講完整:兩顆並排的「移除」看不出各自移除什麼
                             '<button class="wg-mgr-btn" data-op="panel" data-id="' + w.id + '">' +
                               (w.panel ? '換結束畫面' : '做結束畫面') + '</button>' +
-                            (w.panel ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除</button>' : '') +
+                            (w.panel ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除結束畫面</button>' : '') +
                             '<button class="wg-mgr-btn" data-op="achv" data-id="' + w.id + '">' +
                               (w.achv ? '重擬成就' : '設計成就') + '</button>' +
-                            (w.achv ? '<button class="wg-mgr-btn" data-op="achv-x" data-id="' + w.id + '">移除</button>' : '') +
+                            (w.achv ? '<button class="wg-mgr-btn" data-op="achv-x" data-id="' + w.id + '">移除成就</button>' : '') +
                           '</div>'
                         : '') +
                     '</div>').join('')
