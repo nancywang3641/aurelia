@@ -280,8 +280,9 @@
         icon.className = 'lstage-theater-pair lstage-float';
         icon.title = '小劇場';
         icon.innerHTML = '<span class="ltp-dots"><i></i><i></i><i></i></span>';
-        icon.style.left = Math.round((a.x + b.x) / 2) + 'px';   // CSS translateX(-50%) 置中
-        icon.style.top  = Math.round(Math.min(a.y - a.h, b.y - b.h) - 40) + 'px';
+        const anc0 = _pairAnchor(a, b);   // 近=兩人中間,遠=發起人頭頂(同 _theaterFollow)
+        icon.style.left = anc0.x + 'px';   // CSS translateX(-50%) 置中
+        icon.style.top  = anc0.y + 'px';
         icon.addEventListener('click', (e) => { e.stopPropagation(); _openTheaterWin('live'); });
         S.world.appendChild(icon);
         S.theater = { a, b, icon, playing: false };
@@ -358,13 +359,20 @@
     // 🎭 泡泡跟著當事人頭頂走（每幀由 lobby_stage 的主迴圈呼叫）
     //   🚨 建立當下只設一次座標是不夠的：瀅瀅這種會走動的 NPC 一旦離開（凍結被解、
     //      或配對早就結束只剩 DOM 沒清），泡泡就孤零零釘在空地上。
+    // 泡泡錨點:兩人靠得近=頭頂中間;離得遠(書咖值班的釘在櫃檯、對象坐老遠)
+    // 中點會落在水槽這種無人區看起來像亂飄 → 遠距時直接掛在 a(發起人)頭頂
+    function _pairAnchor(a, b) {
+        const far = Math.abs(a.x - b.x) > 200 || Math.abs(a.y - b.y) > 140;
+        if (far) return { x: Math.round(a.x), y: Math.round(a.y - a.h - 40) };
+        return { x: Math.round((a.x + b.x) / 2), y: Math.round(Math.min(a.y - a.h, b.y - b.h) - 40) };
+    }
     function _theaterFollow() {
         const t = S.theater;
         if (!t || !t.icon) { _sweepOrphanBubbles(); return; }
         // 當事人已經不在這個場景（換場景/重生）→ 收場，別留孤兒
         if (!S.npcs || S.npcs.indexOf(t.a) < 0 || S.npcs.indexOf(t.b) < 0) { _endTheater(); return; }
-        const x = Math.round((t.a.x + t.b.x) / 2);
-        const y = Math.round(Math.min(t.a.y - t.a.h, t.b.y - t.b.h) - 40);
+        const anc = _pairAnchor(t.a, t.b);
+        const x = anc.x, y = anc.y;
         if (t._px === x && t._py === y) return;   // 沒動就不碰 DOM
         t._px = x; t._py = y;
         t.icon.style.left = x + 'px';
