@@ -31,7 +31,7 @@
 
     // v2 語音 5.3 秒（前兩版 7.9／10 秒還在同資料夾）；開頭無靜音，點擊反饋即時
     const SFX = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/enter-warp-short-v2.mp3';
-    const DUR = 1500;          // 演出總長 ms（含尾段淡出）
+    const DUR = 1150;          // 演出總長 ms（含尾段淡出）；1500 版點下去到進場景要 1.32 秒，拖
     // 🚨 必須等白閃「全滿」才載入：這版 canvas 大部分是透明的（底下是真 DOM 在縮放），
     //    太早換場景會從碎塊縫隙看到面板消失的瞬間（第一版 0.72 就是這樣穿幫）
     const LOAD_AT = 0.88;
@@ -143,11 +143,15 @@
                 wrap.style.cssText = 'position:absolute;left:' + (crect.left - mrect.left) + 'px;top:' + (crect.top - mrect.top) +
                     'px;width:' + crect.width + 'px;height:' + crect.height + 'px;z-index:55;pointer-events:none;will-change:transform;';
                 // 卡片 zoom：前段就要衝起來，中點破 2 倍、結尾 6 倍（卡片是主角，衝得比整面版狠）
+                // 🚨 第一幀就要看得出動作：純 ease-in 起手（scale 1 配 cubic-bezier(.42,0,...)）前
+                //    三分之一幾乎靜止，點下去像沒反應＝延遲感的真兇（不是掉幀也不是等圖，都量過）。
+                //    改成「按壓 → 彈起 → 衝刺」：頭 100ms 就有可讀的動作，衝刺曲線接在後面。
                 wrap.animate(
                     [
-                        { transform: 'scale(1)', easing: 'cubic-bezier(0.42, 0, 0.72, 0.42)' },
-                        { transform: 'scale(2.2)', offset: 0.5, easing: 'cubic-bezier(0.4, 0, 0.8, 0.5)' },
-                        { transform: 'scale(6)' },
+                        { transform: 'scale(0.965)', offset: 0, easing: 'cubic-bezier(0.2, 0, 0.2, 1)' },
+                        { transform: 'scale(1.08)', offset: 0.1, easing: 'cubic-bezier(0.35, 0, 0.75, 0.45)' },
+                        { transform: 'scale(2.6)', offset: 0.52, easing: 'cubic-bezier(0.4, 0, 0.8, 0.5)' },
+                        { transform: 'scale(6.4)' },
                     ],
                     { duration: Math.round(DUR * LOAD_AT), fill: 'forwards' });
 
@@ -191,7 +195,7 @@
                 } catch (e) {}
                 // 🚨 波前延到 zoom 一半才起：前 0.4 全是乾淨的衝刺，碎裂是「衝到一半解體」，
                 //    開頭就碎會把 zoom 的第一眼吃掉（實測回饋）。
-                const WAVE_T0 = 0.42, WAVE_T1 = 0.78;     // 波前：卡心小圓 → 掃到卡角
+                const WAVE_T0 = 0.34, WAVE_T1 = 0.74;     // 波前：卡心小圓 → 掃到卡角
                 for (let gy = 0; gy < RS; gy++) {
                     for (let gx = 0; gx < CS; gx++) {
                         if (Math.random() < 0.18) continue;   // 留些缺口，崩落才不像整齊瓷磚
