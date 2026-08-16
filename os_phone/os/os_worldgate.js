@@ -2033,8 +2033,10 @@
             '.wg-btn.ghost{background:rgba(255,255,255,.6);color:#3a3e56;border:1px solid rgba(26,28,40,.18);box-shadow:none;}' +
             '.wg-btn.danger{background:rgba(180,80,60,.1);color:#a05040;border:1px solid rgba(180,80,60,.3);box-shadow:none;}' +
             '.wg-btn-row{display:flex;gap:7px;}.wg-btn-row .wg-btn{flex:1;}' +
-            // 管理模式下卡片底部那排維護鈕
-            '.wg-card-ops{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,28,40,.12);}' +
+            // 管理模式下卡片底部的維護區：一行一個對象，左邊標名字、右邊短鈕
+            '.wg-card-ops{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,28,40,.12);}' +
+            '.wg-ops-row{display:flex;align-items:center;gap:5px;}.wg-ops-row+.wg-ops-row{margin-top:5px;}' +
+            '.wg-ops-k{flex:0 0 62px;color:#8a8ea6;font-size:11px;}' +
             '.wg-note{color:#8a8ea6;font-size:10px;text-align:center;margin-top:7px;line-height:1.5;}' +
             '.wg-loading{margin:auto;display:flex;flex-direction:column;align-items:center;gap:12px;color:#8a8ea6;font-size:11px;letter-spacing:2px;font-weight:700;}' +
             '.wg-spinner{width:26px;height:26px;border:2px solid rgba(26,28,40,.15);border-top-color:#1A1C28;border-radius:50%;animation:wgSpin 1s linear infinite;}' +
@@ -2284,14 +2286,19 @@
                       // 🚨這幾個是難得動一次的維護動作,只在管理模式露出:詳情頁是出發用的,
                       //   把它們放在那裡等於每次出發都要看一次自己用不到的東西。
                       (_mgr
+                        // 🚨兩個東西各有兩個動作,平鋪成四顆就得靠加長文案去區分,愈補愈醜。
+                        //   分成兩行、左邊寫是什麼、右邊放短鈕,結構自己講清楚,字就不用長。
                         ? '<div class="wg-card-ops">' +
-                            // 🚨每顆自己講完整:兩顆並排的「移除」看不出各自移除什麼
-                            '<button class="wg-mgr-btn" data-op="panel" data-id="' + w.id + '">' +
-                              (w.panel ? '換結束畫面' : '做結束畫面') + '</button>' +
-                            (w.panel ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除結束畫面</button>' : '') +
-                            '<button class="wg-mgr-btn" data-op="achv" data-id="' + w.id + '">' +
-                              (w.achv ? '重擬成就' : '設計成就') + '</button>' +
-                            (w.achv ? '<button class="wg-mgr-btn" data-op="achv-x" data-id="' + w.id + '">移除成就</button>' : '') +
+                            '<div class="wg-ops-row"><span class="wg-ops-k">結束畫面</span>' +
+                              '<button class="wg-mgr-btn" data-op="panel" data-id="' + w.id + '">' +
+                                (w.panel ? '換一個' : '做一個') + '</button>' +
+                              (w.panel ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除</button>' : '') +
+                            '</div>' +
+                            '<div class="wg-ops-row"><span class="wg-ops-k">成就</span>' +
+                              '<button class="wg-mgr-btn" data-op="achv" data-id="' + w.id + '">' +
+                                (w.achv ? '重擬' : '設計') + '</button>' +
+                              (w.achv ? '<button class="wg-mgr-btn" data-op="achv-x" data-id="' + w.id + '">移除</button>' : '') +
+                            '</div>' +
                           '</div>'
                         : '') +
                     '</div>').join('')
