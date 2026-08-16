@@ -164,6 +164,16 @@
         } catch (e) { console.warn('[Worldgate③] ' + label + ' 失敗', e); return null; }
     }
 
+    // 🚨抽種子那支本來完全不知道檔案庫裡已經有什麼,每次都是一張白紙 →
+    //   模型會一直回到中文命名的慣性用字(翡翠、霓虹、星辰、緋紅那一批),連抽好幾個世界都撞同一個字。
+    //   把已有的名字餵回去它才避得開。只給名字,不給概念:餵多了它會連題材一起模仿。
+    async function _usedNamesLine() {
+        const names = (await _get(K_WORLDS, [])).map(w => w && w.name).filter(Boolean).slice(0, 12);
+        if (!names.length) return '';
+        return '【檔案庫裡已經有的世界】' + names.join('、') + '\n' +
+            '新的四顆不可以跟上面同名,也不可以沿用上面任何一個字或詞來組名字。' +
+            '換一組完全不同的意象與構詞方式,不要跟上面是同一種味道。\n';
+    }
     // ── 種子抽選(1次API→4顆種子;hint=玩家偏好詞可空) ──
     async function _drawSeeds(hint) {
         const prompt =
@@ -193,7 +203,9 @@
             '寫 twist 時不要用「某個抽象概念等於、變成或存放在某個具體東西」的句型——那是同一個套路換皮,四顆並排會像同一個模子印出來的。句子裡要看得見人在做什麼,不是只有一個奇觀設定。\n' +
             '4 顆種子的 twist 不可以是同一種句型,也不要全都圍著同一件事打轉。用該題材自己的語言寫。\n' +
             'daily 寫的是這條規矩讓當地人多出了什麼營生、什麼往來、什麼熱鬧,不是他們為了守規矩而做的例行動作。具體到看得見場面,不要抽象形容。\n' +
-            '世界必須適合多目的探索(可戰鬥/解謎/交易/採集/調查/純閒逛),不要設計成單一主線。語言:繁體中文。';
+            '世界必須適合多目的探索(可戰鬥/解謎/交易/採集/調查/純閒逛),不要設計成單一主線。\n' +
+            (await _usedNamesLine()) +
+            '語言:繁體中文。';
         const arr = await _callAI(prompt, '世界門抽種子', 'worldgate_seeds');
         return (Array.isArray(arr) ? arr : []).filter(s => s && s.name).slice(0, 5);
     }
