@@ -65,7 +65,9 @@
             } catch (e) {}
             if (!url) { resolve(_gradientCanvas(bgStr, 640, 400)); return; }
             const img = new Image();
-            img.crossOrigin = 'anonymous';
+            // 🚨 絕不要設 crossOrigin='anonymous'：這裡只 drawImage 不 getImageData，本來就不需要 CORS，
+            //    但加了它會讓瀏覽器把這次請求視為另一個快取鍵 → 明明縮圖剛剛才顯示過，
+            //    演出時整張圖重新下載一次，網路慢就撞 800ms 逾時＝點下去乾等一秒。
             const bail = setTimeout(() => resolve(_gradientCanvas(bgStr, 640, 400)), 800);
             img.onload = () => { clearTimeout(bail); resolve(img); };
             img.onerror = () => { clearTimeout(bail); resolve(_gradientCanvas(bgStr, 640, 400)); };
@@ -108,13 +110,18 @@
         };
 
         try {
+            const tStart = performance.now();      // 圖晚到時要判斷「碎裂開始了沒」
             const host = opts.host;
             const hr = host.getBoundingClientRect();
             if (!hr.width || !hr.height) { fire(); _busy = false; clearTimeout(fuse); return; }
 
             try { const a = new Audio(SFX); a.volume = 0.9; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
 
-            const img = await _sourceFor(opts.thumb, opts.bg);
+            // 🚨 絕不 await 圖再開演：演出第一幀完全不需要它（碎片要到 t=0.34 才現形、
+            //    場景層要到 t=0.55），先 await 等於把圖的載入時間變成「點下去毫無反應」的空窗。
+            //    圖到了再回頭補：碎片貼圖、canvas 場景層啟用；沒到就是白片＋純白閃，演出照跑。
+            let img = null;
+            const imgP = _sourceFor(opts.thumb, opts.bg);
 
             const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
             const cv = document.createElement('canvas');
@@ -175,24 +182,22 @@
                 //     碎片跟底下的畫面對不上，讀起來只是半透明玻璃格（實測過）。
                 //  卡片白底區的格子落在圖框外 → 維持白片，跟卡面本來的顏色一致。
                 // 🚨 純 CSS background 只是貼圖不讀像素，遠端無 CORS 圖照樣安全（canvas 才會 taint）。
-                let pieceBg = null;
-                try {
+                const trect = opts.thumb && opts.thumb.getBoundingClientRect ? opts.thumb.getBoundingClientRect() : null;
+                const _bgOf = (im) => {
                     // 🚨 只認真實圖片的 src：漸層退路是 canvas，轉 dataURL 會把幾十 KB 的 base64
                     //    塞進近百個 inline style（整段演出瞬間吃掉數 MB）——沒真圖就乖乖用白片
-                    const url = img && img.src ? img.src : '';
-                    const trect = opts.thumb && opts.thumb.getBoundingClientRect ? opts.thumb.getBoundingClientRect() : null;
-                    if (url && trect && trect.width) {
-                        const iw = img.width || 1, ih = img.height || 1;
-                        const tw = trect.width, th = trect.height;
-                        const s = Math.max(tw / iw, th / ih);            // 跟 .chx-thumb 的 background-size:cover 同一套算法
-                        const bw = iw * s, bh = ih * s;
-                        pieceBg = {
-                            url, bw, bh,
-                            ox: (trect.left - crect.left) + (tw - bw) / 2,   // 圖左上角相對卡片左上角
-                            oy: (trect.top - crect.top) + (th - bh) / 2,
-                        };
-                    }
-                } catch (e) {}
+                    if (!im || !im.src || !trect || !trect.width) return null;
+                    const iw = im.width || 1, ih = im.height || 1;
+                    const tw = trect.width, th = trect.height;
+                    const s = Math.max(tw / iw, th / ih);            // 跟 .chx-thumb 的 background-size:cover 同一套算法
+                    const bw = iw * s, bh = ih * s;
+                    return {
+                        url: im.src, bw, bh,
+                        ox: (trect.left - crect.left) + (tw - bw) / 2,   // 圖左上角相對卡片左上角
+                        oy: (trect.top - crect.top) + (th - bh) / 2,
+                    };
+                };
+                const pieceEls = [];                      // 圖晚到時要回頭補貼的碎片
                 // 🚨 波前延到 zoom 一半才起：前 0.4 全是乾淨的衝刺，碎裂是「衝到一半解體」，
                 //    開頭就碎會把 zoom 的第一眼吃掉（實測回饋）。
                 const WAVE_T0 = 0.34, WAVE_T1 = 0.74;     // 波前：卡心小圓 → 掃到卡角
@@ -203,24 +208,13 @@
                         const w = 100 / CS, h = 100 / RS;
                         // 🚨 陰影＋細邊必加：圖塊飛到白閃／白卡上時邊界會糊掉，
                         //    有影子跟細邊才讀得出「一片片浮起剝離」而不是一團色斑
-                        let skin = 'background:rgba(255,255,255,' + (0.88 + Math.random() * 0.12).toFixed(2) + ');';
-                        // 這格在卡片座標裡的範圍；跟圖框有交集才貼圖，否則是白卡區的白片
-                        const gxPx = gx * (cw / CS), gyPx = gy * (chh / RS);
-                        if (pieceBg &&
-                            gxPx + cw / CS > pieceBg.ox && gxPx < pieceBg.ox + pieceBg.bw &&
-                            gyPx + chh / RS > pieceBg.oy && gyPx < pieceBg.oy + pieceBg.bh) {
-                            // 每格露出自己那一塊：整圖尺寸不變，位置扣掉這格的左上角
-                            skin = "background-image:url('" + pieceBg.url + "');" +
-                                'background-size:' + pieceBg.bw.toFixed(1) + 'px ' + pieceBg.bh.toFixed(1) + 'px;' +
-                                'background-position:' + (pieceBg.ox - gxPx).toFixed(1) + 'px ' +
-                                (pieceBg.oy - gyPx).toFixed(1) + 'px;background-repeat:no-repeat;' +
-                                'background-color:rgba(255,255,255,0.92);';   // 圖框邊緣那排格子：沒蓋到的部分接回白卡
-                        }
+                        const skin = 'background:rgba(255,255,255,' + (0.88 + Math.random() * 0.12).toFixed(2) + ');';
                         piece.style.cssText = 'position:absolute;left:' + (gx * w).toFixed(2) + '%;top:' + (gy * h).toFixed(2) +
                             '%;width:' + w.toFixed(2) + '%;height:' + h.toFixed(2) + '%;' + skin +
                             'border:1px solid rgba(255,255,255,0.55);box-shadow:0 3px 12px rgba(30,52,84,0.45);' +
                             'z-index:3;will-change:transform,opacity;opacity:0;';
                         wrap.appendChild(piece);
+                        pieceEls.push({ el: piece, gx, gy });
                         // 這格的剝落時刻＝波前掃到的距離；飛行方向＝卡心 → 格心；
                         // 距離要飛得夠遠——卡片自己也在長大，飛太慢等於永遠貼在卡上
                         const px = (gx + 0.5) / CS * cw, py = (gy + 0.5) / RS * chh;
@@ -242,6 +236,30 @@
                     }
                 }
                 mount.appendChild(wrap);
+
+                // 圖到了才貼：碎片還沒開始剝落就補上，已經在飛的維持白片
+                // （半路換裝會整片突然變色，比全白更怪）
+                imgP.then((im) => {
+                    img = im;
+                    if (!wrap || !wrap.isConnected) return;
+                    if (performance.now() - tStart > DUR * WAVE_T0) return;
+                    const pb = _bgOf(im);
+                    if (!pb) return;
+                    const cellW = cw / CS, cellH = chh / RS;
+                    pieceEls.forEach(({ el, gx, gy }) => {
+                        const gxPx = gx * cellW, gyPx = gy * cellH;
+                        // 這格跟圖框沒交集＝卡片白底那圈，維持白片
+                        if (!(gxPx + cellW > pb.ox && gxPx < pb.ox + pb.bw &&
+                              gyPx + cellH > pb.oy && gyPx < pb.oy + pb.bh)) return;
+                        // 每格露出自己那一塊：整圖尺寸不變，位置扣掉這格的左上角
+                        el.style.backgroundImage = "url('" + pb.url + "')";
+                        el.style.backgroundSize = pb.bw.toFixed(1) + 'px ' + pb.bh.toFixed(1) + 'px';
+                        el.style.backgroundPosition = (pb.ox - gxPx).toFixed(1) + 'px ' + (pb.oy - gyPx).toFixed(1) + 'px';
+                        el.style.backgroundRepeat = 'no-repeat';
+                        el.style.backgroundColor = 'rgba(255,255,255,0.92)';   // 圖框邊緣那排：沒蓋到的部分接回白卡
+                    });
+                });
+
                 // 原卡藏起來（完整 clone 就是它的替身）；restore 會還原
                 hidCard = card;
                 card.style.visibility = 'hidden';
@@ -280,7 +298,7 @@
 
                 // ③ 目的地場景滲入墊底：t≈0.55 起整層淡入並緩慢推進＝衝刺終點已在場景裡
                 const arrive = Math.max(0, (t - 0.55) / 0.3);
-                if (arrive > 0) _drawCover(cx, img, rFull, 1 + 0.35 * _easeOut(Math.min(1, arrive)), Math.min(0.92, _easeOut(Math.min(1, arrive))));
+                if (arrive > 0 && img) _drawCover(cx, img, rFull, 1 + 0.35 * _easeOut(Math.min(1, arrive)), Math.min(0.92, _easeOut(Math.min(1, arrive))));
 
                 // ④ 白閃：0.6 起爬，0.88 全滿（此刻才真正換場景），尾段淡出交給 loading
                 const flash = Math.max(0, (t - 0.6) / 0.28);
