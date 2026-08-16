@@ -884,27 +884,49 @@
             worlds.forEach(w => { owned[_entryComment(w)] = w.id; });
             // 已經是對的就不要寫：這支會被開窗時順手叫到，每次都寫一遍世界書沒必要
             const cur = (TH.getLorebookEntries ? await TH.getLorebookEntries(BOOK_PARA) : null) || [];
-            const isOn = e => (e.constant === true) || (e.type === 'constant') ||
-                (e.strategy && e.strategy.type === 'constant');
+            // 🚨要轉成布林:沒有 strategy 欄位時 (e.strategy && …) 回的是 undefined,
+            //   而 undefined !== false 永遠成立 → 每次檢查都判定要改,等於每一輪重寫一次世界書。
+            const isOn = e => !!((e.constant === true) || (e.type === 'constant') ||
+                (e.strategy && e.strategy.type === 'constant'));
+            // 🚨判斷「有沒有啟用」也要認 disable:只看 enabled 的話,那個欄位不存在＝永遠讀成已啟用,
+            //   於是「已經是對的就不寫」誤判成不用寫,關掉的條目連寫都沒寫就跳過了。
+            const isEnabled = e => (e.disable === true ? false : (e.enabled !== false));
             const dirty = cur.some(e => {
                 const wid = owned[e && e.comment];
                 if (!wid) return false;
                 const on = !!activeId && wid === activeId;
-                return isOn(e) !== on || (e.enabled !== false) !== on;
+                return isOn(e) !== on || isEnabled(e) !== on;
             });
             if (!dirty) return;
             await TH.updateLorebookEntriesWith(BOOK_PARA, list => (list || []).map(e => {
                 const wid = owned[e && e.comment];
                 if (!wid) return e;   // 不是世界門建的條目（別人放在同一本書裡的東西）→ 一律不碰
                 const on = !!activeId && wid === activeId;
+                // 🚨🚨「啟用」欄位在酒館的世界書裡是 disable(反過來的),不是 enabled。
+                //   原本只寫 enabled → 那個欄位在檔案裡根本不存在,disable 從頭到尾沒被碰過,
+                //   條目一旦是關的就再也打不開(實測:DIVE 之後三條世界檔案永遠灰著)。
+                //   常駐那邊原作者已經寫了三種相容,啟用這邊漏了,現在兩種都寫。
                 return Object.assign({}, e, {
-                    enabled: on,
+                    disable: !on, enabled: on,
                     constant: on,
                     type: on ? 'constant' : 'selective',
                     strategy: Object.assign({}, e.strategy || {}, { type: on ? 'constant' : 'selective' }),
                 });
             }));
             console.log('[Worldgate③] 世界條目燈號已同步，常駐：' + (activeId || '（無，全部關閉）'));
+            // 🚨寫完回頭讀一次確認真的生效:助手不同版本的欄位名不一樣,寫下去沒作用時
+            //   以前是靜靜地失敗——畫面顯示「已進入」，條目卻一直灰著，只能靠她自己發現。
+            if (activeId) {
+                try {
+                    const after = (await TH.getLorebookEntries(BOOK_PARA)) || [];
+                    const me = after.find(e => owned[e && e.comment] === activeId);
+                    if (me && !(isOn(me) && isEnabled(me))) {
+                        console.warn('[Worldgate③] 條目寫下去了但沒生效', me);
+                        _toast('世界書條目打不開（助手版本的欄位不一樣）。請手動把「' +
+                            (me.comment || '') + '」設成啟用＋常駐。');
+                    }
+                } catch (e) {}
+            }
         } catch (e) { console.warn('[Worldgate③] 同步世界條目燈號失敗', e); }
     }
     async function _deleteEntry(w) {
