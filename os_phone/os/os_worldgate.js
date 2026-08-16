@@ -2033,6 +2033,8 @@
             '.wg-btn.ghost{background:rgba(255,255,255,.6);color:#3a3e56;border:1px solid rgba(26,28,40,.18);box-shadow:none;}' +
             '.wg-btn.danger{background:rgba(180,80,60,.1);color:#a05040;border:1px solid rgba(180,80,60,.3);box-shadow:none;}' +
             '.wg-btn-row{display:flex;gap:7px;}.wg-btn-row .wg-btn{flex:1;}' +
+            // 移除這種次要動作不該跟主要動作平分寬度：縮成剛好裝得下字的窄鈕靠在旁邊
+            '.wg-btn-row .wg-btn.slim{flex:0 0 auto;width:auto;padding:10px 14px;}' +
             '.wg-note{color:#8a8ea6;font-size:10px;text-align:center;margin-top:7px;line-height:1.5;}' +
             '.wg-loading{margin:auto;display:flex;flex-direction:column;align-items:center;gap:12px;color:#8a8ea6;font-size:11px;letter-spacing:2px;font-weight:700;}' +
             '.wg-spinner{width:26px;height:26px;border:2px solid rgba(26,28,40,.15);border-top-color:#1A1C28;border-radius:50%;animation:wgSpin 1s linear infinite;}' +
@@ -2580,18 +2582,6 @@
             _slotsHtml(team) +
             ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
             // 面板是後來才加的功能:舊世界一律沒有,這裡補一顆給它們;已經有的話這顆就是「換一個樣子」
-            // 已經有的話多給一顆移除:不想要那個畫面時得有地方拿掉,不然只能整個世界刪掉
-            '<div class="wg-btn-row">' +
-              '<button class="wg-btn ghost" data-act="regen-panel"><i class="fa-solid fa-palette"></i> ' +
-                (w.panel ? '換一個結束畫面' : '做這個世界的結束畫面') + '</button>' +
-              (w.panel ? '<button class="wg-btn ghost" data-act="drop-panel"><i class="fa-solid fa-xmark"></i> 移除</button>' : '') +
-            '</div>' +
-            // 成就也是後來才加的:舊世界一律沒有,這顆補給它們
-            '<div class="wg-btn-row">' +
-              '<button class="wg-btn ghost" data-act="regen-achv"><i class="fa-solid fa-medal"></i> ' +
-                (w.achv ? '重擬這個世界的成就' : '設計這個世界的成就') + '</button>' +
-              (w.achv ? '<button class="wg-btn ghost" data-act="drop-achv"><i class="fa-solid fa-xmark"></i> 移除</button>' : '') +
-            '</div>' +
             _spawnHtml(w, entryText) +
             // 🎭 玩家在這個世界要當什麼。不做選單:每個世界的職業與種族體系都不一樣,
             //   給清單等於把它變成題庫,而且清單外的東西就填不了。自由填寫最不設限。
@@ -2600,6 +2590,19 @@
             '<textarea class="wg-input area" data-wg-pc maxlength="200" rows="2" ' +
               'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>' +
             '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
+            // 🚨這幾顆是「維護這個世界」不是「出發前要做的事」,擺在編成與降生地中間會打斷動線。
+            //   移到 DIVE 之後、跟刪除世界放在一起;移除縮成窄鈕,不跟主要動作平分寬度。
+            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-screwdriver-wrench"></i> 這個世界的內容</span></div>' +
+            '<div class="wg-btn-row">' +
+              '<button class="wg-btn ghost" data-act="regen-panel"><i class="fa-solid fa-palette"></i> ' +
+                (w.panel ? '換一個結束畫面' : '做結束畫面') + '</button>' +
+              (w.panel ? '<button class="wg-btn ghost slim" data-act="drop-panel">移除</button>' : '') +
+            '</div>' +
+            '<div class="wg-btn-row">' +
+              '<button class="wg-btn ghost" data-act="regen-achv"><i class="fa-solid fa-medal"></i> ' +
+                (w.achv ? '重擬成就' : '設計成就') + '</button>' +
+              (w.achv ? '<button class="wg-btn ghost slim" data-act="drop-achv">移除</button>' : '') +
+            '</div>' +
             '<div class="wg-btn-row">' +
               '<button class="wg-btn ghost" data-act="back">返回</button>' +
               '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' +
