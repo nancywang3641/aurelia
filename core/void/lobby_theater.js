@@ -355,6 +355,32 @@
         bd.classList.toggle('on', on);
         bd.textContent = on ? '1' : '';
     }
+    // 🎭 泡泡跟著當事人頭頂走（每幀由 lobby_stage 的主迴圈呼叫）
+    //   🚨 建立當下只設一次座標是不夠的：瀅瀅這種會走動的 NPC 一旦離開（凍結被解、
+    //      或配對早就結束只剩 DOM 沒清），泡泡就孤零零釘在空地上。
+    function _theaterFollow() {
+        const t = S.theater;
+        if (!t || !t.icon) { _sweepOrphanBubbles(); return; }
+        // 當事人已經不在這個場景（換場景/重生）→ 收場，別留孤兒
+        if (!S.npcs || S.npcs.indexOf(t.a) < 0 || S.npcs.indexOf(t.b) < 0) { _endTheater(); return; }
+        const x = Math.round((t.a.x + t.b.x) / 2);
+        const y = Math.round(Math.min(t.a.y - t.a.h, t.b.y - t.b.h) - 40);
+        if (t._px === x && t._py === y) return;   // 沒動就不碰 DOM
+        t._px = x; t._py = y;
+        t.icon.style.left = x + 'px';
+        t.icon.style.top = y + 'px';
+    }
+    // 沒有主人的泡泡一律清掉：狀態與 DOM 不同步時（重複 mount、狀態被重建）的兜底
+    function _sweepOrphanBubbles() {
+        const w = S.world; if (!w) return;
+        const now = performance.now();
+        // 每秒一次就夠，別每幀查 DOM；🚨 第一次一定要掃（用 null 判斷不是 ||0：
+        // 進場頭一秒 performance.now() 本來就小於 1000，會被自己的節流擋掉）
+        if (S._bubSweepT != null && now - S._bubSweepT < 1000) return;
+        S._bubSweepT = now;
+        const own = S.theater && S.theater.icon;
+        w.querySelectorAll('.lstage-theater-pair').forEach(el => { if (el !== own) el.remove(); });
+    }
     function _endTheater() {
         const t = S.theater; if (!t) { S._theaterCd = Date.now(); return; }
         if (t.icon) t.icon.remove();
@@ -376,6 +402,7 @@
     _b.regWin(_closeTheaterWin);   // 加入窗口互斥圈：別人開窗會順手關掉小劇場窗，反之亦然
     window.LobbyTheater = {
         tick: _theaterTick,          // lobby_stage 的 15s 輪詢呼叫
+        follow: _theaterFollow,      // 每幀：泡泡跟人＋孤兒清理（lobby_stage 主迴圈呼叫）
         end: _endTheater,            // 收掉進行中配對（unmount/跟當事人開聊時核心呼叫）
         openWin: _openTheaterWin,    // 右上按鈕/頭頂泡泡入口
         closeWin: _closeTheaterWin,
