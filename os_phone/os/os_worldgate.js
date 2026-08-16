@@ -32,8 +32,26 @@
     //   以前這一格存在 global，換聊天室它還是舊值 → 舊世界的條目一直亮著常駐燈，
     //   新聊天室生成世界時整份被餵進去。檔案庫(K_WORLDS)維持 global：世界清單與世界書條目本來就跨聊天室共用。
     function _cid() { try { const db = _db(); return (db?.currentChatId && db.currentChatId()) || ''; } catch (e) { return ''; } }
-    async function _getCurrentId() { const c = _cid(); return c ? (await _get(K_CURRENT, '', c)) : ''; }
-    async function _setCurrentId(v) { const c = _cid(); if (c) await _set(K_CURRENT, v, c); }
+    // 🚨🚨全新的聊天室在第一則訊息落地之前,酒館還沒給它 chatId。
+    //   DIVE 常常就發生在那個當下(開新房→挑世界→進去),這時寫不進去,燈卻已經被點亮 →
+    //   訊息回來、id 出現之後,每輪確認讀到「這一室沒有世界」就把燈全關了(她實測:剛剛還開著,下一秒又關)。
+    //   所以拿不到 id 時先記在手上,等 id 出現的那一刻補寫進去。
+    let _pendingCur = '';
+    async function _getCurrentId() {
+        const c = _cid();
+        if (!c) return _pendingCur || '';        // id 還沒生出來 → 先用手上這筆回答
+        if (_pendingCur) {
+            const cur = await _get(K_CURRENT, '', c);
+            if (!cur) await _set(K_CURRENT, _pendingCur, c);   // 這一室還沒有世界才補,絕不覆蓋既有的
+            _pendingCur = '';
+        }
+        return await _get(K_CURRENT, '', c);
+    }
+    async function _setCurrentId(v) {
+        const c = _cid();
+        if (c) { await _set(K_CURRENT, v, c); _pendingCur = ''; return; }
+        _pendingCur = v;
+    }
     // 舊資料搬家:把 global 那一格搬進「現在這個聊天室」，然後清掉。
     //   只做一次，其餘聊天室從乾淨狀態開始——所以絕不能在拿不到 chatId 時就清掉 global。
     async function _migrateCurrent() {
