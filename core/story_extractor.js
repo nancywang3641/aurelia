@@ -311,6 +311,7 @@
             this.scanAndRender();
             this._startChatSync();   // 卡片自帶跳轉鈕改第 0 樓時，藏書自動跟上
             this._refreshModeBar(rootWrapper);   // 🎲 本卡模式（圖庫/自由）chips
+            try { window.StoryEntryWizard?.maybeShow?.(rootWrapper); } catch (e) { }   // 🎫 第0樓開局 → 入場精靈
         },
 
         // ── 🎲 本卡模式切換（按 storyId=這張卡記，同卡開新聊天不用重選）：
