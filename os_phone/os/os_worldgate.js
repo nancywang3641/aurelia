@@ -915,6 +915,38 @@
     }
     // 刪除的完整動作:世界書條目、檔案庫、大廳上的旅人、旅人對話歷史。
     // 詳情頁的單張刪除與檔案庫的批次刪除共用這條,免得兩邊各寫一份、日後漏掉其中一項。
+    // ── 🧹 孤兒清掃：刪世界時順手跑一次 ──────────────────────────────
+    // 世界門在外面留了兩種東西，鍵都帶著世界 id：旅人小人的皮膚（索引在 localStorage、圖片本體在 IDB）
+    // 與旅人的對話歷史。掃的條件是「這個 id 已經不在檔案庫裡」，所以連以前刪世界留下的也一起帶走。
+    // 🚨不做成按鈕：這是程式自己該收的尾，不該變成一個要她定期去按的東西。
+    const _WG_KEY = /^wg_([^_]+)_\d+$/;
+    async function _sweepOrphans() {
+        try {
+            const alive = new Set((await _get(K_WORLDS, [])).map(w => w && w.id).filter(Boolean));
+            const b = (win.LobbyStage || window.LobbyStage)?._b;
+            let n = 0;
+            if (b?.skins && b.saveSkin) {
+                const all = b.skins() || {};
+                for (const key of Object.keys(all)) {
+                    const m = key.match(_WG_KEY);
+                    if (!m || alive.has(m[1])) continue;
+                    const sk = all[key];
+                    if (sk?.ref?.idb && b.idbDel) { try { await b.idbDel(sk.ref.idb); } catch (e) {} }
+                    b.saveSkin(key, null);
+                    n++;
+                }
+            }
+            const ls = win.localStorage;
+            for (let i = ls.length - 1; i >= 0; i--) {
+                const k = ls.key(i);
+                if (!k || k.indexOf('lstage_hist_wg_') !== 0) continue;
+                const m = k.slice('lstage_hist_'.length).match(_WG_KEY);
+                if (!m || alive.has(m[1])) continue;
+                ls.removeItem(k); n++;
+            }
+            if (n) console.log('[Worldgate③] 🧹 清掉 ' + n + ' 筆沒有世界的殘留');
+        } catch (e) { console.warn('[Worldgate③] 孤兒清掃失敗', e); }
+    }
     async function _deleteWorlds(list) {
         if (!list.length) return;
         for (const w of list) await _deleteEntry(w);   // 世界書是同一份檔案,一個個改不併發
@@ -927,28 +959,7 @@
             if (ids.has(await _getCurrentId())) { await _setCurrentId(''); await _syncWorldLamps(''); }
         } catch (e) {}
         _clearTravelers(); _closeMeet();
-        try {   // 旅人對話歷史一起清,不留孤兒
-            ids.forEach(id => {
-                for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) win.localStorage.removeItem('lstage_hist_wg_' + id + '_' + i);
-            });
-        } catch (e) {}
-        // 旅人小人的皮膚也要清:索引在 localStorage、圖片本體在 IDB,
-        // 只刪世界的話那幾張圖沒人引用卻一直佔著空間(每個世界最多四張)。
-        try {
-            const b = (win.LobbyStage || window.LobbyStage)?._b;
-            if (b?.skins && b.saveSkin) {
-                const all = b.skins() || {};
-                for (const id of ids) {
-                    for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) {
-                        const key = 'wg_' + id + '_' + i;
-                        const sk = all[key];
-                        if (!sk) continue;
-                        if (sk.ref && sk.ref.idb && b.idbDel) { try { await b.idbDel(sk.ref.idb); } catch (e) {} }
-                        b.saveSkin(key, null);
-                    }
-                }
-            }
-        } catch (e) { console.warn('[Worldgate③] 清旅人皮膚失敗', e); }
+        await _sweepOrphans();
     }
 
     // ── 旅人像素小人(大廳限定;LobbyStage._b 缺席=優雅跳過) ──
