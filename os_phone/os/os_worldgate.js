@@ -948,8 +948,15 @@
                     // 🔎 把助手真正回給我們的欄位原樣印出來:寫下去沒生效時,問題永遠是
                     //   「它的欄位名跟我們寫的不一樣」,但那個名字只有這裡看得到。
                     const b4 = cur.find(e => owned[e && e.comment] === activeId);
-                    console.warn('[Worldgate③] 🔎 條目欄位（寫入前）', JSON.stringify(b4));
-                    console.warn('[Worldgate③] 🔎 條目欄位（寫入後）', JSON.stringify(me));
+                    if (!b4) {
+                        // 找不到＝比對就沒對上,那就把兩邊的字串原樣攤開,一次看清楚差在哪
+                        console.warn('[Worldgate③] 🔎 對不上！要找的世界 id =', activeId);
+                        console.warn('[Worldgate③] 🔎 檔案庫算出來的條目名 =', JSON.stringify(Object.keys(owned)));
+                        console.warn('[Worldgate③] 🔎 書裡實際有的條目名 =', JSON.stringify(cur.map(e => e && e.comment)));
+                    } else {
+                        console.warn('[Worldgate③] 🔎 條目欄位（寫入前）', JSON.stringify(b4));
+                        console.warn('[Worldgate③] 🔎 條目欄位（寫入後）', JSON.stringify(me));
+                    }
                     if (me && !(isOn(me) && isEnabled(me))) {
                         _toast('世界書條目打不開（助手版本的欄位不一樣）。請手動把「' +
                             (me.comment || '') + '」設成啟用＋常駐。');
