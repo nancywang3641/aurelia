@@ -570,6 +570,8 @@
         const subheader = document.getElementById('chapter-subheader');
         const overlay = document.getElementById('chapter-overlay');
         overlay.classList.add('active');
+        // 轉場語音在玩家還在挑卡片時就抓好：點下去才 new Audio 要下載＋解碼，聲音會慢畫面一拍
+        try { win.VN_ChapterWarp && win.VN_ChapterWarp.prime && win.VN_ChapterWarp.prime(); } catch (e) {}
 
         // 獨立模式：從 OS_DB 讀取本地存檔（故事資料夾列表；輪播底欄/頁點由 chx-mode-list 收起）
         const isStandalone = win.OS_API?.isStandalone?.() ?? false;

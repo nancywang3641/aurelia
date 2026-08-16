@@ -41,6 +41,25 @@
         try { return localStorage.getItem('vn_chwarp') !== '0'; } catch (e) { return true; }
     }
 
+    // 語音預載：開章節面板時就抓好（vn_panels 呼叫）。點下去才 new Audio 的話，
+    // 下載＋解碼那段就是「聲音慢畫面一拍」——畫面現在 12ms 就動，聲音更顯得拖。
+    let _sfx = null;
+    function prime() {
+        if (_sfx || !enabled()) return;
+        try { _sfx = new Audio(SFX); _sfx.preload = 'auto'; _sfx.volume = 0.9; _sfx.load(); } catch (e) { _sfx = null; }
+    }
+    // 播語音：預載好的直接倒帶重播（零解碼）；還沒好就照舊現開一顆
+    function _playSfx() {
+        try {
+            prime();
+            const a = _sfx && _sfx.readyState >= 2 ? _sfx : new Audio(SFX);
+            a.volume = 0.9;
+            try { a.currentTime = 0; } catch (e) {}
+            const p = a.play();
+            if (p && p.catch) p.catch(() => {});
+        } catch (e) {}
+    }
+
     // 縮圖沒真圖時的退路：把 CSS 漸層字串裡的色碼撈出來畫一張假縮圖，管線照走
     function _gradientCanvas(bgStr, w, h) {
         const cv = document.createElement('canvas');
@@ -115,7 +134,7 @@
             const hr = host.getBoundingClientRect();
             if (!hr.width || !hr.height) { fire(); _busy = false; clearTimeout(fuse); return; }
 
-            try { const a = new Audio(SFX); a.volume = 0.9; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+            _playSfx();
 
             // 🚨 絕不 await 圖再開演：演出第一幀完全不需要它（碎片要到 t=0.34 才現形、
             //    場景層要到 t=0.55），先 await 等於把圖的載入時間變成「點下去毫無反應」的空窗。
@@ -318,6 +337,6 @@
         }
     }
 
-    window.VN_ChapterWarp = { play, get busy() { return _busy; } };
+    window.VN_ChapterWarp = { play, prime, get busy() { return _busy; } };
     console.log('🌀 [VN ChapterWarp] 章節穿越轉場就緒');
 })();
