@@ -353,6 +353,17 @@
             rq.onerror = () => rej(rq.error);
         });
     }
+    // 刪掉存在本機的那張圖。皮膚索引在 localStorage、圖片本體在這裡，
+    // 只清索引的話圖會變成沒人引用的孤兒，一直佔著空間（世界門刪世界時要連旅人小人的皮膚一起清）。
+    async function idbDel(key) {
+        const db = await idbOpen();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('imgs', 'readwrite');
+            tx.objectStore('imgs').delete(key);
+            tx.oncomplete = () => res();
+            tx.onerror = () => rej(tx.error);
+        });
+    }
     // 圖片引用解析：{file}=CDN內建、{url}=外部網址、{idb}=本機上傳
     async function resolveRef(ref) {
         if (!ref) return null;
@@ -2146,7 +2157,7 @@
             skins: _skins, saveSkin: _saveSkin,
             swapActorSrc: _swapActorSrc, applySkin: _applySkin,
             pixelify: _pixelify, askImage: _askImage,
-            resolveRef, idbPut,
+            resolveRef, idbPut, idbDel,
             getNpcHistory, setNpcHistory,
             // 給 lobby_editor.js（擺設模式）：物件擺放/佔地/碰撞重建/遮罩/人物縮放/相機重算
             placeObj, spawnObjEl: _spawnObjEl, footRect,
