@@ -2,17 +2,17 @@
  * 藏書入場精靈(白金視差風)
  * 兩幕:入場規劃(選 圖庫立繪/自由生成)→ 開場預覽(切開場)→ 進入故事
  * 只在第 0 樓(故事未推進)出現;蓋在藏書面板上,收起後即現有閱讀畫面,渲染管線不碰。
- * 版型:橫式=照 manifest 座標絕對定位拼回原稿;直式(手機/手機殼容器)=同素材改直欄流式。
- *      判定看「容器」長寬比不是視窗(藏書常開在直式手機容器裡),JS 掛 .sew-portrait。
- * 素材:sound-files/aseets/story_entry/;定位在 css/story_entry_wizard.css
+ * 視覺:框/鈕/線全 CSS(縮放銳利),只留「畫」用圖——背景大廳、卡片圖案x2、盾徽;
+ *      符號類圖標一律 FontAwesome。直橫共用一套 flex 流式,直式(.sew-portrait)只調參數。
+ * 素材:sound-files/aseets/story_entry/;樣式在 css/story_entry_wizard.css
  */
 
 (function () {
     'use strict';
 
     const CDN = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/';
-    const CANVAS_W = 1253.438;
-    const PORTRAIT_REF_W = 430;   // 直式一欄的參考寬(canvas 單位),--sew-u 換算用
+    const CANVAS_W = 1253.438, CANVAS_H = 705.469;
+    const PORTRAIT_REF_W = 430;   // 直式一欄的參考寬(單位換算用)
 
     // 同一張聊天按過「進入故事」後,這輪 session 內不再彈(避免每次開藏書都重走)
     const _entered = new Set();
@@ -38,73 +38,73 @@
 
         // ── 組裝 ─────────────────────────────────────────────
         _build(rootWrapper) {
-            const img = (name, extra = '') => `<img class="sew-piece sew-p-${name}${extra ? ' ' + extra : ''}" src="${CDN}${name}.webp" alt="">`;
-            // 群組內小件:座標相對群組殼(rel% 在 CSS)
-            const rimg = (name) => `<img class="sew-piece sew-r-${name}" src="${CDN}${name}.webp" alt="">`;
-
             const root = document.createElement('div');
             root.id = 'sew-root';
             root.innerHTML = `
                 <div class="sew-bg"></div>
                 <div class="sew-stage">
-                    ${img('panel-shell')}${img('corner-tl')}${img('corner-tr')}
-                    ${img('rail-left')}${img('rail-right')}${img('deco-right')}
+                    <div class="sew-panel">
+                        <button class="sew-close" id="sew-close" type="button" title="關閉"><i class="fa-solid fa-xmark"></i></button>
+                        <div class="sew-title-row">
+                            <span class="sew-wing"></span>
+                            <h2 class="sew-title">視差入場規劃</h2>
+                            <span class="sew-wing"></span>
+                        </div>
 
-                    <div class="sew-g sew-g-title">
-                        ${rimg('title-banner')}
-                        <div class="sew-title">視差入場規劃</div>
-                    </div>
-                    <div class="sew-g sew-g-close" id="sew-close" title="關閉">
-                        ${rimg('close-x')}
-                    </div>
-
-                    <div class="sew-screen" id="sew-screen-plan">
-                        <div class="sew-g sew-g-badge">
-                            ${rimg('badge-bar')}${rimg('badge-icon')}
-                            <div class="sew-badge-text">已識別:<b id="sew-card-name"></b></div>
-                        </div>
-                        <div class="sew-g sew-g-card sew-g-lib" id="sew-pick-lib">
-                            ${rimg('card-lib-shell')}${rimg('card-lib-diamond')}${rimg('card-lib-deco-l')}${rimg('card-lib-deco-r')}${rimg('card-lib-icon')}${rimg('card-lib-divider')}
-                            <div class="sew-card-title">圖庫立繪</div>
-                            <div class="sew-card-sub">使用角色卡原有的立繪與視覺素材</div>
-                        </div>
-                        <div class="sew-g sew-g-card sew-g-free" id="sew-pick-free">
-                            ${rimg('card-free-shell')}${rimg('card-free-diamond')}${rimg('card-free-deco-l')}${rimg('card-free-deco-r')}${rimg('card-free-icon')}${rimg('card-free-divider')}
-                            <div class="sew-card-title">自由生成</div>
-                            <div class="sew-card-sub">由系統生成風格貼合的視覺立繪</div>
-                        </div>
-                        <div class="sew-g sew-g-info">
-                            ${rimg('info-bar')}${rimg('info-icon-person')}${rimg('info-div-1')}${rimg('info-icon-palette')}${rimg('info-div-2')}${rimg('info-icon-book')}
-                            <div class="sew-info-col sew-info-1">角色來源<small>自動識別</small></div>
-                            <div class="sew-info-col sew-info-2">視覺方案<small>由你選擇</small></div>
-                            <div class="sew-info-col sew-info-3">開場內容<small>保持原樣</small></div>
-                        </div>
-                        ${img('spark-1')}${img('spark-2')}${img('spark-3')}
-                        <div class="sew-g sew-g-cta" id="sew-go-preview">
-                            ${rimg('cta-shell')}${rimg('cta-arrow')}
-                            <div class="sew-cta-text">預覽開場</div>
-                        </div>
-                    </div>
-
-                    <div class="sew-screen sew-hidden" id="sew-screen-preview">
-                        <div class="sew-g sew-g-badge sew-g-chip2">
-                            ${rimg('badge-bar')}${rimg('badge-icon')}
-                            <div class="sew-preview-chip-text">開場預覽</div>
-                        </div>
-                        <div class="sew-preview-frame">
-                            <div class="sew-preview-head">
-                                <button class="sew-swipe-btn" id="sew-swipe-prev" type="button" title="上一個開場"><i class="fa-solid fa-chevron-left"></i></button>
-                                <span id="sew-swipe-label">開場</span>
-                                <button class="sew-swipe-btn" id="sew-swipe-next" type="button" title="下一個開場"><i class="fa-solid fa-chevron-right"></i></button>
+                        <div class="sew-screen" id="sew-screen-plan">
+                            <div class="sew-badge">
+                                <img class="sew-badge-icon" src="${CDN}badge-icon.webp" alt="">
+                                <span class="sew-badge-text">已識別:<b id="sew-card-name"></b></span>
                             </div>
-                            <div class="sew-preview-body" id="sew-preview-body"></div>
+                            <div class="sew-cards">
+                                <div class="sew-card" id="sew-pick-lib">
+                                    <div class="sew-dia-row">
+                                        <span class="sew-dia-deco"></span>
+                                        <div class="sew-diamond"><img src="${CDN}card-lib-icon.webp" alt=""></div>
+                                        <span class="sew-dia-deco sew-dia-deco-r"></span>
+                                    </div>
+                                    <div class="sew-card-title">圖庫立繪</div>
+                                    <div class="sew-card-sub">使用角色卡原有的立繪與視覺素材</div>
+                                    <div class="sew-card-divider"></div>
+                                </div>
+                                <div class="sew-card" id="sew-pick-free">
+                                    <div class="sew-dia-row">
+                                        <span class="sew-dia-deco"></span>
+                                        <div class="sew-diamond"><img class="sew-icon-crystal" src="${CDN}card-free-icon.webp" alt=""></div>
+                                        <span class="sew-dia-deco sew-dia-deco-r"></span>
+                                    </div>
+                                    <div class="sew-card-title">自由生成</div>
+                                    <div class="sew-card-sub">由系統生成風格貼合的視覺立繪</div>
+                                    <div class="sew-card-divider"></div>
+                                </div>
+                            </div>
+                            <div class="sew-info">
+                                <div class="sew-info-col"><i class="fa-solid fa-user"></i><div class="sew-info-txt">角色來源<small>自動識別</small></div></div>
+                                <span class="sew-info-sep"></span>
+                                <div class="sew-info-col"><i class="fa-solid fa-palette"></i><div class="sew-info-txt">視覺方案<small>由你選擇</small></div></div>
+                                <span class="sew-info-sep"></span>
+                                <div class="sew-info-col"><i class="fa-solid fa-book-open"></i><div class="sew-info-txt">開場內容<small>保持原樣</small></div></div>
+                            </div>
+                            <button class="sew-cta" id="sew-go-preview" type="button"><span>預覽開場</span><i class="fa-solid fa-chevron-right"></i></button>
                         </div>
-                        <div class="sew-btn-row">
-                            <button class="sew-btn-outline sew-btn-back" id="sew-back" type="button"><i class="fa-solid fa-chevron-left"></i><span>上一步</span></button>
-                            <button class="sew-btn-outline sew-btn-replan" id="sew-replan" type="button"><span>重新規劃</span></button>
-                            <div class="sew-g sew-g-enter" id="sew-enter">
-                                ${rimg('cta-shell')}
-                                <div class="sew-cta-text">進入故事</div>
+
+                        <div class="sew-screen sew-hidden" id="sew-screen-preview">
+                            <div class="sew-badge">
+                                <img class="sew-badge-icon" src="${CDN}badge-icon.webp" alt="">
+                                <span class="sew-badge-text sew-chip2-text">開場預覽</span>
+                            </div>
+                            <div class="sew-preview-frame">
+                                <div class="sew-preview-head">
+                                    <button class="sew-swipe-btn" id="sew-swipe-prev" type="button" title="上一個開場"><i class="fa-solid fa-chevron-left"></i></button>
+                                    <span id="sew-swipe-label">開場</span>
+                                    <button class="sew-swipe-btn" id="sew-swipe-next" type="button" title="下一個開場"><i class="fa-solid fa-chevron-right"></i></button>
+                                </div>
+                                <div class="sew-preview-body" id="sew-preview-body"></div>
+                            </div>
+                            <div class="sew-btn-row">
+                                <button class="sew-btn-outline" id="sew-back" type="button"><i class="fa-solid fa-chevron-left"></i><span>上一步</span></button>
+                                <button class="sew-btn-outline" id="sew-replan" type="button"><span>重新規劃</span></button>
+                                <button class="sew-cta sew-enter" id="sew-enter" type="button"><span>進入故事</span></button>
                             </div>
                         </div>
                     </div>
@@ -116,25 +116,14 @@
             console.log('[StoryEntryWizard] ✅ 入場精靈已展開');
         },
 
-        // --sew-u = 1 canvas 單位的實際 px;容器直式(比例<1)切 .sew-portrait 直欄版
-        // 橫式舞台尺寸由 JS 算「等比放到最大」——CSS aspect-ratio 撞上 max-width/height 會變形
+        // --sew-u = 版面單位 px(限制邊決定);容器直式(比例<1)切 .sew-portrait
         _watchScale(root) {
-            const AR = 1253.438 / 705.469;
             const apply = () => {
                 const w = root.clientWidth, h = root.clientHeight;
                 if (!w || !h) return;
                 const portrait = (w / h) < 1;
                 root.classList.toggle('sew-portrait', portrait);
-                const stage = root.querySelector('.sew-stage');
-                let u;
-                if (portrait) {
-                    if (stage) { stage.style.width = ''; stage.style.height = ''; }
-                    u = w / PORTRAIT_REF_W;
-                } else {
-                    const sw = Math.min(w, h * AR);
-                    if (stage) { stage.style.width = sw + 'px'; stage.style.height = (sw / AR) + 'px'; }
-                    u = sw / CANVAS_W;
-                }
+                const u = portrait ? (w / PORTRAIT_REF_W) : Math.min(w / CANVAS_W, h / CANVAS_H);
                 root.style.setProperty('--sew-u', u + 'px');
                 root.style.setProperty('--sew-h', h + 'px');
             };
