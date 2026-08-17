@@ -91,6 +91,7 @@
 
         for (const raw of lines) {
             const trimmed = raw.trim();
+            if (/^Last[:：]\s*\d+$/i.test(trimmed)) continue;   // 內部指標行(Last: 61)別端給讀者
             const pipeCount = (trimmed.match(/\|/g) || []).length;
             if (pipeCount >= 2) { tableBuf.push(trimmed); continue; }
             flushTable();
@@ -319,6 +320,10 @@
                     <h3>完整總結</h3>
                 </div>
                 <div class="jrnl-summary-body">載入中…</div>
+                <div class="jrnl-summary-actions">
+                    <button class="jrnl-ornate jrnl-sum-view" type="button">查看完整總結</button>
+                    <button class="jrnl-ornate jrnl-ornate-primary jrnl-sum-edit" type="button">編輯總結</button>
+                </div>
             </div>
         `;
     }
@@ -521,24 +526,23 @@
             };
 
             // 查看：大總結已搬 OS_DB tavern_summary（不再讀世界書）；舊版未遷移的退回讀世界書
-            const viewBtn = rightEl.querySelector('.jrnl-view-full');
-            if (viewBtn && active) {
-                viewBtn.onclick = async () => {
-                    try {
-                        const rec = await _readStorySummary(active);
-                        if (!rec || !rec.content) return _openFullModal('這段劇情還沒有大總結（或已清空）。', active);
-                        _openSummaryFull(rec.content, active, rec, false);
-                    } catch (e) { _openFullModal('讀取失敗：' + (e.message || e), active); }
-                };
-            }
-            const editBtn = rightEl.querySelector('.jrnl-edit-full');
-            if (editBtn && active) {
-                editBtn.onclick = async () => {
-                    try {
-                        const rec = (await _readStorySummary(active)) || { content: '' };
-                        _openSummaryFull(rec.content || '', active, rec, true);
-                    } catch (e) { _openFullModal('讀取失敗：' + (e.message || e), active); }
-                };
+            //   桌面書裝的總結頁另有一組 ornate 鈕(.jrnl-sum-view/.jrnl-sum-edit),行為同款
+            const _viewFull = async () => {
+                try {
+                    const rec = await _readStorySummary(active);
+                    if (!rec || !rec.content) return _openFullModal('這段劇情還沒有大總結（或已清空）。', active);
+                    _openSummaryFull(rec.content, active, rec, false);
+                } catch (e) { _openFullModal('讀取失敗：' + (e.message || e), active); }
+            };
+            const _editFull = async () => {
+                try {
+                    const rec = (await _readStorySummary(active)) || { content: '' };
+                    _openSummaryFull(rec.content || '', active, rec, true);
+                } catch (e) { _openFullModal('讀取失敗：' + (e.message || e), active); }
+            };
+            if (active) {
+                rightEl.querySelectorAll('.jrnl-view-full, .jrnl-sum-view').forEach(b => { b.onclick = _viewFull; });
+                rightEl.querySelectorAll('.jrnl-edit-full, .jrnl-sum-edit').forEach(b => { b.onclick = _editFull; });
             }
             const wipeBtn = rightEl.querySelector('.jrnl-wipe-story');
             if (wipeBtn && active) wipeBtn.onclick = () => _openWipeConfirm(active);
