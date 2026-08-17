@@ -150,8 +150,9 @@
     }
     // Fuzzy 配對：大總結用「名_姓氏」格式存，VN avatar_cache key 是 [Char|...] 的原樣名
     //   策略：完全相等 → 變體拼法（姓名連寫 / 中間點） → substring 包含
-    //   配 _hydrateVnImages 一次 getAll、各 character 在記憶體內比對，避免重複查 DB
-    function _matchAvatar(name, pool, world) {
+    //   🚨 pool 是「不含 url 的中繼資料」(getAllMeta)：整庫頭像 dataURL 一次進記憶體會 OOM
+    //      （畫廊那次的同款坑）。這裡只比對 key，回傳命中的 key，真正的圖用 getRaw 一張張取。
+    function _matchAvatarKey(name, pool, world) {
         if (!name || !pool || !pool.length) return '';
         const VC = win.VN_Cache;
         // 只在「這個故事自己的世界(chatId)」裡找頭像，避免同名 MC 跨卡誤抓（宮廷劇撈到校園卡頭像那種）。
@@ -167,7 +168,7 @@
         if (!p.length) return '';
         const keyOf = e => ((VC && VC.bareKeyOf) ? VC.bareKeyOf(e) : e.key) || '';
         let hit = p.find(e => keyOf(e) === name);
-        if (hit) return hit.url || '';
+        if (hit) return hit.key || '';
         const parts = name.split('_').map(s => s.trim()).filter(s => s && s !== '無');
         if (!parts.length) return '';
         const [given, family] = parts;
@@ -178,15 +179,21 @@
         variants.push(given);
         for (const v of variants) {
             hit = p.find(e => keyOf(e) === v);
-            if (hit) return hit.url || '';
+            if (hit) return hit.key || '';
         }
         // substring fallback（已限定在同世界內，不會跨卡）
         if (family) {
             hit = p.find(e => keyOf(e).includes(given) && keyOf(e).includes(family));
-            if (hit) return hit.url || '';
+            if (hit) return hit.key || '';
         }
         hit = p.find(e => keyOf(e).includes(given));
-        return hit?.url || '';
+        return hit?.key || '';
+    }
+    // 拿單張頭像的圖：只在真的要顯示時才碰那筆資料
+    async function _avatarUrlByKey(win, key) {
+        if (!key) return '';
+        try { const rec = await win.VN_Cache?.getRaw?.('avatar_cache', key); return (rec && rec.url) || ''; }
+        catch (e) { return ''; }
     }
 
     function _renderCard(story, idx, isActive) {
@@ -502,20 +509,26 @@
                     el.classList.forEach(c => { if (c.startsWith('jrnl-cover-')) el.classList.remove(c); });
                 }
             });
-            // Avatar：一次性 getAll、然後在記憶體做 fuzzy 比對（存到 launch 層 avatarPool 供 modal 共用）
-            try { avatarPool = (await win.VN_Cache?.getAll?.('avatar_cache')) || []; } catch (_) {}
-            container.querySelectorAll('[data-avatar-key]').forEach((el) => {
+            // Avatar：只抓「中繼資料」做 fuzzy 比對(不含 dataURL)，命中的才逐張取圖。
+            //   🚨 這裡以前是 getAll('avatar_cache')＝整庫頭像 base64 一次進記憶體，
+            //      而 _renderList 綁在搜尋框的每一次按鍵上 → 每打一個字重讀一次全庫＝OOM。
+            //   中繼資料只在第一次撈（很小、不含圖），之後重渲染直接重用。
+            if (!avatarPool.length) {
+                try { avatarPool = (await win.VN_Cache?.getAllMeta?.('avatar_cache')) || []; } catch (_) {}
+            }
+            for (const el of container.querySelectorAll('[data-avatar-key]')) {
                 const name = el.dataset.avatarKey;
-                if (!name) return;
-                const url = _matchAvatar(name, avatarPool, el.dataset.world);
-                if (url) {
-                    el.style.backgroundImage = `url("${url}")`;
-                    el.style.backgroundSize = 'cover';
-                    el.style.backgroundPosition = 'center';
-                    const fb = el.querySelector('.jrnl-char-img-fallback');
-                    if (fb) fb.style.display = 'none';
-                }
-            });
+                if (!name) continue;
+                const hitKey = _matchAvatarKey(name, avatarPool, el.dataset.world);
+                if (!hitKey) continue;
+                const url = await _avatarUrlByKey(win, hitKey);
+                if (!url || !el.isConnected) continue;   // 圖還沒到就換頁了 → 別往舊節點寫
+                el.style.backgroundImage = `url("${url}")`;
+                el.style.backgroundSize = 'cover';
+                el.style.backgroundPosition = 'center';
+                const fb = el.querySelector('.jrnl-char-img-fallback');
+                if (fb) fb.style.display = 'none';
+            }
         }
 
         function _wireDetail(active) {
@@ -616,15 +629,18 @@
             `;
             container.appendChild(modal);
 
-            // 補頭像（用已抓好的 avatarPool 做 fuzzy 配對）
+            // 補頭像（中繼資料配對 → 只取這一張的圖）
             const avEl = modal.querySelector('[data-avatar-key]');
-            const url = _matchAvatar(rawName, avatarPool, world);
-            if (url && avEl) {
-                avEl.style.backgroundImage = `url("${url}")`;
-                avEl.style.backgroundSize = 'cover';
-                avEl.style.backgroundPosition = 'center';
-                const fb = avEl.querySelector('.jrnl-char-img-fallback');
-                if (fb) fb.style.display = 'none';
+            const hitKey = _matchAvatarKey(rawName, avatarPool, world);
+            if (hitKey && avEl) {
+                _avatarUrlByKey(win, hitKey).then(url => {
+                    if (!url || !avEl.isConnected) return;
+                    avEl.style.backgroundImage = `url("${url}")`;
+                    avEl.style.backgroundSize = 'cover';
+                    avEl.style.backgroundPosition = 'center';
+                    const fb = avEl.querySelector('.jrnl-char-img-fallback');
+                    if (fb) fb.style.display = 'none';
+                });
             }
 
             const close = () => modal.remove();
@@ -828,8 +844,12 @@
             }
         });
 
-        // 搜尋與排序
-        searchEl.addEventListener('input', _renderList);
+        // 搜尋與排序（搜尋防抖：每個按鍵都重渲染＝連帶重跑封面/頭像補圖，打字時記憶體與 IDB 都會被灌爆）
+        let _searchTimer = null;
+        searchEl.addEventListener('input', () => {
+            clearTimeout(_searchTimer);
+            _searchTimer = setTimeout(_renderList, 220);
+        });
         sortEl.addEventListener('change', _renderList);
 
         // 🕮 書裝側邊書籤:story/chars/summary 三枚切右頁區塊;tools 開故事管理面板(獨立 overlay)
