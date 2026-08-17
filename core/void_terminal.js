@@ -548,7 +548,7 @@ const IRIS_IDLE = [
                     <div class="lb-signature"></div>
                     <div class="lb-dock" id="lb-dock">
                         <button class="lb-dock-btn" data-proxy="void-quest-btn" title="藏書">
-                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-archive-flat.png" alt="">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-archive-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="禁庫">藏書</span>
                         </button>
                         <button class="lb-dock-btn" id="lb-dock-story" data-proxy="void-story-btn" title="踏入故事">
@@ -556,24 +556,24 @@ const IRIS_IDLE = [
                             <span class="lb-dock-label" data-cn-404="故事">故事</span>
                         </button>
                         <button class="lb-dock-btn" data-proxy="void-chapter-btn" title="章節選擇">
-                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-chapters-flat.png" alt="">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-chapters-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="異常記錄">章節</span>
                         </button>
                         <button class="lb-dock-btn" data-proxy="void-journal-btn" title="故事日誌">
-                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-journal-flat.png" alt="">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-journal-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="案件日誌">日誌</span>
                         </button>
                         <button class="lb-dock-btn" id="lb-dock-ach" data-proxy="void-achievement-btn" title="成就">
-                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-achievements-flat.png" alt="">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-achievements-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="異常蒐集">成就</span>
                         </button>
                         <button class="lb-dock-btn" data-proxy="void-apps-btn" title="應用">
-                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-apps-flat.png" alt="">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-apps-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="終端機">應用</span>
                         </button>
                         <div class="lb-dock-sep"></div>
                         <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
-                            <img class="lb-dock-ic" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/menu_dock/icon-depart-flat.png" alt="">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-depart-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="墜入404">出門</span>
                         </button>
                     </div>
@@ -1540,7 +1540,7 @@ const IRIS_IDLE = [
         const ov = document.createElement('div');
         ov.id = 'ch-open-ov';
         ov.innerHTML =
-            '<video id="ch-open-vid" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/opening/cheshire_v1.mp4" playsinline preload="auto"></video>' +
+            '<video id="ch-open-vid" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/opening/cheshire_v1.mp4" playsinline preload="auto"></video>' +
             '<button id="ch-open-skip">跳過 <i class="fa-solid fa-forward"></i></button>';
         tab.appendChild(ov);
         const vid = ov.querySelector('video');

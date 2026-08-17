@@ -617,14 +617,14 @@
 
 .jrnl-root.jrnl-desk {
     container-type: size;
-    background: #eaf0f7 url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/bg.webp') center / cover no-repeat;
+    background: #eaf0f7 url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/bg.webp') center / cover no-repeat;
     font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'Microsoft JhengHei', serif;
 }
 /* 外框角飾(左下原圖、右上旋轉) */
 .jrnl-root.jrnl-desk::before, .jrnl-root.jrnl-desk::after {
     content: ''; position: absolute; z-index: 1; pointer-events: none;
     width: 13cqw; height: 13cqw; opacity: 0.38;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/corner.webp') center / contain no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/corner.webp') center / contain no-repeat;
 }
 .jrnl-root.jrnl-desk::before { left: 0; bottom: 0; }
 .jrnl-root.jrnl-desk::after { right: 0; top: 0; transform: rotate(180deg); }
@@ -666,7 +666,7 @@
 .jrnl-desk .jrnl-book-art {
     display: block; position: absolute; z-index: 2;
     left: 3.8%; right: 4.8%; top: 7.2%; bottom: 5.2%;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/book.webp') center / 100% 100% no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/book.webp') center / 100% 100% no-repeat;
     filter: drop-shadow(0 1cqw 1.6cqw rgba(48,38,33,0.24));
     pointer-events: none;
 }
@@ -674,7 +674,7 @@
 .jrnl-desk .jrnl-stage::after {
     content: ''; position: absolute; z-index: 5; pointer-events: none;
     right: 13.5%; top: 14.5%; width: 6.4cqw; height: 6.4cqw;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/flowers.webp') center / contain no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/flowers.webp') center / contain no-repeat;
     opacity: 0.9;
 }
 
@@ -744,7 +744,7 @@
     content: ''; position: absolute; z-index: -1;
     left: -3.9cqw; top: 1cqw;
     width: 4cqw; height: 3.4cqw;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/ribbon.webp') center / 100% 100% no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/ribbon.webp') center / 100% 100% no-repeat;
     filter: saturate(0.75);
 }
 .jrnl-desk .jrnl-card-num {
@@ -803,7 +803,7 @@
     width: 72%; margin: 0.7cqw auto;
     padding: 1.1cqw 1cqw 1.2cqw;
     text-align: center;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/volume-frame.webp') center / 100% 100% no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/volume-frame.webp') center / 100% 100% no-repeat;
     box-sizing: border-box;
 }
 .jrnl-desk .jrnl-volume-main { font-size: max(18px, 1.25cqw); font-weight: 700; color: #3f4c66; letter-spacing: 0.25cqw; }
@@ -824,7 +824,7 @@
 .jrnl-desk .jrnl-d-section-head { border-bottom: none; position: relative; margin-bottom: 0.7cqw; justify-content: center; gap: 0.6cqw; }
 .jrnl-desk .jrnl-d-section-head::after {
     content: ''; position: absolute; left: 0; right: 0; bottom: -0.3cqw; height: 0.5cqw;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/divider.webp') center / contain no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/divider.webp') center / contain no-repeat;
     opacity: 0.8;
 }
 .jrnl-desk .jrnl-d-section-head h3 { font-size: max(15px, 0.95cqw); color: #7c5a63; letter-spacing: 0.2cqw; }
@@ -950,7 +950,7 @@
     font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'Microsoft JhengHei', serif;
 }
 .jrnl-modal-desk .jrnl-modal-card {
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/modal-summary.webp') center / 100% 100% no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/modal-summary.webp') center / 100% 100% no-repeat;
     border: none; border-radius: 0; box-shadow: 0 18px 60px rgba(30, 24, 20, 0.5);
     width: min(720px, 88%);
     max-height: 84%;
@@ -959,7 +959,7 @@
     display: flex; flex-direction: column;
 }
 .jrnl-modal-desk.jrnl-modal-kedit .jrnl-modal-card {
-    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/modal-editor.webp');
+    background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/modal-editor.webp');
 }
 .jrnl-modal-desk .jrnl-modal-head {
     background: transparent; border-bottom: none;
@@ -1004,7 +1004,7 @@
    🚨別再疊 portrait-window:那張圖的窗口是不透明象牙色,蓋上去=把頭像/占位全遮死 */
 .jrnl-modal.jrnl-modal-kchar { container-type: size; }
 .jrnl-modal-desk .jrnl-modal-card.jrnl-modal-char {
-    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/modal-character.webp');
+    background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/modal-character.webp');
     display: block; position: relative;
     width: min(88cqw, 820px, 146cqh);
     aspect-ratio: 1369 / 786;

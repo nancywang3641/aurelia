@@ -20,7 +20,7 @@
 (function () {
     if (window.VN_LoaderChamber) return;
 
-    const CDN = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/loading/';
+    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/loading/';
     // 三支純黑底的已做成真透明通道（VP9 alpha webm）→ 直接是去背素材，不靠混合模式。
     // 🚨 混合模式那條路在這裡走不通：影片被包在有 transform 的容器裡＝自成堆疊上下文，
     //    mix-blend-mode 只會跟同組混合、看不到底下的背景，黑底就變成不透明實色

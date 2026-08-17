@@ -2491,7 +2491,7 @@
     }
 
     // ── 🧍 出發編成槽位 ──
-    const _WG_ART = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/worldgate_ui/';
+    const _WG_ART = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/worldgate_ui/';
     const SLOT_BACK  = _WG_ART + 'party-slot-back.png';
     const SLOT_FRONT = _WG_ART + 'party-slot-front.png';
     // 職業→菱石圖示。旅人的 job 是「普通人在做的工作」的自由文字,對不上就回預設的人形,

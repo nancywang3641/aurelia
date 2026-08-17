@@ -717,7 +717,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         list.className = 'chx-track';
         list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-hourglass-half"></i><div>讀取中…</div></div>';
         if (subheader) subheader.textContent = '酒館數據庫';
-        const CHX = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/';
+        const CHX = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/';
 
         const TIME_GRAD = {
             '黎明': 'linear-gradient(160deg,#c4a68a,#e8c4a0)',

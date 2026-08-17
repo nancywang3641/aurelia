@@ -30,7 +30,7 @@
     if (window.VN_ChapterWarp) return;
 
     // v2 語音 5.3 秒（前兩版 7.9／10 秒還在同資料夾）；開頭無靜音，點擊反饋即時
-    const SFX = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/enter-warp-short-v2.mp3';
+    const SFX = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/enter-warp-short-v2.mp3';
     const DUR = 1150;          // 演出總長 ms（含尾段淡出）；1500 版點下去到進場景要 1.32 秒，拖
     // 🚨 必須等白閃「全滿」才載入：這版 canvas 大部分是透明的（底下是真 DOM 在縮放），
     //    太早換場景會從碎塊縫隙看到面板消失的瞬間（第一版 0.72 就是這樣穿幫）
