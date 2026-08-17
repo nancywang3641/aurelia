@@ -756,27 +756,39 @@
     }
     // 清單寫進條目給主持AI 看。隱藏成就照樣給它(它要知道才鋪得出來),玩家那邊才遮。
     // 🚨明講「名字要一字不差」:程式端靠名字比對來標已完成,寫成同義詞就對不上。
-    // 🚨清單是拿來「照抄名字」的,不是背景設定:程式端靠名字一字不差比對才會標完成。
-    //   舊版把規則寫在清單後面、語氣又是「達成時記下來」→ 實測跑了一百多輪,主持AI 照樣
-    //   每三輪自己取一個名字(它在照角色卡「里程碑2-8字」那條發揮),沒有一條對得上、全部落空。
-    //   所以規則改成「發標記的當下要做的事」,而且清單前後各講一次(它讀長條目容易只記得頭尾)。
+    // 🚨清單是拿來對號入座的,不是背景設定:程式端要認得出「它發的這條＝清單上的哪一條」。
+    //   ①舊版靠「名字一字不差」比對 → 實測跑一百多輪零達成:它每三輪照樣自己取名
+    //     (在照角色卡「里程碑2-8字」那條發揮),而且它常寫簡體,繁簡不同字面也對不上。
+    //   ②改成給每條一個代碼,讓它填代碼:繁簡、改寫、同義詞全都不影響比對,
+    //     正式名字由程式端換回來(貼紙與收藏冊看到的還是好看的名字,不是代碼)。
+    const _ACHV_GRP = { normal: 'A', bond: 'B', hidden: 'H' };
+    const _ACHV_CODE_RE = /^[ABH]\d{1,2}$/i;
+    // 代碼由「組別＋順位」推出來,不另外存:清單本來就存在檔案庫裡、順序固定。
+    function _achvCoded(w) {
+        const a = (w && w.achv) || {};
+        const out = [];
+        Object.keys(_ACHV_GRP).forEach(g => (a[g] || []).forEach((x, i) => {
+            if (x && x.name) out.push({ code: _ACHV_GRP[g] + (i + 1), name: x.name, how: x.how || x.desc || '', group: g });
+        }));
+        return out;
+    }
     function _achvBlock(w) {
-        const a = w.achv;
-        if (!a) return '';
-        const rows = g => (a[g] || []).map(x => '- ' + x.name + '：' + (x.how || x.desc)).join('\n');
+        const coded = _achvCoded(w);
+        if (!coded.length) return '';
+        const rows = g => coded.filter(x => x.group === g).map(x => '- ' + x.code + '　' + x.name + '：' + x.how).join('\n');
         const parts = [];
-        if ((a.normal || []).length) parts.push('### 一般\n' + rows('normal'));
-        if ((a.bond || []).length) parts.push('### 與同行者之間\n' + rows('bond'));
-        if ((a.hidden || []).length) parts.push('### 隱藏(玩家看不到條件)\n' + rows('hidden'));
-        if (!parts.length) return '';
-        return '\n\n## 這個世界的成就（發成就標記時的取名規則）\n' +
-            '**要發成就標記前,一定先看這份清單。** 這一輪發生的事只要對得上其中一條,' +
-            '成就名就直接照抄那一條,一字不差,不可以改寫、縮寫或換同義詞——名字不一樣等於沒記到。\n' +
-            '真的一條都對不上時,才自己取名。\n\n' +
+        if (rows('normal')) parts.push('### 一般\n' + rows('normal'));
+        if (rows('bond')) parts.push('### 與同行者之間\n' + rows('bond'));
+        if (rows('hidden')) parts.push('### 隱藏(玩家看不到條件)\n' + rows('hidden'));
+        return '\n\n## 這個世界的成就（發成就標記時的規則）\n' +
+            '**要發成就標記前,一定先看這份清單。** 這一輪發生的事對得上其中一條時,' +
+            '成就標記的「名字」欄請直接填那一條前面的代碼,不要填成就名、也不要自己改寫——' +
+            '程式會把代碼換回正式名字。填名字會對不上(簡繁與用字只要差一個就不算),填代碼才保險。\n' +
+            '真的一條都對不上時,才照原本的方式自己取名。\n\n' +
             parts.join('\n') +
             '\n\n這些是這個世界值得被記下來的事,不是任務清單,玩家不做也沒關係——' +
             '但機會要鋪得出來:別讓這個世界只剩下戰鬥,上面那些日常與關係的事也要有發生的餘地。\n' +
-            '再說一次:發成就標記時,先在上面的清單找對得上的那一條,有就照抄那個名字。';
+            '再說一次:發成就標記時,先在上面的清單找對得上的那一條,有就把名字欄填成它的代碼。';
     }
 
     // ── 世界條目落地【奧瑞亞-視差】書 ──
@@ -1747,16 +1759,12 @@
     function _achvKey(s) {
         return String(s || '').replace(/[\s　「」『』"'·・,，。、.!！?？~～:：;；\-—_()（）\[\]【】]/g, '').toLowerCase();
     }
-    function _allAchv(w) {
-        const a = w && w.achv;
-        return a ? [].concat(a.normal || [], a.bond || [], a.hidden || []) : [];
-    }
     async function _scanAchv(text) {
         const id = await _getCurrentId();
         if (!id) return;
         const worlds = await _get(K_WORLDS, []);
         const w = worlds.find(x => x.id === id);
-        const list = _allAchv(w);
+        const list = _achvCoded(w);
         if (!list.length) return;
         const got = [];
         const re = /\[Achievement\|([^\]|]*)\|([^\]|]*)\|/gi;   // [Achievement|表情|名|描述]
@@ -1766,8 +1774,10 @@
         const done = Object.assign({}, w.achvDone || {});
         let hit = 0;
         got.forEach(n => {
-            const k = _achvKey(n);
-            const t = list.find(x => _achvKey(x.name) === k);
+            // 代碼優先(繁簡/改寫都不影響);舊世界或它照舊寫名字時,退回原本的洗字比對
+            const t = _ACHV_CODE_RE.test(n)
+                ? list.find(x => x.code.toLowerCase() === n.toLowerCase())
+                : list.find(x => _achvKey(x.name) === _achvKey(n));
             if (t && !done[t.name]) { done[t.name] = Date.now(); hit++; }
         });
         if (!hit) return;
@@ -1798,7 +1808,7 @@
     // 成就取名規則改寫過（見 _achvBlock）→ 已經落地的條目還是舊那份,主持AI 讀到的也還是舊的。
     //   重擬成就會換掉整份清單(還要燒一次 API),這裡只是把條目原文重寫一次:清單不動、不花錢。
     //   每個世界只做一次(存版號),做完就不再碰世界書。
-    const ACHV_BLOCK_V = 2;
+    const ACHV_BLOCK_V = 3;   // 2=規則講在發標記當下 3=改成填代碼
     async function _upgradeAchvBlock(id) {
         if (!id) return;
         const worlds = await _get(K_WORLDS, []);
@@ -2798,6 +2808,21 @@
         } catch (e) { return null; }
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, getWorldPanel };
+    // 🏅 代碼換回正式名字：VN 解析到 [Achievement|表情|代碼|描述] 時先問這支，
+    //    收藏冊與貼紙才會拿到好看的名字而不是 A1。問不到就讓呼叫端照原樣走。
+    async function resolveAchvCode(code) {
+        try {
+            const c = String(code || '').trim();
+            if (!_ACHV_CODE_RE.test(c)) return null;
+            const id = await _getCurrentId();
+            if (!id) return null;
+            const worlds = await _get(K_WORLDS, []);
+            const w = worlds.find(x => x && x.id === id);
+            const hit = _achvCoded(w).find(x => x.code.toLowerCase() === c.toLowerCase());
+            return hit ? { name: hit.name, desc: hit.how } : null;
+        } catch (e) { return null; }
+    }
+
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, getWorldPanel, resolveAchvCode };
     console.log('[Worldgate③] 世界門面板就緒');
 })();
