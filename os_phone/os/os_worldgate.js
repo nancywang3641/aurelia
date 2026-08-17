@@ -870,7 +870,7 @@
         //   留在大廳的人的弱點/翻臉條件也等於白白劇透。隊伍在按下 DIVE 那刻定案(之後就清場),
         //   所以 _dive 會在注入開場指令前重寫一次條目。
         // 旅人區塊帶上目標/弱點/翻臉條件——這是給主持AI看的底牌,玩家在身分卡上看不到這幾欄
-        const recruited = (w.travelers || []).filter(t => t && t.recruited);
+        const recruited = (w.travelers || []).filter(t => t && t.recruited && !t.gone);
         const trav = recruited
             .map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ' ' + t.origin +
             (t.skill ? ';擅長' + t.skill : '') + (t.fit ? ';與這個世界的關係:' + t.fit : '') +
@@ -1148,7 +1148,7 @@
     //   再召集是 concat,沒有任何一行會覆蓋或另存。
     const HALL_CAP = 12;
     function _travSpawnList(w) {
-        const all = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x && x.t && x.t.name);
+        const all = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x && x.t && x.t.name && !x.t.gone);
         const fresh = all.filter(x => !x.t.recruited).reverse();   // 後面召集的排前面(先看到新面孔)
         const joined = all.filter(x => x.t.recruited);
         return fresh.concat(joined).slice(0, HALL_CAP);
@@ -1429,7 +1429,7 @@
         if (w.mapArt && !w.mapFb) delete w.mapFb;
         if (!got) return;
         await _saveWorld(w);
-        if (_winEl && _curDetailId === w.id) { try { _renderDetail(w); } catch (e) {} }
+        if (_winEl && _curDetailId === w.id) { try { _renderDetail(w, 2); } catch (e) {} }   // 隊伍變了→回旅人那一步刷新
     }
     function _profRows(t) {
         const row = (k, v) => v ? '<div class="wg-prof-row"><span>' + k + '</span><b>' + _esc(v) + '</b></div>' : '';
@@ -1563,7 +1563,7 @@
                 const sig = box.querySelector('.wg-poster-sig');
                 if (sig && !sig.querySelector('.wg-joined')) sig.insertAdjacentHTML('beforeend', '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>');
                 _toast(t.name + ' 加入了隊伍');
-                if (_winEl && _curDetailId === w.id) _renderDetail(w);   // 面板正開著這個世界→隊伍狀態即時刷新
+                if (_winEl && _curDetailId === w.id) _renderDetail(w, 2);   // 面板正開著這個世界→旅人那一步即時刷新
             }
             const renderProfile = () => {
                 // 不放 persona 當題幹:下面的欄位表本來就有「性格」那列,擺上面等於同一句印兩次
@@ -1705,7 +1705,7 @@
     // 隊伍組成當 key:重進舊世界目前是 0 次 API,不能因為又 DIVE 一次就重生一張圖。
     //   同一組人再進去＝重用上次那張;換過人才重新要一張。
     function _teamKey(w) {
-        const names = (w.travelers || []).filter(t => t && t.recruited).map(t => String(t.name)).sort();
+        const names = (w.travelers || []).filter(t => t && t.recruited && !t.gone).map(t => String(t.name)).sort();
         return names.length ? names.join('/') : '(單人)';
     }
     function _needLaunchArt(w) {
@@ -1931,7 +1931,7 @@
     _initChatHook();
 
     function _divePrompt(w) {
-        const team = (w.travelers || []).filter(t => t.recruited);
+        const team = (w.travelers || []).filter(t => t.recruited && !t.gone);
         const teamStr = team.length
             ? team.map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ';擅長' + t.skill).join('\n')
             : '(單人行動)';
@@ -2120,18 +2120,28 @@
             '.wg-btn.ghost{background:rgba(255,255,255,.6);color:#3a3e56;border:1px solid rgba(26,28,40,.18);box-shadow:none;}' +
             '.wg-btn.danger{background:rgba(180,80,60,.1);color:#a05040;border:1px solid rgba(180,80,60,.3);box-shadow:none;}' +
             '.wg-btn-row{display:flex;gap:7px;}.wg-btn-row .wg-btn{flex:1;}' +
-            // 再召集一批：偏好兩行 + 鈕 + 一行現況
-            '.wg-trav-more{margin-top:2px;}.wg-trav-more .wg-section-note{text-align:center;margin-top:5px;}' +
-            '.wg-age-row{display:flex;align-items:center;gap:6px;margin-top:6px;color:#6b7089;font-size:11px;}' +
-            '.wg-input.age{width:64px;text-align:center;padding:6px 4px;}' +
-            // 旅人名冊：召過的人全在這裡，點名字開身分卡
-            '.wg-roster{padding:2px 0;}' +
-            '.wg-roster-row{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px dashed rgba(26,28,40,.10);}' +
-            '.wg-roster-row:last-child{border-bottom:none;}.wg-roster-row:hover{background:rgba(26,28,40,.04);}' +
-            '.wg-roster-n{font-weight:700;color:#3a3e56;font-size:12px;}.wg-roster-n i{font-style:normal;color:#8a8ea6;font-size:10px;margin-left:4px;}' +
-            '.wg-roster-j{flex:1;color:#8a8ea6;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
-            '.wg-roster-s{font-size:10px;color:#8a8ea6;border:1px solid rgba(26,28,40,.15);border-radius:6px;padding:1px 6px;}' +
-            '.wg-roster-s.on{color:#3a6b4a;border-color:rgba(60,140,90,.35);background:rgba(60,140,90,.08);}' +
+            // 🚀 啟程步驟列：三段、目前這段亮起來，點得動（回頭改東西不用一步步退）
+            '.wg-steps{display:flex;align-items:center;justify-content:center;gap:4px;margin:0 0 12px;}' +
+            '.wg-steps b{color:#c3c7d8;font-weight:400;}' +
+            '.wg-step{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;cursor:pointer;' +
+              'font-size:11.5px;color:#9aa0b8;background:rgba(26,28,40,.04);border:1px solid transparent;}' +
+            '.wg-step i{font-size:10.5px;}' +
+            '.wg-step.done{color:#5a6180;}' +
+            '.wg-step.on{color:#fff;background:#1A1C28;border-color:#1A1C28;font-weight:700;}' +
+            '.wg-steps-foot{margin-top:14px;}' +
+            // 年齡範圍那一行
+            '.wg-age-row{display:flex;align-items:center;gap:6px;margin-top:8px;color:#6b7089;font-size:11px;}' +
+            '.wg-input.age{width:70px;text-align:center;padding:7px 4px;}' +
+            // 大廳裡的旅人：一人一個小方塊（十幾個人也只佔三四行），點名字開身分卡、點 ✕ 刪掉
+            '.wg-chips{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 4px;}' +
+            '.wg-chip{display:inline-flex;align-items:center;gap:2px;padding:4px 4px 4px 9px;border-radius:16px;' +
+              'background:rgba(255,255,255,.7);border:1px solid rgba(26,28,40,.14);font-size:11.5px;color:#3a3e56;}' +
+            '.wg-chip>span{cursor:pointer;}' +
+            '.wg-chip i{font-style:normal;color:#9aa0b8;font-size:10px;margin-left:4px;}' +
+            '.wg-chip.on{background:rgba(60,140,90,.10);border-color:rgba(60,140,90,.32);color:#2f6b47;}' +
+            '.wg-chip.on i{color:#5f9377;}' +
+            '.wg-chip b{cursor:pointer;color:#c0c4d4;font-weight:400;font-size:11px;padding:0 4px;}' +
+            '.wg-chip b:hover{color:#a05040;}.wg-chip b.arm{color:#a05040;font-weight:800;font-size:10px;}' +
             // 管理模式下卡片底部的維護區：一行一個對象，左邊標名字、右邊短鈕
             '.wg-card-ops{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,28,40,.12);}' +
             '.wg-ops-row{display:flex;align-items:center;gap:5px;}.wg-ops-row+.wg-ops-row{margin-top:5px;}' +
@@ -2588,7 +2598,7 @@
             // 退隊＝回到候選池,人還在大廳,聊得順還能再入隊一次(不是把人刪掉)
             (t.recruited ? '<button class="wg-btn danger" data-act="leave"><i class="fa-solid fa-user-minus"></i> 請他離隊</button>' : '') +
             '<button class="wg-btn ghost" data-act="back">返回</button>';
-        b.querySelector('[data-act="back"]').addEventListener('click', () => _renderDetail(w));
+        b.querySelector('[data-act="back"]').addEventListener('click', () => _renderDetail(w, 2));   // 身分卡是從旅人那一步進來的
         // 兩段確認：這顆會改動世界書裡的隊伍名單，不做成一點就走
         let _leaveArm = 0;
         b.querySelector('[data-act="leave"]')?.addEventListener('click', async (ev) => {
@@ -2603,7 +2613,7 @@
             if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
             _spawnTravelers(w, true);   // 他回候選了 → 大廳的站位重排(同再召集那條)
             _toast(t.name + ' 離開了隊伍，回大廳等下一趟');
-            _renderDetail(w);
+            _renderDetail(w, 2);
         });
     }
 
@@ -2732,8 +2742,22 @@
     }
 
     let _curDetailId = null;   // 面板當前顯示的世界(偶遇入隊時用來即時刷新隊伍區)
-    async function _renderDetail(w) {
+    // 🚀 啟程流程做成三步驟頁（她定案：一頁只做一件事，底下用「繼續」推進）：
+    //   ① 這是什麼世界 → ② 誰跟我走 → ③ 出發設定 → DIVE
+    //   🚨不要再把全部東西堆成一張長卡（鐵則：乾淨瀏覽 + 換頁，不摺疊、不堆砌）。
+    const _STEPS = [
+        { k: 1, t: '世界', i: 'fa-earth-asia' },
+        { k: 2, t: '旅人', i: 'fa-users' },
+        { k: 3, t: '出發', i: 'fa-flag-checkered' },
+    ];
+    function _stepBar(cur) {
+        return '<div class="wg-steps">' + _STEPS.map(x =>
+            '<span class="wg-step' + (x.k === cur ? ' on' : (x.k < cur ? ' done' : '')) + '" data-step="' + x.k + '">' +
+              '<i class="fa-solid ' + x.i + '"></i>' + x.t + '</span>').join('<b>›</b>') + '</div>';
+    }
+    async function _renderDetail(w, step) {
         const b = _body(); if (!b) return;
+        const st = Math.min(3, Math.max(1, Number(step) || 1));
         _delArm = 0;
         _mgrOff();   // 離開檔案庫=管理模式歸零,回來時不會還停在勾選狀態
         _curDetailId = w.id;
@@ -2745,156 +2769,216 @@
             entryText = e ? e.content : '';
         } catch (e) {}
         // 隊伍區只列「確認組隊」的旅人;候選不露臉——他們在大廳裡等妳偶遇(Rae 定案 2026-07-22)
-        const team = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x.t.recruited);
-        const figs = await _slotFigures(w);
-        // 概念句與三顆標籤壓在概念圖上(不再自己佔一張卡)；沒有概念圖時退回原本的文字卡
+        const team = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x.t.recruited && !x.t.gone);
+        // 名冊＝這個世界召過、還沒被刪掉的每一個人（帶原本的 index，刪除與開身分卡都靠它）
+        const roster = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x.t && x.t.name && !x.t.gone);
+        // 有設年齡範圍時，順手算出「不在範圍內」那幾位，給一鍵清掉
+        const _pf = w.travPref || {};
+        const _lo = Number(_pf.ageMin) || 0, _hi = Number(_pf.ageMax) || 0;
+        const offRange = (_lo || _hi)
+            ? roster.filter(x => x.t.age && (x.t.age < (_lo || 1) || x.t.age > (_hi || 120)))
+            : [];
+        const figs = (st === 2) ? await _slotFigures(w) : {};
         const tagsHtml = '<div class="wg-tags">' +
             '<span class="wg-tag"><i class="fa-solid fa-wand-magic-sparkles"></i>' + _esc(w.style) + '</span>' +
             '<span class="wg-tag lure"><i class="fa-solid fa-gem"></i>' + _esc(w.lure) + '</span>' +
             '<span class="wg-tag warn"><i class="fa-solid fa-triangle-exclamation"></i>' + _esc(w.danger) + '</span></div>';
-        b.innerHTML =
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) + '</span><span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>' +
+
+        // ── ① 這是什麼世界：只給看，不放任何操作
+        const page1 =
             (w.art
                 ? '<div class="wg-art"><img src="' + _esc(w.art) + '" alt="">' +
                     '<div class="wg-art-ov"><div class="wg-art-concept">' + _esc(w.concept) + '</div>' + tagsHtml + '</div></div>'
                 : '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' + tagsHtml + '</div>') +
-            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>' : '') +
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 出發編成</span><span class="wg-section-note">' + team.length + ' / ' + MAX_TRAVELER_SPAWN + '</span></div>' +
+            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>' : '');
+
+        // ── ② 誰跟我走：隊伍四格 + 大廳名冊 + 召集
+        const page2 =
+            '<div class="wg-section-head"><span class="wg-section-title">出發編成</span>' +
+              '<span class="wg-section-note">' + team.length + ' / ' + MAX_TRAVELER_SPAWN + '</span></div>' +
             _slotsHtml(team) +
-            // 召旅人＝往池子裡加人，不換掉任何人（她的用法是「有時候看看能抽到什麼」）。
-            //   大廳一次站 MAX 個，新召的排前面 → 按完進大廳就是四張新面孔。
-            '<div class="wg-trav-more">' +
-              '<input class="wg-input" data-wg-travnote maxlength="80" placeholder="想找什麼樣的旅人（可留空）" value="' + _esc((w.travPref && w.travPref.note) || '') + '">' +
-              '<div class="wg-age-row"><span>年齡</span>' +
-                '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((w.travPref && w.travPref.ageMin) || '') + '">' +
-                '<span>～</span>' +
-                '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
-                '<span>歲</span></div>' +
-              '<button class="wg-btn ghost" data-act="more-trav"><i class="fa-solid fa-user-plus"></i> ' +
-              ((w.travelers || []).length ? '再召集一批旅人' : '召集旅人') + '</button>' +
-              '<div class="wg-section-note">目前候選 ' + ((w.travelers || []).filter(t => t && !t.recruited).length) + ' 人，在大廳等你搭話</div>' +
-            '</div>' +
-            // 🚨旅人名冊：召過的人一個都不會消失，全部列在這裡（點得開身分卡）。
-            //   沒有這張清單的話，被擠出大廳的人看起來就像「被覆蓋掉」——資料還在，只是看不到。
-            ((w.travelers || []).length
-                ? '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-address-book"></i> 旅人名冊</span>' +
-                    '<span class="wg-section-note">共 ' + w.travelers.length + ' 人</span></div>' +
-                  '<div class="wg-card wg-roster">' + (w.travelers || []).map((t, i) =>
-                    '<div class="wg-roster-row" data-prof="' + i + '">' +
-                      '<span class="wg-roster-n">' + _esc(t.name) + (t.age ? '<i>' + t.age + '</i>' : '') + '</span>' +
-                      '<span class="wg-roster-j">' + _esc(t.job || '') + '</span>' +
-                      '<span class="wg-roster-s' + (t.recruited ? ' on' : '') + '">' + (t.recruited ? '已入隊' : '大廳') + '</span>' +
-                    '</div>').join('') + '</div>'
+            (roster.length
+                ? '<div class="wg-section-head"><span class="wg-section-title">大廳裡的旅人</span>' +
+                    '<span class="wg-section-note">' + roster.length + ' 人' + (offRange.length ? '・' + offRange.length + ' 人超齡' : '') + '</span></div>' +
+                  '<div class="wg-chips">' + roster.map(function (x) {
+                      var t = x.t, i = x.i;
+                      return '<span class="wg-chip' + (t.recruited ? ' on' : '') + '">' +
+                        '<span data-prof="' + i + '">' + _esc(t.name) + (t.age ? '<i>' + t.age + '</i>' : '') + '</span>' +
+                        '<b data-del="' + i + '" title="從這個世界刪掉他">✕</b></span>';
+                  }).join('') + '</div>'
                 : '') +
-            // 面板是後來才加的功能:舊世界一律沒有,這裡補一顆給它們;已經有的話這顆就是「換一個樣子」
+            '<div class="wg-section-head"><span class="wg-section-title">召集旅人</span>' +
+              '<span class="wg-section-note">加人，不會換掉現有的</span></div>' +
+            '<input class="wg-input" data-wg-travnote maxlength="80" placeholder="想找什麼樣的旅人（可留空）" value="' + _esc((w.travPref && w.travPref.note) || '') + '">' +
+            '<div class="wg-age-row"><span>年齡</span>' +
+              '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((w.travPref && w.travPref.ageMin) || '') + '">' +
+              '<span>～</span>' +
+              '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
+              '<span>歲</span></div>' +
+            '<button class="wg-btn ghost" data-act="more-trav"><i class="fa-solid fa-user-plus"></i> ' +
+              ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>' +
+            (offRange.length ? '<button class="wg-btn ghost" data-act="purge-age"><i class="fa-solid fa-user-slash"></i> 刪掉 ' + offRange.length + ' 位超齡的</button>' : '');
+
+        // ── ③ 出發設定：降生地 + 我的身分
+        const page3 =
             _spawnHtml(w, entryText) +
             // 🎭 玩家在這個世界要當什麼。不做選單:每個世界的職業與種族體系都不一樣,
             //   給清單等於把它變成題庫,而且清單外的東西就填不了。自由填寫最不設限。
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-user-pen"></i> 我的身分</span>' +
+            '<div class="wg-section-head"><span class="wg-section-title">我的身分</span>' +
               '<span class="wg-section-note">' + (w.pc ? '已指定' : '沒填＝由主持AI安排') + '</span></div>' +
             '<textarea class="wg-input area" data-wg-pc maxlength="200" rows="2" ' +
-              'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>' +
-            '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>' +
-            // 維護那幾個動作搬到檔案庫的管理模式了：詳情頁只留出發相關的東西
-            '<div class="wg-btn-row">' +
-              '<button class="wg-btn ghost" data-act="back">返回</button>' +
-              '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' +
-            '</div>';
-        b.querySelectorAll('.wg-slot.on').forEach(el => el.addEventListener('click', () => {
-            _renderProfilePage(w, Number(el.dataset.i));   // 面板內第二層頁,不彈modal
-        }));
-        b.querySelectorAll('[data-prof]').forEach(el => el.addEventListener('click', () => {
-            _renderProfilePage(w, Number(el.dataset.prof));   // 名冊點誰都看得到身分卡
-        }));
-        // 空槽不放說明文字(身分卡在偶遇窗裡已經有一份)——點下去才講怎麼補人
-        b.querySelectorAll('.wg-slot.empty').forEach(el => el.addEventListener('click', () => {
-            _toast('旅人在純白大廳等你搭話,聊得投機才會答應同行');
-        }));
-        // 小人皮膚是動態網址(IDB blob/dataURL),只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
-        b.querySelectorAll('[data-fig]').forEach(el => {
-            const f = figs[Number(el.dataset.fig)];
-            if (!f) return;
-            el.style.setProperty('--wg-fig', 'url("' + f.src + '")');
-            if (f.sheet) el.classList.add('sheet');
-        });
-        // 方位圖是動態網址,只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
-        if (w.mapArt) {
-            const mg = b.querySelector('[data-spawn-grid]');
-            if (mg) mg.style.setProperty('--wg-map', 'url("' + w.mapArt + '")');
+              'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>';
+
+        b.innerHTML =
+            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) + '</span>' +
+              '<span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>' +
+            _stepBar(st) +
+            (st === 1 ? page1 : st === 2 ? page2 : page3) +
+            '<div class="wg-btn-row wg-steps-foot">' +
+              '<button class="wg-btn ghost" data-act="prev">' + (st === 1 ? '返回' : '上一步') + '</button>' +
+              (st < 3
+                ? '<button class="wg-btn" data-act="next">繼續 ›</button>'
+                : '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>') +
+            '</div>' +
+            (st === 1 ? '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' : '');
+
+        // 步驟列可以直接點（回頭改東西不必一步一步退）
+        b.querySelectorAll('.wg-step').forEach(el => el.addEventListener('click', () => _renderDetail(w, Number(el.dataset.step))));
+        b.querySelector('[data-act="prev"]').addEventListener('click', () => { if (st === 1) _renderList(); else _renderDetail(w, st - 1); });
+        b.querySelector('[data-act="next"]')?.addEventListener('click', () => _renderDetail(w, st + 1));
+
+        if (st === 2) {
+            b.querySelectorAll('.wg-slot.on').forEach(el => el.addEventListener('click', () => {
+                _renderProfilePage(w, Number(el.dataset.i));   // 面板內第二層頁,不彈modal
+            }));
+            b.querySelectorAll('[data-prof]').forEach(el => el.addEventListener('click', () => {
+                _renderProfilePage(w, Number(el.dataset.prof));   // 名冊點誰都看得到身分卡
+            }));
+            // 空槽不放說明文字(身分卡在偶遇窗裡已經有一份)——點下去才講怎麼補人
+            b.querySelectorAll('.wg-slot.empty').forEach(el => el.addEventListener('click', () => {
+                _toast('旅人在純白大廳等你搭話,聊得投機才會答應同行');
+            }));
+            // 小人皮膚是動態網址(IDB blob/dataURL),只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
+            b.querySelectorAll('[data-fig]').forEach(el => {
+                const f = figs[Number(el.dataset.fig)];
+                if (!f) return;
+                el.style.setProperty('--wg-fig', 'url("' + f.src + '")');
+                if (f.sheet) el.classList.add('sheet');
+            });
+            // 刪旅人：標記 gone，不從陣列裡抽掉。
+            //   🚨index 是身分證：NPC key(wg_<世界>_<index>)、立姿皮膚、入隊寫回全靠它，
+            //     splice 會讓後面每個人的編號往前挪一格 → 對話記憶與皮膚整批錯位。
+            b.querySelectorAll('[data-del]').forEach(el => {
+                let armed = 0;
+                el.addEventListener('click', async (ev) => {
+                    ev.stopPropagation();
+                    if (!armed) { armed = 1; el.textContent = '刪?'; el.classList.add('arm'); return; }
+                    const t2 = w.travelers[Number(el.dataset.del)];
+                    if (!t2) return;
+                    t2.gone = true;
+                    await _saveWorld(w);
+                    if (t2.recruited && w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }   // 他還在隊上→條目的隊伍名單要跟著改
+                    _spawnTravelers(w, true);
+                    _toast(t2.name + ' 已從這個世界刪掉');
+                    _renderDetail(w, 2);
+                });
+            });
+            // 一鍵清掉不在年齡範圍的
+            let _purgeArm = 0;
+            b.querySelector('[data-act="purge-age"]')?.addEventListener('click', async (ev) => {
+                if (!_purgeArm) {
+                    _purgeArm = 1;
+                    ev.currentTarget.innerHTML = '<i class="fa-solid fa-user-slash"></i> 再按一次確認刪掉這 ' + offRange.length + ' 位';
+                    return;
+                }
+                let hadTeam = false;
+                offRange.forEach(x => { w.travelers[x.i].gone = true; if (w.travelers[x.i].recruited) hadTeam = true; });
+                await _saveWorld(w);
+                if (hadTeam && w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
+                _spawnTravelers(w, true);
+                _toast('已刪掉 ' + offRange.length + ' 位不在年齡範圍的旅人');
+                _renderDetail(w, 2);
+            });
+            // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
+            //   世界檔案與旅人本來就是分兩次生的（旅人那次掛掉時世界照樣存下來），所以這顆同時也是
+            //   「一個旅人都沒有」時的補救按鈕，不必另外做一顆。
+            b.querySelector('[data-act="more-trav"]')?.addEventListener('click', async () => {
+                if (_busy) return;
+                // 偏好在按下去這刻收（她可能填完直接按，沒有離開輸入框的動作）＋存起來，下次打開還在
+                const _clampAge = (v) => { const n = parseInt(v, 10); return (isFinite(n) && n > 0 && n < 130) ? n : 0; };
+                let pref = {
+                    note: (b.querySelector('[data-wg-travnote]')?.value || '').trim().slice(0, 80),
+                    ageMin: _clampAge(b.querySelector('[data-wg-agemin]')?.value),
+                    ageMax: _clampAge(b.querySelector('[data-wg-agemax]')?.value),
+                };
+                if (pref.ageMin && pref.ageMax && pref.ageMin > pref.ageMax) {   // 填反了就自己轉回來
+                    const t0 = pref.ageMin; pref.ageMin = pref.ageMax; pref.ageMax = t0;
+                }
+                w.travPref = pref;
+                await _saveWorld(w);
+                _busy = true;
+                _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
+                const trav = await _expandTravelers(
+                    { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept, twist: w.twist },
+                    w.entryText || entryText || w.concept || w.name,
+                    w.note || '',   // 當初展開時的追加要求要跟著帶,不然新召的旅人會跟這個世界對不上
+                    pref);
+                _busy = false;
+                if (!trav.length) { _toast('旅人召集失敗,請再試一次'); _renderDetail(w, 2); return; }
+                // 同名的不重複收（它偶爾會再抽到上一批的人）
+                const had = new Set((w.travelers || []).filter(t => t && !t.gone).map(t => String(t.name || '').trim()));
+                let add = _normTravelers(trav).filter(t => t && t.name && !had.has(String(t.name).trim()));
+                // 年齡把關：規則寫了它還是可能超線 → 程式再擋一次。
+                //   🚨但不能擋到一個都不剩(那趟 API 就白燒了)：整批都超線時全部收下並講一聲。
+                let dropped = 0;
+                if (pref.ageMin || pref.ageMax) {
+                    const lo = pref.ageMin || 1, hi = pref.ageMax || 120;
+                    const fit = add.filter(t => !t.age || (t.age >= lo && t.age <= hi));   // age=0(它沒填)不擋
+                    if (fit.length) { dropped = add.length - fit.length; add = fit; }
+                    else dropped = -1;   // 整批都超線
+                }
+                if (!add.length) { _toast('這批召來的都是已經在的人,再試一次'); _renderDetail(w, 2); return; }
+                w.travelers = (w.travelers || []).concat(add);
+                await _saveWorld(w);
+                _spawnTravelers(w, true);   // 名單變了 → 立刻換一批人站上大廳(不 force 會被「同世界不重刷」擋掉)
+                _toast('又來了 ' + add.length + ' 位旅人,去大廳跟他們搭話' +
+                    (dropped > 0 ? '（' + dropped + ' 位年齡不合已略過）' : '') +
+                    (dropped < 0 ? '（這批年齡都不在範圍內,還是先收下了）' : ''));
+                _renderDetail(w, 2);
+            });
         }
-        // 降生地:純前端切換,選好存進世界資料;再點一次同一個=取消(交回主持AI安排)
-        b.querySelectorAll('.wg-spawn').forEach(el => el.addEventListener('click', async () => {
-            const nm = el.dataset.n || '';
-            w.spawn = (w.spawn === nm) ? '' : nm;
-            await _saveWorld(w);
-            b.querySelectorAll('.wg-spawn').forEach(x => x.classList.toggle('on', !!w.spawn && x.dataset.n === w.spawn));
-            const tip = b.querySelector('[data-spawn-tip]');
-            if (tip) tip.textContent = w.spawn ? ('降生地：' + w.spawn) : '沒選＝落在哪由主持AI安排';
-        }));
-        // （結束畫面／成就的維護動作已移到檔案庫的管理模式，見 _worldOp）
-        // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
-        //   世界檔案與旅人本來就是分兩次生的（旅人那次掛掉時世界照樣存下來），所以這顆同時也是
-        //   「一個旅人都沒有」時的補救按鈕，不必另外做一顆。
-        b.querySelector('[data-act="more-trav"]')?.addEventListener('click', async () => {
-            if (_busy) return;
-            // 偏好在按下去這刻收（她可能填完直接按，沒有離開輸入框的動作）＋存起來，下次打開還在
-            const _clampAge = (v) => { const n = parseInt(v, 10); return (isFinite(n) && n > 0 && n < 130) ? n : 0; };
-            let pref = {
-                note: (b.querySelector('[data-wg-travnote]')?.value || '').trim().slice(0, 80),
-                ageMin: _clampAge(b.querySelector('[data-wg-agemin]')?.value),
-                ageMax: _clampAge(b.querySelector('[data-wg-agemax]')?.value),
-            };
-            if (pref.ageMin && pref.ageMax && pref.ageMin > pref.ageMax) {   // 填反了就自己轉回來
-                const t0 = pref.ageMin; pref.ageMin = pref.ageMax; pref.ageMax = t0;
+
+        if (st === 3) {
+            // 方位圖是動態網址,只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
+            if (w.mapArt) {
+                const mg = b.querySelector('[data-spawn-grid]');
+                if (mg) mg.style.setProperty('--wg-map', 'url("' + w.mapArt + '")');
             }
-            w.travPref = pref;
-            await _saveWorld(w);
-            _busy = true;
-            _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
-            const trav = await _expandTravelers(
-                { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept, twist: w.twist },
-                w.entryText || entryText || w.concept || w.name,
-                w.note || '',   // 當初展開時的追加要求要跟著帶,不然新召的旅人會跟這個世界對不上
-                pref);
-            _busy = false;
-            if (!trav.length) { _toast('旅人召集失敗,請再試一次'); _renderDetail(w); return; }
-            // 同名的不重複收（它偶爾會再抽到上一批的人）
-            const had = new Set((w.travelers || []).map(t => String(t && t.name || '').trim()));
-            let add = _normTravelers(trav).filter(t => t && t.name && !had.has(String(t.name).trim()));
-            // 年齡把關：規則寫了它還是可能超線 → 程式再擋一次。
-            //   🚨但不能擋到一個都不剩(那趟 API 就白燒了)：整批都超線時全部收下並講一聲，讓她自己決定要不要理。
-            let dropped = 0;
-            if (pref.ageMin || pref.ageMax) {
-                const lo = pref.ageMin || 1, hi = pref.ageMax || 120;
-                const fit = add.filter(t => !t.age || (t.age >= lo && t.age <= hi));   // age=0(它沒填)不擋
-                if (fit.length) { dropped = add.length - fit.length; add = fit; }
-                else dropped = -1;   // 整批都超線
-            }
-            if (!add.length) { _toast('這批召來的都是已經在的人,再試一次'); _renderDetail(w); return; }
-            w.travelers = (w.travelers || []).concat(add);
-            await _saveWorld(w);
-            _spawnTravelers(w, true);   // 名單變了 → 立刻換一批人站上大廳(不 force 會被「同世界不重刷」擋掉)
-            _toast('又來了 ' + add.length + ' 位旅人,去大廳跟他們搭話' +
-                (dropped > 0 ? '（' + dropped + ' 位年齡不合已略過）' : '') +
-                (dropped < 0 ? '（這批年齡都不在範圍內,還是先收下了）' : ''));
-            _renderDetail(w);
-        });
-        _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
-        b.querySelector('[data-act="dive"]').addEventListener('click', async () => {
-            if (_busy) return;
-            _busy = true;
-            // 身分要在按下去這刻收:她可能填完直接按 DIVE，沒有離開輸入框的動作
-            const _pc = (b.querySelector('[data-wg-pc]')?.value || '').trim().slice(0, 200);
-            if (_pc !== (w.pc || '')) { w.pc = _pc; await _saveWorld(w); }
-            _loading('正在同步量子行李…');
-            const r = await _dive(w);
-            _busy = false;
-            _toast(r.msg);
-            if (r.ok) { _refreshModePill(); closeGate(); }
-            else _renderDetail(w);
-        });
-        b.querySelector('[data-act="back"]').addEventListener('click', _renderList);
-        b.querySelector('[data-act="del"]').addEventListener('click', async (ev) => {
+            // 降生地:純前端切換,選好存進世界資料;再點一次同一個=取消(交回主持AI安排)
+            b.querySelectorAll('.wg-spawn').forEach(el => el.addEventListener('click', async () => {
+                const nm = el.dataset.n || '';
+                w.spawn = (w.spawn === nm) ? '' : nm;
+                await _saveWorld(w);
+                b.querySelectorAll('.wg-spawn').forEach(x => x.classList.toggle('on', !!w.spawn && x.dataset.n === w.spawn));
+                const tip = b.querySelector('[data-spawn-tip]');
+                if (tip) tip.textContent = w.spawn ? ('降生地：' + w.spawn) : '沒選＝落在哪由主持AI安排';
+            }));
+            b.querySelector('[data-act="dive"]').addEventListener('click', async () => {
+                if (_busy) return;
+                _busy = true;
+                // 身分要在按下去這刻收:她可能填完直接按 DIVE，沒有離開輸入框的動作
+                const _pc = (b.querySelector('[data-wg-pc]')?.value || '').trim().slice(0, 200);
+                if (_pc !== (w.pc || '')) { w.pc = _pc; await _saveWorld(w); }
+                _loading('正在同步量子行李…');
+                const r = await _dive(w);
+                _busy = false;
+                _toast(r.msg);
+                if (r.ok) { _refreshModePill(); closeGate(); }
+                else _renderDetail(w, 3);
+            });
+        }
+
+        b.querySelector('[data-act="del"]')?.addEventListener('click', async (ev) => {
             if (_delArm === 0) {
                 _delArm = 1;
                 ev.currentTarget.innerHTML = '<i class="fa-solid fa-trash-can"></i> 再按一次確認刪除';
@@ -2904,6 +2988,7 @@
             _toast('「' + w.name + '」已從檔案庫移除');
             _renderList();
         });
+        _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
     }
 
     // 這個聊天室現在在哪個世界（沒 DIVE 過就是 null）。
