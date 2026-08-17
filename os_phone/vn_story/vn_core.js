@@ -1740,14 +1740,39 @@
                             const hdr = document.querySelector('.void-top-bar');
                             const hdrWasHidden = !!(hdr && hdr.style.display === 'none');
                             if (hdrWasHidden) hdr.style.display = '';
+                            // 🎬 轉場：末尾畫面直接被 app 蓋掉會很跳 → 先在 VN 上蒙一層暗幕，app 淡入浮上來。
+                            //    幕布掛在 VN 頁面裡（層級低於面板），所以只暗到末尾畫面，不會糊到 app 自己。
+                            const veilHost = document.getElementById('page-game') || document.body;
+                            let veil = document.getElementById('vn-appwarp-veil');
+                            if (!veil) {
+                                veil = document.createElement('div');
+                                veil.id = 'vn-appwarp-veil';
+                                veilHost.appendChild(veil);
+                            }
+                            requestAnimationFrame(() => veil.classList.add('on'));
+                            panel.classList.remove('vn-appwarp-in', 'vn-appwarp-out');
+                            void panel.offsetWidth;   // 連開兩次也要重播，不然第二次沒動畫
+                            panel.classList.add('vn-appwarp-in');
+                            setTimeout(() => panel.classList.remove('vn-appwarp-in'), 340);
                             // 關閉偵測用面板 display 變化：返回鍵被 launchGameApp 的攔截器直接 doClose、不經 goHome，
                             // 掛 goHome 會漏——observer 兩條關閉路徑都蓋得到，觸發即自拆（不累積）
+                            //   🚨關閉是「一瞬間 display:none」，來不及演 → 先把它擋回可見演完收場再真的收掉，
+                            //     closing 旗標防止我們自己改 display 又把 observer 叫回來。
+                            let closing = false;
                             const ob = new MutationObserver(() => {
-                                if (panel.style.display === 'none') {
+                                if (closing || panel.style.display !== 'none') return;
+                                closing = true;
+                                ob.disconnect();
+                                panel.style.display = 'flex';
+                                panel.classList.add('vn-appwarp-out');
+                                veil.classList.remove('on');
+                                setTimeout(() => {
+                                    panel.style.display = 'none';
+                                    panel.classList.remove('vn-appwarp-out');
                                     if (hdrWasHidden && hdr) hdr.style.display = 'none';   // 回 VN 沉浸
                                     panel.style.zIndex = prevZ || '';
-                                    ob.disconnect();
-                                }
+                                    try { veil.remove(); } catch (e) {}
+                                }, 230);
                             });
                             ob.observe(panel, { attributes: true, attributeFilter: ['style'] });
                         }
@@ -1769,24 +1794,46 @@
                         if (b) { b.onclick = acts[k]; b.classList.remove('hidden'); }
                     });
                     // 🎴 這個世界有活動面板就換上去；沒有(舊世界/還沒生成/生成失敗)一律維持原樣。
-                    //   面板要讀 OS_DB 是非同步的 → 先讓基本鍵組顯示著，讀到才換，中間不會出現空畫面。
+                    //   🚨面板要讀 OS_DB(非同步)。舊版是「先亮基本鍵、讀到再換」→ 每次都先看到原本那四顆
+                    //     閃一下才變成設計過的面板。改成先按住不亮，等結果出來再一次淡入：
+                    //     有面板就直接上面板，沒有才亮基本鍵。
+                    //   按住是有上限的：DB 慢或壞掉時不能把末尾卡成空畫面 → 逾時就先亮基本鍵(退回舊行為)。
+                    //     上一章有面板就多等一會(多半還在同一個世界)，第一次進場只等一小段。
                     //   🚨逐顆收起而不是整組藏掉：模型漏做哪一顆，那顆就留著原本的按鈕，功能不會消失。
                     const basic = document.getElementById('vn-end-basic');
-                    if (basic) basic.classList.remove('hidden');
+                    let _endDecided = false;
+                    // 先按住（模板裡這組預設是顯示的，上一章若被面板收起來過也要重置成「按住」狀態）
+                    if (basic) { basic.classList.add('hidden'); basic.classList.remove('vn-end-fade'); }
+                    const _showBasic = () => {
+                        if (!basic) return;
+                        basic.classList.remove('hidden');
+                        basic.classList.add('vn-end-fade');
+                    };
+                    //   等待期間畫面不是空的（末尾背景與右上系統鍵都在），但也不能等太久 → 上限 0.9 秒
+                    let _hold = 420;
+                    try { if (localStorage.getItem('vn_end_panel_hit') === '1') _hold = 900; } catch (e) {}
+                    const _holdTimer = setTimeout(() => { if (!_endDecided) _showBasic(); }, _hold);
+                    const _settle = (r) => {
+                        _endDecided = true;
+                        clearTimeout(_holdTimer);
+                        try { localStorage.setItem('vn_end_panel_hit', r ? '1' : '0'); } catch (e) {}
+                        if (!r || !basic) { _showBasic(); return; }
+                        let left = 0;
+                        Object.keys(BASIC_OF).forEach(k => {
+                            const b = document.getElementById(BASIC_OF[k]);
+                            if (!b) return;
+                            const covered = r.found.indexOf(k) >= 0;
+                            b.classList.toggle('hidden', covered);
+                            if (!covered) left++;
+                        });
+                        if (!left) basic.classList.add('hidden');   // 面板全包了 → 基本鍵整組不出場
+                        else _showBasic();                          // 有漏做的 → 那幾顆補上來
+                    };
                     try {
-                        window.VN_EndPanel?.render(acts)?.then(r => {
-                            if (!r || !basic) return;
-                            let left = 0;
-                            Object.keys(BASIC_OF).forEach(k => {
-                                const b = document.getElementById(BASIC_OF[k]);
-                                if (!b) return;
-                                const covered = r.found.indexOf(k) >= 0;
-                                b.classList.toggle('hidden', covered);
-                                if (!covered) left++;
-                            });
-                            if (!left) basic.classList.add('hidden');
-                        })?.catch(() => {});
-                    } catch (e) {}
+                        const _p = window.VN_EndPanel?.render(acts);
+                        if (_p && typeof _p.then === 'function') _p.then(_settle).catch(() => _settle(null));
+                        else _settle(null);
+                    } catch (e) { _settle(null); }
                 }
                 return;
             }
