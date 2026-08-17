@@ -949,7 +949,8 @@
                 hoverEl = el;
                 const now = Date.now();
                 if (samePos || now < quietUntil || now - hoverAt < 120) return;   // 掃過一整排也不要連環響
-                _sfx('paper_slide');
+                // 目錄條目是一張張卡＝抽卡聲；右側書籤是紙頁＝紙張輕滑
+                _sfx(el.classList.contains('jrnl-card') ? 'card_pick' : 'paper_slide');
                 hoverAt = now;
             }, true);
             container.addEventListener('mouseout', (e) => {
