@@ -842,11 +842,18 @@
 .jrnl-desk .jrnl-summary-body .jrnl-md-h::before { content: '◆'; color: #b9924f; font-size: 0.5cqw; }
 .jrnl-desk .jrnl-summary-body .jrnl-md-table {
     width: 100%;
+    table-layout: fixed;   /* 欄寬照配比鋪滿,不讓空欄把內容全擠到左邊 */
     border-collapse: collapse;
     background: rgba(255, 251, 244, 0.55);
     border: 1px solid rgba(181, 151, 123, 0.35);
     margin: 0.3cqw 0 0.9cqw;
 }
+/* 事件表欄寬配比(時間/事件/影響/角色/台詞);四欄表會等比放大填滿 */
+.jrnl-desk .jrnl-summary-body .jrnl-md-table th:nth-child(1) { width: 11%; }
+.jrnl-desk .jrnl-summary-body .jrnl-md-table th:nth-child(2) { width: 29%; }
+.jrnl-desk .jrnl-summary-body .jrnl-md-table th:nth-child(3) { width: 27%; }
+.jrnl-desk .jrnl-summary-body .jrnl-md-table th:nth-child(4) { width: 15%; }
+.jrnl-desk .jrnl-summary-body .jrnl-md-table th:nth-child(5) { width: 18%; }
 .jrnl-desk .jrnl-summary-body .jrnl-md-table th {
     background: rgba(190, 150, 120, 0.18);
     color: #6b5646; font-size: 0.64cqw; font-weight: 700; letter-spacing: 0.08cqw;
@@ -857,6 +864,7 @@
     font-size: 0.64cqw; line-height: 1.75; color: #5c4f42;
     padding: 0.45cqw 0.55cqw; vertical-align: top;
     border-top: 1px solid rgba(160, 132, 100, 0.16);
+    word-break: break-word;   /* fixed 版型下長句要能折行 */
 }
 .jrnl-desk .jrnl-summary-body .jrnl-md-table tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.38); }
 .jrnl-desk .jrnl-summary-actions {
