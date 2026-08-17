@@ -620,14 +620,6 @@
     background: #eaf0f7 url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/bg.webp') center / cover no-repeat;
     font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'Microsoft JhengHei', serif;
 }
-/* 外框角飾(左下原圖、右上旋轉) */
-.jrnl-root.jrnl-desk::before, .jrnl-root.jrnl-desk::after {
-    content: ''; position: absolute; z-index: 1; pointer-events: none;
-    width: 13cqw; height: 13cqw; opacity: 0.38;
-    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/corner.webp') center / contain no-repeat;
-}
-.jrnl-root.jrnl-desk::before { left: 0; bottom: 0; }
-.jrnl-root.jrnl-desk::after { right: 0; top: 0; transform: rotate(180deg); }
 /* 原版型的暖色裝飾全下場 */
 .jrnl-desk .jrnl-deco, .jrnl-desk .jrnl-note-bl { display: none !important; }
 
