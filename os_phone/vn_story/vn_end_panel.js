@@ -37,10 +37,31 @@
     // 底圖：這趟隊伍的啟航群像優先，沒有就退回世界概念圖，兩個都沒有就純色底。
     // 🚨圖是動態網址(常常是 dataURL)，只能由 JS 設成 CSS 變數——寫進樣式表會被整份重新解析。
     function _applyBg(root, w) {
-        const url = (w.launchArt && w.launchArt.url) || w.art || '';
+        let url = (w.launchArt && w.launchArt.url) || w.art || '';
+        // 🚨兩張圖都沒有時不能留純黑：啟航群像是主持AI 有寫啟航段落才生的，它忘了就沒有；
+        //   概念圖也可能還在背景生成中。退而求其次拿「這一章的場景背景」墊著，
+        //   連那個都沒有才走程式畫的漸層——總之絕不讓玩家看到黑屏。
+        if (!url) { try { url = _lastSceneBg(); } catch (e) { url = ''; } }
         if (url) root.style.setProperty('--vnep-bg', 'url("' + url.replace(/"/g, '\\"') + '")');
         else root.style.removeProperty('--vnep-bg');
         root.classList.toggle('has-bg', !!url);
+        root.style.setProperty('--vnep-fallback', _hueOf(w));   // has-bg 時被底圖蓋住,沒圖時就是它在撐場面
+    }
+    // 這一章正在用的場景背景（VN 自己的快取，不另外讀 IDB）
+    function _lastSceneBg() {
+        const C = win.VN_Core || window.VN_Core;
+        if (!C) return '';
+        const id = C._lastBgCacheId || '';
+        const mem = C._bgMemCache || {};
+        return (id && mem[id]) || '';
+    }
+    // 沒有任何圖時的底色：拿世界名字算一個色相，同一個世界每次進來都是同一種顏色
+    function _hueOf(w) {
+        const s = String((w && (w.name || w.concept)) || '視差');
+        let h = 0;
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+        const a = h % 360, b = (a + 42) % 360;
+        return 'linear-gradient(160deg, hsl(' + a + ' 32% 22%), hsl(' + b + ' 38% 9%))';
     }
 
     // 面板裡的按鈕綁既有行為。認不得的 data-act 不綁、也不刪:那是還沒做完的功能(成就)，
