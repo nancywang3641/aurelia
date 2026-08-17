@@ -931,14 +931,26 @@
         _applyTab();
 
         // 滑過目錄條目／書籤：紙張輕滑（只給真滑鼠，觸控 tap 會補一次 mouseover 變兩聲）
+        //   🚨點條目會重畫整份清單 → 游標沒動，底下的節點卻被換成新的,瀏覽器補一次 mouseover,
+        //     於是「翻頁聲」後面又跟一聲滑動聲。所以滑動聲要求「游標真的有移動過」，
+        //     而且點擊後那段重畫時間一律不響。
         if (!window.matchMedia || window.matchMedia('(hover: hover)').matches) {
-            let hoverEl = null, hoverAt = 0;
+            let hoverEl = null, hoverAt = 0, lastX = -1, lastY = -1, quietUntil = 0;
+            //   🚨判斷「游標真的移動過」不能靠 mousemove 有沒有來過:游標跳到新元素時
+            //     mouseover 是排在 mousemove 前面的,旗標會來不及翻。改成比座標——
+            //     重畫補的那次 mouseover 帶的是原地座標,跟上一次一模一樣,一眼分得出來。
+            container.addEventListener('mousemove', (e) => { lastX = e.clientX; lastY = e.clientY; }, true);
+            container.addEventListener('mousedown', () => { quietUntil = Date.now() + 320; }, true);
             container.addEventListener('mouseover', (e) => {
+                const samePos = (e.clientX === lastX && e.clientY === lastY);
+                lastX = e.clientX; lastY = e.clientY;
                 const el = e.target.closest?.('.jrnl-card, .jrnl-tab');
                 if (!el || el === hoverEl) return;
+                hoverEl = el;
                 const now = Date.now();
-                if (now - hoverAt >= 120) _sfx('paper_slide');   // 掃過一整排不要連環響
-                hoverEl = el; hoverAt = now;
+                if (samePos || now < quietUntil || now - hoverAt < 120) return;   // 掃過一整排也不要連環響
+                _sfx('paper_slide');
+                hoverAt = now;
             }, true);
             container.addEventListener('mouseout', (e) => {
                 if (hoverEl && e.target === hoverEl) hoverEl = null;
