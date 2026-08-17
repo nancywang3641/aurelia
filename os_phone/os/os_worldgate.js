@@ -1783,6 +1783,28 @@
     }
     // 訊息落地就掃。掛在這裡而不是 VN 那邊:要判斷「現在在哪個世界、這組隊伍有沒有圖了」,
     //   那兩份資料都在世界門手上。
+    // 🎬 主持AI 忘了寫啟航段落時的補救：不等它，改用副模型照「世界＋這趟隊伍」自己寫一段
+    //   Background/Characters 關鍵詞，再走原本那條生圖路。跟自動那條共用 _genLaunchArt，
+    //   所以尺寸、負向詞、存檔方式完全一致。
+    async function _makeLaunchArt(w) {
+        const team = (w.travelers || []).filter(t => t && t.recruited && !t.gone);
+        if (!team.length) return { ok: false, msg: '隊伍還沒有人，先去大廳找人同行' };
+        const who = team.map(t => '- ' + t.name + '：' + (t.sprite || t.look || t.job || '')).join('\n');
+        const prompt =
+            '照下面的世界與隊伍，寫一張「出發前的合照」的生圖關鍵詞。只回傳純 JSON：\n' +
+            '{"bg":"{場景的英文關鍵詞，逗號分隔}","chars":"{每個人的外觀英文關鍵詞，同一行逗號分隔}"}\n' +
+            '全部用英文關鍵詞，不要句子、不要畫風或畫質詞、不要鏡頭術語。\n' +
+            '【世界】' + w.name + '：' + (w.concept || '') + '（風格:' + (w.style || '') + '）\n' +
+            '【這趟隊伍】\n' + who;
+        const r = await _callAI(prompt, '世界門補生啟航圖', 'worldgate_launchart', false, false, true);
+        const bg = (r && r.bg) ? String(r.bg) : '';
+        const ch = (r && r.chars) ? String(r.chars) : '';
+        if (!bg && !ch) return { ok: false, msg: '關鍵詞沒寫出來，再試一次' };
+        // 跟主持AI 那條同樣的長相：Background/Characters 兩段接起來送生圖
+        const p = ('Background: ' + bg + ', Characters: ' + ch).replace(/\s{2,}/g, ' ').trim();
+        const ok = await _genLaunchArt(w, p);
+        return ok ? { ok: true, msg: '啟航群像已生好' } : { ok: false, msg: '生圖失敗，看看圖片設置的連線' };
+    }
     let _launchBusy = false;
     async function _scanLaunchArt(text) {
         if (_launchBusy) return;
@@ -2819,7 +2841,11 @@
               '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
               '<span>歲</span></div>' +
             '<button class="wg-btn ghost" data-act="more-trav"><i class="fa-solid fa-user-plus"></i> ' +
-              ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>';
+              ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>' +
+            // 啟航群像是主持AI 寫了啟航段落才會自動生；它忘了就手動補一張（末尾畫面的底圖用的是這個）
+            (team.length && _needLaunchArt(w)
+                ? '<button class="wg-btn ghost" data-act="make-launch"><i class="fa-solid fa-camera-retro"></i> 生成啟航群像</button>'
+                : '');
 
         // ── ③ 出發設定：降生地 + 我的身分
         const page3 =
@@ -2884,6 +2910,16 @@
                     _toast(t2.name + ' 已從這個世界刪掉');
                     _renderDetail(w, 2);
                 });
+            });
+            b.querySelector('[data-act="make-launch"]')?.addEventListener('click', async () => {
+                if (_busy) return;
+                _busy = true;
+                _loading('正在拍「' + _esc(w.name) + '」的啟航群像…');
+                let r = { ok: false, msg: '生成失敗' };
+                try { r = await _makeLaunchArt(w); } catch (e) { r = { ok: false, msg: (e && e.message) || '生成失敗' }; }
+                _busy = false;
+                _toast(r.msg);
+                _renderDetail(w, 2);
             });
             // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
             //   世界檔案與旅人本來就是分兩次生的（旅人那次掛掉時世界照樣存下來），所以這顆同時也是
