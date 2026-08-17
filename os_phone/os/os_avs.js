@@ -1555,6 +1555,7 @@
         '8b. 白色描邊要貼著物件自己的外形走。物件底下不可以再墊任何色塊、圓盤、光暈或漸層——貼紙背後只有那片純色背景。\n' +
         '9. 每個主體直接浮在純色中灰背景上。格子只是排列位置，不得畫出可見分隔線。只有一張時同樣置中、四周留白。\n' +
         '10. 所有主體彼此不接觸、不重疊、不跨格、不裁切；**每一張的佔格比例要接近**（不可以一張塞滿整格、另一張只有一半大），四周保留充足去背空間。\n' +
+        '10b. 每個物件最多佔自己格子的七成，四周留出明顯空白，物件絕不碰到格線——寧可畫小一點也不要撐滿。\n' +
         '11. 貼紙內禁止文字、字母、數字、Logo、水印、條碼與偽文字。需要標籤的位置保持空白或改成純色圖形。\n' +
         '12. 不生成完整背景、桌面、房間、風景或情境插畫。畫面只能包含那幾張獨立貼紙與純色背景。\n' +
         '13. 未指定風格時，依當前世界觀選擇最合適的可愛插畫風格；清新校園題材使用 soft pastel campus stationery style。\n' +
@@ -1568,7 +1569,7 @@
         // 逐行寫，一列一行 Row N；欄數決定行內要寫幾格（左/中/右）。這是原本就驗證過有效的寫法，不要再壓成一行。
         'Row 1: [位置] [object] die-cut sticker, [位置] [object] die-cut sticker, …（這一列由左到右的每一格）\n\n' +
         'Row 2: …（有幾列就寫幾行 Row，只有一列就只寫 Row 1）\n\n' +
-        'Rendering: every sticker is one isolated object cut out on the flat background, centered and fully visible, comparable scale, minimal internal details, thick uniform white die-cut outline following the exact object silhouette, no cast shadow, no overlap, no cropped objects, no duplicate objects,\n\n' +
+        'Rendering: every sticker is one isolated object cut out on the flat background, centered and fully visible, comparable scale, each object fills at most 70% of its own cell with clear empty margin on all sides and never touches the cell boundary, minimal internal details, thick uniform white die-cut outline following the exact object silhouette, no cast shadow, no overlap, no cropped objects, no duplicate objects,\n\n' +
         // 排除詞要把「會長出背景」的東西一起關掉：發光、粒子、光束、倒影、天空、水面、場景插畫
         'Exclusions: no text, no letters, no numbers, no logo, no watermark, no fake writing, no object clusters, no visible grid lines, no circular backing, no badge base, no plate, no frame, no icon container, no background scene, no scenery, no landscape, no sky, no water, no glow, no glowing aura, no particles, no sparkles, no light rays, no lens flare, no reflections, no vignette, no gradient backdrop, no photorealism, no glossy 3D render,\n' +
         '</世界貼紙>';
@@ -1762,13 +1763,128 @@
         try { url = await _stkRender(imgPrompt, src, preset, info.cols * 384, info.rows * 384); }
         catch (e) { console.warn('[AVS 貼紙] 生圖失敗', e && e.message); return null; }
         if (!url) return null;
-        const boxes = await _stkBoxes(url, info.cols, info.rows);   // 逐格找出實際邊界，之後照它切
+        // 首選:連通域重排(物件越界也切得乾淨);失敗或超預算才退回逐格偵測
+        let boxes = null;
+        const rp = await _stkRepack(url, info.cols, info.rows);
+        if (rp && rp.url && rp.url.length <= STK_MAX_CHARS) { url = rp.url; boxes = rp.boxes; }
+        else boxes = await _stkBoxes(url, info.cols, info.rows);
         return { url, cols: info.cols, rows: info.rows, names: info.names, boxes };
     }
     // 🔍 逐格找出「這張貼紙實際佔的範圍」：純 canvas，手機端一樣跑得動，而且只在生成當下算一次。
     //   為什麼要偵測：生圖那端就算照網格畫，物件還是會偏移、撐邊、大小不一 —— 按格子硬切一定會把隔壁的角切進來。
     //   去背過的圖看 alpha；沒去背的用四角像素當背景色比對。
     //   取到的框會擴成正方形（容器是正方形，直接套長方形框會把船壓扁），再夾回格子內。
+    // 🧩 連通域重排：治「物件越界害切格切到隔壁」的根。
+    //   逐格 bbox 掃描（_stkBoxes）遇到越界物件必壞：自己伸出格外的部分被排除、鄰居伸進來的碎片被算進去。
+    //   這裡改成:去背後把「像素連通的塊」全找出來 → 依面積重心歸戶到格子 → 整張圖重新排版成
+    //   乾淨等距網格（每件置中、最多佔格 86%）。重排後按格硬切永遠精準，鄰居物理上進不來。
+    //   flood fill 一樣走 scanline（四鄰逐點推會把 stack 撐爆，_stkCutout 的老坑）。
+    async function _stkRepack(dataUrl, cols, rows) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return null;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const idata = ctx.getImageData(0, 0, W, H);
+            const d = idata.data;
+            const solid = (x, y) => d[(y * W + x) * 4 + 3] >= 16;
+
+            // scanline 連通域標記
+            const labels = new Int32Array(W * H);
+            const blobs = [];   // {minX,minY,maxX,maxY,area,sx,sy}
+            const stack = [];
+            for (let sy = 0; sy < H; sy++) {
+                for (let sx = 0; sx < W; sx++) {
+                    if (!solid(sx, sy) || labels[sy * W + sx]) continue;
+                    const id = blobs.length + 1;
+                    const b = { minX: sx, minY: sy, maxX: sx, maxY: sy, area: 0, sx: 0, sy: 0 };
+                    stack.length = 0; stack.push([sx, sy]);
+                    while (stack.length) {
+                        const [px, py] = stack.pop();
+                        if (labels[py * W + px] || !solid(px, py)) continue;
+                        let x0 = px; while (x0 > 0 && !labels[py * W + x0 - 1] && solid(x0 - 1, py)) x0--;
+                        let x1 = px; while (x1 < W - 1 && !labels[py * W + x1 + 1] && solid(x1 + 1, py)) x1++;
+                        for (let x = x0; x <= x1; x++) {
+                            labels[py * W + x] = id;
+                            b.area++; b.sx += x; b.sy += py;
+                            if (x < b.minX) b.minX = x; if (x > b.maxX) b.maxX = x;
+                            if (py < b.minY) b.minY = py; if (py > b.maxY) b.maxY = py;
+                        }
+                        for (const ny of [py - 1, py + 1]) {
+                            if (ny < 0 || ny >= H) continue;
+                            for (let x = x0; x <= x1; x++) {
+                                if (!labels[ny * W + x] && solid(x, ny)) { stack.push([x, ny]); while (x <= x1 && solid(x, ny) && !labels[ny * W + x]) x++; }
+                            }
+                        }
+                    }
+                    blobs.push(b);
+                }
+            }
+            const cw = W / cols, ch = H / rows;
+            const minArea = Math.max(120, cw * ch * 0.002);   // 雜訊塊丟掉(小於格子 0.2%)
+            // 依「面積重心」歸戶格子
+            const cellBlobs = Array.from({ length: cols * rows }, () => []);
+            blobs.forEach((b, bi) => {
+                if (b.area < minArea) return;
+                const cx = b.sx / b.area, cy = b.sy / b.area;
+                const c = Math.min(cols - 1, Math.max(0, Math.floor(cx / cw)));
+                const r = Math.min(rows - 1, Math.max(0, Math.floor(cy / ch)));
+                cellBlobs[r * cols + c].push(bi + 1);
+            });
+            const used = cellBlobs.filter(a => a.length).length;
+            if (!used) return null;
+
+            // 重新排版:每格 STK_PER_CELL,物件(該格所有連通塊的聯集)置中、最多佔 86%
+            const S = STK_PER_CELL;
+            const out = document.createElement('canvas'); out.width = cols * S; out.height = rows * S;
+            const octx = out.getContext('2d');
+            const idSetArr = cellBlobs.map(a => new Set(a));
+            for (let i = 0; i < cols * rows; i++) {
+                const ids = idSetArr[i];
+                if (!ids.size) continue;
+                let mnX = W, mnY = H, mxX = 0, mxY = 0;
+                cellBlobs[i].forEach(bid => {
+                    const b = blobs[bid - 1];
+                    if (b.minX < mnX) mnX = b.minX; if (b.maxX > mxX) mxX = b.maxX;
+                    if (b.minY < mnY) mnY = b.minY; if (b.maxY > mxY) mxY = b.maxY;
+                });
+                const bw = mxX - mnX + 1, bh = mxY - mnY + 1;
+                // 只搬「屬於這格的連通塊」的像素:聯集 bbox 裡混進來的鄰居像素全部歸零
+                const t = document.createElement('canvas'); t.width = bw; t.height = bh;
+                const tctx = t.getContext('2d');
+                const td = tctx.createImageData(bw, bh);
+                for (let y = 0; y < bh; y++) {
+                    const rowOff = (mnY + y) * W;
+                    for (let x = 0; x < bw; x++) {
+                        const lid = labels[rowOff + mnX + x];
+                        if (!lid || !ids.has(lid)) continue;
+                        const si = (rowOff + mnX + x) * 4, ti = (y * bw + x) * 4;
+                        td.data[ti] = d[si]; td.data[ti + 1] = d[si + 1]; td.data[ti + 2] = d[si + 2]; td.data[ti + 3] = d[si + 3];
+                    }
+                }
+                tctx.putImageData(td, 0, 0);
+                let k = Math.min((S * 0.86) / bw, (S * 0.86) / bh);
+                if (k > 1.75) k = 1.75;   // 小物件別放大到糊
+                const dw = bw * k, dh = bh * k;
+                const c = i % cols, r = Math.floor(i / cols);
+                octx.drawImage(t, c * S + (S - dw) / 2, r * S + (S - dh) / 2, dw, dh);
+            }
+            let outUrl = out.toDataURL('image/webp', 0.82);
+            if (outUrl.indexOf('data:image/webp') !== 0) outUrl = out.toDataURL('image/png');
+            // 重排後就是完美等距網格 → 直接按格切
+            const boxes = [];
+            for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+                boxes.push(idSetArr[r * cols + c].size ? { x: c / cols, y: r / rows, w: 1 / cols, h: 1 / rows } : null);
+            }
+            console.log('[AVS 貼紙] 連通域重排:' + blobs.length + ' 塊 → ' + used + '/' + (cols * rows) + ' 格');
+            return { url: outUrl, boxes };
+        } catch (e) { console.warn('[AVS 貼紙] 連通域重排失敗,退回逐格偵測', e); return null; }
+    }
+
     async function _stkBoxes(dataUrl, cols, rows) {
         try {
             const img = await new Promise((res, rej) => {
