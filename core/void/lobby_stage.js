@@ -1410,6 +1410,11 @@
     }
 
     // ── 🚪 場景切換（白光過場）──────────────────────────
+    // 🔊 場景廣播:大廳的 404 皮(dock 標籤/配色/BGM/立繪)要跟著「腳下的場景」走,
+    //    不能靠各自記旗標——用快轉地圖跳離 404 時舊寫法不會通知,皮就黏在身上(Rae 2026-08-18 回報)。
+    function _emitScene() {
+        try { window.dispatchEvent(new CustomEvent('lstage-scene', { detail: { scene: S.scene } })); } catch (e) {}
+    }
     function goScene(to, spawn, spawnMode) {
         if (S.transitioning || !SCENES[to]) return;
         S.transitioning = true;
@@ -1425,6 +1430,7 @@
             S.spawnOverride = spawn || ((spawnMode === 'player') ? null : 'arrive');
             S.doorCd = performance.now() + 900;   // 落地冷卻，防止秒回
             tryMount();
+            _emitScene();   // 廣播「現在站在哪個場景」→ void_terminal 據此對齊 404 皮
             S.transitioning = false;
             fade.classList.remove('on');
             setTimeout(() => fade.remove(), 400);
@@ -1803,6 +1809,7 @@
         if (!isStatic) _setupJoystick(root);   // 🕹️ 手機左下角虛擬搖桿（靜態地圖沒走路→不需要）
         S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
         S.doorArm = false;   // 剛進場先解除門武裝，走出門區才啟動
+        _emitScene();        // 掛載當下也報一次場景 → 大廳的 404 皮跟腳下對齊
         // 底圖：本機/網址覆蓋（建構模式「換底圖」）
         if (CFG.baseOverride) {
             const mapImg = root.querySelector('.lstage-map');
