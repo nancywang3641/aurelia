@@ -1131,10 +1131,12 @@
         const joined = all.filter(x => x.t.recruited);
         return fresh.concat(joined).slice(0, MAX_TRAVELER_SPAWN);
     }
-    function _spawnTravelers(w) {
+    // force=true：名單真的變了（再召集一批／有人離隊）→ 一定要重新上線，
+    //   不然下面那道「同世界不重刷」的守衛會擋住，新召來的人永遠站不出來（她實測到的）。
+    function _spawnTravelers(w, force) {
         const b = _stage();
         if (!b || b.S.scene !== 'hall') return false;
-        if (_travWorldId === w.id && _travNpcs.some(n => b.S.npcs.indexOf(n) >= 0)) return true;   // 同世界且人還活著(勾隊友重渲染別閃人;換過場景回來=物件已死→重新上線)
+        if (!force && _travWorldId === w.id && _travNpcs.some(n => b.S.npcs.indexOf(n) >= 0)) return true;   // 同世界且人還活著(勾隊友重渲染別閃人;換過場景回來=物件已死→重新上線)
         _clearTravelers();
         _travWorldId = w.id;
         const alice = b.S.npcs.find(n => n.key === 'alice');
@@ -2560,6 +2562,7 @@
             await _saveWorld(w);
             // 條目裡的隊伍區塊跟著更新，不然主持AI 還會照著演一個已經離隊的人
             if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
+            _spawnTravelers(w, true);   // 他回候選了 → 大廳的站位重排(同再召集那條)
             _toast(t.name + ' 離開了隊伍，回大廳等下一趟');
             _renderDetail(w);
         });
@@ -2788,6 +2791,7 @@
             if (!add.length) { _toast('這批召來的都是已經在的人,再試一次'); _renderDetail(w); return; }
             w.travelers = (w.travelers || []).concat(add);
             await _saveWorld(w);
+            _spawnTravelers(w, true);   // 名單變了 → 立刻換一批人站上大廳(不 force 會被「同世界不重刷」擋掉)
             _toast('又來了 ' + add.length + ' 位旅人,去大廳跟他們搭話');
             _renderDetail(w);
         });
