@@ -2969,12 +2969,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         let response;
                         try {
+                            // 🚨測試要跟生成路徑送一樣的東西,不然會出現「測試失敗但實際能生成」：
+                            //   ①強制不串流（免酒館串流開著時誤判失敗）
+                            //   ②vertex 服務帳號要補 vertexai_auth_mode —— 酒館的 sendRequest 自己不帶,
+                            //     後端就預設 express、跑去 API Key 那桶找金鑰 → 服務帳號永遠找不到。
+                            let _ov = { stream: false };
+                            try { _ov = win.OS_API?._vertexOverride?.(context, cfg.stProfileId, _ov) || _ov; } catch (e) {}
                             response = await context.ConnectionManagerRequestService.sendRequest(
                                 cfg.stProfileId,
                                 [{ role: 'user', content: 'Hi' }],
                                 50,
                                 undefined,
-                                { stream: false }   // 跟生成路徑一致：強制不串流，測試才反映真實（免酒館串流開著時測試誤判失敗）
+                                _ov
                             );
                         } finally {
                             if (needSwitch) {
@@ -3012,9 +3018,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 resultEl.textContent = '✅ 回應: ' + replyText;
                 status.innerText = '✅ API 連線成功';
             } catch (e) {
+                // 酒館把所有失敗都包成 `API request failed`，真正的原因在 cause 裡 → 攤平顯示
+                let _msg = e.message;
+                try { _msg = (window.parent || window).OS_API?._causeText?.(e) || _msg; } catch (_) {}
                 resultEl.style.color = '#fc8181';
-                resultEl.textContent = '❌ 錯誤: ' + e.message;
-                status.innerText = '❌ API 測試失敗'; 
+                resultEl.textContent = '❌ 錯誤: ' + _msg;
+                status.innerText = '❌ API 測試失敗';
             }
         }
 
