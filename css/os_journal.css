@@ -767,9 +767,9 @@
 .jrnl-desk .jrnl-right {
     position: absolute; z-index: 4;
     left: 47.25%; top: 13.1%; width: 41.55%; height: 74.1%;
-    padding: 1.3cqw 3.6cqw 2cqw 2.4cqw; box-sizing: border-box;   /* 右側多留,內容別壓到書頁捲邊 */
+    padding: 1.25cqw 4.25cqw 1.4cqw 3.1cqw; box-sizing: border-box;   /* 阿洛 .detail 同值:左讓開書溝、右讓開捲頁邊 */
     overflow-y: auto;
-    scrollbar-width: thin; scrollbar-color: rgba(160,132,100,0.4) transparent;
+    scrollbar-width: thin; scrollbar-color: #d6b590 transparent;
 }
 .jrnl-desk .jrnl-back-mobile { display: none; }
 /* 右頁全走紙面:舊版的白卡片底/邊框全部洗掉 */
@@ -803,7 +803,7 @@
 }
 .jrnl-desk .jrnl-volume-main { font-size: 1.25cqw; font-weight: 700; color: #3f4c66; letter-spacing: 0.25cqw; }
 .jrnl-desk .jrnl-volume-sub { font-size: 0.62cqw; color: #8a7362; margin-top: 0.25cqw; letter-spacing: 0.1cqw; }
-.jrnl-desk .jrnl-d-foot { margin: 0.4cqw 0 0.8cqw; }
+.jrnl-desk .jrnl-d-foot { margin: 0.4cqw 0 0.8cqw; justify-content: center; }
 .jrnl-desk .jrnl-view-full { display: none; }   /* 桌面走「完整總結」書籤,不用這顆大鈕 */
 .jrnl-desk .jrnl-foot-acts { justify-content: center; gap: 0.5cqw; width: auto; }
 .jrnl-desk .jrnl-act-btn {
@@ -882,35 +882,41 @@
     background: linear-gradient(#c87985, #aa5866);
 }
 
-/* ── 書籤頁籤(貼書右緣) ── */
+/* ── 書籤頁籤:照阿洛規格——貼著書右緣(right 3.85%,蓋上書皮)、高 51%、等分、縫 0.2cqw ── */
 .jrnl-desk .jrnl-tabs {
-    display: flex; flex-direction: column; gap: 1cqw;
-    position: absolute; z-index: 6;
-    right: 1.2%; top: 21%;
-    width: 3.6cqw;
+    display: flex; flex-direction: column; align-items: stretch;
+    gap: 0.2cqw;
+    position: absolute; z-index: 7;
+    right: 3.85%; top: 25.8%;
+    width: 4.75%; height: 51%;
 }
 .jrnl-desk .jrnl-tab {
-    display: flex; flex-direction: column; align-items: center;
-    gap: 0.45cqw;
-    padding: 0.9cqw 0.55cqw;
-    background: linear-gradient(180deg, #faf4e6, #f0e6d2);
-    border: 1px solid rgba(178,148,110,0.5);
+    position: relative;
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.5cqw;
+    padding: 0.4cqw 0.3cqw;
+    background: linear-gradient(105deg, #fbf5e8, #f1e5cf 78%, #e6d6ba);
+    border: 0.07cqw solid rgba(178,148,110,0.55);
     border-left: none;
-    border-radius: 0 0.55cqw 0.55cqw 0;
-    box-shadow: 0.15cqw 0.2cqw 0.6cqw rgba(90,70,50,0.22);
+    border-radius: 0 0.5cqw 0.5cqw 0;
+    filter: drop-shadow(0.12cqw 0.2cqw 0.2cqw rgba(64,48,38,0.12));
     cursor: pointer;
     color: #7a6553;
-    transition: transform 0.16s ease, filter 0.16s ease;
+    transition: transform 0.18s, filter 0.18s;
     font-family: inherit;
 }
 .jrnl-desk .jrnl-tab span {
     writing-mode: vertical-rl;
-    font-size: 0.78cqw; letter-spacing: 0.22cqw; line-height: 1;
+    font-size: 0.85cqw; letter-spacing: 0.3cqw; line-height: 1;
 }
-.jrnl-desk .jrnl-tab i { font-size: 0.8cqw; }
-.jrnl-desk .jrnl-tab:hover { transform: translateX(0.15cqw); filter: brightness(1.04); }
+.jrnl-desk .jrnl-tab i { font-size: 0.85cqw; }
+.jrnl-desk .jrnl-tab:hover {
+    transform: translateX(-0.2cqw);
+    filter: drop-shadow(0.18cqw 0.25cqw 0.28cqw rgba(64,48,38,0.18)) saturate(1.05);
+}
 .jrnl-desk .jrnl-tab.active {
-    background: linear-gradient(180deg, #b25260, #9c3d4b);
+    background: linear-gradient(105deg, #bd5b68, #a2434f 70%, #8e3641);
     border-color: #8a3542;
     color: #f6ead9;
 }
