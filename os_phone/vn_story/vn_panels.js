@@ -562,6 +562,67 @@
         setTimeout(() => { itemEl.remove(); const list = listEl || document.getElementById('bg-mgr-list'); if (list && list.children.length === 0) list.innerHTML = _empty; }, 200);
     }
 
+    // 章節縮圖：從 mem / IDB 取存過的場景圖，縮成小圖再塗上去（尺寸/裁切都在 CSS，這裡只換圖）
+    //   🚨這裡以前是「每張卡都直接塞原圖」——原圖是場景背景(常是 1024px 以上的 dataURL)，
+    //     33 章就是 33 張全尺寸圖同時解碼躺在記憶體裡，開著章節面板整個酒館都會卡。
+    //     現在：①只有「看得到的那幾張」才載入，離開視窗就放掉 ②載入時先縮成 360px 小圖再用。
+    const THUMB_W = 360;
+    const _thumbSmall = {};     // cacheId → 縮好的小圖（字串很小，可以一直留著）
+    const _thumbBusy = {};      // cacheId → 進行中的 Promise（同一張不重複解碼）
+    function _shrink(cacheId, url) {
+        if (_thumbSmall[cacheId]) return Promise.resolve(_thumbSmall[cacheId]);
+        if (_thumbBusy[cacheId]) return _thumbBusy[cacheId];
+        _thumbBusy[cacheId] = new Promise((resolve) => {
+            const img = new Image();   // 🚨不設 crossOrigin：設了會變成另一份請求、快取全落空
+            img.onload = () => {
+                let out = url;
+                try {
+                    const w = img.naturalWidth || THUMB_W, h = img.naturalHeight || THUMB_W;
+                    const s = Math.min(1, THUMB_W / w);
+                    const cv = document.createElement('canvas');
+                    cv.width = Math.max(1, Math.round(w * s));
+                    cv.height = Math.max(1, Math.round(h * s));
+                    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+                    out = cv.toDataURL('image/webp', 0.72);   // 跨網域圖會在這裡丟例外 → 退回原圖
+                } catch (e) { out = url; }
+                _thumbSmall[cacheId] = out;
+                // 小圖字串很小，但換過幾十個故事線也會積 → 超過就丟掉最早那批
+                const keys = Object.keys(_thumbSmall);
+                if (keys.length > 60) keys.slice(0, 20).forEach(k => { delete _thumbSmall[k]; delete _thumbBusy[k]; });
+                resolve(out);
+            };
+            img.onerror = () => resolve('');
+            img.src = url;
+        });
+        return _thumbBusy[cacheId];
+    }
+    async function _fillSceneImg(sceneEl, cacheId) {
+        if (!sceneEl || !cacheId) return;
+        if (sceneEl.dataset.thumbOn === cacheId) return;      // 已經塗好同一張
+        sceneEl.dataset.thumbOn = cacheId;
+        if (_thumbSmall[cacheId]) {
+            sceneEl.style.setProperty('--chx-thumb-img', `url('${_thumbSmall[cacheId]}')`);
+            return;
+        }
+        let url = win.VN_Core?._bgMemCache?.[cacheId] || '';
+        if (!url) {
+            try {
+                const cached = await (win.VN_Cache?.get?.('bg_cache', cacheId));
+                url = (cached && cached.url) || '';
+            } catch (e) {}
+        }
+        if (!url) { delete sceneEl.dataset.thumbOn; return; }
+        const small = await _shrink(cacheId, url);
+        // 縮圖做好之前可能已經滑出視窗（被 _dropSceneImg 清掉）→ 別再塗回去
+        if (!small || sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
+        sceneEl.style.setProperty('--chx-thumb-img', `url('${small}')`);
+    }
+    function _dropSceneImg(sceneEl) {
+        if (!sceneEl || !sceneEl.dataset.thumbOn) return;
+        delete sceneEl.dataset.thumbOn;
+        sceneEl.style.removeProperty('--chx-thumb-img');      // 放掉解碼後的點陣圖，只留底色漸層
+    }
+
     /* =========================================
        🔥 終極解析器：嚴格要求 <content> 標籤
        ========================================= */
@@ -743,17 +804,6 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             const bg = TIME_GRAD[time] || SEASON_GRAD[season] || 'linear-gradient(160deg,#7a8a9a,#5a6a7a)';
             return { place: place || '', bg, cacheId: cacheIdRaw };
         }
-        // 嘗試從 mem / IDB 取已保存的 bg 圖片塗到縮圖（尺寸/裁切都在 CSS，這裡只換圖）
-        async function _fillSceneImg(sceneEl, cacheId) {
-            if (!sceneEl || !cacheId) return;
-            const apply = (url) => { sceneEl.style.setProperty('--chx-thumb-img', `url('${url}')`); };
-            const memUrl = win.VN_Core?._bgMemCache?.[cacheId];
-            if (memUrl) { apply(memUrl); return; }
-            try {
-                const cached = await (win.VN_Cache?.get?.('bg_cache', cacheId));
-                if (cached && cached.url) apply(cached.url);
-            } catch(e) {}
-        }
         function _parseWorld(text) {
             const m = text.match(/\[World\|([^\]]+)\]/);
             return m ? m[1].trim() : '';
@@ -800,9 +850,25 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
             }
         }
 
+        // 手機把輪播攤平成一條可捲動的清單＝看得到的不是「選中附近那幾張」→ 改用捲動可視範圍判斷
+        let _thumbIo = null;
+        function _watchThumbs(cards) {
+            if (_thumbIo) { _thumbIo.disconnect(); _thumbIo = null; }
+            if (!_isMobile() || typeof IntersectionObserver !== 'function') return;
+            _thumbIo = new IntersectionObserver((ents) => {
+                ents.forEach(en => {
+                    const t = en.target.querySelector('.chx-thumb');
+                    if (en.isIntersecting) _fillSceneImg(t, en.target.dataset.cid || '');
+                    else _dropSceneImg(t);
+                });
+            }, { root: list, rootMargin: '300px 0px' });
+            cards.forEach(c => _thumbIo.observe(c));
+        }
+
         // 選誰＝重算每張卡的 data-off（CSS 吃這個做位移縮放）＋底欄資訊＋頁點
         function _applySelection() {
             const cards = list.querySelectorAll('.chx-card');
+            const windowed = !_isMobile();   // 桌機只有選中附近 5 張看得到
             cards.forEach((card, i) => {
                 const off = i - _sel;
                 if (Math.abs(off) <= 2) {
@@ -813,6 +879,12 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                     card.classList.add('chx-far');
                     card.removeAttribute('data-off');
                     card.dataset.side = off > 0 ? 'r' : 'l';
+                }
+                // 縮圖只餵看得到的那幾張（多帶一張當預備，翻頁時不會空一格才補上）
+                if (windowed) {
+                    const t = card.querySelector('.chx-thumb');
+                    if (Math.abs(off) <= 3) _fillSceneImg(t, card.dataset.cid || '');
+                    else _dropSceneImg(t);
                 }
             });
             const ch = _chs[_sel];
@@ -857,11 +929,11 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                     _sel = i;
                     _applySelection();
                 };
+                card.dataset.cid = ch.cacheId || '';
                 list.appendChild(card);
-                // 場景縮圖：先鋪時段/季節漸層打底，再拿真實快取圖蓋上
+                // 場景縮圖：先鋪時段/季節漸層打底；真實快取圖由 _applySelection／捲動觀察者按需補上
                 const thumb = card.querySelector('.chx-thumb');
                 if (thumb && ch.bg) thumb.style.setProperty('--chx-thumb-base', ch.bg);
-                _fillSceneImg(thumb, ch.cacheId);
             });
             const dotsEl = document.getElementById('ch-dots');
             if (dotsEl) {
@@ -884,6 +956,7 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                 _loadChapter(_chs[_sel], selCard && selCard.querySelector('.chx-thumb'));
             };
             _applySelection();
+            _watchThumbs(list.querySelectorAll('.chx-card'));
         }
 
         try {
@@ -924,6 +997,14 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
 
     function closeChapterPanel() {
         document.getElementById('chapter-overlay').classList.remove('active');
+        // 面板收起來就把縮圖的點陣圖放掉（卡片還留在 DOM 裡，圖不清會一直佔著記憶體）。
+        //   縮好的小圖有快取，下次打開是直接貼回去，不會重解一次原圖。
+        try {
+            document.querySelectorAll('#chapter-list .chx-thumb').forEach(t => {
+                delete t.dataset.thumbOn;
+                t.style.removeProperty('--chx-thumb-img');
+            });
+        } catch (e) {}
         const pageGame = document.getElementById('page-game');
         if (pageGame && pageGame.classList.contains('hidden')) {
             if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
