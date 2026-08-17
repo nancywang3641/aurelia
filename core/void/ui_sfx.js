@@ -26,7 +26,8 @@
         book_close: 'ui-book_close',   // 闔上書（關閉日誌）
         page_turn:  'Flip_paper',      // 翻一頁（換故事線）
         book_riffle:'ui-book_riffle',  // 快速翻書（切書籤）
-        paper_slide:'ui-paper_slide',  // 紙張輕滑（滑過條目）
+        paper_slide:'ui-paper_slide',  // 紙張輕滑（滑過書籤頁籤）
+        card_pick:  'ui-card_pick',    // 抽卡片（滑過目錄條目——那排長得就像一張張書籤卡）
         pen_write:  'ui-pen_write',    // 落筆（開編輯器）
         book_stamp: 'ui-stamp',        // 書放到桌上（保存成功）
         paper_tear: 'ui-paper_tear',   // 撕頁（清空劇情）
@@ -36,7 +37,7 @@
         hover: 0.4, slide: 0.7, click: 0.75, toggle: 0.8, cancel: 0.8, close: 0.8,
         error: 0.9, confirm: 1, ping: 1, unlock: 1,
         // 紙質音本身錄得比介面音小聲，整體往上帶；滑過那顆維持最輕
-        paper_slide: 0.55, page_turn: 0.9, book_riffle: 0.9, pen_write: 1,
+        paper_slide: 0.55, card_pick: 0.6, page_turn: 0.9, book_riffle: 0.9, pen_write: 1,
         book_open: 1, book_close: 1, book_stamp: 0.9, paper_tear: 0.9,
     };
 
