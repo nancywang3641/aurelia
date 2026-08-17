@@ -2214,8 +2214,18 @@
                     name = parts[0] || '';
                     desc = parts[1] || '';
                 }
-                this.addLog("成就解鎖", `${name}${desc ? ' — ' + desc : ''}`);
-                if (win.OS_ACHIEVEMENT?.unlock) win.OS_ACHIEVEMENT.unlock(emotion, name, desc);
+                // 🏅 視差世界的成就是「填代碼」的（繁簡與改寫都不影響比對）→ 這裡換回正式名字，
+                //    收藏冊與紀錄才不會出現 A1 這種東西。不是代碼、或問不到世界 → 照原樣。
+                const _unlock = (n, d) => {
+                    this.addLog("成就解鎖", `${n}${d ? ' — ' + d : ''}`);
+                    if (win.OS_ACHIEVEMENT?.unlock) win.OS_ACHIEVEMENT.unlock(emotion, n, d);
+                };
+                const _wg = win.OS_WORLDGATE || window.OS_WORLDGATE;
+                if (_wg?.resolveAchvCode && /^[A-Za-z]\d{1,2}$/.test(String(name).trim())) {
+                    _wg.resolveAchvCode(String(name).trim())
+                        .then(h => _unlock((h && h.name) || name, (h && (desc || h.desc)) || desc))
+                        .catch(() => _unlock(name, desc));
+                } else _unlock(name, desc);
                 // VN 內舊的成就 overlay 貼紙已移除（展示改由 VN 組件卡片負責）；這裡只記錄+繼續，不顯示、不卡劇情。
                 this.next(); return;
             }
