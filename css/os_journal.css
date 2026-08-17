@@ -764,10 +764,14 @@
 .jrnl-desk .jrnl-empty-txt { font-size: max(14px, 0.8cqw); }
 
 /* ── 右頁:卷宗 ── */
+/* 🚨定位依據=書殼圖「右頁紙張的實際範圍」,不是 spread 的算術半邊:
+   實測(掃描空白列的紙色區段)右頁紙張 = 舞台的 52.26%~90.04%,左頁 = 10.53%~46.34%。
+   原本照 spread 算術值(47.25%起)會讓內容左緣壓進書溝陰影、右邊空一大條。
+   現在左右各留 2.4cqw ≈ 28px,跟左頁目錄的邊距對稱。 */
 .jrnl-desk .jrnl-right {
     position: absolute; z-index: 4;
-    left: 47.25%; top: 13.1%; width: 41.55%; height: 74.1%;
-    padding: 1.25cqw 4.25cqw 1.4cqw 3.1cqw; box-sizing: border-box;   /* 阿洛 .detail 同值:左讓開書溝、右讓開捲頁邊 */
+    left: 52.2%; top: 13.1%; width: 37.85%; height: 74.1%;
+    padding: 1.25cqw 2.4cqw 1.4cqw 2.4cqw; box-sizing: border-box;
     overflow-y: auto;
     scrollbar-width: thin; scrollbar-color: #d6b590 transparent;
 }
@@ -831,7 +835,6 @@
 /* ── 完整總結頁:照阿洛 mockup 的結構化排版(段落+區塊標籤+正規事件表) ── */
 .jrnl-desk .jrnl-summary-body {
     font-size: max(13px, 0.72cqw); line-height: 1.9; color: #5c4f42;
-    padding-right: 0.8cqw;
 }
 .jrnl-desk .jrnl-summary-body p { margin: 0 0 0.5cqw; }
 .jrnl-desk .jrnl-summary-body .jrnl-md-h {
