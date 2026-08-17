@@ -1144,7 +1144,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* container-type: size → 生成的樣式可以用 @container 與 cqw/cqh 依「這塊面板」的大小排版。
            奧瑞亞的寬度跟著酒館聊天欄走，@media / vw / vh 量到的是整個瀏覽器視窗，
            視窗寬但面板窄時完全不會生效 → 元素照桌機版型排，直接飛出可視範圍。 */
-        #vn-end-panel { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; overflow: hidden; background: #05050a; pointer-events: auto; container-type: size; container-name: vnep; }
+        /* 底色吃 --vnep-fallback（JS 依世界名算的漸層）：主持AI 忘了寫啟航段落＝沒有啟航圖時，
+           畫面不會變成一片黑（有圖的話這層被 .has-bg::before 的底圖蓋住，看不到） */
+        #vn-end-panel { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; overflow: hidden; background: var(--vnep-fallback, #05050a); pointer-events: auto; container-type: size; container-name: vnep; }
         #vn-end-panel.active { display: block; animation: vn-end-panel-in 0.32s ease both; }
         /* 🚨只淡不位移：面板掛上 active 的下一步就是量子元素位置把飛出去的拉回來(_guardOverflow)，
            這時候若整塊還在 translate，量到的座標會整組偏掉 */
