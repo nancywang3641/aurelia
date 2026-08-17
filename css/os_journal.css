@@ -987,24 +987,38 @@
 .jrnl-modal-desk .jrnl-mbtn-primary { background: #9c3d4b; border-color: #8a3542; color: #f6ead9; }
 .jrnl-modal-desk .jrnl-mbtn-danger { background: #a04848; border-color: #8a3535; color: #f6ead9; }
 
-/* 角色詳情彈窗:人物專用卷軸框 + 相框 */
+/* 角色詳情彈窗:modal-character 底圖「自帶」左側相框,頭像直接鋪進畫好的框裡
+   🚨別再疊 portrait-window:那張圖的窗口是不透明象牙色,蓋上去=把頭像/占位全遮死 */
+.jrnl-modal.jrnl-modal-kchar { container-type: size; }
 .jrnl-modal-desk .jrnl-modal-card.jrnl-modal-char {
     background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/modal-character.webp');
-    flex-direction: row;
-    width: min(760px, 90%);
-    padding: 4.2% 5% 4.6%;
-    gap: 3%;
+    display: block; position: relative;
+    width: min(88cqw, 820px, 146cqh);
+    aspect-ratio: 1369 / 786;
+    max-height: none;
+    padding: 0;
 }
-.jrnl-modal-desk .jrnl-cm-photo {
-    position: relative;
-    border: none; border-radius: 2px;
-    background-color: #efe3cf;
-    box-shadow: 0 4px 14px rgba(90, 66, 40, 0.25);
+.jrnl-modal-desk .jrnl-modal-char .jrnl-cm-photo {
+    position: absolute;
+    left: 4.2%; top: 6.6%; width: 35.2%; height: 87%;
+    flex: none; min-height: 0;
+    border: none; border-radius: 6px;
+    background-color: transparent;
+    background-size: cover; background-position: center top;
+    box-shadow: none;
 }
-.jrnl-modal-desk .jrnl-cm-photo::after {
-    content: ''; position: absolute; inset: -5.5%;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/portrait-window.webp') center / 100% 100% no-repeat;
-    pointer-events: none;
+.jrnl-modal-desk .jrnl-modal-char .jrnl-cm-photo .jrnl-char-img-fallback {
+    font-size: 56px; color: #d4a3b3; opacity: 0.7;
+}
+.jrnl-modal-desk .jrnl-modal-char .jrnl-cm-side {
+    position: absolute;
+    left: 43.5%; right: 5.2%; top: 6.5%; bottom: 7%;
+    padding: 14px 10px 10px 0;
+    overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: rgba(160,132,100,0.4) transparent;
+}
+.jrnl-modal-desk .jrnl-modal-char .jrnl-cm-close {
+    top: 3.4%; right: 2.6%;
 }
 .jrnl-modal-desk .jrnl-cm-name { color: #513f47; letter-spacing: 2px; }
 .jrnl-modal-desk .jrnl-cm-sub { color: #9a8678; }
