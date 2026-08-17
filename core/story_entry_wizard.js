@@ -44,7 +44,7 @@
                 <div class="sew-bg"></div>
                 <div class="sew-stage">
                     <div class="sew-panel">
-                        <button class="sew-close" id="sew-close" type="button" title="關閉"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="sew-close" id="sew-close" type="button" title="關閉"><img src="${CDN}close-x.webp" alt=""></button>
                         <div class="sew-title-row">
                             <span class="sew-wing"></span>
                             <h2 class="sew-title">視差入場規劃</h2>
@@ -79,13 +79,13 @@
                                 </div>
                             </div>
                             <div class="sew-info">
-                                <div class="sew-info-col"><i class="fa-solid fa-user"></i><div class="sew-info-txt">角色來源<small>自動識別</small></div></div>
+                                <div class="sew-info-col"><img class="sew-info-ico" src="${CDN}info-person.webp" alt=""><div class="sew-info-txt">角色來源<small>自動識別</small></div></div>
                                 <span class="sew-info-sep"></span>
-                                <div class="sew-info-col"><i class="fa-solid fa-palette"></i><div class="sew-info-txt">視覺方案<small>由你選擇</small></div></div>
+                                <div class="sew-info-col"><img class="sew-info-ico" src="${CDN}info-palette.webp" alt=""><div class="sew-info-txt">視覺方案<small>由你選擇</small></div></div>
                                 <span class="sew-info-sep"></span>
-                                <div class="sew-info-col"><i class="fa-solid fa-book-open"></i><div class="sew-info-txt">開場內容<small>保持原樣</small></div></div>
+                                <div class="sew-info-col"><img class="sew-info-ico" src="${CDN}info-book.webp" alt=""><div class="sew-info-txt">開場內容<small>保持原樣</small></div></div>
                             </div>
-                            <button class="sew-cta" id="sew-go-preview" type="button"><span>預覽開場</span><i class="fa-solid fa-chevron-right"></i></button>
+                            <button class="sew-cta" id="sew-go-preview" type="button"><span>預覽開場</span><img class="sew-cta-ico" src="${CDN}cta-chevron.webp" alt=""></button>
                         </div>
 
                         <div class="sew-screen sew-hidden" id="sew-screen-preview">
@@ -119,7 +119,7 @@
                             </div>
                             <div class="sew-btn-row">
                                 <button class="sew-btn-outline" id="sew-embark-back" type="button"><i class="fa-solid fa-chevron-left"></i><span>上一步</span></button>
-                                <button class="sew-cta sew-enter" id="sew-embark-go" type="button"><span>啟 程</span><i class="fa-solid fa-feather"></i></button>
+                                <button class="sew-cta sew-enter" id="sew-embark-go" type="button"><span>啟 程</span><img class="sew-cta-ico" src="${CDN}cta-chevron.webp" alt=""></button>
                             </div>
                         </div>
                     </div>
