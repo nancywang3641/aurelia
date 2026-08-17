@@ -606,3 +606,258 @@
     .jrnl-modal-title { font-size: 14px; }
     .jrnl-modal-body { padding: 14px 16px; font-size: 12px; }
 }
+
+/* ============================================================
+   🕮 桌面書裝(.jrnl-desk,JS 依「容器」寬 ≥960 掛上)
+   視覺規格:阿洛 story-journal-html-panel mockup;素材 sound-files/aseets/story_journal/
+   窄屏/手機:以下全部不生效,維持上面的原版型
+   ============================================================ */
+.jrnl-stage { flex: 1; min-width: 0; display: flex; position: relative; container-type: inline-size; }
+.jrnl-book-art, .jrnl-topbar-desk, .jrnl-tabs, .jrnl-volume, .jrnl-sec-summary { display: none; }
+
+.jrnl-root.jrnl-desk {
+    container-type: size;
+    background: #eaf0f7 url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/bg.webp') center / cover no-repeat;
+    font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+/* 外框角飾(左下原圖、右上旋轉) */
+.jrnl-root.jrnl-desk::before, .jrnl-root.jrnl-desk::after {
+    content: ''; position: absolute; z-index: 1; pointer-events: none;
+    width: 13cqw; height: 13cqw; opacity: 0.38;
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/corner.webp') center / contain no-repeat;
+}
+.jrnl-root.jrnl-desk::before { left: 0; bottom: 0; }
+.jrnl-root.jrnl-desk::after { right: 0; top: 0; transform: rotate(180deg); }
+/* 原版型的暖色裝飾全下場 */
+.jrnl-desk .jrnl-deco, .jrnl-desk .jrnl-note-bl { display: none !important; }
+
+/* 頂列:品牌 + 細線;關閉鈕重新定位 */
+.jrnl-desk .jrnl-topbar-desk {
+    display: flex; align-items: baseline; gap: 1.1cqw;
+    position: absolute; z-index: 8;
+    left: 3.2%; right: 6%; top: 2.4%;
+    pointer-events: none;
+}
+.jrnl-desk .jrnl-topbar-brand {
+    color: #506789; font-size: 1.72cqw; font-weight: 700; letter-spacing: 0.15cqw;
+    text-shadow: 0 0.08cqw 0.15cqw rgba(255,255,255,0.9);
+}
+.jrnl-desk .jrnl-topbar-en {
+    color: #8795aa; font-size: 0.62cqw; letter-spacing: 0.23cqw; font-family: Georgia, serif;
+}
+.jrnl-desk .jrnl-topbar-desk::after {
+    content: ''; flex: 1; height: 1px; align-self: center;
+    background: linear-gradient(90deg, rgba(106,130,166,0.45), rgba(106,130,166,0.12));
+}
+.jrnl-desk .jrnl-close {
+    top: 1.8%; right: 1.8%;
+    background: transparent; border: none;
+    color: #536988; font-size: 1.5cqw;
+}
+.jrnl-desk .jrnl-close:hover { color: #a8434f; }
+
+/* 舞台:置中 3:2,書殼攤在其中 */
+.jrnl-desk .jrnl-stage {
+    position: absolute; display: block;
+    left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(100cqw, 150cqh);
+    height: min(100cqh, 66.667cqw);
+}
+.jrnl-desk .jrnl-book-art {
+    display: block; position: absolute; z-index: 2;
+    left: 3.8%; right: 4.8%; top: 7.2%; bottom: 5.2%;
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/book.webp') center / 100% 100% no-repeat;
+    filter: drop-shadow(0 1cqw 1.6cqw rgba(48,38,33,0.24));
+    pointer-events: none;
+}
+/* 右頁花飾 */
+.jrnl-desk .jrnl-stage::after {
+    content: ''; position: absolute; z-index: 5; pointer-events: none;
+    right: 13.5%; top: 14.5%; width: 6.4cqw; height: 6.4cqw;
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/flowers.webp') center / contain no-repeat;
+    opacity: 0.9;
+}
+
+/* ── 左頁:目錄 ── */
+.jrnl-desk .jrnl-left {
+    position: absolute; z-index: 4; flex: none;
+    left: 10.1%; top: 13.1%; width: 37.15%; height: 74.1%;
+    border: none; background: transparent;
+    padding: 1.3cqw 3.1cqw 1.2cqw 2.7cqw; box-sizing: border-box;
+    gap: 0.6cqw;
+}
+.jrnl-desk .jrnl-brand { display: none; }
+.jrnl-desk .jrnl-left::before {
+    content: '目 錄';
+    display: block; flex-shrink: 0;
+    text-align: center;
+    color: #936d5e; font-size: 1.9cqw; font-weight: 600; letter-spacing: 0.32cqw;
+    padding: 0.4cqw 0 0.5cqw;
+}
+.jrnl-desk .jrnl-search {
+    width: 76%; margin: 0 auto;
+    background: rgba(255,253,247,0.56);
+    border: 1px solid rgba(205,171,138,0.31);
+    border-radius: 0.72cqw;
+    font-size: 0.72cqw; padding: 0.5cqw 0.95cqw;
+    color: #6a6059;
+    box-shadow: inset 0 0.06cqw 0.16cqw rgba(133,97,65,0.08);
+}
+.jrnl-desk .jrnl-search:focus { border-color: rgba(185,104,117,0.58); background: rgba(255,255,255,0.8); }
+.jrnl-desk .jrnl-toolbar { justify-content: center; }
+.jrnl-desk .jrnl-sort {
+    flex: 0 0 auto; width: 40%;
+    font-size: 0.66cqw; padding: 0.3cqw 1.6cqw 0.3cqw 0.7cqw;
+    background: rgba(255,253,247,0.5) !important;
+    border-color: rgba(205,171,138,0.31) !important;
+    color: #8a7362 !important;
+    border-radius: 0.6cqw;
+    background-position: calc(100% - 0.9cqw) 55%, calc(100% - 0.6cqw) 55%;
+    background-size: 0.28cqw 0.28cqw, 0.28cqw 0.28cqw;
+}
+.jrnl-desk .jrnl-list { gap: 0.55cqw; padding-right: 0.4cqw; }
+/* 目錄條目:紙上墨線風 */
+.jrnl-desk .jrnl-card {
+    background: transparent; border: none; border-radius: 0.5cqw;
+    border-bottom: 1px solid rgba(160,132,100,0.22);
+    padding: 0.7cqw 0.8cqw 0.7cqw 2.5cqw;
+    gap: 0.9cqw; align-items: center;
+    transform: none;
+}
+.jrnl-desk .jrnl-card:hover { background: rgba(255,251,243,0.7); box-shadow: none; transform: none; }
+.jrnl-desk .jrnl-card.active {
+    background: rgba(255,248,240,0.95);
+    border-left: none;
+    box-shadow: 0 0.2cqw 0.9cqw rgba(150,110,90,0.14);
+}
+/* 現役書籤緞帶 */
+.jrnl-desk .jrnl-card.active::before {
+    content: ''; position: absolute; left: 0.1cqw; top: 50%; transform: translateY(-50%);
+    width: 1.6cqw; height: 2.6cqw;
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/ribbon.webp') center / contain no-repeat;
+}
+.jrnl-desk .jrnl-card-num {
+    position: static; width: auto; height: auto; line-height: 1;
+    background: none; border-radius: 0;
+    font-size: 1.5cqw; color: #7d6a58; font-style: normal;
+    font-family: Georgia, serif;
+}
+.jrnl-desk .jrnl-card.active .jrnl-card-num { color: #a8434f; }
+.jrnl-desk .jrnl-card-img { width: 3.2cqw; height: 3.2cqw; border-radius: 0.35cqw; border-color: rgba(205,171,138,0.4); }
+.jrnl-desk .jrnl-card-title { font-size: 0.95cqw; color: #574a3e; letter-spacing: 0.06cqw; }
+.jrnl-desk .jrnl-card.active .jrnl-card-title { color: #a8434f; }
+.jrnl-desk .jrnl-card-badge { display: none; }
+.jrnl-desk .jrnl-card-sub { font-size: 0.6cqw; color: #9a8678; }
+.jrnl-desk .jrnl-card-brief { display: none; }
+.jrnl-desk .jrnl-card-meta { font-size: 0.58cqw; color: #a08d7a; gap: 0.8cqw; }
+.jrnl-desk .jrnl-empty-txt { font-size: 0.8cqw; }
+
+/* ── 右頁:卷宗 ── */
+.jrnl-desk .jrnl-right {
+    position: absolute; z-index: 4;
+    left: 47.25%; top: 13.1%; width: 41.55%; height: 74.1%;
+    padding: 1.3cqw 3.2cqw 1.6cqw 2.4cqw; box-sizing: border-box;
+    overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: rgba(160,132,100,0.4) transparent;
+}
+.jrnl-desk .jrnl-back-mobile { display: none; }
+/* 右頁全走紙面:舊版的白卡片底/邊框全部洗掉 */
+.jrnl-desk .jrnl-d-head,
+.jrnl-desk .jrnl-d-section {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding-left: 0; padding-right: 0;
+    box-shadow: none;
+}
+.jrnl-desk .jrnl-d-head { display: block; text-align: center; margin-bottom: 0.6cqw; padding-top: 0; }
+.jrnl-desk .jrnl-d-img { display: none; }
+.jrnl-desk .jrnl-d-title::before {
+    content: 'STORY ARCHIVE';
+    display: block;
+    font-size: 0.55cqw; letter-spacing: 0.3cqw; color: #b08e6a;
+    font-family: Georgia, serif; margin-bottom: 0.4cqw;
+}
+.jrnl-desk .jrnl-d-title { font-size: 1.9cqw; color: #3f4c66; letter-spacing: 0.2cqw; margin: 0 0 0.3cqw; }
+.jrnl-desk .jrnl-d-sub { font-size: 0.72cqw; color: #8a7362; }
+.jrnl-desk .jrnl-d-tags { justify-content: center; gap: 0.5cqw; margin-top: 0.5cqw; }
+.jrnl-desk .jrnl-d-tags > span { font-size: 0.6cqw; padding: 0.15cqw 0.7cqw; border-radius: 0.5cqw; }
+.jrnl-desk .jrnl-volume {
+    display: block;
+    width: 72%; margin: 0.7cqw auto;
+    padding: 1.1cqw 1cqw 1.2cqw;
+    text-align: center;
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/volume-frame.webp') center / 100% 100% no-repeat;
+    box-sizing: border-box;
+}
+.jrnl-desk .jrnl-volume-main { font-size: 1.25cqw; font-weight: 700; color: #3f4c66; letter-spacing: 0.25cqw; }
+.jrnl-desk .jrnl-volume-sub { font-size: 0.62cqw; color: #8a7362; margin-top: 0.25cqw; letter-spacing: 0.1cqw; }
+.jrnl-desk .jrnl-d-foot { margin: 0.4cqw 0 0.8cqw; }
+.jrnl-desk .jrnl-view-full { display: none; }   /* 桌面走「完整總結」書籤,不用這顆大鈕 */
+.jrnl-desk .jrnl-foot-acts { justify-content: center; gap: 0.5cqw; width: auto; }
+.jrnl-desk .jrnl-act-btn {
+    flex: 0 0 auto; min-width: 0;
+    font-size: 0.62cqw; padding: 0.3cqw 0.8cqw;
+    background: rgba(255,253,247,0.6); border: 1px solid rgba(205,171,138,0.4);
+    border-radius: 0.5cqw; color: #7a6553;
+}
+.jrnl-desk .jrnl-tl-num { background: rgba(252,228,231,0.8); }
+.jrnl-desk .jrnl-tl-item { background: transparent; }
+.jrnl-desk .jrnl-act-btn:hover { border-color: rgba(185,104,117,0.6); color: #a8434f; }
+.jrnl-desk .jrnl-d-section { margin-top: 0.9cqw; }
+.jrnl-desk .jrnl-d-section-head { border-bottom: none; position: relative; margin-bottom: 0.7cqw; }
+.jrnl-desk .jrnl-d-section-head::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -0.3cqw; height: 0.5cqw;
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/divider.webp') center / contain no-repeat;
+    opacity: 0.8;
+}
+.jrnl-desk .jrnl-d-section-head h3 { font-size: 0.95cqw; color: #7c5a63; letter-spacing: 0.2cqw; }
+.jrnl-desk .jrnl-d-count { font-size: 0.58cqw; color: #a08d7a; }
+.jrnl-desk .jrnl-tl-num { color: #c97a8e; }
+.jrnl-desk .jrnl-tl-head { font-size: 0.78cqw; color: #574a3e; }
+.jrnl-desk .jrnl-tl-brief { font-size: 0.72cqw; line-height: 1.85; color: #6a5c4e; }
+.jrnl-desk .jrnl-chars-grid { gap: 0.8cqw; }
+.jrnl-desk .jrnl-summary-body { font-size: 0.74cqw; line-height: 1.9; color: #5c4f42; }
+.jrnl-desk .jrnl-summary-body .jrnl-md-h { color: #7c5a63; }
+
+/* ── 書籤頁籤(貼書右緣) ── */
+.jrnl-desk .jrnl-tabs {
+    display: flex; flex-direction: column; gap: 1cqw;
+    position: absolute; z-index: 6;
+    right: 1.2%; top: 21%;
+    width: 3.6cqw;
+}
+.jrnl-desk .jrnl-tab {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0.45cqw;
+    padding: 0.9cqw 0.55cqw;
+    background: linear-gradient(180deg, #faf4e6, #f0e6d2);
+    border: 1px solid rgba(178,148,110,0.5);
+    border-left: none;
+    border-radius: 0 0.55cqw 0.55cqw 0;
+    box-shadow: 0.15cqw 0.2cqw 0.6cqw rgba(90,70,50,0.22);
+    cursor: pointer;
+    color: #7a6553;
+    transition: transform 0.16s ease, filter 0.16s ease;
+    font-family: inherit;
+}
+.jrnl-desk .jrnl-tab span {
+    writing-mode: vertical-rl;
+    font-size: 0.78cqw; letter-spacing: 0.22cqw; line-height: 1;
+}
+.jrnl-desk .jrnl-tab i { font-size: 0.8cqw; }
+.jrnl-desk .jrnl-tab:hover { transform: translateX(0.15cqw); filter: brightness(1.04); }
+.jrnl-desk .jrnl-tab.active {
+    background: linear-gradient(180deg, #b25260, #9c3d4b);
+    border-color: #8a3542;
+    color: #f6ead9;
+}
+
+/* ── 書籤切換:右頁一次只亮一個區塊 ── */
+.jrnl-desk.jrnl-tab-story .jrnl-sec-chars,
+.jrnl-desk.jrnl-tab-story .jrnl-sec-summary,
+.jrnl-desk.jrnl-tab-chars .jrnl-sec-story,
+.jrnl-desk.jrnl-tab-chars .jrnl-sec-summary,
+.jrnl-desk.jrnl-tab-summary .jrnl-sec-story,
+.jrnl-desk.jrnl-tab-summary .jrnl-sec-chars { display: none; }
+.jrnl-desk.jrnl-tab-summary .jrnl-sec-summary { display: block; }
