@@ -1123,6 +1123,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 基本鍵組：沒有世界活動面板時的原樣（舊世界、還沒生成過、生成失敗都走這條） */
         #vn-end-basic { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
         #vn-end-basic.hidden { display: none; }
+        /* 末尾這一組是「等結果出來才亮」的（見 vn_core 的按住邏輯）→ 出場一律淡入，不要硬跳出來 */
+        #vn-end-basic.vn-end-fade { animation: vn-end-fade-up 0.3s ease both; }
+        @keyframes vn-end-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         /* 面板做了哪顆，那顆基本鍵就收起來；面板漏做的留在原地，功能不會消失 */
         #vn-end-basic .hidden { display: none; }
         /* 同理，面板自己重畫了系統鍵時收起原生那顆（面板拆掉時 clear() 會還原） */
@@ -1134,7 +1137,19 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            奧瑞亞的寬度跟著酒館聊天欄走，@media / vw / vh 量到的是整個瀏覽器視窗，
            視窗寬但面板窄時完全不會生效 → 元素照桌機版型排，直接飛出可視範圍。 */
         #vn-end-panel { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; overflow: hidden; background: #05050a; pointer-events: auto; container-type: size; container-name: vnep; }
-        #vn-end-panel.active { display: block; }
+        #vn-end-panel.active { display: block; animation: vn-end-panel-in 0.32s ease both; }
+        /* 🚨只淡不位移：面板掛上 active 的下一步就是量子元素位置把飛出去的拉回來(_guardOverflow)，
+           這時候若整塊還在 translate，量到的座標會整組偏掉 */
+        @keyframes vn-end-panel-in { from { opacity: 0; } to { opacity: 1; } }
+
+        /* === 🎬 末尾開手機 app 的轉場（日誌 / 地圖）=== */
+        /* 幕布掛在 #page-game 裡（VN 層 z:51 < 面板 1002）→ 只暗末尾畫面，不會糊到 app */
+        #vn-appwarp-veil { position: absolute; inset: 0; z-index: 60; pointer-events: none; background: rgba(6, 8, 14, 0.55); backdrop-filter: blur(3px); opacity: 0; transition: opacity 0.26s ease; }
+        #vn-appwarp-veil.on { opacity: 1; }
+        #aurelia-panel-container.vn-appwarp-in { animation: vn-appwarp-in 0.3s cubic-bezier(0.22, 0.9, 0.3, 1) both; }
+        #aurelia-panel-container.vn-appwarp-out { animation: vn-appwarp-out 0.22s ease-in both; }
+        @keyframes vn-appwarp-in { from { opacity: 0; transform: scale(0.965) translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes vn-appwarp-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.985) translateY(6px); } }
         #vn-end-panel.has-bg::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: var(--vnep-bg); background-size: cover; background-position: center; }
         /* 中段留給人物，四周壓暗讓沿邊的 UI 讀得清楚 */
         #vn-end-panel::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background: radial-gradient(circle at 50% 48%, rgba(0,0,0,0) 32%, rgba(4,6,14,0.45) 68%, rgba(3,4,10,0.88) 100%); }
