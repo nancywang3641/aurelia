@@ -87,31 +87,76 @@
 
         _overlayShown() { return !!document.getElementById('se-flow-overlay'); },
 
+        // 等待室視覺=章節進入同一顆「視差校準艙」:把 #vn-start-loader 殼借進來(不存在就先建),
+        // 收場時歸還 #page-game 給開場閘門接手——同一個殼、同一套 loading,全程統一。
+        // 拿不到校準艙模組(非 VN 環境)才退回土製轉圈。
         _showFlowOverlay() {
             if (this._overlayShown()) return;
             const host = document.getElementById('se-root-wrapper');
             if (!host) return;
             const o = document.createElement('div');
             o.id = 'se-flow-overlay';
-            o.innerHTML = '<div id="se-flow-spin"></div><div id="se-flow-label">故事撰寫中…</div><div id="se-flow-sub"></div>';
+
+            let usingChamber = false;
+            try {
+                if (window.VN_LoaderChamber) {
+                    // 殼的基礎樣式(track/bar/label):與 vn_core._ensureStartLoaderEl 同 id 同內容,
+                    // 誰先到誰注入、後到跳過,不會雙份
+                    if (!document.getElementById('vn-sl-style')) {
+                        const s = document.createElement('style');
+                        s.id = 'vn-sl-style';
+                        s.textContent = '#vn-start-loader{position:absolute;inset:0;z-index:900;background:#050402;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}' +
+                            '#vn-start-loader-track{width:60%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}' +
+                            '#vn-start-loader-bar{height:100%;width:0%;background:#d4af37;border-radius:2px;transition:width linear}' +
+                            '#vn-start-loader-label{font-size:10px;letter-spacing:3px;color:rgba(212,175,55,0.5);text-transform:uppercase}' +
+                            '#vn-start-loader-skip{display:none;margin-top:6px;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.35);border:1px solid rgba(255,255,255,0.18);border-radius:4px;padding:6px 18px;cursor:pointer;background:transparent}' +
+                            '#vn-start-loader-skip:hover{color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.4)}';
+                        document.head.appendChild(s);
+                    }
+                    let sl = document.getElementById('vn-start-loader');
+                    if (!sl) {
+                        sl = document.createElement('div');
+                        sl.id = 'vn-start-loader';
+                        sl.innerHTML = '<div id="vn-start-loader-track"><div id="vn-start-loader-bar"></div></div><div id="vn-start-loader-label">Loading</div><button id="vn-start-loader-skip" type="button">跳過等待</button>';
+                    }
+                    this._slPrevParent = sl.parentNode || null;   // 記原家(通常是 #page-game),收場歸還
+                    o.appendChild(sl);
+                    sl.style.display = 'flex';
+                    const skip = sl.querySelector('#vn-start-loader-skip');
+                    if (skip) skip.style.display = 'none';
+                    window.VN_LoaderChamber.mount(sl);
+                    window.VN_LoaderChamber.start();
+                    window.VN_LoaderChamber.phase('text');
+                    usingChamber = true;
+                }
+            } catch (e) { console.warn('[StoryExtractor] 校準艙借用失敗,退土製等待室', e); }
+
+            if (!usingChamber) {
+                o.innerHTML = '<div id="se-flow-spin"></div><div id="se-flow-label">故事撰寫中…</div><div id="se-flow-sub"></div>';
+            }
             host.appendChild(o);
+
             const t0 = Date.now();
             this._genWatch = setInterval(() => {
-                const label = document.getElementById('se-flow-label');
-                const sub   = document.getElementById('se-flow-sub');
+                const label = document.getElementById('vn-start-loader-label') || document.getElementById('se-flow-label');
                 if (!label) return;
                 const sec = Math.round((Date.now() - t0) / 1000);
                 if (!label.textContent.startsWith('✓')) label.textContent = `故事撰寫中… ${sec}s`;
                 try {
                     const st = window.VN_Core?.imgPendingStatus?.();
-                    if (sub && st && (st.pending > 0 || st.total > 0)) sub.textContent = `圖片繪製中 ${st.done}/${st.total}`;
+                    if (st && (st.pending > 0 || st.total > 0)) {
+                        const sub = document.getElementById('se-flow-sub');
+                        if (sub) sub.textContent = `圖片繪製中 ${st.done}/${st.total}`;
+                        if (usingChamber && !this._chamberImgPhase) { this._chamberImgPhase = true; try { window.VN_LoaderChamber.phase('img'); } catch (e) {} }
+                    }
                 } catch (e) {}
             }, 1000);
         },
 
         _enterStory() {
-            const label = document.getElementById('se-flow-label');
+            const label = document.getElementById('vn-start-loader-label') || document.getElementById('se-flow-label');
             if (label) label.textContent = '✓ 故事就緒，進入劇情…';
+            try { window.VN_LoaderChamber?.phase('done'); } catch (e) {}
             // 自動偵測那邊正在套劇本＋切頁；稍等再收起藏書讓路
             setTimeout(() => { this._hideFlowOverlay(); this.hide(); }, 800);
         },
@@ -119,8 +164,27 @@
         _hideFlowOverlay() {
             if (this._genWatch) { clearInterval(this._genWatch); this._genWatch = null; }
             if (this._waitClose) { clearInterval(this._waitClose); this._waitClose = null; }
+            this._chamberImgPhase = false;
             const o = document.getElementById('se-flow-overlay');
-            if (o) o.remove();
+            if (!o) return;
+            // 歸還借來的校準艙殼:劇情頁已展開=開場閘門大概率正要/正在用它 → 原樣送回別打斷;
+            // 劇情頁還沒開(生成被停/失敗)→ 藏起來並停掉 rAF,別留背景空轉
+            try {
+                const sl = o.querySelector('#vn-start-loader');
+                if (sl) {
+                    const pg = document.getElementById('page-game');
+                    const home = this._slPrevParent || pg;
+                    if (home) home.appendChild(sl);
+                    const vnActive = pg && !pg.classList.contains('hidden');
+                    if (!vnActive) {
+                        sl.style.display = 'none';
+                        try { window.VN_LoaderChamber?.stop(); } catch (e) {}
+                    }
+                    if (!home) sl.remove();   // 無處可還(純手機殼環境)→ 直接收掉
+                }
+            } catch (e) {}
+            this._slPrevParent = null;
+            o.remove();
         },
 
         loadTheme() {

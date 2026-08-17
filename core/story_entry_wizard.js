@@ -213,10 +213,10 @@
                 $('#sew-screen-embark').classList.add('sew-hidden');
                 $('#sew-screen-preview').classList.remove('sew-hidden');
             };
-            // 啟程:把第一句塞進酒館輸入框直接送出。
-            // VN 掛載時「先收藏書再送」——藏書的 GENERATION_STARTED 有 isVisible 守門,
-            // 收掉後土製等待室不會彈,改由 vn_core 的「故事撰寫中」幕布(章節同款校準艙)統一接管,
-            // 之後套劇本→開場閘門→劇情頁一條龍,loading 全程同一套。
+            // 啟程:把第一句塞進酒館輸入框直接送出;精靈留著當底。
+            // 🚨 不可以在這裡 StoryExtractor.hide():第0樓劇情頁還沒開,hide() 會連整個 VN 面板收掉回主頁;
+            //    而 VN 的撰寫幕布掛在劇情頁裡、此刻也看不到 → 統一 loading 由藏書等待室「借校準艙殼」來演
+            //    (story_extractor._showFlowOverlay),故事就緒後殼還回劇情頁給開場閘門無縫接手。
             $('#sew-embark-go').onclick = () => {
                 const ta = document.getElementById('send_textarea');
                 const btn = document.getElementById('send_but');
@@ -227,10 +227,8 @@
                         ta.value = txt;
                         ta.dispatchEvent(new Event('input', { bubbles: true }));
                         _entered.add(this._chatKey());
-                        const vnMode = !!(window.VN_Core && document.getElementById('story-extractor-container-vn'));
-                        if (vnMode) { try { window.StoryExtractor?.hide?.(); } catch (e) { } }
                         btn.click();
-                        if (!vnMode) $('#sew-embark-go').disabled = true;   // 非 VN 掛載:藏書留著,原等待室接手
+                        $('#sew-embark-go').disabled = true;
                     } catch (e) {
                         console.warn('[StoryEntryWizard] 送出失敗:', e);
                         this.dismiss(root);   // 送不出去就讓路給原本的輸入流程
