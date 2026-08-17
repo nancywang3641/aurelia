@@ -3048,7 +3048,9 @@
                 achv: w.achv || null,            // 這個世界的成就清單
                 achvDone: w.achvDone || null,    // {成就名:達成時間}——名字對得上清單的那幾條
                 launchArt: w.launchArt || null,  // {teamKey,url} — 這趟隊伍的啟航群像
-                art: w.art || '',                // 退路底圖:世界概念圖(無人遠景)
+                // 退路底圖:世界概念圖(無人遠景)。真的沒有就給這個題材的備圖——
+                // 末尾畫面寧可掛一張題材圖,也不要空手回去讓它變成一片色塊。
+                art: w.art || _fbUrl(w, 'art'),
             };
         } catch (e) { return null; }
     }
