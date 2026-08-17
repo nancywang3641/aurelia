@@ -26,7 +26,7 @@
         book_close: 'ui-book_close',   // 闔上書（關閉日誌）
         page_turn:  'Flip_paper',      // 翻一頁（換故事線）
         book_riffle:'ui-book_riffle',  // 快速翻書（切書籤）
-        paper_slide:'ui-paper_slide',  // 紙張輕滑（滑過書籤頁籤）
+        paper_slide:'ui-paper_slide',  // 紙張輕滑（備用：目前沒有介面在用，書籤頁籤刻意不給滑過音）
         card_pick:  'ui-card_pick',    // 抽卡片（滑過目錄條目——那排長得就像一張張書籤卡）
         pen_write:  'ui-pen_write',    // 落筆（開編輯器）
         book_stamp: 'ui-stamp',        // 書放到桌上（保存成功）

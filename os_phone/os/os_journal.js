@@ -944,13 +944,14 @@
             container.addEventListener('mouseover', (e) => {
                 const samePos = (e.clientX === lastX && e.clientY === lastY);
                 lastX = e.clientX; lastY = e.clientY;
-                const el = e.target.closest?.('.jrnl-card, .jrnl-tab');
+                // 只有目錄條目給滑過音（一張張卡＝抽卡聲）。右側書籤刻意不給：
+                // 那三片本來就會點出翻書聲，滑過再加一層整體太吵。
+                const el = e.target.closest?.('.jrnl-card');
                 if (!el || el === hoverEl) return;
                 hoverEl = el;
                 const now = Date.now();
                 if (samePos || now < quietUntil || now - hoverAt < 120) return;   // 掃過一整排也不要連環響
-                // 目錄條目是一張張卡＝抽卡聲；右側書籤是紙頁＝紙張輕滑
-                _sfx(el.classList.contains('jrnl-card') ? 'card_pick' : 'paper_slide');
+                _sfx('card_pick');
                 hoverAt = now;
             }, true);
             container.addEventListener('mouseout', (e) => {
