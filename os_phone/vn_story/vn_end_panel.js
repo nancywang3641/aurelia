@@ -46,11 +46,14 @@
             ['世界概念圖', w.art || ''],
             ['本章場景背景', (function () { try { return _lastSceneBg(); } catch (e) { return ''; } })()],
         ].filter(x => x[1]);
+        // 成功也印一行：不然「畫面怪怪的」時只能用猜的（沒有 log 到底是沒進來、還是進來但沒圖）
+        console.log('[VN末尾面板] 底圖候選：' + (cands.length ? cands.map(x => x[0]).join('、') : '無'));
         (async () => {
             for (const [name, url] of cands) {
                 if (await _canLoad(url)) {
                     root.style.setProperty('--vnep-bg', 'url("' + url.replace(/"/g, '\\"') + '")');
                     root.classList.add('has-bg');
+                    console.log('[VN末尾面板] 底圖用「' + name + '」');
                     return;
                 }
                 console.warn('[VN末尾面板] ' + name + '載不起來(' + url.slice(0, 40) + '…)，往下一個退');
