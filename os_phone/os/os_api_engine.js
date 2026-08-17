@@ -203,6 +203,24 @@
         return cleanRawOutput(rawContent, keepFences);
     }
 
+    // 把錯誤的 cause 鏈攤平成一句話。酒館的 ConnectionManagerRequestService 對所有失敗一律
+    // `throw new Error('API request failed', { cause: 真正的錯誤 })`(shared.js)，只看 message
+    // 等於什麼都沒說；真正有用的是底層那句(如 "Secret id not found for api_key_vertexai: xxx"、
+    // "Publisher Model ... was not found"、"Got response status 500")。
+    function _causeText(err, depth) {
+        if (!err) return '';
+        const parts = [];
+        let cur = err, n = 0;
+        while (cur && n < (depth || 4)) {
+            const m = (typeof cur === 'string') ? cur : (cur.message || cur.error || '');
+            const s = String(m || '').trim();
+            if (s && parts.indexOf(s) < 0) parts.push(s);
+            cur = cur.cause;
+            n++;
+        }
+        return parts.join('｜');
+    }
+
     // 給 ConnectionManager.sendRequest 補 vertex 認證欄位：
     // ST 的 sendRequest 漏帶 vertexai_auth_mode → 後端預設 'express' → 服務帳號(full)被當 API Key 找不到金鑰
     // (Secret id not found for api_key_vertexai)。從 oai_settings 多來源讀回 auth_mode/project 塞進 overridePayload
@@ -269,6 +287,11 @@
 
     // --- 3. OS API 主對象 ---
     win.OS_API = {
+
+        // 測試連線那邊也要用同一份（vertex 服務帳號少了 auth_mode 就會被當 API Key 找不到金鑰；
+        // 錯誤訊息也要同樣攤平，不然只看得到酒館包的那句 API request failed）
+        _vertexOverride: (ctx, profileId, base) => _vertexOverride(ctx, profileId, base),
+        _causeText: (err) => _causeText(err),
 
         isStandalone: function() {
             try {
@@ -959,7 +982,12 @@
                 if (onFinish) onFinish(fullText);
             } catch (err) {
                 console.error("[OS_API Error]", err);
-                try { window._OS_DBG_RESPONSE?.(_dbgId, 'error', err.message, Date.now() - _dbgStart); } catch(e) {}
+                // 🚨酒館的 ConnectionManager 出錯時一律包成 `API request failed`，真正的原因(金鑰桶不對、
+                //   型號不存在、HTTP 狀態…)藏在 error.cause 裡。她沒有 console → 訊息要自己攤開，
+                //   不然畫面上永遠只有那句沒有資訊量的話。
+                const _flat = _causeText(err);
+                if (_flat && err && _flat !== err.message) { try { err.message = _flat; } catch (e) {} }
+                try { window._OS_DBG_RESPONSE?.(_dbgId, 'error', _flat || err.message, Date.now() - _dbgStart); } catch(e) {}
                 if (onError) onError(err);
             }
         },
